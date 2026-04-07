@@ -170,6 +170,8 @@ namespace Assets
         TextureImage& ShadowMap() const { return *cpuShadowMap_; }
 
         FCPUAccelerationStructure& GetCPUAccelerationStructure() { return cpuAccelerationStructure_; }
+        glm::vec3 GetSceneAABBMin() const { return sceneAABBMin_; }
+        glm::vec3 GetSceneAABBMax() const { return sceneAABBMax_; }
 
         // Scene saving功能
         bool Save(const std::string& filename) const;

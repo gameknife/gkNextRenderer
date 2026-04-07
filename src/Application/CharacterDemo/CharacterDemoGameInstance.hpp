@@ -3,6 +3,8 @@
 #include "Common/CoreMinimal.hpp"
 #include "Runtime/Engine.hpp"
 #include "Runtime/Subsystems/NextCharacterController.h"
+#include "Runtime/AI/NavGrid.h"
+#include "Runtime/AI/PathFollower.h"
 
 namespace Runtime { class SkinnedMeshComponent; }
 
@@ -106,6 +108,8 @@ private:
         EBehaviorDebugState behaviorAttackStatus = EBehaviorDebugState::Inactive;
         EBehaviorDebugState behaviorChaseStatus = EBehaviorDebugState::Inactive;
         EBehaviorDebugState behaviorPatrolStatus = EBehaviorDebugState::Inactive;
+        FPathFollower pathFollower;
+        EAIBotState previousState = EAIBotState::Disabled;
     };
 
     glm::vec3 GetMoveForward() const;
@@ -147,6 +151,7 @@ private:
     const char* GetBehaviorDebugStateName(EBehaviorDebugState state) const;
     EBehaviorDebugState ToBehaviorDebugState(EBehaviorTreeStatus status) const;
     void DrawAIBotBehaviorTreeUI() const;
+    void DrawNavGridDebugOverlay() const;
 
     NextEngine* engine_;
     NextCharacterController characterController_;
@@ -159,6 +164,7 @@ private:
     uint32_t projectileModelId_ = 0;
     uint32_t projectileMatId_ = 0;
     FAIBot aiBot_;
+    FNavGrid navGrid_;
 
     // Skinned character model
     std::shared_ptr<Assets::Node> skinnedCharacterRoot_;
@@ -206,6 +212,7 @@ private:
     bool showPhysicsDebug_ = false;
     bool footIKEnabled_ = true;
     bool showFootIKDebug_ = false;
+    bool showNavGridDebug_ = false;
     bool aiEnabled_ = true;
     glm::dvec2 mousePos_{0.0, 0.0};
 

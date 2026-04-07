@@ -3,6 +3,7 @@
 #include <imgui.h>
 #include <SDL3/SDL_events.h>
 #include <spdlog/spdlog.h>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "Assets/Loaders/FProcModel.h"
 #include "Assets/Loaders/FSceneLoader.h"
@@ -295,6 +296,19 @@ void CharacterDemoGameInstance::OnSceneLoaded()
 
     engine_->GetScene().AddNode(characterNode_);
     InitAIBot();
+
+    // Build navigation grid from scene BVH for AI pathfinding
+    {
+        const glm::vec3 sceneMin = engine_->GetScene().GetSceneAABBMin();
+        const glm::vec3 sceneMax = engine_->GetScene().GetSceneAABBMax();
+        FNavGridSettings navSettings;
+        navSettings.cellSize = 0.75f;
+        navSettings.worldMin = glm::vec3(sceneMin.x - 2.0f, 0.0f, sceneMin.z - 2.0f);
+        navSettings.worldMax = glm::vec3(sceneMax.x + 2.0f, 0.0f, sceneMax.z + 2.0f);
+        navSettings.sampleCeiling = sceneMax.y + 5.0f;
+        navGrid_.Build(engine_->GetScene().GetCPUAccelerationStructure(), navSettings);
+    }
+
     SetFirstPersonMode(firstPersonMode_);
     engine_->GetScene().MarkDirty();
 
@@ -381,6 +395,7 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::SliderFloat("Run Speed", &runSpeed_, 5.0f, 20.0f);
     ImGui::SliderFloat("Camera Dist", &cameraDistance_, 1.0f, 15.0f);
     ImGui::Checkbox("Enable AI", &aiEnabled_);
+    ImGui::Checkbox("NavGrid Debug", &showNavGridDebug_);
     ImGui::SliderFloat("AI Sight", &aiSightRange_, 8.0f, 60.0f);
     ImGui::SliderFloat("AI Fire Range", &aiFireRange_, 4.0f, 40.0f);
     ImGui::SliderFloat("AI Fire Cooldown", &aiFireCooldown_, 0.2f, 4.0f);
@@ -400,6 +415,11 @@ bool CharacterDemoGameInstance::OnRenderUI()
         {
             Runtime::DrawCharacterControllerDebugOverlay(aiBot_.controller, debugCamera);
         }
+    }
+
+    if (showNavGridDebug_)
+    {
+        DrawNavGridDebugOverlay();
     }
 
     return true;
@@ -963,7 +983,12 @@ void CharacterDemoGameInstance::UpdateAIBot(float deltaSeconds)
         return;
     }
 
+    const EAIBotState stateBefore = aiBot_.state;
     RunAIBotBehaviorTree(deltaSeconds);
+    if (aiBot_.state != stateBefore)
+    {
+        aiBot_.pathFollower.Clear();
+    }
 
     float speed = aiWalkSpeed_;
     if (aiBot_.state == EAIBotState::Chase)
@@ -1032,8 +1057,6 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
 
 CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIBotEvade(float deltaSeconds)
 {
-    (void)deltaSeconds;
-
     if (!aiBot_.targetVisible)
     {
         return EBehaviorTreeStatus::Failure;
@@ -1057,7 +1080,28 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
 
     const glm::vec3 strafeDir =
         NormalizeHorizontalOrZero(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), toPlayerDir)) * aiBot_.strafeSign;
-    aiBot_.moveDir = NormalizeHorizontalOrZero(-toPlayerDir + strafeDir * 0.5f);
+    const glm::vec3 evadeDir = NormalizeHorizontalOrZero(-toPlayerDir + strafeDir * 0.5f);
+
+    if (navGrid_.IsBuilt())
+    {
+        const glm::vec3 evadeTarget = aiPos + evadeDir * 8.0f;
+        if (aiBot_.pathFollower.NeedsRepath(evadeTarget, deltaSeconds, 0.3f, 1.5f))
+        {
+            auto path = navGrid_.FindPath(aiPos, evadeTarget, aiPos.y);
+            if (path.empty())
+            {
+                path = navGrid_.FindPath(aiPos, aiPos - toPlayerDir * 8.0f, aiPos.y);
+            }
+            aiBot_.pathFollower.SetPath(std::move(path), evadeTarget);
+        }
+        glm::vec3 pathDir = aiBot_.pathFollower.GetMoveDirection(aiPos);
+        aiBot_.moveDir = glm::length(pathDir) > 0.001f ? pathDir : evadeDir;
+    }
+    else
+    {
+        aiBot_.moveDir = evadeDir;
+    }
+
     return EBehaviorTreeStatus::Running;
 }
 
@@ -1126,8 +1170,6 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
 
 CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIBotChase(float deltaSeconds)
 {
-    (void)deltaSeconds;
-
     if (!aiBot_.targetVisible && aiBot_.targetMemoryRemaining <= 0.0f)
     {
         return EBehaviorTreeStatus::Failure;
@@ -1135,8 +1177,9 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
 
     aiBot_.state = EAIBotState::Chase;
 
+    const glm::vec3 aiPos = aiBot_.controller.GetPosition();
     const glm::vec3 chaseTarget = aiBot_.targetVisible ? characterController_.GetPosition() : aiBot_.lastKnownTargetPosition;
-    const glm::vec3 toTarget = chaseTarget - aiBot_.controller.GetPosition();
+    const glm::vec3 toTarget = chaseTarget - aiPos;
     const glm::vec3 chaseDir = NormalizeHorizontalOrZero(toTarget);
     const float distanceToTarget = glm::length(glm::vec2(toTarget.x, toTarget.z));
     if (aiBot_.targetVisible)
@@ -1152,7 +1195,22 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
     }
 
     aiBot_.lookDir = glm::length(chaseDir) > 0.001f ? chaseDir : aiBot_.lookDir;
-    aiBot_.moveDir = chaseDir;
+
+    if (navGrid_.IsBuilt())
+    {
+        if (aiBot_.pathFollower.NeedsRepath(chaseTarget, deltaSeconds, 0.5f, 2.0f))
+        {
+            auto path = navGrid_.FindPath(aiPos, chaseTarget, aiPos.y);
+            aiBot_.pathFollower.SetPath(std::move(path), chaseTarget);
+        }
+        glm::vec3 pathDir = aiBot_.pathFollower.GetMoveDirection(aiPos);
+        aiBot_.moveDir = glm::length(pathDir) > 0.001f ? pathDir : chaseDir;
+    }
+    else
+    {
+        aiBot_.moveDir = chaseDir;
+    }
+
     if (!aiBot_.targetVisible && distanceToTarget <= aiPatrolPointRadius_)
     {
         aiBot_.targetMemoryRemaining = 0.0f;
@@ -1165,8 +1223,6 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
 
 CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIBotPatrol(float deltaSeconds)
 {
-    (void)deltaSeconds;
-
     if (aiBot_.patrolPoints.empty())
     {
         aiBot_.state = EAIBotState::Disabled;
@@ -1181,7 +1237,8 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
 
     aiBot_.patrolIndex %= aiBot_.patrolPoints.size();
     const glm::vec3 patrolTarget = aiBot_.patrolPoints[aiBot_.patrolIndex];
-    const glm::vec3 toPatrol = patrolTarget - aiBot_.controller.GetPosition();
+    const glm::vec3 aiPos = aiBot_.controller.GetPosition();
+    const glm::vec3 toPatrol = patrolTarget - aiPos;
     const glm::vec3 patrolDir = NormalizeHorizontalOrZero(toPatrol);
     const float distanceToPatrol = glm::length(glm::vec2(toPatrol.x, toPatrol.z));
     if (distanceToPatrol <= aiPatrolPointRadius_)
@@ -1193,7 +1250,22 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
     }
 
     aiBot_.lookDir = glm::length(patrolDir) > 0.001f ? patrolDir : aiBot_.lookDir;
-    aiBot_.moveDir = patrolDir;
+
+    if (navGrid_.IsBuilt())
+    {
+        if (aiBot_.pathFollower.NeedsRepath(patrolTarget, deltaSeconds, 1.0f, 0.5f))
+        {
+            auto path = navGrid_.FindPath(aiPos, patrolTarget, aiPos.y);
+            aiBot_.pathFollower.SetPath(std::move(path), patrolTarget);
+        }
+        glm::vec3 pathDir = aiBot_.pathFollower.GetMoveDirection(aiPos);
+        aiBot_.moveDir = glm::length(pathDir) > 0.001f ? pathDir : patrolDir;
+    }
+    else
+    {
+        aiBot_.moveDir = patrolDir;
+    }
+
     return EBehaviorTreeStatus::Running;
 }
 
@@ -2251,5 +2323,190 @@ const char* CharacterDemoGameInstance::GetAnimStateName() const
     case ECharacterAnimState::JumpLoop: return "JumpLoop";
     case ECharacterAnimState::JumpLand: return "JumpLand";
     default: return "Unknown";
+    }
+}
+
+void CharacterDemoGameInstance::DrawNavGridDebugOverlay() const
+{
+    if (!navGrid_.IsBuilt())
+    {
+        return;
+    }
+
+    Assets::Camera cam = engine_->GetScene().GetRenderCamera();
+    OverrideRenderCamera(cam);
+
+    const ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
+    const ImVec2 viewportPos = ImGui::GetMainViewport()->Pos;
+    if (viewportSize.x <= 1.0f || viewportSize.y <= 1.0f)
+    {
+        return;
+    }
+
+    const float aspect = viewportSize.x / viewportSize.y;
+    const float fov = cam.FieldOfView > 1.0f ? cam.FieldOfView : 60.0f;
+    const glm::mat4 projection = glm::perspective(glm::radians(fov), aspect, 0.05f, 2000.0f);
+    const glm::mat4 viewProjection = projection * cam.ModelView;
+
+    auto project = [&](const glm::vec3& worldPos, ImVec2& screenPos) -> bool
+    {
+        const glm::vec4 clip = viewProjection * glm::vec4(worldPos, 1.0f);
+        if (clip.w <= 0.0f)
+        {
+            return false;
+        }
+        const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+        if (ndc.x < -1.2f || ndc.x > 1.2f || ndc.y < -1.2f || ndc.y > 1.2f)
+        {
+            return false;
+        }
+        screenPos.x = viewportPos.x + (ndc.x * 0.5f + 0.5f) * viewportSize.x;
+        screenPos.y = viewportPos.y + (-ndc.y * 0.5f + 0.5f) * viewportSize.y;
+        return true;
+    };
+
+    auto* drawList = ImGui::GetForegroundDrawList();
+    const float cellSize = navGrid_.GetCellSize();
+
+    size_t reachableCount = 0;
+    size_t disconnectedCount = 0;
+
+    // Draw navgrid cells near the AI bot. Use the current connected component rather than a
+    // single reference height, otherwise different floors collapse into the same green layer.
+    if (aiBot_.controller.IsValid())
+    {
+        const glm::vec3 aiPos = aiBot_.controller.GetPosition();
+        constexpr float drawRadius = 18.0f;
+        const int cellRadius = static_cast<int>(drawRadius / cellSize);
+        const auto reachableMask = navGrid_.BuildReachabilityMask(aiPos, aiPos.y);
+
+        const glm::vec3 gridMin = navGrid_.GetWorldMin();
+        const glm::ivec2 aiCell = {
+            static_cast<int>(std::floor((aiPos.x - gridMin.x) / cellSize)),
+            static_cast<int>(std::floor((aiPos.z - gridMin.z) / cellSize))
+        };
+
+        const ImU32 reachableFill = IM_COL32(60, 210, 110, 52);
+        const ImU32 reachableOutline = IM_COL32(60, 220, 120, 150);
+        const ImU32 disconnectedFill = IM_COL32(255, 180, 40, 44);
+        const ImU32 disconnectedOutline = IM_COL32(255, 190, 40, 132);
+        const ImU32 aiCellColor = IM_COL32(80, 190, 255, 230);
+        constexpr float liftY = 0.05f;
+
+        for (int dz = -cellRadius; dz <= cellRadius; ++dz)
+        {
+            for (int dx = -cellRadius; dx <= cellRadius; ++dx)
+            {
+                if ((dx * dx + dz * dz) > (cellRadius * cellRadius))
+                {
+                    continue;
+                }
+
+                const int gx = aiCell.x + dx;
+                const int gz = aiCell.y + dz;
+                if (gx < 0 || gx >= navGrid_.GetWidth() || gz < 0 || gz >= navGrid_.GetHeight())
+                {
+                    continue;
+                }
+
+                const glm::vec3 cellWorld = navGrid_.GetCellWorldPosition(gx, gz);
+                const float halfExtent = cellSize * 0.46f;
+                std::array<ImVec2, 4> projectedCorners {};
+                const std::array<glm::vec2, 4> cornerOffsets = {
+                    glm::vec2(-halfExtent, -halfExtent),
+                    glm::vec2(halfExtent, -halfExtent),
+                    glm::vec2(halfExtent, halfExtent),
+                    glm::vec2(-halfExtent, halfExtent)
+                };
+
+                bool visible = true;
+                for (size_t cornerIndex = 0; cornerIndex < cornerOffsets.size(); ++cornerIndex)
+                {
+                    const glm::vec2 offset = cornerOffsets[cornerIndex];
+                    const glm::vec3 cornerWorld(cellWorld.x + offset.x, cellWorld.y + liftY, cellWorld.z + offset.y);
+                    if (!project(cornerWorld, projectedCorners[cornerIndex]))
+                    {
+                        visible = false;
+                        break;
+                    }
+                }
+
+                if (!visible || !navGrid_.IsCellWalkable(gx, gz))
+                {
+                    continue;
+                }
+
+                const size_t cellIndex = static_cast<size_t>(gz * navGrid_.GetWidth() + gx);
+                const bool isConnected = cellIndex < reachableMask.size() && reachableMask[cellIndex] != 0;
+                if (isConnected)
+                {
+                    ++reachableCount;
+                }
+                else
+                {
+                    ++disconnectedCount;
+                }
+
+                const ImU32 fillColor = isConnected ? reachableFill : disconnectedFill;
+                const ImU32 outlineColor = isConnected ? reachableOutline : disconnectedOutline;
+                drawList->AddConvexPolyFilled(projectedCorners.data(), static_cast<int>(projectedCorners.size()), fillColor);
+                drawList->AddPolyline(projectedCorners.data(), static_cast<int>(projectedCorners.size()), outlineColor, true, 1.0f);
+
+                if (gx == aiCell.x && gz == aiCell.y)
+                {
+                    ImVec2 screenCenter;
+                    if (project(glm::vec3(cellWorld.x, cellWorld.y + 0.12f, cellWorld.z), screenCenter))
+                    {
+                        drawList->AddCircle(screenCenter, 5.0f, aiCellColor, 10, 2.0f);
+                    }
+                }
+            }
+        }
+    }
+
+    // Draw current AI path
+    const auto& waypoints = aiBot_.pathFollower.waypoints;
+    if (waypoints.size() >= 2)
+    {
+        const ImU32 pathColor = IM_COL32(255, 200, 0, 200);
+        const ImU32 waypointColor = IM_COL32(255, 255, 0, 220);
+        const ImU32 currentWpColor = IM_COL32(0, 255, 128, 255);
+        constexpr float liftY = 0.15f;
+
+        for (size_t i = 0; i + 1 < waypoints.size(); ++i)
+        {
+            ImVec2 sa, sb;
+            glm::vec3 a = waypoints[i];
+            a.y += liftY;
+            glm::vec3 b = waypoints[i + 1];
+            b.y += liftY;
+            if (project(a, sa) && project(b, sb))
+            {
+                drawList->AddLine(sa, sb, pathColor, 2.5f);
+            }
+        }
+
+        for (size_t i = 0; i < waypoints.size(); ++i)
+        {
+            ImVec2 sp;
+            glm::vec3 wp = waypoints[i];
+            wp.y += liftY;
+            if (project(wp, sp))
+            {
+                const bool isCurrent = (i == aiBot_.pathFollower.currentIndex);
+                drawList->AddCircleFilled(sp, isCurrent ? 5.0f : 3.0f, isCurrent ? currentWpColor : waypointColor, 8);
+            }
+        }
+    }
+
+    // Draw info text
+    if (aiBot_.controller.IsValid())
+    {
+        ImVec2 textPos(viewportPos.x + 10.0f, viewportPos.y + viewportSize.y - 60.0f);
+        char buf[160];
+        snprintf(buf, sizeof(buf), "NavGrid: %dx%d | Connected: %zu | OtherWalkable: %zu | Path: %zu | WP: %zu",
+                 navGrid_.GetWidth(), navGrid_.GetHeight(),
+                 reachableCount, disconnectedCount, waypoints.size(), aiBot_.pathFollower.currentIndex);
+        drawList->AddText(textPos, IM_COL32(255, 255, 200, 220), buf);
     }
 }
