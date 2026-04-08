@@ -154,7 +154,6 @@ bool NextRendererGameInstance::OnRenderUI()
 
 	DrawTitleBar();
 	DrawSettings();
-    DrawGraphicsDebugPanel();
 
     if (showPhysicsDebug_)
     {
@@ -257,6 +256,11 @@ bool NextRendererGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCam
     return true;
 }
 
+float NextRendererGameInstance::GetGraphicsDebugPanelTopOffset() const
+{
+    return TitlebarSize;
+}
+
 bool NextRendererGameInstance::OnKey(SDL_Event& event)
 {
     // WASDQE camera movement (only active when right mouse is pressed)
@@ -283,31 +287,6 @@ bool NextRendererGameInstance::OnKey(SDL_Event& event)
 		case SDLK_F1:
             showPhysicsDebug_ = !showPhysicsDebug_;
             return true;
-        case SDLK_F2:
-            showGraphicsDebug_ = !showGraphicsDebug_;
-            return true;
-        case SDLK_1:
-        case SDLK_2:
-        case SDLK_3:
-        case SDLK_4:
-        case SDLK_5:
-        case SDLK_6:
-        case SDLK_7:
-        case SDLK_8:
-        case SDLK_KP_1:
-        case SDLK_KP_2:
-        case SDLK_KP_3:
-        case SDLK_KP_4:
-        case SDLK_KP_5:
-        case SDLK_KP_6:
-        case SDLK_KP_7:
-        case SDLK_KP_8:
-            if (Runtime::GraphicsDebugPanel::TryHandleViewModeShortcut(
-                    event.key.key, true, showGraphicsDebug_, GetEngine().GetShowFlags()))
-            {
-                return true;
-            }
-            break;
 		case SDLK_SPACE: CreateBoxAndPush(); return true;
 			break;
 		default: break;
@@ -699,12 +678,6 @@ void NextRendererGameInstance::DrawSettings()
 	}
 	ImGui::End();
 }
-
-void NextRendererGameInstance::DrawGraphicsDebugPanel()
-{
-    Runtime::GraphicsDebugPanel::DrawPanel(GetEngine(), showGraphicsDebug_, TitlebarSize);
-}
-
 
 void NextRendererGameInstance::DrawTitleBar()
 {

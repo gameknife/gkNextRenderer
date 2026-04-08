@@ -16,6 +16,7 @@
 #include "Runtime/Editor/ConsoleLogBuffer.hpp"
 #include "Runtime/Config/UserSettings.hpp"
 #include "Runtime/Scene/SceneList.hpp"
+#include "Runtime/Utilities/GraphicsDebugPanel.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/SwapChain.hpp"
@@ -1065,6 +1066,11 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
     userInterface_->PreRender();
     const bool uiHandled = gameInstance_->OnRenderUI();
     const bool suppressAllUi = screenShotRequested_;
+    if (!suppressAllUi)
+    {
+        Runtime::GraphicsDebugPanel::DrawPanel(*this, showGraphicsDebugPanel_,
+                                               gameInstance_->GetGraphicsDebugPanelTopOffset());
+    }
     if (!uiHandled && !suppressAllUi)
     {
         userInterface_->Render(stats, renderer_->GpuTimer(), scene_.get());
@@ -1102,6 +1108,14 @@ void NextEngine::OnKey(SDL_Event& event)
     if (userInterface_->WantsToCaptureKeyboard())
     {
         return;
+    }
+
+    if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat)
+    {
+        if (Runtime::GraphicsDebugPanel::TryHandleRendererShortcut(event.key.key, true, showGraphicsDebugPanel_, *this))
+        {
+            return;
+        }
     }
 
     if (event.type == SDL_EVENT_KEY_DOWN)
@@ -1196,6 +1210,21 @@ void NextEngine::OnKey(SDL_Event& event)
     if (gameInstance_->OnKey(event))
     {
         return;
+    }
+
+    if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat)
+    {
+        if (event.key.key == SDLK_F2)
+        {
+            showGraphicsDebugPanel_ = !showGraphicsDebugPanel_;
+            return;
+        }
+
+        if (Runtime::GraphicsDebugPanel::TryHandleViewModeShortcut(
+                event.key.key, true, showGraphicsDebugPanel_, showFlags_))
+        {
+            return;
+        }
     }
 }
 

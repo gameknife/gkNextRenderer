@@ -8,8 +8,10 @@
 #include "Runtime/Engine.hpp"
 #include "Assets/Core/Scene.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <unordered_map>
+#include <spdlog/spdlog.h>
 #include <xxhash.h>
 
 #define TINYBVH_IMPLEMENTATION
@@ -26,6 +28,8 @@ Assets::SphericalHarmonics HdrsHs[100];
 namespace
 {
     constexpr uint32_t kCascadeVoxelCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
+    std::atomic_bool GLoggedInvalidCpuAsHit{false};
+    std::atomic_bool GLoggedInvalidCpuAsMaterial{false};
 
     struct FWorldBounds
     {
@@ -100,6 +104,26 @@ FMaterial& FetchMaterial(uint matId)
 
 uint FetchMaterialId(uint materialIdx, uint instanceId)
 {
+    if (GbvhTlasContexts == nullptr || instanceId >= GbvhTlasContexts->size())
+    {
+        if (!GLoggedInvalidCpuAsMaterial.exchange(true))
+        {
+            SPDLOG_WARN("CPUAccelerationStructure: invalid TLAS instance {} while resolving material id.", instanceId);
+        }
+        return 0;
+    }
+
+    if (materialIdx >= (*GbvhTlasContexts)[instanceId].matIdxs.size())
+    {
+        if (!GLoggedInvalidCpuAsMaterial.exchange(true))
+        {
+            SPDLOG_WARN(
+                "CPUAccelerationStructure: section/material index {} exceeds supported material slots ({}); falling back to material 0.",
+                materialIdx, (*GbvhTlasContexts)[instanceId].matIdxs.size());
+        }
+        return 0;
+    }
+
     return (*GbvhTlasContexts)[instanceId].matIdxs[materialIdx];
 }
 
@@ -111,9 +135,37 @@ bool TraceRay(vec3 origin, vec3 rayDir, float dist, vec3& outNormal, uint& outMa
     if (ray.hit.t < dist)
     {
         uint32_t primIdx = ray.hit.prim;
+        if (GbvhInstanceList == nullptr || GbvhTlasContexts == nullptr || GbvhBlasContexts == nullptr ||
+            ray.hit.inst >= GbvhInstanceList->size() || ray.hit.inst >= GbvhTlasContexts->size())
+        {
+            if (!GLoggedInvalidCpuAsHit.exchange(true))
+            {
+                SPDLOG_WARN("CPUAccelerationStructure: invalid hit instance {} during CPU ray trace.", ray.hit.inst);
+            }
+            return false;
+        }
+
         tinybvh::BLASInstance& instance = (*GbvhInstanceList)[ray.hit.inst];
         FCPUTLASInstanceInfo& instContext = (*GbvhTlasContexts)[ray.hit.inst];
+        if (instance.blasIdx >= GbvhBlasContexts->size())
+        {
+            if (!GLoggedInvalidCpuAsHit.exchange(true))
+            {
+                SPDLOG_WARN("CPUAccelerationStructure: invalid BLAS index {} during CPU ray trace.", instance.blasIdx);
+            }
+            return false;
+        }
+
         FCPUBLASContext& context = (*GbvhBlasContexts)[instance.blasIdx];
+        if (primIdx >= context.extinfos.size())
+        {
+            if (!GLoggedInvalidCpuAsHit.exchange(true))
+            {
+                SPDLOG_WARN("CPUAccelerationStructure: invalid primitive index {} during CPU ray trace.", primIdx);
+            }
+            return false;
+        }
+
         mat4* worldTS = (mat4*)instance.transform;
         vec4 normalWS = vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
 

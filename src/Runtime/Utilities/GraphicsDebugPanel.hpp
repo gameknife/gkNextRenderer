@@ -99,6 +99,98 @@ namespace Runtime
             ImGui::PopItemWidth();
         }
 
+        inline const char* GetCurrentRendererLabel(NextEngine& engine, const UserSettings& userSetting)
+        {
+            const int rendererOptionCount = GetRendererOptionCount(engine);
+            const int currentRendererIndex = ResolveRendererOptionIndex(userSetting, rendererOptionCount);
+            if (currentRendererIndex >= 0)
+            {
+                return RendererOptions[currentRendererIndex].label;
+            }
+
+            return "Unknown";
+        }
+
+        inline const char* GetBoolStatusLabel(bool value)
+        {
+            return value ? LOCTEXT("On") : LOCTEXT("Off");
+        }
+
+        inline void DrawBadge(const char* text, const ImVec4& background, const ImVec4& foreground)
+        {
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            const ImVec2 pos = ImGui::GetCursorScreenPos();
+            const ImVec2 textSize = ImGui::CalcTextSize(text);
+            const ImVec2 padding(7.0f, 3.0f);
+            const ImVec2 size(textSize.x + padding.x * 2.0f, textSize.y + padding.y * 2.0f);
+
+            drawList->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), ImGui::GetColorU32(background), 8.0f);
+            drawList->AddText(ImVec2(pos.x + padding.x, pos.y + padding.y), ImGui::GetColorU32(foreground), text);
+            ImGui::Dummy(size);
+        }
+
+        inline void DrawSectionHeader(const char* title)
+        {
+            ImGui::Spacing();
+            ImGui::TextColored(ImVec4(0.96f, 0.82f, 0.42f, 1.0f), "%s", title);
+            ImGui::Separator();
+        }
+
+        inline void DrawValueRow(const char* label, const char* value, const ImVec4& valueColor)
+        {
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextColored(ImVec4(0.72f, 0.76f, 0.82f, 1.0f), "%s", label);
+            ImGui::SameLine(136.0f);
+            ImGui::TextColored(valueColor, "%s", value);
+        }
+
+        inline void DrawBooleanRow(const char* label, bool enabled)
+        {
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextColored(ImVec4(0.72f, 0.76f, 0.82f, 1.0f), "%s", label);
+            ImGui::SameLine(136.0f);
+            DrawBadge(
+                GetBoolStatusLabel(enabled),
+                enabled ? ImVec4(0.14f, 0.36f, 0.20f, 0.92f) : ImVec4(0.22f, 0.24f, 0.28f, 0.88f),
+                enabled ? ImVec4(0.86f, 1.0f, 0.90f, 1.0f) : ImVec4(0.85f, 0.88f, 0.92f, 0.96f));
+        }
+
+        inline void DrawShortcutRow(const char* shortcut, const char* label, bool active)
+        {
+            DrawBadge(
+                shortcut,
+                active ? ImVec4(0.22f, 0.32f, 0.52f, 0.95f) : ImVec4(0.20f, 0.22f, 0.27f, 0.90f),
+                active ? ImVec4(0.92f, 0.97f, 1.0f, 1.0f) : ImVec4(0.82f, 0.85f, 0.90f, 1.0f));
+            ImGui::SameLine();
+            ImGui::TextColored(active ? ImVec4(0.95f, 0.97f, 1.0f, 1.0f) : ImVec4(0.72f, 0.76f, 0.82f, 1.0f), "%s", label);
+        }
+
+        inline bool CycleRenderer(NextEngine& engine)
+        {
+            UserSettings& userSetting = engine.GetUserSettings();
+            const int rendererOptionCount = GetRendererOptionCount(engine);
+            if (rendererOptionCount <= 0)
+            {
+                return false;
+            }
+
+            int currentRendererIndex = ResolveRendererOptionIndex(userSetting, rendererOptionCount);
+            if (currentRendererIndex < 0)
+            {
+                currentRendererIndex = 0;
+            }
+
+            const int nextRendererIndex = (currentRendererIndex + 1) % rendererOptionCount;
+            const auto nextRendererType = static_cast<int32_t>(RendererOptions[nextRendererIndex].type);
+            if (userSetting.RendererType == nextRendererType)
+            {
+                return false;
+            }
+
+            userSetting.RendererType = nextRendererType;
+            return true;
+        }
+
         inline EViewMode ResolveViewMode(const ShowFlags& showFlags)
         {
             int enabledModeCount = 0;
@@ -224,6 +316,21 @@ namespace Runtime
             return true;
         }
 
+        inline bool TryHandleRendererShortcut(SDL_Keycode key, bool pressed, bool panelVisible, NextEngine& engine)
+        {
+            if (!pressed || !panelVisible)
+            {
+                return false;
+            }
+
+            if (key != SDLK_Q)
+            {
+                return false;
+            }
+
+            return CycleRenderer(engine);
+        }
+
         inline void DrawPanel(NextEngine& engine, bool& panelVisible, float topOffset)
         {
             if (!panelVisible)
@@ -240,63 +347,42 @@ namespace Runtime
                 ImVec2(viewport->Pos.x + viewport->Size.x - margin, viewport->Pos.y + topOffset + margin),
                 ImGuiCond_Always,
                 ImVec2(1.0f, 0.0f));
-            ImGui::SetNextWindowBgAlpha(0.82f);
+            ImGui::SetNextWindowBgAlpha(0.88f);
 
             constexpr ImGuiWindowFlags flags =
                 ImGuiWindowFlags_AlwaysAutoResize |
                 ImGuiWindowFlags_NoResize |
-                ImGuiWindowFlags_NoSavedSettings;
+                ImGuiWindowFlags_NoSavedSettings |
+                ImGuiWindowFlags_NoNav |
+                ImGuiWindowFlags_NoMove |
+                ImGuiWindowFlags_NoInputs;
 
-            if (ImGui::Begin("Graphics Debug", &panelVisible, flags))
+            if (ImGui::Begin("Graphics Debug", nullptr, flags))
             {
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f, 7.0f));
                 const EViewMode currentViewMode = ResolveViewMode(showFlags);
-
-                ImGui::TextUnformatted(LOCTEXT("Renderer"));
-                DrawRendererSelector(engine, userSetting, "##GraphicsDebugRendererList");
-
-                ImGui::Spacing();
-                ImGui::TextUnformatted(LOCTEXT("View Mode"));
-                ImGui::PushItemWidth(-1);
-                const char* currentLabel = currentViewMode == EViewMode::Custom
+                const char* currentViewModeLabel = currentViewMode == EViewMode::Custom
                     ? LOCTEXT("Custom")
                     : LOCTEXT(ViewModeLabels[static_cast<size_t>(currentViewMode)]);
-                if (ImGui::BeginCombo("##GraphicsDebugViewMode", currentLabel))
+
+                DrawSectionHeader(LOCTEXT("Renderer"));
+                DrawValueRow(LOCTEXT("Current"), GetCurrentRendererLabel(engine, userSetting), ImVec4(0.93f, 0.96f, 1.0f, 1.0f));
+                ImGui::TextColored(ImVec4(0.52f, 0.57f, 0.65f, 1.0f), "%s", LOCTEXT("Available Renderers"));
+                for (int index = 0; index < GetRendererOptionCount(engine); ++index)
                 {
-                    for (int index = 0; index < static_cast<int>(ViewModeLabels.size()); ++index)
-                    {
-                        const auto mode = static_cast<EViewMode>(index);
-                        const bool isSelected = mode == currentViewMode;
-                        if (ImGui::Selectable(LOCTEXT(ViewModeLabels[index]), isSelected))
-                        {
-                            ApplyViewMode(showFlags, mode);
-                        }
-
-                        if (isSelected)
-                        {
-                            ImGui::SetItemDefaultFocus();
-                        }
-                    }
-
-                    if (currentViewMode == EViewMode::Custom)
-                    {
-                        ImGui::Separator();
-                        ImGui::TextDisabled("%s", LOCTEXT("Custom"));
-                    }
-
-                    ImGui::EndCombo();
+                    const bool isActive = RendererOptions[index].type == static_cast<Vulkan::ERendererType>(userSetting.RendererType);
+                    DrawShortcutRow(isActive ? LOCTEXT("Active") : LOCTEXT("Inactive"), RendererOptions[index].label, isActive);
                 }
-                ImGui::PopItemWidth();
 
-                ImGui::Separator();
-                ImGui::TextUnformatted(LOCTEXT("Mode Shortcuts"));
+                DrawSectionHeader(LOCTEXT("View Mode"));
+                DrawValueRow(LOCTEXT("Current"), currentViewModeLabel, ImVec4(0.93f, 0.96f, 1.0f, 1.0f));
+                ImGui::TextColored(ImVec4(0.52f, 0.57f, 0.65f, 1.0f), "%s", LOCTEXT("Mode Shortcuts"));
                 for (int index = 0; index < static_cast<int>(ViewModeLabels.size()); ++index)
                 {
                     const auto mode = static_cast<EViewMode>(index);
                     const bool isActive = mode == currentViewMode;
-                    if (ImGui::Selectable(fmt::format("[{}] {}", index + 1, LOCTEXT(ViewModeLabels[index])).c_str(), isActive))
-                    {
-                        ApplyViewMode(showFlags, mode);
-                    }
+                    const std::string shortcut = fmt::format("[{}]", index + 1);
+                    DrawShortcutRow(shortcut.c_str(), LOCTEXT(ViewModeLabels[index]), isActive);
                 }
 
                 if (currentViewMode == EViewMode::Custom)
@@ -304,17 +390,10 @@ namespace Runtime
                     ImGui::TextDisabled("%s", LOCTEXT("Custom View Mode Hint"));
                 }
 
-                ImGui::Separator();
-                ImGui::Checkbox(LOCTEXT("Show Grid"), &showFlags.ShowGrid);
-                ImGui::Checkbox(LOCTEXT("Visual Debug"), &showFlags.ShowVisualDebug);
-                ImGui::Checkbox(LOCTEXT("Lighting"), &showFlags.DebugDraw_Lighting);
-                ImGui::Checkbox(LOCTEXT("Bounding Box"), &showFlags.DebugDraw_BoundingBox);
-                ImGui::Checkbox(LOCTEXT("Physics Bodies"), &showFlags.DebugDraw_PhysicsBodies);
-                ImGui::Checkbox(LOCTEXT("Edge"), &showFlags.ShowEdge);
-                ImGui::Checkbox(LOCTEXT("Skeleton"), &showFlags.ShowDebugSkeleton);
-                ImGui::Checkbox(LOCTEXT("Wireframe"), &showFlags.ShowWireframe);
-                ImGui::Separator();
-                ImGui::TextDisabled("%s", LOCTEXT("F2: toggle Graphics Debug."));
+                DrawSectionHeader(LOCTEXT("Panel Shortcuts"));
+                DrawShortcutRow("Q", LOCTEXT("Q: cycle renderer."), false);
+                DrawShortcutRow("F2", LOCTEXT("F2: toggle Graphics Debug."), false);
+                ImGui::PopStyleVar();
             }
             ImGui::End();
         }

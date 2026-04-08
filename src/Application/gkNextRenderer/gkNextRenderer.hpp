@@ -24,6 +24,7 @@ public:
     void OnInitUI() override;
 
     bool OverrideRenderCamera(Assets::Camera& OutRenderCamera) const override;
+    float GetGraphicsDebugPanelTopOffset() const override;
 
     bool OnKey(SDL_Event& event) override;
     bool OnCursorPosition(double xpos, double ypos) override;
@@ -40,7 +41,6 @@ public:
     void CreateBoxAndPush();
 
 private:
-    void DrawGraphicsDebugPanel();
     void DrawSettings();
     void DrawTitleBar();
     void RequestScreenshot(bool openFolder, const std::string& tag);
@@ -56,6 +56,5 @@ private:
 
     bool isTakingScreenshot_ = false;
     bool agentValidationCaptured_ = false;
-    bool showGraphicsDebug_ = false;
     bool showPhysicsDebug_ = false;
 };

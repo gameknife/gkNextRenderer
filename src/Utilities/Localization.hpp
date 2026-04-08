@@ -35,11 +35,23 @@ namespace Utilities
             if(!fileData.empty())
             {
                 std::string content(fileData.begin(), fileData.end());
+                if (content.size() >= 3 &&
+                    static_cast<unsigned char>(content[0]) == 0xEF &&
+                    static_cast<unsigned char>(content[1]) == 0xBB &&
+                    static_cast<unsigned char>(content[2]) == 0xBF)
+                {
+                    content.erase(0, 3);
+                }
                 std::istringstream stream(content);
                 std::string line;
                 
                 while(std::getline(stream, line))
                 {
+                    if (!line.empty() && line.back() == '\r')
+                    {
+                        line.pop_back();
+                    }
+
                     size_t separatorPos = line.find(';');
                     if(separatorPos != std::string::npos)
                     {

@@ -171,6 +171,7 @@ private:
     const char* GetMovementModeName() const;
     const char* GetBehaviorDebugStateName(EBehaviorDebugState state) const;
     EBehaviorDebugState ToBehaviorDebugState(EBehaviorTreeStatus status) const;
+    void DrawAIDebugMenu();
     void DrawAIBotBehaviorTreeUI() const;
     void DrawNavGridDebugOverlay() const;
     FNavGridSettings CreateNavGridSettings() const;
@@ -232,10 +233,11 @@ private:
     bool keySprint_ = false;
     bool mouseCaptured_ = false;
     bool resetMouse_ = true;
-    bool showGraphicsDebug_ = false;
     bool showPhysicsDebug_ = false;
     bool footIKEnabled_ = true;
     bool showFootIKDebug_ = false;
+    bool showAIDebugMenu_ = false;
+    bool showBehaviorTreeDebug_ = false;
     bool showNavGridDebug_ = false;
     bool aiEnabled_ = true;
     glm::dvec2 mousePos_{0.0, 0.0};

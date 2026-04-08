@@ -15,7 +15,6 @@
 #include "Runtime/Config/CVarSystem.hpp"
 #include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
-#include "Runtime/Utilities/GraphicsDebugPanel.hpp"
 #include "Runtime/Utilities/PhysicsDebugOverlay.hpp"
 #include "Vulkan/WindowSurface.hpp"
 
@@ -392,10 +391,13 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Text("On Ground: %s", onGround ? "Yes" : "No");
     ImGui::Text("View: %s", firstPersonMode_ ? "FPS" : "TPS");
     ImGui::Text("Move Mode: %s", GetMovementModeName());
-    ImGui::Text("Graphics Debug: %s", showGraphicsDebug_ ? "On" : "Off");
+    ImGui::Text("Graphics Debug: %s", engine_->IsGraphicsDebugPanelVisible() ? "On" : "Off");
     ImGui::Text("Physics Debug: %s", showPhysicsDebug_ ? "On" : "Off");
     ImGui::Text("Foot IK: %s", footIKEnabled_ ? "On" : "Off");
     ImGui::Text("Foot IK Debug: %s", showFootIKDebug_ ? "On" : "Off");
+    ImGui::Text("AI Debug Menu: %s", showAIDebugMenu_ ? "On" : "Off");
+    ImGui::Text("AI BT Overlay: %s", showBehaviorTreeDebug_ ? "On" : "Off");
+    ImGui::Text("NavGrid Overlay: %s", showNavGridDebug_ ? "On" : "Off");
     ImGui::Text("AI: %s", aiEnabled_ ? GetAIBotStateName() : "Disabled");
     if (characterModelLoaded_)
     {
@@ -425,24 +427,29 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Text("WASD - Move | Shift - Run");
     ImGui::Text("Space - Jump | Mouse - Look");
     ImGui::Text("V - Toggle FPS/TPS | Tab - Move Mode");
-    ImGui::Text("LMB - Shoot | F1 - Physics | F2 - Graphics | F3 - Foot IK");
-    ImGui::Text("1-8 - View Modes | F9 - IK Debug");
+    ImGui::Text("LMB - Shoot | F1 - Physics | F2 - Graphics | F3 - Foot IK | Q - Next Renderer");
+    ImGui::Text("1-8 - View Modes | F8 - AI Debug Menu | F9 - IK Debug");
     ImGui::Text("ESC - Release Mouse");
 
     ImGui::SliderFloat("Walk Speed", &walkSpeed_, 1.0f, 10.0f);
     ImGui::SliderFloat("Run Speed", &runSpeed_, 5.0f, 20.0f);
     ImGui::SliderFloat("Camera Dist", &cameraDistance_, 1.0f, 15.0f);
     ImGui::Checkbox("Enable AI", &aiEnabled_);
-    ImGui::Checkbox("NavGrid Debug", &showNavGridDebug_);
     ImGui::SliderFloat("AI Sight", &aiSightRange_, 8.0f, 60.0f);
     ImGui::SliderFloat("AI Fire Range", &aiFireRange_, 4.0f, 40.0f);
     ImGui::SliderFloat("AI Fire Cooldown", &aiFireCooldown_, 0.2f, 4.0f);
 
     ImGui::End();
 
-    DrawAIBotBehaviorTreeUI();
-    Runtime::GraphicsDebugPanel::DrawPanel(*engine_, showGraphicsDebug_, 0.0f);
+    if (showAIDebugMenu_)
+    {
+        DrawAIDebugMenu();
+    }
 
+    if (showBehaviorTreeDebug_)
+    {
+        DrawAIBotBehaviorTreeUI();
+    }
     if (showPhysicsDebug_)
     {
         Assets::Camera debugCamera = engine_->GetScene().GetRenderCamera();
@@ -542,12 +549,58 @@ bool CharacterDemoGameInstance::OnKey(SDL_Event& event)
             showPhysicsDebug_ = !showPhysicsDebug_;
         }
         return true;
-    case SDLK_F2:
+    case SDLK_F8:
         if (pressed)
         {
-            showGraphicsDebug_ = !showGraphicsDebug_;
+            showAIDebugMenu_ = !showAIDebugMenu_;
         }
         return true;
+    case SDLK_0:
+    case SDLK_KP_0:
+    case SDLK_1:
+    case SDLK_2:
+    case SDLK_3:
+    case SDLK_4:
+    case SDLK_5:
+    case SDLK_6:
+    case SDLK_7:
+    case SDLK_8:
+    case SDLK_9:
+    case SDLK_KP_1:
+    case SDLK_KP_2:
+    case SDLK_KP_3:
+    case SDLK_KP_4:
+    case SDLK_KP_5:
+    case SDLK_KP_6:
+    case SDLK_KP_7:
+    case SDLK_KP_8:
+    case SDLK_KP_9:
+        if (showAIDebugMenu_)
+        {
+            if (!pressed)
+            {
+                return true;
+            }
+
+            switch (key)
+            {
+            case SDLK_1:
+            case SDLK_KP_1:
+                showBehaviorTreeDebug_ = !showBehaviorTreeDebug_;
+                return true;
+            case SDLK_2:
+            case SDLK_KP_2:
+                showNavGridDebug_ = !showNavGridDebug_;
+                return true;
+            case SDLK_0:
+            case SDLK_KP_0:
+                showAIDebugMenu_ = false;
+                return true;
+            default:
+                return true;
+            }
+        }
+        return false;
     case SDLK_F9:
         if (pressed)
         {
@@ -568,28 +621,6 @@ bool CharacterDemoGameInstance::OnKey(SDL_Event& event)
             SDL_SetWindowRelativeMouseMode(engine_->GetWindow().Handle(), mouseCaptured_);
         }
         return true;
-    case SDLK_1:
-    case SDLK_2:
-    case SDLK_3:
-    case SDLK_4:
-    case SDLK_5:
-    case SDLK_6:
-    case SDLK_7:
-    case SDLK_8:
-    case SDLK_KP_1:
-    case SDLK_KP_2:
-    case SDLK_KP_3:
-    case SDLK_KP_4:
-    case SDLK_KP_5:
-    case SDLK_KP_6:
-    case SDLK_KP_7:
-    case SDLK_KP_8:
-        if (Runtime::GraphicsDebugPanel::TryHandleViewModeShortcut(key, pressed, showGraphicsDebug_,
-                                                                   engine_->GetShowFlags()))
-        {
-            return true;
-        }
-        return false;
     default:
         return false;
     }
@@ -2557,13 +2588,43 @@ CharacterDemoGameInstance::EBehaviorDebugState CharacterDemoGameInstance::ToBeha
     }
 }
 
+void CharacterDemoGameInstance::DrawAIDebugMenu()
+{
+    if (!showAIDebugMenu_)
+    {
+        return;
+    }
+
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x - 280.0f, viewport->WorkPos.y + 14.0f),
+                            ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(262.0f, 0.0f), ImGuiCond_Always);
+
+    if (ImGui::Begin("AI Debug Menu", nullptr,
+                     ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse))
+    {
+        ImGui::TextUnformatted("F8 toggles this menu");
+        ImGui::Separator();
+        ImGui::Text("1 - Behavior Tree Overlay [%s]", showBehaviorTreeDebug_ ? "On" : "Off");
+        ImGui::Text("2 - NavGrid Overlay [%s]", showNavGridDebug_ ? "On" : "Off");
+        ImGui::TextDisabled("3-9 reserved for future AI debug toggles");
+        ImGui::Text("0 - Close AI Debug Menu");
+    }
+    ImGui::End();
+}
+
 void CharacterDemoGameInstance::DrawAIBotBehaviorTreeUI() const
 {
+    if (!showBehaviorTreeDebug_)
+    {
+        return;
+    }
+
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     const ImVec2 overlaySize(760.0f, 360.0f);
     const ImVec2 overlayPos(
         viewport->WorkPos.x + viewport->WorkSize.x - overlaySize.x - 18.0f,
-        viewport->WorkPos.y + 14.0f);
+        viewport->WorkPos.y + 112.0f);
 
     ImGui::SetNextWindowPos(overlayPos, ImGuiCond_Always);
     ImGui::SetNextWindowSize(overlaySize, ImGuiCond_Always);

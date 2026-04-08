@@ -50,6 +50,7 @@ public:
     virtual void OnInitUI() {}
     virtual void OnRayHitResponse(Assets::RayCastResult& result) {}
     virtual void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) {}
+    virtual float GetGraphicsDebugPanelTopOffset() const { return 0.0f; }
 
     // camera
     virtual bool OverrideRenderCamera(Assets::Camera& OutRenderCamera) const { return false; }
@@ -161,6 +162,8 @@ public:
     Assets::Scene* GetScenePtr() { return scene_.get(); }
     UserSettings& GetUserSettings() { return userSettings_; }
     ShowFlags& GetShowFlags() { return showFlags_; }
+    bool IsGraphicsDebugPanelVisible() const { return showGraphicsDebugPanel_; }
+    void SetGraphicsDebugPanelVisible(bool visible) { showGraphicsDebugPanel_ = visible; }
 
     float GetTime() const { return static_cast<float>(time_); }
     float GetDeltaSeconds() const { return static_cast<float>(deltaSeconds_); }
@@ -307,6 +310,7 @@ private:
     mutable UserSettings userSettings_{};
     mutable ShowFlags showFlags_{};
     mutable Assets::UniformBufferObject prevUBO_{};
+    bool showGraphicsDebugPanel_ = false;
 
     // scene, maybe multiple at a time
     std::shared_ptr<Assets::Scene> scene_;
