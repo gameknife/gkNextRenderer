@@ -30,6 +30,7 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_GltfSkinning.cpp
 	Tests/Test_CameraFocus.cpp
 	Tests/Test_ComponentSystem.cpp
+	Tests/Test_GameplayComponents.cpp
 	Tests/Test_LDrawConfig.cpp
 	Tests/Test_LDrawGeometry.cpp
 	Tests/Test_LDrawLoader.cpp
@@ -76,6 +77,9 @@ add_library(gkNextEngine
 	${src_files_rendering}
 	${src_files_thirdparty}
 )
+add_library(NextGameplay
+	${src_files_nextgameplay}
+)
 add_executable(gkNextRenderer
 	MACOSX_BUNDLE
 	${src_files_gkrenderer}
@@ -89,6 +93,9 @@ add_library(gkNextEngine
 	${src_files_vulkan} 
 	${src_files_rendering}
 	${src_files_thirdparty}
+)
+add_library(NextGameplay
+	${src_files_nextgameplay}
 )
 add_executable(gkNextRenderer
 	${src_files_gkrenderer}
@@ -176,11 +183,13 @@ gkNextRenderer
 elseif( IOS )
 set(AllTargets
 gkNextEngine
+NextGameplay
 gkNextRenderer
 )
 elseif( MINGW )
 set(AllTargets
 gkNextEngine
+NextGameplay
 gkNextRenderer
 gkNextStillBenchmark
 gkNextMotionBenchmark
@@ -194,6 +203,7 @@ CharacterDemo
 else()
 set(AllTargets
 gkNextEngine
+NextGameplay
 gkNextRenderer
 gkNextStillBenchmark
 gkNextMotionBenchmark
@@ -283,6 +293,9 @@ foreach(target IN LISTS AllTargets)
 			target_link_directories(${target} PRIVATE ${STREAMLINE_LIB_DIR})
 			target_link_libraries(${target} PRIVATE sl.interposer)
 		endif()
+	elseif ( ${target} STREQUAL NextGameplay )
+		set_target_properties(${target} PROPERTIES FOLDER "Gameplay")
+		target_link_libraries(${target} PRIVATE gkNextEngine)
 	else()
 		set_target_properties(${target} PROPERTIES FOLDER "Programs")
 		if ( NOT ANDROID ) 
@@ -413,9 +426,13 @@ foreach(target IN LISTS AllTargets)
 
 endforeach()
 
+if ( TARGET CharacterDemo )
+target_link_libraries(CharacterDemo PRIVATE NextGameplay)
+endif()
+
 # Test Target
 if ( NOT ANDROID AND NOT IOS AND NOT MINGW )
-target_link_libraries(gkNextUnitTests PRIVATE gkNextEngine Catch2::Catch2WithMain gk_project_options)
+target_link_libraries(gkNextUnitTests PRIVATE NextGameplay gkNextEngine Catch2::Catch2WithMain gk_project_options)
 set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
 endif()
 
