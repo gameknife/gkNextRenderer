@@ -1,4 +1,4 @@
-#include "Runtime/AI/NavGrid.h"
+#include "NextGameplay/AI/NavGrid.h"
 #include "Assets/Acceleration/CPUAccelerationStructure.h"
 #include "Assets/GPU/UniformBuffer.hpp"
 
@@ -16,6 +16,8 @@ namespace
     constexpr float kDiagonalInvSqrt = 0.70710678f;
 }
 
+namespace NextGameplay
+{
 void FNavGrid::Build(FCPUAccelerationStructure& bvh, const FNavGridSettings& settings)
 {
     settings_ = settings;
@@ -709,4 +711,5 @@ int FNavGrid::GetFootprintMarginCells() const
 int FNavGrid::GetExtraErosionCells() const
 {
     return std::max(0, GetFootprintMarginCells() - 1);
+}
 }

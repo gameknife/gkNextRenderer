@@ -60,6 +60,13 @@ file(GLOB_RECURSE src_files_engine
     "Options.hpp"
 )
 
+# --- Gameplay Layer ---
+file(GLOB_RECURSE src_files_nextgameplay
+    "NextGameplay/*.cpp"
+    "NextGameplay/*.hpp"
+    "NextGameplay/*.h"
+)
+
 # --- Editor ---
 file(GLOB_RECURSE src_files_editor "Editor/*")
 

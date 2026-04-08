@@ -1,10 +1,16 @@
 #pragma once
 
 #include "Common/CoreMinimal.hpp"
+#include "NextGameplay/AI/NavGrid.h"
+#include "NextGameplay/Character/CharacterActor.h"
+#include "NextGameplay/AI/PathFollower.h"
+#include "NextGameplay/Components/AIAgentComponent.h"
+#include "NextGameplay/Components/CharacterAnimationComponent.h"
+#include "NextGameplay/Components/CharacterControlComponent.h"
+#include "NextGameplay/Components/CharacterGameplayComponent.h"
 #include "Runtime/Engine.hpp"
 #include "Runtime/Subsystems/NextCharacterController.h"
-#include "Runtime/AI/NavGrid.h"
-#include "Runtime/AI/PathFollower.h"
+
 #include <random>
 
 namespace Runtime { class SkinnedMeshComponent; }
@@ -37,47 +43,16 @@ public:
     bool OnScroll(double xoffset, double yoffset) override;
 
 private:
-    enum class EBehaviorTreeStatus
-    {
-        Failure,
-        Success,
-        Running,
-    };
+    using EBehaviorTreeStatus = NextGameplay::EBehaviorTreeStatus;
+    using EBehaviorDebugState = NextGameplay::EBehaviorDebugState;
+    using ECharacterAnimState = NextGameplay::ECharacterAnimState;
+    using EAIBotState = NextGameplay::EAIAgentState;
+    using ECharacterMovementMode = NextGameplay::ECharacterMovementMode;
+    using FNavGridSettings = NextGameplay::FNavGridSettings;
+    using FNavGrid = NextGameplay::FNavGrid;
+    using FPathFollower = NextGameplay::FPathFollower;
 
-    enum class EBehaviorDebugState
-    {
-        Inactive,
-        Failure,
-        Success,
-        Running,
-    };
-
-    enum class ECharacterAnimState
-    {
-        Idle,
-        WalkForward,
-        WalkBackward,
-        WalkStrafeLeft,
-        WalkStrafeRight,
-        RunForward,
-        RunBackward,
-        RunStrafeLeft,
-        RunStrafeRight,
-        JumpStart,
-        JumpLoop,
-        JumpLand,
-    };
-
-    enum class EAIBotState
-    {
-        Disabled,
-        Patrol,
-        Chase,
-        Evade,
-        Attack,
-    };
-
-    struct FAIBot
+    struct FAIBotRuntime
     {
         NextCharacterController controller;
         std::shared_ptr<Assets::Node> visualNode;
@@ -97,16 +72,6 @@ private:
         bool triggerJump = false;
         EAIBotState state = EAIBotState::Disabled;
         EAIBotState desiredState = EAIBotState::Disabled;
-        std::shared_ptr<Assets::Node> skinnedRoot;
-        Runtime::SkinnedMeshComponent* primarySkinnedMeshComp = nullptr;
-        std::vector<Runtime::SkinnedMeshComponent*> skinnedMeshComps;
-        std::string appendRootName = "Mannequin_Medium_1";
-        ECharacterAnimState animState = ECharacterAnimState::Idle;
-        bool characterModelLoaded = false;
-        bool characterLoadRequested = false;
-        bool wasOnGroundLastFrame = true;
-        float jumpStartHoldTimeRemaining = 0.0f;
-        float jumpLandHoldTimeRemaining = 0.0f;
         EBehaviorDebugState behaviorRootStatus = EBehaviorDebugState::Inactive;
         EBehaviorDebugState behaviorEvadeStatus = EBehaviorDebugState::Inactive;
         EBehaviorDebugState behaviorAttackStatus = EBehaviorDebugState::Inactive;
@@ -127,6 +92,8 @@ private:
         glm::vec3 patrolProgressAnchor{0.0f};
         FPathFollower pathFollower;
         EAIBotState previousState = EAIBotState::Disabled;
+        NextGameplay::CharacterActor character;
+        std::shared_ptr<NextGameplay::AIAgentComponent> agentComponent;
     };
 
     glm::vec3 GetMoveForward() const;
@@ -143,7 +110,6 @@ private:
     void UpdateAnimationState(float deltaSeconds);
     void TryInitAIBotCharacterModel();
     void UpdateAIBotAnimationState(float deltaSeconds);
-    void MapAnimationNames(const std::vector<std::string>& names);
     const char* GetAnimStateName() const;
     const char* GetAIBotStateName() const;
     void ResetCharacterState();
@@ -167,7 +133,6 @@ private:
     void DisableNodePhysicsRecursive(const std::shared_ptr<Assets::Node>& node);
     void PlayCharacterAnimation(const std::string& name, bool loop, float playSpeed = 1.0f);
     void UpdateCharacterFacingYaw(const glm::vec3& moveDir, const glm::vec3& currentVelocity, float deltaSeconds);
-    void UpdateCharacterAnimationPostProcess();
     const char* GetMovementModeName() const;
     const char* GetBehaviorDebugStateName(EBehaviorDebugState state) const;
     EBehaviorDebugState ToBehaviorDebugState(EBehaviorTreeStatus status) const;
@@ -178,50 +143,20 @@ private:
     void RefreshNavGridFromSceneDirtyRegion();
 
     NextEngine* engine_;
-    NextCharacterController characterController_;
+    NextGameplay::CharacterActor playerCharacter_;
 
     // Character visual node (box placeholder, hidden once skinned model loads)
-    std::shared_ptr<Assets::Node> characterNode_;
     uint32_t capsuleModelId_ = 0;
     uint32_t characterMatId_ = 0;
     uint32_t aiCharacterMatId_ = 0;
     uint32_t projectileModelId_ = 0;
     uint32_t projectileMatId_ = 0;
-    FAIBot aiBot_;
+    FAIBotRuntime aiBot_;
     FNavGrid navGrid_;
     std::mt19937 patrolRng_{std::random_device{}()};
-
-    // Skinned character model
-    std::shared_ptr<Assets::Node> skinnedCharacterRoot_;
-    Runtime::SkinnedMeshComponent* primarySkinnedMeshComp_ = nullptr;
-    std::vector<Runtime::SkinnedMeshComponent*> skinnedMeshComps_;
-    bool characterModelLoaded_ = false;
-    bool characterLoadRequested_ = false;
     bool sceneHelpersInjected_ = false;
     std::string characterAppendRootName_ = "Mannequin_Medium";
 
-    ECharacterAnimState currentAnimState_ = ECharacterAnimState::Idle;
-    std::string animIdle_;
-    std::string animWalkForward_;
-    std::string animWalkBackward_;
-    std::string animStrafeLeft_;
-    std::string animStrafeRight_;
-    std::string animRunForward_;
-    std::string animRunBackward_;
-    std::string animRunStrafeLeft_;
-    std::string animRunStrafeRight_;
-    std::string animJumpStart_;
-    std::string animJumpLoop_;
-    std::string animJumpLand_;
-    bool wasOnGroundLastFrame_ = true;
-    float jumpStartHoldTimeRemaining_ = 0.0f;
-    float jumpLandHoldTimeRemaining_ = 0.0f;
-
-    enum class ECharacterMovementMode
-    {
-        CameraAligned,
-        MoveAligned,
-    };
     ECharacterMovementMode movementMode_ = ECharacterMovementMode::CameraAligned;
 
     // Input state

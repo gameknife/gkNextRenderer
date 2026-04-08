@@ -2,19 +2,22 @@
 
 #include <imgui.h>
 #include <SDL3/SDL_events.h>
-#include <spdlog/spdlog.h>
 #include <glm/gtc/matrix_transform.hpp>
+#include <spdlog/spdlog.h>
 
+#include "Assets/Core/Node.h"
 #include "Assets/Loaders/FProcModel.h"
 #include "Assets/Loaders/FSceneLoader.h"
-#include "Assets/Core/Node.h"
+#include "NextGameplay/Gameplay/GameplayMath.hpp"
+#include "NextGameplay/Reflection/GameplayReflectionRegistry.h"
+#include "NextGameplay/Utilities/SceneNodeUtils.hpp"
+#include "Runtime/Config/CVarSystem.hpp"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/SkinnedMeshComponent.h"
 #include "Runtime/Engine.hpp"
-#include "Runtime/Config/CVarSystem.hpp"
-#include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
+#include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Utilities/PhysicsDebugOverlay.hpp"
 #include "Vulkan/WindowSurface.hpp"
 
@@ -24,106 +27,13 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
     return std::make_unique<CharacterDemoGameInstance>(config, options, engine);
 }
 
-namespace
-{
-    glm::vec3 NormalizeHorizontalOrZero(const glm::vec3& value)
-    {
-        glm::vec3 horizontal(value.x, 0.0f, value.z);
-        const float length = glm::length(horizontal);
-        if (length <= 0.001f)
-        {
-            return glm::vec3(0.0f);
-        }
-        return horizontal / length;
-    }
-
-    float AdvanceYawToward(float currentYaw, const glm::vec3& desiredDirection, float turnSpeed, float deltaSeconds)
-    {
-        const glm::vec3 horizontalDir = NormalizeHorizontalOrZero(desiredDirection);
-        if (glm::length(horizontalDir) <= 0.001f)
-        {
-            return currentYaw;
-        }
-
-        const float targetYaw = std::atan2(horizontalDir.x, horizontalDir.z);
-        const float yawDelta = std::remainder(targetYaw - currentYaw, glm::two_pi<float>());
-        const float maxStep = turnSpeed * deltaSeconds;
-        if (std::abs(yawDelta) <= maxStep)
-        {
-            return targetYaw;
-        }
-        return currentYaw + glm::sign(yawDelta) * maxStep;
-    }
-
-    bool HasSkinnedMeshInHierarchy(const std::shared_ptr<Assets::Node>& node)
-    {
-        if (!node)
-        {
-            return false;
-        }
-
-        if (node->GetComponent<Runtime::SkinnedMeshComponent>())
-        {
-            return true;
-        }
-
-        for (const auto& child : node->Children())
-        {
-            if (HasSkinnedMeshInHierarchy(child))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    std::shared_ptr<Assets::Node> FindAppendedCharacterRoot(const Assets::Scene& scene,
-                                                            const std::string& baseName,
-                                                            size_t ordinal,
-                                                            const std::shared_ptr<Assets::Node>& exclude = nullptr)
-    {
-        std::vector<std::shared_ptr<Assets::Node>> candidates;
-        for (const auto& node : scene.Nodes())
-        {
-            if (!node || node->GetParent() != nullptr)
-            {
-                continue;
-            }
-
-            const std::string& nodeName = node->GetName();
-            if (nodeName != baseName && !nodeName.starts_with(baseName + "_"))
-            {
-                continue;
-            }
-
-            if (exclude && node->GetInstanceId() == exclude->GetInstanceId())
-            {
-                continue;
-            }
-
-            if (!HasSkinnedMeshInHierarchy(node))
-            {
-                continue;
-            }
-
-            candidates.push_back(node);
-        }
-
-        std::sort(candidates.begin(), candidates.end(),
-                  [](const std::shared_ptr<Assets::Node>& lhs, const std::shared_ptr<Assets::Node>& rhs)
-                  {
-                      return lhs->GetInstanceId() < rhs->GetInstanceId();
-                  });
-
-        if (ordinal >= candidates.size())
-        {
-            return nullptr;
-        }
-
-        return candidates[ordinal];
-    }
-}
+using NextGameplay::AdvanceYawToward;
+using NextGameplay::CollectSkinnedMeshComponents;
+using NextGameplay::DisableNodePhysicsRecursive;
+using NextGameplay::FindAppendedCharacterRoot;
+using NextGameplay::NormalizeHorizontalOrZero;
+using NextGameplay::SetNodeRayCastVisibilityRecursive;
+using NextGameplay::SetNodeVisibilityRecursive;
 
 CharacterDemoGameInstance::CharacterDemoGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
     : NextGameInstanceBase(config, options, engine)
@@ -135,6 +45,8 @@ CharacterDemoGameInstance::CharacterDemoGameInstance(Vulkan::WindowConfig& confi
 
 void CharacterDemoGameInstance::OnInit()
 {
+    NextGameplay::RegisterGameplayReflection();
+
     // CharacterDemo appends the skinned character after the base playground is already loaded.
     // The append path triggers a full scene mesh-buffer rebuild, so the original scene meshes must
     // keep their CPU copy alive instead of being discarded after the first upload.
@@ -151,17 +63,17 @@ void CharacterDemoGameInstance::OnInit()
 
 void CharacterDemoGameInstance::OnTick(double deltaSeconds)
 {
-    if (!characterController_.IsValid())
+    if (!playerCharacter_.controller.IsValid())
     {
         return;
     }
 
     // Try to find and init the skinned character model once it's loaded
-    if (characterLoadRequested_ && !characterModelLoaded_)
+    if (playerCharacter_.modelLoadRequested && !playerCharacter_.modelLoaded)
     {
         TryInitCharacterModel();
     }
-    if (aiBot_.characterLoadRequested && !aiBot_.characterModelLoaded)
+    if (aiBot_.character.modelLoadRequested && !aiBot_.character.modelLoaded)
     {
         TryInitAIBotCharacterModel();
     }
@@ -184,23 +96,26 @@ void CharacterDemoGameInstance::OnTick(double deltaSeconds)
     }
 
     float speed = keySprint_ ? runSpeed_ : walkSpeed_;
+    playerCharacter_.SetControlIntent(moveDir, GetViewForward(), speed, keySprint_, keyJump_);
 
-    characterController_.Update(moveDir, speed, keyJump_, static_cast<float>(deltaSeconds));
+    playerCharacter_.controller.Update(playerCharacter_.control ? playerCharacter_.control->GetMoveIntent() : moveDir,
+                                       playerCharacter_.control ? playerCharacter_.control->GetDesiredSpeed() : speed,
+                                       playerCharacter_.ConsumeJumpRequested(), static_cast<float>(deltaSeconds));
     keyJump_ = false; // consume jump
 
-    const glm::vec3 currentVelocity = characterController_.GetLinearVelocity();
+    const glm::vec3 currentVelocity = playerCharacter_.controller.GetLinearVelocity();
 
-    UpdateCharacterFacingYaw(moveDir, currentVelocity, static_cast<float>(deltaSeconds));
+    UpdateCharacterFacingYaw(playerCharacter_.control ? playerCharacter_.control->GetMoveIntent() : moveDir,
+                             currentVelocity, static_cast<float>(deltaSeconds));
     UpdateCharacterNode();
     UpdateAnimationState(static_cast<float>(deltaSeconds));
-    UpdateCharacterAnimationPostProcess();
     UpdateAIBot(static_cast<float>(deltaSeconds));
 }
 
 void CharacterDemoGameInstance::OnDestroy()
 {
-    characterController_.Destroy();
-    aiBot_.controller.Destroy();
+    playerCharacter_.controller.Destroy();
+    aiBot_.character.controller.Destroy();
 }
 
 void CharacterDemoGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
@@ -268,10 +183,7 @@ void CharacterDemoGameInstance::OnSceneLoaded()
     glm::vec3 camPos = glm::vec3(invModelView[3]);
     settings.initialPosition = glm::vec3(camPos.x, camPos.y, camPos.z);
 
-    characterController_.Create(engine_->GetPhysicsEngine(), settings);
-    wasOnGroundLastFrame_ = true;
-    jumpStartHoldTimeRemaining_ = 0.0f;
-    jumpLandHoldTimeRemaining_ = 0.0f;
+    playerCharacter_.CreateController(engine_->GetPhysicsEngine(), settings);
 
     // Extract yaw from camera
     glm::vec3 camForward = -glm::vec3(invModelView[2]);
@@ -279,24 +191,23 @@ void CharacterDemoGameInstance::OnSceneLoaded()
     pitch_ = std::asin(glm::clamp(camForward.y, -1.0f, 1.0f));
     characterYaw_ = yaw_;
 
-    // Create the character visual node
-    uint32_t instanceId = engine_->GetScene().GenerateInstanceId();
-    characterNode_ = Assets::Node::CreateNode("CharacterBody",
-        settings.initialPosition, glm::quat(1, 0, 0, 0), glm::vec3(1), instanceId);
-
-    auto renderComp = std::make_shared<Runtime::RenderComponent>();
-    renderComp->SetModelId(capsuleModelId_);
-    renderComp->SetMaterial({characterMatId_});
-    renderComp->SetVisible(true);
-    renderComp->SetRayCastVisible(false);
-    characterNode_->AddComponent(renderComp);
-
-    // Prevent Scene::AddNode from auto-creating a static mesh body for the visual-only character node.
-    auto physicsComp = std::make_shared<Runtime::PhysicsComponent>();
-    physicsComp->SetMobility(Runtime::ENodeMobility::Dynamic);
-    characterNode_->AddComponent(physicsComp);
-
-    engine_->GetScene().AddNode(characterNode_);
+    NextGameplay::FCharacterActorSetup playerSetup;
+    playerSetup.actorName = "CharacterActor";
+    playerSetup.initialPosition = settings.initialPosition;
+    playerSetup.appendRootName = characterAppendRootName_;
+    playerSetup.controlSource = NextGameplay::ECharacterControlSource::Player;
+    playerSetup.movementMode = movementMode_;
+    playerSetup.firstPersonMode = firstPersonMode_;
+    playerSetup.footIKEnabled = footIKEnabled_;
+    playerSetup.eyeHeight = firstPersonEyeHeight_;
+    playerSetup.facingYaw = characterYaw_;
+    playerSetup.walkStrafePlaySpeed = walkStrafePlaySpeed_;
+    playerSetup.runBackwardPlaySpeed = runBackwardPlaySpeed_;
+    playerSetup.jumpStartHoldTime = jumpStartHoldTime_;
+    playerSetup.jumpLandHoldTime = jumpLandHoldTime_;
+    playerCharacter_.Initialize(engine_->GetScene(), playerSetup);
+    playerCharacter_.SetControlIntent(glm::vec3(0.0f), GetViewForward(), 0.0f, false, false);
+    playerCharacter_.CreatePlaceholderVisual(engine_->GetScene(), "CharacterBody", capsuleModelId_, characterMatId_);
     InitAIBot();
 
     // Build navigation grid from scene BVH for AI pathfinding
@@ -313,9 +224,9 @@ void CharacterDemoGameInstance::OnSceneLoaded()
     
     // Load the skinned character model asynchronously
     engine_->RequestLoadSceneAdd("assets/models/characters/Mannequin_Medium.glb");
-    characterLoadRequested_ = true;
+    playerCharacter_.SetModelLoadRequested(true);
     engine_->RequestLoadSceneAdd("assets/models/characters/Mannequin_Medium.glb");
-    aiBot_.characterLoadRequested = true;
+    aiBot_.character.SetModelLoadRequested(true);
 
     // Capture mouse
     mouseCaptured_ = true;
@@ -330,16 +241,16 @@ void CharacterDemoGameInstance::OnSceneUnloaded()
     sceneHelpersInjected_ = false;
 }
 
-FNavGridSettings CharacterDemoGameInstance::CreateNavGridSettings() const
+CharacterDemoGameInstance::FNavGridSettings CharacterDemoGameInstance::CreateNavGridSettings() const
 {
     const glm::vec3 sceneMin = engine_->GetScene().GetSceneAABBMin();
     const glm::vec3 sceneMax = engine_->GetScene().GetSceneAABBMax();
 
     FNavGridSettings navSettings;
     navSettings.cellSize = 0.75f;
-    navSettings.agentRadius = characterController_.GetRadius() + 0.02f;
+    navSettings.agentRadius = playerCharacter_.controller.GetRadius() + 0.02f;
     navSettings.maxSlopeAngle = 50.0f;
-    navSettings.clearanceHeight = std::max(characterController_.GetHeight(), 0.1f);
+    navSettings.clearanceHeight = std::max(playerCharacter_.controller.GetHeight(), 0.1f);
     navSettings.maxStepHeight = 0.35f;
     navSettings.worldMin = glm::vec3(sceneMin.x - 2.0f, 0.0f, sceneMin.z - 2.0f);
     navSettings.worldMax = glm::vec3(sceneMax.x + 2.0f, 0.0f, sceneMax.z + 2.0f);
@@ -372,7 +283,7 @@ void CharacterDemoGameInstance::RefreshNavGridFromSceneDirtyRegion()
 
 bool CharacterDemoGameInstance::OnRenderUI()
 {
-    if (!characterController_.IsValid())
+    if (!playerCharacter_.controller.IsValid())
     {
         return false;
     }
@@ -382,9 +293,9 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Begin("Character Demo", nullptr,
                  ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 
-    glm::vec3 pos = characterController_.GetPosition();
-    glm::vec3 vel = characterController_.GetLinearVelocity();
-    bool onGround = characterController_.IsOnGround();
+    glm::vec3 pos = playerCharacter_.controller.GetPosition();
+    glm::vec3 vel = playerCharacter_.controller.GetLinearVelocity();
+    bool onGround = playerCharacter_.controller.IsOnGround();
 
     ImGui::Text("Position: %.1f, %.1f, %.1f", pos.x, pos.y, pos.z);
     ImGui::Text("Velocity: %.1f, %.1f, %.1f", vel.x, vel.y, vel.z);
@@ -399,28 +310,28 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Text("AI BT Overlay: %s", showBehaviorTreeDebug_ ? "On" : "Off");
     ImGui::Text("NavGrid Overlay: %s", showNavGridDebug_ ? "On" : "Off");
     ImGui::Text("AI: %s", aiEnabled_ ? GetAIBotStateName() : "Disabled");
-    if (characterModelLoaded_)
+    if (playerCharacter_.modelLoaded)
     {
         ImGui::Text("Anim State: %s", GetAnimStateName());
-        if (primarySkinnedMeshComp_)
+        if (playerCharacter_.primarySkinnedMeshComp)
         {
-            ImGui::Text("Playing: %s", primarySkinnedMeshComp_->GetCurrentAnimationName().c_str());
+            ImGui::Text("Playing: %s", playerCharacter_.primarySkinnedMeshComp->GetCurrentAnimationName().c_str());
         }
     }
-    else if (characterLoadRequested_)
+    else if (playerCharacter_.modelLoadRequested)
     {
         ImGui::Text("Character: Loading...");
     }
-    if (aiBot_.controller.IsValid())
+    if (aiBot_.character.controller.IsValid())
     {
-        const glm::vec3 aiPos = aiBot_.controller.GetPosition();
+        const glm::vec3 aiPos = aiBot_.character.controller.GetPosition();
         const float botDistance = glm::distance(aiPos, pos);
         ImGui::Text("AI Pos: %.1f, %.1f, %.1f", aiPos.x, aiPos.y, aiPos.z);
         ImGui::Text("AI Dist: %.1f | Visible: %s | LOS: %s", botDistance, aiBot_.targetVisible ? "Yes" : "No",
                     HasLineOfSightToPlayer() ? "Yes" : "No");
-        if (aiBot_.characterModelLoaded && aiBot_.primarySkinnedMeshComp)
+        if (aiBot_.character.modelLoaded && aiBot_.character.primarySkinnedMeshComp)
         {
-            ImGui::Text("AI Clip: %s", aiBot_.primarySkinnedMeshComp->GetCurrentAnimationName().c_str());
+            ImGui::Text("AI Clip: %s", aiBot_.character.primarySkinnedMeshComp->GetCurrentAnimationName().c_str());
         }
     }
     ImGui::Separator();
@@ -434,7 +345,13 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::SliderFloat("Walk Speed", &walkSpeed_, 1.0f, 10.0f);
     ImGui::SliderFloat("Run Speed", &runSpeed_, 5.0f, 20.0f);
     ImGui::SliderFloat("Camera Dist", &cameraDistance_, 1.0f, 15.0f);
-    ImGui::Checkbox("Enable AI", &aiEnabled_);
+    if (ImGui::Checkbox("Enable AI", &aiEnabled_))
+    {
+        if (aiBot_.agentComponent)
+        {
+            aiBot_.agentComponent->SetEnabled(aiEnabled_);
+        }
+    }
     ImGui::SliderFloat("AI Sight", &aiSightRange_, 8.0f, 60.0f);
     ImGui::SliderFloat("AI Fire Range", &aiFireRange_, 4.0f, 40.0f);
     ImGui::SliderFloat("AI Fire Cooldown", &aiFireCooldown_, 0.2f, 4.0f);
@@ -455,10 +372,10 @@ bool CharacterDemoGameInstance::OnRenderUI()
         Assets::Camera debugCamera = engine_->GetScene().GetRenderCamera();
         OverrideRenderCamera(debugCamera);
         Runtime::DrawPhysicsDebugOverlay(engine_->GetScene(), debugCamera);
-        Runtime::DrawCharacterControllerDebugOverlay(characterController_, debugCamera);
-        if (aiBot_.controller.IsValid())
+        Runtime::DrawCharacterControllerDebugOverlay(playerCharacter_.controller, debugCamera);
+        if (aiBot_.character.controller.IsValid())
         {
-            Runtime::DrawCharacterControllerDebugOverlay(aiBot_.controller, debugCamera);
+            Runtime::DrawCharacterControllerDebugOverlay(aiBot_.character.controller, debugCamera);
         }
     }
 
@@ -472,12 +389,12 @@ bool CharacterDemoGameInstance::OnRenderUI()
 
 bool CharacterDemoGameInstance::OverrideRenderCamera(Assets::Camera& OutRenderCamera) const
 {
-    if (!characterController_.IsValid())
+    if (!playerCharacter_.controller.IsValid())
     {
         return false;
     }
 
-    glm::vec3 charPos = characterController_.GetPosition();
+    glm::vec3 charPos = playerCharacter_.controller.GetPosition();
     glm::vec3 forward = GetViewForward();
     glm::vec3 right = GetMoveRight();
     glm::vec3 up = glm::normalize(glm::cross(right, forward));
@@ -537,6 +454,7 @@ bool CharacterDemoGameInstance::OnKey(SDL_Event& event)
             movementMode_ = movementMode_ == ECharacterMovementMode::CameraAligned
                 ? ECharacterMovementMode::MoveAligned
                 : ECharacterMovementMode::CameraAligned;
+            playerCharacter_.SetMovementMode(movementMode_);
             if (movementMode_ == ECharacterMovementMode::CameraAligned || firstPersonMode_)
             {
                 characterYaw_ = yaw_;
@@ -611,6 +529,8 @@ bool CharacterDemoGameInstance::OnKey(SDL_Event& event)
         if (pressed)
         {
             footIKEnabled_ = !footIKEnabled_;
+            playerCharacter_.SetFootIKEnabled(footIKEnabled_);
+            aiBot_.character.SetFootIKEnabled(footIKEnabled_);
         }
         return true;
     case SDLK_ESCAPE:
@@ -726,12 +646,12 @@ glm::vec3 CharacterDemoGameInstance::GetViewForward() const
 
 glm::vec3 CharacterDemoGameInstance::GetEyePosition() const
 {
-    return characterController_.GetPosition() + glm::vec3(0.0f, firstPersonEyeHeight_, 0.0f);
+    return playerCharacter_.controller.GetPosition() + glm::vec3(0.0f, firstPersonEyeHeight_, 0.0f);
 }
 
 glm::vec3 CharacterDemoGameInstance::GetAIBotEyePosition() const
 {
-    return aiBot_.controller.GetPosition() + glm::vec3(0.0f, aiEyeHeight_, 0.0f);
+    return aiBot_.character.controller.GetPosition() + glm::vec3(0.0f, aiEyeHeight_, 0.0f);
 }
 
 float CharacterDemoGameInstance::GetCharacterYaw() const
@@ -746,23 +666,24 @@ float CharacterDemoGameInstance::GetCharacterYaw() const
 void CharacterDemoGameInstance::SetFirstPersonMode(bool enabled)
 {
     firstPersonMode_ = enabled;
+    playerCharacter_.SetFirstPersonMode(enabled);
 
-    if (characterNode_)
+    if (playerCharacter_.gameplay && playerCharacter_.gameplay->visualRoot)
     {
-        if (auto renderComp = characterNode_->GetComponent<Runtime::RenderComponent>())
+        if (auto renderComp = playerCharacter_.gameplay->visualRoot->GetComponent<Runtime::RenderComponent>())
         {
-            renderComp->SetVisible(!firstPersonMode_ && !characterModelLoaded_);
+            renderComp->SetVisible(!firstPersonMode_ && !playerCharacter_.modelLoaded);
         }
     }
 
-    SetNodeVisibilityRecursive(skinnedCharacterRoot_, !firstPersonMode_);
+    SetNodeVisibilityRecursive(playerCharacter_.skinnedRoot, !firstPersonMode_);
 
     engine_->GetScene().MarkDirty();
 }
 
 void CharacterDemoGameInstance::FireProjectile()
 {
-    if (!characterController_.IsValid())
+    if (!playerCharacter_.controller.IsValid())
     {
         return;
     }
@@ -811,39 +732,20 @@ void CharacterDemoGameInstance::SpawnProjectile(const std::string& nodeName, con
 
 void CharacterDemoGameInstance::UpdateCharacterNode()
 {
-    glm::vec3 pos = characterController_.GetPosition();
-    glm::quat rotation = glm::angleAxis(GetCharacterYaw(), glm::vec3(0.0f, 1.0f, 0.0f));
-
-    // Update box placeholder (visible until skinned model loads)
-    if (characterNode_)
-    {
-        characterNode_->SetTranslation(pos);
-        characterNode_->SetRotation(rotation);
-        characterNode_->RecalcTransform(true);
-    }
-
-    // Update the entire appended character hierarchy instead of only one skinned mesh node.
-    if (skinnedCharacterRoot_)
-    {
-        skinnedCharacterRoot_->SetTranslation(pos);
-        skinnedCharacterRoot_->SetRotation(rotation);
-        skinnedCharacterRoot_->RecalcTransform(true);
-    }
+    const glm::vec3 pos = playerCharacter_.controller.GetPosition();
+    playerCharacter_.SyncTransform(pos, GetCharacterYaw());
 
     engine_->GetScene().MarkDirty();
 }
 
 void CharacterDemoGameInstance::InitAIBot()
 {
-    aiBot_.controller.Destroy();
+    aiBot_.character.Reset();
     aiBot_.visualNode.reset();
-    aiBot_.skinnedRoot.reset();
-    aiBot_.primarySkinnedMeshComp = nullptr;
-    aiBot_.skinnedMeshComps.clear();
     aiBot_.patrolPoints.clear();
     aiBot_.moveDir = glm::vec3(0.0f);
     aiBot_.lookDir = glm::vec3(0.0f, 0.0f, 1.0f);
-    aiBot_.lastKnownTargetPosition = characterController_.GetPosition();
+    aiBot_.lastKnownTargetPosition = playerCharacter_.controller.GetPosition();
     aiBot_.fireCooldownRemaining = 0.0f;
     aiBot_.targetMemoryRemaining = 0.0f;
     aiBot_.patrolPauseRemaining = 0.0f;
@@ -867,18 +769,16 @@ void CharacterDemoGameInstance::InitAIBot()
     aiBot_.patrolAbandonedTarget = false;
     aiBot_.patrolLastCommittedIndex = std::numeric_limits<size_t>::max();
     aiBot_.patrolSelectedTarget = glm::vec3(0.0f);
-    aiBot_.patrolProgressAnchor = aiBot_.controller.IsValid() ? aiBot_.controller.GetPosition() : glm::vec3(0.0f);
-    aiBot_.appendRootName = characterAppendRootName_ + "_1";
-    aiBot_.animState = ECharacterAnimState::Idle;
-    aiBot_.characterModelLoaded = false;
-    aiBot_.characterLoadRequested = false;
-    aiBot_.wasOnGroundLastFrame = true;
-    aiBot_.jumpStartHoldTimeRemaining = 0.0f;
-    aiBot_.jumpLandHoldTimeRemaining = 0.0f;
+    aiBot_.patrolProgressAnchor = glm::vec3(0.0f);
+
+    aiBot_.agentComponent = std::make_shared<NextGameplay::AIAgentComponent>();
+    aiBot_.agentComponent->ResetRuntimeState(aiEnabled_, playerCharacter_.controller.GetPosition());
+    aiBot_.agentComponent->SetState(aiEnabled_ ? EAIBotState::Patrol : EAIBotState::Disabled);
+    aiBot_.agentComponent->SetDesiredState(aiBot_.agentComponent->GetState());
 
     CollectAIBotPatrolPoints();
 
-    glm::vec3 aiSpawn = characterController_.GetPosition() + glm::vec3(6.0f, 0.0f, 8.0f);
+    glm::vec3 aiSpawn = playerCharacter_.controller.GetPosition() + glm::vec3(6.0f, 0.0f, 8.0f);
     if (!aiBot_.patrolPoints.empty())
     {
         aiSpawn = aiBot_.patrolPoints.front();
@@ -890,10 +790,25 @@ void CharacterDemoGameInstance::InitAIBot()
     settings.maxStrength = 4000.0f;
     settings.mass = 180.0f;
     settings.initialPosition = aiSpawn;
-    aiBot_.controller.Create(engine_->GetPhysicsEngine(), settings);
+
+    NextGameplay::FCharacterActorSetup aiSetup;
+    aiSetup.actorName = "EnemyBotActor";
+    aiSetup.initialPosition = aiSpawn;
+    aiSetup.appendRootName = characterAppendRootName_ + "_1";
+    aiSetup.controlSource = NextGameplay::ECharacterControlSource::AI;
+    aiSetup.movementMode = ECharacterMovementMode::MoveAligned;
+    aiSetup.footIKEnabled = footIKEnabled_;
+    aiSetup.eyeHeight = aiEyeHeight_;
+    aiSetup.walkStrafePlaySpeed = walkStrafePlaySpeed_;
+    aiSetup.runBackwardPlaySpeed = runBackwardPlaySpeed_;
+    aiSetup.jumpStartHoldTime = jumpStartHoldTime_;
+    aiSetup.jumpLandHoldTime = jumpLandHoldTime_;
+    aiBot_.character.CreateController(engine_->GetPhysicsEngine(), settings);
+    aiBot_.character.Initialize(engine_->GetScene(), aiSetup);
+    aiBot_.character.actorRoot->AddComponent(aiBot_.agentComponent);
     aiBot_.patrolProgressAnchor = aiSpawn;
 
-    const glm::vec3 toPlayer = characterController_.GetPosition() - aiSpawn;
+    const glm::vec3 toPlayer = playerCharacter_.controller.GetPosition() - aiSpawn;
     const glm::vec3 lookDir = NormalizeHorizontalOrZero(toPlayer);
     if (glm::length(lookDir) > 0.001f)
     {
@@ -904,27 +819,9 @@ void CharacterDemoGameInstance::InitAIBot()
     {
         aiBot_.yaw = 0.0f;
     }
-
-    const uint32_t instanceId = engine_->GetScene().GenerateInstanceId();
-    aiBot_.visualNode = Assets::Node::CreateNode(
-        "EnemyBot",
-        aiSpawn,
-        glm::quat(1, 0, 0, 0),
-        glm::vec3(1.0f),
-        instanceId);
-
-    auto renderComp = std::make_shared<Runtime::RenderComponent>();
-    renderComp->SetModelId(capsuleModelId_);
-    renderComp->SetMaterial({aiCharacterMatId_});
-    renderComp->SetVisible(true);
-    renderComp->SetRayCastVisible(false);
-    aiBot_.visualNode->AddComponent(renderComp);
-
-    auto physicsComp = std::make_shared<Runtime::PhysicsComponent>();
-    physicsComp->SetMobility(Runtime::ENodeMobility::Dynamic);
-    aiBot_.visualNode->AddComponent(physicsComp);
-
-    engine_->GetScene().AddNode(aiBot_.visualNode);
+    aiBot_.character.SetControlIntent(glm::vec3(0.0f), aiBot_.lookDir, 0.0f, false, false);
+    aiBot_.visualNode =
+        aiBot_.character.CreatePlaceholderVisual(engine_->GetScene(), "EnemyBot", capsuleModelId_, aiCharacterMatId_);
 }
 
 void CharacterDemoGameInstance::CollectAIBotPatrolPoints()
@@ -972,6 +869,11 @@ void CharacterDemoGameInstance::CollectAIBotPatrolPoints()
             glm::vec3(-12.0f, 0.0f, 18.0f),
             glm::vec3(12.0f, 0.0f, 18.0f),
         };
+    }
+
+    if (aiBot_.agentComponent)
+    {
+        aiBot_.agentComponent->patrolPoints = aiBot_.patrolPoints;
     }
 }
 
@@ -1178,7 +1080,7 @@ bool CharacterDemoGameInstance::TryGetSceneNodePosition(const std::string& nodeN
 
 bool CharacterDemoGameInstance::HasLineOfSightToPlayer() const
 {
-    if (!aiBot_.controller.IsValid() || !characterController_.IsValid())
+    if (!aiBot_.character.controller.IsValid() || !playerCharacter_.controller.IsValid())
     {
         return false;
     }
@@ -1260,13 +1162,17 @@ CharacterDemoGameInstance::EAIBotState CharacterDemoGameInstance::DetermineDesir
 
 void CharacterDemoGameInstance::UpdateAIBot(float deltaSeconds)
 {
-    if (!aiBot_.controller.IsValid())
+    if (!aiBot_.character.controller.IsValid())
     {
         aiBot_.behaviorRootStatus = EBehaviorDebugState::Inactive;
         aiBot_.behaviorEvadeStatus = EBehaviorDebugState::Inactive;
         aiBot_.behaviorAttackStatus = EBehaviorDebugState::Inactive;
         aiBot_.behaviorChaseStatus = EBehaviorDebugState::Inactive;
         aiBot_.behaviorPatrolStatus = EBehaviorDebugState::Inactive;
+        if (aiBot_.agentComponent)
+        {
+            aiBot_.agentComponent->ResetDebugState();
+        }
         return;
     }
 
@@ -1277,9 +1183,11 @@ void CharacterDemoGameInstance::UpdateAIBot(float deltaSeconds)
     aiBot_.stateHoldRemaining = std::max(0.0f, aiBot_.stateHoldRemaining - deltaSeconds);
     aiBot_.moveDir = glm::vec3(0.0f);
     aiBot_.triggerJump = false;
+    aiBot_.character.ClearControlFrameState();
+    aiBot_.character.SetControlIntent(glm::vec3(0.0f), aiBot_.lookDir, 0.0f, false, false);
 
-    const glm::vec3 aiPos = aiBot_.controller.GetPosition();
-    const glm::vec3 playerPos = characterController_.GetPosition();
+    const glm::vec3 aiPos = aiBot_.character.controller.GetPosition();
+    const glm::vec3 playerPos = playerCharacter_.controller.GetPosition();
     const glm::vec3 toPlayer = playerPos - aiPos;
     const glm::vec3 toPlayerDir = NormalizeHorizontalOrZero(toPlayer);
     const float distanceToPlayer = glm::length(glm::vec2(toPlayer.x, toPlayer.z));
@@ -1303,6 +1211,15 @@ void CharacterDemoGameInstance::UpdateAIBot(float deltaSeconds)
     }
 
     aiBot_.targetVisible = rawTargetVisible || aiBot_.targetVisibleGraceRemaining > 0.0f;
+    if (aiBot_.agentComponent)
+    {
+        aiBot_.agentComponent->SetEnabled(aiEnabled_);
+        aiBot_.agentComponent->SetTargetVisible(aiBot_.targetVisible);
+        aiBot_.agentComponent->lookDir = aiBot_.character.control ? aiBot_.character.control->GetLookIntent() : aiBot_.lookDir;
+        aiBot_.agentComponent->moveDir = aiBot_.character.control ? aiBot_.character.control->GetMoveIntent() : aiBot_.moveDir;
+        aiBot_.agentComponent->lastKnownTargetPosition = aiBot_.lastKnownTargetPosition;
+        aiBot_.agentComponent->yaw = aiBot_.yaw;
+    }
 
     if (!aiEnabled_)
     {
@@ -1313,9 +1230,18 @@ void CharacterDemoGameInstance::UpdateAIBot(float deltaSeconds)
         aiBot_.behaviorAttackStatus = EBehaviorDebugState::Inactive;
         aiBot_.behaviorChaseStatus = EBehaviorDebugState::Inactive;
         aiBot_.behaviorPatrolStatus = EBehaviorDebugState::Inactive;
-        aiBot_.controller.Update(glm::vec3(0.0f), 0.0f, false, deltaSeconds);
+        aiBot_.character.SetControlIntent(glm::vec3(0.0f), aiBot_.lookDir, 0.0f, false, false);
+        aiBot_.character.controller.Update(aiBot_.character.control ? aiBot_.character.control->GetMoveIntent() : glm::vec3(0.0f),
+                                           aiBot_.character.control ? aiBot_.character.control->GetDesiredSpeed() : 0.0f,
+                                           aiBot_.character.ConsumeJumpRequested(), deltaSeconds);
         UpdateAIBotAnimationState(deltaSeconds);
         UpdateAIBotNode();
+        if (aiBot_.agentComponent)
+        {
+            aiBot_.agentComponent->SetState(EAIBotState::Disabled);
+            aiBot_.agentComponent->SetDesiredState(EAIBotState::Disabled);
+            aiBot_.agentComponent->ResetDebugState();
+        }
         return;
     }
 
@@ -1367,18 +1293,61 @@ void CharacterDemoGameInstance::UpdateAIBot(float deltaSeconds)
         speed = aiRunSpeed_;
     }
 
-    aiBot_.controller.Update(aiBot_.moveDir, speed, aiBot_.triggerJump, deltaSeconds);
+    aiBot_.character.SetControlIntent(aiBot_.moveDir, aiBot_.lookDir, speed, speed > aiWalkSpeed_ + 0.05f,
+                                      aiBot_.triggerJump);
 
-    glm::vec3 facingDirection = aiBot_.lookDir;
+    aiBot_.character.controller.Update(aiBot_.character.control ? aiBot_.character.control->GetMoveIntent() : aiBot_.moveDir,
+                                       aiBot_.character.control ? aiBot_.character.control->GetDesiredSpeed() : speed,
+                                       aiBot_.character.ConsumeJumpRequested(), deltaSeconds);
+
+    glm::vec3 facingDirection = aiBot_.character.control ? aiBot_.character.control->GetLookIntent() : aiBot_.lookDir;
     if (aiBot_.state != EAIBotState::Attack &&
-        glm::length(aiBot_.controller.GetLinearVelocity()) > 0.2f)
+        glm::length(aiBot_.character.controller.GetLinearVelocity()) > 0.2f)
     {
-        facingDirection = aiBot_.controller.GetLinearVelocity();
+        facingDirection = aiBot_.character.controller.GetLinearVelocity();
     }
     aiBot_.yaw = AdvanceYawToward(aiBot_.yaw, facingDirection, aiTurnSpeed_, deltaSeconds);
 
     UpdateAIBotAnimationState(deltaSeconds);
     UpdateAIBotNode();
+    if (aiBot_.agentComponent)
+    {
+        aiBot_.agentComponent->SetState(aiBot_.state);
+        aiBot_.agentComponent->SetDesiredState(aiBot_.desiredState);
+        aiBot_.agentComponent->SetPreviousState(aiBot_.previousState);
+        aiBot_.agentComponent->SetTargetVisible(aiBot_.targetVisible);
+        aiBot_.agentComponent->SetBehaviorRootStatus(aiBot_.behaviorRootStatus);
+        aiBot_.agentComponent->SetBehaviorEvadeStatus(aiBot_.behaviorEvadeStatus);
+        aiBot_.agentComponent->SetBehaviorAttackStatus(aiBot_.behaviorAttackStatus);
+        aiBot_.agentComponent->SetBehaviorChaseStatus(aiBot_.behaviorChaseStatus);
+        aiBot_.agentComponent->SetBehaviorPatrolStatus(aiBot_.behaviorPatrolStatus);
+        aiBot_.agentComponent->moveDir = aiBot_.character.control ? aiBot_.character.control->GetMoveIntent() : aiBot_.moveDir;
+        aiBot_.agentComponent->lookDir = aiBot_.character.control ? aiBot_.character.control->GetLookIntent() : aiBot_.lookDir;
+        aiBot_.agentComponent->lastKnownTargetPosition = aiBot_.lastKnownTargetPosition;
+        aiBot_.agentComponent->yaw = aiBot_.yaw;
+        aiBot_.agentComponent->fireCooldownRemaining = aiBot_.fireCooldownRemaining;
+        aiBot_.agentComponent->targetMemoryRemaining = aiBot_.targetMemoryRemaining;
+        aiBot_.agentComponent->patrolPauseRemaining = aiBot_.patrolPauseRemaining;
+        aiBot_.agentComponent->targetVisibleGraceRemaining = aiBot_.targetVisibleGraceRemaining;
+        aiBot_.agentComponent->stateHoldRemaining = aiBot_.stateHoldRemaining;
+        aiBot_.agentComponent->strafeSign = aiBot_.strafeSign;
+        aiBot_.agentComponent->patrolIndex = aiBot_.patrolIndex;
+        aiBot_.agentComponent->triggerJump = aiBot_.triggerJump;
+        aiBot_.agentComponent->patrolReachableFound = aiBot_.patrolReachableFound;
+        aiBot_.agentComponent->patrolUsedNearFallback = aiBot_.patrolUsedNearFallback;
+        aiBot_.agentComponent->patrolRequestedIndex = aiBot_.patrolRequestedIndex;
+        aiBot_.agentComponent->patrolSelectedIndex = aiBot_.patrolSelectedIndex;
+        aiBot_.agentComponent->patrolCandidatesTested = aiBot_.patrolCandidatesTested;
+        aiBot_.agentComponent->patrolWaypointCount = aiBot_.patrolWaypointCount;
+        aiBot_.agentComponent->patrolSelectionMs = aiBot_.patrolSelectionMs;
+        aiBot_.agentComponent->patrolSelectedDistance = aiBot_.patrolSelectedDistance;
+        aiBot_.agentComponent->patrolStuckTime = aiBot_.patrolStuckTime;
+        aiBot_.agentComponent->patrolAbandonedTarget = aiBot_.patrolAbandonedTarget;
+        aiBot_.agentComponent->patrolLastCommittedIndex = aiBot_.patrolLastCommittedIndex;
+        aiBot_.agentComponent->patrolSelectedTarget = aiBot_.patrolSelectedTarget;
+        aiBot_.agentComponent->patrolProgressAnchor = aiBot_.patrolProgressAnchor;
+        aiBot_.agentComponent->pathFollower = aiBot_.pathFollower;
+    }
 }
 
 CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIBotBehaviorTree(float deltaSeconds)
@@ -1426,7 +1395,7 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
         return EBehaviorTreeStatus::Failure;
     }
 
-    const glm::vec3 aiPos = aiBot_.controller.GetPosition();
+    const glm::vec3 aiPos = aiBot_.character.controller.GetPosition();
     const glm::vec3 playerEyePos = GetEyePosition();
     const glm::vec3 toPlayer = playerEyePos - GetAIBotEyePosition();
     const glm::vec3 toPlayerDir = NormalizeHorizontalOrZero(toPlayer);
@@ -1470,7 +1439,7 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
         return EBehaviorTreeStatus::Failure;
     }
 
-    const glm::vec3 aiPos = aiBot_.controller.GetPosition();
+    const glm::vec3 aiPos = aiBot_.character.controller.GetPosition();
     const glm::vec3 playerEyePos = GetEyePosition();
     const glm::vec3 toPlayer = playerEyePos - GetAIBotEyePosition();
     const glm::vec3 toPlayerDir = NormalizeHorizontalOrZero(toPlayer);
@@ -1517,8 +1486,9 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
         return EBehaviorTreeStatus::Failure;
     }
 
-    const glm::vec3 aiPos = aiBot_.controller.GetPosition();
-    const glm::vec3 chaseTarget = aiBot_.targetVisible ? characterController_.GetPosition() : aiBot_.lastKnownTargetPosition;
+    const glm::vec3 aiPos = aiBot_.character.controller.GetPosition();
+    const glm::vec3 chaseTarget =
+        aiBot_.targetVisible ? playerCharacter_.controller.GetPosition() : aiBot_.lastKnownTargetPosition;
     const glm::vec3 toTarget = chaseTarget - aiPos;
     const glm::vec3 chaseDir = NormalizeHorizontalOrZero(toTarget);
     const float distanceToTarget = glm::length(glm::vec2(toTarget.x, toTarget.z));
@@ -1565,7 +1535,7 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
     }
 
     aiBot_.patrolIndex %= aiBot_.patrolPoints.size();
-    const glm::vec3 aiPos = aiBot_.controller.GetPosition();
+    const glm::vec3 aiPos = aiBot_.character.controller.GetPosition();
 
     if (navGrid_.IsBuilt())
     {
@@ -1652,7 +1622,7 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
             }
             else
             {
-                glm::vec3 horizontalVelocity = aiBot_.controller.GetLinearVelocity();
+                glm::vec3 horizontalVelocity = aiBot_.character.controller.GetLinearVelocity();
                 horizontalVelocity.y = 0.0f;
                 if (glm::length(horizontalVelocity) <= aiPatrolStuckSpeedThreshold_)
                 {
@@ -1715,24 +1685,10 @@ CharacterDemoGameInstance::EBehaviorTreeStatus CharacterDemoGameInstance::RunAIB
 
 void CharacterDemoGameInstance::UpdateAIBotNode()
 {
-    const glm::vec3 position = aiBot_.controller.GetPosition();
-    const glm::quat rotation = glm::angleAxis(aiBot_.yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+    const glm::vec3 position = aiBot_.character.controller.GetPosition();
+    aiBot_.character.SyncTransform(position, aiBot_.yaw);
 
-    if (aiBot_.visualNode)
-    {
-        aiBot_.visualNode->SetTranslation(position);
-        aiBot_.visualNode->SetRotation(rotation);
-        aiBot_.visualNode->RecalcTransform(true);
-    }
-
-    if (aiBot_.skinnedRoot)
-    {
-        aiBot_.skinnedRoot->SetTranslation(position);
-        aiBot_.skinnedRoot->SetRotation(rotation);
-        aiBot_.skinnedRoot->RecalcTransform(true);
-    }
-
-    if (!aiBot_.visualNode && !aiBot_.skinnedRoot)
+    if (!aiBot_.character.actorRoot)
     {
         return;
     }
@@ -1741,48 +1697,8 @@ void CharacterDemoGameInstance::UpdateAIBotNode()
 
 void CharacterDemoGameInstance::TryInitAIBotCharacterModel()
 {
-    if (!aiBot_.skinnedRoot)
-    {
-        aiBot_.skinnedRoot = FindAppendedCharacterRoot(engine_->GetScene(), characterAppendRootName_, 0, skinnedCharacterRoot_);
-        if (aiBot_.skinnedRoot)
-        {
-            aiBot_.appendRootName = aiBot_.skinnedRoot->GetName();
-        }
-    }
-
-    if (!aiBot_.skinnedRoot)
-    {
-        return;
-    }
-
-    aiBot_.skinnedMeshComps.clear();
-    aiBot_.primarySkinnedMeshComp = nullptr;
-
-    std::function<void(const std::shared_ptr<Assets::Node>&)> collectSkinnedMeshes;
-    collectSkinnedMeshes = [this, &collectSkinnedMeshes](const std::shared_ptr<Assets::Node>& node)
-    {
-        if (!node)
-        {
-            return;
-        }
-
-        if (auto comp = node->GetComponent<Runtime::SkinnedMeshComponent>())
-        {
-            if (!aiBot_.primarySkinnedMeshComp)
-            {
-                aiBot_.primarySkinnedMeshComp = comp.get();
-            }
-            aiBot_.skinnedMeshComps.push_back(comp.get());
-        }
-
-        for (const auto& child : node->Children())
-        {
-            collectSkinnedMeshes(child);
-        }
-    };
-    collectSkinnedMeshes(aiBot_.skinnedRoot);
-
-    if (aiBot_.skinnedMeshComps.empty())
+    if (!aiBot_.character.TryResolveSkinnedModel(engine_->GetScene(), characterAppendRootName_, 0,
+                                                 playerCharacter_.skinnedRoot))
     {
         return;
     }
@@ -1798,7 +1714,7 @@ void CharacterDemoGameInstance::TryInitAIBotCharacterModel()
         std::vector<Assets::AnimationTrack> tracks;
         if (Assets::FSceneLoader::LoadAnimationTracks(animFile, tracks))
         {
-            for (Runtime::SkinnedMeshComponent* skinnedMeshComp : aiBot_.skinnedMeshComps)
+            for (Runtime::SkinnedMeshComponent* skinnedMeshComp : aiBot_.character.skinnedMeshComps)
             {
                 skinnedMeshComp->AddAnimations(tracks);
             }
@@ -1809,24 +1725,26 @@ void CharacterDemoGameInstance::TryInitAIBotCharacterModel()
         }
     }
 
-    if (animIdle_.empty() && aiBot_.primarySkinnedMeshComp)
+    if (aiBot_.character.animation && aiBot_.character.primarySkinnedMeshComp)
     {
-        MapAnimationNames(aiBot_.primarySkinnedMeshComp->GetAnimationNames());
+        aiBot_.character.animation->MapAnimationNames(aiBot_.character.primarySkinnedMeshComp->GetAnimationNames());
+        if (playerCharacter_.animation && playerCharacter_.animation->GetIdleAnimationName().empty())
+        {
+            playerCharacter_.animation->MapAnimationNames(aiBot_.character.primarySkinnedMeshComp->GetAnimationNames());
+        }
     }
 
     if (aiBot_.visualNode)
     {
-        DisableNodePhysicsRecursive(aiBot_.visualNode);
-        engine_->GetScene().RemoveNodeByInstanceId(aiBot_.visualNode->GetInstanceId());
+        aiBot_.character.RemoveVisualRoot(engine_->GetScene(), engine_->GetPhysicsEngine());
         aiBot_.visualNode.reset();
     }
 
-    DisableNodePhysicsRecursive(aiBot_.skinnedRoot);
-    SetNodeRayCastVisibilityRecursive(aiBot_.skinnedRoot, false);
+    aiBot_.character.AttachSkinnedModel(engine_->GetPhysicsEngine());
 
     Runtime::SkinnedMeshComponent::FootPlacementIKSettings footPlacementSettings;
     footPlacementSettings.Enabled = footIKEnabled_;
-    footPlacementSettings.Weight = aiBot_.controller.IsOnGround() ? 1.0f : 0.0f;
+    footPlacementSettings.Weight = aiBot_.character.controller.IsOnGround() ? 1.0f : 0.0f;
     footPlacementSettings.TraceUpDistance = 0.45f;
     footPlacementSettings.TraceDownDistance = 0.90f;
     footPlacementSettings.FootHeight = 0.025f;
@@ -1835,204 +1753,64 @@ void CharacterDemoGameInstance::TryInitAIBotCharacterModel()
     footPlacementSettings.PelvisWeight = 0.75f;
     footPlacementSettings.PelvisMaxOffset = 0.22f;
     footPlacementSettings.DebugDraw = showFootIKDebug_;
-    for (Runtime::SkinnedMeshComponent* skinnedMeshComp : aiBot_.skinnedMeshComps)
+    aiBot_.character.ConfigureFootPlacementIK(footPlacementSettings);
+
+    if (aiBot_.character.animation && !aiBot_.character.animation->GetIdleAnimationName().empty())
     {
-        skinnedMeshComp->SetFootPlacementIKSettings(footPlacementSettings);
+        aiBot_.character.PlayAnimation(aiBot_.character.animation->GetIdleAnimationName(), true);
     }
 
-    if (!animIdle_.empty())
-    {
-        for (Runtime::SkinnedMeshComponent* skinnedMeshComp : aiBot_.skinnedMeshComps)
-        {
-            skinnedMeshComp->SetPlaySpeed(1.0f);
-            skinnedMeshComp->PlayAnimation(animIdle_, true);
-        }
-    }
-
-    aiBot_.characterModelLoaded = true;
+    aiBot_.character.SetModelLoaded(true);
     SPDLOG_INFO("AI character model initialized: root='{}', skinned meshes={}",
-                aiBot_.skinnedRoot->GetName(), aiBot_.skinnedMeshComps.size());
+                aiBot_.character.skinnedRoot->GetName(), aiBot_.character.skinnedMeshComps.size());
 }
 
 void CharacterDemoGameInstance::UpdateAIBotAnimationState(float deltaSeconds)
 {
-    if (aiBot_.skinnedMeshComps.empty())
+    if (!aiBot_.character.IsAnimationReady())
     {
         return;
     }
 
-    glm::vec3 velocity = aiBot_.controller.GetLinearVelocity();
-    const float horizontalSpeed = glm::length(glm::vec2(velocity.x, velocity.z));
-    const bool onGround = aiBot_.controller.IsOnGround();
+    NextGameplay::FCharacterAnimationUpdateInput input;
+    input.velocity = aiBot_.character.controller.GetLinearVelocity();
+    input.commandedMoveDir = aiBot_.character.control->GetMoveIntent();
+    input.deltaSeconds = deltaSeconds;
+    input.onGround = aiBot_.character.controller.IsOnGround();
+    input.referenceForward = glm::vec3(std::sin(aiBot_.yaw), 0.0f, std::cos(aiBot_.yaw));
+    input.referenceRight = glm::vec3(-input.referenceForward.z, 0.0f, input.referenceForward.x);
+    input.desiredSpeed = aiBot_.character.control->GetDesiredSpeed();
+    input.sprinting = aiBot_.character.control->GetSprinting();
 
-    aiBot_.jumpStartHoldTimeRemaining = std::max(0.0f, aiBot_.jumpStartHoldTimeRemaining - deltaSeconds);
-    aiBot_.jumpLandHoldTimeRemaining = std::max(0.0f, aiBot_.jumpLandHoldTimeRemaining - deltaSeconds);
-
-    if (onGround && !aiBot_.wasOnGroundLastFrame)
+    switch (aiBot_.state)
     {
-        aiBot_.jumpLandHoldTimeRemaining = jumpLandHoldTime_;
-    }
-    if (!onGround && aiBot_.wasOnGroundLastFrame && velocity.y > 0.1f)
-    {
-        aiBot_.jumpStartHoldTimeRemaining = jumpStartHoldTime_;
-        aiBot_.jumpLandHoldTimeRemaining = 0.0f;
-    }
-
-    const glm::vec2 horizontalVelocity(velocity.x, velocity.z);
-    const float desiredSpeed =
-        aiBot_.state == EAIBotState::Chase
-            ? aiRunSpeed_
-            : (aiBot_.state == EAIBotState::Evade
-                   ? aiRunSpeed_
-                   : (aiBot_.state == EAIBotState::Attack ? std::max(aiWalkSpeed_, aiRunSpeed_ * 0.85f) : aiWalkSpeed_));
-    const glm::vec3 commandedMoveDir = NormalizeHorizontalOrZero(aiBot_.moveDir);
-    const glm::vec2 commandedHorizontalVelocity(commandedMoveDir.x * desiredSpeed, commandedMoveDir.z * desiredSpeed);
-    const glm::vec3 botForward(std::sin(aiBot_.yaw), 0.0f, std::cos(aiBot_.yaw));
-    const glm::vec3 botRight(-botForward.z, 0.0f, botForward.x);
-    const glm::vec2 forward2D = glm::normalize(glm::vec2(botForward.x, botForward.z));
-    const glm::vec2 right2D = glm::normalize(glm::vec2(botRight.x, botRight.z));
-    const float actualForwardSpeed = glm::dot(horizontalVelocity, forward2D);
-    const float actualRightSpeed = glm::dot(horizontalVelocity, right2D);
-    const float intendedForwardSpeed = glm::dot(commandedHorizontalVelocity, forward2D);
-    const float intendedRightSpeed = glm::dot(commandedHorizontalVelocity, right2D);
-    const float localForwardSpeed =
-        std::abs(actualForwardSpeed) >= std::abs(intendedForwardSpeed) * 0.65f ? actualForwardSpeed : intendedForwardSpeed;
-    const float localRightSpeed =
-        std::abs(actualRightSpeed) >= std::abs(intendedRightSpeed) * 0.65f ? actualRightSpeed : intendedRightSpeed;
-    const float movementSignal = std::max(horizontalSpeed, glm::length(commandedHorizontalVelocity));
-
-    ECharacterAnimState newState = ECharacterAnimState::Idle;
-    std::string animationToPlay = animIdle_;
-    bool loop = true;
-    float playSpeed = 1.0f;
-
-    if (!onGround)
-    {
-        if (aiBot_.jumpStartHoldTimeRemaining > 0.0f && velocity.y >= 0.0f)
-        {
-            newState = ECharacterAnimState::JumpStart;
-            animationToPlay = animJumpStart_;
-            loop = false;
-        }
-        else
-        {
-            newState = ECharacterAnimState::JumpLoop;
-            animationToPlay = animJumpLoop_;
-        }
-    }
-    else if (aiBot_.jumpLandHoldTimeRemaining > 0.0f)
-    {
-        newState = ECharacterAnimState::JumpLand;
-        animationToPlay = animJumpLand_;
-        loop = false;
-    }
-    else if (movementSignal > 0.35f)
-    {
-        if (aiBot_.state == EAIBotState::Chase)
-        {
-            newState = ECharacterAnimState::RunForward;
-            animationToPlay = animRunForward_;
-        }
-        else if (aiBot_.state == EAIBotState::Evade && localForwardSpeed < -0.2f)
-        {
-            newState = ECharacterAnimState::RunBackward;
-            animationToPlay = animRunBackward_;
-            playSpeed = runBackwardPlaySpeed_;
-        }
-        else if (std::abs(localRightSpeed) > std::abs(localForwardSpeed) * 1.1f)
-        {
-            const bool movingRight = localRightSpeed > 0.0f;
-            newState = movingRight ? ECharacterAnimState::RunStrafeRight : ECharacterAnimState::RunStrafeLeft;
-            animationToPlay = movingRight ? animRunStrafeRight_ : animRunStrafeLeft_;
-        }
-        else if (localForwardSpeed < -0.2f)
-        {
-            newState = ECharacterAnimState::WalkBackward;
-            animationToPlay = animWalkBackward_;
-        }
-        else if (aiBot_.state == EAIBotState::Patrol)
-        {
-            newState = ECharacterAnimState::WalkForward;
-            animationToPlay = animWalkForward_;
-        }
-        else
-        {
-            newState = ECharacterAnimState::RunForward;
-            animationToPlay = animRunForward_;
-        }
+    case EAIBotState::Chase:
+        input.policy = NextGameplay::ECharacterAnimationPolicy::AIChase;
+        break;
+    case EAIBotState::Evade:
+        input.policy = NextGameplay::ECharacterAnimationPolicy::AIEvade;
+        break;
+    case EAIBotState::Attack:
+        input.policy = NextGameplay::ECharacterAnimationPolicy::AIAttack;
+        break;
+    case EAIBotState::Patrol:
+    default:
+        input.policy = NextGameplay::ECharacterAnimationPolicy::AIPatrol;
+        break;
     }
 
-    aiBot_.wasOnGroundLastFrame = onGround;
-
-    if (newState != aiBot_.animState ||
-        (loop && aiBot_.primarySkinnedMeshComp &&
-         aiBot_.primarySkinnedMeshComp->GetCurrentAnimationName() != animationToPlay))
-    {
-        aiBot_.animState = newState;
-        for (Runtime::SkinnedMeshComponent* skinnedMeshComp : aiBot_.skinnedMeshComps)
-        {
-            skinnedMeshComp->SetPlaySpeed(playSpeed);
-            skinnedMeshComp->PlayAnimation(animationToPlay, loop);
-        }
-    }
-
-    const float ikWeight = footIKEnabled_ && onGround && aiBot_.animState == ECharacterAnimState::Idle ? 1.0f : 0.0f;
-    for (Runtime::SkinnedMeshComponent* skinnedMeshComp : aiBot_.skinnedMeshComps)
-    {
-        skinnedMeshComp->SetFootPlacementIKEnabled(footIKEnabled_);
-        skinnedMeshComp->SetFootPlacementIKWeight(ikWeight);
-        auto settings = skinnedMeshComp->GetFootPlacementIKSettings();
-        settings.DebugDraw = showFootIKDebug_;
-        skinnedMeshComp->SetFootPlacementIKSettings(settings);
-    }
+    aiBot_.character.UpdateAnimation(input, footIKEnabled_, showFootIKDebug_);
 }
 
 void CharacterDemoGameInstance::TryInitCharacterModel()
 {
-    if (!skinnedCharacterRoot_)
-    {
-        skinnedCharacterRoot_ = FindAppendedCharacterRoot(engine_->GetScene(), characterAppendRootName_, 0);
-    }
-
-    if (!skinnedCharacterRoot_)
-    {
-        return; // Not loaded yet, try again next tick
-    }
-
-    skinnedMeshComps_.clear();
-    primarySkinnedMeshComp_ = nullptr;
-
-    std::function<void(const std::shared_ptr<Assets::Node>&)> collectSkinnedMeshes;
-    collectSkinnedMeshes = [this, &collectSkinnedMeshes](const std::shared_ptr<Assets::Node>& node)
-    {
-        if (!node)
-        {
-            return;
-        }
-
-        if (auto comp = node->GetComponent<Runtime::SkinnedMeshComponent>())
-        {
-            if (!primarySkinnedMeshComp_)
-            {
-                primarySkinnedMeshComp_ = comp.get();
-            }
-            skinnedMeshComps_.push_back(comp.get());
-        }
-
-        for (const auto& child : node->Children())
-        {
-            collectSkinnedMeshes(child);
-        }
-    };
-    collectSkinnedMeshes(skinnedCharacterRoot_);
-
-    if (skinnedMeshComps_.empty())
+    if (!playerCharacter_.TryResolveSkinnedModel(engine_->GetScene(), characterAppendRootName_, 0))
     {
         return; // Append root exists, but components are not fully attached yet.
     }
 
     SPDLOG_INFO("Character model root '{}' found with {} skinned mesh nodes, loading animation packs...",
-                skinnedCharacterRoot_->GetName(), skinnedMeshComps_.size());
+                playerCharacter_.skinnedRoot->GetName(), playerCharacter_.skinnedMeshComps.size());
 
     // Load animation tracks from separate GLB files
     const std::vector<std::string> animFiles = {
@@ -2047,7 +1825,7 @@ void CharacterDemoGameInstance::TryInitCharacterModel()
         if (Assets::FSceneLoader::LoadAnimationTracks(animFile, tracks))
         {
             SPDLOG_INFO("Loaded {} animation tracks from {}", tracks.size(), animFile);
-            for (Runtime::SkinnedMeshComponent* skinnedMeshComp : skinnedMeshComps_)
+            for (Runtime::SkinnedMeshComponent* skinnedMeshComp : playerCharacter_.skinnedMeshComps)
             {
                 skinnedMeshComp->AddAnimations(tracks);
             }
@@ -2059,32 +1837,33 @@ void CharacterDemoGameInstance::TryInitCharacterModel()
     }
 
     // Log and map all discovered animation names
-    auto names = primarySkinnedMeshComp_->GetAnimationNames();
+    auto names = playerCharacter_.primarySkinnedMeshComp->GetAnimationNames();
     for (const auto& name : names)
     {
         SPDLOG_INFO("Character animation: '{}'", name);
     }
-    MapAnimationNames(names);
+    if (playerCharacter_.animation)
+    {
+        playerCharacter_.animation->MapAnimationNames(names);
+    }
+    if (aiBot_.character.animation)
+    {
+        aiBot_.character.animation->MapAnimationNames(names);
+    }
 
     // Remove the temporary placeholder once the real character is ready.
-    if (characterNode_)
-    {
-        DisableNodePhysicsRecursive(characterNode_);
-        engine_->GetScene().RemoveNodeByInstanceId(characterNode_->GetInstanceId());
-        characterNode_.reset();
-    }
+    playerCharacter_.RemoveVisualRoot(engine_->GetScene(), engine_->GetPhysicsEngine());
 
     // Character collision should come only from the controller, not the imported skinned mesh hierarchy.
     // Otherwise the appended mannequin can leave kinematic mesh colliders around the origin / T-pose.
-    DisableNodePhysicsRecursive(skinnedCharacterRoot_);
+    playerCharacter_.AttachSkinnedModel(engine_->GetPhysicsEngine());
 
     // Apply current first-person visibility and start idle animation
     SetFirstPersonMode(firstPersonMode_);
-    SetNodeRayCastVisibilityRecursive(skinnedCharacterRoot_, false);
 
     Runtime::SkinnedMeshComponent::FootPlacementIKSettings footPlacementSettings;
     footPlacementSettings.Enabled = footIKEnabled_;
-    footPlacementSettings.Weight = characterController_.IsOnGround() ? 1.0f : 0.0f;
+    footPlacementSettings.Weight = playerCharacter_.controller.IsOnGround() ? 1.0f : 0.0f;
     footPlacementSettings.TraceUpDistance = 0.45f;
     footPlacementSettings.TraceDownDistance = 0.90f;
     footPlacementSettings.FootHeight = 0.025f;
@@ -2093,255 +1872,46 @@ void CharacterDemoGameInstance::TryInitCharacterModel()
     footPlacementSettings.PelvisWeight = 0.75f;
     footPlacementSettings.PelvisMaxOffset = 0.22f;
     footPlacementSettings.DebugDraw = showFootIKDebug_;
-    for (Runtime::SkinnedMeshComponent* skinnedMeshComp : skinnedMeshComps_)
+    playerCharacter_.ConfigureFootPlacementIK(footPlacementSettings);
+
+    if (playerCharacter_.animation && !playerCharacter_.animation->GetIdleAnimationName().empty())
     {
-        skinnedMeshComp->SetFootPlacementIKSettings(footPlacementSettings);
+        PlayCharacterAnimation(playerCharacter_.animation->GetIdleAnimationName(), true);
     }
 
-    if (!animIdle_.empty())
-    {
-        PlayCharacterAnimation(animIdle_, true);
-    }
-
-    characterModelLoaded_ = true;
+    playerCharacter_.SetModelLoaded(true);
     SPDLOG_INFO("Character model initialized: root='{}', animations={}",
-                skinnedCharacterRoot_->GetName(), names.size());
-}
-
-void CharacterDemoGameInstance::MapAnimationNames(const std::vector<std::string>& names)
-{
-    auto findFirst = [&names](std::initializer_list<const char*> candidates) -> std::string
-    {
-        for (const char* candidate : candidates)
-        {
-            auto it = std::find(names.begin(), names.end(), candidate);
-            if (it != names.end())
-            {
-                return *it;
-            }
-        }
-        return {};
-    };
-
-    // Exact mapping based on the three 3C-oriented packs:
-    // General: Idle_A / Idle_B
-    // MovementBasic: Walking_A/B/C, Running_A/B, Jump_Start/Idle/Land
-    // MovementAdvanced: Walking_Backwards, Running_Strafe_Left/Right
-    animIdle_ = findFirst({"Idle_A", "Idle_B"});
-    animWalkForward_ = findFirst({"Walking_A", "Walking_B", "Walking_C"});
-    animWalkBackward_ = findFirst({"Walking_Backwards", "Walking_B", "Walking_A"});
-    animStrafeLeft_ = findFirst({"Running_Strafe_Left", "Dodge_Left"});
-    animStrafeRight_ = findFirst({"Running_Strafe_Right", "Dodge_Right"});
-    animRunForward_ = findFirst({"Running_A", "Running_B"});
-    animRunBackward_ = animWalkBackward_;
-    animRunStrafeLeft_ = animStrafeLeft_;
-    animRunStrafeRight_ = animStrafeRight_;
-    animJumpStart_ = findFirst({"Jump_Start", "Jump_Full_Short", "Jump_Full_Long"});
-    animJumpLoop_ = findFirst({"Jump_Idle", "Jump_Full_Long", "Jump_Full_Short"});
-    animJumpLand_ = findFirst({"Jump_Land", "Jump_Full_Short"});
-
-    if (animIdle_.empty() && !names.empty())
-    {
-        animIdle_ = names.front();
-    }
-    if (animWalkForward_.empty())
-    {
-        animWalkForward_ = animIdle_;
-    }
-    if (animWalkBackward_.empty())
-    {
-        animWalkBackward_ = animWalkForward_;
-    }
-    if (animStrafeLeft_.empty())
-    {
-        animStrafeLeft_ = animWalkForward_;
-    }
-    if (animStrafeRight_.empty())
-    {
-        animStrafeRight_ = animWalkForward_;
-    }
-    if (animRunForward_.empty())
-    {
-        animRunForward_ = animWalkForward_;
-    }
-    if (animRunBackward_.empty())
-    {
-        animRunBackward_ = animWalkBackward_;
-    }
-    if (animRunStrafeLeft_.empty())
-    {
-        animRunStrafeLeft_ = animStrafeLeft_;
-    }
-    if (animRunStrafeRight_.empty())
-    {
-        animRunStrafeRight_ = animStrafeRight_;
-    }
-    if (animJumpStart_.empty())
-    {
-        animJumpStart_ = animJumpLoop_.empty() ? animIdle_ : animJumpLoop_;
-    }
-    if (animJumpLoop_.empty())
-    {
-        animJumpLoop_ = animJumpStart_;
-    }
-    if (animJumpLand_.empty())
-    {
-        animJumpLand_ = animJumpLoop_;
-    }
-
-    SPDLOG_INFO(
-        "3C animation mapping: Idle='{}', WalkF='{}', WalkB='{}', StrafeL='{}', StrafeR='{}', RunF='{}', JumpStart='{}', JumpLoop='{}', JumpLand='{}'",
-        animIdle_, animWalkForward_, animWalkBackward_, animStrafeLeft_, animStrafeRight_, animRunForward_,
-        animJumpStart_, animJumpLoop_, animJumpLand_);
+                playerCharacter_.skinnedRoot->GetName(), names.size());
 }
 
 void CharacterDemoGameInstance::UpdateAnimationState(float deltaSeconds)
 {
-    if (skinnedMeshComps_.empty())
+    if (!playerCharacter_.IsAnimationReady())
     {
         return;
     }
 
-    glm::vec3 vel = characterController_.GetLinearVelocity();
-    float horizontalSpeed = glm::length(glm::vec2(vel.x, vel.z));
-    bool onGround = characterController_.IsOnGround();
+    NextGameplay::FCharacterAnimationUpdateInput input;
+    input.velocity = playerCharacter_.controller.GetLinearVelocity();
+    input.referenceForward = GetMoveForward();
+    input.referenceRight = GetMoveRight();
+    input.commandedMoveDir = playerCharacter_.control->GetMoveIntent();
+    input.desiredSpeed = playerCharacter_.control->GetDesiredSpeed();
+    input.deltaSeconds = deltaSeconds;
+    input.onGround = playerCharacter_.controller.IsOnGround();
+    input.sprinting = playerCharacter_.control->GetSprinting();
+    input.policy =
+        (!firstPersonMode_ && movementMode_ == ECharacterMovementMode::MoveAligned)
+            ? NextGameplay::ECharacterAnimationPolicy::PlayerMoveAligned
+            : NextGameplay::ECharacterAnimationPolicy::PlayerCameraRelative;
 
-    jumpStartHoldTimeRemaining_ = std::max(0.0f, jumpStartHoldTimeRemaining_ - deltaSeconds);
-    jumpLandHoldTimeRemaining_ = std::max(0.0f, jumpLandHoldTimeRemaining_ - deltaSeconds);
-
-    const glm::vec2 horizontalVelocity(vel.x, vel.z);
-    const glm::vec2 forward2D = glm::normalize(glm::vec2(GetMoveForward().x, GetMoveForward().z));
-    const glm::vec2 right2D = glm::normalize(glm::vec2(GetMoveRight().x, GetMoveRight().z));
-    const float localForwardSpeed = glm::dot(horizontalVelocity, forward2D);
-    const float localRightSpeed = glm::dot(horizontalVelocity, right2D);
-
-    ECharacterAnimState newState = ECharacterAnimState::Idle;
-    std::string animationToPlay = animIdle_;
-    bool loop = true;
-    float playSpeed = 1.0f;
-
-    if (onGround && !wasOnGroundLastFrame_)
-    {
-        jumpLandHoldTimeRemaining_ = jumpLandHoldTime_;
-    }
-    if (!onGround && wasOnGroundLastFrame_ && vel.y > 0.1f)
-    {
-        jumpStartHoldTimeRemaining_ = jumpStartHoldTime_;
-        jumpLandHoldTimeRemaining_ = 0.0f;
-    }
-
-    if (!onGround)
-    {
-        if (jumpStartHoldTimeRemaining_ > 0.0f && vel.y >= 0.0f)
-        {
-            newState = ECharacterAnimState::JumpStart;
-            animationToPlay = animJumpStart_;
-            loop = false;
-        }
-        else
-        {
-            newState = ECharacterAnimState::JumpLoop;
-            animationToPlay = animJumpLoop_;
-        }
-    }
-    else if (jumpLandHoldTimeRemaining_ > 0.0f)
-    {
-        newState = ECharacterAnimState::JumpLand;
-        animationToPlay = animJumpLand_;
-        loop = false;
-    }
-    else if (horizontalSpeed > 0.35f)
-    {
-        if (!firstPersonMode_ && movementMode_ == ECharacterMovementMode::MoveAligned)
-        {
-            if (keySprint_)
-            {
-                newState = ECharacterAnimState::RunForward;
-                animationToPlay = animRunForward_;
-            }
-            else
-            {
-                newState = ECharacterAnimState::WalkForward;
-                animationToPlay = animWalkForward_;
-            }
-        }
-        else
-        {
-            const float absForward = std::abs(localForwardSpeed);
-            const float absRight = std::abs(localRightSpeed);
-            const bool strafeDominant = absRight > absForward * 1.1f;
-            const bool backwardDominant = !strafeDominant && localForwardSpeed < -0.2f;
-            const bool sprinting = keySprint_ && localForwardSpeed > 0.2f;
-
-            if (strafeDominant)
-            {
-                const bool moveRight = localRightSpeed > 0.0f;
-                if (keySprint_)
-                {
-                    newState = moveRight ? ECharacterAnimState::RunStrafeRight : ECharacterAnimState::RunStrafeLeft;
-                    animationToPlay = moveRight ? animRunStrafeRight_ : animRunStrafeLeft_;
-                    playSpeed = 1.0f;
-                }
-                else
-                {
-                    newState = moveRight ? ECharacterAnimState::WalkStrafeRight : ECharacterAnimState::WalkStrafeLeft;
-                    animationToPlay = moveRight ? animStrafeRight_ : animStrafeLeft_;
-                    playSpeed = walkStrafePlaySpeed_;
-                }
-            }
-            else if (backwardDominant)
-            {
-                if (keySprint_)
-                {
-                    newState = ECharacterAnimState::RunBackward;
-                    animationToPlay = animRunBackward_;
-                    playSpeed = runBackwardPlaySpeed_;
-                }
-                else
-                {
-                    newState = ECharacterAnimState::WalkBackward;
-                    animationToPlay = animWalkBackward_;
-                }
-            }
-            else
-            {
-                if (sprinting)
-                {
-                    newState = ECharacterAnimState::RunForward;
-                    animationToPlay = animRunForward_;
-                }
-                else
-                {
-                    newState = ECharacterAnimState::WalkForward;
-                    animationToPlay = animWalkForward_;
-                }
-            }
-        }
-    }
-
-    wasOnGroundLastFrame_ = onGround;
-
-    if (newState != currentAnimState_)
-    {
-        currentAnimState_ = newState;
-        PlayCharacterAnimation(animationToPlay, loop, playSpeed);
-        return;
-    }
-
-    // Keep directional fallback states responsive when they share the same source clip but a different speed profile.
-    if (loop && primarySkinnedMeshComp_ && primarySkinnedMeshComp_->GetCurrentAnimationName() != animationToPlay)
-    {
-        PlayCharacterAnimation(animationToPlay, loop, playSpeed);
-    }
+    playerCharacter_.UpdateAnimation(input, footIKEnabled_, showFootIKDebug_);
 }
 
 void CharacterDemoGameInstance::ResetCharacterState()
 {
-    aiBot_.controller.Destroy();
+    aiBot_.character.Reset();
     aiBot_.visualNode.reset();
-    aiBot_.skinnedRoot.reset();
-    aiBot_.primarySkinnedMeshComp = nullptr;
-    aiBot_.skinnedMeshComps.clear();
     aiBot_.patrolPoints.clear();
     aiBot_.moveDir = glm::vec3(0.0f);
     aiBot_.lookDir = glm::vec3(0.0f, 0.0f, 1.0f);
@@ -2371,101 +1941,25 @@ void CharacterDemoGameInstance::ResetCharacterState()
     aiBot_.patrolLastCommittedIndex = std::numeric_limits<size_t>::max();
     aiBot_.patrolSelectedTarget = glm::vec3(0.0f);
     aiBot_.patrolProgressAnchor = glm::vec3(0.0f);
-    aiBot_.animState = ECharacterAnimState::Idle;
-    aiBot_.characterModelLoaded = false;
-    aiBot_.characterLoadRequested = false;
-    aiBot_.wasOnGroundLastFrame = true;
-    aiBot_.jumpStartHoldTimeRemaining = 0.0f;
-    aiBot_.jumpLandHoldTimeRemaining = 0.0f;
+    aiBot_.agentComponent.reset();
 
-    skinnedCharacterRoot_.reset();
-    primarySkinnedMeshComp_ = nullptr;
-    skinnedMeshComps_.clear();
-    characterModelLoaded_ = false;
-    characterLoadRequested_ = false;
-    currentAnimState_ = ECharacterAnimState::Idle;
-    animIdle_.clear();
-    animWalkForward_.clear();
-    animWalkBackward_.clear();
-    animStrafeLeft_.clear();
-    animStrafeRight_.clear();
-    animRunForward_.clear();
-    animRunBackward_.clear();
-    animRunStrafeLeft_.clear();
-    animRunStrafeRight_.clear();
-    animJumpStart_.clear();
-    animJumpLoop_.clear();
-    animJumpLand_.clear();
-    wasOnGroundLastFrame_ = true;
-    jumpStartHoldTimeRemaining_ = 0.0f;
-    jumpLandHoldTimeRemaining_ = 0.0f;
+    playerCharacter_.Reset();
     characterYaw_ = yaw_;
 }
 
 void CharacterDemoGameInstance::SetNodeVisibilityRecursive(const std::shared_ptr<Assets::Node>& node, bool visible)
 {
-    if (!node)
-    {
-        return;
-    }
-
-    if (auto renderComp = node->GetComponent<Runtime::RenderComponent>())
-    {
-        renderComp->SetVisible(visible);
-    }
-
-    for (const auto& child : node->Children())
-    {
-        SetNodeVisibilityRecursive(child, visible);
-    }
+    NextGameplay::SetNodeVisibilityRecursive(node, visible);
 }
 
 void CharacterDemoGameInstance::SetNodeRayCastVisibilityRecursive(const std::shared_ptr<Assets::Node>& node, bool visible)
 {
-    if (!node)
-    {
-        return;
-    }
-
-    if (auto renderComp = node->GetComponent<Runtime::RenderComponent>())
-    {
-        renderComp->SetRayCastVisible(visible);
-    }
-
-    for (const auto& child : node->Children())
-    {
-        SetNodeRayCastVisibilityRecursive(child, visible);
-    }
+    NextGameplay::SetNodeRayCastVisibilityRecursive(node, visible);
 }
 
 void CharacterDemoGameInstance::DisableNodePhysicsRecursive(const std::shared_ptr<Assets::Node>& node)
 {
-    if (!node)
-    {
-        return;
-    }
-
-    if (auto physComp = node->GetComponent<Runtime::PhysicsComponent>())
-    {
-        if (NextPhysics* physicsEngine = engine_->GetPhysicsEngine())
-        {
-            const NextBodyID bodyId = physComp->GetPhysicsBody();
-            if (!bodyId.IsInvalid())
-            {
-                physicsEngine->RemoveBody(bodyId);
-            }
-        }
-
-        auto disabledPhysicsComp = std::make_shared<Runtime::PhysicsComponent>();
-        disabledPhysicsComp->SetMobility(Runtime::ENodeMobility::Dynamic);
-        disabledPhysicsComp->SetPhysicsOffset(physComp->GetPhysicsOffset());
-        node->AddComponent(disabledPhysicsComp);
-    }
-
-    for (const auto& child : node->Children())
-    {
-        DisableNodePhysicsRecursive(child);
-    }
+    NextGameplay::DisableNodePhysicsRecursive(node, engine_->GetPhysicsEngine());
 }
 
 void CharacterDemoGameInstance::PlayCharacterAnimation(const std::string& name, bool loop, float playSpeed)
@@ -2475,31 +1969,7 @@ void CharacterDemoGameInstance::PlayCharacterAnimation(const std::string& name, 
         return;
     }
 
-    for (Runtime::SkinnedMeshComponent* skinnedMeshComp : skinnedMeshComps_)
-    {
-        skinnedMeshComp->SetPlaySpeed(playSpeed);
-        skinnedMeshComp->PlayAnimation(name, loop);
-    }
-}
-
-void CharacterDemoGameInstance::UpdateCharacterAnimationPostProcess()
-{
-    if (skinnedMeshComps_.empty())
-    {
-        return;
-    }
-
-    const float ikWeight =
-        footIKEnabled_ && (characterController_.IsOnGround() && currentAnimState_ == ECharacterAnimState::Idle) ? 1.0f : 0.0f;
-
-    for (Runtime::SkinnedMeshComponent* skinnedMeshComp : skinnedMeshComps_)
-    {
-        skinnedMeshComp->SetFootPlacementIKEnabled(footIKEnabled_);
-        skinnedMeshComp->SetFootPlacementIKWeight(ikWeight);
-        auto settings = skinnedMeshComp->GetFootPlacementIKSettings();
-        settings.DebugDraw = showFootIKDebug_;
-        skinnedMeshComp->SetFootPlacementIKSettings(settings);
-    }
+    playerCharacter_.PlayAnimation(name, loop, playSpeed);
 }
 
 void CharacterDemoGameInstance::UpdateCharacterFacingYaw(const glm::vec3& moveDir,
@@ -2723,10 +2193,10 @@ void CharacterDemoGameInstance::DrawAIBotBehaviorTreeUI() const
 
     std::string summary = "State: ";
     summary += aiEnabled_ ? GetAIBotStateName() : "Disabled";
-    if (aiBot_.controller.IsValid())
+    if (aiBot_.character.controller.IsValid())
     {
-        const glm::vec3 playerPos = characterController_.GetPosition();
-        const glm::vec3 aiPos = aiBot_.controller.GetPosition();
+        const glm::vec3 playerPos = playerCharacter_.controller.GetPosition();
+        const glm::vec3 aiPos = aiBot_.character.controller.GetPosition();
         const float distance = glm::length(glm::vec2(playerPos.x - aiPos.x, playerPos.z - aiPos.z));
         summary += fmt::format("  |  Dist {:.1f}  |  Visible {}  |  LOS {}",
                                distance,
@@ -2815,22 +2285,9 @@ const char* CharacterDemoGameInstance::GetAIBotStateName() const
 
 const char* CharacterDemoGameInstance::GetAnimStateName() const
 {
-    switch (currentAnimState_)
-    {
-    case ECharacterAnimState::Idle: return "Idle";
-    case ECharacterAnimState::WalkForward: return "WalkForward";
-    case ECharacterAnimState::WalkBackward: return "WalkBackward";
-    case ECharacterAnimState::WalkStrafeLeft: return "WalkStrafeLeft";
-    case ECharacterAnimState::WalkStrafeRight: return "WalkStrafeRight";
-    case ECharacterAnimState::RunForward: return "RunForward";
-    case ECharacterAnimState::RunBackward: return "RunBackward";
-    case ECharacterAnimState::RunStrafeLeft: return "RunStrafeLeft";
-    case ECharacterAnimState::RunStrafeRight: return "RunStrafeRight";
-    case ECharacterAnimState::JumpStart: return "JumpStart";
-    case ECharacterAnimState::JumpLoop: return "JumpLoop";
-    case ECharacterAnimState::JumpLand: return "JumpLand";
-    default: return "Unknown";
-    }
+    return playerCharacter_.animation
+        ? NextGameplay::GetCharacterAnimStateName(playerCharacter_.animation->GetAnimState())
+        : "Unknown";
 }
 
 void CharacterDemoGameInstance::DrawNavGridDebugOverlay() const
@@ -2880,9 +2337,9 @@ void CharacterDemoGameInstance::DrawNavGridDebugOverlay() const
 
     // Draw navgrid cells near the AI bot. Use the current connected component rather than a
     // single reference height, otherwise different floors collapse into the same green layer.
-    if (aiBot_.controller.IsValid())
+    if (aiBot_.character.controller.IsValid())
     {
-        const glm::vec3 aiPos = aiBot_.controller.GetPosition();
+        const glm::vec3 aiPos = aiBot_.character.controller.GetPosition();
         constexpr float drawRadius = 18.0f;
         const int cellRadius = static_cast<int>(drawRadius / cellSize);
         const auto reachableMask = navGrid_.BuildReachabilityMask(aiPos, aiPos.y);
@@ -3007,7 +2464,7 @@ void CharacterDemoGameInstance::DrawNavGridDebugOverlay() const
     }
 
     // Draw info text
-    if (aiBot_.controller.IsValid())
+    if (aiBot_.character.controller.IsValid())
     {
         ImVec2 textPos(viewportPos.x + 10.0f, viewportPos.y + viewportSize.y - 60.0f);
         char buf[160];
