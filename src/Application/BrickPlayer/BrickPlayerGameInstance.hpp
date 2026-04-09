@@ -18,6 +18,10 @@ public:
     void OnDestroy() override {}
     bool OnRenderUI() override;
     void OnInitUI() override;
+    bool SupportsDebugShortcut(SDL_Keycode key) const override;
+    bool IsDebugShortcutActive(SDL_Keycode key) const override;
+    bool SetDebugShortcutActive(SDL_Keycode key, bool active) override;
+    void ClearDebugShortcuts() override;
     bool OnKey(SDL_Event& event) override;
     bool OnCursorPosition(double xpos, double ypos) override;
     bool OnMouseButton(SDL_Event& event) override;

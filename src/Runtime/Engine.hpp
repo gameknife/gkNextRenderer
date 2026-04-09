@@ -66,6 +66,10 @@ public:
     virtual void OnSceneUnloaded() {}
 
     // input
+    virtual bool SupportsDebugShortcut(SDL_Keycode key) const { return false; }
+    virtual bool IsDebugShortcutActive(SDL_Keycode key) const { return false; }
+    virtual bool SetDebugShortcutActive(SDL_Keycode key, bool active) { return false; }
+    virtual void ClearDebugShortcuts() {}
     virtual bool OnKey(SDL_Event& event) { return false; }
     virtual bool OnCursorPosition(double xpos, double ypos) { return false; }
     virtual bool OnMouseButton(SDL_Event& event) { return false; }
@@ -281,6 +285,7 @@ protected:
     void OnScroll(double xoffset, double yoffset);
     void OnDropFile(const char* path);
     void TickGamepadInput();
+    bool HandleDebugShortcut(SDL_Keycode key);
 
 private:
     struct SceneLoadContext

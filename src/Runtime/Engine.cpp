@@ -1116,6 +1116,11 @@ void NextEngine::OnKey(SDL_Event& event)
         {
             return;
         }
+
+        if (HandleDebugShortcut(event.key.key))
+        {
+            return;
+        }
     }
 
     if (event.type == SDL_EVENT_KEY_DOWN)
@@ -1214,18 +1219,50 @@ void NextEngine::OnKey(SDL_Event& event)
 
     if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat)
     {
-        if (event.key.key == SDLK_F2)
-        {
-            showGraphicsDebugPanel_ = !showGraphicsDebugPanel_;
-            return;
-        }
-
         if (Runtime::GraphicsDebugPanel::TryHandleViewModeShortcut(
                 event.key.key, true, showGraphicsDebugPanel_, showFlags_))
         {
             return;
         }
     }
+}
+
+bool NextEngine::HandleDebugShortcut(SDL_Keycode key)
+{
+    if (key < SDLK_F1 || key > SDLK_F5)
+    {
+        return false;
+    }
+
+    const bool engineHandlesKey = key == SDLK_F2;
+    const bool appHandlesKey = gameInstance_ && gameInstance_->SupportsDebugShortcut(key);
+    if (!engineHandlesKey && !appHandlesKey)
+    {
+        return false;
+    }
+
+    const bool isActive = engineHandlesKey
+        ? showGraphicsDebugPanel_
+        : (gameInstance_ && gameInstance_->IsDebugShortcutActive(key));
+
+    if (gameInstance_)
+    {
+        gameInstance_->ClearDebugShortcuts();
+    }
+    showGraphicsDebugPanel_ = false;
+
+    if (isActive)
+    {
+        return true;
+    }
+
+    if (engineHandlesKey)
+    {
+        showGraphicsDebugPanel_ = true;
+        return true;
+    }
+
+    return gameInstance_ && gameInstance_->SetDebugShortcutActive(key, true);
 }
 
 bool NextEngine::ExecuteCommand(std::unique_ptr<ICommand> command)

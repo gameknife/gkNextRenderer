@@ -261,6 +261,32 @@ float NextRendererGameInstance::GetGraphicsDebugPanelTopOffset() const
     return TitlebarSize;
 }
 
+bool NextRendererGameInstance::SupportsDebugShortcut(SDL_Keycode key) const
+{
+    return key == SDLK_F1;
+}
+
+bool NextRendererGameInstance::IsDebugShortcutActive(SDL_Keycode key) const
+{
+    return key == SDLK_F1 && showPhysicsDebug_;
+}
+
+bool NextRendererGameInstance::SetDebugShortcutActive(SDL_Keycode key, bool active)
+{
+    if (key != SDLK_F1)
+    {
+        return false;
+    }
+
+    showPhysicsDebug_ = active;
+    return true;
+}
+
+void NextRendererGameInstance::ClearDebugShortcuts()
+{
+    showPhysicsDebug_ = false;
+}
+
 bool NextRendererGameInstance::OnKey(SDL_Event& event)
 {
     // WASDQE camera movement (only active when right mouse is pressed)
@@ -284,9 +310,6 @@ bool NextRendererGameInstance::OnKey(SDL_Event& event)
                 }
             }
             break;
-		case SDLK_F1:
-            showPhysicsDebug_ = !showPhysicsDebug_;
-            return true;
 		case SDLK_SPACE: CreateBoxAndPush(); return true;
 			break;
 		default: break;

@@ -594,19 +594,6 @@ bool BrickPlayerGameInstance::OnKey(SDL_Event& event)
             if (isFreeBuildMode_)
                 SpawnRandomBricks(6);
             break;
-        case SDLK_F1:
-            TogglePhysicsDebug();
-            break;
-        case SDLK_F2:
-            ToggleSnapDebug();
-            break;
-        case SDLK_F3:
-            ToggleGlobalPhysicsBodies();
-            break;
-        case SDLK_F4:
-            ToggleDragPlaneMode();
-            SwitchDragPlaneWhileDragging();
-            break;
         case SDLK_Q:
             RotateDraggedPart90();
             break;
@@ -615,6 +602,74 @@ bool BrickPlayerGameInstance::OnKey(SDL_Event& event)
         }
     }
     return true;
+}
+
+bool BrickPlayerGameInstance::SupportsDebugShortcut(SDL_Keycode key) const
+{
+    switch (key)
+    {
+    case SDLK_F1:
+    case SDLK_F2:
+    case SDLK_F3:
+    case SDLK_F4:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool BrickPlayerGameInstance::IsDebugShortcutActive(SDL_Keycode key) const
+{
+    switch (key)
+    {
+    case SDLK_F1:
+        return showPhysicsDebug_;
+    case SDLK_F2:
+        return showSnapDebug_;
+    case SDLK_F3:
+        return engine_->GetShowFlags().DebugDraw_PhysicsBodies;
+    case SDLK_F4:
+        return useHorizontalDragPlane_;
+    default:
+        return false;
+    }
+}
+
+bool BrickPlayerGameInstance::SetDebugShortcutActive(SDL_Keycode key, bool active)
+{
+    switch (key)
+    {
+    case SDLK_F1:
+        showPhysicsDebug_ = active;
+        return true;
+    case SDLK_F2:
+        showSnapDebug_ = active;
+        return true;
+    case SDLK_F3:
+        engine_->GetShowFlags().DebugDraw_PhysicsBodies = active;
+        return true;
+    case SDLK_F4:
+        if (useHorizontalDragPlane_ != active)
+        {
+            useHorizontalDragPlane_ = active;
+            SwitchDragPlaneWhileDragging();
+        }
+        return true;
+    default:
+        return false;
+    }
+}
+
+void BrickPlayerGameInstance::ClearDebugShortcuts()
+{
+    showPhysicsDebug_ = false;
+    showSnapDebug_ = false;
+    engine_->GetShowFlags().DebugDraw_PhysicsBodies = false;
+    if (useHorizontalDragPlane_)
+    {
+        useHorizontalDragPlane_ = false;
+        SwitchDragPlaneWhileDragging();
+    }
 }
 
 bool BrickPlayerGameInstance::OnCursorPosition(double xpos, double ypos)
