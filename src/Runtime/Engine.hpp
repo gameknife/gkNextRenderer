@@ -51,6 +51,7 @@ public:
     virtual void OnRayHitResponse(Assets::RayCastResult& result) {}
     virtual void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) {}
     virtual float GetGraphicsDebugPanelTopOffset() const { return 0.0f; }
+    virtual void DrawAdditionalPhysicsDebugOverlay(const Assets::Camera& camera) const {}
 
     // camera
     virtual bool OverrideRenderCamera(Assets::Camera& OutRenderCamera) const { return false; }
@@ -65,11 +66,10 @@ public:
     virtual void OnSceneLoaded() {}
     virtual void OnSceneUnloaded() {}
 
-    // input
-    virtual bool SupportsDebugShortcut(SDL_Keycode key) const { return false; }
-    virtual bool IsDebugShortcutActive(SDL_Keycode key) const { return false; }
-    virtual bool SetDebugShortcutActive(SDL_Keycode key, bool active) { return false; }
-    virtual void ClearDebugShortcuts() {}
+    // application-owned debug shortcuts; engine-owned F1/F2 are handled by NextEngine
+    virtual bool SupportsAppDebugShortcut(SDL_Keycode key) const { return false; }
+    virtual bool IsAppDebugShortcutActive(SDL_Keycode key) const { return false; }
+    virtual bool SetAppDebugShortcutActive(SDL_Keycode key, bool active) { return false; }
     virtual bool OnKey(SDL_Event& event) { return false; }
     virtual bool OnCursorPosition(double xpos, double ypos) { return false; }
     virtual bool OnMouseButton(SDL_Event& event) { return false; }
@@ -166,6 +166,8 @@ public:
     Assets::Scene* GetScenePtr() { return scene_.get(); }
     UserSettings& GetUserSettings() { return userSettings_; }
     ShowFlags& GetShowFlags() { return showFlags_; }
+    bool IsPhysicsDebugOverlayVisible() const { return showPhysicsDebugOverlay_; }
+    void SetPhysicsDebugOverlayVisible(bool visible) { showPhysicsDebugOverlay_ = visible; }
     bool IsGraphicsDebugPanelVisible() const { return showGraphicsDebugPanel_; }
     void SetGraphicsDebugPanelVisible(bool visible) { showGraphicsDebugPanel_ = visible; }
 
@@ -315,6 +317,7 @@ private:
     mutable UserSettings userSettings_{};
     mutable ShowFlags showFlags_{};
     mutable Assets::UniformBufferObject prevUBO_{};
+    bool showPhysicsDebugOverlay_ = false;
     bool showGraphicsDebugPanel_ = false;
 
     // scene, maybe multiple at a time

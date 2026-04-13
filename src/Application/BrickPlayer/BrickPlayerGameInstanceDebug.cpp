@@ -5,7 +5,6 @@
 #include "Assets/Loaders/FLDrawTypes.h"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Subsystems/NextPhysics.h"
-#include "Runtime/Utilities/PhysicsDebugOverlay.hpp"
 
 #include <imgui.h>
 
@@ -90,16 +89,6 @@ namespace
                            BoolLabel(connector.centered),
                            DescribeConnectorProfiles(connector));
     }
-}
-
-void BrickPlayerGameInstance::DrawPhysicsDebug()
-{
-    if (!showPhysicsDebug_ || !sceneLoaded_)
-    {
-        return;
-    }
-
-    Runtime::DrawPhysicsDebugOverlay(GetEngine().GetScene(), GetEngine().GetScene().GetRenderCamera());
 }
 
 void BrickPlayerGameInstance::DrawSnapConfirmation() const

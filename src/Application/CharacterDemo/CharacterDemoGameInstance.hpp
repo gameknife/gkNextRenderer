@@ -38,11 +38,11 @@ public:
 
     bool OnRenderUI() override;
     bool OverrideRenderCamera(Assets::Camera& OutRenderCamera) const override;
+    void DrawAdditionalPhysicsDebugOverlay(const Assets::Camera& camera) const override;
 
-    bool SupportsDebugShortcut(SDL_Keycode key) const override;
-    bool IsDebugShortcutActive(SDL_Keycode key) const override;
-    bool SetDebugShortcutActive(SDL_Keycode key, bool active) override;
-    void ClearDebugShortcuts() override;
+    bool SupportsAppDebugShortcut(SDL_Keycode key) const override;
+    bool IsAppDebugShortcutActive(SDL_Keycode key) const override;
+    bool SetAppDebugShortcutActive(SDL_Keycode key, bool active) override;
     bool OnKey(SDL_Event& event) override;
     bool OnCursorPosition(double xpos, double ypos) override;
     bool OnMouseButton(SDL_Event& event) override;
@@ -129,7 +129,6 @@ private:
     bool keySprint_ = false;
     bool mouseCaptured_ = false;
     bool resetMouse_ = true;
-    bool showPhysicsDebug_ = false;
     bool footIKEnabled_ = true;
     bool showFootIKDebug_ = false;
     bool showAIDebugMenu_ = false;

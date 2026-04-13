@@ -17,6 +17,7 @@
 #include "Runtime/Config/UserSettings.hpp"
 #include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Utilities/GraphicsDebugPanel.hpp"
+#include "Runtime/Utilities/PhysicsDebugOverlay.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/SwapChain.hpp"
@@ -1068,6 +1069,13 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
     const bool suppressAllUi = screenShotRequested_;
     if (!suppressAllUi)
     {
+        if (showPhysicsDebugOverlay_)
+        {
+            Assets::Camera debugCamera = scene_->GetRenderCamera();
+            gameInstance_->OverrideRenderCamera(debugCamera);
+            Runtime::DrawPhysicsDebugOverlay(*scene_, debugCamera);
+            gameInstance_->DrawAdditionalPhysicsDebugOverlay(debugCamera);
+        }
         Runtime::GraphicsDebugPanel::DrawPanel(*this, showGraphicsDebugPanel_,
                                                gameInstance_->GetGraphicsDebugPanelTopOffset());
     }
@@ -1229,40 +1237,64 @@ void NextEngine::OnKey(SDL_Event& event)
 
 bool NextEngine::HandleDebugShortcut(SDL_Keycode key)
 {
-    if (key < SDLK_F1 || key > SDLK_F5)
+    struct FDebugShortcutOps
+    {
+        std::function<bool()> IsActive;
+        std::function<void(bool)> SetActive;
+    };
+
+    if (key < SDLK_F1 || key > SDLK_F10)
     {
         return false;
     }
 
-    const bool engineHandlesKey = key == SDLK_F2;
-    const bool appHandlesKey = gameInstance_ && gameInstance_->SupportsDebugShortcut(key);
-    if (!engineHandlesKey && !appHandlesKey)
+    std::optional<FDebugShortcutOps> shortcutOps;
+    switch (key)
+    {
+    case SDLK_F1:
+        shortcutOps = FDebugShortcutOps{
+            .IsActive = [this]() { return showPhysicsDebugOverlay_; },
+            .SetActive = [this](bool active) { showPhysicsDebugOverlay_ = active; },
+        };
+        break;
+    case SDLK_F2:
+        shortcutOps = FDebugShortcutOps{
+            .IsActive = [this]() { return showGraphicsDebugPanel_; },
+            .SetActive = [this](bool active) { showGraphicsDebugPanel_ = active; },
+        };
+        break;
+    default:
+        if (gameInstance_ && gameInstance_->SupportsAppDebugShortcut(key))
+        {
+            shortcutOps = FDebugShortcutOps{
+                .IsActive = [this, key]() { return gameInstance_->IsAppDebugShortcutActive(key); },
+                .SetActive = [this, key](bool active) { (void)gameInstance_->SetAppDebugShortcutActive(key, active); },
+            };
+        }
+        break;
+    }
+
+    if (!shortcutOps.has_value())
     {
         return false;
     }
 
-    const bool isActive = engineHandlesKey
-        ? showGraphicsDebugPanel_
-        : (gameInstance_ && gameInstance_->IsDebugShortcutActive(key));
+    const bool isActive = shortcutOps->IsActive();
+    const bool engineOwnsShortcut = key == SDLK_F1 || key == SDLK_F2;
 
-    if (gameInstance_)
+    if (engineOwnsShortcut)
     {
-        gameInstance_->ClearDebugShortcuts();
-    }
-    showGraphicsDebugPanel_ = false;
-
-    if (isActive)
-    {
+        showPhysicsDebugOverlay_ = false;
+        showGraphicsDebugPanel_ = false;
+        if (!isActive)
+        {
+            shortcutOps->SetActive(true);
+        }
         return true;
     }
 
-    if (engineHandlesKey)
-    {
-        showGraphicsDebugPanel_ = true;
-        return true;
-    }
-
-    return gameInstance_ && gameInstance_->SetDebugShortcutActive(key, true);
+    shortcutOps->SetActive(!isActive);
+    return true;
 }
 
 bool NextEngine::ExecuteCommand(std::unique_ptr<ICommand> command)

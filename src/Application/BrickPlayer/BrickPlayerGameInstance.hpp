@@ -18,10 +18,9 @@ public:
     void OnDestroy() override {}
     bool OnRenderUI() override;
     void OnInitUI() override;
-    bool SupportsDebugShortcut(SDL_Keycode key) const override;
-    bool IsDebugShortcutActive(SDL_Keycode key) const override;
-    bool SetDebugShortcutActive(SDL_Keycode key, bool active) override;
-    void ClearDebugShortcuts() override;
+    bool SupportsAppDebugShortcut(SDL_Keycode key) const override;
+    bool IsAppDebugShortcutActive(SDL_Keycode key) const override;
+    bool SetAppDebugShortcutActive(SDL_Keycode key, bool active) override;
     bool OnKey(SDL_Event& event) override;
     bool OnCursorPosition(double xpos, double ypos) override;
     bool OnMouseButton(SDL_Event& event) override;
@@ -70,14 +69,13 @@ public:
     std::string GetCurrentBGMName() const;
 
     // Physics debug
-    bool IsShowPhysicsDebug() const { return showPhysicsDebug_; }
-    void TogglePhysicsDebug() { showPhysicsDebug_ = !showPhysicsDebug_; }
+    bool IsShowPhysicsDebug() const { return engine_->IsPhysicsDebugOverlayVisible(); }
+    void TogglePhysicsDebug() { engine_->SetPhysicsDebugOverlayVisible(!engine_->IsPhysicsDebugOverlayVisible()); }
     bool IsShowGlobalPhysicsBodies() const { return engine_->GetShowFlags().DebugDraw_PhysicsBodies; }
     void ToggleGlobalPhysicsBodies()
     {
         engine_->GetShowFlags().DebugDraw_PhysicsBodies = !engine_->GetShowFlags().DebugDraw_PhysicsBodies;
     }
-    void DrawPhysicsDebug();
     void DrawSnapConfirmation() const;
     bool IsShowSnapDebug() const { return showSnapDebug_; }
     void ToggleSnapDebug() { showSnapDebug_ = !showSnapDebug_; }
@@ -253,7 +251,6 @@ private:
     int32_t lockedDraggedConnectorIndex_ = -1;
     DragSnapCandidate activeSnapCandidate_{};
     float snapFeedbackPulseUntil_ = 0.0f;
-    bool showPhysicsDebug_ = false;
     bool showSnapDebug_ = false;
     bool useHorizontalDragPlane_ = true;
     bool hasFloorPlane_ = false;

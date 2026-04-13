@@ -56,7 +56,6 @@ void BrickPlayerUserInterface::Render()
     else
         RenderTimeline();
     gameInstance_->DrawSnapConfirmation();
-    gameInstance_->DrawPhysicsDebug();
     gameInstance_->DrawSnapDebug();
 }
 
@@ -193,7 +192,7 @@ void BrickPlayerUserInterface::RenderTitleBar()
         if (globalPhysicsOn)
             ImGui::PopStyleColor();
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Engine Physics Bodies Debug (F3)");
+            ImGui::SetTooltip("Engine Physics Bodies Debug (F8)");
 
         ImGui::SameLine();
         bool snapDebugOn = gameInstance_->IsShowSnapDebug();
@@ -206,7 +205,7 @@ void BrickPlayerUserInterface::RenderTitleBar()
         if (snapDebugOn)
             ImGui::PopStyleColor();
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Snap Debug (F2)");
+            ImGui::SetTooltip("Snap Debug (F7)");
 
         ImGui::SameLine();
         ImGui::GetForegroundDrawList()->AddLine(
@@ -227,7 +226,7 @@ void BrickPlayerUserInterface::RenderTitleBar()
         if (horizontalDrag)
             ImGui::PopStyleColor();
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip(horizontalDrag ? "Drag: XZ Plane (F4)" : "Drag: Screen Plane (F4)");
+            ImGui::SetTooltip(horizontalDrag ? "Drag: XZ Plane (F9)" : "Drag: Screen Plane (F9)");
 
         ImGui::SameLine();
         bool bgmPaused = gameInstance_->IsBGMPaused();

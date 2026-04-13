@@ -135,7 +135,8 @@ void CharacterDemoGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
     cvars.SetDefaultFromString("r.temporalFrames", "8", &error);
-    cvars.SetDefaultFromString("r.superResolution", "4", &error);
+    //cvars.SetDefaultFromString("r.superResolution", "4", &error);
+    cvars.SetDefaultFromString("r.fastGather", "true", &error);
     //cvars.SetDefaultFromString("r.dlss", "true", &error);
 }
 
@@ -323,7 +324,7 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Text("View: %s", firstPersonMode_ ? "FPS" : "TPS");
     ImGui::Text("Move Mode: %s", GetMovementModeName());
     ImGui::Text("Graphics Debug: %s", engine_->IsGraphicsDebugPanelVisible() ? "On" : "Off");
-    ImGui::Text("Physics Debug: %s", showPhysicsDebug_ ? "On" : "Off");
+    ImGui::Text("Physics Debug: %s", engine_->IsPhysicsDebugOverlayVisible() ? "On" : "Off");
     ImGui::Text("Foot IK: %s", footIKEnabled_ ? "On" : "Off");
     ImGui::Text("Foot IK Debug: %s", showFootIKDebug_ ? "On" : "Off");
     ImGui::Text("AI Debug Menu: %s", showAIDebugMenu_ ? "On" : "Off");
@@ -360,7 +361,7 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Text("WASD - Move | Shift - Run");
     ImGui::Text("Space - Jump | Mouse - Look");
     ImGui::Text("V - Toggle FPS/TPS | Tab - Move Mode");
-    ImGui::Text("LMB - Shoot | F1 - Physics | F2 - Graphics | F3 - Foot IK | Q - Next Renderer");
+    ImGui::Text("LMB - Shoot | F1 - Physics | F2 - Graphics | F7 - Foot IK | Q - Next Renderer");
     ImGui::Text("1-8 - View Modes | F8 - AI Debug Menu | F9 - IK Debug");
     ImGui::Text("ESC - Release Mouse");
 
@@ -389,24 +390,21 @@ bool CharacterDemoGameInstance::OnRenderUI()
     {
         DrawAIBotBehaviorTreeUI();
     }
-    if (showPhysicsDebug_)
-    {
-        Assets::Camera debugCamera = engine_->GetScene().GetRenderCamera();
-        OverrideRenderCamera(debugCamera);
-        Runtime::DrawPhysicsDebugOverlay(engine_->GetScene(), debugCamera);
-        Runtime::DrawCharacterControllerDebugOverlay(playerCharacter_.controller, debugCamera);
-        if (aiBot_.character.controller.IsValid())
-        {
-            Runtime::DrawCharacterControllerDebugOverlay(aiBot_.character.controller, debugCamera);
-        }
-    }
-
     if (showNavGridDebug_)
     {
         DrawNavGridDebugOverlay();
     }
 
     return true;
+}
+
+void CharacterDemoGameInstance::DrawAdditionalPhysicsDebugOverlay(const Assets::Camera& camera) const
+{
+    Runtime::DrawCharacterControllerDebugOverlay(playerCharacter_.controller, camera);
+    if (aiBot_.character.controller.IsValid())
+    {
+        Runtime::DrawCharacterControllerDebugOverlay(aiBot_.character.controller, camera);
+    }
 }
 
 bool CharacterDemoGameInstance::OverrideRenderCamera(Assets::Camera& OutRenderCamera) const
@@ -554,39 +552,33 @@ bool CharacterDemoGameInstance::OnKey(SDL_Event& event)
     }
 }
 
-bool CharacterDemoGameInstance::SupportsDebugShortcut(SDL_Keycode key) const
+bool CharacterDemoGameInstance::SupportsAppDebugShortcut(SDL_Keycode key) const
 {
     switch (key)
     {
-    case SDLK_F1:
-    case SDLK_F3:
+    case SDLK_F7:
         return true;
     default:
         return false;
     }
 }
 
-bool CharacterDemoGameInstance::IsDebugShortcutActive(SDL_Keycode key) const
+bool CharacterDemoGameInstance::IsAppDebugShortcutActive(SDL_Keycode key) const
 {
     switch (key)
     {
-    case SDLK_F1:
-        return showPhysicsDebug_;
-    case SDLK_F3:
+    case SDLK_F7:
         return footIKEnabled_;
     default:
         return false;
     }
 }
 
-bool CharacterDemoGameInstance::SetDebugShortcutActive(SDL_Keycode key, bool active)
+bool CharacterDemoGameInstance::SetAppDebugShortcutActive(SDL_Keycode key, bool active)
 {
     switch (key)
     {
-    case SDLK_F1:
-        showPhysicsDebug_ = active;
-        return true;
-    case SDLK_F3:
+    case SDLK_F7:
         footIKEnabled_ = active;
         playerCharacter_.SetFootIKEnabled(footIKEnabled_);
         aiBot_.character.SetFootIKEnabled(footIKEnabled_);
@@ -594,12 +586,6 @@ bool CharacterDemoGameInstance::SetDebugShortcutActive(SDL_Keycode key, bool act
     default:
         return false;
     }
-}
-
-void CharacterDemoGameInstance::ClearDebugShortcuts()
-{
-    showPhysicsDebug_ = false;
-    SetDebugShortcutActive(SDLK_F3, false);
 }
 
 bool CharacterDemoGameInstance::OnCursorPosition(double xpos, double ypos)

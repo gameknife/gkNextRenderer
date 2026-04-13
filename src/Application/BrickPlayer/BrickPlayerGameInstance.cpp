@@ -604,51 +604,45 @@ bool BrickPlayerGameInstance::OnKey(SDL_Event& event)
     return true;
 }
 
-bool BrickPlayerGameInstance::SupportsDebugShortcut(SDL_Keycode key) const
+bool BrickPlayerGameInstance::SupportsAppDebugShortcut(SDL_Keycode key) const
 {
     switch (key)
     {
-    case SDLK_F1:
-    case SDLK_F2:
-    case SDLK_F3:
-    case SDLK_F4:
+    case SDLK_F7:
+    case SDLK_F8:
+    case SDLK_F9:
         return true;
     default:
         return false;
     }
 }
 
-bool BrickPlayerGameInstance::IsDebugShortcutActive(SDL_Keycode key) const
+bool BrickPlayerGameInstance::IsAppDebugShortcutActive(SDL_Keycode key) const
 {
     switch (key)
     {
-    case SDLK_F1:
-        return showPhysicsDebug_;
-    case SDLK_F2:
+    case SDLK_F7:
         return showSnapDebug_;
-    case SDLK_F3:
+    case SDLK_F8:
         return engine_->GetShowFlags().DebugDraw_PhysicsBodies;
-    case SDLK_F4:
+    case SDLK_F9:
         return useHorizontalDragPlane_;
     default:
         return false;
     }
 }
 
-bool BrickPlayerGameInstance::SetDebugShortcutActive(SDL_Keycode key, bool active)
+bool BrickPlayerGameInstance::SetAppDebugShortcutActive(SDL_Keycode key, bool active)
 {
     switch (key)
     {
-    case SDLK_F1:
-        showPhysicsDebug_ = active;
-        return true;
-    case SDLK_F2:
+    case SDLK_F7:
         showSnapDebug_ = active;
         return true;
-    case SDLK_F3:
+    case SDLK_F8:
         engine_->GetShowFlags().DebugDraw_PhysicsBodies = active;
         return true;
-    case SDLK_F4:
+    case SDLK_F9:
         if (useHorizontalDragPlane_ != active)
         {
             useHorizontalDragPlane_ = active;
@@ -657,18 +651,6 @@ bool BrickPlayerGameInstance::SetDebugShortcutActive(SDL_Keycode key, bool activ
         return true;
     default:
         return false;
-    }
-}
-
-void BrickPlayerGameInstance::ClearDebugShortcuts()
-{
-    showPhysicsDebug_ = false;
-    showSnapDebug_ = false;
-    engine_->GetShowFlags().DebugDraw_PhysicsBodies = false;
-    if (useHorizontalDragPlane_)
-    {
-        useHorizontalDragPlane_ = false;
-        SwitchDragPlaneWhileDragging();
     }
 }
 

@@ -12,7 +12,6 @@
 #include "Runtime/Engine.hpp"
 #include "Runtime/Utilities/NextEngineHelper.h"
 #include "Runtime/Utilities/GraphicsDebugPanel.hpp"
-#include "Runtime/Utilities/PhysicsDebugOverlay.hpp"
 #include "Utilities/Localization.hpp"
 #include "Utilities/ImGui.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
@@ -155,13 +154,6 @@ bool NextRendererGameInstance::OnRenderUI()
 	DrawTitleBar();
 	DrawSettings();
 
-    if (showPhysicsDebug_)
-    {
-        Assets::Camera debugCamera = GetEngine().GetScene().GetRenderCamera();
-        OverrideRenderCamera(debugCamera);
-        Runtime::DrawPhysicsDebugOverlay(GetEngine().GetScene(), debugCamera);
-    }
-
 	if (ImGui::GetCurrentContext() != nullptr)
 	{
 		auto& swapChain = GetEngine().GetRenderer().SwapChain();
@@ -259,32 +251,6 @@ bool NextRendererGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCam
 float NextRendererGameInstance::GetGraphicsDebugPanelTopOffset() const
 {
     return TitlebarSize;
-}
-
-bool NextRendererGameInstance::SupportsDebugShortcut(SDL_Keycode key) const
-{
-    return key == SDLK_F1;
-}
-
-bool NextRendererGameInstance::IsDebugShortcutActive(SDL_Keycode key) const
-{
-    return key == SDLK_F1 && showPhysicsDebug_;
-}
-
-bool NextRendererGameInstance::SetDebugShortcutActive(SDL_Keycode key, bool active)
-{
-    if (key != SDLK_F1)
-    {
-        return false;
-    }
-
-    showPhysicsDebug_ = active;
-    return true;
-}
-
-void NextRendererGameInstance::ClearDebugShortcuts()
-{
-    showPhysicsDebug_ = false;
 }
 
 bool NextRendererGameInstance::OnKey(SDL_Event& event)

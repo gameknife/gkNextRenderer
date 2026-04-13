@@ -25,11 +25,6 @@ public:
 
     bool OverrideRenderCamera(Assets::Camera& OutRenderCamera) const override;
     float GetGraphicsDebugPanelTopOffset() const override;
-
-    bool SupportsDebugShortcut(SDL_Keycode key) const override;
-    bool IsDebugShortcutActive(SDL_Keycode key) const override;
-    bool SetDebugShortcutActive(SDL_Keycode key, bool active) override;
-    void ClearDebugShortcuts() override;
     bool OnKey(SDL_Event& event) override;
     bool OnCursorPosition(double xpos, double ypos) override;
     bool OnMouseButton(SDL_Event& event) override;
@@ -60,5 +55,4 @@ private:
 
     bool isTakingScreenshot_ = false;
     bool agentValidationCaptured_ = false;
-    bool showPhysicsDebug_ = false;
 };
