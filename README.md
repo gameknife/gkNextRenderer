@@ -4,8 +4,6 @@
 
 [English](README.en.md) | [简体中文](README.md)
 
-![Kitchen Scene](gallery/Kitchen.avif)
-
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/gameknife/gkNextEngine)
 ![Windows CI](https://github.com/gameknife/gkNextEngine/actions/workflows/windows.yml/badge.svg)
 ![Linux CI](https://github.com/gameknife/gkNextEngine/actions/workflows/linux.yml/badge.svg)
@@ -13,15 +11,20 @@
 ![Android CI](https://github.com/gameknife/gkNextEngine/actions/workflows/android.yml/badge.svg)
 ![iOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/ios.yml/badge.svg)
 
+![Play ground](gallery/4_playground.avif)
+
 ---
 
-gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎 / 渲染实验场。它一方面追求 **实时路径追踪、Hybrid Rendering 与 HDR 光照表现** 带来的高质量视觉呈现，另一方面也持续强调 **真正可运行、可扩展、可用于游戏原型验证的引擎能力**。
+gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎 / 渲染实验场，重点放在两件事上：
 
-项目以渲染器能力为核心，同时围绕编辑器、脚本、物理、内容导入与玩法原型持续扩展。LDraw / BrickPlayer 是其中一条很有代表性的内容方向：引擎层可以直接导入 LDraw 模型，并将这类结构化资产纳入统一的 Runtime、渲染与交互系统。
+- 用 **实时路径追踪、Hybrid Rendering 与 HDR 光照表现** 做出真正有展示力的画面
+- 用 **可运行、可扩展、可用于游戏原型验证的引擎能力** 支撑长期演进，而不是停留在单点 demo
+
+项目以渲染器能力为核心，同时持续扩展编辑器、脚本、物理、内容导入与玩法原型。LDraw / BrickPlayer 是当前很有代表性的内容方向：引擎层可以直接导入 LDraw 模型，并把这类结构化资产纳入统一的 Runtime、渲染与交互系统。
 
 如果你关注以下方向，这个项目会比较值得参考：
 
-- 想看实时路径追踪、金属/玻璃/塑料材质、HDR 环境光和高密度场景的实际画面
+- 想看实时路径追踪、金属 / 玻璃 / 塑料材质、HDR 环境光和高密度场景的实际画面
 - 想研究一套更贴近游戏运行时的 Vulkan 渲染架构，而不是只会离线出图的 demo
 - 想看一个引擎如何把 **渲染、编辑器、脚本、物理、内容导入与玩法原型** 串成完整系统
 - 想读一套规模可控、强调工程清晰度、适合学习现代 Vulkan 渲染与引擎实现的代码库
@@ -33,7 +36,7 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 ## 项目特性
 
 - **实时路径追踪与 Hybrid Rendering**  
-  项目围绕 1spp + temporal reuse、降噪、重投影和多管线切换持续推进，让路径追踪不只停留在离线效果演示，而是面向真实运行时表现。
+  围绕 1spp + temporal reuse、降噪、重投影和多管线切换持续推进，让路径追踪不只停留在离线效果演示，而是面向真实运行时表现。
 
 - **游戏级性能取向的 GPU 架构**  
   通过 Visibility Buffer、全 Bindless、GPU-Driven、Multi-Draw Indirect 等设计，尽量把 CPU 开销留给内容与玩法，把 GPU 算力用在真正影响画面的地方。
@@ -43,18 +46,6 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 - **多格式内容导入与互操作**  
   引擎完整支持 glTF 运行时导入，并支持部分导出；同时也可以直接导入 `.ldr` / `.mpd`，将结构化的 LDraw 场景纳入统一的 Runtime、渲染与交互系统。
-
----
-
-## 性能数据
-
-> 测试场景：`city.glb`
-
-| 平台 | 硬件 | 分辨率 | 渲染模式 | 帧率 |
-|------|------|--------|----------|------|
-| Windows | RTX 5070 Ti | 1080p | PathTracing (4spp + temporal) | **120 fps** |
-| Windows | RTX 5070 Ti | 1080p | PathTracing + OIDN | **~80 fps** |
-| Android | Snapdragon 8 Gen2 | 720p | Hardware RT Hybrid | **50 fps** |
 
 ---
 
@@ -90,7 +81,7 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 ---
 
-## 技术特长
+## 技术方向
 
 ### 渲染与 GPU 架构
 
@@ -108,35 +99,28 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 - **QuickJS Runtime Scripting**
 - **Visual Test / Benchmark / Packager**
 
-### LDraw / BrickPlayer 方向
+### AI Native
 
-- **LDraw 文件解析**：`FLDrawConfig` / `FLDrawParser` / `FLDrawLoader`
-- **引擎层运行时导入**：从 LDraw 数据直接创建 Scene / Node / Model / Material
-- **搭建语义层**：`BrickPlayerLDrawShadow`
-- **交互规则层**：`BrickPlayerSnapLogic`
-- **玩法原型层**：FreeBuild、拖拽、吸附、确认反馈、物理同步、调试绘制
+- **内置 AI Agent 基础设施，可扩展运行时 LLM 能力**
+- **使用 Codex 进行引擎基础设施与示例 Demo 的原生开发**
+- **放弃 low-code 叙事，转向更直接的 agentic coding 工作流**
 
 ---
 
-## 图库
+## 视觉预览
 
-> 这里将放置 BrickPlayer / LDraw 的动态图，README 内的媒体素材统一使用 GIF 与 AVIF。
-
-<!-- 推荐在这里补一张新的动态图，例如：
-![BrickPlayer Gameplay](gallery/BrickPlayer.gif)
--->
+![BrickPlayer Gameplay](gallery/6_debug_draw.avif)
 
 <details>
 <summary><b>示例截图</b></summary>
 
 | 场景 | 截图 |
 |------|------|
-| Kitchen | ![Kitchen](gallery/Kitchen.avif) |
-| LuxBall | ![LuxBall](gallery/LuxBall.avif) |
-| Living Room | ![LivingRoom](gallery/LivingRoom.avif) |
-| Qx50 | ![Qx50](gallery/Qx50.avif) |
-| Cornell Box | ![CornellBox](gallery/CornellBox.avif) |
-| Android Hybrid | ![Android](gallery/Qx50_Android.avif) |
+| still | ![still](gallery/1_still.avif) |
+| livingroom | ![livingroom](gallery/2_living_room.avif) |
+| ldrawlego | ![ldrawlego](gallery/3_lego_ldraw.avif) |
+| luxball | ![luxball](gallery/5_luxball.avif) |
+| brickplayer | ![brickplayer](gallery/7_brick_player.avif) |
 
 </details>
 
@@ -144,9 +128,15 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 ## 快速开始
 
-项目使用 CMake + Ninja，依赖由 vcpkg 管理。需要可访问 GitHub 的网络环境。
+项目使用 CMake + Ninja，依赖由 vcpkg 管理。构建依赖下载阶段需要可访问 GitHub 的网络环境。
 
-桌面平台现在可以从任意工作目录启动可执行文件，通常不再需要先 `cd` 到 `out/build/<preset>/bin`。
+### 通用说明
+
+- 桌面平台现在可以从任意工作目录启动可执行文件，通常不再需要先 `cd` 到 `out/build/<preset>/bin`
+- 如果不确定可用预设，可以先执行 `cmake --list-presets=configure`
+- 常用桌面预设：`default-windows`、`default-linux`、`default-macos-arm64`
+
+### 平台构建
 
 <details>
 <summary><b>Windows (Visual Studio 2022)</b></summary>
@@ -228,11 +218,9 @@ run.bat --preset android
 
 # BrickPlayer（数字乐高 / LDraw 搭建原型）
 ./run.sh --preset default-macos-arm64 --target BrickPlayer
-```
 
-```shell
-# 直接加载 LDraw 示例
-./out/build/<preset>/bin/gkNextRenderer --load-scene "assets/omr/102.ldr"
+# CharacterDemo（角色控制 / AI / 导航实验）
+./run.sh --preset default-macos-arm64 --target CharacterDemo
 ```
 
 ---
@@ -244,18 +232,12 @@ run.bat --preset android
 | `gkNextRenderer` | 主渲染器，路径追踪 / Hybrid Rendering / 多管线对比 |
 | `gkNextEditor` | ImGui 编辑器，服务于材质、场景与运行时工具链 |
 | `BrickPlayer` | 基于 LDraw 的数字乐高搭建原型 |
+| `CharacterDemo` | 角色控制、AI 行为、导航与战斗交互实验 |
 | `MagicaLego` | 更轻量的乐高 / voxel 风格玩法实验场 |
-| `gkNextBenchmark` | 静态与动态场景基准测试 |
+| `gkNextStillBenchmark` | 静态场景渲染基准测试 |
+| `gkNextMotionBenchmark` | 动态场景渲染基准测试 |
 | `gkNextVisualTest` | 自动化视觉测试与截图报告 |
 | `Packager` | 资产打包为 `.pkg` |
-
----
-
-## 文档入口
-
-- 思考记录：[docs/Thoughts.md](docs/Thoughts.md)
-- LDraw 导入说明：[AGENT_GUIDE/LDrawLoader.md](AGENT_GUIDE/LDrawLoader.md)
-- BrickPlayer / LDraw 技术总结：[docs/BrickPlayer-LDraw-Technical-Summary-2026-03.md](docs/BrickPlayer-LDraw-Technical-Summary-2026-03.md)
 
 ---
 
@@ -272,7 +254,7 @@ run.bat --preset android
 欢迎 Issue / PR。
 
 - 开发协作说明见 `AGENTS.md`
-- 如果你对实时路径追踪、现代渲染架构、LDraw、编辑器工具链或玩法原型验证感兴趣，欢迎交流
+- 如果你对实时路径追踪、现代渲染架构、LDraw、编辑器工具链、AI Native 工作流或玩法原型验证感兴趣，欢迎交流
 
 ---
 
