@@ -32,6 +32,7 @@ public:
     bool OnGamepadInput(int16_t leftStickX, int16_t leftStickY,
                     int16_t rightStickX, int16_t rightStickY,
                     int16_t leftTrigger, int16_t rightTrigger) override;
+    void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) override;
 
     // quick access engine
     NextEngine& GetEngine() { return *engine_; }

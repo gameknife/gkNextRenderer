@@ -7,6 +7,7 @@ namespace
 {
     constexpr float titleBarHeight = 40.0f;
     constexpr float titleBarControlWidth = titleBarHeight * 3;
+    constexpr float titleBarActionWidth = titleBarHeight * 12;
 }
 
 BrickPlayerUserInterface::BrickPlayerUserInterface(BrickPlayerGameInstance* gameInstance)
@@ -65,7 +66,7 @@ void BrickPlayerUserInterface::RenderTitleBar()
 
     // Configure custom title bar drag area
     gameInstance_->GetEngine().ConfigureCustomTitleBarDrag(
-        true, titleBarHeight, titleBarHeight * 10.0f, titleBarControlWidth);
+        true, titleBarHeight, titleBarActionWidth, titleBarControlWidth);
 
     // Title bar background
     auto bgColor = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
@@ -116,7 +117,7 @@ void BrickPlayerUserInterface::RenderTitleBar()
 
     // ---- Left side: action buttons ----
     ImGui::SetNextWindowPos(ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImVec2(titleBarHeight * 10, titleBarHeight));
+    ImGui::SetNextWindowSize(ImVec2(titleBarActionWidth, titleBarHeight));
     ImGui::SetNextWindowBgAlpha(0.0f);
 
     ImGui::Begin("##TitleBarLeft", nullptr,
@@ -140,6 +141,18 @@ void BrickPlayerUserInterface::RenderTitleBar()
         }
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Reset");
+
+        ImGui::SameLine();
+        if (ImGui::Button(ICON_FA_CAMERA, ImVec2(titleBarHeight, titleBarHeight)))
+        {
+            gameInstance_->GetEngine().AddTickedTask([this](double deltaSeconds) -> bool
+            {
+                gameInstance_->GetEngine().RequestScreenShot("");
+                return true;
+            });
+        }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Take a Screenshot into the screenshots folder");
 
         // Per-part mode toggle (only show if the file has build steps)
         if (gameInstance_->HasBuildSteps())

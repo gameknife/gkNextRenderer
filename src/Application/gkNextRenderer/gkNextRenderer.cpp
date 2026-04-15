@@ -18,6 +18,7 @@
 #include "Runtime/ScreenShot.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "Runtime/Components/SkinnedMeshComponent.h"
+#include "Runtime/Config/CVarSystem.hpp"
 #include "Vulkan/SwapChain.hpp"
 
 extern float GAndroidMagicScale;
@@ -370,6 +371,12 @@ bool NextRendererGameInstance::OnGamepadInput(int16_t leftStickX, int16_t leftSt
 	int16_t leftTrigger, int16_t rightTrigger)
 {
 	return modelViewController_.OnGamepadInput(leftStickX, leftStickY, rightStickX, rightStickY, leftTrigger, rightTrigger);
+}
+
+void NextRendererGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
+{
+    //std::string error;
+    //cvars.SetDefaultFromString("r.superResolution", "4", &error);
 }
 
 
