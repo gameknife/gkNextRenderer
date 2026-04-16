@@ -1,6 +1,7 @@
 #include "Runtime/Utilities/PhysicsDebugOverlay.hpp"
 
 #include <cmath>
+#include <optional>
 
 #include <imgui.h>
 #include <glm/gtc/matrix_transform.hpp>

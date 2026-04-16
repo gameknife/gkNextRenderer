@@ -4,6 +4,8 @@
 #include "Assets/Core/Node.h"
 #include "Assets/Data/Skeleton.hpp"
 
+#include <spdlog/spdlog.h>
+
 namespace Assets
 {
     std::string KayKitPieceLoader::BuildPath(const std::string& pieceName, const std::string& color)
