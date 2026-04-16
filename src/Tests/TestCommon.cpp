@@ -18,7 +18,6 @@ EngineTestFixture::EngineTestFixture()
         "gkNextUnitTests", 
         "--width=800", 
         "--height=600",
-        "--renderer=0",
         "--fastexit=false"
     };
     int argc = sizeof(argv) / sizeof(argv[0]);

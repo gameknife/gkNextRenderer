@@ -1,0 +1,9 @@
+# Build a colorful wall
+var width = 8
+var height = 4
+
+repeat $width as x
+    repeat $height as y
+        place Block1x1/#0 $x $y 0
+    end
+end

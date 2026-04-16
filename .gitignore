@@ -360,6 +360,7 @@ assets/models/classic.glb
 assets/models/hyrule2.glb
 assets/models/hyrule3.glb
 assets/models/leaktest.glb
+assets/models/characters/
 
 # third party libraries
 src/ThirdParty/*/bin/
@@ -368,3 +369,10 @@ src/ThirdParty/Streamline/
 # Claude Code files
 .claude/
 lib/
+
+tools/ldraw/source/ldraw/
+tools/ldraw/source/ldrawShadow/
+tools/ldraw/output/
+assets/paks/ldraw.pak
+
+assets/models/KayKit_Platformer_Pack/

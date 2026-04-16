@@ -32,8 +32,6 @@ file(GLOB_RECURSE src_files_rendering
 
 # --- ThirdParty Libraries ---
 file(GLOB_RECURSE src_files_thirdparty
-    "ThirdParty/json11/*.cpp"
-    "ThirdParty/json11/*.hpp"
     "ThirdParty/mikktspace/*.c"
     "ThirdParty/mikktspace/*.h"
     "ThirdParty/miniaudio/*.h"
@@ -41,6 +39,8 @@ file(GLOB_RECURSE src_files_thirdparty
     "ThirdParty/tinybvh/*.h"
     "ThirdParty/ImGuizmo/*.cpp"
     "ThirdParty/ImGuizmo/*.h"
+    "ThirdParty/ImAnim/*.cpp"
+    "ThirdParty/ImAnim/*.h"
     "ThirdParty/ozz/*.h"
 )
 
@@ -60,6 +60,13 @@ file(GLOB_RECURSE src_files_engine
     "Options.hpp"
 )
 
+# --- Gameplay Layer ---
+file(GLOB_RECURSE src_files_nextgameplay
+    "NextGameplay/*.cpp"
+    "NextGameplay/*.hpp"
+    "NextGameplay/*.h"
+)
+
 # --- Editor ---
 file(GLOB_RECURSE src_files_editor "Editor/*")
 
@@ -67,6 +74,11 @@ file(GLOB_RECURSE src_files_editor "Editor/*")
 file(GLOB_RECURSE src_files_magicalego
     "Application/MagicaLego/*.cpp"
     "Application/MagicaLego/*.hpp"
+)
+
+file(GLOB_RECURSE src_files_brickplayer
+    "Application/BrickPlayer/*.cpp"
+    "Application/BrickPlayer/*.hpp"
 )
 
 file(GLOB_RECURSE src_files_gkrenderer "Application/gkNextRenderer/*")
@@ -78,4 +90,9 @@ file(GLOB_RECURSE src_files_gkstillbenchmark "Application/gkNextBenchmark/gkNext
 file(GLOB_RECURSE src_files_gkmotionbenchmark "Application/gkNextBenchmark/gkNextMotionBenchmark/*")
 
 file(GLOB_RECURSE src_files_gkvisualtest "Application/gkNextVisualTest/*"
+)
+
+file(GLOB_RECURSE src_files_characterdemo
+    "Application/CharacterDemo/*.cpp"
+    "Application/CharacterDemo/*.hpp"
 )

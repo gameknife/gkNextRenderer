@@ -1,0 +1,32 @@
+{
+    "provider": "gemini",
+    "gemini": {
+        "apiKey": "YOUR_GOOGLE_API_KEY",
+        "model": "gemini-3-flash-preview",
+        "endpoint": "https://generativelanguage.googleapis.com/v1beta"
+    },
+    "ollama": {
+        "endpoint": "http://localhost:11434",
+        "model": "gemma3:12b"
+    },
+    "zhipu": {
+        "apiKey": "YOUR_ZHIPU_API_KEY",
+        "model": "glm-4.7",
+        "endpoint": "https://open.bigmodel.cn/api/paas/v4"
+    },
+    "deepseek": {
+        "apiKey": "YOUR_DEEPSEEK_API_KEY",
+        "model": "deepseek-chat",
+        "endpoint": "https://api.deepseek.com/v1"
+    },
+    "voiceInput": {
+        "enabled": false,
+        "model": "base",
+        "language": "zh",
+        "threads": 4,
+        "maxRecordSeconds": 20,
+        "sampleRate": 16000,
+        "autoSend": false,
+        "keepTempFiles": false
+    }
+}

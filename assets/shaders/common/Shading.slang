@@ -16,9 +16,32 @@ static const float PT_MAX_TRACE_DISTANCE = 1000.f;
 static const float FAST_MAX_TRACE_DISTANCE = 20.f;
 static const float GENERAL_MAX_TRACE_DISTANCE = 50.f;
 static const float TRACE_CORRECTION_OFFSET = 0.0f;
+static const uint OBJECT_ID_FLAG_VALID = 0x80000000u;
+static const uint OBJECT_ID_FLAG_SELECTED = 0x40000000u;
+static const uint OBJECT_ID_FLAG_HOVERED = 0x20000000u;
+static const uint OBJECT_ID_FLAG_LOCKED = 0x10000000u;
+static const uint OBJECT_ID_INSTANCE_MASK = 0x0FFFFFFFu;
 
 namespace Common
 {
+    public uint EncodeObjectId(uint instanceId, bool selected, bool hovered, bool locked)
+    {
+        uint objectId = OBJECT_ID_FLAG_VALID | (instanceId & OBJECT_ID_INSTANCE_MASK);
+        if (selected)
+        {
+            objectId |= OBJECT_ID_FLAG_SELECTED;
+        }
+        if (hovered)
+        {
+            objectId |= OBJECT_ID_FLAG_HOVERED;
+        }
+        if (locked)
+        {
+            objectId |= OBJECT_ID_FLAG_LOCKED;
+        }
+        return objectId;
+    }
+
     public uint GetPageIndex(float3 pagePos)
     {
         // Calculate the page index based on the page position
@@ -540,13 +563,47 @@ public struct FHiVoxelDDARayTracerV2 : IRayTracer
     public bool TraceRayDDA(float3 rayOrigin, float3 rayDir, float maxDistance, float3 boxMin, float3 boxMax, bool useBounds, inout Vertex outVertex, inout NodeProxy outNode)
     {
         VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
+        uint cascadeCount = GetAmbientCubeCascadeCount();
+
+        float cubeUnit = GetAmbientCubeUnit();
+        float3 cubeOffset = GetAmbientCubeOffset();
+        uint baseOffset = 0;
+        float3 voxelPos = float3(0);
+        bool foundCascade = false;
+
+        for (uint cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex)
+        {
+            float candidateUnit = GetAmbientCubeUnitAtCascade(cascadeIndex);
+            float3 candidateOffset = GetAmbientCubeOffsetAtCascade(cascadeIndex);
+            float3 candidateVoxelPos = (rayOrigin.xyz - candidateOffset) / candidateUnit;
+
+            if (candidateVoxelPos.x >= 0 && candidateVoxelPos.y >= 0 && candidateVoxelPos.z >= 0 &&
+                candidateVoxelPos.x <= CUBE_SIZE_XY - 1 && candidateVoxelPos.y <= CUBE_SIZE_Z - 1 &&
+                candidateVoxelPos.z <= CUBE_SIZE_XY - 1)
+            {
+                cubeUnit = candidateUnit;
+                cubeOffset = candidateOffset;
+                baseOffset = GetCascadeBaseOffset(cascadeIndex);
+                voxelPos = candidateVoxelPos;
+                foundCascade = true;
+                break;
+            }
+        }
+
+        if (!foundCascade)
+        {
+            uint fallbackCascade = cascadeCount - 1;
+            cubeUnit = GetAmbientCubeUnitAtCascade(fallbackCascade);
+            cubeOffset = GetAmbientCubeOffsetAtCascade(fallbackCascade);
+            baseOffset = GetCascadeBaseOffset(fallbackCascade);
+            voxelPos = (rayOrigin.xyz - cubeOffset) / cubeUnit;
+        }
 
 
         uint hitMatId = 0;
-        uint maxSteps = useBounds ? uint(16 * 4 * 1.8 * 2) : uint(maxDistance / CUBE_UNIT);
+        uint maxSteps = useBounds ? uint(16 * 4 * 1.8 * 2) : uint(maxDistance / cubeUnit);
     
-        float3 voxelPos = (rayOrigin.xyz - CUBE_OFFSET) / CUBE_UNIT;
-        float3 tDelta = abs(CUBE_UNIT / rayDir);
+        float3 tDelta = abs(cubeUnit / rayDir);
         float3 tMax = float3(0, 0, 0);
         float3 stepSign = sign(rayDir);
     
@@ -561,19 +618,19 @@ public struct FHiVoxelDDARayTracerV2 : IRayTracer
         {
             if (useBounds)
             {
-                float3 worldPos = CUBE_OFFSET + voxelPos * CUBE_UNIT;
-                if (any(worldPos < boxMin - float3(CUBE_UNIT)) || any(worldPos > boxMax + float3(CUBE_UNIT)))
+                float3 worldPos = cubeOffset + voxelPos * cubeUnit;
+                if (any(worldPos < boxMin - float3(cubeUnit)) || any(worldPos > boxMax + float3(cubeUnit)))
                     break;
             }
     
             float offsetDist = 0;
             float skipLength = 1;
-            if (inSolidV2(voxelPos, rayDir, offsetDist, hitMatId, skipLength, Voxels))
+            if (inSolidV2(voxelPos, rayDir, offsetDist, hitMatId, skipLength, Voxels, baseOffset, cubeUnit))
             {
                 hit = true;
-                outVertex.Normal = normalize(normal);
-                float3 voxelBoxMin = floor(voxelPos) * CUBE_UNIT + CUBE_OFFSET - float3(0.01);
-                float3 voxelBoxMax = floor(voxelPos) * CUBE_UNIT + CUBE_OFFSET + float3(CUBE_UNIT);
+                outVertex.Normal = dot(normal, normal) > 0.0f ? normalize(normal) : normalize(-rayDir);
+                float3 voxelBoxMin = floor(voxelPos) * cubeUnit + cubeOffset - float3(0.01);
+                float3 voxelBoxMax = floor(voxelPos) * cubeUnit + cubeOffset + float3(cubeUnit);
                 outVertex.Position = Common.CalculateRayAABBEntry(rayOrigin, rayDir, voxelBoxMin, voxelBoxMax) + rayDir * offsetDist;
                 outVertex.MaterialIndex = hitMatId;
                 outVertex.TexCoord = float2(0.5, 0.5);
@@ -654,10 +711,11 @@ public struct FHiVoxelDDARayTracerV2 : IRayTracer
     public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor, out float outHitDist)
     {
         PageIndex* Pages = Bindless.GetGpuscene().Pages;
+        float startUnit = max(GetAmbientCubeUnitAtPosition(rayOrigin), 0.0001f);
         // DDA voxel traversal
         bool hit = false;
         outHitDist = 0;
-        rayOrigin = rayOrigin + rayDir * CUBE_UNIT * 2;
+        rayOrigin = rayOrigin + rayDir * startUnit * 2;
 
         // Top Level Page Index
         float3 pagePos = (rayOrigin.xyz - PAGE_OFFSET) / PAGE_SIZE;
@@ -936,10 +994,19 @@ public struct FSoftwareDirectIlluminatorV2 : IDirectIlluminator
         const float4 d = max(dot(lightVector, normalize(normal)), 0.0) * M_1_PI;
         if (Camera.HasSun)
         {
+            const uint cascadeIndex = GetAmbientCubeCascadeAtPosition(position);
+            const float cascadeUnit = GetAmbientCubeUnitAtCascade(cascadeIndex);
             const float3 lightVector = Camera.SunDirection.xyz;
             const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
             shadow = 1;
-            if (HWTracer.TraceOcclusion(position + normal * 0.25f, lightVectorCone))
+            float shadowTraceOffset = cascadeUnit * 0.5f;
+            if (cascadeIndex > 0)
+            {
+                // Coarser cascades are more prone to self-hit near surfaces; push farther out.
+                shadowTraceOffset = cascadeUnit * (1.0f + 0.5f * float(cascadeIndex));
+            }
+            shadowTraceOffset = max(0.25f, shadowTraceOffset);
+            if (HWTracer.TraceOcclusion(position + normal * shadowTraceOffset, lightVectorCone))
             {
                 shadow = 0;
             }
@@ -1011,6 +1078,7 @@ public struct FPathTracingRendererV2
     public int SampleDownscale = 1;
     public bool FuzzyTracing = false;
     public bool ForceExitAfterFirst = false;
+    public bool EnableSoftTracingAdaptiveOffset = false;
 
     bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, inout bool hitReflect, inout bool hitMetal, out float outHitDist)
     {
@@ -1034,6 +1102,9 @@ public struct FPathTracingRendererV2
         const float niOverNt = BackFace ? mat.RefractionIndex2 : (1 / mat.RefractionIndex2);
         const float cosine = dotValue > 0 ? mat.RefractionIndex * dotValue : -dotValue;
         const float reflectProb = Schlick(cosine, mat.RefractionIndex);// * pow((1.0 - roughness), 4.0);
+        const float cosTheta = min(dot(-rayDir, outwardNormal), 1.0f);
+        const float sinTheta = sqrt(max(0.0f, 1.0f - cosTheta * cosTheta));
+        const bool cannotRefract = niOverNt * sinTheta > 1.0f;
         const float metalProb = metalness;
 
         bool chanceReflect = (RandomFloat(RandomSeed) < reflectProb);
@@ -1049,7 +1120,15 @@ public struct FPathTracingRendererV2
         {
             if (!chanceReflect)
             {
-                trace_dir = refract(rayDir, outwardNormal, niOverNt);
+                if (cannotRefract)
+                {
+                    trace_dir = ggxSampling(RandomSeed, sqrt(roughness), reflect(rayDir, outwardNormal));
+                    hitReflect = true;
+                }
+                else
+                {
+                    trace_dir = refract(rayDir, outwardNormal, niOverNt);
+                }
             }
         }
 
@@ -1057,7 +1136,13 @@ public struct FPathTracingRendererV2
 
         NodeProxy hitNode;
         float4 tempColor = float4(0, 0, 0, 1);
-        if (tracer.TraceRay(inVertex.Position + inVertex.Normal * HitNormalOffset * startPosOffset, trace_dir, PT_MAX_TRACE_DISTANCE, inVertex, hitNode, tempColor, outHitDist))
+        float surfaceOffset = HitNormalOffset;
+        if (EnableSoftTracingAdaptiveOffset)
+        {
+            surfaceOffset = max(HitNormalOffset, GetAmbientCubeUnitAtPosition(inVertex.Position) * 0.5f);
+        }
+        const float3 traceOrigin = inVertex.Position + inVertex.Normal * surfaceOffset * startPosOffset;
+        if (tracer.TraceRay(traceOrigin, trace_dir, PT_MAX_TRACE_DISTANCE, inVertex, hitNode, tempColor, outHitDist))
         {
             if(FuzzyTracing)
             {
@@ -1116,11 +1201,11 @@ public struct FPathTracingRendererV2
         Material mat = Bindless.GetGpuscene().GetMaterial(hitPrimaryVertex_.MaterialIndex);
         if (mat.MaterialModel == MaterialDiffuseLight)
         {
-            FinalColor = mat.Diffuse;
+            FinalColor = min(mat.Diffuse, float4(1000, 1000, 1000, 1));
             OutSingleDiffuse.Store(pixel_, FinalColor);
             OutSingleSpecular.Store(pixel_, FinalReflection);
-            OutDiffuseHitDist.Store(pixel_, 0);
-            OutSpecularHitDist.Store(pixel_, 0);
+            OutDiffuseHitDist.Store(pixel_, primaryRayLength_);
+            OutSpecularHitDist.Store(pixel_, primaryRayLength_);
             return;
         }
 
@@ -1164,7 +1249,12 @@ public struct FPathTracingRendererV2
                         {
                             const float3 lightVector = Camera.SunDirection.xyz;
                             const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed_, cos(0.25f / 180.f * M_PI)), lightVector);
-                            if (!tracer.TraceOcclusion(vertexStart.Position + vertexStart.Normal * TRACE_CORRECTION_OFFSET, lightVectorCone))
+                            float shadowTraceOffset = TRACE_CORRECTION_OFFSET;
+                            if (EnableSoftTracingAdaptiveOffset)
+                            {
+                                shadowTraceOffset = max(TRACE_CORRECTION_OFFSET, GetAmbientCubeUnitAtPosition(vertexStart.Position) * 0.5f);
+                            }
+                            if (!tracer.TraceOcclusion(vertexStart.Position + vertexStart.Normal * shadowTraceOffset, lightVectorCone))
                             {
                                 RayColor *= Camera.SunColor;
                                 break;
@@ -1177,7 +1267,14 @@ public struct FPathTracingRendererV2
                         // 终结路径
                         if (b == maxBounces - 1 || earlyExit)
                         {
-                            RayColor *= interpolateAmbientCubesV2<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal);
+                            if (mat.MaterialModel == MaterialDielectric)
+                            {
+                                RayColor *= float4(0, 0, 0, 1);
+                            }
+                            else
+                            {
+                                RayColor *= interpolateAmbientCubesV2<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal);
+                            }
                             break;
                         }
                     }
@@ -1213,8 +1310,8 @@ public struct FPathTracingRendererV2
 
         OutSingleDiffuse.Store(pixel_, FinalColor);
         OutSingleSpecular.Store(pixel_, FinalReflection);
-        OutDiffuseHitDist.Store(pixel_, FinalDiffuseHitDist);
-        OutSpecularHitDist.Store(pixel_, FinalSpecularHitDist);
+        OutDiffuseHitDist.Store(pixel_, FinalDiffuseHitDist + primaryRayLength_);
+        OutSpecularHitDist.Store(pixel_, FinalSpecularHitDist + primaryRayLength_);
     }
 
     [mutating]
@@ -1230,9 +1327,9 @@ public struct FPathTracingRendererV2
             OutMotionVector.Store(pixel_, float4(0, 0, 0, 0));
             OutAlbedo.Store(pixel_, float4(1, 1, 1, 1));
             OutNormal.Store(pixel_, float4(0, 1, 0, 1));
-            OutObjectID.Store(pixel_, 65535);
-            OutDiffuseHitDist.Store(pixel_, 0);
-            OutSpecularHitDist.Store(pixel_, 0);
+            OutObjectID.Store(pixel_, 0);
+            OutDiffuseHitDist.Store(pixel_, 1000);
+            OutSpecularHitDist.Store(pixel_, 1000);
             OutSpecularAlbedo.Store(pixel_, float4(0, 0, 0, 0));
 
             return false;
@@ -1247,7 +1344,10 @@ public struct FPathTracingRendererV2
 
         OutAlbedo.Store(pixel_, primaryAlbedo_);
         OutNormal.Store(pixel_, gbuffer);
-        OutObjectID.Store(pixel_, hitPrimaryNode_.instanceId);
+        const bool selected = hitPrimaryNode_.reserved1 != 0;
+        const bool hovered = (hitPrimaryNode_.reserved2 & 1u) != 0;
+        const bool locked = (hitPrimaryNode_.reserved2 & 2u) != 0;
+        OutObjectID.Store(pixel_, Common.EncodeObjectId(hitPrimaryNode_.instanceId, selected, hovered, locked));
         OutMotionVector.Store(pixel_, float4(motion * size_, 0, 0));
         OutPrevDepth.Store(pixel_, ndcDepth);
         

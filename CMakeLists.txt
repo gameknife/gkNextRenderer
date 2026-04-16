@@ -52,6 +52,20 @@ if (ENABLE_QUICKJS)
     set(WITH_QUICKJS ON CACHE BOOL "Enable QuickJS" FORCE)
 endif()
 
+option(ENABLE_WHISPERCPP "Enable whisper.cpp support" ON)
+if (ANDROID OR IOS)
+    if (ENABLE_WHISPERCPP)
+        message(STATUS "whisper.cpp is not supported on Android/iOS. Disabling.")
+    endif()
+    set(ENABLE_WHISPERCPP OFF CACHE BOOL "Enable whisper.cpp support" FORCE)
+endif()
+
+if (ENABLE_WHISPERCPP)
+    set(WITH_WHISPERCPP ON CACHE BOOL "Enable whisper.cpp" FORCE)
+else()
+    set(WITH_WHISPERCPP OFF CACHE BOOL "Enable whisper.cpp" FORCE)
+endif()
+
 include(cmake/SetupExternalLibs.cmake)
 include(cmake/SetupDependencies.cmake)
 

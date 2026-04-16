@@ -28,8 +28,25 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_PhysicsSync.cpp
 	Tests/Test_GpuTimerLogic.cpp
 	Tests/Test_GltfSkinning.cpp
+	Tests/Test_CameraFocus.cpp
 	Tests/Test_ComponentSystem.cpp
+	Tests/Test_GameplayComponents.cpp
+	Tests/Test_LDrawConfig.cpp
+	Tests/Test_LDrawGeometry.cpp
+	Tests/Test_LDrawLoader.cpp
+	Tests/Test_LDrawParser.cpp
+	Tests/Test_LDrawConnectivity.cpp
+	Tests/Test_SceneList.cpp
 	Tests/Test_RenderComponent.cpp
+	Tests/Test_ImAnimIntegration.cpp
+	Tests/Test_BrickPlayerSnapLogic.cpp
+	Application/BrickPlayer/BrickPlayerSnapLogic.cpp
+	Tests/Test_MagicaLegoStyle.cpp
+	Tests/Test_MagicaLegoScript.cpp
+	Tests/Test_MagicaLegoPlacementRules.cpp
+	Application/MagicaLego/MagicaLegoStyle.cpp
+	Application/MagicaLego/MagicaLegoScriptParser.cpp
+	Application/MagicaLego/MagicaLegoPlacementRules.cpp
 )
 
 if (ENABLE_PHYSIC)
@@ -60,6 +77,9 @@ add_library(gkNextEngine
 	${src_files_rendering}
 	${src_files_thirdparty}
 )
+add_library(NextGameplay
+	${src_files_nextgameplay}
+)
 add_executable(gkNextRenderer
 	MACOSX_BUNDLE
 	${src_files_gkrenderer}
@@ -73,6 +93,9 @@ add_library(gkNextEngine
 	${src_files_vulkan} 
 	${src_files_rendering}
 	${src_files_thirdparty}
+)
+add_library(NextGameplay
+	${src_files_nextgameplay}
 )
 add_executable(gkNextRenderer
 	${src_files_gkrenderer}
@@ -98,6 +121,14 @@ add_executable(gkNextEditor
 )
 add_executable(MagicaLego
 	${src_files_magicalego}
+	DesktopMain.cpp
+)
+add_executable(BrickPlayer
+	${src_files_brickplayer}
+	DesktopMain.cpp
+)
+add_executable(CharacterDemo
+	${src_files_characterdemo}
 	DesktopMain.cpp
 )
 add_executable(Packager
@@ -128,6 +159,22 @@ add_subdirectory(ThirdParty/quickjs-ng)
 target_link_libraries(quickjs PRIVATE gk_project_options)
 endif()
 
+set(GK_WHISPER_LINK_LIBS "")
+set(GK_WHISPER_COMPILE_DEFINITIONS "")
+if (WITH_WHISPERCPP)
+	find_package(whisper CONFIG REQUIRED)
+	if (MSVC)
+		message(STATUS "Whisper.cpp is disabled for MSVC Debug builds due to upstream static runtime mismatch")
+		set(GK_WHISPER_LINK_LIBS "$<$<NOT:$<CONFIG:Debug>>:whisper>")
+		list(APPEND GK_WHISPER_COMPILE_DEFINITIONS
+			"$<$<CONFIG:Debug>:WITH_WHISPERCPP=0>"
+			"$<$<NOT:$<CONFIG:Debug>>:WITH_WHISPERCPP=1>")
+	else()
+		set(GK_WHISPER_LINK_LIBS whisper)
+		list(APPEND GK_WHISPER_COMPILE_DEFINITIONS WITH_WHISPERCPP=1)
+	endif()
+endif()
+
 # postprocess: target setup
 if ( ANDROID )
 set(AllTargets
@@ -136,29 +183,36 @@ gkNextRenderer
 elseif( IOS )
 set(AllTargets
 gkNextEngine
+NextGameplay
 gkNextRenderer
 )
 elseif( MINGW )
 set(AllTargets
 gkNextEngine
+NextGameplay
 gkNextRenderer
 gkNextStillBenchmark
 gkNextMotionBenchmark
 gkNextVisualTest
 gkNextEditor
 Packager
-MagicaLego 
+MagicaLego
+BrickPlayer
+CharacterDemo
 )
 else()
-set(AllTargets 
+set(AllTargets
 gkNextEngine
+NextGameplay
 gkNextRenderer
 gkNextStillBenchmark
 gkNextMotionBenchmark
 gkNextVisualTest
 gkNextEditor
 Packager
-MagicaLego 
+MagicaLego
+BrickPlayer
+CharacterDemo
 gkNextUnitTests
 )
 endif()
@@ -181,6 +235,7 @@ foreach(target IN LISTS AllTargets)
 	target_include_directories(${target} PRIVATE ${TINYGLTF_INCLUDE_DIRS})
 	target_include_directories(${target} PRIVATE ${CPP_BASE64_INCLUDE_DIRS})
 	target_include_directories(${target} PRIVATE ThirdParty/ozz/include)
+	target_include_directories(${target} PRIVATE ThirdParty/ImAnim)
 
 	# preprocessor definitions
 	target_compile_definitions(${target} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
@@ -214,6 +269,9 @@ foreach(target IN LISTS AllTargets)
 		find_package(WebP CONFIG REQUIRED)
 		target_link_libraries(${target} PRIVATE SDL3::SDL3 xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp ${extra_libs})
 		target_link_libraries(${target} PUBLIC spdlog::spdlog)
+		if ( GK_WHISPER_LINK_LIBS )
+			target_link_libraries(${target} PRIVATE ${GK_WHISPER_LINK_LIBS})
+		endif()
 		
 		# handle moltenvk for iOS
 		if ( IOS )
@@ -235,6 +293,9 @@ foreach(target IN LISTS AllTargets)
 			target_link_directories(${target} PRIVATE ${STREAMLINE_LIB_DIR})
 			target_link_libraries(${target} PRIVATE sl.interposer)
 		endif()
+	elseif ( ${target} STREQUAL NextGameplay )
+		set_target_properties(${target} PROPERTIES FOLDER "Gameplay")
+		target_link_libraries(${target} PRIVATE gkNextEngine)
 	else()
 		set_target_properties(${target} PROPERTIES FOLDER "Programs")
 		if ( NOT ANDROID ) 
@@ -292,6 +353,10 @@ foreach(target IN LISTS AllTargets)
 	if ( WITH_QUICKJS )
 		target_compile_definitions(${target} PUBLIC WITH_QUICKJS=1)
 		target_link_libraries(${target} PRIVATE quickjs )
+	endif()
+
+	if ( GK_WHISPER_COMPILE_DEFINITIONS )
+		target_compile_definitions(${target} PUBLIC ${GK_WHISPER_COMPILE_DEFINITIONS})
 	endif()
 
 	if ( WITH_OZZ )
@@ -361,9 +426,13 @@ foreach(target IN LISTS AllTargets)
 
 endforeach()
 
+if ( TARGET CharacterDemo )
+target_link_libraries(CharacterDemo PRIVATE NextGameplay)
+endif()
+
 # Test Target
 if ( NOT ANDROID AND NOT IOS AND NOT MINGW )
-target_link_libraries(gkNextUnitTests PRIVATE gkNextEngine Catch2::Catch2WithMain gk_project_options)
+target_link_libraries(gkNextUnitTests PRIVATE NextGameplay gkNextEngine Catch2::Catch2WithMain gk_project_options)
 set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
 endif()
 

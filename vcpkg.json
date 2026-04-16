@@ -47,6 +47,10 @@
     "cpp-base64",
     "catch2",
     "entt",
+    {
+      "name": "whisper-cpp",
+      "platform": "!(android | ios)"
+    },
     "libwebp",
     {
       "name": "vulkan-loader",
