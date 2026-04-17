@@ -161,7 +161,9 @@
 **工具链:**
 - CMake 3.10+, Ninja
 - vcpkg 管理依赖（`vcpkg.json` / `vcpkg-configuration.json`）
-- 平台脚本：`build.sh` / `build.bat`, `vcpkg.sh` / `vcpkg.bat`
+- 平台脚本入口在根：`build.sh` / `build.bat`, `run.sh` / `run.bat`
+- 实现位于 `scripts/`：`build.ps1`、`run.ps1`、`vcpkg.sh` / `vcpkg.bat` / `vcpkg.ps1`、`package.bat`
+- vcpkg 在首次 `build.*` 时由脚本自动引导，开发者无需手动运行；仅在需要 `--update` 时直接调用 `scripts/vcpkg.*`
 
 **审查建议:**
 - [ ] 新增第三方库需更新 `vcpkg.json`

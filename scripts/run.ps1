@@ -6,7 +6,7 @@ param (
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = $PSScriptRoot
-$ProjectRoot = $ScriptDir
+$ProjectRoot = Split-Path $ScriptDir -Parent
 
 # Default values
 $Target = "gkNextRenderer.exe"

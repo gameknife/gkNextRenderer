@@ -34,7 +34,7 @@ jobs:
     - name: Compile vcpkg dependencies
       run: |
         set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
-        vcpkg.bat
+        scripts\vcpkg.bat
       shell: cmd
 
     - name: Restore cached vcpkg

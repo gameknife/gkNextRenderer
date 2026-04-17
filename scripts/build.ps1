@@ -42,7 +42,7 @@ param (
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = $PSScriptRoot
-$ProjectRoot = $ScriptDir
+$ProjectRoot = Split-Path $ScriptDir -Parent
 
 # --- Defaults ---
 $Preset = $null
@@ -199,7 +199,7 @@ function Ensure-Vcpkg {
     $VcpkgToolchain = Join-Path $ProjectRoot ".vcpkg/scripts/buildsystems/vcpkg.cmake"
     if (-not (Test-Path $VcpkgToolchain)) {
         Write-Log "vcpkg toolchain not found. Bootstrapping..."
-        & (Join-Path $ProjectRoot "vcpkg.bat") "windows"
+        & (Join-Path $ScriptDir "vcpkg.bat")
     }
 }
 

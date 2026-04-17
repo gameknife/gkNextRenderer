@@ -54,14 +54,16 @@
 - `--scene <path>` -> 映射为 `--load-scene=<path>`
 - `--present-mode <value>` -> 映射为 `--present-mode=<value>`
 
-## 3. Vcpkg 引导脚本 (`vcpkg.sh` / `vcpkg.bat`)
+## 3. Vcpkg 引导脚本 (`scripts/vcpkg.sh` / `scripts/vcpkg.bat`)
 
 用于确保 `vcpkg` 工具存在并已引导。它**不**安装依赖项（CMake 会做这件事）。
 
+> 首次执行 `build.sh` / `build.bat` 时会自动调用该脚本完成引导。开发者通常无需手动运行，仅在需要 `--update` 时直接调用：
+
 ### 语法
 ```bash
-./vcpkg.sh [options]
-./vcpkg.bat [options]
+./scripts/vcpkg.sh [options]
+scripts\vcpkg.bat [options]
 ```
 
 ### 选项

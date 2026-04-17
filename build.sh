@@ -59,15 +59,7 @@ detect_default_preset() {
 ensure_vcpkg() {
     if [ ! -f "$PROJECT_ROOT/.vcpkg/scripts/buildsystems/vcpkg.cmake" ]; then
         log "vcpkg toolchain not found. Bootstrapping..."
-        local platform
-        platform=$(detect_default_preset)
-        if [[ "$platform" == *"macos"* ]]; then
-            "$PROJECT_ROOT/vcpkg.sh" "macos"
-        elif [[ "$platform" == "default-mingw" ]]; then
-            "$PROJECT_ROOT/vcpkg.sh"
-        else
-            "$PROJECT_ROOT/vcpkg.sh" "$(echo "$platform" | cut -d- -f2)"
-        fi
+        "$PROJECT_ROOT/scripts/vcpkg.sh"
     fi
 }
 

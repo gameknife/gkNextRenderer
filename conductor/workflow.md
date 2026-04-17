@@ -151,9 +151,9 @@ Before marking any task complete, verify:
 ## Development Commands
 
 ### Setup
+构建脚本首次运行时会自动引导 vcpkg，无需单独执行。如需强制更新依赖版本：
 ```bash
-# Install dependencies
-.\vcpkg.bat windows
+.\scripts\vcpkg.bat --update
 ```
 
 ### Daily Development

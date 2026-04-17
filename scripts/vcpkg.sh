@@ -7,7 +7,7 @@ set -euo pipefail
 
 init_variables() {
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    PROJECT_ROOT="$SCRIPT_DIR"
+    PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
     DEFAULT_VCPKG_ROOT="$PROJECT_ROOT/.vcpkg"
     export VCPKG_DEFAULT_BINARY_CACHE="$PROJECT_ROOT/.vcpkg_bincache"
     if [ ! -d "$VCPKG_DEFAULT_BINARY_CACHE" ]; then

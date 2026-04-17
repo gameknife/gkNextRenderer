@@ -6,7 +6,7 @@ param (
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = $PSScriptRoot
-$ProjectRoot = $ScriptDir
+$ProjectRoot = Split-Path $ScriptDir -Parent
 $DefaultVcpkgRoot = Join-Path $ProjectRoot ".vcpkg"
 $VcpkgDefaultBinaryCache = Join-Path $ProjectRoot ".vcpkg_bincache"
 

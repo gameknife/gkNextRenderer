@@ -36,7 +36,7 @@ jobs:
         sudo apt-get install vulkan-sdk
 
     - name: Compile vcpkg dependencies
-      run: ./vcpkg.sh
+      run: ./scripts/vcpkg.sh
 
     - name: Restore cached vcpkg
       id: cache-vcpkg-restore

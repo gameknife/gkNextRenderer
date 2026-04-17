@@ -11,7 +11,7 @@
 ![Android CI](https://github.com/gameknife/gkNextEngine/actions/workflows/android.yml/badge.svg)
 ![iOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/ios.yml/badge.svg)
 
-![Play ground](gallery/4_playground.avif)
+![Play ground](docs/gallery/4_playground.avif)
 
 ---
 
@@ -109,18 +109,18 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 ## 视觉预览
 
-![BrickPlayer Gameplay](gallery/6_debug_draw.avif)
+![BrickPlayer Gameplay](docs/gallery/6_debug_draw.avif)
 
 <details>
 <summary><b>示例截图</b></summary>
 
 | 场景 | 截图 |
 |------|------|
-| still | ![still](gallery/1_still.avif) |
-| livingroom | ![livingroom](gallery/2_living_room.avif) |
-| ldrawlego | ![ldrawlego](gallery/3_lego_ldraw.avif) |
-| luxball | ![luxball](gallery/5_luxball.avif) |
-| brickplayer | ![brickplayer](gallery/7_brick_player.avif) |
+| still | ![still](docs/gallery/1_still.avif) |
+| livingroom | ![livingroom](docs/gallery/2_living_room.avif) |
+| ldrawlego | ![ldrawlego](docs/gallery/3_lego_ldraw.avif) |
+| luxball | ![luxball](docs/gallery/5_luxball.avif) |
+| brickplayer | ![brickplayer](docs/gallery/7_brick_player.avif) |
 
 </details>
 
@@ -149,7 +149,6 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 - 启用“使用 Unicode UTF-8 提供全球语言支持”
 
 ```bat
-vcpkg.bat windows
 .\build.bat --preset default-windows
 .\run.bat --preset default-windows
 ```
@@ -161,7 +160,6 @@ vcpkg.bat windows
 
 ```shell
 pacman -S --needed git mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake mingw-w64-x86_64-toolchain
-./vcpkg.sh
 ./build.sh --preset default-mingw
 ./run.sh --preset default-mingw
 ```
@@ -173,7 +171,6 @@ pacman -S --needed git mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake mingw-w64-x
 
 ```shell
 sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev autoconf autoconf-archive automake libtool python3.12-venv
-./vcpkg.sh
 ./build.sh --preset default-linux
 ./run.sh --preset default-linux
 ```
@@ -185,7 +182,6 @@ sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev 
 
 ```shell
 brew install molten-vk glslang ninja
-./vcpkg.sh
 ./build.sh --preset default-macos-arm64
 ./run.sh --preset default-macos-arm64
 ```
@@ -200,7 +196,6 @@ brew install molten-vk glslang ninja
 ```bat
 set ANDROID_HOME=C:\Android\Sdk
 set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\27.0.12077973
-vcpkg.bat
 build.bat --android
 run.bat --preset android
 ```
