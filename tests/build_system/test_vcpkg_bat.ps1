@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 # --- Configuration ---
 $ScriptDir = $PSScriptRoot
 $ProjectRoot = Resolve-Path "$ScriptDir\..\.."
-$VcpkgBat = Join-Path $ProjectRoot "vcpkg.bat"
+$VcpkgBat = Join-Path $ProjectRoot "scripts\vcpkg.bat"
 $TempDir = Join-Path $env:TEMP "gkNextVcpkgTest_$(Get-Random)"
 $MockVcpkgRoot = Join-Path $TempDir ".vcpkg"
 

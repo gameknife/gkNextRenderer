@@ -353,6 +353,11 @@ cmake-build-*/
 .DS_Store
 .VSCodeCounter/
 
+# Runtime-generated files (ImGui layout, profiler traces)
+/imgui.ini
+/editor.ini
+/traces/
+
 # spec local test glb
 assets/models/bistro_simple.glb
 assets/models/bistro.glb

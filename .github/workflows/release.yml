@@ -34,7 +34,7 @@ jobs:
         java-version: '21'
     - uses: actions/checkout@v4
     - name: Compile vcpkg dependencies
-      run: ./vcpkg.sh android
+      run: ./scripts/vcpkg.sh
     - name: Install Vulkan SDK
       run: |
         wget -qO - http://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
@@ -77,7 +77,7 @@ jobs:
     - name: Compile vcpkg dependencies
       run: |
         echo "BUILDVER(${{ github.ref_name }})" > src/build.version
-        ./vcpkg.sh linux
+        ./scripts/vcpkg.sh
     - name: Compile gkNextRenderer
       run: ./build.sh --preset default-linux
     - name: Create zip file
@@ -110,7 +110,7 @@ jobs:
     - name: Compile vcpkg dependencies
       run: |
         set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
-        vcpkg.bat
+        scripts\vcpkg.bat
       shell: cmd
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
