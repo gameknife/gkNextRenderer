@@ -55,7 +55,7 @@ copy /Y ..\..\package\*.bat %CD% >nul 2>&1
 echo Creating gkNextRenderer-windows package...
 
 del /Q gkNextRenderer-windows.zip 2>nul
-tar -a -cf gkNextRenderer-windows.zip ./bin ./assets/locale ./assets/shaders ./assets/textures ./assets/fonts ./assets/models ./*.bat
+tar -a -cf gkNextRenderer-windows.zip ./bin ./assets/locale ./assets/shaders ./assets/textures ./assets/fonts ./assets/models ./assets/paks ./*.bat
 del /Q *.bat 2>nul
 
 move /Y gkNextRenderer-windows.zip ..\..\ >nul 2>&1

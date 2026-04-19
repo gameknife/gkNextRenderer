@@ -85,7 +85,7 @@ namespace Utilities
         bool FPackageFileSystem::LoadFile(const std::string& entry, std::vector<uint8_t>& outData)
         {
             outData.clear();
-            
+
             // pak mounted, read through offset and size
             if(runMode_ == EPM_OsFile || filemaps.find(entry) == filemaps.end())
             {
@@ -97,20 +97,27 @@ namespace Utilities
                 }
 
                 std::ifstream reader(absEntry, std::ios::binary);
-                if (!reader.is_open()) {
-                    SPDLOG_ERROR("LoadFile: Failed to open file: {}", entry);
-                    return false;
+                if (reader.is_open())
+                {
+                    reader.seekg(0, std::ios::end);
+                    size_t fileSize = reader.tellg();
+                    reader.seekg(0, std::ios::beg);
+
+                    outData.resize(fileSize);
+                    reader.read(reinterpret_cast<char*>(outData.data()), fileSize);
+                    reader.close();
+
+                    return true;
                 }
-                
-                reader.seekg(0, std::ios::end);
-                size_t fileSize = reader.tellg();
-                reader.seekg(0, std::ios::beg);
-                
-                outData.resize(fileSize);
-                reader.read(reinterpret_cast<char*>(outData.data()), fileSize);
-                reader.close();
-                
-                return true;
+
+                // OS file missing; fall back to a mounted pak (e.g. optional.pak)
+                if (filemaps.find(entry) != filemaps.end())
+                {
+                    return LoadMountedEntryData(filemaps, mountedPaks, entry, outData);
+                }
+
+                SPDLOG_ERROR("LoadFile: Failed to open file: {}", entry);
+                return false;
             }
 
             return LoadMountedEntryData(filemaps, mountedPaks, entry, outData);

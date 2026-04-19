@@ -233,6 +233,18 @@ NextEngine::NextEngine(Options& options, void* userdata)
     status_ = NextRenderer::EApplicationStatus::Starting;
 
     packageFileSystem_.reset(new Utilities::Package::FPackageFileSystem(Utilities::Package::EPM_OsFile));
+
+    // Optional pak: assets moved out of the repo to reduce its size. Mounted automatically when present
+    // so LoadFile can fall back to it for files missing on disk (see FileHelper::LoadFile).
+    {
+        const std::string optionalPakPath = Utilities::FileHelper::GetPlatformFilePath("assets/paks/optional.pak");
+        std::error_code ec;
+        if (std::filesystem::exists(optionalPakPath, ec))
+        {
+            packageFileSystem_->MountPak(optionalPakPath);
+        }
+    }
+
     aiService_ = std::make_unique<NextAI::FAIService>();
 
     Vulkan::Window::InitGLFW();

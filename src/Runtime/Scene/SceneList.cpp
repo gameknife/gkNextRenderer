@@ -825,8 +825,28 @@ void SceneList::ScanScenes()
         }
     }
 
-    // sort the scene
+    // Pull additional top-level scene entries from any mounted paks (e.g. optional.pak),
+    // so files moved out of the on-disk tree still appear in the scene list.
+    auto* pakSystem = Utilities::Package::FPackageFileSystem::TryGetInstance();
+    if (pakSystem != nullptr)
+    {
+        auto mergePakPrefix = [pakSystem](const std::string& prefix)
+        {
+            for (const auto& entry : pakSystem->ListMountedEntries(prefix))
+            {
+                // Only top-level files under the prefix (skip nested directories like KayKit/...).
+                if (entry.find('/', prefix.size()) != std::string::npos) continue;
+                if (!IsSupportedScenePath(std::filesystem::path(entry))) continue;
+                AllScenes.push_back(entry);
+            }
+        };
+        mergePakPrefix(modelPath);
+        mergePakPrefix(omrPath);
+    }
+
+    // Deduplicate (a file may exist on disk and in pak) before sorting.
     std::sort(AllScenes.begin(), AllScenes.end());
+    AllScenes.erase(std::unique(AllScenes.begin(), AllScenes.end()), AllScenes.end());
 
     AllScenes.insert(AllScenes.begin(), "CharacterPlayground.proc");
     AllScenes.insert(AllScenes.begin(), "RTIO.proc");

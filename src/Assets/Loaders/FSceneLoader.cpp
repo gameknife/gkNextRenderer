@@ -331,14 +331,48 @@ namespace Assets
         }
         else
         {
-            std::filesystem::path gltfFile(filename);
-            if (gltfFile.is_relative())
+            // Route tinygltf file IO through FPackageFileSystem so .gltf + .bin + sidecar textures
+            // can be loaded from optional.pak when missing on disk.
+            tinygltf::FsCallbacks fs{};
+            fs.FileExists = [](const std::string& abs, void*) -> bool {
+                std::vector<uint8_t> tmp;
+                return Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(abs, tmp);
+            };
+            fs.ExpandFilePath = [](const std::string& path, void*) -> std::string {
+                return path;
+            };
+            fs.ReadWholeFile = [](std::vector<unsigned char>* out, std::string* err,
+                                  const std::string& path, void*) -> bool {
+                std::vector<uint8_t> data;
+                if (!Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(path, data))
+                {
+                    if (err) { *err = "FPackageFileSystem failed to load: " + path; }
+                    return false;
+                }
+                out->assign(data.begin(), data.end());
+                return true;
+            };
+            fs.WriteWholeFile = [](std::string* err, const std::string&,
+                                   const std::vector<unsigned char>&, void*) -> bool {
+                if (err) { *err = "WriteWholeFile not supported via FPackageFileSystem"; }
+                return false;
+            };
+            fs.GetFileSizeInBytes = [](size_t* sizeOut, std::string* err,
+                                       const std::string& path, void*) -> bool {
+                std::vector<uint8_t> data;
+                if (!Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(path, data))
+                {
+                    if (err) { *err = "FPackageFileSystem failed to stat: " + path; }
+                    return false;
+                }
+                if (sizeOut) { *sizeOut = data.size(); }
+                return true;
+            };
+            gltfLoader.SetFsCallbacks(fs);
+
+            if(!gltfLoader.LoadASCIIFromFile(&model, &err, &warn, filename) )
             {
-                gltfFile = ".." / gltfFile;
-            }
-            if(!gltfLoader.LoadASCIIFromFile(&model, &err, &warn, gltfFile.string()) )
-            {
-                SPDLOG_ERROR("failed to parse gltf file: \nErr: {}\nWarn: {}", filename, err, warn);
+                SPDLOG_ERROR("failed to parse gltf file: {}\nErr: {}\nWarn: {}", filename, err, warn);
                 return false;
             }
         }
