@@ -175,6 +175,26 @@ sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev 
 ./run.sh --preset default-linux
 ```
 
+`build.sh` now performs an early Linux desktop dependency check and will stop with an explicit hint if `xrandr`, `wayland-protocols`, or `xkbcommon` are missing.
+
+</details>
+
+<details>
+<summary><b>Steam Deck / Arch Linux</b></summary>
+
+```shell
+sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxrandr wayland-protocols libxkbcommon
+./build.sh --preset full-linux --reconfigure
+./run.sh --preset full-linux --target gkNextRenderer
+```
+
+Notes:
+
+- `full-linux` is the recommended verification preset for first deployment on Steam Deck
+- if `slangc` is not installed yet, `build.sh` will automatically fetch the project-managed Slang toolchain into `external/`
+- if a GitHub archive download fails during vcpkg setup, rerun the same build command once before doing deeper troubleshooting
+- deployment notes from a real Steam Deck setup are available in [docs/steamdeck-deployment-notes.md](docs/steamdeck-deployment-notes.md)
+
 </details>
 
 <details>
