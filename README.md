@@ -175,6 +175,26 @@ sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev 
 ./run.sh --preset default-linux
 ```
 
+`build.sh` 现在会在 Linux 首轮构建前做桌面依赖预检查，如果缺少 `xrandr`、`wayland-protocols` 或 `xkbcommon`，会直接给出更明确的提示。
+
+</details>
+
+<details>
+<summary><b>Steam Deck / Arch Linux</b></summary>
+
+```shell
+sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxrandr wayland-protocols libxkbcommon
+./build.sh --preset full-linux --reconfigure
+./run.sh --preset full-linux --target gkNextRenderer
+```
+
+说明：
+
+- Steam Deck 首次部署建议直接使用 `full-linux`
+- 如果机器上还没有 `slangc`，`build.sh` 会自动下载项目约定的 Slang 工具链到 `external/`
+- 如果 vcpkg 阶段遇到 GitHub 归档下载失败，优先直接重试同一条构建命令
+- 一次真实 Steam Deck 部署的复盘见 [docs/steamdeck-deployment-notes.md](docs/steamdeck-deployment-notes.md)
+
 </details>
 
 <details>

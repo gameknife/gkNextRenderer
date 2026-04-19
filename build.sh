@@ -42,6 +42,75 @@ warn() { printf "${YELLOW}[build] Warning: %s${NC}\n" "$*" >&2; }
 err()  { printf "${RED}[build] Error: %s${NC}\n" "$*" >&2; exit 1; }
 print_err() { printf "${RED}[build] Error: %s${NC}\n" "$*" >&2; }
 
+has_pkg_config_module() {
+    local module="$1"
+    pkg-config --exists "$module" >/dev/null 2>&1
+}
+
+show_linux_dependency_hint_and_exit() {
+    local missing=("$@")
+    print_err "Missing required Linux desktop development packages: ${missing[*]}"
+    case "$(uname -s)" in
+        Linux*)
+            if [ -f /etc/arch-release ] || [ -f /etc/manjaro-release ] || [ -f /etc/endeavouros-release ]; then
+                printf "${YELLOW}[build] Install them on Arch/Steam Deck with:${NC}\n" >&2
+                printf "  sudo pacman -S --needed libxrandr wayland-protocols libxkbcommon\n" >&2
+            elif command -v apt-get >/dev/null 2>&1; then
+                printf "${YELLOW}[build] Install them on Debian/Ubuntu with:${NC}\n" >&2
+                printf "  sudo apt install libxrandr-dev wayland-protocols libxkbcommon-dev\n" >&2
+            else
+                printf "${YELLOW}[build] Install packages that provide these pkg-config modules:${NC}\n" >&2
+                printf "  xrandr wayland-protocols xkbcommon\n" >&2
+            fi
+            ;;
+    esac
+    exit 1
+}
+
+ensure_linux_desktop_packages() {
+    local preset="$1"
+    local missing=()
+    if [[ "$preset" != *linux* && "$preset" != *mingw* ]]; then
+        return 0
+    fi
+    if [ "$(uname -s)" != "Linux" ]; then
+        return 0
+    fi
+
+    has_pkg_config_module xrandr || missing+=("xrandr")
+    has_pkg_config_module wayland-protocols || missing+=("wayland-protocols")
+    has_pkg_config_module xkbcommon || missing+=("xkbcommon")
+
+    if [ ${#missing[@]} -gt 0 ]; then
+        show_linux_dependency_hint_and_exit "${missing[@]}"
+    fi
+}
+
+ensure_slangc() {
+    local preset="$1"
+    local fetch_script="$PROJECT_ROOT/tools/fetch_slang_linux.sh"
+
+    if [[ "$preset" != *linux* && "$preset" != *macos* ]]; then
+        return 0
+    fi
+
+    if command -v slangc >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if find "$PROJECT_ROOT/external" -maxdepth 2 -type f -name slangc >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if [ "$(uname -s)" = "Linux" ] && [ -x "$fetch_script" ]; then
+        log "slangc not found. Fetching project-managed Slang toolchain..."
+        "$fetch_script"
+        return 0
+    fi
+
+    warn "slangc not found in PATH or under external/. CMake configure may fail."
+}
+
 # ==============================================================================
 # Helper Functions
 # ==============================================================================
@@ -121,6 +190,8 @@ if [ -z "$CONFIGURE_PRESET" ]; then
 fi
 
 ensure_vcpkg
+ensure_linux_desktop_packages "$CONFIGURE_PRESET"
+ensure_slangc "$CONFIGURE_PRESET"
 
 BUILD_DIR="$PROJECT_ROOT/out/build/$CONFIGURE_PRESET"
 CACHE_FILE="$BUILD_DIR/CMakeCache.txt"
