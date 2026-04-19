@@ -23,6 +23,51 @@
 
 extern float GAndroidMagicScale;
 
+namespace
+{
+enum class ESceneListGroup : uint8_t
+{
+    Procedural = 0,
+    Gltf = 1,
+    LDraw = 2,
+    Other = 3,
+};
+
+ESceneListGroup GetSceneListGroup(std::string_view scenePath)
+{
+    const std::string extension = std::filesystem::path(scenePath).extension().string();
+    if (extension == ".proc")
+    {
+        return ESceneListGroup::Procedural;
+    }
+    if (extension == ".glb" || extension == ".gltf")
+    {
+        return ESceneListGroup::Gltf;
+    }
+    if (extension == ".ldr" || extension == ".mpd")
+    {
+        return ESceneListGroup::LDraw;
+    }
+    return ESceneListGroup::Other;
+}
+
+const char* GetSceneListGroupLabel(ESceneListGroup group)
+{
+    switch (group)
+    {
+    case ESceneListGroup::Procedural:
+        return "Procedural";
+    case ESceneListGroup::Gltf:
+        return "glTF";
+    case ESceneListGroup::LDraw:
+        return "OMR/LDraw";
+    case ESceneListGroup::Other:
+    default:
+        return "Other";
+    }
+}
+} // namespace
+
 // should use 1em instead of 1px
 constexpr float constTitlebarSize = 40;
 constexpr float constTitlebarControlSize = constTitlebarSize * 3;
@@ -477,12 +522,6 @@ void NextRendererGameInstance::DrawSettings()
 				std::filesystem::path path(scene);
 				sceneNames.push_back(path.filename().string());
 			}
-
-			std::vector<const char*> scenes;
-			for (const auto& scene : sceneNames)
-			{
-				scenes.push_back(scene.c_str());
-			}
 			
 			std::vector<const char*> camerasList;
 			for (const auto& cam : GetEngine().GetScene().GetCameras())
@@ -493,10 +532,41 @@ void NextRendererGameInstance::DrawSettings()
 			ImGui::Text("%s", LOCTEXT("Scene"));
 			
 			ImGui::PushItemWidth(-1);
-			if (ImGui::Combo("##SceneList", &userSetting.SceneIndex, scenes.data(), static_cast<int>(scenes.size())) )
+            const char* currentScenePreview =
+                (userSetting.SceneIndex >= 0 && userSetting.SceneIndex < static_cast<int>(sceneNames.size()))
+                    ? sceneNames[userSetting.SceneIndex].c_str()
+                    : "";
+			if (ImGui::BeginCombo("##SceneList", currentScenePreview))
 			{
-				// Request Scene Load
-				GetEngine().RequestLoadScene(SceneList::AllScenes[userSetting.SceneIndex]);
+                ESceneListGroup currentGroup = ESceneListGroup::Other;
+                bool hasGroup = false;
+                for (int sceneIdx = 0; sceneIdx < static_cast<int>(SceneList::AllScenes.size()); ++sceneIdx)
+                {
+                    const ESceneListGroup sceneGroup = GetSceneListGroup(SceneList::AllScenes[sceneIdx]);
+                    if (!hasGroup || sceneGroup != currentGroup)
+                    {
+                        if (hasGroup)
+                        {
+                            ImGui::Separator();
+                        }
+                        currentGroup = sceneGroup;
+                        hasGroup = true;
+
+                        ImGui::TextDisabled("%s", GetSceneListGroupLabel(sceneGroup));
+                    }
+
+                    const bool selected = (sceneIdx == userSetting.SceneIndex);
+                    if (ImGui::Selectable(sceneNames[sceneIdx].c_str(), selected))
+                    {
+                        userSetting.SceneIndex = sceneIdx;
+                        GetEngine().RequestLoadScene(SceneList::AllScenes[userSetting.SceneIndex]);
+                    }
+                    if (selected)
+                    {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
 			}
 			ImGui::PopItemWidth();
 

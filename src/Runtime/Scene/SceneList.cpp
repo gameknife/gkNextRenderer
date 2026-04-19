@@ -41,11 +41,37 @@ using Assets::Texture;
 // 这里保留procedural的场景代码，后续再添加，先去掉functor的场景创建，换成使用loader
 namespace
 {
+    enum class ESceneCategory : uint8_t
+    {
+        Procedural = 0,
+        Gltf = 1,
+        LDraw = 2,
+        Other = 3,
+    };
+
     std::string ToLowerCopy(std::string value)
     {
         std::transform(value.begin(), value.end(), value.begin(),
                        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         return value;
+    }
+
+    ESceneCategory GetSceneCategory(std::string_view scenePath)
+    {
+        const std::string extension = ToLowerCopy(std::filesystem::path(scenePath).extension().string());
+        if (extension == ".proc")
+        {
+            return ESceneCategory::Procedural;
+        }
+        if (extension == ".glb" || extension == ".gltf")
+        {
+            return ESceneCategory::Gltf;
+        }
+        if (extension == ".ldr" || extension == ".mpd")
+        {
+            return ESceneCategory::LDraw;
+        }
+        return ESceneCategory::Other;
     }
 
     constexpr std::array<std::string_view, 4> kSupportedSceneExtensions{
@@ -796,6 +822,8 @@ std::span<const std::string_view> SceneList::SupportedSceneExtensions()
 
 void SceneList::ScanScenes()
 {
+    AllScenes.clear();
+
     // add relative path
     std::string modelPath = "assets/models/";
     std::filesystem::path path = Utilities::FileHelper::GetPlatformFilePath(modelPath.c_str());
@@ -844,13 +872,21 @@ void SceneList::ScanScenes()
         mergePakPrefix(omrPath);
     }
 
-    // Deduplicate (a file may exist on disk and in pak) before sorting.
-    std::sort(AllScenes.begin(), AllScenes.end());
-    AllScenes.erase(std::unique(AllScenes.begin(), AllScenes.end()), AllScenes.end());
+    AllScenes.push_back("CornellBox.proc");
+    AllScenes.push_back("RTIO.proc");
 
-    AllScenes.insert(AllScenes.begin(), "CharacterPlayground.proc");
-    AllScenes.insert(AllScenes.begin(), "RTIO.proc");
-    AllScenes.insert(AllScenes.begin(), "CornellBox.proc");
+    // Deduplicate (a file may exist on disk and in pak) before sorting.
+    std::sort(AllScenes.begin(), AllScenes.end(), [](const std::string& lhs, const std::string& rhs)
+    {
+        const ESceneCategory lhsCategory = GetSceneCategory(lhs);
+        const ESceneCategory rhsCategory = GetSceneCategory(rhs);
+        if (lhsCategory != rhsCategory)
+        {
+            return lhsCategory < rhsCategory;
+        }
+        return lhs < rhs;
+    });
+    AllScenes.erase(std::unique(AllScenes.begin(), AllScenes.end()), AllScenes.end());
 
     SPDLOG_INFO("Scene found: {}", AllScenes.size());
 }

@@ -6,6 +6,7 @@ TaskThread::TaskThread(TaskCoordinator* coordinator)
 {
     complete_.reset(new event_signal());
     terminate_.reset(new event_signal());
+    complete_->set();
     thread_.reset(new std::thread([this] {
         while (true)
         {
@@ -17,14 +18,19 @@ TaskThread::TaskThread(TaskCoordinator* coordinator)
             ResTask task;
             if (taskQueue_.dequeue(task, false))
             {
+                busy_.store(true);
                 task.task_func(task);
 
                 // sync add to mainthread complete queue
                 TaskCoordinator::GetInstance()->MarkTaskComplete(task);
+                busy_.store(false);
             }
             else
             {
-                complete_->set();
+                if (!busy_.load())
+                {
+                    complete_->set();
+                }
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
         }
@@ -60,7 +66,7 @@ uint32_t TaskCoordinator::AddTask( ResTask::TaskFunc taskFunc, ResTask::TaskFunc
     mainthreadTaskQueue_.enqueue(task);
     return task.task_id;
 #endif
-    threads_[priority]->taskQueue_.enqueue(task);
+    threads_[priority]->EnqueueTask(std::move(task));
     return task.task_id;
 }
 
@@ -90,6 +96,15 @@ void TaskCoordinator::WaitForAllParralledTask()
     while( !IsAllParralledTaskComplete() )
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(0));
+    }
+}
+
+void TaskCoordinator::WaitForAllTasks()
+{
+    while (!IsAllTaskComplete())
+    {
+        Tick();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
 
@@ -160,8 +175,7 @@ void TaskCoordinator::Tick()
         {
             if( parralledTaskQueue_.dequeue(task, false) )
             {
-                thread->complete_->reset();
-                thread->taskQueue_.enqueue(task);
+                thread->EnqueueTask(std::move(task));
             }
         }
     }

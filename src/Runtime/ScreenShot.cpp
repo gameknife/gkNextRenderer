@@ -20,6 +20,14 @@ namespace ScreenShot
     {
         // screenshot stuffs
         const Vulkan::SwapChain& swapChain = renderer->SwapChain();
+        if (swapChain.IsHDR())
+        {
+            // The fast path assumes 8-bit SDR swapchain pixels. HDR swapchains use packed 10-bit output,
+            // so re-use the standard path's tone-mapped export to avoid color corruption.
+            SaveSwapChainToFile(renderer, filePathWithoutExtension, inX, inY, inWidth, inHeight);
+            return;
+        }
+
         auto orgExtent = swapChain.Extent();
         auto extent = swapChain.Extent();
 

@@ -309,8 +309,26 @@ namespace Assets
 
     uint32_t GlobalTexturePool::LoadHDRTexture(const std::string& filename)
     {
+        auto& pakSystem = Utilities::Package::FPackageFileSystem::GetInstance();
+        const bool hasMountedEntry = pakSystem.HasMountedEntry(filename);
+        const std::string absPath = Utilities::FileHelper::GetPlatformFilePath(filename.c_str());
+        std::error_code existsError;
+        const bool hasOsFile = std::filesystem::exists(absPath, existsError);
+
+        if (!hasMountedEntry && !hasOsFile)
+        {
+            SPDLOG_WARN("HDR texture '{}' is unavailable; using a placeholder environment.", filename);
+            return GetInstance()->RequestNewTextureMemAsync(filename, "image/hdr", true, nullptr, 0, false);
+        }
+
         std::vector<uint8_t> data;
-        Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(filename, data);
+        const bool loaded = pakSystem.LoadFile(filename, data);
+        if (!loaded || data.empty())
+        {
+            SPDLOG_WARN("HDR texture '{}' is unavailable; using a placeholder environment.", filename);
+            return GetInstance()->RequestNewTextureMemAsync(filename, "image/hdr", true, nullptr, 0, false);
+        }
+
         return GetInstance()->RequestNewTextureMemAsync(filename, "image/hdr", true, data.data(), data.size(),false);
     }
 
@@ -427,8 +445,12 @@ namespace Assets
 
         // load parse bind texture into newTextureIdx with transfer queue
 
-        uint8_t* copyedData = new uint8_t[bytelength];
-        memcpy(copyedData, data, bytelength);
+        uint8_t* copyedData = nullptr;
+        if (bytelength > 0)
+        {
+            copyedData = new uint8_t[bytelength];
+            memcpy(copyedData, data, bytelength);
+        }
         TaskCoordinator::GetInstance()->AddTask(
             [this, hdr, srgb, texname, mime, copyedData, bytelength, newTextureIdx](ResTask& task)
             {
@@ -444,11 +466,31 @@ namespace Assets
                 uint32_t size = 0;
                 uint32_t miplevel = 1;
                 VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
+                bool textureCreated = false;
 #if WITH_KTX2
                 ktxTexture2* kTexture = nullptr;
                 ktx_error_code_e result;
 #endif
                 bool useWebPFree = false;
+
+                auto createHdrPlaceholderTexture = [&]()
+                {
+                    static constexpr std::array<float, 4> kPlaceholderHdrPixel = {0.0f, 0.0f, 0.0f, 1.0f};
+
+                    width = 1;
+                    height = 1;
+                    channels = 4;
+                    size = static_cast<uint32_t>(kPlaceholderHdrPixel.size() * sizeof(float));
+                    miplevel = 1;
+                    format = VK_FORMAT_R32G32B32A32_SFLOAT;
+
+                    hdrSphericalHarmonics_[newTextureIdx] = {};
+                    textureImages_[newTextureIdx] = std::make_unique<TextureImage>(
+                        commandPool_, width, height, miplevel, format,
+                        reinterpret_cast<const unsigned char*>(kPlaceholderHdrPixel.data()), size);
+                    textureCreated = true;
+                };
+
                 // load from ktx inside glb
                 if (mime.find("image/ktx") != std::string::npos)
                 {
@@ -500,13 +542,18 @@ namespace Assets
                     // load from texture files
                     if (hdr)
                     {
+                        if (copyedData == nullptr || bytelength == 0)
+                        {
+                            createHdrPlaceholderTexture();
+                        }
+
                         std::string cacheFileName = Utilities::CookHelper::GetCookedFileName(fmt::format("{:016x}", hasher(texname)), "texhdr");
                         std::filesystem::path cacheFilePath(cacheFileName);
                         bool cacheLoaded = false;
                         std::vector<std::vector<float>> mipLevels;
                         std::vector<std::pair<int, int>> mipDimensions;
 
-                        if (std::filesystem::exists(cacheFilePath))
+                        if (!textureCreated && std::filesystem::exists(cacheFilePath))
                         {
                             std::ifstream cacheFile(cacheFileName, std::ios::binary);
                             if (cacheFile.is_open())
@@ -626,6 +673,7 @@ namespace Assets
                                                     commandPool_, width, height, miplevel, format,
                                                     pixels, size, mipLevels, mipDimensions);
                                                 cacheLoaded = true;
+                                                textureCreated = true;
                                             }
                                         }
                                     }
@@ -641,99 +689,107 @@ namespace Assets
                             }
                         }
 
-                        if (!cacheLoaded)
+                        if (!textureCreated && !cacheLoaded)
                         {
                             stbdata = reinterpret_cast<uint8_t*>(stbi_loadf_from_memory(
                                 copyedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha));
-                            pixels = stbdata;
-                            format = VK_FORMAT_R32G32B32A32_SFLOAT;
-                            size = width * height * 4 * sizeof(float);
-
-                            SphericalHarmonics sh = ProjectHdrToSh((float*)pixels, width, height);
-                            hdrSphericalHarmonics_[newTextureIdx] = sh;
-
-                            PrefilterHdrEnvironmentMap((float*)pixels, width, height, mipLevels, mipDimensions);
-                            miplevel = static_cast<uint32_t>(mipLevels.size());
-
-                            std::vector<uint8_t> uncompressedData;
-                            auto writeToBuffer = [&](const void* src, size_t writeSize)
+                            if (stbdata == nullptr)
                             {
-                                const uint8_t* bytes = static_cast<const uint8_t*>(src);
-                                uncompressedData.insert(uncompressedData.end(), bytes, bytes + writeSize);
-                            };
-
-                            writeToBuffer(&width, sizeof(int));
-                            writeToBuffer(&height, sizeof(int));
-                            writeToBuffer(&miplevel, sizeof(uint32_t));
-                            writeToBuffer(&sh, sizeof(SphericalHarmonics));
-
-                            size_t mipCount = mipDimensions.size();
-                            writeToBuffer(&mipCount, sizeof(size_t));
-                            for (const auto& dim : mipDimensions)
-                            {
-                                writeToBuffer(&dim.first, sizeof(int));
-                                writeToBuffer(&dim.second, sizeof(int));
+                                createHdrPlaceholderTexture();
                             }
-
-                            writeToBuffer(pixels, size);
-
-                            for (const auto& mipData : mipLevels)
+                            else
                             {
-                                size_t mipSize = mipData.size();
-                                writeToBuffer(&mipSize, sizeof(size_t));
-                                writeToBuffer(mipData.data(), mipSize * sizeof(float));
-                            }
+                                pixels = stbdata;
+                                format = VK_FORMAT_R32G32B32A32_SFLOAT;
+                                size = width * height * 4 * sizeof(float);
 
-                            size_t uncompressedSize = uncompressedData.size();
-                            if (uncompressedSize <= static_cast<size_t>(std::numeric_limits<int>::max()))
-                            {
-                                size_t compressedBound = lzav_compress_bound_hi(int(uncompressedSize));
-                                std::vector<uint8_t> compressedData(compressedBound);
-                                size_t actualCompressedSize = lzav_compress_hi(
-                                    uncompressedData.data(), compressedData.data(),
-                                    int(uncompressedSize), int(compressedBound));
+                                SphericalHarmonics sh = ProjectHdrToSh((float*)pixels, width, height);
+                                hdrSphericalHarmonics_[newTextureIdx] = sh;
 
-                                if (actualCompressedSize > 0)
+                                PrefilterHdrEnvironmentMap((float*)pixels, width, height, mipLevels, mipDimensions);
+                                miplevel = static_cast<uint32_t>(mipLevels.size());
+
+                                std::vector<uint8_t> uncompressedData;
+                                auto writeToBuffer = [&](const void* src, size_t writeSize)
                                 {
-                                    HdrCacheHeader header{};
-                                    header.magic = kHdrCacheMagic;
-                                    header.version = kHdrCacheVersion;
-                                    header.originalSize = static_cast<uint64_t>(uncompressedSize);
-                                    header.compressedSize = static_cast<uint64_t>(actualCompressedSize);
-                                    header.dataHash = HashBuffer(uncompressedData.data(), uncompressedData.size());
+                                    const uint8_t* bytes = static_cast<const uint8_t*>(src);
+                                    uncompressedData.insert(uncompressedData.end(), bytes, bytes + writeSize);
+                                };
 
-                                    std::filesystem::path tempCachePath = cacheFilePath;
-                                    tempCachePath += ".tmp";
+                                writeToBuffer(&width, sizeof(int));
+                                writeToBuffer(&height, sizeof(int));
+                                writeToBuffer(&miplevel, sizeof(uint32_t));
+                                writeToBuffer(&sh, sizeof(SphericalHarmonics));
 
-                                    std::ofstream cacheFile(tempCachePath, std::ios::binary | std::ios::trunc);
-                                    if (cacheFile.is_open())
+                                size_t mipCount = mipDimensions.size();
+                                writeToBuffer(&mipCount, sizeof(size_t));
+                                for (const auto& dim : mipDimensions)
+                                {
+                                    writeToBuffer(&dim.first, sizeof(int));
+                                    writeToBuffer(&dim.second, sizeof(int));
+                                }
+
+                                writeToBuffer(pixels, size);
+
+                                for (const auto& mipData : mipLevels)
+                                {
+                                    size_t mipSize = mipData.size();
+                                    writeToBuffer(&mipSize, sizeof(size_t));
+                                    writeToBuffer(mipData.data(), mipSize * sizeof(float));
+                                }
+
+                                size_t uncompressedSize = uncompressedData.size();
+                                if (uncompressedSize <= static_cast<size_t>(std::numeric_limits<int>::max()))
+                                {
+                                    size_t compressedBound = lzav_compress_bound_hi(int(uncompressedSize));
+                                    std::vector<uint8_t> compressedData(compressedBound);
+                                    size_t actualCompressedSize = lzav_compress_hi(
+                                        uncompressedData.data(), compressedData.data(),
+                                        int(uncompressedSize), int(compressedBound));
+
+                                    if (actualCompressedSize > 0)
                                     {
-                                        cacheFile.write(reinterpret_cast<const char*>(&header), sizeof(header));
-                                        cacheFile.write(reinterpret_cast<const char*>(compressedData.data()), actualCompressedSize);
-                                        cacheFile.flush();
-                                        cacheFile.close();
+                                        HdrCacheHeader header{};
+                                        header.magic = kHdrCacheMagic;
+                                        header.version = kHdrCacheVersion;
+                                        header.originalSize = static_cast<uint64_t>(uncompressedSize);
+                                        header.compressedSize = static_cast<uint64_t>(actualCompressedSize);
+                                        header.dataHash = HashBuffer(uncompressedData.data(), uncompressedData.size());
 
-                                        std::error_code removeError;
-                                        std::filesystem::remove(cacheFilePath, removeError);
+                                        std::filesystem::path tempCachePath = cacheFilePath;
+                                        tempCachePath += ".tmp";
 
-                                        std::error_code renameError;
-                                        std::filesystem::rename(tempCachePath, cacheFilePath, renameError);
-                                        if (renameError)
+                                        std::ofstream cacheFile(tempCachePath, std::ios::binary | std::ios::trunc);
+                                        if (cacheFile.is_open())
                                         {
-                                            std::filesystem::remove(tempCachePath);
+                                            cacheFile.write(reinterpret_cast<const char*>(&header), sizeof(header));
+                                            cacheFile.write(reinterpret_cast<const char*>(compressedData.data()), actualCompressedSize);
+                                            cacheFile.flush();
+                                            cacheFile.close();
+
+                                            std::error_code removeError;
+                                            std::filesystem::remove(cacheFilePath, removeError);
+
+                                            std::error_code renameError;
+                                            std::filesystem::rename(tempCachePath, cacheFilePath, renameError);
+                                            if (renameError)
+                                            {
+                                                std::filesystem::remove(tempCachePath);
+                                            }
+                                        }
+                                        else
+                                        {
+                                            std::error_code removeTempError;
+                                            std::filesystem::remove(tempCachePath, removeTempError);
                                         }
                                     }
-                                    else
-                                    {
-                                        std::error_code removeTempError;
-                                        std::filesystem::remove(tempCachePath, removeTempError);
-                                    }
                                 }
-                            }
 
-                            textureImages_[newTextureIdx] = std::make_unique<TextureImage>(
-                                commandPool_, width, height, miplevel, format,
-                                pixels, size, mipLevels, mipDimensions);
+                                textureImages_[newTextureIdx] = std::make_unique<TextureImage>(
+                                    commandPool_, width, height, miplevel, format,
+                                    pixels, size, mipLevels, mipDimensions);
+                                textureCreated = true;
+                            }
                         }
                     }
                     else
@@ -802,6 +858,12 @@ namespace Assets
                 if (!hdr)
                 {
                     textureImages_[newTextureIdx] = std::make_unique<TextureImage>(commandPool_, width, height, miplevel, format, pixels, size);
+                    textureCreated = true;
+                }
+
+                if (!textureCreated)
+                {
+                    throw std::runtime_error(fmt::format("failed to create texture '{}'", texname));
                 }
 
                 BindTexture(newTextureIdx, *(textureImages_[newTextureIdx]));

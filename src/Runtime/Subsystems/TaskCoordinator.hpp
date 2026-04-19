@@ -245,13 +245,20 @@ public:
 
     bool IsIdle()
     {
-        return complete_->is_set();
+        return !busy_.load() && taskQueue_.size() == 0 && complete_->is_set();
+    }
+
+    void EnqueueTask(ResTask task)
+    {
+        complete_->reset();
+        taskQueue_.enqueue(std::move(task));
     }
 
     std::unique_ptr<event_signal> terminate_;
     std::unique_ptr<event_signal> complete_;
     std::unique_ptr<std::thread> thread_;
     tsqueue<ResTask> taskQueue_;
+    details::atomic_acq_rel<bool> busy_{ false };
 };
 
 class TaskCoordinator
@@ -300,6 +307,7 @@ public:
     }
 
     void WaitForAllParralledTask();
+    void WaitForAllTasks();
     
     bool IsAllParralledTaskComplete()
     {
@@ -313,12 +321,44 @@ public:
         return true;
     }
 
+    bool IsAllTaskComplete()
+    {
+#if __APPLE__
+        if (mainthreadTaskQueue_.size() > 0)
+        {
+            return false;
+        }
+#else
+        for (auto& thread : threads_)
+        {
+            if (!thread->IsIdle() || thread->taskQueue_.size() > 0)
+            {
+                return false;
+            }
+        }
+#endif
+
+        if (completeTaskQueue_.size() > 0 || parralledTaskQueue_.size() > 0)
+        {
+            return false;
+        }
+
+        for (auto& thread : lowThreads_)
+        {
+            if (!thread->IsIdle() || thread->taskQueue_.size() > 0)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     void CancelAllParralledTasks()
     {
-        while(parralledTaskQueue_.size() > 0)
+        ResTask task;
+        while(parralledTaskQueue_.dequeue(task, false))
         {
-            ResTask task;
-            parralledTaskQueue_.dequeue(task, true);
         }
     }
 
