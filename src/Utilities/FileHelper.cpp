@@ -10,6 +10,32 @@ namespace Utilities
     {
         namespace
         {
+            bool LoadOsFileData(const std::string& entry, std::vector<uint8_t>& outData)
+            {
+                std::filesystem::path path(entry);
+                std::string absEntry = entry;
+                if (!path.is_absolute())
+                {
+                    absEntry = FileHelper::GetPlatformFilePath(entry.c_str());
+                }
+
+                std::ifstream reader(absEntry, std::ios::binary);
+                if (!reader.is_open())
+                {
+                    return false;
+                }
+
+                reader.seekg(0, std::ios::end);
+                size_t fileSize = reader.tellg();
+                reader.seekg(0, std::ios::beg);
+
+                outData.resize(fileSize);
+                reader.read(reinterpret_cast<char*>(outData.data()), fileSize);
+                reader.close();
+
+                return true;
+            }
+
             bool LoadMountedEntryData(
                 const std::map<std::string, FPakEntry>& filemaps,
                 const std::vector<std::string>& mountedPaks,
@@ -85,63 +111,48 @@ namespace Utilities
         bool FPackageFileSystem::LoadFile(const std::string& entry, std::vector<uint8_t>& outData)
         {
             outData.clear();
+            const std::string normalizedEntry = FileHelper::NormalizePathString(entry);
+            const bool hasMountedEntry = filemaps.find(normalizedEntry) != filemaps.end();
 
-            // pak mounted, read through offset and size
-            if(runMode_ == EPM_OsFile || filemaps.find(entry) == filemaps.end())
+            if (runMode_ != EPM_OsFile && hasMountedEntry)
             {
-                std::filesystem::path path(entry);
-                std::string absEntry = entry;
-                if (!path.is_absolute())
-                {
-                    absEntry = FileHelper::GetPlatformFilePath(entry.c_str());
-                }
-
-                std::ifstream reader(absEntry, std::ios::binary);
-                if (reader.is_open())
-                {
-                    reader.seekg(0, std::ios::end);
-                    size_t fileSize = reader.tellg();
-                    reader.seekg(0, std::ios::beg);
-
-                    outData.resize(fileSize);
-                    reader.read(reinterpret_cast<char*>(outData.data()), fileSize);
-                    reader.close();
-
-                    return true;
-                }
-
-                // OS file missing; fall back to a mounted pak (e.g. optional.pak)
-                if (filemaps.find(entry) != filemaps.end())
-                {
-                    return LoadMountedEntryData(filemaps, mountedPaks, entry, outData);
-                }
-
-                SPDLOG_ERROR("LoadFile: Failed to open file: {}", entry);
-                return false;
+                return LoadMountedEntryData(filemaps, mountedPaks, normalizedEntry, outData);
             }
 
-            return LoadMountedEntryData(filemaps, mountedPaks, entry, outData);
+            if (LoadOsFileData(normalizedEntry, outData))
+            {
+                return true;
+            }
+
+            if (hasMountedEntry)
+            {
+                return LoadMountedEntryData(filemaps, mountedPaks, normalizedEntry, outData);
+            }
+
+            SPDLOG_ERROR("LoadFile: Failed to open file: {}", normalizedEntry);
+            return false;
         }
 
         bool FPackageFileSystem::LoadMountedFile(const std::string& entry, std::vector<uint8_t>& outData) const
         {
-            return LoadMountedEntryData(filemaps, mountedPaks, entry, outData);
+            return LoadMountedEntryData(filemaps, mountedPaks, FileHelper::NormalizePathString(entry), outData);
         }
 
         bool FPackageFileSystem::HasMountedEntry(const std::string& entry) const
         {
-            return filemaps.find(entry) != filemaps.end();
+            return filemaps.find(FileHelper::NormalizePathString(entry)) != filemaps.end();
         }
 
         std::vector<std::string> FPackageFileSystem::ListMountedEntries(const std::string& prefix) const
         {
             std::vector<std::string> entries;
             entries.reserve(filemaps.size());
+            const std::string normalizedPrefix = FileHelper::NormalizePathString(prefix);
 
             for (const auto& [name, pakEntry] : filemaps)
             {
                 (void)pakEntry;
-                if (prefix.empty() || name.rfind(prefix, 0) == 0)
+                if (normalizedPrefix.empty() || name.rfind(normalizedPrefix, 0) == 0)
                 {
                     entries.push_back(name);
                 }
@@ -198,7 +209,7 @@ namespace Utilities
                         continue;
                     }
 
-                    std::string entryRelativePathString = entryRelativePath.generic_string();
+                    std::string entryRelativePathString = FileHelper::NormalizePathString(entryRelativePath);
 
                     if (entryRelativePathString.empty())
                     {
@@ -376,7 +387,7 @@ namespace Utilities
             for (uint32_t i = 0; i < entryCount; ++i) {
                 char name[256];
                 reader.getline(name, 256, '\0');
-                entries[i].name = name;
+                entries[i].name = FileHelper::NormalizePathString(std::string(name));
                 entries[i].pkgIdx = pakIdx;
             }
 

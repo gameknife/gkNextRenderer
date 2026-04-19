@@ -416,8 +416,8 @@ namespace Assets
                 if (image.bufferView == -1)
                 {
                     // load from file
-                    auto fileuri = filepath.parent_path() / image.uri;
-                    uint32_t texIdx = GlobalTexturePool::LoadTexture(fileuri.string(), srgb);
+                    const std::filesystem::path fileUriPath = filepath.parent_path() / std::filesystem::path(image.uri);
+                    uint32_t texIdx = GlobalTexturePool::LoadTexture(Utilities::FileHelper::NormalizePathString(fileUriPath), srgb);
                     textureIdMap[imageIdx] = texIdx;
                 }
                 else

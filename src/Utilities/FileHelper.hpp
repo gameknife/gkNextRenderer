@@ -21,6 +21,44 @@ namespace Utilities
             return (NextRenderer::GetExecutableDirectory() / "..").lexically_normal();
         }
 
+        static std::filesystem::path GetRuntimeRoot()
+        {
+#if ANDROID
+            return std::filesystem::path(SDL_GetAndroidExternalStoragePath());
+#elif IOS
+            return std::filesystem::path(SDL_GetBasePath());
+#else
+            return GetDesktopRuntimeRoot();
+#endif
+        }
+
+        static std::filesystem::path GetWritableRuntimeRoot()
+        {
+#if ANDROID
+            return std::filesystem::path(SDL_GetAndroidExternalStoragePath());
+#elif IOS
+            return std::filesystem::path(SDL_GetPrefPath("gknext", "renderer"));
+#else
+            return GetDesktopRuntimeRoot();
+#endif
+        }
+
+        static std::string NormalizePathString(const std::filesystem::path& srcPath)
+        {
+            std::string normalized = srcPath.lexically_normal().generic_string();
+            if (normalized.rfind("./", 0) == 0)
+            {
+                normalized.erase(0, 2);
+            }
+
+            return normalized;
+        }
+
+        static std::string NormalizePathString(const std::string& srcPath)
+        {
+            return NormalizePathString(std::filesystem::path(srcPath));
+        }
+
         static void EnsureDirectoryExists(const std::filesystem::path& path)
         {
             std::filesystem::create_directories(path);
@@ -33,27 +71,12 @@ namespace Utilities
         
         static std::string GetPlatformFilePath( const char* srcPath )
         {
-#if ANDROID
-            const char* AndroidExtPath = SDL_GetAndroidExternalStoragePath();
-            return std::filesystem::path(AndroidExtPath).append(srcPath).string();
-#elif IOS
-            return std::filesystem::path(SDL_GetBasePath()).append(srcPath).string();
-#else
-            return GetDesktopRuntimeRoot().append(srcPath).string();
-#endif
+            return GetRuntimeRoot().append(srcPath).string();
         }
 
         static std::string GetNormalizedFilePath( const char* srcPath )
         {
-            std::string normlizedPath {};
-#if ANDROID
-            const char* AndroidExtPath = SDL_GetAndroidExternalStoragePath();
-            normlizedPath = std::filesystem::path(AndroidExtPath).append(srcPath).string();
-#elif IOS
-            normlizedPath = std::filesystem::path(SDL_GetBasePath()).append(srcPath).string();
-#else
-            normlizedPath = GetDesktopRuntimeRoot().append(srcPath).string();
-#endif
+            std::string normlizedPath = GetRuntimeRoot().append(srcPath).string();
             std::filesystem::path fullPath(normlizedPath);
             std::filesystem::path directory = fullPath.parent_path();
             std::string pattern = fullPath.filename().string();
@@ -94,16 +117,9 @@ namespace Utilities
     {
         static std::string GetCookedFileName(const std::string& filehash, const std::string& cooktype)
         {
-            std::string normlizedPath {};
-            #if ANDROID
-                        normlizedPath = std::string(SDL_GetAndroidExternalStoragePath());
-            #elif IOS
-                        normlizedPath = std::string(SDL_GetPrefPath("gknext", "renderer"));
-            #else
-                        normlizedPath = FileHelper::GetDesktopRuntimeRoot().string();
-            #endif
-            std::filesystem::create_directories(std::filesystem::path(normlizedPath + "/cooked/"));
-            return normlizedPath + "/cooked/" + cooktype + filehash + ".gncook";
+            const std::filesystem::path cookedDirectory = FileHelper::GetWritableRuntimeRoot() / "cooked";
+            std::filesystem::create_directories(cookedDirectory);
+            return (cookedDirectory / (cooktype + filehash + ".gncook")).string();
         }
     }
     
