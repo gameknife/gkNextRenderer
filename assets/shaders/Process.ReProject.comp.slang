@@ -78,6 +78,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
 {
     int2 ipos = int2(DTid.xy);
     uint2 isize = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
+    int2 imageSize = int2(isize);
+    int2 imageMax = imageSize - int2(1, 1);
 
     let SourceDiffuse = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE);
     let SourceSpecular = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR);
@@ -111,10 +113,14 @@ void main(uint3 DTid : SV_DispatchThreadID)
     bool useHistory = true;
     float2 motion = MotionVector[ipos].rg;
     int2 previpos = int2(floor(float2(ipos) + motion));
-    const bool inside = all(previpos < isize) &&
-                        all(previpos >= int2(-1, -1));
+    const bool inside = all(previpos >= int2(0, 0)) &&
+                        all(previpos + int2(1, 1) < imageSize);
     uint current_primitive_index0 = FetchPrimitiveIndex(ObjectId0[ipos]);
-    uint prev_primitive_index0 = FetchPrimitiveIndex(ObjectId1[previpos]);
+    uint prev_primitive_index0 = OBJECT_ID_INVALID_INSTANCE;
+    if (inside)
+    {
+        prev_primitive_index0 = FetchPrimitiveIndex(ObjectId1[previpos]);
+    }
     const bool miss = current_primitive_index0 == OBJECT_ID_INVALID_INSTANCE;
     
     uint moment = Bindless.GetStorageTexture<uint>(Bindless.RT_MOTIONMOMENT)[ipos];
@@ -138,7 +144,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
         for (int y = -SAMPLE_RANGE; y <= SAMPLE_RANGE; y++) {
             for (int x = -SAMPLE_RANGE; x <= SAMPLE_RANGE; x++) {
                 const int2 offset = int2(x, y);
-                const int2 samplePos = ipos + offset;
+                const int2 samplePos = clamp(ipos + offset, int2(0, 0), imageMax);
+                const int2 motionSamplePos = clamp(ipos + offset * 2, int2(0, 0), imageMax);
                 const uint primitiveIdx = FetchPrimitiveIndex(ObjectId0[samplePos]);
                 const float3 worldNormal = NormalBuffer[samplePos].rgb;
 
@@ -151,11 +158,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
                 spatialSpecularSample += SourceSpecular[samplePos] * weight;
                 totalWeight += weight;
 
-                motionInRange += length(MotionVector[ipos + offset * 2].rg);
+                motionInRange += length(MotionVector[motionSamplePos].rg);
             }
         }
-        spatialDiffuseSample /= totalWeight;
-        spatialSpecularSample /= totalWeight;
+        spatialDiffuseSample /= max(totalWeight, 1e-5);
+        spatialSpecularSample /= max(totalWeight, 1e-5);
 
         uint prev_primitive_index1 = FetchPrimitiveIndex(ObjectId1[previpos + int2(1, 0)]);
         uint prev_primitive_index2 = FetchPrimitiveIndex(ObjectId1[previpos + int2(0, 1)]);

@@ -898,19 +898,6 @@ public struct FSoftwareRayTracerV2 : IRayTracer
     {
         float3 offsetPos = rayOrigin;
 
-        // Near field tracing parameters
-        const float longDistanceInit = 0.5; // Far field starting distance (to avoid self-intersection)
-        const float depthToleration = 0.2;   // Near field depth toleration
-
-        // screenspace tracing is heavy, skip
-        float3 outPosition;
-        float3 outNormal;
-        uint outMaterialIdx;
-        if (Common.traceInScreenSpaceV2(offsetPos, rayDir, longDistanceInit, depthToleration, outPosition, outNormal, outMaterialIdx))
-        {
-            return true;
-        }
-
         if (DDARayTracer.TraceOcclusion(offsetPos, rayDir))
         {
             return true;
@@ -924,14 +911,24 @@ public struct FSoftwareRayTracerV2 : IRayTracer
     }
     public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor, out float outHitDist)
     {
+        if (maxDistance <= 0.0f)
+        {
+            outHitDist = 0.0f;
+            return false;
+        }
+
         float3 offsetPos = rayOrigin;
+        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
+        float3 viewRayDir = mul(Camera.ModelView, float4(rayDir, 0.0f)).xyz;
+        float clampedTraceDistance = min(maxDistance, FAST_MAX_TRACE_DISTANCE);
 
         // Near field tracing parameters
         const float longDistanceInit = 0.5; // Far field starting distance (to avoid self-intersection)
         const float depthToleration = 0.2;         // Near field depth toleration
+        const bool allowScreenSpaceTrace = (viewRayDir.z < -0.05f);
 
-        // screenspace tracing is heavy, skip
-        if (Common.traceInScreenSpaceV2(offsetPos, rayDir, longDistanceInit, depthToleration, outVertex.Position, outVertex.Normal, outVertex.MaterialIndex))
+        if (allowScreenSpaceTrace &&
+            Common.traceInScreenSpaceV2(offsetPos, rayDir, min(longDistanceInit, clampedTraceDistance), depthToleration, outVertex.Position, outVertex.Normal, outVertex.MaterialIndex))
         {
             outVertex.TexCoord = float2(0.5, 0.5);
             outHitDist = distance(outVertex.Position, rayOrigin);
@@ -940,7 +937,7 @@ public struct FSoftwareRayTracerV2 : IRayTracer
 
         // use dda directly
         // offsetPos = offsetPos + rayDir * longDistanceInit; no need to offset, dda tracing will handle it
-        if (DDARayTracer.TraceRay(offsetPos, rayDir, FAST_MAX_TRACE_DISTANCE, outVertex, outNode, inoutRayColor, outHitDist))
+        if (DDARayTracer.TraceRay(offsetPos, rayDir, clampedTraceDistance, outVertex, outNode, inoutRayColor, outHitDist))
         {
             return true;
         }
