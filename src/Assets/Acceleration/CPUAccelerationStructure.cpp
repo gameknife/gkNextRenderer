@@ -28,6 +28,7 @@ Assets::SphericalHarmonics HdrsHs[100];
 namespace
 {
     constexpr uint32_t kCascadeVoxelCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
+    constexpr uint8_t kMaxDistanceFieldSeed = 255;
     std::atomic_bool GLoggedInvalidCpuAsHit{false};
     std::atomic_bool GLoggedInvalidCpuAsMaterial{false};
 
@@ -81,6 +82,104 @@ namespace
 
         minBounds = glm::min(minBounds, bounds.min);
         maxBounds = glm::max(maxBounds, bounds.max);
+    }
+
+    uint8_t GetPackedByteX(uint32_t packedValue)
+    {
+        return static_cast<uint8_t>(packedValue & 0xFFu);
+    }
+
+    uint32_t SetPackedByteX(uint32_t packedValue, uint8_t value)
+    {
+        return (packedValue & 0xFFFFFF00u) | value;
+    }
+
+    uint32_t GetVoxelAddress(int x, int y, int z)
+    {
+        return static_cast<uint32_t>(y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x);
+    }
+
+    struct FChamferNeighbor
+    {
+        int dx;
+        int dy;
+        int dz;
+        float weight;
+    };
+
+    constexpr std::array<FChamferNeighbor, 13> kForwardChamferNeighbors = {
+        FChamferNeighbor{-1, -1, -1, 1.73205081f},
+        FChamferNeighbor{0, -1, -1, 1.41421356f},
+        FChamferNeighbor{1, -1, -1, 1.73205081f},
+        FChamferNeighbor{-1, -1, 0, 1.41421356f},
+        FChamferNeighbor{0, -1, 0, 1.0f},
+        FChamferNeighbor{1, -1, 0, 1.41421356f},
+        FChamferNeighbor{-1, -1, 1, 1.73205081f},
+        FChamferNeighbor{0, -1, 1, 1.41421356f},
+        FChamferNeighbor{1, -1, 1, 1.73205081f},
+        FChamferNeighbor{-1, 0, -1, 1.41421356f},
+        FChamferNeighbor{0, 0, -1, 1.0f},
+        FChamferNeighbor{1, 0, -1, 1.41421356f},
+        FChamferNeighbor{-1, 0, 0, 1.0f},
+    };
+
+    constexpr std::array<FChamferNeighbor, 13> kBackwardChamferNeighbors = {
+        FChamferNeighbor{1, 0, 0, 1.0f},
+        FChamferNeighbor{-1, 0, 1, 1.41421356f},
+        FChamferNeighbor{0, 0, 1, 1.0f},
+        FChamferNeighbor{1, 0, 1, 1.41421356f},
+        FChamferNeighbor{-1, 1, -1, 1.73205081f},
+        FChamferNeighbor{0, 1, -1, 1.41421356f},
+        FChamferNeighbor{1, 1, -1, 1.73205081f},
+        FChamferNeighbor{-1, 1, 0, 1.41421356f},
+        FChamferNeighbor{0, 1, 0, 1.0f},
+        FChamferNeighbor{1, 1, 0, 1.41421356f},
+        FChamferNeighbor{-1, 1, 1, 1.73205081f},
+        FChamferNeighbor{0, 1, 1, 1.41421356f},
+        FChamferNeighbor{1, 1, 1, 1.73205081f},
+    };
+
+    void ApplyChamferPass(std::vector<float>& distanceField, const std::array<FChamferNeighbor, 13>& neighbors, bool reverseSweep)
+    {
+        const int xStart = reverseSweep ? Assets::CUBE_SIZE_XY - 1 : 0;
+        const int xEnd = reverseSweep ? -1 : Assets::CUBE_SIZE_XY;
+        const int xStep = reverseSweep ? -1 : 1;
+        const int yStart = reverseSweep ? Assets::CUBE_SIZE_Z - 1 : 0;
+        const int yEnd = reverseSweep ? -1 : Assets::CUBE_SIZE_Z;
+        const int yStep = reverseSweep ? -1 : 1;
+        const int zStart = reverseSweep ? Assets::CUBE_SIZE_XY - 1 : 0;
+        const int zEnd = reverseSweep ? -1 : Assets::CUBE_SIZE_XY;
+        const int zStep = reverseSweep ? -1 : 1;
+
+        for (int y = yStart; y != yEnd; y += yStep)
+        {
+            for (int z = zStart; z != zEnd; z += zStep)
+            {
+                for (int x = xStart; x != xEnd; x += xStep)
+                {
+                    const uint32_t voxelIndex = GetVoxelAddress(x, y, z);
+                    float bestDistance = distanceField[voxelIndex];
+
+                    for (const FChamferNeighbor& neighbor : neighbors)
+                    {
+                        const int nx = x + neighbor.dx;
+                        const int ny = y + neighbor.dy;
+                        const int nz = z + neighbor.dz;
+                        if (nx < 0 || nx >= Assets::CUBE_SIZE_XY ||
+                            ny < 0 || ny >= Assets::CUBE_SIZE_Z ||
+                            nz < 0 || nz >= Assets::CUBE_SIZE_XY)
+                        {
+                            continue;
+                        }
+
+                        const uint32_t neighborIndex = GetVoxelAddress(nx, ny, nz);
+                        bestDistance = std::min(bestDistance, distanceField[neighborIndex] + neighbor.weight);
+                    }
+
+                    distanceField[voxelIndex] = bestDistance;
+                }
+            }
+        }
     }
 }
 
@@ -283,6 +382,7 @@ void FCPUProbeBaker::Init(uint32_t cascadeIdx, float unitSize, vec3 offset)
     UNIT_SIZE = unitSize;
     CUBE_OFFSET = offset;
     voxels.resize(kCascadeVoxelCount);
+    distanceToSolidSeeds.resize(kCascadeVoxelCount, kMaxDistanceFieldSeed);
 }
 
 void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& voxelGpuMemory, uint32_t elementOffset)
@@ -291,6 +391,35 @@ void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& voxelGpuMemory, uint32_t el
     VoxelData* data = reinterpret_cast<VoxelData*>(voxelGpuMemory.Map(byteOffset, sizeof(VoxelData) * voxels.size()));
     std::memcpy(data, voxels.data(), voxels.size() * sizeof(VoxelData));
     voxelGpuMemory.Unmap();
+}
+
+void FCPUProbeBaker::RebuildDistanceField()
+{
+    if (voxels.empty() || distanceToSolidSeeds.size() != voxels.size())
+    {
+        return;
+    }
+
+    std::vector<float> distanceField(voxels.size(), 0.0f);
+    for (size_t voxelIndex = 0; voxelIndex < voxels.size(); ++voxelIndex)
+    {
+        distanceField[voxelIndex] = static_cast<float>(distanceToSolidSeeds[voxelIndex]);
+    }
+
+    constexpr int kChamferPassCount = 2;
+    for (int passIndex = 0; passIndex < kChamferPassCount; ++passIndex)
+    {
+        ApplyChamferPass(distanceField, kForwardChamferNeighbors, false);
+        ApplyChamferPass(distanceField, kBackwardChamferNeighbors, true);
+    }
+
+    for (size_t voxelIndex = 0; voxelIndex < voxels.size(); ++voxelIndex)
+    {
+        const float clampedDistance = glm::clamp(distanceField[voxelIndex], 0.0f, 255.0f);
+        const uint8_t packedDistance = static_cast<uint8_t>(glm::floor(clampedDistance));
+        voxels[voxelIndex].distanceToSolid_gg_z01 =
+            SetPackedByteX(voxels[voxelIndex].distanceToSolid_gg_z01, packedDistance);
+    }
 }
 
 bool FCPUAccelerationStructure::InitCascadeBakers(const UserSettings& settings)
@@ -558,16 +687,21 @@ RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDi
 void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
 {
     vec3 probePos = vec3(x, y, z) * UNIT_SIZE + CUBE_OFFSET;
-    uint32_t addressIdx = y * CUBE_SIZE_XY * CUBE_SIZE_XY + z * CUBE_SIZE_XY + x;
+    uint32_t addressIdx = GetVoxelAddress(x, y, z);
     VoxelData& voxel = voxels[addressIdx];
         
     switch (procType)
     {
         case ECubeProcType::ECPT_Clear:
+            voxel = {};
+            voxel.distanceToSolid_gg_z01 = SetPackedByteX(voxel.distanceToSolid_gg_z01, kMaxDistanceFieldSeed);
+            distanceToSolidSeeds[addressIdx] = kMaxDistanceFieldSeed;
+            break;
         case ECubeProcType::ECPT_Fence:
             break;
         case ECubeProcType::ECPT_Voxelize:
             VoxelizeCube(voxel, probePos, UNIT_SIZE);
+            distanceToSolidSeeds[addressIdx] = GetPackedByteX(voxel.distanceToSolid_gg_z01);
             break;
     }
 }
@@ -709,27 +843,51 @@ void FCPUAccelerationStructure::ClearAllTasks()
     
     // 清空当前批次任务列表
     lastBatchTasks.clear();
+    distanceFieldRebuildTasks.clear();
     
     // 重置刷新标志
     needFlush = false;
+    distanceFieldRebuildScheduled_ = false;
     ClearNavRelevantDirtyBounds();
 }
 
 void FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemory, Vulkan::DeviceMemory* voxelGpuMemory, Vulkan::DeviceMemory* pageIndexMemory)
 {
-    if (needFlush)
+    const bool batchComplete = lastBatchTasks.empty() || TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks);
+    if (needFlush && batchComplete)
     {
-        // Upload to GPU, now entire range, optimize to partial upload later
-        for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
+        if (!distanceFieldRebuildScheduled_)
         {
-            cascadeBakers[cascadeIndex].UploadGPU(*voxelGpuMemory, cascadeIndex * kCascadeVoxelCount);
+            distanceFieldRebuildTasks.clear();
+            distanceFieldRebuildTasks.reserve(GetActiveCascadeCount());
+            for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
+            {
+                const uint32_t taskId = TaskCoordinator::GetInstance()->AddParralledTask(
+                    [this, cascadeIndex](ResTask& task)
+                    {
+                        cascadeBakers[cascadeIndex].RebuildDistanceField();
+                    },
+                    nullptr);
+                distanceFieldRebuildTasks.push_back(taskId);
+            }
+            distanceFieldRebuildScheduled_ = true;
         }
-        if (!cascadeBakers.empty())
+        else if (distanceFieldRebuildTasks.empty() || TaskCoordinator::GetInstance()->IsAllTaskComplete(distanceFieldRebuildTasks))
         {
-            cpuPageIndex.UpdateData(cascadeBakers);
+            // Upload to GPU, now entire range, optimize to partial upload later
+            for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
+            {
+                cascadeBakers[cascadeIndex].UploadGPU(*voxelGpuMemory, cascadeIndex * kCascadeVoxelCount);
+            }
+            if (!cascadeBakers.empty())
+            {
+                cpuPageIndex.UpdateData(cascadeBakers);
+            }
+            cpuPageIndex.UploadGPU(*pageIndexMemory);
+            needFlush = false;
+            distanceFieldRebuildScheduled_ = false;
+            distanceFieldRebuildTasks.clear();
         }
-        cpuPageIndex.UploadGPU(*pageIndexMemory);
-        needFlush = false;
     }
 
     if (!lastBatchTasks.empty())
@@ -759,6 +917,11 @@ void FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
             needUpdateGroups.pop();
         }
     }
+}
+
+bool FCPUAccelerationStructure::HasPendingWork() const
+{
+    return needFlush || !lastBatchTasks.empty() || !distanceFieldRebuildTasks.empty() || distanceFieldRebuildScheduled_ || !needUpdateGroups.empty();
 }
 
 void FCPUAccelerationStructure::RequestUpdate(vec3 worldPos, float radius)
@@ -806,9 +969,12 @@ void FCPUAccelerationStructure::ClearNavRelevantDirtyBounds()
 
 void FCPUProbeBaker::ClearAmbientCubes()
 {
-    for(auto& voxel : voxels)
+    for (size_t voxelIndex = 0; voxelIndex < voxels.size(); ++voxelIndex)
     {
+        VoxelData& voxel = voxels[voxelIndex];
         voxel = {};
+        voxel.distanceToSolid_gg_z01 = SetPackedByteX(voxel.distanceToSolid_gg_z01, kMaxDistanceFieldSeed);
+        distanceToSolidSeeds[voxelIndex] = kMaxDistanceFieldSeed;
     }
 }
 

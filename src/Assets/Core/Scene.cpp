@@ -1,5 +1,4 @@
 #include "Assets/Core/Scene.hpp"
-#include <chrono>
 #include <glm/detail/type_half.hpp>
 #include <meshoptimizer.h>
 #include <tiny_gltf.h>
@@ -10,7 +9,6 @@
 #include "Assets/Core/Model.hpp"
 #include "Options.hpp"
 #include "Runtime/Subsystems/NextPhysics.h"
-#include "Assets/Core/Scene.hpp"
 #include "Vulkan/BufferUtil.hpp"
 
 #include "Assets/Core/Node.h"
@@ -967,16 +965,16 @@ namespace Assets
 
         if (NextEngine::GetInstance()->GetTotalFrames() % 30 == 0)
         {
-            if (sceneDirtyForCpuAS_)
+            cpuAccelerationStructure_.Tick(*this, ambientCubeBufferMemory_.get(), farAmbientCubeBufferMemory_.get(),
+                                           pageIndexBufferMemory_.get());
+            
+            if (sceneDirtyForCpuAS_ && !cpuAccelerationStructure_.HasPendingWork())
             {
                 if (cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), true))
                 {
                     sceneDirtyForCpuAS_ = false;
                 }
             }
-
-            cpuAccelerationStructure_.Tick(*this, ambientCubeBufferMemory_.get(), farAmbientCubeBufferMemory_.get(),
-                                           pageIndexBufferMemory_.get());
         }
     }
 

@@ -80,9 +80,11 @@ struct FCPUProbeBaker
     glm::vec3 CUBE_OFFSET;
     
     std::vector<Assets::VoxelData> voxels;
+    std::vector<uint8_t> distanceToSolidSeeds;
 
     void Init(uint32_t cascadeIdx, float unitSize, glm::vec3 offset);
     void ProcessCube(int x, int y, int z, ECubeProcType procType);
+    void RebuildDistanceField();
     void UploadGPU(Vulkan::DeviceMemory& voxelDeviceMemory);
     void UploadGPU(Vulkan::DeviceMemory& voxelDeviceMemory, uint32_t elementOffset);
     void ClearAmbientCubes();
@@ -111,6 +113,7 @@ public:
                            uint32_t cascadeIndex);
     
     void Tick(Assets::Scene& scene, Vulkan::DeviceMemory* GPUMemory, Vulkan::DeviceMemory* FarGPUMemory, Vulkan::DeviceMemory* PageIndexMemory);
+    bool HasPendingWork() const;
 
     void RequestUpdate(glm::vec3 worldPos, float radius);
     bool ConsumeNavRelevantDirtyBounds(glm::vec3& outWorldMin, glm::vec3& outWorldMax);
@@ -132,11 +135,13 @@ private:
     std::vector<tinybvh::BVHBase*> bvhBLASList;
         
     std::vector<uint32_t> lastBatchTasks;
+    std::vector<uint32_t> distanceFieldRebuildTasks;
 
     std::queue<std::tuple<glm::ivec3, ECubeProcType, EBakerType, uint32_t> > needUpdateGroups;
 
     std::vector<float> shadowMapR32;
     bool needFlush = false;
+    bool distanceFieldRebuildScheduled_ = false;
     bool hasNavRelevantDirtyBounds_ = false;
     glm::vec3 navRelevantDirtyWorldMin_{0.0f};
     glm::vec3 navRelevantDirtyWorldMax_{0.0f};
