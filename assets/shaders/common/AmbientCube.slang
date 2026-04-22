@@ -522,7 +522,7 @@ public bool inSolidV2(float3 pos, float3 rayDir, inout float offsetDist, inout u
         }
     }
 
-    if (unpack0.x > 8)
+    if (unpack0.x > 1)
     {
         skipSetp = max(1, unpack0.x);
     }

@@ -540,9 +540,51 @@ public struct FVoxelRayCaster : IPrimaryRayCaster
 
     FHiVoxelDDARayTracerV2 DDARayTracer;
 }
-
 public struct FHiVoxelDDARayTracerV2 : IRayTracer
 {
+    void RebuildVoxelDDAState(float3 rayOrigin, float3 rayDir, float travelDistance, float cubeUnit, float3 cubeOffset,
+                              out float3 voxelPos, out float3 tMax, out float3 tDelta, out float3 stepSign)
+    {
+        stepSign = sign(rayDir);
+        tDelta = abs(cubeUnit / rayDir);
+
+        float rebuildBias = max(cubeUnit * 0.01f, 0.0001f);
+        float3 worldPos = rayOrigin + rayDir * (travelDistance + rebuildBias);
+        voxelPos = (worldPos - cubeOffset) / cubeUnit;
+
+        tMax = float3(1e30f, 1e30f, 1e30f);
+        if (rayDir.x != 0) tMax.x = (stepSign.x > 0 ? ceil(voxelPos.x) - voxelPos.x : voxelPos.x - floor(voxelPos.x)) * tDelta.x;
+        if (rayDir.y != 0) tMax.y = (stepSign.y > 0 ? ceil(voxelPos.y) - voxelPos.y : voxelPos.y - floor(voxelPos.y)) * tDelta.y;
+        if (rayDir.z != 0) tMax.z = (stepSign.z > 0 ? ceil(voxelPos.z) - voxelPos.z : voxelPos.z - floor(voxelPos.z)) * tDelta.z;
+    }
+
+    float StepVoxelDDA(inout float3 voxelPos, inout float3 tMax, float3 tDelta, float3 stepSign, inout float3 normal)
+    {
+        normal = float3(0, 0, 0);
+        if (tMax.x < tMax.y && tMax.x < tMax.z)
+        {
+            float stepDistance = tMax.x;
+            voxelPos.x += stepSign.x;
+            tMax.x += tDelta.x;
+            normal.x = -stepSign.x;
+            return stepDistance;
+        }
+        if (tMax.y < tMax.z)
+        {
+            float stepDistance = tMax.y;
+            voxelPos.y += stepSign.y;
+            tMax.y += tDelta.y;
+            normal.y = -stepSign.y;
+            return stepDistance;
+        }
+
+        float stepDistance = tMax.z;
+        voxelPos.z += stepSign.z;
+        tMax.z += tDelta.z;
+        normal.z = -stepSign.z;
+        return stepDistance;
+    }
+
     public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
     {
         Vertex outVertex;
@@ -602,23 +644,26 @@ public struct FHiVoxelDDARayTracerV2 : IRayTracer
 
         uint hitMatId = 0;
         uint maxSteps = useBounds ? uint(16 * 4 * 1.8 * 2) : uint(maxDistance / cubeUnit);
-    
-        float3 tDelta = abs(cubeUnit / rayDir);
+        float3 tDelta = float3(0, 0, 0);
         float3 tMax = float3(0, 0, 0);
-        float3 stepSign = sign(rayDir);
-    
-        if (rayDir.x != 0) tMax.x = (stepSign.x > 0 ? ceil(voxelPos.x) - voxelPos.x : voxelPos.x - floor(voxelPos.x)) * tDelta.x;
-        if (rayDir.y != 0) tMax.y = (stepSign.y > 0 ? ceil(voxelPos.y) - voxelPos.y : voxelPos.y - floor(voxelPos.y)) * tDelta.y;
-        if (rayDir.z != 0) tMax.z = (stepSign.z > 0 ? ceil(voxelPos.z) - voxelPos.z : voxelPos.z - floor(voxelPos.z)) * tDelta.z;
+        float3 stepSign = float3(0, 0, 0);
+        RebuildVoxelDDAState(rayOrigin, rayDir, 0.0f, cubeUnit, cubeOffset, voxelPos, tMax, tDelta, stepSign);
     
         bool hit = false;
         float3 normal = float3(0, 0, 0);
+        float travelDistance = 0.0f;
+        const float distanceFieldSkipSafety = 1.5f;
     
         for (uint i = 0; i < maxSteps; ++i)
         {
+            if (!useBounds && travelDistance > maxDistance)
+            {
+                break;
+            }
+
             if (useBounds)
             {
-                float3 worldPos = cubeOffset + voxelPos * cubeUnit;
+                float3 worldPos = rayOrigin + rayDir * travelDistance;
                 if (any(worldPos < boxMin - float3(cubeUnit)) || any(worldPos > boxMax + float3(cubeUnit)))
                     break;
             }
@@ -637,63 +682,17 @@ public struct FHiVoxelDDARayTracerV2 : IRayTracer
                 break;
             }
 
-            // if (skipLength > 1.0f)
-            // {
-            //     int primaryAxis = 0;
-            //     if (tMax.y < tMax.x && tMax.y < tMax.z) primaryAxis = 1;
-            //     else if (tMax.z < tMax.x && tMax.z < tMax.y) primaryAxis = 2;
-                
-            //     float voxelSkipLength = skipLength * CUBE_UNIT;
-            //     float stepsToSkip = 0; 
-            //     stepsToSkip = floor((voxelSkipLength * abs(rayDir[primaryAxis])) / CUBE_UNIT);
-                
-            //     if (stepsToSkip >= 1.0f)
-            //     {
-            //         voxelPos[primaryAxis] += stepSign[primaryAxis] * stepsToSkip;
-            //         tMax[primaryAxis] += tDelta[primaryAxis] * stepsToSkip;
-                    
-            //         float timeAdvanced = tDelta[primaryAxis] * stepsToSkip;
-                    
-            //         for (int axis = 0; axis < 3; ++axis)
-            //         {
-            //             if (axis != primaryAxis && rayDir[axis] != 0)
-            //             {
-            //                 float stepsOther = timeAdvanced / tDelta[axis];
-            //                 voxelPos[axis] += stepSign[axis] * floor(stepsOther);
-            //                 tMax[axis] -= tDelta[axis] * floor(stepsOther);
-            //             }
-            //         }
-                    
-            //         i += uint(stepsToSkip - 1);
+            float safeSkipVoxels = max(skipLength - distanceFieldSkipSafety, 0.0f);
+            if (safeSkipVoxels >= 1.0f)
+            {
+                float skipDistance = safeSkipVoxels * cubeUnit;
+                travelDistance += skipDistance;
+                RebuildVoxelDDAState(rayOrigin, rayDir, travelDistance, cubeUnit, cubeOffset, voxelPos, tMax, tDelta, stepSign);
+                i += uint(floor(safeSkipVoxels));
+                continue;
+            }
 
-            //         normal = float3(0, 0, 0);
-            //         normal[primaryAxis] = -stepSign[primaryAxis];
-                    
-            //         continue;
-            //     }
-            // }
-   
-            // 原始DDA单步进
-            normal = float3(0, 0, 0);
-        
-            if (tMax.x < tMax.y && tMax.x < tMax.z)
-            {
-                voxelPos.x += stepSign.x;
-                tMax.x += tDelta.x;
-                normal.x = -stepSign.x;
-            }
-            else if (tMax.y < tMax.z)
-            {
-                voxelPos.y += stepSign.y;
-                tMax.y += tDelta.y;
-                normal.y = -stepSign.y;
-            }
-            else
-            {
-                voxelPos.z += stepSign.z;
-                tMax.z += tDelta.z;
-                normal.z = -stepSign.z;
-            }
+            travelDistance = StepVoxelDDA(voxelPos, tMax, tDelta, stepSign, normal);
         }
         return hit;
     }
