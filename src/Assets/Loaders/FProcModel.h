@@ -12,6 +12,16 @@ namespace Assets
         static Model CreateBox(const glm::vec3& p0, const glm::vec3& p1);
         static Model CreateSphere(const glm::vec3& center, float radius);
         static uint32_t CreateCornellBox(const float scale,std::vector<Model>& models,std::vector<FMaterial>& materials,std::vector<LightObject>& lights);
+
+        // Emissive quad. origin = one corner; right/up = two edge vectors.
+        // Quad corners are origin, origin+right, origin+right+up, origin+up (CCW from normal side).
+        // The normal direction is normalize(cross(right, up)); a LightObject is appended to `lights`.
+        static Model CreateAreaLight(const std::string& name,
+                                     const glm::vec3& origin,
+                                     const glm::vec3& right,
+                                     const glm::vec3& up,
+                                     uint32_t lightMatIdx,
+                                     std::vector<LightObject>& lights);
     };
 
 }

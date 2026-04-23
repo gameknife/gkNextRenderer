@@ -127,6 +127,39 @@ namespace Assets
         return uint32_t(models.size() - 1);
     }
 
+    Model FProcModel::CreateAreaLight(const std::string& name,
+                                      const vec3& origin,
+                                      const vec3& right,
+                                      const vec3& up,
+                                      uint32_t lightMatIdx,
+                                      std::vector<LightObject>& lights)
+    {
+        const vec3 c0 = origin;
+        const vec3 c1 = origin + right;
+        const vec3 c2 = origin + right + up;
+        const vec3 c3 = origin + up;
+        const vec3 normal = glm::normalize(glm::cross(right, up));
+        const float area = glm::length(glm::cross(right, up));
+
+        std::vector<Vertex> vertices = {
+            Vertex{ c0, normal, vec4(1,0,0,0), vec2(0, 1), 0 },
+            Vertex{ c1, normal, vec4(1,0,0,0), vec2(1, 1), 0 },
+            Vertex{ c2, normal, vec4(1,0,0,0), vec2(1, 0), 0 },
+            Vertex{ c3, normal, vec4(1,0,0,0), vec2(0, 0), 0 },
+        };
+        std::vector<uint32_t> indices = { 0, 1, 2, 0, 2, 3 };
+
+        LightObject light{};
+        light.p0 = vec4(c0, 1);
+        light.p1 = vec4(c3, 1);
+        light.p3 = vec4(c1, 1);
+        light.normal_area = vec4(normal, area);
+        light.lightMatIdx = lightMatIdx;
+        lights.push_back(light);
+
+        return Model(name, std::move(vertices), std::move(indices), true);
+    }
+
     Model FProcModel::CreateBox(const vec3& p0, const vec3& p1)
     {
         std::vector<Vertex> vertices =
