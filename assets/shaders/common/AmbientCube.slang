@@ -315,6 +315,8 @@ public struct LightCacheAmbientCubeSampler : IAmbientCubeSampler
     }
 };
 
+static const float kTraceHistoryLength = 16.0f;
+
 AmbientCube FetchCubeV2(int3 probePos, in AmbientCube* Cubes)
 {
     int idx = probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY + probePos.z * CUBE_SIZE_XY + probePos.x;
@@ -325,6 +327,16 @@ AmbientCube FetchCubeV2(int3 probePos, in AmbientCube* Cubes, uint baseOffset)
 {
     int idx = int(baseOffset) + probePos.y * CUBE_SIZE_XY * CUBE_SIZE_XY + probePos.z * CUBE_SIZE_XY + probePos.x;
     return Cubes[idx];
+}
+
+AmbientCube FetchCubeStableV2(int3 probePos, in AmbientCube* Cubes, in AmbientCube* CubesPong, uint baseOffset,
+                              uint cascadeIndex, uint stableCascadeIndex)
+{
+    if (cascadeIndex == stableCascadeIndex)
+    {
+        return FetchCubeV2(probePos, CubesPong);
+    }
+    return FetchCubeV2(probePos, Cubes, baseOffset);
 }
 
 VoxelData FetchVoxelV2(int3 probePos, in VoxelData* Cubes)
@@ -392,6 +404,95 @@ public float4 interpolateAmbientCubesV2<T : IAmbientCubeSampler>(float3 inPos, f
 
             int3 probePos = baseIdx + offset;
             AmbientCube cube = FetchCubeV2(probePos, Cubes, baseOffset);
+            VoxelData voxel = FetchVoxelV2(probePos, Voxels, baseOffset);
+
+            uint4 unpacked0 = unpack_bytes(voxel.distanceToSolid_gg_z01);
+            uint4 unpacked1 = unpack_bytes(voxel.distanceToSolid_x01_y01);
+
+            float4 distance00z01 = unpacked0 / 255.0f;
+            float4 distancex01y01 = unpacked1 / 255.0f;
+
+            if (distance00z01.y < 0.01f)
+                continue;
+
+            float3 localPos = frac;
+            float3 probeRealPos = offset;
+            float3 probeToLocal = localPos - probeRealPos;
+
+            float distanceToProbe = length(probeToLocal);
+            float3 dir = normalize(probeToLocal);
+
+            float distPZ = distance00z01.z;
+            float distNZ = distance00z01.w;
+            float distPX = distancex01y01.x;
+            float distNX = distancex01y01.y;
+            float distPY = distancex01y01.z;
+            float distNY = distancex01y01.w;
+
+            float wx_pos = sqrt(max(dir.x, 0.0));
+            float wx_neg = sqrt(max(-dir.x, 0.0));
+            float wy_pos = sqrt(max(dir.y, 0.0));
+            float wy_neg = sqrt(max(-dir.y, 0.0));
+            float wz_pos = sqrt(max(dir.z, 0.0));
+            float wz_neg = sqrt(max(-dir.z, 0.0));
+
+            float hitLength = wx_pos * distPX + wx_neg * distNX + wy_pos * distPY + wy_neg * distNY +
+                              wz_pos * distPZ + wz_neg * distNZ;
+
+            if (distanceToProbe > hitLength + 0.05f)
+                continue;
+
+            float wx = offset.x == 0 ? (1.0 - frac.x) : frac.x;
+            float wy = offset.y == 0 ? (1.0 - frac.y) : frac.y;
+            float wz = offset.z == 0 ? (1.0 - frac.z) : frac.z;
+            float weight = wx * wy * wz;
+
+            float4 sampleColor = T.Sample(cube, normal);
+            result += sampleColor * weight;
+            totalWeight += weight;
+        }
+
+        if (totalWeight > 0.0)
+        {
+            return result / totalWeight;
+        }
+    }
+
+    return float4(0.0, 0.0, 0.0, 1.0);
+}
+
+public float4 interpolateAmbientCubesStableV2<T : IAmbientCubeSampler>(float3 inPos, float3 normal, uint stableCascadeIndex)
+{
+    AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
+    AmbientCube* CubesPong = Bindless.GetGpuscene().CubesPong;
+    VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
+    uint cascadeCount = GetAmbientCubeCascadeCount();
+
+    for (uint cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex)
+    {
+        float cubeUnit = GetAmbientCubeUnitAtCascade(cascadeIndex);
+        float3 cubeOffset = GetAmbientCubeOffsetAtCascade(cascadeIndex);
+        float3 nearpos = (inPos - cubeOffset) / cubeUnit;
+
+        if (nearpos.x < 0 || nearpos.y < 0 || nearpos.z < 0 || nearpos.x > CUBE_SIZE_XY - 2 || nearpos.y > CUBE_SIZE_Z - 2 ||
+            nearpos.z > CUBE_SIZE_XY - 2)
+        {
+            continue;
+        }
+
+        uint baseOffset = GetCascadeBaseOffset(cascadeIndex);
+        int3 baseIdx = int3(floor(nearpos));
+        float3 frac = frac(nearpos);
+
+        float totalWeight = 0.0;
+        float4 result = float4(0.0, 0.0, 0.0, 0.0);
+
+        for (int i = 0; i < 8; i++)
+        {
+            int3 offset = int3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
+
+            int3 probePos = baseIdx + offset;
+            AmbientCube cube = FetchCubeStableV2(probePos, Cubes, CubesPong, baseOffset, cascadeIndex, stableCascadeIndex);
             VoxelData voxel = FetchVoxelV2(probePos, Voxels, baseOffset);
 
             uint4 unpacked0 = unpack_bytes(voxel.distanceToSolid_gg_z01);
@@ -548,6 +649,35 @@ public interface IProbeGenerator
     void RenderAmbientCubeOnly(IRayTracer tracer, float3 origin, uint CubeIdx, inout uint4 RandomSeed);
 }
 
+// Axis-face indexing convention for propagation:
+// 0:+Y  1:-Y  2:+Z  3:-Z  4:+X  5:-X
+// Opposite face index = face ^ 1
+uint GetFaceBounceByIdx(AmbientCube cube, uint faceIdx)
+{
+    if (faceIdx == 0) return cube.PosY_D;
+    if (faceIdx == 1) return cube.NegY_D;
+    if (faceIdx == 2) return cube.PosZ_D;
+    if (faceIdx == 3) return cube.NegZ_D;
+    if (faceIdx == 4) return cube.PosX_D;
+    return cube.NegX_D;
+}
+
+float GetVoxelFaceVisibilityByIdx(VoxelData voxel, uint faceIdx)
+{
+    uint4 unpacked0 = unpack_bytes(voxel.distanceToSolid_gg_z01);
+    uint4 unpacked1 = unpack_bytes(voxel.distanceToSolid_x01_y01);
+
+    if (faceIdx == 0) return float(unpacked1.z) / 255.0f;
+    if (faceIdx == 1) return float(unpacked1.w) / 255.0f;
+    if (faceIdx == 2) return float(unpacked0.z) / 255.0f;
+    if (faceIdx == 3) return float(unpacked0.w) / 255.0f;
+    if (faceIdx == 4) return float(unpacked1.x) / 255.0f;
+    return float(unpacked1.y) / 255.0f;
+}
+
+static const float kPropagationAirTransport = 0.95f;
+static const float kPropagationSurfaceTransport = 0.9f;
+
 public struct FGpuProbeGenerator : IProbeGenerator
 {
     LightObject FetchLight(uint lightIdx, inout float4 lightPower)
@@ -557,7 +687,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         return Lights[lightIdx];
     }
 
-    bool FaceTask(IRayTracer tracer, float3 origin, float3 basis, uint iterate, inout uint DirectLight, inout uint IndirectLight, inout uint SkyVisOut, inout uint SunVisOut)
+    bool FaceTask(IRayTracer tracer, float3 origin, float3 basis, uint iterate, uint bakeCascadeIndex, inout uint DirectLight, inout uint IndirectLight, inout uint SkyVisOut, inout uint SunVisOut)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
         float cubeUnit = GetAmbientCubeUnit();
@@ -591,7 +721,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
                     float4 tex = Bindless.GetSampleTexture(hitMaterial.DiffuseTextureId).SampleLevel(hitVertex.TexCoord, 0);
                     outAlbedo *= tex;
                 }
-                bounceColor += outAlbedo * interpolateAmbientCubesV2<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal) * 1.25f; // magic bounce twice
+                bounceColor += outAlbedo * interpolateAmbientCubesStableV2<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, bakeCascadeIndex) * 1.25f; // magic bounce twice
             }
             else
             {
@@ -628,7 +758,8 @@ public struct FGpuProbeGenerator : IProbeGenerator
         }
 
         // 累积，gpu直接只保留4帧
-        float currWeight = 1.0f;//0.25f;
+        float accumulatedFrames = min(float(iterate) + 1.0f, kTraceHistoryLength);
+        float currWeight = 1.0f / accumulatedFrames;
         SkyVisOut = uint(lerp(float(SkyVisOut), 255.0 * skyVisibility / float(FACE_TRACING_COUNT), currWeight));
         DirectLight = LerpPackedColorAlt(DirectLight, directColor, currWeight);
         IndirectLight = LerpPackedColorAlt(IndirectLight, bounceColor, currWeight);
@@ -737,12 +868,13 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
             uint sunvis = 0;
 
-            FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, skyvis_pznzpynyx.z, skyvis_pxnxs0s1.z);
-            FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, skyvis_pznzpynyx.w, sunvis);
-            FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, skyvis_pxnxs0s1.x, sunvis);
-            FaceTask(tracer, origin, float3(-1, 0, 0), iterate, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, skyvis_pxnxs0s1.y, sunvis);
-            FaceTask(tracer, origin, float3(0, 0, 1), iterate, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, skyvis_pznzpynyx.x, sunvis);
-            FaceTask(tracer, origin, float3(0, 0, -1), iterate, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, skyvis_pznzpynyx.y, sunvis);
+            uint bakeCascadeIndex = Bindless.GetGpuscene().custom_data_1;
+            FaceTask(tracer, origin, float3(0, 1, 0), iterate, bakeCascadeIndex, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, skyvis_pznzpynyx.z, skyvis_pxnxs0s1.z);
+            FaceTask(tracer, origin, float3(0, -1, 0), iterate, bakeCascadeIndex, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, skyvis_pznzpynyx.w, sunvis);
+            FaceTask(tracer, origin, float3(1, 0, 0), iterate, bakeCascadeIndex, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, skyvis_pxnxs0s1.x, sunvis);
+            FaceTask(tracer, origin, float3(-1, 0, 0), iterate, bakeCascadeIndex, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, skyvis_pxnxs0s1.y, sunvis);
+            FaceTask(tracer, origin, float3(0, 0, 1), iterate, bakeCascadeIndex, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, skyvis_pznzpynyx.x, sunvis);
+            FaceTask(tracer, origin, float3(0, 0, -1), iterate, bakeCascadeIndex, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, skyvis_pznzpynyx.y, sunvis);
 
             Cubes[CubeIdx].skyVisibility_pznzpyny = pack_bytes(skyvis_pznzpynyx);
             Cubes[CubeIdx].skyVisibility_pxnxs0s1 = pack_bytes(skyvis_pxnxs0s1);
@@ -765,15 +897,179 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
             uint sunvis = 0;
 
-            FaceTask(tracer, origin, float3(0, 1, 0), iterate, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, skyvis_pznzpynyx.z, skyvis_pxnxs0s1.z);
-            FaceTask(tracer, origin, float3(0, -1, 0), iterate, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, skyvis_pznzpynyx.w, sunvis);
-            FaceTask(tracer, origin, float3(1, 0, 0), iterate, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, skyvis_pxnxs0s1.x, sunvis);
-            FaceTask(tracer, origin, float3(-1, 0, 0), iterate, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, skyvis_pxnxs0s1.y, sunvis);
-            FaceTask(tracer, origin, float3(0, 0, 1), iterate, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, skyvis_pznzpynyx.x, sunvis);
-            FaceTask(tracer, origin, float3(0, 0, -1), iterate, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, skyvis_pznzpynyx.y, sunvis);
+            uint bakeCascadeIndex = Bindless.GetGpuscene().custom_data_1;
+            FaceTask(tracer, origin, float3(0, 1, 0), iterate, bakeCascadeIndex, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, skyvis_pznzpynyx.z, skyvis_pxnxs0s1.z);
+            FaceTask(tracer, origin, float3(0, -1, 0), iterate, bakeCascadeIndex, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, skyvis_pznzpynyx.w, sunvis);
+            FaceTask(tracer, origin, float3(1, 0, 0), iterate, bakeCascadeIndex, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, skyvis_pxnxs0s1.x, sunvis);
+            FaceTask(tracer, origin, float3(-1, 0, 0), iterate, bakeCascadeIndex, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, skyvis_pxnxs0s1.y, sunvis);
+            FaceTask(tracer, origin, float3(0, 0, 1), iterate, bakeCascadeIndex, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, skyvis_pznzpynyx.x, sunvis);
+            FaceTask(tracer, origin, float3(0, 0, -1), iterate, bakeCascadeIndex, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, skyvis_pznzpynyx.y, sunvis);
 
             Cubes[CubeIdx].skyVisibility_pznzpyny = pack_bytes(skyvis_pznzpynyx);
             Cubes[CubeIdx].skyVisibility_pxnxs0s1 = pack_bytes(skyvis_pxnxs0s1);
         }
+    }
+
+    // Gather the bounce contribution arriving at a voxel face from the axis neighbor in that face direction.
+    // The propagation pass updates only the bounce channel and keeps traced primary lighting untouched.
+    float3 GatherPropagationFace(int3 localPos, uint faceIdx, uint cascadeBase, VoxelData V_data)
+    {
+        AmbientCube* CubesPong = Bindless.GetGpuscene().CubesPong;
+        VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
+
+        int3 dir = int3(cubeVectors[faceIdx]);
+        int3 neighborPos = localPos + dir;
+        float faceVisibility = GetVoxelFaceVisibilityByIdx(V_data, faceIdx);
+
+        if (faceVisibility <= 0.001f)
+        {
+            return float3(0.0);
+        }
+
+        if (neighborPos.x < 0 || neighborPos.x >= CUBE_SIZE_XY ||
+            neighborPos.y < 0 || neighborPos.y >= CUBE_SIZE_Z ||
+            neighborPos.z < 0 || neighborPos.z >= CUBE_SIZE_XY)
+        {
+            return float3(0.0);
+        }
+
+        uint neighborLocalIdx =
+            uint(neighborPos.y) * CUBE_SIZE_XY * CUBE_SIZE_XY +
+            uint(neighborPos.z) * CUBE_SIZE_XY +
+            uint(neighborPos.x);
+
+        VoxelData N_data = Voxels[cascadeBase + neighborLocalIdx];
+        AmbientCube N_prev = CubesPong[neighborLocalIdx];
+        uint oppositeFace = faceIdx ^ 1u;
+
+        if (N_data.matId == 0)
+        {
+            // Empty neighbor: only transmit the previous bounce field, attenuated by the
+            // shared-interface visibility on both voxels to reduce thin-wall and corner leaks.
+            float neighborFaceVisibility = GetVoxelFaceVisibilityByIdx(N_data, oppositeFace);
+            float transport = saturate(faceVisibility * neighborFaceVisibility);
+            float3 bounce = UnpackColor(GetFaceBounceByIdx(N_prev, faceIdx)).rgb;
+            return bounce * transport * kPropagationAirTransport;
+        }
+
+        // Surface neighbor: sample the neighbor cache instead of feeding V back into itself.
+        Material mat = Bindless.GetGpuscene().GetMaterial(N_data.matId);
+        float3 albedo = mat.Diffuse.rgb;
+        float neighborFaceVisibility = GetVoxelFaceVisibilityByIdx(N_data, oppositeFace);
+        float transport = saturate(faceVisibility * max(neighborFaceVisibility, 0.25f));
+        float3 incident = UnpackColor(GetFaceBounceByIdx(N_prev, oppositeFace)).rgb;
+        float3 reflected = albedo * incident;
+        return reflected * transport * kPropagationSurfaceTransport;
+    }
+
+    // Emissive surfaces are injected separately so transport can stay a pure gather step.
+    float3 GatherPropagationInjectionFace(int3 localPos, uint faceIdx, uint cascadeBase, VoxelData V_data)
+    {
+        VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
+
+        int3 dir = int3(cubeVectors[faceIdx]);
+        int3 neighborPos = localPos + dir;
+        float faceVisibility = GetVoxelFaceVisibilityByIdx(V_data, faceIdx);
+
+        if (faceVisibility <= 0.001f ||
+            neighborPos.x < 0 || neighborPos.x >= CUBE_SIZE_XY ||
+            neighborPos.y < 0 || neighborPos.y >= CUBE_SIZE_Z ||
+            neighborPos.z < 0 || neighborPos.z >= CUBE_SIZE_XY)
+        {
+            return float3(0.0);
+        }
+
+        uint neighborLocalIdx =
+            uint(neighborPos.y) * CUBE_SIZE_XY * CUBE_SIZE_XY +
+            uint(neighborPos.z) * CUBE_SIZE_XY +
+            uint(neighborPos.x);
+
+        VoxelData N_data = Voxels[cascadeBase + neighborLocalIdx];
+        if (N_data.matId == 0u)
+        {
+            return float3(0.0);
+        }
+
+        Material mat = Bindless.GetGpuscene().GetMaterial(N_data.matId);
+        if (mat.MaterialModel != MaterialDiffuseLight)
+        {
+            return float3(0.0);
+        }
+
+        uint oppositeFace = faceIdx ^ 1u;
+        float neighborFaceVisibility = GetVoxelFaceVisibilityByIdx(N_data, oppositeFace);
+        float transport = saturate(faceVisibility * max(neighborFaceVisibility, 0.25f));
+        return mat.Diffuse.rgb * transport;
+    }
+
+    // Propagation-based alternative to RenderAmbientCubeOnly: writes only the *_D (bounce)
+    // channels by gathering from 6 axis neighbors in the same cascade. Primary/sky channels remain
+    // untouched, populated by the lower-frequency tracing bake.
+    public void RenderAmbientCubeByPropagation(uint CubeIdx, uint cascadeIndex, int3 localPos)
+    {
+        AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
+        VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
+
+        uint cascadeBase = GetCascadeBaseOffset(cascadeIndex);
+
+        VoxelData V_data = Voxels[CubeIdx];
+        uint4 upacked = unpack_bytes(V_data.distanceToSolid_gg_z01);
+
+        // Only propagate on empty near-surface voxels; solid-voxel cubes keep their trace-bake values.
+        if (upacked.x >= 16u || V_data.matId != 0u)
+        {
+            return;
+        }
+
+        float3 PY = GatherPropagationFace(localPos, 0u, cascadeBase, V_data);
+        float3 NY = GatherPropagationFace(localPos, 1u, cascadeBase, V_data);
+        float3 PZ = GatherPropagationFace(localPos, 2u, cascadeBase, V_data);
+        float3 NZ = GatherPropagationFace(localPos, 3u, cascadeBase, V_data);
+        float3 PX = GatherPropagationFace(localPos, 4u, cascadeBase, V_data);
+        float3 NX = GatherPropagationFace(localPos, 5u, cascadeBase, V_data);
+
+        Cubes[CubeIdx].PosY_D = packRGB10A2(float4(PY, 0.0));
+        Cubes[CubeIdx].NegY_D = packRGB10A2(float4(NY, 0.0));
+        Cubes[CubeIdx].PosZ_D = packRGB10A2(float4(PZ, 0.0));
+        Cubes[CubeIdx].NegZ_D = packRGB10A2(float4(NZ, 0.0));
+        Cubes[CubeIdx].PosX_D = packRGB10A2(float4(PX, 0.0));
+        Cubes[CubeIdx].NegX_D = packRGB10A2(float4(NX, 0.0));
+    }
+
+    // Injection seeds the propagation field from adjacent emissive surfaces.
+    public void InjectAmbientCubePropagation(uint CubeIdx, uint cascadeIndex, int3 localPos)
+    {
+        AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
+        VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
+
+        uint cascadeBase = GetCascadeBaseOffset(cascadeIndex);
+        VoxelData V_data = Voxels[CubeIdx];
+        uint4 upacked = unpack_bytes(V_data.distanceToSolid_gg_z01);
+
+        if (upacked.x >= 16u || V_data.matId != 0u)
+        {
+            return;
+        }
+
+        float3 PY = GatherPropagationInjectionFace(localPos, 0u, cascadeBase, V_data);
+        float3 NY = GatherPropagationInjectionFace(localPos, 1u, cascadeBase, V_data);
+        float3 PZ = GatherPropagationInjectionFace(localPos, 2u, cascadeBase, V_data);
+        float3 NZ = GatherPropagationInjectionFace(localPos, 3u, cascadeBase, V_data);
+        float3 PX = GatherPropagationInjectionFace(localPos, 4u, cascadeBase, V_data);
+        float3 NX = GatherPropagationInjectionFace(localPos, 5u, cascadeBase, V_data);
+
+        float3 curPY = UnpackColor(Cubes[CubeIdx].PosY_D).rgb;
+        float3 curNY = UnpackColor(Cubes[CubeIdx].NegY_D).rgb;
+        float3 curPZ = UnpackColor(Cubes[CubeIdx].PosZ_D).rgb;
+        float3 curNZ = UnpackColor(Cubes[CubeIdx].NegZ_D).rgb;
+        float3 curPX = UnpackColor(Cubes[CubeIdx].PosX_D).rgb;
+        float3 curNX = UnpackColor(Cubes[CubeIdx].NegX_D).rgb;
+
+        Cubes[CubeIdx].PosY_D = packRGB10A2(float4(curPY + PY, 0.0));
+        Cubes[CubeIdx].NegY_D = packRGB10A2(float4(curNY + NY, 0.0));
+        Cubes[CubeIdx].PosZ_D = packRGB10A2(float4(curPZ + PZ, 0.0));
+        Cubes[CubeIdx].NegZ_D = packRGB10A2(float4(curNZ + NZ, 0.0));
+        Cubes[CubeIdx].PosX_D = packRGB10A2(float4(curPX + PX, 0.0));
+        Cubes[CubeIdx].NegX_D = packRGB10A2(float4(curNX + NX, 0.0));
     }
 }
