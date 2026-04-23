@@ -189,6 +189,31 @@ uint LerpPackedColorAlt(uint c0, float4 c1, float t)
     return PackColor(lerp(color0, color1, t));
 }
 
+float4 sampleAmbientCubeHL2_ID(AmbientCube cube, float3 normal)
+{
+    float4 color = float4(0.0, 0.0, 0.0, 0.0);
+    float sum = 0.0;
+
+    float wx = max(normal.x, 0.0f);
+    float wnx = max(-normal.x, 0.0f);
+    float wy = max(normal.y, 0.0f);
+    float wny = max(-normal.y, 0.0f);
+    float wz = max(normal.z, 0.0f);
+    float wnz = max(-normal.z, 0.0f);
+
+    sum = wx + wnx + wy + wny + wz + wnz;
+
+    color += wx * UnpackColor(cube.PosX);
+    color += wnx * UnpackColor(cube.NegX);
+    color += wy * UnpackColor(cube.PosY);
+    color += wny * UnpackColor(cube.NegY);
+    color += wz * UnpackColor(cube.PosZ);
+    color += wnz * UnpackColor(cube.NegZ);
+
+    color *= (sum > 0.0) ? (1.0 / sum) : 1.0;
+    return color;
+}
+
 float4 sampleAmbientCubeHL2_DI(AmbientCube cube, float3 normal)
 {
     float4 color = float4(0.0, 0.0, 0.0, 0.0);
@@ -291,6 +316,9 @@ interface IAmbientCubeSampler
     static float4 Sample(AmbientCube cube, float3 normal);
 }
 
+
+
+
 public struct FullAmbientCubeSampler : IAmbientCubeSampler
 {
     static float4 Sample(AmbientCube cube, float3 normal)
@@ -312,6 +340,14 @@ public struct LightCacheAmbientCubeSampler : IAmbientCubeSampler
     static float4 Sample(AmbientCube cube, float3 normal)
     {
         return sampleAmbientCubeHL2_LightCache(cube, normal);
+    }
+};
+
+public struct IDAmbientCubeSampler : IAmbientCubeSampler
+{
+    static float4 Sample(AmbientCube cube, float3 normal)
+    {
+        return sampleAmbientCubeHL2_ID(cube, normal);
     }
 };
 
@@ -652,7 +688,7 @@ public interface IProbeGenerator
 // Axis-face indexing convention for propagation:
 // 0:+Y  1:-Y  2:+Z  3:-Z  4:+X  5:-X
 // Opposite face index = face ^ 1
-uint GetFaceBounceByIdx(AmbientCube cube, uint faceIdx)
+uint GetFaceDirectByIdx(AmbientCube cube, uint faceIdx)
 {
     if (faceIdx == 0) return cube.PosY_D;
     if (faceIdx == 1) return cube.NegY_D;
@@ -660,6 +696,16 @@ uint GetFaceBounceByIdx(AmbientCube cube, uint faceIdx)
     if (faceIdx == 3) return cube.NegZ_D;
     if (faceIdx == 4) return cube.PosX_D;
     return cube.NegX_D;
+}
+
+uint GetFaceIndirectByIdx(AmbientCube cube, uint faceIdx)
+{
+    if (faceIdx == 0) return cube.PosY;
+    if (faceIdx == 1) return cube.NegY;
+    if (faceIdx == 2) return cube.PosZ;
+    if (faceIdx == 3) return cube.NegZ;
+    if (faceIdx == 4) return cube.PosX;
+    return cube.NegX;
 }
 
 float GetVoxelFaceVisibilityByIdx(VoxelData voxel, uint faceIdx)
@@ -677,6 +723,19 @@ float GetVoxelFaceVisibilityByIdx(VoxelData voxel, uint faceIdx)
 
 static const float kPropagationAirTransport = 0.95f;
 static const float kPropagationSurfaceTransport = 0.9f;
+static const float kPropagationCrossFaceMix = 0.35f;
+
+float3 GetIndirectAverage(AmbientCube cube)
+{
+    float3 sum = float3(0.0);
+    sum += UnpackColor(cube.PosY).rgb;
+    sum += UnpackColor(cube.NegY).rgb;
+    sum += UnpackColor(cube.PosZ).rgb;
+    sum += UnpackColor(cube.NegZ).rgb;
+    sum += UnpackColor(cube.PosX).rgb;
+    sum += UnpackColor(cube.NegX).rgb;
+    return sum * (1.0f / 6.0f);
+}
 
 public struct FGpuProbeGenerator : IProbeGenerator
 {
@@ -687,7 +746,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         return Lights[lightIdx];
     }
 
-    bool FaceTask(IRayTracer tracer, float3 origin, float3 basis, uint iterate, uint bakeCascadeIndex, inout uint DirectLight, inout uint IndirectLight, inout uint SkyVisOut, inout uint SunVisOut)
+    bool FaceTask(IRayTracer tracer, float3 origin, float3 basis, uint iterate, uint bakeCascadeIndex, bool directOnly, inout uint DirectLight, inout uint IndirectLight, inout uint SkyVisOut, inout uint SunVisOut)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
         float cubeUnit = GetAmbientCubeUnit();
@@ -714,14 +773,17 @@ public struct FGpuProbeGenerator : IProbeGenerator
             float hitDist = 0;
             if (tracer.TraceRay(origin, rayDir, FAST_MAX_TRACE_DISTANCE, hitVertex, hitNode, tempColor, hitDist))
             {
-                Material hitMaterial = Bindless.GetGpuscene().GetMaterial(hitVertex.MaterialIndex);
-                float4 outAlbedo = hitMaterial.Diffuse;
-                if (hitMaterial.DiffuseTextureId >= 0)
+                if (!directOnly)
                 {
-                    float4 tex = Bindless.GetSampleTexture(hitMaterial.DiffuseTextureId).SampleLevel(hitVertex.TexCoord, 0);
-                    outAlbedo *= tex;
+                    Material hitMaterial = Bindless.GetGpuscene().GetMaterial(hitVertex.MaterialIndex);
+                    float4 outAlbedo = hitMaterial.Diffuse;
+                    if (hitMaterial.DiffuseTextureId >= 0)
+                    {
+                        float4 tex = Bindless.GetSampleTexture(hitMaterial.DiffuseTextureId).SampleLevel(hitVertex.TexCoord, 0);
+                        outAlbedo *= tex;
+                    }
+                    bounceColor += outAlbedo * interpolateAmbientCubesStableV2<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, bakeCascadeIndex) * 1.25f; // magic bounce twice
                 }
-                bounceColor += outAlbedo * interpolateAmbientCubesStableV2<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, bakeCascadeIndex) * 1.25f; // magic bounce twice
             }
             else
             {
@@ -734,7 +796,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         bounceColor = bounceColor / float(FACE_TRACING_COUNT);
 
         // 参数光源，目前只取了一盏光源
-        if (Camera.LightCount > 0)
+        if (!directOnly && Camera.LightCount > 0)
         {
             float4 lightPower = float4(0.0);
             LightObject light = FetchLight(0, lightPower);
@@ -762,7 +824,10 @@ public struct FGpuProbeGenerator : IProbeGenerator
         float currWeight = 1.0f / accumulatedFrames;
         SkyVisOut = uint(lerp(float(SkyVisOut), 255.0 * skyVisibility / float(FACE_TRACING_COUNT), currWeight));
         DirectLight = LerpPackedColorAlt(DirectLight, directColor, currWeight);
-        IndirectLight = LerpPackedColorAlt(IndirectLight, bounceColor, currWeight);
+        if (!directOnly)
+        {
+            IndirectLight = LerpPackedColorAlt(IndirectLight, bounceColor, currWeight);
+        }
         return false;
     }
 
@@ -869,12 +934,13 @@ public struct FGpuProbeGenerator : IProbeGenerator
             uint sunvis = 0;
 
             uint bakeCascadeIndex = Bindless.GetGpuscene().custom_data_1;
-            FaceTask(tracer, origin, float3(0, 1, 0), iterate, bakeCascadeIndex, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, skyvis_pznzpynyx.z, skyvis_pxnxs0s1.z);
-            FaceTask(tracer, origin, float3(0, -1, 0), iterate, bakeCascadeIndex, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, skyvis_pznzpynyx.w, sunvis);
-            FaceTask(tracer, origin, float3(1, 0, 0), iterate, bakeCascadeIndex, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, skyvis_pxnxs0s1.x, sunvis);
-            FaceTask(tracer, origin, float3(-1, 0, 0), iterate, bakeCascadeIndex, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, skyvis_pxnxs0s1.y, sunvis);
-            FaceTask(tracer, origin, float3(0, 0, 1), iterate, bakeCascadeIndex, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, skyvis_pznzpynyx.x, sunvis);
-            FaceTask(tracer, origin, float3(0, 0, -1), iterate, bakeCascadeIndex, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, skyvis_pznzpynyx.y, sunvis);
+            bool directOnly = Bindless.GetGpuscene().custom_data_2 != 0u;
+            FaceTask(tracer, origin, float3(0, 1, 0), iterate, bakeCascadeIndex, directOnly, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, skyvis_pznzpynyx.z, skyvis_pxnxs0s1.z);
+            FaceTask(tracer, origin, float3(0, -1, 0), iterate, bakeCascadeIndex, directOnly, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, skyvis_pznzpynyx.w, sunvis);
+            FaceTask(tracer, origin, float3(1, 0, 0), iterate, bakeCascadeIndex, directOnly, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, skyvis_pxnxs0s1.x, sunvis);
+            FaceTask(tracer, origin, float3(-1, 0, 0), iterate, bakeCascadeIndex, directOnly, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, skyvis_pxnxs0s1.y, sunvis);
+            FaceTask(tracer, origin, float3(0, 0, 1), iterate, bakeCascadeIndex, directOnly, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, skyvis_pznzpynyx.x, sunvis);
+            FaceTask(tracer, origin, float3(0, 0, -1), iterate, bakeCascadeIndex, directOnly, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, skyvis_pznzpynyx.y, sunvis);
 
             Cubes[CubeIdx].skyVisibility_pznzpyny = pack_bytes(skyvis_pznzpynyx);
             Cubes[CubeIdx].skyVisibility_pxnxs0s1 = pack_bytes(skyvis_pxnxs0s1);
@@ -898,12 +964,13 @@ public struct FGpuProbeGenerator : IProbeGenerator
             uint sunvis = 0;
 
             uint bakeCascadeIndex = Bindless.GetGpuscene().custom_data_1;
-            FaceTask(tracer, origin, float3(0, 1, 0), iterate, bakeCascadeIndex, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, skyvis_pznzpynyx.z, skyvis_pxnxs0s1.z);
-            FaceTask(tracer, origin, float3(0, -1, 0), iterate, bakeCascadeIndex, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, skyvis_pznzpynyx.w, sunvis);
-            FaceTask(tracer, origin, float3(1, 0, 0), iterate, bakeCascadeIndex, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, skyvis_pxnxs0s1.x, sunvis);
-            FaceTask(tracer, origin, float3(-1, 0, 0), iterate, bakeCascadeIndex, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, skyvis_pxnxs0s1.y, sunvis);
-            FaceTask(tracer, origin, float3(0, 0, 1), iterate, bakeCascadeIndex, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, skyvis_pznzpynyx.x, sunvis);
-            FaceTask(tracer, origin, float3(0, 0, -1), iterate, bakeCascadeIndex, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, skyvis_pznzpynyx.y, sunvis);
+            bool directOnly = Bindless.GetGpuscene().custom_data_2 != 0u;
+            FaceTask(tracer, origin, float3(0, 1, 0), iterate, bakeCascadeIndex, directOnly, Cubes[CubeIdx].PosY_D, Cubes[CubeIdx].PosY, skyvis_pznzpynyx.z, skyvis_pxnxs0s1.z);
+            FaceTask(tracer, origin, float3(0, -1, 0), iterate, bakeCascadeIndex, directOnly, Cubes[CubeIdx].NegY_D, Cubes[CubeIdx].NegY, skyvis_pznzpynyx.w, sunvis);
+            FaceTask(tracer, origin, float3(1, 0, 0), iterate, bakeCascadeIndex, directOnly, Cubes[CubeIdx].PosX_D, Cubes[CubeIdx].PosX, skyvis_pxnxs0s1.x, sunvis);
+            FaceTask(tracer, origin, float3(-1, 0, 0), iterate, bakeCascadeIndex, directOnly, Cubes[CubeIdx].NegX_D, Cubes[CubeIdx].NegX, skyvis_pxnxs0s1.y, sunvis);
+            FaceTask(tracer, origin, float3(0, 0, 1), iterate, bakeCascadeIndex, directOnly, Cubes[CubeIdx].PosZ_D, Cubes[CubeIdx].PosZ, skyvis_pznzpynyx.x, sunvis);
+            FaceTask(tracer, origin, float3(0, 0, -1), iterate, bakeCascadeIndex, directOnly, Cubes[CubeIdx].NegZ_D, Cubes[CubeIdx].NegZ, skyvis_pznzpynyx.y, sunvis);
 
             Cubes[CubeIdx].skyVisibility_pznzpyny = pack_bytes(skyvis_pznzpynyx);
             Cubes[CubeIdx].skyVisibility_pxnxs0s1 = pack_bytes(skyvis_pxnxs0s1);
@@ -944,12 +1011,13 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
         if (N_data.matId == 0)
         {
-            // Empty neighbor: only transmit the previous bounce field, attenuated by the
-            // shared-interface visibility on both voxels to reduce thin-wall and corner leaks.
+            // Empty neighbor: transport the previous indirect field with finite air loss.
+            // A small cross-face mix lets wall bounce redistribute without flooding open floors.
             float neighborFaceVisibility = GetVoxelFaceVisibilityByIdx(N_data, oppositeFace);
             float transport = saturate(faceVisibility * neighborFaceVisibility);
-            float3 bounce = UnpackColor(GetFaceBounceByIdx(N_prev, faceIdx)).rgb;
-            return bounce * transport * kPropagationAirTransport;
+            float3 sameFaceIndirect = UnpackColor(GetFaceIndirectByIdx(N_prev, faceIdx)).rgb;
+            float3 mixedIndirect = lerp(sameFaceIndirect, GetIndirectAverage(N_prev), kPropagationCrossFaceMix);
+            return mixedIndirect * transport * kPropagationAirTransport;
         }
 
         // Surface neighbor: sample the neighbor cache instead of feeding V back into itself.
@@ -957,7 +1025,9 @@ public struct FGpuProbeGenerator : IProbeGenerator
         float3 albedo = mat.Diffuse.rgb;
         float neighborFaceVisibility = GetVoxelFaceVisibilityByIdx(N_data, oppositeFace);
         float transport = saturate(faceVisibility * max(neighborFaceVisibility, 0.25f));
-        float3 incident = UnpackColor(GetFaceBounceByIdx(N_prev, oppositeFace)).rgb;
+        float3 direct = UnpackColor(GetFaceDirectByIdx(N_prev, oppositeFace)).rgb;
+        float3 indirect = UnpackColor(GetFaceIndirectByIdx(N_prev, oppositeFace)).rgb;
+        float3 incident = direct + indirect;
         float3 reflected = albedo * incident;
         return reflected * transport * kPropagationSurfaceTransport;
     }
@@ -1002,9 +1072,9 @@ public struct FGpuProbeGenerator : IProbeGenerator
         return mat.Diffuse.rgb * transport;
     }
 
-    // Propagation-based alternative to RenderAmbientCubeOnly: writes only the *_D (bounce)
-    // channels by gathering from 6 axis neighbors in the same cascade. Primary/sky channels remain
-    // untouched, populated by the lower-frequency tracing bake.
+    // Propagation-based alternative to tracing bounce: writes only the indirect channels
+    // by gathering from 6 axis neighbors in the same cascade. Direct/sky channels remain
+    // untouched, populated by the lower-frequency direct tracing bake.
     public void RenderAmbientCubeByPropagation(uint CubeIdx, uint cascadeIndex, int3 localPos)
     {
         AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
@@ -1015,8 +1085,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
         VoxelData V_data = Voxels[CubeIdx];
         uint4 upacked = unpack_bytes(V_data.distanceToSolid_gg_z01);
 
-        // Only propagate on empty near-surface voxels; solid-voxel cubes keep their trace-bake values.
-        if (upacked.x >= 16u || V_data.matId != 0u)
+        if (upacked.x >= 16u)
         {
             return;
         }
@@ -1028,12 +1097,12 @@ public struct FGpuProbeGenerator : IProbeGenerator
         float3 PX = GatherPropagationFace(localPos, 4u, cascadeBase, V_data);
         float3 NX = GatherPropagationFace(localPos, 5u, cascadeBase, V_data);
 
-        Cubes[CubeIdx].PosY_D = packRGB10A2(float4(PY, 0.0));
-        Cubes[CubeIdx].NegY_D = packRGB10A2(float4(NY, 0.0));
-        Cubes[CubeIdx].PosZ_D = packRGB10A2(float4(PZ, 0.0));
-        Cubes[CubeIdx].NegZ_D = packRGB10A2(float4(NZ, 0.0));
-        Cubes[CubeIdx].PosX_D = packRGB10A2(float4(PX, 0.0));
-        Cubes[CubeIdx].NegX_D = packRGB10A2(float4(NX, 0.0));
+        Cubes[CubeIdx].PosY = packRGB10A2(float4(PY, 0.0));
+        Cubes[CubeIdx].NegY = packRGB10A2(float4(NY, 0.0));
+        Cubes[CubeIdx].PosZ = packRGB10A2(float4(PZ, 0.0));
+        Cubes[CubeIdx].NegZ = packRGB10A2(float4(NZ, 0.0));
+        Cubes[CubeIdx].PosX = packRGB10A2(float4(PX, 0.0));
+        Cubes[CubeIdx].NegX = packRGB10A2(float4(NX, 0.0));
     }
 
     // Injection seeds the propagation field from adjacent emissive surfaces.
@@ -1058,18 +1127,18 @@ public struct FGpuProbeGenerator : IProbeGenerator
         float3 PX = GatherPropagationInjectionFace(localPos, 4u, cascadeBase, V_data);
         float3 NX = GatherPropagationInjectionFace(localPos, 5u, cascadeBase, V_data);
 
-        float3 curPY = UnpackColor(Cubes[CubeIdx].PosY_D).rgb;
-        float3 curNY = UnpackColor(Cubes[CubeIdx].NegY_D).rgb;
-        float3 curPZ = UnpackColor(Cubes[CubeIdx].PosZ_D).rgb;
-        float3 curNZ = UnpackColor(Cubes[CubeIdx].NegZ_D).rgb;
-        float3 curPX = UnpackColor(Cubes[CubeIdx].PosX_D).rgb;
-        float3 curNX = UnpackColor(Cubes[CubeIdx].NegX_D).rgb;
+        float3 curPY = UnpackColor(Cubes[CubeIdx].PosY).rgb;
+        float3 curNY = UnpackColor(Cubes[CubeIdx].NegY).rgb;
+        float3 curPZ = UnpackColor(Cubes[CubeIdx].PosZ).rgb;
+        float3 curNZ = UnpackColor(Cubes[CubeIdx].NegZ).rgb;
+        float3 curPX = UnpackColor(Cubes[CubeIdx].PosX).rgb;
+        float3 curNX = UnpackColor(Cubes[CubeIdx].NegX).rgb;
 
-        Cubes[CubeIdx].PosY_D = packRGB10A2(float4(curPY + PY, 0.0));
-        Cubes[CubeIdx].NegY_D = packRGB10A2(float4(curNY + NY, 0.0));
-        Cubes[CubeIdx].PosZ_D = packRGB10A2(float4(curPZ + PZ, 0.0));
-        Cubes[CubeIdx].NegZ_D = packRGB10A2(float4(curNZ + NZ, 0.0));
-        Cubes[CubeIdx].PosX_D = packRGB10A2(float4(curPX + PX, 0.0));
-        Cubes[CubeIdx].NegX_D = packRGB10A2(float4(curNX + NX, 0.0));
+        Cubes[CubeIdx].PosY = packRGB10A2(float4(curPY + PY, 0.0));
+        Cubes[CubeIdx].NegY = packRGB10A2(float4(curNY + NY, 0.0));
+        Cubes[CubeIdx].PosZ = packRGB10A2(float4(curPZ + PZ, 0.0));
+        Cubes[CubeIdx].NegZ = packRGB10A2(float4(curNZ + NZ, 0.0));
+        Cubes[CubeIdx].PosX = packRGB10A2(float4(curPX + PX, 0.0));
+        Cubes[CubeIdx].NegX = packRGB10A2(float4(curNX + NX, 0.0));
     }
 }

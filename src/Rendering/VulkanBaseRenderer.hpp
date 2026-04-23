@@ -175,6 +175,7 @@ namespace Vulkan
 		uint32_t tempStorageImageCreated_ {};
 
 		void UpdateSkinningBuffers();
+		void BakeAmbientCubePropagation(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 	    
 	    std::vector<uint32_t> skinModelUpdateRequests_;
 

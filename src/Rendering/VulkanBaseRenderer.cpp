@@ -1536,6 +1536,112 @@ namespace Vulkan
         }
     }
 
+    void VulkanBaseRenderer::BakeAmbientCubePropagation(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+    {
+        SCOPED_GPU_TIMER("propagation-lightbake");
+
+        const int cubesPerGroup = 64;
+        const int perCascadeCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
+        const int group = perCascadeCount / cubesPerGroup;
+        const uint32_t cascadeCount = Assets::SanitizeAmbientCubeCascadeCount(
+            NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount);
+        const uint32_t safeCascadeCount = std::max(1u, cascadeCount);
+        const uint32_t cascadeIndex = static_cast<uint32_t>(frameCount_ % safeCascadeCount);
+        const uint32_t cascadeBaseOffset = cascadeIndex * static_cast<uint32_t>(perCascadeCount);
+
+        VkBuffer cubeBuffer = GetScene().AmbientCubeBuffer().Handle();
+        VkBuffer pongBuffer = GetScene().AmbientCubePongBuffer().Handle();
+        const VkDeviceSize cascadeByteOffset = static_cast<VkDeviceSize>(cascadeBaseOffset) * sizeof(Assets::AmbientCube);
+        const VkDeviceSize cascadeByteSize = static_cast<VkDeviceSize>(perCascadeCount) * sizeof(Assets::AmbientCube);
+
+        VkBufferMemoryBarrier preCopyBarrier{};
+        preCopyBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        preCopyBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        preCopyBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        preCopyBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        preCopyBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        preCopyBarrier.buffer = cubeBuffer;
+        preCopyBarrier.offset = cascadeByteOffset;
+        preCopyBarrier.size = cascadeByteSize;
+        vkCmdPipelineBarrier(commandBuffer,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0, 0, nullptr, 1, &preCopyBarrier, 0, nullptr);
+
+        VkBufferCopy copyRegion{};
+        copyRegion.srcOffset = cascadeByteOffset;
+        copyRegion.dstOffset = 0;
+        copyRegion.size = cascadeByteSize;
+        vkCmdCopyBuffer(commandBuffer, cubeBuffer, pongBuffer, 1, &copyRegion);
+
+        VkBufferMemoryBarrier postCopyBarriers[2]{};
+        postCopyBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        postCopyBarriers[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        postCopyBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        postCopyBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        postCopyBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        postCopyBarriers[0].buffer = pongBuffer;
+        postCopyBarriers[0].offset = 0;
+        postCopyBarriers[0].size = cascadeByteSize;
+        postCopyBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        postCopyBarriers[1].srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        postCopyBarriers[1].dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+        postCopyBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        postCopyBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        postCopyBarriers[1].buffer = cubeBuffer;
+        postCopyBarriers[1].offset = cascadeByteOffset;
+        postCopyBarriers[1].size = cascadeByteSize;
+        vkCmdPipelineBarrier(commandBuffer,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            0, 0, nullptr, 2, postCopyBarriers, 0, nullptr);
+
+        propagationAmbientCubeGenPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+
+        Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
+        gpuScene.custom_data_0 = cascadeBaseOffset;
+        gpuScene.custom_data_1 = cascadeIndex;
+        gpuScene.custom_data_2 = 0;
+
+        VkPipelineLayout layout = propagationAmbientCubeGenPipeline_->PipelineLayout().Handle();
+        vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
+                           0, sizeof(Assets::GPUScene), &gpuScene);
+
+        vkCmdDispatch(commandBuffer, group, 1, 1);
+
+        VkBufferMemoryBarrier propagationToInjectionBarrier{};
+        propagationToInjectionBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        propagationToInjectionBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        propagationToInjectionBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        propagationToInjectionBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        propagationToInjectionBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        propagationToInjectionBarrier.buffer = cubeBuffer;
+        propagationToInjectionBarrier.offset = cascadeByteOffset;
+        propagationToInjectionBarrier.size = cascadeByteSize;
+        vkCmdPipelineBarrier(commandBuffer,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            0, 0, nullptr, 1, &propagationToInjectionBarrier, 0, nullptr);
+
+        injectAmbientCubeGenPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+
+        layout = injectAmbientCubeGenPipeline_->PipelineLayout().Handle();
+        vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
+                           0, sizeof(Assets::GPUScene), &gpuScene);
+
+        vkCmdDispatch(commandBuffer, group, 1, 1);
+
+        VkBufferMemoryBarrier postInjectionBarrier{};
+        postInjectionBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        postInjectionBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        postInjectionBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        postInjectionBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        postInjectionBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        postInjectionBarrier.buffer = cubeBuffer;
+        postInjectionBarrier.offset = cascadeByteOffset;
+        postInjectionBarrier.size = cascadeByteSize;
+        vkCmdPipelineBarrier(commandBuffer,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            0, 0, nullptr, 1, &postInjectionBarrier, 0, nullptr);
+    }
+
     void VulkanBaseRenderer::PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         //if (NextEngine::GetInstance()->IsProgressiveRendering())  return;
@@ -1745,6 +1851,7 @@ namespace Vulkan
                     Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
                     gpuScene.custom_data_0 = cascadeBaseOffset + offsetInCubes;
                     gpuScene.custom_data_1 = cascadeIndex;
+                    gpuScene.custom_data_2 = NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation ? 1u : 0u;
 
                     VkPipelineLayout layout = softAmbientCubeGenPipeline_->PipelineLayout().Handle();
                     vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
@@ -1755,118 +1862,11 @@ namespace Vulkan
             }
         }
 
-        // Propagation-based bounce bake plus a separate emissive injection pass.
-        // Runs after the tracing bake so trace-populated skyVis/direct channels survive.
-        if (NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation &&
+        if ((!supportRayTracing_ || GOption->ForceSoftGen) &&
+            NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation &&
             NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel != 2)
         {
-            SCOPED_GPU_TIMER("propagation-lightbake");
-
-            const int cubesPerGroup = 64;
-            const int perCascadeCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
-            const int group = perCascadeCount / cubesPerGroup;
-            const uint32_t cascadeCount = Assets::SanitizeAmbientCubeCascadeCount(
-                NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount);
-            const uint32_t safeCascadeCount = std::max(1u, cascadeCount);
-            const uint32_t cascadeIndex = static_cast<uint32_t>(frameCount_ % safeCascadeCount);
-            const uint32_t cascadeBaseOffset = cascadeIndex * static_cast<uint32_t>(perCascadeCount);
-
-            VkBuffer cubeBuffer = GetScene().AmbientCubeBuffer().Handle();
-            VkBuffer pongBuffer = GetScene().AmbientCubePongBuffer().Handle();
-            const VkDeviceSize cascadeByteOffset = static_cast<VkDeviceSize>(cascadeBaseOffset) * sizeof(Assets::AmbientCube);
-            const VkDeviceSize cascadeByteSize = static_cast<VkDeviceSize>(perCascadeCount) * sizeof(Assets::AmbientCube);
-
-            // Make trace bake's shader writes visible to the upcoming transfer read.
-            VkBufferMemoryBarrier preCopyBarrier{};
-            preCopyBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            preCopyBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            preCopyBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-            preCopyBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            preCopyBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            preCopyBarrier.buffer = cubeBuffer;
-            preCopyBarrier.offset = cascadeByteOffset;
-            preCopyBarrier.size = cascadeByteSize;
-            vkCmdPipelineBarrier(commandBuffer,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                0, 0, nullptr, 1, &preCopyBarrier, 0, nullptr);
-
-            // Snapshot the active cascade into the pong buffer.
-            VkBufferCopy copyRegion{};
-            copyRegion.srcOffset = cascadeByteOffset;
-            copyRegion.dstOffset = 0;
-            copyRegion.size = cascadeByteSize;
-            vkCmdCopyBuffer(commandBuffer, cubeBuffer, pongBuffer, 1, &copyRegion);
-
-            // Pong write → shader read; cube buffer write→read (compute writes both read & write).
-            VkBufferMemoryBarrier postCopyBarriers[2]{};
-            postCopyBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            postCopyBarriers[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            postCopyBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            postCopyBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            postCopyBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            postCopyBarriers[0].buffer = pongBuffer;
-            postCopyBarriers[0].offset = 0;
-            postCopyBarriers[0].size = cascadeByteSize;
-            postCopyBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            postCopyBarriers[1].srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-            postCopyBarriers[1].dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
-            postCopyBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            postCopyBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            postCopyBarriers[1].buffer = cubeBuffer;
-            postCopyBarriers[1].offset = cascadeByteOffset;
-            postCopyBarriers[1].size = cascadeByteSize;
-            vkCmdPipelineBarrier(commandBuffer,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                0, 0, nullptr, 2, postCopyBarriers, 0, nullptr);
-
-            propagationAmbientCubeGenPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
-
-            Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
-            gpuScene.custom_data_0 = cascadeBaseOffset;
-            gpuScene.custom_data_1 = cascadeIndex;
-
-            VkPipelineLayout layout = propagationAmbientCubeGenPipeline_->PipelineLayout().Handle();
-            vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
-                               0, sizeof(Assets::GPUScene), &gpuScene);
-
-            vkCmdDispatch(commandBuffer, group, 1, 1);
-
-            // Propagation writes feed the injection pass, which then seeds emissive surfaces
-            // into the transport field without mixing source injection into the gather step.
-            VkBufferMemoryBarrier propagationToInjectionBarrier{};
-            propagationToInjectionBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            propagationToInjectionBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            propagationToInjectionBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-            propagationToInjectionBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            propagationToInjectionBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            propagationToInjectionBarrier.buffer = cubeBuffer;
-            propagationToInjectionBarrier.offset = cascadeByteOffset;
-            propagationToInjectionBarrier.size = cascadeByteSize;
-            vkCmdPipelineBarrier(commandBuffer,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                0, 0, nullptr, 1, &propagationToInjectionBarrier, 0, nullptr);
-
-            injectAmbientCubeGenPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
-
-            layout = injectAmbientCubeGenPipeline_->PipelineLayout().Handle();
-            vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
-                               0, sizeof(Assets::GPUScene), &gpuScene);
-
-            vkCmdDispatch(commandBuffer, group, 1, 1);
-
-            // Make injection writes visible to downstream sampling in the next frame.
-            VkBufferMemoryBarrier postInjectionBarrier{};
-            postInjectionBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            postInjectionBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            postInjectionBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            postInjectionBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            postInjectionBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            postInjectionBarrier.buffer = cubeBuffer;
-            postInjectionBarrier.offset = cascadeByteOffset;
-            postInjectionBarrier.size = cascadeByteSize;
-            vkCmdPipelineBarrier(commandBuffer,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                0, 0, nullptr, 1, &postInjectionBarrier, 0, nullptr);
+            BakeAmbientCubePropagation(commandBuffer, imageIndex);
         }
 
         if (VisualDebug())

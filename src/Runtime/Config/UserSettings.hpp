@@ -58,6 +58,6 @@ struct UserSettings final
     float AmbientCubeOffsetZ = 0.0f;
     int AmbientCubeCascadeCount = 3;
     float AmbientCubeCascadeRatio = 2.0f;
-    bool UseAmbientCubePropagation = false;
+    bool UseAmbientCubePropagation = true;
     bool UseGpuAmbientCubeSdf = false;
 };

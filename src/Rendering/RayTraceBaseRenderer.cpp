@@ -324,6 +324,7 @@ namespace Vulkan::RayTracing
                         Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
                         gpuScene.custom_data_0 = cascadeBaseOffset + offsetInCubes;
                         gpuScene.custom_data_1 = cascadeIndex;
+                        gpuScene.custom_data_2 = NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation ? 1u : 0u;
                         
                         vkCmdPushConstants(commandBuffer, directLightGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
                                            0, sizeof(Assets::GPUScene), &gpuScene);
@@ -331,6 +332,12 @@ namespace Vulkan::RayTracing
                         vkCmdDispatch(commandBuffer, dispatchGroupCount, 1, 1);
                     }
                 }
+            }
+
+            if (NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation &&
+                NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel != 2)
+            {
+                BakeAmbientCubePropagation(commandBuffer, imageIndex);
             }
         }
     }
