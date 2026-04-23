@@ -851,12 +851,30 @@ void FCPUAccelerationStructure::ClearAllTasks()
     ClearNavRelevantDirtyBounds();
 }
 
-void FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemory, Vulkan::DeviceMemory* voxelGpuMemory, Vulkan::DeviceMemory* pageIndexMemory)
+bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemory, Vulkan::DeviceMemory* voxelGpuMemory, Vulkan::DeviceMemory* pageIndexMemory)
 {
+    bool voxelUploadCompleted = false;
     const bool batchComplete = lastBatchTasks.empty() || TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks);
     if (needFlush && batchComplete)
     {
-        if (!distanceFieldRebuildScheduled_)
+        const bool useGpuAmbientCubeSdf = NextEngine::GetInstance()->GetUserSettings().UseGpuAmbientCubeSdf;
+        if (useGpuAmbientCubeSdf)
+        {
+            distanceFieldRebuildScheduled_ = false;
+            distanceFieldRebuildTasks.clear();
+            for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
+            {
+                cascadeBakers[cascadeIndex].UploadGPU(*voxelGpuMemory, cascadeIndex * kCascadeVoxelCount);
+            }
+            if (!cascadeBakers.empty())
+            {
+                cpuPageIndex.UpdateData(cascadeBakers);
+            }
+            cpuPageIndex.UploadGPU(*pageIndexMemory);
+            needFlush = false;
+            voxelUploadCompleted = true;
+        }
+        else if (!distanceFieldRebuildScheduled_)
         {
             distanceFieldRebuildTasks.clear();
             distanceFieldRebuildTasks.reserve(GetActiveCascadeCount());
@@ -887,6 +905,7 @@ void FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
             needFlush = false;
             distanceFieldRebuildScheduled_ = false;
             distanceFieldRebuildTasks.clear();
+            voxelUploadCompleted = true;
         }
     }
 
@@ -917,6 +936,8 @@ void FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
             needUpdateGroups.pop();
         }
     }
+
+    return voxelUploadCompleted;
 }
 
 bool FCPUAccelerationStructure::HasPendingWork() const

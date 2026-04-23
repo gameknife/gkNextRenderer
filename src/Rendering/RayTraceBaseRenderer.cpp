@@ -274,6 +274,50 @@ namespace Vulkan::RayTracing
                         int offsetInCubes = offset * cubesPerGroup;
                         const uint32_t cascadeIndex = static_cast<uint32_t>(frameCount_ % safeCascadeCount);
                         const uint32_t cascadeBaseOffset = cascadeIndex * static_cast<uint32_t>(perCascadeCount);
+                        VkBuffer cubeBuffer = GetScene().AmbientCubeBuffer().Handle();
+                        VkBuffer pongBuffer = GetScene().AmbientCubePongBuffer().Handle();
+                        const VkDeviceSize cascadeByteOffset = static_cast<VkDeviceSize>(cascadeBaseOffset) * sizeof(Assets::AmbientCube);
+                        const VkDeviceSize cascadeByteSize = static_cast<VkDeviceSize>(perCascadeCount) * sizeof(Assets::AmbientCube);
+
+                        VkBufferMemoryBarrier preCopyBarrier{};
+                        preCopyBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+                        preCopyBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+                        preCopyBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+                        preCopyBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                        preCopyBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                        preCopyBarrier.buffer = cubeBuffer;
+                        preCopyBarrier.offset = cascadeByteOffset;
+                        preCopyBarrier.size = cascadeByteSize;
+                        vkCmdPipelineBarrier(commandBuffer,
+                            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                            0, 0, nullptr, 1, &preCopyBarrier, 0, nullptr);
+
+                        VkBufferCopy copyRegion{};
+                        copyRegion.srcOffset = cascadeByteOffset;
+                        copyRegion.dstOffset = 0;
+                        copyRegion.size = cascadeByteSize;
+                        vkCmdCopyBuffer(commandBuffer, cubeBuffer, pongBuffer, 1, &copyRegion);
+
+                        VkBufferMemoryBarrier postCopyBarriers[2]{};
+                        postCopyBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+                        postCopyBarriers[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                        postCopyBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                        postCopyBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                        postCopyBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                        postCopyBarriers[0].buffer = pongBuffer;
+                        postCopyBarriers[0].offset = 0;
+                        postCopyBarriers[0].size = cascadeByteSize;
+                        postCopyBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+                        postCopyBarriers[1].srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+                        postCopyBarriers[1].dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+                        postCopyBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                        postCopyBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                        postCopyBarriers[1].buffer = cubeBuffer;
+                        postCopyBarriers[1].offset = cascadeByteOffset;
+                        postCopyBarriers[1].size = cascadeByteSize;
+                        vkCmdPipelineBarrier(commandBuffer,
+                            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                            0, 0, nullptr, 2, postCopyBarriers, 0, nullptr);
                     
                         directLightGenPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
 

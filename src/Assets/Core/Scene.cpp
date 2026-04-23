@@ -93,6 +93,17 @@ namespace Assets
             Assets::CUBE_CASCADE_MAX * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube),
             ambientCubeBuffer_, ambientCubeBufferMemory_);
 
+        // Single-cascade ping-pong snapshot for propagation-based ambient cube bake.
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "AmbientCubesPong", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube),
+            ambientCubePongBuffer_, ambientCubePongBufferMemory_);
+
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "AmbientCubeSdfScratch", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(glm::u32vec4),
+            ambientCubeSdfScratchBuffer_, ambientCubeSdfScratchBufferMemory_);
+
         // shadow maps
         cpuShadowMap_.reset(
             new TextureImage(commandPool, SHADOWMAP_SIZE, SHADOWMAP_SIZE, 1, VK_FORMAT_R32_SFLOAT, nullptr, 0));
@@ -127,6 +138,12 @@ namespace Assets
 
         ambientCubeBuffer_.reset();
         ambientCubeBufferMemory_.reset();
+
+        ambientCubePongBuffer_.reset();
+        ambientCubePongBufferMemory_.reset();
+
+        ambientCubeSdfScratchBuffer_.reset();
+        ambientCubeSdfScratchBufferMemory_.reset();
 
         farAmbientCubeBuffer_.reset();
         farAmbientCubeBufferMemory_.reset();
@@ -780,6 +797,7 @@ namespace Assets
         gpuScene_.Reorders = reorderBuffer_->GetDeviceAddress();
         gpuScene_.Lights = lightBuffer_->GetDeviceAddress();
         gpuScene_.Cubes = ambientCubeBuffer_->GetDeviceAddress();
+        gpuScene_.CubesPong = ambientCubePongBuffer_->GetDeviceAddress();
         gpuScene_.Voxels = farAmbientCubeBuffer_->GetDeviceAddress();
         gpuScene_.Pages = pageIndexBuffer_->GetDeviceAddress();
         gpuScene_.HDRSHs = hdrSHBuffer_->GetDeviceAddress();
@@ -965,8 +983,12 @@ namespace Assets
 
         if (NextEngine::GetInstance()->GetTotalFrames() % 30 == 0)
         {
-            cpuAccelerationStructure_.Tick(*this, ambientCubeBufferMemory_.get(), farAmbientCubeBufferMemory_.get(),
-                                           pageIndexBufferMemory_.get());
+            const bool voxelUploadCompleted = cpuAccelerationStructure_.Tick(
+                *this, ambientCubeBufferMemory_.get(), farAmbientCubeBufferMemory_.get(), pageIndexBufferMemory_.get());
+            if (voxelUploadCompleted && NextEngine::GetInstance()->GetUserSettings().UseGpuAmbientCubeSdf)
+            {
+                RequestGpuDistanceFieldRebuild();
+            }
             
             if (sceneDirtyForCpuAS_ && !cpuAccelerationStructure_.HasPendingWork())
             {

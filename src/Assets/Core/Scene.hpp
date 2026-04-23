@@ -159,6 +159,8 @@ namespace Assets
         // Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
 
         Vulkan::Buffer& AmbientCubeBuffer() const { return *ambientCubeBuffer_; }
+        Vulkan::Buffer& AmbientCubePongBuffer() const { return *ambientCubePongBuffer_; }
+        Vulkan::Buffer& AmbientCubeSdfScratchBuffer() const { return *ambientCubeSdfScratchBuffer_; }
         Vulkan::Buffer& FarAmbientCubeBuffer() const { return *farAmbientCubeBuffer_; }
         Vulkan::Buffer& PageIndexBuffer() const { return *pageIndexBuffer_; }
 
@@ -172,6 +174,13 @@ namespace Assets
         FCPUAccelerationStructure& GetCPUAccelerationStructure() { return cpuAccelerationStructure_; }
         glm::vec3 GetSceneAABBMin() const { return sceneAABBMin_; }
         glm::vec3 GetSceneAABBMax() const { return sceneAABBMax_; }
+        void RequestGpuDistanceFieldRebuild() { gpuSdfDirty_ = true; }
+        bool ConsumeGpuDistanceFieldRebuild()
+        {
+            const bool rebuild = gpuSdfDirty_;
+            gpuSdfDirty_ = false;
+            return rebuild;
+        }
 
         // Scene saving功能
         bool Save(const std::string& filename) const;
@@ -220,6 +229,12 @@ namespace Assets
         std::unique_ptr<Vulkan::Buffer> ambientCubeBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> ambientCubeBufferMemory_;
 
+        // Single-cascade snapshot used as read-side for propagation-based ambient cube bake.
+        std::unique_ptr<Vulkan::Buffer> ambientCubePongBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> ambientCubePongBufferMemory_;
+        std::unique_ptr<Vulkan::Buffer> ambientCubeSdfScratchBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> ambientCubeSdfScratchBufferMemory_;
+
         std::unique_ptr<Vulkan::Buffer> farAmbientCubeBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> farAmbientCubeBufferMemory_;
 
@@ -252,6 +267,7 @@ namespace Assets
         bool sceneDirtyForCpuAS_ = false;
         bool sceneDirty_ = true;
         bool materialDirty_ = true;
+        bool gpuSdfDirty_ = false;
 
         std::vector<NodeProxy> nodeProxys;
         std::vector<VkDrawIndexedIndirectCommand> indirectDrawBufferInstanced;

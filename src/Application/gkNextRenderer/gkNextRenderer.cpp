@@ -655,7 +655,13 @@ void NextRendererGameInstance::DrawSettings()
 		
 		if( ImGui::CollapsingHeader(LOCTEXT("Lighting"), ImGuiTreeNodeFlags_None) )
 		{
-			
+		    ImGui::Checkbox(LOCTEXT("UseAmbientCubePropagation"), &userSetting.UseAmbientCubePropagation);
+            if (ImGui::Checkbox(LOCTEXT("UseGpuAmbientCubeSdf"), &userSetting.UseGpuAmbientCubeSdf))
+            {
+                GetEngine().GetScene().RequestGpuDistanceFieldRebuild();
+                GetEngine().GetScene().MarkDirty();
+            }
+		    
 			ImGui::Checkbox(LOCTEXT("HasSky"), &GetEngine().GetScene().GetEnvSettings().HasSky);
 			if(GetEngine().GetScene().GetEnvSettings().HasSky)
 			{

@@ -125,6 +125,8 @@ namespace NextCVar
                     "Ambient cube cascade count");
         GK_CVAR_FLOAT("sys.ambientCubeCascadeRatio", settings, AmbientCubeCascadeRatio, 2.0f, ECVarFlags::Archive,
                       "Ambient cube cascade ratio between levels");
+        GK_CVAR_BOOL("sys.ambientCubeGpuSdf", settings, UseGpuAmbientCubeSdf, false, ECVarFlags::Archive,
+                     "Use GPU jump-flood distance field rebuild for ambient cube voxels");
 
         GK_CVAR_BOOL("show.debugLighting", showFlags, DebugDraw_Lighting, false, ECVarFlags::None,
                      "Debug draw lighting");

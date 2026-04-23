@@ -301,7 +301,7 @@ public struct ALIGN_16 GPUScene
     uint64_t JointMatrices;
 
     uint64_t SkinnedVerticesSimple;
-    uint64_t Reserved;
+    uint64_t CubesPong;
 
     uint32_t SwapChainIndex;
     uint32_t custom_data_0;
@@ -348,7 +348,7 @@ public struct ALIGN_8 GPUScene
     public float4x4 *JointMatrices;
 
     public half4 *SkinnedVerticesSimple;
-    public half4 *Reserved;
+    public AmbientCube *CubesPong;
 
     public RaytracingAccelerationStructure GetTLAS() {
 		return RaytracingAccelerationStructure(TLAS);
@@ -472,6 +472,10 @@ public struct ALIGN_8 GPUScene
     public property half4* SkinnedVerticesSimple
     {
         get { return (half4*)SkinnedVerticesSimple_Reserved_Address.x; }
+    }
+    public property AmbientCube* CubesPong
+    {
+        get { return (AmbientCube*)SkinnedVerticesSimple_Reserved_Address.y; }
     }
 
     public RaytracingAccelerationStructure GetTLAS() {

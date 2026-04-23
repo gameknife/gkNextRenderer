@@ -231,6 +231,11 @@ namespace Vulkan
 		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> visualDebuggerPipeline_;
 		
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> softAmbientCubeGenPipeline_;
+		std::unique_ptr<PipelineCommon::ZeroBindPipeline> propagationAmbientCubeGenPipeline_;
+		std::unique_ptr<PipelineCommon::ZeroBindPipeline> injectAmbientCubeGenPipeline_;
+		std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldInitPipeline_;
+		std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldJumpPipeline_;
+		std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldResolvePipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> gpuCullPipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> skinningPipeline_;
 
