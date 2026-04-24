@@ -5,6 +5,7 @@
 #include "Vulkan/DebugUtilities.hpp"
 #include "Vulkan/RenderingPipeline.hpp"
 #include <vector>
+#include <deque>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -107,6 +108,25 @@ private:
 	static int ConsoleInputTextCallback(ImGuiInputTextCallbackData* data);
 	int HandleConsoleInputTextCallback(ImGuiInputTextCallbackData* data);
 	void DrawConsoleLogOutputInternal(const char* childId, const ImVec2& size, bool bordered);
+
+	struct GpuTimeSample
+	{
+		double sampleTime = 0.0;
+		float milliseconds = 0.0f;
+	};
+
+	struct GpuTimeHistory
+	{
+		std::deque<GpuTimeSample> samples;
+		std::string displayName;
+		double lastSeenTime = 0.0;
+		float average = 0.0f;
+		float minimum = 0.0f;
+		float maximum = 0.0f;
+		int depth = 0;
+		uint32_t displayOrder = 0;
+	};
+
 	std::unique_ptr<Vulkan::DescriptorPool> descriptorPool_;
 	std::unique_ptr<Vulkan::RenderPass> renderPass_;
 	std::vector< Vulkan::FrameBuffer > uiFrameBuffers_;
@@ -126,6 +146,8 @@ private:
 	bool consoleScrollToBottom_ = false;
 	bool requestConsoleFocus_ = false;
 	uint64_t consoleLogRevision_ = 0;
+	std::unordered_map<std::string, GpuTimeHistory> gpuTimeHistory_;
+	uint32_t nextGpuTimeDisplayOrder_ = 0;
 
 	NextEngine* engine_;
 };
