@@ -739,13 +739,6 @@ float3 GetIndirectAverage(AmbientCube cube)
 
 public struct FGpuProbeGenerator : IProbeGenerator
 {
-    LightObject FetchLight(uint lightIdx, inout float4 lightPower)
-    {
-        LightObject* Lights = Bindless.GetGpuscene().Lights;
-        lightPower = Bindless.GetGpuscene().GetMaterial(Lights[lightIdx].lightMatIdx).Diffuse;
-        return Lights[lightIdx];
-    }
-
     bool FaceTask(IRayTracer tracer, float3 origin, float3 basis, uint iterate, uint bakeCascadeIndex, bool directOnly, inout uint DirectLight, inout uint IndirectLight, inout uint SkyVisOut, inout uint SunVisOut)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
@@ -773,15 +766,20 @@ public struct FGpuProbeGenerator : IProbeGenerator
             float hitDist = 0;
             if (tracer.TraceRay(origin, rayDir, FAST_MAX_TRACE_DISTANCE, hitVertex, hitNode, tempColor, hitDist))
             {
-                if (!directOnly)
+                Material hitMaterial = Bindless.GetGpuscene().GetMaterial(hitVertex.MaterialIndex);
+                float4 outAlbedo = hitMaterial.Diffuse;
+                if (hitMaterial.DiffuseTextureId >= 0)
                 {
-                    Material hitMaterial = Bindless.GetGpuscene().GetMaterial(hitVertex.MaterialIndex);
-                    float4 outAlbedo = hitMaterial.Diffuse;
-                    if (hitMaterial.DiffuseTextureId >= 0)
-                    {
-                        float4 tex = Bindless.GetSampleTexture(hitMaterial.DiffuseTextureId).SampleLevel(hitVertex.TexCoord, 0);
-                        outAlbedo *= tex;
-                    }
+                    float4 tex = Bindless.GetSampleTexture(hitMaterial.DiffuseTextureId).SampleLevel(hitVertex.TexCoord, 0);
+                    outAlbedo *= tex;
+                }
+
+                if (hitMaterial.MaterialModel == MaterialDiffuseLight)
+                {
+                    directColor += outAlbedo;
+                }
+                else if (!directOnly)
+                {
                     bounceColor += outAlbedo * interpolateAmbientCubesStableV2<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, bakeCascadeIndex) * 1.25f; // magic bounce twice
                 }
             }
@@ -794,20 +792,6 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
         directColor = directColor / float(FACE_TRACING_COUNT);
         bounceColor = bounceColor / float(FACE_TRACING_COUNT);
-
-        // 参数光源，目前只取了一盏光源
-        if (!directOnly && Camera.LightCount > 0)
-        {
-            float4 lightPower = float4(0.0);
-            LightObject light = FetchLight(0, lightPower);
-            float3 lightPos = lerp(light.p1.xyz, light.p3.xyz, 0.5f);
-            float lightAtten = tracer.TraceSegment(origin, lightPos, cubeUnit * 0.5f) ? 0.0f : 1.0f;
-            float3 lightDir = normalize(lightPos - origin);
-            float ndotl = clamp(dot(basis, lightDir), 0.0f, 1.0f);
-            float distance = length(lightPos - origin);
-            float attenuation = ndotl * light.normal_area.w / (distance * distance * 3.14159f);
-            directColor += lightPower * attenuation * lightAtten;
-        }
 
         // // 太阳光
         if (Camera.HasSun)
