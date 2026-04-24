@@ -109,6 +109,7 @@ namespace Vulkan
 		virtual void CreateSwapChain();
 		virtual void DeleteSwapChain();
 		void RequestRecreateSwapChain() { requestRecreateSwapChain_ = true; }
+		void RequestClearAmbientCubeCache() { requestClearAmbientCubeCache_ = true; }
 		virtual void PreRender(VkCommandBuffer commandBuffer, const uint32_t imageIndex);
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		virtual void PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex);
@@ -175,6 +176,7 @@ namespace Vulkan
 		uint32_t tempStorageImageCreated_ {};
 
 		void UpdateSkinningBuffers();
+		void ClearAmbientCubeCache(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void BakeAmbientCubePropagation(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 	    
 	    std::vector<uint32_t> skinModelUpdateRequests_;
@@ -211,6 +213,9 @@ namespace Vulkan
 
 		const VkPresentModeKHR presentMode_;
 		bool requestRecreateSwapChain_ = false;
+		bool requestClearAmbientCubeCache_ = true;
+		bool ambientCubePropagationStateInitialized_ = false;
+		bool lastAmbientCubePropagation_ = false;
 
 		std::map< ERendererType, std::unique_ptr<class LogicRendererBase> > logicRenderers_;
 		ERendererType currentLogicRenderer_;
@@ -232,6 +237,7 @@ namespace Vulkan
 		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> visualDebuggerPipeline_;
 		
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> softAmbientCubeGenPipeline_;
+		std::unique_ptr<PipelineCommon::ZeroBindPipeline> clearAmbientCubeCachePipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> propagationAmbientCubeGenPipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> injectAmbientCubeGenPipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldInitPipeline_;

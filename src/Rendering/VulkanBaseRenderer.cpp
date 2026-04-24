@@ -326,6 +326,7 @@ namespace Vulkan
     void VulkanBaseRenderer::SetScene(std::shared_ptr<Assets::Scene> scene)
     {
         scene_ = scene;
+        RequestClearAmbientCubeCache();
     }
 
     Assets::UniformBufferObject VulkanBaseRenderer::GetUniformBufferObject(
@@ -589,6 +590,7 @@ namespace Vulkan
         simpleComposePipeline_.reset( new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.UpScaleFSR.comp.slang.spv", 20));
         bufferClearPipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*swapChain_, "assets/shaders/Util.BufferClear.comp.slang.spv", 4));
         softAmbientCubeGenPipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.SwAmbientCube.comp.slang.spv"));
+        clearAmbientCubeCachePipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.ClearAmbientCubeCache.comp.slang.spv"));
         propagationAmbientCubeGenPipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.PropagationAmbientCube.comp.slang.spv"));
         injectAmbientCubeGenPipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.InjectAmbientCube.comp.slang.spv"));
         distanceFieldInitPipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.DistanceFieldInit.comp.slang.spv"));
@@ -649,6 +651,7 @@ namespace Vulkan
         wireframeFramebuffer_.reset();
         bufferClearPipeline_.reset();
         softAmbientCubeGenPipeline_.reset();
+        clearAmbientCubeCachePipeline_.reset();
         propagationAmbientCubeGenPipeline_.reset();
         injectAmbientCubeGenPipeline_.reset();
         distanceFieldInitPipeline_.reset();
@@ -775,6 +778,24 @@ namespace Vulkan
     {
         UpdateSkinningBuffers();
         InitializeBarriers(commandBuffer);
+
+        const bool useAmbientCubePropagation = NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation;
+        if (!ambientCubePropagationStateInitialized_)
+        {
+            lastAmbientCubePropagation_ = useAmbientCubePropagation;
+            ambientCubePropagationStateInitialized_ = true;
+        }
+        else if (lastAmbientCubePropagation_ != useAmbientCubePropagation)
+        {
+            lastAmbientCubePropagation_ = useAmbientCubePropagation;
+            RequestClearAmbientCubeCache();
+        }
+
+        if (requestClearAmbientCubeCache_)
+        {
+            ClearAmbientCubeCache(commandBuffer, imageIndex);
+            requestClearAmbientCubeCache_ = false;
+        }
 
         if (true)
         {
@@ -1534,6 +1555,47 @@ namespace Vulkan
                 SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
             }
         }
+    }
+
+    void VulkanBaseRenderer::ClearAmbientCubeCache(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+    {
+        SCOPED_GPU_TIMER("clear-ambient-cube-cache");
+
+        constexpr uint32_t cubesPerGroup = 64;
+        constexpr uint32_t perCascadeCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
+        constexpr uint32_t totalCubeCount = Assets::CUBE_CASCADE_MAX * perCascadeCount;
+        const uint32_t groupCount = (totalCubeCount + cubesPerGroup - 1) / cubesPerGroup;
+
+        clearAmbientCubeCachePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+
+        Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
+        gpuScene.custom_data_0 = totalCubeCount;
+        gpuScene.custom_data_1 = 0;
+        gpuScene.custom_data_2 = 0;
+
+        VkPipelineLayout layout = clearAmbientCubeCachePipeline_->PipelineLayout().Handle();
+        vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
+                           0, sizeof(Assets::GPUScene), &gpuScene);
+
+        vkCmdDispatch(commandBuffer, groupCount, 1, 1);
+
+        VkBufferMemoryBarrier barriers[2]{};
+        barriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        barriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        barriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        barriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barriers[0].buffer = GetScene().AmbientCubeBuffer().Handle();
+        barriers[0].offset = 0;
+        barriers[0].size = static_cast<VkDeviceSize>(totalCubeCount) * sizeof(Assets::AmbientCube);
+
+        barriers[1] = barriers[0];
+        barriers[1].buffer = GetScene().FarAmbientCubeBuffer().Handle();
+        barriers[1].size = static_cast<VkDeviceSize>(totalCubeCount) * sizeof(Assets::VoxelData);
+
+        vkCmdPipelineBarrier(commandBuffer,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            0, 0, nullptr, 2, barriers, 0, nullptr);
     }
 
     void VulkanBaseRenderer::BakeAmbientCubePropagation(VkCommandBuffer commandBuffer, uint32_t imageIndex)
