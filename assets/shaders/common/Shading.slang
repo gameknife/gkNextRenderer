@@ -585,13 +585,99 @@ public struct FHiVoxelDDARayTracerV2 : IRayTracer
         return stepDistance;
     }
 
+    bool TraceOcclusionDDA(float3 rayOrigin, float3 rayDir, float maxDistance)
+    {
+        VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
+        uint cascadeCount = GetAmbientCubeCascadeCount();
+
+        float cubeUnit = GetAmbientCubeUnit();
+        float3 cubeOffset = GetAmbientCubeOffset();
+        uint baseOffset = 0;
+        float3 voxelPos = float3(0);
+        bool foundCascade = false;
+
+        for (uint cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex)
+        {
+            float candidateUnit = GetAmbientCubeUnitAtCascade(cascadeIndex);
+            float3 candidateOffset = GetAmbientCubeOffsetAtCascade(cascadeIndex);
+            float3 candidateVoxelPos = (rayOrigin.xyz - candidateOffset) / candidateUnit;
+
+            if (candidateVoxelPos.x >= 0 && candidateVoxelPos.y >= 0 && candidateVoxelPos.z >= 0 &&
+                candidateVoxelPos.x <= CUBE_SIZE_XY - 1 && candidateVoxelPos.y <= CUBE_SIZE_Z - 1 &&
+                candidateVoxelPos.z <= CUBE_SIZE_XY - 1)
+            {
+                cubeUnit = candidateUnit;
+                cubeOffset = candidateOffset;
+                baseOffset = GetCascadeBaseOffset(cascadeIndex);
+                voxelPos = candidateVoxelPos;
+                foundCascade = true;
+                break;
+            }
+        }
+
+        if (!foundCascade)
+        {
+            uint fallbackCascade = cascadeCount - 1;
+            cubeUnit = GetAmbientCubeUnitAtCascade(fallbackCascade);
+            cubeOffset = GetAmbientCubeOffsetAtCascade(fallbackCascade);
+            baseOffset = GetCascadeBaseOffset(fallbackCascade);
+            voxelPos = (rayOrigin.xyz - cubeOffset) / cubeUnit;
+        }
+
+        float3 tDelta = float3(0, 0, 0);
+        float3 tMax = float3(0, 0, 0);
+        float3 stepSign = float3(0, 0, 0);
+        RebuildVoxelDDAState(rayOrigin, rayDir, 0.0f, cubeUnit, cubeOffset, voxelPos, tMax, tDelta, stepSign);
+
+        uint maxSteps = max(uint(maxDistance / cubeUnit), 1u);
+        float3 normal = float3(0, 0, 0);
+        float travelDistance = 0.0f;
+
+        for (uint i = 0; i < maxSteps; ++i)
+        {
+            if (travelDistance > maxDistance)
+            {
+                break;
+            }
+
+            float offsetDist = 0.0f;
+            uint hitMatId = 0u;
+            float skipLength = 1.0f;
+            if (inSolidV2(voxelPos, rayDir, offsetDist, hitMatId, skipLength, Voxels, baseOffset, cubeUnit))
+            {
+                return true;
+            }
+
+            float minT = min(tMax.x, min(tMax.y, tMax.z));
+            float tieEpsilon = max(cubeUnit * 0.001f, 0.0001f);
+            normal = float3(0, 0, 0);
+            if (stepSign.x != 0.0f && abs(tMax.x - minT) <= tieEpsilon)
+            {
+                voxelPos.x += stepSign.x;
+                tMax.x += tDelta.x;
+                normal.x = -stepSign.x;
+            }
+            if (stepSign.y != 0.0f && abs(tMax.y - minT) <= tieEpsilon)
+            {
+                voxelPos.y += stepSign.y;
+                tMax.y += tDelta.y;
+                normal.y = -stepSign.y;
+            }
+            if (stepSign.z != 0.0f && abs(tMax.z - minT) <= tieEpsilon)
+            {
+                voxelPos.z += stepSign.z;
+                tMax.z += tDelta.z;
+                normal.z = -stepSign.z;
+            }
+            travelDistance = minT;
+        }
+
+        return false;
+    }
+
     public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
     {
-        Vertex outVertex;
-        NodeProxy outNode;
-        float4 tempColor;
-        float hitDist = 0;
-        return TraceRay(rayOrigin, rayDir, 80.0f, outVertex, outNode, tempColor, hitDist);
+        return TraceOcclusionDDA(rayOrigin, rayDir, 80.0f);
     }
     public bool TraceSegment(float3 rayOrigin, float3 rayTaget, float epsilon)
     {
@@ -995,14 +1081,16 @@ public struct FSoftwareDirectIlluminatorV2 : IDirectIlluminator
             const float3 lightVector = Camera.SunDirection.xyz;
             const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed, cos(0.25f / 180.f * M_PI)), lightVector);
             shadow = 1;
-            float shadowTraceOffset = cascadeUnit * 0.5f;
+            float3 normalDir = normalize(normal);
+            float normalOffset = max(cascadeUnit * 0.5f, 0.25f);
+            float rayOffset = cascadeUnit * 2.5f;
             if (cascadeIndex > 0)
             {
-                // Coarser cascades are more prone to self-hit near surfaces; push farther out.
-                shadowTraceOffset = cascadeUnit * (1.0f + 0.5f * float(cascadeIndex));
+                normalOffset = cascadeUnit * (1.0f + 0.5f * float(cascadeIndex));
+                rayOffset = cascadeUnit * (3.0f + float(cascadeIndex));
             }
-            shadowTraceOffset = max(0.25f, shadowTraceOffset);
-            if (HWTracer.TraceOcclusion(position + normal * shadowTraceOffset, lightVectorCone))
+            float3 shadowOrigin = position + normalDir * normalOffset + lightVectorCone * rayOffset;
+            if (HWTracer.TraceOcclusion(shadowOrigin, lightVectorCone))
             {
                 shadow = 0;
             }
