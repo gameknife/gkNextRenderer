@@ -855,16 +855,16 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
             constexpr double timingStaleSeconds = 3.0;
             const double now = ImGui::GetTime();
 
-            auto BuildTimingRows = [&](const std::vector<std::tuple<std::string, float, int>>& times,
+            auto BuildTimingRows = [&](const std::vector<VulkanGpuTimer::TimerStat>& times,
                                        std::unordered_map<std::string, TimingHistory>& historyMap)
             {
                 uint32_t currentDisplayOrder = 0;
                 for (const auto& time : times)
                 {
-                    const std::string& name = std::get<0>(time);
-                    const float ms = std::get<1>(time);
-                    const int depth = std::get<2>(time);
-                    const std::string historyKey = name + "#" + std::to_string(depth);
+                    const std::string& name = time.name;
+                    const float ms = time.milliseconds;
+                    const int depth = time.depth;
+                    const std::string& historyKey = time.stableKey;
                     auto historyIter = historyMap.try_emplace(historyKey).first;
                     auto& history = historyIter->second;
 
@@ -934,7 +934,11 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
                     {
                         return lhs.displayOrder < rhs.displayOrder;
                     }
-                    return lhs.active && !rhs.active;
+                    if (lhs.active != rhs.active)
+                    {
+                        return lhs.active;
+                    }
+                    return lhs.name < rhs.name;
                 });
                 return timingRows;
             };

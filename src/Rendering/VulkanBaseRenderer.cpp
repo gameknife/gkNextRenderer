@@ -1402,33 +1402,27 @@ namespace Vulkan
             for (auto& logicRenderer : logicRenderers_)
             {
                 std::string rendererName = "";
-                std::string folderName = "";
                 switch (logicRenderer.first)
                 {
                 case ERendererType::ERT_PathTracing:
                     rendererName = "PathTracing";
-                    folderName = "PT-";
                     break;
                 case ERendererType::ERT_ModernDeferred:
                     rendererName = "SoftTracing";
-                    folderName = "ST-";
                     break;
                 case ERendererType::ERT_LegacyDeferred:
                     rendererName = "SoftModern";
-                    folderName = "SM-";
                     break;
                 case ERendererType::ERT_VoxelTracing:
                     rendererName = "VoxelTracing";
-                    folderName = "VT-";
                     break;
                 default:
                     rendererName = "UnknownRenderer";
-                    folderName = "UK-";
                     break;
                 }
 
                 {
-                    SCOPED_GPU_TIMER_FOLDER(rendererName.c_str(), folderName.c_str());
+                    SCOPED_GPU_TIMER(rendererName.c_str());
                     logicRenderer.second->Render(commandBuffer, imageIndex);
                 }
 

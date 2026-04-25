@@ -17,6 +17,7 @@
 class NextPhysics;
 class QuickJSEngine;
 class NextAudio;
+class VulkanGpuTimer;
 
 class NextEngine;
 
@@ -153,6 +154,7 @@ public:
     Vulkan::VulkanBaseRenderer& GetRenderer() { return *renderer_; }
     Vulkan::VulkanBaseRenderer* GetRendererPtr() { return renderer_.get(); }
     const Vulkan::VulkanBaseRenderer* GetRendererPtr() const { return renderer_.get(); }
+    VulkanGpuTimer* GpuTimer() const { return renderer_ ? renderer_->GpuTimer() : nullptr; }
 
     void Start();
     bool HandleEvent(SDL_Event& event);

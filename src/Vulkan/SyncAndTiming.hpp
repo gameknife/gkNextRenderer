@@ -4,22 +4,15 @@
 #include "Device.hpp"
 #include "Options.hpp"
 #include <vector>
-#include <list>
 #include <memory>
 #include <unordered_map>
-#include <cassert>
 #include <chrono>
+#include <limits>
 
 #define GK_CONCAT_IMPL(a, b) a##b
 #define GK_CONCAT(a, b) GK_CONCAT_IMPL(a, b)
-#define SCOPED_GPU_TIMER_ON(commandBuffer, timer, name) ScopedGpuTimer GK_CONCAT(scopedGpuTimer_, __LINE__)(commandBuffer, timer, name)
-#define SCOPED_GPU_TIMER_FOLDER_ON(commandBuffer, timer, name, folder) ScopedGpuTimer GK_CONCAT(scopedGpuTimer_, __LINE__)(commandBuffer, timer, name, folder)
-#define SCOPED_GPU_TIMER_FOLDER(name, folder) SCOPED_GPU_TIMER_FOLDER_ON(commandBuffer, GpuTimer(), name, folder)
-#define SCOPED_GPU_TIMER(name) SCOPED_GPU_TIMER_ON(commandBuffer, GpuTimer(), name)
-#define SCOPED_CPU_TIMER_ON(timer, name) PERFORMANCEAPI_INSTRUMENT_DATA(name, ""); ScopedCpuTimer GK_CONCAT(scopedCpuTimer_, __LINE__)(timer, name)
-#define SCOPED_CPU_TIMER_FOLDER_ON(timer, name, folder) PERFORMANCEAPI_INSTRUMENT_DATA(name, ""); ScopedCpuTimer GK_CONCAT(scopedCpuTimer_, __LINE__)(timer, name, folder)
-#define SCOPED_CPU_TIMER_FOLDER(name, folder) SCOPED_CPU_TIMER_FOLDER_ON(GpuTimer(), name, folder)
-#define SCOPED_CPU_TIMER(name) SCOPED_CPU_TIMER_ON(GpuTimer(), name)
+#define SCOPED_GPU_TIMER(name) ScopedGpuTimer GK_CONCAT(scopedGpuTimer_, __LINE__)(commandBuffer, GpuTimer(), name)
+#define SCOPED_CPU_TIMER(name) PERFORMANCEAPI_INSTRUMENT_DATA(name, ""); ScopedCpuTimer GK_CONCAT(scopedCpuTimer_, __LINE__)(GpuTimer(), name)
 
 #if __APPLE__
 #define BENCH_MARK_CHECK() return
@@ -96,14 +89,36 @@ public:
     DEFAULT_NON_COPIABLE(VulkanGpuTimer)
 
     using CpuClock = std::chrono::high_resolution_clock;
+    static constexpr uint32_t invalidTimerId = std::numeric_limits<uint32_t>::max();
 
-    struct CpuTimerQuery
+    struct TimerStat
     {
+        std::string name;
+        std::string stableKey;
+        float milliseconds = 0.0f;
+        int depth = 0;
+    };
+
+    struct GpuTimerRecord
+    {
+        std::string name;
+        std::string stableKey;
+        int depth = 0;
+        uint32_t startQuery = invalidTimerId;
+        uint32_t endQuery = invalidTimerId;
+        float elapsedMilliseconds = 0.0f;
+        std::unordered_map<std::string, uint32_t> childNameCounts;
+    };
+
+    struct CpuTimerRecord
+    {
+        std::string name;
+        std::string stableKey;
+        int depth = 0;
         CpuClock::time_point startTime{};
         CpuClock::time_point endTime{};
         float elapsedMilliseconds = 0.0f;
-        uint64_t startOrder = 0;
-        uint64_t endOrder = 0;
+        std::unordered_map<std::string, uint32_t> childNameCounts;
     };
 
     VulkanGpuTimer(const Vulkan::Device& device, uint32_t totalCount, const VkPhysicalDeviceProperties& prop) : device_(device)
@@ -150,26 +165,18 @@ public:
         queryIdx = 0;
         started_ = true;
 
-        CalculatieGpuStats();
-        for (auto& [name, query] : gpu_timer_query_map)
-        {
-            std::get<1>(gpu_timer_query_map[name]) = 0;
-            std::get<0>(gpu_timer_query_map[name]) = 0;
-        }
+        CalculateGpuStats();
+        gpuTimerRecords_.clear();
+        gpuActiveStack_.clear();
+        gpuRootNameCounts_.clear();
     }
 
     void CpuFrameBegin()
     {
-        cpuSequence_ = 0;
         cpuFrameStarted_ = true;
-        currentCpuFolder_.clear();
-        cpuFolderStack_.clear();
-        for (auto& [name, query] : cpu_timer_query_map)
-        {
-            query.elapsedMilliseconds = 0.0f;
-            query.startOrder = 0;
-            query.endOrder = 0;
-        }
+        cpuTimerRecords_.clear();
+        cpuActiveStack_.clear();
+        cpuRootNameCounts_.clear();
     }
 
     void CpuFrameEnd()
@@ -189,6 +196,10 @@ public:
         {
             return;
         }
+        if (queryIdx == 0)
+        {
+            return;
+        }
         vkGetQueryPoolResults(
             device_.Handle(),
             query_pool_timestamps,
@@ -199,113 +210,147 @@ public:
             sizeof(uint64_t),
             VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
 
-        for (auto& [name, query] : gpu_timer_query_map)
+        for (auto& record : gpuTimerRecords_)
         {
-            std::get<2>(gpu_timer_query_map[name]) = (time_stamps[std::get<1>(gpu_timer_query_map[name])] - time_stamps[std::get<0>(gpu_timer_query_map[name])]);
+            if (record.startQuery == invalidTimerId || record.endQuery == invalidTimerId)
+            {
+                continue;
+            }
+            record.elapsedMilliseconds =
+                (time_stamps[record.endQuery] - time_stamps[record.startQuery]) * timeStampPeriod_ * 1e-6f;
         }
     }
 
-    void Start(VkCommandBuffer commandBuffer, const char* name)
+    uint32_t Start(VkCommandBuffer commandBuffer, const char* name)
     {
-        BENCH_MARK_CHECK();
-        if (gpu_timer_query_map.find(name) == gpu_timer_query_map.end())
+        if (!GOption->HardwareQuery || !valid_)
         {
-            gpu_timer_query_map[name] = std::make_tuple(0, 0, 0);
+            return invalidTimerId;
         }
+        if (queryIdx + gpuActiveStack_.size() + 1 >= time_stamps.size())
+        {
+            return invalidTimerId;
+        }
+
+        const uint32_t timerId = static_cast<uint32_t>(gpuTimerRecords_.size());
+        GpuTimerRecord record{};
+        record.name = name ? name : "";
+        record.depth = static_cast<int>(gpuActiveStack_.size());
+        record.stableKey = BuildGpuStableKey(record.name);
+        record.startQuery = queryIdx;
+        gpuTimerRecords_.push_back(std::move(record));
+
         vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query_pool_timestamps, queryIdx);
         device_.DebugUtils().BeginMarker(commandBuffer, name);
-        std::get<0>(gpu_timer_query_map[name]) = queryIdx;
         queryIdx++;
+        gpuActiveStack_.push_back(timerId);
+        return timerId;
     }
-    void End(VkCommandBuffer commandBuffer, const char* name)
+
+    void End(VkCommandBuffer commandBuffer, uint32_t timerId)
     {
-        BENCH_MARK_CHECK();
-        assert(gpu_timer_query_map.find(name) != gpu_timer_query_map.end());
+        if (timerId == invalidTimerId || timerId >= gpuTimerRecords_.size())
+        {
+            return;
+        }
+        if (queryIdx >= time_stamps.size())
+        {
+            device_.DebugUtils().EndMarker(commandBuffer);
+            if (!gpuActiveStack_.empty() && gpuActiveStack_.back() == timerId)
+            {
+                gpuActiveStack_.pop_back();
+            }
+            return;
+        }
         vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query_pool_timestamps, queryIdx);
         device_.DebugUtils().EndMarker(commandBuffer);
-        std::get<1>(gpu_timer_query_map[name]) = queryIdx;
+        gpuTimerRecords_[timerId].endQuery = queryIdx;
         queryIdx++;
-    }
-    void StartCpuTimer(const char* name)
-    {
-        if (cpu_timer_query_map.find(name) == cpu_timer_query_map.end())
+        if (!gpuActiveStack_.empty() && gpuActiveStack_.back() == timerId)
         {
-            cpu_timer_query_map[name] = {};
+            gpuActiveStack_.pop_back();
         }
+    }
+
+    uint32_t StartCpuTimer(const char* name)
+    {
         if (!cpuFrameStarted_)
         {
             CpuFrameBegin();
         }
-        auto& query = cpu_timer_query_map[name];
-        query.startTime = CpuClock::now();
-        query.startOrder = ++cpuSequence_;
-        query.endOrder = 0;
-        query.elapsedMilliseconds = 0.0f;
-    }
-    void EndCpuTimer(const char* name)
-    {
-        assert(cpu_timer_query_map.find(name) != cpu_timer_query_map.end());
-        auto& query = cpu_timer_query_map[name];
-        query.endTime = CpuClock::now();
-        query.endOrder = ++cpuSequence_;
-        query.elapsedMilliseconds = std::chrono::duration<float, std::milli>(query.endTime - query.startTime).count();
-    }
-    float GetGpuTime(const char* name)
-    {
-        if (gpu_timer_query_map.find(name) == gpu_timer_query_map.end())
-        {
-            return 0;
-        }
-        return std::get<2>(gpu_timer_query_map[name]) * timeStampPeriod_ * 1e-6f;
-    }
-    float GetCpuTime(const char* name)
-    {
-        if (cpu_timer_query_map.find(name) == cpu_timer_query_map.end())
-        {
-            return 0;
-        }
-        return cpu_timer_query_map[name].elapsedMilliseconds;
+
+        const uint32_t timerId = static_cast<uint32_t>(cpuTimerRecords_.size());
+        CpuTimerRecord record{};
+        record.name = name ? name : "";
+        record.depth = static_cast<int>(cpuActiveStack_.size());
+        record.stableKey = BuildCpuStableKey(record.name);
+        record.startTime = CpuClock::now();
+        cpuTimerRecords_.push_back(std::move(record));
+        cpuActiveStack_.push_back(timerId);
+        return timerId;
     }
 
-    void CalculatieGpuStats()
+    void EndCpuTimer(uint32_t timerId)
+    {
+        if (timerId == invalidTimerId || timerId >= cpuTimerRecords_.size())
+        {
+            return;
+        }
+        auto& record = cpuTimerRecords_[timerId];
+        record.endTime = CpuClock::now();
+        record.elapsedMilliseconds = std::chrono::duration<float, std::milli>(record.endTime - record.startTime).count();
+        if (!cpuActiveStack_.empty() && cpuActiveStack_.back() == timerId)
+        {
+            cpuActiveStack_.pop_back();
+        }
+    }
+
+    float GetGpuTime(const char* name)
+    {
+        for (const auto& stat : lastStats)
+        {
+            if (stat.name == name)
+            {
+                return stat.milliseconds;
+            }
+        }
+        return 0.0f;
+    }
+
+    float GetCpuTime(const char* name)
+    {
+        for (const auto& stat : lastCpuStats)
+        {
+            if (stat.name == name)
+            {
+                return stat.milliseconds;
+            }
+        }
+        return 0.0f;
+    }
+
+    void CalculateGpuStats()
     {
         lastStats.clear();
-        std::list<std::tuple<std::string, float, uint64_t, uint64_t> > order_list;
-        for (auto& [name, query] : gpu_timer_query_map)
+        lastStats.reserve(gpuTimerRecords_.size());
+        for (const auto& record : gpuTimerRecords_)
         {
-            if (std::get<2>(gpu_timer_query_map[name]) == 0)
+            if (record.elapsedMilliseconds <= 0.0f)
             {
                 continue;
             }
-            order_list.insert(order_list.begin(), (std::make_tuple(name, GetGpuTime(name.c_str()), std::get<0>(query), std::get<1>(query))));
-        }
-
-        order_list.sort([](const std::tuple<std::string, float, uint64_t, uint64_t>& a, const std::tuple<std::string, float, uint64_t, uint64_t>& b) -> bool
-        {
-            return std::get<2>(a) < std::get<2>(b);
-        });
-
-        std::vector<std::tuple<std::string, float, uint64_t, uint64_t>> activeTimers;
-        for (auto& [name, time, startIdx, endIdx] : order_list)
-        {
-            while (!activeTimers.empty() && std::get<3>(activeTimers.back()) < startIdx)
-            {
-                activeTimers.pop_back();
-            }
-
-            int stackDepth = static_cast<int>(activeTimers.size());
-            activeTimers.push_back(std::make_tuple(name, time, startIdx, endIdx));
-            lastStats.push_back(std::make_tuple(name, stackDepth, time));
+            lastStats.push_back({record.name, record.stableKey, record.elapsedMilliseconds, record.depth});
         }
     }
-    std::vector<std::tuple<std::string, float, int> > FetchAllTimes(int maxStack)
+
+    std::vector<TimerStat> FetchAllTimes(int maxStack)
     {
-        std::vector<std::tuple<std::string, float, int> > result;
-        for (auto& [name, stackDepth, time] : lastStats)
+        std::vector<TimerStat> result;
+        for (const auto& stat : lastStats)
         {
-            if (maxStack > stackDepth)
+            if (maxStack > stat.depth)
             {
-                result.push_back(std::make_tuple(name, time, stackDepth));
+                result.push_back(stat);
             }
         }
         return result;
@@ -314,98 +359,74 @@ public:
     void CalculateCpuStats()
     {
         lastCpuStats.clear();
-        std::list<std::tuple<std::string, float, uint64_t, uint64_t> > orderList;
-        for (auto& [name, query] : cpu_timer_query_map)
+        lastCpuStats.reserve(cpuTimerRecords_.size());
+        for (const auto& record : cpuTimerRecords_)
         {
-            if (query.elapsedMilliseconds <= 0.0f || query.startOrder == 0 || query.endOrder == 0)
+            if (record.elapsedMilliseconds <= 0.0f)
             {
                 continue;
             }
-            orderList.insert(orderList.begin(), std::make_tuple(name, query.elapsedMilliseconds, query.startOrder, query.endOrder));
-        }
-
-        orderList.sort([](const std::tuple<std::string, float, uint64_t, uint64_t>& a,
-                          const std::tuple<std::string, float, uint64_t, uint64_t>& b) -> bool
-        {
-            return std::get<2>(a) < std::get<2>(b);
-        });
-
-        std::vector<std::tuple<std::string, float, uint64_t, uint64_t>> activeTimers;
-        for (auto& [name, time, startOrder, endOrder] : orderList)
-        {
-            while (!activeTimers.empty() && std::get<3>(activeTimers.back()) < startOrder)
-            {
-                activeTimers.pop_back();
-            }
-
-            int stackDepth = static_cast<int>(activeTimers.size());
-            activeTimers.push_back(std::make_tuple(name, time, startOrder, endOrder));
-            lastCpuStats.push_back(std::make_tuple(name, stackDepth, time));
+            lastCpuStats.push_back({record.name, record.stableKey, record.elapsedMilliseconds, record.depth});
         }
     }
 
-    std::vector<std::tuple<std::string, float, int> > FetchAllCpuTimes(int maxStack)
+    std::vector<TimerStat> FetchAllCpuTimes(int maxStack)
     {
-        std::vector<std::tuple<std::string, float, int> > result;
-        for (auto& [name, stackDepth, time] : lastCpuStats)
+        std::vector<TimerStat> result;
+        for (const auto& stat : lastCpuStats)
         {
-            if (maxStack > stackDepth)
+            if (maxStack > stat.depth)
             {
-                result.push_back(std::make_tuple(name, time, stackDepth));
+                result.push_back(stat);
             }
         }
         return result;
     }
 
-    // Folder management
-    void PushGpuFolder(const std::string& name)
+private:
+    std::string BuildGpuStableKey(const std::string& name)
     {
-        gpuFolderStack_.push_back(currentGpuFolder_.length());
-        currentGpuFolder_ += name;
-    }
-    void PopGpuFolder()
-    {
-        if (!gpuFolderStack_.empty())
+        if (gpuActiveStack_.empty())
         {
-            currentGpuFolder_.resize(gpuFolderStack_.back());
-            gpuFolderStack_.pop_back();
+            const uint32_t occurrence = gpuRootNameCounts_[name]++;
+            return "/" + name + "#" + std::to_string(occurrence);
         }
-    }
-    const std::string& GetCurrentGpuFolder() const { return currentGpuFolder_; }
 
-    void PushCpuFolder(const std::string& name)
-    {
-        cpuFolderStack_.push_back(currentCpuFolder_.length());
-        currentCpuFolder_ += name;
+        auto& parent = gpuTimerRecords_[gpuActiveStack_.back()];
+        const uint32_t occurrence = parent.childNameCounts[name]++;
+        return parent.stableKey + "/" + name + "#" + std::to_string(occurrence);
     }
-    void PopCpuFolder()
+
+    std::string BuildCpuStableKey(const std::string& name)
     {
-        if (!cpuFolderStack_.empty())
+        if (cpuActiveStack_.empty())
         {
-            currentCpuFolder_.resize(cpuFolderStack_.back());
-            cpuFolderStack_.pop_back();
+            const uint32_t occurrence = cpuRootNameCounts_[name]++;
+            return "/" + name + "#" + std::to_string(occurrence);
         }
-    }
-    const std::string& GetCurrentCpuFolder() const { return currentCpuFolder_; }
 
-    std::vector<std::tuple<std::string, int, float> > lastStats; // name, depth, duration seconds
-    std::vector<std::tuple<std::string, int, float> > lastCpuStats; // name, depth, duration milliseconds
+        auto& parent = cpuTimerRecords_[cpuActiveStack_.back()];
+        const uint32_t occurrence = parent.childNameCounts[name]++;
+        return parent.stableKey + "/" + name + "#" + std::to_string(occurrence);
+    }
+
+public:
+    std::vector<TimerStat> lastStats;
+    std::vector<TimerStat> lastCpuStats;
     VkQueryPool query_pool_timestamps = VK_NULL_HANDLE;
     std::vector<uint64_t> time_stamps{};
-    std::unordered_map<std::string, std::tuple<uint64_t, uint64_t, uint64_t> > gpu_timer_query_map{};
-    std::unordered_map<std::string, CpuTimerQuery> cpu_timer_query_map{};
+    std::vector<GpuTimerRecord> gpuTimerRecords_;
+    std::vector<CpuTimerRecord> cpuTimerRecords_;
+    std::vector<uint32_t> gpuActiveStack_;
+    std::vector<uint32_t> cpuActiveStack_;
+    std::unordered_map<std::string, uint32_t> gpuRootNameCounts_;
+    std::unordered_map<std::string, uint32_t> cpuRootNameCounts_;
     const Vulkan::Device& device_;
     uint32_t queryIdx = 0;
-    uint64_t cpuSequence_ = 0;
     float timeStampPeriod_ = 1;
     bool started_ = false;
     bool cpuFrameStarted_ = false;
     bool valid_ = false;
-
-    std::string currentGpuFolder_;
-    std::vector<size_t> gpuFolderStack_;
-    std::string currentCpuFolder_;
-    std::vector<size_t> cpuFolderStack_;
 };
 
 // ============================================================================
@@ -417,32 +438,25 @@ class ScopedGpuTimer
 public:
     DEFAULT_NON_COPIABLE(ScopedGpuTimer)
 
-    ScopedGpuTimer(VkCommandBuffer commandBuffer, VulkanGpuTimer* timer, const char* name, const char* foldername) : commandBuffer_(commandBuffer), timer_(timer), name_(name)
+    ScopedGpuTimer(VkCommandBuffer commandBuffer, VulkanGpuTimer* timer, const char* name) : commandBuffer_(commandBuffer), timer_(timer), name_(name ? name : "")
     {
-        timer_->Start(commandBuffer_, name_.c_str());
-        folderTimer = true;
-        timer_->PushGpuFolder(foldername);
-    }
-    ScopedGpuTimer(VkCommandBuffer commandBuffer, VulkanGpuTimer* timer, const char* name) : commandBuffer_(commandBuffer), timer_(timer), name_(name)
-    {
-        timer_->Start(commandBuffer_, (timer_->GetCurrentGpuFolder() + name_).c_str());
+        if (!timer_)
+        {
+            return;
+        }
+        timerId_ = timer_->Start(commandBuffer_, name_.c_str());
     }
     virtual ~ScopedGpuTimer()
     {
-        if (folderTimer)
+        if (timer_)
         {
-            timer_->PopGpuFolder();
-            timer_->End(commandBuffer_, name_.c_str());
-        }
-        else
-        {
-            timer_->End(commandBuffer_, (timer_->GetCurrentGpuFolder() + name_).c_str());
+            timer_->End(commandBuffer_, timerId_);
         }
     }
     VkCommandBuffer commandBuffer_;
     VulkanGpuTimer* timer_;
     std::string name_;
-    bool folderTimer = false;
+    uint32_t timerId_ = VulkanGpuTimer::invalidTimerId;
 };
 
 // ============================================================================
@@ -454,25 +468,13 @@ class ScopedCpuTimer
 public:
     DEFAULT_NON_COPIABLE(ScopedCpuTimer)
 
-    ScopedCpuTimer(VulkanGpuTimer* timer, const char* name) : timer_(timer), name_(name)
+    ScopedCpuTimer(VulkanGpuTimer* timer, const char* name) : timer_(timer), name_(name ? name : "")
     {
         if (!timer_)
         {
             return;
         }
-        scopedName_ = timer_->GetCurrentCpuFolder() + name_;
-        timer_->StartCpuTimer(scopedName_.c_str());
-    }
-    ScopedCpuTimer(VulkanGpuTimer* timer, const char* name, const char* foldername) : timer_(timer), name_(name)
-    {
-        if (!timer_)
-        {
-            return;
-        }
-        scopedName_ = timer_->GetCurrentCpuFolder() + name_;
-        timer_->StartCpuTimer(scopedName_.c_str());
-        folderTimer = true;
-        timer_->PushCpuFolder(foldername);
+        timerId_ = timer_->StartCpuTimer(name_.c_str());
     }
     virtual ~ScopedCpuTimer()
     {
@@ -480,17 +482,9 @@ public:
         {
             return;
         }
-        if (folderTimer)
-        {
-            timer_->PopCpuFolder();
-        }
-        timer_->EndCpuTimer(scopedName_.c_str());
+        timer_->EndCpuTimer(timerId_);
     }
     VulkanGpuTimer* timer_;
     std::string name_;
-    std::string scopedName_;
-    bool folderTimer = false;
-
-    // Static methods removed as per refactoring plan.
-    // If manual folder management is needed, expose methods on VulkanGpuTimer.
+    uint32_t timerId_ = VulkanGpuTimer::invalidTimerId;
 };
