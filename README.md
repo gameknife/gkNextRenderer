@@ -238,6 +238,50 @@ run.bat --preset android
 ./run.sh --preset default-macos-arm64 --target CharacterDemo
 ```
 
+### 可选资源包（optional / LDraw）
+
+为了控制仓库体积，下面这两个 pak **不随仓库提交**：
+
+- `assets/paks/optional.pak` — 主渲染器 / Editor 用到的额外示例资源
+- `assets/paks/ldraw.pak` — BrickPlayer 用到的 LDraw 零件库
+
+引擎在启动时会自动挂载存在的 pak，没有这两个文件主流程依旧能跑，只是相关 demo 场景或 LDraw 工作流会缺资源。
+
+文件托管在仓库的 GitHub Release（tag `paks-latest`）上，三平台用同一份脚本下载：
+
+```bash
+# Linux / macOS / Git Bash —— 默认两个都拉
+./scripts/fetch-paks.sh
+
+# 只拉其中一个
+./scripts/fetch-paks.sh --optional
+./scripts/fetch-paks.sh --ldraw
+
+# Windows
+scripts\fetch-paks.bat
+scripts\fetch-paks.bat --ldraw
+```
+
+如果需要走自建镜像或特定 tag，可通过环境变量覆盖：
+
+- `PAKS_REPO`（默认 `gameknife/gkNextEngine`）
+- `PAKS_RELEASE_TAG`（默认 `paks-latest`）
+- `PAKS_BASE_URL`（直接指定 `<base>/<name>.pak` 的 base 部分，跳过 GitHub Release 拼装）
+
+**维护者：发布 / 更新 release**
+
+当 pak 内容更新后，用 `scripts/publish-paks.*` 一条命令把本地 `assets/paks/*.pak` 推到 release（不存在则创建，已存在则覆盖同名 asset）。脚本依赖 [`gh` CLI](https://cli.github.com/)，先 `gh auth login` 登录一次：
+
+```bash
+# Linux / macOS / Git Bash
+./scripts/publish-paks.sh              # 上传两个
+./scripts/publish-paks.sh --ldraw      # 仅 ldraw.pak
+./scripts/publish-paks.sh --dry-run    # 不真的上传，先看会做什么
+
+# Windows
+scripts\publish-paks.bat
+```
+
 ---
 
 ## 子项目

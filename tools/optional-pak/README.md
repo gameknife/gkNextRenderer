@@ -7,17 +7,23 @@ falls back to pak entries for any file missing on disk.
 
 ## Downloading the prebuilt pak
 
-```bash
-# bash / zsh
-./tools/optional-pak/fetch-optional-pak.sh
+The canonical fetcher is at the top-level `scripts/fetch-paks.*` and pulls every
+optional pak (`ldraw.pak` and `optional.pak`) from the project's GitHub release:
 
-# PowerShell
-pwsh ./tools/optional-pak/fetch-optional-pak.ps1
+```bash
+# bash / zsh / Git Bash — fetch every optional pak
+./scripts/fetch-paks.sh
+
+# Only this pak
+./scripts/fetch-paks.sh --optional
+
+# Windows
+scripts\fetch-paks.bat --optional
 ```
 
-The default URL is a `TODO` placeholder. Either edit the script or export
-`OPTIONAL_PAK_URL` (or `$env:OPTIONAL_PAK_URL` on Windows) to point at your
-CDN/COS bucket.
+The legacy `tools/optional-pak/fetch-optional-pak.{sh,ps1}` scripts still work
+and now delegate to the canonical fetcher. See `scripts/fetch-paks.sh --help`
+for environment overrides (`PAKS_REPO`, `PAKS_RELEASE_TAG`, `PAKS_BASE_URL`).
 
 ## Rebuilding the pak
 

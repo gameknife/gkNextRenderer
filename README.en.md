@@ -238,6 +238,50 @@ run.bat --preset android
 ./run.sh --preset default-macos-arm64 --target CharacterDemo
 ```
 
+### Optional Asset Paks (optional / LDraw)
+
+To keep the repository small, the following two pak files **are not committed**:
+
+- `assets/paks/optional.pak` — extra sample assets used by the main renderer / Editor
+- `assets/paks/ldraw.pak` — LDraw parts library used by BrickPlayer
+
+The engine mounts whichever paks exist at startup; the project still runs without them — you only lose the demo scenes and LDraw workflows that depend on those assets.
+
+Both files are hosted as assets on a dedicated GitHub Release (tag `paks-latest`). One script handles all platforms:
+
+```bash
+# Linux / macOS / Git Bash — fetches both by default
+./scripts/fetch-paks.sh
+
+# Or only one
+./scripts/fetch-paks.sh --optional
+./scripts/fetch-paks.sh --ldraw
+
+# Windows
+scripts\fetch-paks.bat
+scripts\fetch-paks.bat --ldraw
+```
+
+To use a private mirror or a different release tag, override via environment variables:
+
+- `PAKS_REPO` (default `gameknife/gkNextEngine`)
+- `PAKS_RELEASE_TAG` (default `paks-latest`)
+- `PAKS_BASE_URL` (full base URL — files are appended as `<base>/<name>.pak`; skips the GitHub release path)
+
+**Maintainers: publishing / updating the release**
+
+When the pak contents change, `scripts/publish-paks.*` pushes the local `assets/paks/*.pak` to the release (creates the release if missing, replaces same-named assets otherwise). It uses the [`gh` CLI](https://cli.github.com/), so authenticate once with `gh auth login`:
+
+```bash
+# Linux / macOS / Git Bash
+./scripts/publish-paks.sh              # uploads both
+./scripts/publish-paks.sh --ldraw      # only ldraw.pak
+./scripts/publish-paks.sh --dry-run    # preview without touching the remote
+
+# Windows
+scripts\publish-paks.bat
+```
+
 ---
 
 ## Subprojects
