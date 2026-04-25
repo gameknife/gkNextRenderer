@@ -1010,17 +1010,15 @@ namespace Vulkan
         }
 
         {
-            PERFORMANCEAPI_INSTRUMENT_COLOR("Renderer::DrawFrame", PERFORMANCEAPI_MAKE_COLOR(200, 255, 200));
             SCOPED_CPU_TIMER("draw-frame");
             const auto noTimeout = std::numeric_limits<uint64_t>::max();
 
             {
-                PERFORMANCEAPI_INSTRUMENT_COLOR("Renderer::Prepare", PERFORMANCEAPI_MAKE_COLOR(255, 255, 200));
+                SCOPED_CPU_TIMER("prepare");
                 BeforeNextFrame();
             }
 
             {
-                PERFORMANCEAPI_INSTRUMENT_COLOR("Renderer::QueryWait", PERFORMANCEAPI_MAKE_COLOR(255, 255, 200));
                 SCOPED_CPU_TIMER("hwquery");
                 gpuTimer_->FrameEnd((*commandBuffers_)[currentImageIndex_]);
             }
@@ -1047,7 +1045,6 @@ namespace Vulkan
             gpuTimer_->Reset(commandBuffer);
 
             {
-                PERFORMANCEAPI_INSTRUMENT_COLOR("Renderer::Render", PERFORMANCEAPI_MAKE_COLOR(200, 200, 255));
                 SCOPED_GPU_TIMER("[gpu time]");
 
                 {
@@ -1075,25 +1072,24 @@ namespace Vulkan
             commandBuffers_->End(currentFrame_);
 
             {
-                PERFORMANCEAPI_INSTRUMENT_COLOR("Renderer::UpdateNodes", PERFORMANCEAPI_MAKE_COLOR(255, 200, 255));
+                SCOPED_CPU_TIMER("update uniform");
                 UpdateUniformBuffer(currentImageIndex_);
             }
 
             // wait the last frame command buffer to complete
             if (currentFence)
             {
-                PERFORMANCEAPI_INSTRUMENT_COLOR("Renderer::Fence", PERFORMANCEAPI_MAKE_COLOR(255, 200, 255));
                 SCOPED_CPU_TIMER("fence");
                 currentFence->Wait(noTimeout);
             }
 
-            if (GetScene().UpdateNodes())
             {
-                AfterUpdateScene();
+                SCOPED_CPU_TIMER("update nodes");
+                if (GetScene().UpdateNodes())
+                {
+                    AfterUpdateScene();
+                }
             }
-
-            AfterRenderCmd();
-            currentFence = &(inFlightFences_[currentFrame_]);
 
             VkSubmitInfo submitInfo = {};
             submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1103,22 +1099,26 @@ namespace Vulkan
             VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
             VkSemaphore signalSemaphores[] = {renderFinishedSemaphore};
             {
-                submitInfo.waitSemaphoreCount = 1;
-                submitInfo.pWaitSemaphores = waitSemaphores;
-                submitInfo.pWaitDstStageMask = waitStages;
-                submitInfo.commandBufferCount = 1;
-                submitInfo.pCommandBuffers = commandBuffers;
-                submitInfo.signalSemaphoreCount = 1;
-                submitInfo.pSignalSemaphores = signalSemaphores;
+                SCOPED_CPU_TIMER("submit");
+                AfterRenderCmd();
+                currentFence = &(inFlightFences_[currentFrame_]);
+                {
+                    submitInfo.waitSemaphoreCount = 1;
+                    submitInfo.pWaitSemaphores = waitSemaphores;
+                    submitInfo.pWaitDstStageMask = waitStages;
+                    submitInfo.commandBufferCount = 1;
+                    submitInfo.pCommandBuffers = commandBuffers;
+                    submitInfo.signalSemaphoreCount = 1;
+                    submitInfo.pSignalSemaphores = signalSemaphores;
 
-                currentFence->Reset();
+                    currentFence->Reset();
 
-                Check(vkQueueSubmit(device_->GraphicsQueue(), 1, &submitInfo, currentFence->Handle()),
-                      "submit draw command buffer");
+                    Check(vkQueueSubmit(device_->GraphicsQueue(), 1, &submitInfo, currentFence->Handle()),
+                          "submit draw command buffer");
+                }
             }
 
             {
-                PERFORMANCEAPI_INSTRUMENT_COLOR("Renderer::Present", PERFORMANCEAPI_MAKE_COLOR(255, 200, 255));
                 SCOPED_CPU_TIMER("present");
                 VkSwapchainKHR swapChains[] = {swapChain_->Handle()};
                 VkPresentInfoKHR presentInfo = {};

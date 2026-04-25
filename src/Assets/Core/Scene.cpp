@@ -17,6 +17,7 @@
 #include "Runtime/Components/SkinnedMeshComponent.h"
 #include "Runtime/Engine.hpp"
 #include "Runtime/Utilities/NextEngineHelper.h"
+#include "Vulkan/SyncAndTiming.hpp"
 
 #include <algorithm>
 #include <spdlog/spdlog.h>
@@ -834,98 +835,106 @@ namespace Assets
     {
         if (NextEngine::GetInstance()->GetUserSettings().TickAnimation)
         {
-            for (auto& node : nodes_)
             {
-                if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
-                {
-                    skinnedMesh->Update(deltaSeconds);
-                    if (NextEngine::GetInstance()->GetShowFlags().ShowDebugSkeleton)
-                    {
-                        skinnedMesh->DrawDebugSkeleton(node->WorldTransform());
-                    }
+                SCOPED_CPU_TIMER("skinned mesh");
 
-                    if (skinnedMesh->IsPlaying())
+                for (auto& node : nodes_)
+                {
+                    if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
                     {
+                        skinnedMesh->Update(deltaSeconds);
+                        if (NextEngine::GetInstance()->GetShowFlags().ShowDebugSkeleton)
+                        {
+                            skinnedMesh->DrawDebugSkeleton(node->WorldTransform());
+                        }
+
+                        if (skinnedMesh->IsPlaying())
+                        {
+                            MarkDirty();
+                            if (auto renderComponent = node->GetComponent<Runtime::RenderComponent>())
+                            {
+                                if (renderComponent->GetModelId() != -1)
+                                {
+                                    NextEngine::GetInstance()->GetRenderer().RequestSkinUpdate(
+                                        renderComponent->GetModelId());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            {
+                SCOPED_CPU_TIMER("track anims");
+
+                float durationMax = 0;
+
+                for (auto& track : tracks_)
+                {
+                    if (!track.Playing())
+                        continue;
+                    durationMax = glm::max(durationMax, track.Duration_);
+                }
+
+                for (auto& track : tracks_)
+                {
+                    if (!track.Playing())
+                        continue;
+                    track.Time_ += deltaSeconds * track.PlaySpeed_;
+                    if (track.Time_ > durationMax)
+                    {
+                        track.PlaySpeed_ = -1.0f;
+                    }
+                    if (track.Time_ < 0.0f)
+                    {
+                        track.PlaySpeed_ = 1.0f;
+                    }
+                    Node* node = GetNode(track.NodeName_);
+                    if (node)
+                    {
+                        glm::vec3 translation = node->Translation();
+                        glm::quat rotation = node->Rotation();
+                        glm::vec3 scaling = node->Scale();
+
+                        track.Sample(track.Time_, translation, rotation, scaling);
+
+                        node->SetTranslation(translation);
+                        node->SetRotation(rotation);
+                        node->SetScale(scaling);
+                        node->RecalcTransform(true);
+
                         MarkDirty();
-                        if (auto renderComponent = node->GetComponent<Runtime::RenderComponent>())
+
+                        // to physicSys
+                        std::function<void(Node*)> UpdatePhysicsBodyRecursive = [&](Node* n)
                         {
-                            if (renderComponent->GetModelId() != -1)
+                            if (!n)
+                                return;
+                            auto phys = n->GetComponent<Runtime::PhysicsComponent>();
+                            if (phys)
                             {
-                                NextEngine::GetInstance()->GetRenderer().RequestSkinUpdate(
-                                    renderComponent->GetModelId());
+                                NextBodyID bodyID = phys->GetPhysicsBody();
+                                if (!bodyID.IsInvalid())
+                                {
+                                    NextEngine::GetInstance()->GetPhysicsEngine()->MoveKinematicBody(
+                                        bodyID, n->WorldTranslation(), n->WorldRotation(), 0.01f);
+                                }
                             }
-                        }
-                    }
-                }
-            }
 
-            float durationMax = 0;
-
-            for (auto& track : tracks_)
-            {
-                if (!track.Playing())
-                    continue;
-                durationMax = glm::max(durationMax, track.Duration_);
-            }
-
-            for (auto& track : tracks_)
-            {
-                if (!track.Playing())
-                    continue;
-                track.Time_ += deltaSeconds * track.PlaySpeed_;
-                if (track.Time_ > durationMax)
-                {
-                    track.PlaySpeed_ = -1.0f;
-                }
-                if (track.Time_ < 0.0f)
-                {
-                    track.PlaySpeed_ = 1.0f;
-                }
-                Node* node = GetNode(track.NodeName_);
-                if (node)
-                {
-                    glm::vec3 translation = node->Translation();
-                    glm::quat rotation = node->Rotation();
-                    glm::vec3 scaling = node->Scale();
-
-                    track.Sample(track.Time_, translation, rotation, scaling);
-
-                    node->SetTranslation(translation);
-                    node->SetRotation(rotation);
-                    node->SetScale(scaling);
-                    node->RecalcTransform(true);
-
-                    MarkDirty();
-
-                    // to physicSys
-                    std::function<void(Node*)> UpdatePhysicsBodyRecursive = [&](Node* n)
-                    {
-                        if (!n)
-                            return;
-                        auto phys = n->GetComponent<Runtime::PhysicsComponent>();
-                        if (phys)
-                        {
-                            NextBodyID bodyID = phys->GetPhysicsBody();
-                            if (!bodyID.IsInvalid())
+                            for (auto& child : n->Children())
                             {
-                                NextEngine::GetInstance()->GetPhysicsEngine()->MoveKinematicBody(
-                                    bodyID, n->WorldTranslation(), n->WorldRotation(), 0.01f);
+                                UpdatePhysicsBodyRecursive(child.get());
                             }
-                        }
+                        };
+                        UpdatePhysicsBodyRecursive(node);
 
-                        for (auto& child : n->Children())
+                        // temporal if camera node, request override
+                        if (node->GetName() == "Shot.BlueCar")
                         {
-                            UpdatePhysicsBodyRecursive(child.get());
+                            requestOverrideModelView = true;
+                            overrideModelView = glm::lookAtRH(translation, translation + rotation * glm::vec3(0, 0, -1),
+                                                              glm::vec3(0.0f, 1.0f, 0.0f));
                         }
-                    };
-                    UpdatePhysicsBodyRecursive(node);
-
-                    // temporal if camera node, request override
-                    if (node->GetName() == "Shot.BlueCar")
-                    {
-                        requestOverrideModelView = true;
-                        overrideModelView = glm::lookAtRH(translation, translation + rotation * glm::vec3(0, 0, -1),
-                                                          glm::vec3(0.0f, 1.0f, 0.0f));
                     }
                 }
             }
@@ -1058,12 +1067,10 @@ namespace Assets
         if (nodes_.size() > 0)
         {
             // do always, no flicker now
-            // if (sceneDirty_)
+            if (sceneDirty_)
             {
                 sceneDirty_ = false;
                 {
-                    PERFORMANCEAPI_INSTRUMENT_COLOR("Scene::PrepareSceneNodes",
-                                                    PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
                     nodeProxys.clear();
                     indirectDrawBatchCount_ = 0;
 

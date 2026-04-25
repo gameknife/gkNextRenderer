@@ -11,8 +11,9 @@
 
 #define GK_CONCAT_IMPL(a, b) a##b
 #define GK_CONCAT(a, b) GK_CONCAT_IMPL(a, b)
-#define SCOPED_GPU_TIMER(name) ScopedGpuTimer GK_CONCAT(scopedGpuTimer_, __LINE__)(commandBuffer, GpuTimer(), name)
-#define SCOPED_CPU_TIMER(name) PERFORMANCEAPI_INSTRUMENT_DATA(name, ""); ScopedCpuTimer GK_CONCAT(scopedCpuTimer_, __LINE__)(GpuTimer(), name)
+#define SCOPED_GPU_TIMER_CMD(commandBufferValue, name) ScopedGpuTimer GK_CONCAT(scopedGpuTimer_, __LINE__)(commandBufferValue, VulkanGpuTimer::GetActiveTimer(), name)
+#define SCOPED_GPU_TIMER(name) SCOPED_GPU_TIMER_CMD(commandBuffer, name)
+#define SCOPED_CPU_TIMER(name) PERFORMANCEAPI_INSTRUMENT_DATA(name, ""); ScopedCpuTimer GK_CONCAT(scopedCpuTimer_, __LINE__)(VulkanGpuTimer::GetActiveTimer(), name)
 
 #if __APPLE__
 #define BENCH_MARK_CHECK() return
@@ -121,8 +122,19 @@ public:
         std::unordered_map<std::string, uint32_t> childNameCounts;
     };
 
+    static VulkanGpuTimer* GetActiveTimer()
+    {
+        return activeTimer_;
+    }
+
+    static void SetActiveTimer(VulkanGpuTimer* timer)
+    {
+        activeTimer_ = timer;
+    }
+
     VulkanGpuTimer(const Vulkan::Device& device, uint32_t totalCount, const VkPhysicalDeviceProperties& prop) : device_(device)
     {
+        SetActiveTimer(this);
         time_stamps.resize(totalCount);
         timeStampPeriod_ = prop.limits.timestampPeriod;
 
@@ -152,6 +164,10 @@ public:
     }
     virtual ~VulkanGpuTimer()
     {
+        if (GetActiveTimer() == this)
+        {
+            SetActiveTimer(nullptr);
+        }
         if (query_pool_timestamps != VK_NULL_HANDLE)
         {
             vkDestroyQueryPool(device_.Handle(), query_pool_timestamps, nullptr);
@@ -427,6 +443,9 @@ public:
     bool started_ = false;
     bool cpuFrameStarted_ = false;
     bool valid_ = false;
+
+private:
+    inline static VulkanGpuTimer* activeTimer_ = nullptr;
 };
 
 // ============================================================================
