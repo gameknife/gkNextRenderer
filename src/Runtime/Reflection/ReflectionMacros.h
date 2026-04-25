@@ -4,6 +4,10 @@
 // Macro to define component type name and meta type accessor
 #define REFLECT_COMPONENT(ClassName)                                             \
     std::string_view GetTypeName() const override { return #ClassName; }         \
+    entt::id_type GetTypeId() const override                                     \
+    {                                                                            \
+        return Assets::ComponentTypeId<ClassName>();                             \
+    }                                                                            \
     entt::meta_type GetMetaType() const override                                 \
     {                                                                            \
         return entt::resolve<ClassName>();                                       \

@@ -840,7 +840,7 @@ namespace Assets
 
                 for (auto& node : nodes_)
                 {
-                    if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
+                    if (auto* skinnedMesh = node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
                     {
                         skinnedMesh->Update(deltaSeconds);
                         if (NextEngine::GetInstance()->GetShowFlags().ShowDebugSkeleton)
@@ -851,7 +851,7 @@ namespace Assets
                         if (skinnedMesh->IsPlaying())
                         {
                             MarkDirty();
-                            if (auto renderComponent = node->GetComponent<Runtime::RenderComponent>())
+                            if (auto* renderComponent = node->GetComponentPtr<Runtime::RenderComponent>())
                             {
                                 if (renderComponent->GetModelId() != -1)
                                 {
@@ -910,7 +910,7 @@ namespace Assets
                         {
                             if (!n)
                                 return;
-                            auto phys = n->GetComponent<Runtime::PhysicsComponent>();
+                            auto* phys = n->GetComponentPtr<Runtime::PhysicsComponent>();
                             if (phys)
                             {
                                 NextBodyID bodyID = phys->GetPhysicsBody();
@@ -944,7 +944,7 @@ namespace Assets
         {
             for (auto& node : nodes_)
             {
-                auto render = node->GetComponent<Runtime::RenderComponent>();
+                auto* render = node->GetComponentPtr<Runtime::RenderComponent>();
                 if (!render || !render->GetVisible() || !render->IsDrawable())
                 {
                     continue;
@@ -1071,6 +1071,8 @@ namespace Assets
             {
                 sceneDirty_ = false;
                 {
+                    SCOPED_CPU_TIMER("update nodeproxy");
+
                     nodeProxys.clear();
                     indirectDrawBatchCount_ = 0;
 
@@ -1078,7 +1080,7 @@ namespace Assets
                     for (auto& node : nodes_)
                     {
                         // record all
-                        auto render = node->GetComponent<Runtime::RenderComponent>();
+                        auto* render = node->GetComponentPtr<Runtime::RenderComponent>();
                         if (render && render->IsDrawable())
                         {
                             glm::mat4 combined;
@@ -1097,7 +1099,7 @@ namespace Assets
                                 const uint32_t hoveredBit = hoveredId_ == instanceId ? 1u : 0u;
                                 const uint32_t lockedBit = IsLocked(instanceId) ? 1u : 0u;
                                 const uint32_t stateBits = hoveredBit | (lockedBit << 1u);
-                                if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
+                                if (auto* skinnedMesh = node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
                                 {
                                     nodeJointOffset = currentJointOffset;
                                     currentJointOffset += (uint32_t)skinnedMesh->GetJointMatrices().size();
@@ -1118,7 +1120,10 @@ namespace Assets
                             }
                         }
                     }
+                }
 
+                {
+                    SCOPED_CPU_TIMER("upload nodeproxy");
                     NodeProxy* data = reinterpret_cast<NodeProxy*>(
                         nodeMatrixBufferMemory_->Map(0, sizeof(NodeProxy) * nodeProxys.size()));
                     std::memcpy(data, nodeProxys.data(), nodeProxys.size() * sizeof(NodeProxy));

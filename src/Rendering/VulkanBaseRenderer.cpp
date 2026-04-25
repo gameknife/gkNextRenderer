@@ -743,7 +743,7 @@ namespace Vulkan
         uint32_t totalJoints = 0;
         for (auto& node : scene.Nodes())
         {
-            if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
+            if (auto* skinnedMesh = node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
             {
                 totalJoints += (uint32_t)skinnedMesh->GetJointMatrices().size();
             }
@@ -763,7 +763,7 @@ namespace Vulkan
             uint32_t offset = 0;
             for (auto& node : scene.Nodes())
             {
-                if (auto skinnedMesh = node->GetComponent<Runtime::SkinnedMeshComponent>())
+                if (auto* skinnedMesh = node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
                 {
                     const auto& matrices = skinnedMesh->GetJointMatrices();
                     std::memcpy(data + offset, matrices.data(), matrices.size() * sizeof(glm::mat4));

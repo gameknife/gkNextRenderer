@@ -64,11 +64,12 @@ namespace Assets
         void AddComponent(std::shared_ptr<T> component)
         {
             static_assert(std::is_base_of<Component, T>::value, "T must inherit from Component");
+            const auto componentTypeId = ComponentTypeId<T>();
             
             // Remove existing component of same type
             for (auto it = components_.begin(); it != components_.end(); )
             {
-                if (std::dynamic_pointer_cast<T>(*it))
+                if ((*it)->GetTypeId() == componentTypeId)
                 {
                     it = components_.erase(it);
                 }
@@ -82,20 +83,45 @@ namespace Assets
             {
                 component->SetOwner(this);
                 components_.push_back(component);
+                componentTypeMask_ |= ComponentTypeMask<T>();
             }
+        }
+
+        template <typename T>
+        T* GetComponentPtr() const
+        {
+            static_assert(std::is_base_of<Component, T>::value, "T must inherit from Component");
+            if (!MayHaveComponent<T>())
+            {
+                return nullptr;
+            }
+            const auto componentTypeId = ComponentTypeId<T>();
+
+            for (const auto& comp : components_)
+            {
+                if (comp->GetTypeId() == componentTypeId)
+                {
+                    return static_cast<T*>(comp.get());
+                }
+            }
+            return nullptr;
         }
 
         template <typename T>
         std::shared_ptr<T> GetComponent() const
         {
             static_assert(std::is_base_of<Component, T>::value, "T must inherit from Component");
+            if (!MayHaveComponent<T>())
+            {
+                return nullptr;
+            }
+            const auto componentTypeId = ComponentTypeId<T>();
             
             for (const auto& comp : components_)
             {
-                auto casted = std::dynamic_pointer_cast<T>(comp);
-                if (casted)
+                if (comp->GetTypeId() == componentTypeId)
                 {
-                    return casted;
+                    return std::static_pointer_cast<T>(comp);
                 }
             }
             return nullptr;
@@ -111,6 +137,18 @@ namespace Assets
         }
 
     private:
+        template <typename T>
+        static constexpr uint64_t ComponentTypeMask()
+        {
+            return 1ull << (ComponentTypeId<T>() & 63u);
+        }
+
+        template <typename T>
+        bool MayHaveComponent() const
+        {
+            return (componentTypeMask_ & ComponentTypeMask<T>()) != 0;
+        }
+
         std::string name_;
 
         mutable glm::vec3 translation_;
@@ -127,5 +165,6 @@ namespace Assets
         std::set< std::shared_ptr<Node> > children_;
 
         std::vector<std::shared_ptr<Component>> components_;
+        uint64_t componentTypeMask_ = 0;
     };
 }
