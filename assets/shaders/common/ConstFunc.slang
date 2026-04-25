@@ -48,118 +48,6 @@ public float3 AlignWithNormal(float3 ray, float3 normal)
     return to_world(ray, T, B, normal);
 }
 
-public float3 LinearToST2084UE(float3 lin)
-{
-    const float m1 = 0.1593017578125; // = 2610. / 4096. * .25;
-    const float m2 = 78.84375; // = 2523. / 4096. *  128;
-    const float c1 = 0.8359375; // = 2392. / 4096. * 32 - 2413./4096.*32 + 1;
-    const float c2 = 18.8515625; // = 2413. / 4096. * 32;
-    const float c3 = 18.6875; // = 2392. / 4096. * 32;
-    const float C = 10000.;
-
-    float3 L = lin/C;
-    float3 Lm = pow(L, float3(m1, m1, m1));
-    float3 N1 = (c1 + c2 * Lm);
-    float3 N2 = (1.0 + c3 * Lm);
-    float3 N = N1 * (1.0 / N2);
-    float3 P = pow(N, float3(m2, m2, m2));
-
-    return P;
-}
-
-public float3 CODTonemapping(float3 color)
-{
-    float a = 0.22;
-    float b = 0.30;
-    float c = 0.10;
-    float d = 0.20;
-    float e = 0.01;
-    float f = 0.30;
-    float3 mapped = ((color * (a * color + c * b) + d * e) / (color * (a * color + b) + d * f)) - e / f;
-    return saturate(mapped);
-}
-
-static const float e = 2.71828;
-
-float W_f(float x, float e0, float e1) {
-    if (x <= e0)
-        return 0;
-    if (x >= e1)
-        return 1;
-    float a = (x - e0) / (e1 - e0);
-    return a * a * (3 - 2 * a);
-}
-float H_f(float x, float e0, float e1) {
-    if (x <= e0)
-        return 0;
-    if (x >= e1)
-        return 1;
-    return (x - e0) / (e1 - e0);
-}
-
-float GranTurismoTonemapper(float x) {
-    float P = 1;  // max output
-    float a = 0.7;  // contrast, default 1.0
-    float m = 0.22; // linear section start, 0.22
-    float l = 0.4; // linear section length, 0.4
-    float c = 1.33;
-    float b = 0;
-    float l0 = (P - m) * l / a;
-    float L0 = m - m / a;
-    float L1 = m + (1 - m) / a;
-    float L_x = m + a * (x - m);
-    float T_x = m * pow(x / m, c) + b;
-    float S0 = m + l0;
-    float S1 = m + a * l0;
-    float C2 = a * P / (P - S1);
-    float S_x = P - (P - S1) * pow(e, -(C2 * (x - S0) / P));
-    float w0_x = 1 - W_f(x, 0, m);
-    float w2_x = H_f(x, m + l0, m + l0);
-    float w1_x = 1 - w0_x - w2_x;
-    float f_x = T_x * w0_x + L_x * w1_x + S_x * w2_x;
-    return f_x;
-}
-
-public float3 GT_Tonemapping(float3 x)
-{
-    return float3(GranTurismoTonemapper(x.r), GranTurismoTonemapper(x.g), GranTurismoTonemapper(x.b));
-}
-    
-public float3 ACES_Tonemapping(float3 color){
-    float3x3 m1 = float3x3(
-        0.59719, 0.07600, 0.02840,
-        0.35458, 0.90834, 0.13383,
-        0.04823, 0.01566, 0.83777
-    );
-    float3x3 m2 = float3x3(
-        1.60475, -0.10208, -0.00327,
-        -0.53108, 1.10813, -0.07276,
-        -0.07367, -0.00605, 1.07602
-    );
-    float3 v = mul(m1, color);
-    float3 a = v * (v + 0.0245786) - 0.000090537;
-    float3 b = v * (0.983729 * v + 0.4329510) + 0.238081;
-    return pow(clamp(mul(m2, (a / b)), 0.0, 1.0), float3(1.0 / 2.2, 1.0 / 2.2, 1.0 / 2.2));
-}
-
-float3 uncharted2Tonemap(float3 x) {
-    float A = 0.15;
-    float B = 0.50;
-    float C = 0.10;
-    float D = 0.20;
-    float E = 0.02;
-    float F = 0.30;
-    float W = 11.2;
-    return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
-}
-
-public float3 Uncharted2_Tonemapping(float3 color) {
-    const float W = 11.2;
-    float exposureBias = 2.0;
-    float3 curr = uncharted2Tonemap(exposureBias * color);
-    float3 whiteScale = 1.0 / uncharted2Tonemap(float3(W, W, W));
-    return curr * whiteScale;
-}
 
 // hsv to rgb
 float3 hsv2rgb(float3 c) {
@@ -222,6 +110,51 @@ float4 srgbToLinear(in float4 sRgb)
     //return float4(pow(sRgb.xyz, float3(1.0f / 2.2f, 1.0f / 2.2f, 1.0f / 2.2f)), sRgb.w);
     //float3 rgb = sRgb.xyz * (sRgb.xyz * (sRgb.xyz * 0.305306011F + 0.682171111F) + 0.012522878F);
     return float4(sRgb.rgb, sRgb.a);
+}
+
+// ---------- Packing helpers (shared by AmbientCube / DistanceField shaders) ----------
+
+#define MAX_ILLUMINANCE 512.f
+
+// Software replacements for hw-dependent pack_u8 / unpack_u8u32.
+public uint4 UnpackBytes(uint packed)
+{
+    return uint4(
+        (packed & 0xFF),
+        ((packed >> 8) & 0xFF),
+        ((packed >> 16) & 0xFF),
+        ((packed >> 24) & 0xFF)
+    );
+}
+
+public uint PackBytes(uint4 values)
+{
+    return (values.x & 0xFF) |
+           ((values.y & 0xFF) << 8) |
+           ((values.z & 0xFF) << 16) |
+           ((values.w & 0xFF) << 24);
+}
+
+// RGB10A2 color pack/unpack using MAX_ILLUMINANCE as the HDR clamp range.
+public uint packRGB10A2(float4 color)
+{
+    float4 clamped = clamp(color / MAX_ILLUMINANCE, float4(0.0f), float4(1.0f));
+
+    uint r = uint(clamped.r * 1023.0f);
+    uint g = uint(clamped.g * 1023.0f);
+    uint b = uint(clamped.b * 1023.0f);
+    uint a = uint(clamped.a * 3.0f);
+
+    return r | (g << 10) | (b << 20) | (a << 30);
+}
+
+public float4 unpackRGB10A2(uint packed)
+{
+    float r = float((packed) & 0x3FF) / 1023.0f;
+    float g = float((packed >> 10) & 0x3FF) / 1023.0f;
+    float b = float((packed >> 20) & 0x3FF) / 1023.0f;
+
+    return float4(r, g, b, 0.0) * MAX_ILLUMINANCE;
 }
 
 void pcg4d(inout uint4 v)
@@ -339,21 +272,7 @@ public float3 ggxSampling(inout uint4 RandomSeed, float roughness, float3 normal
     return to_world(wm_, tangent, bitangent, normal);
 }
 
-public Vertex UnpackVertex(uint index, in StructuredBuffer<GPUVertex> Vertices)
-{
-    Vertex v;
-    v.Position = Vertices[index].Position_Tx.xyz;
-    v.Normal = Vertices[index].Normal_Ty.xyz;
-    v.Tangent = Vertices[index].Tangent;
-    v.TexCoord = float2(Vertices[index].Position_Tx.w, Vertices[index].Normal_Ty.w);
-    uint16_t TangentWMatIdx = asuint16(Vertices[index].Tangent.w);
-    v.Tangent.w = (TangentWMatIdx >> 8) & 0xFF;
-    v.MaterialIndex = TangentWMatIdx & 0xFF;
-
-    return v;
-}
-
-public Vertex UnpackVertexV2(in GPUVertex Vert)
+public Vertex UnpackVertex(in GPUVertex Vert)
 {
     Vertex v;
     v.Position = Vert.Position_Tx.xyz;

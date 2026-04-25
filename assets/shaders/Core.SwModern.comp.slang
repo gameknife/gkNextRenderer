@@ -8,11 +8,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
 {
     START_SHADERCLOCK()
 
-    FVisibilityBufferRayCasterV2 rayCaster;
-    FAmbientCubeRayTracerV2 tracer;
-    FAmbientCubeIlluminatorV2 dIlluminator;
+    FVisibilityBufferRayCaster rayCaster;
+    FAmbientCubeRayTracer tracer;
+    FAmbientCubeIlluminator dIlluminator;
 
-    FPathTracingRendererV2 renderer;
+    FPathTracingRenderer renderer;
     renderer.ExitProbability = 0.5f;
     renderer.ExitAfterFirst = true;
     renderer.HitNormalOffset =  max(Bindless.GetGpuscene().Camera->AmbientCubeUnit, 0.0001f) * 0.5;

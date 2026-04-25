@@ -23,7 +23,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     let Camera = Bindless.GetGpuscene().Camera[0];
 
     // compose with renderer and tracer
-    FHiVoxelDDARayTracerV2 voxelTracer;
+    FHiVoxelDDARayTracer voxelTracer;
     FVoxelRayCaster rayCasterVoxel;
 
     int2 ipos = int2(DTid.xy);
@@ -40,7 +40,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float2 pixelOffset = float2(0, 0);
     if (rayCasterVoxel.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode, rayDir, rayLength, pixelOffset))
     {
-        float4 radiance = interpolateAmbientCubesV2<IDAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal);
+        float4 radiance = interpolateAmbientCubes<IDAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal);
         outColor = Bindless.GetGpuscene().GetMaterial(hitVertex.MaterialIndex).Diffuse * radiance;
         if (Camera.DebugDraw_Lighting)
         {

@@ -4,7 +4,7 @@ import Common;
 [numthreads(64, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    FHiVoxelDDARayTracerV2 tracer;
+    FHiVoxelDDARayTracer tracer;
     FGpuProbeGenerator probeGen;
 
     uint cascadeIndex = Bindless.GetGpuscene().custom_data_1;

@@ -2,24 +2,6 @@ import Common;
 
 static const uint kInvalidSeed = 0xffffffffu;
 
-uint4 UnpackBytesLocal(uint packed)
-{
-    return uint4(
-        (packed & 0xFF),
-        ((packed >> 8) & 0xFF),
-        ((packed >> 16) & 0xFF),
-        ((packed >> 24) & 0xFF)
-    );
-}
-
-uint PackBytesLocal(uint4 values)
-{
-    return (values.x & 0xFF) |
-           ((values.y & 0xFF) << 8) |
-           ((values.z & 0xFF) << 16) |
-           ((values.w & 0xFF) << 24);
-}
-
 [shader("compute")]
 [numthreads(64, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
@@ -39,12 +21,12 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
     VoxelData voxel = Voxels[cascadeBase + localIdx];
-    uint4 unpacked = UnpackBytesLocal(voxel.distanceToSolid_gg_z01);
+    uint4 unpacked = UnpackBytes(voxel.distanceToSolid_gg_z01);
 
     if (seed.w == kInvalidSeed)
     {
         unpacked.x = 255u;
-        Voxels[cascadeBase + localIdx].distanceToSolid_gg_z01 = PackBytesLocal(unpacked);
+        Voxels[cascadeBase + localIdx].distanceToSolid_gg_z01 = PackBytes(unpacked);
         return;
     }
 
@@ -55,5 +37,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float3 delta = float3(int(seed.x) - x, int(seed.y) - y, int(seed.z) - z);
     float distance = float(seed.w) + length(delta);
     unpacked.x = uint(clamp(floor(distance), 0.0f, 255.0f));
-    Voxels[cascadeBase + localIdx].distanceToSolid_gg_z01 = PackBytesLocal(unpacked);
+    Voxels[cascadeBase + localIdx].distanceToSolid_gg_z01 = PackBytes(unpacked);
 }

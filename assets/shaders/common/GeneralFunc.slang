@@ -3,7 +3,7 @@ implementing Common;
 
 namespace Common
 {
-    public Vertex get_material_dataV2(uint2 vBuffer, float3 ray_origin, float3 ray_direction, in NodeProxy* NodeProxies, in ModelData* Models, in GPUVertex* Vertices, in uint* PrimAddress)
+    public Vertex get_material_data(uint2 vBuffer, float3 ray_origin, float3 ray_direction, in NodeProxy* NodeProxies, in ModelData* Models, in GPUVertex* Vertices, in uint* PrimAddress)
     {
         // fetch primitive_index high 14bit as instance index and low 18bit as triangle index
         NodeProxy proxy = NodeProxies[vBuffer.x - 1];
@@ -24,7 +24,7 @@ namespace Common
         uint primitive_index = vBuffer.y; // triangle index in model, so has to add by modelinfo
 
         for (int i = 0; i != 3; ++i) {
-            const Vertex v = UnpackVertexV2(currentVertices[model.vertexOffset + PrimAddress[model.indexOffset + primitive_index * 3 + i]]);
+            const Vertex v = UnpackVertex(currentVertices[model.vertexOffset + PrimAddress[model.indexOffset + primitive_index * 3 + i]]);
             positions[i] = mul(proxy.worldTS, float4(v.Position, 1)).xyz;
             normals[i] = mul(proxy.worldTS, float4(v.Normal, 0)).xyz;
             tangents[i] = mul(proxy.worldTS, float4(v.Tangent.xyz, 0)).xyz;
