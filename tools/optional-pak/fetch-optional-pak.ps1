@@ -1,36 +1,26 @@
+[CmdletBinding()]
 param(
-    [string]$Url = $env:OPTIONAL_PAK_URL,
-    [string]$Output
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$Rest
 )
 
-$ErrorActionPreference = 'Stop'
+# Backwards-compatible shim. The canonical fetcher now lives at
+# scripts/fetch-paks.ps1 and can pull every optional pak (ldraw.pak / optional.pak)
+# from the project's GitHub release. See scripts/fetch-paks.ps1 -Help.
 
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ErrorActionPreference = 'Stop'
+$ScriptDir = $PSScriptRoot
 $RepoRoot = Resolve-Path (Join-Path $ScriptDir '..\..')
 
-# TODO: replace with the real COS/CDN URL once uploaded.
-$DefaultUrl = 'https://TODO-replace-me.example.com/gkNextRenderer/optional.pak'
-
-if (-not $Url) {
-    $Url = $DefaultUrl
+# Preserve the legacy OPTIONAL_PAK_URL override by mapping it onto PAKS_BASE_URL.
+if ($env:OPTIONAL_PAK_URL -and -not $env:PAKS_BASE_URL) {
+    $legacy = $env:OPTIONAL_PAK_URL
+    if ($legacy.EndsWith('/optional.pak')) {
+        $legacy = $legacy.Substring(0, $legacy.Length - '/optional.pak'.Length)
+    }
+    $env:PAKS_BASE_URL = $legacy
 }
 
-if ($Url -like '*TODO-replace-me*') {
-    Write-Error 'OPTIONAL_PAK_URL is not set and the default URL is a TODO placeholder. Set $env:OPTIONAL_PAK_URL or edit fetch-optional-pak.ps1.'
-    exit 1
-}
-
-if (-not $Output) {
-    $Output = Join-Path $RepoRoot 'assets\paks\optional.pak'
-}
-
-$OutputDir = Split-Path -Parent $Output
-if (-not (Test-Path $OutputDir)) {
-    New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
-}
-
-Write-Host "Downloading optional.pak from $Url"
-$TmpPath = "$Output.part"
-Invoke-WebRequest -Uri $Url -OutFile $TmpPath -UseBasicParsing
-Move-Item -Force $TmpPath $Output
-Write-Host "Saved to $Output"
+$Target = Join-Path $RepoRoot 'scripts\fetch-paks.ps1'
+& $Target -Optional @Rest
+exit $LASTEXITCODE
