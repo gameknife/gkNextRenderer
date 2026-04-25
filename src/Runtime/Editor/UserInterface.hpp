@@ -13,6 +13,7 @@
 #include <glm/vec4.hpp>
 
 class NextEngine;
+class VulkanGpuTimer;
 
 namespace Assets
 {
@@ -28,7 +29,6 @@ namespace Vulkan
 	class FrameBuffer;
 	class RenderPass;
 	class SwapChain;
-	class VulkanGpuTimer;
 	class RenderImage;
 }
 
@@ -71,7 +71,7 @@ public:
 	~UserInterface();
 
 	void PreRender();
-	void Render(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene);
+	void Render(const Statistics& statistics, VulkanGpuTimer* gpuTimer, Assets::Scene* scene);
 	void PostRender(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx,
 	                bool suppressAllUi = false);
 	void HandleEvent(const SDL_Event* event);
@@ -100,7 +100,7 @@ public:
 private:
 	NextEngine& GetEngine() {return *engine_;}
 	
-	void DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer);
+	void DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gpuTimer);
 	void DrawIndicator(uint32_t frameCount);
 	void DrawConsoleWindow();
 	void RefreshConsoleMatches(size_t matchLimit);
@@ -109,15 +109,15 @@ private:
 	int HandleConsoleInputTextCallback(ImGuiInputTextCallbackData* data);
 	void DrawConsoleLogOutputInternal(const char* childId, const ImVec2& size, bool bordered);
 
-	struct GpuTimeSample
+	struct TimingSample
 	{
 		double sampleTime = 0.0;
 		float milliseconds = 0.0f;
 	};
 
-	struct GpuTimeHistory
+	struct TimingHistory
 	{
-		std::deque<GpuTimeSample> samples;
+		std::deque<TimingSample> samples;
 		std::string displayName;
 		double lastSeenTime = 0.0;
 		float average = 0.0f;
@@ -146,8 +146,8 @@ private:
 	bool consoleScrollToBottom_ = false;
 	bool requestConsoleFocus_ = false;
 	uint64_t consoleLogRevision_ = 0;
-	std::unordered_map<std::string, GpuTimeHistory> gpuTimeHistory_;
-	uint32_t nextGpuTimeDisplayOrder_ = 0;
+	std::unordered_map<std::string, TimingHistory> gpuTimeHistory_;
+	std::unordered_map<std::string, TimingHistory> cpuTimeHistory_;
 
 	NextEngine* engine_;
 };

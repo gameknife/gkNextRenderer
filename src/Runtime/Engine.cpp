@@ -20,6 +20,7 @@
 #include "Runtime/Utilities/PhysicsDebugOverlay.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Instance.hpp"
+#include "Vulkan/SyncAndTiming.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/WindowSurface.hpp"
 
@@ -398,145 +399,180 @@ bool NextEngine::HandleEvent(SDL_Event& event)
 bool NextEngine::Tick(bool forcingDelta)
 {
     PERFORMANCEAPI_INSTRUMENT_FUNCTION();
-
-    // make sure the output is flushed
-    std::cout << std::flush;
-
-    // Hot change renderer
-    auto requestedRendererType = ResolveRendererType(static_cast<Vulkan::ERendererType>(userSettings_.RendererType),
-                                                     renderer_->SupportsRayTracing());
-    if (requestedRendererType != static_cast<Vulkan::ERendererType>(userSettings_.RendererType))
+    auto* cpuTimer = renderer_ ? renderer_->GpuTimer() : nullptr;
+    if (cpuTimer)
     {
-        userSettings_.RendererType = static_cast<int32_t>(requestedRendererType);
+        cpuTimer->CpuFrameBegin();
     }
 
-    if (renderer_->CurrentLogicRendererType() != requestedRendererType)
     {
-        renderer_->SwitchLogicRenderer(requestedRendererType);
-    }
+        SCOPED_CPU_TIMER_FOLDER_ON(cpuTimer, "engine", "engine/");
 
-    // delta time calc
-    const auto prevTime = time_;
-    time_ = GetWindow().GetTime();
-    deltaSeconds_ = time_ - prevTime;
-    if (forcingDelta)
-        deltaSeconds_ = 1.0 / 30.0;
-    float invDelta = static_cast<float>(deltaSeconds_) / 60.0f;
-    smoothedDeltaSeconds_ = glm::mix(smoothedDeltaSeconds_, deltaSeconds_, invDelta * 100.0f);
+        // make sure the output is flushed
+        std::cout << std::flush;
 
-    // Scene Update
-    if (scene_)
-    {
-        PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickScene", "");
-        scene_->Tick(static_cast<float>(deltaSeconds_));
-    }
+        // Hot change renderer
+        {
+            SCOPED_CPU_TIMER_ON(cpuTimer, "renderer switch");
+            auto requestedRendererType =
+                ResolveRendererType(static_cast<Vulkan::ERendererType>(userSettings_.RendererType),
+                                    renderer_->SupportsRayTracing());
+            if (requestedRendererType != static_cast<Vulkan::ERendererType>(userSettings_.RendererType))
+            {
+                userSettings_.RendererType = static_cast<int32_t>(requestedRendererType);
+            }
+
+            if (renderer_->CurrentLogicRendererType() != requestedRendererType)
+            {
+                renderer_->SwitchLogicRenderer(requestedRendererType);
+            }
+        }
+
+        // delta time calc
+        {
+            SCOPED_CPU_TIMER_ON(cpuTimer, "delta");
+            const auto prevTime = time_;
+            time_ = GetWindow().GetTime();
+            deltaSeconds_ = time_ - prevTime;
+            if (forcingDelta)
+                deltaSeconds_ = 1.0 / 30.0;
+            float invDelta = static_cast<float>(deltaSeconds_) / 60.0f;
+            smoothedDeltaSeconds_ = glm::mix(smoothedDeltaSeconds_, deltaSeconds_, invDelta * 100.0f);
+        }
+
+        // Scene Update
+        if (scene_)
+        {
+            SCOPED_CPU_TIMER_ON(cpuTimer, "scene tick");
+            scene_->Tick(static_cast<float>(deltaSeconds_));
+        }
 
 #if WITH_PHYSIC
-    if (userSettings_.TickPhysics && physicsEngine_)
-        physicsEngine_->Tick(deltaSeconds_);
+        if (userSettings_.TickPhysics && physicsEngine_)
+        {
+            SCOPED_CPU_TIMER_ON(cpuTimer, "physics");
+            physicsEngine_->Tick(deltaSeconds_);
+        }
 #endif
 
-    if (userSettings_.TickAnimation && animationEngine_)
-        animationEngine_->Tick(deltaSeconds_); // pause dev, wait next
-
-    if (quickJSEngine_)
-    {
-        quickJSEngine_->Tick(deltaSeconds_);
-    }
-
-    // tick
-    if (status_ == NextRenderer::EApplicationStatus::Running)
-    {
-        PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickGameInstance", "");
-        gameInstance_->OnTick(deltaSeconds_);
-    }
-
-    {
-        PERFORMANCEAPI_INSTRUMENT_DATA("Engine::TickTasks", "");
-
-        // iterate the tickedTasks_, if return true, remove it
-        for (auto it = tickedTasks_.begin(); it != tickedTasks_.end();)
+        if (userSettings_.TickAnimation && animationEngine_)
         {
-            if ((*it)(deltaSeconds_))
-            {
-                it = tickedTasks_.erase(it);
-            }
-            else
-            {
-                ++it;
-            }
+            SCOPED_CPU_TIMER_ON(cpuTimer, "animation");
+            animationEngine_->Tick(deltaSeconds_); // pause dev, wait next
         }
-    }
 
-
-    // iterate the delayedTasks_ , if Time is up, execute it, if return true, remove it
-    for (auto it = delayedTasks_.begin(); it != delayedTasks_.end();)
-    {
-        if (time_ > it->triggerTime)
+        if (quickJSEngine_)
         {
-            // update the next trigger time
-            it->triggerTime = time_ + it->loopTime;
+            SCOPED_CPU_TIMER_ON(cpuTimer, "quickjs");
+            quickJSEngine_->Tick(deltaSeconds_);
+        }
 
-            // execute
-            if (it->task())
+        // tick
+        if (status_ == NextRenderer::EApplicationStatus::Running)
+        {
+            SCOPED_CPU_TIMER_ON(cpuTimer, "game tick");
+            gameInstance_->OnTick(deltaSeconds_);
+        }
+
+        {
+            SCOPED_CPU_TIMER_ON(cpuTimer, "ticked tasks");
+
+            // iterate the tickedTasks_, if return true, remove it
+            for (auto it = tickedTasks_.begin(); it != tickedTasks_.end();)
             {
-                it = delayedTasks_.erase(it);
-            }
-            else
-            {
-                ++it;
+                if ((*it)(deltaSeconds_))
+                {
+                    it = tickedTasks_.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
             }
         }
-        else
+
         {
-            ++it;
+            SCOPED_CPU_TIMER_ON(cpuTimer, "delayed tasks");
+
+            // iterate the delayedTasks_ , if Time is up, execute it, if return true, remove it
+            for (auto it = delayedTasks_.begin(); it != delayedTasks_.end();)
+            {
+                if (time_ > it->triggerTime)
+                {
+                    // update the next trigger time
+                    it->triggerTime = time_ + it->loopTime;
+
+                    // execute
+                    if (it->task())
+                    {
+                        it = delayedTasks_.erase(it);
+                    }
+                    else
+                    {
+                        ++it;
+                    }
+                }
+                else
+                {
+                    ++it;
+                }
+            }
         }
-    }
 
-    {
-        PERFORMANCEAPI_INSTRUMENT_COLOR("Engine::TickRenderer", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
-        renderer_->DrawFrame();
-    }
-    totalFrames_ = renderer_->FrameCount();
-
-    if (screenShotRequested_)
-    {
-        renderer_->Device().WaitIdle();
-        ScreenShot::SaveSwapChainToFile(renderer_.get(), screenShotFilename_, 0, 0, 0, 0);
-        screenShotRequested_ = false;
-        screenShotFilename_.clear();
-    }
-
-    if (progressivePreFrames_ > 0)
-    {
-        progressivePreFrames_--;
-        if (progressivePreFrames_ == 0)
         {
-            progressiveRendering_ = true;
+            PERFORMANCEAPI_INSTRUMENT_COLOR("Engine::TickRenderer", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
+            renderer_->DrawFrame();
         }
-    }
+        totalFrames_ = renderer_->FrameCount();
 
-    // High quality capture: count down accumulated frames after DrawFrame
-    if (hqCaptureFramesRemaining_ > 0)
-    {
-        hqCaptureFramesRemaining_--;
-        if (hqCaptureFramesRemaining_ == 0)
+        if (screenShotRequested_)
         {
-            // All frames accumulated, capture now
+            SCOPED_CPU_TIMER_ON(cpuTimer, "screenshot");
             renderer_->Device().WaitIdle();
-            ScreenShot::SaveSwapChainToFile(renderer_.get(), hqCaptureFilename_, 0, 0, 0, 0);
-            spdlog::info("High quality capture saved: {} ({} frames accumulated)",
-                         hqCaptureFilename_, hqCaptureTotalFrames_);
+            ScreenShot::SaveSwapChainToFile(renderer_.get(), screenShotFilename_, 0, 0, 0, 0);
+            screenShotRequested_ = false;
+            screenShotFilename_.clear();
+        }
 
-            // Restore previous state
-            progressiveRendering_ = hqCapturePrevProgressive_;
-            progressivePreFrames_ = hqCapturePrevPreFrames_;
+        if (progressivePreFrames_ > 0)
+        {
+            progressivePreFrames_--;
+            if (progressivePreFrames_ == 0)
+            {
+                progressiveRendering_ = true;
+            }
+        }
+
+        // High quality capture: count down accumulated frames after DrawFrame
+        if (hqCaptureFramesRemaining_ > 0)
+        {
+            SCOPED_CPU_TIMER_ON(cpuTimer, "hq capture");
+            hqCaptureFramesRemaining_--;
+            if (hqCaptureFramesRemaining_ == 0)
+            {
+                // All frames accumulated, capture now
+                renderer_->Device().WaitIdle();
+                ScreenShot::SaveSwapChainToFile(renderer_.get(), hqCaptureFilename_, 0, 0, 0, 0);
+                spdlog::info("High quality capture saved: {} ({} frames accumulated)",
+                             hqCaptureFilename_, hqCaptureTotalFrames_);
+
+                // Restore previous state
+                progressiveRendering_ = hqCapturePrevProgressive_;
+                progressivePreFrames_ = hqCapturePrevPreFrames_;
+            }
+        }
+
+        // sample gamepad stats
+        {
+            SCOPED_CPU_TIMER_ON(cpuTimer, "gamepad");
+            TickGamepadInput();
         }
     }
 
-    // sample gamepad stats
-
-    TickGamepadInput();
+    if (cpuTimer)
+    {
+        cpuTimer->CpuFrameEnd();
+    }
     return false;
 }
 
@@ -1043,6 +1079,8 @@ void NextEngine::OnRendererDeleteSwapChain()
 
 void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
+    auto* cpuTimer = renderer_ ? renderer_->GpuTimer() : nullptr;
+    SCOPED_CPU_TIMER_FOLDER_ON(cpuTimer, "ui", "ui/");
     static double lastTimestamp = 0.0;
     double now = GetWindow().GetTime();
 
@@ -1076,26 +1114,41 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
     stats.LoadingStatus = status_ == NextRenderer::EApplicationStatus::Loading;
 
     // Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
-    userInterface_->PreRender();
-    const bool uiHandled = gameInstance_->OnRenderUI();
+    {
+        SCOPED_CPU_TIMER_ON(cpuTimer, "pre render");
+        userInterface_->PreRender();
+    }
+    bool uiHandled = false;
+    {
+        SCOPED_CPU_TIMER_ON(cpuTimer, "game ui");
+        uiHandled = gameInstance_->OnRenderUI();
+    }
     const bool suppressAllUi = screenShotRequested_;
     if (!suppressAllUi)
     {
         if (showPhysicsDebugOverlay_)
         {
+            SCOPED_CPU_TIMER_ON(cpuTimer, "physics debug ui");
             Assets::Camera debugCamera = scene_->GetRenderCamera();
             gameInstance_->OverrideRenderCamera(debugCamera);
             Runtime::DrawPhysicsDebugOverlay(*scene_, debugCamera);
             gameInstance_->DrawAdditionalPhysicsDebugOverlay(debugCamera);
         }
-        Runtime::GraphicsDebugPanel::DrawPanel(*this, showGraphicsDebugPanel_,
-                                               gameInstance_->GetGraphicsDebugPanelTopOffset());
+        {
+            SCOPED_CPU_TIMER_ON(cpuTimer, "graphics debug ui");
+            Runtime::GraphicsDebugPanel::DrawPanel(*this, showGraphicsDebugPanel_,
+                                                   gameInstance_->GetGraphicsDebugPanelTopOffset());
+        }
     }
     if (!uiHandled && !suppressAllUi)
     {
+        SCOPED_CPU_TIMER_ON(cpuTimer, "overlay ui");
         userInterface_->Render(stats, renderer_->GpuTimer(), scene_.get());
     }
-    userInterface_->PostRender(commandBuffer, renderer_->SwapChain(), imageIndex, suppressAllUi);
+    {
+        SCOPED_CPU_TIMER_ON(cpuTimer, "imgui submit");
+        userInterface_->PostRender(commandBuffer, renderer_->SwapChain(), imageIndex, suppressAllUi);
+    }
 }
 
 void NextEngine::OnKey(SDL_Event& event)
@@ -1406,7 +1459,12 @@ void NextEngine::TickGamepadInput()
     SDL_free(gamepads);
 }
 
-void NextEngine::OnRendererBeforeNextFrame() { TaskCoordinator::GetInstance()->Tick(); }
+void NextEngine::OnRendererBeforeNextFrame()
+{
+    auto* cpuTimer = renderer_ ? renderer_->GpuTimer() : nullptr;
+    SCOPED_CPU_TIMER_ON(cpuTimer, "task coordinator");
+    TaskCoordinator::GetInstance()->Tick();
+}
 
 void NextEngine::RequestLoadScene(std::string sceneFileName)
 {

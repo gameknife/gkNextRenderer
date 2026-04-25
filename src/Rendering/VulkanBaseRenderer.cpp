@@ -1149,7 +1149,6 @@ namespace Vulkan
             currentFrame_ = (currentFrame_ + 1) % inFlightFences_.size();
             frameCount_++;
         }
-        gpuTimer_->CpuFrameEnd();
     }
 
     void VulkanBaseRenderer::BeforeNextFrame()

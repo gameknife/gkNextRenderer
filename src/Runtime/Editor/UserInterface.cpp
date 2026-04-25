@@ -687,7 +687,7 @@ void UserInterface::PreRender()
     }
 }
 
-void UserInterface::Render(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer, Assets::Scene* scene)
+void UserInterface::Render(const Statistics& statistics, VulkanGpuTimer* gpuTimer, Assets::Scene* scene)
 {
     DrawOverlay(statistics, gpuTimer);
     DrawConsoleWindow();
@@ -757,7 +757,7 @@ bool UserInterface::WantsToCaptureKeyboard() const { return ImGui::GetIO().WantC
 
 bool UserInterface::WantsToCaptureMouse() const { return ImGui::GetIO().WantCaptureMouse; }
 
-void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuTimer* gpuTimer)
+void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gpuTimer)
 {
     if (!Settings().ShowOverlay)
     {
@@ -840,7 +840,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
         // Timers
         if (gpuTimer)
         {
-            struct GpuTimingRow
+            struct TimingRow
             {
                 std::string name;
                 int depth = 0;
@@ -851,151 +851,160 @@ void UserInterface::DrawOverlay(const Statistics& statistics, Vulkan::VulkanGpuT
                 bool active = true;
             };
 
-            constexpr double gpuTimeHistoryWindowSeconds = 2.0;
-            constexpr double gpuTimeStaleSeconds = 3.0;
+            constexpr double timingHistoryWindowSeconds = 2.0;
+            constexpr double timingStaleSeconds = 3.0;
             const double now = ImGui::GetTime();
-            const auto times = gpuTimer->FetchAllTimes(4);
-            std::vector<GpuTimingRow> gpuTimingRows;
-            gpuTimingRows.reserve(times.size());
 
-            for (const auto& time : times)
+            auto BuildTimingRows = [&](const std::vector<std::tuple<std::string, float, int>>& times,
+                                       std::unordered_map<std::string, TimingHistory>& historyMap)
             {
-                const std::string& name = std::get<0>(time);
-                const float ms = std::get<1>(time);
-                const int depth = std::get<2>(time);
-                const std::string historyKey = name + "#" + std::to_string(depth);
-                auto [historyIter, inserted] = gpuTimeHistory_.try_emplace(historyKey);
-                auto& history = historyIter->second;
-                if (inserted)
+                uint32_t currentDisplayOrder = 0;
+                for (const auto& time : times)
                 {
-                    history.displayOrder = nextGpuTimeDisplayOrder_++;
+                    const std::string& name = std::get<0>(time);
+                    const float ms = std::get<1>(time);
+                    const int depth = std::get<2>(time);
+                    const std::string historyKey = name + "#" + std::to_string(depth);
+                    auto historyIter = historyMap.try_emplace(historyKey).first;
+                    auto& history = historyIter->second;
+
+                    history.displayOrder = currentDisplayOrder++;
+                    history.displayName = name;
+                    history.depth = depth;
+                    history.lastSeenTime = now;
+                    history.samples.push_back({now, ms});
+
+                    while (!history.samples.empty() &&
+                           now - history.samples.front().sampleTime > timingHistoryWindowSeconds)
+                    {
+                        history.samples.pop_front();
+                    }
+
+                    float sum = 0.0f;
+                    float minimum = 1000000.0f;
+                    float maximum = 0.0f;
+                    for (const auto& sample : history.samples)
+                    {
+                        sum += sample.milliseconds;
+                        minimum = std::min(minimum, sample.milliseconds);
+                        maximum = std::max(maximum, sample.milliseconds);
+                    }
+
+                    const float average = history.samples.empty() ? ms : sum / static_cast<float>(history.samples.size());
+                    history.average = average;
+                    history.minimum = minimum;
+                    history.maximum = maximum;
                 }
 
-                history.displayName = name;
-                history.depth = depth;
-                history.lastSeenTime = now;
-                history.samples.push_back({now, ms});
-
-                while (!history.samples.empty() &&
-                       now - history.samples.front().sampleTime > gpuTimeHistoryWindowSeconds)
+                for (auto iter = historyMap.begin(); iter != historyMap.end();)
                 {
-                    history.samples.pop_front();
+                    auto& history = iter->second;
+                    while (!history.samples.empty() &&
+                           now - history.samples.front().sampleTime > timingHistoryWindowSeconds)
+                    {
+                        history.samples.pop_front();
+                    }
+
+                    if (now - iter->second.lastSeenTime > timingStaleSeconds)
+                    {
+                        iter = historyMap.erase(iter);
+                    }
+                    else
+                    {
+                        ++iter;
+                    }
                 }
 
-                float sum = 0.0f;
-                float minimum = 1000000.0f;
-                float maximum = 0.0f;
-                for (const auto& sample : history.samples)
+                std::vector<TimingRow> timingRows;
+                timingRows.reserve(historyMap.size());
+                for (const auto& [key, history] : historyMap)
                 {
-                    sum += sample.milliseconds;
-                    minimum = std::min(minimum, sample.milliseconds);
-                    maximum = std::max(maximum, sample.milliseconds);
+                    timingRows.push_back(
+                        {history.displayName,
+                         history.depth,
+                         history.average,
+                         history.minimum,
+                         history.maximum,
+                         history.displayOrder,
+                         now - history.lastSeenTime <= 0.1});
                 }
+                std::sort(timingRows.begin(), timingRows.end(), [](const TimingRow& lhs, const TimingRow& rhs)
+                {
+                    if (lhs.displayOrder != rhs.displayOrder)
+                    {
+                        return lhs.displayOrder < rhs.displayOrder;
+                    }
+                    return lhs.active && !rhs.active;
+                });
+                return timingRows;
+            };
 
-                const float average = history.samples.empty() ? ms : sum / static_cast<float>(history.samples.size());
-                history.average = average;
-                history.minimum = minimum;
-                history.maximum = maximum;
-            }
-
-            for (auto iter = gpuTimeHistory_.begin(); iter != gpuTimeHistory_.end();)
+            auto DrawTimingSection = [&](const char* label, const char* tableId, const std::vector<TimingRow>& timingRows,
+                                         const ImVec4& rootBarColor, const ImVec4& childBarColor)
             {
-                auto& history = iter->second;
-                while (!history.samples.empty() &&
-                       now - history.samples.front().sampleTime > gpuTimeHistoryWindowSeconds)
+                float totalTime = 0.0f;
+                for (const auto& row : timingRows)
                 {
-                    history.samples.pop_front();
+                    if (row.depth == 0)
+                    {
+                        totalTime += row.average;
+                    }
                 }
 
-                if (now - iter->second.lastSeenTime > gpuTimeStaleSeconds)
+                ImGui::TextColored(colHeader, "%s (avg %.2fms / %.1fs):", label, totalTime,
+                                   timingHistoryWindowSeconds);
+
+                if (ImGui::BeginTable(tableId, 5,
+                                      ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
+                                          ImGuiTableFlags_SizingFixedFit))
                 {
-                    iter = gpuTimeHistory_.erase(iter);
+                    ImGui::TableSetupColumn("Pass", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+                    ImGui::TableSetupColumn("Avg", ImGuiTableColumnFlags_WidthFixed, 52.0f);
+                    ImGui::TableSetupColumn("Min", ImGuiTableColumnFlags_WidthFixed, 52.0f);
+                    ImGui::TableSetupColumn("Max", ImGuiTableColumnFlags_WidthFixed, 52.0f);
+                    ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 74.0f);
+                    ImGui::TableHeadersRow();
+
+                    for (const auto& row : timingRows)
+                    {
+                        const float ratio = totalTime > 0.001f ? row.average / totalTime : 0.0f;
+                        const ImVec4 rowColor = row.depth == 0 ? colVal : colLabel;
+
+                        ImGui::TableNextRow();
+                        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, row.active ? 1.0f : 0.45f);
+                        ImGui::TableNextColumn();
+                        ImGui::Indent(static_cast<float>(row.depth) * 12.0f);
+                        ImGui::TextColored(rowColor, "%s", row.name.c_str());
+                        ImGui::Unindent(static_cast<float>(row.depth) * 12.0f);
+
+                        ImGui::TableNextColumn();
+                        ImGui::TextColored(rowColor, "%.2f", row.average);
+                        ImGui::TableNextColumn();
+                        ImGui::TextColored(colLabel, "%.2f", row.minimum);
+                        ImGui::TableNextColumn();
+                        ImGui::TextColored(colLabel, "%.2f", row.maximum);
+                        ImGui::TableNextColumn();
+
+                        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, row.depth == 0 ? rootBarColor : childBarColor);
+                        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0, 0, 0, 0));
+                        ImGui::PushStyleColor(ImGuiCol_Border, colLabel);
+                        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+                        ImGui::ProgressBar(std::min(ratio, 1.0f), ImVec2(70, ImGui::GetTextLineHeight()), "");
+                        ImGui::PopStyleVar();
+                        ImGui::PopStyleColor(3);
+                        ImGui::PopStyleVar();
+                    }
+                    ImGui::EndTable();
                 }
-                else
-                {
-                    ++iter;
-                }
-            }
+            };
 
-            gpuTimingRows.reserve(gpuTimeHistory_.size());
-            for (const auto& [key, history] : gpuTimeHistory_)
-            {
-                gpuTimingRows.push_back(
-                    {history.displayName,
-                     history.depth,
-                     history.average,
-                     history.minimum,
-                     history.maximum,
-                     history.displayOrder,
-                     now - history.lastSeenTime <= 0.1});
-            }
-            std::sort(gpuTimingRows.begin(), gpuTimingRows.end(), [](const GpuTimingRow& lhs, const GpuTimingRow& rhs)
-            {
-                return lhs.displayOrder < rhs.displayOrder;
-            });
+            const auto gpuTimingRows = BuildTimingRows(gpuTimer->FetchAllTimes(4), gpuTimeHistory_);
+            DrawTimingSection("GPU Time", "##GpuTimeTable", gpuTimingRows,
+                              ImVec4(0.35f, 0.65f, 1.0f, 1.0f), ImVec4(0.2f, 0.7f, 0.35f, 1.0f));
 
-            float totalGpuTime = 0.0f;
-            for (const auto& row : gpuTimingRows)
-            {
-                if (row.depth == 0)
-                {
-                    totalGpuTime += row.average;
-                }
-            }
-
-            ImGui::TextColored(colHeader, "GPU Time (avg %.2fms / %.1fs):", totalGpuTime,
-                               gpuTimeHistoryWindowSeconds);
-
-            if (ImGui::BeginTable("##GpuTimeTable", 5,
-                                  ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
-                                      ImGuiTableFlags_SizingFixedFit))
-            {
-                ImGui::TableSetupColumn("Pass", ImGuiTableColumnFlags_WidthFixed, 150.0f);
-                ImGui::TableSetupColumn("Avg", ImGuiTableColumnFlags_WidthFixed, 52.0f);
-                ImGui::TableSetupColumn("Min", ImGuiTableColumnFlags_WidthFixed, 52.0f);
-                ImGui::TableSetupColumn("Max", ImGuiTableColumnFlags_WidthFixed, 52.0f);
-                ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 74.0f);
-                ImGui::TableHeadersRow();
-
-                for (const auto& row : gpuTimingRows)
-                {
-                    const float ratio = totalGpuTime > 0.001f ? row.average / totalGpuTime : 0.0f;
-                    const ImVec4 rowColor = row.depth == 0 ? colVal : colLabel;
-
-                    ImGui::TableNextRow();
-                    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, row.active ? 1.0f : 0.45f);
-                    ImGui::TableNextColumn();
-                    ImGui::Indent(static_cast<float>(row.depth) * 12.0f);
-                    ImGui::TextColored(rowColor, "%s", row.name.c_str());
-                    ImGui::Unindent(static_cast<float>(row.depth) * 12.0f);
-
-                    ImGui::TableNextColumn();
-                    ImGui::TextColored(rowColor, "%.2f", row.average);
-                    ImGui::TableNextColumn();
-                    ImGui::TextColored(colGood, "%.2f", row.minimum);
-                    ImGui::TableNextColumn();
-                    ImGui::TextColored(row.maximum > row.average * 1.35f ? colWarn : colLabel, "%.2f", row.maximum);
-                    ImGui::TableNextColumn();
-
-                    ImGui::PushStyleColor(ImGuiCol_PlotHistogram,
-                                          row.depth == 0 ? ImVec4(0.35f, 0.65f, 1.0f, 1.0f)
-                                                         : ImVec4(0.2f, 0.7f, 0.35f, 1.0f));
-                    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0, 0, 0, 0));
-                    ImGui::PushStyleColor(ImGuiCol_Border, colLabel);
-                    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-                    ImGui::ProgressBar(std::min(ratio, 1.0f), ImVec2(70, ImGui::GetTextLineHeight()), "");
-                    ImGui::PopStyleVar();
-                    ImGui::PopStyleColor(3);
-                    ImGui::PopStyleVar();
-                }
-                ImGui::EndTable();
-            }
-
-            ImGui::TextColored(colHeader, "CPU Time (%.2fms):", gpuTimer->GetCpuTime("draw-frame"));
-            // ImGui::Text("drawframe: %.2fms", gpuTimer->GetCpuTime("draw-frame"));
-            LabelVal("  - hwquery:", "%.2fms", gpuTimer->GetCpuTime("hwquery"));
-            LabelVal("  - fence:", "%.2fms", gpuTimer->GetCpuTime("fence"));
-            LabelVal("  - present:", "%.2fms", gpuTimer->GetCpuTime("present"));
+            const auto cpuTimingRows = BuildTimingRows(gpuTimer->FetchAllCpuTimes(5), cpuTimeHistory_);
+            DrawTimingSection("CPU Time", "##CpuTimeTable", cpuTimingRows,
+                              ImVec4(0.85f, 0.58f, 0.25f, 1.0f), ImVec4(0.7f, 0.45f, 0.2f, 1.0f));
         }
 
         ImGui::Separator();
