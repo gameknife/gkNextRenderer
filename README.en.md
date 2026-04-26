@@ -238,28 +238,32 @@ run.bat --preset android
 ./run.sh --preset default-macos-arm64 --target CharacterDemo
 ```
 
-### Optional Asset Paks (optional / LDraw)
+### Optional Assets
 
-To keep the repository small, the following two pak files **are not committed**:
+To keep the clone small, the following large binary assets are **not committed** to the repo. They live on a dedicated GitHub Release (tag `paks-latest`) and are pulled in via one cross-platform script:
 
-- `assets/paks/optional.pak` — extra sample assets used by the main renderer / Editor
-- `assets/paks/ldraw.pak` — LDraw parts library used by BrickPlayer
+| Selector | Contents | Lands at | If missing |
+|------|------|------|------|
+| `--ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer loses its LDraw parts library |
+| `--optional` | `optional.pak` | `assets/paks/` | Main renderer / Editor lose extra demo scenes |
+| `--sfx` | six mp3/wav files | `assets/sfx/` | MagicaLego / BrickPlayer go silent |
+| `--ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows MagicaLego video capture disabled |
+| `--sdl` | `SDL3-*.aar` | `android/app/libs/` | Android gradle build fails to link |
 
-The engine mounts whichever paks exist at startup; the project still runs without them — you only lose the demo scenes and LDraw workflows that depend on those assets.
-
-Both files are hosted as assets on a dedicated GitHub Release (tag `paks-latest`). One script handles all platforms:
+The engine mounts existing paks automatically, so the main flow boots without these. Android builds and MagicaLego-style scenarios do require their group to be fetched first.
 
 ```bash
-# Linux / macOS / Git Bash — fetches both by default
+# Linux / macOS / Git Bash — pulls every group by default
 ./scripts/fetch-paks.sh
 
-# Or only one
-./scripts/fetch-paks.sh --optional
-./scripts/fetch-paks.sh --ldraw
+# Or pick groups
+./scripts/fetch-paks.sh --optional --ldraw
+./scripts/fetch-paks.sh --sdl              # prep Android build
+./scripts/fetch-paks.sh --ffmpeg --sfx     # prep Windows MagicaLego
 
 # Windows
 scripts\fetch-paks.bat
-scripts\fetch-paks.bat --ldraw
+scripts\fetch-paks.bat --sdl
 ```
 
 To use a private mirror or a different release tag, override via environment variables:
@@ -270,13 +274,13 @@ To use a private mirror or a different release tag, override via environment var
 
 **Maintainers: publishing / updating the release**
 
-When the pak contents change, `scripts/publish-paks.*` pushes the local `assets/paks/*.pak` to the release (creates the release if missing, replaces same-named assets otherwise). It uses the [`gh` CLI](https://cli.github.com/), so authenticate once with `gh auth login`:
+When any group changes, `scripts/publish-paks.*` pushes the local files to the release (creates it if missing, otherwise replaces same-named assets). It uses the [`gh` CLI](https://cli.github.com/), so authenticate once via `gh auth login`. Selectors mirror the fetch side:
 
 ```bash
 # Linux / macOS / Git Bash
-./scripts/publish-paks.sh              # uploads both
-./scripts/publish-paks.sh --ldraw      # only ldraw.pak
-./scripts/publish-paks.sh --dry-run    # preview without touching the remote
+./scripts/publish-paks.sh                 # upload every group
+./scripts/publish-paks.sh --ldraw --sfx   # only refresh these two
+./scripts/publish-paks.sh --dry-run       # preview without touching the remote
 
 # Windows
 scripts\publish-paks.bat

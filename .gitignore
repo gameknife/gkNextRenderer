@@ -407,3 +407,8 @@ tools/ldraw/output/
 assets/paks/ldraw.pak
 
 assets/models/KayKit_Platformer_Pack/
+
+# Optional binary assets — fetched via scripts/fetch-paks.{sh,ps1,bat}.
+assets/sfx/*.mp3
+assets/sfx/*.wav
+android/app/libs/SDL3-*.aar
