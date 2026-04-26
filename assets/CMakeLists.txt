@@ -18,16 +18,26 @@ set(all_asset_files "")
 set(all_asset_stamps "")
 
 foreach(dir ${ASSET_DIRS})
-    file(GLOB_RECURSE ${dir}_files "${CMAKE_CURRENT_SOURCE_DIR}/${dir}/*")
+    set(src_dir "${CMAKE_CURRENT_SOURCE_DIR}/${dir}")
+    # Some asset folders are populated by scripts/fetch-paks (e.g. sfx) and
+    # may be absent on a fresh clone. Skip them gracefully; users will see
+    # the hint and can fetch on demand.
+    if(NOT EXISTS "${src_dir}")
+        message(STATUS "Asset folder '${dir}' not found at ${src_dir}; skipping copy. "
+                       "Run scripts/fetch-paks --${dir} (then re-run CMake configure) if you need its contents.")
+        continue()
+    endif()
+
+    file(GLOB_RECURSE ${dir}_files "${src_dir}/*")
     list(APPEND all_asset_files ${${dir}_files})
-    
+
     set(${dir}_stamp "${CMAKE_CURRENT_BINARY_DIR}/${dir}.stamp")
     list(APPEND all_asset_stamps ${${dir}_stamp})
-    
+
     add_custom_command(
         OUTPUT ${${dir}_stamp}
         COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
-                "${CMAKE_CURRENT_SOURCE_DIR}/${dir}"
+                "${src_dir}"
                 "${output_base_dir}/${dir}"
         COMMAND ${CMAKE_COMMAND} -E touch ${${dir}_stamp}
         DEPENDS ${${dir}_files}
