@@ -1,1 +1,7 @@
-Copy SDL3 Android Archives (.aar files) here.
+Copy SDL3 Android Archives (.aar files) here, or run from the repo root:
+
+  scripts/fetch-paks.sh --sdl     (Linux / macOS / Git Bash)
+  scripts\fetch-paks.bat --sdl    (Windows)
+
+This pulls SDL3-<version>.aar from the project's GitHub release.
+

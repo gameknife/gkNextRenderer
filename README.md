@@ -238,28 +238,32 @@ run.bat --preset android
 ./run.sh --preset default-macos-arm64 --target CharacterDemo
 ```
 
-### 可选资源包（optional / LDraw）
+### 可选资源包（optional assets）
 
-为了控制仓库体积，下面这两个 pak **不随仓库提交**：
+为了控制仓库体积，下面这些较大的二进制资源 **不随仓库提交**，统一放在仓库的 GitHub Release（tag `paks-latest`），用同一份脚本拉取：
 
-- `assets/paks/optional.pak` — 主渲染器 / Editor 用到的额外示例资源
-- `assets/paks/ldraw.pak` — BrickPlayer 用到的 LDraw 零件库
+| 选择器 | 内容 | 落盘位置 | 缺失影响 |
+|------|------|------|------|
+| `--ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer 缺 LDraw 零件库 |
+| `--optional` | `optional.pak` | `assets/paks/` | 主渲染器 / Editor 缺示例 demo 场景 |
+| `--sfx` | 6 个 mp3/wav | `assets/sfx/` | MagicaLego / BrickPlayer 静音 |
+| `--ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows 下 MagicaLego 视频录制不可用 |
+| `--sdl` | `SDL3-*.aar` | `android/app/libs/` | Android 构建链接失败 |
 
-引擎在启动时会自动挂载存在的 pak，没有这两个文件主流程依旧能跑，只是相关 demo 场景或 LDraw 工作流会缺资源。
-
-文件托管在仓库的 GitHub Release（tag `paks-latest`）上，三平台用同一份脚本下载：
+引擎运行时会自动挂载已存在的 pak，主流程不依赖这些文件就能起来。但 Android / MagicaLego 等场景必须先把对应的 group 拉下来。
 
 ```bash
-# Linux / macOS / Git Bash —— 默认两个都拉
+# Linux / macOS / Git Bash —— 默认全部拉取
 ./scripts/fetch-paks.sh
 
-# 只拉其中一个
-./scripts/fetch-paks.sh --optional
-./scripts/fetch-paks.sh --ldraw
+# 只拉指定 group
+./scripts/fetch-paks.sh --optional --ldraw
+./scripts/fetch-paks.sh --sdl              # 准备 Android 构建
+./scripts/fetch-paks.sh --ffmpeg --sfx     # 准备 Windows MagicaLego
 
 # Windows
 scripts\fetch-paks.bat
-scripts\fetch-paks.bat --ldraw
+scripts\fetch-paks.bat --sdl
 ```
 
 如果需要走自建镜像或特定 tag，可通过环境变量覆盖：
@@ -270,13 +274,13 @@ scripts\fetch-paks.bat --ldraw
 
 **维护者：发布 / 更新 release**
 
-当 pak 内容更新后，用 `scripts/publish-paks.*` 一条命令把本地 `assets/paks/*.pak` 推到 release（不存在则创建，已存在则覆盖同名 asset）。脚本依赖 [`gh` CLI](https://cli.github.com/)，先 `gh auth login` 登录一次：
+当任意一组资源更新后，用 `scripts/publish-paks.*` 一条命令把本地文件推到 release（不存在则创建，已存在则覆盖同名 asset）。脚本依赖 [`gh` CLI](https://cli.github.com/)，先 `gh auth login` 登录一次。选择器与 fetch 端完全一致：
 
 ```bash
 # Linux / macOS / Git Bash
-./scripts/publish-paks.sh              # 上传两个
-./scripts/publish-paks.sh --ldraw      # 仅 ldraw.pak
-./scripts/publish-paks.sh --dry-run    # 不真的上传，先看会做什么
+./scripts/publish-paks.sh                 # 上传所有 group
+./scripts/publish-paks.sh --ldraw --sfx   # 只刷新这两组
+./scripts/publish-paks.sh --dry-run       # 不真的上传，先看会做什么
 
 # Windows
 scripts\publish-paks.bat

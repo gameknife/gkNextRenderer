@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Create or refresh the GitHub release that hosts the optional pak files
-# (ldraw.pak / optional.pak). Uploads/replaces release assets with --clobber.
+# Create or refresh the GitHub release that hosts the optional assets
+# (ldraw.pak / optional.pak / sfx / ffmpeg.exe / SDL aar). Uploads or replaces
+# release assets with --clobber.
 #
 # Requires: GitHub CLI (gh) authenticated against the target repo.
 #
@@ -15,34 +16,54 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 REPO="${PAKS_REPO:-gameknife/gkNextEngine}"
 TAG="${PAKS_RELEASE_TAG:-paks-latest}"
-TITLE_DEFAULT="Optional Asset Paks (${TAG})"
-NOTES_DEFAULT="Optional asset paks consumed by scripts/fetch-paks.sh.
+TITLE_DEFAULT="Optional Assets (${TAG})"
+NOTES_DEFAULT="Optional binary assets consumed by scripts/fetch-paks.sh.
 
-Files:
-- ldraw.pak    — LDraw parts library used by BrickPlayer
-- optional.pak — extra sample assets for the main renderer / Editor
+Groups:
+- ldraw.pak         — LDraw parts library used by BrickPlayer
+- optional.pak      — extra sample assets for the main renderer / Editor
+- sfx (mp3/wav)     — background music & sound effects
+- ffmpeg.exe        — Windows-only helper used by MagicaLego packaging
+- SDL3-*.aar        — SDL3 Android archive used by android/ gradle build
 
 Re-uploaded by scripts/publish-paks.sh."
 
-PAK_DIR="${REPO_ROOT}/assets/paks"
+# Manifest entries: "id|asset-name|source-relative-to-repo-root"
+ASSETS=(
+    "ldraw|ldraw.pak|assets/paks/ldraw.pak"
+    "optional|optional.pak|assets/paks/optional.pak"
+    "sfx|bgm.mp3|assets/sfx/bgm.mp3"
+    "sfx|bgm2.mp3|assets/sfx/bgm2.mp3"
+    "sfx|put.mp3|assets/sfx/put.mp3"
+    "sfx|put1.wav|assets/sfx/put1.wav"
+    "sfx|put2.wav|assets/sfx/put2.wav"
+    "sfx|put3.wav|assets/sfx/put3.wav"
+    "ffmpeg|ffmpeg.exe|src/ThirdParty/ffmpeg/bin/ffmpeg.exe"
+    "sdl|SDL3-3.2.22.aar|android/app/libs/SDL3-3.2.22.aar"
+)
 
-WANT_LDRAW=0
-WANT_OPTIONAL=0
+WANT_LDRAW=0; WANT_OPTIONAL=0; WANT_SFX=0; WANT_FFMPEG=0; WANT_SDL=0
+ANY_SELECTOR=0
 DRY_RUN=0
 TITLE=""
 NOTES=""
 
 usage() {
     cat <<EOF
-Usage: $(basename "$0") [--all|--ldraw|--optional] [--dry-run] [--title TXT] [--notes TXT]
+Usage: $(basename "$0") [selectors...] [--dry-run] [--title TXT] [--notes TXT]
 
 Creates the release tag if it doesn't exist, then uploads (or replaces) the
-selected pak assets. Defaults to --all when no selector is passed.
+selected assets. Defaults to --all when no selector is passed.
 
-Options:
-  --all        Publish every optional pak (default).
-  --ldraw      Publish only ldraw.pak.
-  --optional   Publish only optional.pak.
+Selectors (any combination):
+  --all        Publish every group below.
+  --ldraw      ldraw.pak
+  --optional   optional.pak
+  --sfx        sfx mp3/wav files
+  --ffmpeg     ffmpeg.exe
+  --sdl        SDL3 Android archive
+
+Other:
   --title TXT  Override the release title (only used on creation).
   --notes TXT  Override the release notes body (only used on creation).
   --dry-run    Print what would happen without touching the remote.
@@ -56,9 +77,12 @@ EOF
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --all)      WANT_LDRAW=1; WANT_OPTIONAL=1 ;;
-        --ldraw)    WANT_LDRAW=1 ;;
-        --optional) WANT_OPTIONAL=1 ;;
+        --all)      WANT_LDRAW=1; WANT_OPTIONAL=1; WANT_SFX=1; WANT_FFMPEG=1; WANT_SDL=1; ANY_SELECTOR=1 ;;
+        --ldraw)    WANT_LDRAW=1;    ANY_SELECTOR=1 ;;
+        --optional) WANT_OPTIONAL=1; ANY_SELECTOR=1 ;;
+        --sfx)      WANT_SFX=1;      ANY_SELECTOR=1 ;;
+        --ffmpeg)   WANT_FFMPEG=1;   ANY_SELECTOR=1 ;;
+        --sdl)      WANT_SDL=1;      ANY_SELECTOR=1 ;;
         --dry-run)  DRY_RUN=1 ;;
         --title)    TITLE="${2:-}"; shift ;;
         --notes)    NOTES="${2:-}"; shift ;;
@@ -68,13 +92,23 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
-if [[ ${WANT_LDRAW} -eq 0 && ${WANT_OPTIONAL} -eq 0 ]]; then
-    WANT_LDRAW=1
-    WANT_OPTIONAL=1
+if [[ ${ANY_SELECTOR} -eq 0 ]]; then
+    WANT_LDRAW=1; WANT_OPTIONAL=1; WANT_SFX=1; WANT_FFMPEG=1; WANT_SDL=1
 fi
 
 TITLE="${TITLE:-${TITLE_DEFAULT}}"
 NOTES="${NOTES:-${NOTES_DEFAULT}}"
+
+is_wanted() {
+    case "$1" in
+        ldraw)    [[ ${WANT_LDRAW}    -eq 1 ]] ;;
+        optional) [[ ${WANT_OPTIONAL} -eq 1 ]] ;;
+        sfx)      [[ ${WANT_SFX}      -eq 1 ]] ;;
+        ffmpeg)   [[ ${WANT_FFMPEG}   -eq 1 ]] ;;
+        sdl)      [[ ${WANT_SDL}      -eq 1 ]] ;;
+        *)        return 1 ;;
+    esac
+}
 
 if ! command -v gh >/dev/null 2>&1; then
     echo "[paks] gh (GitHub CLI) is required. Install from https://cli.github.com/" >&2
@@ -86,20 +120,28 @@ if ! gh auth status >/dev/null 2>&1; then
     exit 1
 fi
 
-ASSETS=()
-[[ ${WANT_LDRAW}    -eq 1 ]] && ASSETS+=("${PAK_DIR}/ldraw.pak")
-[[ ${WANT_OPTIONAL} -eq 1 ]] && ASSETS+=("${PAK_DIR}/optional.pak")
-
-# Verify all picked assets exist locally before touching the remote.
+# Build the upload list and verify locally.
+SELECTED=()
 missing=0
-for asset in "${ASSETS[@]}"; do
-    if [[ ! -f "${asset}" ]]; then
-        echo "[paks] Missing local asset: ${asset}" >&2
+for entry in "${ASSETS[@]}"; do
+    IFS='|' read -r id name src <<<"${entry}"
+    if ! is_wanted "${id}"; then continue; fi
+    abs="${REPO_ROOT}/${src}"
+    if [[ ! -f "${abs}" ]]; then
+        echo "[paks] Missing local asset: ${src}" >&2
         missing=1
+        continue
     fi
+    SELECTED+=("${abs}")
 done
+
 if [[ ${missing} -ne 0 ]]; then
-    echo "[paks] Build the paks first (see tools/optional-pak/ and tools/ldraw/)." >&2
+    echo "[paks] Bring the missing files in place first (build paks, copy SDL aar, etc.)." >&2
+    exit 1
+fi
+
+if [[ ${#SELECTED[@]} -eq 0 ]]; then
+    echo "[paks] Nothing selected to publish." >&2
     exit 1
 fi
 
@@ -116,17 +158,17 @@ run() {
 echo "[paks] Repo: ${REPO}"
 echo "[paks] Tag:  ${TAG}"
 echo "[paks] Files:"
-for asset in "${ASSETS[@]}"; do
+for asset in "${SELECTED[@]}"; do
     size=$(wc -c < "${asset}" 2>/dev/null || echo "?")
     echo "         ${asset} (${size} bytes)"
 done
 
 if gh release view "${TAG}" --repo "${REPO}" >/dev/null 2>&1; then
     echo "[paks] Release ${TAG} already exists — uploading with --clobber"
-    run gh release upload "${TAG}" "${ASSETS[@]}" --repo "${REPO}" --clobber
+    run gh release upload "${TAG}" "${SELECTED[@]}" --repo "${REPO}" --clobber
 else
     echo "[paks] Release ${TAG} not found — creating"
-    run gh release create "${TAG}" "${ASSETS[@]}" \
+    run gh release create "${TAG}" "${SELECTED[@]}" \
         --repo "${REPO}" \
         --title "${TITLE}" \
         --notes "${NOTES}" \

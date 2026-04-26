@@ -393,7 +393,12 @@ foreach(target IN LISTS AllTargets)
 
 	if ( ${target} STREQUAL MagicaLego )
 	if (MSVC)
-	file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/../src/ThirdParty/ffmpeg/bin/ffmpeg.exe DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+		set(FFMPEG_EXE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../src/ThirdParty/ffmpeg/bin/ffmpeg.exe)
+		if (EXISTS ${FFMPEG_EXE_PATH})
+			file(COPY ${FFMPEG_EXE_PATH} DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+		else()
+			message(STATUS "ffmpeg.exe not found at ${FFMPEG_EXE_PATH}; run scripts/fetch-paks.bat --ffmpeg if you need MagicaLego video capture.")
+		endif()
 	endif()
 	endif()
 

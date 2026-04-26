@@ -3,6 +3,9 @@ param(
     [switch]$All,
     [switch]$Ldraw,
     [switch]$Optional,
+    [switch]$Sfx,
+    [switch]$Ffmpeg,
+    [switch]$Sdl,
     [switch]$Force,
     [switch]$Help
 )
@@ -16,16 +19,33 @@ $Repo    = if ($env:PAKS_REPO)        { $env:PAKS_REPO }        else { 'gameknif
 $Tag     = if ($env:PAKS_RELEASE_TAG) { $env:PAKS_RELEASE_TAG } else { 'paks-latest' }
 $BaseUrl = if ($env:PAKS_BASE_URL)    { $env:PAKS_BASE_URL }    else { "https://github.com/$Repo/releases/download/$Tag" }
 
-$OutputDir = Join-Path $RepoRoot 'assets\paks'
+# Manifest of optional assets. Dest paths are relative to the repo root.
+$Assets = @(
+    @{ Id = 'ldraw';    Name = 'ldraw.pak';        Dest = 'assets/paks/ldraw.pak' }
+    @{ Id = 'optional'; Name = 'optional.pak';     Dest = 'assets/paks/optional.pak' }
+    @{ Id = 'sfx';      Name = 'bgm.mp3';          Dest = 'assets/sfx/bgm.mp3' }
+    @{ Id = 'sfx';      Name = 'bgm2.mp3';         Dest = 'assets/sfx/bgm2.mp3' }
+    @{ Id = 'sfx';      Name = 'put.mp3';          Dest = 'assets/sfx/put.mp3' }
+    @{ Id = 'sfx';      Name = 'put1.wav';         Dest = 'assets/sfx/put1.wav' }
+    @{ Id = 'sfx';      Name = 'put2.wav';         Dest = 'assets/sfx/put2.wav' }
+    @{ Id = 'sfx';      Name = 'put3.wav';         Dest = 'assets/sfx/put3.wav' }
+    @{ Id = 'ffmpeg';   Name = 'ffmpeg.exe';       Dest = 'src/ThirdParty/ffmpeg/bin/ffmpeg.exe' }
+    @{ Id = 'sdl';      Name = 'SDL3-3.2.22.aar';  Dest = 'android/app/libs/SDL3-3.2.22.aar' }
+)
 
 function Show-Usage {
     Write-Host @"
-Usage: fetch-paks.ps1 [-All] [-Ldraw] [-Optional] [-Force]
+Usage: fetch-paks.ps1 [-All] [-Ldraw] [-Optional] [-Sfx] [-Ffmpeg] [-Sdl] [-Force]
 
-Options:
-  -All        Fetch every optional pak (default when no flag is given).
-  -Ldraw      Fetch only ldraw.pak.
-  -Optional   Fetch only optional.pak.
+Selectors (any combination; defaults to -All when none given):
+  -All        Fetch every group below.
+  -Ldraw      ldraw.pak             -> assets/paks/
+  -Optional   optional.pak          -> assets/paks/
+  -Sfx        background music + sound effects -> assets/sfx/
+  -Ffmpeg     ffmpeg.exe            -> src/ThirdParty/ffmpeg/bin/   (Windows only)
+  -Sdl        SDL3 Android archive  -> android/app/libs/            (Android only)
+
+Other:
   -Force      Re-download even if the file already exists.
   -Help       Show this help.
 
@@ -38,27 +58,39 @@ Environment overrides:
 
 if ($Help) { Show-Usage; exit 0 }
 
-if (-not ($All -or $Ldraw -or $Optional)) {
-    $All = $true
-}
-if ($All) { $Ldraw = $true; $Optional = $true }
+$AnySelector = ($All -or $Ldraw -or $Optional -or $Sfx -or $Ffmpeg -or $Sdl)
+if (-not $AnySelector) { $All = $true }
+if ($All) { $Ldraw = $true; $Optional = $true; $Sfx = $true; $Ffmpeg = $true; $Sdl = $true }
 
-if (-not (Test-Path $OutputDir)) {
-    New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+function Test-Wanted {
+    param([string]$Id)
+    switch ($Id) {
+        'ldraw'    { return $Ldraw }
+        'optional' { return $Optional }
+        'sfx'      { return $Sfx }
+        'ffmpeg'   { return $Ffmpeg }
+        'sdl'      { return $Sdl }
+        default    { return $false }
+    }
 }
 
-function Get-OnePak {
-    param([string]$Name)
+function Get-OneAsset {
+    param([string]$Name, [string]$DestRel)
 
     $Url = "$BaseUrl/$Name"
-    $Out = Join-Path $OutputDir $Name
+    $Out = Join-Path $RepoRoot $DestRel
 
     if ((Test-Path $Out) -and -not $Force) {
-        Write-Host "[paks] $Name already exists at $Out (use -Force to re-download)"
+        Write-Host "[paks] $DestRel already exists (use -Force to re-download)"
         return
     }
 
-    Write-Host "[paks] Downloading $Name from $Url"
+    $OutDir = Split-Path -Parent $Out
+    if (-not (Test-Path $OutDir)) {
+        New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+    }
+
+    Write-Host "[paks] Downloading $Name -> $DestRel"
     $Tmp = "$Out.part"
     try {
         $ProgressPreference = 'Continue'
@@ -68,8 +100,12 @@ function Get-OnePak {
         throw
     }
     Move-Item -Force $Tmp $Out
-    Write-Host "[paks] Saved $Out"
 }
 
-if ($Ldraw)    { Get-OnePak -Name 'ldraw.pak' }
-if ($Optional) { Get-OnePak -Name 'optional.pak' }
+foreach ($a in $Assets) {
+    if (Test-Wanted -Id $a.Id) {
+        Get-OneAsset -Name $a.Name -DestRel $a.Dest
+    }
+}
+
+Write-Host '[paks] Done.'
