@@ -238,6 +238,29 @@ run.bat --preset android
 ./run.sh --preset default-macos-arm64 --target CharacterDemo
 ```
 
+### 可选资源包（optional assets）
+
+部分较大的二进制资源不随仓库提交，需要按需拉取：
+
+| 选择器 | 内容 | 落盘位置 | 缺失影响 |
+|------|------|------|------|
+| `--ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer 缺 LDraw 零件库 |
+| `--optional` | `optional.pak` | `assets/paks/` | 主渲染器 / Editor / CharacterDemo / MagicaLego 缺场景资源 |
+| `--sfx` | 6 个 mp3/wav | `assets/sfx/` | MagicaLego / BrickPlayer 静音 |
+| `--ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows 下 MagicaLego 视频录制不可用 |
+
+```bash
+# Linux / macOS / Git Bash：默认拉取全部可选资源
+./scripts/fetch-paks.sh
+
+# 或只拉指定资源
+./scripts/fetch-paks.sh --optional --ldraw
+./scripts/fetch-paks.sh --ffmpeg --sfx
+
+# Windows
+scripts\fetch-paks.bat
+```
+
 ## 子项目
 
 | 项目 | 说明 |

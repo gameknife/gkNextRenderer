@@ -238,6 +238,29 @@ run.bat --preset android
 ./run.sh --preset default-macos-arm64 --target CharacterDemo
 ```
 
+### Optional Assets
+
+Some larger binary assets are not committed to the repo. Fetch them as needed:
+
+| Selector | Contents | Lands at | If missing |
+|------|------|------|------|
+| `--ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer loses its LDraw parts library |
+| `--optional` | `optional.pak` | `assets/paks/` | Main renderer / Editor / CharacterDemo / MagicaLego lose their scene assets |
+| `--sfx` | six mp3/wav files | `assets/sfx/` | MagicaLego / BrickPlayer go silent |
+| `--ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows MagicaLego video capture disabled |
+
+```bash
+# Linux / macOS / Git Bash: fetch every optional asset by default
+./scripts/fetch-paks.sh
+
+# Or fetch specific groups
+./scripts/fetch-paks.sh --optional --ldraw
+./scripts/fetch-paks.sh --ffmpeg --sfx
+
+# Windows
+scripts\fetch-paks.bat
+```
+
 ## Subprojects
 
 | Project | Description |
