@@ -3,17 +3,29 @@
 This folder contains a minimal Android gradle project that builds the SDL_helloworld application.
 Instead of building SDL3 itself, it uses a prebuilt SDL3.
 
+> The required `SDL3-*.aar` is **not** committed to this repo and is no longer
+> mirrored on our paks release. The `downloadSdlAar` task in
+> `app/build.gradle` pulls `SDL3-devel-<ver>-android.zip` directly from
+> [libsdl-org's official release](https://github.com/libsdl-org/SDL/releases)
+> on first build and extracts the `.aar` into `app/libs/`. No manual fetch
+> step is required.
+
 ## FAQ
 
 ## Where do I get a prebuilt SDL3 Android library?
 
-Prebuilt Android archives are part of SDL 3 releases as `.aar` archives.
-Download these and put them in the `app/libs` folder.
+Prebuilt Android archives are part of SDL 3 releases as `.aar` archives,
+published inside `SDL3-devel-X.Y.Z-android.zip`. The `downloadSdlAar` Gradle
+task handles this automatically; bump `ext.sdlVersion` in `app/build.gradle`
+to track a different SDL3 release.
 
-## I downloaded a prebuilt SDL3 library, but it cannot find `SDL3-x.y.z.aar`
+## Gradle cannot find `SDL3-x.y.z.aar`
 
-In `app/build.gradle`, there is a line `implementation files('libs/SDL3-X.Y.Z.aar')`.
-You must download exactly SDL3 X.Y.Z, or modify `app/build.gradle` to the version of the library you downloaded.
+`app/build.gradle` derives both the download URL and dependency path from
+`ext.sdlVersion`. If the build reports a missing `SDL3-x.y.z.aar`, make sure
+`ext.sdlVersion` points to a SDL release that publishes
+`SDL3-devel-x.y.z-android.zip`, then rerun Gradle so `downloadSdlAar` can
+hydrate `app/libs/`.
 
 ## How do I modify my Android project to use prebuilt SDL3 Android archives?
 
@@ -28,10 +40,12 @@ Only 2 changes are required:
        }
    }
    ```
-2. Add the downloaded Android archive to your dependencies:
+2. Add the generated Android archive path to your dependencies:
    ```gradle
+   ext.sdlVersion = '3.2.22'
+
    dependencies {
      /* ... */      
-     implementation files('libs/SDL3-3.2.16.aar')
+     implementation files("libs/SDL3-${sdlVersion}.aar")
    }
    ```

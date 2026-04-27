@@ -19,7 +19,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     GPUVertex baseVertex = scene.Vertices[vertexIdx];
     
     // Unpack positions, normals, tangents
-    Vertex v = UnpackVertexV2(baseVertex);
+    Vertex v = UnpackVertex(baseVertex);
     
     // Load weights and joints
     float4 weights = scene.SkinWeights[vertexIdx];

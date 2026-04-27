@@ -12,6 +12,7 @@ public:
     int value = 0;
     
     std::string_view GetTypeName() const override { return "TestComponent"; }
+    entt::id_type GetTypeId() const override { return Assets::ComponentTypeId<TestComponent>(); }
     entt::meta_type GetMetaType() const override { return entt::resolve<TestComponent>(); }
 };
 

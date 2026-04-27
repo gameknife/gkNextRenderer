@@ -1,75 +1,80 @@
 #include <catch2/catch_test_macros.hpp>
 #include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
-// Improved logic using instance-based state
-class FixedGpuTimer {
+class TimerPathBuilder
+{
 public:
-    std::string currentPath;
-    std::vector<size_t> stack; // Stores lengths of previous paths
-
-    void PushFolder(const std::string& name) {
-        stack.push_back(currentPath.length());
-        currentPath += name;
-    }
-
-    void PopFolder() {
-        if (!stack.empty()) {
-            currentPath.resize(stack.back());
-            stack.pop_back();
-        }
-    }
-    
-    std::string GetScopedName(const std::string& name) {
-        return currentPath + name;
-    }
-};
-
-class FixedScopedGpuTimer {
-public:
-    FixedGpuTimer* timer_;
-    bool isFolder_ = false;
-
-    FixedScopedGpuTimer(FixedGpuTimer* timer, const std::string& name, const std::string& folder) 
-        : timer_(timer), isFolder_(true) 
+    struct Record
     {
-        // Start timer for 'name' (in current context)
-        // Then push folder for children
-        timer_->PushFolder(folder);
-    }
-    
-    FixedScopedGpuTimer(FixedGpuTimer* timer, const std::string& name)
-        : timer_(timer)
+        std::string name;
+        std::string stableKey;
+        int depth = 0;
+        std::unordered_map<std::string, uint32_t> childNameCounts;
+    };
+
+    uint32_t Start(const std::string& name)
     {
-        // Normal timer, just uses current context
+        const uint32_t id = static_cast<uint32_t>(records.size());
+        Record record{};
+        record.name = name;
+        record.depth = static_cast<int>(activeStack.size());
+        record.stableKey = BuildStableKey(name);
+        records.push_back(std::move(record));
+        activeStack.push_back(id);
+        return id;
     }
 
-    ~FixedScopedGpuTimer() {
-        if (isFolder_) {
-            timer_->PopFolder();
-        }
-    }
-};
-
-TEST_CASE("Fixed ScopedGpuTimer Logic Success", "[GpuTimer]") {
-    FixedGpuTimer timer;
-    
-    // Outer Scope
+    void End(uint32_t id)
     {
-        FixedScopedGpuTimer outer(&timer, "Outer", "Root");
-        CHECK(timer.currentPath == "Root");
-        
-        // Inner Scope
+        if (!activeStack.empty() && activeStack.back() == id)
         {
-            FixedScopedGpuTimer inner(&timer, "Inner", "Child");
-            CHECK(timer.currentPath == "RootChild");
-        } 
-        // Inner Destructor called -> PopFolder
-        
-        // Back in Outer
-        CHECK(timer.currentPath == "Root");
+            activeStack.pop_back();
+        }
     }
-    // Outer Destructor called -> PopFolder
-    
-    CHECK(timer.currentPath == "");
+
+    std::string BuildStableKey(const std::string& name)
+    {
+        if (activeStack.empty())
+        {
+            const uint32_t occurrence = rootNameCounts[name]++;
+            return "/" + name + "#" + std::to_string(occurrence);
+        }
+
+        auto& parent = records[activeStack.back()];
+        const uint32_t occurrence = parent.childNameCounts[name]++;
+        return parent.stableKey + "/" + name + "#" + std::to_string(occurrence);
+    }
+
+    std::vector<Record> records;
+    std::vector<uint32_t> activeStack;
+    std::unordered_map<std::string, uint32_t> rootNameCounts;
+};
+
+TEST_CASE("Timer path keeps duplicate names distinct by call tree", "[GpuTimer]")
+{
+    TimerPathBuilder timer;
+
+    const auto frameA = timer.Start("frame");
+    const auto passA = timer.Start("pass");
+    timer.End(passA);
+    const auto passB = timer.Start("pass");
+    timer.End(passB);
+    timer.End(frameA);
+
+    const auto frameB = timer.Start("frame");
+    const auto passC = timer.Start("pass");
+    timer.End(passC);
+    timer.End(frameB);
+
+    REQUIRE(timer.records.size() == 5);
+    CHECK(timer.records[0].stableKey == "/frame#0");
+    CHECK(timer.records[1].stableKey == "/frame#0/pass#0");
+    CHECK(timer.records[2].stableKey == "/frame#0/pass#1");
+    CHECK(timer.records[3].stableKey == "/frame#1");
+    CHECK(timer.records[4].stableKey == "/frame#1/pass#0");
+    CHECK(timer.records[1].depth == 1);
+    CHECK(timer.records[4].depth == 1);
 }

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides guidance to AI coding assistants (GitHub Copilot, Cursor, etc.) when working with code in this repository.
+This file is the single source of truth for AI coding assistants (Claude Code, Gemini CLI, Codex, GitHub Copilot, Cursor, etc.) working in this repository. `CLAUDE.md` imports it via `@AGENTS.md`; other tools read `AGENTS.md` directly.
 
 ## Communication Preference
 
@@ -27,17 +27,14 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
 
 ## Build Commands
 
-**Dependencies (vcpkg):**
-- Windows: `./vcpkg.bat`
-- macOS/Linux: `./vcpkg.sh`
-
-**Build:**
+**Build (vcpkg is auto-bootstrapped on first run):**
 - Windows: `./build.bat --preset default-windows`
 - macOS: `./build.sh --preset default-macos-arm64`
 - Linux: `./build.sh --preset default-linux`
 - Android: `./build.bat --android` (Windows) or `./build.sh --android`
 - Clean rebuild: add `--clean`
 - List presets: `cmake --list-presets=configure`
+- Force vcpkg update: `scripts/vcpkg.sh --update` (or `scripts\vcpkg.bat --update` on Windows)
 
 **Presets:**
 - `minimal-*`: Fewest dependencies (KTX2 only)
@@ -206,8 +203,6 @@ assets/
 
 ## Key References
 
-- **CLAUDE.md** - Claude Code specific guidance
-- **GEMINI.md** - Gemini Code Assistant specific guidance
 - **AGENT_GUIDE/** - Layered documentation:
   - `core-patterns.md` - Essential patterns and commands (Layer 1)
   - `contextual-rules.md` - Context-specific rules (Layer 2)

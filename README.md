@@ -11,7 +11,7 @@
 ![Android CI](https://github.com/gameknife/gkNextEngine/actions/workflows/android.yml/badge.svg)
 ![iOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/ios.yml/badge.svg)
 
-![Play ground](gallery/4_playground.avif)
+![Play ground](docs/gallery/4_playground.avif)
 
 ---
 
@@ -109,18 +109,18 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 ## 视觉预览
 
-![BrickPlayer Gameplay](gallery/6_debug_draw.avif)
+![BrickPlayer Gameplay](docs/gallery/6_debug_draw.avif)
 
 <details>
 <summary><b>示例截图</b></summary>
 
 | 场景 | 截图 |
 |------|------|
-| still | ![still](gallery/1_still.avif) |
-| livingroom | ![livingroom](gallery/2_living_room.avif) |
-| ldrawlego | ![ldrawlego](gallery/3_lego_ldraw.avif) |
-| luxball | ![luxball](gallery/5_luxball.avif) |
-| brickplayer | ![brickplayer](gallery/7_brick_player.avif) |
+| still | ![still](docs/gallery/1_still.avif) |
+| livingroom | ![livingroom](docs/gallery/2_living_room.avif) |
+| ldrawlego | ![ldrawlego](docs/gallery/3_lego_ldraw.avif) |
+| luxball | ![luxball](docs/gallery/5_luxball.avif) |
+| brickplayer | ![brickplayer](docs/gallery/7_brick_player.avif) |
 
 </details>
 
@@ -149,7 +149,6 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 - 启用“使用 Unicode UTF-8 提供全球语言支持”
 
 ```bat
-vcpkg.bat windows
 .\build.bat --preset default-windows
 .\run.bat --preset default-windows
 ```
@@ -161,7 +160,6 @@ vcpkg.bat windows
 
 ```shell
 pacman -S --needed git mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake mingw-w64-x86_64-toolchain
-./vcpkg.sh
 ./build.sh --preset default-mingw
 ./run.sh --preset default-mingw
 ```
@@ -173,10 +171,29 @@ pacman -S --needed git mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake mingw-w64-x
 
 ```shell
 sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev autoconf autoconf-archive automake libtool python3.12-venv
-./vcpkg.sh
 ./build.sh --preset default-linux
 ./run.sh --preset default-linux
 ```
+
+`build.sh` 现在会在 Linux 首轮构建前做桌面依赖预检查，如果缺少 `xrandr`、`wayland-protocols` 或 `xkbcommon`，会直接给出更明确的提示。
+
+</details>
+
+<details>
+<summary><b>Steam Deck / Arch Linux</b></summary>
+
+```shell
+sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxrandr wayland-protocols libxkbcommon
+./build.sh --preset full-linux --reconfigure
+./run.sh --preset full-linux --target gkNextRenderer
+```
+
+说明：
+
+- Steam Deck 首次部署建议直接使用 `full-linux`
+- 如果机器上还没有 `slangc`，`build.sh` 会自动下载项目约定的 Slang 工具链到 `external/`
+- 如果 vcpkg 阶段遇到 GitHub 归档下载失败，优先直接重试同一条构建命令
+- 一次真实 Steam Deck 部署的复盘见 [docs/steamdeck-deployment-notes.md](docs/steamdeck-deployment-notes.md)
 
 </details>
 
@@ -185,7 +202,6 @@ sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev 
 
 ```shell
 brew install molten-vk glslang ninja
-./vcpkg.sh
 ./build.sh --preset default-macos-arm64
 ./run.sh --preset default-macos-arm64
 ```
@@ -200,7 +216,6 @@ brew install molten-vk glslang ninja
 ```bat
 set ANDROID_HOME=C:\Android\Sdk
 set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\27.0.12077973
-vcpkg.bat
 build.bat --android
 run.bat --preset android
 ```
@@ -223,7 +238,28 @@ run.bat --preset android
 ./run.sh --preset default-macos-arm64 --target CharacterDemo
 ```
 
----
+### 可选资源包（optional assets）
+
+部分较大的二进制资源不随仓库提交，需要按需拉取：
+
+| 选择器 | 内容 | 落盘位置 | 缺失影响 |
+|------|------|------|------|
+| `--ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer 缺 LDraw 零件库 |
+| `--optional` | `optional.pak` | `assets/paks/` | 主渲染器 / Editor / CharacterDemo / MagicaLego 缺场景资源 |
+| `--sfx` | 6 个 mp3/wav | `assets/sfx/` | MagicaLego / BrickPlayer 静音 |
+| `--ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows 下 MagicaLego 视频录制不可用 |
+
+```bash
+# Linux / macOS / Git Bash：默认拉取全部可选资源
+./scripts/fetch-paks.sh
+
+# 或只拉指定资源
+./scripts/fetch-paks.sh --optional --ldraw
+./scripts/fetch-paks.sh --ffmpeg --sfx
+
+# Windows
+scripts\fetch-paks.bat
+```
 
 ## 子项目
 

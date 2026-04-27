@@ -1,31 +1,18 @@
 {
-    "version": 1,
-    "outputDir": "screenshots/visual_test",
-    "defaultFramesToWait": 120,
-    "scenes": [
-        {
-            "path": "assets/models/playground.glb",
-            "frames": 480
-        },
-        {
-            "path": "assets/models/livingroom.glb",
-            "frames": 480
-        },
-        {
-            "path": "assets/models/kitchen.glb",
-            "frames": 480
-        },
-        {
-            "path": "assets/models/luxball.glb",
-            "frames": 480
-        },
-        {
-            "path": "assets/models/pbr.glb",
-            "frames": 480
-        },
-        {
-            "path": "assets/models/simple.glb",
-            "frames": 480
-        }
-    ]
+  "version": 2,
+  "outputDir": "screenshots/visual_test",
+  "defaultFramesToWait": 60,
+  "loadTimeoutSeconds": 20.0,
+  "useFastCapture": true,
+  "useSceneList": true,
+  "includeExtensions": [
+    ".proc",
+    ".glb",
+    ".gltf",
+    ".ldr",
+    ".mpd"
+  ],
+  "excludeScenes": [],
+  "excludeSceneContains": [],
+  "scenes": []
 }

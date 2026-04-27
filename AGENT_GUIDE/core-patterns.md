@@ -19,9 +19,10 @@
 ## ⚡ 核心命令
 
 ### 1. 依赖安装
+构建脚本会在首次运行时自动引导 vcpkg，无需手动调用。强制更新：
 ```bash
-./vcpkg.bat    # Windows
-./vcpkg.sh     # macOS/Linux
+scripts\vcpkg.bat --update   # Windows
+./scripts/vcpkg.sh --update  # macOS/Linux
 ```
 
 ### 2. 项目构建

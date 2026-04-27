@@ -1,1 +1,7 @@
-Copy SDL3 Android Archives (.aar files) here.
+The SDL3 Android Archive (.aar) is no longer placed here manually.
+
+Gradle's `downloadSdlAar` task (defined in app/build.gradle) downloads
+SDL3-devel-<ver>-android.zip from libsdl-org's official release and
+extracts SDL3-<ver>.aar into this folder before each build.
+
+To bump the SDL3 version, change `ext.sdlVersion` in app/build.gradle.

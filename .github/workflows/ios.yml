@@ -39,7 +39,7 @@ jobs:
         echo "Downloaded and added slangc to PATH"
 
     - name: Compile vcpkg dependencies
-      run: ./vcpkg.sh ios
+      run: ./scripts/vcpkg.sh
 
     - name: Restore cached vcpkg
       id: cache-vcpkg-restore

@@ -4,7 +4,7 @@
 # Test script for vcpkg.sh CLI compliance
 # ==============================================================================
 
-VCPKG_SH="./vcpkg.sh"
+VCPKG_SH="./scripts/vcpkg.sh"
 
 if [ ! -f "$VCPKG_SH" ]; then
     echo "Error: vcpkg.sh not found!"

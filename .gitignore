@@ -353,6 +353,11 @@ cmake-build-*/
 .DS_Store
 .VSCodeCounter/
 
+# Runtime-generated files (ImGui layout, profiler traces)
+/imgui.ini
+/editor.ini
+/traces/
+
 # spec local test glb
 assets/models/bistro_simple.glb
 assets/models/bistro.glb
@@ -361,6 +366,32 @@ assets/models/hyrule2.glb
 assets/models/hyrule3.glb
 assets/models/leaktest.glb
 assets/models/characters/
+
+# Optional assets — shipped via optional.pak rather than the git repo.
+assets/paks/optional.pak
+assets/models/basketballopt.glb
+assets/models/castle.glb
+assets/models/city.glb
+assets/models/complex.glb
+assets/models/kitchen.glb
+assets/models/legobricks.glb
+assets/models/livingroom.glb
+assets/models/luxball.glb
+assets/models/qx50.glb
+assets/models/rigid.glb
+assets/models/simple.glb
+assets/models/still.glb
+assets/models/track.glb
+assets/textures/canary_wharf_1k.hdr
+assets/textures/kloppenheim_01_puresky_1k.hdr
+assets/textures/kloppenheim_07_1k.hdr
+assets/textures/rainforest_trail_1k.hdr
+assets/textures/shanghai_bund_1k.hdr
+assets/textures/studio_small_03_1k.hdr
+assets/textures/studio_small_09_1k.hdr
+assets/textures/sunset_fairway_1k.hdr
+assets/textures/umhlanga_sunrise_1k.hdr
+tools/optional-pak/output/
 
 # third party libraries
 src/ThirdParty/*/bin/
@@ -376,3 +407,10 @@ tools/ldraw/output/
 assets/paks/ldraw.pak
 
 assets/models/KayKit_Platformer_Pack/
+
+# Optional binary assets — fetched via scripts/fetch-paks.{sh,ps1,bat}.
+assets/sfx/*.mp3
+assets/sfx/*.wav
+
+# SDL3 Android archive — pulled by android/app/build.gradle's downloadSdlAar task.
+android/app/libs/SDL3-*.aar

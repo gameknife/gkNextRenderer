@@ -2,6 +2,40 @@ plugins {
     id 'com.android.application'
 }
 
+// Pull the SDL3 Android archive straight from libsdl-org's official release
+// (SDL3-devel-<ver>-android.zip contains SDL3-<ver>.aar). The archive is no longer
+// committed to the repo; this task hydrates app/libs/ before the build runs.
+ext.sdlVersion = '3.2.22'
+def sdlAarFile = file("libs/SDL3-${sdlVersion}.aar")
+def sdlAndroidZipUrl = "https://github.com/libsdl-org/SDL/releases/download/release-${sdlVersion}/SDL3-devel-${sdlVersion}-android.zip"
+
+task downloadSdlAar {
+    description "Fetch SDL3-${sdlVersion}.aar from libsdl-org's official Android dev archive."
+    group 'sdl'
+    onlyIf { !sdlAarFile.exists() }
+    doLast {
+        sdlAarFile.parentFile.mkdirs()
+        def tmpZip = new File(sdlAarFile.parentFile, "SDL3-devel-${sdlVersion}-android.zip")
+        println "[sdl] Downloading ${sdlAndroidZipUrl}"
+        new URL(sdlAndroidZipUrl).withInputStream { input ->
+            tmpZip.withOutputStream { it << input }
+        }
+        copy {
+            from(zipTree(tmpZip)) { include "SDL3-${sdlVersion}.aar" }
+            into sdlAarFile.parentFile
+        }
+        tmpZip.delete()
+        if (!sdlAarFile.exists()) {
+            throw new GradleException("downloadSdlAar: SDL3-${sdlVersion}.aar missing after extraction")
+        }
+        println "[sdl] Wrote ${sdlAarFile}"
+    }
+}
+
+afterEvaluate {
+    tasks.named('preBuild').configure { dependsOn downloadSdlAar }
+}
+
 android {
     def repoRoot = rootProject.rootDir.absoluteFile.parentFile
     def ndkPath = System.getenv("ANDROID_NDK_HOME")
@@ -74,7 +108,7 @@ android {
 }
 
 dependencies {
-    implementation files('libs/SDL3-3.2.22.aar')
+    implementation files("libs/SDL3-${sdlVersion}.aar")
 }
 
 task installAndLaunch(type: Exec) {

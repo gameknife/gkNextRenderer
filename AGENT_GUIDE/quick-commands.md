@@ -51,10 +51,10 @@ cd out/build/default-linux/bin && ./gkNextUnitTests
 ```
 
 ### 4. 依赖管理 (Vcpkg)
+首次 `build.sh` / `build.bat` 会自动引导 vcpkg。仅在需要强制更新 vcpkg 版本时手动调用：
 ```bash
-# 安装/更新依赖
-./vcpkg.bat    # Windows
-./vcpkg.sh     # Unix
+scripts\vcpkg.bat --update   # Windows
+./scripts/vcpkg.sh --update  # Unix
 ```
 
 ## 🔍 故障排查 (Troubleshooting)

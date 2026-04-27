@@ -1,0 +1,34 @@
+# Optional pak manifest. Relative to project root.
+# Lines starting with '#' and blank lines are ignored.
+# Paths ending with '/' are treated as directory entries and packed recursively
+# (excluding .DS_Store). Otherwise the line must be a single file.
+# Update this list whenever you want to add/remove optional assets, then re-run build-optional-pak.sh.
+
+assets/models/basketballopt.glb
+assets/models/castle.glb
+assets/models/city.glb
+assets/models/complex.glb
+assets/models/kitchen.glb
+assets/models/legobricks.glb
+assets/models/livingroom.glb
+assets/models/luxball.glb
+assets/models/qx50.glb
+assets/models/rigid.glb
+assets/models/simple.glb
+assets/models/still.glb
+assets/models/track.glb
+
+assets/textures/canary_wharf_1k.hdr
+assets/textures/kloppenheim_01_puresky_1k.hdr
+assets/textures/kloppenheim_07_1k.hdr
+assets/textures/rainforest_trail_1k.hdr
+assets/textures/shanghai_bund_1k.hdr
+assets/textures/studio_small_03_1k.hdr
+assets/textures/studio_small_09_1k.hdr
+assets/textures/sunset_fairway_1k.hdr
+assets/textures/umhlanga_sunrise_1k.hdr
+
+# Whole-directory entries (recursed).
+assets/models/characters/
+assets/models/KayKit_Platformer_Pack/
+

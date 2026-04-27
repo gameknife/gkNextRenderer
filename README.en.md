@@ -11,7 +11,7 @@
 ![Android CI](https://github.com/gameknife/gkNextEngine/actions/workflows/android.yml/badge.svg)
 ![iOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/ios.yml/badge.svg)
 
-![Kitchen Scene](gallery/4_playground.avif)
+![Kitchen Scene](docs/gallery/4_playground.avif)
 
 ---
 
@@ -109,18 +109,18 @@ This project is especially relevant if you are interested in:
 
 ## Visual Preview
 
-![BrickPlayer Gameplay](gallery/6_debug_draw.avif)
+![BrickPlayer Gameplay](docs/gallery/6_debug_draw.avif)
 
 <details>
 <summary><b>Sample Screenshots</b></summary>
 
 | Scene | Screenshot |
 |------|------|
-| still | ![still](gallery/1_still.avif) |
-| livingroom | ![livingroom](gallery/2_living_room.avif) |
-| ldrawlego | ![ldrawlego](gallery/3_lego_ldraw.avif) |
-| luxball | ![luxball](gallery/5_luxball.avif) |
-| brickplayer | ![brickplayer](gallery/7_brick_player.avif) |
+| still | ![still](docs/gallery/1_still.avif) |
+| livingroom | ![livingroom](docs/gallery/2_living_room.avif) |
+| ldrawlego | ![ldrawlego](docs/gallery/3_lego_ldraw.avif) |
+| luxball | ![luxball](docs/gallery/5_luxball.avif) |
+| brickplayer | ![brickplayer](docs/gallery/7_brick_player.avif) |
 
 </details>
 
@@ -149,7 +149,6 @@ The project uses CMake + Ninja, with dependencies managed through vcpkg. You wil
 - Enable "Use Unicode UTF-8 for worldwide language support"
 
 ```bat
-vcpkg.bat windows
 .\build.bat --preset default-windows
 .\run.bat --preset default-windows
 ```
@@ -161,7 +160,6 @@ vcpkg.bat windows
 
 ```shell
 pacman -S --needed git mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake mingw-w64-x86_64-toolchain
-./vcpkg.sh
 ./build.sh --preset default-mingw
 ./run.sh --preset default-mingw
 ```
@@ -173,10 +171,29 @@ pacman -S --needed git mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake mingw-w64-x
 
 ```shell
 sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev autoconf autoconf-archive automake libtool python3.12-venv
-./vcpkg.sh
 ./build.sh --preset default-linux
 ./run.sh --preset default-linux
 ```
+
+`build.sh` now performs an early Linux desktop dependency check and will stop with an explicit hint if `xrandr`, `wayland-protocols`, or `xkbcommon` are missing.
+
+</details>
+
+<details>
+<summary><b>Steam Deck / Arch Linux</b></summary>
+
+```shell
+sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxrandr wayland-protocols libxkbcommon
+./build.sh --preset full-linux --reconfigure
+./run.sh --preset full-linux --target gkNextRenderer
+```
+
+Notes:
+
+- `full-linux` is the recommended verification preset for first deployment on Steam Deck
+- if `slangc` is not installed yet, `build.sh` will automatically fetch the project-managed Slang toolchain into `external/`
+- if a GitHub archive download fails during vcpkg setup, rerun the same build command once before doing deeper troubleshooting
+- deployment notes from a real Steam Deck setup are available in [docs/steamdeck-deployment-notes.md](docs/steamdeck-deployment-notes.md)
 
 </details>
 
@@ -185,7 +202,6 @@ sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev 
 
 ```shell
 brew install molten-vk glslang ninja
-./vcpkg.sh
 ./build.sh --preset default-macos-arm64
 ./run.sh --preset default-macos-arm64
 ```
@@ -200,7 +216,6 @@ brew install molten-vk glslang ninja
 ```bat
 set ANDROID_HOME=C:\Android\Sdk
 set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\27.0.12077973
-vcpkg.bat
 build.bat --android
 run.bat --preset android
 ```
@@ -223,7 +238,28 @@ run.bat --preset android
 ./run.sh --preset default-macos-arm64 --target CharacterDemo
 ```
 
----
+### Optional Assets
+
+Some larger binary assets are not committed to the repo. Fetch them as needed:
+
+| Selector | Contents | Lands at | If missing |
+|------|------|------|------|
+| `--ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer loses its LDraw parts library |
+| `--optional` | `optional.pak` | `assets/paks/` | Main renderer / Editor / CharacterDemo / MagicaLego lose their scene assets |
+| `--sfx` | six mp3/wav files | `assets/sfx/` | MagicaLego / BrickPlayer go silent |
+| `--ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows MagicaLego video capture disabled |
+
+```bash
+# Linux / macOS / Git Bash: fetch every optional asset by default
+./scripts/fetch-paks.sh
+
+# Or fetch specific groups
+./scripts/fetch-paks.sh --optional --ldraw
+./scripts/fetch-paks.sh --ffmpeg --sfx
+
+# Windows
+scripts\fetch-paks.bat
+```
 
 ## Subprojects
 
