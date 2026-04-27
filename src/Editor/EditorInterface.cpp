@@ -141,12 +141,43 @@ ImGuiID EditorInterface::DockSpaceUI()
     // Save off menu bar height for later.
     gMenuBarHeight = ImGui::GetCurrentWindow()->MenuBarHeight;
 
+    if (firstRun_ || uiState_.dockResetRequested)
+    {
+        RebuildDefaultDockLayout(dockMain);
+        uiState_.dockResetRequested = false;
+    }
+
     ImGui::DockSpace(dockMain, ImVec2(0, 0),
                      ImGuiDockNodeFlags_NoDockingInCentralNode | ImGuiDockNodeFlags_PassthruCentralNode);
     ImGui::End();
     ImGui::PopStyleVar(3);
 
     return dockMain;
+}
+
+void EditorInterface::RebuildDefaultDockLayout(ImGuiID id)
+{
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::DockBuilderRemoveNode(id);
+    ImGui::DockBuilderAddNode(id, ImGuiDockNodeFlags_DockSpace | ImGuiDockNodeFlags_NoDockingInCentralNode |
+                                      ImGuiDockNodeFlags_PassthruCentralNode);
+    ImGui::DockBuilderSetNodeSize(id, viewport->Size);
+
+    ImGuiID dockMain = id;
+    ImGuiID dock1 = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Left, 0.1f, nullptr, &dockMain);
+    ImGuiID dock2 = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Right, 0.2f, nullptr, &dockMain);
+    ImGuiID dock3 = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Down, 0.25f, nullptr, &dockMain);
+
+    ImGui::DockBuilderDockWindow("Outliner", dock1);
+    ImGui::DockBuilderDockWindow("Properties", dock2);
+    ImGui::DockBuilderDockWindow("Command History", dock2);
+    ImGui::DockBuilderDockWindow("AI Assistant", dock2);
+    ImGui::DockBuilderDockWindow("Content Browser", dock3);
+    ImGui::DockBuilderDockWindow("Log", dock3);
+    ImGui::DockBuilderDockWindow("Material Browser", dock3);
+    ImGui::DockBuilderDockWindow("Texture Browser", dock3);
+    ImGui::DockBuilderDockWindow("Mesh Browser", dock3);
+    ImGui::DockBuilderFinish(id);
 }
 
 void EditorInterface::ToolbarUI()
@@ -247,24 +278,6 @@ void EditorInterface::Render()
 
     ImGuiID id = DockSpaceUI();
     ToolbarUI();
-
-    if (firstRun_)
-    {
-        ImGuiID dock1 = ImGui::DockBuilderSplitNode(id, ImGuiDir_Left, 0.1f, nullptr, &id);
-        ImGuiID dock2 = ImGui::DockBuilderSplitNode(id, ImGuiDir_Right, 0.2f, nullptr, &id);
-        ImGuiID dock3 = ImGui::DockBuilderSplitNode(id, ImGuiDir_Down, 0.25f, nullptr, &id);
-
-        ImGui::DockBuilderDockWindow("Outliner", dock1);
-        ImGui::DockBuilderDockWindow("Properties", dock2);
-        ImGui::DockBuilderDockWindow("Command History", dock2);
-        ImGui::DockBuilderDockWindow("AI Assistant", dock2);
-        ImGui::DockBuilderDockWindow("Content Browser", dock3);
-        ImGui::DockBuilderDockWindow("Log", dock3);
-        ImGui::DockBuilderDockWindow("Material Browser", dock3);
-        ImGui::DockBuilderDockWindow("Texture Browser", dock3);
-        ImGui::DockBuilderDockWindow("Mesh Browser", dock3);
-        ImGui::DockBuilderFinish(id);
-    }
 
     Editor::DrawTitleBarOverlay(ctx, uiState_);
 

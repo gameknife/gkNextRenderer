@@ -3,8 +3,10 @@
   "outputDir": "screenshots/visual_test",
   "defaultFramesToWait": 60,
   "loadTimeoutSeconds": 20.0,
+  "baselineDir": "assets/visual_test_baselines",
+  "diffThreshold": 5,
   "useFastCapture": true,
-  "useSceneList": true,
+  "useSceneList": false,
   "includeExtensions": [
     ".proc",
     ".glb",
@@ -14,5 +16,7 @@
   ],
   "excludeScenes": [],
   "excludeSceneContains": [],
-  "scenes": []
+  "scenes": [
+    "MaterialShowcase.proc"
+  ]
 }

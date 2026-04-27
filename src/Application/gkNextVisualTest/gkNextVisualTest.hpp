@@ -15,9 +15,19 @@ struct VisualTestResult
     std::string sceneCategory;
     std::string rendererName;
     std::string screenshotPath;
+    std::string baselinePath;
+    std::string diffImagePath;
+    std::string baselineStatus;
     double renderTimeSeconds = 0.0;
+    double baselineRmse = 0.0;
+    double baselineDiffPixelPercent = 0.0;
     int framesWaited = 0;
+    int baselineMaxDiffR = 0;
+    int baselineMaxDiffG = 0;
+    int baselineMaxDiffB = 0;
     bool success = true;
+    bool baselineCompared = false;
+    bool baselineUpdated = false;
     std::string errorMessage;
 };
 
@@ -43,12 +53,15 @@ private:
     bool ShouldIncludeScene(const std::string& scenePath) const;
     void CaptureAndAdvance();
     void RecordFailureAndAdvance(const std::string& errorMessage);
+    void EvaluateBaseline(VisualTestResult& result, const std::string& currentImagePath);
     void GenerateReport();
+    void GenerateHtmlReport();
     void GenerateAgentManifest();
     std::string GetRendererName();
     std::string GetSceneName(const std::string& path) const;
     std::string GetSceneCategory(const std::string& path) const;
     std::string GetScreenshotFilename();
+    std::string GetBaselineFilename(const VisualTestResult& result) const;
 
     NextEngine* engine_;
 
@@ -56,8 +69,11 @@ private:
     std::string outputDir_ = "screenshots/visual_test";
     int defaultFrames_ = 60;
     double loadTimeoutSeconds_ = 20.0;
+    std::string baselineDir_ = "assets/visual_test_baselines";
+    int diffThreshold_ = 5;
     bool useFastCapture_ = true;
     bool useSceneList_ = true;
+    bool updateBaseline_ = false;
     std::vector<std::string> includeExtensions_;
     std::vector<std::string> excludeScenes_;
     std::vector<std::string> excludeSceneContains_;

@@ -38,10 +38,42 @@ namespace Editor
             return false;
         }
 
+        bool PassesNodeFilter(const Assets::Node& node, const ImGuiTextFilter& filter)
+        {
+            if (filter.PassFilter(node.GetName().c_str()))
+            {
+                return true;
+            }
+
+            for (const auto& child : node.Children())
+            {
+                if (PassesNodeFilter(*child, filter))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        void AlignNextOutlinerInlineItem()
+        {
+            ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+            ImGui::AlignTextToFramePadding();
+        }
+
         void DrawNode(EditorContext& ctx, Assets::Node& node, uint32_t& renameTargetId,
                       std::string& renameBuffer, bool& openRenamePopup, bool& focusRenameInput,
-                      uint32_t& hoveredIdCandidate, bool autoScrollEnabled, uint32_t& pendingScrollTargetId)
+                      uint32_t& hoveredIdCandidate, bool autoScrollEnabled, uint32_t& pendingScrollTargetId,
+                      const ImGuiTextFilter& filter)
         {
+            const bool filterActive = filter.IsActive();
+            const bool nodePassesFilter = !filterActive || filter.PassFilter(node.GetName().c_str());
+            const bool subtreePassesFilter = !filterActive || nodePassesFilter || PassesNodeFilter(node, filter);
+            if (!subtreePassesFilter)
+            {
+                return;
+            }
+
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
 
@@ -54,9 +86,9 @@ namespace Editor
                 (node.Children().empty() ? ImGuiTreeNodeFlags_Leaf : 0);
 
             ImGui::PushID(static_cast<int>(node.GetInstanceId()));
-            ImGui::PushStyleColor(ImGuiCol_Text, selected ? ActiveColor : ImGui::GetColorU32(ImGuiCol_Text));
             auto render = node.GetComponent<Runtime::RenderComponent>();
             const int modelId = render ? render->GetModelId() : -1;
+            const bool visible = render == nullptr || render->GetVisible();
 
             const bool shouldOpenForTarget =
                 autoScrollEnabled && pendingScrollTargetId != InvalidId &&
@@ -65,10 +97,41 @@ namespace Editor
             {
                 ImGui::SetNextItemOpen(true, ImGuiCond_Always);
             }
+            if (filterActive && !node.Children().empty())
+            {
+                ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+            }
 
             const std::string lockPrefix = locked ? std::string(ICON_FA_LOCK " ") : "";
             const std::string label = lockPrefix + (modelId == -1 ? ICON_FA_CIRCLE_NOTCH : ICON_FA_CUBE) +
                 std::string(" ") + node.GetName();
+            if (render != nullptr)
+            {
+                ImGui::AlignTextToFramePadding();
+                if (!visible)
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetColorU32(ImGuiCol_TextDisabled));
+                }
+                ImGui::TextUnformatted(visible ? ICON_FA_EYE : ICON_FA_EYE_SLASH);
+                if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+                {
+                    render->SetVisible(!visible);
+                    ctx.scene.MarkDirty();
+                }
+                if (!visible)
+                {
+                    ImGui::PopStyleColor();
+                }
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetTooltip("%s", visible ? "Hide Node" : "Show Node");
+                }
+                AlignNextOutlinerInlineItem();
+            }
+
+            const ImU32 textColor = !visible ? ImGui::GetColorU32(ImGuiCol_TextDisabled)
+                                             : selected ? ActiveColor : ImGui::GetColorU32(ImGuiCol_Text);
+            ImGui::PushStyleColor(ImGuiCol_Text, textColor);
             const bool opened = ImGui::TreeNodeEx(label.c_str(), flag);
 
             ImGui::PopStyleColor();
@@ -136,7 +199,7 @@ namespace Editor
                 for (auto& child : node.Children())
                 {
                     DrawNode(ctx, *child, renameTargetId, renameBuffer, openRenamePopup, focusRenameInput,
-                             hoveredIdCandidate, autoScrollEnabled, pendingScrollTargetId);
+                             hoveredIdCandidate, autoScrollEnabled, pendingScrollTargetId, filter);
                 }
                 ImGui::TreePop();
             }
@@ -154,6 +217,7 @@ namespace Editor
         static bool prevAutoScrollEnabled = true;
         static uint32_t lastSelectionId = InvalidId;
         static uint32_t pendingScrollTargetId = InvalidId;
+        static ImGuiTextFilter nodeFilter;
         uint32_t hoveredIdCandidate = InvalidId;
 
         ImGui::Begin("Outliner", nullptr);
@@ -190,6 +254,9 @@ namespace Editor
                                   "auto-scrolls Outliner to it.",
                                   ui.outlinerAutoScrollToSelection ? "On" : "Off");
             }
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(200.0f);
+            nodeFilter.Draw(ICON_FA_MAGNIFYING_GLASS "##OutlinerFilter", 200.0f);
             ImGui::Separator();
 
             const uint32_t currentSelectionId = ctx.scene.GetSelectedId();
@@ -215,6 +282,7 @@ namespace Editor
             {
                 ImGui::TableSetupColumn("NodeName");
                 auto& allnodes = ctx.scene.Nodes();
+                const bool filterActive = nodeFilter.IsActive();
                 uint32_t limit = 1000;
                 for (auto& node : allnodes)
                 {
@@ -224,9 +292,9 @@ namespace Editor
                     }
 
                     DrawNode(ctx, *node, renameTargetId, renameBuffer, openRenamePopup, focusRenameInput,
-                             hoveredIdCandidate, ui.outlinerAutoScrollToSelection, pendingScrollTargetId);
+                             hoveredIdCandidate, ui.outlinerAutoScrollToSelection, pendingScrollTargetId, nodeFilter);
 
-                    if (limit-- <= 0)
+                    if (!filterActive && limit-- <= 0)
                     {
                         break;
                     }

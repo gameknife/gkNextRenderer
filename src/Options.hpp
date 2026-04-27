@@ -32,6 +32,7 @@ public:
 	bool FastExit{true};
 	bool AgentValidation{};
 	bool KeepCPUMeshData{};  // 保留CPU网格数据（编辑器模式需要）
+	bool UpdateVisualTestBaseline{};
 	std::string locale{};
 
 

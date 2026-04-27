@@ -63,10 +63,8 @@ void BrickPlayerUserInterface::Render()
 void BrickPlayerUserInterface::RenderTitleBar()
 {
     ImVec2 windowSize = ImGui::GetMainViewport()->Size;
-
-    // Configure custom title bar drag area
-    gameInstance_->GetEngine().ConfigureCustomTitleBarDrag(
-        true, titleBarHeight, titleBarActionWidth, titleBarControlWidth);
+    float titleBarLeftReservedWidth = 0.0f;
+    float titleBarRightReservedWidth = titleBarControlWidth;
 
     // Title bar background
     auto bgColor = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
@@ -97,6 +95,7 @@ void BrickPlayerUserInterface::RenderTitleBar()
                  ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                  ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                  ImGuiWindowFlags_NoBackground);
+    titleBarRightReservedWidth = ImGui::GetWindowSize().x;
 
     if (ImGui::Button(ICON_FA_MINUS, ImVec2(titleBarHeight, titleBarHeight)))
     {
@@ -264,11 +263,14 @@ void BrickPlayerUserInterface::RenderTitleBar()
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Shuffle BGM");
     }
+    titleBarLeftReservedWidth = ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x;
 
     ImGui::End();
 
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(4);
+    gameInstance_->GetEngine().ConfigureCustomTitleBarDrag(
+        true, titleBarHeight, titleBarLeftReservedWidth, titleBarRightReservedWidth);
 }
 
 void BrickPlayerUserInterface::RenderTimeline()

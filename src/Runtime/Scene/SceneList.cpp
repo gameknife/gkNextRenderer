@@ -628,6 +628,125 @@ namespace
         }
     }
 
+    void MaterialShowcase(Assets::EnvironmentSetting& cameraInit,
+                          std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                          std::vector<Assets::Model>& models,
+                          std::vector<Assets::FMaterial>& materials,
+                          std::vector<Assets::LightObject>& lights,
+                          std::vector<Assets::AnimationTrack>& tracks)
+    {
+        Assets::Camera defaultCam;
+        defaultCam.name = "MaterialShowcaseCam";
+        defaultCam.ModelView = lookAt(vec3(0.0f, 5.0f, 12.0f), vec3(0.0f, 1.2f, 0.0f), vec3(0, 1, 0));
+        defaultCam.FieldOfView = 45;
+        defaultCam.Aperture = 0;
+        defaultCam.FocalDistance = 12;
+
+        cameraInit.cameras.push_back(defaultCam);
+        cameraInit.ControlSpeed = 4.0f;
+        cameraInit.GammaCorrection = true;
+        cameraInit.HasSky = true;
+        cameraInit.SkyIdx = 0;
+        cameraInit.SkyIntensity = 15.0f;
+        cameraInit.HasSun = false;
+
+        const uint32_t matGround = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.45f, 0.45f, 0.46f)), "ms_ground_lambertian"});
+        const uint32_t matLight = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::DiffuseLight(vec3(900.0f, 850.0f, 760.0f)), "ms_key_light"});
+
+        struct MaterialRow
+        {
+            const char* name;
+            uint32_t materials[3];
+        };
+
+        MaterialRow rows[] = {
+            {"Lambertian",
+             {static_cast<uint32_t>(materials.size()),
+              static_cast<uint32_t>(materials.size() + 1),
+              static_cast<uint32_t>(materials.size() + 2)}},
+            {"Metallic",
+             {static_cast<uint32_t>(materials.size() + 3),
+              static_cast<uint32_t>(materials.size() + 4),
+              static_cast<uint32_t>(materials.size() + 5)}},
+            {"Mixture",
+             {static_cast<uint32_t>(materials.size() + 6),
+              static_cast<uint32_t>(materials.size() + 7),
+              static_cast<uint32_t>(materials.size() + 8)}},
+            {"Dielectric",
+             {static_cast<uint32_t>(materials.size() + 9),
+              static_cast<uint32_t>(materials.size() + 10),
+              static_cast<uint32_t>(materials.size() + 11)}},
+            {"DiffuseLight",
+             {static_cast<uint32_t>(materials.size() + 12),
+              static_cast<uint32_t>(materials.size() + 13),
+              static_cast<uint32_t>(materials.size() + 14)}},
+        };
+
+        const float roughness[] = {0.0f, 0.3f, 0.8f};
+        for (int i = 0; i < 3; ++i)
+        {
+            materials.push_back({Material::Lambertian(vec3(0.70f, 0.36f + roughness[i] * 0.35f, 0.24f)),
+                                 fmt::format("ms_lambertian_{:.1f}", roughness[i])});
+        }
+        for (int i = 0; i < 3; ++i)
+        {
+            materials.push_back({Material::Metallic(vec3(0.86f, 0.82f, 0.74f), roughness[i]),
+                                 fmt::format("ms_metallic_{:.1f}", roughness[i])});
+        }
+        for (int i = 0; i < 3; ++i)
+        {
+            materials.push_back({Material::Mixture(vec3(0.25f, 0.48f, 0.85f), roughness[i]),
+                                 fmt::format("ms_mixture_{:.1f}", roughness[i])});
+        }
+        for (int i = 0; i < 3; ++i)
+        {
+            materials.push_back({Material::Dielectric(1.5f, roughness[i]),
+                                 fmt::format("ms_dielectric_{:.1f}", roughness[i])});
+        }
+        for (int i = 0; i < 3; ++i)
+        {
+            const float intensity = 280.0f + roughness[i] * 520.0f;
+            materials.push_back({Material::DiffuseLight(vec3(intensity, intensity * 0.85f, intensity * 0.55f)),
+                                 fmt::format("ms_diffuse_light_{:.1f}", roughness[i])});
+        }
+
+        auto addNode = [&](const std::string& name, const vec3& pos, uint32_t modelIdx, uint32_t matIdx)
+        {
+            auto node = Assets::Node::CreateNode(name, pos, quat(1, 0, 0, 0), vec3(1),
+                                                 static_cast<uint32_t>(nodes.size()));
+            auto rc = std::make_shared<Runtime::RenderComponent>();
+            rc->SetModelId(modelIdx);
+            rc->SetVisible(true);
+            rc->SetMaterial({matIdx});
+            node->AddComponent(rc);
+            nodes.push_back(node);
+        };
+
+        models.push_back(Assets::FProcModel::CreateBox(vec3(-7.5f, -0.08f, -5.0f), vec3(7.5f, 0.0f, 5.0f)));
+        addNode("Ground", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matGround);
+
+        models.push_back(Assets::FProcModel::CreateSphere(vec3(0, 0, 0), 0.75f));
+        const uint32_t sphereModel = static_cast<uint32_t>(models.size() - 1);
+
+        for (int row = 0; row < 5; ++row)
+        {
+            for (int col = 0; col < 3; ++col)
+            {
+                const vec3 pos(-2.8f + static_cast<float>(col) * 2.8f, 0.75f,
+                               -3.2f + static_cast<float>(row) * 1.6f);
+                addNode(fmt::format("MaterialShowcase_{}_R{}", rows[row].name, col),
+                        pos, sphereModel, rows[row].materials[col]);
+            }
+        }
+
+        models.push_back(Assets::FProcModel::CreateAreaLight(
+            "KeyLight", vec3(-3.0f, 5.5f, 1.5f), vec3(6.0f, 0.0f, 0.0f),
+            vec3(0.0f, 0.0f, -3.0f), matLight, lights));
+        addNode("KeyLight", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matLight);
+    }
+
     void CharacterPlayground(Assets::EnvironmentSetting& cameraInit,
                              std::vector<std::shared_ptr<Assets::Node>>& nodes,
                              std::vector<Assets::Model>& models,
@@ -1171,6 +1290,7 @@ void SceneList::ScanScenes()
 
     AllScenes.push_back("CornellBox.proc");
     AllScenes.push_back("GIBootcamp.proc");
+    AllScenes.push_back("MaterialShowcase.proc");
     AllScenes.push_back("RTIO.proc");
 
     // Deduplicate (a file may exist on disk and in pak) before sorting.
@@ -1245,6 +1365,11 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
         if (filename == "GIBootcamp.proc")
         {
             GIBootcamp(camera, nodes, models, materials, lights, tracks);
+            return true;
+        }
+        if (filename == "MaterialShowcase.proc")
+        {
+            MaterialShowcase(camera, nodes, models, materials, lights, tracks);
             return true;
         }
         if (filename == "CharacterPlayground.proc")

@@ -256,8 +256,8 @@ void MagicaLegoUserInterface::DrawTitleBar()
 
     // 获取窗口的大小
     ImVec2 windowSize = ImGui::GetMainViewport()->Size;
-    GetGameInstance()->GetEngine().ConfigureCustomTitleBarDrag(
-        isOpen, titlebarSize, titlebarSize * 18.0f, titlebarControlSize);
+    float titlebarLeftReservedWidth = 0.0f;
+    float titlebarRightReservedWidth = titlebarControlSize;
 
     auto bgColor = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
     bgColor.w = currentAnim * 0.6f;
@@ -284,6 +284,7 @@ void MagicaLegoUserInterface::DrawTitleBar()
     ImGui::SetNextWindowBgAlpha(0.0f);
 
     ImGui::Begin("TitleBarRight", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground);
+    titlebarRightReservedWidth = ImGui::GetWindowSize().x;
     
     ImGui::PushStyleVar(ImGuiStyleVar_Alpha, currentAnim);
 
@@ -420,12 +421,15 @@ void MagicaLegoUserInterface::DrawTitleBar()
         GetGameInstance()->SetCapturing(showHelp_ || capture_);
     }
     BUTTON_TOOLTIP(LOCTEXT("Show Help"))
+    titlebarLeftReservedWidth = ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x;
 
     ImGui::PopStyleVar();
     ImGui::End();
 
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(4);
+    GetGameInstance()->GetEngine().ConfigureCustomTitleBarDrag(
+        isOpen, titlebarSize, titlebarLeftReservedWidth, titlebarRightReservedWidth);
 }
 
 void MagicaLegoUserInterface::DrawOpening() const 

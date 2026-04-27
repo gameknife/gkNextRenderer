@@ -755,7 +755,8 @@ void NextRendererGameInstance::DrawTitleBar()
 {
     // 获取窗口的大小
     ImVec2 windowSize = ImGui::GetMainViewport()->Size;
-    GetEngine().ConfigureCustomTitleBarDrag(true, TitlebarSize, TitlebarSize * 18.0f, TitlebarControlSize);
+    float titlebarLeftReservedWidth = 0.0f;
+    float titlebarRightReservedWidth = TitlebarControlSize;
 
     auto bgColor = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
     bgColor.w = 0.9f;
@@ -778,6 +779,7 @@ void NextRendererGameInstance::DrawTitleBar()
     ImGui::SetNextWindowSize(ImVec2(TitlebarControlSize, TitlebarSize));
 
     ImGui::Begin("TitleBarRight", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground);
+    titlebarRightReservedWidth = ImGui::GetWindowSize().x;
 
     if (ImGui::Button(ICON_FA_MINUS, ImVec2(TitlebarSize, TitlebarSize)))
     {
@@ -853,6 +855,7 @@ void NextRendererGameInstance::DrawTitleBar()
 	{
 		GetEngine().GetUserSettings().ShowOverlay = !GetEngine().GetUserSettings().ShowOverlay;
 	}
+    titlebarLeftReservedWidth = ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x;
 	BUTTON_TOOLTIP(LOCTEXT("Toggle Performance Overlay"))
 	ImGui::SameLine();
     ImGui::GetForegroundDrawList()->AddLine(ImGui::GetCursorPos() + ImVec2(4, TitlebarSize / 2 - 5), ImGui::GetCursorPos() + ImVec2(4, TitlebarSize / 2 + 5), IM_COL32(255, 255, 255, 160), 2.0f);
@@ -864,4 +867,6 @@ void NextRendererGameInstance::DrawTitleBar()
 
     ImGui::PopStyleColor();
     ImGui::PopStyleVar(4);
+    GetEngine().ConfigureCustomTitleBarDrag(
+        true, TitlebarSize, titlebarLeftReservedWidth, titlebarRightReservedWidth);
 }

@@ -20,6 +20,7 @@ public:
 
 private:
     ImGuiID DockSpaceUI();
+    void RebuildDefaultDockLayout(ImGuiID id);
     void ToolbarUI();
     void DrawIndicator(uint32_t frameCount);
 

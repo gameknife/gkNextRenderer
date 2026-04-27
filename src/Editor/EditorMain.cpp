@@ -1,6 +1,7 @@
 #include "EditorMain.h"
 #include <Runtime/Platform/PlatformCommon.h>
 #include "Assets/Core/Node.h"
+#include "Assets/GPU/Texture.hpp"
 #include "EditorInterface.hpp"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Engine.hpp"
@@ -9,6 +10,8 @@
 
 #include "Editor/EditorActionDispatcher.hpp"
 #include "Editor/EditorContext.hpp"
+
+#include <spdlog/spdlog.h>
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options,
                                                          NextEngine* engine)
@@ -82,9 +85,19 @@ void EditorGameInstance::OnInit()
                                 return true;
                             });
     actions_.RegisterAction(EEditorAction::IO_LoadHDRI,
-                            [](EditorContext& /*ctx*/, std::string_view /*args*/) -> bool
+                            [](EditorContext& ctx, std::string_view args) -> bool
                             {
-                                // TODO: integrate HDRI changes with scene/env settings.
+                                const std::string filename(args);
+                                std::error_code existsError;
+                                if (!std::filesystem::exists(filename, existsError))
+                                {
+                                    SPDLOG_ERROR("Failed to load HDRI: {}", filename);
+                                    return false;
+                                }
+
+                                const uint32_t textureId = Assets::GlobalTexturePool::GetInstance()->LoadHDRTexture(filename);
+                                ctx.scene.GetEnvSettings().SkyIdx = static_cast<int32_t>(textureId);
+                                SPDLOG_INFO("HDRI loaded: {} (SkyIdx={})", filename, textureId);
                                 return true;
                             });
 

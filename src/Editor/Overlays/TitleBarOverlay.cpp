@@ -17,12 +17,13 @@ namespace Editor
     {
         constexpr float kTitleBarHeight = 55.0f;
         constexpr float kFooterHeight = 40.0f;
+        constexpr float kMenuHitPadding = 32.0f;
     } // namespace
 
     void DrawTitleBarOverlay(EditorContext& ctx, EditorUiState& ui)
     {
         ImGuiViewport* viewport = ImGui::GetMainViewport();
-        float menuUsedWidth = 0.0f;
+        float menuRight = viewport->Pos.x + kTitleBarHeight;
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -46,7 +47,9 @@ namespace Editor
 
         if (ImGui::BeginMenuBar())
         {
-            if (ImGui::BeginMenu("File"))
+            bool fileMenuOpen = ImGui::BeginMenu("File");
+            menuRight = std::max(menuRight, ImGui::GetItemRectMax().x);
+            if (fileMenuOpen)
             {
                 if (ImGui::MenuItem("Save Scene As...", "Ctrl+Shift+S"))
                 {
@@ -73,7 +76,9 @@ namespace Editor
                 ImGui::EndMenu();
             }
 
-            if (ImGui::BeginMenu("Edit"))
+            bool editMenuOpen = ImGui::BeginMenu("Edit");
+            menuRight = std::max(menuRight, ImGui::GetItemRectMax().x);
+            if (editMenuOpen)
             {
                 // Undo/Redo
                 CommandHistory& history = ctx.engine.GetCommandHistory();
@@ -100,7 +105,10 @@ namespace Editor
                 
                 if (ImGui::BeginMenu("Layout"))
                 {
-                    ImGui::MenuItem("Reset");
+                    if (ImGui::MenuItem("Reset"))
+                    {
+                        ui.dockResetRequested = true;
+                    }
                     ImGui::EndMenu();
                 }
                 if (ImGui::BeginMenu("Behavior"))
@@ -116,7 +124,9 @@ namespace Editor
                 ImGui::EndMenu();
             }
 
-            if (ImGui::BeginMenu("Tools"))
+            bool toolsMenuOpen = ImGui::BeginMenu("Tools");
+            menuRight = std::max(menuRight, ImGui::GetItemRectMax().x);
+            if (toolsMenuOpen)
             {
                 ImGui::MenuItem("Style Editor", nullptr, &ui.child_style);
                 ImGui::MenuItem("Demo Window", nullptr, &ui.child_demo);
@@ -130,7 +140,9 @@ namespace Editor
                 ImGui::EndMenu();
             }
 
-            if (ImGui::BeginMenu("Help"))
+            bool helpMenuOpen = ImGui::BeginMenu("Help");
+            menuRight = std::max(menuRight, ImGui::GetItemRectMax().x);
+            if (helpMenuOpen)
             {
                 if (ImGui::MenuItem("Resources"))
                     ui.child_resources = true;
@@ -140,11 +152,10 @@ namespace Editor
             }
 
             ImGui::EndMenuBar();
-            menuUsedWidth = ImGui::GetCursorPosX();
         }
         ImGui::End();
 
-        const float dragLeftReserved = std::max(kTitleBarHeight, kTitleBarHeight + menuUsedWidth + 16.0f);
+        const float dragLeftReserved = std::max(kTitleBarHeight, menuRight - viewport->Pos.x + kMenuHitPadding);
         ctx.engine.ConfigureCustomTitleBarDrag(true, kTitleBarHeight, dragLeftReserved, 200.0f);
 
         // LOGO

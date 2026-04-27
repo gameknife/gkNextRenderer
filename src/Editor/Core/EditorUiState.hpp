@@ -34,6 +34,7 @@ namespace Editor
         bool logPanel = true;
         bool aiPanel = true;
         bool outlinerAutoScrollToSelection = true;
+        bool dockResetRequested = false;
 
         // Selection
         uint32_t selected_obj_id = InvalidId;

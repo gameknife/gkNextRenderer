@@ -17,6 +17,8 @@
 #include <filesystem>
 #include <fmt/format.h>
 #include <functional>
+#include <spdlog/spdlog.h>
+#include <unordered_map>
 #include <string_view>
 #include <vector>
 
@@ -39,6 +41,10 @@ namespace Editor
             Directory,
             Scene,
             Hdri,
+            Script,
+            Texture,
+            LDraw,
+            Config,
             Unsupported,
         };
 
@@ -79,6 +85,14 @@ namespace Editor
             static const ContentAssetVisual kScene{ICON_FA_CUBE, IM_COL32(255, 172, 0, 255), EContentAssetKind::Scene};
             static const ContentAssetVisual kHdri{ICON_FA_FILE_IMAGE, IM_COL32(200, 64, 64, 255),
                                                   EContentAssetKind::Hdri};
+            static const ContentAssetVisual kScript{ICON_FA_CODE, IM_COL32(84, 180, 255, 255),
+                                                    EContentAssetKind::Script};
+            static const ContentAssetVisual kTexture{ICON_FA_IMAGE, IM_COL32(88, 210, 132, 255),
+                                                     EContentAssetKind::Texture};
+            static const ContentAssetVisual kLDraw{ICON_FA_CUBES, IM_COL32(186, 130, 255, 255),
+                                                   EContentAssetKind::LDraw};
+            static const ContentAssetVisual kConfig{ICON_FA_FILE_LINES, IM_COL32(230, 205, 80, 255),
+                                                    EContentAssetKind::Config};
 
             struct ExtensionVisual
             {
@@ -86,8 +100,16 @@ namespace Editor
                 const ContentAssetVisual* visual = nullptr;
             };
 
-            static const std::array<ExtensionVisual, 1> kVisuals{
+            static const std::array<ExtensionVisual, 9> kVisuals{
                 ExtensionVisual{".hdr", &kHdri},
+                ExtensionVisual{".js", &kScript},
+                ExtensionVisual{".png", &kTexture},
+                ExtensionVisual{".jpg", &kTexture},
+                ExtensionVisual{".jpeg", &kTexture},
+                ExtensionVisual{".tga", &kTexture},
+                ExtensionVisual{".ldr", &kLDraw},
+                ExtensionVisual{".mpd", &kLDraw},
+                ExtensionVisual{".json", &kConfig},
             };
 
             if (SceneList::IsSupportedSceneExtension(extension))
@@ -126,8 +148,52 @@ namespace Editor
             return ResolveAssetVisualForExtension(ext);
         }
 
+        std::vector<std::filesystem::directory_entry>& GetCachedDirectoryEntries(
+            const std::filesystem::path& path,
+            std::unordered_map<std::filesystem::path, std::vector<std::filesystem::directory_entry>>& directoryCache)
+        {
+            auto it = directoryCache.find(path);
+            if (it != directoryCache.end())
+            {
+                return it->second;
+            }
+
+            std::vector<std::filesystem::directory_entry> entries;
+            std::error_code error;
+            std::filesystem::directory_iterator dirIt(path, error);
+            if (error)
+            {
+                SPDLOG_WARN("Failed to read content browser directory '{}': {}", path.string(), error.message());
+                auto [insertedIt, _] = directoryCache.emplace(path, std::move(entries));
+                return insertedIt->second;
+            }
+
+            for (const auto& entry : dirIt)
+            {
+                entries.push_back(entry);
+            }
+
+            std::sort(entries.begin(), entries.end(),
+                      [](const std::filesystem::directory_entry& lhs,
+                         const std::filesystem::directory_entry& rhs)
+                      {
+                          const bool lhsDir = lhs.is_directory();
+                          const bool rhsDir = rhs.is_directory();
+                          if (lhsDir != rhsDir)
+                          {
+                              return lhsDir;
+                          }
+                          return lhs.path().filename().string() < rhs.path().filename().string();
+                      });
+
+            auto [insertedIt, _] = directoryCache.emplace(path, std::move(entries));
+            return insertedIt->second;
+        }
+
         void DrawContentBrowserNavigation(EditorUiState& ui, const std::filesystem::path& rootPath,
-                                          std::filesystem::path& currentPath)
+                                          std::filesystem::path& currentPath,
+                                          std::unordered_map<std::filesystem::path,
+                                                             std::vector<std::filesystem::directory_entry>>& directoryCache)
         {
             const std::string rootStr = rootPath.string();
             const std::string curStr = currentPath.string();
@@ -145,6 +211,20 @@ namespace Editor
             if (ImGui::Button(ICON_FA_HOUSE))
             {
                 currentPath = rootPath;
+            }
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("Assets Root");
+            }
+
+            ImGui::SameLine();
+            if (ImGui::Button(ICON_FA_ROTATE))
+            {
+                directoryCache.erase(currentPath);
+            }
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("Refresh Current Folder");
             }
 
             const std::filesystem::path rel = currentPath.lexically_relative(rootPath);
@@ -350,8 +430,10 @@ namespace Editor
             static const std::filesystem::path rootPath =
                 std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets"));
             static std::filesystem::path currentPath = rootPath;
+            static std::unordered_map<std::filesystem::path, std::vector<std::filesystem::directory_entry>>
+                directoryCache;
 
-            DrawContentBrowserNavigation(ui, rootPath, currentPath);
+            DrawContentBrowserNavigation(ui, rootPath, currentPath, directoryCache);
 
             auto cursorPos = ImGui::GetWindowPos() + ImVec2(0, ImGui::GetCursorPos().y + 2);
             ImGui::NewLine();
@@ -363,9 +445,9 @@ namespace Editor
 
             ImGui::BeginChild("Content Items");
 
-            std::filesystem::directory_iterator it(currentPath);
+            auto& entries = GetCachedDirectoryEntries(currentPath, directoryCache);
             ContentGridLayout grid = BeginContentGrid();
-            for (auto& entry : it)
+            for (auto& entry : entries)
             {
                 const std::string abspath = absolute(entry.path()).string();
                 const std::string name = entry.path().filename().string();
