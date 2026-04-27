@@ -13,6 +13,7 @@
 #include "Vulkan/SwapChain.hpp"
 
 #include <glm/gtc/quaternion.hpp>
+#include <spdlog/spdlog.h>
 
 const glm::i16vec3 invalidPos(0, -10, 0);
 constexpr uint32_t InvalidOwnerHash = std::numeric_limits<uint32_t>::max();
