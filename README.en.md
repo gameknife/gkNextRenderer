@@ -238,55 +238,6 @@ run.bat --preset android
 ./run.sh --preset default-macos-arm64 --target CharacterDemo
 ```
 
-### Optional Assets
-
-To keep the clone small, the following large binary assets are **not committed** to the repo. They live on a dedicated GitHub Release (tag `paks-latest`) and are pulled in via one cross-platform script:
-
-| Selector | Contents | Lands at | If missing |
-|------|------|------|------|
-| `--ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer loses its LDraw parts library |
-| `--optional` | `optional.pak` | `assets/paks/` | Main renderer / Editor / CharacterDemo / MagicaLego lose their scene assets |
-| `--sfx` | six mp3/wav files | `assets/sfx/` | MagicaLego / BrickPlayer go silent |
-| `--ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows MagicaLego video capture disabled |
-
-The engine mounts existing paks automatically, so the main flow boots without these. Apps that depend on a specific group (CharacterDemo / MagicaLego on `--optional`, Windows MagicaLego packaging on `--ffmpeg`) detect the missing files at startup and surface a clear prompt instead of crashing. The Android build no longer goes through this script — see the note below.
-
-```bash
-# Linux / macOS / Git Bash — pulls every group by default
-./scripts/fetch-paks.sh
-
-# Or pick groups
-./scripts/fetch-paks.sh --optional --ldraw
-./scripts/fetch-paks.sh --ffmpeg --sfx     # prep Windows MagicaLego
-
-# Windows
-scripts\fetch-paks.bat
-```
-
-**Android SDL3 archive:** `android/app/build.gradle` defines a `downloadSdlAar` task that pulls `SDL3-devel-<ver>-android.zip` directly from [libsdl-org's official release](https://github.com/libsdl-org/SDL/releases) and extracts the `.aar` into `android/app/libs/` before each build. No manual fetch step is required.
-
-To use a private mirror or a different release tag, override via environment variables:
-
-- `PAKS_REPO` (default `gameknife/gkNextEngine`)
-- `PAKS_RELEASE_TAG` (default `paks-latest`)
-- `PAKS_BASE_URL` (full base URL — files are appended as `<base>/<name>.pak`; skips the GitHub release path)
-
-**Maintainers: publishing / updating the release**
-
-When any group changes, `scripts/publish-paks.*` pushes the local files to the release (creates it if missing, otherwise replaces same-named assets). It uses the [`gh` CLI](https://cli.github.com/), so authenticate once via `gh auth login`. Selectors mirror the fetch side:
-
-```bash
-# Linux / macOS / Git Bash
-./scripts/publish-paks.sh                 # upload every group
-./scripts/publish-paks.sh --ldraw --sfx   # only refresh these two
-./scripts/publish-paks.sh --dry-run       # preview without touching the remote
-
-# Windows
-scripts\publish-paks.bat
-```
-
----
-
 ## Subprojects
 
 | Project | Description |
