@@ -238,55 +238,6 @@ run.bat --preset android
 ./run.sh --preset default-macos-arm64 --target CharacterDemo
 ```
 
-### 可选资源包（optional assets）
-
-为了控制仓库体积，下面这些较大的二进制资源 **不随仓库提交**，统一放在仓库的 GitHub Release（tag `paks-latest`），用同一份脚本拉取：
-
-| 选择器 | 内容 | 落盘位置 | 缺失影响 |
-|------|------|------|------|
-| `--ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer 缺 LDraw 零件库 |
-| `--optional` | `optional.pak` | `assets/paks/` | 主渲染器 / Editor / CharacterDemo / MagicaLego 缺场景资源 |
-| `--sfx` | 6 个 mp3/wav | `assets/sfx/` | MagicaLego / BrickPlayer 静音 |
-| `--ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows 下 MagicaLego 视频录制不可用 |
-
-引擎运行时会自动挂载已存在的 pak，主流程不依赖这些文件就能起来；CharacterDemo / MagicaLego 等依赖 `--optional` 的子项目在启动时会做检查，缺失时弹窗提示，而不是直接 crash。Android 构建已不再走这个脚本，详见下方说明。
-
-```bash
-# Linux / macOS / Git Bash —— 默认全部拉取
-./scripts/fetch-paks.sh
-
-# 只拉指定 group
-./scripts/fetch-paks.sh --optional --ldraw
-./scripts/fetch-paks.sh --ffmpeg --sfx     # 准备 Windows MagicaLego
-
-# Windows
-scripts\fetch-paks.bat
-```
-
-**Android SDL3 archive：** `android/app/build.gradle` 里的 `downloadSdlAar` 任务会在每次构建前从 [libsdl-org 官方 release](https://github.com/libsdl-org/SDL/releases) 拉取 `SDL3-devel-<ver>-android.zip`，并把里面的 `.aar` 释放到 `android/app/libs/`。本地和 CI 都不需要再手动 fetch。
-
-如果需要走自建镜像或特定 tag，可通过环境变量覆盖：
-
-- `PAKS_REPO`（默认 `gameknife/gkNextEngine`）
-- `PAKS_RELEASE_TAG`（默认 `paks-latest`）
-- `PAKS_BASE_URL`（直接指定 `<base>/<name>.pak` 的 base 部分，跳过 GitHub Release 拼装）
-
-**维护者：发布 / 更新 release**
-
-当任意一组资源更新后，用 `scripts/publish-paks.*` 一条命令把本地文件推到 release（不存在则创建，已存在则覆盖同名 asset）。脚本依赖 [`gh` CLI](https://cli.github.com/)，先 `gh auth login` 登录一次。选择器与 fetch 端完全一致：
-
-```bash
-# Linux / macOS / Git Bash
-./scripts/publish-paks.sh                 # 上传所有 group
-./scripts/publish-paks.sh --ldraw --sfx   # 只刷新这两组
-./scripts/publish-paks.sh --dry-run       # 不真的上传，先看会做什么
-
-# Windows
-scripts\publish-paks.bat
-```
-
----
-
 ## 子项目
 
 | 项目 | 说明 |
