@@ -5,7 +5,6 @@ param(
     [switch]$Optional,
     [switch]$Sfx,
     [switch]$Ffmpeg,
-    [switch]$Sdl,
     [switch]$DryRun,
     [string]$Title,
     [string]$Notes,
@@ -29,12 +28,13 @@ Groups:
 - optional.pak      - extra sample assets for the main renderer / Editor
 - sfx (mp3/wav)     - background music & sound effects
 - ffmpeg.exe        - Windows-only helper used by MagicaLego packaging
-- SDL3-*.aar        - SDL3 Android archive used by android/ gradle build
 
 Re-uploaded by scripts/publish-paks.ps1.
 "@
 
 # Manifest of optional assets. Source paths are relative to the repo root.
+# The SDL3 Android archive is sourced directly from libsdl-org's official
+# release by android/app/build.gradle and is no longer mirrored here.
 $Assets = @(
     @{ Id = 'ldraw';    Name = 'ldraw.pak';        Src = 'assets/paks/ldraw.pak' }
     @{ Id = 'optional'; Name = 'optional.pak';     Src = 'assets/paks/optional.pak' }
@@ -45,12 +45,11 @@ $Assets = @(
     @{ Id = 'sfx';      Name = 'put2.wav';         Src = 'assets/sfx/put2.wav' }
     @{ Id = 'sfx';      Name = 'put3.wav';         Src = 'assets/sfx/put3.wav' }
     @{ Id = 'ffmpeg';   Name = 'ffmpeg.exe';       Src = 'src/ThirdParty/ffmpeg/bin/ffmpeg.exe' }
-    @{ Id = 'sdl';      Name = 'SDL3-3.2.22.aar';  Src = 'android/app/libs/SDL3-3.2.22.aar' }
 )
 
 function Show-Usage {
     Write-Host @"
-Usage: publish-paks.ps1 [-All] [-Ldraw] [-Optional] [-Sfx] [-Ffmpeg] [-Sdl] [-DryRun] [-Title TXT] [-Notes TXT]
+Usage: publish-paks.ps1 [-All] [-Ldraw] [-Optional] [-Sfx] [-Ffmpeg] [-DryRun] [-Title TXT] [-Notes TXT]
 
 Creates the release tag if it doesn't exist, then uploads (or replaces) the
 selected assets. Defaults to -All when no selector is passed.
@@ -61,7 +60,6 @@ Selectors (any combination):
   -Optional   optional.pak
   -Sfx        sfx mp3/wav files
   -Ffmpeg     ffmpeg.exe
-  -Sdl        SDL3 Android archive
 
 Other:
   -Title      Override the release title (only used on creation).
@@ -77,9 +75,9 @@ Environment overrides:
 
 if ($Help) { Show-Usage; exit 0 }
 
-$AnySelector = ($All -or $Ldraw -or $Optional -or $Sfx -or $Ffmpeg -or $Sdl)
+$AnySelector = ($All -or $Ldraw -or $Optional -or $Sfx -or $Ffmpeg)
 if (-not $AnySelector) { $All = $true }
-if ($All) { $Ldraw = $true; $Optional = $true; $Sfx = $true; $Ffmpeg = $true; $Sdl = $true }
+if ($All) { $Ldraw = $true; $Optional = $true; $Sfx = $true; $Ffmpeg = $true }
 
 if (-not $Title) { $Title = $DefaultTitle }
 if (-not $Notes) { $Notes = $DefaultNotes }
@@ -91,7 +89,6 @@ function Test-Wanted {
         'optional' { return $Optional }
         'sfx'      { return $Sfx }
         'ffmpeg'   { return $Ffmpeg }
-        'sdl'      { return $Sdl }
         default    { return $false }
     }
 }
@@ -125,7 +122,7 @@ foreach ($a in $Assets) {
 }
 
 if ($missing) {
-    Write-Error 'Bring the missing files in place first (build paks, copy SDL aar, etc.).'
+    Write-Error 'Bring the missing files in place first (build paks, fetch ffmpeg, etc.).'
     exit 1
 }
 

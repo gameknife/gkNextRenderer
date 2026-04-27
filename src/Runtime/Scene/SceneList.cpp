@@ -844,6 +844,7 @@ namespace
                                          const vec3& physicsOffset, const vec3& extent,
                                          const quat& rot = quat(1, 0, 0, 0))
         {
+            if (pieceIdx < 0) return;
             const auto& piece = loader.GetPiece(pieceIdx);
             const vec3 fullExtent = piece.aabbMax - piece.aabbMin;
             const vec3 nodePos = pos + vec3(0.0f, -piece.aabbMin.y, 0.0f);
@@ -888,6 +889,7 @@ namespace
                                             const vec3& physicsOffset, float radius,
                                             const quat& rot = quat(1, 0, 0, 0))
         {
+            if (pieceIdx < 0) return;
             const auto& piece = loader.GetPiece(pieceIdx);
             const vec3 fullExtent = piece.aabbMax - piece.aabbMin;
             const vec3 nodePos = pos + vec3(0.0f, -piece.aabbMin.y, 0.0f);

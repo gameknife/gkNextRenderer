@@ -2,8 +2,10 @@
 set -euo pipefail
 
 # Create or refresh the GitHub release that hosts the optional assets
-# (ldraw.pak / optional.pak / sfx / ffmpeg.exe / SDL aar). Uploads or replaces
-# release assets with --clobber.
+# (ldraw.pak / optional.pak / sfx / ffmpeg.exe). Uploads or replaces release
+# assets with --clobber. The SDL3 Android archive is sourced directly from
+# libsdl-org's official release by android/app/build.gradle and is no longer
+# mirrored here.
 #
 # Requires: GitHub CLI (gh) authenticated against the target repo.
 #
@@ -24,7 +26,6 @@ Groups:
 - optional.pak      — extra sample assets for the main renderer / Editor
 - sfx (mp3/wav)     — background music & sound effects
 - ffmpeg.exe        — Windows-only helper used by MagicaLego packaging
-- SDL3-*.aar        — SDL3 Android archive used by android/ gradle build
 
 Re-uploaded by scripts/publish-paks.sh."
 
@@ -39,10 +40,9 @@ ASSETS=(
     "sfx|put2.wav|assets/sfx/put2.wav"
     "sfx|put3.wav|assets/sfx/put3.wav"
     "ffmpeg|ffmpeg.exe|src/ThirdParty/ffmpeg/bin/ffmpeg.exe"
-    "sdl|SDL3-3.2.22.aar|android/app/libs/SDL3-3.2.22.aar"
 )
 
-WANT_LDRAW=0; WANT_OPTIONAL=0; WANT_SFX=0; WANT_FFMPEG=0; WANT_SDL=0
+WANT_LDRAW=0; WANT_OPTIONAL=0; WANT_SFX=0; WANT_FFMPEG=0
 ANY_SELECTOR=0
 DRY_RUN=0
 TITLE=""
@@ -61,7 +61,6 @@ Selectors (any combination):
   --optional   optional.pak
   --sfx        sfx mp3/wav files
   --ffmpeg     ffmpeg.exe
-  --sdl        SDL3 Android archive
 
 Other:
   --title TXT  Override the release title (only used on creation).
@@ -77,12 +76,11 @@ EOF
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --all)      WANT_LDRAW=1; WANT_OPTIONAL=1; WANT_SFX=1; WANT_FFMPEG=1; WANT_SDL=1; ANY_SELECTOR=1 ;;
+        --all)      WANT_LDRAW=1; WANT_OPTIONAL=1; WANT_SFX=1; WANT_FFMPEG=1; ANY_SELECTOR=1 ;;
         --ldraw)    WANT_LDRAW=1;    ANY_SELECTOR=1 ;;
         --optional) WANT_OPTIONAL=1; ANY_SELECTOR=1 ;;
         --sfx)      WANT_SFX=1;      ANY_SELECTOR=1 ;;
         --ffmpeg)   WANT_FFMPEG=1;   ANY_SELECTOR=1 ;;
-        --sdl)      WANT_SDL=1;      ANY_SELECTOR=1 ;;
         --dry-run)  DRY_RUN=1 ;;
         --title)    TITLE="${2:-}"; shift ;;
         --notes)    NOTES="${2:-}"; shift ;;
@@ -93,7 +91,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ ${ANY_SELECTOR} -eq 0 ]]; then
-    WANT_LDRAW=1; WANT_OPTIONAL=1; WANT_SFX=1; WANT_FFMPEG=1; WANT_SDL=1
+    WANT_LDRAW=1; WANT_OPTIONAL=1; WANT_SFX=1; WANT_FFMPEG=1
 fi
 
 TITLE="${TITLE:-${TITLE_DEFAULT}}"
@@ -105,7 +103,6 @@ is_wanted() {
         optional) [[ ${WANT_OPTIONAL} -eq 1 ]] ;;
         sfx)      [[ ${WANT_SFX}      -eq 1 ]] ;;
         ffmpeg)   [[ ${WANT_FFMPEG}   -eq 1 ]] ;;
-        sdl)      [[ ${WANT_SDL}      -eq 1 ]] ;;
         *)        return 1 ;;
     esac
 }
@@ -136,7 +133,7 @@ for entry in "${ASSETS[@]}"; do
 done
 
 if [[ ${missing} -ne 0 ]]; then
-    echo "[paks] Bring the missing files in place first (build paks, copy SDL aar, etc.)." >&2
+    echo "[paks] Bring the missing files in place first (build paks, fetch ffmpeg, etc.)." >&2
     exit 1
 fi
 

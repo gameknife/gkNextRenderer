@@ -121,7 +121,8 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Opt
     lastPlacedLocation_ = invalidPos;
 
     GetEngine().GetPakSystem().SetRunMode(Utilities::Package::EPM_PakFile);
-    GetEngine().GetPakSystem().Reset();
+    // Do not Reset() the pak system here: that would unmount optional.pak which the engine
+    // mounted at startup and which still provides legobricks.glb when lego.pak hasn't been built.
     GetEngine().GetPakSystem().MountPak(Utilities::FileHelper::GetPlatformFilePath("assets/paks/lego.pak"));
     GetEngine().GetPakSystem().MountPak(Utilities::FileHelper::GetPlatformFilePath("assets/paks/thumbs.pak"));
 
@@ -317,6 +318,22 @@ bool MagicaLegoGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamer
 
 void MagicaLegoGameInstance::OnInit()
 {
+    // MagicaLego cannot run without the brick scene asset. Bail out with a helpful prompt
+    // instead of crashing later in OnSceneLoaded when GetNode("BasePlane12x12") returns null.
+    if (!Utilities::FileHelper::IsAssetAvailable("assets/models/legobricks.glb"))
+    {
+        const char* message =
+            "MagicaLego needs legobricks.glb (shipped via the optional asset pack).\n\n"
+            "Run one of the following from the repo root, then relaunch:\n"
+            "  scripts/fetch-paks.sh --optional      (Linux / macOS / Git Bash)\n"
+            "  scripts\\fetch-paks.bat --optional    (Windows)";
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "MagicaLego - Missing Optional Assets",
+                                 message, GetEngine().GetWindow().Handle());
+        SPDLOG_ERROR("MagicaLego: legobricks.glb not found in disk or any mounted pak; aborting OnInit");
+        GetEngine().RequestClose();
+        return;
+    }
+
     bgmArray_.push_back({"Salut d'Amour", "assets/sfx/bgm.mp3"});
     bgmArray_.push_back({"Liebestraum No. 3", "assets/sfx/bgm2.mp3"});
     PlayNextBGM();

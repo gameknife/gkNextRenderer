@@ -9,7 +9,9 @@ set -euo pipefail
 #   optional -> assets/paks/optional.pak        (extra sample assets)
 #   sfx      -> assets/sfx/*.{mp3,wav}          (background music & sound effects)
 #   ffmpeg   -> src/ThirdParty/ffmpeg/bin/      (Windows-only ffmpeg.exe for MagicaLego)
-#   sdl      -> android/app/libs/SDL3-*.aar     (SDL3 Android archive for Android builds)
+#
+# The SDL3 Android archive is no longer fetched here; android/app/build.gradle
+# pulls it directly from libsdl-org's official release on first build.
 #
 # Environment overrides:
 #   PAKS_REPO         GitHub "owner/name" (default: gameknife/gkNextEngine)
@@ -34,10 +36,9 @@ ASSETS=(
     "sfx|put2.wav|assets/sfx/put2.wav"
     "sfx|put3.wav|assets/sfx/put3.wav"
     "ffmpeg|ffmpeg.exe|src/ThirdParty/ffmpeg/bin/ffmpeg.exe"
-    "sdl|SDL3-3.2.22.aar|android/app/libs/SDL3-3.2.22.aar"
 )
 
-WANT_LDRAW=0; WANT_OPTIONAL=0; WANT_SFX=0; WANT_FFMPEG=0; WANT_SDL=0
+WANT_LDRAW=0; WANT_OPTIONAL=0; WANT_SFX=0; WANT_FFMPEG=0
 FORCE=0
 ANY_SELECTOR=0
 
@@ -51,7 +52,6 @@ Selectors (any combination; defaults to --all when none given):
   --optional   optional.pak          -> assets/paks/
   --sfx        background music + sound effects -> assets/sfx/
   --ffmpeg     ffmpeg.exe            -> src/ThirdParty/ffmpeg/bin/   (Windows only)
-  --sdl        SDL3 Android archive  -> android/app/libs/            (Android only)
 
 Other:
   --force      Re-download even if the file already exists.
@@ -66,12 +66,11 @@ EOF
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --all)      WANT_LDRAW=1; WANT_OPTIONAL=1; WANT_SFX=1; WANT_FFMPEG=1; WANT_SDL=1; ANY_SELECTOR=1 ;;
+        --all)      WANT_LDRAW=1; WANT_OPTIONAL=1; WANT_SFX=1; WANT_FFMPEG=1; ANY_SELECTOR=1 ;;
         --ldraw)    WANT_LDRAW=1;    ANY_SELECTOR=1 ;;
         --optional) WANT_OPTIONAL=1; ANY_SELECTOR=1 ;;
         --sfx)      WANT_SFX=1;      ANY_SELECTOR=1 ;;
         --ffmpeg)   WANT_FFMPEG=1;   ANY_SELECTOR=1 ;;
-        --sdl)      WANT_SDL=1;      ANY_SELECTOR=1 ;;
         --force)    FORCE=1 ;;
         -h|--help)  usage; exit 0 ;;
         *) echo "Unknown argument: $1" >&2; usage; exit 1 ;;
@@ -80,7 +79,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ ${ANY_SELECTOR} -eq 0 ]]; then
-    WANT_LDRAW=1; WANT_OPTIONAL=1; WANT_SFX=1; WANT_FFMPEG=1; WANT_SDL=1
+    WANT_LDRAW=1; WANT_OPTIONAL=1; WANT_SFX=1; WANT_FFMPEG=1
 fi
 
 is_wanted() {
@@ -89,7 +88,6 @@ is_wanted() {
         optional) [[ ${WANT_OPTIONAL} -eq 1 ]] ;;
         sfx)      [[ ${WANT_SFX}      -eq 1 ]] ;;
         ffmpeg)   [[ ${WANT_FFMPEG}   -eq 1 ]] ;;
-        sdl)      [[ ${WANT_SDL}      -eq 1 ]] ;;
         *)        return 1 ;;
     esac
 }

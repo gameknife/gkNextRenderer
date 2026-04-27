@@ -184,4 +184,24 @@ namespace Utilities
             static FPackageFileSystem* instance_;
         };
     }
+
+    namespace FileHelper
+    {
+        // Returns true if a relative asset path can be resolved either from disk or from any mounted pak.
+        // Game instances use this to bail out gracefully when optional assets (fetched via scripts/fetch-paks)
+        // are missing, instead of crashing later in scene/component code.
+        static bool IsAssetAvailable(const std::string& relativePath)
+        {
+            std::error_code ec;
+            if (std::filesystem::exists(GetPlatformFilePath(relativePath.c_str()), ec))
+            {
+                return true;
+            }
+            if (auto* pkg = Package::FPackageFileSystem::TryGetInstance())
+            {
+                return pkg->HasMountedEntry(relativePath);
+            }
+            return false;
+        }
+    }
 }

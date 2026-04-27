@@ -245,12 +245,11 @@ run.bat --preset android
 | 选择器 | 内容 | 落盘位置 | 缺失影响 |
 |------|------|------|------|
 | `--ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer 缺 LDraw 零件库 |
-| `--optional` | `optional.pak` | `assets/paks/` | 主渲染器 / Editor 缺示例 demo 场景 |
+| `--optional` | `optional.pak` | `assets/paks/` | 主渲染器 / Editor / CharacterDemo / MagicaLego 缺场景资源 |
 | `--sfx` | 6 个 mp3/wav | `assets/sfx/` | MagicaLego / BrickPlayer 静音 |
 | `--ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows 下 MagicaLego 视频录制不可用 |
-| `--sdl` | `SDL3-*.aar` | `android/app/libs/` | Android 构建链接失败 |
 
-引擎运行时会自动挂载已存在的 pak，主流程不依赖这些文件就能起来。但 Android / MagicaLego 等场景必须先把对应的 group 拉下来。
+引擎运行时会自动挂载已存在的 pak，主流程不依赖这些文件就能起来；CharacterDemo / MagicaLego 等依赖 `--optional` 的子项目在启动时会做检查，缺失时弹窗提示，而不是直接 crash。Android 构建已不再走这个脚本，详见下方说明。
 
 ```bash
 # Linux / macOS / Git Bash —— 默认全部拉取
@@ -258,13 +257,13 @@ run.bat --preset android
 
 # 只拉指定 group
 ./scripts/fetch-paks.sh --optional --ldraw
-./scripts/fetch-paks.sh --sdl              # 准备 Android 构建
 ./scripts/fetch-paks.sh --ffmpeg --sfx     # 准备 Windows MagicaLego
 
 # Windows
 scripts\fetch-paks.bat
-scripts\fetch-paks.bat --sdl
 ```
+
+**Android SDL3 archive：** `android/app/build.gradle` 里的 `downloadSdlAar` 任务会在每次构建前从 [libsdl-org 官方 release](https://github.com/libsdl-org/SDL/releases) 拉取 `SDL3-devel-<ver>-android.zip`，并把里面的 `.aar` 释放到 `android/app/libs/`。本地和 CI 都不需要再手动 fetch。
 
 如果需要走自建镜像或特定 tag，可通过环境变量覆盖：
 

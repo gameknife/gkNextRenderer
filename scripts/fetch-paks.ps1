@@ -5,7 +5,6 @@ param(
     [switch]$Optional,
     [switch]$Sfx,
     [switch]$Ffmpeg,
-    [switch]$Sdl,
     [switch]$Force,
     [switch]$Help
 )
@@ -20,6 +19,8 @@ $Tag     = if ($env:PAKS_RELEASE_TAG) { $env:PAKS_RELEASE_TAG } else { 'paks-lat
 $BaseUrl = if ($env:PAKS_BASE_URL)    { $env:PAKS_BASE_URL }    else { "https://github.com/$Repo/releases/download/$Tag" }
 
 # Manifest of optional assets. Dest paths are relative to the repo root.
+# The SDL3 Android archive is no longer fetched here; android/app/build.gradle
+# pulls it directly from libsdl-org's official release on first build.
 $Assets = @(
     @{ Id = 'ldraw';    Name = 'ldraw.pak';        Dest = 'assets/paks/ldraw.pak' }
     @{ Id = 'optional'; Name = 'optional.pak';     Dest = 'assets/paks/optional.pak' }
@@ -30,12 +31,11 @@ $Assets = @(
     @{ Id = 'sfx';      Name = 'put2.wav';         Dest = 'assets/sfx/put2.wav' }
     @{ Id = 'sfx';      Name = 'put3.wav';         Dest = 'assets/sfx/put3.wav' }
     @{ Id = 'ffmpeg';   Name = 'ffmpeg.exe';       Dest = 'src/ThirdParty/ffmpeg/bin/ffmpeg.exe' }
-    @{ Id = 'sdl';      Name = 'SDL3-3.2.22.aar';  Dest = 'android/app/libs/SDL3-3.2.22.aar' }
 )
 
 function Show-Usage {
     Write-Host @"
-Usage: fetch-paks.ps1 [-All] [-Ldraw] [-Optional] [-Sfx] [-Ffmpeg] [-Sdl] [-Force]
+Usage: fetch-paks.ps1 [-All] [-Ldraw] [-Optional] [-Sfx] [-Ffmpeg] [-Force]
 
 Selectors (any combination; defaults to -All when none given):
   -All        Fetch every group below.
@@ -43,7 +43,6 @@ Selectors (any combination; defaults to -All when none given):
   -Optional   optional.pak          -> assets/paks/
   -Sfx        background music + sound effects -> assets/sfx/
   -Ffmpeg     ffmpeg.exe            -> src/ThirdParty/ffmpeg/bin/   (Windows only)
-  -Sdl        SDL3 Android archive  -> android/app/libs/            (Android only)
 
 Other:
   -Force      Re-download even if the file already exists.
@@ -58,9 +57,9 @@ Environment overrides:
 
 if ($Help) { Show-Usage; exit 0 }
 
-$AnySelector = ($All -or $Ldraw -or $Optional -or $Sfx -or $Ffmpeg -or $Sdl)
+$AnySelector = ($All -or $Ldraw -or $Optional -or $Sfx -or $Ffmpeg)
 if (-not $AnySelector) { $All = $true }
-if ($All) { $Ldraw = $true; $Optional = $true; $Sfx = $true; $Ffmpeg = $true; $Sdl = $true }
+if ($All) { $Ldraw = $true; $Optional = $true; $Sfx = $true; $Ffmpeg = $true }
 
 function Test-Wanted {
     param([string]$Id)
@@ -69,7 +68,6 @@ function Test-Wanted {
         'optional' { return $Optional }
         'sfx'      { return $Sfx }
         'ffmpeg'   { return $Ffmpeg }
-        'sdl'      { return $Sdl }
         default    { return $false }
     }
 }

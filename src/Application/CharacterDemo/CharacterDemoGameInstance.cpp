@@ -21,6 +21,7 @@
 #include "Runtime/Platform/PlatformCommon.h"
 #include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Utilities/PhysicsDebugOverlay.hpp"
+#include "Utilities/FileHelper.hpp"
 #include "Vulkan/WindowSurface.hpp"
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options,
@@ -59,6 +60,25 @@ const NextGameplay::AIAgentComponent& CharacterDemoGameInstance::GetAIBotAgent()
 void CharacterDemoGameInstance::OnInit()
 {
     NextGameplay::RegisterGameplayReflection();
+
+    // CharacterDemo depends on optional assets (KayKit playground pieces + skinned character mesh).
+    // Bail out with a helpful prompt instead of crashing later in CharacterPlayground / SkinnedMesh setup.
+    constexpr const char* kKayKitProbe = "assets/models/KayKit_Platformer_Pack/Assets/gltf/neutral/cone.gltf";
+    constexpr const char* kCharacterProbe = "assets/models/characters/Mannequin_Medium.glb";
+    if (!Utilities::FileHelper::IsAssetAvailable(kKayKitProbe) ||
+        !Utilities::FileHelper::IsAssetAvailable(kCharacterProbe))
+    {
+        const char* message =
+            "CharacterDemo needs the optional asset pack (KayKit pieces + character mesh).\n\n"
+            "Run one of the following from the repo root, then relaunch:\n"
+            "  scripts/fetch-paks.sh --optional      (Linux / macOS / Git Bash)\n"
+            "  scripts\\fetch-paks.bat --optional    (Windows)";
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "CharacterDemo - Missing Optional Assets",
+                                 message, engine_->GetWindow().Handle());
+        SPDLOG_ERROR("CharacterDemo: optional asset pack missing; aborting OnInit");
+        engine_->RequestClose();
+        return;
+    }
 
     // CharacterDemo appends the skinned character after the base playground is already loaded.
     // The append path triggers a full scene mesh-buffer rebuild, so the original scene meshes must
