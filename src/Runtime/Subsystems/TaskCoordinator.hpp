@@ -209,11 +209,11 @@ struct ResTask
 {
     typedef std::function<void (ResTask& task)> TaskFunc;
     
-    uint32_t task_id;
-    uint8_t priority;
+    uint32_t task_id = 0;
+    uint8_t priority = 0;
     TaskFunc task_func;
     TaskFunc complete_func;
-    uint8_t task_context_1k[1024];
+    uint8_t task_context_1k[1024] = {};
 
     template<typename T>
     void SetContext(T& context)
