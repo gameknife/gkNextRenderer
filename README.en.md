@@ -245,12 +245,11 @@ To keep the clone small, the following large binary assets are **not committed**
 | Selector | Contents | Lands at | If missing |
 |------|------|------|------|
 | `--ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer loses its LDraw parts library |
-| `--optional` | `optional.pak` | `assets/paks/` | Main renderer / Editor lose extra demo scenes |
+| `--optional` | `optional.pak` | `assets/paks/` | Main renderer / Editor / CharacterDemo / MagicaLego lose their scene assets |
 | `--sfx` | six mp3/wav files | `assets/sfx/` | MagicaLego / BrickPlayer go silent |
 | `--ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows MagicaLego video capture disabled |
-| `--sdl` | `SDL3-*.aar` | `android/app/libs/` | Android gradle build fails to link |
 
-The engine mounts existing paks automatically, so the main flow boots without these. Android builds and MagicaLego-style scenarios do require their group to be fetched first.
+The engine mounts existing paks automatically, so the main flow boots without these. Apps that depend on a specific group (CharacterDemo / MagicaLego on `--optional`, Windows MagicaLego packaging on `--ffmpeg`) detect the missing files at startup and surface a clear prompt instead of crashing. The Android build no longer goes through this script — see the note below.
 
 ```bash
 # Linux / macOS / Git Bash — pulls every group by default
@@ -258,13 +257,13 @@ The engine mounts existing paks automatically, so the main flow boots without th
 
 # Or pick groups
 ./scripts/fetch-paks.sh --optional --ldraw
-./scripts/fetch-paks.sh --sdl              # prep Android build
 ./scripts/fetch-paks.sh --ffmpeg --sfx     # prep Windows MagicaLego
 
 # Windows
 scripts\fetch-paks.bat
-scripts\fetch-paks.bat --sdl
 ```
+
+**Android SDL3 archive:** `android/app/build.gradle` defines a `downloadSdlAar` task that pulls `SDL3-devel-<ver>-android.zip` directly from [libsdl-org's official release](https://github.com/libsdl-org/SDL/releases) and extracts the `.aar` into `android/app/libs/` before each build. No manual fetch step is required.
 
 To use a private mirror or a different release tag, override via environment variables:
 
