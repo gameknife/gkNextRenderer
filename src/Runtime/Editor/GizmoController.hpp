@@ -17,6 +17,8 @@ public:
     bool IsUsing() const { return isUsing_; }
     bool IsInteracting() const { return isUsing_ || isOver_; }
     bool IsShowing() const { return isShowing_; }
+    int Operation() const { return operation_; }
+    int Mode() const { return mode_; }
 
 private:
     void DrawToolbar();

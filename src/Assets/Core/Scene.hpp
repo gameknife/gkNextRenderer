@@ -120,6 +120,7 @@ namespace Assets
         const uint32_t AddMaterial(const FMaterial& material);
 
         void MarkDirty();
+        void MarkSelectionDirty();
 
         std::vector<NodeProxy>& GetNodeProxys() { return nodeProxys; }
 

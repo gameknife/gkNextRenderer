@@ -1,6 +1,7 @@
 #include "PropertyWidgets.h"
 #include "Runtime/Command/PropertyCommand.hpp"
 #include "Runtime/Reflection/ReflectionMacros.h"
+#include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
 #include <imgui_stdlib.h>
 #include <imgui_internal.h>
@@ -18,17 +19,23 @@ namespace Editor
     // ============================================================================
     
     // Begin a property row with label on left (50:50 ratio)
-    static void BeginPropertyRow(const char* label)
+    // trailingWidth: reserve space for a trailing widget (e.g., reset button)
+    static void BeginPropertyRow(const char* label, float trailingWidth = 0.0f)
     {
         float labelWidth = ImGui::GetContentRegionAvail().x * 0.5f; // 50% for label
-        
+
         // Draw label
         ImGui::AlignTextToFramePadding();
         ImGui::TextUnformatted(label);
         ImGui::SameLine(labelWidth);
-        
-        // Set width for the value widget
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+
+        // Set width for the value widget, reserving space for trailing
+        float avail = ImGui::GetContentRegionAvail().x;
+        if (trailingWidth > 0.0f)
+        {
+            avail -= trailingWidth + ImGui::GetStyle().ItemSpacing.x;
+        }
+        ImGui::SetNextItemWidth(avail);
     }
     
     // Wrapper for property drawing with label-value layout
@@ -40,7 +47,34 @@ namespace Editor
         ImGui::PopID();
         return result;
     }
-    
+
+    // Draw a property row with an optional trailing reset button
+    static bool DrawPropertyRowWithReset(const char* label, const std::function<bool()>& drawWidget,
+                                          bool readOnly, const std::function<void()>& onReset, bool isDefault)
+    {
+        const float btnWidth = readOnly ? 0.0f : ImGui::GetFrameHeight();
+        BeginPropertyRow(label, btnWidth);
+        ImGui::PushID(label);
+        bool changed = drawWidget();
+        ImGui::PopID();
+        if (!readOnly && onReset)
+        {
+            ImGui::SameLine(0.0f, ImGui::GetStyle().ItemSpacing.x);
+            std::string resetId = std::string(label) + "_reset";
+            ImGui::PushID(resetId.c_str());
+            if (isDefault) ImGui::BeginDisabled();
+            if (ImGui::SmallButton(ICON_FA_ROTATE_LEFT))
+            {
+                onReset();
+                changed = true;
+            }
+            if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Reset to default"); }
+            if (isDefault) ImGui::EndDisabled();
+            ImGui::PopID();
+        }
+        return changed;
+    }
+
     // Draw a category header with distinctive style
     static bool DrawCategoryHeader(const char* category)
     {
@@ -55,42 +89,56 @@ namespace Editor
         return open;
     }
     
+    // Read a property value from a default-constructed meta instance by hash id.
+    static entt::meta_any ReadDefaultFromMeta(entt::meta_type metaType, uint32_t propId, const entt::meta_any& defaultInstance)
+    {
+        if (!defaultInstance) return {};
+        for (auto&& [id, data] : metaType.data())
+        {
+            if (id == propId) return data.get(defaultInstance);
+        }
+        return {};
+    }
+
     // ============================================================================
     // Main property drawing
     // ============================================================================
-    
+
     bool PropertyWidgets::DrawProperty(
         const PropertyInfo& propInfo,
         Assets::Component* component,
         CommandHistory* history,
-        WidgetConfig config
+        WidgetConfig config,
+        const entt::meta_any* defaultInstance
     )
     {
         if (!component)
         {
             return false;
         }
-        
+
         bool changed = false;
         bool isReadOnly = config.readOnly || propInfo.meta.IsReadOnly();
-        
-        // Get current value
+
         auto metaType = component->GetMetaType();
         auto currentValue = PropertyAccessor::GetPropertyValue(metaType, component, propInfo.name);
-        
+
         if (!currentValue)
         {
             ImGui::Text("%s: <unable to read>", propInfo.name.c_str());
             return false;
         }
-        
-        const char* label = propInfo.meta.displayName.empty() 
-            ? propInfo.name.c_str() 
+
+        const char* label = propInfo.meta.displayName.empty()
+            ? propInfo.name.c_str()
             : propInfo.meta.displayName.c_str();
-        
-        // Store old value for undo
+
         entt::meta_any oldValue = currentValue;
-        
+
+        auto metaDefault = defaultInstance
+            ? ReadDefaultFromMeta(metaType, propInfo.propId, *defaultInstance)
+            : entt::meta_any{};
+
         switch (propInfo.type)
         {
             case PropertyType::Bool:
@@ -98,7 +146,14 @@ namespace Editor
                 if (auto* ptr = currentValue.try_cast<bool>())
                 {
                     bool val = *ptr;
-                    if (DrawBool(label, val, isReadOnly))
+                    bool defaultVal = metaDefault && metaDefault.try_cast<bool>() ? *metaDefault.try_cast<bool>() : false;
+                    bool isDefaultVal = (val == defaultVal);
+                    auto drawWidget = [&]() -> bool {
+                        if (isReadOnly) { ImGui::BeginDisabled(); bool t = val; ImGui::Checkbox("##v", &t); ImGui::EndDisabled(); return false; }
+                        return ImGui::Checkbox("##v", &val);
+                    };
+                    auto onReset = [&]() { val = defaultVal; };
+                    if (DrawPropertyRowWithReset(label, drawWidget, isReadOnly, onReset, isDefaultVal))
                     {
                         changed = true;
                         currentValue = entt::meta_any{val};
@@ -106,16 +161,21 @@ namespace Editor
                 }
                 break;
             }
-            
+
             case PropertyType::Int32:
             {
                 if (auto* ptr = currentValue.try_cast<int32_t>())
                 {
                     int32_t val = *ptr;
-                    if (DrawInt(label, val, config.dragSpeed, 
-                               static_cast<int>(config.minValue), 
-                               static_cast<int>(config.maxValue), 
-                               isReadOnly))
+                    int32_t defaultVal = metaDefault && metaDefault.try_cast<int32_t>() ? *metaDefault.try_cast<int32_t>() : 0;
+                    bool isDefaultVal = (val == defaultVal);
+                    int minV = static_cast<int>(config.minValue), maxV = static_cast<int>(config.maxValue);
+                    auto drawWidget = [&]() -> bool {
+                        if (isReadOnly) { ImGui::BeginDisabled(); int t = val; ImGui::DragInt("##v", &t, config.dragSpeed, minV, maxV); ImGui::EndDisabled(); return false; }
+                        return ImGui::DragInt("##v", &val, config.dragSpeed, minV, maxV);
+                    };
+                    auto onReset = [&]() { val = defaultVal; };
+                    if (DrawPropertyRowWithReset(label, drawWidget, isReadOnly, onReset, isDefaultVal))
                     {
                         changed = true;
                         currentValue = entt::meta_any{val};
@@ -123,16 +183,24 @@ namespace Editor
                 }
                 break;
             }
-            
+
             case PropertyType::UInt32:
             {
                 if (auto* ptr = currentValue.try_cast<uint32_t>())
                 {
                     uint32_t val = *ptr;
-                    if (DrawUInt(label, val, config.dragSpeed,
-                                static_cast<uint32_t>(std::max(0.0f, config.minValue)),
-                                static_cast<uint32_t>(config.maxValue),
-                                isReadOnly))
+                    uint32_t defaultVal = metaDefault && metaDefault.try_cast<uint32_t>() ? *metaDefault.try_cast<uint32_t>() : 0u;
+                    bool isDefaultVal = (val == defaultVal);
+                    int intVal = static_cast<int>(val);
+                    int intMin = static_cast<int>(std::min(static_cast<uint32_t>(std::max(0.0f, config.minValue)), static_cast<uint32_t>(INT_MAX)));
+                    int intMax = static_cast<int>(std::min(static_cast<uint32_t>(config.maxValue), static_cast<uint32_t>(INT_MAX)));
+                    auto drawWidget = [&]() -> bool {
+                        if (isReadOnly) { ImGui::BeginDisabled(); ImGui::DragInt("##v", &intVal, config.dragSpeed, intMin, intMax); ImGui::EndDisabled(); return false; }
+                        if (ImGui::DragInt("##v", &intVal, config.dragSpeed, intMin, intMax)) { val = static_cast<uint32_t>(std::max(0, intVal)); return true; }
+                        return false;
+                    };
+                    auto onReset = [&]() { val = defaultVal; intVal = static_cast<int>(val); };
+                    if (DrawPropertyRowWithReset(label, drawWidget, isReadOnly, onReset, isDefaultVal))
                     {
                         changed = true;
                         currentValue = entt::meta_any{val};
@@ -140,14 +208,21 @@ namespace Editor
                 }
                 break;
             }
-            
+
             case PropertyType::Float:
             {
                 if (auto* ptr = currentValue.try_cast<float>())
                 {
                     float val = *ptr;
-                    if (DrawFloat(label, val, config.dragSpeed, config.minValue, config.maxValue, 
-                                 isReadOnly, config.format ? config.format : "%.3f"))
+                    float defaultVal = metaDefault && metaDefault.try_cast<float>() ? *metaDefault.try_cast<float>() : 0.0f;
+                    bool isDefaultVal = (val == defaultVal);
+                    const char* fmt = config.format ? config.format : "%.3f";
+                    auto drawWidget = [&]() -> bool {
+                        if (isReadOnly) { ImGui::BeginDisabled(); float t = val; ImGui::DragFloat("##v", &t, config.dragSpeed, config.minValue, config.maxValue, fmt); ImGui::EndDisabled(); return false; }
+                        return ImGui::DragFloat("##v", &val, config.dragSpeed, config.minValue, config.maxValue, fmt);
+                    };
+                    auto onReset = [&]() { val = defaultVal; };
+                    if (DrawPropertyRowWithReset(label, drawWidget, isReadOnly, onReset, isDefaultVal))
                     {
                         changed = true;
                         currentValue = entt::meta_any{val};
@@ -155,16 +230,23 @@ namespace Editor
                 }
                 break;
             }
-            
+
             case PropertyType::Double:
             {
                 if (auto* ptr = currentValue.try_cast<double>())
                 {
                     double val = *ptr;
-                    if (DrawDouble(label, val, config.dragSpeed,
-                                  static_cast<double>(config.minValue),
-                                  static_cast<double>(config.maxValue),
-                                  isReadOnly, config.format ? config.format : "%.6f"))
+                    double defaultVal = metaDefault && metaDefault.try_cast<double>() ? *metaDefault.try_cast<double>() : 0.0;
+                    bool isDefaultVal = (val == defaultVal);
+                    float floatVal = static_cast<float>(val);
+                    const char* fmt = config.format ? config.format : "%.6f";
+                    auto drawWidget = [&]() -> bool {
+                        if (isReadOnly) { ImGui::BeginDisabled(); float t = floatVal; ImGui::DragFloat("##v", &t, config.dragSpeed, static_cast<float>(config.minValue), static_cast<float>(config.maxValue), fmt); ImGui::EndDisabled(); return false; }
+                        if (ImGui::DragFloat("##v", &floatVal, config.dragSpeed, static_cast<float>(config.minValue), static_cast<float>(config.maxValue), fmt)) { val = static_cast<double>(floatVal); return true; }
+                        return false;
+                    };
+                    auto onReset = [&]() { val = defaultVal; floatVal = static_cast<float>(val); };
+                    if (DrawPropertyRowWithReset(label, drawWidget, isReadOnly, onReset, isDefaultVal))
                     {
                         changed = true;
                         currentValue = entt::meta_any{val};
@@ -172,13 +254,20 @@ namespace Editor
                 }
                 break;
             }
-            
+
             case PropertyType::String:
             {
                 if (auto* ptr = currentValue.try_cast<std::string>())
                 {
                     std::string val = *ptr;
-                    if (DrawString(label, val, isReadOnly))
+                    std::string defaultVal = metaDefault && metaDefault.try_cast<std::string>() ? *metaDefault.try_cast<std::string>() : std::string{};
+                    bool isDefaultVal = (val == defaultVal);
+                    auto drawWidget = [&]() -> bool {
+                        if (isReadOnly) { ImGui::BeginDisabled(); ImGui::InputText("##v", &val, ImGuiInputTextFlags_ReadOnly); ImGui::EndDisabled(); return false; }
+                        return ImGui::InputText("##v", &val);
+                    };
+                    auto onReset = [&]() { val = defaultVal; };
+                    if (DrawPropertyRowWithReset(label, drawWidget, isReadOnly, onReset, isDefaultVal))
                     {
                         changed = true;
                         currentValue = entt::meta_any{val};
@@ -186,13 +275,20 @@ namespace Editor
                 }
                 break;
             }
-            
+
             case PropertyType::Vec2:
             {
                 if (auto* ptr = currentValue.try_cast<glm::vec2>())
                 {
                     glm::vec2 val = *ptr;
-                    if (DrawVec2(label, val, config.dragSpeed, isReadOnly))
+                    glm::vec2 defaultVal = metaDefault && metaDefault.try_cast<glm::vec2>() ? *metaDefault.try_cast<glm::vec2>() : glm::vec2(0.0f);
+                    bool isDefaultVal = (val == defaultVal);
+                    auto drawWidget = [&]() -> bool {
+                        if (isReadOnly) { ImGui::BeginDisabled(); glm::vec2 t = val; ImGui::DragFloat2("##v", &t.x, config.dragSpeed); ImGui::EndDisabled(); return false; }
+                        return ImGui::DragFloat2("##v", &val.x, config.dragSpeed);
+                    };
+                    auto onReset = [&]() { val = defaultVal; };
+                    if (DrawPropertyRowWithReset(label, drawWidget, isReadOnly, onReset, isDefaultVal))
                     {
                         changed = true;
                         currentValue = entt::meta_any{val};
@@ -200,65 +296,84 @@ namespace Editor
                 }
                 break;
             }
-            
+
             case PropertyType::Vec3:
             {
                 if (auto* ptr = currentValue.try_cast<glm::vec3>())
                 {
                     glm::vec3 val = *ptr;
-                    // Check if this is a color property
+                    glm::vec3 defaultVal = metaDefault && metaDefault.try_cast<glm::vec3>() ? *metaDefault.try_cast<glm::vec3>() : glm::vec3(0.0f);
+                    bool isDefaultVal = (val == defaultVal);
                     if (propInfo.meta.category == "Color")
                     {
-                        if (DrawColor3(label, val, isReadOnly))
-                        {
-                            changed = true;
-                            currentValue = entt::meta_any{val};
-                        }
+                        auto drawWidget = [&]() -> bool {
+                            if (isReadOnly) { ImGui::BeginDisabled(); glm::vec3 t = val; ImGui::ColorEdit3("##v", &t.x); ImGui::EndDisabled(); return false; }
+                            return ImGui::ColorEdit3("##v", &val.x);
+                        };
+                        auto onReset = [&]() { val = defaultVal; };
+                        if (DrawPropertyRowWithReset(label, drawWidget, isReadOnly, onReset, isDefaultVal))
+                        { changed = true; currentValue = entt::meta_any{val}; }
                     }
                     else
                     {
-                        if (DrawVec3(label, val, config.dragSpeed, isReadOnly))
-                        {
-                            changed = true;
-                            currentValue = entt::meta_any{val};
-                        }
+                        auto drawWidget = [&]() -> bool {
+                            if (isReadOnly) { ImGui::BeginDisabled(); glm::vec3 t = val; ImGui::DragFloat3("##v", &t.x, config.dragSpeed); ImGui::EndDisabled(); return false; }
+                            return ImGui::DragFloat3("##v", &val.x, config.dragSpeed);
+                        };
+                        auto onReset = [&]() { val = defaultVal; };
+                        if (DrawPropertyRowWithReset(label, drawWidget, isReadOnly, onReset, isDefaultVal))
+                        { changed = true; currentValue = entt::meta_any{val}; }
                     }
                 }
                 break;
             }
-            
+
             case PropertyType::Vec4:
             {
                 if (auto* ptr = currentValue.try_cast<glm::vec4>())
                 {
                     glm::vec4 val = *ptr;
-                    // Check if this is a color property
+                    glm::vec4 defaultVal = metaDefault && metaDefault.try_cast<glm::vec4>() ? *metaDefault.try_cast<glm::vec4>() : glm::vec4(0.0f);
+                    bool isDefaultVal = (val == defaultVal);
                     if (propInfo.meta.category == "Color")
                     {
-                        if (DrawColor4(label, val, isReadOnly))
-                        {
-                            changed = true;
-                            currentValue = entt::meta_any{val};
-                        }
+                        auto drawWidget = [&]() -> bool {
+                            if (isReadOnly) { ImGui::BeginDisabled(); glm::vec4 t = val; ImGui::ColorEdit4("##v", &t.x); ImGui::EndDisabled(); return false; }
+                            return ImGui::ColorEdit4("##v", &val.x);
+                        };
+                        auto onReset = [&]() { val = defaultVal; };
+                        if (DrawPropertyRowWithReset(label, drawWidget, isReadOnly, onReset, isDefaultVal))
+                        { changed = true; currentValue = entt::meta_any{val}; }
                     }
                     else
                     {
-                        if (DrawVec4(label, val, config.dragSpeed, isReadOnly))
-                        {
-                            changed = true;
-                            currentValue = entt::meta_any{val};
-                        }
+                        auto drawWidget = [&]() -> bool {
+                            if (isReadOnly) { ImGui::BeginDisabled(); glm::vec4 t = val; ImGui::DragFloat4("##v", &t.x, config.dragSpeed); ImGui::EndDisabled(); return false; }
+                            return ImGui::DragFloat4("##v", &val.x, config.dragSpeed);
+                        };
+                        auto onReset = [&]() { val = defaultVal; };
+                        if (DrawPropertyRowWithReset(label, drawWidget, isReadOnly, onReset, isDefaultVal))
+                        { changed = true; currentValue = entt::meta_any{val}; }
                     }
                 }
                 break;
             }
-            
+
             case PropertyType::Quat:
             {
                 if (auto* ptr = currentValue.try_cast<glm::quat>())
                 {
                     glm::quat val = *ptr;
-                    if (DrawQuat(label, val, config.dragSpeed, isReadOnly))
+                    glm::vec3 euler = glm::degrees(glm::eulerAngles(val));
+                    glm::quat defaultVal = metaDefault && metaDefault.try_cast<glm::quat>() ? *metaDefault.try_cast<glm::quat>() : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+                    bool isDefaultVal = (val == defaultVal);
+                    auto drawWidget = [&]() -> bool {
+                        if (isReadOnly) { ImGui::BeginDisabled(); ImGui::DragFloat3("##v", &euler.x, config.dragSpeed); ImGui::EndDisabled(); return false; }
+                        if (ImGui::DragFloat3("##v", &euler.x, config.dragSpeed)) { val = glm::quat(glm::radians(euler)); return true; }
+                        return false;
+                    };
+                    auto onReset = [&]() { val = defaultVal; euler = glm::degrees(glm::eulerAngles(val)); };
+                    if (DrawPropertyRowWithReset(label, drawWidget, isReadOnly, onReset, isDefaultVal))
                     {
                         changed = true;
                         currentValue = entt::meta_any{val};
@@ -266,16 +381,14 @@ namespace Editor
                 }
                 break;
             }
-            
+
             case PropertyType::Enum:
             {
                 if (propInfo.enumTypeId != 0)
                 {
                     auto enumType = entt::resolve(propInfo.enumTypeId);
                     if (enumType && DrawEnum(label, currentValue, enumType, isReadOnly))
-                    {
                         changed = true;
-                    }
                 }
                 else
                 {
@@ -283,59 +396,53 @@ namespace Editor
                 }
                 break;
             }
-            
+
             case PropertyType::Array:
             {
                 if (DrawArray(label, propInfo, currentValue, isReadOnly))
-                {
                     changed = true;
-                }
                 break;
             }
-            
+
             default:
                 ImGui::Text("%s: <unsupported type>", label);
                 break;
         }
-        
-        // Apply change with command for undo
+
         if (changed && !isReadOnly)
         {
             if (history)
             {
-                auto command = std::make_unique<PropertyCommand>(
-                    component,
-                    propInfo.name,
-                    currentValue,
-                    oldValue
-                );
-                history->Execute(std::move(command));
+                history->Execute(std::make_unique<PropertyCommand>(component, propInfo.name, currentValue, oldValue));
             }
             else
             {
-                // Direct set without undo
                 PropertyAccessor::SetPropertyValue(metaType, component, propInfo.name, currentValue);
             }
         }
-        
+
         return changed;
     }
     
     bool PropertyWidgets::DrawComponentProperties(
         Assets::Component* component,
         CommandHistory* history,
-        WidgetConfig config
+        WidgetConfig config,
+        ImGuiTextFilter* filter
     )
     {
         if (!component)
         {
             return false;
         }
-        
+
         bool anyChanged = false;
         auto metaType = component->GetMetaType();
         auto properties = PropertyAccessor::GetProperties(metaType);
-        
+
+        // Construct default instance for reset-to-default comparison
+        entt::meta_any defaultInstance = metaType.construct();
+
         // Group properties by category
         std::map<std::string, std::vector<PropertyInfo>> categorized;
         for (const auto& prop : properties)
@@ -343,20 +450,44 @@ namespace Editor
             std::string category = prop.meta.category.empty() ? "General" : prop.meta.category;
             categorized[category].push_back(prop);
         }
-        
+
         // Reduce indent for property rows
         float indent = ImGui::GetStyle().IndentSpacing;
         ImGui::GetStyle().IndentSpacing = 8.0f;
-        
+
         // Draw each category
         for (const auto& [category, props] : categorized)
         {
+            // Count how many properties in this category pass the filter
+            if (filter && filter->IsActive())
+            {
+                size_t visibleCount = 0;
+                for (const auto& prop : props)
+                {
+                    const char* displayName = prop.meta.displayName.empty()
+                        ? prop.name.c_str() : prop.meta.displayName.c_str();
+                    if (filter->PassFilter(displayName))
+                        ++visibleCount;
+                }
+                if (visibleCount == 0)
+                    continue;
+            }
+
             if (DrawCategoryHeader(category.c_str()))
             {
                 ImGui::Indent();
                 for (const auto& prop : props)
                 {
-                    if (DrawProperty(prop, component, history, config))
+                    // Skip individual properties that don't pass the filter
+                    if (filter && filter->IsActive())
+                    {
+                        const char* displayName = prop.meta.displayName.empty()
+                            ? prop.name.c_str() : prop.meta.displayName.c_str();
+                        if (!filter->PassFilter(displayName))
+                            continue;
+                    }
+
+                    if (DrawProperty(prop, component, history, config, &defaultInstance))
                     {
                         anyChanged = true;
                     }
@@ -364,10 +495,10 @@ namespace Editor
                 ImGui::Unindent();
             }
         }
-        
+
         // Restore indent
         ImGui::GetStyle().IndentSpacing = indent;
-        
+
         return anyChanged;
     }
     

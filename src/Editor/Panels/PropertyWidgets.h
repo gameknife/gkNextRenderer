@@ -52,17 +52,20 @@ namespace Editor
             const Reflection::PropertyInfo& propInfo,
             Assets::Component* component,
             CommandHistory* history = nullptr,
-            WidgetConfig config = WidgetConfig()
+            WidgetConfig config = WidgetConfig(),
+            const entt::meta_any* defaultInstance = nullptr
         );
         
         /**
          * Draw all properties of a component using reflection.
          * Returns true if any value was changed.
+         * Pass an optional filter to show only matching properties.
          */
         static bool DrawComponentProperties(
             Assets::Component* component,
             CommandHistory* history = nullptr,
-            WidgetConfig config = WidgetConfig()
+            WidgetConfig config = WidgetConfig(),
+            ImGuiTextFilter* filter = nullptr
         );
         
         /**

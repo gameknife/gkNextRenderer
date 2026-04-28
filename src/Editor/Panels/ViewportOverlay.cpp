@@ -6,8 +6,10 @@
 #include "Assets/Core/Scene.hpp"
 #include "Editor/EditorActionDispatcher.hpp"
 #include "Runtime/Components/RenderComponent.h"
+#include "Runtime/Editor/GizmoController.hpp"
 #include "Runtime/Engine.hpp"
 #include "Runtime/Utilities/NextEngineHelper.h"
+#include "ThirdParty/ImGuizmo/ImGuizmo.h"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Utilities/ImGui.hpp"
 #include "Utilities/Math.hpp"
@@ -182,6 +184,46 @@ namespace Editor
         ImGui::End();
         ImGui::PopStyleColor();
         ImGui::PopStyleVar(2);
+
+        // Gizmo status overlay (operation + space)
+        if (ctx.gizmoController && ctx.gizmoController->IsShowing())
+        {
+            auto GetOperationName = [](int op) -> const char*
+            {
+                switch (op)
+                {
+                case ImGuizmo::TRANSLATE: return "Translate";
+                case ImGuizmo::ROTATE:    return "Rotate";
+                case ImGuizmo::SCALE:     return "Scale";
+                default:                  return "?";
+                }
+            };
+            constexpr const char* kSpaceNames[] = { "Local", "World" };
+
+            int op = ctx.gizmoController->Operation();
+            int mode = ctx.gizmoController->Mode();
+            std::string gizmoText = std::string(GetOperationName(op)) + " \302\267 " +
+                                    kSpaceNames[mode == ImGuizmo::LOCAL ? 0 : 1];
+
+            ImVec2 gizmoSize(ImGui::CalcTextSize(gizmoText.c_str()).x + statPadX * 2.0f, statH);
+            const float gizmoY = pos.y + padding + statH + 4.0f;
+
+            ImGui::SetNextWindowPos(ImVec2(pos.x + padding, gizmoY));
+            ImGui::SetNextWindowSize(gizmoSize);
+            ImGui::SetNextWindowViewport(viewport->ID);
+
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(statPadX, statPadY));
+            ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.5f));
+
+            ImGui::Begin("GizmoStatus", nullptr, windowFlags);
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetColorU32(ImGuiCol_TextDisabled));
+            ImGui::TextUnformatted(gizmoText.c_str());
+            ImGui::PopStyleColor();
+            ImGui::End();
+            ImGui::PopStyleColor();
+            ImGui::PopStyleVar(2);
+        }
 
         const float toolH = kToolIconWidth;
         float toolW = kToolIconWidth + 16.0f;

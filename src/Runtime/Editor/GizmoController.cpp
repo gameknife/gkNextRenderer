@@ -152,6 +152,12 @@ void GizmoController::HandleShortcuts(const ImGuiIO& io)
     {
         operation_ = static_cast<int>(ImGuizmo::SCALE);
     }
+    if (ImGui::IsKeyPressed(ImGuiKey_Q))
+    {
+        mode_ = (mode_ == static_cast<int>(ImGuizmo::LOCAL))
+                    ? static_cast<int>(ImGuizmo::WORLD)
+                    : static_cast<int>(ImGuizmo::LOCAL);
+    }
 }
 
 void GizmoController::ResetState()
@@ -189,16 +195,19 @@ void GizmoController::DrawToolbar()
     {
         operation_ = static_cast<int>(ImGuizmo::TRANSLATE);
     }
+    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Translate (W)"); }
     ImGui::SameLine();
     if (ImGui::RadioButton("Rotate", operation_ == static_cast<int>(ImGuizmo::ROTATE)))
     {
         operation_ = static_cast<int>(ImGuizmo::ROTATE);
     }
+    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Rotate (E)"); }
     ImGui::SameLine();
     if (ImGui::RadioButton("Scale", operation_ == static_cast<int>(ImGuizmo::SCALE)))
     {
         operation_ = static_cast<int>(ImGuizmo::SCALE);
     }
+    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Scale (R)"); }
     ImGui::SameLine();
     ImGui::TextUnformatted("|");
     ImGui::SameLine();
@@ -206,11 +215,27 @@ void GizmoController::DrawToolbar()
     {
         pivotMode_ = static_cast<int>(EGizmoPivotMode::Pivot);
     }
+    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Use individual pivot for each selected node"); }
     ImGui::SameLine();
     if (ImGui::RadioButton("Bounds", pivotMode_ == static_cast<int>(EGizmoPivotMode::SelectionBounds)))
     {
         pivotMode_ = static_cast<int>(EGizmoPivotMode::SelectionBounds);
     }
+    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Use combined selection bounds as pivot"); }
+    ImGui::SameLine();
+    ImGui::TextUnformatted("|");
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Local", mode_ == static_cast<int>(ImGuizmo::LOCAL)))
+    {
+        mode_ = static_cast<int>(ImGuizmo::LOCAL);
+    }
+    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("Local axes (Q)"); }
+    ImGui::SameLine();
+    if (ImGui::RadioButton("World", mode_ == static_cast<int>(ImGuizmo::WORLD)))
+    {
+        mode_ = static_cast<int>(ImGuizmo::WORLD);
+    }
+    if (ImGui::IsItemHovered()) { ImGui::SetTooltip("World axes (Q)"); }
 
     ImGui::End();
     ImGui::PopStyleColor();

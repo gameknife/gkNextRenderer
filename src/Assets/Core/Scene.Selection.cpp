@@ -33,6 +33,7 @@ namespace Assets
     void Scene::SetSelectedId(uint32_t id) const
     {
         selectionState_.SetSingle(id);
+        const_cast<Scene*>(this)->MarkSelectionDirty();
     }
 
     void Scene::SetSelection(const std::vector<uint32_t>& ids) const
@@ -51,11 +52,13 @@ namespace Assets
         }
 
         selectionState_.SetMany(validIds);
+        const_cast<Scene*>(this)->MarkSelectionDirty();
     }
 
     void Scene::ClearSelection() const
     {
         selectionState_.Clear();
+        const_cast<Scene*>(this)->MarkSelectionDirty();
     }
 
     void Scene::AddToSelection(uint32_t id) const
@@ -66,11 +69,13 @@ namespace Assets
         }
 
         selectionState_.Add(id);
+        const_cast<Scene*>(this)->MarkSelectionDirty();
     }
 
     void Scene::RemoveFromSelection(uint32_t id) const
     {
         selectionState_.Remove(id);
+        const_cast<Scene*>(this)->MarkSelectionDirty();
     }
 
     void Scene::ToggleSelection(uint32_t id) const
@@ -98,15 +103,27 @@ namespace Assets
     {
         if (!IsValidSelectionId(*this, id))
         {
-            hoveredId_ = SceneSelectionState::invalidNodeId;
+            if (hoveredId_ != SceneSelectionState::invalidNodeId)
+            {
+                hoveredId_ = SceneSelectionState::invalidNodeId;
+                const_cast<Scene*>(this)->MarkSelectionDirty();
+            }
             return;
         }
-        hoveredId_ = id;
+        if (hoveredId_ != id)
+        {
+            hoveredId_ = id;
+            const_cast<Scene*>(this)->MarkSelectionDirty();
+        }
     }
 
     void Scene::ClearHoveredId() const
     {
-        hoveredId_ = SceneSelectionState::invalidNodeId;
+        if (hoveredId_ != SceneSelectionState::invalidNodeId)
+        {
+            hoveredId_ = SceneSelectionState::invalidNodeId;
+            const_cast<Scene*>(this)->MarkSelectionDirty();
+        }
     }
 
     bool Scene::IsLocked(uint32_t id) const

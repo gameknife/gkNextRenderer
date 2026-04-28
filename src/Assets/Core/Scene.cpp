@@ -1233,6 +1233,12 @@ namespace Assets
         NextEngine::GetInstance()->SetProgressiveRendering(false, false);
     }
 
+    void Scene::MarkSelectionDirty()
+    {
+        sceneDirty_ = true;
+        NextEngine::GetInstance()->SetProgressiveRendering(false, false);
+    }
+
     void Scene::OverrideModelView(glm::mat4& outMatrix)
     {
         if (requestOverrideModelView)

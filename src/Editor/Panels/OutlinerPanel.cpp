@@ -6,6 +6,7 @@
 #include "Assets/Core/Node.h"
 #include "Assets/Core/Scene.hpp"
 #include "Runtime/Components/RenderComponent.h"
+#include "Runtime/Command/DeleteNodesCommand.hpp"
 #include "Runtime/Command/RenameNodeCommand.hpp"
 #include "Runtime/Engine.hpp"
 
@@ -169,6 +170,8 @@ namespace Editor
             // Single click to select
             if (!locked && ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen())
             {
+                // Ensure Outliner gets keyboard focus so shortcuts (Delete, F2, arrows) work immediately
+                ImGui::SetWindowFocus(nullptr);
                 const ImGuiIO& io = ImGui::GetIO();
                 const bool toggleSelection = io.KeyCtrl || io.KeySuper;
                 if (toggleSelection)
@@ -347,16 +350,91 @@ namespace Editor
                 }
             }
 
-            if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
-                ImGui::IsKeyPressed(ImGuiKey_F2, false))
+            if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows))
             {
-                Assets::Node* selectedNode = ctx.scene.GetNodeByInstanceId(ctx.scene.GetSelectedId());
-                if (selectedNode != nullptr)
+                if (ImGui::IsKeyPressed(ImGuiKey_F2, false))
                 {
-                    renameTargetId = selectedNode->GetInstanceId();
-                    renameBuffer = selectedNode->GetName();
-                    openRenamePopup = true;
-                    focusRenameInput = true;
+                    Assets::Node* selectedNode = ctx.scene.GetNodeByInstanceId(ctx.scene.GetSelectedId());
+                    if (selectedNode != nullptr)
+                    {
+                        renameTargetId = selectedNode->GetInstanceId();
+                        renameBuffer = selectedNode->GetName();
+                        openRenamePopup = true;
+                        focusRenameInput = true;
+                    }
+                }
+
+                // Delete / Backspace: remove selected nodes (works while Outliner has keyboard focus)
+                if (!ImGui::GetIO().WantTextInput &&
+                    (ImGui::IsKeyPressed(ImGuiKey_Delete, false) ||
+                     ImGui::IsKeyPressed(ImGuiKey_Backspace, false)))
+                {
+                    std::vector<uint32_t> ids = ctx.scene.GetSelectedIds();
+                    if (!ids.empty())
+                    {
+                        ctx.engine.ExecuteCommand(std::make_unique<DeleteNodesCommand>(ctx.scene, std::move(ids)));
+                    }
+                }
+
+                // Arrow key navigation
+                if (!ImGui::GetIO().WantTextInput)
+                {
+                    bool navigateUp = ImGui::IsKeyPressed(ImGuiKey_UpArrow, false);
+                    bool navigateDown = ImGui::IsKeyPressed(ImGuiKey_DownArrow, false);
+
+                    if (navigateUp || navigateDown)
+                    {
+                        const bool filterActive = nodeFilter.IsActive();
+                        std::vector<uint32_t> visibleIds;
+                        std::function<void(Assets::Node&)> collectVisible = [&](Assets::Node& node)
+                        {
+                            if (filterActive)
+                            {
+                                bool nodePassesFilter = nodeFilter.PassFilter(node.GetName().c_str());
+                                bool subtreePassesFilter = nodePassesFilter || PassesNodeFilter(node, nodeFilter);
+                                if (!subtreePassesFilter) return;
+                            }
+                            if (!ctx.scene.IsLocked(node.GetInstanceId()))
+                                visibleIds.push_back(node.GetInstanceId());
+                            for (auto& child : node.Children())
+                                collectVisible(*child);
+                        };
+
+                        for (auto& node : ctx.scene.Nodes())
+                        {
+                            if (node->GetParent() != nullptr) continue;
+                            if (filterActive && !PassesNodeFilter(*node, nodeFilter)) continue;
+                            collectVisible(*node);
+                        }
+
+                        if (!visibleIds.empty())
+                        {
+                            uint32_t currentId = ctx.scene.GetSelectedId();
+                            int idx = -1;
+                            for (size_t i = 0; i < visibleIds.size(); ++i)
+                            {
+                                if (visibleIds[i] == currentId)
+                                {
+                                    idx = static_cast<int>(i);
+                                    break;
+                                }
+                            }
+
+                            int newIdx = idx;
+                            if (navigateUp && idx > 0)
+                                newIdx = idx - 1;
+                            else if (navigateDown && idx < static_cast<int>(visibleIds.size()) - 1)
+                                newIdx = (idx == -1) ? 0 : idx + 1;
+                            else if (idx == -1 && !visibleIds.empty())
+                                newIdx = 0;
+
+                            if (newIdx != idx && newIdx >= 0 && newIdx < static_cast<int>(visibleIds.size()))
+                            {
+                                ctx.scene.SetSelectedId(visibleIds[newIdx]);
+                                pendingScrollTargetId = visibleIds[newIdx];
+                            }
+                        }
+                    }
                 }
             }
 

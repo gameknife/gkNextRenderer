@@ -11,6 +11,8 @@
 #include "Editor/EditorActionDispatcher.hpp"
 #include "Editor/EditorContext.hpp"
 #include "Editor/Core/RecentScenes.hpp"
+#include "Runtime/Command/DeleteNodesCommand.hpp"
+#include "Runtime/Command/DuplicateNodesCommand.hpp"
 
 #include <spdlog/spdlog.h>
 
@@ -77,6 +79,7 @@ void EditorGameInstance::OnInit()
                                 ctx.engine.GetCommandSystem().Clear();
                                 const std::string scenePath(args);
                                 ctx.engine.RequestLoadScene(scenePath);
+                                GetEditorInterface().GetEditorUiState().currentScenePath = scenePath;
                                 PushRecentScene(GetEditorInterface().GetEditorUiState(), scenePath);
                                 return true;
                             });
@@ -159,6 +162,50 @@ bool EditorGameInstance::OnKey(SDL_Event& event)
         case SDLK_ESCAPE:
             GetEngine().GetScene().ClearSelection();
             break;
+        case SDLK_DELETE:
+        case SDLK_BACKSPACE:
+        {
+            if (ImGui::GetIO().WantTextInput) break;
+            std::vector<uint32_t> ids = GetEngine().GetScene().GetSelectedIds();
+            if (ids.empty()) break;
+            auto cmd = std::make_unique<DeleteNodesCommand>(GetEngine().GetScene(), std::move(ids));
+            GetEngine().ExecuteCommand(std::move(cmd));
+            break;
+        }
+        case SDLK_D:
+        {
+            if (ImGui::GetIO().WantTextInput) break;
+            if (!(event.key.mod & (SDL_KMOD_CTRL | SDL_KMOD_GUI))) break;
+            std::vector<uint32_t> ids = GetEngine().GetScene().GetSelectedIds();
+            if (ids.empty()) break;
+            auto cmd = std::make_unique<DuplicateNodesCommand>(GetEngine().GetScene(), std::move(ids));
+            GetEngine().ExecuteCommand(std::move(cmd));
+            break;
+        }
+        case SDLK_S:
+        {
+            if (ImGui::GetIO().WantTextInput) break;
+            if (!(event.key.mod & (SDL_KMOD_CTRL | SDL_KMOD_GUI))) break;
+            auto& ui = GetEditorInterface().GetEditorUiState();
+            if (!ui.currentScenePath.empty())
+            {
+                std::error_code ec;
+                if (std::filesystem::exists(ui.currentScenePath, ec))
+                {
+                    GetEngine().GetScene().Save(ui.currentScenePath);
+                    SPDLOG_INFO("Scene saved: {}", ui.currentScenePath);
+                }
+                else
+                {
+                    SPDLOG_INFO("Scene file not found: {}; use File > Open Scene... to reload", ui.currentScenePath);
+                }
+            }
+            else
+            {
+                SPDLOG_INFO("No current scene path; use File > Save Scene As...");
+            }
+            break;
+        }
         case SDLK_F:
             {
                 // Focus on selected node (F key shortcut)

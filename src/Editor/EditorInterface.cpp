@@ -270,7 +270,7 @@ void EditorInterface::Render()
         return;
     }
 
-    EditorContext ctx{editor_->GetEngine(), editor_->GetEngine().GetScene(), *ui, editor_->Actions()};
+    EditorContext ctx{editor_->GetEngine(), editor_->GetEngine().GetScene(), *ui, editor_->Actions(), &editor_->GetGizmoController()};
     void* previousUserData = ImGui::GetIO().UserData;
     ImGui::GetIO().UserData = &ctx;
 

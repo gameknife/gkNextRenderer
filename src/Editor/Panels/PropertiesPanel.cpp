@@ -8,6 +8,7 @@
 #include "Runtime/Components/SkinnedMeshComponent.h"
 #include "Runtime/Command/RenameNodeCommand.hpp"
 #include "Runtime/Engine.hpp"
+#include "Runtime/Reflection/PropertyAccessor.h"
 
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
@@ -306,17 +307,43 @@ namespace Editor
             ImGui::NewLine();
             ImGui::Text(ICON_FA_PUZZLE_PIECE " Components");
             ImGui::Separator();
-            
+
+            static ImGuiTextFilter propertyFilter;
+            propertyFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Filter##Properties", 220.0f);
+
             const auto& components = selectedObj->GetComponents();
             for (const auto& component : components)
             {
                 if (!component) continue;
-                
+
+                // Skip component if all its properties are filtered out
+                if (propertyFilter.IsActive())
+                {
+                    auto metaType = component->GetMetaType();
+                    auto props = Reflection::PropertyAccessor::GetProperties(metaType);
+                    bool anyVisible = false;
+                    for (const auto& prop : props)
+                    {
+                        const char* displayName = prop.meta.displayName.empty()
+                            ? prop.name.c_str() : prop.meta.displayName.c_str();
+                        if (propertyFilter.PassFilter(displayName))
+                        {
+                            anyVisible = true;
+                            break;
+                        }
+                    }
+                    if (!anyVisible) continue;
+                }
+
                 std::string headerName = std::string(component->GetTypeName());
                 if (ImGui::CollapsingHeader(headerName.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
                 {
                     ImGui::Indent();
-                    PropertyWidgets::DrawComponentProperties(component.get(), &ctx.engine.GetCommandHistory());
+                    if (PropertyWidgets::DrawComponentProperties(component.get(), &ctx.engine.GetCommandHistory(),
+                                                                 PropertyWidgets::WidgetConfig(), &propertyFilter))
+                    {
+                        ctx.scene.MarkDirty();
+                    }
                     ImGui::Unindent();
                 }
             }

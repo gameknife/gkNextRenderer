@@ -40,6 +40,9 @@ namespace Editor
         // Recent scenes
         std::vector<std::string> recentScenes;
 
+        // Current scene file path (set on load, used by Ctrl+S save)
+        std::string currentScenePath;
+
         // Selection
         uint32_t selected_obj_id = InvalidId;
 

@@ -5,6 +5,7 @@
 class NextEngine;
 class UserInterface;
 class EditorActionDispatcher;
+class GizmoController;
 
 namespace Assets
 {
@@ -17,4 +18,5 @@ struct EditorContext final
     Assets::Scene& scene;
     UserInterface& ui;
     EditorActionDispatcher& actions;
+    GizmoController* gizmoController = nullptr;
 };
