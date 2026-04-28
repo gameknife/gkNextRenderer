@@ -19,7 +19,20 @@
   "scenes": [
     "MaterialShowcase.proc",
     "LightingShowcase.proc",
-    "CameraShowcase.proc"
+    "CameraShowcase.proc",
+    {
+      "path": "AnimationShowcase.proc",
+      "frames": 120
+    },
+    {
+      "path": "PhysicsShowcase.proc",
+      "frames": 180
+    }
   ],
-  "sceneTimeouts": {}
+  "sceneTimeouts": {
+    "PhysicsShowcase.proc": 30.0
+  },
+  "notes": {
+    "PhysicsShowcase.proc": "Physics motion can have small platform-dependent variance; visual baseline is informational."
+  }
 }
