@@ -89,6 +89,7 @@ namespace Editor
             auto render = node.GetComponent<Runtime::RenderComponent>();
             const int modelId = render ? render->GetModelId() : -1;
             const bool visible = render == nullptr || render->GetVisible();
+            const float visibilityIconWidth = ImGui::CalcTextSize(ICON_FA_EYE).x;
 
             const bool shouldOpenForTarget =
                 autoScrollEnabled && pendingScrollTargetId != InvalidId &&
@@ -126,8 +127,12 @@ namespace Editor
                 {
                     ImGui::SetTooltip("%s", visible ? "Hide Node" : "Show Node");
                 }
-                AlignNextOutlinerInlineItem();
             }
+            else
+            {
+                ImGui::Dummy(ImVec2(visibilityIconWidth, ImGui::GetFrameHeight()));
+            }
+            AlignNextOutlinerInlineItem();
 
             const ImU32 textColor = !visible ? ImGui::GetColorU32(ImGuiCol_TextDisabled)
                                              : selected ? ActiveColor : ImGui::GetColorU32(ImGuiCol_Text);

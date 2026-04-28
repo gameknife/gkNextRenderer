@@ -855,7 +855,6 @@ void NextRendererGameInstance::DrawTitleBar()
 	{
 		GetEngine().GetUserSettings().ShowOverlay = !GetEngine().GetUserSettings().ShowOverlay;
 	}
-    titlebarLeftReservedWidth = ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x;
 	BUTTON_TOOLTIP(LOCTEXT("Toggle Performance Overlay"))
 	ImGui::SameLine();
     ImGui::GetForegroundDrawList()->AddLine(ImGui::GetCursorPos() + ImVec2(4, TitlebarSize / 2 - 5), ImGui::GetCursorPos() + ImVec2(4, TitlebarSize / 2 + 5), IM_COL32(255, 255, 255, 160), 2.0f);
@@ -863,6 +862,7 @@ void NextRendererGameInstance::DrawTitleBar()
     ImGui::SameLine();
     ImGui::SetCursorPosY((TitlebarSize - ImGui::GetTextLineHeight()) / 2);
     ImGui::TextUnformatted(fmt::format("{:.0f}fps", GetEngine().GetFrameRate()).c_str());
+    titlebarLeftReservedWidth = ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x;
     ImGui::End();
 
     ImGui::PopStyleColor();
