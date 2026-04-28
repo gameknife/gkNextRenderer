@@ -17,6 +17,9 @@
   "excludeScenes": [],
   "excludeSceneContains": [],
   "scenes": [
-    "MaterialShowcase.proc"
-  ]
+    "MaterialShowcase.proc",
+    "LightingShowcase.proc",
+    "CameraShowcase.proc"
+  ],
+  "sceneTimeouts": {}
 }
