@@ -18,6 +18,9 @@ public:
     void Init();
     void Render();
 
+    Editor::EditorUiState& GetEditorUiState() { return uiState_; }
+    const Editor::EditorUiState& GetEditorUiState() const { return uiState_; }
+
 private:
     ImGuiID DockSpaceUI();
     void RebuildDefaultDockLayout(ImGuiID id);

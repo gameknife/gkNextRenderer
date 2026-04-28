@@ -4,9 +4,11 @@
 #include "Editor/EditorActionDispatcher.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
+#include "Editor/Core/RecentScenes.hpp"
 #include "Editor/EditorUtils.h"
 
 #include <spdlog/spdlog.h>
+#include <SDL3/SDL_dialog.h>
 
 #include "Runtime/Engine.hpp"
 #include "Runtime/Editor/UserInterface.hpp"
@@ -51,6 +53,63 @@ namespace Editor
             menuRight = std::max(menuRight, ImGui::GetItemRectMax().x);
             if (fileMenuOpen)
             {
+                if (ImGui::MenuItem("Open Scene...", "Ctrl+O"))
+                {
+                    SDL_DialogFileFilter filters[] = {
+                        { "Scenes", "glb;gltf;ldr;mpd" },
+                        { "All Files", "*" }
+                    };
+                    SDL_ShowOpenFileDialog(
+                        [](void* userdata, const char* const* filelist, int /*filter*/)
+                        {
+                            auto* editorCtx = static_cast<EditorContext*>(userdata);
+                            if (filelist && filelist[0])
+                            {
+                                SPDLOG_INFO("Open Scene: {}", filelist[0]);
+                                editorCtx->actions.Dispatch(*editorCtx, EEditorAction::IO_LoadScene,
+                                                            std::string(filelist[0]));
+                            }
+                            else
+                            {
+                                SPDLOG_DEBUG("Open Scene dialog cancelled");
+                            }
+                        },
+                        &ctx,
+                        ctx.engine.GetWindow().Handle(),
+                        filters, 2, nullptr, false);
+                }
+
+                if (ImGui::BeginMenu("Recent Scenes"))
+                {
+                    if (ui.recentScenes.empty())
+                    {
+                        ImGui::MenuItem("(empty)", nullptr, false, false);
+                    }
+                    else
+                    {
+                        for (size_t i = 0; i < ui.recentScenes.size(); ++i)
+                        {
+                            const std::string& path = ui.recentScenes[i];
+                            std::string displayName = std::filesystem::path(path).filename().string();
+                            if (ImGui::MenuItem(displayName.c_str(), path.c_str()))
+                            {
+                                ctx.actions.Dispatch(ctx, EEditorAction::IO_LoadScene, path);
+                            }
+                            if (ImGui::IsItemHovered())
+                            {
+                                ImGui::SetTooltip("%s", path.c_str());
+                            }
+                        }
+                        ImGui::Separator();
+                        if (ImGui::MenuItem("Clear"))
+                        {
+                            ui.recentScenes.clear();
+                            SaveRecentScenes(ui);
+                        }
+                    }
+                    ImGui::EndMenu();
+                }
+
                 if (ImGui::MenuItem("Save Scene As...", "Ctrl+Shift+S"))
                 {
                     // TODO: Add file dialog for save path selection
@@ -110,16 +169,6 @@ namespace Editor
                         ui.dockResetRequested = true;
                     }
                     ImGui::EndMenu();
-                }
-                if (ImGui::BeginMenu("Behavior"))
-                {
-                    ImGui::MenuItem("Static Mode", nullptr);
-                    ImGui::SameLine();
-                    utils::HelpMarker("Toggle between static/linear layout and fixed/manual layout");
-                    ImGui::EndMenu();
-                }
-                if (ImGui::MenuItem("Reset"))
-                {
                 }
                 ImGui::EndMenu();
             }
@@ -242,15 +291,6 @@ namespace Editor
             ImVec2(viewport->Pos.x, viewport->Pos.y + viewport->Size.y - kFooterHeight),
             ImVec2(viewport->Pos.x + viewport->Size.x, viewport->Pos.y + viewport->Size.y - kFooterHeight),
             IM_COL32(20, 20, 20, 255), 2);
-
-        if (ImGui::Button(ICON_FA_HOUSE, ImVec2(60, 30)))
-        {
-        }
-        ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_PEN, ImVec2(60, 30)))
-        {
-        }
-        ImGui::SameLine();
 
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6, 6));
         ctx.ui.DrawConsoleCommandInput("##CVar", "Execute CVar...", 200.0f, false, true, "##FooterConsoleMatches");

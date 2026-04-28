@@ -19,6 +19,7 @@
 #include "Editor/EditorActionDispatcher.hpp"
 #include "Editor/EditorContext.hpp"
 #include "Editor/EditorMain.h"
+#include "Editor/Core/RecentScenes.hpp"
 #include "Editor/EditorUtils.h"
 #include "Options.hpp"
 #include "Rendering/VulkanBaseRenderer.hpp"
@@ -106,6 +107,7 @@ void EditorInterface::Init()
 
     uiState_.fontIcon = fontIcon;
     uiState_.bigIcon = fontBigIcon;
+    Editor::LoadRecentScenes(uiState_);
     firstRun_ = true;
 }
 

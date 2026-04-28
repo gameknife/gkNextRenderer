@@ -12,6 +12,8 @@
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include <imgui_stdlib.h>
 
+#include <spdlog/spdlog.h>
+
 namespace Editor
 {
     namespace
@@ -59,6 +61,18 @@ namespace Editor
         {
             ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
             ImGui::AlignTextToFramePadding();
+        }
+
+        std::string MakeNodePath(Assets::Node& node)
+        {
+            std::string path = node.GetName();
+            Assets::Node* parent = node.GetParent();
+            while (parent != nullptr)
+            {
+                path = parent->GetName() + "/" + path;
+                parent = parent->GetParent();
+            }
+            return path;
         }
 
         void DrawNode(EditorContext& ctx, Assets::Node& node, uint32_t& renameTargetId,
@@ -195,6 +209,18 @@ namespace Editor
                 if (ImGui::MenuItem(locked ? "Unlock" : "Lock"))
                 {
                     ctx.scene.ToggleLocked(node.GetInstanceId());
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem("Copy Node Name"))
+                {
+                    ImGui::SetClipboardText(node.GetName().c_str());
+                    SPDLOG_INFO("Copied node name: {}", node.GetName());
+                }
+                if (ImGui::MenuItem("Copy Node Path"))
+                {
+                    const std::string nodePath = MakeNodePath(node);
+                    ImGui::SetClipboardText(nodePath.c_str());
+                    SPDLOG_INFO("Copied node path: {}", nodePath);
                 }
                 ImGui::EndPopup();
             }

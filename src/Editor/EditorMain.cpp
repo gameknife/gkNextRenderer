@@ -10,6 +10,7 @@
 
 #include "Editor/EditorActionDispatcher.hpp"
 #include "Editor/EditorContext.hpp"
+#include "Editor/Core/RecentScenes.hpp"
 
 #include <spdlog/spdlog.h>
 
@@ -71,17 +72,21 @@ void EditorGameInstance::OnInit()
 
     // Scene switching invalidates undo/redo history.
     actions_.RegisterAction(EEditorAction::IO_LoadScene,
-                            [](EditorContext& ctx, std::string_view args) -> bool
+                            [this](EditorContext& ctx, std::string_view args) -> bool
                             {
                                 ctx.engine.GetCommandSystem().Clear();
-                                ctx.engine.RequestLoadScene(std::string(args));
+                                const std::string scenePath(args);
+                                ctx.engine.RequestLoadScene(scenePath);
+                                PushRecentScene(GetEditorInterface().GetEditorUiState(), scenePath);
                                 return true;
                             });
     actions_.RegisterAction(EEditorAction::IO_LoadSceneAdd,
-                            [](EditorContext& ctx, std::string_view args) -> bool
+                            [this](EditorContext& ctx, std::string_view args) -> bool
                             {
                                 ctx.engine.GetCommandSystem().Clear();
-                                ctx.engine.RequestLoadSceneAdd(std::string(args));
+                                const std::string scenePath(args);
+                                ctx.engine.RequestLoadSceneAdd(scenePath);
+                                PushRecentScene(GetEditorInterface().GetEditorUiState(), scenePath);
                                 return true;
                             });
     actions_.RegisterAction(EEditorAction::IO_LoadHDRI,

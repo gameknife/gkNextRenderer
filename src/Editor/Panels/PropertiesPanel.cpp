@@ -31,6 +31,19 @@ namespace Editor
 
             if (selectedIds.empty())
             {
+                const ImVec2 avail = ImGui::GetContentRegionAvail();
+                const char* line1 = ICON_FA_CIRCLE_INFO " No object selected";
+                const char* line2 = "Select an object from the Outliner or Viewport";
+                const ImVec2 textSize1 = ImGui::CalcTextSize(line1);
+                const ImVec2 textSize2 = ImGui::CalcTextSize(line2);
+                ImGui::SetCursorPos(ImVec2(
+                    (avail.x - textSize1.x) * 0.5f,
+                    (avail.y - textSize1.y - textSize2.y) * 0.5f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetColorU32(ImGuiCol_TextDisabled));
+                ImGui::TextUnformatted(line1);
+                ImGui::SetCursorPosX((avail.x - textSize2.x) * 0.5f);
+                ImGui::TextUnformatted(line2);
+                ImGui::PopStyleColor();
                 ImGui::End();
                 return;
             }
@@ -52,6 +65,8 @@ namespace Editor
 
                 if (activeObj == nullptr)
                 {
+                    ImGui::TextDisabled("%s %d objects selected, no active node",
+                                        ICON_FA_CIRCLE_INFO, static_cast<int>(selectedIds.size()));
                     ImGui::End();
                     return;
                 }

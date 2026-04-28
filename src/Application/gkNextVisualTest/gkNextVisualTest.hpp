@@ -2,6 +2,8 @@
 #include "Common/CoreMinimal.hpp"
 #include "Runtime/Engine.hpp"
 
+#include <unordered_map>
+
 struct VisualTestSceneConfig
 {
     std::string path;
@@ -78,6 +80,7 @@ private:
     std::vector<std::string> excludeScenes_;
     std::vector<std::string> excludeSceneContains_;
     std::vector<VisualTestSceneConfig> scenes_;
+    std::unordered_map<std::string, double> sceneTimeouts_;
 
     // State machine
     enum class State { Init, Loading, Rendering, Capturing, Finished };

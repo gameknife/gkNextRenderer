@@ -747,6 +747,182 @@ namespace
         addNode("KeyLight", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matLight);
     }
 
+    void LightingShowcase(Assets::EnvironmentSetting& cameraInit,
+                         std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                         std::vector<Assets::Model>& models,
+                         std::vector<Assets::FMaterial>& materials,
+                         std::vector<Assets::LightObject>& lights,
+                         std::vector<Assets::AnimationTrack>& tracks)
+    {
+        Assets::Camera defaultCam;
+        defaultCam.name = "LightingShowcaseCam";
+        defaultCam.ModelView = lookAt(vec3(0.0f, 4.5f, 14.0f), vec3(0.0f, 1.2f, 0.0f), vec3(0, 1, 0));
+        defaultCam.FieldOfView = 50;
+        defaultCam.Aperture = 0;
+        defaultCam.FocalDistance = 14;
+
+        cameraInit.cameras.push_back(defaultCam);
+        cameraInit.ControlSpeed = 5.0f;
+        cameraInit.GammaCorrection = true;
+        cameraInit.HasSky = true;
+        cameraInit.SkyIdx = 0;
+        cameraInit.SkyIntensity = 10.0f;
+        cameraInit.HasSun = true;
+        cameraInit.SunIntensity = 300.0f;
+
+        const uint32_t matGround = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.45f, 0.45f, 0.46f)), "ls_ground_gray"});
+        const uint32_t matSphere = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.72f, 0.72f, 0.72f)), "ls_sphere_neutral"});
+
+        const uint32_t matPointLight = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::DiffuseLight(vec3(1000.0f, 900.0f, 800.0f)), "ls_point_light"});
+        const uint32_t matAreaLight = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::DiffuseLight(vec3(700.0f, 800.0f, 900.0f)), "ls_area_light"});
+        const uint32_t matFillLight = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::DiffuseLight(vec3(150.0f, 180.0f, 200.0f)), "ls_fill_light"});
+
+        auto addNode = [&](const std::string& name, const vec3& pos, uint32_t modelIdx, uint32_t matIdx)
+        {
+            auto node = Assets::Node::CreateNode(name, pos, quat(1, 0, 0, 0), vec3(1),
+                                                 static_cast<uint32_t>(nodes.size()));
+            auto rc = std::make_shared<Runtime::RenderComponent>();
+            rc->SetModelId(modelIdx);
+            rc->SetVisible(true);
+            rc->SetMaterial({matIdx});
+            node->AddComponent(rc);
+            nodes.push_back(node);
+        };
+
+        // Ground
+        models.push_back(Assets::FProcModel::CreateBox(vec3(-10.0f, -0.08f, -6.0f), vec3(10.0f, 0.0f, 6.0f)));
+        addNode("Ground", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matGround);
+
+        // Back wall
+        models.push_back(Assets::FProcModel::CreateBox(vec3(-10.0f, 0.0f, -6.0f), vec3(10.0f, 6.0f, -5.8f)));
+        addNode("Wall", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matGround);
+
+        // 4 neutral gray spheres as light receivers
+        const float sphereRadius = 0.7f;
+        models.push_back(Assets::FProcModel::CreateSphere(vec3(0, 0, 0), sphereRadius));
+        const uint32_t sphereModel = static_cast<uint32_t>(models.size() - 1);
+
+        const float spacing = 2.5f * sphereRadius * 2.0f;
+        const vec3 spherePositions[] = {
+            vec3(-5.25f, sphereRadius, -1.0f),
+            vec3(-1.75f, sphereRadius, -1.0f),
+            vec3( 1.75f, sphereRadius, -1.0f),
+            vec3( 5.25f, sphereRadius, -1.0f),
+        };
+        for (int i = 0; i < 4; ++i)
+        {
+            addNode(fmt::format("Sphere{}", i + 1), spherePositions[i], sphereModel, matSphere);
+        }
+
+        // Light 1: Point light (small sphere emitter above sphere 1)
+        models.push_back(Assets::FProcModel::CreateSphere(vec3(0, 0, 0), 0.2f));
+        const uint32_t pointLightModel = static_cast<uint32_t>(models.size() - 1);
+        addNode("PointLight", vec3(-5.25f, 4.5f, -1.0f), pointLightModel, matPointLight);
+
+        // Light 2: Area light (rectangle above sphere 2)
+        models.push_back(Assets::FProcModel::CreateAreaLight(
+            "AreaLight", vec3(-2.75f, 4.5f, -0.5f), vec3(2.0f, 0.0f, 0.0f),
+            vec3(0.0f, 0.0f, -1.0f), matAreaLight, lights));
+        addNode("AreaLight", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matAreaLight);
+
+        // Light 3: Uses global sun (directional) - no explicit light node needed
+        // Light 4: Fill light (small area light near sphere 4)
+        models.push_back(Assets::FProcModel::CreateAreaLight(
+            "FillLight", vec3(4.75f, 2.8f, 1.0f), vec3(1.0f, 0.0f, 0.0f),
+            vec3(0.0f, 0.5f, -0.5f), matFillLight, lights));
+        addNode("FillLight", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matFillLight);
+    }
+
+    void CameraShowcase(Assets::EnvironmentSetting& cameraInit,
+                       std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                       std::vector<Assets::Model>& models,
+                       std::vector<Assets::FMaterial>& materials,
+                       std::vector<Assets::LightObject>& lights,
+                       std::vector<Assets::AnimationTrack>& tracks)
+    {
+        Assets::Camera defaultCam;
+        defaultCam.name = "CameraShowcaseCam";
+        defaultCam.ModelView = lookAt(vec3(0.0f, 3.0f, 16.0f), vec3(0.0f, 1.5f, 0.0f), vec3(0, 1, 0));
+        defaultCam.FieldOfView = 50;
+        defaultCam.Aperture = 0;
+        defaultCam.FocalDistance = 16;
+
+        cameraInit.cameras.push_back(defaultCam);
+        cameraInit.ControlSpeed = 5.0f;
+        cameraInit.GammaCorrection = true;
+        cameraInit.HasSky = true;
+        cameraInit.SkyIdx = 0;
+        cameraInit.SkyIntensity = 10.0f;
+        cameraInit.HasSun = true;
+        cameraInit.SunIntensity = 400.0f;
+
+        const uint32_t matGround = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.50f, 0.50f, 0.50f)), "cs_ground"});
+        const uint32_t matWhite = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.78f, 0.78f, 0.78f)), "cs_white"});
+        const uint32_t matDark = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.25f, 0.25f, 0.25f)), "cs_dark"});
+        const uint32_t matRed = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.72f, 0.15f, 0.15f)), "cs_red"});
+        const uint32_t matBlue = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.15f, 0.30f, 0.72f)), "cs_blue"});
+        const uint32_t matGreen = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.15f, 0.55f, 0.20f)), "cs_green"});
+
+        auto addNode = [&](const std::string& name, const vec3& pos, uint32_t modelIdx, uint32_t matIdx)
+        {
+            auto node = Assets::Node::CreateNode(name, pos, quat(1, 0, 0, 0), vec3(1),
+                                                 static_cast<uint32_t>(nodes.size()));
+            auto rc = std::make_shared<Runtime::RenderComponent>();
+            rc->SetModelId(modelIdx);
+            rc->SetVisible(true);
+            rc->SetMaterial({matIdx});
+            node->AddComponent(rc);
+            nodes.push_back(node);
+        };
+
+        // Checkerboard ground: 8x8 grid of alternating white/dark squares
+        const float tileSize = 1.5f;
+        const float groundHalfExtent = 6.0f;
+        for (int row = -4; row < 4; ++row)
+        {
+            for (int col = -4; col < 4; ++col)
+            {
+                const bool isWhite = (row + col) % 2 == 0;
+                const uint32_t mat = isWhite ? matWhite : matDark;
+                const float x0 = static_cast<float>(col) * tileSize;
+                const float z0 = static_cast<float>(row) * tileSize;
+                models.push_back(Assets::FProcModel::CreateBox(
+                    vec3(x0, -0.05f, z0),
+                    vec3(x0 + tileSize, 0.0f, z0 + tileSize)));
+                addNode(fmt::format("Grid_{}_{}", row + 4, col + 4),
+                        vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), mat);
+            }
+        }
+
+        // 5 cubes in a row, receding into the distance
+        struct CubeSpec { vec3 pos; vec3 size; uint32_t mat; const char* name; };
+        const CubeSpec cubes[] = {
+            {vec3(-4.0f, 0.5f, 5.0f),  vec3(1.0f), matRed,   "Cube_Near"},
+            {vec3(-2.0f, 0.6f, 3.0f),  vec3(1.2f), matBlue,  "Cube_NearMid"},
+            {vec3( 0.0f, 0.7f, 0.0f),  vec3(1.4f), matGreen, "Cube_Mid"},
+            {vec3( 2.0f, 0.8f, -3.0f), vec3(1.6f), matWhite, "Cube_FarMid"},
+            {vec3( 4.0f, 0.9f, -6.0f), vec3(1.8f), matRed,   "Cube_Far"},
+        };
+        for (const auto& cube : cubes)
+        {
+            const vec3 halfSize = cube.size * 0.5f;
+            models.push_back(Assets::FProcModel::CreateBox(
+                cube.pos - halfSize, cube.pos + halfSize));
+            addNode(cube.name, vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), cube.mat);
+        }
+    }
+
     void CharacterPlayground(Assets::EnvironmentSetting& cameraInit,
                              std::vector<std::shared_ptr<Assets::Node>>& nodes,
                              std::vector<Assets::Model>& models,
@@ -1291,6 +1467,8 @@ void SceneList::ScanScenes()
     AllScenes.push_back("CornellBox.proc");
     AllScenes.push_back("GIBootcamp.proc");
     AllScenes.push_back("MaterialShowcase.proc");
+    AllScenes.push_back("LightingShowcase.proc");
+    AllScenes.push_back("CameraShowcase.proc");
     AllScenes.push_back("RTIO.proc");
 
     // Deduplicate (a file may exist on disk and in pak) before sorting.
@@ -1370,6 +1548,16 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
         if (filename == "MaterialShowcase.proc")
         {
             MaterialShowcase(camera, nodes, models, materials, lights, tracks);
+            return true;
+        }
+        if (filename == "LightingShowcase.proc")
+        {
+            LightingShowcase(camera, nodes, models, materials, lights, tracks);
+            return true;
+        }
+        if (filename == "CameraShowcase.proc")
+        {
+            CameraShowcase(camera, nodes, models, materials, lights, tracks);
             return true;
         }
         if (filename == "CharacterPlayground.proc")

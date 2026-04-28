@@ -17,6 +17,7 @@ namespace Editor
 {
     inline uint32_t ActiveColor = IM_COL32(64, 128, 255, 255);
     constexpr uint32_t InvalidId = std::numeric_limits<uint32_t>::max();
+    constexpr size_t kRecentScenesCap = 10;
 
     struct EditorUiState
     {
@@ -35,6 +36,9 @@ namespace Editor
         bool aiPanel = true;
         bool outlinerAutoScrollToSelection = true;
         bool dockResetRequested = false;
+
+        // Recent scenes
+        std::vector<std::string> recentScenes;
 
         // Selection
         uint32_t selected_obj_id = InvalidId;

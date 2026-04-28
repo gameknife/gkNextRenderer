@@ -165,10 +165,21 @@ void VisualTestGameInstance::OnTick(double deltaSeconds)
             break;
         }
 
-        if (std::chrono::duration<double>(std::chrono::steady_clock::now() - sceneLoadStartTime_).count() >
-            loadTimeoutSeconds_)
         {
-            RecordFailureAndAdvance(fmt::format("Scene load timed out after {:.1f}s", loadTimeoutSeconds_));
+            double effectiveTimeout = loadTimeoutSeconds_;
+            if (currentSceneIndex_ < scenes_.size())
+            {
+                auto it = sceneTimeouts_.find(scenes_[currentSceneIndex_].path);
+                if (it != sceneTimeouts_.end())
+                {
+                    effectiveTimeout = it->second;
+                }
+            }
+            if (std::chrono::duration<double>(std::chrono::steady_clock::now() - sceneLoadStartTime_).count() >
+                effectiveTimeout)
+            {
+                RecordFailureAndAdvance(fmt::format("Scene load timed out after {:.1f}s", effectiveTimeout));
+            }
         }
         break;
         
@@ -341,6 +352,22 @@ bool VisualTestGameInstance::LoadConfig()
             }
         }
 
+        // Parse per-scene timeout overrides
+        if (config.contains("sceneTimeouts") && config["sceneTimeouts"].is_object())
+        {
+            for (const auto& [key, value] : config["sceneTimeouts"].items())
+            {
+                if (value.is_number())
+                {
+                    sceneTimeouts_[key] = value.get<double>();
+                }
+                else
+                {
+                    SPDLOG_WARN("[VisualTest] Invalid timeout value for scene '{}', skipping", key);
+                }
+            }
+        }
+
         std::vector<VisualTestSceneConfig> deduplicatedScenes;
         std::unordered_set<std::string> seenPaths;
         deduplicatedScenes.reserve(scenes_.size());
@@ -352,7 +379,7 @@ bool VisualTestGameInstance::LoadConfig()
             }
         }
         scenes_ = std::move(deduplicatedScenes);
-        
+
         SPDLOG_INFO("[VisualTest] Loaded {} scenes from config", scenes_.size());
         return true;
     }

@@ -46,6 +46,7 @@ public:
     EditorActionDispatcher& Actions() { return actions_; }
     const EditorActionDispatcher& Actions() const { return actions_; }
     void DrawGizmo(const glm::vec2& viewportPos, const glm::vec2& viewportSize);
+    EditorInterface& GetEditorInterface() { return *editorUserInterface_; }
 
 private:
     NextEngine* engine_;
