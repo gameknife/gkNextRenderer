@@ -76,7 +76,49 @@ namespace Editor
             return path;
         }
 
-        void DrawNode(EditorContext& ctx, Assets::Node& node, uint32_t& renameTargetId,
+        bool SetSubtreeVisibility(Assets::Node& root, bool visible)
+        {
+            bool changed = false;
+            for (const auto& child : root.Children())
+            {
+                if (auto render = child->GetComponent<Runtime::RenderComponent>())
+                {
+                    if (render->GetVisible() != visible)
+                    {
+                        render->SetVisible(visible);
+                        changed = true;
+                    }
+                }
+                changed = SetSubtreeVisibility(*child, visible) || changed;
+            }
+            return changed;
+        }
+
+        void CollectOutlinerVisibleIds(Assets::Scene& scene, Assets::Node& node, const ImGuiTextFilter& filter,
+                                       bool includeLocked, std::vector<uint32_t>& visibleIds)
+        {
+            const bool filterActive = filter.IsActive();
+            if (filterActive)
+            {
+                const bool nodePassesFilter = filter.PassFilter(node.GetName().c_str());
+                const bool subtreePassesFilter = nodePassesFilter || PassesNodeFilter(node, filter);
+                if (!subtreePassesFilter)
+                {
+                    return;
+                }
+            }
+
+            if (includeLocked || !scene.IsLocked(node.GetInstanceId()))
+            {
+                visibleIds.push_back(node.GetInstanceId());
+            }
+            for (const auto& child : node.Children())
+            {
+                CollectOutlinerVisibleIds(scene, *child, filter, includeLocked, visibleIds);
+            }
+        }
+
+        void DrawNode(EditorContext& ctx, EditorUiState& ui, Assets::Node& node, uint32_t& renameTargetId,
                       std::string& renameBuffer, bool& openRenamePopup, bool& focusRenameInput,
                       uint32_t& hoveredIdCandidate, bool autoScrollEnabled, uint32_t& pendingScrollTargetId,
                       const ImGuiTextFilter& filter)
@@ -116,6 +158,16 @@ namespace Editor
             if (filterActive && !node.Children().empty())
             {
                 ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+            }
+            if (!node.Children().empty() && node.GetInstanceId() == ui.pendingExpandTargetId)
+            {
+                ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+                ui.pendingExpandTargetId = InvalidId;
+            }
+            if (!node.Children().empty() && node.GetInstanceId() == ui.pendingCollapseTargetId)
+            {
+                ImGui::SetNextItemOpen(false, ImGuiCond_Always);
+                ui.pendingCollapseTargetId = InvalidId;
             }
 
             const std::string lockPrefix = locked ? std::string(ICON_FA_LOCK " ") : "";
@@ -225,6 +277,21 @@ namespace Editor
                     ImGui::SetClipboardText(nodePath.c_str());
                     SPDLOG_INFO("Copied node path: {}", nodePath);
                 }
+                ImGui::Separator();
+                if (ImGui::MenuItem("Hide All Children"))
+                {
+                    if (SetSubtreeVisibility(node, false))
+                    {
+                        ctx.scene.MarkDirty();
+                    }
+                }
+                if (ImGui::MenuItem("Show All Children"))
+                {
+                    if (SetSubtreeVisibility(node, true))
+                    {
+                        ctx.scene.MarkDirty();
+                    }
+                }
                 ImGui::EndPopup();
             }
 
@@ -232,7 +299,7 @@ namespace Editor
             {
                 for (auto& child : node.Children())
                 {
-                    DrawNode(ctx, *child, renameTargetId, renameBuffer, openRenamePopup, focusRenameInput,
+                    DrawNode(ctx, ui, *child, renameTargetId, renameBuffer, openRenamePopup, focusRenameInput,
                              hoveredIdCandidate, autoScrollEnabled, pendingScrollTargetId, filter);
                 }
                 ImGui::TreePop();
@@ -325,7 +392,7 @@ namespace Editor
                         continue;
                     }
 
-                    DrawNode(ctx, *node, renameTargetId, renameBuffer, openRenamePopup, focusRenameInput,
+                    DrawNode(ctx, ui, *node, renameTargetId, renameBuffer, openRenamePopup, focusRenameInput,
                              hoveredIdCandidate, ui.outlinerAutoScrollToSelection, pendingScrollTargetId, nodeFilter);
 
                     if (!filterActive && limit-- <= 0)
@@ -376,64 +443,86 @@ namespace Editor
                     }
                 }
 
-                // Arrow key navigation
                 if (!ImGui::GetIO().WantTextInput)
                 {
-                    bool navigateUp = ImGui::IsKeyPressed(ImGuiKey_UpArrow, false);
-                    bool navigateDown = ImGui::IsKeyPressed(ImGuiKey_DownArrow, false);
+                    const ImGuiIO& io = ImGui::GetIO();
+                    const bool navigateUp = ImGui::IsKeyPressed(ImGuiKey_UpArrow, false);
+                    const bool navigateDown = ImGui::IsKeyPressed(ImGuiKey_DownArrow, false);
+                    const bool expandSelected = ImGui::IsKeyPressed(ImGuiKey_RightArrow, false);
+                    const bool collapseSelected = ImGui::IsKeyPressed(ImGuiKey_LeftArrow, false);
 
                     if (navigateUp || navigateDown)
                     {
-                        const bool filterActive = nodeFilter.IsActive();
                         std::vector<uint32_t> visibleIds;
-                        std::function<void(Assets::Node&)> collectVisible = [&](Assets::Node& node)
-                        {
-                            if (filterActive)
-                            {
-                                bool nodePassesFilter = nodeFilter.PassFilter(node.GetName().c_str());
-                                bool subtreePassesFilter = nodePassesFilter || PassesNodeFilter(node, nodeFilter);
-                                if (!subtreePassesFilter) return;
-                            }
-                            if (!ctx.scene.IsLocked(node.GetInstanceId()))
-                                visibleIds.push_back(node.GetInstanceId());
-                            for (auto& child : node.Children())
-                                collectVisible(*child);
-                        };
-
                         for (auto& node : ctx.scene.Nodes())
                         {
                             if (node->GetParent() != nullptr) continue;
-                            if (filterActive && !PassesNodeFilter(*node, nodeFilter)) continue;
-                            collectVisible(*node);
+                            CollectOutlinerVisibleIds(ctx.scene, *node, nodeFilter, false, visibleIds);
                         }
 
                         if (!visibleIds.empty())
                         {
-                            uint32_t currentId = ctx.scene.GetSelectedId();
-                            int idx = -1;
+                            const uint32_t currentId = ctx.scene.GetSelectedId();
+                            int currentIndex = -1;
                             for (size_t i = 0; i < visibleIds.size(); ++i)
                             {
                                 if (visibleIds[i] == currentId)
                                 {
-                                    idx = static_cast<int>(i);
+                                    currentIndex = static_cast<int>(i);
                                     break;
                                 }
                             }
 
-                            int newIdx = idx;
-                            if (navigateUp && idx > 0)
-                                newIdx = idx - 1;
-                            else if (navigateDown && idx < static_cast<int>(visibleIds.size()) - 1)
-                                newIdx = (idx == -1) ? 0 : idx + 1;
-                            else if (idx == -1 && !visibleIds.empty())
-                                newIdx = 0;
-
-                            if (newIdx != idx && newIdx >= 0 && newIdx < static_cast<int>(visibleIds.size()))
+                            int newIndex = currentIndex;
+                            if (navigateUp && currentIndex > 0)
                             {
-                                ctx.scene.SetSelectedId(visibleIds[newIdx]);
-                                pendingScrollTargetId = visibleIds[newIdx];
+                                newIndex = currentIndex - 1;
+                            }
+                            else if (navigateDown && currentIndex < static_cast<int>(visibleIds.size()) - 1)
+                            {
+                                newIndex = currentIndex == -1 ? 0 : currentIndex + 1;
+                            }
+                            else if (currentIndex == -1)
+                            {
+                                newIndex = 0;
+                            }
+
+                            if (newIndex != currentIndex && newIndex >= 0 &&
+                                newIndex < static_cast<int>(visibleIds.size()))
+                            {
+                                ctx.scene.SetSelectedId(visibleIds[newIndex]);
+                                pendingScrollTargetId = visibleIds[newIndex];
                             }
                         }
+                    }
+
+                    if (expandSelected || collapseSelected)
+                    {
+                        Assets::Node* selectedNode = ctx.scene.GetNodeByInstanceId(ctx.scene.GetSelectedId());
+                        if (selectedNode != nullptr && !selectedNode->Children().empty())
+                        {
+                            if (expandSelected)
+                            {
+                                ui.pendingExpandTargetId = selectedNode->GetInstanceId();
+                                ui.pendingCollapseTargetId = InvalidId;
+                            }
+                            else
+                            {
+                                ui.pendingCollapseTargetId = selectedNode->GetInstanceId();
+                                ui.pendingExpandTargetId = InvalidId;
+                            }
+                        }
+                    }
+
+                    if ((io.KeyCtrl || io.KeySuper) && ImGui::IsKeyPressed(ImGuiKey_A, false))
+                    {
+                        std::vector<uint32_t> visibleIds;
+                        for (auto& node : ctx.scene.Nodes())
+                        {
+                            if (node->GetParent() != nullptr) continue;
+                            CollectOutlinerVisibleIds(ctx.scene, *node, nodeFilter, true, visibleIds);
+                        }
+                        ctx.scene.SetSelection(visibleIds);
                     }
                 }
             }

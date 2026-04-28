@@ -5,6 +5,7 @@
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
 #include "Editor/Core/RecentScenes.hpp"
+#include "Editor/Core/EditorLayoutConstants.hpp"
 #include "Editor/EditorUtils.h"
 
 #include <spdlog/spdlog.h>
@@ -17,8 +18,6 @@ namespace Editor
 {
     namespace
     {
-        constexpr float kTitleBarHeight = 55.0f;
-        constexpr float kFooterHeight = 40.0f;
         constexpr float kMenuHitPadding = 32.0f;
     } // namespace
 

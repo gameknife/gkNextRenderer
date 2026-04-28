@@ -362,7 +362,7 @@ namespace Editor
                 uint32_t dummySelection = InvalidId;
                 DrawGeneralContentBrowser(ctx, ui, dummySelection, true, i, name, ICON_FA_BOXES_PACKING,
                                           IM_COL32(132, 182, 255, 255),
-                                          ContentBrowserCallbacks{.onDoubleClick = []() {}});
+                                          ContentBrowserCallbacks{});
                 grid.Next();
             }
         }
@@ -416,7 +416,7 @@ namespace Editor
             {
                 DrawGeneralContentBrowser(ctx, ui, ui.selectedTextureId, false, textureGroup.second.GlobalIdx_,
                                           textureGroup.first, ICON_FA_LINK_SLASH, IM_COL32(255, 72, 72, 255),
-                                          ContentBrowserCallbacks{.onDoubleClick = []() {}});
+                                          ContentBrowserCallbacks{});
                 grid.Next();
             }
         }

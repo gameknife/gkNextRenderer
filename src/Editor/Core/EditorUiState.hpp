@@ -35,6 +35,8 @@ namespace Editor
         bool logPanel = true;
         bool aiPanel = true;
         bool outlinerAutoScrollToSelection = true;
+        uint32_t pendingExpandTargetId = InvalidId;
+        uint32_t pendingCollapseTargetId = InvalidId;
         bool dockResetRequested = false;
 
         // Recent scenes

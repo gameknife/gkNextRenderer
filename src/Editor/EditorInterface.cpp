@@ -19,6 +19,7 @@
 #include "Editor/EditorActionDispatcher.hpp"
 #include "Editor/EditorContext.hpp"
 #include "Editor/EditorMain.h"
+#include "Editor/Core/EditorLayoutConstants.hpp"
 #include "Editor/Core/RecentScenes.hpp"
 #include "Editor/EditorUtils.h"
 #include "Options.hpp"
@@ -116,8 +117,6 @@ namespace
     constexpr float kToolbarSize = 50.0f;
     constexpr float kToolbarIconWidth = 32.0f;
     constexpr float kToolbarIconHeight = 32.0f;
-    constexpr float kTitleBarHeight = 55.0f;
-    constexpr float kFootBarHeight = 40.0f;
     float gMenuBarHeight = 0.0f;
 } // namespace
 
@@ -125,9 +124,10 @@ ImGuiID EditorInterface::DockSpaceUI()
 {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(
-        ImVec2(viewport->Pos.x, viewport->Pos.y + kToolbarSize + kTitleBarHeight - gMenuBarHeight));
+        ImVec2(viewport->Pos.x, viewport->Pos.y + kToolbarSize + Editor::kTitleBarHeight - gMenuBarHeight));
     ImGui::SetNextWindowSize(
-        ImVec2(viewport->Size.x, viewport->Size.y - kToolbarSize - kTitleBarHeight + gMenuBarHeight - kFootBarHeight));
+        ImVec2(viewport->Size.x,
+               viewport->Size.y - kToolbarSize - Editor::kTitleBarHeight + gMenuBarHeight - Editor::kFooterHeight));
     ImGui::SetNextWindowViewport(viewport->ID);
     ImGui::SetNextWindowBgAlpha(0);
     ImGuiWindowFlags windowFlags = 0 | ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking |
@@ -185,7 +185,7 @@ void EditorInterface::RebuildDefaultDockLayout(ImGuiID id)
 void EditorInterface::ToolbarUI()
 {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + kTitleBarHeight));
+    ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + Editor::kTitleBarHeight));
     ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, kToolbarSize));
     ImGui::SetNextWindowViewport(viewport->ID);
 

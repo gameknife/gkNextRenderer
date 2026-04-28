@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cmath>
 
 #include "Assets/Loaders/FProcModel.h"
 #include "Assets/Loaders/FLDrawLoader.h"
@@ -923,6 +924,201 @@ namespace
         }
     }
 
+    void AnimationShowcase(Assets::EnvironmentSetting& cameraInit,
+                           std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                           std::vector<Assets::Model>& models,
+                           std::vector<Assets::FMaterial>& materials,
+                           std::vector<Assets::LightObject>& lights,
+                           std::vector<Assets::AnimationTrack>& tracks)
+    {
+        Assets::Camera defaultCam;
+        defaultCam.name = "AnimationShowcaseCam";
+        defaultCam.ModelView = lookAt(vec3(0.0f, 4.0f, 10.0f), vec3(0.0f, 1.0f, 0.0f), vec3(0, 1, 0));
+        defaultCam.FieldOfView = 48;
+        defaultCam.Aperture = 0;
+        defaultCam.FocalDistance = 10;
+
+        cameraInit.cameras.push_back(defaultCam);
+        cameraInit.ControlSpeed = 4.0f;
+        cameraInit.GammaCorrection = true;
+        cameraInit.HasSky = true;
+        cameraInit.SkyIdx = 0;
+        cameraInit.SkyIntensity = 12.0f;
+        cameraInit.HasSun = true;
+        cameraInit.SunIntensity = 250.0f;
+
+        const uint32_t matGround = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.45f, 0.45f, 0.46f)), "as_ground"});
+        const uint32_t matRed = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.74f, 0.22f, 0.18f)), "as_rotation_red"});
+        const uint32_t matBlue = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.18f, 0.36f, 0.78f)), "as_translation_blue"});
+        const uint32_t matGreen = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.18f, 0.62f, 0.28f)), "as_scale_green"});
+
+        auto addNode = [&](const std::string& name, const vec3& pos, uint32_t modelIdx, uint32_t matIdx)
+        {
+            auto node = Assets::Node::CreateNode(name, pos, quat(1, 0, 0, 0), vec3(1),
+                                                 static_cast<uint32_t>(nodes.size()));
+            auto rc = std::make_shared<Runtime::RenderComponent>();
+            rc->SetModelId(modelIdx);
+            rc->SetVisible(true);
+            rc->SetMaterial({matIdx});
+            node->AddComponent(rc);
+            nodes.push_back(node);
+            return node;
+        };
+
+        models.push_back(Assets::FProcModel::CreateBox(vec3(-6.5f, -0.08f, -3.0f), vec3(6.5f, 0.0f, 3.0f)));
+        addNode("AnimationShowcase_Ground", vec3(0, 0, 0), static_cast<uint32_t>(models.size() - 1), matGround);
+
+        models.push_back(Assets::FProcModel::CreateBox(vec3(-0.5f, -0.5f, -0.5f), vec3(0.5f, 0.5f, 0.5f)));
+        const uint32_t cubeModel = static_cast<uint32_t>(models.size() - 1);
+        models.push_back(Assets::FProcModel::CreateSphere(vec3(0, 0, 0), 0.55f));
+        const uint32_t sphereModel = static_cast<uint32_t>(models.size() - 1);
+
+        addNode("AS_RotatingCube", vec3(-3.0f, 0.65f, 0.0f), cubeModel, matRed);
+        addNode("AS_BobbingSphere", vec3(0.0f, 1.0f, 0.0f), sphereModel, matBlue);
+        addNode("AS_PulsingCube", vec3(3.0f, 0.65f, 0.0f), cubeModel, matGreen);
+
+        Assets::AnimationTrack rotationTrack;
+        rotationTrack.AnimationName = "RotationY";
+        rotationTrack.NodeName_ = "AS_RotatingCube";
+        rotationTrack.Duration_ = 12.0f;
+        rotationTrack.Play();
+        for (int i = 0; i <= 12; ++i)
+        {
+            const float time = static_cast<float>(i);
+            const float angle = glm::half_pi<float>() * static_cast<float>(i);
+            rotationTrack.RotationChannel.Keys.push_back({time, glm::angleAxis(angle, vec3(0, 1, 0))});
+        }
+        tracks.push_back(rotationTrack);
+
+        Assets::AnimationTrack bobTrack;
+        bobTrack.AnimationName = "BobY";
+        bobTrack.NodeName_ = "AS_BobbingSphere";
+        bobTrack.Duration_ = 12.0f;
+        bobTrack.Play();
+        for (int i = 0; i <= 24; ++i)
+        {
+            const float time = static_cast<float>(i) * 0.5f;
+            const float y = 1.0f + 0.5f * std::sin(glm::pi<float>() * time);
+            bobTrack.TranslationChannel.Keys.push_back({time, vec3(0.0f, y, 0.0f)});
+        }
+        tracks.push_back(bobTrack);
+
+        Assets::AnimationTrack scaleTrack;
+        scaleTrack.AnimationName = "ScalePulse";
+        scaleTrack.NodeName_ = "AS_PulsingCube";
+        scaleTrack.Duration_ = 12.0f;
+        scaleTrack.Play();
+        for (int i = 0; i <= 16; ++i)
+        {
+            const float time = static_cast<float>(i) * 0.75f;
+            const float scale = 1.0f + 0.3f * std::sin(glm::two_pi<float>() * time / 3.0f);
+            scaleTrack.ScaleChannel.Keys.push_back({time, vec3(scale)});
+        }
+        tracks.push_back(scaleTrack);
+    }
+
+    void PhysicsShowcase(Assets::EnvironmentSetting& cameraInit,
+                         std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                         std::vector<Assets::Model>& models,
+                         std::vector<Assets::FMaterial>& materials,
+                         std::vector<Assets::LightObject>& lights,
+                         std::vector<Assets::AnimationTrack>& tracks)
+    {
+        Assets::Camera defaultCam;
+        defaultCam.name = "PhysicsShowcaseCam";
+        defaultCam.ModelView = lookAt(vec3(0.0f, 7.0f, 14.0f), vec3(0.0f, 3.0f, 0.0f), vec3(0, 1, 0));
+        defaultCam.FieldOfView = 52;
+        defaultCam.Aperture = 0;
+        defaultCam.FocalDistance = 14;
+
+        cameraInit.cameras.push_back(defaultCam);
+        cameraInit.ControlSpeed = 5.0f;
+        cameraInit.GammaCorrection = true;
+        cameraInit.HasSky = true;
+        cameraInit.SkyIdx = 0;
+        cameraInit.SkyIntensity = 12.0f;
+        cameraInit.HasSun = true;
+        cameraInit.SunIntensity = 350.0f;
+
+        const uint32_t matGround = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.45f, 0.45f, 0.46f)), "ps_ground"});
+        const uint32_t matRamp = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.55f, 0.50f, 0.42f)), "ps_ramp"});
+        const uint32_t matRed = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.74f, 0.22f, 0.18f)), "ps_red"});
+        const uint32_t matBlue = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.18f, 0.36f, 0.78f)), "ps_blue"});
+        const uint32_t matGreen = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.18f, 0.62f, 0.28f)), "ps_green"});
+        const uint32_t matYellow = static_cast<uint32_t>(materials.size());
+        materials.push_back({Material::Lambertian(vec3(0.82f, 0.68f, 0.20f)), "ps_yellow"});
+
+        auto addRenderNode = [&](const std::string& name, const vec3& pos, const quat& rot,
+                                 uint32_t modelIdx, uint32_t matIdx)
+        {
+            auto node = Assets::Node::CreateNode(name, pos, rot, vec3(1), static_cast<uint32_t>(nodes.size()));
+            auto rc = std::make_shared<Runtime::RenderComponent>();
+            rc->SetModelId(modelIdx);
+            rc->SetVisible(true);
+            rc->SetMaterial({matIdx});
+            node->AddComponent(rc);
+            nodes.push_back(node);
+            return node;
+        };
+
+        models.push_back(Assets::FProcModel::CreateBox(vec3(-7.0f, -0.10f, -4.5f), vec3(7.0f, 0.0f, 4.5f)));
+        auto ground = addRenderNode("PhysicsShowcase_Ground", vec3(0), quat(1, 0, 0, 0),
+                                    static_cast<uint32_t>(models.size() - 1), matGround);
+        auto groundPhys = std::make_shared<Runtime::PhysicsComponent>();
+        groundPhys->SetMobility(Runtime::ENodeMobility::Static);
+        ground->AddComponent(groundPhys);
+
+        models.push_back(Assets::FProcModel::CreateBox(vec3(-2.2f, -0.15f, -0.8f), vec3(2.2f, 0.15f, 0.8f)));
+        auto ramp = addRenderNode("PhysicsShowcase_Ramp", vec3(-2.0f, 1.0f, 0.0f),
+                                  glm::angleAxis(glm::radians(-16.0f), vec3(0, 0, 1)),
+                                  static_cast<uint32_t>(models.size() - 1), matRamp);
+        auto rampPhys = std::make_shared<Runtime::PhysicsComponent>();
+        rampPhys->SetMobility(Runtime::ENodeMobility::Static);
+        ramp->AddComponent(rampPhys);
+
+        models.push_back(Assets::FProcModel::CreateBox(vec3(-0.5f, -0.5f, -0.5f), vec3(0.5f, 0.5f, 0.5f)));
+        const uint32_t cubeModel = static_cast<uint32_t>(models.size() - 1);
+
+        struct CubeSpec
+        {
+            vec3 position;
+            vec3 extent;
+            uint32_t materialId;
+            const char* name;
+        };
+
+        const CubeSpec cubes[] = {
+            {vec3(-2.8f, 7.5f, -0.6f), vec3(0.85f, 0.85f, 0.85f), matRed, "PhysicsCube_Red"},
+            {vec3(-1.4f, 9.0f, 0.5f), vec3(1.10f, 0.80f, 0.90f), matBlue, "PhysicsCube_Blue"},
+            {vec3(0.2f, 6.5f, -0.4f), vec3(0.75f, 1.20f, 0.75f), matGreen, "PhysicsCube_Green"},
+            {vec3(1.8f, 8.2f, 0.7f), vec3(1.25f, 0.75f, 0.85f), matYellow, "PhysicsCube_Yellow"},
+            {vec3(3.0f, 10.0f, -0.5f), vec3(0.90f, 0.90f, 1.20f), matRed, "PhysicsCube_Tall"},
+        };
+
+        for (const auto& cube : cubes)
+        {
+            auto node = addRenderNode(cube.name, cube.position, quat(1, 0, 0, 0), cubeModel, cube.materialId);
+            node->SetScale(cube.extent);
+            node->RecalcTransform(true);
+
+            auto phys = std::make_shared<Runtime::PhysicsComponent>();
+            phys->SetMobility(Runtime::ENodeMobility::Dynamic);
+            const NextBodyID bodyId = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(
+                cube.position, cube.extent, NextMotionType::Dynamic);
+            phys->BindPhysicsBody(bodyId);
+            node->AddComponent(phys);
+        }
+    }
+
     void CharacterPlayground(Assets::EnvironmentSetting& cameraInit,
                              std::vector<std::shared_ptr<Assets::Node>>& nodes,
                              std::vector<Assets::Model>& models,
@@ -1469,6 +1665,8 @@ void SceneList::ScanScenes()
     AllScenes.push_back("MaterialShowcase.proc");
     AllScenes.push_back("LightingShowcase.proc");
     AllScenes.push_back("CameraShowcase.proc");
+    AllScenes.push_back("AnimationShowcase.proc");
+    AllScenes.push_back("PhysicsShowcase.proc");
     AllScenes.push_back("RTIO.proc");
 
     // Deduplicate (a file may exist on disk and in pak) before sorting.
@@ -1558,6 +1756,16 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
         if (filename == "CameraShowcase.proc")
         {
             CameraShowcase(camera, nodes, models, materials, lights, tracks);
+            return true;
+        }
+        if (filename == "AnimationShowcase.proc")
+        {
+            AnimationShowcase(camera, nodes, models, materials, lights, tracks);
+            return true;
+        }
+        if (filename == "PhysicsShowcase.proc")
+        {
+            PhysicsShowcase(camera, nodes, models, materials, lights, tracks);
             return true;
         }
         if (filename == "CharacterPlayground.proc")
