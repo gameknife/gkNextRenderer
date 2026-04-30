@@ -13,16 +13,19 @@
       "moveSpeed": 0.65,
       "maxMana": 90,
       "manaPerAtk": 22,
+      "synergies": ["法师", "近卫"],
       "color": [0.133333, 0.266667, 0.733333],
       "skills": {
         "w": {
           "name": "魔晶护盾",
           "effect": "magic_shield",
+          "desc": "为自身及最近队友施加150护盾，持续3秒",
           "cooldown": 9000
         },
         "ultimate": {
           "name": "蓝色洪流",
-          "effect": "blue_surge"
+          "effect": "blue_surge",
+          "desc": "对周围3格内所有敌人造成160魔法伤害"
         }
       }
     },
@@ -39,16 +42,19 @@
       "moveSpeed": 0.5,
       "maxMana": 80,
       "manaPerAtk": 26,
+      "synergies": ["斗士", "骑士"],
       "color": [0.8, 0.266667, 0.133333],
       "skills": {
         "w": {
           "name": "急袭斩",
           "effect": "rapid_slash",
+          "desc": "突进到最远敌人身旁，造成150伤害并眩晕0.5秒",
           "cooldown": 8000
         },
         "ultimate": {
           "name": "西德之怒",
-          "effect": "sydney_fury"
+          "effect": "sydney_fury",
+          "desc": "进入4秒狂怒，攻击速度提升至3倍，伤害提升50%"
         }
       }
     },
@@ -65,6 +71,7 @@
       "moveSpeed": 0.55,
       "maxMana": 0,
       "manaPerAtk": 0,
+      "synergies": ["远射", "联盟"],
       "color": [0.8, 0.6, 0.133333],
       "skills": {
         "w": {
@@ -91,6 +98,7 @@
       "moveSpeed": 0.55,
       "maxMana": 0,
       "manaPerAtk": 0,
+      "synergies": ["远射", "联盟"],
       "color": [0.8, 0.6, 0.133333],
       "skills": {
         "w": {
@@ -117,6 +125,7 @@
       "moveSpeed": 0.72,
       "maxMana": 0,
       "manaPerAtk": 0,
+      "synergies": ["近卫", "守卫"],
       "color": [0.2, 0.333333, 0.533333],
       "skills": {
         "w": {
@@ -145,6 +154,7 @@
       "manaPerAtk": 0,
       "healAmount": 42,
       "healInterval": 3000,
+      "synergies": ["秘术", "守卫"],
       "color": [0.133333, 0.533333, 0.333333],
       "skills": {
         "w": {
@@ -171,6 +181,7 @@
       "moveSpeed": 0.68,
       "maxMana": 0,
       "manaPerAtk": 0,
+      "synergies": ["近卫"],
       "color": [0.25098, 0.345098, 0.439216],
       "skills": {
         "w": {
@@ -197,6 +208,7 @@
       "moveSpeed": 0.68,
       "maxMana": 0,
       "manaPerAtk": 0,
+      "synergies": ["近卫"],
       "color": [0.25098, 0.345098, 0.439216],
       "skills": {
         "w": {
@@ -223,6 +235,7 @@
       "moveSpeed": 0.68,
       "maxMana": 0,
       "manaPerAtk": 0,
+      "synergies": ["近卫"],
       "color": [0.25098, 0.345098, 0.439216],
       "skills": {
         "w": {
@@ -249,6 +262,7 @@
       "moveSpeed": 0.55,
       "maxMana": 0,
       "manaPerAtk": 0,
+      "synergies": ["远射"],
       "color": [0.4, 0.133333, 0.666667],
       "skills": {
         "w": {
@@ -275,6 +289,7 @@
       "moveSpeed": 0.55,
       "maxMana": 0,
       "manaPerAtk": 0,
+      "synergies": ["远射"],
       "color": [0.4, 0.133333, 0.666667],
       "skills": {
         "w": {
@@ -301,6 +316,7 @@
       "moveSpeed": 0.55,
       "maxMana": 0,
       "manaPerAtk": 0,
+      "synergies": ["远射"],
       "color": [0.4, 0.133333, 0.666667],
       "skills": {
         "w": {
@@ -327,6 +343,7 @@
       "moveSpeed": 0.72,
       "maxMana": 0,
       "manaPerAtk": 0,
+      "synergies": ["近卫"],
       "color": [0.290196, 0.094118, 0.439216],
       "skills": {
         "w": {
@@ -353,6 +370,7 @@
       "moveSpeed": 0.72,
       "maxMana": 0,
       "manaPerAtk": 0,
+      "synergies": ["近卫"],
       "color": [0.290196, 0.094118, 0.439216],
       "skills": {
         "w": {
@@ -381,6 +399,7 @@
       "manaPerAtk": 0,
       "healAmount": 44,
       "healInterval": 3000,
+      "synergies": ["秘术"],
       "color": [0.478431, 0.094118, 0.533333],
       "skills": {
         "w": {

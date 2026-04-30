@@ -7,13 +7,48 @@
     { "pieceId": "adc_a", "col": 0, "row": 7 },
     { "pieceId": "adc_b", "col": 6, "row": 7 }
   ],
-  "enemy": [
-    { "pieceId": "shadow_tank_1", "col": 2, "row": 3 },
-    { "pieceId": "shadow_tank_2", "col": 4, "row": 3 },
-    { "pieceId": "shadow_healer", "col": 3, "row": 2 },
-    { "pieceId": "shadow_adc_1", "col": 0, "row": 0 },
-    { "pieceId": "shadow_adc_2", "col": 3, "row": 0 },
-    { "pieceId": "shadow_adc_3", "col": 6, "row": 0 }
-  ],
-  "bench": ["bench_tank_1", "bench_tank_2", "bench_tank_3"]
+  "levels": [
+    {
+      "id": "easy",
+      "name": "简单",
+      "enemyDmgMult": 0.8,
+      "enemy": [
+        { "pieceId": "shadow_tank_1", "col": 2, "row": 3 },
+        { "pieceId": "shadow_tank_2", "col": 4, "row": 3 },
+        { "pieceId": "shadow_healer", "col": 3, "row": 2 },
+        { "pieceId": "shadow_adc_1", "col": 0, "row": 0 },
+        { "pieceId": "shadow_adc_2", "col": 3, "row": 0 },
+        { "pieceId": "shadow_adc_3", "col": 6, "row": 0 }
+      ],
+      "bench": ["bench_tank_1", "bench_tank_2", "bench_tank_3"]
+    },
+    {
+      "id": "normal",
+      "name": "普通",
+      "enemyDmgMult": 1.0,
+      "enemy": [
+        { "pieceId": "shadow_tank_1", "col": 2, "row": 3 },
+        { "pieceId": "shadow_tank_2", "col": 4, "row": 3 },
+        { "pieceId": "shadow_healer", "col": 3, "row": 2 },
+        { "pieceId": "shadow_adc_1", "col": 0, "row": 0 },
+        { "pieceId": "shadow_adc_2", "col": 3, "row": 0 },
+        { "pieceId": "shadow_adc_3", "col": 6, "row": 0 }
+      ],
+      "bench": ["bench_tank_1", "bench_tank_2", "bench_tank_3"]
+    },
+    {
+      "id": "hard",
+      "name": "困难",
+      "enemyDmgMult": 1.3,
+      "enemy": [
+        { "pieceId": "shadow_tank_1", "col": 2, "row": 3 },
+        { "pieceId": "shadow_tank_2", "col": 4, "row": 3 },
+        { "pieceId": "shadow_adc_1", "col": 0, "row": 0 },
+        { "pieceId": "shadow_adc_2", "col": 3, "row": 0 },
+        { "pieceId": "shadow_adc_3", "col": 6, "row": 0 },
+        { "pieceId": "shadow_healer", "col": 3, "row": 2 }
+      ],
+      "bench": ["bench_tank_1", "bench_tank_2", "bench_tank_3"]
+    }
+  ]
 }
