@@ -5,7 +5,7 @@
 ## 使用方法
 
 1. **挑任务**: 从下方任务清单中选 1 项,逐项完成 TODO。
-2. **遵循公共约束**: 所有任务必须遵循 [`AGENTS.md`](../AGENTS.md) 的命名/构建/平台规则。
+2. **遵循公共约束**: 所有任务必须遵循 [`AGENTS.md`](../../AGENTS.md) 的命名/构建/平台规则。
 3. **完成判定**: 必须满足任务卡的 "验收方法" 中的全部条目。
 4. **构建 preset**: 验证一律使用 `full-*` preset (`full-windows` / `full-macos-arm64` / `full-linux`),与 `AGENTS.md` 一致。
 5. **报告**: 完成后简述「改了哪些文件、测了什么、看到的输出」。**不要**总结代码意图,代码自己会说话。
@@ -51,8 +51,8 @@
 
 ### TODO
 
-- [ ] 阅读 [`BrickPlayerGameInstance.cpp:2264`](../src/Application/BrickPlayer/BrickPlayerGameInstance.cpp) 的 `OpenFileDialog` 写法,了解项目内 SDL 对话框 callback 模式
-- [ ] 修改 [`TitleBarOverlay.cpp:51-65`](../src/Editor/Overlays/TitleBarOverlay.cpp),把硬编码替换为 `SDL_ShowSaveFileDialog`
+- [ ] 阅读 [`BrickPlayerGameInstance.cpp:2264`](../../src/Application/BrickPlayer/BrickPlayerGameInstance.cpp) 的 `OpenFileDialog` 写法,了解项目内 SDL 对话框 callback 模式
+- [ ] 修改 [`TitleBarOverlay.cpp:51-65`](../../src/Editor/Overlays/TitleBarOverlay.cpp),把硬编码替换为 `SDL_ShowSaveFileDialog`
 - [ ] Filter 至少包含 `.glb`(主要)与 `*`(全部)两项
 - [ ] callback 中调用 `ctx.scene.Save(filelist[0])`,沿用现有的 `SPDLOG_INFO/SPDLOG_ERROR` 日志
 - [ ] 由于 `TitleBarOverlay` 是 namespace 函数,无法捕获 `this`;考虑通过 `userdata` 把 `Scene*` 传过去,或者把 SDL 调用包装成 `Engine` 上的方法暴露
@@ -80,11 +80,11 @@
 **优先级**: P0  **工时**: ~45m  **风险**: 低
 
 ### 背景
-内容浏览器双击 `.hdr` 文件已经派发 `EEditorAction::IO_LoadHDRI` ([`ContentBrowserPanel.cpp:394`](../src/Editor/Panels/ContentBrowserPanel.cpp)),但 action 在 [`EditorMain.cpp:84-89`](../src/Editor/EditorMain.cpp) 里是空 lambda,标着 TODO。引擎层的拖入处理 [`Engine.cpp:1434-1439`](../src/Runtime/Engine.cpp) 已经实现完整逻辑,直接复用即可。
+内容浏览器双击 `.hdr` 文件已经派发 `EEditorAction::IO_LoadHDRI` ([`ContentBrowserPanel.cpp:394`](../../src/Editor/Panels/ContentBrowserPanel.cpp)),但 action 在 [`EditorMain.cpp:84-89`](../../src/Editor/EditorMain.cpp) 里是空 lambda,标着 TODO。引擎层的拖入处理 [`Engine.cpp:1434-1439`](../../src/Runtime/Engine.cpp) 已经实现完整逻辑,直接复用即可。
 
 ### TODO
 
-- [ ] 在 [`EditorMain.cpp:84-89`](../src/Editor/EditorMain.cpp) 的 `IO_LoadHDRI` lambda 里:
+- [ ] 在 [`EditorMain.cpp:84-89`](../../src/Editor/EditorMain.cpp) 的 `IO_LoadHDRI` lambda 里:
   - [ ] 调用 `Assets::GlobalTexturePool::GetInstance()->LoadHDRTexture(std::string(args))` 获取 textureId
   - [ ] 写入 `ctx.scene.GetEnvSettings().SkyIdx = textureId`
   - [ ] 用 `SPDLOG_INFO` 输出加载结果
@@ -112,7 +112,7 @@
 **优先级**: P1  **工时**: ~30m  **风险**: 低
 
 ### 背景
-[`TitleBarOverlay.cpp:101-105`](../src/Editor/Overlays/TitleBarOverlay.cpp) `Layout > Reset` 菜单项是空操作。DockBuilder 默认布局已在 [`EditorInterface.cpp:251-267`](../src/Editor/EditorInterface.cpp) 的 `firstRun_` 块内构造好,把它抽出为函数 + 加一个重置触发即可。
+[`TitleBarOverlay.cpp:101-105`](../../src/Editor/Overlays/TitleBarOverlay.cpp) `Layout > Reset` 菜单项是空操作。DockBuilder 默认布局已在 [`EditorInterface.cpp:251-267`](../../src/Editor/EditorInterface.cpp) 的 `firstRun_` 块内构造好,把它抽出为函数 + 加一个重置触发即可。
 
 ### TODO
 
@@ -120,7 +120,7 @@
 - [ ] `firstRun_` 路径改为调用该函数
 - [ ] 在 `EditorUiState` 增加 `bool dockResetRequested = false;` 标志
 - [ ] `Render` 中:若 `dockResetRequested` 为真,调用 `RebuildDefaultDockLayout(id)` 后清零标志
-- [ ] [`TitleBarOverlay.cpp:103`](../src/Editor/Overlays/TitleBarOverlay.cpp) `Layout > Reset` 菜单项:`ui.dockResetRequested = true;`
+- [ ] [`TitleBarOverlay.cpp:103`](../../src/Editor/Overlays/TitleBarOverlay.cpp) `Layout > Reset` 菜单项:`ui.dockResetRequested = true;`
 
 ### 涉及文件
 - `src/Editor/EditorInterface.cpp` / `.hpp`
@@ -144,7 +144,7 @@
 **优先级**: P1  **工时**: ~45m  **风险**: 低
 
 ### 背景
-[`OutlinerPanel.cpp:218-233`](../src/Editor/Panels/OutlinerPanel.cpp) 用 `limit = 1000` 做硬截断,场景节点超过 1000 时无法选中后面的节点。加一个 `ImGuiTextFilter` 后,既能搜索特定节点,也能避开硬截断。
+[`OutlinerPanel.cpp:218-233`](../../src/Editor/Panels/OutlinerPanel.cpp) 用 `limit = 1000` 做硬截断,场景节点超过 1000 时无法选中后面的节点。加一个 `ImGuiTextFilter` 后,既能搜索特定节点,也能避开硬截断。
 
 ### TODO
 
@@ -176,11 +176,11 @@
 **优先级**: P1  **工时**: ~1h  **风险**: 低
 
 ### 背景
-`RenderComponent::SetVisible(bool)` / `GetVisible()` 在 [`RenderComponent.h:27`](../src/Runtime/Components/RenderComponent.h) 已就绪,反射也已暴露 `"Visible"` 属性。Outliner 行内增加一个眼睛图标按钮,即可一键切换。
+`RenderComponent::SetVisible(bool)` / `GetVisible()` 在 [`RenderComponent.h:27`](../../src/Runtime/Components/RenderComponent.h) 已就绪,反射也已暴露 `"Visible"` 属性。Outliner 行内增加一个眼睛图标按钮,即可一键切换。
 
 ### TODO
 
-- [ ] 修改 [`OutlinerPanel.cpp:69-72`](../src/Editor/Panels/OutlinerPanel.cpp) 的 label 构造:
+- [ ] 修改 [`OutlinerPanel.cpp:69-72`](../../src/Editor/Panels/OutlinerPanel.cpp) 的 label 构造:
   - [ ] 在节点名称右侧或左侧追加一个 `ICON_FA_EYE` / `ICON_FA_EYE_SLASH` 小按钮
   - [ ] 点击切换 `RenderComponent::SetVisible`
   - [ ] 该点击不应触发节点选中/取消选中逻辑
@@ -210,7 +210,7 @@
 **优先级**: P2  **工时**: ~30m  **风险**: 极低
 
 ### 背景
-[`ContentBrowserPanel.cpp:89-91`](../src/Editor/Panels/ContentBrowserPanel.cpp) 的 `kVisuals` 数组只识别 `.hdr`。其他常见资源(`.js` 脚本、`.png/.jpg` 纹理、`.ldr/.mpd` LDraw、`.glb` 已通过 SceneList 走 Scene 通道) 都被归为 Unsupported 而**不显示**。
+[`ContentBrowserPanel.cpp:89-91`](../../src/Editor/Panels/ContentBrowserPanel.cpp) 的 `kVisuals` 数组只识别 `.hdr`。其他常见资源(`.js` 脚本、`.png/.jpg` 纹理、`.ldr/.mpd` LDraw、`.glb` 已通过 SceneList 走 Scene 通道) 都被归为 Unsupported 而**不显示**。
 
 ### TODO
 
@@ -242,7 +242,7 @@
 **优先级**: P2  **工时**: ~1h  **风险**: 中(IO/缓存逻辑)
 
 ### 背景
-[`ContentBrowserPanel.cpp:366-368`](../src/Editor/Panels/ContentBrowserPanel.cpp) 每帧都做 `std::filesystem::directory_iterator(currentPath)`。在大目录(如 `assets/textures/` 几百张)上每帧 IO,既慢又会卡 UI。
+[`ContentBrowserPanel.cpp:366-368`](../../src/Editor/Panels/ContentBrowserPanel.cpp) 每帧都做 `std::filesystem::directory_iterator(currentPath)`。在大目录(如 `assets/textures/` 几百张)上每帧 IO,既慢又会卡 UI。
 
 ### TODO
 
@@ -274,17 +274,17 @@
 **优先级**: P2  **工时**: ~45m  **风险**: 极低
 
 ### 背景
-[`SceneList.cpp:336`](../src/Runtime/Scene/SceneList.cpp) 的 `GIBootcamp` 已经是一个完整的 procedural 场景模板(几何 + 材质 + 灯光 + 相机)。新增一个 `MaterialShowcase`,用于材质回归测试与视觉对比。
+[`SceneList.cpp:336`](../../src/Runtime/Scene/SceneList.cpp) 的 `GIBootcamp` 已经是一个完整的 procedural 场景模板(几何 + 材质 + 灯光 + 相机)。新增一个 `MaterialShowcase`,用于材质回归测试与视觉对比。
 
 ### TODO
 
-- [ ] 在 [`SceneList.cpp`](../src/Runtime/Scene/SceneList.cpp) 仿 `GIBootcamp` 的写法新增 `MaterialShowcase` 函数:
+- [ ] 在 [`SceneList.cpp`](../../src/Runtime/Scene/SceneList.cpp) 仿 `GIBootcamp` 的写法新增 `MaterialShowcase` 函数:
   - [ ] 1 个地面 (Lambertian gray)
   - [ ] 5x3 球阵列,行=材质类型(Lambertian / Metallic / Mixture / Dielectric / DiffuseLight),列=粗糙度(0.0 / 0.3 / 0.8)
   - [ ] 1 盏面光源 (DiffuseLight)
   - [ ] 中性 HDRI(可让 `HasSky = true; SkyIdx = 0`)
-- [ ] 在 [`SceneList.cpp:1173`](../src/Runtime/Scene/SceneList.cpp) `AllScenes.push_back("MaterialShowcase.proc");`
-- [ ] 在 [`SceneList.cpp:1245`](../src/Runtime/Scene/SceneList.cpp) 附近的 if 分支中加 `MaterialShowcase` 调度
+- [ ] 在 [`SceneList.cpp:1173`](../../src/Runtime/Scene/SceneList.cpp) `AllScenes.push_back("MaterialShowcase.proc");`
+- [ ] 在 [`SceneList.cpp:1245`](../../src/Runtime/Scene/SceneList.cpp) 附近的 if 分支中加 `MaterialShowcase` 调度
 - [ ] 在 `assets/configs/visual_test.json` 加一项,把 `MaterialShowcase.proc` 纳入视觉测试
 
 ### 涉及文件
@@ -310,7 +310,7 @@
 **优先级**: P3  **工时**: ~1.5h(略超 1h,作为 stretch)  **风险**: 中
 
 ### 背景
-[`gkNextVisualTest.cpp`](../src/Application/gkNextVisualTest/gkNextVisualTest.cpp) 当前生成截图与 HTML 报告,但没有与基线对比。加上像素级 RMSE / 最大差异统计,能让回归更可发现。
+[`gkNextVisualTest.cpp`](../../src/Application/gkNextVisualTest/gkNextVisualTest.cpp) 当前生成截图与 HTML 报告,但没有与基线对比。加上像素级 RMSE / 最大差异统计,能让回归更可发现。
 
 ### TODO
 
@@ -360,3 +360,4 @@
 - 之后视精力挑 B / C 中任意一项
 
 P3 的 D1 留到有较大空闲时再启动。
+

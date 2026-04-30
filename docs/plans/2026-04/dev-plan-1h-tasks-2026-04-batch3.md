@@ -12,7 +12,7 @@ A1 (Save Scene As 文件对话框) 继续作为 known issue 延后,等专门时�
 ## 使用方法
 
 1. **挑任务**: 任选 1 项,逐项完成 TODO。
-2. **遵循公共约束**: 命名/构建/平台规则全部沿用 [`AGENTS.md`](../AGENTS.md)。
+2. **遵循公共约束**: 命名/构建/平台规则全部沿用 [`AGENTS.md`](../../AGENTS.md)。
 3. **构建 preset**: 验证一律使用 `full-*` preset,与上两批一致。
 4. **报告**: 完成后简述「改了哪些文件、测了什么、看到的输出」,**不**总结代码意图。
 
@@ -54,11 +54,11 @@ A1 (Save Scene As 文件对话框) 继续作为 known issue 延后,等专门时�
 **优先级**: P0  **工时**: ~30m  **风险**: 低
 
 ### 背景
-`DeleteNodesCommand` ([`src/Runtime/Command/DeleteNodesCommand.hpp`](../src/Runtime/Command/DeleteNodesCommand.hpp))已实现且具备 Undo/Redo,目前仅在 AI/JS 脚本路径([`EditorScriptExecutor.cpp:492`](../src/Editor/AI/EditorScriptExecutor.cpp), [`:1002`](../src/Editor/AI/EditorScriptExecutor.cpp))被调用。UI 层 [`EditorMain.cpp:150-178`](../src/Editor/EditorMain.cpp) `OnKey` 已处理 `Esc` 与 `F`,模式清晰,只缺 `Delete`。
+`DeleteNodesCommand` ([`src/Runtime/Command/DeleteNodesCommand.hpp`](../../src/Runtime/Command/DeleteNodesCommand.hpp))已实现且具备 Undo/Redo,目前仅在 AI/JS 脚本路径([`EditorScriptExecutor.cpp:492`](../../src/Editor/AI/EditorScriptExecutor.cpp), [`:1002`](../../src/Editor/AI/EditorScriptExecutor.cpp))被调用。UI 层 [`EditorMain.cpp:150-178`](../../src/Editor/EditorMain.cpp) `OnKey` 已处理 `Esc` 与 `F`,模式清晰,只缺 `Delete`。
 
 ### TODO
 
-- [ ] 在 [`EditorMain.cpp:155`](../src/Editor/EditorMain.cpp) `switch(event.key.key)` 中追加 `case SDLK_DELETE:` 分支
+- [ ] 在 [`EditorMain.cpp:155`](../../src/Editor/EditorMain.cpp) `switch(event.key.key)` 中追加 `case SDLK_DELETE:` 分支
 - [ ] 取出当前选中:`std::vector<uint32_t> ids = GetEngine().GetScene().GetSelectedIds();`
 - [ ] 空选中或 `ids.empty()` → 直接 `break;`(不报错)
 - [ ] 否则:`auto cmd = std::make_unique<DeleteNodesCommand>(GetEngine().GetScene(), std::move(ids)); GetEngine().ExecuteCommand(std::move(cmd));`
@@ -79,7 +79,7 @@ A1 (Save Scene As 文件对话框) 继续作为 known issue 延后,等专门时�
 7. CommandHistory 面板里能看到对应的 "Delete N nodes" 项
 
 ### 注意
-- 输入框聚焦时(例如 Properties 文本字段),`event.key.key` 仍会触发 — `OnKey` 是全局派发。检查 [`EditorMain.cpp:153`](../src/Editor/EditorMain.cpp) `modelViewController_.OnKey` 之后是否已在文本输入态返回。如果没有,**不**在本任务里改全局过滤逻辑;先靠 `ImGui::GetIO().WantTextInput` 在 Delete 分支内提前 `break;`
+- 输入框聚焦时(例如 Properties 文本字段),`event.key.key` 仍会触发 — `OnKey` 是全局派发。检查 [`EditorMain.cpp:153`](../../src/Editor/EditorMain.cpp) `modelViewController_.OnKey` 之后是否已在文本输入态返回。如果没有,**不**在本任务里改全局过滤逻辑;先靠 `ImGui::GetIO().WantTextInput` 在 Delete 分支内提前 `break;`
 - 不要把 Delete 写成全局 ImGui shortcut(`ImGui::Shortcut`)— 与 `OnKey` 路径分两套会乱
 - 删除指令对子树/锁定节点的处理已在 `DeleteNodesCommand` 内部 — 本任务**不需要**额外校验
 
@@ -90,11 +90,11 @@ A1 (Save Scene As 文件对话框) 继续作为 known issue 延后,等专门时�
 **优先级**: P0  **工时**: ~30m  **风险**: 低
 
 ### 背景
-`DuplicateNodesCommand` ([`src/Runtime/Command/DuplicateNodesCommand.hpp`](../src/Runtime/Command/DuplicateNodesCommand.hpp)) 已实现并能 Undo,目前同样只在 AI/JS 路径 ([`EditorScriptExecutor.cpp:510`](../src/Editor/AI/EditorScriptExecutor.cpp), [`:1023`](../src/Editor/AI/EditorScriptExecutor.cpp)) 被使用。`Ctrl+D` 是绝大多数编辑器/IDE 的复制选中物习惯。
+`DuplicateNodesCommand` ([`src/Runtime/Command/DuplicateNodesCommand.hpp`](../../src/Runtime/Command/DuplicateNodesCommand.hpp)) 已实现并能 Undo,目前同样只在 AI/JS 路径 ([`EditorScriptExecutor.cpp:510`](../../src/Editor/AI/EditorScriptExecutor.cpp), [`:1023`](../../src/Editor/AI/EditorScriptExecutor.cpp)) 被使用。`Ctrl+D` 是绝大多数编辑器/IDE 的复制选中物习惯。
 
 ### TODO
 
-- [ ] 在 [`EditorMain.cpp:155`](../src/Editor/EditorMain.cpp) `switch(event.key.key)` 中追加 `case SDLK_D:` 分支
+- [ ] 在 [`EditorMain.cpp:155`](../../src/Editor/EditorMain.cpp) `switch(event.key.key)` 中追加 `case SDLK_D:` 分支
 - [ ] 检查 `event.key.mod & SDL_KMOD_CTRL`(Windows/Linux)或 `SDL_KMOD_GUI`(macOS Cmd)— 都满足才进入逻辑
 - [ ] 不满足修饰键则 `break;`(避免影响 W/A/S/D 相机移动)
 - [ ] 同 K1 模式:取选中,空则 `break;`,否则构造 `DuplicateNodesCommand` 并 `ExecuteCommand`
@@ -115,7 +115,7 @@ A1 (Save Scene As 文件对话框) 继续作为 known issue 延后,等专门时�
 ### 注意
 - 同 K1,在文本输入态(`io.WantTextInput`)提前 `break;`
 - macOS 用 `SDL_KMOD_GUI`(Cmd 键) — 用 `(event.key.mod & (SDL_KMOD_CTRL | SDL_KMOD_GUI))` 一起判断即可
-- `WASDQE` 相机移动仅在右键按下时激活 ([`GizmoController.cpp:138`](../src/Runtime/Editor/GizmoController.cpp)),与 `Ctrl+D` 不会冲突
+- `WASDQE` 相机移动仅在右键按下时激活 ([`GizmoController.cpp:138`](../../src/Runtime/Editor/GizmoController.cpp)),与 `Ctrl+D` 不会冲突
 
 ---
 
@@ -124,11 +124,11 @@ A1 (Save Scene As 文件对话框) 继续作为 known issue 延后,等专门时�
 **优先级**: P0  **工时**: ~30m  **风险**: 低
 
 ### 背景
-[`GizmoController::HandleShortcuts`](../src/Runtime/Editor/GizmoController.cpp) (L130-155) 已绑定 W/E/R 切换 Translate/Rotate/Scale,**`mode_` 字段(`ImGuizmo::LOCAL` / `WORLD`)初始化在 L124-127 后再无 UI 控制**。`DrawToolbar` (L170-218) 也只有 Move/Rotate/Scale + Pivot/Bounds 两组,缺 World/Local。Q 是行业标准切换键(Maya/Blender)。
+[`GizmoController::HandleShortcuts`](../../src/Runtime/Editor/GizmoController.cpp) (L130-155) 已绑定 W/E/R 切换 Translate/Rotate/Scale,**`mode_` 字段(`ImGuizmo::LOCAL` / `WORLD`)初始化在 L124-127 后再无 UI 控制**。`DrawToolbar` (L170-218) 也只有 Move/Rotate/Scale + Pivot/Bounds 两组,缺 World/Local。Q 是行业标准切换键(Maya/Blender)。
 
 ### TODO
 
-- [ ] 在 [`GizmoController.cpp:155`](../src/Runtime/Editor/GizmoController.cpp) `HandleShortcuts` 末尾追加:
+- [ ] 在 [`GizmoController.cpp:155`](../../src/Runtime/Editor/GizmoController.cpp) `HandleShortcuts` 末尾追加:
   ```cpp
   if (ImGui::IsKeyPressed(ImGuiKey_Q))
   {
@@ -137,7 +137,7 @@ A1 (Save Scene As 文件对话框) 继续作为 known issue 延后,等专门时�
                   : static_cast<int>(ImGuizmo::LOCAL);
   }
   ```
-- [ ] 在 [`DrawToolbar`](../src/Runtime/Editor/GizmoController.cpp) 的 Pivot/Bounds 一组之后,加 `ImGui::TextUnformatted("|"); ImGui::SameLine();` 分隔,然后两个 RadioButton:
+- [ ] 在 [`DrawToolbar`](../../src/Runtime/Editor/GizmoController.cpp) 的 Pivot/Bounds 一组之后,加 `ImGui::TextUnformatted("|"); ImGui::SameLine();` 分隔,然后两个 RadioButton:
   - [ ] `Local`(`mode_ == ImGuizmo::LOCAL`)
   - [ ] `World`(`mode_ == ImGuizmo::WORLD`)
 - [ ] 旋转 gizmo 在 Local/World 切换下视觉应有可见差异(把一个非轴对齐的物体先旋转 45°,再切 Local↔World 验证)
@@ -166,7 +166,7 @@ A1 (Save Scene As 文件对话框) 继续作为 known issue 延后,等专门时�
 **优先级**: P1  **工时**: ~15m  **风险**: 极低
 
 ### 背景
-[`DrawToolbar`](../src/Runtime/Editor/GizmoController.cpp) (L170-218) 渲染 Move/Rotate/Scale/Pivot/Bounds RadioButton,但**任何按钮都没有 tooltip**,新用户不知道有 W/E/R 快捷键。配合 K3 的 World/Local 与 Q 键,信息密度需要拉起来。
+[`DrawToolbar`](../../src/Runtime/Editor/GizmoController.cpp) (L170-218) 渲染 Move/Rotate/Scale/Pivot/Bounds RadioButton,但**任何按钮都没有 tooltip**,新用户不知道有 W/E/R 快捷键。配合 K3 的 World/Local 与 Q 键,信息密度需要拉起来。
 
 ### TODO
 
@@ -205,7 +205,7 @@ A1 (Save Scene As 文件对话框) 继续作为 known issue 延后,等专门时�
 
 ### TODO
 
-- [ ] 在 [`src/Editor/Panels/ViewportOverlay.cpp`](../src/Editor/Panels/ViewportOverlay.cpp) 找到现有的角标绘制处(FPS/状态文字附近)
+- [ ] 在 [`src/Editor/Panels/ViewportOverlay.cpp`](../../src/Editor/Panels/ViewportOverlay.cpp) 找到现有的角标绘制处(FPS/状态文字附近)
 - [ ] 通过 `ctx.engine.GetGizmoController()`(若 getter 不存在则添加;**或**通过现有的 GizmoController 引用路径,具体看 ViewportOverlay 已经能访问什么)取到 `operation_` 与 `mode_`
 - [ ] 输出文字格式:`<OperationName> · <SpaceName>`
   - operation:`Translate` / `Rotate` / `Scale`
@@ -239,12 +239,12 @@ A1 (Save Scene As 文件对话框) 继续作为 known issue 延后,等专门时�
 ### 背景
 当前唯一的保存路径是 `File > Save Scene As...`(还在 deferred,见 known issue),且**硬编码**保存到 `saved_scene.glb`。`Ctrl+S` 是基本习惯。要支持「保存到当前已打开的场景路径」需要新增**已加载场景路径**状态跟踪。
 
-[`Engine.cpp:1467`](../src/Runtime/Engine.cpp) `RequestLoadScene` 是统一入口;[`Scene::Save(filename)`](../src/Assets/Core/Scene.cpp) 已存在。
+[`Engine.cpp:1467`](../../src/Runtime/Engine.cpp) `RequestLoadScene` 是统一入口;[`Scene::Save(filename)`](../../src/Assets/Core/Scene.cpp) 已存在。
 
 ### TODO
 
-- [ ] 在 `EditorUiState` ([`EditorUiState.hpp`](../src/Editor/Core/EditorUiState.hpp)) 增加 `std::string currentScenePath;`(默认空)
-- [ ] 在 [`EditorMain.cpp`](../src/Editor/EditorMain.cpp) 的 `IO_LoadScene` action 入口、`PushRecentScene` 之后,把 `args` 写入 `ui.currentScenePath = std::string(args);`(注意此处需要拿到 `EditorUiState&` — 通过 `EditorContext.ui`)
+- [ ] 在 `EditorUiState` ([`EditorUiState.hpp`](../../src/Editor/Core/EditorUiState.hpp)) 增加 `std::string currentScenePath;`(默认空)
+- [ ] 在 [`EditorMain.cpp`](../../src/Editor/EditorMain.cpp) 的 `IO_LoadScene` action 入口、`PushRecentScene` 之后,把 `args` 写入 `ui.currentScenePath = std::string(args);`(注意此处需要拿到 `EditorUiState&` — 通过 `EditorContext.ui`)
 - [ ] 在 `OnKey` 加 `case SDLK_S:` 分支,要求 `Ctrl/Cmd` 修饰键,且 `WantTextInput` 不命中
 - [ ] 行为:
   - [ ] 如果 `ui.currentScenePath` 非空且文件路径有效 → 直接 `ctx.scene.Save(ui.currentScenePath)`,记 `SPDLOG_INFO("Scene saved: {}", path)`
@@ -276,11 +276,11 @@ A1 (Save Scene As 文件对话框) 继续作为 known issue 延后,等专门时�
 **优先级**: P2  **工时**: ~45m  **风险**: 中
 
 ### 背景
-Outliner 当前只能鼠标点选;键盘只支持 F2 重命名 ([`OutlinerPanel.cpp:350`](../src/Editor/Panels/OutlinerPanel.cpp))。逐节点用键盘扫一遍场景树是常见调试需求。本任务只做 ↑↓(选上一项 / 下一项),不动展开/折叠(那是 ←→,留给后续批次)。
+Outliner 当前只能鼠标点选;键盘只支持 F2 重命名 ([`OutlinerPanel.cpp:350`](../../src/Editor/Panels/OutlinerPanel.cpp))。逐节点用键盘扫一遍场景树是常见调试需求。本任务只做 ↑↓(选上一项 / 下一项),不动展开/折叠(那是 ←→,留给后续批次)。
 
 ### TODO
 
-- [ ] 在 [`OutlinerPanel.cpp`](../src/Editor/Panels/OutlinerPanel.cpp) `DrawOutlinerPanel` 主体内,在 `IsKeyPressed(F2)` 附近加 `↑/↓` 处理
+- [ ] 在 [`OutlinerPanel.cpp`](../../src/Editor/Panels/OutlinerPanel.cpp) `DrawOutlinerPanel` 主体内,在 `IsKeyPressed(F2)` 附近加 `↑/↓` 处理
 - [ ] 仅当 Outliner 窗口被聚焦(`ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)`)时响应
 - [ ] 实现一个本地静态 `std::vector<uint32_t> FlattenVisibleNodes(...)`,**只**收集当前 filter+expanded 状态下能看到的节点 ID(若实现复杂可简化为「按 Tree 顺序、忽略折叠」 — 接受 stretch 简化)
 - [ ] 当前选中 → 在 flatten 列表里找索引,`↑` 取 idx-1,`↓` 取 idx+1,clamp 到 [0, size-1]
@@ -315,7 +315,7 @@ Outliner 已有 `ImGuiTextFilter` 节点过滤(上批 B1 完成)。对带很多�
 
 ### TODO
 
-- [ ] 在 [`PropertiesPanel.cpp`](../src/Editor/Panels/PropertiesPanel.cpp) 函数顶部、`ImGui::Begin("Properties", nullptr);` 之后加一个 `static ImGuiTextFilter propertyFilter;`(或挂到 `EditorUiState`,与 Outliner 风格一致)
+- [ ] 在 [`PropertiesPanel.cpp`](../../src/Editor/Panels/PropertiesPanel.cpp) 函数顶部、`ImGui::Begin("Properties", nullptr);` 之后加一个 `static ImGuiTextFilter propertyFilter;`(或挂到 `EditorUiState`,与 Outliner 风格一致)
 - [ ] `propertyFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Filter", 220.0f);`
 - [ ] 在 `PropertyWidgets` 渲染入口(每个属性行)前,如果 `propertyFilter.IsActive() && !propertyFilter.PassFilter(propertyName)`,则跳过该属性
 - [ ] 如果整个 component 的属性全被过滤掉,**也**跳过 component 标题(避免显示空 collapsing header)
@@ -349,7 +349,7 @@ Outliner 已有 `ImGuiTextFilter` 节点过滤(上批 B1 完成)。对带很多�
 
 ### TODO
 
-- [ ] 在 [`PropertyWidgets.cpp`](../src/Editor/Panels/PropertyWidgets.cpp) 渲染单个属性行的位置:
+- [ ] 在 [`PropertyWidgets.cpp`](../../src/Editor/Panels/PropertyWidgets.cpp) 渲染单个属性行的位置:
   - [ ] 在属性 widget 之后 `ImGui::SameLine();`
   - [ ] 用 `ImGui::SmallButton(ICON_FA_ROTATE_LEFT)` 或类似紧凑图标按钮
   - [ ] 鼠标悬停 tooltip:`"Reset to default"`
@@ -383,7 +383,7 @@ Outliner 已有 `ImGuiTextFilter` 节点过滤(上批 B1 完成)。对带很多�
 
 **第三次 carry-over**(自第一批起)。工时 ~30m。
 
-[`TitleBarOverlay.cpp:54-67`](../src/Editor/Overlays/TitleBarOverlay.cpp) 仍硬编码 `"saved_scene.glb"`。本批仍 deferred — K6 完成后,Ctrl+S 已可覆盖保存到「当前路径」,Save Scene As 的紧迫性反而下降。下一批可以将 A1 与「场景另存为副本」「导出 GLTF/GLB 选项」一起作为「场景 IO 完整化」迷你专题处理。
+[`TitleBarOverlay.cpp:54-67`](../../src/Editor/Overlays/TitleBarOverlay.cpp) 仍硬编码 `"saved_scene.glb"`。本批仍 deferred — K6 完成后,Ctrl+S 已可覆盖保存到「当前路径」,Save Scene As 的紧迫性反而下降。下一批可以将 A1 与「场景另存为副本」「导出 GLTF/GLB 选项」一起作为「场景 IO 完整化」迷你专题处理。
 
 ---
 
@@ -406,3 +406,4 @@ Outliner 已有 `ImGuiTextFilter` 节点过滤(上批 B1 完成)。对带很多�
 - 之后视精力挑 K6 / K7 / P1 / P2
 
 K1 / K2 / K6 之间没有顺序依赖。K3 / K4 / K5 强烈建议**按顺序**做(同一块代码区域)。P1 / P2 完全独立,可单独承包。
+
