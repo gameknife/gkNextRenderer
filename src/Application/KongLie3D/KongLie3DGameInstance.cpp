@@ -4,6 +4,8 @@
 
 #include "KongLie3DBoard.hpp"
 #include "KongLie3DAudio.hpp"
+#include "KongLie3DNotifications.hpp"
+#include "KongLie3DStyle.hpp"
 #include "KongLie3DUI.hpp"
 #include "Assets/Core/Node.h"
 #include "Assets/Data/Material.hpp"
@@ -33,6 +35,7 @@ namespace
     constexpr float BenchWorldZ = 8.5f;
     constexpr float DragLiftHeight = 0.4f;
     const glm::vec3 HiddenKnockoutProxyPosition(0.0f, -20.0f, 0.0f);
+    constexpr float BattleStartBannerDurationMs = 800.0f;
 
     [[noreturn]] void LogAndThrow(const std::string& message)
     {
@@ -121,7 +124,7 @@ namespace
         if (glyphRanges.empty())
         {
             ImFontGlyphRangesBuilder builder;
-            builder.AddRanges(fontAtlas.GetGlyphRangesChineseSimplifiedCommon());
+            builder.AddRanges(fontAtlas.GetGlyphRangesChineseFull());
             builder.AddText(KongLie3D::U8Text(u8"✓⚡◈◆◇★◎"));
             builder.BuildRanges(&glyphRanges);
         }
@@ -144,16 +147,48 @@ namespace
         switch (rendererType)
         {
         case 0:
-            return "PathTracing";
+            return KongLie3D::U8Text(u8"路径追踪");
         case 1:
-            return "SoftTracing";
+            return KongLie3D::U8Text(u8"软光追");
         case 2:
-            return "PureAmbient";
+            return KongLie3D::U8Text(u8"纯环境光");
         case 3:
-            return "VoxelTracing";
+            return KongLie3D::U8Text(u8"体素追踪");
         default:
-            return "Unknown";
+            return KongLie3D::U8Text(u8"未知");
         }
+    }
+
+    std::string BuildActiveSynergyToast(const std::vector<KongLie3D::FSynergyStatus>& statuses)
+    {
+        std::vector<std::string> activeSynergies;
+        for (const auto& status : statuses)
+        {
+            if (status.active)
+            {
+                activeSynergies.push_back(fmt::format("{}×{}", status.name, status.count));
+            }
+        }
+
+        if (activeSynergies.empty())
+        {
+            return {};
+        }
+        if (activeSynergies.size() == 1)
+        {
+            return fmt::format(fmt::runtime(KongLie3D::U8Text(u8"羁绊激活：{}")), activeSynergies.front());
+        }
+        return fmt::format(fmt::runtime(KongLie3D::U8Text(u8"羁绊激活：{} 等 {} 项")), activeSynergies.front(), activeSynergies.size());
+    }
+
+    std::string FormatSpeedToast(float speedMultiplier)
+    {
+        const float rounded = std::round(speedMultiplier);
+        if (std::abs(speedMultiplier - rounded) < 0.01f)
+        {
+            return fmt::format(fmt::runtime(KongLie3D::U8Text(u8"节奏 {}x")), static_cast<int>(rounded));
+        }
+        return fmt::format(fmt::runtime(KongLie3D::U8Text(u8"节奏 {:.1f}x")), speedMultiplier);
     }
 
     uint32_t AddLambertMaterial(std::vector<Assets::FMaterial>& materials, const glm::vec3& color)
@@ -287,8 +322,12 @@ KongLie3DGameInstance::KongLie3DGameInstance(Vulkan::WindowConfig& config, Optio
     engine_(engine)
 {
     config.Title = "KongLie3D";
-    config.Width = 1280;
-    config.Height = 720;
+    config.Width = 1920;
+    config.Height = 1080;
+    config.ForceSDR = true;
+    options.Width = 1920;
+    options.Height = 1080;
+    options.ForceSDR = true;
 }
 
 void KongLie3DGameInstance::OnInit()
@@ -317,15 +356,27 @@ void KongLie3DGameInstance::OnInitUI()
     cfg.MergeMode = false;
 
     const std::string fontPath = Utilities::FileHelper::GetPlatformFilePath("assets/fonts/DroidSansFallback.ttf");
-    ImFont* font = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 18.0f, &cfg, GetKongLieGlyphRanges(*io.Fonts));
-    if (font)
+    const ImWchar* glyphRanges = GetKongLieGlyphRanges(*io.Fonts);
+    auto loadFont = [&](float size, std::string_view tag)
     {
-        io.FontDefault = font;
-    }
-    else
+        ImFont* font = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), size, &cfg, glyphRanges);
+        if (!font)
+        {
+            SPDLOG_ERROR("[KongLie3D] Failed to load {} UI font '{}' at {}px", tag, fontPath, size);
+        }
+        return font;
+    };
+
+    KongLie3D::KongLieFonts::Body = loadFont(KongLie3D::ScaleUi(18.0f), "body");
+    KongLie3D::KongLieFonts::Title = loadFont(KongLie3D::ScaleUi(32.0f), "title");
+    KongLie3D::KongLieFonts::Display = loadFont(KongLie3D::ScaleUi(56.0f), "display");
+    if (KongLie3D::KongLieFonts::Body)
     {
-        SPDLOG_ERROR("[KongLie3D] Failed to load UI font '{}'", fontPath);
+        io.FontDefault = KongLie3D::KongLieFonts::Body;
     }
+
+    KongLie3D::ApplyKongLieImGuiStyle();
+    ImGui::GetStyle().ScaleAllSizes(KongLie3D::Style::UiScale);
 }
 
 void KongLie3DGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
@@ -340,10 +391,15 @@ void KongLie3DGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
                         battleSystem_.GetSpeedMultiplierCVarPtr(),
                         NextCVar::ECVarFlags::Archive,
                         "KongLie3D battle simulation speed");
+    
+    //std::string error;
+    //cvars.SetDefaultFromString("r.dlss", "true", &error);
+    // cvars.SetDefaultFromString("r.dlssrr", "true", &error);
 }
 
 void KongLie3DGameInstance::OnTick(double deltaSeconds)
 {
+    const float deltaMs = static_cast<float>(deltaSeconds * 1000.0);
     if (battleSystem_.GetState() != KongLie3D::EBattleState::Deployment && draggingPiece_)
     {
         CancelDraggingPiece();
@@ -352,9 +408,38 @@ void KongLie3DGameInstance::OnTick(double deltaSeconds)
     UpdateHoveredPieceTooltip(deltaSeconds);
     if (battleSystem_.GetState() == KongLie3D::EBattleState::Deployment && !deploymentHintDismissed_)
     {
-        deploymentHintElapsedMs_ += static_cast<float>(deltaSeconds * 1000.0);
+        deploymentHintElapsedMs_ += deltaMs;
     }
     battleSystem_.Update(deltaSeconds);
+    notificationCenter_.Update(deltaMs);
+
+    const KongLie3D::EBattleState currentState = battleSystem_.GetState();
+    if (currentState == KongLie3D::EBattleState::Ended)
+    {
+        resultModalAppearMs_ = previousBattleState_ == KongLie3D::EBattleState::Ended ? resultModalAppearMs_ + deltaMs : 0.0f;
+    }
+    else
+    {
+        resultModalAppearMs_ = 0.0f;
+    }
+
+    if (battleStartBannerElapsedMs_ >= 0.0f)
+    {
+        battleStartBannerElapsedMs_ += deltaMs;
+        if (battleStartBannerElapsedMs_ > BattleStartBannerDurationMs)
+        {
+            battleStartBannerElapsedMs_ = -1.0f;
+        }
+    }
+
+    const bool overtimeActive = battleSystem_.IsOvertimeActive();
+    if (!previousOvertimeActive_ && overtimeActive)
+    {
+        notificationCenter_.Push(KongLie3D::U8Text(u8"加时开始！伤害递增"), KongLie3D::ENotificationKind::Critical);
+    }
+    previousOvertimeActive_ = overtimeActive;
+    previousBattleState_ = currentState;
+
     if (battleSystem_.ConsumeSceneDirty())
     {
         GetEngine().GetScene().MarkDirty();
@@ -369,29 +454,6 @@ void KongLie3DGameInstance::OnDestroy()
 
 bool KongLie3DGameInstance::OnRenderUI()
 {
-    if (showMvpWindow_)
-    {
-        const ImGuiViewport* viewport = ImGui::GetMainViewport();
-        const ImVec2 windowPivot(1.0f, 0.0f);
-        const ImVec2 windowPadding(16.0f, 16.0f);
-        ImGui::SetNextWindowPos(
-            ImVec2(viewport->WorkPos.x + viewport->WorkSize.x - windowPadding.x, viewport->WorkPos.y + windowPadding.y),
-            ImGuiCond_Always,
-            windowPivot);
-        ImGui::SetNextWindowBgAlpha(0.85f);
-
-        constexpr ImGuiWindowFlags windowFlags = ImGuiWindowFlags_AlwaysAutoResize |
-                                                 ImGuiWindowFlags_NoCollapse;
-        if (ImGui::Begin("KongLie3D MVP", &showMvpWindow_, windowFlags))
-        {
-            ImGui::Text("Phase 1: bootstrap OK");
-            ImGui::Text("State: %s",
-                        battleSystem_.GetState() == KongLie3D::EBattleState::Deployment ? "Deployment" :
-                        (battleSystem_.GetState() == KongLie3D::EBattleState::Battle ? "Battle" : "Ended"));
-        }
-        ImGui::End();
-    }
-
     KongLie3D::RenderHUD(*this);
 
     return false;
@@ -457,13 +519,13 @@ bool KongLie3DGameInstance::OnKey(SDL_Event& event)
         }
         break;
     case SDLK_1:
-        battleSystem_.SetSpeedMultiplier(1.0f);
+        SetBattleSpeedMultiplier(1.0f);
         return true;
     case SDLK_2:
-        battleSystem_.SetSpeedMultiplier(2.0f);
+        SetBattleSpeedMultiplier(2.0f);
         return true;
     case SDLK_4:
-        battleSystem_.SetSpeedMultiplier(4.0f);
+        SetBattleSpeedMultiplier(4.0f);
         return true;
     default:
         break;
@@ -524,6 +586,14 @@ void KongLie3DGameInstance::StartBattle()
 
     DismissDeploymentHint();
     battleSystem_.Start();
+    notificationCenter_.Push(KongLie3D::U8Text(u8"战斗开始"), KongLie3D::ENotificationKind::Success);
+    battleStartBannerElapsedMs_ = 0.0f;
+
+    const std::string synergyToast = BuildActiveSynergyToast(battleSystem_.GetActiveSynergies());
+    if (!synergyToast.empty())
+    {
+        notificationCenter_.Push(synergyToast, KongLie3D::ENotificationKind::Success, 3200.0f);
+    }
 }
 
 void KongLie3DGameInstance::ResetBattle()
@@ -537,6 +607,11 @@ void KongLie3DGameInstance::ResetBattle()
     ClearHoveredPieceTooltip();
     deploymentHintElapsedMs_ = 0.0f;
     deploymentHintDismissed_ = false;
+    notificationCenter_.Clear();
+    previousBattleState_ = KongLie3D::EBattleState::Deployment;
+    previousOvertimeActive_ = false;
+    resultModalAppearMs_ = 0.0f;
+    battleStartBannerElapsedMs_ = -1.0f;
     GetEngine().GetScene().MarkDirty();
 }
 
@@ -563,6 +638,35 @@ void KongLie3DGameInstance::SelectLevel(size_t levelIndex)
 
     currentLevelIndex_ = levelIndex;
     RebuildCurrentLevelScene();
+    if (const KongLie3D::FLevelDef* currentLevel = GetCurrentLevel())
+    {
+        notificationCenter_.Push(fmt::format(fmt::runtime(KongLie3D::U8Text(u8"难度切换：{}")), currentLevel->name),
+                                 KongLie3D::ENotificationKind::Info);
+    }
+}
+
+void KongLie3DGameInstance::SelectRelic(const std::string& relicId)
+{
+    const KongLie3D::FRelicDef* before = battleSystem_.GetSelectedRelic();
+    const std::string beforeId = before ? before->id : std::string();
+    battleSystem_.SelectRelic(relicId);
+    const KongLie3D::FRelicDef* after = battleSystem_.GetSelectedRelic();
+    if (after && after->id != beforeId)
+    {
+        notificationCenter_.Push(fmt::format(fmt::runtime(KongLie3D::U8Text(u8"已携带圣物：{}")), after->name),
+                                 KongLie3D::ENotificationKind::Info);
+    }
+}
+
+void KongLie3DGameInstance::SetBattleSpeedMultiplier(float speedMultiplier)
+{
+    const float previousSpeed = battleSystem_.GetSpeedMultiplier();
+    battleSystem_.SetSpeedMultiplier(speedMultiplier);
+    const float currentSpeed = battleSystem_.GetSpeedMultiplier();
+    if (std::abs(currentSpeed - previousSpeed) > 0.01f)
+    {
+        notificationCenter_.Push(FormatSpeedToast(currentSpeed), KongLie3D::ENotificationKind::Info);
+    }
 }
 
 void KongLie3DGameInstance::AdvanceToNextLevel()
@@ -574,6 +678,11 @@ void KongLie3DGameInstance::AdvanceToNextLevel()
 
     ++currentLevelIndex_;
     RebuildCurrentLevelScene();
+}
+
+void KongLie3DGameInstance::PushNotification(std::string text, KongLie3D::ENotificationKind kind, float durationMs)
+{
+    notificationCenter_.Push(std::move(text), kind, durationMs);
 }
 
 bool KongLie3DGameInstance::OnMouseButton(SDL_Event& event)
@@ -944,6 +1053,11 @@ void KongLie3DGameInstance::RebuildCurrentLevelScene()
     ClearHoveredPieceTooltip();
     deploymentHintElapsedMs_ = 0.0f;
     deploymentHintDismissed_ = false;
+    notificationCenter_.Clear();
+    previousBattleState_ = KongLie3D::EBattleState::Deployment;
+    previousOvertimeActive_ = false;
+    resultModalAppearMs_ = 0.0f;
+    battleStartBannerElapsedMs_ = -1.0f;
     battleSystem_.Reset();
     
     // Trigger scene reload to apply new enemy configuration
@@ -973,7 +1087,7 @@ std::string KongLie3DGameInstance::GetRendererLabel() const
     bool found = false;
     const std::string value = GetEngine().GetCVarSystem().GetValueString("r.rendererType", &found);
     const int rendererType = found ? std::clamp(std::stoi(value), 0, 3) : 1;
-    return fmt::format("Render: {}", GetRendererName(rendererType));
+    return fmt::format(fmt::runtime(KongLie3D::U8Text(u8"渲染：{}")), GetRendererName(rendererType));
 }
 
 void KongLie3DGameInstance::DismissDeploymentHint()

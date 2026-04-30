@@ -5,6 +5,7 @@
 #include "Assets/Core/Model.hpp"
 #include "KongLie3DBattleSystem.hpp"
 #include "KongLie3DDataLoader.hpp"
+#include "KongLie3DNotifications.hpp"
 #include "KongLie3DPiece.hpp"
 
 class KongLie3DGameInstance : public NextGameInstanceBase
@@ -32,9 +33,13 @@ public:
     void StartBattle();
     void ResetBattle();
     void SelectLevel(size_t levelIndex);
+    void SelectRelic(const std::string& relicId);
+    void SetBattleSpeedMultiplier(float speedMultiplier);
     void AdvanceToNextLevel();
     KongLie3D::FBattleSystem& GetBattleSystem() { return battleSystem_; }
     const KongLie3D::FBattleSystem& GetBattleSystem() const { return battleSystem_; }
+    KongLie3D::FNotificationCenter& GetNotificationCenter() { return notificationCenter_; }
+    const KongLie3D::FNotificationCenter& GetNotificationCenter() const { return notificationCenter_; }
     const std::vector<KongLie3D::FPieceRuntime>& GetPieceRuntimes() const { return pieceRuntimes_; }
     const std::vector<KongLie3D::FLevelDef>& GetLevels() const { return placement_.levels; }
     size_t GetCurrentLevelIndex() const { return currentLevelIndex_; }
@@ -46,6 +51,9 @@ public:
     const KongLie3D::FPieceRuntime* GetHoveredTooltipPiece() const;
     float GetDeploymentHintAlpha() const;
     std::string GetRendererLabel() const;
+    float GetResultModalAppearMs() const { return resultModalAppearMs_; }
+    float GetBattleStartBannerElapsedMs() const { return battleStartBannerElapsedMs_; }
+    void PushNotification(std::string text, KongLie3D::ENotificationKind kind, float durationMs = 2500.0f);
 
 private:
     NextEngine& GetEngine() const { return *engine_; }
@@ -67,7 +75,6 @@ private:
     void DismissDeploymentHint();
 
     NextEngine* engine_;
-    bool showMvpWindow_ = true;
     std::map<std::string, KongLie3D::FPieceDef> pieceDefs_;
     KongLie3D::FPlacementData placement_;
     size_t currentLevelIndex_ = 0;
@@ -86,4 +93,9 @@ private:
     std::string hoveredTooltipPieceId_;
     float deploymentHintElapsedMs_ = 0.0f;
     bool deploymentHintDismissed_ = false;
+    KongLie3D::FNotificationCenter notificationCenter_;
+    KongLie3D::EBattleState previousBattleState_ = KongLie3D::EBattleState::Deployment;
+    bool previousOvertimeActive_ = false;
+    float resultModalAppearMs_ = 0.0f;
+    float battleStartBannerElapsedMs_ = -1.0f;
 };
