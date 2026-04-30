@@ -2,6 +2,7 @@
 
 #include "Common/CoreMinimal.hpp"
 #include "KongLie3DDataLoader.hpp"
+#include "Runtime/Subsystems/NextPhysicsTypes.h"
 
 namespace Assets
 {
@@ -27,7 +28,10 @@ namespace KongLie3D
         std::shared_ptr<Assets::Node> node;
         uint32_t modelId = 0;
         uint32_t materialId = 0;
+        uint32_t accentMaterialId = 0;
+        uint32_t glowMaterialId = 0;
         uint32_t darkMaterialId = 0;
+        std::vector<std::pair<std::shared_ptr<Assets::Node>, uint32_t>> visualAttachments;
         glm::vec3 dimensions = glm::vec3(0.0f);
         float visualScale = 1.0f;
         float attackCooldownMs = 0.0f;
@@ -44,8 +48,14 @@ namespace KongLie3D
         float shieldTimerMs = 0.0f;
         float stunTimerMs = 0.0f;
         float furyTimerMs = 0.0f;
+        float hitFlashMs = 0.0f;
+        bool hitFlashActive = false;
         float deathAnimationMs = 0.0f;
         glm::vec3 deathStartWorldPos = glm::vec3(0.0f);
+        glm::vec3 lastAttackerPos = glm::vec3(0.0f);
+        std::shared_ptr<Assets::Node> knockoutNode;
+        NextBodyID knockoutBodyId {};
+        float knockoutTimerMs = 0.0f;
         int statDmgAD = 0;
         int statDmgAP = 0;
         int statDmgTaken = 0;

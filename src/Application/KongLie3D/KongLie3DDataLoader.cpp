@@ -61,6 +61,24 @@ namespace
         }
     }
 
+    template <typename TValue>
+    TValue GetOptionalValue(const json& object, const char* key, const std::string& context, TValue defaultValue)
+    {
+        if (!object.is_object() || !object.contains(key))
+        {
+            return defaultValue;
+        }
+
+        try
+        {
+            return object.at(key).get<TValue>();
+        }
+        catch (const std::exception& exception)
+        {
+            LogAndThrow(fmt::format("{} field '{}' has invalid type: {}", context, key, exception.what()));
+        }
+    }
+
     glm::vec3 GetRequiredColor(const json& object, const std::string& context)
     {
         if (!object.contains("color"))
@@ -91,6 +109,7 @@ namespace
         def.name = GetRequiredValue<std::string>(pieceJson, "name", context);
         def.team = GetRequiredValue<std::string>(pieceJson, "team", context);
         def.role = GetRequiredValue<std::string>(pieceJson, "role", context);
+        def.synergies = GetOptionalValue<std::vector<std::string>>(pieceJson, "synergies", context, {});
         def.attackType = GetRequiredValue<std::string>(pieceJson, "attackType", context);
         def.hp = GetRequiredValue<int>(pieceJson, "hp", context);
         def.atk = GetRequiredValue<int>(pieceJson, "atk", context);
@@ -124,11 +143,14 @@ namespace
 
         def.skillWName = GetRequiredValue<std::string>(skillsJson.at("w"), "name", fmt::format("{} skills.w", context));
         def.skillW = GetRequiredValue<std::string>(skillsJson.at("w"), "effect", fmt::format("{} skills.w", context));
+        def.skillWDesc = GetOptionalValue<std::string>(skillsJson.at("w"), "desc", fmt::format("{} skills.w", context), "");
         def.skillWCooldownMs = GetRequiredValue<int>(skillsJson.at("w"), "cooldown", fmt::format("{} skills.w", context));
         def.skillUltimateName =
             GetRequiredValue<std::string>(skillsJson.at("ultimate"), "name", fmt::format("{} skills.ultimate", context));
         def.skillUltimate =
             GetRequiredValue<std::string>(skillsJson.at("ultimate"), "effect", fmt::format("{} skills.ultimate", context));
+        def.skillUltimateDesc =
+            GetOptionalValue<std::string>(skillsJson.at("ultimate"), "desc", fmt::format("{} skills.ultimate", context), "");
         return def;
     }
 
@@ -139,6 +161,71 @@ namespace
         entry.col = GetRequiredValue<int>(entryJson, "col", context);
         entry.row = GetRequiredValue<int>(entryJson, "row", context);
         return entry;
+    }
+
+    KongLie3D::FSynergyTier ParseSynergyTier(const json& tierJson, const std::string& context)
+    {
+        KongLie3D::FSynergyTier tier{};
+        tier.count = GetRequiredValue<int>(tierJson, "count", context);
+        tier.atkBonus = GetOptionalValue<float>(tierJson, "atkBonus", context, 0.0f);
+        tier.hpBonus = GetOptionalValue<float>(tierJson, "hpBonus", context, 0.0f);
+        tier.spdBonus = GetOptionalValue<float>(tierJson, "spdBonus", context, 0.0f);
+        tier.apBonus = GetOptionalValue<float>(tierJson, "apBonus", context, 0.0f);
+        return tier;
+    }
+
+    KongLie3D::FSynergyDef ParseSynergyDef(const json& synergyJson, size_t index)
+    {
+        const std::string context = fmt::format("synergies[{}]", index);
+        KongLie3D::FSynergyDef synergy{};
+        synergy.id = GetRequiredValue<std::string>(synergyJson, "id", context);
+        synergy.name = GetRequiredValue<std::string>(synergyJson, "name", context);
+        if (!synergyJson.contains("tiers") || !synergyJson.at("tiers").is_array())
+        {
+            LogAndThrow(fmt::format("{} is missing required array 'tiers'", context));
+        }
+
+        for (size_t tierIndex = 0; tierIndex < synergyJson.at("tiers").size(); ++tierIndex)
+        {
+            synergy.tiers.push_back(
+                ParseSynergyTier(synergyJson.at("tiers").at(tierIndex), fmt::format("{} tiers[{}]", context, tierIndex)));
+        }
+        return synergy;
+    }
+
+    KongLie3D::FLevelDef ParseLevelDef(const json& levelJson, size_t index)
+    {
+        const std::string context = fmt::format("levels[{}]", index);
+        KongLie3D::FLevelDef level{};
+        level.id = GetRequiredValue<std::string>(levelJson, "id", context);
+        level.name = GetRequiredValue<std::string>(levelJson, "name", context);
+        level.enemyDmgMult = GetRequiredValue<float>(levelJson, "enemyDmgMult", context);
+        if (!levelJson.contains("enemy") || !levelJson.at("enemy").is_array())
+        {
+            LogAndThrow(fmt::format("{} is missing required array 'enemy'", context));
+        }
+        if (!levelJson.contains("bench") || !levelJson.at("bench").is_array())
+        {
+            LogAndThrow(fmt::format("{} is missing required array 'bench'", context));
+        }
+
+        for (size_t enemyIndex = 0; enemyIndex < levelJson.at("enemy").size(); ++enemyIndex)
+        {
+            level.enemy.push_back(ParsePlacementEntry(levelJson.at("enemy").at(enemyIndex),
+                                                      fmt::format("{} enemy[{}]", context, enemyIndex)));
+        }
+
+        for (size_t benchIndex = 0; benchIndex < levelJson.at("bench").size(); ++benchIndex)
+        {
+            const json& benchEntry = levelJson.at("bench").at(benchIndex);
+            if (!benchEntry.is_string())
+            {
+                LogAndThrow(fmt::format("{} bench[{}] must be a string piece id", context, benchIndex));
+            }
+            level.bench.push_back(benchEntry.get<std::string>());
+        }
+
+        return level;
     }
 
     KongLie3D::FRelicDef ParseRelicDef(const json& relicJson, size_t index)
@@ -183,13 +270,9 @@ namespace KongLie3D
         {
             LogAndThrow(fmt::format("placement file '{}' is missing required array 'player'", path));
         }
-        if (!document.contains("enemy") || !document.at("enemy").is_array())
+        if (!document.contains("levels") || !document.at("levels").is_array())
         {
-            LogAndThrow(fmt::format("placement file '{}' is missing required array 'enemy'", path));
-        }
-        if (!document.contains("bench") || !document.at("bench").is_array())
-        {
-            LogAndThrow(fmt::format("placement file '{}' is missing required array 'bench'", path));
+            LogAndThrow(fmt::format("placement file '{}' is missing required array 'levels'", path));
         }
 
         for (size_t index = 0; index < document.at("player").size(); ++index)
@@ -198,23 +281,29 @@ namespace KongLie3D
                 ParsePlacementEntry(document.at("player").at(index), fmt::format("placement.player[{}]", index)));
         }
 
-        for (size_t index = 0; index < document.at("enemy").size(); ++index)
+        for (size_t index = 0; index < document.at("levels").size(); ++index)
         {
-            placement.enemy.push_back(
-                ParsePlacementEntry(document.at("enemy").at(index), fmt::format("placement.enemy[{}]", index)));
-        }
-
-        for (size_t index = 0; index < document.at("bench").size(); ++index)
-        {
-            const json& benchEntry = document.at("bench").at(index);
-            if (!benchEntry.is_string())
-            {
-                LogAndThrow(fmt::format("placement.bench[{}] must be a string piece id", index));
-            }
-            placement.bench.push_back(benchEntry.get<std::string>());
+            placement.levels.push_back(ParseLevelDef(document.at("levels").at(index), index));
         }
 
         return placement;
+    }
+
+    std::vector<FSynergyDef> LoadSynergies(const std::string& path)
+    {
+        const json document = LoadJsonFile(path);
+        if (!document.contains("synergies") || !document.at("synergies").is_array())
+        {
+            LogAndThrow(fmt::format("synergies file '{}' is missing required array 'synergies'", path));
+        }
+
+        std::vector<FSynergyDef> synergies;
+        synergies.reserve(document.at("synergies").size());
+        for (size_t index = 0; index < document.at("synergies").size(); ++index)
+        {
+            synergies.push_back(ParseSynergyDef(document.at("synergies").at(index), index));
+        }
+        return synergies;
     }
 
     std::vector<FRelicDef> LoadRelics(const std::string& path)

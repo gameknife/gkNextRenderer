@@ -1,5 +1,6 @@
 #include "KongLie3DSkills.hpp"
 
+#include "KongLie3DAudio.hpp"
 #include "KongLie3DBattleSystem.hpp"
 #include "Assets/Core/Node.h"
 
@@ -32,6 +33,7 @@ namespace KongLie3D
             piece.wCooldownMs = static_cast<float>(piece.def.skillWCooldownMs);
             piece.shield += ShieldAmount;
             piece.shieldTimerMs = ShieldDurationMs;
+            PlaySkillCastSfx();
 
             if (FPieceRuntime* ally = battleSystem.FindNearestAllyForSkill(piece))
             {
@@ -64,6 +66,7 @@ namespace KongLie3D
             piece.currentMana = 0;
             piece.wCooldownMs = static_cast<float>(piece.def.skillWCooldownMs);
             target->stunTimerMs = std::max(target->stunTimerMs, RapidSlashStunMs);
+            PlaySkillCastSfx();
             battleSystem.ApplyAbilityDamage(piece, *target, RapidSlashDamage, glm::vec4(1.0f, 0.52f, 0.16f, 1.0f), "rapid_slash");
             battleSystem.PushSkillEffect(FSkillEffect{
                 .type = ESkillEffectType::Beam,
@@ -90,6 +93,7 @@ namespace KongLie3D
         if (piece.def.skillUltimate == "blue_surge")
         {
             int hitCount = 0;
+            PlaySkillCastSfx();
             for (auto& candidate : battleSystem.AccessPieces())
             {
                 if (!candidate.alive || candidate.onBench || candidate.def.team == piece.def.team)
@@ -109,6 +113,8 @@ namespace KongLie3D
 
             piece.currentMana = 0;
             piece.ultimateUsed = true;
+            battleSystem.TriggerUltimatePresentation(piece, piece.def.skillUltimateName, glm::vec4(0.18f, 0.52f, 1.0f, 1.0f));
+            battleSystem.TriggerUltimateAreaLight(piece, glm::vec3(0.18f, 0.52f, 1.0f));
             battleSystem.PushSkillEffect(FSkillEffect{
                 .type = ESkillEffectType::ExpandingRing,
                 .center = piece.node ? piece.node->WorldTranslation() : piece.targetWorldPos,
@@ -126,6 +132,9 @@ namespace KongLie3D
             piece.currentMana = 0;
             piece.ultimateUsed = true;
             piece.furyTimerMs = FuryDurationMs;
+            PlaySkillCastSfx();
+            battleSystem.TriggerUltimatePresentation(piece, piece.def.skillUltimateName, glm::vec4(1.0f, 0.55f, 0.18f, 1.0f));
+            battleSystem.TriggerUltimateAreaLight(piece, glm::vec3(1.0f, 0.55f, 0.18f));
             spdlog::info("[KongLie3D] {} cast R sydney_fury", piece.pieceId);
             return true;
         }

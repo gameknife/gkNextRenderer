@@ -171,6 +171,27 @@ namespace
         }
     }
 
+    void EmptyScene(Assets::EnvironmentSetting& cameraInit,
+                    std::vector<std::shared_ptr<Assets::Node>>& /*nodes*/,
+                    std::vector<Assets::Model>& /*models*/,
+                    std::vector<Assets::FMaterial>& /*materials*/,
+                    std::vector<Assets::LightObject>& /*lights*/,
+                    std::vector<Assets::AnimationTrack>& /*tracks*/)
+    {
+        Assets::Camera defaultCam;
+        defaultCam.name = "Cam";
+        defaultCam.ModelView = lookAt(vec3(0, 4, 8), vec3(0, 0, 0), vec3(0, 1, 0));
+        defaultCam.FieldOfView = 45;
+        defaultCam.Aperture = 0;
+        defaultCam.FocalDistance = 10;
+
+        cameraInit.cameras.push_back(defaultCam);
+        cameraInit.ControlSpeed = 5.0f;
+        cameraInit.GammaCorrection = true;
+        cameraInit.HasSky = true;
+        cameraInit.HasSun = false;
+    }
+
     void RayTracingInOneWeekend(Assets::EnvironmentSetting& cameraInit, std::vector<std::shared_ptr<Assets::Node>>& nodes,
                                 std::vector<Assets::Model>& models,
                                 std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks)
@@ -1728,6 +1749,11 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
     }
     if (ext == ".proc")
     {
+        if (filename == "Empty.proc")
+        {
+            EmptyScene(camera, nodes, models, materials, lights, tracks);
+            return true;
+        }
         if (filename == "CornellBox.proc")
         {
             CornellBox(camera, nodes, models, materials, lights, tracks);

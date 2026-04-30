@@ -1,8 +1,9 @@
-#include "KongLie3DUI.hpp"
+﻿#include "KongLie3DUI.hpp"
 
 #include <imgui.h>
 
 #include "Assets/Core/Node.h"
+#include "KongLie3DAudio.hpp"
 #include "KongLie3DGameInstance.hpp"
 
 namespace
@@ -124,6 +125,97 @@ namespace
 
         outCenter = centerScreen;
         outRadius = std::max(2.0f, std::abs(edgeScreen.x - centerScreen.x));
+        return true;
+    }
+
+    bool ProjectGroundRing(const KongLie3DGameInstance& gameInstance,
+                           const glm::vec3& centerWorld,
+                           float radiusWorld,
+                           int segments,
+                           std::vector<ImVec2>& outPoints)
+    {
+        outPoints.clear();
+        outPoints.reserve(static_cast<size_t>(segments));
+        for (int index = 0; index < segments; ++index)
+        {
+            const float angle = glm::two_pi<float>() * (static_cast<float>(index) / static_cast<float>(segments));
+            const glm::vec3 pointWorld = centerWorld + glm::vec3(std::cos(angle) * radiusWorld, 0.0f, std::sin(angle) * radiusWorld);
+            ImVec2 pointScreen{};
+            if (!ProjectWorldToScreen(gameInstance, pointWorld, pointScreen))
+            {
+                outPoints.clear();
+                return false;
+            }
+            outPoints.push_back(pointScreen);
+        }
+
+        return outPoints.size() >= 3;
+    }
+
+    bool ProjectGroundQuad(const KongLie3DGameInstance& gameInstance,
+                           const std::array<glm::vec3, 4>& corners,
+                           std::array<ImVec2, 4>& outScreenCorners)
+    {
+        for (size_t index = 0; index < corners.size(); ++index)
+        {
+            if (!ProjectWorldToScreen(gameInstance, corners[index], outScreenCorners[index]))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    std::string FormatPercentBonus(std::string_view label, float bonus)
+    {
+        return fmt::format("{} +{}%", label, static_cast<int>(std::lround(bonus * 100.0f)));
+    }
+
+    std::string FormatSynergyBonus(const KongLie3D::FSynergyTier& tier)
+    {
+        std::vector<std::string> bonusParts;
+        if (tier.atkBonus > 0.0f)
+        {
+            bonusParts.push_back(FormatPercentBonus("攻击", tier.atkBonus));
+        }
+        if (tier.hpBonus > 0.0f)
+        {
+            bonusParts.push_back(FormatPercentBonus("生命", tier.hpBonus));
+        }
+        if (tier.spdBonus > 0.0f)
+        {
+            bonusParts.push_back(FormatPercentBonus("攻速", tier.spdBonus));
+        }
+        if (tier.apBonus > 0.0f)
+        {
+            bonusParts.push_back(FormatPercentBonus("法强", tier.apBonus));
+        }
+
+        if (bonusParts.empty())
+        {
+            return "无加成";
+        }
+
+        std::string joinedBonuses;
+        for (size_t index = 0; index < bonusParts.size(); ++index)
+        {
+            if (index > 0)
+            {
+                joinedBonuses += " / ";
+            }
+            joinedBonuses += bonusParts[index];
+        }
+        return joinedBonuses;
+    }
+
+    bool ButtonWithClick(const char* label, const ImVec2& size)
+    {
+        if (!ImGui::Button(label, size))
+        {
+            return false;
+        }
+
+        KongLie3D::PlayUiClickSfx();
         return true;
     }
 
@@ -321,7 +413,8 @@ namespace
 
     void DrawDragHighlights(const KongLie3DGameInstance& gameInstance)
     {
-        if (!gameInstance.GetDraggingPiece())
+        const KongLie3D::FPieceRuntime* draggingPiece = gameInstance.GetDraggingPiece();
+        if (!draggingPiece)
         {
             return;
         }
@@ -343,17 +436,7 @@ namespace
             };
 
             std::array<ImVec2, 4> screenCorners{};
-            bool visible = true;
-            for (size_t index = 0; index < corners.size(); ++index)
-            {
-                if (!ProjectWorldToScreen(gameInstance, corners[index], screenCorners[index]))
-                {
-                    visible = false;
-                    break;
-                }
-            }
-
-            if (!visible)
+            if (!ProjectGroundQuad(gameInstance, corners, screenCorners))
             {
                 continue;
             }
@@ -362,13 +445,160 @@ namespace
             drawList->AddPolyline(screenCorners.data(), static_cast<int>(screenCorners.size()), IM_COL32(255, 255, 255, 132),
                                   ImDrawFlags_Closed, 1.5f);
         }
+
+        glm::ivec2 invalidCell{};
+        const bool invalidHover = gameInstance.GetInvalidDragHoverCell(invalidCell);
+        if (draggingPiece->node)
+        {
+            const glm::vec3 piecePos = draggingPiece->node->Translation();
+            const glm::vec3 groundCenter(piecePos.x, 0.03f, piecePos.z);
+            std::vector<ImVec2> outerRing;
+            std::vector<ImVec2> innerRing;
+            if (ProjectGroundRing(gameInstance, groundCenter, 0.36f, 40, outerRing) &&
+                ProjectGroundRing(gameInstance, groundCenter, 0.20f, 28, innerRing))
+            {
+                const ImU32 fillColor = invalidHover ? IM_COL32(255, 88, 88, 48) : IM_COL32(255, 222, 140, 60);
+                const ImU32 ringColor = invalidHover ? IM_COL32(255, 110, 110, 220) : IM_COL32(255, 230, 160, 230);
+                drawList->AddConvexPolyFilled(outerRing.data(), static_cast<int>(outerRing.size()), fillColor);
+                drawList->AddPolyline(outerRing.data(), static_cast<int>(outerRing.size()), ringColor, ImDrawFlags_Closed, 2.5f);
+                drawList->AddPolyline(innerRing.data(), static_cast<int>(innerRing.size()), ringColor, ImDrawFlags_Closed, 1.2f);
+            }
+        }
+
+        if (invalidHover)
+        {
+            const float centerZ = GetCellWorldZ(invalidCell.y);
+            const std::array<glm::vec3, 4> corners = {
+                glm::vec3(static_cast<float>(invalidCell.x) - 0.47f, 0.03f, centerZ - 0.47f),
+                glm::vec3(static_cast<float>(invalidCell.x) + 0.47f, 0.03f, centerZ - 0.47f),
+                glm::vec3(static_cast<float>(invalidCell.x) + 0.47f, 0.03f, centerZ + 0.47f),
+                glm::vec3(static_cast<float>(invalidCell.x) - 0.47f, 0.03f, centerZ + 0.47f),
+            };
+
+            std::array<ImVec2, 4> screenCorners{};
+            if (ProjectGroundQuad(gameInstance, corners, screenCorners))
+            {
+                drawList->AddConvexPolyFilled(screenCorners.data(), static_cast<int>(screenCorners.size()), IM_COL32(255, 64, 64, 80));
+                drawList->AddPolyline(screenCorners.data(),
+                                      static_cast<int>(screenCorners.size()),
+                                      IM_COL32(255, 96, 96, 200),
+                                      ImDrawFlags_Closed,
+                                      1.5f);
+            }
+        }
+    }
+
+    void DrawDeploymentZoneGuidance(const KongLie3DGameInstance& gameInstance)
+    {
+        if (gameInstance.GetBattleSystem().GetState() != KongLie3D::EBattleState::Deployment)
+        {
+            return;
+        }
+
+        ImDrawList* drawList = ImGui::GetForegroundDrawList();
+        if (!drawList)
+        {
+            return;
+        }
+
+        for (int row = 0; row < 8; ++row)
+        {
+            const ImU32 fillColor = row < 4 ? IM_COL32(220, 88, 88, 30) : IM_COL32(80, 140, 220, 30);
+            const float centerZ = static_cast<float>(row);
+            for (int col = 0; col < 7; ++col)
+            {
+                const std::array<glm::vec3, 4> corners = {
+                    glm::vec3(static_cast<float>(col) - 0.47f, 0.025f, centerZ - 0.47f),
+                    glm::vec3(static_cast<float>(col) + 0.47f, 0.025f, centerZ - 0.47f),
+                    glm::vec3(static_cast<float>(col) + 0.47f, 0.025f, centerZ + 0.47f),
+                    glm::vec3(static_cast<float>(col) - 0.47f, 0.025f, centerZ + 0.47f),
+                };
+                std::array<ImVec2, 4> screenCorners{};
+                if (!ProjectGroundQuad(gameInstance, corners, screenCorners))
+                {
+                    continue;
+                }
+                drawList->AddConvexPolyFilled(screenCorners.data(), static_cast<int>(screenCorners.size()), fillColor);
+            }
+        }
+    }
+
+    void DrawDeploymentHintOverlay(const KongLie3DGameInstance& gameInstance)
+    {
+        const float alpha = gameInstance.GetDeploymentHintAlpha();
+        if (alpha <= 0.0f)
+        {
+            return;
+        }
+
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImDrawList* drawList = ImGui::GetForegroundDrawList();
+        if (!viewport || !drawList)
+        {
+            return;
+        }
+
+        ImFont* font = ImGui::GetFont();
+        const char* primaryText = KongLie3D::U8Text(u8"拖拽棋子调整阵型，按 SPACE 开始战斗");
+        const char* secondaryText = KongLie3D::U8Text(u8"按 F3 切换渲染管线，体验光追画质");
+        const float primarySize = 22.0f;
+        const float secondarySize = 18.0f;
+        const ImVec2 primaryTextSize = font->CalcTextSizeA(primarySize, FLT_MAX, 0.0f, primaryText);
+        const ImVec2 secondaryTextSize = font->CalcTextSizeA(secondarySize, FLT_MAX, 0.0f, secondaryText);
+        const float centerX = viewport->Pos.x + viewport->Size.x * 0.5f;
+        const float baseY = viewport->Pos.y + viewport->Size.y * 0.16f;
+
+        const ImU32 primaryShadow = IM_COL32(8, 8, 12, static_cast<int>(alpha * 150.0f));
+        const ImU32 primaryColor = IM_COL32(255, 255, 255, static_cast<int>(alpha * 200.0f));
+        const ImU32 secondaryShadow = IM_COL32(8, 8, 12, static_cast<int>(alpha * 120.0f));
+        const ImU32 secondaryColor = IM_COL32(210, 220, 240, static_cast<int>(alpha * 175.0f));
+
+        const ImVec2 primaryPos(centerX - primaryTextSize.x * 0.5f, baseY);
+        const ImVec2 secondaryPos(centerX - secondaryTextSize.x * 0.5f, baseY + primaryTextSize.y + 8.0f);
+        drawList->AddText(font, primarySize, ImVec2(primaryPos.x + 2.0f, primaryPos.y + 2.0f), primaryShadow, primaryText);
+        drawList->AddText(font, primarySize, primaryPos, primaryColor, primaryText);
+        drawList->AddText(font,
+                          secondarySize,
+                          ImVec2(secondaryPos.x + 2.0f, secondaryPos.y + 2.0f),
+                          secondaryShadow,
+                          secondaryText);
+        drawList->AddText(font, secondarySize, secondaryPos, secondaryColor, secondaryText);
+    }
+
+    void DrawRendererIndicator(const KongLie3DGameInstance& gameInstance)
+    {
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        if (!viewport)
+        {
+            return;
+        }
+
+        ImGui::SetNextWindowBgAlpha(0.40f);
+        ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + viewport->Size.x - 18.0f, viewport->Pos.y + viewport->Size.y - 18.0f),
+                                ImGuiCond_Always,
+                                ImVec2(1.0f, 1.0f));
+        constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                                           ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize |
+                                           ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoFocusOnAppearing;
+        if (!ImGui::Begin("##KongLie3DRendererIndicator", nullptr, flags))
+        {
+            ImGui::End();
+            return;
+        }
+
+        ImGui::TextUnformatted(gameInstance.GetRendererLabel().c_str());
+        if (gameInstance.GetBattleSystem().GetState() == KongLie3D::EBattleState::Deployment)
+        {
+            ImGui::TextDisabled("%s", KongLie3D::U8Text(u8"F3 切换渲染管线"));
+        }
+        ImGui::End();
     }
 
     void DrawHeroPanel(KongLie3DGameInstance& gameInstance)
     {
         auto& battleSystem = gameInstance.GetBattleSystem();
         ImGui::SetNextWindowPos(ImVec2(8.0f, 60.0f), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(180.0f, 420.0f), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(220.0f, 500.0f), ImGuiCond_Always);
 
         constexpr ImGuiWindowFlags flags =
             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
@@ -388,6 +618,43 @@ namespace
             ImGui::TextDisabled("Relic: None");
             ImGui::Separator();
         }
+
+        const bool previewMode = battleSystem.GetState() == KongLie3D::EBattleState::Deployment;
+        const std::vector<KongLie3D::FSynergyStatus> previewStatuses = previewMode ? battleSystem.BuildSynergyPreview()
+                                                                                   : std::vector<KongLie3D::FSynergyStatus>{};
+        const auto& displayedStatuses = previewMode ? previewStatuses : battleSystem.GetActiveSynergies();
+        ImGui::TextUnformatted(previewMode ? KongLie3D::U8Text(u8"羁绊预览") : KongLie3D::U8Text(u8"当前羁绊"));
+        if (displayedStatuses.empty())
+        {
+            ImGui::TextDisabled("%s", KongLie3D::U8Text(u8"当前阵容暂无羁绊"));
+        }
+        else
+        {
+            for (const auto& status : displayedStatuses)
+            {
+                const std::string line = status.active
+                                             ? fmt::format("{} {} ×{}  {}",
+                                                           KongLie3D::U8Text(u8"✓"),
+                                                           status.name,
+                                                           status.count,
+                                                           FormatSynergyBonus(status.activeTier))
+                                             : fmt::format("{} ×{}/{}",
+                                                           status.name,
+                                                           status.count,
+                                                           status.nextTierCount > 0 ? status.nextTierCount : status.count);
+                if (status.active)
+                {
+                    ImGui::TextColored(ImVec4(0.97f, 0.83f, 0.33f, 1.0f), "%s", line.c_str());
+                }
+                else
+                {
+                    ImGui::TextDisabled("%s", line.c_str());
+                }
+            }
+        }
+        ImGui::Separator();
+
+        ImGui::BeginChild("HeroRoster###KongLie3DHeroRoster", ImVec2(0.0f, 0.0f), false);
 
         for (const auto& piece : gameInstance.GetPieceRuntimes())
         {
@@ -424,6 +691,14 @@ namespace
 
             const std::string wText = piece.def.skillWName.empty() ? piece.def.skillW : piece.def.skillWName;
             ImGui::Text("W: %s", wText.empty() ? "-" : wText.c_str());
+            if (!piece.def.skillWDesc.empty())
+            {
+                ImGui::Indent(12.0f);
+                ImGui::PushTextWrapPos(0.0f);
+                ImGui::TextWrapped("%s", piece.def.skillWDesc.c_str());
+                ImGui::PopTextWrapPos();
+                ImGui::Unindent(12.0f);
+            }
 
             if (!piece.alive)
             {
@@ -433,7 +708,7 @@ namespace
             }
             else if (piece.ultimateUsed)
             {
-                constexpr const char* usedLabel = "\xE2\x9C\x93 \xE5\xB7\xB2\xE9\x87\x8A\xE6\x94\xBE";
+                const char* usedLabel = KongLie3D::U8Text(u8"✓ 已释放");
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.35f, 0.35f, 0.35f, 1.0f));
                 ImGui::Button(usedLabel, ImVec2(-1.0f, 0.0f));
                 ImGui::PopStyleColor();
@@ -447,7 +722,7 @@ namespace
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.90f, 0.73f, 0.12f, 1.0f));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.98f, 0.80f, 0.20f, 1.0f));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.84f, 0.67f, 0.10f, 1.0f));
-                    if (ImGui::Button("R Ready", ImVec2(-1.0f, 0.0f)))
+                    if (ButtonWithClick("R Ready", ImVec2(-1.0f, 0.0f)))
                     {
                         battleSystem.RequestUltimate(piece.pieceId);
                     }
@@ -458,11 +733,20 @@ namespace
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.30f, 0.30f, 0.34f, 1.0f));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.38f, 0.38f, 0.42f, 1.0f));
                     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.26f, 0.26f, 0.30f, 1.0f));
-                    if (ImGui::Button("R Charging", ImVec2(-1.0f, 0.0f)))
+                    if (ButtonWithClick("R Charging", ImVec2(-1.0f, 0.0f)))
                     {
                         battleSystem.RequestUltimate(piece.pieceId);
                     }
                     ImGui::PopStyleColor(3);
+                }
+
+                if (ImGui::IsItemHovered() && !piece.def.skillUltimateDesc.empty())
+                {
+                    ImGui::BeginTooltip();
+                    ImGui::PushTextWrapPos(ImGui::GetFontSize() * 18.0f);
+                    ImGui::TextWrapped("%s: %s", piece.def.skillUltimateName.c_str(), piece.def.skillUltimateDesc.c_str());
+                    ImGui::PopTextWrapPos();
+                    ImGui::EndTooltip();
                 }
             }
 
@@ -471,6 +755,7 @@ namespace
             ImGui::PopID();
         }
 
+        ImGui::EndChild();
         ImGui::End();
     }
 
@@ -545,8 +830,8 @@ namespace
         }
 
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + viewport->Size.x - 180.0f, viewport->Pos.y + 60.0f), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(170.0f, 100.0f), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + viewport->Size.x - 230.0f, viewport->Pos.y + 60.0f), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(220.0f, 235.0f), ImGuiCond_Always);
 
         constexpr ImGuiWindowFlags flags =
             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
@@ -558,17 +843,51 @@ namespace
 
         ImGui::Text("Player: %d/6", playerAlive);
         ImGui::Text("Enemy: %d/6", enemyAlive);
+        if (const auto* currentLevel = gameInstance.GetCurrentLevel())
+        {
+            ImGui::Separator();
+            ImGui::Text("%s", KongLie3D::U8Text(u8"难度"));
+            ImGui::TextColored(ImVec4(0.74f, 0.86f, 1.0f, 1.0f), "%s", currentLevel->name.c_str());
+            ImGui::TextDisabled("%s", fmt::format("Enemy DMG x{:.2f}", currentLevel->enemyDmgMult).c_str());
+
+            if (battleSystem.GetState() == KongLie3D::EBattleState::Deployment)
+            {
+                const auto& levels = gameInstance.GetLevels();
+                for (size_t index = 0; index < levels.size(); ++index)
+                {
+                    const bool selected = index == gameInstance.GetCurrentLevelIndex();
+                    if (selected)
+                    {
+                        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.24f, 0.42f, 0.78f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.30f, 0.50f, 0.88f, 1.0f));
+                        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.20f, 0.36f, 0.72f, 1.0f));
+                    }
+
+                    if (ButtonWithClick(levels[index].name.c_str(), ImVec2(-1.0f, 0.0f)))
+                    {
+                        gameInstance.SelectLevel(index);
+                    }
+
+                    if (selected)
+                    {
+                        ImGui::PopStyleColor(3);
+                    }
+                }
+            }
+        }
 
         if (battleSystem.GetState() == KongLie3D::EBattleState::Deployment)
         {
-            if (ImGui::Button("Start Battle", ImVec2(-1.0f, 0.0f)))
+            ImGui::Separator();
+            if (ButtonWithClick("Start Battle", ImVec2(-1.0f, 0.0f)))
             {
-                battleSystem.Start();
+                gameInstance.StartBattle();
             }
         }
         else if (battleSystem.GetState() == KongLie3D::EBattleState::Battle)
         {
-            if (ImGui::Button(battleSystem.IsPaused() ? "Resume" : "Pause", ImVec2(-1.0f, 0.0f)))
+            ImGui::Separator();
+            if (ButtonWithClick(battleSystem.IsPaused() ? "Resume" : "Pause", ImVec2(-1.0f, 0.0f)))
             {
                 battleSystem.TogglePause();
             }
@@ -578,6 +897,14 @@ namespace
             ImGui::BeginDisabled();
             ImGui::Button("Battle Ended", ImVec2(-1.0f, 0.0f));
             ImGui::EndDisabled();
+        }
+
+        ImGui::Separator();
+        const int speedValue = static_cast<int>(std::lround(battleSystem.GetSpeedMultiplier()));
+        const std::string speedLabel = fmt::format("Speed: {}x", speedValue);
+        if (ButtonWithClick(speedLabel.c_str(), ImVec2(-1.0f, 0.0f)))
+        {
+            battleSystem.CycleSpeedMultiplier();
         }
 
         ImGui::End();
@@ -630,8 +957,8 @@ namespace
         }
 
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + 8.0f, viewport->Pos.y + viewport->Size.y - 160.0f), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(viewport->Size.x - 16.0f, 150.0f), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + 8.0f, viewport->Pos.y + viewport->Size.y - 140.0f), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(viewport->Size.x - 16.0f, 130.0f), ImGuiCond_Always);
 
         constexpr ImGuiWindowFlags flags =
             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
@@ -695,7 +1022,7 @@ namespace
             ImGui::PushStyleColor(ImGuiCol_Button, tint);
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hovered);
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, active);
-            if (ImGui::Button(fmt::format("{} {}", relic.icon, relic.name).c_str(), ImVec2(-1.0f, 0.0f)))
+            if (ButtonWithClick(fmt::format("{} {}", relic.icon, relic.name).c_str(), ImVec2(-1.0f, 0.0f)))
             {
                 battleSystem.SelectRelic(relic.id);
             }
@@ -748,7 +1075,7 @@ namespace
         {
             const float fade = bannerElapsedMs < 500.0f ? bannerElapsedMs / 500.0f
                                                         : std::clamp((OvertimeBannerDurationMs - bannerElapsedMs) / 1000.0f, 0.0f, 1.0f);
-            const char* text = "\xE2\x9A\xA1 \xE5\x8A\xA0 \xE6\x97\xB6 \xE2\x9A\xA1";
+            const char* text = KongLie3D::U8Text(u8"⚡ 加 时 ⚡");
             const ImVec2 textSize = ImGui::CalcTextSize(text);
             const ImVec2 textPos(viewport->Pos.x + (viewport->Size.x - textSize.x) * 0.5f,
                                  viewport->Pos.y + viewport->Size.y * 0.18f);
@@ -773,7 +1100,7 @@ namespace
 
         ImVec4 borderColor(0.85f, 0.76f, 0.18f, 1.0f);
         ImVec4 backgroundColor(0.08f, 0.13f, 0.24f, 0.92f);
-        const char* title = "\xE6\x88\x98\xE6\x96\x97\xE8\x83\x9C\xE5\x88\xA9";
+        const char* title = KongLie3D::U8Text(u8"战斗胜利");
         std::string summary;
 
         int playerAlive = 0;
@@ -793,26 +1120,22 @@ namespace
         {
             borderColor = ImVec4(0.78f, 0.22f, 0.18f, 1.0f);
             backgroundColor = ImVec4(0.22f, 0.07f, 0.08f, 0.92f);
-            title = "\xE6\x88\x98\xE6\x96\x97\xE5\xA4\xB1\xE8\xB4\xA5";
-            summary = fmt::format("\xE5\x85\xA8\xE5\x86\x9B\xE8\xA6\x86\xE6\xB2\xA1 \xC2\xB7 \xE8\x80\x97\xE6\x97\xB6 {}:{:02d}", minutes, seconds);
+            title = KongLie3D::U8Text(u8"战斗失败");
+            summary = fmt::format(fmt::runtime(KongLie3D::U8Text(u8"全军覆没 · 耗时 {}:{:02d}")), minutes, seconds);
         }
         else if (battleSystem.GetWinnerTeam() == "draw")
         {
             borderColor = ImVec4(0.90f, 0.78f, 0.25f, 1.0f);
             backgroundColor = ImVec4(0.25f, 0.20f, 0.07f, 0.92f);
-            title = "\xE8\xB6\x85\xE6\x97\xB6\xE5\xB9\xB3\xE5\xB1\x80";
-            summary = fmt::format(
-                "\xE5\x8A\xA0\xE6\x97\xB6\xE8\xB5\x9B\xE7\xBB\x93\xE6\x9D\x9F\xE6\x9C\xAA\xE5\x88\x86\xE8\x83\x9C\xE8\xB4\x9F \xC2\xB7 \xE8\x80\x97\xE6\x97\xB6 {}:{:02d}",
-                minutes,
-                seconds);
+            title = KongLie3D::U8Text(u8"超时平局");
+            summary = fmt::format(fmt::runtime(KongLie3D::U8Text(u8"加时赛结束未分胜负 · 耗时 {}:{:02d}")), minutes, seconds);
         }
         else
         {
-            summary = fmt::format(
-                "\xE5\x85\xA8\xE6\xAD\xBC\xE6\x95\x8C\xE6\x96\xB9 \xC2\xB7 \xE5\xAD\x98\xE6\xB4\xBB {}/6 \xC2\xB7 \xE8\x80\x97\xE6\x97\xB6 {}:{:02d}",
-                playerAlive,
-                minutes,
-                seconds);
+            summary = fmt::format(fmt::runtime(KongLie3D::U8Text(u8"全歼敌方 · 存活 {}/6 · 耗时 {}:{:02d}")),
+                                  playerAlive,
+                                  minutes,
+                                  seconds);
         }
 
         ImGui::PushStyleColor(ImGuiCol_PopupBg, backgroundColor);
@@ -825,22 +1148,38 @@ namespace
             ImGui::Spacing();
             if (const auto* relic = gameInstance.GetBattleSystem().GetSelectedRelic())
             {
-                ImGui::TextWrapped("\xE6\x90\xBA\xE5\xB8\xA6\xE5\x9C\xA3\xE7\x89\xA9\xEF\xBC\x9A%s", relic->name.c_str());
+                ImGui::TextWrapped(KongLie3D::U8Text(u8"携带圣物：%s"), relic->name.c_str());
             }
             else
             {
-                ImGui::TextWrapped("\xE6\x90\xBA\xE5\xB8\xA6\xE5\x9C\xA3\xE7\x89\xA9\xEF\xBC\x9A\xE6\x9C\xAA\xE9\x80\x89\xE6\x8B\xA9");
+                ImGui::TextWrapped("%s", KongLie3D::U8Text(u8"携带圣物：未选择"));
+            }
+            if (const auto* currentLevel = gameInstance.GetCurrentLevel())
+            {
+                ImGui::TextWrapped(KongLie3D::U8Text(u8"当前难度：%s"), currentLevel->name.c_str());
             }
             ImGui::Spacing();
             ImGui::Spacing();
 
-            if (ImGui::Button("\xE9\x87\x8D\xE6\x9D\xA5\xE4\xB8\x80\xE5\xB1\x80", ImVec2(160.0f, 36.0f)))
+            if (battleSystem.GetWinnerTeam() == "player" && gameInstance.CanAdvanceToNextLevel())
             {
-                gameInstance.ResetBattle();
-                ImGui::CloseCurrentPopup();
+                if (ButtonWithClick(KongLie3D::U8Text(u8"下一关"), ImVec2(120.0f, 36.0f)))
+                {
+                    gameInstance.AdvanceToNextLevel();
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
             }
-            ImGui::SameLine();
-            if (ImGui::Button("\xE5\x9B\x9E\xE4\xB8\xBB\xE8\x8F\x9C\xE5\x8D\x95", ImVec2(160.0f, 36.0f)))
+
+            if (battleSystem.GetWinnerTeam() == "player" && !gameInstance.CanAdvanceToNextLevel())
+            {
+                ImGui::BeginDisabled();
+                ImGui::Button(KongLie3D::U8Text(u8"通关！"), ImVec2(120.0f, 36.0f));
+                ImGui::EndDisabled();
+                ImGui::SameLine();
+            }
+
+            if (ButtonWithClick(KongLie3D::U8Text(u8"重来当前关"), ImVec2(140.0f, 36.0f)))
             {
                 gameInstance.ResetBattle();
                 ImGui::CloseCurrentPopup();
@@ -850,12 +1189,81 @@ namespace
         }
         ImGui::PopStyleColor(2);
     }
+
+    void DrawUltimatePresentation(const KongLie3DGameInstance& gameInstance)
+    {
+        const auto& presentation = gameInstance.GetBattleSystem().GetUltimatePresentation();
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImDrawList* drawList = ImGui::GetForegroundDrawList();
+        if (!viewport || !drawList)
+        {
+            return;
+        }
+
+        if (presentation.flashRemainingMs > 0.0f && presentation.flashDurationMs > 0.0f)
+        {
+            const float alpha = 0.4f * std::clamp(presentation.flashRemainingMs / presentation.flashDurationMs, 0.0f, 1.0f);
+            drawList->AddRectFilled(viewport->Pos,
+                                    ImVec2(viewport->Pos.x + viewport->Size.x, viewport->Pos.y + viewport->Size.y),
+                                    ImGui::ColorConvertFloat4ToU32(ImVec4(
+                                        presentation.flashColor.r, presentation.flashColor.g, presentation.flashColor.b, alpha)));
+        }
+
+        if (!presentation.title.empty() && presentation.titleRemainingMs > 0.0f && presentation.titleDurationMs > 0.0f)
+        {
+            const float elapsed = presentation.titleDurationMs - presentation.titleRemainingMs;
+            float alpha = 1.0f;
+            if (elapsed < 200.0f)
+            {
+                alpha = std::clamp(elapsed / 200.0f, 0.0f, 1.0f);
+            }
+            else if (elapsed > 600.0f)
+            {
+                alpha = std::clamp((presentation.titleDurationMs - elapsed) / 400.0f, 0.0f, 1.0f);
+            }
+
+            constexpr float fontSize = 56.0f;
+            ImFont* font = ImGui::GetFont();
+            const ImVec2 textSize = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, presentation.title.c_str());
+            const ImVec2 textPos(viewport->Pos.x + (viewport->Size.x - textSize.x) * 0.5f,
+                                 viewport->Pos.y + viewport->Size.y * 0.22f);
+            const ImU32 shadowColor = IM_COL32(8, 8, 12, static_cast<int>(alpha * 160.0f));
+            const ImU32 textColor = ImGui::ColorConvertFloat4ToU32(
+                ImVec4(presentation.titleColor.r, presentation.titleColor.g, presentation.titleColor.b, alpha));
+            drawList->AddText(font, fontSize, ImVec2(textPos.x + 2.0f, textPos.y + 2.0f), shadowColor, presentation.title.c_str());
+            drawList->AddText(font, fontSize, textPos, textColor, presentation.title.c_str());
+        }
+    }
+
+    void DrawHoveredPieceTooltip(const KongLie3DGameInstance& gameInstance)
+    {
+        if (gameInstance.GetDraggingPiece() || ImGui::GetIO().WantCaptureMouse)
+        {
+            return;
+        }
+
+        const KongLie3D::FPieceRuntime* piece = gameInstance.GetHoveredTooltipPiece();
+        if (!piece || !piece->alive || piece->onBench)
+        {
+            return;
+        }
+
+        ImGui::BeginTooltip();
+        ImGui::Text("%s  [%s]", piece->def.name.c_str(), piece->def.role.c_str());
+        ImGui::Separator();
+        ImGui::Text("HP %d/%d", piece->currentHp, piece->def.hp);
+        ImGui::Text("ATK %d  ATK_SPD %.2f", piece->def.atk, piece->def.atkSpeed * piece->GetAttackSpeedMultiplier());
+        ImGui::Text("Range %d", piece->def.range);
+        ImGui::TextUnformatted(piece->def.team == "player" ? KongLie3D::U8Text(u8"我方") : KongLie3D::U8Text(u8"敌方"));
+        ImGui::EndTooltip();
+    }
 }
 
 namespace KongLie3D
 {
     void RenderHUD(KongLie3DGameInstance& gameInstance)
     {
+        DrawDeploymentZoneGuidance(gameInstance);
         DrawDragHighlights(gameInstance);
         DrawAttackTraces(gameInstance);
         DrawSkillEffects(gameInstance);
@@ -867,6 +1275,10 @@ namespace KongLie3D
         DrawRelicPanel(gameInstance);
         DrawStatsPanel(gameInstance);
         DrawOvertimeOverlay(gameInstance);
+        DrawUltimatePresentation(gameInstance);
+        DrawDeploymentHintOverlay(gameInstance);
+        DrawRendererIndicator(gameInstance);
+        DrawHoveredPieceTooltip(gameInstance);
         DrawResultModal(gameInstance);
     }
 }

@@ -65,6 +65,7 @@ namespace Assets
         std::vector<FMaterial>& Materials() { return materials_; }
         const std::vector<FMaterial>& Materials() const { return materials_; }
         const std::vector<ModelData>& Offsets() const { return offsets_; }
+        std::vector<LightObject>& Lights() { return lights_; }
         const std::vector<LightObject>& Lights() const { return lights_; }
         const Vulkan::Buffer& VertexBuffer() const { return *vertexBuffer_; }
         const Vulkan::Buffer& SimpleVertexBuffer() const { return *simpleVertexBuffer_; }
@@ -120,6 +121,7 @@ namespace Assets
         const uint32_t AddMaterial(const FMaterial& material);
 
         void MarkDirty();
+        void MarkTransformDirty();
         void MarkSelectionDirty();
 
         std::vector<NodeProxy>& GetNodeProxys() { return nodeProxys; }
