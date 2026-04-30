@@ -124,6 +124,10 @@ add_executable(MagicaLego
 	${src_files_magicalego}
 	DesktopMain.cpp
 )
+add_executable(KongLie3D
+	${src_files_konglie3d}
+	DesktopMain.cpp
+)
 add_executable(BrickPlayer
 	${src_files_brickplayer}
 	DesktopMain.cpp
@@ -194,12 +198,13 @@ NextGameplay
 gkNextRenderer
 gkNextStillBenchmark
 gkNextMotionBenchmark
-gkNextVisualTest
-gkNextEditor
-Packager
-MagicaLego
-BrickPlayer
-CharacterDemo
+	gkNextVisualTest
+	gkNextEditor
+	Packager
+	MagicaLego
+	KongLie3D
+	BrickPlayer
+	CharacterDemo
 )
 else()
 set(AllTargets
@@ -208,13 +213,14 @@ NextGameplay
 gkNextRenderer
 gkNextStillBenchmark
 gkNextMotionBenchmark
-gkNextVisualTest
-gkNextEditor
-Packager
-MagicaLego
-BrickPlayer
-CharacterDemo
-gkNextUnitTests
+	gkNextVisualTest
+	gkNextEditor
+	Packager
+	MagicaLego
+	KongLie3D
+	BrickPlayer
+	CharacterDemo
+	gkNextUnitTests
 )
 endif()
 
