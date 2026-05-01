@@ -128,6 +128,10 @@ add_executable(KongLie3D
 	${src_files_konglie3d}
 	DesktopMain.cpp
 )
+add_executable(Brotato3D
+	${src_files_brotato3d}
+	DesktopMain.cpp
+)
 add_executable(BrickPlayer
 	${src_files_brickplayer}
 	DesktopMain.cpp
@@ -203,6 +207,7 @@ gkNextMotionBenchmark
 	Packager
 	MagicaLego
 	KongLie3D
+	Brotato3D
 	BrickPlayer
 	CharacterDemo
 )
@@ -218,6 +223,7 @@ gkNextMotionBenchmark
 	Packager
 	MagicaLego
 	KongLie3D
+	Brotato3D
 	BrickPlayer
 	CharacterDemo
 	gkNextUnitTests

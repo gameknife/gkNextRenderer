@@ -1,0 +1,10 @@
+{
+  "cards": [
+    {"id":"dmg_pct",   "name":"+15% Damage",        "stat":"damagePct",      "delta":0.15, "weight":3},
+    {"id":"atkspd_pct","name":"+12% Attack Speed",  "stat":"atkSpeedPct",    "delta":0.12, "weight":3},
+    {"id":"speed_pct", "name":"+10% Move Speed",    "stat":"moveSpeedPct",   "delta":0.10, "weight":2},
+    {"id":"hp_flat",   "name":"+15 Max HP",         "stat":"maxHpFlat",      "delta":15,   "weight":3},
+    {"id":"range_pct", "name":"+15% Range",         "stat":"rangePct",       "delta":0.15, "weight":2},
+    {"id":"pickup",    "name":"+25% Pickup Radius", "stat":"pickupRadiusPct","delta":0.25, "weight":2}
+  ]
+}
