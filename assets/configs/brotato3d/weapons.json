@@ -1,0 +1,27 @@
+{
+  "weapons": {
+    "smg": {
+      "name": "SMG",
+      "damage": 6,
+      "atkSpeedHz": 4.0,
+      "rangeMeters": 7.0,
+      "projectileSpeed": 18.0,
+      "projectileLifetimeMs": 800,
+      "projectileColor": [1.0, 0.85, 0.2],
+      "projectileSize": 0.12,
+      "spreadDeg": 4.0
+    },
+    "shotgun": {
+      "name": "Shotgun",
+      "damage": 4,
+      "atkSpeedHz": 1.0,
+      "rangeMeters": 5.5,
+      "projectileSpeed": 16.0,
+      "projectileLifetimeMs": 500,
+      "projectileColor": [1.0, 0.4, 0.2],
+      "projectileSize": 0.14,
+      "pellets": 5,
+      "spreadDeg": 18.0
+    }
+  }
+}

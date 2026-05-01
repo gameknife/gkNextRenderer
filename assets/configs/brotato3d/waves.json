@@ -1,0 +1,16 @@
+{
+  "waves": [
+    { "durationSec": 30, "spawns": [ {"enemyId":"rat","count":18,"intervalMs":1100} ] },
+    { "durationSec": 30, "spawns": [ {"enemyId":"rat","count":24,"intervalMs":900},
+                                     {"enemyId":"spitter","count":4,"intervalMs":4500} ] },
+    { "durationSec": 30, "spawns": [ {"enemyId":"rat","count":28,"intervalMs":750},
+                                     {"enemyId":"spitter","count":8,"intervalMs":2800},
+                                     {"enemyId":"tank","count":2,"intervalMs":12000} ] },
+    { "durationSec": 30, "spawns": [ {"enemyId":"rat","count":36,"intervalMs":600},
+                                     {"enemyId":"spitter","count":12,"intervalMs":2200},
+                                     {"enemyId":"tank","count":4,"intervalMs":7500} ] },
+    { "durationSec": 30, "spawns": [ {"enemyId":"rat","count":50,"intervalMs":450},
+                                     {"enemyId":"spitter","count":16,"intervalMs":1700},
+                                     {"enemyId":"tank","count":7,"intervalMs":4500} ] }
+  ]
+}

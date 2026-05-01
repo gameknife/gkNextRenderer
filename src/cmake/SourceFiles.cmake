@@ -97,6 +97,11 @@ file(GLOB_RECURSE src_files_konglie3d
     "Application/KongLie3D/*.hpp"
 )
 
+file(GLOB_RECURSE src_files_brotato3d
+    "Application/Brotato3D/*.cpp"
+    "Application/Brotato3D/*.hpp"
+)
+
 file(GLOB_RECURSE src_files_characterdemo
     "Application/CharacterDemo/*.cpp"
     "Application/CharacterDemo/*.hpp"

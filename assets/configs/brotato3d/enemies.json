@@ -1,0 +1,35 @@
+{
+  "enemies": {
+    "rat": {
+      "name": "Rat",
+      "hp": 14,
+      "moveSpeed": 3.6,
+      "contactDamage": 4,
+      "size": [0.45, 0.45, 0.45],
+      "color": [0.65, 0.45, 0.25],
+      "xpDrop": 1,
+      "materialDrop": 1
+    },
+    "tank": {
+      "name": "Brute",
+      "hp": 60,
+      "moveSpeed": 1.6,
+      "contactDamage": 12,
+      "size": [0.85, 0.9, 0.85],
+      "color": [0.55, 0.15, 0.20],
+      "xpDrop": 5,
+      "materialDrop": 4
+    },
+    "spitter": {
+      "name": "Spitter",
+      "hp": 18,
+      "moveSpeed": 2.2,
+      "contactDamage": 6,
+      "size": [0.55, 0.55, 0.55],
+      "color": [0.30, 0.65, 0.45],
+      "xpDrop": 2,
+      "materialDrop": 2,
+      "kitingDistance": 4.5
+    }
+  }
+}
