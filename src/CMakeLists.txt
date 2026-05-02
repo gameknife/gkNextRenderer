@@ -132,6 +132,7 @@ add_executable(Brotato3D
 	${src_files_brotato3d}
 	DesktopMain.cpp
 )
+target_compile_definitions(Brotato3D PRIVATE DEV_MODE=1)
 add_executable(BrickPlayer
 	${src_files_brickplayer}
 	DesktopMain.cpp

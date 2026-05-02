@@ -1,0 +1,22 @@
+{
+  "arenas": [
+    {
+      "id": "grassland",
+      "name": "绿野",
+      "groundColor": [0.32, 0.40, 0.28],
+      "borderColor": [0.45, 0.55, 0.35]
+    },
+    {
+      "id": "wasteland",
+      "name": "荒地",
+      "groundColor": [0.42, 0.36, 0.28],
+      "borderColor": [0.55, 0.50, 0.40]
+    },
+    {
+      "id": "tech_grid",
+      "name": "数码",
+      "groundColor": [0.18, 0.22, 0.30],
+      "borderColor": [0.35, 0.55, 0.85]
+    }
+  ]
+}

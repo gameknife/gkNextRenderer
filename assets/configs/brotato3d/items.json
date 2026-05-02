@@ -1,0 +1,73 @@
+{
+  "items": [
+    {
+      "id": "vampire_fang",
+      "name": "吸血鬼之牙",
+      "description": "每次击杀回 1 HP",
+      "trigger": "on_kill",
+      "effect": "heal",
+      "value": 1,
+      "rarity": "common",
+      "weight": 3,
+      "cost": 18
+    },
+    {
+      "id": "regen_charm",
+      "name": "再生护符",
+      "description": "每 2 秒回 1 HP",
+      "trigger": "on_tick",
+      "effect": "heal_per_sec",
+      "value": 0.5,
+      "rarity": "common",
+      "weight": 3,
+      "cost": 22
+    },
+    {
+      "id": "magnet",
+      "name": "磁吸宝石",
+      "description": "拾取半径 +60%",
+      "trigger": "passive_stat",
+      "effect": "stat_pickupRadiusPct",
+      "value": 0.6,
+      "rarity": "uncommon",
+      "weight": 2,
+      "cost": 16
+    },
+    {
+      "id": "fury_core",
+      "name": "狂怒核心",
+      "description": "HP 低于 50% 时伤害 +30%",
+      "trigger": "low_hp_buff",
+      "effect": "stat_damagePct",
+      "value": 0.3,
+      "threshold": 0.5,
+      "rarity": "rare",
+      "weight": 1,
+      "cost": 32
+    },
+    {
+      "id": "shrapnel",
+      "name": "碎片榴弹",
+      "description": "击杀有 25% 概率小爆炸",
+      "trigger": "on_kill_chance",
+      "effect": "explosion",
+      "value": 0.25,
+      "explosionRadius": 1.2,
+      "explosionDamage": 12,
+      "rarity": "rare",
+      "weight": 1,
+      "cost": 30
+    },
+    {
+      "id": "speed_boots",
+      "name": "疾行靴",
+      "description": "移速 +25%（永久）",
+      "trigger": "passive_stat",
+      "effect": "stat_moveSpeedPct",
+      "value": 0.25,
+      "rarity": "uncommon",
+      "weight": 2,
+      "cost": 18
+    }
+  ]
+}
