@@ -68,6 +68,11 @@ namespace Brotato3D
             waveTimeRemainingSec_ -= static_cast<float>(dt);
             if (waveTimeRemainingSec_ <= 0.0f)
             {
+                if (wave.bgmCue == "boss")
+                {
+                    waveTimeRemainingSec_ = 0.0f;
+                    return;
+                }
                 spdlog::info("[Brotato3D] [Wave {} ended]", currentWaveIndex_ + 1);
                 waveEndedEvent_ = true;
                 if (currentWaveIndex_ + 1 >= static_cast<int>(waves_.size()))
@@ -119,6 +124,15 @@ namespace Brotato3D
     void FWaveSystem::ForceAllCleared()
     {
         state_ = EWaveState::AllCleared;
+    }
+
+    const FWaveDef* FWaveSystem::GetCurrentWaveDef() const
+    {
+        if (currentWaveIndex_ < 0 || currentWaveIndex_ >= static_cast<int>(waves_.size()))
+        {
+            return nullptr;
+        }
+        return &waves_[currentWaveIndex_];
     }
 
     void FWaveSystem::ResetSpawnRuntime()

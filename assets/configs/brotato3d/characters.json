@@ -1,0 +1,41 @@
+{
+  "characters": [
+    {
+      "id": "soldier",
+      "name": "Soldier",
+      "tagline": "全能战士，平衡型起手",
+      "color": [0.30, 0.65, 0.90],
+      "startWeapon": "smg",
+      "startStats": {
+        "maxHpFlat": 50,
+        "atkSpeedPct": 0.0,
+        "moveSpeedPct": 0.0
+      }
+    },
+    {
+      "id": "brawler",
+      "name": "Brawler",
+      "tagline": "近距离爆破，高伤短射程",
+      "color": [0.85, 0.30, 0.30],
+      "startWeapon": "shotgun",
+      "startStats": {
+        "maxHpFlat": 70,
+        "damagePct": 0.20,
+        "rangePct": -0.20,
+        "moveSpeedPct": 0.10
+      }
+    },
+    {
+      "id": "marksman",
+      "name": "Marksman",
+      "tagline": "远距离精准，暴击专精",
+      "color": [0.20, 0.80, 0.55],
+      "startWeapon": "sniper",
+      "startStats": {
+        "maxHpFlat": 35,
+        "critChancePct": 0.10,
+        "rangePct": 0.20
+      }
+    }
+  ]
+}

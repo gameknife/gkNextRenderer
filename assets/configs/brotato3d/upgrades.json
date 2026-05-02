@@ -5,6 +5,8 @@
     {"id":"speed_pct", "name":"+10% Move Speed",    "stat":"moveSpeedPct",   "delta":0.10, "weight":2},
     {"id":"hp_flat",   "name":"+15 Max HP",         "stat":"maxHpFlat",      "delta":15,   "weight":3},
     {"id":"range_pct", "name":"+15% Range",         "stat":"rangePct",       "delta":0.15, "weight":2},
-    {"id":"pickup",    "name":"+25% Pickup Radius", "stat":"pickupRadiusPct","delta":0.25, "weight":2}
+    {"id":"pickup",    "name":"+25% Pickup Radius", "stat":"pickupRadiusPct","delta":0.25, "weight":2},
+    {"id":"crit_chance","name":"+8% Crit Chance",   "stat":"critChancePct",  "delta":0.08, "weight":2},
+    {"id":"crit_multi", "name":"+30% Crit Damage",  "stat":"critMultiplier", "delta":0.30, "weight":2}
   ]
 }

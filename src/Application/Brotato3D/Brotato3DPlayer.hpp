@@ -20,6 +20,8 @@ namespace Brotato3D
         float rangePct = 0.0f;
         float moveSpeedPct = 0.0f;
         float pickupRadiusPct = 0.0f;
+        float critChancePct = 0.05f;
+        float critMultiplier = 2.0f;
         int maxHpFlatBonus = 0;
     };
 
@@ -35,6 +37,7 @@ namespace Brotato3D
         int level = 1;
         int pendingLevelUps = 0;
         FPlayerStats stats;
+        std::vector<std::string> ownedItemIds;
         std::shared_ptr<Assets::Node> bodyNode;
         std::shared_ptr<Assets::Node> facingNode;
         std::shared_ptr<Assets::Node> smgWeaponNode;

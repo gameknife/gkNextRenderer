@@ -4,6 +4,8 @@
     {"id":"buy_hp",    "name":"+20 Max HP",      "stat":"maxHpFlat",   "delta":20,  "cost":10, "weight":3},
     {"id":"buy_speed", "name":"+8% Move Speed",  "stat":"moveSpeedPct","delta":0.08,"cost":8,  "weight":2},
     {"id":"buy_atkspd","name":"+10% Atk Speed",  "stat":"atkSpeedPct", "delta":0.10,"cost":15, "weight":2},
-    {"id":"buy_heal",  "name":"Heal 30% HP",     "stat":"healPct",     "delta":0.30,"cost":8,  "weight":2}
+    {"id":"buy_heal",  "name":"Heal 30% HP",     "stat":"healPct",     "delta":0.30,"cost":8,  "weight":2},
+    {"id":"buy_crit_chance","name":"+6% Crit Chance","stat":"critChancePct","delta":0.06,"cost":12,"weight":2},
+    {"id":"buy_crit_multi", "name":"+25% Crit Damage","stat":"critMultiplier","delta":0.25,"cost":14,"weight":2}
   ]
 }

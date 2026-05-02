@@ -1,11 +1,24 @@
 #pragma once
 
 #include "Common/CoreMinimal.hpp"
+#include "Brotato3DPlayer.hpp"
 
 #include <glm/ext.hpp>
 
 namespace Brotato3D
 {
+    struct FEnemyRangedDef
+    {
+        int dmg = 0;
+        float speed = 0.0f;
+        float lifetimeMs = 0.0f;
+        glm::vec3 color = glm::vec3(0.3f, 0.95f, 0.2f);
+        float size = 0.18f;
+        float intervalMs = 0.0f;
+        float preferredDistance = 0.0f;
+        bool enabled = false;
+    };
+
     struct FEnemyDef
     {
         std::string name;
@@ -17,6 +30,38 @@ namespace Brotato3D
         int xpDrop = 1;
         int materialDrop = 1;
         float kitingDistance = 0.0f;
+        FEnemyRangedDef ranged{};
+        struct FChargeDef
+        {
+            float triggerDistance = 0.0f;
+            float chargeSpeedMult = 1.0f;
+            float chargeRampSec = 0.0f;
+            float contactDamageMult = 1.0f;
+            float cooldownMs = 0.0f;
+            bool enabled = false;
+        } charge{};
+        struct FBombDef
+        {
+            float triggerDistance = 0.0f;
+            float fuseMs = 0.0f;
+            float explosionRadius = 0.0f;
+            int explosionDamage = 0;
+            bool enabled = false;
+        } bomb{};
+        struct FHealDef
+        {
+            float radiusMeters = 0.0f;
+            int healAmount = 0;
+            float intervalMs = 0.0f;
+            bool enabled = false;
+        } heal{};
+        struct FBossDef
+        {
+            float phase2HpRatio = 0.5f;
+            float phase2MoveSpeedMult = 1.0f;
+            float phase2ContactDamageMult = 1.0f;
+            bool enabled = false;
+        } boss{};
     };
 
     struct FWeaponDef
@@ -31,6 +76,14 @@ namespace Brotato3D
         float projectileSize = 0.12f;
         int pellets = 1;
         float spreadDeg = 0.0f;
+        int pierceCount = 0;
+        float explosionRadius = 0.0f;
+        int explosionDamage = 0;
+        bool instantHit = false;
+        float beamWidth = 0.0f;
+        float beamDurationMs = 0.0f;
+        float critChanceBonus = 0.0f;
+        int tier = 1;
     };
 
     struct FUpgradeCardDef
@@ -50,6 +103,51 @@ namespace Brotato3D
         float delta = 0.0f;
         int cost = 0;
         int weight = 1;
+        bool isPassiveItem = false;
+        std::string description;
+        std::string rarity;
+        std::string trigger;
+        std::string effect;
+        float value = 0.0f;
+        float threshold = 0.0f;
+        float explosionRadius = 0.0f;
+        int explosionDamage = 0;
+        bool isWeaponCard = false;
+        std::string weaponId;
+    };
+
+    struct FItemDef
+    {
+        std::string id;
+        std::string name;
+        std::string description;
+        std::string trigger;
+        std::string effect;
+        std::string rarity;
+        float value = 0.0f;
+        float threshold = 0.0f;
+        float explosionRadius = 0.0f;
+        int explosionDamage = 0;
+        int weight = 1;
+        int cost = 0;
+    };
+
+    struct FCharacterDef
+    {
+        std::string id;
+        std::string name;
+        std::string tagline;
+        glm::vec3 color = glm::vec3(1.0f);
+        std::string startWeapon;
+        FPlayerStats startStats{};
+    };
+
+    struct FArenaDef
+    {
+        std::string id;
+        std::string name;
+        glm::vec3 groundColor = glm::vec3(0.32f, 0.40f, 0.28f);
+        glm::vec3 borderColor = glm::vec3(0.45f, 0.55f, 0.35f);
     };
 
     struct FSpawnEntry
@@ -62,6 +160,7 @@ namespace Brotato3D
     struct FWaveDef
     {
         int durationSec = 30;
+        std::string bgmCue;
         std::vector<FSpawnEntry> spawns;
     };
 
@@ -69,5 +168,9 @@ namespace Brotato3D
     bool LoadWeapons(const std::string& path, std::map<std::string, FWeaponDef>& outWeapons);
     bool LoadUpgrades(const std::string& path, std::vector<FUpgradeCardDef>& outCards);
     bool LoadShopItems(const std::string& path, std::vector<FShopItemDef>& outItems);
+    bool LoadItems(const std::string& path, std::vector<FItemDef>& outItems);
+    bool LoadCharacters(const std::string& path, std::vector<FCharacterDef>& outCharacters);
+    bool LoadArenas(const std::string& path, std::vector<FArenaDef>& outArenas);
+    bool LoadI18n(const std::string& path, std::map<std::string, std::string>& outTexts);
     bool LoadWaves(const std::string& path, std::vector<FWaveDef>& outWaves);
 }

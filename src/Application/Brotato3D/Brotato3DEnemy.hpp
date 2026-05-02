@@ -22,10 +22,19 @@ namespace Brotato3D
         float hitFlashRemainingMs = 0.0f;
         float deathFadeMs = 0.0f;
         float contactCooldownMs = 0.0f;
+        float rangedFireCooldownMs = 0.0f;
+        float chargeRampMs = 0.0f;
+        float chargeCooldownMs = 0.0f;
+        bool charging = false;
+        float bombFuseMs = -1.0f;
+        float healIntervalMs = 0.0f;
+        bool bossPhase2Active = false;
         uint32_t modelId = 0;
         uint32_t materialId = 0;
         uint32_t darkMaterialId = 0;
         uint32_t hitFlashMaterialId = 0;
+        uint32_t warningMaterialId = 0;
+        uint32_t phase2MaterialId = 0;
         std::shared_ptr<Assets::Node> node;
     };
 }

@@ -9,6 +9,8 @@ namespace Brotato3D
     {
         std::string weaponId;
         const FWeaponDef* def = nullptr;
+        FWeaponDef tieredDef{};
+        int tier = 1;
         float cooldownMs = 0.0f;
     };
 }

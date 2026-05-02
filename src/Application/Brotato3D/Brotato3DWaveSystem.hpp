@@ -27,6 +27,7 @@ namespace Brotato3D
         EWaveState GetState() const { return state_; }
         int GetCurrentWaveIndex() const { return currentWaveIndex_; }
         int GetWaveCount() const { return static_cast<int>(waves_.size()); }
+        const FWaveDef* GetCurrentWaveDef() const;
         float GetWaveTimeRemainingSec() const { return waveTimeRemainingSec_; }
         float GetIntermissionTimeRemainingSec() const { return intermissionTimeRemainingSec_; }
         bool ConsumeWaveEnded() { return std::exchange(waveEndedEvent_, false); }
