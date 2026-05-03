@@ -75,12 +75,14 @@ void Brotato3DGameInstance::GoToMainMenu()
     Brotato3D::StopBgm();
     ResetRuntimeState();
     appState_ = Brotato3D::EAppState::MainMenu;
+    Brotato3D::StartBgm("calm");
 }
 
 void Brotato3DGameInstance::GoToCharacterSelect()
 {
     Brotato3D::PlayUiClickSfx();
     appState_ = Brotato3D::EAppState::CharacterSelect;
+    Brotato3D::StartBgm("calm");
     ClearMovementInput();
 }
 

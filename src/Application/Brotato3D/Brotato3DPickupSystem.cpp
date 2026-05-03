@@ -81,7 +81,7 @@ void Brotato3DGameInstance::UpdatePickups(double deltaSeconds)
             {
                 Brotato3D::PlayPickupXpSfx();
                 player_.currentXp += pickup.value;
-                PushFloatingText(player_.worldPos, fmt::format("+{} XP", pickup.value), glm::vec4(0.2f, 1.0f, 0.35f, 1.0f),
+                PushFloatingText(player_.worldPos + glm::vec3(0.0f, 0.6f, 0.0f), fmt::format("+{} XP", pickup.value), glm::vec4(0.2f, 1.0f, 0.35f, 1.0f),
                                  500.0f);
                 while (player_.currentXp >= GetXpToNextLevel())
                 {
@@ -99,7 +99,7 @@ void Brotato3DGameInstance::UpdatePickups(double deltaSeconds)
                 Brotato3D::PlayPickupMaterialSfx();
                 player_.materials += pickup.value;
                 totalMaterialsGained_ += pickup.value;
-                PushFloatingText(player_.worldPos, fmt::format("+{} MAT", pickup.value), glm::vec4(1.0f, 0.85f, 0.15f, 1.0f),
+                PushFloatingText(player_.worldPos + glm::vec3(0.0f, 0.2f, 0.0f), fmt::format("+{} MAT", pickup.value), glm::vec4(1.0f, 0.85f, 0.15f, 1.0f),
                                  500.0f);
                 spdlog::info("[Brotato3D] Materials {}", player_.materials);
             }

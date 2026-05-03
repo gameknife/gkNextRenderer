@@ -70,6 +70,7 @@ void Brotato3DGameInstance::RerollShop()
     if (shop_.Reroll(player_.materials, player_.ownedItemIds, equippedWeapons_, shopOffers_))
     {
         Brotato3D::PlayUiClickSfx();
+        Brotato3D::PlayShopRerollSfx();
         spdlog::info("[Brotato3D] Shop rerolled, materials={}", player_.materials);
     }
 }

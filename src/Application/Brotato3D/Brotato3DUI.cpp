@@ -2,11 +2,17 @@
 
 #include <imgui.h>
 
+#include "Assets/GPU/Texture.hpp"
 #include "Brotato3DAudio.hpp"
+#include "Brotato3DAssetPaths.hpp"
 #include "Brotato3DGameInstance.hpp"
+#include "Runtime/Editor/UserInterface.hpp"
+#include "Utilities/StbImage.hpp"
 
 namespace
 {
+    void DrawFullscreenDim(const ImGuiViewport* viewport, float alpha);
+
     float GetUiScale(const ImGuiViewport* viewport)
     {
         return std::max(0.75f, std::min(viewport->Size.x / 1280.0f, viewport->Size.y / 720.0f));
@@ -22,6 +28,232 @@ namespace
         return ImGui::ColorConvertFloat4ToU32(ImVec4(color.r, color.g, color.b, color.a));
     }
 
+    ImTextureID EmptyTexture()
+    {
+        return static_cast<ImTextureID>(0);
+    }
+
+    ImTextureID LoadUiTexture(Brotato3DGameInstance& gameInstance, const std::string& path, bool srgb = true)
+    {
+        static std::unordered_set<std::string> loadedTextures;
+        if (path.empty() || !std::filesystem::exists(path))
+        {
+            return EmptyTexture();
+        }
+
+        if (loadedTextures.insert(path).second)
+        {
+            Assets::GlobalTexturePool::LoadTexture(path, srgb);
+        }
+
+        const VkDescriptorSet descriptor = gameInstance.GetEngine().GetUserInterface()->RequestImTextureByName(path);
+        return descriptor != VK_NULL_HANDLE ? reinterpret_cast<ImTextureID>(descriptor) : EmptyTexture();
+    }
+
+    ImTextureID LoadHudTexture(Brotato3DGameInstance& gameInstance, const std::string& relPath)
+    {
+        return LoadUiTexture(gameInstance, Brotato3D::PlaceholderAssets::Hud(relPath));
+    }
+
+    ImTextureID LoadMenuTexture(Brotato3DGameInstance& gameInstance, const std::string& relPath)
+    {
+        return LoadUiTexture(gameInstance, Brotato3D::PlaceholderAssets::Menu(relPath));
+    }
+
+    ImTextureID LoadIconTexture(Brotato3DGameInstance& gameInstance, const std::string& category, const std::string& id)
+    {
+        return LoadUiTexture(gameInstance, Brotato3D::PlaceholderAssets::Icon(category, id));
+    }
+
+    ImVec2 GetTexturePixelSize(const std::string& path)
+    {
+        static std::unordered_map<std::string, ImVec2> sizeCache;
+        if (const auto it = sizeCache.find(path); it != sizeCache.end())
+        {
+            return it->second;
+        }
+
+        int width = 0;
+        int height = 0;
+        int comp = 0;
+        if (stbi_info(path.c_str(), &width, &height, &comp) != 0 && width > 0 && height > 0)
+        {
+            const ImVec2 size(static_cast<float>(width), static_cast<float>(height));
+            sizeCache.emplace(path, size);
+            return size;
+        }
+
+        sizeCache.emplace(path, ImVec2(0.0f, 0.0f));
+        return ImVec2(0.0f, 0.0f);
+    }
+
+    ImVec2 CalcFontTextSize(ImFont* font, float fontSize, const std::string& text)
+    {
+        if (!font)
+        {
+            return ImGui::CalcTextSize(text.c_str());
+        }
+        return font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, text.c_str());
+    }
+
+    void DrawImageContain(ImDrawList* drawList,
+                          ImTextureID texture,
+                          const ImVec2& textureSize,
+                          const ImVec2& boxMin,
+                          const ImVec2& boxMax,
+                          float padding = 0.0f,
+                          ImU32 tint = IM_COL32_WHITE)
+    {
+        if (!texture)
+        {
+            return;
+        }
+
+        const float availWidth = std::max(1.0f, (boxMax.x - boxMin.x) - padding * 2.0f);
+        const float availHeight = std::max(1.0f, (boxMax.y - boxMin.y) - padding * 2.0f);
+        if (textureSize.x <= 0.0f || textureSize.y <= 0.0f)
+        {
+            drawList->AddImage(texture,
+                               ImVec2(boxMin.x + padding, boxMin.y + padding),
+                               ImVec2(boxMin.x + padding + availWidth, boxMin.y + padding + availHeight),
+                               ImVec2(0.0f, 0.0f),
+                               ImVec2(1.0f, 1.0f),
+                               tint);
+            return;
+        }
+
+        const float scale = std::min(availWidth / textureSize.x, availHeight / textureSize.y);
+        const ImVec2 drawSize(textureSize.x * scale, textureSize.y * scale);
+        const ImVec2 drawMin(boxMin.x + padding + (availWidth - drawSize.x) * 0.5f,
+                             boxMin.y + padding + (availHeight - drawSize.y) * 0.5f);
+        drawList->AddImage(texture,
+                           drawMin,
+                           ImVec2(drawMin.x + drawSize.x, drawMin.y + drawSize.y),
+                           ImVec2(0.0f, 0.0f),
+                           ImVec2(1.0f, 1.0f),
+                           tint);
+    }
+
+    void DrawImageCover(ImDrawList* drawList,
+                        ImTextureID texture,
+                        const ImVec2& textureSize,
+                        const ImVec2& boxMin,
+                        const ImVec2& boxMax,
+                        ImU32 tint = IM_COL32_WHITE)
+    {
+        if (!texture)
+        {
+            return;
+        }
+
+        if (textureSize.x <= 0.0f || textureSize.y <= 0.0f)
+        {
+            drawList->AddImage(texture, boxMin, boxMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), tint);
+            return;
+        }
+
+        const float boxWidth = std::max(1.0f, boxMax.x - boxMin.x);
+        const float boxHeight = std::max(1.0f, boxMax.y - boxMin.y);
+        const float boxAspect = boxWidth / boxHeight;
+        const float imageAspect = textureSize.x / textureSize.y;
+        ImVec2 uvMin(0.0f, 0.0f);
+        ImVec2 uvMax(1.0f, 1.0f);
+
+        if (imageAspect > boxAspect)
+        {
+            const float visibleWidth = boxAspect / imageAspect;
+            uvMin.x = (1.0f - visibleWidth) * 0.5f;
+            uvMax.x = uvMin.x + visibleWidth;
+        }
+        else
+        {
+            const float visibleHeight = imageAspect / boxAspect;
+            uvMin.y = (1.0f - visibleHeight) * 0.5f;
+            uvMax.y = uvMin.y + visibleHeight;
+        }
+
+        drawList->AddImage(texture, boxMin, boxMax, uvMin, uvMax, tint);
+    }
+
+    void DrawNineSlicePanel(ImDrawList* drawList,
+                            ImTextureID texture,
+                            const ImVec2& textureSize,
+                            const ImVec2& min,
+                            const ImVec2& max,
+                            ImU32 tint)
+    {
+        if (!texture)
+        {
+            return;
+        }
+
+        if (textureSize.x < 3.0f || textureSize.y < 3.0f)
+        {
+            drawList->AddImage(texture, min, max);
+            return;
+        }
+
+        const float width = std::max(1.0f, max.x - min.x);
+        const float height = std::max(1.0f, max.y - min.y);
+        const float leftPixels = std::floor(textureSize.x * 0.5f);
+        const float rightPixels = std::max(0.0f, textureSize.x - leftPixels - 1.0f);
+        const float topPixels = std::floor(textureSize.y * 0.5f);
+        const float bottomPixels = std::max(0.0f, textureSize.y - topPixels - 1.0f);
+        const float leftWidth = std::min(leftPixels, width * 0.5f);
+        const float rightWidth = std::min(rightPixels, width * 0.5f);
+        const float topHeight = std::min(topPixels, height * 0.5f);
+        const float bottomHeight = std::min(bottomPixels, height * 0.5f);
+        const float x0 = min.x;
+        const float x1 = min.x + leftWidth;
+        const float x2 = max.x - rightWidth;
+        const float x3 = max.x;
+        const float y0 = min.y;
+        const float y1 = min.y + topHeight;
+        const float y2 = max.y - bottomHeight;
+        const float y3 = max.y;
+        const float u0 = 0.0f;
+        const float u1 = leftWidth / textureSize.x;
+        const float u2 = 1.0f - rightWidth / textureSize.x;
+        const float u3 = 1.0f;
+        const float v0 = 0.0f;
+        const float v1 = topHeight / textureSize.y;
+        const float v2 = 1.0f - bottomHeight / textureSize.y;
+        const float v3 = 1.0f;
+
+        auto addPatch = [drawList, texture, tint](float ax, float ay, float bx, float by, float au, float av, float bu, float bv)
+        {
+            drawList->AddImage(texture, ImVec2(ax, ay), ImVec2(bx, by), ImVec2(au, av), ImVec2(bu, bv), tint);
+        };
+
+        addPatch(x0, y0, x1, y1, u0, v0, u1, v1);
+        addPatch(x1, y0, x2, y1, u1, v0, u2, v1);
+        addPatch(x2, y0, x3, y1, u2, v0, u3, v1);
+        addPatch(x0, y1, x1, y2, u0, v1, u1, v2);
+        addPatch(x1, y1, x2, y2, u1, v1, u2, v2);
+        addPatch(x2, y1, x3, y2, u2, v1, u3, v2);
+        addPatch(x0, y2, x1, y3, u0, v2, u1, v3);
+        addPatch(x1, y2, x2, y3, u1, v2, u2, v3);
+        addPatch(x2, y2, x3, y3, u2, v2, u3, v3);
+    }
+
+    void DrawPanel(ImDrawList* drawList,
+                   ImTextureID texture,
+                   const ImVec2& min,
+                   const ImVec2& max,
+                   ImU32 fallbackColor,
+                   float rounding,
+                   ImU32 tint = IM_COL32_WHITE,
+                   const ImVec2& textureSize = ImVec2(64.0f, 64.0f))
+    {
+        if (texture)
+        {
+            DrawNineSlicePanel(drawList, texture, textureSize, min, max, tint);
+            return;
+        }
+
+        drawList->AddRectFilled(min, max, fallbackColor, rounding);
+    }
+
     void DrawBar(const ImVec2& pos, const ImVec2& size, float ratio, ImU32 fillColor, const char* text, float scale)
     {
         ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -34,17 +266,55 @@ namespace
                           text);
     }
 
-    ImU32 HpColor(float ratio)
+    void DrawTexturedBar(ImDrawList* drawList,
+                         ImTextureID bgTexture,
+                         ImTextureID fillTexture,
+                         ImTextureID frameTexture,
+                         const ImVec2& pos,
+                         const ImVec2& size,
+                         float ratio,
+                         const std::string& text,
+                         float scale,
+                         ImU32 fillFallback,
+                         ImU32 textColor = IM_COL32_WHITE)
     {
-        if (ratio > 0.6f)
+        const ImVec2 max(pos.x + size.x, pos.y + size.y);
+        const float clampedRatio = std::clamp(ratio, 0.0f, 1.0f);
+        if (bgTexture)
         {
-            return IM_COL32(86, 210, 92, 255);
+            drawList->AddImage(bgTexture, pos, max);
         }
-        if (ratio > 0.3f)
+        else
         {
-            return IM_COL32(230, 196, 64, 255);
+            drawList->AddRectFilled(pos, max, IM_COL32(28, 30, 34, 230), 3.0f * scale);
         }
-        return IM_COL32(220, 68, 58, 255);
+
+        const ImVec2 fillMax(pos.x + size.x * clampedRatio, pos.y + size.y);
+        if (clampedRatio > 0.0f)
+        {
+            if (fillTexture)
+            {
+                drawList->AddImage(fillTexture, pos, fillMax, ImVec2(0.0f, 0.0f), ImVec2(clampedRatio, 1.0f));
+            }
+            else
+            {
+                drawList->AddRectFilled(pos, fillMax, fillFallback, 3.0f * scale);
+            }
+        }
+
+        if (frameTexture)
+        {
+            drawList->AddImage(frameTexture, pos, max);
+        }
+        else
+        {
+            drawList->AddRect(pos, max, IM_COL32(255, 255, 255, 90), 3.0f * scale);
+        }
+
+        const ImVec2 textSize = ImGui::CalcTextSize(text.c_str());
+        drawList->AddText(ImVec2(pos.x + (size.x - textSize.x) * 0.5f, pos.y + (size.y - textSize.y) * 0.5f),
+                          textColor,
+                          text.c_str());
     }
 
     std::string FormatTime(float seconds)
@@ -122,6 +392,298 @@ namespace
             return "LSR";
         }
         return "???";
+    }
+
+    const char* CharacterIconId(const std::string& characterId)
+    {
+        if (characterId == "soldier")
+        {
+            return "soldier";
+        }
+        if (characterId == "brawler")
+        {
+            return "brawler";
+        }
+        if (characterId == "marksman")
+        {
+            return "marksman";
+        }
+        return nullptr;
+    }
+
+    const char* EnemyIconId(const std::string& enemyId)
+    {
+        if (enemyId == "rat")
+        {
+            return "rat";
+        }
+        if (enemyId == "tank")
+        {
+            return "tank";
+        }
+        if (enemyId == "spitter")
+        {
+            return "spitter";
+        }
+        if (enemyId == "charger")
+        {
+            return "charger";
+        }
+        if (enemyId == "bomber")
+        {
+            return "bomber";
+        }
+        if (enemyId == "shaman")
+        {
+            return "shaman";
+        }
+        if (enemyId == "boss_warden")
+        {
+            return "boss_warden";
+        }
+        return nullptr;
+    }
+
+    const char* WeaponIconId(const std::string& weaponId)
+    {
+        if (weaponId == "smg")
+        {
+            return "smg";
+        }
+        if (weaponId == "shotgun")
+        {
+            return "shotgun";
+        }
+        if (weaponId == "sniper")
+        {
+            return "sniper";
+        }
+        if (weaponId == "rocket")
+        {
+            return "rocket";
+        }
+        if (weaponId == "laser")
+        {
+            return "laser";
+        }
+        if (weaponId == "flamethrower")
+        {
+            return "flamethrower";
+        }
+        return nullptr;
+    }
+
+    const char* StatIconId(const std::string& statKey)
+    {
+        if (statKey == "maxHpFlat")
+        {
+            return "max_hp";
+        }
+        if (statKey == "moveSpeedPct")
+        {
+            return "speed";
+        }
+        if (statKey == "atkSpeedPct")
+        {
+            return "attack_speed";
+        }
+        if (statKey == "critChancePct")
+        {
+            return "crit_chance";
+        }
+        if (statKey == "rangePct")
+        {
+            return "range";
+        }
+        if (statKey == "damagePct")
+        {
+            return "percent_damage";
+        }
+        if (statKey == "damageFlat")
+        {
+            return "ranged_damage";
+        }
+        if (statKey == "healPct")
+        {
+            return "lifesteal";
+        }
+        if (statKey == "critMultiplier")
+        {
+            return "crit_chance";
+        }
+        return nullptr;
+    }
+
+    std::string StatDisplayName(const Brotato3DGameInstance& gameInstance, const std::string& statKey)
+    {
+        if (statKey == "maxHpFlat")
+        {
+            return gameInstance.Localize("character.hp", "生命");
+        }
+        if (statKey == "moveSpeedPct")
+        {
+            return gameInstance.Localize("character.move", "移速");
+        }
+        if (statKey == "atkSpeedPct")
+        {
+            return gameInstance.Localize("stat.attack_speed", "攻速");
+        }
+        if (statKey == "critChancePct")
+        {
+            return gameInstance.Localize("character.crit", "暴击");
+        }
+        if (statKey == "rangePct")
+        {
+            return gameInstance.Localize("character.range", "射程");
+        }
+        if (statKey == "damagePct" || statKey == "damageFlat")
+        {
+            return gameInstance.Localize("character.damage", "伤害");
+        }
+        if (statKey == "healPct")
+        {
+            return gameInstance.Localize("stat.heal", "治疗");
+        }
+        if (statKey == "critMultiplier")
+        {
+            return gameInstance.Localize("stat.crit_damage", "暴伤");
+        }
+        return statKey;
+    }
+
+    ImVec4 StatAccentColor(const std::string& statKey, float alpha)
+    {
+        if (statKey == "maxHpFlat" || statKey == "healPct")
+        {
+            return ImVec4(0.28f, 0.70f, 0.44f, alpha);
+        }
+        if (statKey == "moveSpeedPct" || statKey == "rangePct")
+        {
+            return ImVec4(0.26f, 0.66f, 0.86f, alpha);
+        }
+        if (statKey == "critChancePct" || statKey == "critMultiplier")
+        {
+            return ImVec4(0.92f, 0.72f, 0.22f, alpha);
+        }
+        if (statKey == "atkSpeedPct")
+        {
+            return ImVec4(0.88f, 0.48f, 0.20f, alpha);
+        }
+        return ImVec4(0.84f, 0.32f, 0.30f, alpha);
+    }
+
+    void MaybePlayHoverSfx(const std::string& hoverId)
+    {
+        static std::string lastHoverId;
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        {
+            if (lastHoverId != hoverId)
+            {
+                Brotato3D::PlayUiHoverSfx();
+                lastHoverId = hoverId;
+            }
+        }
+        else
+        {
+            if (lastHoverId == hoverId)
+            {
+                lastHoverId.clear();
+            }
+        }
+    }
+
+    void DrawPlaceholderBadge(Brotato3DGameInstance& gameInstance)
+    {
+        if (!Brotato3D::PlaceholderAssets::Exists(Brotato3D::PlaceholderAssets::Sfx("fire_smg_01.wav")))
+        {
+            return;
+        }
+
+        ImDrawList* drawList = ImGui::GetForegroundDrawList();
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        const float uiScale = GetUiScale(viewport);
+        const std::string text = "PLACEHOLDER ASSETS";
+        const ImVec2 textSize = ImGui::CalcTextSize(text.c_str());
+        const ImVec2 padding(10.0f * uiScale, 6.0f * uiScale);
+        const ImVec2 max(viewport->Pos.x + viewport->Size.x - 12.0f * uiScale, viewport->Pos.y + 18.0f * uiScale);
+        const ImVec2 min(max.x - textSize.x - padding.x * 2.0f, max.y - textSize.y - padding.y * 2.0f);
+        drawList->AddRectFilled(min, max, IM_COL32(166, 28, 28, 185), 6.0f * uiScale);
+        drawList->AddRect(min, max, IM_COL32(255, 180, 180, 220), 6.0f * uiScale, 0, 1.5f * uiScale);
+        drawList->AddText(ImVec2(min.x + padding.x, min.y + padding.y), IM_COL32(255, 240, 240, 255), text.c_str());
+    }
+
+    void DrawMenuBackdrop(Brotato3DGameInstance& gameInstance, float dimAlpha)
+    {
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImDrawList* drawList = ImGui::GetBackgroundDrawList();
+        const float t = static_cast<float>(ImGui::GetTime());
+        const ImVec2 min = viewport->Pos;
+        const ImVec2 max(viewport->Pos.x + viewport->Size.x, viewport->Pos.y + viewport->Size.y);
+        const ImVec2 viewportSize(viewport->Size.x, viewport->Size.y);
+
+        const std::string bgPath = Brotato3D::PlaceholderAssets::Menu("splash_bg.png");
+        const std::string mistBackPath = Brotato3D::PlaceholderAssets::Menu("splash_mist_back.png");
+        const std::string mistMidPath = Brotato3D::PlaceholderAssets::Menu("splash_mist_mid.png");
+        const std::string mistFrontPath = Brotato3D::PlaceholderAssets::Menu("splash_mist_front.png");
+        const std::string brotatoPath = Brotato3D::PlaceholderAssets::Menu("splash_brotato.png");
+        const std::string postPath = Brotato3D::PlaceholderAssets::Menu("splash_post.png");
+
+        const ImTextureID bg = LoadUiTexture(gameInstance, bgPath);
+        const ImTextureID mistBack = LoadUiTexture(gameInstance, mistBackPath);
+        const ImTextureID mistMid = LoadUiTexture(gameInstance, mistMidPath);
+        const ImTextureID mistFront = LoadUiTexture(gameInstance, mistFrontPath);
+        const ImTextureID brotato = LoadUiTexture(gameInstance, brotatoPath);
+        const ImTextureID post = LoadUiTexture(gameInstance, postPath);
+
+        if (bg)
+        {
+            DrawImageCover(drawList, bg, GetTexturePixelSize(bgPath), min, max);
+        }
+        else
+        {
+            drawList->AddRectFilled(min, max, IM_COL32(19, 22, 28, 255));
+        }
+
+        auto drawParallaxLayer = [drawList, &min, &max, &viewportSize](ImTextureID texture,
+                                                                       const ImVec2& texSize,
+                                                                       float shiftX,
+                                                                       float shiftY,
+                                                                       ImU32 tint)
+        {
+            if (!texture)
+            {
+                return;
+            }
+            DrawImageCover(drawList,
+                           texture,
+                           texSize,
+                           ImVec2(min.x + shiftX, min.y + shiftY),
+                           ImVec2(min.x + shiftX + viewportSize.x, min.y + shiftY + viewportSize.y),
+                           tint);
+        };
+
+        drawParallaxLayer(mistBack, GetTexturePixelSize(mistBackPath), std::sin(t * 0.17f) * 18.0f, 0.0f, IM_COL32(255, 255, 255, 160));
+        drawParallaxLayer(mistMid, GetTexturePixelSize(mistMidPath), std::sin(t * 0.23f) * 32.0f, 0.0f, IM_COL32(255, 255, 255, 180));
+        drawParallaxLayer(mistFront, GetTexturePixelSize(mistFrontPath), std::sin(t * 0.31f) * 54.0f, 0.0f, IM_COL32(255, 255, 255, 205));
+        if (brotato)
+        {
+            const float h = viewport->Size.y * 0.74f;
+            const float w = h * 0.85f;
+            DrawImageContain(drawList,
+                             brotato,
+                             GetTexturePixelSize(brotatoPath),
+                             ImVec2(viewport->Pos.x + viewport->Size.x * 0.53f, viewport->Pos.y + viewport->Size.y * 0.18f),
+                             ImVec2(viewport->Pos.x + viewport->Size.x * 0.53f + w,
+                                    viewport->Pos.y + viewport->Size.y * 0.18f + h),
+                             0.0f,
+                             IM_COL32(255, 255, 255, 235));
+        }
+
+        DrawFullscreenDim(viewport, dimAlpha);
+        if (post)
+        {
+            DrawImageCover(drawList, post, GetTexturePixelSize(postPath), min, max, IM_COL32(255, 255, 255, 160));
+        }
     }
 
     int CountTierOneWeapons(const std::vector<Brotato3D::FWeaponRuntime>& weapons, const std::string& weaponId)
@@ -269,7 +831,8 @@ namespace Brotato3D
     {
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
         const float uiScale = GetUiScale(viewport);
-        DrawFullscreenDim(viewport, 0.62f);
+        DrawMenuBackdrop(gameInstance, 0.24f);
+        DrawPlaceholderBadge(gameInstance);
 
         ImGui::SetNextWindowPos(viewport->Pos, ImGuiCond_Always);
         ImGui::SetNextWindowSize(viewport->Size, ImGuiCond_Always);
@@ -277,54 +840,90 @@ namespace Brotato3D
                      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                          ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoFocusOnAppearing);
         ImGui::SetWindowFontScale(uiScale);
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        const std::string logoPath = Brotato3D::PlaceholderAssets::Menu("logo.png");
+        const ImTextureID logo = LoadUiTexture(gameInstance, logoPath);
+        const ImTextureID panelTexture = LoadHudTexture(gameInstance, "panel_transparent.png");
+        const ImVec2 panelMin(viewport->Pos.x + viewport->Size.x * 0.075f, viewport->Pos.y + viewport->Size.y * 0.15f);
+        const ImVec2 panelMax(panelMin.x + 488.0f * uiScale, panelMin.y + 628.0f * uiScale);
+        DrawPanel(drawList, panelTexture, panelMin, panelMax, IM_COL32(8, 12, 18, 230), 17.0f * uiScale, IM_COL32(78, 92, 110, 240));
+        drawList->AddRect(panelMin, panelMax, IM_COL32(232, 182, 96, 110), 16.0f * uiScale, 0, 1.5f * uiScale);
 
-        const float centerX = viewport->Size.x * 0.5f;
-        ImGui::SetCursorPosY(viewport->Size.y * 0.23f);
-        ImGui::SetWindowFontScale(3.0f * uiScale);
-        const char* title = "BROTATO 3D";
-        ImGui::SetCursorPosX(centerX - ImGui::CalcTextSize(title).x * 0.5f);
-        ImGui::Text("%s", title);
+        if (logo)
+        {
+            const ImVec2 logoMin(panelMin.x + 28.0f * uiScale, panelMin.y + 16.0f * uiScale);
+            DrawImageContain(drawList,
+                             logo,
+                             GetTexturePixelSize(logoPath),
+                             logoMin,
+                             ImVec2(logoMin.x + 416.0f * uiScale, logoMin.y + 148.0f * uiScale),
+                             0.0f,
+                             IM_COL32(255, 255, 255, 255));
+        }
+        else
+        {
+            const std::string title = "BROTATO 3D";
+            const float fontSize = 62.0f * uiScale;
+            const ImVec2 textSize = CalcFontTextSize(gameInstance.GetBigFont(), fontSize, title);
+            drawList->AddText(gameInstance.GetBigFont(),
+                              fontSize,
+                              ImVec2(panelMin.x + 28.0f * uiScale, panelMin.y + 34.0f * uiScale),
+                              IM_COL32(255, 244, 214, 255),
+                              title.c_str());
+            drawList->AddRectFilled(ImVec2(panelMin.x + 28.0f * uiScale, panelMin.y + 38.0f * uiScale + textSize.y),
+                                    ImVec2(panelMin.x + 28.0f * uiScale + textSize.x, panelMin.y + 46.0f * uiScale + textSize.y),
+                                    IM_COL32(232, 92, 50, 215),
+                                    4.0f * uiScale);
+        }
 
-        ImGui::SetWindowFontScale(1.2f * uiScale);
+        ImGui::SetCursorScreenPos(ImVec2(panelMin.x + 34.0f * uiScale, panelMin.y + 176.0f * uiScale));
+        ImGui::BeginGroup();
+        ImGui::SetWindowFontScale(1.1f * uiScale);
         const std::string subtitle = Tr(gameInstance, "main.subtitle", "幸存 10 波");
-        ImGui::SetCursorPosX(centerX - ImGui::CalcTextSize(subtitle.c_str()).x * 0.5f);
-        ImGui::Text("%s", subtitle.c_str());
-
+        ImGui::TextColored(ImVec4(0.94f, 0.90f, 0.78f, 1.0f), "%s", subtitle.c_str());
         ImGui::SetWindowFontScale(uiScale);
-        ImGui::Dummy(Scale(0.0f, 36.0f, uiScale));
+        ImGui::TextColored(ImVec4(0.88f, 0.79f, 0.55f, 1.0f), "%s", "P1-P10 playable build");
+        ImGui::Dummy(Scale(0.0f, 18.0f, uiScale));
         const Brotato3D::FBestRecord& bestRecord = gameInstance.GetBestRecord();
         const std::string bestText = TrFormat(gameInstance,
                                               "main.best",
                                               "最佳记录：通关 {0} 次 / 击杀 {1}",
                                               bestRecord.totalWins,
                                               bestRecord.totalKills);
-        ImGui::SetCursorPosX(centerX - ImGui::CalcTextSize(bestText.c_str()).x * 0.5f);
-        ImGui::Text("%s", bestText.c_str());
-        ImGui::Dummy(Scale(0.0f, 14.0f, uiScale));
-        const ImVec2 buttonSize = Scale(220.0f, 42.0f, uiScale);
-        ImGui::SetCursorPosX(centerX - buttonSize.x * 0.5f);
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(226, 230, 235, 255));
+        ImGui::TextWrapped("%s", bestText.c_str());
+        ImGui::PopStyleColor();
+        ImGui::Dummy(Scale(0.0f, 18.0f, uiScale));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.78f, 0.22f, 0.16f, 0.92f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.90f, 0.32f, 0.20f, 0.96f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.65f, 0.16f, 0.12f, 1.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f * uiScale);
+        const ImVec2 buttonSize = Scale(296.0f, 48.0f, uiScale);
         if (ImGui::Button(Tr(gameInstance, "main.start", "开始游戏").c_str(), buttonSize))
         {
             gameInstance.GoToCharacterSelect();
         }
+        MaybePlayHoverSfx("main.start");
         ImGui::Dummy(Scale(0.0f, 8.0f, uiScale));
-        ImGui::SetCursorPosX(centerX - buttonSize.x * 0.5f);
         ImGui::BeginDisabled();
         ImGui::Button(Tr(gameInstance, "main.continue", "继续上次").c_str(), buttonSize);
         ImGui::EndDisabled();
         ImGui::Dummy(Scale(0.0f, 8.0f, uiScale));
-        ImGui::SetCursorPosX(centerX - buttonSize.x * 0.5f);
         if (ImGui::Button(Tr(gameInstance, "main.settings", "设置").c_str(), buttonSize))
         {
             Brotato3D::PlayUiClickSfx();
             ImGui::OpenPopup("Settings");
         }
+        MaybePlayHoverSfx("main.settings");
         ImGui::Dummy(Scale(0.0f, 8.0f, uiScale));
-        ImGui::SetCursorPosX(centerX - buttonSize.x * 0.5f);
         if (ImGui::Button(Tr(gameInstance, "main.exit", "退出").c_str(), buttonSize))
         {
             gameInstance.ExitGame();
         }
+        MaybePlayHoverSfx("main.exit");
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(3);
+        ImGui::EndGroup();
         RenderSettingsModal(gameInstance);
         ImGui::End();
     }
@@ -333,7 +932,8 @@ namespace Brotato3D
     {
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
         const float uiScale = GetUiScale(viewport);
-        DrawFullscreenDim(viewport, 0.62f);
+        DrawMenuBackdrop(gameInstance, 0.34f);
+        DrawPlaceholderBadge(gameInstance);
 
         ImGui::SetNextWindowPos(viewport->Pos, ImGuiCond_Always);
         ImGui::SetNextWindowSize(viewport->Size, ImGuiCond_Always);
@@ -369,19 +969,43 @@ namespace Brotato3D
             }
             const FCharacterDef& character = characters[index];
             const bool selected = gameInstance.GetSelectedCharacterId() == character.id;
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.08f, 0.09f, 0.11f, 0.92f));
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.18f));
             ImGui::PushStyleColor(ImGuiCol_Border, selected ? ImVec4(0.95f, 0.72f, 0.22f, 1.0f) :
                                                               ImVec4(0.35f, 0.38f, 0.44f, 1.0f));
             ImGui::BeginChild(fmt::format("CharacterCard{}", character.id).c_str(), ImVec2(cardWidth, cardHeight), true);
-            const ImVec2 swatchMin = ImGui::GetCursorScreenPos();
-            const ImVec2 swatchMax(swatchMin.x + 200.0f * uiScale, swatchMin.y + 150.0f * uiScale);
-            ImGui::GetWindowDrawList()->AddRectFilled(swatchMin, swatchMax,
-                                                      IM_COL32(static_cast<int>(character.color.r * 255.0f),
-                                                               static_cast<int>(character.color.g * 255.0f),
-                                                               static_cast<int>(character.color.b * 255.0f),
-                                                               255),
-                                                      4.0f * uiScale);
-            ImGui::Dummy(Scale(200.0f, 160.0f, uiScale));
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            DrawPanel(drawList,
+                      LoadHudTexture(gameInstance, "panel_normal.png"),
+                      ImGui::GetWindowPos(),
+                      ImVec2(ImGui::GetWindowPos().x + cardWidth, ImGui::GetWindowPos().y + cardHeight),
+                      IM_COL32(12, 16, 20, 235),
+                      10.0f * uiScale,
+                      selected ? IM_COL32(108, 98, 72, 255) : IM_COL32(72, 82, 96, 240));
+            const char* characterIcon = CharacterIconId(character.id);
+            const ImTextureID portrait = characterIcon ? LoadIconTexture(gameInstance, "characters", characterIcon) : EmptyTexture();
+            const ImVec2 portraitMin = ImGui::GetCursorScreenPos();
+            const ImVec2 portraitMax(portraitMin.x + 200.0f * uiScale, portraitMin.y + 150.0f * uiScale);
+            if (portrait)
+            {
+                drawList->AddRectFilled(portraitMin, portraitMax, IM_COL32(10, 14, 18, 220), 6.0f * uiScale);
+                DrawImageContain(drawList,
+                                 portrait,
+                                 GetTexturePixelSize(Brotato3D::PlaceholderAssets::Icon("characters", characterIcon)),
+                                 portraitMin,
+                                 portraitMax,
+                                 4.0f * uiScale);
+            }
+            else
+            {
+                drawList->AddRectFilled(portraitMin, portraitMax,
+                                        IM_COL32(static_cast<int>(character.color.r * 255.0f),
+                                                 static_cast<int>(character.color.g * 255.0f),
+                                                 static_cast<int>(character.color.b * 255.0f),
+                                                 255),
+                                        4.0f * uiScale);
+            }
+            drawList->AddRect(portraitMin, portraitMax, IM_COL32(255, 214, 132, 72), 6.0f * uiScale);
+            ImGui::Dummy(Scale(200.0f, 162.0f, uiScale));
             ImGui::SetWindowFontScale(1.35f * uiScale);
             ImGui::Text("%s", gameInstance.Localize("character." + character.id + ".name", character.name).c_str());
             ImGui::SetWindowFontScale(uiScale);
@@ -410,6 +1034,7 @@ namespace Brotato3D
             {
                 gameInstance.SelectCharacter(character.id);
             }
+            MaybePlayHoverSfx(fmt::format("character.{}", character.id));
             ImGui::EndChild();
             ImGui::PopStyleColor(2);
         }
@@ -458,29 +1083,54 @@ namespace Brotato3D
         const FPlayerRuntime& player = gameInstance.GetPlayer();
         const float hpRatio = player.maxHp > 0 ? static_cast<float>(player.currentHp) / static_cast<float>(player.maxHp) : 0.0f;
         const int xpToNext = gameInstance.GetXpToNextLevel();
+        const FWaveSystem& waveSystem = gameInstance.GetWaveSystem();
+        const FWaveDef* waveDef = waveSystem.GetCurrentWaveDef();
+        const ImTextureID panelNormal = LoadHudTexture(gameInstance, "panel_normal.png");
+        const ImTextureID panelFlat = LoadHudTexture(gameInstance, "panel_flat.png");
 
         ImGui::SetNextWindowPos(Scale(8.0f, 8.0f, uiScale), ImGuiCond_Always);
         ImGui::SetNextWindowSize(Scale(280.0f, 90.0f, uiScale), ImGuiCond_Always);
         ImGui::Begin("PlayerPanel", nullptr,
                      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
-                         ImGuiWindowFlags_NoFocusOnAppearing);
+                         ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoNav);
+        DrawPanel(ImGui::GetWindowDrawList(),
+                  panelNormal,
+                  ImGui::GetWindowPos(),
+                  ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, ImGui::GetWindowPos().y + ImGui::GetWindowSize().y),
+                  IM_COL32(14, 16, 22, 210),
+                  8.0f * uiScale,
+                  IM_COL32(78, 92, 110, 245));
         ImGui::SetWindowFontScale(uiScale);
-        DrawBar(ImGui::GetCursorScreenPos(), Scale(260.0f, 24.0f, uiScale), hpRatio, HpColor(hpRatio),
-                fmt::format("HP {} / {}", player.currentHp, player.maxHp).c_str(), uiScale);
-        ImGui::Dummy(Scale(0.0f, 30.0f, uiScale));
-        DrawBar(ImGui::GetCursorScreenPos(), Scale(260.0f, 20.0f, uiScale),
+        ImGui::SetCursorPos(Scale(18.0f, 14.0f, uiScale));
+        DrawBar(ImGui::GetCursorScreenPos(),
+                Scale(244.0f, 24.0f, uiScale),
+                hpRatio,
+                IM_COL32(210, 68, 58, 255),
+                fmt::format("HP {} / {}", player.currentHp, player.maxHp).c_str(),
+                uiScale);
+        ImGui::SetCursorPos(Scale(18.0f, 44.0f, uiScale));
+        DrawBar(ImGui::GetCursorScreenPos(),
+                Scale(244.0f, 18.0f, uiScale),
                 xpToNext > 0 ? static_cast<float>(player.currentXp) / static_cast<float>(xpToNext) : 0.0f,
-                IM_COL32(72, 135, 245, 255), fmt::format("Lv {}  XP {}/{}", player.level, player.currentXp, xpToNext).c_str(),
+                IM_COL32(72, 135, 245, 255),
+                fmt::format("Lv {}  XP {}/{}", player.level, player.currentXp, xpToNext).c_str(),
                 uiScale);
         ImGui::End();
 
         ImGui::SetNextWindowPos(ImVec2((viewport->Size.x - 260.0f * uiScale) * 0.5f, 8.0f * uiScale), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(Scale(260.0f, 56.0f, uiScale), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(Scale(320.0f, 88.0f, uiScale), ImGuiCond_Always);
         ImGui::Begin("WavePanel", nullptr,
                      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
-                         ImGuiWindowFlags_NoFocusOnAppearing);
+                         ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoNav);
+        DrawPanel(ImGui::GetWindowDrawList(),
+                  panelFlat,
+                  ImGui::GetWindowPos(),
+                  ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, ImGui::GetWindowPos().y + ImGui::GetWindowSize().y),
+                  IM_COL32(12, 16, 20, 180),
+                  8.0f * uiScale,
+                  IM_COL32(62, 74, 90, 235));
         ImGui::SetWindowFontScale(uiScale);
-        const FWaveSystem& waveSystem = gameInstance.GetWaveSystem();
+        ImGui::SetCursorPos(Scale(22.0f, 14.0f, uiScale));
         ImGui::Text("%s", TrFormat(gameInstance,
                                     "hud.wave",
                                     "第 {0} / {1} 波",
@@ -510,14 +1160,49 @@ namespace Brotato3D
         {
             ImGui::Text("%s", Tr(gameInstance, "hud.ready", "准备").c_str());
         }
+        float iconX = ImGui::GetWindowPos().x + 22.0f * uiScale;
+        const float iconY = ImGui::GetWindowPos().y + 60.0f * uiScale;
+        if (waveDef)
+        {
+            std::unordered_set<std::string> seenEnemyIds;
+            for (const FSpawnEntry& spawn : waveDef->spawns)
+            {
+                if (!seenEnemyIds.insert(spawn.enemyId).second)
+                {
+                    continue;
+                }
+                const char* iconId = EnemyIconId(spawn.enemyId);
+                const ImTextureID icon = iconId ? LoadIconTexture(gameInstance, "enemies", iconId) : EmptyTexture();
+                const ImVec2 min(iconX, iconY);
+                const ImVec2 max(iconX + 24.0f * uiScale, iconY + 24.0f * uiScale);
+                DrawPanel(ImGui::GetWindowDrawList(), EmptyTexture(), min, max, IM_COL32(20, 24, 28, 200), 4.0f * uiScale);
+                if (icon)
+                {
+                    ImGui::GetWindowDrawList()->AddImage(icon, min, max);
+                }
+                iconX += 30.0f * uiScale;
+                if (iconX > ImGui::GetWindowPos().x + 296.0f * uiScale)
+                {
+                    break;
+                }
+            }
+        }
         ImGui::End();
 
         ImGui::SetNextWindowPos(ImVec2(viewport->Size.x - 160.0f * uiScale, 8.0f * uiScale), ImGuiCond_Always);
         ImGui::SetNextWindowSize(Scale(150.0f, 50.0f, uiScale), ImGuiCond_Always);
         ImGui::Begin("ResourcePanel", nullptr,
                      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
-                         ImGuiWindowFlags_NoFocusOnAppearing);
+                         ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoNav);
+        DrawPanel(ImGui::GetWindowDrawList(),
+                  panelFlat,
+                  ImGui::GetWindowPos(),
+                  ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, ImGui::GetWindowPos().y + ImGui::GetWindowSize().y),
+                  IM_COL32(16, 18, 22, 190),
+                  8.0f * uiScale,
+                  IM_COL32(64, 72, 84, 235));
         ImGui::SetWindowFontScale(uiScale);
+        ImGui::SetCursorPos(Scale(22.0f, 16.0f, uiScale));
         ImGui::Text("%s", TrFormat(gameInstance, "hud.materials", "材料：{0}", player.materials).c_str());
         ImGui::End();
 
@@ -525,8 +1210,16 @@ namespace Brotato3D
         ImGui::SetNextWindowSize(Scale(236.0f, 48.0f, uiScale), ImGuiCond_Always);
         ImGui::Begin("ItemSlots", nullptr,
                      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
-                         ImGuiWindowFlags_NoFocusOnAppearing);
+                         ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoNav);
+        DrawPanel(ImGui::GetWindowDrawList(),
+                  panelFlat,
+                  ImGui::GetWindowPos(),
+                  ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, ImGui::GetWindowPos().y + ImGui::GetWindowSize().y),
+                  IM_COL32(14, 15, 20, 180),
+                  8.0f * uiScale,
+                  IM_COL32(58, 68, 84, 235));
         ImGui::SetWindowFontScale(uiScale);
+        ImGui::SetCursorPos(Scale(18.0f, 12.0f, uiScale));
         const auto& ownedItemIds = gameInstance.GetOwnedItemIds();
         for (size_t slotIndex = 0; slotIndex < 6; ++slotIndex)
         {
@@ -536,15 +1229,39 @@ namespace Brotato3D
             }
 
             const Brotato3D::FItemDef* item = slotIndex < ownedItemIds.size() ? gameInstance.GetItemDef(ownedItemIds[slotIndex]) : nullptr;
-            const ImVec4 slotColor = item ? RarityColor(item->rarity, 0.82f) : ImVec4(0.12f, 0.13f, 0.15f, 0.82f);
-            ImGui::PushStyleColor(ImGuiCol_Button, slotColor);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, item ? RarityColor(item->rarity, 0.95f) : ImVec4(0.18f, 0.19f, 0.22f, 0.95f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, slotColor);
-            const std::string slotLabel = fmt::format("{}##ItemSlot{}", item ? ItemInitial(item->id) : "-", slotIndex);
-            ImGui::Button(slotLabel.c_str(), Scale(30.0f, 30.0f, uiScale));
-            ImGui::PopStyleColor(3);
+            const ImTextureID itemIcon = item ? LoadIconTexture(gameInstance, "items", item->id) : EmptyTexture();
+            ImGui::InvisibleButton(fmt::format("##ItemSlot{}", slotIndex).c_str(), Scale(30.0f, 30.0f, uiScale));
+            const ImVec2 min = ImGui::GetItemRectMin();
+            const ImVec2 max = ImGui::GetItemRectMax();
+            const ImVec4 slotColor = item ? RarityColor(item->rarity, 0.85f) : ImVec4(0.12f, 0.13f, 0.15f, 0.82f);
+            ImGui::GetWindowDrawList()->AddRectFilled(min, max, Color(glm::vec4(slotColor.x, slotColor.y, slotColor.z, slotColor.w)), 4.0f * uiScale);
+            ImGui::GetWindowDrawList()->AddRect(min, max,
+                                                item ? Color(glm::vec4(RarityColor(item->rarity, 1.0f).x,
+                                                                       RarityColor(item->rarity, 1.0f).y,
+                                                                       RarityColor(item->rarity, 1.0f).z,
+                                                                       1.0f)) :
+                                                       IM_COL32(100, 108, 118, 180),
+                                                4.0f * uiScale,
+                                                0,
+                                                1.5f * uiScale);
+            if (itemIcon)
+            {
+                DrawImageContain(ImGui::GetWindowDrawList(),
+                                 itemIcon,
+                                 GetTexturePixelSize(Brotato3D::PlaceholderAssets::Icon("items", item->id)),
+                                 min,
+                                 max,
+                                 2.0f * uiScale);
+            }
+            else
+            {
+                ImGui::GetWindowDrawList()->AddText(ImVec2(min.x + 9.0f * uiScale, min.y + 6.0f * uiScale),
+                                                    IM_COL32_WHITE,
+                                                    item ? ItemInitial(item->id) : "-");
+            }
             if (item && ImGui::IsItemHovered())
             {
+                MaybePlayHoverSfx(fmt::format("itemslot.{}", item->id));
                 ImGui::BeginTooltip();
                 ImGui::Text("%s", gameInstance.Localize("item." + item->id + ".name", item->name).c_str());
                 ImGui::TextWrapped("%s", gameInstance.Localize("item." + item->id + ".desc", item->description).c_str());
@@ -557,13 +1274,22 @@ namespace Brotato3D
         ImGui::SetNextWindowSize(Scale(374.0f, 76.0f, uiScale), ImGuiCond_Always);
         ImGui::Begin("WeaponPanel", nullptr,
                      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
-                         ImGuiWindowFlags_NoFocusOnAppearing);
+                         ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoNav);
+        DrawPanel(ImGui::GetWindowDrawList(),
+                  panelNormal,
+                  ImGui::GetWindowPos(),
+                  ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, ImGui::GetWindowPos().y + ImGui::GetWindowSize().y),
+                  IM_COL32(14, 16, 20, 215),
+                  8.0f * uiScale,
+                  IM_COL32(78, 90, 104, 245));
         ImGui::SetWindowFontScale(uiScale);
         const auto& weapons = gameInstance.GetWeapons();
         const FPlayerStats effectiveStats = gameInstance.GetEffectivePlayerStats();
+        ImGui::SetCursorPos(Scale(20.0f, 12.0f, uiScale));
         ImGui::Text("%s", Tr(gameInstance, "hud.weapons", "武器").c_str());
         ImGui::SameLine();
         ImGui::TextDisabled("%s", Tr(gameInstance, "hud.merge_hint", "3 把 T1 -> T2").c_str());
+        ImGui::SetCursorPos(Scale(18.0f, 32.0f, uiScale));
         for (size_t slotIndex = 0; slotIndex < 6; ++slotIndex)
         {
             if (slotIndex > 0)
@@ -572,21 +1298,38 @@ namespace Brotato3D
             }
             const FWeaponRuntime* weapon = slotIndex < weapons.size() ? &weapons[slotIndex] : nullptr;
             const bool hasWeapon = weapon && weapon->def;
-            const ImVec4 buttonColor =
-                hasWeapon ? ImVec4(weapon->def->projectileColor.r, weapon->def->projectileColor.g, weapon->def->projectileColor.b, 0.9f) :
-                            ImVec4(0.12f, 0.13f, 0.15f, 0.82f);
-            ImGui::PushStyleColor(ImGuiCol_Button, buttonColor);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, buttonColor);
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, buttonColor);
-            ImGui::Button(fmt::format("{}##WeaponSlot{}", hasWeapon ? WeaponShortName(weapon->weaponId) : "-", slotIndex).c_str(),
-                          Scale(52.0f, 32.0f, uiScale));
-            ImGui::PopStyleColor(3);
+            const char* weaponIconId = hasWeapon ? WeaponIconId(weapon->weaponId) : nullptr;
+            const ImTextureID icon = weaponIconId ? LoadIconTexture(gameInstance, "weapons", weaponIconId) : EmptyTexture();
+            ImGui::InvisibleButton(fmt::format("##WeaponSlot{}", slotIndex).c_str(), Scale(52.0f, 32.0f, uiScale));
             const ImVec2 min = ImGui::GetItemRectMin();
             const ImVec2 max = ImGui::GetItemRectMax();
+            ImGui::GetWindowDrawList()->AddRectFilled(min, max, hasWeapon ? IM_COL32(24, 28, 32, 240) : IM_COL32(18, 20, 24, 160), 5.0f * uiScale);
             ImGui::GetWindowDrawList()->AddRect(min, max, hasWeapon && weapon->tier == 2 ? IM_COL32(255, 210, 70, 255) :
-                                                IM_COL32(180, 185, 195, 180), 3.0f * uiScale, 0, 2.0f * uiScale);
+                                                IM_COL32(180, 185, 195, 180), 5.0f * uiScale, 0, 2.0f * uiScale);
+            if (icon)
+            {
+                DrawImageContain(ImGui::GetWindowDrawList(),
+                                 icon,
+                                 GetTexturePixelSize(Brotato3D::PlaceholderAssets::Icon("weapons", weaponIconId)),
+                                 min,
+                                 max,
+                                 2.0f * uiScale);
+            }
+            else
+            {
+                ImGui::GetWindowDrawList()->AddText(ImVec2(min.x + 7.0f * uiScale, min.y + 7.0f * uiScale),
+                                                    IM_COL32_WHITE,
+                                                    hasWeapon ? WeaponShortName(weapon->weaponId) : "-");
+            }
+            if (hasWeapon && weapon->tier == 2)
+            {
+                ImGui::GetWindowDrawList()->AddText(ImVec2(max.x - 12.0f * uiScale, min.y + 2.0f * uiScale),
+                                                    IM_COL32(255, 226, 120, 255),
+                                                    "2");
+            }
             if (hasWeapon && ImGui::IsItemHovered())
             {
+                MaybePlayHoverSfx(fmt::format("weaponslot.{}", weapon->weaponId));
                 const int damage = static_cast<int>(std::round(weapon->def->damage * (1.0f + effectiveStats.damagePct) +
                                                                effectiveStats.damageFlat));
                 const float atkSpeed = weapon->def->atkSpeedHz * (1.0f + effectiveStats.atkSpeedPct);
@@ -682,8 +1425,11 @@ namespace Brotato3D
             const float rise = (1.0f - alpha) * 30.0f * uiScale;
             glm::vec4 color = text.color;
             color.a *= alpha;
-            drawList->AddText(nullptr, ImGui::GetFontSize() * text.fontScale,
-                              ImVec2(screen.x, screen.y - rise), Color(color), text.text.c_str());
+            drawList->AddText(gameInstance.GetBigFont(),
+                              std::max(18.0f, 24.0f * uiScale * text.fontScale),
+                              ImVec2(screen.x, screen.y - rise),
+                              Color(color),
+                              text.text.c_str());
         }
 
         for (const FExpandingRing& ring : gameInstance.GetExplosionRings())
@@ -728,11 +1474,44 @@ namespace Brotato3D
             const float progress = 1.0f - std::clamp(gameInstance.GetWaveBannerMs() / 1000.0f, 0.0f, 1.0f);
             const float alpha = std::sin(progress * glm::pi<float>());
             const std::string& bannerText = gameInstance.GetWaveBannerText();
-            const ImVec2 textSize = ImGui::CalcTextSize(bannerText.c_str());
             const float fontScale = 2.6f * uiScale;
-            const ImVec2 pos(viewport->Pos.x + (viewport->Size.x - textSize.x * fontScale) * 0.5f,
-                             viewport->Pos.y + viewport->Size.y * 0.36f);
+            const float fontSize = ImGui::GetFontSize() * fontScale;
+            const ImVec2 textSize = CalcFontTextSize(gameInstance.GetBigFont(), fontSize, bannerText);
             const bool bossBanner = bannerText.find("BOSS") != std::string::npos;
+            const char* waveEnemyIconId = bossBanner ? "boss_warden" :
+                ((waveDef && !waveDef->spawns.empty()) ? EnemyIconId(waveDef->spawns.front().enemyId) : nullptr);
+            const ImTextureID waveEnemyIcon = waveEnemyIconId ? LoadIconTexture(gameInstance, "enemies", waveEnemyIconId) : EmptyTexture();
+            const float iconSize = bossBanner ? 80.0f * uiScale : 52.0f * uiScale;
+            const float iconGap = waveEnemyIcon ? 18.0f * uiScale : 0.0f;
+            const float totalWidth = textSize.x + (waveEnemyIcon ? iconSize + iconGap : 0.0f);
+            const float originX = viewport->Pos.x + (viewport->Size.x - totalWidth) * 0.5f;
+            const ImVec2 pos(originX + (waveEnemyIcon ? iconSize + iconGap : 0.0f), viewport->Pos.y + viewport->Size.y * 0.36f);
+            const ImVec2 bgMin(originX - 18.0f * uiScale, pos.y - 12.0f * uiScale);
+            const ImVec2 bgMax(originX + totalWidth + 18.0f * uiScale, pos.y + textSize.y + 14.0f * uiScale);
+                drawList->AddRectFilled(bgMin,
+                                        bgMax,
+                                        bossBanner ? IM_COL32(60, 10, 10, static_cast<int>(alpha * 190.0f)) :
+                                                     IM_COL32(14, 18, 22, static_cast<int>(alpha * 170.0f)),
+                                        10.0f * uiScale);
+            drawList->AddRect(bgMin,
+                              bgMax,
+                              bossBanner ? IM_COL32(255, 84, 64, static_cast<int>(alpha * 255.0f)) :
+                                           IM_COL32(255, 220, 120, static_cast<int>(alpha * 180.0f)),
+                              10.0f * uiScale,
+                              0,
+                              2.0f * uiScale);
+            if (waveEnemyIcon)
+            {
+                const ImVec2 iconMin(originX, pos.y - (iconSize - textSize.y) * 0.2f);
+                const ImVec2 iconMax(originX + iconSize, iconMin.y + iconSize);
+                DrawImageContain(drawList,
+                                 waveEnemyIcon,
+                                 GetTexturePixelSize(Brotato3D::PlaceholderAssets::Icon("enemies", waveEnemyIconId ? waveEnemyIconId : "")),
+                                 iconMin,
+                                 iconMax,
+                                 0.0f,
+                                 IM_COL32(255, 255, 255, static_cast<int>(alpha * 255.0f)));
+            }
             drawList->AddText(gameInstance.GetBigFont(), ImGui::GetFontSize() * fontScale, pos,
                               bossBanner ? IM_COL32(255, 62, 42, static_cast<int>(alpha * 255.0f)) :
                                            IM_COL32(255, 255, 255, static_cast<int>(alpha * 255.0f)),
@@ -744,11 +1523,12 @@ namespace Brotato3D
             const float alpha = std::clamp(gameInstance.GetWeaponMergeBannerMs() / 1500.0f, 0.0f, 1.0f);
             const std::string& bannerText = gameInstance.GetWeaponMergeBannerText();
             const float fontScale = 2.2f * uiScale;
-            const ImVec2 textSize = ImGui::CalcTextSize(bannerText.c_str());
-            const ImVec2 pos(viewport->Pos.x + (viewport->Size.x - textSize.x * fontScale) * 0.5f,
+            const float fontSize = ImGui::GetFontSize() * fontScale;
+            const ImVec2 textSize = CalcFontTextSize(gameInstance.GetBigFont(), fontSize, bannerText);
+            const ImVec2 pos(viewport->Pos.x + (viewport->Size.x - textSize.x) * 0.5f,
                              viewport->Pos.y + viewport->Size.y * 0.44f);
-            drawList->AddText(nullptr,
-                              ImGui::GetFontSize() * fontScale,
+            drawList->AddText(gameInstance.GetBigFont(),
+                              fontSize,
                               pos,
                               IM_COL32(255, 214, 70, static_cast<int>(alpha * 255.0f)),
                               bannerText.c_str());
@@ -761,34 +1541,142 @@ namespace Brotato3D
         const FPlayerRuntime& player = gameInstance.GetPlayer();
         const FPlayerStats effectiveStats = gameInstance.GetEffectivePlayerStats();
         ImGui::OpenPopup("Upgrade");
-        ImGui::SetNextWindowSize(Scale(700.0f, 330.0f, uiScale), ImGuiCond_Appearing);
-        if (ImGui::BeginPopupModal("Upgrade", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings))
+        ImGui::SetNextWindowSize(Scale(820.0f, 410.0f, uiScale), ImGuiCond_Appearing);
+        if (ImGui::BeginPopupModal("Upgrade",
+                                   nullptr,
+                                   ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoTitleBar))
         {
             ImGui::SetWindowFontScale(uiScale);
-            ImGui::Text("%s", Tr(gameInstance, "upgrade.title", "选择 1 个升级").c_str());
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            const ImVec2 windowMin = ImGui::GetWindowPos();
+            const ImVec2 windowMax(windowMin.x + ImGui::GetWindowSize().x, windowMin.y + ImGui::GetWindowSize().y);
+            const ImTextureID shopBackground = LoadMenuTexture(gameInstance, "shop_background.png");
+            const ImTextureID modalPanel = LoadHudTexture(gameInstance, "panel_flat.png");
+            if (shopBackground)
+            {
+                DrawImageCover(drawList,
+                               shopBackground,
+                               GetTexturePixelSize(Brotato3D::PlaceholderAssets::Menu("shop_background.png")),
+                               windowMin,
+                               windowMax,
+                               IM_COL32(255, 255, 255, 110));
+            }
+            drawList->AddRectFilled(windowMin, windowMax, IM_COL32(8, 10, 16, 164), 12.0f * uiScale);
+            DrawPanel(drawList, modalPanel, windowMin, windowMax, IM_COL32(12, 14, 20, 236), 12.0f * uiScale, IM_COL32(74, 86, 102, 246));
+            drawList->AddRect(windowMin, windowMax, IM_COL32(232, 182, 96, 102), 12.0f * uiScale, 0, 1.5f * uiScale);
+
+            const std::string title = Tr(gameInstance, "upgrade.title", "选择 1 个升级");
+            drawList->AddText(gameInstance.GetBigFont(),
+                              std::max(22.0f, ImGui::GetFontSize() * 1.55f),
+                              ImVec2(windowMin.x + 28.0f * uiScale, windowMin.y + 18.0f * uiScale),
+                              IM_COL32(255, 244, 214, 255),
+                              title.c_str());
+            drawList->AddText(ImVec2(windowMin.x + 30.0f * uiScale, windowMin.y + 58.0f * uiScale),
+                              IM_COL32(215, 220, 226, 230),
+                              gameInstance.Localize("upgrade.subtitle", "本波结束后的战利品，请择其一").c_str());
+
             const auto& choices = gameInstance.GetCurrentUpgradeChoices();
+            const float cardWidth = 236.0f * uiScale;
+            const float cardHeight = 250.0f * uiScale;
+            const float gap = 18.0f * uiScale;
+            const float totalWidth = static_cast<float>(choices.size()) * cardWidth +
+                                     std::max(0.0f, static_cast<float>(choices.size() - 1)) * gap;
+            ImGui::SetCursorPos(ImVec2((ImGui::GetWindowSize().x - totalWidth) * 0.5f, 102.0f * uiScale));
             for (size_t index = 0; index < choices.size(); ++index)
             {
                 if (index > 0)
                 {
-                    ImGui::SameLine();
+                    ImGui::SameLine(0.0f, gap);
                 }
-                ImGui::BeginChild(fmt::format("UpgradeCard{}", index).c_str(), Scale(210.0f, 250.0f, uiScale), true);
-                ImGui::TextWrapped("%s", gameInstance.Localize("upgrade." + choices[index].id + ".name", choices[index].name).c_str());
+                const FUpgradeCardDef& choice = choices[index];
+                const std::string choiceName = gameInstance.Localize("upgrade." + choice.id + ".name", choice.name);
+                const std::string statLabel = StatDisplayName(gameInstance, choice.stat);
+                const std::string deltaText = choice.stat == "healPct" ?
+                    fmt::format("{} {:+.0f}%", statLabel, choice.delta * 100.0f) :
+                    fmt::format("{} {}", statLabel, FormatStatValue(choice.stat, choice.delta));
+                const std::string previewText = BuildStatPreview(player, gameInstance, effectiveStats, choice.stat, choice.delta);
+                const char* statIconId = StatIconId(choice.stat);
+                const ImTextureID cardIcon = statIconId ? LoadIconTexture(gameInstance, "stats", statIconId) : EmptyTexture();
+                const ImVec4 accentColor = StatAccentColor(choice.stat, 1.0f);
+
+                ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.05f));
+                ImGui::PushStyleColor(ImGuiCol_Border, accentColor);
+                ImGui::BeginChild(fmt::format("UpgradeCard{}", index).c_str(), ImVec2(cardWidth, cardHeight), true, ImGuiWindowFlags_NoScrollbar);
+                DrawPanel(ImGui::GetWindowDrawList(),
+                          LoadHudTexture(gameInstance, "panel_normal.png"),
+                          ImGui::GetWindowPos(),
+                          ImVec2(ImGui::GetWindowPos().x + cardWidth, ImGui::GetWindowPos().y + cardHeight),
+                          IM_COL32(16, 20, 26, 232),
+                          10.0f * uiScale,
+                          IM_COL32(66, 78, 94, 244));
+                ImGui::GetWindowDrawList()->AddRectFilled(ImGui::GetWindowPos(),
+                                                          ImVec2(ImGui::GetWindowPos().x + cardWidth,
+                                                                 ImGui::GetWindowPos().y + 5.0f * uiScale),
+                                                          ImGui::ColorConvertFloat4ToU32(ImVec4(accentColor.x, accentColor.y, accentColor.z, 0.85f)),
+                                                          8.0f * uiScale);
+
+                const ImVec2 iconMin = ImGui::GetCursorScreenPos();
+                const ImVec2 iconMax(iconMin.x + 64.0f * uiScale, iconMin.y + 64.0f * uiScale);
+                ImGui::GetWindowDrawList()->AddRectFilled(iconMin, iconMax, IM_COL32(8, 10, 14, 205), 8.0f * uiScale);
+                if (cardIcon)
+                {
+                    DrawImageContain(ImGui::GetWindowDrawList(),
+                                     cardIcon,
+                                     GetTexturePixelSize(Brotato3D::PlaceholderAssets::Icon("stats", statIconId ? statIconId : "")),
+                                     iconMin,
+                                     iconMax,
+                                     5.0f * uiScale);
+                }
+                else
+                {
+                    ImGui::GetWindowDrawList()->AddText(ImVec2(iconMin.x + 22.0f * uiScale, iconMin.y + 22.0f * uiScale),
+                                                        IM_COL32_WHITE,
+                                                        "+");
+                }
+
+                ImGui::SetCursorPos(Scale(82.0f, 16.0f, uiScale));
+                ImGui::PushTextWrapPos((236.0f - 18.0f) * uiScale);
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(248, 239, 212, 255));
+                ImGui::TextWrapped("%s", choiceName.c_str());
+                ImGui::PopStyleColor();
+                ImGui::SetCursorPos(Scale(82.0f, 52.0f, uiScale));
+                ImGui::PushStyleColor(ImGuiCol_Text, accentColor);
+                ImGui::TextWrapped("%s", deltaText.c_str());
+                ImGui::PopStyleColor();
+                ImGui::PopTextWrapPos();
+                ImGui::SetCursorPos(Scale(18.0f, 90.0f, uiScale));
                 ImGui::Separator();
-                ImGui::TextWrapped("%s %+g", choices[index].stat.c_str(), choices[index].delta);
-                ImGui::SetCursorPosY(205.0f * uiScale);
+                ImGui::SetCursorPosX(18.0f * uiScale);
+                ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 194.0f * uiScale);
+                ImGui::TextWrapped("%s", previewText.c_str());
+                ImGui::PopTextWrapPos();
+                ImGui::SetCursorPos(Scale(18.0f, 178.0f, uiScale));
+                ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(198, 204, 212, 255));
+                ImGui::TextWrapped("%s", gameInstance.Localize("upgrade.instant", "选择后立即生效").c_str());
+                ImGui::PopStyleColor();
+                ImGui::SetCursorPos(Scale(18.0f, 200.0f, uiScale));
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(accentColor.x * 0.72f, accentColor.y * 0.72f, accentColor.z * 0.72f, 0.96f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(std::min(accentColor.x + 0.08f, 1.0f),
+                                                                     std::min(accentColor.y + 0.08f, 1.0f),
+                                                                     std::min(accentColor.z + 0.08f, 1.0f),
+                                                                     1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(accentColor.x * 0.56f, accentColor.y * 0.56f, accentColor.z * 0.56f, 1.0f));
+                ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 7.0f * uiScale);
                 if (ImGui::Button(fmt::format("{}##{}", Tr(gameInstance, "upgrade.select", "选择"), index).c_str(),
-                                  Scale(180.0f, 32.0f, uiScale)))
+                                  Scale(208.0f, 34.0f, uiScale)))
                 {
                     gameInstance.SelectUpgrade(index);
                     ImGui::CloseCurrentPopup();
                 }
+                MaybePlayHoverSfx(fmt::format("upgrade.{}", choice.id));
+                ImGui::PopStyleVar();
+                ImGui::PopStyleColor(3);
                 if (ImGui::IsWindowHovered())
                 {
-                    DrawWideTooltip(BuildStatPreview(player, gameInstance, effectiveStats, choices[index].stat, choices[index].delta), uiScale);
+                    DrawWideTooltip(previewText, uiScale);
                 }
                 ImGui::EndChild();
+                ImGui::PopStyleColor(2);
             }
             ImGui::EndPopup();
         }
@@ -802,6 +1690,23 @@ namespace Brotato3D
         if (ImGui::BeginPopupModal("Shop", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings))
         {
             ImGui::SetWindowFontScale(uiScale);
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            const ImTextureID shopBackground = LoadMenuTexture(gameInstance, "shop_background.png");
+            if (shopBackground)
+            {
+                DrawImageCover(drawList,
+                               shopBackground,
+                               GetTexturePixelSize(Brotato3D::PlaceholderAssets::Menu("shop_background.png")),
+                               ImGui::GetWindowPos(),
+                               ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x,
+                                      ImGui::GetWindowPos().y + ImGui::GetWindowSize().y),
+                               IM_COL32(255, 255, 255, 132));
+            }
+            drawList->AddRectFilled(ImGui::GetWindowPos(),
+                                    ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x,
+                                           ImGui::GetWindowPos().y + ImGui::GetWindowSize().y),
+                                    IM_COL32(10, 12, 18, 150),
+                                    10.0f * uiScale);
             const FPlayerRuntime& player = gameInstance.GetPlayer();
             const FPlayerStats effectiveStats = gameInstance.GetEffectivePlayerStats();
             const FWaveSystem& waveSystem = gameInstance.GetWaveSystem();
@@ -823,31 +1728,88 @@ namespace Brotato3D
                 }
                 const bool passiveItem = offers[index].isPassiveItem;
                 const bool weaponCard = offers[index].isWeaponCard;
-                if (passiveItem)
-                {
-                    ImGui::PushStyleColor(ImGuiCol_ChildBg, RarityColor(offers[index].rarity, 0.55f));
-                    ImGui::PushStyleColor(ImGuiCol_Border, RarityColor(offers[index].rarity, 0.95f));
-                }
-                else if (weaponCard)
-                {
-                    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.18f, 0.17f, 0.10f, 0.72f));
-                    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.95f, 0.72f, 0.22f, 1.0f));
-                }
-                ImGui::BeginChild(fmt::format("ShopCard{}", index).c_str(), Scale(175.0f, 260.0f, uiScale), true);
+                ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.10f));
+                ImGui::PushStyleColor(ImGuiCol_Border, passiveItem ? RarityColor(offers[index].rarity, 0.95f) :
+                                                            (weaponCard ? ImVec4(0.95f, 0.72f, 0.22f, 1.0f) :
+                                                                          ImVec4(0.45f, 0.49f, 0.58f, 0.95f)));
+                ImGui::BeginChild(fmt::format("ShopCard{}", index).c_str(), Scale(175.0f, 260.0f, uiScale), true,
+                                  ImGuiWindowFlags_NoScrollbar);
+                DrawPanel(ImGui::GetWindowDrawList(),
+                          LoadHudTexture(gameInstance, "panel_normal.png"),
+                          ImGui::GetWindowPos(),
+                          ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x,
+                                 ImGui::GetWindowPos().y + ImGui::GetWindowSize().y),
+                          passiveItem ? Color(glm::vec4(RarityColor(offers[index].rarity, 0.66f).x,
+                                                        RarityColor(offers[index].rarity, 0.66f).y,
+                                                        RarityColor(offers[index].rarity, 0.66f).z,
+                                                        RarityColor(offers[index].rarity, 0.66f).w)) :
+                                        (weaponCard ? IM_COL32(58, 48, 22, 210) : IM_COL32(20, 24, 30, 210)),
+                          8.0f * uiScale,
+                          passiveItem ? IM_COL32(86, 98, 116, 245) :
+                          (weaponCard ? IM_COL32(112, 94, 52, 245) : IM_COL32(72, 82, 94, 240)));
+                ImGui::SetCursorPos(Scale(22.0f, 18.0f, uiScale));
                 const std::string offerName =
                     gameInstance.Localize((passiveItem ? "item." : "shop.") + offers[index].id + ".name", offers[index].name);
                 const std::string offerDesc =
                     gameInstance.Localize((passiveItem ? "item." : "shop.") + offers[index].id + ".desc", offers[index].description);
+                ImTextureID cardIcon = EmptyTexture();
+                std::string cardIconPath;
+                if (passiveItem)
+                {
+                    cardIcon = LoadIconTexture(gameInstance, "items", offers[index].id);
+                    cardIconPath = Brotato3D::PlaceholderAssets::Icon("items", offers[index].id);
+                }
+                else if (weaponCard)
+                {
+                    const char* weaponIconId = WeaponIconId(offers[index].weaponId);
+                    cardIcon = weaponIconId ? LoadIconTexture(gameInstance, "weapons", weaponIconId) : EmptyTexture();
+                    if (weaponIconId)
+                    {
+                        cardIconPath = Brotato3D::PlaceholderAssets::Icon("weapons", weaponIconId);
+                    }
+                }
+                else
+                {
+                    const char* statIconId = StatIconId(offers[index].stat);
+                    cardIcon = statIconId ? LoadIconTexture(gameInstance, "stats", statIconId) : EmptyTexture();
+                    if (statIconId)
+                    {
+                        cardIconPath = Brotato3D::PlaceholderAssets::Icon("stats", statIconId);
+                    }
+                }
+                const ImVec2 iconMin = ImGui::GetCursorScreenPos();
+                const ImVec2 iconMax(iconMin.x + 56.0f * uiScale, iconMin.y + 56.0f * uiScale);
+                ImGui::GetWindowDrawList()->AddRectFilled(iconMin, iconMax, IM_COL32(8, 10, 14, 200), 6.0f * uiScale);
+                if (cardIcon)
+                {
+                    DrawImageContain(ImGui::GetWindowDrawList(),
+                                     cardIcon,
+                                     GetTexturePixelSize(cardIconPath),
+                                     iconMin,
+                                     iconMax,
+                                     4.0f * uiScale);
+                }
+                else
+                {
+                    ImGui::GetWindowDrawList()->AddText(ImVec2(iconMin.x + 17.0f * uiScale, iconMin.y + 15.0f * uiScale),
+                                                        IM_COL32_WHITE,
+                                                        passiveItem ? ItemInitial(offers[index].id) :
+                                                        (weaponCard ? WeaponShortName(offers[index].weaponId) : "+"));
+                }
+                ImGui::SetCursorPos(Scale(22.0f, 82.0f, uiScale));
+                ImGui::PushTextWrapPos((175.0f - 22.0f) * uiScale);
                 ImGui::TextWrapped("%s", offerName.c_str());
+                ImGui::PopTextWrapPos();
                 ImGui::Separator();
+                ImGui::PushTextWrapPos((175.0f - 22.0f) * uiScale);
                 if (weaponCard)
                 {
                     const int ownedTierOne = CountTierOneWeapons(gameInstance.GetWeapons(), offers[index].weaponId);
                     ImGui::Text("%s", Tr(gameInstance, "shop.weapon", "武器").c_str());
-                    ImGui::Text("%s", TrFormat(gameInstance, "shop.merge", "合成：{0} / 3", std::min(ownedTierOne, 3)).c_str());
+                    ImGui::Text("%s", TrFormat(gameInstance, "shop.merge", "合成：{0} / 2", std::min(ownedTierOne, 2)).c_str());
                     ImGui::TextWrapped("%s",
-                                       ownedTierOne >= 2 ? Tr(gameInstance, "shop.merge_ready", "再买一把会合成 T2").c_str() :
-                                                           Tr(gameInstance, "shop.merge_need", "需要 3 把相同 T1").c_str());
+                                       ownedTierOne >= 1 ? Tr(gameInstance, "shop.merge_ready", "再买一把会合成 T2").c_str() :
+                                                           Tr(gameInstance, "shop.merge_need", "需要 2 把相同 T1").c_str());
                 }
                 else if (passiveItem)
                 {
@@ -856,10 +1818,21 @@ namespace Brotato3D
                 }
                 else
                 {
-                    ImGui::TextWrapped("%s %+g", offers[index].stat.c_str(), offers[index].delta);
+                    const std::string statLabel = StatDisplayName(gameInstance, offers[index].stat);
+                    ImGui::PushStyleColor(ImGuiCol_Text, StatAccentColor(offers[index].stat, 1.0f));
+                    if (offers[index].stat == "healPct")
+                    {
+                        ImGui::TextWrapped("%s %+.0f%%", statLabel.c_str(), offers[index].delta * 100.0f);
+                    }
+                    else
+                    {
+                        ImGui::TextWrapped("%s %s", statLabel.c_str(), FormatStatValue(offers[index].stat, offers[index].delta).c_str());
+                    }
+                    ImGui::PopStyleColor();
                 }
+                ImGui::PopTextWrapPos();
                 ImGui::Text("%s", TrFormat(gameInstance, "shop.cost", "价格：{0}", offers[index].cost).c_str());
-                ImGui::SetCursorPosY(210.0f * uiScale);
+                ImGui::SetCursorPos(ImVec2((175.0f - 140.0f) * 0.5f * uiScale, 210.0f * uiScale));
                 const bool canBuy = gameInstance.CanBuyShopOffer(index);
                 if (!canBuy)
                 {
@@ -904,10 +1877,7 @@ namespace Brotato3D
                     }
                 }
                 ImGui::EndChild();
-                if (passiveItem || weaponCard)
-                {
-                    ImGui::PopStyleColor(2);
-                }
+                ImGui::PopStyleColor(2);
             }
 
             ImGui::Separator();
@@ -920,6 +1890,7 @@ namespace Brotato3D
             {
                 gameInstance.RerollShop();
             }
+            MaybePlayHoverSfx("shop.reroll");
             if (player.materials < gameInstance.GetRerollCost())
             {
                 ImGui::EndDisabled();
@@ -930,6 +1901,7 @@ namespace Brotato3D
                 gameInstance.ContinueFromShop();
                 ImGui::CloseCurrentPopup();
             }
+            MaybePlayHoverSfx("shop.next_wave");
             ImGui::EndPopup();
         }
     }
@@ -1031,6 +2003,13 @@ namespace Brotato3D
         if (ImGui::BeginPopupModal("Result", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings))
         {
             ImGui::SetWindowFontScale(uiScale);
+            DrawPanel(ImGui::GetWindowDrawList(),
+                      LoadHudTexture(gameInstance, "panel_transparent.png"),
+                      ImGui::GetWindowPos(),
+                      ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x,
+                             ImGui::GetWindowPos().y + ImGui::GetWindowSize().y),
+                      defeated ? IM_COL32(40, 10, 12, 235) : IM_COL32(10, 22, 40, 235),
+                      10.0f * uiScale);
             ImGui::Text("%s", defeated ? Tr(gameInstance, "result.defeat", "失败").c_str() :
                                           Tr(gameInstance, "result.victory", "胜利").c_str());
             if (defeated)
@@ -1078,9 +2057,51 @@ namespace Brotato3D
                     {
                         itemList += " / ";
                     }
-                    itemList += ItemInitial(item->id);
+                    itemList += gameInstance.Localize("item." + item->id + ".name", item->name);
                 }
             }
+            if (!ownedItemIds.empty())
+            {
+                ImGui::Dummy(Scale(0.0f, 4.0f, uiScale));
+                for (size_t index = 0; index < ownedItemIds.size(); ++index)
+                {
+                    if (index > 0)
+                    {
+                        ImGui::SameLine();
+                    }
+                    const Brotato3D::FItemDef* item = gameInstance.GetItemDef(ownedItemIds[index]);
+                    if (!item)
+                    {
+                        continue;
+                    }
+                    const ImTextureID icon = LoadIconTexture(gameInstance, "items", item->id);
+                    ImGui::InvisibleButton(fmt::format("##ResultItem{}", index).c_str(), Scale(42.0f, 42.0f, uiScale));
+                    const ImVec2 min = ImGui::GetItemRectMin();
+                    const ImVec2 max = ImGui::GetItemRectMax();
+                    ImGui::GetWindowDrawList()->AddRectFilled(min, max,
+                                                              Color(glm::vec4(RarityColor(item->rarity, 0.85f).x,
+                                                                               RarityColor(item->rarity, 0.85f).y,
+                                                                               RarityColor(item->rarity, 0.85f).z,
+                                                                               RarityColor(item->rarity, 0.85f).w)),
+                                                              6.0f * uiScale);
+                    if (icon)
+                    {
+                        ImGui::GetWindowDrawList()->AddImage(icon, min, max);
+                    }
+                    else
+                    {
+                        ImGui::GetWindowDrawList()->AddText(ImVec2(min.x + 12.0f * uiScale, min.y + 12.0f * uiScale),
+                                                            IM_COL32_WHITE,
+                                                            ItemInitial(item->id));
+                    }
+                    if (ImGui::IsItemHovered())
+                    {
+                        MaybePlayHoverSfx(fmt::format("result.{}", item->id));
+                        DrawWideTooltip(gameInstance.Localize("item." + item->id + ".desc", item->description), uiScale);
+                    }
+                }
+            }
+            ImGui::Dummy(Scale(0.0f, 10.0f, uiScale));
             ImGui::TextWrapped("%s", TrFormat(gameInstance, "result.items", "道具：{0}", itemList).c_str());
             const Brotato3D::FBestRecord& bestRecord = gameInstance.GetBestRecord();
             ImGui::Text("%s", Tr(gameInstance, "best.title", "最佳记录").c_str());

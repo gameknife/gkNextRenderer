@@ -1,9 +1,11 @@
 #pragma once
 
 #include "Common/CoreMinimal.hpp"
+#include "Brotato3DAssetPaths.hpp"
 #include "Runtime/Engine.hpp"
 
 #include <chrono>
+#include <random>
 #include <spdlog/spdlog.h>
 
 namespace Brotato3D
@@ -18,6 +20,24 @@ namespace Brotato3D
     {
         static std::string path;
         return path;
+    }
+
+    inline std::mt19937& AudioRng()
+    {
+        static std::mt19937 rng(std::random_device{}());
+        return rng;
+    }
+
+    inline std::string PickVariantPath(std::initializer_list<std::string> candidates)
+    {
+        if (candidates.size() == 0)
+        {
+            return {};
+        }
+        std::uniform_int_distribution<size_t> dist(0, candidates.size() - 1);
+        auto it = candidates.begin();
+        std::advance(it, static_cast<std::ptrdiff_t>(dist(AudioRng())));
+        return *it;
     }
 
     inline void PlayBrotatoSfx(const std::string& soundPath, float volumeScale = 1.0f, uint64_t minIntervalMs = 70)
@@ -51,92 +71,169 @@ namespace Brotato3D
 
     inline void PlayWeaponFireSfx(const std::string& weaponId)
     {
+        if (weaponId == "smg")
+        {
+            PlayBrotatoSfx(PickVariantPath({
+                               PlaceholderAssets::Sfx("fire_smg_01.wav"),
+                               PlaceholderAssets::Sfx("fire_smg_02.wav"),
+                               PlaceholderAssets::Sfx("fire_smg_03.wav"),
+                               PlaceholderAssets::Sfx("fire_smg_04.wav"),
+                               PlaceholderAssets::Sfx("fire_smg_05.wav"),
+                               PlaceholderAssets::Sfx("fire_smg_06.wav"),
+                               PlaceholderAssets::Sfx("fire_smg_07.wav"),
+                               PlaceholderAssets::Sfx("fire_smg_08.wav"),
+                               PlaceholderAssets::Sfx("fire_smg_09.wav"),
+                           }),
+                           0.75f,
+                           55);
+            return;
+        }
+        if (weaponId == "flamethrower")
+        {
+            PlayBrotatoSfx(PickVariantPath({
+                               PlaceholderAssets::Sfx("fire_flamethrower_01.wav"),
+                               PlaceholderAssets::Sfx("fire_flamethrower_02.wav"),
+                               PlaceholderAssets::Sfx("fire_flamethrower_03.wav"),
+                               PlaceholderAssets::Sfx("fire_flamethrower_04.wav"),
+                           }),
+                           0.72f,
+                           40);
+            return;
+        }
+
         static const std::unordered_map<std::string, std::string> paths = {
-            {"smg", "assets/sounds/brotato3d/fire_smg.wav"},
-            {"shotgun", "assets/sounds/brotato3d/fire_shotgun.wav"},
-            {"sniper", "assets/sounds/brotato3d/fire_sniper.wav"},
-            {"flamethrower", "assets/sounds/brotato3d/fire_flamethrower.wav"},
-            {"rocket", "assets/sounds/brotato3d/fire_rocket.wav"},
-            {"laser", "assets/sounds/brotato3d/fire_laser.wav"},
+            {"shotgun", PlaceholderAssets::Sfx("fire_shotgun_01.wav")},
+            {"sniper", PlaceholderAssets::Sfx("fire_sniper_01.wav")},
+            {"rocket", PlaceholderAssets::Sfx("fire_rocket_01.wav")},
+            {"laser", PlaceholderAssets::Sfx("fire_laser_01.wav")},
         };
         const auto it = paths.find(weaponId);
-        PlayBrotatoSfx(it != paths.end() ? it->second : "assets/sounds/brotato3d/fire_smg.wav", 0.75f, 70);
+        PlayBrotatoSfx(it != paths.end() ? it->second : PlaceholderAssets::Sfx("fire_smg_01.wav"), 0.75f, 70);
     }
 
     inline void PlayHitSfx(int damage, bool isCrit)
     {
-        PlayBrotatoSfx(isCrit ? "assets/sounds/brotato3d/hit_crit.wav" : "assets/sounds/brotato3d/hit_normal.wav",
+        PlayBrotatoSfx(isCrit ? PickVariantPath({
+                                    PlaceholderAssets::Sfx("hit_crit_01.wav"),
+                                    PlaceholderAssets::Sfx("hit_crit_02.wav"),
+                                    PlaceholderAssets::Sfx("hit_crit_03.wav"),
+                                    PlaceholderAssets::Sfx("hit_crit_04.wav"),
+                                }) :
+                                PickVariantPath({
+                                    PlaceholderAssets::Sfx("hit_normal_01.wav"),
+                                    PlaceholderAssets::Sfx("hit_normal_02.wav"),
+                                    PlaceholderAssets::Sfx("hit_normal_03.wav"),
+                                    PlaceholderAssets::Sfx("hit_normal_04.wav"),
+                                    PlaceholderAssets::Sfx("hit_normal_05.wav"),
+                                }),
                        isCrit ? 0.85f : std::clamp(static_cast<float>(damage) / 20.0f, 0.45f, 0.8f),
                        isCrit ? 45 : 35);
     }
 
     inline void PlayPickupXpSfx()
     {
-        PlayBrotatoSfx("assets/sounds/brotato3d/pickup_xp.wav", 0.6f, 45);
+        PlayBrotatoSfx(PickVariantPath({
+                           PlaceholderAssets::Sfx("pickup_xp_01.ogg"),
+                           PlaceholderAssets::Sfx("pickup_xp_02.ogg"),
+                       }),
+                       0.6f,
+                       45);
     }
 
     inline void PlayPickupMaterialSfx()
     {
-        PlayBrotatoSfx("assets/sounds/brotato3d/pickup_material.wav", 0.65f, 45);
+        PlayBrotatoSfx(PlaceholderAssets::Sfx("pickup_material.wav"), 0.65f, 45);
     }
 
     inline void PlayLevelUpSfx()
     {
-        PlayBrotatoSfx("assets/sounds/brotato3d/level_up.wav", 0.9f, 0);
+        PlayBrotatoSfx(PlaceholderAssets::Sfx("level_up.wav"), 0.9f, 0);
     }
 
     inline void PlayWaveStartSfx(int waveIndex)
     {
-        PlayBrotatoSfx(waveIndex >= 9 ? "assets/sounds/brotato3d/wave_start_boss.wav" :
-                                        "assets/sounds/brotato3d/wave_start.wav",
+        PlayBrotatoSfx(waveIndex >= 9 ? PlaceholderAssets::Sfx("wave_start_boss.wav") : PlaceholderAssets::Sfx("wave_start.wav"),
                        0.85f,
                        0);
     }
 
     inline void PlayPlayerHurtSfx()
     {
-        PlayBrotatoSfx("assets/sounds/brotato3d/player_hurt.wav", 0.8f, 120);
+        PlayBrotatoSfx(PickVariantPath({
+                           PlaceholderAssets::Sfx("player_hurt_01.wav"),
+                           PlaceholderAssets::Sfx("player_hurt_02.wav"),
+                           PlaceholderAssets::Sfx("player_hurt_03.wav"),
+                           PlaceholderAssets::Sfx("player_hurt_04.wav"),
+                       }),
+                       0.8f,
+                       120);
     }
 
     inline void PlayEnemyDeathSfx(const std::string& enemyId)
     {
         if (enemyId == "Warden" || enemyId == "boss_warden")
         {
-            PlayBrotatoSfx("assets/sounds/brotato3d/enemy_die_boss.wav", 1.0f, 0);
+            PlayBrotatoSfx(PlaceholderAssets::Sfx("enemy_die_boss.wav"), 1.0f, 0);
         }
         else if (enemyId == "Brute" || enemyId == "tank")
         {
-            PlayBrotatoSfx("assets/sounds/brotato3d/enemy_die_tank.wav", 0.85f, 80);
+            PlayBrotatoSfx(PickVariantPath({
+                               PlaceholderAssets::Sfx("enemy_die_tank_01.wav"),
+                               PlaceholderAssets::Sfx("enemy_die_tank_02.wav"),
+                               PlaceholderAssets::Sfx("enemy_die_tank_03.wav"),
+                           }),
+                           0.85f,
+                           80);
         }
         else
         {
-            PlayBrotatoSfx("assets/sounds/brotato3d/enemy_die_small.wav", 0.65f, 55);
+            PlayBrotatoSfx(PickVariantPath({
+                               PlaceholderAssets::Sfx("enemy_die_small_01.wav"),
+                               PlaceholderAssets::Sfx("enemy_die_small_02.wav"),
+                           }),
+                           0.65f,
+                           55);
         }
     }
 
     inline void PlayShopOpenSfx()
     {
-        PlayBrotatoSfx("assets/sounds/brotato3d/shop_open.wav", 0.75f, 0);
+        PlayBrotatoSfx(PlaceholderAssets::Sfx("shop_open.wav"), 0.75f, 0);
     }
 
     inline void PlayShopBuySfx()
     {
-        PlayBrotatoSfx("assets/sounds/brotato3d/shop_buy.wav", 0.8f, 45);
+        PlayBrotatoSfx(PlaceholderAssets::Sfx("shop_buy.wav"), 0.8f, 45);
+    }
+
+    inline void PlayShopRerollSfx()
+    {
+        PlayBrotatoSfx(PlaceholderAssets::Sfx("shop_reroll.wav"), 0.75f, 45);
+    }
+
+    inline void PlayShopCantBuySfx()
+    {
+        PlayBrotatoSfx(PlaceholderAssets::Sfx("shop_cant_buy.wav"), 0.75f, 45);
     }
 
     inline void PlayUiClickSfx()
     {
-        PlayBrotatoSfx("assets/sounds/brotato3d/ui_click.wav", 0.55f, 35);
+        PlayBrotatoSfx(PlaceholderAssets::Sfx("ui_click.wav"), 0.55f, 35);
+    }
+
+    inline void PlayUiHoverSfx()
+    {
+        PlayBrotatoSfx(PlaceholderAssets::Sfx("ui_hover.wav"), 0.45f, 25);
     }
 
     inline void PlayVictorySfx()
     {
-        PlayBrotatoSfx("assets/sounds/brotato3d/victory.wav", 0.9f, 0);
+        PlayBrotatoSfx(PlaceholderAssets::Sfx("victory.wav"), 0.9f, 0);
     }
 
     inline void PlayDefeatSfx()
     {
-        PlayBrotatoSfx("assets/sounds/brotato3d/defeat.wav", 0.9f, 0);
+        PlayBrotatoSfx(PlaceholderAssets::Sfx("defeat.wav"), 0.9f, 0);
     }
 
     inline void StopBgm()
@@ -155,7 +252,7 @@ namespace Brotato3D
 
     inline void StartBgm(const std::string& trackName)
     {
-        const std::string path = fmt::format("assets/sounds/brotato3d/bgm_{}.wav", trackName);
+        const std::string path = PlaceholderAssets::Bgm(fmt::format("bgm_{}.mp3", trackName));
         std::string& currentPath = CurrentBgmPath();
         if (currentPath == path)
         {

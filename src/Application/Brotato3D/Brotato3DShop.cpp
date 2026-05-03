@@ -74,7 +74,7 @@ namespace Brotato3D
                 ++sameTierOneCount;
             }
         }
-        return sameTierOneCount >= 2;
+        return sameTierOneCount >= 1;
     }
 
     void FShop::RollStatOffer(std::vector<FShopItemDef>& remainingStats, std::vector<FShopItemDef>& outOffer)

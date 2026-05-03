@@ -1,4 +1,6 @@
 #include "Brotato3DGameInstance.hpp"
+#include "Brotato3DAssetPaths.hpp"
+#include "Brotato3DAudio.hpp"
 #include "Brotato3DCommon.hpp"
 
 #include <imgui.h>
@@ -77,6 +79,12 @@ void Brotato3DGameInstance::OnInit()
     engine_->SetGraphicsDebugPanelVisible(false);
     engine_->GetUserSettings().ShowOverlay = false;
     engine_->RequestLoadScene("Empty.proc");
+    Brotato3D::StartBgm("calm");
+
+    if (std::filesystem::exists(Brotato3D::PlaceholderAssets::Sfx("fire_smg_01.wav")))
+    {
+        spdlog::warn("[PLACEHOLDER ASSETS] Brotato vendor reference assets detected — DO NOT DISTRIBUTE");
+    }
 }
 
 void Brotato3DGameInstance::OnInitUI()
@@ -84,18 +92,42 @@ void Brotato3DGameInstance::OnInitUI()
     NextGameInstanceBase::OnInitUI();
     if (!bigFont_)
     {
-        const ImWchar* glyphRange = ImGui::GetIO().Fonts->GetGlyphRangesDefault();
-        const std::string chineseFont = Utilities::FileHelper::GetPlatformFilePath("assets/fonts/DroidSansFallback.ttf");
-        const std::string displayFont = std::filesystem::exists(chineseFont) ?
-            chineseFont :
-            Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-BoldCondensed.ttf");
-        glyphRange = displayFont == chineseFont ? ImGui::GetIO().Fonts->GetGlyphRangesChineseSimplifiedCommon() : glyphRange;
-        ImFont* uiFont = ImGui::GetIO().Fonts->AddFontFromFileTTF(displayFont.c_str(), 16, nullptr, glyphRange);
+        ImGuiIO& io = ImGui::GetIO();
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+        const std::string placeholderUiFont =
+            Utilities::FileHelper::GetPlatformFilePath(Brotato3D::PlaceholderAssets::Font("NotoSansSC-Medium.otf").c_str());
+        const std::string fallbackChineseFont = Utilities::FileHelper::GetPlatformFilePath("assets/fonts/DroidSansFallback.ttf");
+        const std::string fallbackLatinFont = Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-BoldCondensed.ttf");
+        const std::string placeholderBigFont =
+            Utilities::FileHelper::GetPlatformFilePath(Brotato3D::PlaceholderAssets::Font("Anybody-Medium.ttf").c_str());
+
+        std::string displayFont = fallbackLatinFont;
+        const ImWchar* displayGlyphRange = io.Fonts->GetGlyphRangesDefault();
+        if (std::filesystem::exists(placeholderUiFont))
+        {
+            displayFont = placeholderUiFont;
+            displayGlyphRange = io.Fonts->GetGlyphRangesChineseSimplifiedCommon();
+        }
+        else if (std::filesystem::exists(fallbackChineseFont))
+        {
+            displayFont = fallbackChineseFont;
+            displayGlyphRange = io.Fonts->GetGlyphRangesChineseSimplifiedCommon();
+        }
+
+        ImFont* uiFont = io.Fonts->AddFontFromFileTTF(displayFont.c_str(), 16.0f, nullptr, displayGlyphRange);
         if (uiFont)
         {
-            ImGui::GetIO().FontDefault = uiFont;
+            io.FontDefault = uiFont;
         }
-        bigFont_ = ImGui::GetIO().Fonts->AddFontFromFileTTF(displayFont.c_str(), 32, nullptr, glyphRange);
+
+        const std::string bigFontPath = std::filesystem::exists(placeholderBigFont) ? placeholderBigFont : displayFont;
+        const ImWchar* bigGlyphRange =
+            bigFontPath == placeholderBigFont ? io.Fonts->GetGlyphRangesDefault() : displayGlyphRange;
+        bigFont_ = io.Fonts->AddFontFromFileTTF(bigFontPath.c_str(), 32.0f, nullptr, bigGlyphRange);
+        if (!bigFont_)
+        {
+            bigFont_ = uiFont;
+        }
     }
 }
 
@@ -320,10 +352,6 @@ std::string Brotato3DGameInstance::GetShopOfferUnavailableReason(size_t slotInde
 
 bool Brotato3DGameInstance::OnRenderUI()
 {
-    ImGui::Begin("Brotato3D");
-    ImGui::Text("Brotato3D MVP - bootstrap OK");
-    ImGui::End();
-
     if (appState_ == Brotato3D::EAppState::MainMenu)
     {
         Brotato3D::RenderMainMenu(*this);

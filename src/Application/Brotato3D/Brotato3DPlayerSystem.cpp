@@ -9,15 +9,18 @@ using namespace Brotato3DUtil;
 
 bool Brotato3DGameInstance::OnKey(SDL_Event& event)
 {
-    if (event.type != SDL_EVENT_KEY_DOWN && event.type != SDL_EVENT_KEY_UP)
+    if (event.type != SDL_EVENT_KEY_DOWN && event.type != SDL_EVENT_KEY_UP &&
+        event.type != SDL_EVENT_GAMEPAD_BUTTON_DOWN && event.type != SDL_EVENT_GAMEPAD_BUTTON_UP)
     {
         return false;
     }
 
-    const bool pressed = event.type == SDL_EVENT_KEY_DOWN;
-    switch (event.key.key)
+    const bool pressed = (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN);
+    const bool isEscape = (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) && event.key.key == SDLK_ESCAPE;
+    const bool isStartButton = (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || event.type == SDL_EVENT_GAMEPAD_BUTTON_UP) && event.gbutton.button == SDL_GAMEPAD_BUTTON_START;
+
+    if (isEscape || isStartButton)
     {
-    case SDLK_ESCAPE:
         if (pressed && appState_ == Brotato3D::EAppState::Playing)
         {
             PauseGame();
@@ -27,26 +30,32 @@ bool Brotato3DGameInstance::OnKey(SDL_Event& event)
             ResumeGame();
         }
         return true;
-    case SDLK_W:
-        keyW_ = pressed;
-        return true;
-    case SDLK_A:
-        keyA_ = pressed;
-        return true;
-    case SDLK_S:
-        keyS_ = pressed;
-        return true;
-    case SDLK_D:
-        keyD_ = pressed;
-        return true;
-    case SDLK_K:
-#if DEV_MODE
-        if (pressed && appState_ == Brotato3D::EAppState::Playing)
+    }
+
+    if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP)
+    {
+        switch (event.key.key)
         {
-            SpawnEnemy("rat", RandomDebugSpawnPosition());
-        }
+        case SDLK_W:
+            keyW_ = pressed;
+            return true;
+        case SDLK_A:
+            keyA_ = pressed;
+            return true;
+        case SDLK_S:
+            keyS_ = pressed;
+            return true;
+        case SDLK_D:
+            keyD_ = pressed;
+            return true;
+        case SDLK_K:
+#if DEV_MODE
+            if (pressed && appState_ == Brotato3D::EAppState::Playing)
+            {
+                SpawnEnemy("rat", RandomDebugSpawnPosition());
+            }
 #endif
-        return true;
+            return true;
 #if DEV_MODE
     case SDLK_1:
         if (pressed && appState_ == Brotato3D::EAppState::Playing)
@@ -87,6 +96,7 @@ bool Brotato3DGameInstance::OnKey(SDL_Event& event)
 #endif
     default:
         break;
+    }
     }
     return false;
 }

@@ -331,7 +331,7 @@ bool Brotato3DGameInstance::CanBuyWeaponCard(const std::string& weaponId) const
             ++sameTierOneCount;
         }
     }
-    return sameTierOneCount >= 2;
+    return sameTierOneCount >= 1;
 }
 
 bool Brotato3DGameInstance::BuyWeaponCard(const Brotato3D::FShopItemDef& item)
@@ -365,13 +365,13 @@ void Brotato3DGameInstance::TryMergeWeapons(const std::string& weaponId)
             tierOneIndices.push_back(index);
         }
     }
-    if (tierOneIndices.size() < 3)
+    if (tierOneIndices.size() < 2)
     {
         NormalizeWeaponDefPointers();
         return;
     }
 
-    for (int removeIndex = 2; removeIndex >= 0; --removeIndex)
+    for (int removeIndex = 1; removeIndex >= 0; --removeIndex)
     {
         equippedWeapons_.erase(equippedWeapons_.begin() + static_cast<std::ptrdiff_t>(tierOneIndices[removeIndex]));
     }

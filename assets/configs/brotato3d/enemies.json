@@ -90,7 +90,7 @@
     },
     "boss_warden": {
       "name": "Warden",
-      "hp": 800,
+      "hp": 8000,
       "moveSpeed": 1.2,
       "contactDamage": 18,
       "size": [1.6, 2.0, 1.6],
