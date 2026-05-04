@@ -2,6 +2,7 @@
 
 #include "Common/CoreMinimal.hpp"
 #include "Runtime/Engine.hpp"
+#include "Runtime/Subsystems/NextLocalization.h"
 #include "Runtime/Subsystems/NextAudio.h"
 
 namespace KongLie3D
@@ -10,7 +11,17 @@ namespace KongLie3D
 
     inline const char* U8Text(const char8_t* text)
     {
-        return reinterpret_cast<const char*>(text);
+        static thread_local std::string localized;
+        const char* fallback = reinterpret_cast<const char*>(text);
+        if (NextEngine* engine = NextEngine::GetInstance())
+        {
+            if (NextLocalization* localization = engine->GetLocalization())
+            {
+                localized = localization->Get(fallback, fallback);
+                return localized.c_str();
+            }
+        }
+        return fallback;
     }
 
     inline void PlayKongLieSfx(const std::string& soundPath, float volumeScale = 1.0f, uint64_t minIntervalMs = 50)

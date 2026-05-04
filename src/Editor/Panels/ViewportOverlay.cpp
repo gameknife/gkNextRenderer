@@ -82,15 +82,15 @@ namespace Editor
                                 engine->RayCastGPU(origin, dir,
                                                    [engine, path](Assets::RayCastResult result) mutable
                                                    {
-                                                       NextEngine::SceneAppendOptions options{};
-                                                       if (result.Hitted)
-                                                       {
-                                                           options.placeOnHit = true;
-                                                           options.hitPosition = result.HitPoint;
-                                                       }
-                                                       engine->RequestLoadSceneAdd(path, options);
-                                                       return true;
-                                                   });
+                                                        NextEngine::FSceneLoadRequest request{.filename = path, .append = true};
+                                                        if (result.Hitted)
+                                                        {
+                                                            request.placeOnHit = true;
+                                                            request.hitPosition = result.HitPoint;
+                                                        }
+                                                        engine->RequestLoadScene(std::move(request));
+                                                        return true;
+                                                    });
                             }
                         }
                         else if (data->type == EEditorDragPayloadType::Material)
@@ -115,11 +115,12 @@ namespace Editor
                                                                   node->GetComponent<Runtime::RenderComponent>();
                                                               if (render && render->IsDrawable())
                                                               {
-                                                                  auto& mats = render->Materials();
+                                                                  auto mats = render->GetMaterials();
                                                                   for (auto& mat : mats)
                                                                   {
                                                                       mat = materialId;
                                                                   }
+                                                                  render->SetMaterials(mats);
                                                                   scene->MarkDirty();
                                                               }
                                                           }

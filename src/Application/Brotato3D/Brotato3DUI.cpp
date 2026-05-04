@@ -8,6 +8,7 @@
 #include "Runtime/Editor/ImGuiPainter.h"
 #include "Runtime/Editor/ImGuiScaling.h"
 #include "Runtime/Editor/UserInterface.hpp"
+#include "Runtime/Subsystems/NextLocalization.h"
 #include "Runtime/Utilities/NextEngineHelper.h"
 
 namespace
@@ -30,6 +31,15 @@ namespace
     ImTextureID EmptyTexture()
     {
         return static_cast<ImTextureID>(0);
+    }
+
+    std::string Localize(const Brotato3DGameInstance& gameInstance, const std::string& key, const std::string& fallback = "")
+    {
+        if (const NextLocalization* localization = gameInstance.GetEngine().GetLocalization())
+        {
+            return localization->Get(key, fallback);
+        }
+        return fallback.empty() ? key : fallback;
     }
 
     ImTextureID LoadUiTexture(Brotato3DGameInstance& gameInstance, const std::string& path, bool srgb = true)
@@ -282,35 +292,35 @@ namespace
     {
         if (statKey == "maxHpFlat")
         {
-            return gameInstance.Localize("character.hp", "生命");
+            return Localize(gameInstance, "character.hp", "生命");
         }
         if (statKey == "moveSpeedPct")
         {
-            return gameInstance.Localize("character.move", "移速");
+            return Localize(gameInstance, "character.move", "移速");
         }
         if (statKey == "atkSpeedPct")
         {
-            return gameInstance.Localize("stat.attack_speed", "攻速");
+            return Localize(gameInstance, "stat.attack_speed", "攻速");
         }
         if (statKey == "critChancePct")
         {
-            return gameInstance.Localize("character.crit", "暴击");
+            return Localize(gameInstance, "character.crit", "暴击");
         }
         if (statKey == "rangePct")
         {
-            return gameInstance.Localize("character.range", "射程");
+            return Localize(gameInstance, "character.range", "射程");
         }
         if (statKey == "damagePct" || statKey == "damageFlat")
         {
-            return gameInstance.Localize("character.damage", "伤害");
+            return Localize(gameInstance, "character.damage", "伤害");
         }
         if (statKey == "healPct")
         {
-            return gameInstance.Localize("stat.heal", "治疗");
+            return Localize(gameInstance, "stat.heal", "治疗");
         }
         if (statKey == "critMultiplier")
         {
-            return gameInstance.Localize("stat.crit_damage", "暴伤");
+            return Localize(gameInstance, "stat.crit_damage", "暴伤");
         }
         return statKey;
     }
@@ -556,19 +566,19 @@ namespace
         if (statKey == "healPct")
         {
             const int healed = std::min(player.maxHp, player.currentHp + static_cast<int>(std::round(player.maxHp * delta)));
-            return fmt::format(fmt::runtime(gameInstance.Localize("tooltip.heal", "当前 HP {0} -> {1}")),
+            return fmt::format(fmt::runtime(Localize(gameInstance, "tooltip.heal", "当前 HP {0} -> {1}")),
                                player.currentHp,
                                healed);
         }
         const float current = GetStatValue(player, stats, statKey);
-        return fmt::format(fmt::runtime(gameInstance.Localize("tooltip.current_after", "当前 {0} -> 升级后 {1}")),
+        return fmt::format(fmt::runtime(Localize(gameInstance, "tooltip.current_after", "当前 {0} -> 升级后 {1}")),
                            FormatStatValue(statKey, current),
                            FormatStatValue(statKey, current + delta));
     }
 
     std::string Tr(const Brotato3DGameInstance& gameInstance, const std::string& key, const std::string& fallback)
     {
-        return gameInstance.Localize(key, fallback);
+        return Localize(gameInstance, key, fallback);
     }
 
     template <typename... Args>
@@ -577,7 +587,7 @@ namespace
                          const std::string& fallback,
                          Args&&... args)
     {
-        return fmt::format(fmt::runtime(gameInstance.Localize(key, fallback)), std::forward<Args>(args)...);
+        return fmt::format(fmt::runtime(Localize(gameInstance, key, fallback)), std::forward<Args>(args)...);
     }
 }
 
@@ -763,9 +773,9 @@ namespace Brotato3D
             drawList->AddRect(portraitMin, portraitMax, IM_COL32(255, 214, 132, 72), 6.0f * uiScale);
             ImGui::Dummy(Scale(200.0f, 162.0f, uiScale));
             ImGui::SetWindowFontScale(1.35f * uiScale);
-            ImGui::Text("%s", gameInstance.Localize("character." + character.id + ".name", character.name).c_str());
+            ImGui::Text("%s", Localize(gameInstance, "character." + character.id + ".name", character.name).c_str());
             ImGui::SetWindowFontScale(uiScale);
-            ImGui::TextWrapped("%s", gameInstance.Localize("character." + character.id + ".tagline", character.tagline).c_str());
+            ImGui::TextWrapped("%s", Localize(gameInstance, "character." + character.id + ".tagline", character.tagline).c_str());
             ImGui::Separator();
             ImGui::Text("%s: %s", Tr(gameInstance, "character.weapon", "武器").c_str(), character.startWeapon.c_str());
             ImGui::Text("%s: %.0f", Tr(gameInstance, "character.hp", "生命").c_str(), character.startStats.maxHpFlat);
@@ -1019,8 +1029,8 @@ namespace Brotato3D
             {
                 MaybePlayHoverSfx(fmt::format("itemslot.{}", item->id));
                 ImGui::BeginTooltip();
-                ImGui::Text("%s", gameInstance.Localize("item." + item->id + ".name", item->name).c_str());
-                ImGui::TextWrapped("%s", gameInstance.Localize("item." + item->id + ".desc", item->description).c_str());
+                ImGui::Text("%s", Localize(gameInstance, "item." + item->id + ".name", item->name).c_str());
+                ImGui::TextWrapped("%s", Localize(gameInstance, "item." + item->id + ".desc", item->description).c_str());
                 ImGui::EndTooltip();
             }
         }
@@ -1108,8 +1118,8 @@ namespace Brotato3D
             {
                 ImVec2 center{};
                 ImVec2 edge{};
-                if (NextEngineHelper::TryProjectWorldToScreen(gameInstance, enemy.worldPos, center) &&
-                    NextEngineHelper::TryProjectWorldToScreen(gameInstance, enemy.worldPos + glm::vec3(enemy.def->heal.radiusMeters, 0.0f, 0.0f), edge))
+                if (NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, enemy.worldPos, center) &&
+                    NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, enemy.worldPos + glm::vec3(enemy.def->heal.radiusMeters, 0.0f, 0.0f), edge))
                 {
                     const float radiusPx = std::abs(edge.x - center.x);
                     drawList->AddCircle(center, radiusPx, IM_COL32(160, 70, 230, 130), 48, std::max(1.5f, 2.0f * uiScale));
@@ -1121,7 +1131,7 @@ namespace Brotato3D
                 continue;
             }
             ImVec2 screen{};
-            if (!NextEngineHelper::TryProjectWorldToScreen(gameInstance, enemy.worldPos + glm::vec3(0.0f, enemy.def->size.y + 0.2f, 0.0f), screen))
+            if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, enemy.worldPos + glm::vec3(0.0f, enemy.def->size.y + 0.2f, 0.0f), screen))
             {
                 continue;
             }
@@ -1144,7 +1154,7 @@ namespace Brotato3D
 
             ImVec2 from{};
             ImVec2 to{};
-            if (!NextEngineHelper::TryProjectWorldToScreen(gameInstance, projectile.lastWorldPos, from) || !NextEngineHelper::TryProjectWorldToScreen(gameInstance, projectile.worldPos, to))
+            if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, projectile.lastWorldPos, from) || !NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, projectile.worldPos, to))
             {
                 continue;
             }
@@ -1155,7 +1165,7 @@ namespace Brotato3D
         for (const FMuzzleFlash& flash : gameInstance.GetMuzzleFlashes())
         {
             ImVec2 center{};
-            if (!NextEngineHelper::TryProjectWorldToScreen(gameInstance, flash.worldPos, center))
+            if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, flash.worldPos, center))
             {
                 continue;
             }
@@ -1173,7 +1183,7 @@ namespace Brotato3D
         for (const FFloatingText& text : gameInstance.GetFloatingTexts())
         {
             ImVec2 screen{};
-            if (!NextEngineHelper::TryProjectWorldToScreen(gameInstance, text.worldPos, screen))
+            if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, text.worldPos, screen))
             {
                 continue;
             }
@@ -1192,8 +1202,8 @@ namespace Brotato3D
         {
             ImVec2 center{};
             ImVec2 edge{};
-            if (!NextEngineHelper::TryProjectWorldToScreen(gameInstance, ring.worldPos, center) ||
-                !NextEngineHelper::TryProjectWorldToScreen(gameInstance, ring.worldPos + glm::vec3(ring.maxRadius, 0.0f, 0.0f), edge))
+            if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, ring.worldPos, center) ||
+                !NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, ring.worldPos + glm::vec3(ring.maxRadius, 0.0f, 0.0f), edge))
             {
                 continue;
             }
@@ -1208,7 +1218,7 @@ namespace Brotato3D
         {
             ImVec2 from{};
             ImVec2 to{};
-            if (!NextEngineHelper::TryProjectWorldToScreen(gameInstance, beam.from, from) || !NextEngineHelper::TryProjectWorldToScreen(gameInstance, beam.to, to))
+            if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, beam.from, from) || !NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, beam.to, to))
             {
                 continue;
             }
@@ -1329,7 +1339,7 @@ namespace Brotato3D
                               title.c_str());
             drawList->AddText(ImVec2(windowMin.x + 30.0f * uiScale, windowMin.y + 58.0f * uiScale),
                               IM_COL32(215, 220, 226, 230),
-                              gameInstance.Localize("upgrade.subtitle", "本波结束后的战利品，请择其一").c_str());
+                              Localize(gameInstance, "upgrade.subtitle", "本波结束后的战利品，请择其一").c_str());
 
             const auto& choices = gameInstance.GetCurrentUpgradeChoices();
             const float cardWidth = 236.0f * uiScale;
@@ -1345,7 +1355,7 @@ namespace Brotato3D
                     ImGui::SameLine(0.0f, gap);
                 }
                 const FUpgradeCardDef& choice = choices[index];
-                const std::string choiceName = gameInstance.Localize("upgrade." + choice.id + ".name", choice.name);
+                const std::string choiceName = Localize(gameInstance, "upgrade." + choice.id + ".name", choice.name);
                 const std::string statLabel = StatDisplayName(gameInstance, choice.stat);
                 const std::string deltaText = choice.stat == "healPct" ?
                     fmt::format("{} {:+.0f}%", statLabel, choice.delta * 100.0f) :
@@ -1408,7 +1418,7 @@ namespace Brotato3D
                 ImGui::PopTextWrapPos();
                 ImGui::SetCursorPos(Scale(18.0f, 178.0f, uiScale));
                 ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(198, 204, 212, 255));
-                ImGui::TextWrapped("%s", gameInstance.Localize("upgrade.instant", "选择后立即生效").c_str());
+                ImGui::TextWrapped("%s", Localize(gameInstance, "upgrade.instant", "选择后立即生效").c_str());
                 ImGui::PopStyleColor();
                 ImGui::SetCursorPos(Scale(18.0f, 200.0f, uiScale));
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(accentColor.x * 0.72f, accentColor.y * 0.72f, accentColor.z * 0.72f, 0.96f));
@@ -1505,9 +1515,9 @@ namespace Brotato3D
                           (weaponCard ? IM_COL32(112, 94, 52, 245) : IM_COL32(72, 82, 94, 240)));
                 ImGui::SetCursorPos(Scale(22.0f, 18.0f, uiScale));
                 const std::string offerName =
-                    gameInstance.Localize((passiveItem ? "item." : "shop.") + offers[index].id + ".name", offers[index].name);
+                    Localize(gameInstance, (passiveItem ? "item." : "shop.") + offers[index].id + ".name", offers[index].name);
                 const std::string offerDesc =
-                    gameInstance.Localize((passiveItem ? "item." : "shop.") + offers[index].id + ".desc", offers[index].description);
+                    Localize(gameInstance, (passiveItem ? "item." : "shop.") + offers[index].id + ".desc", offers[index].description);
                 ImTextureID cardIcon = EmptyTexture();
                 std::string cardIconPath;
                 if (passiveItem)
@@ -1795,7 +1805,7 @@ namespace Brotato3D
                 ImGui::Text("%s", TrFormat(gameInstance,
                                             "result.character",
                                             "角色：{0}",
-                                            gameInstance.Localize("character." + character->id + ".name", character->name)).c_str());
+                                            Localize(gameInstance, "character." + character->id + ".name", character->name)).c_str());
             }
             std::string itemList = Tr(gameInstance, "result.none", "无");
             const auto& ownedItemIds = gameInstance.GetOwnedItemIds();
@@ -1813,7 +1823,7 @@ namespace Brotato3D
                     {
                         itemList += " / ";
                     }
-                    itemList += gameInstance.Localize("item." + item->id + ".name", item->name);
+                    itemList += Localize(gameInstance, "item." + item->id + ".name", item->name);
                 }
             }
             if (!ownedItemIds.empty())
@@ -1853,7 +1863,7 @@ namespace Brotato3D
                     if (ImGui::IsItemHovered())
                     {
                         MaybePlayHoverSfx(fmt::format("result.{}", item->id));
-                        DrawWideTooltip(gameInstance.Localize("item." + item->id + ".desc", item->description), uiScale);
+                        DrawWideTooltip(Localize(gameInstance, "item." + item->id + ".desc", item->description), uiScale);
                     }
                 }
             }
@@ -1885,3 +1895,4 @@ namespace Brotato3D
         ImGui::PopStyleColor(2);
     }
 }
+

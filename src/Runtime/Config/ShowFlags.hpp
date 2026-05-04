@@ -2,6 +2,8 @@
 
 struct ShowFlags final
 {
+    bool DebugPhysicsOverlay = false;
+    bool DebugGraphicsPanel = false;
     bool DebugDraw_Lighting = false;
     bool DebugDraw_BoundingBox = false;
     bool DebugDraw_PhysicsBodies = false;

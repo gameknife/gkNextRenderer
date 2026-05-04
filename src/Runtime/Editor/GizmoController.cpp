@@ -320,7 +320,7 @@ void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, con
         if (io.KeyShift)
         {
             auto duplicateCommand = std::make_unique<DuplicateNodesCommand>(scene, selectedIds);
-            if (engine.ExecuteCommand(std::move(duplicateCommand)))
+            if (engine.GetCommandHistory().Execute(std::move(duplicateCommand)))
             {
                 selectedIds = BuildSelectionList(scene);
                 if (selectedIds.empty())
@@ -433,7 +433,7 @@ void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, con
                 {
                     auto command = std::make_unique<TransformNodesCommand>(
                         scene, validIds, beforeSnapshots, afterSnapshots);
-                    engine.ExecuteCommand(std::move(command));
+                    engine.GetCommandHistory().Execute(std::move(command));
                 }
             }
         }

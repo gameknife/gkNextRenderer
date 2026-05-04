@@ -60,16 +60,19 @@ namespace Assets
     void Node::SetTranslation(glm::vec3 translation)
     {
         translation_ = translation;
+        RecalcTransform(true);
     }
 
     void Node::SetRotation(glm::quat rotation)
     {
         rotation_ = rotation;
+        RecalcTransform(true);
     }
 
     void Node::SetScale(glm::vec3 scale)
     {
         scaling_ = scale;
+        RecalcTransform(true);
     }
 
     void Node::SetName(std::string name)
@@ -145,8 +148,8 @@ namespace Assets
                 glm::vec3 rotatedOffset = body->rotation * scaledOffset;
                 glm::vec3 newTranslation = body->position - rotatedOffset;
 
-                SetTranslation(newTranslation);
-                SetRotation(body->rotation);
+                translation_ = newTranslation;
+                rotation_ = body->rotation;
                 RecalcTransform(true);
             }
         }
@@ -211,7 +214,7 @@ namespace Assets
         {
             proxy.modelId = renderComp->GetModelId();
             proxy.visible = renderComp->GetVisible() ? 1 : 0;
-            const auto& mats = renderComp->Materials();
+            const auto& mats = renderComp->GetMaterials();
             for ( int i = 0; i < 16; i++ )
             {
                 proxy.matId[i] = mats[i];

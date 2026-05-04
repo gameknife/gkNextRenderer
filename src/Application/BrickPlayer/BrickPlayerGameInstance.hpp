@@ -69,8 +69,8 @@ public:
     std::string GetCurrentBGMName() const;
 
     // Physics debug
-    bool IsShowPhysicsDebug() const { return engine_->IsPhysicsDebugOverlayVisible(); }
-    void TogglePhysicsDebug() { engine_->SetPhysicsDebugOverlayVisible(!engine_->IsPhysicsDebugOverlayVisible()); }
+    bool IsShowPhysicsDebug() const { return engine_->GetShowFlags().DebugPhysicsOverlay; }
+    void TogglePhysicsDebug() { engine_->GetShowFlags().DebugPhysicsOverlay = !engine_->GetShowFlags().DebugPhysicsOverlay; }
     bool IsShowGlobalPhysicsBodies() const { return engine_->GetShowFlags().DebugDraw_PhysicsBodies; }
     void ToggleGlobalPhysicsBodies()
     {

@@ -146,7 +146,7 @@ void BrickPlayerUserInterface::RenderTitleBar()
         {
             gameInstance_->GetEngine().AddTickedTask([this](double deltaSeconds) -> bool
             {
-                gameInstance_->GetEngine().RequestScreenShot("");
+                gameInstance_->GetEngine().RequestScreenShot({});
                 return true;
             });
         }

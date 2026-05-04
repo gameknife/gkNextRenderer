@@ -16,6 +16,7 @@
 class NextPhysics;
 class QuickJSEngine;
 class NextAudio;
+class NextLocalization;
 class VulkanGpuTimer;
 
 class NextEngine;
@@ -135,20 +136,6 @@ struct FDelayTaskContext
     DelayedTask task;
 };
 
-class NextComponent : std::enable_shared_from_this<NextComponent>
-{
-public:
-    NextComponent() = default;
-    std::string name_;
-    int id_;
-};
-
-class NextActor
-{
-public:
-    std::vector<NextComponent*> components;
-};
-
 class NextEngine final
 {
 public:
@@ -162,9 +149,26 @@ public:
     static NextEngine* instance_;
     static NextEngine* GetInstance() { return instance_; }
 
+    struct FSceneLoadRequest
+    {
+        std::string filename;
+        bool append = false;
+        bool placeOnHit = false;
+        glm::vec3 hitPosition{0.0f, 0.0f, 0.0f};
+    };
+
+    struct FScreenShotSpec
+    {
+        std::string filename;
+        int x = 0;
+        int y = 0;
+        int width = 0;
+        int height = 0;
+        uint32_t accumulateFrames = 0;
+        bool sync = false;
+    };
+
     Vulkan::VulkanBaseRenderer& GetRenderer() { return *renderer_; }
-    Vulkan::VulkanBaseRenderer* GetRendererPtr() { return renderer_.get(); }
-    const Vulkan::VulkanBaseRenderer* GetRendererPtr() const { return renderer_.get(); }
     VulkanGpuTimer* GpuTimer() const { return renderer_ ? renderer_->GpuTimer() : nullptr; }
 
     void Start();
@@ -176,34 +180,22 @@ public:
     void OnTouchMove(double xpos, double ypos);
 
     Assets::Scene& GetScene() { return *scene_; }
-    Assets::Scene* GetScenePtr() { return scene_.get(); }
     UserSettings& GetUserSettings() { return userSettings_; }
     ShowFlags& GetShowFlags() { return showFlags_; }
-    bool IsPhysicsDebugOverlayVisible() const { return showPhysicsDebugOverlay_; }
-    void SetPhysicsDebugOverlayVisible(bool visible) { showPhysicsDebugOverlay_ = visible; }
-    bool IsGraphicsDebugPanelVisible() const { return showGraphicsDebugPanel_; }
-    void SetGraphicsDebugPanelVisible(bool visible) { showGraphicsDebugPanel_ = visible; }
 
     float GetTime() const { return static_cast<float>(time_); }
     float GetDeltaSeconds() const { return static_cast<float>(deltaSeconds_); }
     float GetSmoothDeltaSeconds() const { return static_cast<float>(smoothedDeltaSeconds_); }
     float GetFrameRate() const { return frameRate_; }
     uint32_t GetTotalFrames() const { return totalFrames_; }
-    uint32_t GetTestNumber() const { return 20; }
-
     void RegisterJSCallback(std::function<void(double)> callback);
 
-    // remove till return true
+    // Runs every Tick on the main thread until the lambda returns true.
+    // Use for frame-bound gameplay/UI work that needs safe scene access.
     void AddTickedTask(TickedTask task) { tickedTasks_.push_back(task); }
+    // Runs on the main thread after delay seconds. Returning false reschedules with the same delay.
+    // For background CPU work, use TaskCoordinator instead.
     void AddTimerTask(double delay, DelayedTask task);
-
-    // sound
-    void PlaySound(const std::string& soundName, bool loop = false, float volume = 1.0f);
-    void PauseSound(const std::string& soundName, bool pause);
-    bool IsSoundPlaying(const std::string& soundName);
-
-    // screen shot
-    void SaveScreenShot(const std::string& filename, int x, int y, int width, int height);
 
     // pak
     Utilities::Package::FPackageFileSystem& GetPakSystem() { return *packageFileSystem_; }
@@ -223,39 +215,22 @@ public:
                                      float rightReservedWidth);
 
     // capture
-    void RequestScreenShot(std::string filename);
-    void RequestHighQualityScreenShot(const std::string& filename, uint32_t accumulateFrames);
-    bool IsCapturingHighQuality() const { return hqCaptureFramesRemaining_ > 0; }
+    void RequestScreenShot(FScreenShotSpec spec);
+    bool IsCapturingScreenShot() const { return hasPendingScreenShot_ || screenShotCaptureFramesRemaining_ > 0; }
 
     // scene loading
-    void RequestLoadScene(std::string sceneFileName);
-    void RequestLoadSceneAdd(std::string sceneFileName);
+    void RequestLoadScene(FSceneLoadRequest request);
 
-    struct SceneAppendOptions
-    {
-        bool placeOnHit = false;
-        glm::vec3 hitPosition{0.0f, 0.0f, 0.0f};
-    };
-
-    void RequestLoadSceneAdd(std::string sceneFileName, const SceneAppendOptions& options);
-
-    // command system
-    bool ExecuteCommand(std::unique_ptr<ICommand> command);
-    bool UndoCommand();
-    bool RedoCommand();
-    bool CanUndo() const;
-    bool CanRedo() const;
     CommandHistory& GetCommandHistory() { return commandHistory_; }
     const CommandHistory& GetCommandHistory() const { return commandHistory_; }
-
-    CommandHistory& GetCommandSystem() { return commandHistory_; }
-    const CommandHistory& GetCommandSystem() const { return commandHistory_; }
 
     Vulkan::Window& GetWindow() const { return *window_; }
 
     class UserInterface* GetUserInterface() { return userInterface_.get(); }
     NextAudio* GetAudio() { return audioEngine_.get(); }
     const NextAudio* GetAudio() const { return audioEngine_.get(); }
+    NextLocalization* GetLocalization() { return localization_.get(); }
+    const NextLocalization* GetLocalization() const { return localization_.get(); }
 
     NextAI::FAIService* GetAIService() { return aiService_.get(); }
     const NextAI::FAIService* GetAIService() const { return aiService_.get(); }
@@ -317,10 +292,7 @@ private:
     };
 
     void LaunchLoadSceneTask(std::string sceneFileName, std::function<void(SceneLoadContext&)> onGpuLoad);
-
-    void LoadScene(std::string sceneFileName);
-    void LoadSceneAdd(std::string sceneFileName);
-    void LoadSceneAdd(std::string sceneFileName, const SceneAppendOptions& options);
+    void LoadScene(const FSceneLoadRequest& request);
 
     void InitPhysics();
 
@@ -332,8 +304,6 @@ private:
     mutable UserSettings userSettings_{};
     mutable ShowFlags showFlags_{};
     mutable Assets::UniformBufferObject prevUBO_{};
-    bool showPhysicsDebugOverlay_ = false;
-    bool showGraphicsDebugPanel_ = false;
 
     // scene, maybe multiple at a time
     std::shared_ptr<Assets::Scene> scene_;
@@ -348,14 +318,13 @@ private:
     bool progressiveRendering_{};
     uint32_t progressivePreFrames_{};
 
-    // high quality capture state
-    uint32_t hqCaptureFramesRemaining_{};
-    uint32_t hqCaptureTotalFrames_{};
-    std::string hqCaptureFilename_;
-    bool hqCapturePrevProgressive_{};
-    uint32_t hqCapturePrevPreFrames_{};
-    bool screenShotRequested_{};
-    std::string screenShotFilename_;
+    bool hasPendingScreenShot_ = false;
+    FScreenShotSpec pendingScreenShot_{};
+    uint32_t screenShotCaptureFramesRemaining_{};
+    uint32_t screenShotCaptureTotalFrames_{};
+    FScreenShotSpec screenShotCaptureSpec_{};
+    bool screenShotCapturePrevProgressive_{};
+    uint32_t screenShotCapturePrevPreFrames_{};
 
     // game instance
     std::unique_ptr<NextGameInstanceBase> gameInstance_;
@@ -366,6 +335,7 @@ private:
 
     // internal ui
     std::unique_ptr<class UserInterface> userInterface_;
+    std::unique_ptr<NextLocalization> localization_;
 
     std::unique_ptr<NextAI::FAIService> aiService_;
     std::unique_ptr<NextAI::VoiceInputService> voiceInputService_;

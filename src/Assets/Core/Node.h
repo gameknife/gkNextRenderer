@@ -24,9 +24,9 @@ namespace Assets
         static std::shared_ptr<Node> CreateNode(std::string name, glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t instanceId = 0);
         Node(std::string name,  glm::vec3 translation, glm::quat rotation, glm::vec3 scale, uint32_t instanceId);
         
-        void SetTranslation( glm::vec3 translation );
-        void SetRotation( glm::quat rotation );
-        void SetScale( glm::vec3 scale );
+        void SetTranslation(glm::vec3 translation);
+        void SetRotation(glm::quat rotation);
+        void SetScale(glm::vec3 scale);
 
         glm::vec3& Translation() const { return translation_; }
         glm::quat& Rotation() const { return rotation_; }

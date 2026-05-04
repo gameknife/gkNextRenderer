@@ -67,6 +67,13 @@ namespace NextCVar
         }
     };
 
+    struct FCVarMatchOptions
+    {
+        bool prefixThenSubstring = false;
+        bool includeValue = false;
+        size_t limit = 0;
+    };
+
     class FCVarSystem final
     {
     public:
@@ -99,9 +106,8 @@ namespace NextCVar
         bool SetDefaultFromString(const std::string& name, const std::string& value, std::string* outError);
         std::string GetValueString(const std::string& name, bool* found = nullptr) const;
         bool ResetToDefault(const std::string& name);
-        std::vector<std::string> ListCVars(const std::string& prefix) const;
-        std::vector<std::string> CompleteCVars(const std::string& query, size_t limit, size_t* totalMatches) const;
-        std::vector<std::string> GetMatchingNames(const std::string& prefix, size_t limit) const;
+        std::vector<std::string> Match(const std::string& query, const FCVarMatchOptions& options,
+                                       size_t* totalMatches = nullptr) const;
 
     private:
         struct FCVarEntry

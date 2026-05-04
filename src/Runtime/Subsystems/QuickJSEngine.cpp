@@ -252,6 +252,12 @@ namespace
         return NextEngine::GetInstance();
     }
 
+    Assets::Scene* GetSceneForGlobal()
+    {
+        auto* engine = NextEngine::GetInstance();
+        return engine ? &engine->GetScene() : nullptr;
+    }
+
     Assets::Node* FindNodeById(uint32_t nodeId)
     {
         auto* engine = NextEngine::GetInstance();
@@ -260,12 +266,7 @@ namespace
             return nullptr;
         }
 
-        auto* scene = engine->GetScenePtr();
-        if (!scene)
-        {
-            return nullptr;
-        }
-
+        auto* scene = &engine->GetScene();
         const auto node = scene->GetNodeSharedByInstanceId(nodeId);
         return node ? node.get() : nullptr;
     }
@@ -309,14 +310,6 @@ namespace
 
         auto* engine = NextEngine::GetInstance();
         if (!engine)
-        {
-            JS_FreeCString(ctx, componentType);
-            JS_FreeCString(ctx, propertyName);
-            return JS_UNDEFINED;
-        }
-
-        auto* scene = engine->GetScenePtr();
-        if (!scene)
         {
             JS_FreeCString(ctx, componentType);
             JS_FreeCString(ctx, propertyName);
@@ -381,14 +374,6 @@ namespace
             return JS_UNDEFINED;
         }
 
-        auto* scene = engine->GetScenePtr();
-        if (!scene)
-        {
-            JS_FreeCString(ctx, componentType);
-            JS_FreeCString(ctx, propertyName);
-            return JS_UNDEFINED;
-        }
-
         Assets::Component* component = FindComponentByTypeName(nodeId, componentType);
         if (!component)
         {
@@ -446,14 +431,6 @@ namespace
 
         auto* engine = NextEngine::GetInstance();
         if (!engine)
-        {
-            JS_FreeCString(ctx, componentType);
-            JS_FreeCString(ctx, functionName);
-            return JS_UNDEFINED;
-        }
-
-        auto* scene = engine->GetScenePtr();
-        if (!scene)
         {
             JS_FreeCString(ctx, componentType);
             JS_FreeCString(ctx, functionName);
@@ -851,12 +828,10 @@ namespace
         result += "export interface Vec4 { x: number; y: number; z: number; w: number; }\n";
         result += "export interface Quat { x: number; y: number; z: number; w: number; }\n\n";
 
-        result += "export class NextComponent {\n";
-        result += "    name_: string;\n";
-        result += "    id_: number;\n";
-        result += "}\n\n";
-
-        result += Reflection::QuickJSReflectionBridge::GenerateTypeScriptDef<NextEngine>("NextEngine");
+        result += "export class NextEngine {\n";
+        result += "    GetTotalFrames(): number;\n";
+        result += "    RegisterJSCallback(arg0: any): void;\n";
+        result += "}\n";
         result += Reflection::QuickJSReflectionBridge::GenerateTypeScriptDef<Assets::Node>("Node");
         result += Reflection::QuickJSReflectionBridge::GenerateTypeScriptDef<Assets::Scene>("Scene");
 
@@ -868,6 +843,7 @@ namespace
         result += "\nexport namespace Global {\n";
         result += "    function spdlog(level: string, ...args: any[]): void;\n";
         result += "    function GetEngine(): NextEngine;\n";
+        result += "    function GetScene(): Scene;\n";
         result += "}\n";
 
         return result;
@@ -935,20 +911,15 @@ void QuickJSEngine::ResetContextAndLoadScript()
         auto globalNamespace = context_->newObject();
         globalNamespace.add<&Spdlog>("spdlog");
         globalNamespace.add<&GetEngine>("GetEngine");
+        globalNamespace.add<&GetSceneForGlobal>("GetScene");
         module.add("Global", std::move(globalNamespace));
 
         module.class_<NextEngine>("NextEngine")
                 .fun<&NextEngine::GetTotalFrames>("GetTotalFrames")
-                .fun<&NextEngine::GetTestNumber>("GetTestNumber")
-                .fun<&NextEngine::RegisterJSCallback>("RegisterJSCallback")
-                .fun<&NextEngine::GetScenePtr>("GetScenePtr");
+                .fun<&NextEngine::RegisterJSCallback>("RegisterJSCallback");
         module.class_<Assets::Scene>("Scene")
                 .fun<&Assets::Scene::GetIndicesCount>("GetIndicesCount")
                 .fun<&Assets::Scene::FindNodeIdWithComponent>("FindNodeIdWithComponent");
-        module.class_<NextComponent>("NextComponent")
-                .constructor<>()
-                .fun<&NextComponent::name_>("name_")
-                .fun<&NextComponent::id_>("id_");
 
         qjs::Context* jsContext = context_.get();
         BindScenePrototype(jsContext->ctx);

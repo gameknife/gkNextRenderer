@@ -290,11 +290,11 @@ void KongLie3DGameInstance::OnInit()
     }
     battleSystem_.SetRelics(KongLie3D::LoadRelics(RelicsConfigPath));
     battleSystem_.SetSynergies(KongLie3D::LoadSynergies(SynergiesConfigPath));
-    GetEngine().SetGraphicsDebugPanelVisible(false);
-    GetEngine().SetPhysicsDebugOverlayVisible(false);
+    GetEngine().GetShowFlags().DebugGraphicsPanel = false;
+    GetEngine().GetShowFlags().DebugPhysicsOverlay = false;
     GetEngine().GetUserSettings().ShowOverlay = false;
 
-    GetEngine().RequestLoadScene("Empty.proc");
+    GetEngine().RequestLoadScene({.filename = "Empty.proc"});
 }
 
 void KongLie3DGameInstance::OnInitUI()
@@ -1010,7 +1010,7 @@ void KongLie3DGameInstance::RebuildCurrentLevelScene()
     battleSystem_.Reset();
     
     // Trigger scene reload to apply new enemy configuration
-    GetEngine().RequestLoadScene("Empty.proc");
+    GetEngine().RequestLoadScene({.filename = "Empty.proc"});
 }
 
 float KongLie3DGameInstance::GetDeploymentHintAlpha() const

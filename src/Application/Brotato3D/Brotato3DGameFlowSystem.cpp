@@ -1,6 +1,7 @@
 #include "Brotato3DGameInstance.hpp"
 #include "Brotato3DCommon.hpp"
 
+#include "Assets/Core/Node.h"
 #include "Brotato3DAudio.hpp"
 
 using namespace Brotato3DUtil;
@@ -18,23 +19,23 @@ void Brotato3DGameInstance::StartNewRun()
     ApplySelectedCharacter();
     if (player_.bodyNode)
     {
-        NodeUtils::SetTranslation(player_.bodyNode, player_.worldPos);
+        player_.bodyNode->SetTranslation(player_.worldPos);
         NodeUtils::SetVisible(player_.bodyNode, true);
     }
     if (player_.facingNode)
     {
-        NodeUtils::SetTranslation(player_.facingNode, glm::vec3(0.0f, 0.62f, -0.45f));
+        player_.facingNode->SetTranslation(glm::vec3(0.0f, 0.62f, -0.45f));
         NodeUtils::SetVisible(player_.facingNode, true);
     }
     if (player_.smgWeaponNode)
     {
-        NodeUtils::SetTranslation(player_.smgWeaponNode, glm::vec3(-0.18f, 0.42f, -0.54f));
+        player_.smgWeaponNode->SetTranslation(glm::vec3(-0.18f, 0.42f, -0.54f));
         NodeUtils::SetVisible(player_.smgWeaponNode,
                               !equippedWeapons_.empty() && equippedWeapons_.front().weaponId == "smg");
     }
     if (player_.shotgunWeaponNode)
     {
-        NodeUtils::SetTranslation(player_.shotgunWeaponNode, glm::vec3(0.24f, 0.43f, -0.62f));
+        player_.shotgunWeaponNode->SetTranslation(glm::vec3(0.24f, 0.43f, -0.62f));
         NodeUtils::SetVisible(player_.shotgunWeaponNode,
                               !equippedWeapons_.empty() && equippedWeapons_.front().weaponId == "shotgun");
     }
@@ -181,10 +182,10 @@ void Brotato3DGameInstance::ApplySelectedArena()
 
     arenaResources_.groundMaterialId = groundIt->second;
     arenaResources_.borderMaterialId = borderIt->second;
-    NodeUtils::SetMaterial(arenaResources_.groundNode, arenaResources_.groundMaterialId);
+    NodeUtils::SetPrimaryMaterial(arenaResources_.groundNode, arenaResources_.groundMaterialId);
     for (const std::shared_ptr<Assets::Node>& node : arenaResources_.borderNodes)
     {
-        NodeUtils::SetMaterial(node, arenaResources_.borderMaterialId);
+        NodeUtils::SetPrimaryMaterial(node, arenaResources_.borderMaterialId);
     }
 }
 
@@ -196,4 +197,5 @@ const Brotato3D::FCharacterDef* Brotato3DGameInstance::FindCharacterDef(const st
     });
     return it != characterDefs_.end() ? &(*it) : nullptr;
 }
+
 

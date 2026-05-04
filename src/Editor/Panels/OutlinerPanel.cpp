@@ -439,7 +439,7 @@ namespace Editor
                     std::vector<uint32_t> ids = ctx.scene.GetSelectedIds();
                     if (!ids.empty())
                     {
-                        ctx.engine.ExecuteCommand(std::make_unique<DeleteNodesCommand>(ctx.scene, std::move(ids)));
+                        ctx.engine.GetCommandHistory().Execute(std::make_unique<DeleteNodesCommand>(ctx.scene, std::move(ids)));
                     }
                 }
 
@@ -569,7 +569,7 @@ namespace Editor
                     {
                         if (!renameBuffer.empty() && renameBuffer != targetNode->GetName())
                         {
-                            ctx.engine.ExecuteCommand(std::make_unique<RenameNodeCommand>(
+                            ctx.engine.GetCommandHistory().Execute(std::make_unique<RenameNodeCommand>(
                                 ctx.scene, targetNode->GetInstanceId(), renameBuffer));
                         }
 

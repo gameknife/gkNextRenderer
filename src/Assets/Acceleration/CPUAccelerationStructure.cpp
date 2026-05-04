@@ -579,7 +579,7 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
             info.navRelevant = true;
         }
 
-        auto& mats = render->Materials();
+        const auto& mats = render->GetMaterials();
         for (int i = 0; i < mats.size() && i < static_cast<int>(info.matIdxs.size()); ++i)
         {
             uint32_t matId = mats[i];

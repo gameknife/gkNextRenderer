@@ -3,7 +3,7 @@ import * as NE from "./Engine";
 let hasRun = false;
 
 function tryRunTest(): boolean {
-    const scene = NE.Global.GetEngine().GetScenePtr();
+    const scene = NE.Global.GetScene();
     const nodeId = scene.FindNodeIdWithComponent("RenderComponent");
     if (nodeId < 0) {
         return false;

@@ -116,7 +116,7 @@ TEST_CASE("LDraw loader preserves MPD submodel hierarchy as nodes", "[Unit][LDra
     REQUIRE(childRender->GetModelId() < models.size());
     CHECK(models[parentRender->GetModelId()].NumberOfVertices() == 3);
     CHECK(models[childRender->GetModelId()].NumberOfVertices() == 3);
-    CHECK(parentRender->Materials()[0] == childRender->Materials()[0]);
+    CHECK(parentRender->GetMaterials()[0] == childRender->GetMaterials()[0]);
 }
 
 TEST_CASE("LDraw loader applies configurable LDU scale to geometry and placement", "[Unit][LDraw]")

@@ -51,8 +51,8 @@ void Brotato3DGameInstance::SpawnPickup(int value, Brotato3D::EPickupKind kind, 
         {
             render->SetModelId(modelId);
         }
-        NodeUtils::SetMaterial(slot->node, materialId);
-        NodeUtils::SetTranslation(slot->node, slot->worldPos);
+        NodeUtils::SetPrimaryMaterial(slot->node, materialId);
+        slot->node->SetTranslation(slot->worldPos);
         NodeUtils::SetVisible(slot->node, true);
     }
 }
@@ -75,7 +75,7 @@ void Brotato3DGameInstance::UpdatePickups(double deltaSeconds)
         {
             pickup.worldPos = glm::mix(pickup.worldPos, player_.worldPos, std::min(1.0f, 8.0f * static_cast<float>(deltaSeconds)));
             pickup.worldPos.y = 0.15f;
-            NodeUtils::SetTranslation(pickup.node, pickup.worldPos);
+            pickup.node->SetTranslation(pickup.worldPos);
         }
         if (DistanceXZ(pickup.worldPos, player_.worldPos) < 0.4f)
         {
@@ -111,4 +111,5 @@ void Brotato3DGameInstance::UpdatePickups(double deltaSeconds)
         }
     }
 }
+
 

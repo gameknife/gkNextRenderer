@@ -93,7 +93,7 @@ void CharacterDemoGameInstance::OnInit()
     {
         initialScene = GOption->SceneName;
     }
-    engine_->RequestLoadScene(initialScene);
+    engine_->RequestLoadScene({.filename = initialScene});
 }
 
 void CharacterDemoGameInstance::OnTick(double deltaSeconds)
@@ -184,11 +184,9 @@ void CharacterDemoGameInstance::BeforeSceneRebuild(
     capsuleModelId_ = static_cast<uint32_t>(models.size() - 1);
 
     // A distinct green material for the character
-    materials.push_back({Assets::Material::Lambertian(glm::vec3(0.2f, 0.8f, 0.3f))});
-    characterMatId_ = static_cast<uint32_t>(materials.size() - 1);
+    characterMatId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.2f, 0.8f, 0.3f));
 
-    materials.push_back({Assets::Material::Lambertian(glm::vec3(0.9f, 0.25f, 0.2f))});
-    aiCharacterMatId_ = static_cast<uint32_t>(materials.size() - 1);
+    aiCharacterMatId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.9f, 0.25f, 0.2f));
 
     const float halfProjectile = config_.Projectile.Size * 0.5f;
     models.push_back(Assets::FProcModel::CreateBox(
@@ -259,9 +257,9 @@ void CharacterDemoGameInstance::OnSceneLoaded()
     engine_->GetScene().GetEnvSettings().SkyIdx = 2;
     
     // Load the skinned character model asynchronously
-    engine_->RequestLoadSceneAdd("assets/models/characters/Mannequin_Medium.glb");
+    engine_->RequestLoadScene({.filename = "assets/models/characters/Mannequin_Medium.glb", .append = true});
     playerCharacter_.SetModelLoadRequested(true);
-    engine_->RequestLoadSceneAdd("assets/models/characters/Mannequin_Medium.glb");
+    engine_->RequestLoadScene({.filename = "assets/models/characters/Mannequin_Medium.glb", .append = true});
     aiBot_.character.SetModelLoadRequested(true);
 
     // Capture mouse
@@ -345,8 +343,8 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Text("On Ground: %s", onGround ? "Yes" : "No");
     ImGui::Text("View: %s", firstPersonMode_ ? "FPS" : "TPS");
     ImGui::Text("Move Mode: %s", GetMovementModeName());
-    ImGui::Text("Graphics Debug: %s", engine_->IsGraphicsDebugPanelVisible() ? "On" : "Off");
-    ImGui::Text("Physics Debug: %s", engine_->IsPhysicsDebugOverlayVisible() ? "On" : "Off");
+    ImGui::Text("Graphics Debug: %s", engine_->GetShowFlags().DebugGraphicsPanel ? "On" : "Off");
+    ImGui::Text("Physics Debug: %s", engine_->GetShowFlags().DebugPhysicsOverlay ? "On" : "Off");
     ImGui::Text("Foot IK: %s", footIKEnabled_ ? "On" : "Off");
     ImGui::Text("Foot IK Debug: %s", showFootIKDebug_ ? "On" : "Off");
     ImGui::Text("AI Debug Menu: %s", showAIDebugMenu_ ? "On" : "Off");

@@ -32,7 +32,7 @@ void BenchmarkGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
 void BenchmarkGameInstance::OnInit()
 {
     benchMarker_ = std::make_unique<BenchMarker>();
-    GetEngine().RequestLoadScene(SceneList::AllScenes[0]);
+    GetEngine().RequestLoadScene({.filename = SceneList::AllScenes[0]});
 }
 
 void BenchmarkGameInstance::OnTick(double deltaSeconds)
@@ -51,7 +51,7 @@ void BenchmarkGameInstance::OnTick(double deltaSeconds)
          else
          {
              GetEngine().GetUserSettings().SceneIndex += 1;
-             GetEngine().RequestLoadScene(SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex]);
+             GetEngine().RequestLoadScene({.filename = SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex]});
          }
      }
 }

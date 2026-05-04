@@ -80,6 +80,40 @@ namespace
 		bodyInterface.ResetSleepTimer(bodyId);
 	}
 
+	void DrawAuxObb(const glm::mat4& worldTransform, const glm::vec3& localMin, const glm::vec3& localMax,
+	                const glm::vec4& color, float size)
+	{
+		const glm::vec3 corners[8] = {
+			{localMin.x, localMin.y, localMin.z},
+			{localMax.x, localMin.y, localMin.z},
+			{localMin.x, localMax.y, localMin.z},
+			{localMax.x, localMax.y, localMin.z},
+			{localMin.x, localMin.y, localMax.z},
+			{localMax.x, localMin.y, localMax.z},
+			{localMin.x, localMax.y, localMax.z},
+			{localMax.x, localMax.y, localMax.z}
+		};
+
+		glm::vec3 transformed[8];
+		for (int i = 0; i < 8; ++i)
+		{
+			transformed[i] = glm::vec3(worldTransform * glm::vec4(corners[i], 1.0f));
+		}
+
+		NextEngineHelper::DrawAuxLine(transformed[0], transformed[1], color, size);
+		NextEngineHelper::DrawAuxLine(transformed[1], transformed[3], color, size);
+		NextEngineHelper::DrawAuxLine(transformed[3], transformed[2], color, size);
+		NextEngineHelper::DrawAuxLine(transformed[2], transformed[0], color, size);
+		NextEngineHelper::DrawAuxLine(transformed[4], transformed[5], color, size);
+		NextEngineHelper::DrawAuxLine(transformed[5], transformed[7], color, size);
+		NextEngineHelper::DrawAuxLine(transformed[7], transformed[6], color, size);
+		NextEngineHelper::DrawAuxLine(transformed[6], transformed[4], color, size);
+		NextEngineHelper::DrawAuxLine(transformed[0], transformed[4], color, size);
+		NextEngineHelper::DrawAuxLine(transformed[1], transformed[5], color, size);
+		NextEngineHelper::DrawAuxLine(transformed[2], transformed[6], color, size);
+		NextEngineHelper::DrawAuxLine(transformed[3], transformed[7], color, size);
+	}
+
 	glm::vec3 ToGlmVec3(const Vec3& value)
 	{
 		return glm::vec3(value.GetX(), value.GetY(), value.GetZ());
@@ -929,8 +963,7 @@ void NextPhysics::DrawDebugBodies() const
 			SelectDebugBodyColor(debugState.motionType, debugState.objectLayer, debugState.isActive, debugState.isValid);
 		const AABox localBounds = transformedShape.mShape->GetLocalBounds();
 		const glm::mat4 worldTransform = ToGlmMat4(transformedShape.GetWorldTransform().ToMat44());
-		NextEngineHelper::DrawAuxOBB(worldTransform, ToGlmVec3(localBounds.mMin), ToGlmVec3(localBounds.mMax), color,
-		                             1.75f);
+		DrawAuxObb(worldTransform, ToGlmVec3(localBounds.mMin), ToGlmVec3(localBounds.mMax), color, 1.75f);
 
 		const glm::vec3 localCenter = ToGlmVec3(localBounds.GetCenter());
 		const glm::vec3 center = glm::vec3(worldTransform * glm::vec4(localCenter, 1.0f));

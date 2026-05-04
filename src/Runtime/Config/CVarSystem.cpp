@@ -349,7 +349,7 @@ namespace NextCVar
         if (tokens[0] == "cvar.list")
         {
             std::string prefix = tokens.size() > 1 ? tokens[1] : "";
-            auto list = ListCVars(prefix);
+            auto list = Match(prefix, {.includeValue = true});
             FConsoleResult result = FConsoleResult::Success(fmt::format("{} entries", list.size()));
             result.output = std::move(list);
             return result;
@@ -359,7 +359,7 @@ namespace NextCVar
         {
             std::string query = tokens.size() > 1 ? tokens[1] : "";
             size_t totalMatches = 0;
-            auto matches = CompleteCVars(query, 20, &totalMatches);
+            auto matches = Match(query, {.prefixThenSubstring = true, .limit = 20}, &totalMatches);
 
             FConsoleResult result = FConsoleResult::Success(fmt::format("{} matches", totalMatches));
             if (matches.empty())
@@ -554,24 +554,9 @@ namespace NextCVar
         return SetEntryValue(it->second, it->second.defaultValue, ECVarSetBy::DefaultFile, &error);
     }
 
-    std::vector<std::string> FCVarSystem::ListCVars(const std::string& prefix) const
-    {
-        std::vector<std::string> result;
-        for (const auto& [name, entry] : cvars_)
-        {
-            if (!prefix.empty() && name.rfind(prefix, 0) != 0)
-            {
-                continue;
-            }
-            result.push_back(fmt::format("{} = {}", name, ToString(GetEntryValue(entry), entry.type)));
-        }
-
-        std::sort(result.begin(), result.end());
-        return result;
-    }
-
-    std::vector<std::string> FCVarSystem::CompleteCVars(const std::string& query, size_t limit,
-                                                        size_t* totalMatches) const
+    std::vector<std::string> FCVarSystem::Match(const std::string& query,
+                                                const FCVarMatchOptions& options,
+                                                size_t* totalMatches) const
     {
         const std::string loweredQuery = ToLower(query);
         std::vector<std::string> prefixMatches;
@@ -579,54 +564,48 @@ namespace NextCVar
 
         for (const auto& [name, entry] : cvars_)
         {
-            (void)entry;
             const std::string loweredName = ToLower(name);
-            if (loweredQuery.empty() || loweredName.rfind(loweredQuery, 0) == 0)
+            const bool isPrefixMatch = loweredQuery.empty() || loweredName.rfind(loweredQuery, 0) == 0;
+            const bool isSubstringMatch = options.prefixThenSubstring &&
+                                          !isPrefixMatch &&
+                                          !loweredQuery.empty() &&
+                                          loweredName.find(loweredQuery) != std::string::npos;
+
+            if (!isPrefixMatch && !isSubstringMatch)
             {
-                prefixMatches.push_back(name);
                 continue;
             }
-            if (loweredName.find(loweredQuery) != std::string::npos)
+
+            const std::string value = options.includeValue
+                ? fmt::format("{} = {}", name, ToString(GetEntryValue(entry), entry.type))
+                : name;
+            if (isPrefixMatch)
             {
-                substringMatches.push_back(name);
+                prefixMatches.push_back(value);
+                continue;
+            }
+            if (isSubstringMatch)
+            {
+                substringMatches.push_back(value);
             }
         }
 
-        auto& matches = prefixMatches.empty() ? substringMatches : prefixMatches;
-        std::sort(matches.begin(), matches.end());
+        std::sort(prefixMatches.begin(), prefixMatches.end());
+        std::sort(substringMatches.begin(), substringMatches.end());
+
+        std::vector<std::string> result = std::move(prefixMatches);
+        if (result.empty() && options.prefixThenSubstring)
+        {
+            result = std::move(substringMatches);
+        }
 
         if (totalMatches)
         {
-            *totalMatches = matches.size();
+            *totalMatches = result.size();
         }
-        if (matches.size() > limit)
+        if (options.limit > 0 && result.size() > options.limit)
         {
-            matches.resize(limit);
-        }
-        return matches;
-    }
-
-    std::vector<std::string> FCVarSystem::GetMatchingNames(const std::string& prefix, size_t limit) const
-    {
-        std::vector<std::string> result;
-        if (limit == 0)
-        {
-            return result;
-        }
-
-        for (const auto& [name, entry] : cvars_)
-        {
-            if (!prefix.empty() && name.rfind(prefix, 0) != 0)
-            {
-                continue;
-            }
-            result.push_back(name);
-        }
-
-        std::sort(result.begin(), result.end());
-        if (result.size() > limit)
-        {
-            result.resize(limit);
+            result.resize(options.limit);
         }
         return result;
     }

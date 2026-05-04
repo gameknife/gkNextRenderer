@@ -17,11 +17,11 @@ TEST_CASE("CVar complete supports case-insensitive prefix and substring lookup",
                                 NextCVar::ECVarFlags::None, "Exposure"));
 
     size_t totalMatches = 0;
-    auto prefixMatches = cvars.CompleteCVars("R.BLOOM", 20, &totalMatches);
+    auto prefixMatches = cvars.Match("R.BLOOM", {.prefixThenSubstring = true, .limit = 20}, &totalMatches);
     REQUIRE(totalMatches == 1);
     REQUIRE(prefixMatches == std::vector<std::string>{"r.bloom.quality"});
 
-    auto substringMatches = cvars.CompleteCVars("bloom", 20, &totalMatches);
+    auto substringMatches = cvars.Match("bloom", {.prefixThenSubstring = true, .limit = 20}, &totalMatches);
     REQUIRE(totalMatches == 2);
     REQUIRE(substringMatches == std::vector<std::string>{"r.bloom.quality", "show.debugBloom"});
 

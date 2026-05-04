@@ -8,6 +8,7 @@
 #include "Runtime/Config/EngineCVars.hpp"
 #include "Runtime/Subsystems/QuickJSEngine.hpp"
 #include "Runtime/Subsystems/AIService.hpp"
+#include "Runtime/Subsystems/NextLocalization.h"
 #include "Runtime/Subsystems/VoiceInputService.hpp"
 #include "Runtime/Command/DeleteNodesCommand.hpp"
 #include "Runtime/Command/DuplicateNodesCommand.hpp"
@@ -73,9 +74,7 @@ void NextEngine::RegisterReflection()
     entt::meta_factory<NextEngine>()
         .type("NextEngine"_hs)
         .func<&NextEngine::GetTotalFrames>("GetTotalFrames")
-        .func<&NextEngine::GetTestNumber>("GetTestNumber")
-        .func<&NextEngine::RegisterJSCallback>("RegisterJSCallback")
-        .func<&NextEngine::GetScenePtr>("GetScenePtr");
+        .func<&NextEngine::RegisterJSCallback>("RegisterJSCallback");
 }
 
 namespace
@@ -87,6 +86,17 @@ namespace
             return Vulkan::ERT_ModernDeferred;
         }
         return requestedType;
+    }
+
+    std::string ResolveScreenShotFilename(const std::string& requestedFilename, const char* defaultPrefix)
+    {
+        if (!requestedFilename.empty())
+        {
+            return requestedFilename;
+        }
+
+        const auto now = std::time(nullptr);
+        return fmt::format("{}_{:%Y-%m-%d-%H-%M-%S}", defaultPrefix, *std::localtime(&now));
     }
 } // namespace
 
@@ -271,8 +281,8 @@ NextEngine::NextEngine(Options& options, void* userdata)
     SetBorderlessFullscreen(userSettings_.BorderlessFullscreen);
     quickJSEngine_ = std::make_unique<QuickJSEngine>();
 
-    // Initialize Localization
-    Utilities::Localization::ReadLocTexts(fmt::format("assets/locale/{}.txt", options_->locale).c_str());
+    localization_ = std::make_unique<NextLocalization>();
+    localization_->LoadFromTxt(fmt::format("assets/locale/{}.txt", options_->locale), options_->locale);
 
     SPDLOG_INFO("---- Next Engine Initialized in {}", stopwatch.elapsed_ms());
 }
@@ -284,7 +294,10 @@ NextEngine::~NextEngine()
         cvarSystem_->SaveUserFile("assets/configs/cvar_user.json");
     }
 
-    Utilities::Localization::SaveLocTexts(fmt::format("assets/locale/{}.txt", options_->locale).c_str());
+    if (localization_)
+    {
+        localization_->SaveToTxt(fmt::format("assets/locale/{}.txt", options_->locale));
+    }
 
     scene_.reset();
     renderer_.reset();
@@ -525,13 +538,18 @@ bool NextEngine::Tick(bool forcingDelta)
         }
         totalFrames_ = renderer_->FrameCount();
 
-        if (screenShotRequested_)
+        if (hasPendingScreenShot_)
         {
             SCOPED_CPU_TIMER("screenshot");
             renderer_->Device().WaitIdle();
-            ScreenShot::SaveSwapChainToFile(renderer_.get(), screenShotFilename_, 0, 0, 0, 0);
-            screenShotRequested_ = false;
-            screenShotFilename_.clear();
+            ScreenShot::SaveSwapChainToFile(renderer_.get(),
+                                           pendingScreenShot_.filename,
+                                           pendingScreenShot_.x,
+                                           pendingScreenShot_.y,
+                                           pendingScreenShot_.width,
+                                           pendingScreenShot_.height);
+            hasPendingScreenShot_ = false;
+            pendingScreenShot_ = {};
         }
 
         if (progressivePreFrames_ > 0)
@@ -544,21 +562,25 @@ bool NextEngine::Tick(bool forcingDelta)
         }
 
         // High quality capture: count down accumulated frames after DrawFrame
-        if (hqCaptureFramesRemaining_ > 0)
+        if (screenShotCaptureFramesRemaining_ > 0)
         {
             SCOPED_CPU_TIMER("hq capture");
-            hqCaptureFramesRemaining_--;
-            if (hqCaptureFramesRemaining_ == 0)
+            screenShotCaptureFramesRemaining_--;
+            if (screenShotCaptureFramesRemaining_ == 0)
             {
-                // All frames accumulated, capture now
                 renderer_->Device().WaitIdle();
-                ScreenShot::SaveSwapChainToFile(renderer_.get(), hqCaptureFilename_, 0, 0, 0, 0);
+                ScreenShot::SaveSwapChainToFile(renderer_.get(),
+                                               screenShotCaptureSpec_.filename,
+                                               screenShotCaptureSpec_.x,
+                                               screenShotCaptureSpec_.y,
+                                               screenShotCaptureSpec_.width,
+                                               screenShotCaptureSpec_.height);
                 spdlog::info("High quality capture saved: {} ({} frames accumulated)",
-                             hqCaptureFilename_, hqCaptureTotalFrames_);
+                             screenShotCaptureSpec_.filename, screenShotCaptureTotalFrames_);
 
-                // Restore previous state
-                progressiveRendering_ = hqCapturePrevProgressive_;
-                progressivePreFrames_ = hqCapturePrevPreFrames_;
+                progressiveRendering_ = screenShotCapturePrevProgressive_;
+                progressivePreFrames_ = screenShotCapturePrevPreFrames_;
+                screenShotCaptureSpec_ = {};
             }
         }
 
@@ -596,7 +618,10 @@ void NextEngine::End()
     renderer_->End();
     userInterface_.reset();
 
-    Utilities::Localization::SaveLocTexts(fmt::format("assets/locale/{}.txt", options_->locale).c_str());
+    if (localization_)
+    {
+        localization_->SaveToTxt(fmt::format("assets/locale/{}.txt", options_->locale));
+    }
 }
 
 void NextEngine::RegisterJSCallback(std::function<void(double)> callback)
@@ -608,37 +633,6 @@ void NextEngine::RegisterJSCallback(std::function<void(double)> callback)
 }
 
 void NextEngine::AddTimerTask(double delay, DelayedTask task) { delayedTasks_.push_back({time_ + delay, delay, task}); }
-
-void NextEngine::PlaySound(const std::string& soundName, bool loop, float volume)
-{
-    if (audioEngine_)
-    {
-        audioEngine_->PlaySound(soundName, loop, volume);
-    }
-}
-
-void NextEngine::PauseSound(const std::string& soundName, bool pause)
-{
-    if (audioEngine_)
-    {
-        audioEngine_->PauseSound(soundName, pause);
-    }
-}
-
-bool NextEngine::IsSoundPlaying(const std::string& soundName)
-{
-    if (!audioEngine_)
-    {
-        return false;
-    }
-
-    return audioEngine_->IsSoundPlaying(soundName);
-}
-
-void NextEngine::SaveScreenShot(const std::string& filename, int x, int y, int width, int height)
-{
-    ScreenShot::SaveSwapChainToFile(renderer_.get(), filename, x, y, width, height);
-}
 
 glm::dvec2 NextEngine::GetMousePos()
 {
@@ -716,39 +710,41 @@ void NextEngine::ToggleMaximize()
     }
 }
 
-void NextEngine::RequestScreenShot(std::string filename)
+void NextEngine::RequestScreenShot(FScreenShotSpec spec)
 {
-    auto time = std::time(nullptr);
-    screenShotFilename_ =
-        filename.empty() ? fmt::format("screenshot_{:%Y-%m-%d-%H-%M-%S}", *std::localtime(&time)) : filename;
-    screenShotRequested_ = true;
-}
-
-void NextEngine::RequestHighQualityScreenShot(const std::string& filename, uint32_t accumulateFrames)
-{
-    if (hqCaptureFramesRemaining_ > 0)
+    if (spec.accumulateFrames > 0)
     {
-        spdlog::warn("High quality capture already in progress, ignoring request");
+        if (screenShotCaptureFramesRemaining_ > 0)
+        {
+            spdlog::warn("High quality capture already in progress, ignoring request");
+            return;
+        }
+
+        screenShotCapturePrevProgressive_ = progressiveRendering_;
+        screenShotCapturePrevPreFrames_ = progressivePreFrames_;
+        screenShotCaptureTotalFrames_ = spec.accumulateFrames;
+        screenShotCaptureFramesRemaining_ = spec.accumulateFrames;
+        screenShotCaptureSpec_ = std::move(spec);
+        screenShotCaptureSpec_.filename =
+            ResolveScreenShotFilename(screenShotCaptureSpec_.filename, "hq_screenshot");
+
+        progressiveRendering_ = true;
+        progressivePreFrames_ = 0;
+        spdlog::info("High quality capture started: accumulating {} frames...",
+                     screenShotCaptureTotalFrames_);
         return;
     }
 
-    // Save current state
-    hqCapturePrevProgressive_ = progressiveRendering_;
-    hqCapturePrevPreFrames_ = progressivePreFrames_;
+    spec.filename = ResolveScreenShotFilename(spec.filename, "screenshot");
+    if (spec.sync)
+    {
+        renderer_->Device().WaitIdle();
+        ScreenShot::SaveSwapChainToFile(renderer_.get(), spec.filename, spec.x, spec.y, spec.width, spec.height);
+        return;
+    }
 
-    // Setup capture
-    hqCaptureTotalFrames_ = accumulateFrames;
-    hqCaptureFramesRemaining_ = accumulateFrames;
-
-    auto time = std::time(nullptr);
-    hqCaptureFilename_ =
-        filename.empty() ? fmt::format("hq_screenshot_{:%Y-%m-%d-%H-%M-%S}", *std::localtime(&time)) : filename;
-
-    // Enable progressive rendering directly (skip pre-frames warmup)
-    progressiveRendering_ = true;
-    progressivePreFrames_ = 0;
-
-    spdlog::info("High quality capture started: accumulating {} frames...", accumulateFrames);
+    pendingScreenShot_ = std::move(spec);
+    hasPendingScreenShot_ = true;
 }
 
 // 生成一个随机抖动偏移
@@ -1122,10 +1118,10 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
         SCOPED_CPU_TIMER("game ui");
         uiHandled = gameInstance_->OnRenderUI();
     }
-    const bool suppressAllUi = screenShotRequested_;
+    const bool suppressAllUi = hasPendingScreenShot_;
     if (!suppressAllUi)
     {
-        if (showPhysicsDebugOverlay_)
+        if (showFlags_.DebugPhysicsOverlay)
         {
             SCOPED_CPU_TIMER("physics debug ui");
             Assets::Camera debugCamera = scene_->GetRenderCamera();
@@ -1135,7 +1131,7 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
         }
         {
             SCOPED_CPU_TIMER("graphics debug ui");
-            Runtime::GraphicsDebugPanel::DrawPanel(*this, showGraphicsDebugPanel_,
+            Runtime::GraphicsDebugPanel::DrawPanel(*this, showFlags_.DebugGraphicsPanel,
                                                    gameInstance_->GetGraphicsDebugPanelTopOffset());
         }
     }
@@ -1184,7 +1180,8 @@ void NextEngine::OnKey(SDL_Event& event)
 
     if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat)
     {
-        if (Runtime::GraphicsDebugPanel::TryHandleRendererShortcut(event.key.key, true, showGraphicsDebugPanel_, *this))
+        if (Runtime::GraphicsDebugPanel::TryHandleRendererShortcut(event.key.key, true,
+                                                                   showFlags_.DebugGraphicsPanel, *this))
         {
             return;
         }
@@ -1247,7 +1244,7 @@ void NextEngine::OnKey(SDL_Event& event)
                 if (!selectedIds.empty())
                 {
                     auto command = std::make_unique<DuplicateNodesCommand>(GetScene(), selectedIds);
-                    if (ExecuteCommand(std::move(command)))
+                    if (commandHistory_.Execute(std::move(command)))
                     {
                         return;
                     }
@@ -1276,7 +1273,7 @@ void NextEngine::OnKey(SDL_Event& event)
             if (!selectedIds.empty())
             {
                 auto command = std::make_unique<DeleteNodesCommand>(GetScene(), selectedIds);
-                if (ExecuteCommand(std::move(command)))
+                if (commandHistory_.Execute(std::move(command)))
                 {
                     return;
                 }
@@ -1292,7 +1289,7 @@ void NextEngine::OnKey(SDL_Event& event)
     if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat)
     {
         if (Runtime::GraphicsDebugPanel::TryHandleViewModeShortcut(
-                event.key.key, true, showGraphicsDebugPanel_, showFlags_))
+                event.key.key, true, showFlags_.DebugGraphicsPanel, showFlags_))
         {
             return;
         }
@@ -1317,14 +1314,14 @@ bool NextEngine::HandleDebugShortcut(SDL_Keycode key)
     {
     case SDLK_F1:
         shortcutOps = FDebugShortcutOps{
-            .IsActive = [this]() { return showPhysicsDebugOverlay_; },
-            .SetActive = [this](bool active) { showPhysicsDebugOverlay_ = active; },
+            .IsActive = [this]() { return showFlags_.DebugPhysicsOverlay; },
+            .SetActive = [this](bool active) { showFlags_.DebugPhysicsOverlay = active; },
         };
         break;
     case SDLK_F2:
         shortcutOps = FDebugShortcutOps{
-            .IsActive = [this]() { return showGraphicsDebugPanel_; },
-            .SetActive = [this](bool active) { showGraphicsDebugPanel_ = active; },
+            .IsActive = [this]() { return showFlags_.DebugGraphicsPanel; },
+            .SetActive = [this](bool active) { showFlags_.DebugGraphicsPanel = active; },
         };
         break;
     default:
@@ -1348,8 +1345,8 @@ bool NextEngine::HandleDebugShortcut(SDL_Keycode key)
 
     if (engineOwnsShortcut)
     {
-        showPhysicsDebugOverlay_ = false;
-        showGraphicsDebugPanel_ = false;
+        showFlags_.DebugPhysicsOverlay = false;
+        showFlags_.DebugGraphicsPanel = false;
         if (!isActive)
         {
             shortcutOps->SetActive(true);
@@ -1360,19 +1357,6 @@ bool NextEngine::HandleDebugShortcut(SDL_Keycode key)
     shortcutOps->SetActive(!isActive);
     return true;
 }
-
-bool NextEngine::ExecuteCommand(std::unique_ptr<ICommand> command)
-{
-    return commandHistory_.Execute(std::move(command));
-}
-
-bool NextEngine::UndoCommand() { return commandHistory_.Undo(); }
-
-bool NextEngine::RedoCommand() { return commandHistory_.Redo(); }
-
-bool NextEngine::CanUndo() const { return commandHistory_.CanUndo(); }
-
-bool NextEngine::CanRedo() const { return commandHistory_.CanRedo(); }
 
 void NextEngine::OnTouch(bool down, double xpos, double ypos)
 {
@@ -1425,7 +1409,7 @@ void NextEngine::OnDropFile(const char* dropPath)
 
     if (SceneList::IsSupportedScenePath(droppedPath))
     {
-        RequestLoadScene(path);
+        RequestLoadScene({.filename = path});
         return;
     }
 
@@ -1464,38 +1448,17 @@ void NextEngine::OnRendererBeforeNextFrame()
     TaskCoordinator::GetInstance()->Tick();
 }
 
-void NextEngine::RequestLoadScene(std::string sceneFileName)
+void NextEngine::RequestLoadScene(FSceneLoadRequest request)
 {
     AddTickedTask(
-        [this, sceneFileName](double deltaSeconds) -> bool
+        [this, request = std::move(request)](double deltaSeconds) -> bool
         {
             if (status_ != NextRenderer::EApplicationStatus::Running)
             {
                 return false;
             }
 
-            LoadScene(sceneFileName);
-            return true;
-        });
-}
-
-void NextEngine::RequestLoadSceneAdd(std::string sceneFileName)
-{
-    SceneAppendOptions options{};
-    RequestLoadSceneAdd(std::move(sceneFileName), options);
-}
-
-void NextEngine::RequestLoadSceneAdd(std::string sceneFileName, const SceneAppendOptions& options)
-{
-    AddTickedTask(
-        [this, sceneFileName, options](double deltaSeconds) -> bool
-        {
-            if (status_ != NextRenderer::EApplicationStatus::Running)
-            {
-                return false;
-            }
-
-            LoadSceneAdd(sceneFileName, options);
+            LoadScene(request);
             return true;
         });
 }
@@ -1565,81 +1528,59 @@ void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<vo
         1);
 }
 
-void NextEngine::LoadScene(std::string sceneFileName)
+void NextEngine::LoadScene(const FSceneLoadRequest& request)
 {
-    scene_->CleanUp();
-    physicsEngine_->OnSceneDestroyed();
-    Assets::GlobalTexturePool::GetInstance()->FreeNonSystemTextures();
+    if (!request.append)
+    {
+        scene_->CleanUp();
+        physicsEngine_->OnSceneDestroyed();
+        Assets::GlobalTexturePool::GetInstance()->FreeNonSystemTextures();
+    }
 
-    LaunchLoadSceneTask(sceneFileName,
-                        [this, sceneFileName](SceneLoadContext& ctx)
-                        {
-                            const auto timer = std::chrono::high_resolution_clock::now();
-                            scene_->GetEnvSettings().Reset();
-                            scene_->SetEnvSettings(*ctx.cameraState);
-
-                            gameInstance_->OnSceneUnloaded();
-                            physicsEngine_->OnSceneStarted();
-
-                            renderer_->OnPreLoadScene();
-
-                            gameInstance_->BeforeSceneRebuild(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights,
-                                                              *ctx.tracks);
-                            scene_->Reload(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
-                            scene_->PostLoad(*ctx.skeletons);
-                            scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
-                            renderer_->SetScene(scene_);
-
-                            userSettings_.CameraIdx = 0;
-                            assert(!scene_->GetEnvSettings().cameras.empty());
-                            scene_->SetRenderCamera(scene_->GetEnvSettings().cameras[0]);
-
-                            gameInstance_->OnSceneLoaded();
-
-                            float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
-                                                std::chrono::high_resolution_clock::now() - timer)
-                                                .count();
-                            SPDLOG_INFO("uploaded scene [{}] to gpu in {:.2f}ms",
-                                        std::filesystem::path(sceneFileName).filename().string(), elapsed * 1000.f);
-                        });
-}
-
-void NextEngine::LoadSceneAdd(std::string sceneFileName)
-{
-    SceneAppendOptions options{};
-    LoadSceneAdd(std::move(sceneFileName), options);
-}
-
-void NextEngine::LoadSceneAdd(std::string sceneFileName, const SceneAppendOptions& options)
-{
     LaunchLoadSceneTask(
-        sceneFileName,
-        [this, sceneFileName, options](SceneLoadContext& ctx)
+        request.filename,
+        [this, request](SceneLoadContext& ctx)
         {
             const auto timer = std::chrono::high_resolution_clock::now();
-
             renderer_->OnPreLoadScene();
-
             gameInstance_->BeforeSceneRebuild(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
 
-            std::string name = std::filesystem::path(sceneFileName).stem().string();
-            std::shared_ptr<Assets::Node> rootNode =
-                scene_->Append(name, *ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks, *ctx.skeletons);
-            if (options.placeOnHit && rootNode)
+            if (!request.append)
             {
-                rootNode->SetTranslation(options.hitPosition);
-                rootNode->RecalcTransform(true);
+                scene_->GetEnvSettings().Reset();
+                scene_->SetEnvSettings(*ctx.cameraState);
+                gameInstance_->OnSceneUnloaded();
+                physicsEngine_->OnSceneStarted();
+
+                scene_->Reload(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
+                scene_->PostLoad(*ctx.skeletons);
+                scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
+                renderer_->SetScene(scene_);
+
+                userSettings_.CameraIdx = 0;
+                assert(!scene_->GetEnvSettings().cameras.empty());
+                scene_->SetRenderCamera(scene_->GetEnvSettings().cameras[0]);
+                gameInstance_->OnSceneLoaded();
             }
-            scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
-            renderer_->SetScene(scene_);
+            else
+            {
+                std::string name = std::filesystem::path(request.filename).stem().string();
+                std::shared_ptr<Assets::Node> rootNode =
+                    scene_->Append(name, *ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks,
+                                   *ctx.skeletons);
+                if (request.placeOnHit && rootNode)
+                {
+                    rootNode->SetTranslation(request.hitPosition);
+                }
+                scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
+                renderer_->SetScene(scene_);
+            }
 
-            // gameInstance_->OnSceneLoaded(); // Maybe trigger this too?
-
-            float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
-                                std::chrono::high_resolution_clock::now() - timer)
-                                .count();
+            const float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
+                                      std::chrono::high_resolution_clock::now() - timer)
+                                      .count();
             SPDLOG_INFO("uploaded scene [{}] to gpu in {:.2f}ms",
-                        std::filesystem::path(sceneFileName).filename().string(), elapsed * 1000.f);
+                        std::filesystem::path(request.filename).filename().string(), elapsed * 1000.f);
         });
 }
 

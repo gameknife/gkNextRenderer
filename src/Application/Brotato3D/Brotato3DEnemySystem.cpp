@@ -1,6 +1,7 @@
 #include "Brotato3DGameInstance.hpp"
 #include "Brotato3DCommon.hpp"
 
+#include "Assets/Core/Node.h"
 #include <spdlog/spdlog.h>
 
 #include "Brotato3DAudio.hpp"
@@ -43,9 +44,9 @@ void Brotato3DGameInstance::SpawnEnemy(const std::string& enemyId, const glm::ve
     {
         enemy.node = reusableEnemy->node;
         *reusableEnemy = enemy;
-        NodeUtils::SetMaterial(reusableEnemy->node, reusableEnemy->materialId);
-        NodeUtils::SetTranslation(reusableEnemy->node, reusableEnemy->worldPos);
-        NodeUtils::SetScale(reusableEnemy->node, glm::vec3(1.0f));
+        NodeUtils::SetPrimaryMaterial(reusableEnemy->node, reusableEnemy->materialId);
+        reusableEnemy->node->SetTranslation(reusableEnemy->worldPos);
+        reusableEnemy->node->SetScale(glm::vec3(1.0f));
         NodeUtils::SetVisible(reusableEnemy->node, true);
         return;
     }
@@ -68,7 +69,7 @@ void Brotato3DGameInstance::UpdateEnemies(double deltaSeconds)
             {
                 enemy.deathFadeMs -= deltaMs;
                 const float alpha = std::clamp(enemy.deathFadeMs / 500.0f, 0.0f, 1.0f);
-                NodeUtils::SetTranslation(enemy.node, enemy.worldPos + glm::vec3(0.0f, -0.3f * (1.0f - alpha), 0.0f));
+                enemy.node->SetTranslation(enemy.worldPos + glm::vec3(0.0f, -0.3f * (1.0f - alpha), 0.0f));
                 if (enemy.deathFadeMs <= 0.0f)
                 {
                     enemy.fading = false;
@@ -104,13 +105,13 @@ void Brotato3DGameInstance::UpdateEnemies(double deltaSeconds)
         {
             activeMaterial = enemy.warningMaterialId;
         }
-        NodeUtils::SetMaterial(enemy.node, activeMaterial);
+        NodeUtils::SetPrimaryMaterial(enemy.node, activeMaterial);
 
         if (enemy.def->bomb.enabled && enemy.bombFuseMs >= 0.0f)
         {
             enemy.bombFuseMs -= deltaMs;
             const float pulse = 1.0f + std::sin(runElapsedSec_ * 28.0f) * 0.1f;
-            NodeUtils::SetScale(enemy.node, glm::vec3(pulse));
+            enemy.node->SetScale(glm::vec3(pulse));
             if (enemy.bombFuseMs <= 0.0f)
             {
                 PushExplosionRing(enemy.worldPos, glm::vec4(1.0f, 0.18f, 0.10f, 1.0f), enemy.def->bomb.explosionRadius);
@@ -130,7 +131,7 @@ void Brotato3DGameInstance::UpdateEnemies(double deltaSeconds)
         }
         else if (enemy.def->bomb.enabled)
         {
-            NodeUtils::SetScale(enemy.node, glm::vec3(1.0f));
+            enemy.node->SetScale(glm::vec3(1.0f));
         }
 
         if (enemy.def->heal.enabled && enemy.healIntervalMs <= 0.0f)
@@ -226,7 +227,7 @@ void Brotato3DGameInstance::UpdateEnemies(double deltaSeconds)
                 enemy.worldPos += moveDir * moveSpeed * static_cast<float>(deltaSeconds);
                 enemy.worldPos = ClampToArena(enemy.worldPos, enemy.radius);
                 enemy.worldPos.y = enemy.def->size.y * 0.5f;
-                NodeUtils::SetTranslation(enemy.node, enemy.worldPos);
+                enemy.node->SetTranslation(enemy.worldPos);
             }
         }
 
@@ -263,8 +264,8 @@ void Brotato3DGameInstance::KillEnemy(Brotato3D::FEnemyRuntime& enemy, bool drop
     enemy.alive = false;
     enemy.fading = true;
     enemy.deathFadeMs = dropLoot ? 500.0f : 400.0f;
-    NodeUtils::SetScale(enemy.node, glm::vec3(1.0f));
-    NodeUtils::SetMaterial(enemy.node, enemy.darkMaterialId);
+    enemy.node->SetScale(glm::vec3(1.0f));
+    NodeUtils::SetPrimaryMaterial(enemy.node, enemy.darkMaterialId);
     if (dropLoot)
     {
         ++killCount_;
@@ -342,8 +343,9 @@ void Brotato3DGameInstance::SpawnDeathDebris(const Brotato3D::FEnemyRuntime& ene
         it->velocity = dir * speedDist(rng_);
         it->lifeMs = enemy.def->boss.enabled ? 900.0f : 520.0f;
         it->remainingMs = it->lifeMs;
-        NodeUtils::SetTranslation(it->node, it->worldPos);
+        it->node->SetTranslation(it->worldPos);
         NodeUtils::SetVisible(it->node, true);
     }
 }
+
 

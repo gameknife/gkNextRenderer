@@ -225,11 +225,12 @@ namespace Assets
                 {
                     render->SetModelId(render->GetModelId() + modelOffset);
                 }
-                auto& mats = render->Materials();
+                auto mats = render->GetMaterials();
                 for (auto& matId : mats)
                 {
                     matId += materialOffset;
                 }
+                render->SetMaterials(mats);
 
                 // Handle Skeletons
                 if (render->GetSkinIndex() != -1 && render->GetSkinIndex() < skeletons.size())

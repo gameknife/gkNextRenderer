@@ -76,9 +76,9 @@ void EditorGameInstance::OnInit()
     actions_.RegisterAction(EEditorAction::IO_LoadScene,
                             [this](EditorContext& ctx, std::string_view args) -> bool
                             {
-                                ctx.engine.GetCommandSystem().Clear();
+                                ctx.engine.GetCommandHistory().Clear();
                                 const std::string scenePath(args);
-                                ctx.engine.RequestLoadScene(scenePath);
+                                ctx.engine.RequestLoadScene({.filename = scenePath});
                                 GetEditorInterface().GetEditorUiState().currentScenePath = scenePath;
                                 PushRecentScene(GetEditorInterface().GetEditorUiState(), scenePath);
                                 return true;
@@ -86,9 +86,9 @@ void EditorGameInstance::OnInit()
     actions_.RegisterAction(EEditorAction::IO_LoadSceneAdd,
                             [this](EditorContext& ctx, std::string_view args) -> bool
                             {
-                                ctx.engine.GetCommandSystem().Clear();
+                                ctx.engine.GetCommandHistory().Clear();
                                 const std::string scenePath(args);
-                                ctx.engine.RequestLoadSceneAdd(scenePath);
+                                ctx.engine.RequestLoadScene({.filename = scenePath, .append = true});
                                 PushRecentScene(GetEditorInterface().GetEditorUiState(), scenePath);
                                 return true;
                             });
@@ -169,7 +169,7 @@ bool EditorGameInstance::OnKey(SDL_Event& event)
             std::vector<uint32_t> ids = GetEngine().GetScene().GetSelectedIds();
             if (ids.empty()) break;
             auto cmd = std::make_unique<DeleteNodesCommand>(GetEngine().GetScene(), std::move(ids));
-            GetEngine().ExecuteCommand(std::move(cmd));
+            GetEngine().GetCommandHistory().Execute(std::move(cmd));
             break;
         }
         case SDLK_D:
@@ -179,7 +179,7 @@ bool EditorGameInstance::OnKey(SDL_Event& event)
             std::vector<uint32_t> ids = GetEngine().GetScene().GetSelectedIds();
             if (ids.empty()) break;
             auto cmd = std::make_unique<DuplicateNodesCommand>(GetEngine().GetScene(), std::move(ids));
-            GetEngine().ExecuteCommand(std::move(cmd));
+            GetEngine().GetCommandHistory().Execute(std::move(cmd));
             break;
         }
         case SDLK_S:

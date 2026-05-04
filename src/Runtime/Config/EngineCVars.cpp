@@ -32,10 +32,9 @@ namespace
             return;
         }
 
-        auto* renderer = engine->GetRendererPtr();
-        if (renderer)
+        if (engine->GetEngineStatus() != NextRenderer::EApplicationStatus::Starting)
         {
-            renderer->RequestRecreateSwapChain();
+            engine->GetRenderer().RequestRecreateSwapChain();
         }
     }
 
@@ -132,6 +131,10 @@ namespace NextCVar
                      "Debug draw lighting");
         GK_CVAR_BOOL("show.debugBoundingBox", showFlags, DebugDraw_BoundingBox, false, ECVarFlags::None,
                      "Debug draw bounding box");
+        GK_CVAR_BOOL("debug.physics.overlay", showFlags, DebugPhysicsOverlay, false, ECVarFlags::None,
+                     "Show physics debug overlay");
+        GK_CVAR_BOOL("debug.graphics.panel", showFlags, DebugGraphicsPanel, false, ECVarFlags::None,
+                     "Show graphics debug panel");
         GK_CVAR_BOOL("show.debugPhysicsBodies", showFlags, DebugDraw_PhysicsBodies, false, ECVarFlags::None,
                      "Debug draw physics bodies");
         GK_CVAR_BOOL("show.visualDebug", showFlags, ShowVisualDebug, false, ECVarFlags::None,

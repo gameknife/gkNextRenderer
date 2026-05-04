@@ -12,6 +12,7 @@
 #include "Runtime/Config/CVarSystem.hpp"
 #include "Runtime/Scene/NodeUtils.h"
 #include "Runtime/Scene/SceneBuilder.h"
+#include "Runtime/Subsystems/NextAudio.h"
 #include "Vulkan/SwapChain.hpp"
 
 #include <glm/gtc/quaternion.hpp>
@@ -341,7 +342,7 @@ void MagicaLegoGameInstance::OnInit()
     bgmArray_.push_back({"Liebestraum No. 3", "assets/sfx/bgm2.mp3"});
     PlayNextBGM();
 
-    GetEngine().RequestLoadScene("assets/models/legobricks.glb");
+    GetEngine().RequestLoadScene({.filename = "assets/models/legobricks.glb"});
     GetEngine().GetUserSettings().SceneEpsilonScale = 0.01f;
     GetEngine().GetUserSettings().AmbientCubeUnit = 0.04f;//0.0625f;
     GetEngine().GetUserSettings().AmbientCubeOffsetX = 0.02f;
@@ -398,8 +399,8 @@ void MagicaLegoGameInstance::OnTick(double deltaSeconds)
     // draw preview block
     if ( previewNode_.get() )
     {
-        NodeUtils::SetTranslation(previewNode_, currentBlockPosCurrent_);
-        NodeUtils::SetRotation(previewNode_, GetOrientationMatrix(currentOrientation_));
+        previewNode_->SetTranslation(currentBlockPosCurrent_);
+        previewNode_->SetRotation(GetOrientationMatrix(currentOrientation_));
 
         // 只在 Place 模式、trace 到物体且非绕物拖拽时显示预览块
         NodeUtils::SetVisible(previewNode_, shouldShowPreview);
@@ -445,7 +446,7 @@ void MagicaLegoGameInstance::OnSceneLoaded()
     NodeUtils::SetVisible(base->shared_from_this(), false);
     uint32_t modelId = baseRender ? baseRender->GetModelId() : 0;
     // Copy materials
-    auto matId = baseRender ? baseRender->Materials() : std::array<uint32_t, 16>{};
+    auto matId = baseRender ? baseRender->GetMaterials() : std::array<uint32_t, 16>{};
     basementInstanceId_ = base->GetInstanceId();
 
     // one is 12 x 12, we support 252 x 252 (21 x 21), so duplicate and create
@@ -640,7 +641,7 @@ void MagicaLegoGameInstance::TestSpawnPhysicsBlock()
 
     auto phys = std::make_shared<Runtime::PhysicsComponent>();
     phys->SetMobility(Runtime::ENodeMobility::Dynamic);
-    auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(bodyPos, bodyExtent, NextMotionType::Dynamic);
+    auto id = GetEngine().GetPhysicsEngine()->CreateBoxBody(bodyPos, bodyExtent, NextMotionType::Dynamic);
     phys->BindPhysicsBody(id);
     phys->SetPhysicsOffset(physicsOffset);
     newNode->AddComponent(phys);
@@ -693,11 +694,11 @@ void MagicaLegoGameInstance::TryChangeSelectionBrushIdx(int16_t idx)
 
     int random = rand();
     if (random % 3 == 0)
-        GetEngine().PlaySound("assets/sfx/put2.wav");
+        GetEngine().GetAudio()->PlaySound("assets/sfx/put2.wav");
     else if (random % 3 == 1)
-        GetEngine().PlaySound("assets/sfx/put1.wav");
+        GetEngine().GetAudio()->PlaySound("assets/sfx/put1.wav");
     else
-        GetEngine().PlaySound("assets/sfx/put3.wav");
+        GetEngine().GetAudio()->PlaySound("assets/sfx/put3.wav");
 }
 
 void MagicaLegoGameInstance::SetCurrentBrushIdx(int16_t idx)
@@ -708,7 +709,7 @@ void MagicaLegoGameInstance::SetCurrentBrushIdx(int16_t idx)
         if (auto render = previewNode_->GetComponent<Runtime::RenderComponent>())
         {
             render->SetModelId( GetBasicBlock(idx)->modelId_ );
-            NodeUtils::SetMaterial(previewNode_, GetBasicBlock(idx)->matType);
+            NodeUtils::SetPrimaryMaterial(previewNode_, GetBasicBlock(idx)->matType);
         }
     }
 }
@@ -778,7 +779,7 @@ void MagicaLegoGameInstance::AddBasicBlock(std::string blockName, std::string ty
         newBlock.type[127] = 0;
         newBlock.modelId_ = render->GetModelId();
         newBlock.brushId_ = static_cast<int16_t>(BasicNodes.size());
-        uint32_t matId = render->Materials()[0];
+        uint32_t matId = render->GetMaterials()[0];
         auto mat = scene.GetMaterial(matId);
         if (mat)
         {
@@ -993,11 +994,11 @@ bool MagicaLegoGameInstance::PlaceDynamicBlock(FPlacedBlock block)
     // random put1 or put2
     int random = rand();
     if (random % 3 == 0)
-        GetEngine().PlaySound("assets/sfx/put2.wav");
+        GetEngine().GetAudio()->PlaySound("assets/sfx/put2.wav");
     else if (random % 3 == 1)
-        GetEngine().PlaySound("assets/sfx/put1.wav");
+        GetEngine().GetAudio()->PlaySound("assets/sfx/put1.wav");
     else
-        GetEngine().PlaySound("assets/sfx/put3.wav");
+        GetEngine().GetAudio()->PlaySound("assets/sfx/put3.wav");
 
     return true;
 }
@@ -1217,9 +1218,11 @@ void MagicaLegoGameInstance::CPURaycast()
         return;
     }
 
-    glm::vec3 dir = NextEngineHelper::ProjectScreenToWorld(mousePos_);
+    glm::vec3 rayOrigin;
+    glm::vec3 dir;
+    NextEngineHelper::GetScreenToWorldRay(mousePos_, rayOrigin, dir);
     isTracingObject_ = false;
-    GetEngine().RayCastGPU(cachedCameraPos_, dir, [this](Assets::RayCastResult result)
+    GetEngine().RayCastGPU(rayOrigin, dir, [this](Assets::RayCastResult result)
         {
             if (result.Hitted)
             {
@@ -1255,19 +1258,19 @@ int16_t MagicaLegoGameInstance::ConvertBrushIdxToNextType(const std::string& pre
 
 void MagicaLegoGameInstance::PlayNextBGM()
 {
-    GetEngine().PauseSound(std::get<1>(bgmArray_[currentBGM_]), true);
+    GetEngine().GetAudio()->PauseSound(std::get<1>(bgmArray_[currentBGM_]), true);
     currentBGM_ = (currentBGM_ + 1) % bgmArray_.size();
-    GetEngine().PlaySound(std::get<1>(bgmArray_[currentBGM_]), true, 0.5f);
+    GetEngine().GetAudio()->PlaySound(std::get<1>(bgmArray_[currentBGM_]), true, 0.5f);
 }
 
 bool MagicaLegoGameInstance::IsBGMPaused()
 {
-    return !GetEngine().IsSoundPlaying(std::get<1>(bgmArray_[currentBGM_]));
+    return !GetEngine().GetAudio()->IsSoundPlaying(std::get<1>(bgmArray_[currentBGM_]));
 }
 
 void MagicaLegoGameInstance::PauseBGM(bool pause)
 {
-    GetEngine().PauseSound(std::get<1>(bgmArray_[currentBGM_]), pause);
+    GetEngine().GetAudio()->PauseSound(std::get<1>(bgmArray_[currentBGM_]), pause);
 }
 
 std::string MagicaLegoGameInstance::GetCurrentBGMName()
@@ -1331,8 +1334,14 @@ void MagicaLegoGameInstance::GenerateThumbnail()
         {
             cameraArm_ = 0.7f;
         }
-        GetEngine().SaveScreenShot(fmt::format("../../../assets/textures/thumb/thumb_{}_{}", BasicNodes[currTask].type, BasicNodes[currTask].name), 1920 / 2 - thumbSize / 2, 960 / 2 - thumbSize / 2,
-                                   thumbSize, thumbSize);
+        GetEngine().RequestScreenShot({
+            .filename = fmt::format("../../../assets/textures/thumb/thumb_{}_{}", BasicNodes[currTask].type, BasicNodes[currTask].name),
+            .x = 1920 / 2 - thumbSize / 2,
+            .y = 960 / 2 - thumbSize / 2,
+            .width = thumbSize,
+            .height = thumbSize,
+            .sync = true,
+        });
         currTask = currTask + 1;
 
         if (currTask >= totalTask)
@@ -1354,10 +1363,12 @@ void MagicaLegoGameInstance::GenerateThumbnail()
 
 void MagicaLegoGameInstance::PerformLeftClickCheck()
 {
-    glm::vec3 dir = NextEngineHelper::ProjectScreenToWorld(mousePos_);
+    glm::vec3 rayOrigin;
+    glm::vec3 dir;
+    NextEngineHelper::GetScreenToWorldRay(mousePos_, rayOrigin, dir);
 
     bool hitObject = false;
-    GetEngine().RayCastGPU(cachedCameraPos_, dir, [&hitObject](Assets::RayCastResult result) -> bool
+    GetEngine().RayCastGPU(rayOrigin, dir, [&hitObject](Assets::RayCastResult result) -> bool
     {
         if (result.Hitted)
         {
@@ -1383,10 +1394,12 @@ void MagicaLegoGameInstance::UpdateFocusToScreenCenter()
     auto vkextent = GetEngine().GetRenderer().SwapChain().OutputExtent();
     glm::vec2 screenCenter(vkextent.width * 0.5f, vkextent.height * 0.5f);
 
-    glm::vec3 centerDir = NextEngineHelper::ProjectScreenToWorld(screenCenter);
+    glm::vec3 rayOrigin;
+    glm::vec3 centerDir;
+    NextEngineHelper::GetScreenToWorldRay(screenCenter, rayOrigin, centerDir);
 
     glm::vec3 newFocus = glm::vec3(0, 0, 0);
-    GetEngine().RayCastGPU(cachedCameraPos_, centerDir, [&newFocus](Assets::RayCastResult result) -> bool
+    GetEngine().RayCastGPU(rayOrigin, centerDir, [&newFocus](Assets::RayCastResult result) -> bool
     {
         if (result.Hitted)
         {
@@ -1597,3 +1610,4 @@ void MagicaLegoGameInstance::UpdateMouseCursor()
         SDL_SetCursor(cursor);
     }
 }
+

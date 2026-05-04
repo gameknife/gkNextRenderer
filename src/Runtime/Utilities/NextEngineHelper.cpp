@@ -11,6 +11,31 @@ namespace
 {
     std::vector<int32_t> AuxCounter;
 
+    glm::vec3 ProjectWorldToScreenInternal(glm::vec3 locationWS)
+    {
+        NextEngine* engine = NextEngine::GetInstance();
+        if (!engine)
+        {
+            return {};
+        }
+
+        auto vkoffset = engine->GetRenderer().SwapChain().OutputOffset();
+        auto vkextent = engine->GetRenderer().SwapChain().OutputExtent();
+
+        const auto& prevUBO = engine->GetUniformBufferObject();
+        glm::vec4 transformed = prevUBO.ViewProjection * glm::vec4(locationWS, 1.0f);
+        transformed = transformed / transformed.w;
+        transformed.x += 1.0f;
+        transformed.x *= vkextent.width / 2;
+        transformed.y += 1.0f;
+        transformed.y *= vkextent.height / 2;
+
+        transformed.x += vkoffset.x;
+        transformed.y += vkoffset.y;
+
+        return transformed;
+    }
+
     bool TryNdcToImGuiPos(const glm::vec3& ndc, ImVec2& outImGuiPos, bool invertY)
     {
         if (ndc.z < -1.0f || ndc.z > 1.0f || ndc.x < -1.2f || ndc.x > 1.2f || ndc.y < -1.2f || ndc.y > 1.2f)
@@ -33,43 +58,6 @@ namespace
 
 namespace NextEngineHelper
 {
-    glm::vec3 ProjectScreenToWorld(glm::vec2 locationSS)
-    {
-        NextEngine* engine = NextEngine::GetInstance();
-        if (!engine)
-        {
-            return {};
-        }
-        glm::vec3 org;
-        glm::vec3 dir;
-        GetScreenToWorldRay(locationSS, org, dir);
-        return dir;
-    }
-
-    glm::vec3 ProjectWorldToScreen(glm::vec3 locationWS)
-    {
-        NextEngine* engine = NextEngine::GetInstance();
-        if (!engine)
-        {
-            return {};
-        }
-        auto vkoffset = engine->GetRenderer().SwapChain().OutputOffset();
-        auto vkextent = engine->GetRenderer().SwapChain().OutputExtent();
-
-        const auto& prevUBO = engine->GetUniformBufferObject();
-        glm::vec4 transformed = prevUBO.ViewProjection * glm::vec4(locationWS, 1.0f);
-        transformed = transformed / transformed.w;
-        transformed.x += 1.0f;
-        transformed.x *= vkextent.width / 2;
-        transformed.y += 1.0f;
-        transformed.y *= vkextent.height / 2;
-
-        transformed.x += vkoffset.x;
-        transformed.y += vkoffset.y;
-
-        return transformed;
-    }
-
     bool TryProjectWorldToScreen(const glm::vec3& worldPos, ImVec2& outImGuiPos)
     {
         NextEngine* engine = NextEngine::GetInstance();
@@ -94,7 +82,7 @@ namespace NextEngineHelper
         return TryNdcToImGuiPos(ndc, outImGuiPos, false);
     }
 
-    bool TryProjectWorldToScreen(const Assets::Camera& camera, const glm::vec3& worldPos, ImVec2& outImGuiPos)
+    bool TryProjectWorldToScreenWithCamera(const Assets::Camera& camera, const glm::vec3& worldPos, ImVec2& outImGuiPos)
     {
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
         if (!viewport || viewport->Size.x <= 1.0f || viewport->Size.y <= 1.0f)
@@ -116,7 +104,7 @@ namespace NextEngineHelper
         return TryNdcToImGuiPos(glm::vec3(clip) / clip.w, outImGuiPos, true);
     }
 
-    bool TryProjectWorldToScreen(const NextGameInstanceBase& gameInstance, const glm::vec3& worldPos, ImVec2& outImGuiPos)
+    bool TryProjectWorldToScreenForGame(const NextGameInstanceBase& gameInstance, const glm::vec3& worldPos, ImVec2& outImGuiPos)
     {
         Assets::Camera camera{};
         if (!gameInstance.OverrideRenderCamera(camera))
@@ -124,7 +112,7 @@ namespace NextEngineHelper
             return TryProjectWorldToScreen(worldPos, outImGuiPos);
         }
 
-        return TryProjectWorldToScreen(camera, worldPos, outImGuiPos);
+        return TryProjectWorldToScreenWithCamera(camera, worldPos, outImGuiPos);
     }
 
     void GetScreenToWorldRay(glm::vec2 locationSS, glm::vec3& org, glm::vec3& dir)
@@ -157,8 +145,8 @@ namespace NextEngineHelper
         {
             return;
         }
-        auto transformedFrom = ProjectWorldToScreen(from);
-        auto transformedTo = ProjectWorldToScreen(to);
+        auto transformedFrom = ProjectWorldToScreenInternal(from);
+        auto transformedTo = ProjectWorldToScreenInternal(to);
 
         if (transformedFrom.z < 1 && transformedTo.z < 1)
         {
@@ -184,42 +172,6 @@ namespace NextEngineHelper
         DrawAuxLine(glm::vec3(min.x, max.y, min.z), glm::vec3(min.x, max.y, max.z), color, size);
     }
 
-    void DrawAuxOBB(const glm::mat4& worldTransform, const glm::vec3& localMin, const glm::vec3& localMax,
-                    glm::vec4 color, float size)
-    {
-        const glm::vec3 corners[8] = {
-            {localMin.x, localMin.y, localMin.z},
-            {localMax.x, localMin.y, localMin.z},
-            {localMin.x, localMax.y, localMin.z},
-            {localMax.x, localMax.y, localMin.z},
-            {localMin.x, localMin.y, localMax.z},
-            {localMax.x, localMin.y, localMax.z},
-            {localMin.x, localMax.y, localMax.z},
-            {localMax.x, localMax.y, localMax.z}
-        };
-
-        glm::vec3 transformed[8];
-        for (int i = 0; i < 8; ++i)
-        {
-            transformed[i] = glm::vec3(worldTransform * glm::vec4(corners[i], 1.0f));
-        }
-
-        DrawAuxLine(transformed[0], transformed[1], color, size);
-        DrawAuxLine(transformed[1], transformed[3], color, size);
-        DrawAuxLine(transformed[3], transformed[2], color, size);
-        DrawAuxLine(transformed[2], transformed[0], color, size);
-
-        DrawAuxLine(transformed[4], transformed[5], color, size);
-        DrawAuxLine(transformed[5], transformed[7], color, size);
-        DrawAuxLine(transformed[7], transformed[6], color, size);
-        DrawAuxLine(transformed[6], transformed[4], color, size);
-
-        DrawAuxLine(transformed[0], transformed[4], color, size);
-        DrawAuxLine(transformed[1], transformed[5], color, size);
-        DrawAuxLine(transformed[2], transformed[6], color, size);
-        DrawAuxLine(transformed[3], transformed[7], color, size);
-    }
-
     void DrawAuxPoint(glm::vec3 location, glm::vec4 color, float size, int32_t durationInTick)
     {
         NextEngine* engine = NextEngine::GetInstance();
@@ -233,7 +185,7 @@ namespace NextEngineHelper
             int32_t id = static_cast<int32_t>(AuxCounter.size()) - 1;
             engine->AddTickedTask([location, color, size, id](double deltaSeconds)->bool
             {
-                auto transformed = ProjectWorldToScreen(location);
+                auto transformed = ProjectWorldToScreenInternal(location);
                 if (transformed.z < 1)
                 {
                     NextEngine::GetInstance()->GetUserInterface()->DrawPoint(transformed.x, transformed.y, size, color);
@@ -243,7 +195,7 @@ namespace NextEngineHelper
         }
         else
         {
-            auto transformed = ProjectWorldToScreen(location);
+            auto transformed = ProjectWorldToScreenInternal(location);
             if (transformed.z < 1)
             {
                 engine->GetUserInterface()->DrawPoint(transformed.x, transformed.y, size, color);

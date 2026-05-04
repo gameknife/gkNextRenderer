@@ -142,7 +142,7 @@ void VisualTestGameInstance::OnInit()
     state_ = State::Loading;
     observedLoadingState_ = false;
     sceneLoadStartTime_ = std::chrono::steady_clock::now();
-    GetEngine().RequestLoadScene(scenes_[0].path);
+    GetEngine().RequestLoadScene({.filename = scenes_[0].path});
 }
 
 void VisualTestGameInstance::OnTick(double deltaSeconds)
@@ -489,7 +489,7 @@ void VisualTestGameInstance::CaptureAndAdvance()
         frameCounter_ = 0;
         observedLoadingState_ = false;
         sceneLoadStartTime_ = std::chrono::steady_clock::now();
-        GetEngine().RequestLoadScene(scenes_[currentSceneIndex_].path);
+        GetEngine().RequestLoadScene({.filename = scenes_[currentSceneIndex_].path});
     }
 }
 
@@ -641,7 +641,7 @@ void VisualTestGameInstance::RecordFailureAndAdvance(const std::string& errorMes
     frameCounter_ = 0;
     observedLoadingState_ = false;
     sceneLoadStartTime_ = std::chrono::steady_clock::now();
-    GetEngine().RequestLoadScene(scenes_[currentSceneIndex_].path);
+    GetEngine().RequestLoadScene({.filename = scenes_[currentSceneIndex_].path});
 }
 
 void VisualTestGameInstance::GenerateReport()

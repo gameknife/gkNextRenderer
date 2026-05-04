@@ -135,7 +135,7 @@ void NextRendererGameInstance::OnInit()
 	{
 		initializedScene = GOption->SceneName;
 	}
-	GetEngine().RequestLoadScene(initializedScene);
+	GetEngine().RequestLoadScene({.filename = initializedScene});
     // GetEngine().GetUserSettings().SceneEpsilonScale = 0.01f;
     // GetEngine().GetUserSettings().AmbientCubeUnit = 0.02f;
     // GetEngine().GetUserSettings().AmbientCubeOffsetX = 0.0f;
@@ -161,8 +161,8 @@ void NextRendererGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<As
 
 	matIds_.clear();
 
-	MatPreparedForAdd.push_back({Assets::Material::Lambertian(glm::vec3(1,1,1))});
-	materials.push_back(MatPreparedForAdd.back());matIds_.push_back(uint32_t(materials.size() - 1));
+	matIds_.push_back(SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1,1,1)));
+	MatPreparedForAdd.push_back(materials.back());
 	MatPreparedForAdd.push_back({Assets::Material::Metallic(glm::vec3(0.5,0.5,0.5), 0.4f)});
 	materials.push_back(MatPreparedForAdd.back());matIds_.push_back(uint32_t(materials.size() - 1));
 	MatPreparedForAdd.push_back({Assets::Material::Dielectric(1.5f, 0.0f)});
@@ -442,7 +442,7 @@ void NextRendererGameInstance::CreateSphereAndPush()
 	
 	auto phys = std::make_shared<Runtime::PhysicsComponent>();
 	phys->SetMobility(Runtime::ENodeMobility::Dynamic);
-	auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(center, 0.2f, NextMotionType::Dynamic);
+	auto id = GetEngine().GetPhysicsEngine()->CreateSphereBody(center, 0.2f, NextMotionType::Dynamic);
 	phys->BindPhysicsBody(id);
 	newNode->AddComponent(phys);
 
@@ -466,7 +466,7 @@ void NextRendererGameInstance::CreateBoxAndPush()
     
     auto phys = std::make_shared<Runtime::PhysicsComponent>();
     phys->SetMobility(Runtime::ENodeMobility::Dynamic);
-    auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateBoxBody(center, {0.4,0.4,0.4}, NextMotionType::Dynamic);
+    auto id = GetEngine().GetPhysicsEngine()->CreateBoxBody(center, {0.4,0.4,0.4}, NextMotionType::Dynamic);
     phys->BindPhysicsBody(id);
     newNode->AddComponent(phys);
 
@@ -552,7 +552,7 @@ void NextRendererGameInstance::DrawSettings()
                     if (ImGui::Selectable(sceneNames[sceneIdx].c_str(), selected))
                     {
                         userSetting.SceneIndex = sceneIdx;
-                        GetEngine().RequestLoadScene(SceneList::AllScenes[userSetting.SceneIndex]);
+                        GetEngine().RequestLoadScene({.filename = SceneList::AllScenes[userSetting.SceneIndex]});
                     }
                     if (selected)
                     {
@@ -813,7 +813,7 @@ void NextRendererGameInstance::DrawTitleBar()
     {
         GetEngine().AddTickedTask([this](double deltaSeconds)-> bool
         {
-            GetEngine().RequestScreenShot("");
+            GetEngine().RequestScreenShot({});
             return true;
         });
 		//GetEngine().RequestHighQualityScreenShot("", 512);

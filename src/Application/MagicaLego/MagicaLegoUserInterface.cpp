@@ -348,7 +348,7 @@ void MagicaLegoUserInterface::DrawTitleBar()
                     Utilities::FileHelper::EnsureDirectoryExists(Utilities::FileHelper::GetAbsolutePath(localPath));
                     auto time = std::time(nullptr);
                     std::string filename = fmt::format("shot_{:%Y-%m-%d-%H-%M-%S}", *std::localtime(&time));
-                    GetGameInstance()->GetEngine().RequestScreenShot(localPath + "/" + filename);
+                    GetGameInstance()->GetEngine().RequestScreenShot({.filename = localPath + "/" + filename});
                 }
                 return false;
             case 514:
@@ -750,7 +750,7 @@ void MagicaLegoUserInterface::RecordTimeline(bool autoRotate)
                 GetGameInstance()->GetCameraRotX() += 1.0f;
             }
             std::string stepfilename = fmt::format("video_{}", step);
-            GetGameInstance()->GetEngine().RequestScreenShot(localTempPath + "/" + stepfilename);
+            GetGameInstance()->GetEngine().RequestScreenShot({.filename = localTempPath + "/" + stepfilename});
         }
 
         return false;

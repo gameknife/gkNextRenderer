@@ -59,19 +59,6 @@ namespace NodeUtils
         }
     }
 
-    void SetMaterial(const std::shared_ptr<Assets::Node>& node, uint32_t materialId)
-    {
-        if (!node)
-        {
-            return;
-        }
-
-        if (auto render = node->GetComponent<Runtime::RenderComponent>())
-        {
-            render->SetMaterial({materialId});
-        }
-    }
-
     void SetPrimaryMaterial(const std::shared_ptr<Assets::Node>& node, uint32_t materialId)
     {
         if (!node)
@@ -81,9 +68,22 @@ namespace NodeUtils
 
         if (auto render = node->GetComponent<Runtime::RenderComponent>())
         {
-            auto materials = render->Materials();
+            auto materials = render->GetMaterials();
             materials[0] = materialId;
-            render->SetMaterial(materials);
+            render->SetMaterials(materials);
+        }
+    }
+
+    void SetAllMaterials(const std::shared_ptr<Assets::Node>& node, const std::array<uint32_t, 16>& materialIds)
+    {
+        if (!node)
+        {
+            return;
+        }
+
+        if (auto render = node->GetComponent<Runtime::RenderComponent>())
+        {
+            render->SetMaterials(materialIds);
         }
     }
 
@@ -101,36 +101,4 @@ namespace NodeUtils
         }
     }
 
-    void SetTranslation(const std::shared_ptr<Assets::Node>& node, const glm::vec3& translation)
-    {
-        if (!node)
-        {
-            return;
-        }
-
-        node->SetTranslation(translation);
-        node->RecalcTransform(true);
-    }
-
-    void SetRotation(const std::shared_ptr<Assets::Node>& node, const glm::quat& rotation)
-    {
-        if (!node)
-        {
-            return;
-        }
-
-        node->SetRotation(rotation);
-        node->RecalcTransform(true);
-    }
-
-    void SetScale(const std::shared_ptr<Assets::Node>& node, const glm::vec3& scale)
-    {
-        if (!node)
-        {
-            return;
-        }
-
-        node->SetScale(scale);
-        node->RecalcTransform(true);
-    }
 }

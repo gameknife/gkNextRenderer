@@ -16,11 +16,6 @@ namespace Runtime
         void SetModelId(uint32_t modelId) { modelId_ = modelId; }
         uint32_t GetModelId() const { return modelId_; }
 
-        void SetMaterial(const std::array<uint32_t, 16>& materials) { materialIdx_ = materials; }
-        std::array<uint32_t, 16>& Materials() { return materialIdx_; }
-        const std::array<uint32_t, 16>& Materials() const { return materialIdx_; }
-        
-        // Getter/Setter for materials array (for reflection)
         const std::array<uint32_t, 16>& GetMaterials() const { return materialIdx_; }
         void SetMaterials(const std::array<uint32_t, 16>& materials) { materialIdx_ = materials; }
 

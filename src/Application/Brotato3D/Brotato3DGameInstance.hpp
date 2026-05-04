@@ -119,7 +119,6 @@ public:
     const std::vector<Brotato3D::FArenaDef>& GetArenaDefs() const { return arenaDefs_; }
     const std::string& GetSelectedArenaId() const { return selectedArenaId_; }
     const Brotato3D::FBestRecord& GetBestRecord() const { return bestRecord_; }
-    std::string Localize(const std::string& key, const std::string& fallback = "") const;
     Brotato3D::FPlayerStats GetEffectivePlayerStats() const;
     bool CanBuyShopOffer(size_t slotIndex) const;
     std::string GetShopOfferUnavailableReason(size_t slotIndex) const;
@@ -228,7 +227,6 @@ private:
     std::vector<Brotato3D::FArenaDef> arenaDefs_;
     std::string selectedCharacterId_ = "soldier";
     std::string selectedArenaId_ = "grassland";
-    std::map<std::string, std::string> i18nTexts_;
     Brotato3D::FBestRecord bestRecord_{};
     std::vector<Brotato3D::FWaveDef> waveDefs_;
     std::map<std::string, FEnemyVisualResource> enemyVisuals_;

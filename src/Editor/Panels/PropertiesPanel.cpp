@@ -206,7 +206,7 @@ namespace Editor
                 }
                 else if (editingName != selectedObj->GetName())
                 {
-                    ctx.engine.ExecuteCommand(std::make_unique<RenameNodeCommand>(
+                    ctx.engine.GetCommandHistory().Execute(std::make_unique<RenameNodeCommand>(
                         ctx.scene, selectedObj->GetInstanceId(), editingName));
                 }
             }
@@ -268,7 +268,8 @@ namespace Editor
 
             if (modelId != -1 && render)
             {
-                auto& mats = render->Materials();
+                auto mats = render->GetMaterials();
+                bool materialsChanged = false;
                 for (auto& mat : mats)
                 {
                     const int matIdx = mat;
@@ -290,6 +291,7 @@ namespace Editor
                         if (ui.selectedMaterialId != InvalidId)
                         {
                             mat = static_cast<int>(ui.selectedMaterialId);
+                            materialsChanged = true;
                         }
                     }
 
@@ -300,6 +302,11 @@ namespace Editor
                         ui.ed_material = true;
                         OpenMaterialEditor(ctx, ui);
                     }
+                }
+                if (materialsChanged)
+                {
+                    render->SetMaterials(mats);
+                    ctx.scene.MarkDirty();
                 }
             }
             

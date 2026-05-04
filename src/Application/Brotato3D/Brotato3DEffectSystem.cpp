@@ -4,6 +4,7 @@
 #include "Assets/Core/Node.h"
 #include "Assets/Loaders/FProcModel.h"
 #include "Brotato3DAudio.hpp"
+#include "Runtime/Scene/SceneBuilder.h"
 
 using namespace Brotato3DUtil;
 
@@ -29,8 +30,7 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
         {
             return it->second;
         }
-        materials.push_back({Assets::Material::DiffuseLight(color * intensity)});
-        const uint32_t materialId = static_cast<uint32_t>(materials.size() - 1);
+        const uint32_t materialId = SceneBuilder::AddDiffuseLightMaterial(materials, color, intensity);
         lightMaterialIds_[key] = materialId;
         return materialId;
     };
@@ -273,14 +273,14 @@ void Brotato3DGameInstance::UpdateImpactDebris(double deltaSeconds)
         if (debris.remainingMs <= 0.0f)
         {
             debris.active = false;
-            NodeUtils::SetTranslation(debris.node, HiddenPosition);
+            debris.node->SetTranslation(HiddenPosition);
             NodeUtils::SetVisible(debris.node, false);
             continue;
         }
 
         debris.velocity.y -= 9.8f * static_cast<float>(deltaSeconds);
         debris.worldPos += debris.velocity * static_cast<float>(deltaSeconds);
-        NodeUtils::SetTranslation(debris.node, debris.worldPos);
+        debris.node->SetTranslation(debris.worldPos);
     }
 }
 
@@ -322,7 +322,7 @@ void Brotato3DGameInstance::UpdateCombatEffects(double deltaSeconds)
 
     const glm::vec3 playerLightPos = player_.worldPos + glm::vec3(0.0f, 3.2f, 0.0f);
     UpdateLightArea(playerLightIndex_, playerLightPos, 6.0f, 1.0f);
-    NodeUtils::SetTranslation(playerLightNode_, playerLightPos);
+    playerLightNode_->SetTranslation(playerLightPos);
     for (auto& light : tempLightPool_)
     {
         if (!light.active)
@@ -337,13 +337,13 @@ void Brotato3DGameInstance::UpdateCombatEffects(double deltaSeconds)
             light.active = false;
             light.remainingMs = 0.0f;
             UpdateLightArea(light.lightIndex, HiddenPosition, 0.01f, 0.0f);
-            NodeUtils::SetTranslation(light.node, HiddenPosition);
+            light.node->SetTranslation(HiddenPosition);
             NodeUtils::SetVisible(light.node, false);
             continue;
         }
         UpdateLightArea(light.lightIndex, light.worldPos, light.radiusMeters, intensityScale);
-        NodeUtils::SetTranslation(light.node, light.worldPos);
-        NodeUtils::SetScale(light.node, glm::vec3(std::max(0.05f, light.radiusMeters * intensityScale)));
+        light.node->SetTranslation(light.worldPos);
+        light.node->SetScale(glm::vec3(std::max(0.05f, light.radiusMeters * intensityScale)));
     }
 }
 
@@ -428,9 +428,9 @@ void Brotato3DGameInstance::SpawnTempLight(const glm::vec3& worldPos,
     {
         lights[static_cast<size_t>(lightIt->lightIndex)].lightMatIdx = EnsureLightMaterial(color);
     }
-    NodeUtils::SetMaterial(lightIt->node, EnsureLightMaterial(color));
-    NodeUtils::SetTranslation(lightIt->node, worldPos);
-    NodeUtils::SetScale(lightIt->node, glm::vec3(radiusMeters));
+    NodeUtils::SetPrimaryMaterial(lightIt->node, EnsureLightMaterial(color));
+    lightIt->node->SetTranslation(worldPos);
+    lightIt->node->SetScale(glm::vec3(radiusMeters));
     NodeUtils::SetVisible(lightIt->node, true);
     UpdateLightArea(lightIt->lightIndex, worldPos, radiusMeters, 1.0f);
 }
@@ -469,7 +469,7 @@ uint32_t Brotato3DGameInstance::EnsureLightMaterial(const glm::vec3& color)
         return it->second;
     }
 
-    const uint32_t materialId = engine_->GetScene().AddMaterial({Assets::Material::DiffuseLight(color * 650.0f)});
+    const uint32_t materialId = SceneBuilder::AddDiffuseLightMaterialToScene(engine_->GetScene(), color, 650.0f);
     lightMaterialIds_[key] = materialId;
     return materialId;
 }
@@ -512,7 +512,7 @@ void Brotato3DGameInstance::SpawnImpactDebris(const glm::vec3& worldPos)
         it->velocity = dir * speedDist(rng_);
         it->lifeMs = 400.0f;
         it->remainingMs = it->lifeMs;
-        NodeUtils::SetTranslation(it->node, it->worldPos);
+        it->node->SetTranslation(it->worldPos);
         NodeUtils::SetVisible(it->node, true);
     }
 }
@@ -546,4 +546,5 @@ void Brotato3DGameInstance::ApplyLightingSettings()
     envSettings.SkyIntensity = 8.0f;
     engine_->GetScene().MarkEnvDirty();
 }
+
 

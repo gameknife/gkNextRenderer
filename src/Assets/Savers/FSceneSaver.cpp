@@ -372,7 +372,7 @@ void FSceneSaver::SerializeMeshes(tinygltf::Model& model, const Scene& scene)
         if (modelToRenderComp.find(modelIdx) != modelToRenderComp.end())
         {
             auto renderComp = modelToRenderComp[modelIdx];
-            const auto& materials = renderComp->Materials();
+            const auto& materials = renderComp->GetMaterials();
             // 使用第一个材质索引（如果Mesh有多个Section，这是简化处理）
             primitive.material = static_cast<int>(materials[0]);
         }

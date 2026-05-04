@@ -10,6 +10,7 @@
 namespace Assets
 {
     class Node;
+    class Scene;
     struct FMaterial;
 }
 
@@ -17,6 +18,8 @@ namespace SceneBuilder
 {
     uint32_t AddLambertianMaterial(std::vector<Assets::FMaterial>& materials, const glm::vec3& color);
     uint32_t AddDiffuseLightMaterial(std::vector<Assets::FMaterial>& materials, const glm::vec3& color, float intensity = 1.0f);
+    uint32_t AddLambertianMaterialToScene(Assets::Scene& scene, const glm::vec3& color);
+    uint32_t AddDiffuseLightMaterialToScene(Assets::Scene& scene, const glm::vec3& color, float intensity = 1.0f);
 
     std::shared_ptr<Assets::Node> CreateRenderNode(
         std::string_view name,

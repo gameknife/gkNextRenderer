@@ -23,7 +23,7 @@ namespace
                                                    source.Scale(),
                                                    newInstanceId,
                                                    render->GetModelId(),
-                                                   render->Materials(),
+                                                   render->GetMaterials(),
                                                    render->GetVisible(),
                                                    source.Rotation(),
                                                    render->GetRayCastVisible());

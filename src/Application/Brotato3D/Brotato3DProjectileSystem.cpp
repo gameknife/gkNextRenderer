@@ -1,6 +1,7 @@
 #include "Brotato3DGameInstance.hpp"
 #include "Brotato3DCommon.hpp"
 
+#include "Assets/Core/Node.h"
 #include <spdlog/spdlog.h>
 
 #include "Brotato3DAudio.hpp"
@@ -93,7 +94,7 @@ void Brotato3DGameInstance::UpdateWeapons(double deltaSeconds)
                 projectile.explosionDamage = weapon.def->explosionDamage;
                 projectile.isCrit = isCrit;
                 projectile.hitEnemyIndices.clear();
-                NodeUtils::SetTranslation(projectile.node, projectile.worldPos);
+                projectile.node->SetTranslation(projectile.worldPos);
                 NodeUtils::SetVisible(projectile.node, true);
                 break;
             }
@@ -182,12 +183,12 @@ void Brotato3DGameInstance::UpdateProjectiles(double deltaSeconds)
             projectile.active = false;
             projectile.worldPos = HiddenPosition;
             projectile.hitEnemyIndices.clear();
-            NodeUtils::SetTranslation(projectile.node, HiddenPosition);
+            projectile.node->SetTranslation(HiddenPosition);
             NodeUtils::SetVisible(projectile.node, false);
         }
         else
         {
-            NodeUtils::SetTranslation(projectile.node, projectile.worldPos);
+            projectile.node->SetTranslation(projectile.worldPos);
         }
     }
 }
@@ -222,10 +223,10 @@ void Brotato3DGameInstance::SpawnEnemyProjectile(const Brotato3D::FEnemyRuntime&
     projectileIt->radius = ranged.size;
     if (const auto materialIt = enemyProjectileMaterialIds_.find(enemy.def); materialIt != enemyProjectileMaterialIds_.end())
     {
-        NodeUtils::SetMaterial(projectileIt->node, materialIt->second);
+        NodeUtils::SetPrimaryMaterial(projectileIt->node, materialIt->second);
     }
-    NodeUtils::SetScale(projectileIt->node, glm::vec3(ranged.size));
-    NodeUtils::SetTranslation(projectileIt->node, projectileIt->worldPos);
+    projectileIt->node->SetScale(glm::vec3(ranged.size));
+    projectileIt->node->SetTranslation(projectileIt->worldPos);
     NodeUtils::SetVisible(projectileIt->node, true);
 }
 
@@ -255,12 +256,12 @@ void Brotato3DGameInstance::UpdateEnemyProjectiles(double deltaSeconds)
         {
             projectile.active = false;
             projectile.worldPos = HiddenPosition;
-            NodeUtils::SetTranslation(projectile.node, HiddenPosition);
+            projectile.node->SetTranslation(HiddenPosition);
             NodeUtils::SetVisible(projectile.node, false);
         }
         else
         {
-            NodeUtils::SetTranslation(projectile.node, projectile.worldPos);
+            projectile.node->SetTranslation(projectile.worldPos);
         }
     }
 }
@@ -404,4 +405,5 @@ void Brotato3DGameInstance::SetDebugSingleWeapon(const std::string& weaponId)
     }
     spdlog::info("[Brotato3D] debug equipped weapon '{}'", weaponId);
 }
+
 

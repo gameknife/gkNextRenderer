@@ -9,6 +9,7 @@
 #include "Brotato3DUI.hpp"
 #include "Runtime/Editor/FontLoader.h"
 #include "Runtime/Platform/UserPaths.h"
+#include "Runtime/Subsystems/NextLocalization.h"
 #include "Utilities/FileHelper.hpp"
 
 #include <filesystem>
@@ -53,7 +54,10 @@ void Brotato3DGameInstance::OnInit()
     {
         throw std::runtime_error("Brotato3D failed to load required data");
     }
-    Brotato3D::LoadI18n(I18nConfigPath, i18nTexts_);
+    if (NextLocalization* localization = engine_->GetLocalization())
+    {
+        localization->LoadFromJson(I18nConfigPath, "zh");
+    }
     LoadBestRecord();
 
     itemDefsById_.clear();
@@ -67,9 +71,9 @@ void Brotato3DGameInstance::OnInit()
     waveSystem_.LoadWaves(waveDefs_);
     ResetRuntimeState();
     appState_ = Brotato3D::EAppState::MainMenu;
-    engine_->SetGraphicsDebugPanelVisible(false);
+    engine_->GetShowFlags().DebugGraphicsPanel = false;
     engine_->GetUserSettings().ShowOverlay = false;
-    engine_->RequestLoadScene("Empty.proc");
+    engine_->RequestLoadScene({.filename = "Empty.proc"});
     Brotato3D::StartBgm("calm");
 
     if (std::filesystem::exists(Brotato3D::PlaceholderAssets::Sfx("fire_smg_01.wav")))
@@ -217,16 +221,6 @@ const Brotato3D::FCharacterDef* Brotato3DGameInstance::GetSelectedCharacterDef()
 Brotato3D::FPlayerStats Brotato3DGameInstance::GetEffectivePlayerStats() const
 {
     return GetEffectiveStats();
-}
-
-std::string Brotato3DGameInstance::Localize(const std::string& key, const std::string& fallback) const
-{
-    const auto it = i18nTexts_.find(key);
-    if (it != i18nTexts_.end())
-    {
-        return it->second;
-    }
-    return fallback.empty() ? key : fallback;
 }
 
 void Brotato3DGameInstance::LoadBestRecord()

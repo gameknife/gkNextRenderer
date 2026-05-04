@@ -6,6 +6,7 @@
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Subsystems/NextPhysics.h"
+#include "Runtime/Subsystems/NextAudio.h"
 #include "Runtime/Config/CVarSystem.hpp"
 #include "Runtime/Scene/NodeUtils.h"
 #include "Runtime/Scene/SceneBuilder.h"
@@ -421,7 +422,7 @@ void BrickPlayerGameInstance::OnInit()
     if (!GOption->SceneName.empty())
     {
         currentScenePath_ = GOption->SceneName;
-        GetEngine().RequestLoadScene(currentScenePath_);
+        GetEngine().RequestLoadScene({.filename = currentScenePath_});
     }
 }
 
@@ -769,9 +770,11 @@ void BrickPlayerGameInstance::PerformRaycast()
         return;
     }
 
-    glm::vec3 dir = NextEngineHelper::ProjectScreenToWorld(mousePos_);
+    glm::vec3 rayOrigin;
+    glm::vec3 rayDir;
+    NextEngineHelper::GetScreenToWorldRay(mousePos_, rayOrigin, rayDir);
     bool handled = false;
-    GetEngine().RayCastGPU(cachedCameraPos_, dir, [this, &handled](Assets::RayCastResult result)
+    GetEngine().RayCastGPU(rayOrigin, rayDir, [this, &handled](Assets::RayCastResult result)
     {
         handled = this->UpdateHitStateFromRaycast(result);
         return true;
@@ -1622,7 +1625,7 @@ bool BrickPlayerGameInstance::ReattachDraggedPart()
 
 void BrickPlayerGameInstance::PlayRandomPutSound()
 {
-    engine_->PlaySound(GetRandomPutSoundPath(), false, 0.55f);
+    engine_->GetAudio()->PlaySound(GetRandomPutSoundPath(), false, 0.55f);
 }
 
 bool BrickPlayerGameInstance::IntersectDragPlane(const glm::vec3& rayOrigin, const glm::vec3& rayDir, glm::vec3& outPoint) const
@@ -1775,14 +1778,14 @@ void BrickPlayerGameInstance::PlayNextBGM()
 
     if (!currentTrack->path.empty())
     {
-        GetEngine().PauseSound(currentTrack->path, true);
+        GetEngine().GetAudio()->PauseSound(currentTrack->path, true);
     }
 
     currentBGM_ = (currentBGM_ + 1) % static_cast<uint32_t>(bgmTracks_.size());
     currentTrack = GetCurrentBGMTrack();
     if (currentTrack && !currentTrack->path.empty())
     {
-        GetEngine().PlaySound(currentTrack->path, true, 0.45f);
+        GetEngine().GetAudio()->PlaySound(currentTrack->path, true, 0.45f);
     }
 }
 
@@ -1794,7 +1797,7 @@ bool BrickPlayerGameInstance::IsBGMPaused() const
         return true;
     }
 
-    return !engine_->IsSoundPlaying(currentTrack->path);
+    return !engine_->GetAudio()->IsSoundPlaying(currentTrack->path);
 }
 
 void BrickPlayerGameInstance::PauseBGM(bool pause)
@@ -1805,7 +1808,7 @@ void BrickPlayerGameInstance::PauseBGM(bool pause)
         return;
     }
 
-    GetEngine().PauseSound(currentTrack->path, pause);
+    GetEngine().GetAudio()->PauseSound(currentTrack->path, pause);
 }
 
 std::string BrickPlayerGameInstance::GetCurrentBGMName() const
@@ -2076,13 +2079,13 @@ void BrickPlayerGameInstance::ResetAll()
 
     // Re-request the same scene
     if (!currentScenePath_.empty())
-        GetEngine().RequestLoadScene(currentScenePath_);
+        GetEngine().RequestLoadScene({.filename = currentScenePath_});
 }
 
 void BrickPlayerGameInstance::StartFreeBuild()
 {
     currentScenePath_ = "assets/omr/freebuild.ldr";
-    GetEngine().RequestLoadScene(currentScenePath_);
+    GetEngine().RequestLoadScene({.filename = currentScenePath_});
 }
 
 void BrickPlayerGameInstance::BuildFreeBuildInventory()
@@ -2113,7 +2116,7 @@ void BrickPlayerGameInstance::BuildFreeBuildInventory()
         InventoryTemplate tmpl;
         tmpl.sourceInstanceId = instanceId;
         tmpl.modelId = render->GetModelId();
-        tmpl.materials = render->Materials();
+        tmpl.materials = render->GetMaterials();
         tmpl.partFile = partIt->second;
         freeBuildInventory_.push_back(tmpl);
     }
@@ -2270,7 +2273,7 @@ void BrickPlayerGameInstance::OpenFileDialog()
             if (filelist && filelist[0])
             {
                 self->currentScenePath_ = filelist[0];
-                self->GetEngine().RequestLoadScene(self->currentScenePath_);
+                self->GetEngine().RequestLoadScene({.filename = self->currentScenePath_});
             }
         },
         this,

@@ -418,7 +418,7 @@ namespace Assets
             renderComp->SetModelId(floorModelIdx);
             renderComp->SetVisible(true);
             renderComp->SetRayCastVisible(false);
-            renderComp->SetMaterial(floorMaterials);
+            renderComp->SetMaterials(floorMaterials);
             floorNode->AddComponent(renderComp);
 
             nodes.push_back(floorNode);
@@ -550,7 +550,7 @@ namespace Assets
                 auto renderComp = std::make_shared<Runtime::RenderComponent>();
                 renderComp->SetModelId(partInfo.modelIdx);
                 renderComp->SetVisible(true);
-                renderComp->SetMaterial(matArray);
+                renderComp->SetMaterials(matArray);
                 node->AddComponent(renderComp);
             }
 

@@ -297,6 +297,8 @@ public:
         completedTaskIds_.insert(task.task_id);
     }
     
+    // Queues worker-thread CPU tasks. Use this for long-running work that must not touch scene/UI state directly.
+    // complete_func runs back on the coordinator path after task_func finishes.
     uint32_t AddTask( ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func, uint8_t priority = 0);
     uint32_t AddParralledTask( ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func );
 

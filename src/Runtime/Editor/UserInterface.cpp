@@ -437,7 +437,7 @@ void UserInterface::RefreshConsoleMatches(size_t matchLimit)
     std::string matchBase = consoleCompletionBase_.empty() ? ExtractConsolePrefix(consoleInput_) : consoleCompletionBase_;
     if (!matchBase.empty())
     {
-        consoleMatches_ = GetEngine().GetCVarSystem().GetMatchingNames(matchBase, matchLimit);
+        consoleMatches_ = GetEngine().GetCVarSystem().Match(matchBase, {.limit = matchLimit});
     }
     else
     {
@@ -621,7 +621,7 @@ int UserInterface::HandleConsoleInputTextCallback(ImGuiInputTextCallbackData* da
         }
 
         constexpr size_t kMatchLimit = 8;
-        auto matches = GetEngine().GetCVarSystem().GetMatchingNames(consoleCompletionBase_, kMatchLimit);
+        auto matches = GetEngine().GetCVarSystem().Match(consoleCompletionBase_, {.limit = kMatchLimit});
         consoleMatches_ = matches;
         if (matches.empty())
         {

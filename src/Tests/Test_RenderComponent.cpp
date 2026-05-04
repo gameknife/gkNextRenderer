@@ -16,7 +16,7 @@ TEST_CASE("RenderComponent Usage", "[Unit][RenderComponent]") {
         
         std::array<uint32_t, 16> mats;
         mats.fill(7);
-        renderComp->SetMaterial(mats);
+        renderComp->SetMaterials(mats);
         
         node->AddComponent(renderComp);
         
@@ -25,6 +25,6 @@ TEST_CASE("RenderComponent Usage", "[Unit][RenderComponent]") {
         CHECK(retrieved->GetModelId() == 123);
         CHECK(retrieved->GetVisible() == true);
         CHECK(retrieved->GetRayCastVisible() == false);
-        CHECK(retrieved->Materials()[0] == 7);
+        CHECK(retrieved->GetMaterials()[0] == 7);
     }
 }

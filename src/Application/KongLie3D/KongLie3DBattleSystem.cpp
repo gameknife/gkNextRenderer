@@ -6,6 +6,7 @@
 #include "KongLie3DAudio.hpp"
 #include "KongLie3DSkills.hpp"
 #include "Runtime/Scene/NodeUtils.h"
+#include "Runtime/Scene/SceneBuilder.h"
 #include "Runtime/Subsystems/NextPhysics.h"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Engine.hpp"
@@ -1710,8 +1711,7 @@ namespace KongLie3D
             return cachedMaterialId;
         }
 
-        materials.push_back({Assets::Material::DiffuseLight(color * 24.0f)});
-        cachedMaterialId = static_cast<uint32_t>(materials.size() - 1);
+        cachedMaterialId = SceneBuilder::AddDiffuseLightMaterial(materials, color, 24.0f);
         return cachedMaterialId;
     }
 

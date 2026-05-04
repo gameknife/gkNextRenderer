@@ -161,7 +161,7 @@ bool GltfTestRunner::Update(double deltaSeconds)
             
             if (DownloadModel(name, path))
             {
-                engine_->RequestLoadScene(path);
+                engine_->RequestLoadScene({.filename = path});
                 currentState_ = State::Loading;
             }
             else

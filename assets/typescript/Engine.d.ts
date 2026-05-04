@@ -3,16 +3,9 @@ export interface Vec3 { x: number; y: number; z: number; }
 export interface Vec4 { x: number; y: number; z: number; w: number; }
 export interface Quat { x: number; y: number; z: number; w: number; }
 
-export class NextComponent {
-    name_: string;
-    id_: number;
-}
-
 export class NextEngine {
     GetTotalFrames(): number;
-    GetTestNumber(): number;
     RegisterJSCallback(arg0: any): void;
-    GetScenePtr(): any;
 }
 export class Node {
     readonly Name: string;
@@ -55,4 +48,5 @@ export type ENodeMobility = "Static" | "Dynamic" | "Kinematic";
 export namespace Global {
     function spdlog(level: string, ...args: any[]): void;
     function GetEngine(): NextEngine;
+    function GetScene(): Scene;
 }

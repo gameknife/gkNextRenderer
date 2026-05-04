@@ -172,7 +172,7 @@ namespace Assets
                 materialIdx[i] = (max(0, primitive.material + materialOffset));
                 primaryMatIdx = primitive.material + materialOffset;
             }
-            renderComp->SetMaterial(materialIdx);
+            renderComp->SetMaterials(materialIdx);
             sceneNode->AddComponent(renderComp);
         }
 
