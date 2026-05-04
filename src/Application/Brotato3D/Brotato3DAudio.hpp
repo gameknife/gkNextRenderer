@@ -3,9 +3,8 @@
 #include "Common/CoreMinimal.hpp"
 #include "Brotato3DAssetPaths.hpp"
 #include "Runtime/Engine.hpp"
+#include "Runtime/Subsystems/NextAudio.h"
 
-#include <chrono>
-#include <random>
 #include <spdlog/spdlog.h>
 
 namespace Brotato3D
@@ -16,56 +15,27 @@ namespace Brotato3D
     inline bool ShowEnemyHpBars = true;
     inline float MasterDifficulty = 1.0f;
 
-    inline std::string& CurrentBgmPath()
-    {
-        static std::string path;
-        return path;
-    }
-
-    inline std::mt19937& AudioRng()
-    {
-        static std::mt19937 rng(std::random_device{}());
-        return rng;
-    }
-
-    inline std::string PickVariantPath(std::initializer_list<std::string> candidates)
-    {
-        if (candidates.size() == 0)
-        {
-            return {};
-        }
-        std::uniform_int_distribution<size_t> dist(0, candidates.size() - 1);
-        auto it = candidates.begin();
-        std::advance(it, static_cast<std::ptrdiff_t>(dist(AudioRng())));
-        return *it;
-    }
-
     inline void PlayBrotatoSfx(const std::string& soundPath, float volumeScale = 1.0f, uint64_t minIntervalMs = 70)
     {
-        static std::unordered_map<std::string, uint64_t> lastPlayMsBySound;
-        static std::unordered_set<std::string> missingSounds;
-
-        using namespace std::chrono;
-        const uint64_t nowMs = duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
-        const auto it = lastPlayMsBySound.find(soundPath);
-        if (it != lastPlayMsBySound.end() && nowMs - it->second < minIntervalMs)
-        {
-            return;
-        }
-
-        lastPlayMsBySound[soundPath] = nowMs;
-        if (!std::filesystem::exists(soundPath))
-        {
-            if (missingSounds.insert(soundPath).second)
-            {
-                spdlog::warn("[Brotato3D] missing sound '{}'", soundPath);
-            }
-            return;
-        }
-
         if (NextEngine* engine = NextEngine::GetInstance())
         {
-            engine->PlaySound(soundPath, false, std::clamp(SfxVolume * volumeScale, 0.0f, 1.0f));
+            if (NextAudio* audio = engine->GetAudio())
+            {
+                audio->PlaySfx(soundPath, std::clamp(SfxVolume * volumeScale, 0.0f, 1.0f), minIntervalMs);
+            }
+        }
+    }
+
+    inline void PlayBrotatoSfxVariant(std::initializer_list<std::string_view> candidates,
+                                      float volumeScale = 1.0f,
+                                      uint64_t minIntervalMs = 70)
+    {
+        if (NextEngine* engine = NextEngine::GetInstance())
+        {
+            if (NextAudio* audio = engine->GetAudio())
+            {
+                audio->PlaySfxVariant(candidates, std::clamp(SfxVolume * volumeScale, 0.0f, 1.0f), minIntervalMs);
+            }
         }
     }
 
@@ -73,7 +43,7 @@ namespace Brotato3D
     {
         if (weaponId == "smg")
         {
-            PlayBrotatoSfx(PickVariantPath({
+            PlayBrotatoSfxVariant({
                                PlaceholderAssets::Sfx("fire_smg_01.wav"),
                                PlaceholderAssets::Sfx("fire_smg_02.wav"),
                                PlaceholderAssets::Sfx("fire_smg_03.wav"),
@@ -83,19 +53,19 @@ namespace Brotato3D
                                PlaceholderAssets::Sfx("fire_smg_07.wav"),
                                PlaceholderAssets::Sfx("fire_smg_08.wav"),
                                PlaceholderAssets::Sfx("fire_smg_09.wav"),
-                           }),
+                           },
                            0.75f,
                            55);
             return;
         }
         if (weaponId == "flamethrower")
         {
-            PlayBrotatoSfx(PickVariantPath({
+            PlayBrotatoSfxVariant({
                                PlaceholderAssets::Sfx("fire_flamethrower_01.wav"),
                                PlaceholderAssets::Sfx("fire_flamethrower_02.wav"),
                                PlaceholderAssets::Sfx("fire_flamethrower_03.wav"),
                                PlaceholderAssets::Sfx("fire_flamethrower_04.wav"),
-                           }),
+                           },
                            0.72f,
                            40);
             return;
@@ -113,29 +83,37 @@ namespace Brotato3D
 
     inline void PlayHitSfx(int damage, bool isCrit)
     {
-        PlayBrotatoSfx(isCrit ? PickVariantPath({
+        if (isCrit)
+        {
+            PlayBrotatoSfxVariant({
                                     PlaceholderAssets::Sfx("hit_crit_01.wav"),
                                     PlaceholderAssets::Sfx("hit_crit_02.wav"),
                                     PlaceholderAssets::Sfx("hit_crit_03.wav"),
                                     PlaceholderAssets::Sfx("hit_crit_04.wav"),
-                                }) :
-                                PickVariantPath({
+                                },
+                                0.85f,
+                                45);
+        }
+        else
+        {
+            PlayBrotatoSfxVariant({
                                     PlaceholderAssets::Sfx("hit_normal_01.wav"),
                                     PlaceholderAssets::Sfx("hit_normal_02.wav"),
                                     PlaceholderAssets::Sfx("hit_normal_03.wav"),
                                     PlaceholderAssets::Sfx("hit_normal_04.wav"),
                                     PlaceholderAssets::Sfx("hit_normal_05.wav"),
-                                }),
-                       isCrit ? 0.85f : std::clamp(static_cast<float>(damage) / 20.0f, 0.45f, 0.8f),
-                       isCrit ? 45 : 35);
+                                },
+                                std::clamp(static_cast<float>(damage) / 20.0f, 0.45f, 0.8f),
+                                35);
+        }
     }
 
     inline void PlayPickupXpSfx()
     {
-        PlayBrotatoSfx(PickVariantPath({
+        PlayBrotatoSfxVariant({
                            PlaceholderAssets::Sfx("pickup_xp_01.ogg"),
                            PlaceholderAssets::Sfx("pickup_xp_02.ogg"),
-                       }),
+                       },
                        0.6f,
                        45);
     }
@@ -159,12 +137,12 @@ namespace Brotato3D
 
     inline void PlayPlayerHurtSfx()
     {
-        PlayBrotatoSfx(PickVariantPath({
+        PlayBrotatoSfxVariant({
                            PlaceholderAssets::Sfx("player_hurt_01.wav"),
                            PlaceholderAssets::Sfx("player_hurt_02.wav"),
                            PlaceholderAssets::Sfx("player_hurt_03.wav"),
                            PlaceholderAssets::Sfx("player_hurt_04.wav"),
-                       }),
+                       },
                        0.8f,
                        120);
     }
@@ -177,20 +155,20 @@ namespace Brotato3D
         }
         else if (enemyId == "Brute" || enemyId == "tank")
         {
-            PlayBrotatoSfx(PickVariantPath({
+            PlayBrotatoSfxVariant({
                                PlaceholderAssets::Sfx("enemy_die_tank_01.wav"),
                                PlaceholderAssets::Sfx("enemy_die_tank_02.wav"),
                                PlaceholderAssets::Sfx("enemy_die_tank_03.wav"),
-                           }),
+                           },
                            0.85f,
                            80);
         }
         else
         {
-            PlayBrotatoSfx(PickVariantPath({
+            PlayBrotatoSfxVariant({
                                PlaceholderAssets::Sfx("enemy_die_small_01.wav"),
                                PlaceholderAssets::Sfx("enemy_die_small_02.wav"),
-                           }),
+                           },
                            0.65f,
                            55);
         }
@@ -238,53 +216,35 @@ namespace Brotato3D
 
     inline void StopBgm()
     {
-        std::string& currentPath = CurrentBgmPath();
-        if (currentPath.empty())
-        {
-            return;
-        }
         if (NextEngine* engine = NextEngine::GetInstance())
         {
-            engine->PauseSound(currentPath, true);
+            if (NextAudio* audio = engine->GetAudio())
+            {
+                audio->StopMusic();
+            }
         }
-        currentPath.clear();
     }
 
     inline void StartBgm(const std::string& trackName)
     {
         const std::string path = PlaceholderAssets::Bgm(fmt::format("bgm_{}.mp3", trackName));
-        std::string& currentPath = CurrentBgmPath();
-        if (currentPath == path)
-        {
-            return;
-        }
-
-        StopBgm();
-        currentPath = path;
-        if (!std::filesystem::exists(currentPath))
-        {
-            spdlog::warn("[Brotato3D] missing bgm '{}'", currentPath);
-            currentPath.clear();
-            return;
-        }
-
         if (NextEngine* engine = NextEngine::GetInstance())
         {
-            engine->PlaySound(currentPath, true, std::clamp(MusicVolume, 0.0f, 1.0f));
+            if (NextAudio* audio = engine->GetAudio())
+            {
+                audio->PlayMusic(path, std::clamp(MusicVolume, 0.0f, 1.0f));
+            }
         }
     }
 
     inline void RefreshBgmVolume()
     {
-        std::string& currentPath = CurrentBgmPath();
-        if (currentPath.empty() || !std::filesystem::exists(currentPath))
-        {
-            return;
-        }
         if (NextEngine* engine = NextEngine::GetInstance())
         {
-            engine->PauseSound(currentPath, true);
-            engine->PlaySound(currentPath, true, std::clamp(MusicVolume, 0.0f, 1.0f));
+            if (NextAudio* audio = engine->GetAudio())
+            {
+                audio->SetMusicVolume(std::clamp(MusicVolume, 0.0f, 1.0f));
+            }
         }
     }
 }

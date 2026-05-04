@@ -3,8 +3,8 @@
 #include "Assets/Core/Node.h"
 #include "Assets/Core/Scene.hpp"
 #include "Runtime/Components/PhysicsComponent.h"
-#include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/SkinnedMeshComponent.h"
+#include "Runtime/Scene/NodeUtils.h"
 #include "Runtime/Subsystems/NextPhysics.h"
 
 namespace NextGameplay
@@ -110,38 +110,12 @@ namespace NextGameplay
 
     void SetNodeVisibilityRecursive(const std::shared_ptr<Assets::Node>& node, bool visible)
     {
-        if (!node)
-        {
-            return;
-        }
-
-        if (auto renderComp = node->GetComponent<Runtime::RenderComponent>())
-        {
-            renderComp->SetVisible(visible);
-        }
-
-        for (const auto& child : node->Children())
-        {
-            SetNodeVisibilityRecursive(child, visible);
-        }
+        NodeUtils::SetVisibleRecursive(node, visible);
     }
 
     void SetNodeRayCastVisibilityRecursive(const std::shared_ptr<Assets::Node>& node, bool visible)
     {
-        if (!node)
-        {
-            return;
-        }
-
-        if (auto renderComp = node->GetComponent<Runtime::RenderComponent>())
-        {
-            renderComp->SetRayCastVisible(visible);
-        }
-
-        for (const auto& child : node->Children())
-        {
-            SetNodeRayCastVisibilityRecursive(child, visible);
-        }
+        NodeUtils::SetRayCastVisibleRecursive(node, visible);
     }
 
     void DisableNodePhysicsRecursive(const std::shared_ptr<Assets::Node>& node, NextPhysics* physicsEngine)

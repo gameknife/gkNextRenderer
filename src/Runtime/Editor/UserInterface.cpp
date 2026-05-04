@@ -5,6 +5,7 @@
 #include "Runtime/Config/UserSettings.hpp"
 #include "Runtime/Config/CVarSystem.hpp"
 #include "Runtime/Editor/ConsoleLogBuffer.hpp"
+#include "Runtime/Editor/FontLoader.h"
 #include "Utilities/Exception.hpp"
 #include "Vulkan/DescriptorSystem.hpp"
 #include "Vulkan/Device.hpp"
@@ -35,6 +36,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Assets/GPU/TextureImage.hpp"
+#include "Assets/GPU/Texture.hpp"
 #include "Options.hpp"
 #include "Rendering/VulkanBaseRenderer.hpp"
 #include "Runtime/Subsystems/TaskCoordinator.hpp"
@@ -42,6 +44,7 @@
 #include "Utilities/FileHelper.hpp"
 #include "Utilities/ImGui.hpp"
 #include "Utilities/Math.hpp"
+#include "Utilities/StbImage.hpp"
 #include "Vulkan/GpuResources.hpp"
 
 extern float GAndroidMagicScale;
@@ -137,16 +140,11 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     //     : GOption->locale == "zhCN"                     ? io.Fonts->GetGlyphRangesChineseFull()
     //                                                     : io.Fonts->GetGlyphRangesDefault();
 
-    const ImWchar* glyphRange = io.Fonts->GetGlyphRangesChineseFull();
-
-    std::vector<uint8_t> tmpData;
-    if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/fonts/Roboto-Regular.ttf", tmpData))
-    {
-        void* dataSrc = IM_ALLOC(tmpData.size());
-        std::memcpy(dataSrc, tmpData.data(), tmpData.size());
-        io.Fonts->AddFontFromMemoryTTF(dataSrc, int(tmpData.size()), fontSize * scaleFactor, nullptr, glyphRange);
-    }
-    else
+    if (!FontLoader::Load(FontLoader::FFontRequest{
+            .filePath = "assets/fonts/Roboto-Regular.ttf",
+            .pixelSize = fontSize * scaleFactor,
+            .includeChineseFull = true,
+        }))
     {
         Throw(std::runtime_error("failed to load basic ImGui Text font"));
     }
@@ -161,34 +159,40 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     config.GlyphMinAdvanceX = fontSize;
     config.GlyphOffset = ImVec2(0, 0);
 
-    if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/fonts/fa-regular-400.ttf", tmpData))
-    {
-        void* dataSrc = IM_ALLOC(tmpData.size());
-        std::memcpy(dataSrc, tmpData.data(), tmpData.size());
-        io.Fonts->AddFontFromMemoryTTF(dataSrc, int(tmpData.size()), fontSize * scaleFactor, &config, iconRange);
-    }
-    if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/fonts/fa-solid-900.ttf", tmpData))
-    {
-        void* dataSrc = IM_ALLOC(tmpData.size());
-        std::memcpy(dataSrc, tmpData.data(), tmpData.size());
-        io.Fonts->AddFontFromMemoryTTF(dataSrc, int(tmpData.size()), fontSize * scaleFactor, &config, iconRange);
-    }
-    if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/fonts/fa-brands-400.ttf", tmpData))
-    {
-        void* dataSrc = IM_ALLOC(tmpData.size());
-        std::memcpy(dataSrc, tmpData.data(), tmpData.size());
-        io.Fonts->AddFontFromMemoryTTF(dataSrc, int(tmpData.size()), fontSize * scaleFactor, &config, iconRange);
-    }
+    FontLoader::Load(FontLoader::FFontRequest{
+        .filePath = "assets/fonts/fa-regular-400.ttf",
+        .pixelSize = fontSize * scaleFactor,
+        .includeChineseFull = false,
+        .glyphRanges = iconRange,
+        .fontConfig = &config,
+        .warnOnFailure = false,
+    });
+    FontLoader::Load(FontLoader::FFontRequest{
+        .filePath = "assets/fonts/fa-solid-900.ttf",
+        .pixelSize = fontSize * scaleFactor,
+        .includeChineseFull = false,
+        .glyphRanges = iconRange,
+        .fontConfig = &config,
+        .warnOnFailure = false,
+    });
+    FontLoader::Load(FontLoader::FFontRequest{
+        .filePath = "assets/fonts/fa-brands-400.ttf",
+        .pixelSize = fontSize * scaleFactor,
+        .includeChineseFull = false,
+        .glyphRanges = iconRange,
+        .fontConfig = &config,
+        .warnOnFailure = false,
+    });
 
     ImFontConfig configLocale;
     configLocale.MergeMode = true;
-    if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/fonts/DroidSansFallback.ttf", tmpData))
-    {
-        void* dataSrc = IM_ALLOC(tmpData.size());
-        std::memcpy(dataSrc, tmpData.data(), tmpData.size());
-        io.Fonts->AddFontFromMemoryTTF(dataSrc, int(tmpData.size()), (fontSize + 2) * scaleFactor, &configLocale,
-                                       glyphRange);
-    }
+    FontLoader::Load(FontLoader::FFontRequest{
+        .filePath = "assets/fonts/DroidSansFallback.ttf",
+        .pixelSize = (fontSize + 2) * scaleFactor,
+        .includeChineseFull = true,
+        .fontConfig = &configLocale,
+        .warnOnFailure = false,
+    });
 
     if (funcInit != nullptr)
     {
@@ -259,6 +263,41 @@ VkDescriptorSet UserInterface::RequestImTextureByName(const std::string& name)
         return VK_NULL_HANDLE;
     }
     return RequestImTextureId(id);
+}
+
+UserInterface::FUiTextureHandle UserInterface::RequestUiTexture(const std::string& path, bool srgb)
+{
+    FUiTextureHandle handle{};
+    if (path.empty() || !Utilities::FileHelper::IsAssetAvailable(path))
+    {
+        return handle;
+    }
+
+    if (uiTextureLoadRequests_.insert(path).second)
+    {
+        Assets::GlobalTexturePool::LoadTexture(path, srgb);
+    }
+
+    const VkDescriptorSet descriptor = RequestImTextureByName(path);
+    handle.textureId = descriptor != VK_NULL_HANDLE ? reinterpret_cast<ImTextureID>(descriptor) : static_cast<ImTextureID>(0);
+    handle.valid = handle.textureId != static_cast<ImTextureID>(0);
+
+    if (const auto sizeIt = uiTexturePixelSizeCache_.find(path); sizeIt != uiTexturePixelSizeCache_.end())
+    {
+        handle.pixelSize = sizeIt->second;
+        return handle;
+    }
+
+    int width = 0;
+    int height = 0;
+    int comp = 0;
+    const std::string platformPath = Utilities::FileHelper::GetPlatformFilePath(path.c_str());
+    if (stbi_info(platformPath.c_str(), &width, &height, &comp) != 0 && width > 0 && height > 0)
+    {
+        handle.pixelSize = ImVec2(static_cast<float>(width), static_cast<float>(height));
+    }
+    uiTexturePixelSizeCache_[path] = handle.pixelSize;
+    return handle;
 }
 
 void UserInterface::SetStyle()

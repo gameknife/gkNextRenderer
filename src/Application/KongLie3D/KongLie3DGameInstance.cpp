@@ -1,4 +1,4 @@
-﻿#include "KongLie3DGameInstance.hpp"
+#include "KongLie3DGameInstance.hpp"
 
 #include <imgui.h>
 
@@ -12,6 +12,9 @@
 #include "Assets/Loaders/FProcModel.h"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Config/CVarSystem.hpp"
+#include "Runtime/Editor/FontLoader.h"
+#include "Runtime/Scene/NodeUtils.h"
+#include "Runtime/Scene/SceneBuilder.h"
 #include "Runtime/Subsystems/NextPhysics.h"
 #include "Runtime/Utilities/NextEngineHelper.h"
 #include "KongLie3DDataLoader.hpp"
@@ -74,23 +77,6 @@ namespace
         return dimensions;
     }
 
-    std::shared_ptr<Assets::Node> CreateRenderNode(const std::string& nodeName,
-                                                   const glm::vec3& translation,
-                                                   const glm::vec3& scale,
-                                                   uint32_t instanceId,
-                                                   uint32_t modelId,
-                                                   uint32_t materialId)
-    {
-        auto node =
-            Assets::Node::CreateNode(nodeName, translation, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), scale, instanceId);
-        auto renderComponent = std::make_shared<Runtime::RenderComponent>();
-        renderComponent->SetModelId(modelId);
-        renderComponent->SetMaterial({materialId});
-        renderComponent->SetVisible(true);
-        node->AddComponent(renderComponent);
-        return node;
-    }
-
     bool IsBoardCell(int col, int row)
     {
         return col >= 0 && col < BoardCols && row >= PlayerBoardRowMin && row <= PlayerBoardRowMax;
@@ -116,20 +102,6 @@ namespace
         return glm::vec3(static_cast<float>(piece.col),
                          piece.dimensions.y * 0.5f * piece.visualScale,
                          GetWorldZForLogicalRow(piece.row));
-    }
-
-    const ImWchar* GetKongLieGlyphRanges(ImFontAtlas& fontAtlas)
-    {
-        static ImVector<ImWchar> glyphRanges;
-        if (glyphRanges.empty())
-        {
-            ImFontGlyphRangesBuilder builder;
-            builder.AddRanges(fontAtlas.GetGlyphRangesChineseFull());
-            builder.AddText(KongLie3D::U8Text(u8"✓⚡◈◆◇★◎"));
-            builder.BuildRanges(&glyphRanges);
-        }
-
-        return glyphRanges.Data;
     }
 
     glm::vec3 ClampColor(const glm::vec3& color)
@@ -191,22 +163,6 @@ namespace
         return fmt::format(fmt::runtime(KongLie3D::U8Text(u8"节奏 {:.1f}x")), speedMultiplier);
     }
 
-    uint32_t AddLambertMaterial(std::vector<Assets::FMaterial>& materials, const glm::vec3& color)
-    {
-        materials.push_back({Assets::Material::Lambertian(ClampColor(color))});
-        return static_cast<uint32_t>(materials.size() - 1);
-    }
-
-    std::shared_ptr<Assets::Node> CreateAttachmentNode(const std::string& nodeName,
-                                                       const glm::vec3& translation,
-                                                       const glm::vec3& scale,
-                                                       uint32_t instanceId,
-                                                       uint32_t modelId,
-                                                       uint32_t materialId)
-    {
-        return CreateRenderNode(nodeName, translation, scale, instanceId, modelId, materialId);
-    }
-
     void RegisterPieceAttachment(KongLie3D::FPieceRuntime& runtime,
                                  size_t pieceIndex,
                                  const std::shared_ptr<Assets::Node>& childNode,
@@ -237,24 +193,24 @@ namespace
 
         auto addBoxAttachment = [&](std::string_view suffix, const glm::vec3& translation, const glm::vec3& scale, uint32_t materialId)
         {
-            auto childNode = CreateAttachmentNode(runtime.pieceId + "_" + std::string(suffix),
-                                                  translation,
-                                                  scale,
-                                                  static_cast<uint32_t>(nodes.size()),
-                                                  attachmentBoxModelId,
-                                                  materialId);
+            auto childNode = SceneBuilder::CreateRenderNode(runtime.pieceId + "_" + std::string(suffix),
+                                                            translation,
+                                                            scale,
+                                                            static_cast<uint32_t>(nodes.size()),
+                                                            attachmentBoxModelId,
+                                                            materialId);
             childNode->SetParent(runtime.node);
             RegisterPieceAttachment(runtime, pieceIndex, childNode, materialId, nodes, pieceInstanceLookup);
         };
 
         auto addSphereAttachment = [&](std::string_view suffix, const glm::vec3& translation, const glm::vec3& scale, uint32_t materialId)
         {
-            auto childNode = CreateAttachmentNode(runtime.pieceId + "_" + std::string(suffix),
-                                                  translation,
-                                                  scale,
-                                                  static_cast<uint32_t>(nodes.size()),
-                                                  attachmentSphereModelId,
-                                                  materialId);
+            auto childNode = SceneBuilder::CreateRenderNode(runtime.pieceId + "_" + std::string(suffix),
+                                                            translation,
+                                                            scale,
+                                                            static_cast<uint32_t>(nodes.size()),
+                                                            attachmentSphereModelId,
+                                                            materialId);
             childNode->SetParent(runtime.node);
             RegisterPieceAttachment(runtime, pieceIndex, childNode, materialId, nodes, pieceInstanceLookup);
         };
@@ -321,13 +277,7 @@ KongLie3DGameInstance::KongLie3DGameInstance(Vulkan::WindowConfig& config, Optio
     NextGameInstanceBase(config, options, engine),
     engine_(engine)
 {
-    config.Title = "KongLie3D";
-    config.Width = 1920;
-    config.Height = 1080;
-    config.ForceSDR = true;
-    options.Width = 1920;
-    options.Height = 1080;
-    options.ForceSDR = true;
+    ConfigureWindow(config, options, "KongLie3D", 1920, 1080, true);
 }
 
 void KongLie3DGameInstance::OnInit()
@@ -351,18 +301,17 @@ void KongLie3DGameInstance::OnInitUI()
 {
     NextGameInstanceBase::OnInitUI();
 
-    ImGuiIO& io = ImGui::GetIO();
-    ImFontConfig cfg{};
-    cfg.MergeMode = false;
-
-    const std::string fontPath = Utilities::FileHelper::GetPlatformFilePath("assets/fonts/DroidSansFallback.ttf");
-    const ImWchar* glyphRanges = GetKongLieGlyphRanges(*io.Fonts);
     auto loadFont = [&](float size, std::string_view tag)
     {
-        ImFont* font = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), size, &cfg, glyphRanges);
+        ImFont* font = FontLoader::Load(FontLoader::FFontRequest{
+            .filePath = "assets/fonts/DroidSansFallback.ttf",
+            .pixelSize = size,
+            .includeChineseFull = true,
+            .extraGlyphsUtf8 = KongLie3D::U8Text(u8"✓⚡◈◆◇★◎"),
+        });
         if (!font)
         {
-            SPDLOG_ERROR("[KongLie3D] Failed to load {} UI font '{}' at {}px", tag, fontPath, size);
+            SPDLOG_ERROR("[KongLie3D] Failed to load {} UI font at {}px", tag, size);
         }
         return font;
     };
@@ -372,11 +321,20 @@ void KongLie3DGameInstance::OnInitUI()
     KongLie3D::KongLieFonts::Display = loadFont(KongLie3D::ScaleUi(56.0f), "display");
     if (KongLie3D::KongLieFonts::Body)
     {
-        io.FontDefault = KongLie3D::KongLieFonts::Body;
+        ImGui::GetIO().FontDefault = KongLie3D::KongLieFonts::Body;
     }
 
     KongLie3D::ApplyKongLieImGuiStyle();
     ImGui::GetStyle().ScaleAllSizes(KongLie3D::Style::UiScale);
+    notificationCenter_.SetStyle(NextUI::FNotificationCenter::FStyle{
+        .infoAccent = KongLie3D::Style::Accent,
+        .successAccent = KongLie3D::Style::Highlight,
+        .warningAccent = ImVec4(0.95f, 0.60f, 0.20f, 1.0f),
+        .criticalAccent = KongLie3D::Style::Hostile,
+        .surface = ImVec4(0.05f, 0.08f, 0.12f, 0.92f),
+        .text = ImVec4(0.96f, 0.97f, 1.0f, 1.0f),
+        .uiScale = KongLie3D::Style::UiScale,
+    });
 }
 
 void KongLie3DGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
@@ -768,10 +726,10 @@ void KongLie3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
     models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.02f), glm::vec3(0.02f)));
     const uint32_t debrisModelId = static_cast<uint32_t>(models.size() - 1);
 
-    const uint32_t hitFlashMaterialId = AddLambertMaterial(materials, glm::vec3(1.0f));
-    const uint32_t projectileAdMaterialId = AddLambertMaterial(materials, glm::vec3(1.0f, 0.58f, 0.20f));
-    const uint32_t projectileApMaterialId = AddLambertMaterial(materials, glm::vec3(0.30f, 0.62f, 1.0f));
-    const uint32_t projectileHealMaterialId = AddLambertMaterial(materials, glm::vec3(0.30f, 1.0f, 0.40f));
+    const uint32_t hitFlashMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f));
+    const uint32_t projectileAdMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f, 0.58f, 0.20f));
+    const uint32_t projectileApMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.30f, 0.62f, 1.0f));
+    const uint32_t projectileHealMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.30f, 1.0f, 0.40f));
 
     auto appendPiece = [&](const std::string& pieceId, float worldX, float worldZ, bool onBench, float scale)
     {
@@ -788,14 +746,14 @@ void KongLie3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
         models.push_back(Assets::FProcModel::CreateBox(-halfExtents, halfExtents));
         const uint32_t pieceModelId = static_cast<uint32_t>(models.size() - 1);
 
-        const uint32_t pieceMaterialId = AddLambertMaterial(materials, pieceDef.color);
-        const uint32_t pieceAccentMaterialId = AddLambertMaterial(materials, BrightenColor(pieceDef.color, 1.30f));
-        const uint32_t pieceGlowMaterialId = AddLambertMaterial(materials, BrightenColor(pieceDef.color, 1.45f, 0.06f));
-        const uint32_t pieceDarkMaterialId = AddLambertMaterial(materials, pieceDef.color * 0.4f);
+        const uint32_t pieceMaterialId = SceneBuilder::AddLambertianMaterial(materials, pieceDef.color);
+        const uint32_t pieceAccentMaterialId = SceneBuilder::AddLambertianMaterial(materials, BrightenColor(pieceDef.color, 1.30f));
+        const uint32_t pieceGlowMaterialId = SceneBuilder::AddLambertianMaterial(materials, BrightenColor(pieceDef.color, 1.45f, 0.06f));
+        const uint32_t pieceDarkMaterialId = SceneBuilder::AddLambertianMaterial(materials, pieceDef.color * 0.4f);
 
         const glm::vec3 pieceScale(scale);
         const glm::vec3 translation(worldX, halfExtents.y * scale, worldZ);
-        auto pieceNode = CreateRenderNode(pieceId, translation, pieceScale, static_cast<uint32_t>(nodes.size()), pieceModelId,
+        auto pieceNode = SceneBuilder::CreateRenderNode(pieceId, translation, pieceScale, static_cast<uint32_t>(nodes.size()), pieceModelId,
                                           pieceMaterialId);
         nodes.push_back(pieceNode);
 
@@ -827,16 +785,13 @@ void KongLie3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
         const size_t pieceIndex = pieceRuntimes_.size() - 1;
         pieceInstanceLookup_[pieceNode->GetInstanceId()] = pieceIndex;
 
-        auto knockoutNode = CreateRenderNode(pieceId + "_Knockout",
+        auto knockoutNode = SceneBuilder::CreateRenderNode(pieceId + "_Knockout",
                                              HiddenKnockoutProxyPosition,
                                              dimensions * scale,
                                              static_cast<uint32_t>(nodes.size()),
                                              attachmentBoxModelId,
                                              pieceDarkMaterialId);
-        if (auto renderComponent = knockoutNode->GetComponent<Runtime::RenderComponent>())
-        {
-            renderComponent->SetVisible(false);
-        }
+        NodeUtils::SetVisible(knockoutNode, false);
         auto knockoutPhysics = std::make_shared<Runtime::PhysicsComponent>();
         knockoutPhysics->SetMobility(Runtime::ENodeMobility::Dynamic);
         if (NextPhysics* physics = GetEngine().GetPhysicsEngine())
@@ -897,16 +852,13 @@ void KongLie3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
     {
         for (int index = 0; index < 7; ++index)
         {
-            auto node = CreateRenderNode(fmt::format("{}_{}", namePrefix, index),
+            auto node = SceneBuilder::CreateRenderNode(fmt::format("{}_{}", namePrefix, index),
                                          glm::vec3(0.0f, -20.0f, 0.0f),
                                          glm::vec3(1.0f),
                                          static_cast<uint32_t>(nodes.size()),
                                          projectileSphereModelId,
                                          materialId);
-            if (auto renderComponent = node->GetComponent<Runtime::RenderComponent>())
-            {
-                renderComponent->SetVisible(false);
-            }
+            NodeUtils::SetVisible(node, false);
             nodes.push_back(node);
             projectilePool.push_back(KongLie3D::FProjectilePoolEntry{
                 .kind = kind,
@@ -924,16 +876,13 @@ void KongLie3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
     debrisPool.reserve(30);
     for (int index = 0; index < 30; ++index)
     {
-        auto node = CreateRenderNode(fmt::format("HitDebris_{}", index),
+        auto node = SceneBuilder::CreateRenderNode(fmt::format("HitDebris_{}", index),
                                      glm::vec3(0.0f, -20.0f, 0.0f),
                                      glm::vec3(1.0f),
                                      static_cast<uint32_t>(nodes.size()),
                                      debrisModelId,
                                      hitFlashMaterialId);
-        if (auto renderComponent = node->GetComponent<Runtime::RenderComponent>())
-        {
-            renderComponent->SetVisible(false);
-        }
+        NodeUtils::SetVisible(node, false);
         nodes.push_back(node);
         debrisPool.push_back(KongLie3D::FImpactDebrisPoolEntry{.node = node});
     }

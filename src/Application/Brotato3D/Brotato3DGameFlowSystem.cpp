@@ -1,30 +1,9 @@
 #include "Brotato3DGameInstance.hpp"
 #include "Brotato3DCommon.hpp"
 
-#include <imgui.h>
-
 #include "Brotato3DAudio.hpp"
 
 using namespace Brotato3DUtil;
-
-bool Brotato3DGameInstance::WorldToScreen(const glm::vec3& world, ImVec2& outScreen) const
-{
-    const auto& ubo = engine_->GetUniformBufferObject();
-    glm::vec4 clip = ubo.ViewProjection * glm::vec4(world, 1.0f);
-    if (clip.w <= 0.001f)
-    {
-        return false;
-    }
-    glm::vec3 ndc = glm::vec3(clip) / clip.w;
-    if (ndc.z < 0.0f || ndc.z > 1.0f)
-    {
-        return false;
-    }
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    outScreen.x = viewport->Pos.x + (ndc.x * 0.5f + 0.5f) * viewport->Size.x;
-    outScreen.y = viewport->Pos.y + (ndc.y * 0.5f + 0.5f) * viewport->Size.y;
-    return true;
-}
 
 void Brotato3DGameInstance::RestartGame()
 {
@@ -39,25 +18,25 @@ void Brotato3DGameInstance::StartNewRun()
     ApplySelectedCharacter();
     if (player_.bodyNode)
     {
-        SetNodeTranslation(player_.bodyNode, player_.worldPos);
-        ShowNode(player_.bodyNode);
+        NodeUtils::SetTranslation(player_.bodyNode, player_.worldPos);
+        NodeUtils::SetVisible(player_.bodyNode, true);
     }
     if (player_.facingNode)
     {
-        SetNodeTranslation(player_.facingNode, glm::vec3(0.0f, 0.62f, -0.45f));
-        ShowNode(player_.facingNode);
+        NodeUtils::SetTranslation(player_.facingNode, glm::vec3(0.0f, 0.62f, -0.45f));
+        NodeUtils::SetVisible(player_.facingNode, true);
     }
     if (player_.smgWeaponNode)
     {
-        SetNodeTranslation(player_.smgWeaponNode, glm::vec3(-0.18f, 0.42f, -0.54f));
-        equippedWeapons_.empty() || equippedWeapons_.front().weaponId != "smg" ? HideNode(player_.smgWeaponNode) :
-                                                                                  ShowNode(player_.smgWeaponNode);
+        NodeUtils::SetTranslation(player_.smgWeaponNode, glm::vec3(-0.18f, 0.42f, -0.54f));
+        NodeUtils::SetVisible(player_.smgWeaponNode,
+                              !equippedWeapons_.empty() && equippedWeapons_.front().weaponId == "smg");
     }
     if (player_.shotgunWeaponNode)
     {
-        SetNodeTranslation(player_.shotgunWeaponNode, glm::vec3(0.24f, 0.43f, -0.62f));
-        equippedWeapons_.empty() || equippedWeapons_.front().weaponId != "shotgun" ? HideNode(player_.shotgunWeaponNode) :
-                                                                                     ShowNode(player_.shotgunWeaponNode);
+        NodeUtils::SetTranslation(player_.shotgunWeaponNode, glm::vec3(0.24f, 0.43f, -0.62f));
+        NodeUtils::SetVisible(player_.shotgunWeaponNode,
+                              !equippedWeapons_.empty() && equippedWeapons_.front().weaponId == "shotgun");
     }
 
     appState_ = Brotato3D::EAppState::Playing;
@@ -202,10 +181,10 @@ void Brotato3DGameInstance::ApplySelectedArena()
 
     arenaResources_.groundMaterialId = groundIt->second;
     arenaResources_.borderMaterialId = borderIt->second;
-    SetNodeMaterial(arenaResources_.groundNode, arenaResources_.groundMaterialId);
+    NodeUtils::SetMaterial(arenaResources_.groundNode, arenaResources_.groundMaterialId);
     for (const std::shared_ptr<Assets::Node>& node : arenaResources_.borderNodes)
     {
-        SetNodeMaterial(node, arenaResources_.borderMaterialId);
+        NodeUtils::SetMaterial(node, arenaResources_.borderMaterialId);
     }
 }
 

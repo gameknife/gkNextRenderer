@@ -4,11 +4,21 @@
 #include <glm/glm.hpp>
 
 class NextEngine;
+class NextGameInstanceBase;
+struct ImVec2;
+
+namespace Assets
+{
+    struct Camera;
+}
 
 namespace NextEngineHelper
 {
     glm::vec3 ProjectScreenToWorld(glm::vec2 locationSS);
     glm::vec3 ProjectWorldToScreen(glm::vec3 locationWS);
+    bool TryProjectWorldToScreen(const glm::vec3& worldPos, ImVec2& outImGuiPos);
+    bool TryProjectWorldToScreen(const Assets::Camera& camera, const glm::vec3& worldPos, ImVec2& outImGuiPos);
+    bool TryProjectWorldToScreen(const NextGameInstanceBase& gameInstance, const glm::vec3& worldPos, ImVec2& outImGuiPos);
     void GetScreenToWorldRay(glm::vec2 locationSS, glm::vec3& origin, glm::vec3& dir);
     void DrawAuxLine(glm::vec3 from, glm::vec3 to, glm::vec4 color, float size = 1);
     void DrawAuxBox(glm::vec3 min, glm::vec3 max, glm::vec4 color, float size = 1);

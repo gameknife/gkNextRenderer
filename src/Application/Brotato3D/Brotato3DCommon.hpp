@@ -1,10 +1,8 @@
 #pragma once
 
 #include "Common/CoreMinimal.hpp"
-
-#include "Assets/Core/Node.h"
-#include "Assets/Data/Material.hpp"
-#include "Runtime/Components/RenderComponent.h"
+#include "Runtime/Scene/NodeUtils.h"
+#include "Runtime/Scene/SceneBuilder.h"
 
 namespace Brotato3DUtil
 {
@@ -21,29 +19,6 @@ namespace Brotato3DUtil
     inline constexpr float PickupBaseRadius = 1.6f;
     inline constexpr size_t MaxWeaponSlots = 6;
     inline const glm::vec3 HiddenPosition(0.0f, -100.0f, 0.0f);
-
-    inline uint32_t AddLambertMaterial(std::vector<Assets::FMaterial>& materials, const glm::vec3& color)
-    {
-        materials.push_back({Assets::Material::Lambertian(glm::clamp(color, glm::vec3(0.0f), glm::vec3(1.0f)))});
-        return static_cast<uint32_t>(materials.size() - 1);
-    }
-
-    inline std::shared_ptr<Assets::Node> CreateRenderNode(const std::string& name,
-                                                          const glm::vec3& translation,
-                                                          const glm::vec3& scale,
-                                                          uint32_t instanceId,
-                                                          uint32_t modelId,
-                                                          uint32_t materialId,
-                                                          bool visible = true)
-    {
-        auto node = Assets::Node::CreateNode(name, translation, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), scale, instanceId);
-        auto renderComponent = std::make_shared<Runtime::RenderComponent>();
-        renderComponent->SetModelId(modelId);
-        renderComponent->SetMaterial({materialId});
-        renderComponent->SetVisible(visible);
-        node->AddComponent(renderComponent);
-        return node;
-    }
 
     inline glm::vec3 ClampToArena(const glm::vec3& pos, float radius)
     {

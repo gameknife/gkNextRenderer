@@ -1,4 +1,4 @@
-﻿#include "KongLie3DUI.hpp"
+#include "KongLie3DUI.hpp"
 
 #include <imgui.h>
 
@@ -6,6 +6,7 @@
 #include "KongLie3DAudio.hpp"
 #include "KongLie3DGameInstance.hpp"
 #include "KongLie3DStyle.hpp"
+#include "Runtime/Utilities/NextEngineHelper.h"
 
 namespace
 {
@@ -286,42 +287,6 @@ namespace
     void DrawResultMetricRow(const char* label, int playerValue, int enemyValue);
     void DrawResultStatsTable(const FStatsSummary& playerSummary, const FStatsSummary& enemySummary);
 
-    bool ProjectWorldToScreen(const KongLie3DGameInstance& gameInstance, const glm::vec3& worldPos, ImVec2& screenPos)
-    {
-        Assets::Camera camera{};
-        if (!gameInstance.OverrideRenderCamera(camera))
-        {
-            return false;
-        }
-
-        const ImGuiViewport* viewport = ImGui::GetMainViewport();
-        if (!viewport || viewport->Size.x <= 1.0f || viewport->Size.y <= 1.0f)
-        {
-            return false;
-        }
-
-        const float aspect = viewport->Size.x / viewport->Size.y;
-        const float fov = camera.FieldOfView > 1.0f ? camera.FieldOfView : 60.0f;
-        const glm::mat4 projection =
-            glm::perspective(glm::radians(fov), aspect, std::max(0.05f, camera.NearPlane), camera.FarPlane);
-        const glm::mat4 viewProjection = projection * camera.ModelView;
-        const glm::vec4 clip = viewProjection * glm::vec4(worldPos, 1.0f);
-        if (clip.w <= 0.0f)
-        {
-            return false;
-        }
-
-        const glm::vec3 ndc = glm::vec3(clip) / clip.w;
-        if (ndc.z < -1.0f || ndc.z > 1.0f || ndc.x < -1.2f || ndc.x > 1.2f || ndc.y < -1.2f || ndc.y > 1.2f)
-        {
-            return false;
-        }
-
-        screenPos.x = viewport->Pos.x + (ndc.x * 0.5f + 0.5f) * viewport->Size.x;
-        screenPos.y = viewport->Pos.y + (-ndc.y * 0.5f + 0.5f) * viewport->Size.y;
-        return true;
-    }
-
     float GetCellWorldZ(int row)
     {
         return row == BenchRow ? BenchWorldZ : static_cast<float>(row);
@@ -335,8 +300,8 @@ namespace
     {
         ImVec2 centerScreen{};
         ImVec2 edgeScreen{};
-        if (!ProjectWorldToScreen(gameInstance, centerWorld, centerScreen) ||
-            !ProjectWorldToScreen(gameInstance, centerWorld + glm::vec3(radiusWorld, 0.0f, 0.0f), edgeScreen))
+        if (!NextEngineHelper::TryProjectWorldToScreen(gameInstance, centerWorld, centerScreen) ||
+            !NextEngineHelper::TryProjectWorldToScreen(gameInstance, centerWorld + glm::vec3(radiusWorld, 0.0f, 0.0f), edgeScreen))
         {
             return false;
         }
@@ -359,7 +324,7 @@ namespace
             const float angle = glm::two_pi<float>() * (static_cast<float>(index) / static_cast<float>(segments));
             const glm::vec3 pointWorld = centerWorld + glm::vec3(std::cos(angle) * radiusWorld, 0.0f, std::sin(angle) * radiusWorld);
             ImVec2 pointScreen{};
-            if (!ProjectWorldToScreen(gameInstance, pointWorld, pointScreen))
+            if (!NextEngineHelper::TryProjectWorldToScreen(gameInstance, pointWorld, pointScreen))
             {
                 outPoints.clear();
                 return false;
@@ -376,7 +341,7 @@ namespace
     {
         for (size_t index = 0; index < corners.size(); ++index)
         {
-            if (!ProjectWorldToScreen(gameInstance, corners[index], outScreenCorners[index]))
+            if (!NextEngineHelper::TryProjectWorldToScreen(gameInstance, corners[index], outScreenCorners[index]))
             {
                 return false;
             }
@@ -572,7 +537,7 @@ namespace
 
             ImVec2 screenPos{};
             const float headOffset = piece.dimensions.y * piece.visualScale + 0.28f;
-            if (!ProjectWorldToScreen(gameInstance, piece.node->WorldTranslation() + glm::vec3(0.0f, headOffset, 0.0f), screenPos))
+            if (!NextEngineHelper::TryProjectWorldToScreen(gameInstance, piece.node->WorldTranslation() + glm::vec3(0.0f, headOffset, 0.0f), screenPos))
             {
                 continue;
             }
@@ -602,8 +567,8 @@ namespace
         {
             ImVec2 from{};
             ImVec2 to{};
-            if (!ProjectWorldToScreen(gameInstance, attackTrace.from, from) ||
-                !ProjectWorldToScreen(gameInstance, attackTrace.to, to))
+            if (!NextEngineHelper::TryProjectWorldToScreen(gameInstance, attackTrace.from, from) ||
+                !NextEngineHelper::TryProjectWorldToScreen(gameInstance, attackTrace.to, to))
             {
                 continue;
             }
@@ -627,7 +592,7 @@ namespace
         for (const auto& popup : gameInstance.GetBattleSystem().GetDamagePopups())
         {
             ImVec2 screenPos{};
-            if (!ProjectWorldToScreen(gameInstance, popup.worldPos, screenPos))
+            if (!NextEngineHelper::TryProjectWorldToScreen(gameInstance, popup.worldPos, screenPos))
             {
                 continue;
             }
@@ -683,8 +648,8 @@ namespace
             {
                 ImVec2 from{};
                 ImVec2 to{};
-                if (ProjectWorldToScreen(gameInstance, effect.from, from) &&
-                    ProjectWorldToScreen(gameInstance, effect.to, to))
+                if (NextEngineHelper::TryProjectWorldToScreen(gameInstance, effect.from, from) &&
+                    NextEngineHelper::TryProjectWorldToScreen(gameInstance, effect.to, to))
                 {
                     drawList->AddLine(from, to, ImGui::ColorConvertFloat4ToU32(ImVec4(effect.color.r, effect.color.g, effect.color.b, 1.0f)),
                                       5.0f);

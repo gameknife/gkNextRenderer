@@ -7,9 +7,10 @@
 #include <spdlog/spdlog.h>
 
 #include "Brotato3DUI.hpp"
+#include "Runtime/Editor/FontLoader.h"
+#include "Runtime/Platform/UserPaths.h"
 #include "Utilities/FileHelper.hpp"
 
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -23,11 +24,7 @@ namespace
 
     std::filesystem::path GetBestRecordPath()
     {
-        if (const char* appData = std::getenv("APPDATA"))
-        {
-            return std::filesystem::path(appData) / "Brotato3D" / "best.json";
-        }
-        return std::filesystem::current_path() / "Brotato3D" / "best.json";
+        return NextPlatform::UserPaths::EnsureUserFile("Brotato3D", "best.json");
     }
 }
 
@@ -40,13 +37,7 @@ Brotato3DGameInstance::Brotato3DGameInstance(Vulkan::WindowConfig& config, Optio
     NextGameInstanceBase(config, options, engine),
     engine_(engine)
 {
-    config.Title = "Brotato3D";
-    config.Width = 1920;
-    config.Height = 1080;
-    config.ForceSDR = true;
-    options.Width = 1920;
-    options.Height = 1080;
-    options.ForceSDR = true;
+    ConfigureWindow(config, options, "Brotato3D", 1920, 1080, true);
 }
 
 void Brotato3DGameInstance::OnInit()
@@ -94,36 +85,38 @@ void Brotato3DGameInstance::OnInitUI()
     {
         ImGuiIO& io = ImGui::GetIO();
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
-        const std::string placeholderUiFont =
-            Utilities::FileHelper::GetPlatformFilePath(Brotato3D::PlaceholderAssets::Font("NotoSansSC-Medium.otf").c_str());
-        const std::string fallbackChineseFont = Utilities::FileHelper::GetPlatformFilePath("assets/fonts/DroidSansFallback.ttf");
-        const std::string fallbackLatinFont = Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-BoldCondensed.ttf");
-        const std::string placeholderBigFont =
-            Utilities::FileHelper::GetPlatformFilePath(Brotato3D::PlaceholderAssets::Font("Anybody-Medium.ttf").c_str());
+        const std::string placeholderUiFont = Brotato3D::PlaceholderAssets::Font("NotoSansSC-Medium.otf");
+        const std::string fallbackChineseFont = "assets/fonts/DroidSansFallback.ttf";
+        const std::string fallbackLatinFont = "assets/fonts/Roboto-BoldCondensed.ttf";
+        const std::string placeholderBigFont = Brotato3D::PlaceholderAssets::Font("Anybody-Medium.ttf");
 
         std::string displayFont = fallbackLatinFont;
-        const ImWchar* displayGlyphRange = io.Fonts->GetGlyphRangesDefault();
-        if (std::filesystem::exists(placeholderUiFont))
+        bool displayIncludesChinese = false;
+        if (Utilities::FileHelper::IsAssetAvailable(placeholderUiFont))
         {
             displayFont = placeholderUiFont;
-            displayGlyphRange = io.Fonts->GetGlyphRangesChineseSimplifiedCommon();
+            displayIncludesChinese = true;
         }
-        else if (std::filesystem::exists(fallbackChineseFont))
+        else if (Utilities::FileHelper::IsAssetAvailable(fallbackChineseFont))
         {
             displayFont = fallbackChineseFont;
-            displayGlyphRange = io.Fonts->GetGlyphRangesChineseSimplifiedCommon();
+            displayIncludesChinese = true;
         }
 
-        ImFont* uiFont = io.Fonts->AddFontFromFileTTF(displayFont.c_str(), 16.0f, nullptr, displayGlyphRange);
-        if (uiFont)
-        {
-            io.FontDefault = uiFont;
-        }
+        ImFont* uiFont = FontLoader::Load(FontLoader::FFontRequest{
+            .filePath = displayFont,
+            .pixelSize = 16.0f,
+            .includeChineseFull = displayIncludesChinese,
+            .setAsDefault = true,
+        });
 
-        const std::string bigFontPath = std::filesystem::exists(placeholderBigFont) ? placeholderBigFont : displayFont;
-        const ImWchar* bigGlyphRange =
-            bigFontPath == placeholderBigFont ? io.Fonts->GetGlyphRangesDefault() : displayGlyphRange;
-        bigFont_ = io.Fonts->AddFontFromFileTTF(bigFontPath.c_str(), 32.0f, nullptr, bigGlyphRange);
+        const bool hasPlaceholderBigFont = Utilities::FileHelper::IsAssetAvailable(placeholderBigFont);
+        const std::string bigFontPath = hasPlaceholderBigFont ? placeholderBigFont : displayFont;
+        bigFont_ = FontLoader::Load(FontLoader::FFontRequest{
+            .filePath = bigFontPath,
+            .pixelSize = 32.0f,
+            .includeChineseFull = !hasPlaceholderBigFont && displayIncludesChinese,
+        });
         if (!bigFont_)
         {
             bigFont_ = uiFont;

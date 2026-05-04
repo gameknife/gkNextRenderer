@@ -4,8 +4,8 @@
 #include "Assets/Core/Scene.hpp"
 #include "NextGameplay/Utilities/SceneNodeUtils.hpp"
 #include "Runtime/Components/PhysicsComponent.h"
-#include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/SkinnedMeshComponent.h"
+#include "Runtime/Scene/SceneBuilder.h"
 
 namespace NextGameplay
 {
@@ -72,16 +72,16 @@ namespace NextGameplay
         }
 
         const uint32_t instanceId = scene.GenerateInstanceId();
-        auto visualRoot = Assets::Node::CreateNode(visualName, glm::vec3(0.0f), glm::quat(1, 0, 0, 0), glm::vec3(1.0f),
-                                                   instanceId);
+        auto visualRoot = SceneBuilder::CreateRenderNode(visualName,
+                                                         glm::vec3(0.0f),
+                                                         glm::vec3(1.0f),
+                                                         instanceId,
+                                                         modelId,
+                                                         materialId,
+                                                         true,
+                                                         glm::quat(1, 0, 0, 0),
+                                                         false);
         visualRoot->SetParent(actorRoot);
-
-        auto renderComp = std::make_shared<Runtime::RenderComponent>();
-        renderComp->SetModelId(modelId);
-        renderComp->SetMaterial({materialId});
-        renderComp->SetVisible(true);
-        renderComp->SetRayCastVisible(false);
-        visualRoot->AddComponent(renderComp);
 
         auto physicsComp = std::make_shared<Runtime::PhysicsComponent>();
         physicsComp->SetMobility(Runtime::ENodeMobility::Dynamic);

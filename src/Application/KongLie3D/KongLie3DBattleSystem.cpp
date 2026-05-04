@@ -5,6 +5,7 @@
 #include "Assets/Loaders/FProcModel.h"
 #include "KongLie3DAudio.hpp"
 #include "KongLie3DSkills.hpp"
+#include "Runtime/Scene/NodeUtils.h"
 #include "Runtime/Subsystems/NextPhysics.h"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Engine.hpp"
@@ -77,65 +78,12 @@ namespace
         return baseCooldownMs + TickMs;
     }
 
-    void SetNodeVisibilityRecursive(const std::shared_ptr<Assets::Node>& node, bool visible)
-    {
-        if (!node)
-        {
-            return;
-        }
-
-        if (auto renderComponent = node->GetComponent<Runtime::RenderComponent>())
-        {
-            renderComponent->SetVisible(visible);
-        }
-
-        for (const auto& child : node->Children())
-        {
-            SetNodeVisibilityRecursive(child, visible);
-        }
-    }
-
-    void SetNodeMaterialRecursive(const std::shared_ptr<Assets::Node>& node, uint32_t materialId)
-    {
-        if (!node)
-        {
-            return;
-        }
-
-        if (auto renderComponent = node->GetComponent<Runtime::RenderComponent>())
-        {
-            auto materials = renderComponent->Materials();
-            materials[0] = materialId;
-            renderComponent->SetMaterial(materials);
-        }
-
-        for (const auto& child : node->Children())
-        {
-            SetNodeMaterialRecursive(child, materialId);
-        }
-    }
-
-    void SetNodeMaterialSingle(const std::shared_ptr<Assets::Node>& node, uint32_t materialId)
-    {
-        if (!node)
-        {
-            return;
-        }
-
-        if (auto renderComponent = node->GetComponent<Runtime::RenderComponent>())
-        {
-            auto materials = renderComponent->Materials();
-            materials[0] = materialId;
-            renderComponent->SetMaterial(materials);
-        }
-    }
-
     void RestorePieceMaterials(KongLie3D::FPieceRuntime& piece)
     {
-        SetNodeMaterialSingle(piece.node, piece.materialId);
+        NodeUtils::SetPrimaryMaterial(piece.node, piece.materialId);
         for (const auto& [node, materialId] : piece.visualAttachments)
         {
-            SetNodeMaterialSingle(node, materialId);
+            NodeUtils::SetPrimaryMaterial(node, materialId);
         }
     }
 
@@ -250,12 +198,12 @@ namespace KongLie3D
         for (auto& pooledProjectile : projectilePool_)
         {
             pooledProjectile.active = false;
-            SetNodeVisibilityRecursive(pooledProjectile.node, false);
+            NodeUtils::SetVisibleRecursive(pooledProjectile.node, false);
         }
         for (auto& pooledDebris : debrisPool_)
         {
             pooledDebris.active = false;
-            SetNodeVisibilityRecursive(pooledDebris.node, false);
+            NodeUtils::SetVisibleRecursive(pooledDebris.node, false);
         }
 
         if (!pieces_)
@@ -301,7 +249,7 @@ namespace KongLie3D
                 piece.node->SetTranslation(piece.targetWorldPos);
                 piece.node->RecalcTransform(true);
             }
-            SetNodeVisibilityRecursive(piece.node, true);
+            NodeUtils::SetVisibleRecursive(piece.node, true);
 
             if (piece.knockoutNode)
             {
@@ -309,7 +257,7 @@ namespace KongLie3D
                 piece.knockoutNode->SetRotation(glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
                 piece.knockoutNode->SetScale(piece.dimensions * piece.visualScale);
                 piece.knockoutNode->RecalcTransform(true);
-                SetNodeVisibilityRecursive(piece.knockoutNode, false);
+                NodeUtils::SetVisibleRecursive(piece.knockoutNode, false);
             }
             if (NextPhysics* physics = NextEngine::GetInstance()->GetPhysicsEngine();
                 physics && piece.knockoutNode && !piece.knockoutBodyId.IsInvalid())
@@ -855,7 +803,7 @@ namespace KongLie3D
                 piece.knockoutTimerMs = std::max(0.0f, piece.knockoutTimerMs - deltaMs);
                 if (piece.knockoutTimerMs <= 0.0f && piece.knockoutNode)
                 {
-                    SetNodeVisibilityRecursive(piece.knockoutNode, false);
+                    NodeUtils::SetVisibleRecursive(piece.knockoutNode, false);
                     piece.knockoutNode->SetTranslation(HiddenProxyPosition);
                     piece.knockoutNode->SetRotation(glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
                     piece.knockoutNode->RecalcTransform(true);
@@ -884,7 +832,7 @@ namespace KongLie3D
             if (piece.deathAnimationMs >= DeathAnimationDurationMs)
             {
                 piece.deathAnimationMs = 0.0f;
-                SetNodeVisibilityRecursive(piece.node, false);
+                NodeUtils::SetVisibleRecursive(piece.node, false);
                 sceneDirty_ = true;
             }
         }
@@ -964,7 +912,7 @@ namespace KongLie3D
                 if (it->poolIndex < projectilePool_.size())
                 {
                     projectilePool_[it->poolIndex].active = false;
-                    SetNodeVisibilityRecursive(projectilePool_[it->poolIndex].node, false);
+                    NodeUtils::SetVisibleRecursive(projectilePool_[it->poolIndex].node, false);
                     sceneDirty_ = true;
                 }
                 it = projectiles_.erase(it);
@@ -1002,7 +950,7 @@ namespace KongLie3D
                 if (it->poolIndex < debrisPool_.size())
                 {
                     debrisPool_[it->poolIndex].active = false;
-                    SetNodeVisibilityRecursive(debrisPool_[it->poolIndex].node, false);
+                    NodeUtils::SetVisibleRecursive(debrisPool_[it->poolIndex].node, false);
                     sceneDirty_ = true;
                 }
                 it = impactDebris_.erase(it);
@@ -1309,7 +1257,7 @@ namespace KongLie3D
         if (piece.node)
         {
             RestorePieceMaterials(piece);
-            SetNodeVisibilityRecursive(piece.node, false);
+            NodeUtils::SetVisibleRecursive(piece.node, false);
             sceneDirty_ = true;
         }
 
@@ -1332,7 +1280,7 @@ namespace KongLie3D
                 piece.knockoutNode->SetTranslation(piece.deathStartWorldPos);
                 piece.knockoutNode->SetRotation(startRotation);
                 piece.knockoutNode->RecalcTransform(true);
-                SetNodeVisibilityRecursive(piece.knockoutNode, true);
+                NodeUtils::SetVisibleRecursive(piece.knockoutNode, true);
 
                 physics->SetBodyTransform(piece.knockoutBodyId, piece.deathStartWorldPos, startRotation, true);
                 physics->SetBodyVelocity(piece.knockoutBodyId,
@@ -1353,8 +1301,8 @@ namespace KongLie3D
             piece.deathAnimationMs = 1.0f;
             if (piece.node)
             {
-                SetNodeVisibilityRecursive(piece.node, true);
-                SetNodeMaterialRecursive(piece.node, piece.darkMaterialId);
+                NodeUtils::SetVisibleRecursive(piece.node, true);
+                NodeUtils::SetMaterialRecursive(piece.node, piece.darkMaterialId);
             }
         }
     }
@@ -1566,7 +1514,7 @@ namespace KongLie3D
         if (!target.hitFlashActive && hitFlashMaterialId_ != 0)
         {
             target.hitFlashActive = true;
-            SetNodeMaterialRecursive(target.node, hitFlashMaterialId_);
+            NodeUtils::SetMaterialRecursive(target.node, hitFlashMaterialId_);
             sceneDirty_ = true;
         }
 
@@ -1593,7 +1541,7 @@ namespace KongLie3D
             pooledProjectile.node->SetScale(glm::vec3(1.0f));
             pooledProjectile.node->SetTranslation(startPos);
             pooledProjectile.node->RecalcTransform(true);
-            SetNodeVisibilityRecursive(pooledProjectile.node, true);
+            NodeUtils::SetVisibleRecursive(pooledProjectile.node, true);
             sceneDirty_ = true;
 
             projectiles_.push_back(FProjectile{
@@ -1629,7 +1577,7 @@ namespace KongLie3D
             pooledDebris.node->SetScale(glm::vec3(startScale));
             pooledDebris.node->SetTranslation(impactPos);
             pooledDebris.node->RecalcTransform(true);
-            SetNodeVisibilityRecursive(pooledDebris.node, true);
+            NodeUtils::SetVisibleRecursive(pooledDebris.node, true);
             sceneDirty_ = true;
 
             impactDebris_.push_back(FImpactDebris{

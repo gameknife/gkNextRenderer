@@ -2,6 +2,10 @@
 
 #include "Utilities/FileHelper.hpp"
 
+#include <chrono>
+#include <random>
+#include <spdlog/spdlog.h>
+
 #if WITH_AUDIO
 #define MINIAUDIO_IMPLEMENTATION
 #include "ThirdParty/miniaudio/miniaudio.h"
@@ -87,6 +91,105 @@ void NextAudio::PlaySound(const std::string& soundName, bool loop, float volume)
     ma_sound_seek_to_pcm_frame(sound, 0);
     ma_sound_start(sound);
 #endif
+}
+
+bool NextAudio::IsSoundAssetAvailable(const std::string& path)
+{
+    return Utilities::FileHelper::IsAssetAvailable(path);
+}
+
+void NextAudio::PlaySfx(const std::string& path, float volume, uint64_t minIntervalMs)
+{
+    if (path.empty())
+    {
+        return;
+    }
+
+    using namespace std::chrono;
+    const uint64_t nowMs = duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
+    const auto lastPlayIt = lastPlayMsBySound_.find(path);
+    if (lastPlayIt != lastPlayMsBySound_.end() && nowMs - lastPlayIt->second < minIntervalMs)
+    {
+        return;
+    }
+    lastPlayMsBySound_[path] = nowMs;
+
+    if (!IsSoundAssetAvailable(path))
+    {
+        if (missingSounds_.insert(path).second)
+        {
+            spdlog::warn("[NextAudio] missing sound '{}'", path);
+        }
+        return;
+    }
+
+    PlaySound(path, false, std::clamp(volume, 0.0f, 1.0f));
+}
+
+void NextAudio::PlaySfxVariant(std::initializer_list<std::string_view> candidates, float volume, uint64_t minIntervalMs)
+{
+    if (candidates.size() == 0)
+    {
+        return;
+    }
+
+    static std::mt19937 rng(std::random_device{}());
+    std::uniform_int_distribution<size_t> dist(0, candidates.size() - 1);
+    auto iter = candidates.begin();
+    std::advance(iter, static_cast<std::ptrdiff_t>(dist(rng)));
+    PlaySfx(std::string(*iter), volume, minIntervalMs);
+}
+
+void NextAudio::PlayMusic(const std::string& path, float volume)
+{
+    if (path.empty())
+    {
+        return;
+    }
+
+    if (currentMusicPath_ == path)
+    {
+        SetMusicVolume(volume);
+        return;
+    }
+
+    StopMusic();
+    if (!IsSoundAssetAvailable(path))
+    {
+        if (missingSounds_.insert(path).second)
+        {
+            spdlog::warn("[NextAudio] missing music '{}'", path);
+        }
+        return;
+    }
+
+    currentMusicPath_ = path;
+    musicVolume_ = std::clamp(volume, 0.0f, 1.0f);
+    PlaySound(currentMusicPath_, true, musicVolume_);
+}
+
+void NextAudio::StopMusic()
+{
+    if (currentMusicPath_.empty())
+    {
+        return;
+    }
+
+    PauseSound(currentMusicPath_, true);
+    currentMusicPath_.clear();
+}
+
+void NextAudio::SetMusicVolume(float volume)
+{
+    musicVolume_ = std::clamp(volume, 0.0f, 1.0f);
+    if (currentMusicPath_.empty())
+    {
+        return;
+    }
+
+    const std::string path = currentMusicPath_;
+    PauseSound(path, true);
+    PlaySound(path, true, musicVolume_);
 }
 
 void NextAudio::PauseSound(const std::string& soundName, bool pause)

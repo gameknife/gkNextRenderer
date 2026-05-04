@@ -193,12 +193,12 @@ void Brotato3DGameInstance::UpdatePlayer(double deltaSeconds)
     player_.worldPos = ClampToArena(player_.worldPos + inputDir * speed * static_cast<float>(deltaSeconds), player_.radius);
     if (player_.bodyNode)
     {
-        SetNodeTranslation(player_.bodyNode, player_.worldPos);
+        NodeUtils::SetTranslation(player_.bodyNode, player_.worldPos);
     }
     if (player_.facingNode)
     {
         const glm::vec3 localOffset = glm::vec3(player_.facingDir.x, 0.0f, player_.facingDir.z) * 0.45f;
-        SetNodeTranslation(player_.facingNode, glm::vec3(localOffset.x, 0.62f, localOffset.z));
+        NodeUtils::SetTranslation(player_.facingNode, glm::vec3(localOffset.x, 0.62f, localOffset.z));
     }
 
     const glm::vec3 forward = glm::normalize(glm::vec3(player_.facingDir.x, 0.0f, player_.facingDir.z));
@@ -215,16 +215,16 @@ void Brotato3DGameInstance::UpdatePlayer(double deltaSeconds)
     if (player_.smgWeaponNode)
     {
         const glm::vec3 smgOffset = forward * 0.54f - right * 0.18f;
-        SetNodeTranslation(player_.smgWeaponNode, glm::vec3(smgOffset.x, 0.42f, smgOffset.z));
-        SetNodeRotation(player_.smgWeaponNode, weaponRotation);
-        hasSmg ? ShowNode(player_.smgWeaponNode) : HideNode(player_.smgWeaponNode);
+        NodeUtils::SetTranslation(player_.smgWeaponNode, glm::vec3(smgOffset.x, 0.42f, smgOffset.z));
+        NodeUtils::SetRotation(player_.smgWeaponNode, weaponRotation);
+        NodeUtils::SetVisible(player_.smgWeaponNode, hasSmg);
     }
     if (player_.shotgunWeaponNode)
     {
         const glm::vec3 shotgunOffset = forward * 0.62f + right * 0.24f;
-        SetNodeTranslation(player_.shotgunWeaponNode, glm::vec3(shotgunOffset.x, 0.43f, shotgunOffset.z));
-        SetNodeRotation(player_.shotgunWeaponNode, weaponRotation);
-        hasShotgun ? ShowNode(player_.shotgunWeaponNode) : HideNode(player_.shotgunWeaponNode);
+        NodeUtils::SetTranslation(player_.shotgunWeaponNode, glm::vec3(shotgunOffset.x, 0.43f, shotgunOffset.z));
+        NodeUtils::SetRotation(player_.shotgunWeaponNode, weaponRotation);
+        NodeUtils::SetVisible(player_.shotgunWeaponNode, hasShotgun);
     }
 }
 
@@ -287,8 +287,8 @@ void Brotato3DGameInstance::ResetRuntimeState()
         enemy.bombFuseMs = -1.0f;
         enemy.healIntervalMs = 0.0f;
         enemy.bossPhase2Active = false;
-        HideNode(enemy.node);
-        SetNodeScale(enemy.node, glm::vec3(1.0f));
+        NodeUtils::SetVisible(enemy.node, false);
+        NodeUtils::SetScale(enemy.node, glm::vec3(1.0f));
     }
     player_ = Brotato3D::FPlayerRuntime{};
     player_.bodyNode = playerBodyNode;
@@ -299,27 +299,27 @@ void Brotato3DGameInstance::ResetRuntimeState()
     {
         projectile.active = false;
         projectile.hitEnemyIndices.clear();
-        HideNode(projectile.node);
-        SetNodeTranslation(projectile.node, HiddenPosition);
+        NodeUtils::SetVisible(projectile.node, false);
+        NodeUtils::SetTranslation(projectile.node, HiddenPosition);
     }
     for (auto& projectile : enemyProjectilePool_)
     {
         projectile.active = false;
-        HideNode(projectile.node);
-        SetNodeTranslation(projectile.node, HiddenPosition);
+        NodeUtils::SetVisible(projectile.node, false);
+        NodeUtils::SetTranslation(projectile.node, HiddenPosition);
     }
     for (auto& debris : impactDebrisPool_)
     {
         debris.active = false;
-        HideNode(debris.node);
-        SetNodeTranslation(debris.node, HiddenPosition);
+        NodeUtils::SetVisible(debris.node, false);
+        NodeUtils::SetTranslation(debris.node, HiddenPosition);
     }
     for (auto& pickup : pickupPool_)
     {
         pickup.active = false;
         pickup.magnetized = false;
-        HideNode(pickup.node);
-        SetNodeTranslation(pickup.node, HiddenPosition);
+        NodeUtils::SetVisible(pickup.node, false);
+        NodeUtils::SetTranslation(pickup.node, HiddenPosition);
     }
     floatingTexts_.clear();
     muzzleFlashes_.clear();
@@ -330,8 +330,8 @@ void Brotato3DGameInstance::ResetRuntimeState()
         light.active = false;
         light.remainingMs = 0.0f;
         UpdateLightArea(light.lightIndex, HiddenPosition, 0.01f, 0.0f);
-        SetNodeTranslation(light.node, HiddenPosition);
-        HideNode(light.node);
+        NodeUtils::SetTranslation(light.node, HiddenPosition);
+        NodeUtils::SetVisible(light.node, false);
     }
     currentUpgradeChoices_.clear();
     shopOffers_.clear();
@@ -359,10 +359,10 @@ void Brotato3DGameInstance::ResetRuntimeState()
     itemTickAccumMs_ = 0.0f;
     itemHealRemainder_ = 0.0f;
     ClearMovementInput();
-    HideNode(player_.bodyNode);
-    HideNode(player_.facingNode);
-    HideNode(player_.smgWeaponNode);
-    HideNode(player_.shotgunWeaponNode);
+    NodeUtils::SetVisible(player_.bodyNode, false);
+    NodeUtils::SetVisible(player_.facingNode, false);
+    NodeUtils::SetVisible(player_.smgWeaponNode, false);
+    NodeUtils::SetVisible(player_.shotgunWeaponNode, false);
 }
 
 void Brotato3DGameInstance::ApplySelectedCharacter()
@@ -401,7 +401,7 @@ void Brotato3DGameInstance::ApplySelectedCharacter()
 
     if (const auto materialIt = characterMaterialIds_.find(character->id); materialIt != characterMaterialIds_.end())
     {
-        SetNodeMaterial(player_.bodyNode, materialIt->second);
+        NodeUtils::SetMaterial(player_.bodyNode, materialIt->second);
     }
 }
 

@@ -1,8 +1,7 @@
 #include "Brotato3DDataLoader.hpp"
 
-#include "Utilities/FileHelper.hpp"
+#include "Runtime/Utilities/JsonHelpers.h"
 
-#include <fstream>
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
@@ -10,58 +9,6 @@ using json = nlohmann::json;
 
 namespace
 {
-    bool LoadJsonFile(const std::string& path, json& outDocument)
-    {
-        const std::string absolutePath = Utilities::FileHelper::GetPlatformFilePath(path.c_str());
-        std::ifstream input(absolutePath);
-        if (!input.is_open())
-        {
-            SPDLOG_ERROR("[Brotato3D] Failed to open JSON file: {}", absolutePath);
-            return false;
-        }
-
-        try
-        {
-            input >> outDocument;
-            return true;
-        }
-        catch (const std::exception& exception)
-        {
-            SPDLOG_ERROR("[Brotato3D] Failed to parse JSON file {}: {}", absolutePath, exception.what());
-            return false;
-        }
-    }
-
-    bool RequireObject(const json& document, const char* key, const std::string& path)
-    {
-        if (!document.contains(key) || !document.at(key).is_object())
-        {
-            SPDLOG_ERROR("[Brotato3D] {} missing required object '{}'", path, key);
-            return false;
-        }
-        return true;
-    }
-
-    bool RequireArray(const json& document, const char* key, const std::string& path)
-    {
-        if (!document.contains(key) || !document.at(key).is_array())
-        {
-            SPDLOG_ERROR("[Brotato3D] {} missing required array '{}'", path, key);
-            return false;
-        }
-        return true;
-    }
-
-    glm::vec3 ReadVec3(const json& object, const char* key, const glm::vec3& defaultValue)
-    {
-        if (!object.contains(key) || !object.at(key).is_array() || object.at(key).size() != 3)
-        {
-            return defaultValue;
-        }
-        return glm::vec3(object.at(key).at(0).get<float>(), object.at(key).at(1).get<float>(),
-                         object.at(key).at(2).get<float>());
-    }
-
     void ReadPlayerStats(const json& object, Brotato3D::FPlayerStats& outStats)
     {
         outStats.maxHpFlat = object.value("maxHpFlat", outStats.maxHpFlat);
@@ -81,7 +28,7 @@ namespace Brotato3D
     bool LoadEnemies(const std::string& path, std::map<std::string, FEnemyDef>& outEnemies)
     {
         json document;
-        if (!LoadJsonFile(path, document) || !RequireObject(document, "enemies", path))
+        if (!NextJson::TryLoadFile(path, document) || !NextJson::HasObject(document, "enemies"))
         {
             return false;
         }
@@ -101,8 +48,8 @@ namespace Brotato3D
             def.hp = enemyJson.value("hp", 1);
             def.moveSpeed = enemyJson.value("moveSpeed", 1.0f);
             def.contactDamage = enemyJson.value("contactDamage", 1);
-            def.size = ReadVec3(enemyJson, "size", glm::vec3(0.5f));
-            def.color = ReadVec3(enemyJson, "color", glm::vec3(1.0f));
+            def.size = NextJson::GetVec3(enemyJson, "size", glm::vec3(0.5f));
+            def.color = NextJson::GetVec3(enemyJson, "color", glm::vec3(1.0f));
             def.xpDrop = enemyJson.value("xpDrop", 1);
             def.materialDrop = enemyJson.value("materialDrop", 1);
             def.kitingDistance = enemyJson.value("kitingDistance", 0.0f);
@@ -113,7 +60,7 @@ namespace Brotato3D
                 def.ranged.dmg = rangedJson.value("projectileDamage", 0);
                 def.ranged.speed = rangedJson.value("projectileSpeed", 0.0f);
                 def.ranged.lifetimeMs = rangedJson.value("projectileLifetimeMs", 0.0f);
-                def.ranged.color = ReadVec3(rangedJson, "projectileColor", glm::vec3(0.3f, 0.95f, 0.2f));
+                def.ranged.color = NextJson::GetVec3(rangedJson, "projectileColor", glm::vec3(0.3f, 0.95f, 0.2f));
                 def.ranged.size = rangedJson.value("projectileSize", 0.18f);
                 def.ranged.intervalMs = rangedJson.value("fireIntervalMs", 0.0f);
                 def.ranged.preferredDistance = rangedJson.value("preferredDistance", def.kitingDistance);
@@ -161,7 +108,7 @@ namespace Brotato3D
     bool LoadWeapons(const std::string& path, std::map<std::string, FWeaponDef>& outWeapons)
     {
         json document;
-        if (!LoadJsonFile(path, document) || !RequireObject(document, "weapons", path))
+        if (!NextJson::TryLoadFile(path, document) || !NextJson::HasObject(document, "weapons"))
         {
             return false;
         }
@@ -182,7 +129,7 @@ namespace Brotato3D
             def.rangeMeters = weaponJson.value("rangeMeters", 1.0f);
             def.projectileSpeed = weaponJson.value("projectileSpeed", 10.0f);
             def.projectileLifetimeMs = weaponJson.value("projectileLifetimeMs", 500.0f);
-            def.projectileColor = ReadVec3(weaponJson, "projectileColor", glm::vec3(1.0f));
+            def.projectileColor = NextJson::GetVec3(weaponJson, "projectileColor", glm::vec3(1.0f));
             def.projectileSize = weaponJson.value("projectileSize", 0.12f);
             def.pellets = weaponJson.value("pellets", 1);
             def.spreadDeg = weaponJson.value("spreadDeg", 0.0f);
@@ -202,7 +149,7 @@ namespace Brotato3D
     bool LoadUpgrades(const std::string& path, std::vector<FUpgradeCardDef>& outCards)
     {
         json document;
-        if (!LoadJsonFile(path, document) || !RequireArray(document, "cards", path))
+        if (!NextJson::TryLoadFile(path, document) || !NextJson::HasArray(document, "cards"))
         {
             return false;
         }
@@ -229,7 +176,7 @@ namespace Brotato3D
     bool LoadShopItems(const std::string& path, std::vector<FShopItemDef>& outItems)
     {
         json document;
-        if (!LoadJsonFile(path, document) || !RequireArray(document, "items", path))
+        if (!NextJson::TryLoadFile(path, document) || !NextJson::HasArray(document, "items"))
         {
             return false;
         }
@@ -257,7 +204,7 @@ namespace Brotato3D
     bool LoadItems(const std::string& path, std::vector<FItemDef>& outItems)
     {
         json document;
-        if (!LoadJsonFile(path, document) || !RequireArray(document, "items", path))
+        if (!NextJson::TryLoadFile(path, document) || !NextJson::HasArray(document, "items"))
         {
             return false;
         }
@@ -291,7 +238,7 @@ namespace Brotato3D
     bool LoadCharacters(const std::string& path, std::vector<FCharacterDef>& outCharacters)
     {
         json document;
-        if (!LoadJsonFile(path, document) || !RequireArray(document, "characters", path))
+        if (!NextJson::TryLoadFile(path, document) || !NextJson::HasArray(document, "characters"))
         {
             return false;
         }
@@ -303,7 +250,7 @@ namespace Brotato3D
             def.id = characterJson.value("id", "");
             def.name = characterJson.value("name", def.id);
             def.tagline = characterJson.value("tagline", "");
-            def.color = ReadVec3(characterJson, "color", glm::vec3(1.0f));
+            def.color = NextJson::GetVec3(characterJson, "color", glm::vec3(1.0f));
             def.startWeapon = characterJson.value("startWeapon", "");
             def.startStats = FPlayerStats{};
             def.startStats.damagePct = 0.0f;
@@ -331,7 +278,7 @@ namespace Brotato3D
     bool LoadArenas(const std::string& path, std::vector<FArenaDef>& outArenas)
     {
         json document;
-        if (!LoadJsonFile(path, document) || !RequireArray(document, "arenas", path))
+        if (!NextJson::TryLoadFile(path, document) || !NextJson::HasArray(document, "arenas"))
         {
             return false;
         }
@@ -342,8 +289,8 @@ namespace Brotato3D
             FArenaDef def{};
             def.id = arenaJson.value("id", "");
             def.name = arenaJson.value("name", def.id);
-            def.groundColor = ReadVec3(arenaJson, "groundColor", def.groundColor);
-            def.borderColor = ReadVec3(arenaJson, "borderColor", def.borderColor);
+            def.groundColor = NextJson::GetVec3(arenaJson, "groundColor", def.groundColor);
+            def.borderColor = NextJson::GetVec3(arenaJson, "borderColor", def.borderColor);
             if (def.id.empty())
             {
                 SPDLOG_ERROR("[Brotato3D] arena missing id");
@@ -357,7 +304,7 @@ namespace Brotato3D
     bool LoadI18n(const std::string& path, std::map<std::string, std::string>& outTexts)
     {
         json document;
-        if (!LoadJsonFile(path, document) || !RequireObject(document, "zh", path))
+        if (!NextJson::TryLoadFile(path, document) || !NextJson::HasObject(document, "zh"))
         {
             return false;
         }
@@ -376,7 +323,7 @@ namespace Brotato3D
     bool LoadWaves(const std::string& path, std::vector<FWaveDef>& outWaves)
     {
         json document;
-        if (!LoadJsonFile(path, document) || !RequireArray(document, "waves", path))
+        if (!NextJson::TryLoadFile(path, document) || !NextJson::HasArray(document, "waves"))
         {
             return false;
         }

@@ -7,6 +7,8 @@
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Subsystems/NextPhysics.h"
 #include "Runtime/Config/CVarSystem.hpp"
+#include "Runtime/Scene/NodeUtils.h"
+#include "Runtime/Scene/SceneBuilder.h"
 
 #include <SDL3/SDL_dialog.h>
 #include <spdlog/spdlog.h>
@@ -1529,7 +1531,7 @@ void BrickPlayerGameInstance::SetDraggedPartRayCastVisible(bool visible)
         return;
     }
 
-    auto* node = GetEngine().GetScene().GetNodeByInstanceId(draggedInstanceId_);
+    auto node = GetEngine().GetScene().GetNodeSharedByInstanceId(draggedInstanceId_);
     if (!node)
     {
         return;
@@ -1541,7 +1543,7 @@ void BrickPlayerGameInstance::SetDraggedPartRayCastVisible(bool visible)
         return;
     }
 
-    render->SetRayCastVisible(visible);
+    NodeUtils::SetRayCastVisible(node, visible);
     GetEngine().GetScene().MarkDirty();
 }
 
@@ -1947,8 +1949,8 @@ void BrickPlayerGameInstance::UpdateVisibilityForStep(int32_t step, bool playPla
             auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
             if (wasVisible != shouldBeVisible)
             {
-                render->SetVisible(shouldBeVisible);
-                render->SetRayCastVisible(shouldBeVisible);
+                NodeUtils::SetVisible(node, shouldBeVisible);
+                NodeUtils::SetRayCastVisible(node, shouldBeVisible);
                 if (physComp && physics)
                 {
                     const NextBodyID bodyId = physComp->GetPhysicsBody();
@@ -2143,19 +2145,13 @@ void BrickPlayerGameInstance::SpawnRandomBricks(int count)
         float y = floorSurfaceY_ + 1.0f + static_cast<float>(i) * 0.12f
                   + (std::rand() % 50) * 0.005f;
 
-        auto clone = Assets::Node::CreateNode(
+        auto clone = SceneBuilder::CreateRenderNode(
             "freebuild_" + std::to_string(newId),
             glm::vec3(x, y, z),
-            glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
             glm::vec3(1.0f),
-            newId);
-
-        auto newRender = std::make_shared<Runtime::RenderComponent>();
-        newRender->SetModelId(tmpl.modelId);
-        newRender->SetMaterial(tmpl.materials);
-        newRender->SetVisible(true);
-        newRender->SetRayCastVisible(true);
-        clone->AddComponent(newRender);
+            newId,
+            tmpl.modelId,
+            tmpl.materials);
 
         scene.AddNode(clone);
 

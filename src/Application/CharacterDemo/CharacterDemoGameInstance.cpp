@@ -19,6 +19,8 @@
 #include "Runtime/Components/SkinnedMeshComponent.h"
 #include "Runtime/Engine.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
+#include "Runtime/Scene/NodeUtils.h"
+#include "Runtime/Scene/SceneBuilder.h"
 #include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Utilities/PhysicsDebugOverlay.hpp"
 #include "Utilities/FileHelper.hpp"
@@ -732,10 +734,7 @@ void CharacterDemoGameInstance::SetFirstPersonMode(bool enabled)
 
     if (playerCharacter_.gameplay && playerCharacter_.gameplay->visualRoot)
     {
-        if (auto renderComp = playerCharacter_.gameplay->visualRoot->GetComponent<Runtime::RenderComponent>())
-        {
-            renderComp->SetVisible(!firstPersonMode_ && !playerCharacter_.modelLoaded);
-        }
+        NodeUtils::SetVisible(playerCharacter_.gameplay->visualRoot, !firstPersonMode_ && !playerCharacter_.modelLoaded);
     }
 
     SetNodeVisibilityRecursive(playerCharacter_.skinnedRoot, !firstPersonMode_);
@@ -764,18 +763,13 @@ void CharacterDemoGameInstance::SpawnProjectile(const std::string& nodeName, con
     }
 
     const uint32_t instanceId = engine_->GetScene().GenerateInstanceId();
-    auto newNode = Assets::Node::CreateNode(
+    auto newNode = SceneBuilder::CreateRenderNode(
         nodeName,
         spawnCenter,
-        glm::quat(1, 0, 0, 0),
         glm::vec3(1.0f),
-        instanceId);
-
-    auto renderComp = std::make_shared<Runtime::RenderComponent>();
-    renderComp->SetModelId(projectileModelId_);
-    renderComp->SetMaterial({projectileMatId_});
-    renderComp->SetVisible(true);
-    newNode->AddComponent(renderComp);
+        instanceId,
+        projectileModelId_,
+        projectileMatId_);
 
     auto phys = std::make_shared<Runtime::PhysicsComponent>();
     phys->SetMobility(Runtime::ENodeMobility::Dynamic);

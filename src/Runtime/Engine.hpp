@@ -9,7 +9,6 @@
 #include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Config/ShowFlags.hpp"
 #include "Runtime/Config/UserSettings.hpp"
-#include "Options.hpp"
 #include "Utilities/FileHelper.hpp"
 #include "Vulkan/RenderingPipeline.hpp"
 #include "Vulkan/WindowSurface.hpp"
@@ -25,11 +24,6 @@ namespace NextAI
 {
     class FAIService;
     class VoiceInputService;
-}
-
-namespace NextCVar
-{
-    class FCVarSystem;
 }
 
 namespace NextCVar
@@ -79,6 +73,23 @@ public:
                                 int16_t leftTrigger, int16_t rightTrigger)
     {
         return false;
+    }
+
+protected:
+    static void ConfigureWindow(Vulkan::WindowConfig& config,
+                                Options& options,
+                                std::string_view title,
+                                int width,
+                                int height,
+                                bool forceSDR)
+    {
+        config.Title = std::string(title);
+        config.Width = width;
+        config.Height = height;
+        config.ForceSDR = forceSDR;
+        options.Width = width;
+        options.Height = height;
+        options.ForceSDR = forceSDR;
     }
 };
 
@@ -243,6 +254,8 @@ public:
     Vulkan::Window& GetWindow() const { return *window_; }
 
     class UserInterface* GetUserInterface() { return userInterface_.get(); }
+    NextAudio* GetAudio() { return audioEngine_.get(); }
+    const NextAudio* GetAudio() const { return audioEngine_.get(); }
 
     NextAI::FAIService* GetAIService() { return aiService_.get(); }
     const NextAI::FAIService* GetAIService() const { return aiService_.get(); }

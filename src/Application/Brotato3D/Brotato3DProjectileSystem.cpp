@@ -93,8 +93,8 @@ void Brotato3DGameInstance::UpdateWeapons(double deltaSeconds)
                 projectile.explosionDamage = weapon.def->explosionDamage;
                 projectile.isCrit = isCrit;
                 projectile.hitEnemyIndices.clear();
-                SetNodeTranslation(projectile.node, projectile.worldPos);
-                ShowNode(projectile.node);
+                NodeUtils::SetTranslation(projectile.node, projectile.worldPos);
+                NodeUtils::SetVisible(projectile.node, true);
                 break;
             }
         }
@@ -182,12 +182,12 @@ void Brotato3DGameInstance::UpdateProjectiles(double deltaSeconds)
             projectile.active = false;
             projectile.worldPos = HiddenPosition;
             projectile.hitEnemyIndices.clear();
-            SetNodeTranslation(projectile.node, HiddenPosition);
-            HideNode(projectile.node);
+            NodeUtils::SetTranslation(projectile.node, HiddenPosition);
+            NodeUtils::SetVisible(projectile.node, false);
         }
         else
         {
-            SetNodeTranslation(projectile.node, projectile.worldPos);
+            NodeUtils::SetTranslation(projectile.node, projectile.worldPos);
         }
     }
 }
@@ -222,11 +222,11 @@ void Brotato3DGameInstance::SpawnEnemyProjectile(const Brotato3D::FEnemyRuntime&
     projectileIt->radius = ranged.size;
     if (const auto materialIt = enemyProjectileMaterialIds_.find(enemy.def); materialIt != enemyProjectileMaterialIds_.end())
     {
-        SetNodeMaterial(projectileIt->node, materialIt->second);
+        NodeUtils::SetMaterial(projectileIt->node, materialIt->second);
     }
-    SetNodeScale(projectileIt->node, glm::vec3(ranged.size));
-    SetNodeTranslation(projectileIt->node, projectileIt->worldPos);
-    ShowNode(projectileIt->node);
+    NodeUtils::SetScale(projectileIt->node, glm::vec3(ranged.size));
+    NodeUtils::SetTranslation(projectileIt->node, projectileIt->worldPos);
+    NodeUtils::SetVisible(projectileIt->node, true);
 }
 
 void Brotato3DGameInstance::UpdateEnemyProjectiles(double deltaSeconds)
@@ -255,12 +255,12 @@ void Brotato3DGameInstance::UpdateEnemyProjectiles(double deltaSeconds)
         {
             projectile.active = false;
             projectile.worldPos = HiddenPosition;
-            SetNodeTranslation(projectile.node, HiddenPosition);
-            HideNode(projectile.node);
+            NodeUtils::SetTranslation(projectile.node, HiddenPosition);
+            NodeUtils::SetVisible(projectile.node, false);
         }
         else
         {
-            SetNodeTranslation(projectile.node, projectile.worldPos);
+            NodeUtils::SetTranslation(projectile.node, projectile.worldPos);
         }
     }
 }

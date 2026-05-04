@@ -5,6 +5,7 @@
 #include "Assets/Core/Model.hpp"
 
 #include "Runtime/Engine.hpp"
+#include "Runtime/Scene/SceneBuilder.h"
 #include "Runtime/Subsystems/NextPhysics.h"
 
 #include <functional>
@@ -20,7 +21,6 @@
 #include "Assets/Loaders/FSceneLoader.h"
 #include "Assets/Loaders/KayKitPieceLoader.h"
 #include "Assets/Core/Node.h"
-#include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Assets/Data/Skeleton.hpp"
 #include "Runtime/Components/SkinnedMeshComponent.h"
@@ -116,16 +116,8 @@ namespace
                         const float g = random() * random();
                         const float r = random() * random();
                         uint32_t matId = CreateMaterial(materials, Material::Lambertian(vec3(r,g,b)));
-                        newNode = Assets::Node::CreateNode(name,
-                                                                 center,
-                                                                 quat(1, 0, 0, 0),
-                                                                 vec3(1, 1, 1),
-                                                                 static_cast<uint32_t>(nodes.size()));
-                        auto renderComp = std::make_shared<Runtime::RenderComponent>();
-                        renderComp->SetModelId(meshIdx);
-                        renderComp->SetVisible(true);
-                        renderComp->SetMaterial({matId});
-                        newNode->AddComponent(renderComp);
+                        newNode = SceneBuilder::CreateRenderNode(name, center, vec3(1, 1, 1),
+                                                                 static_cast<uint32_t>(nodes.size()), meshIdx, matId);
                     }
                     else if (chooseMat < 0.9f) // Metal
                     {
@@ -134,31 +126,15 @@ namespace
                         const float g = 0.5f * (1 + random());
                         const float r = 0.5f * (1 + random());
                         uint32_t matId = CreateMaterial(materials, Material::Metallic(vec3(r,g,b), fuzziness));
-                        newNode = Assets::Node::CreateNode(name,
-                                                                 center,
-                                                                 quat(1, 0, 0, 0),
-                                                                 vec3(1, 1, 1),
-                                                                 static_cast<uint32_t>(nodes.size()));
-                        auto renderComp = std::make_shared<Runtime::RenderComponent>();
-                        renderComp->SetModelId(meshIdx);
-                        renderComp->SetVisible(true);
-                        renderComp->SetMaterial({matId});
-                        newNode->AddComponent(renderComp);
+                        newNode = SceneBuilder::CreateRenderNode(name, center, vec3(1, 1, 1),
+                                                                 static_cast<uint32_t>(nodes.size()), meshIdx, matId);
                     }
                     else // Glass
                     {
                         const float fuzziness = 0.5f * random();
                         uint32_t matId = CreateMaterial(materials, Material::Dielectric(1.5f, fuzziness));
-                        newNode = Assets::Node::CreateNode(name,
-                                                                 center,
-                                                                 quat(1, 0, 0, 0),
-                                                                 vec3(1, 1, 1),
-                                                                 static_cast<uint32_t>(nodes.size()));
-                        auto renderComp = std::make_shared<Runtime::RenderComponent>();
-                        renderComp->SetModelId(meshIdx);
-                        renderComp->SetVisible(true);
-                        renderComp->SetMaterial({matId});
-                        newNode->AddComponent(renderComp);
+                        newNode = SceneBuilder::CreateRenderNode(name, center, vec3(1, 1, 1),
+                                                                 static_cast<uint32_t>(nodes.size()), meshIdx, matId);
                     }
                     
                     nodes.push_back(newNode);
@@ -221,12 +197,9 @@ namespace
         materials.push_back({Material::Lambertian(vec3(0.4f, 0.4f, 0.4f))});
         models.push_back(Assets::FProcModel::CreateBox(vec3(-1000, -0.5, -1000), vec3(1000, 0, 1000)));
         {
-            auto newNode = Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0, 0, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()));
-            auto renderComp = std::make_shared<Runtime::RenderComponent>();
-            renderComp->SetModelId(0);
-            renderComp->SetVisible(true);
-            renderComp->SetMaterial({prevMatId + 0});
-            newNode->AddComponent(renderComp);
+            auto newNode = SceneBuilder::CreateRenderNode(Utilities::NameHelper::RandomName(6), vec3(0, 0, 0),
+                                                          vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()), 0,
+                                                          prevMatId + 0);
             nodes.push_back(newNode);
         }
         
@@ -239,12 +212,9 @@ namespace
         uint32_t modelIdx = static_cast<uint32_t>(models.size() - 1);
         
         {
-            auto newNode = Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0, 1, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()));
-            auto renderComp = std::make_shared<Runtime::RenderComponent>();
-            renderComp->SetModelId(modelIdx);
-            renderComp->SetVisible(true);
-            renderComp->SetMaterial({matIdx0});
-            newNode->AddComponent(renderComp);
+            auto newNode = SceneBuilder::CreateRenderNode(Utilities::NameHelper::RandomName(6), vec3(0, 1, 0),
+                                                          vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()),
+                                                          modelIdx, matIdx0);
             
             auto body1 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(0, 1, 0), 1.0f, NextMotionType::Dynamic);
             auto phys1 = std::make_shared<Runtime::PhysicsComponent>();
@@ -255,12 +225,9 @@ namespace
         }
         
         {
-            auto newNode = Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(-4, 1, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()));
-            auto renderComp = std::make_shared<Runtime::RenderComponent>();
-            renderComp->SetModelId(modelIdx);
-            renderComp->SetVisible(true);
-            renderComp->SetMaterial({matIdx1});
-            newNode->AddComponent(renderComp);
+            auto newNode = SceneBuilder::CreateRenderNode(Utilities::NameHelper::RandomName(6), vec3(-4, 1, 0),
+                                                          vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()),
+                                                          modelIdx, matIdx1);
             
             auto body2 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(-4, 1, 0), 1.0f, NextMotionType::Dynamic);
             auto phys2 = std::make_shared<Runtime::PhysicsComponent>();
@@ -271,12 +238,9 @@ namespace
         }
         
         {
-            auto newNode = Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(4, 1, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()));
-            auto renderComp = std::make_shared<Runtime::RenderComponent>();
-            renderComp->SetModelId(modelIdx);
-            renderComp->SetVisible(true);
-            renderComp->SetMaterial({matIdx2});
-            newNode->AddComponent(renderComp);
+            auto newNode = SceneBuilder::CreateRenderNode(Utilities::NameHelper::RandomName(6), vec3(4, 1, 0),
+                                                          vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()),
+                                                          modelIdx, matIdx2);
 
             auto body3 = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(vec3(4, 1, 0), 1.0f, NextMotionType::Dynamic);
             auto phys3 = std::make_shared<Runtime::PhysicsComponent>();
@@ -309,12 +273,13 @@ namespace
 
         int cboxModel = Assets::FProcModel::CreateCornellBox(5.55f, models, materials, lights);
         {
-            auto newNode = Assets::Node::CreateNode(Utilities::NameHelper::RandomName(6), vec3(0, 0, 0), quat(1, 0, 0, 0), vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()));
-            auto renderComp = std::make_shared<Runtime::RenderComponent>();
-            renderComp->SetModelId(cboxModel);
-            renderComp->SetVisible(true);
-            renderComp->SetMaterial({prevMatId + 0,prevMatId + 1,prevMatId + 2,prevMatId + 3});
-            newNode->AddComponent(renderComp);
+            auto newNode = SceneBuilder::CreateRenderNode(
+                Utilities::NameHelper::RandomName(6),
+                vec3(0, 0, 0),
+                vec3(1, 1, 1),
+                static_cast<uint32_t>(nodes.size()),
+                static_cast<uint32_t>(cboxModel),
+                std::array<uint32_t, 16>{prevMatId + 0, prevMatId + 1, prevMatId + 2, prevMatId + 3});
             nodes.push_back(newNode);
         }
 
@@ -329,12 +294,14 @@ namespace
         models.push_back(ball0);
         
         {
-            auto newNode = Assets::Node::CreateNode("Sphere1", spherePos, quat(vec3(0, 0.5f, 0)), vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()));
-            auto renderComp = std::make_shared<Runtime::RenderComponent>();
-            renderComp->SetModelId(cboxModel + 2);
-            renderComp->SetVisible(true);
-            renderComp->SetMaterial({prevMatId + 5});
-            newNode->AddComponent(renderComp);
+            auto newNode = SceneBuilder::CreateRenderNode("Sphere1",
+                                                          spherePos,
+                                                          vec3(1, 1, 1),
+                                                          static_cast<uint32_t>(nodes.size()),
+                                                          static_cast<uint32_t>(cboxModel + 2),
+                                                          prevMatId + 5,
+                                                          true,
+                                                          quat(vec3(0, 0.5f, 0)));
             
             auto id = NextEngine::GetInstance()->GetPhysicsEngine()->CreateSphereBody(spherePos, 1.0f, NextMotionType::Dynamic);
             auto phys = std::make_shared<Runtime::PhysicsComponent>();
@@ -345,12 +312,14 @@ namespace
         }
         
         {
-            auto newNode = Assets::Node::CreateNode("Box", boxPos, quat(vec3(0, 0.25f, 0)), vec3(1, 2, 1), static_cast<uint32_t>(nodes.size()));
-            auto renderComp = std::make_shared<Runtime::RenderComponent>();
-            renderComp->SetModelId(cboxModel + 1);
-            renderComp->SetVisible(true);
-            renderComp->SetMaterial({prevMatId + 4});
-            newNode->AddComponent(renderComp);
+            auto newNode = SceneBuilder::CreateRenderNode("Box",
+                                                          boxPos,
+                                                          vec3(1, 2, 1),
+                                                          static_cast<uint32_t>(nodes.size()),
+                                                          static_cast<uint32_t>(cboxModel + 1),
+                                                          prevMatId + 4,
+                                                          true,
+                                                          quat(vec3(0, 0.25f, 0)));
             nodes.push_back(newNode);
         }
     }
@@ -406,13 +375,14 @@ namespace
         auto addNodeRot = [&](const std::string& name, const vec3& pos, const quat& rot,
                               uint32_t modelIdx, uint32_t matIdx)
         {
-            auto node = Assets::Node::CreateNode(name, pos, rot, vec3(1), static_cast<uint32_t>(nodes.size()));
-            auto rc = std::make_shared<Runtime::RenderComponent>();
-            rc->SetModelId(modelIdx);
-            rc->SetVisible(true);
-            rc->SetMaterial({matIdx});
-            node->AddComponent(rc);
-            nodes.push_back(node);
+            nodes.push_back(SceneBuilder::CreateRenderNode(name,
+                                                           pos,
+                                                           vec3(1),
+                                                           static_cast<uint32_t>(nodes.size()),
+                                                           modelIdx,
+                                                           matIdx,
+                                                           true,
+                                                           rot));
         };
         auto addNode = [&](const std::string& name, const vec3& pos, uint32_t modelIdx, uint32_t matIdx)
         {
@@ -736,14 +706,12 @@ namespace
 
         auto addNode = [&](const std::string& name, const vec3& pos, uint32_t modelIdx, uint32_t matIdx)
         {
-            auto node = Assets::Node::CreateNode(name, pos, quat(1, 0, 0, 0), vec3(1),
-                                                 static_cast<uint32_t>(nodes.size()));
-            auto rc = std::make_shared<Runtime::RenderComponent>();
-            rc->SetModelId(modelIdx);
-            rc->SetVisible(true);
-            rc->SetMaterial({matIdx});
-            node->AddComponent(rc);
-            nodes.push_back(node);
+            nodes.push_back(SceneBuilder::CreateRenderNode(name,
+                                                           pos,
+                                                           vec3(1),
+                                                           static_cast<uint32_t>(nodes.size()),
+                                                           modelIdx,
+                                                           matIdx));
         };
 
         models.push_back(Assets::FProcModel::CreateBox(vec3(-7.5f, -0.08f, -5.0f), vec3(7.5f, 0.0f, 5.0f)));
@@ -806,14 +774,12 @@ namespace
 
         auto addNode = [&](const std::string& name, const vec3& pos, uint32_t modelIdx, uint32_t matIdx)
         {
-            auto node = Assets::Node::CreateNode(name, pos, quat(1, 0, 0, 0), vec3(1),
-                                                 static_cast<uint32_t>(nodes.size()));
-            auto rc = std::make_shared<Runtime::RenderComponent>();
-            rc->SetModelId(modelIdx);
-            rc->SetVisible(true);
-            rc->SetMaterial({matIdx});
-            node->AddComponent(rc);
-            nodes.push_back(node);
+            nodes.push_back(SceneBuilder::CreateRenderNode(name,
+                                                           pos,
+                                                           vec3(1),
+                                                           static_cast<uint32_t>(nodes.size()),
+                                                           modelIdx,
+                                                           matIdx));
         };
 
         // Ground
@@ -898,14 +864,12 @@ namespace
 
         auto addNode = [&](const std::string& name, const vec3& pos, uint32_t modelIdx, uint32_t matIdx)
         {
-            auto node = Assets::Node::CreateNode(name, pos, quat(1, 0, 0, 0), vec3(1),
-                                                 static_cast<uint32_t>(nodes.size()));
-            auto rc = std::make_shared<Runtime::RenderComponent>();
-            rc->SetModelId(modelIdx);
-            rc->SetVisible(true);
-            rc->SetMaterial({matIdx});
-            node->AddComponent(rc);
-            nodes.push_back(node);
+            nodes.push_back(SceneBuilder::CreateRenderNode(name,
+                                                           pos,
+                                                           vec3(1),
+                                                           static_cast<uint32_t>(nodes.size()),
+                                                           modelIdx,
+                                                           matIdx));
         };
 
         // Checkerboard ground: 8x8 grid of alternating white/dark squares
@@ -979,13 +943,8 @@ namespace
 
         auto addNode = [&](const std::string& name, const vec3& pos, uint32_t modelIdx, uint32_t matIdx)
         {
-            auto node = Assets::Node::CreateNode(name, pos, quat(1, 0, 0, 0), vec3(1),
-                                                 static_cast<uint32_t>(nodes.size()));
-            auto rc = std::make_shared<Runtime::RenderComponent>();
-            rc->SetModelId(modelIdx);
-            rc->SetVisible(true);
-            rc->SetMaterial({matIdx});
-            node->AddComponent(rc);
+            auto node = SceneBuilder::CreateRenderNode(name, pos, vec3(1), static_cast<uint32_t>(nodes.size()),
+                                                       modelIdx, matIdx);
             nodes.push_back(node);
             return node;
         };
@@ -1081,12 +1040,8 @@ namespace
         auto addRenderNode = [&](const std::string& name, const vec3& pos, const quat& rot,
                                  uint32_t modelIdx, uint32_t matIdx)
         {
-            auto node = Assets::Node::CreateNode(name, pos, rot, vec3(1), static_cast<uint32_t>(nodes.size()));
-            auto rc = std::make_shared<Runtime::RenderComponent>();
-            rc->SetModelId(modelIdx);
-            rc->SetVisible(true);
-            rc->SetMaterial({matIdx});
-            node->AddComponent(rc);
+            auto node = SceneBuilder::CreateRenderNode(name, pos, vec3(1), static_cast<uint32_t>(nodes.size()),
+                                                       modelIdx, matIdx, true, rot);
             nodes.push_back(node);
             return node;
         };
@@ -1269,12 +1224,12 @@ namespace
         uint32_t groundModelId = static_cast<uint32_t>(models.size() - 1);
 
         {
-            auto node = Assets::Node::CreateNode("Ground", vec3(0, 0, 0), quat(1, 0, 0, 0), vec3(1), static_cast<uint32_t>(nodes.size()));
-            auto rc = std::make_shared<Runtime::RenderComponent>();
-            rc->SetModelId(groundModelId);
-            rc->SetVisible(true);
-            rc->SetMaterial({matBase + 0});
-            node->AddComponent(rc);
+            auto node = SceneBuilder::CreateRenderNode("Ground",
+                                                       vec3(0, 0, 0),
+                                                       vec3(1),
+                                                       static_cast<uint32_t>(nodes.size()),
+                                                       groundModelId,
+                                                       matBase + 0);
             nodes.push_back(node);
         }
 
@@ -1294,13 +1249,14 @@ namespace
         auto addProcNode = [&](const std::string& name, const vec3& pos, const quat& rot,
                                uint32_t modelId, uint32_t materialId)
         {
-            auto node = Assets::Node::CreateNode(name, pos, rot, vec3(1), static_cast<uint32_t>(nodes.size()));
-            auto rc = std::make_shared<Runtime::RenderComponent>();
-            rc->SetModelId(modelId);
-            rc->SetVisible(true);
-            rc->SetMaterial({materialId});
-            node->AddComponent(rc);
-            nodes.push_back(node);
+            nodes.push_back(SceneBuilder::CreateRenderNode(name,
+                                                           pos,
+                                                           vec3(1),
+                                                           static_cast<uint32_t>(nodes.size()),
+                                                           modelId,
+                                                           materialId,
+                                                           true,
+                                                           rot));
         };
 
         addProcNode("Wall_North", vec3(0, 0, -(groundHalfSize + wallThickness * 0.5f)), quat(1, 0, 0, 0), wallLongId, matBase + 1);
@@ -1314,12 +1270,14 @@ namespace
         {
             if (pieceIdx < 0) return;
             const auto& piece = loader.GetPiece(pieceIdx);
-            auto node = Assets::Node::CreateNode(name, pos, rot, vec3(1), static_cast<uint32_t>(nodes.size()));
-            auto rc = std::make_shared<Runtime::RenderComponent>();
-            rc->SetModelId(piece.modelId);
-            rc->SetVisible(true);
-            rc->SetMaterial({piece.materialId});
-            node->AddComponent(rc);
+            auto node = SceneBuilder::CreateRenderNode(name,
+                                                       pos,
+                                                       vec3(1),
+                                                       static_cast<uint32_t>(nodes.size()),
+                                                       piece.modelId,
+                                                       piece.materialId,
+                                                       true,
+                                                       rot);
 
             if (withPhysics)
             {
@@ -1343,13 +1301,14 @@ namespace
             }
 
             const auto& piece = loader.GetPiece(pieceIdx);
-            auto node = Assets::Node::CreateNode(name, pos, rot, vec3(1), static_cast<uint32_t>(nodes.size()));
-            auto rc = std::make_shared<Runtime::RenderComponent>();
-            rc->SetModelId(piece.modelId);
-            rc->SetVisible(true);
-            rc->SetMaterial({piece.materialId});
-            node->AddComponent(rc);
-            return node;
+            return SceneBuilder::CreateRenderNode(name,
+                                                  pos,
+                                                  vec3(1),
+                                                  static_cast<uint32_t>(nodes.size()),
+                                                  piece.modelId,
+                                                  piece.materialId,
+                                                  true,
+                                                  rot);
         };
 
         auto placeDynamicBoxApprox = [&](const std::string& name, int pieceIdx, const vec3& pos,

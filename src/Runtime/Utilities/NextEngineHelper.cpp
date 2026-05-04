@@ -1,12 +1,34 @@
 #include "Runtime/Utilities/NextEngineHelper.h"
 
+#include "Assets/Core/Model.hpp"
 #include "Runtime/Engine.hpp"
 #include "Runtime/Editor/UserInterface.hpp"
 #include "Vulkan/SwapChain.hpp"
 
+#include <imgui.h>
+
 namespace
 {
     std::vector<int32_t> AuxCounter;
+
+    bool TryNdcToImGuiPos(const glm::vec3& ndc, ImVec2& outImGuiPos, bool invertY)
+    {
+        if (ndc.z < -1.0f || ndc.z > 1.0f || ndc.x < -1.2f || ndc.x > 1.2f || ndc.y < -1.2f || ndc.y > 1.2f)
+        {
+            return false;
+        }
+
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        if (!viewport || viewport->Size.x <= 1.0f || viewport->Size.y <= 1.0f)
+        {
+            return false;
+        }
+
+        outImGuiPos.x = viewport->Pos.x + (ndc.x * 0.5f + 0.5f) * viewport->Size.x;
+        const float yNdc = invertY ? -ndc.y : ndc.y;
+        outImGuiPos.y = viewport->Pos.y + (yNdc * 0.5f + 0.5f) * viewport->Size.y;
+        return true;
+    }
 }
 
 namespace NextEngineHelper
@@ -46,6 +68,63 @@ namespace NextEngineHelper
         transformed.y += vkoffset.y;
 
         return transformed;
+    }
+
+    bool TryProjectWorldToScreen(const glm::vec3& worldPos, ImVec2& outImGuiPos)
+    {
+        NextEngine* engine = NextEngine::GetInstance();
+        if (!engine)
+        {
+            return false;
+        }
+
+        const auto& ubo = engine->GetUniformBufferObject();
+        const glm::vec4 clip = ubo.ViewProjection * glm::vec4(worldPos, 1.0f);
+        if (clip.w <= 0.001f)
+        {
+            return false;
+        }
+
+        const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+        if (ndc.z < 0.0f || ndc.z > 1.0f)
+        {
+            return false;
+        }
+
+        return TryNdcToImGuiPos(ndc, outImGuiPos, false);
+    }
+
+    bool TryProjectWorldToScreen(const Assets::Camera& camera, const glm::vec3& worldPos, ImVec2& outImGuiPos)
+    {
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        if (!viewport || viewport->Size.x <= 1.0f || viewport->Size.y <= 1.0f)
+        {
+            return false;
+        }
+
+        const float aspect = viewport->Size.x / viewport->Size.y;
+        const float fov = camera.FieldOfView > 1.0f ? camera.FieldOfView : 60.0f;
+        const glm::mat4 projection =
+            glm::perspective(glm::radians(fov), aspect, std::max(0.05f, camera.NearPlane), camera.FarPlane);
+        const glm::mat4 viewProjection = projection * camera.ModelView;
+        const glm::vec4 clip = viewProjection * glm::vec4(worldPos, 1.0f);
+        if (clip.w <= 0.0f)
+        {
+            return false;
+        }
+
+        return TryNdcToImGuiPos(glm::vec3(clip) / clip.w, outImGuiPos, true);
+    }
+
+    bool TryProjectWorldToScreen(const NextGameInstanceBase& gameInstance, const glm::vec3& worldPos, ImVec2& outImGuiPos)
+    {
+        Assets::Camera camera{};
+        if (!gameInstance.OverrideRenderCamera(camera))
+        {
+            return TryProjectWorldToScreen(worldPos, outImGuiPos);
+        }
+
+        return TryProjectWorldToScreen(camera, worldPos, outImGuiPos);
     }
 
     void GetScreenToWorldRay(glm::vec2 locationSS, glm::vec3& org, glm::vec3& dir)

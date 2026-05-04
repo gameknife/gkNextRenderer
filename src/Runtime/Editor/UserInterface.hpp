@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <cstdint>
 #include <glm/vec4.hpp>
 
@@ -87,6 +88,14 @@ public:
 
 	VkDescriptorSet RequestImTextureId(uint32_t globalTextureId);
 	VkDescriptorSet RequestImTextureByName(const std::string& name);
+
+	struct FUiTextureHandle
+	{
+		ImTextureID textureId = 0;
+		ImVec2 pixelSize{0.0f, 0.0f};
+		bool valid = false;
+	};
+	FUiTextureHandle RequestUiTexture(const std::string& path, bool srgb = true);
 	
 	static void SetStyle();
 
@@ -133,6 +142,8 @@ private:
 	UserSettings& userSettings_;	
 	
 	std::unordered_map<uint32_t, VkDescriptorSet> imTextureIdMap_;
+	std::unordered_set<std::string> uiTextureLoadRequests_;
+	std::unordered_map<std::string, ImVec2> uiTexturePixelSizeCache_;
 	std::vector< std::function<void ()> > auxDrawRequest_;
 	std::vector<std::string> consoleHistory_;
 	std::vector<std::string> consoleMatches_;

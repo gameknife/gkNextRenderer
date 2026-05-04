@@ -3,7 +3,9 @@
 
 #include <spdlog/spdlog.h>
 
+#include "Assets/Core/Node.h"
 #include "Brotato3DAudio.hpp"
+#include "Runtime/Components/RenderComponent.h"
 
 using namespace Brotato3DUtil;
 
@@ -32,7 +34,7 @@ void Brotato3DGameInstance::SpawnPickup(int value, Brotato3D::EPickupKind kind, 
                                       return DistanceXZ(lhs.worldPos, player_.worldPos) <
                                              DistanceXZ(rhs.worldPos, player_.worldPos);
                                   });
-        HideNode(slot->node);
+        NodeUtils::SetVisible(slot->node, false);
     }
 
     slot->kind = kind;
@@ -48,10 +50,10 @@ void Brotato3DGameInstance::SpawnPickup(int value, Brotato3D::EPickupKind kind, 
         if (auto render = slot->node->GetComponent<Runtime::RenderComponent>())
         {
             render->SetModelId(modelId);
-            render->SetMaterial({materialId});
         }
-        SetNodeTranslation(slot->node, slot->worldPos);
-        ShowNode(slot->node);
+        NodeUtils::SetMaterial(slot->node, materialId);
+        NodeUtils::SetTranslation(slot->node, slot->worldPos);
+        NodeUtils::SetVisible(slot->node, true);
     }
 }
 
@@ -73,7 +75,7 @@ void Brotato3DGameInstance::UpdatePickups(double deltaSeconds)
         {
             pickup.worldPos = glm::mix(pickup.worldPos, player_.worldPos, std::min(1.0f, 8.0f * static_cast<float>(deltaSeconds)));
             pickup.worldPos.y = 0.15f;
-            SetNodeTranslation(pickup.node, pickup.worldPos);
+            NodeUtils::SetTranslation(pickup.node, pickup.worldPos);
         }
         if (DistanceXZ(pickup.worldPos, player_.worldPos) < 0.4f)
         {
@@ -105,7 +107,7 @@ void Brotato3DGameInstance::UpdatePickups(double deltaSeconds)
             }
             pickup.active = false;
             pickup.magnetized = false;
-            HideNode(pickup.node);
+            NodeUtils::SetVisible(pickup.node, false);
         }
     }
 }

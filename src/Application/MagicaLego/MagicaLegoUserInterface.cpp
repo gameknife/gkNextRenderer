@@ -9,6 +9,7 @@
 #include "MagicaLegoUIHelpers.hpp"
 
 #include "Runtime/Editor/UserInterface.hpp"
+#include "Runtime/Editor/FontLoader.h"
 #include "Runtime/Platform/PlatformCommon.h"
 #include "Runtime/Subsystems/VoiceInputService.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
@@ -172,31 +173,23 @@ void MagicaLegoUserInterface::OnInitUI()
 {
     MagicaLego::Style::ApplyStyle();
 
-    std::vector<uint8_t> tmpData;
-    
     if (bigFont_ == nullptr)
     {
-        ImFontGlyphRangesBuilder builder;
-        builder.AddText("MagicaLego");
-        const ImWchar* glyphRange = ImGui::GetIO().Fonts->GetGlyphRangesDefault();
-        if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/fonts/Roboto-BoldCondensed.ttf", tmpData))
-        {
-            void* dataSrc = IM_ALLOC(tmpData.size());
-            std::memcpy(dataSrc, tmpData.data(), tmpData.size());
-            bigFont_ = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(dataSrc, int(tmpData.size()), 72, nullptr, glyphRange);
-        }
+        bigFont_ = FontLoader::Load(FontLoader::FFontRequest{
+            .filePath = "assets/fonts/Roboto-BoldCondensed.ttf",
+            .pixelSize = 72.0f,
+            .includeChineseFull = false,
+            .extraGlyphsUtf8 = "MagicaLego",
+        });
     }
 
     if (boldFont_ == nullptr)
     {
-        ImFontGlyphRangesBuilder builder;
-        const ImWchar* glyphRange = ImGui::GetIO().Fonts->GetGlyphRangesDefault();
-        if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/fonts/Roboto-BoldCondensed.ttf", tmpData))
-        {
-            void* dataSrc = IM_ALLOC(tmpData.size());
-            std::memcpy(dataSrc, tmpData.data(), tmpData.size());
-            boldFont_ = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(dataSrc, int(tmpData.size()), 20, nullptr, glyphRange);
-        }
+        boldFont_ = FontLoader::Load(FontLoader::FFontRequest{
+            .filePath = "assets/fonts/Roboto-BoldCondensed.ttf",
+            .pixelSize = 20.0f,
+            .includeChineseFull = false,
+        });
     }
 
     introStep_ = EIS_Entry;
@@ -1052,7 +1045,9 @@ void MagicaLegoUserInterface::DrawRightBar()
             for (auto& block : basicBlocks)
             {
                 std::string filename = fmt::format("assets/textures/thumb/thumb_{}_{}.jpg", block.type, block.name);
-                ImTextureID id = (ImTextureID)(intptr_t)GetGameInstance()->GetEngine().GetUserInterface()->RequestImTextureByName(filename);
+                const UserInterface::FUiTextureHandle texture =
+                    GetGameInstance()->GetEngine().GetUserInterface()->RequestUiTexture(filename);
+                ImTextureID id = texture.valid ? texture.textureId : static_cast<ImTextureID>(0);
                 if (MaterialButton(block, id, windowWidth, GetGameInstance()->GetCurrentBrushIdx() == block.brushId_))
                 {
                     GetGameInstance()->SetCurrentBrushIdx(block.brushId_);

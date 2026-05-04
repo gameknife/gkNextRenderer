@@ -5,6 +5,7 @@
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Command/SelectionCommandUtils.hpp"
+#include "Runtime/Scene/SceneBuilder.h"
 
 #include <algorithm>
 #include <unordered_set>
@@ -14,22 +15,31 @@ namespace
 
     std::shared_ptr<Assets::Node> CloneNode(const Assets::Node& source, uint32_t newInstanceId)
     {
-        auto clone = Assets::Node::CreateNode(
-            source.GetName() + "_copy",
-            source.Translation(),
-            source.Rotation(),
-            source.Scale(),
-            newInstanceId);
-
+        std::shared_ptr<Assets::Node> clone;
         if (auto render = source.GetComponent<Runtime::RenderComponent>())
         {
-            auto newRender = std::make_shared<Runtime::RenderComponent>();
-            newRender->SetModelId(render->GetModelId());
-            newRender->SetMaterial(render->Materials());
-            newRender->SetVisible(render->GetVisible());
-            newRender->SetRayCastVisible(render->GetRayCastVisible());
-            newRender->SetSkinIndex(render->GetSkinIndex());
-            clone->AddComponent(newRender);
+            clone = SceneBuilder::CreateRenderNode(source.GetName() + "_copy",
+                                                   source.Translation(),
+                                                   source.Scale(),
+                                                   newInstanceId,
+                                                   render->GetModelId(),
+                                                   render->Materials(),
+                                                   render->GetVisible(),
+                                                   source.Rotation(),
+                                                   render->GetRayCastVisible());
+            if (auto newRender = clone->GetComponent<Runtime::RenderComponent>())
+            {
+                newRender->SetSkinIndex(render->GetSkinIndex());
+            }
+        }
+        else
+        {
+            clone = Assets::Node::CreateNode(
+                source.GetName() + "_copy",
+                source.Translation(),
+                source.Rotation(),
+                source.Scale(),
+                newInstanceId);
         }
 
         if (auto phys = source.GetComponent<Runtime::PhysicsComponent>())

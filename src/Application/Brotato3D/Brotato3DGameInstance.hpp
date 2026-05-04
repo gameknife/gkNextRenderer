@@ -123,7 +123,6 @@ public:
     Brotato3D::FPlayerStats GetEffectivePlayerStats() const;
     bool CanBuyShopOffer(size_t slotIndex) const;
     std::string GetShopOfferUnavailableReason(size_t slotIndex) const;
-    bool WorldToScreen(const glm::vec3& world, ImVec2& outScreen) const;
     void SelectUpgrade(size_t choiceIndex);
     void BuyShopItem(size_t slotIndex);
     void RerollShop();
@@ -177,12 +176,6 @@ private:
     void PushExplosionRing(const glm::vec3& worldPos, const glm::vec4& color, float maxRadius);
     void PushLaserBeam(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color, float durationMs, float width);
     void ClearAliveEnemies(bool dropLoot);
-    void HideNode(const std::shared_ptr<Assets::Node>& node);
-    void ShowNode(const std::shared_ptr<Assets::Node>& node);
-    void SetNodeMaterial(const std::shared_ptr<Assets::Node>& node, uint32_t materialId);
-    void SetNodeTranslation(const std::shared_ptr<Assets::Node>& node, const glm::vec3& translation);
-    void SetNodeRotation(const std::shared_ptr<Assets::Node>& node, const glm::quat& rotation);
-    void SetNodeScale(const std::shared_ptr<Assets::Node>& node, const glm::vec3& scale);
     void PushFloatingText(const glm::vec3& worldPos,
                           std::string text,
                           const glm::vec4& color,

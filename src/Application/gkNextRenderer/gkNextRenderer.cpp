@@ -10,6 +10,8 @@
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Engine.hpp"
+#include "Runtime/Editor/FontLoader.h"
+#include "Runtime/Scene/SceneBuilder.h"
 #include "Runtime/Utilities/NextEngineHelper.h"
 #include "Runtime/Utilities/GraphicsDebugPanel.hpp"
 #include "Utilities/Localization.hpp"
@@ -250,10 +252,12 @@ void NextRendererGameInstance::OnInitUI()
 
 	if (bigFont_ == nullptr)
 	{
-		ImFontGlyphRangesBuilder builder;
-		builder.AddText("gkNextRenderer");
-		const ImWchar* glyphRange = ImGui::GetIO().Fonts->GetGlyphRangesDefault();
-		bigFont_ = ImGui::GetIO().Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-BoldCondensed.ttf").c_str(), 24, nullptr, glyphRange);
+		bigFont_ = FontLoader::Load(FontLoader::FFontRequest{
+			.filePath = "assets/fonts/Roboto-BoldCondensed.ttf",
+			.pixelSize = 24.0f,
+			.includeChineseFull = false,
+			.extraGlyphsUtf8 = "gkNextRenderer",
+		});
 	}
 }
 
@@ -432,15 +436,9 @@ void NextRendererGameInstance::CreateSphereAndPush()
 	glm::vec3 farTarget = modelViewController_.GetPosition() + forward * 1000.0f + modelViewController_.GetUp() * 100.f;
 	glm::vec3 shotDir = normalize((farTarget - center));
 	uint32_t instanceId = uint32_t(GetEngine().GetScene().Nodes().size());
-	std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("temp", center, glm::quat(), glm::vec3(1), instanceId);
 
 	uint32_t newMatId = matIds_[std::rand() % matIds_.size()];
-	
-	auto renderComp = std::make_shared<Runtime::RenderComponent>();
-	renderComp->SetModelId(modelId_);
-	renderComp->SetMaterial({newMatId});
-	renderComp->SetVisible(true);
-	newNode->AddComponent(renderComp);
+	std::shared_ptr<Assets::Node> newNode = SceneBuilder::CreateRenderNode("temp", center, glm::vec3(1), instanceId, modelId_, newMatId);
 	
 	auto phys = std::make_shared<Runtime::PhysicsComponent>();
 	phys->SetMobility(Runtime::ENodeMobility::Dynamic);
@@ -461,15 +459,10 @@ void NextRendererGameInstance::CreateBoxAndPush()
     glm::vec3 farTarget = modelViewController_.GetPosition() + forward * 1000.0f + modelViewController_.GetUp() * 200.f;
     glm::vec3 shotDir = normalize((farTarget - center));
     uint32_t instanceId = uint32_t(GetEngine().GetScene().Nodes().size());
-    std::shared_ptr<Assets::Node> newNode = Assets::Node::CreateNode("tempBox", center, glm::quat(), glm::vec3(1), instanceId);
 
     uint32_t newMatId = matIds_[std::rand() % matIds_.size()];
-    
-    auto renderComp = std::make_shared<Runtime::RenderComponent>();
-    renderComp->SetModelId(boxModelId_);
-    renderComp->SetMaterial({newMatId});
-    renderComp->SetVisible(true);
-    newNode->AddComponent(renderComp);
+    std::shared_ptr<Assets::Node> newNode =
+        SceneBuilder::CreateRenderNode("tempBox", center, glm::vec3(1), instanceId, boxModelId_, newMatId);
     
     auto phys = std::make_shared<Runtime::PhysicsComponent>();
     phys->SetMobility(Runtime::ENodeMobility::Dynamic);

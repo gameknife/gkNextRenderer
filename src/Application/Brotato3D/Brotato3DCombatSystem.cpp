@@ -15,7 +15,7 @@ void Brotato3DGameInstance::ApplyDamageToEnemy(Brotato3D::FEnemyRuntime& enemy, 
     enemy.currentHp -= damage;
     Brotato3D::PlayHitSfx(damage, isCrit);
     enemy.hitFlashRemainingMs = 80.0f;
-    SetNodeMaterial(enemy.node, enemy.hitFlashMaterialId);
+    NodeUtils::SetMaterial(enemy.node, enemy.hitFlashMaterialId);
     PushFloatingText(enemy.worldPos + glm::vec3(0.0f, 0.8f, 0.0f),
                      isCrit ? fmt::format("!{}", damage) : fmt::format("-{}", damage),
                      isCrit ? glm::vec4(1.0f, 0.78f, 0.12f, 1.0f) : glm::vec4(1.0f, 0.25f, 0.18f, 1.0f),
@@ -137,7 +137,7 @@ void Brotato3DGameInstance::ApplyItemExplosionDamage(const glm::vec3& worldPos, 
 
         enemy.currentHp -= damage;
         enemy.hitFlashRemainingMs = 80.0f;
-        SetNodeMaterial(enemy.node, enemy.hitFlashMaterialId);
+        NodeUtils::SetMaterial(enemy.node, enemy.hitFlashMaterialId);
         PushFloatingText(enemy.worldPos + glm::vec3(0.0f, 0.8f, 0.0f), fmt::format("-{}", damage),
                          glm::vec4(1.0f, 0.5f, 0.18f, 1.0f), 600.0f);
         if (enemy.currentHp <= 0)

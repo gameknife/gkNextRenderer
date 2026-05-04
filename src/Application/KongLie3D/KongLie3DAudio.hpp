@@ -2,8 +2,7 @@
 
 #include "Common/CoreMinimal.hpp"
 #include "Runtime/Engine.hpp"
-
-#include <chrono>
+#include "Runtime/Subsystems/NextAudio.h"
 
 namespace KongLie3D
 {
@@ -16,21 +15,12 @@ namespace KongLie3D
 
     inline void PlayKongLieSfx(const std::string& soundPath, float volumeScale = 1.0f, uint64_t minIntervalMs = 50)
     {
-        static std::unordered_map<std::string, uint64_t> lastPlayMsBySound;
-
-        using namespace std::chrono;
-        const uint64_t nowMs = duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
-        const auto it = lastPlayMsBySound.find(soundPath);
-        if (it != lastPlayMsBySound.end() && nowMs - it->second < minIntervalMs)
-        {
-            return;
-        }
-
-        lastPlayMsBySound[soundPath] = nowMs;
-
         if (NextEngine* engine = NextEngine::GetInstance())
         {
-            engine->PlaySound(soundPath, false, std::clamp(KongLieSfxVolume * volumeScale, 0.0f, 1.0f));
+            if (NextAudio* audio = engine->GetAudio())
+            {
+                audio->PlaySfx(soundPath, std::clamp(KongLieSfxVolume * volumeScale, 0.0f, 1.0f), minIntervalMs);
+            }
         }
     }
 
