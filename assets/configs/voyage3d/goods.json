@@ -1,0 +1,10 @@
+{
+  "goods": [
+    { "id": "wine",   "name": "葡萄酒", "basePrice":  50, "supplyPorts": ["marseille", "barcelona"], "demandPorts": ["istanbul", "alexandria"] },
+    { "id": "spice",  "name": "香料",   "basePrice": 200, "supplyPorts": ["alexandria", "istanbul"], "demandPorts": ["venice", "marseille"] },
+    { "id": "silk",   "name": "丝绸",   "basePrice": 300, "supplyPorts": ["alexandria", "istanbul"], "demandPorts": ["venice", "genoa"] },
+    { "id": "wheat",  "name": "小麦",   "basePrice":  20, "supplyPorts": ["naples", "tunis"], "demandPorts": ["venice", "genoa"] },
+    { "id": "weapon", "name": "武器",   "basePrice": 150, "supplyPorts": ["genoa", "venice"], "demandPorts": ["tunis", "alexandria"] },
+    { "id": "glass",  "name": "玻璃",   "basePrice": 100, "supplyPorts": ["venice"], "demandPorts": ["alexandria", "istanbul", "tunis"] }
+  ]
+}

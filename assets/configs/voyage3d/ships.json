@@ -1,0 +1,7 @@
+{
+  "ships": [
+    { "id": "sloop",   "name": "单桅快船", "hp":  60, "cargoMax":  20, "cannonCount": 4,  "speedKnots":  9.0, "price":     0, "size": [1.4, 0.3, 0.5], "sailHeight": 1.4 },
+    { "id": "carrack", "name": "卡拉克",   "hp": 120, "cargoMax":  60, "cannonCount": 12, "speedKnots":  7.0, "price":  3000, "size": [2.2, 0.4, 0.8], "sailHeight": 2.0 },
+    { "id": "galleon", "name": "盖伦",     "hp": 220, "cargoMax": 120, "cannonCount": 24, "speedKnots":  6.0, "price": 12000, "size": [3.0, 0.5, 1.0], "sailHeight": 2.6 }
+  ]
+}
