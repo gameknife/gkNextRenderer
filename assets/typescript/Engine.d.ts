@@ -89,6 +89,8 @@ export namespace UI {
     function GetScreenSize(): Vec2;
     function CalcTextSize(text: string, scale?: number): Vec2;
     function DrawText(text: string, x: number, y: number, scale?: number, r?: number, g?: number, b?: number, a?: number): void;
+    function DrawRectFilled(x: number, y: number, width: number, height: number, r: number, g: number, b: number, a: number, rounding?: number): void;
+    function DrawRect(x: number, y: number, width: number, height: number, r: number, g: number, b: number, a: number, rounding?: number, thickness?: number): void;
 }
 
 export type ProceduralModelSpec =
