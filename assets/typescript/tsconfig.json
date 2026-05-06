@@ -10,5 +10,11 @@
     },
     "files": [
         "test.ts",
+        "helper.ts",
+        "flappy/main.ts",
+        "flappy/config.ts",
+        "flappy/rng.ts",
+        "flappy/bird.ts",
+        "flappy/pipes.ts",
     ]
 }

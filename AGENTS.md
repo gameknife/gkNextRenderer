@@ -166,9 +166,11 @@ assets/
 
 **QuickJS Scripting:**
 - Hot reload support (modify `.js` files at runtime)
+- ES module loading supports compiled TypeScript relative imports under `assets/scripts`
 - Components reflected via `entt::meta` are auto-exposed to JavaScript
-- Global namespace: `Global.GetEngine()`, `Global.spdlog()`
-- Scene API: `Scene.FindNodeIdWithComponent()`, `Scene.GetNodeById()`
+- Global namespace: `Global.GetEngine()`, `Global.GetScene()`, `Global.spdlog()`
+- Scene API: `Scene.FindNodeIdWithComponent()`, `Scene.GetNodeById()`, dynamic `AddBoxNode` / `AddSphereNode` helpers
+- See `AGENT_GUIDE/QuickJSBindings.md`; `FlappyCpp` / `FlappyJs` replay parity is the binding regression demo
 
 **Component System:**
 - ECS via entt library
