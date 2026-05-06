@@ -30,8 +30,9 @@ export class Scene {
 }
 export interface Scene {
     GetNodeById(nodeId: number): Node;
-    AddBoxNode(name: string, minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number, r: number, g: number, b: number): number;
-    AddSphereNode(name: string, cx: number, cy: number, cz: number, radius: number, r: number, g: number, b: number): number;
+    AddLambertianMaterial(color: Vec3): number;
+    AddDiffuseLightMaterial(color: Vec3, intensity?: number): number;
+    AddRenderNode(spec: RenderNodeSpec): number;
     RemoveNodeById(nodeId: number): void;
     MarkTransformDirty(): void;
 }
@@ -89,6 +90,25 @@ export namespace UI {
     function CalcTextSize(text: string, scale?: number): Vec2;
     function DrawText(text: string, x: number, y: number, scale?: number, r?: number, g?: number, b?: number, a?: number): void;
 }
+
+export type ProceduralModelSpec =
+    | { type: "box"; min: Vec3; max: Vec3 }
+    | { type: "sphere"; center?: Vec3; radius: number };
+export interface RenderNodeSpec {
+    name: string;
+    modelId: number;
+    materialId: number;
+    translation?: Vec3;
+    scale?: Vec3;
+    visible?: boolean;
+}
+
+export namespace SceneBuild {
+    function AddProceduralModel(spec: ProceduralModelSpec): number;
+    function AddLambertianMaterial(color: Vec3): number;
+    function AddDiffuseLightMaterial(color: Vec3, intensity?: number): number;
+    function AddRenderNode(spec: RenderNodeSpec): number;
+}
 export type InputEventType = "keyDown" | "keyUp" | "mouseButtonDown" | "mouseButtonUp" | "gamepadButtonDown" | "gamepadButtonUp";
 export interface InputEvent {
     type: InputEventType;
@@ -101,9 +121,10 @@ export interface InputEvent {
 export interface LifecycleHooks {
     onInit?: () => void;
     onDestroy?: () => void;
+    onBeforeSceneRebuild?: () => void;
     onSceneLoaded?: () => void;
-    onRenderUI?: () => void;
-    onInputEvent?: (event: InputEvent) => void;
+    onRenderUI?: () => boolean | void;
+    onInputEvent?: (event: InputEvent) => boolean | void;
 }
 export interface CameraOverride { position: Vec3; target: Vec3; up: Vec3; fov: number; }
 export function RegisterLifecycleHooks(hooks: LifecycleHooks): void;

@@ -317,6 +317,22 @@ namespace
     FQuickJSInputState GQuickJSInput;
     FQuickJSCameraOverride GQuickJSCamera;
 
+    struct FQuickJSSceneBuildContext
+    {
+        std::vector<std::shared_ptr<Assets::Node>>* nodes = nullptr;
+        std::vector<Assets::Model>* models = nullptr;
+        std::vector<Assets::FMaterial>* materials = nullptr;
+        std::vector<Assets::LightObject>* lights = nullptr;
+        std::vector<Assets::AnimationTrack>* tracks = nullptr;
+
+        bool IsValid() const
+        {
+            return nodes && models && materials && lights && tracks;
+        }
+    };
+
+    FQuickJSSceneBuildContext GQuickJSSceneBuild;
+
     std::optional<SDL_Keycode> KeyNameToCode(std::string name)
     {
         std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c)
@@ -535,6 +551,90 @@ namespace
         {
             outValue = static_cast<float>(numericValue);
         }
+    }
+
+    std::string GetObjectString(JSContext* ctx, JSValueConst object, const char* key, std::string fallback = {})
+    {
+        JSValue value = JS_GetPropertyStr(ctx, object, key);
+        std::string result = JS_IsUndefined(value) ? std::move(fallback) : ToCString(ctx, value);
+        JS_FreeValue(ctx, value);
+        return result;
+    }
+
+    float GetObjectFloat(JSContext* ctx, JSValueConst object, const char* key, float fallback = 0.0f)
+    {
+        JSValue value = JS_GetPropertyStr(ctx, object, key);
+        float result = fallback;
+        if (!JS_IsUndefined(value))
+        {
+            JSToFloat(ctx, value, result);
+        }
+        JS_FreeValue(ctx, value);
+        return result;
+    }
+
+    uint32_t GetObjectUint32(JSContext* ctx, JSValueConst object, const char* key, uint32_t fallback = 0)
+    {
+        JSValue value = JS_GetPropertyStr(ctx, object, key);
+        uint32_t result = fallback;
+        if (!JS_IsUndefined(value))
+        {
+            JS_ToUint32(ctx, &result, value);
+        }
+        JS_FreeValue(ctx, value);
+        return result;
+    }
+
+    bool GetObjectBool(JSContext* ctx, JSValueConst object, const char* key, bool fallback = false)
+    {
+        JSValue value = JS_GetPropertyStr(ctx, object, key);
+        const bool result = JS_IsUndefined(value) ? fallback : JS_ToBool(ctx, value) != 0;
+        JS_FreeValue(ctx, value);
+        return result;
+    }
+
+    glm::vec3 GetObjectVec3(JSContext* ctx, JSValueConst object, const char* key, const glm::vec3& fallback = glm::vec3(0.0f))
+    {
+        JSValue value = JS_GetPropertyStr(ctx, object, key);
+        glm::vec3 result = fallback;
+        if (JS_IsObject(value))
+        {
+            JSValueToVec3(ctx, value, result);
+        }
+        JS_FreeValue(ctx, value);
+        return result;
+    }
+
+    uint32_t GenerateBuildInstanceId(const std::vector<std::shared_ptr<Assets::Node>>& nodes)
+    {
+        uint32_t maxId = 0;
+        for (const auto& node : nodes)
+        {
+            if (node)
+            {
+                maxId = std::max(maxId, node->GetInstanceId());
+            }
+        }
+        return nodes.empty() ? 0 : maxId + 1;
+    }
+
+    std::shared_ptr<Assets::Node> CreateRenderNodeFromSpec(JSContext* ctx,
+                                                           JSValueConst spec,
+                                                           uint32_t instanceId,
+                                                           uint32_t modelCount)
+    {
+        const std::string name = GetObjectString(ctx, spec, "name", "ScriptNode");
+        const uint32_t modelId = GetObjectUint32(ctx, spec, "modelId");
+        const uint32_t materialId = GetObjectUint32(ctx, spec, "materialId");
+        if (modelId >= modelCount)
+        {
+            return nullptr;
+        }
+
+        const glm::vec3 translation = GetObjectVec3(ctx, spec, "translation");
+        const glm::vec3 scale = GetObjectVec3(ctx, spec, "scale", glm::vec3(1.0f));
+        const bool visible = GetObjectBool(ctx, spec, "visible", true);
+        return SceneBuilder::CreateRenderNode(name, translation, scale, instanceId, modelId, materialId, visible);
     }
 
     JSValue ComponentPropertyGetter(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv,
@@ -1083,12 +1183,12 @@ namespace
         return CreateNodeObject(ctx, nodeId);
     }
 
-    JSValue SceneAddBoxNode(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    JSValue SceneAddLambertianMaterial(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
     {
         (void)thisVal;
-        if (argc < 10)
+        if (argc < 1 || !JS_IsObject(argv[0]))
         {
-            return JS_ThrowTypeError(ctx, "AddBoxNode requires name, min/max coordinates, and rgb");
+            return JS_ThrowTypeError(ctx, "AddLambertianMaterial expects a Vec3 color");
         }
 
         auto* engine = NextEngine::GetInstance();
@@ -1097,81 +1197,159 @@ namespace
             return JS_UNDEFINED;
         }
 
-        const std::string name = ToCString(ctx, argv[0]);
-        float minX = 0.0f, minY = 0.0f, minZ = 0.0f;
-        float maxX = 0.0f, maxY = 0.0f, maxZ = 0.0f;
-        float r = 1.0f, g = 1.0f, b = 1.0f;
-        JSToFloat(ctx, argv[1], minX);
-        JSToFloat(ctx, argv[2], minY);
-        JSToFloat(ctx, argv[3], minZ);
-        JSToFloat(ctx, argv[4], maxX);
-        JSToFloat(ctx, argv[5], maxY);
-        JSToFloat(ctx, argv[6], maxZ);
-        JSToFloat(ctx, argv[7], r);
-        JSToFloat(ctx, argv[8], g);
-        JSToFloat(ctx, argv[9], b);
+        glm::vec3 color(1.0f);
+        JSValueToVec3(ctx, argv[0], color);
+        return JS_NewUint32(ctx, SceneBuilder::AddLambertianMaterialToScene(engine->GetScene(), color));
+    }
 
-        Assets::Scene& scene = engine->GetScene();
-        constexpr uint32_t boxModelId = 1;
-        if (scene.Models().size() <= boxModelId)
+    JSValue SceneAddDiffuseLightMaterial(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 1 || !JS_IsObject(argv[0]))
         {
-            return JS_ThrowInternalError(ctx, "Scene does not have a JS box model slot");
+            return JS_ThrowTypeError(ctx, "AddDiffuseLightMaterial expects a Vec3 color");
         }
 
-        const glm::vec3 minPos(minX, minY, minZ);
-        const glm::vec3 maxPos(maxX, maxY, maxZ);
-        const glm::vec3 center = (minPos + maxPos) * 0.5f;
-        const glm::vec3 size = glm::max(maxPos - minPos, glm::vec3(0.001f));
-        const uint32_t materialId = SceneBuilder::AddLambertianMaterialToScene(scene, glm::vec3(r, g, b));
-        auto node = SceneBuilder::CreateRenderNode(name, center, size, scene.GenerateInstanceId(), boxModelId, materialId);
+        auto* engine = NextEngine::GetInstance();
+        if (!engine)
+        {
+            return JS_UNDEFINED;
+        }
+
+        glm::vec3 color(1.0f);
+        JSValueToVec3(ctx, argv[0], color);
+        float parsedIntensity = 1.0f;
+        if (argc >= 2)
+        {
+            JSToFloat(ctx, argv[1], parsedIntensity);
+        }
+        return JS_NewUint32(ctx, SceneBuilder::AddDiffuseLightMaterialToScene(engine->GetScene(), color, parsedIntensity));
+    }
+
+    JSValue SceneAddRenderNode(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 1 || !JS_IsObject(argv[0]))
+        {
+            return JS_ThrowTypeError(ctx, "AddRenderNode expects a render node spec");
+        }
+
+        auto* engine = NextEngine::GetInstance();
+        if (!engine)
+        {
+            return JS_UNDEFINED;
+        }
+
+        Assets::Scene& scene = engine->GetScene();
+        auto node = CreateRenderNodeFromSpec(ctx,
+                                             argv[0],
+                                             scene.GenerateInstanceId(),
+                                             static_cast<uint32_t>(scene.Models().size()));
+        if (!node)
+        {
+            return JS_ThrowRangeError(ctx, "AddRenderNode received an invalid modelId");
+        }
         const uint32_t nodeId = node->GetInstanceId();
         scene.AddNode(node);
         scene.MarkDirty();
         return JS_NewUint32(ctx, nodeId);
     }
 
-    JSValue SceneAddSphereNode(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    JSValue SceneBuildAddProceduralModel(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
     {
         (void)thisVal;
-        if (argc < 8)
+        if (!GQuickJSSceneBuild.IsValid())
         {
-            return JS_ThrowTypeError(ctx, "AddSphereNode requires name, center, radius, and rgb");
+            return JS_ThrowInternalError(ctx, "SceneBuild is only available during onBeforeSceneRebuild");
+        }
+        if (argc < 1 || !JS_IsObject(argv[0]))
+        {
+            return JS_ThrowTypeError(ctx, "AddProceduralModel expects a model spec");
         }
 
-        auto* engine = NextEngine::GetInstance();
-        if (!engine)
+        const std::string type = GetObjectString(ctx, argv[0], "type", "box");
+        if (type == "sphere")
         {
-            return JS_UNDEFINED;
+            const glm::vec3 center = GetObjectVec3(ctx, argv[0], "center");
+            const float radius = std::max(0.001f, GetObjectFloat(ctx, argv[0], "radius", 1.0f));
+            GQuickJSSceneBuild.models->push_back(Assets::FProcModel::CreateSphere(center, radius));
+        }
+        else if (type == "box")
+        {
+            const glm::vec3 minPos = GetObjectVec3(ctx, argv[0], "min", glm::vec3(-0.5f));
+            const glm::vec3 maxPos = GetObjectVec3(ctx, argv[0], "max", glm::vec3(0.5f));
+            GQuickJSSceneBuild.models->push_back(Assets::FProcModel::CreateBox(minPos, maxPos));
+        }
+        else
+        {
+            return JS_ThrowRangeError(ctx, "Unknown procedural model type '%s'", type.c_str());
         }
 
-        const std::string name = ToCString(ctx, argv[0]);
-        float x = 0.0f, y = 0.0f, z = 0.0f, radius = 1.0f;
-        float r = 1.0f, g = 1.0f, b = 1.0f;
-        JSToFloat(ctx, argv[1], x);
-        JSToFloat(ctx, argv[2], y);
-        JSToFloat(ctx, argv[3], z);
-        JSToFloat(ctx, argv[4], radius);
-        JSToFloat(ctx, argv[5], r);
-        JSToFloat(ctx, argv[6], g);
-        JSToFloat(ctx, argv[7], b);
+        return JS_NewUint32(ctx, static_cast<uint32_t>(GQuickJSSceneBuild.models->size() - 1));
+    }
 
-        Assets::Scene& scene = engine->GetScene();
-        constexpr uint32_t sphereModelId = 0;
-        if (scene.Models().size() <= sphereModelId)
+    JSValue SceneBuildAddLambertianMaterial(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (!GQuickJSSceneBuild.IsValid())
         {
-            return JS_ThrowInternalError(ctx, "Scene does not have a JS sphere model slot");
+            return JS_ThrowInternalError(ctx, "SceneBuild is only available during onBeforeSceneRebuild");
+        }
+        if (argc < 1 || !JS_IsObject(argv[0]))
+        {
+            return JS_ThrowTypeError(ctx, "AddLambertianMaterial expects a Vec3 color");
         }
 
-        const uint32_t materialId = SceneBuilder::AddLambertianMaterialToScene(scene, glm::vec3(r, g, b));
-        auto node = SceneBuilder::CreateRenderNode(name,
-                                                   glm::vec3(x, y, z),
-                                                   glm::vec3(std::max(0.001f, radius)),
-                                                   scene.GenerateInstanceId(),
-                                                   sphereModelId,
-                                                   materialId);
+        glm::vec3 color(1.0f);
+        JSValueToVec3(ctx, argv[0], color);
+        return JS_NewUint32(ctx, SceneBuilder::AddLambertianMaterial(*GQuickJSSceneBuild.materials, color));
+    }
+
+    JSValue SceneBuildAddDiffuseLightMaterial(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (!GQuickJSSceneBuild.IsValid())
+        {
+            return JS_ThrowInternalError(ctx, "SceneBuild is only available during onBeforeSceneRebuild");
+        }
+        if (argc < 1 || !JS_IsObject(argv[0]))
+        {
+            return JS_ThrowTypeError(ctx, "AddDiffuseLightMaterial expects a Vec3 color");
+        }
+
+        glm::vec3 color(1.0f);
+        JSValueToVec3(ctx, argv[0], color);
+        float intensity = 1.0f;
+        if (argc >= 2)
+        {
+            JSToFloat(ctx, argv[1], intensity);
+        }
+        return JS_NewUint32(ctx, SceneBuilder::AddDiffuseLightMaterial(*GQuickJSSceneBuild.materials, color, intensity));
+    }
+
+    JSValue SceneBuildAddRenderNode(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (!GQuickJSSceneBuild.IsValid())
+        {
+            return JS_ThrowInternalError(ctx, "SceneBuild is only available during onBeforeSceneRebuild");
+        }
+        if (argc < 1 || !JS_IsObject(argv[0]))
+        {
+            return JS_ThrowTypeError(ctx, "AddRenderNode expects a render node spec");
+        }
+
+        auto node = CreateRenderNodeFromSpec(ctx,
+                                             argv[0],
+                                             GenerateBuildInstanceId(*GQuickJSSceneBuild.nodes),
+                                             static_cast<uint32_t>(GQuickJSSceneBuild.models->size()));
+        if (!node)
+        {
+            return JS_ThrowRangeError(ctx, "AddRenderNode received an invalid modelId");
+        }
+
         const uint32_t nodeId = node->GetInstanceId();
-        scene.AddNode(node);
-        scene.MarkDirty();
+        GQuickJSSceneBuild.nodes->push_back(node);
         return JS_NewUint32(ctx, nodeId);
     }
 
@@ -1594,10 +1772,12 @@ namespace
 
         JS_SetPropertyStr(ctx, proto, "GetNodeById",
                           JS_NewCFunction(ctx, SceneGetNodeById, "GetNodeById", 1));
-        JS_SetPropertyStr(ctx, proto, "AddBoxNode",
-                          JS_NewCFunction(ctx, SceneAddBoxNode, "AddBoxNode", 10));
-        JS_SetPropertyStr(ctx, proto, "AddSphereNode",
-                          JS_NewCFunction(ctx, SceneAddSphereNode, "AddSphereNode", 8));
+        JS_SetPropertyStr(ctx, proto, "AddLambertianMaterial",
+                          JS_NewCFunction(ctx, SceneAddLambertianMaterial, "AddLambertianMaterial", 1));
+        JS_SetPropertyStr(ctx, proto, "AddDiffuseLightMaterial",
+                          JS_NewCFunction(ctx, SceneAddDiffuseLightMaterial, "AddDiffuseLightMaterial", 2));
+        JS_SetPropertyStr(ctx, proto, "AddRenderNode",
+                          JS_NewCFunction(ctx, SceneAddRenderNode, "AddRenderNode", 1));
         JS_SetPropertyStr(ctx, proto, "RemoveNodeById",
                           JS_NewCFunction(ctx, SceneRemoveNodeById, "RemoveNodeById", 1));
         JS_SetPropertyStr(ctx, proto, "MarkTransformDirty",
@@ -1633,8 +1813,9 @@ namespace
         result += Reflection::QuickJSReflectionBridge::GenerateTypeScriptDef<Assets::Scene>("Scene");
         result += "export interface Scene {\n";
         result += "    GetNodeById(nodeId: number): Node;\n";
-        result += "    AddBoxNode(name: string, minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number, r: number, g: number, b: number): number;\n";
-        result += "    AddSphereNode(name: string, cx: number, cy: number, cz: number, radius: number, r: number, g: number, b: number): number;\n";
+        result += "    AddLambertianMaterial(color: Vec3): number;\n";
+        result += "    AddDiffuseLightMaterial(color: Vec3, intensity?: number): number;\n";
+        result += "    AddRenderNode(spec: RenderNodeSpec): number;\n";
         result += "    RemoveNodeById(nodeId: number): void;\n";
         result += "    MarkTransformDirty(): void;\n";
         result += "}\n";
@@ -1672,6 +1853,23 @@ namespace
         result += "    function CalcTextSize(text: string, scale?: number): Vec2;\n";
         result += "    function DrawText(text: string, x: number, y: number, scale?: number, r?: number, g?: number, b?: number, a?: number): void;\n";
         result += "}\n";
+        result += "\nexport type ProceduralModelSpec =\n";
+        result += "    | { type: \"box\"; min: Vec3; max: Vec3 }\n";
+        result += "    | { type: \"sphere\"; center?: Vec3; radius: number };\n";
+        result += "export interface RenderNodeSpec {\n";
+        result += "    name: string;\n";
+        result += "    modelId: number;\n";
+        result += "    materialId: number;\n";
+        result += "    translation?: Vec3;\n";
+        result += "    scale?: Vec3;\n";
+        result += "    visible?: boolean;\n";
+        result += "}\n";
+        result += "\nexport namespace SceneBuild {\n";
+        result += "    function AddProceduralModel(spec: ProceduralModelSpec): number;\n";
+        result += "    function AddLambertianMaterial(color: Vec3): number;\n";
+        result += "    function AddDiffuseLightMaterial(color: Vec3, intensity?: number): number;\n";
+        result += "    function AddRenderNode(spec: RenderNodeSpec): number;\n";
+        result += "}\n";
         result += "export type InputEventType = \"keyDown\" | \"keyUp\" | \"mouseButtonDown\" | \"mouseButtonUp\" | \"gamepadButtonDown\" | \"gamepadButtonUp\";\n";
         result += "export interface InputEvent {\n";
         result += "    type: InputEventType;\n";
@@ -1683,9 +1881,10 @@ namespace
         result += "\nexport interface LifecycleHooks {\n";
         result += "    onInit?: () => void;\n";
         result += "    onDestroy?: () => void;\n";
+        result += "    onBeforeSceneRebuild?: () => void;\n";
         result += "    onSceneLoaded?: () => void;\n";
-        result += "    onRenderUI?: () => void;\n";
-        result += "    onInputEvent?: (event: InputEvent) => void;\n";
+        result += "    onRenderUI?: () => boolean | void;\n";
+        result += "    onInputEvent?: (event: InputEvent) => boolean | void;\n";
         result += "}\n";
         result += "export interface CameraOverride { position: Vec3; target: Vec3; up: Vec3; fov: number; }\n";
         result += "export function RegisterLifecycleHooks(hooks: LifecycleHooks): void;\n";
@@ -1827,6 +2026,13 @@ void QuickJSEngine::ResetContextAndLoadScript()
         addRawFunction(uiNamespace, "CalcTextSize", UICalcTextSize, 2);
         addRawFunction(uiNamespace, "DrawText", UIDrawText, 8);
         module.add("UI", std::move(uiNamespace));
+
+        auto sceneBuildNamespace = context_->newObject();
+        addRawFunction(sceneBuildNamespace, "AddProceduralModel", SceneBuildAddProceduralModel, 1);
+        addRawFunction(sceneBuildNamespace, "AddLambertianMaterial", SceneBuildAddLambertianMaterial, 1);
+        addRawFunction(sceneBuildNamespace, "AddDiffuseLightMaterial", SceneBuildAddDiffuseLightMaterial, 2);
+        addRawFunction(sceneBuildNamespace, "AddRenderNode", SceneBuildAddRenderNode, 1);
+        module.add("SceneBuild", std::move(sceneBuildNamespace));
 
         module.add("RegisterLifecycleHooks", JS_NewCFunction(ctx, RegisterLifecycleHooks, "RegisterLifecycleHooks", 1));
         module.add("LoadJson", JS_NewCFunction(ctx, LoadJson, "LoadJson", 1));
@@ -2059,6 +2265,33 @@ bool QuickJSEngine::CallLifecycleHook(const char* hookName, double deltaSeconds)
 #endif
 }
 
+bool QuickJSEngine::CallBeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                                           std::vector<Assets::Model>& models,
+                                           std::vector<Assets::FMaterial>& materials,
+                                           std::vector<Assets::LightObject>& lights,
+                                           std::vector<Assets::AnimationTrack>& tracks)
+{
+#if WITH_QUICKJS
+    GQuickJSSceneBuild = FQuickJSSceneBuildContext{
+        .nodes = &nodes,
+        .models = &models,
+        .materials = &materials,
+        .lights = &lights,
+        .tracks = &tracks,
+    };
+    const bool called = CallLifecycleHook("onBeforeSceneRebuild");
+    GQuickJSSceneBuild = FQuickJSSceneBuildContext{};
+    return called;
+#else
+    (void)nodes;
+    (void)models;
+    (void)materials;
+    (void)lights;
+    (void)tracks;
+    return false;
+#endif
+}
+
 bool QuickJSEngine::TryGetOverrideCamera(Assets::Camera& outCamera) const
 {
 #if WITH_QUICKJS
@@ -2098,36 +2331,60 @@ void QuickJSEngine::TickHotReload(double deltaSeconds)
 #endif
 }
 
-bool QuickJSEngine::EnsureTscAvailable(const std::filesystem::path& localTsc)
+std::filesystem::path QuickJSEngine::ResolveBundledTscExecutable()
 {
     if (tscChecked_)
     {
-        return tscAvailable_;
+        return bundledTscPath_;
     }
 
     tscChecked_ = true;
-    if (!localTsc.empty() && std::filesystem::exists(localTsc))
-    {
-        tscAvailable_ = true;
-        return true;
-    }
+    namespace fs = std::filesystem;
 
-#if IOS
-    tscAvailable_ = false;
-#elif WIN32
-    int result = std::system("where tsc >nul 2>&1");
-    tscAvailable_ = (result == 0);
+#if WIN32
+    constexpr const char* tscExecutableName = "tsc.exe";
 #else
-    int result = std::system("command -v tsc >/dev/null 2>&1");
-    tscAvailable_ = (result == 0);
+    constexpr const char* tscExecutableName = "tsc";
 #endif
 
-    if (!tscAvailable_)
+    const fs::path executableDir = NextRenderer::GetExecutableDirectory();
+    const fs::path currentDir = fs::current_path();
+    std::vector<fs::path> candidates;
+
+    if (!executableDir.empty())
     {
-        SPDLOG_WARN("TypeScript compiler not found; hot reload disabled.");
+        candidates.push_back(executableDir / ".." / "tools" / "tsc" / tscExecutableName);
+        candidates.push_back(executableDir / "tools" / "tsc" / tscExecutableName);
+    }
+    if (!currentDir.empty())
+    {
+        candidates.push_back(currentDir / "tools" / "tsc" / tscExecutableName);
+        candidates.push_back(currentDir / ".." / "tools" / "tsc" / tscExecutableName);
+    }
+#if defined(GK_NEXT_SOURCE_DIR)
+    candidates.push_back(fs::path(GK_NEXT_SOURCE_DIR) / "tools" / "tsc" / tscExecutableName);
+#endif
+    candidates.push_back(FindProjectRoot() / "tools" / "tsc" / tscExecutableName);
+
+    std::error_code ec;
+    for (const fs::path& candidate : candidates)
+    {
+        const fs::path normalizedCandidate = candidate.lexically_normal();
+        if (fs::exists(normalizedCandidate, ec) && fs::is_regular_file(normalizedCandidate, ec))
+        {
+            bundledTscPath_ = fs::absolute(normalizedCandidate, ec);
+            if (ec)
+            {
+                bundledTscPath_ = normalizedCandidate;
+                ec.clear();
+            }
+            return bundledTscPath_;
+        }
+        ec.clear();
     }
 
-    return tscAvailable_;
+    SPDLOG_WARN("Bundled TypeScript compiler not found under tools/tsc; TS hot reload disabled.");
+    return {};
 }
 
 bool QuickJSEngine::CompileTypeScriptSources()
@@ -2161,7 +2418,13 @@ bool QuickJSEngine::CompileTypeScriptSources()
             return false;
         }
 
-        const bool forceCompile = std::getenv("NEXTENGINE_FORCE_TSC") != nullptr;
+        const bool forceCompileRequested = std::getenv("NEXTENGINE_FORCE_TSC") != nullptr;
+        const bool forceCompile = forceCompileRequested && !forceTscCompileConsumed_;
+        if (forceCompile)
+        {
+            forceTscCompileConsumed_ = true;
+        }
+
         std::filesystem::file_time_type latestSource{};
         if (!forceCompile && !HasNewerTypeScriptSources(projectDir, outputDir, tsconfigPath, latestSource))
         {
@@ -2182,49 +2445,33 @@ bool QuickJSEngine::CompileTypeScriptSources()
             GetLatestTypeScriptTimestamp(projectDir, tsconfigPath, latestSource);
         }
 
-        const fs::path localTsc = fs::current_path() / "tsc";
-        if (!EnsureTscAvailable(localTsc))
+        const fs::path bundledTsc = ResolveBundledTscExecutable();
+        if (bundledTsc.empty())
         {
             return false;
         }
 
-        std::vector<std::string> commands;
-#if WIN32
-        commands.emplace_back(fmt::format("tsc -p \"{}\" --outDir \"{}\"", tsconfigPath.string(), outputDir.string()));
-#else
-        if (fs::exists(localTsc, ec))
+        const std::string command = fmt::format("\"{}\" -p \"{}\" --outDir \"{}\"",
+                                                bundledTsc.string(),
+                                                tsconfigPath.string(),
+                                                outputDir.string());
+
+        SPDLOG_INFO("Compiling TypeScript scripts using: {}", command);
+        spdlog::stopwatch stopwatch;
+        int result = NextRenderer::OSProcess(command.c_str());
+        SPDLOG_INFO("---- Compiling TypeScript in {}", stopwatch.elapsed_ms());
+        if (result == 0)
         {
-            commands.emplace_back(fmt::format("\"{}\" -p \"{}\" --outDir \"{}\"", localTsc.string(), tsconfigPath.string(), outputDir.string()));
-        }
-        commands.emplace_back(fmt::format("tsc -p \"{}\" --outDir \"{}\"", tsconfigPath.string(), outputDir.string()));
-#endif
-
-        for (const std::string& command : commands)
-        {
-            if (command.empty())
+            const fs::path stampPath = outputDir / ".tsc.stamp";
+            std::ofstream writer(stampPath, std::ios::binary | std::ios::trunc);
+            if (!writer)
             {
-                continue;
+                SPDLOG_WARN("Failed to update TypeScript stamp at {}", stampPath.string());
             }
-
-            SPDLOG_INFO("Compiling TypeScript scripts using: {}", command);
-            spdlog::stopwatch stopwatch;
-            int result = NextRenderer::OSProcess(command.c_str());
-            SPDLOG_INFO("---- Compiling TypeScript in {}", stopwatch.elapsed_ms());
-            if (result == 0)
-            {
-                const fs::path stampPath = outputDir / ".tsc.stamp";
-                std::ofstream writer(stampPath, std::ios::binary | std::ios::trunc);
-                if (!writer)
-                {
-                    SPDLOG_WARN("Failed to update TypeScript stamp at {}", stampPath.string());
-                }
-                return true;
-            }
-
-            SPDLOG_WARN("TypeScript compile command failed with code {}", result);
+            return true;
         }
 
-        SPDLOG_WARN("Unable to compile TypeScript sources; continuing with existing JavaScript outputs.");
+        SPDLOG_WARN("Bundled TypeScript compile command failed with code {}; continuing with existing JavaScript outputs.", result);
     }
     catch (const std::exception& e)
     {

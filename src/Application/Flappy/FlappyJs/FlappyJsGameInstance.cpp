@@ -1,6 +1,5 @@
 #include "Application/Flappy/FlappyJs/FlappyJsGameInstance.hpp"
 
-#include "Assets/Loaders/FProcModel.h"
 #include "Runtime/Subsystems/QuickJSEngine.hpp"
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
@@ -13,7 +12,7 @@ FlappyJsGameInstance::FlappyJsGameInstance(Vulkan::WindowConfig& config, Options
     engine_(engine)
 {
     ConfigureWindow(config, options, "FlappyJs", 1280, 720, true);
-    options.QuickJSEntry = "assets/scripts/flappy/main.js";
+    options.QuickJSEntry = "assets/scripts/flappy/FlappyJs/FlappyJsGameInstance.js";
 }
 
 void FlappyJsGameInstance::OnInit()
@@ -59,14 +58,16 @@ bool FlappyJsGameInstance::OnMouseButton(SDL_Event& event)
     return false;
 }
 
-void FlappyJsGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>&,
+void FlappyJsGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
                                               std::vector<Assets::Model>& models,
-                                              std::vector<Assets::FMaterial>&,
-                                              std::vector<Assets::LightObject>&,
-                                              std::vector<Assets::AnimationTrack>&)
+                                              std::vector<Assets::FMaterial>& materials,
+                                              std::vector<Assets::LightObject>& lights,
+                                              std::vector<Assets::AnimationTrack>& tracks)
 {
-    models.push_back(Assets::FProcModel::CreateSphere(glm::vec3(0.0f), 1.0f));
-    models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.5f), glm::vec3(0.5f)));
+    if (QuickJSEngine* qjs = GetEngine().GetQuickJSEngine())
+    {
+        qjs->CallBeforeSceneRebuild(nodes, models, materials, lights, tracks);
+    }
 }
 
 void FlappyJsGameInstance::OnSceneLoaded()

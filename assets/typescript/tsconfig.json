@@ -11,10 +11,12 @@
     "files": [
         "test.ts",
         "helper.ts",
-        "flappy/main.ts",
-        "flappy/config.ts",
-        "flappy/rng.ts",
-        "flappy/bird.ts",
-        "flappy/pipes.ts",
+        "NextGameInstanceBase.ts",
+        "flappy/FlappyCommon.ts",
+        "flappy/FlappyConfig.ts",
+        "flappy/FlappyJs/FlappyJsRng.ts",
+        "flappy/FlappyJs/FlappyJsBird.ts",
+        "flappy/FlappyJs/FlappyJsPipes.ts",
+        "flappy/FlappyJs/FlappyJsGameInstance.ts",
     ]
 }

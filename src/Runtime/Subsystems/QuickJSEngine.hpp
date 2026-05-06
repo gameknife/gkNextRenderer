@@ -11,6 +11,15 @@ namespace qjs
     class Runtime;
 }
 
+namespace Assets
+{
+    class Node;
+    class Model;
+    struct FMaterial;
+    struct LightObject;
+    struct AnimationTrack;
+}
+
 class NextEngine;
 
 class QuickJSEngine final
@@ -24,6 +33,11 @@ public:
     void RegisterTickCallback(std::function<void(double)> callback);
     void HandleInputEvent(const SDL_Event& event);
     bool CallLifecycleHook(const char* hookName, double deltaSeconds = 0.0);
+    bool CallBeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                                std::vector<Assets::Model>& models,
+                                std::vector<Assets::FMaterial>& materials,
+                                std::vector<Assets::LightObject>& lights,
+                                std::vector<Assets::AnimationTrack>& tracks);
     bool TryGetOverrideCamera(Assets::Camera& outCamera) const;
 
     // Execute JS code in the current context, returns error string (empty on success)
@@ -38,7 +52,7 @@ private:
     bool CompileTypeScriptSources();
     void ResetContextAndLoadScript();
     void TickHotReload(double deltaSeconds);
-    bool EnsureTscAvailable(const std::filesystem::path& localTsc);
+    std::filesystem::path ResolveBundledTscExecutable();
 
     std::unique_ptr<qjs::Runtime> runtime_;
     std::unique_ptr<qjs::Context> context_;
@@ -46,6 +60,7 @@ private:
     BindingsCallback editorBindingsCallback_;
     double hotReloadElapsed_ = 0.0;
     bool tscChecked_ = false;
-    bool tscAvailable_ = false;
+    bool forceTscCompileConsumed_ = false;
+    std::filesystem::path bundledTscPath_;
 #endif
 };

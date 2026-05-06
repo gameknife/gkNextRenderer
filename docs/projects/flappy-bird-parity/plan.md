@@ -105,7 +105,7 @@ Stage 1: FlappyCpp  ──┐
 | 音频 | `NextAudio::PlaySfx / PlayMusic` | [src/Runtime/Subsystems/NextAudio.h:23](../../../src/Runtime/Subsystems/NextAudio.h) |
 | 场景重载 | `NextEngine::RequestLoadScene({"Empty.proc"})` | [src/Runtime/Engine.hpp:222](../../../src/Runtime/Engine.hpp) |
 | QuickJS 反射桥 | `entt::meta` + `JSExposed` 自动暴露 | [src/Runtime/Subsystems/QuickJSEngine.cpp:823](../../../src/Runtime/Subsystems/QuickJSEngine.cpp), [AGENT_GUIDE/ReflectionSystem.md](../../../AGENT_GUIDE/ReflectionSystem.md) |
-| TS 热重载 | `QuickJSEngine` 自动调 `tsc -p` 检测时间戳 | [src/Runtime/Subsystems/QuickJSEngine.cpp:1028](../../../src/Runtime/Subsystems/QuickJSEngine.cpp) |
+| TS 热重载 | `QuickJSEngine` 自动调 bundled `tools/tsc/tsc[.exe] -p` 检测时间戳（Windows 为 `tsc.exe`，macOS/Linux 为 `tsc`），不依赖 Node/npm/global `tsc` | [src/Runtime/Subsystems/QuickJSEngine.cpp](../../../src/Runtime/Subsystems/QuickJSEngine.cpp) |
 | JSON 解析 | nlohmann-json | `vcpkg.json` |
 | CMake 注册套路 | KongLie3D / Brotato3D | [src/cmake/SourceFiles.cmake:95](../../../src/cmake/SourceFiles.cmake), [src/CMakeLists.txt:127](../../../src/CMakeLists.txt) |
 
@@ -117,7 +117,7 @@ Stage 1: FlappyCpp  ──┐
 | **引擎计时** | 无 `GetTime / GetDeltaSeconds` 暴露；callback 入参的 delta 已可用 | `module.class_<NextEngine>` 加 `GetTime / GetDeltaSeconds / GetSmoothDeltaSeconds` | P0 |
 | **输入查询** | JS 无法读键盘/鼠标/手柄状态 | `Engine.Input` 子对象：`IsKeyDown / IsKeyPressed / IsMouseButtonDown / GetGamepadButton`，宿主在 `Tick` 前刷新 frame-cache | P0 |
 | **音频** | 无 | `Engine.Audio.PlaySfx(path, volume)` / `PlayMusic / StopMusic` | P0 |
-| **场景动态构建** | JS 只能改已有 Node 属性，无法新建 / 删除 | `Scene.AddBoxNode / AddSphereNode → nodeId`、`Scene.RemoveNodeById(nodeId)`；底层包 `FProcModel + SceneBuilder + Scene::AddNode` | P0 |
+| **场景动态构建** | JS 只能改已有 Node 属性，无法新建 / 删除 | `SceneBuild.AddProceduralModel / AddLambertianMaterial / AddRenderNode → nodeId`、运行时 `Scene.AddRenderNode / RemoveNodeById`；底层包 `FProcModel + SceneBuilder + Scene::AddNode` | P0 |
 | **生命周期 Hook** | JS 只有 Tick callback，没有 OnInit / OnDestroy / OnSceneLoaded | `Engine.RegisterLifecycleHooks({ onInit, onDestroy, onSceneLoaded })` | P1 |
 | **相机覆盖** | 无 | `Engine.SetOverrideCamera({ position, target, up, fov })`（**仅透视**，不要假装支持 ortho）；宿主 `OverrideRenderCamera` 中读取 | P0 |
 | **ImGui 绑定** | 无 | 最小子集：`Engine.UI.Begin/End/Text/SetCursorPos/PushFont/GetWindowSize`；调用时机：宿主 `OnRenderUI` 触发 JS 注册的 `onRenderUI` 回调 | P1 |
@@ -145,12 +145,13 @@ src/Application/Flappy/
     └── FlappyJsGameInstance.hpp/cpp  # 极薄壳；只 register lifecycle 给 QuickJS
 
 assets/typescript/flappy/
-├── tsconfig.json                     # 单独 outDir；module=ESNext；rootDir=.
-├── main.ts                           # 入口：注册 onInit/onTick/onRenderUI
-├── bird.ts                           # 鸟逻辑（与 FlappyCppBird 一一对应）
-├── pipes.ts                          # 管道逻辑
-├── rng.ts                            # xorshift32（与 FlappyCppRng 算法完全一致）
-└── config.ts                         # 加载 + 校验 gameplay.json
+├── FlappyCommon.ts                   # 对齐 FlappyCommon.hpp 的状态、配置、trace 类型
+├── FlappyConfig.ts                   # 对齐 FlappyConfig.hpp/cpp 的 JSON 加载
+└── FlappyJs/
+    ├── FlappyJsGameInstance.ts       # 入口；派生 NextGameInstanceBase
+    ├── FlappyJsBird.ts               # 鸟运行时（与 FlappyCppBird 一一对应）
+    ├── FlappyJsPipes.ts              # 管道生成 / 移动 / 计分 / 碰撞
+    └── FlappyJsRng.ts                # xorshift32（与 FlappyCppRng 算法完全一致）
 
 assets/configs/flappy/
 ├── gameplay.json                     # 物理 / 管道 / 视野 / 颜色（两份实现共享）
@@ -268,7 +269,8 @@ static JSModuleDef* ModuleLoader(JSContext* ctx, const char* moduleName, void* o
     // 1. 内置模块"Engine"由 addModule 注册，QuickJS 会先查内置表，不会进到这里
     //    所以这里只处理外部文件
     // 2. moduleName 已经是 QuickJS normalized 后的路径（默认 normalizer 会处理 "./"/"../"）
-    //    例：当前模块 "assets/scripts/main"  里 import "./bird" → moduleName = "assets/scripts/bird"
+    //    例：当前模块 "assets/scripts/flappy/FlappyJs/FlappyJsGameInstance"
+    //    里 import "./FlappyJsBird" → moduleName = "assets/scripts/flappy/FlappyJs/FlappyJsBird"
 
     std::string assetPath = std::string(moduleName);
     // 自动补 .js 后缀
@@ -296,9 +298,9 @@ static JSModuleDef* ModuleLoader(JSContext* ctx, const char* moduleName, void* o
 }
 ```
 
-3. **入口加载方式调整**：把 `assets/scripts/test.js` 的加载也改成"以模块名 `assets/scripts/test` import"的形式（调一次 `JS_Eval` 走 module loader），这样从入口就能 `import "./bird"` 到 `assets/scripts/bird.js`。
+3. **入口加载方式调整**：把 `assets/scripts/test.js` 的加载也改成"以模块名 `assets/scripts/test` import"的形式（调一次 `JS_Eval` 走 module loader），这样 FlappyJs 入口就能从 `assets/scripts/flappy/FlappyJs/FlappyJsGameInstance.js` import 到同目录的 `FlappyJsBird.js` 等模块。
 
-4. **路径规范化**：QuickJS 默认的模块名 normalizer 会把 `"./bird"`（在 `assets/scripts/main` 中）解析成 `assets/scripts/bird`（不带 .js）。loader 里手动补 `.js` 即可。如果默认 normalizer 不够用，再注册自定义 normalizer。
+4. **路径规范化**：QuickJS 默认的模块名 normalizer 会把 `"./FlappyJsBird"`（在 `assets/scripts/flappy/FlappyJs/FlappyJsGameInstance` 中）解析成 `assets/scripts/flappy/FlappyJs/FlappyJsBird`（不带 .js）。loader 里手动补 `.js` 即可。如果默认 normalizer 不够用，再注册自定义 normalizer。
 
 5. **测试方法**：
    - 把 `assets/typescript/` 下加两个文件：`helper.ts` 导出一个常量、`test.ts` `import { x } from "./helper"` 然后打印
@@ -341,8 +343,10 @@ static JSModuleDef* ModuleLoader(JSContext* ctx, const char* moduleName, void* o
 
 #### A5 · 场景动态增删 + JSON 加载
 
-- `Scene.AddBoxNode(name, minX, minY, minZ, maxX, maxY, maxZ, r, g, b) → nodeId`
-- `Scene.AddSphereNode(name, cx, cy, cz, radius, r, g, b) → nodeId`
+- `SceneBuild.AddProceduralModel(spec) → modelId`
+- `SceneBuild.AddLambertianMaterial(color) → materialId`
+- `SceneBuild.AddRenderNode(spec) → nodeId`
+- `Scene.AddRenderNode(spec) → nodeId`（运行时只组合已有 model/material）
 - `Scene.RemoveNodeById(nodeId)`
 - `Engine.LoadJson(assetPath) → any`：`PakSystem.LoadFile` + `nlohmann::json::parse` + 写一个 `JsonToJSValue` 递归转换器（数组 / 对象 / 字符串 / 数字 / bool / null）
 - 验收：TS 里加 1 box + 1 sphere，10 秒后删除；TS 里 LoadJson 一份 gameplay.json 解出嵌套数值
@@ -374,17 +378,16 @@ static JSModuleDef* ModuleLoader(JSContext* ctx, const char* moduleName, void* o
     - `OnKey / OnMouseButton / OnGamepadInput`：什么都不做（A3 让 JS 主动查询 input）
     - `OverrideRenderCamera`：读 A6 缓存
   - `src/cmake/SourceFiles.cmake` + `CMakeLists.txt` 加 `FlappyJs` target
-  - `assets/typescript/flappy/tsconfig.json`：参考根 `typescript/tsconfig.json`，`"outDir": "../../../assets/scripts/flappy"`，`"files"` 列出所有 .ts；`extends` 根 tsconfig 复用 module=ESNext 设置
-  - **关键**：根 tsconfig 的 `"files"` 加上 `flappy/main.ts`（或者 flappy/ 用独立 tsconfig，QuickJSEngine 的 `ResolveTypeScriptPaths` 当前只识别 `assets/typescript/tsconfig.json`，需要扩展或合并）
-  - 验收：能编译启动到空场景，TS `main.ts` 里 `console.log("hello")` 输出
+  - 根 `assets/typescript/tsconfig.json` 的 `"files"` 加上 `flappy/FlappyJs/FlappyJsGameInstance.ts` 及其同级依赖；QuickJSEngine 当前只识别根 tsconfig
+  - 验收：能编译启动到空场景，TS `FlappyJsGameInstance.ts` 入口能输出日志
 
 - **C2 · TS 端 RNG + 配置**
-  - `flappy/rng.ts`：xorshift32，与 C++ 端**逐位对齐**（同一个种子前 100 次输出 hash 与 C++ 一致 — 加一个 dev 自检日志）
-  - `flappy/config.ts`：`Engine.LoadJson("assets/configs/flappy/gameplay.json")` + 字段类型断言
+  - `flappy/FlappyJs/FlappyJsRng.ts`：xorshift32，与 C++ 端**逐位对齐**（同一个种子前 100 次输出 hash 与 C++ 一致 — 加一个 dev 自检日志）
+  - `flappy/FlappyConfig.ts`：`Engine.LoadJson("assets/configs/flappy/gameplay.json")` + 字段类型断言
   - 验收：TS 控制台打印的 RNG 头 10 次输出 == B2 的金标
 
 - **C3 · 鸟 + 管道 + 玩法（TS 实现）**
-  - 完全镜像 FlappyCpp 行为，所有数值从 config 来，所有节点用 `Scene.AddBoxNode / AddSphereNode` 创建，状态机用 TS 类
+  - 完全镜像 FlappyCpp 行为，所有数值从 config 来，所有初始节点用 `onBeforeSceneRebuild` 中的 `SceneBuild.*` 创建，状态机用 TS 类
   - 输入用 `Engine.Input.IsKeyPressed("space")`
   - 相机：`onInit` 中 `Engine.SetOverrideCamera({ position, target, up, fov })`
   - 验收：可玩，行为肉眼一致
@@ -430,7 +433,7 @@ static JSModuleDef* ModuleLoader(JSContext* ctx, const char* moduleName, void* o
 - ❌ **不要修改 ThirdParty/quickjs-ng 内部源码**：模块 loader 通过公开 API `JS_SetModuleLoaderFunc` 注册，不要去改 quickjs.c
 - ✅ **音频缺文件不要报错**：现有 `NextAudio` 已有 missing-file 静默逻辑，沿用
 - ✅ **绑定每加一个就跑一次 `full-*` preset 的全量编译**（按 AGENTS.md 要求），不要积攒
-- ✅ **TS 热重载**：`QuickJSEngine` 已有 tsc 时间戳检测；改完 ts 不要手动重启程序，看日志是否自动 `Reloading QuickJS context`
+- ✅ **TS 热重载**：`QuickJSEngine` 使用 bundled `tools/tsc/tsc[.exe]` 做时间戳检测与编译；改完 ts 不要手动重启程序，看日志是否自动 `Reloading QuickJS context`
 - ✅ **场景重载会清空运行时 Node**：`RequestLoadScene` 后所有动态加的 Node 都没了；TS 端要监听 `onSceneLoaded` 重建
 - ✅ **JS Vec3 写法**：现有反射桥支持 `node.Translation = {x, y, z}` **整体赋值**，**不支持** `node.Translation.x = 1`（会写到临时对象上）—— 这点要在 TS 代码里严格遵守，否则会出诡异 bug
 

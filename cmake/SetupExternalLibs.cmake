@@ -103,10 +103,11 @@ if(WITH_QUICKJS)
         set(TSC_FILENAME "tsc")
     endif()
 
-    set(TSC_CACHE_DIR "${FETCHCONTENT_BASE_DIR}/tsc-src")
+    set(TSC_CACHE_DIR "${CMAKE_SOURCE_DIR}/tools/tsc")
     set(TSC_VERSION_FILE "${TSC_CACHE_DIR}/.tsc_version")
     set(TSC_EXECUTABLE "${TSC_CACHE_DIR}/${TSC_FILENAME}")
     set(TSC_CACHE_VALID FALSE)
+    file(MAKE_DIRECTORY "${TSC_CACHE_DIR}")
 
     if(EXISTS "${TSC_EXECUTABLE}")
         if(EXISTS "${TSC_VERSION_FILE}")
