@@ -229,7 +229,7 @@ docs/projects/flappy-bird-parity/
 - [ ] `gameplay.json` 数值已最终确认（任何修改都同步进 git）
 - [ ] `flappy_cpp_trace.json` 用作 baseline 已归档（路径写在下面）
 
-**Baseline trace 路径**：（agent 填）
+**Baseline trace 路径**：`out/flappy_cpp_trace.json`
 
 **用户备注**：（agent 不要填，留给用户）
 

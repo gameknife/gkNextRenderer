@@ -183,9 +183,9 @@ public:
     UserSettings& GetUserSettings() { return userSettings_; }
     ShowFlags& GetShowFlags() { return showFlags_; }
 
-    float GetTime() const { return static_cast<float>(time_); }
-    float GetDeltaSeconds() const { return static_cast<float>(deltaSeconds_); }
-    float GetSmoothDeltaSeconds() const { return static_cast<float>(smoothedDeltaSeconds_); }
+    double GetTime() const { return time_; }
+    double GetDeltaSeconds() const { return deltaSeconds_; }
+    double GetSmoothDeltaSeconds() const { return smoothedDeltaSeconds_; }
     float GetFrameRate() const { return frameRate_; }
     uint32_t GetTotalFrames() const { return totalFrames_; }
     void RegisterJSCallback(std::function<void(double)> callback);

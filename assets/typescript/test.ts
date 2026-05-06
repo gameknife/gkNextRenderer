@@ -1,4 +1,5 @@
 import * as NE from "./Engine";
+import { helperValue } from "./helper";
 
 let hasRun = false;
 
@@ -17,6 +18,10 @@ function tryRunTest(): boolean {
         return false;
     }
 
+    const config = NE.LoadJson("assets/configs/flappy/gameplay.json");
+    const time = NE.Global.GetEngine().GetTime();
+    NE.Audio.PlaySfx("assets/sounds/flappy_missing_regression.wav", 0.0);
+    NE.Global.spdlog("info", `[test.ts] helper=${helperValue} gravity=${config.bird.gravity} time=${time}`);
     NE.Global.spdlog("info", `[test.ts] ${nodeName} pos=(${translation.x}, ${translation.y}, ${translation.z}) visible=${render.Visible}`);
 
     render.Visible = !render.Visible;

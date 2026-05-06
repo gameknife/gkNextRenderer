@@ -1,0 +1,5048 @@
+{
+  "implementation": "FlappyJs",
+  "fixedDeltaSeconds": 0.01666666753590107,
+  "rngSeed": 12648430,
+  "deathFrame": 126,
+  "frames": [
+    {
+      "frame": 0,
+      "birdY": 0.11888889223337173,
+      "birdVelocityY": 7.133333206176758,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 1,
+      "birdY": 0.2316666692495346,
+      "birdVelocityY": 6.766666412353516,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 2,
+      "birdY": 0.3383333384990692,
+      "birdVelocityY": 6.399999618530273,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 3,
+      "birdY": 0.43888890743255615,
+      "birdVelocityY": 6.033332824707031,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 4,
+      "birdY": 0.5333333611488342,
+      "birdVelocityY": 5.666666030883789,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 5,
+      "birdY": 0.621666669845581,
+      "birdVelocityY": 5.299999237060547,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 6,
+      "birdY": 0.7038888931274414,
+      "birdVelocityY": 4.933332443237305,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 7,
+      "birdY": 0.7799999713897705,
+      "birdVelocityY": 4.5666656494140625,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 8,
+      "birdY": 0.8499999642372131,
+      "birdVelocityY": 4.19999885559082,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 9,
+      "birdY": 0.9138888120651245,
+      "birdVelocityY": 3.833332061767578,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 10,
+      "birdY": 0.9716665744781494,
+      "birdVelocityY": 3.466665267944336,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 11,
+      "birdY": 1.023333191871643,
+      "birdVelocityY": 3.0999984741210938,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 12,
+      "birdY": 1.0688886642456055,
+      "birdVelocityY": 2.7333316802978516,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 13,
+      "birdY": 1.1083331108093262,
+      "birdVelocityY": 2.3666648864746094,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 14,
+      "birdY": 1.1416664123535156,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 15,
+      "birdY": 1.1688885688781738,
+      "birdVelocityY": 1.633331537246704,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 16,
+      "birdY": 1.1899996995925903,
+      "birdVelocityY": 1.2666648626327515,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 17,
+      "birdY": 1.2049996852874756,
+      "birdVelocityY": 0.8999981880187988,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 18,
+      "birdY": 1.2138885259628296,
+      "birdVelocityY": 0.5333315134048462,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 19,
+      "birdY": 1.2166662216186523,
+      "birdVelocityY": 0.16666483879089355,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 20,
+      "birdY": 1.2133328914642334,
+      "birdVelocityY": -0.20000183582305908,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 21,
+      "birdY": 1.2038884162902832,
+      "birdVelocityY": -0.5666685104370117,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 22,
+      "birdY": 1.1883327960968018,
+      "birdVelocityY": -0.9333351850509644,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 23,
+      "birdY": 1.1666661500930786,
+      "birdVelocityY": -1.300001859664917,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 24,
+      "birdY": 1.1388883590698242,
+      "birdVelocityY": -1.6666685342788696,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 25,
+      "birdY": 1.1049994230270386,
+      "birdVelocityY": -2.0333352088928223,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 26,
+      "birdY": 1.0649993419647217,
+      "birdVelocityY": -2.4000020027160645,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 27,
+      "birdY": 1.018888235092163,
+      "birdVelocityY": -2.7666687965393066,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 28,
+      "birdY": 1.1377770900726318,
+      "birdVelocityY": 7.133333206176758,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 29,
+      "birdY": 1.2505549192428589,
+      "birdVelocityY": 6.766666412353516,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 30,
+      "birdY": 1.3572216033935547,
+      "birdVelocityY": 6.399999618530273,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 31,
+      "birdY": 1.4577771425247192,
+      "birdVelocityY": 6.033332824707031,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 32,
+      "birdY": 1.5522215366363525,
+      "birdVelocityY": 5.666666030883789,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 33,
+      "birdY": 1.6405549049377441,
+      "birdVelocityY": 5.299999237060547,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 34,
+      "birdY": 1.7227771282196045,
+      "birdVelocityY": 4.933332443237305,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 35,
+      "birdY": 1.7988882064819336,
+      "birdVelocityY": 4.5666656494140625,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 36,
+      "birdY": 1.8688881397247314,
+      "birdVelocityY": 4.19999885559082,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 37,
+      "birdY": 1.9327770471572876,
+      "birdVelocityY": 3.833332061767578,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 38,
+      "birdY": 1.9905548095703125,
+      "birdVelocityY": 3.466665267944336,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 39,
+      "birdY": 2.0422215461730957,
+      "birdVelocityY": 3.0999984741210938,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 40,
+      "birdY": 2.0877771377563477,
+      "birdVelocityY": 2.7333316802978516,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 41,
+      "birdY": 2.1272215843200684,
+      "birdVelocityY": 2.3666648864746094,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 42,
+      "birdY": 2.160554885864258,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 43,
+      "birdY": 2.187777042388916,
+      "birdVelocityY": 1.633331537246704,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 44,
+      "birdY": 2.208888053894043,
+      "birdVelocityY": 1.2666648626327515,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 45,
+      "birdY": 2.2238879203796387,
+      "birdVelocityY": 0.8999981880187988,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 46,
+      "birdY": 2.2327768802642822,
+      "birdVelocityY": 0.5333315134048462,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 47,
+      "birdY": 2.2355546951293945,
+      "birdVelocityY": 0.16666483879089355,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 48,
+      "birdY": 2.2322213649749756,
+      "birdVelocityY": -0.20000183582305908,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 49,
+      "birdY": 2.2227768898010254,
+      "birdVelocityY": -0.5666685104370117,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 50,
+      "birdY": 2.207221269607544,
+      "birdVelocityY": -0.9333351850509644,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 51,
+      "birdY": 2.1855545043945312,
+      "birdVelocityY": -1.300001859664917,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 52,
+      "birdY": 2.1577765941619873,
+      "birdVelocityY": -1.6666685342788696,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 53,
+      "birdY": 2.123887777328491,
+      "birdVelocityY": -2.0333352088928223,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 54,
+      "birdY": 2.083887815475464,
+      "birdVelocityY": -2.4000020027160645,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 55,
+      "birdY": 2.0377767086029053,
+      "birdVelocityY": -2.7666687965393066,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 56,
+      "birdY": 2.156665563583374,
+      "birdVelocityY": 7.133333206176758,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 57,
+      "birdY": 2.2694432735443115,
+      "birdVelocityY": 6.766666412353516,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 58,
+      "birdY": 2.3761098384857178,
+      "birdVelocityY": 6.399999618530273,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 59,
+      "birdY": 2.476665496826172,
+      "birdVelocityY": 6.033332824707031,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 60,
+      "birdY": 2.5711100101470947,
+      "birdVelocityY": 5.666666030883789,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 61,
+      "birdY": 2.6594433784484863,
+      "birdVelocityY": 5.299999237060547,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 62,
+      "birdY": 2.7416656017303467,
+      "birdVelocityY": 4.933332443237305,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 63,
+      "birdY": 2.817776679992676,
+      "birdVelocityY": 4.5666656494140625,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 64,
+      "birdY": 2.8877766132354736,
+      "birdVelocityY": 4.19999885559082,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 65,
+      "birdY": 2.9516654014587402,
+      "birdVelocityY": 3.833332061767578,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 66,
+      "birdY": 3.0094430446624756,
+      "birdVelocityY": 3.466665267944336,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 67,
+      "birdY": 3.061109781265259,
+      "birdVelocityY": 3.0999984741210938,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 68,
+      "birdY": 3.1066653728485107,
+      "birdVelocityY": 2.7333316802978516,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 69,
+      "birdY": 3.1461098194122314,
+      "birdVelocityY": 2.3666648864746094,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 70,
+      "birdY": 3.179443120956421,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 71,
+      "birdY": 3.206665277481079,
+      "birdVelocityY": 1.633331537246704,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 72,
+      "birdY": 3.227776288986206,
+      "birdVelocityY": 1.2666648626327515,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 73,
+      "birdY": 3.2427761554718018,
+      "birdVelocityY": 0.8999981880187988,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 74,
+      "birdY": 3.2516651153564453,
+      "birdVelocityY": 0.5333315134048462,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 75,
+      "birdY": 3.2544429302215576,
+      "birdVelocityY": 0.16666483879089355,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 76,
+      "birdY": 3.2511096000671387,
+      "birdVelocityY": -0.20000183582305908,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 77,
+      "birdY": 3.2416651248931885,
+      "birdVelocityY": -0.5666685104370117,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 78,
+      "birdY": 3.226109504699707,
+      "birdVelocityY": -0.9333351850509644,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 79,
+      "birdY": 3.2044427394866943,
+      "birdVelocityY": -1.300001859664917,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 80,
+      "birdY": 3.1766648292541504,
+      "birdVelocityY": -1.6666685342788696,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 81,
+      "birdY": 3.1427760124206543,
+      "birdVelocityY": -2.0333352088928223,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 82,
+      "birdY": 3.102776050567627,
+      "birdVelocityY": -2.4000020027160645,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 83,
+      "birdY": 3.0566649436950684,
+      "birdVelocityY": -2.7666687965393066,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 84,
+      "birdY": 3.175553798675537,
+      "birdVelocityY": 7.133333206176758,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 85,
+      "birdY": 3.2883315086364746,
+      "birdVelocityY": 6.766666412353516,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 86,
+      "birdY": 3.394998073577881,
+      "birdVelocityY": 6.399999618530273,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 87,
+      "birdY": 3.495553731918335,
+      "birdVelocityY": 6.033332824707031,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 88,
+      "birdY": 3.589998245239258,
+      "birdVelocityY": 5.666666030883789,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 89,
+      "birdY": 3.6783316135406494,
+      "birdVelocityY": 5.299999237060547,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 90,
+      "birdY": 3.7605538368225098,
+      "birdVelocityY": 4.933332443237305,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 91,
+      "birdY": 3.836664915084839,
+      "birdVelocityY": 4.5666656494140625,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 92,
+      "birdY": 3.9066648483276367,
+      "birdVelocityY": 4.19999885559082,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 93,
+      "birdY": 3.9705536365509033,
+      "birdVelocityY": 3.833332061767578,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 94,
+      "birdY": 4.028331279754639,
+      "birdVelocityY": 3.466665267944336,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 95,
+      "birdY": 4.079998016357422,
+      "birdVelocityY": 3.0999984741210938,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 96,
+      "birdY": 4.125553607940674,
+      "birdVelocityY": 2.7333316802978516,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 97,
+      "birdY": 4.1649980545043945,
+      "birdVelocityY": 2.3666648864746094,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 98,
+      "birdY": 4.198331356048584,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 99,
+      "birdY": 4.225553512573242,
+      "birdVelocityY": 1.633331537246704,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 100,
+      "birdY": 4.246664524078369,
+      "birdVelocityY": 1.2666648626327515,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 101,
+      "birdY": 4.261664390563965,
+      "birdVelocityY": 0.8999981880187988,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 102,
+      "birdY": 4.270553112030029,
+      "birdVelocityY": 0.5333315134048462,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 103,
+      "birdY": 4.2733306884765625,
+      "birdVelocityY": 0.16666483879089355,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 104,
+      "birdY": 4.2699971199035645,
+      "birdVelocityY": -0.20000183582305908,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 105,
+      "birdY": 4.260552406311035,
+      "birdVelocityY": -0.5666685104370117,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 106,
+      "birdY": 4.244997024536133,
+      "birdVelocityY": -0.9333351850509644,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 107,
+      "birdY": 4.223330497741699,
+      "birdVelocityY": -1.300001859664917,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 108,
+      "birdY": 4.195552825927734,
+      "birdVelocityY": -1.6666685342788696,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 109,
+      "birdY": 4.161664009094238,
+      "birdVelocityY": -2.0333352088928223,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 110,
+      "birdY": 4.121664047241211,
+      "birdVelocityY": -2.4000020027160645,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 111,
+      "birdY": 4.075552940368652,
+      "birdVelocityY": -2.7666687965393066,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 112,
+      "birdY": 4.194441795349121,
+      "birdVelocityY": 7.133333206176758,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 113,
+      "birdY": 4.307219505310059,
+      "birdVelocityY": 6.766666412353516,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 114,
+      "birdY": 4.413886070251465,
+      "birdVelocityY": 6.399999618530273,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 115,
+      "birdY": 4.51444149017334,
+      "birdVelocityY": 6.033332824707031,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 116,
+      "birdY": 4.608885765075684,
+      "birdVelocityY": 5.666666030883789,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 117,
+      "birdY": 4.697218894958496,
+      "birdVelocityY": 5.299999237060547,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 118,
+      "birdY": 4.779440879821777,
+      "birdVelocityY": 4.933332443237305,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 119,
+      "birdY": 4.8555521965026855,
+      "birdVelocityY": 4.5666656494140625,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 120,
+      "birdY": 4.9255523681640625,
+      "birdVelocityY": 4.19999885559082,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 121,
+      "birdY": 4.989441394805908,
+      "birdVelocityY": 3.833332061767578,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 122,
+      "birdY": 5.047219276428223,
+      "birdVelocityY": 3.466665267944336,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 123,
+      "birdY": 5.098886013031006,
+      "birdVelocityY": 3.0999984741210938,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 124,
+      "birdY": 5.144441604614258,
+      "birdVelocityY": 2.7333316802978516,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 125,
+      "birdY": 5.1838860511779785,
+      "birdVelocityY": 2.3666648864746094,
+      "score": 0,
+      "state": "Playing"
+    },
+    {
+      "frame": 126,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 127,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 128,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 129,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 130,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 131,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 132,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 133,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 134,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 135,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 136,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 137,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 138,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 139,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 140,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 141,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 142,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 143,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 144,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 145,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 146,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 147,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 148,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 149,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 150,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 151,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 152,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 153,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 154,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 155,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 156,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 157,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 158,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 159,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 160,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 161,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 162,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 163,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 164,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 165,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 166,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 167,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 168,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 169,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 170,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 171,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 172,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 173,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 174,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 175,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 176,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 177,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 178,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 179,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 180,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 181,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 182,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 183,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 184,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 185,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 186,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 187,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 188,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 189,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 190,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 191,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 192,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 193,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 194,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 195,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 196,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 197,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 198,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 199,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 200,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 201,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 202,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 203,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 204,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 205,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 206,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 207,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 208,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 209,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 210,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 211,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 212,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 213,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 214,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 215,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 216,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 217,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 218,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 219,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 220,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 221,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 222,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 223,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 224,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 225,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 226,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 227,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 228,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 229,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 230,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 231,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 232,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 233,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 234,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 235,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 236,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 237,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 238,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 239,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 240,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 241,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 242,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 243,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 244,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 245,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 246,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 247,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 248,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 249,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 250,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 251,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 252,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 253,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 254,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 255,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 256,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 257,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 258,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 259,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 260,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 261,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 262,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 263,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 264,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 265,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 266,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 267,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 268,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 269,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 270,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 271,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 272,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 273,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 274,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 275,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 276,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 277,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 278,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 279,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 280,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 281,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 282,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 283,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 284,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 285,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 286,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 287,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 288,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 289,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 290,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 291,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 292,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 293,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 294,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 295,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 296,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 297,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 298,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 299,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 300,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 301,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 302,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 303,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 304,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 305,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 306,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 307,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 308,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 309,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 310,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 311,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 312,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 313,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 314,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 315,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 316,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 317,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 318,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 319,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 320,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 321,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 322,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 323,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 324,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 325,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 326,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 327,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 328,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 329,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 330,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 331,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 332,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 333,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 334,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 335,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 336,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 337,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 338,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 339,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 340,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 341,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 342,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 343,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 344,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 345,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 346,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 347,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 348,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 349,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 350,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 351,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 352,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 353,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 354,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 355,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 356,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 357,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 358,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 359,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 360,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 361,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 362,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 363,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 364,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 365,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 366,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 367,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 368,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 369,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 370,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 371,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 372,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 373,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 374,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 375,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 376,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 377,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 378,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 379,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 380,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 381,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 382,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 383,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 384,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 385,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 386,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 387,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 388,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 389,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 390,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 391,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 392,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 393,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 394,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 395,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 396,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 397,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 398,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 399,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 400,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 401,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 402,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 403,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 404,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 405,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 406,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 407,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 408,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 409,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 410,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 411,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 412,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 413,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 414,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 415,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 416,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 417,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 418,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 419,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 420,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 421,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 422,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 423,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 424,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 425,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 426,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 427,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 428,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 429,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 430,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 431,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 432,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 433,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 434,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 435,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 436,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 437,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 438,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 439,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 440,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 441,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 442,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 443,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 444,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 445,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 446,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 447,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 448,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 449,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 450,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 451,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 452,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 453,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 454,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 455,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 456,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 457,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 458,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 459,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 460,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 461,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 462,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 463,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 464,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 465,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 466,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 467,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 468,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 469,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 470,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 471,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 472,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 473,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 474,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 475,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 476,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 477,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 478,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 479,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 480,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 481,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 482,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 483,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 484,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 485,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 486,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 487,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 488,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 489,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 490,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 491,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 492,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 493,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 494,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 495,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 496,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 497,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 498,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 499,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 500,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 501,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 502,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 503,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 504,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 505,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 506,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 507,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 508,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 509,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 510,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 511,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 512,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 513,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 514,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 515,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 516,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 517,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 518,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 519,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 520,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 521,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 522,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 523,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 524,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 525,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 526,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 527,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 528,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 529,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 530,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 531,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 532,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 533,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 534,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 535,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 536,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 537,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 538,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 539,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 540,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 541,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 542,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 543,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 544,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 545,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 546,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 547,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 548,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 549,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 550,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 551,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 552,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 553,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 554,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 555,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 556,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 557,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 558,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 559,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 560,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 561,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 562,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 563,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 564,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 565,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 566,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 567,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 568,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 569,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 570,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 571,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 572,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 573,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 574,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 575,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 576,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 577,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 578,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 579,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 580,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 581,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 582,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 583,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 584,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 585,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 586,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 587,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 588,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 589,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 590,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 591,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 592,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 593,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 594,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 595,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 596,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 597,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 598,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 599,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 600,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 601,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 602,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 603,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 604,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 605,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 606,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 607,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 608,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 609,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 610,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 611,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 612,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 613,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 614,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 615,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 616,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 617,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 618,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 619,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 620,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 621,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 622,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 623,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 624,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 625,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 626,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 627,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 628,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 629,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 630,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 631,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 632,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 633,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 634,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 635,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 636,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 637,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 638,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 639,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 640,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 641,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 642,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 643,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 644,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 645,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 646,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 647,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 648,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 649,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 650,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 651,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 652,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 653,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 654,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 655,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 656,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 657,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 658,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 659,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 660,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 661,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 662,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 663,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 664,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 665,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 666,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 667,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 668,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 669,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 670,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 671,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 672,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 673,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 674,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 675,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 676,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 677,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 678,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 679,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 680,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 681,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 682,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 683,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 684,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 685,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 686,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 687,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 688,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 689,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 690,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 691,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 692,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 693,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 694,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 695,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 696,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 697,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 698,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 699,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 700,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 701,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 702,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 703,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 704,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 705,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 706,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 707,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 708,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 709,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 710,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 711,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 712,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 713,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 714,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 715,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 716,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 717,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 718,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    },
+    {
+      "frame": 719,
+      "birdY": 5.217219352722168,
+      "birdVelocityY": 1.9999982118606567,
+      "score": 0,
+      "state": "Dead"
+    }
+  ]
+}

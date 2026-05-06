@@ -48,6 +48,7 @@ set(UNIT_TEST_SOURCES
 	Application/MagicaLego/MagicaLegoStyle.cpp
 	Application/MagicaLego/MagicaLegoScriptParser.cpp
 	Application/MagicaLego/MagicaLegoPlacementRules.cpp
+	Tests/Test_FlappyRng.cpp
 )
 
 if (ENABLE_PHYSIC)
@@ -133,6 +134,14 @@ add_executable(Brotato3D
 	DesktopMain.cpp
 )
 target_compile_definitions(Brotato3D PRIVATE DEV_MODE=1)
+add_executable(FlappyCpp
+	${src_files_flappycpp}
+	DesktopMain.cpp
+)
+add_executable(FlappyJs
+	${src_files_flappyjs}
+	DesktopMain.cpp
+)
 add_executable(BrickPlayer
 	${src_files_brickplayer}
 	DesktopMain.cpp
@@ -209,6 +218,8 @@ gkNextMotionBenchmark
 	MagicaLego
 	KongLie3D
 	Brotato3D
+	FlappyCpp
+	FlappyJs
 	BrickPlayer
 	CharacterDemo
 )
@@ -225,6 +236,8 @@ gkNextMotionBenchmark
 	MagicaLego
 	KongLie3D
 	Brotato3D
+	FlappyCpp
+	FlappyJs
 	BrickPlayer
 	CharacterDemo
 	gkNextUnitTests

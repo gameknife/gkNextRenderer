@@ -1,6 +1,9 @@
 #pragma once
 
 #include "Common/CoreMinimal.hpp"
+#include "Assets/Core/Model.hpp"
+
+#include <SDL3/SDL.h>
 
 namespace qjs
 {
@@ -19,6 +22,9 @@ public:
     void Initialize();
     void Tick(double deltaSeconds);
     void RegisterTickCallback(std::function<void(double)> callback);
+    void HandleInputEvent(const SDL_Event& event);
+    bool CallLifecycleHook(const char* hookName, double deltaSeconds = 0.0);
+    bool TryGetOverrideCamera(Assets::Camera& outCamera) const;
 
     // Execute JS code in the current context, returns error string (empty on success)
     std::string Eval(const std::string& code);

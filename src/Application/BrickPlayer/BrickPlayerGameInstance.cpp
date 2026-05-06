@@ -1116,7 +1116,7 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
         hoveredDisassembled_.hitPoint = hoveredAssembly_.instanceId != UINT32_MAX ? hoveredAssembly_.hitPoint : planeHitPoint;
     }
 
-    const float deltaSeconds = std::max(engine_->GetDeltaSeconds(), 1.0f / 240.0f);
+    const float deltaSeconds = std::max(static_cast<float>(engine_->GetDeltaSeconds()), 1.0f / 240.0f);
     if (hasDraggedBodyPositionSample_)
     {
         glm::vec3 frameVelocity = (desiredBodyPosition - lastDraggedBodyPosition_) / deltaSeconds;

@@ -364,6 +364,23 @@ bool NextEngine::HandleEvent(SDL_Event& event)
 {
     userInterface_->HandleEvent(&event);
 
+    if (quickJSEngine_)
+    {
+        switch (event.type)
+        {
+        case SDL_EVENT_KEY_DOWN:
+        case SDL_EVENT_KEY_UP:
+        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        case SDL_EVENT_GAMEPAD_BUTTON_UP:
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+            quickJSEngine_->HandleInputEvent(event);
+            break;
+        default:
+            break;
+        }
+    }
+
     switch (event.type)
     {
     case SDL_EVENT_WINDOW_CLOSE_REQUESTED:

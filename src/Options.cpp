@@ -31,6 +31,7 @@ Options::Options(const int argc, const char* argv[])
 		("agent-validation", "Enable agent validation actions (auto screenshot).", cxxopts::value<bool>(AgentValidation)->default_value("false"))
 		("keep-cpu-mesh-data", "Keep CPU mesh data for editor mode.", cxxopts::value<bool>(KeepCPUMeshData)->default_value("false"))
 		("update-baseline", "Update visual test baseline images from the current run.", cxxopts::value<bool>(UpdateVisualTestBaseline)->default_value("false")->implicit_value("true"))
+		("flappy-replay", "Run Flappy deterministic replay and write trace output.", cxxopts::value<bool>(FlappyReplay)->default_value("false")->implicit_value("true"))
 
 		("test-gltf", "Run glTF robustness test from Khronos Sample Assets.", cxxopts::value<bool>(TestGltfRobustness)->default_value("false"))
 		("test-gltf-filter", "Filter for glTF robustness test (partial name match).", cxxopts::value<std::string>(TestGltfFilter)->default_value(""))

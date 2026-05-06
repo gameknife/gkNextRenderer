@@ -6,12 +6,18 @@
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Components/SkinnedMeshComponent.h"
+#include "Runtime/Scene/SceneBuilder.h"
 #include "Runtime/Reflection/PropertyAccessor.h"
 #include "Runtime/Reflection/QuickJSReflectionBridge.h"
 #include "Runtime/Reflection/QuickJSTypeConverter.h"
+#include "Runtime/Subsystems/NextAudio.h"
+#include "Runtime/Utilities/JsonHelpers.h"
+#include "Assets/Loaders/FProcModel.h"
 #include "Utilities/FileHelper.hpp"
 #include "Runtime/Platform/PlatformCommon.h"
 
+#include <imgui.h>
+#include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 #include <spdlog/stopwatch.h>
 #include <fstream>
@@ -280,6 +286,178 @@ namespace
         }
 
         return node->GetComponentByTypeName(componentType);
+    }
+
+    struct FQuickJSInputState
+    {
+        std::unordered_set<SDL_Keycode> keysDown;
+        std::unordered_set<SDL_Keycode> keysPressed;
+        std::unordered_set<uint8_t> mouseButtonsDown;
+        std::unordered_set<uint8_t> mouseButtonsPressed;
+        std::unordered_set<uint8_t> gamepadButtonsDown;
+        std::unordered_set<uint8_t> gamepadButtonsPressed;
+
+        void ClearPressed()
+        {
+            keysPressed.clear();
+            mouseButtonsPressed.clear();
+            gamepadButtonsPressed.clear();
+        }
+    };
+
+    struct FQuickJSCameraOverride
+    {
+        bool enabled = false;
+        glm::vec3 position{0.0f, 0.0f, 12.0f};
+        glm::vec3 target{0.0f, 0.0f, 0.0f};
+        glm::vec3 up{0.0f, 1.0f, 0.0f};
+        float fieldOfView = 50.0f;
+    };
+
+    FQuickJSInputState GQuickJSInput;
+    FQuickJSCameraOverride GQuickJSCamera;
+
+    std::optional<SDL_Keycode> KeyNameToCode(std::string name)
+    {
+        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c)
+        {
+            return static_cast<char>(std::tolower(c));
+        });
+
+        if (name == "space") return SDLK_SPACE;
+        if (name == "esc" || name == "escape") return SDLK_ESCAPE;
+        if (name == "a") return SDLK_A;
+        if (name == "w") return SDLK_W;
+        if (name == "s") return SDLK_S;
+        if (name == "d") return SDLK_D;
+        if (name == "return" || name == "enter") return SDLK_RETURN;
+        return std::nullopt;
+    }
+
+    std::optional<uint8_t> GamepadNameToButton(std::string name)
+    {
+        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c)
+        {
+            return static_cast<char>(std::tolower(c));
+        });
+
+        if (name == "a" || name == "south") return SDL_GAMEPAD_BUTTON_SOUTH;
+        if (name == "b" || name == "east") return SDL_GAMEPAD_BUTTON_EAST;
+        if (name == "x" || name == "west") return SDL_GAMEPAD_BUTTON_WEST;
+        if (name == "y" || name == "north") return SDL_GAMEPAD_BUTTON_NORTH;
+        if (name == "start") return SDL_GAMEPAD_BUTTON_START;
+        if (name == "back") return SDL_GAMEPAD_BUTTON_BACK;
+        return std::nullopt;
+    }
+
+    bool JSValueToVec3(JSContext* ctx, JSValueConst value, glm::vec3& outVec)
+    {
+        auto readFloat = [&](const char* key, float& outValue) -> bool
+        {
+            JSValue prop = JS_GetPropertyStr(ctx, value, key);
+            double numericValue = 0.0;
+            const bool ok = JS_ToFloat64(ctx, &numericValue, prop) == 0;
+            outValue = static_cast<float>(numericValue);
+            JS_FreeValue(ctx, prop);
+            return ok;
+        };
+
+        return readFloat("x", outVec.x) && readFloat("y", outVec.y) && readFloat("z", outVec.z);
+    }
+
+    JSValue Vec2ToJS(JSContext* ctx, const glm::vec2& value)
+    {
+        JSValue obj = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, obj, "x", JS_NewFloat64(ctx, value.x));
+        JS_SetPropertyStr(ctx, obj, "y", JS_NewFloat64(ctx, value.y));
+        return obj;
+    }
+
+    JSValue JsonToJSValue(JSContext* ctx, const nlohmann::json& value)
+    {
+        if (value.is_null())
+        {
+            return JS_NULL;
+        }
+        if (value.is_boolean())
+        {
+            return JS_NewBool(ctx, value.get<bool>());
+        }
+        if (value.is_number_integer())
+        {
+            return JS_NewInt64(ctx, value.get<int64_t>());
+        }
+        if (value.is_number_unsigned())
+        {
+            return JS_NewUint32(ctx, value.get<uint32_t>());
+        }
+        if (value.is_number_float())
+        {
+            return JS_NewFloat64(ctx, value.get<double>());
+        }
+        if (value.is_string())
+        {
+            return JS_NewString(ctx, value.get<std::string>().c_str());
+        }
+        if (value.is_array())
+        {
+            JSValue array = JS_NewArray(ctx);
+            uint32_t index = 0;
+            for (const auto& item : value)
+            {
+                JS_SetPropertyUint32(ctx, array, index++, JsonToJSValue(ctx, item));
+            }
+            return array;
+        }
+        if (value.is_object())
+        {
+            JSValue obj = JS_NewObject(ctx);
+            for (auto it = value.begin(); it != value.end(); ++it)
+            {
+                JS_SetPropertyStr(ctx, obj, it.key().c_str(), JsonToJSValue(ctx, it.value()));
+            }
+            return obj;
+        }
+        return JS_UNDEFINED;
+    }
+
+    std::filesystem::path FindProjectRoot()
+    {
+        std::filesystem::path cursor = std::filesystem::current_path();
+        for (int depth = 0; depth < 8; ++depth)
+        {
+            if (std::filesystem::exists(cursor / "AGENTS.md") && std::filesystem::exists(cursor / "assets"))
+            {
+                return cursor;
+            }
+            if (!cursor.has_parent_path())
+            {
+                break;
+            }
+            cursor = cursor.parent_path();
+        }
+        return std::filesystem::current_path();
+    }
+
+    std::string ToCString(JSContext* ctx, JSValueConst value)
+    {
+        const char* raw = JS_ToCString(ctx, value);
+        if (!raw)
+        {
+            return {};
+        }
+        std::string result(raw);
+        JS_FreeCString(ctx, raw);
+        return result;
+    }
+
+    void JSToFloat(JSContext* ctx, JSValueConst value, float& outValue)
+    {
+        double numericValue = static_cast<double>(outValue);
+        if (JS_ToFloat64(ctx, &numericValue, value) == 0)
+        {
+            outValue = static_cast<float>(numericValue);
+        }
     }
 
     JSValue ComponentPropertyGetter(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv,
@@ -725,6 +903,25 @@ namespace
         return result;
     }
 
+    JSValue NodeRecalcTransform(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv,
+                                int magic, JSValueConst* data)
+    {
+        (void)thisVal;
+        (void)magic;
+
+        uint32_t nodeId = 0;
+        JS_ToUint32(ctx, &nodeId, data[0]);
+        Assets::Node* node = FindNodeById(nodeId);
+        if (!node)
+        {
+            return JS_UNDEFINED;
+        }
+
+        const bool full = argc < 1 || JS_ToBool(ctx, argv[0]) != 0;
+        node->RecalcTransform(full);
+        return JS_UNDEFINED;
+    }
+
     JSValue CreateNodeObject(JSContext* ctx, uint32_t nodeId)
     {
         Assets::Node* node = FindNodeById(nodeId);
@@ -766,6 +963,11 @@ namespace
         JS_SetPropertyStr(ctx, obj, "GetComponent",
                           JS_NewCFunctionData(ctx, NodeGetComponent, 1, 0, 1, componentData));
 
+        JSValue recalcData[1];
+        recalcData[0] = JS_NewUint32(ctx, nodeId);
+        JS_SetPropertyStr(ctx, obj, "RecalcTransform",
+                          JS_NewCFunctionData(ctx, NodeRecalcTransform, 1, 0, 1, recalcData));
+
         for (auto&& [id, func] : metaType.func())
         {
             const char* funcName = func.name();
@@ -803,20 +1005,532 @@ namespace
         JS_ToUint32(ctx, &nodeId, argv[0]);
         return CreateNodeObject(ctx, nodeId);
     }
+
+    JSValue SceneAddBoxNode(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 10)
+        {
+            return JS_ThrowTypeError(ctx, "AddBoxNode requires name, min/max coordinates, and rgb");
+        }
+
+        auto* engine = NextEngine::GetInstance();
+        if (!engine)
+        {
+            return JS_UNDEFINED;
+        }
+
+        const std::string name = ToCString(ctx, argv[0]);
+        float minX = 0.0f, minY = 0.0f, minZ = 0.0f;
+        float maxX = 0.0f, maxY = 0.0f, maxZ = 0.0f;
+        float r = 1.0f, g = 1.0f, b = 1.0f;
+        JSToFloat(ctx, argv[1], minX);
+        JSToFloat(ctx, argv[2], minY);
+        JSToFloat(ctx, argv[3], minZ);
+        JSToFloat(ctx, argv[4], maxX);
+        JSToFloat(ctx, argv[5], maxY);
+        JSToFloat(ctx, argv[6], maxZ);
+        JSToFloat(ctx, argv[7], r);
+        JSToFloat(ctx, argv[8], g);
+        JSToFloat(ctx, argv[9], b);
+
+        Assets::Scene& scene = engine->GetScene();
+        constexpr uint32_t boxModelId = 1;
+        if (scene.Models().size() <= boxModelId)
+        {
+            return JS_ThrowInternalError(ctx, "Scene does not have a JS box model slot");
+        }
+
+        const glm::vec3 minPos(minX, minY, minZ);
+        const glm::vec3 maxPos(maxX, maxY, maxZ);
+        const glm::vec3 center = (minPos + maxPos) * 0.5f;
+        const glm::vec3 size = glm::max(maxPos - minPos, glm::vec3(0.001f));
+        const uint32_t materialId = SceneBuilder::AddLambertianMaterialToScene(scene, glm::vec3(r, g, b));
+        auto node = SceneBuilder::CreateRenderNode(name, center, size, scene.GenerateInstanceId(), boxModelId, materialId);
+        const uint32_t nodeId = node->GetInstanceId();
+        scene.AddNode(node);
+        scene.MarkDirty();
+        return JS_NewUint32(ctx, nodeId);
+    }
+
+    JSValue SceneAddSphereNode(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 8)
+        {
+            return JS_ThrowTypeError(ctx, "AddSphereNode requires name, center, radius, and rgb");
+        }
+
+        auto* engine = NextEngine::GetInstance();
+        if (!engine)
+        {
+            return JS_UNDEFINED;
+        }
+
+        const std::string name = ToCString(ctx, argv[0]);
+        float x = 0.0f, y = 0.0f, z = 0.0f, radius = 1.0f;
+        float r = 1.0f, g = 1.0f, b = 1.0f;
+        JSToFloat(ctx, argv[1], x);
+        JSToFloat(ctx, argv[2], y);
+        JSToFloat(ctx, argv[3], z);
+        JSToFloat(ctx, argv[4], radius);
+        JSToFloat(ctx, argv[5], r);
+        JSToFloat(ctx, argv[6], g);
+        JSToFloat(ctx, argv[7], b);
+
+        Assets::Scene& scene = engine->GetScene();
+        constexpr uint32_t sphereModelId = 0;
+        if (scene.Models().size() <= sphereModelId)
+        {
+            return JS_ThrowInternalError(ctx, "Scene does not have a JS sphere model slot");
+        }
+
+        const uint32_t materialId = SceneBuilder::AddLambertianMaterialToScene(scene, glm::vec3(r, g, b));
+        auto node = SceneBuilder::CreateRenderNode(name,
+                                                   glm::vec3(x, y, z),
+                                                   glm::vec3(std::max(0.001f, radius)),
+                                                   scene.GenerateInstanceId(),
+                                                   sphereModelId,
+                                                   materialId);
+        const uint32_t nodeId = node->GetInstanceId();
+        scene.AddNode(node);
+        scene.MarkDirty();
+        return JS_NewUint32(ctx, nodeId);
+    }
+
+    JSValue SceneRemoveNodeById(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 1)
+        {
+            return JS_UNDEFINED;
+        }
+        uint32_t nodeId = 0;
+        JS_ToUint32(ctx, &nodeId, argv[0]);
+        if (auto* engine = NextEngine::GetInstance())
+        {
+            engine->GetScene().RemoveNodeByInstanceId(nodeId);
+            engine->GetScene().MarkDirty();
+        }
+        return JS_UNDEFINED;
+    }
+
+    JSValue SceneMarkTransformDirty(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)ctx;
+        (void)thisVal;
+        (void)argc;
+        (void)argv;
+        if (auto* engine = NextEngine::GetInstance())
+        {
+            engine->GetScene().MarkTransformDirty();
+        }
+        return JS_UNDEFINED;
+    }
+
+    JSValue RegisterLifecycleHooks(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 1 || !JS_IsObject(argv[0]))
+        {
+            return JS_ThrowTypeError(ctx, "RegisterLifecycleHooks expects an object");
+        }
+        JSValue global = JS_GetGlobalObject(ctx);
+        JS_SetPropertyStr(ctx, global, "__nextLifecycleHooks", JS_DupValue(ctx, argv[0]));
+        JS_FreeValue(ctx, global);
+        return JS_UNDEFINED;
+    }
+
+    JSValue InputIsKeyDown(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 1)
+        {
+            return JS_NewBool(ctx, false);
+        }
+        const std::string name = ToCString(ctx, argv[0]);
+        if (name == "any")
+        {
+            return JS_NewBool(ctx, !GQuickJSInput.keysDown.empty());
+        }
+        const auto key = KeyNameToCode(name);
+        return JS_NewBool(ctx, key.has_value() && GQuickJSInput.keysDown.contains(*key));
+    }
+
+    JSValue InputIsKeyPressed(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 1)
+        {
+            return JS_NewBool(ctx, false);
+        }
+        const std::string name = ToCString(ctx, argv[0]);
+        if (name == "any")
+        {
+            return JS_NewBool(ctx,
+                              !GQuickJSInput.keysPressed.empty() ||
+                                  !GQuickJSInput.mouseButtonsPressed.empty() ||
+                                  !GQuickJSInput.gamepadButtonsPressed.empty());
+        }
+        const auto key = KeyNameToCode(name);
+        return JS_NewBool(ctx, key.has_value() && GQuickJSInput.keysPressed.contains(*key));
+    }
+
+    JSValue InputIsMouseButtonDown(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 1)
+        {
+            return JS_NewBool(ctx, false);
+        }
+        uint32_t button = 0;
+        JS_ToUint32(ctx, &button, argv[0]);
+        return JS_NewBool(ctx, GQuickJSInput.mouseButtonsDown.contains(static_cast<uint8_t>(button)));
+    }
+
+    JSValue InputIsMouseButtonPressed(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 1)
+        {
+            return JS_NewBool(ctx, false);
+        }
+        uint32_t button = 0;
+        JS_ToUint32(ctx, &button, argv[0]);
+        return JS_NewBool(ctx, GQuickJSInput.mouseButtonsPressed.contains(static_cast<uint8_t>(button)));
+    }
+
+    JSValue InputGetGamepadButton(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 1)
+        {
+            return JS_NewBool(ctx, false);
+        }
+        const auto button = GamepadNameToButton(ToCString(ctx, argv[0]));
+        return JS_NewBool(ctx, button.has_value() && GQuickJSInput.gamepadButtonsDown.contains(*button));
+    }
+
+    JSValue AudioPlaySfx(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 1)
+        {
+            return JS_UNDEFINED;
+        }
+        const std::string path = ToCString(ctx, argv[0]);
+        double volume = 1.0;
+        if (argc >= 2)
+        {
+            JS_ToFloat64(ctx, &volume, argv[1]);
+        }
+        if (auto* engine = NextEngine::GetInstance(); engine && engine->GetAudio())
+        {
+            engine->GetAudio()->PlaySfx(path, static_cast<float>(volume));
+        }
+        return JS_UNDEFINED;
+    }
+
+    JSValue AudioPlayMusic(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 1)
+        {
+            return JS_UNDEFINED;
+        }
+        const std::string path = ToCString(ctx, argv[0]);
+        double volume = 1.0;
+        if (argc >= 2)
+        {
+            JS_ToFloat64(ctx, &volume, argv[1]);
+        }
+        if (auto* engine = NextEngine::GetInstance(); engine && engine->GetAudio())
+        {
+            engine->GetAudio()->PlayMusic(path, static_cast<float>(volume));
+        }
+        return JS_UNDEFINED;
+    }
+
+    JSValue AudioStopMusic(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)ctx;
+        (void)thisVal;
+        (void)argc;
+        (void)argv;
+        if (auto* engine = NextEngine::GetInstance(); engine && engine->GetAudio())
+        {
+            engine->GetAudio()->StopMusic();
+        }
+        return JS_UNDEFINED;
+    }
+
+    JSValue LoadJson(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 1)
+        {
+            return JS_UNDEFINED;
+        }
+        try
+        {
+            const nlohmann::json document = NextJson::LoadFile(ToCString(ctx, argv[0]));
+            return JsonToJSValue(ctx, document);
+        }
+        catch (const std::exception& exception)
+        {
+            return JS_ThrowInternalError(ctx, "%s", exception.what());
+        }
+    }
+
+    JSValue RequestLoadScene(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc >= 1)
+        {
+            if (auto* engine = NextEngine::GetInstance())
+            {
+                engine->RequestLoadScene({.filename = ToCString(ctx, argv[0])});
+            }
+        }
+        return JS_UNDEFINED;
+    }
+
+    JSValue RequestClose(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)ctx;
+        (void)thisVal;
+        (void)argc;
+        (void)argv;
+        if (auto* engine = NextEngine::GetInstance())
+        {
+            engine->RequestClose();
+        }
+        return JS_UNDEFINED;
+    }
+
+    JSValue GetScreenSize(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        (void)argc;
+        (void)argv;
+        if (auto* engine = NextEngine::GetInstance())
+        {
+            const VkExtent2D extent = engine->GetWindow().WindowSize();
+            return Vec2ToJS(ctx, glm::vec2(static_cast<float>(extent.width), static_cast<float>(extent.height)));
+        }
+        return Vec2ToJS(ctx, glm::vec2(0.0f));
+    }
+
+    JSValue SetOverrideCamera(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 1 || !JS_IsObject(argv[0]))
+        {
+            return JS_ThrowTypeError(ctx, "SetOverrideCamera expects an object");
+        }
+
+        JSValue position = JS_GetPropertyStr(ctx, argv[0], "position");
+        JSValue target = JS_GetPropertyStr(ctx, argv[0], "target");
+        JSValue up = JS_GetPropertyStr(ctx, argv[0], "up");
+        JSValue fov = JS_GetPropertyStr(ctx, argv[0], "fov");
+        JSValueToVec3(ctx, position, GQuickJSCamera.position);
+        JSValueToVec3(ctx, target, GQuickJSCamera.target);
+        JSValueToVec3(ctx, up, GQuickJSCamera.up);
+        JSToFloat(ctx, fov, GQuickJSCamera.fieldOfView);
+        GQuickJSCamera.enabled = true;
+        JS_FreeValue(ctx, position);
+        JS_FreeValue(ctx, target);
+        JS_FreeValue(ctx, up);
+        JS_FreeValue(ctx, fov);
+        return JS_UNDEFINED;
+    }
+
+    JSValue IsReplayMode(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        (void)argc;
+        (void)argv;
+        return JS_NewBool(ctx, GOption && GOption->FlappyReplay);
+    }
+
+    JSValue WriteFile(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 2)
+        {
+            return JS_UNDEFINED;
+        }
+
+        const std::string path = ToCString(ctx, argv[0]);
+        const std::string content = ToCString(ctx, argv[1]);
+        std::filesystem::path outputPath(path);
+        if (outputPath.is_relative())
+        {
+            outputPath = FindProjectRoot() / outputPath;
+        }
+        std::filesystem::create_directories(outputPath.parent_path());
+        std::ofstream output(outputPath, std::ios::binary | std::ios::trunc);
+        output << content;
+        return JS_UNDEFINED;
+    }
+
+    JSValue UIBegin(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 1)
+        {
+            return JS_NewBool(ctx, false);
+        }
+        const std::string name = ToCString(ctx, argv[0]);
+        int flags = 0;
+        if (argc >= 2)
+        {
+            JS_ToInt32(ctx, &flags, argv[1]);
+        }
+        return JS_NewBool(ctx, ImGui::Begin(name.c_str(), nullptr, flags));
+    }
+
+    JSValue UIEnd(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)ctx;
+        (void)thisVal;
+        (void)argc;
+        (void)argv;
+        ImGui::End();
+        return JS_UNDEFINED;
+    }
+
+    JSValue UIText(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc >= 1)
+        {
+            const std::string text = ToCString(ctx, argv[0]);
+            ImGui::TextUnformatted(text.c_str());
+        }
+        return JS_UNDEFINED;
+    }
+
+    JSValue UISetCursorPos(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc >= 2)
+        {
+            float x = 0.0f;
+            float y = 0.0f;
+            JSToFloat(ctx, argv[0], x);
+            JSToFloat(ctx, argv[1], y);
+            ImGui::SetCursorPos(ImVec2(x, y));
+        }
+        return JS_UNDEFINED;
+    }
+
+    JSValue UIGetWindowSize(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        (void)argc;
+        (void)argv;
+        const ImVec2 size = ImGui::GetWindowSize();
+        return Vec2ToJS(ctx, glm::vec2(size.x, size.y));
+    }
+
+    JSValue UISetWindowFontScale(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc >= 1)
+        {
+            float scale = 1.0f;
+            JSToFloat(ctx, argv[0], scale);
+            ImGui::SetWindowFontScale(scale);
+        }
+        return JS_UNDEFINED;
+    }
+
+    JSValue UICalcTextSize(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 1)
+        {
+            return Vec2ToJS(ctx, glm::vec2(0.0f));
+        }
+
+        const std::string text = ToCString(ctx, argv[0]);
+        float scale = 1.0f;
+        if (argc >= 2)
+        {
+            JSToFloat(ctx, argv[1], scale);
+        }
+
+        const ImVec2 rawSize = ImGui::CalcTextSize(text.c_str());
+        return Vec2ToJS(ctx, glm::vec2(rawSize.x * scale, rawSize.y * scale));
+    }
+
+    JSValue UIDrawText(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 3)
+        {
+            return JS_UNDEFINED;
+        }
+
+        const std::string text = ToCString(ctx, argv[0]);
+        float x = 0.0f;
+        float y = 0.0f;
+        float scale = 1.0f;
+        float r = 1.0f;
+        float g = 1.0f;
+        float b = 1.0f;
+        float a = 1.0f;
+        JSToFloat(ctx, argv[1], x);
+        JSToFloat(ctx, argv[2], y);
+        if (argc >= 4) JSToFloat(ctx, argv[3], scale);
+        if (argc >= 5) JSToFloat(ctx, argv[4], r);
+        if (argc >= 6) JSToFloat(ctx, argv[5], g);
+        if (argc >= 7) JSToFloat(ctx, argv[6], b);
+        if (argc >= 8) JSToFloat(ctx, argv[7], a);
+
+        ImDrawList* drawList = ImGui::GetForegroundDrawList();
+        if (!drawList)
+        {
+            return JS_UNDEFINED;
+        }
+
+        const auto toByte = [](float value) -> int
+        {
+            return static_cast<int>(glm::clamp(value, 0.0f, 1.0f) * 255.0f + 0.5f);
+        };
+        drawList->AddText(nullptr,
+                          ImGui::GetFontSize() * std::max(scale, 0.01f),
+                          ImVec2(x, y),
+                          IM_COL32(toByte(r), toByte(g), toByte(b), toByte(a)),
+                          text.c_str());
+        return JS_UNDEFINED;
+    }
     
 
-    void BindScenePrototype(JSContext* ctx)
+    void AddDynamicSceneMethods(JSContext* ctx, JSValue proto)
     {
-        JSValue proto = JS_GetClassProto(ctx, qjs::js_traits<std::shared_ptr<Assets::Scene>>::QJSClassId);
         if (!JS_IsObject(proto))
         {
-            JS_FreeValue(ctx, proto);
             return;
         }
 
         JS_SetPropertyStr(ctx, proto, "GetNodeById",
                           JS_NewCFunction(ctx, SceneGetNodeById, "GetNodeById", 1));
+        JS_SetPropertyStr(ctx, proto, "AddBoxNode",
+                          JS_NewCFunction(ctx, SceneAddBoxNode, "AddBoxNode", 10));
+        JS_SetPropertyStr(ctx, proto, "AddSphereNode",
+                          JS_NewCFunction(ctx, SceneAddSphereNode, "AddSphereNode", 8));
+        JS_SetPropertyStr(ctx, proto, "RemoveNodeById",
+                          JS_NewCFunction(ctx, SceneRemoveNodeById, "RemoveNodeById", 1));
+        JS_SetPropertyStr(ctx, proto, "MarkTransformDirty",
+                          JS_NewCFunction(ctx, SceneMarkTransformDirty, "MarkTransformDirty", 0));
+    }
 
+    void BindScenePrototype(JSContext* ctx)
+    {
+        JSValue proto = JS_GetClassProto(ctx, qjs::js_traits<std::shared_ptr<Assets::Scene>>::QJSClassId);
+        AddDynamicSceneMethods(ctx, proto);
         JS_FreeValue(ctx, proto);
     }
 
@@ -830,10 +1544,23 @@ namespace
 
         result += "export class NextEngine {\n";
         result += "    GetTotalFrames(): number;\n";
+        result += "    GetTime(): number;\n";
+        result += "    GetDeltaSeconds(): number;\n";
+        result += "    GetSmoothDeltaSeconds(): number;\n";
         result += "    RegisterJSCallback(arg0: any): void;\n";
         result += "}\n";
         result += Reflection::QuickJSReflectionBridge::GenerateTypeScriptDef<Assets::Node>("Node");
+        result += "export interface Node {\n";
+        result += "    RecalcTransform(full?: boolean): void;\n";
+        result += "}\n";
         result += Reflection::QuickJSReflectionBridge::GenerateTypeScriptDef<Assets::Scene>("Scene");
+        result += "export interface Scene {\n";
+        result += "    GetNodeById(nodeId: number): Node;\n";
+        result += "    AddBoxNode(name: string, minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number, r: number, g: number, b: number): number;\n";
+        result += "    AddSphereNode(name: string, cx: number, cy: number, cz: number, radius: number, r: number, g: number, b: number): number;\n";
+        result += "    RemoveNodeById(nodeId: number): void;\n";
+        result += "    MarkTransformDirty(): void;\n";
+        result += "}\n";
 
         result += Reflection::QuickJSReflectionBridge::GenerateTypeScriptDef<Runtime::RenderComponent>("RenderComponent");
         result += Reflection::QuickJSReflectionBridge::GenerateTypeScriptDef<Runtime::PhysicsComponent>("PhysicsComponent");
@@ -845,6 +1572,44 @@ namespace
         result += "    function GetEngine(): NextEngine;\n";
         result += "    function GetScene(): Scene;\n";
         result += "}\n";
+        result += "\nexport namespace Input {\n";
+        result += "    function IsKeyDown(name: string): boolean;\n";
+        result += "    function IsKeyPressed(name: string): boolean;\n";
+        result += "    function IsMouseButtonDown(button: number): boolean;\n";
+        result += "    function IsMouseButtonPressed(button: number): boolean;\n";
+        result += "    function GetGamepadButton(name: string): boolean;\n";
+        result += "}\n";
+        result += "\nexport namespace Audio {\n";
+        result += "    function PlaySfx(path: string, volume?: number): void;\n";
+        result += "    function PlayMusic(path: string, volume?: number): void;\n";
+        result += "    function StopMusic(): void;\n";
+        result += "}\n";
+        result += "\nexport namespace UI {\n";
+        result += "    function Begin(name: string, flags?: number): boolean;\n";
+        result += "    function End(): void;\n";
+        result += "    function Text(text: string): void;\n";
+        result += "    function SetCursorPos(x: number, y: number): void;\n";
+        result += "    function GetWindowSize(): Vec2;\n";
+        result += "    function SetWindowFontScale(scale: number): void;\n";
+        result += "    function GetScreenSize(): Vec2;\n";
+        result += "    function CalcTextSize(text: string, scale?: number): Vec2;\n";
+        result += "    function DrawText(text: string, x: number, y: number, scale?: number, r?: number, g?: number, b?: number, a?: number): void;\n";
+        result += "}\n";
+        result += "\nexport interface LifecycleHooks {\n";
+        result += "    onInit?: () => void;\n";
+        result += "    onDestroy?: () => void;\n";
+        result += "    onSceneLoaded?: () => void;\n";
+        result += "    onRenderUI?: () => void;\n";
+        result += "}\n";
+        result += "export interface CameraOverride { position: Vec3; target: Vec3; up: Vec3; fov: number; }\n";
+        result += "export function RegisterLifecycleHooks(hooks: LifecycleHooks): void;\n";
+        result += "export function LoadJson(path: string): any;\n";
+        result += "export function RequestLoadScene(filename: string): void;\n";
+        result += "export function RequestClose(): void;\n";
+        result += "export function GetScreenSize(): Vec2;\n";
+        result += "export function SetOverrideCamera(camera: CameraOverride): void;\n";
+        result += "export function IsReplayMode(): boolean;\n";
+        result += "export function WriteFile(path: string, content: string): void;\n";
 
         return result;
     }
@@ -904,6 +1669,37 @@ void QuickJSEngine::ResetContextAndLoadScript()
 
     runtime_ = std::make_unique<qjs::Runtime>();
     context_ = std::make_unique<qjs::Context>(*runtime_);
+    GQuickJSCamera = FQuickJSCameraOverride{};
+
+    context_->moduleLoader = [](std::string_view moduleName) -> qjs::Context::ModuleData
+    {
+        std::string assetPath(moduleName);
+        if (assetPath == "Engine")
+        {
+            return {};
+        }
+        if (assetPath.rfind("file://", 0) == 0)
+        {
+            assetPath = assetPath.substr(7);
+        }
+        std::replace(assetPath.begin(), assetPath.end(), '\\', '/');
+        if (assetPath == "./Engine" || assetPath == "assets/scripts/Engine")
+        {
+            return qjs::Context::ModuleData{std::string("Engine"), std::string("export * from \"Engine\";")};
+        }
+        if (assetPath.size() < 3 || assetPath.substr(assetPath.size() - 3) != ".js")
+        {
+            assetPath += ".js";
+        }
+
+        std::vector<uint8_t> buffer;
+        if (!Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(assetPath, buffer))
+        {
+            return {};
+        }
+
+        return qjs::Context::ModuleData{assetPath, std::string(reinterpret_cast<const char*>(buffer.data()), buffer.size())};
+    };
 
     try
     {
@@ -914,8 +1710,52 @@ void QuickJSEngine::ResetContextAndLoadScript()
         globalNamespace.add<&GetSceneForGlobal>("GetScene");
         module.add("Global", std::move(globalNamespace));
 
+        JSContext* ctx = context_->ctx;
+        auto addRawFunction = [ctx](qjs::Value& object, const char* name, JSCFunction* function, int length)
+        {
+            JS_SetPropertyStr(ctx, object.v, name, JS_NewCFunction(ctx, function, name, length));
+        };
+
+        auto inputNamespace = context_->newObject();
+        addRawFunction(inputNamespace, "IsKeyDown", InputIsKeyDown, 1);
+        addRawFunction(inputNamespace, "IsKeyPressed", InputIsKeyPressed, 1);
+        addRawFunction(inputNamespace, "IsMouseButtonDown", InputIsMouseButtonDown, 1);
+        addRawFunction(inputNamespace, "IsMouseButtonPressed", InputIsMouseButtonPressed, 1);
+        addRawFunction(inputNamespace, "GetGamepadButton", InputGetGamepadButton, 1);
+        module.add("Input", std::move(inputNamespace));
+
+        auto audioNamespace = context_->newObject();
+        addRawFunction(audioNamespace, "PlaySfx", AudioPlaySfx, 2);
+        addRawFunction(audioNamespace, "PlayMusic", AudioPlayMusic, 2);
+        addRawFunction(audioNamespace, "StopMusic", AudioStopMusic, 0);
+        module.add("Audio", std::move(audioNamespace));
+
+        auto uiNamespace = context_->newObject();
+        addRawFunction(uiNamespace, "Begin", UIBegin, 2);
+        addRawFunction(uiNamespace, "End", UIEnd, 0);
+        addRawFunction(uiNamespace, "Text", UIText, 1);
+        addRawFunction(uiNamespace, "SetCursorPos", UISetCursorPos, 2);
+        addRawFunction(uiNamespace, "GetWindowSize", UIGetWindowSize, 0);
+        addRawFunction(uiNamespace, "SetWindowFontScale", UISetWindowFontScale, 1);
+        addRawFunction(uiNamespace, "GetScreenSize", GetScreenSize, 0);
+        addRawFunction(uiNamespace, "CalcTextSize", UICalcTextSize, 2);
+        addRawFunction(uiNamespace, "DrawText", UIDrawText, 8);
+        module.add("UI", std::move(uiNamespace));
+
+        module.add("RegisterLifecycleHooks", JS_NewCFunction(ctx, RegisterLifecycleHooks, "RegisterLifecycleHooks", 1));
+        module.add("LoadJson", JS_NewCFunction(ctx, LoadJson, "LoadJson", 1));
+        module.add("RequestLoadScene", JS_NewCFunction(ctx, RequestLoadScene, "RequestLoadScene", 1));
+        module.add("RequestClose", JS_NewCFunction(ctx, RequestClose, "RequestClose", 0));
+        module.add("GetScreenSize", JS_NewCFunction(ctx, GetScreenSize, "GetScreenSize", 0));
+        module.add("SetOverrideCamera", JS_NewCFunction(ctx, SetOverrideCamera, "SetOverrideCamera", 1));
+        module.add("IsReplayMode", JS_NewCFunction(ctx, IsReplayMode, "IsReplayMode", 0));
+        module.add("WriteFile", JS_NewCFunction(ctx, WriteFile, "WriteFile", 2));
+
         module.class_<NextEngine>("NextEngine")
                 .fun<&NextEngine::GetTotalFrames>("GetTotalFrames")
+                .fun<&NextEngine::GetTime>("GetTime")
+                .fun<&NextEngine::GetDeltaSeconds>("GetDeltaSeconds")
+                .fun<&NextEngine::GetSmoothDeltaSeconds>("GetSmoothDeltaSeconds")
                 .fun<&NextEngine::RegisterJSCallback>("RegisterJSCallback");
         module.class_<Assets::Scene>("Scene")
                 .fun<&Assets::Scene::GetIndicesCount>("GetIndicesCount")
@@ -929,10 +1769,19 @@ void QuickJSEngine::ResetContextAndLoadScript()
             editorBindingsCallback_(jsContext->ctx);
         }
 
+        const std::string entryScript = (GOption && !GOption->QuickJSEntry.empty()) ?
+            GOption->QuickJSEntry : std::string("assets/scripts/test.js");
         std::vector<uint8_t> scriptBuffer;
-        if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile("assets/scripts/test.js", scriptBuffer))
+        if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(entryScript, scriptBuffer))
         {
-            context_->eval(std::string_view(reinterpret_cast<char*>(scriptBuffer.data())), "<import>", JS_EVAL_TYPE_MODULE);
+            std::string moduleName = entryScript;
+            if (moduleName.size() >= 3 && moduleName.substr(moduleName.size() - 3) == ".js")
+            {
+                moduleName.resize(moduleName.size() - 3);
+            }
+            context_->eval(std::string_view(reinterpret_cast<char*>(scriptBuffer.data()), scriptBuffer.size()),
+                           moduleName.c_str(),
+                           JS_EVAL_TYPE_MODULE);
         }
     }
     catch (qjs::exception)
@@ -954,6 +1803,7 @@ void QuickJSEngine::Tick(double deltaSeconds)
     {
         tickCallback_(deltaSeconds);
     }
+    GQuickJSInput.ClearPressed();
 
     TickHotReload(deltaSeconds);
 #else
@@ -967,6 +1817,122 @@ void QuickJSEngine::RegisterTickCallback(std::function<void(double)> callback)
     tickCallback_ = std::move(callback);
 #else
     (void)callback;
+#endif
+}
+
+void QuickJSEngine::HandleInputEvent(const SDL_Event& event)
+{
+#if WITH_QUICKJS
+    switch (event.type)
+    {
+    case SDL_EVENT_KEY_DOWN:
+        if (!event.key.repeat)
+        {
+            GQuickJSInput.keysPressed.insert(event.key.key);
+        }
+        GQuickJSInput.keysDown.insert(event.key.key);
+        break;
+    case SDL_EVENT_KEY_UP:
+        GQuickJSInput.keysDown.erase(event.key.key);
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        GQuickJSInput.mouseButtonsPressed.insert(event.button.button);
+        GQuickJSInput.mouseButtonsDown.insert(event.button.button);
+        break;
+    case SDL_EVENT_MOUSE_BUTTON_UP:
+        GQuickJSInput.mouseButtonsDown.erase(event.button.button);
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        GQuickJSInput.gamepadButtonsPressed.insert(event.gbutton.button);
+        GQuickJSInput.gamepadButtonsDown.insert(event.gbutton.button);
+        break;
+    case SDL_EVENT_GAMEPAD_BUTTON_UP:
+        GQuickJSInput.gamepadButtonsDown.erase(event.gbutton.button);
+        break;
+    default:
+        break;
+    }
+#else
+    (void)event;
+#endif
+}
+
+bool QuickJSEngine::CallLifecycleHook(const char* hookName, double deltaSeconds)
+{
+#if WITH_QUICKJS
+    if (!context_ || !hookName)
+    {
+        return false;
+    }
+
+    JSContext* ctx = context_->ctx;
+    JSValue global = JS_GetGlobalObject(ctx);
+    JSValue hooks = JS_GetPropertyStr(ctx, global, "__nextLifecycleHooks");
+    JS_FreeValue(ctx, global);
+    if (!JS_IsObject(hooks))
+    {
+        JS_FreeValue(ctx, hooks);
+        return false;
+    }
+
+    JSValue callback = JS_GetPropertyStr(ctx, hooks, hookName);
+    if (!JS_IsFunction(ctx, callback))
+    {
+        JS_FreeValue(ctx, callback);
+        JS_FreeValue(ctx, hooks);
+        return false;
+    }
+
+    JSValue arg = JS_NewFloat64(ctx, deltaSeconds);
+    JSValue result = JS_Call(ctx, callback, hooks, 1, &arg);
+    JS_FreeValue(ctx, arg);
+    JS_FreeValue(ctx, callback);
+    JS_FreeValue(ctx, hooks);
+    if (JS_IsException(result))
+    {
+        JSValue exception = JS_GetException(ctx);
+        const char* message = JS_ToCString(ctx, exception);
+        SPDLOG_ERROR("[QuickJS] lifecycle hook '{}' failed: {}", hookName, message ? message : "unknown");
+        if (message)
+        {
+            JS_FreeCString(ctx, message);
+        }
+        JSValue stack = JS_GetPropertyStr(ctx, exception, "stack");
+        const char* stackText = JS_ToCString(ctx, stack);
+        if (stackText && stackText[0] != '\0')
+        {
+            SPDLOG_ERROR("[QuickJS] stack:\n{}", stackText);
+        }
+        if (stackText)
+        {
+            JS_FreeCString(ctx, stackText);
+        }
+        JS_FreeValue(ctx, stack);
+        JS_FreeValue(ctx, exception);
+        return false;
+    }
+    JS_FreeValue(ctx, result);
+    return true;
+#else
+    (void)hookName;
+    (void)deltaSeconds;
+    return false;
+#endif
+}
+
+bool QuickJSEngine::TryGetOverrideCamera(Assets::Camera& outCamera) const
+{
+#if WITH_QUICKJS
+    if (!GQuickJSCamera.enabled)
+    {
+        return false;
+    }
+    outCamera.ModelView = glm::lookAtRH(GQuickJSCamera.position, GQuickJSCamera.target, GQuickJSCamera.up);
+    outCamera.FieldOfView = GQuickJSCamera.fieldOfView;
+    return true;
+#else
+    (void)outCamera;
+    return false;
 #endif
 }
 

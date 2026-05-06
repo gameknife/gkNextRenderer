@@ -33,6 +33,7 @@ public:
 	bool AgentValidation{};
 	bool KeepCPUMeshData{};  // 保留CPU网格数据（编辑器模式需要）
 	bool UpdateVisualTestBaseline{};
+	bool FlappyReplay{};
 	std::string locale{};
 
 
@@ -40,6 +41,7 @@ public:
 	// Scene options.
 	std::string SceneName{};
 	std::string HDRIfile{};
+	std::string QuickJSEntry{"assets/scripts/test.js"};
 
 	// Vulkan options
 	uint32_t GpuIdx{};
