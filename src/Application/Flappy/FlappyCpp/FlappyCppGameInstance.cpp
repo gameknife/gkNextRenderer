@@ -144,37 +144,75 @@ bool FlappyCppGameInstance::OnRenderUI()
     ImDrawList* drawList = ImGui::GetForegroundDrawList();
     const ImVec2 min = viewport->Pos;
     const ImVec2 size = viewport->Size;
+    const ImVec2 center(min.x + size.x * 0.5f, min.y + size.y * 0.5f);
 
-    const std::string scoreText = fmt::format("{}", score_);
-    const float scoreScale = 2.4f;
-    const ImVec2 rawScoreSize = ImGui::CalcTextSize(scoreText.c_str());
-    const ImVec2 scoreSize(rawScoreSize.x * scoreScale, rawScoreSize.y * scoreScale);
-    drawList->AddText(nullptr,
-                      ImGui::GetFontSize() * scoreScale,
-                      ImVec2(min.x + (size.x - scoreSize.x) * 0.5f, min.y + 28.0f),
-                      IM_COL32(255, 255, 255, 255),
-                      scoreText.c_str());
+    auto drawText = [&](const std::string& text, const ImVec2& pos, float scale, ImU32 color)
+    {
+        drawList->AddText(nullptr, ImGui::GetFontSize() * scale, pos, color, text.c_str());
+    };
 
-    std::string centerText;
+    auto drawCenteredText = [&](const std::string& text, float y, float scale, ImU32 color)
+    {
+        const ImVec2 rawSize = ImGui::CalcTextSize(text.c_str());
+        const ImVec2 textSize(rawSize.x * scale, rawSize.y * scale);
+        const ImVec2 pos(min.x + (size.x - textSize.x) * 0.5f, y);
+        drawText(text, ImVec2(pos.x + 2.0f, pos.y + 2.0f), scale, IM_COL32(20, 28, 35, 110));
+        drawText(text, pos, scale, color);
+    };
+
+    auto drawPanel = [&](float width, float height, float y)
+    {
+        const float x = center.x - width * 0.5f;
+        drawList->AddRectFilled(ImVec2(x + 6.0f, y + 8.0f),
+                                ImVec2(x + width + 6.0f, y + height + 8.0f),
+                                IM_COL32(16, 28, 38, 80),
+                                18.0f);
+        drawList->AddRectFilled(ImVec2(x, y),
+                                ImVec2(x + width, y + height),
+                                IM_COL32(18, 32, 43, 210),
+                                18.0f);
+        drawList->AddRect(ImVec2(x, y),
+                          ImVec2(x + width, y + height),
+                          IM_COL32(255, 255, 255, 46),
+                          18.0f,
+                          0,
+                          1.5f);
+        return ImVec2(x, y);
+    };
+
+    const float scoreWidth = 136.0f + static_cast<float>(std::max(0, score_ / 10)) * 18.0f;
+    const float scoreX = center.x - scoreWidth * 0.5f;
+    drawList->AddRectFilled(ImVec2(scoreX + 3.0f, min.y + 27.0f),
+                            ImVec2(scoreX + scoreWidth + 3.0f, min.y + 83.0f),
+                            IM_COL32(10, 24, 34, 80),
+                            16.0f);
+    drawList->AddRectFilled(ImVec2(scoreX, min.y + 24.0f),
+                            ImVec2(scoreX + scoreWidth, min.y + 80.0f),
+                            IM_COL32(24, 40, 52, 210),
+                            16.0f);
+    drawList->AddRect(ImVec2(scoreX, min.y + 24.0f),
+                      ImVec2(scoreX + scoreWidth, min.y + 80.0f),
+                      IM_COL32(255, 255, 255, 40),
+                      16.0f,
+                      0,
+                      1.0f);
+    drawCenteredText(fmt::format("{}", score_), min.y + 31.0f, 2.05f, IM_COL32(255, 255, 255, 255));
+
     if (state_ == Flappy::EGameState::Ready)
     {
-        centerText = "Press Space to Start";
+        const float panelWidth = std::max(280.0f, std::min(520.0f, size.x - 48.0f));
+        const ImVec2 panel = drawPanel(panelWidth, 178.0f, center.y - 96.0f);
+        drawCenteredText("FLAPPY", panel.y + 26.0f, 2.0f, IM_COL32(255, 230, 102, 255));
+        drawCenteredText("Thread the gap. Keep the rhythm.", panel.y + 76.0f, 1.0f, IM_COL32(211, 231, 236, 235));
+        drawCenteredText("SPACE / CLICK / GAMEPAD A", panel.y + 121.0f, 1.1f, IM_COL32(124, 230, 168, 255));
     }
     else if (state_ == Flappy::EGameState::Dead)
     {
-        centerText = fmt::format("Score: {}\nPress Any Key to Restart", score_);
-    }
-
-    if (!centerText.empty())
-    {
-        const float centerScale = 1.4f;
-        const ImVec2 rawTextSize = ImGui::CalcTextSize(centerText.c_str());
-        const ImVec2 textSize(rawTextSize.x * centerScale, rawTextSize.y * centerScale);
-        drawList->AddText(nullptr,
-                          ImGui::GetFontSize() * centerScale,
-                          ImVec2(min.x + (size.x - textSize.x) * 0.5f, min.y + (size.y - textSize.y) * 0.5f),
-                          IM_COL32(255, 255, 255, 245),
-                          centerText.c_str());
+        const float panelWidth = std::max(280.0f, std::min(500.0f, size.x - 48.0f));
+        const ImVec2 panel = drawPanel(panelWidth, 166.0f, center.y - 88.0f);
+        drawCenteredText("GAME OVER", panel.y + 24.0f, 1.75f, IM_COL32(255, 134, 122, 255));
+        drawCenteredText(fmt::format("Score {}", score_), panel.y + 73.0f, 1.25f, IM_COL32(255, 255, 255, 245));
+        drawCenteredText("PRESS ANY KEY TO RESTART", panel.y + 116.0f, 1.0f, IM_COL32(124, 230, 168, 245));
     }
 
     return false;

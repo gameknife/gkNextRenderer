@@ -78,16 +78,39 @@ class FlappyJsGameInstance extends NextGameInstanceBase {
 
     OnRenderUI(): boolean {
         const screen = NE.GetScreenSize();
-        const drawCenteredText = (text: string, y: number, scale: number, alpha = 1.0): void => {
+        const centerX = screen.x * 0.5;
+        const centerY = screen.y * 0.5;
+        const drawCenteredText = (text: string, y: number, scale: number, r = 1.0, g = 1.0, b = 1.0, a = 1.0): void => {
             const textSize = NE.UI.CalcTextSize(text, scale);
-            NE.UI.DrawText(text, Math.max(0, screen.x * 0.5 - textSize.x * 0.5), y, scale, 1.0, 1.0, 1.0, alpha);
+            const x = Math.max(0, centerX - textSize.x * 0.5);
+            NE.UI.DrawText(text, x + 2.0, y + 2.0, scale, 0.08, 0.11, 0.14, a * 0.45);
+            NE.UI.DrawText(text, x, y, scale, r, g, b, a);
+        };
+        const drawPanel = (width: number, height: number, y: number): { x: number; y: number } => {
+            const x = centerX - width * 0.5;
+            NE.UI.DrawRectFilled(x + 6.0, y + 8.0, width, height, 0.06, 0.11, 0.15, 0.32, 18.0);
+            NE.UI.DrawRectFilled(x, y, width, height, 0.07, 0.13, 0.17, 0.82, 18.0);
+            NE.UI.DrawRect(x, y, width, height, 1.0, 1.0, 1.0, 0.18, 18.0, 1.5);
+            return { x, y };
         };
 
-        drawCenteredText(`${this.score}`, 28.0, 2.4);
+        const scoreWidth = 136.0 + Math.max(0, Math.floor(this.score / 10)) * 18.0;
+        const scoreX = centerX - scoreWidth * 0.5;
+        NE.UI.DrawRectFilled(scoreX + 3.0, 27.0, scoreWidth, 56.0, 0.04, 0.09, 0.13, 0.32, 16.0);
+        NE.UI.DrawRectFilled(scoreX, 24.0, scoreWidth, 56.0, 0.09, 0.16, 0.20, 0.82, 16.0);
+        NE.UI.DrawRect(scoreX, 24.0, scoreWidth, 56.0, 1.0, 1.0, 1.0, 0.16, 16.0, 1.0);
+        drawCenteredText(`${this.score}`, 31.0, 2.05);
+
         if (this.state === "Ready") {
-            drawCenteredText("Press Space to Start", Math.max(0, screen.y * 0.5 - 12), 1.4, 0.96);
+            const panel = drawPanel(Math.max(280.0, Math.min(520.0, screen.x - 48.0)), 178.0, centerY - 96.0);
+            drawCenteredText("FLAPPY", panel.y + 26.0, 2.0, 1.0, 0.90, 0.40);
+            drawCenteredText("Thread the gap. Keep the rhythm.", panel.y + 76.0, 1.0, 0.83, 0.91, 0.93, 0.92);
+            drawCenteredText("SPACE / CLICK / GAMEPAD A", panel.y + 121.0, 1.1, 0.49, 0.90, 0.66, 1.0);
         } else if (this.state === "Dead") {
-            drawCenteredText(`Score: ${this.score}\nPress Any Key to Restart`, Math.max(0, screen.y * 0.5 - 24), 1.4, 0.96);
+            const panel = drawPanel(Math.max(280.0, Math.min(500.0, screen.x - 48.0)), 166.0, centerY - 88.0);
+            drawCenteredText("GAME OVER", panel.y + 24.0, 1.75, 1.0, 0.53, 0.48);
+            drawCenteredText(`Score ${this.score}`, panel.y + 73.0, 1.25, 1.0, 1.0, 1.0, 0.96);
+            drawCenteredText("PRESS ANY KEY TO RESTART", panel.y + 116.0, 1.0, 0.49, 0.90, 0.66, 0.96);
         }
         return false;
     }

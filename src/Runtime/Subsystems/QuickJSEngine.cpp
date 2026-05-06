@@ -1761,6 +1761,98 @@ namespace
                           text.c_str());
         return JS_UNDEFINED;
     }
+
+    JSValue UIDrawRectFilled(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 8)
+        {
+            return JS_UNDEFINED;
+        }
+
+        float x = 0.0f;
+        float y = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
+        float r = 1.0f;
+        float g = 1.0f;
+        float b = 1.0f;
+        float a = 1.0f;
+        float rounding = 0.0f;
+        JSToFloat(ctx, argv[0], x);
+        JSToFloat(ctx, argv[1], y);
+        JSToFloat(ctx, argv[2], width);
+        JSToFloat(ctx, argv[3], height);
+        JSToFloat(ctx, argv[4], r);
+        JSToFloat(ctx, argv[5], g);
+        JSToFloat(ctx, argv[6], b);
+        JSToFloat(ctx, argv[7], a);
+        if (argc >= 9) JSToFloat(ctx, argv[8], rounding);
+
+        ImDrawList* drawList = ImGui::GetForegroundDrawList();
+        if (!drawList)
+        {
+            return JS_UNDEFINED;
+        }
+
+        const auto toByte = [](float value) -> int
+        {
+            return static_cast<int>(glm::clamp(value, 0.0f, 1.0f) * 255.0f + 0.5f);
+        };
+        drawList->AddRectFilled(ImVec2(x, y),
+                                ImVec2(x + std::max(0.0f, width), y + std::max(0.0f, height)),
+                                IM_COL32(toByte(r), toByte(g), toByte(b), toByte(a)),
+                                std::max(0.0f, rounding));
+        return JS_UNDEFINED;
+    }
+
+    JSValue UIDrawRect(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 8)
+        {
+            return JS_UNDEFINED;
+        }
+
+        float x = 0.0f;
+        float y = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
+        float r = 1.0f;
+        float g = 1.0f;
+        float b = 1.0f;
+        float a = 1.0f;
+        float rounding = 0.0f;
+        float thickness = 1.0f;
+        JSToFloat(ctx, argv[0], x);
+        JSToFloat(ctx, argv[1], y);
+        JSToFloat(ctx, argv[2], width);
+        JSToFloat(ctx, argv[3], height);
+        JSToFloat(ctx, argv[4], r);
+        JSToFloat(ctx, argv[5], g);
+        JSToFloat(ctx, argv[6], b);
+        JSToFloat(ctx, argv[7], a);
+        if (argc >= 9) JSToFloat(ctx, argv[8], rounding);
+        if (argc >= 10) JSToFloat(ctx, argv[9], thickness);
+
+        ImDrawList* drawList = ImGui::GetForegroundDrawList();
+        if (!drawList)
+        {
+            return JS_UNDEFINED;
+        }
+
+        const auto toByte = [](float value) -> int
+        {
+            return static_cast<int>(glm::clamp(value, 0.0f, 1.0f) * 255.0f + 0.5f);
+        };
+        drawList->AddRect(ImVec2(x, y),
+                          ImVec2(x + std::max(0.0f, width), y + std::max(0.0f, height)),
+                          IM_COL32(toByte(r), toByte(g), toByte(b), toByte(a)),
+                          std::max(0.0f, rounding),
+                          0,
+                          std::max(0.5f, thickness));
+        return JS_UNDEFINED;
+    }
     
 
     void AddDynamicSceneMethods(JSContext* ctx, JSValue proto)
@@ -1852,6 +1944,8 @@ namespace
         result += "    function GetScreenSize(): Vec2;\n";
         result += "    function CalcTextSize(text: string, scale?: number): Vec2;\n";
         result += "    function DrawText(text: string, x: number, y: number, scale?: number, r?: number, g?: number, b?: number, a?: number): void;\n";
+        result += "    function DrawRectFilled(x: number, y: number, width: number, height: number, r: number, g: number, b: number, a: number, rounding?: number): void;\n";
+        result += "    function DrawRect(x: number, y: number, width: number, height: number, r: number, g: number, b: number, a: number, rounding?: number, thickness?: number): void;\n";
         result += "}\n";
         result += "\nexport type ProceduralModelSpec =\n";
         result += "    | { type: \"box\"; min: Vec3; max: Vec3 }\n";
@@ -2025,6 +2119,8 @@ void QuickJSEngine::ResetContextAndLoadScript()
         addRawFunction(uiNamespace, "GetScreenSize", GetScreenSize, 0);
         addRawFunction(uiNamespace, "CalcTextSize", UICalcTextSize, 2);
         addRawFunction(uiNamespace, "DrawText", UIDrawText, 8);
+        addRawFunction(uiNamespace, "DrawRectFilled", UIDrawRectFilled, 9);
+        addRawFunction(uiNamespace, "DrawRect", UIDrawRect, 10);
         module.add("UI", std::move(uiNamespace));
 
         auto sceneBuildNamespace = context_->newObject();
