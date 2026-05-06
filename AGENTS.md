@@ -165,11 +165,12 @@ assets/
 - TypeScript definitions in `assets/typescript/Engine.d.ts` mirror reflected properties
 
 **QuickJS Scripting:**
-- Hot reload support (modify `.js` files at runtime)
+- TypeScript hot reload support via bundled `tools/tsc/tsc[.exe]` (`tsc.exe` on Windows, `tsc` on macOS/Linux); no Node/npm/global `tsc` dependency is required at runtime
 - ES module loading supports compiled TypeScript relative imports under `assets/scripts`
 - Components reflected via `entt::meta` are auto-exposed to JavaScript
 - Global namespace: `Global.GetEngine()`, `Global.GetScene()`, `Global.spdlog()`
-- Scene API: `Scene.FindNodeIdWithComponent()`, `Scene.GetNodeById()`, dynamic `AddBoxNode` / `AddSphereNode` helpers
+- Scripted games should extend `assets/typescript/NextGameInstanceBase.ts` and call `RunGameInstance(new YourGameInstance())`
+- Scene API: `Scene.FindNodeIdWithComponent()`, `Scene.GetNodeById()`, `SceneBuild.*` for rebuild-time procedural scene construction, `Scene.AddRenderNode()` for runtime nodes
 - See `AGENT_GUIDE/QuickJSBindings.md`; `FlappyCpp` / `FlappyJs` replay parity is the binding regression demo
 
 **Component System:**

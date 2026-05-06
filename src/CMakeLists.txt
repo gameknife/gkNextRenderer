@@ -429,12 +429,7 @@ foreach(target IN LISTS AllTargets)
 	endif()
 	endif()
 
-	# copy the tsc to bin
 	if ( ${target} STREQUAL gkNextEngine )
-	if ( WITH_QUICKJS AND EXISTS "${TSC_EXECUTABLE}" )
-		file(COPY "${TSC_EXECUTABLE}" DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-	endif()
-
 	if ( WITH_STREAMLINE )
 		file(GLOB SL_BINS "${STREAMLINE_BIN_DIR}/*")
 		file(COPY ${SL_BINS} DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})

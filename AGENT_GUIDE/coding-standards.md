@@ -183,7 +183,7 @@
 - [ ] 渲染改动需附截图对比（性能改动需附 FPS 数据）
 - [ ] 跨平台改动需在至少 2 个平台验证
 - [ ] 着色器改动需运行 `gkNextRenderer` 目视检查
-- [ ] TypeScript 脚本改动需执行 `npx ts-node src/Typescript/test.ts`
+- [ ] TypeScript 脚本改动需执行 bundled tsc：Windows 用 `tools\tsc\tsc.exe -p assets\typescript\tsconfig.json`，macOS/Linux 用 `tools/tsc/tsc -p assets/typescript/tsconfig.json`；运行时热重载同样使用 bundled tsc，不依赖 Node/npm
 
 ---
 

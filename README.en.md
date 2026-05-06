@@ -96,7 +96,7 @@ This project is especially relevant if you are interested in:
 - **Modern CMake Presets + vcpkg**
 - **Cross-platform runtime: desktop / Android / iOS**
 - **ImGui Editor + node-based material workflow**
-- **QuickJS runtime scripting**
+- **QuickJS runtime scripting with bundled TypeScript hot reload via `tools/tsc/tsc[.exe]`, no Node/npm dependency**
 - **Visual Test / Benchmark / Packager**
 
 ### AI Native

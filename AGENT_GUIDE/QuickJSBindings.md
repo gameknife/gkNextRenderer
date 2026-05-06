@@ -6,8 +6,10 @@ This note documents the binding path used by the Flappy parity demo. Keep it ali
 
 - TypeScript sources live under `assets/typescript`.
 - `QuickJSEngine` compiles the root `assets/typescript/tsconfig.json` into `assets/scripts` when sources are newer than `.tsc.stamp`.
+- Runtime hot reload uses the bundled compiler at `tools/tsc/tsc[.exe]` (`tsc.exe` on Windows, `tsc` on macOS/Linux), copied by CMake to `out/build/<preset>/tools/tsc/tsc[.exe]`. Do not require Node, npm, npx, or a globally installed `tsc`.
 - The runtime module loader resolves relative ESM imports from the compiled `assets/scripts` tree and appends `.js` when needed.
 - Use `import * as NE from "../Engine"` or `import * as NE from "Engine"` depending on the compiled module depth. The loader maps `./Engine`, `../Engine`, and `assets/scripts/Engine` style imports back to the built-in `Engine` module.
+- Scripted game targets should extend `NextGameInstanceBase` from `assets/typescript/NextGameInstanceBase.ts` and call `RunGameInstance(new YourGameInstance())` from their entry module. That keeps `OnInit`, `BeforeSceneRebuild`, `OnSceneLoaded`, `OnTick`, `OnRenderUI`, input, and camera override responsibilities aligned with native game instances.
 
 ## Adding A Binding
 
@@ -27,13 +29,16 @@ Prefer raw `JS_NewCFunction` for object-shaped arguments, JSON values, optional 
 - `Audio.PlaySfx()`, `PlayMusic()`, `StopMusic()`
 - `UI.Begin()`, `End()`, `Text()`, `SetCursorPos()`, `GetWindowSize()`, `SetWindowFontScale()`, `GetScreenSize()`
 - `LoadJson()`, `RequestLoadScene()`, `RequestClose()`, `GetScreenSize()`, `SetOverrideCamera()`, `IsReplayMode()`, `WriteFile()`
-- Lifecycle hooks include `onInit`, `onDestroy`, `onSceneLoaded`, `onRenderUI`, and `onInputEvent(event)` for event-driven input parity with native game instances
-- Dynamic scene helpers: `Scene.AddBoxNode()`, `AddSphereNode()`, `RemoveNodeById()`, `MarkTransformDirty()`, `GetNodeById()`
+- Lifecycle hooks include `onInit`, `onDestroy`, `onBeforeSceneRebuild`, `onSceneLoaded`, `onRenderUI`, and `onInputEvent(event)` for event-driven input parity with native game instances
+- Scene build helpers: `SceneBuild.AddProceduralModel()`, `AddLambertianMaterial()`, `AddDiffuseLightMaterial()`, `AddRenderNode()`
+- Dynamic scene helpers: `Scene.AddLambertianMaterial()`, `AddDiffuseLightMaterial()`, `AddRenderNode()`, `RemoveNodeById()`, `MarkTransformDirty()`, `GetNodeById()`
 - Dynamic node helper: `Node.RecalcTransform()`
 
 ## Scene And Node Notes
 
 `Global.GetScene()` returns the engine-owned scene as a non-owning pointer wrapped by quickjspp. Dynamic scene methods are attached to the shared quickjspp scene prototype after `module.class_<Assets::Scene>("Scene")` registers the class.
+
+`SceneBuild.*` is only valid while an `onBeforeSceneRebuild` hook is running. Use it to build procedural resources and initial render nodes in the same lifecycle phase as native `NextGameInstanceBase::BeforeSceneRebuild`. Do not add Flappy-style shortcut wrappers; compose `AddProceduralModel`, `AddLambertianMaterial`, and `AddRenderNode` instead.
 
 `Scene.GetNodeById()` returns a lightweight JS object backed by a node id. Property reads/writes go through reflection each time, so script code can safely assign whole values like:
 
