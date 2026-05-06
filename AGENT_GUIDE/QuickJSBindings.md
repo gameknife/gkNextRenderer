@@ -27,6 +27,7 @@ Prefer raw `JS_NewCFunction` for object-shaped arguments, JSON values, optional 
 - `Audio.PlaySfx()`, `PlayMusic()`, `StopMusic()`
 - `UI.Begin()`, `End()`, `Text()`, `SetCursorPos()`, `GetWindowSize()`, `SetWindowFontScale()`, `GetScreenSize()`
 - `LoadJson()`, `RequestLoadScene()`, `RequestClose()`, `GetScreenSize()`, `SetOverrideCamera()`, `IsReplayMode()`, `WriteFile()`
+- Lifecycle hooks include `onInit`, `onDestroy`, `onSceneLoaded`, `onRenderUI`, and `onInputEvent(event)` for event-driven input parity with native game instances
 - Dynamic scene helpers: `Scene.AddBoxNode()`, `AddSphereNode()`, `RemoveNodeById()`, `MarkTransformDirty()`, `GetNodeById()`
 - Dynamic node helper: `Node.RecalcTransform()`
 

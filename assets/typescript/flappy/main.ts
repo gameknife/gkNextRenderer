@@ -5,6 +5,9 @@ import { Pipes } from "./pipes";
 import { XorShift32 } from "./rng";
 
 const f32 = Math.fround;
+const flapSfx = "assets/sounds/flappy_flap.wav";
+const scoreSfx = "assets/sounds/flappy_score.wav";
+const hitSfx = "assets/sounds/flappy_hit.wav";
 
 type GameState = "Ready" | "Playing" | "Dead";
 
@@ -27,6 +30,7 @@ class FlappyGame {
     private deadTimer = 0.0;
     private sceneReady = false;
     private replayDone = false;
+    private pendingFlap = false;
 
     onInit(): void {
         NE.SetOverrideCamera({
@@ -65,24 +69,60 @@ class FlappyGame {
             return;
         }
 
-        const flap = NE.Input.IsKeyPressed("space") || NE.Input.IsMouseButtonPressed(1) || NE.Input.GetGamepadButton("a");
-        if (NE.Input.IsKeyPressed("esc")) {
-            NE.RequestClose();
-            return;
-        }
         if (this.state === "Dead") {
             this.deadTimer = f32(this.deadTimer + deltaSeconds);
-            if (this.deadTimer >= this.config.deadHitStopSeconds && NE.Input.IsKeyPressed("any")) {
-                NE.RequestLoadScene("Empty.proc");
-            }
         }
 
         this.accumulator = f32(this.accumulator + Math.min(deltaSeconds, 0.25));
         while (this.accumulator >= this.config.fixedDeltaSeconds) {
+            const flap = this.pendingFlap;
+            this.pendingFlap = false;
             this.fixedStep(flap);
             this.accumulator = f32(this.accumulator - this.config.fixedDeltaSeconds);
         }
         NE.Global.GetScene().MarkTransformDirty();
+    }
+
+    onInputEvent(event: NE.InputEvent): void {
+        if (event.type === "keyDown") {
+            if (event.repeated) {
+                return;
+            }
+            if (event.key === "esc") {
+                NE.RequestClose();
+                return;
+            }
+            if (this.state === "Dead" && this.deadTimer >= this.config.deadHitStopSeconds) {
+                this.restartScene();
+                return;
+            }
+            if (event.key === "space") {
+                this.startOrFlap();
+            }
+            return;
+        }
+
+        if (event.type === "mouseButtonDown") {
+            if (event.mouseButton !== 1) {
+                return;
+            }
+            if (this.state === "Dead" && this.deadTimer >= this.config.deadHitStopSeconds) {
+                this.restartScene();
+                return;
+            }
+            this.startOrFlap();
+            return;
+        }
+
+        if (event.type === "gamepadButtonDown") {
+            if (this.state === "Dead" && this.deadTimer >= this.config.deadHitStopSeconds) {
+                this.restartScene();
+                return;
+            }
+            if (event.gamepadButton === "south") {
+                this.startOrFlap();
+            }
+        }
     }
 
     onRenderUI(): void {
@@ -105,9 +145,29 @@ class FlappyGame {
         this.score = 0;
         this.accumulator = 0.0;
         this.deadTimer = 0.0;
+        this.pendingFlap = false;
         this.rng.reset(this.config.determinism.rngSeed);
         this.bird.reset(this.config);
         this.pipes.reset(this.config);
+    }
+
+    private restartScene(): void {
+        this.reset();
+        NE.RequestLoadScene("Empty.proc");
+    }
+
+    private startOrFlap(): void {
+        if (this.state === "Ready") {
+            this.state = "Playing";
+            this.pendingFlap = true;
+            NE.Audio.PlaySfx(flapSfx);
+            return;
+        }
+
+        if (this.state === "Playing") {
+            this.pendingFlap = true;
+            NE.Audio.PlaySfx(flapSfx);
+        }
     }
 
     private fixedStep(flap: boolean): void {
@@ -131,7 +191,7 @@ class FlappyGame {
         const scored = this.pipes.consumeScoreEvents(this.config.bird.initialPosition.x);
         if (scored > 0) {
             this.score += scored;
-            NE.Audio.PlaySfx("assets/sounds/flappy_score.wav");
+            NE.Audio.PlaySfx(scoreSfx);
         }
         const minBirdY = f32(this.config.world.minY + this.config.bird.radius);
         const maxBirdY = f32(this.config.world.maxY - this.config.bird.radius);
@@ -139,7 +199,7 @@ class FlappyGame {
             this.pipes.checkCollision(this.bird.position.x, this.bird.position.y, this.config.bird.radius, this.config)) {
             this.state = "Dead";
             this.deadTimer = 0.0;
-            NE.Audio.PlaySfx("assets/sounds/flappy_hit.wav");
+            NE.Audio.PlaySfx(hitSfx);
         }
     }
 
@@ -182,5 +242,6 @@ NE.RegisterLifecycleHooks({
     onInit: () => game.onInit(),
     onSceneLoaded: () => game.onSceneLoaded(),
     onRenderUI: () => game.onRenderUI(),
+    onInputEvent: (event: NE.InputEvent) => game.onInputEvent(event),
 });
 NE.Global.GetEngine().RegisterJSCallback((deltaSeconds: number) => game.tick(deltaSeconds));

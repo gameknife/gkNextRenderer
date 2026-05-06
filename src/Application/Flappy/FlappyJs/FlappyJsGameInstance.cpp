@@ -49,19 +49,13 @@ bool FlappyJsGameInstance::OnRenderUI()
 
 bool FlappyJsGameInstance::OnKey(SDL_Event& event)
 {
-    if (QuickJSEngine* qjs = GetEngine().GetQuickJSEngine())
-    {
-        qjs->HandleInputEvent(event);
-    }
+    (void)event;
     return false;
 }
 
 bool FlappyJsGameInstance::OnMouseButton(SDL_Event& event)
 {
-    if (QuickJSEngine* qjs = GetEngine().GetQuickJSEngine())
-    {
-        qjs->HandleInputEvent(event);
-    }
+    (void)event;
     return false;
 }
 

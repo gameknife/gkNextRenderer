@@ -3,6 +3,11 @@ import { helperValue } from "./helper";
 
 let hasRun = false;
 
+NE.RegisterLifecycleHooks({
+    onInputEvent: (_event: NE.InputEvent) => {
+    },
+});
+
 function tryRunTest(): boolean {
     const scene = NE.Global.GetScene();
     const nodeId = scene.FindNodeIdWithComponent("RenderComponent");

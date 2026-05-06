@@ -89,12 +89,21 @@ export namespace UI {
     function CalcTextSize(text: string, scale?: number): Vec2;
     function DrawText(text: string, x: number, y: number, scale?: number, r?: number, g?: number, b?: number, a?: number): void;
 }
+export type InputEventType = "keyDown" | "keyUp" | "mouseButtonDown" | "mouseButtonUp" | "gamepadButtonDown" | "gamepadButtonUp";
+export interface InputEvent {
+    type: InputEventType;
+    key?: string;
+    mouseButton?: number;
+    gamepadButton?: string;
+    repeated?: boolean;
+}
 
 export interface LifecycleHooks {
     onInit?: () => void;
     onDestroy?: () => void;
     onSceneLoaded?: () => void;
     onRenderUI?: () => void;
+    onInputEvent?: (event: InputEvent) => void;
 }
 export interface CameraOverride { position: Vec3; target: Vec3; up: Vec3; fov: number; }
 export function RegisterLifecycleHooks(hooks: LifecycleHooks): void;

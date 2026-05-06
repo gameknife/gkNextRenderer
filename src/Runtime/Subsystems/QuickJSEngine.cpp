@@ -350,6 +350,83 @@ namespace
         return std::nullopt;
     }
 
+    std::string KeyCodeToName(const SDL_Keycode key)
+    {
+        switch (key)
+        {
+        case SDLK_SPACE:
+            return "space";
+        case SDLK_ESCAPE:
+            return "esc";
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER:
+            return "enter";
+        default:
+            break;
+        }
+
+        std::string name = SDL_GetKeyName(key);
+        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c)
+        {
+            return static_cast<char>(std::tolower(c));
+        });
+        return name;
+    }
+
+    std::string GamepadButtonToName(const uint8_t button)
+    {
+        switch (button)
+        {
+        case SDL_GAMEPAD_BUTTON_SOUTH:
+            return "south";
+        case SDL_GAMEPAD_BUTTON_EAST:
+            return "east";
+        case SDL_GAMEPAD_BUTTON_WEST:
+            return "west";
+        case SDL_GAMEPAD_BUTTON_NORTH:
+            return "north";
+        case SDL_GAMEPAD_BUTTON_START:
+            return "start";
+        case SDL_GAMEPAD_BUTTON_BACK:
+            return "back";
+        default:
+            return fmt::format("button{}", button);
+        }
+    }
+
+    JSValue BuildInputEventObject(JSContext* ctx, const SDL_Event& event)
+    {
+        JSValue eventObject = JS_NewObject(ctx);
+        switch (event.type)
+        {
+        case SDL_EVENT_KEY_DOWN:
+        case SDL_EVENT_KEY_UP:
+            JS_SetPropertyStr(ctx, eventObject, "type",
+                              JS_NewString(ctx, event.type == SDL_EVENT_KEY_DOWN ? "keyDown" : "keyUp"));
+            JS_SetPropertyStr(ctx, eventObject, "key",
+                              JS_NewString(ctx, KeyCodeToName(event.key.key).c_str()));
+            JS_SetPropertyStr(ctx, eventObject, "repeated", JS_NewBool(ctx, event.key.repeat));
+            break;
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+            JS_SetPropertyStr(ctx, eventObject, "type",
+                              JS_NewString(ctx, event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? "mouseButtonDown" : "mouseButtonUp"));
+            JS_SetPropertyStr(ctx, eventObject, "mouseButton", JS_NewUint32(ctx, event.button.button));
+            break;
+        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        case SDL_EVENT_GAMEPAD_BUTTON_UP:
+            JS_SetPropertyStr(ctx, eventObject, "type",
+                              JS_NewString(ctx, event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ? "gamepadButtonDown" : "gamepadButtonUp"));
+            JS_SetPropertyStr(ctx, eventObject, "gamepadButton",
+                              JS_NewString(ctx, GamepadButtonToName(event.gbutton.button).c_str()));
+            break;
+        default:
+            JS_SetPropertyStr(ctx, eventObject, "type", JS_NewString(ctx, "unknown"));
+            break;
+        }
+        return eventObject;
+    }
+
     bool JSValueToVec3(JSContext* ctx, JSValueConst value, glm::vec3& outVec)
     {
         auto readFloat = [&](const char* key, float& outValue) -> bool
@@ -1595,11 +1672,20 @@ namespace
         result += "    function CalcTextSize(text: string, scale?: number): Vec2;\n";
         result += "    function DrawText(text: string, x: number, y: number, scale?: number, r?: number, g?: number, b?: number, a?: number): void;\n";
         result += "}\n";
+        result += "export type InputEventType = \"keyDown\" | \"keyUp\" | \"mouseButtonDown\" | \"mouseButtonUp\" | \"gamepadButtonDown\" | \"gamepadButtonUp\";\n";
+        result += "export interface InputEvent {\n";
+        result += "    type: InputEventType;\n";
+        result += "    key?: string;\n";
+        result += "    mouseButton?: number;\n";
+        result += "    gamepadButton?: string;\n";
+        result += "    repeated?: boolean;\n";
+        result += "}\n";
         result += "\nexport interface LifecycleHooks {\n";
         result += "    onInit?: () => void;\n";
         result += "    onDestroy?: () => void;\n";
         result += "    onSceneLoaded?: () => void;\n";
         result += "    onRenderUI?: () => void;\n";
+        result += "    onInputEvent?: (event: InputEvent) => void;\n";
         result += "}\n";
         result += "export interface CameraOverride { position: Vec3; target: Vec3; up: Vec3; fov: number; }\n";
         result += "export function RegisterLifecycleHooks(hooks: LifecycleHooks): void;\n";
@@ -1852,6 +1938,59 @@ void QuickJSEngine::HandleInputEvent(const SDL_Event& event)
     default:
         break;
     }
+
+    if (!context_)
+    {
+        return;
+    }
+
+    JSContext* ctx = context_->ctx;
+    JSValue global = JS_GetGlobalObject(ctx);
+    JSValue hooks = JS_GetPropertyStr(ctx, global, "__nextLifecycleHooks");
+    JS_FreeValue(ctx, global);
+    if (!JS_IsObject(hooks))
+    {
+        JS_FreeValue(ctx, hooks);
+        return;
+    }
+
+    JSValue callback = JS_GetPropertyStr(ctx, hooks, "onInputEvent");
+    if (!JS_IsFunction(ctx, callback))
+    {
+        JS_FreeValue(ctx, callback);
+        JS_FreeValue(ctx, hooks);
+        return;
+    }
+
+    JSValue inputEvent = BuildInputEventObject(ctx, event);
+    JSValue result = JS_Call(ctx, callback, hooks, 1, &inputEvent);
+    JS_FreeValue(ctx, inputEvent);
+    JS_FreeValue(ctx, callback);
+    JS_FreeValue(ctx, hooks);
+    if (JS_IsException(result))
+    {
+        JSValue exception = JS_GetException(ctx);
+        const char* message = JS_ToCString(ctx, exception);
+        SPDLOG_ERROR("[QuickJS] lifecycle hook 'onInputEvent' failed: {}", message ? message : "unknown");
+        if (message)
+        {
+            JS_FreeCString(ctx, message);
+        }
+        JSValue stack = JS_GetPropertyStr(ctx, exception, "stack");
+        const char* stackText = JS_ToCString(ctx, stack);
+        if (stackText && stackText[0] != '\0')
+        {
+            SPDLOG_ERROR("[QuickJS] stack:\n{}", stackText);
+        }
+        if (stackText)
+        {
+            JS_FreeCString(ctx, stackText);
+        }
+        JS_FreeValue(ctx, stack);
+        JS_FreeValue(ctx, exception);
+        return;
+    }
+    JS_FreeValue(ctx, result);
 #else
     (void)event;
 #endif
