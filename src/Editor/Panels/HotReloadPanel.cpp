@@ -52,25 +52,6 @@ namespace Editor
         auto& cvars = ctx.engine.GetCVarSystem();
         const auto status = ctx.engine.GetHotReloadStatus();
 
-        bool pluginHotReload = options.PluginHotReload;
-        if (ImGui::Checkbox("C++ plugin hot reload", &pluginHotReload))
-        {
-            SetCVarBool(cvars, "g.plugin.hot_reload", pluginHotReload);
-        }
-
-        float pluginInterval = options.PluginHotReloadInterval;
-        if (ImGui::SliderFloat("Plugin poll interval", &pluginInterval, 0.1f, 5.0f, "%.1fs"))
-        {
-            SetCVarFloat(cvars, "g.plugin.hot_reload_interval", pluginInterval);
-        }
-
-        if (ImGui::Button("Reload plugin now"))
-        {
-            ctx.engine.RequestPluginHotReload();
-        }
-
-        ImGui::Separator();
-
         bool shaderHotReload = options.ShaderHotReload;
         if (ImGui::Checkbox("Shader hot reload", &shaderHotReload))
         {
@@ -90,10 +71,6 @@ namespace Editor
 
         ImGui::Separator();
         ImGui::Text("Shader: %s", status.shaderInitialized ? "ready" : "not initialized");
-        ImGui::Text("Plugin: %s", status.pluginLoaded ? "loaded" : "not loaded");
-        ImGui::Text("Plugin reloads: %llu", static_cast<unsigned long long>(status.pluginReloadCounter));
-        DrawPathRow("Plugin", status.pluginSourcePath);
-        DrawPathRow("Shadow", status.pluginShadowPath);
         DrawPathRow("Shader source", status.shaderSourceRoot);
         DrawPathRow("Shader output", status.shaderOutputRoot);
         DrawPathRow("slangc", status.shaderCompiler);

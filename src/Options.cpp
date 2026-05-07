@@ -32,14 +32,10 @@ Options::Options(const int argc, const char* argv[])
 		("keep-cpu-mesh-data", "Keep CPU mesh data for editor mode.", cxxopts::value<bool>(KeepCPUMeshData)->default_value("false"))
 		("update-baseline", "Update visual test baseline images from the current run.", cxxopts::value<bool>(UpdateVisualTestBaseline)->default_value("false")->implicit_value("true"))
 		("flappy-replay", "Run Flappy deterministic replay and write trace output.", cxxopts::value<bool>(FlappyReplay)->default_value("false")->implicit_value("true"))
-		("game", "Game plugin name for gkNextHost, e.g. FlappyCpp.", cxxopts::value<std::string>(GameName)->default_value(""))
 		("hot-reload", "Enable runtime hot reload features.", cxxopts::value<bool>(HotReload)->default_value("true")->implicit_value("true"))
-		("no-hot-reload", "Disable all runtime hot reload features.", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
-		("plugin-hotreload", "Enable C++ plugin hot reload.", cxxopts::value<bool>(PluginHotReload)->default_value("true")->implicit_value("true"))
-		("no-plugin-hotreload", "Disable C++ plugin hot reload.", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
+		("no-hot-reload", "Disable runtime hot reload features.", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
 		("shader-hotreload", "Enable Slang shader hot reload.", cxxopts::value<bool>(ShaderHotReload)->default_value("true")->implicit_value("true"))
 		("no-shader-hotreload", "Disable Slang shader hot reload.", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
-		("plugin-hotreload-interval", "C++ plugin hot reload poll interval in seconds.", cxxopts::value<float>(PluginHotReloadInterval)->default_value("0.5"))
 		("shader-hotreload-interval", "Slang shader hot reload poll interval in seconds.", cxxopts::value<float>(ShaderHotReloadInterval)->default_value("0.5"))
 
 		("test-gltf", "Run glTF robustness test from Khronos Sample Assets.", cxxopts::value<bool>(TestGltfRobustness)->default_value("false"))
@@ -59,23 +55,12 @@ Options::Options(const int argc, const char* argv[])
 		if (result["no-hot-reload"].as<bool>())
 		{
 			HotReload = false;
-			PluginHotReload = false;
 			ShaderHotReload = false;
-		}
-
-		if (result["no-plugin-hotreload"].as<bool>())
-		{
-			PluginHotReload = false;
 		}
 
 		if (result["no-shader-hotreload"].as<bool>())
 		{
 			ShaderHotReload = false;
-		}
-
-		if (PluginHotReloadInterval < 0.1f)
-		{
-			PluginHotReloadInterval = 0.1f;
 		}
 
 		if (ShaderHotReloadInterval < 0.1f)

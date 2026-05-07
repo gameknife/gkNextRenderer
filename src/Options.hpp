@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
-
 #include <cstdint>
 #include <exception>
 #include <string>
@@ -37,12 +35,9 @@ public:
 	bool UpdateVisualTestBaseline{};
 	bool FlappyReplay{};
 	bool HotReload{true};
-	bool PluginHotReload{true};
 	bool ShaderHotReload{true};
-	float PluginHotReloadInterval{0.5f};
 	float ShaderHotReloadInterval{0.5f};
 	std::string locale{};
-	std::string GameName{};
 
 
 	
@@ -65,4 +60,4 @@ public:
 	std::string TestGltfFilter{};
 };
 
-extern ENGINE_API Options* GOption;
+extern Options* GOption;

@@ -30,11 +30,6 @@ namespace Flappy
         int ConsumeScoreEvents(float birdX);
 
         const std::vector<FPipeRuntime>& GetPipes() const { return pipes_; }
-        float GetSpawnTimer() const { return spawnTimer_; }
-        void RestoreRuntime(float spawnTimer,
-                            const std::vector<FPipeRuntime>& pipes,
-                            const FPipeConfig& config,
-                            const FWorldConfig& world);
 
     private:
         void SpawnPipe(const FPipeConfig& config, const FWorldConfig& world, FXorShift32& rng);

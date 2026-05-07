@@ -134,11 +134,6 @@ namespace NextCVar
             GK_CVAR_FLOAT("r.shader.hot_reload_interval", options, ShaderHotReloadInterval,
                           options.ShaderHotReloadInterval, ECVarFlags::Archive,
                           "Slang shader hot reload poll interval in seconds");
-            GK_CVAR_BOOL("g.plugin.hot_reload", options, PluginHotReload, options.PluginHotReload,
-                         ECVarFlags::Archive, "Enable C++ game plugin hot reload");
-            GK_CVAR_FLOAT("g.plugin.hot_reload_interval", options, PluginHotReloadInterval,
-                          options.PluginHotReloadInterval, ECVarFlags::Archive,
-                          "C++ game plugin hot reload poll interval in seconds");
         }
 
         GK_CVAR_BOOL("show.debugLighting", showFlags, DebugDraw_Lighting, false, ECVarFlags::None,

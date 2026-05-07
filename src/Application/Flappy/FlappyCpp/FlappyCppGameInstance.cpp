@@ -6,11 +6,10 @@
 #include "Assets/Loaders/FProcModel.h"
 #include "Runtime/Scene/SceneBuilder.h"
 #include "Runtime/Scene/NodeUtils.h"
-#include "Runtime/Plugin/HotReloadState.hpp"
-#include "Runtime/Plugin/PluginUi.hpp"
 #include "Runtime/Subsystems/NextAudio.h"
 
 #include <glm/ext.hpp>
+#include <imgui.h>
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
@@ -50,12 +49,6 @@ namespace
     {
         return (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || event.type == SDL_EVENT_GAMEPAD_BUTTON_UP) &&
                event.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH;
-    }
-
-    constexpr uint32_t UiColor(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
-    {
-        return static_cast<uint32_t>(r) | (static_cast<uint32_t>(g) << 8u) |
-               (static_cast<uint32_t>(b) << 16u) | (static_cast<uint32_t>(a) << 24u);
     }
 
     std::filesystem::path FindProjectRoot()
@@ -142,80 +135,84 @@ void FlappyCppGameInstance::OnDestroy() {}
 
 bool FlappyCppGameInstance::OnRenderUI()
 {
-    glm::vec2 min;
-    glm::vec2 size;
-    if (!Runtime::PluginUi::GetMainViewportRect(min, size))
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    if (!viewport)
     {
         return false;
     }
 
-    const glm::vec2 center(min.x + size.x * 0.5f, min.y + size.y * 0.5f);
+    ImDrawList* drawList = ImGui::GetForegroundDrawList();
+    const ImVec2 min = viewport->Pos;
+    const ImVec2 size = viewport->Size;
+    const ImVec2 center(min.x + size.x * 0.5f, min.y + size.y * 0.5f);
 
-    auto drawText = [](const std::string& text, const glm::vec2& pos, float scale, uint32_t color)
+    auto drawText = [&](const std::string& text, const ImVec2& pos, float scale, ImU32 color)
     {
-        Runtime::PluginUi::AddText(text, pos, scale, color);
+        drawList->AddText(nullptr, ImGui::GetFontSize() * scale, pos, color, text.c_str());
     };
 
-    auto drawCenteredText = [&](const std::string& text, float y, float scale, uint32_t color)
+    auto drawCenteredText = [&](const std::string& text, float y, float scale, ImU32 color)
     {
-        const glm::vec2 rawSize = Runtime::PluginUi::CalcTextSize(text);
-        const glm::vec2 textSize(rawSize.x * scale, rawSize.y * scale);
-        const glm::vec2 pos(min.x + (size.x - textSize.x) * 0.5f, y);
-        drawText(text, glm::vec2(pos.x + 2.0f, pos.y + 2.0f), scale, UiColor(20, 28, 35, 110));
+        const ImVec2 rawSize = ImGui::CalcTextSize(text.c_str());
+        const ImVec2 textSize(rawSize.x * scale, rawSize.y * scale);
+        const ImVec2 pos(min.x + (size.x - textSize.x) * 0.5f, y);
+        drawText(text, ImVec2(pos.x + 2.0f, pos.y + 2.0f), scale, IM_COL32(20, 28, 35, 110));
         drawText(text, pos, scale, color);
     };
 
     auto drawPanel = [&](float width, float height, float y)
     {
         const float x = center.x - width * 0.5f;
-        Runtime::PluginUi::AddRectFilled(glm::vec2(x + 6.0f, y + 8.0f),
-                                         glm::vec2(x + width + 6.0f, y + height + 8.0f),
-                                         UiColor(16, 28, 38, 80),
-                                         18.0f);
-        Runtime::PluginUi::AddRectFilled(glm::vec2(x, y),
-                                         glm::vec2(x + width, y + height),
-                                         UiColor(18, 32, 43, 210),
-                                         18.0f);
-        Runtime::PluginUi::AddRect(glm::vec2(x, y),
-                                   glm::vec2(x + width, y + height),
-                                   UiColor(255, 255, 255, 46),
-                                   18.0f,
-                                   1.5f);
-        return glm::vec2(x, y);
+        drawList->AddRectFilled(ImVec2(x + 6.0f, y + 8.0f),
+                                ImVec2(x + width + 6.0f, y + height + 8.0f),
+                                IM_COL32(16, 28, 38, 80),
+                                18.0f);
+        drawList->AddRectFilled(ImVec2(x, y),
+                                ImVec2(x + width, y + height),
+                                IM_COL32(18, 32, 43, 210),
+                                18.0f);
+        drawList->AddRect(ImVec2(x, y),
+                          ImVec2(x + width, y + height),
+                          IM_COL32(255, 255, 255, 46),
+                          18.0f,
+                          0,
+                          1.5f);
+        return ImVec2(x, y);
     };
 
     const float scoreWidth = 136.0f + static_cast<float>(std::max(0, score_ / 10)) * 18.0f;
     const float scoreX = center.x - scoreWidth * 0.5f;
-    Runtime::PluginUi::AddRectFilled(glm::vec2(scoreX + 3.0f, min.y + 27.0f),
-                                     glm::vec2(scoreX + scoreWidth + 3.0f, min.y + 83.0f),
-                                     UiColor(10, 24, 34, 80),
-                                     16.0f);
-    Runtime::PluginUi::AddRectFilled(glm::vec2(scoreX, min.y + 24.0f),
-                                     glm::vec2(scoreX + scoreWidth, min.y + 80.0f),
-                                     UiColor(24, 40, 52, 210),
-                                     16.0f);
-    Runtime::PluginUi::AddRect(glm::vec2(scoreX, min.y + 24.0f),
-                               glm::vec2(scoreX + scoreWidth, min.y + 80.0f),
-                               UiColor(255, 255, 255, 40),
-                               16.0f,
-                               1.0f);
-    drawCenteredText(fmt::format("{}", score_), min.y + 31.0f, 2.05f, UiColor(255, 255, 255, 255));
+    drawList->AddRectFilled(ImVec2(scoreX + 3.0f, min.y + 27.0f),
+                            ImVec2(scoreX + scoreWidth + 3.0f, min.y + 83.0f),
+                            IM_COL32(10, 24, 34, 80),
+                            16.0f);
+    drawList->AddRectFilled(ImVec2(scoreX, min.y + 24.0f),
+                            ImVec2(scoreX + scoreWidth, min.y + 80.0f),
+                            IM_COL32(24, 40, 52, 210),
+                            16.0f);
+    drawList->AddRect(ImVec2(scoreX, min.y + 24.0f),
+                      ImVec2(scoreX + scoreWidth, min.y + 80.0f),
+                      IM_COL32(255, 255, 255, 40),
+                      16.0f,
+                      0,
+                      1.0f);
+    drawCenteredText(fmt::format("{}", score_), min.y + 31.0f, 2.05f, IM_COL32(255, 255, 255, 255));
 
     if (state_ == Flappy::EGameState::Ready)
     {
         const float panelWidth = std::max(280.0f, std::min(520.0f, size.x - 48.0f));
-        const glm::vec2 panel = drawPanel(panelWidth, 178.0f, center.y - 96.0f);
-        drawCenteredText("FLAPPY", panel.y + 26.0f, 2.0f, UiColor(255, 230, 102, 255));
-        drawCenteredText("Thread the gap. Keep the rhythm.", panel.y + 76.0f, 1.0f, UiColor(211, 231, 236, 235));
-        drawCenteredText("SPACE / CLICK / GAMEPAD A", panel.y + 121.0f, 1.1f, UiColor(124, 230, 168, 255));
+        const ImVec2 panel = drawPanel(panelWidth, 178.0f, center.y - 96.0f);
+        drawCenteredText("FLAPPY", panel.y + 26.0f, 2.0f, IM_COL32(255, 230, 102, 255));
+        drawCenteredText("Thread the gap. Keep the rhythm.", panel.y + 76.0f, 1.0f, IM_COL32(211, 231, 236, 235));
+        drawCenteredText("SPACE / CLICK / GAMEPAD A", panel.y + 121.0f, 1.1f, IM_COL32(124, 230, 168, 255));
     }
     else if (state_ == Flappy::EGameState::Dead)
     {
         const float panelWidth = std::max(280.0f, std::min(500.0f, size.x - 48.0f));
-        const glm::vec2 panel = drawPanel(panelWidth, 166.0f, center.y - 88.0f);
-        drawCenteredText("GAME OVER", panel.y + 24.0f, 1.75f, UiColor(255, 134, 122, 255));
-        drawCenteredText(fmt::format("Score {}", score_), panel.y + 73.0f, 1.25f, UiColor(255, 255, 255, 245));
-        drawCenteredText("PRESS ANY KEY TO RESTART", panel.y + 116.0f, 1.0f, UiColor(124, 230, 168, 245));
+        const ImVec2 panel = drawPanel(panelWidth, 166.0f, center.y - 88.0f);
+        drawCenteredText("GAME OVER", panel.y + 24.0f, 1.75f, IM_COL32(255, 134, 122, 255));
+        drawCenteredText(fmt::format("Score {}", score_), panel.y + 73.0f, 1.25f, IM_COL32(255, 255, 255, 245));
+        drawCenteredText("PRESS ANY KEY TO RESTART", panel.y + 116.0f, 1.0f, IM_COL32(124, 230, 168, 245));
     }
 
     return false;
@@ -356,48 +353,6 @@ void FlappyCppGameInstance::OnSceneLoaded()
 {
     sceneReady_ = true;
     ResetRuntime();
-    TryApplyPendingHotReloadState();
-}
-
-void FlappyCppGameInstance::SaveHotReloadState(FHotReloadState& state) const
-{
-    nlohmann::json flappyState;
-    flappyState["score"] = score_;
-    flappyState["state"] = static_cast<int>(state_);
-    flappyState["fixedAccumulator"] = fixedAccumulator_;
-    flappyState["deadTimer"] = deadTimer_;
-    flappyState["pendingFlap"] = pendingFlap_;
-    flappyState["rng"] = rng_.GetState();
-    flappyState["bird"] = {
-        {"x", bird_.GetPosition().x},
-        {"y", bird_.GetPosition().y},
-        {"z", bird_.GetPosition().z},
-        {"velocityY", bird_.GetVelocityY()},
-    };
-    flappyState["pipeSpawnTimer"] = pipes_.GetSpawnTimer();
-    flappyState["pipes"] = nlohmann::json::array();
-    for (const Flappy::FPipeRuntime& pipe : pipes_.GetPipes())
-    {
-        flappyState["pipes"].push_back({
-            {"x", pipe.x},
-            {"gapCenterY", pipe.gapCenterY},
-            {"active", pipe.active},
-            {"scored", pipe.scored},
-        });
-    }
-    state.Raw()["FlappyCpp"] = std::move(flappyState);
-}
-
-void FlappyCppGameInstance::LoadHotReloadState(const FHotReloadState& state)
-{
-    const auto it = state.Raw().find("FlappyCpp");
-    if (it == state.Raw().end())
-    {
-        return;
-    }
-
-    pendingHotReloadState_ = it->dump();
-    TryApplyPendingHotReloadState();
 }
 
 bool FlappyCppGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera) const
@@ -418,65 +373,6 @@ void FlappyCppGameInstance::ResetRuntime()
     rng_.Reset(config_.rngSeed);
     bird_.Reset(config_.bird);
     pipes_.Reset(config_.pipe);
-}
-
-bool FlappyCppGameInstance::TryApplyPendingHotReloadState()
-{
-    if (pendingHotReloadState_.empty() || !sceneReady_)
-    {
-        return false;
-    }
-
-    nlohmann::json flappyState;
-    try
-    {
-        flappyState = nlohmann::json::parse(pendingHotReloadState_);
-    }
-    catch (const std::exception& e)
-    {
-        SPDLOG_WARN("[HotReload] Failed to parse FlappyCpp hot reload state: {}", e.what());
-        pendingHotReloadState_.clear();
-        return false;
-    }
-
-    score_ = flappyState.value("score", score_);
-    state_ = static_cast<Flappy::EGameState>(flappyState.value("state", static_cast<int>(state_)));
-    fixedAccumulator_ = flappyState.value("fixedAccumulator", fixedAccumulator_);
-    deadTimer_ = flappyState.value("deadTimer", deadTimer_);
-    pendingFlap_ = flappyState.value("pendingFlap", pendingFlap_);
-    rng_.Reset(flappyState.value("rng", rng_.GetState()));
-
-    if (flappyState.contains("bird"))
-    {
-        const nlohmann::json& birdState = flappyState["bird"];
-        bird_.RestoreRuntime(glm::vec3(birdState.value("x", bird_.GetPosition().x),
-                                       birdState.value("y", bird_.GetPosition().y),
-                                       birdState.value("z", bird_.GetPosition().z)),
-                             birdState.value("velocityY", bird_.GetVelocityY()));
-    }
-
-    std::vector<Flappy::FPipeRuntime> pipeRuntime;
-    if (flappyState.contains("pipes") && flappyState["pipes"].is_array())
-    {
-        for (const nlohmann::json& pipeState : flappyState["pipes"])
-        {
-            Flappy::FPipeRuntime pipe;
-            pipe.x = pipeState.value("x", pipe.x);
-            pipe.gapCenterY = pipeState.value("gapCenterY", pipe.gapCenterY);
-            pipe.active = pipeState.value("active", pipe.active);
-            pipe.scored = pipeState.value("scored", pipe.scored);
-            pipeRuntime.push_back(pipe);
-        }
-    }
-    pipes_.RestoreRuntime(flappyState.value("pipeSpawnTimer", pipes_.GetSpawnTimer()),
-                          pipeRuntime,
-                          config_.pipe,
-                          config_.world);
-
-    GetEngine().GetScene().MarkTransformDirty();
-    pendingHotReloadState_.clear();
-    SPDLOG_INFO("[HotReload] Restored FlappyCpp runtime state after plugin reload.");
-    return true;
 }
 
 void FlappyCppGameInstance::RestartScene()

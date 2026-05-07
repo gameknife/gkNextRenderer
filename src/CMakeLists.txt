@@ -88,8 +88,7 @@ add_executable(gkNextRenderer
 	DesktopMain.cpp
 )
 else()
-set(gk_next_engine_library_type STATIC)
-add_library(gkNextEngine ${gk_next_engine_library_type}
+add_library(gkNextEngine
 	${src_files_assets} 
 	${src_files_utilities} 
 	${src_files_engine}
@@ -97,16 +96,6 @@ add_library(gkNextEngine ${gk_next_engine_library_type}
 	${src_files_rendering}
 	${src_files_thirdparty}
 )
-if (GK_ENABLE_HOT_RELOAD)
-add_library(gkNextEngineShared SHARED
-	${src_files_assets}
-	${src_files_utilities}
-	${src_files_engine}
-	${src_files_vulkan}
-	${src_files_rendering}
-	${src_files_thirdparty}
-)
-endif()
 add_library(NextGameplay
 	${src_files_nextgameplay}
 )
@@ -149,17 +138,6 @@ add_executable(FlappyCpp
 	${src_files_flappycpp}
 	DesktopMain.cpp
 )
-if (GK_ENABLE_HOT_RELOAD)
-add_executable(gkNextHost
-	DesktopMain.cpp
-)
-target_compile_definitions(gkNextHost PRIVATE GK_HOST_APP=1)
-add_library(FlappyCppPlugin SHARED
-	${src_files_flappycpp}
-	Application/PluginEntry.cpp
-)
-target_compile_definitions(FlappyCppPlugin PRIVATE GK_BUILDING_GAME_PLUGIN=1)
-endif()
 add_executable(FlappyJs
 	${src_files_flappyjs}
 	DesktopMain.cpp
@@ -266,14 +244,6 @@ gkNextMotionBenchmark
 )
 endif()
 
-if (GK_ENABLE_HOT_RELOAD AND NOT ANDROID AND NOT IOS)
-	list(APPEND AllTargets
-		gkNextEngineShared
-		gkNextHost
-		FlappyCppPlugin
-	)
-endif()
-
 # Unity Build option (default ON, can be disabled with -DENABLE_UNITY_BUILD=OFF)
 option(ENABLE_UNITY_BUILD "Enable unity builds for engine target" ON)
 file(TO_CMAKE_PATH "${Vulkan_SLANGC}" GK_SLANGC_EXECUTABLE_PATH)
@@ -300,7 +270,6 @@ foreach(target IN LISTS AllTargets)
 	target_compile_definitions(${target} PUBLIC MA_NO_ENCODING MA_NO_FLAC)
 	if (GK_ENABLE_HOT_RELOAD)
 		target_compile_definitions(${target} PUBLIC GK_ENABLE_HOT_RELOAD=1)
-		target_compile_definitions(${target} PUBLIC GK_CMAKE_DEBUG_POSTFIX="${CMAKE_DEBUG_POSTFIX}")
 	else()
 		target_compile_definitions(${target} PUBLIC GK_ENABLE_HOT_RELOAD=0)
 	endif()
@@ -310,17 +279,10 @@ foreach(target IN LISTS AllTargets)
 	endif()
 
 	# link engine
-	if ( ${target} STREQUAL gkNextEngine OR ${target} STREQUAL gkNextEngineShared )
+	if ( ${target} STREQUAL gkNextEngine )
 		target_compile_definitions(${target} PRIVATE ENGINE_EXPORTS)
 		target_compile_definitions(${target} PRIVATE GK_NEXT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 		target_compile_definitions(${target} PRIVATE GK_SLANGC_EXECUTABLE="${GK_SLANGC_EXECUTABLE_PATH}")
-		if ( ${target} STREQUAL gkNextEngineShared )
-			target_compile_definitions(${target} PUBLIC ENGINE_API_SHARED)
-			target_compile_definitions(${target} PRIVATE GK_ENGINE_OWNS_SDL_EVENT_PUMP=1)
-			if (WIN32)
-				set_target_properties(${target} PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
-			endif()
-		endif()
 		
 		# Enable Unity Build for gkNextEngine unless explicitly disabled (Android disabled by default)
 		# Group files for Unity Build optimization
@@ -340,7 +302,6 @@ foreach(target IN LISTS AllTargets)
 		endif()
 		find_package(WebP CONFIG REQUIRED)
 		target_link_libraries(${target} PRIVATE SDL3::SDL3 xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp ${extra_libs})
-		target_link_libraries(${target} PRIVATE ${CMAKE_DL_LIBS})
 		target_link_libraries(${target} PUBLIC spdlog::spdlog)
 		if ( GK_WHISPER_LINK_LIBS )
 			target_link_libraries(${target} PRIVATE ${GK_WHISPER_LINK_LIBS})
@@ -369,19 +330,6 @@ foreach(target IN LISTS AllTargets)
 	elseif ( ${target} STREQUAL NextGameplay )
 		set_target_properties(${target} PROPERTIES FOLDER "Gameplay")
 		target_link_libraries(${target} PRIVATE gkNextEngine)
-	elseif ( ${target} STREQUAL FlappyCppPlugin )
-		set_target_properties(${target} PROPERTIES FOLDER "Programs")
-		target_link_libraries(${target} PRIVATE gkNextEngineShared)
-		if ( WITH_STREAMLINE )
-			target_link_directories(${target} PRIVATE ${STREAMLINE_LIB_DIR})
-		endif()
-	elseif ( ${target} STREQUAL gkNextHost )
-		set_target_properties(${target} PROPERTIES FOLDER "Programs")
-		target_link_libraries(${target} PRIVATE gkNextEngineShared SDL3::SDL3)
-		if ( WITH_STREAMLINE )
-			target_link_directories(${target} PRIVATE ${STREAMLINE_LIB_DIR})
-			target_link_libraries(${target} PRIVATE sl.interposer)
-		endif()
 	else()
 		set_target_properties(${target} PROPERTIES FOLDER "Programs")
 		if ( NOT ANDROID ) 
@@ -536,9 +484,6 @@ endif()
 set_target_properties(Assets PROPERTIES FOLDER "Engine")
 if ( NOT ANDROID )
 set_target_properties(gkNextEngine PROPERTIES FOLDER "Engine")
-if ( TARGET gkNextEngineShared )
-set_target_properties(gkNextEngineShared PROPERTIES FOLDER "Engine")
-endif()
 endif()
 
 # iOS specific: copy assets to bundle

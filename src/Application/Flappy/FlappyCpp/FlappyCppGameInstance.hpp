@@ -44,8 +44,6 @@ public:
                             std::vector<Assets::LightObject>& lights,
                             std::vector<Assets::AnimationTrack>& tracks) override;
     void OnSceneLoaded() override;
-    void SaveHotReloadState(FHotReloadState& state) const override;
-    void LoadHotReloadState(const FHotReloadState& state) override;
     bool OverrideRenderCamera(Assets::Camera& outRenderCamera) const override;
 
     const Flappy::FGameplayConfig& GetConfig() const { return config_; }
@@ -62,7 +60,6 @@ private:
     void PlaySfx(const char* path);
     void RunReplayToCompletion();
     void WriteReplayTrace(const std::vector<Flappy::FFlappyTraceFrame>& trace, int deathFrame) const;
-    bool TryApplyPendingHotReloadState();
 
     NextEngine* engine_ = nullptr;
     Flappy::FGameplayConfig config_{};
@@ -78,5 +75,4 @@ private:
     bool sceneReady_ = false;
     bool replayMode_ = false;
     bool replayDone_ = false;
-    std::string pendingHotReloadState_;
 };

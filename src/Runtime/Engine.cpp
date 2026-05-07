@@ -7,8 +7,6 @@
 #include "Runtime/Config/CVarSystem.hpp"
 #include "Runtime/Config/EngineCVars.hpp"
 #include "Runtime/Subsystems/QuickJSEngine.hpp"
-#include "Runtime/Plugin/HotReloadState.hpp"
-#include "Runtime/Plugin/PluginLoader.hpp"
 #include "Runtime/Subsystems/AIService.hpp"
 #include "Runtime/Subsystems/NextLocalization.h"
 #include "Runtime/Subsystems/VoiceInputService.hpp"
@@ -68,7 +66,7 @@
 #include <spdlog/sinks/android_sink.h>
 #endif
 
-ENGINE_API Options* GOption = nullptr;
+Options* GOption = nullptr;
 
 void NextEngine::RegisterReflection()
 {
@@ -220,12 +218,6 @@ UserSettings CreateUserSettings(const Options& options)
 }
 
 NextEngine* NextEngine::instance_ = nullptr;
-NextEngine::GameInstanceFactory NextEngine::gameInstanceFactory_{};
-
-void NextEngine::SetGameInstanceFactory(GameInstanceFactory factory)
-{
-    gameInstanceFactory_ = std::move(factory);
-}
 
 NextEngine::NextEngine(Options& options, void* userdata)
     : options_(&options)
@@ -269,24 +261,24 @@ NextEngine::NextEngine(Options& options, void* userdata)
 
     Vulkan::Window::InitGLFW();
     // Create Window
-    windowConfig_ = Vulkan::WindowConfig{"gkNextRenderer " + NextRenderer::GetBuildVersion(),
-                                         options.Width,
-                                         options.Height,
-                                         options.Fullscreen,
-                                         options.Fullscreen,
-                                         !options.Fullscreen,
-                                         options.SaveFile,
-                                         userdata,
-                                         options.ForceSDR};
-    gameInstance_ = CreateConfiguredGameInstance();
+    Vulkan::WindowConfig windowConfig{"gkNextRenderer " + NextRenderer::GetBuildVersion(),
+                                      options.Width,
+                                      options.Height,
+                                      options.Fullscreen,
+                                      options.Fullscreen,
+                                      !options.Fullscreen,
+                                      options.SaveFile,
+                                      userdata,
+                                      options.ForceSDR};
+    gameInstance_ = CreateGameInstance(windowConfig, options, this);
     userSettings_ = CreateUserSettings(options);
     cvarSystem_ = std::make_unique<NextCVar::FCVarSystem>();
     NextCVar::RegisterEngineCVars(*cvarSystem_, userSettings_, showFlags_, this);
     cvarSystem_->LoadDefaultFile("assets/configs/cvar_default.json");
     gameInstance_->ApplyDefaultCVars(*cvarSystem_);
     cvarSystem_->LoadUserFile("assets/configs/cvar_user.json");
-    windowConfig_.Fullscreen = userSettings_.BorderlessFullscreen;
-    window_.reset(new Vulkan::Window(windowConfig_));
+    windowConfig.Fullscreen = userSettings_.BorderlessFullscreen;
+    window_.reset(new Vulkan::Window(windowConfig));
     SetBorderlessFullscreen(userSettings_.BorderlessFullscreen);
     quickJSEngine_ = std::make_unique<QuickJSEngine>();
 
@@ -294,67 +286,6 @@ NextEngine::NextEngine(Options& options, void* userdata)
     localization_->LoadFromTxt(fmt::format("assets/locale/{}.txt", options_->locale), options_->locale);
 
     SPDLOG_INFO("---- Next Engine Initialized in {}", stopwatch.elapsed_ms());
-}
-
-std::unique_ptr<NextGameInstanceBase> NextEngine::CreateConfiguredGameInstance()
-{
-#if GK_ENABLE_HOT_RELOAD
-    if (options_ != nullptr && options_->HotReload && !options_->GameName.empty())
-    {
-        pluginLoader_ = std::make_unique<PluginLoader>();
-        const std::filesystem::path pluginPath = PluginLoader::ResolvePluginPath(options_->GameName);
-        if (pluginLoader_->Load(pluginPath))
-        {
-            if (NextGameInstanceBase* instance = pluginLoader_->Create(windowConfig_, *options_, this))
-            {
-                usingPluginGameInstance_ = true;
-                gameInstanceDestroyCalled_ = false;
-                return std::unique_ptr<NextGameInstanceBase>(instance);
-            }
-            SPDLOG_WARN("[HotReload] Plugin CreateGameInstance returned null: {}", pluginPath.string());
-        }
-
-        pluginLoader_.reset();
-        usingPluginGameInstance_ = false;
-    }
-#endif
-
-    if (gameInstanceFactory_)
-    {
-        gameInstanceDestroyCalled_ = false;
-        return gameInstanceFactory_(windowConfig_, *options_, this);
-    }
-
-    SPDLOG_WARN("[HotReload] No game instance factory configured; using empty game instance.");
-    gameInstanceDestroyCalled_ = false;
-    return std::make_unique<NextGameInstanceVoid>(windowConfig_, *options_, this);
-}
-
-void NextEngine::DestroyGameInstance(bool callOnDestroy)
-{
-    if (!gameInstance_)
-    {
-        return;
-    }
-
-    if (callOnDestroy && !gameInstanceDestroyCalled_)
-    {
-        gameInstance_->OnDestroy();
-        gameInstanceDestroyCalled_ = true;
-    }
-
-#if GK_ENABLE_HOT_RELOAD
-    if (usingPluginGameInstance_ && pluginLoader_ && pluginLoader_->IsLoaded())
-    {
-        pluginLoader_->Destroy(gameInstance_.release());
-    }
-    else
-#endif
-    {
-        gameInstance_.reset();
-    }
-
-    gameInstanceDestroyCalled_ = false;
 }
 
 void NextEngine::TickHotReload()
@@ -367,56 +298,17 @@ void NextEngine::TickHotReload()
         shaderHotReloader_->SetPollInterval(options_->ShaderHotReloadInterval);
         shaderHotReloader_->Tick(deltaSeconds_);
     }
-
-    if (!pluginLoader_ || !usingPluginGameInstance_ || !gameInstance_ || !options_->HotReload ||
-        !options_->PluginHotReload)
-    {
-        return;
-    }
-
-    pluginLoader_->SetPollInterval(options_->PluginHotReloadInterval);
-    if (!pluginLoader_->PrepareReloadIfChanged(deltaSeconds_))
-    {
-        return;
-    }
-
-    SPDLOG_INFO("[HotReload] Reloading game plugin {}", pluginLoader_->SourcePath().string());
-    FHotReloadState state;
-    gameInstance_->SaveHotReloadState(state);
-    if (scene_)
-    {
-        gameInstance_->OnSceneUnloaded();
-    }
-    DestroyGameInstance(true);
-    pluginLoader_->CommitPreparedReload();
-
-    if (NextGameInstanceBase* instance = pluginLoader_->Create(windowConfig_, *options_, this))
-    {
-        gameInstance_.reset(instance);
-        gameInstanceDestroyCalled_ = false;
-        gameInstance_->OnInit();
-        gameInstance_->LoadHotReloadState(state);
-        SPDLOG_INFO("[HotReload] Game plugin reloaded successfully.");
-        return;
-    }
-
-    SPDLOG_WARN("[HotReload] Failed to create game instance after plugin reload.");
-    usingPluginGameInstance_ = false;
-    pluginLoader_.reset();
-    gameInstance_ = std::make_unique<NextGameInstanceVoid>(windowConfig_, *options_, this);
-    gameInstanceDestroyCalled_ = false;
 #endif
 }
 
 NextEngine::FHotReloadStatus NextEngine::GetHotReloadStatus() const
 {
     FHotReloadStatus status{};
-    status.hotReloadEnabled = options_ != nullptr && options_->HotReload && options_->PluginHotReload;
+    status.hotReloadEnabled = options_ != nullptr && options_->HotReload;
     status.shaderHotReloadEnabled = options_ != nullptr && options_->ShaderHotReload;
     if (options_ != nullptr)
     {
         status.shaderPollIntervalSeconds = options_->ShaderHotReloadInterval;
-        status.pluginPollIntervalSeconds = options_->PluginHotReloadInterval;
     }
 
 #if GK_ENABLE_HOT_RELOAD
@@ -429,17 +321,6 @@ NextEngine::FHotReloadStatus NextEngine::GetHotReloadStatus() const
         status.shaderSourceRoot = shaderStatus.sourceRoot;
         status.shaderOutputRoot = shaderStatus.outputRoot;
         status.shaderCompiler = shaderStatus.slangExecutable;
-    }
-
-    if (pluginLoader_)
-    {
-        const auto pluginStatus = pluginLoader_->GetStatus();
-        status.pluginLoaded = pluginStatus.loaded;
-        status.pluginPending = pluginStatus.pending;
-        status.pluginPollIntervalSeconds = pluginStatus.pollIntervalSeconds;
-        status.pluginReloadCounter = pluginStatus.reloadCounter;
-        status.pluginSourcePath = pluginStatus.sourcePath;
-        status.pluginShadowPath = pluginStatus.shadowPath;
     }
 #endif
 
@@ -456,20 +337,8 @@ void NextEngine::RequestShaderHotReload()
 #endif
 }
 
-void NextEngine::RequestPluginHotReload()
-{
-#if GK_ENABLE_HOT_RELOAD
-    if (pluginLoader_)
-    {
-        pluginLoader_->RequestReload();
-    }
-#endif
-}
-
 NextEngine::~NextEngine()
 {
-    DestroyGameInstance(false);
-
     if (cvarSystem_)
     {
         cvarSystem_->SaveUserFile("assets/configs/cvar_user.json");
@@ -618,22 +487,6 @@ bool NextEngine::HandleEvent(SDL_Event& event)
 bool NextEngine::Tick(bool forcingDelta)
 {
     PERFORMANCEAPI_INSTRUMENT_FUNCTION();
-
-#if GK_ENGINE_OWNS_SDL_EVENT_PUMP
-    SDL_Event event;
-    while (SDL_PollEvent(&event))
-    {
-        if (HandleEvent(event))
-        {
-            closeRequested_ = true;
-        }
-    }
-#endif
-
-    if (closeRequested_)
-    {
-        return true;
-    }
 
     if (GpuTimer())
     {
@@ -819,7 +672,7 @@ bool NextEngine::Tick(bool forcingDelta)
     {
         GpuTimer()->CpuFrameEnd();
     }
-    return closeRequested_;
+    return false;
 }
 
 void NextEngine::End()
@@ -844,10 +697,9 @@ void NextEngine::End()
     {
         animationEngine_->Stop();
     }
-    if (gameInstance_ && !gameInstanceDestroyCalled_)
+    if (gameInstance_)
     {
         gameInstance_->OnDestroy();
-        gameInstanceDestroyCalled_ = true;
     }
     if (renderer_)
     {
@@ -880,7 +732,6 @@ glm::dvec2 NextEngine::GetMousePos()
 
 void NextEngine::RequestClose()
 {
-    closeRequested_ = true;
     if (window_)
     {
         window_->Close();
