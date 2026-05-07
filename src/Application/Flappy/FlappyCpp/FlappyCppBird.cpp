@@ -25,6 +25,13 @@ namespace Flappy
         SyncVisual();
     }
 
+    void FFlappyCppBird::RestoreRuntime(const glm::vec3& position, float velocityY)
+    {
+        position_ = position;
+        velocityY_ = velocityY;
+        SyncVisual();
+    }
+
     void FFlappyCppBird::SyncVisual() const
     {
         if (!node_)

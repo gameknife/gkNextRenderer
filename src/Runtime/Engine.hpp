@@ -3,6 +3,7 @@
 #include "Assets/Core/Model.hpp"
 #include "Assets/GPU/UniformBuffer.hpp"
 #include "Common/CoreMinimal.hpp"
+#include "Common/PluginExport.hpp"
 #include "Options.hpp"
 #include "Rendering/VulkanBaseRenderer.hpp"
 #include "Runtime/Command/CommandHistory.hpp"
@@ -18,6 +19,8 @@ class QuickJSEngine;
 class NextAudio;
 class NextLocalization;
 class VulkanGpuTimer;
+class FHotReloadState;
+class PluginLoader;
 
 class NextEngine;
 
@@ -30,6 +33,10 @@ namespace NextAI
 namespace NextCVar
 {
     class FCVarSystem;
+}
+namespace Vulkan
+{
+    class ShaderHotReloader;
 }
 class NextAnimation;
 
@@ -61,6 +68,8 @@ public:
     }
     virtual void OnSceneLoaded() {}
     virtual void OnSceneUnloaded() {}
+    virtual void SaveHotReloadState(FHotReloadState& state) const { (void)state; }
+    virtual void LoadHotReloadState(const FHotReloadState& state) { (void)state; }
 
     // application-owned debug shortcuts; engine-owned F1/F2 are handled by NextEngine
     virtual bool SupportsAppDebugShortcut(SDL_Keycode key) const { return false; }
@@ -142,6 +151,10 @@ public:
     VULKAN_NON_COPIABLE(NextEngine)
 
     static void RegisterReflection();
+    using GameInstanceFactory = std::function<std::unique_ptr<NextGameInstanceBase>(Vulkan::WindowConfig&,
+                                                                                    Options&,
+                                                                                    NextEngine*)>;
+    static void SetGameInstanceFactory(GameInstanceFactory factory);
 
     NextEngine(Options& options, void* userdata = nullptr);
     ~NextEngine();
@@ -168,6 +181,23 @@ public:
         bool sync = false;
     };
 
+    struct FHotReloadStatus
+    {
+        bool hotReloadEnabled = false;
+        bool shaderHotReloadEnabled = false;
+        bool shaderInitialized = false;
+        bool pluginLoaded = false;
+        bool pluginPending = false;
+        double shaderPollIntervalSeconds = 0.5;
+        double pluginPollIntervalSeconds = 0.5;
+        uint64_t pluginReloadCounter = 0;
+        std::filesystem::path shaderSourceRoot;
+        std::filesystem::path shaderOutputRoot;
+        std::filesystem::path shaderCompiler;
+        std::filesystem::path pluginSourcePath;
+        std::filesystem::path pluginShadowPath;
+    };
+
     Vulkan::VulkanBaseRenderer& GetRenderer() { return *renderer_; }
     VulkanGpuTimer* GpuTimer() const { return renderer_ ? renderer_->GpuTimer() : nullptr; }
 
@@ -182,6 +212,8 @@ public:
     Assets::Scene& GetScene() { return *scene_; }
     UserSettings& GetUserSettings() { return userSettings_; }
     ShowFlags& GetShowFlags() { return showFlags_; }
+    Options& GetOptions() { return *options_; }
+    const Options& GetOptions() const { return *options_; }
 
     double GetTime() const { return time_; }
     double GetDeltaSeconds() const { return deltaSeconds_; }
@@ -260,6 +292,9 @@ public:
 
     VkDeviceAddress TryGetGPUAccelerationStructureAddress() const;
     VkAccelerationStructureKHR TryGetGPUAccelerationStructureHandle() const;
+    FHotReloadStatus GetHotReloadStatus() const;
+    void RequestShaderHotReload();
+    void RequestPluginHotReload();
 
 protected:
     Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent);
@@ -295,6 +330,9 @@ private:
     void LoadScene(const FSceneLoadRequest& request);
 
     void InitPhysics();
+    std::unique_ptr<NextGameInstanceBase> CreateConfiguredGameInstance();
+    void DestroyGameInstance(bool callOnDestroy);
+    void TickHotReload();
 
     // engine stuff
     std::unique_ptr<Vulkan::Window> window_;
@@ -325,9 +363,14 @@ private:
     FScreenShotSpec screenShotCaptureSpec_{};
     bool screenShotCapturePrevProgressive_{};
     uint32_t screenShotCapturePrevPreFrames_{};
+    bool closeRequested_ = false;
 
     // game instance
+    Vulkan::WindowConfig windowConfig_{};
+    std::unique_ptr<PluginLoader> pluginLoader_;
     std::unique_ptr<NextGameInstanceBase> gameInstance_;
+    bool gameInstanceDestroyCalled_ = false;
+    bool usingPluginGameInstance_ = false;
 
     // tasks
     std::vector<TickedTask> tickedTasks_;
@@ -357,9 +400,25 @@ private:
     std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem_;
 
     std::unique_ptr<QuickJSEngine> quickJSEngine_;
+    std::unique_ptr<Vulkan::ShaderHotReloader> shaderHotReloader_;
 
     CommandHistory commandHistory_{};
 
     // engine status
     NextRenderer::EApplicationStatus status_{};
+
+    static GameInstanceFactory gameInstanceFactory_;
 };
+
+inline uint32_t GetEngineHotReloadAbiVersion()
+{
+    uint32_t version = GK_ENGINE_ABI_VERSION;
+    version ^= static_cast<uint32_t>(sizeof(NextGameInstanceBase) & 0xffffu) << 16u;
+    version ^= static_cast<uint32_t>(sizeof(NextEngine) & 0xffffu);
+#if defined(NDEBUG)
+    version ^= 0x4e445247u;
+#else
+    version ^= 0x44424721u;
+#endif
+    return version;
+}

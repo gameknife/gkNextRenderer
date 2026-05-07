@@ -117,6 +117,32 @@ namespace Flappy
         return scoreEvents;
     }
 
+    void FFlappyCppPipes::RestoreRuntime(float spawnTimer,
+                                         const std::vector<FPipeRuntime>& pipes,
+                                         const FPipeConfig& config,
+                                         const FWorldConfig& world)
+    {
+        spawnTimer_ = spawnTimer;
+        const size_t count = std::min(pipes_.size(), pipes.size());
+        for (size_t index = 0; index < count; ++index)
+        {
+            pipes_[index].x = pipes[index].x;
+            pipes_[index].gapCenterY = pipes[index].gapCenterY;
+            pipes_[index].active = pipes[index].active;
+            pipes_[index].scored = pipes[index].scored;
+            if (pipes_[index].active)
+            {
+                NodeUtils::SetVisible(pipes_[index].topNode, true);
+                NodeUtils::SetVisible(pipes_[index].bottomNode, true);
+                SyncVisual(pipes_[index], config, world);
+            }
+            else
+            {
+                Hide(pipes_[index]);
+            }
+        }
+    }
+
     void FFlappyCppPipes::SpawnPipe(const FPipeConfig& config, const FWorldConfig& world, FXorShift32& rng)
     {
         auto pipeIt = std::find_if(pipes_.begin(), pipes_.end(), [](const FPipeRuntime& pipe)

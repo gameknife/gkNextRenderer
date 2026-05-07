@@ -34,6 +34,7 @@ namespace Editor
         bool meshBrowser = true;
         bool logPanel = true;
         bool aiPanel = true;
+        bool hotReloadPanel = false;
         bool outlinerAutoScrollToSelection = true;
         uint32_t pendingExpandTargetId = InvalidId;
         uint32_t pendingCollapseTargetId = InvalidId;

@@ -20,6 +20,7 @@ namespace Flappy
         const glm::vec3& GetPosition() const { return position_; }
         float GetVelocityY() const { return velocityY_; }
         void SetNode(std::shared_ptr<Assets::Node> node) { node_ = std::move(node); }
+        void RestoreRuntime(const glm::vec3& position, float velocityY);
 
     private:
         glm::vec3 position_{-3.0f, 0.0f, 0.0f};

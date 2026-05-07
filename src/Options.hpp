@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Common/CoreMinimal.hpp"
+
 #include <cstdint>
 #include <exception>
 #include <string>
@@ -34,7 +36,13 @@ public:
 	bool KeepCPUMeshData{};  // 保留CPU网格数据（编辑器模式需要）
 	bool UpdateVisualTestBaseline{};
 	bool FlappyReplay{};
+	bool HotReload{true};
+	bool PluginHotReload{true};
+	bool ShaderHotReload{true};
+	float PluginHotReloadInterval{0.5f};
+	float ShaderHotReloadInterval{0.5f};
 	std::string locale{};
+	std::string GameName{};
 
 
 	
@@ -57,4 +65,4 @@ public:
 	std::string TestGltfFilter{};
 };
 
-extern Options* GOption;
+extern ENGINE_API Options* GOption;

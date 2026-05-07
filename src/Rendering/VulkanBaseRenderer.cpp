@@ -686,6 +686,11 @@ namespace Vulkan
         CreateSwapChain();
     }
 
+    void VulkanBaseRenderer::ReloadShaders()
+    {
+        RecreateSwapChain();
+    }
+
     void VulkanBaseRenderer::CaptureScreenShot()
     {
         SingleTimeCommands::Submit(CommandPool(), [&](VkCommandBuffer commandBuffer)

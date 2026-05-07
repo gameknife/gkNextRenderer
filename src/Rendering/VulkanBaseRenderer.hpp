@@ -108,6 +108,7 @@ namespace Vulkan
 		void CreateRenderImages();
 		virtual void CreateSwapChain();
 		virtual void DeleteSwapChain();
+		void ReloadShaders();
 		void RequestRecreateSwapChain() { requestRecreateSwapChain_ = true; }
 		void RequestClearAmbientCubeCache() { requestClearAmbientCubeCache_ = true; }
 		virtual void PreRender(VkCommandBuffer commandBuffer, const uint32_t imageIndex);

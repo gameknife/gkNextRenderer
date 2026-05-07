@@ -1,5 +1,4 @@
 #include "Runtime/Config/EngineCVars.hpp"
-#include "Runtime/Config/EngineCVars.hpp"
 #include "Runtime/Config/CVarSystem.hpp"
 #include "Runtime/Config/ShowFlags.hpp"
 #include "Runtime/Config/UserSettings.hpp"
@@ -126,6 +125,21 @@ namespace NextCVar
                       "Ambient cube cascade ratio between levels");
         GK_CVAR_BOOL("sys.ambientCubeGpuSdf", settings, UseGpuAmbientCubeSdf, false, ECVarFlags::Archive,
                      "Use GPU jump-flood distance field rebuild for ambient cube voxels");
+
+        if (engine != nullptr)
+        {
+            Options& options = engine->GetOptions();
+            GK_CVAR_BOOL("r.shader.hot_reload", options, ShaderHotReload, options.ShaderHotReload,
+                         ECVarFlags::Archive, "Enable Slang shader hot reload");
+            GK_CVAR_FLOAT("r.shader.hot_reload_interval", options, ShaderHotReloadInterval,
+                          options.ShaderHotReloadInterval, ECVarFlags::Archive,
+                          "Slang shader hot reload poll interval in seconds");
+            GK_CVAR_BOOL("g.plugin.hot_reload", options, PluginHotReload, options.PluginHotReload,
+                         ECVarFlags::Archive, "Enable C++ game plugin hot reload");
+            GK_CVAR_FLOAT("g.plugin.hot_reload_interval", options, PluginHotReloadInterval,
+                          options.PluginHotReloadInterval, ECVarFlags::Archive,
+                          "C++ game plugin hot reload poll interval in seconds");
+        }
 
         GK_CVAR_BOOL("show.debugLighting", showFlags, DebugDraw_Lighting, false, ECVarFlags::None,
                      "Debug draw lighting");
