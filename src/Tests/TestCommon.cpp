@@ -18,12 +18,18 @@ EngineTestFixture::EngineTestFixture()
         "gkNextUnitTests", 
         "--width=800", 
         "--height=600",
-        "--fastexit=false"
+        "--fastexit=false",
+        "--no-hot-reload"
     };
     int argc = sizeof(argv) / sizeof(argv[0]);
 
     options_ = std::make_unique<Options>(argc, argv);
     GOption = options_.get();
+    NextEngine::SetGameInstanceFactory(
+        [](Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
+        {
+            return CreateGameInstance(config, options, engine);
+        });
 
     engine_ = std::make_unique<NextEngine>(*GOption);
     engine_->Start();

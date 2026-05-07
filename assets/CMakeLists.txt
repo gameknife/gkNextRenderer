@@ -67,6 +67,31 @@ else()
     message(STATUS "Bundled TypeScript compiler not found at ${tsc_tool_dir}; QuickJS TS hot reload will be disabled in copied runtime layouts.")
 endif()
 
+if(NOT ANDROID AND NOT IOS AND Vulkan_SLANGC)
+    get_filename_component(slangc_tool_dir "${Vulkan_SLANGC}" DIRECTORY)
+    file(GLOB slang_tool_files CONFIGURE_DEPENDS
+        "${slangc_tool_dir}/slangc*"
+        "${slangc_tool_dir}/slang*.dll"
+        "${slangc_tool_dir}/libslang*"
+    )
+    if(slang_tool_files)
+        set(slang_tool_stamp "${CMAKE_CURRENT_BINARY_DIR}/slang-tool.stamp")
+        list(APPEND all_asset_files ${slang_tool_files})
+        list(APPEND all_asset_stamps ${slang_tool_stamp})
+        add_custom_command(
+            OUTPUT ${slang_tool_stamp}
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${output_base_dir}/../tools/slang"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${slang_tool_files}
+                    "${output_base_dir}/../tools/slang"
+            COMMAND ${CMAKE_COMMAND} -E touch ${slang_tool_stamp}
+            DEPENDS ${slang_tool_files}
+            COMMENT "Copying bundled Slang compiler..."
+            VERBATIM
+        )
+    endif()
+endif()
+
 # source_group - 所有非 Shader 资源
 source_group("Assets" FILES ${all_asset_files})
 

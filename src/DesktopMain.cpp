@@ -45,6 +45,16 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 #endif
     // Global GOption, can access from everywhere
     GOption = GOptionPtr.get();
+
+#if !defined(GK_HOST_APP)
+    NextEngine::SetGameInstanceFactory(
+        [](Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
+        {
+            return CreateGameInstance(config, options, engine);
+        });
+#else
+    NextEngine::SetGameInstanceFactory({});
+#endif
     
     if(GOption->RenderDoc)
     {
