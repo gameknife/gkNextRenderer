@@ -25,11 +25,6 @@ EngineTestFixture::EngineTestFixture()
 
     options_ = std::make_unique<Options>(argc, argv);
     GOption = options_.get();
-    NextEngine::SetGameInstanceFactory(
-        [](Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
-        {
-            return CreateGameInstance(config, options, engine);
-        });
 
     engine_ = std::make_unique<NextEngine>(*GOption);
     engine_->Start();
