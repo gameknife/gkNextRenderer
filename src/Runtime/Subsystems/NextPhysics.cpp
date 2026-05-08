@@ -577,6 +577,34 @@ void NextPhysics::SetPaused(bool paused)
     paused_ = paused;
 }
 
+FNextPhysicsBodyStats NextPhysics::GetBodyStats() const
+{
+    FNextPhysicsBodyStats stats{};
+    stats.total = bodies_.size();
+
+    for (const auto& [bodyId, body] : bodies_)
+    {
+        (void)bodyId;
+
+        switch (body.motionType)
+        {
+        case NextMotionType::Dynamic:
+            ++stats.dynamic;
+            break;
+        case NextMotionType::Kinematic:
+            ++stats.kinematic;
+            break;
+        case NextMotionType::Static:
+            ++stats.staticBodies;
+            break;
+        default:
+            break;
+        }
+    }
+
+    return stats;
+}
+
 void NextPhysics::Stop()
 {
 	OnSceneDestroyed();

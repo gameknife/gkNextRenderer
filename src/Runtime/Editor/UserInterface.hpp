@@ -72,7 +72,8 @@ public:
 	~UserInterface();
 
 	void PreRender();
-	void Render(const Statistics& statistics, VulkanGpuTimer* gpuTimer, Assets::Scene* scene);
+	void Render(const Statistics& statistics, VulkanGpuTimer* gpuTimer, Assets::Scene* scene,
+	            bool suppressStatisticsOverlay = false);
 	void PostRender(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx,
 	                bool suppressAllUi = false);
 	void HandleEvent(const SDL_Event* event);

@@ -726,9 +726,13 @@ void UserInterface::PreRender()
     }
 }
 
-void UserInterface::Render(const Statistics& statistics, VulkanGpuTimer* gpuTimer, Assets::Scene* scene)
+void UserInterface::Render(const Statistics& statistics, VulkanGpuTimer* gpuTimer, Assets::Scene* scene,
+                           bool suppressStatisticsOverlay)
 {
-    DrawOverlay(statistics, gpuTimer);
+    if (!suppressStatisticsOverlay)
+    {
+        DrawOverlay(statistics, gpuTimer);
+    }
     DrawConsoleWindow();
 }
 

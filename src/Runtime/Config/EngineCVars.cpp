@@ -144,6 +144,8 @@ namespace NextCVar
                      "Show physics debug overlay");
         GK_CVAR_BOOL("debug.graphics.panel", showFlags, DebugGraphicsPanel, false, ECVarFlags::None,
                      "Show graphics debug panel");
+        GK_CVAR_BOOL("debug.profile.overlay", showFlags, DebugProfileOverlay, false, ECVarFlags::None,
+                     "Show CPU profile debug overlay");
         GK_CVAR_BOOL("show.debugPhysicsBodies", showFlags, DebugDraw_PhysicsBodies, false, ECVarFlags::None,
                      "Debug draw physics bodies");
         GK_CVAR_BOOL("show.visualDebug", showFlags, ShowVisualDebug, false, ECVarFlags::None,

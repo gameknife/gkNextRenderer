@@ -46,6 +46,14 @@ struct FNextPhysicsDebugState
     bool isValid = false;
 };
 
+struct FNextPhysicsBodyStats
+{
+    size_t total = 0;
+    size_t dynamic = 0;
+    size_t kinematic = 0;
+    size_t staticBodies = 0;
+};
+
 class NextPhysics final
 {
 public:
@@ -74,6 +82,7 @@ public:
     void SetBodyVelocity(NextBodyID bodyID, const glm::vec3& linearVelocity, const glm::vec3& angularVelocity);
 
     FNextPhysicsBody* GetBody(NextBodyID bodyID);
+    FNextPhysicsBodyStats GetBodyStats() const;
     FNextPhysicsDebugState GetBodyDebugState(NextBodyID bodyID) const;
     glm::vec4 GetBodyDebugColor(NextBodyID bodyID) const;
     void RemoveBody(NextBodyID bodyID);

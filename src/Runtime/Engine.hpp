@@ -66,7 +66,7 @@ public:
     virtual void OnSceneLoaded() {}
     virtual void OnSceneUnloaded() {}
 
-    // application-owned debug shortcuts; engine-owned F1/F2 are handled by NextEngine
+    // application-owned debug shortcuts; engine-owned F1/F2/F3 are handled by NextEngine
     virtual bool SupportsAppDebugShortcut(SDL_Keycode key) const { return false; }
     virtual bool IsAppDebugShortcutActive(SDL_Keycode key) const { return false; }
     virtual bool SetAppDebugShortcutActive(SDL_Keycode key, bool active) { return false; }

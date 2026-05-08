@@ -19,6 +19,7 @@
 #include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Utilities/GraphicsDebugPanel.hpp"
 #include "Runtime/Utilities/PhysicsDebugOverlay.hpp"
+#include "Runtime/Utilities/ProfileDebugOverlay.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/SyncAndTiming.hpp"
@@ -1229,11 +1230,17 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
             Runtime::GraphicsDebugPanel::DrawPanel(*this, showFlags_.DebugGraphicsPanel,
                                                    gameInstance_->GetGraphicsDebugPanelTopOffset());
         }
+        if (showFlags_.DebugProfileOverlay)
+        {
+            SCOPED_CPU_TIMER("profile debug ui");
+            Runtime::DrawProfileDebugOverlay(*this, stats, renderer_->GpuTimer(),
+                                             gameInstance_->GetGraphicsDebugPanelTopOffset());
+        }
     }
     if (!uiHandled && !suppressAllUi)
     {
         SCOPED_CPU_TIMER("overlay ui");
-        userInterface_->Render(stats, renderer_->GpuTimer(), scene_.get());
+        userInterface_->Render(stats, renderer_->GpuTimer(), scene_.get(), showFlags_.DebugProfileOverlay);
     }
     {
         SCOPED_CPU_TIMER("imgui submit");
@@ -1419,6 +1426,12 @@ bool NextEngine::HandleDebugShortcut(SDL_Keycode key)
             .SetActive = [this](bool active) { showFlags_.DebugGraphicsPanel = active; },
         };
         break;
+    case SDLK_F3:
+        shortcutOps = FDebugShortcutOps{
+            .IsActive = [this]() { return showFlags_.DebugProfileOverlay; },
+            .SetActive = [this](bool active) { showFlags_.DebugProfileOverlay = active; },
+        };
+        break;
     default:
         if (gameInstance_ && gameInstance_->SupportsAppDebugShortcut(key))
         {
@@ -1436,12 +1449,13 @@ bool NextEngine::HandleDebugShortcut(SDL_Keycode key)
     }
 
     const bool isActive = shortcutOps->IsActive();
-    const bool engineOwnsShortcut = key == SDLK_F1 || key == SDLK_F2;
+    const bool engineOwnsShortcut = key == SDLK_F1 || key == SDLK_F2 || key == SDLK_F3;
 
     if (engineOwnsShortcut)
     {
         showFlags_.DebugPhysicsOverlay = false;
         showFlags_.DebugGraphicsPanel = false;
+        showFlags_.DebugProfileOverlay = false;
         if (!isActive)
         {
             shortcutOps->SetActive(true);
