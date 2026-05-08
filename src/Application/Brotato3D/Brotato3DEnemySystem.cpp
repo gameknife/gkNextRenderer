@@ -69,6 +69,7 @@ void Brotato3DGameInstance::SpawnEnemy(const std::string& enemyId, const glm::ve
         reusableEnemy->node->SetTranslation(reusableEnemy->worldPos);
         reusableEnemy->node->SetScale(glm::vec3(1.0f));
         NodeUtils::SetVisible(reusableEnemy->node, true);
+        // Spawn activation is a positional snap; use a stable fallback step for the kinematic body.
         SyncEnemyKinematicBody(*reusableEnemy, 1.0 / 60.0);
         return;
     }
@@ -80,6 +81,7 @@ void Brotato3DGameInstance::SpawnEnemy(const std::string& enemyId, const glm::ve
     engine_->GetScene().AddNode(enemy.node);
     engine_->GetScene().MarkDirty();
     enemies_.push_back(enemy);
+    // Spawn activation is a positional snap; use a stable fallback step for the kinematic body.
     SyncEnemyKinematicBody(enemies_.back(), 1.0 / 60.0);
 }
 
@@ -293,6 +295,11 @@ void Brotato3DGameInstance::KillEnemy(Brotato3D::FEnemyRuntime& enemy, bool drop
         SpawnPickup(enemy.def->xpDrop, Brotato3D::EPickupKind::XP, enemy.worldPos);
         ProcessOnKillTriggers(enemy.worldPos);
     }
+    if (enemy.def && enemy.def->boss.enabled)
+    {
+        bossVictoryDelayMs_ = std::max(bossVictoryDelayMs_, 1200.0f);
+        spdlog::info("[Brotato3D] [boss defeated]");
+    }
     if (dropLoot && enemy.def && enemy.def->boss.enabled)
     {
         const glm::vec3 deathSprayDir = ResolveEnemyDebrisDir(enemy, enemy.worldPos - player_.worldPos);
@@ -342,8 +349,6 @@ void Brotato3DGameInstance::KillEnemy(Brotato3D::FEnemyRuntime& enemy, bool drop
         SpawnTempLight(enemy.worldPos, glm::vec3(1.0f, 0.85f, 0.40f), 12.0f, 800.0f);
         bossKillFlashMs_ = 100.0f;
         timeScaleRecoveryMs_ = 1200.0f;
-        bossVictoryDelayMs_ = 1200.0f;
-        spdlog::info("[Brotato3D] [boss defeated]");
     }
     NodeUtils::SetVisible(enemy.node, false);
 }

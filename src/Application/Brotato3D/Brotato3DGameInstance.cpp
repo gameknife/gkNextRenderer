@@ -172,9 +172,10 @@ void Brotato3DGameInstance::OnTick(double deltaSeconds)
                 EnterResult(false);
             }
         }
-        runElapsedSec_ += static_cast<float>(deltaSeconds);
+
         if (appState_ == Brotato3D::EAppState::Playing)
         {
+            runElapsedSec_ += static_cast<float>(deltaSeconds);
             UpdatePlayer(deltaSeconds);
             UpdateWeapons(deltaSeconds);
             UpdateProjectiles(effectiveDt);
@@ -182,34 +183,26 @@ void Brotato3DGameInstance::OnTick(double deltaSeconds)
             UpdateEnemyProjectiles(effectiveDt);
             UpdatePickups(effectiveDt);
             ProcessItemTriggers(effectiveDt);
-        }
 
-        if (appState_ == Brotato3D::EAppState::Playing && bossVictoryDelayMs_ <= 0.0f)
-        {
-            waveSystem_.Update(deltaSeconds, [this](const std::string& enemyId, glm::vec3 pos)
+            const double waveDt = bossVictoryDelayMs_ <= 0.0f ? deltaSeconds : 0.0;
+            waveSystem_.Update(waveDt, [this](const std::string& enemyId, glm::vec3 pos)
             {
                 SpawnEnemy(enemyId, pos);
             });
-        }
-        else if (appState_ == Brotato3D::EAppState::Playing)
-        {
-            waveSystem_.Update(0.0, [this](const std::string& enemyId, glm::vec3 pos)
+
+            if (waveSystem_.ConsumeWaveEnded())
             {
-                SpawnEnemy(enemyId, pos);
-            });
-        }
-        if (waveSystem_.ConsumeWaveEnded())
-        {
-            ClearAliveEnemies(false);
-            ClearAllDebris(false);
-        }
-        if (waveSystem_.ConsumeIntermissionStarted())
-        {
-            StartShopping();
-        }
-        if (waveSystem_.ConsumeVictory())
-        {
-            EnterResult(false);
+                ClearAliveEnemies(false);
+                ClearAllDebris(false);
+            }
+            if (waveSystem_.ConsumeIntermissionStarted())
+            {
+                StartShopping();
+            }
+            if (waveSystem_.ConsumeVictory())
+            {
+                EnterResult(false);
+            }
         }
     }
     else if (appState_ == Brotato3D::EAppState::Hitstop)
@@ -227,8 +220,8 @@ void Brotato3DGameInstance::OnTick(double deltaSeconds)
     {
         UpdateDebris(effectiveDt);
         UpdateCombatEffects(effectiveDt);
-        UpdateFloatingTexts(deltaSeconds);
     }
+    UpdateFloatingTexts(deltaSeconds);
     engine_->GetScene().MarkTransformDirty();
 }
 

@@ -4,7 +4,9 @@
 #include <spdlog/spdlog.h>
 
 #include "Assets/Core/Node.h"
+#include "Assets/Loaders/FProcModel.h"
 #include "Brotato3DAudio.hpp"
+#include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Components/RenderComponent.h"
 
 using namespace Brotato3DUtil;
@@ -21,6 +23,59 @@ namespace
             physics->SetBodyTransform(pickup.bodyId, HiddenPosition, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), true);
             physics->SetBodyVelocity(pickup.bodyId, glm::vec3(0.0f), glm::vec3(0.0f));
         }
+    }
+}
+
+void Brotato3DGameInstance::BuildPickupPool(std::vector<Assets::Model>& models,
+                                            std::vector<Assets::FMaterial>& materials,
+                                            std::vector<std::shared_ptr<Assets::Node>>& nodes)
+{
+    NextPhysics* physics = GetEngine().GetPhysicsEngine();
+    if (physics)
+    {
+        for (const Brotato3D::FPickupRuntime& pickup : pickupPool_)
+        {
+            if (!pickup.bodyId.IsInvalid() && physics->GetBody(pickup.bodyId))
+            {
+                physics->RemoveBody(pickup.bodyId);
+            }
+        }
+    }
+
+    models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-PickupXpRadius), glm::vec3(PickupXpRadius)));
+    pickupXpModelId_ = static_cast<uint32_t>(models.size() - 1);
+    pickupXpMaterialId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.2f, 1.0f, 0.35f));
+
+    pickupPool_.clear();
+    pickupPool_.reserve(128);
+    for (int index = 0; index < 128; ++index)
+    {
+        auto node = SceneBuilder::CreateRenderNode(fmt::format("Brotato3D_Pickup_{}", index),
+                                                   HiddenPosition,
+                                                   glm::vec3(1.0f),
+                                                   static_cast<uint32_t>(nodes.size()),
+                                                   pickupXpModelId_,
+                                                   pickupXpMaterialId_,
+                                                   false);
+        NodeUtils::SetOutlineFlags(node, Runtime::RenderOutlineFlags::hovered);
+
+        auto physicsComponent = std::make_shared<Runtime::PhysicsComponent>();
+        physicsComponent->SetMobility(Runtime::ENodeMobility::Dynamic);
+        nodes.push_back(node);
+
+        Brotato3D::FPickupRuntime pickup{};
+        pickup.kind = Brotato3D::EPickupKind::XP;
+        pickup.node = node;
+        if (physics)
+        {
+            pickup.bodyId = physics->CreateBoxBody(HiddenPosition, glm::vec3(PickupXpRadius * 2.0f), NextMotionType::Dynamic);
+            physics->SetBodyTransform(pickup.bodyId, HiddenPosition, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), true);
+            physics->SetBodyVelocity(pickup.bodyId, glm::vec3(0.0f), glm::vec3(0.0f));
+            physics->SetBodyActive(pickup.bodyId, false);
+            physicsComponent->BindPhysicsBody(pickup.bodyId);
+        }
+        node->AddComponent(physicsComponent);
+        pickupPool_.push_back(pickup);
     }
 }
 
@@ -149,7 +204,9 @@ void Brotato3DGameInstance::UpdatePickups(double deltaSeconds)
 
         if (pickup.magnetized)
         {
-            pickup.worldPos = glm::mix(pickup.worldPos, player_.worldPos, std::min(1.0f, 8.0f * static_cast<float>(deltaSeconds)));
+            pickup.worldPos = glm::mix(pickup.worldPos,
+                                       player_.worldPos,
+                                       std::min(1.0f, MagnetLerpSpeedXp * static_cast<float>(deltaSeconds)));
             pickup.worldPos.y = PickupXpRadius + 0.03f;
             if (physics && !pickup.bodyId.IsInvalid())
             {
@@ -160,7 +217,7 @@ void Brotato3DGameInstance::UpdatePickups(double deltaSeconds)
                 pickup.node->SetTranslation(pickup.worldPos);
             }
         }
-        if (DistanceXZ(pickup.worldPos, player_.worldPos) < 0.4f)
+        if (DistanceXZ(pickup.worldPos, player_.worldPos) < PickupClaimDistance)
         {
             Brotato3D::PlayPickupXpSfx();
             player_.currentXp += pickup.value;

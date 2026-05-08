@@ -23,8 +23,7 @@ namespace Brotato3D
     {
         None = 0,
         Physics = 1,
-        Settling = 2,
-        Magnetic = 3,
+        Magnetic = 2,
     };
 
     struct FDebrisRuntime

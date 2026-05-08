@@ -18,6 +18,9 @@ namespace Brotato3DUtil
     inline constexpr float PlayerBaseSpeed = 5.0f;
     inline constexpr float PickupBaseRadius = 1.6f;
     inline constexpr float PickupXpRadius = 0.12f;
+    inline constexpr float MagnetLerpSpeedXp = 8.0f;
+    inline constexpr float MagnetLerpSpeedMaterial = 12.0f;
+    inline constexpr float PickupClaimDistance = 0.4f;
     inline constexpr size_t MaxWeaponSlots = 6;
     inline const glm::vec3 HiddenPosition(0.0f, -100.0f, 0.0f);
 

@@ -20,12 +20,24 @@ namespace
     constexpr int RatKinematicBodyCount = 96;
     constexpr int EnemyKinematicBodyCount = 32;
     constexpr int BossKinematicBodyCount = 4;
+    // TODO: drop EnableKinematicDebrisPush guard once the kinematic body engine API stabilizes.
     constexpr bool EnableKinematicDebrisPush = true;
-    constexpr float KinematicMoveTimeSeconds = 0.01f;
 
     constexpr glm::vec3 TinyHalfExtent(0.08f);
     constexpr glm::vec3 ChunkHalfExtent(0.18f);
     constexpr glm::vec3 BossChunkHalfExtent(0.36f);
+    constexpr float DebrisSpawnOffsetJitter = 0.08f;
+    constexpr float DebrisSpeedJitterMin = 0.7f;
+    constexpr float DebrisSpeedJitterMax = 1.3f;
+    constexpr float DebrisLiftMin = 0.25f;
+    constexpr float DebrisLiftMax = 0.65f;
+    constexpr float DebrisAngularSpeedMin = 8.0f;
+    constexpr float DebrisAngularSpeedMax = 16.0f;
+    constexpr float DebrisLengthEpsilon = 0.001f;
+    constexpr float DebrisPickablePhysicsMs = 1000.0f;
+    constexpr float DebrisMagneticHeightOffset = 0.15f;
+    constexpr float DebrisMagneticProgressSpeed = 5.0f;
+    constexpr float KinematicMoveStepSeconds = 1.0f / 60.0f;
 
     uint32_t PackColor24(const glm::vec3& color)
     {
@@ -43,7 +55,7 @@ namespace
         std::uniform_real_distribution<float> angleDist(0.0f, glm::two_pi<float>());
         std::uniform_real_distribution<float> axisDist(-1.0f, 1.0f);
         glm::vec3 axis(axisDist(rng), axisDist(rng), axisDist(rng));
-        if (glm::length(axis) < 0.001f)
+        if (glm::length(axis) < DebrisLengthEpsilon)
         {
             axis = glm::vec3(0.0f, 1.0f, 0.0f);
         }
@@ -53,13 +65,13 @@ namespace
     glm::vec3 SampleConeDirection(const glm::vec3& centerDir, float angleConeRad, std::mt19937& rng)
     {
         glm::vec3 center = centerDir;
-        if (glm::length(center) < 0.001f)
+        if (glm::length(center) < DebrisLengthEpsilon)
         {
             center = glm::vec3(0.0f, 1.0f, 0.0f);
         }
         center = glm::normalize(center);
 
-        if (angleConeRad <= 0.001f)
+        if (angleConeRad <= DebrisLengthEpsilon)
         {
             return center;
         }
@@ -230,9 +242,14 @@ void Brotato3DGameInstance::BuildKinematicCollisionBodies(std::vector<Assets::Mo
         return;
     }
 
-    const uint32_t proxyMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.1f, 0.9f, 1.0f));
+    const uint32_t proxyMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.0f));
     models.push_back(Assets::FProcModel::CreateSphere(glm::vec3(0.0f), std::max(0.35f, player_.radius)));
     const uint32_t playerProxyModelId = static_cast<uint32_t>(models.size() - 1);
+    // HACK: Scene::RebuildMeshBuffer auto-promotes manually-created primitive bodies to mesh bodies
+    // when it sees a Node without a PhysicsComponent that owns the body. Workaround: attach a hidden
+    // proxy Node with a PhysicsComponent (mobility tagged Dynamic to opt out of mesh promotion) that
+    // claims ownership of the kinematic body. The body itself stays Kinematic at the physics layer.
+    // TODO: replace with a `PhysicsComponent::IsManuallyBound()` flag in the engine layer.
     auto attachPhysicsProxyNode = [&nodes, proxyMaterialId](const std::string& name, uint32_t modelId, const NextBodyID& bodyId)
     {
         auto node = SceneBuilder::CreateRenderNode(name,
@@ -245,7 +262,6 @@ void Brotato3DGameInstance::BuildKinematicCollisionBodies(std::vector<Assets::Mo
                                                    glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
                                                    false);
         auto physicsComponent = std::make_shared<Runtime::PhysicsComponent>();
-        // Keep Scene::RebuildMeshBuffer from replacing this manually-created primitive body with a mesh body.
         physicsComponent->SetMobility(Runtime::ENodeMobility::Dynamic);
         physicsComponent->BindPhysicsBody(bodyId);
         node->AddComponent(physicsComponent);
@@ -336,14 +352,14 @@ void Brotato3DGameInstance::SpawnDebris(Brotato3D::EDebrisKind kind,
         selectedSlots.push_back(selected);
     }
 
-    std::uniform_real_distribution<float> offsetDist(-0.08f, 0.08f);
-    std::uniform_real_distribution<float> speedDist(0.7f, 1.3f);
-    std::uniform_real_distribution<float> liftDist(0.25f, 0.65f);
+    std::uniform_real_distribution<float> offsetDist(-DebrisSpawnOffsetJitter, DebrisSpawnOffsetJitter);
+    std::uniform_real_distribution<float> speedDist(DebrisSpeedJitterMin, DebrisSpeedJitterMax);
+    std::uniform_real_distribution<float> liftDist(DebrisLiftMin, DebrisLiftMax);
     std::uniform_real_distribution<float> angularDist(-1.0f, 1.0f);
-    std::uniform_real_distribution<float> angularSpeedDist(8.0f, 16.0f);
+    std::uniform_real_distribution<float> angularSpeedDist(DebrisAngularSpeedMin, DebrisAngularSpeedMax);
 
     glm::vec3 centerDir = impulseDir;
-    if (glm::length(centerDir) < 0.001f)
+    if (glm::length(centerDir) < DebrisLengthEpsilon)
     {
         centerDir = glm::vec3(0.0f, 1.0f, 0.0f);
     }
@@ -356,7 +372,7 @@ void Brotato3DGameInstance::SpawnDebris(Brotato3D::EDebrisKind kind,
         glm::vec3 direction = SampleConeDirection(centerDir, angleConeRad, rng_);
         direction = glm::normalize(direction + glm::vec3(0.0f, liftDist(rng_), 0.0f));
         glm::vec3 angularVelocity(angularDist(rng_), angularDist(rng_), angularDist(rng_));
-        if (glm::length(angularVelocity) < 0.001f)
+        if (glm::length(angularVelocity) < DebrisLengthEpsilon)
         {
             angularVelocity = glm::vec3(0.0f, 1.0f, 0.0f);
         }
@@ -385,7 +401,7 @@ void Brotato3DGameInstance::SpawnDebris(Brotato3D::EDebrisKind kind,
         slot.pickable = pickable;
         slot.pickupState = pickable ? Brotato3D::EPickupState::Physics : Brotato3D::EPickupState::None;
         slot.materialValue = pickable ? materialValuePerSlot : 0;
-        slot.settleTimerMs = pickable ? 600.0f : 0.0f;
+        slot.settleTimerMs = pickable ? DebrisPickablePhysicsMs : 0.0f;
         slot.magneticLerpProgress = 0.0f;
         slot.magneticPos = spawnPos;
         slot.remainingMs = pickable ? 0.0f : lifetimeMs;
@@ -463,15 +479,6 @@ void Brotato3DGameInstance::UpdateDebris(double deltaSeconds)
 
         if (slot.pickupState == Brotato3D::EPickupState::Physics)
         {
-            slot.settleTimerMs -= deltaMs;
-            if (slot.settleTimerMs <= 0.0f)
-            {
-                slot.pickupState = Brotato3D::EPickupState::Settling;
-                slot.settleTimerMs = 400.0f;
-            }
-        }
-        else if (slot.pickupState == Brotato3D::EPickupState::Settling)
-        {
             slot.settleTimerMs = std::max(0.0f, slot.settleTimerMs - deltaMs);
         }
 
@@ -497,9 +504,11 @@ void Brotato3DGameInstance::UpdateDebris(double deltaSeconds)
             continue;
         }
 
-        const glm::vec3 targetPos = player_.worldPos + glm::vec3(0.0f, 0.15f, 0.0f);
-        slot.magneticLerpProgress = std::min(1.0f, slot.magneticLerpProgress + static_cast<float>(deltaSeconds) * 5.0f);
-        slot.magneticPos = glm::mix(slot.magneticPos, targetPos, std::min(1.0f, 12.0f * static_cast<float>(deltaSeconds)));
+        const glm::vec3 targetPos = player_.worldPos + glm::vec3(0.0f, DebrisMagneticHeightOffset, 0.0f);
+        slot.magneticLerpProgress =
+            std::min(1.0f, slot.magneticLerpProgress + static_cast<float>(deltaSeconds) * DebrisMagneticProgressSpeed);
+        slot.magneticPos = glm::mix(slot.magneticPos, targetPos,
+                                    std::min(1.0f, MagnetLerpSpeedMaterial * static_cast<float>(deltaSeconds)));
         if (slot.node)
         {
             slot.node->SetTranslation(slot.magneticPos);
@@ -509,7 +518,7 @@ void Brotato3DGameInstance::UpdateDebris(double deltaSeconds)
             physics->SetBodyTransform(slot.bodyId, slot.magneticPos, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), true);
         }
 
-        if (DistanceXZ(slot.magneticPos, player_.worldPos) < 0.4f)
+        if (DistanceXZ(slot.magneticPos, player_.worldPos) < PickupClaimDistance)
         {
             Brotato3D::PlayPickupMaterialSfx();
             player_.materials += slot.materialValue;
@@ -595,7 +604,7 @@ void Brotato3DGameInstance::SpawnImpactDebris(const glm::vec3& worldPos,
     }
 
     glm::vec3 impulseDir = projectileVelocity;
-    if (glm::length(impulseDir) < 0.001f)
+    if (glm::length(impulseDir) < DebrisLengthEpsilon)
     {
         impulseDir = glm::vec3(0.0f, 1.0f, 0.0f);
     }
@@ -691,7 +700,9 @@ void Brotato3DGameInstance::SyncPlayerKinematicBody(double deltaSeconds)
         return;
     }
 
-    physics->MoveKinematicBody(playerKinematicBodyId_, targetPos, targetRot, KinematicMoveTimeSeconds);
+    // MoveKinematic's dt must match the next fixed Jolt step. Render-frame dt can be smaller than
+    // the fixed step, especially on frames where Physics::Tick skips, and that can create velocity spikes.
+    physics->MoveKinematicBody(playerKinematicBodyId_, targetPos, targetRot, KinematicMoveStepSeconds);
 }
 
 void Brotato3DGameInstance::SyncEnemyKinematicBody(Brotato3D::FEnemyRuntime& enemy, double deltaSeconds)
@@ -718,7 +729,9 @@ void Brotato3DGameInstance::SyncEnemyKinematicBody(Brotato3D::FEnemyRuntime& ene
         return;
     }
 
-    physics->MoveKinematicBody(enemy.kinematicBodyId, enemy.worldPos, targetRot, KinematicMoveTimeSeconds);
+    // MoveKinematic's dt must match the next fixed Jolt step. Render-frame dt can be smaller than
+    // the fixed step, especially on frames where Physics::Tick skips, and that can create velocity spikes.
+    physics->MoveKinematicBody(enemy.kinematicBodyId, enemy.worldPos, targetRot, KinematicMoveStepSeconds);
 }
 
 void Brotato3DGameInstance::DeactivateEnemyKinematicBody(Brotato3D::FEnemyRuntime& enemy)

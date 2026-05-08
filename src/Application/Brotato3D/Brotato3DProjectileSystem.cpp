@@ -50,9 +50,13 @@ void Brotato3DGameInstance::ApplyWeaponKnockback(Brotato3D::FEnemyRuntime& enemy
     {
         enemy.node->SetTranslation(enemy.worldPos);
     }
+    // Knockback is an instant positional snap; use a stable fallback step so Jolt derives a sane push velocity.
     SyncEnemyKinematicBody(enemy, 1.0 / 60.0);
 }
 
+// Note: weapons fire at real-time even during boss-kill slow-motion (effectiveDt < 1.0).
+// This intentional asymmetry lets the player keep shooting while bullets/enemies/debris crawl,
+// emphasizing the slow-mo "savor the kill" beat. Don't "fix" this by passing effectiveDt.
 void Brotato3DGameInstance::UpdateWeapons(double deltaSeconds)
 {
     const float deltaMs = static_cast<float>(deltaSeconds * 1000.0);

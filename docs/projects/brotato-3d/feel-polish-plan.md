@@ -10,6 +10,17 @@ MVP（M1–M9）→ 产品化（P1–P10）→ 资产占位（B1–B10）三阶�
 > - 引擎已开启 `WITH_PHYSIC=1`（[CMakeLists.txt:30](../../../CMakeLists.txt:30)），Jolt 通过 `NextPhysics` 暴露 [`CreateBoxBody / SetBodyVelocity / SetBodyActive / SetBodyTransform`](../../../src/Runtime/Subsystems/NextPhysics.h:60)
 > - KongLie3D 已经为 piece 死亡实现了真物理 knockout 范式（[KongLie3DGameInstance.cpp:795](../../../src/Application/KongLie3D/KongLie3DGameInstance.cpp:795) 创建 + [KongLie3DBattleSystem.cpp:255](../../../src/Application/KongLie3D/KongLie3DBattleSystem.cpp:255) 复位）—— 本计划直接复用同一套路
 
+## Implementation Notes（实现偏离 plan 的点）
+
+最终落地的实现与本计划在以下几点有出入，后续阅读以代码为准：
+
+- **没有按 R1–R6 拆分独立任务**：实际是一次性写完，文件结构按 plan 走（`Brotato3DDebris.hpp` + `Brotato3DDebrisSystem.cpp`）
+- **Material 拾取物走统一 debris pool**：通过 `FDebrisRuntime::pickable` flag 区分装饰碎块和 Material box，而非 plan 描述的"独立 emission"。XP 球同样获得了真物理 body（plan 里只规划了伪物理弹跳）
+- **三态 pickup 状态机简化**：Settling 状态曾仅作为计时器存在，无独立行为差异；后续清理已改为 `None / Physics / Magnetic`
+- **Kinematic body 加了"代理 Node" workaround**：因为 `Scene::RebuildMeshBuffer` 会把没有 PhysicsComponent 持有的 body 替换成 mesh body。绕过方法是为每个 kinematic body 创建一个 invisible 渲染 Node，挂 PhysicsComponent（mobility 标记 Dynamic 让 mesh rebuild 跳过）。这是引擎层缺陷，未来应在引擎层修
+- **Kinematic body 同步使用固定 Jolt step**：`MoveKinematic` 的 dt 用于计算到达目标的速度，最终实现传固定 `1/60s` 以匹配 `NextPhysics::Tick` 的 fixed step；不能传 render-frame dt，否则 physics skip / 高帧率下会产生速度尖峰
+- **Wave 切换时 `ClearAllDebris(false)` 会一并清掉未拾取的 Material box**：玩家来不及捡的就丢了。这是产品决策（避免跨波累积破坏经济）
+
 ## 目标（Phase 4 验收线）
 
 完成 R1–R6 后，端到端体验应该达到：

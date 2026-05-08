@@ -170,6 +170,9 @@ private:
     void BuildDebrisPool(std::vector<Assets::Model>& models,
                          std::vector<Assets::FMaterial>& materials,
                          std::vector<std::shared_ptr<Assets::Node>>& nodes);
+    void BuildPickupPool(std::vector<Assets::Model>& models,
+                         std::vector<Assets::FMaterial>& materials,
+                         std::vector<std::shared_ptr<Assets::Node>>& nodes);
     void BuildKinematicCollisionBodies(std::vector<Assets::Model>& models,
                                        std::vector<Assets::FMaterial>& materials,
                                        std::vector<std::shared_ptr<Assets::Node>>& nodes);
