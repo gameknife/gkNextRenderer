@@ -38,6 +38,10 @@ namespace
     constexpr float DebrisMagneticHeightOffset = 0.15f;
     constexpr float DebrisMagneticProgressSpeed = 5.0f;
     constexpr float KinematicMoveStepSeconds = 1.0f / 60.0f;
+    constexpr float ArenaWallHeight = 5.0f;
+    constexpr float ArenaWallThickness = 0.5f;
+    constexpr float ArenaWallHalfHeight = ArenaWallHeight * 0.5f;
+    constexpr float ArenaWallHalfThickness = ArenaWallThickness * 0.5f;
 
     uint32_t PackColor24(const glm::vec3& color)
     {
@@ -294,6 +298,55 @@ void Brotato3DGameInstance::BuildKinematicCollisionBodies(std::vector<Assets::Mo
     }
 
     spdlog::info("[Brotato3D] kinematic debris push bodies created: {}", bodyCount);
+}
+
+void Brotato3DGameInstance::BuildArenaWallBodies()
+{
+    NextPhysics* physics = GetEngine().GetPhysicsEngine();
+    if (!physics)
+    {
+        return;
+    }
+
+    ClearArenaWallBodies();
+    const glm::vec3 northSouthExtent(arenaHalfExtent_.x * 2.0f + ArenaWallThickness,
+                                     ArenaWallHeight,
+                                     ArenaWallThickness);
+    const glm::vec3 eastWestExtent(ArenaWallThickness,
+                                   ArenaWallHeight,
+                                   arenaHalfExtent_.y * 2.0f + ArenaWallThickness);
+
+    arenaWallBodyIds_[0] = physics->CreateBoxBody(glm::vec3(0.0f, ArenaWallHalfHeight, -(arenaHalfExtent_.y + ArenaWallHalfThickness)),
+                                                  northSouthExtent,
+                                                  NextMotionType::Static);
+    arenaWallBodyIds_[1] = physics->CreateBoxBody(glm::vec3(0.0f, ArenaWallHalfHeight, arenaHalfExtent_.y + ArenaWallHalfThickness),
+                                                  northSouthExtent,
+                                                  NextMotionType::Static);
+    arenaWallBodyIds_[2] = physics->CreateBoxBody(glm::vec3(-(arenaHalfExtent_.x + ArenaWallHalfThickness), ArenaWallHalfHeight, 0.0f),
+                                                  eastWestExtent,
+                                                  NextMotionType::Static);
+    arenaWallBodyIds_[3] = physics->CreateBoxBody(glm::vec3(arenaHalfExtent_.x + ArenaWallHalfThickness, ArenaWallHalfHeight, 0.0f),
+                                                  eastWestExtent,
+                                                  NextMotionType::Static);
+}
+
+void Brotato3DGameInstance::ClearArenaWallBodies()
+{
+    NextPhysics* physics = GetEngine().GetPhysicsEngine();
+    if (!physics)
+    {
+        arenaWallBodyIds_ = {};
+        return;
+    }
+
+    for (NextBodyID& bodyId : arenaWallBodyIds_)
+    {
+        if (!bodyId.IsInvalid() && physics->GetBody(bodyId))
+        {
+            physics->RemoveBody(bodyId);
+        }
+        bodyId = {};
+    }
 }
 
 void Brotato3DGameInstance::SpawnDebris(Brotato3D::EDebrisKind kind,

@@ -244,7 +244,7 @@ void Brotato3DGameInstance::UpdateEnemies(double deltaSeconds)
             if (moveSpeed > 0.0f)
             {
                 enemy.worldPos += moveDir * moveSpeed * static_cast<float>(deltaSeconds);
-                enemy.worldPos = ClampToArena(enemy.worldPos, enemy.radius);
+                enemy.worldPos = ClampToArena(enemy.worldPos, enemy.radius, arenaHalfExtent_);
                 enemy.worldPos.y = enemy.def->size.y * 0.5f;
                 enemy.node->SetTranslation(enemy.worldPos);
             }

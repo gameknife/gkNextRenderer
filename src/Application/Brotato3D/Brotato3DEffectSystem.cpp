@@ -198,6 +198,7 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
     }
 
     BuildDebrisPool(models, materials, nodes);
+    BuildArenaWallBodies();
     BuildKinematicCollisionBodies(models, materials, nodes);
     BuildPickupPool(models, materials, nodes);
 
@@ -210,8 +211,8 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
 
 bool Brotato3DGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera) const
 {
-    glm::vec3 cameraPosition(0.0f, 18.0f, 11.0f);
-    glm::vec3 cameraTarget(0.0f, 0.0f, 0.0f);
+    glm::vec3 cameraTarget = cameraSmoothedTarget_;
+    glm::vec3 cameraPosition = cameraTarget + glm::vec3(0.0f, 18.0f, 11.0f);
     if (Brotato3D::ScreenShakeEnabled && screenShakeMs_ > 0.0f)
     {
         const float strength = std::min(0.25f, screenShakeIntensity_ * 0.05f);

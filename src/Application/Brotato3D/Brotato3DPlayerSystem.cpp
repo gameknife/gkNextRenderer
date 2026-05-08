@@ -191,7 +191,9 @@ void Brotato3DGameInstance::UpdatePlayer(double deltaSeconds)
     }
 
     const float speed = PlayerBaseSpeed * (1.0f + effectiveStats.moveSpeedPct);
-    player_.worldPos = ClampToArena(player_.worldPos + inputDir * speed * static_cast<float>(deltaSeconds), player_.radius);
+    player_.worldPos = ClampToArena(player_.worldPos + inputDir * speed * static_cast<float>(deltaSeconds),
+                                    player_.radius,
+                                    arenaHalfExtent_);
     if (player_.bodyNode)
     {
         player_.bodyNode->SetTranslation(player_.worldPos);
@@ -344,6 +346,7 @@ void Brotato3DGameInstance::ResetRuntimeState()
     shopOffers_.clear();
     equippedWeapons_.clear();
     waveSystem_.LoadWaves(waveDefs_);
+    waveSystem_.SetArenaHalfExtent(arenaHalfExtent_);
     screenShakeMs_ = 0.0f;
     screenShakeIntensity_ = 0.0f;
     damageFlashMs_ = 0.0f;
@@ -437,18 +440,18 @@ void Brotato3DGameInstance::ClearMovementInput()
 glm::vec3 Brotato3DGameInstance::RandomDebugSpawnPosition()
 {
     std::uniform_int_distribution<int> sideDist(0, 3);
-    std::uniform_real_distribution<float> xDist(-ArenaHalfWidth, ArenaHalfWidth);
-    std::uniform_real_distribution<float> zDist(-ArenaHalfDepth, ArenaHalfDepth);
+    std::uniform_real_distribution<float> xDist(-arenaHalfExtent_.x, arenaHalfExtent_.x);
+    std::uniform_real_distribution<float> zDist(-arenaHalfExtent_.y, arenaHalfExtent_.y);
     switch (sideDist(rng_))
     {
     case 0:
-        return glm::vec3(xDist(rng_), 0.3f, -ArenaHalfDepth);
+        return glm::vec3(xDist(rng_), 0.3f, -arenaHalfExtent_.y);
     case 1:
-        return glm::vec3(xDist(rng_), 0.3f, ArenaHalfDepth);
+        return glm::vec3(xDist(rng_), 0.3f, arenaHalfExtent_.y);
     case 2:
-        return glm::vec3(-ArenaHalfWidth, 0.3f, zDist(rng_));
+        return glm::vec3(-arenaHalfExtent_.x, 0.3f, zDist(rng_));
     default:
-        return glm::vec3(ArenaHalfWidth, 0.3f, zDist(rng_));
+        return glm::vec3(arenaHalfExtent_.x, 0.3f, zDist(rng_));
     }
 }
 

@@ -39,6 +39,11 @@ namespace Brotato3D
         spawnRuntime_.clear();
     }
 
+    void FWaveSystem::SetArenaHalfExtent(const glm::vec2& halfExtent)
+    {
+        arenaHalfExtent_ = glm::max(halfExtent, glm::vec2(1.0f));
+    }
+
     void FWaveSystem::Update(double dt, const std::function<void(const std::string& enemyId, glm::vec3 pos)>& spawnCallback)
     {
         if (state_ == EWaveState::Active)
@@ -148,20 +153,21 @@ namespace Brotato3D
 
     glm::vec3 FWaveSystem::RandomSpawnPosition()
     {
+        constexpr float SpawnMargin = 1.0f;
         std::uniform_int_distribution<int> sideDist(0, 3);
-        std::uniform_real_distribution<float> xDist(-12.0f, 12.0f);
-        std::uniform_real_distribution<float> zDist(-8.0f, 8.0f);
+        std::uniform_real_distribution<float> xDist(-arenaHalfExtent_.x, arenaHalfExtent_.x);
+        std::uniform_real_distribution<float> zDist(-arenaHalfExtent_.y, arenaHalfExtent_.y);
 
         switch (sideDist(rng_))
         {
         case 0:
-            return glm::vec3(xDist(rng_), 0.3f, -9.0f);
+            return glm::vec3(xDist(rng_), 0.3f, -(arenaHalfExtent_.y + SpawnMargin));
         case 1:
-            return glm::vec3(xDist(rng_), 0.3f, 9.0f);
+            return glm::vec3(xDist(rng_), 0.3f, arenaHalfExtent_.y + SpawnMargin);
         case 2:
-            return glm::vec3(-13.0f, 0.3f, zDist(rng_));
+            return glm::vec3(-(arenaHalfExtent_.x + SpawnMargin), 0.3f, zDist(rng_));
         default:
-            return glm::vec3(13.0f, 0.3f, zDist(rng_));
+            return glm::vec3(arenaHalfExtent_.x + SpawnMargin, 0.3f, zDist(rng_));
         }
     }
 }

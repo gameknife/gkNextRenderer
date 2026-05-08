@@ -41,7 +41,7 @@ void Brotato3DGameInstance::ApplyWeaponKnockback(Brotato3D::FEnemyRuntime& enemy
         return;
     }
 
-    enemy.worldPos = ClampToArena(enemy.worldPos + knockDir * effectiveKnockback, enemy.radius);
+    enemy.worldPos = ClampToArena(enemy.worldPos + knockDir * effectiveKnockback, enemy.radius, arenaHalfExtent_);
     if (enemy.def)
     {
         enemy.worldPos.y = enemy.def->size.y * 0.5f;
@@ -177,8 +177,9 @@ void Brotato3DGameInstance::UpdateProjectiles(double deltaSeconds)
         projectile.worldPos += projectile.velocity * static_cast<float>(deltaSeconds);
         projectile.remainingLifetimeMs -= deltaMs;
         projectile.elapsedMs += deltaMs;
-        bool deactivate = projectile.remainingLifetimeMs <= 0.0f || std::abs(projectile.worldPos.x) > ArenaHalfWidth + 1.0f ||
-                          std::abs(projectile.worldPos.z) > ArenaHalfDepth + 1.0f;
+        bool deactivate = projectile.remainingLifetimeMs <= 0.0f ||
+                          std::abs(projectile.worldPos.x) > arenaHalfExtent_.x + 1.0f ||
+                          std::abs(projectile.worldPos.z) > arenaHalfExtent_.y + 1.0f;
 
         if (!deactivate)
         {
@@ -332,8 +333,8 @@ void Brotato3DGameInstance::UpdateEnemyProjectiles(double deltaSeconds)
         projectile.worldPos += projectile.velocity * static_cast<float>(deltaSeconds);
         projectile.remainingLifetimeMs -= deltaMs;
         bool deactivate = projectile.remainingLifetimeMs <= 0.0f ||
-                          std::abs(projectile.worldPos.x) > ArenaHalfWidth + 1.0f ||
-                          std::abs(projectile.worldPos.z) > ArenaHalfDepth + 1.0f;
+                          std::abs(projectile.worldPos.x) > arenaHalfExtent_.x + 1.0f ||
+                          std::abs(projectile.worldPos.z) > arenaHalfExtent_.y + 1.0f;
 
         if (!deactivate && DistanceXZ(projectile.worldPos, player_.worldPos) < player_.radius + projectile.radius)
         {

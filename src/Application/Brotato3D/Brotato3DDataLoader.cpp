@@ -9,6 +9,75 @@ using json = nlohmann::json;
 
 namespace
 {
+    glm::vec2 ReadVec2Array(const json& object, const char* key, const glm::vec2& fallback, std::string_view context)
+    {
+        if (!object.is_object() || !object.contains(key))
+        {
+            return fallback;
+        }
+
+        const json& value = object.at(key);
+        if (!value.is_array() || value.size() < 2)
+        {
+            throw std::runtime_error(fmt::format("{} field '{}' must be a 2-number array", context, key));
+        }
+
+        return glm::vec2(value.at(0).get<float>(), value.at(1).get<float>());
+    }
+
+    std::vector<glm::vec2> ReadVec2ArrayList(const json& object, const char* key, std::string_view context)
+    {
+        std::vector<glm::vec2> result;
+        if (!object.is_object() || !object.contains(key))
+        {
+            return result;
+        }
+
+        const json& value = object.at(key);
+        if (!value.is_array())
+        {
+            throw std::runtime_error(fmt::format("{} field '{}' must be an array of vec2 points", context, key));
+        }
+
+        result.reserve(value.size());
+        for (size_t index = 0; index < value.size(); ++index)
+        {
+            const json& pointValue = value.at(index);
+            if (!pointValue.is_array() || pointValue.size() < 2)
+            {
+                throw std::runtime_error(fmt::format("{} field '{}' point {} must be a 2-number array", context, key, index));
+            }
+            result.emplace_back(pointValue.at(0).get<float>(), pointValue.at(1).get<float>());
+        }
+        return result;
+    }
+
+    Brotato3D::EGroundMaterialKind ParseGroundMaterialKind(const json& tileJson,
+                                                           std::string_view context,
+                                                           Brotato3D::EGroundMaterialKind fallback)
+    {
+        if (!tileJson.is_object() || !tileJson.contains("kind"))
+        {
+            return fallback;
+        }
+
+        const std::string kind = tileJson.at("kind").get<std::string>();
+        if (kind == "lambertian")
+        {
+            return Brotato3D::EGroundMaterialKind::Lambertian;
+        }
+        if (kind == "metallic")
+        {
+            return Brotato3D::EGroundMaterialKind::Metallic;
+        }
+        if (kind == "mixture")
+        {
+            return Brotato3D::EGroundMaterialKind::Mixture;
+        }
+
+        throw std::runtime_error(fmt::format("{} field 'kind' has unsupported value '{}'", context, kind));
+    }
+
     void ReadPlayerStats(const json& object, Brotato3D::FPlayerStats& outStats)
     {
         outStats.maxHpFlat = object.value("maxHpFlat", outStats.maxHpFlat);
@@ -285,17 +354,71 @@ namespace Brotato3D
         }
 
         outArenas.clear();
-        for (const auto& arenaJson : document.at("arenas"))
+        for (size_t arenaIndex = 0; arenaIndex < document.at("arenas").size(); ++arenaIndex)
         {
+            const auto& arenaJson = document.at("arenas").at(arenaIndex);
             FArenaDef def{};
             def.id = arenaJson.value("id", "");
             def.name = arenaJson.value("name", def.id);
-            def.groundColor = NextJson::GetVec3(arenaJson, "groundColor", def.groundColor);
-            def.borderColor = NextJson::GetVec3(arenaJson, "borderColor", def.borderColor);
             if (def.id.empty())
             {
                 SPDLOG_ERROR("[Brotato3D] arena missing id");
                 return false;
+            }
+
+            const std::string arenaContext = fmt::format("arena '{}'", def.id);
+            try
+            {
+                def.halfExtent = ReadVec2Array(arenaJson, "halfExtent", def.halfExtent, arenaContext);
+                if (!glm::all(glm::greaterThan(def.halfExtent, glm::vec2(0.0f))))
+                {
+                    SPDLOG_WARN("[Brotato3D] {} has invalid halfExtent [{}, {}], fallback to default",
+                                arenaContext,
+                                def.halfExtent.x,
+                                def.halfExtent.y);
+                    def.halfExtent = glm::vec2(12.0f, 8.0f);
+                }
+            }
+            catch (const std::exception& exception)
+            {
+                SPDLOG_WARN("[Brotato3D] {}", exception.what());
+            }
+
+            def.baseGroundColor = NextJson::GetVec3(arenaJson, "baseGroundColor",
+                                                    NextJson::GetVec3(arenaJson, "groundColor", def.baseGroundColor));
+            def.borderColor = NextJson::GetVec3(arenaJson, "borderColor", def.borderColor);
+
+            if (arenaJson.contains("groundTiles"))
+            {
+                if (!arenaJson.at("groundTiles").is_array())
+                {
+                    SPDLOG_WARN("[Brotato3D] {} field 'groundTiles' must be an array", arenaContext);
+                }
+                else
+                {
+                    for (size_t tileIndex = 0; tileIndex < arenaJson.at("groundTiles").size(); ++tileIndex)
+                    {
+                        const auto& tileJson = arenaJson.at("groundTiles").at(tileIndex);
+                        const std::string tileContext = fmt::format("{} tile {}", arenaContext, tileIndex);
+                        try
+                        {
+                            FGroundTileDef tile{};
+                            tile.minXZ = ReadVec2Array(tileJson, "min", tile.minXZ, tileContext);
+                            tile.maxXZ = ReadVec2Array(tileJson, "max", tile.maxXZ, tileContext);
+                            tile.pointsXZ = ReadVec2ArrayList(tileJson, "points", tileContext);
+                            tile.color = NextJson::GetVec3(tileJson, "color", tile.color);
+                            tile.kind = ParseGroundMaterialKind(tileJson, tileContext, tile.kind);
+                            tile.coverage = tileJson.value("coverage", tile.coverage);
+                            tile.fuzziness = tileJson.value("fuzziness", tile.fuzziness);
+                            tile.refractionIndex = tileJson.value("ior", tile.refractionIndex);
+                            def.groundTiles.push_back(tile);
+                        }
+                        catch (const std::exception& exception)
+                        {
+                            SPDLOG_WARN("[Brotato3D] {}", exception.what());
+                        }
+                    }
+                }
             }
             outArenas.push_back(def);
         }

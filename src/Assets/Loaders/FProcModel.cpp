@@ -12,6 +12,18 @@ namespace Assets
         indices.push_back(offset + i1);
         indices.push_back(offset + i2);
     }
+
+    static float ComputeSignedAreaXZ(const std::vector<glm::vec2>& polygonXZ)
+    {
+        float twiceArea = 0.0f;
+        for (size_t index = 0; index < polygonXZ.size(); ++index)
+        {
+            const glm::vec2& a = polygonXZ[index];
+            const glm::vec2& b = polygonXZ[(index + 1) % polygonXZ.size()];
+            twiceArea += a.x * b.y - b.x * a.y;
+        }
+        return twiceArea * 0.5f;
+    }
 	
 	uint32_t FProcModel::CreateCornellBox(const float scale,
 	                                 std::vector<Model>& models,
@@ -206,6 +218,85 @@ namespace Assets
         };
         
         return Model("pbox", std::move(vertices),std::move(indices), true);
+    }
+
+    Model FProcModel::CreateExtrudedConvexPolygon(const std::string& name,
+                                                  const std::vector<glm::vec2>& polygonXZ,
+                                                  float minY,
+                                                  float maxY)
+    {
+        if (polygonXZ.size() < 3)
+        {
+            return CreateBox(glm::vec3(-0.5f, minY, -0.5f), glm::vec3(0.5f, maxY, 0.5f));
+        }
+
+        std::vector<glm::vec2> polygon = polygonXZ;
+        if (ComputeSignedAreaXZ(polygon) < 0.0f)
+        {
+            std::reverse(polygon.begin(), polygon.end());
+        }
+
+        glm::vec2 minXZ(FLT_MAX);
+        glm::vec2 maxXZ(-FLT_MAX);
+        for (const glm::vec2& point : polygon)
+        {
+            minXZ = glm::min(minXZ, point);
+            maxXZ = glm::max(maxXZ, point);
+        }
+        const glm::vec2 size = glm::max(maxXZ - minXZ, glm::vec2(0.001f));
+        const auto makeUv = [&minXZ, &size](const glm::vec2& point)
+        {
+            return glm::vec2((point.x - minXZ.x) / size.x, (point.y - minXZ.y) / size.y);
+        };
+
+        std::vector<Vertex> vertices;
+        std::vector<uint32_t> indices;
+        vertices.reserve(polygon.size() * 6);
+        indices.reserve(static_cast<size_t>(polygon.size() - 2) * 6 + polygon.size() * 6);
+
+        const uint32_t topOffset = static_cast<uint32_t>(vertices.size());
+        for (const glm::vec2& point : polygon)
+        {
+            vertices.push_back(Vertex{glm::vec3(point.x, maxY, point.y), glm::vec3(0.0f, 1.0f, 0.0f),
+                                      glm::vec4(1, 0, 0, 0), makeUv(point), 0});
+        }
+        for (uint32_t index = 1; index + 1 < static_cast<uint32_t>(polygon.size()); ++index)
+        {
+            AddTriangle(indices, topOffset, 0, index, index + 1);
+        }
+
+        const uint32_t bottomOffset = static_cast<uint32_t>(vertices.size());
+        for (const glm::vec2& point : polygon)
+        {
+            vertices.push_back(Vertex{glm::vec3(point.x, minY, point.y), glm::vec3(0.0f, -1.0f, 0.0f),
+                                      glm::vec4(1, 0, 0, 0), makeUv(point), 0});
+        }
+        for (uint32_t index = 1; index + 1 < static_cast<uint32_t>(polygon.size()); ++index)
+        {
+            AddTriangle(indices, bottomOffset, 0, index + 1, index);
+        }
+
+        for (uint32_t index = 0; index < static_cast<uint32_t>(polygon.size()); ++index)
+        {
+            const glm::vec2& current = polygon[index];
+            const glm::vec2& next = polygon[(index + 1) % polygon.size()];
+            const glm::vec2 edge = next - current;
+            if (glm::length(edge) <= 0.001f)
+            {
+                continue;
+            }
+
+            const glm::vec3 normal = glm::normalize(glm::vec3(edge.y, 0.0f, -edge.x));
+            const uint32_t sideOffset = static_cast<uint32_t>(vertices.size());
+            vertices.push_back(Vertex{glm::vec3(current.x, minY, current.y), normal, glm::vec4(1, 0, 0, 0), glm::vec2(0.0f, 1.0f), 0});
+            vertices.push_back(Vertex{glm::vec3(current.x, maxY, current.y), normal, glm::vec4(1, 0, 0, 0), glm::vec2(0.0f, 0.0f), 0});
+            vertices.push_back(Vertex{glm::vec3(next.x, maxY, next.y), normal, glm::vec4(1, 0, 0, 0), glm::vec2(1.0f, 0.0f), 0});
+            vertices.push_back(Vertex{glm::vec3(next.x, minY, next.y), normal, glm::vec4(1, 0, 0, 0), glm::vec2(1.0f, 1.0f), 0});
+            AddTriangle(indices, sideOffset, 0, 1, 2);
+            AddTriangle(indices, sideOffset, 0, 2, 3);
+        }
+
+        return Model(name, std::move(vertices), std::move(indices), true);
     }
 
     Model FProcModel::CreateSphere(const vec3& center, float radius)

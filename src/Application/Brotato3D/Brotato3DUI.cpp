@@ -825,7 +825,8 @@ namespace Brotato3D
                 }
                 const Brotato3D::FArenaDef& arena = arenas[arenaIndex];
                 const bool selectedArena = gameInstance.GetSelectedArenaId() == arena.id;
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(arena.groundColor.r, arena.groundColor.g, arena.groundColor.b, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Button,
+                                      ImVec4(arena.baseGroundColor.r, arena.baseGroundColor.g, arena.baseGroundColor.b, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(arena.borderColor.r, arena.borderColor.g, arena.borderColor.b, 1.0f));
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(arena.borderColor.r, arena.borderColor.g, arena.borderColor.b, 1.0f));
                 if (ImGui::Button(fmt::format("{}##Arena{}", selectedArena ? "*" : "", arena.id).c_str(), ImVec2(swatchSize, swatchSize)))

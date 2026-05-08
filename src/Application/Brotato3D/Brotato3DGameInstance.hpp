@@ -119,6 +119,7 @@ public:
     const std::string& GetSelectedCharacterId() const { return selectedCharacterId_; }
     const std::vector<Brotato3D::FArenaDef>& GetArenaDefs() const { return arenaDefs_; }
     const std::string& GetSelectedArenaId() const { return selectedArenaId_; }
+    glm::vec2 GetArenaHalfExtent() const { return arenaHalfExtent_; }
     const Brotato3D::FBestRecord& GetBestRecord() const { return bestRecord_; }
     Brotato3D::FPlayerStats GetEffectivePlayerStats() const;
     bool CanBuyShopOffer(size_t slotIndex) const;
@@ -242,15 +243,20 @@ private:
     void ClearMovementInput();
     bool ShouldPauseWorldPhysics() const;
     void SetWorldPhysicsPaused(bool paused);
+    void BuildArenaWallBodies();
+    void ClearArenaWallBodies();
+    void UpdateCameraTracking(double deltaSeconds);
     glm::vec3 RandomDebugSpawnPosition();
     NextBodyID AcquireEnemyKinematicBody(const std::string& enemyId) const;
     void SyncPlayerKinematicBody(double deltaSeconds);
     void SyncEnemyKinematicBody(Brotato3D::FEnemyRuntime& enemy, double deltaSeconds);
     void DeactivateEnemyKinematicBody(Brotato3D::FEnemyRuntime& enemy);
+    const Brotato3D::FArenaDef* FindArenaDef(const std::string& arenaId) const;
 
     NextEngine* engine_ = nullptr;
     Brotato3D::EAppState appState_ = Brotato3D::EAppState::MainMenu;
     Brotato3D::FArenaResources arenaResources_{};
+    glm::vec2 arenaHalfExtent_ = glm::vec2(12.0f, 8.0f);
     Brotato3D::FPlayerRuntime player_{};
     std::map<std::string, Brotato3D::FEnemyDef> enemyDefs_;
     std::map<std::string, Brotato3D::FWeaponDef> weaponDefs_;
@@ -306,6 +312,7 @@ private:
     uint32_t materialDebrisMatId_ = 0;
     uint32_t playerDebrisMatId_ = 0;
     uint64_t debrisTickCounter_ = 0;
+    std::array<NextBodyID, 4> arenaWallBodyIds_{};
     NextBodyID playerKinematicBodyId_{};
     bool playerKinematicBodyActive_ = false;
     std::map<std::string, std::vector<NextBodyID>> enemyKinematicBodyPools_;
@@ -320,6 +327,7 @@ private:
     glm::vec2 gamepadMoveInput_ = glm::vec2(0.0f);
     bool sceneReady_ = false;
     std::mt19937 rng_{std::random_device{}()};
+    glm::vec3 cameraSmoothedTarget_ = glm::vec3(0.0f);
     float screenShakeMs_ = 0.0f;
     float screenShakeIntensity_ = 0.0f;
     float damageFlashMs_ = 0.0f;

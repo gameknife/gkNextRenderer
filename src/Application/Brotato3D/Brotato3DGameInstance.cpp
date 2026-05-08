@@ -23,6 +23,9 @@ namespace
 {
     constexpr const char* ArenasConfigPath = "assets/configs/brotato3d/arenas.json";
     constexpr const char* I18nConfigPath = "assets/configs/brotato3d/i18n.json";
+    constexpr float CameraFollowSharpness = 8.0f;
+    constexpr float CameraClampHalfViewX = 12.0f;
+    constexpr float CameraClampHalfViewZ = 8.0f;
 
     std::filesystem::path GetBestRecordPath()
     {
@@ -71,6 +74,7 @@ void Brotato3DGameInstance::OnInit()
     shop_.SetWeapons(weaponDefs_);
     waveSystem_.LoadWaves(waveDefs_);
     ResetRuntimeState();
+    ApplySelectedArena();
     appState_ = Brotato3D::EAppState::MainMenu;
     SetWorldPhysicsPaused(true);
     engine_->GetShowFlags().DebugGraphicsPanel = false;
@@ -150,6 +154,7 @@ void Brotato3DGameInstance::OnTick(double deltaSeconds)
     damageFlashMs_ = std::max(0.0f, damageFlashMs_ - deltaMs);
     weaponMergeBannerMs_ = std::max(0.0f, weaponMergeBannerMs_ - deltaMs);
     UpdateWaveBanner(deltaSeconds);
+    UpdateCameraTracking(deltaSeconds);
 
     if (timeScaleRecoveryMs_ > 0.0f)
     {
@@ -228,6 +233,7 @@ void Brotato3DGameInstance::OnTick(double deltaSeconds)
 void Brotato3DGameInstance::OnDestroy()
 {
     SetWorldPhysicsPaused(false);
+    ClearArenaWallBodies();
     enemies_.clear();
     projectilePool_.clear();
     enemyProjectilePool_.clear();
@@ -241,6 +247,27 @@ void Brotato3DGameInstance::OnDestroy()
     tempLightPool_.clear();
     enemyKinematicBodyPools_.clear();
     hitDebrisMaterialIds_.clear();
+}
+
+void Brotato3DGameInstance::UpdateCameraTracking(double deltaSeconds)
+{
+    if (appState_ != Brotato3D::EAppState::Playing &&
+        appState_ != Brotato3D::EAppState::Hitstop &&
+        appState_ != Brotato3D::EAppState::LevelUpPicking &&
+        appState_ != Brotato3D::EAppState::Shopping)
+    {
+        return;
+    }
+
+    const glm::vec3 desired(player_.worldPos.x, 0.0f, player_.worldPos.z);
+    const float lerpK = 1.0f - std::exp(-CameraFollowSharpness * static_cast<float>(deltaSeconds));
+    cameraSmoothedTarget_ = glm::mix(cameraSmoothedTarget_, desired, lerpK);
+
+    const float marginX = std::max(0.0f, arenaHalfExtent_.x - CameraClampHalfViewX);
+    const float marginZ = std::max(0.0f, arenaHalfExtent_.y - CameraClampHalfViewZ);
+    cameraSmoothedTarget_.x = std::clamp(cameraSmoothedTarget_.x, -marginX, marginX);
+    cameraSmoothedTarget_.y = 0.0f;
+    cameraSmoothedTarget_.z = std::clamp(cameraSmoothedTarget_.z, -marginZ, marginZ);
 }
 
 bool Brotato3DGameInstance::ShouldPauseWorldPhysics() const

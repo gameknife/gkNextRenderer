@@ -6,6 +6,11 @@
 
 using namespace Brotato3DUtil;
 
+namespace
+{
+    constexpr const char* EmptySceneName = "Empty.proc";
+}
+
 void Brotato3DGameInstance::RestartGame()
 {
     Brotato3D::PlayUiClickSfx();
@@ -39,6 +44,7 @@ void Brotato3DGameInstance::StartNewRun()
         NodeUtils::SetVisible(player_.shotgunWeaponNode,
                               !equippedWeapons_.empty() && equippedWeapons_.front().weaponId == "shotgun");
     }
+    cameraSmoothedTarget_ = glm::vec3(player_.worldPos.x, 0.0f, player_.worldPos.z);
 
     appState_ = Brotato3D::EAppState::Playing;
     SetWorldPhysicsPaused(false);
@@ -56,6 +62,7 @@ void Brotato3DGameInstance::GoToMainMenu()
     Brotato3D::StopBgm();
     ResetRuntimeState();
     appState_ = Brotato3D::EAppState::MainMenu;
+    cameraSmoothedTarget_ = glm::vec3(0.0f);
     SetWorldPhysicsPaused(true);
     Brotato3D::StartBgm("calm");
 }
@@ -64,6 +71,7 @@ void Brotato3DGameInstance::GoToCharacterSelect()
 {
     Brotato3D::PlayUiClickSfx();
     appState_ = Brotato3D::EAppState::CharacterSelect;
+    cameraSmoothedTarget_ = glm::vec3(0.0f);
     SetWorldPhysicsPaused(true);
     Brotato3D::StartBgm("calm");
     ClearMovementInput();
@@ -181,19 +189,19 @@ void Brotato3DGameInstance::EnterResult(bool playerDead)
 
 void Brotato3DGameInstance::ApplySelectedArena()
 {
-    const auto groundIt = arenaResources_.groundMaterialIds.find(selectedArenaId_);
-    const auto borderIt = arenaResources_.borderMaterialIds.find(selectedArenaId_);
-    if (groundIt == arenaResources_.groundMaterialIds.end() || borderIt == arenaResources_.borderMaterialIds.end())
+    const Brotato3D::FArenaDef* arenaDef = FindArenaDef(selectedArenaId_);
+    if (!arenaDef && !arenaDefs_.empty())
     {
-        return;
+        selectedArenaId_ = arenaDefs_.front().id;
+        arenaDef = &arenaDefs_.front();
     }
 
-    arenaResources_.groundMaterialId = groundIt->second;
-    arenaResources_.borderMaterialId = borderIt->second;
-    NodeUtils::SetPrimaryMaterial(arenaResources_.groundNode, arenaResources_.groundMaterialId);
-    for (const std::shared_ptr<Assets::Node>& node : arenaResources_.borderNodes)
+    arenaHalfExtent_ = arenaDef ? arenaDef->halfExtent : glm::vec2(12.0f, 8.0f);
+    waveSystem_.SetArenaHalfExtent(arenaHalfExtent_);
+
+    if (sceneReady_)
     {
-        NodeUtils::SetPrimaryMaterial(node, arenaResources_.borderMaterialId);
+        engine_->RequestLoadScene({.filename = EmptySceneName});
     }
 }
 
@@ -206,4 +214,12 @@ const Brotato3D::FCharacterDef* Brotato3DGameInstance::FindCharacterDef(const st
     return it != characterDefs_.end() ? &(*it) : nullptr;
 }
 
+const Brotato3D::FArenaDef* Brotato3DGameInstance::FindArenaDef(const std::string& arenaId) const
+{
+    const auto it = std::find_if(arenaDefs_.begin(), arenaDefs_.end(), [&arenaId](const Brotato3D::FArenaDef& arena)
+    {
+        return arena.id == arenaId;
+    });
+    return it != arenaDefs_.end() ? &(*it) : nullptr;
+}
 

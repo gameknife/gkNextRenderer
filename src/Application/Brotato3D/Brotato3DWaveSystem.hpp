@@ -23,6 +23,7 @@ namespace Brotato3D
         void LoadWaves(std::vector<FWaveDef> waves);
         void StartGame();
         void Reset();
+        void SetArenaHalfExtent(const glm::vec2& halfExtent);
         void Update(double dt, const std::function<void(const std::string& enemyId, glm::vec3 pos)>& spawnCallback);
         EWaveState GetState() const { return state_; }
         int GetCurrentWaveIndex() const { return currentWaveIndex_; }
@@ -53,6 +54,7 @@ namespace Brotato3D
         int currentWaveIndex_ = 0;
         float waveTimeRemainingSec_ = 0.0f;
         float intermissionTimeRemainingSec_ = 0.0f;
+        glm::vec2 arenaHalfExtent_ = glm::vec2(12.0f, 8.0f);
         std::mt19937 rng_{std::random_device{}()};
         bool waveEndedEvent_ = false;
         bool intermissionStartedEvent_ = false;

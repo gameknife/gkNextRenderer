@@ -11,6 +11,10 @@ namespace Assets
         // basic geometry
         static Model CreateBox(const glm::vec3& p0, const glm::vec3& p1);
         static Model CreateSphere(const glm::vec3& center, float radius);
+        static Model CreateExtrudedConvexPolygon(const std::string& name,
+                                                 const std::vector<glm::vec2>& polygonXZ,
+                                                 float minY,
+                                                 float maxY);
         static uint32_t CreateCornellBox(const float scale,std::vector<Model>& models,std::vector<FMaterial>& materials,std::vector<LightObject>& lights);
 
         // Emissive quad. origin = one corner; right/up = two edge vectors.
