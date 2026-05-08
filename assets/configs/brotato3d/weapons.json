@@ -9,6 +9,7 @@
       "projectileLifetimeMs": 800,
       "projectileColor": [1.0, 0.85, 0.2],
       "projectileSize": 0.12,
+      "knockbackMeters": 0.07,
       "spreadDeg": 4.0
     },
     "shotgun": {
@@ -20,6 +21,7 @@
       "projectileLifetimeMs": 500,
       "projectileColor": [1.0, 0.4, 0.2],
       "projectileSize": 0.14,
+      "knockbackMeters": 0.12,
       "pellets": 5,
       "spreadDeg": 18.0
     },
@@ -32,6 +34,7 @@
       "projectileLifetimeMs": 600,
       "projectileColor": [0.85, 0.95, 1.0],
       "projectileSize": 0.08,
+      "knockbackMeters": 0.42,
       "spreadDeg": 0.0,
       "critChanceBonus": 0.20
     },
@@ -44,6 +47,7 @@
       "projectileLifetimeMs": 350,
       "projectileColor": [1.0, 0.55, 0.10],
       "projectileSize": 0.16,
+      "knockbackMeters": 0.025,
       "pellets": 1,
       "spreadDeg": 22.0,
       "pierceCount": 3
@@ -57,6 +61,7 @@
       "projectileLifetimeMs": 1500,
       "projectileColor": [1.0, 0.30, 0.10],
       "projectileSize": 0.22,
+      "knockbackMeters": 0.34,
       "explosionRadius": 1.8,
       "explosionDamage": 14
     },
@@ -66,6 +71,7 @@
       "atkSpeedHz": 1.0,
       "rangeMeters": 11.0,
       "projectileColor": [0.30, 0.95, 1.0],
+      "knockbackMeters": 0.22,
       "instantHit": true,
       "beamWidth": 0.18,
       "beamDurationMs": 100
