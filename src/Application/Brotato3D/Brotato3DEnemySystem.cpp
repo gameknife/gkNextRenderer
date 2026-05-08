@@ -2,11 +2,29 @@
 #include "Brotato3DCommon.hpp"
 
 #include "Assets/Core/Node.h"
+#include "Runtime/Components/RenderComponent.h"
 #include <spdlog/spdlog.h>
 
 #include "Brotato3DAudio.hpp"
 
 using namespace Brotato3DUtil;
+
+namespace
+{
+    glm::vec3 ResolveEnemyDebrisDir(const Brotato3D::FEnemyRuntime& enemy, const glm::vec3& fallbackDir)
+    {
+        glm::vec3 dir(enemy.lastHitDebrisDir.x, 0.0f, enemy.lastHitDebrisDir.z);
+        if (glm::length(dir) < 0.001f)
+        {
+            dir = glm::vec3(fallbackDir.x, 0.0f, fallbackDir.z);
+        }
+        if (glm::length(dir) < 0.001f)
+        {
+            dir = glm::vec3(0.0f, 0.0f, 1.0f);
+        }
+        return glm::normalize(dir);
+    }
+}
 
 void Brotato3DGameInstance::SpawnEnemy(const std::string& enemyId, const glm::vec3& worldPos)
 {
@@ -47,6 +65,7 @@ void Brotato3DGameInstance::SpawnEnemy(const std::string& enemyId, const glm::ve
                                                                         reusableEnemy->kinematicBodyId;
         *reusableEnemy = enemy;
         NodeUtils::SetPrimaryMaterial(reusableEnemy->node, reusableEnemy->materialId);
+        NodeUtils::SetOutlineFlags(reusableEnemy->node, Runtime::RenderOutlineFlags::danger);
         reusableEnemy->node->SetTranslation(reusableEnemy->worldPos);
         reusableEnemy->node->SetScale(glm::vec3(1.0f));
         NodeUtils::SetVisible(reusableEnemy->node, true);
@@ -57,6 +76,7 @@ void Brotato3DGameInstance::SpawnEnemy(const std::string& enemyId, const glm::ve
     enemy.kinematicBodyId = AcquireEnemyKinematicBody(enemyId);
     enemy.node = SceneBuilder::CreateRenderNode(fmt::format("Brotato3D_Enemy_{}_{}", enemyId, enemies_.size()), spawnPos, glm::vec3(1.0f),
                                   engine_->GetScene().GenerateInstanceId(), visual.modelId, visual.materialId);
+    NodeUtils::SetOutlineFlags(enemy.node, Runtime::RenderOutlineFlags::danger);
     engine_->GetScene().AddNode(enemy.node);
     engine_->GetScene().MarkDirty();
     enemies_.push_back(enemy);
@@ -70,17 +90,6 @@ void Brotato3DGameInstance::UpdateEnemies(double deltaSeconds)
     {
         if (!enemy.alive)
         {
-            if (enemy.fading)
-            {
-                enemy.deathFadeMs -= deltaMs;
-                const float alpha = std::clamp(enemy.deathFadeMs / 500.0f, 0.0f, 1.0f);
-                enemy.node->SetTranslation(enemy.worldPos + glm::vec3(0.0f, -0.3f * (1.0f - alpha), 0.0f));
-                if (enemy.deathFadeMs <= 0.0f)
-                {
-                    enemy.fading = false;
-                    NodeUtils::SetVisible(enemy.node, false);
-                }
-            }
             continue;
         }
 
@@ -257,6 +266,7 @@ void Brotato3DGameInstance::UpdateEnemies(double deltaSeconds)
             {
                 hitStopMs_ = 80.0f;
                 appState_ = Brotato3D::EAppState::Hitstop;
+                SetWorldPhysicsPaused(true);
             }
             DamagePlayer(contactDamage, 150.0f, 180.0f);
         }
@@ -272,10 +282,9 @@ void Brotato3DGameInstance::KillEnemy(Brotato3D::FEnemyRuntime& enemy, bool drop
     }
     enemy.alive = false;
     DeactivateEnemyKinematicBody(enemy);
-    enemy.fading = true;
-    enemy.deathFadeMs = dropLoot ? 500.0f : 400.0f;
+    enemy.fading = false;
+    enemy.deathFadeMs = 0.0f;
     enemy.node->SetScale(glm::vec3(1.0f));
-    NodeUtils::SetPrimaryMaterial(enemy.node, enemy.darkMaterialId);
     if (dropLoot)
     {
         ++killCount_;
@@ -286,12 +295,16 @@ void Brotato3DGameInstance::KillEnemy(Brotato3D::FEnemyRuntime& enemy, bool drop
     }
     if (dropLoot && enemy.def && enemy.def->boss.enabled)
     {
+        const glm::vec3 deathSprayDir = ResolveEnemyDebrisDir(enemy, enemy.worldPos - player_.worldPos);
         std::uniform_real_distribution<float> unitDist(-1.0f, 1.0f);
         std::uniform_real_distribution<float> chunkSpeedDist(5.0f, 9.0f);
         std::uniform_real_distribution<float> bossSpeedDist(6.0f, 10.0f);
         for (int index = 0; index < 50; ++index)
         {
-            glm::vec3 dir(unitDist(rng_), std::uniform_real_distribution<float>(0.4f, 1.0f)(rng_), unitDist(rng_));
+            glm::vec3 dir = deathSprayDir * 2.2f +
+                            glm::vec3(unitDist(rng_) * 0.45f,
+                                      std::uniform_real_distribution<float>(0.35f, 0.95f)(rng_),
+                                      unitDist(rng_) * 0.45f);
             if (glm::length(dir) < 0.001f)
             {
                 dir = glm::vec3(0.0f, 1.0f, 0.0f);
@@ -302,7 +315,10 @@ void Brotato3DGameInstance::KillEnemy(Brotato3D::FEnemyRuntime& enemy, bool drop
         }
         for (int index = 0; index < 8; ++index)
         {
-            glm::vec3 dir(unitDist(rng_), std::uniform_real_distribution<float>(0.4f, 1.0f)(rng_), unitDist(rng_));
+            glm::vec3 dir = deathSprayDir * 2.5f +
+                            glm::vec3(unitDist(rng_) * 0.4f,
+                                      std::uniform_real_distribution<float>(0.4f, 1.0f)(rng_),
+                                      unitDist(rng_) * 0.4f);
             if (glm::length(dir) < 0.001f)
             {
                 dir = glm::vec3(0.0f, 1.0f, 0.0f);
@@ -317,7 +333,7 @@ void Brotato3DGameInstance::KillEnemy(Brotato3D::FEnemyRuntime& enemy, bool drop
             const float angle = static_cast<float>(index) / static_cast<float>(bossMaterialCount) * glm::two_pi<float>();
             const glm::vec3 radial(std::cos(angle), 0.0f, std::sin(angle));
             const glm::vec3 spawnPos = enemy.worldPos + radial * 1.0f + glm::vec3(0.0f, 0.5f, 0.0f);
-            const glm::vec3 dir = glm::normalize(radial + glm::vec3(0.0f, 0.6f, 0.0f));
+            const glm::vec3 dir = glm::normalize(deathSprayDir * 1.8f + radial * 0.35f + glm::vec3(0.0f, 0.6f, 0.0f));
             SpawnDebris(Brotato3D::EDebrisKind::Chunk, spawnPos, dir, 5.0f, materialDebrisMatId_, 1, 0.0f, true, 1);
         }
         StartScreenShake(800.0f, 5.0f);
@@ -329,6 +345,7 @@ void Brotato3DGameInstance::KillEnemy(Brotato3D::FEnemyRuntime& enemy, bool drop
         bossVictoryDelayMs_ = 1200.0f;
         spdlog::info("[Brotato3D] [boss defeated]");
     }
+    NodeUtils::SetVisible(enemy.node, false);
 }
 
 void Brotato3DGameInstance::ClearAliveEnemies(bool dropLoot)
@@ -390,13 +407,14 @@ void Brotato3DGameInstance::SpawnDeathDebris(const Brotato3D::FEnemyRuntime& ene
         {0.0f, 0.0f, 1.0f},
     };
     const glm::vec3 halfExtent = enemy.def->size * 0.5f;
+    const glm::vec3 deathSprayDir = ResolveEnemyDebrisDir(enemy, enemy.worldPos - player_.worldPos);
     std::uniform_real_distribution<float> speedDist(4.0f, 7.0f);
 
     auto emitOne = [&](int index, bool pickable, uint32_t materialId, int materialValue)
     {
         const glm::vec3 corner = sampleOffsets[index % 14];
         const glm::vec3 spawnPos = enemy.worldPos + corner * halfExtent;
-        glm::vec3 dir = corner + glm::vec3(0.0f, 0.4f, 0.0f);
+        glm::vec3 dir = deathSprayDir * (pickable ? 1.8f : 2.2f) + corner * 0.35f + glm::vec3(0.0f, 0.45f, 0.0f);
         if (glm::length(dir) < 0.001f)
         {
             dir = glm::vec3(0.0f, 1.0f, 0.0f);

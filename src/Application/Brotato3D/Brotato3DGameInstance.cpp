@@ -10,6 +10,7 @@
 #include "Runtime/Editor/FontLoader.h"
 #include "Runtime/Platform/UserPaths.h"
 #include "Runtime/Subsystems/NextLocalization.h"
+#include "Runtime/Subsystems/NextPhysics.h"
 #include "Utilities/FileHelper.hpp"
 
 #include <filesystem>
@@ -71,6 +72,7 @@ void Brotato3DGameInstance::OnInit()
     waveSystem_.LoadWaves(waveDefs_);
     ResetRuntimeState();
     appState_ = Brotato3D::EAppState::MainMenu;
+    SetWorldPhysicsPaused(true);
     engine_->GetShowFlags().DebugGraphicsPanel = false;
     engine_->GetUserSettings().ShowOverlay = false;
     engine_->RequestLoadScene({.filename = "Empty.proc"});
@@ -131,6 +133,7 @@ void Brotato3DGameInstance::OnInitUI()
 void Brotato3DGameInstance::OnTick(double deltaSeconds)
 {
     const float deltaMs = static_cast<float>(deltaSeconds * 1000.0);
+    SetWorldPhysicsPaused(ShouldPauseWorldPhysics());
     if (appState_ == Brotato3D::EAppState::Paused ||
         appState_ == Brotato3D::EAppState::MainMenu ||
         appState_ == Brotato3D::EAppState::CharacterSelect)
@@ -216,17 +219,22 @@ void Brotato3DGameInstance::OnTick(double deltaSeconds)
         {
             hitStopMs_ = 0.0f;
             appState_ = Brotato3D::EAppState::Playing;
+            SetWorldPhysicsPaused(false);
         }
     }
 
-    UpdateDebris(effectiveDt);
-    UpdateCombatEffects(effectiveDt);
-    UpdateFloatingTexts(deltaSeconds);
+    if (appState_ == Brotato3D::EAppState::Playing)
+    {
+        UpdateDebris(effectiveDt);
+        UpdateCombatEffects(effectiveDt);
+        UpdateFloatingTexts(deltaSeconds);
+    }
     engine_->GetScene().MarkTransformDirty();
 }
 
 void Brotato3DGameInstance::OnDestroy()
 {
+    SetWorldPhysicsPaused(false);
     enemies_.clear();
     projectilePool_.clear();
     enemyProjectilePool_.clear();
@@ -240,6 +248,24 @@ void Brotato3DGameInstance::OnDestroy()
     tempLightPool_.clear();
     enemyKinematicBodyPools_.clear();
     hitDebrisMaterialIds_.clear();
+}
+
+bool Brotato3DGameInstance::ShouldPauseWorldPhysics() const
+{
+    return appState_ != Brotato3D::EAppState::Playing;
+}
+
+void Brotato3DGameInstance::SetWorldPhysicsPaused(bool paused)
+{
+    if (!engine_)
+    {
+        return;
+    }
+
+    if (NextPhysics* physics = engine_->GetPhysicsEngine())
+    {
+        physics->SetPaused(paused);
+    }
 }
 
 const Brotato3D::FItemDef* Brotato3DGameInstance::GetItemDef(const std::string& itemId) const

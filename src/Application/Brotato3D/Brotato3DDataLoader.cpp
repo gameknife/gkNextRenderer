@@ -140,6 +140,7 @@ namespace Brotato3D
             def.beamWidth = weaponJson.value("beamWidth", 0.0f);
             def.beamDurationMs = weaponJson.value("beamDurationMs", 0.0f);
             def.critChanceBonus = weaponJson.value("critChanceBonus", 0.0f);
+            def.knockbackMeters = weaponJson.value("knockbackMeters", 0.0f);
             def.tier = weaponJson.value("tier", 1);
             outWeapons.emplace(weaponId, def);
         }

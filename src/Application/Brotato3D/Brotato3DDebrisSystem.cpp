@@ -5,6 +5,7 @@
 #include "Assets/Loaders/FProcModel.h"
 #include "Brotato3DAudio.hpp"
 #include "Runtime/Components/PhysicsComponent.h"
+#include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Scene/SceneBuilder.h"
 
 #include <spdlog/spdlog.h>
@@ -19,9 +20,10 @@ namespace
     constexpr int RatKinematicBodyCount = 96;
     constexpr int EnemyKinematicBodyCount = 32;
     constexpr int BossKinematicBodyCount = 4;
-    constexpr bool EnableKinematicDebrisPush = false;
+    constexpr bool EnableKinematicDebrisPush = true;
+    constexpr float KinematicMoveTimeSeconds = 0.01f;
 
-    constexpr glm::vec3 TinyHalfExtent(0.04f);
+    constexpr glm::vec3 TinyHalfExtent(0.08f);
     constexpr glm::vec3 ChunkHalfExtent(0.18f);
     constexpr glm::vec3 BossChunkHalfExtent(0.36f);
 
@@ -193,7 +195,9 @@ void Brotato3DGameInstance::BuildDebrisPool(std::vector<Assets::Model>& models,
     spdlog::info("[Brotato3D] debris pool created: {} dynamic bodies", debrisPool_.size());
 }
 
-void Brotato3DGameInstance::BuildKinematicCollisionBodies()
+void Brotato3DGameInstance::BuildKinematicCollisionBodies(std::vector<Assets::Model>& models,
+                                                          std::vector<Assets::FMaterial>& materials,
+                                                          std::vector<std::shared_ptr<Assets::Node>>& nodes)
 {
     NextPhysics* physics = GetEngine().GetPhysicsEngine();
     if (!physics)
@@ -218,6 +222,7 @@ void Brotato3DGameInstance::BuildKinematicCollisionBodies()
     }
     enemyKinematicBodyPools_.clear();
     playerKinematicBodyId_ = {};
+    playerKinematicBodyActive_ = false;
 
     if (!EnableKinematicDebrisPush)
     {
@@ -225,9 +230,32 @@ void Brotato3DGameInstance::BuildKinematicCollisionBodies()
         return;
     }
 
+    const uint32_t proxyMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.1f, 0.9f, 1.0f));
+    models.push_back(Assets::FProcModel::CreateSphere(glm::vec3(0.0f), std::max(0.35f, player_.radius)));
+    const uint32_t playerProxyModelId = static_cast<uint32_t>(models.size() - 1);
+    auto attachPhysicsProxyNode = [&nodes, proxyMaterialId](const std::string& name, uint32_t modelId, const NextBodyID& bodyId)
+    {
+        auto node = SceneBuilder::CreateRenderNode(name,
+                                                   HiddenPosition,
+                                                   glm::vec3(1.0f),
+                                                   static_cast<uint32_t>(nodes.size()),
+                                                   modelId,
+                                                   proxyMaterialId,
+                                                   false,
+                                                   glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+                                                   false);
+        auto physicsComponent = std::make_shared<Runtime::PhysicsComponent>();
+        // Keep Scene::RebuildMeshBuffer from replacing this manually-created primitive body with a mesh body.
+        physicsComponent->SetMobility(Runtime::ENodeMobility::Dynamic);
+        physicsComponent->BindPhysicsBody(bodyId);
+        node->AddComponent(physicsComponent);
+        nodes.push_back(node);
+    };
+
     playerKinematicBodyId_ = physics->CreateSphereBody(HiddenPosition, std::max(0.35f, player_.radius), NextMotionType::Kinematic);
     physics->SetBodyTransform(playerKinematicBodyId_, HiddenPosition, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), true);
     physics->SetBodyActive(playerKinematicBodyId_, false);
+    attachPhysicsProxyNode("Brotato3D_PlayerKinematicPushProxy", playerProxyModelId, playerKinematicBodyId_);
 
     size_t bodyCount = 1;
     for (const auto& [enemyId, def] : enemyDefs_)
@@ -237,11 +265,13 @@ void Brotato3DGameInstance::BuildKinematicCollisionBodies()
         std::vector<NextBodyID>& pool = enemyKinematicBodyPools_[enemyId];
         pool.reserve(static_cast<size_t>(count));
         const glm::vec3 extent = glm::max(def.size, glm::vec3(0.2f));
+        const uint32_t proxyModelId = enemyVisuals_.contains(enemyId) ? enemyVisuals_[enemyId].modelId : playerProxyModelId;
         for (int index = 0; index < count; ++index)
         {
             const NextBodyID bodyId = physics->CreateBoxBody(HiddenPosition, extent, NextMotionType::Kinematic);
             physics->SetBodyTransform(bodyId, HiddenPosition, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), true);
             physics->SetBodyActive(bodyId, false);
+            attachPhysicsProxyNode(fmt::format("Brotato3D_EnemyKinematicPushProxy_{}_{}", enemyId, index), proxyModelId, bodyId);
             pool.push_back(bodyId);
             ++bodyCount;
         }
@@ -345,6 +375,7 @@ void Brotato3DGameInstance::SpawnDebris(Brotato3D::EDebrisKind kind,
             slot.node->SetRotation(rotation);
             slot.node->SetScale(glm::vec3(1.0f));
             NodeUtils::SetPrimaryMaterial(slot.node, materialId);
+            NodeUtils::SetOutlineFlags(slot.node, pickable ? Runtime::RenderOutlineFlags::selected : Runtime::RenderOutlineFlags::none);
             NodeUtils::SetVisible(slot.node, true);
         }
 
@@ -379,6 +410,7 @@ void Brotato3DGameInstance::UpdateDebris(double deltaSeconds)
         }
         if (slot.node)
         {
+            NodeUtils::SetOutlineFlags(slot.node, Runtime::RenderOutlineFlags::none);
             slot.node->SetTranslation(HiddenPosition);
             NodeUtils::SetVisible(slot.node, false);
         }
@@ -472,6 +504,10 @@ void Brotato3DGameInstance::UpdateDebris(double deltaSeconds)
         {
             slot.node->SetTranslation(slot.magneticPos);
         }
+        if (physics && !slot.bodyId.IsInvalid())
+        {
+            physics->SetBodyTransform(slot.bodyId, slot.magneticPos, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), true);
+        }
 
         if (DistanceXZ(slot.magneticPos, player_.worldPos) < 0.4f)
         {
@@ -505,6 +541,7 @@ void Brotato3DGameInstance::ClearAllDebris(bool keepPickable)
         }
         if (slot.node)
         {
+            NodeUtils::SetOutlineFlags(slot.node, Runtime::RenderOutlineFlags::none);
             slot.node->SetTranslation(HiddenPosition);
             slot.node->SetRotation(glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
             NodeUtils::SetVisible(slot.node, false);
@@ -541,28 +578,33 @@ void Brotato3DGameInstance::SpawnImpactDebris(const glm::vec3& worldPos,
                                               const std::string& enemyName)
 {
     int count = 4;
+    float surfaceOffset = 0.36f;
     if (enemyName == "Brute" || enemyName == "Charger" || enemyName == "Bomber" || enemyName == "Shaman")
     {
         count = 6;
+        surfaceOffset = 0.55f;
     }
     else if (enemyName == "Warden")
     {
         count = 8;
+        surfaceOffset = 0.8f;
     }
     if (isCrit)
     {
         count = static_cast<int>(std::ceil(static_cast<float>(count) * 1.5f));
     }
 
-    glm::vec3 impulseDir = -projectileVelocity;
+    glm::vec3 impulseDir = projectileVelocity;
     if (glm::length(impulseDir) < 0.001f)
     {
         impulseDir = glm::vec3(0.0f, 1.0f, 0.0f);
     }
     impulseDir = glm::normalize(glm::normalize(impulseDir) + glm::vec3(0.0f, 0.3f, 0.0f));
 
+    const glm::vec3 spawnPos = worldPos + impulseDir * surfaceOffset;
+
     SpawnDebris(Brotato3D::EDebrisKind::Tiny,
-                glm::vec3(worldPos.x, std::max(0.35f, worldPos.y), worldPos.z),
+                glm::vec3(spawnPos.x, std::max(0.35f, spawnPos.y), spawnPos.z),
                 impulseDir,
                 isCrit ? 6.0f : 4.0f,
                 EnsureHitDebrisMaterial(weaponColor, enemyColor),
@@ -615,6 +657,8 @@ NextBodyID Brotato3DGameInstance::AcquireEnemyKinematicBody(const std::string& e
 
 void Brotato3DGameInstance::SyncPlayerKinematicBody(double deltaSeconds)
 {
+    (void)deltaSeconds;
+
     if (!EnableKinematicDebrisPush)
     {
         return;
@@ -626,18 +670,34 @@ void Brotato3DGameInstance::SyncPlayerKinematicBody(double deltaSeconds)
         return;
     }
 
-    physics->SetBodyActive(playerKinematicBodyId_, appState_ == Brotato3D::EAppState::Playing);
-    if (appState_ == Brotato3D::EAppState::Playing)
+    if (appState_ != Brotato3D::EAppState::Playing)
     {
-        physics->MoveKinematicBody(playerKinematicBodyId_,
-                                   player_.worldPos + glm::vec3(0.0f, player_.radius, 0.0f),
-                                   glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
-                                   std::max(0.001f, static_cast<float>(deltaSeconds)));
+        if (playerKinematicBodyActive_)
+        {
+            physics->SetBodyActive(playerKinematicBodyId_, false);
+            physics->SetBodyTransform(playerKinematicBodyId_, HiddenPosition, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), true);
+            playerKinematicBodyActive_ = false;
+        }
+        return;
     }
+
+    const glm::vec3 targetPos = player_.worldPos;
+    const glm::quat targetRot(1.0f, 0.0f, 0.0f, 0.0f);
+    if (!playerKinematicBodyActive_)
+    {
+        physics->SetBodyTransform(playerKinematicBodyId_, targetPos, targetRot, true);
+        physics->SetBodyActive(playerKinematicBodyId_, true);
+        playerKinematicBodyActive_ = true;
+        return;
+    }
+
+    physics->MoveKinematicBody(playerKinematicBodyId_, targetPos, targetRot, KinematicMoveTimeSeconds);
 }
 
 void Brotato3DGameInstance::SyncEnemyKinematicBody(Brotato3D::FEnemyRuntime& enemy, double deltaSeconds)
 {
+    (void)deltaSeconds;
+
     if (!EnableKinematicDebrisPush)
     {
         return;
@@ -649,11 +709,16 @@ void Brotato3DGameInstance::SyncEnemyKinematicBody(Brotato3D::FEnemyRuntime& ene
         return;
     }
 
-    physics->SetBodyActive(enemy.kinematicBodyId, true);
-    physics->MoveKinematicBody(enemy.kinematicBodyId,
-                               enemy.worldPos,
-                               enemy.node ? enemy.node->WorldRotation() : glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
-                               std::max(0.001f, static_cast<float>(deltaSeconds)));
+    const glm::quat targetRot = enemy.node ? enemy.node->WorldRotation() : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+    if (!enemy.kinematicBodyActive)
+    {
+        physics->SetBodyTransform(enemy.kinematicBodyId, enemy.worldPos, targetRot, true);
+        physics->SetBodyActive(enemy.kinematicBodyId, true);
+        enemy.kinematicBodyActive = true;
+        return;
+    }
+
+    physics->MoveKinematicBody(enemy.kinematicBodyId, enemy.worldPos, targetRot, KinematicMoveTimeSeconds);
 }
 
 void Brotato3DGameInstance::DeactivateEnemyKinematicBody(Brotato3D::FEnemyRuntime& enemy)
@@ -661,6 +726,7 @@ void Brotato3DGameInstance::DeactivateEnemyKinematicBody(Brotato3D::FEnemyRuntim
     if (!EnableKinematicDebrisPush)
     {
         enemy.kinematicBodyId = {};
+        enemy.kinematicBodyActive = false;
         return;
     }
 
@@ -670,6 +736,7 @@ void Brotato3DGameInstance::DeactivateEnemyKinematicBody(Brotato3D::FEnemyRuntim
         return;
     }
 
-    physics->SetBodyTransform(enemy.kinematicBodyId, HiddenPosition, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), true);
     physics->SetBodyActive(enemy.kinematicBodyId, false);
+    physics->SetBodyTransform(enemy.kinematicBodyId, HiddenPosition, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), true);
+    enemy.kinematicBodyActive = false;
 }

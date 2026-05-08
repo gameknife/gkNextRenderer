@@ -26,6 +26,7 @@ namespace Brotato3D
         int pierceRemaining = 0;
         float explosionRadius = 0.0f;
         int explosionDamage = 0;
+        float knockbackMeters = 0.0f;
         bool isCrit = false;
         std::unordered_set<size_t> hitEnemyIndices;
         uint32_t modelId = 0;

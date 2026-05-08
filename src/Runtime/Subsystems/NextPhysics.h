@@ -57,6 +57,8 @@ public:
     void Start();
     void Tick(double DeltaSeconds);
     void Stop();
+    void SetPaused(bool paused);
+    bool IsPaused() const { return paused_; }
     
     NextBodyID CreateSphereBody(glm::vec3 position, float radius, NextMotionType motionType);
     NextBodyID CreateBoxBody(glm::vec3 position, glm::vec3 extent, NextMotionType motionType);
@@ -90,4 +92,5 @@ private:
 
     double TimeElapsed {};
     double TimeSimulated {};
+    bool paused_ = false;
 };

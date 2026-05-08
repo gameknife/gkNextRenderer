@@ -243,7 +243,7 @@ void Runtime::DrawPhysicsDebugOverlay(const Assets::Scene& scene, const Assets::
         const FNextPhysicsDebugState debugState = physics->GetBodyDebugState(physComp->GetPhysicsBody());
         stats.Add(ClassifyBodyDebugState(debugState));
 
-        if (!renderComp->GetVisible())
+        if (!renderComp->GetVisible() && debugState.objectLayer == NextLayers::HIDDEN)
         {
             continue;
         }

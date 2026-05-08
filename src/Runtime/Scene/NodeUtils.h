@@ -16,6 +16,7 @@ namespace NodeUtils
     void SetVisibleRecursive(const std::shared_ptr<Assets::Node>& node, bool visible);
     void SetRayCastVisible(const std::shared_ptr<Assets::Node>& node, bool visible);
     void SetRayCastVisibleRecursive(const std::shared_ptr<Assets::Node>& node, bool visible);
+    void SetOutlineFlags(const std::shared_ptr<Assets::Node>& node, uint32_t outlineFlags);
 
     void SetPrimaryMaterial(const std::shared_ptr<Assets::Node>& node, uint32_t materialId);
     void SetAllMaterials(const std::shared_ptr<Assets::Node>& node, const std::array<uint32_t, 16>& materialIds);

@@ -406,7 +406,8 @@ public struct FPathTracingRenderer{
         const bool selected = hitPrimaryNode_.reserved1 != 0;
         const bool hovered = (hitPrimaryNode_.reserved2 & 1u) != 0;
         const bool locked = (hitPrimaryNode_.reserved2 & 2u) != 0;
-        OutObjectID.Store(pixel_, Common.EncodeObjectId(hitPrimaryNode_.instanceId, selected, hovered, locked));
+        const bool danger = (hitPrimaryNode_.reserved2 & 4u) != 0;
+        OutObjectID.Store(pixel_, Common.EncodeObjectId(hitPrimaryNode_.instanceId, selected, hovered, locked, danger));
         OutMotionVector.Store(pixel_, float4(motion * size_, 0, 0));
         OutPrevDepth.Store(pixel_, ndcDepth);
 

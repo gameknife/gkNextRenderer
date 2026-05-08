@@ -30,6 +30,7 @@ namespace Brotato3D
         float bombFuseMs = -1.0f;
         float healIntervalMs = 0.0f;
         bool bossPhase2Active = false;
+        glm::vec3 lastHitDebrisDir = glm::vec3(0.0f, 0.0f, 1.0f);
         uint32_t modelId = 0;
         uint32_t materialId = 0;
         uint32_t darkMaterialId = 0;
@@ -37,6 +38,7 @@ namespace Brotato3D
         uint32_t warningMaterialId = 0;
         uint32_t phase2MaterialId = 0;
         NextBodyID kinematicBodyId{};
+        bool kinematicBodyActive = false;
         std::shared_ptr<Assets::Node> node;
     };
 }

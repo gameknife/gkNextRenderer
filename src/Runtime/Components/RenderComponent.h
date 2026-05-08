@@ -6,6 +6,15 @@
 
 namespace Runtime
 {
+    namespace RenderOutlineFlags
+    {
+        inline constexpr uint32_t none = 0u;
+        inline constexpr uint32_t selected = 1u << 0u;
+        inline constexpr uint32_t hovered = 1u << 1u;
+        inline constexpr uint32_t locked = 1u << 2u;
+        inline constexpr uint32_t danger = 1u << 3u;
+    }
+
     class RenderComponent : public Assets::Component
     {
     public:
@@ -24,6 +33,10 @@ namespace Runtime
 
         void SetRayCastVisible(bool visible) { rayCastVisible_ = visible; }
         bool GetRayCastVisible() const { return rayCastVisible_; }
+
+        void SetOutlineFlags(uint32_t outlineFlags) { outlineFlags_ = outlineFlags; }
+        uint32_t GetOutlineFlags() const { return outlineFlags_; }
+        void ClearOutlineFlags() { outlineFlags_ = RenderOutlineFlags::none; }
 
         bool ToggleVisible()
         {
@@ -48,5 +61,6 @@ namespace Runtime
         bool visible_ = true;
         bool rayCastVisible_ = true;
         int32_t skinIndex_ = -1;
+        uint32_t outlineFlags_ = RenderOutlineFlags::none;
     };
 }

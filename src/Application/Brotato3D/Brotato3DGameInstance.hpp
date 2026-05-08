@@ -165,11 +165,14 @@ private:
     void KillEnemy(Brotato3D::FEnemyRuntime& enemy, bool dropLoot);
     int CalculateWeaponDamage(const Brotato3D::FWeaponDef& weaponDef, bool& outIsCrit);
     void ApplyDamageToEnemy(Brotato3D::FEnemyRuntime& enemy, int damage, bool isCrit);
+    void ApplyWeaponKnockback(Brotato3D::FEnemyRuntime& enemy, const glm::vec3& direction, float knockbackMeters);
     void DamagePlayer(int damage, float shakeMs, float flashMs);
     void BuildDebrisPool(std::vector<Assets::Model>& models,
                          std::vector<Assets::FMaterial>& materials,
                          std::vector<std::shared_ptr<Assets::Node>>& nodes);
-    void BuildKinematicCollisionBodies();
+    void BuildKinematicCollisionBodies(std::vector<Assets::Model>& models,
+                                       std::vector<Assets::FMaterial>& materials,
+                                       std::vector<std::shared_ptr<Assets::Node>>& nodes);
     void SpawnDebris(Brotato3D::EDebrisKind kind,
                      const glm::vec3& worldPos,
                      const glm::vec3& impulseDir,
@@ -234,6 +237,8 @@ private:
     void SetDebugSingleWeapon(const std::string& weaponId);
     void ApplyLightingSettings();
     void ClearMovementInput();
+    bool ShouldPauseWorldPhysics() const;
+    void SetWorldPhysicsPaused(bool paused);
     glm::vec3 RandomDebugSpawnPosition();
     NextBodyID AcquireEnemyKinematicBody(const std::string& enemyId) const;
     void SyncPlayerKinematicBody(double deltaSeconds);
@@ -299,6 +304,7 @@ private:
     uint32_t playerDebrisMatId_ = 0;
     uint64_t debrisTickCounter_ = 0;
     NextBodyID playerKinematicBodyId_{};
+    bool playerKinematicBodyActive_ = false;
     std::map<std::string, std::vector<NextBodyID>> enemyKinematicBodyPools_;
     std::unordered_map<uint64_t, uint32_t> hitDebrisMaterialIds_;
     uint32_t pickupXpModelId_ = 0;

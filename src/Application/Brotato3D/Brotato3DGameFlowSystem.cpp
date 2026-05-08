@@ -41,6 +41,7 @@ void Brotato3DGameInstance::StartNewRun()
     }
 
     appState_ = Brotato3D::EAppState::Playing;
+    SetWorldPhysicsPaused(false);
     if (sceneReady_)
     {
         waveSystem_.StartGame();
@@ -55,6 +56,7 @@ void Brotato3DGameInstance::GoToMainMenu()
     Brotato3D::StopBgm();
     ResetRuntimeState();
     appState_ = Brotato3D::EAppState::MainMenu;
+    SetWorldPhysicsPaused(true);
     Brotato3D::StartBgm("calm");
 }
 
@@ -62,6 +64,7 @@ void Brotato3DGameInstance::GoToCharacterSelect()
 {
     Brotato3D::PlayUiClickSfx();
     appState_ = Brotato3D::EAppState::CharacterSelect;
+    SetWorldPhysicsPaused(true);
     Brotato3D::StartBgm("calm");
     ClearMovementInput();
 }
@@ -100,6 +103,7 @@ void Brotato3DGameInstance::PauseGame()
     }
     Brotato3D::PlayUiClickSfx();
     appState_ = Brotato3D::EAppState::Paused;
+    SetWorldPhysicsPaused(true);
     ClearMovementInput();
 }
 
@@ -111,6 +115,7 @@ void Brotato3DGameInstance::ResumeGame()
     }
     Brotato3D::PlayUiClickSfx();
     appState_ = Brotato3D::EAppState::Playing;
+    SetWorldPhysicsPaused(false);
     ClearMovementInput();
 }
 
@@ -125,6 +130,7 @@ void Brotato3DGameInstance::BeginLevelUp()
 {
     Brotato3D::PlayLevelUpSfx();
     appState_ = Brotato3D::EAppState::LevelUpPicking;
+    SetWorldPhysicsPaused(true);
     ClearMovementInput();
     RollUpgradeChoices();
 }
@@ -165,6 +171,7 @@ void Brotato3DGameInstance::EnterResult(bool playerDead)
     playerDead_ = playerDead;
     bossVictoryDelayMs_ = 0.0f;
     appState_ = Brotato3D::EAppState::Result;
+    SetWorldPhysicsPaused(true);
     ClearMovementInput();
     if (playerDead)
     {

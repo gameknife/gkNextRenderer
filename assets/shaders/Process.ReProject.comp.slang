@@ -17,7 +17,7 @@ ConstantBuffer<PushConsts> pushConsts;
 
 // Helper functions
 static const uint OBJECT_ID_FLAG_VALID = 0x80000000u;
-static const uint OBJECT_ID_INSTANCE_MASK = 0x0FFFFFFFu;
+static const uint OBJECT_ID_INSTANCE_MASK = 0x07FFFFFFu;
 static const uint OBJECT_ID_INVALID_INSTANCE = 0xFFFFFFFFu;
 
 uint FetchPrimitiveIndex(uint objectId)

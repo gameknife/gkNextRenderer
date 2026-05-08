@@ -141,6 +141,11 @@ void Brotato3DGameInstance::ApplyItemExplosionDamage(const glm::vec3& worldPos, 
         }
 
         enemy.currentHp -= damage;
+        const glm::vec3 blastDir(enemy.worldPos.x - worldPos.x, 0.0f, enemy.worldPos.z - worldPos.z);
+        if (glm::length(blastDir) > 0.001f)
+        {
+            enemy.lastHitDebrisDir = glm::normalize(blastDir);
+        }
         enemy.hitFlashRemainingMs = 80.0f;
         NodeUtils::SetPrimaryMaterial(enemy.node, enemy.hitFlashMaterialId);
         PushFloatingText(enemy.worldPos + glm::vec3(0.0f, 0.8f, 0.0f), fmt::format("-{}", damage),

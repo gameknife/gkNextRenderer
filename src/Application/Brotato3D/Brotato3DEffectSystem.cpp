@@ -4,6 +4,8 @@
 #include "Assets/Core/Node.h"
 #include "Assets/Loaders/FProcModel.h"
 #include "Brotato3DAudio.hpp"
+#include "Runtime/Components/PhysicsComponent.h"
+#include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Scene/SceneBuilder.h"
 
 using namespace Brotato3DUtil;
@@ -188,6 +190,7 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
         auto node = SceneBuilder::CreateRenderNode(fmt::format("Brotato3D_EnemyProjectile_{}", index), HiddenPosition, glm::vec3(1.0f),
                                      static_cast<uint32_t>(nodes.size()), enemyProjectileModelId_,
                                      enemyProjectileMaterialId_, false);
+        NodeUtils::SetOutlineFlags(node, Runtime::RenderOutlineFlags::danger);
         nodes.push_back(node);
         Brotato3D::FEnemyProjectileRuntime projectile{};
         projectile.radius = 0.18f;
@@ -196,21 +199,44 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
     }
 
     BuildDebrisPool(models, materials, nodes);
-    BuildKinematicCollisionBodies();
+    BuildKinematicCollisionBodies(models, materials, nodes);
 
-    models.push_back(Assets::FProcModel::CreateSphere(glm::vec3(0.0f), 0.12f));
+    models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-PickupXpRadius), glm::vec3(PickupXpRadius)));
     pickupXpModelId_ = static_cast<uint32_t>(models.size() - 1);
     pickupXpMaterialId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.2f, 1.0f, 0.35f));
+    if (NextPhysics* physics = GetEngine().GetPhysicsEngine())
+    {
+        for (const Brotato3D::FPickupRuntime& pickup : pickupPool_)
+        {
+            if (!pickup.bodyId.IsInvalid() && physics->GetBody(pickup.bodyId))
+            {
+                physics->RemoveBody(pickup.bodyId);
+            }
+        }
+    }
     pickupPool_.clear();
     pickupPool_.reserve(128);
+    NextPhysics* physics = GetEngine().GetPhysicsEngine();
     for (int index = 0; index < 128; ++index)
     {
         auto node = SceneBuilder::CreateRenderNode(fmt::format("Brotato3D_Pickup_{}", index), HiddenPosition, glm::vec3(1.0f),
                                      static_cast<uint32_t>(nodes.size()), pickupXpModelId_, pickupXpMaterialId_, false);
+        NodeUtils::SetOutlineFlags(node, Runtime::RenderOutlineFlags::hovered);
+        auto physicsComponent = std::make_shared<Runtime::PhysicsComponent>();
+        physicsComponent->SetMobility(Runtime::ENodeMobility::Dynamic);
         nodes.push_back(node);
         Brotato3D::FPickupRuntime pickup{};
         pickup.kind = Brotato3D::EPickupKind::XP;
         pickup.node = node;
+        if (physics)
+        {
+            pickup.bodyId = physics->CreateBoxBody(HiddenPosition, glm::vec3(PickupXpRadius * 2.0f), NextMotionType::Dynamic);
+            physics->SetBodyTransform(pickup.bodyId, HiddenPosition, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), true);
+            physics->SetBodyVelocity(pickup.bodyId, glm::vec3(0.0f), glm::vec3(0.0f));
+            physics->SetBodyActive(pickup.bodyId, false);
+            physicsComponent->BindPhysicsBody(pickup.bodyId);
+        }
+        node->AddComponent(physicsComponent);
         pickupPool_.push_back(pickup);
     }
     sceneReady_ = true;
@@ -468,7 +494,7 @@ void Brotato3DGameInstance::ApplyLightingSettings()
     auto& envSettings = engine_->GetScene().GetEnvSettings();
     envSettings.HasSky = true;
     envSettings.HasSun = false;
-    envSettings.SkyIntensity = 8.0f;
+    envSettings.SkyIntensity = 50.0f;
     engine_->GetScene().MarkEnvDirty();
 }
 

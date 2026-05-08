@@ -313,12 +313,18 @@ void Brotato3DGameInstance::ResetRuntimeState()
         projectile.node->SetTranslation(HiddenPosition);
     }
     ClearAllDebris(false);
+    NextPhysics* physics = GetEngine().GetPhysicsEngine();
     for (auto& pickup : pickupPool_)
     {
         pickup.active = false;
         pickup.magnetized = false;
-        pickup.bouncePhysicsMs = 0.0f;
-        pickup.bounceVelocity = glm::vec3(0.0f);
+        pickup.settleTimerMs = 0.0f;
+        if (physics && !pickup.bodyId.IsInvalid())
+        {
+            physics->SetBodyActive(pickup.bodyId, false);
+            physics->SetBodyTransform(pickup.bodyId, HiddenPosition, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), true);
+            physics->SetBodyVelocity(pickup.bodyId, glm::vec3(0.0f), glm::vec3(0.0f));
+        }
         NodeUtils::SetVisible(pickup.node, false);
         pickup.node->SetTranslation(HiddenPosition);
     }
@@ -366,8 +372,9 @@ void Brotato3DGameInstance::ResetRuntimeState()
     if (NextPhysics* physics = GetEngine().GetPhysicsEngine();
         physics && !playerKinematicBodyId_.IsInvalid())
     {
-        physics->SetBodyTransform(playerKinematicBodyId_, HiddenPosition, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), true);
         physics->SetBodyActive(playerKinematicBodyId_, false);
+        physics->SetBodyTransform(playerKinematicBodyId_, HiddenPosition, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), true);
+        playerKinematicBodyActive_ = false;
     }
     ClearMovementInput();
     NodeUtils::SetVisible(player_.bodyNode, false);

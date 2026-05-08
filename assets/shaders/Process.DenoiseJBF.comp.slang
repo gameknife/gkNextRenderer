@@ -8,6 +8,7 @@ static const uint OBJECT_ID_FLAG_VALID = 0x80000000u;
 static const uint OBJECT_ID_FLAG_SELECTED = 0x40000000u;
 static const uint OBJECT_ID_FLAG_HOVERED = 0x20000000u;
 static const uint OBJECT_ID_FLAG_LOCKED = 0x10000000u;
+static const uint OBJECT_ID_FLAG_DANGER = 0x08000000u;
 static const float DIAGONAL_EDGE_WEIGHT = 0.70710678;
 
 // Shared memory arrays
@@ -193,9 +194,15 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
                                  ComputeEdgeStrengthTwoSided(ObjectId1, ipos, OBJECT_ID_FLAG_HOVERED) * 0.25);
     float lockedEdge = saturate(ComputeEdgeStrengthTwoSided(ObjectId0, ipos, OBJECT_ID_FLAG_LOCKED) * 0.75 +
                                 ComputeEdgeStrengthTwoSided(ObjectId1, ipos, OBJECT_ID_FLAG_LOCKED) * 0.25);
+    float dangerEdge = saturate(ComputeEdgeStrengthTwoSided(ObjectId0, ipos, OBJECT_ID_FLAG_DANGER) * 0.90 +
+                                ComputeEdgeStrengthTwoSided(ObjectId1, ipos, OBJECT_ID_FLAG_DANGER) * 0.25);
 
-    // Priority: locked > selected > hovered
-    if (lockedEdge > 0)
+    // Priority: danger > locked > selected > hovered
+    if (dangerEdge > 0)
+    {
+        Total = lerp(Total, float3(255, 45, 35), dangerEdge);
+    }
+    else if (lockedEdge > 0)
     {
         Total = lerp(Total, float3(35, 145, 255), lockedEdge);
     }

@@ -59,6 +59,19 @@ namespace NodeUtils
         }
     }
 
+    void SetOutlineFlags(const std::shared_ptr<Assets::Node>& node, uint32_t outlineFlags)
+    {
+        if (!node)
+        {
+            return;
+        }
+
+        if (auto render = node->GetComponent<Runtime::RenderComponent>())
+        {
+            render->SetOutlineFlags(outlineFlags);
+        }
+    }
+
     void SetPrimaryMaterial(const std::shared_ptr<Assets::Node>& node, uint32_t materialId)
     {
         if (!node)

@@ -524,6 +524,11 @@ void NextPhysics::Start()
 
 void NextPhysics::Tick(double deltaSeconds)
 {
+    if (paused_)
+    {
+        return;
+    }
+
 #if WITH_PHYSIC
 	TimeElapsed += deltaSeconds;
 	const float timeOffset = static_cast<float>( TimeElapsed - TimeSimulated );
@@ -565,6 +570,11 @@ void NextPhysics::Tick(double deltaSeconds)
 	// Step the world
 	context_->physicsSystem.Update(cDeltaTime, cCollisionSteps, &context_->tempAllocator, &context_->jobSystem);
 #endif
+}
+
+void NextPhysics::SetPaused(bool paused)
+{
+    paused_ = paused;
 }
 
 void NextPhysics::Stop()
@@ -916,9 +926,10 @@ void NextPhysics::SetBodyActive(NextBodyID bodyID, bool active)
 
     if (active && isAdded)
     {
-        // Preserve MOVING layer for dynamic bodies so they keep colliding with each other
+        // Dynamic and kinematic bodies both belong in the moving broadphase.
+        // Kinematic bodies in NON_MOVING can be moved, but they won't reliably push sleeping dynamic bodies.
         EMotionType mt = bodyInterface.GetMotionType(bodyID);
-        ObjectLayer targetLayer = (mt == EMotionType::Dynamic) ? NextLayers::MOVING : NextLayers::NON_MOVING;
+        ObjectLayer targetLayer = (mt == EMotionType::Static) ? NextLayers::NON_MOVING : NextLayers::MOVING;
         bodyInterface.SetObjectLayer(bodyID, targetLayer);
     }
     else if (!active && isAdded)

@@ -20,12 +20,14 @@ void Brotato3DGameInstance::SelectUpgrade(size_t choiceIndex)
     {
         RollUpgradeChoices();
         appState_ = Brotato3D::EAppState::LevelUpPicking;
+        SetWorldPhysicsPaused(true);
         ClearMovementInput();
     }
     else
     {
         currentUpgradeChoices_.clear();
         appState_ = Brotato3D::EAppState::Playing;
+        SetWorldPhysicsPaused(false);
         ClearMovementInput();
     }
 }
@@ -79,6 +81,7 @@ void Brotato3DGameInstance::ContinueFromShop()
 {
     Brotato3D::PlayUiClickSfx();
     appState_ = Brotato3D::EAppState::Playing;
+    SetWorldPhysicsPaused(false);
     ClearMovementInput();
     waveSystem_.EndIntermissionAndAdvance();
     if (waveSystem_.ConsumeVictory())
@@ -212,6 +215,7 @@ void Brotato3DGameInstance::StartShopping()
     shop_.Roll(4, player_.ownedItemIds, equippedWeapons_, shopOffers_);
     Brotato3D::PlayShopOpenSfx();
     appState_ = Brotato3D::EAppState::Shopping;
+    SetWorldPhysicsPaused(true);
     ClearMovementInput();
 }
 

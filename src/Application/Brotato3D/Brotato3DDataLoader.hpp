@@ -83,6 +83,7 @@ namespace Brotato3D
         float beamWidth = 0.0f;
         float beamDurationMs = 0.0f;
         float critChanceBonus = 0.0f;
+        float knockbackMeters = 0.0f;
         int tier = 1;
     };
 
