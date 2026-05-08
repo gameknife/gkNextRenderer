@@ -23,6 +23,11 @@ void Brotato3DGameInstance::ApplyDamageToEnemy(Brotato3D::FEnemyRuntime& enemy, 
                      isCrit ? 1.4f : 1.0f);
     if (enemy.currentHp <= 0)
     {
+        if (isCrit)
+        {
+            PushExplosionRing(enemy.worldPos, glm::vec4(1.0f, 0.6f, 0.2f, 1.0f), 1.2f);
+            SpawnTempLight(enemy.worldPos, glm::vec3(1.0f, 0.6f, 0.2f), 4.0f, 250.0f);
+        }
         KillEnemy(enemy, true);
     }
 }

@@ -14,7 +14,6 @@ namespace Brotato3D
     enum class EPickupKind : uint8_t
     {
         XP,
-        Material,
     };
 
     struct FPickupRuntime
@@ -24,6 +23,8 @@ namespace Brotato3D
         int value = 0;
         bool active = false;
         bool magnetized = false;
+        float bouncePhysicsMs = 0.0f;
+        glm::vec3 bounceVelocity = glm::vec3(0.0f);
         std::shared_ptr<Assets::Node> node;
     };
 }

@@ -163,6 +163,7 @@ void Brotato3DGameInstance::EnterResult(bool playerDead)
     playerDead ? Brotato3D::PlayDefeatSfx() : Brotato3D::PlayVictorySfx();
     UpdateBestRecord(playerDead);
     playerDead_ = playerDead;
+    bossVictoryDelayMs_ = 0.0f;
     appState_ = Brotato3D::EAppState::Result;
     ClearMovementInput();
     if (playerDead)

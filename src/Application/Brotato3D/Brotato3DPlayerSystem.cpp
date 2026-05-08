@@ -196,6 +196,7 @@ void Brotato3DGameInstance::UpdatePlayer(double deltaSeconds)
     {
         player_.bodyNode->SetTranslation(player_.worldPos);
     }
+    SyncPlayerKinematicBody(deltaSeconds);
     if (player_.facingNode)
     {
         const glm::vec3 localOffset = glm::vec3(player_.facingDir.x, 0.0f, player_.facingDir.z) * 0.45f;
@@ -237,6 +238,7 @@ void Brotato3DGameInstance::DamagePlayer(int damage, float shakeMs, float flashM
     }
 
     player_.currentHp -= damage;
+    SpawnPlayerDamageDebris(damage);
     Brotato3D::PlayPlayerHurtSfx();
     const float shakeIntensity = damage < 5 ? 1.0f : (damage <= 15 ? 2.0f : 3.5f);
     StartScreenShake(shakeMs, shakeIntensity);
@@ -276,6 +278,7 @@ void Brotato3DGameInstance::ResetRuntimeState()
     const std::shared_ptr<Assets::Node> playerShotgunWeaponNode = player_.shotgunWeaponNode;
     for (auto& enemy : enemies_)
     {
+        DeactivateEnemyKinematicBody(enemy);
         enemy.alive = false;
         enemy.fading = false;
         enemy.hitFlashRemainingMs = 0.0f;
@@ -309,16 +312,13 @@ void Brotato3DGameInstance::ResetRuntimeState()
         NodeUtils::SetVisible(projectile.node, false);
         projectile.node->SetTranslation(HiddenPosition);
     }
-    for (auto& debris : impactDebrisPool_)
-    {
-        debris.active = false;
-        NodeUtils::SetVisible(debris.node, false);
-        debris.node->SetTranslation(HiddenPosition);
-    }
+    ClearAllDebris(false);
     for (auto& pickup : pickupPool_)
     {
         pickup.active = false;
         pickup.magnetized = false;
+        pickup.bouncePhysicsMs = 0.0f;
+        pickup.bounceVelocity = glm::vec3(0.0f);
         NodeUtils::SetVisible(pickup.node, false);
         pickup.node->SetTranslation(HiddenPosition);
     }
@@ -342,6 +342,10 @@ void Brotato3DGameInstance::ResetRuntimeState()
     screenShakeIntensity_ = 0.0f;
     damageFlashMs_ = 0.0f;
     hitStopMs_ = 0.0f;
+    globalTimeScale_ = 1.0f;
+    bossKillFlashMs_ = 0.0f;
+    timeScaleRecoveryMs_ = 0.0f;
+    bossVictoryDelayMs_ = 0.0f;
     waveBannerMs_ = 0.0f;
     waveBannerText_.clear();
     weaponMergeBannerMs_ = 0.0f;
@@ -359,6 +363,12 @@ void Brotato3DGameInstance::ResetRuntimeState()
     dynamicStatBuffs_.critChancePct = 0.0f;
     itemTickAccumMs_ = 0.0f;
     itemHealRemainder_ = 0.0f;
+    if (NextPhysics* physics = GetEngine().GetPhysicsEngine();
+        physics && !playerKinematicBodyId_.IsInvalid())
+    {
+        physics->SetBodyTransform(playerKinematicBodyId_, HiddenPosition, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), true);
+        physics->SetBodyActive(playerKinematicBodyId_, false);
+    }
     ClearMovementInput();
     NodeUtils::SetVisible(player_.bodyNode, false);
     NodeUtils::SetVisible(player_.facingNode, false);
@@ -404,6 +414,8 @@ void Brotato3DGameInstance::ApplySelectedCharacter()
     {
         NodeUtils::SetPrimaryMaterial(player_.bodyNode, materialIt->second);
     }
+    playerDebrisMatId_ = SceneBuilder::AddLambertianMaterialToScene(GetEngine().GetScene(),
+                                                                    character->color * 0.6f + glm::vec3(0.4f));
 }
 
 void Brotato3DGameInstance::ClearMovementInput()

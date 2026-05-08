@@ -64,13 +64,4 @@ namespace Brotato3D
         bool active = false;
     };
 
-    struct FImpactDebrisRuntime
-    {
-        glm::vec3 worldPos = glm::vec3(0.0f);
-        glm::vec3 velocity = glm::vec3(0.0f);
-        float lifeMs = 400.0f;
-        float remainingMs = 0.0f;
-        std::shared_ptr<Assets::Node> node;
-        bool active = false;
-    };
 }

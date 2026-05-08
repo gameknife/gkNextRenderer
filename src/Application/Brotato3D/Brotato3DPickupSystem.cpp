@@ -11,6 +11,11 @@ using namespace Brotato3DUtil;
 
 void Brotato3DGameInstance::SpawnPickup(int value, Brotato3D::EPickupKind kind, const glm::vec3& worldPos)
 {
+    if (kind != Brotato3D::EPickupKind::XP)
+    {
+        spdlog::warn("[Brotato3D] Material pickup requested through XP pool; ignored");
+        return;
+    }
     if (value <= 0 || pickupPool_.empty())
     {
         return;
@@ -44,17 +49,17 @@ void Brotato3DGameInstance::SpawnPickup(int value, Brotato3D::EPickupKind kind, 
     slot->magnetized = false;
     if (slot->node)
     {
-        const uint32_t modelId = kind == Brotato3D::EPickupKind::XP ? pickupXpModelId_ : pickupMaterialModelId_;
-        const uint32_t materialId =
-            kind == Brotato3D::EPickupKind::XP ? pickupXpMaterialId_ : pickupMaterialMaterialId_;
         if (auto render = slot->node->GetComponent<Runtime::RenderComponent>())
         {
-            render->SetModelId(modelId);
+            render->SetModelId(pickupXpModelId_);
         }
-        NodeUtils::SetPrimaryMaterial(slot->node, materialId);
+        NodeUtils::SetPrimaryMaterial(slot->node, pickupXpMaterialId_);
         slot->node->SetTranslation(slot->worldPos);
         NodeUtils::SetVisible(slot->node, true);
     }
+    std::uniform_real_distribution<float> horizontalDist(-1.5f, 1.5f);
+    slot->bouncePhysicsMs = 300.0f;
+    slot->bounceVelocity = glm::vec3(horizontalDist(rng_), 4.0f, horizontalDist(rng_));
 }
 
 void Brotato3DGameInstance::UpdatePickups(double deltaSeconds)
@@ -64,6 +69,20 @@ void Brotato3DGameInstance::UpdatePickups(double deltaSeconds)
     {
         if (!pickup.active)
         {
+            continue;
+        }
+        if (pickup.bouncePhysicsMs > 0.0f)
+        {
+            pickup.bounceVelocity.y -= 12.0f * static_cast<float>(deltaSeconds);
+            pickup.worldPos += pickup.bounceVelocity * static_cast<float>(deltaSeconds);
+            pickup.worldPos.y = std::max(0.15f, pickup.worldPos.y);
+            pickup.bouncePhysicsMs -= static_cast<float>(deltaSeconds * 1000.0);
+            pickup.node->SetTranslation(pickup.worldPos);
+            if (pickup.bouncePhysicsMs <= 0.0f)
+            {
+                pickup.bouncePhysicsMs = 0.0f;
+                pickup.bounceVelocity = glm::vec3(0.0f);
+            }
             continue;
         }
         const float pickupRadius = PickupBaseRadius * (1.0f + effectiveStats.pickupRadiusPct);
@@ -79,34 +98,24 @@ void Brotato3DGameInstance::UpdatePickups(double deltaSeconds)
         }
         if (DistanceXZ(pickup.worldPos, player_.worldPos) < 0.4f)
         {
-            if (pickup.kind == Brotato3D::EPickupKind::XP)
+            Brotato3D::PlayPickupXpSfx();
+            player_.currentXp += pickup.value;
+            PushFloatingText(player_.worldPos + glm::vec3(0.0f, 0.6f, 0.0f), fmt::format("+{} XP", pickup.value), glm::vec4(0.2f, 1.0f, 0.35f, 1.0f),
+                             500.0f);
+            while (player_.currentXp >= GetXpToNextLevel())
             {
-                Brotato3D::PlayPickupXpSfx();
-                player_.currentXp += pickup.value;
-                PushFloatingText(player_.worldPos + glm::vec3(0.0f, 0.6f, 0.0f), fmt::format("+{} XP", pickup.value), glm::vec4(0.2f, 1.0f, 0.35f, 1.0f),
-                                 500.0f);
-                while (player_.currentXp >= GetXpToNextLevel())
-                {
-                    player_.currentXp -= GetXpToNextLevel();
-                    ++player_.level;
-                    ++player_.pendingLevelUps;
-                }
-                if (player_.pendingLevelUps > 0)
-                {
-                    BeginLevelUp();
-                }
+                player_.currentXp -= GetXpToNextLevel();
+                ++player_.level;
+                ++player_.pendingLevelUps;
             }
-            else
+            if (player_.pendingLevelUps > 0)
             {
-                Brotato3D::PlayPickupMaterialSfx();
-                player_.materials += pickup.value;
-                totalMaterialsGained_ += pickup.value;
-                PushFloatingText(player_.worldPos + glm::vec3(0.0f, 0.2f, 0.0f), fmt::format("+{} MAT", pickup.value), glm::vec4(1.0f, 0.85f, 0.15f, 1.0f),
-                                 500.0f);
-                spdlog::info("[Brotato3D] Materials {}", player_.materials);
+                BeginLevelUp();
             }
             pickup.active = false;
             pickup.magnetized = false;
+            pickup.bouncePhysicsMs = 0.0f;
+            pickup.bounceVelocity = glm::vec3(0.0f);
             NodeUtils::SetVisible(pickup.node, false);
         }
     }

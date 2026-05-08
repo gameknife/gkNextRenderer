@@ -58,6 +58,12 @@ void Brotato3DGameInstance::UpdateWeapons(double deltaSeconds)
         if (weapon.def->instantHit)
         {
             ApplyDamageToEnemy(*target, weaponDamage, isCrit);
+            SpawnImpactDebris(target->worldPos + glm::vec3(0.0f, target->def ? target->def->size.y * 0.5f : 0.4f, 0.0f),
+                              dir * std::max(1.0f, weapon.def->projectileSpeed),
+                              weapon.def->projectileColor,
+                              target->def ? target->def->color : glm::vec3(1.0f),
+                              isCrit,
+                              target->def ? target->def->name : std::string{});
             PushLaserBeam(player_.worldPos + glm::vec3(0.0f, 0.25f, 0.0f),
                           target->worldPos + glm::vec3(0.0f, target->def->size.y * 0.5f, 0.0f),
                           glm::vec4(weapon.def->projectileColor, 1.0f),
@@ -143,7 +149,12 @@ void Brotato3DGameInstance::UpdateProjectiles(double deltaSeconds)
 
                     projectile.hitEnemyIndices.insert(enemyIndex);
                     ApplyDamageToEnemy(enemy, projectile.damage, projectile.isCrit);
-                    SpawnImpactDebris(projectile.worldPos);
+                    SpawnImpactDebris(projectile.worldPos,
+                                      projectile.velocity,
+                                      projectile.color,
+                                      enemy.def ? enemy.def->color : glm::vec3(1.0f),
+                                      projectile.isCrit,
+                                      enemy.def ? enemy.def->name : std::string{});
 
                     if (projectile.explosionRadius > 0.0f && projectile.explosionDamage > 0)
                     {
@@ -160,6 +171,13 @@ void Brotato3DGameInstance::UpdateProjectiles(double deltaSeconds)
                             if (DistanceXZ(projectile.worldPos, aoeEnemy.worldPos) <= projectile.explosionRadius)
                             {
                                 ApplyDamageToEnemy(aoeEnemy, projectile.explosionDamage, false);
+                                const glm::vec3 blastDir = aoeEnemy.worldPos - projectile.worldPos;
+                                SpawnImpactDebris(aoeEnemy.worldPos + glm::vec3(0.0f, aoeEnemy.def ? aoeEnemy.def->size.y * 0.45f : 0.35f, 0.0f),
+                                                  glm::length(blastDir) > 0.001f ? -blastDir : projectile.velocity,
+                                                  glm::vec3(1.0f, 0.55f, 0.12f),
+                                                  aoeEnemy.def ? aoeEnemy.def->color : glm::vec3(1.0f),
+                                                  false,
+                                                  aoeEnemy.def ? aoeEnemy.def->name : std::string{});
                             }
                         }
                         deactivate = true;

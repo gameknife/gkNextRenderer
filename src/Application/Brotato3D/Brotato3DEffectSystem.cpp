@@ -195,38 +195,21 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
         enemyProjectilePool_.push_back(projectile);
     }
 
-    models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.04f), glm::vec3(0.04f)));
-    impactDebrisModelId_ = static_cast<uint32_t>(models.size() - 1);
-    impactDebrisMaterialId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f, 0.18f, 0.08f));
-    impactDebrisPool_.clear();
-    impactDebrisPool_.reserve(160);
-    for (int index = 0; index < 160; ++index)
-    {
-        auto node = SceneBuilder::CreateRenderNode(fmt::format("Brotato3D_ImpactDebris_{}", index), HiddenPosition, glm::vec3(1.0f),
-                                     static_cast<uint32_t>(nodes.size()), impactDebrisModelId_, impactDebrisMaterialId_, false);
-        nodes.push_back(node);
-        Brotato3D::FImpactDebrisRuntime debris{};
-        debris.node = node;
-        impactDebrisPool_.push_back(debris);
-    }
+    BuildDebrisPool(models, materials, nodes);
+    BuildKinematicCollisionBodies();
 
     models.push_back(Assets::FProcModel::CreateSphere(glm::vec3(0.0f), 0.12f));
     pickupXpModelId_ = static_cast<uint32_t>(models.size() - 1);
     pickupXpMaterialId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.2f, 1.0f, 0.35f));
-    models.push_back(Assets::FProcModel::CreateSphere(glm::vec3(0.0f), 0.10f));
-    pickupMaterialModelId_ = static_cast<uint32_t>(models.size() - 1);
-    pickupMaterialMaterialId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f, 0.85f, 0.15f));
     pickupPool_.clear();
-    pickupPool_.reserve(256);
-    for (int index = 0; index < 256; ++index)
+    pickupPool_.reserve(128);
+    for (int index = 0; index < 128; ++index)
     {
-        const bool xpSlot = index < 128;
         auto node = SceneBuilder::CreateRenderNode(fmt::format("Brotato3D_Pickup_{}", index), HiddenPosition, glm::vec3(1.0f),
-                                     static_cast<uint32_t>(nodes.size()), xpSlot ? pickupXpModelId_ : pickupMaterialModelId_,
-                                     xpSlot ? pickupXpMaterialId_ : pickupMaterialMaterialId_, false);
+                                     static_cast<uint32_t>(nodes.size()), pickupXpModelId_, pickupXpMaterialId_, false);
         nodes.push_back(node);
         Brotato3D::FPickupRuntime pickup{};
-        pickup.kind = xpSlot ? Brotato3D::EPickupKind::XP : Brotato3D::EPickupKind::Material;
+        pickup.kind = Brotato3D::EPickupKind::XP;
         pickup.node = node;
         pickupPool_.push_back(pickup);
     }
@@ -257,31 +240,6 @@ bool Brotato3DGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera
 void Brotato3DGameInstance::OnSceneLoaded()
 {
     ApplyLightingSettings();
-}
-
-void Brotato3DGameInstance::UpdateImpactDebris(double deltaSeconds)
-{
-    const float deltaMs = static_cast<float>(deltaSeconds * 1000.0);
-    for (auto& debris : impactDebrisPool_)
-    {
-        if (!debris.active)
-        {
-            continue;
-        }
-
-        debris.remainingMs -= deltaMs;
-        if (debris.remainingMs <= 0.0f)
-        {
-            debris.active = false;
-            debris.node->SetTranslation(HiddenPosition);
-            NodeUtils::SetVisible(debris.node, false);
-            continue;
-        }
-
-        debris.velocity.y -= 9.8f * static_cast<float>(deltaSeconds);
-        debris.worldPos += debris.velocity * static_cast<float>(deltaSeconds);
-        debris.node->SetTranslation(debris.worldPos);
-    }
 }
 
 void Brotato3DGameInstance::UpdateCombatEffects(double deltaSeconds)
@@ -482,39 +440,6 @@ void Brotato3DGameInstance::StartScreenShake(float durationMs, float intensity)
     }
     screenShakeMs_ = std::max(screenShakeMs_, durationMs);
     screenShakeIntensity_ = std::max(screenShakeIntensity_, intensity);
-}
-
-void Brotato3DGameInstance::SpawnImpactDebris(const glm::vec3& worldPos)
-{
-    std::uniform_real_distribution<float> horizontalDist(-1.0f, 1.0f);
-    std::uniform_real_distribution<float> speedDist(2.0f, 4.0f);
-    for (int count = 0; count < 3; ++count)
-    {
-        auto it = std::find_if(impactDebrisPool_.begin(), impactDebrisPool_.end(),
-                               [](const Brotato3D::FImpactDebrisRuntime& debris)
-                               {
-                                   return !debris.active;
-                               });
-        if (it == impactDebrisPool_.end())
-        {
-            return;
-        }
-
-        glm::vec3 dir(horizontalDist(rng_), 0.8f, horizontalDist(rng_));
-        if (glm::length(dir) < 0.001f)
-        {
-            dir = glm::vec3(0.0f, 1.0f, 0.0f);
-        }
-        dir = glm::normalize(dir);
-        it->active = true;
-        it->worldPos = worldPos;
-        it->worldPos.y = std::max(0.35f, it->worldPos.y);
-        it->velocity = dir * speedDist(rng_);
-        it->lifeMs = 400.0f;
-        it->remainingMs = it->lifeMs;
-        it->node->SetTranslation(it->worldPos);
-        NodeUtils::SetVisible(it->node, true);
-    }
 }
 
 void Brotato3DGameInstance::BeginWaveBanner()

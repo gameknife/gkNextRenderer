@@ -148,24 +148,57 @@ void Brotato3DGameInstance::OnTick(double deltaSeconds)
     weaponMergeBannerMs_ = std::max(0.0f, weaponMergeBannerMs_ - deltaMs);
     UpdateWaveBanner(deltaSeconds);
 
+    if (timeScaleRecoveryMs_ > 0.0f)
+    {
+        timeScaleRecoveryMs_ = std::max(0.0f, timeScaleRecoveryMs_ - deltaMs);
+        globalTimeScale_ = glm::mix(0.4f, 1.0f, 1.0f - timeScaleRecoveryMs_ / 1200.0f);
+    }
+    else
+    {
+        globalTimeScale_ = 1.0f;
+    }
+    const double effectiveDt = deltaSeconds * static_cast<double>(globalTimeScale_);
+
     if (appState_ == Brotato3D::EAppState::Playing)
     {
-        runElapsedSec_ += static_cast<float>(deltaSeconds);
-        UpdatePlayer(deltaSeconds);
-        UpdateWeapons(deltaSeconds);
-        UpdateProjectiles(deltaSeconds);
-        UpdateEnemies(deltaSeconds);
-        UpdateEnemyProjectiles(deltaSeconds);
-        UpdatePickups(deltaSeconds);
-        ProcessItemTriggers(deltaSeconds);
-
-        waveSystem_.Update(deltaSeconds, [this](const std::string& enemyId, glm::vec3 pos)
+        if (bossVictoryDelayMs_ > 0.0f)
         {
-            SpawnEnemy(enemyId, pos);
-        });
+            bossVictoryDelayMs_ = std::max(0.0f, bossVictoryDelayMs_ - deltaMs);
+            if (bossVictoryDelayMs_ <= 0.0f)
+            {
+                EnterResult(false);
+            }
+        }
+        runElapsedSec_ += static_cast<float>(deltaSeconds);
+        if (appState_ == Brotato3D::EAppState::Playing)
+        {
+            UpdatePlayer(deltaSeconds);
+            UpdateWeapons(deltaSeconds);
+            UpdateProjectiles(effectiveDt);
+            UpdateEnemies(effectiveDt);
+            UpdateEnemyProjectiles(effectiveDt);
+            UpdatePickups(effectiveDt);
+            ProcessItemTriggers(effectiveDt);
+        }
+
+        if (appState_ == Brotato3D::EAppState::Playing && bossVictoryDelayMs_ <= 0.0f)
+        {
+            waveSystem_.Update(deltaSeconds, [this](const std::string& enemyId, glm::vec3 pos)
+            {
+                SpawnEnemy(enemyId, pos);
+            });
+        }
+        else if (appState_ == Brotato3D::EAppState::Playing)
+        {
+            waveSystem_.Update(0.0, [this](const std::string& enemyId, glm::vec3 pos)
+            {
+                SpawnEnemy(enemyId, pos);
+            });
+        }
         if (waveSystem_.ConsumeWaveEnded())
         {
             ClearAliveEnemies(false);
+            ClearAllDebris(false);
         }
         if (waveSystem_.ConsumeIntermissionStarted())
         {
@@ -186,8 +219,8 @@ void Brotato3DGameInstance::OnTick(double deltaSeconds)
         }
     }
 
-    UpdateImpactDebris(deltaSeconds);
-    UpdateCombatEffects(deltaSeconds);
+    UpdateDebris(effectiveDt);
+    UpdateCombatEffects(effectiveDt);
     UpdateFloatingTexts(deltaSeconds);
     engine_->GetScene().MarkTransformDirty();
 }
@@ -197,7 +230,7 @@ void Brotato3DGameInstance::OnDestroy()
     enemies_.clear();
     projectilePool_.clear();
     enemyProjectilePool_.clear();
-    impactDebrisPool_.clear();
+    debrisPool_.clear();
     pickupPool_.clear();
     floatingTexts_.clear();
     muzzleFlashes_.clear();
@@ -205,6 +238,8 @@ void Brotato3DGameInstance::OnDestroy()
     laserBeams_.clear();
     playerLightNode_.reset();
     tempLightPool_.clear();
+    enemyKinematicBodyPools_.clear();
+    hitDebrisMaterialIds_.clear();
 }
 
 const Brotato3D::FItemDef* Brotato3DGameInstance::GetItemDef(const std::string& itemId) const
@@ -367,6 +402,15 @@ bool Brotato3DGameInstance::OnRenderUI()
     else if (appState_ == Brotato3D::EAppState::Result)
     {
         Brotato3D::RenderResultModal(*this);
+    }
+    if (bossKillFlashMs_ > 0.0f)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        bossKillFlashMs_ = std::max(0.0f, bossKillFlashMs_ - io.DeltaTime * 1000.0f);
+        const float alpha = std::clamp(bossKillFlashMs_ / 100.0f, 0.0f, 1.0f);
+        ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(0.0f, 0.0f),
+                                                      ImVec2(io.DisplaySize.x, io.DisplaySize.y),
+                                                      ImColor(1.0f, 1.0f, 1.0f, alpha));
     }
     return false;
 }

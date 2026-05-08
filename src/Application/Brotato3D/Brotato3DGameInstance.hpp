@@ -4,6 +4,7 @@
 #include "Runtime/Engine.hpp"
 #include "Brotato3DArena.hpp"
 #include "Brotato3DDataLoader.hpp"
+#include "Brotato3DDebris.hpp"
 #include "Brotato3DEnemy.hpp"
 #include "Brotato3DPickup.hpp"
 #include "Brotato3DPlayer.hpp"
@@ -156,7 +157,7 @@ private:
     void UpdateProjectiles(double deltaSeconds);
     void UpdateEnemyProjectiles(double deltaSeconds);
     void UpdatePickups(double deltaSeconds);
-    void UpdateImpactDebris(double deltaSeconds);
+    void UpdateDebris(double deltaSeconds);
     void UpdateCombatEffects(double deltaSeconds);
     void UpdateWaveBanner(double deltaSeconds);
     void UpdateFloatingTexts(double deltaSeconds);
@@ -165,8 +166,30 @@ private:
     int CalculateWeaponDamage(const Brotato3D::FWeaponDef& weaponDef, bool& outIsCrit);
     void ApplyDamageToEnemy(Brotato3D::FEnemyRuntime& enemy, int damage, bool isCrit);
     void DamagePlayer(int damage, float shakeMs, float flashMs);
-    void SpawnImpactDebris(const glm::vec3& worldPos);
+    void BuildDebrisPool(std::vector<Assets::Model>& models,
+                         std::vector<Assets::FMaterial>& materials,
+                         std::vector<std::shared_ptr<Assets::Node>>& nodes);
+    void BuildKinematicCollisionBodies();
+    void SpawnDebris(Brotato3D::EDebrisKind kind,
+                     const glm::vec3& worldPos,
+                     const glm::vec3& impulseDir,
+                     float speed,
+                     uint32_t materialId,
+                     int count,
+                     float angleConeRad,
+                     bool pickable = false,
+                     int materialValuePerSlot = 0,
+                     float lifetimeMs = 0.0f);
+    void ClearAllDebris(bool keepPickable);
+    void SpawnImpactDebris(const glm::vec3& worldPos,
+                           const glm::vec3& projectileVelocity,
+                           const glm::vec3& weaponColor,
+                           const glm::vec3& enemyColor,
+                           bool isCrit,
+                           const std::string& enemyName);
     void SpawnDeathDebris(const Brotato3D::FEnemyRuntime& enemy);
+    void SpawnPlayerDamageDebris(int damage);
+    uint32_t EnsureHitDebrisMaterial(const glm::vec3& weaponColor, const glm::vec3& enemyColor);
     void PushMuzzleFlash(const glm::vec3& worldPos, const glm::vec3& color);
     void SpawnTempLight(const glm::vec3& worldPos, const glm::vec3& color, float radiusMeters, float durationMs);
     void UpdateLightArea(int lightIndex, const glm::vec3& worldPos, float radiusMeters, float intensityScale);
@@ -212,6 +235,10 @@ private:
     void ApplyLightingSettings();
     void ClearMovementInput();
     glm::vec3 RandomDebugSpawnPosition();
+    NextBodyID AcquireEnemyKinematicBody(const std::string& enemyId) const;
+    void SyncPlayerKinematicBody(double deltaSeconds);
+    void SyncEnemyKinematicBody(Brotato3D::FEnemyRuntime& enemy, double deltaSeconds);
+    void DeactivateEnemyKinematicBody(Brotato3D::FEnemyRuntime& enemy);
 
     NextEngine* engine_ = nullptr;
     Brotato3D::EAppState appState_ = Brotato3D::EAppState::MainMenu;
@@ -234,7 +261,7 @@ private:
     std::vector<Brotato3D::FWeaponRuntime> equippedWeapons_;
     std::vector<Brotato3D::FProjectileRuntime> projectilePool_;
     std::vector<Brotato3D::FEnemyProjectileRuntime> enemyProjectilePool_;
-    std::vector<Brotato3D::FImpactDebrisRuntime> impactDebrisPool_;
+    std::vector<Brotato3D::FDebrisRuntime> debrisPool_;
     std::vector<Brotato3D::FPickupRuntime> pickupPool_;
     std::vector<Brotato3D::FFloatingText> floatingTexts_;
     std::vector<Brotato3D::FMuzzleFlash> muzzleFlashes_;
@@ -263,12 +290,19 @@ private:
     int playerLightIndex_ = -1;
     std::shared_ptr<Assets::Node> playerLightNode_;
     std::vector<FTempLightRuntime> tempLightPool_;
-    uint32_t impactDebrisModelId_ = 0;
-    uint32_t impactDebrisMaterialId_ = 0;
+    uint32_t debrisTinyModelId_ = 0;
+    uint32_t debrisChunkModelId_ = 0;
+    uint32_t debrisBossChunkModelId_ = 0;
+    uint32_t debrisFallbackTinyMatId_ = 0;
+    uint32_t debrisFallbackChunkMatId_ = 0;
+    uint32_t materialDebrisMatId_ = 0;
+    uint32_t playerDebrisMatId_ = 0;
+    uint64_t debrisTickCounter_ = 0;
+    NextBodyID playerKinematicBodyId_{};
+    std::map<std::string, std::vector<NextBodyID>> enemyKinematicBodyPools_;
+    std::unordered_map<uint64_t, uint32_t> hitDebrisMaterialIds_;
     uint32_t pickupXpModelId_ = 0;
     uint32_t pickupXpMaterialId_ = 0;
-    uint32_t pickupMaterialModelId_ = 0;
-    uint32_t pickupMaterialMaterialId_ = 0;
     std::map<std::string, uint32_t> characterMaterialIds_;
     bool keyW_ = false;
     bool keyA_ = false;
@@ -281,6 +315,10 @@ private:
     float screenShakeIntensity_ = 0.0f;
     float damageFlashMs_ = 0.0f;
     float hitStopMs_ = 0.0f;
+    float globalTimeScale_ = 1.0f;
+    float bossKillFlashMs_ = 0.0f;
+    float timeScaleRecoveryMs_ = 0.0f;
+    float bossVictoryDelayMs_ = 0.0f;
     float waveBannerMs_ = 0.0f;
     std::string waveBannerText_;
     float runElapsedSec_ = 0.0f;

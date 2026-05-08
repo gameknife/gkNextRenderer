@@ -2,6 +2,7 @@
 
 #include "Common/CoreMinimal.hpp"
 #include "Brotato3DDataLoader.hpp"
+#include "Runtime/Subsystems/NextPhysicsTypes.h"
 
 namespace Assets
 {
@@ -35,6 +36,7 @@ namespace Brotato3D
         uint32_t hitFlashMaterialId = 0;
         uint32_t warningMaterialId = 0;
         uint32_t phase2MaterialId = 0;
+        NextBodyID kinematicBodyId{};
         std::shared_ptr<Assets::Node> node;
     };
 }
