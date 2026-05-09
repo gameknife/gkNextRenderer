@@ -11,126 +11,115 @@ jobs:
     outputs:
       uploadurl: ${{ steps.create_release.outputs.upload_url }}
     steps:
-    - uses: actions/checkout@v4
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        draft: false
-        prerelease: false
+      - uses: actions/checkout@v4
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
   android-build:
     needs: make-release
     runs-on: ubuntu-22.04
-    env: 
+    env:
       SDK_VERSION: 1.4.313.0
     steps:
-    - uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '21'
-    - uses: actions/checkout@v4
-    - name: Compile vcpkg dependencies
-      run: ./scripts/vcpkg.sh
-    - name: Install Vulkan SDK
-      run: |
-        wget -qO - http://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
-        sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-${SDK_VERSION}-jammy.list http://packages.lunarg.com/vulkan/${SDK_VERSION}/lunarg-vulkan-${SDK_VERSION}-jammy.list
-        sudo apt-get update
-        sudo apt-get install vulkan-sdk
-    - name: Compile gkNextRenderer
-      run: |
-        echo "BUILDVER(${{ github.ref_name }})" > src/build.version
-        ./build.sh --android
-    - name: Create zip file
-      run: |
-        zip -r gknextrenderer_android_${{ github.ref_name }}.zip ./android/app/build/outputs/apk/release/app-release.apk ./deploy_android.bat
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.make-release.outputs.uploadurl }}
-        asset_path: ./gknextrenderer_android_${{ github.ref_name }}.zip
-        asset_name: gknextrenderer_android_${{ github.ref_name }}.zip
-        asset_content_type: application/zip
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Install Vulkan SDK
+        run: |
+          wget -qO - http://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-${SDK_VERSION}-jammy.list http://packages.lunarg.com/vulkan/${SDK_VERSION}/lunarg-vulkan-${SDK_VERSION}-jammy.list
+          sudo apt-get update
+          sudo apt-get install vulkan-sdk
+      - name: Build Android
+        run: |
+          echo "BUILDVER(${{ github.ref_name }})" > src/build.version
+          ./gnb.sh setup --vcpkg-only
+          ./gnb.sh android release
+          zip -r gknextrenderer_android_${{ github.ref_name }}.zip ./android/app/build/outputs/apk/release/app-release.apk ./deploy_android.bat
+      - uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.make-release.outputs.uploadurl }}
+          asset_path: ./gknextrenderer_android_${{ github.ref_name }}.zip
+          asset_name: gknextrenderer_android_${{ github.ref_name }}.zip
+          asset_content_type: application/zip
+
   linux-build:
     needs: make-release
     runs-on: ubuntu-22.04
-    env: 
+    env:
       SDK_VERSION: 1.4.313.0
     steps:
-    - uses: actions/checkout@v4
-    - name: Install Ubuntu dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install autoconf autoconf-archive automake libtool curl unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev ninja-build
-    - name: Install Vulkan SDK
-      run: |
-        wget -qO - http://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
-        sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-${SDK_VERSION}-jammy.list http://packages.lunarg.com/vulkan/${SDK_VERSION}/lunarg-vulkan-${SDK_VERSION}-jammy.list
-        sudo apt-get update
-        sudo apt-get install vulkan-sdk
-    - name: Compile vcpkg dependencies
-      run: |
-        echo "BUILDVER(${{ github.ref_name }})" > src/build.version
-        ./scripts/vcpkg.sh
-    - name: Compile gkNextRenderer
-      run: ./build.sh --preset default-linux
-    - name: Create zip file
-      run: |
-        cd out/build/default-linux
-        zip -r gknextrenderer_linux64_${{ github.ref_name }}.zip ./bin ./assets/locale ./assets/fonts ./assets/models ./assets/shaders ./assets/textures
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.make-release.outputs.uploadurl }}
-        asset_path: ./out/build/default-linux/gknextrenderer_linux64_${{ github.ref_name }}.zip
-        asset_name: gknextrenderer_linux64_${{ github.ref_name }}.zip
-        asset_content_type: application/zip
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install autoconf autoconf-archive automake libtool curl unzip tar libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev ninja-build
+          wget -qO - http://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-${SDK_VERSION}-jammy.list http://packages.lunarg.com/vulkan/${SDK_VERSION}/lunarg-vulkan-${SDK_VERSION}-jammy.list
+          sudo apt-get update
+          sudo apt-get install vulkan-sdk
+      - name: Build and package
+        run: |
+          echo "BUILDVER(${{ github.ref_name }})" > src/build.version
+          ./gnb.sh setup
+          ./gnb.sh build
+          ./gnb.sh package linux --version ${{ github.ref_name }}
+      - uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.make-release.outputs.uploadurl }}
+          asset_path: ./gknextrenderer_linux64_${{ github.ref_name }}.zip
+          asset_name: gknextrenderer_linux64_${{ github.ref_name }}.zip
+          asset_content_type: application/zip
+
   windows-build:
     needs: make-release
     runs-on: windows-latest
     env:
       SDK_VERSION: 1.4.313.1
     steps:
-    - uses: actions/checkout@v4
-    - name: Install zip
-      run: choco install zip
-    - name: Download Vulkan SDK
-      run: Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/${env:SDK_VERSION}/windows/vulkan_sdk.exe?Human=true" -OutFile vulkan_sdk.exe -v
-    - name: Install Vulkan SDK
-      run: .\vulkan_sdk.exe --accept-licenses --default-answer --confirm-command install
-      shell: cmd
-    - name: Compile vcpkg dependencies
-      run: |
-        set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
-        scripts\vcpkg.bat
-      shell: cmd
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2
-    - name: Compile gkNextRenderer
-      run: |
-        set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
-        echo BUILDVER(${{ github.ref_name }}) > src/build.version
-        build.bat --preset default-windows
-      shell: cmd
-    - name: Create zip file
-      run: |
-        cd out/build/default-windows
-        Copy-Item -Path ..\..\..\package\*.bat -Destination .
-        zip -r gknextrenderer_win64_${{ github.ref_name }}.zip ./bin ./assets/locale ./assets/fonts ./assets/models ./assets/shaders ./assets/textures ./*.bat
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.make-release.outputs.uploadurl }}
-        asset_path: ./out/build/default-windows/gknextrenderer_win64_${{ github.ref_name }}.zip
-        asset_name: gknextrenderer_win64_${{ github.ref_name }}.zip
-        asset_content_type: application/zip
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Download Vulkan SDK
+        run: Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/${env:SDK_VERSION}/windows/vulkan_sdk.exe?Human=true" -OutFile vulkan_sdk.exe -v
+      - name: Install Vulkan SDK
+        run: .\vulkan_sdk.exe --accept-licenses --default-answer --confirm-command install
+        shell: cmd
+      - uses: microsoft/setup-msbuild@v2
+      - name: Build and package
+        run: |
+          set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
+          echo BUILDVER(${{ github.ref_name }}) > src/build.version
+          .\gnb.bat setup
+          .\gnb.bat build
+          .\gnb.bat package windows --version ${{ github.ref_name }}
+        shell: cmd
+      - uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.make-release.outputs.uploadurl }}
+          asset_path: ./gkNextRenderer-windows.zip
+          asset_name: gknextrenderer_win64_${{ github.ref_name }}.zip
+          asset_content_type: application/zip

@@ -5,7 +5,8 @@
         "minor": 20,
         "patch": 0
     },
-    "configurePresets": [        {
+    "configurePresets": [
+        {
             "name": "base",
             "hidden": true,
             "binaryDir": "${sourceDir}/out/build/${presetName}",
@@ -17,58 +18,14 @@
             "cacheVariables": {
                 "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/.vcpkg/scripts/buildsystems/vcpkg.cmake",
                 "VCPKG_MANIFEST_MODE": "ON",
-                "VCPKG_INSTALL_OPTIONS": "--no-print-usage"
-            }
-        },
-        {
-            "name": "features-minimal",
-            "hidden": true,
-            "cacheVariables": {
-                "ENABLE_AVIF": "OFF",
-                "ENABLE_DLSS": "OFF",
-                "ENABLE_KTX2": "ON",
-                "ENABLE_PHYSIC": "OFF",
-                "ENABLE_AUDIO": "OFF",
-                "ENABLE_OIDN": "OFF",
-                "ENABLE_QUICKJS": "OFF",
-                "ENABLE_WHISPERCPP": "OFF",
+                "VCPKG_INSTALL_OPTIONS": "--no-print-usage",
                 "ENABLE_UNITY_BUILD": "ON"
             }
         },
         {
-            "name": "features-default",
-            "hidden": true,
-            "cacheVariables": {
-                "ENABLE_AVIF": "OFF",
-                "ENABLE_DLSS": "OFF",
-                "ENABLE_KTX2": "ON",
-                "ENABLE_PHYSIC": "ON",
-                "ENABLE_AUDIO": "ON",
-                "ENABLE_OIDN": "OFF",
-                "ENABLE_QUICKJS": "OFF",
-                "ENABLE_WHISPERCPP": "ON",
-                "ENABLE_UNITY_BUILD": "ON"
-            }
-        },
-        {
-            "name": "features-full",
-            "hidden": true,
-            "cacheVariables": {
-                "ENABLE_AVIF": "OFF",
-                "ENABLE_DLSS": "ON",
-                "ENABLE_KTX2": "ON",
-                "ENABLE_PHYSIC": "ON",
-                "ENABLE_AUDIO": "ON",
-                "ENABLE_OIDN": "OFF",
-                "ENABLE_QUICKJS": "ON",
-                "ENABLE_WHISPERCPP": "ON",
-                "ENABLE_UNITY_BUILD": "ON"
-            }
-        },
-        {
-            "name": "windows-base",
-            "hidden": true,
+            "name": "windows",
             "inherits": "base",
+            "displayName": "Windows",
             "generator": "Visual Studio 17 2022",
             "architecture": "x64",
             "condition": {
@@ -82,27 +39,9 @@
             }
         },
         {
-            "name": "default-windows",
-            "inherits": ["windows-base", "features-default"],
-            "displayName": "Default Windows",
-            "description": "Default Windows configuration for development"
-        },
-        {
-            "name": "minimal-windows",
-            "inherits": ["windows-base", "features-minimal"],
-            "displayName": "Minimal Windows",
-            "description": "Minimal Windows configuration for development"
-        },
-        {
-            "name": "full-windows",
-            "inherits": ["windows-base", "features-full"],
-            "displayName": "Full Windows",
-            "description": "Full-featured Windows configuration for development"
-        },
-        {
-            "name": "linux-base",
-            "hidden": true,
+            "name": "linux",
             "inherits": "base",
+            "displayName": "Linux",
             "generator": "Ninja",
             "condition": {
                 "type": "equals",
@@ -115,24 +54,9 @@
             }
         },
         {
-            "name": "default-linux",
-            "inherits": ["linux-base", "features-default"],
-            "displayName": "Default Linux Release"
-        },
-        {
-            "name": "minimal-linux",
-            "inherits": ["linux-base", "features-minimal"],
-            "displayName": "Minimal Linux Release"
-        },
-        {
-            "name": "full-linux",
-            "inherits": ["linux-base", "features-full"],
-            "displayName": "Full Linux Release"
-        },
-        {
-            "name": "macos-base",
-            "hidden": true,
+            "name": "macos-arm64",
             "inherits": "base",
+            "displayName": "macOS ARM64",
             "generator": "Ninja",
             "condition": {
                 "type": "equals",
@@ -140,69 +64,14 @@
                 "rhs": "Darwin"
             },
             "cacheVariables": {
+                "VCPKG_TARGET_TRIPLET": "arm64-osx",
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo"
             }
         },
         {
-            "name": "mingw-base",
-            "hidden": true,
+            "name": "ios",
             "inherits": "base",
-            "generator": "Ninja",
-            "condition": {
-                "type": "equals",
-                "lhs": "${hostSystemName}",
-                "rhs": "Windows"
-            },
-            "cacheVariables": {
-                "VCPKG_TARGET_TRIPLET": "x64-mingw-static",
-                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
-            }
-        },
-        {
-            "name": "default-mingw",
-            "inherits": ["mingw-base", "features-default"],
-            "displayName": "Default MinGW",
-            "description": "Default MinGW configuration for development"
-        },
-        {
-            "name": "minimal-mingw",
-            "inherits": ["mingw-base", "features-minimal"],
-            "displayName": "Minimal MinGW",
-            "description": "Minimal MinGW configuration for development"
-        },
-        {
-            "name": "full-mingw",
-            "inherits": ["mingw-base", "features-full"],
-            "displayName": "Full MinGW",
-            "description": "Full MinGW configuration for development"
-        },
-        {
-            "name": "macos-arm64-base",
-            "inherits": "macos-base",
-            "hidden": true,
-            "cacheVariables": {
-                "VCPKG_TARGET_TRIPLET": "arm64-osx"
-            }
-        },
-        {
-            "name": "default-macos-arm64",
-            "inherits": ["macos-arm64-base", "features-default"],
-            "displayName": "Default macOS ARM64"
-        },
-        {
-            "name": "minimal-macos-arm64",
-            "inherits": ["macos-arm64-base", "features-minimal"],
-            "displayName": "Minimal macOS ARM64"
-        },
-        {
-            "name": "full-macos-arm64",
-            "inherits": ["macos-arm64-base", "features-full"],
-            "displayName": "Full macOS ARM64"
-        },
-        {
-            "name": "ios-base",
-            "hidden": true,
-            "inherits": "base",
+            "displayName": "iOS",
             "generator": "Xcode",
             "condition": {
                 "type": "equals",
@@ -212,98 +81,30 @@
             "cacheVariables": {
                 "CMAKE_SYSTEM_NAME": "iOS",
                 "VCPKG_TARGET_TRIPLET": "arm64-ios",
-                "IOS_SKIP_CODE_SIGN": "ON"
+                "IOS_SKIP_CODE_SIGN": "ON",
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
             }
-        },
-        {
-            "name": "default-ios",
-            "inherits": ["ios-base", "features-default"],
-            "displayName": "Default iOS"
-        },
-        {
-            "name": "minimal-ios",
-            "inherits": ["ios-base", "features-minimal"],
-            "displayName": "Minimal iOS"
-        },
-        {
-            "name": "full-ios",
-            "inherits": ["ios-base", "features-full"],
-            "displayName": "Full iOS"
         }
     ],
-    "buildPresets": [{
-            "name": "default-windows",
-            "configurePreset": "default-windows",
+    "buildPresets": [
+        {
+            "name": "windows",
+            "configurePreset": "windows",
             "configuration": "RelWithDebInfo"
         },
         {
-            "name": "minimal-windows",
-            "configurePreset": "minimal-windows",
+            "name": "linux",
+            "configurePreset": "linux",
             "configuration": "RelWithDebInfo"
         },
         {
-            "name": "full-windows",
-            "configurePreset": "full-windows",
+            "name": "macos-arm64",
+            "configurePreset": "macos-arm64",
             "configuration": "RelWithDebInfo"
         },
         {
-            "name": "default-linux",
-            "configurePreset": "default-linux",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "minimal-linux",
-            "configurePreset": "minimal-linux",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "full-linux",
-            "configurePreset": "full-linux",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "default-macos-arm64",
-            "configurePreset": "default-macos-arm64",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "minimal-macos-arm64",
-            "configurePreset": "minimal-macos-arm64",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "full-macos-arm64",
-            "configurePreset": "full-macos-arm64",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "default-ios",
-            "configurePreset": "default-ios",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "minimal-ios",
-            "configurePreset": "minimal-ios",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "full-ios",
-            "configurePreset": "full-ios",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "default-mingw",
-            "configurePreset": "default-mingw",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "minimal-mingw",
-            "configurePreset": "minimal-mingw",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "full-mingw",
-            "configurePreset": "full-mingw",
+            "name": "ios",
+            "configurePreset": "ios",
             "configuration": "RelWithDebInfo"
         }
     ]

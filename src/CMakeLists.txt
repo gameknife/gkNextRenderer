@@ -51,9 +51,7 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_FlappyRng.cpp
 )
 
-if (ENABLE_PHYSIC)
-	list(APPEND UNIT_TEST_SOURCES Tests/Test_PhysicsComponent.cpp)
-endif()
+list(APPEND UNIT_TEST_SOURCES Tests/Test_PhysicsComponent.cpp)
 
 
 # libray and app
@@ -154,10 +152,8 @@ add_executable(Packager
 	Application/Packager/PackagerMain.cpp
 )
 
-if( NOT MINGW )
 find_package(Catch2 3 REQUIRED)
 add_executable(gkNextUnitTests ${UNIT_TEST_SOURCES})
-endif()
 
 endif()
 
@@ -204,24 +200,6 @@ set(AllTargets
 gkNextEngine
 NextGameplay
 gkNextRenderer
-)
-elseif( MINGW )
-set(AllTargets
-gkNextEngine
-NextGameplay
-gkNextRenderer
-gkNextStillBenchmark
-gkNextMotionBenchmark
-	gkNextVisualTest
-	gkNextEditor
-	Packager
-	MagicaLego
-	KongLie3D
-	Brotato3D
-	FlappyCpp
-	FlappyJs
-	BrickPlayer
-	CharacterDemo
 )
 else()
 set(AllTargets
@@ -352,10 +330,6 @@ foreach(target IN LISTS AllTargets)
 		target_link_libraries(${target} PRIVATE android SDL3::SDL3 spdlog::spdlog xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp ${Vulkan_LIBRARIES} ${extra_libs})
 	endif()
 
-	if ( MINGW )
-		target_link_libraries(${target} PRIVATE gdi32)
-	endif()
-
 	if ( WITH_AVIF )
 		target_compile_definitions(${target} PUBLIC WITH_AVIF=1)
 		target_compile_definitions(${target} PUBLIC AVIF_CODEC_AOM=SYSTEM)
@@ -366,13 +340,6 @@ foreach(target IN LISTS AllTargets)
 		target_compile_definitions(${target} PUBLIC WITH_SUPERLUMINAL=1)
 		target_include_directories(${target} SYSTEM PRIVATE ${SuperluminalAPI_INCLUDE_DIRS})
 		target_link_libraries(${target} PRIVATE SuperluminalAPI)
-	endif()
-
-	if ( WITH_OIDN )
-		target_compile_definitions(${target} PUBLIC WITH_OIDN=1)
-		target_include_directories(${target} PRIVATE ${OIDN_INCLUDE_DIR})
-		target_link_directories(${target} PRIVATE ${OIDN_LIB_DIR})
-		target_link_libraries(${target} PRIVATE OpenImageDenoise )
 	endif()
 
 	if ( WITH_PHYSIC )
@@ -420,7 +387,7 @@ foreach(target IN LISTS AllTargets)
 	endif()
 
 	# specific for targets
-	if ( (UNIX OR MINGW) AND NOT APPLE AND NOT ANDROID)
+	if ( UNIX AND NOT APPLE AND NOT ANDROID)
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -mavx")
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mavx")
 	endif()
@@ -431,7 +398,7 @@ foreach(target IN LISTS AllTargets)
 		if (EXISTS ${FFMPEG_EXE_PATH})
 			file(COPY ${FFMPEG_EXE_PATH} DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 		else()
-			message(STATUS "ffmpeg.exe not found at ${FFMPEG_EXE_PATH}; run scripts/fetch-paks.bat --ffmpeg if you need MagicaLego video capture.")
+			message(STATUS "ffmpeg.exe not found at ${FFMPEG_EXE_PATH}; run `gnb paks fetch ffmpeg` if you need MagicaLego video capture.")
 		endif()
 	endif()
 	endif()
@@ -442,10 +409,6 @@ foreach(target IN LISTS AllTargets)
 		file(COPY ${SL_BINS} DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 	endif()
 
-	if ( WITH_OIDN )
-		file(GLOB OIDN_BINS "${OIDN_BIN_DIR}/*")
-		file(COPY ${OIDN_BINS} DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-	endif()
 	endif()
 
 	if ( ${target} STREQUAL gkNextEditor )
@@ -465,7 +428,7 @@ target_link_libraries(CharacterDemo PRIVATE NextGameplay)
 endif()
 
 # Test Target
-if ( NOT ANDROID AND NOT IOS AND NOT MINGW )
+if ( NOT ANDROID AND NOT IOS )
 target_link_libraries(gkNextUnitTests PRIVATE NextGameplay gkNextEngine Catch2::Catch2WithMain gk_project_options)
 set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
 endif()

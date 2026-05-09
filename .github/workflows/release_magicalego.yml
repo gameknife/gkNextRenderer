@@ -11,50 +11,48 @@ jobs:
     outputs:
       uploadurl: ${{ steps.create_release.outputs.upload_url }}
     steps:
-    - uses: actions/checkout@v4
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        draft: false
-        prerelease: false
+      - uses: actions/checkout@v4
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
   windows-build:
     needs: make-release
     runs-on: windows-latest
     env:
       SDK_VERSION: 1.4.313.1
     steps:
-    - uses: actions/checkout@v4
-    - name: Install zip
-      run: choco install zip
-    - name: Download Vulkan SDK
-      run: Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/${env:SDK_VERSION}/windows/vulkan_sdk.exe?Human=true" -OutFile vulkan_sdk.exe -v
-    - name: Install Vulkan SDK
-      run: .\vulkan_sdk.exe --accept-licenses --default-answer --confirm-command install
-      shell: cmd
-    - name: Compile vcpkg dependencies
-      run: |
-        set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
-        scripts\vcpkg.bat
-      shell: cmd
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2
-    - name: Compile MagicaLego
-      run: |
-        set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
-        echo BUILDVER(${{ github.ref_name }}) > src/build.version
-        scripts\package.bat magicalego ${{ github.ref_name }}
-      shell: cmd
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.make-release.outputs.uploadurl }}
-        asset_path: ./MagicaLego_win64_${{ github.ref_name }}.zip
-        asset_name: MagicaLego_win64_${{ github.ref_name }}.zip
-        asset_content_type: application/zip
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Download Vulkan SDK
+        run: Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/${env:SDK_VERSION}/windows/vulkan_sdk.exe?Human=true" -OutFile vulkan_sdk.exe -v
+      - name: Install Vulkan SDK
+        run: .\vulkan_sdk.exe --accept-licenses --default-answer --confirm-command install
+        shell: cmd
+      - uses: microsoft/setup-msbuild@v2
+      - name: Build and package
+        run: |
+          set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
+          echo BUILDVER(${{ github.ref_name }}) > src/build.version
+          .\gnb.bat setup
+          .\gnb.bat build MagicaLego
+          .\gnb.bat package magicalego --version ${{ github.ref_name }}
+        shell: cmd
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.make-release.outputs.uploadurl }}
+          asset_path: ./MagicaLego_win64_${{ github.ref_name }}.zip
+          asset_name: MagicaLego_win64_${{ github.ref_name }}.zip
+          asset_content_type: application/zip

@@ -132,9 +132,9 @@ The project uses CMake + Ninja, with dependencies managed through vcpkg. You wil
 
 ### General Notes
 
-- Desktop binaries can now be launched from any working directory, so you usually no longer need to `cd` into `out/build/<preset>/bin`
-- If you are unsure which preset is available, run `cmake --list-presets=configure`
-- Common desktop presets: `default-windows`, `default-linux`, `default-macos-arm64`
+- Desktop binaries are now built and launched through `gnb`, so you usually no longer need to `cd` into `out/build/<platform>/bin`
+- First run `./gnb setup` (Windows: `gnb.bat setup`), then use `./gnb build` / `./gnb run`
+- CMake presets are now: `windows`, `linux`, `macos-arm64`, `ios`
 
 ### Platform Builds
 
@@ -149,19 +149,9 @@ The project uses CMake + Ninja, with dependencies managed through vcpkg. You wil
 - Enable "Use Unicode UTF-8 for worldwide language support"
 
 ```bat
-.\build.bat --preset default-windows
-.\run.bat --preset default-windows
-```
-
-</details>
-
-<details>
-<summary><b>Windows (MSYS2 MinGW)</b></summary>
-
-```shell
-pacman -S --needed git mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake mingw-w64-x86_64-toolchain
-./build.sh --preset default-mingw
-./run.sh --preset default-mingw
+gnb.bat setup
+gnb.bat build
+gnb.bat run gkNextRenderer
 ```
 
 </details>
@@ -170,12 +160,13 @@ pacman -S --needed git mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake mingw-w64-x
 <summary><b>Linux (Ubuntu)</b></summary>
 
 ```shell
-sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev autoconf autoconf-archive automake libtool python3.12-venv
-./build.sh --preset default-linux
-./run.sh --preset default-linux
+sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev autoconf autoconf-archive automake libtool python3.12-venv
+./gnb.sh setup
+./gnb.sh build
+./gnb.sh run gkNextRenderer
 ```
 
-`build.sh` now performs an early Linux desktop dependency check and will stop with an explicit hint if `xrandr`, `wayland-protocols`, or `xkbcommon` are missing.
+`gnb` performs an early Linux desktop dependency check and will stop with an explicit hint if `xrandr`, `wayland-protocols`, or `xkbcommon` are missing.
 
 </details>
 
@@ -184,14 +175,14 @@ sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev 
 
 ```shell
 sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxrandr wayland-protocols libxkbcommon
-./build.sh --preset full-linux --reconfigure
-./run.sh --preset full-linux --target gkNextRenderer
+./gnb.sh setup
+./gnb.sh build --reconfigure
+./gnb.sh run gkNextRenderer
 ```
 
 Notes:
 
-- `full-linux` is the recommended verification preset for first deployment on Steam Deck
-- if `slangc` is not installed yet, `build.sh` will automatically fetch the project-managed Slang toolchain into `external/`
+- if `slangc` is not installed yet, `gnb setup` will automatically fetch the project-managed Slang toolchain into `external/`
 - if a GitHub archive download fails during vcpkg setup, rerun the same build command once before doing deeper troubleshooting
 - deployment notes from a real Steam Deck setup are available in [docs/steamdeck-deployment-notes.md](docs/steamdeck-deployment-notes.md)
 
@@ -202,8 +193,9 @@ Notes:
 
 ```shell
 brew install molten-vk glslang ninja
-./build.sh --preset default-macos-arm64
-./run.sh --preset default-macos-arm64
+./gnb.sh setup
+./gnb.sh build
+./gnb.sh run gkNextRenderer
 ```
 
 </details>
@@ -216,8 +208,8 @@ brew install molten-vk glslang ninja
 ```bat
 set ANDROID_HOME=C:\Android\Sdk
 set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\27.0.12077973
-build.bat --android
-run.bat --preset android
+gnb.bat setup --vcpkg-only
+gnb.bat android
 ```
 
 </details>
@@ -226,16 +218,16 @@ run.bat --preset android
 
 ```shell
 # Main renderer
-./run.sh --preset default-macos-arm64 --target gkNextRenderer
+./gnb.sh run gkNextRenderer
 
 # Editor
-./run.sh --preset default-macos-arm64 --target gkNextEditor
+./gnb.sh run gkNextEditor
 
 # BrickPlayer (digital LEGO / LDraw building prototype)
-./run.sh --preset default-macos-arm64 --target BrickPlayer
+./gnb.sh run BrickPlayer
 
 # CharacterDemo (character control / AI / navigation experiment)
-./run.sh --preset default-macos-arm64 --target CharacterDemo
+./gnb.sh run CharacterDemo
 ```
 
 ### Optional Assets
@@ -244,21 +236,21 @@ Some larger binary assets are not committed to the repo. Fetch them as needed:
 
 | Selector | Contents | Lands at | If missing |
 |------|------|------|------|
-| `--ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer loses its LDraw parts library |
-| `--optional` | `optional.pak` | `assets/paks/` | Main renderer / Editor / CharacterDemo / MagicaLego lose their scene assets |
-| `--sfx` | six mp3/wav files | `assets/sfx/` | MagicaLego / BrickPlayer go silent |
-| `--ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows MagicaLego video capture disabled |
+| `ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer loses its LDraw parts library |
+| `optional` | `optional.pak` | `assets/paks/` | Main renderer / Editor / CharacterDemo / MagicaLego lose their scene assets |
+| `sfx` | six mp3/wav files | `assets/sfx/` | MagicaLego / BrickPlayer go silent |
+| `ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows MagicaLego video capture disabled |
 
 ```bash
 # Linux / macOS / Git Bash: fetch every optional asset by default
-./scripts/fetch-paks.sh
+./gnb.sh paks fetch
 
 # Or fetch specific groups
-./scripts/fetch-paks.sh --optional --ldraw
-./scripts/fetch-paks.sh --ffmpeg --sfx
+./gnb.sh paks fetch optional ldraw
+./gnb.sh paks fetch ffmpeg sfx
 
 # Windows
-scripts\fetch-paks.bat
+gnb.bat paks fetch
 ```
 
 ## Subprojects

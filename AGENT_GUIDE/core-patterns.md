@@ -19,41 +19,30 @@
 ## ⚡ 核心命令
 
 ### 1. 依赖安装
-构建脚本会在首次运行时自动引导 vcpkg，无需手动调用。强制更新：
+`gnb build` 会在首次运行时自动引导 vcpkg，无需手动调用。强制更新：
 ```bash
-scripts\vcpkg.bat --update   # Windows
-./scripts/vcpkg.sh --update  # macOS/Linux
+gnb.bat setup --refresh   # Windows
+./gnb.sh setup --refresh  # macOS/Linux
 ```
 
 ### 2. 项目构建
 ```bash
-./build.bat --preset windows-dev   # Windows
-./build.sh --preset macos-arm64    # macOS
-./build.sh --preset linux-release  # Linux
-./build.bat --android              # Android
+gnb.bat build      # Windows
+./gnb.sh build     # macOS/Linux
+./gnb.sh android   # Android
 ```
 
-### 3. 单元测试 (关键：必须进入二进制目录)
-**注意：** 单元测试依赖相对路径加载资源或动态库，**必须**先进入二进制所在的 `bin` 目录。
-
+### 3. 单元测试
 ```bash
-# Windows
-cd out/build/windows-dev/bin && ./gkNextUnitTests.exe
-
-# macOS
-cd out/build/macos-arm64/bin && ./gkNextUnitTests
-
-# Linux
-cd out/build/linux-release/bin && ./gkNextUnitTests
+gnb.bat test
+./gnb.sh test
 ```
 
 ### 4. 快速运行主程序
 ```bash
-# Windows
-./run.bat
-
-# macOS/Linux
-./run.sh
+gnb.bat run                 # 列出可启动 application
+gnb.bat run gkNextRenderer
+./gnb.sh run gkNextRenderer
 ```
 
 ## ✅ 成功标准
