@@ -1,4 +1,4 @@
-#if WIN32 && !defined(__MINGW32__)
+#if WIN32
 #pragma warning( disable : 4005)
 #endif
 

@@ -550,13 +550,13 @@ CMake 不直接消费这个 toml；gnb 在 `setup` 阶段把外部包准备到 `
 
 ## Status
 
-- [ ] Phase 0 — 环境准备
-- [ ] Phase 1 — gnb 骨架
-- [ ] Phase 2 — setup
-- [ ] Phase 3 — build/run/test
-- [ ] Phase 4 — paks/package/移动端
-- [ ] Phase 5 — CMake 瘦身
-- [ ] Phase 6 — CI 切换
-- [ ] Phase 7 — 文档
-- [ ] Phase 8 — Legacy 收尾
+- [x] Phase 0 — 环境准备
+- [x] Phase 1 — gnb 骨架
+- [x] Phase 2 — setup
+- [x] Phase 3 — build/run/test
+- [x] Phase 4 — paks/package/移动端
+- [x] Phase 5 — CMake 瘦身
+- [x] Phase 6 — CI 切换
+- [x] Phase 7 — 文档
+- [x] Phase 8 — Legacy 收尾
 - [ ] Phase 9 — 验收 & release

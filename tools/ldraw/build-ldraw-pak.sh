@@ -39,14 +39,9 @@ resolve_path() {
 
 find_packager() {
     local candidates=(
-        "${REPO_ROOT}/out/build/full-linux/bin/Packager"
-        "${REPO_ROOT}/out/build/default-linux/bin/Packager"
-        "${REPO_ROOT}/out/build/full-macos-arm64/bin/Packager"
-        "${REPO_ROOT}/out/build/default-macos-arm64/bin/Packager"
-        "${REPO_ROOT}/out/build/full-mingw/bin/Packager.exe"
-        "${REPO_ROOT}/out/build/default-mingw/bin/Packager.exe"
-        "${REPO_ROOT}/out/build/full-windows/bin/Packager.exe"
-        "${REPO_ROOT}/out/build/default-windows/bin/Packager.exe"
+        "${REPO_ROOT}/out/build/linux/bin/Packager"
+        "${REPO_ROOT}/out/build/macos-arm64/bin/Packager"
+        "${REPO_ROOT}/out/build/windows/bin/Packager.exe"
     )
 
     local candidate
@@ -64,7 +59,7 @@ find_packager() {
         return 0
     fi
 
-    echo "Packager binary not found. Build it first, e.g. 'cmake --build --preset full-linux --target Packager'." >&2
+    echo "Packager binary not found. Build it first, e.g. './gnb.sh build Packager'." >&2
     return 1
 }
 

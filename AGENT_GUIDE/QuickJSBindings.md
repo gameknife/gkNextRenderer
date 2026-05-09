@@ -17,7 +17,7 @@ This note documents the binding path used by the Flappy parity demo. Keep it ali
 2. Register it in `ResetContextAndLoadScript()` on the `Engine` module or one of its namespace objects.
 3. Add matching declarations in `BuildTypeScriptDefinitions()`.
 4. Add a minimal call in `assets/typescript/test.ts` unless the binding is only meaningful for a dedicated host.
-5. Build with the platform `full-*` preset and start an app until the log reaches `uploaded scene [...] to gpu`.
+5. Build with `gnb build --reconfigure` and start an app until the log reaches `uploaded scene [...] to gpu`.
 
 Prefer raw `JS_NewCFunction` for object-shaped arguments, JSON values, optional arguments, or functions returning ad-hoc JS objects. Use `quickjspp` member bindings for simple C++ classes with stable signatures.
 
@@ -55,8 +55,8 @@ Do not mutate nested fields on a returned vector object, such as `node.Translati
 `FlappyCpp` and `FlappyJs` exercise the binding set with deterministic replay:
 
 ```powershell
-.\out\build\full-windows\bin\FlappyCpp.exe --flappy-replay
-.\out\build\full-windows\bin\FlappyJs.exe --flappy-replay
+.\out\build\windows\bin\FlappyCpp.exe --flappy-replay
+.\out\build\windows\bin\FlappyJs.exe --flappy-replay
 python tools\flappy\diff_traces.py
 ```
 

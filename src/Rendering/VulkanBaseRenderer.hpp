@@ -11,10 +11,6 @@
 #include <functional>
 #include <map>
 
-#if WITH_OIDN
-#include <OpenImageDenoise/oidn.hpp>
-#endif
-
 namespace StreamlineWrapper
 {
 	void LazyInit(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily, bool& outSupportDLSS, bool& outSupportDLSSRR);
@@ -194,19 +190,6 @@ namespace Vulkan
 		uint32_t currentSkinnedVertexBufferSize_{};
 		uint32_t currentSkinnedSimpleVertexBufferSize_{};
 		uint32_t currentJointMatrixBufferSize_{};
-
-#if WITH_OIDN
-		std::unique_ptr<RenderImage> rtDenoise0_;
-		std::unique_ptr<RenderImage> rtDenoise1_;
-		std::unique_ptr<RenderImage> rtAlbedo_;
-		std::unique_ptr<RenderImage> rtNormal_;
-		oidn::DeviceRef oidnDevice;
-		oidn::FilterRef oidnFilter;
-
-		void InitOIDN();
-		void SetupOIDN(const VkExtent2D& extent);
-		void ExecuteOIDN();
-#endif
 
 	private:
 		void RecreateSwapChain();

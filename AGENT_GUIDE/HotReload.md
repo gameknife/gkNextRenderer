@@ -23,7 +23,7 @@
 full preset 仍然构建普通 executable，不构建 shared engine、host 或 game plugin：
 
 ```powershell
-.\build.bat --preset full-windows --reconfigure
+gnb.bat build --reconfigure
 ```
 
 常用开关：

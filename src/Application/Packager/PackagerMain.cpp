@@ -8,17 +8,6 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
     return std::make_unique<NextGameInstanceVoid>(config, options, engine);
 }
 
-#if MINGW
-int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE hPrev, PWSTR szCmdLine, int sw)
-{
-    (void)hInst;
-    (void)hPrev;
-    (void)szCmdLine;
-    (void)sw;
-    return 0;
-}
-#endif
-
 int main(int argc, const char* argv[]) noexcept
 {
     // Runtime Main Routine

@@ -5,7 +5,7 @@
 #include "MemoryAndShader.hpp"
 #include <memory>
 
-#if WIN32 && !defined(__MINGW32__)
+#if WIN32
 #define ExtHandle HANDLE
 #else
 #define ExtHandle int

@@ -1,62 +1,54 @@
 name: Linux CI
 
-on: 
+on:
   pull_request:
-    branches:
-      - main
-      - dev
-      - 'releases/**'
+    branches: [main, dev, 'releases/**']
   push:
-    branches:
-      - main
-      - 'releases/**'
+    branches: [main, 'releases/**']
     paths:
       - '.github/workflows/**'
       - 'src/**'
       - 'assets/shaders/**'
-      - '*.sh'
-      - '*.bat'
+      - 'tools/gnb/**'
+      - 'gnb.*'
       - '**/CMakeLists.txt'
+
 jobs:
   build:
     runs-on: ubuntu-22.04
-    env: 
+    env:
       SDK_VERSION: 1.4.313
     steps:
-    - uses: actions/checkout@v4
-    - name: Install Ubuntu dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install autoconf autoconf-archive automake libtool curl unzip tar libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev ninja-build
-    - name: Install Vulkan SDK
-      run: |
-        wget -qO - http://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
-        sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-${SDK_VERSION}-jammy.list http://packages.lunarg.com/vulkan/${SDK_VERSION}/lunarg-vulkan-${SDK_VERSION}-jammy.list
-        sudo apt-get update
-        sudo apt-get install vulkan-sdk
-
-    - name: Compile vcpkg dependencies
-      run: ./scripts/vcpkg.sh
-
-    - name: Restore cached vcpkg
-      id: cache-vcpkg-restore
-      uses: actions/cache/restore@v4
-      with:
-        path: |
-          .vcpkg
-          .vcpkg_bincache
-        key: ${{ runner.os }}-desktop-bincache
-
-    - name: Compile gkNextRenderer
-      run: ./build.sh --preset default-linux
-
-    - name: Save vcpkg to cache
-      if: github.event_name != 'pull_request'
-      id: cache-vcpkg-save
-      uses: actions/cache/save@v4
-      with:
-        path: |
-          .vcpkg
-          .vcpkg_bincache
-        key: ${{ steps.cache-vcpkg-restore.outputs.cache-primary-key }}
-
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Install Ubuntu dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install autoconf autoconf-archive automake libtool curl unzip tar libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev ninja-build
+      - name: Install Vulkan SDK
+        run: |
+          wget -qO - http://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-${SDK_VERSION}-jammy.list http://packages.lunarg.com/vulkan/${SDK_VERSION}/lunarg-vulkan-${SDK_VERSION}-jammy.list
+          sudo apt-get update
+          sudo apt-get install vulkan-sdk
+      - name: Cache key
+        id: gnb
+        run: echo "key=$(./gnb.sh info --bincache-key)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        id: cache-vcpkg-restore
+        with:
+          path: |
+            .vcpkg
+            .vcpkg_bincache
+          key: ${{ steps.gnb.outputs.key }}
+      - run: ./gnb.sh setup
+      - run: ./gnb.sh build
+      - uses: actions/cache/save@v4
+        if: github.event_name != 'pull_request'
+        with:
+          path: |
+            .vcpkg
+            .vcpkg_bincache
+          key: ${{ steps.gnb.outputs.key }}

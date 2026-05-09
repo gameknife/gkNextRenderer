@@ -8,7 +8,7 @@
 #	include <dxgi1_2.h>
 #endif
 
-#if WIN32 && !defined(__MINGW32__)
+#if WIN32
 // On Windows, we need to enable some security settings to allow api interop
 // The spec states: For handles of the following types: VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT The implementation must ensure the access rights allow read and write access to the memory.
 // This class sets up the structures required for tis
@@ -105,12 +105,12 @@ DeviceMemory::DeviceMemory(
 
 	VkExportMemoryAllocateInfoKHR exportMemoryAllocateInfo{};
 	exportMemoryAllocateInfo.sType       = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO_KHR;
-#if WIN32 && !defined(__MINGW32__)
+#if WIN32
 	exportMemoryAllocateInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR;
 #else
 	exportMemoryAllocateInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
 #endif
-#if WIN32 && !defined(__MINGW32__)
+#if WIN32
 	WinSecurityAttributes            win_security_attributes;
 	VkExportMemoryWin32HandleInfoKHR export_memory_win32_handle_info{};
 	export_memory_win32_handle_info.sType       = VK_STRUCTURE_TYPE_EXPORT_MEMORY_WIN32_HANDLE_INFO_KHR;
@@ -121,7 +121,7 @@ DeviceMemory::DeviceMemory(
 #if !ANDROID
 	if(external)
 	{
-#if WIN32 && !defined(__MINGW32__)
+#if WIN32
 		exportMemoryAllocateInfo.pNext = &export_memory_win32_handle_info;
 #endif
 		allocInfo.pNext = &exportMemoryAllocateInfo;

@@ -10,7 +10,7 @@ namespace NextRenderer
         NormalizeWorkingDirectoryToExecutableDirectory();
 
         // Windows console color support
-#if WIN32 && !defined(__MINGW32__)
+#if WIN32
         HANDLE hOutput = GetStdHandle(STD_OUTPUT_HANDLE);
         DWORD dwMode;
 

@@ -205,7 +205,7 @@
 
 每次改动后至少做以下验证：
 
-1. `./build.bat --preset full-windows`
+1. `gnb.bat build --reconfigure`
 2. 运行 `CharacterDemo --load-scene CharacterPlayground.proc`
 3. 确认日志出现 `uploaded scene [CharacterPlayground.proc] to gpu`
 4. 确认没有新的 `failed to load piece` 或 `failed to parse gltf file`

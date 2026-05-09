@@ -4,9 +4,7 @@ param(
     [string[]]$Rest
 )
 
-# Backwards-compatible shim. The canonical fetcher now lives at
-# scripts/fetch-paks.ps1 and can pull every optional pak (ldraw.pak / optional.pak)
-# from the project's GitHub release. See scripts/fetch-paks.ps1 -Help.
+# Backwards-compatible shim. The canonical fetcher now lives in gnb.
 
 $ErrorActionPreference = 'Stop'
 $ScriptDir = $PSScriptRoot
@@ -21,6 +19,5 @@ if ($env:OPTIONAL_PAK_URL -and -not $env:PAKS_BASE_URL) {
     $env:PAKS_BASE_URL = $legacy
 }
 
-$Target = Join-Path $RepoRoot 'scripts\fetch-paks.ps1'
-& $Target -Optional @Rest
+& (Join-Path $RepoRoot 'gnb.bat') paks fetch optional @Rest
 exit $LASTEXITCODE

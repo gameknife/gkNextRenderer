@@ -1,66 +1,58 @@
 name: Windows CI
 
-on: 
+on:
   pull_request:
-    branches:
-      - main
-      - dev
-      - 'releases/**'
+    branches: [main, dev, 'releases/**']
   push:
-    branches:
-      - main
-      - 'releases/**'
+    branches: [main, 'releases/**']
     paths:
       - '.github/workflows/**'
       - 'src/**'
       - 'assets/shaders/**'
-      - '*.sh'
-      - '*.bat'
+      - 'tools/gnb/**'
+      - 'gnb.*'
       - '**/CMakeLists.txt'
+
 jobs:
   build:
-
     runs-on: windows-latest
     env:
       SDK_VERSION: 1.4.313.2
     steps:
-    - uses: actions/checkout@v4
-    - name: Download Vulkan SDK
-      run: Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/${env:SDK_VERSION}/windows/vulkan_sdk.exe?Human=true" -OutFile vulkan_sdk.exe -v
-    - name: Install Vulkan SDK
-      run: .\vulkan_sdk.exe --accept-licenses --default-answer --confirm-command install
-      shell: cmd
-
-    - name: Compile vcpkg dependencies
-      run: |
-        set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
-        scripts\vcpkg.bat
-      shell: cmd
-
-    - name: Restore cached vcpkg
-      id: cache-vcpkg-restore
-      uses: actions/cache/restore@v4
-      with:
-        path: |
-          .vcpkg
-          .vcpkg_bincache
-        key: ${{ runner.os }}-desktop-bincache
-
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2
-
-    - name: Compile gkNextRenderer
-      run: |
-        set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
-        build.bat --preset default-windows
-      shell: cmd
-
-    - name: Save vcpkg to cache
-      if: github.event_name != 'pull_request'
-      id: cache-vcpkg-save
-      uses: actions/cache/save@v4
-      with:
-        path: |
-          .vcpkg
-          .vcpkg_bincache
-        key: ${{ steps.cache-vcpkg-restore.outputs.cache-primary-key }}
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Download Vulkan SDK
+        run: Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/${env:SDK_VERSION}/windows/vulkan_sdk.exe?Human=true" -OutFile vulkan_sdk.exe -v
+      - name: Install Vulkan SDK
+        run: .\vulkan_sdk.exe --accept-licenses --default-answer --confirm-command install
+        shell: cmd
+      - name: Cache key
+        id: gnb
+        run: echo "key=$(.\gnb.bat info --bincache-key)" >> $env:GITHUB_OUTPUT
+      - uses: actions/cache/restore@v4
+        id: cache-vcpkg-restore
+        with:
+          path: |
+            .vcpkg
+            .vcpkg_bincache
+          key: ${{ steps.gnb.outputs.key }}
+      - uses: microsoft/setup-msbuild@v2
+      - name: Setup dependencies
+        run: |
+          set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
+          .\gnb.bat setup
+        shell: cmd
+      - name: Build
+        run: |
+          set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
+          .\gnb.bat build
+        shell: cmd
+      - uses: actions/cache/save@v4
+        if: github.event_name != 'pull_request'
+        with:
+          path: |
+            .vcpkg
+            .vcpkg_bincache
+          key: ${{ steps.gnb.outputs.key }}
