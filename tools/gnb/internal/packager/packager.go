@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
 )
 
@@ -67,14 +68,14 @@ func zipPaths(repoRoot string, dst string, baseDir string, rels []string) error 
 	for _, rel := range rels {
 		path := filepath.Join(baseDir, filepath.FromSlash(rel))
 		if _, err := os.Stat(path); err != nil {
-			fmt.Printf("[gnb] package skip missing %s\n", rel)
+			console.Warn("package skip missing %s", rel)
 			continue
 		}
 		if err := addPath(zw, baseDir, path); err != nil {
 			return err
 		}
 	}
-	fmt.Printf("[gnb] package written: %s\n", dst)
+	console.Success("package written: %s", dst)
 	return nil
 }
 

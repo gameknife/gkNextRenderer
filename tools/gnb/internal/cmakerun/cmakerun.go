@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
 )
 
@@ -24,7 +25,7 @@ func Build(repoRoot string, preset string, opts BuildOptions) error {
 	buildDir := filepath.Join(repoRoot, "out", "build", preset)
 	cache := filepath.Join(buildDir, "CMakeCache.txt")
 	if opts.Clean {
-		fmt.Printf("[gnb] cleaning %s\n", buildDir)
+		console.Info("cleaning %s", buildDir)
 		if err := os.RemoveAll(buildDir); err != nil {
 			return err
 		}
@@ -47,7 +48,7 @@ func Build(repoRoot string, preset string, opts BuildOptions) error {
 			return err
 		}
 	} else {
-		fmt.Println("[gnb] configure skipped; use --reconfigure to force")
+		console.Info("configure skipped; use --reconfigure to force")
 	}
 
 	buildArgs := []string{"--build", "--preset", preset}
@@ -80,7 +81,7 @@ func DefaultPreset() (string, error) {
 }
 
 func run(dir string, printOnly bool, name string, args ...string) error {
-	fmt.Printf("[gnb] %s %s\n", name, strings.Join(args, " "))
+	console.CommandLine(strings.TrimSpace(name + " " + strings.Join(args, " ")))
 	if printOnly {
 		return nil
 	}

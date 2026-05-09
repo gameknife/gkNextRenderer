@@ -1,11 +1,12 @@
 package android
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 )
 
 func Run(repoRoot string, mode string) error {
@@ -21,7 +22,7 @@ func Run(repoRoot string, mode string) error {
 		gradle = "gradlew.bat"
 	}
 	dir := filepath.Join(repoRoot, "android")
-	fmt.Printf("[gnb] %s %s\n", gradle, task)
+	console.Command(gradle, task)
 	cmd := exec.Command(gradle, task)
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
