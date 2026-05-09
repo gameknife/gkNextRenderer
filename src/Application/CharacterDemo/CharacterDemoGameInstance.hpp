@@ -102,7 +102,6 @@ private:
     CharacterDemoAIConfig CreateAISettings() const;
     void RefreshNavGridFromSceneDirtyRegion();
 
-    NextEngine* engine_;
     NextGameplay::CharacterActor playerCharacter_;
 
     // Character visual node (box placeholder, hidden once skinned model loads)

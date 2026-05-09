@@ -30,8 +30,6 @@ public:
     void OnSceneLoaded() override;
     void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) override;
 
-    NextEngine& GetEngine() { return *engine_; }
-
     // Timeline
     void SetCurrentStep(int32_t step);
     void StepForward();
@@ -69,12 +67,12 @@ public:
     std::string GetCurrentBGMName() const;
 
     // Physics debug
-    bool IsShowPhysicsDebug() const { return engine_->GetShowFlags().DebugPhysicsOverlay; }
-    void TogglePhysicsDebug() { engine_->GetShowFlags().DebugPhysicsOverlay = !engine_->GetShowFlags().DebugPhysicsOverlay; }
-    bool IsShowGlobalPhysicsBodies() const { return engine_->GetShowFlags().DebugDraw_PhysicsBodies; }
+    bool IsShowPhysicsDebug() const { return GetEngine().GetShowFlags().DebugPhysicsOverlay; }
+    void TogglePhysicsDebug() { GetEngine().GetShowFlags().DebugPhysicsOverlay = !GetEngine().GetShowFlags().DebugPhysicsOverlay; }
+    bool IsShowGlobalPhysicsBodies() const { return GetEngine().GetShowFlags().DebugDraw_PhysicsBodies; }
     void ToggleGlobalPhysicsBodies()
     {
-        engine_->GetShowFlags().DebugDraw_PhysicsBodies = !engine_->GetShowFlags().DebugDraw_PhysicsBodies;
+        GetEngine().GetShowFlags().DebugDraw_PhysicsBodies = !GetEngine().GetShowFlags().DebugDraw_PhysicsBodies;
     }
     void DrawSnapConfirmation() const;
     bool IsShowSnapDebug() const { return showSnapDebug_; }
@@ -184,8 +182,6 @@ private:
     float GetLduToWorldScale() const;
     int32_t GetMaxTimelineStep() const;
     const BGMTrack* GetCurrentBGMTrack() const;
-
-    NextEngine* engine_;
 
     // Camera orbit
     float cameraRotX_ = 45.0f;

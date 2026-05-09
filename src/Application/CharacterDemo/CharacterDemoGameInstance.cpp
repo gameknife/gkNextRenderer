@@ -41,7 +41,6 @@ using NextGameplay::SetNodeVisibilityRecursive;
 
 CharacterDemoGameInstance::CharacterDemoGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
     : NextGameInstanceBase(config, options, engine)
-    , engine_(engine)
 {
     // config.Height = 720;
     // config.Width = 1280;
@@ -76,9 +75,9 @@ void CharacterDemoGameInstance::OnInit()
             "  scripts/fetch-paks.sh --optional      (Linux / macOS / Git Bash)\n"
             "  scripts\\fetch-paks.bat --optional    (Windows)";
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "CharacterDemo - Missing Optional Assets",
-                                 message, engine_->GetWindow().Handle());
+                                 message, GetEngine().GetWindow().Handle());
         SPDLOG_ERROR("CharacterDemo: optional asset pack missing; aborting OnInit");
-        engine_->RequestClose();
+        GetEngine().RequestClose();
         return;
     }
 
@@ -93,7 +92,7 @@ void CharacterDemoGameInstance::OnInit()
     {
         initialScene = GOption->SceneName;
     }
-    engine_->RequestLoadScene({.filename = initialScene});
+    GetEngine().RequestLoadScene({.filename = initialScene});
 }
 
 void CharacterDemoGameInstance::OnTick(double deltaSeconds)
@@ -212,12 +211,12 @@ void CharacterDemoGameInstance::OnSceneLoaded()
     settings.mass = 200.f;
 
     // Place character at scene camera position or a default spawn
-    const auto& cam = engine_->GetScene().GetRenderCamera();
+    const auto& cam = GetEngine().GetScene().GetRenderCamera();
     glm::mat4 invModelView = glm::inverse(cam.ModelView);
     glm::vec3 camPos = glm::vec3(invModelView[3]);
     settings.initialPosition = glm::vec3(camPos.x, camPos.y, camPos.z);
 
-    playerCharacter_.CreateController(engine_->GetPhysicsEngine(), settings);
+    playerCharacter_.CreateController(GetEngine().GetPhysicsEngine(), settings);
 
     // Extract yaw from camera
     glm::vec3 camForward = -glm::vec3(invModelView[2]);
@@ -239,33 +238,33 @@ void CharacterDemoGameInstance::OnSceneLoaded()
     playerSetup.runBackwardPlaySpeed = config_.Animation.RunBackwardPlaySpeed;
     playerSetup.jumpStartHoldTime = config_.Animation.JumpStartHoldTime;
     playerSetup.jumpLandHoldTime = config_.Animation.JumpLandHoldTime;
-    playerCharacter_.Initialize(engine_->GetScene(), playerSetup);
+    playerCharacter_.Initialize(GetEngine().GetScene(), playerSetup);
     playerCharacter_.SetControlIntent(glm::vec3(0.0f), GetViewForward(), 0.0f, false, false);
-    playerCharacter_.CreatePlaceholderVisual(engine_->GetScene(), "CharacterBody", capsuleModelId_, characterMatId_);
+    playerCharacter_.CreatePlaceholderVisual(GetEngine().GetScene(), "CharacterBody", capsuleModelId_, characterMatId_);
     InitAIBot();
 
     // Build navigation grid from scene BVH for AI pathfinding
     {
         const FNavGridSettings navSettings = CreateNavGridSettings();
-        navGrid_.Build(engine_->GetScene().GetCPUAccelerationStructure(), navSettings);
-        engine_->GetScene().GetCPUAccelerationStructure().ClearNavRelevantDirtyBounds();
+        navGrid_.Build(GetEngine().GetScene().GetCPUAccelerationStructure(), navSettings);
+        GetEngine().GetScene().GetCPUAccelerationStructure().ClearNavRelevantDirtyBounds();
     }
 
     SetFirstPersonMode(firstPersonMode_);
-    engine_->GetScene().MarkDirty();
+    GetEngine().GetScene().MarkDirty();
 
-    engine_->GetScene().GetEnvSettings().SkyIdx = 2;
+    GetEngine().GetScene().GetEnvSettings().SkyIdx = 2;
     
     // Load the skinned character model asynchronously
-    engine_->RequestLoadScene({.filename = "assets/models/characters/Mannequin_Medium.glb", .append = true});
+    GetEngine().RequestLoadScene({.filename = "assets/models/characters/Mannequin_Medium.glb", .append = true});
     playerCharacter_.SetModelLoadRequested(true);
-    engine_->RequestLoadScene({.filename = "assets/models/characters/Mannequin_Medium.glb", .append = true});
+    GetEngine().RequestLoadScene({.filename = "assets/models/characters/Mannequin_Medium.glb", .append = true});
     aiBot_.character.SetModelLoadRequested(true);
 
     // Capture mouse
     mouseCaptured_ = true;
     resetMouse_ = true;
-    SDL_SetWindowRelativeMouseMode(engine_->GetWindow().Handle(), true);
+    SDL_SetWindowRelativeMouseMode(GetEngine().GetWindow().Handle(), true);
 }
 
 void CharacterDemoGameInstance::OnSceneUnloaded()
@@ -277,8 +276,8 @@ void CharacterDemoGameInstance::OnSceneUnloaded()
 
 CharacterDemoGameInstance::FNavGridSettings CharacterDemoGameInstance::CreateNavGridSettings() const
 {
-    const glm::vec3 sceneMin = engine_->GetScene().GetSceneAABBMin();
-    const glm::vec3 sceneMax = engine_->GetScene().GetSceneAABBMax();
+    const glm::vec3 sceneMin = GetEngine().GetScene().GetSceneAABBMin();
+    const glm::vec3 sceneMax = GetEngine().GetScene().GetSceneAABBMax();
 
     FNavGridSettings navSettings;
     navSettings.cellSize = 0.75f;
@@ -304,7 +303,7 @@ void CharacterDemoGameInstance::RefreshNavGridFromSceneDirtyRegion()
 {
     glm::vec3 dirtyWorldMin(0.0f);
     glm::vec3 dirtyWorldMax(0.0f);
-    auto& cpuAS = engine_->GetScene().GetCPUAccelerationStructure();
+    auto& cpuAS = GetEngine().GetScene().GetCPUAccelerationStructure();
     if (!cpuAS.ConsumeNavRelevantDirtyBounds(dirtyWorldMin, dirtyWorldMax))
     {
         return;
@@ -343,8 +342,8 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Text("On Ground: %s", onGround ? "Yes" : "No");
     ImGui::Text("View: %s", firstPersonMode_ ? "FPS" : "TPS");
     ImGui::Text("Move Mode: %s", GetMovementModeName());
-    ImGui::Text("Graphics Debug: %s", engine_->GetShowFlags().DebugGraphicsPanel ? "On" : "Off");
-    ImGui::Text("Physics Debug: %s", engine_->GetShowFlags().DebugPhysicsOverlay ? "On" : "Off");
+    ImGui::Text("Graphics Debug: %s", GetEngine().GetShowFlags().DebugGraphicsPanel ? "On" : "Off");
+    ImGui::Text("Physics Debug: %s", GetEngine().GetShowFlags().DebugPhysicsOverlay ? "On" : "Off");
     ImGui::Text("Foot IK: %s", footIKEnabled_ ? "On" : "Off");
     ImGui::Text("Foot IK Debug: %s", showFootIKDebug_ ? "On" : "Off");
     ImGui::Text("AI Debug Menu: %s", showAIDebugMenu_ ? "On" : "Off");
@@ -564,7 +563,7 @@ bool CharacterDemoGameInstance::OnKey(SDL_Event& event)
         {
             mouseCaptured_ = !mouseCaptured_;
             resetMouse_ = true;
-            SDL_SetWindowRelativeMouseMode(engine_->GetWindow().Handle(), mouseCaptured_);
+            SDL_SetWindowRelativeMouseMode(GetEngine().GetWindow().Handle(), mouseCaptured_);
         }
         return true;
     default:
@@ -615,7 +614,7 @@ bool CharacterDemoGameInstance::OnCursorPosition(double xpos, double ypos)
         return false;
     }
 
-    if (SDL_GetWindowRelativeMouseMode(engine_->GetWindow().Handle()))
+    if (SDL_GetWindowRelativeMouseMode(GetEngine().GetWindow().Handle()))
     {
         yaw_ -= static_cast<float>(xpos) * config_.Camera.MouseSensitivity;
         pitch_ += static_cast<float>(ypos) * config_.Camera.MouseSensitivity;
@@ -661,7 +660,7 @@ bool CharacterDemoGameInstance::OnMouseButton(SDL_Event& event)
     {
         mouseCaptured_ = true;
         resetMouse_ = true;
-        SDL_SetWindowRelativeMouseMode(engine_->GetWindow().Handle(), true);
+        SDL_SetWindowRelativeMouseMode(GetEngine().GetWindow().Handle(), true);
         return true;
     }
 
@@ -737,7 +736,7 @@ void CharacterDemoGameInstance::SetFirstPersonMode(bool enabled)
 
     SetNodeVisibilityRecursive(playerCharacter_.skinnedRoot, !firstPersonMode_);
 
-    engine_->GetScene().MarkDirty();
+    GetEngine().GetScene().MarkDirty();
 }
 
 void CharacterDemoGameInstance::FireProjectile()
@@ -760,7 +759,7 @@ void CharacterDemoGameInstance::SpawnProjectile(const std::string& nodeName, con
         return;
     }
 
-    const uint32_t instanceId = engine_->GetScene().GenerateInstanceId();
+    const uint32_t instanceId = GetEngine().GetScene().GenerateInstanceId();
     auto newNode = SceneBuilder::CreateRenderNode(
         nodeName,
         spawnCenter,
@@ -771,17 +770,17 @@ void CharacterDemoGameInstance::SpawnProjectile(const std::string& nodeName, con
 
     auto phys = std::make_shared<Runtime::PhysicsComponent>();
     phys->SetMobility(Runtime::ENodeMobility::Dynamic);
-    NextBodyID bodyId = engine_->GetPhysicsEngine()->CreateBoxBody(
+    NextBodyID bodyId = GetEngine().GetPhysicsEngine()->CreateBoxBody(
         spawnCenter,
         glm::vec3(config_.Projectile.Size),
         NextMotionType::Dynamic);
     phys->BindPhysicsBody(bodyId);
     newNode->AddComponent(phys);
 
-    engine_->GetScene().AddNode(newNode);
-    engine_->GetScene().MarkDirty();
+    GetEngine().GetScene().AddNode(newNode);
+    GetEngine().GetScene().MarkDirty();
 
-    engine_->GetPhysicsEngine()->AddForceToBody(bodyId, glm::normalize(shotDir) * config_.Projectile.Force);
+    GetEngine().GetPhysicsEngine()->AddForceToBody(bodyId, glm::normalize(shotDir) * config_.Projectile.Force);
 }
 
 void CharacterDemoGameInstance::UpdateCharacterNode()
@@ -789,7 +788,7 @@ void CharacterDemoGameInstance::UpdateCharacterNode()
     const glm::vec3 pos = playerCharacter_.controller.GetPosition();
     playerCharacter_.SyncTransform(pos, GetCharacterYaw());
 
-    engine_->GetScene().MarkDirty();
+    GetEngine().GetScene().MarkDirty();
 }
 
 void CharacterDemoGameInstance::InitAIBot()
@@ -852,8 +851,8 @@ void CharacterDemoGameInstance::InitAIBot()
     aiSetup.runBackwardPlaySpeed = config_.Animation.RunBackwardPlaySpeed;
     aiSetup.jumpStartHoldTime = config_.Animation.JumpStartHoldTime;
     aiSetup.jumpLandHoldTime = config_.Animation.JumpLandHoldTime;
-    aiBot_.character.CreateController(engine_->GetPhysicsEngine(), settings);
-    aiBot_.character.Initialize(engine_->GetScene(), aiSetup);
+    aiBot_.character.CreateController(GetEngine().GetPhysicsEngine(), settings);
+    aiBot_.character.Initialize(GetEngine().GetScene(), aiSetup);
     aiBot_.character.actorRoot->AddComponent(aiBot_.agentComponent);
     agent.patrolProgressAnchor = aiSpawn;
 
@@ -870,12 +869,12 @@ void CharacterDemoGameInstance::InitAIBot()
     }
     aiBot_.character.SetControlIntent(glm::vec3(0.0f), agent.lookDir, 0.0f, false, false);
     aiBot_.visualNode =
-        aiBot_.character.CreatePlaceholderVisual(engine_->GetScene(), "EnemyBot", capsuleModelId_, aiCharacterMatId_);
+        aiBot_.character.CreatePlaceholderVisual(GetEngine().GetScene(), "EnemyBot", capsuleModelId_, aiCharacterMatId_);
 }
 
 bool CharacterDemoGameInstance::TryGetSceneNodePosition(const std::string& nodeName, glm::vec3& outPosition) const
 {
-    Assets::Node* node = engine_->GetScene().GetNode(nodeName);
+    Assets::Node* node = GetEngine().GetScene().GetNode(nodeName);
     if (!node)
     {
         return false;
@@ -903,7 +902,7 @@ bool CharacterDemoGameInstance::HasLineOfSightToPlayer() const
     }
 
     const Assets::RayCastResult hit =
-        engine_->GetScene().GetCPUAccelerationStructure().RayCastInCPU(origin, delta / distance);
+        GetEngine().GetScene().GetCPUAccelerationStructure().RayCastInCPU(origin, delta / distance);
     if (!hit.Hitted)
     {
         return true;
@@ -927,12 +926,12 @@ void CharacterDemoGameInstance::UpdateAIBotNode()
     {
         return;
     }
-    engine_->GetScene().MarkDirty();
+    GetEngine().GetScene().MarkDirty();
 }
 
 void CharacterDemoGameInstance::TryInitAIBotCharacterModel()
 {
-    if (!aiBot_.character.TryResolveSkinnedModel(engine_->GetScene(), characterAppendRootName_, 0,
+    if (!aiBot_.character.TryResolveSkinnedModel(GetEngine().GetScene(), characterAppendRootName_, 0,
                                                  playerCharacter_.skinnedRoot))
     {
         return;
@@ -971,11 +970,11 @@ void CharacterDemoGameInstance::TryInitAIBotCharacterModel()
 
     if (aiBot_.visualNode)
     {
-        aiBot_.character.RemoveVisualRoot(engine_->GetScene(), engine_->GetPhysicsEngine());
+        aiBot_.character.RemoveVisualRoot(GetEngine().GetScene(), GetEngine().GetPhysicsEngine());
         aiBot_.visualNode.reset();
     }
 
-    aiBot_.character.AttachSkinnedModel(engine_->GetPhysicsEngine());
+    aiBot_.character.AttachSkinnedModel(GetEngine().GetPhysicsEngine());
 
     Runtime::SkinnedMeshComponent::FootPlacementIKSettings footPlacementSettings;
     footPlacementSettings.Enabled = footIKEnabled_;
@@ -1041,7 +1040,7 @@ void CharacterDemoGameInstance::UpdateAIBotAnimationState(float deltaSeconds)
 
 void CharacterDemoGameInstance::TryInitCharacterModel()
 {
-    if (!playerCharacter_.TryResolveSkinnedModel(engine_->GetScene(), characterAppendRootName_, 0))
+    if (!playerCharacter_.TryResolveSkinnedModel(GetEngine().GetScene(), characterAppendRootName_, 0))
     {
         return; // Append root exists, but components are not fully attached yet.
     }
@@ -1089,11 +1088,11 @@ void CharacterDemoGameInstance::TryInitCharacterModel()
     }
 
     // Remove the temporary placeholder once the real character is ready.
-    playerCharacter_.RemoveVisualRoot(engine_->GetScene(), engine_->GetPhysicsEngine());
+    playerCharacter_.RemoveVisualRoot(GetEngine().GetScene(), GetEngine().GetPhysicsEngine());
 
     // Character collision should come only from the controller, not the imported skinned mesh hierarchy.
     // Otherwise the appended mannequin can leave kinematic mesh colliders around the origin / T-pose.
-    playerCharacter_.AttachSkinnedModel(engine_->GetPhysicsEngine());
+    playerCharacter_.AttachSkinnedModel(GetEngine().GetPhysicsEngine());
 
     // Apply current first-person visibility and start idle animation
     SetFirstPersonMode(firstPersonMode_);
@@ -1174,7 +1173,7 @@ void CharacterDemoGameInstance::SetNodeRayCastVisibilityRecursive(const std::sha
 
 void CharacterDemoGameInstance::DisableNodePhysicsRecursive(const std::shared_ptr<Assets::Node>& node)
 {
-    NextGameplay::DisableNodePhysicsRecursive(node, engine_->GetPhysicsEngine());
+    NextGameplay::DisableNodePhysicsRecursive(node, GetEngine().GetPhysicsEngine());
 }
 
 void CharacterDemoGameInstance::PlayCharacterAnimation(const std::string& name, bool loop, float playSpeed)

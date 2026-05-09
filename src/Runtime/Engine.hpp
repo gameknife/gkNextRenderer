@@ -40,8 +40,12 @@ class NextAnimation;
 class NextGameInstanceBase
 {
 public:
-    NextGameInstanceBase(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) {}
-    virtual ~NextGameInstanceBase() {}
+    NextGameInstanceBase(Vulkan::WindowConfig&, Options&, NextEngine* engine) : engine_(engine) {}
+    virtual ~NextGameInstanceBase() = default;
+
+    NextEngine& GetEngine() { return *engine_; }
+    NextEngine& GetEngine() const { return *engine_; }
+
     virtual void OnInit() = 0;
     virtual void OnTick(double deltaSeconds) = 0;
     virtual void OnDestroy() = 0;
@@ -79,6 +83,9 @@ public:
     {
         return false;
     }
+
+private:
+    NextEngine* engine_ = nullptr;
 
 protected:
     static void ConfigureWindow(Vulkan::WindowConfig& config,

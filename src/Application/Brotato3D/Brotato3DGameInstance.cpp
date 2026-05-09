@@ -39,8 +39,7 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 }
 
 Brotato3DGameInstance::Brotato3DGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) :
-    NextGameInstanceBase(config, options, engine),
-    engine_(engine)
+    NextGameInstanceBase(config, options, engine)
 {
     ConfigureWindow(config, options, "Brotato3D", 1920, 1080, true);
 }
@@ -58,7 +57,7 @@ void Brotato3DGameInstance::OnInit()
     {
         throw std::runtime_error("Brotato3D failed to load required data");
     }
-    if (NextLocalization* localization = engine_->GetLocalization())
+    if (NextLocalization* localization = GetEngine().GetLocalization())
     {
         localization->LoadFromJson(I18nConfigPath, "zh");
     }
@@ -77,9 +76,9 @@ void Brotato3DGameInstance::OnInit()
     ApplySelectedArena();
     appState_ = Brotato3D::EAppState::MainMenu;
     SetWorldPhysicsPaused(true);
-    engine_->GetShowFlags().DebugGraphicsPanel = false;
-    engine_->GetUserSettings().ShowOverlay = false;
-    engine_->RequestLoadScene({.filename = "Empty.proc"});
+    GetEngine().GetShowFlags().DebugGraphicsPanel = false;
+    GetEngine().GetUserSettings().ShowOverlay = false;
+    GetEngine().RequestLoadScene({.filename = "Empty.proc"});
     Brotato3D::StartBgm("calm");
 
     if (std::filesystem::exists(Brotato3D::PlaceholderAssets::Sfx("fire_smg_01.wav")))
@@ -142,7 +141,7 @@ void Brotato3DGameInstance::OnTick(double deltaSeconds)
         appState_ == Brotato3D::EAppState::MainMenu ||
         appState_ == Brotato3D::EAppState::CharacterSelect)
     {
-        engine_->GetScene().MarkTransformDirty();
+        GetEngine().GetScene().MarkTransformDirty();
         return;
     }
 
@@ -227,7 +226,7 @@ void Brotato3DGameInstance::OnTick(double deltaSeconds)
         UpdateCombatEffects(effectiveDt);
     }
     UpdateFloatingTexts(deltaSeconds);
-    engine_->GetScene().MarkTransformDirty();
+    GetEngine().GetScene().MarkTransformDirty();
 }
 
 void Brotato3DGameInstance::OnDestroy()
@@ -277,12 +276,7 @@ bool Brotato3DGameInstance::ShouldPauseWorldPhysics() const
 
 void Brotato3DGameInstance::SetWorldPhysicsPaused(bool paused)
 {
-    if (!engine_)
-    {
-        return;
-    }
-
-    if (NextPhysics* physics = engine_->GetPhysicsEngine())
+    if (NextPhysics* physics = GetEngine().GetPhysicsEngine())
     {
         physics->SetPaused(paused);
     }

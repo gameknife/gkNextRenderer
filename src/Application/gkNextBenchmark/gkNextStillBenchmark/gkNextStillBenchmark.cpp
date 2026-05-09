@@ -8,7 +8,8 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
     return std::make_unique<BenchmarkGameInstance>(config, options, engine);
 }
 
-BenchmarkGameInstance::BenchmarkGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine):NextGameInstanceBase(config, options, engine), engine_(engine)
+BenchmarkGameInstance::BenchmarkGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) :
+    NextGameInstanceBase(config, options, engine)
 {
     config.Title = "gkNextStillBenchmark";
     options.PresentMode = 0;

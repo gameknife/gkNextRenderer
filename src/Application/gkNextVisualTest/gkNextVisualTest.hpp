@@ -46,9 +46,6 @@ public:
     bool OnRenderUI() override;
     void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) override;
 
-    NextEngine& GetEngine() { return *engine_; }
-    const NextEngine& GetEngine() const { return *engine_; }
-
 private:
     bool LoadConfig();
     void PopulateScenesFromSceneList();
@@ -64,8 +61,6 @@ private:
     std::string GetSceneCategory(const std::string& path) const;
     std::string GetScreenshotFilename();
     std::string GetBaselineFilename(const VisualTestResult& result) const;
-
-    NextEngine* engine_;
 
     // Configuration
     std::string outputDir_ = "screenshots/visual_test";

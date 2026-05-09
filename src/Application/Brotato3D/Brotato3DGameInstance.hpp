@@ -86,7 +86,6 @@ public:
                             std::vector<Assets::AnimationTrack>& tracks) override;
     bool OverrideRenderCamera(Assets::Camera& outRenderCamera) const override;
 
-    NextEngine& GetEngine() const { return *engine_; }
     Brotato3D::FPlayerRuntime& GetPlayer() { return player_; }
     const Brotato3D::FPlayerRuntime& GetPlayer() const { return player_; }
     const std::vector<Brotato3D::FEnemyRuntime>& GetEnemies() const { return enemies_; }
@@ -253,7 +252,6 @@ private:
     void DeactivateEnemyKinematicBody(Brotato3D::FEnemyRuntime& enemy);
     const Brotato3D::FArenaDef* FindArenaDef(const std::string& arenaId) const;
 
-    NextEngine* engine_ = nullptr;
     Brotato3D::EAppState appState_ = Brotato3D::EAppState::MainMenu;
     Brotato3D::FArenaResources arenaResources_{};
     glm::vec2 arenaHalfExtent_ = glm::vec2(12.0f, 8.0f);

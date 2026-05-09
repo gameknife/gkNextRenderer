@@ -23,7 +23,7 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 }
 
 EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) :
-    NextGameInstanceBase(config, options, engine), engine_(engine)
+    NextGameInstanceBase(config, options, engine)
 {
     editorUserInterface_ = std::make_unique<EditorInterface>(this);
 
@@ -333,5 +333,5 @@ bool EditorGameInstance::OnScroll(double xoffset, double yoffset)
 
 void EditorGameInstance::DrawGizmo(const glm::vec2& viewportPos, const glm::vec2& viewportSize)
 {
-    gizmoController_.Draw(*engine_, viewportPos, viewportSize);
+    gizmoController_.Draw(GetEngine(), viewportPos, viewportSize);
 }

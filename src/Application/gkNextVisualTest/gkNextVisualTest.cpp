@@ -87,7 +87,6 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 
 VisualTestGameInstance::VisualTestGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
     : NextGameInstanceBase(config, options, engine)
-    , engine_(engine)
 {
     config.Title = "gkNextVisualTest";
     // Fast scene triage defaults: enough detail for screenshots, but optimized for throughput.

@@ -83,7 +83,8 @@ uint32_t GetHashFromBlockLocation(const glm::i16vec3& blockLocation)
     return hash;
 }
 
-MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine): NextGameInstanceBase(config, options, engine), engine_(engine)
+MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) :
+    NextGameInstanceBase(config, options, engine)
 {
     NextRenderer::HideConsole();
 

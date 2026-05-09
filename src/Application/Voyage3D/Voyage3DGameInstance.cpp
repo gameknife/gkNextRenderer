@@ -81,8 +81,7 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 }
 
 Voyage3DGameInstance::Voyage3DGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) :
-    NextGameInstanceBase(config, options, engine),
-    engine_(engine)
+    NextGameInstanceBase(config, options, engine)
 {
     ConfigureWindow(config, options, "Voyage3D", 1280, 720, true);
 }
@@ -91,9 +90,9 @@ void Voyage3DGameInstance::OnInit()
 {
     LoadGameData();
     ResetRuntimeState();
-    engine_->GetShowFlags().DebugGraphicsPanel = false;
-    engine_->GetUserSettings().ShowOverlay = false;
-    engine_->RequestLoadScene({.filename = EmptySceneName});
+    GetEngine().GetShowFlags().DebugGraphicsPanel = false;
+    GetEngine().GetUserSettings().ShowOverlay = false;
+    GetEngine().RequestLoadScene({.filename = EmptySceneName});
 }
 
 void Voyage3DGameInstance::OnInitUI()
@@ -184,7 +183,7 @@ void Voyage3DGameInstance::OnTick(double deltaSeconds)
     UpdateRuntimeEffects(deltaSeconds);
     UpdateBgm();
     CheckLossConditions();
-    engine_->GetScene().MarkTransformDirty();
+    GetEngine().GetScene().MarkTransformDirty();
 }
 
 void Voyage3DGameInstance::OnDestroy()
@@ -342,7 +341,7 @@ bool Voyage3DGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera)
     if (screenShakeMs_ > 0.0f)
     {
         const float strength = std::min(0.35f, screenShakeIntensity_ * 0.06f);
-        const float t = static_cast<float>(engine_->GetTime()) * 41.0f;
+        const float t = static_cast<float>(GetEngine().GetTime()) * 41.0f;
         const glm::vec3 jitter(std::sin(t), 0.0f, std::cos(t * 1.37f));
         cameraPosition += jitter * strength;
         cameraTarget += jitter * strength * 0.35f;
@@ -408,7 +407,7 @@ void Voyage3DGameInstance::StartNewGame()
 {
     ResetRuntimeState();
     appState_ = Voyage3D::EAppState::Sailing;
-    engine_->RequestLoadScene({.filename = EmptySceneName});
+    GetEngine().RequestLoadScene({.filename = EmptySceneName});
 }
 
 void Voyage3DGameInstance::ReturnToMainMenu()
@@ -1073,7 +1072,7 @@ void Voyage3DGameInstance::UpdateBgm()
     }
     currentBgmId_ = bgmId;
 
-    NextAudio* audio = engine_->GetAudio();
+    NextAudio* audio = GetEngine().GetAudio();
     if (!audio)
     {
         return;
@@ -1095,13 +1094,13 @@ void Voyage3DGameInstance::UpdateBgm()
 
 void Voyage3DGameInstance::ApplyLightingSettings()
 {
-    auto& envSettings = engine_->GetScene().GetEnvSettings();
+    auto& envSettings = GetEngine().GetScene().GetEnvSettings();
     envSettings.HasSky = true;
     envSettings.HasSun = true;
     envSettings.SkyIntensity = 7.0f;
     envSettings.SunIntensity = 350.0f;
     envSettings.SunRotation = 0.35f;
-    engine_->GetScene().MarkEnvDirty();
+    GetEngine().GetScene().MarkEnvDirty();
 }
 
 void Voyage3DGameInstance::SetTradeMessage(std::string message)

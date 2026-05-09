@@ -34,7 +34,6 @@ public:
                             std::vector<Assets::AnimationTrack>& tracks) override;
     bool OverrideRenderCamera(Assets::Camera& outRenderCamera) const override;
 
-    NextEngine& GetEngine() const { return *engine_; }
     Voyage3D::EAppState GetAppState() const { return appState_; }
     const Voyage3D::FInputState& GetInputState() const { return input_; }
     Voyage3D::FShipRuntime& GetPlayerShip() { return playerShip_; }
@@ -136,7 +135,6 @@ private:
     void DropOverflowCargo();
     void CheckLossConditions();
 
-    NextEngine* engine_ = nullptr;
     Voyage3D::EAppState appState_ = Voyage3D::EAppState::MainMenu;
     Voyage3D::FInputState input_{};
     std::vector<Voyage3D::FPortDef> portDefs_;

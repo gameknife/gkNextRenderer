@@ -131,7 +131,7 @@ void Brotato3DGameInstance::ExitGame()
 {
     Brotato3D::PlayUiClickSfx();
     Brotato3D::StopBgm();
-    engine_->RequestClose();
+    GetEngine().RequestClose();
 }
 
 void Brotato3DGameInstance::BeginLevelUp()
@@ -201,7 +201,7 @@ void Brotato3DGameInstance::ApplySelectedArena()
 
     if (sceneReady_)
     {
-        engine_->RequestLoadScene({.filename = EmptySceneName});
+        GetEngine().RequestLoadScene({.filename = EmptySceneName});
     }
 }
 

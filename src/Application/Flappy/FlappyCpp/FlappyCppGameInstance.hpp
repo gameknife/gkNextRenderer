@@ -51,7 +51,6 @@ public:
     int GetScore() const { return score_; }
 
 private:
-    NextEngine& GetEngine() const { return *engine_; }
     void ResetRuntime();
     void RestartScene();
     void StartOrFlap();
@@ -61,7 +60,6 @@ private:
     void RunReplayToCompletion();
     void WriteReplayTrace(const std::vector<Flappy::FFlappyTraceFrame>& trace, int deathFrame) const;
 
-    NextEngine* engine_ = nullptr;
     Flappy::FGameplayConfig config_{};
     Flappy::FReplayConfig replayConfig_{};
     Flappy::FXorShift32 rng_{0x00C0FFEEu};

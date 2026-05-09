@@ -274,8 +274,7 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 }
 
 KongLie3DGameInstance::KongLie3DGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) :
-    NextGameInstanceBase(config, options, engine),
-    engine_(engine)
+    NextGameInstanceBase(config, options, engine)
 {
     ConfigureWindow(config, options, "KongLie3D", 1920, 1080, true);
 }

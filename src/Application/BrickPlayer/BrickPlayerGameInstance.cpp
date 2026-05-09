@@ -234,7 +234,6 @@ BrickPlayerGameInstance::PhysicsBodyResult BrickPlayerGameInstance::CreateDynami
 
 BrickPlayerGameInstance::BrickPlayerGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
     : NextGameInstanceBase(config, options, engine)
-    , engine_(engine)
 {
     config.Title = "BrickPlayer";
     config.Width = 1920;
@@ -313,7 +312,7 @@ void BrickPlayerGameInstance::ResetInteractiveSceneState()
 
 float BrickPlayerGameInstance::GetLduToWorldScale() const
 {
-    return Assets::SanitizeLDrawLduToWorldScale(engine_->GetUserSettings().LDrawLduToWorldScale);
+    return Assets::SanitizeLDrawLduToWorldScale(GetEngine().GetUserSettings().LDrawLduToWorldScale);
 }
 
 int32_t BrickPlayerGameInstance::GetMaxTimelineStep() const
@@ -627,7 +626,7 @@ bool BrickPlayerGameInstance::IsAppDebugShortcutActive(SDL_Keycode key) const
     case SDLK_F7:
         return showSnapDebug_;
     case SDLK_F8:
-        return engine_->GetShowFlags().DebugDraw_PhysicsBodies;
+        return GetEngine().GetShowFlags().DebugDraw_PhysicsBodies;
     case SDLK_F9:
         return useHorizontalDragPlane_;
     default:
@@ -643,7 +642,7 @@ bool BrickPlayerGameInstance::SetAppDebugShortcutActive(SDL_Keycode key, bool ac
         showSnapDebug_ = active;
         return true;
     case SDLK_F8:
-        engine_->GetShowFlags().DebugDraw_PhysicsBodies = active;
+        GetEngine().GetShowFlags().DebugDraw_PhysicsBodies = active;
         return true;
     case SDLK_F9:
         if (useHorizontalDragPlane_ != active)
@@ -1100,7 +1099,7 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
             || previousSnapCandidate.targetConnectorIndex != snapCandidate.targetConnectorIndex;
         if (snapChanged)
         {
-            snapFeedbackPulseUntil_ = engine_->GetTime() + 0.12f;
+            snapFeedbackPulseUntil_ = GetEngine().GetTime() + 0.12f;
         }
         if (snapAudioChanged)
         {
@@ -1116,7 +1115,7 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
         hoveredDisassembled_.hitPoint = hoveredAssembly_.instanceId != UINT32_MAX ? hoveredAssembly_.hitPoint : planeHitPoint;
     }
 
-    const float deltaSeconds = std::max(static_cast<float>(engine_->GetDeltaSeconds()), 1.0f / 240.0f);
+    const float deltaSeconds = std::max(static_cast<float>(GetEngine().GetDeltaSeconds()), 1.0f / 240.0f);
     if (hasDraggedBodyPositionSample_)
     {
         glm::vec3 frameVelocity = (desiredBodyPosition - lastDraggedBodyPosition_) / deltaSeconds;
@@ -1385,7 +1384,7 @@ std::vector<BrickPlayerGameInstance::WorldSnapConnector> BrickPlayerGameInstance
         return worldConnectors;
     }
 
-    auto* node = engine_->GetScene().GetNodeByInstanceId(instanceId);
+    auto* node = GetEngine().GetScene().GetNodeByInstanceId(instanceId);
     if (!node)
     {
         return worldConnectors;
@@ -1625,7 +1624,7 @@ bool BrickPlayerGameInstance::ReattachDraggedPart()
 
 void BrickPlayerGameInstance::PlayRandomPutSound()
 {
-    engine_->GetAudio()->PlaySound(GetRandomPutSoundPath(), false, 0.55f);
+    GetEngine().GetAudio()->PlaySound(GetRandomPutSoundPath(), false, 0.55f);
 }
 
 bool BrickPlayerGameInstance::IntersectDragPlane(const glm::vec3& rayOrigin, const glm::vec3& rayDir, glm::vec3& outPoint) const
@@ -1687,7 +1686,7 @@ bool BrickPlayerGameInstance::GetDraggedBodyMinimumY(Assets::Node* node,
         return false;
     }
 
-    const auto* model = engine_->GetScene().GetModel(render->GetModelId());
+    const auto* model = GetEngine().GetScene().GetModel(render->GetModelId());
     if (!model)
     {
         return false;
@@ -1797,7 +1796,7 @@ bool BrickPlayerGameInstance::IsBGMPaused() const
         return true;
     }
 
-    return !engine_->GetAudio()->IsSoundPlaying(currentTrack->path);
+    return !GetEngine().GetAudio()->IsSoundPlaying(currentTrack->path);
 }
 
 void BrickPlayerGameInstance::PauseBGM(bool pause)

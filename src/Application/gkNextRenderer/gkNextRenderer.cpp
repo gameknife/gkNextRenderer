@@ -123,7 +123,8 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
     return std::make_unique<NextRendererGameInstance>(config, options, engine);
 }
 
-NextRendererGameInstance::NextRendererGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine):NextGameInstanceBase(config,options,engine),engine_(engine)
+NextRendererGameInstance::NextRendererGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) :
+    NextGameInstanceBase(config, options, engine)
 {
 	config.HideTitleBar = true;
 }
@@ -208,7 +209,7 @@ bool NextRendererGameInstance::OnRenderUI()
 		const auto offset = swapChain.OutputOffset();
 		const auto extent = swapChain.OutputExtent();
 		const ImVec2 viewportOrigin = ImGui::GetMainViewport()->Pos;
-		gizmoController_.Draw(*engine_,
+		gizmoController_.Draw(GetEngine(),
 			glm::vec2(viewportOrigin.x + static_cast<float>(offset.x), viewportOrigin.y + static_cast<float>(offset.y)),
 			glm::vec2(static_cast<float>(extent.width), static_cast<float>(extent.height)));
 	}

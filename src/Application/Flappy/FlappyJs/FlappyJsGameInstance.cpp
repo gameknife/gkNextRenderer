@@ -8,8 +8,7 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 }
 
 FlappyJsGameInstance::FlappyJsGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) :
-    NextGameInstanceBase(config, options, engine),
-    engine_(engine)
+    NextGameInstanceBase(config, options, engine)
 {
     ConfigureWindow(config, options, "FlappyJs", 1280, 720, true);
     options.QuickJSEntry = "assets/scripts/flappy/FlappyJs/FlappyJsGameInstance.js";

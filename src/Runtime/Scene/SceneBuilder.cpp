@@ -5,30 +5,42 @@
 #include "Assets/Data/Material.hpp"
 #include "Runtime/Components/RenderComponent.h"
 
+namespace
+{
+    Assets::FMaterial CreateLambertianMaterial(const glm::vec3& color)
+    {
+        return {Assets::Material::Lambertian(glm::clamp(color, glm::vec3(0.0f), glm::vec3(1.0f)))};
+    }
+
+    Assets::FMaterial CreateDiffuseLightMaterial(const glm::vec3& color, float intensity)
+    {
+        const glm::vec3 clampedColor = glm::clamp(color, glm::vec3(0.0f), glm::vec3(1.0f));
+        return {Assets::Material::DiffuseLight(clampedColor * std::max(0.0f, intensity))};
+    }
+}
+
 namespace SceneBuilder
 {
     uint32_t AddLambertianMaterial(std::vector<Assets::FMaterial>& materials, const glm::vec3& color)
     {
-        materials.push_back({Assets::Material::Lambertian(glm::clamp(color, glm::vec3(0.0f), glm::vec3(1.0f)))});
+        materials.push_back(CreateLambertianMaterial(color));
         return static_cast<uint32_t>(materials.size() - 1);
     }
 
     uint32_t AddDiffuseLightMaterial(std::vector<Assets::FMaterial>& materials, const glm::vec3& color, float intensity)
     {
-        const glm::vec3 clampedColor = glm::clamp(color, glm::vec3(0.0f), glm::vec3(1.0f));
-        materials.push_back({Assets::Material::DiffuseLight(clampedColor * std::max(0.0f, intensity))});
+        materials.push_back(CreateDiffuseLightMaterial(color, intensity));
         return static_cast<uint32_t>(materials.size() - 1);
     }
 
     uint32_t AddLambertianMaterialToScene(Assets::Scene& scene, const glm::vec3& color)
     {
-        return scene.AddMaterial({Assets::Material::Lambertian(glm::clamp(color, glm::vec3(0.0f), glm::vec3(1.0f)))});
+        return scene.AddMaterial(CreateLambertianMaterial(color));
     }
 
     uint32_t AddDiffuseLightMaterialToScene(Assets::Scene& scene, const glm::vec3& color, float intensity)
     {
-        const glm::vec3 clampedColor = glm::clamp(color, glm::vec3(0.0f), glm::vec3(1.0f));
-        return scene.AddMaterial({Assets::Material::DiffuseLight(clampedColor * std::max(0.0f, intensity))});
+        return scene.AddMaterial(CreateDiffuseLightMaterial(color, intensity));
     }
 
     std::shared_ptr<Assets::Node> CreateRenderNode(

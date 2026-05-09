@@ -98,7 +98,7 @@ void BrickPlayerGameInstance::DrawSnapConfirmation() const
         return;
     }
 
-    const bool pulsing = engine_->GetTime() < snapFeedbackPulseUntil_;
+    const bool pulsing = GetEngine().GetTime() < snapFeedbackPulseUntil_;
     const glm::vec4 snapColor = pulsing
         ? glm::vec4(0.35f, 1.0f, 0.35f, 1.0f)
         : glm::vec4(0.15f, 0.95f, 0.25f, 0.95f);
@@ -371,7 +371,7 @@ void BrickPlayerGameInstance::DrawSnapDebug() const
         }
         else
         {
-            auto* draggedNode = engine_->GetScene().GetNodeByInstanceId(draggedInstanceId_);
+            auto* draggedNode = GetEngine().GetScene().GetNodeByInstanceId(draggedInstanceId_);
             const std::string draggedPartFile = getPartFile(draggedInstanceId_);
             const std::string draggedPartName = GetPartDisplayName(draggedPartFile);
 
@@ -453,7 +453,7 @@ void BrickPlayerGameInstance::DrawSnapDebug() const
             }
             else
             {
-                auto* targetNode = engine_->GetScene().GetNodeByInstanceId(debugTargetInstanceId);
+                auto* targetNode = GetEngine().GetScene().GetNodeByInstanceId(debugTargetInstanceId);
                 const std::string targetPartFile = getPartFile(debugTargetInstanceId);
                 const std::string targetPartName = GetPartDisplayName(targetPartFile);
 

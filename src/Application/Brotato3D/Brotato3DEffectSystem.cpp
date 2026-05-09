@@ -370,7 +370,7 @@ void Brotato3DGameInstance::SpawnTempLight(const glm::vec3& worldPos,
     lightIt->durationMs = durationMs;
     lightIt->remainingMs = durationMs;
 
-    auto& lights = engine_->GetScene().Lights();
+    auto& lights = GetEngine().GetScene().Lights();
     if (lightIt->lightIndex >= 0 && lightIt->lightIndex < static_cast<int>(lights.size()))
     {
         lights[static_cast<size_t>(lightIt->lightIndex)].lightMatIdx = EnsureLightMaterial(color);
@@ -387,12 +387,7 @@ void Brotato3DGameInstance::UpdateLightArea(int lightIndex,
                                             float radiusMeters,
                                             float intensityScale)
 {
-    if (!engine_)
-    {
-        return;
-    }
-
-    auto& lights = engine_->GetScene().Lights();
+    auto& lights = GetEngine().GetScene().Lights();
     if (lightIndex < 0 || lightIndex >= static_cast<int>(lights.size()))
     {
         return;
@@ -416,7 +411,7 @@ uint32_t Brotato3DGameInstance::EnsureLightMaterial(const glm::vec3& color)
         return it->second;
     }
 
-    const uint32_t materialId = SceneBuilder::AddDiffuseLightMaterialToScene(engine_->GetScene(), color, 650.0f);
+    const uint32_t materialId = SceneBuilder::AddDiffuseLightMaterialToScene(GetEngine().GetScene(), color, 650.0f);
     lightMaterialIds_[key] = materialId;
     return materialId;
 }
@@ -454,11 +449,11 @@ void Brotato3DGameInstance::BeginWaveBanner()
 
 void Brotato3DGameInstance::ApplyLightingSettings()
 {
-    auto& envSettings = engine_->GetScene().GetEnvSettings();
+    auto& envSettings = GetEngine().GetScene().GetEnvSettings();
     envSettings.HasSky = true;
     envSettings.HasSun = false;
     envSettings.SkyIntensity = 50.0f;
-    engine_->GetScene().MarkEnvDirty();
+    GetEngine().GetScene().MarkEnvDirty();
 }
 
 

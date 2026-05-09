@@ -130,9 +130,6 @@ public:
     
     void TestSpawnPhysicsBlock();
 
-    // quick access engine
-    NextEngine& GetEngine() { return *engine_; }
-
     // save and load
     void CleanUp();
     void SaveRecord(std::string filename);
@@ -252,8 +249,6 @@ private:
     FPlacedRecords BlockRecords;
     std::unordered_map<uint32_t, uint32_t> OccupiedCellOwnerMap;
     std::unordered_map<uint32_t, std::vector<glm::i16vec3>> OwnerOccupiedCellsMap;
-
-    NextEngine* engine_;
 
     bool resetMouse_{};
 

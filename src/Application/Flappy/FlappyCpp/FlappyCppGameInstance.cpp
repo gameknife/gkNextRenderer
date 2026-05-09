@@ -77,7 +77,6 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 
 FlappyCppGameInstance::FlappyCppGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) :
     NextGameInstanceBase(config, options, engine),
-    engine_(engine),
     replayMode_(options.FlappyReplay)
 {
     ConfigureWindow(config, options, "FlappyCpp", 1280, 720, true);

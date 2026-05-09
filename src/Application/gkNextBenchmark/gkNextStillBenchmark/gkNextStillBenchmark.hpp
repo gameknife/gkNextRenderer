@@ -19,10 +19,6 @@ public:
     
     bool OnRenderUI() override;
     
-    // quick access engine
-    NextEngine& GetEngine() { return *engine_; }
 private:
-    NextEngine* engine_;
-
     std::unique_ptr<BenchMarker> benchMarker_;
 };

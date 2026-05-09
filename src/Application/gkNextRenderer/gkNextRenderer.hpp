@@ -34,9 +34,6 @@ public:
                     int16_t leftTrigger, int16_t rightTrigger) override;
     void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) override;
 
-    // quick access engine
-    NextEngine& GetEngine() { return *engine_; }
-
     void CreateSphereAndPush();
     void CreateBoxAndPush();
 
@@ -44,8 +41,6 @@ private:
     void DrawSettings();
     void DrawTitleBar();
     void RequestScreenshot(bool openFolder, const std::string& tag);
-    NextEngine* engine_;
-
     ModelViewController modelViewController_;
     GizmoController gizmoController_;
 

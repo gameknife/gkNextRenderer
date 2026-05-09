@@ -56,7 +56,6 @@ public:
     void PushNotification(std::string text, KongLie3D::ENotificationKind kind, float durationMs = 2500.0f);
 
 private:
-    NextEngine& GetEngine() const { return *engine_; }
     KongLie3D::FPieceRuntime* FindPieceByInstanceId(uint32_t instanceId);
     KongLie3D::FPieceRuntime* FindPlayerPieceAtCell(int col, int row, const KongLie3D::FPieceRuntime* exclude = nullptr);
     const KongLie3D::FPieceRuntime* FindPieceById(const std::string& pieceId) const;
@@ -74,7 +73,6 @@ private:
     void ClearHoveredPieceTooltip();
     void DismissDeploymentHint();
 
-    NextEngine* engine_;
     std::map<std::string, KongLie3D::FPieceDef> pieceDefs_;
     KongLie3D::FPlacementData placement_;
     size_t currentLevelIndex_ = 0;

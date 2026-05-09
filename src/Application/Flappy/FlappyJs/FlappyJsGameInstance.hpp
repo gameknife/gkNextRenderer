@@ -24,7 +24,4 @@ public:
     bool OverrideRenderCamera(Assets::Camera& outRenderCamera) const override;
 
 private:
-    NextEngine& GetEngine() const { return *engine_; }
-
-    NextEngine* engine_ = nullptr;
 };

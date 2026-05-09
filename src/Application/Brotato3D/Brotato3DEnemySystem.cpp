@@ -76,10 +76,10 @@ void Brotato3DGameInstance::SpawnEnemy(const std::string& enemyId, const glm::ve
 
     enemy.kinematicBodyId = AcquireEnemyKinematicBody(enemyId);
     enemy.node = SceneBuilder::CreateRenderNode(fmt::format("Brotato3D_Enemy_{}_{}", enemyId, enemies_.size()), spawnPos, glm::vec3(1.0f),
-                                  engine_->GetScene().GenerateInstanceId(), visual.modelId, visual.materialId);
+                                  GetEngine().GetScene().GenerateInstanceId(), visual.modelId, visual.materialId);
     NodeUtils::SetOutlineFlags(enemy.node, Runtime::RenderOutlineFlags::danger);
-    engine_->GetScene().AddNode(enemy.node);
-    engine_->GetScene().MarkDirty();
+    GetEngine().GetScene().AddNode(enemy.node);
+    GetEngine().GetScene().MarkDirty();
     enemies_.push_back(enemy);
     // Spawn activation is a positional snap; use a stable fallback step for the kinematic body.
     SyncEnemyKinematicBody(enemies_.back(), 1.0 / 60.0);
