@@ -2,7 +2,7 @@
   "enemies": {
     "rat": {
       "name": "Rat",
-      "hp": 14,
+      "hp": 18,
       "moveSpeed": 3.6,
       "contactDamage": 4,
       "size": [0.45, 0.45, 0.45],
@@ -12,7 +12,7 @@
     },
     "tank": {
       "name": "Brute",
-      "hp": 60,
+      "hp": 80,
       "moveSpeed": 1.6,
       "contactDamage": 12,
       "size": [0.85, 0.9, 0.85],
@@ -22,7 +22,7 @@
     },
     "spitter": {
       "name": "Spitter",
-      "hp": 18,
+      "hp": 24,
       "moveSpeed": 2.2,
       "contactDamage": 6,
       "size": [0.55, 0.55, 0.55],
@@ -42,7 +42,7 @@
     },
     "charger": {
       "name": "Charger",
-      "hp": 34,
+      "hp": 42,
       "moveSpeed": 1.4,
       "contactDamage": 7,
       "size": [0.65, 0.65, 0.65],
@@ -59,7 +59,7 @@
     },
     "bomber": {
       "name": "Bomber",
-      "hp": 24,
+      "hp": 30,
       "moveSpeed": 2.4,
       "contactDamage": 4,
       "size": [0.60, 0.60, 0.60],
@@ -75,7 +75,7 @@
     },
     "shaman": {
       "name": "Shaman",
-      "hp": 25,
+      "hp": 32,
       "moveSpeed": 1.0,
       "contactDamage": 3,
       "size": [0.55, 0.75, 0.55],
