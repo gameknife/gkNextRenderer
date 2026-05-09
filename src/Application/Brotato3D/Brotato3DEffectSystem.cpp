@@ -200,7 +200,6 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
     BuildDebrisPool(models, materials, nodes);
     BuildArenaWallBodies();
     BuildKinematicCollisionBodies(models, materials, nodes);
-    BuildPickupPool(models, materials, nodes);
 
     sceneReady_ = true;
     if (appState_ == Brotato3D::EAppState::MainMenu || appState_ == Brotato3D::EAppState::CharacterSelect)

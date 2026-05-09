@@ -185,7 +185,6 @@ void Brotato3DGameInstance::OnTick(double deltaSeconds)
             UpdateProjectiles(effectiveDt);
             UpdateEnemies(effectiveDt);
             UpdateEnemyProjectiles(effectiveDt);
-            UpdatePickups(effectiveDt);
             ProcessItemTriggers(effectiveDt);
 
             const double waveDt = bossVictoryDelayMs_ <= 0.0f ? deltaSeconds : 0.0;
@@ -237,7 +236,6 @@ void Brotato3DGameInstance::OnDestroy()
     projectilePool_.clear();
     enemyProjectilePool_.clear();
     debrisPool_.clear();
-    pickupPool_.clear();
     floatingTexts_.clear();
     muzzleFlashes_.clear();
     explosionRings_.clear();
@@ -245,7 +243,6 @@ void Brotato3DGameInstance::OnDestroy()
     playerLightNode_.reset();
     tempLightPool_.clear();
     enemyKinematicBodyPools_.clear();
-    hitDebrisMaterialIds_.clear();
 }
 
 void Brotato3DGameInstance::UpdateCameraTracking(double deltaSeconds)

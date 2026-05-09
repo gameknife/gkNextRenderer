@@ -26,6 +26,13 @@ namespace Brotato3D
         Magnetic = 2,
     };
 
+    enum class EDebrisPayload : uint8_t
+    {
+        None = 0,
+        Material = 1,
+        Xp = 2,
+    };
+
     struct FDebrisRuntime
     {
         EDebrisKind kind = EDebrisKind::Tiny;
@@ -35,9 +42,9 @@ namespace Brotato3D
         uint32_t currentMaterialId = 0;
         uint64_t activatedTickId = 0;
         bool active = false;
-        bool pickable = false;
+        EDebrisPayload payload = EDebrisPayload::None;
         EPickupState pickupState = EPickupState::None;
-        int materialValue = 0;
+        int payloadValue = 0;
         float settleTimerMs = 0.0f;
         float magneticLerpProgress = 0.0f;
         glm::vec3 magneticPos = glm::vec3(0.0f);

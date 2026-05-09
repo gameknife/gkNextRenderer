@@ -137,7 +137,6 @@ void Brotato3DGameInstance::UpdateEnemies(double deltaSeconds)
                 {
                     DamagePlayer(enemy.def->bomb.explosionDamage, 180.0f, 250.0f);
                 }
-                SpawnDeathDebris(enemy);
                 enemy.alive = false;
                 enemy.fading = false;
                 DeactivateEnemyKinematicBody(enemy);
@@ -291,8 +290,10 @@ void Brotato3DGameInstance::KillEnemy(Brotato3D::FEnemyRuntime& enemy, bool drop
     {
         ++killCount_;
         Brotato3D::PlayEnemyDeathSfx(enemy.def ? enemy.def->name : std::string{});
-        SpawnDeathDebris(enemy);
-        SpawnPickup(enemy.def->xpDrop, Brotato3D::EPickupKind::XP, enemy.worldPos);
+        if (!enemy.def || !enemy.def->boss.enabled)
+        {
+            SpawnKillMaterialDebris(enemy);
+        }
         ProcessOnKillTriggers(enemy.worldPos);
     }
     if (enemy.def && enemy.def->boss.enabled)
@@ -334,15 +335,7 @@ void Brotato3DGameInstance::KillEnemy(Brotato3D::FEnemyRuntime& enemy, bool drop
             SpawnDebris(Brotato3D::EDebrisKind::BossChunk, enemy.worldPos + dir * 0.4f, dir, bossSpeedDist(rng_),
                         enemy.materialId, 1, 0.0f);
         }
-        const int bossMaterialCount = std::max(12, enemy.def->materialDrop * 3);
-        for (int index = 0; index < bossMaterialCount; ++index)
-        {
-            const float angle = static_cast<float>(index) / static_cast<float>(bossMaterialCount) * glm::two_pi<float>();
-            const glm::vec3 radial(std::cos(angle), 0.0f, std::sin(angle));
-            const glm::vec3 spawnPos = enemy.worldPos + radial * 1.0f + glm::vec3(0.0f, 0.5f, 0.0f);
-            const glm::vec3 dir = glm::normalize(deathSprayDir * 1.8f + radial * 0.35f + glm::vec3(0.0f, 0.6f, 0.0f));
-            SpawnDebris(Brotato3D::EDebrisKind::Chunk, spawnPos, dir, 5.0f, materialDebrisMatId_, 1, 0.0f, true, 1);
-        }
+        SpawnKillMaterialDebris(enemy, 3, 1.0f, 12);
         StartScreenShake(800.0f, 5.0f);
         explosionRings_.push_back({enemy.worldPos, glm::vec4(1.0f, 0.72f, 0.18f, 1.0f), 800.0f, 800.0f, 4.0f});
         explosionRings_.push_back({enemy.worldPos, glm::vec4(1.0f, 0.92f, 0.40f, 1.0f), 1200.0f, 1200.0f, 8.0f});
@@ -364,82 +357,44 @@ void Brotato3DGameInstance::ClearAliveEnemies(bool dropLoot)
     }
 }
 
-void Brotato3DGameInstance::SpawnDeathDebris(const Brotato3D::FEnemyRuntime& enemy)
+void Brotato3DGameInstance::SpawnKillMaterialDebris(const Brotato3D::FEnemyRuntime& enemy,
+                                                    int countMultiplier,
+                                                    float spawnRadius,
+                                                    int minCount)
 {
     if (!enemy.def)
     {
         return;
     }
 
-    if (enemy.def->boss.enabled)
+    const int count = std::max(minCount, enemy.def->materialDrop * std::max(1, countMultiplier));
+    if (count <= 0)
     {
         return;
     }
 
-    int chunkCount = 8;
-    if (enemy.def->name == "Spitter")
-    {
-        chunkCount = 10;
-    }
-    else if (enemy.def->name == "Brute")
-    {
-        chunkCount = 14;
-    }
-    else if (enemy.def->bomb.enabled)
-    {
-        chunkCount = 12;
-        SpawnTempLight(enemy.worldPos, glm::vec3(1.0f, 0.34f, 0.08f), 5.0f, 180.0f);
-    }
-    else if (enemy.def->heal.enabled)
-    {
-        chunkCount = 14;
-    }
-
-    static const glm::vec3 sampleOffsets[14] = {
-        {-1.0f, -1.0f, -1.0f},
-        {-1.0f, -1.0f, 1.0f},
-        {-1.0f, 1.0f, -1.0f},
-        {-1.0f, 1.0f, 1.0f},
-        {1.0f, -1.0f, -1.0f},
-        {1.0f, -1.0f, 1.0f},
-        {1.0f, 1.0f, -1.0f},
-        {1.0f, 1.0f, 1.0f},
-        {-1.0f, 0.0f, 0.0f},
-        {1.0f, 0.0f, 0.0f},
-        {0.0f, -1.0f, 0.0f},
-        {0.0f, 1.0f, 0.0f},
-        {0.0f, 0.0f, -1.0f},
-        {0.0f, 0.0f, 1.0f},
-    };
-    const glm::vec3 halfExtent = enemy.def->size * 0.5f;
     const glm::vec3 deathSprayDir = ResolveEnemyDebrisDir(enemy, enemy.worldPos - player_.worldPos);
-    std::uniform_real_distribution<float> speedDist(4.0f, 7.0f);
-
-    auto emitOne = [&](int index, bool pickable, uint32_t materialId, int materialValue)
+    std::uniform_real_distribution<float> speedDist(4.5f, 7.0f);
+    for (int index = 0; index < count; ++index)
     {
-        const glm::vec3 corner = sampleOffsets[index % 14];
-        const glm::vec3 spawnPos = enemy.worldPos + corner * halfExtent;
-        glm::vec3 dir = deathSprayDir * (pickable ? 1.8f : 2.2f) + corner * 0.35f + glm::vec3(0.0f, 0.45f, 0.0f);
+        const float angle = static_cast<float>(index) / static_cast<float>(count) * glm::two_pi<float>();
+        const glm::vec3 radial(std::cos(angle), 0.0f, std::sin(angle));
+        const glm::vec3 spawnPos = enemy.worldPos + radial * spawnRadius + glm::vec3(0.0f, enemy.def->size.y * 0.45f, 0.0f);
+        glm::vec3 dir = deathSprayDir * 1.8f + radial * 0.45f + glm::vec3(0.0f, 0.6f, 0.0f);
         if (glm::length(dir) < 0.001f)
         {
             dir = glm::vec3(0.0f, 1.0f, 0.0f);
         }
         dir = glm::normalize(dir);
-        const Brotato3D::EDebrisKind kind =
-            pickable ? Brotato3D::EDebrisKind::Chunk :
-                       ((index % 5 == 0) ? Brotato3D::EDebrisKind::Chunk : Brotato3D::EDebrisKind::Tiny);
-        SpawnDebris(kind, spawnPos, dir, speedDist(rng_), materialId, 1, 0.0f, pickable, materialValue);
-    };
-
-    for (int index = 0; index < chunkCount; ++index)
-    {
-        const uint32_t materialId = (index % 10 < 7) ? enemy.materialId : enemy.darkMaterialId;
-        emitOne(index, false, materialId, 0);
-    }
-
-    for (int index = 0; index < enemy.def->materialDrop; ++index)
-    {
-        emitOne(chunkCount + index, true, materialDebrisMatId_, 1);
+        SpawnDebris(Brotato3D::EDebrisKind::Chunk,
+                    spawnPos,
+                    dir,
+                    speedDist(rng_),
+                    materialDebrisMatId_,
+                    1,
+                    0.0f,
+                    Brotato3D::EDebrisPayload::Material,
+                    1);
     }
 }
 

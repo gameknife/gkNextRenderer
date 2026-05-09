@@ -4,6 +4,22 @@
 
 namespace Brotato3D
 {
+    namespace
+    {
+        constexpr float SpawnIntervalScaleStart = 1.15f;
+        constexpr float SpawnIntervalScaleEnd = 0.45f;
+        constexpr float SpawnIntervalMinMs = 80.0f;
+
+        float CalculateSpawnIntervalMs(const FWaveDef& wave, const FSpawnEntry& entry, float waveTimeRemainingSec)
+        {
+            const float durationSec = std::max(1.0f, static_cast<float>(wave.durationSec));
+            const float progress = 1.0f - std::clamp(waveTimeRemainingSec / durationSec, 0.0f, 1.0f);
+            const float pressure = std::pow(progress, 1.25f);
+            const float scale = glm::mix(SpawnIntervalScaleStart, SpawnIntervalScaleEnd, pressure);
+            return std::max(SpawnIntervalMinMs, entry.intervalMs * scale);
+        }
+    }
+
     void FWaveSystem::LoadWaves(std::vector<FWaveDef> waves)
     {
         waves_ = std::move(waves);
@@ -66,7 +82,7 @@ namespace Brotato3D
                 {
                     spawnCallback(entry.enemyId, RandomSpawnPosition());
                     ++runtime.spawnedCount;
-                    runtime.nextSpawnTimerMs += entry.intervalMs;
+                    runtime.nextSpawnTimerMs += CalculateSpawnIntervalMs(wave, entry, waveTimeRemainingSec_);
                 }
             }
 

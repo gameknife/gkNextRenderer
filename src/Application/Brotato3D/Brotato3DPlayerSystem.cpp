@@ -261,7 +261,8 @@ void Brotato3DGameInstance::DamagePlayer(int damage, float shakeMs, float flashM
 
 int Brotato3DGameInstance::GetXpToNextLevel() const
 {
-    return 5 + player_.level * 4;
+    const int level = std::max(1, player_.level);
+    return 20 + level * 10 + level * level * 2;
 }
 
 void Brotato3DGameInstance::ApplyUpgrade(const std::string& stat, float delta)
@@ -315,21 +316,6 @@ void Brotato3DGameInstance::ResetRuntimeState()
         projectile.node->SetTranslation(HiddenPosition);
     }
     ClearAllDebris(false);
-    NextPhysics* physics = GetEngine().GetPhysicsEngine();
-    for (auto& pickup : pickupPool_)
-    {
-        pickup.active = false;
-        pickup.magnetized = false;
-        pickup.settleTimerMs = 0.0f;
-        if (physics && !pickup.bodyId.IsInvalid())
-        {
-            physics->SetBodyActive(pickup.bodyId, false);
-            physics->SetBodyTransform(pickup.bodyId, HiddenPosition, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), true);
-            physics->SetBodyVelocity(pickup.bodyId, glm::vec3(0.0f), glm::vec3(0.0f));
-        }
-        NodeUtils::SetVisible(pickup.node, false);
-        pickup.node->SetTranslation(HiddenPosition);
-    }
     floatingTexts_.clear();
     muzzleFlashes_.clear();
     explosionRings_.clear();

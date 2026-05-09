@@ -6,7 +6,6 @@
 #include "Brotato3DDataLoader.hpp"
 #include "Brotato3DDebris.hpp"
 #include "Brotato3DEnemy.hpp"
-#include "Brotato3DPickup.hpp"
 #include "Brotato3DPlayer.hpp"
 #include "Brotato3DProjectile.hpp"
 #include "Brotato3DShop.hpp"
@@ -150,13 +149,11 @@ private:
     };
 
     void SpawnEnemy(const std::string& enemyId, const glm::vec3& worldPos);
-    void SpawnPickup(int value, Brotato3D::EPickupKind kind, const glm::vec3& worldPos);
     void UpdatePlayer(double deltaSeconds);
     void UpdateEnemies(double deltaSeconds);
     void UpdateWeapons(double deltaSeconds);
     void UpdateProjectiles(double deltaSeconds);
     void UpdateEnemyProjectiles(double deltaSeconds);
-    void UpdatePickups(double deltaSeconds);
     void UpdateDebris(double deltaSeconds);
     void UpdateCombatEffects(double deltaSeconds);
     void UpdateWaveBanner(double deltaSeconds);
@@ -164,13 +161,10 @@ private:
     void SpawnEnemyProjectile(const Brotato3D::FEnemyRuntime& enemy, const glm::vec3& dir);
     void KillEnemy(Brotato3D::FEnemyRuntime& enemy, bool dropLoot);
     int CalculateWeaponDamage(const Brotato3D::FWeaponDef& weaponDef, bool& outIsCrit);
-    void ApplyDamageToEnemy(Brotato3D::FEnemyRuntime& enemy, int damage, bool isCrit);
+    int ApplyDamageToEnemy(Brotato3D::FEnemyRuntime& enemy, int damage, bool isCrit);
     void ApplyWeaponKnockback(Brotato3D::FEnemyRuntime& enemy, const glm::vec3& direction, float knockbackMeters);
     void DamagePlayer(int damage, float shakeMs, float flashMs);
     void BuildDebrisPool(std::vector<Assets::Model>& models,
-                         std::vector<Assets::FMaterial>& materials,
-                         std::vector<std::shared_ptr<Assets::Node>>& nodes);
-    void BuildPickupPool(std::vector<Assets::Model>& models,
                          std::vector<Assets::FMaterial>& materials,
                          std::vector<std::shared_ptr<Assets::Node>>& nodes);
     void BuildKinematicCollisionBodies(std::vector<Assets::Model>& models,
@@ -183,19 +177,16 @@ private:
                      uint32_t materialId,
                      int count,
                      float angleConeRad,
-                     bool pickable = false,
-                     int materialValuePerSlot = 0,
+                     Brotato3D::EDebrisPayload payload = Brotato3D::EDebrisPayload::None,
+                     int payloadValuePerSlot = 0,
                      float lifetimeMs = 0.0f);
     void ClearAllDebris(bool keepPickable);
-    void SpawnImpactDebris(const glm::vec3& worldPos,
-                           const glm::vec3& projectileVelocity,
-                           const glm::vec3& weaponColor,
-                           const glm::vec3& enemyColor,
-                           bool isCrit,
-                           const std::string& enemyName);
-    void SpawnDeathDebris(const Brotato3D::FEnemyRuntime& enemy);
+    void SpawnHitXpDebris(const glm::vec3& worldPos, const glm::vec3& projectileDir, int damage);
+    void SpawnKillMaterialDebris(const Brotato3D::FEnemyRuntime& enemy,
+                                 int countMultiplier = 1,
+                                 float spawnRadius = 0.45f,
+                                 int minCount = 0);
     void SpawnPlayerDamageDebris(int damage);
-    uint32_t EnsureHitDebrisMaterial(const glm::vec3& weaponColor, const glm::vec3& enemyColor);
     void PushMuzzleFlash(const glm::vec3& worldPos, const glm::vec3& color);
     void SpawnTempLight(const glm::vec3& worldPos, const glm::vec3& color, float radiusMeters, float durationMs);
     void UpdateLightArea(int lightIndex, const glm::vec3& worldPos, float radiusMeters, float intensityScale);
@@ -274,7 +265,6 @@ private:
     std::vector<Brotato3D::FProjectileRuntime> projectilePool_;
     std::vector<Brotato3D::FEnemyProjectileRuntime> enemyProjectilePool_;
     std::vector<Brotato3D::FDebrisRuntime> debrisPool_;
-    std::vector<Brotato3D::FPickupRuntime> pickupPool_;
     std::vector<Brotato3D::FFloatingText> floatingTexts_;
     std::vector<Brotato3D::FMuzzleFlash> muzzleFlashes_;
     std::vector<Brotato3D::FExpandingRing> explosionRings_;
@@ -308,15 +298,13 @@ private:
     uint32_t debrisFallbackTinyMatId_ = 0;
     uint32_t debrisFallbackChunkMatId_ = 0;
     uint32_t materialDebrisMatId_ = 0;
+    uint32_t xpDebrisMatId_ = 0;
     uint32_t playerDebrisMatId_ = 0;
     uint64_t debrisTickCounter_ = 0;
     std::array<NextBodyID, 4> arenaWallBodyIds_{};
     NextBodyID playerKinematicBodyId_{};
     bool playerKinematicBodyActive_ = false;
     std::map<std::string, std::vector<NextBodyID>> enemyKinematicBodyPools_;
-    std::unordered_map<uint64_t, uint32_t> hitDebrisMaterialIds_;
-    uint32_t pickupXpModelId_ = 0;
-    uint32_t pickupXpMaterialId_ = 0;
     std::map<std::string, uint32_t> characterMaterialIds_;
     bool keyW_ = false;
     bool keyA_ = false;

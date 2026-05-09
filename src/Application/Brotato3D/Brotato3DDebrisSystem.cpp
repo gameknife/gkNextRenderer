@@ -14,7 +14,7 @@ using namespace Brotato3DUtil;
 
 namespace
 {
-    constexpr int TinyDebrisCount = 600;
+    constexpr int TinyDebrisCount = 800;
     constexpr int ChunkDebrisCount = 480;
     constexpr int BossChunkDebrisCount = 80;
     constexpr int RatKinematicBodyCount = 96;
@@ -37,22 +37,15 @@ namespace
     constexpr float DebrisPickablePhysicsMs = 1000.0f;
     constexpr float DebrisMagneticHeightOffset = 0.15f;
     constexpr float DebrisMagneticProgressSpeed = 5.0f;
+    constexpr int MaxXpChunksPerHit = 12;
+    constexpr float HitXpSurfaceOffset = 0.2f;
+    constexpr float HitXpSpeed = 5.0f;
+    constexpr float HitXpConeRad = 0.6f;
     constexpr float KinematicMoveStepSeconds = 1.0f / 60.0f;
     constexpr float ArenaWallHeight = 5.0f;
     constexpr float ArenaWallThickness = 0.5f;
     constexpr float ArenaWallHalfHeight = ArenaWallHeight * 0.5f;
     constexpr float ArenaWallHalfThickness = ArenaWallThickness * 0.5f;
-
-    uint32_t PackColor24(const glm::vec3& color)
-    {
-        const glm::ivec3 c = glm::ivec3(glm::round(glm::clamp(color, glm::vec3(0.0f), glm::vec3(1.0f)) * 255.0f));
-        return (static_cast<uint32_t>(c.r) << 16u) | (static_cast<uint32_t>(c.g) << 8u) | static_cast<uint32_t>(c.b);
-    }
-
-    uint64_t HitMaterialKey(const glm::vec3& weaponColor, const glm::vec3& enemyColor)
-    {
-        return (static_cast<uint64_t>(PackColor24(weaponColor)) << 32u) | PackColor24(enemyColor);
-    }
 
     glm::quat RandomRotation(std::mt19937& rng)
     {
@@ -127,36 +120,12 @@ void Brotato3DGameInstance::BuildDebrisPool(std::vector<Assets::Model>& models,
     debrisFallbackTinyMatId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f, 0.18f, 0.08f));
     debrisFallbackChunkMatId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.5f));
     materialDebrisMatId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f, 0.85f, 0.15f));
+    xpDebrisMatId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.2f, 1.0f, 0.35f));
 
     const Brotato3D::FCharacterDef* selectedCharacter = FindCharacterDef(selectedCharacterId_);
     const glm::vec3 playerColor = selectedCharacter ? selectedCharacter->color :
                                       (characterDefs_.empty() ? glm::vec3(0.20f, 0.75f, 0.30f) : characterDefs_.front().color);
     playerDebrisMatId_ = SceneBuilder::AddLambertianMaterial(materials, playerColor * 0.6f + glm::vec3(0.4f));
-
-    hitDebrisMaterialIds_.clear();
-    auto appendHitMaterial = [this, &materials](const glm::vec3& weaponColor, const glm::vec3& enemyColor)
-    {
-        const uint64_t key = HitMaterialKey(weaponColor, enemyColor);
-        if (hitDebrisMaterialIds_.contains(key))
-        {
-            return;
-        }
-        hitDebrisMaterialIds_[key] = SceneBuilder::AddLambertianMaterial(materials, weaponColor * 0.5f + enemyColor * 0.5f);
-    };
-    for (const auto& [weaponId, weaponDef] : weaponDefs_)
-    {
-        (void)weaponId;
-        for (const auto& [enemyId, enemyDef] : enemyDefs_)
-        {
-            (void)enemyId;
-            appendHitMaterial(weaponDef.projectileColor, enemyDef.color);
-        }
-    }
-    for (const auto& [enemyId, enemyDef] : enemyDefs_)
-    {
-        (void)enemyId;
-        appendHitMaterial(glm::vec3(1.0f, 0.55f, 0.12f), enemyDef.color);
-    }
 
     auto appendPool = [&](Brotato3D::EDebrisKind kind,
                           int count,
@@ -356,8 +325,8 @@ void Brotato3DGameInstance::SpawnDebris(Brotato3D::EDebrisKind kind,
                                         uint32_t materialId,
                                         int count,
                                         float angleConeRad,
-                                        bool pickable,
-                                        int materialValuePerSlot,
+                                        Brotato3D::EDebrisPayload payload,
+                                        int payloadValuePerSlot,
                                         float lifetimeMs)
 {
     if (count <= 0 || debrisPool_.empty())
@@ -365,6 +334,7 @@ void Brotato3DGameInstance::SpawnDebris(Brotato3D::EDebrisKind kind,
         return;
     }
 
+    const bool pickable = payload != Brotato3D::EDebrisPayload::None;
     NextPhysics* physics = GetEngine().GetPhysicsEngine();
     std::vector<size_t> selectedSlots;
     selectedSlots.reserve(static_cast<size_t>(count));
@@ -444,16 +414,16 @@ void Brotato3DGameInstance::SpawnDebris(Brotato3D::EDebrisKind kind,
             slot.node->SetRotation(rotation);
             slot.node->SetScale(glm::vec3(1.0f));
             NodeUtils::SetPrimaryMaterial(slot.node, materialId);
-            NodeUtils::SetOutlineFlags(slot.node, pickable ? Runtime::RenderOutlineFlags::selected : Runtime::RenderOutlineFlags::none);
+            NodeUtils::SetOutlineFlags(slot.node, Runtime::RenderOutlineFlags::none);
             NodeUtils::SetVisible(slot.node, true);
         }
 
         slot.currentMaterialId = materialId;
         slot.activatedTickId = ++debrisTickCounter_;
         slot.active = true;
-        slot.pickable = pickable;
+        slot.payload = payload;
         slot.pickupState = pickable ? Brotato3D::EPickupState::Physics : Brotato3D::EPickupState::None;
-        slot.materialValue = pickable ? materialValuePerSlot : 0;
+        slot.payloadValue = pickable ? payloadValuePerSlot : 0;
         slot.settleTimerMs = pickable ? DebrisPickablePhysicsMs : 0.0f;
         slot.magneticLerpProgress = 0.0f;
         slot.magneticPos = spawnPos;
@@ -484,9 +454,9 @@ void Brotato3DGameInstance::UpdateDebris(double deltaSeconds)
             NodeUtils::SetVisible(slot.node, false);
         }
         slot.active = false;
-        slot.pickable = false;
+        slot.payload = Brotato3D::EDebrisPayload::None;
         slot.pickupState = Brotato3D::EPickupState::None;
-        slot.materialValue = 0;
+        slot.payloadValue = 0;
         slot.settleTimerMs = 0.0f;
         slot.magneticLerpProgress = 0.0f;
         slot.remainingMs = 0.0f;
@@ -499,7 +469,7 @@ void Brotato3DGameInstance::UpdateDebris(double deltaSeconds)
             continue;
         }
 
-        if (!slot.pickable)
+        if (slot.payload == Brotato3D::EDebrisPayload::None)
         {
             if (slot.remainingMs > 0.0f)
             {
@@ -560,8 +530,9 @@ void Brotato3DGameInstance::UpdateDebris(double deltaSeconds)
         const glm::vec3 targetPos = player_.worldPos + glm::vec3(0.0f, DebrisMagneticHeightOffset, 0.0f);
         slot.magneticLerpProgress =
             std::min(1.0f, slot.magneticLerpProgress + static_cast<float>(deltaSeconds) * DebrisMagneticProgressSpeed);
+        const float magnetSpeed = slot.payload == Brotato3D::EDebrisPayload::Xp ? MagnetLerpSpeedXp : MagnetLerpSpeedMaterial;
         slot.magneticPos = glm::mix(slot.magneticPos, targetPos,
-                                    std::min(1.0f, MagnetLerpSpeedMaterial * static_cast<float>(deltaSeconds)));
+                                    std::min(1.0f, magnetSpeed * static_cast<float>(deltaSeconds)));
         if (slot.node)
         {
             slot.node->SetTranslation(slot.magneticPos);
@@ -573,14 +544,36 @@ void Brotato3DGameInstance::UpdateDebris(double deltaSeconds)
 
         if (DistanceXZ(slot.magneticPos, player_.worldPos) < PickupClaimDistance)
         {
-            Brotato3D::PlayPickupMaterialSfx();
-            player_.materials += slot.materialValue;
-            totalMaterialsGained_ += slot.materialValue;
-            PushFloatingText(player_.worldPos + glm::vec3(0.0f, 0.2f, 0.0f),
-                             fmt::format("+{} MAT", slot.materialValue),
-                             glm::vec4(1.0f, 0.85f, 0.15f, 1.0f),
-                             500.0f);
-            spdlog::info("[Brotato3D] Materials {}", player_.materials);
+            if (slot.payload == Brotato3D::EDebrisPayload::Material)
+            {
+                Brotato3D::PlayPickupMaterialSfx();
+                player_.materials += slot.payloadValue;
+                totalMaterialsGained_ += slot.payloadValue;
+                PushFloatingText(player_.worldPos + glm::vec3(0.0f, 0.2f, 0.0f),
+                                 fmt::format("+{} MAT", slot.payloadValue),
+                                 glm::vec4(1.0f, 0.85f, 0.15f, 1.0f),
+                                 500.0f);
+                spdlog::info("[Brotato3D] Materials {}", player_.materials);
+            }
+            else if (slot.payload == Brotato3D::EDebrisPayload::Xp)
+            {
+                Brotato3D::PlayPickupXpSfx();
+                player_.currentXp += slot.payloadValue;
+                PushFloatingText(player_.worldPos + glm::vec3(0.0f, 0.6f, 0.0f),
+                                 fmt::format("+{} XP", slot.payloadValue),
+                                 glm::vec4(0.2f, 1.0f, 0.35f, 1.0f),
+                                 500.0f);
+                while (player_.currentXp >= GetXpToNextLevel())
+                {
+                    player_.currentXp -= GetXpToNextLevel();
+                    ++player_.level;
+                    ++player_.pendingLevelUps;
+                }
+                if (player_.pendingLevelUps > 0)
+                {
+                    BeginLevelUp();
+                }
+            }
             deactivateSlot(slot);
         }
     }
@@ -591,7 +584,7 @@ void Brotato3DGameInstance::ClearAllDebris(bool keepPickable)
     NextPhysics* physics = GetEngine().GetPhysicsEngine();
     for (Brotato3D::FDebrisRuntime& slot : debrisPool_)
     {
-        if (keepPickable && slot.pickable && slot.active)
+        if (keepPickable && slot.payload != Brotato3D::EDebrisPayload::None && slot.active)
         {
             continue;
         }
@@ -609,69 +602,40 @@ void Brotato3DGameInstance::ClearAllDebris(bool keepPickable)
             NodeUtils::SetVisible(slot.node, false);
         }
         slot.active = false;
-        slot.pickable = false;
+        slot.payload = Brotato3D::EDebrisPayload::None;
         slot.pickupState = Brotato3D::EPickupState::None;
-        slot.materialValue = 0;
+        slot.payloadValue = 0;
         slot.settleTimerMs = 0.0f;
         slot.magneticLerpProgress = 0.0f;
         slot.remainingMs = 0.0f;
     }
 }
 
-uint32_t Brotato3DGameInstance::EnsureHitDebrisMaterial(const glm::vec3& weaponColor, const glm::vec3& enemyColor)
+void Brotato3DGameInstance::SpawnHitXpDebris(const glm::vec3& worldPos, const glm::vec3& projectileDir, int damage)
 {
-    const uint64_t key = HitMaterialKey(weaponColor, enemyColor);
-    if (const auto it = hitDebrisMaterialIds_.find(key); it != hitDebrisMaterialIds_.end())
+    if (damage <= 0)
     {
-        return it->second;
+        return;
     }
 
-    const uint32_t materialId = SceneBuilder::AddLambertianMaterialToScene(GetEngine().GetScene(),
-                                                                           weaponColor * 0.5f + enemyColor * 0.5f);
-    hitDebrisMaterialIds_[key] = materialId;
-    return materialId;
-}
-
-void Brotato3DGameInstance::SpawnImpactDebris(const glm::vec3& worldPos,
-                                              const glm::vec3& projectileVelocity,
-                                              const glm::vec3& weaponColor,
-                                              const glm::vec3& enemyColor,
-                                              bool isCrit,
-                                              const std::string& enemyName)
-{
-    int count = 4;
-    float surfaceOffset = 0.36f;
-    if (enemyName == "Brute" || enemyName == "Charger" || enemyName == "Bomber" || enemyName == "Shaman")
-    {
-        count = 6;
-        surfaceOffset = 0.55f;
-    }
-    else if (enemyName == "Warden")
-    {
-        count = 8;
-        surfaceOffset = 0.8f;
-    }
-    if (isCrit)
-    {
-        count = static_cast<int>(std::ceil(static_cast<float>(count) * 1.5f));
-    }
-
-    glm::vec3 impulseDir = projectileVelocity;
+    glm::vec3 impulseDir(projectileDir.x, 0.0f, projectileDir.z);
     if (glm::length(impulseDir) < DebrisLengthEpsilon)
     {
-        impulseDir = glm::vec3(0.0f, 1.0f, 0.0f);
+        impulseDir = glm::vec3(0.0f, 0.0f, 1.0f);
     }
-    impulseDir = glm::normalize(glm::normalize(impulseDir) + glm::vec3(0.0f, 0.3f, 0.0f));
+    impulseDir = glm::normalize(impulseDir);
 
-    const glm::vec3 spawnPos = worldPos + impulseDir * surfaceOffset;
-
+    const int count = std::clamp(damage, 1, MaxXpChunksPerHit);
+    const glm::vec3 spawnPos = worldPos + impulseDir * HitXpSurfaceOffset;
     SpawnDebris(Brotato3D::EDebrisKind::Tiny,
-                glm::vec3(spawnPos.x, std::max(0.35f, spawnPos.y), spawnPos.z),
+                glm::vec3(spawnPos.x, std::max(0.25f, spawnPos.y), spawnPos.z),
                 impulseDir,
-                isCrit ? 6.0f : 4.0f,
-                EnsureHitDebrisMaterial(weaponColor, enemyColor),
+                HitXpSpeed,
+                xpDebrisMatId_ != 0 ? xpDebrisMatId_ : debrisFallbackTinyMatId_,
                 count,
-                0.6f);
+                HitXpConeRad,
+                Brotato3D::EDebrisPayload::Xp,
+                1);
 }
 
 void Brotato3DGameInstance::SpawnPlayerDamageDebris(int damage)
@@ -685,7 +649,7 @@ void Brotato3DGameInstance::SpawnPlayerDamageDebris(int damage)
                 playerDebrisMatId_ != 0 ? playerDebrisMatId_ : debrisFallbackTinyMatId_,
                 count,
                 glm::half_pi<float>(),
-                false,
+                Brotato3D::EDebrisPayload::None,
                 0,
                 1500.0f);
 }

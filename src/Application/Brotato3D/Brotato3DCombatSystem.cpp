@@ -5,19 +5,25 @@
 
 using namespace Brotato3DUtil;
 
-void Brotato3DGameInstance::ApplyDamageToEnemy(Brotato3D::FEnemyRuntime& enemy, int damage, bool isCrit)
+int Brotato3DGameInstance::ApplyDamageToEnemy(Brotato3D::FEnemyRuntime& enemy, int damage, bool isCrit)
 {
-    if (!enemy.alive)
+    if (!enemy.alive || damage <= 0)
     {
-        return;
+        return 0;
     }
 
-    enemy.currentHp -= damage;
-    Brotato3D::PlayHitSfx(damage, isCrit);
+    const int effectiveDamage = std::min(damage, std::max(0, enemy.currentHp));
+    if (effectiveDamage <= 0)
+    {
+        return 0;
+    }
+
+    enemy.currentHp -= effectiveDamage;
+    Brotato3D::PlayHitSfx(effectiveDamage, isCrit);
     enemy.hitFlashRemainingMs = 80.0f;
     NodeUtils::SetPrimaryMaterial(enemy.node, enemy.hitFlashMaterialId);
     PushFloatingText(enemy.worldPos + glm::vec3(0.0f, 0.8f, 0.0f),
-                     isCrit ? fmt::format("!{}", damage) : fmt::format("-{}", damage),
+                     isCrit ? fmt::format("!{}", effectiveDamage) : fmt::format("-{}", effectiveDamage),
                      isCrit ? glm::vec4(1.0f, 0.78f, 0.12f, 1.0f) : glm::vec4(1.0f, 0.25f, 0.18f, 1.0f),
                      600.0f,
                      isCrit ? 1.4f : 1.0f);
@@ -30,6 +36,7 @@ void Brotato3DGameInstance::ApplyDamageToEnemy(Brotato3D::FEnemyRuntime& enemy, 
         }
         KillEnemy(enemy, true);
     }
+    return effectiveDamage;
 }
 
 void Brotato3DGameInstance::ProcessItemTriggers(double deltaSeconds)
