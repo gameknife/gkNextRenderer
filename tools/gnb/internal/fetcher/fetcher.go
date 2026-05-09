@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/config"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
 )
 
@@ -100,7 +101,7 @@ func ensureArchive(repoRoot string, url string, dstDir string, sentinel string) 
 }
 
 func Download(url string, dst string) error {
-	fmt.Printf("[gnb] download %s\n", url)
+	console.Info("download %s", url)
 	resp, err := http.Get(url)
 	if err != nil {
 		return err

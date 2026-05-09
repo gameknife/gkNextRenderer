@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
 )
 
@@ -51,7 +52,7 @@ func Run(repoRoot string, opts Options) error {
 		args = append(args, "--load-scene="+scene)
 	}
 	args = append(args, opts.Args...)
-	fmt.Printf("[gnb] %s %s\n", exe, strings.Join(args, " "))
+	console.CommandLine(strings.TrimSpace(exe + " " + strings.Join(args, " ")))
 	if opts.DryRun {
 		return nil
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/android"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/cmakerun"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/config"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/fetcher"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ios"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/packager"
@@ -82,16 +83,16 @@ func newInfoCommand(ctx appContext) *cobra.Command {
 				fmt.Println(config.BinCacheKey(ctx.repoRoot, ctx.cfg, runtime.GOOS))
 				return nil
 			}
-			fmt.Printf("gnb:        %s\n", version)
-			fmt.Printf("repo:       %s\n", ctx.repoRoot)
-			fmt.Printf("platform:   %s/%s\n", runtime.GOOS, runtime.GOARCH)
-			fmt.Printf("preset:     %s\n", ctx.preset)
-			fmt.Printf("bin:        %s\n", platform.BinDir(ctx.repoRoot, ctx.preset))
-			fmt.Printf("vcpkg:      %s\n", vcpkg.Root(ctx.repoRoot, ctx.cfg))
-			fmt.Printf("bincache:   %s\n", filepath.Join(ctx.repoRoot, ctx.cfg.Vcpkg.BinaryCache))
-			fmt.Printf("cache-key:  %s\n", config.BinCacheKey(ctx.repoRoot, ctx.cfg, runtime.GOOS))
+			console.Label("gnb", version)
+			console.Label("repo", ctx.repoRoot)
+			console.Label("platform", runtime.GOOS+"/"+runtime.GOARCH)
+			console.Label("preset", ctx.preset)
+			console.Label("bin", platform.BinDir(ctx.repoRoot, ctx.preset))
+			console.Label("vcpkg", vcpkg.Root(ctx.repoRoot, ctx.cfg))
+			console.Label("bincache", filepath.Join(ctx.repoRoot, ctx.cfg.Vcpkg.BinaryCache))
+			console.Label("cache-key", config.BinCacheKey(ctx.repoRoot, ctx.cfg, runtime.GOOS))
 			if sha, err := gitCommit(ctx.repoRoot); err == nil {
-				fmt.Printf("git:        %s\n", sha)
+				console.Label("git", sha)
 			}
 			return nil
 		},
@@ -115,24 +116,24 @@ func newDoctorCommand(ctx appContext) *cobra.Command {
 			failed := false
 			for _, name := range checks {
 				if platform.CommandExists(name) {
-					fmt.Printf("[ok]   %s\n", name)
+					console.Success(name)
 				} else {
-					fmt.Printf("[miss] %s\n", name)
+					console.Warn("missing %s", name)
 					failed = true
 				}
 			}
 			if runtime.GOOS == "windows" && os.Getenv("VULKAN_SDK") == "" {
-				fmt.Println("[miss] VULKAN_SDK")
+				console.Warn("missing VULKAN_SDK")
 				failed = true
 			}
 			if err := platform.EnsureLinuxDesktopPackages(); err != nil {
-				fmt.Println(err)
+				console.Warn("%s", err)
 				failed = true
 			}
 			if _, err := os.Stat(vcpkg.Toolchain(ctx.repoRoot, ctx.cfg)); err == nil {
-				fmt.Println("[ok]   vcpkg toolchain")
+				console.Success("vcpkg toolchain")
 			} else {
-				fmt.Println("[miss] vcpkg toolchain (run `gnb setup`)")
+				console.Warn("missing vcpkg toolchain (run `gnb setup`)")
 			}
 			if failed {
 				return fmt.Errorf("doctor found missing requirements")
@@ -187,7 +188,7 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 			}
 			if !skipSetup {
 				if _, err := os.Stat(vcpkg.Toolchain(ctx.repoRoot, ctx.cfg)); err != nil {
-					fmt.Println("[gnb] 首次构建：自动执行 setup（如需跳过用 --skip-setup）")
+					console.Info("首次构建：自动执行 setup（如需跳过用 --skip-setup）")
 					if err := vcpkg.Ensure(ctx.repoRoot, ctx.cfg, false); err != nil {
 						return err
 					}
@@ -241,7 +242,7 @@ func newRunCommand(ctx appContext) *cobra.Command {
 }
 
 func printRunnableTargets(ctx appContext) {
-	fmt.Println("Runnable applications:")
+	console.Header("Runnable applications")
 	for _, target := range ctx.cfg.Targets.All {
 		if target == "gkNextUnitTests" {
 			continue
@@ -249,7 +250,7 @@ func printRunnableTargets(ctx appContext) {
 		fmt.Printf("  %s\n", target)
 	}
 	fmt.Println()
-	fmt.Println("Run one with: gnb run <target>")
+	console.Info("Run one with: gnb run <target>")
 }
 
 func newTestCommand(ctx appContext) *cobra.Command {
@@ -418,17 +419,17 @@ func newInstallCommand(ctx appContext) *cobra.Command {
 			if err := os.WriteFile(dst, data, 0o755); err != nil {
 				return err
 			}
-			fmt.Printf("[gnb] installed to %s\n", dst)
+			console.Success("installed to %s", dst)
 			return nil
 		},
 	}
 }
 
 func printOverview(ctx appContext) error {
-	fmt.Printf("repo:     %s\n", ctx.repoRoot)
-	fmt.Printf("platform: %s/%s\n", runtime.GOOS, runtime.GOARCH)
-	fmt.Printf("preset:   %s\n", ctx.preset)
-	fmt.Println("try:      gnb setup | gnb build | gnb doctor")
+	console.Label("repo", ctx.repoRoot)
+	console.Label("platform", runtime.GOOS+"/"+runtime.GOARCH)
+	console.Label("preset", ctx.preset)
+	console.Info("try: gnb setup | gnb build | gnb doctor")
 	return nil
 }
 
@@ -443,6 +444,6 @@ func gitCommit(repoRoot string) (string, error) {
 }
 
 func fatal(err error) {
-	fmt.Fprintln(os.Stderr, "gnb:", err)
+	console.Error("%s", err)
 	os.Exit(1)
 }

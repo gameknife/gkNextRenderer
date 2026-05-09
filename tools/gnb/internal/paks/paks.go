@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/config"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/fetcher"
 )
 
@@ -46,7 +47,7 @@ func Fetch(repoRoot string, cfg config.Config, groups []string, force bool) erro
 		}
 		dst := filepath.Join(repoRoot, asset.Dest)
 		if _, err := os.Stat(dst); err == nil && !force {
-			fmt.Printf("[paks] %s already exists\n", asset.Dest)
+			console.Info("%s already exists", asset.Dest)
 			continue
 		}
 		if err := fetcher.Download(baseURL+"/"+asset.Name, dst); err != nil {
@@ -77,7 +78,7 @@ func Publish(repoRoot string, cfg config.Config, groups []string, dryRun bool, t
 	}
 	if dryRun {
 		for _, asset := range assets {
-			fmt.Printf("[dry-run] publish %s as %s\n", asset.Dest, asset.Name)
+			console.Info("dry-run publish %s as %s", asset.Dest, asset.Name)
 		}
 		return nil
 	}
@@ -184,6 +185,6 @@ func uploadAsset(repoRoot string, token string, uploadURL string, asset config.P
 		data, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("upload failed for %s: %s %s", asset.Name, resp.Status, data)
 	}
-	fmt.Printf("[paks] uploaded %s\n", asset.Name)
+	console.Success("uploaded %s", asset.Name)
 	return nil
 }

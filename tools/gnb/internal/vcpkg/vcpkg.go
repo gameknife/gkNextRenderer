@@ -8,6 +8,7 @@ import (
 	"runtime"
 
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/config"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 )
 
 func Root(repoRoot string, cfg config.Config) string {
@@ -77,7 +78,7 @@ func Ensure(repoRoot string, cfg config.Config, refresh bool) error {
 }
 
 func run(dir string, name string, args ...string) error {
-	fmt.Printf("[gnb] %s %v\n", name, args)
+	console.Command(name, args...)
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
