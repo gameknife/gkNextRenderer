@@ -1,39 +1,26 @@
 name: Windows CI (Self)
 
-on: 
+on:
   pull_request:
-    branches:
-      - main
-      - dev
-      - 'releases/**'
+    branches: [main, dev, 'releases/**']
   push:
-    branches:
-      - main
-      - 'releases/**'
+    branches: [main, 'releases/**']
     paths:
       - '.github/workflows/**'
       - 'src/**'
       - 'assets/shaders/**'
-      - '*.sh'
-      - '*.bat'
+      - 'tools/gnb/**'
+      - 'gnb.*'
       - '**/CMakeLists.txt'
+
 jobs:
   build:
     runs-on: self-hosted
-    env:
-      SDK_VERSION: 1.4.313.1
     steps:
-    - uses: actions/checkout@v4
-      with:
-        clean: false
-   
-    - name: Compile vcpkg dependencies
-      run: |
-        scripts\vcpkg.bat
-      shell: cmd
-
-    - name: Compile gkNextRenderer
-      run: |
-        build.bat --preset default-windows
-      shell: cmd
-
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+      - run: .\gnb.bat setup
+        shell: cmd
+      - run: .\gnb.bat build
+        shell: cmd

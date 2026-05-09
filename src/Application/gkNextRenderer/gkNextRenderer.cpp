@@ -595,15 +595,11 @@ void NextRendererGameInstance::DrawSettings()
 
 		if( ImGui::CollapsingHeader(LOCTEXT("Denoiser"), ImGuiTreeNodeFlags_DefaultOpen) )
 		{
-#if WITH_OIDN
-			ImGui::Checkbox("Use OIDN", &userSetting.Denoiser);
-#else
 			ImGui::Checkbox(LOCTEXT("Use JBF"), &userSetting.Denoiser);
 			ImGui::SliderFloat(LOCTEXT("DenoiseSigma"), &userSetting.DenoiseSigma, 0.01f, 2.0f, "%.2f");
 			ImGui::SliderFloat(LOCTEXT("DenoiseSigmaLum"), &userSetting.DenoiseSigmaLum, 0.01f, 50.0f, "%.2f");
 			ImGui::SliderFloat(LOCTEXT("DenoiseSigmaNormal"), &userSetting.DenoiseSigmaNormal, 0.001f, 0.2f, "%.3f");
 			ImGui::SliderInt(LOCTEXT("DenoiseSize"), &userSetting.DenoiseSize, 1, 10);
-#endif
 			ImGui::NewLine();
 		}
 

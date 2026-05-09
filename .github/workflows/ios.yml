@@ -2,67 +2,45 @@ name: iOS CI
 
 on:
   pull_request:
-    branches:
-      - main
-      - dev
-      - 'releases/**'
+    branches: [main, dev, 'releases/**']
   push:
-    branches:
-      - main
-      - 'releases/**'
+    branches: [main, 'releases/**']
     paths:
       - '.github/workflows/**'
       - 'src/**'
       - 'assets/shaders/**'
-      - '*.sh'
-      - '*.bat'
+      - 'tools/gnb/**'
+      - 'gnb.*'
       - '**/CMakeLists.txt'
+
 jobs:
   build:
-
     runs-on: macos-latest
-    env:
-      SDK_VERSION: 1.4.313.0
     steps:
-    - uses: actions/checkout@v4
-    - name: Install Vulkan SDK
-      run: |
-        brew install molten-vk
-        brew install glslang
-
-    - name: Download and setup slangc
-      run: |
-        curl -L https://github.com/shader-slang/slang/releases/download/vulkan-sdk-${SDK_VERSION}/slang-vulkan-sdk-${SDK_VERSION}-macos-aarch64.zip -o slang.zip
-        mkdir -p slang
-        unzip slang.zip -d slang
-        echo "$PWD/slang/bin" >> $GITHUB_PATH
-        echo "Downloaded and added slangc to PATH"
-
-    - name: Compile vcpkg dependencies
-      run: ./scripts/vcpkg.sh
-
-    - name: Restore cached vcpkg
-      id: cache-vcpkg-restore
-      uses: actions/cache/restore@v4
-      with:
-        path: |
-          .vcpkg
-          .vcpkg_bincache
-        key: ${{ runner.os }}-ios-bincache
-        
-    - name: Compile gkNextRenderer
-      run: |
-        slangc -v
-        ./build.sh --preset default-ios
-
-    - name: Save vcpkg to cache
-      if: github.event_name != 'pull_request'
-      id: cache-vcpkg-save
-      uses: actions/cache/save@v4
-      with:
-        path: |
-          .vcpkg
-          .vcpkg_bincache
-        key: ${{ steps.cache-vcpkg-restore.outputs.cache-primary-key }}
-
-
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Install Vulkan dependencies
+        run: |
+          brew install molten-vk
+          brew install glslang
+      - name: Cache key
+        id: gnb
+        run: echo "key=$(./gnb.sh info --bincache-key)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        id: cache-vcpkg-restore
+        with:
+          path: |
+            .vcpkg
+            .vcpkg_bincache
+          key: ${{ steps.gnb.outputs.key }}-ios
+      - run: ./gnb.sh setup --vcpkg-only
+      - run: ./gnb.sh ios --skip-codesign
+      - uses: actions/cache/save@v4
+        if: github.event_name != 'pull_request'
+        with:
+          path: |
+            .vcpkg
+            .vcpkg_bincache
+          key: ${{ steps.gnb.outputs.key }}-ios

@@ -50,7 +50,7 @@ Image::Image(
 
 	VkExternalMemoryImageCreateInfo externalMemoryImageInfo{};
 	externalMemoryImageInfo.sType       = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
-#if WIN32 && !defined(__MINGW32__)
+#if WIN32
 	externalMemoryImageInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
 #else
 	externalMemoryImageInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
@@ -470,7 +470,7 @@ void RenderImage::InsertBarrier(VkCommandBuffer commandBuffer, VkAccessFlags src
 ExtHandle RenderImage::GetExternalHandle() const
 {
     ExtHandle handle{};
-#if WIN32 && !defined(__MINGW32__)
+#if WIN32
     VkMemoryGetWin32HandleInfoKHR handleInfo = { VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR };
     handleInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
     handleInfo.memory = imageMemory_->Handle();

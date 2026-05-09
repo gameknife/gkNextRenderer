@@ -24,7 +24,7 @@
 #include <fmt/format.h>
 #include <fmt/chrono.h>
 
-#if WIN32 && !defined(__MINGW32__)
+#if WIN32
 #define DISABLE_OPTIMIZATION __pragma(optimize("", off))
 #define ENABLE_OPTIMIZATION __pragma(optimize("", on))
 #else
