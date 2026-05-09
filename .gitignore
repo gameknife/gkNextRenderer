@@ -349,6 +349,9 @@ slang/
 tools/node/
 tools/typescript/
 tools/tsc/
+tools/gnb-bin/
+/gnb
+/gnb.exe
 cmake-build-*/
 .DS_Store
 .VSCodeCounter/

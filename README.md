@@ -132,9 +132,9 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 ### 通用说明
 
-- 桌面平台现在可以从任意工作目录启动可执行文件，通常不再需要先 `cd` 到 `out/build/<preset>/bin`
-- 如果不确定可用预设，可以先执行 `cmake --list-presets=configure`
-- 常用桌面预设：`default-windows`、`default-linux`、`default-macos-arm64`
+- 桌面平台现在通过 `gnb` 统一构建和运行，通常不再需要先 `cd` 到 `out/build/<platform>/bin`
+- 首次使用执行 `./gnb setup`（Windows: `gnb.bat setup`），之后日常使用 `./gnb build` / `./gnb run`
+- 可用 CMake 预设收敛为：`windows`、`linux`、`macos-arm64`、`ios`
 
 ### 平台构建
 
@@ -149,19 +149,9 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 - 启用“使用 Unicode UTF-8 提供全球语言支持”
 
 ```bat
-.\build.bat --preset default-windows
-.\run.bat --preset default-windows
-```
-
-</details>
-
-<details>
-<summary><b>Windows (MSYS2 MinGW)</b></summary>
-
-```shell
-pacman -S --needed git mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake mingw-w64-x86_64-toolchain
-./build.sh --preset default-mingw
-./run.sh --preset default-mingw
+gnb.bat setup
+gnb.bat build
+gnb.bat run gkNextRenderer
 ```
 
 </details>
@@ -170,12 +160,13 @@ pacman -S --needed git mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake mingw-w64-x
 <summary><b>Linux (Ubuntu)</b></summary>
 
 ```shell
-sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev autoconf autoconf-archive automake libtool python3.12-venv
-./build.sh --preset default-linux
-./run.sh --preset default-linux
+sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev autoconf autoconf-archive automake libtool python3.12-venv
+./gnb.sh setup
+./gnb.sh build
+./gnb.sh run gkNextRenderer
 ```
 
-`build.sh` 现在会在 Linux 首轮构建前做桌面依赖预检查，如果缺少 `xrandr`、`wayland-protocols` 或 `xkbcommon`，会直接给出更明确的提示。
+`gnb` 现在会在 Linux 首轮构建前做桌面依赖预检查，如果缺少 `xrandr`、`wayland-protocols` 或 `xkbcommon`，会直接给出更明确的提示。
 
 </details>
 
@@ -184,14 +175,14 @@ sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev 
 
 ```shell
 sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxrandr wayland-protocols libxkbcommon
-./build.sh --preset full-linux --reconfigure
-./run.sh --preset full-linux --target gkNextRenderer
+./gnb.sh setup
+./gnb.sh build --reconfigure
+./gnb.sh run gkNextRenderer
 ```
 
 说明：
 
-- Steam Deck 首次部署建议直接使用 `full-linux`
-- 如果机器上还没有 `slangc`，`build.sh` 会自动下载项目约定的 Slang 工具链到 `external/`
+- 如果机器上还没有 `slangc`，`gnb setup` 会自动下载项目约定的 Slang 工具链到 `external/`
 - 如果 vcpkg 阶段遇到 GitHub 归档下载失败，优先直接重试同一条构建命令
 - 一次真实 Steam Deck 部署的复盘见 [docs/steamdeck-deployment-notes.md](docs/steamdeck-deployment-notes.md)
 
@@ -202,8 +193,9 @@ sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxra
 
 ```shell
 brew install molten-vk glslang ninja
-./build.sh --preset default-macos-arm64
-./run.sh --preset default-macos-arm64
+./gnb.sh setup
+./gnb.sh build
+./gnb.sh run gkNextRenderer
 ```
 
 </details>
@@ -216,8 +208,8 @@ brew install molten-vk glslang ninja
 ```bat
 set ANDROID_HOME=C:\Android\Sdk
 set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\27.0.12077973
-build.bat --android
-run.bat --preset android
+gnb.bat setup --vcpkg-only
+gnb.bat android
 ```
 
 </details>
@@ -226,16 +218,16 @@ run.bat --preset android
 
 ```shell
 # 主渲染器
-./run.sh --preset default-macos-arm64 --target gkNextRenderer
+./gnb.sh run gkNextRenderer
 
 # Editor
-./run.sh --preset default-macos-arm64 --target gkNextEditor
+./gnb.sh run gkNextEditor
 
 # BrickPlayer（数字乐高 / LDraw 搭建原型）
-./run.sh --preset default-macos-arm64 --target BrickPlayer
+./gnb.sh run BrickPlayer
 
 # CharacterDemo（角色控制 / AI / 导航实验）
-./run.sh --preset default-macos-arm64 --target CharacterDemo
+./gnb.sh run CharacterDemo
 ```
 
 ### 可选资源包（optional assets）
@@ -244,21 +236,21 @@ run.bat --preset android
 
 | 选择器 | 内容 | 落盘位置 | 缺失影响 |
 |------|------|------|------|
-| `--ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer 缺 LDraw 零件库 |
-| `--optional` | `optional.pak` | `assets/paks/` | 主渲染器 / Editor / CharacterDemo / MagicaLego 缺场景资源 |
-| `--sfx` | 6 个 mp3/wav | `assets/sfx/` | MagicaLego / BrickPlayer 静音 |
-| `--ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows 下 MagicaLego 视频录制不可用 |
+| `ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer 缺 LDraw 零件库 |
+| `optional` | `optional.pak` | `assets/paks/` | 主渲染器 / Editor / CharacterDemo / MagicaLego 缺场景资源 |
+| `sfx` | 6 个 mp3/wav | `assets/sfx/` | MagicaLego / BrickPlayer 静音 |
+| `ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows 下 MagicaLego 视频录制不可用 |
 
 ```bash
 # Linux / macOS / Git Bash：默认拉取全部可选资源
-./scripts/fetch-paks.sh
+./gnb.sh paks fetch
 
 # 或只拉指定资源
-./scripts/fetch-paks.sh --optional --ldraw
-./scripts/fetch-paks.sh --ffmpeg --sfx
+./gnb.sh paks fetch optional ldraw
+./gnb.sh paks fetch ffmpeg sfx
 
 # Windows
-scripts\fetch-paks.bat
+gnb.bat paks fetch
 ```
 
 ## 子项目

@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Backwards-compatible shim. The canonical fetcher now lives at
-# scripts/fetch-paks.sh and can pull every optional pak (ldraw.pak / optional.pak)
-# from the project's GitHub release. See scripts/fetch-paks.sh --help.
+# Backwards-compatible shim. The canonical fetcher now lives in gnb.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
@@ -17,4 +15,4 @@ if [[ -n "${OPTIONAL_PAK_URL:-}" && -z "${PAKS_BASE_URL:-}" ]]; then
     esac
 fi
 
-exec "${REPO_ROOT}/scripts/fetch-paks.sh" --optional "$@"
+exec "${REPO_ROOT}/gnb.sh" paks fetch optional "$@"

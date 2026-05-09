@@ -25,14 +25,9 @@ function Resolve-AbsolutePath($p) {
 
 function Find-Packager {
     $candidates = @(
-        'out\build\full-windows\bin\Packager.exe',
-        'out\build\default-windows\bin\Packager.exe',
-        'out\build\full-mingw\bin\Packager.exe',
-        'out\build\default-mingw\bin\Packager.exe',
-        'out\build\full-linux\bin\Packager',
-        'out\build\default-linux\bin\Packager',
-        'out\build\full-macos-arm64\bin\Packager',
-        'out\build\default-macos-arm64\bin\Packager'
+        'out\build\windows\bin\Packager.exe',
+        'out\build\linux\bin\Packager',
+        'out\build\macos-arm64\bin\Packager'
     )
     foreach ($c in $candidates) {
         $p = Join-Path $RepoRoot $c
@@ -40,7 +35,7 @@ function Find-Packager {
     }
     $found = Get-ChildItem -Path (Join-Path $RepoRoot 'out\build') -Recurse -Include 'Packager','Packager.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($found) { return $found.FullName }
-    throw "Packager binary not found. Build it first (e.g. cmake --build --preset full-windows --target Packager)."
+    throw "Packager binary not found. Build it first (e.g. gnb.bat build Packager)."
 }
 
 $FileList  = Resolve-AbsolutePath $FileList

@@ -9,12 +9,6 @@ if (WIN32)
     )
 endif ()
 
-if (MINGW)
-    target_link_options(gk_project_options INTERFACE "-municode")
-    target_compile_definitions(gk_project_options INTERFACE MINGW=1)
-    target_compile_options(gk_project_options INTERFACE "-Wno-deprecated-declarations")
-endif()
-
 if (MSVC)
 	# 使用 CMake 3.15+ 的标准方式设置 MSVC 运行时库为静态链接
 	set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "" FORCE)

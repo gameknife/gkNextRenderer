@@ -30,10 +30,7 @@ function Find-Packager
     )
 
     $candidatePaths = @(
-        (Join-Path $RepoRoot "out/build/full-windows/bin/Packager.exe"),
-        (Join-Path $RepoRoot "out/build/default-windows/bin/Packager.exe"),
-        (Join-Path $RepoRoot "out/build/full-mingw/bin/Packager.exe"),
-        (Join-Path $RepoRoot "out/build/default-mingw/bin/Packager.exe")
+        (Join-Path $RepoRoot "out/build/windows/bin/Packager.exe")
     )
 
     foreach ($candidatePath in $candidatePaths)
@@ -52,7 +49,7 @@ function Find-Packager
         return (Resolve-NormalizedPath $discoveredPackager.FullName)
     }
 
-    throw "Packager.exe not found. Build it first, e.g. ``cmake --build --preset full-windows --target Packager``."
+    throw "Packager.exe not found. Build it first, e.g. ``gnb.bat build Packager``."
 }
 
 function Sync-Directory
