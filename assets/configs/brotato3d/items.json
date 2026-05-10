@@ -68,6 +68,43 @@
       "rarity": "uncommon",
       "weight": 2,
       "cost": 18
+    },
+    {
+      "id": "impact_kneepads",
+      "name": "冲击护膝",
+      "description": "冲刺结束时推开附近敌人",
+      "trigger": "on_dash_end",
+      "effect": "dash_knockback",
+      "value": 1.0,
+      "explosionRadius": 2.0,
+      "explosionDamage": 0,
+      "rarity": "uncommon",
+      "weight": 2,
+      "cost": 24
+    },
+    {
+      "id": "spare_capacitor",
+      "name": "备用电容",
+      "description": "Dash 技能豆上限 +1",
+      "trigger": "passive_stat",
+      "effect": "stat_dashCharges",
+      "value": 1,
+      "rarity": "uncommon",
+      "weight": 2,
+      "cost": 26
+    },
+    {
+      "id": "kinetic_coil",
+      "name": "动能线圈",
+      "description": "冲刺结束时推开附近敌人并造成少量伤害",
+      "trigger": "on_dash_end",
+      "effect": "dash_knockback",
+      "value": 1.2,
+      "explosionRadius": 2.2,
+      "explosionDamage": 8,
+      "rarity": "rare",
+      "weight": 1,
+      "cost": 34
     }
   ]
 }

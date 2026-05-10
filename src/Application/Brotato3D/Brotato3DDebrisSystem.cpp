@@ -625,7 +625,9 @@ void Brotato3DGameInstance::SpawnHitXpDebris(const glm::vec3& worldPos, const gl
     }
     impulseDir = glm::normalize(impulseDir);
 
-    const int count = std::clamp(damage, 1, MaxXpChunksPerHit);
+    const Brotato3D::FWaveDef* waveDef = waveSystem_.GetCurrentWaveDef();
+    const float duskXpMult = IsDuskSurgeActive() && waveDef ? std::max(1.0f, waveDef->duskBonusXpMult) : 1.0f;
+    const int count = std::clamp(static_cast<int>(std::ceil(static_cast<float>(damage) * duskXpMult)), 1, MaxXpChunksPerHit);
     const glm::vec3 spawnPos = worldPos + impulseDir * HitXpSurfaceOffset;
     SpawnDebris(Brotato3D::EDebrisKind::Tiny,
                 glm::vec3(spawnPos.x, std::max(0.25f, spawnPos.y), spawnPos.z),

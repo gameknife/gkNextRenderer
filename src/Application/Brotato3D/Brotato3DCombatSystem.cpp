@@ -133,6 +133,58 @@ void Brotato3DGameInstance::ProcessOnKillTriggers(const glm::vec3& worldPos)
     }
 }
 
+void Brotato3DGameInstance::ProcessDashEndItemTriggers()
+{
+    for (const std::string& itemId : player_.ownedItemIds)
+    {
+        const Brotato3D::FItemDef* item = GetItemDef(itemId);
+        if (!item || item->trigger != "on_dash_end")
+        {
+            continue;
+        }
+        if (item->effect == "dash_knockback")
+        {
+            ApplyDashKnockbackItem(*item);
+        }
+    }
+}
+
+void Brotato3DGameInstance::ApplyDashKnockbackItem(const Brotato3D::FItemDef& item)
+{
+    if (item.explosionRadius <= 0.0f || item.value <= 0.0f)
+    {
+        return;
+    }
+
+    PushExplosionRing(player_.worldPos, glm::vec4(0.45f, 0.90f, 1.0f, 1.0f), item.explosionRadius);
+    SpawnTempLight(player_.worldPos + glm::vec3(0.0f, 0.35f, 0.0f), glm::vec3(0.35f, 0.85f, 1.0f), 3.0f, 150.0f);
+    StartScreenShake(100.0f, 1.2f);
+    for (auto& enemy : enemies_)
+    {
+        if (!enemy.alive || DistanceXZ(enemy.worldPos, player_.worldPos) > item.explosionRadius)
+        {
+            continue;
+        }
+
+        glm::vec3 pushDir(enemy.worldPos.x - player_.worldPos.x, 0.0f, enemy.worldPos.z - player_.worldPos.z);
+        if (glm::length(pushDir) <= 0.001f)
+        {
+            pushDir = player_.dashDir;
+        }
+        if (glm::length(pushDir) <= 0.001f)
+        {
+            pushDir = glm::vec3(0.0f, 0.0f, 1.0f);
+        }
+        pushDir = glm::normalize(pushDir);
+        enemy.lastHitDebrisDir = pushDir;
+        ApplyWeaponKnockback(enemy, pushDir, item.value);
+        if (item.explosionDamage > 0)
+        {
+            ApplyDamageToEnemy(enemy, item.explosionDamage, false);
+        }
+    }
+}
+
 void Brotato3DGameInstance::ApplyItemExplosionDamage(const glm::vec3& worldPos, float radius, int damage)
 {
     if (radius <= 0.0f || damage <= 0)

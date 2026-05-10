@@ -9,6 +9,44 @@
 
 using namespace Brotato3DUtil;
 
+namespace
+{
+    constexpr float ExtractionVehicleObstacleHalfX = 1.45f;
+    constexpr float ExtractionVehicleObstacleHalfZ = 0.78f;
+    constexpr float SegmentEpsilon = 0.0001f;
+
+    bool SegmentIntersectsAabb2D(const glm::vec2& from,
+                                 const glm::vec2& to,
+                                 const glm::vec2& minBounds,
+                                 const glm::vec2& maxBounds)
+    {
+        const glm::vec2 delta = to - from;
+        float tMin = 0.0f;
+        float tMax = 1.0f;
+
+        auto clipAxis = [&](float start, float dir, float minValue, float maxValue) -> bool
+        {
+            if (std::abs(dir) < SegmentEpsilon)
+            {
+                return start >= minValue && start <= maxValue;
+            }
+
+            float enter = (minValue - start) / dir;
+            float exit = (maxValue - start) / dir;
+            if (enter > exit)
+            {
+                std::swap(enter, exit);
+            }
+            tMin = std::max(tMin, enter);
+            tMax = std::min(tMax, exit);
+            return tMin <= tMax;
+        };
+
+        return clipAxis(from.x, delta.x, minBounds.x, maxBounds.x) &&
+               clipAxis(from.y, delta.y, minBounds.y, maxBounds.y);
+    }
+}
+
 void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
                                                std::vector<Assets::Model>& models,
                                                std::vector<Assets::FMaterial>& materials,
@@ -126,6 +164,77 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
     player_.shotgunWeaponNode->SetParent(player_.bodyNode);
     nodes.push_back(player_.shotgunWeaponNode);
 
+    extractionVehicleNodes_.clear();
+    extractionVehicleRootNode_.reset();
+    extractionVehicleMaterialId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.18f, 0.22f, 0.25f));
+    extractionVehicleActiveMaterialId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.85f, 0.68f, 0.25f));
+    const uint32_t extractionWheelMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.04f, 0.04f, 0.05f));
+    auto addTruckPart = [&models, &nodes, this](const std::string& name,
+                                                const glm::vec3& min,
+                                                const glm::vec3& max,
+                                                const glm::vec3& localPos,
+                                                uint32_t materialId,
+                                                bool root) -> std::shared_ptr<Assets::Node>
+    {
+        models.push_back(Assets::FProcModel::CreateBox(min, max));
+        auto node = SceneBuilder::CreateRenderNode(name,
+                                                   root ? HiddenPosition : localPos,
+                                                   glm::vec3(1.0f),
+                                                   static_cast<uint32_t>(nodes.size()),
+                                                   static_cast<uint32_t>(models.size() - 1),
+                                                   materialId,
+                                                   false);
+        if (!root && extractionVehicleRootNode_)
+        {
+            node->SetParent(extractionVehicleRootNode_);
+        }
+        nodes.push_back(node);
+        extractionVehicleNodes_.push_back(node);
+        return node;
+    };
+    extractionVehicleRootNode_ = addTruckPart("Brotato3D_ExtractionTruck_Body",
+                                              glm::vec3(-1.3f, 0.0f, -0.55f),
+                                              glm::vec3(1.3f, 0.55f, 0.55f),
+                                              glm::vec3(0.0f),
+                                              extractionVehicleMaterialId_,
+                                              true);
+    addTruckPart("Brotato3D_ExtractionTruck_Cab",
+                 glm::vec3(-0.45f, 0.0f, -0.48f),
+                 glm::vec3(0.45f, 0.72f, 0.48f),
+                 glm::vec3(0.72f, 0.36f, 0.0f),
+                 extractionVehicleMaterialId_,
+                 false);
+    addTruckPart("Brotato3D_ExtractionTruck_Beacon",
+                 glm::vec3(-0.16f, 0.0f, -0.16f),
+                 glm::vec3(0.16f, 0.18f, 0.16f),
+                 glm::vec3(0.72f, 1.0f, 0.0f),
+                 extractionVehicleActiveMaterialId_,
+                 false);
+    addTruckPart("Brotato3D_ExtractionTruck_WheelA",
+                 glm::vec3(-0.22f, -0.22f, -0.08f),
+                 glm::vec3(0.22f, 0.22f, 0.08f),
+                 glm::vec3(-0.85f, 0.04f, -0.62f),
+                 extractionWheelMaterialId,
+                 false);
+    addTruckPart("Brotato3D_ExtractionTruck_WheelB",
+                 glm::vec3(-0.22f, -0.22f, -0.08f),
+                 glm::vec3(0.22f, 0.22f, 0.08f),
+                 glm::vec3(0.85f, 0.04f, -0.62f),
+                 extractionWheelMaterialId,
+                 false);
+    addTruckPart("Brotato3D_ExtractionTruck_WheelC",
+                 glm::vec3(-0.22f, -0.22f, -0.08f),
+                 glm::vec3(0.22f, 0.22f, 0.08f),
+                 glm::vec3(-0.85f, 0.04f, 0.62f),
+                 extractionWheelMaterialId,
+                 false);
+    addTruckPart("Brotato3D_ExtractionTruck_WheelD",
+                 glm::vec3(-0.22f, -0.22f, -0.08f),
+                 glm::vec3(0.22f, 0.22f, 0.08f),
+                 glm::vec3(0.85f, 0.04f, 0.62f),
+                 extractionWheelMaterialId,
+                 false);
+
     enemyVisuals_.clear();
     for (const auto& [enemyId, def] : enemyDefs_)
     {
@@ -230,9 +339,155 @@ void Brotato3DGameInstance::OnSceneLoaded()
     ApplyLightingSettings();
 }
 
+void Brotato3DGameInstance::SetExtractionVehicleVisible(bool visible)
+{
+    extractionVehicleVisible_ = visible;
+    for (const auto& node : extractionVehicleNodes_)
+    {
+        if (node)
+        {
+            NodeUtils::SetVisible(node, visible);
+        }
+    }
+    if (!visible && extractionVehicleRootNode_)
+    {
+        extractionVehicleRootNode_->SetTranslation(HiddenPosition);
+    }
+}
+
+void Brotato3DGameInstance::ResetExtractionVehicle()
+{
+    extractionVehiclePos_ = HiddenPosition;
+    extractionVehicleStartPos_ = HiddenPosition;
+    extractionVehicleTargetPos_ = HiddenPosition;
+    extractionVehicleAnimMs_ = 0.0f;
+    extractionVehicleAnimTotalMs_ = 0.0f;
+    SetExtractionVehicleVisible(false);
+}
+
+void Brotato3DGameInstance::BeginDuskSurge()
+{
+    const int side = std::uniform_int_distribution<int>(0, 3)(rng_);
+    const float anchorX = side < 2 ? 0.0f : (side == 2 ? -arenaHalfExtent_.x : arenaHalfExtent_.x);
+    const float anchorZ = side < 2 ? (side == 0 ? -arenaHalfExtent_.y : arenaHalfExtent_.y) : 0.0f;
+    glm::vec3 inward(-anchorX, 0.0f, -anchorZ);
+    if (glm::length(inward) < 0.001f)
+    {
+        inward = glm::vec3(0.0f, 0.0f, side == 0 ? 1.0f : -1.0f);
+    }
+    inward = glm::normalize(inward);
+
+    const glm::vec3 anchor(anchorX, 0.0f, anchorZ);
+    extractionVehicleStartPos_ = anchor - inward * 4.0f + glm::vec3(0.0f, 0.02f, 0.0f);
+    extractionVehicleTargetPos_ = anchor + inward * std::min(arenaHalfExtent_.x, arenaHalfExtent_.y) * 0.42f + glm::vec3(0.0f, 0.02f, 0.0f);
+    extractionVehiclePos_ = extractionVehicleStartPos_;
+    extractionVehicleAnimTotalMs_ = 1500.0f;
+    extractionVehicleAnimMs_ = extractionVehicleAnimTotalMs_;
+    if (extractionVehicleRootNode_)
+    {
+        extractionVehicleRootNode_->SetTranslation(extractionVehiclePos_);
+    }
+    SetExtractionVehicleVisible(true);
+    SetSkyIntensityTarget(5.0f, 1500.0f);
+    waveBannerText_ = "NIGHTFALL";
+    waveBannerMs_ = 1500.0f;
+    StartScreenShake(260.0f, 2.2f);
+    Brotato3D::StartBgm("battle");
+}
+
+void Brotato3DGameInstance::UpdateExtractionVehicle(double deltaSeconds)
+{
+    if (waveSystem_.GetState() != Brotato3D::EWaveState::DuskSurge)
+    {
+        waveSystem_.NotifyPlayerInExtractionZone(false);
+        return;
+    }
+
+    if (extractionVehicleAnimMs_ > 0.0f)
+    {
+        extractionVehicleAnimMs_ = std::max(0.0f, extractionVehicleAnimMs_ - static_cast<float>(deltaSeconds * 1000.0));
+        const float t = 1.0f - extractionVehicleAnimMs_ / std::max(1.0f, extractionVehicleAnimTotalMs_);
+        const float eased = t * t * (3.0f - 2.0f * t);
+        extractionVehiclePos_ = glm::mix(extractionVehicleStartPos_, extractionVehicleTargetPos_, eased);
+        if (extractionVehicleRootNode_)
+        {
+            extractionVehicleRootNode_->SetTranslation(extractionVehiclePos_);
+        }
+    }
+    else
+    {
+        extractionVehiclePos_ = extractionVehicleTargetPos_;
+    }
+
+    const Brotato3D::FWaveDef* waveDef = waveSystem_.GetCurrentWaveDef();
+    const float radius = waveDef ? waveDef->extractionRadiusM : 2.5f;
+    const bool inZone = extractionVehicleVisible_ &&
+                        DistanceXZ(player_.worldPos, extractionVehiclePos_) <= radius;
+    waveSystem_.NotifyPlayerInExtractionZone(inZone);
+    const uint32_t materialId = inZone ? extractionVehicleActiveMaterialId_ : extractionVehicleMaterialId_;
+    if (extractionVehicleRootNode_ && materialId != 0)
+    {
+        NodeUtils::SetPrimaryMaterial(extractionVehicleRootNode_, materialId);
+    }
+}
+
+bool Brotato3DGameInstance::IsExtractionVehicleObstacleActive() const
+{
+    return extractionVehicleVisible_;
+}
+
+glm::vec3 Brotato3DGameInstance::ResolveExtractionVehicleCollision(const glm::vec3& pos, float radius) const
+{
+    if (!IsExtractionVehicleObstacleActive())
+    {
+        return pos;
+    }
+
+    const float paddedHalfX = ExtractionVehicleObstacleHalfX + std::max(0.0f, radius);
+    const float paddedHalfZ = ExtractionVehicleObstacleHalfZ + std::max(0.0f, radius);
+    const glm::vec2 delta(pos.x - extractionVehiclePos_.x, pos.z - extractionVehiclePos_.z);
+    if (std::abs(delta.x) > paddedHalfX || std::abs(delta.y) > paddedHalfZ)
+    {
+        return pos;
+    }
+
+    glm::vec3 resolved = pos;
+    const float overlapX = paddedHalfX - std::abs(delta.x);
+    const float overlapZ = paddedHalfZ - std::abs(delta.y);
+    if (overlapX < overlapZ)
+    {
+        const float sign = delta.x < 0.0f ? -1.0f : 1.0f;
+        resolved.x = extractionVehiclePos_.x + sign * paddedHalfX;
+    }
+    else
+    {
+        const float sign = delta.y < 0.0f ? -1.0f : 1.0f;
+        resolved.z = extractionVehiclePos_.z + sign * paddedHalfZ;
+    }
+    return resolved;
+}
+
+bool Brotato3DGameInstance::IsSegmentBlockedByExtractionVehicle(const glm::vec3& from,
+                                                                const glm::vec3& to,
+                                                                float radius) const
+{
+    if (!IsExtractionVehicleObstacleActive())
+    {
+        return false;
+    }
+
+    const float padding = std::max(0.0f, radius);
+    const glm::vec2 minBounds(extractionVehiclePos_.x - ExtractionVehicleObstacleHalfX - padding,
+                              extractionVehiclePos_.z - ExtractionVehicleObstacleHalfZ - padding);
+    const glm::vec2 maxBounds(extractionVehiclePos_.x + ExtractionVehicleObstacleHalfX + padding,
+                              extractionVehiclePos_.z + ExtractionVehicleObstacleHalfZ + padding);
+    return SegmentIntersectsAabb2D(glm::vec2(from.x, from.z), glm::vec2(to.x, to.z), minBounds, maxBounds);
+}
+
 void Brotato3DGameInstance::UpdateCombatEffects(double deltaSeconds)
 {
     const float deltaMs = static_cast<float>(deltaSeconds * 1000.0);
+    UpdateGroundIndicators(deltaSeconds);
     for (auto& ring : explosionRings_)
     {
         ring.remainingMs -= deltaMs;
@@ -293,6 +548,21 @@ void Brotato3DGameInstance::UpdateCombatEffects(double deltaSeconds)
     }
 }
 
+void Brotato3DGameInstance::UpdateGroundIndicators(double deltaSeconds)
+{
+    const float deltaMs = static_cast<float>(deltaSeconds * 1000.0);
+    for (auto& indicator : groundIndicators_)
+    {
+        indicator.remainingMs -= deltaMs;
+    }
+    groundIndicators_.erase(std::remove_if(groundIndicators_.begin(), groundIndicators_.end(),
+                                           [](const Brotato3D::FGroundIndicator& indicator)
+                                           {
+                                               return indicator.remainingMs <= 0.0f;
+                                           }),
+                            groundIndicators_.end());
+}
+
 void Brotato3DGameInstance::UpdateWaveBanner(double deltaSeconds)
 {
     if (waveBannerMs_ > 0.0f)
@@ -328,6 +598,33 @@ void Brotato3DGameInstance::PushLaserBeam(const glm::vec3& from,
                                           float width)
 {
     laserBeams_.push_back({from, to, color, durationMs, durationMs, width});
+}
+
+void Brotato3DGameInstance::PushGroundIndicator(const Brotato3D::FGroundIndicator& indicator)
+{
+    if (indicator.enemyTag != 0)
+    {
+        CancelGroundIndicatorsForEnemy(indicator.enemyTag);
+    }
+    if (groundIndicators_.size() >= 64)
+    {
+        groundIndicators_.erase(groundIndicators_.begin());
+    }
+    groundIndicators_.push_back(indicator);
+}
+
+void Brotato3DGameInstance::CancelGroundIndicatorsForEnemy(uint32_t enemyTag)
+{
+    if (enemyTag == 0)
+    {
+        return;
+    }
+    groundIndicators_.erase(std::remove_if(groundIndicators_.begin(), groundIndicators_.end(),
+                                           [enemyTag](const Brotato3D::FGroundIndicator& indicator)
+                                           {
+                                               return indicator.enemyTag == enemyTag;
+                                           }),
+                            groundIndicators_.end());
 }
 
 void Brotato3DGameInstance::PushMuzzleFlash(const glm::vec3& worldPos, const glm::vec3& color)
@@ -451,8 +748,46 @@ void Brotato3DGameInstance::ApplyLightingSettings()
     auto& envSettings = GetEngine().GetScene().GetEnvSettings();
     envSettings.HasSky = true;
     envSettings.HasSun = false;
-    envSettings.SkyIntensity = 50.0f;
+    envSettings.SkyIntensity = currentSkyIntensity_;
     GetEngine().GetScene().MarkEnvDirty();
+}
+
+void Brotato3DGameInstance::SetSkyIntensityTarget(float target, float transitionMs)
+{
+    skyTransitionStartIntensity_ = currentSkyIntensity_;
+    targetSkyIntensity_ = target;
+    skyTransitionTotalMs_ = std::max(1.0f, transitionMs);
+    skyTransitionRemainingMs_ = skyTransitionTotalMs_;
+    if (transitionMs <= 0.0f)
+    {
+        currentSkyIntensity_ = targetSkyIntensity_;
+        skyTransitionRemainingMs_ = 0.0f;
+        ApplyLightingSettings();
+    }
+}
+
+void Brotato3DGameInstance::UpdateSkyTransition(double deltaSeconds)
+{
+    if (skyTransitionRemainingMs_ <= 0.0f)
+    {
+        return;
+    }
+
+    skyTransitionRemainingMs_ = std::max(0.0f, skyTransitionRemainingMs_ - static_cast<float>(deltaSeconds * 1000.0));
+    const float t = 1.0f - skyTransitionRemainingMs_ / std::max(1.0f, skyTransitionTotalMs_);
+    currentSkyIntensity_ = glm::mix(skyTransitionStartIntensity_, targetSkyIntensity_, std::clamp(t, 0.0f, 1.0f));
+    ApplyLightingSettings();
+}
+
+bool Brotato3DGameInstance::IsDuskSurgeActive() const
+{
+    return waveSystem_.GetState() == Brotato3D::EWaveState::DuskSurge;
+}
+
+float Brotato3DGameInstance::GetExtractionRadius() const
+{
+    const Brotato3D::FWaveDef* waveDef = waveSystem_.GetCurrentWaveDef();
+    return waveDef ? waveDef->extractionRadiusM : 2.5f;
 }
 
 

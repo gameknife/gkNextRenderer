@@ -94,6 +94,7 @@ public:
     const std::vector<Brotato3D::FMuzzleFlash>& GetMuzzleFlashes() const { return muzzleFlashes_; }
     const std::vector<Brotato3D::FExpandingRing>& GetExplosionRings() const { return explosionRings_; }
     const std::vector<Brotato3D::FLaserBeam>& GetLaserBeams() const { return laserBeams_; }
+    const std::vector<Brotato3D::FGroundIndicator>& GetGroundIndicators() const { return groundIndicators_; }
     const Brotato3D::FWaveSystem& GetWaveSystem() const { return waveSystem_; }
     Brotato3D::EAppState GetAppState() const { return appState_; }
     int GetXpToNextLevel() const;
@@ -105,6 +106,9 @@ public:
     const std::string& GetWaveBannerText() const { return waveBannerText_; }
     float GetWeaponMergeBannerMs() const { return weaponMergeBannerMs_; }
     const std::string& GetWeaponMergeBannerText() const { return weaponMergeBannerText_; }
+    bool IsExtractionVehicleVisible() const { return extractionVehicleVisible_; }
+    glm::vec3 GetExtractionVehiclePos() const { return extractionVehiclePos_; }
+    float GetExtractionRadius() const;
     ImFont* GetBigFont() const { return bigFont_; }
     bool IsPlayerDead() const { return playerDead_; }
     const std::vector<Brotato3D::FUpgradeCardDef>& GetCurrentUpgradeChoices() const { return currentUpgradeChoices_; }
@@ -120,6 +124,10 @@ public:
     glm::vec2 GetArenaHalfExtent() const { return arenaHalfExtent_; }
     const Brotato3D::FBestRecord& GetBestRecord() const { return bestRecord_; }
     Brotato3D::FPlayerStats GetEffectivePlayerStats() const;
+    float GetDashCooldownRatio() const;
+    int GetDashCharges() const { return player_.dashCharges; }
+    int GetDashMaxCharges() const;
+    bool IsPlayerDashing() const { return player_.dashRemainingMs > 0.0f; }
     bool CanBuyShopOffer(size_t slotIndex) const;
     std::string GetShopOfferUnavailableReason(size_t slotIndex) const;
     void SelectUpgrade(size_t choiceIndex);
@@ -150,12 +158,15 @@ private:
 
     void SpawnEnemy(const std::string& enemyId, const glm::vec3& worldPos);
     void UpdatePlayer(double deltaSeconds);
+    void TryStartDash();
+    void FinishDash();
     void UpdateEnemies(double deltaSeconds);
     void UpdateWeapons(double deltaSeconds);
     void UpdateProjectiles(double deltaSeconds);
     void UpdateEnemyProjectiles(double deltaSeconds);
     void UpdateDebris(double deltaSeconds);
     void UpdateCombatEffects(double deltaSeconds);
+    void UpdateGroundIndicators(double deltaSeconds);
     void UpdateWaveBanner(double deltaSeconds);
     void UpdateFloatingTexts(double deltaSeconds);
     void SpawnEnemyProjectile(const Brotato3D::FEnemyRuntime& enemy, const glm::vec3& dir);
@@ -194,6 +205,18 @@ private:
     void StartScreenShake(float durationMs, float intensity);
     void PushExplosionRing(const glm::vec3& worldPos, const glm::vec4& color, float maxRadius);
     void PushLaserBeam(const glm::vec3& from, const glm::vec3& to, const glm::vec4& color, float durationMs, float width);
+    void PushGroundIndicator(const Brotato3D::FGroundIndicator& indicator);
+    void CancelGroundIndicatorsForEnemy(uint32_t enemyTag);
+    bool UpdateMortarTank(Brotato3D::FEnemyRuntime& enemy,
+                          double deltaSeconds,
+                          float deltaMs,
+                          const glm::vec3& toPlayerDir,
+                          float playerDistance);
+    bool UpdateLanceCharger(Brotato3D::FEnemyRuntime& enemy,
+                            double deltaSeconds,
+                            float deltaMs,
+                            const glm::vec3& toPlayerDir,
+                            float playerDistance);
     void ClearAliveEnemies(bool dropLoot);
     void PushFloatingText(const glm::vec3& worldPos,
                           std::string text,
@@ -217,6 +240,8 @@ private:
     void ProcessTickItemTriggers(float deltaMs);
     void ProcessLowHpItemBuffs();
     void ProcessOnKillTriggers(const glm::vec3& worldPos);
+    void ProcessDashEndItemTriggers();
+    void ApplyDashKnockbackItem(const Brotato3D::FItemDef& item);
     void ApplyItemExplosionDamage(const glm::vec3& worldPos, float radius, int damage);
     void StartShopping();
     void EnterResult(bool playerDead);
@@ -230,6 +255,16 @@ private:
     void BeginWaveBanner();
     void SetDebugSingleWeapon(const std::string& weaponId);
     void ApplyLightingSettings();
+    void SetSkyIntensityTarget(float target, float transitionMs);
+    void UpdateSkyTransition(double deltaSeconds);
+    void BeginDuskSurge();
+    void UpdateExtractionVehicle(double deltaSeconds);
+    void ResetExtractionVehicle();
+    void SetExtractionVehicleVisible(bool visible);
+    bool IsExtractionVehicleObstacleActive() const;
+    glm::vec3 ResolveExtractionVehicleCollision(const glm::vec3& pos, float radius) const;
+    bool IsSegmentBlockedByExtractionVehicle(const glm::vec3& from, const glm::vec3& to, float radius) const;
+    bool IsDuskSurgeActive() const;
     void ClearMovementInput();
     bool ShouldPauseWorldPhysics() const;
     void SetWorldPhysicsPaused(bool paused);
@@ -269,6 +304,7 @@ private:
     std::vector<Brotato3D::FMuzzleFlash> muzzleFlashes_;
     std::vector<Brotato3D::FExpandingRing> explosionRings_;
     std::vector<Brotato3D::FLaserBeam> laserBeams_;
+    std::vector<Brotato3D::FGroundIndicator> groundIndicators_;
     Brotato3D::FWaveSystem waveSystem_;
     Brotato3D::FShop shop_;
     std::vector<Brotato3D::FUpgradeCardDef> currentUpgradeChoices_;
@@ -306,6 +342,10 @@ private:
     bool playerKinematicBodyActive_ = false;
     std::map<std::string, std::vector<NextBodyID>> enemyKinematicBodyPools_;
     std::map<std::string, uint32_t> characterMaterialIds_;
+    std::vector<std::shared_ptr<Assets::Node>> extractionVehicleNodes_;
+    std::shared_ptr<Assets::Node> extractionVehicleRootNode_;
+    uint32_t extractionVehicleMaterialId_ = 0;
+    uint32_t extractionVehicleActiveMaterialId_ = 0;
     bool keyW_ = false;
     bool keyA_ = false;
     bool keyS_ = false;
@@ -314,6 +354,18 @@ private:
     bool sceneReady_ = false;
     std::mt19937 rng_{std::random_device{}()};
     glm::vec3 cameraSmoothedTarget_ = glm::vec3(0.0f);
+    glm::vec3 playerVelocity_ = glm::vec3(0.0f);
+    glm::vec3 extractionVehiclePos_ = glm::vec3(0.0f, -100.0f, 0.0f);
+    glm::vec3 extractionVehicleStartPos_ = glm::vec3(0.0f, -100.0f, 0.0f);
+    glm::vec3 extractionVehicleTargetPos_ = glm::vec3(0.0f, -100.0f, 0.0f);
+    float extractionVehicleAnimMs_ = 0.0f;
+    float extractionVehicleAnimTotalMs_ = 0.0f;
+    bool extractionVehicleVisible_ = false;
+    float currentSkyIntensity_ = 30.0f;
+    float skyTransitionStartIntensity_ = 30.0f;
+    float targetSkyIntensity_ = 30.0f;
+    float skyTransitionTotalMs_ = 0.0f;
+    float skyTransitionRemainingMs_ = 0.0f;
     float screenShakeMs_ = 0.0f;
     float screenShakeIntensity_ = 0.0f;
     float damageFlashMs_ = 0.0f;

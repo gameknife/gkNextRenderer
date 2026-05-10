@@ -11,6 +11,14 @@ namespace Assets
 
 namespace Brotato3D
 {
+    enum class ELanceState : uint8_t
+    {
+        Idle,
+        Telegraph,
+        Dashing,
+        Recovering,
+    };
+
     struct FEnemyRuntime
     {
         const FEnemyDef* def = nullptr;
@@ -30,7 +38,17 @@ namespace Brotato3D
         float bombFuseMs = -1.0f;
         float healIntervalMs = 0.0f;
         bool bossPhase2Active = false;
+        float mortarFireCooldownMs = 0.0f;
+        float mortarTelegraphRemainingMs = 0.0f;
+        glm::vec3 mortarTargetPos = glm::vec3(0.0f);
+        ELanceState lanceState = ELanceState::Idle;
+        float lanceStateMs = 0.0f;
+        float lanceCooldownMs = 0.0f;
+        glm::vec3 lanceDashDir = glm::vec3(0.0f);
+        glm::vec3 lanceDashStartPos = glm::vec3(0.0f);
+        float lanceDashRemainingDist = 0.0f;
         glm::vec3 lastHitDebrisDir = glm::vec3(0.0f, 0.0f, 1.0f);
+        uint32_t runtimeTag = 0;
         uint32_t modelId = 0;
         uint32_t materialId = 0;
         uint32_t darkMaterialId = 0;

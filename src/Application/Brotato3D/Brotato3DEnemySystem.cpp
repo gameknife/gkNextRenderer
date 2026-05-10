@@ -60,9 +60,11 @@ void Brotato3DGameInstance::SpawnEnemy(const std::string& enemyId, const glm::ve
     enemy.phase2MaterialId = visual.phase2MaterialId;
     if (reusableEnemy != enemies_.end())
     {
+        const uint32_t runtimeTag = static_cast<uint32_t>(std::distance(enemies_.begin(), reusableEnemy)) + 1U;
         enemy.node = reusableEnemy->node;
         enemy.kinematicBodyId = reusableEnemy->kinematicBodyId.IsInvalid() ? AcquireEnemyKinematicBody(enemyId) :
                                                                         reusableEnemy->kinematicBodyId;
+        enemy.runtimeTag = runtimeTag;
         *reusableEnemy = enemy;
         NodeUtils::SetPrimaryMaterial(reusableEnemy->node, reusableEnemy->materialId);
         NodeUtils::SetOutlineFlags(reusableEnemy->node, Runtime::RenderOutlineFlags::danger);
@@ -81,6 +83,7 @@ void Brotato3DGameInstance::SpawnEnemy(const std::string& enemyId, const glm::ve
     GetEngine().GetScene().AddNode(enemy.node);
     GetEngine().GetScene().MarkDirty();
     enemies_.push_back(enemy);
+    enemies_.back().runtimeTag = static_cast<uint32_t>(enemies_.size());
     // Spawn activation is a positional snap; use a stable fallback step for the kinematic body.
     SyncEnemyKinematicBody(enemies_.back(), 1.0 / 60.0);
 }
@@ -100,6 +103,8 @@ void Brotato3DGameInstance::UpdateEnemies(double deltaSeconds)
         enemy.chargeCooldownMs = std::max(0.0f, enemy.chargeCooldownMs - deltaMs);
         enemy.healIntervalMs = std::max(0.0f, enemy.healIntervalMs - deltaMs);
         enemy.hitFlashRemainingMs = std::max(0.0f, enemy.hitFlashRemainingMs - deltaMs);
+        enemy.mortarFireCooldownMs = std::max(0.0f, enemy.mortarFireCooldownMs - deltaMs);
+        enemy.lanceCooldownMs = std::max(0.0f, enemy.lanceCooldownMs - deltaMs);
 
         if (enemy.def->boss.enabled && !enemy.bossPhase2Active &&
             enemy.currentHp <= static_cast<int>(std::round(enemy.maxHp * enemy.def->boss.phase2HpRatio)))
@@ -115,6 +120,14 @@ void Brotato3DGameInstance::UpdateEnemies(double deltaSeconds)
         if (enemy.hitFlashRemainingMs > 0.0f)
         {
             activeMaterial = enemy.hitFlashMaterialId;
+        }
+        else if ((enemy.def->mortar.enabled && enemy.mortarTelegraphRemainingMs > 0.0f) ||
+                 (enemy.def->lance.enabled &&
+                  (enemy.lanceState == Brotato3D::ELanceState::Telegraph ||
+                   enemy.lanceState == Brotato3D::ELanceState::Dashing)))
+        {
+            activeMaterial = enemy.lanceState == Brotato3D::ELanceState::Dashing ? enemy.hitFlashMaterialId :
+                                                                                   enemy.warningMaterialId;
         }
         else if ((enemy.def->charge.enabled && enemy.charging) ||
                  (enemy.def->bomb.enabled && enemy.bombFuseMs >= 0.0f))
@@ -181,77 +194,101 @@ void Brotato3DGameInstance::UpdateEnemies(double deltaSeconds)
             enemy.healIntervalMs = enemy.def->heal.intervalMs;
         }
 
+        bool customEnemyHandled = false;
         if (playerDistance > 0.001f)
         {
             const glm::vec3 toPlayerDir = toPlayer / playerDistance;
-            glm::vec3 moveDir = toPlayerDir;
-            float moveSpeed = enemy.def->moveSpeed;
-            if (enemy.bossPhase2Active)
+            if (enemy.def->mortar.enabled)
             {
-                moveSpeed *= enemy.def->boss.phase2MoveSpeedMult;
+                customEnemyHandled = UpdateMortarTank(enemy, deltaSeconds, deltaMs, toPlayerDir, playerDistance);
             }
-            if (enemy.def->bomb.enabled && playerDistance <= enemy.def->bomb.triggerDistance)
+            else if (enemy.def->lance.enabled)
             {
-                enemy.bombFuseMs = enemy.def->bomb.fuseMs;
-                SyncEnemyKinematicBody(enemy, deltaSeconds);
-                continue;
+                customEnemyHandled = UpdateLanceCharger(enemy, deltaSeconds, deltaMs, toPlayerDir, playerDistance);
             }
-            if (enemy.def->charge.enabled)
+
+            if (!customEnemyHandled)
             {
-                if (!enemy.charging && enemy.chargeCooldownMs <= 0.0f && playerDistance <= enemy.def->charge.triggerDistance)
+                glm::vec3 moveDir = toPlayerDir;
+                float moveSpeed = enemy.def->moveSpeed;
+                if (enemy.bossPhase2Active)
                 {
-                    enemy.charging = true;
-                    enemy.chargeRampMs = enemy.def->charge.chargeRampSec * 1000.0f;
-                    enemy.chargeCooldownMs = enemy.def->charge.cooldownMs;
+                    moveSpeed *= enemy.def->boss.phase2MoveSpeedMult;
                 }
-                if (enemy.charging)
+                if (enemy.def->bomb.enabled && playerDistance <= enemy.def->bomb.triggerDistance)
                 {
-                    const float rampTotal = std::max(1.0f, enemy.def->charge.chargeRampSec * 1000.0f);
-                    enemy.chargeRampMs -= deltaMs;
-                    const float rampProgress = 1.0f - std::clamp(enemy.chargeRampMs / rampTotal, 0.0f, 1.0f);
-                    moveSpeed *= glm::mix(1.0f, enemy.def->charge.chargeSpeedMult, rampProgress);
-                    if (enemy.chargeRampMs < -800.0f)
+                    enemy.bombFuseMs = enemy.def->bomb.fuseMs;
+                    SyncEnemyKinematicBody(enemy, deltaSeconds);
+                    continue;
+                }
+                if (enemy.def->charge.enabled)
+                {
+                    if (!enemy.charging && enemy.chargeCooldownMs <= 0.0f && playerDistance <= enemy.def->charge.triggerDistance)
                     {
-                        enemy.charging = false;
+                        enemy.charging = true;
+                        enemy.chargeRampMs = enemy.def->charge.chargeRampSec * 1000.0f;
+                        enemy.chargeCooldownMs = enemy.def->charge.cooldownMs;
+                    }
+                    if (enemy.charging)
+                    {
+                        const float rampTotal = std::max(1.0f, enemy.def->charge.chargeRampSec * 1000.0f);
+                        enemy.chargeRampMs -= deltaMs;
+                        const float rampProgress = 1.0f - std::clamp(enemy.chargeRampMs / rampTotal, 0.0f, 1.0f);
+                        moveSpeed *= glm::mix(1.0f, enemy.def->charge.chargeSpeedMult, rampProgress);
+                        if (enemy.chargeRampMs < -800.0f)
+                        {
+                            enemy.charging = false;
+                        }
+                    }
+                    else if (playerDistance > enemy.def->charge.triggerDistance)
+                    {
+                        moveSpeed = 0.0f;
                     }
                 }
-                else if (playerDistance > enemy.def->charge.triggerDistance)
+                if (enemy.def->ranged.enabled)
                 {
-                    moveSpeed = 0.0f;
-                }
-            }
-            if (enemy.def->ranged.enabled)
-            {
-                const float preferredDistance = enemy.def->ranged.preferredDistance;
-                if (playerDistance < preferredDistance - 0.5f)
-                {
-                    moveDir = -toPlayerDir;
-                    moveSpeed = enemy.def->moveSpeed * 0.7f;
-                }
-                else if (playerDistance <= preferredDistance + 0.5f)
-                {
-                    moveSpeed = 0.0f;
+                    const float preferredDistance = enemy.def->ranged.preferredDistance;
+                    if (playerDistance < preferredDistance - 0.5f)
+                    {
+                        moveDir = -toPlayerDir;
+                        moveSpeed = enemy.def->moveSpeed * 0.7f;
+                    }
+                    else if (playerDistance <= preferredDistance + 0.5f)
+                    {
+                        moveSpeed = 0.0f;
+                    }
+
+                    if (enemy.rangedFireCooldownMs <= 0.0f &&
+                        !IsSegmentBlockedByExtractionVehicle(enemy.worldPos, player_.worldPos, enemy.def->ranged.size))
+                    {
+                        SpawnEnemyProjectile(enemy, toPlayerDir);
+                        enemy.rangedFireCooldownMs = enemy.def->ranged.intervalMs;
+                    }
                 }
 
-                if (enemy.rangedFireCooldownMs <= 0.0f)
+                if (moveSpeed > 0.0f)
                 {
-                    SpawnEnemyProjectile(enemy, toPlayerDir);
-                    enemy.rangedFireCooldownMs = enemy.def->ranged.intervalMs;
+                    enemy.worldPos += moveDir * moveSpeed * static_cast<float>(deltaSeconds);
+                    enemy.worldPos = ClampToArena(enemy.worldPos, enemy.radius, arenaHalfExtent_);
+                    enemy.worldPos = ResolveExtractionVehicleCollision(enemy.worldPos, enemy.radius);
+                    enemy.worldPos = ClampToArena(enemy.worldPos, enemy.radius, arenaHalfExtent_);
+                    enemy.worldPos.y = enemy.def->size.y * 0.5f;
+                    enemy.node->SetTranslation(enemy.worldPos);
                 }
-            }
-
-            if (moveSpeed > 0.0f)
-            {
-                enemy.worldPos += moveDir * moveSpeed * static_cast<float>(deltaSeconds);
-                enemy.worldPos = ClampToArena(enemy.worldPos, enemy.radius, arenaHalfExtent_);
-                enemy.worldPos.y = enemy.def->size.y * 0.5f;
-                enemy.node->SetTranslation(enemy.worldPos);
             }
         }
 
         if (DistanceXZ(enemy.worldPos, player_.worldPos) < enemy.radius + player_.radius && enemy.contactCooldownMs <= 0.0f)
         {
             int contactDamage = enemy.def->contactDamage;
+            if (enemy.def->lance.enabled && enemy.lanceState == Brotato3D::ELanceState::Dashing)
+            {
+                contactDamage = static_cast<int>(std::round(contactDamage * enemy.def->lance.dashContactDamageMult));
+                enemy.lanceState = Brotato3D::ELanceState::Recovering;
+                enemy.lanceStateMs = enemy.def->lance.recoverMs;
+                enemy.lanceDashRemainingDist = 0.0f;
+                StartScreenShake(180.0f, 3.0f);
+            }
             if (enemy.def->charge.enabled && enemy.charging)
             {
                 contactDamage = static_cast<int>(std::round(contactDamage * enemy.def->charge.contactDamageMult));
@@ -275,12 +312,192 @@ void Brotato3DGameInstance::UpdateEnemies(double deltaSeconds)
     }
 }
 
+bool Brotato3DGameInstance::UpdateMortarTank(Brotato3D::FEnemyRuntime& enemy,
+                                             double deltaSeconds,
+                                             float deltaMs,
+                                             const glm::vec3& toPlayerDir,
+                                             float playerDistance)
+{
+    if (!enemy.def || !enemy.def->mortar.enabled)
+    {
+        return false;
+    }
+
+    const Brotato3D::FMortarDef& mortar = enemy.def->mortar;
+    if (enemy.mortarTelegraphRemainingMs > 0.0f)
+    {
+        enemy.mortarTelegraphRemainingMs -= deltaMs;
+        if (enemy.mortarTelegraphRemainingMs <= 0.0f)
+        {
+            CancelGroundIndicatorsForEnemy(enemy.runtimeTag);
+            PushExplosionRing(enemy.mortarTargetPos, glm::vec4(1.0f, 0.30f, 0.10f, 1.0f), mortar.explosionRadius);
+            SpawnTempLight(enemy.mortarTargetPos, glm::vec3(1.0f, 0.45f, 0.10f), 5.0f, 250.0f);
+            StartScreenShake(180.0f, 3.0f);
+            if (DistanceXZ(enemy.mortarTargetPos, player_.worldPos) <= mortar.explosionRadius)
+            {
+                DamagePlayer(static_cast<int>(std::round(static_cast<float>(mortar.explosionDamage) * Brotato3D::MasterDifficulty)),
+                             180.0f,
+                             250.0f);
+            }
+            enemy.mortarFireCooldownMs = mortar.fireIntervalMs;
+            enemy.mortarTelegraphRemainingMs = 0.0f;
+        }
+        SyncEnemyKinematicBody(enemy, deltaSeconds);
+        return true;
+    }
+
+    if (enemy.mortarFireCooldownMs <= 0.0f &&
+        playerDistance >= mortar.throwRangeMin &&
+        playerDistance <= mortar.throwRangeMax)
+    {
+        glm::vec3 target = player_.worldPos + playerVelocity_ * mortar.leadFactor;
+        target = ClampToArena(target, 0.0f, arenaHalfExtent_);
+        target.y = 0.05f;
+        enemy.mortarTargetPos = target;
+        enemy.mortarTelegraphRemainingMs = std::max(1.0f, mortar.telegraphMs);
+
+        Brotato3D::FGroundIndicator indicator{};
+        indicator.shape = Brotato3D::EGroundIndicatorShape::Circle;
+        indicator.worldPos = target;
+        indicator.radius = mortar.explosionRadius;
+        indicator.color = glm::vec4(1.0f, 0.20f, 0.08f, 0.9f);
+        indicator.totalMs = enemy.mortarTelegraphRemainingMs;
+        indicator.remainingMs = enemy.mortarTelegraphRemainingMs;
+        indicator.enemyTag = enemy.runtimeTag;
+        PushGroundIndicator(indicator);
+        SyncEnemyKinematicBody(enemy, deltaSeconds);
+        return true;
+    }
+
+    glm::vec3 moveDir = toPlayerDir;
+    float moveSpeed = 0.0f;
+    if (playerDistance < mortar.throwRangeMin)
+    {
+        moveDir = -toPlayerDir;
+        moveSpeed = enemy.def->moveSpeed;
+    }
+    else if (playerDistance > mortar.throwRangeMax)
+    {
+        moveSpeed = enemy.def->moveSpeed;
+    }
+
+    if (moveSpeed > 0.0f)
+    {
+        enemy.worldPos += moveDir * moveSpeed * static_cast<float>(deltaSeconds);
+        enemy.worldPos = ClampToArena(enemy.worldPos, enemy.radius, arenaHalfExtent_);
+        enemy.worldPos = ResolveExtractionVehicleCollision(enemy.worldPos, enemy.radius);
+        enemy.worldPos = ClampToArena(enemy.worldPos, enemy.radius, arenaHalfExtent_);
+        enemy.worldPos.y = enemy.def->size.y * 0.5f;
+        enemy.node->SetTranslation(enemy.worldPos);
+    }
+    return true;
+}
+
+bool Brotato3DGameInstance::UpdateLanceCharger(Brotato3D::FEnemyRuntime& enemy,
+                                               double deltaSeconds,
+                                               float deltaMs,
+                                               const glm::vec3& toPlayerDir,
+                                               float playerDistance)
+{
+    if (!enemy.def || !enemy.def->lance.enabled)
+    {
+        return false;
+    }
+
+    const Brotato3D::FLanceDef& lance = enemy.def->lance;
+    switch (enemy.lanceState)
+    {
+    case Brotato3D::ELanceState::Idle:
+        if (enemy.lanceCooldownMs <= 0.0f && playerDistance <= lance.windupRangeMin)
+        {
+            enemy.lanceState = Brotato3D::ELanceState::Telegraph;
+            enemy.lanceStateMs = std::max(1.0f, lance.telegraphMs);
+            enemy.lanceDashDir = toPlayerDir;
+            enemy.lanceDashRemainingDist = lance.dashDistanceMax;
+
+            Brotato3D::FGroundIndicator indicator{};
+            indicator.shape = Brotato3D::EGroundIndicatorShape::Strip;
+            indicator.worldPos = enemy.worldPos + glm::vec3(0.0f, 0.05f, 0.0f);
+            indicator.endPos = ClampToArena(enemy.worldPos + enemy.lanceDashDir * lance.dashDistanceMax,
+                                            enemy.radius,
+                                            arenaHalfExtent_);
+            indicator.endPos = ResolveExtractionVehicleCollision(indicator.endPos, enemy.radius);
+            indicator.endPos = ClampToArena(indicator.endPos, enemy.radius, arenaHalfExtent_);
+            indicator.endPos.y = 0.05f;
+            indicator.width = 0.6f;
+            indicator.color = glm::vec4(1.0f, 0.18f, 0.08f, 0.85f);
+            indicator.totalMs = enemy.lanceStateMs;
+            indicator.remainingMs = enemy.lanceStateMs;
+            indicator.enemyTag = enemy.runtimeTag;
+            PushGroundIndicator(indicator);
+            return true;
+        }
+        enemy.worldPos += toPlayerDir * enemy.def->moveSpeed * static_cast<float>(deltaSeconds);
+        enemy.worldPos = ClampToArena(enemy.worldPos, enemy.radius, arenaHalfExtent_);
+        enemy.worldPos = ResolveExtractionVehicleCollision(enemy.worldPos, enemy.radius);
+        enemy.worldPos = ClampToArena(enemy.worldPos, enemy.radius, arenaHalfExtent_);
+        enemy.worldPos.y = enemy.def->size.y * 0.5f;
+        enemy.node->SetTranslation(enemy.worldPos);
+        return true;
+
+    case Brotato3D::ELanceState::Telegraph:
+        enemy.lanceStateMs -= deltaMs;
+        if (enemy.lanceStateMs <= 0.0f)
+        {
+            CancelGroundIndicatorsForEnemy(enemy.runtimeTag);
+            enemy.lanceState = Brotato3D::ELanceState::Dashing;
+            enemy.lanceDashStartPos = enemy.worldPos;
+            enemy.lanceDashRemainingDist = lance.dashDistanceMax;
+            Brotato3D::PlayWeaponFireSfx("shotgun");
+        }
+        return true;
+
+    case Brotato3D::ELanceState::Dashing:
+    {
+        const float dashStep = std::min(lance.dashSpeed * static_cast<float>(deltaSeconds), enemy.lanceDashRemainingDist);
+        const glm::vec3 before = enemy.worldPos;
+        const glm::vec3 intendedPos = enemy.worldPos + enemy.lanceDashDir * dashStep;
+        glm::vec3 nextPos = intendedPos;
+        nextPos = ClampToArena(nextPos, enemy.radius, arenaHalfExtent_);
+        nextPos = ResolveExtractionVehicleCollision(nextPos, enemy.radius);
+        nextPos = ClampToArena(nextPos, enemy.radius, arenaHalfExtent_);
+        nextPos.y = enemy.def->size.y * 0.5f;
+        enemy.worldPos = nextPos;
+        enemy.node->SetTranslation(enemy.worldPos);
+        enemy.lanceDashRemainingDist -= glm::length(glm::vec2(enemy.worldPos.x - before.x, enemy.worldPos.z - before.z));
+        const bool hitWall = DistanceXZ(intendedPos, enemy.worldPos) > 0.001f;
+        if (enemy.lanceDashRemainingDist <= 0.001f || hitWall)
+        {
+            enemy.lanceState = Brotato3D::ELanceState::Recovering;
+            enemy.lanceStateMs = lance.recoverMs;
+            enemy.lanceDashRemainingDist = 0.0f;
+        }
+        return true;
+    }
+
+    case Brotato3D::ELanceState::Recovering:
+        enemy.lanceStateMs -= deltaMs;
+        if (enemy.lanceStateMs <= 0.0f)
+        {
+            enemy.lanceState = Brotato3D::ELanceState::Idle;
+            enemy.lanceCooldownMs = lance.cooldownMs;
+            enemy.lanceStateMs = 0.0f;
+        }
+        return true;
+    }
+
+    return true;
+}
+
 void Brotato3DGameInstance::KillEnemy(Brotato3D::FEnemyRuntime& enemy, bool dropLoot)
 {
     if (!enemy.alive)
     {
         return;
     }
+    CancelGroundIndicatorsForEnemy(enemy.runtimeTag);
+    enemy.mortarTelegraphRemainingMs = 0.0f;
+    enemy.lanceState = Brotato3D::ELanceState::Idle;
     enemy.alive = false;
     DeactivateEnemyKinematicBody(enemy);
     enemy.fading = false;

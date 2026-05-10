@@ -54,6 +54,25 @@ namespace Brotato3D
         float width = 0.18f;
     };
 
+    enum class EGroundIndicatorShape : uint8_t
+    {
+        Circle,
+        Strip,
+    };
+
+    struct FGroundIndicator
+    {
+        EGroundIndicatorShape shape = EGroundIndicatorShape::Circle;
+        glm::vec3 worldPos = glm::vec3(0.0f);
+        glm::vec3 endPos = glm::vec3(0.0f);
+        float radius = 0.0f;
+        float width = 0.0f;
+        glm::vec4 color = glm::vec4(1.0f, 0.18f, 0.10f, 1.0f);
+        float totalMs = 0.0f;
+        float remainingMs = 0.0f;
+        uint32_t enemyTag = 0;
+    };
+
     struct FEnemyProjectileRuntime
     {
         glm::vec3 worldPos = glm::vec3(0.0f);

@@ -89,6 +89,7 @@ namespace
         outStats.pickupRadiusPct = object.value("pickupRadiusPct", outStats.pickupRadiusPct);
         outStats.critChancePct = object.value("critChancePct", outStats.critChancePct);
         outStats.critMultiplier = object.value("critMultiplier", outStats.critMultiplier);
+        outStats.dashChargeBonus = object.value("dashChargeBonus", outStats.dashChargeBonus);
     }
 }
 
@@ -133,6 +134,31 @@ namespace Brotato3D
                 def.ranged.size = rangedJson.value("projectileSize", 0.18f);
                 def.ranged.intervalMs = rangedJson.value("fireIntervalMs", 0.0f);
                 def.ranged.preferredDistance = rangedJson.value("preferredDistance", def.kitingDistance);
+            }
+            if (enemyJson.contains("mortar") && enemyJson.at("mortar").is_object())
+            {
+                const json& mortarJson = enemyJson.at("mortar");
+                def.mortar.enabled = true;
+                def.mortar.fireIntervalMs = mortarJson.value("fireIntervalMs", 0.0f);
+                def.mortar.telegraphMs = mortarJson.value("telegraphMs", 0.0f);
+                def.mortar.explosionRadius = mortarJson.value("explosionRadius", 0.0f);
+                def.mortar.explosionDamage = mortarJson.value("explosionDamage", 0);
+                def.mortar.throwRangeMin = mortarJson.value("throwRangeMin", 0.0f);
+                def.mortar.throwRangeMax = mortarJson.value("throwRangeMax", 0.0f);
+                def.mortar.lobHeightMeters = mortarJson.value("lobHeightMeters", 0.0f);
+                def.mortar.leadFactor = mortarJson.value("leadFactor", 0.0f);
+            }
+            if (enemyJson.contains("lance") && enemyJson.at("lance").is_object())
+            {
+                const json& lanceJson = enemyJson.at("lance");
+                def.lance.enabled = true;
+                def.lance.telegraphMs = lanceJson.value("telegraphMs", 0.0f);
+                def.lance.windupRangeMin = lanceJson.value("windupRangeMin", 0.0f);
+                def.lance.dashSpeed = lanceJson.value("dashSpeed", 0.0f);
+                def.lance.dashDistanceMax = lanceJson.value("dashDistanceMax", 0.0f);
+                def.lance.dashContactDamageMult = lanceJson.value("dashContactDamageMult", 1.0f);
+                def.lance.recoverMs = lanceJson.value("recoverMs", 0.0f);
+                def.lance.cooldownMs = lanceJson.value("cooldownMs", 0.0f);
             }
             if (enemyJson.contains("charge") && enemyJson.at("charge").is_object())
             {
@@ -458,6 +484,10 @@ namespace Brotato3D
             FWaveDef wave{};
             wave.durationSec = waveJson.value("durationSec", 30);
             wave.bgmCue = waveJson.value("bgmCue", "");
+            wave.duskSpawnMultiplier = waveJson.value("duskSpawnMultiplier", 1.0f);
+            wave.duskBonusXpMult = waveJson.value("duskBonusXpMult", 1.0f);
+            wave.extractionRequiredSec = waveJson.value("extractionRequiredSec", 0.0f);
+            wave.extractionRadiusM = waveJson.value("extractionRadiusM", 2.5f);
             if (!waveJson.contains("spawns") || !waveJson.at("spawns").is_array())
             {
                 SPDLOG_ERROR("[Brotato3D] wave missing spawns array");

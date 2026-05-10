@@ -23,6 +23,7 @@ namespace Brotato3D
         float critChancePct = 0.05f;
         float critMultiplier = 2.0f;
         int maxHpFlatBonus = 0;
+        int dashChargeBonus = 0;
     };
 
     struct FPlayerRuntime
@@ -36,6 +37,11 @@ namespace Brotato3D
         int materials = 0;
         int level = 1;
         int pendingLevelUps = 0;
+        float dashCooldownMs = 0.0f;
+        float dashRemainingMs = 0.0f;
+        float dashDurationMs = 0.0f;
+        int dashCharges = 3;
+        glm::vec3 dashDir = glm::vec3(0.0f);
         FPlayerStats stats;
         std::vector<std::string> ownedItemIds;
         std::shared_ptr<Assets::Node> bodyNode;

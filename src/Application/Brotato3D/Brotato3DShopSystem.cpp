@@ -83,6 +83,8 @@ void Brotato3DGameInstance::ContinueFromShop()
     appState_ = Brotato3D::EAppState::Playing;
     SetWorldPhysicsPaused(false);
     ClearMovementInput();
+    ResetExtractionVehicle();
+    SetSkyIntensityTarget(30.0f, 500.0f);
     waveSystem_.EndIntermissionAndAdvance();
     if (waveSystem_.ConsumeVictory())
     {
@@ -194,6 +196,11 @@ void Brotato3DGameInstance::ApplyPassiveItemStats(const Brotato3D::FItemDef& ite
     {
         player_.stats.critChancePct += item.value;
     }
+    else if (item.effect == "stat_dashCharges")
+    {
+        player_.stats.dashChargeBonus += static_cast<int>(std::round(item.value));
+        player_.dashCharges = std::min(GetDashMaxCharges(), player_.dashCharges + static_cast<int>(std::round(item.value)));
+    }
 }
 
 Brotato3D::FPlayerStats Brotato3DGameInstance::GetEffectiveStats() const
@@ -214,6 +221,8 @@ void Brotato3DGameInstance::StartShopping()
     shop_.SetWaveIndex(waveSystem_.GetCurrentWaveIndex());
     shop_.Roll(4, player_.ownedItemIds, equippedWeapons_, shopOffers_);
     Brotato3D::PlayShopOpenSfx();
+    ResetExtractionVehicle();
+    SetSkyIntensityTarget(30.0f, 800.0f);
     appState_ = Brotato3D::EAppState::Shopping;
     SetWorldPhysicsPaused(true);
     ClearMovementInput();

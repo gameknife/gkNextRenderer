@@ -22,6 +22,7 @@ void Brotato3DGameInstance::StartNewRun()
     Brotato3D::StopBgm();
     ResetRuntimeState();
     ApplySelectedCharacter();
+    SetSkyIntensityTarget(30.0f, 0.0f);
     if (player_.bodyNode)
     {
         player_.bodyNode->SetTranslation(player_.worldPos);
@@ -61,6 +62,7 @@ void Brotato3DGameInstance::GoToMainMenu()
     Brotato3D::PlayUiClickSfx();
     Brotato3D::StopBgm();
     ResetRuntimeState();
+    SetSkyIntensityTarget(30.0f, 0.0f);
     appState_ = Brotato3D::EAppState::MainMenu;
     cameraSmoothedTarget_ = glm::vec3(0.0f);
     SetWorldPhysicsPaused(true);

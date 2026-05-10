@@ -19,6 +19,31 @@ namespace Brotato3D
         bool enabled = false;
     };
 
+    struct FMortarDef
+    {
+        float fireIntervalMs = 0.0f;
+        float telegraphMs = 0.0f;
+        float explosionRadius = 0.0f;
+        int explosionDamage = 0;
+        float throwRangeMin = 0.0f;
+        float throwRangeMax = 0.0f;
+        float lobHeightMeters = 0.0f;
+        float leadFactor = 0.0f;
+        bool enabled = false;
+    };
+
+    struct FLanceDef
+    {
+        float telegraphMs = 0.0f;
+        float windupRangeMin = 0.0f;
+        float dashSpeed = 0.0f;
+        float dashDistanceMax = 0.0f;
+        float dashContactDamageMult = 1.0f;
+        float recoverMs = 0.0f;
+        float cooldownMs = 0.0f;
+        bool enabled = false;
+    };
+
     struct FEnemyDef
     {
         std::string name;
@@ -31,6 +56,8 @@ namespace Brotato3D
         int materialDrop = 1;
         float kitingDistance = 0.0f;
         FEnemyRangedDef ranged{};
+        FMortarDef mortar{};
+        FLanceDef lance{};
         struct FChargeDef
         {
             float triggerDistance = 0.0f;
@@ -183,6 +210,10 @@ namespace Brotato3D
     {
         int durationSec = 30;
         std::string bgmCue;
+        float duskSpawnMultiplier = 1.0f;
+        float duskBonusXpMult = 1.0f;
+        float extractionRequiredSec = 0.0f;
+        float extractionRadiusM = 2.5f;
         std::vector<FSpawnEntry> spawns;
     };
 

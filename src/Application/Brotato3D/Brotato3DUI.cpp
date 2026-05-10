@@ -136,6 +136,18 @@ namespace
         {
             return "B";
         }
+        if (itemId == "impact_kneepads")
+        {
+            return "K";
+        }
+        if (itemId == "kinetic_coil")
+        {
+            return "C";
+        }
+        if (itemId == "spare_capacitor")
+        {
+            return "+";
+        }
         return "?";
     }
 
@@ -203,9 +215,17 @@ namespace
         {
             return "charger";
         }
+        if (enemyId == "lance_charger")
+        {
+            return "charger";
+        }
         if (enemyId == "bomber")
         {
             return "bomber";
+        }
+        if (enemyId == "mortar_tank")
+        {
+            return "tank";
         }
         if (enemyId == "shaman")
         {
@@ -856,7 +876,7 @@ namespace Brotato3D
         const ImTextureID panelFlat = LoadHudTexture(gameInstance, "panel_flat.png");
 
         ImGui::SetNextWindowPos(Scale(8.0f, 8.0f, uiScale), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(Scale(280.0f, 90.0f, uiScale), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(Scale(280.0f, 112.0f, uiScale), ImGuiCond_Always);
         ImGui::Begin("PlayerPanel", nullptr,
                      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                          ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoNav);
@@ -882,6 +902,32 @@ namespace Brotato3D
                 IM_COL32(72, 135, 245, 255),
                 fmt::format("Lv {}  XP {}/{}", player.level, player.currentXp, xpToNext).c_str(),
                 uiScale);
+        ImGui::SetCursorPos(Scale(18.0f, 68.0f, uiScale));
+        ImGui::TextUnformatted(gameInstance.IsPlayerDashing() ? "DASH" : "Dash Shift / X");
+        const int dashCharges = gameInstance.GetDashCharges();
+        const int dashMaxCharges = gameInstance.GetDashMaxCharges();
+        const float chargeSize = 13.0f * uiScale;
+        const float chargeGap = 7.0f * uiScale;
+        ImVec2 chargeMin(ImGui::GetWindowPos().x + 132.0f * uiScale, ImGui::GetWindowPos().y + 69.0f * uiScale);
+        for (int chargeIndex = 0; chargeIndex < dashMaxCharges; ++chargeIndex)
+        {
+            const ImVec2 min(chargeMin.x + static_cast<float>(chargeIndex) * (chargeSize + chargeGap), chargeMin.y);
+            const ImVec2 max(min.x + chargeSize, min.y + chargeSize);
+            const bool filled = chargeIndex < dashCharges;
+            ImGui::GetWindowDrawList()->AddRectFilled(min,
+                                                      max,
+                                                      filled ? IM_COL32(92, 230, 255, 245) : IM_COL32(40, 52, 62, 210),
+                                                      3.0f * uiScale);
+            if (!filled && chargeIndex == dashCharges && gameInstance.GetDashCooldownRatio() > 0.0f)
+            {
+                const float ratio = gameInstance.GetDashCooldownRatio();
+                ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(min.x, max.y - chargeSize * ratio),
+                                                          max,
+                                                          IM_COL32(92, 210, 170, 230),
+                                                          3.0f * uiScale);
+            }
+            ImGui::GetWindowDrawList()->AddRect(min, max, IM_COL32(170, 225, 235, 210), 3.0f * uiScale, 0, 1.0f * uiScale);
+        }
         ImGui::End();
 
         ImGui::SetNextWindowPos(ImVec2((viewport->Size.x - 260.0f * uiScale) * 0.5f, 8.0f * uiScale), ImGuiCond_Always);
@@ -910,14 +956,19 @@ namespace Brotato3D
             {
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.22f, 0.18f, 1.0f));
             }
-            ImGui::Text("%s", TrFormat(gameInstance,
-                                        "hud.remaining",
-                                        "剩余 {0} 秒",
-                                        static_cast<int>(std::ceil(remaining))).c_str());
+            ImGui::Text("DUSK IN %s", FormatTime(remaining).c_str());
             if (remaining < 5.0f)
             {
                 ImGui::PopStyleColor();
             }
+        }
+        else if (waveSystem.GetState() == EWaveState::DuskSurge)
+        {
+            const float pulse = 0.55f + 0.45f * std::sin(static_cast<float>(ImGui::GetTime()) * 8.0f) *
+                                          std::sin(static_cast<float>(ImGui::GetTime()) * 8.0f);
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.28f + pulse * 0.35f, 0.16f, 1.0f));
+            ImGui::TextUnformatted("EXTRACT NOW");
+            ImGui::PopStyleColor();
         }
         else if (gameInstance.GetAppState() == EAppState::Shopping)
         {
@@ -1113,6 +1164,29 @@ namespace Brotato3D
         ImGui::End();
 
         ImDrawList* drawList = ImGui::GetForegroundDrawList();
+        if (gameInstance.IsExtractionVehicleVisible())
+        {
+            ImVec2 center{};
+            ImVec2 edge{};
+            const glm::vec3 vehiclePos = gameInstance.GetExtractionVehiclePos();
+            const float extractionRadius = gameInstance.GetExtractionRadius();
+            if (NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, vehiclePos, center) &&
+                NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, vehiclePos + glm::vec3(extractionRadius, 0.0f, 0.0f), edge))
+            {
+                const float radiusPx = std::abs(edge.x - center.x);
+                const bool inZone = waveSystem.IsPlayerInExtractionZone();
+                drawList->AddCircleFilled(center,
+                                          radiusPx,
+                                          inZone ? IM_COL32(80, 210, 110, 34) : IM_COL32(255, 190, 70, 26),
+                                          64);
+                drawList->AddCircle(center,
+                                    radiusPx,
+                                    inZone ? IM_COL32(90, 255, 140, 210) : IM_COL32(255, 210, 90, 180),
+                                    64,
+                                    std::max(2.0f, 3.0f * uiScale));
+            }
+        }
+
         for (const FEnemyRuntime& enemy : gameInstance.GetEnemies())
         {
             if (enemy.alive && enemy.def && enemy.def->heal.enabled)
@@ -1199,6 +1273,46 @@ namespace Brotato3D
                               text.text.c_str());
         }
 
+        for (const FGroundIndicator& indicator : gameInstance.GetGroundIndicators())
+        {
+            const float progress = indicator.totalMs > 0.0f ?
+                1.0f - std::clamp(indicator.remainingMs / indicator.totalMs, 0.0f, 1.0f) :
+                1.0f;
+            glm::vec4 color = indicator.color;
+            color = glm::mix(color, glm::vec4(1.0f, 0.92f, 0.72f, color.a), std::max(0.0f, (progress - 0.6f) / 0.4f));
+            color.a *= 0.45f + 0.35f * std::sin(progress * glm::pi<float>() * 5.0f) * std::sin(progress * glm::pi<float>() * 5.0f);
+            if (indicator.shape == EGroundIndicatorShape::Circle)
+            {
+                ImVec2 center{};
+                ImVec2 edge{};
+                if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, indicator.worldPos, center) ||
+                    !NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance,
+                                                                       indicator.worldPos + glm::vec3(indicator.radius, 0.0f, 0.0f),
+                                                                       edge))
+                {
+                    continue;
+                }
+                const float radiusPx = std::abs(edge.x - center.x);
+                drawList->AddCircleFilled(center, radiusPx, Color(glm::vec4(color.r, color.g, color.b, color.a * 0.18f)), 64);
+                drawList->AddCircle(center, radiusPx, Color(color), 64, std::max(2.0f, 4.0f * uiScale));
+                drawList->AddCircle(center, radiusPx * std::clamp(progress, 0.1f, 1.0f), Color(color), 64,
+                                    std::max(1.5f, 2.0f * uiScale));
+            }
+            else
+            {
+                ImVec2 from{};
+                ImVec2 to{};
+                if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, indicator.worldPos, from) ||
+                    !NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, indicator.endPos, to))
+                {
+                    continue;
+                }
+                drawList->AddLine(from, to, Color(glm::vec4(color.r, color.g, color.b, color.a * 0.35f)),
+                                  std::max(4.0f, indicator.width * 34.0f * uiScale));
+                drawList->AddLine(from, to, Color(color), std::max(2.0f, indicator.width * 18.0f * uiScale));
+            }
+        }
+
         for (const FExpandingRing& ring : gameInstance.GetExplosionRings())
         {
             ImVec2 center{};
@@ -1236,11 +1350,38 @@ namespace Brotato3D
                                     ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 0.0f, 0.0f, alpha)));
         }
 
+        if (waveSystem.GetState() == EWaveState::DuskSurge)
+        {
+            const float progress = waveSystem.GetExtractionProgress();
+            const ImVec2 barSize = Scale(360.0f, 24.0f, uiScale);
+            const ImVec2 barMin(viewport->Pos.x + (viewport->Size.x - barSize.x) * 0.5f,
+                                viewport->Pos.y + viewport->Size.y - 122.0f * uiScale);
+            const ImVec2 barMax(barMin.x + barSize.x, barMin.y + barSize.y);
+            const ImU32 fillColor = progress < 0.5f ? IM_COL32(230, 70, 48, 255) :
+                                      (progress < 0.85f ? IM_COL32(235, 178, 56, 255) :
+                                                          IM_COL32(82, 220, 112, 255));
+            drawList->AddRectFilled(ImVec2(barMin.x - 10.0f * uiScale, barMin.y - 24.0f * uiScale),
+                                    ImVec2(barMax.x + 10.0f * uiScale, barMax.y + 10.0f * uiScale),
+                                    IM_COL32(12, 14, 18, 190),
+                                    8.0f * uiScale);
+            drawList->AddText(ImVec2(barMin.x, barMin.y - 20.0f * uiScale),
+                              waveSystem.IsPlayerInExtractionZone() ? IM_COL32(210, 255, 220, 255) :
+                                                                      IM_COL32(255, 210, 120, 255),
+                              fmt::format("EXTRACTING {:>3.0f}%", progress * 100.0f).c_str());
+            drawList->AddRectFilled(barMin, barMax, IM_COL32(55, 58, 64, 230), 5.0f * uiScale);
+            drawList->AddRectFilled(barMin,
+                                    ImVec2(barMin.x + barSize.x * progress, barMax.y),
+                                    fillColor,
+                                    5.0f * uiScale);
+            drawList->AddRect(barMin, barMax, IM_COL32(240, 230, 190, 210), 5.0f * uiScale, 0, 1.5f * uiScale);
+        }
+
         if (gameInstance.GetWaveBannerMs() > 0.0f)
         {
-            const float progress = 1.0f - std::clamp(gameInstance.GetWaveBannerMs() / 1000.0f, 0.0f, 1.0f);
-            const float alpha = std::sin(progress * glm::pi<float>());
             const std::string& bannerText = gameInstance.GetWaveBannerText();
+            const float bannerTotalMs = bannerText == "NIGHTFALL" ? 1500.0f : 1000.0f;
+            const float progress = 1.0f - std::clamp(gameInstance.GetWaveBannerMs() / bannerTotalMs, 0.0f, 1.0f);
+            const float alpha = std::sin(progress * glm::pi<float>());
             const float fontScale = 2.6f * uiScale;
             const float fontSize = ImGui::GetFontSize() * fontScale;
             const ImVec2 textSize = CalcFontTextSize(gameInstance.GetBigFont(), fontSize, bannerText);

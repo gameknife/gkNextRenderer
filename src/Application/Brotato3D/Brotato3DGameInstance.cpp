@@ -152,6 +152,7 @@ void Brotato3DGameInstance::OnTick(double deltaSeconds)
     }
     damageFlashMs_ = std::max(0.0f, damageFlashMs_ - deltaMs);
     weaponMergeBannerMs_ = std::max(0.0f, weaponMergeBannerMs_ - deltaMs);
+    UpdateSkyTransition(deltaSeconds);
     UpdateWaveBanner(deltaSeconds);
     UpdateCameraTracking(deltaSeconds);
 
@@ -186,6 +187,7 @@ void Brotato3DGameInstance::OnTick(double deltaSeconds)
             UpdateEnemies(effectiveDt);
             UpdateEnemyProjectiles(effectiveDt);
             ProcessItemTriggers(effectiveDt);
+            UpdateExtractionVehicle(deltaSeconds);
 
             const double waveDt = bossVictoryDelayMs_ <= 0.0f ? deltaSeconds : 0.0;
             waveSystem_.Update(waveDt, [this](const std::string& enemyId, glm::vec3 pos)
@@ -193,6 +195,16 @@ void Brotato3DGameInstance::OnTick(double deltaSeconds)
                 SpawnEnemy(enemyId, pos);
             });
 
+            if (waveSystem_.ConsumeDuskBegan())
+            {
+                BeginDuskSurge();
+            }
+            if (waveSystem_.ConsumeExtractionCompleted())
+            {
+                SetExtractionVehicleVisible(false);
+                SetSkyIntensityTarget(30.0f, 800.0f);
+                Brotato3D::PlayWaveStartSfx(waveSystem_.GetCurrentWaveIndex());
+            }
             if (waveSystem_.ConsumeWaveEnded())
             {
                 ClearAliveEnemies(false);
@@ -240,6 +252,8 @@ void Brotato3DGameInstance::OnDestroy()
     muzzleFlashes_.clear();
     explosionRings_.clear();
     laserBeams_.clear();
+    groundIndicators_.clear();
+    ResetExtractionVehicle();
     playerLightNode_.reset();
     tempLightPool_.clear();
     enemyKinematicBodyPools_.clear();

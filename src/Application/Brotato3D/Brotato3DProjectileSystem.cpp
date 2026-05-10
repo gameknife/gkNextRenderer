@@ -42,6 +42,8 @@ void Brotato3DGameInstance::ApplyWeaponKnockback(Brotato3D::FEnemyRuntime& enemy
     }
 
     enemy.worldPos = ClampToArena(enemy.worldPos + knockDir * effectiveKnockback, enemy.radius, arenaHalfExtent_);
+    enemy.worldPos = ResolveExtractionVehicleCollision(enemy.worldPos, enemy.radius);
+    enemy.worldPos = ClampToArena(enemy.worldPos, enemy.radius, arenaHalfExtent_);
     if (enemy.def)
     {
         enemy.worldPos.y = enemy.def->size.y * 0.5f;
@@ -83,7 +85,9 @@ void Brotato3DGameInstance::UpdateWeapons(double deltaSeconds)
                 continue;
             }
             const float distance = DistanceXZ(enemy.worldPos, player_.worldPos);
-            if (distance <= range && distance < bestDistance)
+            if (distance <= range &&
+                distance < bestDistance &&
+                !IsSegmentBlockedByExtractionVehicle(player_.worldPos, enemy.worldPos, 0.05f))
             {
                 bestDistance = distance;
                 target = &enemy;
@@ -175,6 +179,22 @@ void Brotato3DGameInstance::UpdateProjectiles(double deltaSeconds)
         bool deactivate = projectile.remainingLifetimeMs <= 0.0f ||
                           std::abs(projectile.worldPos.x) > arenaHalfExtent_.x + 1.0f ||
                           std::abs(projectile.worldPos.z) > arenaHalfExtent_.y + 1.0f;
+
+        if (!deactivate &&
+            IsSegmentBlockedByExtractionVehicle(projectile.lastWorldPos, projectile.worldPos, projectile.radius))
+        {
+            if (projectile.explosionRadius > 0.0f && projectile.explosionDamage > 0)
+            {
+                PushExplosionRing(projectile.worldPos, glm::vec4(1.0f, 0.55f, 0.12f, 1.0f), projectile.explosionRadius);
+                SpawnTempLight(projectile.worldPos, glm::vec3(1.0f, 0.45f, 0.10f), 5.0f, 250.0f);
+                StartScreenShake(180.0f, 2.8f);
+            }
+            else
+            {
+                PushMuzzleFlash(projectile.worldPos, projectile.color);
+            }
+            deactivate = true;
+        }
 
         if (!deactivate)
         {
@@ -319,11 +339,19 @@ void Brotato3DGameInstance::UpdateEnemyProjectiles(double deltaSeconds)
             continue;
         }
 
+        const glm::vec3 previousPos = projectile.worldPos;
         projectile.worldPos += projectile.velocity * static_cast<float>(deltaSeconds);
         projectile.remainingLifetimeMs -= deltaMs;
         bool deactivate = projectile.remainingLifetimeMs <= 0.0f ||
                           std::abs(projectile.worldPos.x) > arenaHalfExtent_.x + 1.0f ||
                           std::abs(projectile.worldPos.z) > arenaHalfExtent_.y + 1.0f;
+
+        if (!deactivate &&
+            IsSegmentBlockedByExtractionVehicle(previousPos, projectile.worldPos, projectile.radius))
+        {
+            PushMuzzleFlash(projectile.worldPos, glm::vec3(0.55f, 0.95f, 0.20f));
+            deactivate = true;
+        }
 
         if (!deactivate && DistanceXZ(projectile.worldPos, player_.worldPos) < player_.radius + projectile.radius)
         {
