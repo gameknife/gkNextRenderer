@@ -123,11 +123,11 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
 
     // Window scaling and style.
 #if ANDROID
-    const auto scaleFactor = 0.75 / GAndroidMagicScale;
+    const float scaleFactor = 0.75f / static_cast<float>(GAndroidMagicScale);
 #else
-    const auto scaleFactor = 1.0;
+    const float scaleFactor = 1.0f;
 #endif
-    const auto fontSize = 16;
+    constexpr float fontSize = 16.0f;
 
     UserInterface::SetStyle();
     ImGui::GetStyle().ScaleAllSizes(scaleFactor);
@@ -188,7 +188,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     configLocale.MergeMode = true;
     FontLoader::Load(FontLoader::FFontRequest{
         .filePath = "assets/fonts/DroidSansFallback.ttf",
-        .pixelSize = (fontSize + 2) * scaleFactor,
+        .pixelSize = (fontSize + 2.0f) * scaleFactor,
         .includeChineseFull = true,
         .fontConfig = &configLocale,
         .warnOnFailure = false,

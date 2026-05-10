@@ -93,7 +93,36 @@ Window::Window(const WindowConfig& config) :
     {
         flags |= SDL_WINDOW_BORDERLESS;
     }
-    window_ = SDL_CreateWindow(config.Title.c_str(), config.Width, config.Height, flags);
+
+    uint32_t windowWidth = config.Width;
+    uint32_t windowHeight = config.Height;
+
+    if (!config.Fullscreen)
+    {
+        const SDL_DisplayID displayId = SDL_GetPrimaryDisplay();
+        SDL_Rect bounds;
+        if (SDL_GetDisplayBounds(displayId, &bounds))
+        {
+            const uint32_t maxW = static_cast<uint32_t>(bounds.w);
+            const uint32_t maxH = static_cast<uint32_t>(bounds.h);
+            if (windowWidth > maxW || windowHeight > maxH)
+            {
+                const float aspect = static_cast<float>(windowWidth) / static_cast<float>(windowHeight);
+                if (windowWidth > maxW)
+                {
+                    windowWidth = maxW;
+                    windowHeight = static_cast<uint32_t>(static_cast<float>(maxW) / aspect);
+                }
+                if (windowHeight > maxH)
+                {
+                    windowHeight = maxH;
+                    windowWidth = static_cast<uint32_t>(static_cast<float>(maxH) * aspect);
+                }
+            }
+        }
+    }
+
+    window_ = SDL_CreateWindow(config.Title.c_str(), windowWidth, windowHeight, flags);
     if (!window_)
     {
         Throw(std::runtime_error("failed to init SDL Window."));

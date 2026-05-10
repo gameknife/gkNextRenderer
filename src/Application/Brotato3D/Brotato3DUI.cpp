@@ -438,7 +438,7 @@ namespace
             drawList->AddRectFilled(min, max, IM_COL32(19, 22, 28, 255));
         }
 
-        auto drawParallaxLayer = [drawList, &min, &max, &viewportSize](ImTextureID texture,
+        auto drawParallaxLayer = [drawList, &min, &viewportSize](ImTextureID texture,
                                                                        const ImVec2& texSize,
                                                                        float shiftX,
                                                                        float shiftY,
@@ -2037,4 +2037,3 @@ namespace Brotato3D
         ImGui::PopStyleColor(2);
     }
 }
-
