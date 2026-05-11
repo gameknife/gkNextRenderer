@@ -42,7 +42,17 @@ func EnsureExternal(repoRoot string, cfg config.Config) error {
 }
 
 func EnsureIOSExternal(repoRoot string, cfg config.Config) error {
-	return ensureArchive(repoRoot, cfg.External.MoltenVK.URL, filepath.Join(repoRoot, "external", "moltenvk-1.4.0"), "MoltenVK/static/MoltenVK.xcframework/ios-arm64/libMoltenVK.a")
+	dstDir := filepath.Join(repoRoot, "external", "moltenvk-1.4.0")
+	sentinels := []string{
+		"MoltenVK/static/MoltenVK.xcframework/ios-arm64/libMoltenVK.a",
+		"MoltenVK/MoltenVK/static/MoltenVK.xcframework/ios-arm64/libMoltenVK.a",
+	}
+	for _, sentinel := range sentinels {
+		if _, err := os.Stat(filepath.Join(dstDir, filepath.FromSlash(sentinel))); err == nil {
+			return nil
+		}
+	}
+	return ensureArchive(repoRoot, cfg.External.MoltenVK.URL, dstDir, "MoltenVK/MoltenVK/static/MoltenVK.xcframework/ios-arm64/libMoltenVK.a")
 }
 
 func ensureTSC(repoRoot string, cfg config.Config) error {

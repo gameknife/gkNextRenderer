@@ -95,7 +95,8 @@ Android:
 iOS:
 
 ```bash
-./gnb.sh ios --skip-codesign
+./gnb.sh ios              # default: skip code signing
+./gnb.sh ios --codesign   # enable code signing
 ```
 
 ## Paks

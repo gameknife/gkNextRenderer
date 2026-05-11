@@ -49,10 +49,25 @@ if(IOS)
     gk_require_path(
         MOLTENVK_SOURCE_ROOT
         "${CMAKE_SOURCE_DIR}/external/moltenvk-*"
-        "MoltenVK/static/MoltenVK.xcframework/ios-arm64/libMoltenVK.a"
+        "MoltenVK"
         "MoltenVK missing under external/. Run `gnb setup` or `gnb ios` first."
     )
-    set(MVK_SOURCE_PATH "${MOLTENVK_SOURCE_ROOT}/MoltenVK/static/MoltenVK.xcframework/ios-arm64")
+
+    unset(MVK_SOURCE_PATH)
+    foreach(_mvk_candidate IN ITEMS
+        "${MOLTENVK_SOURCE_ROOT}/MoltenVK/static/MoltenVK.xcframework/ios-arm64"
+        "${MOLTENVK_SOURCE_ROOT}/MoltenVK/MoltenVK/static/MoltenVK.xcframework/ios-arm64"
+    )
+        if(EXISTS "${_mvk_candidate}/libMoltenVK.a")
+            set(MVK_SOURCE_PATH "${_mvk_candidate}")
+            break()
+        endif()
+    endforeach()
+
+    if(NOT MVK_SOURCE_PATH)
+        message(FATAL_ERROR "MoltenVK missing under external/. Run `gnb setup` or `gnb ios` first.")
+    endif()
+
     file(MAKE_DIRECTORY "${MOLTENVK_SOURCE_ROOT}/lib")
     configure_file("${MVK_SOURCE_PATH}/libMoltenVK.a" "${MOLTENVK_SOURCE_ROOT}/lib/libMoltenVK.a" COPYONLY)
     set(MOLTENVK_ROOT "${MOLTENVK_SOURCE_ROOT}")
