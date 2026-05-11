@@ -151,6 +151,9 @@ func newSetupCommand(ctx appContext) *cobra.Command {
 		Use:   "setup",
 		Short: "Prepare vcpkg, external SDKs, and optional paks",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := platform.EnsureLinuxPreparePackages(); err != nil {
+				return err
+			}
 			if err := vcpkg.Ensure(ctx.repoRoot, ctx.cfg, refresh); err != nil {
 				return err
 			}
@@ -189,6 +192,9 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 			if !skipSetup {
 				if _, err := os.Stat(vcpkg.Toolchain(ctx.repoRoot, ctx.cfg)); err != nil {
 					console.Info("首次构建：自动执行 setup（如需跳过用 --skip-setup）")
+					if err := platform.EnsureLinuxPreparePackages(); err != nil {
+						return err
+					}
 					if err := vcpkg.Ensure(ctx.repoRoot, ctx.cfg, false); err != nil {
 						return err
 					}

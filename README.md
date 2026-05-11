@@ -160,13 +160,13 @@ gnb.bat run gkNextRenderer
 <summary><b>Linux (Ubuntu)</b></summary>
 
 ```shell
-sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev autoconf autoconf-archive automake libtool python3.12-venv
+sudo apt install build-essential cmake ninja-build curl zip unzip tar pkg-config libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev autoconf autoconf-archive automake libtool python3.12-venv
 ./gnb.sh setup
 ./gnb.sh build
 ./gnb.sh run gkNextRenderer
 ```
 
-`gnb` 现在会在 Linux 首轮构建前做桌面依赖预检查，如果缺少 `xrandr`、`wayland-protocols` 或 `xkbcommon`，会直接给出更明确的提示。
+`gnb setup` / Linux 首轮 `gnb build` 会在 vcpkg bootstrap 前按上面的列表准备系统包；非 apt/pacman 发行版仍会给出缺失桌面依赖提示。
 
 </details>
 
@@ -183,6 +183,7 @@ sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxra
 说明：
 
 - 如果机器上还没有 `slangc`，`gnb setup` 会自动下载项目约定的 Slang 工具链到 `external/`
+- `gnb setup` / Linux 首轮 `gnb build` 会在 vcpkg bootstrap 前按上面的列表准备系统包
 - 如果 vcpkg 阶段遇到 GitHub 归档下载失败，优先直接重试同一条构建命令
 - 一次真实 Steam Deck 部署的复盘见 [docs/steamdeck-deployment-notes.md](docs/steamdeck-deployment-notes.md)
 
