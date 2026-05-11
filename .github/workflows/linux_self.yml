@@ -1,4 +1,4 @@
-name: Windows CI (Self)
+name: Linux CI (Self)
 
 on:
   pull_request:
@@ -15,12 +15,10 @@ on:
 
 jobs:
   build:
-    runs-on: [self-hosted, windows]
+    runs-on: [self-hosted, linux]
     steps:
       - uses: actions/checkout@v4
         with:
           clean: false
-      - run: .\gnb.bat setup
-        shell: cmd
-      - run: .\gnb.bat build
-        shell: cmd
+      - run: ./gnb.sh setup
+      - run: ./gnb.sh build
