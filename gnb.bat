@@ -13,6 +13,6 @@ if not exist "%GNB%" (
 )
 if not exist "%GNB%" (
   mkdir "%ROOT%tools\gnb-bin\windows-amd64" >nul 2>nul
-  curl -L -o "%GNB%" "https://github.com/gameknife/gkNextRenderer/releases/latest/download/gnb-windows-amd64.exe"
+  curl -L -o "%GNB%" "https://github.com/gameknife/gkNextEngine/releases/download/paks-latest/gnb-windows-amd64.exe"
 )
 "%GNB%" %*

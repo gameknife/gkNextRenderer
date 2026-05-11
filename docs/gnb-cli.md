@@ -160,3 +160,20 @@ AVIF remains a manual CMake feature and is not exposed as a `gnb build` flag:
 cmake --preset windows -DENABLE_AVIF=ON -DVCPKG_MANIFEST_FEATURES=avif
 gnb.bat build
 ```
+
+## Publish gnb Binaries
+
+`gnb.bat` and `gnb.sh` download bootstrap binaries from the `paks-latest`
+GitHub release. Build and replace those assets from a machine with Go and
+GitHub CLI installed:
+
+```powershell
+gh auth login
+.\scripts\publish-gnb.ps1
+```
+
+Preview the local build and target release URL without uploading:
+
+```powershell
+.\scripts\publish-gnb.ps1 -DryRun
+```

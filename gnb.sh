@@ -17,7 +17,7 @@ if [ ! -x "$GNB" ] && command -v go >/dev/null 2>&1; then
 fi
 if [ ! -x "$GNB" ]; then
   mkdir -p "$(dirname "$GNB")"
-  curl -L -o "$GNB" "https://github.com/gameknife/gkNextRenderer/releases/latest/download/gnb-$PLATFORM"
+  curl -L -o "$GNB" "https://github.com/gameknife/gkNextEngine/releases/download/paks-latest/gnb-$PLATFORM"
   chmod +x "$GNB"
 fi
 exec "$GNB" "$@"
