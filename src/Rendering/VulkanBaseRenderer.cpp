@@ -212,7 +212,13 @@ namespace
     void SetVulkanDevice(Vulkan::VulkanBaseRenderer& application, uint32_t gpuIdx)
     {
         const auto& physicalDevices = application.PhysicalDevices();
-        VkPhysicalDevice pDevice = physicalDevices[gpuIdx <= physicalDevices.size() ? gpuIdx : 0];
+        if (gpuIdx >= physicalDevices.size())
+        {
+            SPDLOG_WARN("Requested GPU index {} is out of range; using GPU 0", gpuIdx);
+            gpuIdx = 0;
+        }
+
+        VkPhysicalDevice pDevice = physicalDevices[gpuIdx];
         VkPhysicalDeviceProperties2 deviceProp{};
         deviceProp.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
         vkGetPhysicalDeviceProperties2(pDevice, &deviceProp);
@@ -238,7 +244,7 @@ namespace Vulkan
         supportDenoiser_ = false;
         forceSDR_ = GOption->ForceSDR;
 
-        supportRayTracing_ = !GOption->ForceNoRT && instance_->SupportsRayQuery();
+        supportRayTracing_ = false;
     }
 
     VulkanBaseRenderer::~VulkanBaseRenderer()
@@ -287,6 +293,7 @@ namespace Vulkan
 
         deviceFeatures.multiDrawIndirect = true;
         deviceFeatures.drawIndirectFirstInstance = true;
+        supportRayTracing_ = !GOption->ForceNoRT && instance_->SupportsRayQuery(physicalDevice);
 
         SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nullptr);
 

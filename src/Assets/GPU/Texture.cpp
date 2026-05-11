@@ -364,8 +364,14 @@ namespace Assets
                                          Vulkan::CommandPool& commandPoolMt) :
         device_(device),
         commandPool_(commandPool),
-        mainThreadCommandPool_(commandPoolMt)
+        mainThreadCommandPool_(commandPoolMt),
+        textureWorkerUploadEnabled_(device.TransferFamilyIndex() != static_cast<int32_t>(device.GraphicsFamilyIndex()))
     {
+        if (!textureWorkerUploadEnabled_)
+        {
+            SPDLOG_INFO("Texture uploads will run on the main thread because no dedicated transfer queue is available");
+        }
+
         static const uint32_t kMaxBindlessResources = 65535u;// moltenVK returns a invalid value. std::min(65535u, device.DeviceProperties().limits.maxPerStageDescriptorSamplers);
         const std::vector<Vulkan::DescriptorBinding> descriptorBindings =
         {
@@ -451,7 +457,7 @@ namespace Assets
             copyedData = new uint8_t[bytelength];
             memcpy(copyedData, data, bytelength);
         }
-        TaskCoordinator::GetInstance()->AddTask(
+        auto textureLoadTask =
             [this, hdr, srgb, texname, mime, copyedData, bytelength, newTextureIdx](ResTask& task)
             {
                 TextureTaskContext taskContext{};
@@ -888,7 +894,9 @@ namespace Assets
                                                taskContext.elapsed * 1000.f);
                 std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
                 task.SetContext(taskContext);
-            }, [this, copyedData](ResTask& task)
+            };
+
+        auto textureCompleteTask = [this, copyedData](ResTask& task)
             {
                 TextureTaskContext taskContext{};
                 task.GetContext(taskContext);
@@ -900,7 +908,16 @@ namespace Assets
                 {
                     NextEngine::GetInstance()->GetScene().UpdateHDRSH();
                 }
-            }, 0);
+            };
+
+        if (textureWorkerUploadEnabled_)
+        {
+            TaskCoordinator::GetInstance()->AddTask(std::move(textureLoadTask), std::move(textureCompleteTask), 0);
+        }
+        else
+        {
+            TaskCoordinator::GetInstance()->AddMainThreadTask(std::move(textureLoadTask), std::move(textureCompleteTask), 0);
+        }
 
         return newTextureIdx;
     }

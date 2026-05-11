@@ -98,19 +98,48 @@ bool Instance::SupportsRayQuery() const
 {
 	for (const auto& device : physicalDevices_)
 	{
-		const auto extensions = GetEnumerateVector(device, static_cast<const char*>(nullptr),
-		                                           vkEnumerateDeviceExtensionProperties);
-		const auto hasRayQuery = std::any_of(extensions.begin(), extensions.end(),
-			[](const VkExtensionProperties& extension)
-			{
-				return std::strcmp(extension.extensionName, VK_KHR_RAY_QUERY_EXTENSION_NAME) == 0;
-			});
-		if (hasRayQuery)
+		if (SupportsRayQuery(device))
 		{
 			return true;
 		}
 	}
 	return false;
+}
+
+bool Instance::SupportsRayQuery(VkPhysicalDevice physicalDevice) const
+{
+	const auto extensions = GetEnumerateVector(physicalDevice, static_cast<const char*>(nullptr),
+	                                           vkEnumerateDeviceExtensionProperties);
+
+	const auto hasExtension = [&extensions](const char* requiredExtension)
+	{
+		return std::any_of(extensions.begin(), extensions.end(),
+			[requiredExtension](const VkExtensionProperties& extension)
+			{
+				return std::strcmp(extension.extensionName, requiredExtension) == 0;
+			});
+	};
+
+	if (!hasExtension(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME) ||
+	    !hasExtension(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) ||
+	    !hasExtension(VK_KHR_RAY_QUERY_EXTENSION_NAME))
+	{
+		return false;
+	}
+
+	VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures = {};
+	accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+
+	VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures = {};
+	rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+	rayQueryFeatures.pNext = &accelerationStructureFeatures;
+
+	VkPhysicalDeviceFeatures2 features = {};
+	features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+	features.pNext = &rayQueryFeatures;
+	vkGetPhysicalDeviceFeatures2(physicalDevice, &features);
+
+	return rayQueryFeatures.rayQuery && accelerationStructureFeatures.accelerationStructure;
 }
 
 void Instance::CheckVulkanMinimumVersion(const uint32_t minVersion)

@@ -60,10 +60,6 @@ namespace Vulkan::RayTracing
         VkPhysicalDeviceFeatures& deviceFeatures,
         void* nextDeviceFeatures)
     {
-        bool fakeRequireRayTracingPipeline = !GOption->RenderDoc;
-#if ANDROID
-        fakeRequireRayTracingPipeline = false;
-#endif
         // Required extensions.
         requiredExtensions.insert(requiredExtensions.end(),
                                   {
@@ -71,8 +67,6 @@ namespace Vulkan::RayTracing
                                       VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
                                       VK_KHR_RAY_QUERY_EXTENSION_NAME,
                                   });
-
-        if (fakeRequireRayTracingPipeline) requiredExtensions.insert(requiredExtensions.end(), {VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME});
 
         // Required device features.
         VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures = {};
@@ -85,12 +79,7 @@ namespace Vulkan::RayTracing
         rayQueryFeatures.pNext = &accelerationStructureFeatures;
         rayQueryFeatures.rayQuery = true;
 
-        VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures = {};
-        rayTracingPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
-        rayTracingPipelineFeatures.pNext = &rayQueryFeatures;
-        rayTracingPipelineFeatures.rayTracingPipeline = true;
-
-        Vulkan::VulkanBaseRenderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, fakeRequireRayTracingPipeline ? (void*)&rayTracingPipelineFeatures : (void*)&rayQueryFeatures);
+        Vulkan::VulkanBaseRenderer::SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, &rayQueryFeatures);
     }
 
     void RayTraceBaseRenderer::OnDeviceSet()

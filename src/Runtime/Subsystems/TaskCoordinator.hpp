@@ -300,6 +300,7 @@ public:
     // Queues worker-thread CPU tasks. Use this for long-running work that must not touch scene/UI state directly.
     // complete_func runs back on the coordinator path after task_func finishes.
     uint32_t AddTask( ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func, uint8_t priority = 0);
+    uint32_t AddMainThreadTask(ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func, uint8_t priority = 0);
     uint32_t AddParralledTask( ResTask::TaskFunc task_func, ResTask::TaskFunc complete_func );
 
     void WaitForTask(uint32_t task_id)
@@ -325,12 +326,11 @@ public:
 
     bool IsAllTaskComplete()
     {
-#if __APPLE__
         if (mainthreadTaskQueue_.size() > 0)
         {
             return false;
         }
-#else
+
         for (auto& thread : threads_)
         {
             if (!thread->IsIdle() || thread->taskQueue_.size() > 0)
@@ -338,7 +338,6 @@ public:
                 return false;
             }
         }
-#endif
 
         if (completeTaskQueue_.size() > 0 || parralledTaskQueue_.size() > 0)
         {
@@ -407,4 +406,3 @@ private:
     static std::unique_ptr<TaskCoordinator> instance_;
     static void TestCase();
 };
-

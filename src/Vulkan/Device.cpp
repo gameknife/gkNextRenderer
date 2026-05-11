@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <set>
 #include <fmt/format.h>
+#include <spdlog/spdlog.h>
 
 namespace Vulkan {
 
@@ -67,10 +68,25 @@ Device::Device(
 #else
 #if ANDROID
     //const auto transferFamily = graphicsFamily;
-	const auto transferFamily = FindQueue(queueFamilies, "transfer", VK_QUEUE_SPARSE_BINDING_BIT, VK_QUEUE_GRAPHICS_BIT, 1);
+	auto transferFamily = std::find_if(queueFamilies.begin(), queueFamilies.end(), [](const VkQueueFamilyProperties& queueFamily)
+	{
+		return queueFamily.queueCount >= 1 &&
+			(queueFamily.queueFlags & VK_QUEUE_SPARSE_BINDING_BIT) &&
+			!(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT);
+	});
 #else
-	const auto transferFamily = FindQueue(queueFamilies, "transfer", VK_QUEUE_TRANSFER_BIT, VK_QUEUE_GRAPHICS_BIT, 1);
+	auto transferFamily = std::find_if(queueFamilies.begin(), queueFamilies.end(), [](const VkQueueFamilyProperties& queueFamily)
+	{
+		return queueFamily.queueCount >= 1 &&
+			(queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT) &&
+			!(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT);
+	});
 #endif
+	if (transferFamily == queueFamilies.end())
+	{
+		SPDLOG_INFO("No dedicated transfer queue found; using graphics queue for transfers");
+		transferFamily = graphicsFamily;
+	}
 #endif
 	
 	//Commented out for Macos compatibility, and this queue is not in use actually
@@ -80,7 +96,7 @@ Device::Device(
 	const auto presentFamily = std::find_if(queueFamilies.begin(), queueFamilies.end(), [&](const VkQueueFamilyProperties& queueFamily)
 	{
 		VkBool32 presentSupport = false;
-		const uint32_t i = static_cast<uint32_t>(&*queueFamilies.cbegin() - &queueFamily);
+		const uint32_t i = static_cast<uint32_t>(&queueFamily - queueFamilies.data());
 		vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surface.Handle(), &presentSupport);
 		return queueFamily.queueCount > 0 && presentSupport;
 	});
@@ -91,7 +107,7 @@ Device::Device(
 	}
 
 	graphicsFamilyIndex_ = static_cast<uint32_t>(graphicsFamily - queueFamilies.begin());
-	//computeFamilyIndex_ = static_cast<uint32_t>(computeFamily - queueFamilies.begin());
+	computeFamilyIndex_ = graphicsFamilyIndex_;
 	presentFamilyIndex_ = static_cast<uint32_t>(presentFamily - queueFamilies.begin());
 	transferFamilyIndex_ = static_cast<uint32_t>(transferFamily - queueFamilies.begin());
 

@@ -118,7 +118,10 @@ namespace NextRenderer
         }
         Vulkan::Instance* instance = new Vulkan::Instance(*window, validationLayers, VK_API_VERSION_1_2);
 
-        const bool useRayTracingRenderer = !GOption->ForceNoRT && instance->SupportsRayQuery();
+        const auto& physicalDevices = instance->PhysicalDevices();
+        const uint32_t selectedGpuIdx = GOption->GpuIdx < physicalDevices.size() ? GOption->GpuIdx : 0;
+        const bool useRayTracingRenderer =
+            !GOption->ForceNoRT && instance->SupportsRayQuery(physicalDevices[selectedGpuIdx]);
 
         std::vector supportedTypes = {Vulkan::ERT_ModernDeferred, Vulkan::ERT_LegacyDeferred, Vulkan::ERT_VoxelTracing};
         Vulkan::VulkanBaseRenderer* renderer = nullptr;
