@@ -17,11 +17,11 @@ func Run(repoRoot string, mode string) error {
 	if mode == "release" {
 		task = "build"
 	}
-	gradle := "./gradlew"
-	if runtime.GOOS == "windows" {
-		gradle = "gradlew.bat"
-	}
 	dir := filepath.Join(repoRoot, "android")
+	gradle := filepath.Join(dir, "gradlew")
+	if runtime.GOOS == "windows" {
+		gradle = filepath.Join(dir, "gradlew.bat")
+	}
 	console.Command(gradle, task)
 	cmd := exec.Command(gradle, task)
 	cmd.Dir = dir
