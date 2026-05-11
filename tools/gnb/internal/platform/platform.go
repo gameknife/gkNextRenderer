@@ -7,6 +7,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
+
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 )
 
 type Host struct {
@@ -74,6 +77,21 @@ func CommandExists(name string) bool {
 	return err == nil
 }
 
+func EnsureLinuxPreparePackages() error {
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+
+	if CommandExists("apt-get") && CommandExists("dpkg-query") {
+		return ensureLinuxAptPackages()
+	}
+	if CommandExists("pacman") {
+		return ensureLinuxPacmanPackages()
+	}
+
+	return EnsureLinuxDesktopPackages()
+}
+
 func EnsureLinuxDesktopPackages() error {
 	if runtime.GOOS != "linux" {
 		return nil
@@ -97,4 +115,91 @@ func EnsureLinuxDesktopPackages() error {
 	}
 
 	return fmt.Errorf("missing Linux desktop packages: %v\n%s", missing, hint)
+}
+
+func ensureLinuxAptPackages() error {
+	packages := []string{
+		"build-essential",
+		"cmake",
+		"ninja-build",
+		"curl",
+		"zip",
+		"unzip",
+		"tar",
+		"pkg-config",
+		"libxi-dev",
+		"libxinerama-dev",
+		"libxcursor-dev",
+		"libxrandr-dev",
+		"wayland-protocols",
+		"libxkbcommon-dev",
+		"xorg-dev",
+		"autoconf",
+		"autoconf-archive",
+		"automake",
+		"libtool",
+		"python3.12-venv",
+	}
+	missing := make([]string, 0)
+	for _, pkg := range packages {
+		cmd := exec.Command("dpkg-query", "-W", "-f=${Status}", pkg)
+		data, err := cmd.Output()
+		if err != nil || !strings.Contains(string(data), "install ok installed") {
+			missing = append(missing, pkg)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+
+	args := append([]string{"apt", "install"}, packages...)
+	return runSystemPrepare("sudo", args...)
+}
+
+func ensureLinuxPacmanPackages() error {
+	packages := []string{
+		"base-devel",
+		"cmake",
+		"ninja",
+		"curl",
+		"zip",
+		"unzip",
+		"tar",
+		"pkgconf",
+		"libxrandr",
+		"wayland-protocols",
+		"libxkbcommon",
+	}
+	missing := make([]string, 0)
+	for _, pkg := range packages {
+		if err := exec.Command("pacman", "-Q", pkg).Run(); err != nil {
+			missing = append(missing, pkg)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+
+	args := append([]string{"pacman", "-S", "--needed"}, packages...)
+	return runSystemPrepare("sudo", args...)
+}
+
+func runSystemPrepare(name string, args ...string) error {
+	if runtime.GOOS == "linux" && name == "sudo" && os.Geteuid() == 0 && len(args) > 0 {
+		name = args[0]
+		args = args[1:]
+	}
+	if !CommandExists(name) {
+		return fmt.Errorf("missing %s; install required Linux packages manually", name)
+	}
+	console.Info("preparing Linux packages")
+	console.Command(name, args...)
+	cmd := exec.Command(name, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%s failed: %w", name, err)
+	}
+	return nil
 }
