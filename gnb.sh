@@ -11,9 +11,17 @@ case "$OS/$ARCH" in
 esac
 GNB="$ROOT/tools/gnb-bin/$PLATFORM/gnb"
 if [ -x "$ROOT/gnb" ]; then GNB="$ROOT/gnb"; fi
-if [ ! -x "$GNB" ] && command -v go >/dev/null 2>&1; then
-  (cd "$ROOT/tools/gnb" && go build -trimpath -ldflags="-s -w" -o "$ROOT/gnb" ./cmd/gnb)
-  GNB="$ROOT/gnb"
+if command -v go >/dev/null 2>&1; then
+  NEED_BUILD=0
+  if [ ! -x "$ROOT/gnb" ]; then
+    NEED_BUILD=1
+  elif find "$ROOT/tools/gnb" -type f \( -name '*.go' -o -name 'go.mod' -o -name 'go.sum' \) -newer "$ROOT/gnb" | grep -q .; then
+    NEED_BUILD=1
+  fi
+  if [ "$NEED_BUILD" -eq 1 ]; then
+    (cd "$ROOT/tools/gnb" && go build -trimpath -ldflags="-s -w" -o "$ROOT/gnb" ./cmd/gnb)
+    GNB="$ROOT/gnb"
+  fi
 fi
 if [ ! -x "$GNB" ]; then
   mkdir -p "$(dirname "$GNB")"

@@ -318,19 +318,35 @@ func newAndroidCommand(ctx appContext) *cobra.Command {
 }
 
 func newIOSCommand(ctx appContext) *cobra.Command {
-	skipCodeSign := false
+	skipCodeSign := true
+	codeSign := false
 	cmd := &cobra.Command{
 		Use:   "ios",
-		Short: "Run iOS xcodebuild",
+		Short: "Build iOS target with CMake preset",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := fetcher.EnsureIOSExternal(ctx.repoRoot, ctx.cfg); err != nil {
 				return err
 			}
-			return ios.Build(ctx.repoRoot, skipCodeSign)
+			skip, err := resolveIOSSkipCodeSign(cmd, skipCodeSign, codeSign)
+			if err != nil {
+				return err
+			}
+			return ios.Build(ctx.repoRoot, skip)
 		},
 	}
 	cmd.Flags().BoolVar(&skipCodeSign, "skip-codesign", true, "disable code signing")
+	cmd.Flags().BoolVar(&codeSign, "codesign", false, "enable code signing")
 	return cmd
+}
+
+func resolveIOSSkipCodeSign(cmd *cobra.Command, skipCodeSign bool, codeSign bool) (bool, error) {
+	if cmd.Flags().Changed("skip-codesign") && cmd.Flags().Changed("codesign") {
+		return false, fmt.Errorf("cannot use --skip-codesign and --codesign together")
+	}
+	if cmd.Flags().Changed("codesign") {
+		return !codeSign, nil
+	}
+	return skipCodeSign, nil
 }
 
 func newPaksCommand(ctx appContext) *cobra.Command {
