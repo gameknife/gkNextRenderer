@@ -1,0 +1,24 @@
+name: MacOS CI (Self)
+
+on:
+  pull_request:
+    branches: [main, dev, 'releases/**']
+  push:
+    branches: [main, 'releases/**']
+    paths:
+      - '.github/workflows/**'
+      - 'src/**'
+      - 'assets/shaders/**'
+      - 'tools/gnb/**'
+      - 'gnb.*'
+      - '**/CMakeLists.txt'
+
+jobs:
+  build:
+    runs-on: [self-hosted, macOS]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false
+      - run: ./gnb.sh setup
+      - run: ./gnb.sh build
