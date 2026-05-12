@@ -249,7 +249,7 @@ void Brotato3DGameInstance::UpdatePlayer(double deltaSeconds)
         player_.worldPos = ClampToArena(player_.worldPos + player_.dashDir * PlayerDashSpeed * (dashStepMs / 1000.0f),
                                         player_.radius,
                                         arenaHalfExtent_);
-        player_.worldPos = ResolveExtractionVehicleCollision(player_.worldPos, player_.radius);
+        player_.worldPos = ResolvePlayerObstacleCollision(player_.worldPos, player_.radius);
         player_.worldPos = ClampToArena(player_.worldPos, player_.radius, arenaHalfExtent_);
         if (player_.dashRemainingMs <= 0.0f)
         {
@@ -261,9 +261,10 @@ void Brotato3DGameInstance::UpdatePlayer(double deltaSeconds)
         player_.worldPos = ClampToArena(player_.worldPos + inputDir * speed * static_cast<float>(deltaSeconds),
                                         player_.radius,
                                         arenaHalfExtent_);
-        player_.worldPos = ResolveExtractionVehicleCollision(player_.worldPos, player_.radius);
+        player_.worldPos = ResolvePlayerObstacleCollision(player_.worldPos, player_.radius);
         player_.worldPos = ClampToArena(player_.worldPos, player_.radius, arenaHalfExtent_);
     }
+    player_.worldPos.y = 0.5f + SampleArenaGroundY(player_.worldPos);
     playerVelocity_ = deltaSeconds > 0.0 ? (player_.worldPos - previousPlayerPos) / static_cast<float>(deltaSeconds) :
                                            glm::vec3(0.0f);
     if (player_.bodyNode)

@@ -1,13 +1,17 @@
 #include "Brotato3DArena.hpp"
 
+#include "Assets/Core/Node.h"
 #include "Assets/Data/Material.hpp"
 #include "Assets/Loaders/FProcModel.h"
 #include "Brotato3DDataLoader.hpp"
+#include "Brotato3DPcgGenerator.hpp"
+#include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Scene/SceneBuilder.h"
 
 #include <cmath>
 #include <limits>
 #include <random>
+#include <unordered_map>
 #include <spdlog/spdlog.h>
 
 namespace
@@ -493,6 +497,188 @@ namespace
         nodes.push_back(outResources.groundNodes.back());
     }
 
+    void MarkRenderOnly(const std::shared_ptr<Assets::Node>& node)
+    {
+        auto physicsComponent = std::make_shared<Runtime::PhysicsComponent>();
+        physicsComponent->SetMobility(Runtime::ENodeMobility::Dynamic);
+        node->AddComponent(physicsComponent);
+    }
+
+    const Brotato3D::Pcg::FPropDef* FindPropDef(const Brotato3D::Pcg::FArenaPcgConfig& config, const std::string& propId)
+    {
+        const auto it = std::find_if(config.props.begin(), config.props.end(), [&propId](const Brotato3D::Pcg::FPropDef& prop)
+        {
+            return prop.id == propId;
+        });
+        return it != config.props.end() ? &(*it) : nullptr;
+    }
+
+    void BuildPcgProps(std::vector<Assets::Model>& models,
+                       std::vector<Assets::FMaterial>& materials,
+                       std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                       Brotato3D::FArenaResources& outResources,
+                       const Brotato3D::Pcg::FArenaPcgConfig& config,
+                       const Brotato3D::Pcg::FMapGraph& graph)
+    {
+        if (graph.props.empty())
+        {
+            return;
+        }
+
+        struct FPropRenderResource
+        {
+            uint32_t modelId = 0;
+            uint32_t materialId = 0;
+        };
+        std::unordered_map<std::string, FPropRenderResource> resources;
+        for (const Brotato3D::Pcg::FPropDef& prop : config.props)
+        {
+            if (prop.id.empty() || resources.contains(prop.id))
+            {
+                continue;
+            }
+
+            const glm::vec2 halfFootprint = glm::max(prop.footprintXZ * 0.5f, glm::vec2(0.05f));
+            models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-halfFootprint.x, 0.0f, -halfFootprint.y),
+                                                           glm::vec3(halfFootprint.x, prop.visualHeight, halfFootprint.y)));
+            const uint32_t modelId = static_cast<uint32_t>(models.size() - 1);
+            const uint32_t materialId = SceneBuilder::AddLambertianMaterial(materials, prop.baseColor);
+            resources.emplace(prop.id, FPropRenderResource{.modelId = modelId, .materialId = materialId});
+        }
+
+        for (size_t index = 0; index < graph.props.size(); ++index)
+        {
+            const Brotato3D::Pcg::FPropPlacement& placement = graph.props[index];
+            const Brotato3D::Pcg::FPropDef* prop = FindPropDef(config, placement.id);
+            const auto resourceIt = resources.find(placement.id);
+            if (!prop || resourceIt == resources.end())
+            {
+                continue;
+            }
+
+            const float groundY = Brotato3D::Pcg::SampleVisualHeight(graph.rootSeed,
+                                                                     config.vertexJitterAmplitude,
+                                                                     config.vertexJitterFrequency,
+                                                                     placement.positionXZ);
+            auto node = SceneBuilder::CreateRenderNode(fmt::format("Brotato3D_PcgProp_{}_{}", placement.id, index),
+                                                       glm::vec3(placement.positionXZ.x, groundY, placement.positionXZ.y),
+                                                       glm::vec3(1.0f),
+                                                       static_cast<uint32_t>(nodes.size()),
+                                                       resourceIt->second.modelId,
+                                                       resourceIt->second.materialId,
+                                                       true,
+                                                       glm::angleAxis(placement.rotationYRadians, glm::vec3(0.0f, 1.0f, 0.0f)),
+                                                       false);
+            MarkRenderOnly(node);
+            outResources.propNodes.push_back(node);
+            nodes.push_back(node);
+
+            const glm::vec3 colliderExtent(std::max(0.05f, prop->footprintXZ.x),
+                                           std::max(0.05f, prop->colliderHeight),
+                                           std::max(0.05f, prop->footprintXZ.y));
+            outResources.propColliders.push_back(Brotato3D::FArenaResources::FBoxCollider{
+                .center = glm::vec3(placement.positionXZ.x, groundY + prop->colliderHeight * 0.5f, placement.positionXZ.y),
+                .rotation = glm::angleAxis(placement.rotationYRadians, glm::vec3(0.0f, 1.0f, 0.0f)),
+                .extent = colliderExtent,
+            });
+        }
+    }
+
+    void AppendBoxToMesh(std::vector<Assets::Vertex>& vertices,
+                         std::vector<uint32_t>& indices,
+                         const glm::vec3& minPos,
+                         const glm::vec3& maxPos)
+    {
+        const std::array<glm::vec3, 8> p{
+            glm::vec3(minPos.x, minPos.y, minPos.z),
+            glm::vec3(maxPos.x, minPos.y, minPos.z),
+            glm::vec3(maxPos.x, maxPos.y, minPos.z),
+            glm::vec3(minPos.x, maxPos.y, minPos.z),
+            glm::vec3(minPos.x, minPos.y, maxPos.z),
+            glm::vec3(maxPos.x, minPos.y, maxPos.z),
+            glm::vec3(maxPos.x, maxPos.y, maxPos.z),
+            glm::vec3(minPos.x, maxPos.y, maxPos.z),
+        };
+
+        const auto addFace = [&vertices, &indices](const glm::vec3& a,
+                                                   const glm::vec3& b,
+                                                   const glm::vec3& c,
+                                                   const glm::vec3& d,
+                                                   const glm::vec3& normal)
+        {
+            const uint32_t offset = static_cast<uint32_t>(vertices.size());
+            vertices.push_back(Assets::Vertex{a, normal, glm::vec4(1, 0, 0, 0), glm::vec2(0.0f), 0});
+            vertices.push_back(Assets::Vertex{b, normal, glm::vec4(1, 0, 0, 0), glm::vec2(1.0f, 0.0f), 0});
+            vertices.push_back(Assets::Vertex{c, normal, glm::vec4(1, 0, 0, 0), glm::vec2(1.0f), 0});
+            vertices.push_back(Assets::Vertex{d, normal, glm::vec4(1, 0, 0, 0), glm::vec2(0.0f, 1.0f), 0});
+            indices.insert(indices.end(), {offset, offset + 1, offset + 2, offset, offset + 2, offset + 3});
+        };
+
+        addFace(p[0], p[4], p[7], p[3], glm::vec3(-1.0f, 0.0f, 0.0f));
+        addFace(p[1], p[2], p[6], p[5], glm::vec3(1.0f, 0.0f, 0.0f));
+        addFace(p[0], p[1], p[5], p[4], glm::vec3(0.0f, -1.0f, 0.0f));
+        addFace(p[3], p[7], p[6], p[2], glm::vec3(0.0f, 1.0f, 0.0f));
+        addFace(p[0], p[3], p[2], p[1], glm::vec3(0.0f, 0.0f, -1.0f));
+        addFace(p[4], p[5], p[6], p[7], glm::vec3(0.0f, 0.0f, 1.0f));
+    }
+
+    void BuildPcgBorderVisual(std::vector<Assets::Model>& models,
+                              std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                              Brotato3D::FArenaResources& outResources,
+                              const Brotato3D::Pcg::FMapGraph& graph,
+                              uint32_t materialId)
+    {
+        if (graph.borderSegments.empty())
+        {
+            return;
+        }
+
+        std::vector<Assets::Vertex> vertices;
+        std::vector<uint32_t> indices;
+        vertices.reserve(graph.borderSegments.size() * 24);
+        indices.reserve(graph.borderSegments.size() * 36);
+        for (const Brotato3D::Pcg::FBorderSegment& segment : graph.borderSegments)
+        {
+            glm::vec2 minXZ = glm::min(segment.baseStartXZ, segment.baseEndXZ);
+            glm::vec2 maxXZ = glm::max(segment.baseStartXZ, segment.baseEndXZ);
+            const bool horizontal = std::abs(segment.baseStartXZ.y - segment.baseEndXZ.y) < 0.001f;
+            if (horizontal)
+            {
+                const float outward = segment.baseStartXZ.y < 0.0f ? -1.0f : 1.0f;
+                minXZ.y += outward < 0.0f ? -segment.thickness : 0.0f;
+                maxXZ.y += outward > 0.0f ? segment.thickness : 0.0f;
+            }
+            else
+            {
+                const float outward = segment.baseStartXZ.x < 0.0f ? -1.0f : 1.0f;
+                minXZ.x += outward < 0.0f ? -segment.thickness : 0.0f;
+                maxXZ.x += outward > 0.0f ? segment.thickness : 0.0f;
+            }
+            AppendBoxToMesh(vertices,
+                            indices,
+                            glm::vec3(minXZ.x, 0.0f, minXZ.y),
+                            glm::vec3(maxXZ.x, segment.topY, maxXZ.y));
+        }
+
+        models.push_back(Assets::FProcModel::CreateFromBuffers("Brotato3D_PcgFracturedBorder",
+                                                               std::move(vertices),
+                                                               std::move(indices),
+                                                               false));
+        const uint32_t modelId = static_cast<uint32_t>(models.size() - 1);
+        auto node = SceneBuilder::CreateRenderNode("Brotato3D_PcgFracturedBorder",
+                                                   glm::vec3(0.0f),
+                                                   glm::vec3(1.0f),
+                                                   static_cast<uint32_t>(nodes.size()),
+                                                   modelId,
+                                                   materialId,
+                                                   true,
+                                                   glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+                                                   false);
+        MarkRenderOnly(node);
+        outResources.borderNodes.push_back(node);
+        nodes.push_back(node);
+    }
+
     void BuildExplicitGround(std::vector<Assets::Model>& models,
                              std::vector<Assets::FMaterial>& materials,
                              std::vector<std::shared_ptr<Assets::Node>>& nodes,
@@ -536,6 +722,109 @@ namespace
                               tileMaterialId,
                               fmt::format("Brotato3D_GroundTile_{}_{}", tileIndex, ToGroundKindName(tile.kind)));
         }
+    }
+
+    Brotato3D::Pcg::FArenaPcgConfig BuildPcgConfigWithPalette(const Brotato3D::FArenaDef& selectedArena)
+    {
+        Brotato3D::Pcg::FArenaPcgConfig config = selectedArena.pcg;
+        if (!config.palette.empty())
+        {
+            if (config.palette.size() > 16)
+            {
+                config.palette.resize(16);
+            }
+            return config;
+        }
+
+        config.palette.push_back(selectedArena.baseGroundColor);
+        for (const Brotato3D::FGroundTileDef& tile : selectedArena.groundTiles)
+        {
+            if (config.palette.size() >= 16)
+            {
+                break;
+            }
+            config.palette.push_back(tile.color);
+        }
+        return config;
+    }
+
+    std::array<uint32_t, 16> AddPcgGroundMaterials(std::vector<Assets::FMaterial>& materials,
+                                                   const Brotato3D::Pcg::FArenaPcgConfig& config,
+                                                   const glm::vec3& fallbackColor)
+    {
+        std::array<uint32_t, 16> materialIds{};
+        const std::vector<glm::vec3>& palette = config.palette;
+        const size_t paletteCount = std::max<size_t>(1, std::min<size_t>(16, palette.size()));
+        for (size_t index = 0; index < paletteCount; ++index)
+        {
+            const glm::vec3 color = palette.empty() ? fallbackColor : palette[index];
+            materialIds[index] = SceneBuilder::AddLambertianMaterial(materials, color);
+        }
+        for (size_t index = paletteCount; index < materialIds.size(); ++index)
+        {
+            materialIds[index] = materialIds[0];
+        }
+        return materialIds;
+    }
+
+    bool BuildPcgGround(std::vector<Assets::Model>& models,
+                        std::vector<Assets::FMaterial>& materials,
+                        std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                        Brotato3D::FArenaResources& outResources,
+                        const Brotato3D::FArenaDef& selectedArena,
+                        const glm::vec2& halfExtent)
+    {
+        Brotato3D::Pcg::FArenaPcgConfig pcgConfig = BuildPcgConfigWithPalette(selectedArena);
+        Brotato3D::Pcg::FMapGraph graph{};
+        const uint32_t sessionSeed = HashArenaSeed(selectedArena.id) ^ GetArenaSessionSeed();
+        if (!Brotato3D::Pcg::BuildMapGraph(pcgConfig, halfExtent, sessionSeed, graph))
+        {
+            spdlog::warn("[Brotato3DPcg] failed to build graph for arena '{}'", selectedArena.id);
+            return false;
+        }
+        outResources.terrainHeight = Brotato3D::FArenaResources::FTerrainHeightSampler{
+            .enabled = true,
+            .rootSeed = graph.rootSeed,
+            .vertexJitterAmplitude = pcgConfig.vertexJitterAmplitude,
+            .vertexJitterFrequency = pcgConfig.vertexJitterFrequency,
+        };
+
+        Brotato3D::Pcg::FTerrainMeshBuffers mesh = Brotato3D::Pcg::BuildTerrainMesh(pcgConfig, graph);
+        if (mesh.vertices.empty() || mesh.indices.empty())
+        {
+            spdlog::warn("[Brotato3DPcg] generated empty terrain mesh for arena '{}'", selectedArena.id);
+            return false;
+        }
+
+        const std::array<uint32_t, 16> materialIds = AddPcgGroundMaterials(materials, pcgConfig, selectedArena.baseGroundColor);
+        models.push_back(Assets::FProcModel::CreateFromBuffers("Brotato3D_PcgTerrain",
+                                                               std::move(mesh.vertices),
+                                                               std::move(mesh.indices),
+                                                               false));
+        const uint32_t modelId = static_cast<uint32_t>(models.size() - 1);
+        outResources.groundNodes.push_back(SceneBuilder::CreateRenderNode("Brotato3D_PcgTerrain",
+                                                                          glm::vec3(0.0f),
+                                                                          glm::vec3(1.0f),
+                                                                          static_cast<uint32_t>(nodes.size()),
+                                                                          modelId,
+                                                                          materialIds,
+                                                                          true,
+                                                                          glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+                                                                          false));
+        nodes.push_back(outResources.groundNodes.back());
+
+        const uint32_t borderMaterialId = outResources.borderMaterialIds[selectedArena.id];
+        BuildPcgProps(models, materials, nodes, outResources, pcgConfig, graph);
+        BuildPcgBorderVisual(models, nodes, outResources, graph, borderMaterialId);
+
+        spdlog::info("[Brotato3DPcg] seed=0x{:08x} arena={} cells={} props={} verts={} indices={}",
+                     graph.rootSeed,
+                     selectedArena.id,
+                     graph.cells.size(),
+                     graph.props.size(),
+                     models.back().NumberOfVertices(),
+                     models.back().NumberOfIndices());
+        return true;
     }
 
     void BuildFloodFilledGround(std::vector<Assets::Model>& models,
@@ -801,52 +1090,57 @@ namespace Brotato3D
         const FArenaDef& selectedArena = *FindArena(fallbackArenas, selectedId);
         const glm::vec2 halfExtent = glm::max(selectedArena.halfExtent, glm::vec2(1.0f));
 
-        if (UseProceduralGroundFlood(selectedArena))
+        const bool builtPcgGround = selectedArena.pcg.enabled &&
+                                    BuildPcgGround(models, materials, nodes, outResources, selectedArena, halfExtent);
+        if (!builtPcgGround && UseProceduralGroundFlood(selectedArena))
         {
             BuildFloodFilledGround(models, materials, nodes, outResources, selectedArena, halfExtent, selectedId);
         }
-        else
+        else if (!builtPcgGround)
         {
             BuildExplicitGround(models, materials, nodes, outResources, selectedArena, halfExtent, selectedId);
         }
 
-        const uint32_t boundaryMaterialId = outResources.borderMaterialIds[selectedId];
-        models.push_back(
-            Assets::FProcModel::CreateBox(glm::vec3(-(halfExtent.x + VisualWallThickness * 0.5f), 0.0f, -VisualWallThickness * 0.5f),
-                                          glm::vec3(halfExtent.x + VisualWallThickness * 0.5f, VisualWallHeight, VisualWallThickness * 0.5f)));
-        const uint32_t horizontalBoundaryModelId = static_cast<uint32_t>(models.size() - 1);
-        models.push_back(
-            Assets::FProcModel::CreateBox(glm::vec3(-VisualWallThickness * 0.5f, 0.0f, -(halfExtent.y + VisualWallThickness * 0.5f)),
-                                          glm::vec3(VisualWallThickness * 0.5f, VisualWallHeight, halfExtent.y + VisualWallThickness * 0.5f)));
-        const uint32_t verticalBoundaryModelId = static_cast<uint32_t>(models.size() - 1);
+        if (!builtPcgGround)
+        {
+            const uint32_t boundaryMaterialId = outResources.borderMaterialIds[selectedId];
+            models.push_back(
+                Assets::FProcModel::CreateBox(glm::vec3(-(halfExtent.x + VisualWallThickness * 0.5f), 0.0f, -VisualWallThickness * 0.5f),
+                                              glm::vec3(halfExtent.x + VisualWallThickness * 0.5f, VisualWallHeight, VisualWallThickness * 0.5f)));
+            const uint32_t horizontalBoundaryModelId = static_cast<uint32_t>(models.size() - 1);
+            models.push_back(
+                Assets::FProcModel::CreateBox(glm::vec3(-VisualWallThickness * 0.5f, 0.0f, -(halfExtent.y + VisualWallThickness * 0.5f)),
+                                              glm::vec3(VisualWallThickness * 0.5f, VisualWallHeight, halfExtent.y + VisualWallThickness * 0.5f)));
+            const uint32_t verticalBoundaryModelId = static_cast<uint32_t>(models.size() - 1);
 
-        outResources.borderNodes.push_back(SceneBuilder::CreateRenderNode("Brotato3D_Boundary_N",
-                                                                          glm::vec3(0.0f, 0.0f, -(halfExtent.y + VisualWallThickness * 0.5f)),
-                                                                          glm::vec3(1.0f),
-                                                                          static_cast<uint32_t>(nodes.size()),
-                                                                          horizontalBoundaryModelId,
-                                                                          boundaryMaterialId));
-        nodes.push_back(outResources.borderNodes.back());
-        outResources.borderNodes.push_back(SceneBuilder::CreateRenderNode("Brotato3D_Boundary_S",
-                                                                          glm::vec3(0.0f, 0.0f, halfExtent.y + VisualWallThickness * 0.5f),
-                                                                          glm::vec3(1.0f),
-                                                                          static_cast<uint32_t>(nodes.size()),
-                                                                          horizontalBoundaryModelId,
-                                                                          boundaryMaterialId));
-        nodes.push_back(outResources.borderNodes.back());
-        outResources.borderNodes.push_back(SceneBuilder::CreateRenderNode("Brotato3D_Boundary_W",
-                                                                          glm::vec3(-(halfExtent.x + VisualWallThickness * 0.5f), 0.0f, 0.0f),
-                                                                          glm::vec3(1.0f),
-                                                                          static_cast<uint32_t>(nodes.size()),
-                                                                          verticalBoundaryModelId,
-                                                                          boundaryMaterialId));
-        nodes.push_back(outResources.borderNodes.back());
-        outResources.borderNodes.push_back(SceneBuilder::CreateRenderNode("Brotato3D_Boundary_E",
-                                                                          glm::vec3(halfExtent.x + VisualWallThickness * 0.5f, 0.0f, 0.0f),
-                                                                          glm::vec3(1.0f),
-                                                                          static_cast<uint32_t>(nodes.size()),
-                                                                          verticalBoundaryModelId,
-                                                                          boundaryMaterialId));
-        nodes.push_back(outResources.borderNodes.back());
+            outResources.borderNodes.push_back(SceneBuilder::CreateRenderNode("Brotato3D_Boundary_N",
+                                                                              glm::vec3(0.0f, 0.0f, -(halfExtent.y + VisualWallThickness * 0.5f)),
+                                                                              glm::vec3(1.0f),
+                                                                              static_cast<uint32_t>(nodes.size()),
+                                                                              horizontalBoundaryModelId,
+                                                                              boundaryMaterialId));
+            nodes.push_back(outResources.borderNodes.back());
+            outResources.borderNodes.push_back(SceneBuilder::CreateRenderNode("Brotato3D_Boundary_S",
+                                                                              glm::vec3(0.0f, 0.0f, halfExtent.y + VisualWallThickness * 0.5f),
+                                                                              glm::vec3(1.0f),
+                                                                              static_cast<uint32_t>(nodes.size()),
+                                                                              horizontalBoundaryModelId,
+                                                                              boundaryMaterialId));
+            nodes.push_back(outResources.borderNodes.back());
+            outResources.borderNodes.push_back(SceneBuilder::CreateRenderNode("Brotato3D_Boundary_W",
+                                                                              glm::vec3(-(halfExtent.x + VisualWallThickness * 0.5f), 0.0f, 0.0f),
+                                                                              glm::vec3(1.0f),
+                                                                              static_cast<uint32_t>(nodes.size()),
+                                                                              verticalBoundaryModelId,
+                                                                              boundaryMaterialId));
+            nodes.push_back(outResources.borderNodes.back());
+            outResources.borderNodes.push_back(SceneBuilder::CreateRenderNode("Brotato3D_Boundary_E",
+                                                                              glm::vec3(halfExtent.x + VisualWallThickness * 0.5f, 0.0f, 0.0f),
+                                                                              glm::vec3(1.0f),
+                                                                              static_cast<uint32_t>(nodes.size()),
+                                                                              verticalBoundaryModelId,
+                                                                              boundaryMaterialId));
+            nodes.push_back(outResources.borderNodes.back());
+        }
     }
 }

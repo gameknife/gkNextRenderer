@@ -15,8 +15,26 @@ namespace Brotato3D
 
     struct FArenaResources
     {
+        struct FBoxCollider
+        {
+            glm::vec3 center = glm::vec3(0.0f);
+            glm::quat rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+            glm::vec3 extent = glm::vec3(0.0f);
+        };
+
+        struct FTerrainHeightSampler
+        {
+            bool enabled = false;
+            uint32_t rootSeed = 0;
+            float vertexJitterAmplitude = 0.0f;
+            float vertexJitterFrequency = 0.0f;
+        };
+
         std::vector<std::shared_ptr<Assets::Node>> groundNodes;
         std::vector<std::shared_ptr<Assets::Node>> borderNodes;
+        std::vector<std::shared_ptr<Assets::Node>> propNodes;
+        std::vector<FBoxCollider> propColliders;
+        FTerrainHeightSampler terrainHeight;
         std::map<std::string, uint32_t> groundMaterialIds;
         std::map<std::string, uint32_t> borderMaterialIds;
     };

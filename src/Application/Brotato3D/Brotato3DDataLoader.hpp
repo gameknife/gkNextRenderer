@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common/CoreMinimal.hpp"
+#include "Brotato3DPcgConfig.hpp"
 #include "Brotato3DPlayer.hpp"
 
 #include <glm/ext.hpp>
@@ -197,6 +198,7 @@ namespace Brotato3D
         glm::vec3 baseGroundColor = glm::vec3(0.32f, 0.40f, 0.28f);
         glm::vec3 borderColor = glm::vec3(0.45f, 0.55f, 0.35f);
         std::vector<FGroundTileDef> groundTiles;
+        Pcg::FArenaPcgConfig pcg;
     };
 
     struct FSpawnEntry

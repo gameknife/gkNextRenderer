@@ -263,13 +263,17 @@ private:
     void SetExtractionVehicleVisible(bool visible);
     bool IsExtractionVehicleObstacleActive() const;
     glm::vec3 ResolveExtractionVehicleCollision(const glm::vec3& pos, float radius) const;
+    glm::vec3 ResolvePlayerObstacleCollision(const glm::vec3& pos, float radius);
     bool IsSegmentBlockedByExtractionVehicle(const glm::vec3& from, const glm::vec3& to, float radius) const;
+    float SampleArenaGroundY(const glm::vec3& worldPos) const;
     bool IsDuskSurgeActive() const;
     void ClearMovementInput();
     bool ShouldPauseWorldPhysics() const;
     void SetWorldPhysicsPaused(bool paused);
     void BuildArenaWallBodies();
     void ClearArenaWallBodies();
+    void BuildArenaPropBodies();
+    void ClearArenaPropBodies();
     void UpdateCameraTracking(double deltaSeconds);
     glm::vec3 RandomDebugSpawnPosition();
     NextBodyID AcquireEnemyKinematicBody(const std::string& enemyId) const;
@@ -338,6 +342,7 @@ private:
     uint32_t playerDebrisMatId_ = 0;
     uint64_t debrisTickCounter_ = 0;
     std::array<NextBodyID, 4> arenaWallBodyIds_{};
+    std::vector<NextBodyID> arenaPropBodyIds_;
     NextBodyID playerKinematicBodyId_{};
     bool playerKinematicBodyActive_ = false;
     std::map<std::string, std::vector<NextBodyID>> enemyKinematicBodyPools_;

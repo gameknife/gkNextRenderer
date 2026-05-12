@@ -22,6 +22,7 @@ void Brotato3DGameInstance::StartNewRun()
     Brotato3D::StopBgm();
     ResetRuntimeState();
     ApplySelectedCharacter();
+    player_.worldPos.y = 0.5f + SampleArenaGroundY(player_.worldPos);
     SetSkyIntensityTarget(30.0f, 0.0f);
     if (player_.bodyNode)
     {

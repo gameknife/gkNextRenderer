@@ -11,6 +11,10 @@ namespace Assets
         // basic geometry
         static Model CreateBox(const glm::vec3& p0, const glm::vec3& p1);
         static Model CreateSphere(const glm::vec3& center, float radius);
+        static Model CreateFromBuffers(const std::string& name,
+                                       std::vector<Vertex>&& vertices,
+                                       std::vector<uint32_t>&& indices,
+                                       bool needGenTSpace = true);
         static Model CreateExtrudedConvexPolygon(const std::string& name,
                                                  const std::vector<glm::vec2>& polygonXZ,
                                                  float minY,

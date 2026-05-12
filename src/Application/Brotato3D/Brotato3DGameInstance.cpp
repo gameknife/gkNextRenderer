@@ -243,6 +243,7 @@ void Brotato3DGameInstance::OnTick(double deltaSeconds)
 void Brotato3DGameInstance::OnDestroy()
 {
     SetWorldPhysicsPaused(false);
+    ClearArenaPropBodies();
     ClearArenaWallBodies();
     enemies_.clear();
     projectilePool_.clear();

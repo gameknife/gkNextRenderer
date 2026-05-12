@@ -46,7 +46,7 @@ void Brotato3DGameInstance::ApplyWeaponKnockback(Brotato3D::FEnemyRuntime& enemy
     enemy.worldPos = ClampToArena(enemy.worldPos, enemy.radius, arenaHalfExtent_);
     if (enemy.def)
     {
-        enemy.worldPos.y = enemy.def->size.y * 0.5f;
+        enemy.worldPos.y = enemy.def->size.y * 0.5f + SampleArenaGroundY(enemy.worldPos);
     }
     if (enemy.node)
     {

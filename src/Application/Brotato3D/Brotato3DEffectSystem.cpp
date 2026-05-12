@@ -4,6 +4,7 @@
 #include "Assets/Core/Node.h"
 #include "Assets/Loaders/FProcModel.h"
 #include "Brotato3DAudio.hpp"
+#include "Brotato3DPcgGenerator.hpp"
 #include "Runtime/Components/RenderComponent.h"
 #include "Runtime/Scene/SceneBuilder.h"
 
@@ -44,6 +45,64 @@ namespace
 
         return clipAxis(from.x, delta.x, minBounds.x, maxBounds.x) &&
                clipAxis(from.y, delta.y, minBounds.y, maxBounds.y);
+    }
+
+    glm::vec2 BoxAabbHalfExtentXZ(const Brotato3D::FArenaResources::FBoxCollider& collider)
+    {
+        const glm::mat3 rotationMatrix = glm::mat3_cast(collider.rotation);
+        const glm::vec3 halfExtent = collider.extent * 0.5f;
+        return glm::vec2(std::abs(rotationMatrix[0][0]) * halfExtent.x +
+                             std::abs(rotationMatrix[1][0]) * halfExtent.y +
+                             std::abs(rotationMatrix[2][0]) * halfExtent.z,
+                         std::abs(rotationMatrix[0][2]) * halfExtent.x +
+                             std::abs(rotationMatrix[1][2]) * halfExtent.y +
+                             std::abs(rotationMatrix[2][2]) * halfExtent.z);
+    }
+
+    glm::vec3 ResolveAabbCollisionXZ(const glm::vec3& pos,
+                                     float radius,
+                                     const glm::vec3& center,
+                                     const glm::vec2& halfExtentXZ)
+    {
+        const float paddedHalfX = halfExtentXZ.x + std::max(0.0f, radius);
+        const float paddedHalfZ = halfExtentXZ.y + std::max(0.0f, radius);
+        const glm::vec2 delta(pos.x - center.x, pos.z - center.z);
+        if (std::abs(delta.x) > paddedHalfX || std::abs(delta.y) > paddedHalfZ)
+        {
+            return pos;
+        }
+
+        glm::vec3 resolved = pos;
+        const float overlapX = paddedHalfX - std::abs(delta.x);
+        const float overlapZ = paddedHalfZ - std::abs(delta.y);
+        if (overlapX < overlapZ)
+        {
+            const float sign = delta.x < 0.0f ? -1.0f : 1.0f;
+            resolved.x = center.x + sign * paddedHalfX;
+        }
+        else
+        {
+            const float sign = delta.y < 0.0f ? -1.0f : 1.0f;
+            resolved.z = center.z + sign * paddedHalfZ;
+        }
+        return resolved;
+    }
+
+    Brotato3D::FArenaResources::FBoxCollider GetCurrentPropCollider(const Brotato3D::FArenaResources::FBoxCollider& source,
+                                                                    NextPhysics* physics,
+                                                                    const std::vector<NextBodyID>& bodyIds,
+                                                                    size_t index)
+    {
+        Brotato3D::FArenaResources::FBoxCollider collider = source;
+        if (physics && index < bodyIds.size())
+        {
+            if (const FNextPhysicsBody* body = physics->GetBody(bodyIds[index]))
+            {
+                collider.center = body->position;
+                collider.rotation = body->rotation;
+            }
+        }
+        return collider;
     }
 }
 
@@ -320,7 +379,7 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
 bool Brotato3DGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera) const
 {
     glm::vec3 cameraTarget = cameraSmoothedTarget_;
-    glm::vec3 cameraPosition = cameraTarget + glm::vec3(0.0f, 18.0f, 11.0f);
+    glm::vec3 cameraPosition = cameraTarget + glm::vec3(0.0f, 10.8f, 6.6f);
     if (Brotato3D::ScreenShakeEnabled && screenShakeMs_ > 0.0f)
     {
         const float strength = std::min(0.25f, screenShakeIntensity_ * 0.05f);
@@ -438,32 +497,36 @@ bool Brotato3DGameInstance::IsExtractionVehicleObstacleActive() const
 
 glm::vec3 Brotato3DGameInstance::ResolveExtractionVehicleCollision(const glm::vec3& pos, float radius) const
 {
-    if (!IsExtractionVehicleObstacleActive())
-    {
-        return pos;
-    }
-
-    const float paddedHalfX = ExtractionVehicleObstacleHalfX + std::max(0.0f, radius);
-    const float paddedHalfZ = ExtractionVehicleObstacleHalfZ + std::max(0.0f, radius);
-    const glm::vec2 delta(pos.x - extractionVehiclePos_.x, pos.z - extractionVehiclePos_.z);
-    if (std::abs(delta.x) > paddedHalfX || std::abs(delta.y) > paddedHalfZ)
-    {
-        return pos;
-    }
-
     glm::vec3 resolved = pos;
-    const float overlapX = paddedHalfX - std::abs(delta.x);
-    const float overlapZ = paddedHalfZ - std::abs(delta.y);
-    if (overlapX < overlapZ)
+    if (IsExtractionVehicleObstacleActive())
     {
-        const float sign = delta.x < 0.0f ? -1.0f : 1.0f;
-        resolved.x = extractionVehiclePos_.x + sign * paddedHalfX;
+        resolved = ResolveAabbCollisionXZ(resolved,
+                                          radius,
+                                          extractionVehiclePos_,
+                                          glm::vec2(ExtractionVehicleObstacleHalfX, ExtractionVehicleObstacleHalfZ));
     }
-    else
+
+    NextPhysics* physics = GetEngine().GetPhysicsEngine();
+    for (size_t index = 0; index < arenaResources_.propColliders.size(); ++index)
     {
-        const float sign = delta.y < 0.0f ? -1.0f : 1.0f;
-        resolved.z = extractionVehiclePos_.z + sign * paddedHalfZ;
+        const Brotato3D::FArenaResources::FBoxCollider collider =
+            GetCurrentPropCollider(arenaResources_.propColliders[index], physics, arenaPropBodyIds_, index);
+        resolved = ResolveAabbCollisionXZ(resolved, radius, collider.center, BoxAabbHalfExtentXZ(collider));
     }
+    return resolved;
+}
+
+glm::vec3 Brotato3DGameInstance::ResolvePlayerObstacleCollision(const glm::vec3& pos, float radius)
+{
+    glm::vec3 resolved = pos;
+    if (IsExtractionVehicleObstacleActive())
+    {
+        resolved = ResolveAabbCollisionXZ(resolved,
+                                          radius,
+                                          extractionVehiclePos_,
+                                          glm::vec2(ExtractionVehicleObstacleHalfX, ExtractionVehicleObstacleHalfZ));
+    }
+
     return resolved;
 }
 
@@ -471,17 +534,50 @@ bool Brotato3DGameInstance::IsSegmentBlockedByExtractionVehicle(const glm::vec3&
                                                                 const glm::vec3& to,
                                                                 float radius) const
 {
-    if (!IsExtractionVehicleObstacleActive())
+    const float padding = std::max(0.0f, radius);
+    const glm::vec2 fromXZ(from.x, from.z);
+    const glm::vec2 toXZ(to.x, to.z);
+    if (IsExtractionVehicleObstacleActive())
     {
-        return false;
+        const glm::vec2 minBounds(extractionVehiclePos_.x - ExtractionVehicleObstacleHalfX - padding,
+                                  extractionVehiclePos_.z - ExtractionVehicleObstacleHalfZ - padding);
+        const glm::vec2 maxBounds(extractionVehiclePos_.x + ExtractionVehicleObstacleHalfX + padding,
+                                  extractionVehiclePos_.z + ExtractionVehicleObstacleHalfZ + padding);
+        if (SegmentIntersectsAabb2D(fromXZ, toXZ, minBounds, maxBounds))
+        {
+            return true;
+        }
     }
 
-    const float padding = std::max(0.0f, radius);
-    const glm::vec2 minBounds(extractionVehiclePos_.x - ExtractionVehicleObstacleHalfX - padding,
-                              extractionVehiclePos_.z - ExtractionVehicleObstacleHalfZ - padding);
-    const glm::vec2 maxBounds(extractionVehiclePos_.x + ExtractionVehicleObstacleHalfX + padding,
-                              extractionVehiclePos_.z + ExtractionVehicleObstacleHalfZ + padding);
-    return SegmentIntersectsAabb2D(glm::vec2(from.x, from.z), glm::vec2(to.x, to.z), minBounds, maxBounds);
+    NextPhysics* physics = GetEngine().GetPhysicsEngine();
+    for (size_t index = 0; index < arenaResources_.propColliders.size(); ++index)
+    {
+        const Brotato3D::FArenaResources::FBoxCollider collider =
+            GetCurrentPropCollider(arenaResources_.propColliders[index], physics, arenaPropBodyIds_, index);
+        const glm::vec2 halfExtent = BoxAabbHalfExtentXZ(collider);
+        const glm::vec2 minBounds(collider.center.x - halfExtent.x - padding,
+                                  collider.center.z - halfExtent.y - padding);
+        const glm::vec2 maxBounds(collider.center.x + halfExtent.x + padding,
+                                  collider.center.z + halfExtent.y + padding);
+        if (SegmentIntersectsAabb2D(fromXZ, toXZ, minBounds, maxBounds))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+float Brotato3DGameInstance::SampleArenaGroundY(const glm::vec3& worldPos) const
+{
+    if (!arenaResources_.terrainHeight.enabled)
+    {
+        return 0.0f;
+    }
+
+    return Brotato3D::Pcg::SampleVisualHeight(arenaResources_.terrainHeight.rootSeed,
+                                             arenaResources_.terrainHeight.vertexJitterAmplitude,
+                                             arenaResources_.terrainHeight.vertexJitterFrequency,
+                                             glm::vec2(worldPos.x, worldPos.z));
 }
 
 void Brotato3DGameInstance::UpdateCombatEffects(double deltaSeconds)

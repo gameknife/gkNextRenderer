@@ -220,6 +220,14 @@ namespace Assets
         return Model("pbox", std::move(vertices),std::move(indices), true);
     }
 
+    Model FProcModel::CreateFromBuffers(const std::string& name,
+                                        std::vector<Vertex>&& vertices,
+                                        std::vector<uint32_t>&& indices,
+                                        bool needGenTSpace)
+    {
+        return Model(name, std::move(vertices), std::move(indices), needGenTSpace);
+    }
+
     Model FProcModel::CreateExtrudedConvexPolygon(const std::string& name,
                                                   const std::vector<glm::vec2>& polygonXZ,
                                                   float minY,

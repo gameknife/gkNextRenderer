@@ -52,6 +52,122 @@ namespace
         return result;
     }
 
+    std::vector<glm::vec3> ReadVec3ArrayList(const json& object, const char* key, std::string_view context)
+    {
+        std::vector<glm::vec3> result;
+        if (!object.is_object() || !object.contains(key))
+        {
+            return result;
+        }
+
+        const json& value = object.at(key);
+        if (!value.is_array())
+        {
+            throw std::runtime_error(fmt::format("{} field '{}' must be an array of vec3 colors", context, key));
+        }
+
+        result.reserve(value.size());
+        for (size_t index = 0; index < value.size(); ++index)
+        {
+            const json& colorValue = value.at(index);
+            if (!colorValue.is_array() || colorValue.size() < 3)
+            {
+                throw std::runtime_error(fmt::format("{} field '{}' color {} must be a 3-number array", context, key, index));
+            }
+            result.emplace_back(colorValue.at(0).get<float>(), colorValue.at(1).get<float>(), colorValue.at(2).get<float>());
+        }
+        return result;
+    }
+
+    Brotato3D::Pcg::EBorderFracturePattern ParseBorderPattern(const json& pcgJson,
+                                                              std::string_view context,
+                                                              Brotato3D::Pcg::EBorderFracturePattern fallback)
+    {
+        if (!pcgJson.is_object() || !pcgJson.contains("borderPattern"))
+        {
+            return fallback;
+        }
+
+        const std::string pattern = pcgJson.at("borderPattern").get<std::string>();
+        if (pattern == "uniform")
+        {
+            return Brotato3D::Pcg::EBorderFracturePattern::Uniform;
+        }
+        if (pattern == "cluster")
+        {
+            return Brotato3D::Pcg::EBorderFracturePattern::Cluster;
+        }
+        if (pattern == "spike")
+        {
+            return Brotato3D::Pcg::EBorderFracturePattern::Spike;
+        }
+
+        throw std::runtime_error(fmt::format("{} field 'borderPattern' has unsupported value '{}'", context, pattern));
+    }
+
+    Brotato3D::Pcg::FArenaPcgConfig ReadPcgConfig(const json& arenaJson, std::string_view arenaContext)
+    {
+        Brotato3D::Pcg::FArenaPcgConfig config{};
+        if (!arenaJson.is_object() || !arenaJson.contains("pcg"))
+        {
+            return config;
+        }
+
+        const json& pcgJson = arenaJson.at("pcg");
+        const std::string pcgContext = fmt::format("{} pcg", arenaContext);
+        if (!pcgJson.is_object())
+        {
+            throw std::runtime_error(fmt::format("{} field 'pcg' must be an object", arenaContext));
+        }
+
+        config.enabled = pcgJson.value("enabled", config.enabled);
+        config.seedOverride = pcgJson.value("seedOverride", config.seedOverride);
+        config.targetCells = std::clamp(pcgJson.value("targetCells", config.targetCells), 1, 512);
+        config.lloydRelaxIterations = std::clamp(pcgJson.value("lloydRelaxIterations", config.lloydRelaxIterations), 0, 4);
+        config.vertexJitterAmplitude = std::clamp(pcgJson.value("vertexJitterAmplitude", config.vertexJitterAmplitude), 0.0f, 0.60f);
+        config.vertexJitterFrequency = std::max(0.001f, pcgJson.value("vertexJitterFrequency", config.vertexJitterFrequency));
+        config.borderHeight = std::max(0.1f, pcgJson.value("borderHeight", config.borderHeight));
+        config.borderSegments = std::clamp(pcgJson.value("borderSegments", config.borderSegments), 4, 256);
+        config.borderPattern = ParseBorderPattern(pcgJson, pcgContext, config.borderPattern);
+        config.borderHeightJitter = std::max(0.0f, pcgJson.value("borderHeightJitter", config.borderHeightJitter));
+        config.propPoissonRadius = std::max(0.1f, pcgJson.value("propPoissonRadius", config.propPoissonRadius));
+        config.propPoissonMaxAttempts = std::clamp(pcgJson.value("propPoissonMaxAttempts", config.propPoissonMaxAttempts), 1, 128);
+        config.spawnSafeRadius = std::max(0.0f, pcgJson.value("spawnSafeRadius", config.spawnSafeRadius));
+        config.edgeKeepout = std::max(0.0f, pcgJson.value("edgeKeepout", config.edgeKeepout));
+        config.palette = ReadVec3ArrayList(pcgJson, "palette", pcgContext);
+        if (config.palette.size() > 16)
+        {
+            config.palette.resize(16);
+        }
+
+        if (pcgJson.contains("props"))
+        {
+            if (!pcgJson.at("props").is_array())
+            {
+                throw std::runtime_error(fmt::format("{} field 'props' must be an array", pcgContext));
+            }
+
+            for (size_t propIndex = 0; propIndex < pcgJson.at("props").size(); ++propIndex)
+            {
+                const json& propJson = pcgJson.at("props").at(propIndex);
+                const std::string propContext = fmt::format("{} prop {}", pcgContext, propIndex);
+                Brotato3D::Pcg::FPropDef prop{};
+                prop.id = propJson.value("id", "");
+                prop.footprintXZ = ReadVec2Array(propJson, "footprintXZ", prop.footprintXZ, propContext);
+                prop.visualHeight = std::max(0.05f, propJson.value("visualHeight", prop.visualHeight));
+                prop.colliderHeight = std::clamp(propJson.value("colliderHeight", prop.colliderHeight), 0.05f, prop.visualHeight);
+                prop.baseColor = NextJson::GetVec3(propJson, "baseColor", prop.baseColor);
+                prop.weight = std::max(0.0f, propJson.value("weight", prop.weight));
+                if (!prop.id.empty() && prop.weight > 0.0f)
+                {
+                    config.props.push_back(prop);
+                }
+            }
+        }
+
+        return config;
+    }
+
     Brotato3D::EGroundMaterialKind ParseGroundMaterialKind(const json& tileJson,
                                                            std::string_view context,
                                                            Brotato3D::EGroundMaterialKind fallback)
@@ -413,6 +529,15 @@ namespace Brotato3D
             def.baseGroundColor = NextJson::GetVec3(arenaJson, "baseGroundColor",
                                                     NextJson::GetVec3(arenaJson, "groundColor", def.baseGroundColor));
             def.borderColor = NextJson::GetVec3(arenaJson, "borderColor", def.borderColor);
+            try
+            {
+                def.pcg = ReadPcgConfig(arenaJson, arenaContext);
+            }
+            catch (const std::exception& exception)
+            {
+                SPDLOG_WARN("[Brotato3D] {}", exception.what());
+                def.pcg = {};
+            }
 
             if (arenaJson.contains("groundTiles"))
             {

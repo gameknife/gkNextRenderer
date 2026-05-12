@@ -38,7 +38,7 @@ void Brotato3DGameInstance::SpawnEnemy(const std::string& enemyId, const glm::ve
 
     const Brotato3D::FEnemyDef& def = defIt->second;
     const FEnemyVisualResource& visual = visualIt->second;
-    const glm::vec3 spawnPos(worldPos.x, def.size.y * 0.5f, worldPos.z);
+    const glm::vec3 spawnPos(worldPos.x, def.size.y * 0.5f + SampleArenaGroundY(worldPos), worldPos.z);
     auto reusableEnemy = std::find_if(enemies_.begin(), enemies_.end(),
                                       [&def](const Brotato3D::FEnemyRuntime& enemy)
                                       {
@@ -272,7 +272,7 @@ void Brotato3DGameInstance::UpdateEnemies(double deltaSeconds)
                     enemy.worldPos = ClampToArena(enemy.worldPos, enemy.radius, arenaHalfExtent_);
                     enemy.worldPos = ResolveExtractionVehicleCollision(enemy.worldPos, enemy.radius);
                     enemy.worldPos = ClampToArena(enemy.worldPos, enemy.radius, arenaHalfExtent_);
-                    enemy.worldPos.y = enemy.def->size.y * 0.5f;
+                    enemy.worldPos.y = enemy.def->size.y * 0.5f + SampleArenaGroundY(enemy.worldPos);
                     enemy.node->SetTranslation(enemy.worldPos);
                 }
             }
@@ -387,7 +387,7 @@ bool Brotato3DGameInstance::UpdateMortarTank(Brotato3D::FEnemyRuntime& enemy,
         enemy.worldPos = ClampToArena(enemy.worldPos, enemy.radius, arenaHalfExtent_);
         enemy.worldPos = ResolveExtractionVehicleCollision(enemy.worldPos, enemy.radius);
         enemy.worldPos = ClampToArena(enemy.worldPos, enemy.radius, arenaHalfExtent_);
-        enemy.worldPos.y = enemy.def->size.y * 0.5f;
+        enemy.worldPos.y = enemy.def->size.y * 0.5f + SampleArenaGroundY(enemy.worldPos);
         enemy.node->SetTranslation(enemy.worldPos);
     }
     return true;
@@ -436,7 +436,7 @@ bool Brotato3DGameInstance::UpdateLanceCharger(Brotato3D::FEnemyRuntime& enemy,
         enemy.worldPos = ClampToArena(enemy.worldPos, enemy.radius, arenaHalfExtent_);
         enemy.worldPos = ResolveExtractionVehicleCollision(enemy.worldPos, enemy.radius);
         enemy.worldPos = ClampToArena(enemy.worldPos, enemy.radius, arenaHalfExtent_);
-        enemy.worldPos.y = enemy.def->size.y * 0.5f;
+        enemy.worldPos.y = enemy.def->size.y * 0.5f + SampleArenaGroundY(enemy.worldPos);
         enemy.node->SetTranslation(enemy.worldPos);
         return true;
 
@@ -461,7 +461,7 @@ bool Brotato3DGameInstance::UpdateLanceCharger(Brotato3D::FEnemyRuntime& enemy,
         nextPos = ClampToArena(nextPos, enemy.radius, arenaHalfExtent_);
         nextPos = ResolveExtractionVehicleCollision(nextPos, enemy.radius);
         nextPos = ClampToArena(nextPos, enemy.radius, arenaHalfExtent_);
-        nextPos.y = enemy.def->size.y * 0.5f;
+        nextPos.y = enemy.def->size.y * 0.5f + SampleArenaGroundY(nextPos);
         enemy.worldPos = nextPos;
         enemy.node->SetTranslation(enemy.worldPos);
         enemy.lanceDashRemainingDist -= glm::length(glm::vec2(enemy.worldPos.x - before.x, enemy.worldPos.z - before.z));

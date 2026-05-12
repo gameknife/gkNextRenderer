@@ -39,6 +39,7 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_CVarSystem.cpp
 	Tests/Test_SceneList.cpp
 	Tests/Test_RenderComponent.cpp
+	Tests/Test_Brotato3DPcg.cpp
 	Tests/Test_ImAnimIntegration.cpp
 	Tests/Test_BrickPlayerSnapLogic.cpp
 	Application/BrickPlayer/BrickPlayerSnapLogic.cpp
@@ -49,6 +50,7 @@ set(UNIT_TEST_SOURCES
 	Application/MagicaLego/MagicaLegoScriptParser.cpp
 	Application/MagicaLego/MagicaLegoPlacementRules.cpp
 	Tests/Test_FlappyRng.cpp
+	Application/Brotato3D/Brotato3DPcgGenerator.cpp
 )
 
 list(APPEND UNIT_TEST_SOURCES Tests/Test_PhysicsComponent.cpp)
