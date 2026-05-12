@@ -22,12 +22,15 @@ func EnsureExternal(repoRoot string, cfg config.Config) error {
 		return err
 	}
 	key := platform.PlatformKey()
-	if key == "linux" || key == "macos_arm64" {
+	if key == "linux" || key == "macos_arm64" || key == "macos_amd64" {
 		url := cfg.External.Slang.Linux
 		name := "slang-2025.6.1-linux-x86_64"
 		if key == "macos_arm64" {
 			url = cfg.External.Slang.MacOSArm64
 			name = "slang-2025.6.1-macos-aarch64"
+		} else if key == "macos_amd64" {
+			url = cfg.External.Slang.MacOSAMD64
+			name = "slang-2025.6.1-macos-x86_64"
 		}
 		if err := ensureArchive(repoRoot, url, filepath.Join(repoRoot, "external", name), "bin/slangc"); err != nil {
 			return err
@@ -62,7 +65,11 @@ func ensureTSC(repoRoot string, cfg config.Config) error {
 		filename = "tsc.exe"
 		url = cfg.External.TSC.Windows
 	} else if runtime.GOOS == "darwin" {
-		url = cfg.External.TSC.MacOSArm64
+		if runtime.GOARCH == "amd64" {
+			url = cfg.External.TSC.MacOSAMD64
+		} else {
+			url = cfg.External.TSC.MacOSArm64
+		}
 	}
 	dir := filepath.Join(repoRoot, "tools", "tsc")
 	dst := filepath.Join(dir, filename)
