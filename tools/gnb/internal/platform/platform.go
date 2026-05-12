@@ -134,7 +134,7 @@ func ensureLinuxAptPackages() error {
 		"autoconf-archive",
 		"automake",
 		"libtool",
-		"python3.12-venv",
+		"libsystemd-dev",
 	}
 	missing := make([]string, 0)
 	for _, pkg := range packages {
@@ -165,6 +165,7 @@ func ensureLinuxPacmanPackages() error {
 		"libxrandr",
 		"wayland-protocols",
 		"libxkbcommon",
+		"systemd-libs",
 	}
 	missing := make([]string, 0)
 	for _, pkg := range packages {

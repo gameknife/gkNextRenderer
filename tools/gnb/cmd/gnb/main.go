@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
 
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/android"
@@ -22,7 +23,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const version = "0.1.0"
+var version = ""
 
 type appContext struct {
 	repoRoot string
@@ -83,7 +84,7 @@ func newInfoCommand(ctx appContext) *cobra.Command {
 				fmt.Println(config.BinCacheKey(ctx.repoRoot, ctx.cfg, runtime.GOOS))
 				return nil
 			}
-			console.Label("gnb", version)
+			console.Label("gnb", resolvedVersion())
 			console.Label("repo", ctx.repoRoot)
 			console.Label("platform", runtime.GOOS+"/"+runtime.GOARCH)
 			console.Label("preset", ctx.preset)
@@ -99,6 +100,20 @@ func newInfoCommand(ctx appContext) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&binCacheKey, "bincache-key", false, "print CI binary cache key only")
 	return cmd
+}
+
+func resolvedVersion() string {
+	if version != "" {
+		return version
+	}
+	if buildInfo, ok := debug.ReadBuildInfo(); ok {
+		for _, setting := range buildInfo.Settings {
+			if setting.Key == "vcs.revision" && setting.Value != "" {
+				return setting.Value
+			}
+		}
+	}
+	return "dev"
 }
 
 func newDoctorCommand(ctx appContext) *cobra.Command {
