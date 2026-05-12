@@ -1,7 +1,6 @@
 package platform
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -31,9 +30,6 @@ func Detect() (Host, error) {
 		return host, nil
 	}
 	if runtime.GOOS == "darwin" {
-		if runtime.GOARCH != "arm64" {
-			return host, errors.New("macOS Intel is not a configured CMake preset; use macos-arm64 on Apple Silicon")
-		}
 		host.Preset = "macos-arm64"
 		return host, nil
 	}

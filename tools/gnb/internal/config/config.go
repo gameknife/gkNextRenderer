@@ -44,12 +44,14 @@ type TSCConfig struct {
 	Version    string `toml:"version"`
 	Windows    string `toml:"windows"`
 	Linux      string `toml:"linux"`
+	MacOSAMD64 string `toml:"macos_amd64"`
 	MacOSArm64 string `toml:"macos_arm64"`
 }
 
 type PlatformURLs struct {
 	Windows    string `toml:"windows"`
 	Linux      string `toml:"linux"`
+	MacOSAMD64 string `toml:"macos_amd64"`
 	MacOSArm64 string `toml:"macos_arm64"`
 }
 
