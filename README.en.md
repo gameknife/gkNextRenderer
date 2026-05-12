@@ -5,10 +5,10 @@
 [English](README.en.md) | [简体中文](README.md)
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/gameknife/gkNextEngine)
-![Windows CI](https://github.com/gameknife/gkNextEngine/actions/workflows/windows.yml/badge.svg)
-![Linux CI](https://github.com/gameknife/gkNextEngine/actions/workflows/linux.yml/badge.svg)
-![macOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/macos.yml/badge.svg)
-![Android CI](https://github.com/gameknife/gkNextEngine/actions/workflows/android.yml/badge.svg)
+![Windows CI](https://github.com/gameknife/gkNextEngine/actions/workflows/windows_self.yml/badge.svg)
+![Linux CI](https://github.com/gameknife/gkNextEngine/actions/workflows/linux_self.yml/badge.svg)
+![macOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/macos_self.yml/badge.svg)
+![Android CI](https://github.com/gameknife/gkNextEngine/actions/workflows/android_self.yml/badge.svg)
 ![iOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/ios.yml/badge.svg)
 
 ![Kitchen Scene](docs/gallery/4_playground.avif)
@@ -128,12 +128,13 @@ This project is especially relevant if you are interested in:
 
 ## Quick Start
 
-The project uses CMake + Ninja, with dependencies managed through vcpkg. You will need a network environment that can access GitHub during dependency setup.
+The project uses CMake + Ninja, with dependencies managed through vcpkg. Beyond the host-side basics you must already have installed (compiler / IDE, CMake, platform SDKs, and similar tools), project-specific dependencies, external toolchains, and optional assets are now prepared by `gnb` whenever possible. You will need a network environment that can access GitHub during dependency setup.
 
 ### General Notes
 
+- Start with `./gnb doctor` (Windows: `gnb.bat doctor`) to see which host-side tools are still missing
+- `./gnb setup` (Windows: `gnb.bat setup`) prepares vcpkg, project external toolchains, and optional pak assets; if you go straight to `./gnb build`, the first build will also bootstrap the core toolchain when needed
 - Desktop binaries are now built and launched through `gnb`, so you usually no longer need to `cd` into `out/build/<platform>/bin`
-- First run `./gnb setup` (Windows: `gnb.bat setup`), then use `./gnb build` / `./gnb run`
 - CMake presets are now: `windows`, `linux`, `macos-arm64`, `ios`
 
 ### Platform Builds
@@ -154,19 +155,22 @@ gnb.bat build
 gnb.bat run gkNextRenderer
 ```
 
+Aside from host-side requirements such as Visual Studio and the Vulkan SDK, the rest of the project dependencies are usually prepared by `gnb`.
+
 </details>
 
 <details>
 <summary><b>Linux (Ubuntu)</b></summary>
 
 ```shell
-sudo apt install build-essential cmake ninja-build curl zip unzip tar pkg-config libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev autoconf autoconf-archive automake libtool python3.12-venv
 ./gnb.sh setup
 ./gnb.sh build
 ./gnb.sh run gkNextRenderer
 ```
 
-`gnb setup` and first-run Linux `gnb build` prepare these system packages before vcpkg bootstrap; non apt/pacman distributions still stop with an explicit desktop dependency hint.
+- On apt / pacman hosts, `gnb setup` and the first Linux `gnb build` automatically install the required desktop build packages before vcpkg bootstrap
+- If automatic installation is unavailable, install them manually: `sudo apt install build-essential cmake ninja-build curl zip unzip tar pkg-config libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev autoconf autoconf-archive automake libtool libsystemd-dev`
+- Non apt/pacman distributions still stop with an explicit missing desktop dependency hint
 
 </details>
 
@@ -174,7 +178,6 @@ sudo apt install build-essential cmake ninja-build curl zip unzip tar pkg-config
 <summary><b>Steam Deck / Arch Linux</b></summary>
 
 ```shell
-sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxrandr wayland-protocols libxkbcommon
 ./gnb.sh setup
 ./gnb.sh build --reconfigure
 ./gnb.sh run gkNextRenderer
@@ -183,7 +186,7 @@ sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxra
 Notes:
 
 - if `slangc` is not installed yet, `gnb setup` will automatically fetch the project-managed Slang toolchain into `external/`
-- `gnb setup` and first-run Linux `gnb build` prepare these system packages before vcpkg bootstrap
+- on pacman hosts, `gnb setup` and the first Linux `gnb build` automatically install the required system packages before vcpkg bootstrap; if that is unavailable, run `sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxrandr wayland-protocols libxkbcommon systemd-libs` manually
 - if a GitHub archive download fails during vcpkg setup, rerun the same build command once before doing deeper troubleshooting
 - deployment notes from a real Steam Deck setup are available in [docs/steamdeck-deployment-notes.md](docs/steamdeck-deployment-notes.md)
 
@@ -192,12 +195,19 @@ Notes:
 <details>
 <summary><b>macOS</b></summary>
 
+**Prerequisites:**
+
+- Xcode / Command Line Tools
+- CMake 3.26+
+- Ninja (if your local CMake distribution does not already provide it)
+
 ```shell
-brew install molten-vk glslang ninja
 ./gnb.sh setup
 ./gnb.sh build
 ./gnb.sh run gkNextRenderer
 ```
+
+`gnb setup` automatically downloads the Slang and TypeScript toolchains used by the project, so those project-level dependencies no longer need to be installed separately.
 
 </details>
 
@@ -212,6 +222,8 @@ set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\27.0.12077973
 gnb.bat setup --vcpkg-only
 gnb.bat android
 ```
+
+Android still depends on the host machine to provide JDK / SDK / NDK, while project-local vcpkg dependencies and external toolchains continue to be prepared by `gnb`.
 
 </details>
 

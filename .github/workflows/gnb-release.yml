@@ -1,58 +1,32 @@
-name: gnb release
+name: gnb publish
 
 on:
   push:
-    tags:
-      - tools-gnb-v*
+    branches:
+      - main
+      - dev
+    paths:
+      - 'tools/gnb/**/*.go'
+      - 'tools/gnb/go.mod'
+      - 'tools/gnb/go.sum'
   workflow_dispatch:
 
+concurrency:
+  group: gnb-paks-latest
+  cancel-in-progress: true
+
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - goos: windows
-            goarch: amd64
-            name: gnb-windows-amd64.exe
-          - goos: linux
-            goarch: amd64
-            name: gnb-linux-amd64
-          - goos: darwin
-            goarch: arm64
-            name: gnb-macos-arm64
-          - goos: darwin
-            goarch: amd64
-            name: gnb-macos-amd64
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23.x'
-      - name: Build gnb
-        working-directory: tools/gnb
+      - name: Publish gnb to paks-latest
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: '0'
-        run: go build -trimpath -ldflags="-s -w" -o ../../${{ matrix.name }} ./cmd/gnb
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.name }}
-          path: ${{ matrix.name }}
-
-  publish:
-    if: startsWith(github.ref, 'refs/tags/tools-gnb-v')
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: ./scripts/publish-gnb.ps1 -Repo '${{ github.repository }}' -Tag 'paks-latest' -Version '${{ github.sha }}' -SkipLocalCache

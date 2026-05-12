@@ -5,10 +5,10 @@
 [English](README.en.md) | [简体中文](README.md)
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/gameknife/gkNextEngine)
-![Windows CI](https://github.com/gameknife/gkNextEngine/actions/workflows/windows.yml/badge.svg)
-![Linux CI](https://github.com/gameknife/gkNextEngine/actions/workflows/linux.yml/badge.svg)
-![macOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/macos.yml/badge.svg)
-![Android CI](https://github.com/gameknife/gkNextEngine/actions/workflows/android.yml/badge.svg)
+![Windows CI](https://github.com/gameknife/gkNextEngine/actions/workflows/windows_self.yml/badge.svg)
+![Linux CI](https://github.com/gameknife/gkNextEngine/actions/workflows/linux_self.yml/badge.svg)
+![macOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/macos_self.yml/badge.svg)
+![Android CI](https://github.com/gameknife/gkNextEngine/actions/workflows/android_self.yml/badge.svg)
 ![iOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/ios.yml/badge.svg)
 
 ![Play ground](docs/gallery/4_playground.avif)
@@ -128,12 +128,13 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 ## 快速开始
 
-项目使用 CMake + Ninja，依赖由 vcpkg 管理。构建依赖下载阶段需要可访问 GitHub 的网络环境。
+项目使用 CMake + Ninja，依赖由 vcpkg 管理。除了宿主机本身必须具备的基础工具（编译器 / IDE、CMake、平台 SDK 等），项目级依赖、外部工具链和可选资源包现在都尽量交给 `gnb` 准备。构建依赖下载阶段需要可访问 GitHub 的网络环境。
 
 ### 通用说明
 
+- 推荐先执行 `./gnb doctor`（Windows: `gnb.bat doctor`）检查宿主机缺失的基础工具
+- `./gnb setup`（Windows: `gnb.bat setup`）会准备 vcpkg、项目外部工具链与可选资源包；如果直接执行 `./gnb build`，首次缺少 toolchain 时也会自动补齐核心依赖
 - 桌面平台现在通过 `gnb` 统一构建和运行，通常不再需要先 `cd` 到 `out/build/<platform>/bin`
-- 首次使用执行 `./gnb setup`（Windows: `gnb.bat setup`），之后日常使用 `./gnb build` / `./gnb run`
 - 可用 CMake 预设收敛为：`windows`、`linux`、`macos-arm64`、`ios`
 
 ### 平台构建
@@ -154,19 +155,22 @@ gnb.bat build
 gnb.bat run gkNextRenderer
 ```
 
+除 Visual Studio / Vulkan SDK 这类宿主工具外，其余项目依赖通常都由 `gnb` 自动准备。
+
 </details>
 
 <details>
 <summary><b>Linux (Ubuntu)</b></summary>
 
 ```shell
-sudo apt install build-essential cmake ninja-build curl zip unzip tar pkg-config libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev autoconf autoconf-archive automake libtool python3.12-venv
 ./gnb.sh setup
 ./gnb.sh build
 ./gnb.sh run gkNextRenderer
 ```
 
-`gnb setup` / Linux 首轮 `gnb build` 会在 vcpkg bootstrap 前按上面的列表准备系统包；非 apt/pacman 发行版仍会给出缺失桌面依赖提示。
+- 在 apt / pacman 环境下，`gnb setup` 与 Linux 首轮 `gnb build` 会在 vcpkg bootstrap 前自动安装桌面构建所需系统包
+- 如果自动安装不可用，再手动补齐：`sudo apt install build-essential cmake ninja-build curl zip unzip tar pkg-config libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev autoconf autoconf-archive automake libtool libsystemd-dev`
+- 非 apt/pacman 发行版仍会给出缺失桌面依赖提示
 
 </details>
 
@@ -174,7 +178,6 @@ sudo apt install build-essential cmake ninja-build curl zip unzip tar pkg-config
 <summary><b>Steam Deck / Arch Linux</b></summary>
 
 ```shell
-sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxrandr wayland-protocols libxkbcommon
 ./gnb.sh setup
 ./gnb.sh build --reconfigure
 ./gnb.sh run gkNextRenderer
@@ -183,7 +186,7 @@ sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxra
 说明：
 
 - 如果机器上还没有 `slangc`，`gnb setup` 会自动下载项目约定的 Slang 工具链到 `external/`
-- `gnb setup` / Linux 首轮 `gnb build` 会在 vcpkg bootstrap 前按上面的列表准备系统包
+- 在 pacman 环境下，`gnb setup` / Linux 首轮 `gnb build` 会在 vcpkg bootstrap 前自动安装系统包；如果自动安装不可用，可手动执行 `sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxrandr wayland-protocols libxkbcommon systemd-libs`
 - 如果 vcpkg 阶段遇到 GitHub 归档下载失败，优先直接重试同一条构建命令
 - 一次真实 Steam Deck 部署的复盘见 [docs/steamdeck-deployment-notes.md](docs/steamdeck-deployment-notes.md)
 
@@ -192,12 +195,19 @@ sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxra
 <details>
 <summary><b>macOS</b></summary>
 
+**前置条件：**
+
+- Xcode / Command Line Tools
+- CMake 3.26+
+- Ninja（如果本机的 CMake 发行版未自带）
+
 ```shell
-brew install molten-vk glslang ninja
 ./gnb.sh setup
 ./gnb.sh build
 ./gnb.sh run gkNextRenderer
 ```
+
+`gnb setup` 会自动下载项目使用的 Slang 与 TypeScript 工具链，无需再单独准备这些项目级依赖。
 
 </details>
 
@@ -212,6 +222,8 @@ set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\27.0.12077973
 gnb.bat setup --vcpkg-only
 gnb.bat android
 ```
+
+Android 主机侧仍需要提供 JDK / SDK / NDK；项目内的 vcpkg 依赖与外部工具链则继续由 `gnb` 处理。
 
 </details>
 

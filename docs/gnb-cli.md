@@ -164,9 +164,18 @@ gnb.bat build
 
 ## Publish gnb Binaries
 
-`gnb.bat` and `gnb.sh` download bootstrap binaries from the `paks-latest`
-GitHub release. Build and replace those assets from a machine with Go and
-GitHub CLI installed:
+`gnb.bat` and `gnb.sh` use the `paks-latest` GitHub release as their single
+bootstrap source. Pushes to `main` / `dev` that modify `tools/gnb` Go sources
+automatically rebuild and publish the platform binaries plus `gnb-version.txt`
+through `.github/workflows/gnb-release.yml`.
+
+The shims compare the local cached version with `gnb-version.txt` and refresh
+their cached bootstrap binary automatically when a newer release is available.
+If Go is installed locally, the shims still prefer a local rebuild from
+`tools/gnb`.
+
+For manual publishing or backfilling from a machine with Go and GitHub CLI
+installed:
 
 ```powershell
 gh auth login
