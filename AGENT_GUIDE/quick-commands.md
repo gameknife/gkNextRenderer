@@ -13,48 +13,37 @@
 ### 1. 构建 (Build)
 ```bash
 # Windows
-./build.bat --preset default-windows
-./build.bat --preset default-windows --clean  # 清理重编
+gnb.bat build
+gnb.bat build --clean  # 清理重编
 
 # macOS / Linux
-./build.sh --preset default-macos-arm64
-./build.sh --preset default-linux
+./gnb.sh build
 
 # Android
-./build.bat --android
+./gnb.sh android
 ```
 
 ### 2. 单元测试 (Test)
-**必须进入 bin 目录运行！**
-
 ```bash
-# Windows
-cd out/build/default-windows/bin && ./gkNextUnitTests.exe
-
-# macOS
-cd out/build/default-macos-arm64/bin && ./gkNextUnitTests
-
-# Linux
-cd out/build/default-linux/bin && ./gkNextUnitTests
+./gnb.sh test
+gnb.bat test
 ```
 
 ### 3. 运行主程序 (Run)
 ```bash
-# Windows (开发模式)
-./run.bat --preset default-windows
+./gnb.sh run                 # 列出可启动 application
+./gnb.sh run gkNextRenderer
 
 # 指定 Target
-./run.bat --preset default-windows --target gkNextEditor.exe
-
-# macOS/Linux
-./run.sh --preset default-macos-arm64
+./gnb.sh run gkNextEditor
+gnb.bat run gkNextEditor
 ```
 
 ### 4. 依赖管理 (Vcpkg)
-首次 `build.sh` / `build.bat` 会自动引导 vcpkg。仅在需要强制更新 vcpkg 版本时手动调用：
+首次 `gnb build` 会自动引导 vcpkg。仅在需要强制更新 vcpkg 版本时手动调用：
 ```bash
-scripts\vcpkg.bat --update   # Windows
-./scripts/vcpkg.sh --update  # Unix
+gnb.bat setup --refresh   # Windows
+./gnb.sh setup --refresh  # Unix
 ```
 
 ## 🔍 故障排查 (Troubleshooting)
@@ -64,7 +53,7 @@ scripts\vcpkg.bat --update   # Windows
 *   **平台错误**: 检查 `PlatformCommon.h` 的宏定义。
 
 ### 运行时错误
-*   **找不到 DLL/so**: 确保运行了 `vcpkg` 并且是在 `bin` 目录下运行测试。
+*   **找不到 DLL/so**: 先运行 `gnb setup` 和 `gnb build`。
 *   **Shader 缺失**: 确保 `assets/shaders` 下有编译好的 `.spv` 文件。
 
 ### 常用搜索

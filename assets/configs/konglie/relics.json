@@ -1,0 +1,49 @@
+{
+  "relics": [
+    {
+      "id": "ring_conquest",
+      "name": "破军之戒",
+      "icon": "◈",
+      "buffs": ["AD攻击力 +22%"],
+      "statKey": "atkBonus",
+      "statVal": 0.22,
+      "color": [0.8, 0.2, 0.27]
+    },
+    {
+      "id": "guardian_shield",
+      "name": "守护圣盾",
+      "icon": "◆",
+      "buffs": ["全队血量 +15%"],
+      "statKey": "hpBonus",
+      "statVal": 0.15,
+      "color": [0.2, 0.4, 0.8]
+    },
+    {
+      "id": "eternal_tear",
+      "name": "永恒之泪",
+      "icon": "◇",
+      "buffs": ["AP攻击力 +20%"],
+      "statKey": "apBonus",
+      "statVal": 0.2,
+      "color": [0.2, 0.67, 0.8]
+    },
+    {
+      "id": "battle_soul",
+      "name": "战斗之魂",
+      "icon": "★",
+      "buffs": ["全队攻速 +18%"],
+      "statKey": "spdBonus",
+      "statVal": 0.18,
+      "color": [0.87, 0.47, 0.13]
+    },
+    {
+      "id": "oracle_eye",
+      "name": "先知之眼",
+      "icon": "◎",
+      "buffs": ["W技能冷却 -30%"],
+      "statKey": "cdBonus",
+      "statVal": 0.3,
+      "color": [0.67, 0.8, 0.13]
+    }
+  ]
+}

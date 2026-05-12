@@ -1,0 +1,95 @@
+[gnb]
+min_version = "0.1.0"
+
+[vcpkg]
+ref = "2025.12.12"
+binary_cache = ".vcpkg_bincache"
+root = ".vcpkg"
+
+[external.streamline]
+when = "windows"
+url = "https://github.com/NVIDIA-RTX/Streamline/releases/download/v2.10.0/streamline-sdk-v2.10.0.zip"
+
+[external.tsc]
+version = "v2025.5.23"
+windows = "https://github.com/rxliuli/tsgo-npm-release/releases/download/v2025.5.23/tsgo-windows-amd64.exe"
+linux = "https://github.com/rxliuli/tsgo-npm-release/releases/download/v2025.5.23/tsgo-linux-amd64"
+macos_amd64 = "https://github.com/rxliuli/tsgo-npm-release/releases/download/v2025.5.23/tsgo-darwin-amd64"
+macos_arm64 = "https://github.com/rxliuli/tsgo-npm-release/releases/download/v2025.5.23/tsgo-darwin-arm64"
+
+[external.moltenvk]
+when = "ios"
+url = "https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.0/MoltenVK-ios.tar"
+
+[external.slang]
+linux = "https://github.com/shader-slang/slang/releases/download/v2025.6.1/slang-2025.6.1-linux-x86_64.zip"
+macos_amd64 = "https://github.com/shader-slang/slang/releases/download/v2025.6.1/slang-2025.6.1-macos-x86_64.zip"
+macos_arm64 = "https://github.com/shader-slang/slang/releases/download/v2025.6.1/slang-2025.6.1-macos-aarch64.zip"
+
+[paks]
+repo = "gameknife/gkNextEngine"
+release_tag = "paks-latest"
+
+[[paks.assets]]
+id = "ldraw"
+name = "ldraw.pak"
+dest = "assets/paks/ldraw.pak"
+
+[[paks.assets]]
+id = "optional"
+name = "optional.pak"
+dest = "assets/paks/optional.pak"
+
+[[paks.assets]]
+id = "sfx"
+name = "bgm.mp3"
+dest = "assets/sfx/bgm.mp3"
+
+[[paks.assets]]
+id = "sfx"
+name = "bgm2.mp3"
+dest = "assets/sfx/bgm2.mp3"
+
+[[paks.assets]]
+id = "sfx"
+name = "put.mp3"
+dest = "assets/sfx/put.mp3"
+
+[[paks.assets]]
+id = "sfx"
+name = "put1.wav"
+dest = "assets/sfx/put1.wav"
+
+[[paks.assets]]
+id = "sfx"
+name = "put2.wav"
+dest = "assets/sfx/put2.wav"
+
+[[paks.assets]]
+id = "sfx"
+name = "put3.wav"
+dest = "assets/sfx/put3.wav"
+
+[[paks.assets]]
+id = "ffmpeg"
+name = "ffmpeg.exe"
+dest = "src/ThirdParty/ffmpeg/bin/ffmpeg.exe"
+
+[targets]
+default = "gkNextRenderer"
+all = [
+  "gkNextRenderer",
+  "gkNextEditor",
+  "gkNextStillBenchmark",
+  "gkNextMotionBenchmark",
+  "gkNextVisualTest",
+  "MagicaLego",
+  "KongLie3D",
+  "Brotato3D",
+  "FlappyCpp",
+  "FlappyJs",
+  "BrickPlayer",
+  "CharacterDemo",
+  "Packager",
+  "gkNextUnitTests"
+]

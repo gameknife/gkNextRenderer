@@ -1,0 +1,9 @@
+{
+  "events": [
+    { "id": "calm",   "weight": 70, "effect": "none" },
+    { "id": "pirate", "weight": 15, "effect": "combat",   "enemyShip": "sloop" },
+    { "id": "bottle", "weight":  5, "effect": "intel",    "rewardGold": 0,   "messageKey": "intel_discount" },
+    { "id": "wreck",  "weight":  5, "effect": "treasure", "rewardGold": 200, "rewardCargoId": "spice", "rewardCargoQty": 5 },
+    { "id": "storm",  "weight":  5, "effect": "storm",    "hpDamage": 10,    "speedDebuffMs": 5000 }
+  ]
+}

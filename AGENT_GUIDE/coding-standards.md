@@ -161,9 +161,9 @@
 **工具链:**
 - CMake 3.10+, Ninja
 - vcpkg 管理依赖（`vcpkg.json` / `vcpkg-configuration.json`）
-- 平台脚本入口在根：`build.sh` / `build.bat`, `run.sh` / `run.bat`
-- 实现位于 `scripts/`：`build.ps1`、`run.ps1`、`vcpkg.sh` / `vcpkg.bat` / `vcpkg.ps1`、`package.bat`
-- vcpkg 在首次 `build.*` 时由脚本自动引导，开发者无需手动运行；仅在需要 `--update` 时直接调用 `scripts/vcpkg.*`
+- 平台脚本入口在根：`gnb.sh` / `gnb.bat`
+- 实现位于 `tools/gnb/`
+- vcpkg 在首次 `gnb build` 时由 gnb 自动引导，开发者无需手动运行；仅在需要更新时调用 `gnb setup --refresh`
 
 **审查建议:**
 - [ ] 新增第三方库需更新 `vcpkg.json`
@@ -183,7 +183,7 @@
 - [ ] 渲染改动需附截图对比（性能改动需附 FPS 数据）
 - [ ] 跨平台改动需在至少 2 个平台验证
 - [ ] 着色器改动需运行 `gkNextRenderer` 目视检查
-- [ ] TypeScript 脚本改动需执行 `npx ts-node src/Typescript/test.ts`
+- [ ] TypeScript 脚本改动需执行 bundled tsc：Windows 用 `tools\tsc\tsc.exe -p assets\typescript\tsconfig.json`，macOS/Linux 用 `tools/tsc/tsc -p assets/typescript/tsconfig.json`；运行时热重载同样使用 bundled tsc，不依赖 Node/npm
 
 ---
 
@@ -222,7 +222,7 @@
   ```
 - ✅ **生成 compile_commands.json**（禁用 Unity Build）：
   ```bash
-  ./build.sh <platform> -DENABLE_UNITY_BUILD=OFF
+  ./gnb.sh build --no-unity
   ```
 - ✅ **性能分析使用 Superluminal/Tracy**（不影响默认构建）
 - ✅ **提交前检查工作区**：`git status` 确认无遗漏文件

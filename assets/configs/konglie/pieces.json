@@ -1,0 +1,417 @@
+{
+  "pieces": {
+    "hero_blue": {
+      "name": "布鲁  Blue",
+      "team": "player",
+      "isHero": true,
+      "role": "tank",
+      "attackType": "ap",
+      "hp": 1520,
+      "atk": 24,
+      "atkSpeed": 1.6,
+      "range": 2,
+      "moveSpeed": 0.65,
+      "maxMana": 90,
+      "manaPerAtk": 22,
+      "synergies": ["法师", "近卫"],
+      "color": [0.133333, 0.266667, 0.733333],
+      "skills": {
+        "w": {
+          "name": "魔晶护盾",
+          "effect": "magic_shield",
+          "desc": "为自身及最近队友施加150护盾，持续3秒",
+          "cooldown": 9000
+        },
+        "ultimate": {
+          "name": "蓝色洪流",
+          "effect": "blue_surge",
+          "desc": "对周围3格内所有敌人造成160魔法伤害"
+        }
+      }
+    },
+    "hero_sydney": {
+      "name": "西德尼  Sydney",
+      "team": "player",
+      "isHero": true,
+      "role": "atk_tank",
+      "attackType": "ad",
+      "hp": 1100,
+      "atk": 70,
+      "atkSpeed": 1.0,
+      "range": 1,
+      "moveSpeed": 0.5,
+      "maxMana": 80,
+      "manaPerAtk": 26,
+      "synergies": ["斗士", "骑士"],
+      "color": [0.8, 0.266667, 0.133333],
+      "skills": {
+        "w": {
+          "name": "急袭斩",
+          "effect": "rapid_slash",
+          "desc": "突进到最远敌人身旁，造成150伤害并眩晕0.5秒",
+          "cooldown": 8000
+        },
+        "ultimate": {
+          "name": "西德之怒",
+          "effect": "sydney_fury",
+          "desc": "进入4秒狂怒，攻击速度提升至3倍，伤害提升50%"
+        }
+      }
+    },
+    "adc_a": {
+      "name": "神射甲",
+      "team": "player",
+      "isHero": false,
+      "role": "adc",
+      "attackType": "ad",
+      "hp": 650,
+      "atk": 60,
+      "atkSpeed": 0.78,
+      "range": 4,
+      "moveSpeed": 0.55,
+      "maxMana": 0,
+      "manaPerAtk": 0,
+      "synergies": ["远射", "联盟"],
+      "color": [0.8, 0.6, 0.133333],
+      "skills": {
+        "w": {
+          "name": "",
+          "effect": "",
+          "cooldown": 0
+        },
+        "ultimate": {
+          "name": "",
+          "effect": ""
+        }
+      }
+    },
+    "adc_b": {
+      "name": "神射乙",
+      "team": "player",
+      "isHero": false,
+      "role": "adc",
+      "attackType": "ad",
+      "hp": 650,
+      "atk": 60,
+      "atkSpeed": 0.78,
+      "range": 4,
+      "moveSpeed": 0.55,
+      "maxMana": 0,
+      "manaPerAtk": 0,
+      "synergies": ["远射", "联盟"],
+      "color": [0.8, 0.6, 0.133333],
+      "skills": {
+        "w": {
+          "name": "",
+          "effect": "",
+          "cooldown": 0
+        },
+        "ultimate": {
+          "name": "",
+          "effect": ""
+        }
+      }
+    },
+    "tank_support": {
+      "name": "护盾卫",
+      "team": "player",
+      "isHero": false,
+      "role": "tank",
+      "attackType": "ad",
+      "hp": 1500,
+      "atk": 30,
+      "atkSpeed": 1.5,
+      "range": 1,
+      "moveSpeed": 0.72,
+      "maxMana": 0,
+      "manaPerAtk": 0,
+      "synergies": ["近卫", "守卫"],
+      "color": [0.2, 0.333333, 0.533333],
+      "skills": {
+        "w": {
+          "name": "",
+          "effect": "",
+          "cooldown": 0
+        },
+        "ultimate": {
+          "name": "",
+          "effect": ""
+        }
+      }
+    },
+    "healer_support": {
+      "name": "圣愈者",
+      "team": "player",
+      "isHero": false,
+      "role": "support",
+      "attackType": "ap",
+      "hp": 550,
+      "atk": 20,
+      "atkSpeed": 2.0,
+      "range": 3,
+      "moveSpeed": 0.6,
+      "maxMana": 0,
+      "manaPerAtk": 0,
+      "healAmount": 42,
+      "healInterval": 3000,
+      "synergies": ["秘术", "守卫"],
+      "color": [0.133333, 0.533333, 0.333333],
+      "skills": {
+        "w": {
+          "name": "",
+          "effect": "",
+          "cooldown": 0
+        },
+        "ultimate": {
+          "name": "",
+          "effect": ""
+        }
+      }
+    },
+    "bench_tank_1": {
+      "name": "卫兵甲",
+      "team": "player",
+      "isHero": false,
+      "role": "tank",
+      "attackType": "ad",
+      "hp": 1100,
+      "atk": 32,
+      "atkSpeed": 1.4,
+      "range": 1,
+      "moveSpeed": 0.68,
+      "maxMana": 0,
+      "manaPerAtk": 0,
+      "synergies": ["近卫"],
+      "color": [0.25098, 0.345098, 0.439216],
+      "skills": {
+        "w": {
+          "name": "",
+          "effect": "",
+          "cooldown": 0
+        },
+        "ultimate": {
+          "name": "",
+          "effect": ""
+        }
+      }
+    },
+    "bench_tank_2": {
+      "name": "卫兵乙",
+      "team": "player",
+      "isHero": false,
+      "role": "tank",
+      "attackType": "ad",
+      "hp": 1100,
+      "atk": 32,
+      "atkSpeed": 1.4,
+      "range": 1,
+      "moveSpeed": 0.68,
+      "maxMana": 0,
+      "manaPerAtk": 0,
+      "synergies": ["近卫"],
+      "color": [0.25098, 0.345098, 0.439216],
+      "skills": {
+        "w": {
+          "name": "",
+          "effect": "",
+          "cooldown": 0
+        },
+        "ultimate": {
+          "name": "",
+          "effect": ""
+        }
+      }
+    },
+    "bench_tank_3": {
+      "name": "卫兵丙",
+      "team": "player",
+      "isHero": false,
+      "role": "tank",
+      "attackType": "ad",
+      "hp": 1100,
+      "atk": 32,
+      "atkSpeed": 1.4,
+      "range": 1,
+      "moveSpeed": 0.68,
+      "maxMana": 0,
+      "manaPerAtk": 0,
+      "synergies": ["近卫"],
+      "color": [0.25098, 0.345098, 0.439216],
+      "skills": {
+        "w": {
+          "name": "",
+          "effect": "",
+          "cooldown": 0
+        },
+        "ultimate": {
+          "name": "",
+          "effect": ""
+        }
+      }
+    },
+    "shadow_adc_1": {
+      "name": "暗影射手",
+      "team": "enemy",
+      "isHero": false,
+      "role": "adc",
+      "attackType": "ad",
+      "hp": 650,
+      "atk": 70,
+      "atkSpeed": 0.68,
+      "range": 4,
+      "moveSpeed": 0.55,
+      "maxMana": 0,
+      "manaPerAtk": 0,
+      "synergies": ["远射"],
+      "color": [0.4, 0.133333, 0.666667],
+      "skills": {
+        "w": {
+          "name": "",
+          "effect": "",
+          "cooldown": 0
+        },
+        "ultimate": {
+          "name": "",
+          "effect": ""
+        }
+      }
+    },
+    "shadow_adc_2": {
+      "name": "暗影射手",
+      "team": "enemy",
+      "isHero": false,
+      "role": "adc",
+      "attackType": "ad",
+      "hp": 650,
+      "atk": 70,
+      "atkSpeed": 0.68,
+      "range": 4,
+      "moveSpeed": 0.55,
+      "maxMana": 0,
+      "manaPerAtk": 0,
+      "synergies": ["远射"],
+      "color": [0.4, 0.133333, 0.666667],
+      "skills": {
+        "w": {
+          "name": "",
+          "effect": "",
+          "cooldown": 0
+        },
+        "ultimate": {
+          "name": "",
+          "effect": ""
+        }
+      }
+    },
+    "shadow_adc_3": {
+      "name": "暗影射手",
+      "team": "enemy",
+      "isHero": false,
+      "role": "adc",
+      "attackType": "ad",
+      "hp": 650,
+      "atk": 70,
+      "atkSpeed": 0.68,
+      "range": 4,
+      "moveSpeed": 0.55,
+      "maxMana": 0,
+      "manaPerAtk": 0,
+      "synergies": ["远射"],
+      "color": [0.4, 0.133333, 0.666667],
+      "skills": {
+        "w": {
+          "name": "",
+          "effect": "",
+          "cooldown": 0
+        },
+        "ultimate": {
+          "name": "",
+          "effect": ""
+        }
+      }
+    },
+    "shadow_tank_1": {
+      "name": "暗影卫兵",
+      "team": "enemy",
+      "isHero": false,
+      "role": "tank",
+      "attackType": "ad",
+      "hp": 1600,
+      "atk": 38,
+      "atkSpeed": 1.4,
+      "range": 1,
+      "moveSpeed": 0.72,
+      "maxMana": 0,
+      "manaPerAtk": 0,
+      "synergies": ["近卫"],
+      "color": [0.290196, 0.094118, 0.439216],
+      "skills": {
+        "w": {
+          "name": "",
+          "effect": "",
+          "cooldown": 0
+        },
+        "ultimate": {
+          "name": "",
+          "effect": ""
+        }
+      }
+    },
+    "shadow_tank_2": {
+      "name": "暗影卫兵",
+      "team": "enemy",
+      "isHero": false,
+      "role": "tank",
+      "attackType": "ad",
+      "hp": 1600,
+      "atk": 38,
+      "atkSpeed": 1.4,
+      "range": 1,
+      "moveSpeed": 0.72,
+      "maxMana": 0,
+      "manaPerAtk": 0,
+      "synergies": ["近卫"],
+      "color": [0.290196, 0.094118, 0.439216],
+      "skills": {
+        "w": {
+          "name": "",
+          "effect": "",
+          "cooldown": 0
+        },
+        "ultimate": {
+          "name": "",
+          "effect": ""
+        }
+      }
+    },
+    "shadow_healer": {
+      "name": "暗影祭司",
+      "team": "enemy",
+      "isHero": false,
+      "role": "support",
+      "attackType": "ap",
+      "hp": 620,
+      "atk": 18,
+      "atkSpeed": 2.0,
+      "range": 3,
+      "moveSpeed": 0.6,
+      "maxMana": 0,
+      "manaPerAtk": 0,
+      "healAmount": 44,
+      "healInterval": 3000,
+      "synergies": ["秘术"],
+      "color": [0.478431, 0.094118, 0.533333],
+      "skills": {
+        "w": {
+          "name": "",
+          "effect": "",
+          "cooldown": 0
+        },
+        "ultimate": {
+          "name": "",
+          "effect": ""
+        }
+      }
+    }
+  }
+}

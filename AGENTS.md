@@ -28,33 +28,28 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
 ## Build Commands
 
 **Build (vcpkg is auto-bootstrapped on first run):**
-- Windows: `./build.bat --preset default-windows`
-- macOS: `./build.sh --preset default-macos-arm64`
-- Linux: `./build.sh --preset default-linux`
-- Android: `./build.bat --android` (Windows) or `./build.sh --android`
-- Clean rebuild: add `--clean`
-- List presets: `cmake --list-presets=configure`
-- Force vcpkg update: `scripts/vcpkg.sh --update` (or `scripts\vcpkg.bat --update` on Windows)
+- Setup once: `./gnb setup` (Windows: `gnb.bat setup`)
+- Desktop build: `./gnb build` (Windows: `gnb.bat build`)
+- Specific target: `./gnb build gkNextEditor`
+- Android: `./gnb android`
+- Clean rebuild: `./gnb build --clean`
+- Force vcpkg update: `./gnb setup --refresh`
 
-**Presets:**
-- `minimal-*`: Fewest dependencies (KTX2 only)
-- `default-*`: Standard features (KTX2 + Physics + Audio)
-- `full-*`: All features including DLSS/OIDN
+**CMake presets:** `windows`, `linux`, `macos-arm64`, `ios`.
 
-**Optional Features (via build flags or CMake args):**
-- `--avif`: AVIF texture loading and screenshots
-- `--dlss`: NVIDIA DLSS support (Windows only, downloads Streamline SDK)
-- `--oidn`: Intel OpenImageDenoise support (not on macOS, auto-downloads runtime)
-- Example: `./build.bat --preset default-windows -- -DENABLE_AVIF=ON`
+**Optional Features:**
+- AVIF is manual: `cmake --preset windows -DENABLE_AVIF=ON -DVCPKG_MANIFEST_FEATURES=avif` then `./gnb build`
+- DLSS/Streamline is always enabled on Windows and disabled elsewhere
+- OIDN and MinGW support have been removed
 
-**Build output:** `out/build/<preset>/bin/`
+**Build output:** `out/build/<platform>/bin/`
 
 ## Run Commands
 
-- Windows: `./run.bat --preset <preset>`
-- macOS/Linux: `./run.sh --preset <preset>`
-- Specific target: `./run.sh --preset default-macos-arm64 --target gkNextEditor`
-- Android: `./run.sh --preset android`
+- Default target: `./gnb run`
+- Specific target: `./gnb run gkNextEditor`
+- Editor shortcut: `./gnb editor`
+- Android: `./gnb android`
 
 Desktop binaries can now be launched from any working directory; no `cd out/build/<preset>/bin` is required.
 
@@ -86,9 +81,9 @@ Tests no longer require the current working directory to be `bin`; launch them v
 
 **Static Analysis:**
 - Config: `.clang-tidy` (naming + include cleaner)
-- Generate compile database: `./build.sh --preset <preset> -- -DCMAKE_EXPORT_COMPILE_COMMANDS=ON`
-- Run clang-tidy: `python3 tools/clang-tools/run-clang-tidy.py -p out/build/<preset>`
-- Run naming checks: `BUILD_DIR=out/build/<preset> tools/clang-tools/run-naming.sh`
+- Generate compile database: `cmake --preset <platform> -DCMAKE_EXPORT_COMPILE_COMMANDS=ON`
+- Run clang-tidy: `python3 tools/clang-tools/run-clang-tidy.py -p out/build/<platform>`
+- Run naming checks: `BUILD_DIR=out/build/<platform> tools/clang-tools/run-naming.sh`
 
 ## Code Style (Summary)
 
@@ -165,10 +160,13 @@ assets/
 - TypeScript definitions in `assets/typescript/Engine.d.ts` mirror reflected properties
 
 **QuickJS Scripting:**
-- Hot reload support (modify `.js` files at runtime)
+- TypeScript hot reload support via bundled `tools/tsc/tsc[.exe]` (`tsc.exe` on Windows, `tsc` on macOS/Linux); no Node/npm/global `tsc` dependency is required at runtime
+- ES module loading supports compiled TypeScript relative imports under `assets/scripts`
 - Components reflected via `entt::meta` are auto-exposed to JavaScript
-- Global namespace: `Global.GetEngine()`, `Global.spdlog()`
-- Scene API: `Scene.FindNodeIdWithComponent()`, `Scene.GetNodeById()`
+- Global namespace: `Global.GetEngine()`, `Global.GetScene()`, `Global.spdlog()`
+- Scripted games should extend `assets/typescript/NextGameInstanceBase.ts` and call `RunGameInstance(new YourGameInstance())`
+- Scene API: `Scene.FindNodeIdWithComponent()`, `Scene.GetNodeById()`, `SceneBuild.*` for rebuild-time procedural scene construction, `Scene.AddRenderNode()` for runtime nodes
+- See `AGENT_GUIDE/QuickJSBindings.md`; `FlappyCpp` / `FlappyJs` replay parity is the binding regression demo
 
 **Component System:**
 - ECS via entt library
@@ -190,16 +188,15 @@ assets/
 
 ## Verification After Changes
 
-1. **Build:** For AI assistant verification, always build with the platform `full-*` preset (not `default-*`/`minimal-*`)
-   - macOS: `./build.sh --preset full-macos-arm64 --reconfigure`
-   - Windows: `./build.bat --preset full-windows --reconfigure`
-   - Linux: `./build.sh --preset full-linux --reconfigure`
-   - If only one target needs verification, still use `full-*` preset and pass target via CMake build command
+1. **Build:** For AI assistant verification, run the platform default through gnb:
+   - macOS/Linux: `./gnb build --reconfigure`
+   - Windows: `gnb.bat build --reconfigure`
+   - If only one target needs verification, pass it as `./gnb build <target>`
 2. **Run:** Verify application starts and logs `uploaded scene [...] to gpu`
 3. **Test:** Run unit tests if touching core systems
 4. **Visual:** For rendering changes, validate visually in gkNextRenderer or run gkNextVisualTest
 
-**Assistant Note:** Large refactors must include a full build with `full-*` preset and fix any compile errors before reporting completion.
+**Assistant Note:** Large refactors must include a full `gnb build --reconfigure` and fix any compile errors before reporting completion.
 
 ## Key References
 

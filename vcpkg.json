@@ -14,6 +14,11 @@
       "features": ["vulkan"],
       "platform": "!(android)"
     },
+    {
+      "name": "dbus",
+      "default-features": false,
+      "platform": "linux"
+    },
     "glm",
     {
       "name": "imgui",

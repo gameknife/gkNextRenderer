@@ -36,6 +36,7 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_LDrawLoader.cpp
 	Tests/Test_LDrawParser.cpp
 	Tests/Test_LDrawConnectivity.cpp
+	Tests/Test_CVarSystem.cpp
 	Tests/Test_SceneList.cpp
 	Tests/Test_RenderComponent.cpp
 	Tests/Test_ImAnimIntegration.cpp
@@ -47,11 +48,10 @@ set(UNIT_TEST_SOURCES
 	Application/MagicaLego/MagicaLegoStyle.cpp
 	Application/MagicaLego/MagicaLegoScriptParser.cpp
 	Application/MagicaLego/MagicaLegoPlacementRules.cpp
+	Tests/Test_FlappyRng.cpp
 )
 
-if (ENABLE_PHYSIC)
-	list(APPEND UNIT_TEST_SOURCES Tests/Test_PhysicsComponent.cpp)
-endif()
+list(APPEND UNIT_TEST_SOURCES Tests/Test_PhysicsComponent.cpp)
 
 
 # libray and app
@@ -123,6 +123,23 @@ add_executable(MagicaLego
 	${src_files_magicalego}
 	DesktopMain.cpp
 )
+add_executable(KongLie3D
+	${src_files_konglie3d}
+	DesktopMain.cpp
+)
+add_executable(Brotato3D
+	${src_files_brotato3d}
+	DesktopMain.cpp
+)
+target_compile_definitions(Brotato3D PRIVATE DEV_MODE=1)
+add_executable(FlappyCpp
+	${src_files_flappycpp}
+	DesktopMain.cpp
+)
+add_executable(FlappyJs
+	${src_files_flappyjs}
+	DesktopMain.cpp
+)
 add_executable(BrickPlayer
 	${src_files_brickplayer}
 	DesktopMain.cpp
@@ -135,10 +152,8 @@ add_executable(Packager
 	Application/Packager/PackagerMain.cpp
 )
 
-if( NOT MINGW )
 find_package(Catch2 3 REQUIRED)
 add_executable(gkNextUnitTests ${UNIT_TEST_SOURCES})
-endif()
 
 endif()
 
@@ -186,20 +201,6 @@ gkNextEngine
 NextGameplay
 gkNextRenderer
 )
-elseif( MINGW )
-set(AllTargets
-gkNextEngine
-NextGameplay
-gkNextRenderer
-gkNextStillBenchmark
-gkNextMotionBenchmark
-gkNextVisualTest
-gkNextEditor
-Packager
-MagicaLego
-BrickPlayer
-CharacterDemo
-)
 else()
 set(AllTargets
 gkNextEngine
@@ -207,18 +208,23 @@ NextGameplay
 gkNextRenderer
 gkNextStillBenchmark
 gkNextMotionBenchmark
-gkNextVisualTest
-gkNextEditor
-Packager
-MagicaLego
-BrickPlayer
-CharacterDemo
-gkNextUnitTests
+	gkNextVisualTest
+	gkNextEditor
+	Packager
+	MagicaLego
+	KongLie3D
+	Brotato3D
+	FlappyCpp
+	FlappyJs
+	BrickPlayer
+	CharacterDemo
+	gkNextUnitTests
 )
 endif()
 
 # Unity Build option (default ON, can be disabled with -DENABLE_UNITY_BUILD=OFF)
 option(ENABLE_UNITY_BUILD "Enable unity builds for engine target" ON)
+file(TO_CMAKE_PATH "${Vulkan_SLANGC}" GK_SLANGC_EXECUTABLE_PATH)
 
 # common setup
 foreach(target IN LISTS AllTargets)
@@ -240,6 +246,11 @@ foreach(target IN LISTS AllTargets)
 	# preprocessor definitions
 	target_compile_definitions(${target} PUBLIC IMGUI_DEFINE_MATH_OPERATORS)
 	target_compile_definitions(${target} PUBLIC MA_NO_ENCODING MA_NO_FLAC)
+	if (GK_ENABLE_HOT_RELOAD)
+		target_compile_definitions(${target} PUBLIC GK_ENABLE_HOT_RELOAD=1)
+	else()
+		target_compile_definitions(${target} PUBLIC GK_ENABLE_HOT_RELOAD=0)
+	endif()
 
 	if( IOS )
 	target_compile_definitions(${target} PUBLIC IOS=1)
@@ -249,6 +260,7 @@ foreach(target IN LISTS AllTargets)
 	if ( ${target} STREQUAL gkNextEngine )
 		target_compile_definitions(${target} PRIVATE ENGINE_EXPORTS)
 		target_compile_definitions(${target} PRIVATE GK_NEXT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+		target_compile_definitions(${target} PRIVATE GK_SLANGC_EXECUTABLE="${GK_SLANGC_EXECUTABLE_PATH}")
 		
 		# Enable Unity Build for gkNextEngine unless explicitly disabled (Android disabled by default)
 		# Group files for Unity Build optimization
@@ -318,10 +330,6 @@ foreach(target IN LISTS AllTargets)
 		target_link_libraries(${target} PRIVATE android SDL3::SDL3 spdlog::spdlog xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp ${Vulkan_LIBRARIES} ${extra_libs})
 	endif()
 
-	if ( MINGW )
-		target_link_libraries(${target} PRIVATE gdi32)
-	endif()
-
 	if ( WITH_AVIF )
 		target_compile_definitions(${target} PUBLIC WITH_AVIF=1)
 		target_compile_definitions(${target} PUBLIC AVIF_CODEC_AOM=SYSTEM)
@@ -332,13 +340,6 @@ foreach(target IN LISTS AllTargets)
 		target_compile_definitions(${target} PUBLIC WITH_SUPERLUMINAL=1)
 		target_include_directories(${target} SYSTEM PRIVATE ${SuperluminalAPI_INCLUDE_DIRS})
 		target_link_libraries(${target} PRIVATE SuperluminalAPI)
-	endif()
-
-	if ( WITH_OIDN )
-		target_compile_definitions(${target} PUBLIC WITH_OIDN=1)
-		target_include_directories(${target} PRIVATE ${OIDN_INCLUDE_DIR})
-		target_link_directories(${target} PRIVATE ${OIDN_LIB_DIR})
-		target_link_libraries(${target} PRIVATE OpenImageDenoise )
 	endif()
 
 	if ( WITH_PHYSIC )
@@ -386,7 +387,7 @@ foreach(target IN LISTS AllTargets)
 	endif()
 
 	# specific for targets
-	if ( (UNIX OR MINGW) AND NOT APPLE AND NOT ANDROID)
+	if ( UNIX AND NOT APPLE AND NOT ANDROID)
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -mavx")
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mavx")
 	endif()
@@ -397,26 +398,17 @@ foreach(target IN LISTS AllTargets)
 		if (EXISTS ${FFMPEG_EXE_PATH})
 			file(COPY ${FFMPEG_EXE_PATH} DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 		else()
-			message(STATUS "ffmpeg.exe not found at ${FFMPEG_EXE_PATH}; run scripts/fetch-paks.bat --ffmpeg if you need MagicaLego video capture.")
+			message(STATUS "ffmpeg.exe not found at ${FFMPEG_EXE_PATH}; run `gnb paks fetch ffmpeg` if you need MagicaLego video capture.")
 		endif()
 	endif()
 	endif()
 
-	# copy the tsc to bin
 	if ( ${target} STREQUAL gkNextEngine )
-	if ( WITH_QUICKJS AND EXISTS "${TSC_EXECUTABLE}" )
-		file(COPY "${TSC_EXECUTABLE}" DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-	endif()
-
 	if ( WITH_STREAMLINE )
 		file(GLOB SL_BINS "${STREAMLINE_BIN_DIR}/*")
 		file(COPY ${SL_BINS} DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 	endif()
 
-	if ( WITH_OIDN )
-		file(GLOB OIDN_BINS "${OIDN_BIN_DIR}/*")
-		file(COPY ${OIDN_BINS} DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-	endif()
 	endif()
 
 	if ( ${target} STREQUAL gkNextEditor )
@@ -436,7 +428,7 @@ target_link_libraries(CharacterDemo PRIVATE NextGameplay)
 endif()
 
 # Test Target
-if ( NOT ANDROID AND NOT IOS AND NOT MINGW )
+if ( NOT ANDROID AND NOT IOS )
 target_link_libraries(gkNextUnitTests PRIVATE NextGameplay gkNextEngine Catch2::Catch2WithMain gk_project_options)
 set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
 endif()

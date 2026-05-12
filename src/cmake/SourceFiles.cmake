@@ -92,6 +92,29 @@ file(GLOB_RECURSE src_files_gkmotionbenchmark "Application/gkNextBenchmark/gkNex
 file(GLOB_RECURSE src_files_gkvisualtest "Application/gkNextVisualTest/*"
 )
 
+file(GLOB_RECURSE src_files_konglie3d
+    "Application/KongLie3D/*.cpp"
+    "Application/KongLie3D/*.hpp"
+)
+
+file(GLOB_RECURSE src_files_brotato3d
+    "Application/Brotato3D/*.cpp"
+    "Application/Brotato3D/*.hpp"
+)
+
+file(GLOB_RECURSE src_files_flappycpp
+    "Application/Flappy/FlappyCommon.hpp"
+    "Application/Flappy/FlappyConfig.cpp"
+    "Application/Flappy/FlappyConfig.hpp"
+    "Application/Flappy/FlappyCpp/*.cpp"
+    "Application/Flappy/FlappyCpp/*.hpp"
+)
+
+file(GLOB_RECURSE src_files_flappyjs
+    "Application/Flappy/FlappyJs/*.cpp"
+    "Application/Flappy/FlappyJs/*.hpp"
+)
+
 file(GLOB_RECURSE src_files_characterdemo
     "Application/CharacterDemo/*.cpp"
     "Application/CharacterDemo/*.hpp"

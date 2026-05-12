@@ -1,0 +1,110 @@
+{
+  "items": [
+    {
+      "id": "vampire_fang",
+      "name": "吸血鬼之牙",
+      "description": "每次击杀回 1 HP",
+      "trigger": "on_kill",
+      "effect": "heal",
+      "value": 1,
+      "rarity": "common",
+      "weight": 3,
+      "cost": 18
+    },
+    {
+      "id": "regen_charm",
+      "name": "再生护符",
+      "description": "每 2 秒回 1 HP",
+      "trigger": "on_tick",
+      "effect": "heal_per_sec",
+      "value": 0.5,
+      "rarity": "common",
+      "weight": 3,
+      "cost": 22
+    },
+    {
+      "id": "magnet",
+      "name": "磁吸宝石",
+      "description": "拾取半径 +60%",
+      "trigger": "passive_stat",
+      "effect": "stat_pickupRadiusPct",
+      "value": 0.6,
+      "rarity": "uncommon",
+      "weight": 2,
+      "cost": 16
+    },
+    {
+      "id": "fury_core",
+      "name": "狂怒核心",
+      "description": "HP 低于 50% 时伤害 +30%",
+      "trigger": "low_hp_buff",
+      "effect": "stat_damagePct",
+      "value": 0.3,
+      "threshold": 0.5,
+      "rarity": "rare",
+      "weight": 1,
+      "cost": 32
+    },
+    {
+      "id": "shrapnel",
+      "name": "碎片榴弹",
+      "description": "击杀有 25% 概率小爆炸",
+      "trigger": "on_kill_chance",
+      "effect": "explosion",
+      "value": 0.25,
+      "explosionRadius": 1.2,
+      "explosionDamage": 12,
+      "rarity": "rare",
+      "weight": 1,
+      "cost": 30
+    },
+    {
+      "id": "speed_boots",
+      "name": "疾行靴",
+      "description": "移速 +25%（永久）",
+      "trigger": "passive_stat",
+      "effect": "stat_moveSpeedPct",
+      "value": 0.25,
+      "rarity": "uncommon",
+      "weight": 2,
+      "cost": 18
+    },
+    {
+      "id": "impact_kneepads",
+      "name": "冲击护膝",
+      "description": "冲刺结束时推开附近敌人",
+      "trigger": "on_dash_end",
+      "effect": "dash_knockback",
+      "value": 1.0,
+      "explosionRadius": 2.0,
+      "explosionDamage": 0,
+      "rarity": "uncommon",
+      "weight": 2,
+      "cost": 24
+    },
+    {
+      "id": "spare_capacitor",
+      "name": "备用电容",
+      "description": "Dash 技能豆上限 +1",
+      "trigger": "passive_stat",
+      "effect": "stat_dashCharges",
+      "value": 1,
+      "rarity": "uncommon",
+      "weight": 2,
+      "cost": 26
+    },
+    {
+      "id": "kinetic_coil",
+      "name": "动能线圈",
+      "description": "冲刺结束时推开附近敌人并造成少量伤害",
+      "trigger": "on_dash_end",
+      "effect": "dash_knockback",
+      "value": 1.2,
+      "explosionRadius": 2.2,
+      "explosionDamage": 8,
+      "rarity": "rare",
+      "weight": 1,
+      "cost": 34
+    }
+  ]
+}

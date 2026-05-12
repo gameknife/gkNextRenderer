@@ -20,11 +20,12 @@ static const uint OBJECT_ID_FLAG_VALID = 0x80000000u;
 static const uint OBJECT_ID_FLAG_SELECTED = 0x40000000u;
 static const uint OBJECT_ID_FLAG_HOVERED = 0x20000000u;
 static const uint OBJECT_ID_FLAG_LOCKED = 0x10000000u;
-static const uint OBJECT_ID_INSTANCE_MASK = 0x0FFFFFFFu;
+static const uint OBJECT_ID_FLAG_DANGER = 0x08000000u;
+static const uint OBJECT_ID_INSTANCE_MASK = 0x07FFFFFFu;
 
 namespace Common
 {
-    public uint EncodeObjectId(uint instanceId, bool selected, bool hovered, bool locked)
+    public uint EncodeObjectId(uint instanceId, bool selected, bool hovered, bool locked, bool danger)
     {
         uint objectId = OBJECT_ID_FLAG_VALID | (instanceId & OBJECT_ID_INSTANCE_MASK);
         if (selected)
@@ -38,6 +39,10 @@ namespace Common
         if (locked)
         {
             objectId |= OBJECT_ID_FLAG_LOCKED;
+        }
+        if (danger)
+        {
+            objectId |= OBJECT_ID_FLAG_DANGER;
         }
         return objectId;
     }

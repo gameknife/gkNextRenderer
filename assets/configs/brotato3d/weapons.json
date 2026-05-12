@@ -1,0 +1,80 @@
+{
+  "weapons": {
+    "smg": {
+      "name": "SMG",
+      "damage": 6,
+      "atkSpeedHz": 4.0,
+      "rangeMeters": 7.0,
+      "projectileSpeed": 18.0,
+      "projectileLifetimeMs": 800,
+      "projectileColor": [1.0, 0.85, 0.2],
+      "projectileSize": 0.12,
+      "knockbackMeters": 0.07,
+      "spreadDeg": 4.0
+    },
+    "shotgun": {
+      "name": "Shotgun",
+      "damage": 4,
+      "atkSpeedHz": 1.0,
+      "rangeMeters": 5.5,
+      "projectileSpeed": 16.0,
+      "projectileLifetimeMs": 500,
+      "projectileColor": [1.0, 0.4, 0.2],
+      "projectileSize": 0.14,
+      "knockbackMeters": 0.12,
+      "pellets": 5,
+      "spreadDeg": 18.0
+    },
+    "sniper": {
+      "name": "Sniper",
+      "damage": 35,
+      "atkSpeedHz": 0.6,
+      "rangeMeters": 14.0,
+      "projectileSpeed": 36.0,
+      "projectileLifetimeMs": 600,
+      "projectileColor": [0.85, 0.95, 1.0],
+      "projectileSize": 0.08,
+      "knockbackMeters": 0.42,
+      "spreadDeg": 0.0,
+      "critChanceBonus": 0.20
+    },
+    "flamethrower": {
+      "name": "Flamethrower",
+      "damage": 3,
+      "atkSpeedHz": 12.0,
+      "rangeMeters": 4.0,
+      "projectileSpeed": 9.0,
+      "projectileLifetimeMs": 350,
+      "projectileColor": [1.0, 0.55, 0.10],
+      "projectileSize": 0.16,
+      "knockbackMeters": 0.025,
+      "pellets": 1,
+      "spreadDeg": 22.0,
+      "pierceCount": 3
+    },
+    "rocket": {
+      "name": "Rocket",
+      "damage": 20,
+      "atkSpeedHz": 0.5,
+      "rangeMeters": 8.0,
+      "projectileSpeed": 11.0,
+      "projectileLifetimeMs": 1500,
+      "projectileColor": [1.0, 0.30, 0.10],
+      "projectileSize": 0.22,
+      "knockbackMeters": 0.34,
+      "explosionRadius": 1.8,
+      "explosionDamage": 14
+    },
+    "laser": {
+      "name": "Laser",
+      "damage": 14,
+      "atkSpeedHz": 1.0,
+      "rangeMeters": 11.0,
+      "projectileColor": [0.30, 0.95, 1.0],
+      "knockbackMeters": 0.22,
+      "instantHit": true,
+      "beamWidth": 0.18,
+      "beamDurationMs": 100
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "ports": [
+    { "id": "venice",     "name": "威尼斯",       "lon": 12.34, "lat": 45.43, "nation": "Venice",    "specialty": "glass",     "color": [0.85, 0.20, 0.20] },
+    { "id": "genoa",      "name": "热那亚",       "lon":  8.93, "lat": 44.40, "nation": "Genoa",     "specialty": "weapon",    "color": [0.95, 0.95, 0.95] },
+    { "id": "marseille",  "name": "马赛",         "lon":  5.36, "lat": 43.29, "nation": "France",    "specialty": "wine",      "color": [0.10, 0.20, 0.70] },
+    { "id": "barcelona",  "name": "巴塞罗那",     "lon":  2.17, "lat": 41.38, "nation": "Aragon",    "specialty": "wool",      "color": [0.95, 0.75, 0.10] },
+    { "id": "naples",     "name": "那不勒斯",     "lon": 14.27, "lat": 40.85, "nation": "Naples",    "specialty": "wheat",     "color": [0.85, 0.55, 0.10] },
+    { "id": "athens",     "name": "雅典",         "lon": 23.72, "lat": 37.98, "nation": "Byzantine", "specialty": "olive_oil", "color": [0.75, 0.80, 0.30] },
+    { "id": "istanbul",   "name": "君士坦丁堡",   "lon": 28.97, "lat": 41.01, "nation": "Ottoman",   "specialty": "spice",     "color": [0.10, 0.60, 0.30] },
+    { "id": "alexandria", "name": "亚历山大",     "lon": 29.92, "lat": 31.20, "nation": "Egypt",     "specialty": "silk",      "color": [0.90, 0.85, 0.40] },
+    { "id": "tunis",      "name": "突尼斯",       "lon": 10.18, "lat": 36.81, "nation": "Hafsid",    "specialty": "ivory",     "color": [0.55, 0.30, 0.10] },
+    { "id": "palermo",    "name": "巴勒莫",       "lon": 13.36, "lat": 38.12, "nation": "Sicily",    "specialty": "sulfur",    "color": [0.95, 0.55, 0.20] }
+  ]
+}

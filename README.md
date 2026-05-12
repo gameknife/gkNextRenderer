@@ -5,10 +5,10 @@
 [English](README.en.md) | [简体中文](README.md)
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/gameknife/gkNextEngine)
-![Windows CI](https://github.com/gameknife/gkNextEngine/actions/workflows/windows.yml/badge.svg)
-![Linux CI](https://github.com/gameknife/gkNextEngine/actions/workflows/linux.yml/badge.svg)
-![macOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/macos.yml/badge.svg)
-![Android CI](https://github.com/gameknife/gkNextEngine/actions/workflows/android.yml/badge.svg)
+![Windows CI](https://github.com/gameknife/gkNextEngine/actions/workflows/windows_self.yml/badge.svg)
+![Linux CI](https://github.com/gameknife/gkNextEngine/actions/workflows/linux_self.yml/badge.svg)
+![macOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/macos_self.yml/badge.svg)
+![Android CI](https://github.com/gameknife/gkNextEngine/actions/workflows/android_self.yml/badge.svg)
 ![iOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/ios.yml/badge.svg)
 
 ![Play ground](docs/gallery/4_playground.avif)
@@ -62,7 +62,7 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 - **ECS + Reflection**：基于 entt 的组件系统，加上反射层，服务于运行时、编辑器和脚本绑定
 - **ImGui 编辑器**：`gkNextEditor` 面向材质、场景和运行时内容的编辑工作流
-- **QuickJS 脚本热重载**：让运行时逻辑、工具能力和实验功能更快迭代
+- **QuickJS 脚本热重载**：运行时使用仓库内置 `tools/tsc/tsc[.exe]` 编译 TypeScript（Windows 为 `tsc.exe`，macOS/Linux 为 `tsc`），无需 Node/npm 或全局 `tsc`
 - **Jolt Physics**：为交互原型、拖拽玩法和游戏化验证提供更真实的物理基础
 
 ### 3. 代码规模可控，适合学习和扩展
@@ -128,13 +128,14 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 ## 快速开始
 
-项目使用 CMake + Ninja，依赖由 vcpkg 管理。构建依赖下载阶段需要可访问 GitHub 的网络环境。
+项目使用 CMake + Ninja，依赖由 vcpkg 管理。除了宿主机本身必须具备的基础工具（编译器 / IDE、CMake、平台 SDK 等），项目级依赖、外部工具链和可选资源包现在都尽量交给 `gnb` 准备。构建依赖下载阶段需要可访问 GitHub 的网络环境。
 
 ### 通用说明
 
-- 桌面平台现在可以从任意工作目录启动可执行文件，通常不再需要先 `cd` 到 `out/build/<preset>/bin`
-- 如果不确定可用预设，可以先执行 `cmake --list-presets=configure`
-- 常用桌面预设：`default-windows`、`default-linux`、`default-macos-arm64`
+- 推荐先执行 `./gnb doctor`（Windows: `gnb.bat doctor`）检查宿主机缺失的基础工具
+- `./gnb setup`（Windows: `gnb.bat setup`）会准备 vcpkg、项目外部工具链与可选资源包；如果直接执行 `./gnb build`，首次缺少 toolchain 时也会自动补齐核心依赖
+- 桌面平台现在通过 `gnb` 统一构建和运行，通常不再需要先 `cd` 到 `out/build/<platform>/bin`
+- 可用 CMake 预设收敛为：`windows`、`linux`、`macos-arm64`、`ios`
 
 ### 平台构建
 
@@ -149,20 +150,12 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 - 启用“使用 Unicode UTF-8 提供全球语言支持”
 
 ```bat
-.\build.bat --preset default-windows
-.\run.bat --preset default-windows
+gnb.bat setup
+gnb.bat build
+gnb.bat run gkNextRenderer
 ```
 
-</details>
-
-<details>
-<summary><b>Windows (MSYS2 MinGW)</b></summary>
-
-```shell
-pacman -S --needed git mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake mingw-w64-x86_64-toolchain
-./build.sh --preset default-mingw
-./run.sh --preset default-mingw
-```
+除 Visual Studio / Vulkan SDK 这类宿主工具外，其余项目依赖通常都由 `gnb` 自动准备。
 
 </details>
 
@@ -170,12 +163,14 @@ pacman -S --needed git mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake mingw-w64-x
 <summary><b>Linux (Ubuntu)</b></summary>
 
 ```shell
-sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev autoconf autoconf-archive automake libtool python3.12-venv
-./build.sh --preset default-linux
-./run.sh --preset default-linux
+./gnb.sh setup
+./gnb.sh build
+./gnb.sh run gkNextRenderer
 ```
 
-`build.sh` 现在会在 Linux 首轮构建前做桌面依赖预检查，如果缺少 `xrandr`、`wayland-protocols` 或 `xkbcommon`，会直接给出更明确的提示。
+- 在 apt / pacman 环境下，`gnb setup` 与 Linux 首轮 `gnb build` 会在 vcpkg bootstrap 前自动安装桌面构建所需系统包
+- 如果自动安装不可用，再手动补齐：`sudo apt install build-essential cmake ninja-build curl zip unzip tar pkg-config libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev autoconf autoconf-archive automake libtool libsystemd-dev`
+- 非 apt/pacman 发行版仍会给出缺失桌面依赖提示
 
 </details>
 
@@ -183,15 +178,15 @@ sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev 
 <summary><b>Steam Deck / Arch Linux</b></summary>
 
 ```shell
-sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxrandr wayland-protocols libxkbcommon
-./build.sh --preset full-linux --reconfigure
-./run.sh --preset full-linux --target gkNextRenderer
+./gnb.sh setup
+./gnb.sh build --reconfigure
+./gnb.sh run gkNextRenderer
 ```
 
 说明：
 
-- Steam Deck 首次部署建议直接使用 `full-linux`
-- 如果机器上还没有 `slangc`，`build.sh` 会自动下载项目约定的 Slang 工具链到 `external/`
+- 如果机器上还没有 `slangc`，`gnb setup` 会自动下载项目约定的 Slang 工具链到 `external/`
+- 在 pacman 环境下，`gnb setup` / Linux 首轮 `gnb build` 会在 vcpkg bootstrap 前自动安装系统包；如果自动安装不可用，可手动执行 `sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxrandr wayland-protocols libxkbcommon systemd-libs`
 - 如果 vcpkg 阶段遇到 GitHub 归档下载失败，优先直接重试同一条构建命令
 - 一次真实 Steam Deck 部署的复盘见 [docs/steamdeck-deployment-notes.md](docs/steamdeck-deployment-notes.md)
 
@@ -200,11 +195,19 @@ sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxra
 <details>
 <summary><b>macOS</b></summary>
 
+**前置条件：**
+
+- Xcode / Command Line Tools
+- CMake 3.26+
+- Ninja（如果本机的 CMake 发行版未自带）
+
 ```shell
-brew install molten-vk glslang ninja
-./build.sh --preset default-macos-arm64
-./run.sh --preset default-macos-arm64
+./gnb.sh setup
+./gnb.sh build
+./gnb.sh run gkNextRenderer
 ```
+
+`gnb setup` 会自动下载项目使用的 Slang 与 TypeScript 工具链，无需再单独准备这些项目级依赖。
 
 </details>
 
@@ -216,9 +219,11 @@ brew install molten-vk glslang ninja
 ```bat
 set ANDROID_HOME=C:\Android\Sdk
 set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\27.0.12077973
-build.bat --android
-run.bat --preset android
+gnb.bat setup --vcpkg-only
+gnb.bat android
 ```
+
+Android 主机侧仍需要提供 JDK / SDK / NDK；项目内的 vcpkg 依赖与外部工具链则继续由 `gnb` 处理。
 
 </details>
 
@@ -226,16 +231,16 @@ run.bat --preset android
 
 ```shell
 # 主渲染器
-./run.sh --preset default-macos-arm64 --target gkNextRenderer
+./gnb.sh run gkNextRenderer
 
 # Editor
-./run.sh --preset default-macos-arm64 --target gkNextEditor
+./gnb.sh run gkNextEditor
 
 # BrickPlayer（数字乐高 / LDraw 搭建原型）
-./run.sh --preset default-macos-arm64 --target BrickPlayer
+./gnb.sh run BrickPlayer
 
 # CharacterDemo（角色控制 / AI / 导航实验）
-./run.sh --preset default-macos-arm64 --target CharacterDemo
+./gnb.sh run CharacterDemo
 ```
 
 ### 可选资源包（optional assets）
@@ -244,21 +249,21 @@ run.bat --preset android
 
 | 选择器 | 内容 | 落盘位置 | 缺失影响 |
 |------|------|------|------|
-| `--ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer 缺 LDraw 零件库 |
-| `--optional` | `optional.pak` | `assets/paks/` | 主渲染器 / Editor / CharacterDemo / MagicaLego 缺场景资源 |
-| `--sfx` | 6 个 mp3/wav | `assets/sfx/` | MagicaLego / BrickPlayer 静音 |
-| `--ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows 下 MagicaLego 视频录制不可用 |
+| `ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer 缺 LDraw 零件库 |
+| `optional` | `optional.pak` | `assets/paks/` | 主渲染器 / Editor / CharacterDemo / MagicaLego 缺场景资源 |
+| `sfx` | 6 个 mp3/wav | `assets/sfx/` | MagicaLego / BrickPlayer 静音 |
+| `ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows 下 MagicaLego 视频录制不可用 |
 
 ```bash
 # Linux / macOS / Git Bash：默认拉取全部可选资源
-./scripts/fetch-paks.sh
+./gnb.sh paks fetch
 
 # 或只拉指定资源
-./scripts/fetch-paks.sh --optional --ldraw
-./scripts/fetch-paks.sh --ffmpeg --sfx
+./gnb.sh paks fetch optional ldraw
+./gnb.sh paks fetch ffmpeg sfx
 
 # Windows
-scripts\fetch-paks.bat
+gnb.bat paks fetch
 ```
 
 ## 子项目

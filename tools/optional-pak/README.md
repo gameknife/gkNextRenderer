@@ -7,23 +7,23 @@ falls back to pak entries for any file missing on disk.
 
 ## Downloading the prebuilt pak
 
-The canonical fetcher is at the top-level `scripts/fetch-paks.*` and pulls every
-optional pak (`ldraw.pak` and `optional.pak`) from the project's GitHub release:
+The canonical fetcher is `gnb paks fetch` and pulls optional paks from the
+project's GitHub release:
 
 ```bash
-# bash / zsh / Git Bash — fetch every optional pak
-./scripts/fetch-paks.sh
+# bash / zsh / Git Bash - fetch every optional pak
+./gnb.sh paks fetch
 
 # Only this pak
-./scripts/fetch-paks.sh --optional
+./gnb.sh paks fetch optional
 
 # Windows
-scripts\fetch-paks.bat --optional
+gnb.bat paks fetch optional
 ```
 
 The legacy `tools/optional-pak/fetch-optional-pak.{sh,ps1}` scripts still work
-and now delegate to the canonical fetcher. See `scripts/fetch-paks.sh --help`
-for environment overrides (`PAKS_REPO`, `PAKS_RELEASE_TAG`, `PAKS_BASE_URL`).
+and now delegate to gnb. Environment overrides remain supported:
+`PAKS_REPO`, `PAKS_RELEASE_TAG`, and `PAKS_BASE_URL`.
 
 ## Rebuilding the pak
 
@@ -31,8 +31,8 @@ Edit [`optional-files.txt`](./optional-files.txt) to add or remove entries
 (paths are relative to the repo root). Then:
 
 ```bash
-# Build the Packager first (any preset works):
-cmake --build --preset full-macos-arm64 --target Packager
+# Build the Packager first:
+./gnb.sh build Packager
 
 # Then pack the listed files:
 ./tools/optional-pak/build-optional-pak.sh
@@ -41,7 +41,7 @@ cmake --build --preset full-macos-arm64 --target Packager
 PowerShell equivalent:
 
 ```powershell
-cmake --build --preset full-windows --target Packager
+gnb.bat build Packager
 pwsh ./tools/optional-pak/build-optional-pak.ps1
 ```
 

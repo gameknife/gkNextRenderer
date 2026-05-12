@@ -1,0 +1,32 @@
+name: gnb publish
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'tools/gnb/**/*.go'
+      - 'tools/gnb/go.mod'
+      - 'tools/gnb/go.sum'
+  workflow_dispatch:
+
+concurrency:
+  group: gnb-paks-latest
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+      - name: Publish gnb to paks-latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: ./scripts/publish-gnb.ps1 -Repo '${{ github.repository }}' -Tag 'paks-latest' -Version '${{ github.sha }}' -SkipLocalCache

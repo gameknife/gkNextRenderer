@@ -1,0 +1,70 @@
+{
+  "synergies": [
+    {
+      "id": "远射",
+      "name": "远射",
+      "tiers": [
+        { "count": 2, "atkBonus": 0.15, "hpBonus": 0.0, "spdBonus": 0.0, "apBonus": 0.0 },
+        { "count": 3, "atkBonus": 0.30, "hpBonus": 0.0, "spdBonus": 0.0, "apBonus": 0.0 },
+        { "count": 4, "atkBonus": 0.50, "hpBonus": 0.0, "spdBonus": 0.0, "apBonus": 0.0 }
+      ]
+    },
+    {
+      "id": "近卫",
+      "name": "近卫",
+      "tiers": [
+        { "count": 2, "atkBonus": 0.0, "hpBonus": 0.20, "spdBonus": 0.0, "apBonus": 0.0 },
+        { "count": 3, "atkBonus": 0.0, "hpBonus": 0.40, "spdBonus": 0.0, "apBonus": 0.0 },
+        { "count": 4, "atkBonus": 0.0, "hpBonus": 0.60, "spdBonus": 0.0, "apBonus": 0.0 }
+      ]
+    },
+    {
+      "id": "法师",
+      "name": "法师",
+      "tiers": [
+        { "count": 2, "atkBonus": 0.0, "hpBonus": 0.0, "spdBonus": 0.0, "apBonus": 0.20 },
+        { "count": 3, "atkBonus": 0.0, "hpBonus": 0.0, "spdBonus": 0.0, "apBonus": 0.40 }
+      ]
+    },
+    {
+      "id": "骑士",
+      "name": "骑士",
+      "tiers": [
+        { "count": 2, "atkBonus": 0.0, "hpBonus": 0.25, "spdBonus": 0.0, "apBonus": 0.0 },
+        { "count": 3, "atkBonus": 0.0, "hpBonus": 0.50, "spdBonus": 0.0, "apBonus": 0.0 }
+      ]
+    },
+    {
+      "id": "联盟",
+      "name": "联盟",
+      "tiers": [
+        { "count": 2, "atkBonus": 0.0, "hpBonus": 0.0, "spdBonus": 0.10, "apBonus": 0.0 },
+        { "count": 3, "atkBonus": 0.0, "hpBonus": 0.0, "spdBonus": 0.20, "apBonus": 0.0 }
+      ]
+    },
+    {
+      "id": "秘术",
+      "name": "秘术",
+      "tiers": [
+        { "count": 2, "atkBonus": 0.0, "hpBonus": 0.0, "spdBonus": 0.0, "apBonus": 0.15 },
+        { "count": 3, "atkBonus": 0.0, "hpBonus": 0.0, "spdBonus": 0.0, "apBonus": 0.30 }
+      ]
+    },
+    {
+      "id": "守卫",
+      "name": "守卫",
+      "tiers": [
+        { "count": 2, "atkBonus": 0.0, "hpBonus": 0.15, "spdBonus": 0.0, "apBonus": 0.0 },
+        { "count": 3, "atkBonus": 0.0, "hpBonus": 0.30, "spdBonus": 0.0, "apBonus": 0.0 }
+      ]
+    },
+    {
+      "id": "斗士",
+      "name": "斗士",
+      "tiers": [
+        { "count": 2, "atkBonus": 0.20, "hpBonus": 0.0, "spdBonus": 0.0, "apBonus": 0.0 },
+        { "count": 3, "atkBonus": 0.40, "hpBonus": 0.0, "spdBonus": 0.0, "apBonus": 0.0 }
+      ]
+    }
+  ]
+}

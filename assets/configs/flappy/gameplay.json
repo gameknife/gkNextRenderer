@@ -1,0 +1,39 @@
+{
+  "camera": {
+    "position": [0.0, 0.0, 12.0],
+    "target": [0.0, 0.0, 0.0],
+    "up": [0.0, 1.0, 0.0],
+    "fieldOfView": 50.0
+  },
+  "world": {
+    "minX": -10.0,
+    "maxX": 10.0,
+    "minY": -5.6,
+    "maxY": 5.6,
+    "gameplayZ": 0.0
+  },
+  "bird": {
+    "initialPosition": [-3.0, 0.0, 0.0],
+    "radius": 0.4,
+    "gravity": -22.0,
+    "flapVelocity": 7.5,
+    "minVelocity": -10.0,
+    "maxVelocity": 10.0
+  },
+  "pipe": {
+    "width": 1.0,
+    "gapHeight": 2.6,
+    "gapCenterMinY": -2.5,
+    "gapCenterMaxY": 2.5,
+    "spawnInterval": 1.6,
+    "spawnX": 12.0,
+    "destroyX": -12.0,
+    "speed": 3.0,
+    "poolSize": 12
+  },
+  "fixedDeltaSeconds": 0.0166666675,
+  "deadHitStopSeconds": 0.5,
+  "determinism": {
+    "rngSeed": 12648430
+  }
+}

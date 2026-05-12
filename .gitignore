@@ -349,6 +349,9 @@ slang/
 tools/node/
 tools/typescript/
 tools/tsc/
+tools/gnb-bin/
+/gnb
+/gnb.exe
 cmake-build-*/
 .DS_Store
 .VSCodeCounter/
@@ -414,3 +417,7 @@ assets/sfx/*.wav
 
 # SDL3 Android archive — pulled by android/app/build.gradle's downloadSdlAar task.
 android/app/libs/SDL3-*.aar
+
+# Phase 3 占位资产 — 受版权保护，不得入库
+assets/_placeholder/*
+!assets/_placeholder/README.md

@@ -5,10 +5,10 @@
 [English](README.en.md) | [简体中文](README.md)
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/gameknife/gkNextEngine)
-![Windows CI](https://github.com/gameknife/gkNextEngine/actions/workflows/windows.yml/badge.svg)
-![Linux CI](https://github.com/gameknife/gkNextEngine/actions/workflows/linux.yml/badge.svg)
-![macOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/macos.yml/badge.svg)
-![Android CI](https://github.com/gameknife/gkNextEngine/actions/workflows/android.yml/badge.svg)
+![Windows CI](https://github.com/gameknife/gkNextEngine/actions/workflows/windows_self.yml/badge.svg)
+![Linux CI](https://github.com/gameknife/gkNextEngine/actions/workflows/linux_self.yml/badge.svg)
+![macOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/macos_self.yml/badge.svg)
+![Android CI](https://github.com/gameknife/gkNextEngine/actions/workflows/android_self.yml/badge.svg)
 ![iOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/ios.yml/badge.svg)
 
 ![Kitchen Scene](docs/gallery/4_playground.avif)
@@ -96,7 +96,7 @@ This project is especially relevant if you are interested in:
 - **Modern CMake Presets + vcpkg**
 - **Cross-platform runtime: desktop / Android / iOS**
 - **ImGui Editor + node-based material workflow**
-- **QuickJS runtime scripting**
+- **QuickJS runtime scripting with bundled TypeScript hot reload via `tools/tsc/tsc[.exe]`, no Node/npm dependency**
 - **Visual Test / Benchmark / Packager**
 
 ### AI Native
@@ -128,13 +128,14 @@ This project is especially relevant if you are interested in:
 
 ## Quick Start
 
-The project uses CMake + Ninja, with dependencies managed through vcpkg. You will need a network environment that can access GitHub during dependency setup.
+The project uses CMake + Ninja, with dependencies managed through vcpkg. Beyond the host-side basics you must already have installed (compiler / IDE, CMake, platform SDKs, and similar tools), project-specific dependencies, external toolchains, and optional assets are now prepared by `gnb` whenever possible. You will need a network environment that can access GitHub during dependency setup.
 
 ### General Notes
 
-- Desktop binaries can now be launched from any working directory, so you usually no longer need to `cd` into `out/build/<preset>/bin`
-- If you are unsure which preset is available, run `cmake --list-presets=configure`
-- Common desktop presets: `default-windows`, `default-linux`, `default-macos-arm64`
+- Start with `./gnb doctor` (Windows: `gnb.bat doctor`) to see which host-side tools are still missing
+- `./gnb setup` (Windows: `gnb.bat setup`) prepares vcpkg, project external toolchains, and optional pak assets; if you go straight to `./gnb build`, the first build will also bootstrap the core toolchain when needed
+- Desktop binaries are now built and launched through `gnb`, so you usually no longer need to `cd` into `out/build/<platform>/bin`
+- CMake presets are now: `windows`, `linux`, `macos-arm64`, `ios`
 
 ### Platform Builds
 
@@ -149,20 +150,12 @@ The project uses CMake + Ninja, with dependencies managed through vcpkg. You wil
 - Enable "Use Unicode UTF-8 for worldwide language support"
 
 ```bat
-.\build.bat --preset default-windows
-.\run.bat --preset default-windows
+gnb.bat setup
+gnb.bat build
+gnb.bat run gkNextRenderer
 ```
 
-</details>
-
-<details>
-<summary><b>Windows (MSYS2 MinGW)</b></summary>
-
-```shell
-pacman -S --needed git mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake mingw-w64-x86_64-toolchain
-./build.sh --preset default-mingw
-./run.sh --preset default-mingw
-```
+Aside from host-side requirements such as Visual Studio and the Vulkan SDK, the rest of the project dependencies are usually prepared by `gnb`.
 
 </details>
 
@@ -170,12 +163,14 @@ pacman -S --needed git mingw-w64-x86_64-ninja mingw-w64-x86_64-cmake mingw-w64-x
 <summary><b>Linux (Ubuntu)</b></summary>
 
 ```shell
-sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev libxinerama-dev libxcursor-dev xorg-dev autoconf autoconf-archive automake libtool python3.12-venv
-./build.sh --preset default-linux
-./run.sh --preset default-linux
+./gnb.sh setup
+./gnb.sh build
+./gnb.sh run gkNextRenderer
 ```
 
-`build.sh` now performs an early Linux desktop dependency check and will stop with an explicit hint if `xrandr`, `wayland-protocols`, or `xkbcommon` are missing.
+- On apt / pacman hosts, `gnb setup` and the first Linux `gnb build` automatically install the required desktop build packages before vcpkg bootstrap
+- If automatic installation is unavailable, install them manually: `sudo apt install build-essential cmake ninja-build curl zip unzip tar pkg-config libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev autoconf autoconf-archive automake libtool libsystemd-dev`
+- Non apt/pacman distributions still stop with an explicit missing desktop dependency hint
 
 </details>
 
@@ -183,15 +178,15 @@ sudo apt install build-essential cmake ninja-build curl zip unzip tar libxi-dev 
 <summary><b>Steam Deck / Arch Linux</b></summary>
 
 ```shell
-sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxrandr wayland-protocols libxkbcommon
-./build.sh --preset full-linux --reconfigure
-./run.sh --preset full-linux --target gkNextRenderer
+./gnb.sh setup
+./gnb.sh build --reconfigure
+./gnb.sh run gkNextRenderer
 ```
 
 Notes:
 
-- `full-linux` is the recommended verification preset for first deployment on Steam Deck
-- if `slangc` is not installed yet, `build.sh` will automatically fetch the project-managed Slang toolchain into `external/`
+- if `slangc` is not installed yet, `gnb setup` will automatically fetch the project-managed Slang toolchain into `external/`
+- on pacman hosts, `gnb setup` and the first Linux `gnb build` automatically install the required system packages before vcpkg bootstrap; if that is unavailable, run `sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxrandr wayland-protocols libxkbcommon systemd-libs` manually
 - if a GitHub archive download fails during vcpkg setup, rerun the same build command once before doing deeper troubleshooting
 - deployment notes from a real Steam Deck setup are available in [docs/steamdeck-deployment-notes.md](docs/steamdeck-deployment-notes.md)
 
@@ -200,11 +195,19 @@ Notes:
 <details>
 <summary><b>macOS</b></summary>
 
+**Prerequisites:**
+
+- Xcode / Command Line Tools
+- CMake 3.26+
+- Ninja (if your local CMake distribution does not already provide it)
+
 ```shell
-brew install molten-vk glslang ninja
-./build.sh --preset default-macos-arm64
-./run.sh --preset default-macos-arm64
+./gnb.sh setup
+./gnb.sh build
+./gnb.sh run gkNextRenderer
 ```
+
+`gnb setup` automatically downloads the Slang and TypeScript toolchains used by the project, so those project-level dependencies no longer need to be installed separately.
 
 </details>
 
@@ -216,9 +219,11 @@ brew install molten-vk glslang ninja
 ```bat
 set ANDROID_HOME=C:\Android\Sdk
 set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\27.0.12077973
-build.bat --android
-run.bat --preset android
+gnb.bat setup --vcpkg-only
+gnb.bat android
 ```
+
+Android still depends on the host machine to provide JDK / SDK / NDK, while project-local vcpkg dependencies and external toolchains continue to be prepared by `gnb`.
 
 </details>
 
@@ -226,16 +231,16 @@ run.bat --preset android
 
 ```shell
 # Main renderer
-./run.sh --preset default-macos-arm64 --target gkNextRenderer
+./gnb.sh run gkNextRenderer
 
 # Editor
-./run.sh --preset default-macos-arm64 --target gkNextEditor
+./gnb.sh run gkNextEditor
 
 # BrickPlayer (digital LEGO / LDraw building prototype)
-./run.sh --preset default-macos-arm64 --target BrickPlayer
+./gnb.sh run BrickPlayer
 
 # CharacterDemo (character control / AI / navigation experiment)
-./run.sh --preset default-macos-arm64 --target CharacterDemo
+./gnb.sh run CharacterDemo
 ```
 
 ### Optional Assets
@@ -244,21 +249,21 @@ Some larger binary assets are not committed to the repo. Fetch them as needed:
 
 | Selector | Contents | Lands at | If missing |
 |------|------|------|------|
-| `--ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer loses its LDraw parts library |
-| `--optional` | `optional.pak` | `assets/paks/` | Main renderer / Editor / CharacterDemo / MagicaLego lose their scene assets |
-| `--sfx` | six mp3/wav files | `assets/sfx/` | MagicaLego / BrickPlayer go silent |
-| `--ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows MagicaLego video capture disabled |
+| `ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer loses its LDraw parts library |
+| `optional` | `optional.pak` | `assets/paks/` | Main renderer / Editor / CharacterDemo / MagicaLego lose their scene assets |
+| `sfx` | six mp3/wav files | `assets/sfx/` | MagicaLego / BrickPlayer go silent |
+| `ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows MagicaLego video capture disabled |
 
 ```bash
 # Linux / macOS / Git Bash: fetch every optional asset by default
-./scripts/fetch-paks.sh
+./gnb.sh paks fetch
 
 # Or fetch specific groups
-./scripts/fetch-paks.sh --optional --ldraw
-./scripts/fetch-paks.sh --ffmpeg --sfx
+./gnb.sh paks fetch optional ldraw
+./gnb.sh paks fetch ffmpeg sfx
 
 # Windows
-scripts\fetch-paks.bat
+gnb.bat paks fetch
 ```
 
 ## Subprojects
