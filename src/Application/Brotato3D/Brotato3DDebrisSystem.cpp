@@ -613,20 +613,12 @@ void Brotato3DGameInstance::UpdateDebris(double deltaSeconds)
                 Brotato3D::PlayPickupMaterialSfx();
                 player_.materials += slot.payloadValue;
                 totalMaterialsGained_ += slot.payloadValue;
-                PushFloatingText(player_.worldPos + glm::vec3(0.0f, 0.2f, 0.0f),
-                                 fmt::format("+{} MAT", slot.payloadValue),
-                                 glm::vec4(1.0f, 0.85f, 0.15f, 1.0f),
-                                 500.0f);
                 spdlog::info("[Brotato3D] Materials {}", player_.materials);
             }
             else if (slot.payload == Brotato3D::EDebrisPayload::Xp)
             {
                 Brotato3D::PlayPickupXpSfx();
                 player_.currentXp += slot.payloadValue;
-                PushFloatingText(player_.worldPos + glm::vec3(0.0f, 0.6f, 0.0f),
-                                 fmt::format("+{} XP", slot.payloadValue),
-                                 glm::vec4(0.2f, 1.0f, 0.35f, 1.0f),
-                                 500.0f);
                 while (player_.currentXp >= GetXpToNextLevel())
                 {
                     player_.currentXp -= GetXpToNextLevel();
@@ -675,7 +667,10 @@ void Brotato3DGameInstance::ClearAllDebris(bool keepPickable)
     }
 }
 
-void Brotato3DGameInstance::SpawnHitXpDebris(const glm::vec3& worldPos, const glm::vec3& projectileDir, int damage)
+void Brotato3DGameInstance::SpawnHitXpDebris(const glm::vec3& worldPos,
+                                             const glm::vec3& projectileDir,
+                                             int damage,
+                                             uint32_t materialId)
 {
     if (damage <= 0)
     {
@@ -697,7 +692,7 @@ void Brotato3DGameInstance::SpawnHitXpDebris(const glm::vec3& worldPos, const gl
                 glm::vec3(spawnPos.x, std::max(0.25f, spawnPos.y), spawnPos.z),
                 impulseDir,
                 HitXpSpeed,
-                xpDebrisMatId_ != 0 ? xpDebrisMatId_ : debrisFallbackTinyMatId_,
+                materialId != 0 ? materialId : (xpDebrisMatId_ != 0 ? xpDebrisMatId_ : debrisFallbackTinyMatId_),
                 count,
                 HitXpConeRad,
                 Brotato3D::EDebrisPayload::Xp,

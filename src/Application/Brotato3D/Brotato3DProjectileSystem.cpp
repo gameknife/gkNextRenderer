@@ -113,8 +113,10 @@ void Brotato3DGameInstance::UpdateWeapons(double deltaSeconds)
             const glm::vec3 hitPos = target->worldPos + glm::vec3(0.0f, target->def ? target->def->size.y * 0.5f : 0.4f, 0.0f);
             target->lastHitDebrisDir = dir;
             ApplyWeaponKnockback(*target, dir, weapon.def->knockbackMeters);
+            const uint32_t hitMaterialId = target->bossPhase2Active && target->phase2MaterialId != 0 ? target->phase2MaterialId :
+                                                                                                        target->materialId;
             const int effectiveDamage = ApplyDamageToEnemy(*target, weaponDamage, isCrit);
-            SpawnHitXpDebris(hitPos, dir, effectiveDamage);
+            SpawnHitXpDebris(hitPos, dir, effectiveDamage, hitMaterialId);
             PushLaserBeam(player_.worldPos + glm::vec3(0.0f, 0.25f, 0.0f),
                           hitPos,
                           glm::vec4(weapon.def->projectileColor, 1.0f),
@@ -222,9 +224,11 @@ void Brotato3DGameInstance::UpdateProjectiles(double deltaSeconds)
                         enemy.lastHitDebrisDir = glm::normalize(glm::vec3(projectile.velocity.x, 0.0f, projectile.velocity.z));
                     }
                     ApplyWeaponKnockback(enemy, projectile.velocity, projectile.knockbackMeters);
+                    const uint32_t hitMaterialId = enemy.bossPhase2Active && enemy.phase2MaterialId != 0 ? enemy.phase2MaterialId :
+                                                                                                           enemy.materialId;
                     const int effectiveDamage = ApplyDamageToEnemy(enemy, projectile.damage, projectile.isCrit);
                     const glm::vec3 hitDir = glm::length(projectile.velocity) > 0.001f ? projectile.velocity : enemy.worldPos - player_.worldPos;
-                    SpawnHitXpDebris(projectile.worldPos, hitDir, effectiveDamage);
+                    SpawnHitXpDebris(projectile.worldPos, hitDir, effectiveDamage, hitMaterialId);
 
                     if (projectile.explosionRadius > 0.0f && projectile.explosionDamage > 0)
                     {
@@ -253,11 +257,15 @@ void Brotato3DGameInstance::UpdateProjectiles(double deltaSeconds)
                                     aoeEnemy,
                                     glm::length(blastDir) > 0.001f ? blastDir : projectile.velocity,
                                     projectile.knockbackMeters * 0.65f);
+                                const uint32_t aoeHitMaterialId = aoeEnemy.bossPhase2Active && aoeEnemy.phase2MaterialId != 0 ?
+                                    aoeEnemy.phase2MaterialId :
+                                    aoeEnemy.materialId;
                                 const int effectiveAoeDamage = ApplyDamageToEnemy(aoeEnemy, projectile.explosionDamage, false);
                                 const glm::vec3 impactDir = glm::length(blastDir) > 0.001f ? blastDir : projectile.velocity;
                                 SpawnHitXpDebris(aoeEnemy.worldPos + glm::vec3(0.0f, aoeEnemy.def ? aoeEnemy.def->size.y * 0.45f : 0.35f, 0.0f),
                                                  impactDir,
-                                                 effectiveAoeDamage);
+                                                 effectiveAoeDamage,
+                                                 aoeHitMaterialId);
                             }
                         }
                         deactivate = true;

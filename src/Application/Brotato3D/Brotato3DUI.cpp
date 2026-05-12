@@ -56,6 +56,10 @@ namespace
 
     ImTextureID LoadHudTexture(Brotato3DGameInstance& gameInstance, const std::string& relPath)
     {
+        if (relPath.starts_with("panel_"))
+        {
+            return EmptyTexture();
+        }
         return LoadUiTexture(gameInstance, Brotato3D::PlaceholderAssets::Hud(relPath));
     }
 
@@ -84,12 +88,78 @@ namespace
         return font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, text.c_str());
     }
 
+    void DrawOutlinedBoldText(ImDrawList* drawList,
+                              ImFont* font,
+                              float fontSize,
+                              const ImVec2& pos,
+                              ImU32 textColor,
+                              ImU32 outlineColor,
+                              const std::string& text,
+                              float outlinePx,
+                              float boldPx)
+    {
+        const std::array<ImVec2, 8> outlineOffsets = {
+            ImVec2(-outlinePx, 0.0f),
+            ImVec2(outlinePx, 0.0f),
+            ImVec2(0.0f, -outlinePx),
+            ImVec2(0.0f, outlinePx),
+            ImVec2(-outlinePx, -outlinePx),
+            ImVec2(outlinePx, -outlinePx),
+            ImVec2(-outlinePx, outlinePx),
+            ImVec2(outlinePx, outlinePx),
+        };
+
+        for (const ImVec2& offset : outlineOffsets)
+        {
+            drawList->AddText(font, fontSize, ImVec2(pos.x + offset.x, pos.y + offset.y), outlineColor, text.c_str());
+        }
+        drawList->AddText(font, fontSize, ImVec2(pos.x - boldPx, pos.y), textColor, text.c_str());
+        drawList->AddText(font, fontSize, ImVec2(pos.x + boldPx, pos.y), textColor, text.c_str());
+        drawList->AddText(font, fontSize, pos, textColor, text.c_str());
+    }
+
     using NextUI::Painter::DrawBar;
     using NextUI::Painter::DrawFullscreenDim;
     using NextUI::Painter::DrawImageContain;
     using NextUI::Painter::DrawImageCover;
-    using NextUI::Painter::DrawPanel;
     using NextUI::Painter::DrawTexturedBar;
+
+    void DrawPanel(ImDrawList* drawList,
+                   ImTextureID texture,
+                   const ImVec2& min,
+                   const ImVec2& max,
+                   ImU32 fallbackColor,
+                   float rounding,
+                   ImU32 tint = IM_COL32_WHITE,
+                   const ImVec2& textureSize = ImVec2(64.0f, 64.0f))
+    {
+        (void)texture;
+        (void)tint;
+        (void)textureSize;
+        if (!drawList)
+        {
+            return;
+        }
+
+        drawList->AddRectFilled(min, max, fallbackColor, rounding);
+        drawList->AddRect(min, max, IM_COL32(0, 0, 0, 230), rounding, 0, 2.0f);
+    }
+
+    void DrawMaterialIcon(ImDrawList* drawList, const ImVec2& center, float radius, float scale)
+    {
+        const std::array<ImVec2, 4> points = {
+            ImVec2(center.x, center.y - radius),
+            ImVec2(center.x + radius * 0.86f, center.y),
+            ImVec2(center.x, center.y + radius),
+            ImVec2(center.x - radius * 0.86f, center.y),
+        };
+        drawList->AddConvexPolyFilled(points.data(), static_cast<int>(points.size()), IM_COL32(255, 204, 54, 255));
+        drawList->AddPolyline(points.data(), static_cast<int>(points.size()), IM_COL32(0, 0, 0, 235), true, 2.0f * scale);
+        drawList->AddCircleFilled(ImVec2(center.x - radius * 0.18f, center.y - radius * 0.18f),
+                                  radius * 0.22f,
+                                  IM_COL32(255, 244, 150, 220),
+                                  12);
+    }
 
     std::string FormatTime(float seconds)
     {
@@ -874,9 +944,16 @@ namespace Brotato3D
         const FWaveDef* waveDef = waveSystem.GetCurrentWaveDef();
         const ImTextureID panelNormal = LoadHudTexture(gameInstance, "panel_normal.png");
         const ImTextureID panelFlat = LoadHudTexture(gameInstance, "panel_flat.png");
+        const bool suppressForegroundUi = gameInstance.GetAppState() == EAppState::LevelUpPicking;
 
-        ImGui::SetNextWindowPos(Scale(8.0f, 8.0f, uiScale), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(Scale(280.0f, 112.0f, uiScale), ImGuiCond_Always);
+        constexpr float bottomPanelHeight = 62.0f;
+        constexpr float bottomPanelMargin = 10.0f;
+        const ImU32 bottomPanelColor = IM_COL32(14, 16, 20, 128);
+        const ImVec2 statusPanelSize = Scale(430.0f, bottomPanelHeight, uiScale);
+        ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + (viewport->Size.x - statusPanelSize.x) * 0.5f,
+                                       viewport->Pos.y + viewport->Size.y - (bottomPanelHeight + bottomPanelMargin) * uiScale),
+                                ImGuiCond_Always);
+        ImGui::SetNextWindowSize(statusPanelSize, ImGuiCond_Always);
         ImGui::Begin("PlayerPanel", nullptr,
                      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                          ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoNav);
@@ -884,102 +961,136 @@ namespace Brotato3D
                   panelNormal,
                   ImGui::GetWindowPos(),
                   ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, ImGui::GetWindowPos().y + ImGui::GetWindowSize().y),
-                  IM_COL32(14, 16, 22, 210),
+                  bottomPanelColor,
                   8.0f * uiScale,
                   IM_COL32(78, 92, 110, 245));
         ImGui::SetWindowFontScale(uiScale);
-        ImGui::SetCursorPos(Scale(18.0f, 14.0f, uiScale));
+        ImGui::SetCursorPos(Scale(16.0f, 17.0f, uiScale));
         DrawBar(ImGui::GetCursorScreenPos(),
-                Scale(244.0f, 24.0f, uiScale),
+                Scale(164.0f, 24.0f, uiScale),
                 hpRatio,
                 IM_COL32(210, 68, 58, 255),
                 fmt::format("HP {} / {}", player.currentHp, player.maxHp).c_str(),
                 uiScale);
-        ImGui::SetCursorPos(Scale(18.0f, 44.0f, uiScale));
+
+        const std::string levelText = fmt::format("Lv {}", player.level);
+        const float levelFontSize = ImGui::GetFontSize() * 1.18f;
+        const ImVec2 levelTextSize = CalcFontTextSize(gameInstance.GetBigFont(), levelFontSize, levelText);
+        const ImVec2 levelPos(ImGui::GetWindowPos().x + (statusPanelSize.x - levelTextSize.x) * 0.5f,
+                              ImGui::GetWindowPos().y + (statusPanelSize.y - levelTextSize.y) * 0.5f);
+        DrawOutlinedBoldText(ImGui::GetWindowDrawList(),
+                             gameInstance.GetBigFont(),
+                             levelFontSize,
+                             levelPos,
+                             IM_COL32(255, 245, 210, 255),
+                             IM_COL32(0, 0, 0, 210),
+                             levelText,
+                             1.2f * uiScale,
+                             0.6f * uiScale);
+
+        ImGui::SetCursorPos(Scale(250.0f, 17.0f, uiScale));
         DrawBar(ImGui::GetCursorScreenPos(),
-                Scale(244.0f, 18.0f, uiScale),
+                Scale(164.0f, 24.0f, uiScale),
                 xpToNext > 0 ? static_cast<float>(player.currentXp) / static_cast<float>(xpToNext) : 0.0f,
                 IM_COL32(72, 135, 245, 255),
-                fmt::format("Lv {}  XP {}/{}", player.level, player.currentXp, xpToNext).c_str(),
+                fmt::format("XP {} / {}", player.currentXp, xpToNext).c_str(),
                 uiScale);
-        ImGui::SetCursorPos(Scale(18.0f, 68.0f, uiScale));
-        ImGui::TextUnformatted(gameInstance.IsPlayerDashing() ? "DASH" : "Dash Shift / X");
-        const int dashCharges = gameInstance.GetDashCharges();
-        const int dashMaxCharges = gameInstance.GetDashMaxCharges();
-        const float chargeSize = 13.0f * uiScale;
-        const float chargeGap = 7.0f * uiScale;
-        ImVec2 chargeMin(ImGui::GetWindowPos().x + 132.0f * uiScale, ImGui::GetWindowPos().y + 69.0f * uiScale);
-        for (int chargeIndex = 0; chargeIndex < dashMaxCharges; ++chargeIndex)
-        {
-            const ImVec2 min(chargeMin.x + static_cast<float>(chargeIndex) * (chargeSize + chargeGap), chargeMin.y);
-            const ImVec2 max(min.x + chargeSize, min.y + chargeSize);
-            const bool filled = chargeIndex < dashCharges;
-            ImGui::GetWindowDrawList()->AddRectFilled(min,
-                                                      max,
-                                                      filled ? IM_COL32(92, 230, 255, 245) : IM_COL32(40, 52, 62, 210),
-                                                      3.0f * uiScale);
-            if (!filled && chargeIndex == dashCharges && gameInstance.GetDashCooldownRatio() > 0.0f)
-            {
-                const float ratio = gameInstance.GetDashCooldownRatio();
-                ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(min.x, max.y - chargeSize * ratio),
-                                                          max,
-                                                          IM_COL32(92, 210, 170, 230),
-                                                          3.0f * uiScale);
-            }
-            ImGui::GetWindowDrawList()->AddRect(min, max, IM_COL32(170, 225, 235, 210), 3.0f * uiScale, 0, 1.0f * uiScale);
-        }
         ImGui::End();
 
-        ImGui::SetNextWindowPos(ImVec2((viewport->Size.x - 260.0f * uiScale) * 0.5f, 8.0f * uiScale), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(Scale(320.0f, 88.0f, uiScale), ImGuiCond_Always);
-        ImGui::Begin("WavePanel", nullptr,
-                     ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
-                         ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoNav);
-        DrawPanel(ImGui::GetWindowDrawList(),
-                  panelFlat,
-                  ImGui::GetWindowPos(),
-                  ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, ImGui::GetWindowPos().y + ImGui::GetWindowSize().y),
-                  IM_COL32(12, 16, 20, 180),
-                  8.0f * uiScale,
-                  IM_COL32(62, 74, 90, 235));
-        ImGui::SetWindowFontScale(uiScale);
-        ImGui::SetCursorPos(Scale(22.0f, 14.0f, uiScale));
-        ImGui::Text("%s", TrFormat(gameInstance,
-                                    "hud.wave",
-                                    "第 {0} / {1} 波",
-                                    std::min(waveSystem.GetCurrentWaveIndex() + 1, waveSystem.GetWaveCount()),
-                                    waveSystem.GetWaveCount()).c_str());
+        ImDrawList* foregroundDrawList = ImGui::GetForegroundDrawList();
+        ImVec2 playerScreen{};
+        const int dashCharges = gameInstance.GetDashCharges();
+        const int dashMaxCharges = gameInstance.GetDashMaxCharges();
+        if (!suppressForegroundUi && NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, player.worldPos, playerScreen))
+        {
+            const float chargeSize = 12.0f * uiScale;
+            const float chargeGap = 5.0f * uiScale;
+            const float totalChargeWidth = static_cast<float>(dashMaxCharges) * chargeSize +
+                                           static_cast<float>(std::max(0, dashMaxCharges - 1)) * chargeGap;
+            const ImVec2 chargeMin(playerScreen.x - totalChargeWidth * 0.5f, playerScreen.y + 34.0f * uiScale);
+            for (int chargeIndex = 0; chargeIndex < dashMaxCharges; ++chargeIndex)
+            {
+                const ImVec2 min(chargeMin.x + static_cast<float>(chargeIndex) * (chargeSize + chargeGap), chargeMin.y);
+                const ImVec2 max(min.x + chargeSize, min.y + chargeSize);
+                const ImVec2 innerMin(min.x + 2.0f * uiScale, min.y + 2.0f * uiScale);
+                const ImVec2 innerMax(max.x - 2.0f * uiScale, max.y - 2.0f * uiScale);
+                const bool filled = chargeIndex < dashCharges;
+                foregroundDrawList->AddRectFilled(min, max, IM_COL32(7, 10, 14, 205), 3.0f * uiScale);
+                foregroundDrawList->AddRectFilled(innerMin,
+                                                  innerMax,
+                                                  filled ? IM_COL32(92, 230, 255, 245) : IM_COL32(34, 42, 50, 210),
+                                                  2.0f * uiScale);
+                if (!filled && chargeIndex == dashCharges && gameInstance.GetDashCooldownRatio() > 0.0f)
+                {
+                    const float ratio = gameInstance.GetDashCooldownRatio();
+                    foregroundDrawList->AddRectFilled(ImVec2(innerMin.x, innerMax.y - (innerMax.y - innerMin.y) * ratio),
+                                                      innerMax,
+                                                      IM_COL32(92, 210, 170, 230),
+                                                      2.0f * uiScale);
+                }
+                foregroundDrawList->AddRect(min, max, IM_COL32(170, 225, 235, 210), 3.0f * uiScale, 0, 1.0f * uiScale);
+            }
+        }
+
+        ImDrawList* hudDrawList = ImGui::GetForegroundDrawList();
+        const std::string waveText = TrFormat(gameInstance,
+                                              "hud.wave",
+                                              "第 {0} / {1} 波",
+                                              std::min(waveSystem.GetCurrentWaveIndex() + 1, waveSystem.GetWaveCount()),
+                                              waveSystem.GetWaveCount());
+        std::string waveStateText;
+        ImU32 waveStateColor = IM_COL32(255, 245, 215, 255);
         if (waveSystem.GetState() == EWaveState::Active)
         {
             const float remaining = waveSystem.GetWaveTimeRemainingSec();
             if (remaining < 5.0f)
             {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.22f, 0.18f, 1.0f));
+                waveStateColor = IM_COL32(255, 72, 56, 255);
             }
-            ImGui::Text("DUSK IN %s", FormatTime(remaining).c_str());
-            if (remaining < 5.0f)
-            {
-                ImGui::PopStyleColor();
-            }
+            waveStateText = fmt::format("DUSK IN {}", FormatTime(remaining));
         }
         else if (waveSystem.GetState() == EWaveState::DuskSurge)
         {
             const float pulse = 0.55f + 0.45f * std::sin(static_cast<float>(ImGui::GetTime()) * 8.0f) *
                                           std::sin(static_cast<float>(ImGui::GetTime()) * 8.0f);
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.28f + pulse * 0.35f, 0.16f, 1.0f));
-            ImGui::TextUnformatted("EXTRACT NOW");
-            ImGui::PopStyleColor();
+            waveStateColor = ImGui::ColorConvertFloat4ToU32(ImVec4(1.0f, 0.28f + pulse * 0.35f, 0.16f, 1.0f));
+            waveStateText = "EXTRACT NOW";
         }
         else if (gameInstance.GetAppState() == EAppState::Shopping)
         {
-            ImGui::Text("%s", Tr(gameInstance, "hud.shop_phase", "商店阶段").c_str());
+            waveStateText = Tr(gameInstance, "hud.shop_phase", "商店阶段");
         }
         else
         {
-            ImGui::Text("%s", Tr(gameInstance, "hud.ready", "准备").c_str());
+            waveStateText = Tr(gameInstance, "hud.ready", "准备");
         }
-        float iconX = ImGui::GetWindowPos().x + 22.0f * uiScale;
-        const float iconY = ImGui::GetWindowPos().y + 60.0f * uiScale;
+
+        const float waveFontSize = ImGui::GetFontSize() * 1.15f * uiScale;
+        const float stateFontSize = ImGui::GetFontSize() * 1.38f * uiScale;
+        const ImVec2 waveTextSize = CalcFontTextSize(gameInstance.GetBigFont(), waveFontSize, waveText);
+        const ImVec2 stateTextSize = CalcFontTextSize(gameInstance.GetBigFont(), stateFontSize, waveStateText);
+        const float topCenterX = viewport->Pos.x + viewport->Size.x * 0.5f;
+        DrawOutlinedBoldText(hudDrawList,
+                             gameInstance.GetBigFont(),
+                             waveFontSize,
+                             ImVec2(topCenterX - waveTextSize.x * 0.5f, viewport->Pos.y + 10.0f * uiScale),
+                             IM_COL32(255, 255, 255, 245),
+                             IM_COL32(0, 0, 0, 245),
+                             waveText,
+                             1.6f * uiScale,
+                             0.45f * uiScale);
+        DrawOutlinedBoldText(hudDrawList,
+                             gameInstance.GetBigFont(),
+                             stateFontSize,
+                             ImVec2(topCenterX - stateTextSize.x * 0.5f, viewport->Pos.y + 32.0f * uiScale),
+                             waveStateColor,
+                             IM_COL32(0, 0, 0, 245),
+                             waveStateText,
+                             1.8f * uiScale,
+                             0.55f * uiScale);
+
+        float iconX = topCenterX - 42.0f * uiScale;
+        const float iconY = viewport->Pos.y + 61.0f * uiScale;
         if (waveDef)
         {
             std::unordered_set<std::string> seenEnemyIds;
@@ -993,39 +1104,40 @@ namespace Brotato3D
                 const ImTextureID icon = iconId ? LoadIconTexture(gameInstance, "enemies", iconId) : EmptyTexture();
                 const ImVec2 min(iconX, iconY);
                 const ImVec2 max(iconX + 24.0f * uiScale, iconY + 24.0f * uiScale);
-                DrawPanel(ImGui::GetWindowDrawList(), EmptyTexture(), min, max, IM_COL32(20, 24, 28, 200), 4.0f * uiScale);
+                hudDrawList->AddRectFilled(min, max, IM_COL32(255, 255, 255, 34), 4.0f * uiScale);
+                hudDrawList->AddRect(min, max, IM_COL32(0, 0, 0, 230), 4.0f * uiScale, 0, 1.5f * uiScale);
                 if (icon)
                 {
-                    ImGui::GetWindowDrawList()->AddImage(icon, min, max);
+                    hudDrawList->AddImage(icon, min, max);
                 }
                 iconX += 30.0f * uiScale;
-                if (iconX > ImGui::GetWindowPos().x + 296.0f * uiScale)
+                if (iconX > topCenterX + 54.0f * uiScale)
                 {
                     break;
                 }
             }
         }
-        ImGui::End();
 
-        ImGui::SetNextWindowPos(ImVec2(viewport->Size.x - 160.0f * uiScale, 8.0f * uiScale), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(Scale(150.0f, 50.0f, uiScale), ImGuiCond_Always);
-        ImGui::Begin("ResourcePanel", nullptr,
-                     ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
-                         ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoNav);
-        DrawPanel(ImGui::GetWindowDrawList(),
-                  panelFlat,
-                  ImGui::GetWindowPos(),
-                  ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, ImGui::GetWindowPos().y + ImGui::GetWindowSize().y),
-                  IM_COL32(16, 18, 22, 190),
-                  8.0f * uiScale,
-                  IM_COL32(64, 72, 84, 235));
-        ImGui::SetWindowFontScale(uiScale);
-        ImGui::SetCursorPos(Scale(22.0f, 16.0f, uiScale));
-        ImGui::Text("%s", TrFormat(gameInstance, "hud.materials", "材料：{0}", player.materials).c_str());
-        ImGui::End();
+        const std::string materialText = fmt::format("{}", player.materials);
+        const float materialFontSize = ImGui::GetFontSize() * 1.45f * uiScale;
+        const ImVec2 materialTextSize = CalcFontTextSize(gameInstance.GetBigFont(), materialFontSize, materialText);
+        const ImVec2 materialIconCenter(viewport->Pos.x + viewport->Size.x - 108.0f * uiScale,
+                                        viewport->Pos.y + 26.0f * uiScale);
+        DrawMaterialIcon(hudDrawList, materialIconCenter, 11.0f * uiScale, uiScale);
+        DrawOutlinedBoldText(hudDrawList,
+                             gameInstance.GetBigFont(),
+                             materialFontSize,
+                             ImVec2(materialIconCenter.x + 18.0f * uiScale, materialIconCenter.y - materialTextSize.y * 0.5f),
+                             IM_COL32(255, 226, 90, 255),
+                             IM_COL32(0, 0, 0, 245),
+                             materialText,
+                             1.8f * uiScale,
+                             0.55f * uiScale);
 
-        ImGui::SetNextWindowPos(ImVec2(viewport->Size.x - 246.0f * uiScale, viewport->Size.y - 58.0f * uiScale), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(Scale(236.0f, 48.0f, uiScale), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + viewport->Size.x - 246.0f * uiScale,
+                                       viewport->Pos.y + viewport->Size.y - (bottomPanelHeight + bottomPanelMargin) * uiScale),
+                                ImGuiCond_Always);
+        ImGui::SetNextWindowSize(Scale(236.0f, bottomPanelHeight, uiScale), ImGuiCond_Always);
         ImGui::Begin("ItemSlots", nullptr,
                      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                          ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoNav);
@@ -1033,11 +1145,11 @@ namespace Brotato3D
                   panelFlat,
                   ImGui::GetWindowPos(),
                   ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, ImGui::GetWindowPos().y + ImGui::GetWindowSize().y),
-                  IM_COL32(14, 15, 20, 180),
+                  bottomPanelColor,
                   8.0f * uiScale,
                   IM_COL32(58, 68, 84, 235));
         ImGui::SetWindowFontScale(uiScale);
-        ImGui::SetCursorPos(Scale(18.0f, 12.0f, uiScale));
+        ImGui::SetCursorPos(Scale(18.0f, 16.0f, uiScale));
         const auto& ownedItemIds = gameInstance.GetOwnedItemIds();
         for (size_t slotIndex = 0; slotIndex < 6; ++slotIndex)
         {
@@ -1088,8 +1200,10 @@ namespace Brotato3D
         }
         ImGui::End();
 
-        ImGui::SetNextWindowPos(ImVec2(8.0f * uiScale, viewport->Size.y - 86.0f * uiScale), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(Scale(374.0f, 76.0f, uiScale), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + 10.0f * uiScale,
+                                       viewport->Pos.y + viewport->Size.y - (bottomPanelHeight + bottomPanelMargin) * uiScale),
+                                ImGuiCond_Always);
+        ImGui::SetNextWindowSize(Scale(374.0f, bottomPanelHeight, uiScale), ImGuiCond_Always);
         ImGui::Begin("WeaponPanel", nullptr,
                      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                          ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoNav);
@@ -1097,17 +1211,17 @@ namespace Brotato3D
                   panelNormal,
                   ImGui::GetWindowPos(),
                   ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowSize().x, ImGui::GetWindowPos().y + ImGui::GetWindowSize().y),
-                  IM_COL32(14, 16, 20, 215),
+                  bottomPanelColor,
                   8.0f * uiScale,
                   IM_COL32(78, 90, 104, 245));
         ImGui::SetWindowFontScale(uiScale);
         const auto& weapons = gameInstance.GetWeapons();
         const FPlayerStats effectiveStats = gameInstance.GetEffectivePlayerStats();
-        ImGui::SetCursorPos(Scale(20.0f, 12.0f, uiScale));
+        ImGui::SetCursorPos(Scale(20.0f, 8.0f, uiScale));
         ImGui::Text("%s", Tr(gameInstance, "hud.weapons", "武器").c_str());
         ImGui::SameLine();
         ImGui::TextDisabled("%s", Tr(gameInstance, "hud.merge_hint", "3 把 T1 -> T2").c_str());
-        ImGui::SetCursorPos(Scale(18.0f, 32.0f, uiScale));
+        ImGui::SetCursorPos(Scale(18.0f, 27.0f, uiScale));
         for (size_t slotIndex = 0; slotIndex < 6; ++slotIndex)
         {
             if (slotIndex > 0)
@@ -1162,6 +1276,11 @@ namespace Brotato3D
             }
         }
         ImGui::End();
+
+        if (suppressForegroundUi)
+        {
+            return;
+        }
 
         ImDrawList* drawList = ImGui::GetForegroundDrawList();
         if (gameInstance.IsExtractionVehicleVisible())
@@ -1266,11 +1385,17 @@ namespace Brotato3D
             const float rise = (1.0f - alpha) * 30.0f * uiScale;
             glm::vec4 color = text.color;
             color.a *= alpha;
-            drawList->AddText(gameInstance.GetBigFont(),
-                              std::max(18.0f, 24.0f * uiScale * text.fontScale),
-                              ImVec2(screen.x, screen.y - rise),
-                              Color(color),
-                              text.text.c_str());
+            const float fontSize = std::max(22.0f, 28.0f * uiScale * text.fontScale);
+            const ImVec2 textSize = CalcFontTextSize(gameInstance.GetBigFont(), fontSize, text.text);
+            DrawOutlinedBoldText(drawList,
+                                 gameInstance.GetBigFont(),
+                                 fontSize,
+                                 ImVec2(screen.x - textSize.x * 0.5f, screen.y - rise - textSize.y * 0.5f),
+                                 Color(color),
+                                 IM_COL32(0, 0, 0, static_cast<int>(alpha * 245.0f)),
+                                 text.text,
+                                 2.0f * uiScale,
+                                 0.8f * uiScale);
         }
 
         for (const FGroundIndicator& indicator : gameInstance.GetGroundIndicators())
