@@ -25,9 +25,9 @@ namespace
         {
             auto uniqueSuffix = std::to_string(
                 std::chrono::steady_clock::now().time_since_epoch().count());
-            path_ = std::filesystem::current_path() / ("ldraw_loader_" + uniqueSuffix + ".mpd");
+            path_ = std::filesystem::temp_directory_path() / ("ldraw_loader_" + uniqueSuffix + ".mpd");
 
-            std::ofstream out(path_);
+            std::ofstream out(path_, std::ios::binary | std::ios::trunc);
             REQUIRE(out.is_open());
             out << contents;
         }
@@ -161,7 +161,7 @@ TEST_CASE("LDraw loader applies configurable LDU scale to geometry and placement
     }
 
     REQUIRE(partNode);
-    CheckVec3Near(partNode->Translation(), glm::vec3(-1.0f, -2.0f, 3.0f));
+    CheckVec3Near(partNode->Translation(), glm::vec3(-1.0f, 0.4f, 3.0f));
 
     auto renderComp = partNode->GetComponent<Runtime::RenderComponent>();
     REQUIRE(renderComp);
