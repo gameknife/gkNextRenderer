@@ -651,7 +651,7 @@ namespace Assets
         const size_t initialMaterialCount = materials.size();
         const size_t initialNodeCount = nodes.size();
 
-        const bool libraryPakAvailable = EnsureLDrawLibraryPakMounted();
+        const bool libraryPakAvailable = normalizedOptions.useLibraryPak && EnsureLDrawLibraryPakMounted();
         const std::string ldconfigPath = std::string(kLDrawLibraryRootEntry) + "/LDConfig.ldr";
 
         // Initialize LDraw subsystem (static lazy init)
@@ -674,7 +674,7 @@ namespace Assets
             }
             libraryIndexed = true;
         }
-        else if (!libraryPakAvailable)
+        else if (normalizedOptions.useLibraryPak && !libraryPakAvailable)
         {
             SPDLOG_WARN("LDraw: pak '{}' is not available, loading embedded-only scene data", kLDrawLibraryPakPath);
         }
