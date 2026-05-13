@@ -153,6 +153,7 @@ private:
         uint32_t hitFlashMaterialId = 0;
         uint32_t warningMaterialId = 0;
         uint32_t phase2MaterialId = 0;
+        uint32_t bodyBlockModelId = 0;
         glm::vec3 baseColor = glm::vec3(1.0f);
     };
 
@@ -174,6 +175,14 @@ private:
     int CalculateWeaponDamage(const Brotato3D::FWeaponDef& weaponDef, bool& outIsCrit);
     int ApplyDamageToEnemy(Brotato3D::FEnemyRuntime& enemy, int damage, bool isCrit);
     void ApplyWeaponKnockback(Brotato3D::FEnemyRuntime& enemy, const glm::vec3& direction, float knockbackMeters);
+    void CreateEnemyBodyBlocks(Brotato3D::FEnemyRuntime& enemy,
+                               const FEnemyVisualResource& visual,
+                               const std::string& enemyId);
+    void ResetEnemyBodyBlocks(Brotato3D::FEnemyRuntime& enemy);
+    void SetEnemyVisualVisible(Brotato3D::FEnemyRuntime& enemy, bool visible);
+    void SetEnemyVisualMaterial(const Brotato3D::FEnemyRuntime& enemy, uint32_t materialId);
+    void SetEnemyVisualOutlineFlags(const Brotato3D::FEnemyRuntime& enemy, uint32_t outlineFlags);
+    void BreakEnemyBodyBlocks(Brotato3D::FEnemyRuntime& enemy, int damage);
     void DamagePlayer(int damage, float shakeMs, float flashMs);
     void BuildDebrisPool(std::vector<Assets::Model>& models,
                          std::vector<Assets::FMaterial>& materials,
@@ -192,7 +201,7 @@ private:
                      int payloadValuePerSlot = 0,
                      float lifetimeMs = 0.0f);
     void ClearAllDebris(bool keepPickable);
-    void SpawnHitXpDebris(const glm::vec3& worldPos, const glm::vec3& projectileDir, int damage);
+    void SpawnHitXpDebris(const glm::vec3& worldPos, const glm::vec3& projectileDir, int damage, uint32_t materialId);
     void SpawnKillMaterialDebris(const Brotato3D::FEnemyRuntime& enemy,
                                  int countMultiplier = 1,
                                  float spawnRadius = 0.45f,

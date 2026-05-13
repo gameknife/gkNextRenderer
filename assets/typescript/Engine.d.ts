@@ -39,6 +39,11 @@ export interface Scene {
 export class RenderComponent {
     Visible: boolean;
     RayCastVisible: boolean;
+    RaycastVisible: boolean;
+    CastShadows: boolean;
+    ReceiveGI: boolean;
+    LightmapUV: boolean;
+    LayerMask: number;
     readonly ModelId: number;
     readonly SkinIndex: number;
     Materials: number[];
@@ -48,6 +53,12 @@ export class RenderComponent {
 export class PhysicsComponent {
     Mobility: string;
     PhysicsOffset: Vec3;
+    SimulatePhysics: boolean;
+    PhysicsMaterial: string;
+    LinearDamping: number;
+    AngularDamping: number;
+    EnableGravity: boolean;
+    CollisionPresets: string;
 }
 export class SkinnedMeshComponent {
     PlaySpeed: number;

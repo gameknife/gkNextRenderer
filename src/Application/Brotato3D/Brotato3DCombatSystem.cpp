@@ -21,12 +21,13 @@ int Brotato3DGameInstance::ApplyDamageToEnemy(Brotato3D::FEnemyRuntime& enemy, i
     enemy.currentHp -= effectiveDamage;
     Brotato3D::PlayHitSfx(effectiveDamage, isCrit);
     enemy.hitFlashRemainingMs = 80.0f;
-    NodeUtils::SetPrimaryMaterial(enemy.node, enemy.hitFlashMaterialId);
+    SetEnemyVisualMaterial(enemy, enemy.hitFlashMaterialId);
+    BreakEnemyBodyBlocks(enemy, effectiveDamage);
     PushFloatingText(enemy.worldPos + glm::vec3(0.0f, 0.8f, 0.0f),
                      isCrit ? fmt::format("!{}", effectiveDamage) : fmt::format("-{}", effectiveDamage),
                      isCrit ? glm::vec4(1.0f, 0.78f, 0.12f, 1.0f) : glm::vec4(1.0f, 0.25f, 0.18f, 1.0f),
                      600.0f,
-                     isCrit ? 1.4f : 1.0f);
+                     isCrit ? 1.55f : 1.15f);
     if (enemy.currentHp <= 0)
     {
         if (isCrit)
@@ -199,16 +200,23 @@ void Brotato3DGameInstance::ApplyItemExplosionDamage(const glm::vec3& worldPos, 
             continue;
         }
 
-        enemy.currentHp -= damage;
+        const int effectiveDamage = std::min(damage, std::max(0, enemy.currentHp));
+        if (effectiveDamage <= 0)
+        {
+            continue;
+        }
+
+        enemy.currentHp -= effectiveDamage;
         const glm::vec3 blastDir(enemy.worldPos.x - worldPos.x, 0.0f, enemy.worldPos.z - worldPos.z);
         if (glm::length(blastDir) > 0.001f)
         {
             enemy.lastHitDebrisDir = glm::normalize(blastDir);
         }
         enemy.hitFlashRemainingMs = 80.0f;
-        NodeUtils::SetPrimaryMaterial(enemy.node, enemy.hitFlashMaterialId);
-        PushFloatingText(enemy.worldPos + glm::vec3(0.0f, 0.8f, 0.0f), fmt::format("-{}", damage),
-                         glm::vec4(1.0f, 0.5f, 0.18f, 1.0f), 600.0f);
+        SetEnemyVisualMaterial(enemy, enemy.hitFlashMaterialId);
+        BreakEnemyBodyBlocks(enemy, effectiveDamage);
+        PushFloatingText(enemy.worldPos + glm::vec3(0.0f, 0.8f, 0.0f), fmt::format("-{}", effectiveDamage),
+                         glm::vec4(1.0f, 0.5f, 0.18f, 1.0f), 600.0f, 1.15f);
         if (enemy.currentHp <= 0)
         {
             KillEnemy(enemy, false);

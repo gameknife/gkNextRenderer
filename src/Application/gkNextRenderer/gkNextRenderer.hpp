@@ -40,6 +40,7 @@ public:
 private:
     void DrawSettings();
     void DrawTitleBar();
+    void DrawBottomStatusBar();
     void RequestScreenshot(bool openFolder, const std::string& tag);
     ModelViewController modelViewController_;
     GizmoController gizmoController_;
@@ -51,4 +52,6 @@ private:
 
     bool isTakingScreenshot_ = false;
     bool agentValidationCaptured_ = false;
+    bool playbackPaused_ = false;
+    bool stepRequested_ = false;
 };
