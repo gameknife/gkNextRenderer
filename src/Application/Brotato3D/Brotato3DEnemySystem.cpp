@@ -93,7 +93,7 @@ void Brotato3DGameInstance::CreateEnemyBodyBlocks(Brotato3D::FEnemyRuntime& enem
         }
     }
     NodeUtils::SetVisible(enemy.node, false);
-    scene.MarkDirty();
+    scene.MarkTransformDirty();
 }
 
 void Brotato3DGameInstance::ResetEnemyBodyBlocks(Brotato3D::FEnemyRuntime& enemy)
@@ -249,7 +249,7 @@ void Brotato3DGameInstance::SpawnEnemy(const std::string& enemyId, const glm::ve
     enemies_.back().runtimeTag = static_cast<uint32_t>(enemies_.size());
     CreateEnemyBodyBlocks(enemies_.back(), visual, enemyId);
     ResetEnemyBodyBlocks(enemies_.back());
-    GetEngine().GetScene().MarkDirty();
+    GetEngine().GetScene().MarkTransformDirty();
     // Spawn activation is a positional snap; use a stable fallback step for the kinematic body.
     SyncEnemyKinematicBody(enemies_.back(), 1.0 / 60.0);
 }
