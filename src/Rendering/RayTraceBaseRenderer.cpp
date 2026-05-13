@@ -318,7 +318,7 @@ namespace Vulkan::RayTracing
                         gpuScene.custom_data_1 = cascadeIndex;
                         gpuScene.custom_data_2 = NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation ? 1u : 0u;
                         
-                        GetScene().UpdateGPUSceneBuffer(imageIndex, gpuScene);
+                        GetScene().CmdUpdateGPUSceneBuffer(commandBuffer, imageIndex, gpuScene);
                         vkCmdDispatch(commandBuffer, dispatchGroupCount, 1, 1);
                     }
                 }

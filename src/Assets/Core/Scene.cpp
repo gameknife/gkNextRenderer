@@ -90,7 +90,7 @@ namespace Assets
         for (uint32_t bufferIndex = 0; bufferIndex < maxGpuSceneBuffers; ++bufferIndex)
         {
             Vulkan::BufferUtil::CreateDeviceBufferLocal(
-                commandPool, "GPUScene", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                commandPool, "GPUScene", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(Assets::GPUScene),
                 gpuSceneBuffers_[bufferIndex], gpuSceneBufferMemories_[bufferIndex]);
         }
@@ -850,6 +850,36 @@ namespace Assets
         void* data = gpuSceneBufferMemories_[bufferIndex]->Map(0, sizeof(Assets::GPUScene));
         std::memcpy(data, &gpuScene, sizeof(Assets::GPUScene));
         gpuSceneBufferMemories_[bufferIndex]->Unmap();
+    }
+
+    void Scene::CmdUpdateGPUSceneBuffer(
+        VkCommandBuffer commandBuffer, uint32_t imageIndex, const Assets::GPUScene& gpuScene) const
+    {
+        static_assert(sizeof(Assets::GPUScene) <= 65536);
+        static_assert(sizeof(Assets::GPUScene) % 4 == 0);
+
+        if (gpuSceneBuffers_.empty())
+        {
+            return;
+        }
+
+        const uint32_t bufferIndex = imageIndex % static_cast<uint32_t>(gpuSceneBuffers_.size());
+        const Vulkan::Buffer& gpuSceneBuffer = *gpuSceneBuffers_[bufferIndex];
+        vkCmdUpdateBuffer(commandBuffer, gpuSceneBuffer.Handle(), 0, sizeof(Assets::GPUScene), &gpuScene);
+
+        VkBufferMemoryBarrier gpuSceneBarrier{};
+        gpuSceneBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        gpuSceneBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        gpuSceneBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        gpuSceneBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        gpuSceneBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        gpuSceneBarrier.buffer = gpuSceneBuffer.Handle();
+        gpuSceneBarrier.offset = 0;
+        gpuSceneBarrier.size = sizeof(Assets::GPUScene);
+
+        vkCmdPipelineBarrier(commandBuffer,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            0, 0, nullptr, 1, &gpuSceneBarrier, 0, nullptr);
     }
 
     const Vulkan::Buffer& Scene::GPUSceneBuffer(uint32_t imageIndex) const

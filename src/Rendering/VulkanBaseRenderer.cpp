@@ -1023,7 +1023,7 @@ namespace Vulkan
                         gpuScene.custom_data_1 = vertexOffset;
                         gpuScene.custom_data_2 = vertexCount;
 
-                        scene.UpdateGPUSceneBuffer(imageIndex, gpuScene);
+                        scene.CmdUpdateGPUSceneBuffer(commandBuffer, imageIndex, gpuScene);
                         uint32_t groupCount = (vertexCount + 63) / 64;
                         vkCmdDispatch(commandBuffer, groupCount, 1, 1);
                     }
@@ -1755,7 +1755,7 @@ namespace Vulkan
         gpuScene.custom_data_1 = 0;
         gpuScene.custom_data_2 = 0;
 
-        GetScene().UpdateGPUSceneBuffer(imageIndex, gpuScene);
+        GetScene().CmdUpdateGPUSceneBuffer(commandBuffer, imageIndex, gpuScene);
         vkCmdDispatch(commandBuffer, groupCount, 1, 1);
 
         VkBufferMemoryBarrier barriers[2]{};
@@ -1842,7 +1842,7 @@ namespace Vulkan
         gpuScene.custom_data_1 = cascadeIndex;
         gpuScene.custom_data_2 = 0;
 
-        GetScene().UpdateGPUSceneBuffer(imageIndex, gpuScene);
+        GetScene().CmdUpdateGPUSceneBuffer(commandBuffer, imageIndex, gpuScene);
         vkCmdDispatch(commandBuffer, group, 1, 1);
 
         VkBufferMemoryBarrier propagationToInjectionBarrier{};
@@ -1860,7 +1860,7 @@ namespace Vulkan
 
         injectAmbientCubeGenPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
 
-        GetScene().UpdateGPUSceneBuffer(imageIndex, gpuScene);
+        GetScene().CmdUpdateGPUSceneBuffer(commandBuffer, imageIndex, gpuScene);
         vkCmdDispatch(commandBuffer, group, 1, 1);
 
         VkBufferMemoryBarrier postInjectionBarrier{};
@@ -1923,7 +1923,7 @@ namespace Vulkan
                 gpuScene.SkinnedVerticesSimple = GetScene().AmbientCubeSdfScratchBuffer().GetDeviceAddress();
 
                 distanceFieldInitPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
-                GetScene().UpdateGPUSceneBuffer(imageIndex, gpuScene);
+                GetScene().CmdUpdateGPUSceneBuffer(commandBuffer, imageIndex, gpuScene);
                 vkCmdDispatch(commandBuffer, group, 1, 1);
 
                 VkBufferMemoryBarrier initBarrier{};
@@ -1946,7 +1946,7 @@ namespace Vulkan
 
                     gpuScene.custom_data_1 = passParity;
                     gpuScene.custom_data_2 = step;
-                    GetScene().UpdateGPUSceneBuffer(imageIndex, gpuScene);
+                    GetScene().CmdUpdateGPUSceneBuffer(commandBuffer, imageIndex, gpuScene);
                     vkCmdDispatch(commandBuffer, group, 1, 1);
 
                     VkBufferMemoryBarrier jumpBarriers[2]{};
@@ -1973,7 +1973,7 @@ namespace Vulkan
                 distanceFieldResolvePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
                 gpuScene.custom_data_1 = passParity - 1;
                 gpuScene.custom_data_2 = 0;
-                GetScene().UpdateGPUSceneBuffer(imageIndex, gpuScene);
+                GetScene().CmdUpdateGPUSceneBuffer(commandBuffer, imageIndex, gpuScene);
                 vkCmdDispatch(commandBuffer, group, 1, 1);
 
                 VkBufferMemoryBarrier postResolveBarrier{};
@@ -2083,7 +2083,7 @@ namespace Vulkan
                     gpuScene.custom_data_1 = cascadeIndex;
                     gpuScene.custom_data_2 = NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation ? 1u : 0u;
 
-                    GetScene().UpdateGPUSceneBuffer(imageIndex, gpuScene);
+                    GetScene().CmdUpdateGPUSceneBuffer(commandBuffer, imageIndex, gpuScene);
                     vkCmdDispatch(commandBuffer, dispatchGroupCount, 1, 1);
                 }
             }

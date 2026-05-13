@@ -60,6 +60,8 @@ namespace Assets
 
         const Assets::GPUScene& FetchGPUScene(const uint32_t imageIndex) const;
         void UpdateGPUSceneBuffer(uint32_t imageIndex, const Assets::GPUScene& gpuScene) const;
+        void CmdUpdateGPUSceneBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex,
+                                     const Assets::GPUScene& gpuScene) const;
         const Vulkan::Buffer& GPUSceneBuffer(uint32_t imageIndex) const;
         std::vector<std::shared_ptr<Node>>& Nodes() { return nodes_; }
         const std::vector<std::shared_ptr<Node>>& Nodes() const { return nodes_; }
