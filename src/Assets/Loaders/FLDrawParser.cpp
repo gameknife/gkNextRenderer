@@ -624,6 +624,11 @@ namespace Assets
                     p = bfcCmd.find_first_not_of(" \t");
                     if (p != std::string::npos)
                         bfcCmd = bfcCmd.substr(p);
+                    p = bfcCmd.find_last_not_of(" \t\r\n");
+                    if (p != std::string::npos)
+                        bfcCmd = bfcCmd.substr(0, p + 1);
+                    else
+                        bfcCmd.clear();
 
                     if (bfcCmd.find("CERTIFY") == 0)
                     {
