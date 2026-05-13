@@ -352,7 +352,7 @@ void NextEngine::TickHotReload()
     if (shaderHotReloader_)
     {
         SCOPED_CPU_TIMER("shader hot reload");
-        shaderHotReloader_->SetEnabled(options_->HotReload && options_->ShaderHotReload);
+        shaderHotReloader_->SetEnabled(options_->ShaderHotReload);
         shaderHotReloader_->SetPollInterval(options_->ShaderHotReloadInterval);
         shaderHotReloader_->Tick(deltaSeconds_);
     }
@@ -362,7 +362,6 @@ void NextEngine::TickHotReload()
 NextEngine::FHotReloadStatus NextEngine::GetHotReloadStatus() const
 {
     FHotReloadStatus status{};
-    status.hotReloadEnabled = options_ != nullptr && options_->HotReload;
     status.shaderHotReloadEnabled = options_ != nullptr && options_->ShaderHotReload;
     if (options_ != nullptr)
     {
@@ -449,7 +448,7 @@ void NextEngine::Start()
     }
 
 #if GK_ENABLE_HOT_RELOAD
-    if (options_->HotReload && options_->ShaderHotReload)
+    if (options_->ShaderHotReload)
     {
         shaderHotReloader_ = std::make_unique<Vulkan::ShaderHotReloader>();
         shaderHotReloader_->Initialize(*renderer_);

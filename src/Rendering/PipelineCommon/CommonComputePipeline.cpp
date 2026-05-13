@@ -327,17 +327,20 @@ namespace Vulkan::PipelineCommon
 		inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 		inputAssembly.primitiveRestartEnable = VK_FALSE;
 
+		const VkOffset2D viewportOffset = isWireFrame ? swapChain.OutputOffset() : swapChain.RenderOffset();
+		const VkExtent2D viewportExtent = isWireFrame ? swapChain.OutputExtent() : swapChain.RenderExtent();
+
 		VkViewport viewport = {};
-		viewport.x = 0.0f;
-		viewport.y = 0.0f;
-		viewport.width = static_cast<float>(swapChain.RenderExtent().width);
-		viewport.height = static_cast<float>(swapChain.RenderExtent().height);
+		viewport.x = static_cast<float>(viewportOffset.x);
+		viewport.y = static_cast<float>(viewportOffset.y);
+		viewport.width = static_cast<float>(viewportExtent.width);
+		viewport.height = static_cast<float>(viewportExtent.height);
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
 
 		VkRect2D scissor = {};
-		scissor.offset = { 0, 0 };
-		scissor.extent = swapChain.RenderExtent();
+		scissor.offset = viewportOffset;
+		scissor.extent = viewportExtent;
 
 		VkPipelineViewportStateCreateInfo viewportState = {};
 		viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;

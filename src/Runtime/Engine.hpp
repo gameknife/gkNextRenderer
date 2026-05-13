@@ -181,7 +181,6 @@ public:
 
     struct FHotReloadStatus
     {
-        bool hotReloadEnabled = false;
         bool shaderHotReloadEnabled = false;
         bool shaderInitialized = false;
         double shaderPollIntervalSeconds = 0.5;

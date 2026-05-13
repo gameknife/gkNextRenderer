@@ -34,7 +34,6 @@ public:
 	bool KeepCPUMeshData{};  // 保留CPU网格数据（编辑器模式需要）
 	bool UpdateVisualTestBaseline{};
 	bool FlappyReplay{};
-	bool HotReload{true};
 	bool ShaderHotReload{true};
 	float ShaderHotReloadInterval{0.5f};
 	std::string locale{};
