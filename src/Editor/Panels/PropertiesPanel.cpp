@@ -8,6 +8,7 @@
 #include "Runtime/Components/SkinnedMeshComponent.h"
 #include "Runtime/Command/RenameNodeCommand.hpp"
 #include "Runtime/Engine.hpp"
+#include "Runtime/Editor/ProfessionalUI.hpp"
 #include "Runtime/Reflection/PropertyAccessor.h"
 
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
@@ -15,15 +16,61 @@
 #include <imgui_stdlib.h>
 
 #include <cmath>
+#include <fmt/format.h>
 #include <functional>
 #include <glm/gtc/quaternion.hpp>
 
 namespace Editor
 {
+    namespace
+    {
+        bool DrawAxisFloat3(const char* label, glm::vec3& value, float speed)
+        {
+            bool changed = false;
+            constexpr ImVec4 axisColors[] = {
+                ImVec4(0.90f, 0.20f, 0.18f, 1.0f),
+                ImVec4(0.22f, 0.78f, 0.34f, 1.0f),
+                ImVec4(0.24f, 0.48f, 0.95f, 1.0f),
+            };
+            constexpr const char* axisIds[] = {"X", "Y", "Z"};
+
+            ImGui::PushID(label);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted(label);
+            ImGui::SameLine(82.0f);
+
+            const float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
+            const float width = std::max(58.0f, (ImGui::GetContentRegionAvail().x - spacing * 2.0f) / 3.0f);
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+            for (int axis = 0; axis < 3; ++axis)
+            {
+                const ImVec2 pos = ImGui::GetCursorScreenPos();
+                const float height = ImGui::GetFrameHeight();
+                drawList->AddRectFilled(pos, ImVec2(pos.x + 2.0f, pos.y + height),
+                                        ImGui::GetColorU32(axisColors[axis]), 1.0f);
+                ImGui::SetCursorScreenPos(ImVec2(pos.x + 5.0f, pos.y));
+                ImGui::SetNextItemWidth(width - 5.0f);
+                changed = ImGui::DragFloat(axisIds[axis], &value[axis], speed, 0.0f, 0.0f, "%.3f") || changed;
+                if (axis < 2)
+                {
+                    ImGui::SameLine(0.0f, spacing);
+                }
+            }
+
+            ImGui::PopID();
+            return changed;
+        }
+    } // namespace
+
     void DrawPropertiesPanel(EditorContext& ctx, EditorUiState& ui)
     {
         ImGui::Begin("Properties", nullptr);
         {
+            static ImGuiTextFilter propertyFilter;
+            propertyFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search properties##PropertiesSearch", -FLT_MIN);
+            Runtime::UiTheme::DrawThinSeparator();
+
             std::vector<uint32_t> selectedIds = ctx.scene.GetSelectedIds();
             if (selectedIds.empty() && ui.selected_obj_id != InvalidId)
             {
@@ -174,15 +221,36 @@ namespace Editor
                 return;
             }
 
-            if (ui.fontIcon)
+            const std::string inspectorSubtitle = "Instance " + std::to_string(selectedObj->GetInstanceId());
+            Runtime::UiTheme::DrawPanelHeader(ICON_FA_SLIDERS, "Inspector", inspectorSubtitle.c_str());
+
+            auto render = selectedObj->GetComponent<Runtime::RenderComponent>();
+            auto physics = selectedObj->GetComponent<Runtime::PhysicsComponent>();
+            bool enabled = render == nullptr || render->GetVisible();
+            if (ImGui::Checkbox("##ObjectEnabled", &enabled) && render != nullptr)
             {
-                ImGui::PushFont(ui.fontIcon);
+                render->SetVisible(enabled);
+                ctx.scene.MarkDirty();
             }
+            ImGui::SameLine();
             ImGui::TextUnformatted(selectedObj->GetName().c_str());
-            if (ui.fontIcon)
+            ImGui::SameLine(std::max(ImGui::GetCursorPosX(), ImGui::GetContentRegionMax().x - 70.0f));
+            bool isStatic = physics == nullptr || physics->GetMobility() == Runtime::ENodeMobility::Static;
+            if (ImGui::Checkbox("Static", &isStatic) && physics != nullptr)
             {
-                ImGui::PopFont();
+                physics->SetMobility(isStatic ? Runtime::ENodeMobility::Static : Runtime::ENodeMobility::Dynamic);
+                ctx.scene.MarkDirty();
             }
+
+            static int tagIndex = 0;
+            static int layerIndex = 0;
+            ImGui::SetNextItemWidth((ImGui::GetContentRegionAvail().x - 8.0f) * 0.5f);
+            ImGui::Combo("##TagSelector", &tagIndex, "Untagged\0Player\0Environment\0Interactable\0\0");
+            Runtime::UiTheme::DrawTooltip("Tag");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::Combo("##LayerSelector", &layerIndex, "Default\0Gameplay\0Props\0Colliders\0Lighting\0\0");
+            Runtime::UiTheme::DrawTooltip("Layer");
 
             ImGui::TextUnformatted("Name");
             ImGui::SameLine();
@@ -211,113 +279,116 @@ namespace Editor
                 }
             }
 
-            ImGui::Separator();
-            ImGui::NewLine();
+            Runtime::UiTheme::DrawThinSeparator();
 
-            ImGui::Text(ICON_FA_LOCATION_ARROW " Transform");
-            ImGui::Separator();
-
-            ImGui::BeginGroup();
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
-            ImGui::Button("L");
-            ImGui::SameLine();
-            ImGui::PopStyleColor();
-            if (ImGui::DragFloat3("##Location", &selectedObj->Translation().x, 0.1f))
+            if (Runtime::UiTheme::BeginSection(ICON_FA_LOCATION_ARROW, "Transform", true))
             {
-                selectedObj->RecalcTransform(true);
-                ctx.scene.MarkDirty();
-            }
-            ImGui::EndGroup();
-
-            ImGui::BeginGroup();
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.8f, 0.2f, 1.0f));
-            ImGui::Button("R");
-            ImGui::SameLine();
-            ImGui::PopStyleColor();
-            glm::vec3 eular = glm::eulerAngles(selectedObj->Rotation());
-            if (ImGui::DragFloat3("##Rotation", &eular.x, 0.1f))
-            {
-                selectedObj->SetRotation(glm::quat(eular));
-                selectedObj->RecalcTransform(true);
-                ctx.scene.MarkDirty();
-            }
-            ImGui::EndGroup();
-
-            ImGui::BeginGroup();
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.2f, 0.8f, 1.0f));
-            ImGui::Button("S");
-            ImGui::SameLine();
-            ImGui::PopStyleColor();
-            if (ImGui::DragFloat3("##Scale", &selectedObj->Scale().x, 0.1f))
-            {
-                selectedObj->RecalcTransform(true);
-                ctx.scene.MarkDirty();
-            }
-            ImGui::EndGroup();
-
-            ImGui::NewLine();
-            ImGui::Text(ICON_FA_CUBE " Mesh");
-            ImGui::Separator();
-            auto render = selectedObj->GetComponent<Runtime::RenderComponent>();
-            int modelId = render ? render->GetModelId() : -1;
-            ImGui::InputInt("##ModelId", &modelId, 1, 1, ImGuiInputTextFlags_ReadOnly);
-
-            ImGui::NewLine();
-            ImGui::Text(ICON_FA_CIRCLE_HALF_STROKE " Material");
-            ImGui::Separator();
-
-            if (modelId != -1 && render)
-            {
-                auto mats = render->GetMaterials();
-                bool materialsChanged = false;
-                for (auto& mat : mats)
+                if (DrawAxisFloat3("Location", selectedObj->Translation(), 0.1f))
                 {
-                    const int matIdx = mat;
-                    if (matIdx == 0)
-                    {
-                        continue;
-                    }
-
-                    auto& refMat = ctx.scene.Materials()[matIdx];
-
-                    ImGui::PushID(matIdx);
-                    ImGui::InputText("##MatName", &refMat.name_, ImGuiInputTextFlags_ReadOnly);
-                    ImGui::PopID();
-
-                    ImGui::SameLine();
-
-                    if (ImGui::Button(ICON_FA_CIRCLE_LEFT))
-                    {
-                        if (ui.selectedMaterialId != InvalidId)
-                        {
-                            mat = static_cast<int>(ui.selectedMaterialId);
-                            materialsChanged = true;
-                        }
-                    }
-
-                    ImGui::SameLine();
-                    if (ImGui::Button(ICON_FA_PEN_TO_SQUARE))
-                    {
-                        ui.selected_material = &(ctx.scene.Materials()[matIdx]);
-                        ui.ed_material = true;
-                        OpenMaterialEditor(ctx, ui);
-                    }
-                }
-                if (materialsChanged)
-                {
-                    render->SetMaterials(mats);
+                    selectedObj->RecalcTransform(true);
                     ctx.scene.MarkDirty();
                 }
+
+                glm::vec3 eular = glm::eulerAngles(selectedObj->Rotation());
+                if (DrawAxisFloat3("Rotation", eular, 0.1f))
+                {
+                    selectedObj->SetRotation(glm::quat(eular));
+                    selectedObj->RecalcTransform(true);
+                    ctx.scene.MarkDirty();
+                }
+
+                if (DrawAxisFloat3("Scale", selectedObj->Scale(), 0.1f))
+                {
+                    selectedObj->RecalcTransform(true);
+                    ctx.scene.MarkDirty();
+                }
+                Runtime::UiTheme::EndSection();
+            }
+            int modelId = render ? render->GetModelId() : -1;
+            if (Runtime::UiTheme::BeginSection(ICON_FA_CUBE, "Mesh", true))
+            {
+                if (render != nullptr)
+                {
+                    const std::string preview = modelId >= 0 && modelId < static_cast<int>(ctx.scene.Models().size())
+                        ? ctx.scene.Models()[modelId].Name()
+                        : "None";
+                    if (ImGui::BeginCombo("Model", preview.c_str()))
+                    {
+                        if (ImGui::Selectable("None", modelId == -1))
+                        {
+                            render->SetModelId(static_cast<uint32_t>(-1));
+                            ctx.scene.MarkDirty();
+                        }
+                        for (int i = 0; i < static_cast<int>(ctx.scene.Models().size()); ++i)
+                        {
+                            const std::string itemName = fmt::format("{}: {}", i, ctx.scene.Models()[i].Name());
+                            if (ImGui::Selectable(itemName.c_str(), modelId == i))
+                            {
+                                render->SetModelId(static_cast<uint32_t>(i));
+                                ctx.scene.MarkDirty();
+                            }
+                        }
+                        ImGui::EndCombo();
+                    }
+                }
+                else
+                {
+                    ImGui::TextDisabled("No RenderComponent");
+                }
+                Runtime::UiTheme::EndSection();
+            }
+
+            if (Runtime::UiTheme::BeginSection(ICON_FA_CIRCLE_HALF_STROKE, "Material", true))
+            {
+                if (modelId != -1 && render)
+                {
+                    auto mats = render->GetMaterials();
+                    bool materialsChanged = false;
+                    for (int elementIndex = 0; elementIndex < static_cast<int>(mats.size()); ++elementIndex)
+                    {
+                        uint32_t& mat = mats[elementIndex];
+                        const std::string comboLabel = fmt::format("Element {}", elementIndex);
+                        const std::string preview = mat < ctx.scene.Materials().size()
+                            ? ctx.scene.Materials()[mat].name_
+                            : "None";
+                        ImGui::PushID(elementIndex);
+                        if (ImGui::BeginCombo(comboLabel.c_str(), preview.c_str()))
+                        {
+                            for (int materialIndex = 0; materialIndex < static_cast<int>(ctx.scene.Materials().size());
+                                 ++materialIndex)
+                            {
+                                const std::string itemName =
+                                    fmt::format("{}: {}", materialIndex, ctx.scene.Materials()[materialIndex].name_);
+                                if (ImGui::Selectable(itemName.c_str(), mat == static_cast<uint32_t>(materialIndex)))
+                                {
+                                    mat = static_cast<uint32_t>(materialIndex);
+                                    materialsChanged = true;
+                                }
+                            }
+                            ImGui::EndCombo();
+                        }
+                        ImGui::SameLine();
+                        if (Runtime::UiTheme::IconButton(ICON_FA_PEN_TO_SQUARE, "Edit Material", false,
+                                                         ImVec2(28.0f, 24.0f)) &&
+                            mat < ctx.scene.Materials().size())
+                        {
+                            ui.selected_material = &(ctx.scene.Materials()[mat]);
+                            ui.ed_material = true;
+                            OpenMaterialEditor(ctx, ui);
+                        }
+                        ImGui::PopID();
+                    }
+                    if (materialsChanged)
+                    {
+                        render->SetMaterials(mats);
+                        ctx.scene.MarkDirty();
+                    }
+                }
+                Runtime::UiTheme::EndSection();
             }
             
-            // Draw component properties using reflection
-            ImGui::NewLine();
-            ImGui::Text(ICON_FA_PUZZLE_PIECE " Components");
-            ImGui::Separator();
-
-            static ImGuiTextFilter propertyFilter;
-            propertyFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Filter##Properties", 220.0f);
-
+            if (Runtime::UiTheme::BeginSection(ICON_FA_PUZZLE_PIECE, "Components", true))
+            {
             const auto& components = selectedObj->GetComponents();
             for (const auto& component : components)
             {
@@ -353,6 +424,20 @@ namespace Editor
                     }
                     ImGui::Unindent();
                 }
+            }
+                if (ImGui::Button(ICON_FA_PLUS " Add Component", ImVec2(-FLT_MIN, 0.0f)))
+                {
+                    ImGui::OpenPopup("AddComponentPopup");
+                }
+                if (ImGui::BeginPopup("AddComponentPopup"))
+                {
+                    ImGui::MenuItem("Render Component", nullptr, false, false);
+                    ImGui::MenuItem("Physics Component", nullptr, false, false);
+                    ImGui::MenuItem("Skinned Mesh Component", nullptr, false, false);
+                    ImGui::MenuItem("Script Component", nullptr, false, false);
+                    ImGui::EndPopup();
+                }
+                Runtime::UiTheme::EndSection();
             }
         }
 

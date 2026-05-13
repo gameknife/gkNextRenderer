@@ -4,6 +4,6 @@
 
 namespace Editor
 {
-    constexpr float kTitleBarHeight = 55.0f;
-    constexpr float kFooterHeight = 40.0f;
+    constexpr float kTitleBarHeight = 38.0f;
+    constexpr float kFooterHeight = 30.0f;
 } // namespace Editor

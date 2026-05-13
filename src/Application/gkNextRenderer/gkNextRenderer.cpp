@@ -11,6 +11,8 @@
 #include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Engine.hpp"
 #include "Runtime/Editor/FontLoader.h"
+#include "Runtime/Editor/ProfessionalUI.hpp"
+#include "Runtime/Editor/UserInterface.hpp"
 #include "Runtime/Scene/SceneBuilder.h"
 #include "Runtime/Utilities/NextEngineHelper.h"
 #include "Runtime/Utilities/GraphicsDebugPanel.hpp"
@@ -22,6 +24,7 @@
 #include "Runtime/Components/SkinnedMeshComponent.h"
 #include "Runtime/Config/CVarSystem.hpp"
 #include "Vulkan/SwapChain.hpp"
+#include "Vulkan/Device.hpp"
 
 extern float GAndroidMagicScale;
 
@@ -145,7 +148,12 @@ void NextRendererGameInstance::OnInit()
 
 void NextRendererGameInstance::OnTick(double deltaSeconds)
 {
+    if (playbackPaused_ && !stepRequested_)
+    {
+        return;
+    }
     modelViewController_.UpdateCamera(10.0f, deltaSeconds);
+    stepRequested_ = false;
 }
 
 std::vector<Assets::FMaterial> MatPreparedForAdd;
@@ -202,6 +210,7 @@ bool NextRendererGameInstance::OnRenderUI()
 
 	DrawTitleBar();
 	DrawSettings();
+    DrawBottomStatusBar();
 
 	if (ImGui::GetCurrentContext() != nullptr)
 	{
@@ -487,20 +496,21 @@ void NextRendererGameInstance::DrawSettings()
 	}
 
 	const float distance = 10.0f;
-	const ImVec2 pos = ImVec2(distance, TitlebarSize + distance);
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+	const ImVec2 pos = viewport->Pos + ImVec2(distance, TitlebarSize + distance);
 	const ImVec2 posPivot = ImVec2(0.0f, 0.0f);
 	ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
-	ImGui::SetNextWindowSize(ImVec2(ImGui::GetFontSize() * 30,-1));
-	ImGui::SetNextWindowBgAlpha(0.9f);
+    ImGui::SetNextWindowSize(ImVec2(430.0f, viewport->Size.y - TitlebarSize - 50.0f), ImGuiCond_Always);
+	ImGui::SetNextWindowBgAlpha(0.92f);
 	
 	const auto flags =
-		ImGuiWindowFlags_AlwaysAutoResize |
 		ImGuiWindowFlags_NoMove |
 		ImGuiWindowFlags_NoResize |
 		ImGuiWindowFlags_NoSavedSettings;
 
 	if (ImGui::Begin("Settings", &userSetting.ShowSettings, flags))
 	{
+            Runtime::UiTheme::DrawPanelHeader(ICON_FA_SLIDERS, "Renderer Settings", "Runtime path tracing controls");
 			if( ImGui::CollapsingHeader(LOCTEXT("Renderer"), ImGuiTreeNodeFlags_DefaultOpen) )
 			{
 				ImGui::Text("%s", LOCTEXT("Renderer"));
@@ -583,20 +593,27 @@ void NextRendererGameInstance::DrawSettings()
 
 		if( ImGui::CollapsingHeader(LOCTEXT("Ray Tracing"), ImGuiTreeNodeFlags_DefaultOpen) )
 		{
+            static bool rayTracingEnabled = true;
+            ImGui::Checkbox("Enable", &rayTracingEnabled);
+            ImGui::BeginDisabled(!rayTracingEnabled);
 			ImGui::Checkbox(LOCTEXT("AntiAlias"), &userSetting.TAA);
 			ImGui::SliderInt(LOCTEXT("Samples"), &userSetting.NumberOfSamples, 1, 16);
 			ImGui::SliderInt(LOCTEXT("TemporalSteps"), &userSetting.AdaptiveSteps, 2, 64);
 			ImGui::Checkbox(LOCTEXT("FastGather"), &userSetting.FastGather);
 			ImGui::SliderInt(LOCTEXT("AmbientSpeed"), &userSetting.BakeSpeedLevel, 0, 2);
-
-			
+            ImGui::EndDisabled();
 			
 			ImGui::NewLine();
 		}
 
 		if( ImGui::CollapsingHeader(LOCTEXT("Denoiser"), ImGuiTreeNodeFlags_DefaultOpen) )
 		{
-			ImGui::Checkbox(LOCTEXT("Use JBF"), &userSetting.Denoiser);
+            static int denoiserAlgorithm = 0;
+            const char* denoiserAlgorithms[] = {"HDR JBF", "SVGF", "Atrous", "None"};
+            if (ImGui::Combo("Algorithm", &denoiserAlgorithm, denoiserAlgorithms, IM_ARRAYSIZE(denoiserAlgorithms)))
+            {
+                userSetting.Denoiser = denoiserAlgorithm != 3;
+            }
 			ImGui::SliderFloat(LOCTEXT("DenoiseSigma"), &userSetting.DenoiseSigma, 0.01f, 2.0f, "%.2f");
 			ImGui::SliderFloat(LOCTEXT("DenoiseSigmaLum"), &userSetting.DenoiseSigmaLum, 0.01f, 50.0f, "%.2f");
 			ImGui::SliderFloat(LOCTEXT("DenoiseSigmaNormal"), &userSetting.DenoiseSigmaNormal, 0.001f, 0.2f, "%.3f");
@@ -606,39 +623,24 @@ void NextRendererGameInstance::DrawSettings()
 
 		if( ImGui::CollapsingHeader(LOCTEXT("Upscaling"), ImGuiTreeNodeFlags_DefaultOpen) )
 		{
-			if (GetEngine().GetRenderer().SupportDLSS())
-			{
-				if (ImGui::Checkbox("NVIDIA DLSS", &userSetting.DLSS))
-                {
-                    GetEngine().GetRenderer().RequestRecreateSwapChain();
-                }
-                
-				if (userSetting.DLSS)
-				{
-					const char* dlssModes[] = { "Quality", "Balanced", "Performance", "Ultra Performance", "DLAA (Native)" };
-					if (ImGui::Combo("DLSS Mode", (int*)&userSetting.SuperResolution, dlssModes, IM_ARRAYSIZE(dlssModes)))
-                    {
-                        GetEngine().GetRenderer().RequestRecreateSwapChain();
-                    }
-					
-					if (GetEngine().GetRenderer().SupportDLSSRR())
-					{
-						ImGui::Checkbox("DLSS Ray Reconstruction", &userSetting.DLSSRR);
-					}
-				}
-			}
-			else
-			{
-				ImGui::TextDisabled("DLSS not supported on this hardware.");
-			}
-            
-            if (!userSetting.DLSS)
+            static int upscaleMethod = userSetting.DLSS ? 1 : 0;
+            static int upscaleMode = 0;
+            const char* methods[] = {"None", "DLSS", "FSR", "TAAU"};
+            if (ImGui::Combo("Method", &upscaleMethod, methods, IM_ARRAYSIZE(methods)))
             {
-                const char* upscaleModes[] = { "Quality", "Balanced", "Performance", "Ultra Performance", "Native" };
-				if (ImGui::Combo("Upscale Mode", (int*)&userSetting.SuperResolution, upscaleModes, IM_ARRAYSIZE(upscaleModes)))
-                {
-                    GetEngine().GetRenderer().RequestRecreateSwapChain();
-                }
+                userSetting.DLSS = upscaleMethod == 1 && GetEngine().GetRenderer().SupportDLSS();
+                GetEngine().GetRenderer().RequestRecreateSwapChain();
+            }
+
+            const char* qualities[] = {"Quality", "Balanced", "Performance", "Ultra Performance", "Native"};
+            if (ImGui::Combo("Quality", (int*)&userSetting.SuperResolution, qualities, IM_ARRAYSIZE(qualities)))
+            {
+                GetEngine().GetRenderer().RequestRecreateSwapChain();
+            }
+            ImGui::Combo("Upscale Mode", &upscaleMode, "Spatial\0Temporal\0Native Output\0\0");
+            if (upscaleMethod == 1 && !GetEngine().GetRenderer().SupportDLSS())
+            {
+                ImGui::TextDisabled("DLSS not supported on this hardware.");
             }
 			ImGui::NewLine();
 		}
@@ -743,120 +745,236 @@ void NextRendererGameInstance::DrawSettings()
 
 void NextRendererGameInstance::DrawTitleBar()
 {
-    // 获取窗口的大小
-    ImVec2 windowSize = ImGui::GetMainViewport()->Size;
-    float titlebarLeftReservedWidth = 0.0f;
-    float titlebarRightReservedWidth = TitlebarControlSize;
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImVec2 windowSize = viewport->Size;
+    float titlebarLeftReservedWidth = 420.0f;
+    constexpr float rightReservedWidth = 560.0f;
+    float titlebarRightReservedWidth = rightReservedWidth;
 
-    auto bgColor = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
-    bgColor.w = 0.9f;
-    ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0, 0), ImVec2(windowSize.x, TitlebarSize), ImGui::ColorConvertFloat4ToU32(bgColor));
+    ImDrawList* background = ImGui::GetBackgroundDrawList();
+    background->AddRectFilled(viewport->Pos, viewport->Pos + ImVec2(windowSize.x, TitlebarSize),
+                              Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Background));
+    background->AddLine(viewport->Pos + ImVec2(0.0f, TitlebarSize - 1.0f),
+                        viewport->Pos + ImVec2(windowSize.x, TitlebarSize - 1.0f),
+                        Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Border));
 
-    ImGui::PushFont(bigFont_);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 4.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 0.0f));
 
-    auto textSize = ImGui::CalcTextSize("gkNextRenderer");
-    ImGui::GetForegroundDrawList()->AddText(ImVec2((windowSize.x - textSize.x) * 0.5f, (TitlebarSize - textSize.y) * 0.5f), IM_COL32(255, 255, 255, 255), "gkNextRenderer");
+    ImGui::SetNextWindowPos(viewport->Pos + ImVec2(windowSize.x - rightReservedWidth, 0), ImGuiCond_Always,
+                            ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImVec2(rightReservedWidth, TitlebarSize));
 
-    ImGui::PopFont();
-
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-
-    ImGui::SetNextWindowPos(ImVec2(windowSize.x - TitlebarControlSize, 0), ImGuiCond_Always, ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImVec2(TitlebarControlSize, TitlebarSize));
-
-    ImGui::Begin("TitleBarRight", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground);
+    ImGui::Begin("TitleBarRight", nullptr,
+                 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                     ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground);
     titlebarRightReservedWidth = ImGui::GetWindowSize().x;
 
-    if (ImGui::Button(ICON_FA_MINUS, ImVec2(TitlebarSize, TitlebarSize)))
+    const auto framebufferSize = GetEngine().GetWindow().FramebufferSize();
+    ImGui::SetCursorPosY((TitlebarSize - ImGui::GetTextLineHeight()) * 0.5f);
+    ImGui::TextColored(Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted), "%ux%u",
+                       framebufferSize.width, framebufferSize.height);
+    ImGui::SameLine(0.0f, 16.0f);
+    ImGui::TextColored(Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted), "Camera %d",
+                       GetEngine().GetUserSettings().CameraIdx);
+    ImGui::SameLine(0.0f, 16.0f);
+    ImGui::TextColored(Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Success), "%.0f FPS",
+                       GetEngine().GetFrameRate());
+    ImGui::SameLine(0.0f, 16.0f);
+    ImGui::TextColored(Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted), "%.2f ms",
+                       GetEngine().GetSmoothDeltaSeconds() * 1000.0);
+    ImGui::SameLine(0.0f, 16.0f);
+
+    if (Runtime::UiTheme::ToolbarButton(ICON_FA_MINUS, LOCTEXT("Minimize"), false, ImVec2(34.0f, 28.0f)))
     {
         GetEngine().RequestMinimize();
     }
     ImGui::SameLine();
-    if (ImGui::Button(GetEngine().IsMaximumed() ? ICON_FA_WINDOW_RESTORE : ICON_FA_SQUARE, ImVec2(TitlebarSize, TitlebarSize)))
+    if (Runtime::UiTheme::ToolbarButton(GetEngine().IsMaximumed() ? ICON_FA_WINDOW_RESTORE : ICON_FA_SQUARE,
+                                        LOCTEXT("Maximize"), false, ImVec2(34.0f, 28.0f)))
     {
         GetEngine().ToggleMaximize();
     }
     ImGui::SameLine();
-    if (ImGui::Button(ICON_FA_XMARK, ImVec2(TitlebarSize, TitlebarSize)))
+    if (Runtime::UiTheme::ToolbarButton(ICON_FA_XMARK, LOCTEXT("Close"), false, ImVec2(34.0f, 28.0f)))
     {
         GetEngine().RequestClose();
     }
     ImGui::End();
 
-    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always, ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImVec2(TitlebarSize * 18, TitlebarSize));
+    ImGui::SetNextWindowPos(viewport->Pos, ImGuiCond_Always, ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImVec2(windowSize.x - rightReservedWidth, TitlebarSize));
 
-    ImGui::Begin("TitleBarLeft", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground);
-    if (ImGui::Button(ICON_FA_GITHUB, ImVec2(TitlebarSize, TitlebarSize)))
+    ImGui::Begin("TitleBarLeft", nullptr,
+                 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                     ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_MenuBar);
+    if (ImGui::BeginMenuBar())
     {
-        NextRenderer::OSCommand("https://github.com/gameknife/gkNextRenderer");
-    }
-    BUTTON_TOOLTIP(LOCTEXT("Open Project Page in OS Browser"))
-    ImGui::SameLine();
-    if (ImGui::Button(ICON_FA_TWITTER, ImVec2(TitlebarSize, TitlebarSize)))
-    {
-        NextRenderer::OSCommand("https://x.com/gKNIFE_");
-    }
-    BUTTON_TOOLTIP(LOCTEXT("Open Twitter Page in OS Browser"))
-    ImGui::SameLine();
-    ImGui::GetForegroundDrawList()->AddLine(ImGui::GetCursorPos() + ImVec2(4, TitlebarSize / 2 - 5), ImGui::GetCursorPos() + ImVec2(4, TitlebarSize / 2 + 5), IM_COL32(255, 255, 255, 160), 2.0f);
-    ImGui::Dummy(ImVec2(10, 10));
-    ImGui::SameLine();
-    if (ImGui::Button(ICON_FA_CAMERA, ImVec2(TitlebarSize, TitlebarSize)))
-    {
-        GetEngine().AddTickedTask([this](double deltaSeconds)-> bool
+        Runtime::UiTheme::DrawBrandMark(ImGui::GetWindowDrawList(), ImGui::GetCursorScreenPos(), 24.0f);
+        ImGui::Dummy(ImVec2(28.0f, 24.0f));
+        ImGui::SameLine(0.0f, 8.0f);
+        ImGui::TextUnformatted("gkNextRenderer");
+        ImGui::SameLine(0.0f, 20.0f);
+
+        if (ImGui::BeginMenu("File"))
         {
-            GetEngine().RequestScreenShot({});
-            return true;
-        });
-		//GetEngine().RequestHighQualityScreenShot("", 512);
-    }
-    BUTTON_TOOLTIP(LOCTEXT("Take a Screenshot into the screenshots folder"))
-	ImGui::SameLine();
-	if (ImGui::Button(ICON_FA_EYE, ImVec2(TitlebarSize, TitlebarSize)))
-	{
-		ImGui::OpenPopup("RendererShowFlags");
-	}
-	BUTTON_TOOLTIP(LOCTEXT("Show Flags"))
+            if (ImGui::MenuItem("Project Page"))
+            {
+                NextRenderer::OSCommand("https://github.com/gameknife/gkNextRenderer");
+            }
+            if (ImGui::MenuItem("Open Screenshot Folder"))
+            {
+                RequestScreenshot(true, "");
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("View"))
+        {
+            auto& showFlags = GetEngine().GetShowFlags();
+            Utilities::UI::DrawShowFlagsCommon(showFlags);
+            ImGui::MenuItem("Profiler Overlay", nullptr, &GetEngine().GetUserSettings().ShowOverlay);
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Capture"))
+        {
+            if (ImGui::MenuItem("Screenshot"))
+            {
+                RequestScreenshot(false, "");
+            }
+            if (ImGui::MenuItem("Screenshot and Open Folder"))
+            {
+                RequestScreenshot(true, "");
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Renderer"))
+        {
+            Runtime::GraphicsDebugPanel::DrawRendererSelector(GetEngine(), GetEngine().GetUserSettings(),
+                                                              "##RendererMenuSelector", 180.0f);
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Settings"))
+        {
+            ImGui::MenuItem("Render Settings", nullptr, &GetEngine().GetUserSettings().ShowSettings);
+            ImGui::MenuItem("Stats Overlay", nullptr, &GetEngine().GetUserSettings().ShowOverlay);
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Help"))
+        {
+            ImGui::MenuItem("Documentation", nullptr, false, false);
+            ImGui::MenuItem("About gkNextRenderer", nullptr, false, false);
+            ImGui::EndMenu();
+        }
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 12));
-    if (ImGui::BeginPopup("RendererShowFlags"))
-    {
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 10));
-        auto& showFlags = GetEngine().GetShowFlags();
-        Utilities::UI::DrawShowFlagsCommon(showFlags);
-        
-        ImGui::PopStyleVar();
-        ImGui::EndPopup();
+        titlebarLeftReservedWidth = ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x;
+        ImGui::EndMenuBar();
     }
-    ImGui::PopStyleVar();
-	ImGui::SameLine();
-	if (ImGui::Button(ICON_FA_LIST_CHECK, ImVec2(TitlebarSize, TitlebarSize)))
-	{
-		GetEngine().GetUserSettings().ShowSettings = !GetEngine().GetUserSettings().ShowSettings;
-	}
-	BUTTON_TOOLTIP(LOCTEXT("Toggle Settings Panel"))
-	ImGui::SameLine();
-	if (ImGui::Button(ICON_FA_GAUGE_SIMPLE_HIGH, ImVec2(TitlebarSize, TitlebarSize)))
-	{
-		GetEngine().GetUserSettings().ShowOverlay = !GetEngine().GetUserSettings().ShowOverlay;
-	}
-	BUTTON_TOOLTIP(LOCTEXT("Toggle Performance Overlay"))
-	ImGui::SameLine();
-    ImGui::GetForegroundDrawList()->AddLine(ImGui::GetCursorPos() + ImVec2(4, TitlebarSize / 2 - 5), ImGui::GetCursorPos() + ImVec2(4, TitlebarSize / 2 + 5), IM_COL32(255, 255, 255, 160), 2.0f);
-    ImGui::Dummy(ImVec2(10, 10));
-    ImGui::SameLine();
-    ImGui::SetCursorPosY((TitlebarSize - ImGui::GetTextLineHeight()) / 2);
-    ImGui::TextUnformatted(fmt::format("{:.0f}fps", GetEngine().GetFrameRate()).c_str());
-    titlebarLeftReservedWidth = ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x;
     ImGui::End();
 
-    ImGui::PopStyleColor();
     ImGui::PopStyleVar(4);
     GetEngine().ConfigureCustomTitleBarDrag(
         true, TitlebarSize, titlebarLeftReservedWidth, titlebarRightReservedWidth);
+}
+
+void NextRendererGameInstance::DrawBottomStatusBar()
+{
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    constexpr float barHeight = 30.0f;
+    ImGui::SetNextWindowPos(viewport->Pos + ImVec2(0.0f, viewport->Size.y - barHeight), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, barHeight), ImGuiCond_Always);
+    ImGui::SetNextWindowViewport(viewport->ID);
+    ImGui::SetNextWindowBgAlpha(1.0f);
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoDocking;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 4.0f));
+    if (ImGui::Begin("RendererStatusBar", nullptr, flags))
+    {
+        ImGui::GetWindowDrawList()->AddLine(
+            viewport->Pos + ImVec2(0.0f, viewport->Size.y - barHeight),
+            viewport->Pos + ImVec2(viewport->Size.x, viewport->Size.y - barHeight),
+            Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Border), 1.0f);
+
+        if (UserInterface* ui = GetEngine().GetUserInterface())
+        {
+            if (Runtime::UiTheme::ToolbarButton("Console", "Toggle Console", ui->IsConsoleOpen(), ImVec2(74.0f, 22.0f)))
+            {
+                ui->ToggleConsole();
+            }
+            ImGui::SameLine();
+        }
+        if (Runtime::UiTheme::ToolbarButton("Stats", "Toggle Profiler", GetEngine().GetUserSettings().ShowOverlay,
+                                            ImVec2(58.0f, 22.0f)))
+        {
+            GetEngine().GetUserSettings().ShowOverlay = !GetEngine().GetUserSettings().ShowOverlay;
+        }
+        ImGui::SameLine();
+        if (Runtime::UiTheme::ToolbarButton("Capture", "Take Screenshot", false, ImVec2(72.0f, 22.0f)))
+        {
+            RequestScreenshot(false, "");
+        }
+
+        const float centerStart = viewport->Size.x * 0.5f - 160.0f;
+        if (ImGui::GetCursorPosX() < centerStart)
+        {
+            ImGui::SameLine(centerStart);
+        }
+        ImGui::TextColored(Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted), "Frame %u",
+                           GetEngine().GetTotalFrames());
+        ImGui::SameLine(0.0f, 10.0f);
+        if (Runtime::UiTheme::ToolbarButton(ICON_FA_BACKWARD_STEP, "Previous Frame (placeholder)", false,
+                                            ImVec2(28.0f, 22.0f)))
+        {
+            stepRequested_ = true;
+        }
+        ImGui::SameLine();
+        if (Runtime::UiTheme::ToolbarButton(ICON_FA_PLAY, "Play", !playbackPaused_, ImVec2(28.0f, 22.0f)))
+        {
+            playbackPaused_ = false;
+        }
+        ImGui::SameLine();
+        if (Runtime::UiTheme::ToolbarButton(ICON_FA_PAUSE, "Pause", playbackPaused_, ImVec2(28.0f, 22.0f)))
+        {
+            playbackPaused_ = true;
+        }
+        ImGui::SameLine();
+        if (Runtime::UiTheme::ToolbarButton(ICON_FA_FORWARD_STEP, "Step Frame", false, ImVec2(28.0f, 22.0f)))
+        {
+            playbackPaused_ = true;
+            stepRequested_ = true;
+        }
+
+        VkPhysicalDeviceMemoryProperties memoryProperties{};
+        vkGetPhysicalDeviceMemoryProperties(GetEngine().GetRenderer().Device().PhysicalDevice(), &memoryProperties);
+        uint64_t totalBytes = 0;
+        for (uint32_t i = 0; i < memoryProperties.memoryHeapCount; ++i)
+        {
+            if ((memoryProperties.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0)
+            {
+                totalBytes += memoryProperties.memoryHeaps[i].size;
+            }
+        }
+        const double totalGb = static_cast<double>(totalBytes) / (1024.0 * 1024.0 * 1024.0);
+        const double usedGb = 0.0;
+        const float memoryFraction = totalGb > 0.0 ? static_cast<float>(usedGb / totalGb) : 0.0f;
+        const std::string memoryLabel = fmt::format("{:.2f}/{:.2f} GB ({:.0f}%)", usedGb, totalGb,
+                                                    memoryFraction * 100.0f);
+
+        const float rightStart = viewport->Size.x - 260.0f;
+        if (ImGui::GetCursorPosX() < rightStart)
+        {
+            ImGui::SameLine(rightStart);
+        }
+        ImGui::TextColored(Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted), "%s", memoryLabel.c_str());
+        ImGui::SameLine(0.0f, 8.0f);
+        Runtime::UiTheme::DrawProgressBar(memoryFraction, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Success),
+                                          ImVec2(92.0f, ImGui::GetTextLineHeight()));
+    }
+    ImGui::End();
+    ImGui::PopStyleVar(3);
 }

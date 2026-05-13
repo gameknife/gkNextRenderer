@@ -106,6 +106,8 @@ public:
 	bool DrawConsoleCommandInput(const char* label, const char* hint, float width = 0.0f, bool closeConsoleOnSubmit = false,
 		bool showMatchPopup = false, const char* matchPopupId = nullptr, bool refreshMatches = true);
 	void DrawConsoleLogOutput(const char* childId, const ImVec2& size = ImVec2(0.0f, 0.0f), bool bordered = true);
+	void ToggleConsole();
+	bool IsConsoleOpen() const { return showConsole_; }
 
 private:
 	NextEngine& GetEngine() {return *engine_;}

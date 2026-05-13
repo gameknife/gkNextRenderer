@@ -6,6 +6,7 @@
 #include "Runtime/Config/CVarSystem.hpp"
 #include "Runtime/Editor/ConsoleLogBuffer.hpp"
 #include "Runtime/Editor/FontLoader.h"
+#include "Runtime/Editor/ProfessionalUI.hpp"
 #include "Utilities/Exception.hpp"
 #include "Vulkan/DescriptorSystem.hpp"
 #include "Vulkan/Device.hpp"
@@ -302,63 +303,9 @@ UserInterface::FUiTextureHandle UserInterface::RequestUiTexture(const std::strin
 
 void UserInterface::SetStyle()
 {
-    ImGuiIO& io = ImGui::GetIO();
-
     // NOTE: Do not override io.IniFilename here.
     // The app/editor is responsible for choosing its ini file in the PreConfig hook.
-
-    ImVec4 activeColor = true ? ImVec4(0.42f, 0.45f, 0.5f, 1.00f) : ImVec4(0.28f, 0.45f, 0.70f, 1.00f);
-
-    ImGuiStyle* style = &ImGui::GetStyle();
-    ImVec4* colors = style->Colors;
-    ImGui::StyleColorsDark(style);
-    colors[ImGuiCol_Text] = ImVec4(0.84f, 0.84f, 0.84f, 1.00f);
-    colors[ImGuiCol_WindowBg] = ImVec4(0.22f, 0.22f, 0.22f, 1.00f);
-    colors[ImGuiCol_ChildBg] = ImVec4(0.19f, 0.19f, 0.19f, 1.00f);
-    colors[ImGuiCol_PopupBg] = ImVec4(0.19f, 0.19f, 0.19f, 1.00f);
-    colors[ImGuiCol_Border] = ImVec4(0.17f, 0.17f, 0.17f, 1.00f);
-    colors[ImGuiCol_BorderShadow] = ImVec4(0.10f, 0.10f, 0.10f, 0.00f);
-    colors[ImGuiCol_FrameBg] = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
-    colors[ImGuiCol_FrameBgHovered] = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
-    colors[ImGuiCol_FrameBgActive] = ImVec4(0.16f, 0.16f, 0.16f, 1.00f);
-    colors[ImGuiCol_TitleBg] = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
-    colors[ImGuiCol_TitleBgActive] = ImVec4(0.0f, 0.0f, 0.0f, 1.00f); // TrueBlack
-    colors[ImGuiCol_MenuBarBg] = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
-    colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
-    colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
-    colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);
-    colors[ImGuiCol_CheckMark] = activeColor;
-    colors[ImGuiCol_SliderGrab] = activeColor;
-    colors[ImGuiCol_SliderGrabActive] = activeColor;
-    colors[ImGuiCol_Button] = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
-    colors[ImGuiCol_ButtonHovered] = ImVec4(0.40f, 0.40f, 0.40f, 1.00f);
-    colors[ImGuiCol_ButtonActive] = activeColor;
-    colors[ImGuiCol_Header] = ImVec4(0.15f, 0.15f, 0.15f, 1.00f);
-    colors[ImGuiCol_HeaderHovered] = activeColor;
-    colors[ImGuiCol_HeaderActive] = ImVec4(0.15f, 0.15f, 0.15f, 1.00f);
-    colors[ImGuiCol_Separator] = ImVec4(0.18f, 0.18f, 0.18f, 1.00f);
-    colors[ImGuiCol_SeparatorHovered] = activeColor;
-    colors[ImGuiCol_SeparatorActive] = activeColor;
-    colors[ImGuiCol_ResizeGrip] = ImVec4(0.54f, 0.54f, 0.54f, 1.00f);
-    colors[ImGuiCol_ResizeGripHovered] = activeColor;
-    colors[ImGuiCol_ResizeGripActive] = ImVec4(0.19f, 0.39f, 0.69f, 1.00f);
-    colors[ImGuiCol_Tab] = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
-    colors[ImGuiCol_TabHovered] = ImVec4(0.14f, 0.14f, 0.14f, 1.00f);
-    colors[ImGuiCol_TabActive] = ImVec4(0.19f, 0.19f, 0.19f, 1.00f);
-    colors[ImGuiCol_PlotHistogram] = activeColor;
-    colors[ImGuiCol_PlotHistogramHovered] = ImVec4(0.20f, 0.39f, 0.69f, 1.00f);
-    colors[ImGuiCol_TextSelectedBg] = activeColor;
-    colors[ImGuiCol_NavHighlight] = activeColor;
-    colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.5f);
-
-    style->WindowPadding = ImVec2(12.00f, 8.00f);
-    style->ItemSpacing = ImVec2(6.00f, 6.00f);
-    style->GrabMinSize = 20.00f;
-    style->WindowRounding = 8.00f;
-    style->FrameBorderSize = 0.00f;
-    style->FrameRounding = 4.00f;
-    style->GrabRounding = 12.00f;
-    style->SeparatorTextBorderSize = 1.0f;
+    Runtime::UiTheme::ApplyProfessionalTheme();
 }
 
 void UserInterface::DrawPoint(float x, float y, float size, glm::vec4 color)
@@ -654,48 +601,113 @@ void UserInterface::DrawConsoleLogOutputInternal(const char* childId, const ImVe
     const auto logSink = Runtime::Editor::GetConsoleLogSink();
     const std::vector<spdlog::details::log_msg_buffer> lines = logSink ? logSink->last_raw() : std::vector<spdlog::details::log_msg_buffer>{};
     const uint64_t revision = Runtime::Editor::GetConsoleLogSequence();
+    static ImGuiTextFilter consoleFilter;
+    static bool showInfo = true;
+    static bool showWarn = true;
+    static bool showError = true;
+    static bool showDebug = true;
+    static size_t clearedLineOffset = 0;
+
+    if (clearedLineOffset > lines.size())
+    {
+        clearedLineOffset = 0;
+    }
+
+    auto LevelInfo = [](spdlog::level::level_enum level) -> std::pair<const char*, ImVec4>
+    {
+        switch (level)
+        {
+        case spdlog::level::trace:
+        case spdlog::level::debug:
+            return {"[Debug]", ImVec4(0.55f, 0.9f, 0.95f, 1.0f)};
+        case spdlog::level::info:
+            return {"[Info]", ImVec4(0.76f, 0.86f, 1.0f, 1.0f)};
+        case spdlog::level::warn:
+            return {"[Warn]", ImVec4(1.0f, 0.82f, 0.35f, 1.0f)};
+        case spdlog::level::err:
+        case spdlog::level::critical:
+            return {"[Error]", ImVec4(1.0f, 0.45f, 0.45f, 1.0f)};
+        case spdlog::level::off:
+        case spdlog::level::n_levels:
+            return {"[Info]", ImVec4(0.78f, 0.78f, 0.78f, 1.0f)};
+        }
+        return {"[Info]", ImVec4(0.78f, 0.78f, 0.78f, 1.0f)};
+    };
+
+    auto ShouldShowLevel = [&](spdlog::level::level_enum level)
+    {
+        switch (level)
+        {
+        case spdlog::level::trace:
+        case spdlog::level::debug:
+            return showDebug;
+        case spdlog::level::info:
+            return showInfo;
+        case spdlog::level::warn:
+            return showWarn;
+        case spdlog::level::err:
+        case spdlog::level::critical:
+            return showError;
+        case spdlog::level::off:
+        case spdlog::level::n_levels:
+            return showInfo;
+        }
+        return true;
+    };
+
+    if (ImGui::Button("Clear"))
+    {
+        clearedLineOffset = lines.size();
+        consoleScrollToBottom_ = true;
+    }
+    ImGui::SameLine();
+    consoleFilter.Draw("Filter##ConsoleFilter", 220.0f);
+    ImGui::SameLine();
+    ImGui::Checkbox("Info", &showInfo);
+    ImGui::SameLine();
+    ImGui::Checkbox("Warn", &showWarn);
+    ImGui::SameLine();
+    ImGui::Checkbox("Error", &showError);
+    ImGui::SameLine();
+    ImGui::Checkbox("Debug", &showDebug);
+
+    std::vector<size_t> visibleLines;
+    visibleLines.reserve(lines.size());
+    for (size_t i = clearedLineOffset; i < lines.size(); ++i)
+    {
+        const auto& line = lines[i];
+        const std::string payload(line.payload.data(), line.payload.size());
+        if (!ShouldShowLevel(line.level))
+        {
+            continue;
+        }
+        if (consoleFilter.IsActive() && !consoleFilter.PassFilter(payload.c_str()))
+        {
+            continue;
+        }
+        visibleLines.push_back(i);
+    }
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.55f));
     const ImGuiChildFlags childFlags = bordered ? ImGuiChildFlags_Borders : ImGuiChildFlags_None;
     if (ImGui::BeginChild(childId, size, childFlags))
     {
         ImGuiListClipper clipper;
-        clipper.Begin(static_cast<int>(lines.size()));
+        clipper.Begin(static_cast<int>(visibleLines.size()));
         while (clipper.Step())
         {
             for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i)
             {
-                const auto& line = lines[static_cast<size_t>(i)];
-                ImVec4 color = ImVec4(0.9f, 0.9f, 0.9f, 1.0f);
-                switch (line.level)
-                {
-                case spdlog::level::trace:
-                    color = ImVec4(0.55f, 0.55f, 0.55f, 1.0f);
-                    break;
-                case spdlog::level::debug:
-                    color = ImVec4(0.55f, 0.9f, 0.95f, 1.0f);
-                    break;
-                case spdlog::level::info:
-                    color = ImVec4(0.9f, 0.9f, 0.9f, 1.0f);
-                    break;
-                case spdlog::level::warn:
-                    color = ImVec4(1.0f, 0.82f, 0.35f, 1.0f);
-                    break;
-                case spdlog::level::err:
-                    color = ImVec4(1.0f, 0.45f, 0.45f, 1.0f);
-                    break;
-                case spdlog::level::critical:
-                    color = ImVec4(1.0f, 0.25f, 0.55f, 1.0f);
-                    break;
-                case spdlog::level::off:
-                case spdlog::level::n_levels:
-                    color = ImVec4(0.78f, 0.78f, 0.78f, 1.0f);
-                    break;
-                }
+                const auto& line = lines[visibleLines[static_cast<size_t>(i)]];
+                const auto [prefix, prefixColor] = LevelInfo(line.level);
 
                 const char* payloadStart = line.payload.data();
                 const char* payloadEnd = payloadStart + line.payload.size();
-                ImGui::PushStyleColor(ImGuiCol_Text, color);
+                ImGui::PushStyleColor(ImGuiCol_Text, prefixColor);
+                ImGui::TextUnformatted(prefix);
+                ImGui::PopStyleColor();
+                ImGui::SameLine();
+                ImGui::PushStyleColor(ImGuiCol_Text, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Text));
                 ImGui::TextUnformatted(payloadStart, payloadEnd);
                 ImGui::PopStyleColor();
             }
@@ -800,6 +812,12 @@ bool UserInterface::WantsToCaptureKeyboard() const { return ImGui::GetIO().WantC
 
 bool UserInterface::WantsToCaptureMouse() const { return ImGui::GetIO().WantCaptureMouse; }
 
+void UserInterface::ToggleConsole()
+{
+    showConsole_ = !showConsole_;
+    requestConsoleFocus_ = showConsole_;
+}
+
 void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gpuTimer)
 {
     if (!Settings().ShowOverlay)
@@ -808,39 +826,44 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
     }
 
     const auto& io = ImGui::GetIO();
-    const float distance = 10.0f;
-    const ImVec2 pos = ImVec2(io.DisplaySize.x - distance, distance + 40);
+    const float distance = 12.0f;
+    const ImVec2 pos = ImVec2(io.DisplaySize.x - distance, distance + 44.0f);
     const ImVec2 posPivot = ImVec2(1.0f, 0.0f);
 
     ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
-    ImGui::SetNextWindowBgAlpha(0.3f); // Transparent background
+    ImGui::SetNextWindowSize(ImVec2(430.0f, std::max(360.0f, io.DisplaySize.y - pos.y - 42.0f)), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.86f);
 
-    const auto flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDecoration |
+    const auto flags = ImGuiWindowFlags_NoDecoration |
         ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoNav |
         ImGuiWindowFlags_NoSavedSettings;
 
     if (ImGui::Begin("Statistics", &Settings().ShowOverlay, flags))
     {
         // Colors
-        const ImVec4 colHeader = ImVec4(0.8f, 0.8f, 1.0f, 1.0f);
-        const ImVec4 colLabel = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
-        const ImVec4 colVal = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
-        const ImVec4 colGood = ImVec4(0.4f, 1.0f, 0.4f, 1.0f);
-        const ImVec4 colWarn = ImVec4(1.0f, 0.8f, 0.2f, 1.0f);
-        const ImVec4 colBad = ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
+        const ImVec4 colHeader = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Blue);
+        const ImVec4 colLabel = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted);
+        const ImVec4 colVal = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Text);
+        const ImVec4 colGood = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Success);
+        const ImVec4 colWarn = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Warning);
+        const ImVec4 colBad = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Danger);
+
+        Runtime::UiTheme::DrawPanelHeader(ICON_FA_CHART_SIMPLE, "Profiler", "Frame, scene and pass timings");
 
         // Helper
         auto LabelVal = [&](const char* label, const char* fmt, auto... args)
         {
             ImGui::TextColored(colLabel, "%s", label);
-            ImGui::SameLine();
+            ImGui::SameLine(132.0f);
             ImGui::TextColored(colVal, fmt, args...);
         };
 
-        ImGui::TextColored(colHeader, "Resolution: %dx%d -> %dx%d", statistics.RenderSize.width,
-                           statistics.RenderSize.height, statistics.FramebufferSize.width,
-                           statistics.FramebufferSize.height);
-        ImGui::TextColored(colLabel, "%s", statistics.Stats["gpu"].c_str());
+        const VkPhysicalDeviceProperties deviceProperties =
+            NextEngine::GetInstance()->GetRenderer().Device().DeviceProperties();
+        ImGui::TextColored(colHeader, "Device");
+        ImGui::SameLine(132.0f);
+        ImGui::TextColored(colVal, "%s", deviceProperties.deviceName);
+        LabelVal("Resolution:", "%dx%d", statistics.FramebufferSize.width, statistics.FramebufferSize.height);
 
         ImGui::Separator();
 
@@ -854,24 +877,39 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
 
         ImGui::Separator();
 
-        // Scene
-        LabelVal("Node:", "%s", Utilities::metricFormatter(static_cast<double>(statistics.NodeCount), "").c_str());
-        LabelVal("Instance:", "%s",
-                 Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), "").c_str());
-        LabelVal("Texture:", "%d", statistics.TextureCount);
+        auto& gpuDrivenStat = NextEngine::GetInstance()->GetScene().GetGpuDrivenStat();
+        uint32_t instanceCount = gpuDrivenStat.ProcessedCount > gpuDrivenStat.CulledCount
+            ? gpuDrivenStat.ProcessedCount - gpuDrivenStat.CulledCount
+            : 0;
+        uint32_t triangleCount = gpuDrivenStat.TriangleCount > gpuDrivenStat.CulledTriangleCount
+            ? gpuDrivenStat.TriangleCount - gpuDrivenStat.CulledTriangleCount
+            : 0;
 
         ImGui::Separator();
-
-        // GPU Stats
-        auto& gpuDrivenStat = NextEngine::GetInstance()->GetScene().GetGpuDrivenStat();
-        uint32_t instanceCount = gpuDrivenStat.ProcessedCount - gpuDrivenStat.CulledCount;
-        uint32_t triangleCount = gpuDrivenStat.TriangleCount - gpuDrivenStat.CulledTriangleCount;
-
-        ImGui::TextColored(colHeader, "GPU Stats (Visible/Total):");
-        LabelVal("Draws:", "%s / %s", Utilities::metricFormatter(static_cast<double>(instanceCount), "").c_str(),
-                 Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.ProcessedCount), "").c_str());
-        LabelVal("Tris:", "%s / %s", Utilities::metricFormatter(static_cast<double>(triangleCount), "").c_str(),
-                 Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.TriangleCount), "").c_str());
+        ImGui::TextColored(colHeader, "Scene Stats");
+        if (ImGui::BeginTable("##SceneStatsTable", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp))
+        {
+            ImGui::TableSetupColumn("Key", ImGuiTableColumnFlags_WidthFixed, 132.0f);
+            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+            auto DrawSceneStat = [&](const char* label, const std::string& value)
+            {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextColored(colLabel, "%s", label);
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextColored(colVal, "%s", value.c_str());
+            };
+            DrawSceneStat("Nodes", Utilities::metricFormatter(static_cast<double>(statistics.NodeCount), ""));
+            DrawSceneStat("Instances", Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), ""));
+            DrawSceneStat("Textures", std::to_string(statistics.TextureCount));
+            DrawSceneStat("Draws", fmt::format("{} / {}",
+                                               Utilities::metricFormatter(static_cast<double>(instanceCount), ""),
+                                               Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.ProcessedCount), "")));
+            DrawSceneStat("Triangles", fmt::format("{} / {}",
+                                                   Utilities::metricFormatter(static_cast<double>(triangleCount), ""),
+                                                   Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.TriangleCount), "")));
+            ImGui::EndTable();
+        }
 
         uint32_t mainTasks = TaskCoordinator::GetInstance()->GetMainTaskCount();
         uint32_t lowTasks = TaskCoordinator::GetInstance()->GetParralledTaskCount();
@@ -1001,6 +1039,19 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
                 ImGui::TextColored(colHeader, "%s (avg %.2fms / %.1fs):", label, totalTime,
                                    timingHistoryWindowSeconds);
 
+                auto TimingBarColor = [&](float milliseconds)
+                {
+                    if (milliseconds < 1.0f)
+                    {
+                        return colGood;
+                    }
+                    if (milliseconds < 4.0f)
+                    {
+                        return colWarn;
+                    }
+                    return colBad;
+                };
+
                 if (ImGui::BeginTable(tableId, 5,
                                       ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
                                           ImGuiTableFlags_SizingFixedFit))
@@ -1032,13 +1083,9 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
                         ImGui::TextColored(colLabel, "%.2f", row.maximum);
                         ImGui::TableNextColumn();
 
-                        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, row.depth == 0 ? rootBarColor : childBarColor);
-                        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0, 0, 0, 0));
-                        ImGui::PushStyleColor(ImGuiCol_Border, colLabel);
-                        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
-                        ImGui::ProgressBar(std::min(ratio, 1.0f), ImVec2(70, ImGui::GetTextLineHeight()), "");
-                        ImGui::PopStyleVar();
-                        ImGui::PopStyleColor(3);
+                        Runtime::UiTheme::DrawProgressBar(std::min(ratio, 1.0f),
+                                                          TimingBarColor(row.average),
+                                                          ImVec2(70.0f, ImGui::GetTextLineHeight()));
                         ImGui::PopStyleVar();
                     }
                     ImGui::EndTable();

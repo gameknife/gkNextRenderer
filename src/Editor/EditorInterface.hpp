@@ -6,6 +6,8 @@
 
 #include <memory>
 
+struct EditorContext;
+
 class EditorInterface final
 {
 public:
@@ -24,7 +26,7 @@ public:
 private:
     ImGuiID DockSpaceUI();
     void RebuildDefaultDockLayout(ImGuiID id);
-    void ToolbarUI();
+    void ToolbarUI(EditorContext& ctx);
     void DrawIndicator(uint32_t frameCount);
 
     EditorGameInstance* editor_;
