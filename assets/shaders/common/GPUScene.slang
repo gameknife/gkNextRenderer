@@ -1,12 +1,10 @@
 implementing Common;
 
-[[vk::binding(0, 1)]]
-StructuredBuffer<GPUScene> GPUSceneBuffer;
-
+[[vk::push_constant]] GPUScene gpuScene;
 namespace Bindless
 {
     public GPUScene GetGpuscene()
     {
-        return GPUSceneBuffer[0];
+        return gpuScene;
     }
 }
