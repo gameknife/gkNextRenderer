@@ -311,7 +311,7 @@ public struct ALIGN_16 GPUVertex
 
 
 #ifdef __cplusplus
-// 13 addresses + 4 uint params; aligned size stays within 128 bytes for Vulkan push_constant.
+// 13 addresses + one reserved address slot + 4 uint params; aligned size is 128 bytes for Vulkan push_constant.
 public struct ALIGN_16 GPUScene
 {
     uint64_t Camera;
@@ -328,6 +328,7 @@ public struct ALIGN_16 GPUScene
     uint64_t SkinJoints;
     uint64_t SkinnedVertices;
     uint64_t JointMatrices;
+    uint64_t ReservedAddress0;
 
     uint32_t SwapChainIndex;
     uint32_t custom_data_0;
@@ -401,6 +402,7 @@ public struct ALIGN_8 GPUScene
 
     public GPUVertex *SkinnedVertices;
     public float4x4 *JointMatrices;
+    public uint64_t ReservedAddress0;
 
     public RaytracingAccelerationStructure GetTLAS() {
 		return RaytracingAccelerationStructure(TLAS);
@@ -492,37 +494,39 @@ public struct ALIGN_8 GPUScene
         get { return (uint4*)(IndirectDrawCommands_AmbientBase_Address.y + GPU_SCENE_AMBIENT_SDF_SCRATCH_OFFSET); }
     }
 
-    public uint64_t TLAS;
+    uint64_t2 TLAS_SkinWeights_Address;
     public property GPUDrivenStat* GPUDrivenStats
     {
         get { return (GPUDrivenStat*)(Camera_SceneDynamicBase_Address.y + GPU_SCENE_DYNAMIC_GPU_DRIVEN_STATS_OFFSET); }
     }
 
-    uint64_t2 SkinWeights_SkinJoints_Address;
     public property float4* SkinWeights
     {
-        get { return (float4*)SkinWeights_SkinJoints_Address.x; }
-    }
-    public property uint4* SkinJoints
-    {
-        get { return (uint4*)SkinWeights_SkinJoints_Address.y; }
+        get { return (float4*)TLAS_SkinWeights_Address.y; }
     }
 
-    uint64_t2 SkinnedVertices_JointMatrices_Address;
+    uint64_t2 SkinJoints_SkinnedVertices_Address;
+    public property uint4* SkinJoints
+    {
+        get { return (uint4*)SkinJoints_SkinnedVertices_Address.x; }
+    }
+
     public property GPUVertex* SkinnedVertices
     {
-        get { return (GPUVertex*)SkinnedVertices_JointMatrices_Address.x; }
+        get { return (GPUVertex*)SkinJoints_SkinnedVertices_Address.y; }
     }
+
+    uint64_t2 JointMatrices_Reserved_Address;
     public property float4x4* JointMatrices
     {
-        get { return (float4x4*)SkinnedVertices_JointMatrices_Address.y; }
+        get { return (float4x4*)JointMatrices_Reserved_Address.x; }
     }
 
     public RaytracingAccelerationStructure GetTLAS() {
 #ifdef PLATFORM_ANDROID
         return BindedTLAS;
 #else
-        return RaytracingAccelerationStructure(TLAS);
+        return RaytracingAccelerationStructure(TLAS_SkinWeights_Address.x);
 #endif
 	}
 
