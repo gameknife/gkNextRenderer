@@ -30,7 +30,7 @@ namespace Vulkan::PipelineCommon
 	{
 	public:
 		VULKAN_NON_COPIABLE(ZeroBindWithTLASPipeline)
-		ZeroBindWithTLASPipeline(const SwapChain& swapChain, const char* shaderfile);
+		ZeroBindWithTLASPipeline(const SwapChain& swapChain, const char* shaderfile, const Assets::Scene& scene);
 
 		void BindPipeline(VkCommandBuffer commandBuffer, const Assets::Scene& scene, uint32_t imageIndex);
 	};
@@ -39,7 +39,7 @@ namespace Vulkan::PipelineCommon
 	{
 	public:
 		VULKAN_NON_COPIABLE(ZeroBindPipeline)
-		ZeroBindPipeline(const SwapChain& swapChain, const char* shaderfile);
+		ZeroBindPipeline(const SwapChain& swapChain, const char* shaderfile, const Assets::Scene& scene);
 
 		void BindPipeline(VkCommandBuffer commandBuffer, const Assets::Scene& scene, uint32_t imageIndex);
 	};

@@ -85,7 +85,11 @@ public struct ALIGN_16 UniformBufferObject
     public uint SuperResolution;
     public float SceneEpsilonScale;
     public float AmbientCubeUnit;
+    public float AmbientCubeOffsetPadding0;
+    public float AmbientCubeOffsetPadding1;
+    public float AmbientCubeOffsetPadding2;
     public float3 AmbientCubeOffset;
+    public float AmbientCubeOffsetPadding3;
     public float4 AmbientCubeCascadeParams;
 };
 

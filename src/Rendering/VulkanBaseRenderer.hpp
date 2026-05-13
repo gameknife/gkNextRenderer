@@ -13,6 +13,8 @@
 
 namespace StreamlineWrapper
 {
+	bool ShouldInitialize();
+	void Initialize();
 	void LazyInit(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily, bool& outSupportDLSS, bool& outSupportDLSSRR);
 	void Shutdown();
 }
@@ -48,7 +50,13 @@ namespace Vulkan
 		ERT_ModernDeferred,
 		ERT_LegacyDeferred,
 		ERT_VoxelTracing,
+		ERT_LegacyDeferredNoAmbient,
 	};
+
+	inline bool RendererUsesAmbientCube(const ERendererType type)
+	{
+		return type != ERT_LegacyDeferredNoAmbient;
+	}
 		
 	class VulkanBaseRenderer
 	{
@@ -130,6 +138,8 @@ namespace Vulkan
 		
 		bool SupportDLSS() const { return supportDLSS_; }
 		bool SupportDLSSRR() const { return supportDLSSRR_; }
+		bool HasFullAmbientCubeBudget() const { return fullAmbientCubeBudget_; }
+		bool CurrentRendererUsesAmbientCube() const { return RendererUsesAmbientCube(currentLogicRenderer_); }
 
 		virtual void RegisterLogicRenderer(ERendererType type);
 		virtual void SwitchLogicRenderer(ERendererType type);
@@ -156,6 +166,8 @@ namespace Vulkan
 		bool supportDLSS_{};
 		bool supportDLSSRR_{};
 		bool supportDenoiser_ {};
+		bool streamlineDeviceExtensionsEnabled_{};
+		bool fullAmbientCubeBudget_{true};
 		// bool showWireframe_ {};
 		int frameCount_{};
 		bool forceSDR_{};
@@ -213,7 +225,7 @@ namespace Vulkan
 		
 		std::vector<Assets::UniformBuffer> uniformBuffers_;
 		
-		std::unique_ptr<PipelineCommon::GraphicsPipeline> wireframePipeline_;
+		//std::unique_ptr<PipelineCommon::GraphicsPipeline> wireframePipeline_;
 		std::unique_ptr<PipelineCommon::VisibilityPipeline> visibilityPipeline_;
 		
 		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> bufferClearPipeline_;
@@ -232,7 +244,7 @@ namespace Vulkan
 
 		std::unique_ptr<class DepthBuffer> depthBuffer_;
 		std::unique_ptr<FrameBuffer> visibilityFrameBuffer_;
-		std::unique_ptr<FrameBuffer> wireframeFramebuffer_;
+		//std::unique_ptr<FrameBuffer> wireframeFramebuffer_;
 		
 		std::unique_ptr<class CommandPool> commandPool_;
 		std::unique_ptr<class CommandPool> commandPool2_;

@@ -54,6 +54,17 @@ namespace
 
         return hash;
     }
+
+    bool ShouldEnableTextureWorkerUpload(const Vulkan::Device& device)
+    {
+        if (device.TransferFamilyIndex() == static_cast<int32_t>(device.GraphicsFamilyIndex()))
+        {
+            return false;
+        }
+
+        const bool validationEnabled = GOption && GOption->Validation;
+        return !validationEnabled;
+    }
 }
 
 namespace Assets
@@ -365,11 +376,11 @@ namespace Assets
         device_(device),
         commandPool_(commandPool),
         mainThreadCommandPool_(commandPoolMt),
-        textureWorkerUploadEnabled_(device.TransferFamilyIndex() != static_cast<int32_t>(device.GraphicsFamilyIndex()))
+        textureWorkerUploadEnabled_(ShouldEnableTextureWorkerUpload(device))
     {
         if (!textureWorkerUploadEnabled_)
         {
-            SPDLOG_INFO("Texture uploads will run on the main thread because no dedicated transfer queue is available");
+            SPDLOG_INFO("Texture uploads will run on the main thread because no dedicated transfer queue is available or validation mode is active");
         }
 
         static const uint32_t kMaxBindlessResources = 65535u;// moltenVK returns a invalid value. std::min(65535u, device.DeviceProperties().limits.maxPerStageDescriptorSamplers);

@@ -5,6 +5,7 @@
 #include "Rendering/RayTraceBaseRenderer.hpp"
 
 #include <memory>
+#include <string>
 
 namespace Vulkan
 {
@@ -25,7 +26,8 @@ namespace Vulkan::LegacyDeferred
 	public:
 		VULKAN_NON_COPIABLE(SoftwareModernRenderer)
 		
-		SoftwareModernRenderer(Vulkan::VulkanBaseRenderer& baseRender);
+		explicit SoftwareModernRenderer(Vulkan::VulkanBaseRenderer& baseRender,
+		                                std::string shaderPath = "assets/shaders/Core.SwModern.comp.slang.spv");
 		~SoftwareModernRenderer();
 
 		void CreateSwapChain(const VkExtent2D& extent) override;
@@ -36,6 +38,7 @@ namespace Vulkan::LegacyDeferred
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> deferredShadingPipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> composePipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> accumulatePipeline_;
+		std::string shaderPath_;
 		
 		uint32_t prevSingleDiffuseId_{};
 		uint32_t prevSingleSpecularId_{};

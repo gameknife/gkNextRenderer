@@ -25,6 +25,8 @@
 
 namespace Assets
 {
+    constexpr uint32_t maxGpuSceneBuffers = 8;
+
     void Scene::RegisterReflection()
     {
         using namespace entt::literals;
@@ -65,11 +67,14 @@ namespace Assets
     Scene::Scene(Vulkan::CommandPool& commandPool, bool supportRayTracing)
     {
         int flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        const bool usesAmbientCube =
+            !NextEngine::GetInstance() || NextEngine::GetInstance()->GetRenderer().CurrentRendererUsesAmbientCube();
+        const uint32_t ambientCubeCascadeCapacity = usesAmbientCube ? Assets::CUBE_CASCADE_MAX : 1u;
 
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "VoxelDatas", flags,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            Assets::CUBE_CASCADE_MAX * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::VoxelData),
+            ambientCubeCascadeCapacity * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::VoxelData),
             farAmbientCubeBuffer_, farAmbientCubeBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "PageIndex", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -79,6 +84,16 @@ namespace Assets
             commandPool, "GPUDrivenStats", flags,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(Assets::GPUDrivenStat),
             gpuDrivenStatsBuffer_, gpuDrivenStatsBuffer_Memory_);
+
+        gpuSceneBuffers_.resize(maxGpuSceneBuffers);
+        gpuSceneBufferMemories_.resize(maxGpuSceneBuffers);
+        for (uint32_t bufferIndex = 0; bufferIndex < maxGpuSceneBuffers; ++bufferIndex)
+        {
+            Vulkan::BufferUtil::CreateDeviceBufferLocal(
+                commandPool, "GPUScene", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(Assets::GPUScene),
+                gpuSceneBuffers_[bufferIndex], gpuSceneBufferMemories_[bufferIndex]);
+        }
 
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "HDRSH", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -91,7 +106,7 @@ namespace Assets
             indirectDrawBufferMemory_); // support 65535 nodes
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "AmbientCubes", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            Assets::CUBE_CASCADE_MAX * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube),
+            ambientCubeCascadeCapacity * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube),
             ambientCubeBuffer_, ambientCubeBufferMemory_);
 
         // Single-cascade ping-pong snapshot for propagation-based ambient cube bake.
@@ -148,6 +163,8 @@ namespace Assets
 
         farAmbientCubeBuffer_.reset();
         farAmbientCubeBufferMemory_.reset();
+        gpuSceneBuffers_.clear();
+        gpuSceneBufferMemories_.clear();
 
         pageIndexBuffer_.reset();
         pageIndexBufferMemory_.reset();
@@ -573,7 +590,10 @@ namespace Assets
         UpdateNodesGpuDriven();
         MarkDirty();
 
-        cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), false);
+        if (!NextEngine::GetInstance() || NextEngine::GetInstance()->GetRenderer().CurrentRendererUsesAmbientCube())
+        {
+            cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), false);
+        }
     }
 
     void Scene::CleanUp() { cpuAccelerationStructure_.ClearAllTasks(); }
@@ -814,8 +834,27 @@ namespace Assets
         gpuScene_.JointMatrices = jointMatricesAddr_;
 
         gpuScene_.SwapChainIndex = imageIndex;
+        UpdateGPUSceneBuffer(imageIndex, gpuScene_);
 
         return gpuScene_;
+    }
+
+    void Scene::UpdateGPUSceneBuffer(uint32_t imageIndex, const Assets::GPUScene& gpuScene) const
+    {
+        if (gpuSceneBufferMemories_.empty())
+        {
+            return;
+        }
+
+        const uint32_t bufferIndex = imageIndex % static_cast<uint32_t>(gpuSceneBufferMemories_.size());
+        void* data = gpuSceneBufferMemories_[bufferIndex]->Map(0, sizeof(Assets::GPUScene));
+        std::memcpy(data, &gpuScene, sizeof(Assets::GPUScene));
+        gpuSceneBufferMemories_[bufferIndex]->Unmap();
+    }
+
+    const Vulkan::Buffer& Scene::GPUSceneBuffer(uint32_t imageIndex) const
+    {
+        return *gpuSceneBuffers_[imageIndex % static_cast<uint32_t>(gpuSceneBuffers_.size())];
     }
 
     void Scene::PlayAllTracks()
@@ -991,7 +1030,8 @@ namespace Assets
             }
         }
 
-        if (NextEngine::GetInstance()->GetTotalFrames() % 30 == 0)
+        if (NextEngine::GetInstance()->GetRenderer().CurrentRendererUsesAmbientCube() &&
+            NextEngine::GetInstance()->GetTotalFrames() % 30 == 0)
         {
             const bool voxelUploadCompleted = cpuAccelerationStructure_.Tick(
                 *this, ambientCubeBufferMemory_.get(), farAmbientCubeBufferMemory_.get(), pageIndexBufferMemory_.get());

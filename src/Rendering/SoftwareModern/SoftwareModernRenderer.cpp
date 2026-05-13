@@ -5,9 +5,13 @@
 #include "Vulkan/WindowSurface.hpp"
 #include "Vulkan/GpuResources.hpp"
 
+#include <utility>
+
 namespace Vulkan::LegacyDeferred {
 
-SoftwareModernRenderer::SoftwareModernRenderer(Vulkan::VulkanBaseRenderer& baseRender):LogicRendererBase(baseRender)
+SoftwareModernRenderer::SoftwareModernRenderer(Vulkan::VulkanBaseRenderer& baseRender, std::string shaderPath) :
+	LogicRendererBase(baseRender),
+	shaderPath_(std::move(shaderPath))
 {
 	
 }
@@ -19,9 +23,9 @@ SoftwareModernRenderer::~SoftwareModernRenderer()
 	
 void SoftwareModernRenderer::CreateSwapChain(const VkExtent2D& extent)
 {
-	deferredShadingPipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Core.SwModern.comp.slang.spv"));
+	deferredShadingPipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), shaderPath_.c_str(), GetScene()));
 	accumulatePipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.ReProject.comp.slang.spv", 24));
-	composePipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Process.DenoiseJBF.comp.slang.spv"));
+	composePipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Process.DenoiseJBF.comp.slang.spv", GetScene()));
 
 	if (GOption->ReferenceMode)
 	{
@@ -56,8 +60,23 @@ void SoftwareModernRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 8, 1);	
 
 		// copy to swap-buffer
-		baseRender_.GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
-			VK_IMAGE_LAYOUT_GENERAL);
+		const auto transitionShadingOutput = [this, commandBuffer](uint32_t bindlessId)
+		{
+			baseRender_.GetStorageImage(bindlessId)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
+				VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+		};
+		transitionShadingOutput(Assets::Bindless::RT_SINGLE_DIFFUSE);
+		transitionShadingOutput(Assets::Bindless::RT_SINGLE_SPECULAR);
+		transitionShadingOutput(Assets::Bindless::RT_ALBEDO);
+		transitionShadingOutput(Assets::Bindless::RT_NORMAL);
+		transitionShadingOutput(Assets::Bindless::RT_OBJEDCTID_0);
+		transitionShadingOutput(Assets::Bindless::RT_MOTIONVECTOR);
+		transitionShadingOutput(Assets::Bindless::RT_PREV_DEPTHBUFFER);
+		transitionShadingOutput(Assets::Bindless::RT_DIFFUSE_HITDIST);
+		transitionShadingOutput(Assets::Bindless::RT_SPECULAR_HITDIST);
+		transitionShadingOutput(Assets::Bindless::RT_SPECULAR_ALBEDO);
+		baseRender_.GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
+			VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	}
 
 		{
@@ -116,7 +135,7 @@ Vulkan::VoxelTracing::VoxelTracingRenderer::~VoxelTracingRenderer()
 
 void Vulkan::VoxelTracing::VoxelTracingRenderer::CreateSwapChain(const VkExtent2D& extent)
 {
-	deferredShadingPipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Core.VoxelTracing.comp.slang.spv"));
+	deferredShadingPipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Core.VoxelTracing.comp.slang.spv", GetScene()));
 }
 
 void Vulkan::VoxelTracing::VoxelTracingRenderer::DeleteSwapChain()

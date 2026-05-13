@@ -81,13 +81,44 @@ void NextEngine::RegisterReflection()
 
 namespace
 {
-    Vulkan::ERendererType ResolveRendererType(Vulkan::ERendererType requestedType, bool supportsRayTracing)
+    Vulkan::ERendererType ResolveRendererType(
+        Vulkan::ERendererType requestedType,
+        bool supportsRayTracing,
+        bool hasFullAmbientCubeBudget)
     {
         if (!supportsRayTracing && requestedType == Vulkan::ERT_PathTracing)
         {
-            return Vulkan::ERT_ModernDeferred;
+            requestedType = Vulkan::ERT_ModernDeferred;
+        }
+        if (!hasFullAmbientCubeBudget && Vulkan::RendererUsesAmbientCube(requestedType))
+        {
+            return Vulkan::ERT_LegacyDeferredNoAmbient;
         }
         return requestedType;
+    }
+
+    bool HasFullAmbientCubeBudget(VkPhysicalDevice physicalDevice)
+    {
+        VkPhysicalDeviceMemoryProperties memoryProperties = {};
+        vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
+
+        VkDeviceSize largestDeviceLocalHeapSize = 0;
+        for (uint32_t heapIndex = 0; heapIndex < memoryProperties.memoryHeapCount; ++heapIndex)
+        {
+            if ((memoryProperties.memoryHeaps[heapIndex].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0)
+            {
+                largestDeviceLocalHeapSize =
+                    std::max(largestDeviceLocalHeapSize, memoryProperties.memoryHeaps[heapIndex].size);
+            }
+        }
+
+        const VkDeviceSize perCascadeCount =
+            static_cast<VkDeviceSize>(Assets::CUBE_SIZE_XY) * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
+        const VkDeviceSize fullAmbientCubeAllocationSize =
+            static_cast<VkDeviceSize>(Assets::CUBE_CASCADE_MAX) * perCascadeCount *
+                (sizeof(Assets::VoxelData) + sizeof(Assets::AmbientCube)) +
+            perCascadeCount * (sizeof(Assets::AmbientCube) + sizeof(glm::u32vec4));
+        return largestDeviceLocalHeapSize >= fullAmbientCubeAllocationSize;
     }
 
     std::string ResolveScreenShotFilename(const std::string& requestedFilename, const char* defaultPrefix)
@@ -116,14 +147,35 @@ namespace NextRenderer
         {
             validationLayers.push_back("VK_LAYER_KHRONOS_validation");
         }
+#if WITH_STREAMLINE
+        if (StreamlineWrapper::ShouldInitialize())
+        {
+            StreamlineWrapper::Initialize();
+        }
+        else
+        {
+            SPDLOG_INFO("Streamline DLSS plugins disabled because no NVIDIA adapter is present");
+        }
+#endif
         Vulkan::Instance* instance = new Vulkan::Instance(*window, validationLayers, VK_API_VERSION_1_2);
 
         const auto& physicalDevices = instance->PhysicalDevices();
         const uint32_t selectedGpuIdx = GOption->GpuIdx < physicalDevices.size() ? GOption->GpuIdx : 0;
+        const bool hasFullAmbientCubeBudget = HasFullAmbientCubeBudget(physicalDevices[selectedGpuIdx]);
         const bool useRayTracingRenderer =
-            !GOption->ForceNoRT && instance->SupportsRayQuery(physicalDevices[selectedGpuIdx]);
+            hasFullAmbientCubeBudget && !GOption->ForceNoRT &&
+            instance->SupportsRayQuery(physicalDevices[selectedGpuIdx]);
 
-        std::vector supportedTypes = {Vulkan::ERT_ModernDeferred, Vulkan::ERT_LegacyDeferred, Vulkan::ERT_VoxelTracing};
+        std::vector<Vulkan::ERendererType> supportedTypes;
+        if (hasFullAmbientCubeBudget)
+        {
+            supportedTypes = {Vulkan::ERT_ModernDeferred, Vulkan::ERT_LegacyDeferred,
+                              Vulkan::ERT_VoxelTracing, Vulkan::ERT_LegacyDeferredNoAmbient};
+        }
+        else
+        {
+            supportedTypes = {Vulkan::ERT_LegacyDeferredNoAmbient};
+        }
         Vulkan::VulkanBaseRenderer* renderer = nullptr;
         if (useRayTracingRenderer)
         {
@@ -142,7 +194,8 @@ namespace NextRenderer
         }
 
         auto requestedType =
-            ResolveRendererType(static_cast<Vulkan::ERendererType>(rendererType), useRayTracingRenderer);
+            ResolveRendererType(static_cast<Vulkan::ERendererType>(rendererType), useRayTracingRenderer,
+                                hasFullAmbientCubeBudget);
         if (std::find(supportedTypes.begin(), supportedTypes.end(), requestedType) == supportedTypes.end())
         {
             requestedType = *supportedTypes.begin();
@@ -386,6 +439,13 @@ void NextEngine::Start()
     { OnRendererPostRender(commandBuffer, imageIndex); };
 
     renderer_->Start();
+    auto resolvedRendererType = ResolveRendererType(
+        renderer_->CurrentLogicRendererType(), renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget());
+    if (resolvedRendererType != renderer_->CurrentLogicRendererType())
+    {
+        renderer_->SwitchLogicRenderer(resolvedRendererType);
+        userSettings_.RendererType = static_cast<int32_t>(resolvedRendererType);
+    }
 
 #if GK_ENABLE_HOT_RELOAD
     if (options_->HotReload && options_->ShaderHotReload)
@@ -508,7 +568,7 @@ bool NextEngine::Tick(bool forcingDelta)
             SCOPED_CPU_TIMER("renderer switch");
             auto requestedRendererType =
                 ResolveRendererType(static_cast<Vulkan::ERendererType>(userSettings_.RendererType),
-                                    renderer_->SupportsRayTracing());
+                                    renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget());
             if (requestedRendererType != static_cast<Vulkan::ERendererType>(userSettings_.RendererType))
             {
                 userSettings_.RendererType = static_cast<int32_t>(requestedRendererType);

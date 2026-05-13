@@ -33,9 +33,10 @@ namespace Runtime
             Custom,
         };
 
-        inline constexpr std::array<FRendererOption, 4> RendererOptions = {{
+        inline constexpr std::array<FRendererOption, 5> RendererOptions = {{
             {"SoftTracing", Vulkan::ERT_ModernDeferred},
             {"SoftModern", Vulkan::ERT_LegacyDeferred},
+            {"SoftModernNoAmbient", Vulkan::ERT_LegacyDeferredNoAmbient},
             {"VoxelTracing", Vulkan::ERT_VoxelTracing},
             {"PathTracing", Vulkan::ERT_PathTracing},
         }};

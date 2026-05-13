@@ -356,7 +356,7 @@ namespace Vulkan
         }
 
         std::string platformDefines;
-#if WIN32
+#if WIN32 && GK_ENABLE_SHADER_CLOCK
         platformDefines += " -DSHADER_CLOCK";
 #endif
 #if __APPLE__

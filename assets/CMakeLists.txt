@@ -117,7 +117,7 @@ foreach(shader ${shader_files})
     set_source_files_properties(${shader} PROPERTIES VS_TOOL_OVERRIDE "None")
 
     set(slangc_args "")
-    if(WIN32)
+    if(WIN32 AND GK_ENABLE_SHADER_CLOCK)
         set(slangc_args "-DSHADER_CLOCK")
     endif()
     if(APPLE)

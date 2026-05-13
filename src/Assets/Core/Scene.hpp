@@ -59,6 +59,8 @@ namespace Assets
         // void RebuildBVH();
 
         const Assets::GPUScene& FetchGPUScene(const uint32_t imageIndex) const;
+        void UpdateGPUSceneBuffer(uint32_t imageIndex, const Assets::GPUScene& gpuScene) const;
+        const Vulkan::Buffer& GPUSceneBuffer(uint32_t imageIndex) const;
         std::vector<std::shared_ptr<Node>>& Nodes() { return nodes_; }
         const std::vector<std::shared_ptr<Node>>& Nodes() const { return nodes_; }
         const std::vector<Model>& Models() const { return models_; }
@@ -285,6 +287,8 @@ namespace Assets
 
         Assets::GPUDrivenStat gpuDrivenStat_;
         mutable Assets::GPUScene gpuScene_;
+        mutable std::vector<std::unique_ptr<Vulkan::Buffer>> gpuSceneBuffers_;
+        mutable std::vector<std::unique_ptr<Vulkan::DeviceMemory>> gpuSceneBufferMemories_;
 
         glm::vec3 sceneAABBMin_{FLT_MAX, FLT_MAX, FLT_MAX};
         glm::vec3 sceneAABBMax_{-FLT_MAX, -FLT_MAX, -FLT_MAX};

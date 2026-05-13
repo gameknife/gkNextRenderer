@@ -16,15 +16,48 @@
 
 namespace Vulkan::PipelineCommon
 {
-	ZeroBindWithTLASPipeline::ZeroBindWithTLASPipeline(const SwapChain& swapChain, const char* shaderfile):PipelineBase(swapChain)
+	namespace
+	{
+		std::unique_ptr<DescriptorSetManager> CreateGPUSceneDescriptorSetManager(
+			const Device& device,
+			const Assets::Scene& scene,
+			uint32_t setCount,
+			VkShaderStageFlags stageFlags)
+		{
+			const std::vector<DescriptorBinding> descriptorBindings =
+			{
+				{0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, stageFlags},
+			};
+
+			auto descriptorSetManager = std::make_unique<DescriptorSetManager>(device, descriptorBindings, setCount);
+			auto& descriptorSets = descriptorSetManager->DescriptorSets();
+
+			for (uint32_t i = 0; i < setCount; ++i)
+			{
+				VkDescriptorBufferInfo gpuSceneBufferInfo = {};
+				gpuSceneBufferInfo.buffer = scene.GPUSceneBuffer(i).Handle();
+				gpuSceneBufferInfo.range = sizeof(Assets::GPUScene);
+
+				const std::vector<VkWriteDescriptorSet> descriptorWrites =
+				{
+					descriptorSets.Bind(i, 0, gpuSceneBufferInfo),
+				};
+				descriptorSets.UpdateDescriptors(i, descriptorWrites);
+			}
+
+			return descriptorSetManager;
+		}
+	}
+
+	ZeroBindWithTLASPipeline::ZeroBindWithTLASPipeline(
+	const SwapChain& swapChain,
+	const char* shaderfile,
+	const Assets::Scene& scene):PipelineBase(swapChain)
 	{
 		// Create descriptor pool/sets.
 		const auto& device = swapChain.Device();
-        
-		VkPushConstantRange pushConstantRange{};
-		pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-		pushConstantRange.offset = 0;
-		pushConstantRange.size = sizeof(Assets::GPUScene);
+		descriptorSetManager_ = CreateGPUSceneDescriptorSetManager(
+			device, scene, static_cast<uint32_t>(swapChain.Images().size()), VK_SHADER_STAGE_COMPUTE_BIT);
 
 #if ANDROID
 		std::vector<DescriptorBinding> descriptorBindings =
@@ -51,12 +84,13 @@ namespace Vulkan::PipelineCommon
 		
 		std::vector<DescriptorSetManager*> managers = {
 			&Assets::GlobalTexturePool::GetInstance()->GetDescriptorManager(),
+			descriptorSetManager_.get(),
 #if ANDROID
 			descriptorSetManager_.get()
 #endif
 		};
 
-		pipelineLayout_.reset(new class PipelineLayout(device, managers, 1, &pushConstantRange, 1));
+		pipelineLayout_.reset(new class PipelineLayout(device, managers, static_cast<uint32_t>(swapChain.Images().size())));
 		
 		const ShaderModule denoiseShader(device, shaderfile);
         
@@ -73,26 +107,26 @@ namespace Vulkan::PipelineCommon
 		uint32_t imageIndex)
 	{
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, Handle());
-		PipelineLayout().BindDescriptorSets(commandBuffer, 0);
-		vkCmdPushConstants(commandBuffer, PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-						   0, sizeof(Assets::GPUScene), &(scene.FetchGPUScene(imageIndex)));
+		scene.FetchGPUScene(imageIndex);
+		PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
 	}
     
-	ZeroBindPipeline::ZeroBindPipeline(const SwapChain& swapChain, const char* shaderfile):PipelineBase(swapChain)
+	ZeroBindPipeline::ZeroBindPipeline(
+	const SwapChain& swapChain,
+	const char* shaderfile,
+	const Assets::Scene& scene):PipelineBase(swapChain)
 	{
 		// Create descriptor pool/sets.
 		const auto& device = swapChain.Device();
-        
-		VkPushConstantRange pushConstantRange{};
-		pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-		pushConstantRange.offset = 0;
-		pushConstantRange.size = sizeof(Assets::GPUScene);
+		descriptorSetManager_ = CreateGPUSceneDescriptorSetManager(
+			device, scene, static_cast<uint32_t>(swapChain.Images().size()), VK_SHADER_STAGE_COMPUTE_BIT);
 
 		std::vector<DescriptorSetManager*> managers = {
-			&Assets::GlobalTexturePool::GetInstance()->GetDescriptorManager()
+			&Assets::GlobalTexturePool::GetInstance()->GetDescriptorManager(),
+			descriptorSetManager_.get()
 		};
 
-		pipelineLayout_.reset(new class PipelineLayout(device, managers, 1, &pushConstantRange, 1));
+		pipelineLayout_.reset(new class PipelineLayout(device, managers, static_cast<uint32_t>(swapChain.Images().size())));
 		
 		const ShaderModule denoiseShader(device, shaderfile);
         
@@ -108,9 +142,8 @@ namespace Vulkan::PipelineCommon
 	void ZeroBindPipeline::BindPipeline(VkCommandBuffer commandBuffer, const Assets::Scene& scene, uint32_t imageIndex)
 	{
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, Handle());
-		PipelineLayout().BindDescriptorSets(commandBuffer, 0);
-		vkCmdPushConstants(commandBuffer, PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-						   0, sizeof(Assets::GPUScene), &(scene.FetchGPUScene(imageIndex)));
+		scene.FetchGPUScene(imageIndex);
+		PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
 	}
 	
 	ZeroBindCustomPushConstantPipeline::ZeroBindCustomPushConstantPipeline(const SwapChain& swapChain,
@@ -245,13 +278,15 @@ namespace Vulkan::PipelineCommon
         colorBlending.blendConstants[2] = 0.0f; // Optional
         colorBlending.blendConstants[3] = 0.0f; // Optional
     	
-    	VkPushConstantRange pushConstantRange{};
-    	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    	pushConstantRange.offset = 0;
-    	pushConstantRange.size = sizeof(Assets::GPUScene);
+		descriptorSetManager_ = CreateGPUSceneDescriptorSetManager(
+			device, scene, static_cast<uint32_t>(swapChain.Images().size()), VK_SHADER_STAGE_VERTEX_BIT);
+		std::vector<DescriptorSetManager*> managers = {
+			&Assets::GlobalTexturePool::GetInstance()->GetDescriptorManager(),
+			descriptorSetManager_.get()
+		};
 
         // Create pipeline layout and render pass.
-        pipelineLayout_.reset(new class PipelineLayout(device, &pushConstantRange, 1));
+        pipelineLayout_.reset(new class PipelineLayout(device, managers, static_cast<uint32_t>(swapChain.Images().size())));
         renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_R32_UINT, depthBuffer, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
         renderPass_->SetDebugName("Visibility Render Pass");
         // Load shaders.
@@ -339,7 +374,10 @@ namespace Vulkan::PipelineCommon
 		rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 		rasterizer.depthClampEnable = VK_FALSE;
 		rasterizer.rasterizerDiscardEnable = VK_FALSE;
-		rasterizer.polygonMode = isWireFrame ? VK_POLYGON_MODE_FILL : VK_POLYGON_MODE_FILL;
+		VkPhysicalDeviceFeatures physicalDeviceFeatures = {};
+		vkGetPhysicalDeviceFeatures(device.PhysicalDevice(), &physicalDeviceFeatures);
+		rasterizer.polygonMode =
+            isWireFrame && physicalDeviceFeatures.fillModeNonSolid ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
 		rasterizer.lineWidth = 1.0f;
 		rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
 		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;

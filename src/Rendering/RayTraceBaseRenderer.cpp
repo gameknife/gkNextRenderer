@@ -123,7 +123,10 @@ namespace Vulkan::RayTracing
     void RayTraceBaseRenderer::CreateSwapChain()
     {
         Vulkan::VulkanBaseRenderer::CreateSwapChain();
-        directLightGenPipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline(SwapChain(), "assets/shaders/Bake.HwAmbientCube.comp.slang.spv"));
+        if (CurrentRendererUsesAmbientCube())
+        {
+            directLightGenPipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline(SwapChain(), "assets/shaders/Bake.HwAmbientCube.comp.slang.spv", GetScene()));
+        }
     }
 
     void RayTraceBaseRenderer::DeleteSwapChain()
@@ -222,7 +225,7 @@ namespace Vulkan::RayTracing
     {
         VulkanBaseRenderer::PostRender(commandBuffer, imageIndex);
         
-        if(supportRayTracing_ && !GOption->ForceSoftGen)
+        if(CurrentRendererUsesAmbientCube() && supportRayTracing_ && !GOption->ForceSoftGen)
         {
             const int cubesPerGroup = 64;
             const int perCascadeCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
@@ -315,9 +318,7 @@ namespace Vulkan::RayTracing
                         gpuScene.custom_data_1 = cascadeIndex;
                         gpuScene.custom_data_2 = NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation ? 1u : 0u;
                         
-                        vkCmdPushConstants(commandBuffer, directLightGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-                                           0, sizeof(Assets::GPUScene), &gpuScene);
-                
+                        GetScene().UpdateGPUSceneBuffer(imageIndex, gpuScene);
                         vkCmdDispatch(commandBuffer, dispatchGroupCount, 1, 1);
                     }
                 }
