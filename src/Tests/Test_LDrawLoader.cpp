@@ -69,6 +69,9 @@ TEST_CASE("LDraw loader preserves MPD submodel hierarchy as nodes", "[Unit][LDra
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
+    Assets::LDrawLoadOptions options;
+    options.useLibraryPak = false;
+
     REQUIRE(Assets::FLDrawLoader::LoadLDrawScene(
         sceneFile.Path().string(),
         environment,
@@ -77,7 +80,8 @@ TEST_CASE("LDraw loader preserves MPD submodel hierarchy as nodes", "[Unit][LDra
         materials,
         lights,
         tracks,
-        skeletons));
+        skeletons,
+        options));
 
     std::vector<std::shared_ptr<Assets::Node>> sceneNodes;
     for (const auto& node : nodes)
@@ -138,6 +142,7 @@ TEST_CASE("LDraw loader applies configurable LDU scale to geometry and placement
 
     Assets::LDrawLoadOptions options;
     options.lduToWorldScale = 0.1f;
+    options.useLibraryPak = false;
 
     REQUIRE(Assets::FLDrawLoader::LoadLDrawScene(
         sceneFile.Path().string(),
