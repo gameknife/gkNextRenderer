@@ -235,17 +235,20 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 }
 
 func newRunCommand(ctx appContext) *cobra.Command {
-	opts := runner.Options{Preset: ctx.preset}
 	cmd := &cobra.Command{
-		Use:   "run [target] [-- app-args]",
+		Use:   "run [gnb-flags] [target] [app-args]",
 		Short: "List runnable applications or run a built target",
-		Args:  cobra.ArbitraryArgs,
+		Long: "List runnable applications or run a built target.\n\n" +
+			"Arguments after the target are passed to the target executable, so `gnb run gkNextRenderer --help` prints the application help.",
+		Args:               cobra.ArbitraryArgs,
+		DisableFlagParsing: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-				opts.Target = args[0]
-				opts.Args = args[1:]
-			} else {
-				opts.Args = args
+			opts, showHelp, err := parseRunArgs(ctx.preset, args)
+			if err != nil {
+				return err
+			}
+			if showHelp {
+				return cmd.Help()
 			}
 			if opts.Target == "" && len(opts.Args) == 0 && !opts.List {
 				printRunnableTargets(ctx)
@@ -254,12 +257,66 @@ func newRunCommand(ctx appContext) *cobra.Command {
 			return runner.Run(ctx.repoRoot, opts)
 		},
 	}
+	var opts runner.Options
 	cmd.Flags().StringVar(&opts.BinDir, "bin-dir", "", "override binary directory")
 	cmd.Flags().BoolVar(&opts.List, "list", false, "list binary directory entries")
 	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "print command without running")
 	cmd.Flags().StringArrayVar(&opts.PresentModes, "present-mode", nil, "append --present-mode=value")
 	cmd.Flags().StringArrayVar(&opts.Scenes, "scene", nil, "append --load-scene=value")
 	return cmd
+}
+
+func parseRunArgs(preset string, args []string) (runner.Options, bool, error) {
+	opts := runner.Options{Preset: preset}
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			opts.Args = append(opts.Args, args[i+1:]...)
+			return opts, false, nil
+		}
+		if !strings.HasPrefix(arg, "-") {
+			opts.Target = arg
+			opts.Args = append(opts.Args, args[i+1:]...)
+			return opts, false, nil
+		}
+
+		switch {
+		case arg == "-h" || arg == "--help":
+			return opts, true, nil
+		case arg == "--dry-run":
+			opts.DryRun = true
+		case arg == "--list":
+			opts.List = true
+		case arg == "--bin-dir":
+			i++
+			if i >= len(args) {
+				return opts, false, fmt.Errorf("--bin-dir requires a value")
+			}
+			opts.BinDir = args[i]
+		case strings.HasPrefix(arg, "--bin-dir="):
+			opts.BinDir = strings.TrimPrefix(arg, "--bin-dir=")
+		case arg == "--present-mode":
+			i++
+			if i >= len(args) {
+				return opts, false, fmt.Errorf("--present-mode requires a value")
+			}
+			opts.PresentModes = append(opts.PresentModes, args[i])
+		case strings.HasPrefix(arg, "--present-mode="):
+			opts.PresentModes = append(opts.PresentModes, strings.TrimPrefix(arg, "--present-mode="))
+		case arg == "--scene":
+			i++
+			if i >= len(args) {
+				return opts, false, fmt.Errorf("--scene requires a value")
+			}
+			opts.Scenes = append(opts.Scenes, args[i])
+		case strings.HasPrefix(arg, "--scene="):
+			opts.Scenes = append(opts.Scenes, strings.TrimPrefix(arg, "--scene="))
+		default:
+			opts.Args = append(opts.Args, args[i:]...)
+			return opts, false, nil
+		}
+	}
+	return opts, false, nil
 }
 
 func printRunnableTargets(ctx appContext) {
