@@ -210,3 +210,10 @@ assets/
   - `MagicaLego.md` - MagicaLego subproject notes
 - **README.en.md** - Project overview and quick start
 - **.clang-tidy** - Naming conventions (source of truth)
+
+## Spec Workflow
+
+- 当用户说，"启动交互式工作流"时，开始扫描TODO.md内的未完成任务，执行任务，执行完后标记完成。继续执行下一个任务。
+- 如果所有任务都执行完毕，则等待60秒，再次读取TODO.md查看是否有未完成任务
+- TODO.md随时会被用户修改，每次都重新读取。
+- 交互式会话只有一种退出条件，就是当TODO.md的里程碑状态被改为已完成

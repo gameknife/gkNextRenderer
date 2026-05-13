@@ -434,6 +434,7 @@ namespace Vulkan
         const VkDeviceSize fullAmbientCubeAllocationSize =
             static_cast<VkDeviceSize>(Assets::CUBE_CASCADE_MAX) * perCascadeCount *
                 (sizeof(Assets::VoxelData) + sizeof(Assets::AmbientCube)) +
+            static_cast<VkDeviceSize>(Assets::ACGI_PAGE_COUNT) * Assets::ACGI_PAGE_COUNT * sizeof(Assets::PageIndex) +
             perCascadeCount * (sizeof(Assets::AmbientCube) + sizeof(glm::u32vec4));
         fullAmbientCubeBudget_ = largestDeviceLocalHeapSize >= fullAmbientCubeAllocationSize;
         if (!fullAmbientCubeBudget_)
@@ -829,8 +830,6 @@ namespace Vulkan
 
         skinnedVertexBuffer_.reset();
         skinnedVertexBufferMemory_.reset();
-        skinnedSimpleVertexBuffer_.reset();
-        skinnedSimpleVertexBufferMemory_.reset();
         jointMatricesBuffer_.reset();
         jointMatricesBufferMemory_.reset();
 
@@ -905,13 +904,6 @@ namespace Vulkan
             currentSkinnedVertexBufferSize_ = (uint32_t)requiredVertexSize;
         }
 
-        size_t requiredSimpleVertexSize = vertCount * sizeof(short) * 4;
-        if (!skinnedSimpleVertexBuffer_ || currentSkinnedSimpleVertexBufferSize_ < requiredSimpleVertexSize)
-        {
-            Vulkan::BufferUtil::CreateDeviceBufferLocal(*commandPool_, "SkinnedVerticesSimple", flags | rtxFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, requiredSimpleVertexSize, skinnedSimpleVertexBuffer_, skinnedSimpleVertexBufferMemory_);
-            currentSkinnedSimpleVertexBufferSize_ = (uint32_t)requiredSimpleVertexSize;
-        }
-
         uint32_t totalJoints = 0;
         for (auto& node : scene.Nodes())
         {
@@ -978,9 +970,9 @@ namespace Vulkan
             auto& scene = GetScene();
 
             if (skinnedVertexBuffer_) {
-                scene.SetSkinningBuffers(skinnedVertexBuffer_->GetDeviceAddress(), skinnedSimpleVertexBuffer_->GetDeviceAddress(), jointMatricesBuffer_ ? jointMatricesBuffer_->GetDeviceAddress() : 0);
+                scene.SetSkinningBuffers(skinnedVertexBuffer_->GetDeviceAddress(), jointMatricesBuffer_ ? jointMatricesBuffer_->GetDeviceAddress() : 0);
             } else {
-                scene.SetSkinningBuffers(0, 0, 0);
+                scene.SetSkinningBuffers(0, 0);
             }
 
             skinningPipeline_->BindPipeline(commandBuffer, scene, imageIndex);
@@ -1023,7 +1015,8 @@ namespace Vulkan
                         gpuScene.custom_data_1 = vertexOffset;
                         gpuScene.custom_data_2 = vertexCount;
 
-                        scene.CmdUpdateGPUSceneBuffer(commandBuffer, imageIndex, gpuScene);
+                        vkCmdPushConstants(commandBuffer, skinningPipeline_->PipelineLayout().Handle(),
+                                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
                         uint32_t groupCount = (vertexCount + 63) / 64;
                         vkCmdDispatch(commandBuffer, groupCount, 1, 1);
                     }
@@ -1154,9 +1147,12 @@ namespace Vulkan
                 const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
 
                 vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visibilityPipeline_->Handle());
-                scene.FetchGPUScene(imageIndex);
+                const Assets::GPUScene& gpuScene = scene.FetchGPUScene(imageIndex);
                 visibilityPipeline_->PipelineLayout().BindDescriptorSets(
-                    commandBuffer, imageIndex, VK_PIPELINE_BIND_POINT_GRAPHICS);
+                    commandBuffer, 0, VK_PIPELINE_BIND_POINT_GRAPHICS);
+                vkCmdPushConstants(commandBuffer, visibilityPipeline_->PipelineLayout().Handle(),
+                                   VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                                   0, sizeof(Assets::GPUScene), &gpuScene);
                 vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
                 
                 vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0,
@@ -1755,7 +1751,8 @@ namespace Vulkan
         gpuScene.custom_data_1 = 0;
         gpuScene.custom_data_2 = 0;
 
-        GetScene().CmdUpdateGPUSceneBuffer(commandBuffer, imageIndex, gpuScene);
+        vkCmdPushConstants(commandBuffer, clearAmbientCubeCachePipeline_->PipelineLayout().Handle(),
+                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
         vkCmdDispatch(commandBuffer, groupCount, 1, 1);
 
         VkBufferMemoryBarrier barriers[2]{};
@@ -1765,11 +1762,12 @@ namespace Vulkan
         barriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barriers[0].buffer = GetScene().AmbientCubeBuffer().Handle();
-        barriers[0].offset = 0;
+        barriers[0].offset = GetScene().AmbientCubesByteOffset();
         barriers[0].size = static_cast<VkDeviceSize>(totalCubeCount) * sizeof(Assets::AmbientCube);
 
         barriers[1] = barriers[0];
         barriers[1].buffer = GetScene().FarAmbientCubeBuffer().Handle();
+        barriers[1].offset = GetScene().AmbientVoxelsByteOffset();
         barriers[1].size = static_cast<VkDeviceSize>(totalCubeCount) * sizeof(Assets::VoxelData);
 
         vkCmdPipelineBarrier(commandBuffer,
@@ -1792,7 +1790,9 @@ namespace Vulkan
 
         VkBuffer cubeBuffer = GetScene().AmbientCubeBuffer().Handle();
         VkBuffer pongBuffer = GetScene().AmbientCubePongBuffer().Handle();
-        const VkDeviceSize cascadeByteOffset = static_cast<VkDeviceSize>(cascadeBaseOffset) * sizeof(Assets::AmbientCube);
+        const VkDeviceSize cascadeByteOffset =
+            GetScene().AmbientCubesByteOffset() + static_cast<VkDeviceSize>(cascadeBaseOffset) * sizeof(Assets::AmbientCube);
+        const VkDeviceSize pongByteOffset = GetScene().AmbientCubesPongByteOffset();
         const VkDeviceSize cascadeByteSize = static_cast<VkDeviceSize>(perCascadeCount) * sizeof(Assets::AmbientCube);
 
         VkBufferMemoryBarrier preCopyBarrier{};
@@ -1810,7 +1810,7 @@ namespace Vulkan
 
         VkBufferCopy copyRegion{};
         copyRegion.srcOffset = cascadeByteOffset;
-        copyRegion.dstOffset = 0;
+        copyRegion.dstOffset = pongByteOffset;
         copyRegion.size = cascadeByteSize;
         vkCmdCopyBuffer(commandBuffer, cubeBuffer, pongBuffer, 1, &copyRegion);
 
@@ -1821,7 +1821,7 @@ namespace Vulkan
         postCopyBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         postCopyBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         postCopyBarriers[0].buffer = pongBuffer;
-        postCopyBarriers[0].offset = 0;
+        postCopyBarriers[0].offset = pongByteOffset;
         postCopyBarriers[0].size = cascadeByteSize;
         postCopyBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
         postCopyBarriers[1].srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
@@ -1842,7 +1842,8 @@ namespace Vulkan
         gpuScene.custom_data_1 = cascadeIndex;
         gpuScene.custom_data_2 = 0;
 
-        GetScene().CmdUpdateGPUSceneBuffer(commandBuffer, imageIndex, gpuScene);
+        vkCmdPushConstants(commandBuffer, propagationAmbientCubeGenPipeline_->PipelineLayout().Handle(),
+                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
         vkCmdDispatch(commandBuffer, group, 1, 1);
 
         VkBufferMemoryBarrier propagationToInjectionBarrier{};
@@ -1860,7 +1861,8 @@ namespace Vulkan
 
         injectAmbientCubeGenPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
 
-        GetScene().CmdUpdateGPUSceneBuffer(commandBuffer, imageIndex, gpuScene);
+        vkCmdPushConstants(commandBuffer, injectAmbientCubeGenPipeline_->PipelineLayout().Handle(),
+                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
         vkCmdDispatch(commandBuffer, group, 1, 1);
 
         VkBufferMemoryBarrier postInjectionBarrier{};
@@ -1897,11 +1899,14 @@ namespace Vulkan
             VkBuffer seedBufferB = GetScene().AmbientCubeSdfScratchBuffer().Handle();
             const VkDeviceSize cascadeByteSize = static_cast<VkDeviceSize>(perCascadeCount) * sizeof(Assets::VoxelData);
             const VkDeviceSize seedByteSize = static_cast<VkDeviceSize>(perCascadeCount) * sizeof(glm::u32vec4);
+            const VkDeviceSize seedAByteOffset = GetScene().AmbientCubesPongByteOffset();
+            const VkDeviceSize seedBByteOffset = GetScene().AmbientSdfScratchByteOffset();
 
             for (uint32_t cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex)
             {
                 const uint32_t cascadeBaseOffset = cascadeIndex * static_cast<uint32_t>(perCascadeCount);
-                const VkDeviceSize cascadeByteOffset = static_cast<VkDeviceSize>(cascadeBaseOffset) * sizeof(Assets::VoxelData);
+                const VkDeviceSize cascadeByteOffset =
+                    GetScene().AmbientVoxelsByteOffset() + static_cast<VkDeviceSize>(cascadeBaseOffset) * sizeof(Assets::VoxelData);
 
                 VkBufferMemoryBarrier preSdfBarrier{};
                 preSdfBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
@@ -1920,10 +1925,10 @@ namespace Vulkan
                 gpuScene.custom_data_0 = cascadeBaseOffset;
                 gpuScene.custom_data_1 = cascadeIndex;
                 gpuScene.custom_data_2 = 0;
-                gpuScene.SkinnedVerticesSimple = GetScene().AmbientCubeSdfScratchBuffer().GetDeviceAddress();
 
                 distanceFieldInitPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
-                GetScene().CmdUpdateGPUSceneBuffer(commandBuffer, imageIndex, gpuScene);
+                vkCmdPushConstants(commandBuffer, distanceFieldInitPipeline_->PipelineLayout().Handle(),
+                                   VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
                 vkCmdDispatch(commandBuffer, group, 1, 1);
 
                 VkBufferMemoryBarrier initBarrier{};
@@ -1933,7 +1938,7 @@ namespace Vulkan
                 initBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
                 initBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
                 initBarrier.buffer = seedBufferA;
-                initBarrier.offset = 0;
+                initBarrier.offset = seedAByteOffset;
                 initBarrier.size = seedByteSize;
                 vkCmdPipelineBarrier(commandBuffer,
                     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -1946,7 +1951,8 @@ namespace Vulkan
 
                     gpuScene.custom_data_1 = passParity;
                     gpuScene.custom_data_2 = step;
-                    GetScene().CmdUpdateGPUSceneBuffer(commandBuffer, imageIndex, gpuScene);
+                    vkCmdPushConstants(commandBuffer, distanceFieldJumpPipeline_->PipelineLayout().Handle(),
+                                       VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
                     vkCmdDispatch(commandBuffer, group, 1, 1);
 
                     VkBufferMemoryBarrier jumpBarriers[2]{};
@@ -1956,10 +1962,11 @@ namespace Vulkan
                     jumpBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
                     jumpBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
                     jumpBarriers[0].buffer = seedBufferA;
-                    jumpBarriers[0].offset = 0;
+                    jumpBarriers[0].offset = seedAByteOffset;
                     jumpBarriers[0].size = seedByteSize;
                     jumpBarriers[1] = jumpBarriers[0];
                     jumpBarriers[1].buffer = seedBufferB;
+                    jumpBarriers[1].offset = seedBByteOffset;
                     vkCmdPipelineBarrier(commandBuffer,
                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                         0, 0, nullptr, 2, jumpBarriers, 0, nullptr);
@@ -1973,7 +1980,8 @@ namespace Vulkan
                 distanceFieldResolvePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
                 gpuScene.custom_data_1 = passParity - 1;
                 gpuScene.custom_data_2 = 0;
-                GetScene().CmdUpdateGPUSceneBuffer(commandBuffer, imageIndex, gpuScene);
+                vkCmdPushConstants(commandBuffer, distanceFieldResolvePipeline_->PipelineLayout().Handle(),
+                                   VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
                 vkCmdDispatch(commandBuffer, group, 1, 1);
 
                 VkBufferMemoryBarrier postResolveBarrier{};
@@ -2033,7 +2041,9 @@ namespace Vulkan
                     const uint32_t cascadeBaseOffset = cascadeIndex * static_cast<uint32_t>(perCascadeCount);
                     VkBuffer cubeBuffer = GetScene().AmbientCubeBuffer().Handle();
                     VkBuffer pongBuffer = GetScene().AmbientCubePongBuffer().Handle();
-                    const VkDeviceSize cascadeByteOffset = static_cast<VkDeviceSize>(cascadeBaseOffset) * sizeof(Assets::AmbientCube);
+                    const VkDeviceSize cascadeByteOffset =
+                        GetScene().AmbientCubesByteOffset() + static_cast<VkDeviceSize>(cascadeBaseOffset) * sizeof(Assets::AmbientCube);
+                    const VkDeviceSize pongByteOffset = GetScene().AmbientCubesPongByteOffset();
                     const VkDeviceSize cascadeByteSize = static_cast<VkDeviceSize>(perCascadeCount) * sizeof(Assets::AmbientCube);
 
                     VkBufferMemoryBarrier preCopyBarrier{};
@@ -2051,7 +2061,7 @@ namespace Vulkan
 
                     VkBufferCopy copyRegion{};
                     copyRegion.srcOffset = cascadeByteOffset;
-                    copyRegion.dstOffset = 0;
+                    copyRegion.dstOffset = pongByteOffset;
                     copyRegion.size = cascadeByteSize;
                     vkCmdCopyBuffer(commandBuffer, cubeBuffer, pongBuffer, 1, &copyRegion);
 
@@ -2062,7 +2072,7 @@ namespace Vulkan
                     postCopyBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
                     postCopyBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
                     postCopyBarriers[0].buffer = pongBuffer;
-                    postCopyBarriers[0].offset = 0;
+                    postCopyBarriers[0].offset = pongByteOffset;
                     postCopyBarriers[0].size = cascadeByteSize;
                     postCopyBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
                     postCopyBarriers[1].srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
@@ -2083,7 +2093,8 @@ namespace Vulkan
                     gpuScene.custom_data_1 = cascadeIndex;
                     gpuScene.custom_data_2 = NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation ? 1u : 0u;
 
-                    GetScene().CmdUpdateGPUSceneBuffer(commandBuffer, imageIndex, gpuScene);
+                    vkCmdPushConstants(commandBuffer, softAmbientCubeGenPipeline_->PipelineLayout().Handle(),
+                                       VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
                     vkCmdDispatch(commandBuffer, dispatchGroupCount, 1, 1);
                 }
             }

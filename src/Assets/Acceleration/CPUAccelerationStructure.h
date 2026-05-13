@@ -86,6 +86,7 @@ struct FCPUProbeBaker
     void ProcessCube(int x, int y, int z, ECubeProcType procType);
     void RebuildDistanceField();
     void UploadGPU(Vulkan::DeviceMemory& voxelDeviceMemory);
+    void UploadGPU(Vulkan::DeviceMemory& voxelDeviceMemory, size_t byteBaseOffset, uint32_t elementOffset);
     void UploadGPU(Vulkan::DeviceMemory& voxelDeviceMemory, uint32_t elementOffset);
     void ClearAmbientCubes();
 };
@@ -98,6 +99,7 @@ struct FCPUPageIndex
     void UpdateData(const std::vector<FCPUProbeBaker>& bakers);
     Assets::PageIndex& GetPage(glm::vec3 worldpos);
     void UploadGPU(Vulkan::DeviceMemory& deviceMemory);
+    void UploadGPU(Vulkan::DeviceMemory& deviceMemory, size_t byteBaseOffset);
 };
 
 class FCPUAccelerationStructure

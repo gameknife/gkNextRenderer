@@ -14,21 +14,15 @@ VertexOutput main(uint vertexIndex: SV_VertexID, uint baseVertex: SV_StartVertex
     uint absouluteInstanceIdx = instanceIndex + instanceBase;
     NodeProxy proxy = Bindless.GetGpuscene().Nodes[absouluteInstanceIdx];
 
-    half4* currentVerticesSimple = Bindless.GetGpuscene().VerticesSimple;
-    if (proxy.skinId != 0xFFFFFFFF)
-    {
-        currentVerticesSimple = Bindless.GetGpuscene().SkinnedVerticesSimple;
-    }
-
-    half4 Position = currentVerticesSimple[Bindless.GetGpuscene().Reorders[vertexIndex]];
-    output.position = mul(mul(Bindless.GetGpuscene().Camera[0].ViewProjection, proxy.worldTS), float4(Position.xyz, 1.0));
-
     GPUVertex* currentVertices = Bindless.GetGpuscene().Vertices;
     if (proxy.skinId != 0xFFFFFFFF)
     {
         currentVertices = Bindless.GetGpuscene().SkinnedVertices;
     }
-    Vertex vertex = UnpackVertex(currentVertices[Bindless.GetGpuscene().Reorders[vertexIndex]]);
+    GPUVertex packedVertex = currentVertices[Bindless.GetGpuscene().Reorders[vertexIndex]];
+    output.position = mul(mul(Bindless.GetGpuscene().Camera[0].ViewProjection, proxy.worldTS), float4(packedVertex.Position_Tx.xyz, 1.0));
+
+    Vertex vertex = UnpackVertex(packedVertex);
     const uint materialId = FetchMaterialId(proxy, vertex.MaterialIndex);
     output.material_model = Bindless.GetGpuscene().GetMaterial(materialId).MaterialModel;
 

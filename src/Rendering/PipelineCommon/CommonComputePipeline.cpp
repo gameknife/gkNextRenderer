@@ -16,39 +16,6 @@
 
 namespace Vulkan::PipelineCommon
 {
-	namespace
-	{
-		std::unique_ptr<DescriptorSetManager> CreateGPUSceneDescriptorSetManager(
-			const Device& device,
-			const Assets::Scene& scene,
-			uint32_t setCount,
-			VkShaderStageFlags stageFlags)
-		{
-			const std::vector<DescriptorBinding> descriptorBindings =
-			{
-				{0, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, stageFlags},
-			};
-
-			auto descriptorSetManager = std::make_unique<DescriptorSetManager>(device, descriptorBindings, setCount);
-			auto& descriptorSets = descriptorSetManager->DescriptorSets();
-
-			for (uint32_t i = 0; i < setCount; ++i)
-			{
-				VkDescriptorBufferInfo gpuSceneBufferInfo = {};
-				gpuSceneBufferInfo.buffer = scene.GPUSceneBuffer(i).Handle();
-				gpuSceneBufferInfo.range = sizeof(Assets::GPUScene);
-
-				const std::vector<VkWriteDescriptorSet> descriptorWrites =
-				{
-					descriptorSets.Bind(i, 0, gpuSceneBufferInfo),
-				};
-				descriptorSets.UpdateDescriptors(i, descriptorWrites);
-			}
-
-			return descriptorSetManager;
-		}
-	}
-
 	ZeroBindWithTLASPipeline::ZeroBindWithTLASPipeline(
 	const SwapChain& swapChain,
 	const char* shaderfile,
@@ -56,8 +23,11 @@ namespace Vulkan::PipelineCommon
 	{
 		// Create descriptor pool/sets.
 		const auto& device = swapChain.Device();
-		descriptorSetManager_ = CreateGPUSceneDescriptorSetManager(
-			device, scene, static_cast<uint32_t>(swapChain.Images().size()), VK_SHADER_STAGE_COMPUTE_BIT);
+
+		VkPushConstantRange pushConstantRange{};
+		pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+		pushConstantRange.offset = 0;
+		pushConstantRange.size = sizeof(Assets::GPUScene);
 
 #if ANDROID
 		std::vector<DescriptorBinding> descriptorBindings =
@@ -84,13 +54,12 @@ namespace Vulkan::PipelineCommon
 		
 		std::vector<DescriptorSetManager*> managers = {
 			&Assets::GlobalTexturePool::GetInstance()->GetDescriptorManager(),
-			descriptorSetManager_.get(),
 #if ANDROID
 			descriptorSetManager_.get()
 #endif
 		};
 
-		pipelineLayout_.reset(new class PipelineLayout(device, managers, static_cast<uint32_t>(swapChain.Images().size())));
+		pipelineLayout_.reset(new class PipelineLayout(device, managers, 1, &pushConstantRange, 1));
 		
 		const ShaderModule denoiseShader(device, shaderfile);
         
@@ -107,8 +76,9 @@ namespace Vulkan::PipelineCommon
 		uint32_t imageIndex)
 	{
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, Handle());
-		scene.FetchGPUScene(imageIndex);
-		PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
+		PipelineLayout().BindDescriptorSets(commandBuffer, 0);
+		vkCmdPushConstants(commandBuffer, PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+						   0, sizeof(Assets::GPUScene), &(scene.FetchGPUScene(imageIndex)));
 	}
     
 	ZeroBindPipeline::ZeroBindPipeline(
@@ -118,15 +88,17 @@ namespace Vulkan::PipelineCommon
 	{
 		// Create descriptor pool/sets.
 		const auto& device = swapChain.Device();
-		descriptorSetManager_ = CreateGPUSceneDescriptorSetManager(
-			device, scene, static_cast<uint32_t>(swapChain.Images().size()), VK_SHADER_STAGE_COMPUTE_BIT);
+
+		VkPushConstantRange pushConstantRange{};
+		pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+		pushConstantRange.offset = 0;
+		pushConstantRange.size = sizeof(Assets::GPUScene);
 
 		std::vector<DescriptorSetManager*> managers = {
 			&Assets::GlobalTexturePool::GetInstance()->GetDescriptorManager(),
-			descriptorSetManager_.get()
 		};
 
-		pipelineLayout_.reset(new class PipelineLayout(device, managers, static_cast<uint32_t>(swapChain.Images().size())));
+		pipelineLayout_.reset(new class PipelineLayout(device, managers, 1, &pushConstantRange, 1));
 		
 		const ShaderModule denoiseShader(device, shaderfile);
         
@@ -142,8 +114,9 @@ namespace Vulkan::PipelineCommon
 	void ZeroBindPipeline::BindPipeline(VkCommandBuffer commandBuffer, const Assets::Scene& scene, uint32_t imageIndex)
 	{
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, Handle());
-		scene.FetchGPUScene(imageIndex);
-		PipelineLayout().BindDescriptorSets(commandBuffer, imageIndex);
+		PipelineLayout().BindDescriptorSets(commandBuffer, 0);
+		vkCmdPushConstants(commandBuffer, PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+						   0, sizeof(Assets::GPUScene), &(scene.FetchGPUScene(imageIndex)));
 	}
 	
 	ZeroBindCustomPushConstantPipeline::ZeroBindCustomPushConstantPipeline(const SwapChain& swapChain,
@@ -278,15 +251,17 @@ namespace Vulkan::PipelineCommon
         colorBlending.blendConstants[2] = 0.0f; // Optional
         colorBlending.blendConstants[3] = 0.0f; // Optional
     	
-		descriptorSetManager_ = CreateGPUSceneDescriptorSetManager(
-			device, scene, static_cast<uint32_t>(swapChain.Images().size()), VK_SHADER_STAGE_VERTEX_BIT);
 		std::vector<DescriptorSetManager*> managers = {
 			&Assets::GlobalTexturePool::GetInstance()->GetDescriptorManager(),
-			descriptorSetManager_.get()
 		};
 
+        VkPushConstantRange pushConstantRange{};
+        pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+        pushConstantRange.offset = 0;
+        pushConstantRange.size = sizeof(Assets::GPUScene);
+
         // Create pipeline layout and render pass.
-        pipelineLayout_.reset(new class PipelineLayout(device, managers, static_cast<uint32_t>(swapChain.Images().size())));
+        pipelineLayout_.reset(new class PipelineLayout(device, managers, 1, &pushConstantRange, 1));
         renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_R32_UINT, depthBuffer, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
         renderPass_->SetDebugName("Visibility Render Pass");
         // Load shaders.

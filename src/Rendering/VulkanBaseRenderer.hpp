@@ -193,14 +193,10 @@ namespace Vulkan
 		std::unique_ptr<Buffer> skinnedVertexBuffer_;
 		std::unique_ptr<DeviceMemory> skinnedVertexBufferMemory_;
 
-		std::unique_ptr<Buffer> skinnedSimpleVertexBuffer_;
-		std::unique_ptr<DeviceMemory> skinnedSimpleVertexBufferMemory_;
-
 		std::unique_ptr<Buffer> jointMatricesBuffer_;
 		std::unique_ptr<DeviceMemory> jointMatricesBufferMemory_;
 
 		uint32_t currentSkinnedVertexBufferSize_{};
-		uint32_t currentSkinnedSimpleVertexBufferSize_{};
 		uint32_t currentJointMatrixBufferSize_{};
 
 	private:

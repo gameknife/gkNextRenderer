@@ -117,6 +117,7 @@ namespace
         const VkDeviceSize fullAmbientCubeAllocationSize =
             static_cast<VkDeviceSize>(Assets::CUBE_CASCADE_MAX) * perCascadeCount *
                 (sizeof(Assets::VoxelData) + sizeof(Assets::AmbientCube)) +
+            static_cast<VkDeviceSize>(Assets::ACGI_PAGE_COUNT) * Assets::ACGI_PAGE_COUNT * sizeof(Assets::PageIndex) +
             perCascadeCount * (sizeof(Assets::AmbientCube) + sizeof(glm::u32vec4));
         return largestDeviceLocalHeapSize >= fullAmbientCubeAllocationSize;
     }

@@ -59,10 +59,6 @@ namespace Assets
         // void RebuildBVH();
 
         const Assets::GPUScene& FetchGPUScene(const uint32_t imageIndex) const;
-        void UpdateGPUSceneBuffer(uint32_t imageIndex, const Assets::GPUScene& gpuScene) const;
-        void CmdUpdateGPUSceneBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex,
-                                     const Assets::GPUScene& gpuScene) const;
-        const Vulkan::Buffer& GPUSceneBuffer(uint32_t imageIndex) const;
         std::vector<std::shared_ptr<Node>>& Nodes() { return nodes_; }
         const std::vector<std::shared_ptr<Node>>& Nodes() const { return nodes_; }
         const std::vector<Model>& Models() const { return models_; }
@@ -72,12 +68,11 @@ namespace Assets
         std::vector<LightObject>& Lights() { return lights_; }
         const std::vector<LightObject>& Lights() const { return lights_; }
         const Vulkan::Buffer& VertexBuffer() const { return *vertexBuffer_; }
-        const Vulkan::Buffer& SimpleVertexBuffer() const { return *simpleVertexBuffer_; }
         const Vulkan::Buffer& IndexBuffer() const { return *indexBuffer_; }
-        const Vulkan::Buffer& MaterialBuffer() const { return *materialBuffer_; }
+        const Vulkan::Buffer& MaterialBuffer() const { return *sceneDynamicBuffer_; }
         const Vulkan::Buffer& OffsetsBuffer() const { return *offsetBuffer_; }
         const Vulkan::Buffer& LightBuffer() const { return *lightBuffer_; }
-        const Vulkan::Buffer& NodeMatrixBuffer() const { return *nodeMatrixBuffer_; }
+        const Vulkan::Buffer& NodeMatrixBuffer() const { return *sceneDynamicBuffer_; }
         const Vulkan::Buffer& IndirectDrawBuffer() const { return *indirectDrawBuffer_; }
         const Vulkan::Buffer& ReorderBuffer() const { return *reorderBuffer_; }
         const Vulkan::Buffer& PrimAddressBuffer() const { return *primAddressBuffer_; }
@@ -160,21 +155,25 @@ namespace Assets
         void RestoreNodes(const std::vector<RemovedNodeEntry>& entries, const std::shared_ptr<Node>& parent,
                           const std::shared_ptr<Node>& root);
 
-        void SetSkinningBuffers(VkDeviceAddress skinnedVertices, VkDeviceAddress skinnedVerticesSimple,
-                                VkDeviceAddress jointMatrices);
+        void SetSkinningBuffers(VkDeviceAddress skinnedVertices, VkDeviceAddress jointMatrices);
 
         // Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
 
-        Vulkan::Buffer& AmbientCubeBuffer() const { return *ambientCubeBuffer_; }
-        Vulkan::Buffer& AmbientCubePongBuffer() const { return *ambientCubePongBuffer_; }
-        Vulkan::Buffer& AmbientCubeSdfScratchBuffer() const { return *ambientCubeSdfScratchBuffer_; }
-        Vulkan::Buffer& FarAmbientCubeBuffer() const { return *farAmbientCubeBuffer_; }
-        Vulkan::Buffer& PageIndexBuffer() const { return *pageIndexBuffer_; }
+        Vulkan::Buffer& AmbientCubeBuffer() const { return *ambientArenaBuffer_; }
+        Vulkan::Buffer& AmbientCubePongBuffer() const { return *ambientArenaBuffer_; }
+        Vulkan::Buffer& AmbientCubeSdfScratchBuffer() const { return *ambientArenaBuffer_; }
+        Vulkan::Buffer& FarAmbientCubeBuffer() const { return *ambientArenaBuffer_; }
+        Vulkan::Buffer& PageIndexBuffer() const { return *ambientArenaBuffer_; }
+        size_t AmbientCubesByteOffset() const { return GPU_SCENE_AMBIENT_CUBES_OFFSET; }
+        size_t AmbientVoxelsByteOffset() const { return GPU_SCENE_AMBIENT_VOXELS_OFFSET; }
+        size_t AmbientPagesByteOffset() const { return GPU_SCENE_AMBIENT_PAGES_OFFSET; }
+        size_t AmbientCubesPongByteOffset() const { return GPU_SCENE_AMBIENT_CUBES_PONG_OFFSET; }
+        size_t AmbientSdfScratchByteOffset() const { return GPU_SCENE_AMBIENT_SDF_SCRATCH_OFFSET; }
 
         Vulkan::Buffer& SkinWeightBuffer() const { return *skinWeightBuffer_; }
         Vulkan::Buffer& SkinJointBuffer() const { return *skinJointBuffer_; }
 
-        Vulkan::Buffer& HDRSHBuffer() const { return *hdrSHBuffer_; }
+        Vulkan::Buffer& HDRSHBuffer() const { return *sceneDynamicBuffer_; }
 
         TextureImage& ShadowMap() const { return *cpuShadowMap_; }
 
@@ -206,9 +205,6 @@ namespace Assets
         std::unique_ptr<Vulkan::Buffer> vertexBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> vertexBufferMemory_;
 
-        std::unique_ptr<Vulkan::Buffer> simpleVertexBuffer_;
-        std::unique_ptr<Vulkan::DeviceMemory> simpleVertexBufferMemory_;
-
         std::unique_ptr<Vulkan::Buffer> indexBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> indexBufferMemory_;
 
@@ -218,8 +214,8 @@ namespace Assets
         std::unique_ptr<Vulkan::Buffer> primAddressBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> primAddressBufferMemory_;
 
-        std::unique_ptr<Vulkan::Buffer> materialBuffer_;
-        std::unique_ptr<Vulkan::DeviceMemory> materialBufferMemory_;
+        std::unique_ptr<Vulkan::Buffer> sceneDynamicBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> sceneDynamicBufferMemory_;
 
         std::unique_ptr<Vulkan::Buffer> offsetBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> offsetBufferMemory_;
@@ -227,38 +223,17 @@ namespace Assets
         std::unique_ptr<Vulkan::Buffer> lightBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> lightBufferMemory_;
 
-        std::unique_ptr<Vulkan::Buffer> nodeMatrixBuffer_;
-        std::unique_ptr<Vulkan::DeviceMemory> nodeMatrixBufferMemory_;
-
         std::unique_ptr<Vulkan::Buffer> indirectDrawBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> indirectDrawBufferMemory_;
 
-        std::unique_ptr<Vulkan::Buffer> ambientCubeBuffer_;
-        std::unique_ptr<Vulkan::DeviceMemory> ambientCubeBufferMemory_;
-
-        // Single-cascade snapshot used as read-side for propagation-based ambient cube bake.
-        std::unique_ptr<Vulkan::Buffer> ambientCubePongBuffer_;
-        std::unique_ptr<Vulkan::DeviceMemory> ambientCubePongBufferMemory_;
-        std::unique_ptr<Vulkan::Buffer> ambientCubeSdfScratchBuffer_;
-        std::unique_ptr<Vulkan::DeviceMemory> ambientCubeSdfScratchBufferMemory_;
-
-        std::unique_ptr<Vulkan::Buffer> farAmbientCubeBuffer_;
-        std::unique_ptr<Vulkan::DeviceMemory> farAmbientCubeBufferMemory_;
-
-        std::unique_ptr<Vulkan::Buffer> pageIndexBuffer_;
-        std::unique_ptr<Vulkan::DeviceMemory> pageIndexBufferMemory_;
+        std::unique_ptr<Vulkan::Buffer> ambientArenaBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> ambientArenaBufferMemory_;
 
         std::unique_ptr<Vulkan::Buffer> skinWeightBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> skinWeightBufferMemory_;
 
         std::unique_ptr<Vulkan::Buffer> skinJointBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> skinJointBufferMemory_;
-
-        std::unique_ptr<Vulkan::Buffer> hdrSHBuffer_;
-        std::unique_ptr<Vulkan::DeviceMemory> hdrSHBufferMemory_;
-
-        std::unique_ptr<Vulkan::Buffer> gpuDrivenStatsBuffer_;
-        std::unique_ptr<Vulkan::DeviceMemory> gpuDrivenStatsBuffer_Memory_;
 
         std::unique_ptr<TextureImage> cpuShadowMap_;
 
@@ -289,15 +264,12 @@ namespace Assets
 
         Assets::GPUDrivenStat gpuDrivenStat_;
         mutable Assets::GPUScene gpuScene_;
-        mutable std::vector<std::unique_ptr<Vulkan::Buffer>> gpuSceneBuffers_;
-        mutable std::vector<std::unique_ptr<Vulkan::DeviceMemory>> gpuSceneBufferMemories_;
 
         glm::vec3 sceneAABBMin_{FLT_MAX, FLT_MAX, FLT_MAX};
         glm::vec3 sceneAABBMax_{-FLT_MAX, -FLT_MAX, -FLT_MAX};
         std::vector<NextRefConst<NextMeshShapeSettings>> cachedMeshShapes_;
 
         VkDeviceAddress skinnedVerticesAddr_ = 0;
-        VkDeviceAddress skinnedVerticesSimpleAddr_ = 0;
         VkDeviceAddress jointMatricesAddr_ = 0;
     };
 } // namespace Assets

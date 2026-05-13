@@ -387,7 +387,12 @@ void FCPUProbeBaker::Init(uint32_t cascadeIdx, float unitSize, vec3 offset)
 
 void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& voxelGpuMemory, uint32_t elementOffset)
 {
-    const size_t byteOffset = static_cast<size_t>(elementOffset) * sizeof(VoxelData);
+    UploadGPU(voxelGpuMemory, 0, elementOffset);
+}
+
+void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& voxelGpuMemory, size_t byteBaseOffset, uint32_t elementOffset)
+{
+    const size_t byteOffset = byteBaseOffset + static_cast<size_t>(elementOffset) * sizeof(VoxelData);
     VoxelData* data = reinterpret_cast<VoxelData*>(voxelGpuMemory.Map(byteOffset, sizeof(VoxelData) * voxels.size()));
     std::memcpy(data, voxels.data(), voxels.size() * sizeof(VoxelData));
     voxelGpuMemory.Unmap();
@@ -734,7 +739,7 @@ bool FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::D
         {
             FCPUProbeBaker& baker = cascadeBakers[cascadeIndex];
             baker.ClearAmbientCubes();
-            baker.UploadGPU(*voxelGpuMemory, cascadeIndex * kCascadeVoxelCount);
+            baker.UploadGPU(*voxelGpuMemory, scene.AmbientVoxelsByteOffset(), cascadeIndex * kCascadeVoxelCount);
         }
     }
     else
@@ -864,13 +869,14 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
             distanceFieldRebuildTasks.clear();
             for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
             {
-                cascadeBakers[cascadeIndex].UploadGPU(*voxelGpuMemory, cascadeIndex * kCascadeVoxelCount);
+                cascadeBakers[cascadeIndex].UploadGPU(
+                    *voxelGpuMemory, scene.AmbientVoxelsByteOffset(), cascadeIndex * kCascadeVoxelCount);
             }
             if (!cascadeBakers.empty())
             {
                 cpuPageIndex.UpdateData(cascadeBakers);
             }
-            cpuPageIndex.UploadGPU(*pageIndexMemory);
+            cpuPageIndex.UploadGPU(*pageIndexMemory, scene.AmbientPagesByteOffset());
             needFlush = false;
             voxelUploadCompleted = true;
         }
@@ -895,13 +901,14 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
             // Upload to GPU, now entire range, optimize to partial upload later
             for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
             {
-                cascadeBakers[cascadeIndex].UploadGPU(*voxelGpuMemory, cascadeIndex * kCascadeVoxelCount);
+                cascadeBakers[cascadeIndex].UploadGPU(
+                    *voxelGpuMemory, scene.AmbientVoxelsByteOffset(), cascadeIndex * kCascadeVoxelCount);
             }
             if (!cascadeBakers.empty())
             {
                 cpuPageIndex.UpdateData(cascadeBakers);
             }
-            cpuPageIndex.UploadGPU(*pageIndexMemory);
+            cpuPageIndex.UploadGPU(*pageIndexMemory, scene.AmbientPagesByteOffset());
             needFlush = false;
             distanceFieldRebuildScheduled_ = false;
             distanceFieldRebuildTasks.clear();
@@ -1063,7 +1070,13 @@ Assets::PageIndex& FCPUPageIndex::GetPage(glm::vec3 worldpos)
 
 void FCPUPageIndex::UploadGPU(Vulkan::DeviceMemory& gpuMemory)
 {
-    PageIndex* data = reinterpret_cast<PageIndex*>(gpuMemory.Map(0, sizeof(PageIndex) * pageIndex.size()));
+    UploadGPU(gpuMemory, 0);
+}
+
+void FCPUPageIndex::UploadGPU(Vulkan::DeviceMemory& gpuMemory, size_t byteBaseOffset)
+{
+    PageIndex* data = reinterpret_cast<PageIndex*>(
+        gpuMemory.Map(byteBaseOffset, sizeof(PageIndex) * pageIndex.size()));
     std::memcpy(data, pageIndex.data(), pageIndex.size() * sizeof(PageIndex));
     gpuMemory.Unmap();
 }

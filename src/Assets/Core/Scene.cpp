@@ -25,7 +25,32 @@
 
 namespace Assets
 {
-    constexpr uint32_t maxGpuSceneBuffers = 8;
+    namespace
+    {
+        constexpr VkDeviceSize perAmbientCascadeCount =
+            static_cast<VkDeviceSize>(Assets::CUBE_SIZE_XY) * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
+
+        constexpr VkDeviceSize AmbientArenaSizeForCascadeCapacity(uint32_t cascadeCapacity)
+        {
+            return static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_CUBE_SIZE) * perAmbientCascadeCount *
+                       cascadeCapacity +
+                   static_cast<VkDeviceSize>(Assets::GPU_SCENE_VOXEL_DATA_SIZE) * perAmbientCascadeCount *
+                       cascadeCapacity +
+                   static_cast<VkDeviceSize>(Assets::GPU_SCENE_PAGE_INDEX_SIZE) * Assets::ACGI_PAGE_COUNT *
+                       Assets::ACGI_PAGE_COUNT +
+                   static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_CUBE_SIZE) * perAmbientCascadeCount +
+                   static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_SEED_SIZE) * perAmbientCascadeCount;
+        }
+
+        static_assert(sizeof(Assets::NodeProxy) == Assets::GPU_SCENE_NODE_PROXY_SIZE);
+        static_assert(sizeof(Assets::Material) == Assets::GPU_SCENE_MATERIAL_SIZE);
+        static_assert(sizeof(Assets::GPUDrivenStat) == Assets::GPU_SCENE_GPU_DRIVEN_STAT_SIZE);
+        static_assert(sizeof(Assets::SphericalHarmonics) == Assets::GPU_SCENE_SPHERICAL_HARMONICS_SIZE);
+        static_assert(sizeof(Assets::AmbientCube) == Assets::GPU_SCENE_AMBIENT_CUBE_SIZE);
+        static_assert(sizeof(Assets::VoxelData) == Assets::GPU_SCENE_VOXEL_DATA_SIZE);
+        static_assert(sizeof(Assets::PageIndex) == Assets::GPU_SCENE_PAGE_INDEX_SIZE);
+        static_assert(sizeof(Assets::GPUScene) <= 128);
+    }
 
     void Scene::RegisterReflection()
     {
@@ -72,54 +97,19 @@ namespace Assets
         const uint32_t ambientCubeCascadeCapacity = usesAmbientCube ? Assets::CUBE_CASCADE_MAX : 1u;
 
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
-            commandPool, "VoxelDatas", flags,
+            commandPool, "SceneDynamic", flags,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            ambientCubeCascadeCapacity * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::VoxelData),
-            farAmbientCubeBuffer_, farAmbientCubeBufferMemory_);
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(
-            commandPool, "PageIndex", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            ACGI_PAGE_COUNT * ACGI_PAGE_COUNT * sizeof(Assets::PageIndex), pageIndexBuffer_, pageIndexBufferMemory_);
+            Assets::GPU_SCENE_DYNAMIC_SIZE, sceneDynamicBuffer_, sceneDynamicBufferMemory_);
 
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
-            commandPool, "GPUDrivenStats", flags,
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(Assets::GPUDrivenStat),
-            gpuDrivenStatsBuffer_, gpuDrivenStatsBuffer_Memory_);
-
-        gpuSceneBuffers_.resize(maxGpuSceneBuffers);
-        gpuSceneBufferMemories_.resize(maxGpuSceneBuffers);
-        for (uint32_t bufferIndex = 0; bufferIndex < maxGpuSceneBuffers; ++bufferIndex)
-        {
-            Vulkan::BufferUtil::CreateDeviceBufferLocal(
-                commandPool, "GPUScene", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, sizeof(Assets::GPUScene),
-                gpuSceneBuffers_[bufferIndex], gpuSceneBufferMemories_[bufferIndex]);
-        }
-
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(
-            commandPool, "HDRSH", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            sizeof(SphericalHarmonics) * 100, hdrSHBuffer_, hdrSHBufferMemory_);
+            commandPool, "AmbientArena", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            AmbientArenaSizeForCascadeCapacity(ambientCubeCascadeCapacity), ambientArenaBuffer_, ambientArenaBufferMemory_);
 
         // gpu local buffers
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(VkDrawIndexedIndirectCommand) * 65535, indirectDrawBuffer_,
             indirectDrawBufferMemory_); // support 65535 nodes
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(
-            commandPool, "AmbientCubes", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            ambientCubeCascadeCapacity * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube),
-            ambientCubeBuffer_, ambientCubeBufferMemory_);
-
-        // Single-cascade ping-pong snapshot for propagation-based ambient cube bake.
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(
-            commandPool, "AmbientCubesPong", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(Assets::AmbientCube),
-            ambientCubePongBuffer_, ambientCubePongBufferMemory_);
-
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(
-            commandPool, "AmbientCubeSdfScratch", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z * sizeof(glm::u32vec4),
-            ambientCubeSdfScratchBuffer_, ambientCubeSdfScratchBufferMemory_);
-
         // shadow maps
         cpuShadowMap_.reset(
             new TextureImage(commandPool, SHADOWMAP_SIZE, SHADOWMAP_SIZE, 1, VK_FORMAT_R32_SFLOAT, nullptr, 0));
@@ -147,30 +137,10 @@ namespace Assets
 
         indirectDrawBuffer_.reset();
         indirectDrawBufferMemory_.reset();
-        nodeMatrixBuffer_.reset();
-        nodeMatrixBufferMemory_.reset();
-        materialBuffer_.reset();
-        materialBufferMemory_.reset();
-
-        ambientCubeBuffer_.reset();
-        ambientCubeBufferMemory_.reset();
-
-        ambientCubePongBuffer_.reset();
-        ambientCubePongBufferMemory_.reset();
-
-        ambientCubeSdfScratchBuffer_.reset();
-        ambientCubeSdfScratchBufferMemory_.reset();
-
-        farAmbientCubeBuffer_.reset();
-        farAmbientCubeBufferMemory_.reset();
-        gpuSceneBuffers_.clear();
-        gpuSceneBufferMemories_.clear();
-
-        pageIndexBuffer_.reset();
-        pageIndexBufferMemory_.reset();
-
-        hdrSHBuffer_.reset();
-        hdrSHBufferMemory_.reset();
+        sceneDynamicBuffer_.reset();
+        sceneDynamicBufferMemory_.reset();
+        ambientArenaBuffer_.reset();
+        ambientArenaBufferMemory_.reset();
 
         skinWeightBuffer_.reset();
         skinWeightBufferMemory_.reset();
@@ -437,7 +407,6 @@ namespace Assets
 
         // 重建universe mesh buffer, 这个可以比较静态
         std::vector<GPUVertex> vertices;
-        std::vector<glm::detail::hdata> simpleVertices;
         std::vector<uint32_t> indices;
         std::vector<glm::vec4> allWeights;
         std::vector<glm::uvec4> allJoints;
@@ -456,10 +425,6 @@ namespace Assets
             for (auto& vertex : model.CPUVertices())
             {
                 vertices.push_back(MakeVertex(vertex));
-                simpleVertices.push_back(glm::detail::toFloat16(vertex.Position.x));
-                simpleVertices.push_back(glm::detail::toFloat16(vertex.Position.y));
-                simpleVertices.push_back(glm::detail::toFloat16(vertex.Position.z));
-                simpleVertices.push_back(glm::detail::toFloat16(vertex.Position.x));
             }
 
             const auto& weights = model.CPUWeights();
@@ -551,21 +516,10 @@ namespace Assets
         int flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         int rtxFlags = supportRayTracing ? VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR : 0;
 
-        // this two buffer may change violate, reverse to MAX_NODES and  MAX_MATERIALS
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(
-            commandPool, "Nodes", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            sizeof(NodeProxy) * Assets::MAX_NODES, nodeMatrixBuffer_, nodeMatrixBufferMemory_);
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(
-            commandPool, "Materials", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            sizeof(Material) * Assets::MAX_MATERIALS, materialBuffer_, materialBufferMemory_);
-
         // this buffer now, no support extended
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Vertices",
                                                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rtxFlags | flags, vertices,
                                                vertexBuffer_, vertexBufferMemory_);
-        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SimpleVertices",
-                                               VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rtxFlags | flags, simpleVertices,
-                                               simpleVertexBuffer_, simpleVertexBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Indices", VK_BUFFER_USAGE_INDEX_BUFFER_BIT | flags,
                                                indices, indexBuffer_, indexBufferMemory_);
         Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "Reorder", flags, reorders, reorderBuffer_,
@@ -592,7 +546,7 @@ namespace Assets
 
         if (!NextEngine::GetInstance() || NextEngine::GetInstance()->GetRenderer().CurrentRendererUsesAmbientCube())
         {
-            cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), false);
+            cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), false);
         }
     }
 
@@ -810,81 +764,23 @@ namespace Assets
         // all gpu device address
         gpuScene_.Camera =
             NextEngine::GetInstance()->GetRenderer().UniformBuffers()[imageIndex].Buffer().GetDeviceAddress();
-        gpuScene_.Nodes = nodeMatrixBuffer_->GetDeviceAddress();
-        gpuScene_.Materials = materialBuffer_->GetDeviceAddress();
+        gpuScene_.SceneDynamicBase = sceneDynamicBuffer_->GetDeviceAddress();
         gpuScene_.Offsets = offsetBuffer_->GetDeviceAddress();
         gpuScene_.Indices = primAddressBuffer_->GetDeviceAddress();
         gpuScene_.Vertices = vertexBuffer_->GetDeviceAddress();
-        gpuScene_.VerticesSimple = simpleVertexBuffer_->GetDeviceAddress();
         gpuScene_.Reorders = reorderBuffer_->GetDeviceAddress();
-        gpuScene_.Lights = lightBuffer_->GetDeviceAddress();
-        gpuScene_.Cubes = ambientCubeBuffer_->GetDeviceAddress();
-        gpuScene_.CubesPong = ambientCubePongBuffer_->GetDeviceAddress();
-        gpuScene_.Voxels = farAmbientCubeBuffer_->GetDeviceAddress();
-        gpuScene_.Pages = pageIndexBuffer_->GetDeviceAddress();
-        gpuScene_.HDRSHs = hdrSHBuffer_->GetDeviceAddress();
         gpuScene_.IndirectDrawCommands = indirectDrawBuffer_->GetDeviceAddress();
-        gpuScene_.GPUDrivenStats = gpuDrivenStatsBuffer_->GetDeviceAddress();
+        gpuScene_.AmbientBase = ambientArenaBuffer_->GetDeviceAddress();
         gpuScene_.TLAS = NextEngine::GetInstance()->TryGetGPUAccelerationStructureAddress();
 
         gpuScene_.SkinWeights = skinWeightBuffer_->GetDeviceAddress();
         gpuScene_.SkinJoints = skinJointBuffer_->GetDeviceAddress();
         gpuScene_.SkinnedVertices = skinnedVerticesAddr_;
-        gpuScene_.SkinnedVerticesSimple = skinnedVerticesSimpleAddr_;
         gpuScene_.JointMatrices = jointMatricesAddr_;
 
         gpuScene_.SwapChainIndex = imageIndex;
-        UpdateGPUSceneBuffer(imageIndex, gpuScene_);
 
         return gpuScene_;
-    }
-
-    void Scene::UpdateGPUSceneBuffer(uint32_t imageIndex, const Assets::GPUScene& gpuScene) const
-    {
-        if (gpuSceneBufferMemories_.empty())
-        {
-            return;
-        }
-
-        const uint32_t bufferIndex = imageIndex % static_cast<uint32_t>(gpuSceneBufferMemories_.size());
-        void* data = gpuSceneBufferMemories_[bufferIndex]->Map(0, sizeof(Assets::GPUScene));
-        std::memcpy(data, &gpuScene, sizeof(Assets::GPUScene));
-        gpuSceneBufferMemories_[bufferIndex]->Unmap();
-    }
-
-    void Scene::CmdUpdateGPUSceneBuffer(
-        VkCommandBuffer commandBuffer, uint32_t imageIndex, const Assets::GPUScene& gpuScene) const
-    {
-        static_assert(sizeof(Assets::GPUScene) <= 65536);
-        static_assert(sizeof(Assets::GPUScene) % 4 == 0);
-
-        if (gpuSceneBuffers_.empty())
-        {
-            return;
-        }
-
-        const uint32_t bufferIndex = imageIndex % static_cast<uint32_t>(gpuSceneBuffers_.size());
-        const Vulkan::Buffer& gpuSceneBuffer = *gpuSceneBuffers_[bufferIndex];
-        vkCmdUpdateBuffer(commandBuffer, gpuSceneBuffer.Handle(), 0, sizeof(Assets::GPUScene), &gpuScene);
-
-        VkBufferMemoryBarrier gpuSceneBarrier{};
-        gpuSceneBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        gpuSceneBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        gpuSceneBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        gpuSceneBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        gpuSceneBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        gpuSceneBarrier.buffer = gpuSceneBuffer.Handle();
-        gpuSceneBarrier.offset = 0;
-        gpuSceneBarrier.size = sizeof(Assets::GPUScene);
-
-        vkCmdPipelineBarrier(commandBuffer,
-            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            0, 0, nullptr, 1, &gpuSceneBarrier, 0, nullptr);
-    }
-
-    const Vulkan::Buffer& Scene::GPUSceneBuffer(uint32_t imageIndex) const
-    {
-        return *gpuSceneBuffers_[imageIndex % static_cast<uint32_t>(gpuSceneBuffers_.size())];
     }
 
     void Scene::PlayAllTracks()
@@ -897,7 +793,7 @@ namespace Assets
 
     void Scene::MarkEnvDirty()
     {
-        // cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), true);
+        // cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), true);
         // cpuAccelerationStructure_.GenShadowMap(*this);
     }
 
@@ -1064,7 +960,7 @@ namespace Assets
             NextEngine::GetInstance()->GetTotalFrames() % 30 == 0)
         {
             const bool voxelUploadCompleted = cpuAccelerationStructure_.Tick(
-                *this, ambientCubeBufferMemory_.get(), farAmbientCubeBufferMemory_.get(), pageIndexBufferMemory_.get());
+                *this, ambientArenaBufferMemory_.get(), ambientArenaBufferMemory_.get(), ambientArenaBufferMemory_.get());
             if (voxelUploadCompleted && NextEngine::GetInstance()->GetUserSettings().UseGpuAmbientCubeSdf)
             {
                 RequestGpuDistanceFieldRebuild();
@@ -1072,7 +968,7 @@ namespace Assets
             
             if (sceneDirtyForCpuAS_ && !cpuAccelerationStructure_.HasPendingWork())
             {
-                if (cpuAccelerationStructure_.AsyncProcessFull(*this, farAmbientCubeBufferMemory_.get(), true))
+                if (cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), true))
                 {
                     sceneDirtyForCpuAS_ = false;
                 }
@@ -1091,10 +987,10 @@ namespace Assets
             gpuMaterials_.push_back(material.gpuMaterial_);
         }
 
-        Material* data =
-            reinterpret_cast<Material*>(materialBufferMemory_->Map(0, sizeof(Material) * gpuMaterials_.size()));
+        Material* data = reinterpret_cast<Material*>(sceneDynamicBufferMemory_->Map(
+            Assets::GPU_SCENE_DYNAMIC_MATERIALS_OFFSET, sizeof(Material) * gpuMaterials_.size()));
         std::memcpy(data, gpuMaterials_.data(), gpuMaterials_.size() * sizeof(Material));
-        materialBufferMemory_->Unmap();
+        sceneDynamicBufferMemory_->Unmap();
 
         NextEngine::GetInstance()->SetProgressiveRendering(false, false);
     }
@@ -1103,12 +999,13 @@ namespace Assets
     {
         GPUDrivenStat zero{};
         // read back gpu driven stats
-        const auto data = gpuDrivenStatsBuffer_Memory_->Map(0, sizeof(Assets::GPUDrivenStat));
+        const auto data = sceneDynamicBufferMemory_->Map(
+            Assets::GPU_SCENE_DYNAMIC_GPU_DRIVEN_STATS_OFFSET, sizeof(Assets::GPUDrivenStat));
         // download
         GPUDrivenStat* gpuData = static_cast<GPUDrivenStat*>(data);
         std::memcpy(&gpuDrivenStat_, gpuData, sizeof(GPUDrivenStat));
         std::memcpy(gpuData, &zero, sizeof(GPUDrivenStat)); // reset to zero
-        gpuDrivenStatsBuffer_Memory_->Unmap();
+        sceneDynamicBufferMemory_->Unmap();
 
 
         // if mat dirty, update
@@ -1127,9 +1024,10 @@ namespace Assets
         if (shData.size() > 0)
         {
             SphericalHarmonics* data = reinterpret_cast<SphericalHarmonics*>(
-                hdrSHBufferMemory_->Map(0, sizeof(SphericalHarmonics) * shData.size()));
+                sceneDynamicBufferMemory_->Map(
+                    Assets::GPU_SCENE_DYNAMIC_HDRSHS_OFFSET, sizeof(SphericalHarmonics) * shData.size()));
             std::memcpy(data, shData.data(), shData.size() * sizeof(SphericalHarmonics));
-            hdrSHBufferMemory_->Unmap();
+            sceneDynamicBufferMemory_->Unmap();
         }
     }
 
@@ -1202,9 +1100,10 @@ namespace Assets
                 {
                     SCOPED_CPU_TIMER("upload nodeproxy");
                     NodeProxy* data = reinterpret_cast<NodeProxy*>(
-                        nodeMatrixBufferMemory_->Map(0, sizeof(NodeProxy) * nodeProxys.size()));
+                        sceneDynamicBufferMemory_->Map(
+                            Assets::GPU_SCENE_DYNAMIC_NODES_OFFSET, sizeof(NodeProxy) * nodeProxys.size()));
                     std::memcpy(data, nodeProxys.data(), nodeProxys.size() * sizeof(NodeProxy));
-                    nodeMatrixBufferMemory_->Unmap();
+                    sceneDynamicBufferMemory_->Unmap();
                 }
                 return true;
             }
@@ -1331,11 +1230,9 @@ namespace Assets
         }
     }
 
-    void Scene::SetSkinningBuffers(VkDeviceAddress skinnedVertices, VkDeviceAddress skinnedVerticesSimple,
-                                   VkDeviceAddress jointMatrices)
+    void Scene::SetSkinningBuffers(VkDeviceAddress skinnedVertices, VkDeviceAddress jointMatrices)
     {
         skinnedVerticesAddr_ = skinnedVertices;
-        skinnedVerticesSimpleAddr_ = skinnedVerticesSimple;
         jointMatricesAddr_ = jointMatrices;
     }
 
