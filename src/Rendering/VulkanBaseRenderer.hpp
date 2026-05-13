@@ -202,6 +202,7 @@ namespace Vulkan
 	private:
 		void RecreateSwapChain();
 		void UpdateUniformBuffer(uint32_t imageIndex);
+		void DrawWireframeOverlay(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
 		const VkPresentModeKHR presentMode_;
 		bool requestRecreateSwapChain_ = false;
@@ -221,7 +222,7 @@ namespace Vulkan
 		
 		std::vector<Assets::UniformBuffer> uniformBuffers_;
 		
-		//std::unique_ptr<PipelineCommon::GraphicsPipeline> wireframePipeline_;
+		std::unique_ptr<PipelineCommon::GraphicsPipeline> wireframePipeline_;
 		std::unique_ptr<PipelineCommon::VisibilityPipeline> visibilityPipeline_;
 		
 		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> bufferClearPipeline_;
@@ -240,7 +241,7 @@ namespace Vulkan
 
 		std::unique_ptr<class DepthBuffer> depthBuffer_;
 		std::unique_ptr<FrameBuffer> visibilityFrameBuffer_;
-		//std::unique_ptr<FrameBuffer> wireframeFramebuffer_;
+		std::vector<FrameBuffer> wireframeFrameBuffers_;
 		
 		std::unique_ptr<class CommandPool> commandPool_;
 		std::unique_ptr<class CommandPool> commandPool2_;

@@ -310,16 +310,17 @@ namespace Vulkan::PipelineCommon
 	const bool isWireFrame) :
 	PipelineBase(swapChain)
 	{
+        (void)uniformBuffers;
+        (void)scene;
+
 		const auto& device = swapChain.Device();
-		const auto bindingDescription = Assets::GPUVertex::GetFastBindingDescription();
-		const auto attributeDescriptions = Assets::GPUVertex::GetFastAttributeDescriptions();
 
 		VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
 		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-		vertexInputInfo.vertexBindingDescriptionCount = 1;
-		vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-		vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-		vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+		vertexInputInfo.vertexBindingDescriptionCount = 0;
+		vertexInputInfo.pVertexBindingDescriptions = nullptr;
+		vertexInputInfo.vertexAttributeDescriptionCount = 0;
+		vertexInputInfo.pVertexAttributeDescriptions = nullptr;
 
 		VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
 		inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -354,7 +355,7 @@ namespace Vulkan::PipelineCommon
 		rasterizer.polygonMode =
             isWireFrame && physicalDeviceFeatures.fillModeNonSolid ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
 		rasterizer.lineWidth = 1.0f;
-		rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+		rasterizer.cullMode = VK_CULL_MODE_NONE;
 		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 		rasterizer.depthBiasEnable = VK_FALSE;
 		rasterizer.depthBiasConstantFactor = 0.0f; // Optional
@@ -403,47 +404,18 @@ namespace Vulkan::PipelineCommon
 		colorBlending.blendConstants[2] = 0.0f; // Optional
 		colorBlending.blendConstants[3] = 0.0f; // Optional
 
-		// Create descriptor pool/sets.
-		std::vector<DescriptorBinding> descriptorBindings =
-		{
-			{0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT},
-			{1, 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT}
+		std::vector<DescriptorSetManager*> managers = {
+			&Assets::GlobalTexturePool::GetInstance()->GetDescriptorManager(),
 		};
 
-		descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, uniformBuffers.size()));
-
-		auto& descriptorSets = descriptorSetManager_->DescriptorSets();
-
-		for (uint32_t i = 0; i != swapChain.Images().size(); ++i)
-		{
-			// Uniform buffer
-			VkDescriptorBufferInfo uniformBufferInfo = {};
-			uniformBufferInfo.buffer = uniformBuffers[i].Buffer().Handle();
-			uniformBufferInfo.range = VK_WHOLE_SIZE;
-
-			// Nodes buffer
-			VkDescriptorBufferInfo nodesBufferInfo = {};
-			nodesBufferInfo.buffer = scene.NodeMatrixBuffer().Handle();
-			nodesBufferInfo.range = VK_WHOLE_SIZE;
-
-			const std::vector<VkWriteDescriptorSet> descriptorWrites =
-			{
-				descriptorSets.Bind(i, 0, uniformBufferInfo),
-				descriptorSets.Bind(i, 1, nodesBufferInfo),
-			};
-
-			descriptorSets.UpdateDescriptors(i, descriptorWrites);
-		}
-
 		VkPushConstantRange pushConstantRange{};
-		// Push constants will only be accessible at the selected pipeline stages, for this sample it's the vertex shader that reads them
 		pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 		pushConstantRange.offset = 0;
-		pushConstantRange.size = 4 * 16;
+		pushConstantRange.size = sizeof(Assets::GPUScene);
 		
 		// Create pipeline layout and render pass.
-		pipelineLayout_.reset(new class PipelineLayout(device, descriptorSetManager_->DescriptorSetLayout(), &pushConstantRange, 1));
-		renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_R16G16B16A16_SFLOAT, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_LOAD));
+		pipelineLayout_.reset(new class PipelineLayout(device, managers, 1, &pushConstantRange, 1));
+		renderPass_.reset(new class RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_LOAD));
 		renderPass_->SetDebugName("Wireframe Render Pass");
 
 		// Load shaders.

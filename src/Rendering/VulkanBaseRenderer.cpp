@@ -754,9 +754,13 @@ namespace Vulkan
         // 公用RenderImages
         CreateRenderImages();
 
-        // 最简单的fallback pipeline, 也用作 wireframe pipeline
-        //wireframePipeline_.reset(new class PipelineCommon::GraphicsPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), true));
-        //wireframeFramebuffer_.reset(new FrameBuffer(swapChain_->RenderExtent(), GetStorageImage(Assets::Bindless::RT_DENOISED)->GetImageView(), wireframePipeline_->RenderPass()));
+        wireframePipeline_.reset(new class PipelineCommon::GraphicsPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), true));
+        wireframeFrameBuffers_.clear();
+        wireframeFrameBuffers_.reserve(swapChain_->ImageViews().size());
+        for (const auto& imageView : swapChain_->ImageViews())
+        {
+            wireframeFrameBuffers_.emplace_back(swapChain_->Extent(), *imageView, wireframePipeline_->RenderPass());
+        }
 
         // 公用Pipeline
         simpleComposePipeline_.reset( new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.UpScaleFSR.comp.slang.spv", 20));
@@ -815,8 +819,8 @@ namespace Vulkan
         screenShotImageMemory_.reset();
         screenShotImage_.reset();
         commandBuffers_.reset();
-        //wireframePipeline_.reset();
-        //wireframeFramebuffer_.reset();
+        wireframeFrameBuffers_.clear();
+        wireframePipeline_.reset();
         bufferClearPipeline_.reset();
         softAmbientCubeGenPipeline_.reset();
         clearAmbientCubeCachePipeline_.reset();
@@ -1575,6 +1579,47 @@ namespace Vulkan
         currentLogicRenderer_ = type;
     }
 
+    void VulkanBaseRenderer::DrawWireframeOverlay(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+    {
+        if (!wireframePipeline_ || imageIndex >= wireframeFrameBuffers_.size())
+        {
+            SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
+            return;
+        }
+
+        SCOPED_GPU_TIMER("wireframe");
+
+        ImageMemoryBarrier::FullInsert(
+            commandBuffer, SwapChain().Images()[imageIndex],
+            VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT, 0,
+            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
+        VkRenderPassBeginInfo renderPassInfo = {};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassInfo.renderPass = wireframePipeline_->RenderPass().Handle();
+        renderPassInfo.framebuffer = wireframeFrameBuffers_[imageIndex].Handle();
+        renderPassInfo.renderArea.offset = {0, 0};
+        renderPassInfo.renderArea.extent = SwapChain().Extent();
+        renderPassInfo.clearValueCount = 0;
+        renderPassInfo.pClearValues = nullptr;
+
+        vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+        {
+            const auto& scene = GetScene();
+            const Assets::GPUScene& gpuScene = scene.FetchGPUScene(imageIndex);
+
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, wireframePipeline_->Handle());
+            wireframePipeline_->PipelineLayout().BindDescriptorSets(
+                commandBuffer, 0, VK_PIPELINE_BIND_POINT_GRAPHICS);
+            vkCmdPushConstants(commandBuffer, wireframePipeline_->PipelineLayout().Handle(),
+                               VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
+            vkCmdBindIndexBuffer(commandBuffer, scene.IndexBuffer().Handle(), 0, VK_INDEX_TYPE_UINT32);
+            vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0,
+                                     scene.GetIndirectDrawBatchCount(), sizeof(VkDrawIndexedIndirectCommand));
+        }
+        vkCmdEndRenderPass(commandBuffer);
+    }
+
     void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
         if (GOption->ReferenceMode)
@@ -1652,47 +1697,6 @@ namespace Vulkan
                 logicRenderers_[currentLogicRenderer_]->Render(commandBuffer, imageIndex);
             }
 
-            // if (NextEngine::GetInstance()->GetShowFlags().ShowWireframe)            {
-            //    SCOPED_GPU_TIMER("wireframe");
-            //
-            //    VkRenderPassBeginInfo renderPassInfo = {};
-            //    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            //    renderPassInfo.renderPass = wireframePipeline_->RenderPass().Handle();
-            //    renderPassInfo.framebuffer = wireframeFramebuffer_->Handle();
-            //    renderPassInfo.renderArea.offset = {0, 0};
-            //    renderPassInfo.renderArea.extent = swapChain_->RenderExtent();
-                
-                // vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-                // {
-                //     auto& scene = GetScene();
-                //
-                //     VkDescriptorSet descriptorSets[] = {wireframePipeline_->DescriptorSet(imageIndex)};
-                //     VkBuffer vertexBuffers[] = {scene.SimpleVertexBuffer().Handle()};
-                //     const VkBuffer indexBuffer = scene.PrimAddressBuffer().Handle();
-                //     VkDeviceSize offsets[] = {0};
-                //
-                //     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, wireframePipeline_->Handle());
-                //     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                //                             wireframePipeline_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
-                //     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-                //     vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-                //
-                //     // drawcall one by one, old school pipeline only
-                //     for (const auto& node : scene.GetNodeProxys())
-                //     {
-                //         auto& offset = scene.Offsets()[node.modelId];
-                //         const auto indexCount = static_cast<uint32_t>(offset.indexCount);
-                //         if (indexCount == 0) continue;
-                //
-                //         glm::mat4 worldMatrix = node.worldTS;
-                //         vkCmdPushConstants(commandBuffer, wireframePipeline_->PipelineLayout().Handle(),
-                //                            VK_SHADER_STAGE_VERTEX_BIT,0, sizeof(glm::mat4), &worldMatrix);
-                //         vkCmdDrawIndexed(commandBuffer, indexCount, 1, offset.indexOffset, static_cast<int>(offset.vertexOffset), 0);
-                //     }
-                // }
-                // vkCmdEndRenderPass(commandBuffer);
-            //}
-            
             {
                 SCOPED_GPU_TIMER("resolve pass");
 
@@ -1730,7 +1734,15 @@ namespace Vulkan
                                VK_FILTER_LINEAR);
 #endif
                 }
-                SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
+
+                if (NextEngine::GetInstance()->GetShowFlags().ShowWireframe)
+                {
+                    DrawWireframeOverlay(commandBuffer, imageIndex);
+                }
+                else
+                {
+                    SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
+                }
             }
         }
     }

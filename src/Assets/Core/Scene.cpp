@@ -49,7 +49,11 @@ namespace Assets
         static_assert(sizeof(Assets::AmbientCube) == Assets::GPU_SCENE_AMBIENT_CUBE_SIZE);
         static_assert(sizeof(Assets::VoxelData) == Assets::GPU_SCENE_VOXEL_DATA_SIZE);
         static_assert(sizeof(Assets::PageIndex) == Assets::GPU_SCENE_PAGE_INDEX_SIZE);
-        static_assert(sizeof(Assets::GPUScene) <= 128);
+        static_assert(Assets::GPU_SCENE_AMBIENT_PER_CASCADE_COUNT == perAmbientCascadeCount);
+        static_assert(Assets::GPU_SCENE_AMBIENT_CASCADE_MAX == Assets::CUBE_CASCADE_MAX);
+        static_assert(Assets::GPU_SCENE_ACGI_PAGE_COUNT == Assets::ACGI_PAGE_COUNT);
+        static_assert(Assets::GPU_SCENE_AMBIENT_SIZE == AmbientArenaSizeForCascadeCapacity(Assets::CUBE_CASCADE_MAX));
+        static_assert(sizeof(Assets::GPUScene) == 128);
     }
 
     void Scene::RegisterReflection()
@@ -777,6 +781,7 @@ namespace Assets
         gpuScene_.SkinJoints = skinJointBuffer_->GetDeviceAddress();
         gpuScene_.SkinnedVertices = skinnedVerticesAddr_;
         gpuScene_.JointMatrices = jointMatricesAddr_;
+        gpuScene_.ReservedAddress0 = 0;
 
         gpuScene_.SwapChainIndex = imageIndex;
 
