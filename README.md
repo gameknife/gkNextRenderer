@@ -62,7 +62,7 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 - **ECS + Reflection**：基于 entt 的组件系统，加上反射层，服务于运行时、编辑器和脚本绑定
 - **ImGui 编辑器**：`gkNextEditor` 面向材质、场景和运行时内容的编辑工作流
-- **QuickJS 脚本热重载**：运行时使用仓库内置 `tools/tsc/tsc[.exe]` 编译 TypeScript（Windows 为 `tsc.exe`，macOS/Linux 为 `tsc`），无需 Node/npm 或全局 `tsc`
+- **QuickJS 脚本热重载**：运行时使用仓库内置 `tools/tsc/tsc[.exe]` 编译 TypeScript（Windows 为 `tsc.exe`，macOS/Linux 为 `tsc`），无需 Node/npm 或全局 `tsc`；整合链路见 [docs/typescript-integration.md](docs/typescript-integration.md)
 - **Jolt Physics**：为交互原型、拖拽玩法和游戏化验证提供更真实的物理基础
 
 ### 3. 代码规模可控，适合学习和扩展
