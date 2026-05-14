@@ -1,111 +1,515 @@
-{{define "todo_panel"}}
-<h2>TODO</h2>
+{{define "tab_todo"}}
+<div class="tab-todo">
+  <aside>
+    <div class="card">
+      <h2 class="card-title">
+        <span class="ico">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          </svg>
+        </span>
+        项目信息
+      </h2>
+      <div class="info-row">
+        <span class="k">repo</span>
+        <span class="v" title="{{.RepoRoot}}">
+          {{.RepoRoot}}
+          <button class="copy-btn" type="button" onclick="navigator.clipboard.writeText('{{.RepoRoot}}')" title="copy">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+        </span>
+      </div>
+      <div class="info-row"><span class="k">preset</span><span class="v">{{.Preset}}</span></div>
+      <div class="info-row">
+        <span class="k">git</span>
+        <span class="v">
+          {{shortHash .Version}}
+          <button class="copy-btn" type="button" onclick="navigator.clipboard.writeText('{{.Version}}')" title="copy">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+        </span>
+      </div>
+      <div class="info-row"><span class="k">最近完成</span><span class="v">{{.RecentSize}} 条</span></div>
+    </div>
 
+    <div class="card">
+      <h2 class="card-title">
+        <span class="ico">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </span>
+        添加任务
+      </h2>
+      <form hx-post="/task/add" hx-target="#todo-panel" hx-swap="innerHTML" hx-on::after-request="this.reset()">
+        <div class="form-field">
+          <label>标题</label>
+          <input class="input" name="title" placeholder="请输入任务标题" required>
+        </div>
+        <div class="form-row">
+          <div class="form-field" style="margin: 0;">
+            <label>type</label>
+            <div class="select-with-dot">
+              <select class="select" name="type" required>
+                <option value="IDEA">IDEA 想法</option>
+                <option value="BUG">BUG 缺陷</option>
+                <option value="FEAT">FEAT 功能</option>
+                <option value="SPIKE">SPIKE 探针</option>
+                <option value="REFACTOR">REFACTOR 重构</option>
+                <option value="DOC">DOC 文档</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-field" style="margin: 0;">
+            <label>priority</label>
+            <select class="select" name="priority">
+              <option value="">priority</option>
+              <option>P0</option>
+              <option>P1</option>
+              <option>P2</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-field">
+          <label>section</label>
+          <select class="select" name="section">
+            <option value="next">下一步</option>
+            <option value="backlog">待规划</option>
+          </select>
+        </div>
+        <button class="btn-primary" type="submit">添加任务</button>
+      </form>
+    </div>
+
+    <div class="sidebar-footer">
+      <span>gnb dashboard</span>
+      <span class="ver">{{shortHash .Version}}</span>
+    </div>
+  </aside>
+
+  <section class="col" id="todo-panel">
+    {{template "todo_panel" .}}
+  </section>
+
+  <section class="col" id="detail-panel">
+    <div class="card detail-empty">点击任意任务查看详情（spec / journal / blocker）。</div>
+  </section>
+</div>
+{{end}}
+
+
+{{define "todo_panel"}}
 {{if gt .RecentSize 10}}
 <div class="archive-hint">
   最近完成 已有 {{.RecentSize}} 条，建议在终端运行 <code>gnb todo archive</code> 归档。
 </div>
 {{end}}
 
-{{range .Sections}}
-<div class="section">
-  <h3>{{.Heading}}</h3>
-  {{if .Tasks}}
-    {{range .Tasks}}
-      <div class="task {{statusClass (printf "%s" .Status)}}"
-           hx-get="/task/{{printf "%05d" .ID}}"
-           hx-target="#detail-panel"
-           hx-swap="innerHTML">
-        <span class="icon">{{statusIcon (printf "%s" .Status)}}</span>
-        <div class="body">
-          <span class="id">#{{printf "%05d" .ID}}</span>
-          {{if .Priority}}<span class="tag pri-{{.Priority}}">{{.Priority}}</span>{{end}}
-          {{if .Type}}<span class="tag type-{{.Type}}">{{.Type}}</span>{{end}}
-          <span class="title">{{.Title}}</span>
-          {{if or .Arrow .Paren}}
-          <div class="meta-line">
-            {{if .Arrow}}→ {{.Arrow}}{{end}}
-            {{if .Paren}}　({{.Paren}}){{end}}
-          </div>
-          {{end}}
-        </div>
-        <span class="actions">
-          {{if ne (printf "%s" .Status) "x"}}
-            <button hx-post="/task/{{printf "%05d" .ID}}/done"
-                    hx-target="#todo-panel" hx-swap="innerHTML"
-                    hx-confirm="标 #{{printf "%05d" .ID}} 为完成？"
-                    onclick="event.stopPropagation()">done</button>
-          {{end}}
-          {{if and (ne (printf "%s" .Status) "!") (ne (printf "%s" .Status) "x")}}
-            <button class="danger"
-                    hx-post="/task/{{printf "%05d" .ID}}/block"
-                    hx-target="#todo-panel" hx-swap="innerHTML"
-                    hx-confirm="标 #{{printf "%05d" .ID}} 为卡住？"
-                    onclick="event.stopPropagation()">block</button>
-          {{end}}
-        </span>
-      </div>
-    {{end}}
-  {{else}}
-    <div style="color: var(--fg-dim); font-size: 12px; padding: 4px 8px;">(暂无)</div>
-  {{end}}
-</div>
-{{end}}
+<div class="card">
+  <h2 class="card-title">
+    <span class="ico">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+      </svg>
+    </span>
+    TODO
+  </h2>
 
-<h2 style="margin-top: 22px;">最近 Journal</h2>
-{{if .Journals}}
-  {{range .Journals}}
-  <div class="journal-item"
-       hx-get="/task/{{printf "%05d" .ID}}"
-       hx-target="#detail-panel"
-       hx-swap="innerHTML">
-    <div class="date">{{.Date}} · #{{printf "%05d" .ID}} · {{.Type}}</div>
-    <div class="title">{{.Title}}</div>
+  {{range .Sections}}
+  {{$secHeading := .Heading}}
+  <div style="margin-bottom: 18px;">
+    <h2 class="card-title" style="font-size: 12.5px; margin-bottom: 10px;">
+      <span class="ico" style="background: {{sectionTint .Kind}}; color: {{sectionColor .Kind}};">
+        {{sectionIcon .Kind | safeHTML}}
+      </span>
+      {{.Heading}}
+      <span class="count">{{len .Tasks}}</span>
+    </h2>
+    {{if .Tasks}}
+      <div class="task-list">
+        {{range .Tasks}}
+          <div class="task {{statusClass (printf "%s" .Status)}}"
+               data-id="{{printf "%05d" .ID}}"
+               hx-get="/task/{{printf "%05d" .ID}}"
+               hx-target="#detail-panel"
+               hx-swap="innerHTML">
+            <span class="dot {{if eq $secHeading "待规划"}}backlog-dot{{end}}"></span>
+            <div class="body">
+              <div class="head">
+                <span class="tid">#{{printf "%05d" .ID}}</span>
+                {{if .Priority}}<span class="tag pri-{{.Priority}}">{{.Priority}}</span>{{end}}
+                {{if .Type}}<span class="tag type-{{.Type}}">{{.Type}}</span>{{end}}
+                <span class="title">{{.Title}}</span>
+              </div>
+              {{if or .Arrow .Paren}}
+              <div class="meta-line">
+                {{if .Arrow}}<span class="arrow">→ {{.Arrow}}</span>{{end}}
+                {{if .Paren}}<span class="date">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  {{.Paren}}
+                </span>{{end}}
+              </div>
+              {{end}}
+            </div>
+            <div class="menu" onclick="event.stopPropagation()">
+              <button class="menu-btn" type="button" title="操作">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+              </button>
+              <div class="menu-dropdown">
+                {{if eq (printf "%s" .Status) " "}}
+                  <button type="button"
+                          hx-get="/task/{{printf "%05d" .ID}}/edit"
+                          hx-target="closest .task" hx-swap="outerHTML">编辑</button>
+                {{end}}
+                {{if ne (printf "%s" .Status) "x"}}
+                  <button type="button"
+                          hx-post="/task/{{printf "%05d" .ID}}/done"
+                          hx-target="#todo-panel" hx-swap="innerHTML"
+                          hx-confirm="标 #{{printf "%05d" .ID}} 为完成？">标为完成</button>
+                {{end}}
+                {{if and (ne (printf "%s" .Status) "!") (ne (printf "%s" .Status) "x")}}
+                  <button type="button" class="danger"
+                          hx-post="/task/{{printf "%05d" .ID}}/block"
+                          hx-target="#todo-panel" hx-swap="innerHTML"
+                          hx-confirm="标 #{{printf "%05d" .ID}} 为卡住？">标为卡住</button>
+                {{end}}
+              </div>
+            </div>
+          </div>
+        {{end}}
+      </div>
+    {{else}}
+      <div class="empty-row">{{emptyHint .Kind}}</div>
+    {{end}}
   </div>
   {{end}}
-{{else}}
-  <div style="color: var(--fg-dim); font-size: 12px;">(尚无 journal 记录)</div>
-{{end}}
+
+  <div style="margin-top: 8px;">
+    <h2 class="card-title" style="font-size: 12.5px; margin-bottom: 8px;">
+      <span class="ico">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h12a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4V4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="14" y2="13"/></svg>
+      </span>
+      最新 JOURNAL
+    </h2>
+    {{if .Journals}}
+      <div class="journal-list">
+        {{range .Journals}}
+        <div class="journal-item"
+             data-id="{{printf "%05d" .ID}}"
+             hx-get="/task/{{printf "%05d" .ID}}"
+             hx-target="#detail-panel"
+             hx-swap="innerHTML">
+          <div class="left">
+            <div class="meta-line">
+              <span>{{.Date}}</span>
+              <span>#{{printf "%05d" .ID}}</span>
+              <span class="tag type-{{.Type}}" style="padding: 0 5px;">{{.Type}}</span>
+            </div>
+            <div class="title">{{.Title}}</div>
+          </div>
+          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+        {{end}}
+      </div>
+    {{else}}
+      <div class="empty-row">尚无最近完成的任务</div>
+    {{end}}
+  </div>
+</div>
 {{end}}
 
 
 {{define "task_detail"}}
-<div class="detail">
-  <h2 class="title">
-    <span style="font-size: 16px;">{{statusIcon (printf "%s" .Task.Status)}}</span>
-    {{if .Task.Priority}}<span class="tag pri-{{.Task.Priority}}">{{.Task.Priority}}</span>{{end}}
-    {{if .Task.Type}}<span class="tag type-{{.Task.Type}}">{{.Task.Type}}</span>{{end}}
-    {{.Task.Title}}
-  </h2>
-  <div class="breadcrumb">
-    #{{printf "%05d" .Task.ID}} · {{.SectionName}}
-    {{if .Task.Arrow}} · → {{.Task.Arrow}}{{end}}
-    {{if .Task.Paren}} · ({{.Task.Paren}}){{end}}
+<div class="card detail-card" data-selected-id="{{printf "%05d" .Task.ID}}">
+  <div class="detail-head">
+    <button class="back" type="button" onclick="document.getElementById('detail-panel').innerHTML='<div class=\'card detail-empty\'>点击任意任务查看详情（spec / journal / blocker）。</div>'; document.querySelectorAll('.task.selected').forEach(t=>t.classList.remove('selected'));" title="返回">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <div class="head-body">
+      <h1>
+        {{if .Task.Type}}<span class="tag type-{{.Task.Type}}">{{.Task.Type}}</span>{{end}}
+        {{if .Task.Priority}}<span class="tag pri-{{.Task.Priority}}">{{.Task.Priority}}</span>{{end}}
+        <span>{{.Task.Title}}</span>
+      </h1>
+      <div class="breadcrumb">
+        <span>#{{printf "%05d" .Task.ID}}</span>
+        <span class="sep">·</span>
+        <span>{{.SectionName}}</span>
+        {{if .Task.Arrow}}<span class="sep">·</span><span>{{.Task.Arrow}}</span>{{end}}
+        {{if .Task.Paren}}<span class="sep">·</span><span>{{.Task.Paren}}</span>{{end}}
+      </div>
+    </div>
+    <div class="actions">
+      <button class="action-btn" type="button" title="编辑">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+      <button class="action-btn" type="button" title="更多">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+      </button>
+    </div>
   </div>
 
-  {{if .HasSpec}}
-  <div class="file-section">
-    <h3>spec</h3>
-    <pre>{{.SpecBody}}</pre>
+  {{if .HasJournal}}
+  <div class="file-card">
+    <div class="file-card-head">
+      <span class="ico">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h12a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4V4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="14" y2="13"/></svg>
+      </span>
+      <span class="label">journal</span>
+    </div>
+    <div class="md-content" data-md>{{.JournalBody}}</div>
   </div>
   {{end}}
 
-  {{if .HasJournal}}
-  <div class="file-section">
-    <h3>journal</h3>
-    <pre>{{.JournalBody}}</pre>
+  {{if .HasSpec}}
+  <div class="file-card">
+    <div class="file-card-head">
+      <span class="ico">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      </span>
+      <span class="label">spec</span>
+    </div>
+    <div class="md-content" data-md>{{.SpecBody}}</div>
   </div>
   {{end}}
 
   {{if .HasBlocker}}
-  <div class="file-section">
-    <h3>blocker</h3>
-    <pre>{{.BlockerBody}}</pre>
+  <div class="file-card">
+    <div class="file-card-head">
+      <span class="ico" style="background: rgba(239, 68, 68, 0.12); color: var(--red);">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      </span>
+      <span class="label">blocker</span>
+    </div>
+    <div class="md-content" data-md>{{.BlockerBody}}</div>
   </div>
   {{end}}
 
   {{if and (not .HasSpec) (not .HasJournal) (not .HasBlocker)}}
-  <div class="detail-empty">这个任务没有 spec / journal / blocker 文件。</div>
+  <div class="file-card detail-empty">这个任务没有 spec / journal / blocker 文件。</div>
   {{end}}
+
+  <div class="detail-foot">
+    <span>创建于 {{or .Task.Paren "—"}}</span>
+    <span>更新时间 {{or .Task.Paren "—"}}</span>
+  </div>
 </div>
+{{end}}
+
+
+{{define "tab_build"}}
+<div class="tab-jobs">
+  <aside class="tab-side">
+    <div class="card">
+      <h2 class="card-title">
+        <span class="ico">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13l2 2 4-4"/></svg>
+        </span>
+        Build target
+      </h2>
+      <form data-job-form hx-post="/jobs/build" hx-target="#log-panel-host" hx-swap="innerHTML">
+        <input type="hidden" name="target" value="all">
+        <div class="target-list" style="margin-bottom: 12px;">
+          <div class="target-item selected" data-target="all">
+            <span class="radio"></span>
+            <span class="name">all targets</span>
+            <span class="tag-mini">build all</span>
+          </div>
+          {{range .BuildVM.Targets}}
+          <div class="target-item" data-target="{{.}}">
+            <span class="radio"></span>
+            <span class="name">{{.}}</span>
+          </div>
+          {{end}}
+        </div>
+        <button class="btn-primary" type="submit">开始构建</button>
+      </form>
+    </div>
+  </aside>
+
+  <section class="tab-main">
+    <div id="log-panel-host" style="display: contents;">
+      {{if .BuildVM.HasJob}}
+        {{template "log_panel" .BuildVM.Latest}}
+      {{else}}
+        {{template "log_panel_empty" "build"}}
+      {{end}}
+    </div>
+  </section>
+</div>
+{{end}}
+
+
+{{define "tab_run"}}
+<div class="tab-jobs">
+  <aside class="tab-side">
+    <div class="card">
+      <h2 class="card-title">
+        <span class="ico">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><polygon points="6 4 20 12 6 20 6 4" fill="currentColor"/></svg>
+        </span>
+        Run target
+      </h2>
+      <form data-job-form hx-post="/jobs/run" hx-target="#log-panel-host" hx-swap="innerHTML">
+        <input type="hidden" name="target" value="">
+        <div class="target-list" style="margin-bottom: 12px;">
+          {{range .RunVM.Targets}}
+          <div class="target-item" data-target="{{.}}">
+            <span class="radio"></span>
+            <span class="name">{{.}}</span>
+          </div>
+          {{end}}
+        </div>
+        <button class="btn-primary" type="submit">运行</button>
+      </form>
+    </div>
+  </aside>
+
+  <section class="tab-main">
+    <div id="log-panel-host" style="display: contents;">
+      {{if .RunVM.HasJob}}
+        {{template "log_panel" .RunVM.Latest}}
+      {{else}}
+        {{template "log_panel_empty" "run"}}
+      {{end}}
+    </div>
+  </section>
+</div>
+{{end}}
+
+
+{{define "tab_test"}}
+<div class="tab-jobs">
+  <aside class="tab-side">
+    <div class="card">
+      <h2 class="card-title">
+        <span class="ico">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 2v8L4 20a2 2 0 0 0 1.7 3h12.6A2 2 0 0 0 20 20l-5-10V2"/><line x1="9" y1="2" x2="15" y2="2"/></svg>
+        </span>
+        Test case
+      </h2>
+      {{if not .TestVM.BinExists}}
+        <div class="archive-hint" style="margin-bottom: 10px;">
+          未找到 <code>gkNextUnitTests</code>，请先在 Build 页构建该 target。
+          {{if .TestVM.ListErr}}<br><span style="opacity:0.7; font-size: 11px;">{{.TestVM.ListErr}}</span>{{end}}
+        </div>
+      {{end}}
+      <form data-job-form hx-post="/jobs/test" hx-target="#log-panel-host" hx-swap="innerHTML">
+        <input type="hidden" name="target" value="all">
+        <div class="target-list" style="margin-bottom: 12px;">
+          <div class="target-item selected" data-target="all">
+            <span class="radio"></span>
+            <span class="name">all tests</span>
+            <span class="tag-mini">run all</span>
+          </div>
+          {{range .TestVM.Tests}}
+          <div class="target-item" data-target="{{.Name}}" title="{{.Tags}}">
+            <span class="radio"></span>
+            <span class="name">{{.Name}}</span>
+            {{if .Tags}}<span class="tag-mini">{{.Tags}}</span>{{end}}
+          </div>
+          {{end}}
+        </div>
+        <button class="btn-primary" type="submit" {{if not .TestVM.BinExists}}disabled style="opacity:0.5; cursor:not-allowed"{{end}}>运行测试</button>
+      </form>
+    </div>
+  </aside>
+
+  <section class="tab-main">
+    <div id="log-panel-host" style="display: contents;">
+      {{if .TestVM.HasJob}}
+        {{template "log_panel" .TestVM.Latest}}
+      {{else}}
+        {{template "log_panel_empty" "test"}}
+      {{end}}
+    </div>
+  </section>
+</div>
+{{end}}
+
+
+{{define "log_panel"}}
+<div class="log-panel" data-stream="/jobs/{{.ID}}/stream">
+  <div class="log-head">
+    <div class="label">
+      <span class="ico">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+      </span>
+      {{.Kind}}
+    </div>
+    <span class="target-pill">{{.Target}}</span>
+    <span class="spacer"></span>
+    <div class="meta">
+      <span>{{jobElapsed .}}</span>
+      <span data-stream-status>{{jobStatusBadge .}}</span>
+    </div>
+    <div class="log-actions">
+      {{if jobIsRunning .}}
+      <button class="action-btn danger" type="button"
+              hx-post="/jobs/{{.ID}}/cancel"
+              hx-target="#log-panel-host" hx-swap="innerHTML"
+              hx-confirm="终止当前任务？"
+              title="终止">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+      </button>
+      {{end}}
+      <button class="action-btn" type="button" title="清空显示" onclick="this.closest('.log-panel').querySelector('.log-body').innerHTML='';">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="log-body"></div>
+</div>
+{{end}}
+
+
+{{define "log_panel_empty"}}
+<div class="log-panel">
+  <div class="log-head">
+    <div class="label">
+      <span class="ico">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+      </span>
+      {{.}}
+    </div>
+    <span class="spacer"></span>
+    <div class="meta"><span>暂无任务</span></div>
+  </div>
+  <div class="log-empty">选择左侧 target 后点击按钮开始 —— 日志会在这里实时显示（带 ANSI 颜色）。</div>
+</div>
+{{end}}
+
+
+{{define "task_edit_form"}}
+<form class="task-edit"
+      hx-post="/task/{{printf "%05d" .ID}}/edit"
+      hx-target="#todo-panel" hx-swap="innerHTML"
+      onclick="event.stopPropagation()">
+  <div class="form-field">
+    <label>标题 · #{{printf "%05d" .ID}}</label>
+    <input class="input" name="title" value="{{.Title}}" required autofocus>
+  </div>
+  <div class="row">
+    <select class="select" name="type">
+      <option value="">type</option>
+      <option value="BUG"      {{if eq .Type "BUG"}}selected{{end}}>BUG</option>
+      <option value="FEAT"     {{if eq .Type "FEAT"}}selected{{end}}>FEAT</option>
+      <option value="IDEA"     {{if eq .Type "IDEA"}}selected{{end}}>IDEA</option>
+      <option value="SPIKE"    {{if eq .Type "SPIKE"}}selected{{end}}>SPIKE</option>
+      <option value="REFACTOR" {{if eq .Type "REFACTOR"}}selected{{end}}>REFACTOR</option>
+      <option value="DOC"      {{if eq .Type "DOC"}}selected{{end}}>DOC</option>
+    </select>
+    <select class="select" name="priority">
+      <option value="">priority</option>
+      <option value="P0" {{if eq .Priority "P0"}}selected{{end}}>P0</option>
+      <option value="P1" {{if eq .Priority "P1"}}selected{{end}}>P1</option>
+      <option value="P2" {{if eq .Priority "P2"}}selected{{end}}>P2</option>
+    </select>
+  </div>
+  <div class="actions">
+    <button type="button" class="btn-secondary"
+            hx-get="/todo-panel" hx-target="#todo-panel" hx-swap="innerHTML">取消</button>
+    <button type="submit" class="btn-primary small">保存</button>
+  </div>
+</form>
 {{end}}

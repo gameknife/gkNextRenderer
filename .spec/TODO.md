@@ -13,9 +13,6 @@
 
 ### 待规划
 
-- [ ] `#00001` [FEAT] gnb todo 子命令族（add / list / show / done / block / archive / next）
-- [ ] `#00002` [FEAT] gnb dashboard 本地 web 可视化界面（embed HTML，整合 build/run/package/todo）
-
 ### 最近完成
 
 (暂无)
