@@ -1,0 +1,111 @@
+{{define "todo_panel"}}
+<h2>TODO</h2>
+
+{{if gt .RecentSize 10}}
+<div class="archive-hint">
+  最近完成 已有 {{.RecentSize}} 条，建议在终端运行 <code>gnb todo archive</code> 归档。
+</div>
+{{end}}
+
+{{range .Sections}}
+<div class="section">
+  <h3>{{.Heading}}</h3>
+  {{if .Tasks}}
+    {{range .Tasks}}
+      <div class="task {{statusClass (printf "%s" .Status)}}"
+           hx-get="/task/{{printf "%05d" .ID}}"
+           hx-target="#detail-panel"
+           hx-swap="innerHTML">
+        <span class="icon">{{statusIcon (printf "%s" .Status)}}</span>
+        <div class="body">
+          <span class="id">#{{printf "%05d" .ID}}</span>
+          {{if .Priority}}<span class="tag pri-{{.Priority}}">{{.Priority}}</span>{{end}}
+          {{if .Type}}<span class="tag type-{{.Type}}">{{.Type}}</span>{{end}}
+          <span class="title">{{.Title}}</span>
+          {{if or .Arrow .Paren}}
+          <div class="meta-line">
+            {{if .Arrow}}→ {{.Arrow}}{{end}}
+            {{if .Paren}}　({{.Paren}}){{end}}
+          </div>
+          {{end}}
+        </div>
+        <span class="actions">
+          {{if ne (printf "%s" .Status) "x"}}
+            <button hx-post="/task/{{printf "%05d" .ID}}/done"
+                    hx-target="#todo-panel" hx-swap="innerHTML"
+                    hx-confirm="标 #{{printf "%05d" .ID}} 为完成？"
+                    onclick="event.stopPropagation()">done</button>
+          {{end}}
+          {{if and (ne (printf "%s" .Status) "!") (ne (printf "%s" .Status) "x")}}
+            <button class="danger"
+                    hx-post="/task/{{printf "%05d" .ID}}/block"
+                    hx-target="#todo-panel" hx-swap="innerHTML"
+                    hx-confirm="标 #{{printf "%05d" .ID}} 为卡住？"
+                    onclick="event.stopPropagation()">block</button>
+          {{end}}
+        </span>
+      </div>
+    {{end}}
+  {{else}}
+    <div style="color: var(--fg-dim); font-size: 12px; padding: 4px 8px;">(暂无)</div>
+  {{end}}
+</div>
+{{end}}
+
+<h2 style="margin-top: 22px;">最近 Journal</h2>
+{{if .Journals}}
+  {{range .Journals}}
+  <div class="journal-item"
+       hx-get="/task/{{printf "%05d" .ID}}"
+       hx-target="#detail-panel"
+       hx-swap="innerHTML">
+    <div class="date">{{.Date}} · #{{printf "%05d" .ID}} · {{.Type}}</div>
+    <div class="title">{{.Title}}</div>
+  </div>
+  {{end}}
+{{else}}
+  <div style="color: var(--fg-dim); font-size: 12px;">(尚无 journal 记录)</div>
+{{end}}
+{{end}}
+
+
+{{define "task_detail"}}
+<div class="detail">
+  <h2 class="title">
+    <span style="font-size: 16px;">{{statusIcon (printf "%s" .Task.Status)}}</span>
+    {{if .Task.Priority}}<span class="tag pri-{{.Task.Priority}}">{{.Task.Priority}}</span>{{end}}
+    {{if .Task.Type}}<span class="tag type-{{.Task.Type}}">{{.Task.Type}}</span>{{end}}
+    {{.Task.Title}}
+  </h2>
+  <div class="breadcrumb">
+    #{{printf "%05d" .Task.ID}} · {{.SectionName}}
+    {{if .Task.Arrow}} · → {{.Task.Arrow}}{{end}}
+    {{if .Task.Paren}} · ({{.Task.Paren}}){{end}}
+  </div>
+
+  {{if .HasSpec}}
+  <div class="file-section">
+    <h3>spec</h3>
+    <pre>{{.SpecBody}}</pre>
+  </div>
+  {{end}}
+
+  {{if .HasJournal}}
+  <div class="file-section">
+    <h3>journal</h3>
+    <pre>{{.JournalBody}}</pre>
+  </div>
+  {{end}}
+
+  {{if .HasBlocker}}
+  <div class="file-section">
+    <h3>blocker</h3>
+    <pre>{{.BlockerBody}}</pre>
+  </div>
+  {{end}}
+
+  {{if and (not .HasSpec) (not .HasJournal) (not .HasBlocker)}}
+  <div class="detail-empty">这个任务没有 spec / journal / blocker 文件。</div>
+  {{end}}
+</div>
+{{end}}

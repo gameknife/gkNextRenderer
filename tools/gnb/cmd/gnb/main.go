@@ -68,6 +68,8 @@ func main() {
 	root.AddCommand(newPackageCommand(ctx))
 	root.AddCommand(newCleanCommand(ctx))
 	root.AddCommand(newInstallCommand(ctx))
+	root.AddCommand(newTodoCommand(ctx))
+	root.AddCommand(newDashboardCommand(ctx))
 
 	if err := root.Execute(); err != nil {
 		fatal(err)
