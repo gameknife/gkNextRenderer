@@ -268,6 +268,29 @@ func WithParen(text string) EditOption { return func(t *Task) { t.Paren = text }
 func WithClearArrow() EditOption       { return func(t *Task) { t.Arrow = "" } }
 func WithClearParen() EditOption       { return func(t *Task) { t.Paren = "" } }
 
+// EditTask updates the title / type / priority of a pending task. It refuses to
+// touch tasks that are not StatusPending so we never silently rewrite a done or
+// blocked entry's metadata.
+func (d *Document) EditTask(id int, title, taskType, priority string) error {
+	t, idx, ok := d.FindTask(id)
+	if !ok {
+		return fmt.Errorf("task #%05d not found in %s", id, filepath.Base(d.Path))
+	}
+	if t.Status != StatusPending {
+		return fmt.Errorf("task #%05d is not pending (status=%q); refusing to edit", id, string(t.Status))
+	}
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return fmt.Errorf("title must not be empty")
+	}
+	t.Title = title
+	t.Type = strings.ToUpper(strings.TrimSpace(taskType))
+	t.Priority = strings.ToUpper(strings.TrimSpace(priority))
+	d.Tasks[idx] = *t
+	d.Lines[t.LineNum-1] = FormatLine(*t)
+	return nil
+}
+
 // AppendTask inserts a new task line at the end of the given section, returning
 // the assigned ID (max existing + 1, capped at 99999).
 func (d *Document) AppendTask(section SectionKind, t Task) (int, error) {

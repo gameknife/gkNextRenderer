@@ -27,6 +27,7 @@ func newDashboardCommand(ctx appContext) *cobra.Command {
 				NoOpen:   noOpen,
 				Version:  resolvedVersion(),
 				Preset:   ctx.preset,
+				Config:   ctx.cfg,
 			})
 			if err != nil {
 				return err
