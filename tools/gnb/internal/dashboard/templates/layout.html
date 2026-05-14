@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>gnb dashboard — {{.Milestone}}</title>
+<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+<style>
+  :root {
+    --bg: #0f1115;
+    --bg-elev: #151920;
+    --bg-hover: #1c2230;
+    --fg: #e6e6e6;
+    --fg-dim: #8a8f99;
+    --accent: #4ea1ff;
+    --pending: #8a8f99;
+    --doing: #f0b429;
+    --done: #5cb85c;
+    --blocked: #e74c3c;
+    --border: #262b35;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body { background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; font-size: 14px; }
+
+  header { padding: 14px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header .milestone { color: var(--fg-dim); font-size: 13px; }
+  header .badge { padding: 2px 8px; border-radius: 4px; background: var(--bg-elev); font-size: 12px; color: var(--fg-dim); }
+  header .badge.active { color: var(--doing); }
+  header .badge.done { color: var(--done); }
+  header .meta { margin-left: auto; display: flex; gap: 14px; color: var(--fg-dim); font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  main { display: grid; grid-template-columns: 260px 1fr 1fr; gap: 1px; height: calc(100vh - 56px); background: var(--border); }
+  aside, section { background: var(--bg); overflow-y: auto; padding: 16px; }
+
+  h2 { margin: 0 0 12px 0; font-size: 13px; font-weight: 600; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  h3 { margin: 18px 0 8px 0; font-size: 12px; font-weight: 600; color: var(--fg-dim); }
+
+  /* Sidebar */
+  aside .info-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; }
+  aside .info-row .k { color: var(--fg-dim); }
+  aside .info-row .v { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  aside form { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+  aside input, aside select, aside button { background: var(--bg-elev); color: var(--fg); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; font-size: 13px; font-family: inherit; }
+  aside input:focus, aside select:focus { outline: none; border-color: var(--accent); }
+  aside button { background: var(--accent); border-color: var(--accent); color: white; cursor: pointer; font-weight: 500; }
+  aside button:hover { opacity: 0.9; }
+  aside .row { display: flex; gap: 6px; }
+  aside .row > * { flex: 1; min-width: 0; }
+
+  /* Task list */
+  .section { margin-bottom: 18px; }
+  .task { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border-radius: 4px; cursor: pointer; }
+  .task:hover { background: var(--bg-hover); }
+  .task .icon { font-size: 14px; line-height: 1.4; }
+  .task.pending .icon { color: var(--pending); }
+  .task.doing   .icon { color: var(--doing); }
+  .task.done    .icon { color: var(--done); }
+  .task.blocked .icon { color: var(--blocked); }
+  .task .body { flex: 1; min-width: 0; }
+  .task .id { color: var(--fg-dim); font-family: ui-monospace, monospace; font-size: 11px; margin-right: 6px; }
+  .task .tag { display: inline-block; padding: 0 5px; border-radius: 3px; font-size: 10px; font-weight: 600; background: var(--bg-elev); color: var(--fg-dim); margin-right: 4px; }
+  .task .tag.pri-P0 { color: #ff7878; }
+  .task .tag.pri-P1 { color: var(--doing); }
+  .task .tag.pri-P2 { color: var(--accent); }
+  .task .tag.type-BUG { color: #ff7878; }
+  .task .tag.type-FEAT { color: var(--accent); }
+  .task .tag.type-IDEA { color: var(--done); }
+  .task .title { display: inline; word-break: break-word; }
+  .task .meta-line { color: var(--fg-dim); font-size: 11px; margin-top: 2px; }
+  .task.done .title { color: var(--fg-dim); text-decoration: line-through; }
+  .task .actions { display: none; gap: 4px; margin-left: 6px; }
+  .task:hover .actions { display: inline-flex; }
+  .task .actions button { background: var(--bg-elev); color: var(--fg-dim); border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; font-size: 11px; cursor: pointer; }
+  .task .actions button:hover { color: var(--fg); }
+  .task .actions .danger:hover { color: var(--blocked); }
+
+  /* Detail panel */
+  .detail-empty { color: var(--fg-dim); font-style: italic; }
+  .detail h2.title { font-size: 16px; color: var(--fg); text-transform: none; letter-spacing: normal; margin-bottom: 4px; }
+  .detail .breadcrumb { color: var(--fg-dim); font-size: 12px; margin-bottom: 14px; font-family: ui-monospace, monospace; }
+  .detail pre { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 4px; padding: 12px; overflow-x: auto; white-space: pre-wrap; font-size: 12px; line-height: 1.5; }
+  .detail .file-section { margin-top: 16px; }
+  .detail .file-section h3 { color: var(--accent); }
+
+  /* Journal feed */
+  .journal-item { padding: 6px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .journal-item:hover { background: var(--bg-hover); }
+  .journal-item:last-child { border: 0; }
+  .journal-item .date { color: var(--fg-dim); font-size: 11px; font-family: ui-monospace, monospace; }
+  .journal-item .title { font-size: 13px; margin-top: 2px; }
+
+  /* Status footer */
+  footer { padding: 8px 24px; border-top: 1px solid var(--border); color: var(--fg-dim); font-size: 11px; display: flex; justify-content: space-between; }
+
+  .archive-hint { background: rgba(240, 180, 41, 0.1); color: var(--doing); border: 1px solid rgba(240, 180, 41, 0.3); border-radius: 4px; padding: 8px 12px; font-size: 12px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>gnb dashboard</h1>
+  <span class="milestone">{{.Milestone}}</span>
+  <span class="badge {{.Status}}">{{.Status}}</span>
+  <div class="meta">
+    <span>{{.Preset}}</span>
+    <span>{{shortHash .Version}}</span>
+    <span>{{.OS}}</span>
+  </div>
+</header>
+
+<main>
+
+  <aside>
+    <h2>项目信息</h2>
+    <div class="info-row"><span class="k">repo</span><span class="v">{{.RepoRoot}}</span></div>
+    <div class="info-row"><span class="k">preset</span><span class="v">{{.Preset}}</span></div>
+    <div class="info-row"><span class="k">git</span><span class="v">{{shortHash .Version}}</span></div>
+    <div class="info-row"><span class="k">最近完成</span><span class="v">{{.RecentSize}} 条</span></div>
+
+    <h2 style="margin-top: 22px;">添加任务</h2>
+    <form hx-post="/task/add" hx-target="#todo-panel" hx-swap="innerHTML" hx-on::after-request="this.reset()">
+      <input name="title" placeholder="标题" required>
+      <div class="row">
+        <select name="type" required>
+          <option value="">type</option>
+          <option>BUG</option>
+          <option>FEAT</option>
+          <option>IDEA</option>
+          <option>SPIKE</option>
+          <option>REFACTOR</option>
+          <option>DOC</option>
+        </select>
+        <select name="priority">
+          <option value="">priority</option>
+          <option>P0</option>
+          <option>P1</option>
+          <option>P2</option>
+        </select>
+      </div>
+      <select name="section">
+        <option value="next">下一步</option>
+        <option value="backlog">待规划</option>
+      </select>
+      <button type="submit">添加</button>
+    </form>
+  </aside>
+
+  <section id="todo-panel">
+    {{template "todo_panel" .}}
+  </section>
+
+  <section id="detail-panel" class="detail">
+    <div class="detail-empty">点击任意任务查看详情（spec / journal / blocker）。</div>
+  </section>
+
+</main>
+
+<footer>
+  <span>http://127.0.0.1 · 修改 TODO.md 后刷新页面或点击任务可见最新</span>
+  <span>htmx 1.9.10</span>
+</footer>
+
+</body>
+</html>

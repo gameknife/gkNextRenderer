@@ -213,10 +213,39 @@ assets/
 
 ## Spec Workflow
 
-- 当用户说，"启动交互式工作流"时，开始扫描TODO.md内的下一步任务，执行任务，执行完后标记完成。继续执行下一个任务。
-- 如果所有的下一步任务都执行完毕，则等待600秒，再次读取TODO.md查看是否有未完成的下一步任务
-- 待确认任务列表不要执行
-- TODO.md随时会被用户修改，每次都重新读取。
-- 交互式会话只有一种退出条件，就是当TODO.md的里程碑状态被改为已完成
-- AGENT只能修改TODO.md的任务完成状态，其他都不能修改
-- 不要帮用户建立自动化任务
+**完整规范见 [.spec/README.md](.spec/README.md)**。下面是 AGENT 必须遵守的核心规则，规范与本节不一致以 README 为准。
+
+文件位置：
+- 任务列表：`.spec/TODO.md`
+- 任务详细规格（可选，仅复杂任务）：`.spec/specs/<id>.md`
+- 完成报告（一任务一文件）：`.spec/journal/<id>.md`
+- 卡住提问（一任务一文件）：`.spec/blockers/<id>.md`
+- 归档：`.spec/ARCHIVE.md`
+
+执行规则：
+
+1. 用户触发"启动交互式工作流"时，读取 `.spec/TODO.md`
+2. 在"下一步"段找第一个 `[ ]` 任务
+3. 若 `.spec/specs/<id>.md` 存在，先读它再执行
+4. 执行任务
+5. 完成后：
+   - 在 TODO.md 把该任务的 `[ ]` 改为 `[x]`
+   - 行末追加 ` → journal/<id>.md (YYYY-MM-DD)`
+   - 写 `.spec/journal/<id>.md`（frontmatter + 做了什么 + 改动文件 + 风险/遗留）
+6. 回到 2，继续下一个 `[ ]` 任务
+7. "下一步"段没有 `[ ]` 任务时：
+   - 比较 TODO.md mtime 与 `.spec/journal/` 目录中最新文件的 mtime
+   - TODO 较新 → 用户可能加了任务，回到 2 重扫
+   - 否则 → 执行sleep command等待600秒，回到步骤2。等待期间不要思考，这时TODO.md可能更新
+8. 里程碑状态改为 `done` → 退出工作流
+
+特殊情况：
+- 任务歧义无法判断时：写 `.spec/blockers/<id>.md`，任务状态改 `[!]`，**跳过该任务继续做下一个**，不要瞎猜
+- 启动工作流时若"最近完成"段超过 10 条：在首次回复中提醒用户运行 `gnb todo archive`，但不要自己归档
+- 用户在工作流期间修改 TODO.md：下一轮重扫时会发现
+
+边界：
+- AGENT **可改**：TODO.md 中任务的状态字符、行末 journal 链接；`journal/`、`blockers/` 下的文件
+- AGENT **不可改**：TODO.md 中任务标题/ID/优先级/类型/所属段落；`specs/` 下的文件；`ARCHIVE.md`；"待规划"段任何任务
+- 不要建立自动化任务（hooks、scheduled tasks 等）
+- 不要调用其他 agent 处理任务
