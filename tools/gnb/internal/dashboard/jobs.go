@@ -48,10 +48,10 @@ type JobEvent struct {
 // Job is one in-flight or terminated subprocess. It is safe to read fields via
 // Snapshot(); raw fields must only be touched while holding mu.
 type Job struct {
-	ID         string
-	Kind       JobKind
-	Target     string // descriptive label ("all", a target name, or "all tests")
-	Command    string // human-readable command line for the header
+	ID      string
+	Kind    JobKind
+	Target  string // descriptive label ("all", a target name, or "all tests")
+	Command string // human-readable command line for the header
 
 	mu         sync.Mutex
 	status     JobStatus
@@ -121,6 +121,7 @@ func (j *Job) finalize(status JobStatus, note string) {
 	j.mu.Lock()
 	j.status = status
 	j.finishedAt = time.Now()
+	donePayload := fmt.Sprintf("%d", j.finishedAt.Unix())
 	j.exitNote = note
 	subs := make([]chan JobEvent, 0, len(j.subs))
 	for ch := range j.subs {
@@ -136,7 +137,7 @@ func (j *Job) finalize(status JobStatus, note string) {
 		default:
 		}
 		select {
-		case ch <- JobEvent{Name: "done", Data: ""}:
+		case ch <- JobEvent{Name: "done", Data: donePayload}:
 		default:
 		}
 	}

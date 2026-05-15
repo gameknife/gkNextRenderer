@@ -214,8 +214,7 @@ func templateFuncs() template.FuncMap {
 			if end.IsZero() {
 				end = time.Now()
 			}
-			d := end.Sub(s.StartedAt).Round(time.Millisecond)
-			return d.String()
+			return formatElapsedDuration(end.Sub(s.StartedAt))
 		},
 		"emptyHint": func(k spec.SectionKind) string {
 			switch k {
@@ -229,6 +228,16 @@ func templateFuncs() template.FuncMap {
 			return "(暂无)"
 		},
 	}
+}
+
+func formatElapsedDuration(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	totalSeconds := int(d / time.Second)
+	minutes := totalSeconds / 60
+	seconds := totalSeconds % 60
+	return fmt.Sprintf("%d min %d sec", minutes, seconds)
 }
 
 // ensureStatusDir is unused but kept to make adding new mkdir-on-demand cases trivial.
