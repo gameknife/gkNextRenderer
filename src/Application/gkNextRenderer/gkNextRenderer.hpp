@@ -37,13 +37,29 @@ public:
     void CreateSphereAndPush();
     void CreateBoxAndPush();
 
+    enum class EWorkMode : uint8_t
+    {
+        Renderer = 0,
+        Camera,
+        World,
+        Mesh,
+        Profiler,
+        Settings,
+        Count,
+    };
+
 private:
     void DrawSettings();
     void DrawTitleBar();
     void DrawBottomStatusBar();
+    void DrawModeRail();
+    void DrawViewportTopBar();
+    void DrawViewportBottomBar();
     void RequestScreenshot(bool openFolder, const std::string& tag);
     ModelViewController modelViewController_;
     GizmoController gizmoController_;
+
+    EWorkMode workMode_ = EWorkMode::Renderer;
 
     uint32_t modelId_;
     uint32_t boxModelId_;

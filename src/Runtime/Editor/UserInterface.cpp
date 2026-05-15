@@ -825,289 +825,382 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
         return;
     }
 
+    frameRateSamples_[overlaySampleCursor_] = statistics.FrameRate;
+    frameTimeSamples_[overlaySampleCursor_] = statistics.FrameTime;
+    overlaySampleCursor_ = (overlaySampleCursor_ + 1) % kOverlaySparklineSampleCount;
+    overlaySampleFilled_ = std::min(overlaySampleFilled_ + 1, kOverlaySparklineSampleCount);
+
     const auto& io = ImGui::GetIO();
-    const float distance = 12.0f;
-    const ImVec2 pos = ImVec2(io.DisplaySize.x - distance, distance + 44.0f);
-    const ImVec2 posPivot = ImVec2(1.0f, 0.0f);
+    constexpr float distance = 12.0f;
+    constexpr float panelWidth = 380.0f;
+    const ImVec2 pos = ImVec2(io.DisplaySize.x - distance - panelWidth, distance + 44.0f);
+    const float panelHeight = std::max(420.0f, io.DisplaySize.y - pos.y - 42.0f);
 
-    ImGui::SetNextWindowPos(pos, ImGuiCond_Always, posPivot);
-    ImGui::SetNextWindowSize(ImVec2(430.0f, std::max(360.0f, io.DisplaySize.y - pos.y - 42.0f)), ImGuiCond_Always);
-    ImGui::SetNextWindowBgAlpha(0.86f);
-
-    const auto flags = ImGuiWindowFlags_NoDecoration |
-        ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoNav |
-        ImGuiWindowFlags_NoSavedSettings;
-
-    if (ImGui::Begin("Statistics", &Settings().ShowOverlay, flags))
+    if (!Runtime::UiTheme::BeginFloatingPanel(
+            "##ProfilerPanel", ICON_FA_CHART_LINE, "Profiler", &Settings().ShowOverlay,
+            pos, ImVec2(panelWidth, panelHeight)))
     {
-        // Colors
-        const ImVec4 colHeader = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Blue);
-        const ImVec4 colLabel = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted);
-        const ImVec4 colVal = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Text);
-        const ImVec4 colGood = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Success);
-        const ImVec4 colWarn = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Warning);
-        const ImVec4 colBad = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Danger);
+        return;
+    }
 
-        Runtime::UiTheme::DrawPanelHeader(ICON_FA_CHART_SIMPLE, "Profiler", "Frame, scene and pass timings");
+    ImGui::BeginChild("##ProfilerBody", ImVec2(0, 0), false, ImGuiWindowFlags_NoBackground);
 
-        // Helper
-        auto LabelVal = [&](const char* label, const char* fmt, auto... args)
+    auto BeginCard = [&](const char* id, float height, ImGuiWindowFlags extraFlags = 0)
+    {
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 10.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::SurfaceElevated, 0.38f));
+        ImGui::PushStyleColor(ImGuiCol_Border, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Border, 0.84f));
+        ImGui::BeginChild(id, ImVec2(0.0f, height), true, extraFlags);
+    };
+
+    auto EndCard = [&]()
+    {
+        ImGui::EndChild();
+        ImGui::PopStyleColor(2);
+        ImGui::PopStyleVar(3);
+    };
+
+    auto BuildOrdered = [&](const std::array<float, kOverlaySparklineSampleCount>& src,
+                            std::array<float, kOverlaySparklineSampleCount>& dst,
+                            int& outCount)
+    {
+        outCount = overlaySampleFilled_;
+        if (overlaySampleFilled_ < kOverlaySparklineSampleCount)
         {
-            ImGui::TextColored(colLabel, "%s", label);
-            ImGui::SameLine(132.0f);
-            ImGui::TextColored(colVal, fmt, args...);
-        };
+            for (int i = 0; i < outCount; ++i)
+            {
+                dst[i] = src[i];
+            }
+        }
+        else
+        {
+            for (int i = 0; i < kOverlaySparklineSampleCount; ++i)
+            {
+                dst[i] = src[(overlaySampleCursor_ + i) % kOverlaySparklineSampleCount];
+            }
+        }
+    };
 
+    std::array<float, kOverlaySparklineSampleCount> orderedFps{};
+    std::array<float, kOverlaySparklineSampleCount> orderedFt{};
+    int orderedCount = 0;
+    BuildOrdered(frameRateSamples_, orderedFps, orderedCount);
+    BuildOrdered(frameTimeSamples_, orderedFt, orderedCount);
+
+    const ImVec4 colHeader = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Blue);
+    const ImVec4 colLabel = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted);
+    const ImVec4 colVal = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Text);
+    const ImVec4 colGood = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Success);
+    const ImVec4 colWarn = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Warning);
+    const ImVec4 colBad = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Danger);
+
+    auto LabelVal = [&](const char* label, const char* fmt, auto... args)
+    {
+        ImGui::TextColored(colLabel, "%s", label);
+        ImGui::SameLine(132.0f);
+        ImGui::TextColored(colVal, fmt, args...);
+    };
+
+    {
         const VkPhysicalDeviceProperties deviceProperties =
             NextEngine::GetInstance()->GetRenderer().Device().DeviceProperties();
-        ImGui::TextColored(colHeader, "Device");
-        ImGui::SameLine(132.0f);
-        ImGui::TextColored(colVal, "%s", deviceProperties.deviceName);
-        LabelVal("Resolution:", "%dx%d", statistics.FramebufferSize.width, statistics.FramebufferSize.height);
 
-        ImGui::Separator();
-
-        // FPS
-        ImVec4 fpsColor = statistics.FrameRate > 55.0f ? colGood : (statistics.FrameRate > 30.0f ? colWarn : colBad);
-        ImGui::TextColored(colLabel, "Frame rate:");
-        ImGui::SameLine();
-        ImGui::TextColored(fpsColor, "%.0f fps", statistics.FrameRate);
-
-        LabelVal("Frame time:", "%.2f ms", statistics.FrameTime);
-
-        ImGui::Separator();
-
-        auto& gpuDrivenStat = NextEngine::GetInstance()->GetScene().GetGpuDrivenStat();
-        uint32_t instanceCount = gpuDrivenStat.ProcessedCount > gpuDrivenStat.CulledCount
-            ? gpuDrivenStat.ProcessedCount - gpuDrivenStat.CulledCount
-            : 0;
-        uint32_t triangleCount = gpuDrivenStat.TriangleCount > gpuDrivenStat.CulledTriangleCount
-            ? gpuDrivenStat.TriangleCount - gpuDrivenStat.CulledTriangleCount
-            : 0;
-
-        ImGui::Separator();
-        ImGui::TextColored(colHeader, "Scene Stats");
-        if (ImGui::BeginTable("##SceneStatsTable", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp))
+        BeginCard("##ProfilerDeviceCard", 76.0f);
+        if (ImGui::BeginTable("##ProfilerDeviceHeader", 2, ImGuiTableFlags_SizingStretchProp))
         {
-            ImGui::TableSetupColumn("Key", ImGuiTableColumnFlags_WidthFixed, 132.0f);
-            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
-            auto DrawSceneStat = [&](const char* label, const std::string& value)
-            {
-                ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0);
-                ImGui::TextColored(colLabel, "%s", label);
-                ImGui::TableSetColumnIndex(1);
-                ImGui::TextColored(colVal, "%s", value.c_str());
-            };
-            DrawSceneStat("Nodes", Utilities::metricFormatter(static_cast<double>(statistics.NodeCount), ""));
-            DrawSceneStat("Instances", Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), ""));
-            DrawSceneStat("Textures", std::to_string(statistics.TextureCount));
-            DrawSceneStat("Draws", fmt::format("{} / {}",
-                                               Utilities::metricFormatter(static_cast<double>(instanceCount), ""),
-                                               Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.ProcessedCount), "")));
-            DrawSceneStat("Triangles", fmt::format("{} / {}",
-                                                   Utilities::metricFormatter(static_cast<double>(triangleCount), ""),
-                                                   Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.TriangleCount), "")));
+            ImGui::TableNextColumn();
+            ImGui::TextColored(colHeader, "Device");
+            ImGui::TableNextColumn();
+            ImGui::TextColored(colLabel, "Resolution");
+            ImGui::SameLine(0.0f, 8.0f);
+            ImGui::TextColored(colVal, "%ux%u", statistics.FramebufferSize.width,
+                               statistics.FramebufferSize.height);
             ImGui::EndTable();
         }
+        ImGui::TextColored(colVal, "%s", deviceProperties.deviceName);
+        EndCard();
+        ImGui::Dummy(ImVec2(0.0f, 8.0f));
+    }
 
-        uint32_t mainTasks = TaskCoordinator::GetInstance()->GetMainTaskCount();
-        uint32_t lowTasks = TaskCoordinator::GetInstance()->GetParralledTaskCount();
-        uint32_t completeTasks = TaskCoordinator::GetInstance()->GetComleteTaskQueueCount();
-        LabelVal("Tasks:", "%d / %d / %d", mainTasks, lowTasks, completeTasks);
+    {
+        const float panelAvail = ImGui::GetContentRegionAvail().x;
+        const float gap = 8.0f;
+        const float halfWidth = (panelAvail - gap) * 0.5f;
 
-        ImGui::Separator();
-
-        // Timers
-        if (gpuTimer)
+        auto DrawCard = [&](const char* title, const char* value, ImVec4 valueColor,
+                            const float* samples, int count, ImVec4 sparkColor, float width)
         {
-            struct TimingRow
+            ImVec2 cardPos = ImGui::GetCursorScreenPos();
+            const float height = 78.0f;
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            dl->AddRectFilled(cardPos, ImVec2(cardPos.x + width, cardPos.y + height),
+                              Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::SurfaceElevated, 0.65f), 6.0f);
+            dl->AddRect(cardPos, ImVec2(cardPos.x + width, cardPos.y + height),
+                        Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Border, 0.85f), 6.0f);
+
+            ImGui::SetCursorScreenPos(ImVec2(cardPos.x + 10.0f, cardPos.y + 6.0f));
+            ImGui::TextColored(colHeader, "%s", title);
+
+            ImGui::SetCursorScreenPos(ImVec2(cardPos.x + 10.0f, cardPos.y + 22.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, valueColor);
+            ImGui::Text("%s", value);
+            ImGui::PopStyleColor();
+
+            ImGui::SetCursorScreenPos(ImVec2(cardPos.x + 10.0f, cardPos.y + height - 26.0f));
+            Runtime::UiTheme::Sparkline(samples, count, ImVec2(width - 20.0f, 22.0f), sparkColor);
+
+            ImGui::SetCursorScreenPos(ImVec2(cardPos.x + width, cardPos.y));
+            ImGui::Dummy(ImVec2(width, height));
+        };
+
+        const ImVec4 fpsColor = statistics.FrameRate > 55.0f ? colGood
+            : (statistics.FrameRate > 30.0f ? colWarn : colBad);
+        const std::string fpsText = fmt::format("{:.0f}  FPS", statistics.FrameRate);
+        const std::string ftText = fmt::format("{:.2f}  ms", statistics.FrameTime);
+
+        DrawCard("Frame Rate", fpsText.c_str(), fpsColor,
+                 orderedFps.data(), orderedCount, colGood, halfWidth);
+        ImGui::SameLine(0.0f, gap);
+        DrawCard("Frame Time", ftText.c_str(), colVal,
+                 orderedFt.data(), orderedCount, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Blue), halfWidth);
+        ImGui::Dummy(ImVec2(0.0f, 8.0f));
+    }
+
+    auto& gpuDrivenStat = NextEngine::GetInstance()->GetScene().GetGpuDrivenStat();
+    const uint32_t instanceCount = gpuDrivenStat.ProcessedCount > gpuDrivenStat.CulledCount
+        ? gpuDrivenStat.ProcessedCount - gpuDrivenStat.CulledCount
+        : 0;
+    const uint32_t triangleCount = gpuDrivenStat.TriangleCount > gpuDrivenStat.CulledTriangleCount
+        ? gpuDrivenStat.TriangleCount - gpuDrivenStat.CulledTriangleCount
+        : 0;
+
+    BeginCard("##ProfilerSceneStatsCard", 156.0f);
+    ImGui::TextColored(colHeader, "Scene Stats");
+    ImGui::Dummy(ImVec2(0.0f, 4.0f));
+    if (ImGui::BeginTable("##SceneStatsTable", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp))
+    {
+        ImGui::TableSetupColumn("Key", ImGuiTableColumnFlags_WidthFixed, 132.0f);
+        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+        auto DrawSceneStat = [&](const char* label, const std::string& value)
+        {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextColored(colLabel, "%s", label);
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TextColored(colVal, "%s", value.c_str());
+        };
+        DrawSceneStat("Nodes", Utilities::metricFormatter(static_cast<double>(statistics.NodeCount), ""));
+        DrawSceneStat("Instances", Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), ""));
+        DrawSceneStat("Textures", std::to_string(statistics.TextureCount));
+        DrawSceneStat("Draws", fmt::format("{} / {}",
+                                           Utilities::metricFormatter(static_cast<double>(instanceCount), ""),
+                                           Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.ProcessedCount), "")));
+        DrawSceneStat("Triangles", fmt::format("{} / {}",
+                                               Utilities::metricFormatter(static_cast<double>(triangleCount), ""),
+                                               Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.TriangleCount), "")));
+        ImGui::EndTable();
+    }
+
+    const uint32_t mainTasks = TaskCoordinator::GetInstance()->GetMainTaskCount();
+    const uint32_t lowTasks = TaskCoordinator::GetInstance()->GetParralledTaskCount();
+    const uint32_t completeTasks = TaskCoordinator::GetInstance()->GetComleteTaskQueueCount();
+    LabelVal("Tasks:", "%d / %d / %d", mainTasks, lowTasks, completeTasks);
+    EndCard();
+    ImGui::Dummy(ImVec2(0.0f, 8.0f));
+
+    struct TimingRow
+    {
+        std::string name;
+        int depth = 0;
+        float average = 0.0f;
+        float minimum = 0.0f;
+        float maximum = 0.0f;
+        uint32_t displayOrder = 0;
+        bool active = true;
+    };
+
+    constexpr double timingHistoryWindowSeconds = 2.0;
+    constexpr double timingStaleSeconds = 3.0;
+    const double now = ImGui::GetTime();
+
+    auto BuildTimingRows = [&](const std::vector<VulkanGpuTimer::TimerStat>& times,
+                               std::unordered_map<std::string, TimingHistory>& historyMap)
+    {
+        uint32_t currentDisplayOrder = 0;
+        for (const auto& time : times)
+        {
+            const std::string& historyKey = time.stableKey;
+            auto historyIter = historyMap.try_emplace(historyKey).first;
+            auto& history = historyIter->second;
+
+            history.displayOrder = currentDisplayOrder++;
+            history.displayName = time.name;
+            history.depth = time.depth;
+            history.lastSeenTime = now;
+            history.samples.push_back({now, time.milliseconds});
+
+            while (!history.samples.empty() &&
+                   now - history.samples.front().sampleTime > timingHistoryWindowSeconds)
             {
-                std::string name;
-                int depth = 0;
-                float average = 0.0f;
-                float minimum = 0.0f;
-                float maximum = 0.0f;
-                uint32_t displayOrder = 0;
-                bool active = true;
-            };
+                history.samples.pop_front();
+            }
 
-            constexpr double timingHistoryWindowSeconds = 2.0;
-            constexpr double timingStaleSeconds = 3.0;
-            const double now = ImGui::GetTime();
-
-            auto BuildTimingRows = [&](const std::vector<VulkanGpuTimer::TimerStat>& times,
-                                       std::unordered_map<std::string, TimingHistory>& historyMap)
+            float sum = 0.0f;
+            float minimum = 1000000.0f;
+            float maximum = 0.0f;
+            for (const auto& sample : history.samples)
             {
-                uint32_t currentDisplayOrder = 0;
-                for (const auto& time : times)
-                {
-                    const std::string& name = time.name;
-                    const float ms = time.milliseconds;
-                    const int depth = time.depth;
-                    const std::string& historyKey = time.stableKey;
-                    auto historyIter = historyMap.try_emplace(historyKey).first;
-                    auto& history = historyIter->second;
+                sum += sample.milliseconds;
+                minimum = std::min(minimum, sample.milliseconds);
+                maximum = std::max(maximum, sample.milliseconds);
+            }
 
-                    history.displayOrder = currentDisplayOrder++;
-                    history.displayName = name;
-                    history.depth = depth;
-                    history.lastSeenTime = now;
-                    history.samples.push_back({now, ms});
-
-                    while (!history.samples.empty() &&
-                           now - history.samples.front().sampleTime > timingHistoryWindowSeconds)
-                    {
-                        history.samples.pop_front();
-                    }
-
-                    float sum = 0.0f;
-                    float minimum = 1000000.0f;
-                    float maximum = 0.0f;
-                    for (const auto& sample : history.samples)
-                    {
-                        sum += sample.milliseconds;
-                        minimum = std::min(minimum, sample.milliseconds);
-                        maximum = std::max(maximum, sample.milliseconds);
-                    }
-
-                    const float average = history.samples.empty() ? ms : sum / static_cast<float>(history.samples.size());
-                    history.average = average;
-                    history.minimum = minimum;
-                    history.maximum = maximum;
-                }
-
-                for (auto iter = historyMap.begin(); iter != historyMap.end();)
-                {
-                    auto& history = iter->second;
-                    while (!history.samples.empty() &&
-                           now - history.samples.front().sampleTime > timingHistoryWindowSeconds)
-                    {
-                        history.samples.pop_front();
-                    }
-
-                    if (now - iter->second.lastSeenTime > timingStaleSeconds)
-                    {
-                        iter = historyMap.erase(iter);
-                    }
-                    else
-                    {
-                        ++iter;
-                    }
-                }
-
-                std::vector<TimingRow> timingRows;
-                timingRows.reserve(historyMap.size());
-                for (const auto& [key, history] : historyMap)
-                {
-                    timingRows.push_back(
-                        {history.displayName,
-                         history.depth,
-                         history.average,
-                         history.minimum,
-                         history.maximum,
-                         history.displayOrder,
-                         now - history.lastSeenTime <= 0.1});
-                }
-                std::sort(timingRows.begin(), timingRows.end(), [](const TimingRow& lhs, const TimingRow& rhs)
-                {
-                    if (lhs.displayOrder != rhs.displayOrder)
-                    {
-                        return lhs.displayOrder < rhs.displayOrder;
-                    }
-                    if (lhs.active != rhs.active)
-                    {
-                        return lhs.active;
-                    }
-                    return lhs.name < rhs.name;
-                });
-                return timingRows;
-            };
-
-            auto DrawTimingSection = [&](const char* label, const char* tableId, const std::vector<TimingRow>& timingRows,
-                                         const ImVec4& rootBarColor, const ImVec4& childBarColor)
-            {
-                float totalTime = 0.0f;
-                for (const auto& row : timingRows)
-                {
-                    if (row.depth == 0)
-                    {
-                        totalTime += row.average;
-                    }
-                }
-
-                ImGui::TextColored(colHeader, "%s (avg %.2fms / %.1fs):", label, totalTime,
-                                   timingHistoryWindowSeconds);
-
-                auto TimingBarColor = [&](float milliseconds)
-                {
-                    if (milliseconds < 1.0f)
-                    {
-                        return colGood;
-                    }
-                    if (milliseconds < 4.0f)
-                    {
-                        return colWarn;
-                    }
-                    return colBad;
-                };
-
-                if (ImGui::BeginTable(tableId, 5,
-                                      ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
-                                          ImGuiTableFlags_SizingFixedFit))
-                {
-                    ImGui::TableSetupColumn("Pass", ImGuiTableColumnFlags_WidthFixed, 150.0f);
-                    ImGui::TableSetupColumn("Avg", ImGuiTableColumnFlags_WidthFixed, 52.0f);
-                    ImGui::TableSetupColumn("Min", ImGuiTableColumnFlags_WidthFixed, 52.0f);
-                    ImGui::TableSetupColumn("Max", ImGuiTableColumnFlags_WidthFixed, 52.0f);
-                    ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 74.0f);
-                    ImGui::TableHeadersRow();
-
-                    for (const auto& row : timingRows)
-                    {
-                        const float ratio = totalTime > 0.001f ? row.average / totalTime : 0.0f;
-                        const ImVec4 rowColor = row.depth == 0 ? colVal : colLabel;
-
-                        ImGui::TableNextRow();
-                        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, row.active ? 1.0f : 0.45f);
-                        ImGui::TableNextColumn();
-                        ImGui::Indent(static_cast<float>(row.depth) * 12.0f);
-                        ImGui::TextColored(rowColor, "%s", row.name.c_str());
-                        ImGui::Unindent(static_cast<float>(row.depth) * 12.0f);
-
-                        ImGui::TableNextColumn();
-                        ImGui::TextColored(rowColor, "%.2f", row.average);
-                        ImGui::TableNextColumn();
-                        ImGui::TextColored(colLabel, "%.2f", row.minimum);
-                        ImGui::TableNextColumn();
-                        ImGui::TextColored(colLabel, "%.2f", row.maximum);
-                        ImGui::TableNextColumn();
-
-                        Runtime::UiTheme::DrawProgressBar(std::min(ratio, 1.0f),
-                                                          TimingBarColor(row.average),
-                                                          ImVec2(70.0f, ImGui::GetTextLineHeight()));
-                        ImGui::PopStyleVar();
-                    }
-                    ImGui::EndTable();
-                }
-            };
-
-            const auto gpuTimingRows = BuildTimingRows(gpuTimer->FetchAllTimes(4), gpuTimeHistory_);
-            DrawTimingSection("GPU Time", "##GpuTimeTable", gpuTimingRows,
-                              ImVec4(0.35f, 0.65f, 1.0f, 1.0f), ImVec4(0.2f, 0.7f, 0.35f, 1.0f));
-
-            const auto cpuTimingRows = BuildTimingRows(gpuTimer->FetchAllCpuTimes(5), cpuTimeHistory_);
-            DrawTimingSection("CPU Time", "##CpuTimeTable", cpuTimingRows,
-                              ImVec4(0.85f, 0.58f, 0.25f, 1.0f), ImVec4(0.7f, 0.45f, 0.2f, 1.0f));
+            history.average = history.samples.empty() ? time.milliseconds : sum / static_cast<float>(history.samples.size());
+            history.minimum = minimum;
+            history.maximum = maximum;
         }
 
-        ImGui::Separator();
-        LabelVal("Frame:", "%d", statistics.TotalFrames);
-        LabelVal(
-            "Time:", "%s",
-            fmt::format("{:%H:%M:%S}", std::chrono::seconds(static_cast<long long>(statistics.RenderTime))).c_str());
+        for (auto iter = historyMap.begin(); iter != historyMap.end();)
+        {
+            auto& history = iter->second;
+            while (!history.samples.empty() &&
+                   now - history.samples.front().sampleTime > timingHistoryWindowSeconds)
+            {
+                history.samples.pop_front();
+            }
+
+            if (now - iter->second.lastSeenTime > timingStaleSeconds)
+            {
+                iter = historyMap.erase(iter);
+            }
+            else
+            {
+                ++iter;
+            }
+        }
+
+        std::vector<TimingRow> timingRows;
+        timingRows.reserve(historyMap.size());
+        for (const auto& [key, history] : historyMap)
+        {
+            timingRows.push_back({history.displayName,
+                                  history.depth,
+                                  history.average,
+                                  history.minimum,
+                                  history.maximum,
+                                  history.displayOrder,
+                                  now - history.lastSeenTime <= 0.1});
+        }
+        std::sort(timingRows.begin(), timingRows.end(), [](const TimingRow& lhs, const TimingRow& rhs)
+        {
+            if (lhs.displayOrder != rhs.displayOrder)
+            {
+                return lhs.displayOrder < rhs.displayOrder;
+            }
+            if (lhs.active != rhs.active)
+            {
+                return lhs.active;
+            }
+            return lhs.name < rhs.name;
+        });
+        return timingRows;
+    };
+
+    auto DrawTimingSection = [&](const char* label, const char* tableId, const std::vector<TimingRow>& timingRows)
+    {
+        float totalTime = 0.0f;
+        for (const auto& row : timingRows)
+        {
+            if (row.depth == 0)
+            {
+                totalTime += row.average;
+            }
+        }
+
+        ImGui::TextColored(colHeader, "%s (avg %.2fms / %.1fs)", label, totalTime, timingHistoryWindowSeconds);
+
+        auto TimingBarColor = [&](float milliseconds)
+        {
+            if (milliseconds < 1.0f)
+            {
+                return colGood;
+            }
+            if (milliseconds < 4.0f)
+            {
+                return colWarn;
+            }
+            return colBad;
+        };
+
+        if (ImGui::BeginTable(tableId, 5,
+                              ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
+                                  ImGuiTableFlags_SizingFixedFit))
+        {
+            ImGui::TableSetupColumn("Pass", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+            ImGui::TableSetupColumn("Avg (ms)", ImGuiTableColumnFlags_WidthFixed, 62.0f);
+            ImGui::TableSetupColumn("Min (ms)", ImGuiTableColumnFlags_WidthFixed, 62.0f);
+            ImGui::TableSetupColumn("Max (ms)", ImGuiTableColumnFlags_WidthFixed, 62.0f);
+            ImGui::TableSetupColumn("Graph", ImGuiTableColumnFlags_WidthFixed, 74.0f);
+            ImGui::TableHeadersRow();
+
+            for (const auto& row : timingRows)
+            {
+                const float ratio = totalTime > 0.001f ? row.average / totalTime : 0.0f;
+                const ImVec4 rowColor = row.depth == 0 ? colVal : colLabel;
+
+                ImGui::TableNextRow();
+                ImGui::PushStyleVar(ImGuiStyleVar_Alpha, row.active ? 1.0f : 0.45f);
+                ImGui::TableNextColumn();
+                ImGui::Indent(static_cast<float>(row.depth) * 12.0f);
+                ImGui::TextColored(rowColor, "%s", row.name.c_str());
+                ImGui::Unindent(static_cast<float>(row.depth) * 12.0f);
+
+                ImGui::TableNextColumn();
+                ImGui::TextColored(rowColor, "%.2f", row.average);
+                ImGui::TableNextColumn();
+                ImGui::TextColored(colLabel, "%.2f", row.minimum);
+                ImGui::TableNextColumn();
+                ImGui::TextColored(colLabel, "%.2f", row.maximum);
+                ImGui::TableNextColumn();
+                Runtime::UiTheme::DrawProgressBar(std::min(ratio, 1.0f),
+                                                  TimingBarColor(row.average),
+                                                  ImVec2(70.0f, ImGui::GetTextLineHeight()));
+                ImGui::PopStyleVar();
+            }
+            ImGui::EndTable();
+        }
+    };
+
+    const float timingCardHeight = std::max(180.0f, ImGui::GetContentRegionAvail().y - 42.0f);
+    BeginCard("##ProfilerTimingCard", timingCardHeight, ImGuiWindowFlags_HorizontalScrollbar);
+    if (gpuTimer)
+    {
+        const auto gpuTimingRows = BuildTimingRows(gpuTimer->FetchAllTimes(4), gpuTimeHistory_);
+        DrawTimingSection("Pass Timing", "##GpuTimeTable", gpuTimingRows);
+
+        const auto cpuTimingRows = BuildTimingRows(gpuTimer->FetchAllCpuTimes(5), cpuTimeHistory_);
+        if (!cpuTimingRows.empty())
+        {
+            ImGui::Dummy(ImVec2(0.0f, 6.0f));
+            Runtime::UiTheme::DrawThinSeparator(0.55f);
+            DrawTimingSection("CPU Time", "##CpuTimeTable", cpuTimingRows);
+        }
     }
-    ImGui::End();
+    else
+    {
+        ImGui::TextColored(colLabel, "Timing data is unavailable.");
+    }
+    EndCard();
+
+    ImGui::Dummy(ImVec2(0.0f, 8.0f));
+    LabelVal("Frame:", "%d", statistics.TotalFrames);
+    LabelVal("Time:", "%s",
+             fmt::format("{:%H:%M:%S}", std::chrono::seconds(static_cast<long long>(statistics.RenderTime))).c_str());
+
+    ImGui::EndChild();
+    Runtime::UiTheme::EndFloatingPanel();
 }
 
 void UserInterface::DrawIndicator(uint32_t frameCount)
