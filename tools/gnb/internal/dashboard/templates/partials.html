@@ -429,7 +429,10 @@
 
 
 {{define "log_panel"}}
-<div class="log-panel" data-stream="/jobs/{{.ID}}/stream">
+<div class="log-panel"
+     data-started-at="{{.StartedAt.Unix}}"
+     {{if jobIsTerminal .}}data-finished-at="{{.FinishedAt.Unix}}"{{end}}
+     {{if jobIsRunning .}}data-stream="/jobs/{{.ID}}/stream?from={{len .Lines}}"{{end}}>
   <div class="log-head">
     <div class="label">
       <span class="ico">
@@ -440,7 +443,7 @@
     <span class="target-pill">{{.Target}}</span>
     <span class="spacer"></span>
     <div class="meta">
-      <span>{{jobElapsed .}}</span>
+      <span data-elapsed>{{jobElapsed .}}</span>
       <span data-stream-status>{{jobStatusBadge .}}</span>
     </div>
     <div class="log-actions">
@@ -458,7 +461,7 @@
       </button>
     </div>
   </div>
-  <div class="log-body"></div>
+  <div class="log-body">{{jobLines .}}</div>
 </div>
 {{end}}
 

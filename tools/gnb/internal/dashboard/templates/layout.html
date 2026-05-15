@@ -33,7 +33,7 @@
     --radius-md: 8px;
     --radius-sm: 6px;
     --font-sans: "Inter", "Noto Sans SC", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif;
-    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "Cascadia Mono", "Consolas", "Liberation Mono", Menlo, monospace;
+    --font-mono: "Cascadia Mono", "Cascadia Code", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, "DejaVu Sans Mono", "Liberation Mono", "Ubuntu Mono", Consolas, monospace;
   }
   * {
     box-sizing: border-box;
@@ -314,6 +314,7 @@
     line-height: 1.55;
     color: var(--fg);
   }
+  .log-body, .log-body *, .log-line, .log-line * { font-family: var(--font-mono); }
   .log-line { white-space: pre-wrap; word-break: break-word; }
   .log-empty {
     flex: 1;
@@ -943,6 +944,36 @@
   // the `done` event AND on any error, with no reconnect.
   const logSources = new WeakMap(); // panel element -> EventSource
 
+  function formatElapsedSeconds(totalSeconds) {
+    const wholeSeconds = Math.max(0, Math.floor(totalSeconds));
+    const minutes = Math.floor(wholeSeconds / 60);
+    const seconds = wholeSeconds % 60;
+    return `${minutes} min ${seconds} sec`;
+  }
+
+  function updatePanelElapsed(panel) {
+    const startedAt = Number(panel?.dataset?.startedAt || '');
+    if (!Number.isFinite(startedAt)) return;
+    const elapsedEl = panel.querySelector('[data-elapsed]');
+    if (!elapsedEl) return;
+    const finishedAt = Number(panel.dataset.finishedAt || '');
+    const end = Number.isFinite(finishedAt) ? finishedAt : Math.floor(Date.now() / 1000);
+    elapsedEl.textContent = formatElapsedSeconds(end - startedAt);
+  }
+
+  function refreshElapsedPanels(root) {
+    (root || document).querySelectorAll('.log-panel[data-started-at]').forEach(updatePanelElapsed);
+  }
+
+  setInterval(() => {
+    document.querySelectorAll('.log-panel[data-started-at]:not([data-finished-at])').forEach(updatePanelElapsed);
+  }, 1000);
+
+  function initPanelElapsed(panel) {
+    if (!panel) return;
+    updatePanelElapsed(panel);
+  }
+
   function closePanelStream(panel) {
     const src = logSources.get(panel);
     if (src) {
@@ -970,7 +1001,9 @@
     src.addEventListener('status', (e) => {
       if (statusEl) statusEl.innerHTML = e.data;
     });
-    src.addEventListener('done', () => {
+    src.addEventListener('done', (e) => {
+      if (e.data) panel.dataset.finishedAt = e.data;
+      updatePanelElapsed(panel);
       closePanelStream(panel);
     });
     // Suppress the browser's default auto-reconnect on error. For localhost
@@ -980,7 +1013,10 @@
   }
 
   function initAllLogPanels(root) {
-    (root || document).querySelectorAll('.log-panel[data-stream]').forEach(initLogPanel);
+    refreshElapsedPanels(root);
+    (root || document).querySelectorAll('.log-panel').forEach(panel => {
+      initLogPanel(panel);
+    });
   }
 
   // Close any EventSources whose panels just got removed from the DOM
@@ -991,7 +1027,9 @@
       const panels = n.matches && n.matches('.log-panel[data-stream]')
         ? [n]
         : (n.querySelectorAll ? Array.from(n.querySelectorAll('.log-panel[data-stream]')) : []);
-      panels.forEach(closePanelStream);
+      panels.forEach(panel => {
+        closePanelStream(panel);
+      });
     }));
   }).observe(document.body, { childList: true, subtree: true });
 

@@ -76,12 +76,12 @@ type runVM struct {
 }
 
 type testVM struct {
-	Tests      []TestCase
-	ListErr    string
-	BinPath    string
-	BinExists  bool
-	Latest     JobSnapshot
-	HasJob     bool
+	Tests     []TestCase
+	ListErr   string
+	BinPath   string
+	BinExists bool
+	Latest    JobSnapshot
+	HasJob    bool
 }
 
 type journalSummary struct {
@@ -93,14 +93,14 @@ type journalSummary struct {
 }
 
 type taskDetailVM struct {
-	Task         spec.Task
-	SectionName  string
-	SpecBody     string
-	JournalBody  string
-	BlockerBody  string
-	HasSpec      bool
-	HasJournal   bool
-	HasBlocker   bool
+	Task        spec.Task
+	SectionName string
+	SpecBody    string
+	JournalBody string
+	BlockerBody string
+	HasSpec     bool
+	HasJournal  bool
+	HasBlocker  bool
 }
 
 func (s *Server) buildIndex() (indexVM, error) {
@@ -545,6 +545,24 @@ func (s *Server) handleJobStream(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "job not found", http.StatusNotFound)
 		return
 	}
+	from := 0
+	if raw := strings.TrimSpace(r.URL.Query().Get("from")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 0 {
+			http.Error(w, "invalid stream offset", http.StatusBadRequest)
+			return
+		}
+		from = n
+	}
+	ch, snap := job.subscribe()
+	defer job.unsubscribe(ch)
+	if from > len(snap.Lines) {
+		from = len(snap.Lines)
+	}
+	if snap.Status != StatusRunning && from >= len(snap.Lines) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
@@ -555,9 +573,6 @@ func (s *Server) handleJobStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
-
-	ch, snap := job.subscribe()
-	defer job.unsubscribe(ch)
 
 	// SSE protocol: `data:` lines may not contain raw newlines. Each log
 	// line is already a single HTML row, but defend against embedded \n
@@ -574,12 +589,12 @@ func (s *Server) handleJobStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Replay buffer.
-	for _, line := range snap.Lines {
+	for _, line := range snap.Lines[from:] {
 		emit("line", line)
 	}
 	if snap.Status != StatusRunning {
 		emit("status", statusBadgeHTML(snap.Status, snap.ExitNote))
-		emit("done", "")
+		emit("done", fmt.Sprintf("%d", snap.FinishedAt.Unix()))
 		return
 	}
 	emit("status", statusBadgeHTML(snap.Status, snap.ExitNote))

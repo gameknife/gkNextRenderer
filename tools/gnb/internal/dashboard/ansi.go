@@ -20,6 +20,7 @@ import (
 func ansiToHTML(line string) string {
 	var out strings.Builder
 	state := newAnsiState()
+	sawSGR := false
 	i := 0
 	for i < len(line) {
 		c := line[i]
@@ -58,18 +59,22 @@ func ansiToHTML(line string) string {
 			// Non-SGR: cursor moves, erase, etc. Drop silently.
 			continue
 		}
+		sawSGR = true
 		state.apply(params, &out)
 	}
 	state.closeAll(&out)
+	if !sawSGR {
+		return formatStructuredLogLine(line)
+	}
 	return out.String()
 }
 
 type ansiState struct {
-	bold       bool
-	underline  bool
-	fg         string // CSS color or "" for default
-	bg         string
-	openSpans  int
+	bold      bool
+	underline bool
+	fg        string // CSS color or "" for default
+	bg        string
+	openSpans int
 }
 
 func newAnsiState() *ansiState { return &ansiState{} }
@@ -278,5 +283,77 @@ func palette256(n int) string {
 	default:
 		v := 8 + (n-232)*10
 		return fmt.Sprintf("rgb(%d,%d,%d)", v, v, v)
+	}
+}
+
+func formatStructuredLogLine(line string) string {
+	timestamp, rest, ok := cutBracketToken(line)
+	if !ok {
+		return html.EscapeString(line)
+	}
+	level, rest, ok := cutBracketToken(strings.TrimLeft(rest, " "))
+	if !ok {
+		return html.EscapeString(line)
+	}
+	levelStyle, ok := logLevelColor(level)
+	if !ok {
+		return html.EscapeString(line)
+	}
+
+	rest = strings.TrimLeft(rest, " ")
+	source := ""
+	if token, remaining, ok := cutBracketToken(rest); ok {
+		source = token
+		rest = strings.TrimLeft(remaining, " ")
+	}
+
+	var out strings.Builder
+	out.WriteString(`<span style="color:#6b7384">[`)
+	out.WriteString(html.EscapeString(timestamp))
+	out.WriteString(`]</span> `)
+	out.WriteString(`<span style="color:`)
+	out.WriteString(levelStyle)
+	out.WriteString(`;font-weight:600">[`)
+	out.WriteString(html.EscapeString(level))
+	out.WriteString(`]</span>`)
+	if source != "" {
+		out.WriteString(` <span style="color:#9aa3b2">[`)
+		out.WriteString(html.EscapeString(source))
+		out.WriteString(`]</span>`)
+	}
+	if rest != "" {
+		out.WriteByte(' ')
+		out.WriteString(html.EscapeString(rest))
+	}
+	return out.String()
+}
+
+func cutBracketToken(s string) (token, rest string, ok bool) {
+	if !strings.HasPrefix(s, "[") {
+		return "", s, false
+	}
+	end := strings.IndexByte(s, ']')
+	if end < 0 {
+		return "", s, false
+	}
+	return s[1:end], s[end+1:], true
+}
+
+func logLevelColor(level string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "trace":
+		return "#6b7384", true
+	case "debug":
+		return "#93c5fd", true
+	case "info":
+		return "#22c55e", true
+	case "warning", "warn":
+		return "#eab308", true
+	case "error":
+		return "#ef4444", true
+	case "critical":
+		return "#f472b6", true
+	default:
+		return "", false
 	}
 }
