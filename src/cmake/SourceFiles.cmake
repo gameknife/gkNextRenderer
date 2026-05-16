@@ -41,6 +41,8 @@ file(GLOB_RECURSE src_files_thirdparty
     "ThirdParty/ImGuizmo/*.h"
     "ThirdParty/ImAnim/*.cpp"
     "ThirdParty/ImAnim/*.h"
+    "ThirdParty/imgui-custom/imgui_impl_sdl3_custom.cpp"
+    "ThirdParty/imgui-custom/imgui_impl_sdl3_custom.h"
     "ThirdParty/ozz/*.h"
 )
 
