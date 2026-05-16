@@ -28,7 +28,6 @@ namespace Vulkan
 	class CommandPool;
 	class Buffer;
 	class DepthBuffer;
-	class DescriptorPool;
 	class DeviceMemory;
 	class FrameBuffer;
 	class RenderPass;
@@ -61,6 +60,8 @@ struct Statistics final
 class UserInterface final
 {
 public:
+
+	struct FUiRenderBuffers;
 
 	VULKAN_NON_COPIABLE(UserInterface)
 
@@ -120,13 +121,27 @@ private:
 	void DrawConsoleWindow();
 	void RefreshConsoleMatches(size_t matchLimit);
 	void DrawConsoleMatchPopup(float width, const char* popupId);
+	void InitializeRendererBackend();
+	void ShutdownRendererBackend();
+	void BeginRendererBackendFrame();
 	void CreateUiPipeline(const Vulkan::SwapChain& swapChain);
 	void DestroyUiPipeline();
 	void InitializeFontTexture(Vulkan::CommandPool& commandPool);
-	VkDescriptorSet GetOrCreateFallbackDescriptorSet(uint32_t textureIndex);
-	void TranslatePlatformViewportTextures();
-	void RenderDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain,
-	                    uint32_t imageIdx);
+	VkPipeline GetOrCreatePlatformViewportPipeline(VkRenderPass renderPass);
+	void CreatePlatformViewportWindow(ImGuiViewport* viewport);
+	void DestroyPlatformViewportWindow(ImGuiViewport* viewport);
+	void ResizePlatformViewportWindow(ImGuiViewport* viewport, ImVec2 size);
+	void RenderPlatformViewportWindow(ImGuiViewport* viewport);
+	void SwapPlatformViewportBuffers(ImGuiViewport* viewport);
+	static UserInterface* GetRendererBackendOwner();
+	static void CreatePlatformViewportWindowCallback(ImGuiViewport* viewport);
+	static void DestroyPlatformViewportWindowCallback(ImGuiViewport* viewport);
+	static void ResizePlatformViewportWindowCallback(ImGuiViewport* viewport, ImVec2 size);
+	static void RenderPlatformViewportWindowCallback(ImGuiViewport* viewport, void* renderArg);
+	static void SwapPlatformViewportBuffersCallback(ImGuiViewport* viewport, void* renderArg);
+	void PrunePlatformViewportRenderBuffers();
+	void RenderDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, FUiRenderBuffers& renderBuffers,
+	                    VkExtent2D framebufferExtent, bool hdrOutput, VkPipeline pipeline);
 	static ImTextureID EncodeBindlessTextureId(uint32_t textureIndex);
 	static bool DecodeBindlessTextureId(ImTextureID textureId, uint32_t& outTextureIndex);
 	static int ConsoleInputTextCallback(ImGuiInputTextCallbackData* data);
@@ -151,7 +166,6 @@ private:
 		uint32_t displayOrder = 0;
 	};
 
-	std::unique_ptr<Vulkan::DescriptorPool> descriptorPool_;
 	std::unique_ptr<Vulkan::RenderPass> renderPass_;
 	std::vector< Vulkan::FrameBuffer > uiFrameBuffers_;
 	struct FUiRenderBuffers
@@ -163,9 +177,11 @@ private:
 	std::vector<FUiRenderBuffers> uiRenderBuffers_;
 	VkPipelineLayout uiPipelineLayout_ = VK_NULL_HANDLE;
 	VkPipeline uiPipeline_ = VK_NULL_HANDLE;
+	VkPipeline uiPlatformViewportPipeline_ = VK_NULL_HANDLE;
+	VkRenderPass uiPlatformViewportRenderPass_ = VK_NULL_HANDLE;
 	UserSettings& userSettings_;	
 	
-	std::unordered_map<uint32_t, VkDescriptorSet> uiFallbackDescriptorSetMap_;
+	std::unordered_map<ImGuiID, std::vector<FUiRenderBuffers>> platformUiRenderBuffers_;
 	std::unordered_set<std::string> uiTextureLoadRequests_;
 	std::unordered_map<std::string, ImVec2> uiTexturePixelSizeCache_;
 	uint32_t fontTextureIndex_ = UINT32_MAX;

@@ -7,8 +7,8 @@
 #include "Runtime/Editor/ConsoleLogBuffer.hpp"
 #include "Runtime/Editor/FontLoader.h"
 #include "Runtime/Editor/ProfessionalUI.hpp"
+#include "ThirdParty/imgui-custom/imgui_impl_sdl3_custom.h"
 #include "Utilities/Exception.hpp"
-#include "Vulkan/DescriptorSystem.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/MemoryAndShader.hpp"
 #include "Vulkan/Instance.hpp"
@@ -21,9 +21,6 @@
 #include <imgui_freetype.h>
 #include <imgui_stdlib.h>
 #include <SDL3/SDL.h>
-#include <imgui_impl_sdl3.h>
-#include <imgui_impl_vulkan.h>
-
 
 #include <algorithm>
 #include <array>
@@ -96,6 +93,415 @@ namespace
         const ImDrawCmd* drawCmd = nullptr;
     };
 
+    struct UiRendererRenderState
+    {
+        VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+        VkPipeline pipeline = VK_NULL_HANDLE;
+        VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+    };
+
+    struct UiPlatformFrame
+    {
+        VkCommandPool commandPool = VK_NULL_HANDLE;
+        VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+        VkFence fence = VK_NULL_HANDLE;
+        VkImage backbuffer = VK_NULL_HANDLE;
+        VkImageView backbufferView = VK_NULL_HANDLE;
+        VkFramebuffer framebuffer = VK_NULL_HANDLE;
+    };
+
+    struct UiPlatformFrameSemaphores
+    {
+        VkSemaphore imageAcquiredSemaphore = VK_NULL_HANDLE;
+        VkSemaphore renderCompleteSemaphore = VK_NULL_HANDLE;
+    };
+
+    struct UiPlatformWindow
+    {
+        int width = 0;
+        int height = 0;
+        VkSwapchainKHR swapchain = VK_NULL_HANDLE;
+        VkSurfaceKHR surface = VK_NULL_HANDLE;
+        VkSurfaceFormatKHR surfaceFormat{};
+        VkPresentModeKHR presentMode = static_cast<VkPresentModeKHR>(~0);
+        VkRenderPass renderPass = VK_NULL_HANDLE;
+        bool useDynamicRendering = false;
+        bool clearEnable = true;
+        VkClearValue clearValue{};
+        uint32_t frameIndex = 0;
+        uint32_t imageCount = 0;
+        uint32_t semaphoreCount = 0;
+        uint32_t semaphoreIndex = 0;
+        ImVector<UiPlatformFrame> frames;
+        ImVector<UiPlatformFrameSemaphores> frameSemaphores;
+    };
+
+    struct UiPlatformViewportData
+    {
+        UiPlatformWindow window;
+        bool windowOwned = false;
+        bool swapChainNeedRebuild = false;
+        bool swapChainSuboptimal = false;
+    };
+
+    VkSurfaceFormatKHR SelectPlatformSurfaceFormat(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface,
+                                                   const VkFormat* requestFormats, int requestFormatsCount,
+                                                   VkColorSpaceKHR requestColorSpace)
+    {
+        uint32_t availableCount = 0;
+        Vulkan::Check(vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &availableCount, nullptr),
+                      "query ui platform surface format count");
+
+        ImVector<VkSurfaceFormatKHR> availableFormats;
+        availableFormats.resize(static_cast<int>(availableCount));
+        Vulkan::Check(vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &availableCount,
+                                                           availableFormats.Data),
+                      "query ui platform surface formats");
+
+        if (availableCount == 1)
+        {
+            if (availableFormats[0].format == VK_FORMAT_UNDEFINED)
+            {
+                VkSurfaceFormatKHR format{};
+                format.format = requestFormats[0];
+                format.colorSpace = requestColorSpace;
+                return format;
+            }
+            return availableFormats[0];
+        }
+
+        for (int requestedIndex = 0; requestedIndex < requestFormatsCount; ++requestedIndex)
+        {
+            for (uint32_t availableIndex = 0; availableIndex < availableCount; ++availableIndex)
+            {
+                if (availableFormats[availableIndex].format == requestFormats[requestedIndex] &&
+                    availableFormats[availableIndex].colorSpace == requestColorSpace)
+                {
+                    return availableFormats[availableIndex];
+                }
+            }
+        }
+
+        return availableFormats[0];
+    }
+
+    VkPresentModeKHR SelectPlatformPresentMode(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface,
+                                               const VkPresentModeKHR* requestModes, int requestModesCount)
+    {
+        uint32_t availableCount = 0;
+        Vulkan::Check(vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &availableCount, nullptr),
+                      "query ui platform present mode count");
+
+        ImVector<VkPresentModeKHR> availableModes;
+        availableModes.resize(static_cast<int>(availableCount));
+        Vulkan::Check(vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &availableCount,
+                                                                availableModes.Data),
+                      "query ui platform present modes");
+
+        for (int requestedIndex = 0; requestedIndex < requestModesCount; ++requestedIndex)
+        {
+            for (uint32_t availableIndex = 0; availableIndex < availableCount; ++availableIndex)
+            {
+                if (requestModes[requestedIndex] == availableModes[availableIndex])
+                {
+                    return requestModes[requestedIndex];
+                }
+            }
+        }
+
+        return VK_PRESENT_MODE_FIFO_KHR;
+    }
+
+    void DestroyPlatformFrame(VkDevice device, UiPlatformFrame& frame)
+    {
+        if (frame.fence != VK_NULL_HANDLE)
+        {
+            vkDestroyFence(device, frame.fence, nullptr);
+            frame.fence = VK_NULL_HANDLE;
+        }
+        if (frame.commandBuffer != VK_NULL_HANDLE && frame.commandPool != VK_NULL_HANDLE)
+        {
+            vkFreeCommandBuffers(device, frame.commandPool, 1, &frame.commandBuffer);
+            frame.commandBuffer = VK_NULL_HANDLE;
+        }
+        if (frame.commandPool != VK_NULL_HANDLE)
+        {
+            vkDestroyCommandPool(device, frame.commandPool, nullptr);
+            frame.commandPool = VK_NULL_HANDLE;
+        }
+        if (frame.backbufferView != VK_NULL_HANDLE)
+        {
+            vkDestroyImageView(device, frame.backbufferView, nullptr);
+            frame.backbufferView = VK_NULL_HANDLE;
+        }
+        if (frame.framebuffer != VK_NULL_HANDLE)
+        {
+            vkDestroyFramebuffer(device, frame.framebuffer, nullptr);
+            frame.framebuffer = VK_NULL_HANDLE;
+        }
+    }
+
+    void DestroyPlatformFrameSemaphores(VkDevice device, UiPlatformFrameSemaphores& semaphores)
+    {
+        if (semaphores.imageAcquiredSemaphore != VK_NULL_HANDLE)
+        {
+            vkDestroySemaphore(device, semaphores.imageAcquiredSemaphore, nullptr);
+            semaphores.imageAcquiredSemaphore = VK_NULL_HANDLE;
+        }
+        if (semaphores.renderCompleteSemaphore != VK_NULL_HANDLE)
+        {
+            vkDestroySemaphore(device, semaphores.renderCompleteSemaphore, nullptr);
+            semaphores.renderCompleteSemaphore = VK_NULL_HANDLE;
+        }
+    }
+
+    void CreatePlatformWindowCommandBuffers(VkDevice device, UiPlatformWindow& window, uint32_t queueFamily)
+    {
+        for (uint32_t imageIndex = 0; imageIndex < window.imageCount; ++imageIndex)
+        {
+            UiPlatformFrame& frame = window.frames[imageIndex];
+
+            VkCommandPoolCreateInfo commandPoolInfo{};
+            commandPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+            commandPoolInfo.queueFamilyIndex = queueFamily;
+            Vulkan::Check(vkCreateCommandPool(device, &commandPoolInfo, nullptr, &frame.commandPool),
+                          "create ui platform viewport command pool");
+
+            VkCommandBufferAllocateInfo commandBufferInfo{};
+            commandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            commandBufferInfo.commandPool = frame.commandPool;
+            commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            commandBufferInfo.commandBufferCount = 1;
+            Vulkan::Check(vkAllocateCommandBuffers(device, &commandBufferInfo, &frame.commandBuffer),
+                          "allocate ui platform viewport command buffer");
+
+            VkFenceCreateInfo fenceInfo{};
+            fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+            fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+            Vulkan::Check(vkCreateFence(device, &fenceInfo, nullptr, &frame.fence),
+                          "create ui platform viewport fence");
+        }
+
+        for (uint32_t semaphoreIndex = 0; semaphoreIndex < window.semaphoreCount; ++semaphoreIndex)
+        {
+            UiPlatformFrameSemaphores& semaphores = window.frameSemaphores[semaphoreIndex];
+            VkSemaphoreCreateInfo semaphoreInfo{};
+            semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+            Vulkan::Check(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &semaphores.imageAcquiredSemaphore),
+                          "create ui platform viewport acquire semaphore");
+            Vulkan::Check(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &semaphores.renderCompleteSemaphore),
+                          "create ui platform viewport render semaphore");
+        }
+    }
+
+    void CreatePlatformWindowSwapChain(VkPhysicalDevice physicalDevice, VkDevice device, UiPlatformWindow& window,
+                                       int width, int height, uint32_t minImageCount)
+    {
+        VkSwapchainKHR oldSwapChain = window.swapchain;
+        window.swapchain = VK_NULL_HANDLE;
+
+        Vulkan::Check(vkDeviceWaitIdle(device), "wait device idle for ui platform viewport resize");
+
+        for (int imageIndex = 0; imageIndex < window.frames.Size; ++imageIndex)
+        {
+            DestroyPlatformFrame(device, window.frames[imageIndex]);
+        }
+        for (int semaphoreIndex = 0; semaphoreIndex < window.frameSemaphores.Size; ++semaphoreIndex)
+        {
+            DestroyPlatformFrameSemaphores(device, window.frameSemaphores[semaphoreIndex]);
+        }
+        window.frames.clear();
+        window.frameSemaphores.clear();
+        window.imageCount = 0;
+        if (window.renderPass != VK_NULL_HANDLE)
+        {
+            vkDestroyRenderPass(device, window.renderPass, nullptr);
+            window.renderPass = VK_NULL_HANDLE;
+        }
+
+        VkSurfaceCapabilitiesKHR surfaceCapabilities{};
+        Vulkan::Check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, window.surface, &surfaceCapabilities),
+                      "query ui platform surface capabilities");
+
+        VkSwapchainCreateInfoKHR swapChainInfo{};
+        swapChainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+        swapChainInfo.surface = window.surface;
+        swapChainInfo.minImageCount = minImageCount;
+        swapChainInfo.imageFormat = window.surfaceFormat.format;
+        swapChainInfo.imageColorSpace = window.surfaceFormat.colorSpace;
+        swapChainInfo.imageArrayLayers = 1;
+        swapChainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        swapChainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        swapChainInfo.preTransform =
+            (surfaceCapabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
+                ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR
+                : surfaceCapabilities.currentTransform;
+        swapChainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+        swapChainInfo.presentMode = window.presentMode;
+        swapChainInfo.clipped = VK_TRUE;
+        swapChainInfo.oldSwapchain = oldSwapChain;
+        if (swapChainInfo.minImageCount < surfaceCapabilities.minImageCount)
+        {
+            swapChainInfo.minImageCount = surfaceCapabilities.minImageCount;
+        }
+        else if (surfaceCapabilities.maxImageCount != 0 &&
+                 swapChainInfo.minImageCount > surfaceCapabilities.maxImageCount)
+        {
+            swapChainInfo.minImageCount = surfaceCapabilities.maxImageCount;
+        }
+
+        if (surfaceCapabilities.currentExtent.width == 0xffffffff)
+        {
+            swapChainInfo.imageExtent.width = window.width = width;
+            swapChainInfo.imageExtent.height = window.height = height;
+        }
+        else
+        {
+            swapChainInfo.imageExtent.width = window.width = static_cast<int>(surfaceCapabilities.currentExtent.width);
+            swapChainInfo.imageExtent.height = window.height = static_cast<int>(surfaceCapabilities.currentExtent.height);
+        }
+
+        Vulkan::Check(vkCreateSwapchainKHR(device, &swapChainInfo, nullptr, &window.swapchain),
+                      "create ui platform viewport swapchain");
+        Vulkan::Check(vkGetSwapchainImagesKHR(device, window.swapchain, &window.imageCount, nullptr),
+                      "query ui platform viewport swapchain image count");
+
+        std::array<VkImage, 16> backbuffers{};
+        if (window.imageCount > backbuffers.size())
+        {
+            Throw(std::runtime_error("ui platform viewport swapchain exceeds supported image count"));
+        }
+        Vulkan::Check(vkGetSwapchainImagesKHR(device, window.swapchain, &window.imageCount, backbuffers.data()),
+                      "query ui platform viewport swapchain images");
+
+        window.semaphoreCount = window.imageCount + 1;
+        window.frames.resize(static_cast<int>(window.imageCount));
+        window.frameSemaphores.resize(static_cast<int>(window.semaphoreCount));
+        memset(window.frames.Data, 0, window.frames.size_in_bytes());
+        memset(window.frameSemaphores.Data, 0, window.frameSemaphores.size_in_bytes());
+        for (uint32_t imageIndex = 0; imageIndex < window.imageCount; ++imageIndex)
+        {
+            window.frames[imageIndex].backbuffer = backbuffers[imageIndex];
+        }
+
+        if (oldSwapChain != VK_NULL_HANDLE)
+        {
+            vkDestroySwapchainKHR(device, oldSwapChain, nullptr);
+        }
+
+        VkAttachmentDescription attachment{};
+        attachment.format = window.surfaceFormat.format;
+        attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+        attachment.loadOp = window.clearEnable ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+        VkAttachmentReference colorAttachment{};
+        colorAttachment.attachment = 0;
+        colorAttachment.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+        VkSubpassDescription subpass{};
+        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.colorAttachmentCount = 1;
+        subpass.pColorAttachments = &colorAttachment;
+
+        VkSubpassDependency dependency{};
+        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependency.dstSubpass = 0;
+        dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+        VkRenderPassCreateInfo renderPassInfo{};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        renderPassInfo.attachmentCount = 1;
+        renderPassInfo.pAttachments = &attachment;
+        renderPassInfo.subpassCount = 1;
+        renderPassInfo.pSubpasses = &subpass;
+        renderPassInfo.dependencyCount = 1;
+        renderPassInfo.pDependencies = &dependency;
+        Vulkan::Check(vkCreateRenderPass(device, &renderPassInfo, nullptr, &window.renderPass),
+                      "create ui platform viewport render pass");
+
+        VkImageViewCreateInfo imageViewInfo{};
+        imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        imageViewInfo.format = window.surfaceFormat.format;
+        imageViewInfo.components.r = VK_COMPONENT_SWIZZLE_R;
+        imageViewInfo.components.g = VK_COMPONENT_SWIZZLE_G;
+        imageViewInfo.components.b = VK_COMPONENT_SWIZZLE_B;
+        imageViewInfo.components.a = VK_COMPONENT_SWIZZLE_A;
+        imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageViewInfo.subresourceRange.levelCount = 1;
+        imageViewInfo.subresourceRange.layerCount = 1;
+
+        for (uint32_t imageIndex = 0; imageIndex < window.imageCount; ++imageIndex)
+        {
+            UiPlatformFrame& frame = window.frames[imageIndex];
+            imageViewInfo.image = frame.backbuffer;
+            Vulkan::Check(vkCreateImageView(device, &imageViewInfo, nullptr, &frame.backbufferView),
+                          "create ui platform viewport image view");
+        }
+
+        VkFramebufferCreateInfo framebufferInfo{};
+        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebufferInfo.renderPass = window.renderPass;
+        framebufferInfo.attachmentCount = 1;
+        framebufferInfo.width = static_cast<uint32_t>(window.width);
+        framebufferInfo.height = static_cast<uint32_t>(window.height);
+        framebufferInfo.layers = 1;
+
+        for (uint32_t imageIndex = 0; imageIndex < window.imageCount; ++imageIndex)
+        {
+            UiPlatformFrame& frame = window.frames[imageIndex];
+            VkImageView attachmentView = frame.backbufferView;
+            framebufferInfo.pAttachments = &attachmentView;
+            Vulkan::Check(vkCreateFramebuffer(device, &framebufferInfo, nullptr, &frame.framebuffer),
+                          "create ui platform viewport framebuffer");
+        }
+    }
+
+    void CreateOrResizePlatformWindow(VkPhysicalDevice physicalDevice, VkDevice device, UiPlatformWindow& window,
+                                      uint32_t queueFamily, int width, int height, uint32_t minImageCount)
+    {
+        CreatePlatformWindowSwapChain(physicalDevice, device, window, width, height, minImageCount);
+        CreatePlatformWindowCommandBuffers(device, window, queueFamily);
+    }
+
+    void DestroyPlatformWindow(VkInstance instance, VkDevice device, UiPlatformWindow& window)
+    {
+        Vulkan::Check(vkDeviceWaitIdle(device), "wait device idle for ui platform viewport destroy");
+
+        for (int imageIndex = 0; imageIndex < window.frames.Size; ++imageIndex)
+        {
+            DestroyPlatformFrame(device, window.frames[imageIndex]);
+        }
+        for (int semaphoreIndex = 0; semaphoreIndex < window.frameSemaphores.Size; ++semaphoreIndex)
+        {
+            DestroyPlatformFrameSemaphores(device, window.frameSemaphores[semaphoreIndex]);
+        }
+        window.frames.clear();
+        window.frameSemaphores.clear();
+
+        if (window.renderPass != VK_NULL_HANDLE)
+        {
+            vkDestroyRenderPass(device, window.renderPass, nullptr);
+        }
+        if (window.swapchain != VK_NULL_HANDLE)
+        {
+            vkDestroySwapchainKHR(device, window.swapchain, nullptr);
+        }
+        if (window.surface != VK_NULL_HANDLE)
+        {
+            vkDestroySurfaceKHR(instance, window.surface, nullptr);
+        }
+
+        window = UiPlatformWindow{};
+    }
+
     std::string ExtractConsolePrefix(const std::string& input)
     {
         size_t start = input.find_first_not_of(" \t\r\n");
@@ -142,6 +548,118 @@ namespace
         vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
                            sizeof(UiPushConstants), &pushConsts);
     }
+
+    VkPipeline CreateUiGraphicsPipeline(const Vulkan::Device& device, VkPipelineLayout pipelineLayout,
+                                        VkRenderPass renderPass)
+    {
+        const Vulkan::ShaderModule vertShader(device, kUiVertexShaderPath);
+        const Vulkan::ShaderModule fragShader(device, kUiFragmentShaderPath);
+
+        VkVertexInputBindingDescription vertexBinding{};
+        vertexBinding.binding = 0;
+        vertexBinding.stride = sizeof(UiBatchedVertex);
+        vertexBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+        std::array<VkVertexInputAttributeDescription, 5> vertexAttributes{};
+        vertexAttributes[0].location = 0;
+        vertexAttributes[0].binding = 0;
+        vertexAttributes[0].format = VK_FORMAT_R32G32_SFLOAT;
+        vertexAttributes[0].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, position));
+        vertexAttributes[1].location = 1;
+        vertexAttributes[1].binding = 0;
+        vertexAttributes[1].format = VK_FORMAT_R32G32_SFLOAT;
+        vertexAttributes[1].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, uv));
+        vertexAttributes[2].location = 2;
+        vertexAttributes[2].binding = 0;
+        vertexAttributes[2].format = VK_FORMAT_R8G8B8A8_UNORM;
+        vertexAttributes[2].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, color));
+        vertexAttributes[3].location = 3;
+        vertexAttributes[3].binding = 0;
+        vertexAttributes[3].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        vertexAttributes[3].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, clipRect));
+        vertexAttributes[4].location = 4;
+        vertexAttributes[4].binding = 0;
+        vertexAttributes[4].format = VK_FORMAT_R32_UINT;
+        vertexAttributes[4].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, textureIndex));
+
+        VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+        vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        vertexInputInfo.vertexBindingDescriptionCount = 1;
+        vertexInputInfo.pVertexBindingDescriptions = &vertexBinding;
+        vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertexAttributes.size());
+        vertexInputInfo.pVertexAttributeDescriptions = vertexAttributes.data();
+
+        VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+        inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+        VkPipelineViewportStateCreateInfo viewportState{};
+        viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        viewportState.viewportCount = 1;
+        viewportState.scissorCount = 1;
+
+        VkPipelineRasterizationStateCreateInfo rasterizer{};
+        rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+        rasterizer.cullMode = VK_CULL_MODE_NONE;
+        rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+        rasterizer.lineWidth = 1.0f;
+
+        VkPipelineMultisampleStateCreateInfo multisampling{};
+        multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+        multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+        VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+        colorBlendAttachment.blendEnable = VK_TRUE;
+        colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+        colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+        colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                              VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+        VkPipelineColorBlendStateCreateInfo colorBlending{};
+        colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        colorBlending.attachmentCount = 1;
+        colorBlending.pAttachments = &colorBlendAttachment;
+
+        VkPipelineDepthStencilStateCreateInfo depthStencil{};
+        depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+
+        VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+        VkPipelineDynamicStateCreateInfo dynamicState{};
+        dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+        dynamicState.dynamicStateCount = static_cast<uint32_t>(std::size(dynamicStates));
+        dynamicState.pDynamicStates = dynamicStates;
+
+        VkPipelineShaderStageCreateInfo shaderStages[] = {
+            vertShader.CreateShaderStage(VK_SHADER_STAGE_VERTEX_BIT),
+            fragShader.CreateShaderStage(VK_SHADER_STAGE_FRAGMENT_BIT)};
+
+        VkGraphicsPipelineCreateInfo pipelineInfo{};
+        pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        pipelineInfo.stageCount = static_cast<uint32_t>(std::size(shaderStages));
+        pipelineInfo.pStages = shaderStages;
+        pipelineInfo.pVertexInputState = &vertexInputInfo;
+        pipelineInfo.pInputAssemblyState = &inputAssembly;
+        pipelineInfo.pViewportState = &viewportState;
+        pipelineInfo.pRasterizationState = &rasterizer;
+        pipelineInfo.pMultisampleState = &multisampling;
+        pipelineInfo.pDepthStencilState = &depthStencil;
+        pipelineInfo.pColorBlendState = &colorBlending;
+        pipelineInfo.pDynamicState = &dynamicState;
+        pipelineInfo.layout = pipelineLayout;
+        pipelineInfo.renderPass = renderPass;
+        pipelineInfo.subpass = 0;
+
+        VkPipeline pipeline = VK_NULL_HANDLE;
+        Vulkan::Check(vkCreateGraphicsPipelines(device.Handle(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline),
+                      "create ui pipeline");
+        return pipeline;
+    }
 } // namespace
 
 UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPool, const Vulkan::SwapChain& swapChain,
@@ -149,14 +667,8 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
                              std::function<void()> funcPreConfig, std::function<void()> funcInit) :
     userSettings_(userSettings), engine_(engine)
 {
-    const auto& device = swapChain.Device();
-    const auto& window = device.Surface().Instance().Window();
+    const auto& window = swapChain.Device().Surface().Instance().Window();
 
-    // Initialise descriptor pool and render pass for ImGui.
-    const std::vector<Vulkan::DescriptorBinding> descriptorBindings = {
-        {0, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0},
-    };
-    descriptorPool_.reset(new Vulkan::DescriptorPool(device, descriptorBindings, swapChain.MinImageCount() + 2048));
     renderPass_.reset(new Vulkan::RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD));
     renderPass_->SetDebugName("ImGui Render Pass");
     CreateUiPipeline(swapChain);
@@ -179,24 +691,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
         Throw(std::runtime_error("failed to initialise ImGui GLFW adapter"));
     }
 
-    // Initialise ImGui Vulkan adapter
-    ImGui_ImplVulkan_InitInfo vulkanInit = {};
-    vulkanInit.Instance = device.Surface().Instance().Handle();
-    vulkanInit.PhysicalDevice = device.PhysicalDevice();
-    vulkanInit.Device = device.Handle();
-    vulkanInit.QueueFamily = device.GraphicsFamilyIndex();
-    vulkanInit.Queue = device.GraphicsQueue();
-    vulkanInit.PipelineCache = nullptr;
-    vulkanInit.DescriptorPool = descriptorPool_->Handle();
-    vulkanInit.MinImageCount = swapChain.MinImageCount();
-    vulkanInit.ImageCount = static_cast<uint32_t>(swapChain.Images().size());
-    vulkanInit.Allocator = nullptr;
-    vulkanInit.RenderPass = renderPass_->Handle();
-
-    if (!ImGui_ImplVulkan_Init(&vulkanInit))
-    {
-        Throw(std::runtime_error("failed to initialise ImGui vulkan adapter"));
-    }
+    InitializeRendererBackend();
 
     // Window scaling and style.
 #if ANDROID
@@ -280,11 +775,12 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
 
 UserInterface::~UserInterface()
 {
+    ShutdownRendererBackend();
     DestroyUiPipeline();
     uiFrameBuffers_.clear();
     uiRenderBuffers_.clear();
+    platformUiRenderBuffers_.clear();
 
-    ImGui_ImplVulkan_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
 }
@@ -308,6 +804,7 @@ void UserInterface::OnDestroySurface()
     renderPass_.reset();
     uiFrameBuffers_.clear();
     uiRenderBuffers_.clear();
+    platformUiRenderBuffers_.clear();
 }
 
 ImTextureID UserInterface::EncodeBindlessTextureId(uint32_t textureIndex)
@@ -333,6 +830,75 @@ bool UserInterface::DecodeBindlessTextureId(ImTextureID textureId, uint32_t& out
     outTextureIndex = static_cast<uint32_t>(textureIndex);
     return true;
 }
+
+void UserInterface::InitializeRendererBackend()
+{
+    auto& io = ImGui::GetIO();
+    if (io.BackendRendererUserData != nullptr)
+    {
+        Throw(std::runtime_error("imgui renderer backend already initialized"));
+    }
+
+    io.BackendRendererUserData = this;
+    io.BackendRendererName = "gk_imgui_renderer";
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasViewports;
+
+    ImGuiPlatformIO& platformIo = ImGui::GetPlatformIO();
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+    {
+        if (platformIo.Platform_CreateVkSurface == nullptr)
+        {
+            Throw(std::runtime_error("imgui platform backend does not provide Platform_CreateVkSurface"));
+        }
+    }
+
+    platformIo.Renderer_CreateWindow = &UserInterface::CreatePlatformViewportWindowCallback;
+    platformIo.Renderer_DestroyWindow = &UserInterface::DestroyPlatformViewportWindowCallback;
+    platformIo.Renderer_SetWindowSize = &UserInterface::ResizePlatformViewportWindowCallback;
+    platformIo.Renderer_RenderWindow = &UserInterface::RenderPlatformViewportWindowCallback;
+    platformIo.Renderer_SwapBuffers = &UserInterface::SwapPlatformViewportBuffersCallback;
+
+    ImGuiViewport* mainViewport = ImGui::GetMainViewport();
+    if (mainViewport->RendererUserData == nullptr)
+    {
+        mainViewport->RendererUserData = IM_NEW(UiPlatformViewportData)();
+    }
+}
+
+void UserInterface::ShutdownRendererBackend()
+{
+    if (ImGui::GetCurrentContext() == nullptr)
+    {
+        return;
+    }
+
+    auto& io = ImGui::GetIO();
+    ImGuiPlatformIO& platformIo = ImGui::GetPlatformIO();
+    ImGui::DestroyPlatformWindows();
+
+    if (ImGuiViewport* mainViewport = ImGui::GetMainViewport(); mainViewport != nullptr)
+    {
+        if (mainViewport->RendererUserData != nullptr)
+        {
+            IM_DELETE(static_cast<UiPlatformViewportData*>(mainViewport->RendererUserData));
+            mainViewport->RendererUserData = nullptr;
+        }
+    }
+
+    platformIo.Renderer_CreateWindow = nullptr;
+    platformIo.Renderer_DestroyWindow = nullptr;
+    platformIo.Renderer_SetWindowSize = nullptr;
+    platformIo.Renderer_RenderWindow = nullptr;
+    platformIo.Renderer_SwapBuffers = nullptr;
+    platformIo.Renderer_RenderState = nullptr;
+
+    io.BackendRendererName = nullptr;
+    io.BackendRendererUserData = nullptr;
+    io.BackendFlags &= ~(ImGuiBackendFlags_RendererHasVtxOffset | ImGuiBackendFlags_RendererHasViewports);
+}
+
+void UserInterface::BeginRendererBackendFrame() {}
 
 void UserInterface::InitializeFontTexture(Vulkan::CommandPool& commandPool)
 {
@@ -363,40 +929,7 @@ void UserInterface::InitializeFontTexture(Vulkan::CommandPool& commandPool)
     fontTextureIndex_ = texturePool->RegisterTexture(
         kUiFontAtlasTextureName, std::move(fontTexture), Assets::ETextureLifetime::ETL_Persistent);
 
-    if (!ImGui_ImplVulkan_CreateFontsTexture())
-    {
-        Throw(std::runtime_error("failed to create ImGui font textures"));
-    }
-
-    const VkDescriptorSet fontFallbackDescriptorSet = (VkDescriptorSet)(intptr_t)io.Fonts->TexID;
-    if (fontFallbackDescriptorSet == VK_NULL_HANDLE)
-    {
-        Throw(std::runtime_error("imgui font fallback descriptor set is invalid"));
-    }
-
-    uiFallbackDescriptorSetMap_[fontTextureIndex_] = fontFallbackDescriptorSet;
     io.Fonts->TexID = EncodeBindlessTextureId(fontTextureIndex_);
-}
-
-VkDescriptorSet UserInterface::GetOrCreateFallbackDescriptorSet(uint32_t textureIndex)
-{
-    if (const auto descriptorIt = uiFallbackDescriptorSetMap_.find(textureIndex);
-        descriptorIt != uiFallbackDescriptorSetMap_.end())
-    {
-        return descriptorIt->second;
-    }
-
-    auto* texture = Assets::GlobalTexturePool::GetTextureImage(textureIndex);
-    if (texture == nullptr)
-    {
-        return VK_NULL_HANDLE;
-    }
-
-    const VkDescriptorSet descriptorSet =
-        ImGui_ImplVulkan_AddTexture(texture->Sampler().Handle(), texture->ImageView().Handle(),
-                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    uiFallbackDescriptorSetMap_[textureIndex] = descriptorSet;
-    return descriptorSet;
 }
 
 ImTextureID UserInterface::RequestImTextureId(uint32_t globalTextureId)
@@ -406,7 +939,6 @@ ImTextureID UserInterface::RequestImTextureId(uint32_t globalTextureId)
         return 0;
     }
 
-    GetOrCreateFallbackDescriptorSet(globalTextureId);
     return EncodeBindlessTextureId(globalTextureId);
 }
 
@@ -485,112 +1017,7 @@ void UserInterface::CreateUiPipeline(const Vulkan::SwapChain& swapChain)
 
     Vulkan::Check(vkCreatePipelineLayout(device.Handle(), &pipelineLayoutInfo, nullptr, &uiPipelineLayout_),
                   "create ui pipeline layout");
-
-    const Vulkan::ShaderModule vertShader(device, kUiVertexShaderPath);
-    const Vulkan::ShaderModule fragShader(device, kUiFragmentShaderPath);
-
-    VkVertexInputBindingDescription vertexBinding{};
-    vertexBinding.binding = 0;
-    vertexBinding.stride = sizeof(UiBatchedVertex);
-    vertexBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-    std::array<VkVertexInputAttributeDescription, 5> vertexAttributes{};
-    vertexAttributes[0].location = 0;
-    vertexAttributes[0].binding = 0;
-    vertexAttributes[0].format = VK_FORMAT_R32G32_SFLOAT;
-    vertexAttributes[0].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, position));
-    vertexAttributes[1].location = 1;
-    vertexAttributes[1].binding = 0;
-    vertexAttributes[1].format = VK_FORMAT_R32G32_SFLOAT;
-    vertexAttributes[1].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, uv));
-    vertexAttributes[2].location = 2;
-    vertexAttributes[2].binding = 0;
-    vertexAttributes[2].format = VK_FORMAT_R8G8B8A8_UNORM;
-    vertexAttributes[2].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, color));
-    vertexAttributes[3].location = 3;
-    vertexAttributes[3].binding = 0;
-    vertexAttributes[3].format = VK_FORMAT_R32G32B32A32_SFLOAT;
-    vertexAttributes[3].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, clipRect));
-    vertexAttributes[4].location = 4;
-    vertexAttributes[4].binding = 0;
-    vertexAttributes[4].format = VK_FORMAT_R32_UINT;
-    vertexAttributes[4].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, textureIndex));
-
-    VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-    vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexBindingDescriptionCount = 1;
-    vertexInputInfo.pVertexBindingDescriptions = &vertexBinding;
-    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertexAttributes.size());
-    vertexInputInfo.pVertexAttributeDescriptions = vertexAttributes.data();
-
-    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-    VkPipelineViewportStateCreateInfo viewportState{};
-    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-    viewportState.viewportCount = 1;
-    viewportState.scissorCount = 1;
-
-    VkPipelineRasterizationStateCreateInfo rasterizer{};
-    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-    rasterizer.cullMode = VK_CULL_MODE_NONE;
-    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-    rasterizer.lineWidth = 1.0f;
-
-    VkPipelineMultisampleStateCreateInfo multisampling{};
-    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-    colorBlendAttachment.blendEnable = VK_TRUE;
-    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
-    colorBlendAttachment.colorWriteMask =
-        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-
-    VkPipelineColorBlendStateCreateInfo colorBlending{};
-    colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    colorBlending.attachmentCount = 1;
-    colorBlending.pAttachments = &colorBlendAttachment;
-
-    VkPipelineDepthStencilStateCreateInfo depthStencil{};
-    depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-
-    VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
-    VkPipelineDynamicStateCreateInfo dynamicState{};
-    dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamicState.dynamicStateCount = static_cast<uint32_t>(std::size(dynamicStates));
-    dynamicState.pDynamicStates = dynamicStates;
-
-    VkPipelineShaderStageCreateInfo shaderStages[] = {
-        vertShader.CreateShaderStage(VK_SHADER_STAGE_VERTEX_BIT),
-        fragShader.CreateShaderStage(VK_SHADER_STAGE_FRAGMENT_BIT)};
-
-    VkGraphicsPipelineCreateInfo pipelineInfo{};
-    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    pipelineInfo.stageCount = static_cast<uint32_t>(std::size(shaderStages));
-    pipelineInfo.pStages = shaderStages;
-    pipelineInfo.pVertexInputState = &vertexInputInfo;
-    pipelineInfo.pInputAssemblyState = &inputAssembly;
-    pipelineInfo.pViewportState = &viewportState;
-    pipelineInfo.pRasterizationState = &rasterizer;
-    pipelineInfo.pMultisampleState = &multisampling;
-    pipelineInfo.pDepthStencilState = &depthStencil;
-    pipelineInfo.pColorBlendState = &colorBlending;
-    pipelineInfo.pDynamicState = &dynamicState;
-    pipelineInfo.layout = uiPipelineLayout_;
-    pipelineInfo.renderPass = renderPass_->Handle();
-    pipelineInfo.subpass = 0;
-
-    Vulkan::Check(vkCreateGraphicsPipelines(device.Handle(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &uiPipeline_),
-                  "create ui pipeline");
+    uiPipeline_ = CreateUiGraphicsPipeline(device, uiPipelineLayout_, renderPass_->Handle());
 }
 
 void UserInterface::DestroyUiPipeline()
@@ -606,6 +1033,12 @@ void UserInterface::DestroyUiPipeline()
         vkDestroyPipeline(device.Handle(), uiPipeline_, nullptr);
         uiPipeline_ = VK_NULL_HANDLE;
     }
+    if (uiPlatformViewportPipeline_ != VK_NULL_HANDLE)
+    {
+        vkDestroyPipeline(device.Handle(), uiPlatformViewportPipeline_, nullptr);
+        uiPlatformViewportPipeline_ = VK_NULL_HANDLE;
+    }
+    uiPlatformViewportRenderPass_ = VK_NULL_HANDLE;
     if (uiPipelineLayout_ != VK_NULL_HANDLE)
     {
         vkDestroyPipelineLayout(device.Handle(), uiPipelineLayout_, nullptr);
@@ -613,10 +1046,34 @@ void UserInterface::DestroyUiPipeline()
     }
 }
 
-void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain,
-                                   uint32_t imageIdx)
+VkPipeline UserInterface::GetOrCreatePlatformViewportPipeline(VkRenderPass renderPass)
 {
-    if (drawData == nullptr || drawData->CmdListsCount <= 0 || imageIdx >= uiRenderBuffers_.size())
+    if (renderPass == VK_NULL_HANDLE)
+    {
+        return VK_NULL_HANDLE;
+    }
+
+    if (uiPlatformViewportPipeline_ != VK_NULL_HANDLE && uiPlatformViewportRenderPass_ == renderPass)
+    {
+        return uiPlatformViewportPipeline_;
+    }
+
+    const auto& device = engine_->GetRenderer().Device();
+    if (uiPlatformViewportPipeline_ != VK_NULL_HANDLE)
+    {
+        vkDestroyPipeline(device.Handle(), uiPlatformViewportPipeline_, nullptr);
+        uiPlatformViewportPipeline_ = VK_NULL_HANDLE;
+    }
+
+    uiPlatformViewportPipeline_ = CreateUiGraphicsPipeline(device, uiPipelineLayout_, renderPass);
+    uiPlatformViewportRenderPass_ = renderPass;
+    return uiPlatformViewportPipeline_;
+}
+
+void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, FUiRenderBuffers& renderBuffers,
+                                   VkExtent2D framebufferExtent, bool hdrOutput, VkPipeline pipeline)
+{
+    if (drawData == nullptr || drawData->CmdListsCount <= 0 || pipeline == VK_NULL_HANDLE)
     {
         return;
     }
@@ -624,8 +1081,6 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
     {
         return;
     }
-
-    const VkExtent2D framebufferExtent = swapChain.Extent();
     if (framebufferExtent.width == 0 || framebufferExtent.height == 0)
     {
         return;
@@ -646,7 +1101,7 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
     pushConsts.rotation[2] = -1.0f;
     pushConsts.rotation[3] = 0.0f;
 #endif
-    pushConsts.hdrOutput = swapChain.IsHDR() ? 1u : 0u;
+    pushConsts.hdrOutput = hdrOutput ? 1u : 0u;
     pushConsts.hdrReferenceWhiteNit = kUiHdrReferenceWhiteNit;
 
     std::vector<UiBatchedVertex> batchedVertices;
@@ -749,8 +1204,7 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
     }
     FlushPendingDraw(currentSegmentStartVertex);
 
-    auto& renderBuffers = uiRenderBuffers_[imageIdx];
-    const auto& device = swapChain.Device();
+    const auto& device = engine_->GetRenderer().Device();
     const VkDeviceSize vertexSize = static_cast<VkDeviceSize>(batchedVertices.size()) * sizeof(UiBatchedVertex);
     if (vertexSize > 0)
     {
@@ -782,14 +1236,14 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
     const VkDescriptorSet bindlessDescriptorSet = Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0);
     const VkBuffer vertexBufferHandle =
         renderBuffers.vertexBuffer ? renderBuffers.vertexBuffer->Handle() : VK_NULL_HANDLE;
-    BindUiRenderState(commandBuffer, uiPipeline_, uiPipelineLayout_, bindlessDescriptorSet, vertexBufferHandle,
+    BindUiRenderState(commandBuffer, pipeline, uiPipelineLayout_, bindlessDescriptorSet, vertexBufferHandle,
                       viewport, scissor, pushConsts);
 
     ImGuiPlatformIO& platformIo = ImGui::GetPlatformIO();
-    ImGui_ImplVulkan_RenderState renderState{};
-    renderState.CommandBuffer = commandBuffer;
-    renderState.Pipeline = uiPipeline_;
-    renderState.PipelineLayout = uiPipelineLayout_;
+    UiRendererRenderState renderState{};
+    renderState.commandBuffer = commandBuffer;
+    renderState.pipeline = pipeline;
+    renderState.pipelineLayout = uiPipelineLayout_;
     platformIo.Renderer_RenderState = &renderState;
 
     for (const UiDrawOp& drawOp : drawOps)
@@ -810,60 +1264,326 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
 
         if (drawOp.drawCmd->UserCallback == ImDrawCallback_ResetRenderState)
         {
-            BindUiRenderState(commandBuffer, uiPipeline_, uiPipelineLayout_, bindlessDescriptorSet, vertexBufferHandle,
+            BindUiRenderState(commandBuffer, pipeline, uiPipelineLayout_, bindlessDescriptorSet, vertexBufferHandle,
                               viewport, scissor, pushConsts);
             continue;
         }
 
         drawOp.drawCmd->UserCallback(drawOp.drawList, drawOp.drawCmd);
-        BindUiRenderState(commandBuffer, uiPipeline_, uiPipelineLayout_, bindlessDescriptorSet, vertexBufferHandle,
+        BindUiRenderState(commandBuffer, pipeline, uiPipelineLayout_, bindlessDescriptorSet, vertexBufferHandle,
                           viewport, scissor, pushConsts);
     }
 
     platformIo.Renderer_RenderState = nullptr;
 }
 
-void UserInterface::TranslatePlatformViewportTextures()
+UserInterface* UserInterface::GetRendererBackendOwner()
 {
+    if (ImGui::GetCurrentContext() == nullptr)
+    {
+        return nullptr;
+    }
+
+    return static_cast<UserInterface*>(ImGui::GetIO().BackendRendererUserData);
+}
+
+void UserInterface::CreatePlatformViewportWindowCallback(ImGuiViewport* viewport)
+{
+    if (UserInterface* owner = GetRendererBackendOwner(); owner != nullptr)
+    {
+        owner->CreatePlatformViewportWindow(viewport);
+    }
+}
+
+void UserInterface::DestroyPlatformViewportWindowCallback(ImGuiViewport* viewport)
+{
+    if (UserInterface* owner = GetRendererBackendOwner(); owner != nullptr)
+    {
+        owner->DestroyPlatformViewportWindow(viewport);
+    }
+}
+
+void UserInterface::ResizePlatformViewportWindowCallback(ImGuiViewport* viewport, ImVec2 size)
+{
+    if (UserInterface* owner = GetRendererBackendOwner(); owner != nullptr)
+    {
+        owner->ResizePlatformViewportWindow(viewport, size);
+    }
+}
+
+void UserInterface::RenderPlatformViewportWindowCallback(ImGuiViewport* viewport, void* renderArg)
+{
+    UserInterface* owner = renderArg != nullptr ? static_cast<UserInterface*>(renderArg) : GetRendererBackendOwner();
+    if (owner != nullptr)
+    {
+        owner->RenderPlatformViewportWindow(viewport);
+    }
+}
+
+void UserInterface::SwapPlatformViewportBuffersCallback(ImGuiViewport* viewport, void* renderArg)
+{
+    UserInterface* owner = renderArg != nullptr ? static_cast<UserInterface*>(renderArg) : GetRendererBackendOwner();
+    if (owner != nullptr)
+    {
+        owner->SwapPlatformViewportBuffers(viewport);
+    }
+}
+
+void UserInterface::CreatePlatformViewportWindow(ImGuiViewport* viewport)
+{
+    if (viewport == nullptr)
+    {
+        return;
+    }
+
+    auto* viewportData = IM_NEW(UiPlatformViewportData)();
+    viewport->RendererUserData = viewportData;
+
+    UiPlatformWindow& window = viewportData->window;
+    const auto& renderer = engine_->GetRenderer();
+    const auto& device = renderer.Device();
+
+    ImGuiPlatformIO& platformIo = ImGui::GetPlatformIO();
+    VkResult result = static_cast<VkResult>(platformIo.Platform_CreateVkSurface(
+        viewport, reinterpret_cast<ImU64>(device.Surface().Instance().Handle()), nullptr,
+        reinterpret_cast<ImU64*>(&window.surface)));
+    Vulkan::Check(result, "create ui platform viewport surface");
+
+    VkBool32 presentSupported = VK_FALSE;
+    Vulkan::Check(vkGetPhysicalDeviceSurfaceSupportKHR(device.PhysicalDevice(), device.GraphicsFamilyIndex(),
+                                                       window.surface, &presentSupported),
+                  "query ui platform viewport present support");
+    if (presentSupported != VK_TRUE)
+    {
+        Throw(std::runtime_error("ui platform viewport surface has no present support"));
+    }
+
+    const VkFormat requestedFormats[] = {
+        VK_FORMAT_B8G8R8A8_UNORM,
+        VK_FORMAT_R8G8B8A8_UNORM,
+        VK_FORMAT_B8G8R8_UNORM,
+        VK_FORMAT_R8G8B8_UNORM};
+    window.surfaceFormat = SelectPlatformSurfaceFormat(device.PhysicalDevice(), window.surface, requestedFormats,
+                                                       static_cast<int>(std::size(requestedFormats)),
+                                                       VK_COLORSPACE_SRGB_NONLINEAR_KHR);
+
+    const VkPresentModeKHR requestedPresentModes[] = {
+        VK_PRESENT_MODE_MAILBOX_KHR,
+        VK_PRESENT_MODE_IMMEDIATE_KHR,
+        VK_PRESENT_MODE_FIFO_KHR};
+    window.presentMode = SelectPlatformPresentMode(device.PhysicalDevice(), window.surface, requestedPresentModes,
+                                                   static_cast<int>(std::size(requestedPresentModes)));
+    window.clearEnable = (viewport->Flags & ImGuiViewportFlags_NoRendererClear) == 0;
+    window.useDynamicRendering = false;
+
+    CreateOrResizePlatformWindow(device.PhysicalDevice(), device.Handle(), window, device.GraphicsFamilyIndex(),
+                                 static_cast<int>(viewport->Size.x),
+                                 static_cast<int>(viewport->Size.y), renderer.SwapChain().MinImageCount());
+    viewportData->windowOwned = true;
+}
+
+void UserInterface::DestroyPlatformViewportWindow(ImGuiViewport* viewport)
+{
+    if (viewport == nullptr || viewport->RendererUserData == nullptr)
+    {
+        return;
+    }
+
+    auto* viewportData = static_cast<UiPlatformViewportData*>(viewport->RendererUserData);
+    if (viewportData->windowOwned)
+    {
+        const auto& device = engine_->GetRenderer().Device();
+        DestroyPlatformWindow(device.Surface().Instance().Handle(), device.Handle(), viewportData->window);
+    }
+
+    platformUiRenderBuffers_.erase(viewport->ID);
+    IM_DELETE(viewportData);
+    viewport->RendererUserData = nullptr;
+}
+
+void UserInterface::ResizePlatformViewportWindow(ImGuiViewport* viewport, ImVec2 size)
+{
+    if (viewport == nullptr || viewport->RendererUserData == nullptr)
+    {
+        return;
+    }
+
+    auto* viewportData = static_cast<UiPlatformViewportData*>(viewport->RendererUserData);
+    UiPlatformWindow& window = viewportData->window;
+    const auto& renderer = engine_->GetRenderer();
+    const auto& device = renderer.Device();
+
+    window.clearEnable = (viewport->Flags & ImGuiViewportFlags_NoRendererClear) == 0;
+    CreateOrResizePlatformWindow(device.PhysicalDevice(), device.Handle(), window, device.GraphicsFamilyIndex(),
+                                 static_cast<int>(size.x), static_cast<int>(size.y),
+                                 renderer.SwapChain().MinImageCount());
+    viewportData->swapChainNeedRebuild = false;
+    viewportData->swapChainSuboptimal = false;
+}
+
+void UserInterface::RenderPlatformViewportWindow(ImGuiViewport* viewport)
+{
+    if (viewport == nullptr || viewport->RendererUserData == nullptr || viewport->DrawData == nullptr)
+    {
+        return;
+    }
+
+    auto* viewportData = static_cast<UiPlatformViewportData*>(viewport->RendererUserData);
+    UiPlatformWindow& window = viewportData->window;
+    const auto& renderer = engine_->GetRenderer();
+    const auto& device = renderer.Device();
+    VkResult result = VK_SUCCESS;
+
+    if (viewportData->swapChainNeedRebuild || viewportData->swapChainSuboptimal)
+    {
+        ResizePlatformViewportWindow(viewport, viewport->Size);
+    }
+
+    UiPlatformFrameSemaphores& frameSemaphores = window.frameSemaphores[window.semaphoreIndex];
+    result = vkAcquireNextImageKHR(device.Handle(), window.swapchain, UINT64_MAX,
+                                   frameSemaphores.imageAcquiredSemaphore, VK_NULL_HANDLE, &window.frameIndex);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        viewportData->swapChainNeedRebuild = true;
+        return;
+    }
+    if (result == VK_SUBOPTIMAL_KHR)
+    {
+        viewportData->swapChainSuboptimal = true;
+    }
+    else
+    {
+        Vulkan::Check(result, "acquire ui platform viewport image");
+    }
+
+    UiPlatformFrame& frame = window.frames[window.frameIndex];
+    for (;;)
+    {
+        result = vkWaitForFences(device.Handle(), 1, &frame.fence, VK_TRUE, 100);
+        if (result == VK_SUCCESS)
+        {
+            break;
+        }
+        if (result != VK_TIMEOUT)
+        {
+            Vulkan::Check(result, "wait ui platform viewport fence");
+        }
+    }
+
+    Vulkan::Check(vkResetCommandPool(device.Handle(), frame.commandPool, 0), "reset ui platform viewport command pool");
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    Vulkan::Check(vkBeginCommandBuffer(frame.commandBuffer, &beginInfo), "begin ui platform viewport command buffer");
+
+    VkRenderPassBeginInfo renderPassBeginInfo{};
+    renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassBeginInfo.renderPass = window.renderPass;
+    renderPassBeginInfo.framebuffer = frame.framebuffer;
+    renderPassBeginInfo.renderArea.extent.width = static_cast<uint32_t>(window.width);
+    renderPassBeginInfo.renderArea.extent.height = static_cast<uint32_t>(window.height);
+    renderPassBeginInfo.clearValueCount = (viewport->Flags & ImGuiViewportFlags_NoRendererClear) ? 0u : 1u;
+    renderPassBeginInfo.pClearValues = (viewport->Flags & ImGuiViewportFlags_NoRendererClear) ? nullptr : &window.clearValue;
+    vkCmdBeginRenderPass(frame.commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    VkPipeline viewportPipeline = GetOrCreatePlatformViewportPipeline(window.renderPass);
+    auto& viewportRenderBuffers = platformUiRenderBuffers_[viewport->ID];
+    if (viewportRenderBuffers.size() < window.imageCount)
+    {
+        viewportRenderBuffers.resize(window.imageCount);
+    }
+
+    RenderDrawData(viewport->DrawData, frame.commandBuffer, viewportRenderBuffers[window.frameIndex],
+                   VkExtent2D{static_cast<uint32_t>(window.width), static_cast<uint32_t>(window.height)}, false,
+                   viewportPipeline);
+
+    vkCmdEndRenderPass(frame.commandBuffer);
+
+    VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = &frameSemaphores.imageAcquiredSemaphore;
+    submitInfo.pWaitDstStageMask = &waitStage;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &frame.commandBuffer;
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = &frameSemaphores.renderCompleteSemaphore;
+
+    Vulkan::Check(vkEndCommandBuffer(frame.commandBuffer), "end ui platform viewport command buffer");
+    Vulkan::Check(vkResetFences(device.Handle(), 1, &frame.fence), "reset ui platform viewport fence");
+    Vulkan::Check(vkQueueSubmit(device.GraphicsQueue(), 1, &submitInfo, frame.fence),
+                  "submit ui platform viewport command buffer");
+}
+
+void UserInterface::SwapPlatformViewportBuffers(ImGuiViewport* viewport)
+{
+    if (viewport == nullptr || viewport->RendererUserData == nullptr)
+    {
+        return;
+    }
+
+    auto* viewportData = static_cast<UiPlatformViewportData*>(viewport->RendererUserData);
+    if (viewportData->swapChainNeedRebuild)
+    {
+        return;
+    }
+
+    UiPlatformWindow& window = viewportData->window;
+    UiPlatformFrameSemaphores& frameSemaphores = window.frameSemaphores[window.semaphoreIndex];
+    uint32_t presentIndex = window.frameIndex;
+
+    VkPresentInfoKHR presentInfo{};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = &frameSemaphores.renderCompleteSemaphore;
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = &window.swapchain;
+    presentInfo.pImageIndices = &presentIndex;
+
+    VkResult result = vkQueuePresentKHR(engine_->GetRenderer().Device().GraphicsQueue(), &presentInfo);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        viewportData->swapChainNeedRebuild = true;
+        return;
+    }
+    if (result == VK_SUBOPTIMAL_KHR)
+    {
+        viewportData->swapChainSuboptimal = true;
+    }
+    else
+    {
+        Vulkan::Check(result, "present ui platform viewport");
+    }
+
+    window.semaphoreIndex = (window.semaphoreIndex + 1) % window.semaphoreCount;
+}
+
+void UserInterface::PrunePlatformViewportRenderBuffers()
+{
+    std::unordered_set<ImGuiID> activeViewportIds;
     ImGuiPlatformIO& platformIo = ImGui::GetPlatformIO();
     ImGuiViewport* mainViewport = ImGui::GetMainViewport();
     for (int viewportIndex = 0; viewportIndex < platformIo.Viewports.Size; ++viewportIndex)
     {
         ImGuiViewport* viewport = platformIo.Viewports[viewportIndex];
-        if (viewport == nullptr || viewport == mainViewport || viewport->DrawData == nullptr)
+        if (viewport == nullptr || viewport == mainViewport)
         {
             continue;
         }
+        activeViewportIds.insert(viewport->ID);
+    }
 
-        ImDrawData* drawData = viewport->DrawData;
-        for (int listIndex = 0; listIndex < drawData->CmdListsCount; ++listIndex)
+    for (auto it = platformUiRenderBuffers_.begin(); it != platformUiRenderBuffers_.end();)
+    {
+        if (!activeViewportIds.contains(it->first))
         {
-            ImDrawList* drawList = drawData->CmdLists[listIndex];
-            if (drawList == nullptr)
-            {
-                continue;
-            }
-
-            for (int cmdIndex = 0; cmdIndex < drawList->CmdBuffer.Size; ++cmdIndex)
-            {
-                ImDrawCmd& drawCmd = drawList->CmdBuffer[cmdIndex];
-                if (drawCmd.UserCallback != nullptr)
-                {
-                    continue;
-                }
-
-                uint32_t textureIndex = 0;
-                if (!DecodeBindlessTextureId(drawCmd.TextureId, textureIndex))
-                {
-                    continue;
-                }
-
-                const VkDescriptorSet fallbackDescriptorSet = GetOrCreateFallbackDescriptorSet(textureIndex);
-                if (fallbackDescriptorSet != VK_NULL_HANDLE)
-                {
-                    drawCmd.TextureId = (ImTextureID)(intptr_t)fallbackDescriptorSet;
-                }
-            }
+            it = platformUiRenderBuffers_.erase(it);
+        }
+        else
+        {
+            ++it;
         }
     }
 }
@@ -1293,7 +2013,7 @@ void UserInterface::DrawConsoleLogOutputInternal(const char* childId, const ImVe
 
 void UserInterface::PreRender()
 {
-    ImGui_ImplVulkan_NewFrame();
+    BeginRendererBackendFrame();
     ImGui_ImplSDL3_NewFrame();
 #if ANDROID
     auto& io = ImGui::GetIO();
@@ -1344,15 +2064,16 @@ void UserInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::Swap
     renderPassInfo.pClearValues = nullptr;
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    RenderDrawData(ImGui::GetDrawData(), commandBuffer, swapChain, imageIdx);
+    RenderDrawData(ImGui::GetDrawData(), commandBuffer, uiRenderBuffers_[imageIdx], swapChain.Extent(), swapChain.IsHDR(),
+                   uiPipeline_);
     vkCmdEndRenderPass(commandBuffer);
 
     auto& io = ImGui::GetIO();
     if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
     {
         ImGui::UpdatePlatformWindows();
-        TranslatePlatformViewportTextures();
-        ImGui::RenderPlatformWindowsDefault();
+        PrunePlatformViewportRenderBuffers();
+        ImGui::RenderPlatformWindowsDefault(nullptr, this);
     }
 }
 

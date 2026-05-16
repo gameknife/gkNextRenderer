@@ -15,6 +15,10 @@
       "platform": "!(android)"
     },
     {
+      "name": "vulkan-headers",
+      "platform": "!(android | ios)"
+    },
+    {
       "name": "dbus",
       "default-features": false,
       "platform": "linux"
@@ -24,8 +28,6 @@
       "name": "imgui",
       "features": [
         "freetype",
-        "sdl3-binding",
-        "vulkan-binding",
         "docking-experimental"
       ],
       "platform": "!(android)"
@@ -65,6 +67,10 @@
         "xlib",
         "wayland"
       ]
+    },
+    {
+      "name": "vulkan-loader",
+      "platform": "windows"
     }
   ],
   "features": {
