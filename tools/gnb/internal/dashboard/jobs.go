@@ -128,6 +128,17 @@ func (j *Job) finalize(status JobStatus, note string) {
 		subs = append(subs, ch)
 	}
 	j.mu.Unlock()
+
+	// Append a completion summary line so the user doesn't miss the result.
+	switch status {
+	case StatusSuccess:
+		j.appendLine(`<span style="color:#22c55e;font-weight:600">✓ 完成 (` + note + `)</span>`)
+	case StatusFailed:
+		j.appendLine(`<span style="color:#ef4444;font-weight:600">✗ 失败 (` + note + `)</span>`)
+	case StatusCanceled:
+		j.appendLine(`<span style="color:#9aa3b2">⊘ 已取消</span>`)
+	}
+
 	statusPayload := statusBadgeHTML(status, note)
 	for _, ch := range subs {
 		// Send status & done events synchronously where possible; we
