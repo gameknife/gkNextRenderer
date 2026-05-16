@@ -285,15 +285,14 @@ namespace Editor
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::SurfaceHover));
             ImGui::PushID(static_cast<int>(globalId));
 
-            VkDescriptorSet textureId = ctx.ui.RequestImTextureId(globalId);
-            if (iconOrTex || (VK_NULL_HANDLE == textureId))
+            ImTextureID textureId = ctx.ui.RequestImTextureId(globalId);
+            if (iconOrTex || textureId == 0)
             {
                 ImGui::Button(icon, ImVec2(GContentBrowserIconSize, GContentBrowserIconSize));
             }
             else
             {
-                ImGui::Image((ImTextureID)(intptr_t)textureId,
-                             ImVec2(GContentBrowserIconSize, GContentBrowserIconSize));
+                ImGui::Image(textureId, ImVec2(GContentBrowserIconSize, GContentBrowserIconSize));
             }
 
             if (callbacks.onDragSource && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))

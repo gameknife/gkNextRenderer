@@ -90,8 +90,8 @@ public:
 		const Vulkan::DepthBuffer& depthBuffer);
 	void OnDestroySurface();
 
-	VkDescriptorSet RequestImTextureId(uint32_t globalTextureId);
-	VkDescriptorSet RequestImTextureByName(const std::string& name);
+	ImTextureID RequestImTextureId(uint32_t globalTextureId);
+	ImTextureID RequestImTextureByName(const std::string& name);
 
 	struct FUiTextureHandle
 	{
@@ -122,8 +122,13 @@ private:
 	void DrawConsoleMatchPopup(float width, const char* popupId);
 	void CreateUiPipeline(const Vulkan::SwapChain& swapChain);
 	void DestroyUiPipeline();
+	void InitializeFontTexture(Vulkan::CommandPool& commandPool);
+	VkDescriptorSet GetOrCreateFallbackDescriptorSet(uint32_t textureIndex);
+	void TranslatePlatformViewportTextures();
 	void RenderDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain,
 	                    uint32_t imageIdx);
+	static ImTextureID EncodeBindlessTextureId(uint32_t textureIndex);
+	static bool DecodeBindlessTextureId(ImTextureID textureId, uint32_t& outTextureIndex);
 	static int ConsoleInputTextCallback(ImGuiInputTextCallbackData* data);
 	int HandleConsoleInputTextCallback(ImGuiInputTextCallbackData* data);
 	void DrawConsoleLogOutputInternal(const char* childId, const ImVec2& size, bool bordered);
@@ -154,19 +159,16 @@ private:
 		std::unique_ptr<Vulkan::Buffer> vertexBuffer;
 		std::unique_ptr<Vulkan::DeviceMemory> vertexBufferMemory;
 		VkDeviceSize vertexBufferSize = 0;
-		std::unique_ptr<Vulkan::Buffer> indexBuffer;
-		std::unique_ptr<Vulkan::DeviceMemory> indexBufferMemory;
-		VkDeviceSize indexBufferSize = 0;
 	};
 	std::vector<FUiRenderBuffers> uiRenderBuffers_;
-	VkDescriptorSetLayout uiDescriptorSetLayout_ = VK_NULL_HANDLE;
 	VkPipelineLayout uiPipelineLayout_ = VK_NULL_HANDLE;
 	VkPipeline uiPipeline_ = VK_NULL_HANDLE;
 	UserSettings& userSettings_;	
 	
-	std::unordered_map<uint32_t, VkDescriptorSet> imTextureIdMap_;
+	std::unordered_map<uint32_t, VkDescriptorSet> uiFallbackDescriptorSetMap_;
 	std::unordered_set<std::string> uiTextureLoadRequests_;
 	std::unordered_map<std::string, ImVec2> uiTexturePixelSizeCache_;
+	uint32_t fontTextureIndex_ = UINT32_MAX;
 	std::vector< std::function<void ()> > auxDrawRequest_;
 	std::vector<std::string> consoleHistory_;
 	std::vector<std::string> consoleMatches_;

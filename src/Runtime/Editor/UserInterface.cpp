@@ -27,6 +27,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -53,6 +54,7 @@ namespace
 {
     constexpr const char* kUiVertexShaderPath = "assets/shaders/UI.ImGui.vert.slang.spv";
     constexpr const char* kUiFragmentShaderPath = "assets/shaders/UI.ImGui.frag.slang.spv";
+    constexpr const char* kUiFontAtlasTextureName = "__imgui_font_atlas__";
     constexpr float kUiHdrReferenceWhiteNit = 203.0f;
 
     struct UiPushConstants
@@ -63,6 +65,35 @@ namespace
         uint32_t hdrOutput;
         float hdrReferenceWhiteNit;
         float padding[2];
+    };
+
+    struct UiBatchedVertex
+    {
+        ImVec2 position;
+        ImVec2 uv;
+        ImU32 color = 0;
+        float clipRect[4]{};
+        uint32_t textureIndex = 0;
+    };
+
+    struct UiDrawSegment
+    {
+        uint32_t vertexOffset = 0;
+        uint32_t vertexCount = 0;
+    };
+
+    struct UiDrawOp
+    {
+        enum class EType : uint8_t
+        {
+            Draw,
+            Callback,
+        };
+
+        EType type = EType::Draw;
+        UiDrawSegment segment{};
+        const ImDrawList* drawList = nullptr;
+        const ImDrawCmd* drawCmd = nullptr;
     };
 
     std::string ExtractConsolePrefix(const std::string& input)
@@ -89,6 +120,27 @@ namespace
 
         return ImVec2((rx * 0.5f + 0.5f) * static_cast<float>(extent.width),
                       (ry * 0.5f + 0.5f) * static_cast<float>(extent.height));
+    }
+
+    void BindUiRenderState(VkCommandBuffer commandBuffer, VkPipeline pipeline, VkPipelineLayout pipelineLayout,
+                           VkDescriptorSet bindlessDescriptorSet, VkBuffer vertexBuffer, const VkViewport& viewport,
+                           const VkRect2D& scissor, const UiPushConstants& pushConsts)
+    {
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+        if (bindlessDescriptorSet != VK_NULL_HANDLE)
+        {
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1,
+                                    &bindlessDescriptorSet, 0, nullptr);
+        }
+        if (vertexBuffer != VK_NULL_HANDLE)
+        {
+            constexpr VkDeviceSize vertexOffset = 0;
+            vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBuffer, &vertexOffset);
+        }
+        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+        vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+                           sizeof(UiPushConstants), &pushConsts);
     }
 } // namespace
 
@@ -223,15 +275,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     {
         funcInit();
     }
-
-    Vulkan::SingleTimeCommands::Submit(commandPool,
-                                       [](VkCommandBuffer commandBuffer)
-                                       {
-                                           if (!ImGui_ImplVulkan_CreateFontsTexture())
-                                           {
-                                               Throw(std::runtime_error("failed to create ImGui font textures"));
-                                           }
-                                       });
+    InitializeFontTexture(commandPool);
 }
 
 UserInterface::~UserInterface()
@@ -264,34 +308,114 @@ void UserInterface::OnDestroySurface()
     renderPass_.reset();
     uiFrameBuffers_.clear();
     uiRenderBuffers_.clear();
-    for (auto image : imTextureIdMap_)
-    {
-        ImGui_ImplVulkan_RemoveTexture(image.second);
-    }
-    imTextureIdMap_.clear();
 }
 
-VkDescriptorSet UserInterface::RequestImTextureId(uint32_t globalTextureId)
+ImTextureID UserInterface::EncodeBindlessTextureId(uint32_t textureIndex)
 {
-    auto texture = Assets::GlobalTexturePool::GetTextureImage(globalTextureId);
-    if (texture == nullptr)
-        return VK_NULL_HANDLE;
-
-    if (imTextureIdMap_.find(globalTextureId) == imTextureIdMap_.end())
-    {
-        imTextureIdMap_[globalTextureId] = ImGui_ImplVulkan_AddTexture(
-            texture->Sampler().Handle(), texture->ImageView().Handle(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    }
-
-    return imTextureIdMap_[globalTextureId];
+    return (ImTextureID)(static_cast<intptr_t>(textureIndex + 1u));
 }
 
-VkDescriptorSet UserInterface::RequestImTextureByName(const std::string& name)
+bool UserInterface::DecodeBindlessTextureId(ImTextureID textureId, uint32_t& outTextureIndex)
+{
+    const uint64_t rawValue = static_cast<uint64_t>((intptr_t)textureId);
+    if (rawValue == 0)
+    {
+        return false;
+    }
+
+    const uint64_t textureIndex = rawValue - 1u;
+    const auto* texturePool = Assets::GlobalTexturePool::GetInstance();
+    if (texturePool == nullptr || textureIndex >= texturePool->TotalTextures())
+    {
+        return false;
+    }
+
+    outTextureIndex = static_cast<uint32_t>(textureIndex);
+    return true;
+}
+
+void UserInterface::InitializeFontTexture(Vulkan::CommandPool& commandPool)
+{
+    auto& io = ImGui::GetIO();
+    unsigned char* pixels = nullptr;
+    int width = 0;
+    int height = 0;
+    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+
+    if (pixels == nullptr || width <= 0 || height <= 0)
+    {
+        Throw(std::runtime_error("failed to build imgui font atlas"));
+    }
+
+    const uint32_t fontTextureSize = static_cast<uint32_t>(width * height * 4);
+    auto fontTexture = std::make_unique<Assets::TextureImage>(
+        commandPool, static_cast<size_t>(width), static_cast<size_t>(height), 1, VK_FORMAT_R8G8B8A8_UNORM, pixels,
+        fontTextureSize);
+    fontTexture->MainThreadPostLoading(commandPool);
+    fontTexture->SetDebugName(kUiFontAtlasTextureName);
+
+    auto* texturePool = Assets::GlobalTexturePool::GetInstance();
+    if (texturePool == nullptr)
+    {
+        Throw(std::runtime_error("global texture pool is unavailable for imgui font atlas"));
+    }
+    
+    fontTextureIndex_ = texturePool->RegisterTexture(
+        kUiFontAtlasTextureName, std::move(fontTexture), Assets::ETextureLifetime::ETL_Persistent);
+
+    if (!ImGui_ImplVulkan_CreateFontsTexture())
+    {
+        Throw(std::runtime_error("failed to create ImGui font textures"));
+    }
+
+    const VkDescriptorSet fontFallbackDescriptorSet = (VkDescriptorSet)(intptr_t)io.Fonts->TexID;
+    if (fontFallbackDescriptorSet == VK_NULL_HANDLE)
+    {
+        Throw(std::runtime_error("imgui font fallback descriptor set is invalid"));
+    }
+
+    uiFallbackDescriptorSetMap_[fontTextureIndex_] = fontFallbackDescriptorSet;
+    io.Fonts->TexID = EncodeBindlessTextureId(fontTextureIndex_);
+}
+
+VkDescriptorSet UserInterface::GetOrCreateFallbackDescriptorSet(uint32_t textureIndex)
+{
+    if (const auto descriptorIt = uiFallbackDescriptorSetMap_.find(textureIndex);
+        descriptorIt != uiFallbackDescriptorSetMap_.end())
+    {
+        return descriptorIt->second;
+    }
+
+    auto* texture = Assets::GlobalTexturePool::GetTextureImage(textureIndex);
+    if (texture == nullptr)
+    {
+        return VK_NULL_HANDLE;
+    }
+
+    const VkDescriptorSet descriptorSet =
+        ImGui_ImplVulkan_AddTexture(texture->Sampler().Handle(), texture->ImageView().Handle(),
+                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    uiFallbackDescriptorSetMap_[textureIndex] = descriptorSet;
+    return descriptorSet;
+}
+
+ImTextureID UserInterface::RequestImTextureId(uint32_t globalTextureId)
+{
+    if (Assets::GlobalTexturePool::GetTextureImage(globalTextureId) == nullptr)
+    {
+        return 0;
+    }
+
+    GetOrCreateFallbackDescriptorSet(globalTextureId);
+    return EncodeBindlessTextureId(globalTextureId);
+}
+
+ImTextureID UserInterface::RequestImTextureByName(const std::string& name)
 {
     uint32_t id = Assets::GlobalTexturePool::GetTextureIndexByName(name);
-    if (id == -1)
+    if (id == static_cast<uint32_t>(-1))
     {
-        return VK_NULL_HANDLE;
+        return 0;
     }
     return RequestImTextureId(id);
 }
@@ -309,9 +433,8 @@ UserInterface::FUiTextureHandle UserInterface::RequestUiTexture(const std::strin
         Assets::GlobalTexturePool::LoadTexture(path, srgb);
     }
 
-    const VkDescriptorSet descriptor = RequestImTextureByName(path);
-    handle.textureId = descriptor != VK_NULL_HANDLE ? reinterpret_cast<ImTextureID>(descriptor) : static_cast<ImTextureID>(0);
-    handle.valid = handle.textureId != static_cast<ImTextureID>(0);
+    handle.textureId = RequestImTextureByName(path);
+    handle.valid = handle.textureId != 0;
 
     if (const auto sizeIt = uiTexturePixelSizeCache_.find(path); sizeIt != uiTexturePixelSizeCache_.end())
     {
@@ -340,20 +463,13 @@ void UserInterface::CreateUiPipeline(const Vulkan::SwapChain& swapChain)
     }
 
     const auto& device = swapChain.Device();
+    const auto* texturePool = Assets::GlobalTexturePool::GetInstance();
+    if (texturePool == nullptr)
+    {
+        Throw(std::runtime_error("global texture pool is unavailable for ui pipeline"));
+    }
 
-    VkDescriptorSetLayoutBinding samplerBinding{};
-    samplerBinding.binding = 0;
-    samplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    samplerBinding.descriptorCount = 1;
-    samplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-    VkDescriptorSetLayoutCreateInfo descriptorSetLayoutInfo{};
-    descriptorSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    descriptorSetLayoutInfo.bindingCount = 1;
-    descriptorSetLayoutInfo.pBindings = &samplerBinding;
-
-    Vulkan::Check(vkCreateDescriptorSetLayout(device.Handle(), &descriptorSetLayoutInfo, nullptr, &uiDescriptorSetLayout_),
-                  "create ui descriptor set layout");
+    const VkDescriptorSetLayout bindlessLayout = texturePool->Layout();
 
     VkPushConstantRange pushConstantRange{};
     pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -363,7 +479,7 @@ void UserInterface::CreateUiPipeline(const Vulkan::SwapChain& swapChain)
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &uiDescriptorSetLayout_;
+    pipelineLayoutInfo.pSetLayouts = &bindlessLayout;
     pipelineLayoutInfo.pushConstantRangeCount = 1;
     pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
@@ -375,22 +491,30 @@ void UserInterface::CreateUiPipeline(const Vulkan::SwapChain& swapChain)
 
     VkVertexInputBindingDescription vertexBinding{};
     vertexBinding.binding = 0;
-    vertexBinding.stride = sizeof(ImDrawVert);
+    vertexBinding.stride = sizeof(UiBatchedVertex);
     vertexBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-    std::array<VkVertexInputAttributeDescription, 3> vertexAttributes{};
+    std::array<VkVertexInputAttributeDescription, 5> vertexAttributes{};
     vertexAttributes[0].location = 0;
     vertexAttributes[0].binding = 0;
     vertexAttributes[0].format = VK_FORMAT_R32G32_SFLOAT;
-    vertexAttributes[0].offset = IM_OFFSETOF(ImDrawVert, pos);
+    vertexAttributes[0].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, position));
     vertexAttributes[1].location = 1;
     vertexAttributes[1].binding = 0;
     vertexAttributes[1].format = VK_FORMAT_R32G32_SFLOAT;
-    vertexAttributes[1].offset = IM_OFFSETOF(ImDrawVert, uv);
+    vertexAttributes[1].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, uv));
     vertexAttributes[2].location = 2;
     vertexAttributes[2].binding = 0;
     vertexAttributes[2].format = VK_FORMAT_R8G8B8A8_UNORM;
-    vertexAttributes[2].offset = IM_OFFSETOF(ImDrawVert, col);
+    vertexAttributes[2].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, color));
+    vertexAttributes[3].location = 3;
+    vertexAttributes[3].binding = 0;
+    vertexAttributes[3].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    vertexAttributes[3].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, clipRect));
+    vertexAttributes[4].location = 4;
+    vertexAttributes[4].binding = 0;
+    vertexAttributes[4].format = VK_FORMAT_R32_UINT;
+    vertexAttributes[4].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, textureIndex));
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -487,17 +611,12 @@ void UserInterface::DestroyUiPipeline()
         vkDestroyPipelineLayout(device.Handle(), uiPipelineLayout_, nullptr);
         uiPipelineLayout_ = VK_NULL_HANDLE;
     }
-    if (uiDescriptorSetLayout_ != VK_NULL_HANDLE)
-    {
-        vkDestroyDescriptorSetLayout(device.Handle(), uiDescriptorSetLayout_, nullptr);
-        uiDescriptorSetLayout_ = VK_NULL_HANDLE;
-    }
 }
 
 void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain,
                                    uint32_t imageIdx)
 {
-    if (drawData == nullptr || drawData->TotalVtxCount <= 0 || drawData->CmdListsCount <= 0 || imageIdx >= uiRenderBuffers_.size())
+    if (drawData == nullptr || drawData->CmdListsCount <= 0 || imageIdx >= uiRenderBuffers_.size())
     {
         return;
     }
@@ -511,39 +630,6 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
     {
         return;
     }
-
-    auto& renderBuffers = uiRenderBuffers_[imageIdx];
-    const VkDeviceSize vertexSize = static_cast<VkDeviceSize>(drawData->TotalVtxCount) * sizeof(ImDrawVert);
-    const VkDeviceSize indexSize = static_cast<VkDeviceSize>(drawData->TotalIdxCount) * sizeof(ImDrawIdx);
-    const auto& device = swapChain.Device();
-
-    if (!renderBuffers.vertexBuffer || renderBuffers.vertexBufferSize < vertexSize)
-    {
-        renderBuffers.vertexBuffer.reset(new Vulkan::Buffer(device, vertexSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT));
-        renderBuffers.vertexBufferMemory.reset(
-            new Vulkan::DeviceMemory(renderBuffers.vertexBuffer->AllocateMemory(0, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
-        renderBuffers.vertexBufferSize = vertexSize;
-    }
-    if (!renderBuffers.indexBuffer || renderBuffers.indexBufferSize < indexSize)
-    {
-        renderBuffers.indexBuffer.reset(new Vulkan::Buffer(device, indexSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
-        renderBuffers.indexBufferMemory.reset(
-            new Vulkan::DeviceMemory(renderBuffers.indexBuffer->AllocateMemory(0, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
-        renderBuffers.indexBufferSize = indexSize;
-    }
-
-    auto* vertexDst = static_cast<ImDrawVert*>(renderBuffers.vertexBufferMemory->Map(0, vertexSize));
-    auto* indexDst = static_cast<ImDrawIdx*>(renderBuffers.indexBufferMemory->Map(0, indexSize));
-    for (int listIndex = 0; listIndex < drawData->CmdListsCount; ++listIndex)
-    {
-        const ImDrawList* drawList = drawData->CmdLists[listIndex];
-        memcpy(vertexDst, drawList->VtxBuffer.Data, static_cast<size_t>(drawList->VtxBuffer.Size) * sizeof(ImDrawVert));
-        memcpy(indexDst, drawList->IdxBuffer.Data, static_cast<size_t>(drawList->IdxBuffer.Size) * sizeof(ImDrawIdx));
-        vertexDst += drawList->VtxBuffer.Size;
-        indexDst += drawList->IdxBuffer.Size;
-    }
-    renderBuffers.vertexBufferMemory->Unmap();
-    renderBuffers.indexBufferMemory->Unmap();
 
     UiPushConstants pushConsts{};
     pushConsts.scale[0] = 2.0f / drawData->DisplaySize.x;
@@ -563,65 +649,59 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
     pushConsts.hdrOutput = swapChain.IsHDR() ? 1u : 0u;
     pushConsts.hdrReferenceWhiteNit = kUiHdrReferenceWhiteNit;
 
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float>(framebufferExtent.width);
-    viewport.height = static_cast<float>(framebufferExtent.height);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+    std::vector<UiBatchedVertex> batchedVertices;
+    batchedVertices.reserve(static_cast<size_t>(std::max(drawData->TotalIdxCount, 0)));
 
-    VkDeviceSize vertexOffset = 0;
-    const VkBuffer vertexBufferHandle = renderBuffers.vertexBuffer->Handle();
-    const VkBuffer indexBufferHandle = renderBuffers.indexBuffer->Handle();
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, uiPipeline_);
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBufferHandle, &vertexOffset);
-    vkCmdBindIndexBuffer(commandBuffer, indexBufferHandle, 0,
-                         sizeof(ImDrawIdx) == 2 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
-    vkCmdPushConstants(commandBuffer, uiPipelineLayout_, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-                       sizeof(UiPushConstants), &pushConsts);
+    std::vector<UiDrawOp> drawOps;
+    drawOps.reserve(static_cast<size_t>(drawData->CmdListsCount) * 2);
 
-    ImGuiPlatformIO& platformIo = ImGui::GetPlatformIO();
-    ImGui_ImplVulkan_RenderState renderState{};
-    renderState.CommandBuffer = commandBuffer;
-    renderState.Pipeline = uiPipeline_;
-    renderState.PipelineLayout = uiPipelineLayout_;
-    platformIo.Renderer_RenderState = &renderState;
+    auto FlushPendingDraw = [&](uint32_t& segmentStartVertex)
+    {
+        const uint32_t vertexCount = static_cast<uint32_t>(batchedVertices.size()) - segmentStartVertex;
+        if (vertexCount == 0)
+        {
+            return;
+        }
 
-    int globalVertexOffset = 0;
-    int globalIndexOffset = 0;
+        drawOps.push_back(
+            UiDrawOp{UiDrawOp::EType::Draw, UiDrawSegment{segmentStartVertex, vertexCount}, nullptr, nullptr});
+        segmentStartVertex = static_cast<uint32_t>(batchedVertices.size());
+    };
+
+    uint32_t currentSegmentStartVertex = 0;
     for (int listIndex = 0; listIndex < drawData->CmdListsCount; ++listIndex)
     {
         const ImDrawList* drawList = drawData->CmdLists[listIndex];
+        if (drawList == nullptr)
+        {
+            continue;
+        }
+
         for (int cmdIndex = 0; cmdIndex < drawList->CmdBuffer.Size; ++cmdIndex)
         {
             const ImDrawCmd* drawCmd = &drawList->CmdBuffer[cmdIndex];
             if (drawCmd->UserCallback != nullptr)
             {
-                if (drawCmd->UserCallback == ImDrawCallback_ResetRenderState)
-                {
-                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, uiPipeline_);
-                    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBufferHandle, &vertexOffset);
-                    vkCmdBindIndexBuffer(commandBuffer, indexBufferHandle, 0,
-                                         sizeof(ImDrawIdx) == 2 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
-                    vkCmdPushConstants(commandBuffer, uiPipelineLayout_,
-                                       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
-                                       sizeof(UiPushConstants), &pushConsts);
-                    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-                }
-                else
-                {
-                    drawCmd->UserCallback(drawList, drawCmd);
-                }
+                FlushPendingDraw(currentSegmentStartVertex);
+                drawOps.push_back(UiDrawOp{UiDrawOp::EType::Callback, UiDrawSegment{}, drawList, drawCmd});
+                continue;
+            }
+
+            uint32_t textureIndex = fontTextureIndex_;
+            if (!DecodeBindlessTextureId(drawCmd->GetTexID(), textureIndex))
+            {
                 continue;
             }
 
             const ImVec2 corners[] = {
-                TransformUiPointToFramebuffer(ImVec2(drawCmd->ClipRect.x, drawCmd->ClipRect.y), pushConsts, framebufferExtent),
-                TransformUiPointToFramebuffer(ImVec2(drawCmd->ClipRect.z, drawCmd->ClipRect.y), pushConsts, framebufferExtent),
-                TransformUiPointToFramebuffer(ImVec2(drawCmd->ClipRect.z, drawCmd->ClipRect.w), pushConsts, framebufferExtent),
-                TransformUiPointToFramebuffer(ImVec2(drawCmd->ClipRect.x, drawCmd->ClipRect.w), pushConsts, framebufferExtent),
+                TransformUiPointToFramebuffer(ImVec2(drawCmd->ClipRect.x, drawCmd->ClipRect.y), pushConsts,
+                                              framebufferExtent),
+                TransformUiPointToFramebuffer(ImVec2(drawCmd->ClipRect.z, drawCmd->ClipRect.y), pushConsts,
+                                              framebufferExtent),
+                TransformUiPointToFramebuffer(ImVec2(drawCmd->ClipRect.z, drawCmd->ClipRect.w), pushConsts,
+                                              framebufferExtent),
+                TransformUiPointToFramebuffer(ImVec2(drawCmd->ClipRect.x, drawCmd->ClipRect.w), pushConsts,
+                                              framebufferExtent),
             };
 
             float clipMinX = corners[0].x;
@@ -645,24 +725,147 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
                 continue;
             }
 
-            VkRect2D scissor{};
-            scissor.offset.x = static_cast<int32_t>(std::floor(clipMinX));
-            scissor.offset.y = static_cast<int32_t>(std::floor(clipMinY));
-            scissor.extent.width = static_cast<uint32_t>(std::ceil(clipMaxX) - std::floor(clipMinX));
-            scissor.extent.height = static_cast<uint32_t>(std::ceil(clipMaxY) - std::floor(clipMinY));
-            vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+            for (uint32_t elemIndex = 0; elemIndex < drawCmd->ElemCount; ++elemIndex)
+            {
+                const uint32_t vertexIndex = static_cast<uint32_t>(drawList->IdxBuffer[drawCmd->IdxOffset + elemIndex]) +
+                                             drawCmd->VtxOffset;
+                if (vertexIndex >= static_cast<uint32_t>(drawList->VtxBuffer.Size))
+                {
+                    continue;
+                }
 
-            const VkDescriptorSet descriptorSet = reinterpret_cast<VkDescriptorSet>(drawCmd->GetTexID());
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, uiPipelineLayout_, 0, 1,
-                                    &descriptorSet, 0, nullptr);
-            vkCmdDrawIndexed(commandBuffer, drawCmd->ElemCount, 1, drawCmd->IdxOffset + globalIndexOffset,
-                             drawCmd->VtxOffset + globalVertexOffset, 0);
+                const ImDrawVert& sourceVertex = drawList->VtxBuffer[vertexIndex];
+                UiBatchedVertex& batchedVertex = batchedVertices.emplace_back();
+                batchedVertex.position = sourceVertex.pos;
+                batchedVertex.uv = sourceVertex.uv;
+                batchedVertex.color = sourceVertex.col;
+                batchedVertex.clipRect[0] = clipMinX;
+                batchedVertex.clipRect[1] = clipMinY;
+                batchedVertex.clipRect[2] = clipMaxX;
+                batchedVertex.clipRect[3] = clipMaxY;
+                batchedVertex.textureIndex = textureIndex;
+            }
         }
-        globalIndexOffset += drawList->IdxBuffer.Size;
-        globalVertexOffset += drawList->VtxBuffer.Size;
+    }
+    FlushPendingDraw(currentSegmentStartVertex);
+
+    auto& renderBuffers = uiRenderBuffers_[imageIdx];
+    const auto& device = swapChain.Device();
+    const VkDeviceSize vertexSize = static_cast<VkDeviceSize>(batchedVertices.size()) * sizeof(UiBatchedVertex);
+    if (vertexSize > 0)
+    {
+        if (!renderBuffers.vertexBuffer || renderBuffers.vertexBufferSize < vertexSize)
+        {
+            renderBuffers.vertexBuffer.reset(new Vulkan::Buffer(device, vertexSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT));
+            renderBuffers.vertexBufferMemory.reset(new Vulkan::DeviceMemory(
+                renderBuffers.vertexBuffer->AllocateMemory(0, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+            renderBuffers.vertexBufferSize = vertexSize;
+        }
+
+        void* mappedData = renderBuffers.vertexBufferMemory->Map(0, vertexSize);
+        memcpy(mappedData, batchedVertices.data(), static_cast<size_t>(vertexSize));
+        renderBuffers.vertexBufferMemory->Unmap();
+    }
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(framebufferExtent.width);
+    viewport.height = static_cast<float>(framebufferExtent.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = framebufferExtent;
+
+    const VkDescriptorSet bindlessDescriptorSet = Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0);
+    const VkBuffer vertexBufferHandle =
+        renderBuffers.vertexBuffer ? renderBuffers.vertexBuffer->Handle() : VK_NULL_HANDLE;
+    BindUiRenderState(commandBuffer, uiPipeline_, uiPipelineLayout_, bindlessDescriptorSet, vertexBufferHandle,
+                      viewport, scissor, pushConsts);
+
+    ImGuiPlatformIO& platformIo = ImGui::GetPlatformIO();
+    ImGui_ImplVulkan_RenderState renderState{};
+    renderState.CommandBuffer = commandBuffer;
+    renderState.Pipeline = uiPipeline_;
+    renderState.PipelineLayout = uiPipelineLayout_;
+    platformIo.Renderer_RenderState = &renderState;
+
+    for (const UiDrawOp& drawOp : drawOps)
+    {
+        if (drawOp.type == UiDrawOp::EType::Draw)
+        {
+            if (drawOp.segment.vertexCount > 0)
+            {
+                vkCmdDraw(commandBuffer, drawOp.segment.vertexCount, 1, drawOp.segment.vertexOffset, 0);
+            }
+            continue;
+        }
+
+        if (drawOp.drawCmd == nullptr || drawOp.drawCmd->UserCallback == nullptr)
+        {
+            continue;
+        }
+
+        if (drawOp.drawCmd->UserCallback == ImDrawCallback_ResetRenderState)
+        {
+            BindUiRenderState(commandBuffer, uiPipeline_, uiPipelineLayout_, bindlessDescriptorSet, vertexBufferHandle,
+                              viewport, scissor, pushConsts);
+            continue;
+        }
+
+        drawOp.drawCmd->UserCallback(drawOp.drawList, drawOp.drawCmd);
+        BindUiRenderState(commandBuffer, uiPipeline_, uiPipelineLayout_, bindlessDescriptorSet, vertexBufferHandle,
+                          viewport, scissor, pushConsts);
     }
 
     platformIo.Renderer_RenderState = nullptr;
+}
+
+void UserInterface::TranslatePlatformViewportTextures()
+{
+    ImGuiPlatformIO& platformIo = ImGui::GetPlatformIO();
+    ImGuiViewport* mainViewport = ImGui::GetMainViewport();
+    for (int viewportIndex = 0; viewportIndex < platformIo.Viewports.Size; ++viewportIndex)
+    {
+        ImGuiViewport* viewport = platformIo.Viewports[viewportIndex];
+        if (viewport == nullptr || viewport == mainViewport || viewport->DrawData == nullptr)
+        {
+            continue;
+        }
+
+        ImDrawData* drawData = viewport->DrawData;
+        for (int listIndex = 0; listIndex < drawData->CmdListsCount; ++listIndex)
+        {
+            ImDrawList* drawList = drawData->CmdLists[listIndex];
+            if (drawList == nullptr)
+            {
+                continue;
+            }
+
+            for (int cmdIndex = 0; cmdIndex < drawList->CmdBuffer.Size; ++cmdIndex)
+            {
+                ImDrawCmd& drawCmd = drawList->CmdBuffer[cmdIndex];
+                if (drawCmd.UserCallback != nullptr)
+                {
+                    continue;
+                }
+
+                uint32_t textureIndex = 0;
+                if (!DecodeBindlessTextureId(drawCmd.TextureId, textureIndex))
+                {
+                    continue;
+                }
+
+                const VkDescriptorSet fallbackDescriptorSet = GetOrCreateFallbackDescriptorSet(textureIndex);
+                if (fallbackDescriptorSet != VK_NULL_HANDLE)
+                {
+                    drawCmd.TextureId = (ImTextureID)(intptr_t)fallbackDescriptorSet;
+                }
+            }
+        }
+    }
 }
 
 void UserInterface::SetStyle()
@@ -1098,13 +1301,6 @@ void UserInterface::PreRender()
     io.DisplayFramebufferScale.y *= GAndroidMagicScale;
 #endif
     ImGui::NewFrame();
-
-    // update texture to ui
-    uint32_t maxId = Assets::GlobalTexturePool::GetInstance()->TotalTextures();
-    for (uint32_t idx = 0; idx < maxId; ++idx)
-    {
-        RequestImTextureId(idx);
-    }
 }
 
 void UserInterface::Render(const Statistics& statistics, VulkanGpuTimer* gpuTimer, Assets::Scene* scene,
@@ -1155,6 +1351,7 @@ void UserInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::Swap
     if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
     {
         ImGui::UpdatePlatformWindows();
+        TranslatePlatformViewportTextures();
         ImGui::RenderPlatformWindowsDefault();
     }
 }

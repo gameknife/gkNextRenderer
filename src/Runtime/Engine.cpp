@@ -1702,7 +1702,7 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
     {
         scene_->CleanUp();
         physicsEngine_->OnSceneDestroyed();
-        Assets::GlobalTexturePool::GetInstance()->FreeNonSystemTextures();
+        Assets::GlobalTexturePool::GetInstance()->FreeTransientTextures();
     }
 
     LaunchLoadSceneTask(
