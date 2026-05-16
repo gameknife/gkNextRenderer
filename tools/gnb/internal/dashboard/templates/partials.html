@@ -341,7 +341,8 @@
 
 
 {{define "tab_run"}}
-<div class="tab-jobs">
+<div class="tab-run-3col">
+  <!-- col 1: target list -->
   <aside class="tab-side">
     <div class="card">
       <h2 class="card-title">
@@ -352,6 +353,7 @@
       </h2>
       <form data-job-form hx-post="/jobs/run" hx-target="#log-panel-host" hx-swap="innerHTML">
         <input type="hidden" name="target" value="">
+        <input type="hidden" name="extraArgs" value="" id="run-extra-args">
         <div class="target-list" style="margin-bottom: 12px;">
           {{range .RunVM.Targets}}
           <div class="target-item" data-target="{{.}}">
@@ -365,6 +367,22 @@
     </div>
   </aside>
 
+  <!-- col 2: args panel -->
+  <aside class="tab-side run-args-col">
+    <div class="card" style="flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column;">
+      <h2 class="card-title">
+        <span class="ico">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        </span>
+        命令行参数
+      </h2>
+      <div id="run-args-list" style="flex: 1 1 auto; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; min-height: 0;">
+        <div class="run-args-empty" style="color: var(--fg-dim); font-size: 12px; font-style: italic;">选择左侧 target 后显示可用参数</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- col 3: log -->
   <section class="tab-main">
     <div id="log-panel-host" style="display: contents;">
       {{if .RunVM.HasJob}}
@@ -375,6 +393,154 @@
     </div>
   </section>
 </div>
+
+<style>
+  .tab-run-3col {
+    display: grid;
+    grid-template-columns: 330px 360px minmax(0, 1fr);
+    gap: 16px;
+    padding: 16px;
+    height: 100%;
+    overflow: hidden;
+  }
+  .run-args-col { overflow: hidden; gap: 0; }
+  .arg-item {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 7px 9px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  }
+  .arg-item input[type="checkbox"] { accent-color: var(--accent); width: 13px; height: 13px; flex: 0 0 auto; margin-top: 2px; }
+  .arg-item .arg-body { flex: 1; min-width: 0; }
+  .arg-item .arg-flag { font-family: var(--font-mono); font-size: 11.5px; color: var(--fg); display: block; }
+  .arg-item .arg-desc { font-size: 10.5px; color: var(--fg-dim); display: block; margin-top: 1px; }
+  .arg-item .arg-val { margin-top: 5px; }
+  .arg-item .arg-val input {
+    width: 100%; background: var(--bg-input); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 3px 6px; font-size: 12px; font-family: var(--font-mono); outline: none;
+  }
+  .arg-item .arg-val input:focus { border-color: var(--accent); }
+</style>
+
+<script>
+(function() {
+  // Actual args from src/Options.cpp (cxxopts definitions).
+  // Common args shared by gkNextRenderer, gkNextEditor, MagicaLego, gkNextBenchmark, gkNextVisualTest.
+  const COMMON_ARGS = [
+    { flag: '--width',                    desc: '帧缓冲宽度',                           hasVal: true,  valDefault: '1920' },
+    { flag: '--height',                   desc: '帧缓冲高度',                           hasVal: true,  valDefault: '1080' },
+    { flag: '--load-scene',               desc: '加载场景（绝对路径或相对项目根目录）', hasVal: true,  valDefault: ''     },
+    { flag: '--hdri',                     desc: '加载 HDRI 文件路径',                   hasVal: true,  valDefault: ''     },
+    { flag: '--gpu',                      desc: '指定 GPU 索引',                        hasVal: true,  valDefault: '0'    },
+    { flag: '--present-mode',             desc: '呈现模式 (0=Immediate 1=Mailbox 2=FIFO 3=FIFORelaxed)', hasVal: true, valDefault: '3' },
+    { flag: '--locale',                   desc: '区域设置 (en / zhCN / RU)',            hasVal: true,  valDefault: 'en'   },
+    { flag: '--fullscreen',               desc: '切换全屏模式',                         hasVal: false                     },
+    { flag: '--savefile',                 desc: '基准测试完成后保存截图',               hasVal: false                     },
+    { flag: '--renderdoc',                desc: '附加 RenderDoc（如可用）',             hasVal: false                     },
+    { flag: '--forcesdr',                 desc: '即使支持 HDR 也强制使用 SDR',          hasVal: false                     },
+    { flag: '--reference',                desc: '开启参考渲染器对比模式',              hasVal: false                     },
+    { flag: '--forcenort',                desc: '强制不使用硬件光追',                   hasVal: false                     },
+    { flag: '--forcesoftgen',             desc: '强制环境立方体使用软件光追',           hasVal: false                     },
+    { flag: '--validation',               desc: '开启 Vulkan 校验层',                  hasVal: false                     },
+    { flag: '--no-shader-hotreload',      desc: '关闭 Slang 着色器热重载',             hasVal: false                     },
+    { flag: '--shader-hotreload-interval',desc: '着色器热重载轮询间隔（秒）',          hasVal: true,  valDefault: '0.5'  },
+    { flag: '--agent-validation',         desc: '开启 Agent 校验（自动截图）',         hasVal: false                     },
+    { flag: '--flappy-replay',            desc: '运行 Flappy 确定性回放',              hasVal: false                     },
+    { flag: '--test-gltf',                desc: '运行 glTF 健壮性测试',               hasVal: false                     },
+    { flag: '--test-gltf-filter',         desc: 'glTF 测试过滤器（部分名称匹配）',    hasVal: true,  valDefault: ''     },
+    { flag: '--update-baseline',          desc: '更新视觉测试基准图片',               hasVal: false                     },
+  ];
+
+  const TARGET_ARGS = {
+    gkNextRenderer:  COMMON_ARGS,
+    gkNextEditor:    COMMON_ARGS,
+    MagicaLego:      COMMON_ARGS,
+    gkNextBenchmark: COMMON_ARGS,
+    gkNextVisualTest: COMMON_ARGS,
+  };
+
+  function lsKey(target) { return 'gnb-run-args-' + target; }
+
+  function loadSaved(target) {
+    try { return JSON.parse(localStorage.getItem(lsKey(target)) || '{}'); } catch { return {}; }
+  }
+
+  function saveCurrent(target) {
+    const saved = {};
+    document.querySelectorAll('#run-args-list .arg-item').forEach(item => {
+      const flag = item.dataset.flag;
+      const cb = item.querySelector('input[type="checkbox"]');
+      const valInput = item.querySelector('.arg-val input');
+      saved[flag] = { checked: cb.checked, val: valInput ? valInput.value : '' };
+    });
+    localStorage.setItem(lsKey(target), JSON.stringify(saved));
+    rebuildExtraArgs();
+  }
+
+  function rebuildExtraArgs() {
+    const parts = [];
+    document.querySelectorAll('#run-args-list .arg-item').forEach(item => {
+      const cb = item.querySelector('input[type="checkbox"]');
+      if (!cb.checked) return;
+      parts.push(item.dataset.flag);
+      const valInput = item.querySelector('.arg-val input');
+      if (valInput && valInput.value.trim()) parts.push(valInput.value.trim());
+    });
+    const el = document.getElementById('run-extra-args');
+    if (el) el.value = parts.join(' ');
+  }
+
+  function renderArgsPanel(target) {
+    const list = document.getElementById('run-args-list');
+    if (!list) return;
+    const defs = TARGET_ARGS[target];
+    if (!defs || defs.length === 0) {
+      list.innerHTML = '<div class="run-args-empty" style="color:var(--fg-dim);font-size:12px;font-style:italic;">该 target 无可配置参数</div>';
+      return;
+    }
+    const saved = loadSaved(target);
+    list.innerHTML = '';
+    defs.forEach(def => {
+      const s = saved[def.flag] || {};
+      const checked = s.checked || false;
+      const val = s.val !== undefined ? s.val : (def.valDefault || '');
+      const item = document.createElement('div');
+      item.className = 'arg-item';
+      item.dataset.flag = def.flag;
+      const valHtml = def.hasVal
+        ? '<div class="arg-val"><input type="text" value="' + val.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '" placeholder="值"></div>'
+        : '';
+      item.innerHTML =
+        '<input type="checkbox"' + (checked ? ' checked' : '') + '>' +
+        '<div class="arg-body">' +
+          '<span class="arg-flag">' + def.flag + '</span>' +
+          '<span class="arg-desc">' + def.desc + '</span>' +
+          valHtml +
+        '</div>';
+      item.querySelector('input[type="checkbox"]').addEventListener('change', () => saveCurrent(target));
+      if (def.hasVal) item.querySelector('.arg-val input').addEventListener('input', () => saveCurrent(target));
+      list.appendChild(item);
+    });
+    rebuildExtraArgs();
+  }
+
+  // On target click (capture phase so it runs before selection highlight)
+  document.body.addEventListener('click', e => {
+    const item = e.target.closest('.target-item');
+    if (!item || !item.dataset.target) return;
+    if (!document.querySelector('[data-tab="run"].active')) return;
+    // slight delay so the selected class is already applied
+    setTimeout(() => renderArgsPanel(item.dataset.target), 0);
+  });
+
+  // After htmx swaps (tab switch, job start, etc.)
+  document.body.addEventListener('htmx:afterSwap', () => {
+    if (!document.querySelector('[data-tab="run"].active')) return;
+    const sel = document.querySelector('.target-item.selected');
+    if (sel) renderArgsPanel(sel.dataset.target);
+  });
+})();
+</script>
 {{end}}
 
 

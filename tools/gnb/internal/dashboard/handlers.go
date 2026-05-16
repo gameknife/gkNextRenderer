@@ -497,7 +497,8 @@ func (s *Server) handleJobStart(w http.ResponseWriter, r *http.Request) {
 		spec = s.buildJobSpec(target)
 	case JobRun:
 		var err error
-		spec, err = s.runJobSpec(target)
+		extraArgs := strings.Fields(r.FormValue("extraArgs"))
+		spec, err = s.runJobSpec(target, extraArgs)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -636,7 +637,7 @@ func (s *Server) buildJobSpec(target string) JobSpec {
 	}
 }
 
-func (s *Server) runJobSpec(target string) (JobSpec, error) {
+func (s *Server) runJobSpec(target string, extraArgs []string) (JobSpec, error) {
 	if target == "" {
 		return JobSpec{}, fmt.Errorf("请选择要运行的 target")
 	}
@@ -646,6 +647,7 @@ func (s *Server) runJobSpec(target string) (JobSpec, error) {
 		Kind:    JobRun,
 		Target:  target,
 		Name:    exe,
+		Args:    extraArgs,
 		WorkDir: filepath.Dir(exe),
 		Env:     []string{"FORCE_COLOR=1"},
 	}, nil

@@ -892,14 +892,15 @@
       el.classList.add('selected');
     }
   });
-  // Restore selection + render markdown after every swap.
   document.body.addEventListener('htmx:afterSwap', (e) => {
     renderMarkdown(e.detail.target);
     const sel = document.querySelector('[data-selected-id]')?.dataset?.selectedId;
-    if (!sel) return;
-    document.querySelectorAll('.task').forEach(t => {
-      if (t.dataset.id === sel) t.classList.add('selected');
-    });
+    if (sel) {
+      document.querySelectorAll('.task').forEach(t => {
+        if (t.dataset.id === sel) t.classList.add('selected');
+      });
+    }
+    restoreTargetSelection(e.detail.target);
   });
   // Initial pass for any markdown rendered on first load (currently none, but cheap).
   document.addEventListener('DOMContentLoaded', () => renderMarkdown(document));
@@ -924,6 +925,30 @@
   });
   // Target list (build / run / test): radio-style single selection. The hidden
   // input named "target" inside the form is updated so the next submit posts it.
+  // Selection is also persisted to localStorage so it survives tab switches.
+  function getTabKind() {
+    const active = document.querySelector('[data-tab].active');
+    return active ? active.dataset.tab : null;
+  }
+  function saveTargetSelection(tab, target) {
+    if (tab && target) localStorage.setItem('gnb-target-' + tab, target);
+  }
+  function restoreTargetSelection(root) {
+    const tab = getTabKind();
+    if (!tab) return;
+    const saved = localStorage.getItem('gnb-target-' + tab);
+    if (!saved) return;
+    const list = (root || document).querySelector('.target-list');
+    if (!list) return;
+    const match = list.querySelector('[data-target="' + saved + '"]');
+    if (!match) return;
+    list.querySelectorAll('.target-item').forEach(t => t.classList.toggle('selected', t === match));
+    const form = list.closest('.tab-side')?.querySelector('form[data-job-form]');
+    if (form) {
+      const hidden = form.querySelector('input[name="target"]');
+      if (hidden) hidden.value = saved;
+    }
+  }
   document.body.addEventListener('click', (e) => {
     const item = e.target.closest('.target-item');
     if (!item || !item.dataset.target) return;
@@ -935,6 +960,7 @@
       const hidden = form.querySelector('input[name="target"]');
       if (hidden) hidden.value = item.dataset.target;
     }
+    saveTargetSelection(getTabKind(), item.dataset.target);
   });
   // ----- Log panel streaming ------------------------------------------
   // We manage the EventSource ourselves instead of using htmx-ext-sse: the
@@ -943,6 +969,7 @@
   // output. Owning the EventSource lets us close it deterministically on
   // the `done` event AND on any error, with no reconnect.
   const logSources = new WeakMap(); // panel element -> EventSource
+  const logTimers  = new WeakMap(); // panel element -> intervalId
 
   function formatElapsedSeconds(totalSeconds) {
     const wholeSeconds = Math.max(0, Math.floor(totalSeconds));
@@ -952,12 +979,12 @@
   }
 
   function updatePanelElapsed(panel) {
-    const startedAt = Number(panel?.dataset?.startedAt || '');
-    if (!Number.isFinite(startedAt)) return;
+    const startedAt = Number(panel?.dataset?.startedAt);
+    if (!startedAt) return;
     const elapsedEl = panel.querySelector('[data-elapsed]');
     if (!elapsedEl) return;
-    const finishedAt = Number(panel.dataset.finishedAt || '');
-    const end = Number.isFinite(finishedAt) ? finishedAt : Math.floor(Date.now() / 1000);
+    const finishedAt = Number(panel.dataset.finishedAt) || 0;
+    const end = finishedAt > 0 ? finishedAt : Math.floor(Date.now() / 1000);
     elapsedEl.textContent = formatElapsedSeconds(end - startedAt);
   }
 
@@ -965,9 +992,10 @@
     (root || document).querySelectorAll('.log-panel[data-started-at]').forEach(updatePanelElapsed);
   }
 
-  setInterval(() => {
-    document.querySelectorAll('.log-panel[data-started-at]:not([data-finished-at])').forEach(updatePanelElapsed);
-  }, 1000);
+  function stopPanelTimer(panel) {
+    const id = logTimers.get(panel);
+    if (id != null) { clearInterval(id); logTimers.delete(panel); }
+  }
 
   function initPanelElapsed(panel) {
     if (!panel) return;
@@ -980,6 +1008,7 @@
       src.close();
       logSources.delete(panel);
     }
+    stopPanelTimer(panel);
   }
 
   function initLogPanel(panel) {
@@ -990,6 +1019,11 @@
     const statusEl = panel.querySelector('[data-stream-status]');
     const src = new EventSource(url);
     logSources.set(panel, src);
+
+    // Per-panel elapsed timer: tick every second while the job is running.
+    updatePanelElapsed(panel);
+    const timerId = setInterval(() => updatePanelElapsed(panel), 1000);
+    logTimers.set(panel, timerId);
 
     src.addEventListener('line', (e) => {
       if (!panel.isConnected) { closePanelStream(panel); return; }
@@ -1003,6 +1037,7 @@
     });
     src.addEventListener('done', (e) => {
       if (e.data) panel.dataset.finishedAt = e.data;
+      stopPanelTimer(panel);
       updatePanelElapsed(panel);
       closePanelStream(panel);
     });

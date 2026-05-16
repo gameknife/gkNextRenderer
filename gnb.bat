@@ -19,7 +19,7 @@ if not defined LOCAL_VERSION set "LOCAL_VERSION=dev"
 if exist "%ROOT%tools\gnb\go.mod" if defined GOEXE (
   set "NEED_BUILD=1"
   if exist "%LOCAL_GNB%" (
-    for /f "usebackq delims=" %%I in (`powershell -NoProfile -Command "$binary = Get-Item '%LOCAL_GNB%'; $newer = Get-ChildItem -Path '%ROOT%tools\gnb' -Recurse -File | Where-Object { $_.Name -match '\.go$|^go\.mod$|^go\.sum$' -and $_.LastWriteTimeUtc -gt $binary.LastWriteTimeUtc } | Select-Object -First 1; if ($newer) { '1' } else { '0' }"`) do set "NEED_BUILD=%%I"
+    for /f "usebackq delims=" %%I in (`powershell -NoProfile -Command "$binary = Get-Item '%LOCAL_GNB%'; $newer = Get-ChildItem -Path '%ROOT%tools\gnb' -Recurse -File | Where-Object { $_.Name -match '\.go$|^go\.mod$|^go\.sum$|\.html$' -and $_.LastWriteTimeUtc -gt $binary.LastWriteTimeUtc } | Select-Object -First 1; if ($newer) { '1' } else { '0' }"`) do set "NEED_BUILD=%%I"
   )
   pushd "%ROOT%tools\gnb"
   if "!NEED_BUILD!"=="1" "%GOEXE%" build -trimpath -ldflags "-s -w -X main.version=%LOCAL_VERSION%" -o "%LOCAL_GNB%" .\cmd\gnb
