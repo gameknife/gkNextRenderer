@@ -26,8 +26,10 @@ namespace Vulkan
 {
 	class Window;
 	class CommandPool;
+	class Buffer;
 	class DepthBuffer;
 	class DescriptorPool;
+	class DeviceMemory;
 	class FrameBuffer;
 	class RenderPass;
 	class SwapChain;
@@ -118,6 +120,10 @@ private:
 	void DrawConsoleWindow();
 	void RefreshConsoleMatches(size_t matchLimit);
 	void DrawConsoleMatchPopup(float width, const char* popupId);
+	void CreateUiPipeline(const Vulkan::SwapChain& swapChain);
+	void DestroyUiPipeline();
+	void RenderDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain,
+	                    uint32_t imageIdx);
 	static int ConsoleInputTextCallback(ImGuiInputTextCallbackData* data);
 	int HandleConsoleInputTextCallback(ImGuiInputTextCallbackData* data);
 	void DrawConsoleLogOutputInternal(const char* childId, const ImVec2& size, bool bordered);
@@ -143,6 +149,19 @@ private:
 	std::unique_ptr<Vulkan::DescriptorPool> descriptorPool_;
 	std::unique_ptr<Vulkan::RenderPass> renderPass_;
 	std::vector< Vulkan::FrameBuffer > uiFrameBuffers_;
+	struct FUiRenderBuffers
+	{
+		std::unique_ptr<Vulkan::Buffer> vertexBuffer;
+		std::unique_ptr<Vulkan::DeviceMemory> vertexBufferMemory;
+		VkDeviceSize vertexBufferSize = 0;
+		std::unique_ptr<Vulkan::Buffer> indexBuffer;
+		std::unique_ptr<Vulkan::DeviceMemory> indexBufferMemory;
+		VkDeviceSize indexBufferSize = 0;
+	};
+	std::vector<FUiRenderBuffers> uiRenderBuffers_;
+	VkDescriptorSetLayout uiDescriptorSetLayout_ = VK_NULL_HANDLE;
+	VkPipelineLayout uiPipelineLayout_ = VK_NULL_HANDLE;
+	VkPipeline uiPipeline_ = VK_NULL_HANDLE;
 	UserSettings& userSettings_;	
 	
 	std::unordered_map<uint32_t, VkDescriptorSet> imTextureIdMap_;

@@ -10,6 +10,7 @@
 #include "Utilities/Exception.hpp"
 #include "Vulkan/DescriptorSystem.hpp"
 #include "Vulkan/Device.hpp"
+#include "Vulkan/MemoryAndShader.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/RenderingPipeline.hpp"
 #include "Vulkan/CommandExecution.hpp"
@@ -20,17 +21,14 @@
 #include <imgui_freetype.h>
 #include <imgui_stdlib.h>
 #include <SDL3/SDL.h>
-#if !ANDROID
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_vulkan.h>
-#else
-#include <ThirdParty/imgui-custom/imgui_impl_sdl3_custom.h>
-#include <ThirdParty/imgui-custom/imgui_impl_vulkan_custom.h>
-#endif
 
 
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <fmt/chrono.h>
 #include <fmt/format.h>
@@ -53,6 +51,20 @@ extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
 
 namespace
 {
+    constexpr const char* kUiVertexShaderPath = "assets/shaders/UI.ImGui.vert.slang.spv";
+    constexpr const char* kUiFragmentShaderPath = "assets/shaders/UI.ImGui.frag.slang.spv";
+    constexpr float kUiHdrReferenceWhiteNit = 203.0f;
+
+    struct UiPushConstants
+    {
+        float scale[2];
+        float translate[2];
+        float rotation[4];
+        uint32_t hdrOutput;
+        float hdrReferenceWhiteNit;
+        float padding[2];
+    };
+
     std::string ExtractConsolePrefix(const std::string& input)
     {
         size_t start = input.find_first_not_of(" \t\r\n");
@@ -66,6 +78,17 @@ namespace
             return input.substr(start);
         }
         return input.substr(start, end - start);
+    }
+
+    ImVec2 TransformUiPointToFramebuffer(const ImVec2 point, const UiPushConstants& pushConsts, const VkExtent2D& extent)
+    {
+        const float x = point.x * pushConsts.scale[0] + pushConsts.translate[0];
+        const float y = point.y * pushConsts.scale[1] + pushConsts.translate[1];
+        const float rx = x * pushConsts.rotation[0] + y * pushConsts.rotation[1];
+        const float ry = x * pushConsts.rotation[2] + y * pushConsts.rotation[3];
+
+        return ImVec2((rx * 0.5f + 0.5f) * static_cast<float>(extent.width),
+                      (ry * 0.5f + 0.5f) * static_cast<float>(extent.height));
     }
 } // namespace
 
@@ -84,6 +107,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     descriptorPool_.reset(new Vulkan::DescriptorPool(device, descriptorBindings, swapChain.MinImageCount() + 2048));
     renderPass_.reset(new Vulkan::RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD));
     renderPass_->SetDebugName("ImGui Render Pass");
+    CreateUiPipeline(swapChain);
 
     // Initialise ImGui
     IMGUI_CHECKVERSION();
@@ -212,7 +236,9 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
 
 UserInterface::~UserInterface()
 {
+    DestroyUiPipeline();
     uiFrameBuffers_.clear();
+    uiRenderBuffers_.clear();
 
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplSDL3_Shutdown();
@@ -223,17 +249,21 @@ void UserInterface::OnCreateSurface(const Vulkan::SwapChain& swapChain, const Vu
 {
     renderPass_.reset(new Vulkan::RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD));
     renderPass_->SetDebugName("ImGui Render Pass");
+    CreateUiPipeline(swapChain);
 
     for (const auto& imageView : swapChain.ImageViews())
     {
         uiFrameBuffers_.emplace_back(swapChain.Extent(), *imageView, *renderPass_, false);
     }
+    uiRenderBuffers_.resize(swapChain.Images().size());
 }
 
 void UserInterface::OnDestroySurface()
 {
+    DestroyUiPipeline();
     renderPass_.reset();
     uiFrameBuffers_.clear();
+    uiRenderBuffers_.clear();
     for (auto image : imTextureIdMap_)
     {
         ImGui_ImplVulkan_RemoveTexture(image.second);
@@ -299,6 +329,340 @@ UserInterface::FUiTextureHandle UserInterface::RequestUiTexture(const std::strin
     }
     uiTexturePixelSizeCache_[path] = handle.pixelSize;
     return handle;
+}
+
+void UserInterface::CreateUiPipeline(const Vulkan::SwapChain& swapChain)
+{
+    DestroyUiPipeline();
+    if (renderPass_ == nullptr)
+    {
+        return;
+    }
+
+    const auto& device = swapChain.Device();
+
+    VkDescriptorSetLayoutBinding samplerBinding{};
+    samplerBinding.binding = 0;
+    samplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    samplerBinding.descriptorCount = 1;
+    samplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutCreateInfo descriptorSetLayoutInfo{};
+    descriptorSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    descriptorSetLayoutInfo.bindingCount = 1;
+    descriptorSetLayoutInfo.pBindings = &samplerBinding;
+
+    Vulkan::Check(vkCreateDescriptorSetLayout(device.Handle(), &descriptorSetLayoutInfo, nullptr, &uiDescriptorSetLayout_),
+                  "create ui descriptor set layout");
+
+    VkPushConstantRange pushConstantRange{};
+    pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    pushConstantRange.offset = 0;
+    pushConstantRange.size = sizeof(UiPushConstants);
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &uiDescriptorSetLayout_;
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+    pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
+
+    Vulkan::Check(vkCreatePipelineLayout(device.Handle(), &pipelineLayoutInfo, nullptr, &uiPipelineLayout_),
+                  "create ui pipeline layout");
+
+    const Vulkan::ShaderModule vertShader(device, kUiVertexShaderPath);
+    const Vulkan::ShaderModule fragShader(device, kUiFragmentShaderPath);
+
+    VkVertexInputBindingDescription vertexBinding{};
+    vertexBinding.binding = 0;
+    vertexBinding.stride = sizeof(ImDrawVert);
+    vertexBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    std::array<VkVertexInputAttributeDescription, 3> vertexAttributes{};
+    vertexAttributes[0].location = 0;
+    vertexAttributes[0].binding = 0;
+    vertexAttributes[0].format = VK_FORMAT_R32G32_SFLOAT;
+    vertexAttributes[0].offset = IM_OFFSETOF(ImDrawVert, pos);
+    vertexAttributes[1].location = 1;
+    vertexAttributes[1].binding = 0;
+    vertexAttributes[1].format = VK_FORMAT_R32G32_SFLOAT;
+    vertexAttributes[1].offset = IM_OFFSETOF(ImDrawVert, uv);
+    vertexAttributes[2].location = 2;
+    vertexAttributes[2].binding = 0;
+    vertexAttributes[2].format = VK_FORMAT_R8G8B8A8_UNORM;
+    vertexAttributes[2].offset = IM_OFFSETOF(ImDrawVert, col);
+
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+    vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInputInfo.vertexBindingDescriptionCount = 1;
+    vertexInputInfo.pVertexBindingDescriptions = &vertexBinding;
+    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertexAttributes.size());
+    vertexInputInfo.pVertexAttributeDescriptions = vertexAttributes.data();
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+    VkPipelineViewportStateCreateInfo viewportState{};
+    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.viewportCount = 1;
+    viewportState.scissorCount = 1;
+
+    VkPipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.cullMode = VK_CULL_MODE_NONE;
+    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizer.lineWidth = 1.0f;
+
+    VkPipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+    colorBlendAttachment.blendEnable = VK_TRUE;
+    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+    colorBlendAttachment.colorWriteMask =
+        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+    VkPipelineColorBlendStateCreateInfo colorBlending{};
+    colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlending.attachmentCount = 1;
+    colorBlending.pAttachments = &colorBlendAttachment;
+
+    VkPipelineDepthStencilStateCreateInfo depthStencil{};
+    depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+
+    VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    VkPipelineDynamicStateCreateInfo dynamicState{};
+    dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicState.dynamicStateCount = static_cast<uint32_t>(std::size(dynamicStates));
+    dynamicState.pDynamicStates = dynamicStates;
+
+    VkPipelineShaderStageCreateInfo shaderStages[] = {
+        vertShader.CreateShaderStage(VK_SHADER_STAGE_VERTEX_BIT),
+        fragShader.CreateShaderStage(VK_SHADER_STAGE_FRAGMENT_BIT)};
+
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.stageCount = static_cast<uint32_t>(std::size(shaderStages));
+    pipelineInfo.pStages = shaderStages;
+    pipelineInfo.pVertexInputState = &vertexInputInfo;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState = &multisampling;
+    pipelineInfo.pDepthStencilState = &depthStencil;
+    pipelineInfo.pColorBlendState = &colorBlending;
+    pipelineInfo.pDynamicState = &dynamicState;
+    pipelineInfo.layout = uiPipelineLayout_;
+    pipelineInfo.renderPass = renderPass_->Handle();
+    pipelineInfo.subpass = 0;
+
+    Vulkan::Check(vkCreateGraphicsPipelines(device.Handle(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &uiPipeline_),
+                  "create ui pipeline");
+}
+
+void UserInterface::DestroyUiPipeline()
+{
+    if (engine_ == nullptr)
+    {
+        return;
+    }
+
+    const auto& device = engine_->GetRenderer().Device();
+    if (uiPipeline_ != VK_NULL_HANDLE)
+    {
+        vkDestroyPipeline(device.Handle(), uiPipeline_, nullptr);
+        uiPipeline_ = VK_NULL_HANDLE;
+    }
+    if (uiPipelineLayout_ != VK_NULL_HANDLE)
+    {
+        vkDestroyPipelineLayout(device.Handle(), uiPipelineLayout_, nullptr);
+        uiPipelineLayout_ = VK_NULL_HANDLE;
+    }
+    if (uiDescriptorSetLayout_ != VK_NULL_HANDLE)
+    {
+        vkDestroyDescriptorSetLayout(device.Handle(), uiDescriptorSetLayout_, nullptr);
+        uiDescriptorSetLayout_ = VK_NULL_HANDLE;
+    }
+}
+
+void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain,
+                                   uint32_t imageIdx)
+{
+    if (drawData == nullptr || drawData->TotalVtxCount <= 0 || drawData->CmdListsCount <= 0 || imageIdx >= uiRenderBuffers_.size())
+    {
+        return;
+    }
+    if (drawData->DisplaySize.x <= 0.0f || drawData->DisplaySize.y <= 0.0f)
+    {
+        return;
+    }
+
+    const VkExtent2D framebufferExtent = swapChain.Extent();
+    if (framebufferExtent.width == 0 || framebufferExtent.height == 0)
+    {
+        return;
+    }
+
+    auto& renderBuffers = uiRenderBuffers_[imageIdx];
+    const VkDeviceSize vertexSize = static_cast<VkDeviceSize>(drawData->TotalVtxCount) * sizeof(ImDrawVert);
+    const VkDeviceSize indexSize = static_cast<VkDeviceSize>(drawData->TotalIdxCount) * sizeof(ImDrawIdx);
+    const auto& device = swapChain.Device();
+
+    if (!renderBuffers.vertexBuffer || renderBuffers.vertexBufferSize < vertexSize)
+    {
+        renderBuffers.vertexBuffer.reset(new Vulkan::Buffer(device, vertexSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT));
+        renderBuffers.vertexBufferMemory.reset(
+            new Vulkan::DeviceMemory(renderBuffers.vertexBuffer->AllocateMemory(0, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+        renderBuffers.vertexBufferSize = vertexSize;
+    }
+    if (!renderBuffers.indexBuffer || renderBuffers.indexBufferSize < indexSize)
+    {
+        renderBuffers.indexBuffer.reset(new Vulkan::Buffer(device, indexSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
+        renderBuffers.indexBufferMemory.reset(
+            new Vulkan::DeviceMemory(renderBuffers.indexBuffer->AllocateMemory(0, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+        renderBuffers.indexBufferSize = indexSize;
+    }
+
+    auto* vertexDst = static_cast<ImDrawVert*>(renderBuffers.vertexBufferMemory->Map(0, vertexSize));
+    auto* indexDst = static_cast<ImDrawIdx*>(renderBuffers.indexBufferMemory->Map(0, indexSize));
+    for (int listIndex = 0; listIndex < drawData->CmdListsCount; ++listIndex)
+    {
+        const ImDrawList* drawList = drawData->CmdLists[listIndex];
+        memcpy(vertexDst, drawList->VtxBuffer.Data, static_cast<size_t>(drawList->VtxBuffer.Size) * sizeof(ImDrawVert));
+        memcpy(indexDst, drawList->IdxBuffer.Data, static_cast<size_t>(drawList->IdxBuffer.Size) * sizeof(ImDrawIdx));
+        vertexDst += drawList->VtxBuffer.Size;
+        indexDst += drawList->IdxBuffer.Size;
+    }
+    renderBuffers.vertexBufferMemory->Unmap();
+    renderBuffers.indexBufferMemory->Unmap();
+
+    UiPushConstants pushConsts{};
+    pushConsts.scale[0] = 2.0f / drawData->DisplaySize.x;
+    pushConsts.scale[1] = 2.0f / drawData->DisplaySize.y;
+    pushConsts.translate[0] = -1.0f - drawData->DisplayPos.x * pushConsts.scale[0];
+    pushConsts.translate[1] = -1.0f - drawData->DisplayPos.y * pushConsts.scale[1];
+    pushConsts.rotation[0] = 1.0f;
+    pushConsts.rotation[1] = 0.0f;
+    pushConsts.rotation[2] = 0.0f;
+    pushConsts.rotation[3] = 1.0f;
+#if ANDROID
+    pushConsts.rotation[0] = 0.0f;
+    pushConsts.rotation[1] = 1.0f;
+    pushConsts.rotation[2] = -1.0f;
+    pushConsts.rotation[3] = 0.0f;
+#endif
+    pushConsts.hdrOutput = swapChain.IsHDR() ? 1u : 0u;
+    pushConsts.hdrReferenceWhiteNit = kUiHdrReferenceWhiteNit;
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(framebufferExtent.width);
+    viewport.height = static_cast<float>(framebufferExtent.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkDeviceSize vertexOffset = 0;
+    const VkBuffer vertexBufferHandle = renderBuffers.vertexBuffer->Handle();
+    const VkBuffer indexBufferHandle = renderBuffers.indexBuffer->Handle();
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, uiPipeline_);
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBufferHandle, &vertexOffset);
+    vkCmdBindIndexBuffer(commandBuffer, indexBufferHandle, 0,
+                         sizeof(ImDrawIdx) == 2 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
+    vkCmdPushConstants(commandBuffer, uiPipelineLayout_, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+                       sizeof(UiPushConstants), &pushConsts);
+
+    ImGuiPlatformIO& platformIo = ImGui::GetPlatformIO();
+    ImGui_ImplVulkan_RenderState renderState{};
+    renderState.CommandBuffer = commandBuffer;
+    renderState.Pipeline = uiPipeline_;
+    renderState.PipelineLayout = uiPipelineLayout_;
+    platformIo.Renderer_RenderState = &renderState;
+
+    int globalVertexOffset = 0;
+    int globalIndexOffset = 0;
+    for (int listIndex = 0; listIndex < drawData->CmdListsCount; ++listIndex)
+    {
+        const ImDrawList* drawList = drawData->CmdLists[listIndex];
+        for (int cmdIndex = 0; cmdIndex < drawList->CmdBuffer.Size; ++cmdIndex)
+        {
+            const ImDrawCmd* drawCmd = &drawList->CmdBuffer[cmdIndex];
+            if (drawCmd->UserCallback != nullptr)
+            {
+                if (drawCmd->UserCallback == ImDrawCallback_ResetRenderState)
+                {
+                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, uiPipeline_);
+                    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBufferHandle, &vertexOffset);
+                    vkCmdBindIndexBuffer(commandBuffer, indexBufferHandle, 0,
+                                         sizeof(ImDrawIdx) == 2 ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32);
+                    vkCmdPushConstants(commandBuffer, uiPipelineLayout_,
+                                       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+                                       sizeof(UiPushConstants), &pushConsts);
+                    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+                }
+                else
+                {
+                    drawCmd->UserCallback(drawList, drawCmd);
+                }
+                continue;
+            }
+
+            const ImVec2 corners[] = {
+                TransformUiPointToFramebuffer(ImVec2(drawCmd->ClipRect.x, drawCmd->ClipRect.y), pushConsts, framebufferExtent),
+                TransformUiPointToFramebuffer(ImVec2(drawCmd->ClipRect.z, drawCmd->ClipRect.y), pushConsts, framebufferExtent),
+                TransformUiPointToFramebuffer(ImVec2(drawCmd->ClipRect.z, drawCmd->ClipRect.w), pushConsts, framebufferExtent),
+                TransformUiPointToFramebuffer(ImVec2(drawCmd->ClipRect.x, drawCmd->ClipRect.w), pushConsts, framebufferExtent),
+            };
+
+            float clipMinX = corners[0].x;
+            float clipMinY = corners[0].y;
+            float clipMaxX = corners[0].x;
+            float clipMaxY = corners[0].y;
+            for (const ImVec2 corner : corners)
+            {
+                clipMinX = std::min(clipMinX, corner.x);
+                clipMinY = std::min(clipMinY, corner.y);
+                clipMaxX = std::max(clipMaxX, corner.x);
+                clipMaxY = std::max(clipMaxY, corner.y);
+            }
+
+            clipMinX = std::clamp(clipMinX, 0.0f, static_cast<float>(framebufferExtent.width));
+            clipMinY = std::clamp(clipMinY, 0.0f, static_cast<float>(framebufferExtent.height));
+            clipMaxX = std::clamp(clipMaxX, 0.0f, static_cast<float>(framebufferExtent.width));
+            clipMaxY = std::clamp(clipMaxY, 0.0f, static_cast<float>(framebufferExtent.height));
+            if (clipMaxX <= clipMinX || clipMaxY <= clipMinY)
+            {
+                continue;
+            }
+
+            VkRect2D scissor{};
+            scissor.offset.x = static_cast<int32_t>(std::floor(clipMinX));
+            scissor.offset.y = static_cast<int32_t>(std::floor(clipMinY));
+            scissor.extent.width = static_cast<uint32_t>(std::ceil(clipMaxX) - std::floor(clipMinX));
+            scissor.extent.height = static_cast<uint32_t>(std::ceil(clipMaxY) - std::floor(clipMinY));
+            vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+            const VkDescriptorSet descriptorSet = reinterpret_cast<VkDescriptorSet>(drawCmd->GetTexID());
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, uiPipelineLayout_, 0, 1,
+                                    &descriptorSet, 0, nullptr);
+            vkCmdDrawIndexed(commandBuffer, drawCmd->ElemCount, 1, drawCmd->IdxOffset + globalIndexOffset,
+                             drawCmd->VtxOffset + globalVertexOffset, 0);
+        }
+        globalIndexOffset += drawList->IdxBuffer.Size;
+        globalVertexOffset += drawList->VtxBuffer.Size;
+    }
+
+    platformIo.Renderer_RenderState = nullptr;
 }
 
 void UserInterface::SetStyle()
@@ -728,6 +1092,11 @@ void UserInterface::PreRender()
 {
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplSDL3_NewFrame();
+#if ANDROID
+    auto& io = ImGui::GetIO();
+    io.DisplayFramebufferScale.x *= GAndroidMagicScale;
+    io.DisplayFramebufferScale.y *= GAndroidMagicScale;
+#endif
     ImGui::NewFrame();
 
     // update texture to ui
@@ -779,7 +1148,7 @@ void UserInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::Swap
     renderPassInfo.pClearValues = nullptr;
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+    RenderDrawData(ImGui::GetDrawData(), commandBuffer, swapChain, imageIdx);
     vkCmdEndRenderPass(commandBuffer);
 
     auto& io = ImGui::GetIO();

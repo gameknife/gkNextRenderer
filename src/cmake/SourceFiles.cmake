@@ -44,12 +44,6 @@ file(GLOB_RECURSE src_files_thirdparty
     "ThirdParty/ozz/*.h"
 )
 
-# --- Custom ImGui Backend ---
-file(GLOB_RECURSE src_files_customimgui
-    "ThirdParty/imgui-custom/*.cpp"
-    "ThirdParty/imgui-custom/*.h"
-)
-
 # --- Engine Core ---
 file(GLOB_RECURSE src_files_engine
     "Common/*.hpp"
