@@ -1,3 +1,5 @@
+import Bindless;
+
 struct PushConsts
 {
     float2 scale;
@@ -11,13 +13,13 @@ struct PushConsts
 [[vk::push_constant]]
 ConstantBuffer<PushConsts> pushConsts;
 
-[[vk::binding(0, 0)]]
-Sampler2D uiTexture;
-
 struct FragmentInput
 {
+    float4 position : SV_Position;
     [[vk::location(0)]] float2 uv : TEXCOORD0;
     [[vk::location(1)]] float4 color : COLOR0;
+    [[vk::location(2)]] nointerpolation float4 clipRect : TEXCOORD1;
+    [[vk::location(3)]] nointerpolation uint textureIndex : TEXCOORD2;
 };
 
 struct FragmentOutput
@@ -61,7 +63,13 @@ FragmentOutput main(FragmentInput input)
 {
     FragmentOutput output;
 
-    float4 sdrColor = uiTexture.SampleLevel(input.uv, 0.0) * input.color;
+    if (input.position.x < input.clipRect.x || input.position.y < input.clipRect.y ||
+        input.position.x >= input.clipRect.z || input.position.y >= input.clipRect.w)
+    {
+        discard;
+    }
+
+    float4 sdrColor = Bindless.GetSampleTexture(input.textureIndex).SampleLevel(input.uv, 0.0) * input.color;
     if (pushConsts.hdrOutput != 0)
     {
         float3 linear709 = SrgbToLinear(saturate(sdrColor.rgb));
