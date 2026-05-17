@@ -27,15 +27,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
             ? Common.SampleIBL(Camera.SkyIdx, primaryRayDir, Camera.SkyRotation, 0) * Camera.SkyIntensity
             : float4(0, 0, 0, 1);
         Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, skyColor);
-        Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR).Store(pixel, float4(0, 0, 0, 1));
-        Bindless.GetStorageTexture<float>(Bindless.RT_DIFFUSE_HITDIST).Store(pixel, 1000);
-        Bindless.GetStorageTexture<float>(Bindless.RT_SPECULAR_HITDIST).Store(pixel, 1000);
         Bindless.GetStorageTexture<float4>(Bindless.RT_ALBEDO).Store(pixel, float4(1, 1, 1, 1));
-        Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL).Store(pixel, float4(0, 1, 0, 1));
         Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(pixel, 0);
-        Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR).Store(pixel, float4(0, 0, 0, 0));
         Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(pixel, 1000);
-        Bindless.GetStorageTexture<float4>(Bindless.RT_SPECULAR_ALBEDO).Store(pixel, float4(0, 0, 0, 0));
         return;
     }
 
@@ -77,7 +71,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
     hitVertex.Normal = normalize(n0 * baryX + n1 * baryY + n2 * baryZ);
     hitVertex.TexCoord = v0.TexCoord * baryX + v1.TexCoord * baryY + v2.TexCoord * baryZ;
     hitVertex.MaterialIndex = FetchMaterialId(hitNode, v0.MaterialIndex);
-    float primaryRayLength = length(hitVertex.Position - origin.xyz);
 
     Material material = Bindless.GetGpuscene().GetMaterial(hitVertex.MaterialIndex);
     float4 primaryAlbedo = material.Diffuse;
@@ -108,20 +101,12 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     float4 clipPos = mul(Camera.ViewProjection, float4(hitVertex.Position, 1.0));
     float ndcDepth = clipPos.z / clipPos.w;
-    float2 motion = Common.CalculateMotionVector(Camera, hitNode, hitVertex, pixel);
     const bool selected = hitNode.reserved1 != 0;
     const bool hovered = (hitNode.reserved2 & 1u) != 0;
     const bool locked = (hitNode.reserved2 & 2u) != 0;
     const bool danger = (hitNode.reserved2 & 4u) != 0;
-    float4 specularAlbedo = material.MaterialModel == MaterialMetallic ? primaryAlbedo : float4(1, 1, 1, 1);
     Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, color);
-    Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR).Store(pixel, float4(0, 0, 0, 1));
-    Bindless.GetStorageTexture<float>(Bindless.RT_DIFFUSE_HITDIST).Store(pixel, primaryRayLength);
-    Bindless.GetStorageTexture<float>(Bindless.RT_SPECULAR_HITDIST).Store(pixel, primaryRayLength);
     Bindless.GetStorageTexture<float4>(Bindless.RT_ALBEDO).Store(pixel, primaryAlbedo);
-    Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL).Store(pixel, float4(hitVertex.Normal, 1));
     Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(pixel, Common.EncodeObjectId(hitNode.instanceId, selected, hovered, locked, danger));
-    Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR).Store(pixel, float4(motion * size, 0, 0));
     Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(pixel, ndcDepth);
-    Bindless.GetStorageTexture<float4>(Bindless.RT_SPECULAR_ALBEDO).Store(pixel, specularAlbedo);
 }
