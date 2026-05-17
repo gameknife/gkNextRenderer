@@ -9,9 +9,11 @@
 
 namespace Vulkan::LegacyDeferred {
 
-SoftwareModernRenderer::SoftwareModernRenderer(Vulkan::VulkanBaseRenderer& baseRender, std::string shaderPath) :
+SoftwareModernRenderer::SoftwareModernRenderer(Vulkan::VulkanBaseRenderer& baseRender, std::string shaderPath,
+                                               bool simpleComposeOnly) :
 	LogicRendererBase(baseRender),
-	shaderPath_(std::move(shaderPath))
+	shaderPath_(std::move(shaderPath)),
+	simpleComposeOnly_(simpleComposeOnly)
 {
 	
 }
@@ -23,7 +25,14 @@ SoftwareModernRenderer::~SoftwareModernRenderer()
 	
 void SoftwareModernRenderer::CreateSwapChain(const VkExtent2D& extent)
 {
+	(void)extent;
 	deferredShadingPipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), shaderPath_.c_str(), GetScene()));
+	if (simpleComposeOnly_)
+	{
+		composePipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Process.ComposeSimple.comp.slang.spv", GetScene()));
+		return;
+	}
+
 	accumulatePipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.ReProject.comp.slang.spv", 24));
 	composePipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Process.DenoiseJBF.comp.slang.spv", GetScene()));
 
@@ -66,20 +75,31 @@ void SoftwareModernRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 				VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 		};
 		transitionShadingOutput(Assets::Bindless::RT_SINGLE_DIFFUSE);
-		transitionShadingOutput(Assets::Bindless::RT_SINGLE_SPECULAR);
 		transitionShadingOutput(Assets::Bindless::RT_ALBEDO);
-		transitionShadingOutput(Assets::Bindless::RT_NORMAL);
 		transitionShadingOutput(Assets::Bindless::RT_OBJEDCTID_0);
-		transitionShadingOutput(Assets::Bindless::RT_MOTIONVECTOR);
 		transitionShadingOutput(Assets::Bindless::RT_PREV_DEPTHBUFFER);
-		transitionShadingOutput(Assets::Bindless::RT_DIFFUSE_HITDIST);
-		transitionShadingOutput(Assets::Bindless::RT_SPECULAR_HITDIST);
-		transitionShadingOutput(Assets::Bindless::RT_SPECULAR_ALBEDO);
-		baseRender_.GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
-			VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+		if (!simpleComposeOnly_)
+		{
+			transitionShadingOutput(Assets::Bindless::RT_SINGLE_SPECULAR);
+			transitionShadingOutput(Assets::Bindless::RT_NORMAL);
+			transitionShadingOutput(Assets::Bindless::RT_MOTIONVECTOR);
+			transitionShadingOutput(Assets::Bindless::RT_DIFFUSE_HITDIST);
+			transitionShadingOutput(Assets::Bindless::RT_SPECULAR_HITDIST);
+			transitionShadingOutput(Assets::Bindless::RT_SPECULAR_ALBEDO);
+			baseRender_.GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
+				VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+		}
 	}
 
-		{
+	if (simpleComposeOnly_)
+	{
+		SCOPED_GPU_TIMER("compose pass");
+		composePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+		vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 8, 1);
+		return;
+	}
+
+	{
 		SCOPED_GPU_TIMER("reproject pass");
 		std::array<uint32_t, 6> pushConst { NextEngine::GetInstance()->IsProgressiveRendering(), uint32_t(NextEngine::GetInstance()->GetUserSettings().TemporalFrames),
 					   prevSingleDiffuseId_, prevSingleSpecularId_, prevSingleAlbedoId_, 1 };

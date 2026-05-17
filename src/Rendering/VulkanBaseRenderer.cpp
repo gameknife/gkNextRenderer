@@ -1563,7 +1563,7 @@ namespace Vulkan
             break;
         case ERendererType::ERT_LegacyDeferredNoAmbient:
             logicRenderers_[type] = std::make_unique<LegacyDeferred::SoftwareModernRenderer>(
-                *this, "assets/shaders/Core.SwModernNoAmbient.comp.slang.spv");
+                *this, "assets/shaders/Core.SwModernNoAmbient.comp.slang.spv", true);
             break;
         case ERendererType::ERT_VoxelTracing:
             logicRenderers_[type] = std::make_unique<VoxelTracing::VoxelTracingRenderer>(*this);
