@@ -2,6 +2,8 @@
 
 This note documents the binding path used by the Flappy parity demo. Keep it aligned with `src/Runtime/Subsystems/QuickJSEngine.cpp`.
 
+For a higher-level overview of the TypeScript source, compile, hot reload, and runtime loading pipeline, see `docs/typescript-integration.md`.
+
 ## TypeScript Entry And Modules
 
 - TypeScript sources live under `assets/typescript`.

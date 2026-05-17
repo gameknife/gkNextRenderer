@@ -3,6 +3,8 @@
 `gnb` is the gkNextRenderer build helper. It wraps setup, CMake presets, running,
 tests, optional pak assets, packaging, and mobile build entry points.
 
+Architecture and stack overview: [`docs/gnb-tech-stack.md`](../../docs/gnb-tech-stack.md)
+
 Build locally from the repository root:
 
 ```bash

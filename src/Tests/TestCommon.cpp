@@ -19,7 +19,7 @@ EngineTestFixture::EngineTestFixture()
         "--width=800", 
         "--height=600",
         "--fastexit=false",
-        "--no-hot-reload"
+        "--no-shader-hotreload"
     };
     int argc = sizeof(argv) / sizeof(argv[0]);
 

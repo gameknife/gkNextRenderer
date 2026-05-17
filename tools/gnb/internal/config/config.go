@@ -33,6 +33,7 @@ type ExternalConfig struct {
 	TSC        TSCConfig         `toml:"tsc"`
 	MoltenVK   ExternalURLConfig `toml:"moltenvk"`
 	Slang      PlatformURLs      `toml:"slang"`
+	VulkanSDK  VulkanSDKConfig   `toml:"vulkansdk"`
 }
 
 type ExternalURLConfig struct {
@@ -53,6 +54,11 @@ type PlatformURLs struct {
 	Linux      string `toml:"linux"`
 	MacOSAMD64 string `toml:"macos_amd64"`
 	MacOSArm64 string `toml:"macos_arm64"`
+}
+
+type VulkanSDKConfig struct {
+	Version string `toml:"version"`
+	Root    string `toml:"root"`
 }
 
 type PaksConfig struct {
@@ -100,6 +106,12 @@ func Load(repoRoot string) (Config, error) {
 	}
 	if cfg.Targets.Default == "" {
 		cfg.Targets.Default = "gkNextRenderer"
+	}
+	if cfg.External.VulkanSDK.Version == "" {
+		cfg.External.VulkanSDK.Version = "1.4.341.1"
+	}
+	if cfg.External.VulkanSDK.Root == "" {
+		cfg.External.VulkanSDK.Root = "external/VulkanSDK"
 	}
 	return cfg, nil
 }
