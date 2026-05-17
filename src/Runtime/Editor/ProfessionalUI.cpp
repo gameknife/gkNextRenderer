@@ -1,6 +1,7 @@
 #include "Common/CoreMinimal.hpp"
 
 #include "Runtime/Editor/ProfessionalUI.hpp"
+#include "Runtime/Engine.hpp"
 
 #include <algorithm>
 #include <imgui_internal.h>
@@ -11,10 +12,40 @@ namespace Runtime::UiTheme
 {
     namespace
     {
+        constexpr float kTitleBarControlButtonWidth = 46.0f;
+        constexpr float kTitleBarControlButtonCount = 3.0f;
+        constexpr float kTitleBarControlsWidth = kTitleBarControlButtonWidth * kTitleBarControlButtonCount;
+
         ImVec4 WithAlpha(ImVec4 color, float alpha)
         {
             color.w *= alpha;
             return color;
+        }
+
+        float CalcFontTextWidth(ImFont* font, const char* text)
+        {
+            if (text == nullptr || text[0] == '\0')
+            {
+                return 0.0f;
+            }
+
+            ImFont* activeFont = font != nullptr ? font : ImGui::GetFont();
+            return activeFont->CalcTextSizeA(activeFont->FontSize, FLT_MAX, 0.0f, text).x;
+        }
+
+        bool DrawWindowControlButton(const char* label, const char* tooltip, ImVec2 size, ImVec4 hoverColor,
+                                     ImVec4 activeColor)
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hoverColor);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, activeColor);
+            const bool pressed = ImGui::Button(label, size);
+            ImGui::PopStyleColor(3);
+            ImGui::PopStyleVar(2);
+            DrawTooltip(tooltip);
+            return pressed;
         }
     } // namespace
 
@@ -177,6 +208,136 @@ namespace Runtime::UiTheme
         drawList->AddLine(ImVec2(min.x + size * 0.52f, min.y + pad), ImVec2(min.x + size * 0.52f, min.y + size - pad), lineColor, stroke);
         drawList->AddLine(ImVec2(min.x + size * 0.52f, min.y + size - pad), ImVec2(min.x + size - pad, min.y + size - pad), lineColor, stroke);
         drawList->AddLine(ImVec2(min.x + size - pad, min.y + size - pad), ImVec2(min.x + size - pad, min.y + pad), lineColor, stroke);
+    }
+
+    void DrawAppTitleBar(NextEngine& engine, const FAppTitleBarConfig& config)
+    {
+        ImGuiViewport* viewport = ImGui::GetMainViewport();
+        if (viewport == nullptr)
+        {
+            return;
+        }
+
+        ImDrawList* background = ImGui::GetBackgroundDrawList();
+        const ImVec2 titleMin = viewport->Pos;
+        const ImVec2 titleMax = viewport->Pos + ImVec2(viewport->Size.x, config.Height);
+        background->AddRectFilled(titleMin, titleMax, ColorU32(EColor::Background), 0.0f);
+
+        ImFont* titleFont = config.TitleFont != nullptr ? config.TitleFont : ImGui::GetFont();
+        const float brandTextWidth = CalcFontTextWidth(titleFont, config.AppName);
+        const float brandWidth =
+            config.BrandHorizontalPadding * 2.0f + config.BrandIconSize + config.BrandTextSpacing + brandTextWidth;
+        const float rightWidth = config.RightContentWidth + kTitleBarControlsWidth;
+        const float menuWidth =
+            std::max(0.0f, viewport->Size.x - brandWidth - rightWidth - config.MenuTrailingPadding);
+        float menuRight = viewport->Pos.x + brandWidth;
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+
+        ImGui::SetNextWindowPos(viewport->Pos);
+        ImGui::SetNextWindowSize(ImVec2(brandWidth, config.Height));
+        ImGui::SetNextWindowViewport(viewport->ID);
+        ImGui::SetNextWindowBgAlpha(0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::Begin(config.BrandWindowId, nullptr,
+                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+                         ImGuiWindowFlags_NoDocking);
+        ImGui::SetCursorPos(
+            ImVec2(config.BrandHorizontalPadding, std::floor((config.Height - config.BrandIconSize) * 0.5f)));
+        DrawBrandMark(ImGui::GetWindowDrawList(), ImGui::GetCursorScreenPos(), config.BrandIconSize);
+        ImGui::Dummy(ImVec2(config.BrandIconSize, config.BrandIconSize));
+        ImGui::SameLine(0.0f, config.BrandTextSpacing);
+        if (titleFont != nullptr)
+        {
+            ImGui::PushFont(titleFont);
+        }
+        ImGui::SetCursorPosY(std::floor((config.Height - ImGui::GetTextLineHeight()) * 0.5f) - 1.0f);
+        ImGui::TextUnformatted(config.AppName);
+        if (titleFont != nullptr)
+        {
+            ImGui::PopFont();
+        }
+        ImGui::End();
+        ImGui::PopStyleVar();
+
+        ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + brandWidth, viewport->Pos.y));
+        ImGui::SetNextWindowSize(ImVec2(menuWidth, config.Height));
+        ImGui::SetNextWindowViewport(viewport->ID);
+        ImGui::SetNextWindowBgAlpha(0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::Begin(config.MenuWindowId, nullptr,
+                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                         ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+                         ImGuiWindowFlags_NoDocking);
+        ImGui::PopStyleVar();
+
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12.0f, 11.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(16.0f, 0.0f));
+        if (ImGui::BeginMenuBar())
+        {
+            if (config.DrawMenuBar)
+            {
+                const float menuBarRightEdge = config.DrawMenuBar();
+                menuRight = std::max(menuRight, menuBarRightEdge);
+            }
+            ImGui::EndMenuBar();
+        }
+        ImGui::PopStyleVar(2);
+        ImGui::End();
+
+        ImGui::SetNextWindowPos(viewport->Pos + ImVec2(viewport->Size.x - rightWidth, 0.0f));
+        ImGui::SetNextWindowSize(ImVec2(rightWidth, config.Height));
+        ImGui::SetNextWindowViewport(viewport->ID);
+        ImGui::SetNextWindowBgAlpha(0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::Begin(config.RightWindowId, nullptr,
+                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+                         ImGuiWindowFlags_NoDocking);
+        if (config.DrawRightContent)
+        {
+            config.DrawRightContent();
+        }
+        ImGui::SetCursorPos(ImVec2(config.RightContentWidth, 0.0f));
+
+        if (DrawWindowControlButton(ICON_FA_WINDOW_MINIMIZE, "Minimize",
+                                    ImVec2(kTitleBarControlButtonWidth, config.Height), Color(EColor::SurfaceHover),
+                                    Color(EColor::SurfaceHover, 0.92f)))
+        {
+            if (config.OnMinimize)
+            {
+                config.OnMinimize();
+            }
+        }
+        ImGui::SameLine(0.0f, 0.0f);
+        if (DrawWindowControlButton(config.IsMaximized ? ICON_FA_WINDOW_RESTORE : ICON_FA_WINDOW_MAXIMIZE, "Maximize",
+                                    ImVec2(kTitleBarControlButtonWidth, config.Height), Color(EColor::SurfaceHover),
+                                    Color(EColor::SurfaceHover, 0.92f)))
+        {
+            if (config.OnToggleMaximize)
+            {
+                config.OnToggleMaximize();
+            }
+        }
+        ImGui::SameLine(0.0f, 0.0f);
+        if (DrawWindowControlButton(ICON_FA_XMARK, "Close", ImVec2(kTitleBarControlButtonWidth, config.Height),
+                                    Color(EColor::Danger, 0.90f), Color(EColor::Danger)))
+        {
+            if (config.OnClose)
+            {
+                config.OnClose();
+            }
+        }
+        ImGui::End();
+        ImGui::PopStyleVar();
+
+        ImGui::PopStyleVar(2);
+
+        const float dragLeftReserved =
+            std::max(brandWidth + 12.0f, menuRight - viewport->Pos.x + config.MenuHitPadding);
+        engine.ConfigureCustomTitleBarDrag(true, config.Height, dragLeftReserved, rightWidth);
     }
 
     void DrawTooltip(const char* text)

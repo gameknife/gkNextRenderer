@@ -19,54 +19,24 @@ namespace Editor
 {
     namespace
     {
-        constexpr float kMenuHitPadding = 32.0f;
+        constexpr const char* kWindowTitle = "gkNextEditor";
     } // namespace
 
     void DrawTitleBarOverlay(EditorContext& ctx, EditorUiState& ui)
     {
         ImGuiViewport* viewport = ImGui::GetMainViewport();
-        ImDrawList* background = ImGui::GetBackgroundDrawList();
-        const ImVec2 titleMin = viewport->Pos;
-        const ImVec2 titleMax = viewport->Pos + ImVec2(viewport->Size.x, kTitleBarHeight);
-        background->AddRectFilled(titleMin, titleMax, Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Background), 0.0f);
-        background->AddLine(ImVec2(titleMin.x, titleMax.y - 1.0f), ImVec2(titleMax.x, titleMax.y - 1.0f),
-                            Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Border));
 
-        float menuRight = viewport->Pos.x + 210.0f;
-
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-
-        ImGui::SetNextWindowPos(viewport->Pos);
-        ImGui::SetNextWindowSize(ImVec2(210.0f, kTitleBarHeight));
-        ImGui::SetNextWindowViewport(viewport->ID);
-        ImGui::SetNextWindowBgAlpha(0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(9.0f, 6.0f));
-        ImGui::Begin("EditorBrand", nullptr,
-                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
-                         ImGuiWindowFlags_NoDocking);
-        Runtime::UiTheme::DrawBrandMark(ImGui::GetWindowDrawList(), ImGui::GetCursorScreenPos(), 24.0f);
-        ImGui::Dummy(ImVec2(30.0f, 24.0f));
-        ImGui::SameLine(0.0f, 8.0f);
-        ImGui::SetCursorPosY(8.0f);
-        ImGui::TextUnformatted("gkNextEditor");
-        ImGui::End();
-        ImGui::PopStyleVar();
-
-        ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + 210.0f, viewport->Pos.y));
-        ImGui::SetNextWindowSize(ImVec2(viewport->Size.x - 360.0f, kTitleBarHeight));
-        ImGui::SetNextWindowViewport(viewport->ID);
-        ImGui::SetNextWindowBgAlpha(0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::Begin("Menubar", nullptr,
-                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                         ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
-                         ImGuiWindowFlags_NoDocking);
-        ImGui::PopStyleVar();
-
-        if (ImGui::BeginMenuBar())
+        Runtime::UiTheme::FAppTitleBarConfig config{};
+        config.BrandWindowId = "EditorBrand";
+        config.MenuWindowId = "EditorMenuBar";
+        config.RightWindowId = "EditorWindowControls";
+        config.AppName = kWindowTitle;
+        config.Height = kTitleBarHeight;
+        config.TitleFont = ui.fontIcon;
+        config.IsMaximized = ctx.engine.IsMaximumed();
+        config.DrawMenuBar = [&]() -> float
         {
+            float menuRight = ImGui::GetCursorScreenPos().x;
             bool fileMenuOpen = ImGui::BeginMenu("File");
             menuRight = std::max(menuRight, ImGui::GetItemRectMax().x);
             if (fileMenuOpen)
@@ -323,49 +293,21 @@ namespace Editor
                 ImGui::EndMenu();
             }
 
-            ImGui::EndMenuBar();
-        }
-        ImGui::End();
-
-        const float dragLeftReserved = std::max(230.0f, menuRight - viewport->Pos.x + kMenuHitPadding);
-        ctx.engine.ConfigureCustomTitleBarDrag(true, kTitleBarHeight, dragLeftReserved, 150.0f);
-
-        ImGui::SetNextWindowPos(viewport->Pos + ImVec2(viewport->Size.x - 150.0f, 0.0f));
-        ImGui::SetNextWindowSize(ImVec2(150.0f, kTitleBarHeight));
-        ImGui::SetNextWindowViewport(viewport->ID);
-        ImGui::SetNextWindowBgAlpha(0.0f);
-
-        ImGui::Begin("WindowControls", nullptr,
-                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
-                         ImGuiWindowFlags_NoDocking);
-        ImGui::SetCursorPos(ImVec2(14.0f, 4.0f));
-        if (ui.fontIcon)
-        {
-            ImGui::PushFont(ui.fontIcon);
-        }
-        if (Runtime::UiTheme::ToolbarButton(ICON_FA_WINDOW_MINIMIZE, "Minimize", false, ImVec2(38.0f, 28.0f)))
+            return menuRight;
+        };
+        config.OnMinimize = [&]()
         {
             ctx.actions.Dispatch(ctx, EEditorAction::System_RequestMinimize);
-        }
-        ImGui::SameLine(0.0f, 4.0f);
-        if (Runtime::UiTheme::ToolbarButton(ctx.engine.IsMaximumed() ? ICON_FA_WINDOW_RESTORE : ICON_FA_WINDOW_MAXIMIZE,
-                                            "Maximize", false, ImVec2(38.0f, 28.0f)))
+        };
+        config.OnToggleMaximize = [&]()
         {
             ctx.actions.Dispatch(ctx, EEditorAction::System_ToggleMaximize);
-        }
-        ImGui::SameLine(0.0f, 4.0f);
-        if (Runtime::UiTheme::ToolbarButton(ICON_FA_XMARK, "Close", false, ImVec2(38.0f, 28.0f)))
+        };
+        config.OnClose = [&]()
         {
             ctx.actions.Dispatch(ctx, EEditorAction::System_RequestExit);
-        }
-        if (ui.fontIcon)
-        {
-            ImGui::PopFont();
-        }
-        ImGui::End();
-
-        ImGui::PopStyleVar(2);
+        };
+        Runtime::UiTheme::DrawAppTitleBar(ctx.engine, config);
 
         ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + viewport->Size.y - kFooterHeight));
         ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, kFooterHeight));

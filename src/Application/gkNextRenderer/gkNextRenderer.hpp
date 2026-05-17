@@ -65,6 +65,7 @@ private:
     uint32_t boxModelId_;
     std::vector<uint32_t> matIds_;
     struct ImFont* bigFont_ {};
+    struct ImFont* titleBarFont_ {};
 
     bool isTakingScreenshot_ = false;
     bool agentValidationCaptured_ = false;

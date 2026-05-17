@@ -98,8 +98,8 @@ bool DrawSettingSliderRow(const char* label, ImGuiDataType dataType, T* value,
 } // namespace
 
 // should use 1em instead of 1px
-constexpr float constTitlebarSize = 40;
-constexpr float constTitlebarControlSize = constTitlebarSize * 3;
+constexpr float constTitlebarSize = 44;
+constexpr float constTitlebarRightInfoWidth = 296;
 constexpr float constIconSize = 64;
 constexpr float constPaletteSize = 46;
 constexpr float constButtonSize = 36;
@@ -110,7 +110,7 @@ constexpr float constModeRailWidth = 56;
 constexpr float constModeRailButtonSize = 40;
 
 float TitlebarSize = constTitlebarSize;
-float TitlebarControlSize = constTitlebarControlSize;
+float TitlebarRightInfoWidth = constTitlebarRightInfoWidth;
 float IconSize = constIconSize;
 float PaletteSize = constPaletteSize;
 float ButtonSize = constButtonSize;
@@ -140,7 +140,7 @@ static void UpdateUiScaledMetrics()
     }
 
     TitlebarSize = constTitlebarSize * scale;
-    TitlebarControlSize = constTitlebarControlSize * scale;
+    TitlebarRightInfoWidth = constTitlebarRightInfoWidth * scale;
     IconSize = constIconSize * scale;
     PaletteSize = constPaletteSize * scale;
     ButtonSize = constButtonSize * scale;
@@ -302,6 +302,16 @@ void NextRendererGameInstance::OnInitUI()
 			.extraGlyphsUtf8 = "gkNextRenderer",
 		});
 	}
+
+    if (titleBarFont_ == nullptr)
+    {
+        titleBarFont_ = FontLoader::Load(FontLoader::FFontRequest{
+            .filePath = "assets/fonts/Roboto-BoldCondensed.ttf",
+            .pixelSize = 18.0f,
+            .includeChineseFull = true,
+            .extraGlyphsUtf8 = "gkNextRenderer",
+        });
+    }
 }
 
 void NextRendererGameInstance::RequestScreenshot(bool openFolder, const std::string& tag)
@@ -1024,81 +1034,27 @@ void NextRendererGameInstance::DrawViewportBottomBar()
 
 void NextRendererGameInstance::DrawTitleBar()
 {
-    ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImVec2 windowSize = viewport->Size;
-    float titlebarLeftReservedWidth = 420.0f;
-    constexpr float rightReservedWidth = 560.0f;
-    float titlebarRightReservedWidth = rightReservedWidth;
-
-    ImDrawList* background = ImGui::GetBackgroundDrawList();
-    background->AddRectFilled(viewport->Pos, viewport->Pos + ImVec2(windowSize.x, TitlebarSize),
-                              Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Background));
-    background->AddLine(viewport->Pos + ImVec2(0.0f, TitlebarSize - 1.0f),
-                        viewport->Pos + ImVec2(windowSize.x, TitlebarSize - 1.0f),
-                        Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Border));
-
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 0.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 4.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 0.0f));
-
-    ImGui::SetNextWindowPos(viewport->Pos + ImVec2(windowSize.x - rightReservedWidth, 0), ImGuiCond_Always,
-                            ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImVec2(rightReservedWidth, TitlebarSize));
-
-    ImGui::Begin("TitleBarRight", nullptr,
-                 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                     ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground);
-    titlebarRightReservedWidth = ImGui::GetWindowSize().x;
-
-    const auto framebufferSize = GetEngine().GetWindow().FramebufferSize();
-    ImGui::SetCursorPosY((TitlebarSize - ImGui::GetTextLineHeight()) * 0.5f);
-    ImGui::TextColored(Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted), "%ux%u",
-                       framebufferSize.width, framebufferSize.height);
-    ImGui::SameLine(0.0f, 16.0f);
-    ImGui::TextColored(Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted), "Camera %d",
-                       GetEngine().GetUserSettings().CameraIdx);
-    ImGui::SameLine(0.0f, 16.0f);
-    ImGui::TextColored(Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Success), "%.0f FPS",
-                       GetEngine().GetFrameRate());
-    ImGui::SameLine(0.0f, 16.0f);
-    ImGui::TextColored(Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted), "%.2f ms",
-                       GetEngine().GetSmoothDeltaSeconds() * 1000.0);
-    ImGui::SameLine(0.0f, 16.0f);
-
-    if (Runtime::UiTheme::ToolbarButton(ICON_FA_MINUS, LOCTEXT("Minimize"), false, ImVec2(34.0f, 28.0f)))
+    Runtime::UiTheme::FAppTitleBarConfig config{};
+    config.BrandWindowId = "RendererBrand";
+    config.MenuWindowId = "RendererMenuBar";
+    config.RightWindowId = "RendererWindowControls";
+    config.AppName = "gkNextRenderer";
+    config.Height = TitlebarSize;
+    config.RightContentWidth = TitlebarRightInfoWidth;
+    config.TitleFont = titleBarFont_;
+    config.IsMaximized = GetEngine().IsMaximumed();
+    config.DrawMenuBar = [&]() -> float
     {
-        GetEngine().RequestMinimize();
-    }
-    ImGui::SameLine();
-    if (Runtime::UiTheme::ToolbarButton(GetEngine().IsMaximumed() ? ICON_FA_WINDOW_RESTORE : ICON_FA_SQUARE,
-                                        LOCTEXT("Maximize"), false, ImVec2(34.0f, 28.0f)))
-    {
-        GetEngine().ToggleMaximize();
-    }
-    ImGui::SameLine();
-    if (Runtime::UiTheme::ToolbarButton(ICON_FA_XMARK, LOCTEXT("Close"), false, ImVec2(34.0f, 28.0f)))
-    {
-        GetEngine().RequestClose();
-    }
-    ImGui::End();
+        float menuRight = ImGui::GetCursorScreenPos().x;
 
-    ImGui::SetNextWindowPos(viewport->Pos, ImGuiCond_Always, ImVec2(0, 0));
-    ImGui::SetNextWindowSize(ImVec2(windowSize.x - rightReservedWidth, TitlebarSize));
-
-    ImGui::Begin("TitleBarLeft", nullptr,
-                 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                     ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_MenuBar);
-    if (ImGui::BeginMenuBar())
-    {
-        Runtime::UiTheme::DrawBrandMark(ImGui::GetWindowDrawList(), ImGui::GetCursorScreenPos(), 24.0f);
-        ImGui::Dummy(ImVec2(28.0f, 24.0f));
-        ImGui::SameLine(0.0f, 8.0f);
-        ImGui::TextUnformatted("gkNextRenderer");
-        ImGui::SameLine(0.0f, 20.0f);
+        const auto UpdateMenuRight = [&menuRight]()
+        {
+            menuRight = std::max(menuRight, ImGui::GetItemRectMax().x);
+        };
 
         if (ImGui::BeginMenu("File"))
         {
+            UpdateMenuRight();
             if (ImGui::MenuItem("Project Page"))
             {
                 NextRenderer::OSCommand("https://github.com/gameknife/gkNextRenderer");
@@ -1109,15 +1065,27 @@ void NextRendererGameInstance::DrawTitleBar()
             }
             ImGui::EndMenu();
         }
+        else
+        {
+            UpdateMenuRight();
+        }
+
         if (ImGui::BeginMenu("View"))
         {
+            UpdateMenuRight();
             auto& showFlags = GetEngine().GetShowFlags();
             Utilities::UI::DrawShowFlagsCommon(showFlags);
             ImGui::MenuItem("Profiler Overlay", nullptr, &GetEngine().GetUserSettings().ShowOverlay);
             ImGui::EndMenu();
         }
+        else
+        {
+            UpdateMenuRight();
+        }
+
         if (ImGui::BeginMenu("Capture"))
         {
+            UpdateMenuRight();
             if (ImGui::MenuItem("Screenshot"))
             {
                 RequestScreenshot(false, "");
@@ -1128,33 +1096,69 @@ void NextRendererGameInstance::DrawTitleBar()
             }
             ImGui::EndMenu();
         }
+        else
+        {
+            UpdateMenuRight();
+        }
+
         if (ImGui::BeginMenu("Renderer"))
         {
+            UpdateMenuRight();
             Runtime::GraphicsDebugPanel::DrawRendererSelector(GetEngine(), GetEngine().GetUserSettings(),
                                                               "##RendererMenuSelector", 180.0f);
             ImGui::EndMenu();
         }
+        else
+        {
+            UpdateMenuRight();
+        }
+
         if (ImGui::BeginMenu("Settings"))
         {
+            UpdateMenuRight();
             ImGui::MenuItem("Render Settings", nullptr, &GetEngine().GetUserSettings().ShowSettings);
             ImGui::MenuItem("Stats Overlay", nullptr, &GetEngine().GetUserSettings().ShowOverlay);
             ImGui::EndMenu();
         }
+        else
+        {
+            UpdateMenuRight();
+        }
+
         if (ImGui::BeginMenu("Help"))
         {
+            UpdateMenuRight();
             ImGui::MenuItem("Documentation", nullptr, false, false);
             ImGui::MenuItem("About gkNextRenderer", nullptr, false, false);
             ImGui::EndMenu();
         }
+        else
+        {
+            UpdateMenuRight();
+        }
 
-        titlebarLeftReservedWidth = ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x;
-        ImGui::EndMenuBar();
-    }
-    ImGui::End();
-
-    ImGui::PopStyleVar(4);
-    GetEngine().ConfigureCustomTitleBarDrag(
-        true, TitlebarSize, titlebarLeftReservedWidth, titlebarRightReservedWidth);
+        return menuRight;
+    };
+    config.DrawRightContent = [&]()
+    {
+        const auto framebufferSize = GetEngine().GetWindow().FramebufferSize();
+        ImGui::SetCursorPos(ImVec2(0.0f, std::floor((TitlebarSize - ImGui::GetTextLineHeight()) * 0.5f) - 1.0f));
+        ImGui::TextColored(Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted), "%ux%u",
+                           framebufferSize.width, framebufferSize.height);
+        ImGui::SameLine(0.0f, 16.0f);
+        ImGui::TextColored(Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted), "Camera %d",
+                           GetEngine().GetUserSettings().CameraIdx);
+        ImGui::SameLine(0.0f, 16.0f);
+        ImGui::TextColored(Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Success), "%.0f FPS",
+                           GetEngine().GetFrameRate());
+        ImGui::SameLine(0.0f, 16.0f);
+        ImGui::TextColored(Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted), "%.2f ms",
+                           GetEngine().GetSmoothDeltaSeconds() * 1000.0);
+    };
+    config.OnMinimize = [&]() { GetEngine().RequestMinimize(); };
+    config.OnToggleMaximize = [&]() { GetEngine().ToggleMaximize(); };
+    config.OnClose = [&]() { GetEngine().RequestClose(); };
+    Runtime::UiTheme::DrawAppTitleBar(GetEngine(), config);
 }
 
 void NextRendererGameInstance::DrawBottomStatusBar()

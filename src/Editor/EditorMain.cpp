@@ -32,7 +32,7 @@ EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Options& op
     glm::ivec2 monitorSize = GetEngine().GetMonitorSize();
 
     // windows config
-    config.Title = "NextEditor";
+    config.Title = "gkNextEditor";
     config.Width = static_cast<uint32_t>(monitorSize.x * 0.75f);
     config.Height = static_cast<uint32_t>(monitorSize.y * 0.75f);
     config.ForceSDR = true;

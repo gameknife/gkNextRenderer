@@ -2,7 +2,10 @@
 
 #include "Common/CoreMinimal.hpp"
 
+#include <functional>
 #include <imgui.h>
+
+class NextEngine;
 
 namespace Runtime::UiTheme
 {
@@ -29,8 +32,31 @@ namespace Runtime::UiTheme
     ImVec4 Color(EColor color, float alpha = 1.0f);
     ImU32 ColorU32(EColor color, float alpha = 1.0f);
 
+    struct FAppTitleBarConfig
+    {
+        const char* BrandWindowId = "AppTitleBarBrand";
+        const char* MenuWindowId = "AppTitleBarMenu";
+        const char* RightWindowId = "AppTitleBarRight";
+        const char* AppName = "";
+        float Height = 44.0f;
+        float RightContentWidth = 0.0f;
+        float BrandHorizontalPadding = 14.0f;
+        float BrandIconSize = 22.0f;
+        float BrandTextSpacing = 10.0f;
+        float MenuHitPadding = 28.0f;
+        float MenuTrailingPadding = 8.0f;
+        ImFont* TitleFont = nullptr;
+        bool IsMaximized = false;
+        std::function<float()> DrawMenuBar;
+        std::function<void()> DrawRightContent;
+        std::function<void()> OnMinimize;
+        std::function<void()> OnToggleMaximize;
+        std::function<void()> OnClose;
+    };
+
     void ApplyProfessionalTheme();
     void DrawBrandMark(ImDrawList* drawList, ImVec2 min, float size);
+    void DrawAppTitleBar(NextEngine& engine, const FAppTitleBarConfig& config);
     void DrawTooltip(const char* text);
     bool IconButton(const char* label, const char* tooltip, bool active = false, ImVec2 size = ImVec2(30.0f, 30.0f));
     bool ToolbarButton(const char* label, const char* tooltip, bool active = false, ImVec2 size = ImVec2(34.0f, 30.0f));
