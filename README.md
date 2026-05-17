@@ -146,7 +146,7 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 - CMake 3.26+
 - Visual Studio 2022（C++ 工作负载）
-- Vulkan SDK 1.4.313.2
+- Vulkan SDK 1.4.341.1（默认由 `gnb` 自动下载到仓库内；若设置 `VULKAN_SDK` 则优先使用环境里的 SDK）
 - 启用“使用 Unicode UTF-8 提供全球语言支持”
 
 ```bat
@@ -155,7 +155,7 @@ gnb.bat build
 gnb.bat run gkNextRenderer
 ```
 
-除 Visual Studio / Vulkan SDK 这类宿主工具外，其余项目依赖通常都由 `gnb` 自动准备。
+除 Visual Studio 这类宿主工具外，其余项目依赖通常都由 `gnb` 自动准备；默认会拉取项目约定版本的 Vulkan SDK、Slang 与 TypeScript 工具链到仓库内。
 
 </details>
 
@@ -185,6 +185,7 @@ gnb.bat run gkNextRenderer
 
 说明：
 
+- 如果机器上没有可用的 `VULKAN_SDK`，`gnb setup` 会自动下载项目约定版本的 LunarG Vulkan SDK 到 `external/VulkanSDK/`
 - 如果机器上还没有 `slangc`，`gnb setup` 会自动下载项目约定的 Slang 工具链到 `external/`
 - 在 pacman 环境下，`gnb setup` / Linux 首轮 `gnb build` 会在 vcpkg bootstrap 前自动安装系统包；如果自动安装不可用，可手动执行 `sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxrandr wayland-protocols libxkbcommon systemd-libs`
 - 如果 vcpkg 阶段遇到 GitHub 归档下载失败，优先直接重试同一条构建命令
@@ -207,7 +208,7 @@ gnb.bat run gkNextRenderer
 ./gnb.sh run gkNextRenderer
 ```
 
-`gnb setup` 会自动下载项目使用的 Slang 与 TypeScript 工具链，无需再单独准备这些项目级依赖。
+`gnb setup` 会自动下载项目使用的 Vulkan SDK、Slang 与 TypeScript 工具链，无需再单独准备这些项目级依赖。若显式设置 `VULKAN_SDK`，则优先使用该环境变量指向的 SDK。
 
 </details>
 
