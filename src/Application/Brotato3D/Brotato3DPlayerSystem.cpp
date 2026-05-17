@@ -421,7 +421,7 @@ void Brotato3DGameInstance::ResetRuntimeState()
         enemy.lanceDashDir = glm::vec3(0.0f);
         enemy.lanceDashStartPos = glm::vec3(0.0f);
         enemy.lanceDashRemainingDist = 0.0f;
-        NodeUtils::SetVisible(enemy.node, false);
+        SetEnemyVisualVisible(enemy, false);
         enemy.node->SetScale(glm::vec3(1.0f));
     }
     player_ = Brotato3D::FPlayerRuntime{};

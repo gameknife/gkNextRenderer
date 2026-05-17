@@ -32,8 +32,6 @@ Options::Options(const int argc, const char* argv[])
 		("keep-cpu-mesh-data", "Keep CPU mesh data for editor mode.", cxxopts::value<bool>(KeepCPUMeshData)->default_value("false"))
 		("update-baseline", "Update visual test baseline images from the current run.", cxxopts::value<bool>(UpdateVisualTestBaseline)->default_value("false")->implicit_value("true"))
 		("flappy-replay", "Run Flappy deterministic replay and write trace output.", cxxopts::value<bool>(FlappyReplay)->default_value("false")->implicit_value("true"))
-		("hot-reload", "Enable runtime hot reload features.", cxxopts::value<bool>(HotReload)->default_value("true")->implicit_value("true"))
-		("no-hot-reload", "Disable runtime hot reload features.", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
 		("shader-hotreload", "Enable Slang shader hot reload.", cxxopts::value<bool>(ShaderHotReload)->default_value("true")->implicit_value("true"))
 		("no-shader-hotreload", "Disable Slang shader hot reload.", cxxopts::value<bool>()->default_value("false")->implicit_value("true"))
 		("shader-hotreload-interval", "Slang shader hot reload poll interval in seconds.", cxxopts::value<float>(ShaderHotReloadInterval)->default_value("0.5"))
@@ -50,12 +48,6 @@ Options::Options(const int argc, const char* argv[])
 		{
 			std::cout << options.help() << std::endl;
 			exit(0);
-		}
-
-		if (result["no-hot-reload"].as<bool>())
-		{
-			HotReload = false;
-			ShaderHotReload = false;
 		}
 
 		if (result["no-shader-hotreload"].as<bool>())

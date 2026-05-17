@@ -1,30 +1,4 @@
-public struct UniformBufferObject
-{
-    public float4x4 ModelView;
-    public float4x4 Projection;
-    public float4x4 ModelViewInverse;
-    public float4x4 ProjectionInverse;
-    public float4x4 ViewProjection;
-    public float4x4 PrevViewProjection;
-    public float4x4 ViewProjectionUnJit;
-    public float4x4 PrevViewProjectionUnJit;
-}
-
-[[vk::binding(0, 0)]]
-ConstantBuffer<UniformBufferObject> Camera;
-
-struct PushConsts
-{
-    float4x4 worldMatrix;
-};
-
-[[vk::push_constant]]
-ConstantBuffer<PushConsts> pushConsts;
-
-struct VertexInput
-{
-    [[vk::location(0)]] half3 InPosition : POSITION;
-};
+import Common;
 
 struct VertexOutput
 {
@@ -32,10 +6,21 @@ struct VertexOutput
 };
 
 [shader("vertex")]
-VertexOutput main(VertexInput input)
+VertexOutput main(uint vertexIndex: SV_VertexID, uint instanceIndex: SV_InstanceID, uint instanceBase: SV_StartInstanceLocation)
 {
     VertexOutput output;
-    output.position = mul(mul(Camera.ViewProjection, pushConsts.worldMatrix), float4(input.InPosition, 1.0));
+    uint absoluteInstanceIdx = instanceIndex + instanceBase;
+    NodeProxy proxy = Bindless.GetGpuscene().Nodes[absoluteInstanceIdx];
+
+    GPUVertex* currentVertices = Bindless.GetGpuscene().Vertices;
+    if (proxy.skinId != 0xFFFFFFFF)
+    {
+        currentVertices = Bindless.GetGpuscene().SkinnedVertices;
+    }
+
+    GPUVertex packedVertex = currentVertices[Bindless.GetGpuscene().Reorders[vertexIndex]];
+    output.position =
+        mul(mul(Bindless.GetGpuscene().Camera[0].ViewProjection, proxy.worldTS), float4(packedVertex.Position_Tx.xyz, 1.0));
     output.position.z -= 0.000001f * output.position.w;
     return output;
 }

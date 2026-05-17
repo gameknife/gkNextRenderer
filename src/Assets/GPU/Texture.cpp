@@ -54,6 +54,17 @@ namespace
 
         return hash;
     }
+
+    bool ShouldEnableTextureWorkerUpload(const Vulkan::Device& device)
+    {
+        if (device.TransferFamilyIndex() == static_cast<int32_t>(device.GraphicsFamilyIndex()))
+        {
+            return false;
+        }
+
+        const bool validationEnabled = GOption && GOption->Validation;
+        return !validationEnabled;
+    }
 }
 
 namespace Assets
@@ -298,13 +309,15 @@ namespace Assets
         Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(filename, data);
         std::filesystem::path path(filename);
         std::string mime = std::string("image/") + path.extension().string().substr(1);
-        return GetInstance()->RequestNewTextureMemAsync(filename, mime, false, data.data(), data.size(),srgb);
+        return GetInstance()->RequestNewTextureMemAsync(
+            filename, mime, false, data.data(), data.size(), srgb, ETextureLifetime::ETL_Transient);
     }
 
     uint32_t GlobalTexturePool::LoadTexture(const std::string& texname, const std::string& mime,
                                             const unsigned char* data, size_t bytelength, bool srgb)
     {
-        return GetInstance()->RequestNewTextureMemAsync(texname, mime, false, data, bytelength, srgb);
+        return GetInstance()->RequestNewTextureMemAsync(
+            texname, mime, false, data, bytelength, srgb, ETextureLifetime::ETL_Transient);
     }
 
     uint32_t GlobalTexturePool::LoadHDRTexture(const std::string& filename)
@@ -318,7 +331,8 @@ namespace Assets
         if (!hasMountedEntry && !hasOsFile)
         {
             SPDLOG_WARN("HDR texture '{}' is unavailable; using a placeholder environment.", filename);
-            return GetInstance()->RequestNewTextureMemAsync(filename, "image/hdr", true, nullptr, 0, false);
+            return GetInstance()->RequestNewTextureMemAsync(
+                filename, "image/hdr", true, nullptr, 0, false, ETextureLifetime::ETL_Persistent);
         }
 
         std::vector<uint8_t> data;
@@ -326,10 +340,12 @@ namespace Assets
         if (!loaded || data.empty())
         {
             SPDLOG_WARN("HDR texture '{}' is unavailable; using a placeholder environment.", filename);
-            return GetInstance()->RequestNewTextureMemAsync(filename, "image/hdr", true, nullptr, 0, false);
+            return GetInstance()->RequestNewTextureMemAsync(
+                filename, "image/hdr", true, nullptr, 0, false, ETextureLifetime::ETL_Persistent);
         }
 
-        return GetInstance()->RequestNewTextureMemAsync(filename, "image/hdr", true, data.data(), data.size(),false);
+        return GetInstance()->RequestNewTextureMemAsync(
+            filename, "image/hdr", true, data.data(), data.size(), false, ETextureLifetime::ETL_Persistent);
     }
 
     TextureImage* GlobalTexturePool::GetTextureImage(uint32_t idx)
@@ -365,11 +381,11 @@ namespace Assets
         device_(device),
         commandPool_(commandPool),
         mainThreadCommandPool_(commandPoolMt),
-        textureWorkerUploadEnabled_(device.TransferFamilyIndex() != static_cast<int32_t>(device.GraphicsFamilyIndex()))
+        textureWorkerUploadEnabled_(ShouldEnableTextureWorkerUpload(device))
     {
         if (!textureWorkerUploadEnabled_)
         {
-            SPDLOG_INFO("Texture uploads will run on the main thread because no dedicated transfer queue is available");
+            SPDLOG_INFO("Texture uploads will run on the main thread because no dedicated transfer queue is available or validation mode is active");
         }
 
         static const uint32_t kMaxBindlessResources = 65535u;// moltenVK returns a invalid value. std::min(65535u, device.DeviceProperties().limits.maxPerStageDescriptorSamplers);
@@ -398,9 +414,14 @@ namespace Assets
     void GlobalTexturePool::BindTexture(uint32_t textureIdx, const TextureImage& textureImage)
     {
         auto& descriptorSets = descriptorSetManager_->DescriptorSets();
+        const VkDescriptorImageInfo imageInfo{
+            textureImage.Sampler().Handle(),
+            textureImage.ImageView().Handle(),
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        };
         std::vector<VkWriteDescriptorSet> descriptorWrites =
         {
-            descriptorSets.Bind(0, 0, { textureImage.Sampler().Handle(), textureImage.ImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL}, textureIdx, 1),
+            descriptorSets.Bind(0, 0, imageInfo, textureIdx, 1),
         };
         descriptorSets.UpdateDescriptors(0, descriptorWrites);
     }
@@ -408,11 +429,48 @@ namespace Assets
     void GlobalTexturePool::BindStorageTexture(uint32_t textureIdx, const Vulkan::ImageView& textureImage)
     {
         auto& descriptorSets = descriptorSetManager_->DescriptorSets();
+        const VkDescriptorImageInfo imageInfo{
+            VK_NULL_HANDLE,
+            textureImage.Handle(),
+            VK_IMAGE_LAYOUT_GENERAL,
+        };
         std::vector<VkWriteDescriptorSet> descriptorWrites =
         {
-            descriptorSets.Bind(0, 1, {NULL, textureImage.Handle(), VK_IMAGE_LAYOUT_GENERAL}, textureIdx, 1),
+            descriptorSets.Bind(0, 1, imageInfo, textureIdx, 1),
         };
         descriptorSets.UpdateDescriptors(0, descriptorWrites);
+    }
+
+    uint32_t GlobalTexturePool::RegisterTexture(const std::string& textureName, std::unique_ptr<TextureImage> textureImage,
+                                                ETextureLifetime lifetime)
+    {
+        if (!textureImage)
+        {
+            return static_cast<uint32_t>(-1);
+        }
+
+        uint32_t textureIdx = 0;
+        auto textureIt = textureNameMap_.find(textureName);
+        if (textureIt != textureNameMap_.end())
+        {
+            textureIdx = textureIt->second.GlobalIdx_;
+            textureIt->second.Status_ = ETextureStatus::ETS_Loaded;
+            textureIt->second.Lifetime_ = lifetime;
+            if (textureImages_.size() <= textureIdx)
+            {
+                textureImages_.resize(static_cast<size_t>(textureIdx) + 1);
+            }
+            textureImages_[textureIdx] = std::move(textureImage);
+        }
+        else
+        {
+            textureIdx = static_cast<uint32_t>(textureImages_.size());
+            textureNameMap_[textureName] = {textureIdx, ETextureStatus::ETS_Loaded, lifetime};
+            textureImages_.push_back(std::move(textureImage));
+        }
+
+        BindTexture(textureIdx, *textureImages_[textureIdx]);
+        return textureIdx;
     }
 
     uint32_t GlobalTexturePool::TryGetTexureIndex(const std::string& textureName) const
@@ -425,7 +483,8 @@ namespace Assets
     }
 
     uint32_t GlobalTexturePool::RequestNewTextureMemAsync(const std::string& texname, const std::string& mime, bool hdr,
-                                                          const unsigned char* data, size_t bytelength, bool srgb)
+                                                          const unsigned char* data, size_t bytelength, bool srgb,
+                                                          ETextureLifetime lifetime)
     {
         uint32_t newTextureIdx = 0;
         if (textureNameMap_.find(texname) != textureNameMap_.end())
@@ -434,10 +493,12 @@ namespace Assets
             if(textureNameMap_[texname].Status_ == ETextureStatus::ETS_Unloaded)
             {
                 textureNameMap_[texname].Status_ = ETextureStatus::ETS_Loaded;
+                textureNameMap_[texname].Lifetime_ = lifetime;
                 newTextureIdx = textureNameMap_[texname].GlobalIdx_;
             }
             else
             {
+                textureNameMap_[texname].Lifetime_ = lifetime;
                 // 这里要判断一下，如果已经加载了，直接返回
                 return textureNameMap_[texname].GlobalIdx_;
             }
@@ -446,7 +507,7 @@ namespace Assets
         {
             textureImages_.emplace_back(nullptr);
             newTextureIdx = static_cast<uint32_t>(textureImages_.size()) - 1;
-            textureNameMap_[texname] = { newTextureIdx, ETextureStatus::ETS_Loaded };
+            textureNameMap_[texname] = { newTextureIdx, ETextureStatus::ETS_Loaded, lifetime };
         }
 
         // load parse bind texture into newTextureIdx with transfer queue
@@ -922,27 +983,31 @@ namespace Assets
         return newTextureIdx;
     }
 
-    void GlobalTexturePool::FreeNonSystemTextures()
+    void GlobalTexturePool::FreeTransientTextures()
     {
         // make sure the binded image not in use
         device_.WaitIdle();
         
-        for( int i = 0; i < textureImages_.size(); ++i)
+        for (auto& textureGroup : textureNameMap_)
         {
-            if( i > 10 )
+            if (textureGroup.second.Lifetime_ == ETextureLifetime::ETL_Persistent)
             {
-                // free up TextureImage;, rebind with a default texture sampler
-                textureImages_[i].reset();
-                BindTexture(i, *defaultWhiteTexture_);
+                continue;
             }
-        }
 
-        for( auto& textureGroup : textureNameMap_ )
-        {
-            if( textureGroup.second.GlobalIdx_ > 10 )
+            const uint32_t textureIdx = textureGroup.second.GlobalIdx_;
+            if (textureIdx >= textureImages_.size())
             {
-                textureGroup.second.Status_ = ETextureStatus::ETS_Unloaded;
+                continue;
             }
+
+            if (textureImages_[textureIdx])
+            {
+                textureImages_[textureIdx].reset();
+                BindTexture(textureIdx, *defaultWhiteTexture_);
+            }
+
+            textureGroup.second.Status_ = ETextureStatus::ETS_Unloaded;
         }
     }
 

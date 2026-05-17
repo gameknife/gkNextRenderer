@@ -34,6 +34,18 @@ namespace Runtime
         void SetRayCastVisible(bool visible) { rayCastVisible_ = visible; }
         bool GetRayCastVisible() const { return rayCastVisible_; }
 
+        void SetCastShadows(bool castShadows) { castShadows_ = castShadows; }
+        bool GetCastShadows() const { return castShadows_; }
+
+        void SetReceiveGI(bool receiveGI) { receiveGI_ = receiveGI; }
+        bool GetReceiveGI() const { return receiveGI_; }
+
+        void SetLightmapUV(bool lightmapUV) { lightmapUV_ = lightmapUV; }
+        bool GetLightmapUV() const { return lightmapUV_; }
+
+        void SetLayerMask(uint32_t layerMask) { layerMask_ = layerMask; }
+        uint32_t GetLayerMask() const { return layerMask_; }
+
         void SetOutlineFlags(uint32_t outlineFlags) { outlineFlags_ = outlineFlags; }
         uint32_t GetOutlineFlags() const { return outlineFlags_; }
         void ClearOutlineFlags() { outlineFlags_ = RenderOutlineFlags::none; }
@@ -60,6 +72,10 @@ namespace Runtime
         std::array<uint32_t, 16> materialIdx_ = {0}; // Initialize with defaults
         bool visible_ = true;
         bool rayCastVisible_ = true;
+        bool castShadows_ = true;
+        bool receiveGI_ = true;
+        bool lightmapUV_ = false;
+        uint32_t layerMask_ = 0xFFFFFFFFu;
         int32_t skinIndex_ = -1;
         uint32_t outlineFlags_ = RenderOutlineFlags::none;
     };

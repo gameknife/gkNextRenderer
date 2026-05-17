@@ -434,9 +434,9 @@ PipelineLayout::~PipelineLayout()
 	}
 }
 
-void PipelineLayout::BindDescriptorSets(VkCommandBuffer commandBuffer, uint32_t idx) const
+void PipelineLayout::BindDescriptorSets(VkCommandBuffer commandBuffer, uint32_t idx, VkPipelineBindPoint bindPoint) const
 {
-	vkCmdBindDescriptorSets( commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,Handle(), 0,
+	vkCmdBindDescriptorSets( commandBuffer, bindPoint,Handle(), 0,
 						 static_cast<uint32_t>(cachedDescriptorSets_[idx].size()), cachedDescriptorSets_[idx].data(), 0, nullptr );
 
 }

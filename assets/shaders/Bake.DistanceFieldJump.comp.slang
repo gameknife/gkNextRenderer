@@ -28,7 +28,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     uint passParity = Bindless.GetGpuscene().custom_data_1;
 
     uint4* SeedA = (uint4*)Bindless.GetGpuscene().CubesPong;
-    uint4* SeedB = (uint4*)Bindless.GetGpuscene().SkinnedVerticesSimple;
+    uint4* SeedB = Bindless.GetGpuscene().AmbientSdfScratch;
     uint4* SourceSeeds = (passParity & 1u) == 0u ? SeedA : SeedB;
     uint4* DestSeeds = (passParity & 1u) == 0u ? SeedB : SeedA;
 

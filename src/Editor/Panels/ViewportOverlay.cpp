@@ -6,6 +6,7 @@
 #include "Assets/Core/Scene.hpp"
 #include "Editor/EditorActionDispatcher.hpp"
 #include "Runtime/Components/RenderComponent.h"
+#include "Runtime/Editor/ProfessionalUI.hpp"
 #include "Runtime/Editor/GizmoController.hpp"
 #include "Runtime/Engine.hpp"
 #include "Runtime/Utilities/NextEngineHelper.h"
@@ -13,6 +14,7 @@
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Utilities/ImGui.hpp"
 #include "Utilities/Math.hpp"
+#include "Vulkan/SyncAndTiming.hpp"
 
 #include <string>
 
@@ -20,7 +22,7 @@ namespace Editor
 {
     namespace
     {
-        constexpr float kToolIconWidth = 32.0f;
+        constexpr float kToolIconWidth = 34.0f;
     }
 
     void DrawViewportOverlay(EditorContext& ctx, EditorUiState& ui)
@@ -135,53 +137,99 @@ namespace Editor
             ImGui::End();
         }
 
-        constexpr float padding = 5.0f;
-        constexpr float statPadX = 8.0f;
-        constexpr float statPadY = 6.0f;
-        const float statW = 240.0f;
-        const float statH = ImGui::GetFrameHeight() + statPadY * 2.0f;
-
-        ImGui::SetNextWindowPos(pos + ImVec2(padding, padding));
-        ImGui::SetNextWindowSize(ImVec2(statW, statH));
-        ImGui::SetNextWindowViewport(viewport->ID);
-
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(statPadX, statPadY));
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.5f));
+        constexpr float padding = 8.0f;
+        constexpr float statPadX = 10.0f;
+        constexpr float statPadY = 8.0f;
 
         ImGuiWindowFlags windowFlags = 0 | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
             ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
             ImGuiWindowFlags_NoSavedSettings;
 
-        ImGui::Begin("ViewportStat", nullptr, windowFlags);
+        ImGui::SetNextWindowPos(pos + ImVec2(padding, padding));
+        ImGui::SetNextWindowSize(ImVec2(std::min(720.0f, size.x - padding * 2.0f), 40.0f));
+        ImGui::SetNextWindowViewport(viewport->ID);
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 5.0f));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Background, 0.78f));
+        ImGui::Begin("ViewportToolbar", nullptr, windowFlags);
+
+        static int projectionMode = 0;
+        static int displayMode = 0;
+        static int cameraIndex = 0;
+        static float angleSnap = 10.0f;
+        static float distanceSnap = 0.25f;
+
+        ImGui::SetNextItemWidth(132.0f);
+        ImGui::Combo("##ViewportProjection", &projectionMode, "Perspective\0Orthographic\0\0");
+        Runtime::UiTheme::DrawTooltip("Camera Projection");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(118.0f);
+        ImGui::Combo("##ViewportDisplayMode", &displayMode, "Lit\0Lighting\0Wireframe\0\0");
+        Runtime::UiTheme::DrawTooltip("Display Mode");
+        ImGui::SameLine();
+        if (Runtime::UiTheme::ToolbarButton(ICON_FA_EYE " Show", "Show Flags", false, ImVec2(74.0f, 28.0f)))
+        {
+            ImGui::OpenPopup("ViewportShowFlags");
+        }
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(84.0f);
+        ImGui::DragFloat("##AngleSnap", &angleSnap, 1.0f, 1.0f, 90.0f, "%.0f deg");
+        Runtime::UiTheme::DrawTooltip("Angle Snap");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(84.0f);
+        ImGui::DragFloat("##DistanceSnap", &distanceSnap, 0.01f, 0.01f, 10.0f, "%.2f");
+        Runtime::UiTheme::DrawTooltip("Distance Snap");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(106.0f);
+        ImGui::Combo("##ViewportCamera", &cameraIndex, "Camera 0\0Editor Cam\0\0");
+        Runtime::UiTheme::DrawTooltip("Active Camera");
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 12));
+        if (ImGui::BeginPopup("ViewportShowFlags"))
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 10));
+            auto& showFlags = ctx.engine.GetShowFlags();
+            Utilities::UI::DrawShowFlagsCommon(showFlags);
+
+            ImGui::PopStyleVar();
+            ImGui::EndPopup();
+        }
+        ImGui::PopStyleVar();
+
+        ImGui::End();
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar(2);
 
         const double smoothDelta = ctx.engine.GetSmoothDeltaSeconds();
         const double frameRate = smoothDelta > 0.0 ? (1.0 / smoothDelta) : 0.0;
-        const ImGuiIO& io = ImGui::GetIO();
+        const float gpuMs = ctx.engine.GpuTimer() ? ctx.engine.GpuTimer()->GetGpuTime("[gpu time]") : 0.0f;
+        const auto& gpuDrivenStat = ctx.scene.GetGpuDrivenStat();
+        const uint32_t drawCalls = gpuDrivenStat.ProcessedCount > gpuDrivenStat.CulledCount
+            ? gpuDrivenStat.ProcessedCount - gpuDrivenStat.CulledCount
+            : 0;
+        const uint32_t triangles = gpuDrivenStat.TriangleCount > gpuDrivenStat.CulledTriangleCount
+            ? gpuDrivenStat.TriangleCount - gpuDrivenStat.CulledTriangleCount
+            : 0;
 
-        auto DrawBoolDot = [](const char* label, bool value)
-        {
-            ImDrawList* drawList = ImGui::GetWindowDrawList();
-            const float radius = 4.0f;
-            const float spacing = 6.0f;
-            const ImVec2 cursor = ImGui::GetCursorScreenPos();
-            const float centerY = cursor.y + ImGui::GetFrameHeight() * 0.5f;
-            const ImU32 color = value ? IM_COL32(80, 220, 120, 255) : IM_COL32(220, 80, 80, 255);
-            drawList->AddCircleFilled(ImVec2(cursor.x + radius, centerY), radius, color);
-            ImGui::Dummy(ImVec2(radius * 2.0f + spacing, ImGui::GetFrameHeight()));
-            ImGui::SameLine(0.0f, 4.0f);
-            ImGui::TextUnformatted(label);
-        };
+        const float statW = 190.0f;
+        const float statH = ImGui::GetTextLineHeightWithSpacing() * 6.0f + statPadY * 2.0f;
+        ImGui::SetNextWindowPos(pos + ImVec2(padding, padding + 44.0f));
+        ImGui::SetNextWindowSize(ImVec2(statW, statH));
+        ImGui::SetNextWindowViewport(viewport->ID);
 
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("FPS %.0f", frameRate);
-        ImGui::SameLine();
-        DrawBoolDot("Mouse", io.WantCaptureMouse);
-        ImGui::SameLine();
-        DrawBoolDot("Key", io.WantCaptureKeyboard);
-        ImGui::SameLine();
-        DrawBoolDot("Text", io.WantTextInput);
-
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(statPadX, statPadY));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.56f));
+        ImGui::Begin("ViewportStat", nullptr, windowFlags);
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.94f, 0.96f, 1.0f, 1.0f));
+        ImGui::Text("FPS %.0f (%.2f ms)", frameRate, smoothDelta * 1000.0);
+        ImGui::Text("GPU %.2f ms", gpuMs);
+        ImGui::Text("Frame %u", ctx.engine.GetTotalFrames());
+        ImGui::Text("Draw Calls %s", Utilities::metricFormatter(static_cast<double>(drawCalls), "").c_str());
+        ImGui::Text("Triangles %s", Utilities::metricFormatter(static_cast<double>(triangles), "").c_str());
+        ImGui::Text("Res %.0fx%.0f", size.x, size.y);
+        ImGui::PopStyleColor();
         ImGui::End();
         ImGui::PopStyleColor();
         ImGui::PopStyleVar(2);
@@ -207,7 +255,7 @@ namespace Editor
                                     kSpaceNames[mode == ImGuizmo::LOCAL ? 0 : 1];
 
             ImVec2 gizmoSize(ImGui::CalcTextSize(gizmoText.c_str()).x + statPadX * 2.0f, statH);
-            const float gizmoY = pos.y + padding + statH + 4.0f;
+            const float gizmoY = pos.y + padding + 44.0f + statH + 4.0f;
 
             ImGui::SetNextWindowPos(ImVec2(pos.x + padding, gizmoY));
             ImGui::SetNextWindowSize(gizmoSize);
@@ -215,7 +263,7 @@ namespace Editor
 
             ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(statPadX, statPadY));
-            ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.5f));
+            ImGui::PushStyleColor(ImGuiCol_WindowBg, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Background, 0.72f));
 
             ImGui::Begin("GizmoStatus", nullptr, windowFlags);
             ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetColorU32(ImGuiCol_TextDisabled));
@@ -225,6 +273,22 @@ namespace Editor
             ImGui::PopStyleColor();
             ImGui::PopStyleVar(2);
         }
+
+        const ImVec2 axisOrigin = pos + ImVec2(26.0f, size.y - 42.0f);
+        ImDrawList* foreground = ImGui::GetForegroundDrawList(viewport);
+        foreground->AddCircleFilled(axisOrigin, 4.0f, Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::TextMuted));
+        foreground->AddLine(axisOrigin, axisOrigin + ImVec2(28.0f, 0.0f),
+                            Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Danger), 2.0f);
+        foreground->AddLine(axisOrigin, axisOrigin + ImVec2(0.0f, -28.0f),
+                            Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Success), 2.0f);
+        foreground->AddLine(axisOrigin, axisOrigin + ImVec2(-18.0f, 18.0f),
+                            Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Blue), 2.0f);
+        foreground->AddText(axisOrigin + ImVec2(32.0f, -7.0f), Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Danger),
+                            "X");
+        foreground->AddText(axisOrigin + ImVec2(-4.0f, -44.0f), Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Success),
+                            "Y");
+        foreground->AddText(axisOrigin + ImVec2(-34.0f, 18.0f), Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Blue),
+                            "Z");
 
         const float toolH = kToolIconWidth;
         float toolW = kToolIconWidth + 16.0f;
@@ -240,31 +304,14 @@ namespace Editor
         ImGui::Begin("ViewportTool", nullptr, windowFlags);
 
 
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.5f));
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
 
         const float startX = ImGui::GetCursorPosX();
         const float availW = ImGui::GetContentRegionAvail().x;
         ImGui::SetCursorPosX(startX + std::max(0.0f, availW - kToolIconWidth));
-        if (ImGui::Button(ICON_FA_EYE, ImVec2(kToolIconWidth, kToolIconWidth)))
-        {
-            ImGui::OpenPopup("ViewportShowFlags");
-        }
-        BUTTON_TOOLTIP("Show Flags")
+        Runtime::UiTheme::IconButton(ICON_FA_CAMERA, "Camera Options (placeholder)", false,
+                                     ImVec2(kToolIconWidth, kToolIconWidth));
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 12));
-        if (ImGui::BeginPopup("ViewportShowFlags"))
-        {
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 10));
-            auto& showFlags = ctx.engine.GetShowFlags();
-            Utilities::UI::DrawShowFlagsCommon(showFlags);
-
-            ImGui::PopStyleVar();
-            ImGui::EndPopup();
-        }
-        ImGui::PopStyleVar();
-
-        ImGui::PopStyleColor();
         ImGui::PopStyleVar();
         ImGui::PopStyleVar();
         ImGui::PopStyleVar();

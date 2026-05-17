@@ -29,6 +29,7 @@
 
 #include "Utilities/Exception.hpp"
 #include <array>
+#include <cstring>
 #include "Common/CoreMinimal.hpp"
 
 #include "Options.hpp"
@@ -39,6 +40,10 @@
 #include "Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include <spdlog/spdlog.h>
 #include <utility>
+
+#if WITH_STREAMLINE && WIN32
+#include <dxgi1_6.h>
+#endif
 
 #if WITH_STREAMLINE
 #include <sl.h>
@@ -69,19 +74,93 @@ static sl::float4x4 toSlMatrix(const glm::mat4& m)
     res.row[3] = sl::float4(m[0][3], m[1][3], m[2][3], m[3][3]);
     return res;
 }
+
+static bool HasNvidiaAdapter()
+{
+#if WIN32
+    HMODULE dxgiModule = LoadLibraryW(L"dxgi.dll");
+    if (!dxgiModule)
+    {
+        return false;
+    }
+
+    using CreateDXGIFactory1Fn = HRESULT(WINAPI*)(REFIID, void**);
+    auto createFactory = reinterpret_cast<CreateDXGIFactory1Fn>(
+        GetProcAddress(dxgiModule, "CreateDXGIFactory1"));
+    if (!createFactory)
+    {
+        FreeLibrary(dxgiModule);
+        return false;
+    }
+
+    IDXGIFactory1* factory = nullptr;
+    if (FAILED(createFactory(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&factory))))
+    {
+        FreeLibrary(dxgiModule);
+        return false;
+    }
+
+    bool hasNvidiaAdapter = false;
+    for (UINT adapterIndex = 0;; ++adapterIndex)
+    {
+        IDXGIAdapter1* adapter = nullptr;
+        const HRESULT result = factory->EnumAdapters1(adapterIndex, &adapter);
+        if (result == DXGI_ERROR_NOT_FOUND)
+        {
+            break;
+        }
+        if (FAILED(result))
+        {
+            continue;
+        }
+
+        DXGI_ADAPTER_DESC1 desc{};
+        if (SUCCEEDED(adapter->GetDesc1(&desc)) && desc.VendorId == 0x10DE)
+        {
+            hasNvidiaAdapter = true;
+        }
+        adapter->Release();
+
+        if (hasNvidiaAdapter)
+        {
+            break;
+        }
+    }
+
+    factory->Release();
+    FreeLibrary(dxgiModule);
+    return hasNvidiaAdapter;
+#else
+    return false;
+#endif
+}
 #endif
 
 namespace StreamlineWrapper
 {
     bool GStreamLineInit = false;
+    bool GStreamLineInitAttempted = false;
     bool GStreamLineEnabled = false;
-    
-   void LazyInit(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily, bool& outSupportDLSS, bool& outSupportDLSSRR)
-   {
+    bool GStreamLineVulkanInfoSet = false;
+
+    bool ShouldInitialize()
+    {
 #if WITH_STREAMLINE
-       if (GStreamLineInit) return;
-       GStreamLineInit = true;
-       
+        return HasNvidiaAdapter();
+#else
+        return false;
+#endif
+    }
+
+    void Initialize()
+    {
+#if WITH_STREAMLINE
+        if (GStreamLineInitAttempted)
+        {
+            return;
+        }
+        GStreamLineInitAttempted = true;
+
         sl::Preferences pref{};
         //pref.showConsole = true; // for debugging, set to false in production
         //pref.logLevel = sl::LogLevel::eVerbose;
@@ -101,12 +180,35 @@ namespace StreamlineWrapper
         //pref.renderAPI = sl::RenderAPI::eVulkan;
 
         sl::Result res;
-        if(SL_FAILED(res, slInit(pref)))
+        if (SL_FAILED(res, slInit(pref)))
         {
             SPDLOG_ERROR("Streamline slInit failed: {}", (int)res);
             return;
         }
-        
+
+        GStreamLineInit = true;
+        GStreamLineEnabled = true;
+#endif
+    }
+
+   void LazyInit(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily, bool& outSupportDLSS, bool& outSupportDLSSRR)
+   {
+#if WITH_STREAMLINE
+       Initialize();
+       if (!GStreamLineInit)
+       {
+           outSupportDLSS = false;
+           outSupportDLSSRR = false;
+           return;
+       }
+
+       if (GStreamLineVulkanInfoSet)
+       {
+           return;
+       }
+       GStreamLineVulkanInfoSet = true;
+
+       sl::Result res;
        sl::VulkanInfo slVulkanInfo{};
        slVulkanInfo.device = device;
        slVulkanInfo.instance = instance;
@@ -117,9 +219,9 @@ namespace StreamlineWrapper
        slVulkanInfo.graphicsQueueFamily = graphicsQueueFamily;
        
        if(SL_FAILED(res, slSetVulkanInfo(slVulkanInfo)))
-       {
+        {
             SPDLOG_ERROR("Streamline slSetVulkanInfo failed: {}", (int)res);
-       }
+        }
        else
        {
             SPDLOG_INFO("Streamline Initialized Successfully.");
@@ -135,8 +237,6 @@ namespace StreamlineWrapper
             
             SPDLOG_INFO("DLSS Support: {}, RR Support: {}", outSupportDLSS, outSupportDLSSRR);
        }
-       
-       GStreamLineEnabled = true;
 #else
        outSupportDLSS = false;
        outSupportDLSSRR = false;
@@ -207,6 +307,32 @@ namespace
 
         SPDLOG_INFO("Swap Chain: image count: {}, present mode: {}", swapChain.Images().size(),
                    static_cast<int>(swapChain.PresentMode()));
+    }
+
+    bool HasDeviceExtension(VkPhysicalDevice physicalDevice, const char* requiredExtension)
+    {
+        const auto extensions = Vulkan::GetEnumerateVector(physicalDevice, static_cast<const char*>(nullptr),
+                                                           vkEnumerateDeviceExtensionProperties);
+        return std::any_of(extensions.begin(), extensions.end(),
+                           [requiredExtension](const VkExtensionProperties& extension)
+                           {
+                               return std::strcmp(extension.extensionName, requiredExtension) == 0;
+                           });
+    }
+
+    bool AddDeviceExtensionIfAvailable(VkPhysicalDevice physicalDevice,
+                                       std::vector<const char*>& requiredExtensions,
+                                       const char* extensionName,
+                                       const char* featureName)
+    {
+        if (HasDeviceExtension(physicalDevice, extensionName))
+        {
+            requiredExtensions.push_back(extensionName);
+            return true;
+        }
+
+        SPDLOG_WARN("{} disabled because device extension {} is unavailable", featureName, extensionName);
+        return false;
     }
 
     void SetVulkanDevice(Vulkan::VulkanBaseRenderer& application, uint32_t gpuIdx)
@@ -291,8 +417,33 @@ namespace Vulkan
 
         VkPhysicalDeviceFeatures deviceFeatures = {};
 
-        deviceFeatures.multiDrawIndirect = true;
-        deviceFeatures.drawIndirectFirstInstance = true;
+        VkPhysicalDeviceMemoryProperties memoryProperties = {};
+        vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
+        VkDeviceSize largestDeviceLocalHeapSize = 0;
+        for (uint32_t heapIndex = 0; heapIndex < memoryProperties.memoryHeapCount; ++heapIndex)
+        {
+            if ((memoryProperties.memoryHeaps[heapIndex].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0)
+            {
+                largestDeviceLocalHeapSize =
+                    std::max(largestDeviceLocalHeapSize, memoryProperties.memoryHeaps[heapIndex].size);
+            }
+        }
+
+        const VkDeviceSize perCascadeCount =
+            static_cast<VkDeviceSize>(Assets::CUBE_SIZE_XY) * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
+        const VkDeviceSize fullAmbientCubeAllocationSize =
+            static_cast<VkDeviceSize>(Assets::CUBE_CASCADE_MAX) * perCascadeCount *
+                (sizeof(Assets::VoxelData) + sizeof(Assets::AmbientCube)) +
+            static_cast<VkDeviceSize>(Assets::ACGI_PAGE_COUNT) * Assets::ACGI_PAGE_COUNT * sizeof(Assets::PageIndex) +
+            perCascadeCount * (sizeof(Assets::AmbientCube) + sizeof(glm::u32vec4));
+        fullAmbientCubeBudget_ = largestDeviceLocalHeapSize >= fullAmbientCubeAllocationSize;
+        if (!fullAmbientCubeBudget_)
+        {
+            SPDLOG_WARN("Largest Vulkan device-local memory heap is {} MB, smaller than full ambient-cube allocation {} MB; ambient-cube renderers will use the no-ambient fallback",
+                        static_cast<uint64_t>(largestDeviceLocalHeapSize / (1024 * 1024)),
+                        static_cast<uint64_t>(fullAmbientCubeAllocationSize / (1024 * 1024)));
+        }
+
         supportRayTracing_ = !GOption->ForceNoRT && instance_->SupportsRayQuery(physicalDevice);
 
         SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nullptr);
@@ -313,8 +464,8 @@ namespace Vulkan
         PrintVulkanSwapChainInformation(*this);
         currentFrame_ = 0;
 
-        supportDLSS_ = true;
-        supportDLSSRR_ = true;
+        supportDLSS_ = streamlineDeviceExtensionsEnabled_;
+        supportDLSSRR_ = streamlineDeviceExtensionsEnabled_;
     }
 
     void VulkanBaseRenderer::End()
@@ -352,19 +503,44 @@ namespace Vulkan
         VkPhysicalDeviceFeatures& deviceFeatures,
         void* nextDeviceFeatures)
     {
-        deviceFeatures.fillModeNonSolid = false;
+        VkPhysicalDeviceFeatures supportedFeatures = {};
+        vkGetPhysicalDeviceFeatures(physicalDevice, &supportedFeatures);
+
+        VkPhysicalDeviceProperties deviceProperties = {};
+        vkGetPhysicalDeviceProperties(physicalDevice, &deviceProperties);
+        auto enableDeviceExtensionIfAvailable = [&](const char* extensionName)
+        {
+            if (HasDeviceExtension(physicalDevice, extensionName) &&
+                std::find(requiredExtensions.begin(), requiredExtensions.end(), extensionName) == requiredExtensions.end())
+            {
+                requiredExtensions.push_back(extensionName);
+            }
+        };
+
+        enableDeviceExtensionIfAvailable(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+        enableDeviceExtensionIfAvailable(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+        enableDeviceExtensionIfAvailable(VK_KHR_16BIT_STORAGE_EXTENSION_NAME);
+        enableDeviceExtensionIfAvailable(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME);
+        if (deviceProperties.apiVersion < VK_API_VERSION_1_2 &&
+            !HasDeviceExtension(physicalDevice, VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME))
+        {
+            Throw(std::runtime_error("VK_KHR_buffer_device_address is required"));
+        }
+
+        deviceFeatures.multiDrawIndirect = true;
+        deviceFeatures.drawIndirectFirstInstance = true;
+        deviceFeatures.fillModeNonSolid = supportedFeatures.fillModeNonSolid;
         deviceFeatures.samplerAnisotropy = true;
         deviceFeatures.shaderStorageImageReadWithoutFormat = true;
         deviceFeatures.shaderStorageImageWriteWithoutFormat = true;
         deviceFeatures.shaderInt16 = true;
         deviceFeatures.shaderInt64 = true;
 
-        // Required extensions. windows only
-#if WIN32
+        // Optional heatmap instrumentation.
+#if WIN32 && GK_ENABLE_SHADER_CLOCK
         requiredExtensions.insert(requiredExtensions.end(),
                                   {
                                       VK_KHR_SHADER_CLOCK_EXTENSION_NAME,
-                                      VK_NVX_BINARY_IMPORT_EXTENSION_NAME,
                                       VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME
                                   });
 
@@ -378,7 +554,7 @@ namespace Vulkan
         // support bindless material
         VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures = {};
         indexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
-#if WIN32
+#if WIN32 && GK_ENABLE_SHADER_CLOCK
         indexingFeatures.pNext = &shaderClockFeatures;
 #else
 	indexingFeatures.pNext = nextDeviceFeatures;
@@ -421,16 +597,26 @@ namespace Vulkan
         VkPhysicalDeviceVulkan12Features deviceVulkan12Features = {};
         deviceVulkan12Features.timelineSemaphore = true;
         deviceVulkan12Features.pNext = &shaderDrawParametersFeatures;
-        storage16BitFeatures.pNext = &deviceVulkan12Features;
-        
-        requiredExtensions.insert(requiredExtensions.end(),
-                                  {
-                                      VK_NVX_IMAGE_VIEW_HANDLE_EXTENSION_NAME,
-                                      VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
-                                      VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME
-                                  });
+        const bool hasStreamlineExtensions =
+            AddDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
+                                          VK_NVX_BINARY_IMPORT_EXTENSION_NAME, "Streamline binary import") &&
+            AddDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
+                                          VK_NVX_IMAGE_VIEW_HANDLE_EXTENSION_NAME, "Streamline image view handles") &&
+            AddDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
+                                          VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, "Streamline buffer device address") &&
+            AddDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
+                                          VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, "Streamline EXT buffer device address");
+        if (hasStreamlineExtensions)
+        {
+            storage16BitFeatures.pNext = &deviceVulkan12Features;
+            streamlineDeviceExtensionsEnabled_ = true;
+        }
+        else
+        {
+            streamlineDeviceExtensionsEnabled_ = false;
+        }
 #endif
-        
+
         device_.reset(new class Device(physicalDevice, *surface_, requiredExtensions, deviceFeatures,
                                        &storage16BitFeatures));
         commandPool_.reset(new class CommandPool(*device_, device_->GraphicsFamilyIndex(), 0, true));
@@ -568,22 +754,29 @@ namespace Vulkan
         // 公用RenderImages
         CreateRenderImages();
 
-        // 最简单的fallback pipeline, 也用作 wireframe pipeline
         wireframePipeline_.reset(new class PipelineCommon::GraphicsPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), true));
-        wireframeFramebuffer_.reset(new FrameBuffer(swapChain_->RenderExtent(), GetStorageImage(Assets::Bindless::RT_DENOISED)->GetImageView(), wireframePipeline_->RenderPass()));
+        wireframeFrameBuffers_.clear();
+        wireframeFrameBuffers_.reserve(swapChain_->ImageViews().size());
+        for (const auto& imageView : swapChain_->ImageViews())
+        {
+            wireframeFrameBuffers_.emplace_back(swapChain_->Extent(), *imageView, wireframePipeline_->RenderPass());
+        }
 
         // 公用Pipeline
         simpleComposePipeline_.reset( new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.UpScaleFSR.comp.slang.spv", 20));
         bufferClearPipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*swapChain_, "assets/shaders/Util.BufferClear.comp.slang.spv", 4));
-        softAmbientCubeGenPipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.SwAmbientCube.comp.slang.spv"));
-        clearAmbientCubeCachePipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.ClearAmbientCubeCache.comp.slang.spv"));
-        propagationAmbientCubeGenPipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.PropagationAmbientCube.comp.slang.spv"));
-        injectAmbientCubeGenPipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.InjectAmbientCube.comp.slang.spv"));
-        distanceFieldInitPipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.DistanceFieldInit.comp.slang.spv"));
-        distanceFieldJumpPipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.DistanceFieldJump.comp.slang.spv"));
-        distanceFieldResolvePipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.DistanceFieldResolve.comp.slang.spv"));
-        gpuCullPipeline_.reset(new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Task.GpuCull.comp.slang.spv"));
-        skinningPipeline_.reset(new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Task.Skinning.comp.slang.spv"));
+        if (CurrentRendererUsesAmbientCube())
+        {
+            softAmbientCubeGenPipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.SwAmbientCube.comp.slang.spv", GetScene()));
+            clearAmbientCubeCachePipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.ClearAmbientCubeCache.comp.slang.spv", GetScene()));
+            propagationAmbientCubeGenPipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.PropagationAmbientCube.comp.slang.spv", GetScene()));
+            injectAmbientCubeGenPipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.InjectAmbientCube.comp.slang.spv", GetScene()));
+            distanceFieldInitPipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.DistanceFieldInit.comp.slang.spv", GetScene()));
+            distanceFieldJumpPipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.DistanceFieldJump.comp.slang.spv", GetScene()));
+            distanceFieldResolvePipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.DistanceFieldResolve.comp.slang.spv", GetScene()));
+        }
+        gpuCullPipeline_.reset(new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Task.GpuCull.comp.slang.spv", GetScene()));
+        skinningPipeline_.reset(new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Task.Skinning.comp.slang.spv", GetScene()));
         visualDebuggerPipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*swapChain_, "assets/shaders/Util.VisualDebugger.comp.slang.spv", 20));
 
         visibilityPipeline_.reset(new PipelineCommon::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
@@ -626,8 +819,8 @@ namespace Vulkan
         screenShotImageMemory_.reset();
         screenShotImage_.reset();
         commandBuffers_.reset();
+        wireframeFrameBuffers_.clear();
         wireframePipeline_.reset();
-        wireframeFramebuffer_.reset();
         bufferClearPipeline_.reset();
         softAmbientCubeGenPipeline_.reset();
         clearAmbientCubeCachePipeline_.reset();
@@ -641,8 +834,6 @@ namespace Vulkan
 
         skinnedVertexBuffer_.reset();
         skinnedVertexBufferMemory_.reset();
-        skinnedSimpleVertexBuffer_.reset();
-        skinnedSimpleVertexBufferMemory_.reset();
         jointMatricesBuffer_.reset();
         jointMatricesBufferMemory_.reset();
 
@@ -717,13 +908,6 @@ namespace Vulkan
             currentSkinnedVertexBufferSize_ = (uint32_t)requiredVertexSize;
         }
 
-        size_t requiredSimpleVertexSize = vertCount * sizeof(short) * 4;
-        if (!skinnedSimpleVertexBuffer_ || currentSkinnedSimpleVertexBufferSize_ < requiredSimpleVertexSize)
-        {
-            Vulkan::BufferUtil::CreateDeviceBufferLocal(*commandPool_, "SkinnedVerticesSimple", flags | rtxFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, requiredSimpleVertexSize, skinnedSimpleVertexBuffer_, skinnedSimpleVertexBufferMemory_);
-            currentSkinnedSimpleVertexBufferSize_ = (uint32_t)requiredSimpleVertexSize;
-        }
-
         uint32_t totalJoints = 0;
         for (auto& node : scene.Nodes())
         {
@@ -763,22 +947,25 @@ namespace Vulkan
         UpdateSkinningBuffers();
         InitializeBarriers(commandBuffer);
 
-        const bool useAmbientCubePropagation = NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation;
-        if (!ambientCubePropagationStateInitialized_)
+        if (CurrentRendererUsesAmbientCube())
         {
-            lastAmbientCubePropagation_ = useAmbientCubePropagation;
-            ambientCubePropagationStateInitialized_ = true;
-        }
-        else if (lastAmbientCubePropagation_ != useAmbientCubePropagation)
-        {
-            lastAmbientCubePropagation_ = useAmbientCubePropagation;
-            RequestClearAmbientCubeCache();
-        }
+            const bool useAmbientCubePropagation = NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation;
+            if (!ambientCubePropagationStateInitialized_)
+            {
+                lastAmbientCubePropagation_ = useAmbientCubePropagation;
+                ambientCubePropagationStateInitialized_ = true;
+            }
+            else if (lastAmbientCubePropagation_ != useAmbientCubePropagation)
+            {
+                lastAmbientCubePropagation_ = useAmbientCubePropagation;
+                RequestClearAmbientCubeCache();
+            }
 
-        if (requestClearAmbientCubeCache_)
-        {
-            ClearAmbientCubeCache(commandBuffer, imageIndex);
-            requestClearAmbientCubeCache_ = false;
+            if (requestClearAmbientCubeCache_)
+            {
+                ClearAmbientCubeCache(commandBuffer, imageIndex);
+                requestClearAmbientCubeCache_ = false;
+            }
         }
 
         if (true)
@@ -787,9 +974,9 @@ namespace Vulkan
             auto& scene = GetScene();
 
             if (skinnedVertexBuffer_) {
-                scene.SetSkinningBuffers(skinnedVertexBuffer_->GetDeviceAddress(), skinnedSimpleVertexBuffer_->GetDeviceAddress(), jointMatricesBuffer_ ? jointMatricesBuffer_->GetDeviceAddress() : 0);
+                scene.SetSkinningBuffers(skinnedVertexBuffer_->GetDeviceAddress(), jointMatricesBuffer_ ? jointMatricesBuffer_->GetDeviceAddress() : 0);
             } else {
-                scene.SetSkinningBuffers(0, 0, 0);
+                scene.SetSkinningBuffers(0, 0);
             }
 
             skinningPipeline_->BindPipeline(commandBuffer, scene, imageIndex);
@@ -832,10 +1019,8 @@ namespace Vulkan
                         gpuScene.custom_data_1 = vertexOffset;
                         gpuScene.custom_data_2 = vertexCount;
 
-                        VkPipelineLayout layout = skinningPipeline_->PipelineLayout().Handle();
-                        vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
-                                           0, sizeof(Assets::GPUScene), &gpuScene);
-
+                        vkCmdPushConstants(commandBuffer, skinningPipeline_->PipelineLayout().Handle(),
+                                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
                         uint32_t groupCount = (vertexCount + 63) / 64;
                         vkCmdDispatch(commandBuffer, groupCount, 1, 1);
                     }
@@ -845,15 +1030,28 @@ namespace Vulkan
                 VkBufferMemoryBarrier skinnedBufferBarrier = {};
                 skinnedBufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
                 skinnedBufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-                skinnedBufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+                skinnedBufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                if (supportRayTracing_)
+                {
+                    skinnedBufferBarrier.dstAccessMask |= VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+                }
                 skinnedBufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
                 skinnedBufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
                 skinnedBufferBarrier.buffer = skinnedVertexBuffer_->Handle();
                 skinnedBufferBarrier.offset = 0;
                 skinnedBufferBarrier.size = VK_WHOLE_SIZE;
 
+                VkPipelineStageFlags skinnedDstStages =
+                    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+                    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+                if (supportRayTracing_)
+                {
+                    skinnedDstStages |= VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+                }
+
                 vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                     VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, 0, 0, nullptr, 1, &skinnedBufferBarrier, 0, nullptr);
+                                     skinnedDstStages, 0, 0, nullptr, 1, &skinnedBufferBarrier, 0, nullptr);
             }
         }
 
@@ -953,9 +1151,13 @@ namespace Vulkan
                 const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
 
                 vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, visibilityPipeline_->Handle());
+                const Assets::GPUScene& gpuScene = scene.FetchGPUScene(imageIndex);
+                visibilityPipeline_->PipelineLayout().BindDescriptorSets(
+                    commandBuffer, 0, VK_PIPELINE_BIND_POINT_GRAPHICS);
+                vkCmdPushConstants(commandBuffer, visibilityPipeline_->PipelineLayout().Handle(),
+                                   VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                                   0, sizeof(Assets::GPUScene), &gpuScene);
                 vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-                vkCmdPushConstants(commandBuffer, visibilityPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_VERTEX_BIT,
-                                   0, sizeof(Assets::GPUScene), &(scene.FetchGPUScene(imageIndex)));
                 
                 vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0,
                                          scene.GetIndirectDrawBatchCount(), sizeof(VkDrawIndexedIndirectCommand));
@@ -1359,6 +1561,10 @@ namespace Vulkan
         case ERendererType::ERT_LegacyDeferred:
             logicRenderers_[type] = std::make_unique<LegacyDeferred::SoftwareModernRenderer>(*this);
             break;
+        case ERendererType::ERT_LegacyDeferredNoAmbient:
+            logicRenderers_[type] = std::make_unique<LegacyDeferred::SoftwareModernRenderer>(
+                *this, "assets/shaders/Core.SwModernNoAmbient.comp.slang.spv", true);
+            break;
         case ERendererType::ERT_VoxelTracing:
             logicRenderers_[type] = std::make_unique<VoxelTracing::VoxelTracingRenderer>(*this);
             break;
@@ -1371,6 +1577,47 @@ namespace Vulkan
     void VulkanBaseRenderer::SwitchLogicRenderer(ERendererType type)
     {
         currentLogicRenderer_ = type;
+    }
+
+    void VulkanBaseRenderer::DrawWireframeOverlay(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+    {
+        if (!wireframePipeline_ || imageIndex >= wireframeFrameBuffers_.size())
+        {
+            SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
+            return;
+        }
+
+        SCOPED_GPU_TIMER("wireframe");
+
+        ImageMemoryBarrier::FullInsert(
+            commandBuffer, SwapChain().Images()[imageIndex],
+            VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT, 0,
+            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
+        VkRenderPassBeginInfo renderPassInfo = {};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassInfo.renderPass = wireframePipeline_->RenderPass().Handle();
+        renderPassInfo.framebuffer = wireframeFrameBuffers_[imageIndex].Handle();
+        renderPassInfo.renderArea.offset = {0, 0};
+        renderPassInfo.renderArea.extent = SwapChain().Extent();
+        renderPassInfo.clearValueCount = 0;
+        renderPassInfo.pClearValues = nullptr;
+
+        vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+        {
+            const auto& scene = GetScene();
+            const Assets::GPUScene& gpuScene = scene.FetchGPUScene(imageIndex);
+
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, wireframePipeline_->Handle());
+            wireframePipeline_->PipelineLayout().BindDescriptorSets(
+                commandBuffer, 0, VK_PIPELINE_BIND_POINT_GRAPHICS);
+            vkCmdPushConstants(commandBuffer, wireframePipeline_->PipelineLayout().Handle(),
+                               VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
+            vkCmdBindIndexBuffer(commandBuffer, scene.IndexBuffer().Handle(), 0, VK_INDEX_TYPE_UINT32);
+            vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0,
+                                     scene.GetIndirectDrawBatchCount(), sizeof(VkDrawIndexedIndirectCommand));
+        }
+        vkCmdEndRenderPass(commandBuffer);
     }
 
     void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
@@ -1392,6 +1639,9 @@ namespace Vulkan
                     break;
                 case ERendererType::ERT_LegacyDeferred:
                     rendererName = "SoftModern";
+                    break;
+                case ERendererType::ERT_LegacyDeferredNoAmbient:
+                    rendererName = "SoftModernNoAmbient";
                     break;
                 case ERendererType::ERT_VoxelTracing:
                     rendererName = "VoxelTracing";
@@ -1447,47 +1697,6 @@ namespace Vulkan
                 logicRenderers_[currentLogicRenderer_]->Render(commandBuffer, imageIndex);
             }
 
-            	if (NextEngine::GetInstance()->GetShowFlags().ShowWireframe)            {
-                SCOPED_GPU_TIMER("wireframe");
-                
-                VkRenderPassBeginInfo renderPassInfo = {};
-                renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-                renderPassInfo.renderPass = wireframePipeline_->RenderPass().Handle();
-                renderPassInfo.framebuffer = wireframeFramebuffer_->Handle();
-                renderPassInfo.renderArea.offset = {0, 0};
-                renderPassInfo.renderArea.extent = swapChain_->RenderExtent();
-                
-                vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-                {
-                    auto& scene = GetScene();
-                
-                    VkDescriptorSet descriptorSets[] = {wireframePipeline_->DescriptorSet(imageIndex)};
-                    VkBuffer vertexBuffers[] = {scene.SimpleVertexBuffer().Handle()};
-                    const VkBuffer indexBuffer = scene.PrimAddressBuffer().Handle();
-                    VkDeviceSize offsets[] = {0};
-                
-                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, wireframePipeline_->Handle());
-                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                            wireframePipeline_->PipelineLayout().Handle(), 0, 1, descriptorSets, 0, nullptr);
-                    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-                    vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-                    
-                    // drawcall one by one, old school pipeline only
-                    for (const auto& node : scene.GetNodeProxys())
-                    {
-                        auto& offset = scene.Offsets()[node.modelId];
-                        const auto indexCount = static_cast<uint32_t>(offset.indexCount);
-                        if (indexCount == 0) continue;
-                
-                        glm::mat4 worldMatrix = node.worldTS;
-                        vkCmdPushConstants(commandBuffer, wireframePipeline_->PipelineLayout().Handle(),
-                                           VK_SHADER_STAGE_VERTEX_BIT,0, sizeof(glm::mat4), &worldMatrix);
-                        vkCmdDrawIndexed(commandBuffer, indexCount, 1, offset.indexOffset, static_cast<int>(offset.vertexOffset), 0);
-                    }
-                }
-                vkCmdEndRenderPass(commandBuffer);
-            }
-            
             {
                 SCOPED_GPU_TIMER("resolve pass");
 
@@ -1525,7 +1734,15 @@ namespace Vulkan
                                VK_FILTER_LINEAR);
 #endif
                 }
-                SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
+
+                if (NextEngine::GetInstance()->GetShowFlags().ShowWireframe)
+                {
+                    DrawWireframeOverlay(commandBuffer, imageIndex);
+                }
+                else
+                {
+                    SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
+                }
             }
         }
     }
@@ -1546,10 +1763,8 @@ namespace Vulkan
         gpuScene.custom_data_1 = 0;
         gpuScene.custom_data_2 = 0;
 
-        VkPipelineLayout layout = clearAmbientCubeCachePipeline_->PipelineLayout().Handle();
-        vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
-                           0, sizeof(Assets::GPUScene), &gpuScene);
-
+        vkCmdPushConstants(commandBuffer, clearAmbientCubeCachePipeline_->PipelineLayout().Handle(),
+                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
         vkCmdDispatch(commandBuffer, groupCount, 1, 1);
 
         VkBufferMemoryBarrier barriers[2]{};
@@ -1559,11 +1774,12 @@ namespace Vulkan
         barriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barriers[0].buffer = GetScene().AmbientCubeBuffer().Handle();
-        barriers[0].offset = 0;
+        barriers[0].offset = GetScene().AmbientCubesByteOffset();
         barriers[0].size = static_cast<VkDeviceSize>(totalCubeCount) * sizeof(Assets::AmbientCube);
 
         barriers[1] = barriers[0];
         barriers[1].buffer = GetScene().FarAmbientCubeBuffer().Handle();
+        barriers[1].offset = GetScene().AmbientVoxelsByteOffset();
         barriers[1].size = static_cast<VkDeviceSize>(totalCubeCount) * sizeof(Assets::VoxelData);
 
         vkCmdPipelineBarrier(commandBuffer,
@@ -1586,7 +1802,9 @@ namespace Vulkan
 
         VkBuffer cubeBuffer = GetScene().AmbientCubeBuffer().Handle();
         VkBuffer pongBuffer = GetScene().AmbientCubePongBuffer().Handle();
-        const VkDeviceSize cascadeByteOffset = static_cast<VkDeviceSize>(cascadeBaseOffset) * sizeof(Assets::AmbientCube);
+        const VkDeviceSize cascadeByteOffset =
+            GetScene().AmbientCubesByteOffset() + static_cast<VkDeviceSize>(cascadeBaseOffset) * sizeof(Assets::AmbientCube);
+        const VkDeviceSize pongByteOffset = GetScene().AmbientCubesPongByteOffset();
         const VkDeviceSize cascadeByteSize = static_cast<VkDeviceSize>(perCascadeCount) * sizeof(Assets::AmbientCube);
 
         VkBufferMemoryBarrier preCopyBarrier{};
@@ -1604,7 +1822,7 @@ namespace Vulkan
 
         VkBufferCopy copyRegion{};
         copyRegion.srcOffset = cascadeByteOffset;
-        copyRegion.dstOffset = 0;
+        copyRegion.dstOffset = pongByteOffset;
         copyRegion.size = cascadeByteSize;
         vkCmdCopyBuffer(commandBuffer, cubeBuffer, pongBuffer, 1, &copyRegion);
 
@@ -1615,7 +1833,7 @@ namespace Vulkan
         postCopyBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         postCopyBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         postCopyBarriers[0].buffer = pongBuffer;
-        postCopyBarriers[0].offset = 0;
+        postCopyBarriers[0].offset = pongByteOffset;
         postCopyBarriers[0].size = cascadeByteSize;
         postCopyBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
         postCopyBarriers[1].srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
@@ -1636,10 +1854,8 @@ namespace Vulkan
         gpuScene.custom_data_1 = cascadeIndex;
         gpuScene.custom_data_2 = 0;
 
-        VkPipelineLayout layout = propagationAmbientCubeGenPipeline_->PipelineLayout().Handle();
-        vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
-                           0, sizeof(Assets::GPUScene), &gpuScene);
-
+        vkCmdPushConstants(commandBuffer, propagationAmbientCubeGenPipeline_->PipelineLayout().Handle(),
+                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
         vkCmdDispatch(commandBuffer, group, 1, 1);
 
         VkBufferMemoryBarrier propagationToInjectionBarrier{};
@@ -1657,10 +1873,8 @@ namespace Vulkan
 
         injectAmbientCubeGenPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
 
-        layout = injectAmbientCubeGenPipeline_->PipelineLayout().Handle();
-        vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
-                           0, sizeof(Assets::GPUScene), &gpuScene);
-
+        vkCmdPushConstants(commandBuffer, injectAmbientCubeGenPipeline_->PipelineLayout().Handle(),
+                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
         vkCmdDispatch(commandBuffer, group, 1, 1);
 
         VkBufferMemoryBarrier postInjectionBarrier{};
@@ -1680,7 +1894,8 @@ namespace Vulkan
     void VulkanBaseRenderer::PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         //if (NextEngine::GetInstance()->IsProgressiveRendering())  return;
-        if (NextEngine::GetInstance()->GetUserSettings().UseGpuAmbientCubeSdf &&
+        if (CurrentRendererUsesAmbientCube() &&
+            NextEngine::GetInstance()->GetUserSettings().UseGpuAmbientCubeSdf &&
             GetScene().ConsumeGpuDistanceFieldRebuild())
         {
             SCOPED_GPU_TIMER("gpu-distance-field");
@@ -1696,11 +1911,14 @@ namespace Vulkan
             VkBuffer seedBufferB = GetScene().AmbientCubeSdfScratchBuffer().Handle();
             const VkDeviceSize cascadeByteSize = static_cast<VkDeviceSize>(perCascadeCount) * sizeof(Assets::VoxelData);
             const VkDeviceSize seedByteSize = static_cast<VkDeviceSize>(perCascadeCount) * sizeof(glm::u32vec4);
+            const VkDeviceSize seedAByteOffset = GetScene().AmbientCubesPongByteOffset();
+            const VkDeviceSize seedBByteOffset = GetScene().AmbientSdfScratchByteOffset();
 
             for (uint32_t cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex)
             {
                 const uint32_t cascadeBaseOffset = cascadeIndex * static_cast<uint32_t>(perCascadeCount);
-                const VkDeviceSize cascadeByteOffset = static_cast<VkDeviceSize>(cascadeBaseOffset) * sizeof(Assets::VoxelData);
+                const VkDeviceSize cascadeByteOffset =
+                    GetScene().AmbientVoxelsByteOffset() + static_cast<VkDeviceSize>(cascadeBaseOffset) * sizeof(Assets::VoxelData);
 
                 VkBufferMemoryBarrier preSdfBarrier{};
                 preSdfBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
@@ -1719,12 +1937,10 @@ namespace Vulkan
                 gpuScene.custom_data_0 = cascadeBaseOffset;
                 gpuScene.custom_data_1 = cascadeIndex;
                 gpuScene.custom_data_2 = 0;
-                gpuScene.SkinnedVerticesSimple = GetScene().AmbientCubeSdfScratchBuffer().GetDeviceAddress();
 
                 distanceFieldInitPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
-                VkPipelineLayout layout = distanceFieldInitPipeline_->PipelineLayout().Handle();
-                vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
-                                   0, sizeof(Assets::GPUScene), &gpuScene);
+                vkCmdPushConstants(commandBuffer, distanceFieldInitPipeline_->PipelineLayout().Handle(),
+                                   VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
                 vkCmdDispatch(commandBuffer, group, 1, 1);
 
                 VkBufferMemoryBarrier initBarrier{};
@@ -1734,7 +1950,7 @@ namespace Vulkan
                 initBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
                 initBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
                 initBarrier.buffer = seedBufferA;
-                initBarrier.offset = 0;
+                initBarrier.offset = seedAByteOffset;
                 initBarrier.size = seedByteSize;
                 vkCmdPipelineBarrier(commandBuffer,
                     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -1747,9 +1963,8 @@ namespace Vulkan
 
                     gpuScene.custom_data_1 = passParity;
                     gpuScene.custom_data_2 = step;
-                    layout = distanceFieldJumpPipeline_->PipelineLayout().Handle();
-                    vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
-                                       0, sizeof(Assets::GPUScene), &gpuScene);
+                    vkCmdPushConstants(commandBuffer, distanceFieldJumpPipeline_->PipelineLayout().Handle(),
+                                       VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
                     vkCmdDispatch(commandBuffer, group, 1, 1);
 
                     VkBufferMemoryBarrier jumpBarriers[2]{};
@@ -1759,10 +1974,11 @@ namespace Vulkan
                     jumpBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
                     jumpBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
                     jumpBarriers[0].buffer = seedBufferA;
-                    jumpBarriers[0].offset = 0;
+                    jumpBarriers[0].offset = seedAByteOffset;
                     jumpBarriers[0].size = seedByteSize;
                     jumpBarriers[1] = jumpBarriers[0];
                     jumpBarriers[1].buffer = seedBufferB;
+                    jumpBarriers[1].offset = seedBByteOffset;
                     vkCmdPipelineBarrier(commandBuffer,
                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                         0, 0, nullptr, 2, jumpBarriers, 0, nullptr);
@@ -1776,9 +1992,8 @@ namespace Vulkan
                 distanceFieldResolvePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
                 gpuScene.custom_data_1 = passParity - 1;
                 gpuScene.custom_data_2 = 0;
-                layout = distanceFieldResolvePipeline_->PipelineLayout().Handle();
-                vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
-                                   0, sizeof(Assets::GPUScene), &gpuScene);
+                vkCmdPushConstants(commandBuffer, distanceFieldResolvePipeline_->PipelineLayout().Handle(),
+                                   VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
                 vkCmdDispatch(commandBuffer, group, 1, 1);
 
                 VkBufferMemoryBarrier postResolveBarrier{};
@@ -1797,7 +2012,7 @@ namespace Vulkan
         }
 
         // soft ambient cube generation
-        if (!supportRayTracing_ || GOption->ForceSoftGen)
+        if (CurrentRendererUsesAmbientCube() && (!supportRayTracing_ || GOption->ForceSoftGen))
         {
             const int cubesPerGroup = 64;
             const int perCascadeCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
@@ -1838,7 +2053,9 @@ namespace Vulkan
                     const uint32_t cascadeBaseOffset = cascadeIndex * static_cast<uint32_t>(perCascadeCount);
                     VkBuffer cubeBuffer = GetScene().AmbientCubeBuffer().Handle();
                     VkBuffer pongBuffer = GetScene().AmbientCubePongBuffer().Handle();
-                    const VkDeviceSize cascadeByteOffset = static_cast<VkDeviceSize>(cascadeBaseOffset) * sizeof(Assets::AmbientCube);
+                    const VkDeviceSize cascadeByteOffset =
+                        GetScene().AmbientCubesByteOffset() + static_cast<VkDeviceSize>(cascadeBaseOffset) * sizeof(Assets::AmbientCube);
+                    const VkDeviceSize pongByteOffset = GetScene().AmbientCubesPongByteOffset();
                     const VkDeviceSize cascadeByteSize = static_cast<VkDeviceSize>(perCascadeCount) * sizeof(Assets::AmbientCube);
 
                     VkBufferMemoryBarrier preCopyBarrier{};
@@ -1856,7 +2073,7 @@ namespace Vulkan
 
                     VkBufferCopy copyRegion{};
                     copyRegion.srcOffset = cascadeByteOffset;
-                    copyRegion.dstOffset = 0;
+                    copyRegion.dstOffset = pongByteOffset;
                     copyRegion.size = cascadeByteSize;
                     vkCmdCopyBuffer(commandBuffer, cubeBuffer, pongBuffer, 1, &copyRegion);
 
@@ -1867,7 +2084,7 @@ namespace Vulkan
                     postCopyBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
                     postCopyBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
                     postCopyBarriers[0].buffer = pongBuffer;
-                    postCopyBarriers[0].offset = 0;
+                    postCopyBarriers[0].offset = pongByteOffset;
                     postCopyBarriers[0].size = cascadeByteSize;
                     postCopyBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
                     postCopyBarriers[1].srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
@@ -1888,16 +2105,15 @@ namespace Vulkan
                     gpuScene.custom_data_1 = cascadeIndex;
                     gpuScene.custom_data_2 = NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation ? 1u : 0u;
 
-                    VkPipelineLayout layout = softAmbientCubeGenPipeline_->PipelineLayout().Handle();
-                    vkCmdPushConstants(commandBuffer, layout, VK_SHADER_STAGE_COMPUTE_BIT,
-                                       0, sizeof(Assets::GPUScene), &gpuScene);
-
+                    vkCmdPushConstants(commandBuffer, softAmbientCubeGenPipeline_->PipelineLayout().Handle(),
+                                       VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
                     vkCmdDispatch(commandBuffer, dispatchGroupCount, 1, 1);
                 }
             }
         }
 
-        if ((!supportRayTracing_ || GOption->ForceSoftGen) &&
+        if (CurrentRendererUsesAmbientCube() &&
+            (!supportRayTracing_ || GOption->ForceSoftGen) &&
             NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation &&
             NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel != 2)
         {

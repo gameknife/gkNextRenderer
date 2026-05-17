@@ -123,7 +123,10 @@ namespace Vulkan::RayTracing
     void RayTraceBaseRenderer::CreateSwapChain()
     {
         Vulkan::VulkanBaseRenderer::CreateSwapChain();
-        directLightGenPipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline(SwapChain(), "assets/shaders/Bake.HwAmbientCube.comp.slang.spv"));
+        if (CurrentRendererUsesAmbientCube())
+        {
+            directLightGenPipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline(SwapChain(), "assets/shaders/Bake.HwAmbientCube.comp.slang.spv", GetScene()));
+        }
     }
 
     void RayTraceBaseRenderer::DeleteSwapChain()
@@ -222,7 +225,7 @@ namespace Vulkan::RayTracing
     {
         VulkanBaseRenderer::PostRender(commandBuffer, imageIndex);
         
-        if(supportRayTracing_ && !GOption->ForceSoftGen)
+        if(CurrentRendererUsesAmbientCube() && supportRayTracing_ && !GOption->ForceSoftGen)
         {
             const int cubesPerGroup = 64;
             const int perCascadeCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
@@ -265,7 +268,9 @@ namespace Vulkan::RayTracing
                         const uint32_t cascadeBaseOffset = cascadeIndex * static_cast<uint32_t>(perCascadeCount);
                         VkBuffer cubeBuffer = GetScene().AmbientCubeBuffer().Handle();
                         VkBuffer pongBuffer = GetScene().AmbientCubePongBuffer().Handle();
-                        const VkDeviceSize cascadeByteOffset = static_cast<VkDeviceSize>(cascadeBaseOffset) * sizeof(Assets::AmbientCube);
+                        const VkDeviceSize cascadeByteOffset =
+                            GetScene().AmbientCubesByteOffset() + static_cast<VkDeviceSize>(cascadeBaseOffset) * sizeof(Assets::AmbientCube);
+                        const VkDeviceSize pongByteOffset = GetScene().AmbientCubesPongByteOffset();
                         const VkDeviceSize cascadeByteSize = static_cast<VkDeviceSize>(perCascadeCount) * sizeof(Assets::AmbientCube);
 
                         VkBufferMemoryBarrier preCopyBarrier{};
@@ -283,7 +288,7 @@ namespace Vulkan::RayTracing
 
                         VkBufferCopy copyRegion{};
                         copyRegion.srcOffset = cascadeByteOffset;
-                        copyRegion.dstOffset = 0;
+                        copyRegion.dstOffset = pongByteOffset;
                         copyRegion.size = cascadeByteSize;
                         vkCmdCopyBuffer(commandBuffer, cubeBuffer, pongBuffer, 1, &copyRegion);
 
@@ -294,7 +299,7 @@ namespace Vulkan::RayTracing
                         postCopyBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
                         postCopyBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
                         postCopyBarriers[0].buffer = pongBuffer;
-                        postCopyBarriers[0].offset = 0;
+                        postCopyBarriers[0].offset = pongByteOffset;
                         postCopyBarriers[0].size = cascadeByteSize;
                         postCopyBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
                         postCopyBarriers[1].srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
@@ -315,9 +320,8 @@ namespace Vulkan::RayTracing
                         gpuScene.custom_data_1 = cascadeIndex;
                         gpuScene.custom_data_2 = NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation ? 1u : 0u;
                         
-                        vkCmdPushConstants(commandBuffer, directLightGenPipeline_->PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-                                           0, sizeof(Assets::GPUScene), &gpuScene);
-                
+                        vkCmdPushConstants(commandBuffer, directLightGenPipeline_->PipelineLayout().Handle(),
+                                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
                         vkCmdDispatch(commandBuffer, dispatchGroupCount, 1, 1);
                     }
                 }
@@ -369,15 +373,15 @@ namespace Vulkan::RayTracing
             BottomLevelGeometry geometries;
 
             VkDeviceAddress vertexAddr = 0;
-            if (hasSkin && skinnedSimpleVertexBuffer_)
+            if (hasSkin && skinnedVertexBuffer_)
             {
-                vertexAddr = skinnedSimpleVertexBuffer_->GetDeviceAddress();
+                vertexAddr = skinnedVertexBuffer_->GetDeviceAddress();
             }
 
             geometries.AddGeometryTriangles(scene, vertexOffset, vertexCount, indexOffset, indexCount, true, vertexAddr);
             bottomAs_.emplace_back(Device().GetDeviceProcedures(), *rayTracingProperties_, geometries);
 
-            vertexOffset += vertexCount * sizeof(short) * 4;
+            vertexOffset += vertexCount * sizeof(Assets::GPUVertex);
             indexOffset += indexCount * sizeof(uint32_t);
             aabbOffset += sizeof(VkAabbPositionsKHR);
         }

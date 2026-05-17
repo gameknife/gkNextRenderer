@@ -70,7 +70,7 @@ namespace Assets
 
 			attributeDescriptions[0].binding = 0;
 			attributeDescriptions[0].location = 0;
-			attributeDescriptions[0].format = VK_FORMAT_R16G16B16_SFLOAT;
+			attributeDescriptions[0].format = VK_FORMAT_R16G16B16A16_SFLOAT;
 			attributeDescriptions[0].offset = 0;
 			
 			return attributeDescriptions;

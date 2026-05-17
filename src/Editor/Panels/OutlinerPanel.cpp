@@ -9,6 +9,7 @@
 #include "Runtime/Command/DeleteNodesCommand.hpp"
 #include "Runtime/Command/RenameNodeCommand.hpp"
 #include "Runtime/Engine.hpp"
+#include "Runtime/Editor/ProfessionalUI.hpp"
 
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include <imgui_stdlib.h>
@@ -146,7 +147,6 @@ namespace Editor
             auto render = node.GetComponent<Runtime::RenderComponent>();
             const int modelId = render ? render->GetModelId() : -1;
             const bool visible = render == nullptr || render->GetVisible();
-            const float visibilityIconWidth = ImGui::CalcTextSize(ICON_FA_EYE).x;
 
             const bool shouldOpenForTarget =
                 autoScrollEnabled && pendingScrollTargetId != InvalidId &&
@@ -170,12 +170,18 @@ namespace Editor
                 ui.pendingCollapseTargetId = InvalidId;
             }
 
-            const std::string lockPrefix = locked ? std::string(ICON_FA_LOCK " ") : "";
-            const std::string label = lockPrefix + (modelId == -1 ? ICON_FA_CIRCLE_NOTCH : ICON_FA_CUBE) +
+            const std::string label = (modelId == -1 ? ICON_FA_CIRCLE_NOTCH : ICON_FA_CUBE) +
                 std::string(" ") + node.GetName();
+            const ImU32 textColor = !visible ? ImGui::GetColorU32(ImGuiCol_TextDisabled)
+                                             : selected ? ActiveColor : ImGui::GetColorU32(ImGuiCol_Text);
+            ImGui::PushStyleColor(ImGuiCol_Text, textColor);
+            const bool opened = ImGui::TreeNodeEx(label.c_str(), flag);
+
+            ImGui::PopStyleColor();
+            const float columnWidth = ImGui::GetColumnWidth();
+            ImGui::SameLine(std::max(ImGui::GetCursorPosX(), columnWidth - 56.0f));
             if (render != nullptr)
             {
-                ImGui::AlignTextToFramePadding();
                 if (!visible)
                 {
                     ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetColorU32(ImGuiCol_TextDisabled));
@@ -197,16 +203,18 @@ namespace Editor
             }
             else
             {
-                ImGui::Dummy(ImVec2(visibilityIconWidth, ImGui::GetFrameHeight()));
+                ImGui::TextDisabled(ICON_FA_EYE);
             }
-            AlignNextOutlinerInlineItem();
-
-            const ImU32 textColor = !visible ? ImGui::GetColorU32(ImGuiCol_TextDisabled)
-                                             : selected ? ActiveColor : ImGui::GetColorU32(ImGuiCol_Text);
-            ImGui::PushStyleColor(ImGuiCol_Text, textColor);
-            const bool opened = ImGui::TreeNodeEx(label.c_str(), flag);
-
-            ImGui::PopStyleColor();
+            ImGui::SameLine(0.0f, 10.0f);
+            ImGui::TextUnformatted(locked ? ICON_FA_LOCK : ICON_FA_LOCK_OPEN);
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+            {
+                ctx.scene.ToggleLocked(node.GetInstanceId());
+            }
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("%s", locked ? "Unlock Node" : "Lock Node");
+            }
 
             if (ImGui::IsItemHovered())
             {
@@ -307,6 +315,38 @@ namespace Editor
 
             ImGui::PopID();
         }
+
+        void DrawLayersPanel()
+        {
+            struct FLayerRow
+            {
+                const char* name;
+                ImVec4 color;
+            };
+            constexpr FLayerRow layers[] = {
+                {"Default", ImVec4(0.42f, 0.63f, 0.95f, 1.0f)},
+                {"Gameplay", ImVec4(0.24f, 0.80f, 0.44f, 1.0f)},
+                {"Props", ImVec4(0.95f, 0.68f, 0.24f, 1.0f)},
+                {"Colliders", ImVec4(0.88f, 0.28f, 0.28f, 1.0f)},
+                {"Lighting", ImVec4(0.80f, 0.70f, 1.0f, 1.0f)},
+            };
+
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            for (const FLayerRow& layer : layers)
+            {
+                const ImVec2 pos = ImGui::GetCursorScreenPos();
+                const float rowHeight = ImGui::GetFrameHeight();
+                drawList->AddCircleFilled(ImVec2(pos.x + 6.0f, pos.y + rowHeight * 0.5f), 4.0f,
+                                          ImGui::GetColorU32(layer.color), 12);
+                ImGui::Dummy(ImVec2(16.0f, rowHeight));
+                ImGui::SameLine();
+                ImGui::TextUnformatted(layer.name);
+                ImGui::SameLine(std::max(ImGui::GetCursorPosX(), ImGui::GetColumnWidth() - 56.0f));
+                ImGui::TextUnformatted(ICON_FA_EYE);
+                ImGui::SameLine(0.0f, 10.0f);
+                ImGui::TextUnformatted(ICON_FA_LOCK_OPEN);
+            }
+        }
     } // namespace
 
     void DrawOutlinerPanel(EditorContext& ctx, EditorUiState& ui)
@@ -323,42 +363,28 @@ namespace Editor
 
         ImGui::Begin("Outliner", nullptr);
         {
-            ImGui::TextDisabled("NOTE");
+            const std::string subtitle = std::to_string(ctx.scene.Nodes().size()) + " scene nodes";
+            ImGui::Text("%s Outliner", ICON_FA_DIAGRAM_PROJECT);
             ImGui::SameLine();
-            utils::HelpMarker("ALL SCENE NODES\n"
-                              "limited to 1000 nodes\n"
-                              "select and view node properties\n");
-            ImGui::Separator();
+            Runtime::UiTheme::IconButton(ICON_FA_PLUS "##CreateActor", "Create Actor (placeholder)", false,
+                                         ImVec2(24.0f, 22.0f));
+            ImGui::TextDisabled("%s", subtitle.c_str());
+            Runtime::UiTheme::DrawThinSeparator();
 
-            ImGui::Text("Nodes");
-            ImGui::SameLine();
             const bool autoScrollWasEnabled = ui.outlinerAutoScrollToSelection;
-            if (autoScrollWasEnabled)
-            {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.10f, 0.35f, 0.75f, 0.75f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.16f, 0.42f, 0.82f, 0.85f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.08f, 0.30f, 0.68f, 0.95f));
-            }
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4.0f, 2.0f));
-            if (ImGui::Button(ICON_FA_LOCATION_CROSSHAIRS "##AutoScrollToSelection"))
+            if (Runtime::UiTheme::IconButton(ICON_FA_LOCATION_CROSSHAIRS "##AutoScrollToSelection",
+                                             "Auto Scroll To Selection", autoScrollWasEnabled,
+                                             ImVec2(28.0f, 24.0f)))
             {
                 ui.outlinerAutoScrollToSelection = !ui.outlinerAutoScrollToSelection;
             }
-            ImGui::PopStyleVar();
-            if (autoScrollWasEnabled)
-            {
-                ImGui::PopStyleColor(3);
-            }
-            if (ImGui::IsItemHovered())
-            {
-                ImGui::SetTooltip("Auto Scroll To Selection: %s\nWhen enabled, selecting an object in viewport "
-                                  "auto-scrolls Outliner to it.",
-                                  ui.outlinerAutoScrollToSelection ? "On" : "Off");
-            }
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(200.0f);
-            nodeFilter.Draw(ICON_FA_MAGNIFYING_GLASS "##OutlinerFilter", 200.0f);
-            ImGui::Separator();
+            Runtime::UiTheme::IconButton(ICON_FA_LAYER_GROUP, "Create Group (placeholder)", false,
+                                         ImVec2(28.0f, 24.0f));
+
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            nodeFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Filter##OutlinerFilter", -FLT_MIN);
+            Runtime::UiTheme::DrawThinSeparator();
 
             const uint32_t currentSelectionId = ctx.scene.GetSelectedId();
             if (ui.outlinerAutoScrollToSelection)
@@ -377,7 +403,7 @@ namespace Editor
             prevAutoScrollEnabled = ui.outlinerAutoScrollToSelection;
             lastSelectionId = currentSelectionId;
 
-            ImGui::BeginChild("ListBox", ImVec2(0, -50));
+            ImGui::BeginChild("ListBox", ImVec2(0, -132.0f));
 
             if (ImGui::BeginTable("NodesList", 1, ImGuiTableFlags_NoBordersInBodyUntilResize | ImGuiTableFlags_RowBg))
             {
@@ -590,8 +616,24 @@ namespace Editor
                 ImGui::EndPopup();
             }
 
+            if (ImGui::BeginTabBar("OutlinerSubTabs"))
+            {
+                if (ImGui::BeginTabItem("Scene"))
+                {
+                    ImGui::TextDisabled("Root scene graph");
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem("Layers"))
+                {
+                    DrawLayersPanel();
+                    ImGui::EndTabItem();
+                }
+                ImGui::EndTabBar();
+            }
+
             ImGui::Spacing();
-            ImGui::Text("%d Nodes", static_cast<int>(ctx.scene.Nodes().size()));
+            ImGui::Text("%d actors (%d selected)", static_cast<int>(ctx.scene.Nodes().size()),
+                        static_cast<int>(ctx.scene.GetSelectedIds().size()));
             ImGui::Spacing();
 
             if ((ImGui::GetIO().KeyAlt) && (ImGui::IsKeyPressed(ImGuiKey_F4)))

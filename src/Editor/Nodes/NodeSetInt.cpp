@@ -1,7 +1,5 @@
 #include "NodeSetInt.hpp"
 
-#include <vulkan/vulkan_core.h>
-
 #include "Editor/EditorContext.hpp"
 #include "Runtime/Editor/UserInterface.hpp"
 
@@ -66,10 +64,10 @@ namespace Nodes
             return;
         }
 
-        VkDescriptorSet tex = ctx->ui.RequestImTextureId(static_cast<uint32_t>(textureId));
-        if (tex != VK_NULL_HANDLE)
+        ImTextureID tex = ctx->ui.RequestImTextureId(static_cast<uint32_t>(textureId));
+        if (tex != 0)
         {
-            ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(128, 128));
+            ImGui::Image(tex, ImVec2(128, 128));
         }
     }
 } // namespace Nodes

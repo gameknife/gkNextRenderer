@@ -7,6 +7,7 @@
 #include "Editor/EditorActionDispatcher.hpp"
 #include "Runtime/Scene/SceneList.hpp"
 #include "Runtime/Editor/UserInterface.hpp"
+#include "Runtime/Editor/ProfessionalUI.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Utilities/FileHelper.hpp"
 
@@ -26,8 +27,8 @@ namespace Editor
 {
     namespace
     {
-        constexpr int kIconSize = 96;
-        constexpr int kIconPadding = 20;
+        float GContentBrowserIconSize = 76.0f;
+        constexpr float kIconPadding = 12.0f;
 
         struct ContentBrowserCallbacks
         {
@@ -74,7 +75,7 @@ namespace Editor
         {
             const float windowWidth = ImGui::GetContentRegionAvail().x;
             const int itemsPerRow =
-                std::max(1, static_cast<int>(windowWidth / (kIconSize + ImGui::GetStyle().ItemSpacing.x)));
+                std::max(1, static_cast<int>(windowWidth / (GContentBrowserIconSize + ImGui::GetStyle().ItemSpacing.x)));
             return ContentGridLayout{itemsPerRow, 0};
         }
 
@@ -280,17 +281,18 @@ namespace Editor
             {
                 ImGui::PushFont(ui.bigIcon);
             }
-            ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(32, 32, 32, 255));
+            ImGui::PushStyleColor(ImGuiCol_Button, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Background));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::SurfaceHover));
             ImGui::PushID(static_cast<int>(globalId));
 
-            VkDescriptorSet textureId = ctx.ui.RequestImTextureId(globalId);
-            if (iconOrTex || (VK_NULL_HANDLE == textureId))
+            ImTextureID textureId = ctx.ui.RequestImTextureId(globalId);
+            if (iconOrTex || textureId == 0)
             {
-                ImGui::Button(icon, ImVec2(kIconSize, kIconSize));
+                ImGui::Button(icon, ImVec2(GContentBrowserIconSize, GContentBrowserIconSize));
             }
             else
             {
-                ImGui::Image((ImTextureID)(intptr_t)textureId, ImVec2(kIconSize, kIconSize));
+                ImGui::Image(textureId, ImVec2(GContentBrowserIconSize, GContentBrowserIconSize));
             }
 
             if (callbacks.onDragSource && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID))
@@ -300,7 +302,7 @@ namespace Editor
             }
 
             ImGui::PopID();
-            ImGui::PopStyleColor();
+            ImGui::PopStyleColor(2);
             if (ui.bigIcon)
             {
                 ImGui::PopFont();
@@ -324,12 +326,15 @@ namespace Editor
 
             auto cursorPos = ImGui::GetCursorPos() + ImGui::GetWindowPos() - ImVec2(0, 4 + ImGui::GetScrollY());
             const bool selected = selectionId == globalId;
-            ImGui::GetWindowDrawList()->AddRectFilled(cursorPos, cursorPos + ImVec2(kIconSize, kIconSize / 5.0f * 3.0f),
-                                                      selected ? ActiveColor : IM_COL32(64, 64, 64, 255), 4);
-            ImGui::GetWindowDrawList()->AddLine(cursorPos, cursorPos + ImVec2(kIconSize, 0), color, 2);
+            ImGui::GetWindowDrawList()->AddRectFilled(
+                cursorPos, cursorPos + ImVec2(GContentBrowserIconSize, GContentBrowserIconSize / 5.0f * 3.0f),
+                selected ? Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Accent, 0.72f)
+                         : Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::SurfaceElevated),
+                4);
+            ImGui::GetWindowDrawList()->AddLine(cursorPos, cursorPos + ImVec2(GContentBrowserIconSize, 0), color, 2);
 
-            ImGui::PushItemWidth(kIconSize);
-            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + kIconSize);
+            ImGui::PushItemWidth(GContentBrowserIconSize);
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + GContentBrowserIconSize);
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 5);
             ImGui::Text("%s", name.c_str());
             ImGui::PopTextWrapPos();
@@ -349,22 +354,98 @@ namespace Editor
         }
     } // namespace
 
+    int DrawMeshBrowserContents(EditorContext& ctx, EditorUiState& ui, ImGuiTextFilter* filter)
+    {
+        auto& allModels = ctx.scene.Models();
+        int itemCount = 0;
+        ContentGridLayout grid = BeginContentGrid();
+        for (uint32_t i = 0; i < allModels.size(); ++i)
+        {
+            auto& model = allModels[i];
+            const std::string name = fmt::format("{}_#{}", model.Name(), i);
+            if (filter != nullptr && filter->IsActive() && !filter->PassFilter(name.c_str()))
+            {
+                continue;
+            }
+
+            uint32_t dummySelection = InvalidId;
+            DrawGeneralContentBrowser(ctx, ui, dummySelection, true, i, name, ICON_FA_BOXES_PACKING,
+                                      IM_COL32(132, 182, 255, 255),
+                                      ContentBrowserCallbacks{});
+            grid.Next();
+            ++itemCount;
+        }
+        return itemCount;
+    }
+
+    int DrawMaterialBrowserContents(EditorContext& ctx, EditorUiState& ui, ImGuiTextFilter* filter)
+    {
+        auto& allMaterials = ctx.scene.Materials();
+        int itemCount = 0;
+        ContentGridLayout grid = BeginContentGrid();
+        for (uint32_t i = 0; i < allMaterials.size(); ++i)
+        {
+            auto& mat = allMaterials[i];
+            if (filter != nullptr && filter->IsActive() && !filter->PassFilter(mat.name_.c_str()))
+            {
+                continue;
+            }
+
+            DrawGeneralContentBrowser(ctx, ui, ui.selectedMaterialId, true, i, mat.name_, ICON_FA_BOWLING_BALL,
+                                      IM_COL32(132, 255, 132, 255),
+                                      ContentBrowserCallbacks{
+                                          .onDoubleClick =
+                                              [&]()
+                                          {
+                                              ui.selected_material = &(ctx.scene.Materials()[i]);
+                                              ui.ed_material = true;
+                                              OpenMaterialEditor(ctx, ui);
+                                          },
+                                          .onDragSource =
+                                              [&]()
+                                          {
+                                              EditorDragDropPayload payload{};
+                                              payload.type = EEditorDragPayloadType::Material;
+                                              payload.materialId = i;
+                                              ImGui::SetDragDropPayload(kEditorDragDropPayload, &payload,
+                                                                        sizeof(payload));
+                                              ImGui::TextUnformatted(mat.name_.c_str());
+                                          },
+                                      });
+
+            grid.Next();
+            ++itemCount;
+        }
+        return itemCount;
+    }
+
+    int DrawTextureBrowserContents(EditorContext& ctx, EditorUiState& ui, ImGuiTextFilter* filter)
+    {
+        auto& totalTextureMap = Assets::GlobalTexturePool::GetInstance()->TotalTextureMap();
+        int itemCount = 0;
+        ContentGridLayout grid = BeginContentGrid();
+        for (auto& textureGroup : totalTextureMap)
+        {
+            if (filter != nullptr && filter->IsActive() && !filter->PassFilter(textureGroup.first.c_str()))
+            {
+                continue;
+            }
+
+            DrawGeneralContentBrowser(ctx, ui, ui.selectedTextureId, false, textureGroup.second.GlobalIdx_,
+                                      textureGroup.first, ICON_FA_LINK_SLASH, IM_COL32(255, 72, 72, 255),
+                                      ContentBrowserCallbacks{});
+            grid.Next();
+            ++itemCount;
+        }
+        return itemCount;
+    }
+
     void DrawMeshBrowserPanel(EditorContext& ctx, EditorUiState& ui)
     {
         ImGui::Begin("Mesh Browser", nullptr);
         {
-            auto& allModels = ctx.scene.Models();
-            ContentGridLayout grid = BeginContentGrid();
-            for (uint32_t i = 0; i < allModels.size(); ++i)
-            {
-                auto& model = allModels[i];
-                const std::string name = fmt::format("{}_#{}", model.Name(), i);
-                uint32_t dummySelection = InvalidId;
-                DrawGeneralContentBrowser(ctx, ui, dummySelection, true, i, name, ICON_FA_BOXES_PACKING,
-                                          IM_COL32(132, 182, 255, 255),
-                                          ContentBrowserCallbacks{});
-                grid.Next();
-            }
+            Runtime::UiTheme::DrawPanelHeader(ICON_FA_BOXES_PACKING, "Meshes", "Scene model buffers");
+            DrawMeshBrowserContents(ctx, ui, nullptr);
         }
         ImGui::End();
     }
@@ -373,35 +454,8 @@ namespace Editor
     {
         ImGui::Begin("Material Browser", nullptr);
         {
-            auto& allMaterials = ctx.scene.Materials();
-            ContentGridLayout grid = BeginContentGrid();
-            for (uint32_t i = 0; i < allMaterials.size(); ++i)
-            {
-                auto& mat = allMaterials[i];
-                DrawGeneralContentBrowser(ctx, ui, ui.selectedMaterialId, true, i, mat.name_, ICON_FA_BOWLING_BALL,
-                                          IM_COL32(132, 255, 132, 255),
-                                          ContentBrowserCallbacks{
-                                              .onDoubleClick =
-                                                  [&]()
-                                              {
-                                                  ui.selected_material = &(ctx.scene.Materials()[i]);
-                                                  ui.ed_material = true;
-                                                  OpenMaterialEditor(ctx, ui);
-                                              },
-                                              .onDragSource =
-                                                  [&]()
-                                              {
-                                                  EditorDragDropPayload payload{};
-                                                  payload.type = EEditorDragPayloadType::Material;
-                                                  payload.materialId = i;
-                                                  ImGui::SetDragDropPayload(kEditorDragDropPayload, &payload,
-                                                                            sizeof(payload));
-                                                  ImGui::TextUnformatted(mat.name_.c_str());
-                                              },
-                                          });
-
-                grid.Next();
-            }
+            Runtime::UiTheme::DrawPanelHeader(ICON_FA_CIRCLE_HALF_STROKE, "Materials", "Drag materials onto viewport objects");
+            DrawMaterialBrowserContents(ctx, ui, nullptr);
         }
         ImGui::End();
     }
@@ -410,15 +464,8 @@ namespace Editor
     {
         ImGui::Begin("Texture Browser", nullptr);
         {
-            auto& totalTextureMap = Assets::GlobalTexturePool::GetInstance()->TotalTextureMap();
-            ContentGridLayout grid = BeginContentGrid();
-            for (auto& textureGroup : totalTextureMap)
-            {
-                DrawGeneralContentBrowser(ctx, ui, ui.selectedTextureId, false, textureGroup.second.GlobalIdx_,
-                                          textureGroup.first, ICON_FA_LINK_SLASH, IM_COL32(255, 72, 72, 255),
-                                          ContentBrowserCallbacks{});
-                grid.Next();
-            }
+            Runtime::UiTheme::DrawPanelHeader(ICON_FA_IMAGE, "Textures", "Loaded GPU textures");
+            DrawTextureBrowserContents(ctx, ui, nullptr);
         }
         ImGui::End();
     }
@@ -427,12 +474,44 @@ namespace Editor
     {
         ImGui::Begin("Content Browser", nullptr);
         {
+            Runtime::UiTheme::DrawPanelHeader(ICON_FA_FOLDER_TREE, "Assets", "Project content browser");
             static const std::filesystem::path rootPath =
                 std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets"));
             static std::filesystem::path currentPath = rootPath;
             static std::unordered_map<std::filesystem::path, std::vector<std::filesystem::directory_entry>>
                 directoryCache;
+            static ImGuiTextFilter contentFilter;
+            int itemCount = 0;
+            int selectedCount = ui.selectedContentItemId != InvalidId ? 1 : 0;
 
+            if (ImGui::Button(ICON_FA_FILE_IMPORT " Import"))
+            {
+                SPDLOG_INFO("Content Browser import placeholder");
+            }
+            ImGui::SameLine();
+            if (ImGui::Button(ICON_FA_PLUS " Add"))
+            {
+                ImGui::OpenPopup("ContentAddPopup");
+            }
+            if (ImGui::BeginPopup("ContentAddPopup"))
+            {
+                ImGui::MenuItem("Material", nullptr, false, false);
+                ImGui::MenuItem("Texture", nullptr, false, false);
+                ImGui::MenuItem("Scene", nullptr, false, false);
+                ImGui::MenuItem("Script", nullptr, false, false);
+                ImGui::EndPopup();
+            }
+            ImGui::SameLine();
+            contentFilter.Draw("Filter##ContentBrowserFilter", 220.0f);
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(130.0f);
+            ImGui::SliderFloat("Thumbnail", &GContentBrowserIconSize, 48.0f, 112.0f, "%.0f");
+            Runtime::UiTheme::DrawThinSeparator();
+
+            if (ImGui::BeginTabBar("ContentBrowserTabs"))
+            {
+                if (ImGui::BeginTabItem("Content Browser"))
+                {
             DrawContentBrowserNavigation(ui, rootPath, currentPath, directoryCache);
 
             auto cursorPos = ImGui::GetWindowPos() + ImVec2(0, ImGui::GetCursorPos().y + 2);
@@ -443,7 +522,7 @@ namespace Editor
             ImGui::GetWindowDrawList()->AddLine(cursorPos, cursorPos + ImVec2(ImGui::GetWindowSize().x, 0),
                                                 IM_COL32(20, 20, 20, 255), 1);
 
-            ImGui::BeginChild("Content Items");
+            ImGui::BeginChild("Content Items", ImVec2(0.0f, -24.0f));
 
             auto& entries = GetCachedDirectoryEntries(currentPath, directoryCache);
             ContentGridLayout grid = BeginContentGrid();
@@ -454,6 +533,10 @@ namespace Editor
 
                 const ContentAssetVisual visual = ResolveAssetVisual(entry);
                 if (visual.kind == EContentAssetKind::Unsupported)
+                {
+                    continue;
+                }
+                if (contentFilter.IsActive() && !contentFilter.PassFilter(name.c_str()))
                 {
                     continue;
                 }
@@ -508,8 +591,39 @@ namespace Editor
                     });
 
                 grid.Next();
+                ++itemCount;
             }
             ImGui::EndChild();
+                    selectedCount = ui.selectedContentItemId != InvalidId ? 1 : 0;
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem("Material Browser"))
+                {
+                    ImGui::BeginChild("Material Items", ImVec2(0.0f, -24.0f));
+                    itemCount = DrawMaterialBrowserContents(ctx, ui, &contentFilter);
+                    selectedCount = ui.selectedMaterialId != InvalidId ? 1 : 0;
+                    ImGui::EndChild();
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem("Texture Browser"))
+                {
+                    ImGui::BeginChild("Texture Items", ImVec2(0.0f, -24.0f));
+                    itemCount = DrawTextureBrowserContents(ctx, ui, &contentFilter);
+                    selectedCount = ui.selectedTextureId != InvalidId ? 1 : 0;
+                    ImGui::EndChild();
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem("Mesh Browser"))
+                {
+                    ImGui::BeginChild("Mesh Items", ImVec2(0.0f, -24.0f));
+                    itemCount = DrawMeshBrowserContents(ctx, ui, &contentFilter);
+                    selectedCount = 0;
+                    ImGui::EndChild();
+                    ImGui::EndTabItem();
+                }
+                ImGui::EndTabBar();
+            }
+            ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
         }
         ImGui::End();
     }

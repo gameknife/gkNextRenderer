@@ -26,6 +26,10 @@ linux = "https://github.com/shader-slang/slang/releases/download/v2025.6.1/slang
 macos_amd64 = "https://github.com/shader-slang/slang/releases/download/v2025.6.1/slang-2025.6.1-macos-x86_64.zip"
 macos_arm64 = "https://github.com/shader-slang/slang/releases/download/v2025.6.1/slang-2025.6.1-macos-aarch64.zip"
 
+[external.vulkansdk]
+version = "1.4.341.1"
+root = "external/VulkanSDK"
+
 [paks]
 repo = "gameknife/gkNextEngine"
 release_tag = "paks-latest"

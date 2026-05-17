@@ -13,6 +13,8 @@
 
 namespace StreamlineWrapper
 {
+	bool ShouldInitialize();
+	void Initialize();
 	void LazyInit(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily, bool& outSupportDLSS, bool& outSupportDLSSRR);
 	void Shutdown();
 }
@@ -48,7 +50,13 @@ namespace Vulkan
 		ERT_ModernDeferred,
 		ERT_LegacyDeferred,
 		ERT_VoxelTracing,
+		ERT_LegacyDeferredNoAmbient,
 	};
+
+	inline bool RendererUsesAmbientCube(const ERendererType type)
+	{
+		return type != ERT_LegacyDeferredNoAmbient;
+	}
 		
 	class VulkanBaseRenderer
 	{
@@ -130,6 +138,8 @@ namespace Vulkan
 		
 		bool SupportDLSS() const { return supportDLSS_; }
 		bool SupportDLSSRR() const { return supportDLSSRR_; }
+		bool HasFullAmbientCubeBudget() const { return fullAmbientCubeBudget_; }
+		bool CurrentRendererUsesAmbientCube() const { return RendererUsesAmbientCube(currentLogicRenderer_); }
 
 		virtual void RegisterLogicRenderer(ERendererType type);
 		virtual void SwitchLogicRenderer(ERendererType type);
@@ -156,6 +166,8 @@ namespace Vulkan
 		bool supportDLSS_{};
 		bool supportDLSSRR_{};
 		bool supportDenoiser_ {};
+		bool streamlineDeviceExtensionsEnabled_{};
+		bool fullAmbientCubeBudget_{true};
 		// bool showWireframe_ {};
 		int frameCount_{};
 		bool forceSDR_{};
@@ -181,19 +193,16 @@ namespace Vulkan
 		std::unique_ptr<Buffer> skinnedVertexBuffer_;
 		std::unique_ptr<DeviceMemory> skinnedVertexBufferMemory_;
 
-		std::unique_ptr<Buffer> skinnedSimpleVertexBuffer_;
-		std::unique_ptr<DeviceMemory> skinnedSimpleVertexBufferMemory_;
-
 		std::unique_ptr<Buffer> jointMatricesBuffer_;
 		std::unique_ptr<DeviceMemory> jointMatricesBufferMemory_;
 
 		uint32_t currentSkinnedVertexBufferSize_{};
-		uint32_t currentSkinnedSimpleVertexBufferSize_{};
 		uint32_t currentJointMatrixBufferSize_{};
 
 	private:
 		void RecreateSwapChain();
 		void UpdateUniformBuffer(uint32_t imageIndex);
+		void DrawWireframeOverlay(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
 		const VkPresentModeKHR presentMode_;
 		bool requestRecreateSwapChain_ = false;
@@ -232,7 +241,7 @@ namespace Vulkan
 
 		std::unique_ptr<class DepthBuffer> depthBuffer_;
 		std::unique_ptr<FrameBuffer> visibilityFrameBuffer_;
-		std::unique_ptr<FrameBuffer> wireframeFramebuffer_;
+		std::vector<FrameBuffer> wireframeFrameBuffers_;
 		
 		std::unique_ptr<class CommandPool> commandPool_;
 		std::unique_ptr<class CommandPool> commandPool2_;

@@ -33,9 +33,10 @@ namespace Runtime
             Custom,
         };
 
-        inline constexpr std::array<FRendererOption, 4> RendererOptions = {{
+        inline constexpr std::array<FRendererOption, 5> RendererOptions = {{
             {"SoftTracing", Vulkan::ERT_ModernDeferred},
             {"SoftModern", Vulkan::ERT_LegacyDeferred},
+            {"SoftModernNoAmbient", Vulkan::ERT_LegacyDeferredNoAmbient},
             {"VoxelTracing", Vulkan::ERT_VoxelTracing},
             {"PathTracing", Vulkan::ERT_PathTracing},
         }};
@@ -71,7 +72,8 @@ namespace Runtime
             return -1;
         }
 
-        inline void DrawRendererSelector(NextEngine& engine, UserSettings& userSetting, const char* comboId)
+        inline void DrawRendererSelector(NextEngine& engine, UserSettings& userSetting, const char* comboId,
+                                         float width = -1.0f)
         {
             const int rendererOptionCount = GetRendererOptionCount(engine);
             int currentRendererIndex = ResolveRendererOptionIndex(userSetting, rendererOptionCount);
@@ -81,7 +83,7 @@ namespace Runtime
                 userSetting.RendererType = static_cast<int32_t>(RendererOptions[currentRendererIndex].type);
             }
 
-            ImGui::PushItemWidth(-1);
+            ImGui::PushItemWidth(width);
             auto renderersGetter = [](void* data, int index, const char** outText)
             {
                 const auto* options = static_cast<const FRendererOption*>(data);

@@ -41,13 +41,9 @@ file(GLOB_RECURSE src_files_thirdparty
     "ThirdParty/ImGuizmo/*.h"
     "ThirdParty/ImAnim/*.cpp"
     "ThirdParty/ImAnim/*.h"
+    "ThirdParty/imgui-custom/imgui_impl_sdl3_custom.cpp"
+    "ThirdParty/imgui-custom/imgui_impl_sdl3_custom.h"
     "ThirdParty/ozz/*.h"
-)
-
-# --- Custom ImGui Backend ---
-file(GLOB_RECURSE src_files_customimgui
-    "ThirdParty/imgui-custom/*.cpp"
-    "ThirdParty/imgui-custom/*.h"
 )
 
 # --- Engine Core ---

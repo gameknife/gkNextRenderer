@@ -3,7 +3,6 @@
 #define NODES_SET_INT_H
 
 #include "../../ImNodeFlow/include/ImNodeFlow.h"
-#include "Vulkan/DescriptorSystem.hpp"
 
 namespace Nodes
 {
@@ -27,7 +26,6 @@ namespace Nodes
 
     private:
         int textureId = 0;
-        VkDescriptorSet imTextureId;
     };
 
 } // namespace Nodes

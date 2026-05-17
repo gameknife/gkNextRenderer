@@ -79,7 +79,10 @@ namespace Vulkan
 		PipelineLayout(const Device& device, const VkPushConstantRange* pushConstantRanges = nullptr, uint32_t pushConstantRangeCount = 0);
 		~PipelineLayout();
 
-		void BindDescriptorSets(VkCommandBuffer commandBuffer, uint32_t idx) const;
+		void BindDescriptorSets(
+			VkCommandBuffer commandBuffer,
+			uint32_t idx,
+			VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_COMPUTE) const;
 	private:
 
 		const Device& device_;

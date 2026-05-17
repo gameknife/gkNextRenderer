@@ -9,6 +9,7 @@ namespace Assets
     struct LDrawLoadOptions
     {
         float lduToWorldScale = defaultLDrawLduToWorldScale;
+        bool useLibraryPak = true;
     };
 
     inline float SanitizeLDrawLduToWorldScale(float scale)

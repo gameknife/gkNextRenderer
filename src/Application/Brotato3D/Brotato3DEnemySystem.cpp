@@ -2,6 +2,7 @@
 #include "Brotato3DCommon.hpp"
 
 #include "Assets/Core/Node.h"
+#include "Runtime/Components/PhysicsComponent.h"
 #include "Runtime/Components/RenderComponent.h"
 #include <spdlog/spdlog.h>
 
@@ -11,6 +12,9 @@ using namespace Brotato3DUtil;
 
 namespace
 {
+    constexpr float BodyBlockFillScale = 1.02f;
+    constexpr float BodyBlockMinExtent = 0.08f;
+
     glm::vec3 ResolveEnemyDebrisDir(const Brotato3D::FEnemyRuntime& enemy, const glm::vec3& fallbackDir)
     {
         glm::vec3 dir(enemy.lastHitDebrisDir.x, 0.0f, enemy.lastHitDebrisDir.z);
@@ -23,6 +27,164 @@ namespace
             dir = glm::vec3(0.0f, 0.0f, 1.0f);
         }
         return glm::normalize(dir);
+    }
+
+    int CountBodyBlocksOnAxis(float size, bool boss, bool vertical)
+    {
+        if (boss)
+        {
+            return vertical ? 4 : 3;
+        }
+        const float threshold = vertical ? 0.65f : 0.75f;
+        return size >= threshold ? 3 : 2;
+    }
+}
+
+void Brotato3DGameInstance::CreateEnemyBodyBlocks(Brotato3D::FEnemyRuntime& enemy,
+                                                  const FEnemyVisualResource& visual,
+                                                  const std::string& enemyId)
+{
+    if (!enemy.node || !enemy.def || visual.bodyBlockModelId == 0)
+    {
+        return;
+    }
+
+    enemy.bodyBlocks.clear();
+    enemy.bodyBlocksLost = 0;
+    const bool boss = enemy.def->boss.enabled;
+    const glm::ivec3 grid(CountBodyBlocksOnAxis(enemy.def->size.x, boss, false),
+                          CountBodyBlocksOnAxis(enemy.def->size.y, boss, true),
+                          CountBodyBlocksOnAxis(enemy.def->size.z, boss, false));
+    const glm::vec3 cellSize = enemy.def->size / glm::vec3(grid);
+    const glm::vec3 blockScale = glm::max(cellSize * BodyBlockFillScale, glm::vec3(BodyBlockMinExtent));
+    auto& scene = GetEngine().GetScene();
+
+    enemy.bodyBlocks.reserve(static_cast<size_t>(grid.x * grid.y * grid.z));
+    for (int y = 0; y < grid.y; ++y)
+    {
+        for (int z = 0; z < grid.z; ++z)
+        {
+            for (int x = 0; x < grid.x; ++x)
+            {
+                const glm::vec3 localOffset = -enemy.def->size * 0.5f +
+                    cellSize * (glm::vec3(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z)) + glm::vec3(0.5f));
+                auto blockNode = SceneBuilder::CreateRenderNode(
+                    fmt::format("Brotato3D_EnemyBlock_{}_{}_{}_{}", enemyId, enemy.runtimeTag, enemy.bodyBlocks.size(), enemy.def->name),
+                    localOffset,
+                    blockScale,
+                    scene.GenerateInstanceId(),
+                    visual.bodyBlockModelId,
+                    enemy.materialId,
+                    true);
+
+                auto physicsComponent = std::make_shared<Runtime::PhysicsComponent>();
+                physicsComponent->SetMobility(Runtime::ENodeMobility::Dynamic);
+                blockNode->AddComponent(physicsComponent);
+                blockNode->SetParent(enemy.node);
+                NodeUtils::SetOutlineFlags(blockNode, Runtime::RenderOutlineFlags::danger);
+                scene.AddNode(blockNode);
+
+                Brotato3D::FEnemyBodyBlockRuntime block{};
+                block.node = blockNode;
+                block.localOffset = localOffset;
+                block.visible = true;
+                enemy.bodyBlocks.push_back(block);
+            }
+        }
+    }
+    NodeUtils::SetVisible(enemy.node, false);
+    scene.MarkTransformDirty();
+}
+
+void Brotato3DGameInstance::ResetEnemyBodyBlocks(Brotato3D::FEnemyRuntime& enemy)
+{
+    enemy.bodyBlocksLost = 0;
+    for (Brotato3D::FEnemyBodyBlockRuntime& block : enemy.bodyBlocks)
+    {
+        block.visible = true;
+        if (block.node)
+        {
+            block.node->SetTranslation(block.localOffset);
+            block.node->SetRotation(glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+            NodeUtils::SetVisible(block.node, true);
+        }
+    }
+    SetEnemyVisualMaterial(enemy, enemy.materialId);
+    SetEnemyVisualOutlineFlags(enemy, Runtime::RenderOutlineFlags::danger);
+    SetEnemyVisualVisible(enemy, true);
+}
+
+void Brotato3DGameInstance::SetEnemyVisualVisible(Brotato3D::FEnemyRuntime& enemy, bool visible)
+{
+    if (!enemy.node)
+    {
+        return;
+    }
+
+    NodeUtils::SetVisible(enemy.node, visible && enemy.bodyBlocks.empty());
+    for (Brotato3D::FEnemyBodyBlockRuntime& block : enemy.bodyBlocks)
+    {
+        NodeUtils::SetVisible(block.node, visible && block.visible);
+    }
+}
+
+void Brotato3DGameInstance::SetEnemyVisualMaterial(const Brotato3D::FEnemyRuntime& enemy, uint32_t materialId)
+{
+    NodeUtils::SetPrimaryMaterial(enemy.node, materialId);
+    for (const Brotato3D::FEnemyBodyBlockRuntime& block : enemy.bodyBlocks)
+    {
+        NodeUtils::SetPrimaryMaterial(block.node, materialId);
+    }
+}
+
+void Brotato3DGameInstance::SetEnemyVisualOutlineFlags(const Brotato3D::FEnemyRuntime& enemy, uint32_t outlineFlags)
+{
+    NodeUtils::SetOutlineFlags(enemy.node, outlineFlags);
+    for (const Brotato3D::FEnemyBodyBlockRuntime& block : enemy.bodyBlocks)
+    {
+        NodeUtils::SetOutlineFlags(block.node, outlineFlags);
+    }
+}
+
+void Brotato3DGameInstance::BreakEnemyBodyBlocks(Brotato3D::FEnemyRuntime& enemy, int damage)
+{
+    if (damage <= 0 || enemy.bodyBlocks.empty() || enemy.maxHp <= 0)
+    {
+        return;
+    }
+
+    const int totalBlocks = static_cast<int>(enemy.bodyBlocks.size());
+    const float hpRatio = std::clamp(static_cast<float>(std::max(0, enemy.currentHp)) / static_cast<float>(enemy.maxHp), 0.0f, 1.0f);
+    const int targetLost = enemy.currentHp <= 0 ? totalBlocks :
+        std::clamp(static_cast<int>(std::floor((1.0f - hpRatio) * static_cast<float>(totalBlocks))), 0, totalBlocks);
+    int dropsRemaining = std::max(0, targetLost - enemy.bodyBlocksLost);
+    if (dropsRemaining <= 0)
+    {
+        return;
+    }
+
+    while (dropsRemaining > 0)
+    {
+        std::vector<size_t> visibleIndices;
+        visibleIndices.reserve(enemy.bodyBlocks.size());
+        for (size_t index = 0; index < enemy.bodyBlocks.size(); ++index)
+        {
+            if (enemy.bodyBlocks[index].visible)
+            {
+                visibleIndices.push_back(index);
+            }
+        }
+        if (visibleIndices.empty())
+        {
+            break;
+        }
+
+        std::uniform_int_distribution<size_t> indexDist(0, visibleIndices.size() - 1);
+        Brotato3D::FEnemyBodyBlockRuntime& block = enemy.bodyBlocks[visibleIndices[indexDist(rng_)]];
+        block.visible = false;
+        NodeUtils::SetVisible(block.node, false);
+        ++enemy.bodyBlocksLost;
+        --dropsRemaining;
     }
 }
 
@@ -62,15 +224,18 @@ void Brotato3DGameInstance::SpawnEnemy(const std::string& enemyId, const glm::ve
     {
         const uint32_t runtimeTag = static_cast<uint32_t>(std::distance(enemies_.begin(), reusableEnemy)) + 1U;
         enemy.node = reusableEnemy->node;
+        enemy.bodyBlocks = std::move(reusableEnemy->bodyBlocks);
         enemy.kinematicBodyId = reusableEnemy->kinematicBodyId.IsInvalid() ? AcquireEnemyKinematicBody(enemyId) :
                                                                         reusableEnemy->kinematicBodyId;
         enemy.runtimeTag = runtimeTag;
-        *reusableEnemy = enemy;
-        NodeUtils::SetPrimaryMaterial(reusableEnemy->node, reusableEnemy->materialId);
-        NodeUtils::SetOutlineFlags(reusableEnemy->node, Runtime::RenderOutlineFlags::danger);
+        *reusableEnemy = std::move(enemy);
+        if (reusableEnemy->bodyBlocks.empty())
+        {
+            CreateEnemyBodyBlocks(*reusableEnemy, visual, enemyId);
+        }
+        ResetEnemyBodyBlocks(*reusableEnemy);
         reusableEnemy->node->SetTranslation(reusableEnemy->worldPos);
         reusableEnemy->node->SetScale(glm::vec3(1.0f));
-        NodeUtils::SetVisible(reusableEnemy->node, true);
         // Spawn activation is a positional snap; use a stable fallback step for the kinematic body.
         SyncEnemyKinematicBody(*reusableEnemy, 1.0 / 60.0);
         return;
@@ -78,12 +243,13 @@ void Brotato3DGameInstance::SpawnEnemy(const std::string& enemyId, const glm::ve
 
     enemy.kinematicBodyId = AcquireEnemyKinematicBody(enemyId);
     enemy.node = SceneBuilder::CreateRenderNode(fmt::format("Brotato3D_Enemy_{}_{}", enemyId, enemies_.size()), spawnPos, glm::vec3(1.0f),
-                                  GetEngine().GetScene().GenerateInstanceId(), visual.modelId, visual.materialId);
-    NodeUtils::SetOutlineFlags(enemy.node, Runtime::RenderOutlineFlags::danger);
+                                  GetEngine().GetScene().GenerateInstanceId(), visual.modelId, visual.materialId, false);
     GetEngine().GetScene().AddNode(enemy.node);
-    GetEngine().GetScene().MarkDirty();
     enemies_.push_back(enemy);
     enemies_.back().runtimeTag = static_cast<uint32_t>(enemies_.size());
+    CreateEnemyBodyBlocks(enemies_.back(), visual, enemyId);
+    ResetEnemyBodyBlocks(enemies_.back());
+    GetEngine().GetScene().MarkTransformDirty();
     // Spawn activation is a positional snap; use a stable fallback step for the kinematic body.
     SyncEnemyKinematicBody(enemies_.back(), 1.0 / 60.0);
 }
@@ -134,7 +300,7 @@ void Brotato3DGameInstance::UpdateEnemies(double deltaSeconds)
         {
             activeMaterial = enemy.warningMaterialId;
         }
-        NodeUtils::SetPrimaryMaterial(enemy.node, activeMaterial);
+        SetEnemyVisualMaterial(enemy, activeMaterial);
 
         if (enemy.def->bomb.enabled && enemy.bombFuseMs >= 0.0f)
         {
@@ -153,7 +319,7 @@ void Brotato3DGameInstance::UpdateEnemies(double deltaSeconds)
                 enemy.alive = false;
                 enemy.fading = false;
                 DeactivateEnemyKinematicBody(enemy);
-                NodeUtils::SetVisible(enemy.node, false);
+                SetEnemyVisualVisible(enemy, false);
                 continue;
             }
             SyncEnemyKinematicBody(enemy, deltaSeconds);
@@ -503,6 +669,7 @@ void Brotato3DGameInstance::KillEnemy(Brotato3D::FEnemyRuntime& enemy, bool drop
     enemy.fading = false;
     enemy.deathFadeMs = 0.0f;
     enemy.node->SetScale(glm::vec3(1.0f));
+    SetEnemyVisualVisible(enemy, true);
     if (dropLoot)
     {
         ++killCount_;
@@ -560,7 +727,7 @@ void Brotato3DGameInstance::KillEnemy(Brotato3D::FEnemyRuntime& enemy, bool drop
         bossKillFlashMs_ = 100.0f;
         timeScaleRecoveryMs_ = 1200.0f;
     }
-    NodeUtils::SetVisible(enemy.node, false);
+    SetEnemyVisualVisible(enemy, false);
 }
 
 void Brotato3DGameInstance::ClearAliveEnemies(bool dropLoot)

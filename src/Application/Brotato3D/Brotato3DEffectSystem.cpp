@@ -300,6 +300,8 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
         models.push_back(Assets::FProcModel::CreateBox(-def.size * 0.5f, def.size * 0.5f));
         FEnemyVisualResource visual{};
         visual.modelId = static_cast<uint32_t>(models.size() - 1);
+        models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.5f), glm::vec3(0.5f)));
+        visual.bodyBlockModelId = static_cast<uint32_t>(models.size() - 1);
         visual.materialId = SceneBuilder::AddLambertianMaterial(materials, def.color);
         visual.darkMaterialId = SceneBuilder::AddLambertianMaterial(materials, def.color * 0.4f);
         visual.hitFlashMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f));

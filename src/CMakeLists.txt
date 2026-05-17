@@ -65,7 +65,6 @@ add_library(gkNextRenderer SHARED
 	${src_files_vulkan} 
 	${src_files_rendering}
 	${src_files_thirdparty}
-	${src_files_customimgui}
 	${src_files_gkrenderer}
 	AndroidMain.cpp
 	#GameActivitySources.cpp
@@ -253,6 +252,11 @@ foreach(target IN LISTS AllTargets)
 	else()
 		target_compile_definitions(${target} PUBLIC GK_ENABLE_HOT_RELOAD=0)
 	endif()
+	if (GK_ENABLE_SHADER_CLOCK)
+		target_compile_definitions(${target} PUBLIC GK_ENABLE_SHADER_CLOCK=1)
+	else()
+		target_compile_definitions(${target} PUBLIC GK_ENABLE_SHADER_CLOCK=0)
+	endif()
 
 	if( IOS )
 	target_compile_definitions(${target} PUBLIC IOS=1)
@@ -306,6 +310,10 @@ foreach(target IN LISTS AllTargets)
 			target_include_directories(${target} PRIVATE ${STREAMLINE_INCLUDE_DIR})
 			target_link_directories(${target} PRIVATE ${STREAMLINE_LIB_DIR})
 			target_link_libraries(${target} PRIVATE sl.interposer)
+			if ( WIN32 )
+				target_link_libraries(${target} PRIVATE delayimp)
+				target_link_options(${target} PRIVATE "/DELAYLOAD:sl.interposer.dll")
+			endif()
 		endif()
 	elseif ( ${target} STREQUAL NextGameplay )
 		set_target_properties(${target} PROPERTIES FOLDER "Gameplay")
@@ -318,6 +326,10 @@ foreach(target IN LISTS AllTargets)
 		if ( WITH_STREAMLINE ) 
 		target_link_directories(${target} PRIVATE ${STREAMLINE_LIB_DIR})
 		target_link_libraries(${target} PRIVATE sl.interposer)
+		if ( WIN32 )
+			target_link_libraries(${target} PRIVATE delayimp)
+			target_link_options(${target} PRIVATE "/DELAYLOAD:sl.interposer.dll")
+		endif()
 		endif()
 	endif()
 

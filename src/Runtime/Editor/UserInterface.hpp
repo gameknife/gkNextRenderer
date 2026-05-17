@@ -5,6 +5,7 @@
 #include "Vulkan/DebugUtilities.hpp"
 #include "Vulkan/RenderingPipeline.hpp"
 #include <vector>
+#include <array>
 #include <deque>
 #include <memory>
 #include <string>
@@ -25,8 +26,9 @@ namespace Vulkan
 {
 	class Window;
 	class CommandPool;
+	class Buffer;
 	class DepthBuffer;
-	class DescriptorPool;
+	class DeviceMemory;
 	class FrameBuffer;
 	class RenderPass;
 	class SwapChain;
@@ -87,8 +89,8 @@ public:
 		const Vulkan::DepthBuffer& depthBuffer);
 	void OnDestroySurface();
 
-	VkDescriptorSet RequestImTextureId(uint32_t globalTextureId);
-	VkDescriptorSet RequestImTextureByName(const std::string& name);
+	ImTextureID RequestImTextureId(uint32_t globalTextureId);
+	ImTextureID RequestImTextureByName(const std::string& name);
 
 	struct FUiTextureHandle
 	{
@@ -106,8 +108,12 @@ public:
 	bool DrawConsoleCommandInput(const char* label, const char* hint, float width = 0.0f, bool closeConsoleOnSubmit = false,
 		bool showMatchPopup = false, const char* matchPopupId = nullptr, bool refreshMatches = true);
 	void DrawConsoleLogOutput(const char* childId, const ImVec2& size = ImVec2(0.0f, 0.0f), bool bordered = true);
+	void ToggleConsole();
+	bool IsConsoleOpen() const { return showConsole_; }
 
 private:
+	struct FUiRenderBuffers;
+
 	NextEngine& GetEngine() {return *engine_;}
 	
 	void DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gpuTimer);
@@ -115,6 +121,29 @@ private:
 	void DrawConsoleWindow();
 	void RefreshConsoleMatches(size_t matchLimit);
 	void DrawConsoleMatchPopup(float width, const char* popupId);
+	void InitializeRendererBackend();
+	void ShutdownRendererBackend();
+	void BeginRendererBackendFrame();
+	void CreateUiPipeline(const Vulkan::SwapChain& swapChain);
+	void DestroyUiPipeline();
+	void InitializeFontTexture(Vulkan::CommandPool& commandPool);
+	VkPipeline GetOrCreatePlatformViewportPipeline(VkRenderPass renderPass);
+	void CreatePlatformViewportWindow(ImGuiViewport* viewport);
+	void DestroyPlatformViewportWindow(ImGuiViewport* viewport);
+	void ResizePlatformViewportWindow(ImGuiViewport* viewport, ImVec2 size);
+	void RenderPlatformViewportWindow(ImGuiViewport* viewport);
+	void SwapPlatformViewportBuffers(ImGuiViewport* viewport);
+	static UserInterface* GetRendererBackendOwner();
+	static void CreatePlatformViewportWindowCallback(ImGuiViewport* viewport);
+	static void DestroyPlatformViewportWindowCallback(ImGuiViewport* viewport);
+	static void ResizePlatformViewportWindowCallback(ImGuiViewport* viewport, ImVec2 size);
+	static void RenderPlatformViewportWindowCallback(ImGuiViewport* viewport, void* renderArg);
+	static void SwapPlatformViewportBuffersCallback(ImGuiViewport* viewport, void* renderArg);
+	void PrunePlatformViewportRenderBuffers();
+	void RenderDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, FUiRenderBuffers& renderBuffers,
+	                    VkExtent2D framebufferExtent, bool hdrOutput, VkPipeline pipeline);
+	static ImTextureID EncodeBindlessTextureId(uint32_t textureIndex);
+	static bool DecodeBindlessTextureId(ImTextureID textureId, uint32_t& outTextureIndex);
 	static int ConsoleInputTextCallback(ImGuiInputTextCallbackData* data);
 	int HandleConsoleInputTextCallback(ImGuiInputTextCallbackData* data);
 	void DrawConsoleLogOutputInternal(const char* childId, const ImVec2& size, bool bordered);
@@ -137,14 +166,25 @@ private:
 		uint32_t displayOrder = 0;
 	};
 
-	std::unique_ptr<Vulkan::DescriptorPool> descriptorPool_;
 	std::unique_ptr<Vulkan::RenderPass> renderPass_;
 	std::vector< Vulkan::FrameBuffer > uiFrameBuffers_;
+	struct FUiRenderBuffers
+	{
+		std::unique_ptr<Vulkan::Buffer> vertexBuffer;
+		std::unique_ptr<Vulkan::DeviceMemory> vertexBufferMemory;
+		VkDeviceSize vertexBufferSize = 0;
+	};
+	std::vector<FUiRenderBuffers> uiRenderBuffers_;
+	VkPipelineLayout uiPipelineLayout_ = VK_NULL_HANDLE;
+	VkPipeline uiPipeline_ = VK_NULL_HANDLE;
+	VkPipeline uiPlatformViewportPipeline_ = VK_NULL_HANDLE;
+	VkRenderPass uiPlatformViewportRenderPass_ = VK_NULL_HANDLE;
 	UserSettings& userSettings_;	
 	
-	std::unordered_map<uint32_t, VkDescriptorSet> imTextureIdMap_;
+	std::unordered_map<ImGuiID, std::vector<FUiRenderBuffers>> platformUiRenderBuffers_;
 	std::unordered_set<std::string> uiTextureLoadRequests_;
 	std::unordered_map<std::string, ImVec2> uiTexturePixelSizeCache_;
+	uint32_t fontTextureIndex_ = UINT32_MAX;
 	std::vector< std::function<void ()> > auxDrawRequest_;
 	std::vector<std::string> consoleHistory_;
 	std::vector<std::string> consoleMatches_;
@@ -160,6 +200,12 @@ private:
 	uint64_t consoleLogRevision_ = 0;
 	std::unordered_map<std::string, TimingHistory> gpuTimeHistory_;
 	std::unordered_map<std::string, TimingHistory> cpuTimeHistory_;
+
+	static constexpr int kOverlaySparklineSampleCount = 64;
+	std::array<float, kOverlaySparklineSampleCount> frameRateSamples_{};
+	std::array<float, kOverlaySparklineSampleCount> frameTimeSamples_{};
+	int overlaySampleCursor_ = 0;
+	int overlaySampleFilled_ = 0;
 
 	NextEngine* engine_;
 };

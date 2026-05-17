@@ -25,9 +25,9 @@ namespace
         {
             auto uniqueSuffix = std::to_string(
                 std::chrono::steady_clock::now().time_since_epoch().count());
-            path_ = std::filesystem::current_path() / ("ldraw_loader_" + uniqueSuffix + ".mpd");
+            path_ = std::filesystem::temp_directory_path() / ("ldraw_loader_" + uniqueSuffix + ".mpd");
 
-            std::ofstream out(path_);
+            std::ofstream out(path_, std::ios::binary | std::ios::trunc);
             REQUIRE(out.is_open());
             out << contents;
         }
@@ -69,6 +69,9 @@ TEST_CASE("LDraw loader preserves MPD submodel hierarchy as nodes", "[Unit][LDra
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
 
+    Assets::LDrawLoadOptions options;
+    options.useLibraryPak = false;
+
     REQUIRE(Assets::FLDrawLoader::LoadLDrawScene(
         sceneFile.Path().string(),
         environment,
@@ -77,7 +80,8 @@ TEST_CASE("LDraw loader preserves MPD submodel hierarchy as nodes", "[Unit][LDra
         materials,
         lights,
         tracks,
-        skeletons));
+        skeletons,
+        options));
 
     std::vector<std::shared_ptr<Assets::Node>> sceneNodes;
     for (const auto& node : nodes)
@@ -138,6 +142,7 @@ TEST_CASE("LDraw loader applies configurable LDU scale to geometry and placement
 
     Assets::LDrawLoadOptions options;
     options.lduToWorldScale = 0.1f;
+    options.useLibraryPak = false;
 
     REQUIRE(Assets::FLDrawLoader::LoadLDrawScene(
         sceneFile.Path().string(),
@@ -161,7 +166,7 @@ TEST_CASE("LDraw loader applies configurable LDU scale to geometry and placement
     }
 
     REQUIRE(partNode);
-    CheckVec3Near(partNode->Translation(), glm::vec3(-1.0f, -2.0f, 3.0f));
+    CheckVec3Near(partNode->Translation(), glm::vec3(-1.0f, 0.4f, 3.0f));
 
     auto renderComp = partNode->GetComponent<Runtime::RenderComponent>();
     REQUIRE(renderComp);

@@ -25,10 +25,17 @@ namespace Assets
 		ETS_Unloaded,
 	};
 
+	enum class ETextureLifetime : uint8
+	{
+		ETL_Transient,
+		ETL_Persistent,
+	};
+
 	struct FTextureBindingGroup
 	{
 		uint32_t GlobalIdx_;
 		ETextureStatus Status_;
+		ETextureLifetime Lifetime_ = ETextureLifetime::ETL_Transient;
 	};
 	
 	class GlobalTexturePool final
@@ -42,18 +49,24 @@ namespace Assets
 
 		void BindTexture(uint32_t textureIdx, const TextureImage& textureImage);
 		void BindStorageTexture(uint32_t textureIdx, const Vulkan::ImageView& textureImage);
+		uint32_t RegisterTexture(const std::string& textureName, std::unique_ptr<TextureImage> textureImage,
+		                         ETextureLifetime lifetime = ETextureLifetime::ETL_Transient);
 		uint32_t TryGetTexureIndex(const std::string& textureName) const;
-		uint32_t RequestNewTextureFileAsync(const std::string& filename, bool hdr);
-		uint32_t RequestNewTextureMemAsync(const std::string& texname, const std::string& mime, bool hdr, const unsigned char* data, size_t bytelength, bool srgb);
+		uint32_t RequestNewTextureFileAsync(const std::string& filename, bool hdr,
+		                                    ETextureLifetime lifetime = ETextureLifetime::ETL_Transient);
+		uint32_t RequestNewTextureMemAsync(const std::string& texname, const std::string& mime, bool hdr,
+		                                   const unsigned char* data, size_t bytelength, bool srgb,
+		                                   ETextureLifetime lifetime = ETextureLifetime::ETL_Transient);
 		
 		uint32_t TotalTextures() const {return static_cast<uint32_t>(textureImages_.size());}
 		const std::unordered_map<std::string, FTextureBindingGroup>& TotalTextureMap() {return textureNameMap_;}
 
-		void FreeNonSystemTextures();
+		void FreeTransientTextures();
 		void CreateDefaultTextures();
 		
 		static GlobalTexturePool* GetInstance() {return instance_;}
-		static uint32_t LoadTexture(const std::string& texname, const std::string& mime, const unsigned char* data, size_t bytelength, bool srgb);
+		static uint32_t LoadTexture(const std::string& texname, const std::string& mime, const unsigned char* data,
+		                            size_t bytelength, bool srgb);
 		static uint32_t LoadTexture(const std::string& filename, bool srgb);
 		static uint32_t LoadHDRTexture(const std::string& filename);
 

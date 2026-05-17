@@ -562,7 +562,7 @@ void NextPhysics::Tick(double deltaSeconds)
 
 			if (vel.Length() > 0.001f)
 			{
-				NextEngine::GetInstance()->GetScene().MarkDirty(); // if changed, then dirty
+				NextEngine::GetInstance()->GetScene().MarkTransformDirty();
 			}
 		}
 	}
