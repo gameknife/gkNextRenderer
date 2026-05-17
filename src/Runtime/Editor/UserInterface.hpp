@@ -61,8 +61,6 @@ class UserInterface final
 {
 public:
 
-	struct FUiRenderBuffers;
-
 	VULKAN_NON_COPIABLE(UserInterface)
 
 	UserInterface(
@@ -114,6 +112,8 @@ public:
 	bool IsConsoleOpen() const { return showConsole_; }
 
 private:
+	struct FUiRenderBuffers;
+
 	NextEngine& GetEngine() {return *engine_;}
 	
 	void DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gpuTimer);

@@ -1,6 +1,33 @@
 message(STATUS "SDL3_DIR: ${SDL3_DIR}")
 find_package(SDL3 CONFIG REQUIRED)
 
+if (APPLE AND NOT IOS)
+    if (DEFINED Vulkan_LIBRARY AND Vulkan_LIBRARY AND NOT EXISTS "${Vulkan_LIBRARY}")
+        message(STATUS "Clearing stale Vulkan library cache entry: ${Vulkan_LIBRARY}")
+        unset(Vulkan_LIBRARY CACHE)
+    endif()
+
+    if (DEFINED Vulkan_INCLUDE_DIR AND Vulkan_INCLUDE_DIR AND
+        NOT EXISTS "${Vulkan_INCLUDE_DIR}/vulkan/vulkan.h")
+        message(STATUS "Clearing stale Vulkan include cache entry: ${Vulkan_INCLUDE_DIR}")
+        unset(Vulkan_INCLUDE_DIR CACHE)
+    endif()
+
+    if (NOT DEFINED ENV{VULKAN_SDK} OR "$ENV{VULKAN_SDK}" STREQUAL "")
+        file(GLOB _vulkan_sdk_candidates LIST_DIRECTORIES true "$ENV{HOME}/VulkanSDK/*/macOS")
+        list(SORT _vulkan_sdk_candidates COMPARE NATURAL ORDER DESCENDING)
+
+        foreach(_vulkan_sdk_candidate IN LISTS _vulkan_sdk_candidates)
+            if (EXISTS "${_vulkan_sdk_candidate}/include/vulkan/vulkan.h" AND
+                EXISTS "${_vulkan_sdk_candidate}/lib/libvulkan.dylib")
+                set(ENV{VULKAN_SDK} "${_vulkan_sdk_candidate}")
+                message(STATUS "Using auto-detected Vulkan SDK: $ENV{VULKAN_SDK}")
+                break()
+            endif()
+        endforeach()
+    endif()
+endif()
+
 if (IOS)
     message(STATUS "MoltenVK: ${MOLTENVK_ROOT}")
     if (DEFINED MOLTENVK_ROOT)
