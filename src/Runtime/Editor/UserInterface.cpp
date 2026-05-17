@@ -377,8 +377,8 @@ namespace
         window.semaphoreCount = window.imageCount + 1;
         window.frames.resize(static_cast<int>(window.imageCount));
         window.frameSemaphores.resize(static_cast<int>(window.semaphoreCount));
-        memset(window.frames.Data, 0, window.frames.size_in_bytes());
-        memset(window.frameSemaphores.Data, 0, window.frameSemaphores.size_in_bytes());
+        std::fill_n(window.frames.Data, window.frames.Size, UiPlatformFrame{});
+        std::fill_n(window.frameSemaphores.Data, window.frameSemaphores.Size, UiPlatformFrameSemaphores{});
         for (uint32_t imageIndex = 0; imageIndex < window.imageCount; ++imageIndex)
         {
             window.frames[imageIndex].backbuffer = backbuffers[imageIndex];
