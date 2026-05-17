@@ -146,7 +146,7 @@ The project uses CMake + Ninja, with dependencies managed through vcpkg. Beyond 
 
 - CMake 3.26+
 - Visual Studio 2022 with C++ workload
-- Vulkan SDK 1.4.313.2
+- Vulkan SDK 1.4.341.1 (downloaded into the repository by default; if `VULKAN_SDK` is set, that SDK is used first)
 - Enable "Use Unicode UTF-8 for worldwide language support"
 
 ```bat
@@ -155,7 +155,7 @@ gnb.bat build
 gnb.bat run gkNextRenderer
 ```
 
-Aside from host-side requirements such as Visual Studio and the Vulkan SDK, the rest of the project dependencies are usually prepared by `gnb`.
+Aside from host-side requirements such as Visual Studio, the rest of the project dependencies are usually prepared by `gnb`, including the pinned Vulkan SDK, Slang, and TypeScript toolchains.
 
 </details>
 
@@ -185,7 +185,8 @@ Aside from host-side requirements such as Visual Studio and the Vulkan SDK, the 
 
 Notes:
 
-- if `slangc` is not installed yet, `gnb setup` will automatically fetch the project-managed Slang toolchain into `external/`
+- if no usable `VULKAN_SDK` is available, `gnb setup` automatically downloads the pinned LunarG Vulkan SDK into `external/VulkanSDK/`
+- if `slangc` is not installed yet, `gnb setup` automatically fetches the project-managed Slang toolchain into `external/`
 - on pacman hosts, `gnb setup` and the first Linux `gnb build` automatically install the required system packages before vcpkg bootstrap; if that is unavailable, run `sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxrandr wayland-protocols libxkbcommon systemd-libs` manually
 - if a GitHub archive download fails during vcpkg setup, rerun the same build command once before doing deeper troubleshooting
 - deployment notes from a real Steam Deck setup are available in [docs/steamdeck-deployment-notes.md](docs/steamdeck-deployment-notes.md)
@@ -207,7 +208,7 @@ Notes:
 ./gnb.sh run gkNextRenderer
 ```
 
-`gnb setup` automatically downloads the Slang and TypeScript toolchains used by the project, so those project-level dependencies no longer need to be installed separately.
+`gnb setup` automatically downloads the Vulkan SDK, Slang, and TypeScript toolchains used by the project, so those project-level dependencies no longer need to be installed separately. If `VULKAN_SDK` is explicitly set, that SDK takes precedence.
 
 </details>
 

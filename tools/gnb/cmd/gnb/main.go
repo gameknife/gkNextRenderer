@@ -57,6 +57,7 @@ func main() {
 	root.AddCommand(newInfoCommand(ctx))
 	root.AddCommand(newDoctorCommand(ctx))
 	root.AddCommand(newSetupCommand(ctx))
+	root.AddCommand(newDepsCommand(ctx))
 	root.AddCommand(newBuildCommand(ctx))
 	root.AddCommand(newRunCommand(ctx))
 	root.AddCommand(newTestCommand(ctx))
@@ -140,8 +141,12 @@ func newDoctorCommand(ctx appContext) *cobra.Command {
 				}
 			}
 			if runtime.GOOS == "windows" && os.Getenv("VULKAN_SDK") == "" {
-				console.Warn("missing VULKAN_SDK")
-				failed = true
+				if fetcher.DiscoverVulkanSDK(ctx.repoRoot, ctx.cfg) != "" {
+					console.Success("project Vulkan SDK")
+				} else {
+					console.Warn("missing Vulkan SDK (run `gnb setup`)")
+					failed = true
+				}
 			}
 			if err := platform.EnsureLinuxDesktopPackages(); err != nil {
 				console.Warn("%s", err)
@@ -193,6 +198,24 @@ func newSetupCommand(ctx appContext) *cobra.Command {
 	cmd.Flags().BoolVar(&vcpkgOnly, "vcpkg-only", false, "only prepare vcpkg")
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "update vcpkg instead of pinning configured ref")
 	return cmd
+}
+
+func newDepsCommand(ctx appContext) *cobra.Command {
+	root := &cobra.Command{
+		Use:   "deps",
+		Short: "Fetch project-managed external toolchains",
+	}
+
+	fetch := &cobra.Command{
+		Use:   "fetch [all|tsc|slang|vulkan|streamline]",
+		Short: "Fetch one or more external dependencies",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return fetcher.EnsureNamedExternal(ctx.repoRoot, ctx.cfg, args)
+		},
+	}
+
+	root.AddCommand(fetch)
+	return root
 }
 
 func newBuildCommand(ctx appContext) *cobra.Command {
@@ -398,6 +421,9 @@ func newIOSCommand(ctx appContext) *cobra.Command {
 		Use:   "ios",
 		Short: "Build iOS target with CMake preset",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := fetcher.EnsureExternal(ctx.repoRoot, ctx.cfg); err != nil {
+				return err
+			}
 			if err := fetcher.EnsureIOSExternal(ctx.repoRoot, ctx.cfg); err != nil {
 				return err
 			}
