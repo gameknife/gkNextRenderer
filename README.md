@@ -274,7 +274,9 @@ gnb.bat paks fetch
 | `gkNextRenderer` | 主渲染器，路径追踪 / Hybrid Rendering / 多管线对比 |
 | `gkNextEditor` | ImGui 编辑器，服务于材质、场景与运行时工具链 |
 | `BrickPlayer` | 基于 LDraw 的数字乐高搭建原型 |
+| `Brotato3D` | 俯视角 3D 生存射击原型，介绍见 [docs/projects/brotato-3d/introduction.md](docs/projects/brotato-3d/introduction.md) |
 | `CharacterDemo` | 角色控制、AI 行为、导航与战斗交互实验 |
+| `FlappyCpp` / `FlappyJs` | Flappy Bird 双实现回归样例，用于验证 C++ 与 QuickJS/TypeScript 行为一致性，介绍见 [docs/projects/flappy-bird-parity/introduction.md](docs/projects/flappy-bird-parity/introduction.md) |
 | `MagicaLego` | 更轻量的乐高 / voxel 风格玩法实验场 |
 | `gkNextStillBenchmark` | 静态场景渲染基准测试 |
 | `gkNextMotionBenchmark` | 动态场景渲染基准测试 |
