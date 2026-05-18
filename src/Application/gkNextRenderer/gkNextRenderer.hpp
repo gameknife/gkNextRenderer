@@ -53,6 +53,7 @@ private:
     void DrawTitleBar();
     void DrawBottomStatusBar();
     void DrawModeRail();
+    void DrawMemoryStatisticsPanel();
     void DrawViewportTopBar();
     void DrawViewportBottomBar();
     void RequestScreenshot(bool openFolder, const std::string& tag);

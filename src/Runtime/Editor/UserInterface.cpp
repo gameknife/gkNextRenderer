@@ -1212,8 +1212,8 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
         {
             renderBuffers.vertexBuffer.reset(new Vulkan::Buffer(device, vertexSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT));
             renderBuffers.vertexBufferMemory.reset(new Vulkan::DeviceMemory(
-                renderBuffers.vertexBuffer->AllocateMemory(0, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+                renderBuffers.vertexBuffer->AllocateMemory(
+                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
             renderBuffers.vertexBufferSize = vertexSize;
         }
 

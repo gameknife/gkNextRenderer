@@ -275,6 +275,8 @@ else()
     find_package(Vulkan REQUIRED)
 endif()
 
+find_package(VulkanMemoryAllocator CONFIG REQUIRED)
+
 if(NOT IOS AND NOT ANDROID)
     find_package(cpptrace CONFIG REQUIRED)
 endif()

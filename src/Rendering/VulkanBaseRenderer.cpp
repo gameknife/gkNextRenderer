@@ -673,6 +673,8 @@ namespace Vulkan
         screenShotImageMemory_.reset(new DeviceMemory(
             screenShotImage_->
             AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+        device_->DebugUtils().SetObjectName(screenShotImage_->Handle(), "Screenshot Image");
+        screenShotImageMemory_->SetName("Screenshot Memory");
 
         bindlessStorageImages_.resize(Assets::Bindless::RT_COUNT);
         
@@ -816,8 +818,8 @@ namespace Vulkan
         visibilityPipeline_.reset();
         visibilityFrameBuffer_.reset();
         
-        screenShotImageMemory_.reset();
         screenShotImage_.reset();
+        screenShotImageMemory_.reset();
         commandBuffers_.reset();
         wireframeFrameBuffers_.clear();
         wireframePipeline_.reset();

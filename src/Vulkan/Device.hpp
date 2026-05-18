@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Allocator.hpp"
 #include <memory>
 #include <vector>
 
@@ -41,10 +42,12 @@ namespace Vulkan
 		VkQueue TransferQueue() const { return transferQueue_; }
 
 		VkPhysicalDeviceProperties DeviceProperties() const { return deviceProp_; }
+		MemoryStatsSnapshot CaptureMemoryStats() const;
 
 		void WaitIdle() const;
 
 		const DeviceProcedures& GetDeviceProcedures() const { return *deviceProcedures_; }
+		const MemoryAllocator& GetMemoryAllocator() const { return *memoryAllocator_; }
 
 	private:
 
@@ -68,6 +71,7 @@ namespace Vulkan
 		VkQueue transferQueue_{};
 				
 		std::unique_ptr<DeviceProcedures> deviceProcedures_;
+		std::unique_ptr<MemoryAllocator> memoryAllocator_;
 		VkPhysicalDeviceProperties deviceProp_;
 	};
 

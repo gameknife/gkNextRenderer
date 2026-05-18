@@ -5,8 +5,37 @@
 #include "Utilities/Exception.hpp"
 #include "Vulkan/RayTracing/DeviceProcedures.hpp"
 
+#include <array>
+
 namespace Vulkan
 {
+namespace
+{
+    void SetupQueueSharing(
+        const Device& device,
+        VkSharingMode& sharingMode,
+        uint32_t& queueFamilyIndexCount,
+        const uint32_t*& queueFamilyIndices,
+        std::array<uint32_t, 2>& queueFamilyIndexStorage)
+    {
+        if (device.TransferFamilyIndex() != static_cast<int32_t>(device.GraphicsFamilyIndex()))
+        {
+            queueFamilyIndexStorage =
+            {
+                device.GraphicsFamilyIndex(),
+                static_cast<uint32_t>(device.TransferFamilyIndex())
+            };
+            sharingMode = VK_SHARING_MODE_CONCURRENT;
+            queueFamilyIndexCount = static_cast<uint32_t>(queueFamilyIndexStorage.size());
+            queueFamilyIndices = queueFamilyIndexStorage.data();
+            return;
+        }
+
+        sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        queueFamilyIndexCount = 0;
+        queueFamilyIndices = nullptr;
+    }
+}
 
 // ============================================================================
 // Image
@@ -33,6 +62,9 @@ Image::Image(
 	external_(useForExternal)
 {
 	VkImageCreateInfo imageInfo = {};
+	std::array<uint32_t, 2> queueFamilyIndexStorage{};
+	const uint32_t* queueFamilyIndices = nullptr;
+	uint32_t queueFamilyIndexCount = 0;
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
 	imageInfo.extent.width = extent.width;
@@ -44,7 +76,9 @@ Image::Image(
 	imageInfo.tiling = tiling;
 	imageInfo.initialLayout = imageLayout_;
 	imageInfo.usage = usage;
-	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	SetupQueueSharing(device_, imageInfo.sharingMode, queueFamilyIndexCount, queueFamilyIndices, queueFamilyIndexStorage);
+	imageInfo.queueFamilyIndexCount = queueFamilyIndexCount;
+	imageInfo.pQueueFamilyIndices = queueFamilyIndices;
 	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 	imageInfo.flags = 0; // Optional
 
@@ -86,15 +120,9 @@ Image::~Image()
 	}
 }
 
-DeviceMemory Image::AllocateMemory(const VkMemoryPropertyFlags properties, bool external) const
+DeviceMemory Image::AllocateMemory(const VkMemoryPropertyFlags properties, bool external, bool dedicated) const
 {
-	const auto requirements = GetMemoryRequirements();
-	DeviceMemory memory(device_, requirements.size, requirements.memoryTypeBits, 0, properties, external);
-
-	Check(vkBindImageMemory(device_.Handle(), image_, memory.Handle(), 0),
-		"bind image memory");
-
-	return memory;
+	return DeviceMemory(device_, *this, properties, external, dedicated);
 }
 
 VkMemoryRequirements Image::GetMemoryRequirements() const
@@ -280,10 +308,15 @@ Buffer::Buffer(const class Device& device, const size_t size, const VkBufferUsag
 	device_(device)
 {
 	VkBufferCreateInfo bufferInfo = {};
+	std::array<uint32_t, 2> queueFamilyIndexStorage{};
+	const uint32_t* queueFamilyIndices = nullptr;
+	uint32_t queueFamilyIndexCount = 0;
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	bufferInfo.size = size;
 	bufferInfo.usage = usage;
-	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	SetupQueueSharing(device_, bufferInfo.sharingMode, queueFamilyIndexCount, queueFamilyIndices, queueFamilyIndexStorage);
+	bufferInfo.queueFamilyIndexCount = queueFamilyIndexCount;
+	bufferInfo.pQueueFamilyIndices = queueFamilyIndices;
 
 	Check(vkCreateBuffer(device.Handle(), &bufferInfo, nullptr, &buffer_),
 		"create buffer");
@@ -298,20 +331,11 @@ Buffer::~Buffer()
 	}
 }
 
-DeviceMemory Buffer::AllocateMemory(const VkMemoryPropertyFlags propertyFlags)
+DeviceMemory Buffer::AllocateMemory(
+	const VkMemoryPropertyFlags propertyFlags,
+	const DeviceMemory::BufferAllocationOptions& options)
 {
-	return AllocateMemory(0, propertyFlags);
-}
-
-DeviceMemory Buffer::AllocateMemory(const VkMemoryAllocateFlags allocateFlags, const VkMemoryPropertyFlags propertyFlags)
-{
-	const auto requirements = GetMemoryRequirements();
-	DeviceMemory memory(device_, requirements.size, requirements.memoryTypeBits, allocateFlags, propertyFlags);
-
-	Check(vkBindBufferMemory(device_.Handle(), buffer_, memory.Handle(), 0),
-		"bind buffer memory");
-
-	return memory;
+	return DeviceMemory(device_, *this, propertyFlags, options);
 }
 
 VkMemoryRequirements Buffer::GetMemoryRequirements() const
@@ -400,7 +424,7 @@ DepthBuffer::DepthBuffer(CommandPool& commandPool, const VkExtent2D extent) :
 	const auto& device = commandPool.Device();
 
 	image_.reset(new Image(device, extent, 1, format_, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT));
-	imageMemory_.reset(new DeviceMemory(image_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+	imageMemory_.reset(new DeviceMemory(image_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, false, true)));
 	imageView_.reset(new class ImageView(device, image_->Handle(), format_, VK_IMAGE_ASPECT_DEPTH_BIT));
 
 	image_->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
@@ -408,7 +432,7 @@ DepthBuffer::DepthBuffer(CommandPool& commandPool, const VkExtent2D extent) :
 	const auto& debugUtils = device.DebugUtils();
 
 	debugUtils.SetObjectName(image_->Handle(), "Depth Buffer Image");
-	debugUtils.SetObjectName(imageMemory_->Handle(), "Depth Buffer Image Memory");
+	imageMemory_->SetName("Depth Buffer Image Memory");
 	debugUtils.SetObjectName(imageView_->Handle(), "Depth Buffer ImageView");
 }
 
@@ -433,13 +457,15 @@ RenderImage::RenderImage(const Device& device,
 {
     image_.reset(new Image(device, extent, 1, format, tiling, usage, external));
     imageMemory_.reset(
-        new DeviceMemory(image_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, external)));
+        new DeviceMemory(image_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, external, true)));
     imageView_.reset(new ImageView(device, image_->Handle(), format, VK_IMAGE_ASPECT_COLOR_BIT));
 
     if(debugName)
     {
         const auto& debugUtils = device.DebugUtils();
         debugUtils.SetObjectName(image_->Handle(), debugName);
+        imageMemory_->SetName((std::string(debugName) + " Memory").c_str());
+        debugUtils.SetObjectName(imageView_->Handle(), (std::string(debugName) + " View").c_str());
     }
 
     sampler_.reset(new Vulkan::Sampler(device, Vulkan::SamplerConfig()));
@@ -448,9 +474,9 @@ RenderImage::RenderImage(const Device& device,
 RenderImage::~RenderImage()
 {
     sampler_.reset();
+    imageView_.reset();
     image_.reset();
     imageMemory_.reset();
-    imageView_.reset();
 }
 
 void RenderImage::InsertBarrier(VkCommandBuffer commandBuffer, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, VkImageLayout oldLayout, VkImageLayout newLayout) const

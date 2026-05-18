@@ -13,6 +13,7 @@
 #include "Runtime/Engine.hpp"
 #include "Runtime/Subsystems/NextPhysics.h"
 #include "Utilities/Math.hpp"
+#include "Vulkan/Allocator.hpp"
 #include "Vulkan/SyncAndTiming.hpp"
 
 namespace
@@ -27,6 +28,19 @@ namespace
     uint32_t SaturatingSubtract(uint32_t lhs, uint32_t rhs)
     {
         return lhs > rhs ? lhs - rhs : 0;
+    }
+
+    std::string FormatBytes(VkDeviceSize bytes)
+    {
+        static constexpr const char* units[] = {"B", "KB", "MB", "GB", "TB"};
+        double value = static_cast<double>(bytes);
+        size_t unitIndex = 0;
+        while (value >= 1024.0 && unitIndex + 1 < (sizeof(units) / sizeof(units[0])))
+        {
+            value /= 1024.0;
+            ++unitIndex;
+        }
+        return fmt::format("{:.2f} {}", value, units[unitIndex]);
     }
 
     void DrawSectionHeader(const char* title)
@@ -136,6 +150,8 @@ void Runtime::DrawProfileDebugOverlay(NextEngine& engine, const Statistics& stat
         physicsStats = physics->GetBodyStats();
     }
 
+    const Vulkan::MemoryStatsSnapshot memoryStats = engine.GetRenderer().Device().CaptureMemoryStats();
+
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     const float margin = 12.0f;
     ImGui::SetNextWindowPos(
@@ -197,6 +213,19 @@ void Runtime::DrawProfileDebugOverlay(NextEngine& engine, const Statistics& stat
                                                   FormatCount(gpuDrivenStat.TriangleCount)));
             DrawValueRow("Culled tris", FormatCount(gpuDrivenStat.CulledTriangleCount));
             DrawValueRow("Batches", FormatCount(scene.GetIndirectDrawBatchCount()));
+            ImGui::EndTable();
+        }
+
+        DrawSectionHeader("Memory");
+        if (BeginStatTable("##MemoryStats"))
+        {
+            DrawValueRow("VRAM used", fmt::format("{} / {}", FormatBytes(memoryStats.deviceLocalUsageBytes),
+                                                  FormatBytes(memoryStats.deviceLocalBudgetBytes)));
+            DrawValueRow("VMA managed", fmt::format("{} / {}", FormatBytes(memoryStats.deviceLocalAllocationBytes),
+                                                    FormatBytes(memoryStats.deviceLocalBlockBytes)));
+            DrawValueRow("All heaps", fmt::format("{} / {}", FormatBytes(memoryStats.totalAllocationBytes),
+                                                  FormatBytes(memoryStats.totalBlockBytes)));
+            DrawValueRow("Heaps", FormatCount(memoryStats.heaps.size()));
             ImGui::EndTable();
         }
 

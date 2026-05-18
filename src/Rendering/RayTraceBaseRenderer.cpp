@@ -39,7 +39,7 @@ namespace Vulkan::RayTracing
             return total;
         }
     }
-    
+
     RayTraceBaseRenderer::RayTraceBaseRenderer(Vulkan::Window* window, const VkPresentModeKHR presentMode,
                                                const bool enableValidationLayers, Instance* instance) :
         Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers, instance)
@@ -209,8 +209,8 @@ namespace Vulkan::RayTracing
                 if (modelId != -1)
                 {
                     bottomAs_[modelId].Update(commandBuffer, *bottomScratchBuffer_, scratchOffset);
+                    scratchOffset += bottomAs_[modelId].BuildSizes().buildScratchSize;
                 }
-                scratchOffset += bottomAs_[modelId].BuildSizes().buildScratchSize;
             }
             AccelerationStructure::InsertMemoryBarrier(commandBuffer);
         }
@@ -393,19 +393,26 @@ namespace Vulkan::RayTracing
                                        VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
                                        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
         bottomBufferMemory_.reset(new DeviceMemory(
-            bottomBuffer_->AllocateMemory(VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+            bottomBuffer_->AllocateMemory(
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                {
+                    .AllocateFlags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT
+                })));
         bottomScratchBuffer_.reset(new Buffer(Device(), total.buildScratchSize,
                                               VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
                                               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
                                               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
         bottomScratchBufferMemory_.reset(new DeviceMemory(
-            bottomScratchBuffer_->AllocateMemory(VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT,
-                                                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+            bottomScratchBuffer_->AllocateMemory(
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                {
+                    .AllocateFlags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT
+                })));
 
         debugUtils.SetObjectName(bottomBuffer_->Handle(), "BLAS Buffer");
-        debugUtils.SetObjectName(bottomBufferMemory_->Handle(), "BLAS Memory");
+        bottomBufferMemory_->SetName("BLAS Memory");
         debugUtils.SetObjectName(bottomScratchBuffer_->Handle(), "BLAS Scratch Buffer");
-        debugUtils.SetObjectName(bottomScratchBufferMemory_->Handle(), "BLAS Scratch Memory");
+        bottomScratchBufferMemory_->SetName("BLAS Scratch Memory");
 
         // Generate the structures.
         VkDeviceSize resultOffset = 0;
@@ -432,7 +439,12 @@ namespace Vulkan::RayTracing
                                            VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
                                            VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT ));
         instancesBufferMemory_.reset(new DeviceMemory(
-            instancesBuffer_->AllocateMemory(VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+            instancesBuffer_->AllocateMemory(
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                {
+                    .AllocateFlags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT,
+                    .Passthrough = true
+                })));
         
         // Memory barrier for the bottom level acceleration structure builds.
         AccelerationStructure::InsertMemoryBarrier(commandBuffer);
@@ -445,22 +457,32 @@ namespace Vulkan::RayTracing
 
         topBuffer_.reset(new Buffer(Device(), total.accelerationStructureSize,
                                     VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
-        topBufferMemory_.reset(new DeviceMemory(topBuffer_->AllocateMemory(VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+        topBufferMemory_.reset(new DeviceMemory(
+            topBuffer_->AllocateMemory(
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                {
+                    .AllocateFlags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT,
+                    .Passthrough = true
+                })));
 
         topScratchBuffer_.reset(new Buffer(Device(), total.buildScratchSize,
                                            VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
                                            VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
                                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
         topScratchBufferMemory_.reset(new DeviceMemory(
-            topScratchBuffer_->AllocateMemory(VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT,
-                                              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+            topScratchBuffer_->AllocateMemory(
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                {
+                    .AllocateFlags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT,
+                    .Passthrough = true
+                })));
 
         debugUtils.SetObjectName(topBuffer_->Handle(), "TLAS Buffer");
-        debugUtils.SetObjectName(topBufferMemory_->Handle(), "TLAS Memory");
+        topBufferMemory_->SetName("TLAS Memory");
         debugUtils.SetObjectName(topScratchBuffer_->Handle(), "TLAS Scratch Buffer");
-        debugUtils.SetObjectName(topScratchBufferMemory_->Handle(), "TLAS Scratch Memory");
+        topScratchBufferMemory_->SetName("TLAS Scratch Memory");
         debugUtils.SetObjectName(instancesBuffer_->Handle(), "TLAS Instances Buffer");
-        debugUtils.SetObjectName(instancesBufferMemory_->Handle(), "TLAS Instances Memory");
+        instancesBufferMemory_->SetName("TLAS Instances Memory");
 
         // Generate the structures.
         topAs_[0].Generate(commandBuffer, *topScratchBuffer_, 0, *topBuffer_, 0);

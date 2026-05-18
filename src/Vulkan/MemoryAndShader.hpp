@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Allocator.hpp"
 #include "DebugUtilities.hpp"
 #include <string>
 #include <vector>
@@ -7,6 +8,8 @@
 namespace Vulkan
 {
 	class Device;
+	class Buffer;
+	class Image;
 
 	// ============================================================================
 	// DeviceMemory
@@ -16,11 +19,23 @@ namespace Vulkan
 	{
 	public:
 
+		struct BufferAllocationOptions final
+		{
+			VkMemoryAllocateFlags AllocateFlags = 0;
+			bool Dedicated = false;
+			bool Passthrough = false;
+		};
+
 		DeviceMemory(const DeviceMemory&) = delete;
 		DeviceMemory& operator = (const DeviceMemory&) = delete;
 		DeviceMemory& operator = (DeviceMemory&&) = delete;
 
-		DeviceMemory(const Device& device, size_t size, uint32_t memoryTypeBits, VkMemoryAllocateFlags allocateFLags, VkMemoryPropertyFlags propertyFlags, bool external = false);
+		DeviceMemory(
+			const Device& device,
+			const Buffer& buffer,
+			VkMemoryPropertyFlags propertyFlags,
+			const BufferAllocationOptions& options = {});
+		DeviceMemory(const Device& device, const Image& image, VkMemoryPropertyFlags propertyFlags, bool external = false, bool dedicated = false);
 		DeviceMemory(DeviceMemory&& other) noexcept;
 		~DeviceMemory();
 
@@ -28,12 +43,14 @@ namespace Vulkan
 
 		void* Map(size_t offset, size_t size);
 		void Unmap();
+		void SetName(const char* name);
 
 	private:
 
 		uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
 
 		const class Device& device_;
+		VmaAllocationHandle allocation_ = nullptr;
 
 		VULKAN_HANDLE(VkDeviceMemory, memory_)
 	};

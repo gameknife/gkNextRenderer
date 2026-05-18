@@ -1,7 +1,10 @@
 #include "MemoryAndShader.hpp"
 #include "Device.hpp"
+#include "GpuResources.hpp"
 #include "Utilities/Exception.hpp"
 #include "Utilities/FileHelper.hpp"
+
+#include <cstddef>
 
 #ifdef VK_USE_PLATFORM_WIN32_KHR
 #	include <aclapi.h>
@@ -85,23 +88,66 @@ namespace Vulkan {
 
 DeviceMemory::DeviceMemory(
 	const class Device& device,
-	const size_t size,
-	const uint32_t memoryTypeBits,
-	const VkMemoryAllocateFlags allocateFLags,
+	const Buffer& buffer,
 	const VkMemoryPropertyFlags propertyFlags,
-	bool external) :
+	const BufferAllocationOptions& options) :
 	device_(device)
 {
-	VkMemoryAllocateFlagsInfo flagsInfo = {};
-	flagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
-	flagsInfo.pNext = nullptr;
-	flagsInfo.flags = allocateFLags;
+	if (options.Passthrough)
+	{
+		const VkMemoryRequirements requirements = buffer.GetMemoryRequirements();
+		VkMemoryAllocateFlagsInfo flagsInfo{};
+		flagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
+		flagsInfo.flags = options.AllocateFlags;
 
-	VkMemoryAllocateInfo allocInfo = {};
-	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	allocInfo.pNext = &flagsInfo;
-	allocInfo.allocationSize = size;
-	allocInfo.memoryTypeIndex = FindMemoryType(memoryTypeBits, propertyFlags);
+		VkMemoryAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		allocInfo.pNext = options.AllocateFlags != 0 ? &flagsInfo : nullptr;
+		allocInfo.allocationSize = requirements.size;
+		allocInfo.memoryTypeIndex = FindMemoryType(requirements.memoryTypeBits, propertyFlags);
+
+		Check(vkAllocateMemory(device.Handle(), &allocInfo, nullptr, &memory_),
+			"allocate buffer memory");
+
+		Check(vkBindBufferMemory(device_.Handle(), buffer.Handle(), memory_, 0),
+			"bind buffer memory");
+		return;
+	}
+
+	const MemoryAllocationRequest request
+	{
+		.allocateFlags = options.AllocateFlags,
+		.propertyFlags = propertyFlags,
+		.dedicated = options.Dedicated,
+	};
+	const MemoryAllocationHandle allocationHandle = device_.GetMemoryAllocator().AllocateForBuffer(buffer.Handle(), request);
+	allocation_ = allocationHandle.allocation;
+	memory_ = allocationHandle.deviceMemory;
+}
+
+DeviceMemory::DeviceMemory(
+	const class Device& device,
+	const Image& image,
+	const VkMemoryPropertyFlags propertyFlags,
+	bool external,
+	bool dedicated) :
+	device_(device)
+{
+	if (!external)
+	{
+		const MemoryAllocationRequest request
+		{
+			.propertyFlags = propertyFlags,
+			.dedicated = dedicated,
+			.preferRandomAccess = (propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0
+		};
+		const MemoryAllocationHandle allocationHandle = device_.GetMemoryAllocator().AllocateForImage(image.Handle(), request);
+		allocation_ = allocationHandle.allocation;
+		memory_ = allocationHandle.deviceMemory;
+		return;
+	}
+
+	const VkMemoryRequirements requirements = image.GetMemoryRequirements();
 
 	VkExportMemoryAllocateInfoKHR exportMemoryAllocateInfo{};
 	exportMemoryAllocateInfo.sType       = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO_KHR;
@@ -118,6 +164,12 @@ DeviceMemory::DeviceMemory(
 	export_memory_win32_handle_info.dwAccess    = DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE;
 #endif
 
+	VkMemoryAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.pNext = nullptr;
+	allocInfo.allocationSize = requirements.size;
+	allocInfo.memoryTypeIndex = FindMemoryType(requirements.memoryTypeBits, propertyFlags);
+
 #if !ANDROID
 	if(external)
 	{
@@ -130,17 +182,30 @@ DeviceMemory::DeviceMemory(
 
 	Check(vkAllocateMemory(device.Handle(), &allocInfo, nullptr, &memory_),
 		"allocate memory");
+
+	Check(vkBindImageMemory(device_.Handle(), image.Handle(), memory_, 0),
+		"bind image memory");
 }
 
 DeviceMemory::DeviceMemory(DeviceMemory&& other) noexcept :
 	device_(other.device_),
+	allocation_(other.allocation_),
 	memory_(other.memory_)
 {
+	other.allocation_ = nullptr;
 	other.memory_ = nullptr;
 }
 
 DeviceMemory::~DeviceMemory()
 {
+	if (allocation_ != nullptr)
+	{
+		device_.GetMemoryAllocator().Free(allocation_);
+		allocation_ = nullptr;
+		memory_ = nullptr;
+		return;
+	}
+
 	if (memory_ != nullptr)
 	{
 		vkFreeMemory(device_.Handle(), memory_, nullptr);
@@ -150,7 +215,13 @@ DeviceMemory::~DeviceMemory()
 
 void* DeviceMemory::Map(const size_t offset, const size_t size)
 {
-	void* data;
+	if (allocation_ != nullptr)
+	{
+		auto* const data = static_cast<std::byte*>(device_.GetMemoryAllocator().Map(allocation_));
+		return data + offset;
+	}
+
+	void* data = nullptr;
 	Check(vkMapMemory(device_.Handle(), memory_, offset, size, 0, &data),
 		"map memory");
 
@@ -159,7 +230,27 @@ void* DeviceMemory::Map(const size_t offset, const size_t size)
 
 void DeviceMemory::Unmap()
 {
+	if (allocation_ != nullptr)
+	{
+		device_.GetMemoryAllocator().Unmap(allocation_);
+		return;
+	}
+
 	vkUnmapMemory(device_.Handle(), memory_);
+}
+
+void DeviceMemory::SetName(const char* name)
+{
+	if (allocation_ != nullptr)
+	{
+		device_.GetMemoryAllocator().SetAllocationName(allocation_, name);
+		return;
+	}
+
+	if (memory_ != nullptr && name != nullptr && name[0] != '\0')
+	{
+		device_.DebugUtils().SetObjectName(memory_, name);
+	}
 }
 
 uint32_t DeviceMemory::FindMemoryType(const uint32_t typeFilter, const VkMemoryPropertyFlags propertyFlags) const

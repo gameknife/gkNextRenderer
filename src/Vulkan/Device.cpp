@@ -160,16 +160,23 @@ Device::Device(
     vkGetPhysicalDeviceProperties(PhysicalDevice(), &deviceProp_);
 	
 	deviceProcedures_.reset(new DeviceProcedures(*this, true, true));
+	memoryAllocator_.reset(new MemoryAllocator(*this));
 }
 
 Device::~Device()
 {
 	if (device_ != nullptr)
 	{
+		memoryAllocator_.reset();
+		deviceProcedures_.reset();
 		vkDestroyDevice(device_, nullptr);
 		device_ = nullptr;
-		deviceProcedures_.reset();
 	}
+}
+
+MemoryStatsSnapshot Device::CaptureMemoryStats() const
+{
+	return memoryAllocator_->CaptureStats();
 }
 
 void Device::WaitIdle() const

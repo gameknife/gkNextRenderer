@@ -2,7 +2,6 @@
 
 #include "DebugUtilities.hpp"
 #include "MemoryAndShader.hpp"
-#include "MemoryAndShader.hpp"
 #include <memory>
 
 #if WIN32
@@ -37,7 +36,7 @@ namespace Vulkan
 		VkExtent2D Extent() const { return extent_; }
 		VkFormat Format() const { return format_; }
 
-		DeviceMemory AllocateMemory(VkMemoryPropertyFlags properties, bool external = false) const;
+		DeviceMemory AllocateMemory(VkMemoryPropertyFlags properties, bool external = false, bool dedicated = false) const;
 		VkMemoryRequirements GetMemoryRequirements() const;
 
 		void TransitionImageLayout(CommandPool& commandPool, VkImageLayout newLayout);
@@ -99,8 +98,9 @@ namespace Vulkan
 
 		const class Device& Device() const { return device_; }
 
-		DeviceMemory AllocateMemory(VkMemoryPropertyFlags propertyFlags);
-		DeviceMemory AllocateMemory(VkMemoryAllocateFlags allocateFlags, VkMemoryPropertyFlags propertyFlags);
+		DeviceMemory AllocateMemory(
+			VkMemoryPropertyFlags propertyFlags,
+			const DeviceMemory::BufferAllocationOptions& options = {});
 		VkMemoryRequirements GetMemoryRequirements() const;
 		VkDeviceAddress GetDeviceAddress() const;
 

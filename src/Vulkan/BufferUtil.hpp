@@ -110,10 +110,14 @@ namespace Vulkan
 			: 0;
 		
 		buffer.reset(new Buffer(device, contentSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | usage));
-		memory.reset(new DeviceMemory(buffer->AllocateMemory(allocateFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+		memory.reset(new DeviceMemory(buffer->AllocateMemory(
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			{
+				.AllocateFlags = allocateFlags
+			})));
 
 		debugUtils.SetObjectName(buffer->Handle(), (name + std::string(" Buffer")).c_str());
-		debugUtils.SetObjectName(memory->Handle(), (name + std::string(" Memory")).c_str());
+		memory->SetName((name + std::string(" Memory")).c_str());
 
 		if(content.size() > 0)
 		{
@@ -137,10 +141,14 @@ namespace Vulkan
 			: 0;
 		
 		buffer.reset(new Buffer(device, contentSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | usage));
-		memory.reset(new DeviceMemory(buffer->AllocateMemory(allocateFlags, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+		memory.reset(new DeviceMemory(buffer->AllocateMemory(
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			{
+				.AllocateFlags = allocateFlags
+			})));
 
 		debugUtils.SetObjectName(buffer->Handle(), (name + std::string(" Buffer")).c_str());
-		debugUtils.SetObjectName(memory->Handle(), (name + std::string(" Memory")).c_str());
+		memory->SetName((name + std::string(" Memory")).c_str());
 	}
 
 	inline void BufferUtil::CreateDeviceBufferLocal(
@@ -160,10 +168,14 @@ namespace Vulkan
 			: 0;
 		
 		buffer.reset(new Buffer(device, contentSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | usage));
-		memory.reset(new DeviceMemory(buffer->AllocateMemory(allocateFlags, memProp)));
+		memory.reset(new DeviceMemory(buffer->AllocateMemory(
+			memProp,
+			{
+				.AllocateFlags = allocateFlags
+			})));
 
 		debugUtils.SetObjectName(buffer->Handle(), (name + std::string(" Buffer")).c_str());
-		debugUtils.SetObjectName(memory->Handle(), (name + std::string(" Memory")).c_str());
+		memory->SetName((name + std::string(" Memory")).c_str());
 	}
 
 	
