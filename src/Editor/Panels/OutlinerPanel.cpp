@@ -364,11 +364,10 @@ namespace Editor
         ImGui::Begin("Outliner", nullptr);
         {
             const std::string subtitle = std::to_string(ctx.scene.Nodes().size()) + " scene nodes";
-            ImGui::Text("%s Outliner", ICON_FA_DIAGRAM_PROJECT);
-            ImGui::SameLine();
+            Runtime::UiTheme::DrawPanelHeader(ICON_FA_DIAGRAM_PROJECT, "Outliner", subtitle.c_str());
+
             Runtime::UiTheme::IconButton(ICON_FA_PLUS "##CreateActor", "Create Actor (placeholder)", false,
-                                         ImVec2(24.0f, 22.0f));
-            ImGui::TextDisabled("%s", subtitle.c_str());
+                                         ImVec2(26.0f, 24.0f));
             Runtime::UiTheme::DrawThinSeparator();
 
             const bool autoScrollWasEnabled = ui.outlinerAutoScrollToSelection;
@@ -381,9 +380,9 @@ namespace Editor
             ImGui::SameLine();
             Runtime::UiTheme::IconButton(ICON_FA_LAYER_GROUP, "Create Group (placeholder)", false,
                                          ImVec2(28.0f, 24.0f));
-
+            ImGui::SameLine();
             ImGui::SetNextItemWidth(-FLT_MIN);
-            nodeFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Filter##OutlinerFilter", -FLT_MIN);
+            nodeFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##OutlinerFilter", -FLT_MIN);
             Runtime::UiTheme::DrawThinSeparator();
 
             const uint32_t currentSelectionId = ctx.scene.GetSelectedId();
@@ -403,7 +402,9 @@ namespace Editor
             prevAutoScrollEnabled = ui.outlinerAutoScrollToSelection;
             lastSelectionId = currentSelectionId;
 
-            ImGui::BeginChild("ListBox", ImVec2(0, -132.0f));
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Background, 0.42f));
+            ImGui::PushStyleColor(ImGuiCol_Border, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Border, 0.82f));
+            ImGui::BeginChild("ListBox", ImVec2(0, -132.0f), true);
 
             if (ImGui::BeginTable("NodesList", 1, ImGuiTableFlags_NoBordersInBodyUntilResize | ImGuiTableFlags_RowBg))
             {
@@ -430,6 +431,7 @@ namespace Editor
             }
 
             ImGui::EndChild();
+            ImGui::PopStyleColor(2);
 
             if (ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows))
             {
@@ -631,10 +633,9 @@ namespace Editor
                 ImGui::EndTabBar();
             }
 
-            ImGui::Spacing();
+            Runtime::UiTheme::DrawThinSeparator(0.65f);
             ImGui::Text("%d actors (%d selected)", static_cast<int>(ctx.scene.Nodes().size()),
                         static_cast<int>(ctx.scene.GetSelectedIds().size()));
-            ImGui::Spacing();
 
             if ((ImGui::GetIO().KeyAlt) && (ImGui::IsKeyPressed(ImGuiKey_F4)))
             {

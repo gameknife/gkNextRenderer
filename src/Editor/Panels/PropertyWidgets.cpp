@@ -6,6 +6,7 @@
 #include <imgui_stdlib.h>
 #include <imgui_internal.h>
 #include <spdlog/spdlog.h>
+#include <algorithm>
 #include <map>
 #include <array>
 #include <vector>
@@ -22,11 +23,14 @@ namespace Editor
     // trailingWidth: reserve space for a trailing widget (e.g., reset button)
     static void BeginPropertyRow(const char* label, float trailingWidth = 0.0f)
     {
-        float labelWidth = ImGui::GetContentRegionAvail().x * 0.5f; // 50% for label
+        const float contentWidth = ImGui::GetContentRegionAvail().x;
+        const float labelWidth = std::clamp(contentWidth * 0.42f, 92.0f, 138.0f);
 
         // Draw label
         ImGui::AlignTextToFramePadding();
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.63f, 0.67f, 0.73f, 1.0f));
         ImGui::TextUnformatted(label);
+        ImGui::PopStyleColor();
         ImGui::SameLine(labelWidth);
 
         // Set width for the value widget, reserving space for trailing

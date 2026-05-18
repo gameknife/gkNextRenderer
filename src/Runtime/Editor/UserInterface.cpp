@@ -2030,7 +2030,7 @@ void UserInterface::Render(const Statistics& statistics, VulkanGpuTimer* gpuTime
     {
         DrawOverlay(statistics, gpuTimer);
     }
-    DrawConsoleWindow();
+    RenderConsoleOverlay();
 }
 
 void UserInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx,
@@ -2079,20 +2079,31 @@ void UserInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::Swap
 
 void UserInterface::HandleEvent(const SDL_Event* event)
 {
-    ImGui_ImplSDL3_ProcessEvent(event);
     if (!event)
     {
         return;
     }
 
-    if (event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_GRAVE)
+    if (event->type == SDL_EVENT_KEY_DOWN && event->key.repeat == 0 &&
+        (event->key.key == SDLK_GRAVE || event->key.scancode == SDL_SCANCODE_GRAVE))
     {
-        //if (!ImGui::GetIO().WantCaptureKeyboard)
+        ToggleConsole();
+        suppressConsoleToggleTextInput_ = true;
+        return;
+    }
+
+    if (suppressConsoleToggleTextInput_ && event->type == SDL_EVENT_TEXT_INPUT)
+    {
+        const bool isConsoleToggleText =
+            std::strcmp(event->text.text, "`") == 0 || std::strcmp(event->text.text, "~") == 0;
+        suppressConsoleToggleTextInput_ = false;
+        if (isConsoleToggleText)
         {
-            showConsole_ = !showConsole_;
-            requestConsoleFocus_ = showConsole_;
+            return;
         }
     }
+
+    ImGui_ImplSDL3_ProcessEvent(event);
 }
 
 bool UserInterface::WantsToCaptureKeyboard() const { return ImGui::GetIO().WantCaptureKeyboard; }
@@ -2103,6 +2114,11 @@ void UserInterface::ToggleConsole()
 {
     showConsole_ = !showConsole_;
     requestConsoleFocus_ = showConsole_;
+}
+
+void UserInterface::RenderConsoleOverlay()
+{
+    DrawConsoleWindow();
 }
 
 void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gpuTimer)
@@ -2518,9 +2534,19 @@ void UserInterface::DrawConsoleWindow()
         return;
     }
 
-    const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
-    ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(displaySize, ImGuiCond_Always);
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    if (viewport == nullptr)
+    {
+        return;
+    }
+
+    constexpr float kBottomBarReservedHeight = 34.0f;
+    const ImVec2 windowPos = viewport->Pos;
+    const ImVec2 windowSize(viewport->Size.x, std::max(140.0f, viewport->Size.y - kBottomBarReservedHeight));
+
+    ImGui::SetNextWindowPos(windowPos, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(windowSize, ImGuiCond_Always);
+    ImGui::SetNextWindowViewport(viewport->ID);
     ImGui::SetNextWindowBgAlpha(0.7f);
 
     const auto flags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove;

@@ -110,6 +110,7 @@ public:
 	void DrawConsoleLogOutput(const char* childId, const ImVec2& size = ImVec2(0.0f, 0.0f), bool bordered = true);
 	void ToggleConsole();
 	bool IsConsoleOpen() const { return showConsole_; }
+	void RenderConsoleOverlay();
 
 private:
 	struct FUiRenderBuffers;
@@ -197,6 +198,7 @@ private:
 	bool showConsole_ = false;
 	bool consoleScrollToBottom_ = false;
 	bool requestConsoleFocus_ = false;
+	bool suppressConsoleToggleTextInput_ = false;
 	uint64_t consoleLogRevision_ = 0;
 	std::unordered_map<std::string, TimingHistory> gpuTimeHistory_;
 	std::unordered_map<std::string, TimingHistory> cpuTimeHistory_;

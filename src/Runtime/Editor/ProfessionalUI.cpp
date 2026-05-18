@@ -2,6 +2,7 @@
 
 #include "Runtime/Editor/ProfessionalUI.hpp"
 #include "Runtime/Engine.hpp"
+#include "Runtime/Editor/UserInterface.hpp"
 
 #include <algorithm>
 #include <imgui_internal.h>
@@ -46,6 +47,17 @@ namespace Runtime::UiTheme
             ImGui::PopStyleVar(2);
             DrawTooltip(tooltip);
             return pressed;
+        }
+
+        float CalcFormLabelWidth(float contentWidth, float ratio, float minLabelWidth, float maxLabelWidth)
+        {
+            return std::clamp(contentWidth * ratio, minLabelWidth, maxLabelWidth);
+        }
+
+        float CalcBadgeWidth(const char* label)
+        {
+            const float textWidth = ImGui::CalcTextSize(label != nullptr ? label : "").x;
+            return textWidth + 14.0f;
         }
     } // namespace
 
@@ -120,71 +132,79 @@ namespace Runtime::UiTheme
         ImVec4* colors = style.Colors;
         colors[ImGuiCol_Text] = Color(EColor::Text);
         colors[ImGuiCol_TextDisabled] = Color(EColor::TextDim);
-        colors[ImGuiCol_WindowBg] = Color(EColor::Surface);
-        colors[ImGuiCol_ChildBg] = Color(EColor::Background, 0.72f);
+        colors[ImGuiCol_WindowBg] = Color(EColor::Surface, 0.98f);
+        colors[ImGuiCol_ChildBg] = Color(EColor::Background, 0.62f);
         colors[ImGuiCol_PopupBg] = Color(EColor::SurfaceElevated, 0.98f);
         colors[ImGuiCol_Border] = Color(EColor::Border);
         colors[ImGuiCol_BorderShadow] = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
-        colors[ImGuiCol_FrameBg] = Color(EColor::Background);
-        colors[ImGuiCol_FrameBgHovered] = Color(EColor::SurfaceHover);
+        colors[ImGuiCol_FrameBg] = Color(EColor::Background, 0.96f);
+        colors[ImGuiCol_FrameBgHovered] = Color(EColor::SurfaceHover, 0.96f);
         colors[ImGuiCol_FrameBgActive] = Color(EColor::SurfaceHover);
         colors[ImGuiCol_TitleBg] = Color(EColor::Background);
         colors[ImGuiCol_TitleBgActive] = Color(EColor::Background);
         colors[ImGuiCol_TitleBgCollapsed] = Color(EColor::Background);
         colors[ImGuiCol_MenuBarBg] = Color(EColor::Background);
-        colors[ImGuiCol_ScrollbarBg] = Color(EColor::Background, 0.40f);
-        colors[ImGuiCol_ScrollbarGrab] = Color(EColor::BorderStrong);
+        colors[ImGuiCol_ScrollbarBg] = Color(EColor::Background, 0.26f);
+        colors[ImGuiCol_ScrollbarGrab] = Color(EColor::BorderStrong, 0.92f);
         colors[ImGuiCol_ScrollbarGrabHovered] = Color(EColor::TextDim);
         colors[ImGuiCol_ScrollbarGrabActive] = Color(EColor::TextMuted);
         colors[ImGuiCol_CheckMark] = Color(EColor::AccentHover);
         colors[ImGuiCol_SliderGrab] = Color(EColor::Blue);
         colors[ImGuiCol_SliderGrabActive] = Color(EColor::AccentHover);
-        colors[ImGuiCol_Button] = Color(EColor::SurfaceElevated);
+        colors[ImGuiCol_Button] = Color(EColor::SurfaceElevated, 0.94f);
         colors[ImGuiCol_ButtonHovered] = Color(EColor::SurfaceHover);
         colors[ImGuiCol_ButtonActive] = Color(EColor::Accent);
-        colors[ImGuiCol_Header] = Color(EColor::SurfaceElevated);
-        colors[ImGuiCol_HeaderHovered] = Color(EColor::SurfaceHover);
-        colors[ImGuiCol_HeaderActive] = Color(EColor::Accent, 0.85f);
+        colors[ImGuiCol_Header] = Color(EColor::SurfaceElevated, 0.90f);
+        colors[ImGuiCol_HeaderHovered] = Color(EColor::SurfaceHover, 0.96f);
+        colors[ImGuiCol_HeaderActive] = Color(EColor::Accent, 0.82f);
         colors[ImGuiCol_Separator] = Color(EColor::Border);
         colors[ImGuiCol_SeparatorHovered] = Color(EColor::AccentHover);
         colors[ImGuiCol_SeparatorActive] = Color(EColor::AccentHover);
         colors[ImGuiCol_ResizeGrip] = Color(EColor::BorderStrong, 0.55f);
         colors[ImGuiCol_ResizeGripHovered] = Color(EColor::AccentHover);
         colors[ImGuiCol_ResizeGripActive] = Color(EColor::AccentHover);
-        colors[ImGuiCol_Tab] = Color(EColor::Surface);
+        colors[ImGuiCol_Tab] = Color(EColor::Surface, 0.96f);
         colors[ImGuiCol_TabHovered] = Color(EColor::SurfaceHover);
-        colors[ImGuiCol_TabActive] = Color(EColor::SurfaceElevated);
+        colors[ImGuiCol_TabActive] = Color(EColor::SurfaceElevated, 0.98f);
         colors[ImGuiCol_TabUnfocused] = Color(EColor::Surface, 0.82f);
         colors[ImGuiCol_TabUnfocusedActive] = Color(EColor::SurfaceElevated, 0.88f);
         colors[ImGuiCol_DockingPreview] = Color(EColor::Accent, 0.55f);
         colors[ImGuiCol_DockingEmptyBg] = Color(EColor::Background);
+        colors[ImGuiCol_TableHeaderBg] = Color(EColor::SurfaceElevated, 0.92f);
+        colors[ImGuiCol_TableBorderStrong] = Color(EColor::BorderStrong, 0.92f);
+        colors[ImGuiCol_TableBorderLight] = Color(EColor::Border, 0.76f);
+        colors[ImGuiCol_TableRowBg] = Color(EColor::Background, 0.10f);
+        colors[ImGuiCol_TableRowBgAlt] = Color(EColor::Surface, 0.18f);
         colors[ImGuiCol_PlotHistogram] = Color(EColor::Success);
         colors[ImGuiCol_PlotHistogramHovered] = Color(EColor::AccentHover);
+        colors[ImGuiCol_PlotLines] = Color(EColor::Blue);
+        colors[ImGuiCol_PlotLinesHovered] = Color(EColor::AccentHover);
         colors[ImGuiCol_TextSelectedBg] = Color(EColor::Accent, 0.45f);
         colors[ImGuiCol_NavHighlight] = Color(EColor::AccentHover);
         colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.62f);
 
-        style.WindowPadding = ImVec2(10.0f, 8.0f);
-        style.FramePadding = ImVec2(8.0f, 5.0f);
-        style.CellPadding = ImVec2(8.0f, 5.0f);
-        style.ItemSpacing = ImVec2(7.0f, 6.0f);
-        style.ItemInnerSpacing = ImVec2(6.0f, 4.0f);
+        style.WindowPadding = ImVec2(8.0f, 7.0f);
+        style.FramePadding = ImVec2(7.0f, 4.0f);
+        style.CellPadding = ImVec2(7.0f, 4.0f);
+        style.ItemSpacing = ImVec2(6.0f, 5.0f);
+        style.ItemInnerSpacing = ImVec2(5.0f, 4.0f);
         style.TouchExtraPadding = ImVec2(0.0f, 0.0f);
-        style.IndentSpacing = 14.0f;
-        style.ScrollbarSize = 12.0f;
-        style.GrabMinSize = 12.0f;
+        style.IndentSpacing = 12.0f;
+        style.ScrollbarSize = 10.0f;
+        style.GrabMinSize = 10.0f;
         style.WindowBorderSize = 1.0f;
         style.ChildBorderSize = 1.0f;
         style.PopupBorderSize = 1.0f;
         style.FrameBorderSize = 1.0f;
         style.TabBorderSize = 0.0f;
-        style.WindowRounding = 6.0f;
-        style.ChildRounding = 5.0f;
-        style.FrameRounding = 4.0f;
-        style.PopupRounding = 6.0f;
-        style.ScrollbarRounding = 7.0f;
-        style.GrabRounding = 6.0f;
-        style.TabRounding = 4.0f;
+        style.WindowRounding = 7.0f;
+        style.ChildRounding = 6.0f;
+        style.FrameRounding = 5.0f;
+        style.PopupRounding = 7.0f;
+        style.ScrollbarRounding = 8.0f;
+        style.GrabRounding = 7.0f;
+        style.TabRounding = 5.0f;
+        style.WindowMenuButtonPosition = ImGuiDir_None;
         style.SeparatorTextBorderSize = 1.0f;
     }
 
@@ -273,8 +293,8 @@ namespace Runtime::UiTheme
                          ImGuiWindowFlags_NoDocking);
         ImGui::PopStyleVar();
 
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12.0f, 11.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(16.0f, 0.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(11.0f, 10.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(14.0f, 0.0f));
         if (ImGui::BeginMenuBar())
         {
             if (config.DrawMenuBar)
@@ -340,6 +360,168 @@ namespace Runtime::UiTheme
         engine.ConfigureCustomTitleBarDrag(true, config.Height, dragLeftReserved, rightWidth);
     }
 
+    void DrawBottomBar(const FBottomBarConfig& config)
+    {
+        ImGuiViewport* viewport = ImGui::GetMainViewport();
+        if (viewport == nullptr)
+        {
+            return;
+        }
+
+        const float barHeight = config.Height;
+        ImGui::SetNextWindowPos(viewport->Pos + ImVec2(0.0f, viewport->Size.y - barHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, barHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowViewport(viewport->ID);
+        ImGui::SetNextWindowBgAlpha(1.0f);
+
+        ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoDocking;
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(config.HorizontalPadding, config.VerticalPadding));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, Color(EColor::Background, 0.98f));
+
+        if (ImGui::Begin(config.WindowId, nullptr, flags))
+        {
+            ImGui::GetWindowDrawList()->AddLine(
+                viewport->Pos + ImVec2(0.0f, viewport->Size.y - barHeight),
+                viewport->Pos + ImVec2(viewport->Size.x, viewport->Size.y - barHeight),
+                ColorU32(EColor::Border), 1.0f);
+
+            if (config.DrawLeftContent)
+            {
+                config.DrawLeftContent();
+            }
+
+            if (config.DrawCenterContent)
+            {
+                const float centerWidth = std::max(0.0f, config.CenterWidth);
+                const float centerStart = (viewport->Size.x - centerWidth) * 0.5f;
+                if (ImGui::GetCursorPosX() < centerStart)
+                {
+                    ImGui::SameLine(centerStart);
+                }
+                config.DrawCenterContent();
+            }
+
+            if (config.DrawRightContent)
+            {
+                const float rightWidth = std::max(0.0f, config.RightWidth);
+                const float rightStart = viewport->Size.x - rightWidth;
+                if (ImGui::GetCursorPosX() < rightStart)
+                {
+                    ImGui::SameLine(rightStart);
+                }
+                config.DrawRightContent();
+            }
+        }
+        ImGui::End();
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar(4);
+    }
+
+    void DrawStandardBottomBar(NextEngine& engine, const char* windowId, float height)
+    {
+        UserInterface* ui = engine.GetUserInterface();
+        const NextEngine::FHotReloadStatus hotReloadStatus = engine.GetHotReloadStatus();
+        const auto memoryStats = engine.GetRenderer().Device().CaptureMemoryStats();
+        const float memoryFraction =
+            memoryStats.deviceLocalBudgetBytes > 0
+                ? static_cast<float>(static_cast<double>(memoryStats.deviceLocalUsageBytes) /
+                                     static_cast<double>(memoryStats.deviceLocalBudgetBytes))
+                : 0.0f;
+
+        const bool shaderLive = hotReloadStatus.shaderHotReloadEnabled && hotReloadStatus.shaderInitialized;
+        const char* shaderLabel = shaderLive ? "Shader Live"
+            : (hotReloadStatus.shaderHotReloadEnabled ? "Shader Init" : "Shader Off");
+        const ImVec4 shaderBackground = shaderLive
+            ? Color(EColor::Success, 0.14f)
+            : (hotReloadStatus.shaderHotReloadEnabled ? Color(EColor::Warning, 0.14f)
+                                                      : Color(EColor::Background, 0.78f));
+        const ImVec4 shaderForeground = shaderLive
+            ? Color(EColor::Success)
+            : (hotReloadStatus.shaderHotReloadEnabled ? Color(EColor::Warning) : Color(EColor::TextMuted));
+
+        const std::string fpsText = fmt::format("FPS {:.0f}", engine.GetFrameRate());
+        const std::string memoryText = fmt::format("VRAM {} / {}",
+                                                   fmt::format("{:.2f} {}",
+                                                               memoryStats.deviceLocalUsageBytes >= (1024ull * 1024ull * 1024ull)
+                                                                   ? static_cast<double>(memoryStats.deviceLocalUsageBytes) /
+                                                                         static_cast<double>(1024ull * 1024ull * 1024ull)
+                                                                   : static_cast<double>(memoryStats.deviceLocalUsageBytes) /
+                                                                         static_cast<double>(1024ull * 1024ull),
+                                                               memoryStats.deviceLocalUsageBytes >= (1024ull * 1024ull * 1024ull)
+                                                                   ? "GB"
+                                                                   : "MB"),
+                                                   fmt::format("{:.2f} {}",
+                                                               memoryStats.deviceLocalBudgetBytes >= (1024ull * 1024ull * 1024ull)
+                                                                   ? static_cast<double>(memoryStats.deviceLocalBudgetBytes) /
+                                                                         static_cast<double>(1024ull * 1024ull * 1024ull)
+                                                                   : static_cast<double>(memoryStats.deviceLocalBudgetBytes) /
+                                                                         static_cast<double>(1024ull * 1024ull),
+                                                               memoryStats.deviceLocalBudgetBytes >= (1024ull * 1024ull * 1024ull)
+                                                                   ? "GB"
+                                                                   : "MB"));
+        (void)memoryFraction;
+
+        constexpr float kConsoleButtonWidth = 74.0f;
+        constexpr float kStatsButtonWidth = 58.0f;
+        constexpr float kCaptureButtonWidth = 72.0f;
+        constexpr float kButtonHeight = 22.0f;
+        constexpr float kSeparatorWidth = 25.0f;
+        constexpr float kGapWidth = 8.0f;
+
+        const float rightWidth = kConsoleButtonWidth + kGapWidth + kStatsButtonWidth + kGapWidth + kCaptureButtonWidth +
+            kSeparatorWidth + CalcBadgeWidth(shaderLabel) + kSeparatorWidth + ImGui::CalcTextSize(fpsText.c_str()).x +
+            kSeparatorWidth + ImGui::CalcTextSize(memoryText.c_str()).x + 18.0f;
+
+        FBottomBarConfig config{};
+        config.WindowId = windowId;
+        config.Height = height;
+        config.RightWidth = rightWidth;
+        config.DrawLeftContent = []()
+        {
+            DrawStatusDot("Ready", true);
+        };
+        config.DrawRightContent = [&]()
+        {
+            if (ui != nullptr)
+            {
+                if (ToolbarButton("Console", "Toggle Console", ui->IsConsoleOpen(), ImVec2(kConsoleButtonWidth, kButtonHeight)))
+                {
+                    ui->ToggleConsole();
+                }
+            }
+            else
+            {
+                ToolbarButton("Console", "Console Unavailable", false, ImVec2(kConsoleButtonWidth, kButtonHeight));
+            }
+
+            ImGui::SameLine();
+            if (ToolbarButton("Stats", "Toggle Stats Overlay", engine.GetUserSettings().ShowOverlay,
+                              ImVec2(kStatsButtonWidth, kButtonHeight)))
+            {
+                engine.GetUserSettings().ShowOverlay = !engine.GetUserSettings().ShowOverlay;
+            }
+
+            ImGui::SameLine();
+            if (ToolbarButton("Capture", "Take Screenshot", false, ImVec2(kCaptureButtonWidth, kButtonHeight)))
+            {
+                engine.RequestScreenShot({});
+            }
+
+            DrawVerticalSeparator(14.0f, 10.0f, 0.72f);
+            DrawBadge(shaderLabel, shaderBackground, shaderForeground);
+            DrawVerticalSeparator(14.0f, 10.0f, 0.72f);
+            ImGui::TextColored(Color(EColor::TextMuted), "%s", fpsText.c_str());
+            DrawVerticalSeparator(14.0f, 10.0f, 0.72f);
+            ImGui::TextColored(Color(EColor::TextMuted), "%s", memoryText.c_str());
+        };
+        DrawBottomBar(config);
+    }
+
     void DrawTooltip(const char* text)
     {
         if (!ImGui::IsItemHovered() || text == nullptr || text[0] == '\0')
@@ -348,29 +530,39 @@ namespace Runtime::UiTheme
         }
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 6.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_PopupBg, Color(EColor::SurfaceElevated, 0.98f));
+        ImGui::PushStyleColor(ImGuiCol_Border, Color(EColor::BorderStrong, 0.82f));
         ImGui::BeginTooltip();
         ImGui::TextUnformatted(text);
         ImGui::EndTooltip();
-        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(2);
+        ImGui::PopStyleVar(3);
     }
 
     bool IconButton(const char* label, const char* tooltip, bool active, ImVec2 size)
     {
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
         if (active)
         {
             ImGui::PushStyleColor(ImGuiCol_Button, Color(EColor::Accent, 0.82f));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Color(EColor::AccentHover));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, Color(EColor::AccentHover));
+            ImGui::PushStyleColor(ImGuiCol_Border, Color(EColor::AccentHover, 0.88f));
         }
         else
         {
-            ImGui::PushStyleColor(ImGuiCol_Button, Color(EColor::SurfaceElevated, 0.86f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Color(EColor::SurfaceHover));
+            ImGui::PushStyleColor(ImGuiCol_Button, Color(EColor::SurfaceElevated, 0.82f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Color(EColor::SurfaceHover, 0.96f));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive, Color(EColor::Accent, 0.72f));
+            ImGui::PushStyleColor(ImGuiCol_Border, Color(EColor::Border, 0.86f));
         }
 
         const bool pressed = ImGui::Button(label, size);
-        ImGui::PopStyleColor(3);
+        ImGui::PopStyleColor(4);
+        ImGui::PopStyleVar(2);
         DrawTooltip(tooltip);
         return pressed;
     }
@@ -383,12 +575,68 @@ namespace Runtime::UiTheme
         return pressed;
     }
 
+    void BeginFormRow(const char* label, float ratio, float minLabelWidth, float maxLabelWidth)
+    {
+        ImGui::AlignTextToFramePadding();
+        ImGui::PushStyleColor(ImGuiCol_Text, Color(EColor::TextMuted));
+        ImGui::TextUnformatted(label != nullptr ? label : "");
+        ImGui::PopStyleColor();
+
+        const float labelWidth = CalcFormLabelWidth(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX(),
+                                                    ratio, minLabelWidth, maxLabelWidth);
+        ImGui::SameLine(labelWidth);
+    }
+
+    bool BeginInsetPanel(const char* id, ImVec2 size, bool border, ImGuiWindowFlags flags, ImVec2 padding,
+                         float backgroundAlpha)
+    {
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, Color(EColor::Background, backgroundAlpha));
+        ImGui::PushStyleColor(ImGuiCol_Border, Color(EColor::Border, 0.82f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, padding);
+        return ImGui::BeginChild(id, size, border, flags);
+    }
+
+    void EndInsetPanel()
+    {
+        ImGui::EndChild();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(2);
+    }
+
+    bool BeginOverlayPanel(const FOverlayPanelConfig& config)
+    {
+        ImGui::SetNextWindowPos(config.Position, ImGuiCond_Always);
+        ImGui::SetNextWindowSize(config.Size, ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(config.BackgroundAlpha);
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, config.Padding);
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, config.ItemSpacing);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, config.Rounding);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, Color(config.BackgroundColor, config.BackgroundAlpha));
+        ImGui::PushStyleColor(ImGuiCol_Border, Color(EColor::BorderStrong, config.BorderAlpha));
+
+        const ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings |
+            ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | config.ExtraFlags;
+        return ImGui::Begin(config.WindowId, nullptr, flags);
+    }
+
+    void EndOverlayPanel()
+    {
+        ImGui::End();
+        ImGui::PopStyleColor(2);
+        ImGui::PopStyleVar(4);
+    }
+
     bool BeginSection(const char* icon, const char* label, bool defaultOpen)
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 5.0f));
-        ImGui::PushStyleColor(ImGuiCol_Header, Color(EColor::Background, 0.92f));
-        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, Color(EColor::SurfaceHover));
-        ImGui::PushStyleColor(ImGuiCol_HeaderActive, Color(EColor::SurfaceHover));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 4.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+        ImGui::PushStyleColor(ImGuiCol_Header, Color(EColor::Background, 0.86f));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, Color(EColor::SurfaceHover, 0.94f));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, Color(EColor::Accent, 0.48f));
+        ImGui::PushStyleColor(ImGuiCol_Border, Color(EColor::Border, 0.84f));
 
         const std::string header = fmt::format("{} {}", icon ? icon : "", label ? label : "");
         ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_Framed;
@@ -398,13 +646,13 @@ namespace Runtime::UiTheme
         }
         const bool open = ImGui::CollapsingHeader(header.c_str(), flags);
 
-        ImGui::PopStyleColor(3);
-        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(4);
+        ImGui::PopStyleVar(2);
 
         if (open)
         {
-            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(7.0f, 6.0f));
-            ImGui::Indent(4.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 5.0f));
+            ImGui::Indent(5.0f);
         }
         return open;
     }
@@ -453,18 +701,20 @@ namespace Runtime::UiTheme
         drawList->AddCircleFilled(ImVec2(pos.x + radius, pos.y + ImGui::GetTextLineHeight() * 0.5f), radius, dotColor);
         ImGui::Dummy(ImVec2(radius * 2.0f + 4.0f, ImGui::GetTextLineHeight()));
         ImGui::SameLine(0.0f, 3.0f);
+        ImGui::PushStyleColor(ImGuiCol_Text, Color(EColor::TextMuted));
         ImGui::TextUnformatted(label);
+        ImGui::PopStyleColor();
     }
 
     void DrawBadge(const char* label, ImVec4 background, ImVec4 foreground)
     {
         const ImVec2 pos = ImGui::GetCursorScreenPos();
         const ImVec2 textSize = ImGui::CalcTextSize(label);
-        const ImVec2 padding(8.0f, 3.0f);
+        const ImVec2 padding(7.0f, 2.0f);
         const ImVec2 size(textSize.x + padding.x * 2.0f, textSize.y + padding.y * 2.0f);
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         drawList->AddRectFilled(pos, pos + size, ImGui::GetColorU32(background), 4.0f);
-        drawList->AddRect(pos, pos + size, ColorU32(EColor::Border, 0.75f), 4.0f);
+        drawList->AddRect(pos, pos + size, ColorU32(EColor::Border, 0.62f), 4.0f);
         drawList->AddText(pos + padding, ImGui::GetColorU32(foreground), label);
         ImGui::Dummy(size);
     }
@@ -486,7 +736,19 @@ namespace Runtime::UiTheme
         const ImVec2 pos = ImGui::GetCursorScreenPos();
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         drawList->AddLine(pos, ImVec2(pos.x + ImGui::GetContentRegionAvail().x, pos.y), ColorU32(EColor::Border, alpha), 1.0f);
-        ImGui::Dummy(ImVec2(0.0f, 6.0f));
+        ImGui::Dummy(ImVec2(0.0f, 4.0f));
+    }
+
+    void DrawVerticalSeparator(float height, float spacing, float alpha)
+    {
+        ImGui::SameLine(0.0f, spacing);
+        const ImVec2 separatorMin = ImGui::GetCursorScreenPos();
+        ImGui::GetWindowDrawList()->AddLine(
+            ImVec2(separatorMin.x, separatorMin.y + 1.0f),
+            ImVec2(separatorMin.x, separatorMin.y + height - 1.0f),
+            ColorU32(EColor::Border, alpha));
+        ImGui::Dummy(ImVec2(1.0f, height));
+        ImGui::SameLine(0.0f, spacing);
     }
 
     void DrawProgressBar(float fraction, ImVec4 color, ImVec2 size)

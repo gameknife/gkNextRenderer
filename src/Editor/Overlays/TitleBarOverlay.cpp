@@ -269,7 +269,11 @@ namespace Editor
                 ImGui::MenuItem("Outliner", nullptr, &ui.sidebar);
                 ImGui::MenuItem("Properties", nullptr, &ui.properties);
                 ImGui::MenuItem("Content Browser", nullptr, &ui.contentBrowser);
-                ImGui::MenuItem("Console", nullptr, &ui.logPanel);
+                const bool consoleOpen = ctx.ui.IsConsoleOpen();
+                if (ImGui::MenuItem("Console", nullptr, consoleOpen))
+                {
+                    ctx.ui.ToggleConsole();
+                }
                 ImGui::MenuItem("Material Editor", nullptr, &ui.child_mat_editor);
 
                 ImGui::Separator();
@@ -309,50 +313,6 @@ namespace Editor
         };
         Runtime::UiTheme::DrawAppTitleBar(ctx.engine, config);
 
-        ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + viewport->Size.y - kFooterHeight));
-        ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, kFooterHeight));
-        ImGui::SetNextWindowViewport(viewport->ID);
-        ImGui::SetNextWindowBgAlpha(1.0f);
-
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 4.0f));
-
-        ImGui::Begin("Footer", nullptr,
-                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
-                         ImGuiWindowFlags_NoDocking);
-
-        ImGui::GetWindowDrawList()->AddLine(
-            ImVec2(viewport->Pos.x, viewport->Pos.y + viewport->Size.y - kFooterHeight),
-            ImVec2(viewport->Pos.x + viewport->Size.x, viewport->Pos.y + viewport->Size.y - kFooterHeight),
-            Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Border), 1.0f);
-
-        Runtime::UiTheme::DrawStatusDot("Ready", true);
-
-        const float rightWidth = 430.0f;
-        const float rightStart = viewport->Size.x - rightWidth;
-        if (ImGui::GetCursorPosX() < rightStart)
-        {
-            ImGui::SameLine(rightStart);
-        }
-        Runtime::UiTheme::DrawBadge("Live Link", Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Success, 0.18f),
-                                    Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Success));
-        ImGui::SameLine(0.0f, 8.0f);
-        Runtime::UiTheme::DrawBadge("Source Control",
-                                    Runtime::UiTheme::Color(Runtime::UiTheme::EColor::SurfaceElevated, 0.90f),
-                                    Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted));
-        ImGui::SameLine(0.0f, 10.0f);
-        ImGui::TextColored(Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted), "%.0f FPS",
-                           ctx.engine.GetFrameRate());
-        ImGui::SameLine(0.0f, 10.0f);
-        ImGui::TextColored(Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Blue), "Vulkan");
-        ImGui::SameLine(0.0f, 10.0f);
-        ImGui::TextColored(Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted), "%.2f ms",
-                           ctx.engine.GetSmoothDeltaSeconds() * 1000.0);
-
-        ImGui::End();
-
-        ImGui::PopStyleVar(3);
+        Runtime::UiTheme::DrawStandardBottomBar(ctx.engine, "Footer", kFooterHeight);
     }
 } // namespace Editor

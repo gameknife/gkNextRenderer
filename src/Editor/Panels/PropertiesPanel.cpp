@@ -35,22 +35,20 @@ namespace Editor
             constexpr const char* axisIds[] = {"X", "Y", "Z"};
 
             ImGui::PushID(label);
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted(label);
-            ImGui::SameLine(82.0f);
+            Runtime::UiTheme::BeginFormRow(label, 0.22f, 70.0f, 70.0f);
 
             const float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
-            const float width = std::max(58.0f, (ImGui::GetContentRegionAvail().x - spacing * 2.0f) / 3.0f);
-            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            const float labelWidth = 14.0f;
+            const float width =
+                std::max(54.0f, (ImGui::GetContentRegionAvail().x - spacing * 2.0f - labelWidth * 3.0f) / 3.0f);
 
             for (int axis = 0; axis < 3; ++axis)
             {
-                const ImVec2 pos = ImGui::GetCursorScreenPos();
-                const float height = ImGui::GetFrameHeight();
-                drawList->AddRectFilled(pos, ImVec2(pos.x + 2.0f, pos.y + height),
-                                        ImGui::GetColorU32(axisColors[axis]), 1.0f);
-                ImGui::SetCursorScreenPos(ImVec2(pos.x + 5.0f, pos.y));
-                ImGui::SetNextItemWidth(width - 5.0f);
+                ImGui::PushStyleColor(ImGuiCol_Text, axisColors[axis]);
+                ImGui::TextUnformatted(axisIds[axis]);
+                ImGui::PopStyleColor();
+                ImGui::SameLine(0.0f, 4.0f);
+                ImGui::SetNextItemWidth(width);
                 changed = ImGui::DragFloat(axisIds[axis], &value[axis], speed, 0.0f, 0.0f, "%.3f") || changed;
                 if (axis < 2)
                 {
@@ -226,6 +224,18 @@ namespace Editor
 
             auto render = selectedObj->GetComponent<Runtime::RenderComponent>();
             auto physics = selectedObj->GetComponent<Runtime::PhysicsComponent>();
+            static uint32_t editingNodeId = InvalidId;
+            static std::string editingName;
+            if (editingNodeId != selectedObj->GetInstanceId())
+            {
+                editingNodeId = selectedObj->GetInstanceId();
+                editingName = selectedObj->GetName();
+            }
+
+            Runtime::UiTheme::BeginInsetPanel("##InspectorSummary", ImVec2(0.0f, 98.0f), true, 0,
+                                              ImVec2(10.0f, 9.0f), 0.26f);
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 6.0f));
+
             bool enabled = render == nullptr || render->GetVisible();
             if (ImGui::Checkbox("##ObjectEnabled", &enabled) && render != nullptr)
             {
@@ -234,7 +244,7 @@ namespace Editor
             }
             ImGui::SameLine();
             ImGui::TextUnformatted(selectedObj->GetName().c_str());
-            ImGui::SameLine(std::max(ImGui::GetCursorPosX(), ImGui::GetContentRegionMax().x - 70.0f));
+            ImGui::SameLine(std::max(ImGui::GetCursorPosX(), ImGui::GetContentRegionMax().x - 72.0f));
             bool isStatic = physics == nullptr || physics->GetMobility() == Runtime::ENodeMobility::Static;
             if (ImGui::Checkbox("Static", &isStatic) && physics != nullptr)
             {
@@ -252,17 +262,11 @@ namespace Editor
             ImGui::Combo("##LayerSelector", &layerIndex, "Default\0Gameplay\0Props\0Colliders\0Lighting\0\0");
             Runtime::UiTheme::DrawTooltip("Layer");
 
+            ImGui::PushStyleColor(ImGuiCol_Text, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted));
             ImGui::TextUnformatted("Name");
+            ImGui::PopStyleColor();
             ImGui::SameLine();
             ImGui::SetNextItemWidth(-FLT_MIN);
-            static uint32_t editingNodeId = InvalidId;
-            static std::string editingName;
-            if (editingNodeId != selectedObj->GetInstanceId())
-            {
-                editingNodeId = selectedObj->GetInstanceId();
-                editingName = selectedObj->GetName();
-            }
-
             const bool nameSubmitted =
                 ImGui::InputText("##NodeRenameInput", &editingName, ImGuiInputTextFlags_EnterReturnsTrue);
             const bool nameEditFinished = nameSubmitted || ImGui::IsItemDeactivatedAfterEdit();
@@ -278,6 +282,9 @@ namespace Editor
                         ctx.scene, selectedObj->GetInstanceId(), editingName));
                 }
             }
+
+            ImGui::PopStyleVar();
+            Runtime::UiTheme::EndInsetPanel();
 
             Runtime::UiTheme::DrawThinSeparator();
 

@@ -23,6 +23,7 @@
 #include "Editor/EditorUtils.h"
 #include "Options.hpp"
 #include "Rendering/VulkanBaseRenderer.hpp"
+#include "Runtime/Editor/UserInterface.hpp"
 #include "Runtime/Editor/ProfessionalUI.hpp"
 #include "Runtime/Utilities/GraphicsDebugPanel.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
@@ -117,7 +118,7 @@ void EditorInterface::Init()
 
 namespace
 {
-    constexpr float kToolbarSize = 40.0f;
+    constexpr float kToolbarSize = 38.0f;
     constexpr float kToolbarIconWidth = 34.0f;
     constexpr float kToolbarIconHeight = 30.0f;
 } // namespace
@@ -164,9 +165,9 @@ void EditorInterface::RebuildDefaultDockLayout(ImGuiID id)
     ImGui::DockBuilderSetNodeSize(id, viewport->Size);
 
     ImGuiID dockMain = id;
-    ImGuiID dock1 = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Left, 0.135f, nullptr, &dockMain);
-    ImGuiID dock2 = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Right, 0.19f, nullptr, &dockMain);
-    ImGuiID dock3 = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Down, 0.24f, nullptr, &dockMain);
+    ImGuiID dock1 = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Left, 0.155f, nullptr, &dockMain);
+    ImGuiID dock2 = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Right, 0.205f, nullptr, &dockMain);
+    ImGuiID dock3 = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Down, 0.25f, nullptr, &dockMain);
 
     ImGui::DockBuilderDockWindow("Outliner", dock1);
     ImGui::DockBuilderDockWindow("Properties", dock2);
@@ -198,6 +199,14 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
     ImGui::PopStyleVar();
     ImGui::PopStyleVar();
 
+    ImDrawList* toolbarDrawList = ImGui::GetWindowDrawList();
+    const ImVec2 toolbarMin = ImGui::GetWindowPos();
+    const ImVec2 toolbarMax = toolbarMin + ImGui::GetWindowSize();
+    toolbarDrawList->AddLine(toolbarMin, ImVec2(toolbarMax.x, toolbarMin.y),
+                             Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Border, 0.70f), 1.0f);
+    toolbarDrawList->AddLine(ImVec2(toolbarMin.x, toolbarMax.y - 1.0f), toolbarMax,
+                             Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Border, 0.92f), 1.0f);
+
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 0.0f));
     ImGui::SetCursorPosY((kToolbarSize - kToolbarIconHeight) * 0.5f);
 
@@ -206,15 +215,15 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
     static int platformIndex = 0;
     static int buildConfigIndex = 0;
 
-    ImGui::SetNextItemWidth(150.0f);
+    ImGui::SetNextItemWidth(138.0f);
     ImGui::Combo("##ProjectSelector", &projectIndex, ICON_FA_CUBE " RayQuery\0" ICON_FA_CUBE " Playground\0\0");
     Runtime::UiTheme::DrawTooltip("Project");
     ImGui::SameLine();
 
-    ImGui::SetNextItemWidth(118.0f);
+    ImGui::SetNextItemWidth(108.0f);
     ImGui::Combo("##BackendSelector", &backendIndex, "Vulkan\0Metal\0DirectX 12\0\0");
     Runtime::UiTheme::DrawTooltip("Backend");
-    ImGui::SameLine(0.0f, 14.0f);
+    ImGui::SameLine(0.0f, 12.0f);
 
     ImGui::BeginGroup();
     if (uiState_.fontIcon)
@@ -269,7 +278,7 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
         ImGui::PopFont();
     }
     ImGui::EndGroup();
-    ImGui::SameLine(0.0f, 14.0f);
+    ImGui::SameLine(0.0f, 12.0f);
 
     ImGui::BeginGroup();
     if (uiState_.fontIcon)
@@ -293,12 +302,12 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
         ImGui::PopFont();
     }
     ImGui::EndGroup();
-    ImGui::SameLine(0.0f, 16.0f);
+    ImGui::SameLine(0.0f, 14.0f);
 
     ImGui::PushStyleColor(ImGuiCol_Button, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Success, 0.92f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Success));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Success, 0.75f));
-    if (ImGui::Button(ICON_FA_PLAY " Play", ImVec2(92.0f, kToolbarIconHeight)))
+    if (ImGui::Button(ICON_FA_PLAY " Play", ImVec2(88.0f, kToolbarIconHeight)))
     {
         std::filesystem::path currentPath = std::filesystem::current_path();
         std::string cmdline = (currentPath / "gkNextRenderer").string() + (GOption->ForceSDR ? " --forcesdr" : "");
@@ -308,11 +317,11 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
     ImGui::PopStyleColor(3);
     ImGui::SameLine(0.0f, 12.0f);
 
-    ImGui::SetNextItemWidth(124.0f);
+    ImGui::SetNextItemWidth(116.0f);
     ImGui::Combo("##PlatformSelector", &platformIndex, ICON_FA_DESKTOP " Desktop\0Android\0iOS\0\0");
     Runtime::UiTheme::DrawTooltip("Target Platform");
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(142.0f);
+    ImGui::SetNextItemWidth(134.0f);
     ImGui::Combo("##BuildConfigSelector", &buildConfigIndex, "Development\0Debug\0Shipping\0\0");
     Runtime::UiTheme::DrawTooltip("Build Configuration");
 
@@ -387,6 +396,8 @@ void EditorInterface::Render()
         Editor::DrawAIPanel(ctx, uiState_);
     if (uiState_.viewport)
         Editor::DrawViewportOverlay(ctx, uiState_);
+
+    ctx.ui.RenderConsoleOverlay();
 
     if (uiState_.child_style)
         utils::ShowStyleEditorWindow(&uiState_.child_style);
