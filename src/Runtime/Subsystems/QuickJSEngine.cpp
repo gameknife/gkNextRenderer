@@ -241,6 +241,67 @@ namespace
         return spdlog::level::info;
     }
 
+    std::string NormalizeLineEndings(std::string text)
+    {
+        std::string normalized;
+        normalized.reserve(text.size());
+        for (size_t index = 0; index < text.size(); ++index)
+        {
+            if (text[index] == '\r')
+            {
+                if (index + 1 < text.size() && text[index + 1] == '\n')
+                {
+                    ++index;
+                }
+                normalized += '\n';
+                continue;
+            }
+
+            normalized += text[index];
+        }
+
+        return normalized;
+    }
+
+    std::string DetectLineEnding(const std::string& text)
+    {
+        if (text.find("\r\n") != std::string::npos)
+        {
+            return "\r\n";
+        }
+
+        if (text.find('\n') != std::string::npos)
+        {
+            return "\n";
+        }
+
+        return "\n";
+    }
+
+    std::string ApplyLineEnding(const std::string& text, std::string_view lineEnding)
+    {
+        if (lineEnding == "\n")
+        {
+            return text;
+        }
+
+        std::string converted;
+        converted.reserve(text.size() + text.size() / 8);
+        for (char ch : text)
+        {
+            if (ch == '\n')
+            {
+                converted.append(lineEnding);
+            }
+            else
+            {
+                converted += ch;
+            }
+        }
+
+        return converted;
+    }
+
     void Spdlog(qjs::rest<std::string> args)
     {
         if (args.empty())
@@ -2005,11 +2066,15 @@ namespace
         const fs::path outputPath = tsconfigPath.parent_path() / "Engine.d.ts";
         const std::string content = BuildTypeScriptDefinitions();
 
+        std::string existing;
+        std::string lineEnding = "\n";
         std::ifstream reader(outputPath, std::ios::binary);
         if (reader)
         {
-            std::string existing((std::istreambuf_iterator<char>(reader)), std::istreambuf_iterator<char>());
-            if (existing == content)
+            existing.assign((std::istreambuf_iterator<char>(reader)), std::istreambuf_iterator<char>());
+            lineEnding = DetectLineEnding(existing);
+
+            if (NormalizeLineEndings(existing) == NormalizeLineEndings(content))
             {
                 return;
             }
@@ -2022,7 +2087,7 @@ namespace
             return;
         }
 
-        writer << content;
+        writer << ApplyLineEnding(content, lineEnding);
     }
 #endif
 }

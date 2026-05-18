@@ -6,7 +6,9 @@
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
 #include <entt/meta/meta.hpp>
 #include <entt/meta/resolve.hpp>
+#include <algorithm>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <spdlog/spdlog.h>
 
@@ -97,6 +99,10 @@ namespace Reflection
             result += " {\n";
             
             auto properties = PropertyAccessor::GetProperties(metaType);
+            std::sort(properties.begin(), properties.end(), [](const PropertyInfo& lhs, const PropertyInfo& rhs)
+            {
+                return lhs.name < rhs.name;
+            });
             for (const auto& prop : properties)
             {
                 if (!prop.meta.IsJSExposed())
@@ -121,7 +127,21 @@ namespace Reflection
                 result += ";\n";
             }
 
+            std::vector<entt::meta_func> functions;
             for (auto&& [id, func] : metaType.func())
+            {
+                (void)id;
+                functions.push_back(func);
+            }
+
+            std::sort(functions.begin(), functions.end(), [](const entt::meta_func& lhs, const entt::meta_func& rhs)
+            {
+                const char* lhsName = lhs.name();
+                const char* rhsName = rhs.name();
+                return std::string_view(lhsName ? lhsName : "") < std::string_view(rhsName ? rhsName : "");
+            });
+
+            for (const auto& func : functions)
             {
                 const char* funcName = func.name();
                 if (!funcName)
@@ -169,24 +189,33 @@ namespace Reflection
             std::string result = "export type ";
             result += enumName;
             result += " = ";
-            
-            bool first = true;
+
+            std::vector<std::string> enumValues;
             for (auto&& [id, data] : metaType.data())
             {
+                (void)id;
                 const char* name = data.name();
                 if (name)
                 {
-                    if (!first)
-                    {
-                        result += " | ";
-                    }
-                    result += "\"";
-                    result += name;
-                    result += "\"";
-                    first = false;
+                    enumValues.emplace_back(name);
                 }
             }
-            
+
+            std::sort(enumValues.begin(), enumValues.end());
+
+            bool first = true;
+            for (const std::string& name : enumValues)
+            {
+                if (!first)
+                {
+                    result += " | ";
+                }
+                result += "\"";
+                result += name;
+                result += "\"";
+                first = false;
+            }
+
             result += ";\n";
             return result;
         }
