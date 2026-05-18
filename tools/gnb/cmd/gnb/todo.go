@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"strconv"
@@ -27,7 +28,7 @@ func newTodoCommand(ctx appContext) *cobra.Command {
 				return err
 			}
 			fmt.Println()
-			fmt.Println("Subcommands: list | show | add | done | block | archive | next")
+			fmt.Println("Subcommands: list | show | add | move | swap | done | block | delete | archive | next")
 			fmt.Println("Run `gnb todo <cmd> --help` for usage.")
 			return nil
 		},
@@ -36,8 +37,11 @@ func newTodoCommand(ctx appContext) *cobra.Command {
 	cmd.AddCommand(newTodoShowCommand(ctx))
 	cmd.AddCommand(newTodoNextCommand(ctx))
 	cmd.AddCommand(newTodoAddCommand(ctx))
+	cmd.AddCommand(newTodoMoveCommand(ctx))
+	cmd.AddCommand(newTodoSwapCommand(ctx))
 	cmd.AddCommand(newTodoDoneCommand(ctx))
 	cmd.AddCommand(newTodoBlockCommand(ctx))
+	cmd.AddCommand(newTodoDeleteCommand(ctx))
 	cmd.AddCommand(newTodoArchiveCommand(ctx))
 	return cmd
 }
@@ -324,6 +328,9 @@ func newTodoAddCommand(ctx appContext) *cobra.Command {
 		priority    string
 		sectionFlag string
 		idFlag      int
+		specFlag    bool
+		specText    string
+		specFrom    string
 	)
 	cmd := &cobra.Command{
 		Use:   "add <title>",
@@ -332,7 +339,9 @@ func newTodoAddCommand(ctx appContext) *cobra.Command {
 			"Recommended types: BUG, FEAT, IDEA, SPIKE, REFACTOR, DOC (others allowed with a warning).\n" +
 			"Examples:\n" +
 			"  gnb todo add -t bug \"修复贴图采样越界\"\n" +
-			"  gnb todo add -t feat -p P1 \"体积雾\" --section backlog",
+			"  gnb todo add -t feat -p P1 \"体积雾\" --section backlog\n" +
+			"  gnb todo add -t feat \"重构材质缓存\" --spec\n" +
+			"  gnb todo add -t feat \"重构材质缓存\" --spec-from docs/material-cache.md",
 		// Args validation is done inside RunE so that bad input prints help
 		// instead of an error message.
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -364,15 +373,41 @@ func newTodoAddCommand(ctx appContext) *cobra.Command {
 			if priUp != "" && !regexp.MustCompile(`^P[0-9]$`).MatchString(priUp) {
 				return showHelp()
 			}
+			createSpec := specFlag || specText != "" || specFrom != ""
+			if specText != "" && specFrom != "" {
+				return fmt.Errorf("--spec-text and --spec-from are mutually exclusive")
+			}
+			specBody := specText
+			if specFrom != "" {
+				data, err := readSpecBody(specFrom)
+				if err != nil {
+					return err
+				}
+				specBody = string(data)
+				createSpec = true
+			}
 			doc, err := spec.Parse(spec.TODOPath(ctx.repoRoot))
 			if err != nil {
 				return err
+			}
+			newID := idFlag
+			if newID == 0 {
+				newID = doc.MaxID() + 1
+			}
+			if newID > 99999 {
+				return fmt.Errorf("task id exceeds 5-digit range")
+			}
+			if createSpec {
+				if _, err := os.Stat(spec.SpecPath(ctx.repoRoot, newID)); err == nil {
+					return fmt.Errorf("spec already exists: %s", spec.SpecPath(ctx.repoRoot, newID))
+				}
 			}
 			id, err := doc.AppendTask(section, spec.Task{
 				Priority: priUp,
 				Type:     typeUp,
 				Title:    title,
-				ID:       idFlag,
+				ID:       newID,
+				Arrow:    specArrowIf(createSpec, newID),
 			})
 			if err != nil {
 				return err
@@ -381,6 +416,19 @@ func newTodoAddCommand(ctx appContext) *cobra.Command {
 				return err
 			}
 			console.Success("added #%05d  [%s]%s %s  → %s", id, typeUp, priorityBracket(priUp), title, sectionName(section))
+			if createSpec {
+				path, err := spec.WriteSpecStub(ctx.repoRoot, spec.SpecStub{
+					TaskID:   id,
+					Title:    title,
+					Type:     typeUp,
+					Priority: priUp,
+					Body:     specBody,
+				})
+				if err != nil {
+					return err
+				}
+				console.Success("wrote spec: %s", path)
+			}
 			return nil
 		},
 	}
@@ -388,7 +436,24 @@ func newTodoAddCommand(ctx appContext) *cobra.Command {
 	cmd.Flags().StringVarP(&priority, "priority", "p", "", "priority (P0, P1, P2)")
 	cmd.Flags().StringVar(&sectionFlag, "section", "next", "target section: next | backlog")
 	cmd.Flags().IntVar(&idFlag, "id", 0, "force a specific ID instead of auto-assigning")
+	cmd.Flags().BoolVar(&specFlag, "spec", false, "create .spec/specs/<id>.md and link it from TODO.md")
+	cmd.Flags().StringVar(&specText, "spec-text", "", "create a spec file with this markdown body")
+	cmd.Flags().StringVar(&specFrom, "spec-from", "", "create a spec file from a markdown file; use - for stdin")
 	return cmd
+}
+
+func specArrowIf(enabled bool, id int) string {
+	if !enabled {
+		return ""
+	}
+	return spec.SpecRel(id)
+}
+
+func readSpecBody(path string) ([]byte, error) {
+	if path == "-" {
+		return io.ReadAll(os.Stdin)
+	}
+	return os.ReadFile(path)
 }
 
 func priorityBracket(p string) string {
@@ -396,6 +461,115 @@ func priorityBracket(p string) string {
 		return ""
 	}
 	return "[" + p + "]"
+}
+
+// ----- move / swap ------------------------------------------------------
+
+func newTodoMoveCommand(ctx appContext) *cobra.Command {
+	var (
+		toFlag     string
+		beforeFlag string
+		afterFlag  string
+	)
+	cmd := &cobra.Command{
+		Use:   "move <id>",
+		Short: "Move a task within or between 下一步 and 待规划",
+		Long: "Move a task line as if dragging it in the TODO list.\n\n" +
+			"Examples:\n" +
+			"  gnb todo move 00021 --to next\n" +
+			"  gnb todo move 00021 --before 00018\n" +
+			"  gnb todo move 00018 --after 00021",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			id, err := parseID(args[0])
+			if err != nil {
+				return err
+			}
+			toSection := spec.SectionUnknown
+			if toFlag != "" {
+				toSection, err = parseMaintenanceSection(toFlag)
+				if err != nil {
+					return err
+				}
+			}
+			beforeID, err := optionalID(beforeFlag)
+			if err != nil {
+				return err
+			}
+			afterID, err := optionalID(afterFlag)
+			if err != nil {
+				return err
+			}
+			doc, err := spec.Parse(spec.TODOPath(ctx.repoRoot))
+			if err != nil {
+				return err
+			}
+			if err := doc.MoveTask(id, spec.MovePlacement{
+				ToSection: toSection,
+				BeforeID:  beforeID,
+				AfterID:   afterID,
+			}); err != nil {
+				return err
+			}
+			if err := doc.Save(); err != nil {
+				return err
+			}
+			console.Success("moved #%05d", id)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&toFlag, "to", "", "target section: next | backlog (optional when --before/--after is used)")
+	cmd.Flags().StringVar(&beforeFlag, "before", "", "insert before task ID")
+	cmd.Flags().StringVar(&afterFlag, "after", "", "insert after task ID")
+	return cmd
+}
+
+func newTodoSwapCommand(ctx appContext) *cobra.Command {
+	return &cobra.Command{
+		Use:   "swap <id-a> <id-b>",
+		Short: "Swap two tasks in 下一步/待规划",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			aID, err := parseID(args[0])
+			if err != nil {
+				return err
+			}
+			bID, err := parseID(args[1])
+			if err != nil {
+				return err
+			}
+			doc, err := spec.Parse(spec.TODOPath(ctx.repoRoot))
+			if err != nil {
+				return err
+			}
+			if err := doc.SwapTasks(aID, bID); err != nil {
+				return err
+			}
+			if err := doc.Save(); err != nil {
+				return err
+			}
+			console.Success("swapped #%05d and #%05d", aID, bID)
+			return nil
+		},
+	}
+}
+
+func parseMaintenanceSection(s string) (spec.SectionKind, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "next", "下一步":
+		return spec.SectionNext, nil
+	case "backlog", "待规划":
+		return spec.SectionBacklog, nil
+	default:
+		return spec.SectionUnknown, fmt.Errorf("unknown section %q (expected next|backlog)", s)
+	}
+}
+
+func optionalID(s string) (int, error) {
+	if strings.TrimSpace(s) == "" {
+		return 0, nil
+	}
+	return parseID(s)
 }
 
 // ----- done -------------------------------------------------------------
@@ -453,6 +627,90 @@ func newTodoDoneCommand(ctx appContext) *cobra.Command {
 	cmd.Flags().StringVar(&summary, "summary", "", "initial 做了什么 summary in the journal stub")
 	cmd.Flags().BoolVar(&buildOK, "build-ok", false, "set build_ok: true in the journal frontmatter")
 	cmd.Flags().BoolVar(&noJournal, "no-journal", false, "do not create journal/<id>.md")
+	return cmd
+}
+
+// ----- delete -----------------------------------------------------------
+
+func newTodoDeleteCommand(ctx appContext) *cobra.Command {
+	var (
+		yes        bool
+		keepSpec   bool
+		alsoFiles  bool
+	)
+	cmd := &cobra.Command{
+		Use:   "delete <id>",
+		Short: "Permanently remove a task (and its specs/<id>.md by default)",
+		Long: "Delete a task line from TODO.md and remove its specs/<id>.md.\n\n" +
+			"Pass --keep-spec to leave specs/<id>.md alone.\n" +
+			"Pass --also-files to also drop journal/<id>.md and blockers/<id>.md.\n" +
+			"Without -y, prints what would be deleted and aborts.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			id, err := parseID(args[0])
+			if err != nil {
+				return err
+			}
+			doc, err := spec.Parse(spec.TODOPath(ctx.repoRoot))
+			if err != nil {
+				return err
+			}
+			t, _, ok := doc.FindTask(id)
+			if !ok {
+				return fmt.Errorf("task #%05d not found", id)
+			}
+			specPath := spec.SpecPath(ctx.repoRoot, id)
+			_, specExists := os.Stat(specPath)
+			journalPath := spec.JournalPath(ctx.repoRoot, id)
+			_, journalExists := os.Stat(journalPath)
+			blockerPath := spec.BlockerPath(ctx.repoRoot, id)
+			_, blockerExists := os.Stat(blockerPath)
+			if !yes {
+				console.Info("将删除任务 #%05d [%s]%s %s", id, t.Type, priorityBracket(t.Priority), t.Title)
+				if !keepSpec && specExists == nil {
+					console.Info("  + %s", specPath)
+				}
+				if alsoFiles && journalExists == nil {
+					console.Info("  + %s", journalPath)
+				}
+				if alsoFiles && blockerExists == nil {
+					console.Info("  + %s", blockerPath)
+				}
+				console.Warn("dry-run；加 -y 真正执行")
+				return nil
+			}
+			if _, err := doc.DeleteTask(id); err != nil {
+				return err
+			}
+			if err := doc.Save(); err != nil {
+				return err
+			}
+			console.Success("removed #%05d from TODO.md", id)
+			if !keepSpec {
+				if removed, err := spec.RemoveIfExists(specPath); err != nil {
+					return err
+				} else if removed {
+					console.Success("removed %s", specPath)
+				}
+			}
+			if alsoFiles {
+				if removed, err := spec.RemoveIfExists(journalPath); err != nil {
+					return err
+				} else if removed {
+					console.Success("removed %s", journalPath)
+				}
+				if removed, err := spec.RemoveIfExists(blockerPath); err != nil {
+					return err
+				} else if removed {
+					console.Success("removed %s", blockerPath)
+				}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "execute the deletion (otherwise dry-run)")
+	cmd.Flags().BoolVar(&keepSpec, "keep-spec", false, "keep specs/<id>.md")
+	cmd.Flags().BoolVar(&alsoFiles, "also-files", false, "also delete journal/<id>.md and blockers/<id>.md")
 	return cmd
 }
 

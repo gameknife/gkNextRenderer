@@ -75,6 +75,65 @@ func buildJournalBody(j JournalStub) string {
 	return b.String()
 }
 
+// SpecStub is the detailed task background written by `gnb todo add --spec`.
+type SpecStub struct {
+	TaskID   int
+	Title    string
+	Type     string
+	Priority string
+	Body     string
+	Created  time.Time
+}
+
+// WriteSpecStub creates specs/<id>.md if it doesn't exist.
+func WriteSpecStub(repoRoot string, s SpecStub) (string, error) {
+	if err := os.MkdirAll(SpecsDir(repoRoot), 0755); err != nil {
+		return "", err
+	}
+	path := SpecPath(repoRoot, s.TaskID)
+	if _, err := os.Stat(path); err == nil {
+		return path, fmt.Errorf("%w: %s", os.ErrExist, path)
+	}
+	body := buildSpecBody(s)
+	if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func buildSpecBody(s SpecStub) string {
+	t := s.Created
+	if t.IsZero() {
+		t = time.Now()
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "---\n")
+	fmt.Fprintf(&b, "task: %05d\n", s.TaskID)
+	fmt.Fprintf(&b, "created: %s\n", t.Format(time.RFC3339))
+	if s.Type != "" {
+		fmt.Fprintf(&b, "type: %s\n", s.Type)
+	}
+	if s.Priority != "" {
+		fmt.Fprintf(&b, "priority: %s\n", s.Priority)
+	}
+	fmt.Fprintf(&b, "---\n\n")
+	fmt.Fprintf(&b, "# #%05d %s\n\n", s.TaskID, s.Title)
+	if strings.TrimSpace(s.Body) != "" {
+		b.WriteString(strings.TrimRight(s.Body, "\r\n"))
+		b.WriteString("\n")
+		return b.String()
+	}
+	b.WriteString("## 背景\n\n")
+	b.WriteString("…\n\n")
+	b.WriteString("## 目标\n\n")
+	b.WriteString("- …\n\n")
+	b.WriteString("## 执行细节\n\n")
+	b.WriteString("- …\n\n")
+	b.WriteString("## 验收\n\n")
+	b.WriteString("- …\n")
+	return b.String()
+}
+
 // BlockerStub is the minimal blocker file layout written by `gnb todo block`.
 type BlockerStub struct {
 	TaskID    int
@@ -116,6 +175,18 @@ func buildBlockerBody(b BlockerStub) string {
 	}
 	sb.WriteString("## 候选方案\n\n- …\n")
 	return sb.String()
+}
+
+// RemoveIfExists deletes the file at path when it exists. Returns true if a
+// file was actually removed. Missing files are not an error.
+func RemoveIfExists(path string) (bool, error) {
+	if err := os.Remove(path); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 // ReadIfExists is a small helper for `gnb todo show` that returns the file

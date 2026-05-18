@@ -1,7 +1,10 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -103,5 +106,53 @@ func TestParseRunArgsShowsRunHelpWithoutTarget(t *testing.T) {
 	}
 	if !showHelp {
 		t.Fatal("parseRunArgs showHelp = false, want true")
+	}
+}
+
+func TestTodoAddWithSpecTextCreatesLinkedSpec(t *testing.T) {
+	dir := t.TempDir()
+	specDir := filepath.Join(dir, ".spec")
+	if err := os.MkdirAll(specDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	todo := `# TODO
+
+## Milestone: 测试  <!-- status: active -->
+
+### 下一步
+
+(暂无)
+
+### 待规划
+
+(暂无)
+
+### 最近完成
+
+(暂无)
+`
+	if err := os.WriteFile(filepath.Join(specDir, "TODO.md"), []byte(todo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := newTodoAddCommand(appContext{repoRoot: dir})
+	cmd.SetArgs([]string{"-t", "feat", "测试任务", "--spec-text", "## 背景\n\n详细背景"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("todo add: %v", err)
+	}
+
+	todoAfter, err := os.ReadFile(filepath.Join(specDir, "TODO.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(todoAfter), "- [ ] `#00001` [FEAT] 测试任务 → specs/00001.md") {
+		t.Fatalf("TODO missing linked spec:\n%s", todoAfter)
+	}
+	specBody, err := os.ReadFile(filepath.Join(specDir, "specs", "00001.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(specBody), "详细背景") {
+		t.Fatalf("spec body missing detail:\n%s", specBody)
 	}
 }

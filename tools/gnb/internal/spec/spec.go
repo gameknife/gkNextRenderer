@@ -84,6 +84,14 @@ type Document struct {
 	sectionRanges map[SectionKind][2]int
 }
 
+// MovePlacement describes where a task line should be inserted. When BeforeID
+// or AfterID is set, ToSection is optional and the anchor task's section wins.
+type MovePlacement struct {
+	ToSection SectionKind
+	BeforeID  int
+	AfterID   int
+}
+
 var (
 	taskHeadRE  = regexp.MustCompile("^- \\[([ /x!])\\] `#(\\d+)`\\s*(.*)$")
 	tagRE       = regexp.MustCompile(`^\[([A-Z][A-Z0-9]*)\]`)
@@ -336,6 +344,94 @@ func (d *Document) AppendTask(section SectionKind, t Task) (int, error) {
 	return t.ID, nil
 }
 
+// MoveTask moves a task line within or between the next/backlog sections.
+// It preserves the task line exactly, including status, tags, and spec links.
+func (d *Document) MoveTask(id int, placement MovePlacement) error {
+	if placement.BeforeID != 0 && placement.AfterID != 0 {
+		return fmt.Errorf("before and after are mutually exclusive")
+	}
+	task, _, ok := d.FindTask(id)
+	if !ok {
+		return fmt.Errorf("task #%05d not found in %s", id, filepath.Base(d.Path))
+	}
+	if task.Section != SectionNext && task.Section != SectionBacklog {
+		return fmt.Errorf("task #%05d is in %s; only 下一步/待规划 tasks can be moved", id, task.Section.Heading())
+	}
+	if placement.BeforeID == id || placement.AfterID == id {
+		return fmt.Errorf("task #%05d cannot be moved relative to itself", id)
+	}
+
+	line := d.Lines[task.LineNum-1]
+	sourceSection := task.Section
+	removeLine := task.LineNum - 1
+	d.Lines = append(d.Lines[:removeLine], d.Lines[removeLine+1:]...)
+	if err := d.reloadFromLines(); err != nil {
+		return err
+	}
+
+	insertAt, targetSection, err := d.resolveMoveInsert(placement)
+	if err != nil {
+		return err
+	}
+	if targetSection != SectionNext && targetSection != SectionBacklog {
+		return fmt.Errorf("target section must be next or backlog")
+	}
+	d.Lines = append(d.Lines[:insertAt], append([]string{line}, d.Lines[insertAt:]...)...)
+	if err := d.reloadFromLines(); err != nil {
+		return err
+	}
+	if sourceSection != targetSection && len(d.SectionTasks(sourceSection)) == 0 {
+		insertPlaceholderIfEmpty(d, sourceSection)
+	}
+	return d.reloadFromLines()
+}
+
+// SwapTasks exchanges two task lines. If they are in different sections, each
+// task takes the other's section by position.
+func (d *Document) SwapTasks(aID, bID int) error {
+	if aID == bID {
+		return fmt.Errorf("cannot swap task #%05d with itself", aID)
+	}
+	a, _, ok := d.FindTask(aID)
+	if !ok {
+		return fmt.Errorf("task #%05d not found in %s", aID, filepath.Base(d.Path))
+	}
+	b, _, ok := d.FindTask(bID)
+	if !ok {
+		return fmt.Errorf("task #%05d not found in %s", bID, filepath.Base(d.Path))
+	}
+	if !isMaintainedSection(a.Section) || !isMaintainedSection(b.Section) {
+		return fmt.Errorf("only 下一步/待规划 tasks can be swapped")
+	}
+	ai := a.LineNum - 1
+	bi := b.LineNum - 1
+	d.Lines[ai], d.Lines[bi] = d.Lines[bi], d.Lines[ai]
+	return d.reloadFromLines()
+}
+
+// DeleteTask removes the task line for id and re-inserts a "(暂无)" placeholder
+// if its section becomes empty. The returned Task reflects the row as parsed
+// before removal (useful for cleaning up related spec/journal files).
+func (d *Document) DeleteTask(id int) (Task, error) {
+	t, _, ok := d.FindTask(id)
+	if !ok {
+		return Task{}, fmt.Errorf("task #%05d not found in %s", id, filepath.Base(d.Path))
+	}
+	removed := *t
+	section := t.Section
+	d.Lines = append(d.Lines[:t.LineNum-1], d.Lines[t.LineNum:]...)
+	if err := d.reloadFromLines(); err != nil {
+		return Task{}, err
+	}
+	if len(d.SectionTasks(section)) == 0 {
+		insertPlaceholderIfEmpty(d, section)
+		if err := d.reloadFromLines(); err != nil {
+			return Task{}, err
+		}
+	}
+	return removed, nil
+}
+
 // RemoveLines removes the given 1-indexed line numbers from the buffer and
 // updates section ranges accordingly. Task parsing is NOT re-done; callers that
 // need a fresh task slice should re-Parse.
@@ -385,6 +481,77 @@ func (d *Document) SectionTasks(section SectionKind) []Task {
 		}
 	}
 	return out
+}
+
+func (d *Document) resolveMoveInsert(placement MovePlacement) (int, SectionKind, error) {
+	switch {
+	case placement.BeforeID != 0:
+		anchor, _, ok := d.FindTask(placement.BeforeID)
+		if !ok {
+			return 0, SectionUnknown, fmt.Errorf("anchor task #%05d not found", placement.BeforeID)
+		}
+		if !isMaintainedSection(anchor.Section) {
+			return 0, SectionUnknown, fmt.Errorf("anchor task #%05d is not in 下一步/待规划", placement.BeforeID)
+		}
+		if placement.ToSection != SectionUnknown && placement.ToSection != anchor.Section {
+			return 0, SectionUnknown, fmt.Errorf("anchor task #%05d is in %s, not %s", placement.BeforeID, anchor.Section.Heading(), placement.ToSection.Heading())
+		}
+		return anchor.LineNum - 1, anchor.Section, nil
+	case placement.AfterID != 0:
+		anchor, _, ok := d.FindTask(placement.AfterID)
+		if !ok {
+			return 0, SectionUnknown, fmt.Errorf("anchor task #%05d not found", placement.AfterID)
+		}
+		if !isMaintainedSection(anchor.Section) {
+			return 0, SectionUnknown, fmt.Errorf("anchor task #%05d is not in 下一步/待规划", placement.AfterID)
+		}
+		if placement.ToSection != SectionUnknown && placement.ToSection != anchor.Section {
+			return 0, SectionUnknown, fmt.Errorf("anchor task #%05d is in %s, not %s", placement.AfterID, anchor.Section.Heading(), placement.ToSection.Heading())
+		}
+		return anchor.LineNum, anchor.Section, nil
+	default:
+		if placement.ToSection == SectionUnknown {
+			return 0, SectionUnknown, fmt.Errorf("target section is required when no anchor is provided")
+		}
+		insertAt, err := d.sectionAppendIndex(placement.ToSection)
+		return insertAt, placement.ToSection, err
+	}
+}
+
+func (d *Document) sectionAppendIndex(section SectionKind) (int, error) {
+	rng, ok := d.sectionRanges[section]
+	if !ok {
+		return 0, fmt.Errorf("section %q not present in %s", section.Heading(), filepath.Base(d.Path))
+	}
+	insertAt := rng[1]
+	for insertAt > rng[0] && strings.TrimSpace(d.Lines[insertAt-1]) == "" {
+		insertAt--
+	}
+	if insertAt-1 >= rng[0] && strings.TrimSpace(d.Lines[insertAt-1]) == "(暂无)" {
+		d.Lines = append(d.Lines[:insertAt-1], d.Lines[insertAt:]...)
+		if err := d.reloadFromLines(); err != nil {
+			return 0, err
+		}
+		insertAt--
+	}
+	return insertAt, nil
+}
+
+func (d *Document) reloadFromLines() error {
+	content := strings.Join(d.Lines, "\n")
+	if content != "" {
+		content += "\n"
+	}
+	next, err := parseBytes(d.Path, []byte(content))
+	if err != nil {
+		return err
+	}
+	*d = *next
+	return nil
+}
+
+func isMaintainedSection(section SectionKind) bool {
+	return section == SectionNext || section == SectionBacklog
 }
 
 func (d *Document) shiftRanges(insertedAt, delta int) {

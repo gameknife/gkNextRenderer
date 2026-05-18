@@ -165,6 +165,117 @@ func TestAppendReplacesPlaceholder(t *testing.T) {
 	}
 }
 
+func TestMoveTaskToBacklog(t *testing.T) {
+	doc, _ := parseBytes("TODO.md", []byte(sampleTODO))
+	if err := doc.MoveTask(18, MovePlacement{ToSection: SectionBacklog}); err != nil {
+		t.Fatalf("MoveTask: %v", err)
+	}
+	doc2, _ := parseBytes("TODO.md", []byte(strings.Join(doc.Lines, "\n")+"\n"))
+	task, _, ok := doc2.FindTask(18)
+	if !ok {
+		t.Fatal("task 18 not found after move")
+	}
+	if task.Section != SectionBacklog {
+		t.Fatalf("section = %d, want backlog", task.Section)
+	}
+	backlog := doc2.SectionTasks(SectionBacklog)
+	if got := backlog[len(backlog)-1].ID; got != 18 {
+		t.Fatalf("last backlog task = %d, want 18", got)
+	}
+}
+
+func TestMoveTaskIntoEmptySectionPreservesBlankLine(t *testing.T) {
+	empty := `# TODO
+
+## Milestone: 测试  <!-- status: active -->
+
+### 下一步
+
+- [ ] ` + "`#00010`" + ` [BUG] 唯一任务
+
+### 待规划
+
+(暂无)
+
+### 最近完成
+
+(暂无)
+`
+	doc, err := parseBytes("TODO.md", []byte(empty))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if err := doc.MoveTask(10, MovePlacement{ToSection: SectionBacklog}); err != nil {
+		t.Fatalf("MoveTask: %v", err)
+	}
+	joined := strings.Join(doc.Lines, "\n")
+	if !strings.Contains(joined, "### 待规划\n\n- [ ] `#00010`") {
+		t.Fatalf("expected blank line between heading and task:\n%s", joined)
+	}
+}
+
+func TestMoveTaskBeforeAnchorAcrossSections(t *testing.T) {
+	doc, _ := parseBytes("TODO.md", []byte(sampleTODO))
+	if err := doc.MoveTask(21, MovePlacement{BeforeID: 18}); err != nil {
+		t.Fatalf("MoveTask: %v", err)
+	}
+	doc2, _ := parseBytes("TODO.md", []byte(strings.Join(doc.Lines, "\n")+"\n"))
+	next := doc2.SectionTasks(SectionNext)
+	if len(next) < 2 {
+		t.Fatalf("next tasks = %d, want at least 2", len(next))
+	}
+	if next[0].ID != 21 || next[1].ID != 18 {
+		t.Fatalf("next order = [%d, %d], want [21, 18]", next[0].ID, next[1].ID)
+	}
+	if backlog := doc2.SectionTasks(SectionBacklog); len(backlog) != 0 {
+		t.Fatalf("backlog tasks = %d, want 0", len(backlog))
+	}
+	if !strings.Contains(strings.Join(doc2.Lines, "\n"), "### 待规划\n\n(暂无)") {
+		t.Fatalf("empty backlog placeholder missing:\n%s", strings.Join(doc2.Lines, "\n"))
+	}
+}
+
+func TestDeleteTaskRefillsEmptySection(t *testing.T) {
+	doc, _ := parseBytes("TODO.md", []byte(sampleTODO))
+	removed, err := doc.DeleteTask(21)
+	if err != nil {
+		t.Fatalf("DeleteTask: %v", err)
+	}
+	if removed.ID != 21 {
+		t.Fatalf("removed.ID = %d, want 21", removed.ID)
+	}
+	doc2, _ := parseBytes("TODO.md", []byte(strings.Join(doc.Lines, "\n")+"\n"))
+	if _, _, ok := doc2.FindTask(21); ok {
+		t.Fatal("task 21 still present after delete")
+	}
+	if !strings.Contains(strings.Join(doc2.Lines, "\n"), "### 待规划\n\n(暂无)") {
+		t.Fatalf("empty backlog placeholder missing:\n%s", strings.Join(doc2.Lines, "\n"))
+	}
+}
+
+func TestDeleteTaskNotFound(t *testing.T) {
+	doc, _ := parseBytes("TODO.md", []byte(sampleTODO))
+	if _, err := doc.DeleteTask(9999); err == nil {
+		t.Fatal("expected error for unknown id")
+	}
+}
+
+func TestSwapTasksAcrossSections(t *testing.T) {
+	doc, _ := parseBytes("TODO.md", []byte(sampleTODO))
+	if err := doc.SwapTasks(18, 21); err != nil {
+		t.Fatalf("SwapTasks: %v", err)
+	}
+	doc2, _ := parseBytes("TODO.md", []byte(strings.Join(doc.Lines, "\n")+"\n"))
+	t18, _, _ := doc2.FindTask(18)
+	t21, _, _ := doc2.FindTask(21)
+	if t18.Section != SectionBacklog {
+		t.Fatalf("task 18 section = %d, want backlog", t18.Section)
+	}
+	if t21.Section != SectionNext {
+		t.Fatalf("task 21 section = %d, want next", t21.Section)
+	}
+}
+
 func TestRemoveLines(t *testing.T) {
 	doc, _ := parseBytes("TODO.md", []byte(sampleTODO))
 	taskBefore, _, _ := doc.FindTask(17)
@@ -288,6 +399,34 @@ func TestWriteJournalStub(t *testing.T) {
 	}
 	// Re-writing should refuse.
 	if _, err := WriteJournalStub(dir, JournalStub{TaskID: 42}); err == nil {
+		t.Error("expected error on overwrite")
+	}
+}
+
+func TestWriteSpecStub(t *testing.T) {
+	dir := t.TempDir()
+	path, err := WriteSpecStub(dir, SpecStub{
+		TaskID:   42,
+		Title:    "测试规格",
+		Type:     "FEAT",
+		Priority: "P1",
+		Body:     "## 背景\n\n详细背景。",
+	})
+	if err != nil {
+		t.Fatalf("WriteSpecStub: %v", err)
+	}
+	data, _ := os.ReadFile(path)
+	text := string(data)
+	if !strings.Contains(text, "task: 00042") {
+		t.Errorf("missing task id: %s", text)
+	}
+	if !strings.Contains(text, "# #00042 测试规格") {
+		t.Errorf("missing title: %s", text)
+	}
+	if !strings.Contains(text, "详细背景。") {
+		t.Errorf("missing body: %s", text)
+	}
+	if _, err := WriteSpecStub(dir, SpecStub{TaskID: 42}); err == nil {
 		t.Error("expected error on overwrite")
 	}
 }

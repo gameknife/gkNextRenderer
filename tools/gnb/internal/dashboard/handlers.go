@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -24,6 +25,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /task/{id}/block", s.handleTaskBlock)
 	mux.HandleFunc("GET /task/{id}/edit", s.handleTaskEditForm)
 	mux.HandleFunc("POST /task/{id}/edit", s.handleTaskEdit)
+	mux.HandleFunc("POST /task/{id}/move", s.handleTaskMove)
+	mux.HandleFunc("POST /task/{id}/spec", s.handleTaskCreateSpec)
+	mux.HandleFunc("POST /task/{id}/delete", s.handleTaskDelete)
 	mux.HandleFunc("GET /tab/{kind}", s.handleTab)
 	mux.HandleFunc("POST /jobs/{kind}", s.handleJobStart)
 	mux.HandleFunc("POST /jobs/{id}/cancel", s.handleJobCancel)
@@ -405,6 +409,166 @@ func (s *Server) handleTaskBlock(w http.ResponseWriter, r *http.Request) {
 	}
 	_, _ = spec.WriteBlockerStub(s.opts.RepoRoot, spec.BlockerStub{TaskID: id, Reason: reason})
 	s.respondTodoPanel(w, r)
+}
+
+func (s *Server) handleTaskMove(w http.ResponseWriter, r *http.Request) {
+	id, err := parsePathID(r)
+	if err != nil {
+		httpError(w, err)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err)
+		return
+	}
+	toSection := spec.SectionUnknown
+	switch strings.ToLower(strings.TrimSpace(r.FormValue("to"))) {
+	case "":
+		// no explicit target; resolved via anchor below
+	case "next", "下一步":
+		toSection = spec.SectionNext
+	case "backlog", "待规划":
+		toSection = spec.SectionBacklog
+	default:
+		http.Error(w, "to must be next or backlog", http.StatusBadRequest)
+		return
+	}
+	beforeID, err := optionalFormID(r.FormValue("before"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	afterID, err := optionalFormID(r.FormValue("after"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	doc, err := spec.Parse(spec.TODOPath(s.opts.RepoRoot))
+	if err != nil {
+		httpError(w, err)
+		return
+	}
+	if err := doc.MoveTask(id, spec.MovePlacement{
+		ToSection: toSection,
+		BeforeID:  beforeID,
+		AfterID:   afterID,
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := doc.Save(); err != nil {
+		httpError(w, err)
+		return
+	}
+	s.respondTodoPanel(w, r)
+}
+
+func (s *Server) handleTaskCreateSpec(w http.ResponseWriter, r *http.Request) {
+	id, err := parsePathID(r)
+	if err != nil {
+		httpError(w, err)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err)
+		return
+	}
+	body := r.FormValue("body")
+	doc, err := spec.Parse(spec.TODOPath(s.opts.RepoRoot))
+	if err != nil {
+		httpError(w, err)
+		return
+	}
+	t, _, ok := doc.FindTask(id)
+	if !ok {
+		http.Error(w, fmt.Sprintf("task #%05d not found", id), http.StatusNotFound)
+		return
+	}
+	if _, err := os.Stat(spec.SpecPath(s.opts.RepoRoot, id)); err == nil {
+		http.Error(w, "spec 文件已存在", http.StatusConflict)
+		return
+	}
+	if _, err := spec.WriteSpecStub(s.opts.RepoRoot, spec.SpecStub{
+		TaskID:   id,
+		Title:    t.Title,
+		Type:     t.Type,
+		Priority: t.Priority,
+		Body:     body,
+	}); err != nil {
+		httpError(w, err)
+		return
+	}
+	if t.Arrow == "" {
+		if err := doc.MarkStatus(id, t.Status, spec.WithArrow(spec.SpecRel(id))); err != nil {
+			httpError(w, err)
+			return
+		}
+		if err := doc.Save(); err != nil {
+			httpError(w, err)
+			return
+		}
+	}
+	// Re-render the detail panel so the new spec card shows up immediately.
+	r2 := r.Clone(r.Context())
+	r2.SetPathValue("id", r.PathValue("id"))
+	s.handleTaskDetail(w, r2)
+}
+
+func (s *Server) handleTaskDelete(w http.ResponseWriter, r *http.Request) {
+	id, err := parsePathID(r)
+	if err != nil {
+		httpError(w, err)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err)
+		return
+	}
+	alsoFiles := r.FormValue("also_files") == "1"
+	doc, err := spec.Parse(spec.TODOPath(s.opts.RepoRoot))
+	if err != nil {
+		httpError(w, err)
+		return
+	}
+	if _, err := doc.DeleteTask(id); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if err := doc.Save(); err != nil {
+		httpError(w, err)
+		return
+	}
+	if _, err := spec.RemoveIfExists(spec.SpecPath(s.opts.RepoRoot, id)); err != nil {
+		httpError(w, err)
+		return
+	}
+	if alsoFiles {
+		if _, err := spec.RemoveIfExists(spec.JournalPath(s.opts.RepoRoot, id)); err != nil {
+			httpError(w, err)
+			return
+		}
+		if _, err := spec.RemoveIfExists(spec.BlockerPath(s.opts.RepoRoot, id)); err != nil {
+			httpError(w, err)
+			return
+		}
+	}
+	// Tell the page to also clear the detail panel; htmx-trigger fires the
+	// `clear-detail` event in the browser which our layout.html script handles.
+	w.Header().Set("HX-Trigger", "clear-detail")
+	s.respondTodoPanel(w, r)
+}
+
+func optionalFormID(raw string) (int, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, nil
+	}
+	raw = strings.TrimPrefix(raw, "#")
+	id, err := strconv.Atoi(raw)
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("invalid id %q", raw)
+	}
+	return id, nil
 }
 
 func (s *Server) respondTodoPanel(w http.ResponseWriter, r *http.Request) {

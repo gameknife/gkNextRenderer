@@ -190,3 +190,37 @@ Preview the local build and target release URL without uploading:
 ```powershell
 .\scripts\publish-gnb.ps1 -DryRun
 ```
+
+## Todo Workflow
+
+List and inspect `.spec/TODO.md` tasks:
+
+```bash
+./gnb.sh todo list
+./gnb.sh todo show 00021
+./gnb.sh todo next --json
+```
+
+Add a task, optionally creating a linked `specs/<id>.md` background file:
+
+```bash
+./gnb.sh todo add -t feat -p P1 "重构材质缓存" --spec
+./gnb.sh todo add -t feat "重构材质缓存" --spec-from docs/material-cache.md
+```
+
+Maintain ordering between `下一步` and `待规划`:
+
+```bash
+./gnb.sh todo move 00021 --to next
+./gnb.sh todo move 00021 --before 00018
+./gnb.sh todo swap 00018 00021
+```
+
+Delete a task (defaults to also removing `specs/<id>.md`):
+
+```bash
+./gnb.sh todo delete 00021          # dry-run: show what would be removed
+./gnb.sh todo delete 00021 -y       # actually remove the task line + its spec
+./gnb.sh todo delete 00021 -y --keep-spec
+./gnb.sh todo delete 00021 -y --also-files   # also drop journal/blocker
+```
