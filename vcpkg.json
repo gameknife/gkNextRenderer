@@ -71,7 +71,8 @@
     {
       "name": "vulkan-loader",
       "platform": "windows"
-    }
+    },
+    "vulkan-memory-allocator"
   ],
   "features": {
     "avif": {
