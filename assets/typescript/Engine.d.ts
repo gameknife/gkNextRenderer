@@ -11,21 +11,21 @@ export class NextEngine {
     RegisterJSCallback(arg0: any): void;
 }
 export class Node {
-    readonly Name: string;
     readonly InstanceId: number;
-    Translation: Vec3;
+    readonly Name: string;
     Rotation: Quat;
     Scale: Vec3;
-    GetName(): string;
-    GetInstanceId(): number;
+    Translation: Vec3;
     GetComponent(arg0: string): any;
+    GetInstanceId(): number;
+    GetName(): string;
 }
 export interface Node {
     RecalcTransform(full?: boolean): void;
 }
 export class Scene {
-    GetIndicesCount(): number;
     FindNodeIdWithComponent(arg0: string): number;
+    GetIndicesCount(): number;
     GetNodeById(arg0: number): any;
 }
 export interface Scene {
@@ -37,38 +37,38 @@ export interface Scene {
     MarkTransformDirty(): void;
 }
 export class RenderComponent {
-    Visible: boolean;
+    CastShadows: boolean;
+    LayerMask: number;
+    LightmapUV: boolean;
+    Materials: number[];
+    readonly ModelId: number;
     RayCastVisible: boolean;
     RaycastVisible: boolean;
-    CastShadows: boolean;
     ReceiveGI: boolean;
-    LightmapUV: boolean;
-    LayerMask: number;
-    readonly ModelId: number;
     readonly SkinIndex: number;
-    Materials: number[];
-    ToggleVisible(): boolean;
+    Visible: boolean;
     ToggleRayCastVisible(): boolean;
+    ToggleVisible(): boolean;
 }
 export class PhysicsComponent {
+    AngularDamping: number;
+    CollisionPresets: string;
+    EnableGravity: boolean;
+    LinearDamping: number;
     Mobility: string;
+    PhysicsMaterial: string;
     PhysicsOffset: Vec3;
     SimulatePhysics: boolean;
-    PhysicsMaterial: string;
-    LinearDamping: number;
-    AngularDamping: number;
-    EnableGravity: boolean;
-    CollisionPresets: string;
 }
 export class SkinnedMeshComponent {
-    PlaySpeed: number;
-    readonly IsPlaying: boolean;
     readonly CurrentAnimation: string;
+    readonly IsPlaying: boolean;
+    PlaySpeed: number;
+    GetAnimationNames(): string[];
     PlayAnimation(arg0: string, arg1: boolean): void;
     StopAnimation(): void;
-    GetAnimationNames(): string[];
 }
-export type ENodeMobility = "Static" | "Dynamic" | "Kinematic";
+export type ENodeMobility = "Dynamic" | "Kinematic" | "Static";
 
 export namespace Global {
     function spdlog(level: string, ...args: any[]): void;
