@@ -2,7 +2,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include "Application/BrickPlayer/BrickPlayerSnapLogic.hpp"
+#include "Application/Game/BrickPlayer/BrickPlayerSnapLogic.hpp"
 
 namespace
 {

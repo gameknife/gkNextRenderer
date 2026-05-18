@@ -1,0 +1,1493 @@
+#include "Application/Editor/gkNextEditor/AI/EditorScriptExecutor.hpp"
+
+#include "Assets/Core/Node.h"
+#include "Assets/Core/Scene.hpp"
+#include "Application/Editor/gkNextEditor/EditorContext.hpp"
+#include "Runtime/Command/CommandHistory.hpp"
+#include "Runtime/Command/DeleteNodesCommand.hpp"
+#include "Runtime/Command/DuplicateNodesCommand.hpp"
+#include "Runtime/Command/PropertyCommand.hpp"
+#include "Runtime/Command/RenameNodeCommand.hpp"
+#include "Runtime/Command/TransformNodesCommand.hpp"
+#include "Runtime/Config/CVarSystem.hpp"
+#include "Runtime/Engine.hpp"
+#include "Runtime/Reflection/PropertyAccessor.h"
+#include "Runtime/Scene/SceneList.hpp"
+#include "Runtime/Subsystems/QuickJSEngine.hpp"
+#include "Utilities/FileHelper.hpp"
+
+#include <glm/gtc/quaternion.hpp>
+#include <cctype>
+#include <filesystem>
+#include <regex>
+#include <spdlog/spdlog.h>
+#include <sstream>
+
+#if WITH_QUICKJS
+#include <ThirdParty/quickjs-ng/quickjspp.hpp>
+#endif
+
+namespace Editor
+{
+    namespace
+    {
+        std::string ToLowerCopy(std::string value)
+        {
+            std::transform(value.begin(), value.end(), value.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            return value;
+        }
+
+        std::string JoinTokens(const std::vector<std::string>& tokens, size_t startIdx)
+        {
+            std::string joined;
+            for (size_t i = startIdx; i < tokens.size(); ++i)
+            {
+                if (!joined.empty())
+                {
+                    joined += " ";
+                }
+                joined += tokens[i];
+            }
+            return joined;
+        }
+
+        bool ParseVec3FromText(const std::string& text, glm::vec3& outValue)
+        {
+            std::string normalized = text;
+            for (char& ch : normalized)
+            {
+                if (ch == '(' || ch == ')' || ch == '[' || ch == ']' || ch == '{' || ch == '}' || ch == ',')
+                {
+                    ch = ' ';
+                }
+            }
+
+            std::istringstream iss(normalized);
+            float x = 0.0f;
+            float y = 0.0f;
+            float z = 0.0f;
+            if (!(iss >> x >> y >> z))
+            {
+                return false;
+            }
+
+            outValue = glm::vec3(x, y, z);
+            return true;
+        }
+
+        bool ParseVec3FromTokens(const std::vector<std::string>& tokens, size_t startIdx, glm::vec3& outValue)
+        {
+            if (tokens.size() <= startIdx)
+            {
+                return false;
+            }
+
+            return ParseVec3FromText(JoinTokens(tokens, startIdx), outValue);
+        }
+    } // namespace
+
+    FEditorScriptExecutor* FEditorScriptExecutor::activeInstance_ = nullptr;
+
+    FEditorScriptExecutor::FEditorScriptExecutor(NextEngine& engine)
+        : engine_(engine)
+    {
+        activeInstance_ = this;
+    }
+
+    std::vector<ScriptLogEntry> FEditorScriptExecutor::TakeLog()
+    {
+        std::vector<ScriptLogEntry> result;
+        std::swap(result, log_);
+        return result;
+    }
+
+    std::vector<FDeferredEditorAction> FEditorScriptExecutor::TakeDeferredActions()
+    {
+        std::vector<FDeferredEditorAction> result;
+        std::swap(result, deferredActions_);
+        return result;
+    }
+
+    void FEditorScriptExecutor::Log(const std::string& message)
+    {
+        log_.push_back({message, false});
+        SPDLOG_INFO("[EditorScript] {}", message);
+    }
+
+    void FEditorScriptExecutor::LogError(const std::string& message)
+    {
+        log_.push_back({message, true});
+        SPDLOG_ERROR("[EditorScript] {}", message);
+    }
+
+    std::vector<std::string> FEditorScriptExecutor::Tokenize(const std::string& line)
+    {
+        std::vector<std::string> tokens;
+        std::string token;
+
+        bool inQuote = false;
+        char quoteChar = '\0';
+
+        auto flushToken = [&]() {
+            if (!token.empty())
+            {
+                tokens.push_back(token);
+                token.clear();
+            }
+        };
+
+        for (size_t i = 0; i < line.size(); ++i)
+        {
+            const char ch = line[i];
+
+            if (inQuote)
+            {
+                if (ch == '\\' && i + 1 < line.size() && (line[i + 1] == quoteChar || line[i + 1] == '\\'))
+                {
+                    token += line[i + 1];
+                    ++i;
+                    continue;
+                }
+
+                if (ch == quoteChar)
+                {
+                    inQuote = false;
+                    continue;
+                }
+
+                token += ch;
+                continue;
+            }
+
+            if (ch == '\'' || ch == '"')
+            {
+                inQuote = true;
+                quoteChar = ch;
+                continue;
+            }
+
+            if (std::isspace(static_cast<unsigned char>(ch)))
+            {
+                flushToken();
+                continue;
+            }
+
+            token += ch;
+        }
+
+        flushToken();
+        return tokens;
+    }
+
+    uint32_t FEditorScriptExecutor::ResolveNode(const std::string& nameOrId)
+    {
+        auto* scene = &engine_.GetScene();
+        if (!scene)
+        {
+            return static_cast<uint32_t>(-1);
+        }
+
+        if (nameOrId == "$selected")
+        {
+            uint32_t selectedId = scene->GetSelectedId();
+            if (selectedId != static_cast<uint32_t>(-1) && scene->GetNodeByInstanceId(selectedId))
+            {
+                return selectedId;
+            }
+            return static_cast<uint32_t>(-1);
+        }
+
+        // Try as numeric instanceId first
+        try
+        {
+            size_t pos = 0;
+            unsigned long id = std::stoul(nameOrId, &pos);
+            if (pos == nameOrId.size())
+            {
+                auto node = scene->GetNodeSharedByInstanceId(static_cast<uint32_t>(id));
+                if (node)
+                {
+                    return static_cast<uint32_t>(id);
+                }
+            }
+        }
+        catch (...)
+        {
+        }
+
+        // Try as name
+        auto* node = scene->GetNode(nameOrId);
+        if (node)
+        {
+            return node->GetInstanceId();
+        }
+
+        return static_cast<uint32_t>(-1);
+    }
+
+    bool FEditorScriptExecutor::DispatchAction(EditorContext& editorContext, EEditorAction action, std::string_view args,
+                                               std::string_view commandText)
+    {
+        (void)action;
+        const bool dispatched = editorContext.actions.Dispatch(editorContext, action, args);
+        if (dispatched)
+        {
+            Log(fmt::format("Executed action: {}", commandText));
+            return true;
+        }
+
+        LogError(fmt::format("action dispatch failed: {}", commandText));
+        return false;
+    }
+
+    bool FEditorScriptExecutor::IsHighRiskAction(EEditorAction action) const
+    {
+        return action == EEditorAction::IO_LoadScene;
+    }
+
+    std::optional<std::string> FEditorScriptExecutor::ResolveScenePath(const std::string& sceneRef,
+                                                                        std::string& errorMessage,
+                                                                        std::vector<std::string>* outCandidates) const
+    {
+        namespace fs = std::filesystem;
+
+        if (sceneRef.empty())
+        {
+            errorMessage = "sceneRef is empty";
+            return std::nullopt;
+        }
+
+        auto IsSceneAsset = [](const fs::path& path) { return SceneList::IsSupportedScenePath(path); };
+
+        fs::path inputPath(sceneRef);
+        if (inputPath.is_absolute())
+        {
+            if (fs::exists(inputPath) && fs::is_regular_file(inputPath) && IsSceneAsset(inputPath))
+            {
+                return fs::absolute(inputPath).string();
+            }
+
+            errorMessage = fmt::format("absolute path is not a valid scene asset: {}", sceneRef);
+            return std::nullopt;
+        }
+
+        const fs::path assetsRoot(Utilities::FileHelper::GetPlatformFilePath("assets"));
+        fs::path relPath = inputPath;
+        if (relPath.string().rfind("assets/", 0) == 0 || relPath.string() == "assets")
+        {
+            relPath = relPath.lexically_relative("assets");
+        }
+
+        auto TryPath = [&](const fs::path& pathCandidate) -> std::optional<std::string>
+        {
+            if (fs::exists(pathCandidate) && fs::is_regular_file(pathCandidate) && IsSceneAsset(pathCandidate))
+            {
+                return fs::absolute(pathCandidate).string();
+            }
+            return std::nullopt;
+        };
+
+        if (auto direct = TryPath(assetsRoot / relPath))
+        {
+            return direct;
+        }
+
+        if (!relPath.has_extension())
+        {
+            for (std::string_view extension : SceneList::SupportedSceneExtensions())
+            {
+                fs::path candidate = assetsRoot / relPath;
+                candidate.replace_extension(std::string(extension));
+                if (auto withExt = TryPath(candidate))
+                {
+                    return withExt;
+                }
+            }
+        }
+
+        std::vector<std::string> matches;
+        const std::string targetName = ToLowerCopy(inputPath.filename().string());
+        const std::string targetStem = ToLowerCopy(inputPath.stem().string());
+        const std::string targetRel = ToLowerCopy(inputPath.generic_string());
+
+        std::error_code iterErr;
+        const auto iterOpts = fs::directory_options::skip_permission_denied;
+        for (fs::recursive_directory_iterator it(assetsRoot, iterOpts, iterErr), end; it != end; it.increment(iterErr))
+        {
+            if (iterErr)
+            {
+                continue;
+            }
+
+            const auto& entry = *it;
+            if (!entry.is_regular_file())
+            {
+                continue;
+            }
+
+            const fs::path& file = entry.path();
+            if (!IsSceneAsset(file))
+            {
+                continue;
+            }
+
+            const std::string rel = ToLowerCopy(fs::relative(file, assetsRoot).generic_string());
+            const std::string name = ToLowerCopy(file.filename().string());
+            const std::string stem = ToLowerCopy(file.stem().string());
+
+            const bool matchesName = (!targetName.empty() && name == targetName);
+            const bool matchesStem = (!targetStem.empty() && stem == targetStem);
+            const bool matchesRel = (!targetRel.empty() && rel == targetRel);
+
+            if (matchesName || matchesStem || matchesRel)
+            {
+                matches.push_back(fs::absolute(file).string());
+            }
+        }
+
+        if (outCandidates)
+        {
+            *outCandidates = matches;
+        }
+
+        if (matches.empty())
+        {
+            errorMessage = fmt::format("no supported scene matched '{}'", sceneRef);
+            return std::nullopt;
+        }
+
+        if (matches.size() > 1)
+        {
+            errorMessage = fmt::format("scene reference '{}' is ambiguous ({} matches)", sceneRef, matches.size());
+            return std::nullopt;
+        }
+
+        return matches.front();
+    }
+
+    // ========== EditorScript command execution ==========
+
+    void FEditorScriptExecutor::ExecuteScriptText(const std::string& scriptText, EditorContext* editorContext,
+                                                  bool deferHighRiskActions)
+    {
+        activeEditorContext_ = editorContext;
+        deferHighRiskActions_ = deferHighRiskActions;
+        deferredActions_.clear();
+
+        auto& history = engine_.GetCommandHistory();
+        history.BeginGroup("AI EditorScript");
+
+        std::istringstream stream(scriptText);
+        std::string line;
+        int lineNum = 0;
+
+        while (std::getline(stream, line))
+        {
+            lineNum++;
+            // Trim
+            auto start = line.find_first_not_of(" \t");
+            if (start == std::string::npos)
+            {
+                continue;
+            }
+            line = line.substr(start);
+
+            // Skip comments
+            if (line[0] == '#' || line.substr(0, 2) == "//")
+            {
+                continue;
+            }
+
+            auto tokens = Tokenize(line);
+            if (tokens.empty())
+            {
+                continue;
+            }
+
+            const std::string& cmd = tokens[0];
+
+            if (cmd == "select")
+                ExecSelect(tokens);
+            else if (cmd == "rename")
+                ExecRename(tokens);
+            else if (cmd == "delete")
+                ExecDelete(tokens);
+            else if (cmd == "duplicate")
+                ExecDuplicate(tokens);
+            else if (cmd == "move")
+                ExecMove(tokens);
+            else if (cmd == "rotate")
+                ExecRotate(tokens);
+            else if (cmd == "scale")
+                ExecScale(tokens);
+            else if (cmd == "set_property")
+                ExecSetProperty(tokens);
+            else if (cmd == "rename_pattern")
+                ExecRenamePattern(tokens);
+            else if (cmd == "list_nodes")
+                ExecListNodes(tokens);
+            else if (cmd == "cvar")
+                ExecCVar(tokens);
+            else if (cmd == "action")
+                ExecAction(tokens);
+            else
+                LogError(fmt::format("Line {}: Unknown command '{}'", lineNum, cmd));
+        }
+
+        history.EndGroup();
+
+        activeEditorContext_ = nullptr;
+        deferHighRiskActions_ = false;
+    }
+
+    void FEditorScriptExecutor::ExecSelect(const std::vector<std::string>& tokens)
+    {
+        if (tokens.size() < 2)
+        {
+            LogError("select: missing node name/id");
+            return;
+        }
+        uint32_t id = ResolveNode(tokens[1]);
+        if (id == static_cast<uint32_t>(-1))
+        {
+            LogError(fmt::format("select: node '{}' not found", tokens[1]));
+            return;
+        }
+        engine_.GetScene().SetSelectedId(id);
+        Log(fmt::format("Selected node '{}'", tokens[1]));
+    }
+
+    void FEditorScriptExecutor::ExecRename(const std::vector<std::string>& tokens)
+    {
+        if (tokens.size() < 3)
+        {
+            LogError("rename: usage: rename <node> <newName>");
+            return;
+        }
+        uint32_t id = ResolveNode(tokens[1]);
+        if (id == static_cast<uint32_t>(-1))
+        {
+            LogError(fmt::format("rename: node '{}' not found", tokens[1]));
+            return;
+        }
+        auto cmd = std::make_unique<RenameNodeCommand>(engine_.GetScene(), id, tokens[2]);
+        engine_.GetCommandHistory().Execute(std::move(cmd));
+        Log(fmt::format("Renamed '{}' to '{}'", tokens[1], tokens[2]));
+    }
+
+    void FEditorScriptExecutor::ExecDelete(const std::vector<std::string>& tokens)
+    {
+        if (tokens.size() < 2)
+        {
+            LogError("delete: missing node name/id");
+            return;
+        }
+        uint32_t id = ResolveNode(tokens[1]);
+        if (id == static_cast<uint32_t>(-1))
+        {
+            LogError(fmt::format("delete: node '{}' not found", tokens[1]));
+            return;
+        }
+        auto cmd = std::make_unique<DeleteNodesCommand>(engine_.GetScene(), std::vector<uint32_t>{id});
+        engine_.GetCommandHistory().Execute(std::move(cmd));
+        Log(fmt::format("Deleted node '{}'", tokens[1]));
+    }
+
+    void FEditorScriptExecutor::ExecDuplicate(const std::vector<std::string>& tokens)
+    {
+        if (tokens.size() < 2)
+        {
+            LogError("duplicate: missing node name/id");
+            return;
+        }
+        uint32_t id = ResolveNode(tokens[1]);
+        if (id == static_cast<uint32_t>(-1))
+        {
+            LogError(fmt::format("duplicate: node '{}' not found", tokens[1]));
+            return;
+        }
+        auto cmd = std::make_unique<DuplicateNodesCommand>(engine_.GetScene(), std::vector<uint32_t>{id});
+        engine_.GetCommandHistory().Execute(std::move(cmd));
+        Log(fmt::format("Duplicated node '{}'", tokens[1]));
+    }
+
+    void FEditorScriptExecutor::ExecMove(const std::vector<std::string>& tokens)
+    {
+        if (tokens.size() < 3)
+        {
+            LogError("move: usage: move <node> <x> <y> <z> or move <node> (x y z)");
+            return;
+        }
+        uint32_t id = ResolveNode(tokens[1]);
+        if (id == static_cast<uint32_t>(-1))
+        {
+            LogError(fmt::format("move: node '{}' not found", tokens[1]));
+            return;
+        }
+        auto* node = engine_.GetScene().GetNodeByInstanceId(id);
+        if (!node)
+        {
+            return;
+        }
+
+        TransformSnapshot before;
+        before.translation = node->Translation();
+        before.rotation = node->Rotation();
+        before.scale = node->Scale();
+
+        TransformSnapshot after = before;
+        glm::vec3 targetPosition;
+        if (!ParseVec3FromTokens(tokens, 2, targetPosition))
+        {
+            LogError("move: invalid vector, expected <x> <y> <z> or (x y z)");
+            return;
+        }
+        after.translation = targetPosition;
+
+        auto cmd = std::make_unique<TransformNodesCommand>(
+            engine_.GetScene(), std::vector<uint32_t>{id}, std::vector<TransformSnapshot>{before},
+            std::vector<TransformSnapshot>{after});
+        engine_.GetCommandHistory().Execute(std::move(cmd));
+        Log(fmt::format("Moved '{}' to ({:.3f}, {:.3f}, {:.3f})", tokens[1], targetPosition.x, targetPosition.y,
+                        targetPosition.z));
+    }
+
+    void FEditorScriptExecutor::ExecRotate(const std::vector<std::string>& tokens)
+    {
+        if (tokens.size() < 3)
+        {
+            LogError("rotate: usage: rotate <node> <rx> <ry> <rz> or rotate <node> (rx ry rz)");
+            return;
+        }
+        uint32_t id = ResolveNode(tokens[1]);
+        if (id == static_cast<uint32_t>(-1))
+        {
+            LogError(fmt::format("rotate: node '{}' not found", tokens[1]));
+            return;
+        }
+        auto* node = engine_.GetScene().GetNodeByInstanceId(id);
+        if (!node)
+        {
+            return;
+        }
+
+        TransformSnapshot before;
+        before.translation = node->Translation();
+        before.rotation = node->Rotation();
+        before.scale = node->Scale();
+
+        TransformSnapshot after = before;
+        glm::vec3 eulerDeg;
+        if (!ParseVec3FromTokens(tokens, 2, eulerDeg))
+        {
+            LogError("rotate: invalid vector, expected <rx> <ry> <rz> or (rx ry rz)");
+            return;
+        }
+        float rx = glm::radians(eulerDeg.x);
+        float ry = glm::radians(eulerDeg.y);
+        float rz = glm::radians(eulerDeg.z);
+        after.rotation = glm::quat(glm::vec3(rx, ry, rz));
+
+        auto cmd = std::make_unique<TransformNodesCommand>(
+            engine_.GetScene(), std::vector<uint32_t>{id}, std::vector<TransformSnapshot>{before},
+            std::vector<TransformSnapshot>{after});
+        engine_.GetCommandHistory().Execute(std::move(cmd));
+        Log(fmt::format("Rotated '{}' to ({:.3f}, {:.3f}, {:.3f}) degrees", tokens[1], eulerDeg.x, eulerDeg.y,
+                        eulerDeg.z));
+    }
+
+    void FEditorScriptExecutor::ExecScale(const std::vector<std::string>& tokens)
+    {
+        if (tokens.size() < 3)
+        {
+            LogError("scale: usage: scale <node> <sx> <sy> <sz> or scale <node> (sx sy sz)");
+            return;
+        }
+        uint32_t id = ResolveNode(tokens[1]);
+        if (id == static_cast<uint32_t>(-1))
+        {
+            LogError(fmt::format("scale: node '{}' not found", tokens[1]));
+            return;
+        }
+        auto* node = engine_.GetScene().GetNodeByInstanceId(id);
+        if (!node)
+        {
+            return;
+        }
+
+        TransformSnapshot before;
+        before.translation = node->Translation();
+        before.rotation = node->Rotation();
+        before.scale = node->Scale();
+
+        TransformSnapshot after = before;
+        glm::vec3 targetScale;
+        if (!ParseVec3FromTokens(tokens, 2, targetScale))
+        {
+            LogError("scale: invalid vector, expected <sx> <sy> <sz> or (sx sy sz)");
+            return;
+        }
+        after.scale = targetScale;
+
+        auto cmd = std::make_unique<TransformNodesCommand>(
+            engine_.GetScene(), std::vector<uint32_t>{id}, std::vector<TransformSnapshot>{before},
+            std::vector<TransformSnapshot>{after});
+        engine_.GetCommandHistory().Execute(std::move(cmd));
+        Log(fmt::format("Scaled '{}' to ({:.3f}, {:.3f}, {:.3f})", tokens[1], targetScale.x, targetScale.y,
+                        targetScale.z));
+    }
+
+    void FEditorScriptExecutor::ExecSetProperty(const std::vector<std::string>& tokens)
+    {
+        // set_property <node> <component> <property> <value>
+        if (tokens.size() < 5)
+        {
+            LogError("set_property: usage: set_property <node> <component> <property> <value>");
+            return;
+        }
+        uint32_t id = ResolveNode(tokens[1]);
+        if (id == static_cast<uint32_t>(-1))
+        {
+            LogError(fmt::format("set_property: node '{}' not found", tokens[1]));
+            return;
+        }
+        auto* node = engine_.GetScene().GetNodeByInstanceId(id);
+        if (!node)
+        {
+            return;
+        }
+
+        auto* component = node->GetComponentByTypeName(tokens[2]);
+        if (!component)
+        {
+            LogError(fmt::format("set_property: component '{}' not found on node '{}'", tokens[2], tokens[1]));
+            return;
+        }
+
+        const std::string& propName = tokens[3];
+        const std::string& valueStr = tokens[4];
+
+        entt::meta_type metaType = component->GetMetaType();
+        auto dataEntry = metaType.data(entt::hashed_string::value(propName.c_str()));
+        if (!dataEntry)
+        {
+            LogError(fmt::format("set_property: property '{}' not found on '{}'", propName, tokens[2]));
+            return;
+        }
+
+        entt::meta_any oldValue = Reflection::PropertyAccessor::GetPropertyValue(metaType, component, propName);
+
+        // Parse value based on type
+        entt::meta_type valueType = dataEntry.type();
+        entt::meta_any newValue;
+
+        if (valueType == entt::resolve<bool>())
+        {
+            newValue = entt::meta_any{valueStr == "true" || valueStr == "1"};
+        }
+        else if (valueType == entt::resolve<float>())
+        {
+            newValue = entt::meta_any{std::stof(valueStr)};
+        }
+        else if (valueType == entt::resolve<int32_t>())
+        {
+            newValue = entt::meta_any{std::stoi(valueStr)};
+        }
+        else if (valueType == entt::resolve<uint32_t>())
+        {
+            newValue = entt::meta_any{static_cast<uint32_t>(std::stoul(valueStr))};
+        }
+        else if (valueType == entt::resolve<std::string>())
+        {
+            newValue = entt::meta_any{valueStr};
+        }
+        else
+        {
+            LogError(fmt::format("set_property: unsupported type for property '{}'", propName));
+            return;
+        }
+
+        auto cmd = std::make_unique<PropertyCommand>(component, propName, std::move(newValue), std::move(oldValue));
+        engine_.GetCommandHistory().Execute(std::move(cmd));
+        Log(fmt::format("Set {}.{} = {} on '{}'", tokens[2], propName, valueStr, tokens[1]));
+    }
+
+    void FEditorScriptExecutor::ExecRenamePattern(const std::vector<std::string>& tokens)
+    {
+        if (tokens.size() < 3)
+        {
+            LogError("rename_pattern: usage: rename_pattern <search> <replace>");
+            return;
+        }
+        auto* scene = &engine_.GetScene();
+        if (!scene)
+        {
+            return;
+        }
+
+        const std::string& search = tokens[1];
+        const std::string& replace = tokens[2];
+        int count = 0;
+
+        for (const auto& node : scene->Nodes())
+        {
+            const std::string& name = node->GetName();
+            if (name.find(search) != std::string::npos)
+            {
+                std::string newName = name;
+                size_t pos = 0;
+                while ((pos = newName.find(search, pos)) != std::string::npos)
+                {
+                    newName.replace(pos, search.length(), replace);
+                    pos += replace.length();
+                }
+                auto cmd = std::make_unique<RenameNodeCommand>(*scene, node->GetInstanceId(), newName);
+                engine_.GetCommandHistory().Execute(std::move(cmd));
+                count++;
+            }
+        }
+        Log(fmt::format("Renamed {} nodes: '{}' -> '{}'", count, search, replace));
+    }
+
+    void FEditorScriptExecutor::ExecListNodes(const std::vector<std::string>& tokens)
+    {
+        auto* scene = &engine_.GetScene();
+        if (!scene)
+        {
+            return;
+        }
+
+        std::string pattern = tokens.size() > 1 ? tokens[1] : "";
+        int count = 0;
+
+        for (const auto& node : scene->Nodes())
+        {
+            const std::string& name = node->GetName();
+            if (pattern.empty() || name.find(pattern) != std::string::npos)
+            {
+                auto pos = node->Translation();
+                Log(fmt::format("  [{}] {} ({:.1f}, {:.1f}, {:.1f})", node->GetInstanceId(), name, pos.x, pos.y,
+                                pos.z));
+                count++;
+            }
+        }
+        Log(fmt::format("Total: {} nodes", count));
+    }
+
+    void FEditorScriptExecutor::ExecCVar(const std::vector<std::string>& tokens)
+    {
+        if (tokens.size() < 2)
+        {
+            LogError("cvar: missing command");
+            return;
+        }
+
+        const std::string cvarCmd = JoinTokens(tokens, 1);
+
+        auto result = engine_.GetCVarSystem().ExecuteCommand(cvarCmd);
+        if (result.success)
+        {
+            Log(fmt::format("CVar: {}", result.message.empty() ? "OK" : result.message));
+        }
+        else
+        {
+            LogError(fmt::format("CVar error: {}", result.message));
+        }
+    }
+
+    bool FEditorScriptExecutor::ExecuteDeferredAction(const FDeferredEditorAction& deferredAction,
+                                                      EditorContext& editorContext)
+    {
+        return DispatchAction(editorContext, deferredAction.action, deferredAction.args, deferredAction.commandText);
+    }
+
+    void FEditorScriptExecutor::ExecAction(const std::vector<std::string>& tokens)
+    {
+        if (!activeEditorContext_)
+        {
+            LogError("action: editor context unavailable");
+            return;
+        }
+
+        if (tokens.size() < 2)
+        {
+            LogError("action: usage: action <load_scene|add_scene|focus_selected> [args]");
+            return;
+        }
+
+        const std::string actionName = ToLowerCopy(tokens[1]);
+        EEditorAction action = EEditorAction::Camera_FocusSelected;
+        std::string args;
+
+        if (actionName == "focus_selected")
+        {
+            action = EEditorAction::Camera_FocusSelected;
+        }
+        else if (actionName == "load_scene" || actionName == "add_scene")
+        {
+            const std::string sceneRef = JoinTokens(tokens, 2);
+            if (sceneRef.empty())
+            {
+                LogError(fmt::format("action {}: missing scene reference", actionName));
+                return;
+            }
+
+            std::string resolveError;
+            std::vector<std::string> candidates;
+            std::optional<std::string> resolvedPath = ResolveScenePath(sceneRef, resolveError, &candidates);
+            if (!resolvedPath)
+            {
+                LogError(fmt::format("action {}: {}", actionName, resolveError));
+                for (const auto& candidate : candidates)
+                {
+                    LogError(fmt::format("  candidate: {}", candidate));
+                }
+                return;
+            }
+
+            args = *resolvedPath;
+            action = (actionName == "load_scene") ? EEditorAction::IO_LoadScene : EEditorAction::IO_LoadSceneAdd;
+        }
+        else
+        {
+            LogError(fmt::format("action: unknown action '{}'", tokens[1]));
+            return;
+        }
+
+        std::string commandText = fmt::format("action {}", actionName);
+        if (!args.empty())
+        {
+            commandText += " ";
+            commandText += args;
+        }
+
+        if (deferHighRiskActions_ && IsHighRiskAction(action))
+        {
+            FDeferredEditorAction deferredAction;
+            deferredAction.action = action;
+            deferredAction.args = args;
+            deferredAction.commandText = commandText;
+            deferredAction.description = fmt::format("需要确认后执行: {}", commandText);
+            deferredActions_.push_back(std::move(deferredAction));
+
+            Log(fmt::format("Deferred action pending confirmation: {}", commandText));
+            return;
+        }
+
+        DispatchAction(*activeEditorContext_, action, args, commandText);
+    }
+
+    // ========== JavaScript eval ==========
+
+    void FEditorScriptExecutor::EvalJavaScript(const std::string& code)
+    {
+        auto& history = engine_.GetCommandHistory();
+        history.BeginGroup("AI JavaScript");
+
+        auto* qjs = engine_.GetQuickJSEngine();
+        if (!qjs)
+        {
+            LogError("QuickJS engine not available");
+            history.EndGroup();
+            return;
+        }
+
+        std::string error = qjs->Eval(code);
+        if (!error.empty())
+        {
+            LogError(fmt::format("JS error: {}", error));
+        }
+        else
+        {
+            Log("JavaScript executed successfully");
+        }
+
+        history.EndGroup();
+    }
+
+    // ========== Editor.* JS bindings ==========
+
+#if WITH_QUICKJS
+    namespace
+    {
+        Assets::Scene* GetScene()
+        {
+            auto* engine = NextEngine::GetInstance();
+            return engine ? &engine->GetScene() : nullptr;
+        }
+
+        uint32_t ResolveNodeJS(JSContext* ctx, JSValueConst val)
+        {
+            auto* scene = GetScene();
+            if (!scene)
+            {
+                return static_cast<uint32_t>(-1);
+            }
+
+            // Try as number
+            if (JS_IsNumber(val))
+            {
+                uint32_t id = 0;
+                JS_ToUint32(ctx, &id, val);
+                if (scene->GetNodeByInstanceId(id))
+                {
+                    return id;
+                }
+                return static_cast<uint32_t>(-1);
+            }
+
+            // Try as string (name)
+            const char* str = JS_ToCString(ctx, val);
+            if (!str)
+            {
+                return static_cast<uint32_t>(-1);
+            }
+            std::string name(str);
+            JS_FreeCString(ctx, str);
+
+            auto* node = scene->GetNode(name);
+            return node ? node->GetInstanceId() : static_cast<uint32_t>(-1);
+        }
+
+        // Editor.renameNode(nameOrId, newName)
+        JSValue JsEditorRenameNode(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+        {
+            (void)thisVal;
+            if (argc < 2)
+            {
+                return JS_UNDEFINED;
+            }
+
+            uint32_t id = ResolveNodeJS(ctx, argv[0]);
+            if (id == static_cast<uint32_t>(-1))
+            {
+                return JS_ThrowReferenceError(ctx, "Node not found");
+            }
+
+            const char* newName = JS_ToCString(ctx, argv[1]);
+            if (!newName)
+            {
+                return JS_UNDEFINED;
+            }
+
+            auto* engine = NextEngine::GetInstance();
+            auto cmd = std::make_unique<RenameNodeCommand>(engine->GetScene(), id, newName);
+            engine->GetCommandHistory().Execute(std::move(cmd));
+            JS_FreeCString(ctx, newName);
+
+            if (FEditorScriptExecutor::activeInstance_)
+            {
+                FEditorScriptExecutor::activeInstance_->Log(fmt::format("JS: Renamed node {}", id));
+            }
+            return JS_UNDEFINED;
+        }
+
+        // Editor.deleteNode(nameOrId)
+        JSValue JsEditorDeleteNode(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+        {
+            (void)thisVal;
+            if (argc < 1)
+            {
+                return JS_UNDEFINED;
+            }
+
+            uint32_t id = ResolveNodeJS(ctx, argv[0]);
+            if (id == static_cast<uint32_t>(-1))
+            {
+                return JS_ThrowReferenceError(ctx, "Node not found");
+            }
+
+            auto* engine = NextEngine::GetInstance();
+            auto cmd = std::make_unique<DeleteNodesCommand>(engine->GetScene(), std::vector<uint32_t>{id});
+            engine->GetCommandHistory().Execute(std::move(cmd));
+            return JS_UNDEFINED;
+        }
+
+        // Editor.duplicateNode(nameOrId) -> id
+        JSValue JsEditorDuplicateNode(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+        {
+            (void)thisVal;
+            if (argc < 1)
+            {
+                return JS_UNDEFINED;
+            }
+
+            uint32_t id = ResolveNodeJS(ctx, argv[0]);
+            if (id == static_cast<uint32_t>(-1))
+            {
+                return JS_ThrowReferenceError(ctx, "Node not found");
+            }
+
+            auto* engine = NextEngine::GetInstance();
+            auto cmd = std::make_unique<DuplicateNodesCommand>(engine->GetScene(), std::vector<uint32_t>{id});
+            auto* cmdPtr = cmd.get();
+            engine->GetCommandHistory().Execute(std::move(cmd));
+            const auto& newIds = cmdPtr->GetNewInstanceIds();
+            if (newIds.empty())
+            {
+                return JS_UNDEFINED;
+            }
+            return JS_NewUint32(ctx, newIds.back());
+        }
+
+        // Editor.moveNode(nameOrId, x, y, z)
+        JSValue JsEditorMoveNode(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+        {
+            (void)thisVal;
+            if (argc < 4)
+            {
+                return JS_UNDEFINED;
+            }
+
+            uint32_t id = ResolveNodeJS(ctx, argv[0]);
+            if (id == static_cast<uint32_t>(-1))
+            {
+                return JS_ThrowReferenceError(ctx, "Node not found");
+            }
+
+            auto* scene = GetScene();
+            auto* node = scene->GetNodeByInstanceId(id);
+            if (!node)
+            {
+                return JS_UNDEFINED;
+            }
+
+            double x, y, z;
+            JS_ToFloat64(ctx, &x, argv[1]);
+            JS_ToFloat64(ctx, &y, argv[2]);
+            JS_ToFloat64(ctx, &z, argv[3]);
+
+            TransformSnapshot before;
+            before.translation = node->Translation();
+            before.rotation = node->Rotation();
+            before.scale = node->Scale();
+
+            TransformSnapshot after = before;
+            after.translation = glm::vec3(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z));
+
+            auto* engine = NextEngine::GetInstance();
+            auto cmd = std::make_unique<TransformNodesCommand>(
+                *scene, std::vector<uint32_t>{id}, std::vector<TransformSnapshot>{before},
+                std::vector<TransformSnapshot>{after});
+            engine->GetCommandHistory().Execute(std::move(cmd));
+            return JS_UNDEFINED;
+        }
+
+        // Editor.rotateNode(nameOrId, rx, ry, rz) - euler angles in degrees
+        JSValue JsEditorRotateNode(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+        {
+            (void)thisVal;
+            if (argc < 4)
+            {
+                return JS_UNDEFINED;
+            }
+
+            uint32_t id = ResolveNodeJS(ctx, argv[0]);
+            if (id == static_cast<uint32_t>(-1))
+            {
+                return JS_ThrowReferenceError(ctx, "Node not found");
+            }
+
+            auto* scene = GetScene();
+            auto* node = scene->GetNodeByInstanceId(id);
+            if (!node)
+            {
+                return JS_UNDEFINED;
+            }
+
+            double rx, ry, rz;
+            JS_ToFloat64(ctx, &rx, argv[1]);
+            JS_ToFloat64(ctx, &ry, argv[2]);
+            JS_ToFloat64(ctx, &rz, argv[3]);
+
+            TransformSnapshot before;
+            before.translation = node->Translation();
+            before.rotation = node->Rotation();
+            before.scale = node->Scale();
+
+            TransformSnapshot after = before;
+            after.rotation = glm::quat(glm::vec3(glm::radians(static_cast<float>(rx)),
+                                                   glm::radians(static_cast<float>(ry)),
+                                                   glm::radians(static_cast<float>(rz))));
+
+            auto* engine = NextEngine::GetInstance();
+            auto cmd = std::make_unique<TransformNodesCommand>(
+                *scene, std::vector<uint32_t>{id}, std::vector<TransformSnapshot>{before},
+                std::vector<TransformSnapshot>{after});
+            engine->GetCommandHistory().Execute(std::move(cmd));
+            return JS_UNDEFINED;
+        }
+
+        // Editor.scaleNode(nameOrId, sx, sy, sz)
+        JSValue JsEditorScaleNode(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+        {
+            (void)thisVal;
+            if (argc < 4)
+            {
+                return JS_UNDEFINED;
+            }
+
+            uint32_t id = ResolveNodeJS(ctx, argv[0]);
+            if (id == static_cast<uint32_t>(-1))
+            {
+                return JS_ThrowReferenceError(ctx, "Node not found");
+            }
+
+            auto* scene = GetScene();
+            auto* node = scene->GetNodeByInstanceId(id);
+            if (!node)
+            {
+                return JS_UNDEFINED;
+            }
+
+            double sx, sy, sz;
+            JS_ToFloat64(ctx, &sx, argv[1]);
+            JS_ToFloat64(ctx, &sy, argv[2]);
+            JS_ToFloat64(ctx, &sz, argv[3]);
+
+            TransformSnapshot before;
+            before.translation = node->Translation();
+            before.rotation = node->Rotation();
+            before.scale = node->Scale();
+
+            TransformSnapshot after = before;
+            after.scale = glm::vec3(static_cast<float>(sx), static_cast<float>(sy), static_cast<float>(sz));
+
+            auto* engine = NextEngine::GetInstance();
+            auto cmd = std::make_unique<TransformNodesCommand>(
+                *scene, std::vector<uint32_t>{id}, std::vector<TransformSnapshot>{before},
+                std::vector<TransformSnapshot>{after});
+            engine->GetCommandHistory().Execute(std::move(cmd));
+            return JS_UNDEFINED;
+        }
+
+        // Editor.setProperty(nameOrId, comp, prop, val)
+        JSValue JsEditorSetProperty(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+        {
+            (void)thisVal;
+            if (argc < 4)
+            {
+                return JS_UNDEFINED;
+            }
+
+            uint32_t id = ResolveNodeJS(ctx, argv[0]);
+            if (id == static_cast<uint32_t>(-1))
+            {
+                return JS_ThrowReferenceError(ctx, "Node not found");
+            }
+
+            auto* scene = GetScene();
+            auto* node = scene->GetNodeByInstanceId(id);
+            if (!node)
+            {
+                return JS_UNDEFINED;
+            }
+
+            const char* compName = JS_ToCString(ctx, argv[1]);
+            const char* propName = JS_ToCString(ctx, argv[2]);
+            if (!compName || !propName)
+            {
+                if (compName)
+                {
+                    JS_FreeCString(ctx, compName);
+                }
+                if (propName)
+                {
+                    JS_FreeCString(ctx, propName);
+                }
+                return JS_UNDEFINED;
+            }
+
+            auto* component = node->GetComponentByTypeName(compName);
+            if (!component)
+            {
+                JS_FreeCString(ctx, compName);
+                JS_FreeCString(ctx, propName);
+                return JS_ThrowReferenceError(ctx, "Component not found");
+            }
+
+            entt::meta_type metaType = component->GetMetaType();
+            auto dataEntry = metaType.data(entt::hashed_string::value(propName));
+            if (!dataEntry)
+            {
+                JS_FreeCString(ctx, compName);
+                JS_FreeCString(ctx, propName);
+                return JS_ThrowReferenceError(ctx, "Property not found");
+            }
+
+            entt::meta_any oldValue = Reflection::PropertyAccessor::GetPropertyValue(metaType, component, propName);
+            entt::meta_type valueType = dataEntry.type();
+
+            entt::meta_any newValue;
+            if (valueType == entt::resolve<bool>())
+            {
+                newValue = entt::meta_any{static_cast<bool>(JS_ToBool(ctx, argv[3]))};
+            }
+            else if (valueType == entt::resolve<float>())
+            {
+                double d = 0;
+                JS_ToFloat64(ctx, &d, argv[3]);
+                newValue = entt::meta_any{static_cast<float>(d)};
+            }
+            else if (valueType == entt::resolve<int32_t>())
+            {
+                int32_t i = 0;
+                JS_ToInt32(ctx, &i, argv[3]);
+                newValue = entt::meta_any{i};
+            }
+            else if (valueType == entt::resolve<uint32_t>())
+            {
+                uint32_t u = 0;
+                JS_ToUint32(ctx, &u, argv[3]);
+                newValue = entt::meta_any{u};
+            }
+            else if (valueType == entt::resolve<std::string>())
+            {
+                const char* s = JS_ToCString(ctx, argv[3]);
+                newValue = entt::meta_any{std::string(s ? s : "")};
+                if (s)
+                {
+                    JS_FreeCString(ctx, s);
+                }
+            }
+
+            JS_FreeCString(ctx, compName);
+            JS_FreeCString(ctx, propName);
+
+            if (!newValue)
+            {
+                return JS_ThrowTypeError(ctx, "Unsupported property type");
+            }
+
+            auto* engine = NextEngine::GetInstance();
+            auto cmd = std::make_unique<PropertyCommand>(component, propName, std::move(newValue), std::move(oldValue));
+            engine->GetCommandHistory().Execute(std::move(cmd));
+            return JS_UNDEFINED;
+        }
+
+        // Editor.findNodes(regexPattern) -> [{id, name, position:{x,y,z}}]
+        JSValue JsEditorFindNodes(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+        {
+            (void)thisVal;
+            auto* scene = GetScene();
+            if (!scene)
+            {
+                return JS_NewArray(ctx);
+            }
+
+            std::string pattern = ".*";
+            if (argc >= 1)
+            {
+                if (JS_IsString(argv[0]))
+                {
+                    const char* str = JS_ToCString(ctx, argv[0]);
+                    if (str)
+                    {
+                        pattern = str;
+                        JS_FreeCString(ctx, str);
+                    }
+                }
+                else if (JS_IsObject(argv[0]))
+                {
+                    // RegExp object - extract .source property for the raw pattern
+                    JSValue source = JS_GetPropertyStr(ctx, argv[0], "source");
+                    if (JS_IsString(source))
+                    {
+                        const char* str = JS_ToCString(ctx, source);
+                        if (str)
+                        {
+                            pattern = str;
+                            JS_FreeCString(ctx, str);
+                        }
+                    }
+                    JS_FreeValue(ctx, source);
+                }
+            }
+
+            std::regex re;
+            try
+            {
+                re = std::regex(pattern);
+            }
+            catch (...)
+            {
+                return JS_ThrowSyntaxError(ctx, "Invalid regex pattern");
+            }
+
+            JSValue arr = JS_NewArray(ctx);
+            uint32_t idx = 0;
+
+            for (const auto& node : scene->Nodes())
+            {
+                if (std::regex_search(node->GetName(), re))
+                {
+                    JSValue obj = JS_NewObject(ctx);
+                    JS_SetPropertyStr(ctx, obj, "id", JS_NewUint32(ctx, node->GetInstanceId()));
+                    JS_SetPropertyStr(ctx, obj, "name", JS_NewString(ctx, node->GetName().c_str()));
+
+                    JSValue pos = JS_NewObject(ctx);
+                    auto t = node->Translation();
+                    JS_SetPropertyStr(ctx, pos, "x", JS_NewFloat64(ctx, t.x));
+                    JS_SetPropertyStr(ctx, pos, "y", JS_NewFloat64(ctx, t.y));
+                    JS_SetPropertyStr(ctx, pos, "z", JS_NewFloat64(ctx, t.z));
+                    JS_SetPropertyStr(ctx, obj, "position", pos);
+
+                    JS_SetPropertyUint32(ctx, arr, idx++, obj);
+                }
+            }
+
+            return arr;
+        }
+
+        // Editor.getNodeCount() -> number
+        JSValue JsEditorGetNodeCount(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+        {
+            (void)thisVal;
+            (void)argc;
+            (void)argv;
+            auto* scene = GetScene();
+            return JS_NewUint32(ctx, scene ? static_cast<uint32_t>(scene->Nodes().size()) : 0);
+        }
+
+        // Editor.getNodeInfo(nameOrId) -> {id, name, position, rotation, scale, components:[]}
+        JSValue JsEditorGetNodeInfo(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+        {
+            (void)thisVal;
+            if (argc < 1)
+            {
+                return JS_UNDEFINED;
+            }
+
+            uint32_t id = ResolveNodeJS(ctx, argv[0]);
+            if (id == static_cast<uint32_t>(-1))
+            {
+                return JS_UNDEFINED;
+            }
+
+            auto* scene = GetScene();
+            auto* node = scene->GetNodeByInstanceId(id);
+            if (!node)
+            {
+                return JS_UNDEFINED;
+            }
+
+            JSValue obj = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, obj, "id", JS_NewUint32(ctx, node->GetInstanceId()));
+            JS_SetPropertyStr(ctx, obj, "name", JS_NewString(ctx, node->GetName().c_str()));
+
+            auto t = node->Translation();
+            JSValue pos = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, pos, "x", JS_NewFloat64(ctx, t.x));
+            JS_SetPropertyStr(ctx, pos, "y", JS_NewFloat64(ctx, t.y));
+            JS_SetPropertyStr(ctx, pos, "z", JS_NewFloat64(ctx, t.z));
+            JS_SetPropertyStr(ctx, obj, "position", pos);
+
+            auto r = glm::eulerAngles(node->Rotation());
+            JSValue rot = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, rot, "x", JS_NewFloat64(ctx, glm::degrees(r.x)));
+            JS_SetPropertyStr(ctx, rot, "y", JS_NewFloat64(ctx, glm::degrees(r.y)));
+            JS_SetPropertyStr(ctx, rot, "z", JS_NewFloat64(ctx, glm::degrees(r.z)));
+            JS_SetPropertyStr(ctx, obj, "rotation", rot);
+
+            auto s = node->Scale();
+            JSValue scl = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, scl, "x", JS_NewFloat64(ctx, s.x));
+            JS_SetPropertyStr(ctx, scl, "y", JS_NewFloat64(ctx, s.y));
+            JS_SetPropertyStr(ctx, scl, "z", JS_NewFloat64(ctx, s.z));
+            JS_SetPropertyStr(ctx, obj, "scale", scl);
+
+            JSValue comps = JS_NewArray(ctx);
+            uint32_t ci = 0;
+            for (const auto& comp : node->GetComponents())
+            {
+                JS_SetPropertyUint32(ctx, comps, ci++, JS_NewString(ctx, std::string(comp->GetTypeName()).c_str()));
+            }
+            JS_SetPropertyStr(ctx, obj, "components", comps);
+
+            return obj;
+        }
+
+        // Editor.selectNode(nameOrId)
+        JSValue JsEditorSelectNode(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+        {
+            (void)thisVal;
+            if (argc < 1)
+            {
+                return JS_UNDEFINED;
+            }
+
+            uint32_t id = ResolveNodeJS(ctx, argv[0]);
+            if (id == static_cast<uint32_t>(-1))
+            {
+                return JS_ThrowReferenceError(ctx, "Node not found");
+            }
+
+            auto* scene = GetScene();
+            if (scene)
+            {
+                scene->SetSelectedId(id);
+            }
+            return JS_UNDEFINED;
+        }
+
+        // Editor.log(message)
+        JSValue JsEditorLog(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+        {
+            (void)thisVal;
+            if (argc < 1)
+            {
+                return JS_UNDEFINED;
+            }
+
+            const char* msg = JS_ToCString(ctx, argv[0]);
+            if (msg)
+            {
+                if (FEditorScriptExecutor::activeInstance_)
+                {
+                    FEditorScriptExecutor::activeInstance_->Log(msg);
+                }
+                JS_FreeCString(ctx, msg);
+            }
+            return JS_UNDEFINED;
+        }
+    } // namespace
+
+    void FEditorScriptExecutor::RegisterEditorBindings(void* jsContext)
+    {
+        auto* ctx = static_cast<JSContext*>(jsContext);
+
+        JSValue global = JS_GetGlobalObject(ctx);
+        JSValue editor = JS_NewObject(ctx);
+
+        // Modification functions (create ICommand)
+        JS_SetPropertyStr(ctx, editor, "renameNode", JS_NewCFunction(ctx, JsEditorRenameNode, "renameNode", 2));
+        JS_SetPropertyStr(ctx, editor, "deleteNode", JS_NewCFunction(ctx, JsEditorDeleteNode, "deleteNode", 1));
+        JS_SetPropertyStr(ctx, editor, "duplicateNode",
+                          JS_NewCFunction(ctx, JsEditorDuplicateNode, "duplicateNode", 1));
+        JS_SetPropertyStr(ctx, editor, "moveNode", JS_NewCFunction(ctx, JsEditorMoveNode, "moveNode", 4));
+        JS_SetPropertyStr(ctx, editor, "rotateNode", JS_NewCFunction(ctx, JsEditorRotateNode, "rotateNode", 4));
+        JS_SetPropertyStr(ctx, editor, "scaleNode", JS_NewCFunction(ctx, JsEditorScaleNode, "scaleNode", 4));
+        JS_SetPropertyStr(ctx, editor, "setProperty", JS_NewCFunction(ctx, JsEditorSetProperty, "setProperty", 4));
+
+        // Query functions (read-only)
+        JS_SetPropertyStr(ctx, editor, "findNodes", JS_NewCFunction(ctx, JsEditorFindNodes, "findNodes", 1));
+        JS_SetPropertyStr(ctx, editor, "getNodeCount",
+                          JS_NewCFunction(ctx, JsEditorGetNodeCount, "getNodeCount", 0));
+        JS_SetPropertyStr(ctx, editor, "getNodeInfo", JS_NewCFunction(ctx, JsEditorGetNodeInfo, "getNodeInfo", 1));
+        JS_SetPropertyStr(ctx, editor, "selectNode", JS_NewCFunction(ctx, JsEditorSelectNode, "selectNode", 1));
+
+        // Output
+        JS_SetPropertyStr(ctx, editor, "log", JS_NewCFunction(ctx, JsEditorLog, "log", 1));
+
+        JS_SetPropertyStr(ctx, global, "Editor", editor);
+        JS_FreeValue(ctx, global);
+    }
+#else
+    void FEditorScriptExecutor::RegisterEditorBindings(void* jsContext)
+    {
+        (void)jsContext;
+    }
+#endif
+
+} // namespace Editor

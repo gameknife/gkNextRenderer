@@ -1,0 +1,638 @@
+#include "Brotato3DDataLoader.hpp"
+
+#include "Runtime/Utilities/JsonHelpers.h"
+
+#include <nlohmann/json.hpp>
+#include <spdlog/spdlog.h>
+
+using json = nlohmann::json;
+
+namespace
+{
+    glm::vec2 ReadVec2Array(const json& object, const char* key, const glm::vec2& fallback, std::string_view context)
+    {
+        if (!object.is_object() || !object.contains(key))
+        {
+            return fallback;
+        }
+
+        const json& value = object.at(key);
+        if (!value.is_array() || value.size() < 2)
+        {
+            throw std::runtime_error(fmt::format("{} field '{}' must be a 2-number array", context, key));
+        }
+
+        return glm::vec2(value.at(0).get<float>(), value.at(1).get<float>());
+    }
+
+    std::vector<glm::vec2> ReadVec2ArrayList(const json& object, const char* key, std::string_view context)
+    {
+        std::vector<glm::vec2> result;
+        if (!object.is_object() || !object.contains(key))
+        {
+            return result;
+        }
+
+        const json& value = object.at(key);
+        if (!value.is_array())
+        {
+            throw std::runtime_error(fmt::format("{} field '{}' must be an array of vec2 points", context, key));
+        }
+
+        result.reserve(value.size());
+        for (size_t index = 0; index < value.size(); ++index)
+        {
+            const json& pointValue = value.at(index);
+            if (!pointValue.is_array() || pointValue.size() < 2)
+            {
+                throw std::runtime_error(fmt::format("{} field '{}' point {} must be a 2-number array", context, key, index));
+            }
+            result.emplace_back(pointValue.at(0).get<float>(), pointValue.at(1).get<float>());
+        }
+        return result;
+    }
+
+    std::vector<glm::vec3> ReadVec3ArrayList(const json& object, const char* key, std::string_view context)
+    {
+        std::vector<glm::vec3> result;
+        if (!object.is_object() || !object.contains(key))
+        {
+            return result;
+        }
+
+        const json& value = object.at(key);
+        if (!value.is_array())
+        {
+            throw std::runtime_error(fmt::format("{} field '{}' must be an array of vec3 colors", context, key));
+        }
+
+        result.reserve(value.size());
+        for (size_t index = 0; index < value.size(); ++index)
+        {
+            const json& colorValue = value.at(index);
+            if (!colorValue.is_array() || colorValue.size() < 3)
+            {
+                throw std::runtime_error(fmt::format("{} field '{}' color {} must be a 3-number array", context, key, index));
+            }
+            result.emplace_back(colorValue.at(0).get<float>(), colorValue.at(1).get<float>(), colorValue.at(2).get<float>());
+        }
+        return result;
+    }
+
+    Brotato3D::Pcg::EBorderFracturePattern ParseBorderPattern(const json& pcgJson,
+                                                              std::string_view context,
+                                                              Brotato3D::Pcg::EBorderFracturePattern fallback)
+    {
+        if (!pcgJson.is_object() || !pcgJson.contains("borderPattern"))
+        {
+            return fallback;
+        }
+
+        const std::string pattern = pcgJson.at("borderPattern").get<std::string>();
+        if (pattern == "uniform")
+        {
+            return Brotato3D::Pcg::EBorderFracturePattern::Uniform;
+        }
+        if (pattern == "cluster")
+        {
+            return Brotato3D::Pcg::EBorderFracturePattern::Cluster;
+        }
+        if (pattern == "spike")
+        {
+            return Brotato3D::Pcg::EBorderFracturePattern::Spike;
+        }
+
+        throw std::runtime_error(fmt::format("{} field 'borderPattern' has unsupported value '{}'", context, pattern));
+    }
+
+    Brotato3D::Pcg::FArenaPcgConfig ReadPcgConfig(const json& arenaJson, std::string_view arenaContext)
+    {
+        Brotato3D::Pcg::FArenaPcgConfig config{};
+        if (!arenaJson.is_object() || !arenaJson.contains("pcg"))
+        {
+            return config;
+        }
+
+        const json& pcgJson = arenaJson.at("pcg");
+        const std::string pcgContext = fmt::format("{} pcg", arenaContext);
+        if (!pcgJson.is_object())
+        {
+            throw std::runtime_error(fmt::format("{} field 'pcg' must be an object", arenaContext));
+        }
+
+        config.enabled = pcgJson.value("enabled", config.enabled);
+        config.seedOverride = pcgJson.value("seedOverride", config.seedOverride);
+        config.targetCells = std::clamp(pcgJson.value("targetCells", config.targetCells), 1, 512);
+        config.lloydRelaxIterations = std::clamp(pcgJson.value("lloydRelaxIterations", config.lloydRelaxIterations), 0, 4);
+        config.vertexJitterAmplitude = std::clamp(pcgJson.value("vertexJitterAmplitude", config.vertexJitterAmplitude), 0.0f, 0.60f);
+        config.vertexJitterFrequency = std::max(0.001f, pcgJson.value("vertexJitterFrequency", config.vertexJitterFrequency));
+        config.borderHeight = std::max(0.1f, pcgJson.value("borderHeight", config.borderHeight));
+        config.borderSegments = std::clamp(pcgJson.value("borderSegments", config.borderSegments), 4, 256);
+        config.borderPattern = ParseBorderPattern(pcgJson, pcgContext, config.borderPattern);
+        config.borderHeightJitter = std::max(0.0f, pcgJson.value("borderHeightJitter", config.borderHeightJitter));
+        config.propPoissonRadius = std::max(0.1f, pcgJson.value("propPoissonRadius", config.propPoissonRadius));
+        config.propPoissonMaxAttempts = std::clamp(pcgJson.value("propPoissonMaxAttempts", config.propPoissonMaxAttempts), 1, 128);
+        config.spawnSafeRadius = std::max(0.0f, pcgJson.value("spawnSafeRadius", config.spawnSafeRadius));
+        config.edgeKeepout = std::max(0.0f, pcgJson.value("edgeKeepout", config.edgeKeepout));
+        config.palette = ReadVec3ArrayList(pcgJson, "palette", pcgContext);
+        if (config.palette.size() > 16)
+        {
+            config.palette.resize(16);
+        }
+
+        if (pcgJson.contains("props"))
+        {
+            if (!pcgJson.at("props").is_array())
+            {
+                throw std::runtime_error(fmt::format("{} field 'props' must be an array", pcgContext));
+            }
+
+            for (size_t propIndex = 0; propIndex < pcgJson.at("props").size(); ++propIndex)
+            {
+                const json& propJson = pcgJson.at("props").at(propIndex);
+                const std::string propContext = fmt::format("{} prop {}", pcgContext, propIndex);
+                Brotato3D::Pcg::FPropDef prop{};
+                prop.id = propJson.value("id", "");
+                prop.footprintXZ = ReadVec2Array(propJson, "footprintXZ", prop.footprintXZ, propContext);
+                prop.visualHeight = std::max(0.05f, propJson.value("visualHeight", prop.visualHeight));
+                prop.colliderHeight = std::clamp(propJson.value("colliderHeight", prop.colliderHeight), 0.05f, prop.visualHeight);
+                prop.baseColor = NextJson::GetVec3(propJson, "baseColor", prop.baseColor);
+                prop.weight = std::max(0.0f, propJson.value("weight", prop.weight));
+                if (!prop.id.empty() && prop.weight > 0.0f)
+                {
+                    config.props.push_back(prop);
+                }
+            }
+        }
+
+        return config;
+    }
+
+    Brotato3D::EGroundMaterialKind ParseGroundMaterialKind(const json& tileJson,
+                                                           std::string_view context,
+                                                           Brotato3D::EGroundMaterialKind fallback)
+    {
+        if (!tileJson.is_object() || !tileJson.contains("kind"))
+        {
+            return fallback;
+        }
+
+        const std::string kind = tileJson.at("kind").get<std::string>();
+        if (kind == "lambertian")
+        {
+            return Brotato3D::EGroundMaterialKind::Lambertian;
+        }
+        if (kind == "metallic")
+        {
+            return Brotato3D::EGroundMaterialKind::Metallic;
+        }
+        if (kind == "mixture")
+        {
+            return Brotato3D::EGroundMaterialKind::Mixture;
+        }
+
+        throw std::runtime_error(fmt::format("{} field 'kind' has unsupported value '{}'", context, kind));
+    }
+
+    void ReadPlayerStats(const json& object, Brotato3D::FPlayerStats& outStats)
+    {
+        outStats.maxHpFlat = object.value("maxHpFlat", outStats.maxHpFlat);
+        outStats.damagePct = object.value("damagePct", outStats.damagePct);
+        outStats.damageFlat = object.value("damageFlat", outStats.damageFlat);
+        outStats.atkSpeedPct = object.value("atkSpeedPct", outStats.atkSpeedPct);
+        outStats.rangePct = object.value("rangePct", outStats.rangePct);
+        outStats.moveSpeedPct = object.value("moveSpeedPct", outStats.moveSpeedPct);
+        outStats.pickupRadiusPct = object.value("pickupRadiusPct", outStats.pickupRadiusPct);
+        outStats.critChancePct = object.value("critChancePct", outStats.critChancePct);
+        outStats.critMultiplier = object.value("critMultiplier", outStats.critMultiplier);
+        outStats.dashChargeBonus = object.value("dashChargeBonus", outStats.dashChargeBonus);
+    }
+}
+
+namespace Brotato3D
+{
+    bool LoadEnemies(const std::string& path, std::map<std::string, FEnemyDef>& outEnemies)
+    {
+        json document;
+        if (!NextJson::TryLoadFile(path, document) || !NextJson::HasObject(document, "enemies"))
+        {
+            return false;
+        }
+
+        outEnemies.clear();
+        for (const auto& [enemyId, enemyJson] : document.at("enemies").items())
+        {
+            if (!enemyJson.contains("name") || !enemyJson.contains("hp") || !enemyJson.contains("moveSpeed") ||
+                !enemyJson.contains("contactDamage"))
+            {
+                SPDLOG_ERROR("[Brotato3D] enemy '{}' missing required combat fields", enemyId);
+                return false;
+            }
+
+            FEnemyDef def{};
+            def.name = enemyJson.value("name", enemyId);
+            def.hp = enemyJson.value("hp", 1);
+            def.moveSpeed = enemyJson.value("moveSpeed", 1.0f);
+            def.contactDamage = enemyJson.value("contactDamage", 1);
+            def.size = NextJson::GetVec3(enemyJson, "size", glm::vec3(0.5f));
+            def.color = NextJson::GetVec3(enemyJson, "color", glm::vec3(1.0f));
+            def.xpDrop = enemyJson.value("xpDrop", 1);
+            def.materialDrop = enemyJson.value("materialDrop", 1);
+            def.kitingDistance = enemyJson.value("kitingDistance", 0.0f);
+            if (enemyJson.contains("ranged") && enemyJson.at("ranged").is_object())
+            {
+                const json& rangedJson = enemyJson.at("ranged");
+                def.ranged.enabled = true;
+                def.ranged.dmg = rangedJson.value("projectileDamage", 0);
+                def.ranged.speed = rangedJson.value("projectileSpeed", 0.0f);
+                def.ranged.lifetimeMs = rangedJson.value("projectileLifetimeMs", 0.0f);
+                def.ranged.color = NextJson::GetVec3(rangedJson, "projectileColor", glm::vec3(0.3f, 0.95f, 0.2f));
+                def.ranged.size = rangedJson.value("projectileSize", 0.18f);
+                def.ranged.intervalMs = rangedJson.value("fireIntervalMs", 0.0f);
+                def.ranged.preferredDistance = rangedJson.value("preferredDistance", def.kitingDistance);
+            }
+            if (enemyJson.contains("mortar") && enemyJson.at("mortar").is_object())
+            {
+                const json& mortarJson = enemyJson.at("mortar");
+                def.mortar.enabled = true;
+                def.mortar.fireIntervalMs = mortarJson.value("fireIntervalMs", 0.0f);
+                def.mortar.telegraphMs = mortarJson.value("telegraphMs", 0.0f);
+                def.mortar.explosionRadius = mortarJson.value("explosionRadius", 0.0f);
+                def.mortar.explosionDamage = mortarJson.value("explosionDamage", 0);
+                def.mortar.throwRangeMin = mortarJson.value("throwRangeMin", 0.0f);
+                def.mortar.throwRangeMax = mortarJson.value("throwRangeMax", 0.0f);
+                def.mortar.lobHeightMeters = mortarJson.value("lobHeightMeters", 0.0f);
+                def.mortar.leadFactor = mortarJson.value("leadFactor", 0.0f);
+            }
+            if (enemyJson.contains("lance") && enemyJson.at("lance").is_object())
+            {
+                const json& lanceJson = enemyJson.at("lance");
+                def.lance.enabled = true;
+                def.lance.telegraphMs = lanceJson.value("telegraphMs", 0.0f);
+                def.lance.windupRangeMin = lanceJson.value("windupRangeMin", 0.0f);
+                def.lance.dashSpeed = lanceJson.value("dashSpeed", 0.0f);
+                def.lance.dashDistanceMax = lanceJson.value("dashDistanceMax", 0.0f);
+                def.lance.dashContactDamageMult = lanceJson.value("dashContactDamageMult", 1.0f);
+                def.lance.recoverMs = lanceJson.value("recoverMs", 0.0f);
+                def.lance.cooldownMs = lanceJson.value("cooldownMs", 0.0f);
+            }
+            if (enemyJson.contains("charge") && enemyJson.at("charge").is_object())
+            {
+                const json& chargeJson = enemyJson.at("charge");
+                def.charge.enabled = true;
+                def.charge.triggerDistance = chargeJson.value("triggerDistance", 0.0f);
+                def.charge.chargeSpeedMult = chargeJson.value("chargeSpeedMult", 1.0f);
+                def.charge.chargeRampSec = chargeJson.value("chargeRampSec", 0.0f);
+                def.charge.contactDamageMult = chargeJson.value("contactDamageMult", 1.0f);
+                def.charge.cooldownMs = chargeJson.value("cooldownMs", 0.0f);
+            }
+            if (enemyJson.contains("bomb") && enemyJson.at("bomb").is_object())
+            {
+                const json& bombJson = enemyJson.at("bomb");
+                def.bomb.enabled = true;
+                def.bomb.triggerDistance = bombJson.value("triggerDistance", 0.0f);
+                def.bomb.fuseMs = bombJson.value("fuseMs", 0.0f);
+                def.bomb.explosionRadius = bombJson.value("explosionRadius", 0.0f);
+                def.bomb.explosionDamage = bombJson.value("explosionDamage", 0);
+            }
+            if (enemyJson.contains("heal") && enemyJson.at("heal").is_object())
+            {
+                const json& healJson = enemyJson.at("heal");
+                def.heal.enabled = true;
+                def.heal.radiusMeters = healJson.value("radiusMeters", 0.0f);
+                def.heal.healAmount = healJson.value("healAmount", 0);
+                def.heal.intervalMs = healJson.value("intervalMs", 0.0f);
+            }
+            if (enemyJson.contains("boss") && enemyJson.at("boss").is_object())
+            {
+                const json& bossJson = enemyJson.at("boss");
+                def.boss.enabled = true;
+                def.boss.phase2HpRatio = bossJson.value("phase2HpRatio", 0.5f);
+                def.boss.phase2MoveSpeedMult = bossJson.value("phase2MoveSpeedMult", 1.0f);
+                def.boss.phase2ContactDamageMult = bossJson.value("phase2ContactDamageMult", 1.0f);
+            }
+            outEnemies.emplace(enemyId, def);
+        }
+        return true;
+    }
+
+    bool LoadWeapons(const std::string& path, std::map<std::string, FWeaponDef>& outWeapons)
+    {
+        json document;
+        if (!NextJson::TryLoadFile(path, document) || !NextJson::HasObject(document, "weapons"))
+        {
+            return false;
+        }
+
+        outWeapons.clear();
+        for (const auto& [weaponId, weaponJson] : document.at("weapons").items())
+        {
+            if (!weaponJson.contains("name") || !weaponJson.contains("damage") || !weaponJson.contains("atkSpeedHz"))
+            {
+                SPDLOG_ERROR("[Brotato3D] weapon '{}' missing required combat fields", weaponId);
+                return false;
+            }
+
+            FWeaponDef def{};
+            def.name = weaponJson.value("name", weaponId);
+            def.damage = weaponJson.value("damage", 1);
+            def.atkSpeedHz = weaponJson.value("atkSpeedHz", 1.0f);
+            def.rangeMeters = weaponJson.value("rangeMeters", 1.0f);
+            def.projectileSpeed = weaponJson.value("projectileSpeed", 10.0f);
+            def.projectileLifetimeMs = weaponJson.value("projectileLifetimeMs", 500.0f);
+            def.projectileColor = NextJson::GetVec3(weaponJson, "projectileColor", glm::vec3(1.0f));
+            def.projectileSize = weaponJson.value("projectileSize", 0.12f);
+            def.pellets = weaponJson.value("pellets", 1);
+            def.spreadDeg = weaponJson.value("spreadDeg", 0.0f);
+            def.pierceCount = weaponJson.value("pierceCount", 0);
+            def.explosionRadius = weaponJson.value("explosionRadius", 0.0f);
+            def.explosionDamage = weaponJson.value("explosionDamage", 0);
+            def.instantHit = weaponJson.value("instantHit", false);
+            def.beamWidth = weaponJson.value("beamWidth", 0.0f);
+            def.beamDurationMs = weaponJson.value("beamDurationMs", 0.0f);
+            def.critChanceBonus = weaponJson.value("critChanceBonus", 0.0f);
+            def.knockbackMeters = weaponJson.value("knockbackMeters", 0.0f);
+            def.tier = weaponJson.value("tier", 1);
+            outWeapons.emplace(weaponId, def);
+        }
+        return true;
+    }
+
+    bool LoadUpgrades(const std::string& path, std::vector<FUpgradeCardDef>& outCards)
+    {
+        json document;
+        if (!NextJson::TryLoadFile(path, document) || !NextJson::HasArray(document, "cards"))
+        {
+            return false;
+        }
+
+        outCards.clear();
+        for (const auto& cardJson : document.at("cards"))
+        {
+            FUpgradeCardDef def{};
+            def.id = cardJson.value("id", "");
+            def.name = cardJson.value("name", def.id);
+            def.stat = cardJson.value("stat", "");
+            def.delta = cardJson.value("delta", 0.0f);
+            def.weight = cardJson.value("weight", 1);
+            if (def.id.empty() || def.stat.empty())
+            {
+                SPDLOG_ERROR("[Brotato3D] upgrade card missing id/stat");
+                return false;
+            }
+            outCards.push_back(def);
+        }
+        return true;
+    }
+
+    bool LoadShopItems(const std::string& path, std::vector<FShopItemDef>& outItems)
+    {
+        json document;
+        if (!NextJson::TryLoadFile(path, document) || !NextJson::HasArray(document, "items"))
+        {
+            return false;
+        }
+
+        outItems.clear();
+        for (const auto& itemJson : document.at("items"))
+        {
+            FShopItemDef def{};
+            def.id = itemJson.value("id", "");
+            def.name = itemJson.value("name", def.id);
+            def.stat = itemJson.value("stat", "");
+            def.delta = itemJson.value("delta", 0.0f);
+            def.cost = itemJson.value("cost", 0);
+            def.weight = itemJson.value("weight", 1);
+            if (def.id.empty() || def.stat.empty())
+            {
+                SPDLOG_ERROR("[Brotato3D] shop item missing id/stat");
+                return false;
+            }
+            outItems.push_back(def);
+        }
+        return true;
+    }
+
+    bool LoadItems(const std::string& path, std::vector<FItemDef>& outItems)
+    {
+        json document;
+        if (!NextJson::TryLoadFile(path, document) || !NextJson::HasArray(document, "items"))
+        {
+            return false;
+        }
+
+        outItems.clear();
+        for (const auto& itemJson : document.at("items"))
+        {
+            FItemDef def{};
+            def.id = itemJson.value("id", "");
+            def.name = itemJson.value("name", def.id);
+            def.description = itemJson.value("description", "");
+            def.trigger = itemJson.value("trigger", "");
+            def.effect = itemJson.value("effect", "");
+            def.value = itemJson.value("value", 0.0f);
+            def.rarity = itemJson.value("rarity", "common");
+            def.weight = itemJson.value("weight", 1);
+            def.cost = itemJson.value("cost", 0);
+            def.threshold = itemJson.value("threshold", 0.0f);
+            def.explosionRadius = itemJson.value("explosionRadius", 0.0f);
+            def.explosionDamage = itemJson.value("explosionDamage", 0);
+            if (def.id.empty() || def.trigger.empty() || def.effect.empty())
+            {
+                SPDLOG_ERROR("[Brotato3D] item missing id/trigger/effect");
+                return false;
+            }
+            outItems.push_back(def);
+        }
+        return true;
+    }
+
+    bool LoadCharacters(const std::string& path, std::vector<FCharacterDef>& outCharacters)
+    {
+        json document;
+        if (!NextJson::TryLoadFile(path, document) || !NextJson::HasArray(document, "characters"))
+        {
+            return false;
+        }
+
+        outCharacters.clear();
+        for (const auto& characterJson : document.at("characters"))
+        {
+            FCharacterDef def{};
+            def.id = characterJson.value("id", "");
+            def.name = characterJson.value("name", def.id);
+            def.tagline = characterJson.value("tagline", "");
+            def.color = NextJson::GetVec3(characterJson, "color", glm::vec3(1.0f));
+            def.startWeapon = characterJson.value("startWeapon", "");
+            def.startStats = FPlayerStats{};
+            def.startStats.damagePct = 0.0f;
+            def.startStats.damageFlat = 0.0f;
+            def.startStats.atkSpeedPct = 0.0f;
+            def.startStats.rangePct = 0.0f;
+            def.startStats.moveSpeedPct = 0.0f;
+            def.startStats.pickupRadiusPct = 0.0f;
+            def.startStats.critChancePct = 0.0f;
+            def.startStats.critMultiplier = 0.0f;
+            if (characterJson.contains("startStats") && characterJson.at("startStats").is_object())
+            {
+                ReadPlayerStats(characterJson.at("startStats"), def.startStats);
+            }
+            if (def.id.empty() || def.startWeapon.empty())
+            {
+                SPDLOG_ERROR("[Brotato3D] character missing id/startWeapon");
+                return false;
+            }
+            outCharacters.push_back(def);
+        }
+        return true;
+    }
+
+    bool LoadArenas(const std::string& path, std::vector<FArenaDef>& outArenas)
+    {
+        json document;
+        if (!NextJson::TryLoadFile(path, document) || !NextJson::HasArray(document, "arenas"))
+        {
+            return false;
+        }
+
+        outArenas.clear();
+        for (size_t arenaIndex = 0; arenaIndex < document.at("arenas").size(); ++arenaIndex)
+        {
+            const auto& arenaJson = document.at("arenas").at(arenaIndex);
+            FArenaDef def{};
+            def.id = arenaJson.value("id", "");
+            def.name = arenaJson.value("name", def.id);
+            if (def.id.empty())
+            {
+                SPDLOG_ERROR("[Brotato3D] arena missing id");
+                return false;
+            }
+
+            const std::string arenaContext = fmt::format("arena '{}'", def.id);
+            try
+            {
+                def.halfExtent = ReadVec2Array(arenaJson, "halfExtent", def.halfExtent, arenaContext);
+                if (!glm::all(glm::greaterThan(def.halfExtent, glm::vec2(0.0f))))
+                {
+                    SPDLOG_WARN("[Brotato3D] {} has invalid halfExtent [{}, {}], fallback to default",
+                                arenaContext,
+                                def.halfExtent.x,
+                                def.halfExtent.y);
+                    def.halfExtent = glm::vec2(12.0f, 8.0f);
+                }
+            }
+            catch (const std::exception& exception)
+            {
+                SPDLOG_WARN("[Brotato3D] {}", exception.what());
+            }
+
+            def.baseGroundColor = NextJson::GetVec3(arenaJson, "baseGroundColor",
+                                                    NextJson::GetVec3(arenaJson, "groundColor", def.baseGroundColor));
+            def.borderColor = NextJson::GetVec3(arenaJson, "borderColor", def.borderColor);
+            try
+            {
+                def.pcg = ReadPcgConfig(arenaJson, arenaContext);
+            }
+            catch (const std::exception& exception)
+            {
+                SPDLOG_WARN("[Brotato3D] {}", exception.what());
+                def.pcg = {};
+            }
+
+            if (arenaJson.contains("groundTiles"))
+            {
+                if (!arenaJson.at("groundTiles").is_array())
+                {
+                    SPDLOG_WARN("[Brotato3D] {} field 'groundTiles' must be an array", arenaContext);
+                }
+                else
+                {
+                    for (size_t tileIndex = 0; tileIndex < arenaJson.at("groundTiles").size(); ++tileIndex)
+                    {
+                        const auto& tileJson = arenaJson.at("groundTiles").at(tileIndex);
+                        const std::string tileContext = fmt::format("{} tile {}", arenaContext, tileIndex);
+                        try
+                        {
+                            FGroundTileDef tile{};
+                            tile.minXZ = ReadVec2Array(tileJson, "min", tile.minXZ, tileContext);
+                            tile.maxXZ = ReadVec2Array(tileJson, "max", tile.maxXZ, tileContext);
+                            tile.pointsXZ = ReadVec2ArrayList(tileJson, "points", tileContext);
+                            tile.color = NextJson::GetVec3(tileJson, "color", tile.color);
+                            tile.kind = ParseGroundMaterialKind(tileJson, tileContext, tile.kind);
+                            tile.coverage = tileJson.value("coverage", tile.coverage);
+                            tile.fuzziness = tileJson.value("fuzziness", tile.fuzziness);
+                            tile.refractionIndex = tileJson.value("ior", tile.refractionIndex);
+                            def.groundTiles.push_back(tile);
+                        }
+                        catch (const std::exception& exception)
+                        {
+                            SPDLOG_WARN("[Brotato3D] {}", exception.what());
+                        }
+                    }
+                }
+            }
+            outArenas.push_back(def);
+        }
+        return true;
+    }
+
+    bool LoadI18n(const std::string& path, std::map<std::string, std::string>& outTexts)
+    {
+        json document;
+        if (!NextJson::TryLoadFile(path, document) || !NextJson::HasObject(document, "zh"))
+        {
+            return false;
+        }
+
+        outTexts.clear();
+        for (const auto& [key, value] : document.at("zh").items())
+        {
+            if (value.is_string())
+            {
+                outTexts[key] = value.get<std::string>();
+            }
+        }
+        return true;
+    }
+
+    bool LoadWaves(const std::string& path, std::vector<FWaveDef>& outWaves)
+    {
+        json document;
+        if (!NextJson::TryLoadFile(path, document) || !NextJson::HasArray(document, "waves"))
+        {
+            return false;
+        }
+
+        outWaves.clear();
+        for (const auto& waveJson : document.at("waves"))
+        {
+            FWaveDef wave{};
+            wave.durationSec = waveJson.value("durationSec", 30);
+            wave.bgmCue = waveJson.value("bgmCue", "");
+            wave.duskSpawnMultiplier = waveJson.value("duskSpawnMultiplier", 1.0f);
+            wave.duskBonusXpMult = waveJson.value("duskBonusXpMult", 1.0f);
+            wave.extractionRequiredSec = waveJson.value("extractionRequiredSec", 0.0f);
+            wave.extractionRadiusM = waveJson.value("extractionRadiusM", 2.5f);
+            if (!waveJson.contains("spawns") || !waveJson.at("spawns").is_array())
+            {
+                SPDLOG_ERROR("[Brotato3D] wave missing spawns array");
+                return false;
+            }
+            for (const auto& spawnJson : waveJson.at("spawns"))
+            {
+                FSpawnEntry spawn{};
+                spawn.enemyId = spawnJson.value("enemyId", "");
+                spawn.count = spawnJson.value("count", 0);
+                spawn.intervalMs = spawnJson.value("intervalMs", 1000.0f);
+                if (spawn.enemyId.empty() || spawn.count <= 0)
+                {
+                    SPDLOG_ERROR("[Brotato3D] invalid wave spawn entry");
+                    return false;
+                }
+                wave.spawns.push_back(spawn);
+            }
+            outWaves.push_back(wave);
+        }
+        return true;
+    }
+}

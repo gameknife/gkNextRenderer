@@ -20,12 +20,8 @@ src/Runtime/Reflection/
 ├── ReflectionMacros.h      # REFLECT_COMPONENT macro
 └── ReflectionRegistry.h/cpp # Central registration
 
-src/Editor/Panels/
+src/Application/Editor/gkNextEditor/Panels/
 ├── PropertyWidgets.h/cpp   # ImGui widgets based on PropertyType
-
-src/Editor/Commands/
-├── CommandHistory.h/cpp    # Undo/redo stack
-└── PropertyCommand.h/cpp   # Property modification command
 ```
 
 ## Supported Property Types

@@ -127,19 +127,28 @@ src/
 │   ├── SoftwareTracing/  # Software ray tracing
 │   ├── SoftwareModern/   # Modern rasterization + software GI
 │   └── PipelineCommon/   # Shared pipeline utilities
-├── Editor/            # ImGui editor
-│   ├── Panels/        # Property panel (auto-generated from reflection)
-│   ├── Nodes/         # Node-based material editor
-│   └── Commands/      # Editor command system (undo/redo)
 ├── Assets/            # Asset loading (glTF, textures, etc.)
 ├── Tests/             # Catch2 unit tests
-├── Application/       # App entry points
-│   ├── gkNextRenderer/
-│   ├── gkNextEditor/
-│   ├── MagicaLego/
-│   ├── gkNextBenchmark/
-│   ├── gkNextVisualTest/
-│   └── Packager/
+├── Application/       # App entry points grouped by role
+│   ├── Editor/
+│   │   └── gkNextEditor/
+│   │       ├── Panels/    # Property panel (auto-generated from reflection)
+│   │       ├── Nodes/     # Node-based material editor
+│   │       └── Overlays/  # Editor overlays and chrome
+│   ├── Game/
+│   │   ├── MagicaLego/
+│   │   ├── BrickPlayer/
+│   │   ├── Brotato3D/
+│   │   ├── CharacterDemo/
+│   │   ├── Flappy/
+│   │   ├── KongLie3D/
+│   │   └── Voyage3D/
+│   ├── Render/
+│   │   ├── gkNextRenderer/
+│   │   ├── gkNextBenchmark/
+│   │   └── gkNextVisualTest/
+│   └── Util/
+│       └── Packager/
 └── ThirdParty/        # Third-party code (DO NOT MODIFY)
 
 assets/
