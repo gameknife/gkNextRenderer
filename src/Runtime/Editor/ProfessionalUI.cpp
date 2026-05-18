@@ -260,6 +260,7 @@ namespace Runtime::UiTheme
         ImGui::SetNextWindowViewport(viewport->ID);
         ImGui::SetNextWindowBgAlpha(0.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        
         ImGui::Begin(config.BrandWindowId, nullptr,
                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
@@ -282,19 +283,24 @@ namespace Runtime::UiTheme
         ImGui::End();
         ImGui::PopStyleVar();
 
-        ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + brandWidth, viewport->Pos.y));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+        
+        ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + brandWidth, viewport->Pos.y + (config.Height - ImGui::GetTextLineHeight()) * 0.5f));
         ImGui::SetNextWindowSize(ImVec2(menuWidth, config.Height));
         ImGui::SetNextWindowViewport(viewport->ID);
         ImGui::SetNextWindowBgAlpha(0.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        
         ImGui::Begin(config.MenuWindowId, nullptr,
                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                          ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
                          ImGuiWindowFlags_NoDocking);
-        ImGui::PopStyleVar();
-
-        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(11.0f, 10.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(14.0f, 0.0f));
+        ImGui::PopStyleVar(3);
+        
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(14.0f, 6.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
         if (ImGui::BeginMenuBar())
         {
             if (config.DrawMenuBar)
@@ -352,8 +358,8 @@ namespace Runtime::UiTheme
         }
         ImGui::End();
         ImGui::PopStyleVar();
-
         ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor();
 
         const float dragLeftReserved =
             std::max(brandWidth + 12.0f, menuRight - viewport->Pos.x + config.MenuHitPadding);
