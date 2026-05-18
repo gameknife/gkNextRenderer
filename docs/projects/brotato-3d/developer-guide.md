@@ -9,7 +9,7 @@ last_updated: 2026-05-10
 
 本文是 Brotato3D 的开发者梳理文档，目的是让你在阅读完后可以**快速完成数值调整、新增敌人/武器/物品、调整波次和角色配置**。文档不覆盖引擎层细节（Vulkan/RT/ECS），只关注 Brotato3D 子项目的玩法、配置和资产组织。
 
-> 想了解 Brotato3D 当前的开发计划，请参考同目录下的 `plan.md`、`product-plan.md`、`loot-overhaul-plan.md`、`dusk-extraction-plan.md` 等。
+> 想先了解 Brotato3D 的项目定位，请读 `introduction.md`；想了解当前开发计划，请参考同目录下的 `plan.md`、`product-plan.md`、`loot-overhaul-plan.md`、`dusk-extraction-plan.md` 等。
 
 ---
 
@@ -445,6 +445,7 @@ HUD 中的相机始终俯视玩家头顶，跟随有一个 `CameraFollowSharpnes
 
 ## 10. 进一步阅读
 
+- [introduction.md](introduction.md) — 项目定位与系统概览
 - [plan.md](plan.md), [product-plan.md](product-plan.md) — 项目愿景
 - [loot-overhaul-plan.md](loot-overhaul-plan.md) — XP/Material 碎块统一化的设计动机
 - [dusk-extraction-plan.md](dusk-extraction-plan.md) — 黄昏潮 + 撤离车机制的来历

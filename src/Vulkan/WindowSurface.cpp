@@ -287,6 +287,12 @@ void Window::ConfigureCustomTitleBarDrag(bool enabled, int titleBarHeight, int l
 
 void Window::InitGLFW()
 {
+#if WIN32
+    if (!SDL_SetHintWithPriority("SDL_WINDOWS_DPI_AWARENESS", "unaware", SDL_HINT_OVERRIDE))
+    {
+        SPDLOG_WARN("Failed to set SDL Windows DPI awareness to unaware: {}", SDL_GetError());
+    }
+#endif
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))
     {

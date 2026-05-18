@@ -109,7 +109,7 @@ RunGameInstance(new MyGameInstance());
 - `OverrideRenderCamera`
 - `OnDestroy`
 
-这条路径让脚本游戏和原生 `NextGameInstanceBase` 保持类似职责边界，便于做 Flappy 这类 C++/TypeScript 行为一致性验证。
+这条路径让脚本游戏和原生 `NextGameInstanceBase` 保持类似职责边界，便于做 Flappy 这类 C++/TypeScript 行为一致性验证；Flappy 双实现的项目定位见 [docs/projects/flappy-bird-parity/introduction.md](projects/flappy-bird-parity/introduction.md)。
 
 ## 绑定和类型定义
 
