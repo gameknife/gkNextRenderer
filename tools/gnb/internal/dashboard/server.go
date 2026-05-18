@@ -216,6 +216,17 @@ func templateFuncs() template.FuncMap {
 			}
 			return formatElapsedDuration(end.Sub(s.StartedAt))
 		},
+		"sectionSlug": func(k spec.SectionKind) string {
+			switch k {
+			case spec.SectionNext:
+				return "next"
+			case spec.SectionBacklog:
+				return "backlog"
+			case spec.SectionRecent:
+				return "recent"
+			}
+			return ""
+		},
 		"emptyHint": func(k spec.SectionKind) string {
 			switch k {
 			case spec.SectionNext:

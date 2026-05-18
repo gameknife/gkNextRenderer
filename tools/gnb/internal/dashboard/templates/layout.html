@@ -796,6 +796,54 @@
   }
   .btn-secondary:hover { border-color: var(--border-strong); }
   .btn-primary.small { width: auto; padding: 7px 14px; font-size: 12.5px; }
+
+  /* Drag-and-drop for tasks in 下一步 / 待规划. */
+  .task[draggable="true"] { cursor: grab; }
+  .task[draggable="true"]:active { cursor: grabbing; }
+  .task.dragging { opacity: 0.45; }
+  .task.drop-before { box-shadow: 0 -2px 0 0 var(--accent) inset, 0 -2px 0 0 var(--accent); }
+  .task.drop-after  { box-shadow: 0 2px 0 0 var(--accent) inset, 0 2px 0 0 var(--accent); }
+  .task-list-droppable.drop-target {
+    background: rgba(99, 102, 241, 0.06);
+    border-radius: var(--radius-sm);
+    outline: 1px dashed rgba(99, 102, 241, 0.4);
+    outline-offset: 2px;
+  }
+  .empty-row.drop-target { color: var(--accent); border: 1px dashed var(--accent); border-radius: var(--radius-sm); }
+
+  /* Spec creation form on the detail panel. */
+  .spec-create .file-card-head .hint {
+    margin-left: 8px;
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 400;
+  }
+  .spec-form { padding: 8px 12px 12px 12px; }
+  .spec-form textarea {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 110px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-input, var(--bg));
+    color: var(--fg);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12px;
+    resize: vertical;
+  }
+  .spec-form textarea:focus { outline: none; border-color: var(--accent); }
+  .spec-form-actions {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .spec-form-actions .muted { color: var(--muted); font-size: 11.5px; }
+
+  .action-btn.danger { color: var(--red); }
+  .action-btn.danger:hover { background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.4); }
 </style>
 </head>
 <body>
@@ -1070,6 +1118,102 @@
 
   document.body.addEventListener('htmx:afterSwap', (e) => initAllLogPanels(e.detail.target));
   document.addEventListener('DOMContentLoaded', () => initAllLogPanels(document));
+
+  // When a delete reply comes back the server sends HX-Trigger: clear-detail
+  // so the right-hand detail panel doesn't keep rendering a now-gone task.
+  document.body.addEventListener('clear-detail', () => {
+    const panel = document.getElementById('detail-panel');
+    if (panel) panel.innerHTML = '<div class="card detail-empty">点击任意任务查看详情（spec / journal / blocker）。</div>';
+    document.querySelectorAll('.task.selected').forEach(t => t.classList.remove('selected'));
+  });
+
+  // ----- Task drag-and-drop (下一步 / 待规划) -------------------------
+  // Native HTML5 D&D. The dragged task ID is captured on dragstart, and the
+  // drop handler computes `to` (target section) / `before` / `after` (anchor)
+  // from where the pointer landed, then POSTs to /task/{id}/move via htmx
+  // so the panel re-renders with the freshly parsed TODO.md.
+  let dragTaskId = null;
+  let dragSourceSection = null;
+  function clearDropHints() {
+    document.querySelectorAll('.task.drop-before,.task.drop-after').forEach(el => {
+      el.classList.remove('drop-before', 'drop-after');
+    });
+    document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target'));
+  }
+  document.body.addEventListener('dragstart', (e) => {
+    const task = e.target.closest('.task[draggable="true"]');
+    if (!task) return;
+    dragTaskId = task.dataset.id;
+    dragSourceSection = task.dataset.section || null;
+    task.classList.add('dragging');
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      // Firefox requires setData to actually fire drag events.
+      try { e.dataTransfer.setData('text/plain', dragTaskId); } catch (_) {}
+    }
+  });
+  document.body.addEventListener('dragend', () => {
+    document.querySelectorAll('.task.dragging').forEach(t => t.classList.remove('dragging'));
+    clearDropHints();
+    dragTaskId = null;
+    dragSourceSection = null;
+  });
+  document.body.addEventListener('dragover', (e) => {
+    if (!dragTaskId) return;
+    const list = e.target.closest('.task-list-droppable, .empty-row.task-list-droppable');
+    const task = e.target.closest('.task[data-section]');
+    if (!list && !task) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    clearDropHints();
+    if (task && task.dataset.id !== dragTaskId) {
+      const rect = task.getBoundingClientRect();
+      if (e.clientY < rect.top + rect.height / 2) {
+        task.classList.add('drop-before');
+      } else {
+        task.classList.add('drop-after');
+      }
+    } else if (list) {
+      list.classList.add('drop-target');
+    }
+  });
+  document.body.addEventListener('dragleave', (e) => {
+    // Only clear hints when leaving the whole drop region; relatedTarget is
+    // null when the pointer exits the window, and not contained when crossing
+    // between sibling rows the browser already cleared via dragover.
+    if (!e.relatedTarget) clearDropHints();
+  });
+  document.body.addEventListener('drop', (e) => {
+    if (!dragTaskId) return;
+    const task = e.target.closest('.task[data-section]');
+    const list = e.target.closest('.task-list-droppable, .empty-row.task-list-droppable');
+    if (!task && !list) return;
+    e.preventDefault();
+    let toSection = '', before = '', after = '';
+    if (task && task.dataset.id !== dragTaskId) {
+      const rect = task.getBoundingClientRect();
+      if (e.clientY < rect.top + rect.height / 2) before = task.dataset.id;
+      else after = task.dataset.id;
+    } else if (list) {
+      toSection = list.dataset.section || '';
+    } else {
+      clearDropHints();
+      return;
+    }
+    const id = dragTaskId;
+    clearDropHints();
+    dragTaskId = null;
+    dragSourceSection = null;
+    const values = {};
+    if (toSection) values.to = toSection;
+    if (before) values.before = before;
+    if (after) values.after = after;
+    htmx.ajax('POST', '/task/' + id + '/move', {
+      target: '#todo-panel',
+      swap: 'innerHTML',
+      values: values,
+    });
+  });
 </script>
 
 </body>
