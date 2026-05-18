@@ -75,7 +75,7 @@ r.shader.hot_reload_interval
 - 手动 `Rebuild shaders now`
 - 显示 shader source/output/slangc 路径
 
-面板文件：`src/Editor/Panels/HotReloadPanel.cpp`。
+面板文件：`src/Application/Editor/gkNextEditor/Panels/HotReloadPanel.cpp`。
 
 ---
 

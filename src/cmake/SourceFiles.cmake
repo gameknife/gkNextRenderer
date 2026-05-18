@@ -64,54 +64,54 @@ file(GLOB_RECURSE src_files_nextgameplay
 )
 
 # --- Editor ---
-file(GLOB_RECURSE src_files_editor "Editor/*")
+file(GLOB_RECURSE src_files_editor "Application/Editor/gkNextEditor/*")
 
 # --- Applications ---
 file(GLOB_RECURSE src_files_magicalego
-    "Application/MagicaLego/*.cpp"
-    "Application/MagicaLego/*.hpp"
+    "Application/Game/MagicaLego/*.cpp"
+    "Application/Game/MagicaLego/*.hpp"
 )
 
 file(GLOB_RECURSE src_files_brickplayer
-    "Application/BrickPlayer/*.cpp"
-    "Application/BrickPlayer/*.hpp"
+    "Application/Game/BrickPlayer/*.cpp"
+    "Application/Game/BrickPlayer/*.hpp"
 )
 
-file(GLOB_RECURSE src_files_gkrenderer "Application/gkNextRenderer/*")
+file(GLOB_RECURSE src_files_gkrenderer "Application/Render/gkNextRenderer/*")
 
-file(GLOB_RECURSE src_files_benchmarkcommon "Application/gkNextBenchmark/Common/*")
+file(GLOB_RECURSE src_files_benchmarkcommon "Application/Render/gkNextBenchmark/Common/*")
 
-file(GLOB_RECURSE src_files_gkstillbenchmark "Application/gkNextBenchmark/gkNextStillBenchmark/*")
+file(GLOB_RECURSE src_files_gkstillbenchmark "Application/Render/gkNextBenchmark/gkNextStillBenchmark/*")
 
-file(GLOB_RECURSE src_files_gkmotionbenchmark "Application/gkNextBenchmark/gkNextMotionBenchmark/*")
+file(GLOB_RECURSE src_files_gkmotionbenchmark "Application/Render/gkNextBenchmark/gkNextMotionBenchmark/*")
 
-file(GLOB_RECURSE src_files_gkvisualtest "Application/gkNextVisualTest/*"
+file(GLOB_RECURSE src_files_gkvisualtest "Application/Render/gkNextVisualTest/*"
 )
 
 file(GLOB_RECURSE src_files_konglie3d
-    "Application/KongLie3D/*.cpp"
-    "Application/KongLie3D/*.hpp"
+    "Application/Game/KongLie3D/*.cpp"
+    "Application/Game/KongLie3D/*.hpp"
 )
 
 file(GLOB_RECURSE src_files_brotato3d
-    "Application/Brotato3D/*.cpp"
-    "Application/Brotato3D/*.hpp"
+    "Application/Game/Brotato3D/*.cpp"
+    "Application/Game/Brotato3D/*.hpp"
 )
 
 file(GLOB_RECURSE src_files_flappycpp
-    "Application/Flappy/FlappyCommon.hpp"
-    "Application/Flappy/FlappyConfig.cpp"
-    "Application/Flappy/FlappyConfig.hpp"
-    "Application/Flappy/FlappyCpp/*.cpp"
-    "Application/Flappy/FlappyCpp/*.hpp"
+    "Application/Game/Flappy/FlappyCommon.hpp"
+    "Application/Game/Flappy/FlappyConfig.cpp"
+    "Application/Game/Flappy/FlappyConfig.hpp"
+    "Application/Game/Flappy/FlappyCpp/*.cpp"
+    "Application/Game/Flappy/FlappyCpp/*.hpp"
 )
 
 file(GLOB_RECURSE src_files_flappyjs
-    "Application/Flappy/FlappyJs/*.cpp"
-    "Application/Flappy/FlappyJs/*.hpp"
+    "Application/Game/Flappy/FlappyJs/*.cpp"
+    "Application/Game/Flappy/FlappyJs/*.hpp"
 )
 
 file(GLOB_RECURSE src_files_characterdemo
-    "Application/CharacterDemo/*.cpp"
-    "Application/CharacterDemo/*.hpp"
+    "Application/Game/CharacterDemo/*.cpp"
+    "Application/Game/CharacterDemo/*.hpp"
 )

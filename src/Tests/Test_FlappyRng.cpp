@@ -1,4 +1,4 @@
-#include "Application/Flappy/FlappyCpp/FlappyCppRng.hpp"
+#include "Application/Game/Flappy/FlappyCpp/FlappyCppRng.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

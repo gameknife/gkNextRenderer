@@ -42,15 +42,15 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_Brotato3DPcg.cpp
 	Tests/Test_ImAnimIntegration.cpp
 	Tests/Test_BrickPlayerSnapLogic.cpp
-	Application/BrickPlayer/BrickPlayerSnapLogic.cpp
+	Application/Game/BrickPlayer/BrickPlayerSnapLogic.cpp
 	Tests/Test_MagicaLegoStyle.cpp
 	Tests/Test_MagicaLegoScript.cpp
 	Tests/Test_MagicaLegoPlacementRules.cpp
-	Application/MagicaLego/MagicaLegoStyle.cpp
-	Application/MagicaLego/MagicaLegoScriptParser.cpp
-	Application/MagicaLego/MagicaLegoPlacementRules.cpp
+	Application/Game/MagicaLego/MagicaLegoStyle.cpp
+	Application/Game/MagicaLego/MagicaLegoScriptParser.cpp
+	Application/Game/MagicaLego/MagicaLegoPlacementRules.cpp
 	Tests/Test_FlappyRng.cpp
-	Application/Brotato3D/Brotato3DPcgGenerator.cpp
+	Application/Game/Brotato3D/Brotato3DPcgGenerator.cpp
 )
 
 list(APPEND UNIT_TEST_SOURCES Tests/Test_PhysicsComponent.cpp)
@@ -150,7 +150,7 @@ add_executable(CharacterDemo
 	DesktopMain.cpp
 )
 add_executable(Packager
-	Application/Packager/PackagerMain.cpp
+	Application/Util/Packager/PackagerMain.cpp
 )
 
 find_package(Catch2 3 REQUIRED)

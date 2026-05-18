@@ -1,4 +1,4 @@
-#include "Application/Brotato3D/Brotato3DPcgGenerator.hpp"
+#include "Application/Game/Brotato3D/Brotato3DPcgGenerator.hpp"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>

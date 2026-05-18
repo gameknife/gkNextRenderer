@@ -1,6 +1,6 @@
 # MagicaLego 小游戏代码梳理
 
-本文档梳理 `src/Application/MagicaLego` 目录下乐高搭建小游戏的结构与关键流程，便于后续扩展与维护。
+本文档梳理 `src/Application/Game/MagicaLego` 目录下乐高搭建小游戏的结构与关键流程，便于后续扩展与维护。
 
 ## 功能概览
 - 玩法：基于网格的乐高方块搭建，支持放置/挖掘/选择、朝向旋转、基座尺寸切换。
@@ -8,14 +8,14 @@
 - 辅助：存档读写、时间轴回放、截图与录屏、背景音乐。
 
 ## 目录与入口
-- `src/Application/MagicaLego/MagicaLegoGameInstance.hpp`
+- `src/Application/Game/MagicaLego/MagicaLegoGameInstance.hpp`
   - `MagicaLegoGameInstance`：核心运行逻辑。
   - 枚举：`ELegoMode`、`ECamMode`、`EBasePlane`、`EOrientation`。
   - 数据结构：`FBasicBlock`、`FPlacedBlock`、`FMagicaLegoSave`。
-- `src/Application/MagicaLego/MagicaLegoGameInstance.cpp`
+- `src/Application/Game/MagicaLego/MagicaLegoGameInstance.cpp`
   - 主要运行流程与核心行为实现。
   - `CreateGameInstance` 为游戏入口工厂。
-- `src/Application/MagicaLego/MagicaLegoUserInterface.hpp/.cpp`
+- `src/Application/Game/MagicaLego/MagicaLegoUserInterface.hpp/.cpp`
   - `MagicaLegoUserInterface`：ImGui UI 逻辑。
 
 ## 核心数据结构
@@ -176,7 +176,7 @@ end
 
 ### 文件结构
 ```
-src/Application/MagicaLego/
+src/Application/Game/MagicaLego/
 ├── MagicaLegoGameInstance.hpp/cpp   # 核心游戏逻辑 (~1200行)
 ├── MagicaLegoUserInterface.hpp/cpp  # UI 渲染 (~1700行)
 ├── MagicaLegoCommands.hpp/cpp       # 命令系统 (~700行)
@@ -226,17 +226,17 @@ namespace MagicaLego
 - AI 生成的脚本会显示在 "Last Generated Script" 区域
 
 ## 关联文件速查
-- `src/Application/MagicaLego/MagicaLegoGameInstance.hpp`
-- `src/Application/MagicaLego/MagicaLegoGameInstance.cpp`
-- `src/Application/MagicaLego/MagicaLegoUserInterface.hpp`
-- `src/Application/MagicaLego/MagicaLegoUserInterface.cpp`
-- `src/Application/MagicaLego/MagicaLegoCommands.hpp`
-- `src/Application/MagicaLego/MagicaLegoCommands.cpp`
-- `src/Application/MagicaLego/MagicaLegoScriptParser.hpp`
-- `src/Application/MagicaLego/MagicaLegoScriptParser.cpp`
-- `src/Application/MagicaLego/MagicaLegoAIService.hpp`
-- `src/Application/MagicaLego/MagicaLegoAIService.cpp`
-- `src/Application/MagicaLego/MagicaLegoConstants.hpp`
-- `src/Application/MagicaLego/MagicaLegoUIHelpers.hpp`
+- `src/Application/Game/MagicaLego/MagicaLegoGameInstance.hpp`
+- `src/Application/Game/MagicaLego/MagicaLegoGameInstance.cpp`
+- `src/Application/Game/MagicaLego/MagicaLegoUserInterface.hpp`
+- `src/Application/Game/MagicaLego/MagicaLegoUserInterface.cpp`
+- `src/Application/Game/MagicaLego/MagicaLegoCommands.hpp`
+- `src/Application/Game/MagicaLego/MagicaLegoCommands.cpp`
+- `src/Application/Game/MagicaLego/MagicaLegoScriptParser.hpp`
+- `src/Application/Game/MagicaLego/MagicaLegoScriptParser.cpp`
+- `src/Application/Game/MagicaLego/MagicaLegoAIService.hpp`
+- `src/Application/Game/MagicaLego/MagicaLegoAIService.cpp`
+- `src/Application/Game/MagicaLego/MagicaLegoConstants.hpp`
+- `src/Application/Game/MagicaLego/MagicaLegoUIHelpers.hpp`
 - `assets/configs/ai_config.json`
 - `assets/scripts/*.mlscript`
