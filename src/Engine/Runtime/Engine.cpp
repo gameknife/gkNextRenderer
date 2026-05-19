@@ -1101,7 +1101,15 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         glm::vec4(renderer_->SwapChain().RenderOffset().x, renderer_->SwapChain().RenderOffset().y,
                   renderer_->SwapChain().RenderExtent().width, renderer_->SwapChain().RenderExtent().height);
 
-    ubo.SunViewProjection = scene_->GetEnvSettings().GetSunViewProjection();
+    {
+        const auto cascades = scene_->GetEnvSettings().ComputeSunCascades(
+            ubo.ViewProjectionUnJit, renderCam.NearPlane, renderCam.FarPlane);
+        for (int i = 0; i < 4; ++i)
+        {
+            ubo.SunCascadeViewProjection[i] = cascades.viewProjection[i];
+        }
+        ubo.CascadeSplits = cascades.splits;
+    }
 
     ubo.SelectedId = scene_->GetSelectedId();
 

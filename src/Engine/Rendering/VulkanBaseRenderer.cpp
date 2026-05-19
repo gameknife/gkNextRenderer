@@ -34,10 +34,12 @@
 
 #include "Engine/Options.hpp"
 #include "SoftwareModern/SoftwareModernRenderer.hpp"
+#include "SoftwareModern/SwModernNoAmbientRenderer.hpp"
 #include "SoftwareTracing/SoftwareTracingRenderer.hpp"
 #include "PathTracing/PathTracingRenderer.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
+#include "Engine/Rendering/Shadow/ShadowMapPass.hpp"
 #include <spdlog/spdlog.h>
 #include <utility>
 
@@ -784,6 +786,18 @@ namespace Vulkan
         visibilityPipeline_.reset(new PipelineCommon::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
         visibilityFrameBuffer_.reset(new FrameBuffer(swapChain_->RenderExtent(), GetStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(), visibilityPipeline_->RenderPass()));
 
+        // 太阳方向光 CSM 阴影 pass + 注册 4 个 cascade 到 Bindless
+        {
+            sunShadowPass_.reset(new Shadow::ShadowMapPass(*device_));
+            sunShadowPass_->CreateResources(GetScene());
+
+            auto* texPool = Assets::GlobalTexturePool::GetInstance();
+            for (uint32_t i = 0; i < Assets::Scene::kSunShadowCascadeCount; ++i)
+            {
+                texPool->BindShadowMap(i, GetScene().SunShadowImageView(i), GetScene().SunShadowSampler());
+            }
+        }
+
         // 逻辑Renderer
         for (auto& logicRenderer : logicRenderers_)
         {
@@ -817,6 +831,7 @@ namespace Vulkan
 
         visibilityPipeline_.reset();
         visibilityFrameBuffer_.reset();
+        sunShadowPass_.reset();
         
         screenShotImage_.reset();
         screenShotImageMemory_.reset();
@@ -1185,6 +1200,13 @@ namespace Vulkan
             
             GetStorageImage(Assets::Bindless::RT_MINIGBUFFER)->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+        }
+
+        // Sun CSM shadow map：HasSun 时绘制 4 个 cascade（depth-only）
+        if (sunShadowPass_ && GetScene().GetEnvSettings().HasSun)
+        {
+            SCOPED_GPU_TIMER("shadow pass");
+            sunShadowPass_->Draw(commandBuffer, GetScene(), imageIndex);
         }
     }
 
@@ -1564,8 +1586,7 @@ namespace Vulkan
             logicRenderers_[type] = std::make_unique<LegacyDeferred::SoftwareModernRenderer>(*this);
             break;
         case ERendererType::ERT_LegacyDeferredNoAmbient:
-            logicRenderers_[type] = std::make_unique<LegacyDeferred::SoftwareModernRenderer>(
-                *this, "assets/shaders/Core.SwModernNoAmbient.comp.slang.spv", true);
+            logicRenderers_[type] = std::make_unique<NoAmbientDeferred::Renderer>(*this);
             break;
         case ERendererType::ERT_VoxelTracing:
             logicRenderers_[type] = std::make_unique<VoxelTracing::VoxelTracingRenderer>(*this);

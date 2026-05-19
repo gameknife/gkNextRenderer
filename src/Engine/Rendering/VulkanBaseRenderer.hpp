@@ -29,6 +29,11 @@ namespace Vulkan
 		class ZeroBindCustomPushConstantPipeline;
 	}
 
+	namespace Shadow
+	{
+		class ShadowMapPass;
+	}
+
 	class RenderImage;
 	class DescriptorSetManager;
 	class Instance;
@@ -224,6 +229,7 @@ namespace Vulkan
 		
 		std::unique_ptr<PipelineCommon::GraphicsPipeline> wireframePipeline_;
 		std::unique_ptr<PipelineCommon::VisibilityPipeline> visibilityPipeline_;
+		std::unique_ptr<Shadow::ShadowMapPass> sunShadowPass_;
 		
 		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> bufferClearPipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> simpleComposePipeline_;

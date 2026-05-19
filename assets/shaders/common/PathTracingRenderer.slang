@@ -82,7 +82,7 @@ public struct FShadowMapDirectIlluminator : IDirectIlluminator
 {
     public float getShadow(float3 worldPos, float3 jit, float3 normal )
     {
-        float4 posInLightMap = mul(Camera.SunViewProjection, float4(worldPos + jit * 4.0f, 1.0f));
+        float4 posInLightMap = mul(Camera.SunCascadeViewProjection[0], float4(worldPos + jit * 4.0f, 1.0f));
 
         float3 projCoords = posInLightMap.xyz / posInLightMap.w;
         projCoords = projCoords * 0.5 + 0.5;

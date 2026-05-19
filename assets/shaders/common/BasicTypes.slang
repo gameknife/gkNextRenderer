@@ -79,7 +79,8 @@ public struct ALIGN_16 UniformBufferObject
     public float4 SunColor;
     public float4 BackGroundColor;    //not used
 
-    public float4x4 SunViewProjection;
+    public float4x4 SunCascadeViewProjection[4];
+    public float4 CascadeSplits;      // view-space positive distance at the far edge of each cascade
 
     public float Aperture;
     public float FocusDistance;

@@ -13,7 +13,7 @@
 - [x] `#00005` [FEAT] 在windows下，设置 SDL 的 Windows DPI awareness 为 unaware, 使用系统拉伸的方式适配DPI缩放  → journal/00005.md (2026-05-18)
 - [x] `#00008` [IDEA] gnb的todolist要增加维护功能，可以调换add的任务顺序。
 - [x] `#00009` [IDEA] gnb需要能够给add的task增加spec文件，写明执行的详细背景信息
-
+- [x] `#00013` [REFACTOR] 重构 SwModernNoAmbient 渲染流程：Lambert+IBL + CSM 阴影 → journal/00013.md (2026-05-20)
 
 ### 待规划
 - [ ] `#00007` [FEAT] 目前的vcpkg是固定在一个老版本的，把项目依赖升级到最新的vcpkg版本，2026.04.27。并绑定版本，解决各种编译和运行问题。

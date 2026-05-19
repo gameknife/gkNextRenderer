@@ -9,29 +9,21 @@
 
 namespace Vulkan::LegacyDeferred {
 
-SoftwareModernRenderer::SoftwareModernRenderer(Vulkan::VulkanBaseRenderer& baseRender, std::string shaderPath,
-                                               bool simpleComposeOnly) :
-	LogicRendererBase(baseRender),
-	shaderPath_(std::move(shaderPath)),
-	simpleComposeOnly_(simpleComposeOnly)
+SoftwareModernRenderer::SoftwareModernRenderer(Vulkan::VulkanBaseRenderer& baseRender) :
+	LogicRendererBase(baseRender)
 {
-	
+
 }
 
 SoftwareModernRenderer::~SoftwareModernRenderer()
 {
 	DeleteSwapChain();
 }
-	
+
 void SoftwareModernRenderer::CreateSwapChain(const VkExtent2D& extent)
 {
 	(void)extent;
-	deferredShadingPipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), shaderPath_.c_str(), GetScene()));
-	if (simpleComposeOnly_)
-	{
-		composePipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Process.ComposeSimple.comp.slang.spv", GetScene()));
-		return;
-	}
+	deferredShadingPipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Core.SwModern.comp.slang.spv", GetScene()));
 
 	accumulatePipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.ReProject.comp.slang.spv", 24));
 	composePipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Process.DenoiseJBF.comp.slang.spv", GetScene()));
@@ -78,25 +70,14 @@ void SoftwareModernRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		transitionShadingOutput(Assets::Bindless::RT_ALBEDO);
 		transitionShadingOutput(Assets::Bindless::RT_OBJEDCTID_0);
 		transitionShadingOutput(Assets::Bindless::RT_PREV_DEPTHBUFFER);
-		if (!simpleComposeOnly_)
-		{
-			transitionShadingOutput(Assets::Bindless::RT_SINGLE_SPECULAR);
-			transitionShadingOutput(Assets::Bindless::RT_NORMAL);
-			transitionShadingOutput(Assets::Bindless::RT_MOTIONVECTOR);
-			transitionShadingOutput(Assets::Bindless::RT_DIFFUSE_HITDIST);
-			transitionShadingOutput(Assets::Bindless::RT_SPECULAR_HITDIST);
-			transitionShadingOutput(Assets::Bindless::RT_SPECULAR_ALBEDO);
-			baseRender_.GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
-				VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-		}
-	}
-
-	if (simpleComposeOnly_)
-	{
-		SCOPED_GPU_TIMER("compose pass");
-		composePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
-		vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8, SwapChain().RenderExtent().height / 8, 1);
-		return;
+		transitionShadingOutput(Assets::Bindless::RT_SINGLE_SPECULAR);
+		transitionShadingOutput(Assets::Bindless::RT_NORMAL);
+		transitionShadingOutput(Assets::Bindless::RT_MOTIONVECTOR);
+		transitionShadingOutput(Assets::Bindless::RT_DIFFUSE_HITDIST);
+		transitionShadingOutput(Assets::Bindless::RT_SPECULAR_HITDIST);
+		transitionShadingOutput(Assets::Bindless::RT_SPECULAR_ALBEDO);
+		baseRender_.GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
+			VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	}
 
 	{

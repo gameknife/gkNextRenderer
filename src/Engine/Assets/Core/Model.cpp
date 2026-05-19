@@ -44,6 +44,83 @@ namespace std
 
 namespace Assets
 {
+    CascadeShadowSetup EnvironmentSetting::ComputeSunCascades(
+        const glm::mat4& cameraViewProj,
+        float cameraNear,
+        float cameraFar,
+        float shadowFar) const
+    {
+        constexpr int CASCADE_COUNT = 4;
+        constexpr float SPLIT_LAMBDA = 0.75f;   // 偏 log
+
+        const float n = std::max(cameraNear, 1e-3f);
+        const float f = std::max(std::min(shadowFar, cameraFar), n * 2.0f);
+
+        float splits[CASCADE_COUNT + 1];
+        splits[0] = n;
+        for (int i = 1; i <= CASCADE_COUNT; ++i)
+        {
+            const float p = float(i) / float(CASCADE_COUNT);
+            const float logS = n * std::pow(f / n, p);
+            const float uniS = n + (f - n) * p;
+            splits[i] = SPLIT_LAMBDA * logS + (1.0f - SPLIT_LAMBDA) * uniS;
+        }
+
+        const glm::vec3 sunDir = SunDirection();
+        const glm::vec3 lightDir = glm::normalize(-sunDir);
+        const glm::mat4 invCamVP = glm::inverse(cameraViewProj);
+
+        // 主相机视椎 8 顶点：z=0 是 Vulkan 近平面 (GLM_FORCE_DEPTH_ZERO_TO_ONE)，z=1 是远平面。
+        const glm::vec4 ndc[8] = {
+            {-1, -1, 0, 1}, {1, -1, 0, 1}, {1, 1, 0, 1}, {-1, 1, 0, 1},
+            {-1, -1, 1, 1}, {1, -1, 1, 1}, {1, 1, 1, 1}, {-1, 1, 1, 1},
+        };
+        glm::vec3 worldFull[8];
+        for (int i = 0; i < 8; ++i)
+        {
+            glm::vec4 w = invCamVP * ndc[i];
+            worldFull[i] = glm::vec3(w) / w.w;
+        }
+
+        CascadeShadowSetup result{};
+        for (int c = 0; c < CASCADE_COUNT; ++c)
+        {
+            const float zNear = splits[c];
+            const float zFar = splits[c + 1];
+            const float denom = std::max(cameraFar - cameraNear, 1e-3f);
+            const float tN = (zNear - cameraNear) / denom;
+            const float tF = (zFar - cameraNear) / denom;
+
+            glm::vec3 corners[8];
+            for (int i = 0; i < 4; ++i)
+            {
+                const glm::vec3 ray = worldFull[i + 4] - worldFull[i];
+                corners[i] = worldFull[i] + ray * tN;
+                corners[i + 4] = worldFull[i] + ray * tF;
+            }
+
+            glm::vec3 center(0.0f);
+            for (int i = 0; i < 8; ++i) center += corners[i];
+            center /= 8.0f;
+
+            float radius = 0.0f;
+            for (int i = 0; i < 8; ++i)
+                radius = std::max(radius, glm::length(corners[i] - center));
+            radius = std::ceil(radius * 16.0f) / 16.0f;
+
+            const glm::vec3 lightUp = std::abs(lightDir.y) > 0.99f ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
+            const float backOff = radius + 50.0f;       // 让光源相机后挪一段，吃到背面阻挡物
+            const glm::vec3 lightPos = center - lightDir * backOff;
+            const glm::mat4 lightView = glm::lookAt(lightPos, center, lightUp);
+            const glm::mat4 lightProj = glm::ortho(-radius, radius, -radius, radius, 0.0f, 2.0f * backOff);
+
+            result.viewProjection[c] = lightProj * lightView;
+            result.splits[c] = zFar;
+        }
+
+        return result;
+    }
+
     template <typename T>
     T AnimationChannel<T>::Sample(float time)
     {

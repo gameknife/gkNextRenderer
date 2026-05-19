@@ -4,6 +4,8 @@
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include <glm/ext.hpp>
 
+#include <array>
+
 struct FNextPhysicsBody;
 
 namespace Assets
@@ -17,6 +19,12 @@ namespace Assets
         float FocalDistance;
         float NearPlane = 0.2f;
         float FarPlane = 2000.0f;
+    };
+
+    struct CascadeShadowSetup
+    {
+        std::array<glm::mat4, 4> viewProjection{};
+        glm::vec4 splits{};   // view-space positive distance at the far edge of each cascade
     };
 
     struct EnvironmentSetting
@@ -44,6 +52,7 @@ namespace Assets
             return glm::normalize(glm::vec3( sinf( SunRotation * glm::pi<float>() ), 0.75f, cosf(SunRotation * glm::pi<float>()) ));
         }
 
+        // Deprecated: 旧 CPU shadowmap 路径用。新的 GPU CSM 走 ComputeSunCascades。
         glm::mat4 GetSunViewProjection() const
         {
             // 获取阳光方向并规范化
@@ -69,6 +78,14 @@ namespace Assets
             // 返回组合的视图投影矩阵
             return lightProj * lightView;
         }
+
+        // GPU CSM：以主相机视椎为根据切 4 段，对每段计算光源 view-proj。
+        // cameraViewProj 应为未抖动的主相机 view*proj；shadowFar 控制 cascade 覆盖深度。
+        CascadeShadowSetup ComputeSunCascades(
+            const glm::mat4& cameraViewProj,
+            float cameraNear,
+            float cameraFar,
+            float shadowFar = 100.0f) const;
         
         float ControlSpeed;
         bool GammaCorrection;
