@@ -1,0 +1,43 @@
+#include "ReflectionRegistry.h"
+#include "GlmTypeSupport.h"
+#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Components/PhysicsComponent.h"
+#include "Engine/Runtime/Components/SkinnedMeshComponent.h"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Assets/Core/Scene.hpp"
+#include "Engine/Assets/Core/Node.h"
+
+namespace Reflection
+{
+    static bool sReflectionInitialized = false;
+
+    void RegisterAllReflection()
+    {
+        if (sReflectionInitialized)
+        {
+            return;
+        }
+        
+        // Register GLM types first
+        RegisterGlmTypes();
+        
+        // Register container types for array reflection
+        RegisterContainerTypes();
+        
+        // Register all component types
+        Runtime::RenderComponent::RegisterReflection();
+        Runtime::PhysicsComponent::RegisterReflection();
+        Runtime::SkinnedMeshComponent::RegisterReflection();
+        Assets::Node::RegisterReflection();
+        
+        NextEngine::RegisterReflection();
+        Assets::Scene::RegisterReflection();
+        
+        sReflectionInitialized = true;
+    }
+
+    bool IsReflectionInitialized()
+    {
+        return sReflectionInitialized;
+    }
+}

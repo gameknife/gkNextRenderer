@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
-#include "Assets/Loaders/FLDrawConfig.h"
+#include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Assets/Loaders/FLDrawConfig.h"
 
 #include <algorithm>
 #include <cctype>

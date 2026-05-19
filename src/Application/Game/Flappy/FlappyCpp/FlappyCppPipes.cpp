@@ -1,7 +1,7 @@
-#include "Application/Game/Flappy/FlappyCpp/FlappyCppPipes.hpp"
+#include "FlappyCpp/FlappyCppPipes.hpp"
 
-#include "Assets/Core/Node.h"
-#include "Runtime/Scene/NodeUtils.h"
+#include "Engine/Assets/Core/Node.h"
+#include "Engine/Runtime/Scene/NodeUtils.h"
 
 namespace
 {

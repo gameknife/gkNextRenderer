@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
-#include "Application/Editor/gkNextEditor/AI/EditorScriptExecutor.hpp"
-#include "Runtime/Subsystems/AIService.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
+#include "AI/EditorScriptExecutor.hpp"
+#include "Engine/Runtime/Subsystems/AIService.hpp"
 
 #include <atomic>
 #include <cstdint>

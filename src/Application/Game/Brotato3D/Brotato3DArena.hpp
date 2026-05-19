@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
-#include "Assets/Core/Model.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Assets/Core/Model.hpp"
 
 namespace Assets
 {

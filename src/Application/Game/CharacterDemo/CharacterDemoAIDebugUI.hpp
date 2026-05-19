@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
-#include "NextGameplay/AI/NavGrid.h"
-#include "NextGameplay/Character/CharacterActor.h"
-#include "NextGameplay/Components/AIAgentComponent.h"
+#include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/NextGameplay/AI/NavGrid.h"
+#include "Engine/NextGameplay/Character/CharacterActor.h"
+#include "Engine/NextGameplay/Components/AIAgentComponent.h"
 
 namespace Assets
 {

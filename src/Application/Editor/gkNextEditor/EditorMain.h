@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Application/Editor/gkNextEditor/EditorActionDispatcher.hpp"
-#include "Runtime/Engine.hpp"
-#include "Runtime/Editor/GizmoController.hpp"
-#include "Runtime/Camera/ModelViewController.hpp"
+#include "EditorActionDispatcher.hpp"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Editor/GizmoController.hpp"
+#include "Engine/Runtime/Camera/ModelViewController.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>

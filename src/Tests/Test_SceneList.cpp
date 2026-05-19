@@ -1,6 +1,6 @@
 #include <catch2/catch_all.hpp>
 
-#include "Runtime/Scene/SceneList.hpp"
+#include "Engine/Runtime/Scene/SceneList.hpp"
 
 TEST_CASE("SceneList recognizes supported scene extensions", "[Unit][SceneList]")
 {

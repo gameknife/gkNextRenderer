@@ -1,5 +1,5 @@
-#include "Application/Editor/gkNextEditor/Core/RecentScenes.hpp"
-#include "Application/Editor/gkNextEditor/Core/EditorUiState.hpp"
+#include "Core/RecentScenes.hpp"
+#include "Core/EditorUiState.hpp"
 
 #include <spdlog/spdlog.h>
 #include <fstream>

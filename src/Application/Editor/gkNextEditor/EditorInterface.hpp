@@ -1,8 +1,8 @@
 #pragma once
 #include <imgui.h>
 
-#include "Application/Editor/gkNextEditor/Core/EditorUiState.hpp"
-#include "Vulkan/DebugUtilities.hpp"
+#include "Core/EditorUiState.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
 
 #include <memory>
 
@@ -11,7 +11,7 @@ struct EditorContext;
 class EditorInterface final
 {
 public:
-    VULKAN_NON_COPIABLE(EditorInterface)
+    GK_NON_COPIABLE(EditorInterface)
 
     EditorInterface(class EditorGameInstance* editor);
     ~EditorInterface();

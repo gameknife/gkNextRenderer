@@ -5,11 +5,11 @@
 #include "Brotato3DAudio.hpp"
 #include "Brotato3DAssetPaths.hpp"
 #include "Brotato3DGameInstance.hpp"
-#include "Runtime/Editor/ImGuiPainter.h"
-#include "Runtime/Editor/ImGuiScaling.h"
-#include "Runtime/Editor/UserInterface.hpp"
-#include "Runtime/Subsystems/NextLocalization.h"
-#include "Runtime/Utilities/NextEngineHelper.h"
+#include "Engine/Runtime/Editor/ImGuiPainter.h"
+#include "Engine/Runtime/Editor/ImGuiScaling.h"
+#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Subsystems/NextLocalization.h"
+#include "Engine/Runtime/Utilities/NextEngineHelper.h"
 
 namespace
 {

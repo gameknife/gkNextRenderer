@@ -1,8 +1,8 @@
 #include "Brotato3DGameInstance.hpp"
 #include "Brotato3DCommon.hpp"
 
-#include "Assets/Core/Node.h"
-#include "Runtime/Components/RenderComponent.h"
+#include "Engine/Assets/Core/Node.h"
+#include "Engine/Runtime/Components/RenderComponent.h"
 #include <spdlog/spdlog.h>
 
 #include "Brotato3DAudio.hpp"

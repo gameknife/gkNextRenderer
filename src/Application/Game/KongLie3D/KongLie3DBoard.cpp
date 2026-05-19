@@ -1,7 +1,7 @@
 #include "KongLie3DBoard.hpp"
 
-#include "Assets/Loaders/FProcModel.h"
-#include "Runtime/Scene/SceneBuilder.h"
+#include "Engine/Assets/Loaders/FProcModel.h"
+#include "Engine/Runtime/Scene/SceneBuilder.h"
 
 namespace
 {

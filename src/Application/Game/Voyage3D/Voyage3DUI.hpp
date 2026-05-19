@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
 
 class Voyage3DGameInstance;
 

@@ -1,20 +1,20 @@
-#include "Application/Editor/gkNextEditor/EditorUi.hpp"
+#include "EditorUi.hpp"
 
-#include "Application/Editor/gkNextEditor/EditorDragDrop.hpp"
+#include "EditorDragDrop.hpp"
 
-#include "Assets/Core/Node.h"
-#include "Assets/Core/Scene.hpp"
-#include "Application/Editor/gkNextEditor/EditorActionDispatcher.hpp"
-#include "Runtime/Components/RenderComponent.h"
-#include "Runtime/Editor/ProfessionalUI.hpp"
-#include "Runtime/Editor/GizmoController.hpp"
-#include "Runtime/Engine.hpp"
-#include "Runtime/Utilities/NextEngineHelper.h"
+#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Scene.hpp"
+#include "EditorActionDispatcher.hpp"
+#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Editor/ProfessionalUI.hpp"
+#include "Engine/Runtime/Editor/GizmoController.hpp"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Utilities/NextEngineHelper.h"
 #include "ThirdParty/ImGuizmo/ImGuizmo.h"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
-#include "Utilities/ImGui.hpp"
-#include "Utilities/Math.hpp"
-#include "Vulkan/SyncAndTiming.hpp"
+#include "Engine/Utilities/ImGui.hpp"
+#include "Engine/Utilities/Math.hpp"
+#include "Engine/Vulkan/SyncAndTiming.hpp"
 
 #include <string>
 

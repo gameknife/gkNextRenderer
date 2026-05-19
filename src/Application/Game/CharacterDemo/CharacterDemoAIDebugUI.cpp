@@ -3,8 +3,8 @@
 #include <imgui.h>
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "Assets/Core/Model.hpp"
-#include "Runtime/Engine.hpp"
+#include "Engine/Assets/Core/Model.hpp"
+#include "Engine/Runtime/Engine.hpp"
 
 namespace CharacterDemoAIDebugUI
 {

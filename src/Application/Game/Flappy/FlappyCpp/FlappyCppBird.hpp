@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Application/Game/Flappy/FlappyCommon.hpp"
+#include "FlappyCommon.hpp"
 
 namespace Assets
 {

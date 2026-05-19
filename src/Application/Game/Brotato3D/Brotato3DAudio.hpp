@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
 #include "Brotato3DAssetPaths.hpp"
-#include "Runtime/Engine.hpp"
-#include "Runtime/Subsystems/NextAudio.h"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Subsystems/NextAudio.h"
 
 #include <spdlog/spdlog.h>
 

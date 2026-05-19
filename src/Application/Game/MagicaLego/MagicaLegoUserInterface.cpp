@@ -8,14 +8,14 @@
 #include "MagicaLegoStyle.hpp"
 #include "MagicaLegoUIHelpers.hpp"
 
-#include "Runtime/Editor/UserInterface.hpp"
-#include "Runtime/Editor/FontLoader.h"
-#include "Runtime/Platform/PlatformCommon.h"
-#include "Runtime/Subsystems/VoiceInputService.hpp"
+#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Editor/FontLoader.h"
+#include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Subsystems/VoiceInputService.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
-#include "Utilities/FileHelper.hpp"
-#include "Utilities/ImGui.hpp"
-#include "Utilities/Localization.hpp"
+#include "Engine/Utilities/FileHelper.hpp"
+#include "Engine/Utilities/ImGui.hpp"
+#include "Engine/Utilities/Localization.hpp"
 
 #include <fmt/chrono.h>
 #include <imgui_internal.h>

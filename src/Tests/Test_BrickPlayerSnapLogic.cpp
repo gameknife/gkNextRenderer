@@ -1,4 +1,4 @@
-#include "Common/CoreMinimal.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
-#include "Runtime/Engine.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Runtime/Engine.hpp"
 #include "Brotato3DArena.hpp"
 #include "Brotato3DDataLoader.hpp"
 #include "Brotato3DDebris.hpp"

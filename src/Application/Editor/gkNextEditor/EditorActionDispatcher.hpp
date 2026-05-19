@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
 
-#include "Application/Editor/gkNextEditor/EditorContext.hpp"
+#include "EditorContext.hpp"
 
 #include <functional>
 #include <string_view>

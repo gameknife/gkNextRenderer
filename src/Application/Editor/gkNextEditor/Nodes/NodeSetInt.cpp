@@ -1,7 +1,7 @@
 #include "NodeSetInt.hpp"
 
-#include "Application/Editor/gkNextEditor/EditorContext.hpp"
-#include "Runtime/Editor/UserInterface.hpp"
+#include "EditorContext.hpp"
+#include "Engine/Runtime/Editor/UserInterface.hpp"
 
 namespace Nodes
 {

@@ -1,7 +1,7 @@
 #include <catch2/catch_all.hpp>
 
-#include "Assets/Core/Model.hpp"
-#include "Runtime/Camera/ModelViewController.hpp"
+#include "Engine/Assets/Core/Model.hpp"
+#include "Engine/Runtime/Camera/ModelViewController.hpp"
 
 TEST_CASE("Camera focus moves closer for small targets", "[Unit][Camera]")
 {

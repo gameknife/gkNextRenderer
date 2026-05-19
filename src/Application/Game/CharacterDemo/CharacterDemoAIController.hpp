@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
 #include "CharacterDemoConfig.hpp"
-#include "NextGameplay/AI/NavGrid.h"
-#include "NextGameplay/Character/CharacterActor.h"
-#include "NextGameplay/Components/AIAgentComponent.h"
+#include "Engine/NextGameplay/AI/NavGrid.h"
+#include "Engine/NextGameplay/Character/CharacterActor.h"
+#include "Engine/NextGameplay/Components/AIAgentComponent.h"
 
 class CharacterDemoAIController
 {

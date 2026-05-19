@@ -1,7 +1,7 @@
 #include "BrickPlayerLDrawShadow.hpp"
 
-#include "Assets/Loaders/FLDrawConnectivity.h"
-#include "Utilities/FileHelper.hpp"
+#include "Engine/Assets/Loaders/FLDrawConnectivity.h"
+#include "Engine/Utilities/FileHelper.hpp"
 
 #include <spdlog/spdlog.h>
 

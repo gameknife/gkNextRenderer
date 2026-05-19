@@ -1,18 +1,18 @@
 #include "EditorMain.h"
-#include <Runtime/Platform/PlatformCommon.h>
-#include "Assets/Core/Node.h"
-#include "Assets/GPU/Texture.hpp"
+#include <Engine/Runtime/Platform/PlatformCommon.h>
+#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/GPU/Texture.hpp"
 #include "EditorInterface.hpp"
-#include "Runtime/Components/RenderComponent.h"
-#include "Runtime/Engine.hpp"
-#include "Runtime/Config/CVarSystem.hpp"
-#include "Runtime/Utilities/NextEngineHelper.h"
+#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Config/CVarSystem.hpp"
+#include "Engine/Runtime/Utilities/NextEngineHelper.h"
 
-#include "Application/Editor/gkNextEditor/EditorActionDispatcher.hpp"
-#include "Application/Editor/gkNextEditor/EditorContext.hpp"
-#include "Application/Editor/gkNextEditor/Core/RecentScenes.hpp"
-#include "Runtime/Command/DeleteNodesCommand.hpp"
-#include "Runtime/Command/DuplicateNodesCommand.hpp"
+#include "EditorActionDispatcher.hpp"
+#include "EditorContext.hpp"
+#include "Core/RecentScenes.hpp"
+#include "Engine/Runtime/Command/DeleteNodesCommand.hpp"
+#include "Engine/Runtime/Command/DuplicateNodesCommand.hpp"
 
 #include <spdlog/spdlog.h>
 

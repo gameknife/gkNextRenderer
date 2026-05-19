@@ -1,7 +1,7 @@
 #include "BenchMark.hpp"
-#include "Common/CoreMinimal.hpp"
-#include "Options.hpp"
-#include "Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Options.hpp"
+#include "Engine/Rendering/VulkanBaseRenderer.hpp"
 
 #include <nlohmann/json.hpp>
 #include "cpp-base64/base64.cpp"
@@ -14,10 +14,10 @@ using json = nlohmann::json;
 #include <filesystem>
 #include <math.h>
 
-#include "Runtime/Engine.hpp"
-#include "Runtime/ScreenShot.hpp"
-#include "Utilities/Exception.hpp"
-#include "Vulkan/Device.hpp"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/ScreenShot.hpp"
+#include "Engine/Utilities/Exception.hpp"
+#include "Engine/Vulkan/Device.hpp"
 
 // #include <spdlog/spdlog.h>
 

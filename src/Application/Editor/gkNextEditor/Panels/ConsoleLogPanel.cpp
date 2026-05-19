@@ -1,6 +1,6 @@
-#include "Application/Editor/gkNextEditor/EditorUi.hpp"
+#include "EditorUi.hpp"
 
-#include "Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Editor/UserInterface.hpp"
 
 #include <imgui.h>
 

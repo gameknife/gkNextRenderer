@@ -1,12 +1,12 @@
-#include "Application/Game/Flappy/FlappyCpp/FlappyCppGameInstance.hpp"
+#include "FlappyCpp/FlappyCppGameInstance.hpp"
 
-#include "Application/Game/Flappy/FlappyConfig.hpp"
-#include "Assets/Core/Node.h"
-#include "Assets/Data/Material.hpp"
-#include "Assets/Loaders/FProcModel.h"
-#include "Runtime/Scene/SceneBuilder.h"
-#include "Runtime/Scene/NodeUtils.h"
-#include "Runtime/Subsystems/NextAudio.h"
+#include "FlappyConfig.hpp"
+#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Data/Material.hpp"
+#include "Engine/Assets/Loaders/FProcModel.h"
+#include "Engine/Runtime/Scene/SceneBuilder.h"
+#include "Engine/Runtime/Scene/NodeUtils.h"
+#include "Engine/Runtime/Subsystems/NextAudio.h"
 
 #include <glm/ext.hpp>
 #include <imgui.h>

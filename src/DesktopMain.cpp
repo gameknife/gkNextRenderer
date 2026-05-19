@@ -1,8 +1,8 @@
-#include "Utilities/Exception.hpp"
-#include "Options.hpp"
-#include "Runtime/Engine.hpp"
-#include "Runtime/Scene/GltfTestRunner.hpp"
-#include "Runtime/Platform/PlatformCommon.h"
+#include "Engine/Utilities/Exception.hpp"
+#include "Engine/Options.hpp"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Scene/GltfTestRunner.hpp"
+#include "Engine/Runtime/Platform/PlatformCommon.h"
 
 #if WIN32
 #include "ThirdParty/renderdoc/renderdoc_app.h"

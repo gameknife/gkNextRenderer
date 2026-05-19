@@ -1,13 +1,13 @@
-#include "Application/Editor/gkNextEditor/AI/EditorAIService.hpp"
+#include "AI/EditorAIService.hpp"
 
-#include "Assets/Core/Node.h"
-#include "Assets/Core/Scene.hpp"
-#include "Application/Editor/gkNextEditor/EditorContext.hpp"
-#include "Runtime/Engine.hpp"
-#include "Runtime/Reflection/PropertyAccessor.h"
-#include "Runtime/Scene/SceneList.hpp"
-#include "Runtime/Subsystems/QuickJSEngine.hpp"
-#include "Utilities/FileHelper.hpp"
+#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Scene.hpp"
+#include "EditorContext.hpp"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Reflection/PropertyAccessor.h"
+#include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Engine/Runtime/Subsystems/QuickJSEngine.hpp"
+#include "Engine/Utilities/FileHelper.hpp"
 
 #include <algorithm>
 #include <cctype>

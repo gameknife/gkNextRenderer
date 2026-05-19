@@ -1,15 +1,15 @@
-#include "Application/Editor/gkNextEditor/EditorUi.hpp"
+#include "EditorUi.hpp"
 
-#include "Application/Editor/gkNextEditor/EditorActionDispatcher.hpp"
-#include "Application/Editor/gkNextEditor/EditorUtils.h"
+#include "EditorActionDispatcher.hpp"
+#include "EditorUtils.h"
 
-#include "Assets/Core/Node.h"
-#include "Assets/Core/Scene.hpp"
-#include "Runtime/Components/RenderComponent.h"
-#include "Runtime/Command/DeleteNodesCommand.hpp"
-#include "Runtime/Command/RenameNodeCommand.hpp"
-#include "Runtime/Engine.hpp"
-#include "Runtime/Editor/ProfessionalUI.hpp"
+#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Core/Scene.hpp"
+#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Command/DeleteNodesCommand.hpp"
+#include "Engine/Runtime/Command/RenameNodeCommand.hpp"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Editor/ProfessionalUI.hpp"
 
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include <imgui_stdlib.h>

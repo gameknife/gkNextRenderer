@@ -1,7 +1,7 @@
 #include <catch2/catch_all.hpp>
 #include <fmt/format.h>
 
-#include "Runtime/Config/CVarSystem.hpp"
+#include "Engine/Runtime/Config/CVarSystem.hpp"
 
 TEST_CASE("CVar complete supports case-insensitive prefix and substring lookup", "[Unit][CVar]")
 {

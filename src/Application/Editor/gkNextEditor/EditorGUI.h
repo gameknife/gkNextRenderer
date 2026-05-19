@@ -3,7 +3,7 @@
 // Compatibility shim: old code used Editor::GUI.
 // New code should prefer Editor::EditorUiState and free Draw* functions in Application/Editor/gkNextEditor/EditorUi.hpp.
 
-#include "Application/Editor/gkNextEditor/Core/EditorUiState.hpp"
+#include "Core/EditorUiState.hpp"
 
 namespace Editor
 {

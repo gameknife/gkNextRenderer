@@ -1,9 +1,9 @@
 #include <catch2/catch_all.hpp>
 
-#include "Assets/Core/Node.h"
-#include "Assets/Data/Material.hpp"
-#include "Assets/Loaders/FLDrawLoader.h"
-#include "Runtime/Components/RenderComponent.h"
+#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Data/Material.hpp"
+#include "Engine/Assets/Loaders/FLDrawLoader.h"
+#include "Engine/Runtime/Components/RenderComponent.h"
 
 #include <chrono>
 #include <filesystem>

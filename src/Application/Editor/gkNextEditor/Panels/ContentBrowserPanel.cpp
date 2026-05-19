@@ -1,15 +1,15 @@
-#include "Application/Editor/gkNextEditor/EditorUi.hpp"
+#include "EditorUi.hpp"
 
-#include "Application/Editor/gkNextEditor/EditorDragDrop.hpp"
+#include "EditorDragDrop.hpp"
 
-#include "Assets/Core/Scene.hpp"
-#include "Assets/GPU/TextureImage.hpp"
-#include "Application/Editor/gkNextEditor/EditorActionDispatcher.hpp"
-#include "Runtime/Scene/SceneList.hpp"
-#include "Runtime/Editor/UserInterface.hpp"
-#include "Runtime/Editor/ProfessionalUI.hpp"
+#include "Engine/Assets/Core/Scene.hpp"
+#include "Engine/Assets/GPU/TextureImage.hpp"
+#include "EditorActionDispatcher.hpp"
+#include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Editor/ProfessionalUI.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
-#include "Utilities/FileHelper.hpp"
+#include "Engine/Utilities/FileHelper.hpp"
 
 #include <algorithm>
 #include <array>

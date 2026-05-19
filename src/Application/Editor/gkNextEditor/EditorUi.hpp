@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
 
-#include "Application/Editor/gkNextEditor/Core/EditorUiState.hpp"
-#include "Application/Editor/gkNextEditor/EditorContext.hpp"
+#include "Core/EditorUiState.hpp"
+#include "EditorContext.hpp"
 
 #include <imgui.h>
 

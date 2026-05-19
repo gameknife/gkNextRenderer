@@ -1,9 +1,9 @@
-#include "Application/Editor/gkNextEditor/EditorUi.hpp"
+#include "EditorUi.hpp"
 
-#include "Application/Editor/gkNextEditor/AI/EditorAIService.hpp"
-#include "Runtime/Engine.hpp"
-#include "Runtime/Subsystems/AIService.hpp"
-#include "Runtime/Subsystems/VoiceInputService.hpp"
+#include "AI/EditorAIService.hpp"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Subsystems/AIService.hpp"
+#include "Engine/Runtime/Subsystems/VoiceInputService.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
 #include <algorithm>
