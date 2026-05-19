@@ -185,12 +185,13 @@ func (j *Job) unsubscribe(ch chan JobEvent) {
 // JobSpec describes how to spawn a subprocess. WorkDir, Env, and forcing of
 // color output are managed centrally so build/run/test all behave the same.
 type JobSpec struct {
-	Kind    JobKind
-	Target  string
-	Name    string // executable
-	Args    []string
-	WorkDir string
-	Env     []string // extra env entries, appended to os.Environ()
+	Kind       JobKind
+	Target     string
+	Name       string // executable
+	Args       []string
+	WorkDir    string
+	Env        []string // extra env entries, appended to os.Environ()
+	AfterStart func(*exec.Cmd)
 }
 
 // JobManager owns the active and historical jobs. Per kind only one job is
@@ -232,6 +233,9 @@ func (m *JobManager) Start(spec JobSpec) (*Job, error) {
 	if err := cmd.Start(); err != nil {
 		cancel()
 		return nil, err
+	}
+	if spec.AfterStart != nil {
+		go spec.AfterStart(cmd)
 	}
 
 	job := &Job{

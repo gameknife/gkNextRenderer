@@ -33,8 +33,12 @@ namespace Vulkan
 		DeviceMemory(
 			const Device& device,
 			const Buffer& buffer,
+			VkMemoryPropertyFlags propertyFlags);
+		DeviceMemory(
+			const Device& device,
+			const Buffer& buffer,
 			VkMemoryPropertyFlags propertyFlags,
-			const BufferAllocationOptions& options = {});
+			const BufferAllocationOptions& options);
 		DeviceMemory(const Device& device, const Image& image, VkMemoryPropertyFlags propertyFlags, bool external = false, bool dedicated = false);
 		DeviceMemory(DeviceMemory&& other) noexcept;
 		~DeviceMemory();

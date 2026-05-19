@@ -808,12 +808,13 @@ func (s *Server) runJobSpec(target string, extraArgs []string) (JobSpec, error) 
 	binDir := platform.BinDir(s.opts.RepoRoot, s.opts.Preset)
 	exe := platform.ExecutablePath(binDir, target)
 	return JobSpec{
-		Kind:    JobRun,
-		Target:  target,
-		Name:    exe,
-		Args:    extraArgs,
-		WorkDir: filepath.Dir(exe),
-		Env:     []string{"FORCE_COLOR=1"},
+		Kind:       JobRun,
+		Target:     target,
+		Name:       exe,
+		Args:       extraArgs,
+		WorkDir:    filepath.Dir(exe),
+		Env:        []string{"FORCE_COLOR=1"},
+		AfterStart: runActivationHook,
 	}, nil
 }
 

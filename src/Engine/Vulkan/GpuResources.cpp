@@ -332,6 +332,12 @@ Buffer::~Buffer()
 }
 
 DeviceMemory Buffer::AllocateMemory(
+	const VkMemoryPropertyFlags propertyFlags)
+{
+	return DeviceMemory(device_, *this, propertyFlags);
+}
+
+DeviceMemory Buffer::AllocateMemory(
 	const VkMemoryPropertyFlags propertyFlags,
 	const DeviceMemory::BufferAllocationOptions& options)
 {
