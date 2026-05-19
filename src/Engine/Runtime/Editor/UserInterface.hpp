@@ -210,10 +210,12 @@ private:
 	std::unordered_map<std::string, TimingHistory> cpuTimeHistory_;
 
 	static constexpr int kOverlaySparklineSampleCount = 64;
+	static constexpr int kOverlaySparklineSampleStride = 2;
 	std::array<float, kOverlaySparklineSampleCount> frameRateSamples_{};
 	std::array<float, kOverlaySparklineSampleCount> frameTimeSamples_{};
 	int overlaySampleCursor_ = 0;
 	int overlaySampleFilled_ = 0;
+	int overlaySampleStrideCounter_ = 0;
 
 	NextEngine* engine_;
 };
