@@ -5,6 +5,9 @@
 #include <string>
 #include <vector>
 
+namespace Runtime::Config
+{
+
 class Options final
 {
 public:
@@ -59,4 +62,6 @@ public:
 	std::string TestGltfFilter{};
 };
 
-extern Options* GOption;
+}
+
+extern Runtime::Config::Options* GOption;

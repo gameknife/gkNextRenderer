@@ -14,7 +14,7 @@
 #include "avif/avif.h"
 #endif
 
-namespace ScreenShot
+namespace Runtime::ScreenShot
 {
     void SaveSwapChainToFileFast(Vulkan::VulkanBaseRenderer* renderer, const std::string& filePathWithoutExtension, int inX, int inY, int inWidth, int inHeight)
     {
@@ -52,7 +52,7 @@ namespace ScreenShot
         uint8_t* mappedData = (uint8_t*)malloc(rawDataBytes);
         memcpy(mappedData, mappedGPUData, rawDataBytes);
         vkMemory->Unmap();
-        TaskCoordinator::GetInstance()->AddTask([=](ResTask& task)->void
+        Tasks::TaskCoordinator::GetInstance()->AddTask([=](Tasks::ResTask& task)->void
         {
             uint8_t* dataview = (uint8_t*)malloc(dataBytes);
             {
@@ -91,7 +91,7 @@ namespace ScreenShot
             free(dataview);
             free(mappedData);
         },
-        [](ResTask& task)
+        [](Tasks::ResTask& task)
         {
 
         },1);

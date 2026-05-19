@@ -1381,7 +1381,7 @@ namespace Vulkan
 
         bool useDLSSRR = SupportDLSSRR() && settings.DLSSRR;
         
-        // 1. DLSS Options
+        // 1. DLSS Runtime::Config::Options
         if (useDLSSRR)
         {
             sl::DLSSDOptions dlssOptions;

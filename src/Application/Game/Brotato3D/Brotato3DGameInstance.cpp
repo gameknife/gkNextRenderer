@@ -33,12 +33,12 @@ namespace
     }
 }
 
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
 {
     return std::make_unique<Brotato3DGameInstance>(config, options, engine);
 }
 
-Brotato3DGameInstance::Brotato3DGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) :
+Brotato3DGameInstance::Brotato3DGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine) :
     NextGameInstanceBase(config, options, engine)
 {
     ConfigureWindow(config, options, "Brotato3D", 1920, 1080, true);
@@ -112,7 +112,7 @@ void Brotato3DGameInstance::OnInitUI()
             displayIncludesChinese = true;
         }
 
-        ImFont* uiFont = FontLoader::Load(FontLoader::FFontRequest{
+        ImFont* uiFont = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
             .filePath = displayFont,
             .pixelSize = 16.0f,
             .includeChineseFull = displayIncludesChinese,
@@ -121,7 +121,7 @@ void Brotato3DGameInstance::OnInitUI()
 
         const bool hasPlaceholderBigFont = Utilities::FileHelper::IsAssetAvailable(placeholderBigFont);
         const std::string bigFontPath = hasPlaceholderBigFont ? placeholderBigFont : displayFont;
-        bigFont_ = FontLoader::Load(FontLoader::FFontRequest{
+        bigFont_ = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
             .filePath = bigFontPath,
             .pixelSize = 32.0f,
             .includeChineseFull = !hasPlaceholderBigFont && displayIncludesChinese,

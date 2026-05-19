@@ -10,6 +10,9 @@
 #include <string>
 #include <vector>
 
+namespace Runtime::Command
+{
+
 /**
  * Manages the undo/redo stack for commands.
  * Provides functionality for executing, undoing, and redoing commands.
@@ -123,3 +126,5 @@ private:
     std::vector<CommandPtr> groupCommands_;
     std::string groupDescription_;
 };
+
+}

@@ -116,7 +116,7 @@ namespace
                         const float g = random() * random();
                         const float r = random() * random();
                         uint32_t matId = CreateMaterial(materials, Material::Lambertian(vec3(r,g,b)));
-                        newNode = SceneBuilder::CreateRenderNode(name, center, vec3(1, 1, 1),
+                        newNode = Assets::SceneBuilder::CreateRenderNode(name, center, vec3(1, 1, 1),
                                                                  static_cast<uint32_t>(nodes.size()), meshIdx, matId);
                     }
                     else if (chooseMat < 0.9f) // Metal
@@ -126,14 +126,14 @@ namespace
                         const float g = 0.5f * (1 + random());
                         const float r = 0.5f * (1 + random());
                         uint32_t matId = CreateMaterial(materials, Material::Metallic(vec3(r,g,b), fuzziness));
-                        newNode = SceneBuilder::CreateRenderNode(name, center, vec3(1, 1, 1),
+                        newNode = Assets::SceneBuilder::CreateRenderNode(name, center, vec3(1, 1, 1),
                                                                  static_cast<uint32_t>(nodes.size()), meshIdx, matId);
                     }
                     else // Glass
                     {
                         const float fuzziness = 0.5f * random();
                         uint32_t matId = CreateMaterial(materials, Material::Dielectric(1.5f, fuzziness));
-                        newNode = SceneBuilder::CreateRenderNode(name, center, vec3(1, 1, 1),
+                        newNode = Assets::SceneBuilder::CreateRenderNode(name, center, vec3(1, 1, 1),
                                                                  static_cast<uint32_t>(nodes.size()), meshIdx, matId);
                     }
                     
@@ -197,7 +197,7 @@ namespace
         materials.push_back({Material::Lambertian(vec3(0.4f, 0.4f, 0.4f))});
         models.push_back(Assets::FProcModel::CreateBox(vec3(-1000, -0.5, -1000), vec3(1000, 0, 1000)));
         {
-            auto newNode = SceneBuilder::CreateRenderNode(Utilities::NameHelper::RandomName(6), vec3(0, 0, 0),
+            auto newNode = Assets::SceneBuilder::CreateRenderNode(Utilities::NameHelper::RandomName(6), vec3(0, 0, 0),
                                                           vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()), 0,
                                                           prevMatId + 0);
             nodes.push_back(newNode);
@@ -212,7 +212,7 @@ namespace
         uint32_t modelIdx = static_cast<uint32_t>(models.size() - 1);
         
         {
-            auto newNode = SceneBuilder::CreateRenderNode(Utilities::NameHelper::RandomName(6), vec3(0, 1, 0),
+            auto newNode = Assets::SceneBuilder::CreateRenderNode(Utilities::NameHelper::RandomName(6), vec3(0, 1, 0),
                                                           vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()),
                                                           modelIdx, matIdx0);
             
@@ -225,7 +225,7 @@ namespace
         }
         
         {
-            auto newNode = SceneBuilder::CreateRenderNode(Utilities::NameHelper::RandomName(6), vec3(-4, 1, 0),
+            auto newNode = Assets::SceneBuilder::CreateRenderNode(Utilities::NameHelper::RandomName(6), vec3(-4, 1, 0),
                                                           vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()),
                                                           modelIdx, matIdx1);
             
@@ -238,7 +238,7 @@ namespace
         }
         
         {
-            auto newNode = SceneBuilder::CreateRenderNode(Utilities::NameHelper::RandomName(6), vec3(4, 1, 0),
+            auto newNode = Assets::SceneBuilder::CreateRenderNode(Utilities::NameHelper::RandomName(6), vec3(4, 1, 0),
                                                           vec3(1, 1, 1), static_cast<uint32_t>(nodes.size()),
                                                           modelIdx, matIdx2);
 
@@ -273,7 +273,7 @@ namespace
 
         int cboxModel = Assets::FProcModel::CreateCornellBox(5.55f, models, materials, lights);
         {
-            auto newNode = SceneBuilder::CreateRenderNode(
+            auto newNode = Assets::SceneBuilder::CreateRenderNode(
                 Utilities::NameHelper::RandomName(6),
                 vec3(0, 0, 0),
                 vec3(1, 1, 1),
@@ -294,7 +294,7 @@ namespace
         models.push_back(ball0);
         
         {
-            auto newNode = SceneBuilder::CreateRenderNode("Sphere1",
+            auto newNode = Assets::SceneBuilder::CreateRenderNode("Sphere1",
                                                           spherePos,
                                                           vec3(1, 1, 1),
                                                           static_cast<uint32_t>(nodes.size()),
@@ -312,7 +312,7 @@ namespace
         }
         
         {
-            auto newNode = SceneBuilder::CreateRenderNode("Box",
+            auto newNode = Assets::SceneBuilder::CreateRenderNode("Box",
                                                           boxPos,
                                                           vec3(1, 2, 1),
                                                           static_cast<uint32_t>(nodes.size()),
@@ -375,7 +375,7 @@ namespace
         auto addNodeRot = [&](const std::string& name, const vec3& pos, const quat& rot,
                               uint32_t modelIdx, uint32_t matIdx)
         {
-            nodes.push_back(SceneBuilder::CreateRenderNode(name,
+            nodes.push_back(Assets::SceneBuilder::CreateRenderNode(name,
                                                            pos,
                                                            vec3(1),
                                                            static_cast<uint32_t>(nodes.size()),
@@ -706,7 +706,7 @@ namespace
 
         auto addNode = [&](const std::string& name, const vec3& pos, uint32_t modelIdx, uint32_t matIdx)
         {
-            nodes.push_back(SceneBuilder::CreateRenderNode(name,
+            nodes.push_back(Assets::SceneBuilder::CreateRenderNode(name,
                                                            pos,
                                                            vec3(1),
                                                            static_cast<uint32_t>(nodes.size()),
@@ -774,7 +774,7 @@ namespace
 
         auto addNode = [&](const std::string& name, const vec3& pos, uint32_t modelIdx, uint32_t matIdx)
         {
-            nodes.push_back(SceneBuilder::CreateRenderNode(name,
+            nodes.push_back(Assets::SceneBuilder::CreateRenderNode(name,
                                                            pos,
                                                            vec3(1),
                                                            static_cast<uint32_t>(nodes.size()),
@@ -864,7 +864,7 @@ namespace
 
         auto addNode = [&](const std::string& name, const vec3& pos, uint32_t modelIdx, uint32_t matIdx)
         {
-            nodes.push_back(SceneBuilder::CreateRenderNode(name,
+            nodes.push_back(Assets::SceneBuilder::CreateRenderNode(name,
                                                            pos,
                                                            vec3(1),
                                                            static_cast<uint32_t>(nodes.size()),
@@ -943,7 +943,7 @@ namespace
 
         auto addNode = [&](const std::string& name, const vec3& pos, uint32_t modelIdx, uint32_t matIdx)
         {
-            auto node = SceneBuilder::CreateRenderNode(name, pos, vec3(1), static_cast<uint32_t>(nodes.size()),
+            auto node = Assets::SceneBuilder::CreateRenderNode(name, pos, vec3(1), static_cast<uint32_t>(nodes.size()),
                                                        modelIdx, matIdx);
             nodes.push_back(node);
             return node;
@@ -1040,7 +1040,7 @@ namespace
         auto addRenderNode = [&](const std::string& name, const vec3& pos, const quat& rot,
                                  uint32_t modelIdx, uint32_t matIdx)
         {
-            auto node = SceneBuilder::CreateRenderNode(name, pos, vec3(1), static_cast<uint32_t>(nodes.size()),
+            auto node = Assets::SceneBuilder::CreateRenderNode(name, pos, vec3(1), static_cast<uint32_t>(nodes.size()),
                                                        modelIdx, matIdx, true, rot);
             nodes.push_back(node);
             return node;
@@ -1224,7 +1224,7 @@ namespace
         uint32_t groundModelId = static_cast<uint32_t>(models.size() - 1);
 
         {
-            auto node = SceneBuilder::CreateRenderNode("Ground",
+            auto node = Assets::SceneBuilder::CreateRenderNode("Ground",
                                                        vec3(0, 0, 0),
                                                        vec3(1),
                                                        static_cast<uint32_t>(nodes.size()),
@@ -1249,7 +1249,7 @@ namespace
         auto addProcNode = [&](const std::string& name, const vec3& pos, const quat& rot,
                                uint32_t modelId, uint32_t materialId)
         {
-            nodes.push_back(SceneBuilder::CreateRenderNode(name,
+            nodes.push_back(Assets::SceneBuilder::CreateRenderNode(name,
                                                            pos,
                                                            vec3(1),
                                                            static_cast<uint32_t>(nodes.size()),
@@ -1270,7 +1270,7 @@ namespace
         {
             if (pieceIdx < 0) return;
             const auto& piece = loader.GetPiece(pieceIdx);
-            auto node = SceneBuilder::CreateRenderNode(name,
+            auto node = Assets::SceneBuilder::CreateRenderNode(name,
                                                        pos,
                                                        vec3(1),
                                                        static_cast<uint32_t>(nodes.size()),
@@ -1301,7 +1301,7 @@ namespace
             }
 
             const auto& piece = loader.GetPiece(pieceIdx);
-            return SceneBuilder::CreateRenderNode(name,
+            return Assets::SceneBuilder::CreateRenderNode(name,
                                                   pos,
                                                   vec3(1),
                                                   static_cast<uint32_t>(nodes.size()),
@@ -1564,6 +1564,9 @@ namespace
     }
 }
 
+namespace Runtime::Scene
+{
+
 std::vector<std::string> SceneList::AllScenes;
 
 bool SceneList::IsSupportedSceneExtension(std::string_view extension)
@@ -1762,4 +1765,6 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
     }
 
     return false;
+}
+
 }

@@ -19,7 +19,7 @@ namespace
     }
 }
 
-namespace SceneBuilder
+namespace Assets::SceneBuilder
 {
     uint32_t AddLambertianMaterial(std::vector<Assets::FMaterial>& materials, const glm::vec3& color)
     {

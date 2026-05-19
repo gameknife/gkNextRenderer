@@ -27,8 +27,8 @@ namespace Voyage3D::WorldMap
     {
         models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-30.0f, -0.05f, -90.0f), glm::vec3(85.0f, 0.0f, 20.0f)));
         const uint32_t modelId = static_cast<uint32_t>(models.size() - 1);
-        const uint32_t materialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.10f, 0.30f, 0.60f));
-        nodes.push_back(SceneBuilder::CreateRenderNode("Voyage3D_Ocean",
+        const uint32_t materialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.10f, 0.30f, 0.60f));
+        nodes.push_back(Assets::SceneBuilder::CreateRenderNode("Voyage3D_Ocean",
                                                        glm::vec3(0.0f),
                                                        glm::vec3(1.0f),
                                                        static_cast<uint32_t>(nodes.size()),
@@ -48,8 +48,8 @@ namespace Voyage3D::WorldMap
         {
             models.push_back(Assets::FProcModel::CreateBox(block.min, block.max));
             const uint32_t modelId = static_cast<uint32_t>(models.size() - 1);
-            const uint32_t materialId = SceneBuilder::AddLambertianMaterial(materials, block.color);
-            nodes.push_back(SceneBuilder::CreateRenderNode("Voyage3D_Land_" + block.name,
+            const uint32_t materialId = Assets::SceneBuilder::AddLambertianMaterial(materials, block.color);
+            nodes.push_back(Assets::SceneBuilder::CreateRenderNode("Voyage3D_Land_" + block.name,
                                                            glm::vec3(0.0f),
                                                            glm::vec3(1.0f),
                                                            static_cast<uint32_t>(nodes.size()),

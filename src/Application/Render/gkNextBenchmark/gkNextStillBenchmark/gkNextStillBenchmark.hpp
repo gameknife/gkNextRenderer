@@ -7,7 +7,7 @@ class BenchMarker;
 class BenchmarkGameInstance : public NextGameInstanceBase
 {
 public:
-    BenchmarkGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine);
+    BenchmarkGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine);
     ~BenchmarkGameInstance() override = default;
 
     // overrides

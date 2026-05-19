@@ -128,7 +128,7 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
         {
             return it->second;
         }
-        const uint32_t materialId = SceneBuilder::AddDiffuseLightMaterial(materials, color, intensity);
+        const uint32_t materialId = Assets::SceneBuilder::AddDiffuseLightMaterial(materials, color, intensity);
         lightMaterialIds_[key] = materialId;
         return materialId;
     };
@@ -154,7 +154,7 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
 
         lights.push_back(createdLights.front());
         const int lightIndex = static_cast<int>(lights.size() - 1);
-        auto node = SceneBuilder::CreateRenderNode(name,
+        auto node = Assets::SceneBuilder::CreateRenderNode(name,
                                      center,
                                      glm::vec3(1.0f),
                                      static_cast<uint32_t>(nodes.size()),
@@ -188,27 +188,27 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
     characterMaterialIds_.clear();
     for (const Brotato3D::FCharacterDef& character : characterDefs_)
     {
-        characterMaterialIds_[character.id] = SceneBuilder::AddLambertianMaterial(materials, character.color);
+        characterMaterialIds_[character.id] = Assets::SceneBuilder::AddLambertianMaterial(materials, character.color);
     }
     const uint32_t playerMaterialId =
         characterMaterialIds_.contains(selectedCharacterId_) ? characterMaterialIds_[selectedCharacterId_] :
-                                                               SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.20f, 0.75f, 0.30f));
-    player_.bodyNode = SceneBuilder::CreateRenderNode("Brotato3D_Player", player_.worldPos, glm::vec3(1.0f),
+                                                               Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.20f, 0.75f, 0.30f));
+    player_.bodyNode = Assets::SceneBuilder::CreateRenderNode("Brotato3D_Player", player_.worldPos, glm::vec3(1.0f),
                                         static_cast<uint32_t>(nodes.size()), playerModelId, playerMaterialId);
     nodes.push_back(player_.bodyNode);
 
     models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.08f), glm::vec3(0.08f)));
     const uint32_t facingModelId = static_cast<uint32_t>(models.size() - 1);
-    const uint32_t facingMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f));
-    player_.facingNode = SceneBuilder::CreateRenderNode("Brotato3D_PlayerFacing", glm::vec3(0.0f, 0.45f, -0.25f), glm::vec3(1.0f),
+    const uint32_t facingMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f));
+    player_.facingNode = Assets::SceneBuilder::CreateRenderNode("Brotato3D_PlayerFacing", glm::vec3(0.0f, 0.45f, -0.25f), glm::vec3(1.0f),
                                           static_cast<uint32_t>(nodes.size()), facingModelId, facingMaterialId);
     player_.facingNode->SetParent(player_.bodyNode);
     nodes.push_back(player_.facingNode);
 
     models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.06f, -0.05f, -0.24f), glm::vec3(0.06f, 0.05f, 0.24f)));
     const uint32_t smgWeaponModelId = static_cast<uint32_t>(models.size() - 1);
-    const uint32_t smgWeaponMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f, 0.85f, 0.2f));
-    player_.smgWeaponNode = SceneBuilder::CreateRenderNode("Brotato3D_PlayerWeapon_SMG", glm::vec3(-0.18f, 0.42f, -0.54f),
+    const uint32_t smgWeaponMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f, 0.85f, 0.2f));
+    player_.smgWeaponNode = Assets::SceneBuilder::CreateRenderNode("Brotato3D_PlayerWeapon_SMG", glm::vec3(-0.18f, 0.42f, -0.54f),
                                              glm::vec3(1.0f), static_cast<uint32_t>(nodes.size()), smgWeaponModelId,
                                              smgWeaponMaterialId);
     player_.smgWeaponNode->SetParent(player_.bodyNode);
@@ -216,8 +216,8 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
 
     models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.11f, -0.06f, -0.34f), glm::vec3(0.11f, 0.06f, 0.34f)));
     const uint32_t shotgunWeaponModelId = static_cast<uint32_t>(models.size() - 1);
-    const uint32_t shotgunWeaponMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f, 0.4f, 0.2f));
-    player_.shotgunWeaponNode = SceneBuilder::CreateRenderNode("Brotato3D_PlayerWeapon_Shotgun", glm::vec3(0.24f, 0.43f, -0.62f),
+    const uint32_t shotgunWeaponMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f, 0.4f, 0.2f));
+    player_.shotgunWeaponNode = Assets::SceneBuilder::CreateRenderNode("Brotato3D_PlayerWeapon_Shotgun", glm::vec3(0.24f, 0.43f, -0.62f),
                                                  glm::vec3(1.0f), static_cast<uint32_t>(nodes.size()),
                                                  shotgunWeaponModelId, shotgunWeaponMaterialId);
     player_.shotgunWeaponNode->SetParent(player_.bodyNode);
@@ -225,9 +225,9 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
 
     extractionVehicleNodes_.clear();
     extractionVehicleRootNode_.reset();
-    extractionVehicleMaterialId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.18f, 0.22f, 0.25f));
-    extractionVehicleActiveMaterialId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.85f, 0.68f, 0.25f));
-    const uint32_t extractionWheelMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.04f, 0.04f, 0.05f));
+    extractionVehicleMaterialId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.18f, 0.22f, 0.25f));
+    extractionVehicleActiveMaterialId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.85f, 0.68f, 0.25f));
+    const uint32_t extractionWheelMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.04f, 0.04f, 0.05f));
     auto addTruckPart = [&models, &nodes, this](const std::string& name,
                                                 const glm::vec3& min,
                                                 const glm::vec3& max,
@@ -236,7 +236,7 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
                                                 bool root) -> std::shared_ptr<Assets::Node>
     {
         models.push_back(Assets::FProcModel::CreateBox(min, max));
-        auto node = SceneBuilder::CreateRenderNode(name,
+        auto node = Assets::SceneBuilder::CreateRenderNode(name,
                                                    root ? HiddenPosition : localPos,
                                                    glm::vec3(1.0f),
                                                    static_cast<uint32_t>(nodes.size()),
@@ -302,11 +302,11 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
         visual.modelId = static_cast<uint32_t>(models.size() - 1);
         models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.5f), glm::vec3(0.5f)));
         visual.bodyBlockModelId = static_cast<uint32_t>(models.size() - 1);
-        visual.materialId = SceneBuilder::AddLambertianMaterial(materials, def.color);
-        visual.darkMaterialId = SceneBuilder::AddLambertianMaterial(materials, def.color * 0.4f);
-        visual.hitFlashMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f));
-        visual.warningMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f, 0.08f, 0.06f));
-        visual.phase2MaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.95f, 0.20f, 0.10f));
+        visual.materialId = Assets::SceneBuilder::AddLambertianMaterial(materials, def.color);
+        visual.darkMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, def.color * 0.4f);
+        visual.hitFlashMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f));
+        visual.warningMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f, 0.08f, 0.06f));
+        visual.phase2MaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.95f, 0.20f, 0.10f));
         visual.baseColor = def.color;
         enemyVisuals_[enemyId] = visual;
     }
@@ -317,7 +317,7 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
     {
         models.push_back(Assets::FProcModel::CreateSphere(glm::vec3(0.0f), weaponDef.projectileSize));
         const uint32_t weaponProjectileModelId = static_cast<uint32_t>(models.size() - 1);
-        const uint32_t weaponProjectileMaterialId = SceneBuilder::AddLambertianMaterial(materials, weaponDef.projectileColor);
+        const uint32_t weaponProjectileMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, weaponDef.projectileColor);
         if (weaponId == "smg")
         {
             projectileModelId_ = weaponProjectileModelId;
@@ -326,7 +326,7 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
 
         for (int index = 0; index < 128; ++index)
         {
-            auto node = SceneBuilder::CreateRenderNode(fmt::format("Brotato3D_Projectile_{}_{}", weaponId, index), HiddenPosition,
+            auto node = Assets::SceneBuilder::CreateRenderNode(fmt::format("Brotato3D_Projectile_{}_{}", weaponId, index), HiddenPosition,
                                          glm::vec3(1.0f), static_cast<uint32_t>(nodes.size()), weaponProjectileModelId,
                                          weaponProjectileMaterialId, false);
             nodes.push_back(node);
@@ -346,20 +346,20 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
         (void)enemyId;
         if (enemyDef.ranged.enabled)
         {
-            enemyProjectileMaterialIds_[&enemyDef] = SceneBuilder::AddLambertianMaterial(materials, enemyDef.ranged.color);
+            enemyProjectileMaterialIds_[&enemyDef] = Assets::SceneBuilder::AddLambertianMaterial(materials, enemyDef.ranged.color);
         }
     }
     models.push_back(Assets::FProcModel::CreateSphere(glm::vec3(0.0f), 1.0f));
     enemyProjectileModelId_ = static_cast<uint32_t>(models.size() - 1);
-    enemyProjectileMaterialId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.3f, 0.95f, 0.2f));
+    enemyProjectileMaterialId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.3f, 0.95f, 0.2f));
     enemyProjectilePool_.clear();
     enemyProjectilePool_.reserve(128);
     for (int index = 0; index < 128; ++index)
     {
-        auto node = SceneBuilder::CreateRenderNode(fmt::format("Brotato3D_EnemyProjectile_{}", index), HiddenPosition, glm::vec3(1.0f),
+        auto node = Assets::SceneBuilder::CreateRenderNode(fmt::format("Brotato3D_EnemyProjectile_{}", index), HiddenPosition, glm::vec3(1.0f),
                                      static_cast<uint32_t>(nodes.size()), enemyProjectileModelId_,
                                      enemyProjectileMaterialId_, false);
-        NodeUtils::SetOutlineFlags(node, Runtime::RenderOutlineFlags::danger);
+        Assets::NodeUtils::SetOutlineFlags(node, Runtime::RenderOutlineFlags::danger);
         nodes.push_back(node);
         Brotato3D::FEnemyProjectileRuntime projectile{};
         projectile.radius = 0.18f;
@@ -374,7 +374,7 @@ void Brotato3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
     sceneReady_ = true;
     if (appState_ == Brotato3D::EAppState::MainMenu || appState_ == Brotato3D::EAppState::CharacterSelect)
     {
-        NodeUtils::SetVisible(player_.bodyNode, false);
+        Assets::NodeUtils::SetVisible(player_.bodyNode, false);
     }
 }
 
@@ -407,7 +407,7 @@ void Brotato3DGameInstance::SetExtractionVehicleVisible(bool visible)
     {
         if (node)
         {
-            NodeUtils::SetVisible(node, visible);
+            Assets::NodeUtils::SetVisible(node, visible);
         }
     }
     if (!visible && extractionVehicleRootNode_)
@@ -488,7 +488,7 @@ void Brotato3DGameInstance::UpdateExtractionVehicle(double deltaSeconds)
     const uint32_t materialId = inZone ? extractionVehicleActiveMaterialId_ : extractionVehicleMaterialId_;
     if (extractionVehicleRootNode_ && materialId != 0)
     {
-        NodeUtils::SetPrimaryMaterial(extractionVehicleRootNode_, materialId);
+        Assets::NodeUtils::SetPrimaryMaterial(extractionVehicleRootNode_, materialId);
     }
 }
 
@@ -637,7 +637,7 @@ void Brotato3DGameInstance::UpdateCombatEffects(double deltaSeconds)
             light.remainingMs = 0.0f;
             UpdateLightArea(light.lightIndex, HiddenPosition, 0.01f, 0.0f);
             light.node->SetTranslation(HiddenPosition);
-            NodeUtils::SetVisible(light.node, false);
+            Assets::NodeUtils::SetVisible(light.node, false);
             continue;
         }
         UpdateLightArea(light.lightIndex, light.worldPos, light.radiusMeters, intensityScale);
@@ -769,10 +769,10 @@ void Brotato3DGameInstance::SpawnTempLight(const glm::vec3& worldPos,
     {
         lights[static_cast<size_t>(lightIt->lightIndex)].lightMatIdx = EnsureLightMaterial(color);
     }
-    NodeUtils::SetPrimaryMaterial(lightIt->node, EnsureLightMaterial(color));
+    Assets::NodeUtils::SetPrimaryMaterial(lightIt->node, EnsureLightMaterial(color));
     lightIt->node->SetTranslation(worldPos);
     lightIt->node->SetScale(glm::vec3(radiusMeters));
-    NodeUtils::SetVisible(lightIt->node, true);
+    Assets::NodeUtils::SetVisible(lightIt->node, true);
     UpdateLightArea(lightIt->lightIndex, worldPos, radiusMeters, 1.0f);
 }
 
@@ -805,7 +805,7 @@ uint32_t Brotato3DGameInstance::EnsureLightMaterial(const glm::vec3& color)
         return it->second;
     }
 
-    const uint32_t materialId = SceneBuilder::AddDiffuseLightMaterialToScene(GetEngine().GetScene(), color, 650.0f);
+    const uint32_t materialId = Assets::SceneBuilder::AddDiffuseLightMaterialToScene(GetEngine().GetScene(), color, 650.0f);
     lightMaterialIds_[key] = materialId;
     return materialId;
 }

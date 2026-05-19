@@ -11,6 +11,9 @@ namespace Assets
 
 union SDL_Event;
 
+namespace Runtime::Camera
+{
+
 struct MovementInput
 {
     float forward = 0.0f;   // [-1, 1]
@@ -118,3 +121,5 @@ private:
 
 	bool movedByEvent_ {};
 };
+
+}

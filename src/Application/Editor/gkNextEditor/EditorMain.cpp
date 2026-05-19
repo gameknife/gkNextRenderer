@@ -16,13 +16,13 @@
 
 #include <spdlog/spdlog.h>
 
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options,
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
                                                          NextEngine* engine)
 {
     return std::make_unique<EditorGameInstance>(config, options, engine);
 }
 
-EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) :
+EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine) :
     NextGameInstanceBase(config, options, engine)
 {
     editorUserInterface_ = std::make_unique<EditorInterface>(this);
@@ -168,7 +168,7 @@ bool EditorGameInstance::OnKey(SDL_Event& event)
             if (ImGui::GetIO().WantTextInput) break;
             std::vector<uint32_t> ids = GetEngine().GetScene().GetSelectedIds();
             if (ids.empty()) break;
-            auto cmd = std::make_unique<DeleteNodesCommand>(GetEngine().GetScene(), std::move(ids));
+            auto cmd = std::make_unique<Runtime::Command::DeleteNodesCommand>(GetEngine().GetScene(), std::move(ids));
             GetEngine().GetCommandHistory().Execute(std::move(cmd));
             break;
         }
@@ -178,7 +178,7 @@ bool EditorGameInstance::OnKey(SDL_Event& event)
             if (!(event.key.mod & (SDL_KMOD_CTRL | SDL_KMOD_GUI))) break;
             std::vector<uint32_t> ids = GetEngine().GetScene().GetSelectedIds();
             if (ids.empty()) break;
-            auto cmd = std::make_unique<DuplicateNodesCommand>(GetEngine().GetScene(), std::move(ids));
+            auto cmd = std::make_unique<Runtime::Command::DuplicateNodesCommand>(GetEngine().GetScene(), std::move(ids));
             GetEngine().GetCommandHistory().Execute(std::move(cmd));
             break;
         }
@@ -253,7 +253,7 @@ bool EditorGameInstance::OnCursorPosition(double xpos, double ypos)
         auto mousePos = GetEngine().GetMousePos();
         glm::vec3 org;
         glm::vec3 dir;
-        NextEngineHelper::GetScreenToWorldRay(mousePos, org, dir);
+        Runtime::EngineHelper::GetScreenToWorldRay(mousePos, org, dir);
         GetEngine().RayCastGPU(org, dir,
                                [this](Assets::RayCastResult result)
                                {
@@ -288,7 +288,7 @@ bool EditorGameInstance::OnMouseButton(SDL_Event& event)
         auto mousePos = GetEngine().GetMousePos();
         glm::vec3 org;
         glm::vec3 dir;
-        NextEngineHelper::GetScreenToWorldRay(mousePos, org, dir);
+        Runtime::EngineHelper::GetScreenToWorldRay(mousePos, org, dir);
         GetEngine().RayCastGPU(org, dir,
                                [this, toggleSelection](Assets::RayCastResult result)
                                {
@@ -299,7 +299,7 @@ bool EditorGameInstance::OnMouseButton(SDL_Event& event)
                                            return true;
                                        }
                                        GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
-                                       NextEngineHelper::DrawAuxPoint(result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2,
+                                       Runtime::EngineHelper::DrawAuxPoint(result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2,
                                                                       30);
                                        if (toggleSelection)
                                        {

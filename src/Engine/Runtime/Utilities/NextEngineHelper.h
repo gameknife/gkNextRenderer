@@ -12,7 +12,7 @@ namespace Assets
     struct Camera;
 }
 
-namespace NextEngineHelper
+namespace Runtime::EngineHelper
 {
     bool TryProjectWorldToScreen(const glm::vec3& worldPos, ImVec2& outImGuiPos);
     bool TryProjectWorldToScreenWithCamera(const Assets::Camera& camera, const glm::vec3& worldPos, ImVec2& outImGuiPos);

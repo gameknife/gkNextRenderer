@@ -6,6 +6,9 @@
 
 #include <algorithm>
 
+namespace Runtime::Command
+{
+
 DeleteNodesCommand::DeleteNodesCommand(Assets::Scene& scene, std::vector<uint32_t> instanceIds)
     : scene_(&scene)
     , instanceIds_(std::move(instanceIds))
@@ -104,4 +107,6 @@ void DeleteNodesCommand::RestoreSelection() const
         return;
     }
     Runtime::Command::SelectionUtils::RestoreSelection(*scene_, previousSelection_, previousSelectedId_);
+}
+
 }

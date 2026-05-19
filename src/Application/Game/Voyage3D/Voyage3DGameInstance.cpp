@@ -75,12 +75,12 @@ namespace
     }
 }
 
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
 {
     return std::make_unique<Voyage3DGameInstance>(config, options, engine);
 }
 
-Voyage3DGameInstance::Voyage3DGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) :
+Voyage3DGameInstance::Voyage3DGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine) :
     NextGameInstanceBase(config, options, engine)
 {
     ConfigureWindow(config, options, "Voyage3D", 1280, 720, true);
@@ -101,14 +101,14 @@ void Voyage3DGameInstance::OnInitUI()
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-    ImFont* bodyFont = FontLoader::Load(FontLoader::FFontRequest{
+    ImFont* bodyFont = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/DroidSansFallback.ttf",
         .pixelSize = 17.0f,
         .includeChineseFull = true,
         .extraGlyphsUtf8 = Voyage3D::U8Text(u8"✓"),
         .setAsDefault = true,
     });
-    titleFont_ = FontLoader::Load(FontLoader::FFontRequest{
+    titleFont_ = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/DroidSansFallback.ttf",
         .pixelSize = 34.0f,
         .includeChineseFull = true,
@@ -585,7 +585,7 @@ void Voyage3DGameInstance::EndCombatVictory()
         if (projectile.node)
         {
             projectile.node->SetTranslation(Voyage3D::HiddenPosition);
-            NodeUtils::SetVisible(projectile.node, false);
+            Assets::NodeUtils::SetVisible(projectile.node, false);
         }
     }
 
@@ -777,7 +777,7 @@ void Voyage3DGameInstance::SpawnProjectile(const glm::vec3& worldPos, const glm:
     if (projectileIt->node)
     {
         projectileIt->node->SetTranslation(worldPos);
-        NodeUtils::SetVisible(projectileIt->node, true);
+        Assets::NodeUtils::SetVisible(projectileIt->node, true);
     }
 }
 
@@ -856,9 +856,9 @@ void Voyage3DGameInstance::BuildPorts(std::vector<std::shared_ptr<Assets::Node>>
     models.push_back(Assets::FProcModel::CreateSphere(glm::vec3(0.0f, 2.4f, 0.0f), 0.25f));
     const uint32_t anchorModelId = static_cast<uint32_t>(models.size() - 1);
 
-    const uint32_t roofMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.15f, 0.10f, 0.10f));
-    visitedAnchorMaterialId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.90f, 0.70f, 0.20f));
-    unvisitedAnchorMaterialId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.50f, 0.50f, 0.50f));
+    const uint32_t roofMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.15f, 0.10f, 0.10f));
+    visitedAnchorMaterialId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.90f, 0.70f, 0.20f));
+    unvisitedAnchorMaterialId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.50f, 0.50f, 0.50f));
 
     for (Voyage3D::FPortRuntime& port : ports_)
     {
@@ -869,8 +869,8 @@ void Voyage3DGameInstance::BuildPorts(std::vector<std::shared_ptr<Assets::Node>>
                                                  static_cast<uint32_t>(nodes.size()));
         nodes.push_back(port.rootNode);
 
-        const uint32_t towerMaterialId = SceneBuilder::AddLambertianMaterial(materials, port.def.color);
-        port.towerNode = SceneBuilder::CreateRenderNode("Voyage3D_PortTower_" + port.def.id,
+        const uint32_t towerMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, port.def.color);
+        port.towerNode = Assets::SceneBuilder::CreateRenderNode("Voyage3D_PortTower_" + port.def.id,
                                                         glm::vec3(0.0f),
                                                         glm::vec3(1.0f),
                                                         static_cast<uint32_t>(nodes.size()),
@@ -879,7 +879,7 @@ void Voyage3DGameInstance::BuildPorts(std::vector<std::shared_ptr<Assets::Node>>
         port.towerNode->SetParent(port.rootNode);
         nodes.push_back(port.towerNode);
 
-        port.roofNode = SceneBuilder::CreateRenderNode("Voyage3D_PortRoof_" + port.def.id,
+        port.roofNode = Assets::SceneBuilder::CreateRenderNode("Voyage3D_PortRoof_" + port.def.id,
                                                        glm::vec3(0.0f),
                                                        glm::vec3(1.0f),
                                                        static_cast<uint32_t>(nodes.size()),
@@ -888,7 +888,7 @@ void Voyage3DGameInstance::BuildPorts(std::vector<std::shared_ptr<Assets::Node>>
         port.roofNode->SetParent(port.rootNode);
         nodes.push_back(port.roofNode);
 
-        port.anchorNode = SceneBuilder::CreateRenderNode("Voyage3D_PortAnchor_" + port.def.id,
+        port.anchorNode = Assets::SceneBuilder::CreateRenderNode("Voyage3D_PortAnchor_" + port.def.id,
                                                          glm::vec3(0.0f),
                                                          glm::vec3(1.0f),
                                                          static_cast<uint32_t>(nodes.size()),
@@ -914,9 +914,9 @@ void Voyage3DGameInstance::BuildShipVisual(Voyage3D::FShipRuntime& ship,
     models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.5f, 0.0f, -0.5f), glm::vec3(0.5f, 1.0f, 0.5f)));
     const uint32_t sailModelId = static_cast<uint32_t>(models.size() - 1);
 
-    const uint32_t hullMaterialId = SceneBuilder::AddLambertianMaterial(materials, ship.enemy ? glm::vec3(0.34f, 0.16f, 0.10f) : glm::vec3(0.50f, 0.30f, 0.15f));
-    const uint32_t mastMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.30f, 0.20f, 0.10f));
-    const uint32_t sailMaterialId = SceneBuilder::AddLambertianMaterial(materials, sailColor);
+    const uint32_t hullMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, ship.enemy ? glm::vec3(0.34f, 0.16f, 0.10f) : glm::vec3(0.50f, 0.30f, 0.15f));
+    const uint32_t mastMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.30f, 0.20f, 0.10f));
+    const uint32_t sailMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, sailColor);
 
     ship.rootNode = Assets::Node::CreateNode(std::string(namePrefix) + "_Root",
                                              ship.worldPos,
@@ -925,7 +925,7 @@ void Voyage3DGameInstance::BuildShipVisual(Voyage3D::FShipRuntime& ship,
                                              static_cast<uint32_t>(nodes.size()));
     nodes.push_back(ship.rootNode);
 
-    ship.hullNode = SceneBuilder::CreateRenderNode(std::string(namePrefix) + "_Hull",
+    ship.hullNode = Assets::SceneBuilder::CreateRenderNode(std::string(namePrefix) + "_Hull",
                                                    glm::vec3(0.0f),
                                                    ship.def.size,
                                                    static_cast<uint32_t>(nodes.size()),
@@ -935,7 +935,7 @@ void Voyage3DGameInstance::BuildShipVisual(Voyage3D::FShipRuntime& ship,
     ship.hullNode->SetParent(ship.rootNode);
     nodes.push_back(ship.hullNode);
 
-    ship.mastNode = SceneBuilder::CreateRenderNode(std::string(namePrefix) + "_Mast",
+    ship.mastNode = Assets::SceneBuilder::CreateRenderNode(std::string(namePrefix) + "_Mast",
                                                    glm::vec3(0.0f, ship.def.size.y, 0.0f),
                                                    glm::vec3(0.12f, ship.def.sailHeight, 0.12f),
                                                    static_cast<uint32_t>(nodes.size()),
@@ -945,7 +945,7 @@ void Voyage3DGameInstance::BuildShipVisual(Voyage3D::FShipRuntime& ship,
     ship.mastNode->SetParent(ship.rootNode);
     nodes.push_back(ship.mastNode);
 
-    ship.sailNode = SceneBuilder::CreateRenderNode(std::string(namePrefix) + "_Sail",
+    ship.sailNode = Assets::SceneBuilder::CreateRenderNode(std::string(namePrefix) + "_Sail",
                                                    glm::vec3(0.0f, ship.def.size.y + 0.32f, 0.0f),
                                                    glm::vec3(ship.def.size.x * 0.68f, ship.def.sailHeight * 0.72f, 0.08f),
                                                    static_cast<uint32_t>(nodes.size()),
@@ -963,12 +963,12 @@ void Voyage3DGameInstance::BuildProjectilePool(std::vector<std::shared_ptr<Asset
 {
     models.push_back(Assets::FProcModel::CreateSphere(glm::vec3(0.0f), 0.12f));
     const uint32_t projectileModelId = static_cast<uint32_t>(models.size() - 1);
-    const uint32_t projectileMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.15f, 0.15f, 0.15f));
+    const uint32_t projectileMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.15f, 0.15f, 0.15f));
     projectiles_.clear();
     projectiles_.reserve(96);
     for (int index = 0; index < 96; ++index)
     {
-        auto node = SceneBuilder::CreateRenderNode(fmt::format("Voyage3D_Projectile_{}", index),
+        auto node = Assets::SceneBuilder::CreateRenderNode(fmt::format("Voyage3D_Projectile_{}", index),
                                                    Voyage3D::HiddenPosition,
                                                    glm::vec3(1.0f),
                                                    static_cast<uint32_t>(nodes.size()),
@@ -1055,12 +1055,12 @@ void Voyage3DGameInstance::UpdateRuntimeEffects(double deltaSeconds)
 
 void Voyage3DGameInstance::UpdateVisitedAnchor(Voyage3D::FPortRuntime& port)
 {
-    NodeUtils::SetPrimaryMaterial(port.anchorNode, port.visited ? visitedAnchorMaterialId_ : unvisitedAnchorMaterialId_);
+    Assets::NodeUtils::SetPrimaryMaterial(port.anchorNode, port.visited ? visitedAnchorMaterialId_ : unvisitedAnchorMaterialId_);
 }
 
 void Voyage3DGameInstance::SetRuntimeVisible(Voyage3D::FShipRuntime& ship, bool visible)
 {
-    NodeUtils::SetVisibleRecursive(ship.rootNode, visible);
+    Assets::NodeUtils::SetVisibleRecursive(ship.rootNode, visible);
 }
 
 void Voyage3DGameInstance::UpdateBgm()

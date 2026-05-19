@@ -14,7 +14,7 @@ namespace Assets
     struct FMaterial;
 }
 
-namespace SceneBuilder
+namespace Assets::SceneBuilder
 {
     uint32_t AddLambertianMaterial(std::vector<Assets::FMaterial>& materials, const glm::vec3& color);
     uint32_t AddDiffuseLightMaterial(std::vector<Assets::FMaterial>& materials, const glm::vec3& color, float intensity = 1.0f);

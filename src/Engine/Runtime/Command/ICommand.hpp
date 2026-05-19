@@ -7,6 +7,9 @@
 #include <memory>
 #include <string>
 
+namespace Runtime::Command
+{
+
 class ICommand
 {
 public:
@@ -21,3 +24,5 @@ public:
 };
 
 using CommandPtr = std::unique_ptr<ICommand>;
+
+}

@@ -5,7 +5,7 @@
 class FlappyJsGameInstance final : public NextGameInstanceBase
 {
 public:
-    FlappyJsGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine);
+    FlappyJsGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine);
     ~FlappyJsGameInstance() override = default;
 
     void OnInit() override;

@@ -32,7 +32,7 @@
 // line parsing by converting arguments to c++ objects of type bool, int, float
 // or const char* c string.
 // Unlike getogt(), program options can be scattered in the source files (a la
-// google-gflags). Options are collected by a parser which then automatically
+// google-gflags). Runtime::Config::Options are collected by a parser which then automatically
 // generate the help/usage screen based on registered options.
 //
 // This library is made of two c++ file (.h/.cc) with no other dependency.
@@ -99,7 +99,7 @@ enum ParseResult {
 };
 
 // Parses all registered options using the command line specified with (_argc,
-// _argv) arguments. Options are registered using OZZ_OPTIONS_DECLARE_* macros.
+// _argv) arguments. Runtime::Config::Options are registered using OZZ_OPTIONS_DECLARE_* macros.
 // Valid command line syntax is explained on top of this options.h file and
 // displayed by the help/usage screen.
 // ParseCommandLine expects that _argc >= 1 and _argv[0] is the executable path.
@@ -305,7 +305,7 @@ class OZZ_OPTIONS_DLL Parser {
   // Construct a parser with only built-in options.
   Parser();
 
-  // Destroys the parser. Options does not need to be unregistered.
+  // Destroys the parser. Runtime::Config::Options does not need to be unregistered.
   ~Parser();
 
   // Parses the command line against all registered options.

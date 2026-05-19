@@ -22,7 +22,7 @@ namespace Flappy
 class FlappyCppGameInstance final : public NextGameInstanceBase
 {
 public:
-    FlappyCppGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine);
+    FlappyCppGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine);
     ~FlappyCppGameInstance() override = default;
 
     void OnInit() override;

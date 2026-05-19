@@ -175,7 +175,7 @@ void MagicaLegoUserInterface::OnInitUI()
 
     if (bigFont_ == nullptr)
     {
-        bigFont_ = FontLoader::Load(FontLoader::FFontRequest{
+        bigFont_ = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
             .filePath = "assets/fonts/Roboto-BoldCondensed.ttf",
             .pixelSize = 72.0f,
             .includeChineseFull = false,
@@ -185,7 +185,7 @@ void MagicaLegoUserInterface::OnInitUI()
 
     if (boldFont_ == nullptr)
     {
-        boldFont_ = FontLoader::Load(FontLoader::FFontRequest{
+        boldFont_ = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
             .filePath = "assets/fonts/Roboto-BoldCondensed.ttf",
             .pixelSize = 20.0f,
             .includeChineseFull = false,
@@ -1045,7 +1045,7 @@ void MagicaLegoUserInterface::DrawRightBar()
             for (auto& block : basicBlocks)
             {
                 std::string filename = fmt::format("assets/textures/thumb/thumb_{}_{}.jpg", block.type, block.name);
-                const UserInterface::FUiTextureHandle texture =
+                const NextUI::UserInterface::FUiTextureHandle texture =
                     GetGameInstance()->GetEngine().GetUserInterface()->RequestUiTexture(filename);
                 ImTextureID id = texture.valid ? texture.textureId : static_cast<ImTextureID>(0);
                 if (MaterialButton(block, id, windowWidth, GetGameInstance()->GetCurrentBrushIdx() == block.brushId_))

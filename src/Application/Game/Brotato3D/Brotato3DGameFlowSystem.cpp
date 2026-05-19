@@ -27,23 +27,23 @@ void Brotato3DGameInstance::StartNewRun()
     if (player_.bodyNode)
     {
         player_.bodyNode->SetTranslation(player_.worldPos);
-        NodeUtils::SetVisible(player_.bodyNode, true);
+        Assets::NodeUtils::SetVisible(player_.bodyNode, true);
     }
     if (player_.facingNode)
     {
         player_.facingNode->SetTranslation(glm::vec3(0.0f, 0.62f, -0.45f));
-        NodeUtils::SetVisible(player_.facingNode, true);
+        Assets::NodeUtils::SetVisible(player_.facingNode, true);
     }
     if (player_.smgWeaponNode)
     {
         player_.smgWeaponNode->SetTranslation(glm::vec3(-0.18f, 0.42f, -0.54f));
-        NodeUtils::SetVisible(player_.smgWeaponNode,
+        Assets::NodeUtils::SetVisible(player_.smgWeaponNode,
                               !equippedWeapons_.empty() && equippedWeapons_.front().weaponId == "smg");
     }
     if (player_.shotgunWeaponNode)
     {
         player_.shotgunWeaponNode->SetTranslation(glm::vec3(0.24f, 0.43f, -0.62f));
-        NodeUtils::SetVisible(player_.shotgunWeaponNode,
+        Assets::NodeUtils::SetVisible(player_.shotgunWeaponNode,
                               !equippedWeapons_.empty() && equippedWeapons_.front().weaponId == "shotgun");
     }
     cameraSmoothedTarget_ = glm::vec3(player_.worldPos.x, 0.0f, player_.worldPos.z);

@@ -3,12 +3,12 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
 {
     return std::make_unique<BenchmarkGameInstance>(config, options, engine);
 }
 
-BenchmarkGameInstance::BenchmarkGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) :
+BenchmarkGameInstance::BenchmarkGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine) :
     NextGameInstanceBase(config, options, engine)
 {
     config.Title = "gkNextStillBenchmark";
@@ -33,7 +33,7 @@ void BenchmarkGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
 void BenchmarkGameInstance::OnInit()
 {
     benchMarker_ = std::make_unique<BenchMarker>();
-    GetEngine().RequestLoadScene({.filename = SceneList::AllScenes[0]});
+    GetEngine().RequestLoadScene({.filename = Runtime::Scene::SceneList::AllScenes[0]});
 }
 
 void BenchmarkGameInstance::OnTick(double deltaSeconds)
@@ -42,17 +42,17 @@ void BenchmarkGameInstance::OnTick(double deltaSeconds)
     if( benchMarker_ && benchMarker_->OnTick( GetEngine().GetWindow().GetTime(), &(GetEngine().GetRenderer()) ))
      {
          // Benchmark is done, report the results.
-         benchMarker_->OnReport( &(GetEngine().GetRenderer()) , SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex]);
+         benchMarker_->OnReport( &(GetEngine().GetRenderer()) , Runtime::Scene::SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex]);
          
          if (static_cast<size_t>(GetEngine().GetUserSettings().SceneIndex) ==
-             SceneList::AllScenes.size() - 1)
+             Runtime::Scene::SceneList::AllScenes.size() - 1)
          {
              GetEngine().RequestClose();
          }
          else
          {
              GetEngine().GetUserSettings().SceneIndex += 1;
-             GetEngine().RequestLoadScene({.filename = SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex]});
+             GetEngine().RequestLoadScene({.filename = Runtime::Scene::SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex]});
          }
      }
 }

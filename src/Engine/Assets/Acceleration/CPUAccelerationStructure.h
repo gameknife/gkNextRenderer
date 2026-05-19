@@ -30,12 +30,18 @@ namespace Assets
     struct RayCastResult;
 }
 
-struct UserSettings;
+namespace Runtime::Config
+{
+    struct UserSettings;
+}
 
 namespace Vulkan
 {
     class DeviceMemory;
 }
+
+namespace Assets::CPU
+{
 
 enum class ECubeProcType : uint8_t
 {
@@ -126,7 +132,7 @@ public:
     void ClearAllTasks();
 
 private:
-    bool InitCascadeBakers(const UserSettings& settings);
+    bool InitCascadeBakers(const Runtime::Config::UserSettings& settings);
     uint32_t GetActiveCascadeCount() const { return static_cast<uint32_t>(cascadeBakers.size()); }
 
     void UpdateBVH(Assets::Scene& scene);
@@ -151,3 +157,5 @@ private:
     std::vector<FCPUProbeBaker> cascadeBakers;
     FCPUPageIndex cpuPageIndex;
 };
+
+}

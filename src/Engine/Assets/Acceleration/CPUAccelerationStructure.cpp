@@ -17,6 +17,8 @@
 #define TINYBVH_IMPLEMENTATION
 #include "ThirdParty/tinybvh/tiny_bvh.h"
 
+namespace Assets::CPU
+{
 
 static tinybvh::BVH GCpuBvh;
 static std::vector<tinybvh::BLASInstance>* GbvhInstanceList;
@@ -427,7 +429,7 @@ void FCPUProbeBaker::RebuildDistanceField()
     }
 }
 
-bool FCPUAccelerationStructure::InitCascadeBakers(const UserSettings& settings)
+bool FCPUAccelerationStructure::InitCascadeBakers(const Runtime::Config::UserSettings& settings)
 {
     const float baseUnit = SanitizeAmbientCubeUnit(settings.AmbientCubeUnit);
     const vec3 cubeOffsetBias = vec3(settings.AmbientCubeOffsetX, settings.AmbientCubeOffsetY, settings.AmbientCubeOffsetZ);
@@ -527,7 +529,7 @@ void FCPUAccelerationStructure::InitBVH(Scene& scene)
         bvhBLASList.push_back( &bvhBLASContexts[m].bvh );
     }
     
-    const UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
+    const Runtime::Config::UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
     InitCascadeBakers(settings);
 
     UpdateBVH(scene);
@@ -631,7 +633,7 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
         GCpuBvh.Build( tmpbvhInstanceList.data(), static_cast<int>(tmpbvhInstanceList.size()), bvhBLASList.data(), static_cast<int>(bvhBLASList.size()) );
     }
 
-    TaskCoordinator::GetInstance()->WaitForAllParralledTask();
+    Tasks::TaskCoordinator::GetInstance()->WaitForAllParralledTask();
 
     bvhInstanceList.swap(tmpbvhInstanceList);
     bvhTLASContexts.swap(tmpbvhTLASContexts);
@@ -718,7 +720,7 @@ void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& voxelGpuMemory)
 
 bool FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::DeviceMemory* voxelGpuMemory, bool incremental)
 {
-    if ( !TaskCoordinator::GetInstance()->IsAllParralledTaskComplete() )
+    if ( !Tasks::TaskCoordinator::GetInstance()->IsAllParralledTaskComplete() )
     {
         return false;
     }
@@ -727,7 +729,7 @@ bool FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::D
         needUpdateGroups.pop();
     lastBatchTasks.clear();
 
-    const UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
+    const Runtime::Config::UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
     if (InitCascadeBakers(settings))
     {
         incremental = false;
@@ -815,8 +817,8 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Sc
         sunDir.push_back( scene.GetSunDir() );
     }
 
-    uint32_t taskId = TaskCoordinator::GetInstance()->AddParralledTask(
-                [this, actualX, actualZ, groupSize, procType, cascadeIndex](ResTask& task)
+    uint32_t taskId = Tasks::TaskCoordinator::GetInstance()->AddParralledTask(
+                [this, actualX, actualZ, groupSize, procType, cascadeIndex](Tasks::ResTask& task)
             {
                 FCPUProbeBaker& baker = cascadeBakers[cascadeIndex];
                 for (int z = actualZ; z < actualZ + groupSize; z++)
@@ -826,7 +828,7 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Sc
                             baker.ProcessCube(x, y, z, procType);
                         }
             },
-            [this](ResTask& task)
+            [this](Tasks::ResTask& task)
             {
                 // flush here
                 //bakerType == EBakerType::EBT_Probe ? probeBaker.UploadGPU(*GPUMemory) : farProbeBaker.UploadGPU(*FarGPUMemory);
@@ -838,7 +840,7 @@ void FCPUAccelerationStructure::AsyncProcessGroup(int xInMeter, int zInMeter, Sc
 void FCPUAccelerationStructure::ClearAllTasks()
 {
     // 等待所有并行任务完成
-    TaskCoordinator::GetInstance()->WaitForAllParralledTask();
+    Tasks::TaskCoordinator::GetInstance()->WaitForAllParralledTask();
     
     // 清空待更新队列
     while (!needUpdateGroups.empty())
@@ -859,7 +861,7 @@ void FCPUAccelerationStructure::ClearAllTasks()
 bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemory, Vulkan::DeviceMemory* voxelGpuMemory, Vulkan::DeviceMemory* pageIndexMemory)
 {
     bool voxelUploadCompleted = false;
-    const bool batchComplete = lastBatchTasks.empty() || TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks);
+    const bool batchComplete = lastBatchTasks.empty() || Tasks::TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks);
     if (needFlush && batchComplete)
     {
         const bool useGpuAmbientCubeSdf = NextEngine::GetInstance()->GetUserSettings().UseGpuAmbientCubeSdf;
@@ -886,8 +888,8 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
             distanceFieldRebuildTasks.reserve(GetActiveCascadeCount());
             for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
             {
-                const uint32_t taskId = TaskCoordinator::GetInstance()->AddParralledTask(
-                    [this, cascadeIndex](ResTask& task)
+                const uint32_t taskId = Tasks::TaskCoordinator::GetInstance()->AddParralledTask(
+                    [this, cascadeIndex](Tasks::ResTask& task)
                     {
                         cascadeBakers[cascadeIndex].RebuildDistanceField();
                     },
@@ -896,7 +898,7 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
             }
             distanceFieldRebuildScheduled_ = true;
         }
-        else if (distanceFieldRebuildTasks.empty() || TaskCoordinator::GetInstance()->IsAllTaskComplete(distanceFieldRebuildTasks))
+        else if (distanceFieldRebuildTasks.empty() || Tasks::TaskCoordinator::GetInstance()->IsAllTaskComplete(distanceFieldRebuildTasks))
         {
             // Upload to GPU, now entire range, optimize to partial upload later
             for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
@@ -918,7 +920,7 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
 
     if (!lastBatchTasks.empty())
     {
-        if (TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks))
+        if (Tasks::TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks))
         {
             lastBatchTasks.clear();
         }
@@ -932,7 +934,7 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
             uint32_t cascadeIndex = std::get<3>(group);
             if (type == ECubeProcType::ECPT_Fence)
             {
-                if (!TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks))
+                if (!Tasks::TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks))
                 {
                     break; 
                 }
@@ -1116,8 +1118,8 @@ void FCPUAccelerationStructure::GenShadowMap(Scene& scene)
             int startY = currentTileY * tileSize;
 
                 // 处理当前tile
-            TaskCoordinator::GetInstance()->AddParralledTask(
-                [this, lightViewProj, invLVP, lightDir, startX, startY, tileSize, shadowMapSize](ResTask& task)
+            Tasks::TaskCoordinator::GetInstance()->AddParralledTask(
+                [this, lightViewProj, invLVP, lightDir, startX, startY, tileSize, shadowMapSize](Tasks::ResTask& task)
                 {
                     for (int y = 0; y < tileSize; y++)
                     {
@@ -1155,7 +1157,7 @@ void FCPUAccelerationStructure::GenShadowMap(Scene& scene)
                         }
                     }
                 },
-                [this, &scene, shadowMapSize, startX, startY, tileSize](ResTask& task)
+                [this, &scene, shadowMapSize, startX, startY, tileSize](Tasks::ResTask& task)
                 {
                     // 更新当前tile到GPU
                     Vulkan::CommandPool& commandPool = GlobalTexturePool::GetInstance()->GetMainThreadCommandPool();
@@ -1166,4 +1168,6 @@ void FCPUAccelerationStructure::GenShadowMap(Scene& scene)
             );
         }
     }
+}
+
 }

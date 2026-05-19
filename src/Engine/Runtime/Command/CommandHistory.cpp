@@ -3,6 +3,9 @@
 
 #include <spdlog/spdlog.h>
 
+namespace Runtime::Command
+{
+
 namespace
 {
     class GroupCommand final : public ICommand
@@ -238,4 +241,6 @@ void CommandHistory::NotifyHistoryChanged()
     {
         onHistoryChanged_();
     }
+}
+
 }

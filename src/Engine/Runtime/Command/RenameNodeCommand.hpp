@@ -10,6 +10,9 @@ namespace Assets
     class Scene;
 }
 
+namespace Runtime::Command
+{
+
 class RenameNodeCommand final : public ICommand
 {
 public:
@@ -24,3 +27,5 @@ private:
     std::string oldName_{};
     std::string newName_{};
 };
+
+}

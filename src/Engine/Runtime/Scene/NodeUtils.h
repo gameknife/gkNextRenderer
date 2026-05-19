@@ -10,7 +10,7 @@ namespace Assets
     class Node;
 }
 
-namespace NodeUtils
+namespace Assets::NodeUtils
 {
     void SetVisible(const std::shared_ptr<Assets::Node>& node, bool visible);
     void SetVisibleRecursive(const std::shared_ptr<Assets::Node>& node, bool visible);

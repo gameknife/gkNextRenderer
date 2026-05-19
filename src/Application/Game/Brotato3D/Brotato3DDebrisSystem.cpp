@@ -117,15 +117,15 @@ void Brotato3DGameInstance::BuildDebrisPool(std::vector<Assets::Model>& models,
     models.push_back(Assets::FProcModel::CreateBox(-BossChunkHalfExtent, BossChunkHalfExtent));
     debrisBossChunkModelId_ = static_cast<uint32_t>(models.size() - 1);
 
-    debrisFallbackTinyMatId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f, 0.18f, 0.08f));
-    debrisFallbackChunkMatId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.5f));
-    materialDebrisMatId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f, 0.85f, 0.15f));
-    xpDebrisMatId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.2f, 1.0f, 0.35f));
+    debrisFallbackTinyMatId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f, 0.18f, 0.08f));
+    debrisFallbackChunkMatId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.5f));
+    materialDebrisMatId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f, 0.85f, 0.15f));
+    xpDebrisMatId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.2f, 1.0f, 0.35f));
 
     const Brotato3D::FCharacterDef* selectedCharacter = FindCharacterDef(selectedCharacterId_);
     const glm::vec3 playerColor = selectedCharacter ? selectedCharacter->color :
                                       (characterDefs_.empty() ? glm::vec3(0.20f, 0.75f, 0.30f) : characterDefs_.front().color);
-    playerDebrisMatId_ = SceneBuilder::AddLambertianMaterial(materials, playerColor * 0.6f + glm::vec3(0.4f));
+    playerDebrisMatId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, playerColor * 0.6f + glm::vec3(0.4f));
 
     auto appendPool = [&](Brotato3D::EDebrisKind kind,
                           int count,
@@ -138,7 +138,7 @@ void Brotato3DGameInstance::BuildDebrisPool(std::vector<Assets::Model>& models,
         const glm::vec3 fullExtent = halfExtent * 2.0f;
         for (int index = 0; index < count; ++index)
         {
-            auto node = SceneBuilder::CreateRenderNode(fmt::format("{}_{}", namePrefix, index),
+            auto node = Assets::SceneBuilder::CreateRenderNode(fmt::format("{}_{}", namePrefix, index),
                                                        HiddenPosition,
                                                        glm::vec3(1.0f),
                                                        static_cast<uint32_t>(nodes.size()),
@@ -157,7 +157,7 @@ void Brotato3DGameInstance::BuildDebrisPool(std::vector<Assets::Model>& models,
                 physicsComponent->BindPhysicsBody(bodyId);
             }
             node->AddComponent(physicsComponent);
-            NodeUtils::SetVisible(node, false);
+            Assets::NodeUtils::SetVisible(node, false);
             nodes.push_back(node);
 
             Brotato3D::FDebrisRuntime slot{};
@@ -215,7 +215,7 @@ void Brotato3DGameInstance::BuildKinematicCollisionBodies(std::vector<Assets::Mo
         return;
     }
 
-    const uint32_t proxyMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.0f));
+    const uint32_t proxyMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.0f));
     models.push_back(Assets::FProcModel::CreateSphere(glm::vec3(0.0f), std::max(0.35f, player_.radius)));
     const uint32_t playerProxyModelId = static_cast<uint32_t>(models.size() - 1);
     // HACK: Scene::RebuildMeshBuffer auto-promotes manually-created primitive bodies to mesh bodies
@@ -225,7 +225,7 @@ void Brotato3DGameInstance::BuildKinematicCollisionBodies(std::vector<Assets::Mo
     // TODO: replace with a `PhysicsComponent::IsManuallyBound()` flag in the engine layer.
     auto attachPhysicsProxyNode = [&nodes, proxyMaterialId](const std::string& name, uint32_t modelId, const NextBodyID& bodyId)
     {
-        auto node = SceneBuilder::CreateRenderNode(name,
+        auto node = Assets::SceneBuilder::CreateRenderNode(name,
                                                    HiddenPosition,
                                                    glm::vec3(1.0f),
                                                    static_cast<uint32_t>(nodes.size()),
@@ -477,9 +477,9 @@ void Brotato3DGameInstance::SpawnDebris(Brotato3D::EDebrisKind kind,
             slot.node->SetTranslation(spawnPos);
             slot.node->SetRotation(rotation);
             slot.node->SetScale(glm::vec3(1.0f));
-            NodeUtils::SetPrimaryMaterial(slot.node, materialId);
-            NodeUtils::SetOutlineFlags(slot.node, Runtime::RenderOutlineFlags::none);
-            NodeUtils::SetVisible(slot.node, true);
+            Assets::NodeUtils::SetPrimaryMaterial(slot.node, materialId);
+            Assets::NodeUtils::SetOutlineFlags(slot.node, Runtime::RenderOutlineFlags::none);
+            Assets::NodeUtils::SetVisible(slot.node, true);
         }
 
         slot.currentMaterialId = materialId;
@@ -513,9 +513,9 @@ void Brotato3DGameInstance::UpdateDebris(double deltaSeconds)
         }
         if (slot.node)
         {
-            NodeUtils::SetOutlineFlags(slot.node, Runtime::RenderOutlineFlags::none);
+            Assets::NodeUtils::SetOutlineFlags(slot.node, Runtime::RenderOutlineFlags::none);
             slot.node->SetTranslation(HiddenPosition);
-            NodeUtils::SetVisible(slot.node, false);
+            Assets::NodeUtils::SetVisible(slot.node, false);
         }
         slot.active = false;
         slot.payload = Brotato3D::EDebrisPayload::None;
@@ -652,10 +652,10 @@ void Brotato3DGameInstance::ClearAllDebris(bool keepPickable)
         }
         if (slot.node)
         {
-            NodeUtils::SetOutlineFlags(slot.node, Runtime::RenderOutlineFlags::none);
+            Assets::NodeUtils::SetOutlineFlags(slot.node, Runtime::RenderOutlineFlags::none);
             slot.node->SetTranslation(HiddenPosition);
             slot.node->SetRotation(glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
-            NodeUtils::SetVisible(slot.node, false);
+            Assets::NodeUtils::SetVisible(slot.node, false);
         }
         slot.active = false;
         slot.payload = Brotato3D::EDebrisPayload::None;

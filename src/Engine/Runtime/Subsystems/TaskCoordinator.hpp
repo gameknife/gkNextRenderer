@@ -9,7 +9,7 @@
 #include <cstring>
 #include <unordered_set>
 
-namespace details
+namespace Tasks::Detail
 {
     // Like std::atomic, but defaults to std::memory_order_acq_rel (or memory_order_acquire or memory_order_release,
     // as appropriate) rather than memory_order_seq_cst.
@@ -93,6 +93,9 @@ namespace details
     };
 }
 
+namespace Tasks
+{
+
 struct event_signal final
 {
     event_signal() noexcept : m_signaled{ false } {}
@@ -148,7 +151,7 @@ struct event_signal final
 private:
     mutable std::condition_variable m_condition;
     mutable std::mutex m_mutex;
-    details::atomic_acq_rel<bool> m_signaled;
+    Tasks::Detail::atomic_acq_rel<bool> m_signaled;
 };
 
 template <class T>
@@ -258,7 +261,7 @@ public:
     std::unique_ptr<event_signal> complete_;
     std::unique_ptr<std::thread> thread_;
     tsqueue<ResTask> taskQueue_;
-    details::atomic_acq_rel<bool> busy_{ false };
+    Tasks::Detail::atomic_acq_rel<bool> busy_{ false };
 };
 
 class TaskCoordinator
@@ -406,3 +409,5 @@ private:
     static std::unique_ptr<TaskCoordinator> instance_;
     static void TestCase();
 };
+
+}

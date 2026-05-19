@@ -110,7 +110,7 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, int fps, const st
     std::string imgEncoded{};
     if (uploadScreen || saveScreen)
     {
-        ScreenShot::SaveSwapChainToFile(renderer, sceneName, 0, 0, 0, 0);
+        Runtime::ScreenShot::SaveSwapChainToFile(renderer, sceneName, 0, 0, 0, 0);
     }
 
     // perf server upload

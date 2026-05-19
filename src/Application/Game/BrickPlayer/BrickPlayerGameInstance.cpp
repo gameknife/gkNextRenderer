@@ -179,7 +179,7 @@ namespace
     }
 }
 
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
 {
     return std::make_unique<BrickPlayerGameInstance>(config, options, engine);
 }
@@ -232,7 +232,7 @@ BrickPlayerGameInstance::PhysicsBodyResult BrickPlayerGameInstance::CreateDynami
     return result;
 }
 
-BrickPlayerGameInstance::BrickPlayerGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
+BrickPlayerGameInstance::BrickPlayerGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
     : NextGameInstanceBase(config, options, engine)
 {
     config.Title = "BrickPlayer";
@@ -771,7 +771,7 @@ void BrickPlayerGameInstance::PerformRaycast()
 
     glm::vec3 rayOrigin;
     glm::vec3 rayDir;
-    NextEngineHelper::GetScreenToWorldRay(mousePos_, rayOrigin, rayDir);
+    Runtime::EngineHelper::GetScreenToWorldRay(mousePos_, rayOrigin, rayDir);
     bool handled = false;
     GetEngine().RayCastGPU(rayOrigin, rayDir, [this, &handled](Assets::RayCastResult result)
     {
@@ -872,7 +872,7 @@ bool BrickPlayerGameInstance::StartDraggingHoveredPart()
     // UpdateDraggedPart uses, so the first drag frame produces no positional jump.
     glm::vec3 rayOrigin{0.0f};
     glm::vec3 rayDir{0.0f};
-    NextEngineHelper::GetScreenToWorldRay(glm::vec2(mousePos_), rayOrigin, rayDir);
+    Runtime::EngineHelper::GetScreenToWorldRay(glm::vec2(mousePos_), rayOrigin, rayDir);
     glm::vec3 initialPlaneHit{0.0f};
     if (IntersectDragPlane(rayOrigin, rayDir, initialPlaneHit))
     {
@@ -973,7 +973,7 @@ void BrickPlayerGameInstance::SwitchDragPlaneWhileDragging()
     // Recompute dragBodyOffset_ with the new plane
     glm::vec3 rayOrigin{0.0f};
     glm::vec3 rayDir{0.0f};
-    NextEngineHelper::GetScreenToWorldRay(glm::vec2(mousePos_), rayOrigin, rayDir);
+    Runtime::EngineHelper::GetScreenToWorldRay(glm::vec2(mousePos_), rayOrigin, rayDir);
     glm::vec3 planeHit{0.0f};
     if (IntersectDragPlane(rayOrigin, rayDir, planeHit))
     {
@@ -1027,7 +1027,7 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
 
     glm::vec3 rayOrigin{0.0f};
     glm::vec3 rayDir{0.0f};
-    NextEngineHelper::GetScreenToWorldRay(glm::vec2(mousePos_), rayOrigin, rayDir);
+    Runtime::EngineHelper::GetScreenToWorldRay(glm::vec2(mousePos_), rayOrigin, rayDir);
 
     glm::vec3 planeHitPoint{0.0f};
     if (!IntersectDragPlane(rayOrigin, rayDir, planeHitPoint))
@@ -1545,7 +1545,7 @@ void BrickPlayerGameInstance::SetDraggedPartRayCastVisible(bool visible)
         return;
     }
 
-    NodeUtils::SetRayCastVisible(node, visible);
+    Assets::NodeUtils::SetRayCastVisible(node, visible);
     GetEngine().GetScene().MarkDirty();
 }
 
@@ -1951,8 +1951,8 @@ void BrickPlayerGameInstance::UpdateVisibilityForStep(int32_t step, bool playPla
             auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
             if (wasVisible != shouldBeVisible)
             {
-                NodeUtils::SetVisible(node, shouldBeVisible);
-                NodeUtils::SetRayCastVisible(node, shouldBeVisible);
+                Assets::NodeUtils::SetVisible(node, shouldBeVisible);
+                Assets::NodeUtils::SetRayCastVisible(node, shouldBeVisible);
                 if (physComp && physics)
                 {
                     const NextBodyID bodyId = physComp->GetPhysicsBody();
@@ -2147,7 +2147,7 @@ void BrickPlayerGameInstance::SpawnRandomBricks(int count)
         float y = floorSurfaceY_ + 1.0f + static_cast<float>(i) * 0.12f
                   + (std::rand() % 50) * 0.005f;
 
-        auto clone = SceneBuilder::CreateRenderNode(
+        auto clone = Assets::SceneBuilder::CreateRenderNode(
             "freebuild_" + std::to_string(newId),
             glm::vec3(x, y, z),
             glm::vec3(1.0f),

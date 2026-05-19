@@ -35,7 +35,13 @@ namespace Vulkan
 	class RenderImage;
 }
 
-struct UserSettings;
+namespace Runtime::Config
+{
+    struct UserSettings;
+}
+
+namespace NextUI
+{
 
 struct Statistics final
 {
@@ -68,7 +74,7 @@ public:
 		Vulkan::CommandPool& commandPool, 
 		const Vulkan::SwapChain& swapChain, 
 		const Vulkan::DepthBuffer& depthBuffer,
-		UserSettings& userSettings,
+		Runtime::Config::UserSettings& userSettings,
 		std::function<void()> funcPreConfig,
 		std::function<void()> funcInit);
 	~UserInterface();
@@ -83,7 +89,7 @@ public:
 	bool WantsToCaptureKeyboard() const;
 	bool WantsToCaptureMouse() const;
 
-	UserSettings& Settings() { return userSettings_; }
+	Runtime::Config::UserSettings& Settings() { return userSettings_; }
 
 	void OnCreateSurface(const Vulkan::SwapChain& swapChain, 
 		const Vulkan::DepthBuffer& depthBuffer);
@@ -180,7 +186,7 @@ private:
 	VkPipeline uiPipeline_ = VK_NULL_HANDLE;
 	VkPipeline uiPlatformViewportPipeline_ = VK_NULL_HANDLE;
 	VkRenderPass uiPlatformViewportRenderPass_ = VK_NULL_HANDLE;
-	UserSettings& userSettings_;	
+	Runtime::Config::UserSettings& userSettings_;	
 	
 	std::unordered_map<ImGuiID, std::vector<FUiRenderBuffers>> platformUiRenderBuffers_;
 	std::unordered_set<std::string> uiTextureLoadRequests_;
@@ -211,3 +217,5 @@ private:
 
 	NextEngine* engine_;
 };
+
+}

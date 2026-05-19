@@ -300,8 +300,8 @@ namespace
     {
         ImVec2 centerScreen{};
         ImVec2 edgeScreen{};
-        if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, centerWorld, centerScreen) ||
-            !NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, centerWorld + glm::vec3(radiusWorld, 0.0f, 0.0f), edgeScreen))
+        if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, centerWorld, centerScreen) ||
+            !Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, centerWorld + glm::vec3(radiusWorld, 0.0f, 0.0f), edgeScreen))
         {
             return false;
         }
@@ -324,7 +324,7 @@ namespace
             const float angle = glm::two_pi<float>() * (static_cast<float>(index) / static_cast<float>(segments));
             const glm::vec3 pointWorld = centerWorld + glm::vec3(std::cos(angle) * radiusWorld, 0.0f, std::sin(angle) * radiusWorld);
             ImVec2 pointScreen{};
-            if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, pointWorld, pointScreen))
+            if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, pointWorld, pointScreen))
             {
                 outPoints.clear();
                 return false;
@@ -341,7 +341,7 @@ namespace
     {
         for (size_t index = 0; index < corners.size(); ++index)
         {
-            if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, corners[index], outScreenCorners[index]))
+            if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, corners[index], outScreenCorners[index]))
             {
                 return false;
             }
@@ -537,7 +537,7 @@ namespace
 
             ImVec2 screenPos{};
             const float headOffset = piece.dimensions.y * piece.visualScale + 0.28f;
-            if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, piece.node->WorldTranslation() + glm::vec3(0.0f, headOffset, 0.0f), screenPos))
+            if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, piece.node->WorldTranslation() + glm::vec3(0.0f, headOffset, 0.0f), screenPos))
             {
                 continue;
             }
@@ -567,8 +567,8 @@ namespace
         {
             ImVec2 from{};
             ImVec2 to{};
-            if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, attackTrace.from, from) ||
-                !NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, attackTrace.to, to))
+            if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, attackTrace.from, from) ||
+                !Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, attackTrace.to, to))
             {
                 continue;
             }
@@ -592,7 +592,7 @@ namespace
         for (const auto& popup : gameInstance.GetBattleSystem().GetDamagePopups())
         {
             ImVec2 screenPos{};
-            if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, popup.worldPos, screenPos))
+            if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, popup.worldPos, screenPos))
             {
                 continue;
             }
@@ -648,8 +648,8 @@ namespace
             {
                 ImVec2 from{};
                 ImVec2 to{};
-                if (NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, effect.from, from) &&
-                    NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, effect.to, to))
+                if (Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, effect.from, from) &&
+                    Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, effect.to, to))
                 {
                     drawList->AddLine(from, to, ImGui::ColorConvertFloat4ToU32(ImVec4(effect.color.r, effect.color.g, effect.color.b, 1.0f)),
                                       5.0f);

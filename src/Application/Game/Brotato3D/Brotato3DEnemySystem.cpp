@@ -68,7 +68,7 @@ void Brotato3DGameInstance::CreateEnemyBodyBlocks(Brotato3D::FEnemyRuntime& enem
             {
                 const glm::vec3 localOffset = -enemy.def->size * 0.5f +
                     cellSize * (glm::vec3(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z)) + glm::vec3(0.5f));
-                auto blockNode = SceneBuilder::CreateRenderNode(
+                auto blockNode = Assets::SceneBuilder::CreateRenderNode(
                     fmt::format("Brotato3D_EnemyBlock_{}_{}_{}_{}", enemyId, enemy.runtimeTag, enemy.bodyBlocks.size(), enemy.def->name),
                     localOffset,
                     blockScale,
@@ -81,7 +81,7 @@ void Brotato3DGameInstance::CreateEnemyBodyBlocks(Brotato3D::FEnemyRuntime& enem
                 physicsComponent->SetMobility(Runtime::ENodeMobility::Dynamic);
                 blockNode->AddComponent(physicsComponent);
                 blockNode->SetParent(enemy.node);
-                NodeUtils::SetOutlineFlags(blockNode, Runtime::RenderOutlineFlags::danger);
+                Assets::NodeUtils::SetOutlineFlags(blockNode, Runtime::RenderOutlineFlags::danger);
                 scene.AddNode(blockNode);
 
                 Brotato3D::FEnemyBodyBlockRuntime block{};
@@ -92,7 +92,7 @@ void Brotato3DGameInstance::CreateEnemyBodyBlocks(Brotato3D::FEnemyRuntime& enem
             }
         }
     }
-    NodeUtils::SetVisible(enemy.node, false);
+    Assets::NodeUtils::SetVisible(enemy.node, false);
     scene.MarkTransformDirty();
 }
 
@@ -106,7 +106,7 @@ void Brotato3DGameInstance::ResetEnemyBodyBlocks(Brotato3D::FEnemyRuntime& enemy
         {
             block.node->SetTranslation(block.localOffset);
             block.node->SetRotation(glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
-            NodeUtils::SetVisible(block.node, true);
+            Assets::NodeUtils::SetVisible(block.node, true);
         }
     }
     SetEnemyVisualMaterial(enemy, enemy.materialId);
@@ -121,28 +121,28 @@ void Brotato3DGameInstance::SetEnemyVisualVisible(Brotato3D::FEnemyRuntime& enem
         return;
     }
 
-    NodeUtils::SetVisible(enemy.node, visible && enemy.bodyBlocks.empty());
+    Assets::NodeUtils::SetVisible(enemy.node, visible && enemy.bodyBlocks.empty());
     for (Brotato3D::FEnemyBodyBlockRuntime& block : enemy.bodyBlocks)
     {
-        NodeUtils::SetVisible(block.node, visible && block.visible);
+        Assets::NodeUtils::SetVisible(block.node, visible && block.visible);
     }
 }
 
 void Brotato3DGameInstance::SetEnemyVisualMaterial(const Brotato3D::FEnemyRuntime& enemy, uint32_t materialId)
 {
-    NodeUtils::SetPrimaryMaterial(enemy.node, materialId);
+    Assets::NodeUtils::SetPrimaryMaterial(enemy.node, materialId);
     for (const Brotato3D::FEnemyBodyBlockRuntime& block : enemy.bodyBlocks)
     {
-        NodeUtils::SetPrimaryMaterial(block.node, materialId);
+        Assets::NodeUtils::SetPrimaryMaterial(block.node, materialId);
     }
 }
 
 void Brotato3DGameInstance::SetEnemyVisualOutlineFlags(const Brotato3D::FEnemyRuntime& enemy, uint32_t outlineFlags)
 {
-    NodeUtils::SetOutlineFlags(enemy.node, outlineFlags);
+    Assets::NodeUtils::SetOutlineFlags(enemy.node, outlineFlags);
     for (const Brotato3D::FEnemyBodyBlockRuntime& block : enemy.bodyBlocks)
     {
-        NodeUtils::SetOutlineFlags(block.node, outlineFlags);
+        Assets::NodeUtils::SetOutlineFlags(block.node, outlineFlags);
     }
 }
 
@@ -182,7 +182,7 @@ void Brotato3DGameInstance::BreakEnemyBodyBlocks(Brotato3D::FEnemyRuntime& enemy
         std::uniform_int_distribution<size_t> indexDist(0, visibleIndices.size() - 1);
         Brotato3D::FEnemyBodyBlockRuntime& block = enemy.bodyBlocks[visibleIndices[indexDist(rng_)]];
         block.visible = false;
-        NodeUtils::SetVisible(block.node, false);
+        Assets::NodeUtils::SetVisible(block.node, false);
         ++enemy.bodyBlocksLost;
         --dropsRemaining;
     }
@@ -242,7 +242,7 @@ void Brotato3DGameInstance::SpawnEnemy(const std::string& enemyId, const glm::ve
     }
 
     enemy.kinematicBodyId = AcquireEnemyKinematicBody(enemyId);
-    enemy.node = SceneBuilder::CreateRenderNode(fmt::format("Brotato3D_Enemy_{}_{}", enemyId, enemies_.size()), spawnPos, glm::vec3(1.0f),
+    enemy.node = Assets::SceneBuilder::CreateRenderNode(fmt::format("Brotato3D_Enemy_{}_{}", enemyId, enemies_.size()), spawnPos, glm::vec3(1.0f),
                                   GetEngine().GetScene().GenerateInstanceId(), visual.modelId, visual.materialId, false);
     GetEngine().GetScene().AddNode(enemy.node);
     enemies_.push_back(enemy);

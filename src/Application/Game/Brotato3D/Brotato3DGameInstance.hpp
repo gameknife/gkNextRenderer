@@ -62,7 +62,7 @@ namespace Brotato3D
 class Brotato3DGameInstance : public NextGameInstanceBase
 {
 public:
-    Brotato3DGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine);
+    Brotato3DGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine);
     ~Brotato3DGameInstance() override = default;
 
     void OnInit() override;

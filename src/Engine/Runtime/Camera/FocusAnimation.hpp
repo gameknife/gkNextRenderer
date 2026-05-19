@@ -2,6 +2,9 @@
 
 #include "Engine/Utilities/Glm.hpp"
 
+namespace Runtime::Camera
+{
+
 class FocusAnimation
 {
 public:
@@ -29,3 +32,5 @@ private:
     glm::quat startRot_{};
     glm::quat targetRot_{};
 };
+
+}

@@ -177,7 +177,7 @@ namespace Assets
 
         TextureImage& ShadowMap() const { return *cpuShadowMap_; }
 
-        FCPUAccelerationStructure& GetCPUAccelerationStructure() { return cpuAccelerationStructure_; }
+        Assets::CPU::FCPUAccelerationStructure& GetCPUAccelerationStructure() { return cpuAccelerationStructure_; }
         glm::vec3 GetSceneAABBMin() const { return sceneAABBMin_; }
         glm::vec3 GetSceneAABBMax() const { return sceneAABBMax_; }
         void RequestGpuDistanceFieldRebuild() { gpuSdfDirty_ = true; }
@@ -260,7 +260,7 @@ namespace Assets
         Assets::EnvironmentSetting envSettings_;
         Camera renderCamera_;
 
-        FCPUAccelerationStructure cpuAccelerationStructure_;
+        Assets::CPU::FCPUAccelerationStructure cpuAccelerationStructure_;
 
         Assets::GPUDrivenStat gpuDrivenStat_;
         mutable Assets::GPUScene gpuScene_;

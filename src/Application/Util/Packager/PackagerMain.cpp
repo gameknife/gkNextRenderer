@@ -3,7 +3,7 @@
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Runtime/Engine.hpp"
 
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
 {
     return std::make_unique<NextGameInstanceVoid>(config, options, engine);
 }

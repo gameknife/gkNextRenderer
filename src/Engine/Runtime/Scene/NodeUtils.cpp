@@ -3,7 +3,7 @@
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
 
-namespace NodeUtils
+namespace Assets::NodeUtils
 {
     void SetVisible(const std::shared_ptr<Assets::Node>& node, bool visible)
     {

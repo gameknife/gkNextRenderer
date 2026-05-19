@@ -128,7 +128,7 @@ Use double quotes for args containing spaces.
 
 ## JavaScript API (Editor.* helpers)
 ```javascript
-// Modification (each creates an ICommand, undoable)
+// Modification (each creates an Runtime::Command::ICommand, undoable)
 Editor.renameNode(nameOrId, newName)
 Editor.deleteNode(nameOrId)
 Editor.duplicateNode(nameOrId) // returns new id
@@ -257,7 +257,7 @@ Editor.log(message)
             }
 
             const fs::path& file = entry.path();
-            if (!SceneList::IsSupportedScenePath(file))
+            if (!Runtime::Scene::SceneList::IsSupportedScenePath(file))
             {
                 continue;
             }

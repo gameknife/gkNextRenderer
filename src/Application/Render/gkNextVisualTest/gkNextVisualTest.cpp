@@ -80,12 +80,12 @@ namespace
     }
 }
 
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
 {
     return std::make_unique<VisualTestGameInstance>(config, options, engine);
 }
 
-VisualTestGameInstance::VisualTestGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
+VisualTestGameInstance::VisualTestGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
     : NextGameInstanceBase(config, options, engine)
 {
     config.Title = "gkNextVisualTest";
@@ -113,7 +113,7 @@ void VisualTestGameInstance::OnInit()
     
     if (!LoadConfig())
     {
-        SPDLOG_WARN("[VisualTest] Failed to load configuration, using SceneList defaults");
+        SPDLOG_WARN("[VisualTest] Failed to load configuration, using Runtime::Scene::SceneList defaults");
     }
 
     if (scenes_.empty())
@@ -242,7 +242,7 @@ bool VisualTestGameInstance::LoadConfig()
     
     if (configPath.empty())
     {
-        SPDLOG_WARN("[VisualTest] No visual_test.json found, will use SceneList::AllScenes");
+        SPDLOG_WARN("[VisualTest] No visual_test.json found, will use Runtime::Scene::SceneList::AllScenes");
         return false;
     }
     
@@ -391,7 +391,7 @@ bool VisualTestGameInstance::LoadConfig()
 
 void VisualTestGameInstance::PopulateScenesFromSceneList()
 {
-    for (const auto& scene : SceneList::AllScenes)
+    for (const auto& scene : Runtime::Scene::SceneList::AllScenes)
     {
         if (!ShouldIncludeScene(scene))
         {
@@ -447,13 +447,13 @@ void VisualTestGameInstance::CaptureAndAdvance()
     // Take screenshot
     if (useFastCapture_)
     {
-        ScreenShot::SaveSwapChainToFileFast(&GetEngine().GetRenderer(), screenshotPath, 0, 0, 0, 0);
+        Runtime::ScreenShot::SaveSwapChainToFileFast(&GetEngine().GetRenderer(), screenshotPath, 0, 0, 0, 0);
     }
     else
     {
-        ScreenShot::SaveSwapChainToFile(&GetEngine().GetRenderer(), screenshotPath, 0, 0, 0, 0);
+        Runtime::ScreenShot::SaveSwapChainToFile(&GetEngine().GetRenderer(), screenshotPath, 0, 0, 0, 0);
     }
-    TaskCoordinator::GetInstance()->WaitForAllTasks();
+    Tasks::TaskCoordinator::GetInstance()->WaitForAllTasks();
     
     // Record result
     VisualTestResult result;
@@ -476,7 +476,7 @@ void VisualTestGameInstance::CaptureAndAdvance()
     currentSceneIndex_++;
     if (currentSceneIndex_ >= scenes_.size())
     {
-        TaskCoordinator::GetInstance()->WaitForAllTasks();
+        Tasks::TaskCoordinator::GetInstance()->WaitForAllTasks();
         GenerateReport();
         state_ = State::Finished;
         SPDLOG_INFO("[VisualTest] All tests completed, exiting...");

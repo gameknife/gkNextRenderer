@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <cmath>
 
+namespace Runtime::Command
+{
+
 TransformNodesCommand::TransformNodesCommand(Assets::Scene& scene, std::vector<uint32_t> instanceIds,
                                              std::vector<TransformSnapshot> before,
                                              std::vector<TransformSnapshot> after)
@@ -86,4 +89,6 @@ void TransformNodesCommand::Apply(const std::vector<TransformSnapshot>& snapshot
     {
         scene_->MarkDirty();
     }
+}
+
 }

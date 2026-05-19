@@ -26,7 +26,7 @@
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
 
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options,
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
                                                          NextEngine* engine)
 {
     return std::make_unique<CharacterDemoGameInstance>(config, options, engine);
@@ -39,7 +39,7 @@ using NextGameplay::NormalizeHorizontalOrZero;
 using NextGameplay::SetNodeRayCastVisibilityRecursive;
 using NextGameplay::SetNodeVisibilityRecursive;
 
-CharacterDemoGameInstance::CharacterDemoGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
+CharacterDemoGameInstance::CharacterDemoGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
     : NextGameInstanceBase(config, options, engine)
 {
     // config.Height = 720;
@@ -183,9 +183,9 @@ void CharacterDemoGameInstance::BeforeSceneRebuild(
     capsuleModelId_ = static_cast<uint32_t>(models.size() - 1);
 
     // A distinct green material for the character
-    characterMatId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.2f, 0.8f, 0.3f));
+    characterMatId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.2f, 0.8f, 0.3f));
 
-    aiCharacterMatId_ = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.9f, 0.25f, 0.2f));
+    aiCharacterMatId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.9f, 0.25f, 0.2f));
 
     const float halfProjectile = config_.Projectile.Size * 0.5f;
     models.push_back(Assets::FProcModel::CreateBox(
@@ -731,7 +731,7 @@ void CharacterDemoGameInstance::SetFirstPersonMode(bool enabled)
 
     if (playerCharacter_.gameplay && playerCharacter_.gameplay->visualRoot)
     {
-        NodeUtils::SetVisible(playerCharacter_.gameplay->visualRoot, !firstPersonMode_ && !playerCharacter_.modelLoaded);
+        Assets::NodeUtils::SetVisible(playerCharacter_.gameplay->visualRoot, !firstPersonMode_ && !playerCharacter_.modelLoaded);
     }
 
     SetNodeVisibilityRecursive(playerCharacter_.skinnedRoot, !firstPersonMode_);
@@ -760,7 +760,7 @@ void CharacterDemoGameInstance::SpawnProjectile(const std::string& nodeName, con
     }
 
     const uint32_t instanceId = GetEngine().GetScene().GenerateInstanceId();
-    auto newNode = SceneBuilder::CreateRenderNode(
+    auto newNode = Assets::SceneBuilder::CreateRenderNode(
         nodeName,
         spawnCenter,
         glm::vec3(1.0f),

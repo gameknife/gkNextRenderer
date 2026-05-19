@@ -35,7 +35,7 @@ namespace Editor
             constexpr const char* axisIds[] = {"X", "Y", "Z"};
 
             ImGui::PushID(label);
-            Runtime::UiTheme::BeginFormRow(label, 0.22f, 70.0f, 70.0f);
+            NextUI::Theme::BeginFormRow(label, 0.22f, 70.0f, 70.0f);
 
             const float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
             const float labelWidth = 14.0f;
@@ -67,7 +67,7 @@ namespace Editor
         {
             static ImGuiTextFilter propertyFilter;
             propertyFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search properties##PropertiesSearch", -FLT_MIN);
-            Runtime::UiTheme::DrawThinSeparator();
+            NextUI::Theme::DrawThinSeparator();
 
             std::vector<uint32_t> selectedIds = ctx.scene.GetSelectedIds();
             if (selectedIds.empty() && ui.selected_obj_id != InvalidId)
@@ -220,7 +220,7 @@ namespace Editor
             }
 
             const std::string inspectorSubtitle = "Instance " + std::to_string(selectedObj->GetInstanceId());
-            Runtime::UiTheme::DrawPanelHeader(ICON_FA_SLIDERS, "Inspector", inspectorSubtitle.c_str());
+            NextUI::Theme::DrawPanelHeader(ICON_FA_SLIDERS, "Inspector", inspectorSubtitle.c_str());
 
             auto render = selectedObj->GetComponent<Runtime::RenderComponent>();
             auto physics = selectedObj->GetComponent<Runtime::PhysicsComponent>();
@@ -232,7 +232,7 @@ namespace Editor
                 editingName = selectedObj->GetName();
             }
 
-            Runtime::UiTheme::BeginInsetPanel("##InspectorSummary", ImVec2(0.0f, 98.0f), true, 0,
+            NextUI::Theme::BeginInsetPanel("##InspectorSummary", ImVec2(0.0f, 98.0f), true, 0,
                                               ImVec2(10.0f, 9.0f), 0.26f);
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 6.0f));
 
@@ -256,13 +256,13 @@ namespace Editor
             static int layerIndex = 0;
             ImGui::SetNextItemWidth((ImGui::GetContentRegionAvail().x - 8.0f) * 0.5f);
             ImGui::Combo("##TagSelector", &tagIndex, "Untagged\0Player\0Environment\0Interactable\0\0");
-            Runtime::UiTheme::DrawTooltip("Tag");
+            NextUI::Theme::DrawTooltip("Tag");
             ImGui::SameLine();
             ImGui::SetNextItemWidth(-FLT_MIN);
             ImGui::Combo("##LayerSelector", &layerIndex, "Default\0Gameplay\0Props\0Colliders\0Lighting\0\0");
-            Runtime::UiTheme::DrawTooltip("Layer");
+            NextUI::Theme::DrawTooltip("Layer");
 
-            ImGui::PushStyleColor(ImGuiCol_Text, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted));
+            ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted));
             ImGui::TextUnformatted("Name");
             ImGui::PopStyleColor();
             ImGui::SameLine();
@@ -278,17 +278,17 @@ namespace Editor
                 }
                 else if (editingName != selectedObj->GetName())
                 {
-                    ctx.engine.GetCommandHistory().Execute(std::make_unique<RenameNodeCommand>(
+                    ctx.engine.GetCommandHistory().Execute(std::make_unique<Runtime::Command::RenameNodeCommand>(
                         ctx.scene, selectedObj->GetInstanceId(), editingName));
                 }
             }
 
             ImGui::PopStyleVar();
-            Runtime::UiTheme::EndInsetPanel();
+            NextUI::Theme::EndInsetPanel();
 
-            Runtime::UiTheme::DrawThinSeparator();
+            NextUI::Theme::DrawThinSeparator();
 
-            if (Runtime::UiTheme::BeginSection(ICON_FA_LOCATION_ARROW, "Transform", true))
+            if (NextUI::Theme::BeginSection(ICON_FA_LOCATION_ARROW, "Transform", true))
             {
                 if (DrawAxisFloat3("Location", selectedObj->Translation(), 0.1f))
                 {
@@ -309,10 +309,10 @@ namespace Editor
                     selectedObj->RecalcTransform(true);
                     ctx.scene.MarkDirty();
                 }
-                Runtime::UiTheme::EndSection();
+                NextUI::Theme::EndSection();
             }
             int modelId = render ? render->GetModelId() : -1;
-            if (Runtime::UiTheme::BeginSection(ICON_FA_CUBE, "Mesh", true))
+            if (NextUI::Theme::BeginSection(ICON_FA_CUBE, "Mesh", true))
             {
                 if (render != nullptr)
                 {
@@ -342,10 +342,10 @@ namespace Editor
                 {
                     ImGui::TextDisabled("No RenderComponent");
                 }
-                Runtime::UiTheme::EndSection();
+                NextUI::Theme::EndSection();
             }
 
-            if (Runtime::UiTheme::BeginSection(ICON_FA_CIRCLE_HALF_STROKE, "Material", true))
+            if (NextUI::Theme::BeginSection(ICON_FA_CIRCLE_HALF_STROKE, "Material", true))
             {
                 if (modelId != -1 && render)
                 {
@@ -375,7 +375,7 @@ namespace Editor
                             ImGui::EndCombo();
                         }
                         ImGui::SameLine();
-                        if (Runtime::UiTheme::IconButton(ICON_FA_PEN_TO_SQUARE, "Edit Material", false,
+                        if (NextUI::Theme::IconButton(ICON_FA_PEN_TO_SQUARE, "Edit Material", false,
                                                          ImVec2(28.0f, 24.0f)) &&
                             mat < ctx.scene.Materials().size())
                         {
@@ -391,10 +391,10 @@ namespace Editor
                         ctx.scene.MarkDirty();
                     }
                 }
-                Runtime::UiTheme::EndSection();
+                NextUI::Theme::EndSection();
             }
             
-            if (Runtime::UiTheme::BeginSection(ICON_FA_PUZZLE_PIECE, "Components", true))
+            if (NextUI::Theme::BeginSection(ICON_FA_PUZZLE_PIECE, "Components", true))
             {
             const auto& components = selectedObj->GetComponents();
             for (const auto& component : components)
@@ -444,7 +444,7 @@ namespace Editor
                     ImGui::MenuItem("Script Component", nullptr, false, false);
                     ImGui::EndPopup();
                 }
-                Runtime::UiTheme::EndSection();
+                NextUI::Theme::EndSection();
             }
         }
 

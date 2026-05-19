@@ -553,7 +553,7 @@ To run locally, you'll need to use emrun:
 
 
 
-2.7. Build Options
+2.7. Build Runtime::Config::Options
 ------------------
 `#define` these options before including miniaudio.h.
 

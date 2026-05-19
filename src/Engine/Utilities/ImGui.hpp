@@ -15,7 +15,7 @@ namespace Utilities
             }
         }
 
-        inline void DrawShowFlagsCommon(ShowFlags& showFlags) {
+        inline void DrawShowFlagsCommon(Runtime::Config::ShowFlags& showFlags) {
             DrawShowFlagItem("Grid", showFlags.ShowGrid);
             ImGui::Separator();
             DrawShowFlagItem("Lighting", showFlags.DebugDraw_Lighting);

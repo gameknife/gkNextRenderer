@@ -44,13 +44,13 @@ namespace
 
     ImTextureID LoadUiTexture(Brotato3DGameInstance& gameInstance, const std::string& path, bool srgb = true)
     {
-        UserInterface* ui = gameInstance.GetEngine().GetUserInterface();
+        NextUI::UserInterface* ui = gameInstance.GetEngine().GetUserInterface();
         if (!ui)
         {
             return EmptyTexture();
         }
 
-        const UserInterface::FUiTextureHandle handle = ui->RequestUiTexture(path, srgb);
+        const NextUI::UserInterface::FUiTextureHandle handle = ui->RequestUiTexture(path, srgb);
         return handle.valid ? handle.textureId : EmptyTexture();
     }
 
@@ -75,7 +75,7 @@ namespace
 
     ImVec2 GetTexturePixelSize(Brotato3DGameInstance& gameInstance, const std::string& path)
     {
-        UserInterface* ui = gameInstance.GetEngine().GetUserInterface();
+        NextUI::UserInterface* ui = gameInstance.GetEngine().GetUserInterface();
         return ui ? ui->RequestUiTexture(path).pixelSize : ImVec2(0.0f, 0.0f);
     }
 
@@ -1001,7 +1001,7 @@ namespace Brotato3D
         ImVec2 playerScreen{};
         const int dashCharges = gameInstance.GetDashCharges();
         const int dashMaxCharges = gameInstance.GetDashMaxCharges();
-        if (!suppressForegroundUi && NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, player.worldPos, playerScreen))
+        if (!suppressForegroundUi && Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, player.worldPos, playerScreen))
         {
             const float chargeSize = 12.0f * uiScale;
             const float chargeGap = 5.0f * uiScale;
@@ -1289,8 +1289,8 @@ namespace Brotato3D
             ImVec2 edge{};
             const glm::vec3 vehiclePos = gameInstance.GetExtractionVehiclePos();
             const float extractionRadius = gameInstance.GetExtractionRadius();
-            if (NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, vehiclePos, center) &&
-                NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, vehiclePos + glm::vec3(extractionRadius, 0.0f, 0.0f), edge))
+            if (Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, vehiclePos, center) &&
+                Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, vehiclePos + glm::vec3(extractionRadius, 0.0f, 0.0f), edge))
             {
                 const float radiusPx = std::abs(edge.x - center.x);
                 const bool inZone = waveSystem.IsPlayerInExtractionZone();
@@ -1312,8 +1312,8 @@ namespace Brotato3D
             {
                 ImVec2 center{};
                 ImVec2 edge{};
-                if (NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, enemy.worldPos, center) &&
-                    NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, enemy.worldPos + glm::vec3(enemy.def->heal.radiusMeters, 0.0f, 0.0f), edge))
+                if (Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, enemy.worldPos, center) &&
+                    Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, enemy.worldPos + glm::vec3(enemy.def->heal.radiusMeters, 0.0f, 0.0f), edge))
                 {
                     const float radiusPx = std::abs(edge.x - center.x);
                     drawList->AddCircle(center, radiusPx, IM_COL32(160, 70, 230, 130), 48, std::max(1.5f, 2.0f * uiScale));
@@ -1325,7 +1325,7 @@ namespace Brotato3D
                 continue;
             }
             ImVec2 screen{};
-            if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, enemy.worldPos + glm::vec3(0.0f, enemy.def->size.y + 0.2f, 0.0f), screen))
+            if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, enemy.worldPos + glm::vec3(0.0f, enemy.def->size.y + 0.2f, 0.0f), screen))
             {
                 continue;
             }
@@ -1348,7 +1348,7 @@ namespace Brotato3D
 
             ImVec2 from{};
             ImVec2 to{};
-            if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, projectile.lastWorldPos, from) || !NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, projectile.worldPos, to))
+            if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, projectile.lastWorldPos, from) || !Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, projectile.worldPos, to))
             {
                 continue;
             }
@@ -1359,7 +1359,7 @@ namespace Brotato3D
         for (const FMuzzleFlash& flash : gameInstance.GetMuzzleFlashes())
         {
             ImVec2 center{};
-            if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, flash.worldPos, center))
+            if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, flash.worldPos, center))
             {
                 continue;
             }
@@ -1377,7 +1377,7 @@ namespace Brotato3D
         for (const FFloatingText& text : gameInstance.GetFloatingTexts())
         {
             ImVec2 screen{};
-            if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, text.worldPos, screen))
+            if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, text.worldPos, screen))
             {
                 continue;
             }
@@ -1410,8 +1410,8 @@ namespace Brotato3D
             {
                 ImVec2 center{};
                 ImVec2 edge{};
-                if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, indicator.worldPos, center) ||
-                    !NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance,
+                if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, indicator.worldPos, center) ||
+                    !Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance,
                                                                        indicator.worldPos + glm::vec3(indicator.radius, 0.0f, 0.0f),
                                                                        edge))
                 {
@@ -1427,8 +1427,8 @@ namespace Brotato3D
             {
                 ImVec2 from{};
                 ImVec2 to{};
-                if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, indicator.worldPos, from) ||
-                    !NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, indicator.endPos, to))
+                if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, indicator.worldPos, from) ||
+                    !Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, indicator.endPos, to))
                 {
                     continue;
                 }
@@ -1442,8 +1442,8 @@ namespace Brotato3D
         {
             ImVec2 center{};
             ImVec2 edge{};
-            if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, ring.worldPos, center) ||
-                !NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, ring.worldPos + glm::vec3(ring.maxRadius, 0.0f, 0.0f), edge))
+            if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, ring.worldPos, center) ||
+                !Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, ring.worldPos + glm::vec3(ring.maxRadius, 0.0f, 0.0f), edge))
             {
                 continue;
             }
@@ -1458,7 +1458,7 @@ namespace Brotato3D
         {
             ImVec2 from{};
             ImVec2 to{};
-            if (!NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, beam.from, from) || !NextEngineHelper::TryProjectWorldToScreenForGame(gameInstance, beam.to, to))
+            if (!Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, beam.from, from) || !Runtime::EngineHelper::TryProjectWorldToScreenForGame(gameInstance, beam.to, to))
             {
                 continue;
             }

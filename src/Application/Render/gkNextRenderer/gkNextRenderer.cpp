@@ -80,7 +80,7 @@ bool DrawSettingSliderRow(const char* label, ImGuiDataType dataType, T* value,
                           float valueWidth = 84.0f)
 {
     ImGui::PushID(label);
-    Runtime::UiTheme::BeginFormRow(label);
+    NextUI::Theme::BeginFormRow(label);
 
     const float sliderWidth = std::max(40.0f, ImGui::GetContentRegionAvail().x - valueWidth - 6.0f);
     bool changed = false;
@@ -100,7 +100,7 @@ template <typename DrawControl>
 bool DrawSettingRow(const char* label, DrawControl&& drawControl)
 {
     ImGui::PushID(label);
-    Runtime::UiTheme::BeginFormRow(label);
+    NextUI::Theme::BeginFormRow(label);
 
     const bool changed = drawControl();
     ImGui::PopID();
@@ -207,12 +207,12 @@ static void UpdateUiScaledMetrics()
     ModeRailButtonSize = constModeRailButtonSize * scale;
 }
 
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
 {
     return std::make_unique<NextRendererGameInstance>(config, options, engine);
 }
 
-NextRendererGameInstance::NextRendererGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) :
+NextRendererGameInstance::NextRendererGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine) :
     NextGameInstanceBase(config, options, engine)
 {
 	config.HideTitleBar = true;
@@ -220,7 +220,7 @@ NextRendererGameInstance::NextRendererGameInstance(Vulkan::WindowConfig& config,
 
 void NextRendererGameInstance::OnInit()
 {
-	std::string initializedScene = SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex];
+	std::string initializedScene = Runtime::Scene::SceneList::AllScenes[GetEngine().GetUserSettings().SceneIndex];
 	if (!GOption->SceneName.empty())
 	{
 		initializedScene = GOption->SceneName;
@@ -256,7 +256,7 @@ void NextRendererGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<As
 
 	matIds_.clear();
 
-	matIds_.push_back(SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1,1,1)));
+	matIds_.push_back(Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1,1,1)));
 	MatPreparedForAdd.push_back(materials.back());
 	MatPreparedForAdd.push_back({Assets::Material::Metallic(glm::vec3(0.5,0.5,0.5), 0.4f)});
 	materials.push_back(MatPreparedForAdd.back());matIds_.push_back(uint32_t(materials.size() - 1));
@@ -352,7 +352,7 @@ void NextRendererGameInstance::OnInitUI()
 
 	if (bigFont_ == nullptr)
 	{
-		bigFont_ = FontLoader::Load(FontLoader::FFontRequest{
+		bigFont_ = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
 			.filePath = "assets/fonts/Roboto-BoldCondensed.ttf",
 			.pixelSize = 24.0f,
 			.includeChineseFull = false,
@@ -362,7 +362,7 @@ void NextRendererGameInstance::OnInitUI()
 
     if (titleBarFont_ == nullptr)
     {
-        titleBarFont_ = FontLoader::Load(FontLoader::FFontRequest{
+        titleBarFont_ = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
             .filePath = "assets/fonts/Roboto-BoldCondensed.ttf",
             .pixelSize = 18.0f,
             .includeChineseFull = true,
@@ -391,7 +391,7 @@ void NextRendererGameInstance::RequestScreenshot(bool openFolder, const std::str
 	isTakingScreenshot_ = true;
 
 	GetEngine().AddTimerTask(0.2, [this, filename, folderPath, openFolder]() {
-		ScreenShot::SaveSwapChainToFile(&GetEngine().GetRenderer(), filename, 0, 0, 0, 0);
+		Runtime::ScreenShot::SaveSwapChainToFile(&GetEngine().GetRenderer(), filename, 0, 0, 0, 0);
 		if (openFolder)
 		{
 			NextRenderer::OSCommand(folderPath.c_str());
@@ -494,13 +494,13 @@ bool NextRendererGameInstance::OnMouseButton(SDL_Event& event)
 		auto mousePos = GetEngine().GetMousePos();
 		glm::vec3 org;
 		glm::vec3 dir;
-        NextEngineHelper::GetScreenToWorldRay(mousePos, org, dir);
+        Runtime::EngineHelper::GetScreenToWorldRay(mousePos, org, dir);
 		GetEngine().RayCastGPU( org, dir, [this](Assets::RayCastResult result)
 		{
 			if (result.Hitted)
 			{
 				GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
-				NextEngineHelper::DrawAuxPoint( result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 60 );
+				Runtime::EngineHelper::DrawAuxPoint( result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 60 );
 				GetEngine().GetScene().SetSelectedId(result.InstanceId);
 				GetEngine().GetShowFlags().ShowEdge = true;
 			}
@@ -548,7 +548,7 @@ void NextRendererGameInstance::CreateSphereAndPush()
 	uint32_t instanceId = uint32_t(GetEngine().GetScene().Nodes().size());
 
 	uint32_t newMatId = matIds_[std::rand() % matIds_.size()];
-	std::shared_ptr<Assets::Node> newNode = SceneBuilder::CreateRenderNode("temp", center, glm::vec3(1), instanceId, modelId_, newMatId);
+	std::shared_ptr<Assets::Node> newNode = Assets::SceneBuilder::CreateRenderNode("temp", center, glm::vec3(1), instanceId, modelId_, newMatId);
 	
 	auto phys = std::make_shared<Runtime::PhysicsComponent>();
 	phys->SetMobility(Runtime::ENodeMobility::Dynamic);
@@ -572,7 +572,7 @@ void NextRendererGameInstance::CreateBoxAndPush()
 
     uint32_t newMatId = matIds_[std::rand() % matIds_.size()];
     std::shared_ptr<Assets::Node> newNode =
-        SceneBuilder::CreateRenderNode("tempBox", center, glm::vec3(1), instanceId, boxModelId_, newMatId);
+        Assets::SceneBuilder::CreateRenderNode("tempBox", center, glm::vec3(1), instanceId, boxModelId_, newMatId);
     
     auto phys = std::make_shared<Runtime::PhysicsComponent>();
     phys->SetMobility(Runtime::ENodeMobility::Dynamic);
@@ -588,7 +588,7 @@ void NextRendererGameInstance::CreateBoxAndPush()
 
 void NextRendererGameInstance::DrawSettings()
 {
-    UserSettings& userSetting = GetEngine().GetUserSettings();
+    Runtime::Config::UserSettings& userSetting = GetEngine().GetUserSettings();
 
     if (!userSetting.ShowSettings)
     {
@@ -602,7 +602,7 @@ void NextRendererGameInstance::DrawSettings()
     const ImVec2 panelSize(panelWidth,
                            viewport->Size.y - TitlebarSize - 50.0f - panelMargin);
 
-    if (!Runtime::UiTheme::BeginFloatingPanel("##RendererSettingsPanel", ICON_FA_SLIDERS,
+    if (!NextUI::Theme::BeginFloatingPanel("##RendererSettingsPanel", ICON_FA_SLIDERS,
                                               "Renderer Settings", &userSetting.ShowSettings,
                                               panelPos, panelSize))
     {
@@ -610,7 +610,7 @@ void NextRendererGameInstance::DrawSettings()
     }
 
     // Scrollable body
-    Runtime::UiTheme::BeginInsetPanel("##SettingsBody", ImVec2(0, 0), true, 0, ImVec2(10.0f, 10.0f), 0.30f);
+    NextUI::Theme::BeginInsetPanel("##SettingsBody", ImVec2(0, 0), true, 0, ImVec2(10.0f, 10.0f), 0.30f);
 
     auto DrawFloatSetting = [&](const char* label, float* value, float minValue, float maxValue,
                                 const char* format, float dragSpeed)
@@ -624,7 +624,7 @@ void NextRendererGameInstance::DrawSettings()
         return DrawSettingSliderRow(label, ImGuiDataType_S32, value, minValue, maxValue, format, 1.0f);
     };
 
-    if (Runtime::UiTheme::BeginPanelSection(LOCTEXT("Renderer"), true))
+    if (NextUI::Theme::BeginPanelSection(LOCTEXT("Renderer"), true))
     {
         DrawSettingRow(LOCTEXT("Renderer"),
                        [&]()
@@ -633,14 +633,14 @@ void NextRendererGameInstance::DrawSettings()
                            Runtime::GraphicsDebugPanel::DrawRendererSelector(GetEngine(), userSetting, "##RendererList");
                            return false;
                        });
-        Runtime::UiTheme::EndPanelSection();
+        NextUI::Theme::EndPanelSection();
     }
 
-    if (Runtime::UiTheme::BeginPanelSection(LOCTEXT("Scene"), true))
+    if (NextUI::Theme::BeginPanelSection(LOCTEXT("Scene"), true))
     {
         std::vector<std::string> sceneNames;
-        sceneNames.reserve(SceneList::AllScenes.size());
-        for (const auto& scene : SceneList::AllScenes)
+        sceneNames.reserve(Runtime::Scene::SceneList::AllScenes.size());
+        for (const auto& scene : Runtime::Scene::SceneList::AllScenes)
         {
             sceneNames.push_back(std::filesystem::path(scene).filename().string());
         }
@@ -655,9 +655,9 @@ void NextRendererGameInstance::DrawSettings()
                                 bool changed = false;
                                 ESceneListGroup currentGroup = ESceneListGroup::Other;
                                 bool hasGroup = false;
-                                for (int sceneIdx = 0; sceneIdx < static_cast<int>(SceneList::AllScenes.size()); ++sceneIdx)
+                                for (int sceneIdx = 0; sceneIdx < static_cast<int>(Runtime::Scene::SceneList::AllScenes.size()); ++sceneIdx)
                                 {
-                                    const ESceneListGroup sceneGroup = GetSceneListGroup(SceneList::AllScenes[sceneIdx]);
+                                    const ESceneListGroup sceneGroup = GetSceneListGroup(Runtime::Scene::SceneList::AllScenes[sceneIdx]);
                                     if (!hasGroup || sceneGroup != currentGroup)
                                     {
                                         if (hasGroup)
@@ -673,7 +673,7 @@ void NextRendererGameInstance::DrawSettings()
                                     if (ImGui::Selectable(sceneNames[sceneIdx].c_str(), selected))
                                     {
                                         userSetting.SceneIndex = sceneIdx;
-                                        GetEngine().RequestLoadScene({.filename = SceneList::AllScenes[userSetting.SceneIndex]});
+                                        GetEngine().RequestLoadScene({.filename = Runtime::Scene::SceneList::AllScenes[userSetting.SceneIndex]});
                                         changed = true;
                                     }
                                     if (selected)
@@ -683,10 +683,10 @@ void NextRendererGameInstance::DrawSettings()
                                 }
                                 return changed;
                             });
-        Runtime::UiTheme::EndPanelSection();
+        NextUI::Theme::EndPanelSection();
     }
 
-    if (Runtime::UiTheme::BeginPanelSection(LOCTEXT("Camera"), true))
+    if (NextUI::Theme::BeginPanelSection(LOCTEXT("Camera"), true))
     {
         std::vector<const char*> camerasList;
         for (const auto& cam : GetEngine().GetScene().GetCameras())
@@ -711,10 +711,10 @@ void NextRendererGameInstance::DrawSettings()
         auto& camera = GetEngine().GetScene().GetRenderCamera();
         DrawFloatSetting(LOCTEXT("Aperture"), &camera.Aperture, 0.0f, 1.0f, "%.2f", 0.01f);
         DrawFloatSetting(LOCTEXT("Focus(cm)"), &camera.FocalDistance, 0.001f, 1000.0f, "%.3f", 0.05f);
-        Runtime::UiTheme::EndPanelSection();
+        NextUI::Theme::EndPanelSection();
     }
 
-    if (Runtime::UiTheme::BeginPanelSection(LOCTEXT("Ray Tracing"), true))
+    if (NextUI::Theme::BeginPanelSection(LOCTEXT("Ray Tracing"), true))
     {
         static bool rayTracingEnabled = true;
         DrawSettingCheckboxRow("Enable", &rayTracingEnabled);
@@ -725,10 +725,10 @@ void NextRendererGameInstance::DrawSettings()
         DrawSettingCheckboxRow(LOCTEXT("FastGather"), &userSetting.FastGather);
         DrawIntSetting(LOCTEXT("Ambient Speed"), &userSetting.BakeSpeedLevel, 0, 2);
         ImGui::EndDisabled();
-        Runtime::UiTheme::EndPanelSection();
+        NextUI::Theme::EndPanelSection();
     }
 
-    if (Runtime::UiTheme::BeginPanelSection(LOCTEXT("Denoiser"), true))
+    if (NextUI::Theme::BeginPanelSection(LOCTEXT("Denoiser"), true))
     {
         static int denoiserAlgorithm = 0;
         const char* denoiserAlgorithms[] = {"HDR JBF", "SVGF", "Atrous", "None"};
@@ -748,10 +748,10 @@ void NextRendererGameInstance::DrawSettings()
         DrawFloatSetting(LOCTEXT("DenoiseSigma Lum"), &userSetting.DenoiseSigmaLum, 0.01f, 50.0f, "%.2f", 0.05f);
         DrawFloatSetting(LOCTEXT("DenoiseSigma Norm"), &userSetting.DenoiseSigmaNormal, 0.0f, 0.2f, "%.3f", 0.001f);
         DrawIntSetting(LOCTEXT("DenoiseSize"), &userSetting.DenoiseSize, 1, 10);
-        Runtime::UiTheme::EndPanelSection();
+        NextUI::Theme::EndPanelSection();
     }
 
-    if (Runtime::UiTheme::BeginPanelSection(LOCTEXT("Upscaling"), true))
+    if (NextUI::Theme::BeginPanelSection(LOCTEXT("Upscaling"), true))
     {
         static int upscaleMethod = userSetting.DLSS ? 1 : 0;
         const char* methods[] = {"None", "DLSS", "FSR", "TAAU"};
@@ -786,10 +786,10 @@ void NextRendererGameInstance::DrawSettings()
         {
             ImGui::TextDisabled("DLSS not supported on this hardware.");
         }
-        Runtime::UiTheme::EndPanelSection();
+        NextUI::Theme::EndPanelSection();
     }
 
-    if (Runtime::UiTheme::BeginPanelSection(LOCTEXT("Lighting"), false))
+    if (NextUI::Theme::BeginPanelSection(LOCTEXT("Lighting"), false))
     {
         DrawSettingCheckboxRow(LOCTEXT("UseAmbientCubePropagation"), &userSetting.UseAmbientCubePropagation);
         if (DrawSettingCheckboxRow(LOCTEXT("UseGpuAmbientCubeSdf"), &userSetting.UseGpuAmbientCubeSdf))
@@ -814,10 +814,10 @@ void NextRendererGameInstance::DrawSettings()
         }
 
         ImGui::SliderFloat(LOCTEXT("PaperWhitNit"), &userSetting.PaperWhiteNit, 100.0f, 1600.0f, "%.1f");
-        Runtime::UiTheme::EndPanelSection();
+        NextUI::Theme::EndPanelSection();
     }
 
-    if (Runtime::UiTheme::BeginPanelSection(LOCTEXT("Animation"), false))
+    if (NextUI::Theme::BeginPanelSection(LOCTEXT("Animation"), false))
     {
         DrawSettingCheckboxRow(LOCTEXT("Tick Animation"), &userSetting.TickAnimation);
         DrawSettingCheckboxRow(LOCTEXT("Show Debug Skeleton"), &GetEngine().GetShowFlags().ShowDebugSkeleton);
@@ -865,10 +865,10 @@ void NextRendererGameInstance::DrawSettings()
                 ImGui::PopID();
             }
         }
-        Runtime::UiTheme::EndPanelSection();
+        NextUI::Theme::EndPanelSection();
     }
 
-    if (Runtime::UiTheme::BeginPanelSection(LOCTEXT("Misc"), false))
+    if (NextUI::Theme::BeginPanelSection(LOCTEXT("Misc"), false))
     {
         DrawSettingCheckboxRow(LOCTEXT("ShowWireframe"), &GetEngine().GetShowFlags().ShowWireframe);
         DrawSettingCheckboxRow(LOCTEXT("TickPhysics"), &userSetting.TickPhysics);
@@ -883,11 +883,11 @@ void NextRendererGameInstance::DrawSettings()
         uint32_t tmin = 8, tmax = 32;
         ImGui::SliderScalar(LOCTEXT("Temporal Frames"), ImGuiDataType_U32, &userSetting.TemporalFrames, &tmin,
                             &tmax);
-        Runtime::UiTheme::EndPanelSection();
+        NextUI::Theme::EndPanelSection();
     }
 
-    Runtime::UiTheme::EndInsetPanel();
-    Runtime::UiTheme::EndFloatingPanel();
+    NextUI::Theme::EndInsetPanel();
+    NextUI::Theme::EndFloatingPanel();
 }
 
 void NextRendererGameInstance::DrawModeRail()
@@ -898,10 +898,10 @@ void NextRendererGameInstance::DrawModeRail()
 
     ImDrawList* background = ImGui::GetBackgroundDrawList();
     background->AddRectFilled(railPos, railPos + railSize,
-                              Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Background));
+                              NextUI::Theme::ColorU32(NextUI::Theme::EColor::Background));
     background->AddLine(ImVec2(railPos.x + railSize.x - 1.0f, railPos.y),
                         ImVec2(railPos.x + railSize.x - 1.0f, railPos.y + railSize.y),
-                        Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Border));
+                        NextUI::Theme::ColorU32(NextUI::Theme::EColor::Border));
 
     ImGui::SetNextWindowPos(railPos, ImGuiCond_Always);
     ImGui::SetNextWindowSize(railSize, ImGuiCond_Always);
@@ -934,7 +934,7 @@ void NextRendererGameInstance::DrawModeRail()
         for (const auto& entry : topEntries)
         {
             const bool active = (entry.mode == workMode_);
-            if (Runtime::UiTheme::ModeRailButton(entry.icon, entry.tooltip, active, ModeRailButtonSize))
+            if (NextUI::Theme::ModeRailButton(entry.icon, entry.tooltip, active, ModeRailButtonSize))
             {
                 workMode_ = entry.mode;
             }
@@ -948,7 +948,7 @@ void NextRendererGameInstance::DrawModeRail()
             ImGui::Dummy(ImVec2(0.0f, spaceUntilBottom));
         }
         const bool settingsActive = (workMode_ == EWorkMode::Settings);
-        if (Runtime::UiTheme::ModeRailButton(ICON_FA_GEAR, "Settings", settingsActive, gearSize))
+        if (NextUI::Theme::ModeRailButton(ICON_FA_GEAR, "Settings", settingsActive, gearSize))
         {
             workMode_ = EWorkMode::Settings;
         }
@@ -960,7 +960,7 @@ void NextRendererGameInstance::DrawModeRail()
 
 void NextRendererGameInstance::DrawViewportTopBar()
 {
-    UserSettings& userSetting = GetEngine().GetUserSettings();
+    Runtime::Config::UserSettings& userSetting = GetEngine().GetUserSettings();
     ImGuiViewport* viewport = ImGui::GetMainViewport();
 
     const float panelMargin = 10.0f;
@@ -978,45 +978,45 @@ void NextRendererGameInstance::DrawViewportTopBar()
         const float liveWidth = ImGui::CalcTextSize(liveText).x + 20.0f;
         const float badgeWidth = rendererWidth + liveWidth + 26.0f;
 
-        Runtime::UiTheme::FOverlayPanelConfig config{};
+        NextUI::Theme::FOverlayPanelConfig config{};
         config.WindowId = "##ViewportTopLeftBadge";
         config.Position = ImVec2(leftEdge, topEdge);
         config.Size = ImVec2(badgeWidth, badgeHeight);
         config.Padding = ImVec2(12.0f, 6.0f);
         config.ItemSpacing = ImVec2(8.0f, 0.0f);
-        config.BackgroundColor = Runtime::UiTheme::EColor::Background;
+        config.BackgroundColor = NextUI::Theme::EColor::Background;
         config.BackgroundAlpha = 0.82f;
         config.ExtraFlags = ImGuiWindowFlags_NoScrollbar;
 
-        if (Runtime::UiTheme::BeginOverlayPanel(config))
+        if (NextUI::Theme::BeginOverlayPanel(config))
         {
             ImGui::TextUnformatted(rendererText.c_str());
             ImGui::SameLine(0.0f, 12.0f);
-            Runtime::UiTheme::DrawVerticalSeparator(16.0f, 0.0f, 0.8f);
-            Runtime::UiTheme::DrawStatusDot(liveText, true);
+            NextUI::Theme::DrawVerticalSeparator(16.0f, 0.0f, 0.8f);
+            NextUI::Theme::DrawStatusDot(liveText, true);
         }
-        Runtime::UiTheme::EndOverlayPanel();
+        NextUI::Theme::EndOverlayPanel();
     }
 
     // Right cluster: screenshot / focus / 1:1
     {
         const float clusterWidth = 138.0f;
         const float rightEdge = viewport->Pos.x + viewport->Size.x - panelMargin - clusterWidth;
-        Runtime::UiTheme::FOverlayPanelConfig config{};
+        NextUI::Theme::FOverlayPanelConfig config{};
         config.WindowId = "##ViewportTopRightCluster";
         config.Position = ImVec2(rightEdge, topEdge);
         config.Size = ImVec2(clusterWidth, 32.0f);
         config.Padding = ImVec2(4.0f, 2.0f);
         config.ItemSpacing = ImVec2(4.0f, 0.0f);
         config.BackgroundAlpha = 0.80f;
-        if (Runtime::UiTheme::BeginOverlayPanel(config))
+        if (NextUI::Theme::BeginOverlayPanel(config))
         {
-            if (Runtime::UiTheme::ToolbarButton(ICON_FA_CAMERA, "Take Screenshot", false, ImVec2(28.0f, 26.0f)))
+            if (NextUI::Theme::ToolbarButton(ICON_FA_CAMERA, "Take Screenshot", false, ImVec2(28.0f, 26.0f)))
             {
                 RequestScreenshot(false, "");
             }
             ImGui::SameLine();
-            if (Runtime::UiTheme::ToolbarButton(ICON_FA_EXPAND, "Focus Selected", false, ImVec2(28.0f, 26.0f)))
+            if (NextUI::Theme::ToolbarButton(ICON_FA_EXPAND, "Focus Selected", false, ImVec2(28.0f, 26.0f)))
             {
                 glm::vec3 focusCenter;
                 float radius;
@@ -1026,9 +1026,9 @@ void NextRendererGameInstance::DrawViewportTopBar()
                 }
             }
             ImGui::SameLine();
-            Runtime::UiTheme::ToolbarButton("1:1 " ICON_FA_CHEVRON_DOWN, "Native Resolution", false, ImVec2(46.0f, 26.0f));
+            NextUI::Theme::ToolbarButton("1:1 " ICON_FA_CHEVRON_DOWN, "Native Resolution", false, ImVec2(46.0f, 26.0f));
         }
-        Runtime::UiTheme::EndOverlayPanel();
+        NextUI::Theme::EndOverlayPanel();
     }
 }
 
@@ -1051,7 +1051,7 @@ void NextRendererGameInstance::DrawViewportBottomBar()
     const ImVec2 windowPos(viewport->Pos.x + (viewport->Size.x - windowSize.x) * 0.5f,
                            viewport->Pos.y + viewport->Size.y - bottomStatusBar - windowSize.y - 8.0f);
 
-    Runtime::UiTheme::FOverlayPanelConfig config{};
+    NextUI::Theme::FOverlayPanelConfig config{};
     config.WindowId = "##ViewportFrameInfo";
     config.Position = windowPos;
     config.Size = windowSize;
@@ -1059,22 +1059,22 @@ void NextRendererGameInstance::DrawViewportBottomBar()
     config.ItemSpacing = ImVec2(4.0f, 0.0f);
     config.BackgroundAlpha = 0.80f;
 
-    if (Runtime::UiTheme::BeginOverlayPanel(config))
+    if (NextUI::Theme::BeginOverlayPanel(config))
     {
-        ImGui::TextColored(Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted), "%s", frameText.c_str());
-        Runtime::UiTheme::DrawVerticalSeparator(14.0f, 10.0f, 0.72f);
-        ImGui::TextColored(Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted), "%s", sampleText.c_str());
-        Runtime::UiTheme::DrawVerticalSeparator(14.0f, 10.0f, 0.72f);
-        ImGui::TextColored(Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted), "%s", resolutionText.c_str());
-        Runtime::UiTheme::DrawVerticalSeparator(14.0f, 10.0f, 0.72f);
-        Runtime::UiTheme::ToolbarButton(ICON_FA_EXPAND, "Viewport Display Options", false, ImVec2(22.0f, 18.0f));
+        ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted), "%s", frameText.c_str());
+        NextUI::Theme::DrawVerticalSeparator(14.0f, 10.0f, 0.72f);
+        ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted), "%s", sampleText.c_str());
+        NextUI::Theme::DrawVerticalSeparator(14.0f, 10.0f, 0.72f);
+        ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted), "%s", resolutionText.c_str());
+        NextUI::Theme::DrawVerticalSeparator(14.0f, 10.0f, 0.72f);
+        NextUI::Theme::ToolbarButton(ICON_FA_EXPAND, "Viewport Display Options", false, ImVec2(22.0f, 18.0f));
     }
-    Runtime::UiTheme::EndOverlayPanel();
+    NextUI::Theme::EndOverlayPanel();
 }
 
 void NextRendererGameInstance::DrawTitleBar()
 {
-    Runtime::UiTheme::FAppTitleBarConfig config{};
+    NextUI::Theme::FAppTitleBarConfig config{};
     config.BrandWindowId = "RendererBrand";
     config.MenuWindowId = "RendererMenuBar";
     config.RightWindowId = "RendererWindowControls";
@@ -1182,12 +1182,12 @@ void NextRendererGameInstance::DrawTitleBar()
     config.OnMinimize = [&]() { GetEngine().RequestMinimize(); };
     config.OnToggleMaximize = [&]() { GetEngine().ToggleMaximize(); };
     config.OnClose = [&]() { GetEngine().RequestClose(); };
-    Runtime::UiTheme::DrawAppTitleBar(GetEngine(), config);
+    NextUI::Theme::DrawAppTitleBar(GetEngine(), config);
 }
 
 void NextRendererGameInstance::DrawBottomStatusBar()
 {
-    Runtime::UiTheme::DrawStandardBottomBar(GetEngine(), "RendererStatusBar", 30.0f);
+    NextUI::Theme::DrawStandardBottomBar(GetEngine(), "RendererStatusBar", 30.0f);
 }
 
 void NextRendererGameInstance::DrawMemoryStatisticsPanel()
@@ -1202,7 +1202,7 @@ void NextRendererGameInstance::DrawMemoryStatisticsPanel()
     const ImVec2 panelPos(viewport->Pos.x + viewport->Size.x - 16.0f, viewport->Pos.y + TitlebarSize + 16.0f);
     const ImVec2 panelSize(440.0f, 360.0f);
 
-    if (!Runtime::UiTheme::BeginFloatingPanel("##RendererMemoryStats", ICON_FA_CHART_COLUMN, "Memory Statistics",
+    if (!NextUI::Theme::BeginFloatingPanel("##RendererMemoryStats", ICON_FA_CHART_COLUMN, "Memory Statistics",
                                               &keepOpen, panelPos, panelSize, ImVec2(1.0f, 0.0f)))
     {
         if (!keepOpen)
@@ -1222,16 +1222,16 @@ void NextRendererGameInstance::DrawMemoryStatisticsPanel()
                                                FormatBytes(memoryStats.deviceLocalBlockBytes));
     const std::string heapCount = fmt::format("{} heaps", memoryStats.heaps.size());
 
-    Runtime::UiTheme::DrawMetricCard("VRAM usage", vramUsage.c_str(),
-                                     Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Text), 124.0f);
+    NextUI::Theme::DrawMetricCard("VRAM usage", vramUsage.c_str(),
+                                     NextUI::Theme::Color(NextUI::Theme::EColor::Text), 124.0f);
     ImGui::SameLine();
-    Runtime::UiTheme::DrawMetricCard("VMA managed", vmaManaged.c_str(),
-                                     Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Text), 124.0f);
+    NextUI::Theme::DrawMetricCard("VMA managed", vmaManaged.c_str(),
+                                     NextUI::Theme::Color(NextUI::Theme::EColor::Text), 124.0f);
     ImGui::SameLine();
-    Runtime::UiTheme::DrawMetricCard("Heaps", heapCount.c_str(),
-                                     Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Text), 90.0f);
+    NextUI::Theme::DrawMetricCard("Heaps", heapCount.c_str(),
+                                     NextUI::Theme::Color(NextUI::Theme::EColor::Text), 90.0f);
 
-    Runtime::UiTheme::DrawThinSeparator();
+    NextUI::Theme::DrawThinSeparator();
 
     if (ImGui::BeginTable("##MemoryHeapTable", 6,
                           ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp))
@@ -1252,9 +1252,9 @@ void NextRendererGameInstance::DrawMemoryStatisticsPanel()
             ImGui::Text("Heap %u", heap.heapIndex);
 
             ImGui::TableSetColumnIndex(1);
-            ImGui::TextColored(Runtime::UiTheme::Color(heap.deviceLocal
-                                   ? Runtime::UiTheme::EColor::Success
-                                   : Runtime::UiTheme::EColor::TextMuted),
+            ImGui::TextColored(NextUI::Theme::Color(heap.deviceLocal
+                                   ? NextUI::Theme::EColor::Success
+                                   : NextUI::Theme::EColor::TextMuted),
                                "%s", heap.deviceLocal ? "Local" : "Shared");
 
             ImGui::TableSetColumnIndex(2);
@@ -1273,7 +1273,7 @@ void NextRendererGameInstance::DrawMemoryStatisticsPanel()
         ImGui::EndTable();
     }
 
-    Runtime::UiTheme::EndFloatingPanel();
+    NextUI::Theme::EndFloatingPanel();
 
     if (!keepOpen)
     {

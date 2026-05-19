@@ -155,7 +155,7 @@ void Brotato3DGameInstance::UpdateWeapons(double deltaSeconds)
                 projectile.isCrit = isCrit;
                 projectile.hitEnemyIndices.clear();
                 projectile.node->SetTranslation(projectile.worldPos);
-                NodeUtils::SetVisible(projectile.node, true);
+                Assets::NodeUtils::SetVisible(projectile.node, true);
                 break;
             }
         }
@@ -290,7 +290,7 @@ void Brotato3DGameInstance::UpdateProjectiles(double deltaSeconds)
             projectile.worldPos = HiddenPosition;
             projectile.hitEnemyIndices.clear();
             projectile.node->SetTranslation(HiddenPosition);
-            NodeUtils::SetVisible(projectile.node, false);
+            Assets::NodeUtils::SetVisible(projectile.node, false);
         }
         else
         {
@@ -329,12 +329,12 @@ void Brotato3DGameInstance::SpawnEnemyProjectile(const Brotato3D::FEnemyRuntime&
     projectileIt->radius = ranged.size;
     if (const auto materialIt = enemyProjectileMaterialIds_.find(enemy.def); materialIt != enemyProjectileMaterialIds_.end())
     {
-        NodeUtils::SetPrimaryMaterial(projectileIt->node, materialIt->second);
+        Assets::NodeUtils::SetPrimaryMaterial(projectileIt->node, materialIt->second);
     }
     projectileIt->node->SetScale(glm::vec3(ranged.size));
     projectileIt->node->SetTranslation(projectileIt->worldPos);
-    NodeUtils::SetOutlineFlags(projectileIt->node, Runtime::RenderOutlineFlags::danger);
-    NodeUtils::SetVisible(projectileIt->node, true);
+    Assets::NodeUtils::SetOutlineFlags(projectileIt->node, Runtime::RenderOutlineFlags::danger);
+    Assets::NodeUtils::SetVisible(projectileIt->node, true);
 }
 
 void Brotato3DGameInstance::UpdateEnemyProjectiles(double deltaSeconds)
@@ -372,7 +372,7 @@ void Brotato3DGameInstance::UpdateEnemyProjectiles(double deltaSeconds)
             projectile.active = false;
             projectile.worldPos = HiddenPosition;
             projectile.node->SetTranslation(HiddenPosition);
-            NodeUtils::SetVisible(projectile.node, false);
+            Assets::NodeUtils::SetVisible(projectile.node, false);
         }
         else
         {
