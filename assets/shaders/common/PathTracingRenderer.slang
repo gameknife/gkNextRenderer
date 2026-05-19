@@ -78,56 +78,74 @@ public struct FSoftwareDirectIlluminator : IDirectIlluminator
     FSoftwareRayTracer HWTracer;
 }
 
+namespace Common
+{
+    // 基于 view-space 距离选 cascade（CascadeSplits 为正向距离）
+    public uint SelectSunCascade(float viewDist, float4 splits)
+    {
+        if (viewDist < splits.x) return 0;
+        if (viewDist < splits.y) return 1;
+        if (viewDist < splits.z) return 2;
+        return 3;
+    }
+
+    // 3x3 PCF + slope-scaled bias，对 4 个 CSM cascade 都通用。
+    // 返回 [0,1]，1 = 完全无遮蔽，0 = 完全阴影。
+    public float SampleSunShadowCSM(float3 worldPos, float3 normal, float viewDist)
+    {
+        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
+        uint c = Common.SelectSunCascade(viewDist, Camera.CascadeSplits);
+
+        float4 lightPos = mul(Camera.SunCascadeViewProjection[c], float4(worldPos, 1.0));
+        float3 projCoords = lightPos.xyz / lightPos.w;
+        float2 uv = projCoords.xy * 0.5 + 0.5;
+
+        // 出 cascade 视椎视为无遮挡
+        if (any(uv < float2(0.0)) || any(uv > float2(1.0)))
+            return 1.0f;
+        if (projCoords.z < 0.0f || projCoords.z > 1.0f)
+            return 1.0f;
+
+        float NoL = max(dot(normalize(normal), Camera.SunDirection.xyz), 0.0f);
+        float bias = max(0.0008f * (1.0f - NoL), 0.0001f);
+
+        Sampler2D shadowMap = Bindless.GetShadowMap(int(c));
+        uint2 texSize;
+        shadowMap.GetDimensions(texSize.x, texSize.y);
+        float2 texelSize = 1.0f / float2(texSize);
+
+        float shadow = 0.0f;
+        [unroll]
+        for (int dy = -1; dy <= 1; ++dy)
+        {
+            [unroll]
+            for (int dx = -1; dx <= 1; ++dx)
+            {
+                float2 offset = float2(dx, dy) * texelSize;
+                float closestDepth = shadowMap.SampleLevel(uv + offset, 0).r;
+                shadow += (projCoords.z - bias) > closestDepth ? 0.0f : 1.0f;
+            }
+        }
+        return shadow * (1.0f / 9.0f);
+    }
+}
+
 public struct FShadowMapDirectIlluminator : IDirectIlluminator
 {
-    public float getShadow(float3 worldPos, float3 jit, float3 normal )
-    {
-        float4 posInLightMap = mul(Camera.SunCascadeViewProjection[0], float4(worldPos + jit * 4.0f, 1.0f));
-
-        float3 projCoords = posInLightMap.xyz / posInLightMap.w;
-        projCoords = projCoords * 0.5 + 0.5;
-        projCoords.y = 1.0 - projCoords.y;
-
-        float currentDepth = projCoords.z;
-        float cosTheta = max(dot(normal, normalize(Camera.SunDirection.xyz)), 0.0);
-        float bias = lerp(0.0001, 0.00005, cosTheta);
-
-        float closestDepth = ShadowMapSampler.SampleLevel(projCoords.xy, 0).x;
-        float shadow = currentDepth - bias > closestDepth ? 0.0 : 1.0;
-
-        // if (shadow > 0.01) {
-        //     float3 outPosition;
-        //     float3 outNormal;
-        //     uint outMaterialIdx;
-        //     float contactShadow = Common.traceInScreenSpace(worldPos + jit, normalize(Camera.SunDirection.xyz), 0.25, 0.5, outPosition, outNormal, outMaterialIdx, Camera, MiniGBuffer, NodeProxies, Models, Vertices, Indices) ? 0.0 : 1.0;
-        //     shadow = min(shadow, contactShadow); // 结合两种阴影结果
-        // }
-
-        return shadow;
-    };
-
-
     public void DirectIlluminate(inout uint4 RandomSeed, float3 position, float3 normal, inout float4 directIllumColor)
     {
-        float shadow = 0.0f;
+        UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
         const float3 lightVector = Camera.SunDirection.xyz;
         const float4 d = max(dot(lightVector, normalize(normal)), 0.0) * M_1_PI;
+
+        float shadow = 0.0f;
         if (Camera.HasSun)
         {
-            float3 jitter = (RandomFloat3(RandomSeed) - float3(0.5f)) * 0.125f;
-            shadow += getShadow(position, jitter, normal);
+            float viewDist = -mul(Camera.ModelView, float4(position, 1.0f)).z;
+            shadow = Common.SampleSunShadowCSM(position, normal, viewDist);
         }
         directIllumColor = Camera.SunColor * d * shadow;
     }
-
-    ConstantBuffer<UniformBufferObject> Camera;
-    Sampler2D ShadowMapSampler;
-
-    RWTexture2D<uint> MiniGBuffer;
-    StructuredBuffer<NodeProxy> NodeProxies;
-    StructuredBuffer<ModelData> Models;
-    StructuredBuffer<GPUVertex> Vertices;
-    StructuredBuffer<uint> Indices;
 }
 
 public struct FPathTracingRenderer{

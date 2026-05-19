@@ -10,7 +10,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     FVisibilityBufferRayCaster rayCaster;
     FSoftwareRayTracer tracer;
-    FSoftwareDirectIlluminator dIlluminator;
+    FShadowMapDirectIlluminator dIlluminator;
 
     FPathTracingRenderer renderer;
     renderer.ExitProbability = 0.5f;

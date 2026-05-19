@@ -355,6 +355,29 @@ public struct FAmbientCubeRayTracer : IRayTracer
         return probeData.a < 0.6;
     }
 }
+
+// Indirect-only 版本：从 ambient cube probe 只读取间接反弹通道，跳过 `_D` 中的太阳直射部分。
+// 配合 FShadowMapDirectIlluminator 使用，避免太阳光被 probe baked direct 和 shadow map 双重计算。
+public struct FAmbientCubeRayTracerIndirect : IRayTracer
+{
+    public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
+    {
+        return false;
+    }
+
+    public bool TraceSegment(float3 rayOrigin, float3 rayTarget, float epsilon)
+    {
+        return false;
+    }
+
+    public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor, out float outHitDist)
+    {
+        float4 probeData = interpolateAmbientCubes<FullAmbientCubeWNSunSampler>(rayOrigin, rayDir);
+        inoutRayColor.rgb = probeData.rgb;
+        outHitDist = 100.0f;
+        return probeData.a < 0.6;
+    }
+}
 public struct FHardwareRayTracer : IRayTracer
 {
     public bool TraceOcclusion(float3 rayOrigin, float3 rayDir)
