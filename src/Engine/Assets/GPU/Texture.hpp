@@ -49,6 +49,7 @@ namespace Assets
 
 		void BindTexture(uint32_t textureIdx, const TextureImage& textureImage);
 		void BindStorageTexture(uint32_t textureIdx, const Vulkan::ImageView& textureImage);
+		void BindShadowMap(uint32_t slot, const Vulkan::ImageView& view, const Vulkan::Sampler& sampler);
 		uint32_t RegisterTexture(const std::string& textureName, std::unique_ptr<TextureImage> textureImage,
 		                         ETextureLifetime lifetime = ETextureLifetime::ETL_Transient);
 		uint32_t TryGetTexureIndex(const std::string& textureName) const;

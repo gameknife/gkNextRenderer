@@ -389,10 +389,12 @@ namespace Assets
         }
 
         static const uint32_t kMaxBindlessResources = 65535u;// moltenVK returns a invalid value. std::min(65535u, device.DeviceProperties().limits.maxPerStageDescriptorSamplers);
+        static const uint32_t kMaxBindlessShadowMaps = 16u;
         const std::vector<Vulkan::DescriptorBinding> descriptorBindings =
         {
             {0, kMaxBindlessResources, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_ALL},
             {1, kMaxBindlessResources, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_ALL},
+            {2, kMaxBindlessShadowMaps, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_ALL},
         };
         descriptorSetManager_.reset(new Vulkan::DescriptorSetManager(device, descriptorBindings, 1, true));
         
@@ -437,6 +439,21 @@ namespace Assets
         std::vector<VkWriteDescriptorSet> descriptorWrites =
         {
             descriptorSets.Bind(0, 1, imageInfo, textureIdx, 1),
+        };
+        descriptorSets.UpdateDescriptors(0, descriptorWrites);
+    }
+
+    void GlobalTexturePool::BindShadowMap(uint32_t slot, const Vulkan::ImageView& view, const Vulkan::Sampler& sampler)
+    {
+        auto& descriptorSets = descriptorSetManager_->DescriptorSets();
+        const VkDescriptorImageInfo imageInfo{
+            sampler.Handle(),
+            view.Handle(),
+            VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+        };
+        std::vector<VkWriteDescriptorSet> descriptorWrites =
+        {
+            descriptorSets.Bind(0, 2, imageInfo, slot, 1),
         };
         descriptorSets.UpdateDescriptors(0, descriptorWrites);
     }

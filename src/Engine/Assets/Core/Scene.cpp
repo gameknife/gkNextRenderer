@@ -120,6 +120,41 @@ namespace Assets
         cpuShadowMap_->Image().TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_GENERAL);
         cpuShadowMap_->SetDebugName("Shadowmap");
 
+        // 太阳方向光 CSM：4 个单层 D32_SFLOAT 阴影图，初始 layout = DEPTH_READ_ONLY。
+        {
+            const auto& device = commandPool.Device();
+            const VkExtent2D extent{kSunShadowResolution, kSunShadowResolution};
+            constexpr VkFormat shadowFormat = VK_FORMAT_D32_SFLOAT;
+            constexpr VkImageUsageFlags shadowUsage =
+                VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+            for (uint32_t i = 0; i < kSunShadowCascadeCount; ++i)
+            {
+                sunShadowImages_[i].reset(
+                    new Vulkan::Image(device, extent, 1, shadowFormat, VK_IMAGE_TILING_OPTIMAL, shadowUsage, false));
+
+                sunShadowMemories_[i].reset(new Vulkan::DeviceMemory(
+                    sunShadowImages_[i]->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
+                sunShadowMemories_[i]->SetName(fmt::format("SunShadowCascade{} Memory", i).c_str());
+
+                sunShadowImages_[i]->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
+
+                sunShadowViews_[i].reset(new Vulkan::ImageView(
+                    device, sunShadowImages_[i]->Handle(), shadowFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1));
+            }
+
+            Vulkan::SamplerConfig samplerConfig;
+            samplerConfig.MagFilter = VK_FILTER_NEAREST;
+            samplerConfig.MinFilter = VK_FILTER_NEAREST;
+            samplerConfig.AddressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+            samplerConfig.AddressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+            samplerConfig.AddressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+            samplerConfig.BorderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+            samplerConfig.AnisotropyEnable = false;
+            samplerConfig.MipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+            sunShadowSampler_.reset(new Vulkan::Sampler(device, samplerConfig));
+        }
+
         RebuildMeshBuffer(commandPool, supportRayTracing);
     }
 
@@ -152,6 +187,14 @@ namespace Assets
         skinJointBufferMemory_.reset();
 
         cpuShadowMap_.reset();
+
+        sunShadowSampler_.reset();
+        for (uint32_t i = 0; i < kSunShadowCascadeCount; ++i)
+        {
+            sunShadowViews_[i].reset();
+            sunShadowImages_[i].reset();
+            sunShadowMemories_[i].reset();
+        }
     }
 
     void Scene::PostLoad(const std::vector<Skeleton>& skeletons)

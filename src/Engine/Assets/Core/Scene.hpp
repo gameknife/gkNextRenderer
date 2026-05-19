@@ -1,5 +1,6 @@
 #pragma once
 #include <glm/vec2.hpp>
+#include <array>
 #include <memory>
 #include <string>
 #include <vector>
@@ -20,7 +21,9 @@ namespace Vulkan
     class CommandPool;
     class DeviceMemory;
     class Image;
+    class ImageView;
     class RenderImage;
+    class Sampler;
     class DescriptorSetManager;
 } // namespace Vulkan
 
@@ -177,6 +180,13 @@ namespace Assets
 
         TextureImage& ShadowMap() const { return *cpuShadowMap_; }
 
+        // GPU CSM 资源（4 个 cascade，单层 D32_SFLOAT，独立 image）。
+        static constexpr uint32_t kSunShadowCascadeCount = 4;
+        static constexpr uint32_t kSunShadowResolution = 2048;
+        Vulkan::Image& SunShadowImage(uint32_t cascade) const { return *sunShadowImages_[cascade]; }
+        const Vulkan::ImageView& SunShadowImageView(uint32_t cascade) const { return *sunShadowViews_[cascade]; }
+        const Vulkan::Sampler& SunShadowSampler() const { return *sunShadowSampler_; }
+
         Assets::CPU::FCPUAccelerationStructure& GetCPUAccelerationStructure() { return cpuAccelerationStructure_; }
         glm::vec3 GetSceneAABBMin() const { return sceneAABBMin_; }
         glm::vec3 GetSceneAABBMax() const { return sceneAABBMax_; }
@@ -236,6 +246,11 @@ namespace Assets
         std::unique_ptr<Vulkan::DeviceMemory> skinJointBufferMemory_;
 
         std::unique_ptr<TextureImage> cpuShadowMap_;
+
+        std::array<std::unique_ptr<Vulkan::Image>, 4> sunShadowImages_;
+        std::array<std::unique_ptr<Vulkan::DeviceMemory>, 4> sunShadowMemories_;
+        std::array<std::unique_ptr<Vulkan::ImageView>, 4> sunShadowViews_;
+        std::unique_ptr<Vulkan::Sampler> sunShadowSampler_;
 
         uint32_t lightCount_{};
         uint32_t indicesCount_{};

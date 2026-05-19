@@ -25,10 +25,8 @@ namespace Vulkan::LegacyDeferred
 	{
 	public:
 		VULKAN_NON_COPIABLE(SoftwareModernRenderer)
-		
-		explicit SoftwareModernRenderer(Vulkan::VulkanBaseRenderer& baseRender,
-		                                std::string shaderPath = "assets/shaders/Core.SwModern.comp.slang.spv",
-		                                bool simpleComposeOnly = false);
+
+		explicit SoftwareModernRenderer(Vulkan::VulkanBaseRenderer& baseRender);
 		~SoftwareModernRenderer();
 
 		void CreateSwapChain(const VkExtent2D& extent) override;
@@ -39,9 +37,7 @@ namespace Vulkan::LegacyDeferred
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> deferredShadingPipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> composePipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> accumulatePipeline_;
-		std::string shaderPath_;
-		bool simpleComposeOnly_{false};
-		
+
 		uint32_t prevSingleDiffuseId_{};
 		uint32_t prevSingleSpecularId_{};
 		uint32_t prevSingleAlbedoId_{};
