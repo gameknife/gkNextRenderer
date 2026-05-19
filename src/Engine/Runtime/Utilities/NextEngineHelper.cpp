@@ -56,7 +56,7 @@ namespace
     }
 }
 
-namespace NextEngineHelper
+namespace Runtime::EngineHelper
 {
     bool TryProjectWorldToScreen(const glm::vec3& worldPos, ImVec2& outImGuiPos)
     {

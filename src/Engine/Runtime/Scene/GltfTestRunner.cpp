@@ -21,6 +21,9 @@ static size_t WriteFileCallback(void* ptr, size_t size, size_t nmemb, FILE* stre
     return written;
 }
 
+namespace Runtime::Scene
+{
+
 GltfTestRunner::GltfTestRunner(NextEngine* engine) : engine_(engine)
 {
     cacheDir_ = "../cache/gltf_samples/";
@@ -195,4 +198,6 @@ bool GltfTestRunner::Update(double deltaSeconds)
     }
 
     return false;
+}
+
 }

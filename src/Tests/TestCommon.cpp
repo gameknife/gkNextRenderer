@@ -5,7 +5,7 @@
 
 // Define the global hook for creating the game instance.
 // This is called by NextEngine internally.
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
 {
     return std::make_unique<TestGameInstance>(config, options, engine);
 }
@@ -23,7 +23,7 @@ EngineTestFixture::EngineTestFixture()
     };
     int argc = sizeof(argv) / sizeof(argv[0]);
 
-    options_ = std::make_unique<Options>(argc, argv);
+    options_ = std::make_unique<Runtime::Config::Options>(argc, argv);
     GOption = options_.get();
 
     engine_ = std::make_unique<NextEngine>(*GOption);

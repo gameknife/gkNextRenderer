@@ -3,6 +3,9 @@
 #include <cxxopts.hpp>
 #include <iostream>
 
+namespace Runtime::Config
+{
+
 Options::Options(const int argc, const char* argv[])
 {	
 	cxxopts::Options options("options", "");
@@ -70,4 +73,6 @@ Options::Options(const int argc, const char* argv[])
 		std::cerr << e.what() << std::endl;
 		exit(0);
 	}
+}
+
 }

@@ -15,7 +15,7 @@ struct ImFont;
 class Voyage3DGameInstance : public NextGameInstanceBase
 {
 public:
-    Voyage3DGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine);
+    Voyage3DGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine);
     ~Voyage3DGameInstance() override = default;
 
     void OnInit() override;

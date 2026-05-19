@@ -37,7 +37,7 @@ namespace
         }
     }
 
-    void ApplyBorderlessFullscreenIfPossible(NextEngine* engine, const UserSettings& settings)
+    void ApplyBorderlessFullscreenIfPossible(NextEngine* engine, const Runtime::Config::UserSettings& settings)
     {
         if (!engine)
         {
@@ -50,7 +50,7 @@ namespace
 
 namespace NextCVar
 {
-    void RegisterEngineCVars(FCVarSystem& cvars, UserSettings& settings, ShowFlags& showFlags, NextEngine* engine)
+    void RegisterEngineCVars(FCVarSystem& cvars, Runtime::Config::UserSettings& settings, Runtime::Config::ShowFlags& showFlags, NextEngine* engine)
     {
         GK_CVAR_UINT("r.temporalFrames", settings, TemporalFrames, 16, ECVarFlags::Archive,
                      "Temporal accumulation frames");
@@ -128,7 +128,7 @@ namespace NextCVar
 
         if (engine != nullptr)
         {
-            Options& options = engine->GetOptions();
+            Runtime::Config::Options& options = engine->GetOptions();
             GK_CVAR_BOOL("r.shader.hot_reload", options, ShaderHotReload, options.ShaderHotReload,
                          ECVarFlags::Archive, "Enable Slang shader hot reload");
             GK_CVAR_FLOAT("r.shader.hot_reload_interval", options, ShaderHotReloadInterval,

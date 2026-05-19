@@ -8,7 +8,7 @@ class BenchMarker;
 class BenchmarkGameInstance : public NextGameInstanceBase
 {
 public:
-    BenchmarkGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine);
+    BenchmarkGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine);
     ~BenchmarkGameInstance() override = default;
 
     // overrides
@@ -24,7 +24,7 @@ public:
     
 private:
     std::unique_ptr<BenchMarker> benchMarker_;
-    ModelViewController modelViewController_;
+    Runtime::Camera::ModelViewController modelViewController_;
 
     double totalTime_;
 };

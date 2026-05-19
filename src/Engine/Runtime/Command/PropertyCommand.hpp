@@ -16,6 +16,9 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+namespace Runtime::Command
+{
+
 /**
  * Command for modifying a property on a component through reflection.
  * Supports undo/redo and command merging for continuous edits.
@@ -145,3 +148,5 @@ private:
     entt::meta_any newValue_;
     entt::meta_any oldValue_;
 };
+
+}

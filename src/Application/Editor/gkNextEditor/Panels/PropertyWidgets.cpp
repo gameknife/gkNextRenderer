@@ -111,7 +111,7 @@ namespace Editor
     bool PropertyWidgets::DrawProperty(
         const PropertyInfo& propInfo,
         Assets::Component* component,
-        CommandHistory* history,
+        Runtime::Command::CommandHistory* history,
         WidgetConfig config,
         const entt::meta_any* defaultInstance
     )
@@ -417,7 +417,7 @@ namespace Editor
         {
             if (history)
             {
-                history->Execute(std::make_unique<PropertyCommand>(component, propInfo.name, currentValue, oldValue));
+                history->Execute(std::make_unique<Runtime::Command::PropertyCommand>(component, propInfo.name, currentValue, oldValue));
             }
             else
             {
@@ -430,7 +430,7 @@ namespace Editor
     
     bool PropertyWidgets::DrawComponentProperties(
         Assets::Component* component,
-        CommandHistory* history,
+        Runtime::Command::CommandHistory* history,
         WidgetConfig config,
         ImGuiTextFilter* filter
     )

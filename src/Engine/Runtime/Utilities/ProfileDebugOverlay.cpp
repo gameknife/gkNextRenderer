@@ -135,7 +135,7 @@ namespace
     }
 }
 
-void Runtime::DrawProfileDebugOverlay(NextEngine& engine, const Statistics& statistics, VulkanGpuTimer* gpuTimer,
+void Runtime::DrawProfileDebugOverlay(NextEngine& engine, const NextUI::Statistics& statistics, VulkanGpuTimer* gpuTimer,
                                       float topOffset)
 {
     Assets::Scene& scene = engine.GetScene();

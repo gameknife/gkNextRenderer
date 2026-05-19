@@ -133,8 +133,8 @@ namespace Flappy
         pipeIt->gapCenterY = config.gapCenterMinY + (config.gapCenterMaxY - config.gapCenterMinY) * t;
         pipeIt->active = true;
         pipeIt->scored = false;
-        NodeUtils::SetVisible(pipeIt->topNode, true);
-        NodeUtils::SetVisible(pipeIt->bottomNode, true);
+        Assets::NodeUtils::SetVisible(pipeIt->topNode, true);
+        Assets::NodeUtils::SetVisible(pipeIt->bottomNode, true);
         SyncVisual(*pipeIt, config, world);
     }
 
@@ -173,13 +173,13 @@ namespace Flappy
         {
             pipe.topNode->SetTranslation(glm::vec3(0.0f, hiddenY, 0.0f));
             pipe.topNode->RecalcTransform(true);
-            NodeUtils::SetVisible(pipe.topNode, false);
+            Assets::NodeUtils::SetVisible(pipe.topNode, false);
         }
         if (pipe.bottomNode)
         {
             pipe.bottomNode->SetTranslation(glm::vec3(0.0f, hiddenY, 0.0f));
             pipe.bottomNode->RecalcTransform(true);
-            NodeUtils::SetVisible(pipe.bottomNode, false);
+            Assets::NodeUtils::SetVisible(pipe.bottomNode, false);
         }
     }
 }

@@ -113,7 +113,7 @@ namespace Editor
                 ExtensionVisual{".json", &kConfig},
             };
 
-            if (SceneList::IsSupportedSceneExtension(extension))
+            if (Runtime::Scene::SceneList::IsSupportedSceneExtension(extension))
             {
                 return kScene;
             }
@@ -288,15 +288,15 @@ namespace Editor
                                                           std::vector<std::filesystem::directory_entry>>& directoryCache)
         {
             (void)ui;
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Background, 0.48f));
-            ImGui::PushStyleColor(ImGuiCol_Border, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Border, 0.82f));
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.48f));
+            ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.82f));
             ImGui::BeginChild("ContentBrowserSidebar", ImVec2(170.0f, 0.0f), true);
             ImGui::TextDisabled("Favorites");
             DrawQuickAccessDirectory(ICON_FA_STAR " Assets", rootPath, currentPath);
             DrawQuickAccessDirectory(ICON_FA_FOLDER " Models", rootPath / "models", currentPath);
             DrawQuickAccessDirectory(ICON_FA_FOLDER " Materials", rootPath / "materials", currentPath);
             DrawQuickAccessDirectory(ICON_FA_FOLDER " Textures", rootPath / "textures", currentPath);
-            Runtime::UiTheme::DrawThinSeparator(0.70f);
+            NextUI::Theme::DrawThinSeparator(0.70f);
             ImGui::TextDisabled("Project");
             DrawDirectoryTreeNode(rootPath, currentPath, directoryCache, true);
             ImGui::EndChild();
@@ -393,8 +393,8 @@ namespace Editor
             {
                 ImGui::PushFont(ui.bigIcon);
             }
-            ImGui::PushStyleColor(ImGuiCol_Button, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Background));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::SurfaceHover));
+            ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Background));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover));
             ImGui::PushID(static_cast<int>(globalId));
 
             ImTextureID textureId = ctx.ui.RequestImTextureId(globalId);
@@ -442,18 +442,18 @@ namespace Editor
             const ImVec2 cardMax = cardMin + ImVec2(GContentBrowserIconSize + 12.0f, GContentBrowserIconSize + 54.0f);
             ImGui::GetWindowDrawList()->AddRectFilled(
                 cardMin, cardMax,
-                selected ? Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Accent, 0.14f)
-                         : Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Background, 0.84f),
+                selected ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Accent, 0.14f)
+                         : NextUI::Theme::ColorU32(NextUI::Theme::EColor::Background, 0.84f),
                 8.0f);
             ImGui::GetWindowDrawList()->AddRect(
                 cardMin, cardMax,
-                selected ? Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::AccentHover, 0.92f)
-                         : Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Border, 0.84f),
+                selected ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::AccentHover, 0.92f)
+                         : NextUI::Theme::ColorU32(NextUI::Theme::EColor::Border, 0.84f),
                 8.0f, 0, selected ? 1.4f : 1.0f);
             ImGui::GetWindowDrawList()->AddRectFilled(
                 cursorPos, cursorPos + ImVec2(GContentBrowserIconSize, GContentBrowserIconSize / 5.0f * 3.0f),
-                selected ? Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Accent, 0.72f)
-                         : Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::SurfaceElevated),
+                selected ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Accent, 0.72f)
+                         : NextUI::Theme::ColorU32(NextUI::Theme::EColor::SurfaceElevated),
                 6);
             ImGui::GetWindowDrawList()->AddLine(cursorPos, cursorPos + ImVec2(GContentBrowserIconSize, 0), color, 2);
 
@@ -568,7 +568,7 @@ namespace Editor
     {
         ImGui::Begin("Mesh Browser", nullptr);
         {
-            Runtime::UiTheme::DrawPanelHeader(ICON_FA_BOXES_PACKING, "Meshes", "Scene model buffers");
+            NextUI::Theme::DrawPanelHeader(ICON_FA_BOXES_PACKING, "Meshes", "Scene model buffers");
             DrawMeshBrowserContents(ctx, ui, nullptr);
         }
         ImGui::End();
@@ -578,7 +578,7 @@ namespace Editor
     {
         ImGui::Begin("Material Browser", nullptr);
         {
-            Runtime::UiTheme::DrawPanelHeader(ICON_FA_CIRCLE_HALF_STROKE, "Materials", "Drag materials onto viewport objects");
+            NextUI::Theme::DrawPanelHeader(ICON_FA_CIRCLE_HALF_STROKE, "Materials", "Drag materials onto viewport objects");
             DrawMaterialBrowserContents(ctx, ui, nullptr);
         }
         ImGui::End();
@@ -588,7 +588,7 @@ namespace Editor
     {
         ImGui::Begin("Texture Browser", nullptr);
         {
-            Runtime::UiTheme::DrawPanelHeader(ICON_FA_IMAGE, "Textures", "Loaded GPU textures");
+            NextUI::Theme::DrawPanelHeader(ICON_FA_IMAGE, "Textures", "Loaded GPU textures");
             DrawTextureBrowserContents(ctx, ui, nullptr);
         }
         ImGui::End();
@@ -598,7 +598,7 @@ namespace Editor
     {
         ImGui::Begin("Content Browser", nullptr);
         {
-            Runtime::UiTheme::DrawPanelHeader(ICON_FA_FOLDER_TREE, "Assets", "Project content browser");
+            NextUI::Theme::DrawPanelHeader(ICON_FA_FOLDER_TREE, "Assets", "Project content browser");
             static const std::filesystem::path rootPath =
                 std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets"));
             static std::filesystem::path currentPath = rootPath;
@@ -615,8 +615,8 @@ namespace Editor
                     DrawContentBrowserSidebar(ui, rootPath, currentPath, directoryCache);
                     ImGui::SameLine();
 
-                    ImGui::PushStyleColor(ImGuiCol_ChildBg, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Background, 0.28f));
-                    ImGui::PushStyleColor(ImGuiCol_Border, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Border, 0.82f));
+                    ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.28f));
+                    ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.82f));
                     ImGui::BeginChild("ContentBrowserMain", ImVec2(0.0f, -24.0f), true);
 
                     if (ImGui::Button(ICON_FA_PLUS " Add"))
@@ -644,14 +644,14 @@ namespace Editor
                     ImGui::SameLine();
                     DrawContentBrowserNavigation(ui, rootPath, currentPath, directoryCache);
 
-                    Runtime::UiTheme::DrawThinSeparator();
+                    NextUI::Theme::DrawThinSeparator();
                     ImGui::SetNextItemWidth(200.0f);
                     contentFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##ContentBrowserFilter", 200.0f);
                     ImGui::SameLine();
                     ImGui::SetNextItemWidth(118.0f);
                     ImGui::SliderFloat("Thumbnail", &GContentBrowserIconSize, 52.0f, 108.0f, "%.0f");
 
-                    Runtime::UiTheme::DrawThinSeparator(0.70f);
+                    NextUI::Theme::DrawThinSeparator(0.70f);
                     ImGui::BeginChild("Content Items", ImVec2(0.0f, 0.0f));
 
                     auto& entries = GetCachedDirectoryEntries(currentPath, directoryCache);

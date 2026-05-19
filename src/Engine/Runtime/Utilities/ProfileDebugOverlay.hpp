@@ -4,10 +4,14 @@
 
 class NextEngine;
 class VulkanGpuTimer;
-struct Statistics;
+
+namespace NextUI
+{
+    struct Statistics;
+}
 
 namespace Runtime
 {
-    void DrawProfileDebugOverlay(NextEngine& engine, const Statistics& statistics, VulkanGpuTimer* gpuTimer,
+    void DrawProfileDebugOverlay(NextEngine& engine, const NextUI::Statistics& statistics, VulkanGpuTimer* gpuTimer,
                                  float topOffset);
 }

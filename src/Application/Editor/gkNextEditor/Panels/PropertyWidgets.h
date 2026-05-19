@@ -51,7 +51,7 @@ namespace Editor
         static bool DrawProperty(
             const Reflection::PropertyInfo& propInfo,
             Assets::Component* component,
-            CommandHistory* history = nullptr,
+            Runtime::Command::CommandHistory* history = nullptr,
             WidgetConfig config = WidgetConfig(),
             const entt::meta_any* defaultInstance = nullptr
         );
@@ -63,7 +63,7 @@ namespace Editor
          */
         static bool DrawComponentProperties(
             Assets::Component* component,
-            CommandHistory* history = nullptr,
+            Runtime::Command::CommandHistory* history = nullptr,
             WidgetConfig config = WidgetConfig(),
             ImGuiTextFilter* filter = nullptr
         );

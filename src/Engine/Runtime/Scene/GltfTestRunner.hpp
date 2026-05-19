@@ -6,6 +6,9 @@
 
 class NextEngine;
 
+namespace Runtime::Scene
+{
+
 class GltfTestRunner
 {
 public:
@@ -38,3 +41,5 @@ private:
 
     std::string cacheDir_;
 };
+
+}

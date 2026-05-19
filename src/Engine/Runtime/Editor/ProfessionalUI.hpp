@@ -7,7 +7,7 @@
 
 class NextEngine;
 
-namespace Runtime::UiTheme
+namespace NextUI::Theme
 {
     enum class EColor
     {
@@ -125,4 +125,4 @@ namespace Runtime::UiTheme
     void DrawThinSeparator(float alpha = 1.0f);
     void DrawVerticalSeparator(float height = 18.0f, float spacing = 12.0f, float alpha = 0.9f);
     void DrawProgressBar(float fraction, ImVec4 color, ImVec2 size);
-} // namespace Runtime::UiTheme
+} // namespace NextUI::Theme

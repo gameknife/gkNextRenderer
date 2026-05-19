@@ -105,7 +105,7 @@ void BrickPlayerGameInstance::DrawSnapConfirmation() const
     const float pointSize = pulsing ? 8.0f : 5.5f;
     const float lineSize = pulsing ? 3.0f : 2.0f;
 
-    NextEngineHelper::DrawAuxPoint(activeSnapCandidate_.desiredTranslation, snapColor, pointSize);
+    Runtime::EngineHelper::DrawAuxPoint(activeSnapCandidate_.desiredTranslation, snapColor, pointSize);
 
     if (activeSnapCandidate_.restoreOriginalHierarchy
         || activeSnapCandidate_.draggedConnectorIndex < 0
@@ -132,14 +132,14 @@ void BrickPlayerGameInstance::DrawSnapConfirmation() const
     const float draggedAxisLength = std::max(std::max(draggedConnector.connector->length, draggedConnector.connector->radius * 2.0f), 0.01f);
     const float targetAxisLength = std::max(std::max(targetConnector.connector->length, targetConnector.connector->radius * 2.0f), 0.01f);
 
-    NextEngineHelper::DrawAuxPoint(draggedConnector.worldPosition, snapColor, pointSize + 1.0f);
-    NextEngineHelper::DrawAuxPoint(targetConnector.worldPosition, glm::vec4(1.0f, 0.95f, 0.35f, 1.0f), pointSize + 1.0f);
-    NextEngineHelper::DrawAuxLine(draggedConnector.worldPosition, targetConnector.worldPosition, snapColor, lineSize);
-    NextEngineHelper::DrawAuxLine(draggedConnector.worldPosition,
+    Runtime::EngineHelper::DrawAuxPoint(draggedConnector.worldPosition, snapColor, pointSize + 1.0f);
+    Runtime::EngineHelper::DrawAuxPoint(targetConnector.worldPosition, glm::vec4(1.0f, 0.95f, 0.35f, 1.0f), pointSize + 1.0f);
+    Runtime::EngineHelper::DrawAuxLine(draggedConnector.worldPosition, targetConnector.worldPosition, snapColor, lineSize);
+    Runtime::EngineHelper::DrawAuxLine(draggedConnector.worldPosition,
                                   draggedConnector.worldPosition + draggedConnector.worldAxis * draggedAxisLength,
                                   snapColor,
                                   lineSize);
-    NextEngineHelper::DrawAuxLine(targetConnector.worldPosition,
+    Runtime::EngineHelper::DrawAuxLine(targetConnector.worldPosition,
                                   targetConnector.worldPosition + targetConnector.worldAxis * targetAxisLength,
                                   glm::vec4(1.0f, 0.95f, 0.35f, 1.0f),
                                   lineSize);
@@ -208,8 +208,8 @@ void BrickPlayerGameInstance::DrawSnapDebug() const
         }
 
         const float axisLength = std::max(std::max(connector.connector->length, connector.connector->radius * 2.0f), 0.01f);
-        NextEngineHelper::DrawAuxPoint(connector.worldPosition, color, pointSize);
-        NextEngineHelper::DrawAuxLine(connector.worldPosition,
+        Runtime::EngineHelper::DrawAuxPoint(connector.worldPosition, color, pointSize);
+        Runtime::EngineHelper::DrawAuxLine(connector.worldPosition,
                                       connector.worldPosition + connector.worldAxis * axisLength,
                                       color,
                                       lineSize);
@@ -248,7 +248,7 @@ void BrickPlayerGameInstance::DrawSnapDebug() const
 
         if (!hoveredTargetConnectors.empty())
         {
-            NextEngineHelper::DrawAuxPoint(hoveredAssembly_.hitPoint, glm::vec4(1.0f, 0.2f, 1.0f, 1.0f), 5.0f);
+            Runtime::EngineHelper::DrawAuxPoint(hoveredAssembly_.hitPoint, glm::vec4(1.0f, 0.2f, 1.0f, 1.0f), 5.0f);
 
             for (size_t targetConnectorIndex = 0; targetConnectorIndex < hoveredTargetConnectors.size(); ++targetConnectorIndex)
             {
@@ -292,7 +292,7 @@ void BrickPlayerGameInstance::DrawSnapDebug() const
                     const bool isActivePair = activeSnapCandidate_.valid
                         && activeSnapCandidate_.draggedConnectorIndex == lockedDraggedConnectorIndex_
                         && activeSnapCandidate_.targetConnectorIndex == static_cast<int32_t>(targetConnectorIndex);
-                    NextEngineHelper::DrawAuxLine(lockedWorldConnector.worldPosition,
+                    Runtime::EngineHelper::DrawAuxLine(lockedWorldConnector.worldPosition,
                                                   targetConnector.worldPosition,
                                                   isActivePair ? glm::vec4(0.1f, 1.0f, 0.2f, 1.0f)
                                                                : glm::vec4(1.0f, 0.85f, 0.2f, 0.8f),

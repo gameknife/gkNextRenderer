@@ -20,7 +20,7 @@ public:
 class EngineTestFixture
 {
 protected:
-    std::unique_ptr<Options> options_;
+    std::unique_ptr<Runtime::Config::Options> options_;
     std::unique_ptr<NextEngine> engine_;
 
 public:

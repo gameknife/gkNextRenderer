@@ -26,7 +26,7 @@ namespace Editor
     {
         ImGuiViewport* viewport = ImGui::GetMainViewport();
 
-        Runtime::UiTheme::FAppTitleBarConfig config{};
+        NextUI::Theme::FAppTitleBarConfig config{};
         config.BrandWindowId = "EditorBrand";
         config.MenuWindowId = "EditorMenuBar";
         config.RightWindowId = "EditorWindowControls";
@@ -140,7 +140,7 @@ namespace Editor
             menuRight = std::max(menuRight, ImGui::GetItemRectMax().x);
             if (editMenuOpen)
             {
-                CommandHistory& history = ctx.engine.GetCommandHistory();
+                Runtime::Command::CommandHistory& history = ctx.engine.GetCommandHistory();
                 const bool canUndo = history.CanUndo();
                 const bool canRedo = history.CanRedo();
 
@@ -311,8 +311,8 @@ namespace Editor
         {
             ctx.actions.Dispatch(ctx, EEditorAction::System_RequestExit);
         };
-        Runtime::UiTheme::DrawAppTitleBar(ctx.engine, config);
+        NextUI::Theme::DrawAppTitleBar(ctx.engine, config);
 
-        Runtime::UiTheme::DrawStandardBottomBar(ctx.engine, "Footer", kFooterHeight);
+        NextUI::Theme::DrawStandardBottomBar(ctx.engine, "Footer", kFooterHeight);
     }
 } // namespace Editor

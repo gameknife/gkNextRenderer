@@ -72,7 +72,7 @@ namespace NextGameplay
         }
 
         const uint32_t instanceId = scene.GenerateInstanceId();
-        auto visualRoot = SceneBuilder::CreateRenderNode(visualName,
+        auto visualRoot = Assets::SceneBuilder::CreateRenderNode(visualName,
                                                          glm::vec3(0.0f),
                                                          glm::vec3(1.0f),
                                                          instanceId,

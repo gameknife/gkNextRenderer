@@ -44,7 +44,7 @@ namespace
         if (projectile.node)
         {
             projectile.node->SetTranslation(Voyage3D::HiddenPosition);
-            NodeUtils::SetVisible(projectile.node, false);
+            Assets::NodeUtils::SetVisible(projectile.node, false);
         }
     }
 

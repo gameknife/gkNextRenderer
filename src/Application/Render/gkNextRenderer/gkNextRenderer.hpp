@@ -7,7 +7,7 @@
 class NextRendererGameInstance : public NextGameInstanceBase
 {
 public:
-    NextRendererGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine);
+    NextRendererGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine);
     ~NextRendererGameInstance() override = default;
 
     // overrides
@@ -57,8 +57,8 @@ private:
     void DrawViewportTopBar();
     void DrawViewportBottomBar();
     void RequestScreenshot(bool openFolder, const std::string& tag);
-    ModelViewController modelViewController_;
-    GizmoController gizmoController_;
+    Runtime::Camera::ModelViewController modelViewController_;
+    NextUI::GizmoController gizmoController_;
 
     EWorkMode workMode_ = EWorkMode::Renderer;
 

@@ -213,7 +213,7 @@ namespace Runtime
                 glm::vec3 start = glm::vec3(worldTransform * runtimeJoints_[parentIdx].GlobalTransform * glm::vec4(0, 0, 0, 1));
                 glm::vec3 end = glm::vec3(worldTransform * runtimeJoints_[i].GlobalTransform * glm::vec4(0, 0, 0, 1));
                 
-                NextEngineHelper::DrawAuxLine(start, end, glm::vec4(0, 1, 0, 1), 2.0f);
+                Runtime::EngineHelper::DrawAuxLine(start, end, glm::vec4(0, 1, 0, 1), 2.0f);
             }
         }
     }
@@ -726,15 +726,15 @@ namespace Runtime
 
         if (chain.footHitValid)
         {
-            NextEngineHelper::DrawAuxPoint(chain.footHitPoint, glm::vec4(1.0f, 0.5f, 0.1f, 1.0f), 5.0f);
-            NextEngineHelper::DrawAuxLine(chain.footHitPoint, chain.footHitPoint + footDebugNormal * axisLength,
+            Runtime::EngineHelper::DrawAuxPoint(chain.footHitPoint, glm::vec4(1.0f, 0.5f, 0.1f, 1.0f), 5.0f);
+            Runtime::EngineHelper::DrawAuxLine(chain.footHitPoint, chain.footHitPoint + footDebugNormal * axisLength,
                                           glm::vec4(1.0f, 0.7f, 0.1f, 1.0f), 2.0f);
         }
 
         if (chain.toeHitValid)
         {
-            NextEngineHelper::DrawAuxPoint(chain.toeHitPoint, glm::vec4(1.0f, 0.1f, 0.8f, 1.0f), 5.0f);
-            NextEngineHelper::DrawAuxLine(chain.toeHitPoint, chain.toeHitPoint + toeDebugNormal * axisLength,
+            Runtime::EngineHelper::DrawAuxPoint(chain.toeHitPoint, glm::vec4(1.0f, 0.1f, 0.8f, 1.0f), 5.0f);
+            Runtime::EngineHelper::DrawAuxLine(chain.toeHitPoint, chain.toeHitPoint + toeDebugNormal * axisLength,
                                           glm::vec4(1.0f, 0.2f, 0.9f, 1.0f), 2.0f);
         }
 
@@ -753,11 +753,11 @@ namespace Runtime
             const glm::vec3 footForwardAxis =
                 glm::normalize(glm::vec3(componentWorldTransform * glm::vec4(footForwardAxisModel, 0.0f)));
 
-            NextEngineHelper::DrawAuxLine(footWorldPos, footWorldPos + footRightAxis * footAxisLength,
+            Runtime::EngineHelper::DrawAuxLine(footWorldPos, footWorldPos + footRightAxis * footAxisLength,
                                           glm::vec4(0.75f, 0.0f, 0.0f, 1.0f), 2.0f);
-            NextEngineHelper::DrawAuxLine(footWorldPos, footWorldPos + footUpAxis * footAxisLength,
+            Runtime::EngineHelper::DrawAuxLine(footWorldPos, footWorldPos + footUpAxis * footAxisLength,
                                           glm::vec4(0.0f, 0.75f, 0.0f, 1.0f), 2.0f);
-            NextEngineHelper::DrawAuxLine(footWorldPos, footWorldPos + footForwardAxis * footAxisLength,
+            Runtime::EngineHelper::DrawAuxLine(footWorldPos, footWorldPos + footForwardAxis * footAxisLength,
                                           glm::vec4(0.0f, 0.35f, 0.75f, 1.0f), 2.0f);
         }
 
@@ -776,11 +776,11 @@ namespace Runtime
             const glm::vec3 toeForwardAxis =
                 glm::normalize(glm::vec3(componentWorldTransform * glm::vec4(toeForwardAxisModel, 0.0f)));
 
-            NextEngineHelper::DrawAuxLine(toeWorldPos, toeWorldPos + toeRightAxis * toeAxisLength,
+            Runtime::EngineHelper::DrawAuxLine(toeWorldPos, toeWorldPos + toeRightAxis * toeAxisLength,
                                           glm::vec4(1.0f, 0.15f, 0.15f, 1.0f), 2.0f);
-            NextEngineHelper::DrawAuxLine(toeWorldPos, toeWorldPos + toeUpAxis * toeAxisLength,
+            Runtime::EngineHelper::DrawAuxLine(toeWorldPos, toeWorldPos + toeUpAxis * toeAxisLength,
                                           glm::vec4(0.15f, 1.0f, 0.15f, 1.0f), 2.0f);
-            NextEngineHelper::DrawAuxLine(toeWorldPos, toeWorldPos + toeForwardAxis * toeAxisLength,
+            Runtime::EngineHelper::DrawAuxLine(toeWorldPos, toeWorldPos + toeForwardAxis * toeAxisLength,
                                           glm::vec4(0.2f, 0.55f, 1.0f, 1.0f), 2.0f);
         }
     }

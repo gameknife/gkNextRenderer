@@ -18,7 +18,7 @@ namespace
 
 namespace NextGameplay
 {
-void FNavGrid::Build(FCPUAccelerationStructure& bvh, const FNavGridSettings& settings)
+void FNavGrid::Build(Assets::CPU::FCPUAccelerationStructure& bvh, const FNavGridSettings& settings)
 {
     settings_ = settings;
     width_ = static_cast<int>(std::ceil((settings_.worldMax.x - settings_.worldMin.x) / settings_.cellSize));
@@ -50,7 +50,7 @@ void FNavGrid::Build(FCPUAccelerationStructure& bvh, const FNavGridSettings& set
                  width_, height_, walkableCount, settings_.cellSize, settings_.agentRadius);
 }
 
-void FNavGrid::RebuildDirtyRegion(FCPUAccelerationStructure& bvh, const glm::vec3& dirtyWorldMin,
+void FNavGrid::RebuildDirtyRegion(Assets::CPU::FCPUAccelerationStructure& bvh, const glm::vec3& dirtyWorldMin,
                                   const glm::vec3& dirtyWorldMax)
 {
     if (cells_.empty() || width_ <= 0 || height_ <= 0)
@@ -553,7 +553,7 @@ bool FNavGrid::IsGridRectValid(const FGridRect& rect) const
     return rect.minGx <= rect.maxGx && rect.minGz <= rect.maxGz;
 }
 
-void FNavGrid::SampleBaseWalkability(FCPUAccelerationStructure& bvh, const FGridRect& rect)
+void FNavGrid::SampleBaseWalkability(Assets::CPU::FCPUAccelerationStructure& bvh, const FGridRect& rect)
 {
     if (!IsGridRectValid(rect))
     {
@@ -618,7 +618,7 @@ void FNavGrid::UpdateWalkabilityFromBase(const FGridRect& rect)
     }
 }
 
-bool FNavGrid::SampleBaseCell(FCPUAccelerationStructure& bvh, int gx, int gz, FNavCell& outCell) const
+bool FNavGrid::SampleBaseCell(Assets::CPU::FCPUAccelerationStructure& bvh, int gx, int gz, FNavCell& outCell) const
 {
     outCell = {};
 

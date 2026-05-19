@@ -29,7 +29,7 @@ namespace
                                              uint32_t materialId,
                                              bool visible = true)
     {
-        auto node = SceneBuilder::CreateRenderNode(name,
+        auto node = Assets::SceneBuilder::CreateRenderNode(name,
                                                    translation,
                                                    scale,
                                                    static_cast<uint32_t>(nodes.size()),
@@ -70,12 +70,12 @@ namespace
     }
 }
 
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
 {
     return std::make_unique<FlappyCppGameInstance>(config, options, engine);
 }
 
-FlappyCppGameInstance::FlappyCppGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) :
+FlappyCppGameInstance::FlappyCppGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine) :
     NextGameInstanceBase(config, options, engine),
     replayMode_(options.FlappyReplay)
 {
@@ -294,10 +294,10 @@ void FlappyCppGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
     models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.5f, -0.5f, -0.02f), glm::vec3(0.5f, 0.5f, 0.02f)));
     const uint32_t backgroundModelId = static_cast<uint32_t>(models.size() - 1);
 
-    const uint32_t birdMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f, 0.82f, 0.12f));
-    const uint32_t pipeMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.52f, 0.58f, 0.62f));
-    const uint32_t boundaryMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.30f, 0.78f, 0.32f));
-    const uint32_t backgroundMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.30f, 0.62f, 0.94f));
+    const uint32_t birdMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f, 0.82f, 0.12f));
+    const uint32_t pipeMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.52f, 0.58f, 0.62f));
+    const uint32_t boundaryMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.30f, 0.78f, 0.32f));
+    const uint32_t backgroundMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.30f, 0.62f, 0.94f));
 
     auto birdNode = CreateNode(nodes,
                                "FlappyCpp_Bird",

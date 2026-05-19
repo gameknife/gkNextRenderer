@@ -2,17 +2,17 @@
 
 #include "Engine/Runtime/Scene/SceneList.hpp"
 
-TEST_CASE("SceneList recognizes supported scene extensions", "[Unit][SceneList]")
+TEST_CASE("Runtime::Scene::SceneList recognizes supported scene extensions", "[Unit][Runtime::Scene::SceneList]")
 {
-    CHECK(SceneList::IsSupportedSceneExtension(".glb"));
-    CHECK(SceneList::IsSupportedSceneExtension(".gltf"));
-    CHECK(SceneList::IsSupportedSceneExtension(".ldr"));
-    CHECK(SceneList::IsSupportedSceneExtension(".mpd"));
+    CHECK(Runtime::Scene::SceneList::IsSupportedSceneExtension(".glb"));
+    CHECK(Runtime::Scene::SceneList::IsSupportedSceneExtension(".gltf"));
+    CHECK(Runtime::Scene::SceneList::IsSupportedSceneExtension(".ldr"));
+    CHECK(Runtime::Scene::SceneList::IsSupportedSceneExtension(".mpd"));
 
-    CHECK(SceneList::IsSupportedSceneExtension(".GLB"));
-    CHECK(SceneList::IsSupportedSceneExtension(".LDR"));
+    CHECK(Runtime::Scene::SceneList::IsSupportedSceneExtension(".GLB"));
+    CHECK(Runtime::Scene::SceneList::IsSupportedSceneExtension(".LDR"));
 
-    CHECK_FALSE(SceneList::IsSupportedSceneExtension(".hdr"));
-    CHECK_FALSE(SceneList::IsSupportedSceneExtension(".png"));
-    CHECK_FALSE(SceneList::IsSupportedSceneExtension(""));
+    CHECK_FALSE(Runtime::Scene::SceneList::IsSupportedSceneExtension(".hdr"));
+    CHECK_FALSE(Runtime::Scene::SceneList::IsSupportedSceneExtension(".png"));
+    CHECK_FALSE(Runtime::Scene::SceneList::IsSupportedSceneExtension(""));
 }

@@ -203,9 +203,9 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
     const ImVec2 toolbarMin = ImGui::GetWindowPos();
     const ImVec2 toolbarMax = toolbarMin + ImGui::GetWindowSize();
     toolbarDrawList->AddLine(toolbarMin, ImVec2(toolbarMax.x, toolbarMin.y),
-                             Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Border, 0.70f), 1.0f);
+                             NextUI::Theme::ColorU32(NextUI::Theme::EColor::Border, 0.70f), 1.0f);
     toolbarDrawList->AddLine(ImVec2(toolbarMin.x, toolbarMax.y - 1.0f), toolbarMax,
-                             Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Border, 0.92f), 1.0f);
+                             NextUI::Theme::ColorU32(NextUI::Theme::EColor::Border, 0.92f), 1.0f);
 
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 0.0f));
     ImGui::SetCursorPosY((kToolbarSize - kToolbarIconHeight) * 0.5f);
@@ -217,12 +217,12 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
 
     ImGui::SetNextItemWidth(138.0f);
     ImGui::Combo("##ProjectSelector", &projectIndex, ICON_FA_CUBE " RayQuery\0" ICON_FA_CUBE " Playground\0\0");
-    Runtime::UiTheme::DrawTooltip("Project");
+    NextUI::Theme::DrawTooltip("Project");
     ImGui::SameLine();
 
     ImGui::SetNextItemWidth(108.0f);
     ImGui::Combo("##BackendSelector", &backendIndex, "Vulkan\0Metal\0DirectX 12\0\0");
-    Runtime::UiTheme::DrawTooltip("Backend");
+    NextUI::Theme::DrawTooltip("Backend");
     ImGui::SameLine(0.0f, 12.0f);
 
     ImGui::BeginGroup();
@@ -230,7 +230,7 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
     {
         ImGui::PushFont(uiState_.fontIcon);
     }
-    if (Runtime::UiTheme::ToolbarButton(ICON_FA_FLOPPY_DISK, "Save Scene", false,
+    if (NextUI::Theme::ToolbarButton(ICON_FA_FLOPPY_DISK, "Save Scene", false,
                                         ImVec2(kToolbarIconWidth, kToolbarIconHeight)))
     {
         if (!uiState_.currentScenePath.empty())
@@ -247,7 +247,7 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
         }
     }
     ImGui::SameLine();
-    if (Runtime::UiTheme::ToolbarButton(ICON_FA_FOLDER_OPEN, "Open Scene", false,
+    if (NextUI::Theme::ToolbarButton(ICON_FA_FOLDER_OPEN, "Open Scene", false,
                                         ImVec2(kToolbarIconWidth, kToolbarIconHeight)))
     {
         SDL_DialogFileFilter filters[] = {
@@ -268,10 +268,10 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
             filters, 2, nullptr, false);
     }
     ImGui::SameLine();
-    Runtime::UiTheme::ToolbarButton(ICON_FA_FILE_IMPORT, "Import Asset (placeholder)", false,
+    NextUI::Theme::ToolbarButton(ICON_FA_FILE_IMPORT, "Import Asset (placeholder)", false,
                                     ImVec2(kToolbarIconWidth, kToolbarIconHeight));
     ImGui::SameLine();
-    Runtime::UiTheme::ToolbarButton(ICON_FA_CUBE, "Create Actor (placeholder)", false,
+    NextUI::Theme::ToolbarButton(ICON_FA_CUBE, "Create Actor (placeholder)", false,
                                     ImVec2(kToolbarIconWidth, kToolbarIconHeight));
     if (uiState_.fontIcon)
     {
@@ -285,16 +285,16 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
     {
         ImGui::PushFont(uiState_.fontIcon);
     }
-    Runtime::UiTheme::ToolbarButton(ICON_FA_GEAR, "Project Settings (placeholder)", false,
+    NextUI::Theme::ToolbarButton(ICON_FA_GEAR, "Project Settings (placeholder)", false,
                                     ImVec2(kToolbarIconWidth, kToolbarIconHeight));
     ImGui::SameLine();
-    Runtime::UiTheme::ToolbarButton(ICON_FA_CIRCLE_NODES, "Node Graph (placeholder)", false,
+    NextUI::Theme::ToolbarButton(ICON_FA_CIRCLE_NODES, "Node Graph (placeholder)", false,
                                     ImVec2(kToolbarIconWidth, kToolbarIconHeight));
     ImGui::SameLine();
-    Runtime::UiTheme::ToolbarButton(ICON_FA_ARROWS_ROTATE, "Refresh Assets (placeholder)", false,
+    NextUI::Theme::ToolbarButton(ICON_FA_ARROWS_ROTATE, "Refresh Assets (placeholder)", false,
                                     ImVec2(kToolbarIconWidth, kToolbarIconHeight));
     ImGui::SameLine();
-    Runtime::UiTheme::ToolbarButton(ICON_FA_MAGNET, "Snap Settings (placeholder)", false,
+    NextUI::Theme::ToolbarButton(ICON_FA_MAGNET, "Snap Settings (placeholder)", false,
                                     ImVec2(kToolbarIconWidth, kToolbarIconHeight));
     ImGui::SameLine();
     if (uiState_.fontIcon)
@@ -304,26 +304,26 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
     ImGui::EndGroup();
     ImGui::SameLine(0.0f, 14.0f);
 
-    ImGui::PushStyleColor(ImGuiCol_Button, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Success, 0.92f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Success));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Success, 0.75f));
+    ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Success, 0.92f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::Success));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, NextUI::Theme::Color(NextUI::Theme::EColor::Success, 0.75f));
     if (ImGui::Button(ICON_FA_PLAY " Play", ImVec2(88.0f, kToolbarIconHeight)))
     {
         std::filesystem::path currentPath = std::filesystem::current_path();
         std::string cmdline = (currentPath / "gkNextRenderer").string() + (GOption->ForceSDR ? " --forcesdr" : "");
         std::system(cmdline.c_str());
     }
-    Runtime::UiTheme::DrawTooltip("Run in gkNextRenderer");
+    NextUI::Theme::DrawTooltip("Run in gkNextRenderer");
     ImGui::PopStyleColor(3);
     ImGui::SameLine(0.0f, 12.0f);
 
     ImGui::SetNextItemWidth(116.0f);
     ImGui::Combo("##PlatformSelector", &platformIndex, ICON_FA_DESKTOP " Desktop\0Android\0iOS\0\0");
-    Runtime::UiTheme::DrawTooltip("Target Platform");
+    NextUI::Theme::DrawTooltip("Target Platform");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(134.0f);
     ImGui::Combo("##BuildConfigSelector", &buildConfigIndex, "Development\0Debug\0Shipping\0\0");
-    Runtime::UiTheme::DrawTooltip("Build Configuration");
+    NextUI::Theme::DrawTooltip("Build Configuration");
 
     const float rightStart = viewport->Size.x - 104.0f;
     if (ImGui::GetCursorPosX() < rightStart)
@@ -334,7 +334,7 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
     {
         ImGui::PushFont(uiState_.fontIcon);
     }
-    Runtime::UiTheme::ToolbarButton(ICON_FA_GEAR, "Editor Settings", false,
+    NextUI::Theme::ToolbarButton(ICON_FA_GEAR, "Editor Settings", false,
                                     ImVec2(kToolbarIconWidth, kToolbarIconHeight));
     if (uiState_.fontIcon)
     {
@@ -346,14 +346,14 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
     const ImVec2 avatarPos = ImGui::GetCursorScreenPos();
     const float avatarRadius = kToolbarIconHeight * 0.5f;
     drawList->AddCircleFilled(avatarPos + ImVec2(avatarRadius, avatarRadius), avatarRadius,
-                              Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Accent, 0.55f), 24);
+                              NextUI::Theme::ColorU32(NextUI::Theme::EColor::Accent, 0.55f), 24);
     drawList->AddCircle(avatarPos + ImVec2(avatarRadius, avatarRadius), avatarRadius,
-                        Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::BorderStrong), 24, 1.0f);
+                        NextUI::Theme::ColorU32(NextUI::Theme::EColor::BorderStrong), 24, 1.0f);
     const ImVec2 initialsSize = ImGui::CalcTextSize("GK");
     drawList->AddText(avatarPos + ImVec2(avatarRadius - initialsSize.x * 0.5f, avatarRadius - initialsSize.y * 0.5f),
-                      Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Text), "GK");
+                      NextUI::Theme::ColorU32(NextUI::Theme::EColor::Text), "GK");
     ImGui::Dummy(ImVec2(kToolbarIconHeight, kToolbarIconHeight));
-    Runtime::UiTheme::DrawTooltip("User");
+    NextUI::Theme::DrawTooltip("User");
 
     ImGui::PopStyleVar();
     ImGui::End();
@@ -361,7 +361,7 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
 
 void EditorInterface::Render()
 {
-    UserInterface* ui = editor_->GetEngine().GetUserInterface();
+    NextUI::UserInterface* ui = editor_->GetEngine().GetUserInterface();
     if (ui == nullptr)
     {
         return;

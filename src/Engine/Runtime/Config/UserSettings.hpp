@@ -3,6 +3,9 @@
 
 #include "Engine/Assets/Core/Model.hpp"
 
+namespace Runtime::Config
+{
+
 struct UserSettings final
 {
 	int32_t RendererType;
@@ -61,3 +64,5 @@ struct UserSettings final
     bool UseAmbientCubePropagation = true;
     bool UseGpuAmbientCubeSdf = false;
 };
+
+}

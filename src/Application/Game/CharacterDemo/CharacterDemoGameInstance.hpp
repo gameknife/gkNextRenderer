@@ -20,7 +20,7 @@ namespace Runtime { class SkinnedMeshComponent; }
 class CharacterDemoGameInstance : public NextGameInstanceBase
 {
 public:
-    CharacterDemoGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine);
+    CharacterDemoGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine);
     ~CharacterDemoGameInstance() override = default;
 
     void OnInit() override;

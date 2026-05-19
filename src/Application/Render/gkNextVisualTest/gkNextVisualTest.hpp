@@ -36,7 +36,7 @@ struct VisualTestResult
 class VisualTestGameInstance : public NextGameInstanceBase
 {
 public:
-    VisualTestGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine);
+    VisualTestGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine);
     ~VisualTestGameInstance() override = default;
 
     void OnInit() override;

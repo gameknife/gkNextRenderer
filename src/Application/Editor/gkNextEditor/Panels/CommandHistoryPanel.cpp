@@ -14,7 +14,7 @@ namespace Editor
             return;
         }
 
-        CommandHistory& history = ctx.engine.GetCommandHistory();
+        Runtime::Command::CommandHistory& history = ctx.engine.GetCommandHistory();
 
         const bool canUndo = history.CanUndo();
         const bool canRedo = history.CanRedo();

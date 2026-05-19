@@ -5,7 +5,7 @@
 #include <imgui.h>
 #include <string_view>
 
-namespace FontLoader
+namespace NextUI::FontLoader
 {
     struct FFontRequest
     {

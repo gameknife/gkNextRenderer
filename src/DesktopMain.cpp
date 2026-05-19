@@ -13,8 +13,8 @@
 #include <SDL3/SDL_main.h>
 
 std::unique_ptr<NextEngine> GApplication;
-std::unique_ptr<Options> GOptionPtr;
-std::unique_ptr<GltfTestRunner> GTestRunner;
+std::unique_ptr<Runtime::Config::Options> GOptionPtr;
+std::unique_ptr<Runtime::Scene::GltfTestRunner> GTestRunner;
 
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
@@ -39,9 +39,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     // Handle command line options.
 #if IOS
     const char* argv1[] = { "gkNextRenderer", "--load-scene=assets/models/playground.glb" };
-    GOptionPtr.reset(new Options(2, argv1));
+    GOptionPtr.reset(new Runtime::Config::Options(2, argv1));
 #else
-    GOptionPtr.reset(new Options(argc, const_cast<const char**>(argv)));
+    GOptionPtr.reset(new Runtime::Config::Options(argc, const_cast<const char**>(argv)));
 #endif
     // Global GOption, can access from everywhere
     GOption = GOptionPtr.get();
@@ -80,7 +80,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
     if (GOption->TestGltfRobustness)
     {
-        GTestRunner = std::make_unique<GltfTestRunner>(GApplication.get());
+        GTestRunner = std::make_unique<Runtime::Scene::GltfTestRunner>(GApplication.get());
         GApplication->AddTickedTask([](double dt){ return GTestRunner->Update(dt); });
     }
 

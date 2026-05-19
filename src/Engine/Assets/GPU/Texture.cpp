@@ -519,7 +519,7 @@ namespace Assets
             memcpy(copyedData, data, bytelength);
         }
         auto textureLoadTask =
-            [this, hdr, srgb, texname, mime, copyedData, bytelength, newTextureIdx](ResTask& task)
+            [this, hdr, srgb, texname, mime, copyedData, bytelength, newTextureIdx](Tasks::ResTask& task)
             {
                 TextureTaskContext taskContext{};
                 const auto timer = std::chrono::high_resolution_clock::now();
@@ -957,7 +957,7 @@ namespace Assets
                 task.SetContext(taskContext);
             };
 
-        auto textureCompleteTask = [this, copyedData](ResTask& task)
+        auto textureCompleteTask = [this, copyedData](Tasks::ResTask& task)
             {
                 TextureTaskContext taskContext{};
                 task.GetContext(taskContext);
@@ -973,11 +973,11 @@ namespace Assets
 
         if (textureWorkerUploadEnabled_)
         {
-            TaskCoordinator::GetInstance()->AddTask(std::move(textureLoadTask), std::move(textureCompleteTask), 0);
+            Tasks::TaskCoordinator::GetInstance()->AddTask(std::move(textureLoadTask), std::move(textureCompleteTask), 0);
         }
         else
         {
-            TaskCoordinator::GetInstance()->AddMainThreadTask(std::move(textureLoadTask), std::move(textureCompleteTask), 0);
+            Tasks::TaskCoordinator::GetInstance()->AddMainThreadTask(std::move(textureLoadTask), std::move(textureCompleteTask), 0);
         }
 
         return newTextureIdx;

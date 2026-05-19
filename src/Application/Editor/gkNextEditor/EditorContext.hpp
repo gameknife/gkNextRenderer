@@ -3,9 +3,13 @@
 #include "Engine/Common/CoreMinimal.hpp"
 
 class NextEngine;
-class UserInterface;
 class EditorActionDispatcher;
-class GizmoController;
+
+namespace NextUI
+{
+    class UserInterface;
+    class GizmoController;
+}
 
 namespace Assets
 {
@@ -16,7 +20,7 @@ struct EditorContext final
 {
     NextEngine& engine;
     Assets::Scene& scene;
-    UserInterface& ui;
+    NextUI::UserInterface& ui;
     EditorActionDispatcher& actions;
-    GizmoController* gizmoController = nullptr;
+    NextUI::GizmoController* gizmoController = nullptr;
 };

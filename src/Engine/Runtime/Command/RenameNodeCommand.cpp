@@ -3,6 +3,9 @@
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Core/Scene.hpp"
 
+namespace Runtime::Command
+{
+
 RenameNodeCommand::RenameNodeCommand(Assets::Scene& scene, uint32_t instanceId, std::string newName)
     : scene_(&scene)
     , instanceId_(instanceId)
@@ -51,4 +54,6 @@ bool RenameNodeCommand::Undo()
     node->SetName(oldName_);
     scene_->MarkDirty();
     return true;
+}
+
 }

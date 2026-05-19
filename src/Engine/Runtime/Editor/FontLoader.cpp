@@ -37,7 +37,7 @@ namespace
     }
 }
 
-namespace FontLoader
+namespace NextUI::FontLoader
 {
     ImFont* Load(const FFontRequest& request)
     {

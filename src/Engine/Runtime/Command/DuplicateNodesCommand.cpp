@@ -10,6 +10,9 @@
 #include <algorithm>
 #include <unordered_set>
 
+namespace Runtime::Command
+{
+
 namespace
 {
 
@@ -18,7 +21,7 @@ namespace
         std::shared_ptr<Assets::Node> clone;
         if (auto render = source.GetComponent<Runtime::RenderComponent>())
         {
-            clone = SceneBuilder::CreateRenderNode(source.GetName() + "_copy",
+            clone = Assets::SceneBuilder::CreateRenderNode(source.GetName() + "_copy",
                                                    source.Translation(),
                                                    source.Scale(),
                                                    newInstanceId,
@@ -180,4 +183,6 @@ void DuplicateNodesCommand::RestoreSelection() const
         return;
     }
     Runtime::Command::SelectionUtils::RestoreSelection(*scene_, previousSelection_, previousSelectedId_);
+}
+
 }

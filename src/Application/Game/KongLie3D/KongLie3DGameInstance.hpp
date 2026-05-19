@@ -11,7 +11,7 @@
 class KongLie3DGameInstance : public NextGameInstanceBase
 {
 public:
-    KongLie3DGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine);
+    KongLie3DGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine);
     ~KongLie3DGameInstance() override = default;
 
     void OnInit() override;

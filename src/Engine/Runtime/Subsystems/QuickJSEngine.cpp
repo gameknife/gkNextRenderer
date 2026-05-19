@@ -695,7 +695,7 @@ namespace
         const glm::vec3 translation = GetObjectVec3(ctx, spec, "translation");
         const glm::vec3 scale = GetObjectVec3(ctx, spec, "scale", glm::vec3(1.0f));
         const bool visible = GetObjectBool(ctx, spec, "visible", true);
-        return SceneBuilder::CreateRenderNode(name, translation, scale, instanceId, modelId, materialId, visible);
+        return Assets::SceneBuilder::CreateRenderNode(name, translation, scale, instanceId, modelId, materialId, visible);
     }
 
     JSValue ComponentPropertyGetter(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv,
@@ -1260,7 +1260,7 @@ namespace
 
         glm::vec3 color(1.0f);
         JSValueToVec3(ctx, argv[0], color);
-        return JS_NewUint32(ctx, SceneBuilder::AddLambertianMaterialToScene(engine->GetScene(), color));
+        return JS_NewUint32(ctx, Assets::SceneBuilder::AddLambertianMaterialToScene(engine->GetScene(), color));
     }
 
     JSValue SceneAddDiffuseLightMaterial(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
@@ -1284,7 +1284,7 @@ namespace
         {
             JSToFloat(ctx, argv[1], parsedIntensity);
         }
-        return JS_NewUint32(ctx, SceneBuilder::AddDiffuseLightMaterialToScene(engine->GetScene(), color, parsedIntensity));
+        return JS_NewUint32(ctx, Assets::SceneBuilder::AddDiffuseLightMaterialToScene(engine->GetScene(), color, parsedIntensity));
     }
 
     JSValue SceneAddRenderNode(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
@@ -1363,7 +1363,7 @@ namespace
 
         glm::vec3 color(1.0f);
         JSValueToVec3(ctx, argv[0], color);
-        return JS_NewUint32(ctx, SceneBuilder::AddLambertianMaterial(*GQuickJSSceneBuild.materials, color));
+        return JS_NewUint32(ctx, Assets::SceneBuilder::AddLambertianMaterial(*GQuickJSSceneBuild.materials, color));
     }
 
     JSValue SceneBuildAddDiffuseLightMaterial(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
@@ -1385,7 +1385,7 @@ namespace
         {
             JSToFloat(ctx, argv[1], intensity);
         }
-        return JS_NewUint32(ctx, SceneBuilder::AddDiffuseLightMaterial(*GQuickJSSceneBuild.materials, color, intensity));
+        return JS_NewUint32(ctx, Assets::SceneBuilder::AddDiffuseLightMaterial(*GQuickJSSceneBuild.materials, color, intensity));
     }
 
     JSValue SceneBuildAddRenderNode(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)

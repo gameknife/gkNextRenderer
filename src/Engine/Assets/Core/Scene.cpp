@@ -949,7 +949,7 @@ namespace Assets
                     worldAABBMax = glm::max(worldAABBMax, corners[i]);
                 }
 
-                NextEngineHelper::DrawAuxBox(worldAABBMin, worldAABBMax, glm::vec4(0.2f, 0.8f, 1.0f, 1.0f), 1.5f);
+                Runtime::EngineHelper::DrawAuxBox(worldAABBMin, worldAABBMax, glm::vec4(0.2f, 0.8f, 1.0f, 1.0f), 1.5f);
             }
         }
 

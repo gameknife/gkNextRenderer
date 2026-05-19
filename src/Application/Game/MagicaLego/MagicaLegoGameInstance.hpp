@@ -105,7 +105,7 @@ struct FMagicaLegoSave
 class MagicaLegoGameInstance : public NextGameInstanceBase
 {
 public:
-    MagicaLegoGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine);
+    MagicaLegoGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine);
     ~MagicaLegoGameInstance() override = default;
 
     // overrides

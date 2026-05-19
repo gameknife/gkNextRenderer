@@ -13,6 +13,9 @@ namespace Assets
     class Node;
 }
 
+namespace Runtime::Command
+{
+
 class DeleteNodesCommand final : public ICommand
 {
 public:
@@ -42,3 +45,5 @@ private:
     uint32_t previousSelectedId_ = static_cast<uint32_t>(-1);
     bool initialized_ = false;
 };
+
+}

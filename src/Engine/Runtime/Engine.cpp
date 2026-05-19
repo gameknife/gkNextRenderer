@@ -67,7 +67,7 @@
 #include <spdlog/sinks/android_sink.h>
 #endif
 
-Options* GOption = nullptr;
+Runtime::Config::Options* GOption = nullptr;
 
 void NextEngine::RegisterReflection()
 {
@@ -218,12 +218,12 @@ namespace
     };
 } // namespace
 
-UserSettings CreateUserSettings(const Options& options)
+Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options& options)
 {
     (void)options;
-    SceneList::ScanScenes();
+    Runtime::Scene::SceneList::ScanScenes();
 
-    UserSettings userSettings{};
+    Runtime::Config::UserSettings userSettings{};
 
     userSettings.RendererType = 0;
     userSettings.SceneIndex = 0;
@@ -277,7 +277,7 @@ UserSettings CreateUserSettings(const Options& options)
 
 NextEngine* NextEngine::instance_ = nullptr;
 
-NextEngine::NextEngine(Options& options, void* userdata)
+NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     : options_(&options)
 {
     spdlog::set_level(spdlog::level::info);
@@ -683,7 +683,7 @@ bool NextEngine::Tick(bool forcingDelta)
         {
             SCOPED_CPU_TIMER("screenshot");
             renderer_->Device().WaitIdle();
-            ScreenShot::SaveSwapChainToFile(renderer_.get(),
+            Runtime::ScreenShot::SaveSwapChainToFile(renderer_.get(),
                                            pendingScreenShot_.filename,
                                            pendingScreenShot_.x,
                                            pendingScreenShot_.y,
@@ -710,7 +710,7 @@ bool NextEngine::Tick(bool forcingDelta)
             if (screenShotCaptureFramesRemaining_ == 0)
             {
                 renderer_->Device().WaitIdle();
-                ScreenShot::SaveSwapChainToFile(renderer_.get(),
+                Runtime::ScreenShot::SaveSwapChainToFile(renderer_.get(),
                                                screenShotCaptureSpec_.filename,
                                                screenShotCaptureSpec_.x,
                                                screenShotCaptureSpec_.y,
@@ -743,9 +743,9 @@ void NextEngine::End()
 {
     if (!GOption->FastExit)
     {
-        TaskCoordinator::GetInstance()->CancelAllParralledTasks();
-        TaskCoordinator::GetInstance()->WaitForAllParralledTask();
-        TaskCoordinator::DestroyInstance();
+        Tasks::TaskCoordinator::GetInstance()->CancelAllParralledTasks();
+        Tasks::TaskCoordinator::GetInstance()->WaitForAllParralledTask();
+        Tasks::TaskCoordinator::DestroyInstance();
     }
 
     if (audioEngine_)
@@ -898,7 +898,7 @@ void NextEngine::RequestScreenShot(FScreenShotSpec spec)
     if (spec.sync)
     {
         renderer_->Device().WaitIdle();
-        ScreenShot::SaveSwapChainToFile(renderer_.get(), spec.filename, spec.x, spec.y, spec.width, spec.height);
+        Runtime::ScreenShot::SaveSwapChainToFile(renderer_.get(), spec.filename, spec.x, spec.y, spec.width, spec.height);
         return;
     }
 
@@ -1213,7 +1213,7 @@ void NextEngine::OnRendererCreateSwapChain()
 {
     if (userInterface_.get() == nullptr)
     {
-        userInterface_.reset(new UserInterface(
+        userInterface_.reset(new NextUI::UserInterface(
             this, renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(), userSettings_,
             [this]() -> void { gameInstance_->OnPreConfigUI(); }, [this]() -> void { gameInstance_->OnInitUI(); }));
     }
@@ -1243,7 +1243,7 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
     }
 
     // Render the UI
-    Statistics stats = {};
+    NextUI::Statistics stats = {};
 
     stats.FrameTime = static_cast<float>((now - lastTimestamp) * 1000.0);
     lastTimestamp = now;
@@ -1404,7 +1404,7 @@ void NextEngine::OnKey(SDL_Event& event)
             {
                 if (!selectedIds.empty())
                 {
-                    auto command = std::make_unique<DuplicateNodesCommand>(GetScene(), selectedIds);
+                    auto command = std::make_unique<Runtime::Command::DuplicateNodesCommand>(GetScene(), selectedIds);
                     if (commandHistory_.Execute(std::move(command)))
                     {
                         return;
@@ -1433,7 +1433,7 @@ void NextEngine::OnKey(SDL_Event& event)
 
             if (!selectedIds.empty())
             {
-                auto command = std::make_unique<DeleteNodesCommand>(GetScene(), selectedIds);
+                auto command = std::make_unique<Runtime::Command::DeleteNodesCommand>(GetScene(), selectedIds);
                 if (commandHistory_.Execute(std::move(command)))
                 {
                     return;
@@ -1575,7 +1575,7 @@ void NextEngine::OnDropFile(const char* dropPath)
     const std::string path(dropPath);
     const std::filesystem::path droppedPath(path);
 
-    if (SceneList::IsSupportedScenePath(droppedPath))
+    if (Runtime::Scene::SceneList::IsSupportedScenePath(droppedPath))
     {
         RequestLoadScene({.filename = path});
         return;
@@ -1613,7 +1613,7 @@ void NextEngine::TickGamepadInput()
 void NextEngine::OnRendererBeforeNextFrame()
 {
     SCOPED_CPU_TIMER("task coordinator");
-    TaskCoordinator::GetInstance()->Tick();
+    Tasks::TaskCoordinator::GetInstance()->Tick();
 }
 
 void NextEngine::RequestLoadScene(FSceneLoadRequest request)
@@ -1634,8 +1634,8 @@ void NextEngine::RequestLoadScene(FSceneLoadRequest request)
 void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<void(SceneLoadContext&)> onGpuLoad)
 {
     // wait all task finish
-    TaskCoordinator::GetInstance()->CancelAllParralledTasks();
-    TaskCoordinator::GetInstance()->WaitForAllParralledTask();
+    Tasks::TaskCoordinator::GetInstance()->CancelAllParralledTasks();
+    Tasks::TaskCoordinator::GetInstance()->WaitForAllParralledTask();
 
     status_ = NextRenderer::EApplicationStatus::Loading;
 
@@ -1649,13 +1649,13 @@ void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<vo
     ctx.cameraState = std::make_shared<Assets::EnvironmentSetting>();
 
     // dispatch in thread task and reset in main thread
-    TaskCoordinator::GetInstance()->AddTask(
-        [ctx, sceneFileName](ResTask& task)
+    Tasks::TaskCoordinator::GetInstance()->AddTask(
+        [ctx, sceneFileName](Tasks::ResTask& task)
         {
             SceneTaskContext taskContext{};
             const auto timer = std::chrono::high_resolution_clock::now();
 
-            taskContext.success = SceneList::LoadScene(sceneFileName, *ctx.cameraState, *ctx.nodes, *ctx.models,
+            taskContext.success = Runtime::Scene::SceneList::LoadScene(sceneFileName, *ctx.cameraState, *ctx.nodes, *ctx.models,
                                                        *ctx.materials, *ctx.lights, *ctx.tracks, *ctx.skeletons);
 
             taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
@@ -1668,7 +1668,7 @@ void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<vo
             std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
             task.SetContext(taskContext);
         },
-        [this, ctx, sceneFileName, onGpuLoad](ResTask& task) mutable
+        [this, ctx, sceneFileName, onGpuLoad](Tasks::ResTask& task) mutable
         {
             SceneTaskContext taskContext{};
             task.GetContext(taskContext);

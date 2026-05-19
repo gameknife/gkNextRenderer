@@ -20,6 +20,9 @@ namespace Assets
     struct Skeleton;
 }
 
+namespace Runtime::Scene
+{
+
 class SceneList final
 {
 public:
@@ -36,3 +39,5 @@ public:
                      std::vector<Assets::AnimationTrack>& tracks,
                      std::vector<Assets::Skeleton>& skeletons);
 };
+
+}

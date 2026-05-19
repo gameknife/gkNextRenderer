@@ -2,6 +2,9 @@
 
 #include <chrono>
 
+namespace Tasks
+{
+
 TaskThread::TaskThread(TaskCoordinator* coordinator)
 {
     complete_.reset(new event_signal());
@@ -186,3 +189,5 @@ void TaskCoordinator::Tick()
 }
 
 std::unique_ptr<TaskCoordinator> TaskCoordinator::instance_;
+
+}

@@ -364,26 +364,26 @@ namespace Editor
         ImGui::Begin("Outliner", nullptr);
         {
             const std::string subtitle = std::to_string(ctx.scene.Nodes().size()) + " scene nodes";
-            Runtime::UiTheme::DrawPanelHeader(ICON_FA_DIAGRAM_PROJECT, "Outliner", subtitle.c_str());
+            NextUI::Theme::DrawPanelHeader(ICON_FA_DIAGRAM_PROJECT, "Outliner", subtitle.c_str());
 
-            Runtime::UiTheme::IconButton(ICON_FA_PLUS "##CreateActor", "Create Actor (placeholder)", false,
+            NextUI::Theme::IconButton(ICON_FA_PLUS "##CreateActor", "Create Actor (placeholder)", false,
                                          ImVec2(26.0f, 24.0f));
-            Runtime::UiTheme::DrawThinSeparator();
+            NextUI::Theme::DrawThinSeparator();
 
             const bool autoScrollWasEnabled = ui.outlinerAutoScrollToSelection;
-            if (Runtime::UiTheme::IconButton(ICON_FA_LOCATION_CROSSHAIRS "##AutoScrollToSelection",
+            if (NextUI::Theme::IconButton(ICON_FA_LOCATION_CROSSHAIRS "##AutoScrollToSelection",
                                              "Auto Scroll To Selection", autoScrollWasEnabled,
                                              ImVec2(28.0f, 24.0f)))
             {
                 ui.outlinerAutoScrollToSelection = !ui.outlinerAutoScrollToSelection;
             }
             ImGui::SameLine();
-            Runtime::UiTheme::IconButton(ICON_FA_LAYER_GROUP, "Create Group (placeholder)", false,
+            NextUI::Theme::IconButton(ICON_FA_LAYER_GROUP, "Create Group (placeholder)", false,
                                          ImVec2(28.0f, 24.0f));
             ImGui::SameLine();
             ImGui::SetNextItemWidth(-FLT_MIN);
             nodeFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##OutlinerFilter", -FLT_MIN);
-            Runtime::UiTheme::DrawThinSeparator();
+            NextUI::Theme::DrawThinSeparator();
 
             const uint32_t currentSelectionId = ctx.scene.GetSelectedId();
             if (ui.outlinerAutoScrollToSelection)
@@ -402,8 +402,8 @@ namespace Editor
             prevAutoScrollEnabled = ui.outlinerAutoScrollToSelection;
             lastSelectionId = currentSelectionId;
 
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Background, 0.42f));
-            ImGui::PushStyleColor(ImGuiCol_Border, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Border, 0.82f));
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.42f));
+            ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.82f));
             ImGui::BeginChild("ListBox", ImVec2(0, -132.0f), true);
 
             if (ImGui::BeginTable("NodesList", 1, ImGuiTableFlags_NoBordersInBodyUntilResize | ImGuiTableFlags_RowBg))
@@ -467,7 +467,7 @@ namespace Editor
                     std::vector<uint32_t> ids = ctx.scene.GetSelectedIds();
                     if (!ids.empty())
                     {
-                        ctx.engine.GetCommandHistory().Execute(std::make_unique<DeleteNodesCommand>(ctx.scene, std::move(ids)));
+                        ctx.engine.GetCommandHistory().Execute(std::make_unique<Runtime::Command::DeleteNodesCommand>(ctx.scene, std::move(ids)));
                     }
                 }
 
@@ -597,7 +597,7 @@ namespace Editor
                     {
                         if (!renameBuffer.empty() && renameBuffer != targetNode->GetName())
                         {
-                            ctx.engine.GetCommandHistory().Execute(std::make_unique<RenameNodeCommand>(
+                            ctx.engine.GetCommandHistory().Execute(std::make_unique<Runtime::Command::RenameNodeCommand>(
                                 ctx.scene, targetNode->GetInstanceId(), renameBuffer));
                         }
 
@@ -633,7 +633,7 @@ namespace Editor
                 ImGui::EndTabBar();
             }
 
-            Runtime::UiTheme::DrawThinSeparator(0.65f);
+            NextUI::Theme::DrawThinSeparator(0.65f);
             ImGui::Text("%d actors (%d selected)", static_cast<int>(ctx.scene.Nodes().size()),
                         static_cast<int>(ctx.scene.GetSelectedIds().size()));
 

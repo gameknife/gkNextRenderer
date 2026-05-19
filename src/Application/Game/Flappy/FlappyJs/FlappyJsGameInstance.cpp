@@ -2,12 +2,12 @@
 
 #include "Engine/Runtime/Subsystems/QuickJSEngine.hpp"
 
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
 {
     return std::make_unique<FlappyJsGameInstance>(config, options, engine);
 }
 
-FlappyJsGameInstance::FlappyJsGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) :
+FlappyJsGameInstance::FlappyJsGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine) :
     NextGameInstanceBase(config, options, engine)
 {
     ConfigureWindow(config, options, "FlappyJs", 1280, 720, true);

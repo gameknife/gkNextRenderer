@@ -59,7 +59,7 @@ namespace Runtime
                 : static_cast<int>(RendererOptions.size()) - 1;
         }
 
-        inline int ResolveRendererOptionIndex(const UserSettings& userSetting, int rendererOptionCount)
+        inline int ResolveRendererOptionIndex(const Runtime::Config::UserSettings& userSetting, int rendererOptionCount)
         {
             for (int index = 0; index < rendererOptionCount; ++index)
             {
@@ -72,7 +72,7 @@ namespace Runtime
             return -1;
         }
 
-        inline void DrawRendererSelector(NextEngine& engine, UserSettings& userSetting, const char* comboId,
+        inline void DrawRendererSelector(NextEngine& engine, Runtime::Config::UserSettings& userSetting, const char* comboId,
                                          float width = -1.0f)
         {
             const int rendererOptionCount = GetRendererOptionCount(engine);
@@ -101,7 +101,7 @@ namespace Runtime
             ImGui::PopItemWidth();
         }
 
-        inline const char* GetCurrentRendererLabel(NextEngine& engine, const UserSettings& userSetting)
+        inline const char* GetCurrentRendererLabel(NextEngine& engine, const Runtime::Config::UserSettings& userSetting)
         {
             const int rendererOptionCount = GetRendererOptionCount(engine);
             const int currentRendererIndex = ResolveRendererOptionIndex(userSetting, rendererOptionCount);
@@ -169,7 +169,7 @@ namespace Runtime
 
         inline bool CycleRenderer(NextEngine& engine)
         {
-            UserSettings& userSetting = engine.GetUserSettings();
+            Runtime::Config::UserSettings& userSetting = engine.GetUserSettings();
             const int rendererOptionCount = GetRendererOptionCount(engine);
             if (rendererOptionCount <= 0)
             {
@@ -193,7 +193,7 @@ namespace Runtime
             return true;
         }
 
-        inline EViewMode ResolveViewMode(const ShowFlags& showFlags)
+        inline EViewMode ResolveViewMode(const Runtime::Config::ShowFlags& showFlags)
         {
             int enabledModeCount = 0;
             EViewMode activeMode = EViewMode::Lit;
@@ -230,7 +230,7 @@ namespace Runtime
             return EViewMode::Custom;
         }
 
-        inline void ApplyViewMode(ShowFlags& showFlags, EViewMode mode)
+        inline void ApplyViewMode(Runtime::Config::ShowFlags& showFlags, EViewMode mode)
         {
             showFlags.ShowVisualDebug = false;
             showFlags.DebugDraw_Lighting = false;
@@ -269,7 +269,7 @@ namespace Runtime
             }
         }
 
-        inline bool TryHandleViewModeShortcut(SDL_Keycode key, bool pressed, bool panelVisible, ShowFlags& showFlags)
+        inline bool TryHandleViewModeShortcut(SDL_Keycode key, bool pressed, bool panelVisible, Runtime::Config::ShowFlags& showFlags)
         {
             if (!pressed || !panelVisible)
             {
@@ -340,8 +340,8 @@ namespace Runtime
                 return;
             }
 
-            UserSettings& userSetting = engine.GetUserSettings();
-            ShowFlags& showFlags = engine.GetShowFlags();
+            Runtime::Config::UserSettings& userSetting = engine.GetUserSettings();
+            Runtime::Config::ShowFlags& showFlags = engine.GetShowFlags();
             ImGuiViewport* viewport = ImGui::GetMainViewport();
             const float margin = 12.0f;
 

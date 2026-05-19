@@ -193,7 +193,7 @@ namespace
 
         auto addBoxAttachment = [&](std::string_view suffix, const glm::vec3& translation, const glm::vec3& scale, uint32_t materialId)
         {
-            auto childNode = SceneBuilder::CreateRenderNode(runtime.pieceId + "_" + std::string(suffix),
+            auto childNode = Assets::SceneBuilder::CreateRenderNode(runtime.pieceId + "_" + std::string(suffix),
                                                             translation,
                                                             scale,
                                                             static_cast<uint32_t>(nodes.size()),
@@ -205,7 +205,7 @@ namespace
 
         auto addSphereAttachment = [&](std::string_view suffix, const glm::vec3& translation, const glm::vec3& scale, uint32_t materialId)
         {
-            auto childNode = SceneBuilder::CreateRenderNode(runtime.pieceId + "_" + std::string(suffix),
+            auto childNode = Assets::SceneBuilder::CreateRenderNode(runtime.pieceId + "_" + std::string(suffix),
                                                             translation,
                                                             scale,
                                                             static_cast<uint32_t>(nodes.size()),
@@ -268,12 +268,12 @@ namespace
     }
 }
 
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
 {
     return std::make_unique<KongLie3DGameInstance>(config, options, engine);
 }
 
-KongLie3DGameInstance::KongLie3DGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine) :
+KongLie3DGameInstance::KongLie3DGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine) :
     NextGameInstanceBase(config, options, engine)
 {
     ConfigureWindow(config, options, "KongLie3D", 1920, 1080, true);
@@ -302,7 +302,7 @@ void KongLie3DGameInstance::OnInitUI()
 
     auto loadFont = [&](float size, std::string_view tag)
     {
-        ImFont* font = FontLoader::Load(FontLoader::FFontRequest{
+        ImFont* font = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
             .filePath = "assets/fonts/DroidSansFallback.ttf",
             .pixelSize = size,
             .includeChineseFull = true,
@@ -667,7 +667,7 @@ bool KongLie3DGameInstance::OnMouseButton(SDL_Event& event)
 
         glm::vec3 rayOrigin{};
         glm::vec3 rayDir{};
-        NextEngineHelper::GetScreenToWorldRay(glm::vec2(mousePos_), rayOrigin, rayDir);
+        Runtime::EngineHelper::GetScreenToWorldRay(glm::vec2(mousePos_), rayOrigin, rayDir);
 
         bool handled = false;
         GetEngine().RayCastGPU(rayOrigin, rayDir, [this, &handled](Assets::RayCastResult result)
@@ -725,10 +725,10 @@ void KongLie3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
     models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.02f), glm::vec3(0.02f)));
     const uint32_t debrisModelId = static_cast<uint32_t>(models.size() - 1);
 
-    const uint32_t hitFlashMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f));
-    const uint32_t projectileAdMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f, 0.58f, 0.20f));
-    const uint32_t projectileApMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.30f, 0.62f, 1.0f));
-    const uint32_t projectileHealMaterialId = SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.30f, 1.0f, 0.40f));
+    const uint32_t hitFlashMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f));
+    const uint32_t projectileAdMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(1.0f, 0.58f, 0.20f));
+    const uint32_t projectileApMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.30f, 0.62f, 1.0f));
+    const uint32_t projectileHealMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.30f, 1.0f, 0.40f));
 
     auto appendPiece = [&](const std::string& pieceId, float worldX, float worldZ, bool onBench, float scale)
     {
@@ -745,14 +745,14 @@ void KongLie3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
         models.push_back(Assets::FProcModel::CreateBox(-halfExtents, halfExtents));
         const uint32_t pieceModelId = static_cast<uint32_t>(models.size() - 1);
 
-        const uint32_t pieceMaterialId = SceneBuilder::AddLambertianMaterial(materials, pieceDef.color);
-        const uint32_t pieceAccentMaterialId = SceneBuilder::AddLambertianMaterial(materials, BrightenColor(pieceDef.color, 1.30f));
-        const uint32_t pieceGlowMaterialId = SceneBuilder::AddLambertianMaterial(materials, BrightenColor(pieceDef.color, 1.45f, 0.06f));
-        const uint32_t pieceDarkMaterialId = SceneBuilder::AddLambertianMaterial(materials, pieceDef.color * 0.4f);
+        const uint32_t pieceMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, pieceDef.color);
+        const uint32_t pieceAccentMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, BrightenColor(pieceDef.color, 1.30f));
+        const uint32_t pieceGlowMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, BrightenColor(pieceDef.color, 1.45f, 0.06f));
+        const uint32_t pieceDarkMaterialId = Assets::SceneBuilder::AddLambertianMaterial(materials, pieceDef.color * 0.4f);
 
         const glm::vec3 pieceScale(scale);
         const glm::vec3 translation(worldX, halfExtents.y * scale, worldZ);
-        auto pieceNode = SceneBuilder::CreateRenderNode(pieceId, translation, pieceScale, static_cast<uint32_t>(nodes.size()), pieceModelId,
+        auto pieceNode = Assets::SceneBuilder::CreateRenderNode(pieceId, translation, pieceScale, static_cast<uint32_t>(nodes.size()), pieceModelId,
                                           pieceMaterialId);
         nodes.push_back(pieceNode);
 
@@ -784,13 +784,13 @@ void KongLie3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
         const size_t pieceIndex = pieceRuntimes_.size() - 1;
         pieceInstanceLookup_[pieceNode->GetInstanceId()] = pieceIndex;
 
-        auto knockoutNode = SceneBuilder::CreateRenderNode(pieceId + "_Knockout",
+        auto knockoutNode = Assets::SceneBuilder::CreateRenderNode(pieceId + "_Knockout",
                                              HiddenKnockoutProxyPosition,
                                              dimensions * scale,
                                              static_cast<uint32_t>(nodes.size()),
                                              attachmentBoxModelId,
                                              pieceDarkMaterialId);
-        NodeUtils::SetVisible(knockoutNode, false);
+        Assets::NodeUtils::SetVisible(knockoutNode, false);
         auto knockoutPhysics = std::make_shared<Runtime::PhysicsComponent>();
         knockoutPhysics->SetMobility(Runtime::ENodeMobility::Dynamic);
         if (NextPhysics* physics = GetEngine().GetPhysicsEngine())
@@ -851,13 +851,13 @@ void KongLie3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
     {
         for (int index = 0; index < 7; ++index)
         {
-            auto node = SceneBuilder::CreateRenderNode(fmt::format("{}_{}", namePrefix, index),
+            auto node = Assets::SceneBuilder::CreateRenderNode(fmt::format("{}_{}", namePrefix, index),
                                          glm::vec3(0.0f, -20.0f, 0.0f),
                                          glm::vec3(1.0f),
                                          static_cast<uint32_t>(nodes.size()),
                                          projectileSphereModelId,
                                          materialId);
-            NodeUtils::SetVisible(node, false);
+            Assets::NodeUtils::SetVisible(node, false);
             nodes.push_back(node);
             projectilePool.push_back(KongLie3D::FProjectilePoolEntry{
                 .kind = kind,
@@ -875,13 +875,13 @@ void KongLie3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
     debrisPool.reserve(30);
     for (int index = 0; index < 30; ++index)
     {
-        auto node = SceneBuilder::CreateRenderNode(fmt::format("HitDebris_{}", index),
+        auto node = Assets::SceneBuilder::CreateRenderNode(fmt::format("HitDebris_{}", index),
                                      glm::vec3(0.0f, -20.0f, 0.0f),
                                      glm::vec3(1.0f),
                                      static_cast<uint32_t>(nodes.size()),
                                      debrisModelId,
                                      hitFlashMaterialId);
-        NodeUtils::SetVisible(node, false);
+        Assets::NodeUtils::SetVisible(node, false);
         nodes.push_back(node);
         debrisPool.push_back(KongLie3D::FImpactDebrisPoolEntry{.node = node});
     }
@@ -1065,7 +1065,7 @@ bool KongLie3DGameInstance::TryGetBoardIntersection(glm::dvec2 screenPos, glm::v
 {
     glm::vec3 rayOrigin{};
     glm::vec3 rayDir{};
-    NextEngineHelper::GetScreenToWorldRay(glm::vec2(screenPos), rayOrigin, rayDir);
+    Runtime::EngineHelper::GetScreenToWorldRay(glm::vec2(screenPos), rayOrigin, rayDir);
     if (std::abs(rayDir.y) < 0.0001f)
     {
         return false;
@@ -1274,7 +1274,7 @@ void KongLie3DGameInstance::UpdateHoveredPieceTooltip(double deltaSeconds)
 
     glm::vec3 rayOrigin{};
     glm::vec3 rayDir{};
-    NextEngineHelper::GetScreenToWorldRay(glm::vec2(mousePos_), rayOrigin, rayDir);
+    Runtime::EngineHelper::GetScreenToWorldRay(glm::vec2(mousePos_), rayOrigin, rayDir);
 
     std::string hoveredPieceId;
     GetEngine().RayCastGPU(rayOrigin, rayDir, [this, &hoveredPieceId](Assets::RayCastResult result)

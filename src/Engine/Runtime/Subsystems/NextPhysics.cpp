@@ -100,18 +100,18 @@ namespace
 			transformed[i] = glm::vec3(worldTransform * glm::vec4(corners[i], 1.0f));
 		}
 
-		NextEngineHelper::DrawAuxLine(transformed[0], transformed[1], color, size);
-		NextEngineHelper::DrawAuxLine(transformed[1], transformed[3], color, size);
-		NextEngineHelper::DrawAuxLine(transformed[3], transformed[2], color, size);
-		NextEngineHelper::DrawAuxLine(transformed[2], transformed[0], color, size);
-		NextEngineHelper::DrawAuxLine(transformed[4], transformed[5], color, size);
-		NextEngineHelper::DrawAuxLine(transformed[5], transformed[7], color, size);
-		NextEngineHelper::DrawAuxLine(transformed[7], transformed[6], color, size);
-		NextEngineHelper::DrawAuxLine(transformed[6], transformed[4], color, size);
-		NextEngineHelper::DrawAuxLine(transformed[0], transformed[4], color, size);
-		NextEngineHelper::DrawAuxLine(transformed[1], transformed[5], color, size);
-		NextEngineHelper::DrawAuxLine(transformed[2], transformed[6], color, size);
-		NextEngineHelper::DrawAuxLine(transformed[3], transformed[7], color, size);
+		Runtime::EngineHelper::DrawAuxLine(transformed[0], transformed[1], color, size);
+		Runtime::EngineHelper::DrawAuxLine(transformed[1], transformed[3], color, size);
+		Runtime::EngineHelper::DrawAuxLine(transformed[3], transformed[2], color, size);
+		Runtime::EngineHelper::DrawAuxLine(transformed[2], transformed[0], color, size);
+		Runtime::EngineHelper::DrawAuxLine(transformed[4], transformed[5], color, size);
+		Runtime::EngineHelper::DrawAuxLine(transformed[5], transformed[7], color, size);
+		Runtime::EngineHelper::DrawAuxLine(transformed[7], transformed[6], color, size);
+		Runtime::EngineHelper::DrawAuxLine(transformed[6], transformed[4], color, size);
+		Runtime::EngineHelper::DrawAuxLine(transformed[0], transformed[4], color, size);
+		Runtime::EngineHelper::DrawAuxLine(transformed[1], transformed[5], color, size);
+		Runtime::EngineHelper::DrawAuxLine(transformed[2], transformed[6], color, size);
+		Runtime::EngineHelper::DrawAuxLine(transformed[3], transformed[7], color, size);
 	}
 
 	glm::vec3 ToGlmVec3(const Vec3& value)
@@ -1006,7 +1006,7 @@ void NextPhysics::DrawDebugBodies() const
 
 		const glm::vec3 localCenter = ToGlmVec3(localBounds.GetCenter());
 		const glm::vec3 center = glm::vec3(worldTransform * glm::vec4(localCenter, 1.0f));
-		NextEngineHelper::DrawAuxPoint(center, color, 2.0f);
+		Runtime::EngineHelper::DrawAuxPoint(center, color, 2.0f);
 	}
 #endif
 }

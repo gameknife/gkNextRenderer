@@ -1,5 +1,8 @@
 #include "Engine/Runtime/Camera/FocusAnimation.hpp"
 
+namespace Runtime::Camera
+{
+
 void FocusAnimation::Start(glm::vec3 startPos, glm::quat startRot,
                            glm::vec3 targetPos, glm::quat targetRot)
 {
@@ -31,4 +34,6 @@ bool FocusAnimation::Update(float deltaTime, glm::vec3& outPos, glm::quat& outRo
     }
 
     return true;
+}
+
 }

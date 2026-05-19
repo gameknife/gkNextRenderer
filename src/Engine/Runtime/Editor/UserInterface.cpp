@@ -47,6 +47,9 @@
 extern float GAndroidMagicScale;
 extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
 
+namespace NextUI
+{
+
 namespace
 {
     constexpr const char* kUiVertexShaderPath = "assets/shaders/UI.ImGui.vert.slang.spv";
@@ -663,7 +666,7 @@ namespace
 } // namespace
 
 UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPool, const Vulkan::SwapChain& swapChain,
-                             const Vulkan::DepthBuffer& depthBuffer, UserSettings& userSettings,
+                             const Vulkan::DepthBuffer& depthBuffer, Runtime::Config::UserSettings& userSettings,
                              std::function<void()> funcPreConfig, std::function<void()> funcInit) :
     userSettings_(userSettings), engine_(engine)
 {
@@ -712,7 +715,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     //     : GOption->locale == "zhCN"                     ? io.Fonts->GetGlyphRangesChineseFull()
     //                                                     : io.Fonts->GetGlyphRangesDefault();
 
-    if (!FontLoader::Load(FontLoader::FFontRequest{
+    if (!NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
             .filePath = "assets/fonts/Roboto-Regular.ttf",
             .pixelSize = fontSize * scaleFactor,
             .includeChineseFull = true,
@@ -731,7 +734,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     config.GlyphMinAdvanceX = fontSize;
     config.GlyphOffset = ImVec2(0, 0);
 
-    FontLoader::Load(FontLoader::FFontRequest{
+    NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/fa-regular-400.ttf",
         .pixelSize = fontSize * scaleFactor,
         .includeChineseFull = false,
@@ -739,7 +742,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
         .fontConfig = &config,
         .warnOnFailure = false,
     });
-    FontLoader::Load(FontLoader::FFontRequest{
+    NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/fa-solid-900.ttf",
         .pixelSize = fontSize * scaleFactor,
         .includeChineseFull = false,
@@ -747,7 +750,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
         .fontConfig = &config,
         .warnOnFailure = false,
     });
-    FontLoader::Load(FontLoader::FFontRequest{
+    NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/fa-brands-400.ttf",
         .pixelSize = fontSize * scaleFactor,
         .includeChineseFull = false,
@@ -758,7 +761,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
 
     ImFontConfig configLocale;
     configLocale.MergeMode = true;
-    FontLoader::Load(FontLoader::FFontRequest{
+    NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/DroidSansFallback.ttf",
         .pixelSize = (fontSize + 2.0f) * scaleFactor,
         .includeChineseFull = true,
@@ -1592,7 +1595,7 @@ void UserInterface::SetStyle()
 {
     // NOTE: Do not override io.IniFilename here.
     // The app/editor is responsible for choosing its ini file in the PreConfig hook.
-    Runtime::UiTheme::ApplyProfessionalTheme();
+    NextUI::Theme::ApplyProfessionalTheme();
 }
 
 void UserInterface::DrawPoint(float x, float y, float size, glm::vec4 color)
@@ -1994,7 +1997,7 @@ void UserInterface::DrawConsoleLogOutputInternal(const char* childId, const ImVe
                 ImGui::TextUnformatted(prefix);
                 ImGui::PopStyleColor();
                 ImGui::SameLine();
-                ImGui::PushStyleColor(ImGuiCol_Text, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Text));
+                ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::Text));
                 ImGui::TextUnformatted(payloadStart, payloadEnd);
                 ImGui::PopStyleColor();
             }
@@ -2139,7 +2142,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
     const ImVec2 pos = ImVec2(io.DisplaySize.x - distance - panelWidth, distance + 44.0f);
     const float panelHeight = std::max(420.0f, io.DisplaySize.y - pos.y - 42.0f);
 
-    if (!Runtime::UiTheme::BeginFloatingPanel(
+    if (!NextUI::Theme::BeginFloatingPanel(
             "##ProfilerPanel", ICON_FA_CHART_LINE, "Profiler", &Settings().ShowOverlay,
             pos, ImVec2(panelWidth, panelHeight)))
     {
@@ -2153,8 +2156,8 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 10.0f));
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::SurfaceElevated, 0.38f));
-        ImGui::PushStyleColor(ImGuiCol_Border, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Border, 0.84f));
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceElevated, 0.38f));
+        ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.84f));
         ImGui::BeginChild(id, ImVec2(0.0f, height), true, extraFlags);
     };
 
@@ -2192,12 +2195,12 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
     BuildOrdered(frameRateSamples_, orderedFps, orderedCount);
     BuildOrdered(frameTimeSamples_, orderedFt, orderedCount);
 
-    const ImVec4 colHeader = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Blue);
-    const ImVec4 colLabel = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::TextMuted);
-    const ImVec4 colVal = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Text);
-    const ImVec4 colGood = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Success);
-    const ImVec4 colWarn = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Warning);
-    const ImVec4 colBad = Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Danger);
+    const ImVec4 colHeader = NextUI::Theme::Color(NextUI::Theme::EColor::Blue);
+    const ImVec4 colLabel = NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted);
+    const ImVec4 colVal = NextUI::Theme::Color(NextUI::Theme::EColor::Text);
+    const ImVec4 colGood = NextUI::Theme::Color(NextUI::Theme::EColor::Success);
+    const ImVec4 colWarn = NextUI::Theme::Color(NextUI::Theme::EColor::Warning);
+    const ImVec4 colBad = NextUI::Theme::Color(NextUI::Theme::EColor::Danger);
 
     auto LabelVal = [&](const char* label, const char* fmt, auto... args)
     {
@@ -2239,9 +2242,9 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
             const float height = 78.0f;
             ImDrawList* dl = ImGui::GetWindowDrawList();
             dl->AddRectFilled(cardPos, ImVec2(cardPos.x + width, cardPos.y + height),
-                              Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::SurfaceElevated, 0.65f), 6.0f);
+                              NextUI::Theme::ColorU32(NextUI::Theme::EColor::SurfaceElevated, 0.65f), 6.0f);
             dl->AddRect(cardPos, ImVec2(cardPos.x + width, cardPos.y + height),
-                        Runtime::UiTheme::ColorU32(Runtime::UiTheme::EColor::Border, 0.85f), 6.0f);
+                        NextUI::Theme::ColorU32(NextUI::Theme::EColor::Border, 0.85f), 6.0f);
 
             ImGui::SetCursorScreenPos(ImVec2(cardPos.x + 10.0f, cardPos.y + 6.0f));
             ImGui::TextColored(colHeader, "%s", title);
@@ -2252,7 +2255,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
             ImGui::PopStyleColor();
 
             ImGui::SetCursorScreenPos(ImVec2(cardPos.x + 10.0f, cardPos.y + height - 26.0f));
-            Runtime::UiTheme::Sparkline(samples, count, ImVec2(width - 20.0f, 22.0f), sparkColor);
+            NextUI::Theme::Sparkline(samples, count, ImVec2(width - 20.0f, 22.0f), sparkColor);
 
             ImGui::SetCursorScreenPos(ImVec2(cardPos.x + width, cardPos.y));
             ImGui::Dummy(ImVec2(width, height));
@@ -2267,7 +2270,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
                  orderedFps.data(), orderedCount, colGood, halfWidth);
         ImGui::SameLine(0.0f, gap);
         DrawCard("Frame Time", ftText.c_str(), colVal,
-                 orderedFt.data(), orderedCount, Runtime::UiTheme::Color(Runtime::UiTheme::EColor::Blue), halfWidth);
+                 orderedFt.data(), orderedCount, NextUI::Theme::Color(NextUI::Theme::EColor::Blue), halfWidth);
         ImGui::Dummy(ImVec2(0.0f, 8.0f));
     }
 
@@ -2306,9 +2309,9 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
         ImGui::EndTable();
     }
 
-    const uint32_t mainTasks = TaskCoordinator::GetInstance()->GetMainTaskCount();
-    const uint32_t lowTasks = TaskCoordinator::GetInstance()->GetParralledTaskCount();
-    const uint32_t completeTasks = TaskCoordinator::GetInstance()->GetComleteTaskQueueCount();
+    const uint32_t mainTasks = Tasks::TaskCoordinator::GetInstance()->GetMainTaskCount();
+    const uint32_t lowTasks = Tasks::TaskCoordinator::GetInstance()->GetParralledTaskCount();
+    const uint32_t completeTasks = Tasks::TaskCoordinator::GetInstance()->GetComleteTaskQueueCount();
     LabelVal("Tasks:", "%d / %d / %d", mainTasks, lowTasks, completeTasks);
     EndCard();
     ImGui::Dummy(ImVec2(0.0f, 8.0f));
@@ -2467,7 +2470,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
                 ImGui::TableNextColumn();
                 ImGui::TextColored(colLabel, "%.2f", row.maximum);
                 ImGui::TableNextColumn();
-                Runtime::UiTheme::DrawProgressBar(std::min(ratio, 1.0f),
+                NextUI::Theme::DrawProgressBar(std::min(ratio, 1.0f),
                                                   TimingBarColor(row.average),
                                                   ImVec2(70.0f, ImGui::GetTextLineHeight()));
                 ImGui::PopStyleVar();
@@ -2487,7 +2490,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
         if (!cpuTimingRows.empty())
         {
             ImGui::Dummy(ImVec2(0.0f, 6.0f));
-            Runtime::UiTheme::DrawThinSeparator(0.55f);
+            NextUI::Theme::DrawThinSeparator(0.55f);
             DrawTimingSection("CPU Time", "##CpuTimeTable", cpuTimingRows);
         }
     }
@@ -2503,7 +2506,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
              fmt::format("{:%H:%M:%S}", std::chrono::seconds(static_cast<long long>(statistics.RenderTime))).c_str());
 
     ImGui::EndChild();
-    Runtime::UiTheme::EndFloatingPanel();
+    NextUI::Theme::EndFloatingPanel();
 }
 
 void UserInterface::DrawIndicator(uint32_t frameCount)
@@ -2591,4 +2594,6 @@ void UserInterface::DrawConsoleWindow()
         ImGui::PopItemWidth();
     }
     ImGui::End();
+}
+
 }

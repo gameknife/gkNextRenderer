@@ -11,7 +11,7 @@ namespace Runtime { class PhysicsComponent; }
 class BrickPlayerGameInstance : public NextGameInstanceBase
 {
 public:
-    BrickPlayerGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine);
+    BrickPlayerGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine);
 
     void OnInit() override;
     void OnTick(double deltaSeconds) override;

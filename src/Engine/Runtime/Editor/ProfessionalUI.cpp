@@ -9,7 +9,7 @@
 #include <fmt/format.h>
 #include <ThirdParty/fontawesome/IconsFontAwesome6.h>
 
-namespace Runtime::UiTheme
+namespace NextUI::Theme
 {
     namespace
     {
@@ -430,7 +430,7 @@ namespace Runtime::UiTheme
 
     void DrawStandardBottomBar(NextEngine& engine, const char* windowId, float height)
     {
-        UserInterface* ui = engine.GetUserInterface();
+        NextUI::UserInterface* ui = engine.GetUserInterface();
         const NextEngine::FHotReloadStatus hotReloadStatus = engine.GetHotReloadStatus();
         const auto memoryStats = engine.GetRenderer().Device().CaptureMemoryStats();
         const float memoryFraction =
@@ -1015,4 +1015,4 @@ namespace Runtime::UiTheme
         drawList->AddPolyline(pts.data(), count, lineCol, ImDrawFlags_None, 1.5f);
         ImGui::Dummy(size);
     }
-} // namespace Runtime::UiTheme
+} // namespace NextUI::Theme

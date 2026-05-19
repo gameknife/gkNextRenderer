@@ -1,5 +1,8 @@
 #pragma once
 
+namespace Runtime::Config
+{
+
 struct ShowFlags final
 {
     bool DebugPhysicsOverlay = false;
@@ -14,3 +17,5 @@ struct ShowFlags final
     bool ShowGrid = true;
     bool ShowWireframe = false;
 };
+
+}

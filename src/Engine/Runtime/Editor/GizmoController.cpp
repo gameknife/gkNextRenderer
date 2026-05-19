@@ -15,6 +15,9 @@
 #include <memory>
 #include <unordered_set>
 
+namespace NextUI
+{
+
 namespace
 {
     constexpr float kToolbarEdgePadding = 5.0f;
@@ -319,7 +322,7 @@ void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, con
     {
         if (io.KeyShift)
         {
-            auto duplicateCommand = std::make_unique<DuplicateNodesCommand>(scene, selectedIds);
+            auto duplicateCommand = std::make_unique<Runtime::Command::DuplicateNodesCommand>(scene, selectedIds);
             if (engine.GetCommandHistory().Execute(std::move(duplicateCommand)))
             {
                 selectedIds = BuildSelectionList(scene);
@@ -354,7 +357,7 @@ void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, con
             }
 
             dragStartWorldMatrices_.push_back(node->WorldTransform());
-            dragStartSnapshots_.push_back(TransformSnapshot{node->Translation(), node->Rotation(), node->Scale()});
+            dragStartSnapshots_.push_back(Runtime::Command::TransformSnapshot{node->Translation(), node->Rotation(), node->Scale()});
         }
         dragStartGizmoMatrix_ = worldMatrix;
     }
@@ -407,8 +410,8 @@ void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, con
         if (dragActive_ && !dragStartSnapshots_.empty())
         {
             std::vector<uint32_t> validIds;
-            std::vector<TransformSnapshot> beforeSnapshots;
-            std::vector<TransformSnapshot> afterSnapshots;
+            std::vector<Runtime::Command::TransformSnapshot> beforeSnapshots;
+            std::vector<Runtime::Command::TransformSnapshot> afterSnapshots;
             const size_t count = std::min(dragInstanceIds_.size(), dragStartSnapshots_.size());
             validIds.reserve(count);
             beforeSnapshots.reserve(count);
@@ -429,9 +432,9 @@ void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, con
 
             if (!validIds.empty())
             {
-                if (TransformNodesCommand::IsDifferent(beforeSnapshots, afterSnapshots))
+                if (Runtime::Command::TransformNodesCommand::IsDifferent(beforeSnapshots, afterSnapshots))
                 {
-                    auto command = std::make_unique<TransformNodesCommand>(
+                    auto command = std::make_unique<Runtime::Command::TransformNodesCommand>(
                         scene, validIds, beforeSnapshots, afterSnapshots);
                     engine.GetCommandHistory().Execute(std::move(command));
                 }
@@ -447,4 +450,6 @@ void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, con
     wasUsing_ = isUsing_;
 
     io.WantCaptureMouse = io.WantCaptureMouse || isOver_ || isUsing_;
+}
+
 }

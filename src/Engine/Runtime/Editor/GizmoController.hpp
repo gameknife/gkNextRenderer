@@ -10,6 +10,9 @@
 class NextEngine;
 struct ImGuiIO;
 
+namespace NextUI
+{
+
 class GizmoController
 {
 public:
@@ -43,6 +46,8 @@ private:
     bool dragActive_ = false;
     std::vector<uint32_t> dragInstanceIds_;
     std::vector<glm::mat4> dragStartWorldMatrices_;
-    std::vector<TransformSnapshot> dragStartSnapshots_;
+    std::vector<Runtime::Command::TransformSnapshot> dragStartSnapshots_;
     glm::mat4 dragStartGizmoMatrix_ {1.0f};
 };
+
+}

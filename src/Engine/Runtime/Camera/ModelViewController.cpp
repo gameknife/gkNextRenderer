@@ -3,6 +3,9 @@
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.h"
 
+namespace Runtime::Camera
+{
+
 void ModelViewController::Reset(const Assets::Camera& renderCamera)
 {
     const auto inverse = glm::inverse(renderCamera.ModelView);
@@ -368,4 +371,6 @@ void ModelViewController::UpdateVectors()
     right_ = inverse * glm::vec4(1, 0, 0, 0);
     up_ = inverse * glm::vec4(0, 1, 0, 0);
     forward_ = inverse * glm::vec4(0, 0, -1, 0);
+}
+
 }

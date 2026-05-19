@@ -5,7 +5,10 @@
 #include <glm/glm.hpp>
 #include <vector>
 
-class FCPUAccelerationStructure;
+namespace Assets::CPU
+{
+    class FCPUAccelerationStructure;
+}
 
 namespace NextGameplay
 {
@@ -32,8 +35,8 @@ namespace NextGameplay
     class FNavGrid
     {
     public:
-        void Build(FCPUAccelerationStructure& bvh, const FNavGridSettings& settings);
-        void RebuildDirtyRegion(FCPUAccelerationStructure& bvh, const glm::vec3& dirtyWorldMin, const glm::vec3& dirtyWorldMax);
+        void Build(Assets::CPU::FCPUAccelerationStructure& bvh, const FNavGridSettings& settings);
+        void RebuildDirtyRegion(Assets::CPU::FCPUAccelerationStructure& bvh, const glm::vec3& dirtyWorldMin, const glm::vec3& dirtyWorldMax);
 
         std::vector<glm::vec3> FindPath(const glm::vec3& from, const glm::vec3& to, float referenceHeight) const;
 
@@ -70,9 +73,9 @@ namespace NextGameplay
         FGridRect MakeGridRectFromWorldBounds(const glm::vec3& worldMin, const glm::vec3& worldMax) const;
         FGridRect ExpandGridRect(const FGridRect& rect, int margin) const;
         bool IsGridRectValid(const FGridRect& rect) const;
-        void SampleBaseWalkability(FCPUAccelerationStructure& bvh, const FGridRect& rect);
+        void SampleBaseWalkability(Assets::CPU::FCPUAccelerationStructure& bvh, const FGridRect& rect);
         void UpdateWalkabilityFromBase(const FGridRect& rect);
-        bool SampleBaseCell(FCPUAccelerationStructure& bvh, int gx, int gz, FNavCell& outCell) const;
+        bool SampleBaseCell(Assets::CPU::FCPUAccelerationStructure& bvh, int gx, int gz, FNavCell& outCell) const;
         int GetFootprintMarginCells() const;
         int GetExtraErosionCells() const;
 

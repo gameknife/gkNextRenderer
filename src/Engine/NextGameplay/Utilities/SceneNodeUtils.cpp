@@ -110,12 +110,12 @@ namespace NextGameplay
 
     void SetNodeVisibilityRecursive(const std::shared_ptr<Assets::Node>& node, bool visible)
     {
-        NodeUtils::SetVisibleRecursive(node, visible);
+        Assets::NodeUtils::SetVisibleRecursive(node, visible);
     }
 
     void SetNodeRayCastVisibilityRecursive(const std::shared_ptr<Assets::Node>& node, bool visible)
     {
-        NodeUtils::SetRayCastVisibleRecursive(node, visible);
+        Assets::NodeUtils::SetRayCastVisibleRecursive(node, visible);
     }
 
     void DisableNodePhysicsRecursive(const std::shared_ptr<Assets::Node>& node, NextPhysics* physicsEngine)

@@ -12,6 +12,9 @@ namespace Assets
     class Scene;
 }
 
+namespace Runtime::Command
+{
+
 struct TransformSnapshot
 {
     glm::vec3 translation{};
@@ -40,3 +43,5 @@ private:
     std::vector<TransformSnapshot> before_;
     std::vector<TransformSnapshot> after_;
 };
+
+}
