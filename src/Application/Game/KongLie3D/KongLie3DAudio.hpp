@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
-#include "Runtime/Engine.hpp"
-#include "Runtime/Subsystems/NextLocalization.h"
-#include "Runtime/Subsystems/NextAudio.h"
+#include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Subsystems/NextLocalization.h"
+#include "Engine/Runtime/Subsystems/NextAudio.h"
 
 namespace KongLie3D
 {

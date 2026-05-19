@@ -1,6 +1,6 @@
 #pragma once
-#include "Common/CoreMinimal.hpp"
-#include "Runtime/Engine.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Runtime/Engine.hpp"
 
 #include <unordered_map>
 

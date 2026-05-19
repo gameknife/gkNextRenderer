@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Application/Game/Flappy/FlappyCommon.hpp"
-#include "Application/Game/Flappy/FlappyCpp/FlappyCppRng.hpp"
+#include "FlappyCommon.hpp"
+#include "FlappyCpp/FlappyCppRng.hpp"
 
 namespace Assets
 {

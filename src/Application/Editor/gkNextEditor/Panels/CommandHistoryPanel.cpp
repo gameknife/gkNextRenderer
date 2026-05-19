@@ -1,8 +1,8 @@
-#include "Application/Editor/gkNextEditor/EditorUi.hpp"
+#include "EditorUi.hpp"
 
 #include <imgui.h>
 
-#include "Runtime/Engine.hpp"
+#include "Engine/Runtime/Engine.hpp"
 
 namespace Editor
 {

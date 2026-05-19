@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
 #include "Brotato3DDataLoader.hpp"
-#include "Runtime/Subsystems/NextPhysicsTypes.h"
+#include "Engine/Runtime/Subsystems/NextPhysicsTypes.h"
 
 namespace Assets
 {

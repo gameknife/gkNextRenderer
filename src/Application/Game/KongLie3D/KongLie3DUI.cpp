@@ -2,11 +2,11 @@
 
 #include <imgui.h>
 
-#include "Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.h"
 #include "KongLie3DAudio.hpp"
 #include "KongLie3DGameInstance.hpp"
 #include "KongLie3DStyle.hpp"
-#include "Runtime/Utilities/NextEngineHelper.h"
+#include "Engine/Runtime/Utilities/NextEngineHelper.h"
 
 namespace
 {

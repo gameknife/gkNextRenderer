@@ -1,17 +1,17 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
 #include "CharacterDemoAIController.hpp"
 #include "CharacterDemoConfig.hpp"
 #include "CharacterDemoAIDebugUI.hpp"
-#include "NextGameplay/AI/NavGrid.h"
-#include "NextGameplay/Character/CharacterActor.h"
-#include "NextGameplay/Components/AIAgentComponent.h"
-#include "NextGameplay/Components/CharacterAnimationComponent.h"
-#include "NextGameplay/Components/CharacterControlComponent.h"
-#include "NextGameplay/Components/CharacterGameplayComponent.h"
-#include "Runtime/Engine.hpp"
-#include "Runtime/Subsystems/NextCharacterController.h"
+#include "Engine/NextGameplay/AI/NavGrid.h"
+#include "Engine/NextGameplay/Character/CharacterActor.h"
+#include "Engine/NextGameplay/Components/AIAgentComponent.h"
+#include "Engine/NextGameplay/Components/CharacterAnimationComponent.h"
+#include "Engine/NextGameplay/Components/CharacterControlComponent.h"
+#include "Engine/NextGameplay/Components/CharacterGameplayComponent.h"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Subsystems/NextCharacterController.h"
 
 #include <random>
 

@@ -1,4 +1,4 @@
-#include "Common/CoreMinimal.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
 #include "MagicaLegoPlacementRules.hpp"
 #include "MagicaLegoConstants.hpp"
 #include "MagicaLegoGameInstance.hpp"

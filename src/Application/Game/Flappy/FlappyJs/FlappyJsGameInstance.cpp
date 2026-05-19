@@ -1,6 +1,6 @@
-#include "Application/Game/Flappy/FlappyJs/FlappyJsGameInstance.hpp"
+#include "FlappyJs/FlappyJsGameInstance.hpp"
 
-#include "Runtime/Subsystems/QuickJSEngine.hpp"
+#include "Engine/Runtime/Subsystems/QuickJSEngine.hpp"
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
 {

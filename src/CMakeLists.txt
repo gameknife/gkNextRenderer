@@ -19,7 +19,7 @@ else()
 endif()
 
 if (IOS)
-    set_source_files_properties(Runtime/Subsystems/NextAudio.cpp PROPERTIES LANGUAGE "OBJCXX")
+    set_source_files_properties(Engine/Runtime/Subsystems/NextAudio.cpp PROPERTIES LANGUAGE "OBJCXX")
 endif()
 
 # unit test files
@@ -102,53 +102,65 @@ add_executable(gkNextRenderer
 	${src_files_gkrenderer}
 	DesktopMain.cpp
 )
+target_include_directories(gkNextRenderer PRIVATE Application/Render/gkNextRenderer)
 add_executable(gkNextStillBenchmark
 	${src_files_benchmarkcommon}
 	${src_files_gkstillbenchmark}
 	DesktopMain.cpp
 )
+target_include_directories(gkNextStillBenchmark PRIVATE Application/Render/gkNextBenchmark)
 add_executable(gkNextMotionBenchmark
 	${src_files_benchmarkcommon}
 	${src_files_gkmotionbenchmark}
 	DesktopMain.cpp
 )
+target_include_directories(gkNextMotionBenchmark PRIVATE Application/Render/gkNextBenchmark)
 add_executable(gkNextVisualTest
 	${src_files_gkvisualtest}
 	DesktopMain.cpp
 )
+target_include_directories(gkNextVisualTest PRIVATE Application/Render/gkNextVisualTest)
 add_executable(gkNextEditor
 	${src_files_editor}
 	DesktopMain.cpp
 )
+target_include_directories(gkNextEditor PRIVATE Application/Editor/gkNextEditor)
 add_executable(MagicaLego
 	${src_files_magicalego}
 	DesktopMain.cpp
 )
+target_include_directories(MagicaLego PRIVATE Application/Game/MagicaLego)
 add_executable(KongLie3D
 	${src_files_konglie3d}
 	DesktopMain.cpp
 )
+target_include_directories(KongLie3D PRIVATE Application/Game/KongLie3D)
 add_executable(Brotato3D
 	${src_files_brotato3d}
 	DesktopMain.cpp
 )
+target_include_directories(Brotato3D PRIVATE Application/Game/Brotato3D)
 target_compile_definitions(Brotato3D PRIVATE DEV_MODE=1)
 add_executable(FlappyCpp
 	${src_files_flappycpp}
 	DesktopMain.cpp
 )
+target_include_directories(FlappyCpp PRIVATE Application/Game/Flappy)
 add_executable(FlappyJs
 	${src_files_flappyjs}
 	DesktopMain.cpp
 )
+target_include_directories(FlappyJs PRIVATE Application/Game/Flappy)
 add_executable(BrickPlayer
 	${src_files_brickplayer}
 	DesktopMain.cpp
 )
+target_include_directories(BrickPlayer PRIVATE Application/Game/BrickPlayer)
 add_executable(CharacterDemo
 	${src_files_characterdemo}
 	DesktopMain.cpp
 )
+target_include_directories(CharacterDemo PRIVATE Application/Game/CharacterDemo)
 add_executable(Packager
 	Application/Util/Packager/PackagerMain.cpp
 )
@@ -281,9 +293,9 @@ foreach(target IN LISTS AllTargets)
 		set_source_files_properties(${src_files_thirdparty} PROPERTIES UNITY_GROUP "thirdparty")
 
 		# Exclude files with STB implementation from Unity Build to avoid redefinition conflicts
-		set_source_files_properties(Assets/Loaders/FSceneLoader.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-		set_source_files_properties(Assets/Savers/FSceneSaver.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-		set_source_files_properties(Vulkan/Allocator.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+		set_source_files_properties(Engine/Assets/Loaders/FSceneLoader.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+		set_source_files_properties(Engine/Assets/Savers/FSceneSaver.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+		set_source_files_properties(Engine/Vulkan/Allocator.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 		endif()
 		find_package(WebP CONFIG REQUIRED)
 		target_link_libraries(${target} PRIVATE SDL3::SDL3 xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp GPUOpen::VulkanMemoryAllocator ${extra_libs})

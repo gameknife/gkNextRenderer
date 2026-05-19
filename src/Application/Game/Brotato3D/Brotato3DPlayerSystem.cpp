@@ -1,7 +1,7 @@
 #include "Brotato3DGameInstance.hpp"
 #include "Brotato3DCommon.hpp"
 
-#include "Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.h"
 #include <spdlog/spdlog.h>
 
 #include "Brotato3DAudio.hpp"

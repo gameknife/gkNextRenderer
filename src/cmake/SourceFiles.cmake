@@ -6,28 +6,28 @@
 
 # --- Assets ---
 file(GLOB_RECURSE src_files_assets
-    "Assets/*.cpp"
-    "Assets/*.hpp"
-    "Assets/*.h"
+    "Engine/Assets/*.cpp"
+    "Engine/Assets/*.hpp"
+    "Engine/Assets/*.h"
 )
 
 # --- Utilities ---
 file(GLOB_RECURSE src_files_utilities
-    "Utilities/*.cpp"
-    "Utilities/*.hpp"
-    "Utilities/*.h"
+    "Engine/Utilities/*.cpp"
+    "Engine/Utilities/*.hpp"
+    "Engine/Utilities/*.h"
 )
 
 # --- Vulkan Backend ---
 file(GLOB_RECURSE src_files_vulkan
-    "Vulkan/*.cpp"
-    "Vulkan/*.hpp"
+    "Engine/Vulkan/*.cpp"
+    "Engine/Vulkan/*.hpp"
 )
 
 # --- Rendering ---
 file(GLOB_RECURSE src_files_rendering
-    "Rendering/*.cpp"
-    "Rendering/*.hpp"
+    "Engine/Rendering/*.cpp"
+    "Engine/Rendering/*.hpp"
 )
 
 # --- ThirdParty Libraries ---
@@ -48,19 +48,19 @@ file(GLOB_RECURSE src_files_thirdparty
 
 # --- Engine Core ---
 file(GLOB_RECURSE src_files_engine
-    "Common/*.hpp"
-    "Runtime/*.h"
-    "Runtime/*.hpp"
-    "Runtime/*.cpp"
-    "Options.cpp"
-    "Options.hpp"
+    "Engine/Common/*.hpp"
+    "Engine/Runtime/*.h"
+    "Engine/Runtime/*.hpp"
+    "Engine/Runtime/*.cpp"
+    "Engine/Options.cpp"
+    "Engine/Options.hpp"
 )
 
 # --- Gameplay Layer ---
 file(GLOB_RECURSE src_files_nextgameplay
-    "NextGameplay/*.cpp"
-    "NextGameplay/*.hpp"
-    "NextGameplay/*.h"
+    "Engine/NextGameplay/*.cpp"
+    "Engine/NextGameplay/*.hpp"
+    "Engine/NextGameplay/*.h"
 )
 
 # --- Editor ---

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
-#include "Runtime/Engine.hpp"
-#include "Assets/Core/Model.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Assets/Core/Model.hpp"
 #include "KongLie3DBattleSystem.hpp"
 #include "KongLie3DDataLoader.hpp"
 #include "KongLie3DNotifications.hpp"

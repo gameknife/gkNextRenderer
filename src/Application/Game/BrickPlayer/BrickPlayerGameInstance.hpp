@@ -1,8 +1,8 @@
 #pragma once
-#include "Common/CoreMinimal.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
 #include "BrickPlayerLDrawShadow.hpp"
-#include "Runtime/Engine.hpp"
-#include "Runtime/Utilities/NextEngineHelper.h"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Utilities/NextEngineHelper.h"
 
 class BrickPlayerUserInterface;
 namespace Assets { class Node; }

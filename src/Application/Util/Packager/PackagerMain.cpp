@@ -1,7 +1,7 @@
 #include <iostream>
 #include <cxxopts.hpp>
-#include "Utilities/FileHelper.hpp"
-#include "Runtime/Engine.hpp"
+#include "Engine/Utilities/FileHelper.hpp"
+#include "Engine/Runtime/Engine.hpp"
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
 {

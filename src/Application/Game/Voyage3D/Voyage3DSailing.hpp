@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
 #include "Voyage3DCommon.hpp"
 #include "Voyage3DDataLoader.hpp"
 #include "Voyage3DPort.hpp"

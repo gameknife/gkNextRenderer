@@ -1,6 +1,6 @@
 #include "EditorInterface.hpp"
 
-#include "Utilities/Exception.hpp"
+#include "Engine/Utilities/Exception.hpp"
 
 #include <imgui.h>
 #include <imgui_freetype.h>
@@ -10,27 +10,27 @@
 #include <fmt/chrono.h>
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
-#include "Application/Editor/gkNextEditor/EditorUi.hpp"
+#include "EditorUi.hpp"
 
-#include "Assets/Core/Scene.hpp"
-#include "Assets/GPU/TextureImage.hpp"
-#include "Common/CoreMinimal.hpp"
-#include "Application/Editor/gkNextEditor/EditorActionDispatcher.hpp"
-#include "Application/Editor/gkNextEditor/EditorContext.hpp"
-#include "Application/Editor/gkNextEditor/EditorMain.h"
-#include "Application/Editor/gkNextEditor/Core/EditorLayoutConstants.hpp"
-#include "Application/Editor/gkNextEditor/Core/RecentScenes.hpp"
-#include "Application/Editor/gkNextEditor/EditorUtils.h"
-#include "Options.hpp"
-#include "Rendering/VulkanBaseRenderer.hpp"
-#include "Runtime/Editor/UserInterface.hpp"
-#include "Runtime/Editor/ProfessionalUI.hpp"
-#include "Runtime/Utilities/GraphicsDebugPanel.hpp"
+#include "Engine/Assets/Core/Scene.hpp"
+#include "Engine/Assets/GPU/TextureImage.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
+#include "EditorActionDispatcher.hpp"
+#include "EditorContext.hpp"
+#include "EditorMain.h"
+#include "Core/EditorLayoutConstants.hpp"
+#include "Core/RecentScenes.hpp"
+#include "EditorUtils.h"
+#include "Engine/Options.hpp"
+#include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Editor/ProfessionalUI.hpp"
+#include "Engine/Runtime/Utilities/GraphicsDebugPanel.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
-#include "Utilities/FileHelper.hpp"
-#include "Utilities/Localization.hpp"
-#include "Utilities/Math.hpp"
-#include "Vulkan/SwapChain.hpp"
+#include "Engine/Utilities/FileHelper.hpp"
+#include "Engine/Utilities/Localization.hpp"
+#include "Engine/Utilities/Math.hpp"
+#include "Engine/Vulkan/SwapChain.hpp"
 
 #include <SDL3/SDL_dialog.h>
 

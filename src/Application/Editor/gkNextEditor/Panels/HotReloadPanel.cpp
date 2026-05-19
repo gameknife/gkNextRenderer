@@ -1,7 +1,7 @@
-#include "Application/Editor/gkNextEditor/EditorUi.hpp"
+#include "EditorUi.hpp"
 
-#include "Runtime/Config/CVarSystem.hpp"
-#include "Runtime/Engine.hpp"
+#include "Engine/Runtime/Config/CVarSystem.hpp"
+#include "Engine/Runtime/Engine.hpp"
 
 #include <fmt/format.h>
 #include <imgui.h>

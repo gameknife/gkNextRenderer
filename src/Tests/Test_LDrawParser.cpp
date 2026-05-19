@@ -1,13 +1,13 @@
 #include <catch2/catch_all.hpp>
 
-#include "Assets/Loaders/FLDrawParser.h"
+#include "Engine/Assets/Loaders/FLDrawParser.h"
 
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <thread>
 
-#include "Utilities/FileHelper.hpp"
+#include "Engine/Utilities/FileHelper.hpp"
 
 namespace
 {

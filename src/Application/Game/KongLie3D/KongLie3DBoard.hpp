@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
-#include "Assets/Core/Model.hpp"
-#include "Assets/Data/Material.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Assets/Core/Model.hpp"
+#include "Engine/Assets/Data/Material.hpp"
 
 namespace Assets
 {

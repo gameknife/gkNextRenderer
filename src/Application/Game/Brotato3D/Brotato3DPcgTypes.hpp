@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
-#include "Application/Editor/gkNextEditor/EditorActionDispatcher.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
+#include "EditorActionDispatcher.hpp"
 
 #include <functional>
 #include <optional>

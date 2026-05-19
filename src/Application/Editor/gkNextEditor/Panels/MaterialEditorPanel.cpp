@@ -1,10 +1,10 @@
-#include "Application/Editor/gkNextEditor/EditorUi.hpp"
+#include "EditorUi.hpp"
 
-#include "Assets/Data/Material.hpp"
-#include "Assets/Core/Scene.hpp"
-#include "Application/Editor/gkNextEditor/Nodes/NodeMaterial.hpp"
-#include "Application/Editor/gkNextEditor/Nodes/NodeSetFloat.hpp"
-#include "Application/Editor/gkNextEditor/Nodes/NodeSetInt.hpp"
+#include "Engine/Assets/Data/Material.hpp"
+#include "Engine/Assets/Core/Scene.hpp"
+#include "Nodes/NodeMaterial.hpp"
+#include "Nodes/NodeSetFloat.hpp"
+#include "Nodes/NodeSetInt.hpp"
 #include "ImNodeFlow.h"
 
 #include <glm/vec3.hpp>

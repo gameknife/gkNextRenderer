@@ -1,7 +1,7 @@
 #include "gkNextMotionBenchmark.hpp"
-#include "Application/Render/gkNextBenchmark/Common/BenchMark.hpp"
-#include "Runtime/Engine.hpp"
-#include "Runtime/Config/CVarSystem.hpp"
+#include "Common/BenchMark.hpp"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Config/CVarSystem.hpp"
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options,
                                                          NextEngine* engine)

@@ -1,19 +1,19 @@
-#include "Application/Editor/gkNextEditor/EditorUi.hpp"
+#include "EditorUi.hpp"
 
-#include "Assets/Core/Scene.hpp"
-#include "Application/Editor/gkNextEditor/EditorActionDispatcher.hpp"
+#include "Engine/Assets/Core/Scene.hpp"
+#include "EditorActionDispatcher.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
-#include "Application/Editor/gkNextEditor/Core/RecentScenes.hpp"
-#include "Application/Editor/gkNextEditor/Core/EditorLayoutConstants.hpp"
-#include "Application/Editor/gkNextEditor/EditorUtils.h"
+#include "Core/RecentScenes.hpp"
+#include "Core/EditorLayoutConstants.hpp"
+#include "EditorUtils.h"
 
 #include <spdlog/spdlog.h>
 #include <SDL3/SDL_dialog.h>
 
-#include "Runtime/Engine.hpp"
-#include "Runtime/Editor/ProfessionalUI.hpp"
-#include "Runtime/Editor/UserInterface.hpp"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Editor/ProfessionalUI.hpp"
+#include "Engine/Runtime/Editor/UserInterface.hpp"
 
 namespace Editor
 {

@@ -1,12 +1,12 @@
 #include "Brotato3DGameInstance.hpp"
 #include "Brotato3DCommon.hpp"
 
-#include "Assets/Core/Node.h"
-#include "Assets/Loaders/FProcModel.h"
+#include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Loaders/FProcModel.h"
 #include "Brotato3DAudio.hpp"
 #include "Brotato3DPcgGenerator.hpp"
-#include "Runtime/Components/RenderComponent.h"
-#include "Runtime/Scene/SceneBuilder.h"
+#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Scene/SceneBuilder.h"
 
 using namespace Brotato3DUtil;
 

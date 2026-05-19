@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Application/Game/Flappy/FlappyCommon.hpp"
-#include "Application/Game/Flappy/FlappyCpp/FlappyCppBird.hpp"
-#include "Application/Game/Flappy/FlappyCpp/FlappyCppPipes.hpp"
-#include "Runtime/Engine.hpp"
+#include "FlappyCommon.hpp"
+#include "FlappyCpp/FlappyCppBird.hpp"
+#include "FlappyCpp/FlappyCppPipes.hpp"
+#include "Engine/Runtime/Engine.hpp"
 
 class NextAudio;
 

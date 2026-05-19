@@ -1,7 +1,7 @@
 #pragma once
-#include "Common/CoreMinimal.hpp"
-#include "Runtime/Engine.hpp"
-#include "Runtime/Camera/ModelViewController.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Camera/ModelViewController.hpp"
 
 class BenchMarker;
 

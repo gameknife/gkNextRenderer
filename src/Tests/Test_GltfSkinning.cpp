@@ -1,12 +1,12 @@
 #include <catch2/catch_all.hpp>
-#include "Assets/Loaders/FSceneLoader.h"
-#include "Assets/Core/Model.hpp"
-#include "Assets/Data/Material.hpp"
+#include "Engine/Assets/Loaders/FSceneLoader.h"
+#include "Engine/Assets/Core/Model.hpp"
+#include "Engine/Assets/Data/Material.hpp"
 #include <fstream>
 #include <filesystem>
 
 #include "TestCommon.hpp"
-#include "Utilities/FileHelper.hpp"
+#include "Engine/Utilities/FileHelper.hpp"
 
 TEST_CASE_METHOD(EngineTestFixture, "Load glTF Skinning Data", "[Assets][glTF]")
 {
@@ -36,7 +36,7 @@ TEST_CASE_METHOD(EngineTestFixture, "Load glTF Skinning Data", "[Assets][glTF]")
     }
 }
 
-#include "Runtime/Components/SkinnedMeshComponent.h"
+#include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 
 TEST_CASE("SkinnedMeshComponent Animation Playback", "[Runtime][Animation]") {
     Assets::Skeleton skeleton;

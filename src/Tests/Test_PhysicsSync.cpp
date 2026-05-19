@@ -1,8 +1,8 @@
 #include <catch2/catch_all.hpp>
 #include "TestCommon.hpp"
-#include "Runtime/Subsystems/NextPhysics.h"
-#include "Assets/Core/Node.h"
-#include "Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Subsystems/NextPhysics.h"
+#include "Engine/Assets/Core/Node.h"
+#include "Engine/Runtime/Components/RenderComponent.h"
 #include <glm/gtc/epsilon.hpp>
 #include <glm/gtc/quaternion.hpp>
 

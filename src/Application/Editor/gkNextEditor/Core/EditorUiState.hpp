@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Common/CoreMinimal.hpp"
-#include "Runtime/Command/CommandHistory.hpp"
+#include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Runtime/Command/CommandHistory.hpp"
 
 #include <imgui.h>
 

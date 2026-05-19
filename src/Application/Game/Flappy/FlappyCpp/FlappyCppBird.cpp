@@ -1,6 +1,6 @@
-#include "Application/Game/Flappy/FlappyCpp/FlappyCppBird.hpp"
+#include "FlappyCpp/FlappyCppBird.hpp"
 
-#include "Assets/Core/Node.h"
+#include "Engine/Assets/Core/Node.h"
 
 namespace Flappy
 {

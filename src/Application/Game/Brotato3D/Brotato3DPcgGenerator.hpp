@@ -2,7 +2,7 @@
 
 #include "Brotato3DPcgConfig.hpp"
 #include "Brotato3DPcgTypes.hpp"
-#include "Assets/Data/Vertex.hpp"
+#include "Engine/Assets/Data/Vertex.hpp"
 
 namespace Brotato3D::Pcg
 {

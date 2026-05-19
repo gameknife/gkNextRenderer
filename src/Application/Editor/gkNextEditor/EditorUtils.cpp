@@ -3,11 +3,11 @@
 #include <fmt/core.h>
 #include <fmt/printf.h>
 
-#include "Runtime/Engine.hpp"
+#include "Engine/Runtime/Engine.hpp"
 #include "ImNodeFlow.h"
 
-#include "Application/Editor/gkNextEditor/Nodes/NodeSetInt.hpp"
-#include "Application/Editor/gkNextEditor/Nodes/NodeSetFloat.hpp"
+#include "Nodes/NodeSetInt.hpp"
+#include "Nodes/NodeSetFloat.hpp"
 #include "Nodes/NodeMaterial.hpp"
 
 ImVec2 utils::GetLocalCursor()
