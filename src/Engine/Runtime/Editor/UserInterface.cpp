@@ -2131,10 +2131,14 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
         return;
     }
 
-    frameRateSamples_[overlaySampleCursor_] = statistics.FrameRate;
-    frameTimeSamples_[overlaySampleCursor_] = statistics.FrameTime;
-    overlaySampleCursor_ = (overlaySampleCursor_ + 1) % kOverlaySparklineSampleCount;
-    overlaySampleFilled_ = std::min(overlaySampleFilled_ + 1, kOverlaySparklineSampleCount);
+    if (overlaySampleStrideCounter_ == 0)
+    {
+        frameRateSamples_[overlaySampleCursor_] = statistics.FrameRate;
+        frameTimeSamples_[overlaySampleCursor_] = statistics.FrameTime;
+        overlaySampleCursor_ = (overlaySampleCursor_ + 1) % kOverlaySparklineSampleCount;
+        overlaySampleFilled_ = std::min(overlaySampleFilled_ + 1, kOverlaySparklineSampleCount);
+    }
+    overlaySampleStrideCounter_ = (overlaySampleStrideCounter_ + 1) % kOverlaySparklineSampleStride;
 
     const auto& io = ImGui::GetIO();
     constexpr float distance = 12.0f;
@@ -2151,14 +2155,18 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
 
     ImGui::BeginChild("##ProfilerBody", ImVec2(0, 0), false, ImGuiWindowFlags_NoBackground);
 
+    constexpr float cardHorizontalInset = 4.0f;
     auto BeginCard = [&](const char* id, float height, ImGuiWindowFlags extraFlags = 0)
     {
+        ImGui::Dummy(ImVec2(0.0f, 2.0f));
+        const float cardWidth = std::max(0.0f, ImGui::GetContentRegionAvail().x - cardHorizontalInset * 2.0f);
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + cardHorizontalInset);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 10.0f));
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
         ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceElevated, 0.38f));
         ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.84f));
-        ImGui::BeginChild(id, ImVec2(0.0f, height), true, extraFlags);
+        ImGui::BeginChild(id, ImVec2(cardWidth, height), true, extraFlags);
     };
 
     auto EndCard = [&]()
@@ -2213,7 +2221,12 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
         const VkPhysicalDeviceProperties deviceProperties =
             NextEngine::GetInstance()->GetRenderer().Device().DeviceProperties();
 
-        BeginCard("##ProfilerDeviceCard", 76.0f);
+        const ImVec4 fpsColor = statistics.FrameRate > 55.0f ? colGood
+            : (statistics.FrameRate > 30.0f ? colWarn : colBad);
+        const std::string fpsText = fmt::format("{:.0f}  FPS", statistics.FrameRate);
+        const std::string ftText = fmt::format("{:.2f}  ms", statistics.FrameTime);
+
+        BeginCard("##ProfilerDeviceCard", 164.0f);
         if (ImGui::BeginTable("##ProfilerDeviceHeader", 2, ImGuiTableFlags_SizingStretchProp))
         {
             ImGui::TableNextColumn();
@@ -2226,52 +2239,29 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
             ImGui::EndTable();
         }
         ImGui::TextColored(colVal, "%s", deviceProperties.deviceName);
-        EndCard();
+
         ImGui::Dummy(ImVec2(0.0f, 8.0f));
-    }
-
-    {
-        const float panelAvail = ImGui::GetContentRegionAvail().x;
-        const float gap = 8.0f;
-        const float halfWidth = (panelAvail - gap) * 0.5f;
-
-        auto DrawCard = [&](const char* title, const char* value, ImVec4 valueColor,
-                            const float* samples, int count, ImVec4 sparkColor, float width)
+        if (ImGui::BeginTable("##ProfilerSparklineTable", 2, ImGuiTableFlags_SizingStretchSame))
         {
-            ImVec2 cardPos = ImGui::GetCursorScreenPos();
-            const float height = 78.0f;
-            ImDrawList* dl = ImGui::GetWindowDrawList();
-            dl->AddRectFilled(cardPos, ImVec2(cardPos.x + width, cardPos.y + height),
-                              NextUI::Theme::ColorU32(NextUI::Theme::EColor::SurfaceElevated, 0.65f), 6.0f);
-            dl->AddRect(cardPos, ImVec2(cardPos.x + width, cardPos.y + height),
-                        NextUI::Theme::ColorU32(NextUI::Theme::EColor::Border, 0.85f), 6.0f);
+            ImGui::TableSetupColumn("Frame Rate", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("Frame Time", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableNextRow();
 
-            ImGui::SetCursorScreenPos(ImVec2(cardPos.x + 10.0f, cardPos.y + 6.0f));
-            ImGui::TextColored(colHeader, "%s", title);
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextColored(colHeader, "Frame Rate");
+            ImGui::TextColored(fpsColor, "%s", fpsText.c_str());
+            NextUI::Theme::Sparkline(orderedFps.data(), orderedCount,
+                                     ImVec2(ImGui::GetContentRegionAvail().x, 26.0f), colGood);
 
-            ImGui::SetCursorScreenPos(ImVec2(cardPos.x + 10.0f, cardPos.y + 22.0f));
-            ImGui::PushStyleColor(ImGuiCol_Text, valueColor);
-            ImGui::Text("%s", value);
-            ImGui::PopStyleColor();
-
-            ImGui::SetCursorScreenPos(ImVec2(cardPos.x + 10.0f, cardPos.y + height - 26.0f));
-            NextUI::Theme::Sparkline(samples, count, ImVec2(width - 20.0f, 22.0f), sparkColor);
-
-            ImGui::SetCursorScreenPos(ImVec2(cardPos.x + width, cardPos.y));
-            ImGui::Dummy(ImVec2(width, height));
-        };
-
-        const ImVec4 fpsColor = statistics.FrameRate > 55.0f ? colGood
-            : (statistics.FrameRate > 30.0f ? colWarn : colBad);
-        const std::string fpsText = fmt::format("{:.0f}  FPS", statistics.FrameRate);
-        const std::string ftText = fmt::format("{:.2f}  ms", statistics.FrameTime);
-
-        DrawCard("Frame Rate", fpsText.c_str(), fpsColor,
-                 orderedFps.data(), orderedCount, colGood, halfWidth);
-        ImGui::SameLine(0.0f, gap);
-        DrawCard("Frame Time", ftText.c_str(), colVal,
-                 orderedFt.data(), orderedCount, NextUI::Theme::Color(NextUI::Theme::EColor::Blue), halfWidth);
-        ImGui::Dummy(ImVec2(0.0f, 8.0f));
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TextColored(colHeader, "Frame Time");
+            ImGui::TextColored(colVal, "%s", ftText.c_str());
+            NextUI::Theme::Sparkline(orderedFt.data(), orderedCount,
+                                     ImVec2(ImGui::GetContentRegionAvail().x, 26.0f),
+                                     NextUI::Theme::Color(NextUI::Theme::EColor::Blue));
+            ImGui::EndTable();
+        }
+        EndCard();
     }
 
     auto& gpuDrivenStat = NextEngine::GetInstance()->GetScene().GetGpuDrivenStat();
@@ -2281,40 +2271,46 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
     const uint32_t triangleCount = gpuDrivenStat.TriangleCount > gpuDrivenStat.CulledTriangleCount
         ? gpuDrivenStat.TriangleCount - gpuDrivenStat.CulledTriangleCount
         : 0;
+    const uint32_t mainTasks = Tasks::TaskCoordinator::GetInstance()->GetMainTaskCount();
+    const uint32_t lowTasks = Tasks::TaskCoordinator::GetInstance()->GetParralledTaskCount();
+    const uint32_t completeTasks = Tasks::TaskCoordinator::GetInstance()->GetComleteTaskQueueCount();
 
     BeginCard("##ProfilerSceneStatsCard", 156.0f);
     ImGui::TextColored(colHeader, "Scene Stats");
     ImGui::Dummy(ImVec2(0.0f, 4.0f));
-    if (ImGui::BeginTable("##SceneStatsTable", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp))
+    const std::array<std::pair<const char*, std::string>, 6> sceneStats =
+    {{
+        {"Nodes", Utilities::metricFormatter(static_cast<double>(statistics.NodeCount), "")},
+        {"Instances", Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), "")},
+        {"Textures", std::to_string(statistics.TextureCount)},
+        {"Draws", fmt::format("{} / {}",
+                              Utilities::metricFormatter(static_cast<double>(instanceCount), ""),
+                              Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.ProcessedCount), ""))},
+        {"Triangles", fmt::format("{} / {}",
+                                  Utilities::metricFormatter(static_cast<double>(triangleCount), ""),
+                                  Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.TriangleCount), ""))},
+        {"Tasks", fmt::format("{} / {} / {}", mainTasks, lowTasks, completeTasks)}
+    }};
+    if (ImGui::BeginTable("##SceneStatsTable", 2, ImGuiTableFlags_SizingStretchSame))
     {
-        ImGui::TableSetupColumn("Key", ImGuiTableColumnFlags_WidthFixed, 132.0f);
-        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
-        auto DrawSceneStat = [&](const char* label, const std::string& value)
+        ImGui::TableSetupColumn("Left", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Right", ImGuiTableColumnFlags_WidthStretch);
+        auto DrawSceneStat = [&](const std::pair<const char*, std::string>& stat)
+        {
+            ImGui::TextColored(colLabel, "%s", stat.first);
+            ImGui::TextColored(colVal, "%s", stat.second.c_str());
+        };
+        for (size_t statIndex = 0; statIndex < sceneStats.size(); statIndex += 2)
         {
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            ImGui::TextColored(colLabel, "%s", label);
+            DrawSceneStat(sceneStats[statIndex]);
             ImGui::TableSetColumnIndex(1);
-            ImGui::TextColored(colVal, "%s", value.c_str());
-        };
-        DrawSceneStat("Nodes", Utilities::metricFormatter(static_cast<double>(statistics.NodeCount), ""));
-        DrawSceneStat("Instances", Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), ""));
-        DrawSceneStat("Textures", std::to_string(statistics.TextureCount));
-        DrawSceneStat("Draws", fmt::format("{} / {}",
-                                           Utilities::metricFormatter(static_cast<double>(instanceCount), ""),
-                                           Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.ProcessedCount), "")));
-        DrawSceneStat("Triangles", fmt::format("{} / {}",
-                                               Utilities::metricFormatter(static_cast<double>(triangleCount), ""),
-                                               Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.TriangleCount), "")));
+            DrawSceneStat(sceneStats[statIndex + 1]);
+        }
         ImGui::EndTable();
     }
-
-    const uint32_t mainTasks = Tasks::TaskCoordinator::GetInstance()->GetMainTaskCount();
-    const uint32_t lowTasks = Tasks::TaskCoordinator::GetInstance()->GetParralledTaskCount();
-    const uint32_t completeTasks = Tasks::TaskCoordinator::GetInstance()->GetComleteTaskQueueCount();
-    LabelVal("Tasks:", "%d / %d / %d", mainTasks, lowTasks, completeTasks);
     EndCard();
-    ImGui::Dummy(ImVec2(0.0f, 8.0f));
 
     struct TimingRow
     {
@@ -2444,10 +2440,10 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
                               ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
                                   ImGuiTableFlags_SizingFixedFit))
         {
-            ImGui::TableSetupColumn("Pass", ImGuiTableColumnFlags_WidthFixed, 150.0f);
-            ImGui::TableSetupColumn("Avg (ms)", ImGuiTableColumnFlags_WidthFixed, 62.0f);
-            ImGui::TableSetupColumn("Min (ms)", ImGuiTableColumnFlags_WidthFixed, 62.0f);
-            ImGui::TableSetupColumn("Max (ms)", ImGuiTableColumnFlags_WidthFixed, 62.0f);
+            ImGui::TableSetupColumn("Pass", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+            ImGui::TableSetupColumn("Avg", ImGuiTableColumnFlags_WidthFixed, 30.0f);
+            ImGui::TableSetupColumn("Min", ImGuiTableColumnFlags_WidthFixed, 30.0f);
+            ImGui::TableSetupColumn("Max", ImGuiTableColumnFlags_WidthFixed, 30.0f);
             ImGui::TableSetupColumn("Graph", ImGuiTableColumnFlags_WidthFixed, 74.0f);
             ImGui::TableHeadersRow();
 
@@ -2499,11 +2495,6 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
         ImGui::TextColored(colLabel, "Timing data is unavailable.");
     }
     EndCard();
-
-    ImGui::Dummy(ImVec2(0.0f, 8.0f));
-    LabelVal("Frame:", "%d", statistics.TotalFrames);
-    LabelVal("Time:", "%s",
-             fmt::format("{:%H:%M:%S}", std::chrono::seconds(static_cast<long long>(statistics.RenderTime))).c_str());
 
     ImGui::EndChild();
     NextUI::Theme::EndFloatingPanel();
