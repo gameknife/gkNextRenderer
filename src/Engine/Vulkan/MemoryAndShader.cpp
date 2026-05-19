@@ -89,6 +89,14 @@ namespace Vulkan {
 DeviceMemory::DeviceMemory(
 	const class Device& device,
 	const Buffer& buffer,
+	const VkMemoryPropertyFlags propertyFlags) :
+	DeviceMemory(device, buffer, propertyFlags, BufferAllocationOptions{})
+{
+}
+
+DeviceMemory::DeviceMemory(
+	const class Device& device,
+	const Buffer& buffer,
 	const VkMemoryPropertyFlags propertyFlags,
 	const BufferAllocationOptions& options) :
 	device_(device)
