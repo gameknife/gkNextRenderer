@@ -218,7 +218,8 @@ float4 sampleAmbientCubeHL2_LightCache(AmbientCube cube, float3 normal)
     return color;
 }
 
-float4 sampleAmbientCubeHL2_Full(AmbientCube cube, float3 normal)
+
+float4 sampleAmbientCubeHL2_Full(AmbientCube cube, float3 normal, float sunIntensity)
 {
     float4 color = float4(0.0, 0.0, 0.0, 0.0);
     float skyvis = 0.0;
@@ -244,12 +245,12 @@ float4 sampleAmbientCubeHL2_Full(AmbientCube cube, float3 normal)
     skyvis += unpacked_skyvis1.x * wx;
     skyvis += unpacked_skyvis1.y * wnx;
 
-    color += wx * UnpackColor(cube.PosX_D);
-    color += wnx * UnpackColor(cube.NegX_D);
-    color += wy * UnpackColor(cube.PosY_D);
-    color += wny * UnpackColor(cube.NegY_D);
-    color += wz * UnpackColor(cube.PosZ_D);
-    color += wnz * UnpackColor(cube.NegZ_D);
+    color += wx * UnpackColor(cube.PosX_D) * sunIntensity;
+    color += wnx * UnpackColor(cube.NegX_D) * sunIntensity;
+    color += wy * UnpackColor(cube.PosY_D) * sunIntensity;
+    color += wny * UnpackColor(cube.NegY_D) * sunIntensity;
+    color += wz * UnpackColor(cube.PosZ_D) * sunIntensity;
+    color += wnz * UnpackColor(cube.NegZ_D) * sunIntensity;
 
     color += wx * UnpackColor(cube.PosX);
     color += wnx * UnpackColor(cube.NegX);
@@ -277,7 +278,15 @@ public struct FullAmbientCubeSampler : IAmbientCubeSampler
 {
     static float4 Sample(AmbientCube cube, float3 normal)
     {
-        return sampleAmbientCubeHL2_Full(cube, normal);
+        return sampleAmbientCubeHL2_Full(cube, normal, 1.0);
+    }
+};
+
+public struct FullAmbientCubeWNSunSampler : IAmbientCubeSampler
+{
+    static float4 Sample(AmbientCube cube, float3 normal)
+    {
+        return sampleAmbientCubeHL2_Full(cube, normal, 0.0);
     }
 };
 

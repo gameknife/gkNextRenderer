@@ -2,54 +2,6 @@ import Common;
 import Bindless;
 #include "common/PreProcessor.slang"
 
-uint SelectCascade(float viewDist, float4 splits)
-{
-    if (viewDist < splits.x) return 0;
-    if (viewDist < splits.y) return 1;
-    if (viewDist < splits.z) return 2;
-    return 3;
-}
-
-float SampleShadowCSM(float3 worldPos, float3 normal, float viewDist, UniformBufferObject Camera)
-{
-    uint c = SelectCascade(viewDist, Camera.CascadeSplits);
-    float4 lightPos = mul(Camera.SunCascadeViewProjection[c], float4(worldPos, 1.0));
-    float3 projCoords = lightPos.xyz / lightPos.w;
-    float2 uv = projCoords.xy * 0.5 + 0.5;
-
-    // 出 cascade 视椎视为无遮挡
-    if (any(uv < float2(0.0)) || any(uv > float2(1.0)))
-    {
-        return 1.0;
-    }
-    if (projCoords.z < 0.0 || projCoords.z > 1.0)
-    {
-        return 1.0;
-    }
-
-    float NoL = max(dot(normalize(normal), Camera.SunDirection.xyz), 0.0);
-    float bias = max(0.0008f * (1.0f - NoL), 0.0001f);
-
-    Sampler2D shadowMap = Bindless.GetShadowMap(c);
-    uint2 texSize;
-    shadowMap.GetDimensions(texSize.x, texSize.y);
-    float2 texelSize = 1.0f / float2(texSize);
-
-    float shadow = 0.0f;
-    [unroll]
-    for (int dy = -1; dy <= 1; ++dy)
-    {
-        [unroll]
-        for (int dx = -1; dx <= 1; ++dx)
-        {
-            float2 offset = float2(dx, dy) * texelSize;
-            float closestDepth = shadowMap.SampleLevel(uv + offset, 0).r;
-            shadow += (projCoords.z - bias) > closestDepth ? 0.0f : 1.0f;
-        }
-    }
-    return shadow * (1.0f / 9.0f);
-}
-
 [shader("compute")]
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
@@ -152,7 +104,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         {
             float NoL = max(dot(Camera.SunDirection.xyz, N), 0.0f);
             float viewDist = -mul(Camera.ModelView, float4(hitVertex.Position, 1.0f)).z;
-            float shadow = SampleShadowCSM(hitVertex.Position, N, viewDist, Camera);
+            float shadow = Common.SampleSunShadowCSM(hitVertex.Position, N, viewDist);
             direct = albedo * Camera.SunColor.rgb * (NoL * shadow * M_1_PI);
         }
 
