@@ -69,6 +69,12 @@ void main(uint3 DTid : SV_DispatchThreadID)
     int2 imageMax = int2(size) - int2(1, 1);
     UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
 
+    if (Camera.DebugDraw_ShadowCascadeCoverage)
+    {
+        OutImage[ipos] = float4(LightingImage[ipos].rgb, 1.0f);
+        return;
+    }
+
     float3 total = LightingImage[ipos].rgb;
     if (!Camera.DebugDraw_Lighting)
     {

@@ -19,6 +19,7 @@ namespace Utilities
             DrawShowFlagItem("Grid", showFlags.ShowGrid);
             ImGui::Separator();
             DrawShowFlagItem("Lighting", showFlags.DebugDraw_Lighting);
+            DrawShowFlagItem("Shadow Cascade Coverage", showFlags.DebugDraw_ShadowCascadeCoverage);
             DrawShowFlagItem("Bounding Box", showFlags.DebugDraw_BoundingBox);
             DrawShowFlagItem("Physics Bodies", showFlags.DebugDraw_PhysicsBodies);
             DrawShowFlagItem("Visual Debug", showFlags.ShowVisualDebug);

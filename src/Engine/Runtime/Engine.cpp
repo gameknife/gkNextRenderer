@@ -1103,7 +1103,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
 
     {
         const auto cascades = scene_->GetEnvSettings().ComputeSunCascades(
-            ubo.ViewProjectionUnJit, renderCam.NearPlane, renderCam.FarPlane);
+            ubo.ViewProjectionUnJit, renderCam.NearPlane, renderCam.FarPlane, 400.f);
         for (int i = 0; i < 4; ++i)
         {
             ubo.SunCascadeViewProjection[i] = cascades.viewProjection[i];
@@ -1144,6 +1144,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.ShowHeatmap = showFlags_.ShowVisualDebug;
     ubo.HeatmapScale = userSettings_.HeatmapScale;
     ubo.DebugDraw_Lighting = showFlags_.DebugDraw_Lighting;
+    ubo.DebugDraw_ShadowCascadeCoverage = showFlags_.DebugDraw_ShadowCascadeCoverage;
     ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
     ubo.TemporalFrames = progressiveRendering_ ? 256 : userSettings_.TemporalFrames;
     ubo.HDR = renderer_->SwapChain().IsHDR();

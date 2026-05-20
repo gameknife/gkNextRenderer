@@ -2,6 +2,38 @@ import Common;
 import Bindless;
 #include "common/PreProcessor.slang"
 
+float3 GetSunCascadeCoverageDebugColor(uint cascadeIndex)
+{
+    if (cascadeIndex == 0u) return float3(1.00f, 0.28f, 0.24f);
+    if (cascadeIndex == 1u) return float3(0.20f, 0.82f, 0.42f);
+    if (cascadeIndex == 2u) return float3(0.24f, 0.56f, 1.00f);
+    return float3(1.00f, 0.82f, 0.18f);
+}
+
+float3 ResolveSunCascadeCoverageDebugColor(UniformBufferObject Camera, float3 worldPos, float viewDist)
+{
+    if (!Camera.HasSun)
+    {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+
+    uint cascadeIndex = Common.SelectSunCascade(viewDist, Camera.CascadeSplits);
+    float4 lightPos = mul(Camera.SunCascadeViewProjection[cascadeIndex], float4(worldPos, 1.0f));
+    if (abs(lightPos.w) < 1e-5f)
+    {
+        return float3(1.0f, 0.0f, 1.0f);
+    }
+
+    float3 projCoords = lightPos.xyz / lightPos.w;
+    float2 uv = projCoords.xy * 0.5f + 0.5f;
+    bool inside = all(uv >= float2(0.0f, 0.0f)) &&
+                  all(uv <= float2(1.0f, 1.0f)) &&
+                  projCoords.z >= 0.0f &&
+                  projCoords.z <= 1.0f;
+
+    return inside ? GetSunCascadeCoverageDebugColor(cascadeIndex) : float3(1.0f, 0.0f, 1.0f);
+}
+
 [shader("compute")]
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
@@ -24,9 +56,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
     uint2 vBuffer = uint2((packedValue >> 17) & 0x7FFF, packedValue & 0x1FFFF);
     if (vBuffer.x == 0)
     {
-        float4 skyColor = Camera.HasSky
-            ? Common.SampleIBL(Camera.SkyIdx, primaryRayDir, Camera.SkyRotation, 0) * Camera.SkyIntensity
-            : float4(0, 0, 0, 1);
+        float4 skyColor = Camera.DebugDraw_ShadowCascadeCoverage
+            ? float4(0, 0, 0, 1)
+            : (Camera.HasSky
+                ? Common.SampleIBL(Camera.SkyIdx, primaryRayDir, Camera.SkyRotation, 0) * Camera.SkyIntensity
+                : float4(0, 0, 0, 1));
         Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, skyColor);
         Bindless.GetStorageTexture<float4>(Bindless.RT_ALBEDO).Store(pixel, float4(1, 1, 1, 1));
         Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(pixel, 0);
@@ -73,42 +107,52 @@ void main(uint3 DTid : SV_DispatchThreadID)
     hitVertex.TexCoord = v0.TexCoord * baryX + v1.TexCoord * baryY + v2.TexCoord * baryZ;
     hitVertex.MaterialIndex = FetchMaterialId(hitNode, v0.MaterialIndex);
 
-    Material material = Bindless.GetGpuscene().GetMaterial(hitVertex.MaterialIndex);
-    float4 primaryAlbedo = material.Diffuse;
-    if (material.DiffuseTextureId >= 0)
-    {
-        primaryAlbedo *= Bindless.GetSampleTexture(material.DiffuseTextureId).SampleLevel(hitVertex.TexCoord, 0);
-    }
-
     float4 color;
-    if (material.MaterialModel == MaterialDiffuseLight)
+    float4 primaryAlbedo = float4(1, 1, 1, 1);
+    if (Camera.DebugDraw_ShadowCascadeCoverage)
     {
-        color = min(material.Diffuse, float4(1000, 1000, 1000, 1));
+        float viewDist = -mul(Camera.ModelView, float4(hitVertex.Position, 1.0f)).z;
+        float3 debugColor = ResolveSunCascadeCoverageDebugColor(Camera, hitVertex.Position, viewDist);
+        color = float4(debugColor, 1.0f);
     }
     else
     {
-        float3 N = normalize(hitVertex.Normal);
-        float3 albedo = primaryAlbedo.rgb;
-
-        // 天光：HDRSH irradiance (SampleIBLRough 走 EvaluateSH，相当于 SH-irradiance)
-        float3 ambient = float3(0);
-        if (Camera.HasSky)
+        Material material = Bindless.GetGpuscene().GetMaterial(hitVertex.MaterialIndex);
+        primaryAlbedo = material.Diffuse;
+        if (material.DiffuseTextureId >= 0)
         {
-            float3 irr = Common.SampleIBLRough(Camera.SkyIdx, N, Camera.SkyRotation).rgb * Camera.SkyIntensity;
-            ambient = albedo * irr;
+            primaryAlbedo *= Bindless.GetSampleTexture(material.DiffuseTextureId).SampleLevel(hitVertex.TexCoord, 0);
         }
 
-        // 太阳：Lambert + CSM 阴影
-        float3 direct = float3(0);
-        if (Camera.HasSun)
+        if (material.MaterialModel == MaterialDiffuseLight)
         {
-            float NoL = max(dot(Camera.SunDirection.xyz, N), 0.0f);
-            float viewDist = -mul(Camera.ModelView, float4(hitVertex.Position, 1.0f)).z;
-            float shadow = Common.SampleSunShadowCSM(hitVertex.Position, N, viewDist);
-            direct = albedo * Camera.SunColor.rgb * (NoL * shadow * M_1_PI);
+            color = min(material.Diffuse, float4(1000, 1000, 1000, 1));
         }
+        else
+        {
+            float3 N = normalize(hitVertex.Normal);
+            float3 albedo = primaryAlbedo.rgb;
 
-        color = float4(ambient + direct, 1.0f);
+            // 天光：HDRSH irradiance (SampleIBLRough 走 EvaluateSH，相当于 SH-irradiance)
+            float3 ambient = float3(0);
+            if (Camera.HasSky)
+            {
+                float3 irr = Common.SampleIBLRough(Camera.SkyIdx, N, Camera.SkyRotation).rgb * Camera.SkyIntensity;
+                ambient = albedo * irr;
+            }
+
+            // 太阳：Lambert + CSM 阴影
+            float3 direct = float3(0);
+            if (Camera.HasSun)
+            {
+                float NoL = max(dot(Camera.SunDirection.xyz, N), 0.0f);
+                float viewDist = -mul(Camera.ModelView, float4(hitVertex.Position, 1.0f)).z;
+                float shadow = Common.SampleSunShadowCSM(hitVertex.Position, N, viewDist);
+                direct = albedo * Camera.SunColor.rgb * (NoL * shadow * M_1_PI);
+            }
+
+            color = float4(ambient + direct, 1.0f);
+        }
     }
 
     float4 clipPos = mul(Camera.ViewProjection, float4(hitVertex.Position, 1.0));

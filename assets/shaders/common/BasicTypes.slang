@@ -123,7 +123,7 @@ public struct ALIGN_16 UniformBufferObject
     public bool ReservedBool1;
 
     public bool DebugDraw_Lighting;
-    public bool ReservedBool2;
+    public bool DebugDraw_ShadowCascadeCoverage;
     public uint SuperResolution;
     public float SceneEpsilonScale;
     public float AmbientCubeUnit;

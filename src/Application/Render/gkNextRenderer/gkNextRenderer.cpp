@@ -874,6 +874,7 @@ void NextRendererGameInstance::DrawSettings()
         DrawSettingCheckboxRow(LOCTEXT("TickPhysics"), &userSetting.TickPhysics);
         DrawSettingCheckboxRow(LOCTEXT("DebugDraw"), &GetEngine().GetShowFlags().ShowVisualDebug);
         DrawSettingCheckboxRow(LOCTEXT("DebugDraw_Lighting"), &GetEngine().GetShowFlags().DebugDraw_Lighting);
+        DrawSettingCheckboxRow(LOCTEXT("ShadowCascadeCoverage"), &GetEngine().GetShowFlags().DebugDraw_ShadowCascadeCoverage);
         DrawSettingCheckboxRow(LOCTEXT("DebugDraw_BoundingBox"), &GetEngine().GetShowFlags().DebugDraw_BoundingBox);
 
         ImGui::SliderFloat(LOCTEXT("Time Scaling"), &userSetting.HeatmapScale, 0.10f, 2.0f, "%.2f",
