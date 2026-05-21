@@ -390,17 +390,20 @@ namespace Assets
 
         static const uint32_t kMaxBindlessResources = 65535u;// moltenVK returns a invalid value. std::min(65535u, device.DeviceProperties().limits.maxPerStageDescriptorSamplers);
         static const uint32_t kMaxBindlessShadowMaps = 16u;
+        // Last binding must have the most descriptors because DescriptorSetLayout
+        // puts VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT on the last binding,
+        // and DescriptorSets allocates with variableDescriptorCount = 65534.
         const std::vector<Vulkan::DescriptorBinding> descriptorBindings =
         {
+            {2, kMaxBindlessShadowMaps, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_ALL},
             {0, kMaxBindlessResources, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_ALL},
             {1, kMaxBindlessResources, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_ALL},
-            {2, kMaxBindlessShadowMaps, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_ALL},
         };
         descriptorSetManager_.reset(new Vulkan::DescriptorSetManager(device, descriptorBindings, 1, true));
-        
+
         // for hdr to bind
         hdrSphericalHarmonics_.resize(100);
-        
+
         GlobalTexturePool::instance_ = this;
 
         CreateDefaultTextures();
