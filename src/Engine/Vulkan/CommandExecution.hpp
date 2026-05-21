@@ -1,14 +1,13 @@
 #pragma once
 
 #include "DebugUtilities.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 #include <vector>
 #include <functional>
 #include <mutex>
 
 namespace Vulkan
 {
-    class Device;
-
     // ============================================================================
     // CommandPool
     // ============================================================================

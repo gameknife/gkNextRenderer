@@ -4,15 +4,11 @@
 #include <glm/glm.hpp>
 #include <glm/detail/type_quat.hpp>
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysicsTypes.h"
 
 struct FNextPhysicsContext;
-
-namespace Assets
-{
-    class Model;
-}
 
 enum class ENextBodyShape
 {

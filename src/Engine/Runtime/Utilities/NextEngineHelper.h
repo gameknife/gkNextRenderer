@@ -1,16 +1,11 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Runtime/RuntimeFwd.hpp"
 #include <glm/glm.hpp>
 
-class NextEngine;
-class NextGameInstanceBase;
 struct ImVec2;
-
-namespace Assets
-{
-    struct Camera;
-}
 
 namespace Runtime::EngineHelper
 {

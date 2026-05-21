@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
@@ -10,15 +11,8 @@
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Vulkan/DescriptorSystem.hpp"
 
-namespace Vulkan {
-	class CommandPool;
-	class DescriptorSetManager;
-}
-
 namespace Assets
 {
-	class TextureImage;
-
 	enum class ETextureStatus : uint8
 	{
 		ETS_Loaded,

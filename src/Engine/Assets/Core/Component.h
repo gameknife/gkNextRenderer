@@ -1,4 +1,5 @@
 #pragma once
+#include "Engine/Assets/AssetsFwd.hpp"
 #include <memory>
 #include <string>
 #include <string_view>
@@ -6,8 +7,6 @@
 
 namespace Assets
 {
-    class Node;
-
     template <typename T>
     constexpr entt::id_type ComponentTypeId()
     {

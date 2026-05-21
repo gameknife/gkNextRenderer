@@ -1,13 +1,8 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "AccelerationStructure.hpp"
 #include "BottomLevelGeometry.hpp"
-
-namespace Assets
-{
-	class Procedural;
-	class Scene;
-}
 
 namespace Vulkan::RayTracing
 {

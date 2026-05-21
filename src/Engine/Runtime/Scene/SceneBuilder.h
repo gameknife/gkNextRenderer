@@ -1,18 +1,12 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 
 #include <array>
 #include <glm/ext/quaternion_float.hpp>
 #include <glm/vec3.hpp>
 #include <string_view>
-
-namespace Assets
-{
-    class Node;
-    class Scene;
-    struct FMaterial;
-}
 
 namespace Assets::SceneBuilder
 {

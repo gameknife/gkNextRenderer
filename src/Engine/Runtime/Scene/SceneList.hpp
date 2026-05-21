@@ -1,24 +1,13 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
+
 #include <filesystem>
 #include <memory>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
-
-namespace Assets
-{
-    class Node;
-    class Model;
-    class Texture;
-    struct Material;
-    struct FMaterial;
-    struct LightObject;
-	struct AnimationTrack;
-    struct EnvironmentSetting;
-    struct Skeleton;
-}
 
 namespace Runtime::Scene
 {

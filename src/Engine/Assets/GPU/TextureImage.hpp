@@ -1,23 +1,14 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 #include <memory>
 #include <string>
 #include <vector>
 
-namespace Vulkan
-{
-	class CommandPool;
-	class DeviceMemory;
-	class Image;
-	class ImageView;
-	class Sampler;
-}
-
 namespace Assets
 {
-	class Texture;
-	
 	class TextureImage final
 	{
 	public:

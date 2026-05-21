@@ -1,10 +1,9 @@
 #pragma once
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 
 namespace Assets
 {
-    struct FMaterial;
-    
     class FProcModel
     {
     public:

@@ -1,10 +1,12 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
 #include "Engine/Vulkan/SyncAndTiming.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/RayTracing/TopLevelAccelerationStructure.hpp"
 #include "Engine/Vulkan/RayTracing/BottomLevelAccelerationStructure.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include <vector>
@@ -19,40 +21,6 @@ namespace StreamlineWrapper
 	void Initialize();
 	void LazyInit(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily, bool& outSupportDLSS, bool& outSupportDLSSRR);
 	void Shutdown();
-}
-
-namespace Vulkan
-{
-	namespace PipelineCommon
-	{
-		class VisibilityPipeline;
-		class GraphicsPipeline;
-		class ZeroBindPipeline;
-		class ZeroBindWithTLASPipeline;
-		class ZeroBindCustomPushConstantPipeline;
-	}
-
-	namespace Shadow
-	{
-		class ShadowMapPass;
-	}
-
-	namespace RayTracing
-	{
-		class RayTracingProperties;
-	}
-
-	class RenderImage;
-	class DescriptorSetManager;
-	class Instance;
-}
-
-namespace Assets
-{
-	class GlobalTexturePool;
-	class Scene;
-	struct UniformBufferObject;
-	class UniformBuffer;
 }
 
 namespace Vulkan 

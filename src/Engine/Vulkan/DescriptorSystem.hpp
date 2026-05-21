@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DebugUtilities.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 #include <map>
 #include <memory>
 #include <vector>
@@ -8,10 +9,6 @@
 
 namespace Vulkan
 {
-    class Device;
-    class Buffer;
-    class ImageView;
-
     // ============================================================================
     // DescriptorBinding
     // ============================================================================

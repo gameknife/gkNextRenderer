@@ -15,6 +15,7 @@ import (
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/fetcher"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ios"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/loc"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/packager"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/paks"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
@@ -71,6 +72,7 @@ func main() {
 	root.AddCommand(newInstallCommand(ctx))
 	root.AddCommand(newTodoCommand(ctx))
 	root.AddCommand(newDashboardCommand(ctx))
+	root.AddCommand(newLocCommand(ctx))
 
 	if err := root.Execute(); err != nil {
 		fatal(err)
@@ -545,6 +547,27 @@ func newInstallCommand(ctx appContext) *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func newLocCommand(ctx appContext) *cobra.Command {
+	var (
+		includeThirdParty bool
+		extensions        []string
+	)
+	cmd := &cobra.Command{
+		Use:   "loc",
+		Short: "Print a line-of-code summary of src/, grouped by category and subproject",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return loc.Run(loc.Options{
+				Root:              ctx.repoRoot,
+				Extensions:        extensions,
+				IncludeThirdParty: includeThirdParty,
+			})
+		},
+	}
+	cmd.Flags().BoolVar(&includeThirdParty, "thirdparty", false, "include src/ThirdParty in the report")
+	cmd.Flags().StringSliceVar(&extensions, "ext", nil, "override file extensions (e.g. --ext .cpp,.h)")
+	return cmd
 }
 
 func printOverview(ctx appContext) error {

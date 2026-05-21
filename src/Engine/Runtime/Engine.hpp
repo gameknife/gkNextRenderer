@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
@@ -9,37 +10,11 @@
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Runtime/Config/ShowFlags.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
+#include "Engine/Runtime/RuntimeFwd.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
-
-class NextPhysics;
-class QuickJSEngine;
-class NextAudio;
-class NextLocalization;
-class VulkanGpuTimer;
-
-class NextEngine;
-class NextGameInstanceBase;
-
-namespace NextAI
-{
-    class FAIService;
-    class VoiceInputService;
-}
-
-namespace NextCVar
-{
-    class FCVarSystem;
-}
-namespace Vulkan
-{
-    class ShaderHotReloader;
-}
-namespace NextUI
-{
-    class UserInterface;
-}
 
 namespace NextRenderer
 {

@@ -1,24 +1,14 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include <memory>
-
-namespace Vulkan
-{
-	class RenderImage;
-}
 
 namespace Vulkan::PipelineCommon
 {
 	class AccumulatePipeline;
-}
-
-namespace Assets
-{
-	class Scene;
-	struct UniformBufferObject;
-	class UniformBuffer;
 }
 
 namespace Vulkan::ModernDeferred

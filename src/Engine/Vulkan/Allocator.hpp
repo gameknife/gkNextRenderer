@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DebugUtilities.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include <vector>
 
@@ -55,8 +56,6 @@ namespace Vulkan
         VmaAllocationHandle allocation{};
         VkDeviceMemory deviceMemory{};
     };
-
-    class Device;
 
     class MemoryAllocator final
     {

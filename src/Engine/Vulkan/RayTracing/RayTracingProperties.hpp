@@ -1,11 +1,10 @@
 #pragma once
 
 #include "Engine/Vulkan/DebugUtilities.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 
 namespace Vulkan
 {
-	class Device;
-
 	namespace RayTracing
 	{
 		class RayTracingProperties final

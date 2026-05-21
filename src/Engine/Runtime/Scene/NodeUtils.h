@@ -1,14 +1,10 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 
 #include <glm/ext/quaternion_float.hpp>
 #include <glm/vec3.hpp>
-
-namespace Assets
-{
-    class Node;
-}
 
 namespace Assets::NodeUtils
 {
