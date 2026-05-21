@@ -27,6 +27,7 @@ namespace Vulkan::NoAmbientDeferred
         void CreateSwapChain(const VkExtent2D& extent) override;
         void DeleteSwapChain() override;
         void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
+        FRendererRequirements Requirements() const override { return GetRendererRequirements(ERT_LegacyDeferredNoAmbient); }
 
     private:
         std::unique_ptr<PipelineCommon::ZeroBindPipeline> shadingPipeline_;

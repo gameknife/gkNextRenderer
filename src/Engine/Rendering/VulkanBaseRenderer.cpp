@@ -358,6 +358,24 @@ namespace
 
 namespace Vulkan
 {
+    FRendererRequirements GetRendererRequirements(ERendererType type)
+    {
+        switch (type)
+        {
+        case ERT_PathTracing:
+            return {.requestAmbientCube = true, .requestRayTracing = true};
+        case ERT_ModernDeferred:
+        case ERT_LegacyDeferred:
+        case ERT_VoxelTracing:
+            return {.requestAmbientCube = true};
+        case ERT_LegacyDeferredNoAmbient:
+            return {};
+        default:
+            assert(false);
+            return {};
+        }
+    }
+
     VulkanBaseRenderer::VulkanBaseRenderer(Vulkan::Window* window, const VkPresentModeKHR presentMode,
                                            const bool enableValidationLayers,
                                            Instance* instance) :
@@ -769,7 +787,9 @@ namespace Vulkan
         // 公用Pipeline
         simpleComposePipeline_.reset( new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.UpScaleFSR.comp.slang.spv", 20));
         bufferClearPipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*swapChain_, "assets/shaders/Util.BufferClear.comp.slang.spv", 4));
-        if (CurrentRendererUsesAmbientCube())
+        // Shared swap-chain resources must cover every registered renderer because
+        // switching logic renderers does not recreate the swap chain.
+        if (RegisteredRendererRequirements().requestAmbientCube)
         {
             softAmbientCubeGenPipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.SwAmbientCube.comp.slang.spv", GetScene()));
             clearAmbientCubeCachePipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.ClearAmbientCubeCache.comp.slang.spv", GetScene()));
@@ -966,7 +986,7 @@ namespace Vulkan
         UpdateSkinningBuffers();
         InitializeBarriers(commandBuffer);
 
-        if (CurrentRendererUsesAmbientCube())
+        if (CurrentRendererRequirements().requestAmbientCube)
         {
             const bool useAmbientCubePropagation = NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation;
             if (!ambientCubePropagationStateInitialized_)
@@ -1660,6 +1680,27 @@ namespace Vulkan
         currentLogicRenderer_ = type;
     }
 
+    FRendererRequirements VulkanBaseRenderer::CurrentRendererRequirements() const
+    {
+        const auto renderer = logicRenderers_.find(currentLogicRenderer_);
+        if (renderer != logicRenderers_.end())
+        {
+            return renderer->second->Requirements();
+        }
+
+        return GetRendererRequirements(currentLogicRenderer_);
+    }
+
+    FRendererRequirements VulkanBaseRenderer::RegisteredRendererRequirements() const
+    {
+        FRendererRequirements requirements;
+        for (const auto& logicRenderer : logicRenderers_)
+        {
+            requirements.Merge(logicRenderer.second->Requirements());
+        }
+        return requirements;
+    }
+
     void VulkanBaseRenderer::SwitchLogicRenderer(ERendererType type)
     {
         currentLogicRenderer_ = type;
@@ -1980,7 +2021,7 @@ namespace Vulkan
     void VulkanBaseRenderer::PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         //if (NextEngine::GetInstance()->IsProgressiveRendering())  return;
-        if (CurrentRendererUsesAmbientCube() &&
+        if (CurrentRendererRequirements().requestAmbientCube &&
             NextEngine::GetInstance()->GetUserSettings().UseGpuAmbientCubeSdf &&
             GetScene().ConsumeGpuDistanceFieldRebuild())
         {
@@ -2098,7 +2139,7 @@ namespace Vulkan
         }
 
         // soft ambient cube generation
-        if (CurrentRendererUsesAmbientCube() && (!supportRayTracing_ || GOption->ForceSoftGen))
+        if (CurrentRendererRequirements().requestAmbientCube && (!supportRayTracing_ || GOption->ForceSoftGen))
         {
             const int cubesPerGroup = 64;
             const int perCascadeCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
@@ -2198,7 +2239,7 @@ namespace Vulkan
             }
         }
 
-        if (CurrentRendererUsesAmbientCube() &&
+        if (CurrentRendererRequirements().requestAmbientCube &&
             (!supportRayTracing_ || GOption->ForceSoftGen) &&
             NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation &&
             NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel != 2)

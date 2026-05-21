@@ -123,7 +123,7 @@ namespace Vulkan::RayTracing
     void RayTraceBaseRenderer::CreateSwapChain()
     {
         Vulkan::VulkanBaseRenderer::CreateSwapChain();
-        if (CurrentRendererUsesAmbientCube())
+        if (RegisteredRendererRequirements().requestAmbientCube)
         {
             directLightGenPipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline(SwapChain(), "assets/shaders/Bake.HwAmbientCube.comp.slang.spv", GetScene()));
         }
@@ -187,7 +187,8 @@ namespace Vulkan::RayTracing
 
     void RayTraceBaseRenderer::PreRender(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
-        if ( GOption->ReferenceMode || !GOption->ForceSoftGen || CurrentLogicRendererType() == ERT_PathTracing )
+        if (GOption->ReferenceMode || CurrentRendererRequirements().requestRayTracing ||
+            (CurrentRendererRequirements().requestAmbientCube && !GOption->ForceSoftGen))
         {
             SCOPED_GPU_TIMER("TLAS Update");
             if (tlasUpdateRequest_ > 0)
@@ -225,7 +226,7 @@ namespace Vulkan::RayTracing
     {
         VulkanBaseRenderer::PostRender(commandBuffer, imageIndex);
         
-        if(CurrentRendererUsesAmbientCube() && supportRayTracing_ && !GOption->ForceSoftGen)
+        if(CurrentRendererRequirements().requestAmbientCube && supportRayTracing_ && !GOption->ForceSoftGen)
         {
             const int cubesPerGroup = 64;
             const int perCascadeCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
