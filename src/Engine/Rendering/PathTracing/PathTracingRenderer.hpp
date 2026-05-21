@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
-#include "Engine/Rendering/RayTraceBaseRenderer.hpp"
+#include "Engine/Rendering/VulkanBaseRenderer.hpp"
 
 namespace Vulkan
 {

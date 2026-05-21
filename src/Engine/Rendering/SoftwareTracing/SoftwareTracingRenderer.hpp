@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Engine/Rendering/RayTraceBaseRenderer.hpp"
 
 #include <memory>
 

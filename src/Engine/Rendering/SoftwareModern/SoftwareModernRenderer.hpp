@@ -2,7 +2,6 @@
 
 #include "Engine/Vulkan/RenderingPipeline.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Engine/Rendering/RayTraceBaseRenderer.hpp"
 
 #include <memory>
 #include <string>
