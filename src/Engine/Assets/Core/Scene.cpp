@@ -114,6 +114,10 @@ namespace Assets
             commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(VkDrawIndexedIndirectCommand) * 65535, indirectDrawBuffer_,
             indirectDrawBufferMemory_); // support 65535 nodes
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "ShadowIndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(VkDrawIndexedIndirectCommand) * 65535,
+            shadowIndirectDrawBuffer_, shadowIndirectDrawBufferMemory_); // support 65535 nodes
         // shadow maps
         cpuShadowMap_.reset(
             new TextureImage(commandPool, SHADOWMAP_SIZE, SHADOWMAP_SIZE, 1, VK_FORMAT_R32_SFLOAT, nullptr, 0));
@@ -176,6 +180,8 @@ namespace Assets
 
         indirectDrawBuffer_.reset();
         indirectDrawBufferMemory_.reset();
+        shadowIndirectDrawBuffer_.reset();
+        shadowIndirectDrawBufferMemory_.reset();
         sceneDynamicBuffer_.reset();
         sceneDynamicBufferMemory_.reset();
         ambientArenaBuffer_.reset();
@@ -806,29 +812,42 @@ namespace Assets
         }
     }
 
+    Assets::GPUScene Scene::BuildGPUScene(const uint32_t imageIndex, const VkDeviceAddress indirectDrawCommands) const
+    {
+        Assets::GPUScene gpuScene{};
+        gpuScene.Camera =
+            NextEngine::GetInstance()->GetRenderer().UniformBuffers()[imageIndex].Buffer().GetDeviceAddress();
+        gpuScene.SceneDynamicBase = sceneDynamicBuffer_->GetDeviceAddress();
+        gpuScene.Offsets = offsetBuffer_->GetDeviceAddress();
+        gpuScene.Indices = primAddressBuffer_->GetDeviceAddress();
+        gpuScene.Vertices = vertexBuffer_->GetDeviceAddress();
+        gpuScene.Reorders = reorderBuffer_->GetDeviceAddress();
+        gpuScene.IndirectDrawCommands = indirectDrawCommands;
+        gpuScene.AmbientBase = ambientArenaBuffer_->GetDeviceAddress();
+        gpuScene.TLAS = NextEngine::GetInstance()->TryGetGPUAccelerationStructureAddress();
+
+        gpuScene.SkinWeights = skinWeightBuffer_->GetDeviceAddress();
+        gpuScene.SkinJoints = skinJointBuffer_->GetDeviceAddress();
+        gpuScene.SkinnedVertices = skinnedVerticesAddr_;
+        gpuScene.JointMatrices = jointMatricesAddr_;
+        gpuScene.ReservedAddress0 = 0;
+
+        gpuScene.SwapChainIndex = imageIndex;
+
+        return gpuScene;
+    }
+
     const Assets::GPUScene& Scene::FetchGPUScene(const uint32_t imageIndex) const
     {
-        // all gpu device address
-        gpuScene_.Camera =
-            NextEngine::GetInstance()->GetRenderer().UniformBuffers()[imageIndex].Buffer().GetDeviceAddress();
-        gpuScene_.SceneDynamicBase = sceneDynamicBuffer_->GetDeviceAddress();
-        gpuScene_.Offsets = offsetBuffer_->GetDeviceAddress();
-        gpuScene_.Indices = primAddressBuffer_->GetDeviceAddress();
-        gpuScene_.Vertices = vertexBuffer_->GetDeviceAddress();
-        gpuScene_.Reorders = reorderBuffer_->GetDeviceAddress();
-        gpuScene_.IndirectDrawCommands = indirectDrawBuffer_->GetDeviceAddress();
-        gpuScene_.AmbientBase = ambientArenaBuffer_->GetDeviceAddress();
-        gpuScene_.TLAS = NextEngine::GetInstance()->TryGetGPUAccelerationStructureAddress();
-
-        gpuScene_.SkinWeights = skinWeightBuffer_->GetDeviceAddress();
-        gpuScene_.SkinJoints = skinJointBuffer_->GetDeviceAddress();
-        gpuScene_.SkinnedVertices = skinnedVerticesAddr_;
-        gpuScene_.JointMatrices = jointMatricesAddr_;
-        gpuScene_.ReservedAddress0 = 0;
-
-        gpuScene_.SwapChainIndex = imageIndex;
+        gpuScene_ = BuildGPUScene(imageIndex, indirectDrawBuffer_->GetDeviceAddress());
 
         return gpuScene_;
+    }
+
+    Assets::GPUScene Scene::FetchGPUSceneWithIndirectBuffer(
+        const uint32_t imageIndex, const VkDeviceAddress indirectDrawCommands) const
+    {
+        return BuildGPUScene(imageIndex, indirectDrawCommands);
     }
 
     void Scene::PlayAllTracks()
@@ -1048,11 +1067,14 @@ namespace Assets
         GPUDrivenStat zero{};
         // read back gpu driven stats
         const auto data = sceneDynamicBufferMemory_->Map(
-            Assets::GPU_SCENE_DYNAMIC_GPU_DRIVEN_STATS_OFFSET, sizeof(Assets::GPUDrivenStat));
+            Assets::GPU_SCENE_DYNAMIC_GPU_DRIVEN_STATS_OFFSET,
+            sizeof(Assets::GPUDrivenStat) * (1 + Assets::Scene::kSunShadowCascadeCount));
         // download
         GPUDrivenStat* gpuData = static_cast<GPUDrivenStat*>(data);
         std::memcpy(&gpuDrivenStat_, gpuData, sizeof(GPUDrivenStat));
-        std::memcpy(gpuData, &zero, sizeof(GPUDrivenStat)); // reset to zero
+        std::memcpy(shadowGpuDrivenStats_.data(), gpuData + 1,
+                    sizeof(Assets::GPUDrivenStat) * Assets::Scene::kSunShadowCascadeCount);
+        std::fill_n(gpuData, 1 + Assets::Scene::kSunShadowCascadeCount, zero); // reset to zero
         sceneDynamicBufferMemory_->Unmap();
 
 

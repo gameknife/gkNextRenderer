@@ -3,6 +3,7 @@
 #include "Engine/Runtime/Utilities/ProfileDebugOverlay.hpp"
 
 #include <string>
+#include <array>
 #include <vector>
 
 #include <fmt/format.h>
@@ -70,6 +71,45 @@ namespace
         ImGui::TextColored(ImVec4(0.72f, 0.76f, 0.82f, 1.0f), "%s", label);
         ImGui::TableSetColumnIndex(1);
         ImGui::TextColored(valueColor, "%s", value.c_str());
+    }
+
+    std::string FormatVisibleOverTotal(uint32_t visibleCount, uint32_t totalCount)
+    {
+        return fmt::format("{} / {}", FormatCount(visibleCount), FormatCount(totalCount));
+    }
+
+    void DrawShadowCascadeStats(const std::array<Assets::GPUDrivenStat, Assets::Scene::kSunShadowCascadeCount>& stats)
+    {
+        if (!ImGui::BeginTable("##ShadowCascadeStats", 3,
+                               ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
+                                   ImGuiTableFlags_SizingFixedFit))
+        {
+            return;
+        }
+
+        ImGui::TableSetupColumn("Cascade", ImGuiTableColumnFlags_WidthFixed, 54.0f);
+        ImGui::TableSetupColumn("Draws", ImGuiTableColumnFlags_WidthFixed, 92.0f);
+        ImGui::TableSetupColumn("Tri", ImGuiTableColumnFlags_WidthFixed, 92.0f);
+        ImGui::TableHeadersRow();
+
+        for (uint32_t cascade = 0; cascade < Assets::Scene::kSunShadowCascadeCount; ++cascade)
+        {
+            const auto& stat = stats[cascade];
+            const uint32_t visibleDrawCount = SaturatingSubtract(stat.ProcessedCount, stat.CulledCount);
+            const uint32_t visibleTriangleCount = SaturatingSubtract(stat.TriangleCount, stat.CulledTriangleCount);
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextColored(ImVec4(0.72f, 0.76f, 0.82f, 1.0f), "C%u", cascade);
+            ImGui::TableSetColumnIndex(1);
+            const std::string drawText = FormatVisibleOverTotal(visibleDrawCount, stat.ProcessedCount);
+            ImGui::TextColored(ImVec4(0.93f, 0.96f, 1.0f, 1.0f), "%s", drawText.c_str());
+            ImGui::TableSetColumnIndex(2);
+            const std::string triText = FormatVisibleOverTotal(visibleTriangleCount, stat.TriangleCount);
+            ImGui::TextColored(ImVec4(0.93f, 0.96f, 1.0f, 1.0f), "%s", triText.c_str());
+        }
+
+        ImGui::EndTable();
     }
 
     void DrawCpuTimers(VulkanGpuTimer* gpuTimer)
@@ -140,6 +180,7 @@ void Runtime::DrawProfileDebugOverlay(NextEngine& engine, const NextUI::Statisti
 {
     Assets::Scene& scene = engine.GetScene();
     const auto& gpuDrivenStat = scene.GetGpuDrivenStat();
+    const auto& shadowGpuDrivenStats = scene.GetShadowGpuDrivenStats();
     const uint32_t visibleDrawCount = SaturatingSubtract(gpuDrivenStat.ProcessedCount, gpuDrivenStat.CulledCount);
     const uint32_t visibleTriangleCount =
         SaturatingSubtract(gpuDrivenStat.TriangleCount, gpuDrivenStat.CulledTriangleCount);
@@ -206,15 +247,16 @@ void Runtime::DrawProfileDebugOverlay(NextEngine& engine, const NextUI::Statisti
         DrawSectionHeader("Render / Cull");
         if (BeginStatTable("##RenderCullStats"))
         {
-            DrawValueRow("Draws", fmt::format("{} / {}", FormatCount(visibleDrawCount),
-                                              FormatCount(gpuDrivenStat.ProcessedCount)));
+            DrawValueRow("Draws", FormatVisibleOverTotal(visibleDrawCount, gpuDrivenStat.ProcessedCount));
             DrawValueRow("Culled draws", FormatCount(gpuDrivenStat.CulledCount));
-            DrawValueRow("Triangles", fmt::format("{} / {}", FormatCount(visibleTriangleCount),
-                                                  FormatCount(gpuDrivenStat.TriangleCount)));
+            DrawValueRow("Triangles", FormatVisibleOverTotal(visibleTriangleCount, gpuDrivenStat.TriangleCount));
             DrawValueRow("Culled tris", FormatCount(gpuDrivenStat.CulledTriangleCount));
             DrawValueRow("Batches", FormatCount(scene.GetIndirectDrawBatchCount()));
             ImGui::EndTable();
         }
+
+        DrawSectionHeader("Shadow Cascades");
+        DrawShadowCascadeStats(shadowGpuDrivenStats);
 
         DrawSectionHeader("Memory");
         if (BeginStatTable("##MemoryStats"))

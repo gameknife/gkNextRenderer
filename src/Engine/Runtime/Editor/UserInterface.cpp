@@ -2265,6 +2265,7 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
     }
 
     auto& gpuDrivenStat = NextEngine::GetInstance()->GetScene().GetGpuDrivenStat();
+    const auto& shadowGpuDrivenStats = NextEngine::GetInstance()->GetScene().GetShadowGpuDrivenStats();
     const uint32_t instanceCount = gpuDrivenStat.ProcessedCount > gpuDrivenStat.CulledCount
         ? gpuDrivenStat.ProcessedCount - gpuDrivenStat.CulledCount
         : 0;
@@ -2275,30 +2276,39 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
     const uint32_t lowTasks = Tasks::TaskCoordinator::GetInstance()->GetParralledTaskCount();
     const uint32_t completeTasks = Tasks::TaskCoordinator::GetInstance()->GetComleteTaskQueueCount();
 
-    BeginCard("##ProfilerSceneStatsCard", 156.0f);
+    auto FormatVisibleOverTotal = [](uint32_t visibleCount, uint32_t totalCount)
+    {
+        return fmt::format("{} / {}",
+                           Utilities::metricFormatter(static_cast<double>(visibleCount), ""),
+                           Utilities::metricFormatter(static_cast<double>(totalCount), ""));
+    };
+
+    BeginCard("##ProfilerSceneStatsCard", 308.0f);
     ImGui::TextColored(colHeader, "Scene Stats");
     ImGui::Dummy(ImVec2(0.0f, 4.0f));
-    const std::array<std::pair<const char*, std::string>, 6> sceneStats =
-    {{
+    std::vector<std::pair<std::string, std::string>> sceneStats = {
         {"Nodes", Utilities::metricFormatter(static_cast<double>(statistics.NodeCount), "")},
         {"Instances", Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), "")},
         {"Textures", std::to_string(statistics.TextureCount)},
-        {"Draws", fmt::format("{} / {}",
-                              Utilities::metricFormatter(static_cast<double>(instanceCount), ""),
-                              Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.ProcessedCount), ""))},
-        {"Triangles", fmt::format("{} / {}",
-                                  Utilities::metricFormatter(static_cast<double>(triangleCount), ""),
-                                  Utilities::metricFormatter(static_cast<double>(gpuDrivenStat.TriangleCount), ""))},
-        {"Tasks", fmt::format("{} / {} / {}", mainTasks, lowTasks, completeTasks)}
-    }};
+        {"Draws", FormatVisibleOverTotal(instanceCount, gpuDrivenStat.ProcessedCount)},
+        {"Triangles", FormatVisibleOverTotal(triangleCount, gpuDrivenStat.TriangleCount)},
+        {"Tasks", fmt::format("{} / {} / {}", mainTasks, lowTasks, completeTasks)},
+    };
+    if ((sceneStats.size() & 1u) != 0u)
+    {
+        sceneStats.emplace_back("", "");
+    }
     if (ImGui::BeginTable("##SceneStatsTable", 2, ImGuiTableFlags_SizingStretchSame))
     {
         ImGui::TableSetupColumn("Left", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("Right", ImGuiTableColumnFlags_WidthStretch);
-        auto DrawSceneStat = [&](const std::pair<const char*, std::string>& stat)
+        auto DrawSceneStat = [&](const std::pair<std::string, std::string>& stat)
         {
-            ImGui::TextColored(colLabel, "%s", stat.first);
-            ImGui::TextColored(colVal, "%s", stat.second.c_str());
+            if (!stat.first.empty())
+            {
+                ImGui::TextColored(colLabel, "%s", stat.first.c_str());
+                ImGui::TextColored(colVal, "%s", stat.second.c_str());
+            }
         };
         for (size_t statIndex = 0; statIndex < sceneStats.size(); statIndex += 2)
         {
@@ -2307,6 +2317,40 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
             DrawSceneStat(sceneStats[statIndex]);
             ImGui::TableSetColumnIndex(1);
             DrawSceneStat(sceneStats[statIndex + 1]);
+        }
+        ImGui::EndTable();
+    }
+
+    ImGui::Dummy(ImVec2(0.0f, 8.0f));
+    ImGui::TextColored(colHeader, "Shadow Cascades");
+    if (ImGui::BeginTable("##SceneShadowCascadeStatsTable", 3,
+                          ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
+                              ImGuiTableFlags_SizingFixedFit))
+    {
+        ImGui::TableSetupColumn("Cascade", ImGuiTableColumnFlags_WidthFixed, 56.0f);
+        ImGui::TableSetupColumn("Draws", ImGuiTableColumnFlags_WidthFixed, 92.0f);
+        ImGui::TableSetupColumn("Tri", ImGuiTableColumnFlags_WidthFixed, 92.0f);
+        ImGui::TableHeadersRow();
+
+        for (uint32_t cascade = 0; cascade < Assets::Scene::kSunShadowCascadeCount; ++cascade)
+        {
+            const auto& stat = shadowGpuDrivenStats[cascade];
+            const uint32_t shadowDrawCount = stat.ProcessedCount > stat.CulledCount
+                ? stat.ProcessedCount - stat.CulledCount
+                : 0;
+            const uint32_t shadowTriangleCount = stat.TriangleCount > stat.CulledTriangleCount
+                ? stat.TriangleCount - stat.CulledTriangleCount
+                : 0;
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextColored(colLabel, "C%u", cascade);
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TextColored(colVal, "%s",
+                               FormatVisibleOverTotal(shadowDrawCount, stat.ProcessedCount).c_str());
+            ImGui::TableSetColumnIndex(2);
+            ImGui::TextColored(colVal, "%s",
+                               FormatVisibleOverTotal(shadowTriangleCount, stat.TriangleCount).c_str());
         }
         ImGui::EndTable();
     }

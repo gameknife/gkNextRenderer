@@ -217,14 +217,14 @@ namespace Vulkan::Shadow
         }
     }
 
-    void ShadowMapPass::Draw(VkCommandBuffer commandBuffer, const Assets::Scene& scene, uint32_t imageIndex)
+    void ShadowMapPass::DrawCascade(
+        VkCommandBuffer commandBuffer, const Assets::Scene& scene, const Assets::GPUScene& gpuSceneBase,
+        uint32_t cascade)
     {
         if (!pipeline_)
         {
             return;
         }
-
-        Assets::GPUScene gpuScene = scene.FetchGPUScene(imageIndex);
 
         const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
         vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
@@ -232,30 +232,28 @@ namespace Vulkan::Shadow
         VkClearValue clearValue{};
         clearValue.depthStencil = {1.0f, 0};
 
-        for (uint32_t cascade = 0; cascade < Assets::Scene::kSunShadowCascadeCount; ++cascade)
-        {
-            VkRenderPassBeginInfo rpBegin{};
-            rpBegin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            rpBegin.renderPass = renderPass_;
-            rpBegin.framebuffer = frameBuffers_[cascade];
-            rpBegin.renderArea.offset = {0, 0};
-            rpBegin.renderArea.extent = {Assets::Scene::kSunShadowResolution, Assets::Scene::kSunShadowResolution};
-            rpBegin.clearValueCount = 1;
-            rpBegin.pClearValues = &clearValue;
+        VkRenderPassBeginInfo rpBegin{};
+        rpBegin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        rpBegin.renderPass = renderPass_;
+        rpBegin.framebuffer = frameBuffers_[cascade];
+        rpBegin.renderArea.offset = {0, 0};
+        rpBegin.renderArea.extent = {Assets::Scene::kSunShadowResolution, Assets::Scene::kSunShadowResolution};
+        rpBegin.clearValueCount = 1;
+        rpBegin.pClearValues = &clearValue;
 
-            vkCmdBeginRenderPass(commandBuffer, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
-            pipelineLayout_->BindDescriptorSets(commandBuffer, 0, VK_PIPELINE_BIND_POINT_GRAPHICS);
+        vkCmdBeginRenderPass(commandBuffer, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
+        pipelineLayout_->BindDescriptorSets(commandBuffer, 0, VK_PIPELINE_BIND_POINT_GRAPHICS);
 
-            gpuScene.custom_data_0 = cascade;
-            vkCmdPushConstants(commandBuffer, pipelineLayout_->Handle(),
-                               VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                               0, sizeof(Assets::GPUScene), &gpuScene);
+        Assets::GPUScene gpuScene = gpuSceneBase;
+        gpuScene.custom_data_0 = cascade;
+        vkCmdPushConstants(commandBuffer, pipelineLayout_->Handle(),
+                           VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                           0, sizeof(Assets::GPUScene), &gpuScene);
 
-            vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0,
-                                     scene.GetIndirectDrawBatchCount(),
-                                     sizeof(VkDrawIndexedIndirectCommand));
-            vkCmdEndRenderPass(commandBuffer);
-        }
+        vkCmdDrawIndexedIndirect(commandBuffer, scene.ShadowIndirectDrawBuffer().Handle(), 0,
+                                 scene.GetIndirectDrawBatchCount(),
+                                 sizeof(VkDrawIndexedIndirectCommand));
+        vkCmdEndRenderPass(commandBuffer);
     }
 }

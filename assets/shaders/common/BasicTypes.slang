@@ -14,6 +14,7 @@ public static const int MAX_HDR_SH = 100;
 public static const int GPU_SCENE_NODE_PROXY_SIZE = 224;
 public static const int GPU_SCENE_MATERIAL_SIZE = 64;
 public static const int GPU_SCENE_GPU_DRIVEN_STAT_SIZE = 32;
+public static const int GPU_SCENE_SHADOW_GPU_DRIVEN_STAT_COUNT = 4;
 public static const int GPU_SCENE_SPHERICAL_HARMONICS_SIZE = 112;
 
 public static const int GPU_SCENE_DYNAMIC_NODES_OFFSET = 0;
@@ -21,8 +22,11 @@ public static const int GPU_SCENE_DYNAMIC_MATERIALS_OFFSET =
     GPU_SCENE_DYNAMIC_NODES_OFFSET + GPU_SCENE_NODE_PROXY_SIZE * MAX_NODES;
 public static const int GPU_SCENE_DYNAMIC_GPU_DRIVEN_STATS_OFFSET =
     GPU_SCENE_DYNAMIC_MATERIALS_OFFSET + GPU_SCENE_MATERIAL_SIZE * MAX_MATERIALS;
-public static const int GPU_SCENE_DYNAMIC_HDRSHS_OFFSET =
+public static const int GPU_SCENE_DYNAMIC_SHADOW_GPU_DRIVEN_STATS_OFFSET =
     GPU_SCENE_DYNAMIC_GPU_DRIVEN_STATS_OFFSET + GPU_SCENE_GPU_DRIVEN_STAT_SIZE;
+public static const int GPU_SCENE_DYNAMIC_HDRSHS_OFFSET =
+    GPU_SCENE_DYNAMIC_SHADOW_GPU_DRIVEN_STATS_OFFSET +
+    GPU_SCENE_GPU_DRIVEN_STAT_SIZE * GPU_SCENE_SHADOW_GPU_DRIVEN_STAT_COUNT;
 public static const int GPU_SCENE_DYNAMIC_SIZE =
     GPU_SCENE_DYNAMIC_HDRSHS_OFFSET + GPU_SCENE_SPHERICAL_HARMONICS_SIZE * MAX_HDR_SH;
 
@@ -58,6 +62,9 @@ public struct ALIGN_16 GPUDrivenStat
     public uint CulledCount;
     public uint TriangleCount;
     public uint CulledTriangleCount;
+    public uint ReservedAlign1;
+    public uint ReservedAlign2;
+    public uint ReservedAlign3;
 };
 
 public struct ALIGN_16 UniformBufferObject
@@ -396,6 +403,10 @@ public struct ALIGN_8 GPUScene
     {
         get { return (GPUDrivenStat*)(SceneDynamicBase + GPU_SCENE_DYNAMIC_GPU_DRIVEN_STATS_OFFSET); }
     }
+    public property GPUDrivenStat* ShadowGPUDrivenStats
+    {
+        get { return (GPUDrivenStat*)(SceneDynamicBase + GPU_SCENE_DYNAMIC_SHADOW_GPU_DRIVEN_STATS_OFFSET); }
+    }
     public uint64_t TLAS;
 
     public float4 *SkinWeights;
@@ -499,6 +510,14 @@ public struct ALIGN_8 GPUScene
     public property GPUDrivenStat* GPUDrivenStats
     {
         get { return (GPUDrivenStat*)(Camera_SceneDynamicBase_Address.y + GPU_SCENE_DYNAMIC_GPU_DRIVEN_STATS_OFFSET); }
+    }
+    public property GPUDrivenStat* ShadowGPUDrivenStats
+    {
+        get
+        {
+            return (GPUDrivenStat*)(Camera_SceneDynamicBase_Address.y +
+                                    GPU_SCENE_DYNAMIC_SHADOW_GPU_DRIVEN_STATS_OFFSET);
+        }
     }
 
     public property float4* SkinWeights
