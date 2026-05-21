@@ -41,7 +41,7 @@
 
 #include "Engine/Runtime/Subsystems/NextAudio.h"
 #include "Engine/Options.hpp"
-#include "Engine/Rendering/RayTraceBaseRenderer.hpp"
+#include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Utilities/Localization.hpp"
 
@@ -176,16 +176,11 @@ namespace NextRenderer
         {
             supportedTypes = {Vulkan::ERT_LegacyDeferredNoAmbient};
         }
-        Vulkan::VulkanBaseRenderer* renderer = nullptr;
+        Vulkan::VulkanBaseRenderer* renderer =
+            new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers, instance);
         if (useRayTracingRenderer)
         {
-            renderer =
-                new Vulkan::RayTracing::RayTraceBaseRenderer(window, presentMode, enableValidationLayers, instance);
             supportedTypes.emplace_back(Vulkan::ERT_PathTracing);
-        }
-        else
-        {
-            renderer = new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers, instance);
         }
 
         for (auto type : supportedTypes)
@@ -427,14 +422,15 @@ void NextEngine::Start()
                                                  shouldEnableValidation));
     userSettings_.RendererType = static_cast<int32_t>(renderer_->CurrentLogicRendererType());
 
-    renderer_->DelegateOnDeviceSet = [this]() -> void { OnRendererDeviceSet(); };
-    renderer_->DelegateCreateSwapChain = [this]() -> void { OnRendererCreateSwapChain(); };
-    renderer_->DelegateDeleteSwapChain = [this]() -> void { OnRendererDeleteSwapChain(); };
-    renderer_->DelegateBeforeNextTick = [this]() -> void { OnRendererBeforeNextFrame(); };
-    renderer_->DelegateGetUniformBufferObject = [this](VkOffset2D offset,
-                                                       VkExtent2D extend) -> Assets::UniformBufferObject
+    auto& rendererDelegates = renderer_->GetDelegates();
+    rendererDelegates.onDeviceSet = [this]() -> void { OnRendererDeviceSet(); };
+    rendererDelegates.createSwapChain = [this]() -> void { OnRendererCreateSwapChain(); };
+    rendererDelegates.deleteSwapChain = [this]() -> void { OnRendererDeleteSwapChain(); };
+    rendererDelegates.beforeNextTick = [this]() -> void { OnRendererBeforeNextFrame(); };
+    rendererDelegates.getUniformBufferObject = [this](VkOffset2D offset,
+                                                      VkExtent2D extend) -> Assets::UniformBufferObject
     { return GetUniformBufferObject(offset, extend); };
-    renderer_->DelegatePostRender = [this](VkCommandBuffer commandBuffer, uint32_t imageIndex) -> void
+    rendererDelegates.postRender = [this](VkCommandBuffer commandBuffer, uint32_t imageIndex) -> void
     { OnRendererPostRender(commandBuffer, imageIndex); };
 
     renderer_->Start();
@@ -1001,25 +997,19 @@ void NextEngine::SetProgressiveRendering(bool enable, bool directly)
 
 VkDeviceAddress NextEngine::TryGetGPUAccelerationStructureAddress() const
 {
-    Vulkan::RayTracing::RayTraceBaseRenderer* rtRender =
-        dynamic_cast<Vulkan::RayTracing::RayTraceBaseRenderer*>(renderer_.get());
-    if (rtRender)
+    if (renderer_ && renderer_->SupportsRayTracing() && !renderer_->TLAS().empty())
     {
-        return rtRender->TLAS()[0].GetDeviceAddress();
+        return renderer_->TLAS()[0].GetDeviceAddress();
     }
-
     return -1;
 }
 
 VkAccelerationStructureKHR NextEngine::TryGetGPUAccelerationStructureHandle() const
 {
-    Vulkan::RayTracing::RayTraceBaseRenderer* rtRender =
-        dynamic_cast<Vulkan::RayTracing::RayTraceBaseRenderer*>(renderer_.get());
-    if (rtRender)
+    if (renderer_ && renderer_->SupportsRayTracing() && !renderer_->TLAS().empty())
     {
-        return rtRender->TLAS()[0].Handle();
+        return renderer_->TLAS()[0].Handle();
     }
-
     return nullptr;
 }
 
@@ -1159,8 +1149,8 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.AmbientCubeCascadeParams = glm::vec4(float(ambientCubeCascadeCount), ambientCubeCascadeRatio, 0.0f, 0.0f);
 
     // Other Setup
-    renderer_->supportDenoiser_ = userSettings_.Denoiser;
-    renderer_->visualDebug_ = showFlags_.ShowVisualDebug;
+    renderer_->SetDenoiserEnabled(userSettings_.Denoiser);
+    renderer_->SetVisualDebugEnabled(showFlags_.ShowVisualDebug);
     // UBO Backup, for motion vector calc
     prevUBO_ = ubo;
 
@@ -1197,7 +1187,7 @@ void NextEngine::OnRendererDeviceSet()
     // if(GOption->HDRIfile != "") Assets::GlobalTexturePool::UpdateHDRTexture(0, GOption->HDRIfile.c_str(),
     // Vulkan::SamplerConfig());
 
-    scene_.reset(new Assets::Scene(renderer_->CommandPool(), renderer_->supportRayTracing_));
+    scene_.reset(new Assets::Scene(renderer_->CommandPool(), renderer_->SupportsRayTracing()));
     renderer_->SetScene(scene_);
     renderer_->OnPostLoadScene();
 
@@ -1717,7 +1707,7 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
 
                 scene_->Reload(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
                 scene_->PostLoad(*ctx.skeletons);
-                scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
+                scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->SupportsRayTracing());
                 renderer_->SetScene(scene_);
 
                 userSettings_.CameraIdx = 0;
@@ -1735,7 +1725,7 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
                 {
                     rootNode->SetTranslation(request.hitPosition);
                 }
-                scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->supportRayTracing_);
+                scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->SupportsRayTracing());
                 renderer_->SetScene(scene_);
             }
 

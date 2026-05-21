@@ -3,6 +3,8 @@
 #include "Engine/Vulkan/RenderingPipeline.hpp"
 #include "Engine/Vulkan/SyncAndTiming.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
+#include "Engine/Vulkan/RayTracing/TopLevelAccelerationStructure.hpp"
+#include "Engine/Vulkan/RayTracing/BottomLevelAccelerationStructure.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include <vector>
@@ -26,12 +28,18 @@ namespace Vulkan
 		class VisibilityPipeline;
 		class GraphicsPipeline;
 		class ZeroBindPipeline;
+		class ZeroBindWithTLASPipeline;
 		class ZeroBindCustomPushConstantPipeline;
 	}
 
 	namespace Shadow
 	{
 		class ShadowMapPass;
+	}
+
+	namespace RayTracing
+	{
+		class RayTracingProperties;
 	}
 
 	class RenderImage;
@@ -75,209 +83,269 @@ namespace Vulkan
 	class VulkanBaseRenderer
 	{
 	public:
-
 		VULKAN_NON_COPIABLE(VulkanBaseRenderer)
 
-		virtual ~VulkanBaseRenderer();
+		VulkanBaseRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers, Instance* instance);
+		~VulkanBaseRenderer();
 
-		const std::vector<VkExtensionProperties>& Extensions() const;
-		const std::vector<VkLayerProperties>& Layers() const;
-		const std::vector<VkPhysicalDevice>& PhysicalDevices() const;
-
-		const class SwapChain& SwapChain() const { return *swapChain_; }
-		class Window& Window() { return *window_; }
-		const class Window& Window() const { return *window_; }
-
-		bool HasSwapChain() const { return swapChain_.operator bool(); }
-
-		void SetPhysicalDevice(VkPhysicalDevice physicalDevice);
-		
+		// Lifecycle
 		void Start();
 		void End();
-		
-		void CaptureScreenShot();
-
-		virtual void DrawFrame();
-
-
-		VulkanBaseRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers, Instance* instance);
-
-		const class Device& Device() const { return *device_; }
-		class CommandPool& CommandPool() { return *commandPool_; }
-		const class DepthBuffer& DepthBuffer() const { return *depthBuffer_; }
-		const std::vector<Assets::UniformBuffer>& UniformBuffers() const { return uniformBuffers_; }
-		const bool CheckerboxRendering() {return checkerboxRendering_;}
-		class VulkanGpuTimer* GpuTimer() const {return gpuTimer_.get();}
-		
-		Assets::Scene& GetScene();
-		void SetScene(std::shared_ptr<Assets::Scene> scene);
-		virtual Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const;
-		bool SupportsRayTracing() const { return supportRayTracing_; }
-
-		int FrameCount() const {return frameCount_;}
-
-		virtual void SetPhysicalDeviceImpl(
-			VkPhysicalDevice physicalDevice, 
-			std::vector<const char*>& requiredExtensions, 
-			VkPhysicalDeviceFeatures& deviceFeatures,
-			void* nextDeviceFeatures);
-		
-		virtual void OnDeviceSet();
-		void CreateRenderImages();
-		virtual void CreateSwapChain();
-		virtual void DeleteSwapChain();
+		void DrawFrame();
 		void ReloadShaders();
 		void RequestRecreateSwapChain() { requestRecreateSwapChain_ = true; }
-		void RequestClearAmbientCubeCache() { requestClearAmbientCubeCache_ = true; }
-		virtual void PreRender(VkCommandBuffer commandBuffer, const uint32_t imageIndex);
-		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-		virtual void PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
-		virtual void BeforeNextFrame();
+		// Device / swapchain access
+		const class Device& Device() const { return *ctx_.device; }
+		class CommandPool& CommandPool() { return *ctx_.commandPool; }
+		const class SwapChain& SwapChain() const { return *frame_.swapChain; }
+		class Window& Window() { return *ctx_.window; }
+		const class Window& Window() const { return *ctx_.window; }
+		const class DepthBuffer& DepthBuffer() const { return *frame_.depthBuffer; }
+		const std::vector<Assets::UniformBuffer>& UniformBuffers() const { return frame_.uniformBuffers; }
+		class VulkanGpuTimer* GpuTimer() const {return ctx_.gpuTimer.get();}
+		bool HasSwapChain() const { return frame_.swapChain.operator bool(); }
+		int FrameCount() const {return frame_.frameCount;}
+		DeviceMemory* GetScreenShotMemory() const {return screenshot_.imageMemory.get();}
 
-		virtual void AfterRenderCmd() {}
-		virtual void AfterPresent() {}
-		virtual void AfterUpdateScene() {}
+		// Scene
+		Assets::Scene& GetScene();
+		void SetScene(std::shared_ptr<Assets::Scene> scene);
+		Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const;
+		void OnPreLoadScene();
+		void OnPostLoadScene();
+		void CreateSwapChain();
+		void DeleteSwapChain();
 
-		virtual void OnPreLoadScene() {}
-		virtual void OnPostLoadScene() { skinModelUpdateRequests_.clear(); }
-
-		void InitializeBarriers(VkCommandBuffer commandBuffer);
-		
-		void UpdateStreamline(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-	    
-	    void RequestSkinUpdate(uint32_t modelId) { skinModelUpdateRequests_.push_back(modelId); }
-
-		bool VisualDebug() const {return visualDebug_;}
-		
-		bool SupportDLSS() const { return supportDLSS_; }
-		bool SupportDLSSRR() const { return supportDLSSRR_; }
-		bool HasFullAmbientCubeBudget() const { return fullAmbientCubeBudget_; }
+		// Renderer registry
+		void RegisterLogicRenderer(ERendererType type);
+		void SwitchLogicRenderer(ERendererType type);
+		ERendererType CurrentLogicRendererType() const { return logicRenderers_.current; }
 		FRendererRequirements CurrentRendererRequirements() const;
 		FRendererRequirements RegisteredRendererRequirements() const;
 
-		virtual void RegisterLogicRenderer(ERendererType type);
-		virtual void SwitchLogicRenderer(ERendererType type);
+		// Capabilities / flags
+		bool VisualDebug() const {return visualDebug_;}
+		bool SupportsRayTracing() const { return caps_.supportRayTracing; }
+		bool SupportDLSS() const { return caps_.supportDLSS; }
+		bool SupportDLSSRR() const { return caps_.supportDLSSRR; }
+		bool HasFullAmbientCubeBudget() const { return caps_.fullAmbientCubeBudget; }
+		void SetDenoiserEnabled(bool enabled) { caps_.supportDenoiser = enabled; }
+		void SetVisualDebugEnabled(bool enabled) { visualDebug_ = enabled; }
 
-		ERendererType CurrentLogicRendererType() const
+		// Engine callbacks
+		struct Delegates
 		{
-			return currentLogicRenderer_;
-		}
-		
-		// Callbacks
-		std::function<void()> DelegateOnDeviceSet;
-		std::function<void()> DelegateCreateSwapChain;
-		std::function<void()> DelegateDeleteSwapChain;
-		std::function<void()> DelegateBeforeNextTick;
-		std::function<Assets::UniformBufferObject(VkOffset2D, VkExtent2D)> DelegateGetUniformBufferObject;
-		std::function<void(VkCommandBuffer, uint32_t)> DelegatePostRender;
+			std::function<void()> onDeviceSet;
+			std::function<void()> createSwapChain;
+			std::function<void()> deleteSwapChain;
+			std::function<void()> beforeNextTick;
+			std::function<Assets::UniformBufferObject(VkOffset2D, VkExtent2D)> getUniformBufferObject;
+			std::function<void(VkCommandBuffer, uint32_t)> postRender;
+		};
+		Delegates& GetDelegates() { return delegates_; }
+		const Delegates& GetDelegates() const { return delegates_; }
 
-		DeviceMemory* GetScreenShotMemory() const {return screenShotImageMemory_.get();}
-	
-		std::weak_ptr<Assets::Scene> scene_;
-		
-		bool checkerboxRendering_{};
-		bool supportRayTracing_ {};
-		bool supportDLSS_{};
-		bool supportDLSSRR_{};
-		bool supportDenoiser_ {};
-		bool streamlineDeviceExtensionsEnabled_{};
-		bool fullAmbientCubeBudget_{true};
-		// bool showWireframe_ {};
-		int frameCount_{};
-		bool forceSDR_{};
-		bool visualDebug_{};
-
-		void CreateStorageImage(uint32_t bindlessIdx, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName);
+		// Shared render resources used by logic renderers
+		void CaptureScreenShot();
 		const RenderImage* GetStorageImage(uint32_t bindlessIdx) const;
 		uint32_t GetTemporalStorageImage(VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName);
-
+		void InitializeBarriers(VkCommandBuffer commandBuffer);
 		void CaptureOIDN(VkCommandBuffer commandBuffer);
-
-	protected:
-		Assets::UniformBufferObject lastUBO;
-		std::vector<std::unique_ptr<RenderImage> > bindlessStorageImages_;
-		uint32_t tempStorageImageCreated_ {};
-
-		void UpdateSkinningBuffers();
-		void ClearAmbientCubeCache(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-		void BakeAmbientCubePropagation(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-	    
-	    std::vector<uint32_t> skinModelUpdateRequests_;
-
-		std::unique_ptr<Buffer> skinnedVertexBuffer_;
-		std::unique_ptr<DeviceMemory> skinnedVertexBufferMemory_;
-
-		std::unique_ptr<Buffer> jointMatricesBuffer_;
-		std::unique_ptr<DeviceMemory> jointMatricesBufferMemory_;
-
-		uint32_t currentSkinnedVertexBufferSize_{};
-		uint32_t currentJointMatrixBufferSize_{};
+		void RequestSkinUpdate(uint32_t modelId) { skin_.updateRequests.push_back(modelId); }
+		std::vector<RayTracing::TopLevelAccelerationStructure>& TLAS();
 
 	private:
+		// Internal resource groups
+		struct DeviceCaps
+		{
+			bool supportRayTracing       = false;
+			bool supportDLSS             = false;
+			bool supportDLSSRR           = false;
+			bool supportDenoiser         = false;
+			bool streamlineExtsEnabled   = false;
+			bool fullAmbientCubeBudget   = true;
+		};
+
+		struct RayTracingResources
+		{
+			std::unique_ptr<RayTracing::RayTracingProperties> properties;
+
+			std::vector<RayTracing::BottomLevelAccelerationStructure> blas;
+			std::unique_ptr<Buffer> blasBuffer;
+			std::unique_ptr<DeviceMemory> blasMemory;
+			std::unique_ptr<Buffer> blasScratch;
+			std::unique_ptr<DeviceMemory> blasScratchMemory;
+
+			std::vector<RayTracing::TopLevelAccelerationStructure> tlas;
+			std::unique_ptr<Buffer> tlasBuffer;
+			std::unique_ptr<DeviceMemory> tlasMemory;
+			std::unique_ptr<Buffer> tlasScratch;
+			std::unique_ptr<DeviceMemory> tlasScratchMemory;
+
+			std::unique_ptr<Buffer> instancesBuffer;
+			std::unique_ptr<DeviceMemory> instancesMemory;
+
+			std::unique_ptr<PipelineCommon::ZeroBindWithTLASPipeline> directLightGenPipeline;
+
+			int tlasUpdateRequest = 0;
+		};
+
+		struct AmbientCubePipelines
+		{
+			std::unique_ptr<PipelineCommon::ZeroBindPipeline> softBake;
+			std::unique_ptr<PipelineCommon::ZeroBindPipeline> clearCache;
+			std::unique_ptr<PipelineCommon::ZeroBindPipeline> propagation;
+			std::unique_ptr<PipelineCommon::ZeroBindPipeline> inject;
+			std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldInit;
+			std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldJump;
+			std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldResolve;
+			bool requestClearCache = true;
+			bool propagationStateInitialized = false;
+			bool lastPropagation = false;
+		};
+
+		struct SkinnedMeshResources
+		{
+			std::unique_ptr<Buffer> vertexBuffer;
+			std::unique_ptr<DeviceMemory> vertexMemory;
+			std::unique_ptr<Buffer> jointBuffer;
+			std::unique_ptr<DeviceMemory> jointMemory;
+			uint32_t vertexBufferSize = 0;
+			uint32_t jointBufferSize = 0;
+			std::vector<uint32_t> updateRequests;
+			std::unique_ptr<PipelineCommon::ZeroBindPipeline> pipeline;
+		};
+
+		struct DeviceContext
+		{
+			class Window* window = nullptr;
+			std::unique_ptr<class Instance> instance;
+			std::unique_ptr<class DebugUtilsMessenger> debugUtilsMessenger;
+			std::unique_ptr<class Surface> surface;
+			std::unique_ptr<class Device> device;
+			std::unique_ptr<class CommandPool> commandPool;
+			std::unique_ptr<class CommandPool> commandPool2;
+			std::unique_ptr<class VulkanGpuTimer> gpuTimer;
+			std::unique_ptr<Assets::GlobalTexturePool> globalTexturePool;
+		};
+
+		struct FrameResources
+		{
+			std::unique_ptr<class SwapChain> swapChain;
+			std::unique_ptr<class DepthBuffer> depthBuffer;
+			std::unique_ptr<class CommandBuffers> commandBuffers;
+			std::vector<class Semaphore> imageAvailableSemaphores;
+			std::vector<class Semaphore> renderFinishedSemaphores;
+			std::vector<class Fence> inFlightFences;
+			std::vector<Assets::UniformBuffer> uniformBuffers;
+			uint32_t currentImageIndex = 0;
+			size_t currentFrame = 0;
+			Fence* currentFence = nullptr;
+			int frameCount = 0;
+			Assets::UniformBufferObject lastUBO;
+		};
+
+		struct BindlessStorageImages
+		{
+			std::vector<std::unique_ptr<RenderImage> > images;
+			uint32_t tempCreated = 0;
+		};
+
+		struct OverlayPipelines
+		{
+			std::unique_ptr<PipelineCommon::GraphicsPipeline> wireframePipeline;
+			std::unique_ptr<PipelineCommon::VisibilityPipeline> visibilityPipeline;
+			std::unique_ptr<Shadow::ShadowMapPass> sunShadowPass;
+			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> bufferClearPipeline;
+			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> simpleComposePipeline;
+			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> visualDebuggerPipeline;
+			std::unique_ptr<PipelineCommon::ZeroBindPipeline> gpuCullPipeline;
+			std::unique_ptr<PipelineCommon::ZeroBindPipeline> shadowGpuCullPipeline;
+			std::unique_ptr<FrameBuffer> visibilityFrameBuffer;
+			std::vector<FrameBuffer> wireframeFrameBuffers;
+		};
+
+		struct LogicRendererRegistry
+		{
+			std::map< ERendererType, std::unique_ptr<class LogicRendererBase> > renderers;
+			ERendererType current = ERT_LegacyDeferred;
+		};
+
+		struct ScreenshotResources
+		{
+			std::unique_ptr<Image> image;
+			std::unique_ptr<DeviceMemory> imageMemory;
+			std::unique_ptr<ImageView> imageView;
+		};
+
+		DeviceCaps caps_;
+		DeviceContext ctx_;
+		FrameResources frame_;
+		SkinnedMeshResources skin_;
+		BindlessStorageImages bindless_;
+		std::unique_ptr<RayTracingResources> rt_;
+		ScreenshotResources screenshot_;
+		AmbientCubePipelines ambient_;
+		OverlayPipelines overlay_;
+		LogicRendererRegistry logicRenderers_;
+		Delegates delegates_;
+
+		std::weak_ptr<Assets::Scene> scene_;
+		const VkPresentModeKHR presentMode_;
+		bool checkerboxRendering_{};
+		bool forceSDR_{};
+		bool visualDebug_{};
+		bool requestRecreateSwapChain_ = false;
+
+		// Device / swapchain internals
+		void SelectPhysicalDevice(uint32_t gpuIdx);
+		void SetPhysicalDevice(VkPhysicalDevice physicalDevice);
+		void SetPhysicalDeviceImpl(
+			VkPhysicalDevice physicalDevice,
+			std::vector<const char*>& requiredExtensions,
+			VkPhysicalDeviceFeatures& deviceFeatures,
+			void* nextDeviceFeatures);
+		void OnDeviceSet();
+		void CreateRenderImages();
+		void CreateStorageImage(uint32_t bindlessIdx, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName);
+		void RequestClearAmbientCubeCache() { ambient_.requestClearCache = true; }
 		void RecreateSwapChain();
 		void UpdateUniformBuffer(uint32_t imageIndex);
+
+		// Frame stages
+		void BeforeNextFrame();
+		void PreRender(VkCommandBuffer commandBuffer, const uint32_t imageIndex);
+		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void AfterUpdateScene();
+		void UpdateStreamline(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+
+		// Pre-render passes
+		void UpdateSkinningBuffers();
+		void UpdateAccelerationStructuresTop(VkCommandBuffer commandBuffer);
+		void UpdateAccelerationStructuresBottom(VkCommandBuffer commandBuffer);
+		void HandleAmbientCubeCacheInvalidation(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void DispatchSkinning(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void DispatchGpuCulling(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void DispatchClearPass(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void DispatchVisibilityPass(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void DispatchSunShadow(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+
+		// Post-render passes
+		void ClearAmbientCubeCache(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void BakeAmbientCubeCascade(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool useHardware);
+		void BakeAmbientCubePropagation(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void RebuildDistanceFieldCascades(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void DispatchVisualDebugger(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void CopyObjectIdHistory(VkCommandBuffer commandBuffer);
 		void DrawWireframeOverlay(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
-		const VkPresentModeKHR presentMode_;
-		bool requestRecreateSwapChain_ = false;
-		bool requestClearAmbientCubeCache_ = true;
-		bool ambientCubePropagationStateInitialized_ = false;
-		bool lastAmbientCubePropagation_ = false;
-
-		std::map< ERendererType, std::unique_ptr<class LogicRendererBase> > logicRenderers_;
-		ERendererType currentLogicRenderer_;
-		
-		class Window* window_;
-		std::unique_ptr<class Instance> instance_;
-		std::unique_ptr<class DebugUtilsMessenger> debugUtilsMessenger_;
-		std::unique_ptr<class Surface> surface_;
-		std::unique_ptr<class Device> device_;
-		std::unique_ptr<class SwapChain> swapChain_;
-		
-		std::vector<Assets::UniformBuffer> uniformBuffers_;
-		
-		std::unique_ptr<PipelineCommon::GraphicsPipeline> wireframePipeline_;
-		std::unique_ptr<PipelineCommon::VisibilityPipeline> visibilityPipeline_;
-		std::unique_ptr<Shadow::ShadowMapPass> sunShadowPass_;
-		
-		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> bufferClearPipeline_;
-		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> simpleComposePipeline_;
-		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> visualDebuggerPipeline_;
-		
-		std::unique_ptr<PipelineCommon::ZeroBindPipeline> softAmbientCubeGenPipeline_;
-		std::unique_ptr<PipelineCommon::ZeroBindPipeline> clearAmbientCubeCachePipeline_;
-		std::unique_ptr<PipelineCommon::ZeroBindPipeline> propagationAmbientCubeGenPipeline_;
-		std::unique_ptr<PipelineCommon::ZeroBindPipeline> injectAmbientCubeGenPipeline_;
-		std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldInitPipeline_;
-		std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldJumpPipeline_;
-		std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldResolvePipeline_;
-		std::unique_ptr<PipelineCommon::ZeroBindPipeline> gpuCullPipeline_;
-		std::unique_ptr<PipelineCommon::ZeroBindPipeline> shadowGpuCullPipeline_;
-		std::unique_ptr<PipelineCommon::ZeroBindPipeline> skinningPipeline_;
-
-		std::unique_ptr<class DepthBuffer> depthBuffer_;
-		std::unique_ptr<FrameBuffer> visibilityFrameBuffer_;
-		std::vector<FrameBuffer> wireframeFrameBuffers_;
-		
-		std::unique_ptr<class CommandPool> commandPool_;
-		std::unique_ptr<class CommandPool> commandPool2_;
-		std::unique_ptr<class CommandBuffers> commandBuffers_;
-		
-		std::vector<class Semaphore> imageAvailableSemaphores_;
-		std::vector<class Semaphore> renderFinishedSemaphores_;
-		std::vector<class Fence> inFlightFences_;
-
-		std::unique_ptr<Image> screenShotImage_;
-		std::unique_ptr<DeviceMemory> screenShotImageMemory_;
-		std::unique_ptr<ImageView> screenShotImageView_;
-
-		std::unique_ptr<VulkanGpuTimer> gpuTimer_;
-		std::unique_ptr<Assets::GlobalTexturePool> globalTexturePool_;
-
-		uint32_t currentImageIndex_{};
-		size_t currentFrame_{};
-		Fence* currentFence;
+		// Acceleration structure lifecycle
+		void CreateAccelerationStructures();
+		void DeleteAccelerationStructures();
+		void CreateBottomLevelStructures(VkCommandBuffer commandBuffer);
+		void CreateTopLevelStructures(VkCommandBuffer commandBuffer);
 	};
 	
 	class LogicRendererBase
