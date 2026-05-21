@@ -3,14 +3,59 @@
 #include "Engine/Runtime/Utilities/NextEngineHelper.h"
 #include "Engine/Runtime/Reflection/PropertyMeta.h"
 #include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Loaders/OzzAnimationBuilder.h"
 #include <algorithm>
 #include <spdlog/spdlog.h>
 #include <functional>
+#include <unordered_map>
 #include <entt/meta/factory.hpp>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <cstring>
+
+#if WITH_OZZ
+#include "ozz/animation/runtime/animation.h"
+#include "ozz/animation/runtime/blending_job.h"
+#include "ozz/animation/runtime/ik_aim_job.h"
+#include "ozz/animation/runtime/ik_two_bone_job.h"
+#include "ozz/animation/runtime/local_to_model_job.h"
+#include "ozz/animation/runtime/sampling_job.h"
+#include "ozz/animation/runtime/skeleton.h"
+#include "ozz/base/maths/simd_quaternion.h"
+#include "ozz/base/containers/vector.h"
+#include "ozz/base/maths/simd_math.h"
+#include "ozz/base/maths/soa_transform.h"
+#include "ozz/base/memory/unique_ptr.h"
+#include "ozz/base/platform.h"
+#endif
+
+namespace Runtime
+{
+#if WITH_OZZ
+    struct SkinnedMeshOzzState
+    {
+        ozz::unique_ptr<ozz::animation::Skeleton> skeleton;
+        std::unordered_map<std::string, ozz::unique_ptr<ozz::animation::Animation>> animations;
+
+        ozz::animation::SamplingJob::Context contextA;
+        ozz::animation::SamplingJob::Context contextB;
+
+        ozz::vector<ozz::math::SoaTransform> localsA;
+        ozz::vector<ozz::math::SoaTransform> localsB;
+        ozz::vector<ozz::math::SoaTransform> blended;
+        ozz::vector<ozz::math::Float4x4> models;
+
+        // Mapping from ozz joint index (depth-first) to the matching Assets::Skeleton::Joints[] index.
+        // -1 means no matching joint by name (should not happen in practice).
+        std::vector<int> ozzToAsset;
+    };
+#else
+    struct SkinnedMeshOzzState {};
+#endif
+}
 
 namespace Runtime
 {
@@ -54,6 +99,32 @@ namespace Runtime
             const glm::vec3 axisDir = glm::normalize(axis);
             return std::atan2(glm::dot(axisDir, glm::cross(fromDir, toDir)), glm::dot(fromDir, toDir));
         }
+
+#if WITH_OZZ
+        ozz::math::Float4x4 ToOzzMat4(const glm::mat4& m)
+        {
+            ozz::math::Float4x4 out;
+            // glm::mat4 is column-major; ozz Float4x4 cols are SimdFloat4 in same layout.
+            out.cols[0] = ozz::math::simd_float4::LoadPtrU(glm::value_ptr(m) + 0);
+            out.cols[1] = ozz::math::simd_float4::LoadPtrU(glm::value_ptr(m) + 4);
+            out.cols[2] = ozz::math::simd_float4::LoadPtrU(glm::value_ptr(m) + 8);
+            out.cols[3] = ozz::math::simd_float4::LoadPtrU(glm::value_ptr(m) + 12);
+            return out;
+        }
+
+        ozz::math::SimdFloat4 LoadVec3(const glm::vec3& v)
+        {
+            alignas(16) const float tmp[4] = {v.x, v.y, v.z, 0.0f};
+            return ozz::math::simd_float4::LoadPtr(tmp);
+        }
+
+        glm::quat SimdQuatToGlm(const ozz::math::SimdQuaternion& q)
+        {
+            alignas(16) float tmp[4];
+            ozz::math::StorePtr(q.xyzw, tmp);
+            return glm::quat(tmp[3], tmp[0], tmp[1], tmp[2]);
+        }
+#endif
     }
 
     void SkinnedMeshComponent::RegisterReflection()
@@ -80,27 +151,63 @@ namespace Runtime
 
     SkinnedMeshComponent::SkinnedMeshComponent(const Assets::Skeleton& skeleton)
         : skeleton_(skeleton)
+        , ozz_(std::make_unique<SkinnedMeshOzzState>())
     {
         runtimeJoints_.resize(skeleton_.Joints.size());
-        blendSourceJoints_.resize(skeleton_.Joints.size());
         jointMatrices_.resize(skeleton_.Joints.size(), glm::mat4(1.0f));
-        
+
         for (size_t i = 0; i < skeleton_.Joints.size(); ++i)
         {
             jointMap_[skeleton_.Joints[i].Name] = static_cast<int>(i);
             runtimeJoints_[i].Translation = skeleton_.Joints[i].Translation;
             runtimeJoints_[i].Rotation = skeleton_.Joints[i].Rotation;
             runtimeJoints_[i].Scale = skeleton_.Joints[i].Scale;
-            blendSourceJoints_[i] = runtimeJoints_[i];
         }
-        
+
         UpdateJoints();
-        
+
         currentState_.Playing = false;
         currentState_.CurrentTime = 0.0f;
         blendSourceState_.Playing = false;
         blendSourceState_.CurrentTime = 0.0f;
+
+#if WITH_OZZ
+        ozz_->skeleton = Assets::BuildOzzSkeleton(skeleton_);
+        if (ozz_->skeleton)
+        {
+            const int numJoints = ozz_->skeleton->num_joints();
+            const int numSoa = ozz_->skeleton->num_soa_joints();
+            ozz_->contextA.Resize(numJoints);
+            ozz_->contextB.Resize(numJoints);
+            ozz_->localsA.resize(numSoa);
+            ozz_->localsB.resize(numSoa);
+            ozz_->blended.resize(numSoa);
+            ozz_->models.resize(numJoints);
+
+            // Build mapping ozz_index -> assets_index using joint names.
+            ozz_->ozzToAsset.assign(numJoints, -1);
+            const auto names = ozz_->skeleton->joint_names();
+            for (int i = 0; i < numJoints; ++i)
+            {
+                const auto it = jointMap_.find(names[i]);
+                if (it != jointMap_.end())
+                {
+                    ozz_->ozzToAsset[i] = it->second;
+                }
+                else
+                {
+                    SPDLOG_WARN("SkinnedMeshComponent: ozz joint '{}' has no match in Assets::Skeleton", names[i]);
+                }
+            }
+        }
+        else
+        {
+            SPDLOG_ERROR("SkinnedMeshComponent: BuildOzzSkeleton failed for skeleton '{}'", skeleton_.Name);
+        }
+#endif
     }
+
+    SkinnedMeshComponent::~SkinnedMeshComponent() = default;
 
     void SkinnedMeshComponent::AddAnimations(const std::vector<Assets::AnimationTrack>& allTracks)
     {
@@ -137,7 +244,6 @@ namespace Runtime
         if (!currentState_.Name.empty() && currentState_.Name != name)
         {
             blendSourceState_ = currentState_;
-            EvaluateAnimationState(blendSourceState_, blendSourceJoints_);
             blendActive_ = true;
             blendElapsed_ = 0.0f;
         }
@@ -173,33 +279,29 @@ namespace Runtime
         }
 
         AdvanceAnimationState(currentState_, deltaTime);
-        EvaluateAnimationState(currentState_, runtimeJoints_);
+
+#if WITH_OZZ
+        const bool sampledCurrent = SampleOzz(currentState_, 0);
+        float currentWeight = 1.0f;
 
         if (blendActive_)
         {
             AdvanceAnimationState(blendSourceState_, deltaTime);
-            EvaluateAnimationState(blendSourceState_, blendSourceJoints_);
-
+            SampleOzz(blendSourceState_, 1);
             blendElapsed_ += deltaTime;
-            const float blendAlpha = glm::clamp(blendElapsed_ / blendDuration_, 0.0f, 1.0f);
-
-            for (size_t i = 0; i < runtimeJoints_.size(); ++i)
-            {
-                runtimeJoints_[i].Translation =
-                    glm::mix(blendSourceJoints_[i].Translation, runtimeJoints_[i].Translation, blendAlpha);
-                runtimeJoints_[i].Rotation =
-                    glm::slerp(blendSourceJoints_[i].Rotation, runtimeJoints_[i].Rotation, blendAlpha);
-                runtimeJoints_[i].Scale =
-                    glm::mix(blendSourceJoints_[i].Scale, runtimeJoints_[i].Scale, blendAlpha);
-            }
-
-            if (blendAlpha >= 1.0f)
+            currentWeight = glm::clamp(blendElapsed_ / blendDuration_, 0.0f, 1.0f);
+            if (currentWeight >= 1.0f)
             {
                 blendActive_ = false;
             }
         }
 
-        UpdateJoints();
+        if (sampledCurrent)
+        {
+            FinalizePose(currentWeight);
+        }
+#endif
+
         ApplyFootPlacementIK(deltaTime);
     }
 
@@ -247,48 +349,141 @@ namespace Runtime
         }
     }
 
-    void SkinnedMeshComponent::ResetJointsToBindPose(std::vector<RuntimeJoint>& joints) const
+#if WITH_OZZ
+    bool SkinnedMeshComponent::SampleOzz(const AnimationState& state, int contextSlot)
     {
-        joints.resize(skeleton_.Joints.size());
-        for (size_t i = 0; i < skeleton_.Joints.size(); ++i)
+        if (!ozz_ || !ozz_->skeleton)
         {
-            joints[i].Translation = skeleton_.Joints[i].Translation;
-            joints[i].Rotation = skeleton_.Joints[i].Rotation;
-            joints[i].Scale = skeleton_.Joints[i].Scale;
-            joints[i].GlobalTransform = glm::mat4(1.0f);
+            return false;
         }
+
+        // Lazy-build ozz animation for this state.Name if not yet cached.
+        auto it = ozz_->animations.find(state.Name);
+        if (it == ozz_->animations.end())
+        {
+            auto animIt = animations_.find(state.Name);
+            if (animIt == animations_.end())
+            {
+                return false;
+            }
+            auto built = Assets::BuildOzzAnimation(state.Name, *ozz_->skeleton, animIt->second);
+            if (!built)
+            {
+                return false;
+            }
+            it = ozz_->animations.emplace(state.Name, std::move(built)).first;
+        }
+
+        const ozz::animation::Animation* animation = it->second.get();
+        const float duration = animation->duration();
+        const float ratio = duration > 0.0f ? glm::clamp(state.CurrentTime / duration, 0.0f, 1.0f) : 0.0f;
+
+        ozz::animation::SamplingJob job;
+        job.animation = animation;
+        job.context = contextSlot == 0 ? &ozz_->contextA : &ozz_->contextB;
+        job.ratio = ratio;
+        job.output = ozz::make_span(contextSlot == 0 ? ozz_->localsA : ozz_->localsB);
+
+        if (!job.Run())
+        {
+            SPDLOG_ERROR("SkinnedMeshComponent: SamplingJob failed for '{}'", state.Name);
+            return false;
+        }
+        return true;
     }
 
-    void SkinnedMeshComponent::EvaluateAnimationState(const AnimationState& state, std::vector<RuntimeJoint>& joints) const
+    void SkinnedMeshComponent::FinalizePose(float currentWeight)
     {
-        ResetJointsToBindPose(joints);
-
-        auto animIt = animations_.find(state.Name);
-        if (animIt == animations_.end())
+        if (!ozz_ || !ozz_->skeleton)
         {
             return;
         }
 
-        for (const auto& track : animIt->second)
+        // Blend (or copy) into ozz_->blended.
+        if (blendActive_ && currentWeight < 1.0f)
         {
-            auto jointIt = jointMap_.find(track.NodeName_);
-            if (jointIt == jointMap_.end())
+            ozz::animation::BlendingJob::Layer layers[2];
+            layers[0].weight = currentWeight;
+            layers[0].transform = ozz::make_span(ozz_->localsA);
+            layers[1].weight = 1.0f - currentWeight;
+            layers[1].transform = ozz::make_span(ozz_->localsB);
+
+            ozz::animation::BlendingJob blend;
+            blend.threshold = 0.1f;
+            blend.layers = ozz::span<const ozz::animation::BlendingJob::Layer>(layers, layers + 2);
+            blend.rest_pose = ozz_->skeleton->joint_rest_poses();
+            blend.output = ozz::make_span(ozz_->blended);
+            if (!blend.Run())
+            {
+                SPDLOG_ERROR("SkinnedMeshComponent: BlendingJob failed");
+                return;
+            }
+        }
+        else
+        {
+            // Pure current pose; memcpy is the cheapest option.
+            const size_t bytes = ozz_->localsA.size() * sizeof(ozz::math::SoaTransform);
+            std::memcpy(ozz_->blended.data(), ozz_->localsA.data(), bytes);
+        }
+
+        ozz::animation::LocalToModelJob ltm;
+        ltm.skeleton = ozz_->skeleton.get();
+        ltm.input = ozz::make_span(ozz_->blended);
+        ltm.output = ozz::make_span(ozz_->models);
+        if (!ltm.Run())
+        {
+            SPDLOG_ERROR("SkinnedMeshComponent: LocalToModelJob failed");
+            return;
+        }
+
+        // Mirror ozz output back into runtimeJoints_ / jointMatrices_ in Assets joint order.
+        const int numJoints = ozz_->skeleton->num_joints();
+
+        auto extractLane = [](const ozz::math::SimdFloat4& v, int lane) -> float
+        {
+            alignas(16) float tmp[4];
+            ozz::math::StorePtr(v, tmp);
+            return tmp[lane];
+        };
+
+        for (int ozzI = 0; ozzI < numJoints; ++ozzI)
+        {
+            const int assetI = ozz_->ozzToAsset[ozzI];
+            if (assetI < 0)
             {
                 continue;
             }
 
-            RuntimeJoint& joint = joints[jointIt->second];
-            glm::vec3 translation = joint.Translation;
-            glm::quat rotation = joint.Rotation;
-            glm::vec3 scale = joint.Scale;
+            const ozz::math::SoaTransform& soa = ozz_->blended[ozzI / 4];
+            const int lane = ozzI % 4;
 
-            const_cast<Assets::AnimationTrack&>(track).Sample(state.CurrentTime, translation, rotation, scale);
+            RuntimeJoint& rj = runtimeJoints_[assetI];
+            rj.Translation = glm::vec3(
+                extractLane(soa.translation.x, lane),
+                extractLane(soa.translation.y, lane),
+                extractLane(soa.translation.z, lane));
+            rj.Rotation = glm::quat(
+                extractLane(soa.rotation.w, lane),
+                extractLane(soa.rotation.x, lane),
+                extractLane(soa.rotation.y, lane),
+                extractLane(soa.rotation.z, lane));
+            rj.Scale = glm::vec3(
+                extractLane(soa.scale.x, lane),
+                extractLane(soa.scale.y, lane),
+                extractLane(soa.scale.z, lane));
 
-            joint.Translation = translation;
-            joint.Rotation = rotation;
-            joint.Scale = scale;
+            const ozz::math::Float4x4& m = ozz_->models[ozzI];
+            alignas(16) float colData[16];
+            ozz::math::StorePtr(m.cols[0], colData + 0);
+            ozz::math::StorePtr(m.cols[1], colData + 4);
+            ozz::math::StorePtr(m.cols[2], colData + 8);
+            ozz::math::StorePtr(m.cols[3], colData + 12);
+            const glm::mat4 global = glm::make_mat4(colData);
+            rj.GlobalTransform = global;
+            jointMatrices_[assetI] = global * skeleton_.Joints[assetI].InverseBindMatrix;
         }
     }
+#endif
 
     void SkinnedMeshComponent::AdvanceAnimationState(AnimationState& state, float deltaTime) const
     {
@@ -571,6 +766,12 @@ namespace Runtime
         return true;
     }
 
+    // Geometric two-bone IK. We use a hand-rolled solver instead of ozz's IKTwoBoneJob
+    // because ozz requires a per-skeleton mid_axis convention (in mid-joint local space)
+    // that depends on rig orientation. Mannequin's bind pose is not a canonical T-pose
+    // (foot is 46° toes-down), which makes runtime derivation of mid_axis fragile and
+    // produced a 180° flip during testing. Until we add per-rig IK config, this geometric
+    // solver — which only depends on current-pose geometry — is the robust choice.
     void SkinnedMeshComponent::SolveTwoBoneIK(int upperJointIndex, int lowerJointIndex, int endJointIndex,
                                               const glm::vec3& targetModelSpace)
     {
@@ -657,6 +858,9 @@ namespace Runtime
             glm::normalize(glm::inverse(lowerParentGlobalRotation) * lowerDelta * lowerGlobalRotation);
     }
 
+    // Hand-rolled toe alignment. See note on SolveTwoBoneIK above — ozz::IKAimJob is
+    // available but requires correct local-space axes for the rig, which Mannequin's
+    // non-canonical bind pose makes fragile to derive automatically.
     void SkinnedMeshComponent::AlignToeToGround(const FootPlacementChain& chain, const glm::mat4& componentWorldTransform)
     {
         if (chain.toe == -1 || !chain.toeHitValid)

@@ -39,8 +39,6 @@ namespace NextUI
 {
     class UserInterface;
 }
-class NextAnimation;
-
 class NextGameInstanceBase
 {
 public:
@@ -379,9 +377,6 @@ private:
 
     // physics
     std::unique_ptr<NextPhysics> physicsEngine_;
-
-    // animation
-    std::unique_ptr<NextAnimation> animationEngine_;
 
     // package
     std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem_;

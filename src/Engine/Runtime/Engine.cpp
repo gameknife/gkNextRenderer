@@ -51,7 +51,6 @@
 #include <entt/meta/factory.hpp>
 
 #define BUILDVER(X) std::string buildver(#X);
-#include "Engine/Runtime/Subsystems/NextAnimation.h"
 #include "Engine/Runtime/Subsystems/NextPhysics.h"
 #include "Engine/Runtime/Platform/PlatformCommon.h"
 #include "build.version"
@@ -458,9 +457,6 @@ void NextEngine::Start()
     physicsEngine_.reset(new NextPhysics());
     physicsEngine_->Start();
 
-    animationEngine_ = std::make_unique<NextAnimation>();
-    animationEngine_->Start();
-
     audioEngine_ = std::make_unique<NextAudio>();
     audioEngine_->Start();
 
@@ -609,12 +605,6 @@ bool NextEngine::Tick(bool forcingDelta)
         }
 #endif
 
-        if (userSettings_.TickAnimation && animationEngine_)
-        {
-            SCOPED_CPU_TIMER("animation");
-            animationEngine_->Tick(deltaSeconds_); // pause dev, wait next
-        }
-
         if (quickJSEngine_)
         {
             SCOPED_CPU_TIMER("quickjs");
@@ -756,10 +746,6 @@ void NextEngine::End()
     if (physicsEngine_)
     {
         physicsEngine_->Stop();
-    }
-    if (animationEngine_)
-    {
-        animationEngine_->Stop();
     }
     if (gameInstance_)
     {
