@@ -56,7 +56,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
 {
     let OutImage = Bindless.GetStorageTexture<float4>(Bindless.RT_DENOISED);
     let LightingImage = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE);
-    let AlbedoImage = Bindless.GetStorageTexture<float4>(Bindless.RT_ALBEDO);
     let ObjectIdImage = Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
 
     uint2 size = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_DENOISED);
@@ -76,10 +75,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     float3 total = LightingImage[ipos].rgb;
-    if (!Camera.DebugDraw_Lighting)
-    {
-        total *= AlbedoImage[ipos].rgb;
-    }
 
     float dangerEdge = ComputeEdgeStrengthTwoSided(ObjectIdImage, ipos, imageMax, OBJECT_ID_FLAG_DANGER);
     float lockedEdge = ComputeEdgeStrengthTwoSided(ObjectIdImage, ipos, imageMax, OBJECT_ID_FLAG_LOCKED);

@@ -62,7 +62,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
                 ? Common.SampleIBL(Camera.SkyIdx, primaryRayDir, Camera.SkyRotation, 0) * Camera.SkyIntensity
                 : float4(0, 0, 0, 1));
         Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, skyColor);
-        Bindless.GetStorageTexture<float4>(Bindless.RT_ALBEDO).Store(pixel, float4(1, 1, 1, 1));
         Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(pixel, 0);
         Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(pixel, 1000);
         return;
@@ -162,7 +161,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
     const bool locked = (hitNode.reserved2 & 2u) != 0;
     const bool danger = (hitNode.reserved2 & 4u) != 0;
     Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, color);
-    Bindless.GetStorageTexture<float4>(Bindless.RT_ALBEDO).Store(pixel, primaryAlbedo);
     Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(pixel, Common.EncodeObjectId(hitNode.instanceId, selected, hovered, locked, danger));
     Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(pixel, ndcDepth);
 }
