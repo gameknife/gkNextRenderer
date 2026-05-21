@@ -10,7 +10,7 @@
 #include "Engine/NextGameplay/Components/CharacterAnimationComponent.h"
 #include "Engine/NextGameplay/Components/CharacterControlComponent.h"
 #include "Engine/NextGameplay/Components/CharacterGameplayComponent.h"
-#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Subsystems/NextCharacterController.h"
 
 #include <random>

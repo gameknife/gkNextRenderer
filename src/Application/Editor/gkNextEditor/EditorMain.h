@@ -1,7 +1,8 @@
 #pragma once
 
 #include "EditorActionDispatcher.hpp"
-#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Assets/Core/Model.hpp"
+#include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Editor/GizmoController.hpp"
 #include "Engine/Runtime/Camera/ModelViewController.hpp"
 

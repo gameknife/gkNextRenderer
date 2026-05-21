@@ -37,7 +37,7 @@ namespace Brotato3D
     {
         EDebrisKind kind = EDebrisKind::Tiny;
         NextBodyID bodyId{};
-        std::shared_ptr<Assets::Node> node;
+        std::shared_ptr<::Assets::Node> node;
         uint32_t baseModelId = 0;
         uint32_t currentMaterialId = 0;
         uint64_t activatedTickId = 0;

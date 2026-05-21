@@ -293,7 +293,7 @@ void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, con
     ImGui::SetNextWindowBgAlpha(0.5f);
     DrawToolbar();
 
-    const auto& ubo = engine.GetUniformBufferObject();
+    const auto& ubo = engine.GetLastUniformBufferObject();
     const glm::mat4& view = ubo.ModelView;
     glm::mat4 projection = ubo.Projection;
     projection[1][1] *= -1.0f;

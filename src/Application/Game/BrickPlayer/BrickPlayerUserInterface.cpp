@@ -102,7 +102,7 @@ void BrickPlayerUserInterface::RenderTitleBar()
         gameInstance_->GetEngine().RequestMinimize();
     }
     ImGui::SameLine();
-    if (ImGui::Button(gameInstance_->GetEngine().IsMaximumed() ? ICON_FA_WINDOW_RESTORE : ICON_FA_SQUARE,
+    if (ImGui::Button(gameInstance_->GetEngine().IsMaximized() ? ICON_FA_WINDOW_RESTORE : ICON_FA_SQUARE,
                       ImVec2(titleBarHeight, titleBarHeight)))
     {
         gameInstance_->GetEngine().ToggleMaximize();

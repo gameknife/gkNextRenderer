@@ -2,6 +2,7 @@
 
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 
@@ -22,7 +23,7 @@ namespace
         auto vkoffset = engine->GetRenderer().SwapChain().OutputOffset();
         auto vkextent = engine->GetRenderer().SwapChain().OutputExtent();
 
-        const auto& prevUBO = engine->GetUniformBufferObject();
+        const auto& prevUBO = engine->GetLastUniformBufferObject();
         glm::vec4 transformed = prevUBO.ViewProjection * glm::vec4(locationWS, 1.0f);
         transformed = transformed / transformed.w;
         transformed.x += 1.0f;
@@ -66,7 +67,7 @@ namespace Runtime::EngineHelper
             return false;
         }
 
-        const auto& ubo = engine->GetUniformBufferObject();
+        const auto& ubo = engine->GetLastUniformBufferObject();
         const glm::vec4 clip = ubo.ViewProjection * glm::vec4(worldPos, 1.0f);
         if (clip.w <= 0.001f)
         {
@@ -130,7 +131,7 @@ namespace Runtime::EngineHelper
         glm::vec2 extent = {vkextent.width, vkextent.height};
         glm::vec2 pixel = locationSS - glm::vec2(offset.x, offset.y);
         glm::vec2 uv = pixel / extent * glm::vec2(2.0, 2.0) - glm::vec2(1.0, 1.0);
-        const auto& prevUBO = engine->GetUniformBufferObject();
+        const auto& prevUBO = engine->GetLastUniformBufferObject();
         glm::vec4 origin = prevUBO.ModelViewInverse * glm::vec4(0, 0, 0, 1);
         glm::vec4 target = prevUBO.ProjectionInverse * (glm::vec4(uv.x, uv.y, 1, 1));
         glm::vec3 raydir = prevUBO.ModelViewInverse * glm::vec4(normalize((glm::vec3(target) - glm::vec3(0.0f, 0.0f, 0.0f))), 0.0f);

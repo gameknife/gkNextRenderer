@@ -2,6 +2,7 @@
 #include "Brotato3DCommon.hpp"
 
 #include "Engine/Assets/Core/Node.h"
+#include "Engine/Runtime/Engine.hpp"
 #include <spdlog/spdlog.h>
 
 #include "Brotato3DAudio.hpp"

@@ -31,7 +31,7 @@ namespace Brotato3D
         std::unordered_set<size_t> hitEnemyIndices;
         uint32_t modelId = 0;
         uint32_t materialId = 0;
-        std::shared_ptr<Assets::Node> node;
+        std::shared_ptr<::Assets::Node> node;
         bool active = false;
     };
 
@@ -80,7 +80,7 @@ namespace Brotato3D
         float remainingLifetimeMs = 0.0f;
         int damage = 0;
         float radius = 0.18f;
-        std::shared_ptr<Assets::Node> node;
+        std::shared_ptr<::Assets::Node> node;
         bool active = false;
     };
 

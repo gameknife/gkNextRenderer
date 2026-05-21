@@ -1,5 +1,6 @@
 #include "gkNextVisualTest.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/ScreenShot.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"

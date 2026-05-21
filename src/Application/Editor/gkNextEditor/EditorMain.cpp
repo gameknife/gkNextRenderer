@@ -5,6 +5,7 @@
 #include "EditorInterface.hpp"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.h"
 

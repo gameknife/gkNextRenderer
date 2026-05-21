@@ -2,6 +2,7 @@
 
 #include <catch2/catch_all.hpp>
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Options.hpp"
 #include <memory>
 

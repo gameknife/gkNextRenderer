@@ -2368,12 +2368,7 @@ namespace Vulkan
             GetStorageImage(Assets::Bindless::RT_OBJEDCTID_1)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             1, &copyRegion);
     }
-
-    void VulkanBaseRenderer::CaptureOIDN(VkCommandBuffer commandBuffer)
-    {
-        (void)commandBuffer;
-    }
-
+    
     void VulkanBaseRenderer::UpdateUniformBuffer(const uint32_t imageIndex)
     {
         frame_.lastUBO = GetUniformBufferObject(frame_.swapChain->RenderOffset(), frame_.swapChain->OutputExtent());

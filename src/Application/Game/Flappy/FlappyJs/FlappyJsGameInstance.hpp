@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/GameInstance.hpp"
 
 class FlappyJsGameInstance final : public NextGameInstanceBase
 {

@@ -286,7 +286,7 @@ void MagicaLegoUserInterface::DrawTitleBar()
         GetGameInstance()->GetEngine().RequestMinimize();
     }
     ImGui::SameLine();
-    if (ImGui::Button(GetGameInstance()->GetEngine().IsMaximumed() ? ICON_FA_WINDOW_RESTORE : ICON_FA_SQUARE, ImVec2(titlebarSize, titlebarSize)))
+    if (ImGui::Button(GetGameInstance()->GetEngine().IsMaximized() ? ICON_FA_WINDOW_RESTORE : ICON_FA_SQUARE, ImVec2(titlebarSize, titlebarSize)))
     {
         GetGameInstance()->GetEngine().ToggleMaximize();
     }

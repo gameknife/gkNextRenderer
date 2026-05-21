@@ -1,5 +1,6 @@
 #include "MagicaLegoAIService.hpp"
 #include "MagicaLegoGameInstance.hpp"
+#include "Engine/Runtime/Engine.hpp"
 #include <algorithm>
 #include <map>
 #include <thread>

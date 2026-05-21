@@ -151,7 +151,6 @@ namespace Vulkan
 		const RenderImage* GetStorageImage(uint32_t bindlessIdx) const;
 		uint32_t GetTemporalStorageImage(VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName);
 		void InitializeBarriers(VkCommandBuffer commandBuffer);
-		void CaptureOIDN(VkCommandBuffer commandBuffer);
 		void RequestSkinUpdate(uint32_t modelId) { skin_.updateRequests.push_back(modelId); }
 		std::vector<RayTracing::TopLevelAccelerationStructure>& TLAS();
 

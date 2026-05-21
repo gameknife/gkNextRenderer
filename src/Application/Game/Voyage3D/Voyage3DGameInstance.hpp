@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/GameInstance.hpp"
 #include "Voyage3DCombat.hpp"
 #include "Voyage3DCommon.hpp"
 #include "Voyage3DDataLoader.hpp"

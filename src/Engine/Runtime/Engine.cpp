@@ -4,6 +4,7 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
+#include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Config/EngineCVars.hpp"
 #include "Engine/Runtime/Subsystems/QuickJSEngine.hpp"
@@ -271,6 +272,8 @@ Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options&
 
 NextEngine* NextEngine::instance_ = nullptr;
 
+NextEngine::FRuntimeServices::~FRuntimeServices() = default;
+
 NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     : options_(&options)
 {
@@ -296,7 +299,7 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
 
     status_ = NextRenderer::EApplicationStatus::Starting;
 
-    packageFileSystem_.reset(new Utilities::Package::FPackageFileSystem(Utilities::Package::EPM_OsFile));
+    services_.packageFileSystem.reset(new Utilities::Package::FPackageFileSystem(Utilities::Package::EPM_OsFile));
 
     // Optional pak: assets moved out of the repo to reduce its size. Mounted automatically when present
     // so LoadFile can fall back to it for files missing on disk (see FileHelper::LoadFile).
@@ -305,11 +308,11 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
         std::error_code ec;
         if (std::filesystem::exists(optionalPakPath, ec))
         {
-            packageFileSystem_->MountPak(optionalPakPath);
+            services_.packageFileSystem->MountPak(optionalPakPath);
         }
     }
 
-    aiService_ = std::make_unique<NextAI::FAIService>();
+    services_.aiService = std::make_unique<NextAI::FAIService>();
 
     Vulkan::Window::InitGLFW();
     // Create Window
@@ -323,19 +326,19 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
                                       userdata,
                                       options.ForceSDR};
     gameInstance_ = CreateGameInstance(windowConfig, options, this);
-    userSettings_ = CreateUserSettings(options);
-    cvarSystem_ = std::make_unique<NextCVar::FCVarSystem>();
-    NextCVar::RegisterEngineCVars(*cvarSystem_, userSettings_, showFlags_, this);
-    cvarSystem_->LoadDefaultFile("assets/configs/cvar_default.json");
-    gameInstance_->ApplyDefaultCVars(*cvarSystem_);
-    cvarSystem_->LoadUserFile("assets/configs/cvar_user.json");
-    windowConfig.Fullscreen = userSettings_.BorderlessFullscreen;
+    config_.userSettings = CreateUserSettings(options);
+    services_.cvarSystem = std::make_unique<NextCVar::FCVarSystem>();
+    NextCVar::RegisterEngineCVars(*services_.cvarSystem, config_.userSettings, config_.showFlags, this);
+    services_.cvarSystem->LoadDefaultFile("assets/configs/cvar_default.json");
+    gameInstance_->ApplyDefaultCVars(*services_.cvarSystem);
+    services_.cvarSystem->LoadUserFile("assets/configs/cvar_user.json");
+    windowConfig.Fullscreen = config_.userSettings.BorderlessFullscreen;
     window_.reset(new Vulkan::Window(windowConfig));
-    SetBorderlessFullscreen(userSettings_.BorderlessFullscreen);
-    quickJSEngine_ = std::make_unique<QuickJSEngine>();
+    SetBorderlessFullscreen(config_.userSettings.BorderlessFullscreen);
+    services_.quickJSEngine = std::make_unique<QuickJSEngine>();
 
-    localization_ = std::make_unique<NextLocalization>();
-    localization_->LoadFromTxt(fmt::format("assets/locale/{}.txt", options_->locale), options_->locale);
+    services_.localization = std::make_unique<NextLocalization>();
+    services_.localization->LoadFromTxt(fmt::format("assets/locale/{}.txt", options_->locale), options_->locale);
 
     SPDLOG_INFO("---- Next Engine Initialized in {}", stopwatch.elapsed_ms());
 }
@@ -343,12 +346,12 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
 void NextEngine::TickHotReload()
 {
 #if GK_ENABLE_HOT_RELOAD
-    if (shaderHotReloader_)
+    if (services_.shaderHotReloader)
     {
         SCOPED_CPU_TIMER("shader hot reload");
-        shaderHotReloader_->SetEnabled(options_->ShaderHotReload);
-        shaderHotReloader_->SetPollInterval(options_->ShaderHotReloadInterval);
-        shaderHotReloader_->Tick(deltaSeconds_);
+        services_.shaderHotReloader->SetEnabled(options_->ShaderHotReload);
+        services_.shaderHotReloader->SetPollInterval(options_->ShaderHotReloadInterval);
+        services_.shaderHotReloader->Tick(frameState_.deltaSeconds);
     }
 #endif
 }
@@ -363,9 +366,9 @@ NextEngine::FHotReloadStatus NextEngine::GetHotReloadStatus() const
     }
 
 #if GK_ENABLE_HOT_RELOAD
-    if (shaderHotReloader_)
+    if (services_.shaderHotReloader)
     {
-        const auto shaderStatus = shaderHotReloader_->GetStatus();
+        const auto shaderStatus = services_.shaderHotReloader->GetStatus();
         status.shaderHotReloadEnabled = shaderStatus.enabled;
         status.shaderInitialized = shaderStatus.initialized;
         status.shaderPollIntervalSeconds = shaderStatus.pollIntervalSeconds;
@@ -381,23 +384,23 @@ NextEngine::FHotReloadStatus NextEngine::GetHotReloadStatus() const
 void NextEngine::RequestShaderHotReload()
 {
 #if GK_ENABLE_HOT_RELOAD
-    if (shaderHotReloader_)
+    if (services_.shaderHotReloader)
     {
-        shaderHotReloader_->RequestRebuildAll();
+        services_.shaderHotReloader->RequestRebuildAll();
     }
 #endif
 }
 
 NextEngine::~NextEngine()
 {
-    if (cvarSystem_)
+    if (services_.cvarSystem)
     {
-        cvarSystem_->SaveUserFile("assets/configs/cvar_user.json");
+        services_.cvarSystem->SaveUserFile("assets/configs/cvar_user.json");
     }
 
-    if (localization_)
+    if (services_.localization)
     {
-        localization_->SaveToTxt(fmt::format("assets/locale/{}.txt", options_->locale));
+        services_.localization->SaveToTxt(fmt::format("assets/locale/{}.txt", options_->locale));
     }
 
     scene_.reset();
@@ -417,10 +420,10 @@ void NextEngine::Start()
     // Initialize Renderer
     bool shouldEnableValidation = GOption->Validation;
     
-    renderer_.reset(NextRenderer::CreateRenderer(static_cast<uint32_t>(userSettings_.RendererType), window_.get(),
+    renderer_.reset(NextRenderer::CreateRenderer(static_cast<uint32_t>(config_.userSettings.RendererType), window_.get(),
                                                  static_cast<VkPresentModeKHR>(options_->PresentMode),
                                                  shouldEnableValidation));
-    userSettings_.RendererType = static_cast<int32_t>(renderer_->CurrentLogicRendererType());
+    config_.userSettings.RendererType = static_cast<int32_t>(renderer_->CurrentLogicRendererType());
 
     auto& rendererDelegates = renderer_->GetDelegates();
     rendererDelegates.onDeviceSet = [this]() -> void { OnRendererDeviceSet(); };
@@ -439,34 +442,34 @@ void NextEngine::Start()
     if (resolvedRendererType != renderer_->CurrentLogicRendererType())
     {
         renderer_->SwitchLogicRenderer(resolvedRendererType);
-        userSettings_.RendererType = static_cast<int32_t>(resolvedRendererType);
+        config_.userSettings.RendererType = static_cast<int32_t>(resolvedRendererType);
     }
 
 #if GK_ENABLE_HOT_RELOAD
     if (options_->ShaderHotReload)
     {
-        shaderHotReloader_ = std::make_unique<Vulkan::ShaderHotReloader>();
-        shaderHotReloader_->Initialize(*renderer_);
+        services_.shaderHotReloader = std::make_unique<Vulkan::ShaderHotReloader>();
+        services_.shaderHotReloader->Initialize(*renderer_);
     }
 #endif
 
-    physicsEngine_.reset(new NextPhysics());
-    physicsEngine_->Start();
+    services_.physics.reset(new NextPhysics());
+    services_.physics->Start();
 
-    audioEngine_ = std::make_unique<NextAudio>();
-    audioEngine_->Start();
+    services_.audio = std::make_unique<NextAudio>();
+    services_.audio->Start();
 
-    voiceInputService_ = std::make_unique<NextAI::VoiceInputService>();
+    services_.voiceInputService = std::make_unique<NextAI::VoiceInputService>();
     NextAI::FVoiceInputConfig voiceConfig;
-    if (aiService_)
+    if (services_.aiService)
     {
-        aiService_->TryGetVoiceInputConfig(voiceConfig);
+        services_.aiService->TryGetVoiceInputConfig(voiceConfig);
     }
-    voiceInputService_->Initialize(voiceConfig);
+    services_.voiceInputService->Initialize(voiceConfig);
 
-    if (quickJSEngine_)
+    if (services_.quickJSEngine)
     {
-        quickJSEngine_->Initialize();
+        services_.quickJSEngine->Initialize();
     }
 
     gameInstance_->OnInit();
@@ -478,7 +481,7 @@ bool NextEngine::HandleEvent(SDL_Event& event)
 {
     userInterface_->HandleEvent(&event);
 
-    if (quickJSEngine_)
+    if (services_.quickJSEngine)
     {
         switch (event.type)
         {
@@ -488,7 +491,7 @@ bool NextEngine::HandleEvent(SDL_Event& event)
         case SDL_EVENT_GAMEPAD_BUTTON_UP:
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
         case SDL_EVENT_MOUSE_BUTTON_UP:
-            quickJSEngine_->HandleInputEvent(event);
+            services_.quickJSEngine->HandleInputEvent(event);
             break;
         default:
             break;
@@ -559,11 +562,11 @@ bool NextEngine::Tick(bool forcingDelta)
         {
             SCOPED_CPU_TIMER("renderer switch");
             auto requestedRendererType =
-                ResolveRendererType(static_cast<Vulkan::ERendererType>(userSettings_.RendererType),
+                ResolveRendererType(static_cast<Vulkan::ERendererType>(config_.userSettings.RendererType),
                                     renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget());
-            if (requestedRendererType != static_cast<Vulkan::ERendererType>(userSettings_.RendererType))
+            if (requestedRendererType != static_cast<Vulkan::ERendererType>(config_.userSettings.RendererType))
             {
-                userSettings_.RendererType = static_cast<int32_t>(requestedRendererType);
+                config_.userSettings.RendererType = static_cast<int32_t>(requestedRendererType);
             }
 
             if (renderer_->CurrentLogicRendererType() != requestedRendererType)
@@ -575,13 +578,14 @@ bool NextEngine::Tick(bool forcingDelta)
         // delta time calc
         {
             SCOPED_CPU_TIMER("delta");
-            const auto prevTime = time_;
-            time_ = GetWindow().GetTime();
-            deltaSeconds_ = time_ - prevTime;
+            const auto prevTime = frameState_.time;
+            frameState_.time = GetWindow().GetTime();
+            frameState_.deltaSeconds = frameState_.time - prevTime;
             if (forcingDelta)
-                deltaSeconds_ = 1.0 / 30.0;
-            float invDelta = static_cast<float>(deltaSeconds_) / 60.0f;
-            smoothedDeltaSeconds_ = glm::mix(smoothedDeltaSeconds_, deltaSeconds_, invDelta * 100.0f);
+                frameState_.deltaSeconds = 1.0 / 30.0;
+            float invDelta = static_cast<float>(frameState_.deltaSeconds) / 60.0f;
+            frameState_.smoothedDeltaSeconds =
+                glm::mix(frameState_.smoothedDeltaSeconds, frameState_.deltaSeconds, invDelta * 100.0f);
         }
 
         TickHotReload();
@@ -590,39 +594,39 @@ bool NextEngine::Tick(bool forcingDelta)
         if (scene_)
         {
             SCOPED_CPU_TIMER("scene tick");
-            scene_->Tick(static_cast<float>(deltaSeconds_));
+            scene_->Tick(static_cast<float>(frameState_.deltaSeconds));
         }
 
 #if WITH_PHYSIC
-        if (userSettings_.TickPhysics && physicsEngine_)
+        if (config_.userSettings.TickPhysics && services_.physics)
         {
             SCOPED_CPU_TIMER("physics");
-            physicsEngine_->Tick(deltaSeconds_);
+            services_.physics->Tick(frameState_.deltaSeconds);
         }
 #endif
 
-        if (quickJSEngine_)
+        if (services_.quickJSEngine)
         {
             SCOPED_CPU_TIMER("quickjs");
-            quickJSEngine_->Tick(deltaSeconds_);
+            services_.quickJSEngine->Tick(frameState_.deltaSeconds);
         }
 
         // tick
         if (status_ == NextRenderer::EApplicationStatus::Running)
         {
             SCOPED_CPU_TIMER("game tick");
-            gameInstance_->OnTick(deltaSeconds_);
+            gameInstance_->OnTick(frameState_.deltaSeconds);
         }
 
         {
             SCOPED_CPU_TIMER("ticked tasks");
 
-            // iterate the tickedTasks_, if return true, remove it
-            for (auto it = tickedTasks_.begin(); it != tickedTasks_.end();)
+            // Remove completed ticked tasks.
+            for (auto it = taskQueues_.ticked.begin(); it != taskQueues_.ticked.end();)
             {
-                if ((*it)(deltaSeconds_))
+                if ((*it)(frameState_.deltaSeconds))
                 {
-                    it = tickedTasks_.erase(it);
+                    it = taskQueues_.ticked.erase(it);
                 }
                 else
                 {
@@ -634,18 +638,18 @@ bool NextEngine::Tick(bool forcingDelta)
         {
             SCOPED_CPU_TIMER("delayed tasks");
 
-            // iterate the delayedTasks_ , if Time is up, execute it, if return true, remove it
-            for (auto it = delayedTasks_.begin(); it != delayedTasks_.end();)
+            // Run due delayed tasks and remove completed ones.
+            for (auto it = taskQueues_.delayed.begin(); it != taskQueues_.delayed.end();)
             {
-                if (time_ > it->triggerTime)
+                if (frameState_.time > it->triggerTime)
                 {
                     // update the next trigger time
-                    it->triggerTime = time_ + it->loopTime;
+                    it->triggerTime = frameState_.time + it->loopTime;
 
                     // execute
                     if (it->task())
                     {
-                        it = delayedTasks_.erase(it);
+                        it = taskQueues_.delayed.erase(it);
                     }
                     else
                     {
@@ -663,51 +667,51 @@ bool NextEngine::Tick(bool forcingDelta)
             PERFORMANCEAPI_INSTRUMENT_COLOR("Engine::TickRenderer", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
             renderer_->DrawFrame();
         }
-        totalFrames_ = renderer_->FrameCount();
+        frameState_.totalFrames = renderer_->FrameCount();
 
-        if (hasPendingScreenShot_)
+        if (screenShot_.hasPending)
         {
             SCOPED_CPU_TIMER("screenshot");
             renderer_->Device().WaitIdle();
             Runtime::ScreenShot::SaveSwapChainToFile(renderer_.get(),
-                                           pendingScreenShot_.filename,
-                                           pendingScreenShot_.x,
-                                           pendingScreenShot_.y,
-                                           pendingScreenShot_.width,
-                                           pendingScreenShot_.height);
-            hasPendingScreenShot_ = false;
-            pendingScreenShot_ = {};
+                                           screenShot_.pending.filename,
+                                           screenShot_.pending.x,
+                                           screenShot_.pending.y,
+                                           screenShot_.pending.width,
+                                           screenShot_.pending.height);
+            screenShot_.hasPending = false;
+            screenShot_.pending = {};
         }
 
-        if (progressivePreFrames_ > 0)
+        if (progressiveRender_.warmupFramesRemaining > 0)
         {
-            progressivePreFrames_--;
-            if (progressivePreFrames_ == 0)
+            progressiveRender_.warmupFramesRemaining--;
+            if (progressiveRender_.warmupFramesRemaining == 0)
             {
-                progressiveRendering_ = true;
+                progressiveRender_.enabled = true;
             }
         }
 
         // High quality capture: count down accumulated frames after DrawFrame
-        if (screenShotCaptureFramesRemaining_ > 0)
+        if (screenShot_.captureFramesRemaining > 0)
         {
             SCOPED_CPU_TIMER("hq capture");
-            screenShotCaptureFramesRemaining_--;
-            if (screenShotCaptureFramesRemaining_ == 0)
+            screenShot_.captureFramesRemaining--;
+            if (screenShot_.captureFramesRemaining == 0)
             {
                 renderer_->Device().WaitIdle();
                 Runtime::ScreenShot::SaveSwapChainToFile(renderer_.get(),
-                                               screenShotCaptureSpec_.filename,
-                                               screenShotCaptureSpec_.x,
-                                               screenShotCaptureSpec_.y,
-                                               screenShotCaptureSpec_.width,
-                                               screenShotCaptureSpec_.height);
+                                               screenShot_.captureSpec.filename,
+                                               screenShot_.captureSpec.x,
+                                               screenShot_.captureSpec.y,
+                                               screenShot_.captureSpec.width,
+                                               screenShot_.captureSpec.height);
                 spdlog::info("High quality capture saved: {} ({} frames accumulated)",
-                             screenShotCaptureSpec_.filename, screenShotCaptureTotalFrames_);
+                             screenShot_.captureSpec.filename, screenShot_.captureTotalFrames);
 
-                progressiveRendering_ = screenShotCapturePrevProgressive_;
-                progressivePreFrames_ = screenShotCapturePrevPreFrames_;
-                screenShotCaptureSpec_ = {};
+                progressiveRender_.enabled = screenShot_.previousProgressiveEnabled;
+                progressiveRender_.warmupFramesRemaining = screenShot_.previousProgressiveWarmupFrames;
+                screenShot_.captureSpec = {};
             }
         }
 
@@ -734,14 +738,14 @@ void NextEngine::End()
         Tasks::TaskCoordinator::DestroyInstance();
     }
 
-    if (audioEngine_)
+    if (services_.audio)
     {
-        audioEngine_->Stop();
+        services_.audio->Stop();
     }
 
-    if (physicsEngine_)
+    if (services_.physics)
     {
-        physicsEngine_->Stop();
+        services_.physics->Stop();
     }
     if (gameInstance_)
     {
@@ -753,21 +757,24 @@ void NextEngine::End()
     }
     userInterface_.reset();
 
-    if (localization_)
+    if (services_.localization)
     {
-        localization_->SaveToTxt(fmt::format("assets/locale/{}.txt", options_->locale));
+        services_.localization->SaveToTxt(fmt::format("assets/locale/{}.txt", options_->locale));
     }
 }
 
 void NextEngine::RegisterJSCallback(std::function<void(double)> callback)
 {
-    if (quickJSEngine_)
+    if (services_.quickJSEngine)
     {
-        quickJSEngine_->RegisterTickCallback(std::move(callback));
+        services_.quickJSEngine->RegisterTickCallback(std::move(callback));
     }
 }
 
-void NextEngine::AddTimerTask(double delay, DelayedTask task) { delayedTasks_.push_back({time_ + delay, delay, task}); }
+void NextEngine::AddTimerTask(double delay, DelayedTask task)
+{
+    taskQueues_.delayed.push_back({frameState_.time + delay, delay, task});
+}
 
 glm::dvec2 NextEngine::GetMousePos()
 {
@@ -790,7 +797,7 @@ bool NextEngine::IsBorderlessFullscreen() const
 {
     if (!window_)
     {
-        return userSettings_.BorderlessFullscreen;
+        return config_.userSettings.BorderlessFullscreen;
     }
 
     return window_->IsBorderlessFullscreen();
@@ -798,7 +805,7 @@ bool NextEngine::IsBorderlessFullscreen() const
 
 bool NextEngine::SetBorderlessFullscreen(bool enable)
 {
-    userSettings_.BorderlessFullscreen = enable;
+    config_.userSettings.BorderlessFullscreen = enable;
     if (!window_)
     {
         return true;
@@ -811,14 +818,14 @@ bool NextEngine::ToggleBorderlessFullscreen()
 {
     if (!window_)
     {
-        userSettings_.BorderlessFullscreen = !userSettings_.BorderlessFullscreen;
+        config_.userSettings.BorderlessFullscreen = !config_.userSettings.BorderlessFullscreen;
         return true;
     }
 
     const bool success = window_->ToggleBorderlessFullscreen();
     if (success)
     {
-        userSettings_.BorderlessFullscreen = window_->IsBorderlessFullscreen();
+        config_.userSettings.BorderlessFullscreen = window_->IsBorderlessFullscreen();
     }
     return success;
 }
@@ -837,7 +844,7 @@ void NextEngine::ConfigureCustomTitleBarDrag(bool enabled, float titleBarHeight,
     window_->ConfigureCustomTitleBarDrag(enabled, titleBarHeightInt, leftReservedWidthInt, rightReservedWidthInt);
 }
 
-bool NextEngine::IsMaximumed() { return window_->IsMaximumed(); }
+bool NextEngine::IsMaximized() { return window_->IsMaximumed(); }
 
 void NextEngine::ToggleMaximize()
 {
@@ -855,24 +862,24 @@ void NextEngine::RequestScreenShot(FScreenShotSpec spec)
 {
     if (spec.accumulateFrames > 0)
     {
-        if (screenShotCaptureFramesRemaining_ > 0)
+        if (screenShot_.captureFramesRemaining > 0)
         {
             spdlog::warn("High quality capture already in progress, ignoring request");
             return;
         }
 
-        screenShotCapturePrevProgressive_ = progressiveRendering_;
-        screenShotCapturePrevPreFrames_ = progressivePreFrames_;
-        screenShotCaptureTotalFrames_ = spec.accumulateFrames;
-        screenShotCaptureFramesRemaining_ = spec.accumulateFrames;
-        screenShotCaptureSpec_ = std::move(spec);
-        screenShotCaptureSpec_.filename =
-            ResolveScreenShotFilename(screenShotCaptureSpec_.filename, "hq_screenshot");
+        screenShot_.previousProgressiveEnabled = progressiveRender_.enabled;
+        screenShot_.previousProgressiveWarmupFrames = progressiveRender_.warmupFramesRemaining;
+        screenShot_.captureTotalFrames = spec.accumulateFrames;
+        screenShot_.captureFramesRemaining = spec.accumulateFrames;
+        screenShot_.captureSpec = std::move(spec);
+        screenShot_.captureSpec.filename =
+            ResolveScreenShotFilename(screenShot_.captureSpec.filename, "hq_screenshot");
 
-        progressiveRendering_ = true;
-        progressivePreFrames_ = 0;
+        progressiveRender_.enabled = true;
+        progressiveRender_.warmupFramesRemaining = 0;
         spdlog::info("High quality capture started: accumulating {} frames...",
-                     screenShotCaptureTotalFrames_);
+                     screenShot_.captureTotalFrames);
         return;
     }
 
@@ -884,8 +891,8 @@ void NextEngine::RequestScreenShot(FScreenShotSpec spec)
         return;
     }
 
-    pendingScreenShot_ = std::move(spec);
-    hasPendingScreenShot_ = true;
+    screenShot_.pending = std::move(spec);
+    screenShot_.hasPending = true;
 }
 
 // 生成一个随机抖动偏移
@@ -977,21 +984,21 @@ void NextEngine::SetProgressiveRendering(bool enable, bool directly)
 {
     if (directly)
     {
-        progressiveRendering_ = enable;
+        progressiveRender_.enabled = enable;
         return;
     }
 
     if (enable)
     {
-        if (progressivePreFrames_ == 0)
+        if (progressiveRender_.warmupFramesRemaining == 0)
         {
-            progressivePreFrames_ = userSettings_.TemporalFrames * 2;
+            progressiveRender_.warmupFramesRemaining = config_.userSettings.TemporalFrames * 2;
         }
     }
     else
     {
-        progressivePreFrames_ = 0;
-        progressiveRendering_ = false;
+        progressiveRender_.warmupFramesRemaining = 0;
+        progressiveRender_.enabled = false;
     }
 }
 
@@ -1027,9 +1034,9 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         glm::perspective(glm::radians(renderCam.FieldOfView), extent.width / static_cast<float>(extent.height),
                          renderCam.NearPlane, renderCam.FarPlane);
 
-    ubo.FastGather = userSettings_.FastGather;
+    ubo.FastGather = config_.userSettings.FastGather;
     ubo.SelectedId = scene_->GetSelectedId();
-    ubo.SuperResolution = GOption->ReferenceMode ? 2 : userSettings_.SuperResolution;
+    ubo.SuperResolution = GOption->ReferenceMode ? 2 : config_.userSettings.SuperResolution;
     ubo.Projection[1][1] *= -1;
 
     glm::mat4x4 projectionUnJit = ubo.Projection;
@@ -1047,10 +1054,11 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     projectionUnJit = ubo.Projection;
 #endif
 
-    if (userSettings_.TAA || userSettings_.DLSS)
+    if (config_.userSettings.TAA || config_.userSettings.DLSS)
     {
-        std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(userSettings_.TemporalFrames);
-        glm::vec2 jitter = haltonSeq[totalFrames_ % userSettings_.TemporalFrames] - glm::vec2(0.5f, 0.5f);
+        std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(config_.userSettings.TemporalFrames);
+        glm::vec2 jitter =
+            haltonSeq[frameState_.totalFrames % config_.userSettings.TemporalFrames] - glm::vec2(0.5f, 0.5f);
 
         ubo.Projection[2][0] = jitter.x / static_cast<float>(extent.width) * 2.0f;
         ubo.Projection[2][1] = jitter.y / static_cast<float>(extent.height) * 2.0f;
@@ -1070,8 +1078,12 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.ProjectionUnJit = projectionUnJit;
     ubo.ProjectionInverseUnJit = glm::inverse(projectionUnJit);
 
-    ubo.PrevViewProjection = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjection : ubo.ViewProjection;
-    ubo.PrevViewProjectionUnJit = prevUBO_.TotalFrames != 0 ? prevUBO_.ViewProjectionUnJit : ubo.ViewProjectionUnJit;
+    ubo.PrevViewProjection = renderState_.previousUniformBuffer.TotalFrames != 0
+                                  ? renderState_.previousUniformBuffer.ViewProjection
+                                  : ubo.ViewProjection;
+    ubo.PrevViewProjectionUnJit = renderState_.previousUniformBuffer.TotalFrames != 0
+                                      ? renderState_.previousUniformBuffer.ViewProjectionUnJit
+                                      : ubo.ViewProjectionUnJit;
 
     ubo.ViewportRect =
         glm::vec4(renderer_->SwapChain().RenderOffset().x, renderer_->SwapChain().RenderOffset().y,
@@ -1095,14 +1107,14 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
 
     // SceneStuff
     ubo.SkyRotation = scene_->GetEnvSettings().SkyRotation;
-    ubo.MaxNumberOfBounces = userSettings_.MaxNumberOfBounces;
-    ubo.TotalFrames = totalFrames_;
-    ubo.NumberOfSamples = userSettings_.NumberOfSamples;
-    ubo.NumberOfBounces = userSettings_.NumberOfBounces;
-    ubo.AdaptiveSample = userSettings_.AdaptiveSample;
-    ubo.AdaptiveVariance = userSettings_.AdaptiveVariance;
-    ubo.AdaptiveSteps = userSettings_.AdaptiveSteps;
-    ubo.TAA = userSettings_.TAA;
+    ubo.MaxNumberOfBounces = config_.userSettings.MaxNumberOfBounces;
+    ubo.TotalFrames = frameState_.totalFrames;
+    ubo.NumberOfSamples = config_.userSettings.NumberOfSamples;
+    ubo.NumberOfBounces = config_.userSettings.NumberOfBounces;
+    ubo.AdaptiveSample = config_.userSettings.AdaptiveSample;
+    ubo.AdaptiveVariance = config_.userSettings.AdaptiveVariance;
+    ubo.AdaptiveSteps = config_.userSettings.AdaptiveSteps;
+    ubo.TAA = config_.userSettings.TAA;
     ubo.RandomSeed = rand();
     ubo.SunDirection = glm::vec4(scene_->GetEnvSettings().SunDirection(), 0.0f);
     ubo.SunColor = glm::vec4(1, 1, 1, 0) * scene_->GetEnvSettings().SunIntensity;
@@ -1112,47 +1124,49 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.HasSky = scene_->GetEnvSettings().HasSky;
     ubo.HasSun = scene_->GetEnvSettings().HasSun && scene_->GetEnvSettings().SunIntensity > 0;
 
-    if (ubo.HasSun != prevUBO_.HasSun || ubo.SunDirection != prevUBO_.SunDirection)
+    if (ubo.HasSun != renderState_.previousUniformBuffer.HasSun ||
+        ubo.SunDirection != renderState_.previousUniformBuffer.SunDirection)
     {
         scene_->MarkEnvDirty();
     }
 
-    ubo.ShowHeatmap = showFlags_.ShowVisualDebug;
-    ubo.HeatmapScale = userSettings_.HeatmapScale;
-    ubo.DebugDraw_Lighting = showFlags_.DebugDraw_Lighting;
-    ubo.DebugDraw_ShadowCascadeCoverage = showFlags_.DebugDraw_ShadowCascadeCoverage;
-    ubo.UseCheckerBoard = userSettings_.UseCheckerBoardRendering;
-    ubo.TemporalFrames = progressiveRendering_ ? 256 : userSettings_.TemporalFrames;
+    ubo.ShowHeatmap = config_.showFlags.ShowVisualDebug;
+    ubo.HeatmapScale = config_.userSettings.HeatmapScale;
+    ubo.DebugDraw_Lighting = config_.showFlags.DebugDraw_Lighting;
+    ubo.DebugDraw_ShadowCascadeCoverage = config_.showFlags.DebugDraw_ShadowCascadeCoverage;
+    ubo.UseCheckerBoard = config_.userSettings.UseCheckerBoardRendering;
+    ubo.TemporalFrames = progressiveRender_.enabled ? 256 : config_.userSettings.TemporalFrames;
     ubo.HDR = renderer_->SwapChain().IsHDR();
 
-    ubo.PaperWhiteNit = userSettings_.PaperWhiteNit;
+    ubo.PaperWhiteNit = config_.userSettings.PaperWhiteNit;
     ubo.LightCount = scene_->GetLightCount();
 
-    ubo.BFSigma = userSettings_.DenoiseSigma;
-    ubo.BFSigmaLum = userSettings_.DenoiseSigmaLum;
-    ubo.BFSigmaNormal = userSettings_.DenoiseSigmaNormal;
+    ubo.BFSigma = config_.userSettings.DenoiseSigma;
+    ubo.BFSigmaLum = config_.userSettings.DenoiseSigmaLum;
+    ubo.BFSigmaNormal = config_.userSettings.DenoiseSigmaNormal;
 
-    ubo.BFSize = userSettings_.Denoiser ? userSettings_.DenoiseSize : 0;
+    ubo.BFSize = config_.userSettings.Denoiser ? config_.userSettings.DenoiseSize : 0;
 
-    ubo.ShowEdge = showFlags_.ShowEdge;
-    ubo.ProgressiveRender = progressiveRendering_;
-    ubo.SceneEpsilonScale = userSettings_.SceneEpsilonScale;
-    const float ambientCubeUnit = Assets::SanitizeAmbientCubeUnit(userSettings_.AmbientCubeUnit);
+    ubo.ShowEdge = config_.showFlags.ShowEdge;
+    ubo.ProgressiveRender = progressiveRender_.enabled;
+    ubo.SceneEpsilonScale = config_.userSettings.SceneEpsilonScale;
+    const float ambientCubeUnit = Assets::SanitizeAmbientCubeUnit(config_.userSettings.AmbientCubeUnit);
     const glm::vec3 ambientCubeOffsetBias =
-        glm::vec3(userSettings_.AmbientCubeOffsetX, userSettings_.AmbientCubeOffsetY, userSettings_.AmbientCubeOffsetZ);
+        glm::vec3(config_.userSettings.AmbientCubeOffsetX, config_.userSettings.AmbientCubeOffsetY,
+                  config_.userSettings.AmbientCubeOffsetZ);
     const uint32_t ambientCubeCascadeCount =
-        Assets::SanitizeAmbientCubeCascadeCount(userSettings_.AmbientCubeCascadeCount);
+        Assets::SanitizeAmbientCubeCascadeCount(config_.userSettings.AmbientCubeCascadeCount);
     const float ambientCubeCascadeRatio =
-        Assets::SanitizeAmbientCubeCascadeRatio(userSettings_.AmbientCubeCascadeRatio);
+        Assets::SanitizeAmbientCubeCascadeRatio(config_.userSettings.AmbientCubeCascadeRatio);
     ubo.AmbientCubeUnit = ambientCubeUnit;
     ubo.AmbientCubeOffset = Assets::CalculateAmbientCubeOffset(ambientCubeUnit, ambientCubeOffsetBias);
     ubo.AmbientCubeCascadeParams = glm::vec4(float(ambientCubeCascadeCount), ambientCubeCascadeRatio, 0.0f, 0.0f);
 
     // Other Setup
-    renderer_->SetDenoiserEnabled(userSettings_.Denoiser);
-    renderer_->SetVisualDebugEnabled(showFlags_.ShowVisualDebug);
+    renderer_->SetDenoiserEnabled(config_.userSettings.Denoiser);
+    renderer_->SetVisualDebugEnabled(config_.showFlags.ShowVisualDebug);
     // UBO Backup, for motion vector calc
-    prevUBO_ = ubo;
+    renderState_.previousUniformBuffer = ubo;
 
     return ubo;
 }
@@ -1199,7 +1213,7 @@ void NextEngine::OnRendererCreateSwapChain()
     if (userInterface_.get() == nullptr)
     {
         userInterface_.reset(new NextUI::UserInterface(
-            this, renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(), userSettings_,
+            this, renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(), config_.userSettings,
             [this]() -> void { gameInstance_->OnPreConfigUI(); }, [this]() -> void { gameInstance_->OnInitUI(); }));
     }
     userInterface_->OnCreateSurface(renderer_->SwapChain(), renderer_->DepthBuffer());
@@ -1220,11 +1234,11 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
     double now = GetWindow().GetTime();
 
     // Record delta time between calls to Render.
-    if (totalFrames_ % 30 == 0)
+    if (frameState_.totalFrames % 30 == 0)
     {
-        const auto timeDelta = now - lastFrameTime_;
-        lastFrameTime_ = now;
-        frameRate_ = static_cast<float>(30 / timeDelta);
+        const auto timeDelta = now - frameState_.lastFrameTime;
+        frameState_.lastFrameTime = now;
+        frameState_.frameRate = static_cast<float>(30 / timeDelta);
     }
 
     // Render the UI
@@ -1237,10 +1251,10 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
 
     stats.FramebufferSize = GetWindow().FramebufferSize();
     stats.RenderSize = renderer_->SwapChain().RenderExtent();
-    stats.FrameRate = frameRate_;
+    stats.FrameRate = frameState_.frameRate;
     stats.RenderTime = GetTime();
 
-    stats.TotalFrames = totalFrames_;
+    stats.TotalFrames = frameState_.totalFrames;
     stats.InstanceCount = static_cast<uint32_t>(scene_->GetNodeProxys().size());
     stats.NodeCount = static_cast<uint32_t>(scene_->Nodes().size());
     stats.TriCount = scene_->GetIndicesCount() / 3;
@@ -1248,7 +1262,7 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
     stats.ComputePassCount = 0;
     stats.LoadingStatus = status_ == NextRenderer::EApplicationStatus::Loading;
 
-    // Renderer::visualDebug_ = userSettings_.ShowVisualDebug;
+    // Renderer::visualDebug_ = config_.userSettings.ShowVisualDebug;
     {
         SCOPED_CPU_TIMER("pre render");
         userInterface_->PreRender();
@@ -1258,10 +1272,10 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
         SCOPED_CPU_TIMER("game ui");
         uiHandled = gameInstance_->OnRenderUI();
     }
-    const bool suppressAllUi = hasPendingScreenShot_;
+    const bool suppressAllUi = screenShot_.hasPending;
     if (!suppressAllUi)
     {
-        if (showFlags_.DebugPhysicsOverlay)
+        if (config_.showFlags.DebugPhysicsOverlay)
         {
             SCOPED_CPU_TIMER("physics debug ui");
             Assets::Camera debugCamera = scene_->GetRenderCamera();
@@ -1271,10 +1285,10 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
         }
         {
             SCOPED_CPU_TIMER("graphics debug ui");
-            Runtime::GraphicsDebugPanel::DrawPanel(*this, showFlags_.DebugGraphicsPanel,
+            Runtime::GraphicsDebugPanel::DrawPanel(*this, config_.showFlags.DebugGraphicsPanel,
                                                    gameInstance_->GetGraphicsDebugPanelTopOffset());
         }
-        if (showFlags_.DebugProfileOverlay)
+        if (config_.showFlags.DebugProfileOverlay)
         {
             SCOPED_CPU_TIMER("profile debug ui");
             Runtime::DrawProfileDebugOverlay(*this, stats, renderer_->GpuTimer(),
@@ -1284,7 +1298,7 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
     if (!uiHandled && !suppressAllUi)
     {
         SCOPED_CPU_TIMER("overlay ui");
-        userInterface_->Render(stats, renderer_->GpuTimer(), scene_.get(), showFlags_.DebugProfileOverlay);
+        userInterface_->Render(stats, renderer_->GpuTimer(), scene_.get(), config_.showFlags.DebugProfileOverlay);
     }
     {
         SCOPED_CPU_TIMER("imgui submit");
@@ -1303,9 +1317,9 @@ void NextEngine::OnKey(SDL_Event& event)
 
         if (isAltEnter || isF11)
         {
-            if (cvarSystem_)
+            if (services_.cvarSystem)
             {
-                auto result = cvarSystem_->ExecuteCommand("cvar.toggle sys.fullscreen");
+                auto result = services_.cvarSystem->ExecuteCommand("cvar.toggle sys.fullscreen");
                 if (!result.success)
                 {
                     ToggleBorderlessFullscreen();
@@ -1327,7 +1341,7 @@ void NextEngine::OnKey(SDL_Event& event)
     if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat)
     {
         if (Runtime::GraphicsDebugPanel::TryHandleRendererShortcut(event.key.key, true,
-                                                                   showFlags_.DebugGraphicsPanel, *this))
+                                                                   config_.showFlags.DebugGraphicsPanel, *this))
         {
             return;
         }
@@ -1435,7 +1449,7 @@ void NextEngine::OnKey(SDL_Event& event)
     if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat)
     {
         if (Runtime::GraphicsDebugPanel::TryHandleViewModeShortcut(
-                event.key.key, true, showFlags_.DebugGraphicsPanel, showFlags_))
+                event.key.key, true, config_.showFlags.DebugGraphicsPanel, config_.showFlags))
         {
             return;
         }
@@ -1460,20 +1474,20 @@ bool NextEngine::HandleDebugShortcut(SDL_Keycode key)
     {
     case SDLK_F1:
         shortcutOps = FDebugShortcutOps{
-            .IsActive = [this]() { return showFlags_.DebugPhysicsOverlay; },
-            .SetActive = [this](bool active) { showFlags_.DebugPhysicsOverlay = active; },
+            .IsActive = [this]() { return config_.showFlags.DebugPhysicsOverlay; },
+            .SetActive = [this](bool active) { config_.showFlags.DebugPhysicsOverlay = active; },
         };
         break;
     case SDLK_F2:
         shortcutOps = FDebugShortcutOps{
-            .IsActive = [this]() { return showFlags_.DebugGraphicsPanel; },
-            .SetActive = [this](bool active) { showFlags_.DebugGraphicsPanel = active; },
+            .IsActive = [this]() { return config_.showFlags.DebugGraphicsPanel; },
+            .SetActive = [this](bool active) { config_.showFlags.DebugGraphicsPanel = active; },
         };
         break;
     case SDLK_F3:
         shortcutOps = FDebugShortcutOps{
-            .IsActive = [this]() { return showFlags_.DebugProfileOverlay; },
-            .SetActive = [this](bool active) { showFlags_.DebugProfileOverlay = active; },
+            .IsActive = [this]() { return config_.showFlags.DebugProfileOverlay; },
+            .SetActive = [this](bool active) { config_.showFlags.DebugProfileOverlay = active; },
         };
         break;
     default:
@@ -1497,9 +1511,9 @@ bool NextEngine::HandleDebugShortcut(SDL_Keycode key)
 
     if (engineOwnsShortcut)
     {
-        showFlags_.DebugPhysicsOverlay = false;
-        showFlags_.DebugGraphicsPanel = false;
-        showFlags_.DebugProfileOverlay = false;
+        config_.showFlags.DebugPhysicsOverlay = false;
+        config_.showFlags.DebugGraphicsPanel = false;
+        config_.showFlags.DebugProfileOverlay = false;
         if (!isActive)
         {
             shortcutOps->SetActive(true);
@@ -1572,7 +1586,6 @@ void NextEngine::OnDropFile(const char* dropPath)
     {
         uint32_t newTextureId = Assets::GlobalTexturePool::GetInstance()->LoadHDRTexture(path);
         scene_->GetEnvSettings().SkyIdx = newTextureId;
-        // userSettings_. = 0;
     }
 }
 void NextEngine::TickGamepadInput()
@@ -1667,7 +1680,7 @@ void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<vo
                 // Execute the specific GPU load logic
                 onGpuLoad(ctx);
 
-                totalFrames_ = 0;
+                frameState_.totalFrames = 0;
                 renderer_->OnPostLoadScene();
                 renderer_->CreateSwapChain();
             }
@@ -1686,7 +1699,7 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
     if (!request.append)
     {
         scene_->CleanUp();
-        physicsEngine_->OnSceneDestroyed();
+        services_.physics->OnSceneDestroyed();
         Assets::GlobalTexturePool::GetInstance()->FreeTransientTextures();
     }
 
@@ -1703,14 +1716,14 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
                 scene_->GetEnvSettings().Reset();
                 scene_->SetEnvSettings(*ctx.cameraState);
                 gameInstance_->OnSceneUnloaded();
-                physicsEngine_->OnSceneStarted();
+                services_.physics->OnSceneStarted();
 
                 scene_->Reload(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
                 scene_->PostLoad(*ctx.skeletons);
                 scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->SupportsRayTracing());
                 renderer_->SetScene(scene_);
 
-                userSettings_.CameraIdx = 0;
+                config_.userSettings.CameraIdx = 0;
                 assert(!scene_->GetEnvSettings().cameras.empty());
                 scene_->SetRenderCamera(scene_->GetEnvSettings().cameras[0]);
                 gameInstance_->OnSceneLoaded();
