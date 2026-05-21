@@ -1,11 +1,10 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 
 namespace Vulkan
 {
-    class VulkanBaseRenderer;
-
     class ShaderHotReloader final
     {
     public:

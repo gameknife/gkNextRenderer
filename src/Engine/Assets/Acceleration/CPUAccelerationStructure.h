@@ -1,6 +1,9 @@
 #pragma once
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
+#include "Engine/Runtime/RuntimeFwd.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 #include <glm/glm.hpp>
 #include "ThirdParty/tinybvh/tiny_bvh.h"
 #include <functional>
@@ -22,22 +25,6 @@ namespace std {
             return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
         }
     };
-}
-
-namespace Assets
-{
-    class Scene;
-    struct RayCastResult;
-}
-
-namespace Runtime::Config
-{
-    struct UserSettings;
-}
-
-namespace Vulkan
-{
-    class DeviceMemory;
 }
 
 namespace Assets::CPU

@@ -1,14 +1,7 @@
 #pragma once
 
 #include "Engine/Vulkan/DebugUtilities.hpp"
-
-namespace Vulkan
-{
-	class Buffer;
-	class Device;
-	class DeviceMemory;
-	class DeviceProcedures;
-}
+#include "Engine/Vulkan/VulkanFwd.hpp"
 
 namespace Vulkan::RayTracing
 {

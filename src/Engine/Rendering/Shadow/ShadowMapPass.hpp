@@ -1,22 +1,11 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include <array>
 #include <memory>
-
-namespace Assets
-{
-    struct GPUScene;
-    class Scene;
-}
-
-namespace Vulkan
-{
-    class CommandPool;
-    class Device;
-    class SwapChain;
-}
 
 namespace Vulkan::Shadow
 {

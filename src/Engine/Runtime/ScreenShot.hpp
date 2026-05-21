@@ -1,11 +1,8 @@
 #pragma once
 
-#include <string>
+#include "Engine/Vulkan/VulkanFwd.hpp"
 
-namespace Vulkan
-{
-	class VulkanBaseRenderer;
-}
+#include <string>
 
 namespace Runtime::ScreenShot
 {

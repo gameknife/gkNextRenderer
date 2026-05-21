@@ -1,12 +1,7 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
-
-namespace Assets
-{
-    class Scene;
-    struct Camera;
-}
 
 class NextCharacterController;
 

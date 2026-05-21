@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
+
 #include <string>
 #include <vector>
 
@@ -11,8 +13,6 @@ namespace tinygltf
 
 namespace Assets
 {
-    class Scene;
-
     /**
      * @brief 场景保存器 - 将运行时Scene导出为GLTF/GLB文件
      *

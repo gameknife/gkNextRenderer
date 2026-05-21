@@ -1,13 +1,9 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Assets/Core/Component.h"
 #include "Engine/NextGameplay/Gameplay/GameplayTypes.h"
 #include "Engine/Runtime/Reflection/ReflectionMacros.h"
-
-namespace Assets
-{
-    class Node;
-}
 
 namespace Runtime
 {

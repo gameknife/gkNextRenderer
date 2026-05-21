@@ -1,13 +1,11 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Data/Skeleton.hpp"
 
 namespace Assets
 {
-    struct FMaterial;
-    class Node;
-    
     class FSceneLoader
     {
     public:

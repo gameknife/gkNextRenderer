@@ -1,4 +1,5 @@
 #pragma once
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "PropertyTypes.h"
 #include "PropertyMeta.h"
 #include <entt/meta/meta.hpp>
@@ -6,11 +7,6 @@
 #include <vector>
 #include <string>
 #include <utility>
-
-namespace Assets
-{
-    class Component;
-}
 
 namespace Reflection
 {

@@ -1,12 +1,11 @@
 #pragma once
 
 #include "Engine/Vulkan/DebugUtilities.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 #include <functional>
 
 namespace Vulkan
 {
-	class Device;
-	
 	class DeviceProcedures final
 	{
 	public:

@@ -1,12 +1,11 @@
 #pragma once
 
 #include "DebugUtilities.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 #include <vector>
 
 namespace Vulkan
 {
-	class Window;
-
 	class Instance final
 	{
 	public:

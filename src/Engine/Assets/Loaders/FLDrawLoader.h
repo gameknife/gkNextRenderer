@@ -1,4 +1,5 @@
 #pragma once
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Data/Skeleton.hpp"
 #include "Engine/Assets/Loaders/FLDrawTypes.h"
@@ -7,9 +8,6 @@
 
 namespace Assets
 {
-    struct FMaterial;
-    class Node;
-
     struct PartModelInfo
     {
         uint32_t modelIdx;

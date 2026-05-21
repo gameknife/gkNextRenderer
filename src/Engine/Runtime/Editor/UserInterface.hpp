@@ -1,4 +1,7 @@
 #pragma once
+#include "Engine/Assets/AssetsFwd.hpp"
+#include "Engine/Runtime/RuntimeFwd.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 #include <functional>
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -13,32 +16,6 @@
 #include <unordered_set>
 #include <cstdint>
 #include <glm/vec4.hpp>
-
-class NextEngine;
-class VulkanGpuTimer;
-
-namespace Assets
-{
-	class Scene;
-}
-
-namespace Vulkan
-{
-	class Window;
-	class CommandPool;
-	class Buffer;
-	class DepthBuffer;
-	class DeviceMemory;
-	class FrameBuffer;
-	class RenderPass;
-	class SwapChain;
-	class RenderImage;
-}
-
-namespace Runtime::Config
-{
-    struct UserSettings;
-}
 
 namespace NextUI
 {

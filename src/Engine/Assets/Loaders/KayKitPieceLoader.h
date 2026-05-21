@@ -1,11 +1,10 @@
 #pragma once
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 
 namespace Assets
 {
-    struct FMaterial;
-
     struct KayKitPiece
     {
         std::string name;

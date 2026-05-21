@@ -1,11 +1,10 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Runtime/RuntimeFwd.hpp"
 
 #include <functional>
 #include <imgui.h>
-
-class NextEngine;
 
 namespace NextUI::Theme
 {

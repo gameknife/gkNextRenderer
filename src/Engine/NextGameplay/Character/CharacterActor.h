@@ -1,19 +1,13 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/NextGameplay/Components/CharacterAnimationComponent.h"
 #include "Engine/NextGameplay/Components/CharacterControlComponent.h"
 #include "Engine/NextGameplay/Components/CharacterGameplayComponent.h"
+#include "Engine/Runtime/RuntimeFwd.hpp"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 #include "Engine/Runtime/Subsystems/NextCharacterController.h"
-
-namespace Assets
-{
-    class Node;
-    class Scene;
-}
-
-class NextPhysics;
 
 namespace NextGameplay
 {

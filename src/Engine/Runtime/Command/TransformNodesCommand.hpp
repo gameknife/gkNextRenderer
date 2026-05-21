@@ -1,16 +1,12 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Runtime/Command/ICommand.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <string>
 #include <vector>
-
-namespace Assets
-{
-    class Scene;
-}
 
 namespace Runtime::Command
 {

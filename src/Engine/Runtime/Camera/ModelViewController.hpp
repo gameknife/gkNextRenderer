@@ -1,13 +1,9 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Runtime/Camera/FocusAnimation.hpp"
 #include "Engine/Utilities/Glm.hpp"
 #include <optional>
-
-namespace Assets
-{
-    struct Camera;
-}
 
 union SDL_Event;
 

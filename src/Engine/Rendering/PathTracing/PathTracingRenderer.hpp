@@ -2,22 +2,7 @@
 
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
-
-namespace Vulkan
-{
-	namespace PipelineCommon
-	{
-		class ZeroBindPipeline;
-		class ZeroBindWithTLASPipeline;
-	}
-
-	class CommandBuffers;
-	class Buffer;
-	class DeviceMemory;
-	class Image;
-	class ImageView;
-	class RenderImage;
-}
+#include "Engine/Vulkan/VulkanFwd.hpp"
 
 namespace Vulkan::RayTracing
 {

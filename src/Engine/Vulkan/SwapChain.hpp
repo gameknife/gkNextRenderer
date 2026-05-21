@@ -1,15 +1,12 @@
 #pragma once
 
 #include "DebugUtilities.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 #include <memory>
 #include <vector>
 
 namespace Vulkan
 {
-	class Device;
-	class ImageView;
-	class Window;
-
 	class SwapChain final
 	{
 	public:

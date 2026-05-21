@@ -2,6 +2,7 @@
 
 #include "DebugUtilities.hpp"
 #include "MemoryAndShader.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 #include <memory>
 
 #if WIN32
@@ -12,9 +13,6 @@
 
 namespace Vulkan
 {
-	class CommandPool;
-	class Device;
-
 	// ============================================================================
 	// Image
 	// ============================================================================

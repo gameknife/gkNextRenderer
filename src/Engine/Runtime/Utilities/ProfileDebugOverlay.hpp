@@ -1,14 +1,7 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
-
-class NextEngine;
-class VulkanGpuTimer;
-
-namespace NextUI
-{
-    struct Statistics;
-}
+#include "Engine/Runtime/RuntimeFwd.hpp"
 
 namespace Runtime
 {

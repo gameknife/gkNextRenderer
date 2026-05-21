@@ -1,7 +1,9 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/Core/Model.hpp"
+#include "Engine/Runtime/RuntimeFwd.hpp"
 
 #include <SDL3/SDL.h>
 
@@ -10,17 +12,6 @@ namespace qjs
     class Context;
     class Runtime;
 }
-
-namespace Assets
-{
-    class Node;
-    class Model;
-    struct FMaterial;
-    struct LightObject;
-    struct AnimationTrack;
-}
-
-class NextEngine;
 
 class QuickJSEngine final
 {

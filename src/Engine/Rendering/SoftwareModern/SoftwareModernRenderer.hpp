@@ -1,22 +1,12 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include <memory>
 #include <string>
-
-namespace Vulkan
-{
-	class RenderImage;
-}
-
-namespace Assets
-{
-	class Scene;
-	struct UniformBufferObject;
-	class UniformBuffer;
-}
 
 namespace Vulkan::LegacyDeferred
 {

@@ -4,9 +4,9 @@
 #include <glm/glm.hpp>
 #include <glm/detail/type_quat.hpp>
 
+#include "Engine/Runtime/RuntimeFwd.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysicsTypes.h"
 
-class NextPhysics;
 struct FNextCharacterControllerContext;
 
 enum class ECharacterGroundState

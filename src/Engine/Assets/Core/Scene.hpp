@@ -5,8 +5,10 @@
 #include <string>
 #include <vector>
 #include <unordered_set>
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include "Engine/Assets/Acceleration/CPUAccelerationStructure.h"
 #include "Engine/Assets/Core/Model.hpp"
@@ -15,27 +17,8 @@
 #include "Engine/Runtime/Subsystems/NextPhysicsTypes.h"
 #include "Engine/Assets/Data/Skeleton.hpp"
 
-namespace Vulkan
-{
-    class Buffer;
-    class CommandPool;
-    class DeviceMemory;
-    class Image;
-    class ImageView;
-    class RenderImage;
-    class Sampler;
-    class DescriptorSetManager;
-} // namespace Vulkan
-
 namespace Assets
 {
-    class Node;
-    class Model;
-    class Texture;
-    class TextureImage;
-    struct Material;
-    struct LightObject;
-
     class Scene final
     {
     public:

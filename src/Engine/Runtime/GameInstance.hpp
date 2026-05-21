@@ -1,26 +1,10 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Options.hpp"
+#include "Engine/Runtime/RuntimeFwd.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
-
-class NextEngine;
-
-namespace Assets
-{
-    class Node;
-    struct AnimationTrack;
-    struct Camera;
-    struct FMaterial;
-    struct LightObject;
-    class Model;
-    struct RayCastResult;
-}
-
-namespace NextCVar
-{
-    class FCVarSystem;
-}
 
 class NextGameInstanceBase
 {

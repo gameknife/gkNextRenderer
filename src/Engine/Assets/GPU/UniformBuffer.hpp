@@ -1,18 +1,11 @@
 #pragma once
+#include "Engine/Vulkan/VulkanFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Utilities/Glm.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <memory>
-
-namespace Vulkan
-{
-	class Buffer;
-	class Device;
-	class DeviceMemory;
-	class CommandPool;
-}
 
 namespace Assets
 {

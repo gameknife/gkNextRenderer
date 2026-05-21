@@ -4,15 +4,13 @@
 #include "Device.hpp"
 #include "SwapChain.hpp"
 #include "DescriptorSystem.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 #include <string>
 #include <vector>
 #include <memory>
 
 namespace Vulkan
 {
-	class DepthBuffer;
-	class ImageView;
-
 	// ============================================================================
 	// RenderPass
 	// ============================================================================

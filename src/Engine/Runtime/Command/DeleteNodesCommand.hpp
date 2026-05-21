@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Runtime/Command/ICommand.hpp"
 
 #include "Engine/Assets/Core/Scene.hpp"
@@ -7,11 +8,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-
-namespace Assets
-{
-    class Node;
-}
 
 namespace Runtime::Command
 {

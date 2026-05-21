@@ -1,14 +1,10 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/Command/ICommand.hpp"
 
 #include <string>
-
-namespace Assets
-{
-    class Scene;
-}
 
 namespace Runtime::Command
 {

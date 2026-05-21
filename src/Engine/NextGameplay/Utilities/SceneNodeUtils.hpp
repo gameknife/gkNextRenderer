@@ -1,14 +1,8 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
-
-class NextPhysics;
-
-namespace Assets
-{
-    class Node;
-    class Scene;
-}
+#include "Engine/Runtime/RuntimeFwd.hpp"
 
 namespace Runtime
 {

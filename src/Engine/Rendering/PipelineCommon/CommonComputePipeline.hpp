@@ -1,28 +1,13 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include <memory>
 #include <vector>
-
-namespace Assets
-{
-	class Scene;
-	class UniformBuffer;
-}
-
-namespace Vulkan
-{
-	class DepthBuffer;
-	class PipelineLayout;
-	class RenderPass;
-	class SwapChain;
-	class DescriptorSetManager;
-	class DeviceProcedures;
-	class Buffer;
-}
 
 namespace Vulkan::PipelineCommon
 {

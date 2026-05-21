@@ -2,15 +2,12 @@
 
 #include "Allocator.hpp"
 #include "DebugUtilities.hpp"
+#include "Engine/Vulkan/VulkanFwd.hpp"
 #include <string>
 #include <vector>
 
 namespace Vulkan
 {
-	class Device;
-	class Buffer;
-	class Image;
-
 	// ============================================================================
 	// DeviceMemory
 	// ============================================================================

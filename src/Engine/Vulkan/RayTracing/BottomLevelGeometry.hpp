@@ -1,13 +1,8 @@
 #pragma once
 
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include <vector>
-
-namespace Assets
-{
-	class Procedural;
-	class Scene;
-}
 
 namespace Vulkan::RayTracing
 {

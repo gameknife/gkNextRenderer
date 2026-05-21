@@ -1,10 +1,9 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Runtime/RuntimeFwd.hpp"
 #include <vector>
 #include <string>
-
-class NextEngine;
 
 namespace Runtime::Scene
 {

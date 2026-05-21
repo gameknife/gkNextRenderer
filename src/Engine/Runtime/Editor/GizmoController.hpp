@@ -2,12 +2,12 @@
 
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/Command/TransformNodesCommand.hpp"
+#include "Engine/Runtime/RuntimeFwd.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <vector>
 
-class NextEngine;
 struct ImGuiIO;
 
 namespace NextUI
