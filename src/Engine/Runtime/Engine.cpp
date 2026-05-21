@@ -85,11 +85,11 @@ namespace
         bool supportsRayTracing,
         bool hasFullAmbientCubeBudget)
     {
-        if (!supportsRayTracing && requestedType == Vulkan::ERT_PathTracing)
+        if (!supportsRayTracing && Vulkan::GetRendererRequirements(requestedType).requestRayTracing)
         {
             requestedType = Vulkan::ERT_ModernDeferred;
         }
-        if (!hasFullAmbientCubeBudget && Vulkan::RendererUsesAmbientCube(requestedType))
+        if (!hasFullAmbientCubeBudget && Vulkan::GetRendererRequirements(requestedType).requestAmbientCube)
         {
             return Vulkan::ERT_LegacyDeferredNoAmbient;
         }

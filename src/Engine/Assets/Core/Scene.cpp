@@ -96,9 +96,10 @@ namespace Assets
     Scene::Scene(Vulkan::CommandPool& commandPool, bool supportRayTracing)
     {
         int flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-        const bool usesAmbientCube =
-            !NextEngine::GetInstance() || NextEngine::GetInstance()->GetRenderer().CurrentRendererUsesAmbientCube();
-        const uint32_t ambientCubeCascadeCapacity = usesAmbientCube ? Assets::CUBE_CASCADE_MAX : 1u;
+        const bool allocateAmbientCube =
+            !NextEngine::GetInstance() ||
+            NextEngine::GetInstance()->GetRenderer().RegisteredRendererRequirements().requestAmbientCube;
+        const uint32_t ambientCubeCascadeCapacity = allocateAmbientCube ? Assets::CUBE_CASCADE_MAX : 1u;
 
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SceneDynamic", flags,
@@ -597,7 +598,8 @@ namespace Assets
         UpdateNodesGpuDriven();
         MarkDirty();
 
-        if (!NextEngine::GetInstance() || NextEngine::GetInstance()->GetRenderer().CurrentRendererUsesAmbientCube())
+        if (!NextEngine::GetInstance() ||
+            NextEngine::GetInstance()->GetRenderer().CurrentRendererRequirements().requestAmbientCube)
         {
             cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), false);
         }
@@ -1023,7 +1025,7 @@ namespace Assets
             }
         }
 
-        if (NextEngine::GetInstance()->GetRenderer().CurrentRendererUsesAmbientCube() &&
+        if (NextEngine::GetInstance()->GetRenderer().CurrentRendererRequirements().requestAmbientCube &&
             NextEngine::GetInstance()->GetTotalFrames() % 30 == 0)
         {
             const bool voxelUploadCompleted = cpuAccelerationStructure_.Tick(

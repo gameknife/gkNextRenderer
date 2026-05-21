@@ -58,10 +58,19 @@ namespace Vulkan
 		ERT_LegacyDeferredNoAmbient,
 	};
 
-	inline bool RendererUsesAmbientCube(const ERendererType type)
+	struct FRendererRequirements
 	{
-		return type != ERT_LegacyDeferredNoAmbient;
-	}
+		bool requestAmbientCube = false;
+		bool requestRayTracing = false;
+
+		void Merge(const FRendererRequirements& other)
+		{
+			requestAmbientCube = requestAmbientCube || other.requestAmbientCube;
+			requestRayTracing = requestRayTracing || other.requestRayTracing;
+		}
+	};
+
+	FRendererRequirements GetRendererRequirements(ERendererType type);
 		
 	class VulkanBaseRenderer
 	{
@@ -144,7 +153,8 @@ namespace Vulkan
 		bool SupportDLSS() const { return supportDLSS_; }
 		bool SupportDLSSRR() const { return supportDLSSRR_; }
 		bool HasFullAmbientCubeBudget() const { return fullAmbientCubeBudget_; }
-		bool CurrentRendererUsesAmbientCube() const { return RendererUsesAmbientCube(currentLogicRenderer_); }
+		FRendererRequirements CurrentRendererRequirements() const;
+		FRendererRequirements RegisteredRendererRequirements() const;
 
 		virtual void RegisterLogicRenderer(ERendererType type);
 		virtual void SwitchLogicRenderer(ERendererType type);
@@ -281,6 +291,7 @@ namespace Vulkan
 		virtual void DeleteSwapChain() {};
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) {};
 		virtual void BeforeNextFrame() {};
+		virtual FRendererRequirements Requirements() const { return {}; }
 		
 		VulkanBaseRenderer& baseRender_;
 		template<typename T>
