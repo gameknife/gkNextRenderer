@@ -1,3 +1,4 @@
+#include "Engine/Runtime/GameInstance.hpp"
 #include "Voyage3DGameInstance.hpp"
 
 #include <imgui.h>
@@ -6,6 +7,7 @@
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Loaders/FProcModel.h"
 #include "Engine/Runtime/Editor/FontLoader.h"
+#include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Scene/NodeUtils.h"
 #include "Engine/Runtime/Scene/SceneBuilder.h"
 #include "Engine/Runtime/Subsystems/NextAudio.h"

@@ -8,7 +8,7 @@ namespace Brotato3D::Pcg
 {
     struct FTerrainMeshBuffers
     {
-        std::vector<Assets::Vertex> vertices;
+        std::vector<::Assets::Vertex> vertices;
         std::vector<uint32_t> indices;
     };
 

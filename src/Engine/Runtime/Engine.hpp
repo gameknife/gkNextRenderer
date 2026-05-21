@@ -20,6 +20,7 @@ class NextLocalization;
 class VulkanGpuTimer;
 
 class NextEngine;
+class NextGameInstanceBase;
 
 namespace NextAI
 {
@@ -39,91 +40,6 @@ namespace NextUI
 {
     class UserInterface;
 }
-class NextGameInstanceBase
-{
-public:
-    NextGameInstanceBase(Vulkan::WindowConfig&, Runtime::Config::Options&, NextEngine* engine) : engine_(engine) {}
-    virtual ~NextGameInstanceBase() = default;
-
-    NextEngine& GetEngine() { return *engine_; }
-    NextEngine& GetEngine() const { return *engine_; }
-
-    virtual void OnInit() = 0;
-    virtual void OnTick(double deltaSeconds) = 0;
-    virtual void OnDestroy() = 0;
-    virtual bool OnRenderUI() = 0;
-    virtual void OnPreConfigUI() {}
-    virtual void OnInitUI() {}
-    virtual void OnRayHitResponse(Assets::RayCastResult& result) {}
-    virtual void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) {}
-    virtual float GetGraphicsDebugPanelTopOffset() const { return 0.0f; }
-    virtual void DrawAdditionalPhysicsDebugOverlay(const Assets::Camera& camera) const {}
-
-    // camera
-    virtual bool OverrideRenderCamera(Assets::Camera& OutRenderCamera) const { return false; }
-
-    // scene
-    virtual void BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
-                                    std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials,
-                                    std::vector<Assets::LightObject>& lights,
-                                    std::vector<Assets::AnimationTrack>& tracks)
-    {
-    }
-    virtual void OnSceneLoaded() {}
-    virtual void OnSceneUnloaded() {}
-
-    // application-owned debug shortcuts; engine-owned F1/F2/F3 are handled by NextEngine
-    virtual bool SupportsAppDebugShortcut(SDL_Keycode key) const { return false; }
-    virtual bool IsAppDebugShortcutActive(SDL_Keycode key) const { return false; }
-    virtual bool SetAppDebugShortcutActive(SDL_Keycode key, bool active) { return false; }
-    virtual bool OnKey(SDL_Event& event) { return false; }
-    virtual bool OnCursorPosition(double xpos, double ypos) { return false; }
-    virtual bool OnMouseButton(SDL_Event& event) { return false; }
-    virtual bool OnScroll(double xoffset, double yoffset) { return false; }
-    virtual bool OnGamepadInput(int16_t leftStickX, int16_t leftStickY, int16_t rightStickX, int16_t rightStickY,
-                                int16_t leftTrigger, int16_t rightTrigger)
-    {
-        return false;
-    }
-
-private:
-    NextEngine* engine_ = nullptr;
-
-protected:
-    static void ConfigureWindow(Vulkan::WindowConfig& config,
-                                Runtime::Config::Options& options,
-                                std::string_view title,
-                                int width,
-                                int height,
-                                bool forceSDR)
-    {
-        config.Title = std::string(title);
-        config.Width = width;
-        config.Height = height;
-        config.ForceSDR = forceSDR;
-        options.Width = width;
-        options.Height = height;
-        options.ForceSDR = forceSDR;
-    }
-};
-
-class NextGameInstanceVoid : public NextGameInstanceBase
-{
-public:
-    NextGameInstanceVoid(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine) :
-        NextGameInstanceBase(config, options, engine)
-    {
-    }
-    ~NextGameInstanceVoid() override = default;
-
-    void OnInit() override {}
-    void OnTick(double deltaSeconds) override {}
-    void OnDestroy() override {}
-    bool OnRenderUI() override { return false; }
-};
-
-extern std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
-                                                                NextEngine* engine);
 
 namespace NextRenderer
 {
@@ -154,14 +70,7 @@ class NextEngine final
 public:
     GK_NON_COPIABLE(NextEngine)
 
-    static void RegisterReflection();
-
-    NextEngine(Runtime::Config::Options& options, void* userdata = nullptr);
-    ~NextEngine();
-
-    static NextEngine* instance_;
-    static NextEngine* GetInstance() { return instance_; }
-
+    // Request and status payloads
     struct FSceneLoadRequest
     {
         std::string filename;
@@ -191,47 +100,63 @@ public:
         std::filesystem::path shaderCompiler;
     };
 
-    Vulkan::VulkanBaseRenderer& GetRenderer() { return *renderer_; }
-    VulkanGpuTimer* GpuTimer() const { return renderer_ ? renderer_->GpuTimer() : nullptr; }
+    // Construction and global access
+    static void RegisterReflection();
+    static NextEngine* GetInstance() { return instance_; }
 
+    NextEngine(Runtime::Config::Options& options, void* userdata = nullptr);
+    ~NextEngine();
+
+    static NextEngine* instance_;
+
+    // Main lifecycle
     void Start();
     bool HandleEvent(SDL_Event& event);
     bool Tick(bool forcingDelta = false);
     void End();
 
-    void OnTouch(bool down, double xpos, double ypos);
-    void OnTouchMove(double xpos, double ypos);
-
+    // Core runtime objects
+    Vulkan::VulkanBaseRenderer& GetRenderer() { return *renderer_; }
+    VulkanGpuTimer* GpuTimer() const { return renderer_ ? renderer_->GpuTimer() : nullptr; }
     Assets::Scene& GetScene() { return *scene_; }
-    Runtime::Config::UserSettings& GetUserSettings() { return userSettings_; }
-    Runtime::Config::ShowFlags& GetShowFlags() { return showFlags_; }
+    Vulkan::Window& GetWindow() const { return *window_; }
+
+    // Configuration state
+    Runtime::Config::UserSettings& GetUserSettings() { return config_.userSettings; }
+    Runtime::Config::ShowFlags& GetShowFlags() { return config_.showFlags; }
     Runtime::Config::Options& GetOptions() { return *options_; }
     const Runtime::Config::Options& GetOptions() const { return *options_; }
 
-    double GetTime() const { return time_; }
-    double GetDeltaSeconds() const { return deltaSeconds_; }
-    double GetSmoothDeltaSeconds() const { return smoothedDeltaSeconds_; }
-    float GetFrameRate() const { return frameRate_; }
-    uint32_t GetTotalFrames() const { return totalFrames_; }
-    void RegisterJSCallback(std::function<void(double)> callback);
+    // Runtime services
+    NextUI::UserInterface* GetUserInterface() { return userInterface_.get(); }
+    NextAudio* GetAudio() { return services_.audio.get(); }
+    const NextAudio* GetAudio() const { return services_.audio.get(); }
+    NextLocalization* GetLocalization() { return services_.localization.get(); }
+    const NextLocalization* GetLocalization() const { return services_.localization.get(); }
+    NextAI::FAIService* GetAIService() { return services_.aiService.get(); }
+    const NextAI::FAIService* GetAIService() const { return services_.aiService.get(); }
+    NextAI::VoiceInputService* GetVoiceInputService() { return services_.voiceInputService.get(); }
+    const NextAI::VoiceInputService* GetVoiceInputService() const { return services_.voiceInputService.get(); }
+    NextCVar::FCVarSystem& GetCVarSystem() { return *services_.cvarSystem; }
+    const NextCVar::FCVarSystem& GetCVarSystem() const { return *services_.cvarSystem; }
+    QuickJSEngine* GetQuickJSEngine() { return services_.quickJSEngine.get(); }
+    NextPhysics* GetPhysicsEngine() { return services_.physics.get(); }
+    Utilities::Package::FPackageFileSystem& GetPakSystem() { return *services_.packageFileSystem; }
 
-    // Runs every Tick on the main thread until the lambda returns true.
-    // Use for frame-bound gameplay/UI work that needs safe scene access.
-    void AddTickedTask(TickedTask task) { tickedTasks_.push_back(task); }
-    // Runs on the main thread after delay seconds. Returning false reschedules with the same delay.
-    // For background CPU work, use TaskCoordinator instead.
-    void AddTimerTask(double delay, DelayedTask task);
+    // Frame state
+    double GetTime() const { return frameState_.time; }
+    double GetDeltaSeconds() const { return frameState_.deltaSeconds; }
+    double GetSmoothDeltaSeconds() const { return frameState_.smoothedDeltaSeconds; }
+    float GetFrameRate() const { return frameState_.frameRate; }
+    uint32_t GetTotalFrames() const { return frameState_.totalFrames; }
+    NextRenderer::EApplicationStatus GetEngineStatus() const { return status_; }
 
-    // pak
-    Utilities::Package::FPackageFileSystem& GetPakSystem() { return *packageFileSystem_; }
-
-    // cursor pos
+    // Window and pointer state
     glm::dvec2 GetMousePos();
-
-    // life cycle
+    glm::ivec2 GetMonitorSize() const;
     void RequestClose();
     void RequestMinimize();
-    bool IsMaximumed();
+    bool IsMaximized();
     void ToggleMaximize();
     bool IsBorderlessFullscreen() const;
     bool SetBorderlessFullscreen(bool enable);
@@ -239,74 +164,39 @@ public:
     void ConfigureCustomTitleBarDrag(bool enabled, float titleBarHeight, float leftReservedWidth,
                                      float rightReservedWidth);
 
-    // capture
+    // Input forwarding
+    void OnTouch(bool down, double xpos, double ypos);
+    void OnTouchMove(double xpos, double ypos);
+
+    // Screen capture
     void RequestScreenShot(FScreenShotSpec spec);
-    bool IsCapturingScreenShot() const { return hasPendingScreenShot_ || screenShotCaptureFramesRemaining_ > 0; }
+    bool IsCapturingScreenShot() const { return screenShot_.IsCapturing(); }
 
-    // scene loading
+    // Scene and command operations
     void RequestLoadScene(FSceneLoadRequest request);
-
     Runtime::Command::CommandHistory& GetCommandHistory() { return commandHistory_; }
     const Runtime::Command::CommandHistory& GetCommandHistory() const { return commandHistory_; }
 
-    Vulkan::Window& GetWindow() const { return *window_; }
-
-    NextUI::UserInterface* GetUserInterface() { return userInterface_.get(); }
-    NextAudio* GetAudio() { return audioEngine_.get(); }
-    const NextAudio* GetAudio() const { return audioEngine_.get(); }
-    NextLocalization* GetLocalization() { return localization_.get(); }
-    const NextLocalization* GetLocalization() const { return localization_.get(); }
-
-    NextAI::FAIService* GetAIService() { return aiService_.get(); }
-    const NextAI::FAIService* GetAIService() const { return aiService_.get(); }
-    NextAI::VoiceInputService* GetVoiceInputService() { return voiceInputService_.get(); }
-    const NextAI::VoiceInputService* GetVoiceInputService() const { return voiceInputService_.get(); }
-
-    NextCVar::FCVarSystem& GetCVarSystem() { return *cvarSystem_; }
-    const NextCVar::FCVarSystem& GetCVarSystem() const { return *cvarSystem_; }
-
-    QuickJSEngine* GetQuickJSEngine() { return quickJSEngine_.get(); }
-
-    // monitor info
-    glm::ivec2 GetMonitorSize() const;
-
-    // gpu raycast
+    // Rendering helpers
     void RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir,
                     std::function<bool(Assets::RayCastResult rayResult)> callback);
-
     void SetProgressiveRendering(bool enable, bool directly);
-    bool IsProgressiveRendering() const { return progressiveRendering_; }
-
-    NextRenderer::EApplicationStatus GetEngineStatus() const { return status_; }
-
-    NextPhysics* GetPhysicsEngine() { return physicsEngine_.get(); }
-
-    Assets::UniformBufferObject& GetUniformBufferObject() { return prevUBO_; }
-
+    bool IsProgressiveRendering() const { return progressiveRender_.enabled; }
+    Assets::UniformBufferObject& GetLastUniformBufferObject() { return renderState_.previousUniformBuffer; }
     VkDeviceAddress TryGetGPUAccelerationStructureAddress() const;
     VkAccelerationStructureKHR TryGetGPUAccelerationStructureHandle() const;
+
+    // Hot reload
     FHotReloadStatus GetHotReloadStatus() const;
     void RequestShaderHotReload();
 
-protected:
-    Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent);
-    void OnRendererDeviceSet();
-    void OnRendererCreateSwapChain();
-    void OnRendererDeleteSwapChain();
-    void OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-    void OnRendererBeforeNextFrame();
-
-    const Assets::Scene& GetScene() const { return *scene_; }
-
-    void OnKey(SDL_Event& event);
-    void OnCursorPosition(double xpos, double ypos);
-    void OnMouseButton(SDL_Event& event);
-    void OnScroll(double xoffset, double yoffset);
-    void OnDropFile(const char* path);
-    void TickGamepadInput();
-    bool HandleDebugShortcut(SDL_Keycode key);
+    // Main-thread tasks and scripting callbacks
+    void RegisterJSCallback(std::function<void(double)> callback);
+    void AddTickedTask(TickedTask task) { taskQueues_.ticked.push_back(task); }
+    void AddTimerTask(double delay, DelayedTask task);
 
 private:
+    // Scene loading payload
     struct SceneLoadContext
     {
         std::shared_ptr<std::vector<Assets::Model>> models;
@@ -318,74 +208,121 @@ private:
         std::shared_ptr<Assets::EnvironmentSetting> cameraState;
     };
 
+    // Renderer callbacks
+    Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent);
+    void OnRendererDeviceSet();
+    void OnRendererCreateSwapChain();
+    void OnRendererDeleteSwapChain();
+    void OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+    void OnRendererBeforeNextFrame();
+
+    // Scene helpers
+    const Assets::Scene& GetScene() const { return *scene_; }
     void LaunchLoadSceneTask(std::string sceneFileName, std::function<void(SceneLoadContext&)> onGpuLoad);
     void LoadScene(const FSceneLoadRequest& request);
 
+    // Input helpers
+    void OnKey(SDL_Event& event);
+    void OnCursorPosition(double xpos, double ypos);
+    void OnMouseButton(SDL_Event& event);
+    void OnScroll(double xoffset, double yoffset);
+    void OnDropFile(const char* path);
+    void TickGamepadInput();
+    bool HandleDebugShortcut(SDL_Keycode key);
+
+    // Lifecycle helpers
     void InitPhysics();
     void TickHotReload();
 
-    // engine stuff
+    // Configuration and user-facing toggles
+    struct FConfigState
+    {
+        mutable Runtime::Config::UserSettings userSettings{};
+        mutable Runtime::Config::ShowFlags showFlags{};
+    };
+
+    // Renderer-derived transient state
+    struct FRenderState
+    {
+        mutable Assets::UniformBufferObject previousUniformBuffer{};
+    };
+
+    // Per-frame timing and statistics
+    struct FFrameState
+    {
+        uint32_t totalFrames = 0;
+        double time = 0.0;
+        double deltaSeconds = 0.0;
+        double smoothedDeltaSeconds = 0.0;
+        float frameRate = 0.0f;
+        double lastFrameTime = 0.0;
+    };
+
+    // Progressive rendering warmup state
+    struct FProgressiveRenderState
+    {
+        bool enabled = false;
+        uint32_t warmupFramesRemaining = 0;
+    };
+
+    // Deferred and accumulated screenshot state
+    struct FScreenShotState
+    {
+        bool hasPending = false;
+        FScreenShotSpec pending{};
+        uint32_t captureFramesRemaining = 0;
+        uint32_t captureTotalFrames = 0;
+        FScreenShotSpec captureSpec{};
+        bool previousProgressiveEnabled = false;
+        uint32_t previousProgressiveWarmupFrames = 0;
+
+        bool IsCapturing() const { return hasPending || captureFramesRemaining > 0; }
+    };
+
+    // Main-thread task queues
+    struct FTaskQueues
+    {
+        std::vector<TickedTask> ticked;
+        std::vector<FDelayTaskContext> delayed;
+    };
+
+    // Runtime subsystems owned by the engine
+    struct FRuntimeServices
+    {
+        FRuntimeServices() = default;
+        ~FRuntimeServices();
+
+        std::unique_ptr<NextLocalization> localization;
+        std::unique_ptr<NextAI::FAIService> aiService;
+        std::unique_ptr<NextAI::VoiceInputService> voiceInputService;
+        std::unique_ptr<NextCVar::FCVarSystem> cvarSystem;
+        std::unique_ptr<NextAudio> audio;
+        std::unique_ptr<NextPhysics> physics;
+        std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem;
+        std::unique_ptr<QuickJSEngine> quickJSEngine;
+        std::unique_ptr<Vulkan::ShaderHotReloader> shaderHotReloader;
+    };
+
+    // Core ownership
+    Runtime::Config::Options* options_ = nullptr;
     std::unique_ptr<Vulkan::Window> window_;
     std::unique_ptr<Vulkan::VulkanBaseRenderer> renderer_;
-
-    // settings, may move into scene
-    mutable Runtime::Config::UserSettings userSettings_{};
-    mutable Runtime::Config::ShowFlags showFlags_{};
-    mutable Assets::UniformBufferObject prevUBO_{};
-
-    // scene, maybe multiple at a time
     std::shared_ptr<Assets::Scene> scene_;
-
-    // timing
-    uint32_t totalFrames_{};
-    double time_{};
-    double deltaSeconds_{};
-    double smoothedDeltaSeconds_{};
-    float frameRate_{};
-    double lastFrameTime_{};
-    bool progressiveRendering_{};
-    uint32_t progressivePreFrames_{};
-
-    bool hasPendingScreenShot_ = false;
-    FScreenShotSpec pendingScreenShot_{};
-    uint32_t screenShotCaptureFramesRemaining_{};
-    uint32_t screenShotCaptureTotalFrames_{};
-    FScreenShotSpec screenShotCaptureSpec_{};
-    bool screenShotCapturePrevProgressive_{};
-    uint32_t screenShotCapturePrevPreFrames_{};
-
-    // game instance
     std::unique_ptr<NextGameInstanceBase> gameInstance_;
 
-    // tasks
-    std::vector<TickedTask> tickedTasks_;
-    std::vector<FDelayTaskContext> delayedTasks_;
-
-    // internal ui
-    std::unique_ptr<NextUI::UserInterface> userInterface_;
-    std::unique_ptr<NextLocalization> localization_;
-
-    std::unique_ptr<NextAI::FAIService> aiService_;
-    std::unique_ptr<NextAI::VoiceInputService> voiceInputService_;
-
-    std::unique_ptr<NextCVar::FCVarSystem> cvarSystem_;
-
-    Runtime::Config::Options* options_ = nullptr;
-
-    // audio
-    std::unique_ptr<NextAudio> audioEngine_;
-
-    // physics
-    std::unique_ptr<NextPhysics> physicsEngine_;
-
-    // package
-    std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem_;
-
-    std::unique_ptr<QuickJSEngine> quickJSEngine_;
-    std::unique_ptr<Vulkan::ShaderHotReloader> shaderHotReloader_;
-
-    Runtime::Command::CommandHistory commandHistory_{};
-
-    // engine status
+    // Engine state
+    FConfigState config_{};
+    FRenderState renderState_{};
+    FFrameState frameState_{};
+    FProgressiveRenderState progressiveRender_{};
+    FScreenShotState screenShot_{};
+    FTaskQueues taskQueues_{};
     NextRenderer::EApplicationStatus status_{};
+
+    // Runtime services and UI
+    std::unique_ptr<NextUI::UserInterface> userInterface_;
+    FRuntimeServices services_{};
+
+    // Editor and tooling state
+    Runtime::Command::CommandHistory commandHistory_{};
 };

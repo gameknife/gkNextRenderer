@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/GameInstance.hpp"
 #include "Brotato3DArena.hpp"
 #include "Brotato3DDataLoader.hpp"
 #include "Brotato3DDebris.hpp"
@@ -78,12 +78,12 @@ public:
                         int16_t rightStickY,
                         int16_t leftTrigger,
                         int16_t rightTrigger) override;
-    void BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
-                            std::vector<Assets::Model>& models,
-                            std::vector<Assets::FMaterial>& materials,
-                            std::vector<Assets::LightObject>& lights,
-                            std::vector<Assets::AnimationTrack>& tracks) override;
-    bool OverrideRenderCamera(Assets::Camera& outRenderCamera) const override;
+    void BeforeSceneRebuild(std::vector<std::shared_ptr<::Assets::Node>>& nodes,
+                            std::vector<::Assets::Model>& models,
+                            std::vector<::Assets::FMaterial>& materials,
+                            std::vector<::Assets::LightObject>& lights,
+                            std::vector<::Assets::AnimationTrack>& tracks) override;
+    bool OverrideRenderCamera(::Assets::Camera& outRenderCamera) const override;
 
     Brotato3D::FPlayerRuntime& GetPlayer() { return player_; }
     const Brotato3D::FPlayerRuntime& GetPlayer() const { return player_; }
@@ -184,12 +184,12 @@ private:
     void SetEnemyVisualOutlineFlags(const Brotato3D::FEnemyRuntime& enemy, uint32_t outlineFlags);
     void BreakEnemyBodyBlocks(Brotato3D::FEnemyRuntime& enemy, int damage);
     void DamagePlayer(int damage, float shakeMs, float flashMs);
-    void BuildDebrisPool(std::vector<Assets::Model>& models,
-                         std::vector<Assets::FMaterial>& materials,
-                         std::vector<std::shared_ptr<Assets::Node>>& nodes);
-    void BuildKinematicCollisionBodies(std::vector<Assets::Model>& models,
-                                       std::vector<Assets::FMaterial>& materials,
-                                       std::vector<std::shared_ptr<Assets::Node>>& nodes);
+    void BuildDebrisPool(std::vector<::Assets::Model>& models,
+                         std::vector<::Assets::FMaterial>& materials,
+                         std::vector<std::shared_ptr<::Assets::Node>>& nodes);
+    void BuildKinematicCollisionBodies(std::vector<::Assets::Model>& models,
+                                       std::vector<::Assets::FMaterial>& materials,
+                                       std::vector<std::shared_ptr<::Assets::Node>>& nodes);
     void SpawnDebris(Brotato3D::EDebrisKind kind,
                      const glm::vec3& worldPos,
                      const glm::vec3& impulseDir,
@@ -335,11 +335,11 @@ private:
         float radiusMeters = 3.0f;
         float durationMs = 120.0f;
         float remainingMs = 0.0f;
-        std::shared_ptr<Assets::Node> node;
+        std::shared_ptr<::Assets::Node> node;
         bool active = false;
     };
     int playerLightIndex_ = -1;
-    std::shared_ptr<Assets::Node> playerLightNode_;
+    std::shared_ptr<::Assets::Node> playerLightNode_;
     std::vector<FTempLightRuntime> tempLightPool_;
     uint32_t debrisTinyModelId_ = 0;
     uint32_t debrisChunkModelId_ = 0;
@@ -356,8 +356,8 @@ private:
     bool playerKinematicBodyActive_ = false;
     std::map<std::string, std::vector<NextBodyID>> enemyKinematicBodyPools_;
     std::map<std::string, uint32_t> characterMaterialIds_;
-    std::vector<std::shared_ptr<Assets::Node>> extractionVehicleNodes_;
-    std::shared_ptr<Assets::Node> extractionVehicleRootNode_;
+    std::vector<std::shared_ptr<::Assets::Node>> extractionVehicleNodes_;
+    std::shared_ptr<::Assets::Node> extractionVehicleRootNode_;
     uint32_t extractionVehicleMaterialId_ = 0;
     uint32_t extractionVehicleActiveMaterialId_ = 0;
     bool keyW_ = false;

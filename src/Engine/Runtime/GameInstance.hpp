@@ -1,0 +1,110 @@
+#pragma once
+
+#include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Options.hpp"
+#include "Engine/Vulkan/WindowSurface.hpp"
+
+class NextEngine;
+
+namespace Assets
+{
+    class Node;
+    struct AnimationTrack;
+    struct Camera;
+    struct FMaterial;
+    struct LightObject;
+    class Model;
+    struct RayCastResult;
+}
+
+namespace NextCVar
+{
+    class FCVarSystem;
+}
+
+class NextGameInstanceBase
+{
+public:
+    NextGameInstanceBase(Vulkan::WindowConfig&, Runtime::Config::Options&, NextEngine* engine) : engine_(engine) {}
+    virtual ~NextGameInstanceBase() = default;
+
+    NextEngine& GetEngine() { return *engine_; }
+    NextEngine& GetEngine() const { return *engine_; }
+
+    virtual void OnInit() = 0;
+    virtual void OnTick(double deltaSeconds) = 0;
+    virtual void OnDestroy() = 0;
+    virtual bool OnRenderUI() = 0;
+    virtual void OnPreConfigUI() {}
+    virtual void OnInitUI() {}
+    virtual void OnRayHitResponse(Assets::RayCastResult& result) {}
+    virtual void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) {}
+    virtual float GetGraphicsDebugPanelTopOffset() const { return 0.0f; }
+    virtual void DrawAdditionalPhysicsDebugOverlay(const Assets::Camera& camera) const {}
+
+    // Camera override hook.
+    virtual bool OverrideRenderCamera(Assets::Camera& outRenderCamera) const { return false; }
+
+    // Scene lifecycle hooks.
+    virtual void BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                                    std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials,
+                                    std::vector<Assets::LightObject>& lights,
+                                    std::vector<Assets::AnimationTrack>& tracks)
+    {
+    }
+    virtual void OnSceneLoaded() {}
+    virtual void OnSceneUnloaded() {}
+
+    // Application-owned debug shortcuts; engine-owned F1/F2/F3 are handled by NextEngine.
+    virtual bool SupportsAppDebugShortcut(SDL_Keycode key) const { return false; }
+    virtual bool IsAppDebugShortcutActive(SDL_Keycode key) const { return false; }
+    virtual bool SetAppDebugShortcutActive(SDL_Keycode key, bool active) { return false; }
+    virtual bool OnKey(SDL_Event& event) { return false; }
+    virtual bool OnCursorPosition(double xpos, double ypos) { return false; }
+    virtual bool OnMouseButton(SDL_Event& event) { return false; }
+    virtual bool OnScroll(double xoffset, double yoffset) { return false; }
+    virtual bool OnGamepadInput(int16_t leftStickX, int16_t leftStickY, int16_t rightStickX, int16_t rightStickY,
+                                int16_t leftTrigger, int16_t rightTrigger)
+    {
+        return false;
+    }
+
+private:
+    NextEngine* engine_ = nullptr;
+
+protected:
+    static void ConfigureWindow(Vulkan::WindowConfig& config,
+                                Runtime::Config::Options& options,
+                                std::string_view title,
+                                int width,
+                                int height,
+                                bool forceSDR)
+    {
+        config.Title = std::string(title);
+        config.Width = width;
+        config.Height = height;
+        config.ForceSDR = forceSDR;
+        options.Width = width;
+        options.Height = height;
+        options.ForceSDR = forceSDR;
+    }
+};
+
+class NextGameInstanceVoid : public NextGameInstanceBase
+{
+public:
+    NextGameInstanceVoid(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine) :
+        NextGameInstanceBase(config, options, engine)
+    {
+    }
+    ~NextGameInstanceVoid() override = default;
+
+    void OnInit() override {}
+    void OnTick(double deltaSeconds) override {}
+    void OnDestroy() override {}
+    bool OnRenderUI() override { return false; }
+};
+
+extern std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config,
+                                                                Runtime::Config::Options& options,
+                                                                NextEngine* engine);

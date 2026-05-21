@@ -11,6 +11,7 @@
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Editor/FontLoader.h"
 #include "Engine/Runtime/Editor/ProfessionalUI.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
@@ -1083,7 +1084,7 @@ void NextRendererGameInstance::DrawTitleBar()
     config.Height = TitlebarSize;
     config.RightContentWidth = TitlebarRightInfoWidth;
     config.TitleFont = titleBarFont_;
-    config.IsMaximized = GetEngine().IsMaximumed();
+    config.IsMaximized = GetEngine().IsMaximized();
     config.DrawMenuBar = [&]() -> float
     {
         float menuRight = ImGui::GetCursorScreenPos().x;

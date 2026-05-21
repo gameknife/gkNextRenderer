@@ -1,3 +1,4 @@
+#include "Engine/Runtime/GameInstance.hpp"
 #include "BrickPlayerGameInstance.hpp"
 #include "BrickPlayerSnapLogic.hpp"
 #include "BrickPlayerUserInterface.hpp"
@@ -5,6 +6,7 @@
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
+#include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.h"
 #include "Engine/Runtime/Subsystems/NextAudio.h"
 #include "Engine/Runtime/Config/CVarSystem.hpp"

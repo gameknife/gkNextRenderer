@@ -44,9 +44,9 @@ namespace Brotato3D
         glm::vec3 dashDir = glm::vec3(0.0f);
         FPlayerStats stats;
         std::vector<std::string> ownedItemIds;
-        std::shared_ptr<Assets::Node> bodyNode;
-        std::shared_ptr<Assets::Node> facingNode;
-        std::shared_ptr<Assets::Node> smgWeaponNode;
-        std::shared_ptr<Assets::Node> shotgunWeaponNode;
+        std::shared_ptr<::Assets::Node> bodyNode;
+        std::shared_ptr<::Assets::Node> facingNode;
+        std::shared_ptr<::Assets::Node> smgWeaponNode;
+        std::shared_ptr<::Assets::Node> shotgunWeaponNode;
     };
 }

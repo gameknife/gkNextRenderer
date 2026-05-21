@@ -13,7 +13,7 @@ namespace Brotato3D
 {
     struct FEnemyBodyBlockRuntime
     {
-        std::shared_ptr<Assets::Node> node;
+        std::shared_ptr<::Assets::Node> node;
         glm::vec3 localOffset = glm::vec3(0.0f);
         bool visible = true;
     };
@@ -66,6 +66,6 @@ namespace Brotato3D
         int bodyBlocksLost = 0;
         NextBodyID kinematicBodyId{};
         bool kinematicBodyActive = false;
-        std::shared_ptr<Assets::Node> node;
+        std::shared_ptr<::Assets::Node> node;
     };
 }

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "KongLie3DBattleSystem.hpp"
 #include "KongLie3DDataLoader.hpp"

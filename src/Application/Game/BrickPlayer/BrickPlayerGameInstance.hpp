@@ -2,6 +2,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "BrickPlayerLDrawShadow.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.h"
 
 class BrickPlayerUserInterface;

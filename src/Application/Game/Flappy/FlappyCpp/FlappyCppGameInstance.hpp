@@ -3,7 +3,7 @@
 #include "FlappyCommon.hpp"
 #include "FlappyCpp/FlappyCppBird.hpp"
 #include "FlappyCpp/FlappyCppPipes.hpp"
-#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/GameInstance.hpp"
 
 class NextAudio;
 
