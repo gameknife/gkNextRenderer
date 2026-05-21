@@ -70,7 +70,7 @@ namespace
 
     ImTextureID LoadIconTexture(Brotato3DGameInstance& gameInstance, const std::string& category, const std::string& id)
     {
-        return LoadUiTexture(gameInstance, Brotato3D::PlaceholderAssets::Icon(category, id));
+        return LoadUiTexture(gameInstance, Brotato3D::Assets::Icon(category, id));
     }
 
     ImVec2 GetTexturePixelSize(Brotato3DGameInstance& gameInstance, const std::string& path)
@@ -458,7 +458,7 @@ namespace
 
     void DrawPlaceholderBadge(Brotato3DGameInstance& gameInstance)
     {
-        if (!Brotato3D::PlaceholderAssets::Exists(Brotato3D::PlaceholderAssets::Sfx("fire_smg_01.wav")))
+        if (!Utilities::FileHelper::IsAssetAvailable(Brotato3D::Assets::Sfx("fire_smg_01.wav")))
         {
             return;
         }
@@ -846,7 +846,7 @@ namespace Brotato3D
                 drawList->AddRectFilled(portraitMin, portraitMax, IM_COL32(10, 14, 18, 220), 6.0f * uiScale);
                 DrawImageContain(drawList,
                                  portrait,
-                                 GetTexturePixelSize(gameInstance, Brotato3D::PlaceholderAssets::Icon("characters", characterIcon)),
+                                 GetTexturePixelSize(gameInstance, Brotato3D::Assets::Icon("characters", characterIcon)),
                                  portraitMin,
                                  portraitMax,
                                  4.0f * uiScale);
@@ -1178,7 +1178,7 @@ namespace Brotato3D
             {
                 DrawImageContain(ImGui::GetWindowDrawList(),
                                  itemIcon,
-                                 GetTexturePixelSize(gameInstance, Brotato3D::PlaceholderAssets::Icon("items", item->id)),
+                                 GetTexturePixelSize(gameInstance, Brotato3D::Assets::Icon("items", item->id)),
                                  min,
                                  max,
                                  2.0f * uiScale);
@@ -1242,7 +1242,7 @@ namespace Brotato3D
             {
                 DrawImageContain(ImGui::GetWindowDrawList(),
                                  icon,
-                                 GetTexturePixelSize(gameInstance, Brotato3D::PlaceholderAssets::Icon("weapons", weaponIconId)),
+                                 GetTexturePixelSize(gameInstance, Brotato3D::Assets::Icon("weapons", weaponIconId)),
                                  min,
                                  max,
                                  2.0f * uiScale);
@@ -1539,7 +1539,7 @@ namespace Brotato3D
                 const ImVec2 iconMax(originX + iconSize, iconMin.y + iconSize);
                 DrawImageContain(drawList,
                                  waveEnemyIcon,
-                                 GetTexturePixelSize(gameInstance, Brotato3D::PlaceholderAssets::Icon("enemies", waveEnemyIconId ? waveEnemyIconId : "")),
+                                 GetTexturePixelSize(gameInstance, Brotato3D::Assets::Icon("enemies", waveEnemyIconId ? waveEnemyIconId : "")),
                                  iconMin,
                                  iconMax,
                                  0.0f,
@@ -1655,7 +1655,7 @@ namespace Brotato3D
                 {
                     DrawImageContain(ImGui::GetWindowDrawList(),
                                      cardIcon,
-                                     GetTexturePixelSize(gameInstance, Brotato3D::PlaceholderAssets::Icon("stats", statIconId ? statIconId : "")),
+                                     GetTexturePixelSize(gameInstance, Brotato3D::Assets::Icon("stats", statIconId ? statIconId : "")),
                                      iconMin,
                                      iconMax,
                                      5.0f * uiScale);
@@ -1790,7 +1790,7 @@ namespace Brotato3D
                 if (passiveItem)
                 {
                     cardIcon = LoadIconTexture(gameInstance, "items", offers[index].id);
-                    cardIconPath = Brotato3D::PlaceholderAssets::Icon("items", offers[index].id);
+                    cardIconPath = Brotato3D::Assets::Icon("items", offers[index].id);
                 }
                 else if (weaponCard)
                 {
@@ -1798,7 +1798,7 @@ namespace Brotato3D
                     cardIcon = weaponIconId ? LoadIconTexture(gameInstance, "weapons", weaponIconId) : EmptyTexture();
                     if (weaponIconId)
                     {
-                        cardIconPath = Brotato3D::PlaceholderAssets::Icon("weapons", weaponIconId);
+                        cardIconPath = Brotato3D::Assets::Icon("weapons", weaponIconId);
                     }
                 }
                 else
@@ -1807,7 +1807,7 @@ namespace Brotato3D
                     cardIcon = statIconId ? LoadIconTexture(gameInstance, "stats", statIconId) : EmptyTexture();
                     if (statIconId)
                     {
-                        cardIconPath = Brotato3D::PlaceholderAssets::Icon("stats", statIconId);
+                        cardIconPath = Brotato3D::Assets::Icon("stats", statIconId);
                     }
                 }
                 const ImVec2 iconMin = ImGui::GetCursorScreenPos();

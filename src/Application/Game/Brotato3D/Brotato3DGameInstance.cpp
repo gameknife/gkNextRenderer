@@ -79,9 +79,22 @@ void Brotato3DGameInstance::OnInit()
     GetEngine().GetShowFlags().DebugGraphicsPanel = false;
     GetEngine().GetUserSettings().ShowOverlay = false;
     GetEngine().RequestLoadScene({.filename = "Empty.proc"});
+
+    // Mount brotato3d.pak (SFX + UI icons). Missing is non-fatal: FPackageFileSystem
+    // will fall back to the on-disk copies under assets/sounds/brotato3d and
+    // assets/textures/brotato3d.
+    const std::string brotato3dPakPath =
+        Utilities::FileHelper::GetPlatformFilePath("assets/paks/brotato3d.pak");
+    if (std::filesystem::exists(brotato3dPakPath))
+    {
+        GetEngine().GetPakSystem().MountPak(brotato3dPakPath);
+    }
+
     Brotato3D::StartBgm("calm");
 
-    if (std::filesystem::exists(Brotato3D::PlaceholderAssets::Sfx("fire_smg_01.wav")))
+    // SFX/icons have been absorbed into formal asset paths, but the underlying binary
+    // content is still proprietary Brotato reference material until the planned refresh.
+    if (Utilities::FileHelper::IsAssetAvailable(Brotato3D::Assets::Sfx("fire_smg_01.wav")))
     {
         spdlog::warn("[PLACEHOLDER ASSETS] Brotato vendor reference assets detected — DO NOT DISTRIBUTE");
     }
