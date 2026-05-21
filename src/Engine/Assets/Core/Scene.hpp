@@ -41,7 +41,7 @@ namespace Assets
     public:
         static void RegisterReflection();
         static constexpr uint32_t kSunShadowCascadeCount = 4;
-        static constexpr uint32_t kSunShadowResolution = 2048;
+        static constexpr uint32_t kSunShadowResolution = 1024;
         Scene(const Scene&) = delete;
         Scene(Scene&&) = delete;
         Scene& operator=(const Scene&) = delete;
