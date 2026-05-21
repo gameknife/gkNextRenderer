@@ -71,14 +71,15 @@ TEST_CASE("SkinnedMeshComponent Animation Playback", "[Runtime][Animation]") {
         REQUIRE(matrices.size() == 1);
         // At 0.5s, translation should be (0.5, 0, 0)
         // Matrix should be translate(0.5, 0, 0) * IBM(identity)
-        REQUIRE(matrices[0][3][0] == Catch::Approx(0.5f));
+        // Margin accommodates ozz 16-bit keyframe compression (~1e-4 worst case).
+        REQUIRE(matrices[0][3][0] == Catch::Approx(0.5f).margin(0.001f));
     }
-    
+
     SECTION("Looping Animation") {
         component.PlayAnimation("TestAnim", true);
         component.Update(1.5f); // Should loop to 0.5s
         auto matrices = component.GetJointMatrices();
-        REQUIRE(matrices[0][3][0] == Catch::Approx(0.5f));
+        REQUIRE(matrices[0][3][0] == Catch::Approx(0.5f).margin(0.001f));
     }
 }
 

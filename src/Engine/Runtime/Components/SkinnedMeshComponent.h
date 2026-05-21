@@ -6,11 +6,14 @@
 #include "Engine/Assets/Core/Component.h"
 #include "Engine/Runtime/Reflection/ReflectionMacros.h"
 #include <map>
+#include <memory>
 #include <vector>
 #include <string>
 
 namespace Runtime
 {
+    struct SkinnedMeshOzzState;
+
     class SkinnedMeshComponent : public Assets::Component
     {
     public:
@@ -38,7 +41,8 @@ namespace Runtime
         };
         
         SkinnedMeshComponent(const Assets::Skeleton& skeleton);
-        
+        ~SkinnedMeshComponent();
+
         void Update(float deltaTime);
         
         // Add all tracks relevant to this skeleton from a global list
@@ -91,14 +95,17 @@ namespace Runtime
         std::map<std::string, std::vector<Assets::AnimationTrack>> animations_;
         AnimationState currentState_;
         AnimationState blendSourceState_;
-        std::vector<RuntimeJoint> blendSourceJoints_;
         bool blendActive_ = false;
         float blendElapsed_ = 0.0f;
         float blendDuration_ = 0.12f;
-        void ResetJointsToBindPose(std::vector<RuntimeJoint>& joints) const;
-        void EvaluateAnimationState(const AnimationState& state, std::vector<RuntimeJoint>& joints) const;
         void AdvanceAnimationState(AnimationState& state, float deltaTime) const;
         void ApplyFootPlacementIK(float deltaTime);
+        // Samples one named animation at state.CurrentTime into the supplied locals buffer.
+        // Returns false if no ozz animation matches the name (locals untouched).
+        bool SampleOzz(const AnimationState& state, int contextSlot);
+        // Blends the two sampled local buffers (alpha = current weight in [0,1]) into the
+        // primary buffer, runs LocalToModel, and mirrors the result into runtimeJoints_/jointMatrices_.
+        void FinalizePose(float currentWeight);
         int FindJointIndex(std::initializer_list<std::string_view> aliases,
                            std::initializer_list<std::string_view> containsTokens = {}) const;
         glm::quat ExtractJointGlobalRotation(int jointIndex) const;
@@ -133,6 +140,7 @@ namespace Runtime
 
         Assets::Skeleton skeleton_;
         std::map<std::string, int> jointMap_;
+        std::unique_ptr<SkinnedMeshOzzState> ozz_;
         FootPlacementIKSettings footPlacementIKSettings_;
         FootPlacementChain leftFootPlacementChain_;
         FootPlacementChain rightFootPlacementChain_;
