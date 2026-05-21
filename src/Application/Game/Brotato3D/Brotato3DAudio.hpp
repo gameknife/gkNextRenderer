@@ -44,15 +44,15 @@ namespace Brotato3D
         if (weaponId == "smg")
         {
             PlayBrotatoSfxVariant({
-                               PlaceholderAssets::Sfx("fire_smg_01.wav"),
-                               PlaceholderAssets::Sfx("fire_smg_02.wav"),
-                               PlaceholderAssets::Sfx("fire_smg_03.wav"),
-                               PlaceholderAssets::Sfx("fire_smg_04.wav"),
-                               PlaceholderAssets::Sfx("fire_smg_05.wav"),
-                               PlaceholderAssets::Sfx("fire_smg_06.wav"),
-                               PlaceholderAssets::Sfx("fire_smg_07.wav"),
-                               PlaceholderAssets::Sfx("fire_smg_08.wav"),
-                               PlaceholderAssets::Sfx("fire_smg_09.wav"),
+                               Assets::Sfx("fire_smg_01.wav"),
+                               Assets::Sfx("fire_smg_02.wav"),
+                               Assets::Sfx("fire_smg_03.wav"),
+                               Assets::Sfx("fire_smg_04.wav"),
+                               Assets::Sfx("fire_smg_05.wav"),
+                               Assets::Sfx("fire_smg_06.wav"),
+                               Assets::Sfx("fire_smg_07.wav"),
+                               Assets::Sfx("fire_smg_08.wav"),
+                               Assets::Sfx("fire_smg_09.wav"),
                            },
                            0.75f,
                            55);
@@ -61,10 +61,10 @@ namespace Brotato3D
         if (weaponId == "flamethrower")
         {
             PlayBrotatoSfxVariant({
-                               PlaceholderAssets::Sfx("fire_flamethrower_01.wav"),
-                               PlaceholderAssets::Sfx("fire_flamethrower_02.wav"),
-                               PlaceholderAssets::Sfx("fire_flamethrower_03.wav"),
-                               PlaceholderAssets::Sfx("fire_flamethrower_04.wav"),
+                               Assets::Sfx("fire_flamethrower_01.wav"),
+                               Assets::Sfx("fire_flamethrower_02.wav"),
+                               Assets::Sfx("fire_flamethrower_03.wav"),
+                               Assets::Sfx("fire_flamethrower_04.wav"),
                            },
                            0.72f,
                            40);
@@ -72,13 +72,13 @@ namespace Brotato3D
         }
 
         static const std::unordered_map<std::string, std::string> paths = {
-            {"shotgun", PlaceholderAssets::Sfx("fire_shotgun_01.wav")},
-            {"sniper", PlaceholderAssets::Sfx("fire_sniper_01.wav")},
-            {"rocket", PlaceholderAssets::Sfx("fire_rocket_01.wav")},
-            {"laser", PlaceholderAssets::Sfx("fire_laser_01.wav")},
+            {"shotgun", Assets::Sfx("fire_shotgun_01.wav")},
+            {"sniper", Assets::Sfx("fire_sniper_01.wav")},
+            {"rocket", Assets::Sfx("fire_rocket_01.wav")},
+            {"laser", Assets::Sfx("fire_laser_01.wav")},
         };
         const auto it = paths.find(weaponId);
-        PlayBrotatoSfx(it != paths.end() ? it->second : PlaceholderAssets::Sfx("fire_smg_01.wav"), 0.75f, 70);
+        PlayBrotatoSfx(it != paths.end() ? it->second : Assets::Sfx("fire_smg_01.wav"), 0.75f, 70);
     }
 
     inline void PlayHitSfx(int damage, bool isCrit)
@@ -86,10 +86,10 @@ namespace Brotato3D
         if (isCrit)
         {
             PlayBrotatoSfxVariant({
-                                    PlaceholderAssets::Sfx("hit_crit_01.wav"),
-                                    PlaceholderAssets::Sfx("hit_crit_02.wav"),
-                                    PlaceholderAssets::Sfx("hit_crit_03.wav"),
-                                    PlaceholderAssets::Sfx("hit_crit_04.wav"),
+                                    Assets::Sfx("hit_crit_01.wav"),
+                                    Assets::Sfx("hit_crit_02.wav"),
+                                    Assets::Sfx("hit_crit_03.wav"),
+                                    Assets::Sfx("hit_crit_04.wav"),
                                 },
                                 0.85f,
                                 45);
@@ -97,11 +97,11 @@ namespace Brotato3D
         else
         {
             PlayBrotatoSfxVariant({
-                                    PlaceholderAssets::Sfx("hit_normal_01.wav"),
-                                    PlaceholderAssets::Sfx("hit_normal_02.wav"),
-                                    PlaceholderAssets::Sfx("hit_normal_03.wav"),
-                                    PlaceholderAssets::Sfx("hit_normal_04.wav"),
-                                    PlaceholderAssets::Sfx("hit_normal_05.wav"),
+                                    Assets::Sfx("hit_normal_01.wav"),
+                                    Assets::Sfx("hit_normal_02.wav"),
+                                    Assets::Sfx("hit_normal_03.wav"),
+                                    Assets::Sfx("hit_normal_04.wav"),
+                                    Assets::Sfx("hit_normal_05.wav"),
                                 },
                                 std::clamp(static_cast<float>(damage) / 20.0f, 0.45f, 0.8f),
                                 35);
@@ -111,8 +111,8 @@ namespace Brotato3D
     inline void PlayPickupXpSfx()
     {
         PlayBrotatoSfxVariant({
-                           PlaceholderAssets::Sfx("pickup_xp_01.ogg"),
-                           PlaceholderAssets::Sfx("pickup_xp_02.ogg"),
+                           Assets::Sfx("pickup_xp_01.ogg"),
+                           Assets::Sfx("pickup_xp_02.ogg"),
                        },
                        0.6f,
                        45);
@@ -120,17 +120,17 @@ namespace Brotato3D
 
     inline void PlayPickupMaterialSfx()
     {
-        PlayBrotatoSfx(PlaceholderAssets::Sfx("pickup_material.wav"), 0.65f, 45);
+        PlayBrotatoSfx(Assets::Sfx("pickup_material.wav"), 0.65f, 45);
     }
 
     inline void PlayLevelUpSfx()
     {
-        PlayBrotatoSfx(PlaceholderAssets::Sfx("level_up.wav"), 0.9f, 0);
+        PlayBrotatoSfx(Assets::Sfx("level_up.wav"), 0.9f, 0);
     }
 
     inline void PlayWaveStartSfx(int waveIndex)
     {
-        PlayBrotatoSfx(waveIndex >= 9 ? PlaceholderAssets::Sfx("wave_start_boss.wav") : PlaceholderAssets::Sfx("wave_start.wav"),
+        PlayBrotatoSfx(waveIndex >= 9 ? Assets::Sfx("wave_start_boss.wav") : Assets::Sfx("wave_start.wav"),
                        0.85f,
                        0);
     }
@@ -138,10 +138,10 @@ namespace Brotato3D
     inline void PlayPlayerHurtSfx()
     {
         PlayBrotatoSfxVariant({
-                           PlaceholderAssets::Sfx("player_hurt_01.wav"),
-                           PlaceholderAssets::Sfx("player_hurt_02.wav"),
-                           PlaceholderAssets::Sfx("player_hurt_03.wav"),
-                           PlaceholderAssets::Sfx("player_hurt_04.wav"),
+                           Assets::Sfx("player_hurt_01.wav"),
+                           Assets::Sfx("player_hurt_02.wav"),
+                           Assets::Sfx("player_hurt_03.wav"),
+                           Assets::Sfx("player_hurt_04.wav"),
                        },
                        0.8f,
                        120);
@@ -151,14 +151,14 @@ namespace Brotato3D
     {
         if (enemyId == "Warden" || enemyId == "boss_warden")
         {
-            PlayBrotatoSfx(PlaceholderAssets::Sfx("enemy_die_boss.wav"), 1.0f, 0);
+            PlayBrotatoSfx(Assets::Sfx("enemy_die_boss.wav"), 1.0f, 0);
         }
         else if (enemyId == "Brute" || enemyId == "tank")
         {
             PlayBrotatoSfxVariant({
-                               PlaceholderAssets::Sfx("enemy_die_tank_01.wav"),
-                               PlaceholderAssets::Sfx("enemy_die_tank_02.wav"),
-                               PlaceholderAssets::Sfx("enemy_die_tank_03.wav"),
+                               Assets::Sfx("enemy_die_tank_01.wav"),
+                               Assets::Sfx("enemy_die_tank_02.wav"),
+                               Assets::Sfx("enemy_die_tank_03.wav"),
                            },
                            0.85f,
                            80);
@@ -166,8 +166,8 @@ namespace Brotato3D
         else
         {
             PlayBrotatoSfxVariant({
-                               PlaceholderAssets::Sfx("enemy_die_small_01.wav"),
-                               PlaceholderAssets::Sfx("enemy_die_small_02.wav"),
+                               Assets::Sfx("enemy_die_small_01.wav"),
+                               Assets::Sfx("enemy_die_small_02.wav"),
                            },
                            0.65f,
                            55);
@@ -176,42 +176,42 @@ namespace Brotato3D
 
     inline void PlayShopOpenSfx()
     {
-        PlayBrotatoSfx(PlaceholderAssets::Sfx("shop_open.wav"), 0.75f, 0);
+        PlayBrotatoSfx(Assets::Sfx("shop_open.wav"), 0.75f, 0);
     }
 
     inline void PlayShopBuySfx()
     {
-        PlayBrotatoSfx(PlaceholderAssets::Sfx("shop_buy.wav"), 0.8f, 45);
+        PlayBrotatoSfx(Assets::Sfx("shop_buy.wav"), 0.8f, 45);
     }
 
     inline void PlayShopRerollSfx()
     {
-        PlayBrotatoSfx(PlaceholderAssets::Sfx("shop_reroll.wav"), 0.75f, 45);
+        PlayBrotatoSfx(Assets::Sfx("shop_reroll.wav"), 0.75f, 45);
     }
 
     inline void PlayShopCantBuySfx()
     {
-        PlayBrotatoSfx(PlaceholderAssets::Sfx("shop_cant_buy.wav"), 0.75f, 45);
+        PlayBrotatoSfx(Assets::Sfx("shop_cant_buy.wav"), 0.75f, 45);
     }
 
     inline void PlayUiClickSfx()
     {
-        PlayBrotatoSfx(PlaceholderAssets::Sfx("ui_click.wav"), 0.55f, 35);
+        PlayBrotatoSfx(Assets::Sfx("ui_click.wav"), 0.55f, 35);
     }
 
     inline void PlayUiHoverSfx()
     {
-        PlayBrotatoSfx(PlaceholderAssets::Sfx("ui_hover.wav"), 0.45f, 25);
+        PlayBrotatoSfx(Assets::Sfx("ui_hover.wav"), 0.45f, 25);
     }
 
     inline void PlayVictorySfx()
     {
-        PlayBrotatoSfx(PlaceholderAssets::Sfx("victory.wav"), 0.9f, 0);
+        PlayBrotatoSfx(Assets::Sfx("victory.wav"), 0.9f, 0);
     }
 
     inline void PlayDefeatSfx()
     {
-        PlayBrotatoSfx(PlaceholderAssets::Sfx("defeat.wav"), 0.9f, 0);
+        PlayBrotatoSfx(Assets::Sfx("defeat.wav"), 0.9f, 0);
     }
 
     inline void StopBgm()

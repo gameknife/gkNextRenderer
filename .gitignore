@@ -395,6 +395,7 @@ assets/textures/studio_small_09_1k.hdr
 assets/textures/sunset_fairway_1k.hdr
 assets/textures/umhlanga_sunrise_1k.hdr
 tools/optional-pak/output/
+tools/brotato3d-pak/output/
 
 # third party libraries
 src/ThirdParty/*/bin/
@@ -421,6 +422,12 @@ android/app/libs/SDL3-*.aar
 # Phase 3 占位资产 — 受版权保护，不得入库
 assets/_placeholder/*
 !assets/_placeholder/README.md
+
+# Brotato3D SFX/icons — 已从 _placeholder 升格为正式路径，但内容仍为 Brotato 解包参考资产，
+# 翻新（替换为自制 / CC0）之前不得入库。
+assets/sounds/brotato3d/sfx/
+assets/textures/brotato3d/icons/
+assets/paks/brotato3d.pak
 
 # 本地草稿、宣传材料 — 不入库，仅本地保留
 marketing/

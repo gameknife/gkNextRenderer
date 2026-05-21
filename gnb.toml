@@ -45,6 +45,11 @@ name = "optional.pak"
 dest = "assets/paks/optional.pak"
 
 [[paks.assets]]
+id = "brotato3d"
+name = "brotato3d.pak"
+dest = "assets/paks/brotato3d.pak"
+
+[[paks.assets]]
 id = "sfx"
 name = "bgm.mp3"
 dest = "assets/sfx/bgm.mp3"

@@ -5,8 +5,31 @@
 
 #include <filesystem>
 
+namespace Brotato3D
+{
+    // Official asset paths. SFX and icons live under assets/sounds/brotato3d and
+    // assets/textures/brotato3d respectively, and are mounted at runtime via
+    // assets/paks/brotato3d.pak. Paths returned here are project-root-relative; the
+    // engine's package file system handles pak lookup and filesystem fallback.
+    namespace Assets
+    {
+        inline std::string Sfx(const std::string& relPath)
+        {
+            return "assets/sounds/brotato3d/sfx/" + relPath;
+        }
+
+        inline std::string Icon(const std::string& category, const std::string& id)
+        {
+            return "assets/textures/brotato3d/icons/" + category + "/" + id + ".png";
+        }
+    }
+}
+
 namespace Brotato3D::PlaceholderAssets
 {
+    // Still-proprietary placeholder assets pending refresh. Once these categories are
+    // refreshed (legitimate or self-authored content), they should follow the same
+    // pattern as Brotato3D::Assets::Sfx/Icon and this namespace can be deleted.
     inline constexpr const char* kPlaceholderRoot = "assets/_placeholder/brotato/";
 
     inline std::string Resolve(const std::string& relativePath)
@@ -29,16 +52,6 @@ namespace Brotato3D::PlaceholderAssets
         return runtimeCandidate.string();
     }
 
-    inline std::string Root()
-    {
-        return Resolve(kPlaceholderRoot);
-    }
-
-    inline std::string Sfx(const std::string& relPath)
-    {
-        return Resolve(std::string(kPlaceholderRoot) + "audio/sfx/" + relPath);
-    }
-
     inline std::string Bgm(const std::string& relPath)
     {
         return Resolve(std::string(kPlaceholderRoot) + "audio/bgm/" + relPath);
@@ -57,11 +70,6 @@ namespace Brotato3D::PlaceholderAssets
     inline std::string Menu(const std::string& relPath)
     {
         return Resolve(std::string(kPlaceholderRoot) + "ui/menu/" + relPath);
-    }
-
-    inline std::string Icon(const std::string& category, const std::string& id)
-    {
-        return Resolve(std::string(kPlaceholderRoot) + "ui/icons/" + category + "/" + id + ".png");
     }
 
     inline bool Exists(const std::string& fullPath)
