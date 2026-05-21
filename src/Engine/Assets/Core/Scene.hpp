@@ -40,6 +40,8 @@ namespace Assets
     {
     public:
         static void RegisterReflection();
+        static constexpr uint32_t kSunShadowCascadeCount = 4;
+        static constexpr uint32_t kSunShadowResolution = 2048;
         Scene(const Scene&) = delete;
         Scene(Scene&&) = delete;
         Scene& operator=(const Scene&) = delete;
@@ -77,6 +79,7 @@ namespace Assets
         const Vulkan::Buffer& LightBuffer() const { return *lightBuffer_; }
         const Vulkan::Buffer& NodeMatrixBuffer() const { return *sceneDynamicBuffer_; }
         const Vulkan::Buffer& IndirectDrawBuffer() const { return *indirectDrawBuffer_; }
+        const Vulkan::Buffer& ShadowIndirectDrawBuffer() const { return *shadowIndirectDrawBuffer_; }
         const Vulkan::Buffer& ReorderBuffer() const { return *reorderBuffer_; }
         const Vulkan::Buffer& PrimAddressBuffer() const { return *primAddressBuffer_; }
         const glm::vec3 GetSunDir() const { return envSettings_.SunDirection(); }
@@ -91,6 +94,10 @@ namespace Assets
         Node* GetNodeById(uint32_t nodeId);
 
         const Assets::GPUDrivenStat& GetGpuDrivenStat() const { return gpuDrivenStat_; }
+        const std::array<Assets::GPUDrivenStat, kSunShadowCascadeCount>& GetShadowGpuDrivenStats() const
+        {
+            return shadowGpuDrivenStats_;
+        }
 
         uint32_t GetSelectedId() const { return selectionState_.GetPrimaryId(); }
         const std::vector<uint32_t>& GetSelectedIds() const { return selectionState_.GetIds(); }
@@ -159,6 +166,7 @@ namespace Assets
                           const std::shared_ptr<Node>& root);
 
         void SetSkinningBuffers(VkDeviceAddress skinnedVertices, VkDeviceAddress jointMatrices);
+        Assets::GPUScene FetchGPUSceneWithIndirectBuffer(uint32_t imageIndex, VkDeviceAddress indirectDrawCommands) const;
 
         // Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
 
@@ -181,8 +189,6 @@ namespace Assets
         TextureImage& ShadowMap() const { return *cpuShadowMap_; }
 
         // GPU CSM 资源（4 个 cascade，单层 D32_SFLOAT，独立 image）。
-        static constexpr uint32_t kSunShadowCascadeCount = 4;
-        static constexpr uint32_t kSunShadowResolution = 2048;
         Vulkan::Image& SunShadowImage(uint32_t cascade) const { return *sunShadowImages_[cascade]; }
         const Vulkan::ImageView& SunShadowImageView(uint32_t cascade) const { return *sunShadowViews_[cascade]; }
         const Vulkan::Sampler& SunShadowSampler() const { return *sunShadowSampler_; }
@@ -236,6 +242,9 @@ namespace Assets
         std::unique_ptr<Vulkan::Buffer> indirectDrawBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> indirectDrawBufferMemory_;
 
+        std::unique_ptr<Vulkan::Buffer> shadowIndirectDrawBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> shadowIndirectDrawBufferMemory_;
+
         std::unique_ptr<Vulkan::Buffer> ambientArenaBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> ambientArenaBufferMemory_;
 
@@ -278,6 +287,7 @@ namespace Assets
         Assets::CPU::FCPUAccelerationStructure cpuAccelerationStructure_;
 
         Assets::GPUDrivenStat gpuDrivenStat_;
+        std::array<Assets::GPUDrivenStat, kSunShadowCascadeCount> shadowGpuDrivenStats_{};
         mutable Assets::GPUScene gpuScene_;
 
         glm::vec3 sceneAABBMin_{FLT_MAX, FLT_MAX, FLT_MAX};
@@ -286,5 +296,7 @@ namespace Assets
 
         VkDeviceAddress skinnedVerticesAddr_ = 0;
         VkDeviceAddress jointMatricesAddr_ = 0;
+
+        Assets::GPUScene BuildGPUScene(uint32_t imageIndex, VkDeviceAddress indirectDrawCommands) const;
     };
 } // namespace Assets

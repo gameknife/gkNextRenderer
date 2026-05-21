@@ -243,6 +243,7 @@ namespace Vulkan
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldJumpPipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldResolvePipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> gpuCullPipeline_;
+		std::unique_ptr<PipelineCommon::ZeroBindPipeline> shadowGpuCullPipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> skinningPipeline_;
 
 		std::unique_ptr<class DepthBuffer> depthBuffer_;

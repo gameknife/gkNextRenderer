@@ -780,6 +780,7 @@ namespace Vulkan
             distanceFieldResolvePipeline_.reset( new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Bake.DistanceFieldResolve.comp.slang.spv", GetScene()));
         }
         gpuCullPipeline_.reset(new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Task.GpuCull.comp.slang.spv", GetScene()));
+        shadowGpuCullPipeline_.reset(new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Task.ShadowGpuCull.comp.slang.spv", GetScene()));
         skinningPipeline_.reset(new PipelineCommon::ZeroBindPipeline(*swapChain_, "assets/shaders/Task.Skinning.comp.slang.spv", GetScene()));
         visualDebuggerPipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*swapChain_, "assets/shaders/Util.VisualDebugger.comp.slang.spv", 20));
 
@@ -847,6 +848,7 @@ namespace Vulkan
         distanceFieldJumpPipeline_.reset();
         distanceFieldResolvePipeline_.reset();
         gpuCullPipeline_.reset();
+        shadowGpuCullPipeline_.reset();
         skinningPipeline_.reset();
 
         skinnedVertexBuffer_.reset();
@@ -1206,7 +1208,68 @@ namespace Vulkan
         if (sunShadowPass_ && GetScene().GetEnvSettings().HasSun)
         {
             SCOPED_GPU_TIMER("shadow pass");
-            sunShadowPass_->Draw(commandBuffer, GetScene(), imageIndex);
+            auto& scene = GetScene();
+            const uint32_t indirectDrawBatchCount = scene.GetIndirectDrawBatchCount();
+            const uint32_t groupCount = (indirectDrawBatchCount + 63) / 64;
+            const VkBuffer shadowIndirectBuffer = scene.ShadowIndirectDrawBuffer().Handle();
+            const VkDeviceAddress shadowIndirectAddress = scene.ShadowIndirectDrawBuffer().GetDeviceAddress();
+
+            for (uint32_t cascade = 0; cascade < Assets::Scene::kSunShadowCascadeCount; ++cascade)
+            {
+                Assets::GPUScene shadowGpuScene =
+                    scene.FetchGPUSceneWithIndirectBuffer(imageIndex, shadowIndirectAddress);
+                shadowGpuScene.custom_data_0 = cascade;
+                shadowGpuScene.custom_data_1 = indirectDrawBatchCount;
+
+                if (groupCount > 0)
+                {
+                    VkBufferMemoryBarrier preCullBarrier = {};
+                    preCullBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+                    preCullBarrier.srcAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+                    preCullBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+                    preCullBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                    preCullBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                    preCullBarrier.buffer = shadowIndirectBuffer;
+                    preCullBarrier.offset = 0;
+                    preCullBarrier.size = VK_WHOLE_SIZE;
+
+                    vkCmdPipelineBarrier(
+                        commandBuffer,
+                        VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+                        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                        0,
+                        0, nullptr,
+                        1, &preCullBarrier,
+                        0, nullptr);
+
+                    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, shadowGpuCullPipeline_->Handle());
+                    shadowGpuCullPipeline_->PipelineLayout().BindDescriptorSets(commandBuffer, 0);
+                    vkCmdPushConstants(commandBuffer, shadowGpuCullPipeline_->PipelineLayout().Handle(),
+                                       VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &shadowGpuScene);
+                    vkCmdDispatch(commandBuffer, groupCount, 1, 1);
+
+                    VkBufferMemoryBarrier postCullBarrier = {};
+                    postCullBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+                    postCullBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+                    postCullBarrier.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+                    postCullBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                    postCullBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                    postCullBarrier.buffer = shadowIndirectBuffer;
+                    postCullBarrier.offset = 0;
+                    postCullBarrier.size = VK_WHOLE_SIZE;
+
+                    vkCmdPipelineBarrier(
+                        commandBuffer,
+                        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                        VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+                        0,
+                        0, nullptr,
+                        1, &postCullBarrier,
+                        0, nullptr);
+                }
+
+                sunShadowPass_->DrawCascade(commandBuffer, scene, shadowGpuScene, cascade);
+            }
         }
     }
 

@@ -7,6 +7,7 @@
 
 namespace Assets
 {
+    struct GPUScene;
     class Scene;
 }
 
@@ -31,8 +32,9 @@ namespace Vulkan::Shadow
         void CreateResources(const Assets::Scene& scene);
         void DestroyResources();
 
-        // 绘制 4 个 cascade 的 shadow map。调用前 sun shadow image 应处于 SHADER_READ 状态。
-        void Draw(VkCommandBuffer commandBuffer, const Assets::Scene& scene, uint32_t imageIndex);
+        // 绘制单个 cascade 的 shadow map。调用前对应 indirect buffer 已完成 GPU cull。
+        void DrawCascade(VkCommandBuffer commandBuffer, const Assets::Scene& scene, const Assets::GPUScene& gpuScene,
+                         uint32_t cascade);
 
     private:
         const Vulkan::Device& device_;
