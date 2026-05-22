@@ -19,7 +19,7 @@ VertexOutput main(uint vertexIndex: SV_VertexID, uint baseVertex: SV_StartVertex
     {
         currentVertices = Bindless.GetGpuscene().SkinnedVertices;
     }
-    GPUVertex packedVertex = currentVertices[Bindless.GetGpuscene().Reorders[vertexIndex]];
+    GPUVertex packedVertex = currentVertices[Bindless.GetGpuscene().Reorders[vertexIndex + baseVertex]];
     output.position = mul(mul(Bindless.GetGpuscene().Camera[0].ViewProjection, proxy.worldTS), float4(packedVertex.Position_Tx.xyz, 1.0));
 
     Vertex vertex = UnpackVertex(packedVertex);
@@ -27,7 +27,7 @@ VertexOutput main(uint vertexIndex: SV_VertexID, uint baseVertex: SV_StartVertex
     output.material_model = Bindless.GetGpuscene().GetMaterial(materialId).MaterialModel;
 
     uint instanceIdx = absouluteInstanceIdx + 1;
-    uint triangleIdx = vertexIndex - baseVertex;
+    uint triangleIdx = vertexIndex;
     // we use a 32bit visibility buffer, with 1 bit shift to left, support up to 32768 instances and 131072 triangles per instance
     // if exceed, render result will be undefined
     output.primitive_index = ((instanceIdx & 0x7FFF) << 17) | (triangleIdx & 0x1FFFF);

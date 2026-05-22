@@ -21,7 +21,7 @@ VertexOutput main(uint vertexIndex: SV_VertexID, uint baseVertex: SV_StartVertex
     {
         currentVertices = GpuScene.SkinnedVertices;
     }
-    GPUVertex packedVertex = currentVertices[GpuScene.Reorders[vertexIndex]];
+    GPUVertex packedVertex = currentVertices[GpuScene.Reorders[vertexIndex + baseVertex]];
 
     uint cascadeIdx = min(GpuScene.custom_data_0, 3u);
     float4x4 lightVP = GpuScene.Camera[0].SunCascadeViewProjection[cascadeIdx];
