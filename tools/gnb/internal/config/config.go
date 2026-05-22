@@ -34,6 +34,63 @@ type ExternalConfig struct {
 	MoltenVK   ExternalURLConfig `toml:"moltenvk"`
 	Slang      PlatformURLs      `toml:"slang"`
 	VulkanSDK  VulkanSDKConfig   `toml:"vulkansdk"`
+	LLM        LLMConfig         `toml:"llm"`
+}
+
+type LLMConfig struct {
+	Llama  LlamaConfig   `toml:"llama"`
+	Active string        `toml:"active"`
+	Models []ModelConfig `toml:"models"`
+	Server ServerConfig  `toml:"server"`
+}
+
+// ActiveModel returns the model selected by LLMConfig.Active. If Active is
+// empty or does not match any entry, the first configured model is returned.
+// Callers should treat a zero-value result as "no models configured".
+func (c LLMConfig) ActiveModel() ModelConfig {
+	if m, ok := c.FindModel(c.Active); ok {
+		return m
+	}
+	if len(c.Models) > 0 {
+		return c.Models[0]
+	}
+	return ModelConfig{}
+}
+
+// FindModel looks up a model by id. Returns the model and true on match.
+func (c LLMConfig) FindModel(id string) (ModelConfig, bool) {
+	if id == "" {
+		return ModelConfig{}, false
+	}
+	for _, m := range c.Models {
+		if m.ID == id {
+			return m, true
+		}
+	}
+	return ModelConfig{}, false
+}
+
+type LlamaConfig struct {
+	Version           string `toml:"version"`
+	WindowsVulkan     string `toml:"windows_vulkan"`
+	WindowsCPU        string `toml:"windows_cpu"`
+	LinuxVulkan       string `toml:"linux_vulkan"`
+	LinuxCPU          string `toml:"linux_cpu"`
+	MacOSArm64        string `toml:"macos_arm64"`
+}
+
+type ModelConfig struct {
+	ID       string `toml:"id"`
+	File     string `toml:"file"`
+	URL      string `toml:"url"`
+	ContextN int    `toml:"context"`
+}
+
+type ServerConfig struct {
+	Host       string `toml:"host"`
+	Port       int    `toml:"port"`
+	GPULayers  int    `toml:"gpu_layers"`
+	IdleSecs   int    `toml:"idle_seconds"`
 }
 
 type ExternalURLConfig struct {
@@ -113,7 +170,43 @@ func Load(repoRoot string) (Config, error) {
 	if cfg.External.VulkanSDK.Root == "" {
 		cfg.External.VulkanSDK.Root = "external/VulkanSDK"
 	}
+	applyLLMDefaults(&cfg.External.LLM)
 	return cfg, nil
+}
+
+func applyLLMDefaults(c *LLMConfig) {
+	if c.Llama.Version == "" {
+		c.Llama.Version = "b6000"
+	}
+	if len(c.Models) == 0 {
+		c.Models = []ModelConfig{{
+			ID:       "gemma-4-E4B-it-Q4_K_M",
+			File:     "gemma-4-E4B-it-Q4_K_M.gguf",
+			URL:      "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf",
+			ContextN: 8192,
+		}}
+	}
+	for i := range c.Models {
+		m := &c.Models[i]
+		if m.File == "" && m.ID != "" {
+			m.File = m.ID + ".gguf"
+		}
+		if m.ContextN == 0 {
+			m.ContextN = 8192
+		}
+	}
+	if c.Active == "" && len(c.Models) > 0 {
+		c.Active = c.Models[0].ID
+	}
+	if c.Server.Host == "" {
+		c.Server.Host = "127.0.0.1"
+	}
+	if c.Server.Port == 0 {
+		c.Server.Port = 8765
+	}
+	if c.Server.IdleSecs == 0 {
+		c.Server.IdleSecs = 600
+	}
 }
 
 func BinCacheKey(repoRoot string, cfg Config, osName string) string {

@@ -734,7 +734,59 @@
     <div id="git-commit-detail">
       <div class="card detail-empty">点击 hash 或 subject 查看完整 message；点击 ⤺ 重置 HEAD。</div>
     </div>
+    {{template "git_commit_card" .}}
   </section>
+</div>
+{{end}}
+
+
+{{define "git_commit_card"}}
+<div class="card commit-card">
+  <h2 class="card-title">
+    <span class="ico" style="background: rgba(99, 102, 241, 0.12); color: var(--accent);">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><line x1="2" y1="12" x2="8" y2="12"/><line x1="16" y1="12" x2="22" y2="12"/></svg>
+    </span>
+    新提交
+    {{if .GitVM.Status.Dirty}}
+      <span class="count">{{len .GitVM.Status.DirtyFiles}}</span>
+    {{end}}
+  </h2>
+
+  {{if .GitVM.Status.Dirty}}
+    <div class="commit-card-hint">分支 <code>{{if .GitVM.Status.Branch}}{{.GitVM.Status.Branch}}{{else}}(detached){{end}}</code> · 工作区 <span class="dirty">dirty</span>（{{.GitVM.Status.DirtyHint}}）</div>
+  {{else}}
+    <div class="commit-card-hint">分支 <code>{{if .GitVM.Status.Branch}}{{.GitVM.Status.Branch}}{{else}}(detached){{end}}</code> · 工作区 <span class="clean">clean</span></div>
+  {{end}}
+
+  <form class="commit-card-form" onsubmit="return false;">
+    <textarea id="commit-msg-textarea" name="message" class="input commit-msg-textarea" rows="6" placeholder="点击 'AI 补全' 让本地 Gemma 3n 根据 diff 生成；也可手动编辑"></textarea>
+
+    <label class="build-opt commit-card-opt">
+      <input type="checkbox" name="stage_all" value="1" checked>
+      <span>提交前 <code>git add -A</code></span>
+    </label>
+
+    <div class="commit-card-actions">
+      <button class="btn-secondary commit-ai-btn" type="button"
+              hx-post="/git/commit-message"
+              hx-target="#commit-msg-textarea"
+              hx-swap="outerHTML"
+              hx-disabled-elt="this"
+              hx-indicator=".commit-ai-indicator"
+              title="调用本地 LLM 根据 diff 生成 commit message（首次会加载模型）">
+        <span class="ai-btn-label">✨ AI 补全</span>
+        <span class="commit-ai-indicator htmx-indicator">生成中…</span>
+      </button>
+      <button class="btn-primary small" type="button"
+              hx-post="/git/commit"
+              hx-include="closest form"
+              hx-target="#git-tab-body" hx-swap="innerHTML"
+              hx-confirm="使用当前 commit message 创建提交？"
+              {{if not .GitVM.Status.Dirty}}disabled title="工作区无改动"{{end}}>
+        Commit
+      </button>
+    </div>
+  </form>
 </div>
 {{end}}
 

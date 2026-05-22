@@ -276,6 +276,9 @@ func Download(url string, dst string) error {
 	return os.Rename(part, dst)
 }
 
+// Unzip extracts a zip archive into dst (exported wrapper around unzip).
+func Unzip(src string, dst string) error { return unzip(src, dst) }
+
 func unzip(src string, dst string) error {
 	reader, err := zip.OpenReader(src)
 	if err != nil {
