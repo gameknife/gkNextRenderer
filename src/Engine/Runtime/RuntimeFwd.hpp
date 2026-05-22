@@ -27,7 +27,7 @@ namespace NextUI
 
 namespace Runtime::Config
 {
-    struct Options;
+    class Options;
     struct ShowFlags;
     struct UserSettings;
 }

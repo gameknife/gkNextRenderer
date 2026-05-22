@@ -264,7 +264,7 @@ private:
     // Runtime subsystems owned by the engine
     struct FRuntimeServices
     {
-        FRuntimeServices() = default;
+        FRuntimeServices();
         ~FRuntimeServices();
 
         std::unique_ptr<NextLocalization> localization;
