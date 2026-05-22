@@ -33,13 +33,14 @@ type appContext struct {
 }
 
 func main() {
-	repoRoot, err := config.FindRepoRoot(".")
-	if err != nil {
-		fatal(err)
-	}
-	cfg, err := config.Load(repoRoot)
-	if err != nil {
-		fatal(err)
+	repoRoot, repoErr := config.FindRepoRoot(".")
+	var cfg config.Config
+	if repoErr == nil {
+		var err error
+		cfg, err = config.Load(repoRoot)
+		if err != nil {
+			fatal(err)
+		}
 	}
 	preset, _ := cmakerun.DefaultPreset()
 	ctx := appContext{repoRoot: repoRoot, cfg: cfg, preset: preset}
@@ -50,10 +51,35 @@ func main() {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = cmd.Help()
-			fmt.Println()
-			return printOverview(ctx)
+			// Bare `gnb` launches the dashboard.
+			return runDashboard(ctx, dashboardCmdOpts{})
 		},
+	}
+	// Commands listed here run without a discovered repository — everything
+	// else fails fast with a friendly hint instead of crashing inside a
+	// command implementation that assumed a repo root.
+	repolessCommands := map[string]bool{
+		"init":      true,
+		"help":      true,
+		"version":   true,
+		"completion": true,
+	}
+	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if repoErr == nil {
+			return nil
+		}
+		name := cmd.Name()
+		parentName := ""
+		if p := cmd.Parent(); p != nil {
+			parentName = p.Name()
+		}
+		if repolessCommands[name] || repolessCommands[parentName] {
+			return nil
+		}
+		console.Error("%s", repoErr)
+		fmt.Println()
+		console.Info("cd into a gkNextEngine checkout, or run `gnb init` to clone one.")
+		return repoErr
 	}
 	root.AddCommand(newInfoCommand(ctx))
 	root.AddCommand(newDoctorCommand(ctx))
@@ -73,6 +99,8 @@ func main() {
 	root.AddCommand(newTodoCommand(ctx))
 	root.AddCommand(newDashboardCommand(ctx))
 	root.AddCommand(newLocCommand(ctx))
+	root.AddCommand(newGitCommand(ctx))
+	root.AddCommand(newInitCommand())
 
 	if err := root.Execute(); err != nil {
 		fatal(err)

@@ -248,6 +248,25 @@ $builtAssets += @{
     DownloadUrl = "https://github.com/$Repo/releases/download/$Tag/$versionAssetName"
 }
 
+# Bootstrap scripts: users download these into an empty folder, run them, and
+# get a working clone + matching gnb binary without needing to clone first.
+$bootstrapAssets = @(
+    @{ Source = Join-Path $scriptDir "gnb-init.sh";  Name = "gnb-init.sh"  },
+    @{ Source = Join-Path $scriptDir "gnb-init.ps1"; Name = "gnb-init.ps1" }
+)
+foreach ($bootstrap in $bootstrapAssets) {
+    if (-not (Test-Path $bootstrap.Source)) {
+        throw "Missing bootstrap script: $($bootstrap.Source)"
+    }
+    $dst = Join-Path $distDir $bootstrap.Name
+    Copy-Item -Force $bootstrap.Source $dst
+    $builtAssets += @{
+        Name = $bootstrap.Name
+        Path = $dst
+        DownloadUrl = "https://github.com/$Repo/releases/download/$Tag/$($bootstrap.Name)"
+    }
+}
+
 if ($DryRun)
 {
     foreach ($asset in $builtAssets)
