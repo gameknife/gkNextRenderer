@@ -272,6 +272,8 @@ Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options&
 
 NextEngine* NextEngine::instance_ = nullptr;
 
+NextEngine::FRuntimeServices::FRuntimeServices() = default;
+
 NextEngine::FRuntimeServices::~FRuntimeServices() = default;
 
 NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)

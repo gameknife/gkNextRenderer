@@ -54,7 +54,7 @@ namespace Vulkan
 		VULKAN_NON_COPIABLE(VulkanBaseRenderer)
 
 		VulkanBaseRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers, Instance* instance);
-		~VulkanBaseRenderer();
+		virtual ~VulkanBaseRenderer();
 
 		// Lifecycle
 		void Start();
