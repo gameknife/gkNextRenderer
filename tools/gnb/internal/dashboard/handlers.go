@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/gitops"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/spec"
 )
@@ -32,6 +33,16 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /jobs/{kind}", s.handleJobStart)
 	mux.HandleFunc("POST /jobs/{id}/cancel", s.handleJobCancel)
 	mux.HandleFunc("GET /jobs/{id}/stream", s.handleJobStream)
+	mux.HandleFunc("POST /git/switch", s.handleGitSwitch)
+	mux.HandleFunc("POST /git/switch-remote", s.handleGitSwitchRemote)
+	mux.HandleFunc("POST /git/create-branch", s.handleGitCreateBranch)
+	mux.HandleFunc("POST /git/pull", s.handleGitPull)
+	mux.HandleFunc("POST /git/fetch", s.handleGitFetch)
+	mux.HandleFunc("POST /git/reset", s.handleGitReset)
+	mux.HandleFunc("POST /git/stash/push", s.handleGitStashPush)
+	mux.HandleFunc("POST /git/stash/{action}", s.handleGitStashAction)
+	mux.HandleFunc("GET /git/commit/{ref}", s.handleGitCommit)
+	mux.HandleFunc("GET /git/panel", s.handleGitPanel)
 	return logRequests(mux)
 }
 
@@ -61,10 +72,21 @@ type indexVM struct {
 	Preset     string
 	OS         string
 	RecentSize int
-	ActiveTab  string // "todo" | "build" | "run" | "test"
+	ActiveTab  string // "todo" | "build" | "run" | "test" | "git"
 	BuildVM    buildVM
 	RunVM      runVM
 	TestVM     testVM
+	GitVM      gitVM
+}
+
+type gitVM struct {
+	Status         gitops.Status
+	Branches       []gitops.Branch
+	RemoteBranches []gitops.RemoteBranch
+	Commits        []gitops.Commit
+	Stashes        []gitops.Stash
+	Error          string
+	Flash          string // success / info message after an action
 }
 
 type buildVM struct {
@@ -641,9 +663,214 @@ func (s *Server) handleTab(w http.ResponseWriter, r *http.Request) {
 		vm := s.buildHeader("test")
 		vm.TestVM = s.buildTestVM()
 		s.render(w, "tab_test", vm)
+	case "git":
+		vm := s.buildHeader("git")
+		vm.GitVM = s.buildGitVM("")
+		s.render(w, "tab_git", vm)
 	default:
 		http.Error(w, "unknown tab "+kind, http.StatusNotFound)
 	}
+}
+
+// ----- git handlers ---------------------------------------------------
+
+func (s *Server) buildGitVM(flash string) gitVM {
+	vm := gitVM{Flash: flash}
+	st, err := gitops.GetStatus(s.opts.RepoRoot)
+	if err != nil {
+		vm.Error = err.Error()
+		return vm
+	}
+	vm.Status = st
+	if branches, err := gitops.Branches(s.opts.RepoRoot); err != nil {
+		vm.Error = err.Error()
+	} else {
+		vm.Branches = branches
+	}
+	if remotes, err := gitops.RemoteBranches(s.opts.RepoRoot); err != nil {
+		if vm.Error == "" {
+			vm.Error = err.Error()
+		}
+	} else {
+		vm.RemoteBranches = remotes
+	}
+	if commits, err := gitops.Log(s.opts.RepoRoot, 30); err != nil {
+		if vm.Error == "" {
+			vm.Error = err.Error()
+		}
+	} else {
+		vm.Commits = commits
+	}
+	if stashes, err := gitops.StashList(s.opts.RepoRoot); err != nil {
+		if vm.Error == "" {
+			vm.Error = err.Error()
+		}
+	} else {
+		vm.Stashes = stashes
+	}
+	return vm
+}
+
+// renderGitBody re-renders the whole git tab body (left column + commits +
+// stash). All destructive actions go through this so both columns stay in
+// sync (e.g. reset moves HEAD which changes the log).
+func (s *Server) renderGitBody(w http.ResponseWriter, flash string) {
+	vm := s.buildHeader("git")
+	vm.GitVM = s.buildGitVM(flash)
+	s.render(w, "git_body", vm)
+}
+
+func (s *Server) handleGitPanel(w http.ResponseWriter, r *http.Request) {
+	s.renderGitBody(w, r.URL.Query().Get("flash"))
+}
+
+func (s *Server) handleGitSwitch(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err)
+		return
+	}
+	branch := strings.TrimSpace(r.FormValue("branch"))
+	if branch == "" {
+		http.Error(w, "branch is required", http.StatusBadRequest)
+		return
+	}
+	if err := gitops.Checkout(s.opts.RepoRoot, branch, false); err != nil {
+		s.renderGitBody(w, "切换分支失败: "+err.Error())
+		return
+	}
+	s.renderGitBody(w, "已切换到 "+branch)
+}
+
+func (s *Server) handleGitPull(w http.ResponseWriter, r *http.Request) {
+	out, err := gitops.Pull(s.opts.RepoRoot)
+	if err != nil {
+		s.renderGitBody(w, "Pull 失败: "+err.Error())
+		return
+	}
+	flash := "Pull 完成"
+	if first := firstLine(out); first != "" {
+		flash = flash + " (" + first + ")"
+	}
+	s.renderGitBody(w, flash)
+}
+
+func (s *Server) handleGitFetch(w http.ResponseWriter, r *http.Request) {
+	if _, err := gitops.Fetch(s.opts.RepoRoot); err != nil {
+		s.renderGitBody(w, "Fetch 失败: "+err.Error())
+		return
+	}
+	s.renderGitBody(w, "Fetch 完成")
+}
+
+func (s *Server) handleGitSwitchRemote(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err)
+		return
+	}
+	ref := strings.TrimSpace(r.FormValue("ref"))
+	if ref == "" {
+		http.Error(w, "ref required", http.StatusBadRequest)
+		return
+	}
+	if err := gitops.CheckoutRemote(s.opts.RepoRoot, ref, false); err != nil {
+		s.renderGitBody(w, "切换远程分支失败: "+err.Error())
+		return
+	}
+	s.renderGitBody(w, "已基于 "+ref+" 创建本地跟踪分支")
+}
+
+func (s *Server) handleGitCreateBranch(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err)
+		return
+	}
+	name := strings.TrimSpace(r.FormValue("name"))
+	startPoint := strings.TrimSpace(r.FormValue("start"))
+	if name == "" {
+		http.Error(w, "name required", http.StatusBadRequest)
+		return
+	}
+	if err := gitops.CreateBranch(s.opts.RepoRoot, name, startPoint, false); err != nil {
+		s.renderGitBody(w, "创建分支失败: "+err.Error())
+		return
+	}
+	s.renderGitBody(w, "已创建并切换到 "+name)
+}
+
+func (s *Server) handleGitReset(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err)
+		return
+	}
+	ref := strings.TrimSpace(r.FormValue("ref"))
+	if ref == "" {
+		http.Error(w, "ref required", http.StatusBadRequest)
+		return
+	}
+	if err := gitops.ResetHard(s.opts.RepoRoot, ref); err != nil {
+		s.renderGitBody(w, "Reset 失败: "+err.Error())
+		return
+	}
+	s.renderGitBody(w, "已 reset --hard 到 "+ref)
+}
+
+func (s *Server) handleGitStashPush(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err)
+		return
+	}
+	msg := strings.TrimSpace(r.FormValue("message"))
+	includeUntracked := r.FormValue("untracked") == "1"
+	out, err := gitops.StashPush(s.opts.RepoRoot, msg, includeUntracked)
+	if err != nil {
+		s.renderGitBody(w, "Stash 失败: "+err.Error())
+		return
+	}
+	flash := "已 stash"
+	if first := firstLine(out); first != "" {
+		flash = flash + " (" + first + ")"
+	}
+	s.renderGitBody(w, flash)
+}
+
+func (s *Server) handleGitStashAction(w http.ResponseWriter, r *http.Request) {
+	action := r.PathValue("action")
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err)
+		return
+	}
+	ref := strings.TrimSpace(r.FormValue("ref"))
+	out, err := gitops.StashAction(s.opts.RepoRoot, action, ref)
+	if err != nil {
+		s.renderGitBody(w, "stash "+action+" 失败: "+err.Error())
+		return
+	}
+	flash := "stash " + action + " 完成"
+	if first := firstLine(out); first != "" {
+		flash = flash + " (" + first + ")"
+	}
+	s.renderGitBody(w, flash)
+}
+
+func (s *Server) handleGitCommit(w http.ResponseWriter, r *http.Request) {
+	ref := r.PathValue("ref")
+	if ref == "" {
+		http.Error(w, "ref required", http.StatusBadRequest)
+		return
+	}
+	c, err := gitops.ShowCommit(s.opts.RepoRoot, ref)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	s.render(w, "git_commit_detail", c)
+}
+
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
 }
 
 // ----- job handlers ---------------------------------------------------
@@ -658,7 +885,8 @@ func (s *Server) handleJobStart(w http.ResponseWriter, r *http.Request) {
 	var spec JobSpec
 	switch kind {
 	case JobBuild:
-		spec = s.buildJobSpec(target)
+		reconfigure := r.FormValue("reconfigure") == "1"
+		spec = s.buildJobSpec(target, reconfigure)
 	case JobRun:
 		var err error
 		extraArgs := strings.Fields(r.FormValue("extraArgs"))
@@ -783,22 +1011,67 @@ func (s *Server) handleJobStream(w http.ResponseWriter, r *http.Request) {
 
 // ----- job spec builders ----------------------------------------------
 
-func (s *Server) buildJobSpec(target string) JobSpec {
-	args := []string{"--build", "--preset", s.opts.Preset}
+func (s *Server) buildJobSpec(target string, reconfigure bool) JobSpec {
 	label := target
 	if target == "" || target == "all" {
 		label = "all"
-	} else {
+	}
+	args := []string{"--build", "--preset", s.opts.Preset}
+	if target != "" && target != "all" {
 		args = append(args, "--target", target)
 	}
+	env := []string{"CLICOLOR_FORCE=1", "FORCE_COLOR=1"}
+	if !reconfigure {
+		return JobSpec{
+			Kind:    JobBuild,
+			Target:  label,
+			Name:    "cmake",
+			Args:    args,
+			WorkDir: s.opts.RepoRoot,
+			Env:     env,
+		}
+	}
+	// Two-step run: configure first, then build. We model that as a shell
+	// invocation so the user gets one combined log stream. On Windows we
+	// fall back to PowerShell because cmd.exe lacks `&&` in CommandContext
+	// without a /c wrapper.
+	configureArgs := []string{"--preset", s.opts.Preset}
+	if runtime.GOOS == "windows" {
+		ps := fmt.Sprintf("cmake %s; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; cmake %s",
+			joinShell(configureArgs), joinShell(args))
+		return JobSpec{
+			Kind:    JobBuild,
+			Target:  label,
+			Name:    "powershell",
+			Args:    []string{"-NoProfile", "-Command", ps},
+			WorkDir: s.opts.RepoRoot,
+			Env:     env,
+		}
+	}
+	sh := fmt.Sprintf("cmake %s && cmake %s",
+		joinShell(configureArgs), joinShell(args))
 	return JobSpec{
 		Kind:    JobBuild,
 		Target:  label,
-		Name:    "cmake",
-		Args:    args,
+		Name:    "sh",
+		Args:    []string{"-c", sh},
 		WorkDir: s.opts.RepoRoot,
-		Env:     []string{"CLICOLOR_FORCE=1", "FORCE_COLOR=1"},
+		Env:     env,
 	}
+}
+
+// joinShell quotes args naively for human-readable shell strings. Inputs come
+// from preset name + target name, neither of which contains shell metacharacters
+// in this project, so we keep it simple.
+func joinShell(args []string) string {
+	out := ""
+	for i, a := range args {
+		if i > 0 {
+			out += " "
+		}
+		out += a
+	}
+	return out
 }
 
 func (s *Server) runJobSpec(target string, extraArgs []string) (JobSpec, error) {

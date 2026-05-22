@@ -227,6 +227,36 @@ func templateFuncs() template.FuncMap {
 			}
 			return ""
 		},
+		"dirtyCodeClass": func(code string) string {
+			switch code {
+			case "??":
+				return "untracked"
+			}
+			if len(code) != 2 {
+				return "other"
+			}
+			// porcelain v2 XY: X=staged, Y=unstaged. A renamed/added/deleted
+			// staged change usually matters more than an extra unstaged tweak.
+			pick := code[0]
+			if pick == '.' {
+				pick = code[1]
+			}
+			switch pick {
+			case 'M':
+				return "modified"
+			case 'A':
+				return "added"
+			case 'D':
+				return "deleted"
+			case 'R':
+				return "renamed"
+			case 'C':
+				return "copied"
+			case 'U':
+				return "unmerged"
+			}
+			return "other"
+		},
 		"emptyHint": func(k spec.SectionKind) string {
 			switch k {
 			case spec.SectionNext:
