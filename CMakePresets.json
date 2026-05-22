@@ -26,7 +26,6 @@
             "name": "windows",
             "inherits": "base",
             "displayName": "Windows",
-            "generator": "Visual Studio 17 2022",
             "architecture": "x64",
             "condition": {
                 "type": "equals",
