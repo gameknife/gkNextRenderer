@@ -1,7 +1,9 @@
 package dashboard
 
 import (
+	"context"
 	"fmt"
+	"html"
 	"html/template"
 	"net/http"
 	"os"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/gitops"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/llm"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/spec"
 )
@@ -43,6 +46,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /git/stash/{action}", s.handleGitStashAction)
 	mux.HandleFunc("GET /git/commit/{ref}", s.handleGitCommit)
 	mux.HandleFunc("GET /git/panel", s.handleGitPanel)
+	mux.HandleFunc("POST /git/commit-message", s.handleGitCommitMessage)
+	mux.HandleFunc("POST /git/commit", s.handleGitCommitCreate)
 	return logRequests(mux)
 }
 
@@ -871,6 +876,67 @@ func firstLine(s string) string {
 		return s[:i]
 	}
 	return s
+}
+
+// handleGitCommitMessage runs the LLM commit-message generator and returns
+// an HTMX fragment that replaces the textarea inside the commit card.
+//
+// The endpoint takes the LLM round-trip in the request goroutine (can take
+// 30-60s on first call while the model loads). HTMX's hx-indicator handles
+// the spinner; the client times out at 5 min just like the CLI.
+func (s *Server) handleGitCommitMessage(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+	defer cancel()
+	res, err := llm.GenerateCommitMessage(ctx, s.opts.RepoRoot, s.opts.Config.External.LLM, 16000, 0.2)
+	if err != nil {
+		// Surface error inside the textarea so the user can see what went wrong
+		// without breaking the rest of the page.
+		writeCommitTextarea(w, "[LLM error] "+err.Error())
+		return
+	}
+	writeCommitTextarea(w, res.Message)
+}
+
+// handleGitCommitCreate stages all (optional) and commits with the provided
+// message. Re-renders the whole git body so the recent-commits list and dirty
+// state reflect the new HEAD.
+func (s *Server) handleGitCommitCreate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err)
+		return
+	}
+	message := strings.TrimSpace(r.FormValue("message"))
+	if message == "" {
+		s.renderGitBody(w, "Commit 失败: 提交消息为空")
+		return
+	}
+	if r.FormValue("stage_all") == "1" {
+		if err := gitops.AddAll(s.opts.RepoRoot); err != nil {
+			s.renderGitBody(w, "git add -A 失败: "+err.Error())
+			return
+		}
+	}
+	if _, err := gitops.CreateCommit(s.opts.RepoRoot, message); err != nil {
+		s.renderGitBody(w, "Commit 失败: "+err.Error())
+		return
+	}
+	subject := firstLine(message)
+	if len(subject) > 60 {
+		subject = subject[:60] + "..."
+	}
+	s.renderGitBody(w, "已提交: "+subject)
+}
+
+// writeCommitTextarea emits the textarea HTML fragment used as the htmx swap
+// target. Keeping the markup here (rather than a separate template) keeps the
+// fragment trivially small and lets the caller embed it without a render
+// round-trip.
+func writeCommitTextarea(w http.ResponseWriter, content string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprintf(w,
+		`<textarea id="commit-msg-textarea" name="message" class="input commit-msg-textarea" rows="6" placeholder="commit message">%s</textarea>`,
+		html.EscapeString(content),
+	)
 }
 
 // ----- job handlers ---------------------------------------------------

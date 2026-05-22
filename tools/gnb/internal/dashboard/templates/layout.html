@@ -623,6 +623,35 @@
   }
   .commit-detail .meta { color: var(--fg-mute); font-size: 11.5px; font-family: var(--font-mono); }
 
+  /* ----- Git "new commit" card (right column) ----- */
+  .commit-card-hint {
+    font-size: 12px;
+    color: var(--fg-mute);
+    margin-bottom: 10px;
+  }
+  .commit-card-hint .dirty { color: var(--yellow); font-weight: 500; }
+  .commit-card-hint .clean { color: var(--green); font-weight: 500; }
+  .commit-card-form { display: flex; flex-direction: column; gap: 8px; }
+  .commit-msg-textarea {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 96px;
+  }
+  .commit-card-opt { margin: 0; }
+  .commit-card-actions { display: flex; gap: 8px; align-items: center; }
+  .commit-card-actions .commit-ai-btn { flex: 1; position: relative; }
+  .commit-card-actions .btn-primary { flex: 0 0 auto; min-width: 84px; }
+  .commit-ai-btn[disabled] { opacity: 0.6; cursor: progress; }
+  .commit-ai-btn .commit-ai-indicator {
+    display: none;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .commit-ai-btn.htmx-request .ai-btn-label { display: none; }
+  .commit-ai-btn.htmx-request .commit-ai-indicator { display: inline; }
+
   /* ----- Build-page options ----- */
   .build-opt {
     display: flex; align-items: center; gap: 8px;

@@ -460,6 +460,98 @@ func ShowCommit(repoRoot, ref string) (Commit, error) {
 	}, nil
 }
 
+// DiffStaged returns the unified diff of staged changes (vs HEAD).
+func DiffStaged(repoRoot string) (string, error) {
+	return run(repoRoot, "diff", "--staged", "--no-color")
+}
+
+// DiffWorkingTree returns the unified diff of all unstaged tracked changes.
+// Note: this does NOT include untracked files; callers needing full coverage
+// must also list untracked files separately.
+func DiffWorkingTree(repoRoot string) (string, error) {
+	return run(repoRoot, "diff", "--no-color")
+}
+
+// DiffStagedStat returns the human-readable `git diff --staged --stat` summary.
+func DiffStagedStat(repoRoot string) (string, error) {
+	return run(repoRoot, "diff", "--staged", "--stat", "--no-color")
+}
+
+// DiffWorkingTreeStat returns the human-readable `git diff --stat` summary
+// for unstaged tracked changes.
+func DiffWorkingTreeStat(repoRoot string) (string, error) {
+	return run(repoRoot, "diff", "--stat", "--no-color")
+}
+
+// FileChange is a single entry from `git diff --name-status`.
+type FileChange struct {
+	Code string // M, A, D, R, C, etc.
+	Path string
+}
+
+// StagedNameStatus returns `git diff --staged --name-status` entries.
+func StagedNameStatus(repoRoot string) ([]FileChange, error) {
+	out, err := run(repoRoot, "diff", "--staged", "--name-status")
+	if err != nil {
+		return nil, err
+	}
+	return parseNameStatus(out), nil
+}
+
+// WorkingTreeNameStatus returns `git diff --name-status` entries (tracked
+// modifications only — untracked files come from UntrackedFiles).
+func WorkingTreeNameStatus(repoRoot string) ([]FileChange, error) {
+	out, err := run(repoRoot, "diff", "--name-status")
+	if err != nil {
+		return nil, err
+	}
+	return parseNameStatus(out), nil
+}
+
+func parseNameStatus(out string) []FileChange {
+	out = strings.TrimSpace(out)
+	if out == "" {
+		return nil
+	}
+	var changes []FileChange
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		// Rename / copy lines look like: R100 old new -- take the last path so
+		// the LLM sees the destination filename it would naturally describe.
+		changes = append(changes, FileChange{Code: fields[0], Path: fields[len(fields)-1]})
+	}
+	return changes
+}
+
+// UntrackedFiles returns the list of untracked file paths (NUL-safe split
+// using the porcelain z-format is overkill here; -z would complicate the
+// parser and untracked filenames with newlines are vanishingly rare).
+func UntrackedFiles(repoRoot string) ([]string, error) {
+	out, err := run(repoRoot, "ls-files", "--others", "--exclude-standard")
+	if err != nil {
+		return nil, err
+	}
+	out = strings.TrimSpace(out)
+	if out == "" {
+		return nil, nil
+	}
+	return strings.Split(out, "\n"), nil
+}
+
+// CreateCommit creates a commit with the given message.
+func CreateCommit(repoRoot, message string) (string, error) {
+	return run(repoRoot, "commit", "-m", message)
+}
+
+// AddAll stages all working tree changes (tracked + untracked).
+func AddAll(repoRoot string) error {
+	_, err := run(repoRoot, "add", "-A")
+	return err
+}
+
 func run(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir

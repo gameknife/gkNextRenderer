@@ -100,6 +100,7 @@ func main() {
 	root.AddCommand(newDashboardCommand(ctx))
 	root.AddCommand(newLocCommand(ctx))
 	root.AddCommand(newGitCommand(ctx))
+	root.AddCommand(newLLMCommand(ctx))
 	root.AddCommand(newInitCommand())
 
 	if err := root.Execute(); err != nil {

@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/gitops"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/llm"
 	"github.com/spf13/cobra"
 )
 
@@ -22,7 +25,88 @@ func newGitCommand(ctx appContext) *cobra.Command {
 	root.AddCommand(newGitLogCommand(ctx))
 	root.AddCommand(newGitResetCommand(ctx))
 	root.AddCommand(newGitStashCommand(ctx))
+	root.AddCommand(newGitCommitMsgCommand(ctx))
 	return root
+}
+
+// newGitCommitMsgCommand wires the MVP: ask the local LLM for a commit
+// message describing the current working tree / staged changes. The diff is
+// truncated to keep the request inside the model context window.
+func newGitCommitMsgCommand(ctx appContext) *cobra.Command {
+	var (
+		doCommit    bool
+		stageAll    bool
+		maxDiffChar int
+		temperature float64
+		dryRun      bool
+		modelID     string
+	)
+	cmd := &cobra.Command{
+		Use:     "commit-msg",
+		Aliases: []string{"ai-commit"},
+		Short:   "Generate a commit message from local changes using the local LLM",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if stageAll {
+				if err := gitops.AddAll(ctx.repoRoot); err != nil {
+					return err
+				}
+			}
+			if dryRun {
+				diff, source, truncated, err := llm.CollectDiff(ctx.repoRoot, llm.DiffBudget{TotalChars: maxDiffChar})
+				if err != nil {
+					return err
+				}
+				suffix := ""
+				if truncated {
+					suffix = " (truncated)"
+				}
+				console.Info("source: %s%s · prompt bytes: %d", source, suffix, len(diff))
+				fmt.Println()
+				console.Header("prompt that would be sent to the LLM")
+				fmt.Println(diff)
+				return nil
+			}
+			c, cancel := context.WithTimeout(cmd.Context(), 5*time.Minute)
+			defer cancel()
+			llmCfg, err := selectLLMModel(ctx.cfg.External.LLM, modelID)
+			if err != nil {
+				return err
+			}
+			res, err := llm.GenerateCommitMessage(c, ctx.repoRoot, llmCfg, maxDiffChar, temperature)
+			if err != nil {
+				return err
+			}
+			suffix := ""
+			if res.Truncated {
+				suffix = " (diff truncated)"
+			}
+			console.Info("source: %s%s", res.Source, suffix)
+
+			fmt.Println()
+			console.Header("generated commit message")
+			fmt.Println(res.Message)
+			fmt.Println()
+
+			if doCommit {
+				out, err := gitops.CreateCommit(ctx.repoRoot, res.Message)
+				if err != nil {
+					return err
+				}
+				if out != "" {
+					fmt.Println(out)
+				}
+				console.Success("committed")
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&doCommit, "commit", false, "create the commit using the generated message")
+	cmd.Flags().BoolVar(&stageAll, "stage-all", false, "run `git add -A` before diffing")
+	cmd.Flags().IntVar(&maxDiffChar, "max-diff-chars", 16000, "truncate the diff sent to the model after this many characters")
+	cmd.Flags().Float64Var(&temperature, "temperature", 0.2, "sampling temperature for the model")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the prompt that would be sent without calling the LLM")
+	cmd.Flags().StringVar(&modelID, "model", "", "override the active LLM model (id from [[external.llm.models]])")
+	return cmd
 }
 
 func newGitStatusCommand(ctx appContext) *cobra.Command {
