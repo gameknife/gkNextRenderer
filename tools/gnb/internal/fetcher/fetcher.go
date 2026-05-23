@@ -17,7 +17,6 @@ import (
 
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/config"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
-	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
 )
 
 type vulkanDownloadSpec struct {
@@ -34,7 +33,7 @@ func EnsureExternal(repoRoot string, cfg config.Config) error {
 
 func EnsureNamedExternal(repoRoot string, cfg config.Config, names []string) error {
 	if len(names) == 0 {
-		names = []string{"tsc", "slang", "vulkan", "streamline"}
+		names = []string{"tsc", "vulkan", "streamline"}
 	}
 
 	for _, name := range names {
@@ -43,10 +42,6 @@ func EnsureNamedExternal(repoRoot string, cfg config.Config, names []string) err
 			return EnsureExternal(repoRoot, cfg)
 		case "tsc":
 			if err := ensureTSC(repoRoot, cfg); err != nil {
-				return err
-			}
-		case "slang":
-			if err := ensureSlang(repoRoot, cfg); err != nil {
 				return err
 			}
 		case "vulkan", "vulkansdk", "vulkan-sdk":
@@ -165,25 +160,6 @@ func EnsureIOSExternal(repoRoot string, cfg config.Config) error {
 		}
 	}
 	return ensureArchive(repoRoot, cfg.External.MoltenVK.URL, dstDir, "MoltenVK/MoltenVK/static/MoltenVK.xcframework/ios-arm64/libMoltenVK.a")
-}
-
-func ensureSlang(repoRoot string, cfg config.Config) error {
-	key := platform.PlatformKey()
-	if key != "linux" && key != "macos_arm64" && key != "macos_amd64" {
-		return nil
-	}
-
-	url := cfg.External.Slang.Linux
-	name := "slang-2025.6.1-linux-x86_64"
-	if key == "macos_arm64" {
-		url = cfg.External.Slang.MacOSArm64
-		name = "slang-2025.6.1-macos-aarch64"
-	} else if key == "macos_amd64" {
-		url = cfg.External.Slang.MacOSAMD64
-		name = "slang-2025.6.1-macos-x86_64"
-	}
-
-	return ensureArchive(repoRoot, url, filepath.Join(repoRoot, "external", name), "bin/slangc")
 }
 
 func ensureTSC(repoRoot string, cfg config.Config) error {

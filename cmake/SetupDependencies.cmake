@@ -316,47 +316,14 @@ ELSE()
 ENDIF()
 
 set(_slang_hint_dirs)
-set(_project_managed_slangc "")
-
-set(_slang_candidate_roots)
-list(APPEND _slang_candidate_roots
-    "${CMAKE_SOURCE_DIR}/external/slang"
-    "${CMAKE_SOURCE_DIR}/slang")
-
-file(GLOB _slang_downloads "${CMAKE_SOURCE_DIR}/external/slang-*")
-list(APPEND _slang_candidate_roots ${_slang_downloads})
-list(REMOVE_DUPLICATES _slang_candidate_roots)
-
-foreach(_slang_root ${_slang_candidate_roots})
-    if(EXISTS "${_slang_root}")
-        list(APPEND _slang_hint_dirs "${_slang_root}")
-        if (NOT _project_managed_slangc AND EXISTS "${_slang_root}/bin/slangc")
-            set(_project_managed_slangc "${_slang_root}/bin/slangc")
-        endif()
-    endif()
-endforeach()
-
-if(DEFINED ENV{SLANG_ROOT})
-    list(APPEND _slang_hint_dirs "$ENV{SLANG_ROOT}")
-endif()
-
-if(DEFINED SLANG_ROOT)
-    list(APPEND _slang_hint_dirs "${SLANG_ROOT}")
-endif()
 
 if(DEFINED ENV{VULKAN_SDK} AND NOT "$ENV{VULKAN_SDK}" STREQUAL "")
     list(APPEND _slang_hint_dirs "$ENV{VULKAN_SDK}")
 endif()
 
-list(REMOVE_DUPLICATES _slang_hint_dirs)
-
 if (DEFINED Vulkan_SLANGC AND Vulkan_SLANGC AND NOT EXISTS "${Vulkan_SLANGC}")
     message(STATUS "Clearing stale slangc cache entry: ${Vulkan_SLANGC}")
     unset(Vulkan_SLANGC CACHE)
-endif()
-
-if (_project_managed_slangc)
-    set(Vulkan_SLANGC "${_project_managed_slangc}" CACHE FILEPATH "Preferred project-managed slangc executable" FORCE)
 endif()
 
 find_program(Vulkan_SLANGC
@@ -365,5 +332,5 @@ find_program(Vulkan_SLANGC
 	PATH_SUFFIXES bin)
 
 if (NOT Vulkan_SLANGC)
-    message(FATAL_ERROR "slangc not found!")
+    message(FATAL_ERROR "slangc not found! It should be bundled with the Vulkan SDK at \$VULKAN_SDK/bin/slangc.")
 endif()

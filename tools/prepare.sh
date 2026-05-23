@@ -45,26 +45,15 @@ setup_windows() {
     echo "Please ensure Visual Studio 2022 with C++ tools is installed"
 }
 
-setup_slangc() {
-    echo "Setting up slangc..."
-    curl -L https://github.com/shader-slang/slang/releases/download/vulkan-sdk-1.4.313.0/slang-vulkan-sdk-1.4.313.0-linux-x86_64.zip -o slang.zip
-    mkdir -p slang
-    unzip slang.zip -d slang
-    echo "slangc setup completed!"
-    echo "Add to PATH: export PATH=\"\$PWD/slang/bin:\$PATH\""
-}
-
 show_help() {
     echo "Usage: $0 [command]"
     echo ""
     echo "Commands:"
     echo "  setup     Setup development environment for current platform"
-    echo "  slangc    Setup slangc compiler"
     echo "  help      Show this help message"
     echo ""
     echo "Examples:"
     echo "  $0 setup     # Auto-detect platform and setup"
-    echo "  $0 slangc    # Setup slangc"
 }
 
 main() {
@@ -96,9 +85,6 @@ main() {
                     exit 1
                     ;;
             esac
-            ;;
-        slangc)
-            setup_slangc
             ;;
         help|--help|-h)
             show_help

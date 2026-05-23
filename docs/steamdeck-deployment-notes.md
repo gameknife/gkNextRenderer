@@ -52,15 +52,7 @@ curl: (92) HTTP/2 stream 1 reset by server
 slangc not found!
 ```
 
-这是因为项目需要 Slang 着色器编译器，但首次部署时机器上并没有可用的 `slangc`，而 README 也没有明确把它作为 Linux 首次部署的关键前置项强调出来。
-
-仓库里实际上已经有对应脚本：
-
-```bash
-./tools/fetch_slang_linux.sh
-```
-
-执行后会把 `slangc` 安装到 `external/slang-<version>-linux-x86_64/`，随后 CMake 就能自动发现。
+`slangc` 现在随 VulkanSDK 一同分发，`gnb setup` 会通过 `gnb deps fetch vulkan` 自动拉取 VulkanSDK。如果仍然找不到，确认 `external/VulkanSDK/<version>/` 下存在 `bin/slangc`，或设置 `VULKAN_SDK` 环境变量指向已安装的 SDK 根目录。
 
 ## 实际处理方式
 
@@ -79,18 +71,6 @@ sudo pacman -S --needed libxrandr wayland-protocols libxkbcommon
 ```
 
 如果中途遇到 GitHub 归档下载失败，通常直接重试即可。
-
-### 3. 安装 `slangc`
-
-```bash
-./tools/fetch_slang_linux.sh
-```
-
-然后再次执行：
-
-```bash
-./build.sh --preset full-linux --reconfigure
-```
 
 ## 最终结果
 
@@ -135,28 +115,13 @@ uploaded scene [CornellBox.proc] to gpu
 
 然后直接给出不同发行版的安装命令提示。
 
-### 2. 在 `build.sh` 里自动补 `slangc`
-
-如果检测到：
-
-- `PATH` 中没有 `slangc`
-- `external/` 下也没有项目托管的 Slang
-
-则可以直接调用：
-
-```bash
-./tools/fetch_slang_linux.sh
-```
-
-这样首次部署时就不会在 CMake 深处才因为 `slangc` 失败。
-
-### 3. README 增加 Steam Deck / Arch Linux 专项说明
+### 2. README 增加 Steam Deck / Arch Linux 专项说明
 
 Ubuntu 依赖列表并不能覆盖 SteamOS / Arch 系环境。README 应该补一段单独说明，至少明确：
 
 - 推荐在 Steam Deck 上直接使用 `full-linux`
 - 首次部署需安装 `libxrandr`、`wayland-protocols`、`libxkbcommon`
-- `build.sh` 会自动尝试准备 `slangc`
+- `slangc` 随 VulkanSDK 一并由 `gnb setup` 拉取，无需单独处理
 - 若 GitHub 下载偶发失败，可直接重试构建
 
 ### 4. 把“网络抖动可重试”写进文档
