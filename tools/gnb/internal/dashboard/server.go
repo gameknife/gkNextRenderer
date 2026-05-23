@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/config"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/gitops"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/spec"
 )
 
@@ -257,6 +258,39 @@ func templateFuncs() template.FuncMap {
 			}
 			return "other"
 		},
+		"dirtySummary": func(files []gitops.DirtyFile) string {
+			var modified, added, deleted int
+			for _, f := range files {
+				switch dirtyPrimaryCode(f.Code) {
+				case 'M', 'R', 'C', 'U':
+					modified++
+				case 'A', '?':
+					added++
+				case 'D':
+					deleted++
+				}
+			}
+			parts := []string{}
+			if modified > 0 {
+				parts = append(parts, fmt.Sprintf("%d modified", modified))
+			}
+			if added > 0 {
+				parts = append(parts, fmt.Sprintf("%d add", added))
+			}
+			if deleted > 0 {
+				parts = append(parts, fmt.Sprintf("%d delete", deleted))
+			}
+			if len(parts) == 0 {
+				return "0 files"
+			}
+			return strings.Join(parts, ", ")
+		},
+		"dirtyIsStaged": func(code string) bool {
+			return len(code) == 2 && code[0] != '.' && code[0] != '?'
+		},
+		"dirtyIsUnstaged": func(code string) bool {
+			return code == "??" || (len(code) == 2 && code[1] != '.')
+		},
 		"emptyHint": func(k spec.SectionKind) string {
 			switch k {
 			case spec.SectionNext:
@@ -269,6 +303,20 @@ func templateFuncs() template.FuncMap {
 			return "(暂无)"
 		},
 	}
+}
+
+func dirtyPrimaryCode(code string) byte {
+	if code == "??" {
+		return '?'
+	}
+	if len(code) != 2 {
+		return 0
+	}
+	pick := code[0]
+	if pick == '.' {
+		pick = code[1]
+	}
+	return pick
 }
 
 func formatElapsedDuration(d time.Duration) string {

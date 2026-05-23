@@ -691,30 +691,70 @@
     {{template "git_panel" .}}
   </aside>
   <section class="git-commits-col">
-    <div class="card">
+    <div class="card git-history-card">
       <h2 class="card-title">
         <span class="ico">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h12a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4V4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="14" y2="13"/></svg>
         </span>
         最近提交
         <span class="count">{{len .GitVM.Commits}}</span>
+        {{if .GitVM.RemoteCommits}}
+          <span class="remote-commit-count">远端 +{{len .GitVM.RemoteCommits}}</span>
+        {{end}}
       </h2>
-      {{if .GitVM.Commits}}
+      {{if or .GitVM.RemoteCommits .GitVM.Status.Dirty .GitVM.Commits}}
         <div class="commit-list">
-          {{range .GitVM.Commits}}
-          <div class="commit-row">
-            <span class="hash"
-                  hx-get="/git/commit/{{.Full}}"
-                  hx-target="#git-commit-detail"
-                  hx-swap="innerHTML"
-                  style="cursor:pointer;">{{.Hash}}</span>
+          {{if .GitVM.RemoteCommits}}
+          <div class="commit-list-label">远端未拉取 · {{.GitVM.Status.Upstream}}</div>
+          {{range .GitVM.RemoteCommits}}
+          <div class="commit-row remote-commit-row"
+               data-git-selectable
+               hx-get="/git/commit/{{.Full}}"
+               hx-trigger="click[!event.target.closest('.commit-reset')]"
+               hx-target="#git-side-panel"
+               hx-swap="innerHTML">
+            <span class="hash">{{.Hash}}</span>
             <span class="date">{{.Date}}</span>
             <span class="author">{{.Author}}</span>
-            <span class="subject"
-                  hx-get="/git/commit/{{.Full}}"
-                  hx-target="#git-commit-detail"
-                  hx-swap="innerHTML"
-                  style="cursor:pointer;">{{.Subject}}</span>
+            <span class="subject">{{.Subject}}</span>
+            <button class="commit-reset" type="button"
+                    title="reset --hard 到此远端提交"
+                    hx-post="/git/reset"
+                    hx-vals='{"ref":"{{.Full}}"}'
+                    hx-target="#git-tab-body" hx-swap="innerHTML"
+                    hx-confirm="⚠️ 执行 git reset --hard {{.Hash}}？这会让当前分支直接指向这个远端提交，并丢弃当前未提交改动。">⤺</button>
+          </div>
+          {{end}}
+          {{end}}
+
+          {{if .GitVM.Status.Dirty}}
+          <div class="commit-list-label">本地工作区</div>
+          <div class="commit-row local-change-row selected"
+               data-git-selectable
+               hx-get="/git/local-changes"
+               hx-target="#git-side-panel"
+               hx-swap="innerHTML">
+            <span class="hash">LOCAL</span>
+            <span class="date">{{if .GitVM.Status.Branch}}{{.GitVM.Status.Branch}}{{else}}detached{{end}}</span>
+            <span class="author">working tree</span>
+            <span class="subject">本地修改 · {{len .GitVM.Status.DirtyFiles}} files · {{dirtySummary .GitVM.Status.DirtyFiles}}</span>
+            <span class="commit-row-spacer"></span>
+          </div>
+          {{end}}
+
+          {{if .GitVM.Commits}}
+          <div class="commit-list-label">本地提交</div>
+          {{range .GitVM.Commits}}
+          <div class="commit-row"
+               data-git-selectable
+               hx-get="/git/commit/{{.Full}}"
+               hx-trigger="click[!event.target.closest('.commit-reset')]"
+               hx-target="#git-side-panel"
+               hx-swap="innerHTML">
+            <span class="hash">{{.Hash}}</span>
+            <span class="date">{{.Date}}</span>
+            <span class="author">{{.Author}}</span>
+            <span class="subject">{{.Subject}}</span>
             <button class="commit-reset" type="button"
                     title="reset --hard 到此提交"
                     hx-post="/git/reset"
@@ -722,6 +762,7 @@
                     hx-target="#git-tab-body" hx-swap="innerHTML"
                     hx-confirm="⚠️ 执行 git reset --hard {{.Hash}}？这会丢弃当前分支所有未提交改动以及 HEAD 之后到此 commit 之间的所有提交。">⤺</button>
           </div>
+          {{end}}
           {{end}}
         </div>
       {{else}}
@@ -731,10 +772,13 @@
   </section>
 
   <section class="git-detail-col">
-    <div id="git-commit-detail">
+    <div id="git-side-panel">
+      {{if .GitVM.Status.Dirty}}
+        {{template "git_commit_card" .}}
+      {{else}}
       <div class="card detail-empty">点击 hash 或 subject 查看完整 message；点击 ⤺ 重置 HEAD。</div>
+      {{end}}
     </div>
-    {{template "git_commit_card" .}}
   </section>
 </div>
 {{end}}
@@ -758,11 +802,50 @@
     <div class="commit-card-hint">分支 <code>{{if .GitVM.Status.Branch}}{{.GitVM.Status.Branch}}{{else}}(detached){{end}}</code> · 工作区 <span class="clean">clean</span></div>
   {{end}}
 
+  {{if .GitVM.Status.Dirty}}
+  <div class="stage-panel">
+    <div class="stage-panel-head">
+      <span>文件 stage</span>
+      <span>{{dirtySummary .GitVM.Status.DirtyFiles}}</span>
+    </div>
+    <div class="stage-actions">
+      <button class="btn-secondary" type="button"
+              hx-post="/git/stage"
+              hx-target="#git-tab-body" hx-swap="innerHTML">stage all</button>
+      <button class="btn-secondary" type="button"
+              hx-post="/git/unstage"
+              hx-target="#git-tab-body" hx-swap="innerHTML">unstage all</button>
+    </div>
+    <div class="stage-file-list">
+      {{range .GitVM.Status.DirtyFiles}}
+      <div class="stage-file">
+        <span class="dirty-code dirty-code-{{dirtyCodeClass .Code}}">{{.Code}}</span>
+        <span class="dirty-path" title="{{.Path}}">{{.Path}}</span>
+        <div class="stage-file-actions">
+          {{if dirtyIsUnstaged .Code}}
+          <form hx-post="/git/stage" hx-target="#git-tab-body" hx-swap="innerHTML">
+            <input type="hidden" name="path" value="{{.Path}}">
+            <button type="submit">stage</button>
+          </form>
+          {{end}}
+          {{if dirtyIsStaged .Code}}
+          <form hx-post="/git/unstage" hx-target="#git-tab-body" hx-swap="innerHTML">
+            <input type="hidden" name="path" value="{{.Path}}">
+            <button type="submit">unstage</button>
+          </form>
+          {{end}}
+        </div>
+      </div>
+      {{end}}
+    </div>
+  </div>
+  {{end}}
+
   <form class="commit-card-form" onsubmit="return false;">
-    <textarea id="commit-msg-textarea" name="message" class="input commit-msg-textarea" rows="6" placeholder="点击 'AI 补全' 让本地 Gemma 3n 根据 diff 生成；也可手动编辑"></textarea>
+    <textarea id="commit-msg-textarea" name="message" class="input commit-msg-textarea" rows="10" placeholder="点击 AI 补全让本地 LLM 根据 diff 生成；也可手动编辑"></textarea>
 
     <label class="build-opt commit-card-opt">
-      <input type="checkbox" name="stage_all" value="1" checked>
+      <input type="checkbox" name="stage_all" value="1">
       <span>提交前 <code>git add -A</code></span>
     </label>
 

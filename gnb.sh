@@ -106,7 +106,7 @@ if command -v go >/dev/null 2>&1; then
   NEED_BUILD=0
   if [ ! -x "$LOCAL_GNB" ]; then
     NEED_BUILD=1
-  elif find "$ROOT/tools/gnb" -type f \( -name '*.go' -o -name 'go.mod' -o -name 'go.sum' \) -newer "$LOCAL_GNB" | grep -q .; then
+  elif find "$ROOT/tools/gnb" -type f \( -name '*.go' -o -name 'go.mod' -o -name 'go.sum' -o -name '*.html' \) -newer "$LOCAL_GNB" | grep -q .; then
     NEED_BUILD=1
   fi
   if [ "$NEED_BUILD" -eq 1 ]; then

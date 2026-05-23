@@ -18,14 +18,14 @@ var ErrDirty = errors.New("working tree is dirty (uncommitted changes)")
 
 // Status summarizes the working tree.
 type Status struct {
-	Branch      string // current branch name; empty when in detached HEAD
-	Head        string // short HEAD sha
-	Dirty       bool
-	Ahead       int // commits ahead of upstream
-	Behind      int // commits behind upstream
-	Upstream    string
-	DirtyHint   string      // first dirty path (informational)
-	DirtyFiles  []DirtyFile // all dirty entries (modified/added/deleted/renamed/untracked)
+	Branch     string // current branch name; empty when in detached HEAD
+	Head       string // short HEAD sha
+	Dirty      bool
+	Ahead      int // commits ahead of upstream
+	Behind     int // commits behind upstream
+	Upstream   string
+	DirtyHint  string      // first dirty path (informational)
+	DirtyFiles []DirtyFile // all dirty entries (modified/added/deleted/renamed/untracked)
 }
 
 // DirtyFile is one entry from `git status --porcelain=v2`.
@@ -415,6 +415,30 @@ func Log(repoRoot string, n int) ([]Commit, error) {
 	if err != nil {
 		return nil, err
 	}
+	return parseLog(out), nil
+}
+
+// LogRange returns commits in a revision range such as "HEAD..origin/main".
+func LogRange(repoRoot, revRange string, n int) ([]Commit, error) {
+	if revRange == "" {
+		return nil, nil
+	}
+	if n <= 0 {
+		n = 30
+	}
+	out, err := run(repoRoot, "log",
+		fmt.Sprintf("-n%d", n),
+		"--pretty=format:%h%x00%H%x00%an%x00%ad%x00%s",
+		"--date=short",
+		revRange,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return parseLog(out), nil
+}
+
+func parseLog(out string) []Commit {
 	var commits []Commit
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimRight(line, "\r")
@@ -433,7 +457,7 @@ func Log(repoRoot string, n int) ([]Commit, error) {
 			Subject: parts[4],
 		})
 	}
-	return commits, nil
+	return commits
 }
 
 // ShowCommit returns the full commit message for a single ref.
@@ -549,6 +573,38 @@ func CreateCommit(repoRoot, message string) (string, error) {
 // AddAll stages all working tree changes (tracked + untracked).
 func AddAll(repoRoot string) error {
 	_, err := run(repoRoot, "add", "-A")
+	return err
+}
+
+// AddPath stages one working tree path.
+func AddPath(repoRoot, path string) error {
+	if path == "" {
+		return fmt.Errorf("path required")
+	}
+	_, err := run(repoRoot, "add", "--", path)
+	return err
+}
+
+// UnstagePath removes one path from the index while keeping the working tree
+// content intact.
+func UnstagePath(repoRoot, path string) error {
+	if path == "" {
+		return fmt.Errorf("path required")
+	}
+	if _, err := run(repoRoot, "restore", "--staged", "--", path); err == nil {
+		return nil
+	}
+	_, err := run(repoRoot, "reset", "HEAD", "--", path)
+	return err
+}
+
+// UnstageAll removes all staged entries from the index without touching the
+// working tree.
+func UnstageAll(repoRoot string) error {
+	if _, err := run(repoRoot, "restore", "--staged", ":/"); err == nil {
+		return nil
+	}
+	_, err := run(repoRoot, "reset", "HEAD")
 	return err
 }
 
