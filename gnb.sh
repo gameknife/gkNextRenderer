@@ -126,21 +126,6 @@ ensure_intel_macos_host_tools() {
     download_file "$TSC_URL" "$TSC_DST"
     chmod +x "$TSC_DST"
   fi
-
-  SLANG_URL="https://github.com/shader-slang/slang/releases/download/v2025.6.1/slang-2025.6.1-macos-x86_64.zip"
-  SLANG_DIR="$ROOT/external/slang-2025.6.1-macos-x86_64"
-  SLANG_SENTINEL="$SLANG_DIR/bin/slangc"
-  if [ ! -x "$SLANG_SENTINEL" ] || ! file "$SLANG_SENTINEL" | grep -q "x86_64"; then
-    TMP_ZIP="$ROOT/external/.download-slang-2025.6.1-macos-x86_64.zip"
-    echo "[gnb] download $SLANG_URL"
-    download_file "$SLANG_URL" "$TMP_ZIP"
-    rm -rf "$SLANG_DIR"
-    mkdir -p "$SLANG_DIR"
-    unzip -q "$TMP_ZIP" -d "$SLANG_DIR"
-    rm -f "$TMP_ZIP"
-    chmod +x "$SLANG_SENTINEL"
-  fi
-  ln -sfn "$(basename "$SLANG_DIR")" "$ROOT/external/slang"
 }
 
 fallback_intel_macos_build() {

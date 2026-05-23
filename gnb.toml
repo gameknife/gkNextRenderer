@@ -21,11 +21,6 @@ macos_arm64 = "https://github.com/rxliuli/tsgo-npm-release/releases/download/v20
 when = "ios"
 url = "https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.0/MoltenVK-ios.tar"
 
-[external.slang]
-linux = "https://github.com/shader-slang/slang/releases/download/v2025.6.1/slang-2025.6.1-linux-x86_64.zip"
-macos_amd64 = "https://github.com/shader-slang/slang/releases/download/v2025.6.1/slang-2025.6.1-macos-x86_64.zip"
-macos_arm64 = "https://github.com/shader-slang/slang/releases/download/v2025.6.1/slang-2025.6.1-macos-aarch64.zip"
-
 [external.vulkansdk]
 version = "1.4.341.1"
 root = "external/VulkanSDK"
