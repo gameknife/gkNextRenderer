@@ -465,7 +465,17 @@
     height: 100%;
     overflow: hidden;
   }
+  #git-tab-body {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
   .tab-git aside, .tab-git section { overflow-y: auto; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+  .tab-git .git-commits-col {
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+  }
   .tab-git .git-detail-col .detail-empty {
     color: var(--fg-mute);
     font-size: 12.5px;
@@ -495,15 +505,17 @@
   .branch-row .remote { color: var(--fg-dim); font-family: var(--font-mono); font-size: 11px; }
   .branch-row .star { color: var(--accent); font-weight: 700; }
   .branch-row button {
-    border: 1px solid var(--border);
-    background: var(--bg-input);
-    color: var(--fg-mute);
+    border: 1px solid var(--border-strong);
+    background: var(--bg-card-hover);
+    color: var(--fg);
     border-radius: var(--radius-sm);
-    padding: 3px 9px;
+    padding: 4px 10px;
     font-size: 11.5px;
+    font-weight: 650;
     cursor: pointer;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset;
   }
-  .branch-row button:hover { color: var(--fg); border-color: var(--border-strong); }
+  .branch-row button:hover { color: white; border-color: var(--accent); background: rgba(99, 102, 241, 0.22); }
   .commit-row {
     display: grid;
     grid-template-columns: 80px 84px 130px minmax(0, 1fr) 24px;
@@ -513,25 +525,125 @@
     border-bottom: 1px solid var(--border);
     cursor: pointer;
     font-size: 12.5px;
+    min-width: 560px;
   }
   .commit-row:last-child { border-bottom: 0; }
   .commit-row:hover { background: var(--bg-card-hover); }
+  .commit-row.selected {
+    background: rgba(99, 102, 241, 0.13);
+    box-shadow: 3px 0 0 var(--accent) inset;
+  }
+  .commit-row.selected .subject { color: white; font-weight: 600; }
+  .commit-row.remote-commit-row {
+    background: rgba(148, 163, 184, 0.04);
+    color: var(--fg-mute);
+  }
+  .commit-row.remote-commit-row .hash,
+  .commit-row.remote-commit-row .date,
+  .commit-row.remote-commit-row .author,
+  .commit-row.remote-commit-row .subject {
+    opacity: 0.62;
+  }
+  .commit-row.remote-commit-row:hover {
+    background: rgba(148, 163, 184, 0.09);
+  }
+  .commit-row.remote-commit-row.selected {
+    background: rgba(99, 102, 241, 0.1);
+  }
+  .commit-row.local-change-row {
+    border-top: 1px solid rgba(234, 179, 8, 0.24);
+    border-bottom: 1px solid rgba(234, 179, 8, 0.24);
+    background: rgba(234, 179, 8, 0.07);
+  }
+  .commit-row.local-change-row:hover { background: rgba(234, 179, 8, 0.1); }
+  .commit-row.local-change-row.selected {
+    background: rgba(234, 179, 8, 0.14);
+    box-shadow: 3px 0 0 var(--yellow) inset;
+  }
+  .commit-row.local-change-row .hash { color: var(--yellow); }
   .commit-row .hash { font-family: var(--font-mono); color: var(--accent); font-size: 11.5px; }
   .commit-row .date { font-family: var(--font-mono); color: var(--fg-dim); font-size: 11px; }
   .commit-row .author { color: var(--fg-mute); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .commit-row .subject { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .commit-row .commit-reset {
-    border: 1px solid var(--border);
-    background: var(--bg-input);
-    color: var(--fg-dim);
+    border: 1px solid rgba(239, 68, 68, 0.34);
+    background: rgba(239, 68, 68, 0.08);
+    color: var(--red);
     border-radius: var(--radius-sm);
-    width: 24px; height: 22px;
+    width: 26px; height: 24px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 14px;
+    font-weight: 700;
     line-height: 1;
   }
-  .commit-row .commit-reset:hover { color: var(--red); border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.08); }
+  .commit-row .commit-reset:hover { color: white; border-color: rgba(239, 68, 68, 0.65); background: rgba(239, 68, 68, 0.26); }
+  .commit-row-spacer { width: 26px; height: 24px; }
   .commit-row .chev { color: var(--fg-dim); }
+  .commit-list-label {
+    padding: 9px 10px 5px;
+    color: var(--fg-dim);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+  }
+  .remote-commit-count {
+    margin-left: auto;
+    color: var(--fg-dim);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .git-history-card {
+    flex: 1;
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-bottom: 0;
+  }
+  .git-history-card .card-title {
+    flex: 0 0 auto;
+  }
+  .git-history-card .commit-list {
+    flex: 1;
+    min-height: 0;
+    max-height: 100%;
+    overflow-x: auto;
+    overflow-y: scroll;
+    margin: 0 -16px;
+    padding-bottom: 10px;
+  }
+  .git-history-card .empty-row {
+    flex: 1;
+  }
+  .local-changes-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 11px 12px;
+    border: 1px solid rgba(234, 179, 8, 0.28);
+    background: rgba(234, 179, 8, 0.07);
+    color: var(--fg);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    text-align: left;
+  }
+  .local-changes-card:hover { border-color: rgba(234, 179, 8, 0.48); background: rgba(234, 179, 8, 0.1); }
+  .local-changes-card.selected {
+    border-color: rgba(234, 179, 8, 0.68);
+    background: rgba(234, 179, 8, 0.14);
+    box-shadow: 3px 0 0 var(--yellow) inset;
+  }
+  .local-changes-card .local-changes-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .local-changes-card .title { font-size: 13px; font-weight: 650; }
+  .local-changes-card .summary { color: var(--fg-mute); font-size: 12px; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .local-changes-card .chev { color: var(--fg-dim); flex: 0 0 auto; }
   .git-actions { display: flex; gap: 8px; }
   .git-actions button { flex: 1; }
   .git-status-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 12.5px; }
@@ -595,13 +707,13 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .dirty-code-modified  { color: var(--yellow); border-color: rgba(234, 179, 8, 0.4); }
-  .dirty-code-added     { color: var(--green);  border-color: rgba(34, 197, 94, 0.4); }
-  .dirty-code-deleted   { color: var(--red);    border-color: rgba(239, 68, 68, 0.4); }
-  .dirty-code-renamed   { color: var(--accent); border-color: rgba(59, 130, 246, 0.4); }
-  .dirty-code-copied    { color: var(--accent); border-color: rgba(59, 130, 246, 0.4); }
-  .dirty-code-untracked { color: var(--fg-dim); border-color: var(--border); border-style: dashed; }
-  .dirty-code-unmerged  { color: var(--red);    border-color: rgba(239, 68, 68, 0.4); }
+  .dirty-code-modified, .dirty-file .dirty-code-modified, .stage-file .dirty-code-modified  { color: var(--yellow); border-color: rgba(234, 179, 8, 0.4); }
+  .dirty-code-added, .dirty-file .dirty-code-added, .stage-file .dirty-code-added            { color: var(--green);  border-color: rgba(34, 197, 94, 0.4); }
+  .dirty-code-deleted, .dirty-file .dirty-code-deleted, .stage-file .dirty-code-deleted      { color: var(--red);    border-color: rgba(239, 68, 68, 0.4); }
+  .dirty-code-renamed, .dirty-file .dirty-code-renamed, .stage-file .dirty-code-renamed      { color: var(--accent); border-color: rgba(59, 130, 246, 0.4); }
+  .dirty-code-copied, .dirty-file .dirty-code-copied, .stage-file .dirty-code-copied         { color: var(--accent); border-color: rgba(59, 130, 246, 0.4); }
+  .dirty-code-untracked, .dirty-file .dirty-code-untracked, .stage-file .dirty-code-untracked { color: var(--fg-dim); border-color: var(--border); border-style: dashed; }
+  .dirty-code-unmerged, .dirty-file .dirty-code-unmerged, .stage-file .dirty-code-unmerged   { color: var(--red);    border-color: rgba(239, 68, 68, 0.4); }
   .commit-detail {
     padding: 14px;
     background: var(--bg-panel);
@@ -637,8 +749,78 @@
     font-size: 12.5px;
     line-height: 1.5;
     resize: vertical;
-    min-height: 96px;
+    min-height: 180px;
   }
+  .stage-panel {
+    margin-bottom: 10px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-panel);
+  }
+  .stage-panel-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--fg-mute);
+    font-size: 11.5px;
+    margin-bottom: 8px;
+  }
+  .stage-panel-head span:last-child {
+    font-family: var(--font-mono);
+    color: var(--fg-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .stage-actions { display: flex; gap: 8px; margin-bottom: 8px; }
+  .stage-actions button { flex: 1; padding: 7px 9px; font-size: 12px; font-weight: 650; }
+  .stage-file-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  .stage-file {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-family: var(--font-mono);
+  }
+  .stage-file .dirty-code {
+    text-align: center;
+    padding: 1px 0;
+    font-size: 10.5px;
+    border-radius: 3px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--fg-dim);
+    letter-spacing: 0;
+    white-space: pre;
+  }
+  .stage-file .dirty-path {
+    min-width: 0;
+    color: var(--fg);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .stage-file-actions { display: flex; gap: 4px; }
+  .stage-file-actions form { margin: 0; }
+  .stage-file-actions button {
+    border: 1px solid var(--border-strong);
+    background: var(--bg-card-hover);
+    color: var(--fg);
+    border-radius: var(--radius-sm);
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: 650;
+    cursor: pointer;
+  }
+  .stage-file-actions button:hover { color: white; border-color: var(--accent); background: rgba(99, 102, 241, 0.22); }
   .commit-card-opt { margin: 0; }
   .commit-card-actions { display: flex; gap: 8px; align-items: center; }
   .commit-card-actions .commit-ai-btn { flex: 1; position: relative; }
@@ -1004,15 +1186,17 @@
   .task-edit .row .select { flex: 1; }
   .task-edit .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
   .btn-secondary {
-    background: var(--bg-input);
+    background: var(--bg-card-hover);
     color: var(--fg);
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-strong);
     border-radius: var(--radius-sm);
     padding: 7px 14px;
     font-size: 12.5px;
+    font-weight: 650;
     cursor: pointer;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset;
   }
-  .btn-secondary:hover { border-color: var(--border-strong); }
+  .btn-secondary:hover { color: white; border-color: var(--accent); background: rgba(99, 102, 241, 0.22); }
   .btn-primary.small { width: auto; padding: 7px 14px; font-size: 12.5px; }
 
   /* Drag-and-drop for tasks in 下一步 / 待规划. */
@@ -1174,6 +1358,7 @@
       });
     }
     restoreTargetSelection(e.detail.target);
+    restoreGitSelection(e.detail.target);
   });
   // Initial pass for any markdown rendered on first load (currently none, but cheap).
   document.addEventListener('DOMContentLoaded', () => renderMarkdown(document));
@@ -1195,6 +1380,28 @@
     const tab = e.target.closest('[data-tab]');
     if (!tab) return;
     document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b === tab));
+  });
+  function selectGitItem(item) {
+    if (!item) return;
+    const col = item.closest('.git-commits-col');
+    if (!col) return;
+    col.querySelectorAll('[data-git-selectable].selected').forEach(el => el.classList.remove('selected'));
+    item.classList.add('selected');
+  }
+  function restoreGitSelection(root) {
+    const scope = root || document;
+    const gitBody = scope.id === 'git-tab-body' ? scope : scope.querySelector?.('#git-tab-body');
+    if (!gitBody) return;
+    const selected = gitBody.querySelector('[data-git-selectable].selected');
+    if (selected) return;
+    const localChanges = gitBody.querySelector('.local-change-row[data-git-selectable]');
+    if (localChanges) localChanges.classList.add('selected');
+  }
+  document.body.addEventListener('click', (e) => {
+    if (e.target.closest('.commit-reset')) return;
+    const item = e.target.closest('[data-git-selectable]');
+    if (!item) return;
+    selectGitItem(item);
   });
   // Target list (build / run / test): radio-style single selection. The hidden
   // input named "target" inside the form is updated so the next submit posts it.

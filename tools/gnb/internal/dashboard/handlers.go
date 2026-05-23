@@ -42,6 +42,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /git/pull", s.handleGitPull)
 	mux.HandleFunc("POST /git/fetch", s.handleGitFetch)
 	mux.HandleFunc("POST /git/reset", s.handleGitReset)
+	mux.HandleFunc("GET /git/local-changes", s.handleGitLocalChanges)
+	mux.HandleFunc("POST /git/stage", s.handleGitStage)
+	mux.HandleFunc("POST /git/unstage", s.handleGitUnstage)
 	mux.HandleFunc("POST /git/stash/push", s.handleGitStashPush)
 	mux.HandleFunc("POST /git/stash/{action}", s.handleGitStashAction)
 	mux.HandleFunc("GET /git/commit/{ref}", s.handleGitCommit)
@@ -88,6 +91,7 @@ type gitVM struct {
 	Status         gitops.Status
 	Branches       []gitops.Branch
 	RemoteBranches []gitops.RemoteBranch
+	RemoteCommits  []gitops.Commit
 	Commits        []gitops.Commit
 	Stashes        []gitops.Stash
 	Error          string
@@ -706,6 +710,15 @@ func (s *Server) buildGitVM(flash string) gitVM {
 	} else {
 		vm.Commits = commits
 	}
+	if st.Upstream != "" {
+		if commits, err := gitops.LogRange(s.opts.RepoRoot, "HEAD.."+st.Upstream, 12); err != nil {
+			if vm.Error == "" {
+				vm.Error = err.Error()
+			}
+		} else {
+			vm.RemoteCommits = commits
+		}
+	}
 	if stashes, err := gitops.StashList(s.opts.RepoRoot); err != nil {
 		if vm.Error == "" {
 			vm.Error = err.Error()
@@ -871,6 +884,54 @@ func (s *Server) handleGitCommit(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "git_commit_detail", c)
 }
 
+func (s *Server) handleGitLocalChanges(w http.ResponseWriter, r *http.Request) {
+	vm := s.buildHeader("git")
+	vm.GitVM = s.buildGitVM(r.URL.Query().Get("flash"))
+	s.render(w, "git_commit_card", vm)
+}
+
+func (s *Server) handleGitStage(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err)
+		return
+	}
+	path := strings.TrimSpace(r.FormValue("path"))
+	if path == "" {
+		if err := gitops.AddAll(s.opts.RepoRoot); err != nil {
+			s.renderGitBody(w, "Stage 失败: "+err.Error())
+			return
+		}
+		s.renderGitBody(w, "已 stage 全部改动")
+		return
+	}
+	if err := gitops.AddPath(s.opts.RepoRoot, path); err != nil {
+		s.renderGitBody(w, "Stage 失败: "+err.Error())
+		return
+	}
+	s.renderGitBody(w, "已 stage: "+path)
+}
+
+func (s *Server) handleGitUnstage(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err)
+		return
+	}
+	path := strings.TrimSpace(r.FormValue("path"))
+	if path == "" {
+		if err := gitops.UnstageAll(s.opts.RepoRoot); err != nil {
+			s.renderGitBody(w, "Unstage 失败: "+err.Error())
+			return
+		}
+		s.renderGitBody(w, "已 unstage 全部改动")
+		return
+	}
+	if err := gitops.UnstagePath(s.opts.RepoRoot, path); err != nil {
+		s.renderGitBody(w, "Unstage 失败: "+err.Error())
+		return
+	}
+	s.renderGitBody(w, "已 unstage: "+path)
+}
+
 func firstLine(s string) string {
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
 		return s[:i]
@@ -934,7 +995,7 @@ func (s *Server) handleGitCommitCreate(w http.ResponseWriter, r *http.Request) {
 func writeCommitTextarea(w http.ResponseWriter, content string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w,
-		`<textarea id="commit-msg-textarea" name="message" class="input commit-msg-textarea" rows="6" placeholder="commit message">%s</textarea>`,
+		`<textarea id="commit-msg-textarea" name="message" class="input commit-msg-textarea" rows="10" placeholder="commit message">%s</textarea>`,
 		html.EscapeString(content),
 	)
 }
