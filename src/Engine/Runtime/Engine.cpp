@@ -1312,7 +1312,17 @@ void NextEngine::OnKey(SDL_Event& event)
 {
     if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat)
     {
-        const bool altPressed = (SDL_GetModState() & SDL_KMOD_ALT) != 0;
+        const SDL_Keymod modifiers = SDL_GetModState();
+#if __APPLE__
+        const bool hasCommand = (modifiers & SDL_KMOD_GUI) != 0;
+        if (hasCommand && event.key.key == SDLK_Q)
+        {
+            RequestClose();
+            return;
+        }
+#endif
+
+        const bool altPressed = (modifiers & SDL_KMOD_ALT) != 0;
         const bool isAltEnter =
             altPressed && (event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER);
         const bool isF11 = event.key.key == SDLK_F11;
