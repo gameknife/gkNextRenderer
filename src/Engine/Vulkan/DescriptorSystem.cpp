@@ -63,12 +63,15 @@ DescriptorSetLayout::DescriptorSetLayout(const Device& device, const std::vector
         layoutBindings.push_back(b);
     }
 
-    for ( int i = 0; i < layoutBindings.size() - 1; ++i )
+    if (bindless)
     {
-        bindlessBindingFlags.push_back( VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT );
+        for (size_t i = 0; i < layoutBindings.size(); ++i)
+        {
+            bindlessBindingFlags.push_back(
+                VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT |
+                VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT);
+        }
     }
-    bindlessBindingFlags.push_back(VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT_EXT |
-        VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT_EXT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT_EXT);
 
     VkDescriptorSetLayoutCreateInfo layoutInfo = {};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -122,15 +125,6 @@ DescriptorSets::DescriptorSets(
     allocInfo.descriptorPool = descriptorPool.Handle();
     allocInfo.descriptorSetCount = static_cast<uint32_t>(size);
     allocInfo.pSetLayouts = layouts.data();
-
-    // bindless stuff
-    VkDescriptorSetVariableDescriptorCountAllocateInfoEXT countInfo{
-        VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT
-    };
-    uint32_t maxBinding = 65535u - 1;
-    countInfo.descriptorSetCount = static_cast<uint32_t>(size);
-    countInfo.pDescriptorCounts = &maxBinding;
-    if (bindless) allocInfo.pNext = &countInfo;
 
     descriptorSets_.resize(size);
 

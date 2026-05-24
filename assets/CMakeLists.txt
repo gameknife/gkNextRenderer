@@ -105,6 +105,18 @@ source_group("Shaders" FILES ${shader_files} ${shader_common_files})
 
 set(all_shader_outputs "")
 
+execute_process(
+    COMMAND ${Vulkan_SLANGC} -v
+    OUTPUT_VARIABLE slangc_version
+    ERROR_VARIABLE slangc_version_error
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_STRIP_TRAILING_WHITESPACE
+)
+if(NOT slangc_version)
+    set(slangc_version ${slangc_version_error})
+endif()
+message(STATUS "slangc compiler version: ${slangc_version}")
+
 foreach(shader ${shader_files})
     get_filename_component(file_name ${shader} NAME)
     get_filename_component(full_path ${shader} ABSOLUTE)
