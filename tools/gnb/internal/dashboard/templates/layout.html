@@ -153,6 +153,295 @@
   }
   .tab-main { overflow: hidden; }
 
+  .tab-chat {
+    height: 100%;
+    padding: 16px;
+    overflow: hidden;
+  }
+  #chat-panel {
+    height: 100%;
+    min-height: 0;
+  }
+  .chat-layout {
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 16px;
+    height: 100%;
+    min-height: 0;
+  }
+  .chat-side, .chat-main {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow: hidden;
+  }
+  .chat-side .card {
+    flex: 0 0 auto;
+  }
+  .chat-main {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+  }
+  .chat-head {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .chat-head .title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 650;
+  }
+  .chat-head .ico {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .chat-head .spacer { flex: 1; }
+  .chat-head .target-pill {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--fg-mute);
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-family: var(--font-mono);
+  }
+  .chat-status {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--fg-dim);
+  }
+  .chat-messages {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    min-height: 0;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .chat-empty {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--fg-dim);
+    font-style: italic;
+    text-align: center;
+  }
+  .chat-msg {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 10px;
+    max-width: 920px;
+  }
+  .chat-msg.user {
+    align-self: flex-end;
+    grid-template-columns: minmax(0, 1fr) 34px;
+  }
+  .chat-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-md);
+    background: var(--bg-card-hover);
+    border: 1px solid var(--border);
+    color: var(--fg-mute);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+  }
+  .chat-msg.user .chat-avatar {
+    grid-column: 2;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+  .chat-bubble {
+    min-width: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+  }
+  .chat-msg.user .chat-bubble {
+    grid-column: 1;
+    grid-row: 1;
+    background: rgba(59, 130, 246, 0.11);
+    border-color: rgba(59, 130, 246, 0.28);
+  }
+  .chat-msg.thinking .chat-text {
+    color: var(--fg-mute);
+    font-style: italic;
+  }
+  .chat-role {
+    color: var(--fg-dim);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .chat-text {
+    color: var(--fg);
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+  .chat-text p { margin: 0 0 8px; }
+  .chat-text p:last-child { margin-bottom: 0; }
+  .chat-text ul, .chat-text ol { margin: 7px 0 7px 20px; padding: 0; }
+  .chat-text li { margin: 3px 0; }
+  .chat-text blockquote {
+    margin: 8px 0;
+    padding: 7px 10px;
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    color: var(--fg-mute);
+  }
+  .chat-text pre {
+    overflow-x: auto;
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px;
+  }
+  .chat-text code {
+    font-family: var(--font-mono);
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 4px;
+  }
+  .chat-text pre code {
+    border: 0;
+    padding: 0;
+    background: transparent;
+  }
+  .chat-text table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+  }
+  .chat-text th, .chat-text td {
+    border: 1px solid var(--border);
+    padding: 5px 7px;
+    vertical-align: top;
+  }
+  .chat-text th {
+    background: var(--bg-card-hover);
+    color: var(--fg);
+    font-weight: 650;
+  }
+  .chat-composer {
+    flex: 0 0 auto;
+    border-top: 1px solid var(--border);
+    padding: 12px;
+  }
+  .chat-composer textarea {
+    width: 100%;
+    min-height: 92px;
+    max-height: 240px;
+    resize: vertical;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .chat-actions {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .chat-actions .btn-primary {
+    width: auto;
+    min-width: 92px;
+  }
+  .chat-thinking-opt {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--fg-mute);
+    font-size: 12px;
+    user-select: none;
+  }
+  .chat-thinking-opt input {
+    width: 13px;
+    height: 13px;
+    accent-color: var(--accent);
+  }
+  .chat-token-opt {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--fg-mute);
+    font-size: 12px;
+    user-select: none;
+  }
+  .chat-token-opt input {
+    width: 76px;
+    background: var(--bg-input);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 4px 6px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+  }
+  .chat-actions .muted {
+    color: var(--fg-dim);
+    font-size: 11.5px;
+    font-family: var(--font-mono);
+  }
+  .model-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12.5px;
+  }
+  .model-row:last-child { border-bottom: 0; }
+  .model-row .model-id {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+  }
+  .model-pill {
+    border: 1px solid var(--border);
+    color: var(--fg-dim);
+    border-radius: 999px;
+    padding: 1px 7px;
+    font-size: 10.5px;
+    font-family: var(--font-mono);
+  }
+  .model-pill.ready { color: var(--green); border-color: rgba(34, 197, 94, 0.32); background: rgba(34, 197, 94, 0.08); }
+  .model-pill.running { color: var(--accent); border-color: rgba(59, 130, 246, 0.35); background: var(--accent-soft); }
+  .chat-error {
+    margin: 0 18px 12px;
+    color: var(--red);
+    border: 1px solid rgba(239, 68, 68, 0.32);
+    background: rgba(239, 68, 68, 0.08);
+    border-radius: var(--radius-md);
+    padding: 8px 10px;
+    font-size: 12.5px;
+  }
+
   /* Build / Run / Test left card: title fixed at top, target list takes
      remaining space and scrolls independently, submit button stays pinned
      to the bottom. Without this the button scrolls off-screen when the
@@ -1309,6 +1598,11 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 15V9a6 6 0 0 1 6-6"/><path d="M18 9v3a6 6 0 0 1-6 6"/></svg>
       <span>Git</span>
     </button>
+    <button class="tab-item {{if eq .ActiveTab "chat"}}active{{end}}" type="button" data-tab="chat"
+            hx-get="/tab/chat" hx-target="#tab-content" hx-swap="innerHTML">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/></svg>
+      <span>Chat</span>
+    </button>
   </nav>
 
   <div id="tab-content">
@@ -1320,6 +1614,8 @@
       {{template "tab_test" .}}
     {{else if eq .ActiveTab "git"}}
       {{template "tab_git" .}}
+    {{else if eq .ActiveTab "chat"}}
+      {{template "tab_chat" .}}
     {{else}}
       {{template "tab_todo" .}}
     {{end}}
@@ -1332,12 +1628,138 @@
   if (window.marked) {
     marked.setOptions({ gfm: true, breaks: false, headerIds: false, mangle: false });
   }
+  function escapeHTML(s) {
+    return String(s || '').replace(/[&<>"']/g, ch => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+  }
+  function renderInlineMarkdown(s) {
+    let out = escapeHTML(s);
+    out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
+    out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    out = out.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    out = out.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+    return out;
+  }
+  function fallbackMarkdown(source) {
+    const lines = String(source || '').replace(/\r\n/g, '\n').split('\n');
+    const out = [];
+    let paragraph = [];
+    let list = null;
+    let inCode = false;
+    let codeLang = '';
+    let codeLines = [];
+    const flushParagraph = () => {
+      if (!paragraph.length) return;
+      out.push('<p>' + renderInlineMarkdown(paragraph.join(' ')) + '</p>');
+      paragraph = [];
+    };
+    const closeList = () => {
+      if (!list) return;
+      out.push('</' + list + '>');
+      list = null;
+    };
+    const startList = (type) => {
+      flushParagraph();
+      if (list === type) return;
+      closeList();
+      list = type;
+      out.push('<' + type + '>');
+    };
+    const splitTableRow = (line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+    const isTableSep = (line) => /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line || '');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      if (inCode) {
+        if (trimmed.startsWith('```')) {
+          out.push('<pre><code' + (codeLang ? ' class="language-' + escapeHTML(codeLang) + '"' : '') + '>' + escapeHTML(codeLines.join('\n')) + '</code></pre>');
+          inCode = false;
+          codeLang = '';
+          codeLines = [];
+        } else {
+          codeLines.push(line);
+        }
+        continue;
+      }
+      if (trimmed.startsWith('```')) {
+        flushParagraph();
+        closeList();
+        inCode = true;
+        codeLang = trimmed.slice(3).trim().split(/\s+/)[0] || '';
+        continue;
+      }
+      if (!trimmed) {
+        flushParagraph();
+        closeList();
+        continue;
+      }
+      if (trimmed.includes('|') && isTableSep(lines[i + 1])) {
+        flushParagraph();
+        closeList();
+        const headers = splitTableRow(trimmed);
+        i += 2;
+        const rows = [];
+        while (i < lines.length && lines[i].trim().includes('|') && lines[i].trim()) {
+          rows.push(splitTableRow(lines[i]));
+          i++;
+        }
+        i--;
+        out.push('<table><thead><tr>' + headers.map(h => '<th>' + renderInlineMarkdown(h) + '</th>').join('') + '</tr></thead><tbody>' +
+          rows.map(row => '<tr>' + row.map(c => '<td>' + renderInlineMarkdown(c) + '</td>').join('') + '</tr>').join('') +
+          '</tbody></table>');
+        continue;
+      }
+      const heading = /^(#{1,6})\s+(.+)$/.exec(trimmed);
+      if (heading) {
+        flushParagraph();
+        closeList();
+        const level = heading[1].length;
+        out.push('<h' + level + '>' + renderInlineMarkdown(heading[2]) + '</h' + level + '>');
+        continue;
+      }
+      const bullet = /^[-*+]\s+(.+)$/.exec(trimmed);
+      if (bullet) {
+        startList('ul');
+        out.push('<li>' + renderInlineMarkdown(bullet[1]) + '</li>');
+        continue;
+      }
+      const ordered = /^\d+\.\s+(.+)$/.exec(trimmed);
+      if (ordered) {
+        startList('ol');
+        out.push('<li>' + renderInlineMarkdown(ordered[1]) + '</li>');
+        continue;
+      }
+      const quote = /^>\s?(.+)$/.exec(trimmed);
+      if (quote) {
+        flushParagraph();
+        closeList();
+        out.push('<blockquote>' + renderInlineMarkdown(quote[1]) + '</blockquote>');
+        continue;
+      }
+      closeList();
+      paragraph.push(trimmed);
+    }
+    if (inCode) {
+      out.push('<pre><code' + (codeLang ? ' class="language-' + escapeHTML(codeLang) + '"' : '') + '>' + escapeHTML(codeLines.join('\n')) + '</code></pre>');
+    }
+    flushParagraph();
+    closeList();
+    return out.join('');
+  }
+  function renderMarkdownText(el, source) {
+    if (!el) return;
+    el.innerHTML = window.marked ? marked.parse(source || '') : fallbackMarkdown(source || '');
+    el.dataset.mdRendered = '1';
+  }
   function renderMarkdown(root) {
-    if (!window.marked) return;
     (root || document).querySelectorAll('[data-md]:not([data-md-rendered])').forEach(el => {
-      const src = el.textContent;
-      el.innerHTML = marked.parse(src);
-      el.dataset.mdRendered = '1';
+      renderMarkdownText(el, el.textContent);
+    });
+  }
+  function scrollChatToBottom(root) {
+    (root || document).querySelectorAll('.chat-messages').forEach(el => {
+      el.scrollTop = el.scrollHeight;
     });
   }
   // Highlight the active task row when a detail request fires (skip the row's
@@ -1359,9 +1781,189 @@
     }
     restoreTargetSelection(e.detail.target);
     restoreGitSelection(e.detail.target);
+    scrollChatToBottom(e.detail.target);
   });
   // Initial pass for any markdown rendered on first load (currently none, but cheap).
-  document.addEventListener('DOMContentLoaded', () => renderMarkdown(document));
+  document.addEventListener('DOMContentLoaded', () => {
+    renderMarkdown(document);
+    scrollChatToBottom(document);
+  });
+
+  function chatMessageCount(panel) {
+    return panel ? panel.querySelectorAll('.chat-msg').length : 0;
+  }
+
+  function setChatStatus(panel, text) {
+    const status = panel?.querySelector('.chat-status');
+    if (status) status.textContent = text;
+  }
+
+  function setChatError(panel, message) {
+    let err = panel?.querySelector('.chat-error');
+    if (!panel) return;
+    if (!message) {
+      if (err) err.remove();
+      return;
+    }
+    if (!err) {
+      err = document.createElement('div');
+      err.className = 'chat-error';
+      const form = panel.querySelector('.chat-composer');
+      form?.parentNode?.insertBefore(err, form);
+    }
+    err.textContent = message;
+  }
+
+  function appendChatMessage(panel, role, text, renderNow) {
+    const messages = panel.querySelector('.chat-messages');
+    if (!messages) return null;
+    messages.querySelector('.chat-empty')?.remove();
+    const row = document.createElement('div');
+    row.className = 'chat-msg ' + role;
+    const avatar = document.createElement('div');
+    avatar.className = 'chat-avatar';
+    avatar.textContent = role === 'user' ? 'U' : 'AI';
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble';
+    const roleEl = document.createElement('div');
+    roleEl.className = 'chat-role';
+    roleEl.textContent = role;
+    const textEl = document.createElement('div');
+    textEl.className = 'chat-text';
+    textEl.setAttribute('data-md', '');
+    if (renderNow) renderMarkdownText(textEl, text);
+    else textEl.textContent = text || '';
+    bubble.append(roleEl, textEl);
+    row.append(avatar, bubble);
+    messages.appendChild(row);
+    scrollChatToBottom(panel);
+    return { row, textEl };
+  }
+
+  function setChatBusy(form, busy) {
+    form?.querySelectorAll('button, textarea, select, input').forEach(el => {
+      if (el.id === 'chat-model') return;
+      el.disabled = busy;
+    });
+  }
+
+  function parseSSEBlock(block) {
+    let event = 'message';
+    const data = [];
+    block.split(/\r?\n/).forEach(line => {
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      else if (line.startsWith('data:')) data.push(line.slice(5).trimStart());
+    });
+    return { event, data: data.join('\n') };
+  }
+
+  async function handleChatSubmit(form) {
+    const panel = form.closest('#chat-panel');
+    const input = form.querySelector('textarea[name="message"]');
+    const model = document.getElementById('chat-model');
+    const session = document.getElementById('chat-session-id');
+    const thinking = document.getElementById('chat-thinking');
+    const maxTokens = document.getElementById('chat-max-tokens');
+    const text = input?.value?.trim() || '';
+    if (!panel || !input || !model || !session || !text || form.dataset.busy === '1') return;
+
+    setChatError(panel, '');
+    appendChatMessage(panel, 'user', text, true);
+    let assistant = null;
+    let assistantText = '';
+    form.dataset.busy = '1';
+    setChatBusy(form, true);
+    setChatStatus(panel, 'waiting for model');
+
+    const body = new URLSearchParams();
+    body.set('session_id', session.value);
+    body.set('model', model.value);
+    body.set('message', text);
+    body.set('thinking', thinking?.checked ? '1' : '0');
+    body.set('max_tokens', maxTokens?.value || '4096');
+    input.value = '';
+
+    try {
+      const resp = await fetch('/chat/send-stream', { method: 'POST', body });
+      if (!resp.ok || !resp.body) throw new Error('HTTP ' + resp.status);
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        while (true) {
+          const lfIdx = buffer.indexOf('\n\n');
+          const crlfIdx = buffer.indexOf('\r\n\r\n');
+          let idx = -1;
+          let sepLen = 2;
+          if (lfIdx >= 0 && (crlfIdx < 0 || lfIdx < crlfIdx)) {
+            idx = lfIdx;
+          } else if (crlfIdx >= 0) {
+            idx = crlfIdx;
+            sepLen = 4;
+          }
+          if (idx < 0) break;
+          const block = buffer.slice(0, idx).trim();
+          buffer = buffer.slice(idx + sepLen);
+          if (!block) continue;
+          const msg = parseSSEBlock(block);
+          const payload = msg.data ? JSON.parse(msg.data) : {};
+          if (msg.event === 'start') {
+            if (payload.session_id) session.value = payload.session_id;
+            setChatStatus(panel, thinking?.checked ? '正在思考...' : 'generating');
+          } else if (msg.event === 'status') {
+            setChatStatus(panel, payload.message || 'working');
+          } else if (msg.event === 'thinking') {
+            if (!assistant) {
+              assistant = appendChatMessage(panel, 'assistant', payload.message || '正在思考...', false);
+              assistant?.row?.classList.add('thinking');
+            } else if (!assistantText && assistant.textEl) {
+              assistant.textEl.textContent = payload.message || '正在思考...';
+              assistant.row.classList.add('thinking');
+            }
+            setChatStatus(panel, '正在思考...');
+            scrollChatToBottom(panel);
+          } else if (msg.event === 'delta') {
+            if (assistant?.row) assistant.row.classList.remove('thinking');
+            assistantText += payload.text || '';
+            if (!assistant) assistant = appendChatMessage(panel, 'assistant', '', false);
+            if (assistant?.textEl) assistant.textEl.textContent = assistantText;
+            setChatStatus(panel, 'streaming');
+            scrollChatToBottom(panel);
+          } else if (msg.event === 'error') {
+            if (assistant && !assistantText) assistant.row.remove();
+            setChatError(panel, payload.message || 'LLM 请求失败');
+            setChatStatus(panel, chatMessageCount(panel) + ' messages');
+          } else if (msg.event === 'done') {
+            if (assistant?.textEl) renderMarkdownText(assistant.textEl, assistantText);
+            if (payload.truncated) {
+              setChatError(panel, '输出达到长度上限（' + (payload.max_tokens || '当前') + ' tokens），回答可能已截断；可提高“输出上限”后让模型继续。');
+            }
+            setChatStatus(panel, chatMessageCount(panel) + ' messages');
+          }
+        }
+      }
+      if (assistantText && assistant?.textEl && !assistant.textEl.dataset.mdRendered) {
+        renderMarkdownText(assistant.textEl, assistantText);
+      }
+    } catch (err) {
+      setChatError(panel, String(err && err.message ? err.message : err));
+      setChatStatus(panel, chatMessageCount(panel) + ' messages');
+    } finally {
+      setChatBusy(form, false);
+      delete form.dataset.busy;
+      input.focus();
+    }
+  }
+
+  document.body.addEventListener('submit', (e) => {
+    const form = e.target.closest('form[data-chat-form]');
+    if (!form) return;
+    e.preventDefault();
+    handleChatSubmit(form);
+  });
   // Three-dot menu toggling.
   document.body.addEventListener('click', (e) => {
     const trigger = e.target.closest('.menu-btn');

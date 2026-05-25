@@ -30,8 +30,8 @@ type CommitMessageResult struct {
 }
 
 // DiffBudget bounds how much we serialise for the model. Sized so the typical
-// commit fits inside the Gemma-3n 8K context after the system prompt + chat
-// template overhead.
+// commit stays small enough for fast local commit-message generation after the
+// system prompt + chat template overhead.
 type DiffBudget struct {
 	TotalChars   int // overall cap for the body content (excluding the always-kept header). 0 = use default
 	PerFileChars int // cap for any single file's content. 0 = use default
@@ -103,11 +103,11 @@ func buildCommitUserPrompt(diff string) string {
 // CollectDiff assembles a prompt-ready description of the current change.
 //
 // Layout of the returned text:
-//   1. A "summary header" listing every changed path with its status code
-//      (M/A/D/R/??). This is ALWAYS preserved even if budgets force the body
-//      to be truncated, so the model retains a global view.
-//   2. The body: tracked-file diff (from `git diff [--staged]`) plus
-//      synthesised new-file diffs for untracked files (read from disk).
+//  1. A "summary header" listing every changed path with its status code
+//     (M/A/D/R/??). This is ALWAYS preserved even if budgets force the body
+//     to be truncated, so the model retains a global view.
+//  2. The body: tracked-file diff (from `git diff [--staged]`) plus
+//     synthesised new-file diffs for untracked files (read from disk).
 //
 // Returns the assembled text, a mode label ("staged" / "working tree"), and
 // a "truncated" flag set when any per-file or total budget was hit.

@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"html"
 	"html/template"
@@ -51,6 +52,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /git/panel", s.handleGitPanel)
 	mux.HandleFunc("POST /git/commit-message", s.handleGitCommitMessage)
 	mux.HandleFunc("POST /git/commit", s.handleGitCommitCreate)
+	mux.HandleFunc("POST /chat/send", s.handleChatSend)
+	mux.HandleFunc("POST /chat/send-stream", s.handleChatSendStream)
+	mux.HandleFunc("POST /chat/clear", s.handleChatClear)
 	return logRequests(mux)
 }
 
@@ -85,6 +89,7 @@ type indexVM struct {
 	RunVM      runVM
 	TestVM     testVM
 	GitVM      gitVM
+	ChatVM     chatVM
 }
 
 type gitVM struct {
@@ -118,6 +123,31 @@ type testVM struct {
 	Latest    JobSnapshot
 	HasJob    bool
 }
+
+type chatVM struct {
+	SessionID     string
+	Models        []chatModelVM
+	SelectedModel string
+	Messages      []llm.ChatMessage
+	Error         string
+	ServerRunning bool
+	RunningModel  string
+	Endpoint      string
+}
+
+type chatModelVM struct {
+	ID         string
+	ContextN   int
+	Downloaded bool
+	Active     bool
+	Running    bool
+}
+
+const (
+	defaultChatMaxTokens = 4096
+	minChatMaxTokens     = 256
+	maxChatMaxTokens     = 32768
+)
 
 type journalSummary struct {
 	ID      int
@@ -676,9 +706,249 @@ func (s *Server) handleTab(w http.ResponseWriter, r *http.Request) {
 		vm := s.buildHeader("git")
 		vm.GitVM = s.buildGitVM("")
 		s.render(w, "tab_git", vm)
+	case "chat":
+		vm := s.buildHeader("chat")
+		vm.ChatVM = s.buildChatVM("", "")
+		s.render(w, "tab_chat", vm)
 	default:
 		http.Error(w, "unknown tab "+kind, http.StatusNotFound)
 	}
+}
+
+// ----- LLM chat handlers ---------------------------------------------
+
+func (s *Server) buildChatVM(sessionID string, errText string) chatVM {
+	if s.chats == nil {
+		s.chats = NewChatStore()
+	}
+	cfg := s.opts.Config.External.LLM
+	active := cfg.ActiveModel().ID
+	sess := s.chats.Get(sessionID, active)
+	selected := sess.ModelID
+	if selected == "" {
+		selected = active
+	}
+	status := llm.NewServer(s.opts.RepoRoot, cfg).Status()
+	layout := llm.ResolveLayout(s.opts.RepoRoot, cfg)
+	vm := chatVM{
+		SessionID:     sess.ID,
+		SelectedModel: selected,
+		Messages:      sess.Messages,
+		Error:         errText,
+		ServerRunning: status.Running,
+		RunningModel:  status.Model,
+		Endpoint:      fmt.Sprintf("%s:%d", status.Host, status.Port),
+	}
+	for _, model := range cfg.Models {
+		_, statErr := os.Stat(layout.ModelPath(model))
+		vm.Models = append(vm.Models, chatModelVM{
+			ID:         model.ID,
+			ContextN:   model.ContextN,
+			Downloaded: statErr == nil,
+			Active:     model.ID == selected,
+			Running:    status.Running && status.Model == model.ID,
+		})
+	}
+	return vm
+}
+
+func (s *Server) renderChatPanel(w http.ResponseWriter, sessionID string, errText string) {
+	s.render(w, "chat_panel", s.buildChatVM(sessionID, errText))
+}
+
+func (s *Server) handleChatClear(w http.ResponseWriter, r *http.Request) {
+	if s.chats == nil {
+		s.chats = NewChatStore()
+	}
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err)
+		return
+	}
+	modelID := strings.TrimSpace(r.FormValue("model"))
+	cfg, err := llm.SelectModel(s.opts.Config.External.LLM, modelID)
+	if err != nil {
+		s.renderChatPanel(w, r.FormValue("session_id"), err.Error())
+		return
+	}
+	sess := s.chats.Reset(strings.TrimSpace(r.FormValue("session_id")), cfg.ActiveModel().ID)
+	s.renderChatPanel(w, sess.ID, "")
+}
+
+func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
+	if s.chats == nil {
+		s.chats = NewChatStore()
+	}
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err)
+		return
+	}
+	sessionID := strings.TrimSpace(r.FormValue("session_id"))
+	modelID := strings.TrimSpace(r.FormValue("model"))
+	userText := strings.TrimSpace(r.FormValue("message"))
+	thinking := r.FormValue("thinking") == "1"
+	maxTokens := parseChatMaxTokens(r.FormValue("max_tokens"))
+	if userText == "" {
+		s.renderChatPanel(w, sessionID, "请输入要发送的内容")
+		return
+	}
+	cfg, err := llm.SelectModel(s.opts.Config.External.LLM, modelID)
+	if err != nil {
+		s.renderChatPanel(w, sessionID, err.Error())
+		return
+	}
+	modelID = cfg.ActiveModel().ID
+	sess := s.chats.Get(sessionID, modelID)
+	messages := append([]llm.ChatMessage(nil), sess.Messages...)
+	messages = append(messages, llm.ChatMessage{Role: "user", Content: userText})
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+	defer cancel()
+	srv := llm.NewServer(s.opts.RepoRoot, cfg)
+	if _, err := srv.EnsureRunning(ctx); err != nil {
+		s.renderChatPanel(w, sess.ID, "启动 LLM 失败: "+err.Error())
+		return
+	}
+	reply, err := llm.NewClient(srv.BaseURL()).Chat(ctx, llm.ChatRequest{
+		Model:       modelID,
+		Messages:    messages,
+		Temperature: 0.7,
+		MaxTokens:   maxTokens,
+		ChatTemplateKwargs: map[string]any{
+			"enable_thinking": thinking,
+		},
+	})
+	if err != nil {
+		s.renderChatPanel(w, sess.ID, "LLM 请求失败: "+err.Error())
+		return
+	}
+	sess = s.chats.AppendExchange(sess.ID, modelID, userText, strings.TrimSpace(reply))
+	s.renderChatPanel(w, sess.ID, "")
+}
+
+func (s *Server) handleChatSendStream(w http.ResponseWriter, r *http.Request) {
+	if s.chats == nil {
+		s.chats = NewChatStore()
+	}
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err)
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, no-transform")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	emit := func(event string, payload any) bool {
+		data, err := json.Marshal(payload)
+		if err != nil {
+			data = []byte(`{"error":"encode stream payload failed"}`)
+		}
+		if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, data); err != nil {
+			return false
+		}
+		flusher.Flush()
+		return true
+	}
+
+	sessionID := strings.TrimSpace(r.FormValue("session_id"))
+	modelID := strings.TrimSpace(r.FormValue("model"))
+	userText := strings.TrimSpace(r.FormValue("message"))
+	thinking := r.FormValue("thinking") == "1"
+	maxTokens := parseChatMaxTokens(r.FormValue("max_tokens"))
+	if userText == "" {
+		emit("error", map[string]string{"message": "请输入要发送的内容"})
+		return
+	}
+	cfg, err := llm.SelectModel(s.opts.Config.External.LLM, modelID)
+	if err != nil {
+		emit("error", map[string]string{"message": err.Error()})
+		return
+	}
+	modelID = cfg.ActiveModel().ID
+	sess := s.chats.Get(sessionID, modelID)
+	if !emit("start", map[string]string{"session_id": sess.ID, "model": modelID}) {
+		return
+	}
+
+	messages := append([]llm.ChatMessage(nil), sess.Messages...)
+	messages = append(messages, llm.ChatMessage{Role: "user", Content: userText})
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+	defer cancel()
+	srv := llm.NewServer(s.opts.RepoRoot, cfg)
+	emit("status", map[string]string{"message": "正在准备本地模型..."})
+	if _, err := srv.EnsureRunning(ctx); err != nil {
+		emit("error", map[string]string{"message": "启动 LLM 失败: " + err.Error()})
+		return
+	}
+	emit("status", map[string]string{"message": "模型已就绪，正在生成..."})
+	reasoningEmitted := false
+	if thinking {
+		emit("thinking", map[string]string{"message": "正在思考..."})
+		reasoningEmitted = true
+	}
+
+	var reply strings.Builder
+	finishReason := ""
+	err = llm.NewClient(srv.BaseURL()).ChatStream(ctx, llm.ChatRequest{
+		Model:       modelID,
+		Messages:    messages,
+		Temperature: 0.7,
+		MaxTokens:   maxTokens,
+		ChatTemplateKwargs: map[string]any{
+			"enable_thinking": thinking,
+		},
+	}, func(delta llm.StreamDelta) error {
+		if delta.FinishReason != "" {
+			finishReason = delta.FinishReason
+			return nil
+		}
+		if delta.Reasoning != "" {
+			if !reasoningEmitted {
+				if !emit("thinking", map[string]string{"message": "正在思考..."}) {
+					return fmt.Errorf("client disconnected")
+				}
+				reasoningEmitted = true
+			}
+			return nil
+		}
+		reply.WriteString(delta.Text)
+		if !emit("delta", map[string]string{"text": delta.Text}) {
+			return fmt.Errorf("client disconnected")
+		}
+		return nil
+	})
+	if err != nil {
+		emit("error", map[string]string{"message": "LLM 请求失败: " + err.Error()})
+		return
+	}
+	s.chats.AppendExchange(sess.ID, modelID, userText, strings.TrimSpace(reply.String()))
+	emit("done", map[string]any{
+		"session_id":    sess.ID,
+		"messages":      len(messages) + 1,
+		"finish_reason": finishReason,
+		"truncated":     finishReason == "length",
+		"max_tokens":    maxTokens,
+	})
+}
+
+func parseChatMaxTokens(raw string) int {
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || n == 0 {
+		return defaultChatMaxTokens
+	}
+	if n < minChatMaxTokens {
+		return minChatMaxTokens
+	}
+	if n > maxChatMaxTokens {
+		return maxChatMaxTokens
+	}
+	return n
 }
 
 // ----- git handlers ---------------------------------------------------

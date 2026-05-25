@@ -35,11 +35,14 @@ func NewServer(repoRoot string, cfg config.LLMConfig) *Server {
 }
 
 type ServerInfo struct {
-	PID     int
-	Host    string
-	Port    int
-	Model   string // model id loaded by the running server (read from PID file)
-	Running bool
+	PID       int
+	Host      string
+	Port      int
+	Model     string // model id loaded by the running server (read from PID file)
+	ContextN  int
+	Parallel  int
+	Reasoning string
+	Running   bool
 }
 
 func (s *Server) BaseURL() string {
@@ -65,6 +68,29 @@ func (s *Server) Status() ServerInfo {
 		if len(lines) >= 4 {
 			info.Model = strings.TrimSpace(lines[3])
 		}
+		if len(lines) >= 5 {
+			line := strings.TrimSpace(lines[4])
+			if strings.HasPrefix(line, "ctx:") {
+				if ctxN, err := strconv.Atoi(strings.TrimPrefix(line, "ctx:")); err == nil {
+					info.ContextN = ctxN
+				}
+			} else {
+				info.Reasoning = strings.TrimPrefix(line, "reasoning:")
+			}
+		}
+		if len(lines) >= 6 {
+			line := strings.TrimSpace(lines[5])
+			if strings.HasPrefix(line, "parallel:") {
+				if parallel, err := strconv.Atoi(strings.TrimPrefix(line, "parallel:")); err == nil {
+					info.Parallel = parallel
+				}
+			} else {
+				info.Reasoning = strings.TrimPrefix(line, "reasoning:")
+			}
+		}
+		if len(lines) >= 7 {
+			info.Reasoning = strings.TrimPrefix(strings.TrimSpace(lines[6]), "reasoning:")
+		}
 	}
 	info.Running = s.healthyAt(info.Host, info.Port)
 	return info
@@ -82,13 +108,15 @@ func (s *Server) EnsureRunning(ctx context.Context) (ServerInfo, error) {
 
 	info := s.Status()
 	if info.Running {
-		if info.Model == "" || info.Model == active.ID {
+		if (info.Model == "" || info.Model == active.ID) && info.ContextN == active.ContextN && info.Parallel == 1 && info.Reasoning == "auto" {
 			return info, nil
 		}
-		console.Info("active model changed (%s -> %s); restarting llama-server", info.Model, active.ID)
+		console.Info("llama-server mode changed (model %s -> %s, ctx %d -> %d, parallel %d -> 1, reasoning %s -> auto); restarting", info.Model, active.ID, info.ContextN, active.ContextN, info.Parallel, info.Reasoning)
 		if err := s.Stop(); err != nil {
 			return info, fmt.Errorf("stop stale llama-server: %w", err)
 		}
+	} else if info.PID != 0 {
+		_ = os.Remove(s.layout.PIDFile)
 	}
 
 	if err := EnsureBinaries(s.repoRoot, s.cfg); err != nil {
@@ -108,8 +136,10 @@ func (s *Server) EnsureRunning(ctx context.Context) (ServerInfo, error) {
 		"--host", s.cfg.Server.Host,
 		"--port", strconv.Itoa(s.cfg.Server.Port),
 		"--ctx-size", strconv.Itoa(active.ContextN),
+		"--parallel", "1",
 		"--n-gpu-layers", strconv.Itoa(s.cfg.Server.GPULayers),
 		"--jinja", // Gemma chat template lives in the GGUF
+		"--reasoning", "auto",
 	}
 	console.Info("starting llama-server (%s) model=%s on %s:%d", filepath.Base(bin), active.ID, s.cfg.Server.Host, s.cfg.Server.Port)
 	cmd := exec.Command(bin, args...)
@@ -129,15 +159,16 @@ func (s *Server) EnsureRunning(ctx context.Context) (ServerInfo, error) {
 	pid := cmd.Process.Pid
 	_ = cmd.Process.Release()
 
-	pidContent := fmt.Sprintf("%d\n%s\n%d\n%s\n", pid, s.cfg.Server.Host, s.cfg.Server.Port, active.ID)
+	pidContent := fmt.Sprintf("%d\n%s\n%d\n%s\nctx:%d\nparallel:1\nreasoning:auto\n", pid, s.cfg.Server.Host, s.cfg.Server.Port, active.ID, active.ContextN)
 	if err := os.WriteFile(s.layout.PIDFile, []byte(pidContent), 0o644); err != nil {
 		return info, err
 	}
 
-	if err := waitHealthy(ctx, s.cfg.Server.Host, s.cfg.Server.Port, 90*time.Second); err != nil {
+	if err := waitHealthy(ctx, s.cfg.Server.Host, s.cfg.Server.Port, 90*time.Second, pid); err != nil {
+		_ = os.Remove(s.layout.PIDFile)
 		return info, fmt.Errorf("llama-server did not become ready: %w (see %s)", err, logPath)
 	}
-	return ServerInfo{PID: pid, Host: s.cfg.Server.Host, Port: s.cfg.Server.Port, Model: active.ID, Running: true}, nil
+	return ServerInfo{PID: pid, Host: s.cfg.Server.Host, Port: s.cfg.Server.Port, Model: active.ID, ContextN: active.ContextN, Parallel: 1, Reasoning: "auto", Running: true}, nil
 }
 
 func (s *Server) Stop() error {
@@ -184,7 +215,7 @@ func portReachable(host string, port int, timeout time.Duration) bool {
 	return true
 }
 
-func waitHealthy(ctx context.Context, host string, port int, max time.Duration) error {
+func waitHealthy(ctx context.Context, host string, port int, max time.Duration, pid int) error {
 	deadline := time.Now().Add(max)
 	for {
 		if ctx.Err() != nil {
@@ -192,6 +223,9 @@ func waitHealthy(ctx context.Context, host string, port int, max time.Duration) 
 		}
 		if time.Now().After(deadline) {
 			return fmt.Errorf("timeout after %s", max)
+		}
+		if pid != 0 && !processAlive(pid) {
+			return fmt.Errorf("process %d exited before /health became ready", pid)
 		}
 		c, err := net.DialTimeout("tcp", net.JoinHostPort(host, strconv.Itoa(port)), 500*time.Millisecond)
 		if err == nil {

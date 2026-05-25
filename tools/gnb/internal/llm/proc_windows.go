@@ -4,6 +4,7 @@ package llm
 
 import (
 	"os/exec"
+	"strings"
 	"syscall"
 )
 
@@ -24,6 +25,15 @@ func killPID(pid int) error {
 	// on Windows; falling back to os.FindProcess+Kill works for the bare PID
 	// but doesn't reap any children llama-server may have spawned.
 	return exec.Command("taskkill", "/PID", itoa(pid), "/F", "/T").Run()
+}
+
+func processAlive(pid int) bool {
+	out, err := exec.Command("tasklist", "/FI", "PID eq "+itoa(pid), "/FO", "CSV", "/NH").Output()
+	if err != nil {
+		return false
+	}
+	text := strings.TrimSpace(string(out))
+	return text != "" && !strings.Contains(text, "INFO:") && strings.Contains(text, itoa(pid))
 }
 
 func itoa(n int) string {

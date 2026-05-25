@@ -31,11 +31,22 @@ func EnsureBinaries(repoRoot string, cfg config.LLMConfig) error {
 		return err
 	}
 	defer os.Remove(tmp)
-	if !strings.HasSuffix(strings.ToLower(url), ".zip") {
-		return fmt.Errorf("unsupported llama.cpp archive (expected .zip): %s", url)
-	}
-	if err := fetcher.Unzip(tmp, layout.BinDir); err != nil {
-		return err
+	lowerURL := strings.ToLower(url)
+	switch {
+	case strings.HasSuffix(lowerURL, ".zip"):
+		if err := fetcher.Unzip(tmp, layout.BinDir); err != nil {
+			return err
+		}
+	case strings.HasSuffix(lowerURL, ".tar.gz"), strings.HasSuffix(lowerURL, ".tgz"):
+		if err := fetcher.Untar(tmp, layout.BinDir, true); err != nil {
+			return err
+		}
+	case strings.HasSuffix(lowerURL, ".tar"):
+		if err := fetcher.Untar(tmp, layout.BinDir, false); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unsupported llama.cpp archive: %s", url)
 	}
 	if err := flattenLlamaLayout(layout.BinDir); err != nil {
 		return err

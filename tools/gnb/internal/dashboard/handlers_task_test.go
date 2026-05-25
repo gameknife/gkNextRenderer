@@ -47,9 +47,10 @@ func setupTODORepo(t *testing.T) *Server {
 		t.Fatal(err)
 	}
 	return &Server{
-		opts: Options{RepoRoot: dir},
-		tpl:  tpl,
-		jobs: NewJobManager(),
+		opts:  Options{RepoRoot: dir},
+		tpl:   tpl,
+		jobs:  NewJobManager(),
+		chats: NewChatStore(),
 	}
 }
 

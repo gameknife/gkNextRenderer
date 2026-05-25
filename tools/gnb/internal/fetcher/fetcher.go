@@ -255,6 +255,9 @@ func Download(url string, dst string) error {
 // Unzip extracts a zip archive into dst (exported wrapper around unzip).
 func Unzip(src string, dst string) error { return unzip(src, dst) }
 
+// Untar extracts a tar or tar.gz archive into dst.
+func Untar(src string, dst string, gz bool) error { return untar(src, dst, gz) }
+
 func unzip(src string, dst string) error {
 	reader, err := zip.OpenReader(src)
 	if err != nil {

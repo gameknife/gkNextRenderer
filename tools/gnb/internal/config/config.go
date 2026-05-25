@@ -70,12 +70,12 @@ func (c LLMConfig) FindModel(id string) (ModelConfig, bool) {
 }
 
 type LlamaConfig struct {
-	Version           string `toml:"version"`
-	WindowsVulkan     string `toml:"windows_vulkan"`
-	WindowsCPU        string `toml:"windows_cpu"`
-	LinuxVulkan       string `toml:"linux_vulkan"`
-	LinuxCPU          string `toml:"linux_cpu"`
-	MacOSArm64        string `toml:"macos_arm64"`
+	Version       string `toml:"version"`
+	WindowsVulkan string `toml:"windows_vulkan"`
+	WindowsCPU    string `toml:"windows_cpu"`
+	LinuxVulkan   string `toml:"linux_vulkan"`
+	LinuxCPU      string `toml:"linux_cpu"`
+	MacOSArm64    string `toml:"macos_arm64"`
 }
 
 type ModelConfig struct {
@@ -86,10 +86,10 @@ type ModelConfig struct {
 }
 
 type ServerConfig struct {
-	Host       string `toml:"host"`
-	Port       int    `toml:"port"`
-	GPULayers  int    `toml:"gpu_layers"`
-	IdleSecs   int    `toml:"idle_seconds"`
+	Host      string `toml:"host"`
+	Port      int    `toml:"port"`
+	GPULayers int    `toml:"gpu_layers"`
+	IdleSecs  int    `toml:"idle_seconds"`
 }
 
 type ExternalURLConfig struct {
@@ -168,15 +168,23 @@ func Load(repoRoot string) (Config, error) {
 
 func applyLLMDefaults(c *LLMConfig) {
 	if c.Llama.Version == "" {
-		c.Llama.Version = "b6000"
+		c.Llama.Version = "b9296"
 	}
 	if len(c.Models) == 0 {
-		c.Models = []ModelConfig{{
-			ID:       "gemma-4-E4B-it-Q4_K_M",
-			File:     "gemma-4-E4B-it-Q4_K_M.gguf",
-			URL:      "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf",
-			ContextN: 8192,
-		}}
+		c.Models = []ModelConfig{
+			{
+				ID:       "gemma-4-E4B-it-Q4_K_M",
+				File:     "gemma-4-E4B-it-Q4_K_M.gguf",
+				URL:      "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf",
+				ContextN: 131072,
+			},
+			{
+				ID:       "gemma-4-E2B-it-Q4_K_M",
+				File:     "gemma-4-E2B-it-Q4_K_M.gguf",
+				URL:      "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_K_M.gguf",
+				ContextN: 131072,
+			},
+		}
 	}
 	for i := range c.Models {
 		m := &c.Models[i]
@@ -184,7 +192,7 @@ func applyLLMDefaults(c *LLMConfig) {
 			m.File = m.ID + ".gguf"
 		}
 		if m.ContextN == 0 {
-			m.ContextN = 8192
+			m.ContextN = 131072
 		}
 	}
 	if c.Active == "" && len(c.Models) > 0 {

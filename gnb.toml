@@ -31,25 +31,25 @@ active = "gemma-4-E4B-it-Q4_K_M"
 
 [external.llm.llama]
 # llama.cpp 预编译 release（来自 ggml-org/llama.cpp）
-# Gemma 3n/4 需要 >= b5165；这里选用稳定的 b6000
-version = "b6000"
-windows_vulkan = "https://github.com/ggml-org/llama.cpp/releases/download/b6000/llama-b6000-bin-win-vulkan-x64.zip"
-windows_cpu    = "https://github.com/ggml-org/llama.cpp/releases/download/b6000/llama-b6000-bin-win-cpu-x64.zip"
-linux_vulkan   = "https://github.com/ggml-org/llama.cpp/releases/download/b6000/llama-b6000-bin-ubuntu-vulkan-x64.zip"
-linux_cpu      = "https://github.com/ggml-org/llama.cpp/releases/download/b6000/llama-b6000-bin-ubuntu-x64.zip"
-macos_arm64    = "https://github.com/ggml-org/llama.cpp/releases/download/b6000/llama-b6000-bin-macos-arm64.zip"
+# Gemma 4 需要新版 llama.cpp。
+version = "b9296"
+windows_vulkan = "https://github.com/ggml-org/llama.cpp/releases/download/b9296/llama-b9296-bin-win-vulkan-x64.zip"
+windows_cpu    = "https://github.com/ggml-org/llama.cpp/releases/download/b9296/llama-b9296-bin-win-cpu-x64.zip"
+linux_vulkan   = "https://github.com/ggml-org/llama.cpp/releases/download/b9296/llama-b9296-bin-ubuntu-vulkan-x64.tar.gz"
+linux_cpu      = "https://github.com/ggml-org/llama.cpp/releases/download/b9296/llama-b9296-bin-ubuntu-x64.tar.gz"
+macos_arm64    = "https://github.com/ggml-org/llama.cpp/releases/download/b9296/llama-b9296-bin-macos-arm64.tar.gz"
 
 [[external.llm.models]]
 id      = "gemma-4-E4B-it-Q4_K_M"
 file    = "gemma-4-E4B-it-Q4_K_M.gguf"
 url     = "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf"
-context = 8192
+context = 131072
 
 [[external.llm.models]]
-id      = "gemma-3n-E4B-it-Q4_K_M"
-file    = "gemma-3n-E4B-it-Q4_K_M.gguf"
-url     = "https://huggingface.co/unsloth/gemma-3n-E4B-it-GGUF/resolve/main/gemma-3n-E4B-it-Q4_K_M.gguf"
-context = 8192
+id      = "gemma-4-E2B-it-Q4_K_M"
+file    = "gemma-4-E2B-it-Q4_K_M.gguf"
+url     = "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_K_M.gguf"
+context = 131072
 
 [external.llm.server]
 host         = "127.0.0.1"
