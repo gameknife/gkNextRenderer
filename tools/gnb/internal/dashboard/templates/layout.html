@@ -288,6 +288,93 @@
     color: var(--fg-mute);
     font-style: italic;
   }
+  .chat-tool-panel {
+    margin: 2px 0 10px;
+    padding: 8px 0 2px;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .chat-tool-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 7px;
+    color: var(--fg-mute);
+    font-size: 11.5px;
+    font-weight: 650;
+  }
+  .chat-tool-pulse {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.35);
+    animation: chatToolPulse 1.5s infinite;
+  }
+  .chat-tool-panel.complete .chat-tool-pulse {
+    animation: none;
+    background: var(--green);
+    box-shadow: none;
+  }
+  .chat-tool-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .chat-tool-item {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+    color: var(--fg-mute);
+    font-size: 12px;
+  }
+  .chat-tool-mark {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1px solid var(--border-strong);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--fg-dim);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 1;
+  }
+  .chat-tool-item.running .chat-tool-mark {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .chat-tool-item.done .chat-tool-mark {
+    border-color: rgba(34, 197, 94, 0.4);
+    color: var(--green);
+  }
+  .chat-tool-item.error .chat-tool-mark {
+    border-color: rgba(239, 68, 68, 0.45);
+    color: var(--red);
+  }
+  .chat-tool-name {
+    color: var(--fg);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+  }
+  .chat-tool-summary {
+    margin-left: 6px;
+    color: var(--fg-mute);
+  }
+  .chat-tool-detail {
+    margin-top: 2px;
+    color: var(--fg-dim);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
+  @keyframes chatToolPulse {
+    0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.35); }
+    70% { box-shadow: 0 0 0 7px rgba(59, 130, 246, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+  }
   .chat-role {
     color: var(--fg-dim);
     font-family: var(--font-mono);
@@ -1837,7 +1924,78 @@
     row.append(avatar, bubble);
     messages.appendChild(row);
     scrollChatToBottom(panel);
-    return { row, textEl };
+    return { row, bubble, textEl };
+  }
+
+  function ensureAssistantMessage(panel, assistant, placeholder) {
+    if (assistant) return assistant;
+    const msg = appendChatMessage(panel, 'assistant', placeholder || '', false);
+    msg?.row?.classList.add('thinking');
+    return msg;
+  }
+
+  function ensureToolPanel(assistant) {
+    if (!assistant?.bubble) return null;
+    let panel = assistant.bubble.querySelector('.chat-tool-panel');
+    if (panel) return panel;
+    panel = document.createElement('div');
+    panel.className = 'chat-tool-panel';
+    const title = document.createElement('div');
+    title.className = 'chat-tool-title';
+    const pulse = document.createElement('span');
+    pulse.className = 'chat-tool-pulse';
+    const label = document.createElement('span');
+    label.textContent = '执行概览';
+    title.append(pulse, label);
+    const list = document.createElement('div');
+    list.className = 'chat-tool-list';
+    panel.append(title, list);
+    assistant.textEl?.parentNode?.insertBefore(panel, assistant.textEl);
+    return panel;
+  }
+
+  function updateToolOverview(assistant, payload) {
+    const panel = ensureToolPanel(assistant);
+    const list = panel?.querySelector('.chat-tool-list');
+    if (!panel || !list) return;
+    const step = String(payload.step || list.children.length + 1);
+    let item = list.querySelector('[data-tool-step="' + CSS.escape(step) + '"]');
+    if (!item) {
+      item = document.createElement('div');
+      item.className = 'chat-tool-item running';
+      item.dataset.toolStep = step;
+      const mark = document.createElement('div');
+      mark.className = 'chat-tool-mark';
+      mark.textContent = String(payload.step || list.children.length + 1);
+      const body = document.createElement('div');
+      const line = document.createElement('div');
+      const name = document.createElement('span');
+      name.className = 'chat-tool-name';
+      const summary = document.createElement('span');
+      summary.className = 'chat-tool-summary';
+      const detail = document.createElement('div');
+      detail.className = 'chat-tool-detail';
+      line.append(name, summary);
+      body.append(line, detail);
+      item.append(mark, body);
+      list.appendChild(item);
+    }
+    const phase = payload.phase || 'start';
+    const detailText = payload.detail || '';
+    const isError = detailText.startsWith('ERROR:');
+    item.classList.toggle('running', phase !== 'done');
+    item.classList.toggle('done', phase === 'done' && !isError);
+    item.classList.toggle('error', isError);
+    const mark = item.querySelector('.chat-tool-mark');
+    if (mark && phase === 'done') mark.textContent = isError ? '!' : '✓';
+    const name = item.querySelector('.chat-tool-name');
+    const summary = item.querySelector('.chat-tool-summary');
+    const detail = item.querySelector('.chat-tool-detail');
+    if (name) name.textContent = payload.name || 'tool';
+    if (summary) summary.textContent = payload.summary ? ' ' + payload.summary : '';
+    if (detail) detail.textContent = detailText;
+    const hasRunning = !!list.querySelector('.chat-tool-item.running');
+    panel.classList.toggle('complete', !hasRunning);
   }
 
   function setChatBusy(form, busy) {
@@ -1915,6 +2073,12 @@
             setChatStatus(panel, thinking?.checked ? '正在思考...' : 'generating');
           } else if (msg.event === 'status') {
             setChatStatus(panel, payload.message || 'working');
+          } else if (msg.event === 'tool') {
+            assistant = ensureAssistantMessage(panel, assistant, '正在思考...');
+            updateToolOverview(assistant, payload);
+            const toolName = payload.name || 'local tool';
+            setChatStatus(panel, payload.phase === 'done' ? '工具完成：' + toolName : '调用工具：' + toolName);
+            scrollChatToBottom(panel);
           } else if (msg.event === 'thinking') {
             if (!assistant) {
               assistant = appendChatMessage(panel, 'assistant', payload.message || '正在思考...', false);
@@ -1933,7 +2097,7 @@
             setChatStatus(panel, 'streaming');
             scrollChatToBottom(panel);
           } else if (msg.event === 'error') {
-            if (assistant && !assistantText) assistant.row.remove();
+            if (assistant && !assistantText && !assistant.bubble?.querySelector('.chat-tool-panel')) assistant.row.remove();
             setChatError(panel, payload.message || 'LLM 请求失败');
             setChatStatus(panel, chatMessageCount(panel) + ' messages');
           } else if (msg.event === 'done') {
