@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/config"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/gitops"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/llm"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
@@ -54,6 +55,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /git/commit", s.handleGitCommitCreate)
 	mux.HandleFunc("POST /chat/send", s.handleChatSend)
 	mux.HandleFunc("POST /chat/send-stream", s.handleChatSendStream)
+	mux.HandleFunc("GET /chat/session", s.handleChatSession)
+	mux.HandleFunc("POST /chat/new", s.handleChatNew)
+	mux.HandleFunc("POST /chat/archive", s.handleChatArchive)
 	mux.HandleFunc("POST /chat/clear", s.handleChatClear)
 	return logRequests(mux)
 }
@@ -127,12 +131,33 @@ type testVM struct {
 type chatVM struct {
 	SessionID     string
 	Models        []chatModelVM
+	Sessions      []chatSessionVM
 	SelectedModel string
 	Messages      []llm.ChatMessage
+	Context       chatContextVM
 	Error         string
 	ServerRunning bool
 	RunningModel  string
 	Endpoint      string
+}
+
+type chatSessionVM struct {
+	ID             string
+	Title          string
+	ModelID        string
+	UpdatedAt      time.Time
+	RelativeTime   string
+	MessageCount   int
+	Active         bool
+	ContextUsed    int
+	ContextLimit   int
+	ContextPercent int
+}
+
+type chatContextVM struct {
+	Used    int
+	Limit   int
+	Percent int
 }
 
 type chatModelVM struct {
@@ -719,21 +744,33 @@ func (s *Server) handleTab(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) buildChatVM(sessionID string, errText string) chatVM {
 	if s.chats == nil {
-		s.chats = NewChatStore()
+		s.chats = NewChatStore(chatStorePath(s.opts))
 	}
 	cfg := s.opts.Config.External.LLM
 	active := cfg.ActiveModel().ID
-	sess := s.chats.Get(sessionID, active)
+	var sess *ChatSession
+	if sessionID == "" {
+		sess = s.chats.Latest(active)
+	} else {
+		sess = s.chats.Get(sessionID, active)
+	}
 	selected := sess.ModelID
 	if selected == "" {
 		selected = active
 	}
+	contextLimit := chatContextLimit(cfg.Models, selected)
+	contextUsed := EstimateChatContextTokens(s.opts.RepoRoot, sess.Messages)
 	status := llm.NewServer(s.opts.RepoRoot, cfg).Status()
 	layout := llm.ResolveLayout(s.opts.RepoRoot, cfg)
 	vm := chatVM{
 		SessionID:     sess.ID,
 		SelectedModel: selected,
 		Messages:      sess.Messages,
+		Context: chatContextVM{
+			Used:    contextUsed,
+			Limit:   contextLimit,
+			Percent: percentOf(contextUsed, contextLimit),
+		},
 		Error:         errText,
 		ServerRunning: status.Running,
 		RunningModel:  status.Model,
@@ -749,6 +786,26 @@ func (s *Server) buildChatVM(sessionID string, errText string) chatVM {
 			Running:    status.Running && status.Model == model.ID,
 		})
 	}
+	for _, item := range s.chats.List() {
+		title := item.Title
+		if title == "" {
+			title = "新对话"
+		}
+		limit := chatContextLimit(cfg.Models, item.ModelID)
+		used := EstimateChatContextTokens(s.opts.RepoRoot, item.Messages)
+		vm.Sessions = append(vm.Sessions, chatSessionVM{
+			ID:             item.ID,
+			Title:          title,
+			ModelID:        item.ModelID,
+			UpdatedAt:      item.UpdatedAt,
+			RelativeTime:   relativeTime(item.UpdatedAt),
+			MessageCount:   len(item.Messages),
+			Active:         item.ID == sess.ID,
+			ContextUsed:    used,
+			ContextLimit:   limit,
+			ContextPercent: percentOf(used, limit),
+		})
+	}
 	return vm
 }
 
@@ -758,7 +815,7 @@ func (s *Server) renderChatPanel(w http.ResponseWriter, sessionID string, errTex
 
 func (s *Server) handleChatClear(w http.ResponseWriter, r *http.Request) {
 	if s.chats == nil {
-		s.chats = NewChatStore()
+		s.chats = NewChatStore(chatStorePath(s.opts))
 	}
 	if err := r.ParseForm(); err != nil {
 		httpError(w, err)
@@ -774,9 +831,50 @@ func (s *Server) handleChatClear(w http.ResponseWriter, r *http.Request) {
 	s.renderChatPanel(w, sess.ID, "")
 }
 
+func (s *Server) handleChatSession(w http.ResponseWriter, r *http.Request) {
+	sessionID := strings.TrimSpace(r.URL.Query().Get("id"))
+	s.renderChatPanel(w, sessionID, "")
+}
+
+func (s *Server) handleChatNew(w http.ResponseWriter, r *http.Request) {
+	if s.chats == nil {
+		s.chats = NewChatStore(chatStorePath(s.opts))
+	}
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err)
+		return
+	}
+	modelID := strings.TrimSpace(r.FormValue("model"))
+	cfg, err := llm.SelectModel(s.opts.Config.External.LLM, modelID)
+	if err != nil {
+		s.renderChatPanel(w, r.FormValue("session_id"), err.Error())
+		return
+	}
+	sess := s.chats.Create(cfg.ActiveModel().ID)
+	s.renderChatPanel(w, sess.ID, "")
+}
+
+func (s *Server) handleChatArchive(w http.ResponseWriter, r *http.Request) {
+	if s.chats == nil {
+		s.chats = NewChatStore(chatStorePath(s.opts))
+	}
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err)
+		return
+	}
+	modelID := strings.TrimSpace(r.FormValue("model"))
+	cfg, err := llm.SelectModel(s.opts.Config.External.LLM, modelID)
+	if err != nil {
+		s.renderChatPanel(w, r.FormValue("session_id"), err.Error())
+		return
+	}
+	sess := s.chats.Archive(strings.TrimSpace(r.FormValue("session_id")), cfg.ActiveModel().ID)
+	s.renderChatPanel(w, sess.ID, "")
+}
+
 func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	if s.chats == nil {
-		s.chats = NewChatStore()
+		s.chats = NewChatStore(chatStorePath(s.opts))
 	}
 	if err := r.ParseForm(); err != nil {
 		httpError(w, err)
@@ -798,8 +896,9 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 	}
 	modelID = cfg.ActiveModel().ID
 	sess := s.chats.Get(sessionID, modelID)
-	messages := append([]llm.ChatMessage(nil), sess.Messages...)
-	messages = append(messages, llm.ChatMessage{Role: "user", Content: userText})
+	visibleMessages := append([]llm.ChatMessage(nil), sess.Messages...)
+	visibleMessages = append(visibleMessages, llm.ChatMessage{Role: "user", Content: userText})
+	messages := ChatMessagesWithStandardContext(s.opts.RepoRoot, visibleMessages)
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
@@ -833,7 +932,7 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleChatSendStream(w http.ResponseWriter, r *http.Request) {
 	if s.chats == nil {
-		s.chats = NewChatStore()
+		s.chats = NewChatStore(chatStorePath(s.opts))
 	}
 	if err := r.ParseForm(); err != nil {
 		httpError(w, err)
@@ -881,8 +980,9 @@ func (s *Server) handleChatSendStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	messages := append([]llm.ChatMessage(nil), sess.Messages...)
-	messages = append(messages, llm.ChatMessage{Role: "user", Content: userText})
+	visibleMessages := append([]llm.ChatMessage(nil), sess.Messages...)
+	visibleMessages = append(visibleMessages, llm.ChatMessage{Role: "user", Content: userText})
+	messages := ChatMessagesWithStandardContext(s.opts.RepoRoot, visibleMessages)
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
@@ -941,13 +1041,20 @@ func (s *Server) handleChatSendStream(w http.ResponseWriter, r *http.Request) {
 		emit("error", map[string]string{"message": "LLM 请求失败: " + err.Error()})
 		return
 	}
-	s.chats.AppendExchange(sess.ID, modelID, userText, strings.TrimSpace(reply.String()))
+	sess = s.chats.AppendExchange(sess.ID, modelID, userText, strings.TrimSpace(reply.String()))
+	contextLimit := chatContextLimit(s.opts.Config.External.LLM.Models, modelID)
+	contextUsed := EstimateChatContextTokens(s.opts.RepoRoot, sess.Messages)
 	emit("done", map[string]any{
 		"session_id":    sess.ID,
-		"messages":      len(messages) + 1,
+		"messages":      len(sess.Messages),
 		"finish_reason": finishReason,
 		"truncated":     finishReason == "length",
 		"max_tokens":    maxTokens,
+		"context_used":  contextUsed,
+		"context_limit": contextLimit,
+		"context_pct":   percentOf(contextUsed, contextLimit),
+		"session_title": sess.Title,
+		"session_age":   relativeTime(sess.UpdatedAt),
 	})
 }
 
@@ -963,6 +1070,63 @@ func parseChatMaxTokens(raw string) int {
 		return maxChatMaxTokens
 	}
 	return n
+}
+
+func chatStorePath(opts Options) string {
+	layout := llm.ResolveLayout(opts.RepoRoot, opts.Config.External.LLM)
+	return filepath.Join(layout.RunDir, "dashboard_chats.json")
+}
+
+func chatContextLimit(models []config.ModelConfig, modelID string) int {
+	for _, model := range models {
+		if model.ID == modelID {
+			return model.ContextN
+		}
+	}
+	if len(models) > 0 {
+		return models[0].ContextN
+	}
+	return 0
+}
+
+func percentOf(used int, limit int) int {
+	if used <= 0 || limit <= 0 {
+		return 0
+	}
+	pct := int(float64(used) * 100 / float64(limit))
+	if pct < 1 {
+		return 1
+	}
+	if pct > 100 {
+		return 100
+	}
+	return pct
+}
+
+func relativeTime(t time.Time) string {
+	if t.IsZero() {
+		return "now"
+	}
+	d := time.Since(t)
+	if d < 0 {
+		d = 0
+	}
+	switch {
+	case d < time.Minute:
+		return "now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	case d < 7*24*time.Hour:
+		return fmt.Sprintf("%dd", int(d.Hours()/24))
+	case d < 30*24*time.Hour:
+		return fmt.Sprintf("%dweek", int(d.Hours()/(24*7)))
+	case d < 365*24*time.Hour:
+		return fmt.Sprintf("%dmonth", int(d.Hours()/(24*30)))
+	default:
+		return fmt.Sprintf("%dy", int(d.Hours()/(24*365)))
+	}
 }
 
 // ----- git handlers ---------------------------------------------------

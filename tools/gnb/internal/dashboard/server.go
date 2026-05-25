@@ -55,7 +55,7 @@ func New(opts Options) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse templates: %w", err)
 	}
-	return &Server{opts: opts, tpl: tpl, jobs: NewJobManager(), chats: NewChatStore()}, nil
+	return &Server{opts: opts, tpl: tpl, jobs: NewJobManager(), chats: NewChatStore(chatStorePath(opts))}, nil
 }
 
 // Run binds the configured port and serves until ctx is canceled.
@@ -146,7 +146,11 @@ func templateFuncs() template.FuncMap {
 			}
 			return s
 		},
-		"date":     func(t time.Time) string { return t.Format("2006-01-02 15:04") },
+		"date":    func(t time.Time) string { return t.Format("2006-01-02 15:04") },
+		"relTime": relativeTime,
+		"tokenK": func(n int) string {
+			return fmt.Sprintf("%.1f k", float64(n)/1000.0)
+		},
 		"safeHTML": func(s string) template.HTML { return template.HTML(s) },
 		"userInitial": func() string {
 			if u, err := user.Current(); err == nil && u.Username != "" {
