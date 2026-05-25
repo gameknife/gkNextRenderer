@@ -808,7 +808,13 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 		s.renderChatPanel(w, sess.ID, "启动 LLM 失败: "+err.Error())
 		return
 	}
-	reply, err := llm.NewClient(srv.BaseURL()).Chat(ctx, llm.ChatRequest{
+	client := llm.NewClient(srv.BaseURL())
+	messages, _, err = s.runChatToolLoop(ctx, client, modelID, messages, nil)
+	if err != nil {
+		s.renderChatPanel(w, sess.ID, "工具调用失败: "+err.Error())
+		return
+	}
+	reply, err := client.Chat(ctx, llm.ChatRequest{
 		Model:       modelID,
 		Messages:    messages,
 		Temperature: 0.7,
@@ -886,6 +892,14 @@ func (s *Server) handleChatSendStream(w http.ResponseWriter, r *http.Request) {
 		emit("error", map[string]string{"message": "启动 LLM 失败: " + err.Error()})
 		return
 	}
+	client := llm.NewClient(srv.BaseURL())
+	messages, _, err = s.runChatToolLoop(ctx, client, modelID, messages, func(event chatToolEvent) {
+		emit("tool", event)
+	})
+	if err != nil {
+		emit("error", map[string]string{"message": "工具调用失败: " + err.Error()})
+		return
+	}
 	emit("status", map[string]string{"message": "模型已就绪，正在生成..."})
 	reasoningEmitted := false
 	if thinking {
@@ -895,7 +909,7 @@ func (s *Server) handleChatSendStream(w http.ResponseWriter, r *http.Request) {
 
 	var reply strings.Builder
 	finishReason := ""
-	err = llm.NewClient(srv.BaseURL()).ChatStream(ctx, llm.ChatRequest{
+	err = client.ChatStream(ctx, llm.ChatRequest{
 		Model:       modelID,
 		Messages:    messages,
 		Temperature: 0.7,
