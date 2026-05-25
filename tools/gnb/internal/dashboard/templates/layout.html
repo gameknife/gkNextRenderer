@@ -178,6 +178,141 @@
   }
   .chat-side .card {
     flex: 0 0 auto;
+    padding: 12px;
+  }
+  .chat-side {
+    overflow-y: auto;
+    gap: 10px;
+  }
+  .chat-session-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 340px;
+    overflow-y: auto;
+  }
+  .chat-session-item {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 26px;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    padding: 4px;
+    color: var(--fg);
+  }
+  .chat-session-item:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border);
+  }
+  .chat-session-item.active {
+    background: var(--accent-soft);
+    border-color: rgba(59, 130, 246, 0.32);
+  }
+  .chat-session-open {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: 0;
+    color: inherit;
+    padding: 4px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .chat-session-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 12.5px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .chat-session-age {
+    color: var(--fg-dim);
+    font-size: 10.5px;
+    font-family: var(--font-mono);
+    white-space: nowrap;
+  }
+  .chat-session-archive,
+  .chat-title-action {
+    margin: 0;
+  }
+  .chat-title-action {
+    margin-left: auto;
+  }
+  .icon-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--fg-dim);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+  }
+  .icon-btn:hover {
+    color: var(--fg);
+    background: var(--bg-card-hover);
+    border-color: var(--border);
+  }
+  .chat-session-archive .icon-btn {
+    opacity: 0;
+  }
+  .chat-session-item:hover .chat-session-archive .icon-btn,
+  .chat-session-item.active .chat-session-archive .icon-btn {
+    opacity: 1;
+  }
+  .chat-session-empty {
+    color: var(--fg-dim);
+    font-size: 12px;
+    padding: 8px 0 2px;
+  }
+  .chat-model-list {
+    margin-top: 8px;
+  }
+  .chat-side .model-row,
+  .chat-side .info-row {
+    padding: 5px 0;
+    font-size: 11.5px;
+  }
+  .chat-side .card-title {
+    margin-bottom: 10px;
+  }
+  .chat-context-compact {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--fg-mute);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    white-space: nowrap;
+  }
+  .chat-context-ring {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at center, var(--bg-panel) 0 52%, transparent 54%),
+      conic-gradient(var(--accent) var(--ctx-pct, 0%), var(--bg-input) 0);
+    border: 1px solid var(--border);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .chat-context-ring span {
+    color: var(--fg-dim);
+    font-size: 8.5px;
+    line-height: 1;
   }
   .chat-main {
     background: var(--bg-panel);
@@ -451,6 +586,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
   }
   .chat-actions .btn-primary {
     width: auto;
@@ -1836,13 +1972,41 @@
   }
   function renderMarkdownText(el, source) {
     if (!el) return;
-    el.innerHTML = window.marked ? marked.parse(source || '') : fallbackMarkdown(source || '');
+    const markdown = source == null ? (el.dataset.mdSource || el.textContent || '') : String(source || '');
+    el.dataset.mdSource = markdown;
+    el.innerHTML = window.marked ? marked.parse(markdown) : fallbackMarkdown(markdown);
     el.dataset.mdRendered = '1';
+  }
+  function scheduleMarkdownRender(el, source) {
+    if (!el) return;
+    el.dataset.mdSource = String(source || '');
+    if (el._mdRenderFrame) return;
+    el._mdRenderFrame = window.requestAnimationFrame(() => {
+      el._mdRenderFrame = 0;
+      renderMarkdownText(el);
+    });
+  }
+  function flushMarkdownRender(el) {
+    if (!el) return;
+    if (el._mdRenderFrame) {
+      window.cancelAnimationFrame(el._mdRenderFrame);
+      el._mdRenderFrame = 0;
+    }
+    renderMarkdownText(el);
   }
   function renderMarkdown(root) {
     (root || document).querySelectorAll('[data-md]:not([data-md-rendered])').forEach(el => {
-      renderMarkdownText(el, el.textContent);
+      renderMarkdownText(el);
     });
+  }
+  function currentSwapRoot(target) {
+    if (!target) return document;
+    if (target.isConnected) return target;
+    if (target.id) {
+      const replacement = document.getElementById(target.id);
+      if (replacement) return replacement;
+    }
+    return document;
   }
   function scrollChatToBottom(root) {
     (root || document).querySelectorAll('.chat-messages').forEach(el => {
@@ -1859,18 +2023,19 @@
     }
   });
   document.body.addEventListener('htmx:afterSwap', (e) => {
-    renderMarkdown(e.detail.target);
+    const root = currentSwapRoot(e.detail.target);
+    renderMarkdown(root);
     const sel = document.querySelector('[data-selected-id]')?.dataset?.selectedId;
     if (sel) {
       document.querySelectorAll('.task').forEach(t => {
         if (t.dataset.id === sel) t.classList.add('selected');
       });
     }
-    restoreTargetSelection(e.detail.target);
-    restoreGitSelection(e.detail.target);
-    scrollChatToBottom(e.detail.target);
+    restoreTargetSelection(root);
+    restoreGitSelection(root);
+    scrollChatToBottom(root);
   });
-  // Initial pass for any markdown rendered on first load (currently none, but cheap).
+  // Initial pass for any server-rendered markdown on first load.
   document.addEventListener('DOMContentLoaded', () => {
     renderMarkdown(document);
     scrollChatToBottom(document);
@@ -1883,6 +2048,33 @@
   function setChatStatus(panel, text) {
     const status = panel?.querySelector('.chat-status');
     if (status) status.textContent = text;
+  }
+
+  function formatTokenK(n) {
+    const value = Number(n || 0) / 1000;
+    return value.toFixed(1) + ' k';
+  }
+
+  function updateChatContext(panel, used, limit, pct) {
+    if (!panel || used == null || limit == null) return;
+    const label = panel.querySelector('[data-chat-context-label]');
+    const fill = panel.querySelector('[data-chat-context-fill]');
+    const percent = Math.max(0, Math.min(100, Number(pct || 0)));
+    if (label) label.textContent = formatTokenK(used) + ' / ' + formatTokenK(limit);
+    if (fill) {
+      fill.style.setProperty('--ctx-pct', percent + '%');
+      const pctLabel = fill.querySelector('span');
+      if (pctLabel) pctLabel.textContent = String(percent) + '%';
+    }
+  }
+
+  function updateActiveSessionSummary(panel, payload) {
+    const active = panel?.querySelector('.chat-session-item.active');
+    if (!active) return;
+    const title = active.querySelector('[data-session-title]');
+    const age = active.querySelector('[data-session-age]');
+    if (title && payload.session_title) title.textContent = payload.session_title;
+    if (age && payload.session_age) age.textContent = payload.session_age;
   }
 
   function setChatError(panel, message) {
@@ -2093,7 +2285,7 @@
             if (assistant?.row) assistant.row.classList.remove('thinking');
             assistantText += payload.text || '';
             if (!assistant) assistant = appendChatMessage(panel, 'assistant', '', false);
-            if (assistant?.textEl) assistant.textEl.textContent = assistantText;
+            if (assistant?.textEl) scheduleMarkdownRender(assistant.textEl, assistantText);
             setChatStatus(panel, 'streaming');
             scrollChatToBottom(panel);
           } else if (msg.event === 'error') {
@@ -2101,16 +2293,18 @@
             setChatError(panel, payload.message || 'LLM 请求失败');
             setChatStatus(panel, chatMessageCount(panel) + ' messages');
           } else if (msg.event === 'done') {
-            if (assistant?.textEl) renderMarkdownText(assistant.textEl, assistantText);
+            if (assistant?.textEl) flushMarkdownRender(assistant.textEl);
             if (payload.truncated) {
               setChatError(panel, '输出达到长度上限（' + (payload.max_tokens || '当前') + ' tokens），回答可能已截断；可提高“输出上限”后让模型继续。');
             }
+            updateChatContext(panel, payload.context_used, payload.context_limit, payload.context_pct);
+            updateActiveSessionSummary(panel, payload);
             setChatStatus(panel, chatMessageCount(panel) + ' messages');
           }
         }
       }
       if (assistantText && assistant?.textEl && !assistant.textEl.dataset.mdRendered) {
-        renderMarkdownText(assistant.textEl, assistantText);
+        flushMarkdownRender(assistant.textEl);
       }
     } catch (err) {
       setChatError(panel, String(err && err.message ? err.message : err));
@@ -2314,7 +2508,7 @@
     }));
   }).observe(document.body, { childList: true, subtree: true });
 
-  document.body.addEventListener('htmx:afterSwap', (e) => initAllLogPanels(e.detail.target));
+  document.body.addEventListener('htmx:afterSwap', (e) => initAllLogPanels(currentSwapRoot(e.detail.target)));
   document.addEventListener('DOMContentLoaded', () => initAllLogPanels(document));
 
   // When a delete reply comes back the server sends HX-Trigger: clear-detail

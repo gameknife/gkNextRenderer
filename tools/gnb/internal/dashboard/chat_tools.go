@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	chatToolMaxSteps    = 8
+	chatToolMaxSteps    = 12
 	chatToolResultChars = 24000
 )
 
@@ -39,9 +39,13 @@ const chatToolControllerPrompt = `你是本地工程助手的工具控制器。�
 - 如果用户问某个 C/C++ 类、结构体、模块的 API、public 方法、成员函数、接口，先用 find_symbol 定位符号定义；如果找到定义文件，下一步必须 read_file 读取定义文件后再回答。
 - .spec 总结通常先 list_dir(".spec")，再 read_file(".spec/TODO.md")，必要时 read_file(".spec/journal/<id>.md") 或 read_file(".spec/specs/<id>.md")。
 - 最近修改通常先 git_log，再按需 read_file 或 git_show。
+- 把 list_dir/find_files/search_text/find_symbol/git_log 视为“探索工具”：它们只给候选、目录、匹配或提交列表。除非用户只问“有哪些文件/路径/是否存在”，否则不要在探索工具后直接 final；应继续 read_file、git_show 或 run_cmd 读取证据。
+- 对源码问题，常见链路是 find_symbol/search_text -> read_file -> 如仍缺实现细节再 search_text "<Symbol>::" -> read_file 相关实现文件。
+- 对 .spec 或本地文件总结，常见链路是 list_dir -> read_file 入口文件 -> read_file 相关 specs/journal/blockers。
+- 对 git/最近修改，常见链路是 git_log -> git_show 或 run_cmd git diff/status/ls-files。
 - 如果工具没有结果，换一个关键词继续查一次，例如 NextEngine 可改查 gkNextEngine、NextGameplay、Runtime、Application、Renderer。
-- 每次只调用一个工具。拿到工具结果后再决定下一步。
-- 信息足够后输出 {"tool":"final","args":{}}。
+- 每次只调用一个工具。拿到工具结果后，基于已有 observation 判断是否还缺信息；缺信息就继续调用下一步工具。
+- 只有当工具结果已经足以支撑完整回答时，才输出 {"tool":"final","args":{}}。
 
 JSON 格式只能是：
 {"tool":"list_dir","args":{"path":".spec","max_entries":50}}
@@ -88,12 +92,13 @@ func (s *Server) runChatToolLoop(ctx context.Context, client *llm.Client, modelI
 
 	var results []chatToolResult
 	parseFailures := 0
+	prematureFinals := 0
 	for step := 0; step < chatToolMaxSteps; step++ {
 		reply, err := client.Chat(ctx, llm.ChatRequest{
 			Model:       modelID,
 			Messages:    controllerMessages,
 			Temperature: 0.0,
-			MaxTokens:   512,
+			MaxTokens:   768,
 		})
 		if err != nil {
 			return nil, nil, err
@@ -115,6 +120,14 @@ func (s *Server) runChatToolLoop(ctx context.Context, client *llm.Client, modelI
 		}
 		parseFailures = 0
 		if call.Tool == "" || call.Tool == "final" {
+			if reason := forcedToolContinuationReason(messages, results); reason != "" && prematureFinals < 2 && step < chatToolMaxSteps-1 {
+				prematureFinals++
+				controllerMessages = append(controllerMessages,
+					llm.ChatMessage{Role: "assistant", Content: mustJSON(chatToolCall{Tool: "final", Args: map[string]any{}})},
+					llm.ChatMessage{Role: "user", Content: reason},
+				)
+				continue
+			}
 			break
 		}
 		if emit != nil {
@@ -151,7 +164,7 @@ func (s *Server) runChatToolLoop(ctx context.Context, client *llm.Client, modelI
 	}
 	finalMessages := []llm.ChatMessage{{
 		Role:    "system",
-		Content: "你是 gnb dashboard 的本地工程助手。你已经通过工具读取了本地仓库信息。请只基于工具结果和对话内容回答；引用具体文件路径、任务 ID、提交 hash。不要输出 JSON，不要声称无法访问本地文件。",
+		Content: "你是 gnb dashboard 的本地工程助手。你已经通过工具读取了本地仓库信息。请只基于工具结果和对话内容回答；引用具体文件路径、任务 ID、提交 hash。不要输出 JSON，不要输出 <|tool_call>、call: Tool、args: 之类的工具调用文本，不要声称无法访问本地文件。如果工具结果仍不足，只说明还缺哪些具体信息，不要假装继续调用工具。",
 	}}
 	finalMessages = append(finalMessages, llm.ChatMessage{Role: "system", Content: buildToolTranscript(results)})
 	finalMessages = append(finalMessages, messages...)
@@ -478,6 +491,9 @@ func validateReadOnlyCommand(cmdName string, args []string) error {
 }
 
 func parseChatToolCall(reply string) (chatToolCall, error) {
+	if call, ok := parseNativeChatToolCall(reply); ok {
+		return call, nil
+	}
 	raw := extractJSONObject(reply)
 	if raw == "" {
 		return chatToolCall{}, fmt.Errorf("no json object in tool reply")
@@ -490,7 +506,32 @@ func parseChatToolCall(reply string) (chatToolCall, error) {
 	if call.Args == nil {
 		call.Args = map[string]any{}
 	}
+	if call.Tool == "" {
+		return chatToolCall{}, fmt.Errorf("tool field is required")
+	}
 	return call, nil
+}
+
+func parseNativeChatToolCall(reply string) (chatToolCall, bool) {
+	lower := strings.ToLower(reply)
+	if !strings.Contains(lower, "tool_call") && !strings.Contains(lower, "args:") {
+		return chatToolCall{}, false
+	}
+	re := regexp.MustCompile(`(?is)(?:tool\s*\d+\s*:\s*)?([a-zA-Z_][a-zA-Z0-9_]*)\s+args\s*:\s*(\{.*\})`)
+	m := re.FindStringSubmatch(reply)
+	if len(m) != 3 {
+		return chatToolCall{}, false
+	}
+	tool := strings.TrimSpace(m[1])
+	rawArgs := extractJSONObject(m[2])
+	if rawArgs == "" {
+		return chatToolCall{}, false
+	}
+	var args map[string]any
+	if err := json.Unmarshal([]byte(rawArgs), &args); err != nil {
+		return chatToolCall{}, false
+	}
+	return chatToolCall{Tool: tool, Args: args}, true
 }
 
 func extractJSONObject(s string) string {
@@ -540,6 +581,76 @@ func buildToolTranscript(results []chatToolResult) string {
 
 func formatToolResult(name string, output string) string {
 	return fmt.Sprintf("TOOL_RESULT %s\n```text\n%s\n```", name, output)
+}
+
+func forcedToolContinuationReason(messages []llm.ChatMessage, results []chatToolResult) string {
+	if len(results) == 0 {
+		return ""
+	}
+	userText := strings.ToLower(latestUserMessage(messages))
+	if !needsGroundedFollowup(userText) {
+		return ""
+	}
+	if hasEvidenceTool(results) {
+		return ""
+	}
+	last := results[len(results)-1]
+	if !isDiscoveryTool(last.Name) {
+		return ""
+	}
+	switch last.Name {
+	case "list_dir":
+		return "你刚刚只列出了目录，还没有读取具体文件内容。请继续选择 read_file 读取最相关的入口文件，例如 TODO.md、README、spec 或候选源码文件；只输出下一次工具 JSON。"
+	case "find_files", "search_text", "find_symbol":
+		return "你刚刚只找到了候选路径/符号/匹配行，还没有读取定义或实现文件。请继续选择 read_file 读取最相关的候选文件；只输出下一次工具 JSON。"
+	case "git_log":
+		return "你刚刚只读取了提交列表。若要回答最近修改、系统变更或实现细节，请继续选择 git_show 查看相关提交，或 run_cmd 读取 git status/diff；只输出下一次工具 JSON。"
+	default:
+		return "当前 observation 还只是候选信息，不足以支撑回答。请继续调用一个能读取具体证据的工具；只输出下一次工具 JSON。"
+	}
+}
+
+func latestUserMessage(messages []llm.ChatMessage) string {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" {
+			return messages[i].Content
+		}
+	}
+	return ""
+}
+
+func needsGroundedFollowup(userText string) bool {
+	keywords := []string{
+		".spec", "todo", "journal", "blocker", "最近", "修改", "提交", "git",
+		"源码", "源代码", "代码", "模块", "目录", "类", "函数", "结构体", "实现", "调用", "依赖",
+		"总结", "解释", "分析", "列出", "public", "method", "methods", "api", "source", "code",
+		"nextengine", "gknextengine", "runtime", "application", "renderer",
+	}
+	for _, keyword := range keywords {
+		if strings.Contains(userText, keyword) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasEvidenceTool(results []chatToolResult) bool {
+	for _, result := range results {
+		switch result.Name {
+		case "read_file", "git_show", "run_cmd":
+			return true
+		}
+	}
+	return false
+}
+
+func isDiscoveryTool(name string) bool {
+	switch name {
+	case "list_dir", "find_files", "search_text", "find_symbol", "git_log":
+		return true
+	default:
+		return false
+	}
 }
 
 func chatToolCallSummary(call chatToolCall) string {
