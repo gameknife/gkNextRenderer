@@ -31,21 +31,7 @@ func newLLMCommand(ctx appContext) *cobra.Command {
 // (when non-empty) and validates that the model exists. Used by every command
 // that takes an optional --model override so behavior stays consistent.
 func selectLLMModel(cfg config.LLMConfig, modelID string) (config.LLMConfig, error) {
-	if modelID == "" {
-		if cfg.ActiveModel().ID == "" {
-			return cfg, fmt.Errorf("no LLM model configured (set [external.llm].active in gnb.toml)")
-		}
-		return cfg, nil
-	}
-	if _, ok := cfg.FindModel(modelID); !ok {
-		ids := make([]string, 0, len(cfg.Models))
-		for _, m := range cfg.Models {
-			ids = append(ids, m.ID)
-		}
-		return cfg, fmt.Errorf("unknown LLM model %q (available: %s)", modelID, strings.Join(ids, ", "))
-	}
-	cfg.Active = modelID
-	return cfg, nil
+	return llm.SelectModel(cfg, modelID)
 }
 
 func newLLMSetupCommand(ctx appContext) *cobra.Command {
@@ -135,6 +121,12 @@ func newLLMStatusCommand(ctx appContext) *cobra.Command {
 			console.Label("active", ctx.cfg.External.LLM.ActiveModel().ID)
 			if info.Model != "" {
 				console.Label("running model", info.Model)
+			}
+			if info.ContextN != 0 {
+				console.Label("running ctx", fmt.Sprintf("%d", info.ContextN))
+			}
+			if info.Parallel != 0 {
+				console.Label("parallel", fmt.Sprintf("%d", info.Parallel))
 			}
 			if info.Running {
 				console.Success("running")

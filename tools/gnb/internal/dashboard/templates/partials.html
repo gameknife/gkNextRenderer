@@ -678,6 +678,126 @@
 {{end}}
 
 
+{{define "tab_chat"}}
+<div class="tab-chat">
+  {{template "chat_panel" .ChatVM}}
+</div>
+{{end}}
+
+
+{{define "chat_panel"}}
+<div id="chat-panel">
+  <div class="chat-layout">
+    <aside class="chat-side">
+      <div class="card">
+        <h2 class="card-title">
+          <span class="ico">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </span>
+          LLM 模型
+        </h2>
+
+        <div class="form-field">
+          <label>model</label>
+          <select id="chat-model" class="select" name="model" form="chat-send-form">
+            {{range .Models}}
+            <option value="{{.ID}}" {{if .Active}}selected{{end}}>{{.ID}}</option>
+            {{end}}
+          </select>
+        </div>
+
+        <div>
+          {{range .Models}}
+          <div class="model-row">
+            <span class="model-id" title="{{.ID}}">{{.ID}}</span>
+            <span class="model-pill">{{.ContextN}} ctx</span>
+            {{if .Downloaded}}<span class="model-pill ready">ready</span>{{else}}<span class="model-pill">missing</span>{{end}}
+            {{if .Running}}<span class="model-pill running">running</span>{{end}}
+          </div>
+          {{end}}
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">
+          <span class="ico">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+          </span>
+          Server
+        </h2>
+        <div class="info-row"><span class="k">endpoint</span><span class="v">{{.Endpoint}}</span></div>
+        <div class="info-row">
+          <span class="k">status</span>
+          <span class="v">{{if .ServerRunning}}running{{else}}stopped{{end}}</span>
+        </div>
+        <div class="info-row"><span class="k">model</span><span class="v">{{if .RunningModel}}{{.RunningModel}}{{else}}—{{end}}</span></div>
+      </div>
+
+      <form hx-post="/chat/clear"
+            hx-include="#chat-session-id,#chat-model"
+            hx-target="#chat-panel"
+            hx-swap="outerHTML">
+        <button class="btn-secondary" type="submit" style="width:100%;">清空当前对话</button>
+      </form>
+    </aside>
+
+    <section class="chat-main">
+      <div class="chat-head">
+        <div class="title">
+          <span class="ico">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>
+          </span>
+          Chat
+        </div>
+        <span class="target-pill">{{.SelectedModel}}</span>
+        <span class="spacer"></span>
+        <span class="chat-status">{{len .Messages}} messages</span>
+      </div>
+
+      <div class="chat-messages">
+        {{if .Messages}}
+          {{range .Messages}}
+            <div class="chat-msg {{.Role}}">
+              <div class="chat-avatar">{{if eq .Role "user"}}U{{else}}AI{{end}}</div>
+              <div class="chat-bubble">
+                <div class="chat-role">{{.Role}}</div>
+                <div class="chat-text" data-md>{{.Content}}</div>
+              </div>
+            </div>
+          {{end}}
+        {{else}}
+          <div class="chat-empty">选择模型后直接提问；首次请求会按需启动 llama-server。</div>
+        {{end}}
+      </div>
+
+      {{if .Error}}
+      <div class="chat-error">{{.Error}}</div>
+      {{end}}
+
+      <form id="chat-send-form"
+            class="chat-composer"
+            data-chat-form>
+        <input id="chat-session-id" type="hidden" name="session_id" value="{{.SessionID}}">
+        <textarea id="chat-input" class="input" name="message" placeholder="输入消息" required></textarea>
+        <div class="chat-actions">
+          <button class="btn-primary" type="submit">发送</button>
+          <label class="chat-thinking-opt">
+            <input id="chat-thinking" type="checkbox" name="thinking" value="1">
+            <span>思考模式</span>
+          </label>
+          <label class="chat-token-opt">
+            <span>输出上限</span>
+            <input id="chat-max-tokens" type="number" name="max_tokens" min="256" max="32768" step="256" value="4096">
+          </label>
+          <span class="muted">temperature 0.7</span>
+        </div>
+      </form>
+    </section>
+  </div>
+</div>
+{{end}}
+
+
 {{define "tab_git"}}
 <div id="git-tab-body">
   {{template "git_body" .}}

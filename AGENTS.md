@@ -222,7 +222,7 @@ assets/
 
 ## Local LLM (gnb llm)
 
-gnb 集成了基于 **llama.cpp + Gemma E4B** 的本地 LLM，用于离线辅助任务（首个用例：自动生成 commit message）。当前默认模型为 **gemma-4-E4B-it (Q4_K_M)**，备选模型为 **gemma-3n-E4B-it (Q4_K_M)**；可在 `gnb.toml` 的 `[external.llm].active` 切换，也可在命令上用 `--model <id>` 临时覆盖。
+gnb 集成了基于 **llama.cpp + Gemma 4** 的本地 LLM，用于离线辅助任务（首个用例：自动生成 commit message）。当前默认模型为 **gemma-4-E4B-it (Q4_K_M)**，备选模型为 **gemma-4-E2B-it (Q4_K_M)**，两者默认按 128K context（`context = 131072`）启动；可在 `gnb.toml` 的 `[external.llm].active` 切换，也可在命令上用 `--model <id>` 临时覆盖。
 
 **首次安装**（下载 llama.cpp 预编译二进制 + GGUF 模型到 `external/llm/`）：
 
@@ -267,7 +267,7 @@ Prompt 内容包含：模式（staged / working tree）、文件清单（含 `??
 - server 日志：`external/llm/run/server.log`
 - PID/端口快照：`external/llm/run/server.pid`
 - Windows / Linux 默认拉 **Vulkan 后端**，利用本项目已有的 Vulkan SDK；macOS 走 Metal
-- Gemma 3n/4 需要 llama.cpp >= b5165；如更新模型遇到加载失败，先升级 `external.llm.llama.version`
+- Gemma 4 需要新版 llama.cpp；如更新模型遇到加载失败，先升级 `external.llm.llama.version`
 - 多模型按 `[[external.llm.models]]` 数组配置，`[external.llm].active` 指定默认，每个模型的 GGUF 落在 `external/llm/models/<file>.gguf`，可并存
 - PID 文件第 4 行记录当前 server 加载的模型 id；切换 active 后 `gnb llm serve` / `chat` / `git commit-msg` 会自动停掉旧 server 再重启
 

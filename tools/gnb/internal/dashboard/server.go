@@ -40,9 +40,10 @@ type Options struct {
 
 // Server holds runtime state for the dashboard.
 type Server struct {
-	opts Options
-	tpl  *template.Template
-	jobs *JobManager
+	opts  Options
+	tpl   *template.Template
+	jobs  *JobManager
+	chats *ChatStore
 }
 
 // New constructs a Server. Template parsing happens eagerly so problems surface
@@ -54,7 +55,7 @@ func New(opts Options) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse templates: %w", err)
 	}
-	return &Server{opts: opts, tpl: tpl, jobs: NewJobManager()}, nil
+	return &Server{opts: opts, tpl: tpl, jobs: NewJobManager(), chats: NewChatStore()}, nil
 }
 
 // Run binds the configured port and serves until ctx is canceled.
