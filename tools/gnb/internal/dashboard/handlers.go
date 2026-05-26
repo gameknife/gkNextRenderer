@@ -17,6 +17,7 @@ import (
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/config"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/gitops"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/llm"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/loc"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/spec"
 )
@@ -94,6 +95,14 @@ type indexVM struct {
 	TestVM     testVM
 	GitVM      gitVM
 	ChatVM     chatVM
+	LocVM      locVM
+}
+
+type locVM struct {
+	Snapshot          *loc.Snapshot
+	IncludeThirdParty bool
+	Error             string
+	MaxCategoryLines  int
 }
 
 type gitVM struct {
@@ -270,6 +279,25 @@ func (s *Server) buildTestVM() testVM {
 	if snap, ok := s.jobs.LatestSnapshot(JobTest); ok {
 		vm.Latest = snap
 		vm.HasJob = true
+	}
+	return vm
+}
+
+func (s *Server) buildLocVM(includeThirdParty bool) locVM {
+	snap, err := loc.Scan(loc.Options{
+		Root:              s.opts.RepoRoot,
+		IncludeThirdParty: includeThirdParty,
+	})
+	vm := locVM{IncludeThirdParty: includeThirdParty}
+	if err != nil {
+		vm.Error = err.Error()
+		return vm
+	}
+	vm.Snapshot = snap
+	for _, c := range snap.Categories {
+		if c.Lines > vm.MaxCategoryLines {
+			vm.MaxCategoryLines = c.Lines
+		}
 	}
 	return vm
 }
@@ -735,6 +763,10 @@ func (s *Server) handleTab(w http.ResponseWriter, r *http.Request) {
 		vm := s.buildHeader("chat")
 		vm.ChatVM = s.buildChatVM("", "")
 		s.render(w, "tab_chat", vm)
+	case "loc":
+		vm := s.buildHeader("loc")
+		vm.LocVM = s.buildLocVM(r.URL.Query().Get("thirdparty") == "1")
+		s.render(w, "tab_loc", vm)
 	default:
 		http.Error(w, "unknown tab "+kind, http.StatusNotFound)
 	}

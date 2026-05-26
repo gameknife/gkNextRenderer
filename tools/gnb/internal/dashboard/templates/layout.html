@@ -1826,6 +1826,11 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/></svg>
       <span>Chat</span>
     </button>
+    <button class="tab-item {{if eq .ActiveTab "loc"}}active{{end}}" type="button" data-tab="loc"
+            hx-get="/tab/loc" hx-target="#tab-content" hx-swap="innerHTML">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="20" x2="4" y2="10"/><line x1="10" y1="20" x2="10" y2="4"/><line x1="16" y1="20" x2="16" y2="14"/><line x1="22" y1="20" x2="22" y2="8"/></svg>
+      <span>LOC</span>
+    </button>
   </nav>
 
   <div id="tab-content">
@@ -1839,6 +1844,8 @@
       {{template "tab_git" .}}
     {{else if eq .ActiveTab "chat"}}
       {{template "tab_chat" .}}
+    {{else if eq .ActiveTab "loc"}}
+      {{template "tab_loc" .}}
     {{else}}
       {{template "tab_todo" .}}
     {{end}}

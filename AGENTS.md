@@ -9,21 +9,19 @@ Always communicate with the user in Chinese (中文).
 
 ## Project Overview
 
-gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vulkan, featuring hardware/software ray tracing, real-time global illumination, and GPU-driven rendering. Target codebase size is <50k LOC (currently ~15k).
+gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vulkan, featuring hardware/software ray tracing, real-time global illumination, GPU-driven rendering, and GPU CSM shadows. Target codebase size is <50k LOC of first-party engine code (currently ~85k LOC including all games + tests; see `gnb loc`).
 
 **Key Technologies:**
-- C++20/C11, Vulkan API, Slang shader language
-- ECS architecture (entt library)
-- QuickJS TypeScript scripting with hot reload
+- C++20/C11, Vulkan API, Slang shader language (ray query, not ray pipeline)
+- ECS architecture (entt library) + entt::meta reflection
+- QuickJS TypeScript scripting with hot reload (bundled `tools/tsc`)
 - Multi-platform: Windows x86_64 / Linux x86_64 / macOS arm64 / Android arm64 / iOS arm64
 
-**Subprojects:**
-- gkNextRenderer (main renderer)
-- gkNextEditor (ImGui editor with node-based material editor)
-- MagicaLego (voxel building game with AI assistant)
-- gkNextBenchmark
-- gkNextVisualTest (automated visual testing)
-- Packager (asset packaging to `.pkg`)
+**Subprojects (under `src/Application/`):**
+- Render: gkNextRenderer (main), gkNextBenchmark, gkNextVisualTest
+- Editor: gkNextEditor (ImGui editor + node-based material editor)
+- Game: MagicaLego, Brotato3D, KongLie3D, BrickPlayer, CharacterDemo, Flappy (Cpp + Js), Voyage3D
+- Util: Packager (asset packaging to `.pkg`)
 
 ## Build Commands
 
@@ -49,9 +47,13 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
 - Default target: `./gnb run`
 - Specific target: `./gnb run gkNextEditor`
 - Editor shortcut: `./gnb editor`
+- Visual test shortcut: `./gnb visual`
 - Android: `./gnb android`
+- Asset packaging: `./gnb paks list` / `./gnb paks install`
+- Source-line stats: `./gnb loc` (CLI) — also browsable in `./gnb dashboard`
+- Local web dashboard: `./gnb dashboard` (todo / build / run / test / git / chat / LOC tabs)
 
-Desktop binaries can now be launched from any working directory; no `cd out/build/<preset>/bin` is required.
+Desktop binaries can be launched from any working directory; no `cd out/build/<preset>/bin` is required.
 
 **Runtime success indicator:** Log shows `uploaded scene [...] to gpu`
 
@@ -115,47 +117,32 @@ Tests no longer require the current working directory to be `bin`; launch them v
 
 ```
 src/
-├── Runtime/           # Core engine runtime
-│   ├── Platform/      # Platform abstraction (via PlatformCommon.h)
-│   ├── Components/    # ECS components (entt)
-│   ├── Reflection/    # Property reflection (entt::meta) for editor + JS bindings
-│   └── Command/       # Command history system (undo/redo)
-├── Vulkan/            # Vulkan backend
-│   └── RayTracing/    # Hardware ray tracing
-├── Rendering/         # Render pipelines
-│   ├── PathTracing/   # Full path tracing
-│   ├── SoftwareTracing/  # Software ray tracing
-│   ├── SoftwareModern/   # Modern rasterization + software GI
-│   └── PipelineCommon/   # Shared pipeline utilities
-├── Assets/            # Asset loading (glTF, textures, etc.)
-├── Tests/             # Catch2 unit tests
-├── Application/       # App entry points grouped by role
-│   ├── Editor/
-│   │   └── gkNextEditor/
-│   │       ├── Panels/    # Property panel (auto-generated from reflection)
-│   │       ├── Nodes/     # Node-based material editor
-│   │       └── Overlays/  # Editor overlays and chrome
-│   ├── Game/
-│   │   ├── MagicaLego/
-│   │   ├── BrickPlayer/
-│   │   ├── Brotato3D/
-│   │   ├── CharacterDemo/
-│   │   ├── Flappy/
-│   │   ├── KongLie3D/
-│   │   └── Voyage3D/
-│   ├── Render/
-│   │   ├── gkNextRenderer/
-│   │   ├── gkNextBenchmark/
-│   │   └── gkNextVisualTest/
-│   └── Util/
-│       └── Packager/
-└── ThirdParty/        # Third-party code (DO NOT MODIFY)
+├── Engine/                  # Engine library (gkNextEngine.lib)
+│   ├── Common/              # CoreMinimal.hpp + shared platform abstraction
+│   ├── Runtime/             # Engine runtime: ECS, scripting, reflection, command history
+│   ├── Assets/              # Asset loading (glTF/textures), Scene, GPU resources, CPU acceleration
+│   ├── Vulkan/              # Vulkan backend + RayTracing/ (HW ray tracing)
+│   ├── Rendering/           # Render pipelines
+│   │   ├── PathTracing/     # Full path tracing
+│   │   ├── SoftwareTracing/ # Software ray tracing
+│   │   ├── SoftwareModern/  # Modern rasterization + software GI + NoAmbient deferred
+│   │   ├── Shadow/          # GPU CSM shadow pass (4 cascades, bindless sampling)
+│   │   └── PipelineCommon/  # Shared pipeline utilities
+│   ├── NextGameplay/        # Gameplay primitives shared across games
+│   └── Utilities/           # Misc helpers
+├── Application/             # Subproject entry points (per role)
+│   ├── Render/, Editor/, Game/, Util/   # See "Subprojects" above
+├── Tests/                   # Catch2 unit tests (gkNextUnitTests)
+└── ThirdParty/              # Third-party code (DO NOT MODIFY)
 
 assets/
-├── shaders/           # Slang shaders (.slang)
-├── configs/           # Runtime config (visual_test.json, ai_config.json)
-├── models/            # glTF scenes
-└── typescript/        # TypeScript definitions for QuickJS scripting
+├── shaders/                 # Slang shaders (.slang)
+├── configs/                 # Runtime config (visual_test.json, ai_config.json, ...)
+├── models/                  # glTF scenes
+├── scripts/                 # TypeScript scripts (hot-reloadable via QuickJS)
+└── typescript/              # TypeScript definitions for QuickJS scripting
+
+tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 ```
 
 ## Key Architectural Patterns
@@ -182,6 +169,11 @@ assets/
 - All components inherit from `Assets::Component`
 - Must implement `GetMetaType()` for reflection support
 - Common components: RenderComponent, PhysicsComponent, SkinnedMeshComponent
+
+**Rendering / Shadows:**
+- Three rendering paths: PathTracing (HW RT), SoftwareTracing (SW DDA on ambient cubes), SoftwareModern (rasterizer + GPU CSM). `SwModernNoAmbient` is the deferred Lambert+IBL+CSM-only variant.
+- GPU CSM: 4 cascades, D32_SFLOAT per-cascade images bound bindless (slots 0..3); cascade selection + 3x3 PCF lives in `Common.SampleSunShadowCSM` (PathTracingRenderer.slang).
+- `ShadowMapPass` (Engine/Rendering/Shadow) renders the cascades; UBO carries `SunCascadeViewProjection[4]` + `CascadeSplits`.
 
 **Resource Management:**
 - Vulkan objects use RAII (destroyed in destructors)
@@ -210,66 +202,47 @@ assets/
 ## Key References
 
 - **AGENT_GUIDE/** - Layered documentation:
-  - `core-patterns.md` - Essential patterns and commands (Layer 1)
-  - `contextual-rules.md` - Context-specific rules (Layer 2)
-  - `coding-standards.md` - Detailed code review guidelines
-  - `quick-commands.md` - Command reference (Layer 3)
-  - `ReflectionSystem.md` - Reflection system documentation
-  - `PrefabSceneWorkflow.md` - KayKit procedural scene prefab workflow and review rules
+  - `core-patterns.md` / `contextual-rules.md` / `coding-standards.md` / `quick-commands.md` - General rules
+  - `ReflectionSystem.md` - entt::meta reflection (editor UI + JS bindings)
+  - `QuickJSBindings.md` - JS/TS engine bindings and replay parity demo
+  - `HotReload.md` - Shader/script hot reload mechanics
+  - `LDrawLoader.md` - LDraw model loading (used by MagicaLego/BrickPlayer)
+  - `PrefabSceneWorkflow.md` - KayKit procedural scene prefab workflow
   - `MagicaLego.md` - MagicaLego subproject notes
 - **README.en.md** - Project overview and quick start
 - **.clang-tidy** - Naming conventions (source of truth)
 
+## gnb Dashboard
+
+`gnb dashboard` 启动本地 HTTP UI（默认 127.0.0.1:某端口，自动开浏览器），htmx 驱动的 SPA。提供 tabs：
+- **TODO**：可视化 `.spec/TODO.md` 的工作流操作（增删改、move、spec 创建、标 done/blocked）
+- **Build / Run / Test**：触发 cmake build、运行 target、Catch2 测试，SSE 实时流日志
+- **Git**：分支管理、stash、commits、本地改动 stage/unstage、LLM 生成 commit message
+- **Chat**：直接对接本地 llama-server，流式 + 工具调用，多会话归档
+- **LOC**：`gnb loc` 的图表/表格化视图（分类柱图 + 嵌套表格）
+
+实现位置：`tools/gnb/internal/dashboard/`（Go + 内嵌 html template）。
+
 ## Local LLM (gnb llm)
 
-gnb 集成了基于 **llama.cpp + Gemma 4** 的本地 LLM，用于离线辅助任务（首个用例：自动生成 commit message）。当前默认模型为 **gemma-4-E4B-it (Q4_K_M)**，备选模型为 **gemma-4-E2B-it (Q4_K_M)**，两者默认按 128K context（`context = 131072`）启动；可在 `gnb.toml` 的 `[external.llm].active` 切换，也可在命令上用 `--model <id>` 临时覆盖。
-
-**首次安装**（下载 llama.cpp 预编译二进制 + GGUF 模型到 `external/llm/`）：
+gnb 集成 **llama.cpp + Gemma 4** 本地 LLM，OpenAI 兼容 HTTP（默认 127.0.0.1:8765）。当前 active 模型 `gemma-4-E4B-it (Q4_K_M)`，128K context；备选 `E2B-it`。`gnb.toml` 的 `[external.llm].active` 切换，命令用 `--model <id>` 临时覆盖。
 
 ```bash
-gnb llm setup                       # 下载 active 模型
-gnb llm setup --model <id>          # 下载指定模型
-gnb llm setup --all                 # 下载所有配置的模型
+gnb llm setup [--model <id>|--all]   # 下载 llama.cpp 二进制 + GGUF 到 external/llm/
+gnb llm models                       # 列出模型 + 下载状态
+gnb llm serve | status | stop        # server 生命周期（自动按需启动 / 切模型重启）
+gnb llm chat "你好"                  # 一次性 prompt
+gnb git commit-msg [--stage-all] [--commit] [--dry-run] [--model <id>]   # LLM 生成 commit
+gnb git ai-commit                    # commit-msg 的短别名
 ```
-
-**模型管理**：
-
-```bash
-gnb llm models    # 列出所有配置模型，标星号者为 active，并显示是否已下载
-```
-
-**生命周期管理**：
-
-```bash
-gnb llm serve                       # 后台拉起 llama-server（OpenAI 兼容 HTTP，默认 127.0.0.1:8765）
-gnb llm serve --model <id>          # 用非 active 模型启动（已在跑且模型不同会自动重启）
-gnb llm status                      # 查看 PID / endpoint / active 模型 / 实际运行的模型
-gnb llm stop                        # 关掉后台 server
-gnb llm chat "你好"                 # 一次性 prompt（自动按需启动 server）
-gnb llm chat --model <id> "你好"    # 一次性切换模型（必要时重启 server）
-```
-
-**MVP：根据 local change 生成 commit message**：
-
-```bash
-gnb git commit-msg                  # 仅生成并打印
-gnb git commit-msg --stage-all      # 先 git add -A 再生成
-gnb git commit-msg --commit         # 生成后直接 git commit
-gnb git ai-commit                   # commit-msg 的短别名
-gnb git commit-msg --dry-run        # 仅打印将要发送给 LLM 的完整 prompt，不调用模型
-gnb git commit-msg --model <id>     # 用指定模型生成（与上面各开关可叠加）
-```
-
-Prompt 内容包含：模式（staged / working tree）、文件清单（含 `??` 未跟踪）、`git diff --stat` 总览、已跟踪文件 diff、未跟踪文件合成的 `+++ b/<path>` 新文件 diff（带二进制/64KB 大小保护）。当总字节超出 `--max-diff-chars` 时按文件边界截断而不是字节硬切。
 
 诊断要点：
-- llama.cpp 版本、模型 URL、端口在 `gnb.toml` 的 `[external.llm.*]` 段配置
-- server 日志：`external/llm/run/server.log`
-- PID/端口快照：`external/llm/run/server.pid`
-- Windows / Linux 默认拉 **Vulkan 后端**，利用本项目已有的 Vulkan SDK；macOS 走 Metal
-- Gemma 4 需要新版 llama.cpp；如更新模型遇到加载失败，先升级 `external.llm.llama.version`
-- 多模型按 `[[external.llm.models]]` 数组配置，`[external.llm].active` 指定默认，每个模型的 GGUF 落在 `external/llm/models/<file>.gguf`，可并存
-- PID 文件第 4 行记录当前 server 加载的模型 id；切换 active 后 `gnb llm serve` / `chat` / `git commit-msg` 会自动停掉旧 server 再重启
+- 配置：`gnb.toml` 的 `[external.llm.*]` 段（版本、URL、端口、模型列表）
+- 运行时：`external/llm/run/server.{log,pid}`（PID 文件第 4 行是当前加载的模型 id）
+- 后端：Windows/Linux Vulkan、macOS Metal
+- 多模型 `[[external.llm.models]]` 数组配置，GGUF 落在 `external/llm/models/<file>.gguf` 可并存
+
+commit-msg prompt 内容包含：模式（staged / working tree）、文件清单（含 `??` 未跟踪）、`git diff --stat`、已跟踪文件 diff、未跟踪文件合成的 `+++ b/<path>` 新文件 diff（带二进制/64KB 大小保护）。超 `--max-diff-chars` 按文件边界截断。
 
 ## Spec Workflow
 

@@ -296,6 +296,40 @@ func templateFuncs() template.FuncMap {
 		"dirtyIsUnstaged": func(code string) bool {
 			return code == "??" || (len(code) == 2 && code[1] != '.')
 		},
+		"locBarPct": func(lines, max int) string {
+			if max <= 0 {
+				return "0"
+			}
+			pct := float64(lines) * 100.0 / float64(max)
+			if pct > 100 {
+				pct = 100
+			}
+			return fmt.Sprintf("%.1f", pct)
+		},
+		"locShare": func(lines, total int) string {
+			if total <= 0 {
+				return "0.0"
+			}
+			return fmt.Sprintf("%.1f", float64(lines)*100.0/float64(total))
+		},
+		"intCommas": func(n int) string {
+			s := fmt.Sprintf("%d", n)
+			if n < 1000 {
+				return s
+			}
+			// Insert thousands separators.
+			var b strings.Builder
+			start := len(s) % 3
+			if start == 0 {
+				start = 3
+			}
+			b.WriteString(s[:start])
+			for i := start; i < len(s); i += 3 {
+				b.WriteByte(',')
+				b.WriteString(s[i : i+3])
+			}
+			return b.String()
+		},
 		"emptyHint": func(k spec.SectionKind) string {
 			switch k {
 			case spec.SectionNext:

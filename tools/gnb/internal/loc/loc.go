@@ -66,8 +66,60 @@ func newReport() *Report {
 	}
 }
 
+// Snapshot is the dashboard-friendly view of a scan result. Categories,
+// subcategories and leaves are pre-sorted by line count descending so the
+// caller can render directly without resorting.
+type Snapshot struct {
+	TotalFiles         int
+	TotalLines         int
+	Categories         []CategorySummary
+	IncludedThirdParty bool
+}
+
+// CategorySummary aggregates a top-level src/ category.
+type CategorySummary struct {
+	Name  string
+	Files int
+	Lines int
+	Subs  []SubSummary
+}
+
+// SubSummary aggregates a sub-bucket (e.g. Application/Game, Engine/Vulkan).
+type SubSummary struct {
+	Name   string
+	Files  int
+	Lines  int
+	Leaves []LeafSummary
+}
+
+// LeafSummary is the most granular bucket (an Application project name).
+type LeafSummary struct {
+	Name  string
+	Files int
+	Lines int
+}
+
 // Run scans the repository and prints the report to stdout.
 func Run(opts Options) error {
+	report, err := scan(opts)
+	if err != nil {
+		return err
+	}
+	render(report, opts)
+	return nil
+}
+
+// Scan walks the source tree and returns a sorted snapshot. It does not
+// produce any output.
+func Scan(opts Options) (*Snapshot, error) {
+	report, err := scan(opts)
+	if err != nil {
+		return nil, err
+	}
+	return reportToSnapshot(report, opts), nil
+}
+
+func scan(opts Options) (*Report, error) {
 	if len(opts.Extensions) == 0 {
 		opts.Extensions = DefaultExtensions()
 	}
@@ -78,11 +130,10 @@ func Run(opts Options) error {
 
 	srcRoot := filepath.Join(opts.Root, "src")
 	if info, err := os.Stat(srcRoot); err != nil || !info.IsDir() {
-		return fmt.Errorf("src directory not found at %s", srcRoot)
+		return nil, fmt.Errorf("src directory not found at %s", srcRoot)
 	}
 
 	report := newReport()
-
 	walkErr := filepath.WalkDir(srcRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -112,11 +163,49 @@ func Run(opts Options) error {
 		return nil
 	})
 	if walkErr != nil {
-		return walkErr
+		return nil, walkErr
 	}
+	return report, nil
+}
 
-	render(report, opts)
-	return nil
+func reportToSnapshot(report *Report, opts Options) *Snapshot {
+	snap := &Snapshot{
+		TotalFiles:         report.total.files,
+		TotalLines:         report.total.lines,
+		IncludedThirdParty: opts.IncludeThirdParty,
+	}
+	names := make([]string, 0, len(report.categories))
+	for name := range report.categories {
+		names = append(names, name)
+	}
+	sort.Slice(names, func(i, j int) bool {
+		return report.categories[names[i]].lines > report.categories[names[j]].lines
+	})
+	for _, name := range names {
+		c := report.categories[name]
+		cs := CategorySummary{Name: name, Files: c.files, Lines: c.lines}
+		subs := append([]string(nil), report.subKeys[name]...)
+		sort.Slice(subs, func(i, j int) bool {
+			return report.subTotals[name][subs[i]].lines > report.subTotals[name][subs[j]].lines
+		})
+		for _, sub := range subs {
+			s := report.subTotals[name][sub]
+			ss := SubSummary{Name: sub, Files: s.files, Lines: s.lines}
+			leaves := append([]string(nil), report.leafKeys[name][sub]...)
+			sort.Slice(leaves, func(i, j int) bool {
+				li := report.leaves[leafKey{category: name, sub: sub, leaf: leaves[i]}]
+				lj := report.leaves[leafKey{category: name, sub: sub, leaf: leaves[j]}]
+				return li.lines > lj.lines
+			})
+			for _, leaf := range leaves {
+				l := report.leaves[leafKey{category: name, sub: sub, leaf: leaf}]
+				ss.Leaves = append(ss.Leaves, LeafSummary{Name: leaf, Files: l.files, Lines: l.lines})
+			}
+			cs.Subs = append(cs.Subs, ss)
+		}
+		snap.Categories = append(snap.Categories, cs)
+	}
+	return snap
 }
 
 // classify maps a path (forward-slash, relative to src/) to its category key.
