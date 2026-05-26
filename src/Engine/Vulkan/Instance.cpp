@@ -9,6 +9,28 @@
 
 namespace Vulkan {
 
+namespace
+{
+    void AppendUniqueExtension(std::vector<const char*>& extensions, const char* extensionName)
+    {
+        if (extensionName == nullptr)
+        {
+            return;
+        }
+
+        const auto existing = std::find_if(extensions.begin(), extensions.end(),
+            [extensionName](const char* current)
+            {
+                return current != nullptr && std::strcmp(current, extensionName) == 0;
+            });
+        if (existing == extensions.end())
+        {
+            extensions.push_back(extensionName);
+        }
+    }
+
+}
+
 Instance::Instance(const class Window& window, const std::vector<const char*>& validationLayers, uint32_t vulkanVersion) :
 	window_(window),
 	validationLayers_(validationLayers)
@@ -18,26 +40,45 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
 
 	// Get the list of required extensions.
 	auto extensions = window.GetRequiredInstanceExtensions();
+    const auto availableExtensions = GetEnumerateVector(static_cast<const char*>(nullptr), vkEnumerateInstanceExtensionProperties);
+
+    const auto hasInstanceExtension = [&availableExtensions](const char* extensionName)
+    {
+        return std::any_of(availableExtensions.begin(), availableExtensions.end(),
+            [extensionName](const VkExtensionProperties& extension)
+            {
+                return std::strcmp(extension.extensionName, extensionName) == 0;
+            });
+    };
 
 	// Check the validation layers and add them to the list of required extensions.
 	CheckVulkanValidationLayerSupport(validationLayers);
 
 #if WITH_STREAMLINE
-    extensions.push_back(VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME);
-    extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+    AppendUniqueExtension(extensions, VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME);
+    AppendUniqueExtension(extensions, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 #endif
     
 #if !ANDROID
-	extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+	AppendUniqueExtension(extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 #endif
 	
-	extensions.push_back(VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME);
+	AppendUniqueExtension(extensions, VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME);
 #if WIN32
-	extensions.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
+	AppendUniqueExtension(extensions, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
 #endif	
     
 #if __APPLE__
-	extensions.push_back("VK_EXT_swapchain_colorspace");
+	AppendUniqueExtension(extensions, "VK_EXT_swapchain_colorspace");
+#endif
+
+    VkInstanceCreateFlags createFlags = 0;
+#if defined(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME)
+    if (hasInstanceExtension(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME))
+    {
+        AppendUniqueExtension(extensions, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+        createFlags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+    }
 #endif
 
 	// Create the Vulkan instance.
@@ -51,6 +92,7 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
 
 	VkInstanceCreateInfo createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+	createInfo.flags = createFlags;
 	createInfo.pApplicationInfo = &appInfo;
 	createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
 	createInfo.ppEnabledExtensionNames = extensions.data();
