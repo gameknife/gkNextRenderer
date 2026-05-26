@@ -15,11 +15,7 @@
 #define SCOPED_GPU_TIMER(name) SCOPED_GPU_TIMER_CMD(commandBuffer, name)
 #define SCOPED_CPU_TIMER(name) PERFORMANCEAPI_INSTRUMENT_DATA(name, ""); ScopedCpuTimer GK_CONCAT(scopedCpuTimer_, __LINE__)(VulkanGpuTimer::GetActiveTimer(), name)
 
-#if __APPLE__
-#define BENCH_MARK_CHECK() return
-#else
 #define BENCH_MARK_CHECK() if(!GOption->HardwareQuery || !valid_) return
-#endif
 
 namespace Vulkan
 {
