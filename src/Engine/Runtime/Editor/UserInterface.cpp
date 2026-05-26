@@ -2381,7 +2381,15 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
             auto historyIter = historyMap.try_emplace(historyKey).first;
             auto& history = historyIter->second;
 
-            history.displayOrder = currentDisplayOrder++;
+            // Keep stale timers in their previous slot so transient timers do not
+            // cause the rest of the table to jump every frame. Existing rows only
+            // move when the current traversal order would otherwise place them
+            // above a timer we have already emitted this frame.
+            if (history.displayOrder < currentDisplayOrder)
+            {
+                history.displayOrder = currentDisplayOrder;
+            }
+            currentDisplayOrder = history.displayOrder + 1;
             history.displayName = time.name;
             history.depth = time.depth;
             history.lastSeenTime = now;

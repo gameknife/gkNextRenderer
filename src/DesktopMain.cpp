@@ -70,6 +70,11 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 //         setenv("MTL_CAPTURE_ENABLED", "1", 1);
 //         setenv("MVK_CONFIG_AUTO_GPU_CAPTURE_SCOPE","2",1);
 // #endif
+        
+#if __APPLE__
+    setenv("MESA_KK_GPU_CAPTURE", "1", 1);
+    setenv("MESA_KK_GPU_CAPTURE_DIRECTORY", "~/capture", 1);
+#endif
     }
 
     // Init
