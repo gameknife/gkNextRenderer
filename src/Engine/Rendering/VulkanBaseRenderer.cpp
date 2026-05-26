@@ -1383,9 +1383,13 @@ namespace Vulkan
             const auto imageAvailableSemaphore = frame_.imageAvailableSemaphores[frame_.currentFrame].Handle();
             const auto renderFinishedSemaphore = frame_.renderFinishedSemaphores[frame_.currentFrame].Handle();
 
-            auto result = vkAcquireNextImageKHR(ctx_.device->Handle(), frame_.swapChain->Handle(), noTimeout,
+            auto result = VkResult(VK_SUCCESS);
+            {
+                SCOPED_CPU_TIMER("acquire-frame");
+                result = vkAcquireNextImageKHR(ctx_.device->Handle(), frame_.swapChain->Handle(), noTimeout,
                                                 imageAvailableSemaphore, nullptr, &frame_.currentImageIndex);
-
+            }
+            
             if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
             {
                 RecreateSwapChain();
