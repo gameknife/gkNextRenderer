@@ -266,6 +266,8 @@ namespace StreamlineWrapper
 
 namespace
 {
+    constexpr const char* kPortabilitySubsetExtensionName = "VK_KHR_portability_subset";
+
     void PrintVulkanSdkInformation()
     {
         SPDLOG_INFO("Vulkan SDK Header Version: {}", VK_HEADER_VERSION);
@@ -541,6 +543,34 @@ namespace Vulkan
         VkPhysicalDeviceFeatures supportedFeatures = {};
         vkGetPhysicalDeviceFeatures(physicalDevice, &supportedFeatures);
 
+        VkPhysicalDeviceDescriptorIndexingFeatures supportedIndexingFeatures = {};
+        supportedIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+
+        VkPhysicalDeviceBufferDeviceAddressFeatures supportedBufferDeviceAddressFeatures = {};
+        supportedBufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+        supportedBufferDeviceAddressFeatures.pNext = &supportedIndexingFeatures;
+
+        VkPhysicalDeviceHostQueryResetFeaturesEXT supportedHostQueryResetFeatures = {};
+        supportedHostQueryResetFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES_EXT;
+        supportedHostQueryResetFeatures.pNext = &supportedBufferDeviceAddressFeatures;
+
+        VkPhysicalDeviceShaderFloat16Int8FeaturesKHR supportedShaderFloat16Int8Features = {};
+        supportedShaderFloat16Int8Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES_KHR;
+        supportedShaderFloat16Int8Features.pNext = &supportedHostQueryResetFeatures;
+
+        VkPhysicalDeviceShaderDrawParametersFeatures supportedShaderDrawParametersFeatures = {};
+        supportedShaderDrawParametersFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES;
+        supportedShaderDrawParametersFeatures.pNext = &supportedShaderFloat16Int8Features;
+
+        VkPhysicalDevice16BitStorageFeatures supportedStorage16BitFeatures = {};
+        supportedStorage16BitFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES;
+        supportedStorage16BitFeatures.pNext = &supportedShaderDrawParametersFeatures;
+
+        VkPhysicalDeviceFeatures2 supportedFeatures2 = {};
+        supportedFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        supportedFeatures2.pNext = &supportedStorage16BitFeatures;
+        vkGetPhysicalDeviceFeatures2(physicalDevice, &supportedFeatures2);
+
         VkPhysicalDeviceProperties deviceProperties = {};
         vkGetPhysicalDeviceProperties(physicalDevice, &deviceProperties);
         auto enableDeviceExtensionIfAvailable = [&](const char* extensionName)
@@ -556,6 +586,7 @@ namespace Vulkan
         enableDeviceExtensionIfAvailable(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
         enableDeviceExtensionIfAvailable(VK_KHR_16BIT_STORAGE_EXTENSION_NAME);
         enableDeviceExtensionIfAvailable(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME);
+        enableDeviceExtensionIfAvailable(kPortabilitySubsetExtensionName);
         if (deviceProperties.apiVersion < VK_API_VERSION_1_2 &&
             !HasDeviceExtension(physicalDevice, VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME))
         {
@@ -565,11 +596,11 @@ namespace Vulkan
         deviceFeatures.multiDrawIndirect = true;
         deviceFeatures.drawIndirectFirstInstance = true;
         deviceFeatures.fillModeNonSolid = supportedFeatures.fillModeNonSolid;
-        deviceFeatures.samplerAnisotropy = true;
-        deviceFeatures.shaderStorageImageReadWithoutFormat = true;
-        deviceFeatures.shaderStorageImageWriteWithoutFormat = true;
-        deviceFeatures.shaderInt16 = true;
-        deviceFeatures.shaderInt64 = true;
+        deviceFeatures.samplerAnisotropy = supportedFeatures.samplerAnisotropy;
+        deviceFeatures.shaderStorageImageReadWithoutFormat = supportedFeatures.shaderStorageImageReadWithoutFormat;
+        deviceFeatures.shaderStorageImageWriteWithoutFormat = supportedFeatures.shaderStorageImageWriteWithoutFormat;
+        deviceFeatures.shaderInt16 = supportedFeatures.shaderInt16;
+        deviceFeatures.shaderInt64 = supportedFeatures.shaderInt64;
 
         // Optional heatmap instrumentation.
 #if WIN32 && GK_ENABLE_SHADER_CLOCK
@@ -594,39 +625,40 @@ namespace Vulkan
 #else
 	indexingFeatures.pNext = nextDeviceFeatures;
 #endif
-        indexingFeatures.runtimeDescriptorArray = true;
-        indexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
-        indexingFeatures.descriptorBindingPartiallyBound = true;
-        indexingFeatures.descriptorBindingSampledImageUpdateAfterBind = true;
-        indexingFeatures.descriptorBindingStorageImageUpdateAfterBind = true;
-        indexingFeatures.descriptorBindingVariableDescriptorCount = true;
+        indexingFeatures.runtimeDescriptorArray = supportedIndexingFeatures.runtimeDescriptorArray;
+        indexingFeatures.shaderSampledImageArrayNonUniformIndexing = supportedIndexingFeatures.shaderSampledImageArrayNonUniformIndexing;
+        indexingFeatures.descriptorBindingPartiallyBound = supportedIndexingFeatures.descriptorBindingPartiallyBound;
+        indexingFeatures.descriptorBindingSampledImageUpdateAfterBind = supportedIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind;
+        indexingFeatures.descriptorBindingStorageImageUpdateAfterBind = supportedIndexingFeatures.descriptorBindingStorageImageUpdateAfterBind;
+        indexingFeatures.descriptorBindingVariableDescriptorCount = supportedIndexingFeatures.descriptorBindingVariableDescriptorCount;
 
 
         VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures = {};
         bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
         bufferDeviceAddressFeatures.pNext = &indexingFeatures;
-        bufferDeviceAddressFeatures.bufferDeviceAddress = true;
+        bufferDeviceAddressFeatures.bufferDeviceAddress = supportedBufferDeviceAddressFeatures.bufferDeviceAddress;
 
         VkPhysicalDeviceHostQueryResetFeaturesEXT hostQueryResetFeatures = {};
         hostQueryResetFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_QUERY_RESET_FEATURES_EXT;
         hostQueryResetFeatures.pNext = &bufferDeviceAddressFeatures;
-        hostQueryResetFeatures.hostQueryReset = true;
+        hostQueryResetFeatures.hostQueryReset = supportedHostQueryResetFeatures.hostQueryReset;
 
         VkPhysicalDeviceShaderFloat16Int8FeaturesKHR shaderFloat16Int8Features = {};
         shaderFloat16Int8Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES_KHR;
         shaderFloat16Int8Features.pNext = &hostQueryResetFeatures;
-        shaderFloat16Int8Features.shaderFloat16 = true;
+        shaderFloat16Int8Features.shaderFloat16 = supportedShaderFloat16Int8Features.shaderFloat16;
         //shaderFloat16Int8Features.shaderInt8 = true;
 
         VkPhysicalDeviceShaderDrawParametersFeatures shaderDrawParametersFeatures = {};
         shaderDrawParametersFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES;
         shaderDrawParametersFeatures.pNext = &shaderFloat16Int8Features;
-        shaderDrawParametersFeatures.shaderDrawParameters = true;
+        shaderDrawParametersFeatures.shaderDrawParameters = supportedShaderDrawParametersFeatures.shaderDrawParameters;
 
         VkPhysicalDevice16BitStorageFeatures storage16BitFeatures = {};
         storage16BitFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES;
         storage16BitFeatures.pNext = &shaderDrawParametersFeatures;
-        storage16BitFeatures.storageBuffer16BitAccess = true;
+        storage16BitFeatures.storageBuffer16BitAccess = supportedStorage16BitFeatures.storageBuffer16BitAccess;
+        storage16BitFeatures.storagePushConstant16 = supportedStorage16BitFeatures.storagePushConstant16;
 
 #if WITH_STREAMLINE
         VkPhysicalDeviceVulkan12Features deviceVulkan12Features = {};

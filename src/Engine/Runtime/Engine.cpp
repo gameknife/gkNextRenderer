@@ -81,6 +81,23 @@ void NextEngine::RegisterReflection()
 
 namespace
 {
+    VkDriverId GetDriverId(VkPhysicalDevice physicalDevice)
+    {
+        VkPhysicalDeviceDriverProperties driverProperties{};
+        driverProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
+
+        VkPhysicalDeviceProperties2 deviceProperties{};
+        deviceProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        deviceProperties.pNext = &driverProperties;
+        vkGetPhysicalDeviceProperties2(physicalDevice, &deviceProperties);
+        return driverProperties.driverID;
+    }
+
+    bool IsKosmicKrispDriver(VkPhysicalDevice physicalDevice)
+    {
+        return GetDriverId(physicalDevice) == VK_DRIVER_ID_MESA_KOSMICKRISP;
+    }
+
     Vulkan::ERendererType ResolveRendererType(
         Vulkan::ERendererType requestedType,
         bool supportsRayTracing,
@@ -162,6 +179,11 @@ namespace NextRenderer
 
         const auto& physicalDevices = instance->PhysicalDevices();
         const uint32_t selectedGpuIdx = GOption->GpuIdx < physicalDevices.size() ? GOption->GpuIdx : 0;
+        if (GOption->HardwareQuery && IsKosmicKrispDriver(physicalDevices[selectedGpuIdx]))
+        {
+            SPDLOG_WARN("KosmicKrisp detected; disabling Vulkan timestamp queries to avoid device-loss on macOS");
+            GOption->HardwareQuery = false;
+        }
         const bool hasFullAmbientCubeBudget = HasFullAmbientCubeBudget(physicalDevices[selectedGpuIdx]);
         const bool useRayTracingRenderer =
             hasFullAmbientCubeBudget && !GOption->ForceNoRT &&
