@@ -1,5 +1,13 @@
 {
-    "provider": "gemini",
+    "provider": "localllm",
+    "useAgentLoop": true,
+    "maxAgentSteps": 12,
+    "localllm": {
+        "endpoint": "http://127.0.0.1:8765",
+        "model": "",
+        "pidFile": "external/llm/run/server.pid",
+        "autoDiscoverPid": true
+    },
     "gemini": {
         "apiKey": "YOUR_GOOGLE_API_KEY",
         "model": "gemini-3-flash-preview",

@@ -1,4 +1,5 @@
 #include "AI/EditorAIService.hpp"
+#include "AI/EditorTools.hpp"
 
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Core/Scene.hpp"
@@ -6,12 +7,16 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Reflection/PropertyAccessor.h"
 #include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Engine/Runtime/Subsystems/AI/AgentLoop.hpp"
+#include "Engine/Runtime/Subsystems/AI/Tools/RepoTools.hpp"
 #include "Engine/Runtime/Subsystems/QuickJSEngine.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <fstream>
+#include <nlohmann/json.hpp>
 #include <set>
 #include <spdlog/spdlog.h>
 #include <thread>
@@ -27,6 +32,100 @@ namespace Editor
         if (qjs)
         {
             qjs->SetEditorBindingsCallback([this](void* ctx) { executor_.RegisterEditorBindings(ctx); });
+        }
+        LoadAgentConfig();
+    }
+
+    FEditorAIService::~FEditorAIService() = default;
+
+    void FEditorAIService::EnsureToolRegistry()
+    {
+        if (toolRegistryInitialized_) return;
+
+        NextAI::FRepoToolsOptions repoOpts;
+        repoOpts.repoRoot = Utilities::FileHelper::GetPlatformFilePath(".");
+        // Read-only knowledge tools; run_cmd whitelist still active.
+        NextAI::RegisterRepoTools(toolRegistry_, repoOpts);
+
+        FEditorToolsOptions editorOpts;
+        editorOpts.engine = &engine_;
+        editorOpts.executor = &executor_;
+        editorOpts.contextProvider = [this]() -> EditorContext* { return currentContext_; };
+        editorOpts.deferHighRiskActions = true;
+        RegisterEditorTools(toolRegistry_, editorOpts);
+
+        toolRegistryInitialized_ = true;
+        SPDLOG_INFO("[EditorAI] tool registry initialized ({} tools)", toolRegistry_.Size());
+    }
+
+    void FEditorAIService::PumpMainThread()
+    {
+        // Drain queued tool tasks (agent worker may be waiting on these).
+        dispatcher_.DrainOnce();
+        // Collect any deferred actions that the executor accumulated this frame.
+        HarvestDeferredActions();
+    }
+
+    void FEditorAIService::HarvestDeferredActions()
+    {
+        auto deferred = executor_.TakeDeferredActions();
+        for (auto& d : deferred)
+        {
+            FPendingEditorAction pa;
+            pa.id = nextPendingActionId_++;
+            pa.request = std::move(d);
+            pendingActions_.push_back(std::move(pa));
+        }
+    }
+
+    std::string FEditorAIService::BuildAgentSystemPrompt(const EditorContext& ctx)
+    {
+        std::string prompt =
+            "You are the gkNextEngine editor AI agent. Use the provided tools to inspect "
+            "and modify the scene. Prefer calling tools over guessing.\n\n"
+            "## Rules\n"
+            "1. Reply in the user's language (Chinese if the user wrote Chinese).\n"
+            "2. When unsure of node names, call scene_list_nodes or scene_summary first.\n"
+            "3. When unsure of a component's property names, call scene_get_node on a "
+            "representative node to see live values.\n"
+            "4. For source-code or .spec questions, use list_dir / find_files / "
+            "search_text / find_symbol / read_file to gather evidence before answering.\n"
+            "5. scene_action with name='load_scene' is HIGH-RISK: it will be queued for "
+            "user confirmation. Tell the user what you queued, then stop.\n"
+            "6. Use scene_select / scene_move / scene_set_property / etc. for mutations. "
+            "Each mutation is undoable.\n"
+            "7. When the task is complete, respond in plain text describing what was "
+            "done and (optionally) suggest one next action.\n";
+
+        // A short live snapshot to anchor the model without dumping the whole scene.
+        prompt += "\n## Current Selection\n";
+        prompt += BuildSelectionContext(ctx);
+        return prompt;
+    }
+
+    void FEditorAIService::LoadAgentConfig()
+    {
+        // Best-effort: read useAgentLoop / maxAgentSteps from the same ai_config.json
+        // that FAIService consumes. Missing keys leave defaults.
+        try
+        {
+            std::string path = Utilities::FileHelper::GetPlatformFilePath("assets/configs/ai_config.json");
+            std::ifstream f(path);
+            if (!f.is_open()) return;
+            nlohmann::json j;
+            f >> j;
+            if (j.contains("useAgentLoop") && j["useAgentLoop"].is_boolean())
+            {
+                useAgentLoop_ = j["useAgentLoop"].get<bool>();
+            }
+            if (j.contains("maxAgentSteps") && j["maxAgentSteps"].is_number_integer())
+            {
+                SetMaxAgentSteps(j["maxAgentSteps"].get<int>());
+            }
+        }
+        catch (const std::exception& e)
+        {
+            SPDLOG_WARN("EditorAIService: failed to read agent config: {}", e.what());
         }
     }
 
@@ -456,7 +555,20 @@ Editor.log(message)
 
         status_ = EEditorAIStatus::Generating;
         statusMessage_ = "Generating...";
+        cancelRequested_.store(false);
 
+        if (useAgentLoop_ && ai->SupportsTools())
+        {
+            RunAgentLoopAsync(userPrompt, ctx);
+        }
+        else
+        {
+            RunLegacyAsync(userPrompt, ctx);
+        }
+    }
+
+    void FEditorAIService::RunLegacyAsync(const std::string& userPrompt, const EditorContext& ctx)
+    {
         std::string systemPrompt = BuildSystemPrompt(ctx);
         std::string fullPrompt = systemPrompt + "\nUser request: " + userPrompt;
 
@@ -467,6 +579,59 @@ Editor.log(message)
             {
                 std::lock_guard<std::mutex> lock(resultMutex_);
                 pendingResponse_ = response;
+                hasPendingResult_ = true;
+            }
+        }).detach();
+    }
+
+    void FEditorAIService::RunAgentLoopAsync(const std::string& userPrompt, const EditorContext& ctx)
+    {
+        EnsureToolRegistry();
+
+        NextAI::FChatRequest seed;
+        seed.messages.push_back(NextAI::FChatMessage::System(BuildAgentSystemPrompt(ctx)));
+        seed.messages.push_back(NextAI::FChatMessage::User(userPrompt));
+
+        NextAI::FAgentOptions opts;
+        opts.maxSteps = maxAgentSteps_;
+        opts.temperature = 0.3f;
+        opts.groundingReminder =
+            "You produced a final answer without calling any tool. If the user's request "
+            "requires looking at or modifying the scene/source, call the appropriate tool "
+            "first. Retry now.";
+
+        std::thread([this, seed = std::move(seed), opts]() mutable {
+            auto* ai = engine_.GetAIService();
+            NextAI::FChatProviderFn provider =
+                [ai](const NextAI::FChatRequest& req) { return ai->Chat(req); };
+
+            NextAI::FAgentResult result = NextAI::FAgentLoop::Run(
+                std::move(seed), toolRegistry_, std::move(provider), opts,
+                &agentEventSink_, &dispatcher_, &cancelRequested_);
+
+            NextAI::FAIResponse legacyShaped;
+            if (result.success)
+            {
+                legacyShaped = NextAI::FAIResponse::Success(result.finalContent);
+            }
+            else if (result.cancelled)
+            {
+                legacyShaped = NextAI::FAIResponse::Failure("cancelled by user");
+            }
+            else if (result.maxStepsExceeded)
+            {
+                legacyShaped = NextAI::FAIResponse::Failure(
+                    fmt::format("agent loop hit max steps ({})", opts.maxSteps));
+            }
+            else
+            {
+                legacyShaped = NextAI::FAIResponse::Failure(
+                    result.errorMessage.empty() ? "agent loop failed" : result.errorMessage);
+            }
+
+            {
+                std::lock_guard<std::mutex> lock(resultMutex_);
+                pendingResponse_ = legacyShaped;
                 hasPendingResult_ = true;
             }
         }).detach();
@@ -494,6 +659,17 @@ Editor.log(message)
         }
 
         lastResponse_ = response.text;
+
+        if (useAgentLoop_)
+        {
+            // Agent loop already executed tools during the run; the final text is
+            // just a natural-language summary. Anything high-risk landed in
+            // pendingActions_ via HarvestDeferredActions() during PumpMainThread().
+            status_ = EEditorAIStatus::Idle;
+            statusMessage_ = pendingActions_.empty() ? "Done" : "Waiting confirmation";
+            return;
+        }
+
         status_ = EEditorAIStatus::Executing;
         statusMessage_ = "Executing...";
 

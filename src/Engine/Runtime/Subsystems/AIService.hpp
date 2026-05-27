@@ -1,5 +1,6 @@
 #pragma once
 #include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Runtime/Subsystems/AI/AIChat.hpp"
 #include "Engine/Runtime/Subsystems/VoiceInputService.hpp"
 #include <functional>
 #include <map>
@@ -15,7 +16,8 @@ namespace NextAI
         Gemini,
         Ollama,
         Zhipu,
-        DeepSeek
+        DeepSeek,
+        LocalLlama
     };
 
     struct FAIResponse
@@ -59,6 +61,10 @@ namespace NextAI
 
         FAIResponse GenerateText(const std::string& prompt);
         void GenerateTextAsync(const std::string& prompt, std::function<void(FAIResponse)> callback);
+
+        // Multi-message chat with optional tool calling (used by FAgentLoop).
+        FChatResponse Chat(const FChatRequest& request);
+        bool SupportsTools() const;
 
         std::string GetProviderName() const;
         EAIProviderType GetProviderType() const { return providerType_; }

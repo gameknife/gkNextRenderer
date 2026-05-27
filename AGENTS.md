@@ -244,6 +244,8 @@ gnb git ai-commit                    # commit-msg 的短别名
 
 commit-msg prompt 内容包含：模式（staged / working tree）、文件清单（含 `??` 未跟踪）、`git diff --stat`、已跟踪文件 diff、未跟踪文件合成的 `+++ b/<path>` 新文件 diff（带二进制/64KB 大小保护）。超 `--max-diff-chars` 按文件边界截断。
 
+引擎层 `NextAI::FAIService` 通过 `localllm` provider 复用同一个 llama-server（无需独立模型进程）：默认读 `external/llm/run/server.pid` 自动发现 host/port/model，PID 文件缺失或解析失败时回退到 `ai_config.json` 的 `localllm.endpoint`。`gnb llm serve --model <id>` 切模型时引擎会在下次 Chat 调用前重读 PID，无需重启编辑器。
+
 ## Spec Workflow
 
 **完整规范见 [.spec/README.md](.spec/README.md)**。下面是 AGENT 必须遵守的核心规则，规范与本节不一致以 README 为准。

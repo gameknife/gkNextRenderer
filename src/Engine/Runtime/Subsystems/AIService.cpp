@@ -1,5 +1,6 @@
 #include "Engine/Runtime/Subsystems/AIService.hpp"
 #include "Engine/Runtime/Config/AISettings.hpp"
+#include "Engine/Runtime/Subsystems/AI/LlamaPidFile.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include <algorithm>
 #include <cctype>
@@ -30,8 +31,71 @@ namespace NextAI
         virtual bool Initialize(const nlohmann::json& config) = 0;
         virtual bool IsConfigured() const = 0;
         virtual FAIResponse Generate(const std::string& prompt) = 0;
+        virtual FChatResponse Chat(const FChatRequest& request) = 0;
+        virtual bool SupportsTools() const = 0;
         virtual std::string GetName() const = 0;
     };
+
+    namespace
+    {
+        struct FHttpResult
+        {
+            bool ok = false;
+            std::string body;
+            std::string error;
+            long statusCode = 0;
+        };
+
+        FHttpResult HttpPostJson(const std::string& url, const std::string& jsonBody,
+                                 const std::vector<std::string>& extraHeaders = {})
+        {
+            FHttpResult result;
+            CURL* curl = curl_easy_init();
+            if (!curl)
+            {
+                result.error = "Failed to initialize CURL";
+                return result;
+            }
+
+            struct curl_slist* headers = nullptr;
+            headers = curl_slist_append(headers, "Content-Type: application/json");
+            for (const auto& h : extraHeaders)
+            {
+                headers = curl_slist_append(headers, h.c_str());
+            }
+
+            curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonBody.c_str());
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, AIServiceWriteCallback);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &result.body);
+            curl_easy_setopt(curl, CURLOPT_TIMEOUT, AIConfig::RequestTimeoutSeconds);
+
+            CURLcode res = curl_easy_perform(curl);
+            if (res == CURLE_OK)
+            {
+                curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &result.statusCode);
+                result.ok = true;
+            }
+            else
+            {
+                result.error = fmt::format("Network error: {}", curl_easy_strerror(res));
+            }
+
+            curl_slist_free_all(headers);
+            curl_easy_cleanup(curl);
+            return result;
+        }
+
+        FAIResponse ChatToLegacyResponse(const FChatResponse& chatResp)
+        {
+            if (!chatResp.success)
+            {
+                return FAIResponse::Failure(chatResp.errorMessage);
+            }
+            return FAIResponse::Success(chatResp.content);
+        }
+    }
 
     class FGeminiProvider : public IAIProvider
     {
@@ -39,6 +103,8 @@ namespace NextAI
         bool Initialize(const nlohmann::json& config) override;
         bool IsConfigured() const override;
         FAIResponse Generate(const std::string& prompt) override;
+        FChatResponse Chat(const FChatRequest& request) override;
+        bool SupportsTools() const override { return true; }
         std::string GetName() const override { return "Gemini"; }
 
     private:
@@ -54,6 +120,8 @@ namespace NextAI
         bool Initialize(const nlohmann::json& config) override;
         bool IsConfigured() const override;
         FAIResponse Generate(const std::string& prompt) override;
+        FChatResponse Chat(const FChatRequest& request) override;
+        bool SupportsTools() const override { return true; }
         std::string GetName() const override { return "Ollama"; }
 
     private:
@@ -68,6 +136,8 @@ namespace NextAI
         bool Initialize(const nlohmann::json& config) override;
         bool IsConfigured() const override;
         FAIResponse Generate(const std::string& prompt) override;
+        FChatResponse Chat(const FChatRequest& request) override;
+        bool SupportsTools() const override { return true; }
         std::string GetName() const override { return "Zhipu"; }
 
     private:
@@ -83,12 +153,34 @@ namespace NextAI
         bool Initialize(const nlohmann::json& config) override;
         bool IsConfigured() const override;
         FAIResponse Generate(const std::string& prompt) override;
+        FChatResponse Chat(const FChatRequest& request) override;
+        bool SupportsTools() const override { return true; }
         std::string GetName() const override { return "DeepSeek"; }
 
     private:
         std::string apiKey_;
         std::string model_ = "deepseek-chat";
         std::string endpoint_ = "https://api.deepseek.com/v1";
+        bool configured_ = false;
+    };
+
+    class FLocalLlamaProvider : public IAIProvider
+    {
+    public:
+        bool Initialize(const nlohmann::json& config) override;
+        bool IsConfigured() const override;
+        FAIResponse Generate(const std::string& prompt) override;
+        FChatResponse Chat(const FChatRequest& request) override;
+        bool SupportsTools() const override { return true; }
+        std::string GetName() const override { return "LocalLlama"; }
+
+    private:
+        bool RefreshFromPidFile();
+
+        std::string endpoint_ = "http://127.0.0.1:8765";
+        std::string model_;
+        std::string pidFilePath_ = "external/llm/run/server.pid";
+        bool autoDiscoverPid_ = true;
         bool configured_ = false;
     };
 
@@ -132,86 +224,40 @@ namespace NextAI
         return configured_;
     }
 
-    FAIResponse FGeminiProvider::Generate(const std::string& prompt)
+    FChatResponse FGeminiProvider::Chat(const FChatRequest& request)
     {
         if (!configured_)
         {
-            return FAIResponse::Failure("Gemini provider not configured");
+            return FChatResponse::Failure("Gemini provider not configured");
         }
+        FChatRequest req = request;
+        if (req.model.empty()) req.model = model_;
+        if (req.maxTokens <= 0) req.maxTokens = AIConfig::MaxOutputTokens;
 
         std::string url = fmt::format("{}/models/{}:generateContent?key={}",
-            endpoint_, model_, apiKey_);
-
-        json requestBody = {
-            {"contents", json::array({
-                {{"role", "user"}, {"parts", json::array({{{"text", prompt}}})}}
-            })},
-            {"generationConfig", {
-                {"temperature", 0.7},
-                {"maxOutputTokens", AIConfig::MaxOutputTokens}
-            }}
-        };
-
-        std::string requestStr = requestBody.dump();
-        std::string responseBuffer;
-
-        CURL* curl = curl_easy_init();
-        if (!curl)
+            endpoint_, req.model, apiKey_);
+        json body = BuildGeminiChatRequestBody(req);
+        FHttpResult http = HttpPostJson(url, body.dump());
+        if (!http.ok)
         {
-            return FAIResponse::Failure("Failed to initialize CURL");
+            return FChatResponse::Failure(http.error);
         }
-
-        struct curl_slist* headers = nullptr;
-        headers = curl_slist_append(headers, "Content-Type: application/json");
-
-        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, requestStr.c_str());
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, AIServiceWriteCallback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseBuffer);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, AIConfig::RequestTimeoutSeconds);
-
-        CURLcode res = curl_easy_perform(curl);
-
-        curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
-
-        if (res != CURLE_OK)
-        {
-            return FAIResponse::Failure(fmt::format("Network error: {}", curl_easy_strerror(res)));
-        }
-
         try
         {
-            json response = json::parse(responseBuffer);
-
-            if (response.contains("error"))
-            {
-                std::string errorMsg = response["error"]["message"].get<std::string>();
-                return FAIResponse::Failure(fmt::format("API error: {}", errorMsg));
-            }
-
-            if (response.contains("candidates") && !response["candidates"].empty())
-            {
-                auto& candidate = response["candidates"][0];
-                if (candidate.contains("content") && candidate["content"].contains("parts"))
-                {
-                    auto& parts = candidate["content"]["parts"];
-                    if (!parts.empty() && parts[0].contains("text"))
-                    {
-                        std::string generatedText = parts[0]["text"].get<std::string>();
-                        return FAIResponse::Success(generatedText);
-                    }
-                }
-            }
-
-            return FAIResponse::Failure("Unexpected API response format");
+            return ParseGeminiChatResponse(json::parse(http.body));
         }
         catch (const std::exception& e)
         {
             SPDLOG_ERROR("Failed to parse Gemini response: {}", e.what());
-            return FAIResponse::Failure(fmt::format("Response parse error: {}", e.what()));
+            return FChatResponse::Failure(fmt::format("Response parse error: {}", e.what()));
         }
+    }
+
+    FAIResponse FGeminiProvider::Generate(const std::string& prompt)
+    {
+        FChatRequest req;
+        req.messages.push_back(FChatMessage::User(prompt));
+        return ChatToLegacyResponse(Chat(req));
     }
 
     bool FOllamaProvider::Initialize(const nlohmann::json& config)
@@ -250,73 +296,47 @@ namespace NextAI
         return configured_;
     }
 
-    FAIResponse FOllamaProvider::Generate(const std::string& prompt)
+    FChatResponse FOllamaProvider::Chat(const FChatRequest& request)
     {
         if (!configured_)
         {
-            return FAIResponse::Failure("Ollama provider not configured");
+            return FChatResponse::Failure("Ollama provider not configured");
         }
+        FChatRequest req = request;
+        if (req.model.empty()) req.model = model_;
 
-        std::string url = endpoint_ + "/api/generate";
+        // If tools are requested, use Ollama's OpenAI-compatible /v1/chat/completions endpoint.
+        // Otherwise stick with the legacy /api/generate path for backward compatibility.
+        const bool useToolsPath = !req.tools.empty();
+        const std::string url = useToolsPath
+            ? endpoint_ + "/v1/chat/completions"
+            : endpoint_ + "/api/generate";
+        const json body = useToolsPath
+            ? BuildOpenAIChatRequestBody(req)
+            : BuildOllamaGenerateRequestBody(req);
 
-        json requestBody = {
-            {"model", model_},
-            {"prompt", prompt},
-            {"stream", false}
-        };
-
-        std::string requestStr = requestBody.dump();
-        std::string responseBuffer;
-
-        CURL* curl = curl_easy_init();
-        if (!curl)
+        FHttpResult http = HttpPostJson(url, body.dump());
+        if (!http.ok)
         {
-            return FAIResponse::Failure("Failed to initialize CURL");
+            return FChatResponse::Failure(http.error);
         }
-
-        struct curl_slist* headers = nullptr;
-        headers = curl_slist_append(headers, "Content-Type: application/json");
-
-        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, requestStr.c_str());
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, AIServiceWriteCallback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseBuffer);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, AIConfig::RequestTimeoutSeconds);
-
-        CURLcode res = curl_easy_perform(curl);
-
-        curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
-
-        if (res != CURLE_OK)
-        {
-            return FAIResponse::Failure(fmt::format("Network error: {}", curl_easy_strerror(res)));
-        }
-
         try
         {
-            json response = json::parse(responseBuffer);
-
-            if (response.contains("error"))
-            {
-                std::string errorMsg = response["error"].get<std::string>();
-                return FAIResponse::Failure(fmt::format("Ollama error: {}", errorMsg));
-            }
-
-            if (response.contains("response"))
-            {
-                std::string generatedText = response["response"].get<std::string>();
-                return FAIResponse::Success(generatedText);
-            }
-
-            return FAIResponse::Failure("Unexpected Ollama response format");
+            json parsed = json::parse(http.body);
+            return useToolsPath ? ParseOpenAIChatResponse(parsed) : ParseOllamaGenerateResponse(parsed);
         }
         catch (const std::exception& e)
         {
             SPDLOG_ERROR("Failed to parse Ollama response: {}", e.what());
-            return FAIResponse::Failure(fmt::format("Response parse error: {}", e.what()));
+            return FChatResponse::Failure(fmt::format("Response parse error: {}", e.what()));
         }
+    }
+
+    FAIResponse FOllamaProvider::Generate(const std::string& prompt)
+    {
+        FChatRequest req;
+        req.messages.push_back(FChatMessage::User(prompt));
+        return ChatToLegacyResponse(Chat(req));
     }
 
     bool FZhipuProvider::Initialize(const nlohmann::json& config)
@@ -359,89 +379,39 @@ namespace NextAI
         return configured_;
     }
 
-    FAIResponse FZhipuProvider::Generate(const std::string& prompt)
+    FChatResponse FZhipuProvider::Chat(const FChatRequest& request)
     {
         if (!configured_)
         {
-            return FAIResponse::Failure("Zhipu provider not configured");
+            return FChatResponse::Failure("Zhipu provider not configured");
         }
+        FChatRequest req = request;
+        if (req.model.empty()) req.model = model_;
 
-        std::string url = endpoint_ + "/chat/completions";
-
-        json requestBody = {
-            {"model", model_},
-            {"messages", json::array({
-                {{"role", "user"}, {"content", prompt}}
-            })}
-        };
-
-        std::string requestStr = requestBody.dump();
-        std::string responseBuffer;
-
-        CURL* curl = curl_easy_init();
-        if (!curl)
+        const std::string url = endpoint_ + "/chat/completions";
+        const json body = BuildOpenAIChatRequestBody(req);
+        std::vector<std::string> headers{fmt::format("Authorization: Bearer {}", apiKey_)};
+        FHttpResult http = HttpPostJson(url, body.dump(), headers);
+        if (!http.ok)
         {
-            return FAIResponse::Failure("Failed to initialize CURL");
+            return FChatResponse::Failure(http.error);
         }
-
-        std::string authHeader = fmt::format("Authorization: Bearer {}", apiKey_);
-
-        struct curl_slist* headers = nullptr;
-        headers = curl_slist_append(headers, "Content-Type: application/json");
-        headers = curl_slist_append(headers, authHeader.c_str());
-
-        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, requestStr.c_str());
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, AIServiceWriteCallback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseBuffer);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, AIConfig::RequestTimeoutSeconds);
-
-        CURLcode res = curl_easy_perform(curl);
-
-        curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
-
-        if (res != CURLE_OK)
-        {
-            return FAIResponse::Failure(fmt::format("Network error: {}", curl_easy_strerror(res)));
-        }
-
         try
         {
-            json response = json::parse(responseBuffer);
-
-            if (response.contains("error"))
-            {
-                std::string errorMsg;
-                if (response["error"].is_object() && response["error"].contains("message"))
-                {
-                    errorMsg = response["error"]["message"].get<std::string>();
-                }
-                else
-                {
-                    errorMsg = response["error"].dump();
-                }
-                return FAIResponse::Failure(fmt::format("Zhipu error: {}", errorMsg));
-            }
-
-            if (response.contains("choices") && !response["choices"].empty())
-            {
-                auto& choice = response["choices"][0];
-                if (choice.contains("message") && choice["message"].contains("content"))
-                {
-                    std::string generatedText = choice["message"]["content"].get<std::string>();
-                    return FAIResponse::Success(generatedText);
-                }
-            }
-
-            return FAIResponse::Failure("Unexpected Zhipu response format");
+            return ParseOpenAIChatResponse(json::parse(http.body));
         }
         catch (const std::exception& e)
         {
             SPDLOG_ERROR("Failed to parse Zhipu response: {}", e.what());
-            return FAIResponse::Failure(fmt::format("Response parse error: {}", e.what()));
+            return FChatResponse::Failure(fmt::format("Response parse error: {}", e.what()));
         }
+    }
+
+    FAIResponse FZhipuProvider::Generate(const std::string& prompt)
+    {
+        FChatRequest req;
+        req.messages.push_back(FChatMessage::User(prompt));
+        return ChatToLegacyResponse(Chat(req));
     }
 
     bool FDeepSeekProvider::Initialize(const nlohmann::json& config)
@@ -484,89 +454,145 @@ namespace NextAI
         return configured_;
     }
 
-    FAIResponse FDeepSeekProvider::Generate(const std::string& prompt)
+    FChatResponse FDeepSeekProvider::Chat(const FChatRequest& request)
     {
         if (!configured_)
         {
-            return FAIResponse::Failure("DeepSeek provider not configured");
+            return FChatResponse::Failure("DeepSeek provider not configured");
         }
+        FChatRequest req = request;
+        if (req.model.empty()) req.model = model_;
 
-        std::string url = endpoint_ + "/chat/completions";
-
-        json requestBody = {
-            {"model", model_},
-            {"messages", json::array({
-                {{"role", "user"}, {"content", prompt}}
-            })}
-        };
-
-        std::string requestStr = requestBody.dump();
-        std::string responseBuffer;
-
-        CURL* curl = curl_easy_init();
-        if (!curl)
+        const std::string url = endpoint_ + "/chat/completions";
+        const json body = BuildOpenAIChatRequestBody(req);
+        std::vector<std::string> headers{fmt::format("Authorization: Bearer {}", apiKey_)};
+        FHttpResult http = HttpPostJson(url, body.dump(), headers);
+        if (!http.ok)
         {
-            return FAIResponse::Failure("Failed to initialize CURL");
+            return FChatResponse::Failure(http.error);
         }
-
-        std::string authHeader = fmt::format("Authorization: Bearer {}", apiKey_);
-
-        struct curl_slist* headers = nullptr;
-        headers = curl_slist_append(headers, "Content-Type: application/json");
-        headers = curl_slist_append(headers, authHeader.c_str());
-
-        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, requestStr.c_str());
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, AIServiceWriteCallback);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseBuffer);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, AIConfig::RequestTimeoutSeconds);
-
-        CURLcode res = curl_easy_perform(curl);
-
-        curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
-
-        if (res != CURLE_OK)
-        {
-            return FAIResponse::Failure(fmt::format("Network error: {}", curl_easy_strerror(res)));
-        }
-
         try
         {
-            json response = json::parse(responseBuffer);
-
-            if (response.contains("error"))
-            {
-                std::string errorMsg;
-                if (response["error"].is_object() && response["error"].contains("message"))
-                {
-                    errorMsg = response["error"]["message"].get<std::string>();
-                }
-                else
-                {
-                    errorMsg = response["error"].dump();
-                }
-                return FAIResponse::Failure(fmt::format("DeepSeek error: {}", errorMsg));
-            }
-
-            if (response.contains("choices") && !response["choices"].empty())
-            {
-                auto& choice = response["choices"][0];
-                if (choice.contains("message") && choice["message"].contains("content"))
-                {
-                    std::string generatedText = choice["message"]["content"].get<std::string>();
-                    return FAIResponse::Success(generatedText);
-                }
-            }
-
-            return FAIResponse::Failure("Unexpected DeepSeek response format");
+            return ParseOpenAIChatResponse(json::parse(http.body));
         }
         catch (const std::exception& e)
         {
             SPDLOG_ERROR("Failed to parse DeepSeek response: {}", e.what());
-            return FAIResponse::Failure(fmt::format("Response parse error: {}", e.what()));
+            return FChatResponse::Failure(fmt::format("Response parse error: {}", e.what()));
         }
+    }
+
+    FAIResponse FDeepSeekProvider::Generate(const std::string& prompt)
+    {
+        FChatRequest req;
+        req.messages.push_back(FChatMessage::User(prompt));
+        return ChatToLegacyResponse(Chat(req));
+    }
+
+    bool FLocalLlamaProvider::Initialize(const nlohmann::json& config)
+    {
+        try
+        {
+            if (config.contains("endpoint") && config["endpoint"].is_string())
+            {
+                endpoint_ = config["endpoint"].get<std::string>();
+            }
+            if (config.contains("model") && config["model"].is_string())
+            {
+                model_ = config["model"].get<std::string>();
+            }
+            if (config.contains("pidFile") && config["pidFile"].is_string())
+            {
+                pidFilePath_ = config["pidFile"].get<std::string>();
+            }
+            if (config.contains("autoDiscoverPid") && config["autoDiscoverPid"].is_boolean())
+            {
+                autoDiscoverPid_ = config["autoDiscoverPid"].get<bool>();
+            }
+
+            if (autoDiscoverPid_)
+            {
+                RefreshFromPidFile();
+            }
+
+            // Configured if we have a usable endpoint; PID may fail (server not running),
+            // but as long as a fallback endpoint is set we count it as configured.
+            configured_ = !endpoint_.empty();
+            if (configured_)
+            {
+                SPDLOG_INFO("LocalLlama Provider initialized: endpoint={} model={}",
+                            endpoint_, model_.empty() ? "<auto>" : model_);
+            }
+            return configured_;
+        }
+        catch (const std::exception& e)
+        {
+            SPDLOG_ERROR("Failed to initialize LocalLlama Provider: {}", e.what());
+            configured_ = false;
+            return false;
+        }
+    }
+
+    bool FLocalLlamaProvider::IsConfigured() const
+    {
+        return configured_;
+    }
+
+    bool FLocalLlamaProvider::RefreshFromPidFile()
+    {
+        std::string resolved = Utilities::FileHelper::GetPlatformFilePath(pidFilePath_.c_str());
+        FLlamaPidInfo info = ReadLlamaPidFile(resolved);
+        if (!info.valid)
+        {
+            return false;
+        }
+        endpoint_ = info.Endpoint();
+        if (model_.empty())
+        {
+            model_ = info.model;
+        }
+        return true;
+    }
+
+    FChatResponse FLocalLlamaProvider::Chat(const FChatRequest& request)
+    {
+        if (!configured_)
+        {
+            return FChatResponse::Failure("LocalLlama provider not configured");
+        }
+        // Re-read PID each call so model swaps via `gnb llm serve --model <id>`
+        // are picked up without restarting the engine.
+        if (autoDiscoverPid_)
+        {
+            RefreshFromPidFile();
+        }
+
+        FChatRequest req = request;
+        if (req.model.empty()) req.model = model_;
+
+        const std::string url = endpoint_ + "/v1/chat/completions";
+        const json body = BuildOpenAIChatRequestBody(req);
+        FHttpResult http = HttpPostJson(url, body.dump());
+        if (!http.ok)
+        {
+            return FChatResponse::Failure(http.error);
+        }
+        try
+        {
+            return ParseOpenAIChatResponse(json::parse(http.body));
+        }
+        catch (const std::exception& e)
+        {
+            SPDLOG_ERROR("Failed to parse LocalLlama response: {}", e.what());
+            return FChatResponse::Failure(fmt::format("Response parse error: {}", e.what()));
+        }
+    }
+
+    FAIResponse FLocalLlamaProvider::Generate(const std::string& prompt)
+    {
+        FChatRequest req;
+        req.messages.push_back(FChatMessage::User(prompt));
+        return ChatToLegacyResponse(Chat(req));
     }
 
     FAIService::FAIService()
@@ -594,6 +620,8 @@ namespace NextAI
             return std::make_unique<FZhipuProvider>();
         case EAIProviderType::DeepSeek:
             return std::make_unique<FDeepSeekProvider>();
+        case EAIProviderType::LocalLlama:
+            return std::make_unique<FLocalLlamaProvider>();
         default:
             return std::make_unique<FGeminiProvider>();
         }
@@ -616,6 +644,7 @@ namespace NextAI
         case EAIProviderType::Ollama: return "ollama";
         case EAIProviderType::Zhipu: return "zhipu";
         case EAIProviderType::DeepSeek: return "deepseek";
+        case EAIProviderType::LocalLlama: return "localllm";
         default: return "gemini";
         }
     }
@@ -628,12 +657,14 @@ namespace NextAI
         if (lower == "ollama") return EAIProviderType::Ollama;
         if (lower == "zhipu") return EAIProviderType::Zhipu;
         if (lower == "deepseek") return EAIProviderType::DeepSeek;
+        if (lower == "localllm" || lower == "local" || lower == "llama") return EAIProviderType::LocalLlama;
         return EAIProviderType::Gemini;
     }
 
     std::vector<std::pair<EAIProviderType, std::string>> FAIService::GetAvailableProviders()
     {
         return {
+            {EAIProviderType::LocalLlama, "LocalLlama"},
             {EAIProviderType::Gemini, "Gemini"},
             {EAIProviderType::Ollama, "Ollama"},
             {EAIProviderType::Zhipu, "Zhipu"},
@@ -968,6 +999,34 @@ namespace NextAI
         }
 
         return response;
+    }
+
+    FChatResponse FAIService::Chat(const FChatRequest& request)
+    {
+        if (!configured_ || !provider_)
+        {
+            return FChatResponse::Failure("AI service not configured");
+        }
+
+        status_ = EAIStatus::Generating;
+        statusMessage_ = "Generating...";
+        FChatResponse response = provider_->Chat(request);
+        if (response.success)
+        {
+            status_ = EAIStatus::Ready;
+            statusMessage_ = "Ready";
+        }
+        else
+        {
+            status_ = EAIStatus::Error;
+            statusMessage_ = response.errorMessage;
+        }
+        return response;
+    }
+
+    bool FAIService::SupportsTools() const
+    {
+        return provider_ && provider_->SupportsTools();
     }
 
     void FAIService::GenerateTextAsync(const std::string& prompt, std::function<void(FAIResponse)> callback)
