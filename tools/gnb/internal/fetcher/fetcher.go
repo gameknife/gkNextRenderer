@@ -332,6 +332,18 @@ func untar(src string, dst string, gz bool) error {
 			if err := os.MkdirAll(target, 0o755); err != nil {
 				return err
 			}
+		case tar.TypeSymlink:
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return err
+			}
+			linkTarget := filepath.Clean(filepath.Join(filepath.Dir(target), header.Linkname))
+			if !strings.HasPrefix(linkTarget, filepath.Clean(dst)+string(os.PathSeparator)) {
+				return fmt.Errorf("tar symlink escapes destination: %s -> %s", header.Name, header.Linkname)
+			}
+			_ = os.Remove(target)
+			if err := os.Symlink(header.Linkname, target); err != nil {
+				return err
+			}
 		case tar.TypeReg:
 			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return err

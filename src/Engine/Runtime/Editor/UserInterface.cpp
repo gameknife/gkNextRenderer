@@ -52,6 +52,24 @@ namespace NextUI
 
 namespace
 {
+    std::string GetPhysicalDeviceDriverName(VkPhysicalDevice physicalDevice)
+    {
+        if (physicalDevice == VK_NULL_HANDLE)
+        {
+            return {};
+        }
+
+        VkPhysicalDeviceDriverProperties driverProperties{};
+        driverProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
+
+        VkPhysicalDeviceProperties2 deviceProperties{};
+        deviceProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        deviceProperties.pNext = &driverProperties;
+        vkGetPhysicalDeviceProperties2(physicalDevice, &deviceProperties);
+
+        return driverProperties.driverName[0] != '\0' ? std::string(driverProperties.driverName) : std::string{};
+    }
+
     constexpr const char* kUiVertexShaderPath = "assets/shaders/UI.ImGui.vert.slang.spv";
     constexpr const char* kUiFragmentShaderPath = "assets/shaders/UI.ImGui.frag.slang.spv";
     constexpr const char* kUiFontAtlasTextureName = "__imgui_font_atlas__";
@@ -2218,15 +2236,16 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
     };
 
     {
-        const VkPhysicalDeviceProperties deviceProperties =
-            NextEngine::GetInstance()->GetRenderer().Device().DeviceProperties();
+        const Vulkan::Device& device = NextEngine::GetInstance()->GetRenderer().Device();
+        const VkPhysicalDeviceProperties deviceProperties = device.DeviceProperties();
+        const std::string driverName = GetPhysicalDeviceDriverName(device.PhysicalDevice());
 
         const ImVec4 fpsColor = statistics.FrameRate > 55.0f ? colGood
             : (statistics.FrameRate > 30.0f ? colWarn : colBad);
         const std::string fpsText = fmt::format("{:.0f}  FPS", statistics.FrameRate);
         const std::string ftText = fmt::format("{:.2f}  ms", statistics.FrameTime);
 
-        BeginCard("##ProfilerDeviceCard", 164.0f);
+        BeginCard("##ProfilerDeviceCard", 180.0f);
         if (ImGui::BeginTable("##ProfilerDeviceHeader", 2, ImGuiTableFlags_SizingStretchProp))
         {
             ImGui::TableNextColumn();
@@ -2239,6 +2258,17 @@ void UserInterface::DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gp
             ImGui::EndTable();
         }
         ImGui::TextColored(colVal, "%s", deviceProperties.deviceName);
+        if (!driverName.empty())
+        {
+            const float driverFontSize = ImGui::GetFontSize() * 0.84f;
+            const ImVec4 driverColor = NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted, 0.72f);
+            const ImVec2 driverPos = ImGui::GetCursorScreenPos();
+            ImFont* font = ImGui::GetFont();
+            const ImVec2 driverSize = font->CalcTextSizeA(driverFontSize, FLT_MAX, 0.0f, driverName.c_str());
+            ImGui::GetWindowDrawList()->AddText(font, driverFontSize, driverPos,
+                                                ImGui::GetColorU32(driverColor), driverName.c_str());
+            ImGui::Dummy(ImVec2(driverSize.x, driverSize.y + 2.0f));
+        }
 
         ImGui::Dummy(ImVec2(0.0f, 8.0f));
         if (ImGui::BeginTable("##ProfilerSparklineTable", 2, ImGuiTableFlags_SizingStretchSame))
