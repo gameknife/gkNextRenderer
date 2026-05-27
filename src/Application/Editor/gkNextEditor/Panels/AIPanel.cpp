@@ -373,6 +373,19 @@ namespace Editor
         std::vector<ChatMessage> chatHistory;
         bool chatScrollToBottom = false;
 
+        // Agent event stream (rolling buffer of recent steps; capped to keep ImGui draw cheap).
+        struct AgentEventDisplay
+        {
+            int step;
+            std::string phase;
+            std::string toolName;
+            std::string summary;
+            std::string detail;
+        };
+        std::vector<AgentEventDisplay> agentEventLog;
+        bool agentStepsOpen = false;
+        constexpr size_t kAgentEventCap = 200;
+
         // EditorScript tab: execution logs
         char scriptInputBuffer[8192] = {};
         std::vector<ScriptLogEntry> logHistory;
@@ -552,11 +565,105 @@ namespace Editor
         }
     }
 
+    static const char* PhaseColorTag(const std::string& phase)
+    {
+        if (phase == "call") return "calling";
+        if (phase == "result") return "result";
+        if (phase == "error") return "error";
+        if (phase == "final") return "final";
+        if (phase == "cancelled") return "cancelled";
+        return phase.c_str();
+    }
+
+    static ImVec4 PhaseColor(const std::string& phase)
+    {
+        if (phase == "error" || phase == "cancelled") return ImVec4(1.0f, 0.45f, 0.45f, 1.0f);
+        if (phase == "final") return ImVec4(0.6f, 0.9f, 0.6f, 1.0f);
+        if (phase == "result") return ImVec4(0.6f, 0.85f, 1.0f, 1.0f);
+        return ImVec4(0.95f, 0.8f, 0.4f, 1.0f);
+    }
+
+    static void DrawAgentStepsSection(FEditorAIService& service)
+    {
+        if (!ImGui::CollapsingHeader("Agent Steps", agentStepsOpen ? ImGuiTreeNodeFlags_DefaultOpen : 0))
+        {
+            return;
+        }
+        // Drain new events from the sink into our display log.
+        auto drained = service.GetAgentEventSink().Drain();
+        for (auto& e : drained)
+        {
+            agentEventLog.push_back({e.step, NextAI::AgentEventPhaseToString(e.phase),
+                                     e.toolName, e.summary, e.detail});
+        }
+        while (agentEventLog.size() > kAgentEventCap)
+        {
+            agentEventLog.erase(agentEventLog.begin());
+        }
+
+        if (ImGui::Button(ICON_FA_TRASH " Clear"))
+        {
+            agentEventLog.clear();
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("%zu events (cap %zu)", agentEventLog.size(), kAgentEventCap);
+
+        ImGui::BeginChild("AgentEventList", ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * 10),
+                          ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar);
+        for (const auto& e : agentEventLog)
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, PhaseColor(e.phase));
+            ImGui::Text("step %d  %s  %s", e.step, PhaseColorTag(e.phase),
+                        e.toolName.empty() ? "" : e.toolName.c_str());
+            ImGui::PopStyleColor();
+            if (!e.summary.empty())
+            {
+                ImGui::SameLine();
+                ImGui::TextDisabled("· %s", e.summary.c_str());
+            }
+            if (!e.detail.empty())
+            {
+                ImGui::Indent(16.0f);
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.65f, 0.65f, 0.7f, 1.0f));
+                ImGui::TextWrapped("%s", e.detail.c_str());
+                ImGui::PopStyleColor();
+                ImGui::Unindent(16.0f);
+            }
+        }
+        if (!drained.empty())
+        {
+            ImGui::SetScrollHereY(1.0f);
+        }
+        ImGui::EndChild();
+    }
+
+    static void DrawAgentSettings(FEditorAIService& service)
+    {
+        if (!ImGui::CollapsingHeader("Agent Settings"))
+        {
+            return;
+        }
+        bool useAgent = service.IsAgentLoopEnabled();
+        if (ImGui::Checkbox("Use Agent Loop (multi-step tool calling)", &useAgent))
+        {
+            service.SetAgentLoopEnabled(useAgent);
+        }
+        int maxSteps = service.GetMaxAgentSteps();
+        if (ImGui::SliderInt("Max Steps", &maxSteps, 1, 30))
+        {
+            service.SetMaxAgentSteps(maxSteps);
+        }
+        ImGui::TextDisabled("Agent loop becomes active once Phase 7 wires it in.");
+    }
+
     static void DrawAIAssistantTab(EditorContext& ctx, FEditorAIService& service)
     {
         auto status = service.GetStatus();
         bool generating = (status == EEditorAIStatus::Generating);
         auto* voiceService = ctx.engine.GetVoiceInputService();
+
+        DrawAgentSettings(service);
+        DrawAgentStepsSection(service);
 
         // Chat area
         float footerHeight = ImGui::GetFrameHeightWithSpacing() * 2.5f;
@@ -703,6 +810,21 @@ namespace Editor
         if (generating)
         {
             ImGui::EndDisabled();
+            // Stop button replaces the disabled Send footprint so the user has a
+            // way out of an in-flight agent loop.
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.18f, 0.18f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.7f, 0.25f, 0.25f, 1.0f));
+            if (ImGui::Button(ICON_FA_STOP " Stop", ImVec2(80.0f, ImGui::GetFrameHeightWithSpacing() * 1.5f)))
+            {
+                service.RequestCancel();
+            }
+            ImGui::PopStyleColor(2);
+            if (service.IsCancelRequested())
+            {
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.4f, 1.0f), "cancelling...");
+            }
         }
 
         if (voiceService && voiceService->IsEnabled())
@@ -794,6 +916,11 @@ namespace Editor
             aiService = std::make_unique<FEditorAIService>(ctx.engine);
         }
 
+        // Expose this frame's EditorContext to agent tools, then run any pending
+        // main-thread tool tasks queued by the agent worker since the last frame.
+        aiService->SetCurrentContext(&ctx);
+        aiService->PumpMainThread();
+
         if (auto* voiceService = ctx.engine.GetVoiceInputService();
             voiceService && voiceService->HasPendingResult())
         {
@@ -860,6 +987,10 @@ namespace Editor
 
             ImGui::EndTabBar();
         }
+
+        // Clear context at end of frame so background workers don't deref a stale
+        // pointer if the panel is closed next frame.
+        aiService->SetCurrentContext(nullptr);
 
         ImGui::End();
     }

@@ -51,6 +51,10 @@ set(UNIT_TEST_SOURCES
 	Application/Game/MagicaLego/MagicaLegoPlacementRules.cpp
 	Tests/Test_FlappyRng.cpp
 	Application/Game/Brotato3D/Brotato3DPcgGenerator.cpp
+	Tests/Test_AIChatProtocol.cpp
+	Tests/Test_LlamaPidFile.cpp
+	Tests/Test_AgentLoop.cpp
+	Tests/Test_RepoTools.cpp
 )
 
 list(APPEND UNIT_TEST_SOURCES Tests/Test_PhysicsComponent.cpp)
