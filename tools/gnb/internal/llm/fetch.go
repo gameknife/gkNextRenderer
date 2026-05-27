@@ -17,7 +17,7 @@ import (
 func EnsureBinaries(repoRoot string, cfg config.LLMConfig) error {
 	layout := ResolveLayout(repoRoot, cfg)
 	if _, err := os.Stat(layout.ServerBinary()); err == nil {
-		return nil
+		return repairLlamaRuntime(layout)
 	}
 	url := LlamaArchiveURL(cfg.Llama)
 	if url == "" {
@@ -57,6 +57,9 @@ func EnsureBinaries(repoRoot string, cfg config.LLMConfig) error {
 	if runtime.GOOS != "windows" {
 		_ = os.Chmod(layout.ServerBinary(), 0o755)
 		_ = os.Chmod(layout.CLIBinary(), 0o755)
+	}
+	if err := repairLlamaRuntime(layout); err != nil {
+		return err
 	}
 	console.Success("installed llama.cpp %s", filepath.Base(layout.BinDir))
 	return nil
@@ -137,4 +140,69 @@ func moveAll(src, dst string) error {
 		}
 	}
 	return nil
+}
+
+func repairLlamaRuntime(layout Layout) error {
+	if runtime.GOOS != "darwin" {
+		return nil
+	}
+	entries, err := os.ReadDir(layout.BinDir)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		alias, ok := dylibMajorAlias(name)
+		if !ok {
+			continue
+		}
+		aliasPath := filepath.Join(layout.BinDir, alias)
+		if _, err := os.Lstat(aliasPath); err == nil {
+			continue
+		}
+		if err := os.Symlink(name, aliasPath); err != nil && !os.IsExist(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func dylibMajorAlias(name string) (string, bool) {
+	if !strings.HasSuffix(name, ".dylib") {
+		return "", false
+	}
+	stem := strings.TrimSuffix(name, ".dylib")
+	parts := strings.Split(stem, ".")
+	trailingNumeric := 0
+	for i := len(parts) - 1; i >= 0; i-- {
+		if !isDigits(parts[i]) {
+			break
+		}
+		trailingNumeric++
+	}
+	if trailingNumeric < 2 {
+		return "", false
+	}
+	majorIdx := len(parts) - trailingNumeric
+	if majorIdx <= 0 {
+		return "", false
+	}
+	base := strings.Join(parts[:majorIdx], ".")
+	major := parts[majorIdx]
+	return base + "." + major + ".dylib", true
+}
+
+func isDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }

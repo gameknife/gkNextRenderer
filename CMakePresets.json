@@ -63,6 +63,7 @@
                 "rhs": "Darwin"
             },
             "cacheVariables": {
+                "CMAKE_OSX_SYSROOT": "macosx",
                 "VCPKG_TARGET_TRIPLET": "arm64-osx",
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo"
             }
