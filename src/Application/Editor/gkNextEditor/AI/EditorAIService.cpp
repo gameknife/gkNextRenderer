@@ -78,11 +78,32 @@ namespace Editor
         }
     }
 
+    void FEditorAIService::TrimConversation()
+    {
+        while (conversation_.size() > kMaxConversationMessages)
+        {
+            conversation_.erase(conversation_.begin());
+        }
+        // Keep the oldest surviving turn a user turn so a request seed never starts
+        // with an assistant message.
+        while (!conversation_.empty() && conversation_.front().role != NextAI::EChatRole::User)
+        {
+            conversation_.erase(conversation_.begin());
+        }
+    }
+
     std::string FEditorAIService::BuildAgentSystemPrompt(const EditorContext& ctx)
     {
         std::string prompt =
-            "You are the gkNextEngine editor AI agent. Use the provided tools to inspect "
-            "and modify the scene. Prefer calling tools over guessing.\n\n"
+            "You are the gkNextEngine editor AI agent. You can inspect and modify the "
+            "scene and read project source through the provided tools.\n\n"
+            "## When to use tools\n"
+            "- For greetings, small talk, general knowledge, or conceptual questions "
+            "(e.g. explaining a rendering technique), answer directly in plain text. Do "
+            "NOT call any tool.\n"
+            "- Only call tools when the request actually requires inspecting/modifying "
+            "the scene or reading project files/source. In those cases prefer calling "
+            "tools over guessing.\n\n"
             "## Rules\n"
             "1. Reply in the user's language (Chinese if the user wrote Chinese).\n"
             "2. When unsure of node names, call scene_list_nodes or scene_summary first.\n"
@@ -161,6 +182,48 @@ namespace Editor
             std::transform(value.begin(), value.end(), value.begin(),
                            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
             return value;
+        }
+
+        // The agent loop only forces a tool call (grounding retry) when the request
+        // actually touches the scene or the project source. Casual chat, greetings
+        // and conceptual questions are answered directly instead of triggering a
+        // scan of scene nodes / files. Mirrors gnb's needsGroundedFollowup gate.
+        bool NeedsGroundingReminder(const std::string& userPrompt)
+        {
+            static const char* const keywords[] = {
+                // scene / nodes / objects / transforms / components
+                "\xE5\x9C\xBA\xE6\x99\xAF", "\xE8\x8A\x82\xE7\x82\xB9", "\xE9\x80\x89\xE4\xB8\xAD",
+                "\xE7\x89\xA9\xE4\xBD\x93", "\xE5\xAF\xB9\xE8\xB1\xA1", "\xE6\xA8\xA1\xE5\x9E\x8B",
+                "\xE6\x9D\x90\xE8\xB4\xA8", "\xE7\xBA\xB9\xE7\x90\x86", "\xE8\xB4\xB4\xE5\x9B\xBE",
+                "\xE7\x81\xAF\xE5\x85\x89", "\xE5\x85\x89\xE6\xBA\x90", "\xE7\x9B\xB8\xE6\x9C\xBA",
+                "\xE6\x91\x84\xE5\x83\x8F\xE6\x9C\xBA", "\xE4\xBD\x8D\xE7\xBD\xAE", "\xE5\x9D\x90\xE6\xA0\x87",
+                "\xE7\xA7\xBB\xE5\x8A\xA8", "\xE6\x97\x8B\xE8\xBD\xAC", "\xE7\xBC\xA9\xE6\x94\xBE",
+                "\xE5\x8F\x98\xE6\x8D\xA2", "\xE5\xB1\x9E\xE6\x80\xA7", "\xE7\xBB\x84\xE4\xBB\xB6",
+                "\xE5\x88\xA0\xE9\x99\xA4", "\xE9\x87\x8D\xE5\x91\xBD\xE5\x90\x8D", "\xE5\xA4\x8D\xE5\x88\xB6",
+                "\xE6\xB7\xBB\xE5\x8A\xA0", "\xE5\x88\x9B\xE5\xBB\xBA", "\xE5\x8A\xA0\xE8\xBD\xBD",
+                "scene", "node", "select", "object", "mesh", "material", "texture",
+                "light", "camera", "position", "move", "rotate", "scale", "transform",
+                "property", "component", "rename", "delete", "duplicate", "load",
+                // source / files / spec / git
+                "\xE6\xBA\x90\xE7\xA0\x81", "\xE6\xBA\x90\xE4\xBB\xA3\xE7\xA0\x81", "\xE4\xBB\xA3\xE7\xA0\x81",
+                "\xE6\x96\x87\xE4\xBB\xB6", "\xE7\x9B\xAE\xE5\xBD\x95", "\xE7\xB1\xBB",
+                "\xE5\x87\xBD\xE6\x95\xB0", "\xE7\xBB\x93\xE6\x9E\x84\xE4\xBD\x93", "\xE5\xAE\x9E\xE7\x8E\xB0",
+                "\xE8\xB0\x83\xE7\x94\xA8", "\xE4\xBE\x9D\xE8\xB5\x96", "\xE6\x8F\x90\xE4\xBA\xA4",
+                "code", "file", "dir", "class", "function", "struct", "method", "api",
+                "implement", ".spec", "todo", "journal", "blocker", "commit", "git",
+                // engine identifiers
+                "nextengine", "gknextengine", "runtime", "application", "renderer",
+                "quickjs", "reflection", "entt", "ecs",
+            };
+            const std::string lower = ToLowerCopy(userPrompt);
+            for (const char* kw : keywords)
+            {
+                if (lower.find(kw) != std::string::npos)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
     } // namespace
 
@@ -557,6 +620,10 @@ Editor.log(message)
         statusMessage_ = "Generating...";
         cancelRequested_.store(false);
 
+        // Record the user turn before dispatching so the request seed built below
+        // carries the full multi-turn history.
+        conversation_.push_back(NextAI::FChatMessage::User(userPrompt));
+
         if (useAgentLoop_ && ai->SupportsTools())
         {
             RunAgentLoopAsync(userPrompt, ctx);
@@ -569,8 +636,15 @@ Editor.log(message)
 
     void FEditorAIService::RunLegacyAsync(const std::string& userPrompt, const EditorContext& ctx)
     {
-        std::string systemPrompt = BuildSystemPrompt(ctx);
-        std::string fullPrompt = systemPrompt + "\nUser request: " + userPrompt;
+        (void)userPrompt; // current turn already recorded in conversation_
+        std::string fullPrompt = BuildSystemPrompt(ctx);
+        fullPrompt += "\n## Conversation\n";
+        for (const auto& msg : conversation_)
+        {
+            const char* who = (msg.role == NextAI::EChatRole::Assistant) ? "Assistant" : "User";
+            fullPrompt += fmt::format("{}: {}\n", who, msg.content);
+        }
+        fullPrompt += "Assistant:";
 
         std::thread([this, fullPrompt]() {
             auto* ai = engine_.GetAIService();
@@ -588,17 +662,35 @@ Editor.log(message)
     {
         EnsureToolRegistry();
 
+        // Rebuild the (dynamic, selection-aware) system prompt each turn and prepend
+        // it to the persistent conversation history. The current user turn is already
+        // the last entry in conversation_ (appended by GenerateAsync).
         NextAI::FChatRequest seed;
         seed.messages.push_back(NextAI::FChatMessage::System(BuildAgentSystemPrompt(ctx)));
-        seed.messages.push_back(NextAI::FChatMessage::User(userPrompt));
+        for (const auto& msg : conversation_)
+        {
+            seed.messages.push_back(msg);
+        }
 
         NextAI::FAgentOptions opts;
         opts.maxSteps = maxAgentSteps_;
         opts.temperature = 0.3f;
-        opts.groundingReminder =
-            "You produced a final answer without calling any tool. If the user's request "
-            "requires looking at or modifying the scene/source, call the appropriate tool "
-            "first. Retry now.";
+        // Only force a tool call (grounding retry) when the request actually concerns
+        // the scene or project source. For casual chat / conceptual questions, leave
+        // the reminder empty so the model can answer directly instead of being pushed
+        // into scanning scene nodes or files. FAgentOptions defaults the reminder to a
+        // non-empty string, so the empty branch must be explicit.
+        if (NeedsGroundingReminder(userPrompt))
+        {
+            opts.groundingReminder =
+                "You produced a final answer without calling any tool. If the user's request "
+                "requires looking at or modifying the scene/source, call the appropriate tool "
+                "first. Retry now.";
+        }
+        else
+        {
+            opts.groundingReminder.clear();
+        }
 
         std::thread([this, seed = std::move(seed), opts]() mutable {
             auto* ai = engine_.GetAIService();
@@ -655,10 +747,20 @@ Editor.log(message)
             status_ = EEditorAIStatus::Error;
             statusMessage_ = response.message;
             SPDLOG_ERROR("[EditorAI] Generation failed: {}", response.message);
+            // Roll back the unanswered user turn so the history stays paired.
+            if (!conversation_.empty() && conversation_.back().role == NextAI::EChatRole::User)
+            {
+                conversation_.pop_back();
+            }
             return;
         }
 
         lastResponse_ = response.text;
+        if (!response.text.empty())
+        {
+            conversation_.push_back(NextAI::FChatMessage::Assistant(response.text));
+            TrimConversation();
+        }
 
         if (useAgentLoop_)
         {
