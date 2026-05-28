@@ -571,7 +571,7 @@ namespace NextAI
         if (req.model.empty()) req.model = model_;
 
         const std::string url = endpoint_ + "/v1/chat/completions";
-        const json body = BuildOpenAIChatRequestBody(req);
+        const json body = BuildOpenAIChatRequestBody(req, /*injectThinkingControl=*/true);
         FHttpResult http = HttpPostJson(url, body.dump());
         if (!http.ok)
         {

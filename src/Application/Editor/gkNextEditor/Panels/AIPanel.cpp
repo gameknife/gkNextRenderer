@@ -665,6 +665,14 @@ namespace Editor
         DrawAgentSettings(service);
         DrawAgentStepsSection(service);
 
+        if (ImGui::Button(ICON_FA_ERASER " New Chat"))
+        {
+            chatHistory.clear();
+            agentEventLog.clear();
+            service.ClearConversation();
+            chatScrollToBottom = false;
+        }
+
         // Chat area
         float footerHeight = ImGui::GetFrameHeightWithSpacing() * 2.5f;
         ImGui::BeginChild("AIChatRegion", ImVec2(0, -footerHeight), ImGuiChildFlags_None,

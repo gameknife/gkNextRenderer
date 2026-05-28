@@ -61,7 +61,7 @@ namespace NextAI
         };
     }
 
-    json BuildOpenAIChatRequestBody(const FChatRequest& req)
+    json BuildOpenAIChatRequestBody(const FChatRequest& req, bool injectThinkingControl)
     {
         json messages = json::array();
         for (const auto& m : req.messages)
@@ -124,6 +124,13 @@ namespace NextAI
                 tools.push_back(BuildToolSchemaOpenAI(t));
             }
             body["tools"] = tools;
+        }
+        if (injectThinkingControl)
+        {
+            // llama-server / Qwen3-style chat templates gate the <think> block via
+            // chat_template_kwargs.enable_thinking. Disabling it keeps reasoning out
+            // of content and avoids confusing the tool-call parser.
+            body["chat_template_kwargs"] = {{"enable_thinking", req.enableThinking}};
         }
         return body;
     }

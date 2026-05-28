@@ -92,6 +92,10 @@ namespace NextAI
         std::string model;
         float temperature = 0.7f;
         int maxTokens = 0;
+        // Whether the model should emit a reasoning/<think> block. Default off so
+        // reasoning never leaks into content or confuses tool-call parsing. Only
+        // honored by backends that accept chat_template_kwargs (llama-server).
+        bool enableThinking = false;
     };
 
     struct FChatUsage
@@ -127,7 +131,7 @@ namespace NextAI
 
     // Serializers for OpenAI-compatible /v1/chat/completions endpoints
     // (Zhipu, DeepSeek, llama-server, Ollama-with-tools).
-    nlohmann::json BuildOpenAIChatRequestBody(const FChatRequest& req);
+    nlohmann::json BuildOpenAIChatRequestBody(const FChatRequest& req, bool injectThinkingControl = false);
     FChatResponse ParseOpenAIChatResponse(const nlohmann::json& body);
 
     // Serializers for Gemini generateContent.

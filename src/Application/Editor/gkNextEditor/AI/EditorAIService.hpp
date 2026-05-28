@@ -76,6 +76,9 @@ namespace Editor
         // Direct execution of script text (for manual input)
         void ExecuteDirect(const std::string& input, EditorContext& ctx);
 
+        // Reset the multi-turn conversation history (e.g. a "New Chat" button).
+        void ClearConversation() { conversation_.clear(); }
+
         EEditorAIStatus GetStatus() const { return status_; }
         const std::string& GetStatusMessage() const { return statusMessage_; }
         bool IsAIConfigured() const;
@@ -110,6 +113,7 @@ namespace Editor
         void RunAgentLoopAsync(const std::string& userPrompt, const EditorContext& ctx);
         void RunLegacyAsync(const std::string& userPrompt, const EditorContext& ctx);
         void HarvestDeferredActions();
+        void TrimConversation();
 
         std::string BuildSceneContext(const EditorContext& ctx);
         std::string BuildSelectionContext(const EditorContext& ctx);
@@ -142,5 +146,11 @@ namespace Editor
         NextAI::FToolRegistry toolRegistry_;
         bool toolRegistryInitialized_ = false;
         EditorContext* currentContext_ = nullptr;
+
+        // Persistent multi-turn chat history (user/assistant text turns only). The
+        // dynamic system prompt is rebuilt and prepended per request, and agent-loop
+        // tool steps are not carried across turns. Accessed on the main thread only.
+        std::vector<NextAI::FChatMessage> conversation_;
+        static constexpr size_t kMaxConversationMessages = 40;
     };
 } // namespace Editor
