@@ -7,5 +7,8 @@
   "overlay-triplets": [
     "android/custom-triplets",
     "android/custom-triplets/community"
+  ],
+  "overlay-ports": [
+    "cmake/vcpkg-overlays"
   ]
 }

@@ -1,0 +1,53 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 5712cf8..06dd39c 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -361,12 +361,15 @@ set(is_clangcl "$<AND:${is_msvc_fe},$<CXX_COMPILER_ID:Clang>>")
+ # Compiler is upstream clang with the standard frontend
+ set(is_clang "$<AND:${is_gnu_fe},$<CXX_COMPILER_ID:Clang,AppleClang>>")
+ 
++include(CheckCXXCompilerFlag)
++check_cxx_compiler_flag("-ffp-model=precise" KTX_SUPPORTS_FFP_MODEL_PRECISE)
++
+ add_compile_options(
+     $<$<AND:${is_msvccl},$<VERSION_LESS:$<CXX_COMPILER_VERSION>,19.30>>:/fp:strict>
+     $<$<AND:${is_msvccl},$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,19.30>>:/fp:precise>
+     $<${is_clangcl}:/fp:precise>
+     $<$<AND:${is_clangcl},$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,14.0.0>>:-Xclang$<SEMICOLON>-ffp-contract=off>
+-    $<$<AND:${is_clang},$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,10.0.0>>:-ffp-model=precise>
++    $<$<AND:${is_clang},$<BOOL:${KTX_SUPPORTS_FFP_MODEL_PRECISE}>>:-ffp-model=precise>
+     $<${is_gnu_fe}:-ffp-contract=off>
+     # Hide noise from clang and clangcl 20 warning the 2nd fp option changes
+     # one of the settings made the first.
+diff --git a/external/astc-encoder/Source/cmake_core.cmake b/external/astc-encoder/Source/cmake_core.cmake
+index 7475d8f..3ace223 100644
+--- a/external/astc-encoder/Source/cmake_core.cmake
++++ b/external/astc-encoder/Source/cmake_core.cmake
+@@ -16,6 +16,9 @@ set(ASTCENC_TARGET astc${ASTCENC_CODEC}-${ASTCENC_ISA_SIMD})
+ project(${ASTCENC_TARGET})
+ 
+ include(cmake_compiler.cmake)
++include(CheckCXXCompilerFlag)
++
++check_cxx_compiler_flag("-ffp-model=precise" ASTCENC_SUPPORTS_FFP_MODEL_PRECISE)
+ 
+ add_library(${ASTCENC_TARGET}-static
+     STATIC
+@@ -224,7 +227,7 @@ function(astcenc_set_properties ASTCENC_TARGET_NAME ASTCENC_SHAREDLIB ASTCENC_C
+                 $<${is_clangcl}:/fp:precise>
+                 $<$<AND:${is_msvccl},$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,19.30>>:/fp:contract>
+                 $<$<AND:${is_clangcl},$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,14.0.0>>:-Xclang -ffp-contract=fast>
+-                $<$<AND:${is_clang},$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,10.0.0>>:-ffp-model=precise>
++                $<$<AND:${is_clang},$<BOOL:${ASTCENC_SUPPORTS_FFP_MODEL_PRECISE}>>:-ffp-model=precise>
+                 $<${is_gnu_fe}:-ffp-contract=fast>)
+     else()
+         # For Visual Studio prior to 2022 (compiler < 19.30) /fp:strict
+@@ -239,7 +242,7 @@ function(astcenc_set_properties ASTCENC_TARGET_NAME ASTCENC_SHAREDLIB ASTCENC_C
+                 $<$<AND:${is_msvccl},$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,19.30>>:/fp:precise>
+                 $<${is_clangcl}:/fp:precise>
+                 $<$<AND:${is_clangcl},$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,14.0.0>>:-Xclang -ffp-contract=off>
+-                $<$<AND:${is_clang},$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,10.0.0>>:-ffp-model=precise>
++                $<$<AND:${is_clang},$<BOOL:${ASTCENC_SUPPORTS_FFP_MODEL_PRECISE}>>:-ffp-model=precise>
+                 $<${is_gnu_fe}:-ffp-contract=off>)
+     endif()
+ 

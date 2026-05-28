@@ -1184,7 +1184,7 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
             float clipMinY = corners[0].y;
             float clipMaxX = corners[0].x;
             float clipMaxY = corners[0].y;
-            for (const ImVec2 corner : corners)
+            for (const ImVec2& corner : corners)
             {
                 clipMinX = std::min(clipMinX, corner.x);
                 clipMinY = std::min(clipMinY, corner.y);

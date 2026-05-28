@@ -12,6 +12,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include <cstdlib>
+
 std::unique_ptr<NextEngine> GApplication;
 std::unique_ptr<Runtime::Config::Options> GOptionPtr;
 std::unique_ptr<Runtime::Scene::GltfTestRunner> GTestRunner;
@@ -101,7 +103,11 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
     
     if (GOption->FastExit)
     {
+#if __APPLE__
+        std::exit(0);
+#else
         std::quick_exit(0);
+#endif
     }
 
     GTestRunner.reset();

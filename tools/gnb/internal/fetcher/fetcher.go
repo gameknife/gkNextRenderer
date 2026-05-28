@@ -5,6 +5,8 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"crypto/sha256"
+	"debug/macho"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -115,6 +117,13 @@ func EnsureVulkanSDK(repoRoot string, cfg config.Config) error {
 	return writeCurrentVulkanSDKVersion(installBase, spec.Version)
 }
 
+func EnsureHostBuildTools(repoRoot string, cfg config.Config) error {
+	if runtime.GOOS == "darwin" && runtime.GOARCH == "amd64" {
+		return ensureTSC(repoRoot, cfg)
+	}
+	return nil
+}
+
 func DiscoverVulkanSDK(repoRoot string, cfg config.Config) string {
 	if sdkRoot := normalizeVulkanSDKRoot(os.Getenv("VULKAN_SDK")); sdkRoot != "" {
 		return sdkRoot
@@ -179,7 +188,7 @@ func ensureTSC(repoRoot string, cfg config.Config) error {
 	dst := filepath.Join(dir, filename)
 	versionFile := filepath.Join(dir, ".tsc_version")
 	if data, err := os.ReadFile(versionFile); err == nil && strings.TrimSpace(string(data)) == cfg.External.TSC.Version {
-		if _, err := os.Stat(dst); err == nil {
+		if _, err := os.Stat(dst); err == nil && tscMatchesHostArch(dst) {
 			return nil
 		}
 	}
@@ -195,6 +204,36 @@ func ensureTSC(repoRoot string, cfg config.Config) error {
 		}
 	}
 	return os.WriteFile(versionFile, []byte(cfg.External.TSC.Version+"\n"), 0o644)
+}
+
+func tscMatchesHostArch(path string) bool {
+	if runtime.GOOS != "darwin" {
+		return true
+	}
+
+	wantCPU := macho.CpuArm64
+	if runtime.GOARCH == "amd64" {
+		wantCPU = macho.CpuAmd64
+	}
+
+	if fatFile, err := macho.OpenFat(path); err == nil {
+		defer fatFile.Close()
+		for _, arch := range fatFile.Arches {
+			if arch.Cpu == wantCPU {
+				return true
+			}
+		}
+		return false
+	} else if !errors.Is(err, macho.ErrNotFat) {
+		return false
+	}
+
+	file, err := macho.Open(path)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+	return file.Cpu == wantCPU
 }
 
 func ensureArchive(repoRoot string, url string, dstDir string, sentinel string) error {
