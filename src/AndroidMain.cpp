@@ -14,6 +14,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include <cstdlib>
+
 std::unique_ptr<NextEngine> GApplication;
 std::unique_ptr<Runtime::Config::Options> GOptionPtr;
 

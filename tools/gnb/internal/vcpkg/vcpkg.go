@@ -6,6 +6,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
+	"strings"
+	"time"
 
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/config"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
@@ -31,6 +34,69 @@ func Exe(repoRoot string, cfg config.Config) string {
 		name = "vcpkg.exe"
 	}
 	return filepath.Join(Root(repoRoot, cfg), name)
+}
+
+func ResolveCMake(repoRoot string, cfg config.Config) (string, error) {
+	if path, err := exec.LookPath("cmake"); err == nil {
+		return path, nil
+	}
+	return resolveDownloadedTool(repoRoot, cfg, cmakeToolName(), func(path string) bool {
+		binComponent := string(filepath.Separator) + "bin" + string(filepath.Separator)
+		return strings.Contains(path, binComponent)
+	})
+}
+
+func ResolveNinja(repoRoot string, cfg config.Config) (string, error) {
+	for _, name := range []string{"ninja", "ninja-build"} {
+		if path, err := exec.LookPath(name); err == nil {
+			return path, nil
+		}
+	}
+	return resolveDownloadedTool(repoRoot, cfg, ninjaToolName(), nil)
+}
+
+func EnsureBundledCMake(repoRoot string, cfg config.Config) (string, error) {
+	if path, err := exec.LookPath("cmake"); err == nil {
+		return path, nil
+	}
+	if path, err := resolveDownloadedTool(repoRoot, cfg, cmakeToolName(), func(path string) bool {
+		binComponent := string(filepath.Separator) + "bin" + string(filepath.Separator)
+		return strings.Contains(path, binComponent)
+	}); err == nil {
+		return path, nil
+	}
+	if err := Ensure(repoRoot, cfg, false); err != nil {
+		return "", err
+	}
+	if path, err := fetchTool(repoRoot, cfg, "cmake"); err == nil && path != "" {
+		return path, nil
+	} else if err != nil {
+		return "", err
+	}
+	return resolveDownloadedTool(repoRoot, cfg, cmakeToolName(), func(path string) bool {
+		binComponent := string(filepath.Separator) + "bin" + string(filepath.Separator)
+		return strings.Contains(path, binComponent)
+	})
+}
+
+func EnsureBundledNinja(repoRoot string, cfg config.Config) (string, error) {
+	for _, name := range []string{"ninja", "ninja-build"} {
+		if path, err := exec.LookPath(name); err == nil {
+			return path, nil
+		}
+	}
+	if path, err := resolveDownloadedTool(repoRoot, cfg, ninjaToolName(), nil); err == nil {
+		return path, nil
+	}
+	if err := Ensure(repoRoot, cfg, false); err != nil {
+		return "", err
+	}
+	if path, err := fetchTool(repoRoot, cfg, "ninja"); err == nil && path != "" {
+		return path, nil
+	} else if err != nil {
+		return "", err
+	}
+	return resolveDownloadedTool(repoRoot, cfg, ninjaToolName(), nil)
 }
 
 func Ensure(repoRoot string, cfg config.Config, refresh bool) error {
@@ -88,4 +154,88 @@ func run(dir string, name string, args ...string) error {
 		return fmt.Errorf("%s failed: %w", name, err)
 	}
 	return nil
+}
+
+func cmakeToolName() string {
+	if runtime.GOOS == "windows" {
+		return "cmake.exe"
+	}
+	return "cmake"
+}
+
+func ninjaToolName() string {
+	if runtime.GOOS == "windows" {
+		return "ninja.exe"
+	}
+	return "ninja"
+}
+
+func resolveDownloadedTool(repoRoot string, cfg config.Config, toolName string, filter func(string) bool) (string, error) {
+	toolsRoot := filepath.Join(Root(repoRoot, cfg), "downloads", "tools")
+	type toolMatch struct {
+		path    string
+		modTime time.Time
+	}
+	var matches []toolMatch
+	_ = filepath.WalkDir(toolsRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d == nil || d.IsDir() {
+			return nil
+		}
+		if filepath.Base(path) != toolName {
+			return nil
+		}
+		if filter != nil && !filter(path) {
+			return nil
+		}
+		info, statErr := d.Info()
+		if statErr != nil {
+			return nil
+		}
+		matches = append(matches, toolMatch{path: path, modTime: info.ModTime()})
+		return nil
+	})
+
+	if len(matches) == 0 {
+		return "", fmt.Errorf("%s not found in PATH and no bundled vcpkg copy was found under %s", toolName, toolsRoot)
+	}
+
+	sort.Slice(matches, func(i int, j int) bool {
+		if matches[i].modTime.Equal(matches[j].modTime) {
+			return matches[i].path < matches[j].path
+		}
+		return matches[i].modTime.Before(matches[j].modTime)
+	})
+	return matches[len(matches)-1].path, nil
+}
+
+func fetchTool(repoRoot string, cfg config.Config, tool string) (string, error) {
+	output, err := runCapture(repoRoot, Exe(repoRoot, cfg), "fetch", tool)
+	if err != nil {
+		return "", err
+	}
+
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		if filepath.IsAbs(line) {
+			return line, nil
+		}
+	}
+	return "", nil
+}
+
+func runCapture(dir string, name string, args ...string) (string, error) {
+	console.Command(name, args...)
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("%s failed: %w", name, err)
+	}
+	return string(output), nil
 }

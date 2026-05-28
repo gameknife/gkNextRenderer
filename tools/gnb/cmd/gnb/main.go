@@ -59,9 +59,9 @@ func main() {
 	// else fails fast with a friendly hint instead of crashing inside a
 	// command implementation that assumed a repo root.
 	repolessCommands := map[string]bool{
-		"init":      true,
-		"help":      true,
-		"version":   true,
+		"init":       true,
+		"help":       true,
+		"version":    true,
 		"completion": true,
 	}
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
@@ -155,7 +155,7 @@ func newDoctorCommand(ctx appContext) *cobra.Command {
 		Use:   "doctor",
 		Short: "Check required build tools",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			checks := []string{"git", "cmake"}
+			checks := []string{"git"}
 			if runtime.GOOS == "linux" {
 				checks = append(checks, "pkg-config")
 			}
@@ -171,11 +171,39 @@ func newDoctorCommand(ctx appContext) *cobra.Command {
 					failed = true
 				}
 			}
-			if runtime.GOOS == "windows" && os.Getenv("VULKAN_SDK") == "" {
-				if fetcher.DiscoverVulkanSDK(ctx.repoRoot, ctx.cfg) != "" {
-					console.Success("project Vulkan SDK")
+			if cmakePath, err := vcpkg.ResolveCMake(ctx.repoRoot, ctx.cfg); err == nil {
+				if platform.CommandExists("cmake") {
+					console.Success("cmake")
+				} else {
+					console.Success("cmake (bundled)")
+					console.Label("cmake-path", cmakePath)
+				}
+			} else {
+				console.Warn("missing cmake")
+				failed = true
+			}
+			if runtime.GOOS == "linux" || runtime.GOOS == "darwin" {
+				if ninjaPath, err := vcpkg.ResolveNinja(ctx.repoRoot, ctx.cfg); err == nil {
+					if platform.CommandExists("ninja") || platform.CommandExists("ninja-build") {
+						console.Success("ninja")
+					} else {
+						console.Success("ninja (bundled)")
+						console.Label("ninja-path", ninjaPath)
+					}
+				} else {
+					console.Warn("missing ninja")
+					failed = true
+				}
+			}
+			if runtime.GOOS == "windows" || runtime.GOOS == "linux" || runtime.GOOS == "darwin" {
+				if sdkRoot := fetcher.DiscoverVulkanSDK(ctx.repoRoot, ctx.cfg); sdkRoot != "" {
+					console.Success("Vulkan SDK")
+					console.Label("vulkan-sdk-path", sdkRoot)
 				} else {
 					console.Warn("missing Vulkan SDK (run `gnb setup`)")
+					if envRoot := os.Getenv("VULKAN_SDK"); envRoot != "" {
+						console.Label("VULKAN_SDK", envRoot)
+					}
 					failed = true
 				}
 			}
@@ -274,10 +302,26 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 					}
 				}
 			}
+			if !opts.PrintCmd {
+				if err := fetcher.EnsureHostBuildTools(ctx.repoRoot, ctx.cfg); err != nil {
+					return err
+				}
+			}
 			if err := platform.EnsureLinuxDesktopPackages(); err != nil {
 				return err
 			}
-			return cmakerun.Build(ctx.repoRoot, ctx.preset, opts)
+			cmakePath, err := vcpkg.EnsureBundledCMake(ctx.repoRoot, ctx.cfg)
+			if err != nil {
+				return err
+			}
+			if ctx.preset == "linux" || ctx.preset == "macos-arm64" {
+				ninjaPath, err := vcpkg.EnsureBundledNinja(ctx.repoRoot, ctx.cfg)
+				if err != nil {
+					return err
+				}
+				opts.MakeProgram = ninjaPath
+			}
+			return cmakerun.BuildWithCMake(ctx.repoRoot, cmakePath, ctx.preset, opts)
 		},
 	}
 	cmd.Flags().BoolVar(&opts.Clean, "clean", false, "delete the CMake build directory before building")
@@ -462,7 +506,11 @@ func newIOSCommand(ctx appContext) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return ios.Build(ctx.repoRoot, skip)
+			cmakePath, err := vcpkg.ResolveCMake(ctx.repoRoot, ctx.cfg)
+			if err != nil {
+				return err
+			}
+			return ios.Build(ctx.repoRoot, cmakePath, skip)
 		},
 	}
 	cmd.Flags().BoolVar(&skipCodeSign, "skip-codesign", true, "disable code signing")

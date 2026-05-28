@@ -71,6 +71,17 @@ namespace Editor
             }
         };
 
+        struct FilesystemPathHash
+        {
+            size_t operator()(const std::filesystem::path& path) const
+            {
+                return std::hash<std::string>{}(path.string());
+            }
+        };
+
+        using DirectoryEntries = std::vector<std::filesystem::directory_entry>;
+        using DirectoryCache = std::unordered_map<std::filesystem::path, DirectoryEntries, FilesystemPathHash>;
+
         ContentGridLayout BeginContentGrid()
         {
             const float windowWidth = ImGui::GetContentRegionAvail().x;
@@ -149,9 +160,7 @@ namespace Editor
             return ResolveAssetVisualForExtension(ext);
         }
 
-        std::vector<std::filesystem::directory_entry>& GetCachedDirectoryEntries(
-            const std::filesystem::path& path,
-            std::unordered_map<std::filesystem::path, std::vector<std::filesystem::directory_entry>>& directoryCache)
+        DirectoryEntries& GetCachedDirectoryEntries(const std::filesystem::path& path, DirectoryCache& directoryCache)
         {
             auto it = directoryCache.find(path);
             if (it != directoryCache.end())
@@ -159,7 +168,7 @@ namespace Editor
                 return it->second;
             }
 
-            std::vector<std::filesystem::directory_entry> entries;
+            DirectoryEntries entries;
             std::error_code error;
             std::filesystem::directory_iterator dirIt(path, error);
             if (error)
@@ -211,7 +220,7 @@ namespace Editor
         void DrawDirectoryTreeNode(
             const std::filesystem::path& directoryPath,
             std::filesystem::path& currentPath,
-            std::unordered_map<std::filesystem::path, std::vector<std::filesystem::directory_entry>>& directoryCache,
+            DirectoryCache& directoryCache,
             bool isRoot)
         {
             auto& entries = GetCachedDirectoryEntries(directoryPath, directoryCache);
@@ -284,8 +293,7 @@ namespace Editor
 
         void DrawContentBrowserSidebar(EditorUiState& ui, const std::filesystem::path& rootPath,
                                        std::filesystem::path& currentPath,
-                                       std::unordered_map<std::filesystem::path,
-                                                          std::vector<std::filesystem::directory_entry>>& directoryCache)
+                                       DirectoryCache& directoryCache)
         {
             (void)ui;
             ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.48f));
@@ -305,8 +313,7 @@ namespace Editor
 
         void DrawContentBrowserNavigation(EditorUiState& ui, const std::filesystem::path& rootPath,
                                           std::filesystem::path& currentPath,
-                                          std::unordered_map<std::filesystem::path,
-                                                             std::vector<std::filesystem::directory_entry>>& directoryCache)
+                                          DirectoryCache& directoryCache)
         {
             const std::string rootStr = rootPath.string();
             const std::string curStr = currentPath.string();
@@ -602,8 +609,7 @@ namespace Editor
             static const std::filesystem::path rootPath =
                 std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets"));
             static std::filesystem::path currentPath = rootPath;
-            static std::unordered_map<std::filesystem::path, std::vector<std::filesystem::directory_entry>>
-                directoryCache;
+            static DirectoryCache directoryCache;
             static ImGuiTextFilter contentFilter;
             int itemCount = 0;
             int selectedCount = ui.selectedContentItemId != InvalidId ? 1 : 0;

@@ -25,7 +25,11 @@ if (UNIX AND !ANDROID)
 endif ()
 
 if (APPLE)
-    target_link_options(gk_project_options INTERFACE "-Wl,-no_warn_duplicate_libraries")
+    include(CheckLinkerFlag)
+    check_linker_flag(CXX "-Wl,-no_warn_duplicate_libraries" GK_HAS_NO_WARN_DUPLICATE_LIBRARIES)
+    if (GK_HAS_NO_WARN_DUPLICATE_LIBRARIES)
+        target_link_options(gk_project_options INTERFACE "-Wl,-no_warn_duplicate_libraries")
+    endif()
 endif()
 
 # LTO/LTCG - Disabled by default (slows down build), enable with -DENABLE_LTO=ON
