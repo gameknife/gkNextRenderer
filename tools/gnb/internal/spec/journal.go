@@ -3,7 +3,6 @@ package spec
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -198,6 +197,3 @@ func ReadIfExists(path string) (string, bool) {
 	}
 	return string(data), true
 }
-
-// Sanity: ensure JournalDir/BlockerDir/SpecsDir helpers are usable by callers.
-var _ = filepath.Join

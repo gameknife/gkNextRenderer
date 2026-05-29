@@ -647,14 +647,6 @@ func newLocCommand(ctx appContext) *cobra.Command {
 	return cmd
 }
 
-func printOverview(ctx appContext) error {
-	console.Label("repo", ctx.repoRoot)
-	console.Label("platform", runtime.GOOS+"/"+runtime.GOARCH)
-	console.Label("preset", ctx.preset)
-	console.Info("try: gnb setup | gnb build | gnb doctor")
-	return nil
-}
-
 func gitCommit(repoRoot string) (string, error) {
 	cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
 	cmd.Dir = repoRoot

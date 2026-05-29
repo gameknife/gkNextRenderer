@@ -1,7 +1,6 @@
 package spec
 
 import (
-	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -202,6 +201,3 @@ func insertPlaceholderIfEmpty(d *Document, section SectionKind) {
 		}
 	}
 }
-
-// formattedRange is a tiny helper retained for testing; unused at runtime.
-var _ = fmt.Sprintf

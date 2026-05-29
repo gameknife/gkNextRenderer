@@ -13,7 +13,6 @@ import (
 	"html/template"
 	"net"
 	"net/http"
-	"os"
 	"os/exec"
 	"os/user"
 	"runtime"
@@ -367,6 +366,3 @@ func formatElapsedDuration(d time.Duration) string {
 	seconds := totalSeconds % 60
 	return fmt.Sprintf("%d min %d sec", minutes, seconds)
 }
-
-// ensureStatusDir is unused but kept to make adding new mkdir-on-demand cases trivial.
-var _ = os.MkdirAll

@@ -5,6 +5,8 @@ tests, optional pak assets, packaging, and mobile build entry points.
 
 Architecture and stack overview: [`docs/gnb-tech-stack.md`](../../docs/gnb-tech-stack.md)
 
+Source-level code & architecture guide (for editing `gnb` itself): [`docs/gnb-architecture.md`](../../docs/gnb-architecture.md)
+
 Build locally from the repository root:
 
 ```bash
