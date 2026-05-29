@@ -240,21 +240,7 @@ void CharacterDemoAIController::Update(float deltaSeconds, const CharacterDemoAI
 
 const char* CharacterDemoAIController::GetStateName(EAIBotState state)
 {
-    switch (state)
-    {
-    case EAIBotState::Disabled:
-        return "Disabled";
-    case EAIBotState::Patrol:
-        return "Patrol";
-    case EAIBotState::Chase:
-        return "Chase";
-    case EAIBotState::Evade:
-        return "Evade";
-    case EAIBotState::Attack:
-        return "Attack";
-    default:
-        return "Unknown";
-    }
+    return NextGameplay::GetAIAgentStateName(state);
 }
 
 NextGameplay::CharacterActor& CharacterDemoAIController::GetAICharacter()

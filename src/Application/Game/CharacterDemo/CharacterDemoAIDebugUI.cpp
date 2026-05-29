@@ -11,23 +11,6 @@ namespace CharacterDemoAIDebugUI
     namespace
     {
         using EBehaviorDebugState = NextGameplay::EBehaviorDebugState;
-
-        const char* GetBehaviorStateLabel(EBehaviorDebugState state)
-        {
-            switch (state)
-            {
-            case EBehaviorDebugState::Inactive:
-                return "Inactive";
-            case EBehaviorDebugState::Failure:
-                return "Failure";
-            case EBehaviorDebugState::Success:
-                return "Success";
-            case EBehaviorDebugState::Running:
-                return "Running";
-            default:
-                return "Unknown";
-            }
-        }
     }
 
     void DrawMenu(const FContext& context)
@@ -134,7 +117,7 @@ namespace CharacterDemoAIDebugUI
             const ImVec2 subtitleSize = ImGui::CalcTextSize(subtitle);
             drawList->AddText(ImVec2(center.x - subtitleSize.x * 0.5f, min.y + 56.0f), IM_COL32(186, 194, 204, 220), subtitle);
 
-            const char* stateLabel = GetBehaviorStateLabel(state);
+            const char* stateLabel = NextGameplay::GetBehaviorDebugStateName(state);
             const ImVec2 stateSize = ImGui::CalcTextSize(stateLabel);
             const ImVec2 badgeMin(max.x - stateSize.x - 24.0f, min.y + 10.0f);
             const ImVec2 badgeMax(max.x - 12.0f, min.y + 28.0f);
