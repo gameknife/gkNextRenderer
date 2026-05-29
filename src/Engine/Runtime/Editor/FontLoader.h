@@ -15,6 +15,7 @@ namespace NextUI::FontLoader
         const char* extraGlyphsUtf8 = nullptr;
         const ImWchar* glyphRanges = nullptr;
         const ImFontConfig* fontConfig = nullptr;
+        float rasterizerDensity = 2.0f;
         bool warnOnFailure = true;
         bool setAsDefault = false;
     };
