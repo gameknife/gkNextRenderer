@@ -583,6 +583,18 @@ float Brotato3DGameInstance::SampleArenaGroundY(const glm::vec3& worldPos) const
                                              glm::vec2(worldPos.x, worldPos.z));
 }
 
+glm::vec3 Brotato3DGameInstance::ResolveEnemyGroundedPosition(const Brotato3D::FEnemyRuntime& enemy, glm::vec3 candidate) const
+{
+    candidate = ClampToArena(candidate, enemy.radius, arenaHalfExtent_);
+    candidate = ResolveExtractionVehicleCollision(candidate, enemy.radius);
+    candidate = ClampToArena(candidate, enemy.radius, arenaHalfExtent_);
+    if (enemy.def)
+    {
+        candidate.y = enemy.def->size.y * 0.5f + SampleArenaGroundY(candidate);
+    }
+    return candidate;
+}
+
 void Brotato3DGameInstance::UpdateCombatEffects(double deltaSeconds)
 {
     const float deltaMs = static_cast<float>(deltaSeconds * 1000.0);

@@ -19,7 +19,7 @@ Brotato3D 是一款 **C++ 原生** 子应用（不是 QuickJS 脚本游戏），
 
 | 路径 | 内容 |
 | --- | --- |
-| [src/Application/Brotato3D/](../../../src/Application/Brotato3D) | 全部 C++ 源码（22 个 cpp/hpp） |
+| [src/Application/Game/Brotato3D/](../../../src/Application/Game/Brotato3D) | 全部 C++ 源码（32 个 cpp/hpp） |
 | [assets/configs/brotato3d/](../../../assets/configs/brotato3d) | 9 个 JSON 配置（敌人/武器/角色/波次/物品/商店/升级/场景/i18n） |
 | `assets/_placeholder/brotato/` | 占位音频、字体、UI 图标（参考资源，**不可分发**） |
 
@@ -29,21 +29,21 @@ Brotato3D 是一款 **C++ 原生** 子应用（不是 QuickJS 脚本游戏），
 
 | 系统 | 关键源文件 | 说明 |
 | --- | --- | --- |
-| 入口 / 状态机 | [Brotato3DGameInstance.cpp](../../../src/Application/Brotato3D/Brotato3DGameInstance.cpp), [Brotato3DGameFlowSystem.cpp](../../../src/Application/Brotato3D/Brotato3DGameFlowSystem.cpp) | `OnTick` 主循环、`EAppState` 状态切换、Best Record 持久化 |
-| 玩家 | [Brotato3DPlayerSystem.cpp](../../../src/Application/Brotato3D/Brotato3DPlayerSystem.cpp) | 移动、Dash、瞄准、HP、属性合并 |
-| 武器 / 弹道 | [Brotato3DProjectileSystem.cpp](../../../src/Application/Brotato3D/Brotato3DProjectileSystem.cpp) | 自动开火、Tier 升级、命中、爆炸、激光 |
-| 战斗 | [Brotato3DCombatSystem.cpp](../../../src/Application/Brotato3D/Brotato3DCombatSystem.cpp) | 受伤、被动 Item 触发器、低血怒等 |
-| 敌人 AI | [Brotato3DEnemySystem.cpp](../../../src/Application/Brotato3D/Brotato3DEnemySystem.cpp) | 普通追击、Charge、Bomb、Heal、Mortar、Lance、Boss 二阶段 |
-| 波次 / 黄昏 | [Brotato3DWaveSystem.cpp](../../../src/Application/Brotato3D/Brotato3DWaveSystem.cpp) | Active → DuskSurge → Intermission 状态机 |
-| 商店 / 升级 | [Brotato3DShopSystem.cpp](../../../src/Application/Brotato3D/Brotato3DShopSystem.cpp), [Brotato3DShop.cpp](../../../src/Application/Brotato3D/Brotato3DShop.cpp) | 4 卡商店、Reroll、武器合并 |
-| 战利品 / 物理碎块 | [Brotato3DDebrisSystem.cpp](../../../src/Application/Brotato3D/Brotato3DDebrisSystem.cpp) | XP/Material 碎块池、Jolt 物理体、磁吸 |
-| 视觉效果 | [Brotato3DEffectSystem.cpp](../../../src/Application/Brotato3D/Brotato3DEffectSystem.cpp) | 屏幕震动、爆炸环、激光束、地面警示 |
-| 数据加载 | [Brotato3DDataLoader.cpp](../../../src/Application/Brotato3D/Brotato3DDataLoader.cpp) | 所有 JSON → 内存结构体 |
-| UI / HUD | [Brotato3DUI.cpp](../../../src/Application/Brotato3D/Brotato3DUI.cpp) | ImGui 主菜单、HUD、升级/商店/结算面板 |
-| 音频 | [Brotato3DAudio.hpp](../../../src/Application/Brotato3D/Brotato3DAudio.hpp) | 全部 SFX/BGM 通道集中在此 header（inline 函数） |
-| 资源路径 | [Brotato3DAssetPaths.hpp](../../../src/Application/Brotato3D/Brotato3DAssetPaths.hpp) | `assets/_placeholder/brotato/` 解析 |
+| 入口 / 状态机 | [Brotato3DGameInstance.cpp](../../../src/Application/Game/Brotato3D/Brotato3DGameInstance.cpp), [Brotato3DGameFlowSystem.cpp](../../../src/Application/Game/Brotato3D/Brotato3DGameFlowSystem.cpp) | `OnTick` 主循环、`EAppState` 状态切换、Best Record 持久化 |
+| 玩家 | [Brotato3DPlayerSystem.cpp](../../../src/Application/Game/Brotato3D/Brotato3DPlayerSystem.cpp) | 移动、Dash、瞄准、HP、属性合并 |
+| 武器 / 弹道 | [Brotato3DProjectileSystem.cpp](../../../src/Application/Game/Brotato3D/Brotato3DProjectileSystem.cpp) | 自动开火、Tier 升级、命中、爆炸、激光 |
+| 战斗 | [Brotato3DCombatSystem.cpp](../../../src/Application/Game/Brotato3D/Brotato3DCombatSystem.cpp) | 受伤、被动 Item 触发器、低血怒等 |
+| 敌人 AI | [Brotato3DEnemySystem.cpp](../../../src/Application/Game/Brotato3D/Brotato3DEnemySystem.cpp) | 普通追击、Charge、Bomb、Heal、Mortar、Lance、Boss 二阶段 |
+| 波次 / 黄昏 | [Brotato3DWaveSystem.cpp](../../../src/Application/Game/Brotato3D/Brotato3DWaveSystem.cpp) | Active → DuskSurge → Intermission 状态机 |
+| 商店 / 升级 | [Brotato3DShopSystem.cpp](../../../src/Application/Game/Brotato3D/Brotato3DShopSystem.cpp), [Brotato3DShop.cpp](../../../src/Application/Game/Brotato3D/Brotato3DShop.cpp) | 4 卡商店、Reroll、武器合并 |
+| 战利品 / 物理碎块 | [Brotato3DDebrisSystem.cpp](../../../src/Application/Game/Brotato3D/Brotato3DDebrisSystem.cpp) | XP/Material 碎块池、Jolt 物理体、磁吸 |
+| 视觉效果 | [Brotato3DEffectSystem.cpp](../../../src/Application/Game/Brotato3D/Brotato3DEffectSystem.cpp) | 屏幕震动、爆炸环、激光束、地面警示 |
+| 数据加载 | [Brotato3DDataLoader.cpp](../../../src/Application/Game/Brotato3D/Brotato3DDataLoader.cpp) | 所有 JSON → 内存结构体 |
+| UI / HUD | [Brotato3DUI.cpp](../../../src/Application/Game/Brotato3D/Brotato3DUI.cpp) | ImGui 主菜单、HUD、升级/商店/结算面板 |
+| 音频 | [Brotato3DAudio.hpp](../../../src/Application/Game/Brotato3D/Brotato3DAudio.hpp) | 全部 SFX/BGM 通道集中在此 header（inline 函数） |
+| 资源路径 | [Brotato3DAssetPaths.hpp](../../../src/Application/Game/Brotato3D/Brotato3DAssetPaths.hpp) | `assets/_placeholder/brotato/` 解析 |
 
-### 1.2 核心数据结构（在 [Brotato3DDataLoader.hpp](../../../src/Application/Brotato3D/Brotato3DDataLoader.hpp) 定义）
+### 1.2 核心数据结构（在 [Brotato3DDataLoader.hpp](../../../src/Application/Game/Brotato3D/Brotato3DDataLoader.hpp) 定义）
 
 | 结构体 | 来源 JSON | 说明 |
 | --- | --- | --- |
@@ -60,22 +60,22 @@ Brotato3D 是一款 **C++ 原生** 子应用（不是 QuickJS 脚本游戏），
 
 ## 2. 游戏循环与状态机
 
-`EAppState`（在 [Brotato3DGameInstance.hpp:23](../../../src/Application/Brotato3D/Brotato3DGameInstance.hpp)）：
+`EAppState`（在 [Brotato3DGameInstance.hpp:23](../../../src/Application/Game/Brotato3D/Brotato3DGameInstance.hpp)）：
 
 ```
 MainMenu → CharacterSelect → Playing ⇄ {Hitstop, Paused, LevelUpPicking, Shopping} → Result
 ```
 
-`OnTick` 流程（[Brotato3DGameInstance.cpp:136](../../../src/Application/Brotato3D/Brotato3DGameInstance.cpp)）：
+`OnTick` 流程（[Brotato3DGameInstance.cpp:136](../../../src/Application/Game/Brotato3D/Brotato3DGameInstance.cpp)）：
 
 1. 屏幕震动 / 受伤闪烁 / 天空过渡 / 相机跟随都是**实时**（不受 timeScale 影响）。
-2. `globalTimeScale_`：Boss 击杀后 1.2 秒慢动作（0.4 → 1.0 缓动），武器开火**仍是实时**，子弹/敌人/碎块用 `effectiveDt`（注释见 [Brotato3DProjectileSystem.cpp:59](../../../src/Application/Brotato3D/Brotato3DProjectileSystem.cpp)），这是有意为之的"savor the kill"演出，**不要"修复"它**。
+2. `globalTimeScale_`：Boss 击杀后 1.2 秒慢动作（0.4 → 1.0 缓动），武器开火**仍是实时**，子弹/敌人/碎块用 `effectiveDt`（注释见 [Brotato3DProjectileSystem.cpp:59](../../../src/Application/Game/Brotato3D/Brotato3DProjectileSystem.cpp)），这是有意为之的"savor the kill"演出，**不要"修复"它**。
 3. 子系统按顺序：Player → Weapons → Projectiles → Enemies → EnemyProjectiles → Items 触发器 → 撤离车 → WaveSystem。
 4. WaveSystem 通过事件 (`ConsumeWaveEnded` 等) 通知主类何时清场、刷新商店、触发胜利。
 
 ### 2.1 波次状态机
 
-[Brotato3DWaveSystem.cpp](../../../src/Application/Brotato3D/Brotato3DWaveSystem.cpp)：
+[Brotato3DWaveSystem.cpp](../../../src/Application/Game/Brotato3D/Brotato3DWaveSystem.cpp)：
 
 ```
 Idle → Active → (waveTimeRemainingSec → 0) → DuskSurge → (玩家进入撤离车持续 extractionRequiredSec) → Intermission(=商店) → 下一波
@@ -90,7 +90,7 @@ Idle → Active → (waveTimeRemainingSec → 0) → DuskSurge → (玩家进入
 ### 2.2 经验与升级
 
 - 击杀敌人喷出 `materialDrop` 个 Material 碎块；每点造成的伤害都喷一个 XP 碎块（[loot-overhaul-plan.md](loot-overhaul-plan.md)）。
-- 升级所需 XP：[Brotato3DPlayerSystem.cpp:380](../../../src/Application/Brotato3D/Brotato3DPlayerSystem.cpp)
+- 升级所需 XP：[Brotato3DPlayerSystem.cpp:380](../../../src/Application/Game/Brotato3D/Brotato3DPlayerSystem.cpp)
   ```cpp
   return 20 + level * 10 + level * level * 2;
   ```
@@ -99,7 +99,7 @@ Idle → Active → (waveTimeRemainingSec → 0) → DuskSurge → (玩家进入
 ### 2.3 玩家属性合并
 
 最终值 = `角色 startStats` + 升级卡累加 + 被动 Item 加成 + 动态 buff（低血怒等）。
-合并函数 `GetEffectiveStats()` 见 [Brotato3DShopSystem.cpp:206](../../../src/Application/Brotato3D/Brotato3DShopSystem.cpp)。
+合并函数 `GetEffectiveStats()` 见 [Brotato3DShopSystem.cpp:206](../../../src/Application/Game/Brotato3D/Brotato3DShopSystem.cpp)。
 
 | Stat 字段 | 含义 | 修改方 |
 | --- | --- | --- |
@@ -112,7 +112,7 @@ Idle → Active → (waveTimeRemainingSec → 0) → DuskSurge → (玩家进入
 | `critChancePct` `critMultiplier` | 暴击率 / 暴击倍率 | character / 升级卡 |
 | `dashChargeBonus` | Dash 豆数 | `spare_capacitor` |
 
-伤害计算（[Brotato3DProjectileSystem.cpp:376](../../../src/Application/Brotato3D/Brotato3DProjectileSystem.cpp)）：
+伤害计算（[Brotato3DProjectileSystem.cpp:376](../../../src/Application/Game/Brotato3D/Brotato3DProjectileSystem.cpp)）：
 
 ```
 damage = round(weapon.damage * (1 + damagePct) + damageFlat)
@@ -173,7 +173,7 @@ crit   = round(damage * critMultiplier) when rng < (critChancePct + weapon.critC
 
 **让新敌人出场**：在 [waves.json](../../../assets/configs/brotato3d/waves.json) 对应波次的 `spawns` 数组里加 `{"enemyId":"slime","count":N,"intervalMs":M}`。
 
-**视觉**：当前所有敌人都是程序化盒子，模型是按 `size` 自动生成的（[Brotato3DEffectSystem.cpp:241](../../../src/Application/Brotato3D/Brotato3DEffectSystem.cpp)）。颜色取自 `color`，并自动派生 4 个材质：基础 / 暗化 / 命中白闪 / 红色警告 / Boss 二阶段红。**不需要**自己写材质代码。
+**视觉**：当前所有敌人都是程序化盒子，模型是按 `size` 自动生成的（[Brotato3DEffectSystem.cpp:241](../../../src/Application/Game/Brotato3D/Brotato3DEffectSystem.cpp)）。颜色取自 `color`，并自动派生 4 个材质：基础 / 暗化 / 命中白闪 / 红色警告 / Boss 二阶段红。**不需要**自己写材质代码。
 
 **HUD 图标**（可选）：放置 `assets/_placeholder/brotato/ui/icons/enemies/<enemyId>.png`。文件不存在不会报错，只是 HUD 不显示。
 
@@ -201,13 +201,13 @@ crit   = round(damage * critMultiplier) when rng < (critChancePct + weapon.critC
 | `knockbackMeters` | 击退距离（米） | Boss 自动 ×0.25，大型怪按尺寸缩减 |
 | `tier` | 武器等级 | 始终是 1，2 级由商店购买重复 1 级武器自动合并产生 |
 
-**Tier 升级公式**（[Brotato3DProjectileSystem.cpp:408](../../../src/Application/Brotato3D/Brotato3DProjectileSystem.cpp)，硬编码）：
+**Tier 升级公式**（[Brotato3DProjectileSystem.cpp:408](../../../src/Application/Game/Brotato3D/Brotato3DProjectileSystem.cpp)，硬编码）：
 - `damage * 1.5`
 - `atkSpeedHz * 1.2`
 - `knockbackMeters * 1.15`
 - 名字加 ★
 
-商店里购买重复的 1 级武器即合并；玩家最多 6 把武器。商店武器的卡价格写死在 [Brotato3DShop.cpp:46](../../../src/Application/Brotato3D/Brotato3DShop.cpp)（smg/shotgun=8、sniper/laser=14、其它=18）。**这是非配置数据**，新增武器请同步修改这段 if/else。
+商店里购买重复的 1 级武器即合并；玩家最多 6 把武器。商店武器的卡价格写死在 [Brotato3DShop.cpp:46](../../../src/Application/Game/Brotato3D/Brotato3DShop.cpp)（smg/shotgun=8、sniper/laser=14、其它=18）。**这是非配置数据**，新增武器请同步修改这段 if/else。
 
 **实例：等离子手枪**
 
@@ -226,7 +226,7 @@ crit   = round(damage * critMultiplier) when rng < (critChancePct + weapon.critC
 }
 ```
 
-**音频**：[Brotato3DAudio.hpp:42](../../../src/Application/Brotato3D/Brotato3DAudio.hpp) `PlayWeaponFireSfx()` 是一个写死的 if-chain。新增武器请加一个分支或 fallback 到 SMG 音效。
+**音频**：[Brotato3DAudio.hpp:42](../../../src/Application/Game/Brotato3D/Brotato3DAudio.hpp) `PlayWeaponFireSfx()` 是一个写死的 if-chain。新增武器请加一个分支或 fallback 到 SMG 音效。
 
 ### 3.3 新增 / 调整一个角色
 
@@ -248,7 +248,7 @@ crit   = round(damage * critMultiplier) when rng < (critChancePct + weapon.critC
 }
 ```
 
-`startStats` 字段集合见 [`ReadPlayerStats`](../../../src/Application/Brotato3D/Brotato3DDataLoader.cpp)。`color` 同时用于角色模型主体材质、Dash 拖尾、玩家受伤碎块色（[Brotato3DPlayerSystem.cpp:555](../../../src/Application/Brotato3D/Brotato3DPlayerSystem.cpp)）。
+`startStats` 字段集合见 [`ReadPlayerStats`](../../../src/Application/Game/Brotato3D/Brotato3DDataLoader.cpp)。`color` 同时用于角色模型主体材质、Dash 拖尾、玩家受伤碎块色（[Brotato3DPlayerSystem.cpp:555](../../../src/Application/Game/Brotato3D/Brotato3DPlayerSystem.cpp)）。
 
 可选：`assets/_placeholder/brotato/ui/icons/characters/<id>.png` 用于角色选择面板。
 
@@ -260,7 +260,7 @@ crit   = round(damage * critMultiplier) when rng < (critChancePct + weapon.critC
 {"id":"crit_chance","name":"+8% Crit Chance","stat":"critChancePct","delta":0.08,"weight":2}
 ```
 
-`stat` 必须匹配 [Brotato3DShopSystem.cpp:99](../../../src/Application/Brotato3D/Brotato3DShopSystem.cpp) `ApplyShopItem()` 的分支之一：`damagePct / damageFlat / atkSpeedPct / rangePct / moveSpeedPct / pickupRadiusPct / critChancePct / critMultiplier / maxHpFlat / healPct`。如果用了不在列表里的字段，**不会生效也不会报错**。
+`stat` 必须匹配 [Brotato3DShopSystem.cpp:99](../../../src/Application/Game/Brotato3D/Brotato3DShopSystem.cpp) `ApplyShopItem()` 的分支之一：`damagePct / damageFlat / atkSpeedPct / rangePct / moveSpeedPct / pickupRadiusPct / critChancePct / critMultiplier / maxHpFlat / healPct`。如果用了不在列表里的字段，**不会生效也不会报错**。
 
 `weight` 是抽卡权重；想做"罕见卡"就把权重调到 1，常见卡是 3。
 
@@ -283,7 +283,7 @@ crit   = round(damage * critMultiplier) when rng < (critChancePct + weapon.critC
 | `low_hp_buff` | `stat_damagePct` | 低于 HP 阈值时加伤害 | `value`, `threshold` (0~1) |
 | `on_dash_end` | `dash_knockback` | 冲刺结束推开附近敌人 | `value`, `explosionRadius`, `explosionDamage` |
 
-> **加新 trigger/effect 必须改 C++**：[Brotato3DCombatSystem.cpp:42-150](../../../src/Application/Brotato3D/Brotato3DCombatSystem.cpp) 和 [Brotato3DShopSystem.cpp:168 ApplyPassiveItemStats](../../../src/Application/Brotato3D/Brotato3DShopSystem.cpp)。
+> **加新 trigger/effect 必须改 C++**：[Brotato3DCombatSystem.cpp:42-150](../../../src/Application/Game/Brotato3D/Brotato3DCombatSystem.cpp) 和 [Brotato3DShopSystem.cpp:168 ApplyPassiveItemStats](../../../src/Application/Game/Brotato3D/Brotato3DShopSystem.cpp)。
 
 **实例：闪电护符（命中几率麻痹）—— 需要 C++ 支持**
 
@@ -322,7 +322,7 @@ crit   = round(damage * critMultiplier) when rng < (critChancePct + weapon.critC
 }
 ```
 
-刷怪间隔会**随波次进度从 ×1.15 逼近 ×0.45**（写死在 [Brotato3DWaveSystem.cpp:9](../../../src/Application/Brotato3D/Brotato3DWaveSystem.cpp) `SpawnIntervalScaleStart/End`），所以 `intervalMs` 是"开局值"，越往后会越快。
+刷怪间隔会**随波次进度从 ×1.15 逼近 ×0.45**（写死在 [Brotato3DWaveSystem.cpp:9](../../../src/Application/Game/Brotato3D/Brotato3DWaveSystem.cpp) `SpawnIntervalScaleStart/End`），所以 `intervalMs` 是"开局值"，越往后会越快。
 
 最末波是 Boss 波（`bgmCue="boss"`），直接跳过 DuskSurge，杀光 boss 即胜利。
 
@@ -332,7 +332,7 @@ crit   = round(damage * critMultiplier) when rng < (critChancePct + weapon.critC
 
 `halfExtent`: `[halfX, halfZ]`，玩家活动范围。
 `groundTiles`: 程序化生成地面斑块的"调色板"。`kind` ∈ `lambertian / metallic / mixture`。`coverage` 是该色块占地面积比（0~1）。
-HUD 中的相机始终俯视玩家头顶，跟随有一个 `CameraFollowSharpness=8.0` 的 lerp（[Brotato3DGameInstance.cpp:26](../../../src/Application/Brotato3D/Brotato3DGameInstance.cpp)）。
+HUD 中的相机始终俯视玩家头顶，跟随有一个 `CameraFollowSharpness=8.0` 的 lerp（[Brotato3DGameInstance.cpp:26](../../../src/Application/Game/Brotato3D/Brotato3DGameInstance.cpp)）。
 
 > 当前角色选择界面默认锁定 `grassland`，如要让玩家能选场景需要扩 UI，参考 `SelectArena()`。
 
@@ -354,7 +354,7 @@ HUD 中的相机始终俯视玩家头顶，跟随有一个 `CameraFollowSharpnes
 
 ### 4.2 资产路径
 
-通过 [Brotato3DAssetPaths.hpp](../../../src/Application/Brotato3D/Brotato3DAssetPaths.hpp) 的 `Resolve()` 解析，**支持运行时根目录与仓库根目录两种 fallback**，所以本地从 `bin/` 或仓库根目录都能跑通。
+通过 [Brotato3DAssetPaths.hpp](../../../src/Application/Game/Brotato3D/Brotato3DAssetPaths.hpp) 的 `Resolve()` 解析，**支持运行时根目录与仓库根目录两种 fallback**，所以本地从 `bin/` 或仓库根目录都能跑通。
 
 | API | 路径模板 |
 | --- | --- |
@@ -366,7 +366,7 @@ HUD 中的相机始终俯视玩家头顶，跟随有一个 `CameraFollowSharpnes
 
 ### 4.3 关键音效约定
 
-[Brotato3DAudio.hpp](../../../src/Application/Brotato3D/Brotato3DAudio.hpp) 是**唯一**音频入口；UI / 玩法代码只调用 `PlayWeaponFireSfx`、`PlayHitSfx`、`PlayShopBuySfx` 等 inline 函数。新增武器/敌人想加音效，扩这个文件即可。
+[Brotato3DAudio.hpp](../../../src/Application/Game/Brotato3D/Brotato3DAudio.hpp) 是**唯一**音频入口；UI / 玩法代码只调用 `PlayWeaponFireSfx`、`PlayHitSfx`、`PlayShopBuySfx` 等 inline 函数。新增武器/敌人想加音效，扩这个文件即可。
 
 | 函数 | 候选文件名前缀 |
 | --- | --- |
@@ -376,7 +376,7 @@ HUD 中的相机始终俯视玩家头顶，跟随有一个 `CameraFollowSharpnes
 | `PlayPickupXpSfx` `PlayPickupMaterialSfx` | `pickup_xp_NN.ogg` / `pickup_material.wav` |
 | `StartBgm("calm/battle/boss")` | `bgm_<cue>.mp3` |
 
-`MasterDifficulty` (默认 1.0) 是个全局难度乘子（写在 [Brotato3DAudio.hpp:16](../../../src/Application/Brotato3D/Brotato3DAudio.hpp)，但作用于敌人接触/迫击炮伤害，[Brotato3DEnemySystem.cpp:301](../../../src/Application/Brotato3D/Brotato3DEnemySystem.cpp))。可作为 cheat / 难度模式开关。
+`MasterDifficulty` (默认 1.0) 是个全局难度乘子（写在 [Brotato3DAudio.hpp:16](../../../src/Application/Game/Brotato3D/Brotato3DAudio.hpp)，但作用于敌人接触/迫击炮伤害，[Brotato3DEnemySystem.cpp:301](../../../src/Application/Game/Brotato3D/Brotato3DEnemySystem.cpp))。可作为 cheat / 难度模式开关。
 
 ---
 
@@ -396,7 +396,7 @@ HUD 中的相机始终俯视玩家头顶，跟随有一个 `CameraFollowSharpnes
 
 ## 6. Best Record（存档）
 
-[Brotato3DGameInstance.cpp:312](../../../src/Application/Brotato3D/Brotato3DGameInstance.cpp) `LoadBestRecord/SaveBestRecord` 写到平台 user dir：
+[Brotato3DGameInstance.cpp:312](../../../src/Application/Game/Brotato3D/Brotato3DGameInstance.cpp) `LoadBestRecord/SaveBestRecord` 写到平台 user dir：
 
 ```
 <UserPaths>/Brotato3D/best.json
@@ -413,13 +413,13 @@ HUD 中的相机始终俯视玩家头顶，跟随有一个 `CameraFollowSharpnes
 | 把一个怪强一点 | enemies.json 的 `hp` / `contactDamage` |
 | 让升级更慢 | Brotato3DPlayerSystem.cpp 的 `GetXpToNextLevel()`（公式硬编码） |
 | 调商店 reroll 价格 | Brotato3DShop.hpp `GetRerollCost()`：`2 + waveIndex`（硬编码） |
-| 调武器合并阈值 | [Brotato3DProjectileSystem.cpp:466 TryMergeWeapons](../../../src/Application/Brotato3D/Brotato3DProjectileSystem.cpp)（写死 2 → 1 级合并） |
-| 调 Dash 距离 / 冷却 | [Brotato3DPlayerSystem.cpp:13](../../../src/Application/Brotato3D/Brotato3DPlayerSystem.cpp) 三个 `PlayerDashXxx` 常量 |
-| 调玩家最多持有 Item 数 | [Brotato3DGameInstance.cpp:393](../../../src/Application/Brotato3D/Brotato3DGameInstance.cpp)、`BuyPassiveItem` 中的 `>= 6` 字面量 |
-| 调武器槽数上限 | [Brotato3DCommon.hpp:22 MaxWeaponSlots](../../../src/Application/Brotato3D/Brotato3DCommon.hpp) |
+| 调武器合并阈值 | [Brotato3DProjectileSystem.cpp:466 TryMergeWeapons](../../../src/Application/Game/Brotato3D/Brotato3DProjectileSystem.cpp)（写死 2 → 1 级合并） |
+| 调 Dash 距离 / 冷却 | [Brotato3DPlayerSystem.cpp:13](../../../src/Application/Game/Brotato3D/Brotato3DPlayerSystem.cpp) 三个 `PlayerDashXxx` 常量 |
+| 调玩家最多持有 Item 数 | [Brotato3DGameInstance.cpp:393](../../../src/Application/Game/Brotato3D/Brotato3DGameInstance.cpp)、`BuyPassiveItem` 中的 `>= 6` 字面量 |
+| 调武器槽数上限 | [Brotato3DCommon.hpp:22 MaxWeaponSlots](../../../src/Application/Game/Brotato3D/Brotato3DCommon.hpp) |
 | 调撤离车驻留时间 | waves.json 的 `extractionRequiredSec` |
-| 调暴击基础值 | [Brotato3DPlayer.hpp:23](../../../src/Application/Brotato3D/Brotato3DPlayer.hpp) `critChancePct=0.05f, critMultiplier=2.0f` |
-| 关掉 Boss 击杀慢动作 | [Brotato3DGameInstance.cpp:159-167](../../../src/Application/Brotato3D/Brotato3DGameInstance.cpp) `timeScaleRecoveryMs_` 段 |
+| 调暴击基础值 | [Brotato3DPlayer.hpp:23](../../../src/Application/Game/Brotato3D/Brotato3DPlayer.hpp) `critChancePct=0.05f, critMultiplier=2.0f` |
+| 关掉 Boss 击杀慢动作 | [Brotato3DGameInstance.cpp:159-167](../../../src/Application/Game/Brotato3D/Brotato3DGameInstance.cpp) `timeScaleRecoveryMs_` 段 |
 
 ---
 
@@ -427,7 +427,7 @@ HUD 中的相机始终俯视玩家头顶，跟随有一个 `CameraFollowSharpnes
 
 1. **构建**：`gnb.bat build Brotato3D --reconfigure`（Windows）/ `./gnb build Brotato3D --reconfigure`。
 2. **跑**：`./gnb run Brotato3D`，看 log `uploaded scene [...] to gpu` 表示初始化通过。
-3. **配置出错**：`Brotato3D failed to load required data` 抛在 `OnInit()`，常见原因是 JSON 字段缺失（敌人缺 `hp`、武器缺 `damage` 等，必填字段在 [Brotato3DDataLoader.cpp:108](../../../src/Application/Brotato3D/Brotato3DDataLoader.cpp) 校验）。
+3. **配置出错**：`Brotato3D failed to load required data` 抛在 `OnInit()`，常见原因是 JSON 字段缺失（敌人缺 `hp`、武器缺 `damage` 等，必填字段在 [Brotato3DDataLoader.cpp:108](../../../src/Application/Game/Brotato3D/Brotato3DDataLoader.cpp) 校验）。
 4. **跑数值平衡**：用 `DEV_MODE` 的 K 键和 1~6 键一边玩一边喷怪 + 切武器，看 TTK / 受伤量。
 5. **波次推进卡住**：检查 `extractionRequiredSec > 0` 才会进入 DuskSurge；boss 波必须 `bgmCue="boss"`。
 
@@ -435,7 +435,7 @@ HUD 中的相机始终俯视玩家头顶，跟随有一个 `CameraFollowSharpnes
 
 ## 9. 还没做的扩展点（开发者注意）
 
-- **武器商店价**写死在 [Brotato3DShop.cpp:46](../../../src/Application/Brotato3D/Brotato3DShop.cpp) —— 想做"贵重武器"得抽进 `weapons.json` 的字段。
+- **武器商店价**写死在 [Brotato3DShop.cpp:46](../../../src/Application/Game/Brotato3D/Brotato3DShop.cpp) —— 想做"贵重武器"得抽进 `weapons.json` 的字段。
 - **`duskBonusXpMult`** 字段已加载但还没乘进任何地方（loot-overhaul 计划中）。
 - **场景选择**只有"绿野"会被默认应用。
 - **新 trigger/effect** 必须改 C++（见 §3.6）。

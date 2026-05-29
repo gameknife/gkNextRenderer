@@ -568,24 +568,6 @@ namespace
         ImGui::EndTooltip();
     }
 
-    void RenderSettingsPlaceholder(float uiScale)
-    {
-        ImGui::SetNextWindowSize(Scale(360.0f, 180.0f, uiScale), ImGuiCond_Appearing);
-        if (ImGui::BeginPopupModal("Settings", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings))
-        {
-            ImGui::SetWindowFontScale(uiScale);
-            ImGui::Text("Settings");
-            ImGui::Separator();
-            ImGui::TextWrapped("Settings controls will be implemented in P9.");
-            ImGui::Dummy(Scale(0.0f, 28.0f, uiScale));
-            if (ImGui::Button("Close", Scale(120.0f, 34.0f, uiScale)))
-            {
-                ImGui::CloseCurrentPopup();
-            }
-            ImGui::EndPopup();
-        }
-    }
-
     float GetStatValue(const Brotato3D::FPlayerRuntime& player,
                        const Brotato3D::FPlayerStats& stats,
                        const std::string& statKey)

@@ -275,6 +275,10 @@ private:
     glm::vec3 ResolvePlayerObstacleCollision(const glm::vec3& pos, float radius);
     bool IsSegmentBlockedByExtractionVehicle(const glm::vec3& from, const glm::vec3& to, float radius) const;
     float SampleArenaGroundY(const glm::vec3& worldPos) const;
+    // Clamps a candidate enemy position to the arena, pushes it out of obstacles (extraction
+    // truck + props), re-clamps, then snaps it onto the (possibly displaced) ground. This is the
+    // single source of truth for "where can this enemy legally stand", shared by every move path.
+    glm::vec3 ResolveEnemyGroundedPosition(const Brotato3D::FEnemyRuntime& enemy, glm::vec3 candidate) const;
     bool IsDuskSurgeActive() const;
     void ClearMovementInput();
     bool ShouldPauseWorldPhysics() const;

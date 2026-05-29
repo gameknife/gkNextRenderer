@@ -226,6 +226,5 @@ namespace Brotato3D
     bool LoadItems(const std::string& path, std::vector<FItemDef>& outItems);
     bool LoadCharacters(const std::string& path, std::vector<FCharacterDef>& outCharacters);
     bool LoadArenas(const std::string& path, std::vector<FArenaDef>& outArenas);
-    bool LoadI18n(const std::string& path, std::map<std::string, std::string>& outTexts);
     bool LoadWaves(const std::string& path, std::vector<FWaveDef>& outWaves);
 }
