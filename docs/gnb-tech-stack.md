@@ -103,6 +103,7 @@
 
 ## 相关文档
 
+- 架构与代码导览（改 `gnb` 源码必读）：`docs/gnb-architecture.md`
 - 命令用法手册：`docs/gnb-cli.md`
 - 最小命令规格：`docs/CLI_SPEC.md`
 - 本地开发入口：`tools/gnb/README.md`
