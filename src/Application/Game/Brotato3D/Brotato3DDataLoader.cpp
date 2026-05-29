@@ -576,25 +576,6 @@ namespace Brotato3D
         return true;
     }
 
-    bool LoadI18n(const std::string& path, std::map<std::string, std::string>& outTexts)
-    {
-        json document;
-        if (!NextJson::TryLoadFile(path, document) || !NextJson::HasObject(document, "zh"))
-        {
-            return false;
-        }
-
-        outTexts.clear();
-        for (const auto& [key, value] : document.at("zh").items())
-        {
-            if (value.is_string())
-            {
-                outTexts[key] = value.get<std::string>();
-            }
-        }
-        return true;
-    }
-
     bool LoadWaves(const std::string& path, std::vector<FWaveDef>& outWaves)
     {
         json document;

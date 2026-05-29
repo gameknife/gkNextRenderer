@@ -41,13 +41,7 @@ void Brotato3DGameInstance::ApplyWeaponKnockback(Brotato3D::FEnemyRuntime& enemy
         return;
     }
 
-    enemy.worldPos = ClampToArena(enemy.worldPos + knockDir * effectiveKnockback, enemy.radius, arenaHalfExtent_);
-    enemy.worldPos = ResolveExtractionVehicleCollision(enemy.worldPos, enemy.radius);
-    enemy.worldPos = ClampToArena(enemy.worldPos, enemy.radius, arenaHalfExtent_);
-    if (enemy.def)
-    {
-        enemy.worldPos.y = enemy.def->size.y * 0.5f + SampleArenaGroundY(enemy.worldPos);
-    }
+    enemy.worldPos = ResolveEnemyGroundedPosition(enemy, enemy.worldPos + knockDir * effectiveKnockback);
     if (enemy.node)
     {
         enemy.node->SetTranslation(enemy.worldPos);
