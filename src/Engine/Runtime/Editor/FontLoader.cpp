@@ -50,10 +50,22 @@ namespace NextUI::FontLoader
         const std::string platformPath = Utilities::FileHelper::GetPlatformFilePath(request.filePath.c_str());
         const ImWchar* ranges = request.glyphRanges ? request.glyphRanges :
             ResolveGlyphRanges(*io.Fonts, request.includeChineseFull, request.extraGlyphsUtf8);
+        ImFontConfig fontConfig;
+        const ImFontConfig* fontConfigPtr = request.fontConfig;
+        if (request.rasterizerDensity > 0.0f && request.rasterizerDensity != 1.0f)
+        {
+            if (request.fontConfig != nullptr)
+            {
+                fontConfig = *request.fontConfig;
+            }
+            fontConfig.RasterizerDensity = request.rasterizerDensity;
+            fontConfigPtr = &fontConfig;
+        }
+
         ImFont* font = nullptr;
         if (std::filesystem::exists(platformPath))
         {
-            font = io.Fonts->AddFontFromFileTTF(platformPath.c_str(), request.pixelSize, request.fontConfig, ranges);
+            font = io.Fonts->AddFontFromFileTTF(platformPath.c_str(), request.pixelSize, fontConfigPtr, ranges);
         }
         else
         {
@@ -65,7 +77,7 @@ namespace NextUI::FontLoader
                 font = io.Fonts->AddFontFromMemoryTTF(data,
                                                       static_cast<int>(fontData.size()),
                                                       request.pixelSize,
-                                                      request.fontConfig,
+                                                      fontConfigPtr,
                                                       ranges);
             }
         }
