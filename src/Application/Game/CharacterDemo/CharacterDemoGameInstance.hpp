@@ -87,12 +87,8 @@ private:
     void UpdateAIBotNode();
     bool TryGetSceneNodePosition(const std::string& nodeName, glm::vec3& outPosition) const;
     bool HasLineOfSightToPlayer() const;
-    void SetNodeVisibilityRecursive(const std::shared_ptr<Assets::Node>& node, bool visible);
-    void SetNodeRayCastVisibilityRecursive(const std::shared_ptr<Assets::Node>& node, bool visible);
-    void DisableNodePhysicsRecursive(const std::shared_ptr<Assets::Node>& node);
     void PlayCharacterAnimation(const std::string& name, bool loop, float playSpeed = 1.0f);
     void UpdateCharacterFacingYaw(const glm::vec3& moveDir, const glm::vec3& currentVelocity, float deltaSeconds);
-    const char* GetMovementModeName() const;
     CharacterDemoAIDebugUI::FContext CreateAIDebugUIContext() const;
     void DrawAIDebugMenu();
     void DrawAIBotBehaviorTreeUI() const;

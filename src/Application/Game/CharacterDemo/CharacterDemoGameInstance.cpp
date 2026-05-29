@@ -33,11 +33,7 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
     return std::make_unique<CharacterDemoGameInstance>(config, options, engine);
 }
 
-using NextGameplay::CollectSkinnedMeshComponents;
-using NextGameplay::DisableNodePhysicsRecursive;
-using NextGameplay::FindAppendedCharacterRoot;
 using NextGameplay::NormalizeHorizontalOrZero;
-using NextGameplay::SetNodeRayCastVisibilityRecursive;
 using NextGameplay::SetNodeVisibilityRecursive;
 
 CharacterDemoGameInstance::CharacterDemoGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
@@ -342,7 +338,7 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Text("Velocity: %.1f, %.1f, %.1f", vel.x, vel.y, vel.z);
     ImGui::Text("On Ground: %s", onGround ? "Yes" : "No");
     ImGui::Text("View: %s", firstPersonMode_ ? "FPS" : "TPS");
-    ImGui::Text("Move Mode: %s", GetMovementModeName());
+    ImGui::Text("Move Mode: %s", NextGameplay::GetCharacterMovementModeName(movementMode_));
     ImGui::Text("Graphics Debug: %s", GetEngine().GetShowFlags().DebugGraphicsPanel ? "On" : "Off");
     ImGui::Text("Physics Debug: %s", GetEngine().GetShowFlags().DebugPhysicsOverlay ? "On" : "Off");
     ImGui::Text("Foot IK: %s", footIKEnabled_ ? "On" : "Off");
@@ -1162,21 +1158,6 @@ void CharacterDemoGameInstance::ResetCharacterState()
     characterYaw_ = yaw_;
 }
 
-void CharacterDemoGameInstance::SetNodeVisibilityRecursive(const std::shared_ptr<Assets::Node>& node, bool visible)
-{
-    NextGameplay::SetNodeVisibilityRecursive(node, visible);
-}
-
-void CharacterDemoGameInstance::SetNodeRayCastVisibilityRecursive(const std::shared_ptr<Assets::Node>& node, bool visible)
-{
-    NextGameplay::SetNodeRayCastVisibilityRecursive(node, visible);
-}
-
-void CharacterDemoGameInstance::DisableNodePhysicsRecursive(const std::shared_ptr<Assets::Node>& node)
-{
-    NextGameplay::DisableNodePhysicsRecursive(node, GetEngine().GetPhysicsEngine());
-}
-
 void CharacterDemoGameInstance::PlayCharacterAnimation(const std::string& name, bool loop, float playSpeed)
 {
     if (name.empty())
@@ -1224,19 +1205,6 @@ void CharacterDemoGameInstance::UpdateCharacterFacingYaw(const glm::vec3& moveDi
         {
             characterYaw_ += glm::sign(yawDelta) * maxStep;
         }
-    }
-}
-
-const char* CharacterDemoGameInstance::GetMovementModeName() const
-{
-    switch (movementMode_)
-    {
-    case ECharacterMovementMode::CameraAligned:
-        return "CameraAligned";
-    case ECharacterMovementMode::MoveAligned:
-        return "MoveAligned";
-    default:
-        return "Unknown";
     }
 }
 
