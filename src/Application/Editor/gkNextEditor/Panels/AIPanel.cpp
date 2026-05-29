@@ -1,6 +1,7 @@
 #include "EditorUi.hpp"
 
 #include "AI/EditorAIService.hpp"
+#include "Panels/imgui_markdown_custom.h"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Subsystems/AIService.hpp"
 #include "Engine/Runtime/Subsystems/VoiceInputService.hpp"
@@ -14,350 +15,6 @@
 
 namespace Editor
 {
-    // ========== Lightweight Markdown Renderer ==========
-    namespace
-    {
-        enum class EMdBlockType
-        {
-            Text,
-            CodeBlock,
-            Header,
-            Bullet,
-            Separator
-        };
-
-        struct MdBlock
-        {
-            EMdBlockType type;
-            std::string content;
-            std::string lang;
-            int level = 0;
-        };
-
-        enum class EMdInlineType
-        {
-            Normal,
-            Bold,
-            Code
-        };
-
-        struct MdInlineSegment
-        {
-            EMdInlineType type;
-            std::string text;
-        };
-
-        std::vector<MdBlock> ParseMarkdownBlocks(const std::string& text)
-        {
-            std::vector<MdBlock> blocks;
-            std::istringstream stream(text);
-            std::string line;
-            bool inCodeBlock = false;
-            std::string codeContent;
-            std::string codeLang;
-            std::string textAccum;
-
-            auto flushText = [&]() {
-                if (!textAccum.empty())
-                {
-                    blocks.push_back({EMdBlockType::Text, textAccum});
-                    textAccum.clear();
-                }
-            };
-
-            while (std::getline(stream, line))
-            {
-                // Remove trailing \r
-                if (!line.empty() && line.back() == '\r')
-                {
-                    line.pop_back();
-                }
-
-                // Code fence
-                if (line.size() >= 3 && line[0] == '`' && line[1] == '`' && line[2] == '`')
-                {
-                    if (!inCodeBlock)
-                    {
-                        flushText();
-                        inCodeBlock = true;
-                        codeLang = line.length() > 3 ? line.substr(3) : "";
-                        auto s = codeLang.find_first_not_of(" \t");
-                        if (s != std::string::npos)
-                        {
-                            codeLang = codeLang.substr(s);
-                        }
-                        auto e = codeLang.find_last_not_of(" \t");
-                        if (e != std::string::npos)
-                        {
-                            codeLang = codeLang.substr(0, e + 1);
-                        }
-                        codeContent.clear();
-                    }
-                    else
-                    {
-                        blocks.push_back({EMdBlockType::CodeBlock, codeContent, codeLang});
-                        inCodeBlock = false;
-                    }
-                    continue;
-                }
-
-                if (inCodeBlock)
-                {
-                    if (!codeContent.empty())
-                    {
-                        codeContent += "\n";
-                    }
-                    codeContent += line;
-                    continue;
-                }
-
-                // Separator
-                if (line == "---" || line == "***" || line == "___")
-                {
-                    flushText();
-                    blocks.push_back({EMdBlockType::Separator});
-                    continue;
-                }
-
-                // Header
-                int headerLevel = 0;
-                for (size_t ci = 0; ci < line.size() && line[ci] == '#'; ++ci)
-                {
-                    headerLevel++;
-                }
-                if (headerLevel > 0 && headerLevel <= 3 && static_cast<int>(line.size()) > headerLevel &&
-                    line[headerLevel] == ' ')
-                {
-                    flushText();
-                    blocks.push_back({EMdBlockType::Header, line.substr(headerLevel + 1), "", headerLevel});
-                    continue;
-                }
-
-                // Bullet (- item, * item, 1. item)
-                if (line.size() >= 2 && (line[0] == '-' || line[0] == '*') && line[1] == ' ')
-                {
-                    flushText();
-                    blocks.push_back({EMdBlockType::Bullet, line.substr(2)});
-                    continue;
-                }
-                // Numbered list
-                {
-                    size_t numEnd = 0;
-                    while (numEnd < line.size() && line[numEnd] >= '0' && line[numEnd] <= '9')
-                    {
-                        numEnd++;
-                    }
-                    if (numEnd > 0 && numEnd + 1 < line.size() && line[numEnd] == '.' && line[numEnd + 1] == ' ')
-                    {
-                        flushText();
-                        blocks.push_back({EMdBlockType::Bullet, line.substr(numEnd + 2)});
-                        continue;
-                    }
-                }
-
-                // Blank line → flush as paragraph break
-                if (line.empty())
-                {
-                    flushText();
-                    continue;
-                }
-
-                // Regular text: accumulate
-                if (!textAccum.empty())
-                {
-                    textAccum += " ";
-                }
-                textAccum += line;
-            }
-
-            flushText();
-
-            if (inCodeBlock && !codeContent.empty())
-            {
-                blocks.push_back({EMdBlockType::CodeBlock, codeContent, codeLang});
-            }
-
-            return blocks;
-        }
-
-        std::vector<MdInlineSegment> ParseInlineSegments(const std::string& text)
-        {
-            std::vector<MdInlineSegment> segments;
-            size_t i = 0;
-            std::string current;
-
-            while (i < text.size())
-            {
-                // Bold: **text**
-                if (i + 1 < text.size() && text[i] == '*' && text[i + 1] == '*')
-                {
-                    if (!current.empty())
-                    {
-                        segments.push_back({EMdInlineType::Normal, current});
-                        current.clear();
-                    }
-                    i += 2;
-                    size_t end = text.find("**", i);
-                    if (end == std::string::npos)
-                    {
-                        current = "**";
-                        continue;
-                    }
-                    segments.push_back({EMdInlineType::Bold, text.substr(i, end - i)});
-                    i = end + 2;
-                    continue;
-                }
-
-                // Inline code: `text`
-                if (text[i] == '`')
-                {
-                    if (!current.empty())
-                    {
-                        segments.push_back({EMdInlineType::Normal, current});
-                        current.clear();
-                    }
-                    i += 1;
-                    size_t end = text.find('`', i);
-                    if (end == std::string::npos)
-                    {
-                        current = "`";
-                        continue;
-                    }
-                    segments.push_back({EMdInlineType::Code, text.substr(i, end - i)});
-                    i = end + 1;
-                    continue;
-                }
-
-                current += text[i];
-                i++;
-            }
-
-            if (!current.empty())
-            {
-                segments.push_back({EMdInlineType::Normal, current});
-            }
-
-            return segments;
-        }
-
-        void DrawInlineFormatted(const std::string& text, const ImVec4& baseColor)
-        {
-            auto segments = ParseInlineSegments(text);
-            if (segments.empty())
-            {
-                return;
-            }
-
-            ImGui::PushTextWrapPos(0.0f);
-            bool first = true;
-
-            for (const auto& seg : segments)
-            {
-                if (!first)
-                {
-                    ImGui::SameLine(0, 0);
-                }
-
-                switch (seg.type)
-                {
-                case EMdInlineType::Bold:
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
-                    ImGui::TextUnformatted(seg.text.c_str());
-                    ImGui::PopStyleColor();
-                    break;
-                case EMdInlineType::Code: {
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.75f, 0.4f, 1.0f));
-                    ImGui::TextUnformatted(seg.text.c_str());
-                    ImGui::PopStyleColor();
-                    break;
-                }
-                default:
-                    ImGui::PushStyleColor(ImGuiCol_Text, baseColor);
-                    ImGui::TextUnformatted(seg.text.c_str());
-                    ImGui::PopStyleColor();
-                    break;
-                }
-
-                first = false;
-            }
-
-            ImGui::PopTextWrapPos();
-        }
-
-        void DrawCodeBlock(const std::string& code, const std::string& lang)
-        {
-            ImDrawList* drawList = ImGui::GetWindowDrawList();
-            float padding = 6.0f;
-            float width = ImGui::GetContentRegionAvail().x;
-            float labelHeight = lang.empty() ? 0.0f : ImGui::GetTextLineHeight() + 2.0f;
-            ImVec2 textSize = ImGui::CalcTextSize(code.c_str(), nullptr, false, width - padding * 2);
-            float height = textSize.y + padding * 2 + labelHeight;
-
-            ImVec2 pos = ImGui::GetCursorScreenPos();
-
-            // Background
-            drawList->AddRectFilled(pos, ImVec2(pos.x + width, pos.y + height), IM_COL32(25, 30, 40, 230), 4.0f);
-            drawList->AddRect(pos, ImVec2(pos.x + width, pos.y + height), IM_COL32(55, 65, 85, 200), 4.0f);
-
-            // Language label
-            if (!lang.empty())
-            {
-                drawList->AddText(ImVec2(pos.x + padding, pos.y + 2.0f), IM_COL32(100, 120, 160, 200), lang.c_str());
-            }
-
-            // Code text
-            ImGui::SetCursorScreenPos(ImVec2(pos.x + padding, pos.y + padding + labelHeight));
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.82f, 0.88f, 0.78f, 1.0f));
-            ImGui::PushTextWrapPos(pos.x + width - padding);
-            ImGui::TextUnformatted(code.c_str());
-            ImGui::PopTextWrapPos();
-            ImGui::PopStyleColor();
-
-            // Advance cursor past block
-            ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + height + 4.0f));
-        }
-
-        void DrawMarkdownText(const std::string& text, const ImVec4& baseColor)
-        {
-            auto blocks = ParseMarkdownBlocks(text);
-
-            for (const auto& block : blocks)
-            {
-                switch (block.type)
-                {
-                case EMdBlockType::Header: {
-                    float scale = block.level == 1 ? 1.3f : block.level == 2 ? 1.15f : 1.05f;
-                    ImGui::SetWindowFontScale(scale);
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
-                    ImGui::PushTextWrapPos(0.0f);
-                    ImGui::TextUnformatted(block.content.c_str());
-                    ImGui::PopTextWrapPos();
-                    ImGui::PopStyleColor();
-                    ImGui::SetWindowFontScale(1.0f);
-                    ImGui::Spacing();
-                    break;
-                }
-                case EMdBlockType::CodeBlock:
-                    DrawCodeBlock(block.content, block.lang);
-                    ImGui::Spacing();
-                    break;
-                case EMdBlockType::Bullet:
-                    ImGui::Indent(12.0f);
-                    DrawInlineFormatted("\xe2\x80\xa2 " + block.content, baseColor);
-                    ImGui::Unindent(12.0f);
-                    break;
-                case EMdBlockType::Separator:
-                    ImGui::Separator();
-                    break;
-                case EMdBlockType::Text:
-                    DrawInlineFormatted(block.content, baseColor);
-                    ImGui::Spacing();
-                    break;
-                }
-            }
-        }
-    } // namespace
-
     // ========== Panel State ==========
     namespace
     {
@@ -706,7 +363,7 @@ namespace Editor
                 ImGui::PopStyleColor();
                 ImGui::SameLine();
                 ImVec4 aiColor(0.7f, 0.85f, 1.0f, 1.0f);
-                DrawMarkdownText(msg.text, aiColor);
+                RenderMarkdown(msg.text, aiColor);
             }
             ImGui::Spacing();
             ImGui::Spacing();
@@ -910,6 +567,21 @@ namespace Editor
         }
     }
 
+    void TickAIAgentMainThread(EditorContext& ctx)
+    {
+        // aiService is created lazily by DrawAIPanel. Once it exists, keep pumping
+        // its main-thread queue every frame regardless of panel visibility, so agent
+        // tool calls (RequiresMainThread) don't time out — and deferred high-risk
+        // actions still reach pendingActions_ — when the panel is hidden, collapsed,
+        // or on an inactive docked tab.
+        if (!aiService)
+        {
+            return;
+        }
+        aiService->SetCurrentContext(&ctx);
+        aiService->PumpMainThread();
+    }
+
     void DrawAIPanel(EditorContext& ctx, EditorUiState& ui)
     {
         if (!ImGui::Begin("AI Assistant", &ui.aiPanel))
@@ -924,10 +596,10 @@ namespace Editor
             aiService = std::make_unique<FEditorAIService>(ctx.engine);
         }
 
-        // Expose this frame's EditorContext to agent tools, then run any pending
-        // main-thread tool tasks queued by the agent worker since the last frame.
+        // Main-thread pump now runs every frame via TickAIAgentMainThread (called
+        // from EditorInterface::Render), independent of this panel's visibility.
+        // Ensure the freshly-created service sees this frame's context immediately.
         aiService->SetCurrentContext(&ctx);
-        aiService->PumpMainThread();
 
         if (auto* voiceService = ctx.engine.GetVoiceInputService();
             voiceService && voiceService->HasPendingResult())
