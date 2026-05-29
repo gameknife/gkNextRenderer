@@ -1,8 +1,0 @@
-{
-  "track_id": "magicalego_ui_20260203",
-  "type": "feature",
-  "status": "new",
-  "created_at": "2026-02-03T20:06:00Z",
-  "updated_at": "2026-02-03T20:06:00Z",
-  "description": "美化MagicaLego的界面，现在有点过于软件，让他更加像游戏界面，更加现代，可以引入https://github.com/soufianekhiat/ImAnim增加一些动效"
-}

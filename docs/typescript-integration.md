@@ -1,6 +1,6 @@
 # TypeScript 整合说明
 
-gkNextRenderer 的 TypeScript 链路不是独立的 Web 工具链，而是服务于引擎运行时的脚本层：开发者在 `assets/typescript` 编写 TypeScript，运行时使用仓库内置的 `tools/tsc/tsc[.exe]` 编译到 `assets/scripts`，然后由 QuickJS 以 ES module 形式加载。这个设计让脚本热重载、编辑器验证和玩法原型都能在不依赖 Node/npm/全局 `tsc` 的前提下运行。
+gkNextEngine 的 TypeScript 链路不是独立的 Web 工具链，而是服务于引擎运行时的脚本层：开发者在 `assets/typescript` 编写 TypeScript，运行时使用仓库内置的 `tools/tsc/tsc[.exe]` 编译到 `assets/scripts`，然后由 QuickJS 以 ES module 形式加载。这个设计让脚本热重载、编辑器验证和玩法原型都能在不依赖 Node/npm/全局 `tsc` 的前提下运行。
 
 ## 一句话概览
 

@@ -203,7 +203,7 @@ glm::vec3 Brotato3DGameInstance::ResolveEnemyGroundedPosition(
 | 武器商店价格硬编码 if-else | `FShop::MakeOfferFromWeapon`（Brotato3DShop.cpp） | 抽进 `weapons.json` 的 `cost` 字段 |
 | `PlayWeaponFireSfx` 武器分支硬编码 | `Brotato3DAudio.hpp` | 数据驱动（武器 def 带音效 id）可去掉 if-chain |
 | `PlayShopCantBuySfx` 已定义但**从未接线** | `Brotato3DAudio.hpp` | 对应资源 `shop_cant_buy.wav` 已导入；应在购买失败处接上，或确认废弃后删除 |
-| `duskBonusXpMult` 已加载未生效 | 见配置向 guide §7 | loot-overhaul 计划项 |
+| `duskBonusXpMult` 已加载未生效 | 见配置向 guide §7 | 黄昏期 XP 倍率字段，接线或确认废弃后删除 |
 
 > 这些都是**可选**的优雅化，不影响功能。属性分发表是收益最高的一项（消除三处重复 + 降低加 stat 出错概率）。
 
@@ -228,6 +228,5 @@ gnb.bat build Brotato3D --reconfigure      # Windows
 
 - [`docs/projects/brotato-3d/developer-guide.md`](../docs/projects/brotato-3d/developer-guide.md) —— 配置/数值/加内容向开发指南（本文的姊妹篇）
 - [`docs/projects/brotato-3d/introduction.md`](../docs/projects/brotato-3d/introduction.md) —— 项目定位
-- 同目录 `*-plan.md` —— 各机制（黄昏撤离、战利品、PCG 竞技场、手感打磨）的设计来历
 - [`AGENT_GUIDE/MagicaLego.md`](MagicaLego.md) —— 另一个 C++ 小游戏的同类梳理，可对照
 - [`AGENTS.md`](../AGENTS.md) —— 引擎全局规范、构建/命名/目录约定

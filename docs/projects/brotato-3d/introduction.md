@@ -83,6 +83,5 @@ Brotato3D 的意义不只是“复刻一个玩法”，而是提供一个高频�
 
 1. 先读本文，了解 Brotato3D 的定位和系统边界。
 2. 再读 `developer-guide.md`，按“改数值 / 加武器 / 加敌人 / 加波次”的方式进入实操。
-3. 若要了解项目从 MVP 到当前形态的演进，读 `plan.md`、`loot-overhaul-plan.md`、`dusk-extraction-plan.md`、`feel-polish-plan.md` 和 `lowpoly-pcg-arena-plan.md`。
-4. 若准备把通用能力下沉到 Runtime，读 `docs/plans/2026-05/engine-uplift-from-brotato-konglie.md`。
+3. 想了解代码结构与工程模式（god-class、子系统拆分、对象池），读 `AGENT_GUIDE/Brotato3D.md`。
 

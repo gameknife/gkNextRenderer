@@ -1,6 +1,6 @@
 # gnb CLI
 
-`gnb` is the single build entry point for gkNextRenderer. Use `gnb.bat` on
+`gnb` is the single build entry point for gkNextEngine. Use `gnb.bat` on
 Windows and `./gnb.sh` on macOS/Linux when a system-wide `gnb` is not installed.
 
 For implementation details and architecture notes, see

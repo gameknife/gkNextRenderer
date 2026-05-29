@@ -6,11 +6,11 @@
 
 - 设备：Steam Deck
 - 系统：SteamOS / Arch Linux 系
-- 编译预设：`full-linux`
+- 编译预设：`linux`
 - 目标命令：
 
 ```bash
-./build.sh --preset full-linux --reconfigure
+./gnb.sh build --reconfigure
 ```
 
 ## 实际遇到的问题
@@ -67,7 +67,7 @@ sudo pacman -S --needed libxrandr wayland-protocols libxkbcommon
 ### 2. 重新执行完整构建
 
 ```bash
-./build.sh --preset full-linux --reconfigure
+./gnb.sh build --reconfigure
 ```
 
 如果中途遇到 GitHub 归档下载失败，通常直接重试即可。
@@ -76,9 +76,9 @@ sudo pacman -S --needed libxrandr wayland-protocols libxkbcommon
 
 构建成功，主要产物包括：
 
-- `out/build/full-linux/bin/gkNextRenderer`
-- `out/build/full-linux/bin/gkNextEditor`
-- `out/build/full-linux/bin/gkNextUnitTests`
+- `out/build/linux/bin/gkNextRenderer`
+- `out/build/linux/bin/gkNextEditor`
+- `out/build/linux/bin/gkNextUnitTests`
 
 运行验证中，`gkNextRenderer` 成功启动，并输出：
 
@@ -103,45 +103,25 @@ uploaded scene [CornellBox.proc] to gpu
 
 运行时日志里会看到 AI provider 的 fallback 警告，但不影响渲染器启动与 GPU 场景上传。
 
-## 后续优化建议
+## 已沉淀到主流程
 
-### 1. 在 `build.sh` 里前置检查 Linux 桌面依赖
+这次复盘暴露的几个痛点现已固化到 `gnb` 与 README，无需再手动处理：
 
-不要等到 vcpkg 构建 `vulkan-loader` 时才暴露缺失包。更好的方式是在构建一开始就用 `pkg-config` 检查：
-
-- `xrandr`
-- `wayland-protocols`
-- `xkbcommon`
-
-然后直接给出不同发行版的安装命令提示。
-
-### 2. README 增加 Steam Deck / Arch Linux 专项说明
-
-Ubuntu 依赖列表并不能覆盖 SteamOS / Arch 系环境。README 应该补一段单独说明，至少明确：
-
-- 推荐在 Steam Deck 上直接使用 `full-linux`
-- 首次部署需安装 `libxrandr`、`wayland-protocols`、`libxkbcommon`
-- `slangc` 随 VulkanSDK 一并由 `gnb setup` 拉取，无需单独处理
-- 若 GitHub 下载偶发失败，可直接重试构建
-
-### 4. 把“网络抖动可重试”写进文档
-
-首次部署时最容易误判的一类问题，是把第三方归档下载失败误认为本地环境配置错误。README 或部署说明里应明确：
-
-- vcpkg 依赖下载依赖 GitHub
-- 单次失败不一定代表配置错误
-- 优先重试一次构建，再判断是否需要人工排查
+- pacman / apt 环境下，`gnb setup` 与 Linux 首轮 `gnb build` 会在 vcpkg bootstrap 前自动安装桌面构建所需系统包（含 `libxrandr`、`wayland-protocols`、`libxkbcommon`）。
+- `slangc` 随项目托管的 Vulkan SDK 由 `gnb setup` 自动拉取。
+- README 已有「Steam Deck / Arch Linux」专项小节，并说明 GitHub 归档下载偶发失败时优先重试同一条构建命令。
 
 ## 推荐的 Steam Deck 首次部署命令
 
 ```bash
 sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxrandr wayland-protocols libxkbcommon
-./build.sh --preset full-linux --reconfigure
-./run.sh --preset full-linux --target gkNextRenderer
+./gnb.sh setup
+./gnb.sh build --reconfigure
+./gnb.sh run gkNextRenderer
 ```
 
 如果构建过程中 GitHub 下载失败，直接再次执行：
 
 ```bash
-./build.sh --preset full-linux --reconfigure
+./gnb.sh build --reconfigure
 ```

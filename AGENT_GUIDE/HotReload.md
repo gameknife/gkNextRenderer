@@ -47,9 +47,9 @@ r.shader.hot_reload_interval
 
 实现文件：
 
-- `src/Vulkan/ShaderHotReloader.hpp`
-- `src/Vulkan/ShaderHotReloader.cpp`
-- `src/Rendering/VulkanBaseRenderer::ReloadShaders()`
+- `src/Engine/Vulkan/ShaderHotReloader.hpp`
+- `src/Engine/Vulkan/ShaderHotReloader.cpp`
+- `src/Engine/Rendering/VulkanBaseRenderer::ReloadShaders()`
 
 当前设计：
 

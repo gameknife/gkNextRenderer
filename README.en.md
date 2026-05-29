@@ -89,7 +89,7 @@ This project is especially relevant if you are interested in:
 - **Fully Bindless + GPU-Driven**
 - **Multi-Draw Indirect**
 - **Hardware / Software Ray Tracing**
-- **Temporal Reprojection / JBF / OIDN / DLSS RR**
+- **Temporal Reprojection / JBF / FSR / DLSS RR**
 
 ### Engine and tooling
 
@@ -274,7 +274,9 @@ gnb.bat paks fetch
 | `gkNextRenderer` | Main renderer for path tracing / hybrid rendering / multi-pipeline comparison |
 | `gkNextEditor` | ImGui editor for materials, scenes, and runtime-oriented tooling |
 | `BrickPlayer` | Digital LEGO building prototype based on LDraw |
+| `Brotato3D` | Top-down 3D survival shooter prototype, intro in [docs/projects/brotato-3d/introduction.md](docs/projects/brotato-3d/introduction.md) |
 | `CharacterDemo` | Character control, AI behavior, navigation, and combat interaction experiments |
+| `FlappyCpp` / `FlappyJs` | Flappy Bird dual implementation used to verify C++/QuickJS behavior parity, intro in [docs/projects/flappy-bird-parity/introduction.md](docs/projects/flappy-bird-parity/introduction.md) |
 | `MagicaLego` | A lighter LEGO / voxel-style gameplay playground |
 | `gkNextStillBenchmark` | Static-scene rendering benchmark |
 | `gkNextMotionBenchmark` | Dynamic-scene rendering benchmark |

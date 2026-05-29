@@ -98,5 +98,5 @@ python tools\flappy\diff_traces.py --report docs\projects\flappy-bird-parity\par
 1. 先读本文，理解为什么 Flappy 有两个目标。
 2. 再读 `docs/typescript-integration.md`，理解 TypeScript 源码、编译输出和 QuickJS 入口。
 3. 然后读 `AGENT_GUIDE/QuickJSBindings.md`，了解绑定规则和 Flappy replay 回归命令。
-4. 若要追溯开发计划，读 `plan.md`；若要看当前验证结果，读 `parity-report.md`。
+4. 若要看当前验证结果，读 `parity-report.md`。
 

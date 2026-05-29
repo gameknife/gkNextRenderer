@@ -148,15 +148,24 @@ end
 ## AI 助手集成
 
 ### 核心文件
-- `MagicaLegoAIService.hpp/.cpp` - Gemini API 集成
+- `MagicaLegoAIService.hpp/.cpp` - 薄封装，委托给引擎级 `NextAI::AIService`（`src/Engine/Runtime/Subsystems/AIService.{hpp,cpp}`）
 - 配置文件: `assets/configs/ai_config.json`
 
 ### 配置格式
+多 provider 配置，默认 `provider: localllm`（复用 `gnb llm` 启动的本地 llama-server，详见 AGENTS.md 的 Local LLM 段），可切到 `gemini` / `ollama` / `zhipu` / `deepseek`：
 ```json
 {
-    "apiKey": "YOUR_GOOGLE_API_KEY",
-    "model": "gemini-2.0-flash",
-    "endpoint": "https://generativelanguage.googleapis.com/v1beta"
+    "provider": "localllm",
+    "useAgentLoop": true,
+    "localllm": {
+        "endpoint": "http://127.0.0.1:8765",
+        "pidFile": "external/llm/run/server.pid",
+        "autoDiscoverPid": true
+    },
+    "gemini":   { "apiKey": "...", "model": "gemini-3-flash-preview", "endpoint": "..." },
+    "ollama":   { "endpoint": "http://localhost:11434", "model": "gemma3:12b" },
+    "zhipu":    { "apiKey": "...", "model": "glm-4.7", "endpoint": "..." },
+    "deepseek": { "apiKey": "...", "model": "deepseek-chat", "endpoint": "..." }
 }
 ```
 
@@ -177,11 +186,12 @@ end
 ### 文件结构
 ```
 src/Application/Game/MagicaLego/
-├── MagicaLegoGameInstance.hpp/cpp   # 核心游戏逻辑 (~1200行)
-├── MagicaLegoUserInterface.hpp/cpp  # UI 渲染 (~1700行)
-├── MagicaLegoCommands.hpp/cpp       # 命令系统 (~700行)
-├── MagicaLegoScriptParser.hpp/cpp   # 脚本解析 (~500行)
-├── MagicaLegoAIService.hpp/cpp      # AI 集成 (~800行)
+├── MagicaLegoGameInstance.hpp/cpp   # 核心游戏逻辑
+├── MagicaLegoUserInterface.hpp/cpp  # ImGui UI 渲染
+├── MagicaLegoCommands.hpp/cpp       # 命令系统
+├── MagicaLegoScriptParser.hpp/cpp   # mlscript 脚本解析（变量/循环）
+├── MagicaLegoPlacementRules.hpp/cpp # 方块放置规则
+├── MagicaLegoAIService.hpp/cpp      # AI 集成（封装引擎 NextAI::AIService）
 ├── MagicaLegoConstants.hpp          # 集中常量定义
 ├── MagicaLegoUIHelpers.hpp          # UI 辅助函数
 └── MagicaLegoStyle.hpp/cpp          # ImGui 样式
