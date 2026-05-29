@@ -12,23 +12,20 @@
 
 ## 🛠️ 构建系统规则
 
-### 统一脚本使用
-- **Windows 脚本**: 核心逻辑使用 PowerShell (`.ps1`)。
-- **优先使用**: `build.[bat|sh] --preset [name]`。
-- **支持平台**: windows-dev, linux-release, macos-arm64, android。
+### 统一入口 gnb
+- **唯一入口**: 一律通过 `gnb`（Windows `gnb.bat`、macOS/Linux `./gnb.sh`）构建、运行、测试，不再有 `build.bat`/`build.sh`。
+- **可用 CMake 预设**: `windows`、`linux`、`macos-arm64`、`ios`。
 
 ### 构建输出管理
-- **桌面端**: 输出到 `out/build/{preset}/bin/`。
+- **桌面端**: 输出到 `out/build/<preset>/bin/`。
 - **Android**: 输出到 `android/app/build/outputs/apk/`。
 
 ## 🧪 测试和验证规则
 
-### 1. 单元测试执行规范 (CRITICAL)
-**重要规则**: 运行 `gkNextUnitTests` 时，**当前工作目录 (CWD)** 必须是可执行文件所在的目录（即 `bin` 目录）。
-
-*   **原因**: 测试程序需要加载同级目录下的动态库（DLL/so）或相对路径的资源文件。如果从项目根目录运行，可能会导致加载失败。
-*   **正确做法**: `cd out/build/<preset>/bin && ./gkNextUnitTests`
-*   **错误做法**: `./out/build/<preset>/bin/gkNextUnitTests` (这样 CWD 是项目根目录)
+### 1. 单元测试执行
+- 测试不再要求 CWD 为 `bin`，直接用可执行文件路径启动即可：
+  `./out/build/<preset>/bin/gkNextUnitTests`
+- 按名称/标签筛选：`gkNextUnitTests "RenderComponent Usage"` 或 `gkNextUnitTests "[Unit][RenderComponent]"`。
 
 ### 2. 编译验证
 - **每次修改**: 代码修改后必须验证编译成功。
@@ -41,13 +38,13 @@
 ## 📂 项目结构理解
 
 ### 核心目录
-- `src/Runtime/`: 核心运行时代码
-- `src/Runtime/Platform/`: 平台特定代码 (通过 `PlatformCommon.h` 暴露)
-- `src/Vulkan/`: Vulkan 渲染后端
+- `src/Engine/Runtime/`: 核心运行时代码（ECS、脚本、反射）
+- `src/Engine/Common/`: 跨平台抽象（通过 `PlatformCommon.h` 暴露）
+- `src/Engine/Vulkan/`: Vulkan 渲染后端
 - `src/Tests/`: 单元测试代码 (Catch2)
 
 ### 关键文件
-- `src/Common/CoreMinimal.hpp`: 统一头文件，包含标准库和基础类型。
+- `src/Engine/Common/CoreMinimal.hpp`: 统一头文件，包含标准库和基础类型。
 - `vcpkg.json`: 依赖定义。
 
 ---

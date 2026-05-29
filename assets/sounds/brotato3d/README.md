@@ -1,8 +1,17 @@
-# Brotato3D Audio Placeholders
+# Brotato3D Audio
 
-This directory intentionally does not include audio assets. Add local `.wav` files with the names below. Prefer CC0 sources such as freesound.org, OpenGameArt CC0 packs, or self-recorded/AI-generated assets that you have rights to use.
+This directory ships no audio binaries. SFX are loaded from the `sfx/` subdirectory
+here (`assets/sounds/brotato3d/sfx/`, resolved by `Brotato3D::Assets::Sfx`) and are
+normally packed into `assets/paks/brotato3d.pak`. To author your own, add `.wav` files
+with the names below under `sfx/`. Prefer CC0 sources such as freesound.org, OpenGameArt
+CC0 packs, or self-recorded/AI-generated assets you have rights to use.
 
-## Required SFX
+> BGM is handled separately: `Brotato3D::PlaceholderAssets::Bgm` reads
+> `assets/_placeholder/brotato/audio/bgm/bgm_<cue>.mp3` (proprietary placeholder, not
+> distributed). The `.wav` BGM names below are the legacy target if you re-home BGM
+> alongside the SFX.
+
+## Required SFX (under `sfx/`)
 
 - `fire_smg.wav` - short light automatic gunshot, search: `cc0 sci fi smg burst`
 - `fire_shotgun.wav` - punchy shotgun blast, search: `cc0 shotgun game`

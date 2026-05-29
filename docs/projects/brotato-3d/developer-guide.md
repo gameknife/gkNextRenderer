@@ -9,7 +9,7 @@ last_updated: 2026-05-10
 
 本文是 Brotato3D 的开发者梳理文档，目的是让你在阅读完后可以**快速完成数值调整、新增敌人/武器/物品、调整波次和角色配置**。文档不覆盖引擎层细节（Vulkan/RT/ECS），只关注 Brotato3D 子项目的玩法、配置和资产组织。
 
-> 想先了解 Brotato3D 的项目定位，请读 `introduction.md`；想了解当前开发计划，请参考同目录下的 `plan.md`、`product-plan.md`、`loot-overhaul-plan.md`、`dusk-extraction-plan.md` 等。
+> 想先了解 Brotato3D 的项目定位，请读 `introduction.md`；想了解代码结构与工程模式，请读 `AGENT_GUIDE/Brotato3D.md`。
 
 ---
 
@@ -21,7 +21,8 @@ Brotato3D 是一款 **C++ 原生** 子应用（不是 QuickJS 脚本游戏），
 | --- | --- |
 | [src/Application/Game/Brotato3D/](../../../src/Application/Game/Brotato3D) | 全部 C++ 源码（32 个 cpp/hpp） |
 | [assets/configs/brotato3d/](../../../assets/configs/brotato3d) | 9 个 JSON 配置（敌人/武器/角色/波次/物品/商店/升级/场景/i18n） |
-| `assets/_placeholder/brotato/` | 占位音频、字体、UI 图标（参考资源，**不可分发**） |
+| `assets/sounds/brotato3d/` · `assets/textures/brotato3d/` | 官方 SFX 与 UI 图标，打包进 `assets/paks/brotato3d.pak` 运行时挂载 |
+| `assets/_placeholder/brotato/` | 仍待替换的占位 BGM / 字体 / HUD·菜单图（Brotato 参考素材，**不可分发**） |
 
 **一切玩法数值都通过 JSON 配置驱动**，C++ 只实现**机制（mechanics）**，例如"什么是 charge 冲撞"，而具体冲撞距离、冷却、伤害倍率全在 JSON 里。新增数据通常无需改 C++；只有新增**新机制**（例如全新的怪物 AI 类型）才需要改 C++。
 
@@ -89,7 +90,7 @@ Idle → Active → (waveTimeRemainingSec → 0) → DuskSurge → (玩家进入
 
 ### 2.2 经验与升级
 
-- 击杀敌人喷出 `materialDrop` 个 Material 碎块；每点造成的伤害都喷一个 XP 碎块（[loot-overhaul-plan.md](loot-overhaul-plan.md)）。
+- 击杀敌人喷出 `materialDrop` 个 Material 碎块；每点造成的伤害都喷一个 XP 碎块。
 - 升级所需 XP：[Brotato3DPlayerSystem.cpp:380](../../../src/Application/Game/Brotato3D/Brotato3DPlayerSystem.cpp)
   ```cpp
   return 20 + level * 10 + level * level * 2;
@@ -175,7 +176,7 @@ crit   = round(damage * critMultiplier) when rng < (critChancePct + weapon.critC
 
 **视觉**：当前所有敌人都是程序化盒子，模型是按 `size` 自动生成的（[Brotato3DEffectSystem.cpp:241](../../../src/Application/Game/Brotato3D/Brotato3DEffectSystem.cpp)）。颜色取自 `color`，并自动派生 4 个材质：基础 / 暗化 / 命中白闪 / 红色警告 / Boss 二阶段红。**不需要**自己写材质代码。
 
-**HUD 图标**（可选）：放置 `assets/_placeholder/brotato/ui/icons/enemies/<enemyId>.png`。文件不存在不会报错，只是 HUD 不显示。
+**HUD 图标**（可选）：放置 `assets/textures/brotato3d/icons/enemies/<enemyId>.png`。文件不存在不会报错，只是 HUD 不显示。
 
 ### 3.2 新增 / 调整一把武器
 
@@ -250,7 +251,7 @@ crit   = round(damage * critMultiplier) when rng < (critChancePct + weapon.critC
 
 `startStats` 字段集合见 [`ReadPlayerStats`](../../../src/Application/Game/Brotato3D/Brotato3DDataLoader.cpp)。`color` 同时用于角色模型主体材质、Dash 拖尾、玩家受伤碎块色（[Brotato3DPlayerSystem.cpp:555](../../../src/Application/Game/Brotato3D/Brotato3DPlayerSystem.cpp)）。
 
-可选：`assets/_placeholder/brotato/ui/icons/characters/<id>.png` 用于角色选择面板。
+可选：`assets/textures/brotato3d/icons/characters/<id>.png` 用于角色选择面板。
 
 ### 3.4 新增升级卡（每级 3 选 1）
 
@@ -340,29 +341,24 @@ HUD 中的相机始终俯视玩家头顶，跟随有一个 `CameraFollowSharpnes
 
 ## 4. 资产组织
 
-### 4.1 占位资产 (placeholder) 的取舍
+### 4.1 官方资产与占位资产
 
-`assets/_placeholder/brotato/` 是 **Brotato 原版游戏的引用资源**，仅用于本地开发参考，**严禁随版本分发**。代码会在 `Brotato3DAssetPaths.hpp` 里 fallback 到引擎自带字体；不存在的图标 / SFX 会静默跳过。
+[Brotato3DAssetPaths.hpp](../../../src/Application/Game/Brotato3D/Brotato3DAssetPaths.hpp) 分两类：
 
-启动日志若出现：
+- **`Brotato3D::Assets`（官方，可分发）**：SFX 与 UI 图标，落在 `assets/sounds/brotato3d/` 与 `assets/textures/brotato3d/`，打包进 `assets/paks/brotato3d.pak`（重建见 [`tools/brotato3d-pak/README.md`](../../../tools/brotato3d-pak/README.md)）。返回的是工程根相对路径，由引擎 package file system 负责 pak 查找与磁盘 fallback。
+- **`Brotato3D::PlaceholderAssets`（仍待替换，不可分发）**：BGM / 字体 / HUD·菜单图，仍来自 **Brotato 原版引用资源** `assets/_placeholder/brotato/`，仅供本地开发，**严禁随版本分发**。`Resolve()` 支持运行时根目录与仓库根目录两种 fallback；缺失资源静默跳过（字体会 fallback 到引擎自带字体）。
 
-```
-[PLACEHOLDER ASSETS] Brotato vendor reference assets detected — DO NOT DISTRIBUTE
-```
+启动日志若出现 `[PLACEHOLDER ASSETS] Brotato vendor reference assets detected — DO NOT DISTRIBUTE`，说明检测到占位素材，打包前请移除 `assets/_placeholder/brotato/`。
 
-说明检测到了占位音效，请在打包前移除 `assets/_placeholder/brotato/`。
+### 4.2 资产路径 API
 
-### 4.2 资产路径
-
-通过 [Brotato3DAssetPaths.hpp](../../../src/Application/Game/Brotato3D/Brotato3DAssetPaths.hpp) 的 `Resolve()` 解析，**支持运行时根目录与仓库根目录两种 fallback**，所以本地从 `bin/` 或仓库根目录都能跑通。
-
-| API | 路径模板 |
-| --- | --- |
-| `Sfx("xxx.wav")` | `assets/_placeholder/brotato/audio/sfx/xxx.wav` |
-| `Bgm("battle.mp3")` | `assets/_placeholder/brotato/audio/bgm/battle.mp3` |
-| `Font("xxx.ttf")` | `assets/_placeholder/brotato/fonts/xxx.ttf` |
-| `Icon("enemies", "rat")` | `assets/_placeholder/brotato/ui/icons/enemies/rat.png` |
-| `Hud("xxx.png")` `Menu("xxx.png")` | `assets/_placeholder/brotato/ui/hud / menu/...` |
+| API | 路径模板 | 类别 |
+| --- | --- | --- |
+| `Assets::Sfx("xxx.wav")` | `assets/sounds/brotato3d/sfx/xxx.wav` | 官方（pak） |
+| `Assets::Icon("enemies", "rat")` | `assets/textures/brotato3d/icons/enemies/rat.png` | 官方（pak） |
+| `PlaceholderAssets::Bgm("battle.mp3")` | `assets/_placeholder/brotato/audio/bgm/battle.mp3` | 占位 |
+| `PlaceholderAssets::Font("xxx.ttf")` | `assets/_placeholder/brotato/fonts/xxx.ttf` | 占位 |
+| `PlaceholderAssets::Hud/Menu("xxx.png")` | `assets/_placeholder/brotato/ui/hud · menu/...` | 占位 |
 
 ### 4.3 关键音效约定
 
@@ -436,7 +432,7 @@ HUD 中的相机始终俯视玩家头顶，跟随有一个 `CameraFollowSharpnes
 ## 9. 还没做的扩展点（开发者注意）
 
 - **武器商店价**写死在 [Brotato3DShop.cpp:46](../../../src/Application/Game/Brotato3D/Brotato3DShop.cpp) —— 想做"贵重武器"得抽进 `weapons.json` 的字段。
-- **`duskBonusXpMult`** 字段已加载但还没乘进任何地方（loot-overhaul 计划中）。
+- **`duskBonusXpMult`** 字段已加载但还没乘进任何地方（预留）。
 - **场景选择**只有"绿野"会被默认应用。
 - **新 trigger/effect** 必须改 C++（见 §3.6）。
 - **外部图标**只在 HUD 命中槽位有 fallback；新增 weapon/character/item 不放 PNG 也能玩，UI 只是空白。
@@ -446,10 +442,5 @@ HUD 中的相机始终俯视玩家头顶，跟随有一个 `CameraFollowSharpnes
 ## 10. 进一步阅读
 
 - [introduction.md](introduction.md) — 项目定位与系统概览
-- [plan.md](plan.md), [product-plan.md](product-plan.md) — 项目愿景
-- [loot-overhaul-plan.md](loot-overhaul-plan.md) — XP/Material 碎块统一化的设计动机
-- [dusk-extraction-plan.md](dusk-extraction-plan.md) — 黄昏潮 + 撤离车机制的来历
-- [arena-expansion-plan.md](arena-expansion-plan.md) — 多场景路线图
-- [feel-polish-plan.md](feel-polish-plan.md) — 手感打磨（Jolt 物理碎块等）
-- [asset-polish-plan.md](asset-polish-plan.md) — 美术资源换皮路径
+- [`AGENT_GUIDE/Brotato3D.md`](../../../AGENT_GUIDE/Brotato3D.md) — Brotato3D 代码结构梳理（god-class + 子系统拆分、对象池、数据模型）
 - 引擎层文档：[`AGENT_GUIDE/`](../../../AGENT_GUIDE/) 与 [`AGENTS.md`](../../../AGENTS.md)

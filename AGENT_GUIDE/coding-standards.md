@@ -1,4 +1,4 @@
-# Copilot Code Review Instructions / Copilot 代码审查指南
+# 编码规范与代码审查指南 / Coding Standards & Code Review
 
 ## 项目概览 / Project Overview
 
@@ -80,7 +80,7 @@
 ### 3. 平台兼容性 / Platform Compatibility
 
 **必须支持的平台:**
-- Windows (MSVC 2022 / MinGW)
+- Windows (MSVC 2022)
 - Linux (GCC/Clang)
 - macOS (arm64, Clang)
 - Android (NDK r27, arm64)
@@ -159,7 +159,7 @@
 ### 8. 构建系统 / Build System
 
 **工具链:**
-- CMake 3.10+, Ninja
+- CMake 3.26+, Ninja
 - vcpkg 管理依赖（`vcpkg.json` / `vcpkg-configuration.json`）
 - 平台脚本入口在根：`gnb.sh` / `gnb.bat`
 - 实现位于 `tools/gnb/`
@@ -176,10 +176,11 @@
 ### 9. 测试与验证 / Testing & Validation
 
 **当前测试策略:**
-- 无自动化单元测试（需手动验证）
-- 关键平台需构建并运行主程序验证
+- Catch2 单元测试 `gkNextUnitTests`，直接用可执行文件路径启动（不再要求 CWD 为 bin）
+- 渲染改动用 `gkNextRenderer` 目视验证，或跑 `gkNextVisualTest` 生成截图报告
 
 **审查建议:**
+- [ ] 触及核心系统时补充/更新对应的 Catch2 测试
 - [ ] 渲染改动需附截图对比（性能改动需附 FPS 数据）
 - [ ] 跨平台改动需在至少 2 个平台验证
 - [ ] 着色器改动需运行 `gkNextRenderer` 目视检查
@@ -218,7 +219,7 @@
 
 - ✅ **运行 clang-tidy 自动修正命名**：
   ```bash
-  python3 tools/clang-tools/run-clang-tidy.py -p build/<platform> -fix -j <N>
+  python3 tools/clang-tools/run-clang-tidy.py -p out/build/<platform> -fix -j <N>
   ```
 - ✅ **生成 compile_commands.json**（禁用 Unity Build）：
   ```bash
@@ -262,44 +263,7 @@
 
 ---
 
-## 扩展与更新建议 / Extension & Update Notes
+## 反馈 / Feedback
 
-本文档为 **初始版本**，后续可根据项目演进扩展以下内容：
-
-1. **自动化测试规范**：
-   - 单元测试框架（如 Google Test）
-   - 持续集成（CI）测试覆盖率要求
-   - 渲染回归测试（图像对比工具）
-
-2. **性能基准**：
-   - 关键场景 FPS 基线（如 LuxBall, Complex）
-   - 内存占用上限（移动平台）
-   - 着色器编译时间监控
-
-3. **API 设计规范**：
-   - 公共接口设计模式（Builder, Factory 等）
-   - 错误码定义（统一 enum）
-   - 异步 API 回调约定
-
-4. **安全性检查**：
-   - 输入验证（特别是网络/文件输入）
-   - 缓冲区溢出检查（使用 ASAN/UBSAN）
-   - 着色器注入防护（材质编辑器）
-
-5. **多语言支持**：
-   - UI 本地化流程（`assets/locale/`）
-   - 字符串外部化（避免硬编码文本）
-   - 字体渲染优化（CJK 字符）
-
----
-
-## 联系与反馈 / Contact & Feedback
-
-如有疑问或建议，请通过以下方式联系：
-- GitHub Issues: [gameknife/gkNextRenderer](https://github.com/gameknife/gkNextRenderer/issues)
+- GitHub Issues: [gameknife/gkNextEngine](https://github.com/gameknife/gkNextEngine/issues)
 - 提交 PR 并在描述中说明改动理由
-
----
-
-**最后更新 / Last Updated:** 2025-10-09  
-**维护者 / Maintainer:** @gameknife

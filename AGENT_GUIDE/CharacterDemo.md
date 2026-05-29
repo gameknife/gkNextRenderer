@@ -126,7 +126,7 @@ OnSceneUnloaded ResetCharacterState（销毁 actor/AI/导航）
 - **坐标/朝向**：玩法在 XZ 平面，yaw = `atan2(dir.x, dir.z)`。转向限速统一用 `NextGameplay::AdvanceYawToward`。
 - **控制意图**：永远 `SetControlIntent → controller.Update → ConsumeJumpRequested`，别让输入直接改 transform。
 - **反射**：`OnInit` 里调一次 `NextGameplay::RegisterGameplayReflection()`（内部有幂等守卫）。新增反射组件就在 `GameplayReflectionRegistry.cpp` 里加一行注册。
-- **可选资产**：CharacterDemo 依赖 KayKit + Mannequin 资产包，缺失时 `OnInit` 弹框提示跑 `scripts/fetch-paks.{sh,bat} --optional` 而不是崩溃。
+- **可选资产**：CharacterDemo 依赖 KayKit + Mannequin 资产包，缺失时 `OnInit` 弹框提示获取可选资源包（`gnb paks fetch optional`）而不是崩溃。
 
 ---
 
@@ -169,5 +169,4 @@ gnb.bat build gkNextUnitTests        # 改了 NextGameplay 必须连带构建
 
 - [`AGENT_GUIDE/Brotato3D.md`](Brotato3D.md) / [`AGENT_GUIDE/MagicaLego.md`](MagicaLego.md) —— 另两个 C++ 游戏的同类梳理
 - [`AGENT_GUIDE/ReflectionSystem.md`](ReflectionSystem.md) —— entt::meta 反射（CharacterDemo 的组件就靠它进编辑器）
-- `docs/plans/2026-05/refactor/phase-05-nextgameplay.md` —— NextGameplay 当初从游戏里抽取出来的重构计划（历史背景）
 - [`AGENTS.md`](../AGENTS.md) —— 引擎全局规范、构建/命名/目录约定
