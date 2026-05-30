@@ -320,6 +320,22 @@ TEST_CASE("Scad echo / assert / str are accepted", "[Unit][Scad]")
     CHECK(TotalTriangles(result) == 12);
 }
 
+TEST_CASE("Scad negative-determinant transforms keep outward winding", "[Unit][Scad]")
+{
+    const EvalResult result = EvalProgram("mirror([1,0,0]) cube([1,1,1]);\n");
+    REQUIRE(result.buckets.size() == 1);
+
+    const auto& tris = result.buckets.begin()->second.tris;
+    REQUIRE(tris.size() == 36);
+    const glm::dvec3 center(-0.5, 0.5, 0.5);
+    for (size_t i = 0; i + 2 < tris.size(); i += 3)
+    {
+        const glm::dvec3 normal = glm::cross(tris[i + 1] - tris[i + 0], tris[i + 2] - tris[i + 0]);
+        const glm::dvec3 centroid = (tris[i + 0] + tris[i + 1] + tris[i + 2]) / 3.0;
+        CHECK(glm::dot(normal, centroid - center) > 0.0);
+    }
+}
+
 TEST_CASE("Scad loader: use imports definitions without executing previews", "[Unit][Scad]")
 {
     ScopedDir dir;
@@ -350,6 +366,71 @@ TEST_CASE("Scad loader: use imports definitions without executing previews", "[U
     auto render = nodes[0]->GetComponent<Runtime::RenderComponent>();
     REQUIRE(render);
     CHECK(render->GetModelId() == 0);
+}
+
+TEST_CASE("Scad loader: comments and strings do not create use/include directives", "[Unit][Scad]")
+{
+    ScopedDir dir;
+    const std::filesystem::path mainPath = dir.Write("main.scad",
+              "echo(\"use <missing_from_string.scad>\");\n"
+              "// include <missing_from_comment.scad>\n"
+              "/* use <missing_from_block_comment.scad> */\n"
+              "cube([1,1,1]);\n");
+
+    Assets::EnvironmentSetting environment;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    REQUIRE(Assets::FScadLoader::LoadScadScene(
+        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+    REQUIRE(models.size() == 1);
+    CHECK(models[0].NumberOfVertices() == 36);
+}
+
+TEST_CASE("Scad loader: include executes a file even if use imported it first", "[Unit][Scad]")
+{
+    ScopedDir dir;
+    dir.Write("lib.scad",
+              "module box1() { cube([1,1,1]); }\n"
+              "box1();\n");
+    const std::filesystem::path mainPath = dir.Write("main.scad",
+              "use <lib.scad>\n"
+              "include <lib.scad>\n"
+              "box1();\n");
+
+    Assets::EnvironmentSetting environment;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    REQUIRE(Assets::FScadLoader::LoadScadScene(
+        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+    REQUIRE(models.size() == 1);
+    CHECK(models[0].NumberOfVertices() == 72);
+}
+
+TEST_CASE("Scad loader: parse errors fail the load", "[Unit][Scad]")
+{
+    ScopedDir dir;
+    const std::filesystem::path mainPath = dir.Write("bad.scad", "cube([1, 2,\n");
+
+    Assets::EnvironmentSetting environment;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    CHECK_FALSE(Assets::FScadLoader::LoadScadScene(
+        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
 }
 
 TEST_CASE("Scad loader: Z-up converts to engine Y-up", "[Unit][Scad]")

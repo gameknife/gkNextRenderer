@@ -10,6 +10,7 @@
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Utilities/FileHelper.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cctype>
 #include <cmath>
@@ -108,6 +109,43 @@ namespace Assets
 
             for (size_t i = 0; i < source.size();)
             {
+                if (source[i] == '"')
+                {
+                    ++i;
+                    while (i < source.size())
+                    {
+                        if (source[i] == '\\' && i + 1 < source.size())
+                        {
+                            i += 2;
+                            continue;
+                        }
+                        if (source[i++] == '"')
+                        {
+                            break;
+                        }
+                    }
+                    continue;
+                }
+                if (source[i] == '/' && i + 1 < source.size() && source[i + 1] == '/')
+                {
+                    i += 2;
+                    while (i < source.size() && source[i] != '\n')
+                    {
+                        ++i;
+                    }
+                    continue;
+                }
+                if (source[i] == '/' && i + 1 < source.size() && source[i + 1] == '*')
+                {
+                    i += 2;
+                    while (i + 1 < source.size() && !(source[i] == '*' && source[i + 1] == '/'))
+                    {
+                        ++i;
+                    }
+                    i = std::min(i + 2, source.size());
+                    continue;
+                }
+
                 size_t next = tryMatch(i, "use", false);
                 if (next == 0)
                 {
@@ -224,7 +262,8 @@ namespace Assets
         std::unordered_map<std::string, scad::StmtPtr> functionTable;
         scad::Scope mainTopLevel;
 
-        std::unordered_set<std::string> visited;
+        std::unordered_set<std::string> parsedDefinitions;
+        std::unordered_set<std::string> executedTopLevel;
         struct WorkItem
         {
             fs::path path;
@@ -238,17 +277,23 @@ namespace Assets
         {
             const WorkItem item = queue[head++];
             const std::string key = item.path.string();
-            if (visited.count(key) != 0)
+            if (item.executable)
+            {
+                if (executedTopLevel.count(key) != 0)
+                {
+                    continue;
+                }
+            }
+            else if (parsedDefinitions.count(key) != 0)
             {
                 continue;
             }
-            visited.insert(key);
 
             std::string source;
             if (!ScadReadFile(item.path, source))
             {
-                SPDLOG_WARN("SCAD: cannot read referenced file: {}", key);
-                continue;
+                SPDLOG_ERROR("SCAD: cannot read referenced file: {}", key);
+                return false;
             }
 
             std::string stripped;
@@ -259,13 +304,19 @@ namespace Assets
             if (!scad::ScadLexer::Tokenize(stripped, tokens, err))
             {
                 SPDLOG_ERROR("SCAD: lex error in {}: {}", key, err);
-                continue;
+                return false;
             }
             scad::Scope scope;
             if (!scad::ScadParser::Parse(tokens, scope, err))
             {
                 SPDLOG_ERROR("SCAD: parse error in {}: {}", key, err);
-                continue;
+                return false;
+            }
+
+            parsedDefinitions.insert(key);
+            if (item.executable)
+            {
+                executedTopLevel.insert(key);
             }
 
             for (const scad::StmtPtr& s : scope)

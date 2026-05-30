@@ -5,8 +5,8 @@
 #endif
 
 #if GK_WITH_MANIFOLD
+#include <cmath>
 #include <cstdint>
-#include <cstring>
 #include <unordered_map>
 
 #include <manifold/manifold.h>
@@ -19,29 +19,36 @@ namespace Assets::scad
     {
         struct VKey
         {
-            double x, y, z;
+            int64_t x, y, z;
             bool operator==(const VKey& o) const { return x == o.x && y == o.y && z == o.z; }
         };
+
+        VKey QuantizedKey(const glm::dvec3& p)
+        {
+            constexpr double weldEpsilon = 1e-9;
+            return VKey{
+                static_cast<int64_t>(std::llround(p.x / weldEpsilon)),
+                static_cast<int64_t>(std::llround(p.y / weldEpsilon)),
+                static_cast<int64_t>(std::llround(p.z / weldEpsilon))};
+        }
 
         struct VKeyHash
         {
             size_t operator()(const VKey& k) const
             {
-                uint64_t bits[3];
-                std::memcpy(&bits[0], &k.x, sizeof(double));
-                std::memcpy(&bits[1], &k.y, sizeof(double));
-                std::memcpy(&bits[2], &k.z, sizeof(double));
                 size_t h = 1469598103934665603ull;
-                for (uint64_t b : bits)
+                const int64_t values[3] = {k.x, k.y, k.z};
+                for (int64_t v : values)
                 {
-                    h ^= static_cast<size_t>(b);
+                    h ^= static_cast<size_t>(v);
                     h *= 1099511628211ull;
                 }
                 return h;
             }
         };
 
-        // Welds an unindexed triangle soup (exact position match) into a Manifold.
+        // Welds an unindexed triangle soup into a Manifold. Quantized keys avoid
+        // leaving tiny seam gaps from repeated trig evaluation at 0 / 2pi.
         manifold::Manifold ToManifold(const TriSoup& soup, bool& ok)
         {
             ok = false;
@@ -58,7 +65,7 @@ namespace Assets::scad
             mesh.triVerts.reserve(soup.size());
             for (const glm::dvec3& p : soup)
             {
-                const VKey key{p.x, p.y, p.z};
+                const VKey key = QuantizedKey(p);
                 auto found = lookup.find(key);
                 uint32_t index;
                 if (found != lookup.end())

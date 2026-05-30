@@ -660,9 +660,23 @@ namespace Assets::scad
                 cs.color = color;
                 cs.hasColor = hasColor;
                 cs.soup.reserve(objSpace.size());
-                for (const glm::dvec3& p : objSpace)
+                const bool flipWinding = glm::determinant(glm::dmat3(xform)) < 0.0;
+                for (size_t i = 0; i + 2 < objSpace.size(); i += 3)
                 {
-                    cs.soup.push_back(glm::dvec3(xform * glm::dvec4(p, 1.0)));
+                    const glm::dvec3 a = glm::dvec3(xform * glm::dvec4(objSpace[i + 0], 1.0));
+                    const glm::dvec3 b = glm::dvec3(xform * glm::dvec4(objSpace[i + 1], 1.0));
+                    const glm::dvec3 c = glm::dvec3(xform * glm::dvec4(objSpace[i + 2], 1.0));
+                    cs.soup.push_back(a);
+                    if (flipWinding)
+                    {
+                        cs.soup.push_back(c);
+                        cs.soup.push_back(b);
+                    }
+                    else
+                    {
+                        cs.soup.push_back(b);
+                        cs.soup.push_back(c);
+                    }
                 }
                 GeomList out;
                 out.push_back(std::move(cs));
