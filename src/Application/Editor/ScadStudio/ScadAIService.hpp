@@ -1,0 +1,64 @@
+#pragma once
+
+#include "Engine/Runtime/Subsystems/AI/AIChat.hpp"
+
+#include <atomic>
+#include <mutex>
+#include <string>
+#include <vector>
+
+class NextEngine;
+
+namespace ScadStudio
+{
+    // Result of one generation turn, consumed on the main thread.
+    struct FScadGenResult
+    {
+        bool success = false;
+        std::string assistantText; // full model reply (for the chat bubble)
+        std::string scadSource;    // extracted ```scad``` block (empty if none)
+        std::string error;         // populated when success == false
+    };
+
+    // Thin wrapper around the engine's NextAI::FAIService that:
+    //  - builds a SCAD-specialised system prompt constraining output to the loader subset,
+    //  - runs FAIService::Chat() on a background thread (the engine API is blocking),
+    //  - marshals the result back to the main thread via an atomic/mutex hand-off
+    //    (mirrors the MagicaLego / Editor AI service pattern).
+    class ScadAIService
+    {
+    public:
+        explicit ScadAIService(NextEngine& engine);
+
+        bool IsConfigured() const;
+        bool IsGenerating() const { return generating_.load(); }
+        std::string ProviderName() const;
+
+        // Kick off a generation. `currentSource` is the authoritative model state fed
+        // back so multi-turn edits ("make it taller") resolve correctly; pass empty for
+        // a fresh model. Safe to call only when !IsGenerating().
+        void SubmitAsync(const std::string& currentSource, const std::string& instruction);
+
+        bool HasPendingResult() const { return hasPending_.load(); }
+        FScadGenResult TakePendingResult();
+
+        // Drop multi-turn history (e.g. when switching sessions).
+        void ResetConversation();
+
+    private:
+        std::string BuildSystemPrompt() const;
+        static std::string ExtractScadBlock(const std::string& text);
+
+        NextEngine& engine_;
+
+        std::atomic<bool> generating_{false};
+        std::atomic<bool> hasPending_{false};
+        std::mutex mutex_;
+        FScadGenResult pending_;
+
+        // Plain-text turn history (no embedded source); the live source is injected into
+        // the latest user message at request-build time. Main-thread only.
+        std::vector<NextAI::FChatMessage> conversation_;
+        static constexpr size_t kMaxConversationMessages = 24;
+    };
+}

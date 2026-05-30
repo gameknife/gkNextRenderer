@@ -130,6 +130,11 @@ add_executable(gkNextEditor
 	DesktopMain.cpp
 )
 target_include_directories(gkNextEditor PRIVATE Application/Editor/gkNextEditor)
+add_executable(ScadStudio
+	${src_files_scadstudio}
+	DesktopMain.cpp
+)
+target_include_directories(ScadStudio PRIVATE Application/Editor/ScadStudio)
 add_executable(MagicaLego
 	${src_files_magicalego}
 	DesktopMain.cpp
@@ -228,6 +233,7 @@ gkNextStillBenchmark
 gkNextMotionBenchmark
 	gkNextVisualTest
 	gkNextEditor
+	ScadStudio
 	Packager
 	MagicaLego
 	KongLie3D
