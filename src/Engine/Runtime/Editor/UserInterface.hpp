@@ -1,4 +1,5 @@
 #pragma once
+#include "Engine/Common/CoreMinimal.hpp" // GK_NON_COPIABLE
 #include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"

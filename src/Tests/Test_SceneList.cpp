@@ -8,6 +8,7 @@ TEST_CASE("Runtime::Scene::SceneList recognizes supported scene extensions", "[U
     CHECK(Runtime::Scene::SceneList::IsSupportedSceneExtension(".gltf"));
     CHECK(Runtime::Scene::SceneList::IsSupportedSceneExtension(".ldr"));
     CHECK(Runtime::Scene::SceneList::IsSupportedSceneExtension(".mpd"));
+    CHECK(Runtime::Scene::SceneList::IsSupportedSceneExtension(".scad"));
 
     CHECK(Runtime::Scene::SceneList::IsSupportedSceneExtension(".GLB"));
     CHECK(Runtime::Scene::SceneList::IsSupportedSceneExtension(".LDR"));

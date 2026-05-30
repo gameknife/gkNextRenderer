@@ -207,6 +207,7 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
   - `QuickJSBindings.md` - JS/TS engine bindings and replay parity demo
   - `HotReload.md` - Shader/script hot reload mechanics
   - `LDrawLoader.md` - LDraw model loading (used by MagicaLego/BrickPlayer)
+  - `SCADLoader.md` - OpenSCAD (.scad) DSL loading (parser/evaluator/CSG via Manifold/text via FreeType)
   - `PrefabSceneWorkflow.md` - KayKit procedural scene prefab workflow
   - `MagicaLego.md` - MagicaLego subproject notes
   - `Brotato3D.md` - Brotato3D code structure (god-class + per-system split, runtime data model, object pools)

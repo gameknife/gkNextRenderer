@@ -13,6 +13,7 @@ struct UserSettings final
 	// Scene
 	int SceneIndex {};
     float LDrawLduToWorldScale = 0.001f;
+    float ScadToWorldScale = 1.0f;
 
 	// Renderer
 	int32_t NumberOfSamples;

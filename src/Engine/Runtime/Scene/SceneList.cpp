@@ -18,6 +18,7 @@
 
 #include "Engine/Assets/Loaders/FProcModel.h"
 #include "Engine/Assets/Loaders/FLDrawLoader.h"
+#include "Engine/Assets/Loaders/FScadLoader.h"
 #include "Engine/Assets/Loaders/FSceneLoader.h"
 #include "Engine/Assets/Loaders/KayKitPieceLoader.h"
 #include "Engine/Assets/Core/Node.h"
@@ -47,7 +48,8 @@ namespace
         Procedural = 0,
         Gltf = 1,
         LDraw = 2,
-        Other = 3,
+        Scad = 3,
+        Other = 4,
     };
 
     std::string ToLowerCopy(std::string value)
@@ -72,14 +74,19 @@ namespace
         {
             return ESceneCategory::LDraw;
         }
+        if (extension == ".scad")
+        {
+            return ESceneCategory::Scad;
+        }
         return ESceneCategory::Other;
     }
 
-    constexpr std::array<std::string_view, 4> kSupportedSceneExtensions{
+    constexpr std::array<std::string_view, 5> kSupportedSceneExtensions{
         ".glb",
         ".gltf",
         ".ldr",
         ".mpd",
+        ".scad",
     };
 
     int CreateMaterial(std::vector<Assets::FMaterial>& materials, Material mat)
@@ -1624,6 +1631,21 @@ void SceneList::ScanScenes()
         }
     }
 
+    // Scan assets/scad/ for top-level .scad files (sub-modules under nested
+    // directories are pulled in via `use`/`include`, not listed as scenes).
+    std::string scadPath = "assets/scad/";
+    std::filesystem::path scadDir = Utilities::FileHelper::GetPlatformFilePath(scadPath.c_str());
+    if (std::filesystem::exists(scadDir))
+    {
+        for (const auto& entry : std::filesystem::directory_iterator(scadDir))
+        {
+            if (!entry.is_regular_file()) continue;
+            if (!IsSupportedScenePath(entry.path())) continue;
+            std::filesystem::path filename = entry.path().filename();
+            AllScenes.push_back((scadPath / filename).string());
+        }
+    }
+
     // Pull additional top-level scene entries from any mounted paks (e.g. optional.pak),
     // so files moved out of the on-disk tree still appear in the scene list.
     auto* pakSystem = Utilities::Package::FPackageFileSystem::TryGetInstance();
@@ -1708,6 +1730,25 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
             tracks,
             skeletons,
             ldrawOptions);
+    }
+    if (ext == ".scad")
+    {
+        Assets::ScadLoadOptions scadOptions;
+        if (NextEngine* engine = NextEngine::GetInstance())
+        {
+            scadOptions.scadToWorldScale = engine->GetUserSettings().ScadToWorldScale;
+        }
+
+        return Assets::FScadLoader::LoadScadScene(
+            filename,
+            camera,
+            nodes,
+            models,
+            materials,
+            lights,
+            tracks,
+            skeletons,
+            scadOptions);
     }
     if (ext == ".proc")
     {
