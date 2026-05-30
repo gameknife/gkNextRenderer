@@ -109,6 +109,8 @@ namespace NextCVar
                         std::bind(ApplyBorderlessFullscreenIfPossible, engine, std::cref(settings)));
         GK_CVAR_FLOAT("sys.ldrawLduToWorldScale", settings, LDrawLduToWorldScale, 0.02f, ECVarFlags::Archive,
                       "World-space units represented by one LDraw LDU when loading .ldr/.mpd scenes");
+        GK_CVAR_FLOAT("sys.scadToWorldScale", settings, ScadToWorldScale, 1.0f, ECVarFlags::Archive,
+                      "Uniform world scale applied when loading .scad scenes (1 unit -> N meters)");
         GK_CVAR_FLOAT("sys.sceneEpsilonScale", settings, SceneEpsilonScale, 1.0f, ECVarFlags::Archive,
                       "Scene epsilon scale");
         GK_CVAR_FLOAT("sys.ambientCubeUnit", settings, AmbientCubeUnit, 0.25f, ECVarFlags::Archive,

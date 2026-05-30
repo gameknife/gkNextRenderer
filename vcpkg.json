@@ -51,6 +51,18 @@
     "joltphysics",
     "xxhash",
     "spdlog",
+    {
+      "name": "manifold",
+      "platform": "!(android | ios)"
+    },
+    {
+      "name": "earcut-hpp",
+      "platform": "!(android | ios)"
+    },
+    {
+      "name": "freetype",
+      "platform": "!(android | ios)"
+    },
     "cpp-base64",
     "catch2",
     "entt",
