@@ -66,6 +66,9 @@ file(GLOB_RECURSE src_files_nextgameplay
 # --- Editor ---
 file(GLOB_RECURSE src_files_editor "Application/Editor/gkNextEditor/*")
 
+# --- SCAD Studio (conversational SCAD model generator) ---
+file(GLOB_RECURSE src_files_scadstudio "Application/Editor/ScadStudio/*")
+
 # --- Applications ---
 file(GLOB_RECURSE src_files_magicalego
     "Application/Game/MagicaLego/*.cpp"
