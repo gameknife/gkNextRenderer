@@ -15,6 +15,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <string>
 #include <unordered_map>
 
@@ -186,6 +187,49 @@ TEST_CASE("Scad difference cuts a through-hole with the Manifold backend", "[Uni
     CHECK(TotalTriangles(result) > 12);
 }
 
+TEST_CASE("Scad difference hollows a unioned tapered cup shell", "[Unit][Scad]")
+{
+    if (!ScadCsg::BackendAvailable())
+    {
+        return;
+    }
+
+    const EvalResult result = EvalProgram(
+        "$fn = 96;\n"
+        "difference() {\n"
+        "  union() {\n"
+        "    cylinder(h = 90, r1 = 28, r2 = 28 * 0.95);\n"
+        "    cylinder(h = 8, r = 28 * 1.02);\n"
+        "  }\n"
+        "  translate([0, 0, 8]) cylinder(h = 91, r1 = 24, r2 = 24 * 0.95);\n"
+        "}\n");
+
+    REQUIRE(result.buckets.size() == 1);
+    const auto& tris = result.buckets.begin()->second.tris;
+    bool hasTopCenterCapVertex = false;
+    bool hasTopInnerRimVertex = false;
+    bool hasBottomInnerRimVertex = false;
+    for (const glm::dvec3& p : tris)
+    {
+        const double r = std::sqrt(p.x * p.x + p.y * p.y);
+        if (std::abs(p.z - 90.0) < 1e-5 && r < 1.0)
+        {
+            hasTopCenterCapVertex = true;
+        }
+        if (std::abs(p.z - 90.0) < 1e-5 && r > 22.0 && r < 24.5)
+        {
+            hasTopInnerRimVertex = true;
+        }
+        if (std::abs(p.z - 8.0) < 1e-5 && r > 23.5 && r < 24.5)
+        {
+            hasBottomInnerRimVertex = true;
+        }
+    }
+    CHECK_FALSE(hasTopCenterCapVertex);
+    CHECK(hasTopInnerRimVertex);
+    CHECK(hasBottomInnerRimVertex);
+}
+
 TEST_CASE("Scad color groups split geometry into buckets", "[Unit][Scad]")
 {
     const EvalResult result = EvalProgram(
@@ -280,6 +324,78 @@ TEST_CASE("Scad loader: loads the bundled beer_cup sample when present", "[Unit]
         if (m.gpuMaterial_.MaterialModel == Assets::Material::Enum::Dielectric) anyDielectric = true;
     }
     CHECK(anyDielectric);
+
+    glm::vec3 sceneMin(std::numeric_limits<float>::max());
+    glm::vec3 sceneMax(std::numeric_limits<float>::lowest());
+    for (const Assets::Model& model : models)
+    {
+        sceneMin = glm::min(sceneMin, model.GetLocalAABBMin());
+        sceneMax = glm::max(sceneMax, model.GetLocalAABBMax());
+    }
+    CHECK((sceneMax.y - sceneMin.y) < 0.12f);
+    CHECK((sceneMax.x - sceneMin.x) < 0.12f);
+    CHECK((sceneMax.z - sceneMin.z) < 0.12f);
+}
+
+TEST_CASE("Scad loader: bundled beer_cup glass body is hollow", "[Unit][Scad]")
+{
+    if (!ScadCsg::BackendAvailable())
+    {
+        return;
+    }
+
+    const std::filesystem::path samplePath =
+        std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets/scad/beer_cup.scad"));
+    if (!std::filesystem::exists(samplePath))
+    {
+        WARN("assets/scad/beer_cup.scad not present; skipping sample load");
+        return;
+    }
+
+    Assets::EnvironmentSetting environment;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    REQUIRE(Assets::FScadLoader::LoadScadScene(
+        "assets/scad/beer_cup.scad",
+        environment, nodes, models, materials, lights, tracks, skeletons));
+
+    int glassBodyIndex = -1;
+    for (size_t i = 0; i < materials.size(); ++i)
+    {
+        const glm::vec4 diffuse = materials[i].gpuMaterial_.Diffuse;
+        if (diffuse.a == Catch::Approx(0.28f).margin(1e-3f))
+        {
+            glassBodyIndex = static_cast<int>(i);
+            break;
+        }
+    }
+    REQUIRE(glassBodyIndex >= 0);
+    REQUIRE(static_cast<size_t>(glassBodyIndex) < models.size());
+
+    const Assets::Model& glassBody = models[static_cast<size_t>(glassBodyIndex)];
+    bool hasTopCenterCapVertex = false;
+    bool hasTopInnerRimVertex = false;
+    for (const Assets::Vertex& v : glassBody.CPUVertices())
+    {
+        const glm::vec3 p = v.Position;
+        // Loader converts SCAD (x,y,z) to engine (x,z,-y), so cup top z=0.09m is y=0.09m.
+        const float radial = std::sqrt(p.x * p.x + p.z * p.z);
+        if (std::abs(p.y - 0.09f) < 1e-6f && radial < 0.001f)
+        {
+            hasTopCenterCapVertex = true;
+        }
+        if (std::abs(p.y - 0.09f) < 1e-6f && radial > 0.022f && radial < 0.0245f)
+        {
+            hasTopInnerRimVertex = true;
+        }
+    }
+    CHECK_FALSE(hasTopCenterCapVertex);
+    CHECK(hasTopInnerRimVertex);
 }
 
 TEST_CASE("Scad user module children() forwards child geometry", "[Unit][Scad]")
@@ -480,4 +596,26 @@ TEST_CASE("Scad loader: loads the bundled ancient_city sample when present", "[U
     CHECK(nodes.size() > 1);
     CHECK(models.size() > 1);
     CHECK(materials.size() > 1);
+
+    glm::vec3 sceneMin(std::numeric_limits<float>::max());
+    glm::vec3 sceneMax(std::numeric_limits<float>::lowest());
+    for (const Assets::Model& model : models)
+    {
+        sceneMin = glm::min(sceneMin, model.GetLocalAABBMin());
+        sceneMax = glm::max(sceneMax, model.GetLocalAABBMax());
+    }
+
+    const glm::vec3 extent = sceneMax - sceneMin;
+    CHECK(extent.x == Catch::Approx(330.0f).margin(2.0f));
+    CHECK(extent.z == Catch::Approx(305.0f).margin(2.0f));
+    CHECK(extent.y > 30.0f);
+
+    REQUIRE_FALSE(environment.cameras.empty());
+    const Assets::Camera& camera = environment.cameras[0];
+    const glm::vec3 center = (sceneMin + sceneMax) * 0.5f;
+    const float radius = glm::length(extent) * 0.5f;
+    const glm::vec3 eye = glm::vec3(glm::inverse(camera.ModelView)[3]);
+    const float cameraDistance = glm::distance(eye, center);
+    CHECK(camera.FarPlane > cameraDistance + radius);
+    CHECK(camera.NearPlane < cameraDistance - radius);
 }
