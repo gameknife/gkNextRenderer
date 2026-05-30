@@ -45,6 +45,6 @@
   },
   "notes": {
     "PhysicsShowcase.proc": "Physics motion can have small platform-dependent variance; visual baseline is informational.",
-    "assets/scad/acient_city.scad": "SCAD MVP: CSG difference/intersection are approximated (first child only); arches/holes render solid until the Manifold backend lands."
+    "assets/scad/acient_city.scad": "SCAD loader uses Manifold for CSG on desktop; mobile/no-backend builds may still fall back to approximations."
   }
 }

@@ -1100,15 +1100,20 @@ namespace Assets
         }
 
         glm::vec3 boundsCenter = (boundsMax - boundsMin) * 0.5f + boundsMin;
-        float radius = length(boundsMax - boundsMin);
+        const glm::vec3 extent = glm::max(boundsMax - boundsMin, glm::vec3(0.01f));
+        const float sphereRadius = glm::max(glm::length(extent) * 0.5f, 0.01f);
 
         Camera newCamera;
-        newCamera.ModelView = lookAt(vec3(boundsCenter.x, boundsCenter.y, boundsCenter.z + radius * 1.5f), boundsCenter, vec3(0, 1, 0));
         newCamera.FieldOfView = 40;
+        const float halfFov = glm::radians(newCamera.FieldOfView) * 0.5f;
+        const float viewDistance = sphereRadius / glm::max(std::sin(halfFov), 0.01f) * 1.15f;
+        newCamera.ModelView = lookAt(vec3(boundsCenter.x, boundsCenter.y, boundsCenter.z + viewDistance), boundsCenter, vec3(0, 1, 0));
         newCamera.Aperture = 0.0f;
+        newCamera.FocalDistance = viewDistance;
         newCamera.name = "AutoCamera";
-        newCamera.NearPlane = radius < 50.0f ? 0.01f : 0.2f;
-        newCamera.FarPlane = glm::min( radius + 50.0f, 1000.f);
+        newCamera.NearPlane = sphereRadius < 25.0f ? 0.01f : glm::max(0.05f, sphereRadius * 0.001f);
+        newCamera.FarPlane = glm::max(viewDistance + sphereRadius * 1.5f, newCamera.NearPlane * 10.0f);
+        cameraInit.ControlSpeed = glm::max(cameraInit.ControlSpeed, sphereRadius * 0.04f);
 
         return newCamera;
     }
