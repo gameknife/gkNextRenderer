@@ -30,6 +30,9 @@ namespace ScadStudio
         constexpr float kTitleBarHeight = 44.0f;
         constexpr float kBottomBarHeight = 30.0f;
         constexpr float kCollapsedRailWidth = 46.0f;
+        constexpr size_t kMaxSessionTitleBytes = 28;
+        constexpr const char* kDefaultNewSessionPrompt =
+            "生成一个现代城市，有住宅区，商业区，工厂区。住宅区和商业区普遍高楼林立，城市中有中央公园。有交通路网，有河流。";
 
         int64_t NowUnixSeconds()
         {
@@ -85,9 +88,18 @@ namespace ScadStudio
             {
                 title = title.substr(0, nl);
             }
-            if (title.size() > 28)
+
+            if (title.size() > kMaxSessionTitleBytes)
             {
-                title = title.substr(0, 28) + "...";
+                size_t end = kMaxSessionTitleBytes;
+                // Never cut inside a UTF-8 continuation sequence; JSON persistence
+                // rejects invalid UTF-8 and would otherwise crash on save.
+                while (end > 0 && end < title.size() &&
+                       (static_cast<unsigned char>(title[end]) & 0xC0) == 0x80)
+                {
+                    --end;
+                }
+                title = title.substr(0, end) + "...";
             }
             return title.empty() ? std::string("New Model") : title;
         }
@@ -205,6 +217,19 @@ namespace ScadStudio
             return it == files.end() ? files.front().source : it->source;
         }
 
+        FScadEditScope CurrentEditScope(const FScadSession& session)
+        {
+            FScadEditScope scope;
+            scope.activeFilePath = ActiveFilePath(session);
+            if (!session.previewModuleName.empty())
+            {
+                scope.focusedModuleName = session.previewModuleName;
+                scope.focusedModuleFilePath =
+                    session.previewModuleFilePath.empty() ? scope.activeFilePath : session.previewModuleFilePath;
+            }
+            return scope;
+        }
+
         FOutlineResult ValidateProjectFiles(const std::vector<FScadProjectFile>& files)
         {
             FOutlineResult result;
@@ -263,6 +288,32 @@ namespace ScadStudio
                 return "";
             }
             return label.substr(nameStart, argsStart - nameStart);
+        }
+
+        bool OutlineContainsModule(const std::vector<FOutlineNode>& nodes, const std::string& moduleName)
+        {
+            for (const FOutlineNode& node : nodes)
+            {
+                if (node.kind == "module" && ModuleNameFromOutlineLabel(node.label) == moduleName)
+                {
+                    return true;
+                }
+                if (OutlineContainsModule(node.children, moduleName))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        bool SourceContainsModule(const std::string& source, const std::string& moduleName)
+        {
+            if (source.empty() || moduleName.empty())
+            {
+                return false;
+            }
+            const FOutlineResult outline = BuildScadOutline(source);
+            return outline.ok && OutlineContainsModule(outline.roots, moduleName);
         }
 
         std::filesystem::path SafeProjectPath(const std::filesystem::path& base, const std::string& relative, bool& ok)
@@ -649,7 +700,7 @@ namespace ScadStudio
         sessions_.push_back(std::move(session));
         current_ = static_cast<int>(sessions_.size()) - 1;
         ai_.ResetConversation();
-        inputBuf_[0] = '\0';
+        SetBuf(inputBuf_, sizeof(inputBuf_), kDefaultNewSessionPrompt);
         store_.SaveIndex(sessions_);
         return sessions_[current_];
     }
@@ -665,7 +716,7 @@ namespace ScadStudio
         FScadSession& s = sessions_[index];
         if (!s.currentSource.empty())
         {
-            WriteAndReload(s);
+            ReloadSessionForScope(s, CurrentEditScope(s));
         }
     }
 
@@ -689,7 +740,7 @@ namespace ScadStudio
             ai_.ResetConversation();
             if (!sessions_[current_].currentSource.empty())
             {
-                WriteAndReload(sessions_[current_]);
+                ReloadSessionForScope(sessions_[current_], CurrentEditScope(sessions_[current_]));
             }
         }
     }
@@ -717,7 +768,7 @@ namespace ScadStudio
             ai_.ResetConversation();
             if (!sessions_[current_].currentSource.empty())
             {
-                WriteAndReload(sessions_[current_]);
+                ReloadSessionForScope(sessions_[current_], CurrentEditScope(sessions_[current_]));
             }
         }
     }
@@ -1245,7 +1296,22 @@ namespace ScadStudio
                 }
                 ImGui::EndCombo();
             }
-            ImGui::TextDisabled("Target module file");
+            if (!session.previewModuleName.empty())
+            {
+                const std::string scopePath = session.previewModuleFilePath.empty() ? activePath : session.previewModuleFilePath;
+                if (scopePath.empty())
+                {
+                    ImGui::TextDisabled("Default target: module %s", session.previewModuleName.c_str());
+                }
+                else
+                {
+                    ImGui::TextDisabled("Default target: %s :: %s", scopePath.c_str(), session.previewModuleName.c_str());
+                }
+            }
+            else
+            {
+                ImGui::TextDisabled("Default target: selected file");
+            }
             ImGui::Separator();
         }
 
@@ -1410,24 +1476,34 @@ namespace ScadStudio
 
     void ScadStudioInterface::SubmitCurrentInput()
     {
-        FScadSession& s = (current_ >= 0) ? sessions_[current_] : NewSession();
-
         const std::string instruction = inputBuf_;
+        FScadSession& s = (current_ >= 0) ? sessions_[current_] : NewSession();
         if (s.turns.empty())
         {
             s.title = MakeTitle(instruction);
         }
         s.updatedAt = NowUnixSeconds();
-        const std::string activePath = ActiveFilePath(s);
+        const FScadEditScope editScope = CurrentEditScope(s);
+        const std::string targetPath = editScope.EffectiveFilePath();
         FChatTurn userTurn;
         userTurn.role = "user";
-        userTurn.content = activePath.empty() ? instruction : fmt::format("[{}]\n{}", activePath, instruction);
-        userTurn.targetFilePath = activePath;
+        if (editScope.HasFocusedModule())
+        {
+            userTurn.content = targetPath.empty()
+                ? fmt::format("[module:{}]\n{}", editScope.focusedModuleName, instruction)
+                : fmt::format("[{} :: module:{}]\n{}", targetPath, editScope.focusedModuleName, instruction);
+        }
+        else
+        {
+            userTurn.content = targetPath.empty() ? instruction : fmt::format("[{}]\n{}", targetPath, instruction);
+        }
+        userTurn.targetFilePath = targetPath;
         s.turns.push_back(std::move(userTurn));
 
         pendingSessionId_ = s.id;
+        pendingEditScope_ = editScope;
         repairBudget_ = autoRepair_ ? kMaxRepairAttempts : 0;
-        ai_.SubmitAsync(s.currentSource, s.files, activePath, instruction);
+        ai_.SubmitAsync(s.currentSource, s.files, editScope, instruction);
         PersistSession(s);
 
         inputBuf_[0] = '\0';
@@ -1461,6 +1537,8 @@ namespace ScadStudio
         FScadSession& s = *target;
         s.updatedAt = NowUnixSeconds();
         scrollChatToBottom_ = true;
+        const FScadEditScope requestScope = pendingEditScope_;
+        const std::string targetPath = requestScope.EffectiveFilePath();
 
         if (!result.success)
         {
@@ -1472,10 +1550,11 @@ namespace ScadStudio
             s.statusLine = "✗ " + result.error;
             s.statusError = true;
             PersistSession(s);
+            pendingSessionId_.clear();
+            pendingEditScope_ = {};
             return;
         }
 
-        const std::string targetPath = ActiveFilePath(s);
         FChatTurn assistantTurn;
         assistantTurn.role = "assistant";
         assistantTurn.content = result.assistantText;
@@ -1489,6 +1568,8 @@ namespace ScadStudio
             s.statusLine = "(no SCAD code in reply)";
             s.statusError = true;
             PersistSession(s);
+            pendingSessionId_.clear();
+            pendingEditScope_ = {};
             return;
         }
 
@@ -1506,7 +1587,7 @@ namespace ScadStudio
                 "The SCAD you produced has a parse error: " + check.error +
                 "\nReturn the COMPLETE corrected " + (result.files.empty() ? std::string(".scad file.")
                                                                             : std::string("scad-project block."));
-            ai_.SubmitAsync(s.currentSource, s.files, targetPath, repairPrompt);
+            ai_.SubmitAsync(s.currentSource, s.files, requestScope, repairPrompt);
             PersistSession(s);
             return;
         }
@@ -1547,12 +1628,16 @@ namespace ScadStudio
             s.statusError = true;
             s.outlineDirty = true;
             PersistSession(s);
+            pendingSessionId_.clear();
+            pendingEditScope_ = {};
             return;
         }
 
         s.outlineDirty = true;
-        WriteAndReload(s);
+        ReloadSessionForScope(s, requestScope);
         PersistSession(s);
+        pendingSessionId_.clear();
+        pendingEditScope_ = {};
     }
 
     void ScadStudioInterface::RestoreSessionToTurn(FScadSession& session, int turnIndex)
@@ -1611,7 +1696,7 @@ namespace ScadStudio
         }
         session.outlineDirty = true;
         session.updatedAt = NowUnixSeconds();
-        WriteAndReload(session);
+        ReloadSessionForScope(session, CurrentEditScope(session));
         if (!session.statusError)
         {
             int resultIndex = 0;
@@ -1776,6 +1861,30 @@ namespace ScadStudio
 
         outRootPath = path;
         return true;
+    }
+
+    void ScadStudioInterface::ReloadSessionForScope(FScadSession& session, const FScadEditScope& editScope)
+    {
+        if (editScope.HasFocusedModule())
+        {
+            const std::string filePath = editScope.EffectiveFilePath();
+            const bool canPreview = session.files.empty()
+                ? SourceContainsModule(session.currentSource, editScope.focusedModuleName)
+                : ([&]()
+                {
+                    const FScadProjectFile* file = FindProjectFile(session, filePath);
+                    return file != nullptr && SourceContainsModule(file->source, editScope.focusedModuleName);
+                })();
+            if (canPreview)
+            {
+                PreviewModule(session, editScope.focusedModuleName, filePath);
+                return;
+            }
+        }
+
+        session.previewModuleName.clear();
+        session.previewModuleFilePath.clear();
+        WriteAndReload(session);
     }
 
     void ScadStudioInterface::WriteAndReload(FScadSession& session)

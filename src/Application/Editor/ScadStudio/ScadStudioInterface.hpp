@@ -45,6 +45,7 @@ namespace ScadStudio
         void RefreshOutline(FScadSession& session);
         void ExportSession(const FScadSession& session);
         void PersistSession(const FScadSession& session);
+        void ReloadSessionForScope(FScadSession& session, const FScadEditScope& editScope);
 
         NextEngine& engine_;
         ScadAIService ai_;
@@ -57,6 +58,7 @@ namespace ScadStudio
         // The session id that owns the in-flight AI request (so a result lands on the
         // right session even if the user switches selection mid-generation).
         std::string pendingSessionId_;
+        FScadEditScope pendingEditScope_;
         // Remaining auto-repair attempts for the in-flight request.
         int repairBudget_ = 0;
         static constexpr int kMaxRepairAttempts = 2;

@@ -96,27 +96,6 @@ namespace ScadStudio
             return "";
         }
 
-        std::string ProjectToPrompt(const std::vector<FScadProjectFile>& files, const std::string& currentSource)
-        {
-            if (files.empty())
-            {
-                return currentSource.empty() ? std::string()
-                                             : "Current single-file model:\n```scad\n" + currentSource + "\n```";
-            }
-
-            std::string out = "Current multi-file project (authoritative):\n```scad-project\n";
-            for (const FScadProjectFile& file : files)
-            {
-                out += "--- file: " + file.path + "\n";
-                out += file.source;
-                if (!out.empty() && out.back() != '\n')
-                {
-                    out += "\n";
-                }
-            }
-            out += "```";
-            return out;
-        }
     } // namespace
 
     ScadAIService::ScadAIService(NextEngine& engine)
@@ -333,7 +312,7 @@ namespace ScadStudio
     void ScadAIService::SubmitAsync(
         const std::string& currentSource,
         const std::vector<FScadProjectFile>& files,
-        const std::string& activeFilePath,
+        const FScadEditScope& editScope,
         const std::string& instruction)
     {
         auto* ai = engine_.GetAIService();
@@ -356,21 +335,7 @@ namespace ScadStudio
             request.messages.push_back(msg);
         }
 
-        std::string userContent;
-        if (currentSource.empty() && files.empty())
-        {
-            userContent = "Create a new model.\n\nRequest: " + instruction;
-        }
-        else
-        {
-            userContent = ProjectToPrompt(files, currentSource);
-            if (!activeFilePath.empty())
-            {
-                userContent += "\n\nActive file/module to edit: " + activeFilePath +
-                               "\nModify that module when possible, but return the complete project block.";
-            }
-            userContent += "\n\nRequest: " + instruction;
-        }
+        const std::string userContent = BuildScadUserPrompt(currentSource, files, editScope, instruction);
         request.messages.push_back(NextAI::FChatMessage::User(userContent));
 
         // Record the plain instruction in history (source is injected live, not stored).
