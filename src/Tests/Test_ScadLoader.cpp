@@ -369,6 +369,144 @@ TEST_CASE("Scad translucent color() becomes a dielectric material", "[Unit][Scad
     CHECK(materials[0].gpuMaterial_.Diffuse.a == Catch::Approx(0.3f).margin(1e-3f));
 }
 
+TEST_CASE("Scad loader: recreates module hierarchy with module names", "[Unit][Scad]")
+{
+    ScopedDir dir;
+    const std::filesystem::path mainPath = dir.Write("main.scad",
+              "module helper() { cube([1,1,1]); }\n"
+              "module house() { helper(); }\n"
+              "module roof() { translate([3,0,0]) cube([1,1,1]); }\n"
+              "color([1,0,0]) house();\n"
+              "color([1,0,0]) roof();\n");
+
+    Assets::EnvironmentSetting environment;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    REQUIRE(Assets::FScadLoader::LoadScadScene(
+        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+
+    REQUIRE(nodes.size() == 3);
+    Assets::Node* house = nullptr;
+    Assets::Node* helper = nullptr;
+    Assets::Node* roof = nullptr;
+    for (const std::shared_ptr<Assets::Node>& node : nodes)
+    {
+        if (node->GetName() == "house")
+        {
+            house = node.get();
+        }
+        else if (node->GetName() == "helper")
+        {
+            helper = node.get();
+        }
+        else if (node->GetName() == "roof")
+        {
+            roof = node.get();
+        }
+    }
+    REQUIRE(house);
+    REQUIRE(helper);
+    REQUIRE(roof);
+    CHECK(house->GetParent() == nullptr);
+    CHECK(helper->GetParent() == house);
+    CHECK(roof->GetParent() == nullptr);
+}
+
+TEST_CASE("Scad loader: keeps repeated leaf-module instances as separate nodes", "[Unit][Scad]")
+{
+    ScopedDir dir;
+    const std::filesystem::path mainPath = dir.Write("main.scad",
+              "module panel() { cube([1,1,1]); }\n"
+              "for (x = [0, 2]) translate([x,0,0]) panel();\n");
+
+    Assets::EnvironmentSetting environment;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    REQUIRE(Assets::FScadLoader::LoadScadScene(
+        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+
+    REQUIRE(nodes.size() == 2);
+    CHECK(nodes[0]->GetName() == "panel");
+    CHECK(nodes[1]->GetName() == "panel");
+    CHECK(nodes[0]->GetParent() == nullptr);
+    CHECK(nodes[1]->GetParent() == nullptr);
+}
+
+TEST_CASE("Scad loader: merges direct mesh buckets under one module node", "[Unit][Scad]")
+{
+    ScopedDir dir;
+    const std::filesystem::path mainPath = dir.Write("main.scad",
+              "module facade() {\n"
+              "  color([1,0,0]) cube([1,1,1]);\n"
+              "  color([0,1,0]) translate([2,0,0]) cube([1,1,1]);\n"
+              "}\n"
+              "facade();\n");
+
+    Assets::EnvironmentSetting environment;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    REQUIRE(Assets::FScadLoader::LoadScadScene(
+        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+
+    REQUIRE(nodes.size() == 1);
+    CHECK(nodes[0]->GetName() == "facade");
+
+    auto render = nodes[0]->GetComponent<Runtime::RenderComponent>();
+    REQUIRE(render);
+    REQUIRE(models.size() == 1);
+    REQUIRE(materials.size() == 2);
+    CHECK(render->GetModelId() == 0);
+    CHECK(models[0].SectionCount() == 2);
+}
+
+TEST_CASE("Scad loader: nested module calls keep translated child transforms", "[Unit][Scad]")
+{
+    ScopedDir dir;
+    const std::filesystem::path mainPath = dir.Write("main.scad",
+              "module leaf() { cube([1,1,1], center=true); }\n"
+              "module parent() { translate([0,-10,0]) leaf(); }\n"
+              "parent();\n");
+
+    Assets::EnvironmentSetting environment;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    REQUIRE(Assets::FScadLoader::LoadScadScene(
+        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+
+    Assets::Node* leaf = nullptr;
+    for (const std::shared_ptr<Assets::Node>& node : nodes)
+    {
+        if (node->GetName() == "leaf")
+        {
+            leaf = node.get();
+            break;
+        }
+    }
+
+    REQUIRE(leaf);
+    CHECK(leaf->WorldTranslation().z == Catch::Approx(10.0f).margin(1e-4f));
+}
+
 TEST_CASE("Scad loader: loads the bundled beer_cup sample when present", "[Unit][Scad]")
 {
     const std::filesystem::path samplePath =
@@ -403,10 +541,22 @@ TEST_CASE("Scad loader: loads the bundled beer_cup sample when present", "[Unit]
 
     glm::vec3 sceneMin(std::numeric_limits<float>::max());
     glm::vec3 sceneMax(std::numeric_limits<float>::lowest());
-    for (const Assets::Model& model : models)
+    for (const std::shared_ptr<Assets::Node>& node : nodes)
     {
-        sceneMin = glm::min(sceneMin, model.GetLocalAABBMin());
-        sceneMax = glm::max(sceneMax, model.GetLocalAABBMax());
+        auto render = node->GetComponent<Runtime::RenderComponent>();
+        if (!render)
+        {
+            continue;
+        }
+
+        const Assets::Model& model = models[render->GetModelId()];
+        const glm::mat4 world = node->WorldTransform();
+        for (const Assets::Vertex& vertex : model.CPUVertices())
+        {
+            const glm::vec3 p = world * glm::vec4(vertex.Position, 1.0f);
+            sceneMin = glm::min(sceneMin, p);
+            sceneMax = glm::max(sceneMax, p);
+        }
     }
     CHECK((sceneMax.y - sceneMin.y) < 0.12f);
     CHECK((sceneMax.x - sceneMin.x) < 0.12f);
@@ -604,8 +754,12 @@ TEST_CASE("Scad loader: include executes a file even if use imported it first", 
 
     REQUIRE(Assets::FScadLoader::LoadScadScene(
         mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
-    REQUIRE(models.size() == 1);
-    CHECK(models[0].NumberOfVertices() == 72);
+    REQUIRE(nodes.size() == 2);
+    REQUIRE(models.size() == 2);
+    CHECK(nodes[0]->GetName() == "box1");
+    CHECK(nodes[1]->GetName() == "box1");
+    CHECK(models[0].NumberOfVertices() == 36);
+    CHECK(models[1].NumberOfVertices() == 36);
 }
 
 TEST_CASE("Scad loader: parse errors fail the load", "[Unit][Scad]")
@@ -683,7 +837,7 @@ TEST_CASE("Scad loader: loads the bundled ancient_city sample when present", "[U
 
     const glm::vec3 extent = sceneMax - sceneMin;
     CHECK(extent.x == Catch::Approx(330.0f).margin(2.0f));
-    CHECK(extent.z == Catch::Approx(305.0f).margin(2.0f));
+    CHECK(extent.z == Catch::Approx(260.0f).margin(2.0f));
     CHECK(extent.y > 30.0f);
 
     REQUIRE_FALSE(environment.cameras.empty());
