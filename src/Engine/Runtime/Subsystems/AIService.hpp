@@ -17,6 +17,7 @@ namespace NextAI
         Ollama,
         Zhipu,
         DeepSeek,
+        OpenAI,
         LocalLlama
     };
 
@@ -70,6 +71,9 @@ namespace NextAI
         EAIProviderType GetProviderType() const { return providerType_; }
         bool SwitchProvider(EAIProviderType type);
         bool IsProviderConfigured(EAIProviderType type) const;
+        std::vector<std::string> GetProviderModels(EAIProviderType type) const;
+        std::string GetCurrentModel() const;
+        bool SetCurrentModel(std::string model);
         static std::vector<std::pair<EAIProviderType, std::string>> GetAvailableProviders();
         static std::string ProviderTypeToString(EAIProviderType type);
         static EAIProviderType StringToProviderType(const std::string& name);
@@ -79,6 +83,7 @@ namespace NextAI
         FAIResponse CallProvider(const std::string& prompt);
         std::unique_ptr<IAIProvider> CreateProvider(EAIProviderType type);
         nlohmann::json GetProviderConfig(EAIProviderType type) const;
+        std::string GetProviderDefaultModel(EAIProviderType type) const;
         void UpdateProviderConfigCache();
 
         std::string configPath_ = "assets/configs/ai_config.json";
@@ -86,6 +91,8 @@ namespace NextAI
         EAIProviderType providerType_ = EAIProviderType::Gemini;
         std::unique_ptr<nlohmann::json> fullConfig_;
         std::map<EAIProviderType, bool> providerConfigCache_;
+        std::map<EAIProviderType, std::vector<std::string>> providerModels_;
+        std::map<EAIProviderType, std::string> providerModelSelection_;
         FVoiceInputConfig voiceInputConfig_{};
         bool hasVoiceInputConfig_ = false;
         bool configured_ = false;

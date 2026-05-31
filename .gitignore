@@ -360,6 +360,7 @@ cmake-build-*/
 /imgui.ini
 /editor.ini
 /traces/
+/ai_secrets.local.json
 
 # spec local test glb
 assets/models/bistro_simple.glb

@@ -1,31 +1,47 @@
 {
-    "provider": "localllm",
+    "provider": "openai",
     "useAgentLoop": true,
     "maxAgentSteps": 12,
     "localllm": {
         "endpoint": "http://127.0.0.1:8765",
-        "model": "",
+        "defaultModel": "",
         "pidFile": "external/llm/run/server.pid",
         "autoDiscoverPid": true
     },
     "gemini": {
-        "apiKey": "YOUR_GOOGLE_API_KEY",
-        "model": "gemini-3-flash-preview",
-        "endpoint": "https://generativelanguage.googleapis.com/v1beta"
+        "endpoint": "https://generativelanguage.googleapis.com/v1beta",
+        "defaultModel": "gemini-3-flash-preview",
+        "models": [
+            "gemini-3-flash-preview"
+        ]
     },
     "ollama": {
         "endpoint": "http://localhost:11434",
-        "model": "gemma3:12b"
+        "defaultModel": "gemma3:12b",
+        "models": [
+            "gemma3:12b"
+        ]
     },
     "zhipu": {
-        "apiKey": "YOUR_ZHIPU_API_KEY",
-        "model": "glm-4.7",
-        "endpoint": "https://open.bigmodel.cn/api/paas/v4"
+        "endpoint": "https://open.bigmodel.cn/api/paas/v4",
+        "defaultModel": "glm-4.7",
+        "models": [
+            "glm-4.7"
+        ]
     },
     "deepseek": {
-        "apiKey": "YOUR_DEEPSEEK_API_KEY",
-        "model": "deepseek-chat",
-        "endpoint": "https://api.deepseek.com/v1"
+        "endpoint": "https://api.deepseek.com/v1",
+        "defaultModel": "deepseek-v4-flash",
+        "models": [
+            "deepseek-v4-flash"
+        ]
+    },
+    "openai": {
+        "endpoint": "http://gameknife.site:60317/v1",
+        "defaultModel": "gpt-5.5",
+        "models": [
+            "gpt-5.5"
+        ]
     },
     "voiceInput": {
         "enabled": false,

@@ -474,11 +474,89 @@ namespace ScadStudio
         {
             ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Not configured (assets/configs/ai_config.json)");
         }
+        const bool controlsDisabled = ai_.IsGenerating();
+        if (controlsDisabled)
+        {
+            ImGui::BeginDisabled();
+        }
+
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(115.0f);
+        if (ImGui::BeginCombo("##provider", ai_.ProviderName().c_str()))
+        {
+            const NextAI::EAIProviderType currentType = ai_.ProviderType();
+            for (const auto& [type, name] : ai_.Providers())
+            {
+                const bool configured = ai_.IsProviderConfigured(type);
+                const bool selected = (type == currentType);
+                if (!configured)
+                {
+                    ImGui::BeginDisabled();
+                }
+                if (ImGui::Selectable(name.c_str(), selected))
+                {
+                    ai_.SwitchProvider(type);
+                }
+                if (!configured)
+                {
+                    ImGui::EndDisabled();
+                    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                    {
+                        ImGui::SetTooltip("Not configured");
+                    }
+                }
+                if (selected)
+                {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+
+        const std::vector<std::string> models = ai_.CurrentProviderModels();
+        std::string currentModel = ai_.CurrentModel();
+        if (currentModel.empty())
+        {
+            currentModel = "(default)";
+        }
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(170.0f);
+        if (models.empty())
+        {
+            ImGui::BeginDisabled();
+            if (ImGui::BeginCombo("##model", currentModel.c_str()))
+            {
+                ImGui::EndCombo();
+            }
+            ImGui::EndDisabled();
+        }
+        else if (ImGui::BeginCombo("##model", currentModel.c_str()))
+        {
+            for (const std::string& model : models)
+            {
+                const bool selected = (model == currentModel);
+                if (ImGui::Selectable(model.c_str(), selected))
+                {
+                    ai_.SetCurrentModel(model);
+                }
+                if (selected)
+                {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+
+        if (controlsDisabled)
+        {
+            ImGui::EndDisabled();
+        }
+
         ImGui::SameLine();
         ImGui::Checkbox("auto-fix", &autoRepair_);
         ImGui::Separator();
 
-        const float footerHeight = ImGui::GetFrameHeightWithSpacing() * 4.0f;
+        const float footerHeight = ImGui::GetFrameHeightWithSpacing() * 4.5f;
         ImGui::BeginChild("##messages", ImVec2(0.0f, -footerHeight), ImGuiChildFlags_None,
                           ImGuiWindowFlags_HorizontalScrollbar);
         if (current_ >= 0)

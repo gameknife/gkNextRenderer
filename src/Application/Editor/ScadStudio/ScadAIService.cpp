@@ -29,6 +29,52 @@ namespace ScadStudio
         return ai ? ai->GetProviderName() : std::string("None");
     }
 
+    NextAI::EAIProviderType ScadAIService::ProviderType() const
+    {
+        auto* ai = engine_.GetAIService();
+        return ai ? ai->GetProviderType() : NextAI::EAIProviderType::Gemini;
+    }
+
+    std::vector<std::pair<NextAI::EAIProviderType, std::string>> ScadAIService::Providers() const
+    {
+        return NextAI::FAIService::GetAvailableProviders();
+    }
+
+    bool ScadAIService::IsProviderConfigured(NextAI::EAIProviderType type) const
+    {
+        auto* ai = engine_.GetAIService();
+        return ai && ai->IsProviderConfigured(type);
+    }
+
+    bool ScadAIService::SwitchProvider(NextAI::EAIProviderType type)
+    {
+        auto* ai = engine_.GetAIService();
+        if (!ai || !ai->SwitchProvider(type))
+        {
+            return false;
+        }
+        ResetConversation();
+        return true;
+    }
+
+    std::vector<std::string> ScadAIService::CurrentProviderModels() const
+    {
+        auto* ai = engine_.GetAIService();
+        return ai ? ai->GetProviderModels(ai->GetProviderType()) : std::vector<std::string>{};
+    }
+
+    std::string ScadAIService::CurrentModel() const
+    {
+        auto* ai = engine_.GetAIService();
+        return ai ? ai->GetCurrentModel() : std::string();
+    }
+
+    bool ScadAIService::SetCurrentModel(const std::string& model)
+    {
+        auto* ai = engine_.GetAIService();
+        return ai && ai->SetCurrentModel(model);
+    }
+
     void ScadAIService::ResetConversation()
     {
         conversation_.clear();

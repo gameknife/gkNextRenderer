@@ -1,10 +1,13 @@
 #include "Engine/Runtime/Subsystems/AIService.hpp"
 #include "Engine/Runtime/Config/AISettings.hpp"
 #include "Engine/Runtime/Subsystems/AI/LlamaPidFile.hpp"
+#include "Engine/Runtime/Platform/UserPaths.h"
 #include "Engine/Utilities/FileHelper.hpp"
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <curl/curl.h>
+#include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
@@ -95,6 +98,63 @@ namespace NextAI
             }
             return FAIResponse::Success(chatResp.content);
         }
+
+        void ReadModelSetting(const nlohmann::json& config, std::string& model)
+        {
+            if (config.contains("defaultModel") && config["defaultModel"].is_string())
+            {
+                model = config["defaultModel"].get<std::string>();
+                return;
+            }
+            if (config.contains("model") && config["model"].is_string())
+            {
+                model = config["model"].get<std::string>();
+            }
+        }
+
+        void MergeSecretObject(nlohmann::json& target, const nlohmann::json& secret)
+        {
+            if (!target.is_object() || !secret.is_object())
+            {
+                return;
+            }
+
+            for (auto it = secret.begin(); it != secret.end(); ++it)
+            {
+                if (target.contains(it.key()) && target[it.key()].is_object() && it.value().is_object())
+                {
+                    for (auto field = it.value().begin(); field != it.value().end(); ++field)
+                    {
+                        target[it.key()][field.key()] = field.value();
+                    }
+                }
+                else
+                {
+                    target[it.key()] = it.value();
+                }
+            }
+        }
+
+        std::filesystem::path ResolveConfigRelativePath(const std::string& path)
+        {
+            std::filesystem::path p(path);
+            if (p.is_absolute())
+            {
+                return p;
+            }
+            return std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath(path.c_str()));
+        }
+
+        bool TryReadJsonFile(const std::filesystem::path& path, nlohmann::json& out)
+        {
+            std::ifstream file(path);
+            if (!file.is_open())
+            {
+                return false;
+            }
+            file >> out;
+            return true;
+        }
     }
 
     class FGeminiProvider : public IAIProvider
@@ -164,6 +224,23 @@ namespace NextAI
         bool configured_ = false;
     };
 
+    class FOpenAIProvider : public IAIProvider
+    {
+    public:
+        bool Initialize(const nlohmann::json& config) override;
+        bool IsConfigured() const override;
+        FAIResponse Generate(const std::string& prompt) override;
+        FChatResponse Chat(const FChatRequest& request) override;
+        bool SupportsTools() const override { return true; }
+        std::string GetName() const override { return "OpenAI"; }
+
+    private:
+        std::string apiKey_;
+        std::string model_ = "gpt-4.1-mini";
+        std::string endpoint_ = "https://api.openai.com/v1";
+        bool configured_ = false;
+    };
+
     class FLocalLlamaProvider : public IAIProvider
     {
     public:
@@ -192,10 +269,7 @@ namespace NextAI
             {
                 apiKey_ = config["apiKey"].get<std::string>();
             }
-            if (config.contains("model"))
-            {
-                model_ = config["model"].get<std::string>();
-            }
+            ReadModelSetting(config, model_);
             if (config.contains("endpoint"))
             {
                 endpoint_ = config["endpoint"].get<std::string>();
@@ -268,10 +342,7 @@ namespace NextAI
             {
                 endpoint_ = config["endpoint"].get<std::string>();
             }
-            if (config.contains("model"))
-            {
-                model_ = config["model"].get<std::string>();
-            }
+            ReadModelSetting(config, model_);
 
             if (endpoint_.empty())
             {
@@ -347,10 +418,7 @@ namespace NextAI
             {
                 apiKey_ = config["apiKey"].get<std::string>();
             }
-            if (config.contains("model"))
-            {
-                model_ = config["model"].get<std::string>();
-            }
+            ReadModelSetting(config, model_);
             if (config.contains("endpoint"))
             {
                 endpoint_ = config["endpoint"].get<std::string>();
@@ -422,10 +490,7 @@ namespace NextAI
             {
                 apiKey_ = config["apiKey"].get<std::string>();
             }
-            if (config.contains("model"))
-            {
-                model_ = config["model"].get<std::string>();
-            }
+            ReadModelSetting(config, model_);
             if (config.contains("endpoint"))
             {
                 endpoint_ = config["endpoint"].get<std::string>();
@@ -489,6 +554,78 @@ namespace NextAI
         return ChatToLegacyResponse(Chat(req));
     }
 
+    bool FOpenAIProvider::Initialize(const nlohmann::json& config)
+    {
+        try
+        {
+            if (config.contains("apiKey") && config["apiKey"].is_string())
+            {
+                apiKey_ = config["apiKey"].get<std::string>();
+            }
+            ReadModelSetting(config, model_);
+            if (config.contains("endpoint") && config["endpoint"].is_string())
+            {
+                endpoint_ = config["endpoint"].get<std::string>();
+            }
+
+            if (apiKey_.empty() || apiKey_ == "YOUR_OPENAI_API_KEY")
+            {
+                configured_ = false;
+                return false;
+            }
+
+            configured_ = true;
+            SPDLOG_INFO("OpenAI Provider initialized with model: {}", model_);
+            return true;
+        }
+        catch (const std::exception& e)
+        {
+            SPDLOG_ERROR("Failed to initialize OpenAI Provider: {}", e.what());
+            configured_ = false;
+            return false;
+        }
+    }
+
+    bool FOpenAIProvider::IsConfigured() const
+    {
+        return configured_;
+    }
+
+    FChatResponse FOpenAIProvider::Chat(const FChatRequest& request)
+    {
+        if (!configured_)
+        {
+            return FChatResponse::Failure("OpenAI provider not configured");
+        }
+        FChatRequest req = request;
+        if (req.model.empty()) req.model = model_;
+
+        const std::string url = endpoint_ + "/chat/completions";
+        const json body = BuildOpenAIChatRequestBody(req);
+        std::vector<std::string> headers{fmt::format("Authorization: Bearer {}", apiKey_)};
+        FHttpResult http = HttpPostJson(url, body.dump(), headers);
+        if (!http.ok)
+        {
+            return FChatResponse::Failure(http.error);
+        }
+        try
+        {
+            return ParseOpenAIChatResponse(json::parse(http.body));
+        }
+        catch (const std::exception& e)
+        {
+            SPDLOG_ERROR("Failed to parse OpenAI response: {}", e.what());
+            return FChatResponse::Failure(fmt::format("Response parse error: {}", e.what()));
+        }
+    }
+
+    FAIResponse FOpenAIProvider::Generate(const std::string& prompt)
+    {
+        FChatRequest req;
+        req.messages.push_back(FChatMessage::User(prompt));
+        return ChatToLegacyResponse(Chat(req));
+    }
+
     bool FLocalLlamaProvider::Initialize(const nlohmann::json& config)
     {
         try
@@ -497,10 +634,7 @@ namespace NextAI
             {
                 endpoint_ = config["endpoint"].get<std::string>();
             }
-            if (config.contains("model") && config["model"].is_string())
-            {
-                model_ = config["model"].get<std::string>();
-            }
+            ReadModelSetting(config, model_);
             if (config.contains("pidFile") && config["pidFile"].is_string())
             {
                 pidFilePath_ = config["pidFile"].get<std::string>();
@@ -620,6 +754,8 @@ namespace NextAI
             return std::make_unique<FZhipuProvider>();
         case EAIProviderType::DeepSeek:
             return std::make_unique<FDeepSeekProvider>();
+        case EAIProviderType::OpenAI:
+            return std::make_unique<FOpenAIProvider>();
         case EAIProviderType::LocalLlama:
             return std::make_unique<FLocalLlamaProvider>();
         default:
@@ -644,6 +780,7 @@ namespace NextAI
         case EAIProviderType::Ollama: return "ollama";
         case EAIProviderType::Zhipu: return "zhipu";
         case EAIProviderType::DeepSeek: return "deepseek";
+        case EAIProviderType::OpenAI: return "openai";
         case EAIProviderType::LocalLlama: return "localllm";
         default: return "gemini";
         }
@@ -657,6 +794,7 @@ namespace NextAI
         if (lower == "ollama") return EAIProviderType::Ollama;
         if (lower == "zhipu") return EAIProviderType::Zhipu;
         if (lower == "deepseek") return EAIProviderType::DeepSeek;
+        if (lower == "openai" || lower == "openai-compatible") return EAIProviderType::OpenAI;
         if (lower == "localllm" || lower == "local" || lower == "llama") return EAIProviderType::LocalLlama;
         return EAIProviderType::Gemini;
     }
@@ -668,7 +806,8 @@ namespace NextAI
             {EAIProviderType::Gemini, "Gemini"},
             {EAIProviderType::Ollama, "Ollama"},
             {EAIProviderType::Zhipu, "Zhipu"},
-            {EAIProviderType::DeepSeek, "DeepSeek"}
+            {EAIProviderType::DeepSeek, "DeepSeek"},
+            {EAIProviderType::OpenAI, "OpenAI"}
         };
     }
 
@@ -704,6 +843,57 @@ namespace NextAI
         return false;
     }
 
+    std::vector<std::string> FAIService::GetProviderModels(EAIProviderType type) const
+    {
+        auto it = providerModels_.find(type);
+        if (it != providerModels_.end())
+        {
+            return it->second;
+        }
+
+        std::string fallback = GetProviderDefaultModel(type);
+        if (!fallback.empty())
+        {
+            return {fallback};
+        }
+        return {};
+    }
+
+    std::string FAIService::GetProviderDefaultModel(EAIProviderType type) const
+    {
+        nlohmann::json config = GetProviderConfig(type);
+        if (config.contains("defaultModel") && config["defaultModel"].is_string())
+        {
+            return config["defaultModel"].get<std::string>();
+        }
+        if (config.contains("model") && config["model"].is_string())
+        {
+            return config["model"].get<std::string>();
+        }
+        return "";
+    }
+
+    std::string FAIService::GetCurrentModel() const
+    {
+        auto selected = providerModelSelection_.find(providerType_);
+        if (selected != providerModelSelection_.end() && !selected->second.empty())
+        {
+            return selected->second;
+        }
+        return GetProviderDefaultModel(providerType_);
+    }
+
+    bool FAIService::SetCurrentModel(std::string model)
+    {
+        if (model.empty())
+        {
+            return false;
+        }
+
+        providerModelSelection_[providerType_] = std::move(model);
+        return true;
+    }
+
     bool FAIService::TryGetVoiceInputConfig(FVoiceInputConfig& outConfig) const
     {
         if (!hasVoiceInputConfig_)
@@ -718,6 +908,7 @@ namespace NextAI
     void FAIService::UpdateProviderConfigCache()
     {
         providerConfigCache_.clear();
+        providerModels_.clear();
 
         for (const auto& [type, name] : GetAvailableProviders())
         {
@@ -725,6 +916,27 @@ namespace NextAI
             if (tempProvider)
             {
                 nlohmann::json config = GetProviderConfig(type);
+                std::vector<std::string> models;
+                if (config.contains("models") && config["models"].is_array())
+                {
+                    for (const auto& item : config["models"])
+                    {
+                        if (item.is_string())
+                        {
+                            models.push_back(item.get<std::string>());
+                        }
+                    }
+                }
+                if (models.empty())
+                {
+                    std::string defaultModel = GetProviderDefaultModel(type);
+                    if (!defaultModel.empty())
+                    {
+                        models.push_back(defaultModel);
+                    }
+                }
+                providerModels_[type] = std::move(models);
+
                 bool configured = tempProvider->Initialize(config);
                 providerConfigCache_[type] = configured;
             }
@@ -788,6 +1000,60 @@ namespace NextAI
         {
             json j;
             file >> j;
+
+            std::vector<std::filesystem::path> secretCandidates;
+            if (j.contains("secretsPath") && j["secretsPath"].is_string())
+            {
+                secretCandidates.push_back(ResolveConfigRelativePath(j["secretsPath"].get<std::string>()));
+            }
+            if (const char* envPath = std::getenv("GKNEXT_AI_SECRETS"))
+            {
+                if (envPath[0] != '\0')
+                {
+                    secretCandidates.emplace_back(envPath);
+                }
+            }
+            if (const char* localAppData = std::getenv("LOCALAPPDATA"))
+            {
+                if (localAppData[0] != '\0')
+                {
+                    secretCandidates.push_back(
+                        std::filesystem::path(localAppData) / "gkNextEngine" / "ai_secrets.json");
+                }
+            }
+            if (const char* appData = std::getenv("APPDATA"))
+            {
+                if (appData[0] != '\0')
+                {
+                    secretCandidates.push_back(
+                        std::filesystem::path(appData) / "gkNextRenderer" / "gkNextEngine" / "ai_secrets.json");
+                }
+            }
+            secretCandidates.push_back(NextPlatform::UserPaths::GetUserDataDir("gkNextEngine") / "ai_secrets.json");
+
+            for (const std::filesystem::path& secretPath : secretCandidates)
+            {
+                std::error_code ec;
+                if (!std::filesystem::exists(secretPath, ec))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    json secrets;
+                    if (TryReadJsonFile(secretPath, secrets))
+                    {
+                        MergeSecretObject(j, secrets);
+                        SPDLOG_INFO("AI secrets loaded from {}", secretPath.string());
+                        break;
+                    }
+                }
+                catch (const std::exception& e)
+                {
+                    SPDLOG_WARN("Failed to read AI secrets from {}: {}", secretPath.string(), e.what());
+                }
+            }
 
             hasVoiceInputConfig_ = false;
             voiceInputConfig_ = FVoiceInputConfig{};
@@ -977,7 +1243,14 @@ namespace NextAI
             return FAIResponse::Failure("AI service not configured");
         }
 
-        return provider_->Generate(prompt);
+        FChatRequest req;
+        req.messages.push_back(FChatMessage::User(prompt));
+        std::string selectedModel = GetCurrentModel();
+        if (!selectedModel.empty())
+        {
+            req.model = std::move(selectedModel);
+        }
+        return ChatToLegacyResponse(provider_->Chat(req));
     }
 
     FAIResponse FAIService::GenerateText(const std::string& prompt)
@@ -1010,7 +1283,12 @@ namespace NextAI
 
         status_ = EAIStatus::Generating;
         statusMessage_ = "Generating...";
-        FChatResponse response = provider_->Chat(request);
+        FChatRequest req = request;
+        if (req.model.empty())
+        {
+            req.model = GetCurrentModel();
+        }
+        FChatResponse response = provider_->Chat(req);
         if (response.success)
         {
             status_ = EAIStatus::Ready;
