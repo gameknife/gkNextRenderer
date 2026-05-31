@@ -4,8 +4,9 @@
 // FScadLoader.h - Public entry point for loading OpenSCAD (.scad) scenes.
 //
 // Mirrors FLDrawLoader::LoadLDrawScene. Resolves the use/include closure,
-// evaluates the program, groups geometry by color, and emits one Model + one
-// single-material Node per color.
+// evaluates the program into a SCAD user-module scene graph, rebuilds the
+// parent/child Node hierarchy, and merges each logical module node's direct
+// geometry into as few render meshes as the material-slot limit allows.
 // ============================================================================
 
 #include <memory>

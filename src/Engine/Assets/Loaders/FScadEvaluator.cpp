@@ -9,6 +9,7 @@
 #include <cctype>
 #include <cmath>
 #include <limits>
+#include <memory>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtc/matrix_transform.hpp>
@@ -68,6 +69,8 @@ namespace Assets::scad
         {
             glm::dvec4 color = glm::dvec4(0.78, 0.78, 0.78, 1.0);
             bool hasColor = false;
+            std::string groupName;
+            uint64_t groupInstanceId = 0;
             TriSoup soup;
         };
         using GeomList = std::vector<ColoredSoup>;
@@ -124,21 +127,73 @@ namespace Assets::scad
                       const std::unordered_map<std::string, StmtPtr>& functions,
                       const ScadLoadOptions& options,
                       EvalResult& result)
-                : modules_(modules), functions_(functions), options_(options), result_(result)
+                : modules_(modules), functions_(functions), options_(options), flatResult_(&result)
             {
             }
 
-            void Run(const Scope& topLevel)
+            Evaluator(const std::unordered_map<std::string, StmtPtr>& modules,
+                      const std::unordered_map<std::string, StmtPtr>& functions,
+                      const ScadLoadOptions& options,
+                      SceneEvalResult& result)
+                : modules_(modules), functions_(functions), options_(options), sceneResult_(&result)
             {
-                ctx_.Push(); // global frame
-                ctx_.Set("$fn", Value::MakeNumber(0.0));
-                ctx_.Set("$fa", Value::MakeNumber(12.0));
-                ctx_.Set("$fs", Value::MakeNumber(2.0));
-                ctx_.Set("$t", Value::MakeNumber(0.0));
-                ctx_.Set("PI", Value::MakeNumber(kPi));
+            }
 
-                GeomList geom = EvalScope(topLevel, glm::dmat4(1.0), glm::dvec4(0.78, 0.78, 0.78, 1.0), false);
-                EmitAll(geom);
+            void RunFlat(const Scope& topLevel)
+            {
+                InitGlobals();
+
+                DefinitionFrameGuard definitionFrame(*this);
+                RegisterLocalDefinitions(topLevel);
+
+                GeomList geom;
+                for (const StmtPtr& s : topLevel)
+                {
+                    if (!s) continue;
+                    if (s->kind == StmtKind::Assign)
+                    {
+                        ctx_.Set(s->name, EvalExpr(s->value));
+                    }
+                    else if (s->kind == StmtKind::Instance)
+                    {
+                        topLevelFallbackLabel_ = s->name;
+                        topLevelFallbackInstanceId_ = nextGroupInstanceId_++;
+                        AppendMove(geom, EvalInstance(*s, glm::dmat4(1.0), glm::dvec4(0.78, 0.78, 0.78, 1.0), false));
+                        topLevelFallbackLabel_.clear();
+                        topLevelFallbackInstanceId_ = 0;
+                    }
+                }
+                EmitFlat(geom);
+                ctx_.Pop();
+            }
+
+            void RunScene(const Scope& topLevel)
+            {
+                InitGlobals();
+
+                DefinitionFrameGuard definitionFrame(*this);
+                RegisterLocalDefinitions(topLevel);
+
+                for (const StmtPtr& s : topLevel)
+                {
+                    if (!s) continue;
+                    if (s->kind == StmtKind::Assign)
+                    {
+                        ctx_.Set(s->name, EvalExpr(s->value));
+                    }
+                    else if (s->kind == StmtKind::Instance)
+                    {
+                        topLevelFallbackLabel_ = s->name;
+                        topLevelFallbackInstanceId_ = nextGroupInstanceId_++;
+                        currentTopLevelFallbackRoot_ = nullptr;
+                        EmitSceneGeometry(EvalInstance(*s, glm::dmat4(1.0), glm::dvec4(0.78, 0.78, 0.78, 1.0), false));
+                        currentTopLevelFallbackRoot_ = nullptr;
+                        topLevelFallbackLabel_.clear();
+                        topLevelFallbackInstanceId_ = 0;
+                    }
+                }
+
+                FinalizeScene();
                 ctx_.Pop();
             }
 
@@ -146,13 +201,36 @@ namespace Assets::scad
             const std::unordered_map<std::string, StmtPtr>& modules_;
             const std::unordered_map<std::string, StmtPtr>& functions_;
             const ScadLoadOptions& options_;
-            EvalResult& result_;
+            EvalResult* flatResult_ = nullptr;
+            SceneEvalResult* sceneResult_ = nullptr;
             Context ctx_;
             int depth_ = 0;
             std::unordered_map<std::string, int> warnOnce_;
             std::vector<const Scope*> childrenStack_; // caller children for children()
             std::vector<std::unordered_map<std::string, StmtPtr>> localModules_;
             std::vector<std::unordered_map<std::string, StmtPtr>> localFunctions_;
+            struct GroupFrame
+            {
+                std::string name;
+                uint64_t instanceId = 0;
+            };
+            std::vector<GroupFrame> moduleCallStack_;
+            std::string topLevelFallbackLabel_;
+            uint64_t topLevelFallbackInstanceId_ = 0;
+            uint64_t nextGroupInstanceId_ = 1;
+            int suppressSceneNodes_ = 0;
+
+            struct SceneNodeBuild
+            {
+                std::string name;
+                uint64_t instanceId = 0;
+                glm::dmat4 localTransform = glm::dmat4(1.0);
+                std::map<uint32_t, SceneMeshBucket> meshes;
+                std::vector<std::unique_ptr<SceneNodeBuild>> children;
+            };
+            std::vector<std::unique_ptr<SceneNodeBuild>> sceneRoots_;
+            std::vector<SceneNodeBuild*> sceneOwnerStack_;
+            SceneNodeBuild* currentTopLevelFallbackRoot_ = nullptr;
 
             struct DefinitionFrameGuard
             {
@@ -173,9 +251,25 @@ namespace Assets::scad
                 Evaluator& owner_;
             };
 
+            struct SuppressSceneNodeGuard
+            {
+                explicit SuppressSceneNodeGuard(Evaluator& owner) : owner_(owner)
+                {
+                    ++owner_.suppressSceneNodes_;
+                }
+
+                ~SuppressSceneNodeGuard()
+                {
+                    --owner_.suppressSceneNodes_;
+                }
+
+                Evaluator& owner_;
+            };
+
             void Warn(const std::string& key, const std::string& msg)
             {
-                ++result_.warningCount;
+                if (flatResult_) ++flatResult_->warningCount;
+                if (sceneResult_) ++sceneResult_->warningCount;
                 int& count = warnOnce_[key];
                 if (count < 3)
                 {
@@ -184,17 +278,171 @@ namespace Assets::scad
                 }
             }
 
-            void EmitAll(const GeomList& geom)
+            void InitGlobals()
             {
+                ctx_.Push(); // global frame
+                ctx_.Set("$fn", Value::MakeNumber(0.0));
+                ctx_.Set("$fa", Value::MakeNumber(12.0));
+                ctx_.Set("$fs", Value::MakeNumber(2.0));
+                ctx_.Set("$t", Value::MakeNumber(0.0));
+                ctx_.Set("PI", Value::MakeNumber(kPi));
+            }
+
+            void AddTriangleCount(size_t triangleCount)
+            {
+                if (flatResult_) flatResult_->triangleCount += triangleCount;
+                if (sceneResult_) sceneResult_->triangleCount += triangleCount;
+            }
+
+            void EmitFlat(const GeomList& geom)
+            {
+                if (!flatResult_) return;
                 for (const ColoredSoup& cs : geom)
                 {
                     const glm::vec4 c = cs.hasColor ? glm::vec4(cs.color) : glm::vec4(0.78f, 0.78f, 0.78f, 1.0f);
-                    const uint32_t key = QuantizeColor(c);
-                    ColorBucket& bucket = result_.buckets[key];
+                    const std::string groupName = cs.groupName.empty() ? std::string("part") : cs.groupName;
+                    const uint64_t groupInstanceId = cs.groupInstanceId == 0 ? nextGroupInstanceId_++ : cs.groupInstanceId;
+                    const BucketKey key{groupName, groupInstanceId, QuantizeColor(c)};
+                    ColorBucket& bucket = flatResult_->buckets[key];
+                    bucket.color = c;
+                    bucket.groupName = groupName;
+                    bucket.tris.insert(bucket.tris.end(), cs.soup.begin(), cs.soup.end());
+                    AddTriangleCount(cs.soup.size() / 3);
+                }
+            }
+
+            bool IsSceneMode() const
+            {
+                return sceneResult_ != nullptr;
+            }
+
+            bool ShouldCreateSceneNodeForModule() const
+            {
+                return IsSceneMode() && suppressSceneNodes_ == 0;
+            }
+
+            SceneNodeBuild* CurrentSceneOwner() const
+            {
+                return sceneOwnerStack_.empty() ? nullptr : sceneOwnerStack_.back();
+            }
+
+            SceneNodeBuild* CreateSceneNode(const std::string& name, const glm::dmat4& localTransform)
+            {
+                auto node = std::make_unique<SceneNodeBuild>();
+                node->name = name.empty() ? "part" : name;
+                node->instanceId = nextGroupInstanceId_++;
+                node->localTransform = localTransform;
+
+                SceneNodeBuild* raw = node.get();
+                SceneNodeBuild* parent = CurrentSceneOwner();
+                if (parent)
+                {
+                    parent->children.push_back(std::move(node));
+                }
+                else
+                {
+                    sceneRoots_.push_back(std::move(node));
+                }
+                return raw;
+            }
+
+            SceneNodeBuild* EnsureSceneFallbackRoot()
+            {
+                if (currentTopLevelFallbackRoot_)
+                {
+                    return currentTopLevelFallbackRoot_;
+                }
+
+                auto node = std::make_unique<SceneNodeBuild>();
+                node->name = topLevelFallbackLabel_.empty() ? "part" : topLevelFallbackLabel_;
+                node->instanceId = topLevelFallbackInstanceId_ != 0 ? topLevelFallbackInstanceId_ : nextGroupInstanceId_++;
+                node->localTransform = glm::dmat4(1.0);
+                currentTopLevelFallbackRoot_ = node.get();
+                sceneRoots_.push_back(std::move(node));
+                return currentTopLevelFallbackRoot_;
+            }
+
+            void EmitSceneGeometry(const GeomList& geom)
+            {
+                if (!IsSceneMode() || geom.empty())
+                {
+                    return;
+                }
+
+                SceneNodeBuild* owner = CurrentSceneOwner();
+                if (!owner)
+                {
+                    owner = EnsureSceneFallbackRoot();
+                }
+
+                for (const ColoredSoup& cs : geom)
+                {
+                    const glm::vec4 c = cs.hasColor ? glm::vec4(cs.color) : glm::vec4(0.78f, 0.78f, 0.78f, 1.0f);
+                    SceneMeshBucket& bucket = owner->meshes[QuantizeColor(c)];
                     bucket.color = c;
                     bucket.tris.insert(bucket.tris.end(), cs.soup.begin(), cs.soup.end());
-                    result_.triangleCount += cs.soup.size() / 3;
+                    AddTriangleCount(cs.soup.size() / 3);
                 }
+            }
+
+            SceneNode FinalizeSceneNode(const SceneNodeBuild& build) const
+            {
+                SceneNode node;
+                node.name = build.name;
+                node.instanceId = build.instanceId;
+                node.localTransform = build.localTransform;
+                node.meshes.reserve(build.meshes.size());
+                for (const auto& entry : build.meshes)
+                {
+                    node.meshes.push_back(entry.second);
+                }
+                node.children.reserve(build.children.size());
+                for (const auto& child : build.children)
+                {
+                    node.children.push_back(FinalizeSceneNode(*child));
+                }
+                return node;
+            }
+
+            void FinalizeScene()
+            {
+                if (!sceneResult_)
+                {
+                    return;
+                }
+
+                sceneResult_->roots.clear();
+                sceneResult_->roots.reserve(sceneRoots_.size());
+                for (const auto& root : sceneRoots_)
+                {
+                    sceneResult_->roots.push_back(FinalizeSceneNode(*root));
+                }
+            }
+
+            std::string CurrentGroupLabel() const
+            {
+                if (!moduleCallStack_.empty())
+                {
+                    return moduleCallStack_.back().name;
+                }
+                if (!topLevelFallbackLabel_.empty())
+                {
+                    return topLevelFallbackLabel_;
+                }
+                return "part";
+            }
+
+            uint64_t CurrentGroupInstanceId() const
+            {
+                if (!moduleCallStack_.empty())
+                {
+                    return moduleCallStack_.back().instanceId;
+                }
+                if (topLevelFallbackInstanceId_ != 0)
+                {
+                    return topLevelFallbackInstanceId_;
+                }
+                return 0;
             }
 
             // --------------------------------------------------------------
@@ -409,6 +657,7 @@ namespace Assets::scad
 
             GeomList EvalDifference(const Stmt& inst, const glm::dmat4& xform, const glm::dvec4& color, bool hasColor)
             {
+                SuppressSceneNodeGuard suppressGuard(*this);
                 DefinitionFrameGuard definitionFrame(*this);
                 RegisterLocalDefinitions(inst.children);
 
@@ -416,6 +665,8 @@ namespace Assets::scad
                 std::vector<TriSoup> negatives;
                 glm::dvec4 posColor = color;
                 bool posHas = hasColor;
+                std::string posGroupName = CurrentGroupLabel();
+                uint64_t posGroupInstanceId = CurrentGroupInstanceId();
                 bool gotColor = false;
                 int instIdx = 0;
                 for (const StmtPtr& s : inst.children)
@@ -432,7 +683,14 @@ namespace Assets::scad
                     {
                         for (ColoredSoup& cs : g)
                         {
-                            if (!gotColor) { posColor = cs.color; posHas = cs.hasColor; gotColor = true; }
+                            if (!gotColor)
+                            {
+                                posColor = cs.color;
+                                posHas = cs.hasColor;
+                                posGroupName = cs.groupName.empty() ? posGroupName : cs.groupName;
+                                posGroupInstanceId = cs.groupInstanceId == 0 ? posGroupInstanceId : cs.groupInstanceId;
+                                gotColor = true;
+                            }
                             positives.push_back(std::move(cs.soup));
                         }
                     }
@@ -458,6 +716,8 @@ namespace Assets::scad
                 ColoredSoup result;
                 result.color = posColor;
                 result.hasColor = posHas;
+                result.groupName = posGroupName;
+                result.groupInstanceId = posGroupInstanceId;
                 result.soup = std::move(r);
                 out.push_back(std::move(result));
                 return out;
@@ -465,12 +725,15 @@ namespace Assets::scad
 
             GeomList EvalIntersection(const Stmt& inst, const glm::dmat4& xform, const glm::dvec4& color, bool hasColor)
             {
+                SuppressSceneNodeGuard suppressGuard(*this);
                 DefinitionFrameGuard definitionFrame(*this);
                 RegisterLocalDefinitions(inst.children);
 
                 std::vector<TriSoup> operands;
                 glm::dvec4 firstColor = color;
                 bool firstHas = hasColor;
+                std::string firstGroupName = CurrentGroupLabel();
+                uint64_t firstGroupInstanceId = CurrentGroupInstanceId();
                 bool gotColor = false;
                 for (const StmtPtr& s : inst.children)
                 {
@@ -489,6 +752,8 @@ namespace Assets::scad
                         {
                             firstColor = cs.color;
                             firstHas = cs.hasColor;
+                            firstGroupName = cs.groupName.empty() ? firstGroupName : cs.groupName;
+                            firstGroupInstanceId = cs.groupInstanceId == 0 ? firstGroupInstanceId : cs.groupInstanceId;
                             gotColor = true;
                         }
                         parts.push_back(std::move(cs.soup));
@@ -508,6 +773,8 @@ namespace Assets::scad
                 ColoredSoup result;
                 result.color = firstColor;
                 result.hasColor = firstHas;
+                result.groupName = firstGroupName;
+                result.groupInstanceId = firstGroupInstanceId;
                 result.soup = std::move(r);
                 out.push_back(std::move(result));
                 return out;
@@ -515,10 +782,13 @@ namespace Assets::scad
 
             GeomList EvalHull(const Stmt& inst, const glm::dmat4& xform, const glm::dvec4& color, bool hasColor)
             {
+                SuppressSceneNodeGuard suppressGuard(*this);
                 GeomList children = EvalScope(inst.children, xform, color, hasColor);
                 std::vector<TriSoup> parts;
                 glm::dvec4 firstColor = color;
                 bool firstHas = hasColor;
+                std::string firstGroupName = CurrentGroupLabel();
+                uint64_t firstGroupInstanceId = CurrentGroupInstanceId();
                 bool gotColor = false;
                 for (ColoredSoup& cs : children)
                 {
@@ -526,6 +796,8 @@ namespace Assets::scad
                     {
                         firstColor = cs.color;
                         firstHas = cs.hasColor;
+                        firstGroupName = cs.groupName.empty() ? firstGroupName : cs.groupName;
+                        firstGroupInstanceId = cs.groupInstanceId == 0 ? firstGroupInstanceId : cs.groupInstanceId;
                         gotColor = true;
                     }
                     parts.push_back(std::move(cs.soup));
@@ -541,6 +813,8 @@ namespace Assets::scad
                 ColoredSoup result;
                 result.color = firstColor;
                 result.hasColor = firstHas;
+                result.groupName = firstGroupName;
+                result.groupInstanceId = firstGroupInstanceId;
                 result.soup = std::move(r);
                 out.push_back(std::move(result));
                 return out;
@@ -634,11 +908,30 @@ namespace Assets::scad
                 }
                 ++depth_;
                 ctx_.Push();
+                const bool createSceneNode = ShouldCreateSceneNodeForModule();
+                const uint64_t instanceId = nextGroupInstanceId_++;
+                moduleCallStack_.push_back(GroupFrame{def.name, instanceId});
                 BindParams(def.params, call.args);
                 ctx_.Set("$children", Value::MakeNumber(static_cast<double>(CountInstanceChildren(call.children))));
                 childrenStack_.push_back(&call.children);
-                GeomList g = EvalScope(def.body, xform, color, hasColor);
+
+                GeomList g;
+                if (createSceneNode)
+                {
+                    SceneNodeBuild* node = CreateSceneNode(def.name, xform);
+                    sceneOwnerStack_.push_back(node);
+                    g = EvalScope(def.body, glm::dmat4(1.0), color, hasColor);
+                    EmitSceneGeometry(g);
+                    sceneOwnerStack_.pop_back();
+                    g.clear();
+                }
+                else
+                {
+                    g = EvalScope(def.body, xform, color, hasColor);
+                }
+
                 childrenStack_.pop_back();
+                moduleCallStack_.pop_back();
                 ctx_.Pop();
                 --depth_;
                 return g;
@@ -729,6 +1022,8 @@ namespace Assets::scad
                 ColoredSoup cs;
                 cs.color = color;
                 cs.hasColor = hasColor;
+                cs.groupName = CurrentGroupLabel();
+                cs.groupInstanceId = CurrentGroupInstanceId();
                 cs.soup.reserve(objSpace.size());
                 const bool flipWinding = glm::determinant(glm::dmat3(xform)) < 0.0;
                 for (size_t i = 0; i + 2 < objSpace.size(); i += 3)
@@ -1591,7 +1886,20 @@ namespace Assets::scad
     {
         outError.clear();
         Evaluator evaluator(modules, functions, options, outResult);
-        evaluator.Run(mainTopLevel);
+        evaluator.RunFlat(mainTopLevel);
+        return true;
+    }
+
+    bool ScadEvaluator::EvaluateScene(const Scope& mainTopLevel,
+                                      const std::unordered_map<std::string, StmtPtr>& modules,
+                                      const std::unordered_map<std::string, StmtPtr>& functions,
+                                      const ScadLoadOptions& options,
+                                      SceneEvalResult& outResult,
+                                      std::string& outError)
+    {
+        outError.clear();
+        Evaluator evaluator(modules, functions, options, outResult);
+        evaluator.RunScene(mainTopLevel);
         return true;
     }
 } // namespace Assets::scad

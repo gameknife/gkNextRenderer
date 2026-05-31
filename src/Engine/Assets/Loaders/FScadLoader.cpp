@@ -25,6 +25,9 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/matrix_decompose.hpp>
+
 namespace Assets
 {
     namespace
@@ -231,6 +234,209 @@ namespace Assets
             }
             return out;
         }
+
+        glm::dmat4 ScadToWorldBasis(double scale)
+        {
+            glm::dmat4 basis(1.0);
+            basis[0] = glm::dvec4(scale, 0.0, 0.0, 0.0);
+            basis[1] = glm::dvec4(0.0, 0.0, -scale, 0.0);
+            basis[2] = glm::dvec4(0.0, scale, 0.0, 0.0);
+            basis[3] = glm::dvec4(0.0, 0.0, 0.0, 1.0);
+            return basis;
+        }
+
+        void ScadLocalToEngineTRS(
+            const glm::dmat4& scadLocal,
+            double scale,
+            glm::vec3& outTranslation,
+            glm::quat& outRotation,
+            glm::vec3& outScale)
+        {
+            const glm::dmat4 basis = ScadToWorldBasis(scale);
+            const glm::dmat4 engineLocal = basis * scadLocal * glm::inverse(basis);
+
+            glm::dvec3 skew(0.0);
+            glm::dvec4 perspective(0.0);
+            glm::dvec3 scaleD(1.0);
+            glm::dvec3 translationD(0.0);
+            glm::dquat rotationD(1.0, 0.0, 0.0, 0.0);
+            if (!glm::decompose(engineLocal, scaleD, rotationD, translationD, skew, perspective))
+            {
+                outTranslation = glm::vec3(0.0f);
+                outRotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+                outScale = glm::vec3(1.0f);
+                return;
+            }
+
+            outTranslation = glm::vec3(translationD);
+            outRotation = glm::normalize(glm::quat(rotationD));
+            outScale = glm::vec3(scaleD);
+        }
+
+        Material ScadMaterialFromColor(const glm::vec4& color)
+        {
+            const glm::vec3 rgb(color.r, color.g, color.b);
+            const float alpha = color.a;
+            if (alpha < 0.99f)
+            {
+                Material material = Material::Dielectric(1.45f, 0.0f);
+                material.Diffuse = glm::vec4(rgb, alpha);
+                return material;
+            }
+            return Material::Lambertian(rgb);
+        }
+
+        bool AttachSceneMeshesToNode(
+            const std::string& baseName,
+            const std::vector<scad::SceneMeshBucket>& meshBuckets,
+            size_t startBucket,
+            size_t maxBucketCount,
+            double scale,
+            float smoothAngleDegrees,
+            std::shared_ptr<Node> node,
+            std::vector<Model>& models,
+            std::vector<FMaterial>& materials)
+        {
+            const size_t endBucket = std::min(meshBuckets.size(), startBucket + maxBucketCount);
+            if (startBucket >= endBucket)
+            {
+                return false;
+            }
+
+            std::vector<Vertex> vertices;
+            std::vector<uint32_t> indices;
+            std::array<uint32_t, 16> nodeMaterials = {0};
+            uint32_t sectionIndex = 0;
+
+            for (size_t bucketIndex = startBucket; bucketIndex < endBucket; ++bucketIndex)
+            {
+                const scad::SceneMeshBucket& bucket = meshBuckets[bucketIndex];
+                const size_t triCount = bucket.tris.size() / 3;
+                if (triCount == 0)
+                {
+                    continue;
+                }
+
+                std::vector<glm::vec3> localPos(triCount * 3);
+                for (size_t i = 0; i < localPos.size(); ++i)
+                {
+                    localPos[i] = ScadToWorldPos(bucket.tris[i], scale);
+                }
+                const std::vector<glm::vec3> normals = ScadComputeSmoothNormals(localPos, smoothAngleDegrees);
+
+                const uint32_t vertexOffset = static_cast<uint32_t>(vertices.size());
+                vertices.reserve(vertices.size() + localPos.size());
+                indices.reserve(indices.size() + localPos.size());
+                for (uint32_t i = 0; i < static_cast<uint32_t>(localPos.size()); ++i)
+                {
+                    vertices.push_back(Vertex{localPos[i], normals[i], glm::vec4(1, 0, 0, 1), glm::vec2(0, 0), sectionIndex});
+                    indices.push_back(vertexOffset + i);
+                }
+
+                const uint32_t materialIdx = static_cast<uint32_t>(materials.size());
+                materials.push_back({ScadMaterialFromColor(bucket.color),
+                                     fmt::format("{}__material_{}", baseName, bucketIndex)});
+                nodeMaterials[sectionIndex] = materialIdx;
+                ++sectionIndex;
+            }
+
+            if (vertices.empty() || sectionIndex == 0)
+            {
+                return false;
+            }
+
+            Model model = FProcModel::CreateFromBuffers(
+                fmt::format("{}__mesh_{}_{}", baseName, startBucket, endBucket - 1),
+                std::move(vertices),
+                std::move(indices),
+                false);
+            model.SetSectionCount(sectionIndex);
+
+            const uint32_t modelIdx = static_cast<uint32_t>(models.size());
+            models.push_back(std::move(model));
+
+            auto renderComp = std::make_shared<Runtime::RenderComponent>();
+            renderComp->SetModelId(modelIdx);
+            renderComp->SetVisible(true);
+            renderComp->SetRayCastVisible(true);
+            renderComp->SetMaterials(nodeMaterials);
+            node->AddComponent(renderComp);
+            return true;
+        }
+
+        void BuildScadSceneNodeRecursive(
+            const scad::SceneNode& sceneNode,
+            const std::shared_ptr<Node>& parent,
+            double scale,
+            float smoothAngleDegrees,
+            std::vector<std::shared_ptr<Node>>& nodes,
+            std::vector<Model>& models,
+            std::vector<FMaterial>& materials)
+        {
+            glm::vec3 localTranslation(0.0f);
+            glm::quat localRotation(1.0f, 0.0f, 0.0f, 0.0f);
+            glm::vec3 localScale(1.0f);
+            ScadLocalToEngineTRS(sceneNode.localTransform, scale, localTranslation, localRotation, localScale);
+
+            auto node = Node::CreateNode(
+                sceneNode.name,
+                localTranslation,
+                localRotation,
+                localScale,
+                static_cast<uint32_t>(sceneNode.instanceId));
+            if (parent)
+            {
+                node->SetParent(parent);
+            }
+            nodes.push_back(node);
+
+            if (!sceneNode.meshes.empty())
+            {
+                constexpr size_t kMaxMaterialsPerNode = 16;
+                if (sceneNode.meshes.size() <= kMaxMaterialsPerNode)
+                {
+                    AttachSceneMeshesToNode(
+                        sceneNode.name,
+                        sceneNode.meshes,
+                        0,
+                        kMaxMaterialsPerNode,
+                        scale,
+                        smoothAngleDegrees,
+                        node,
+                        models,
+                        materials);
+                }
+                else
+                {
+                    for (size_t start = 0; start < sceneNode.meshes.size(); start += kMaxMaterialsPerNode)
+                    {
+                        auto chunkNode = Node::CreateNode(
+                            fmt::format("{}__render", sceneNode.name),
+                            glm::vec3(0.0f),
+                            glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+                            glm::vec3(1.0f),
+                            static_cast<uint32_t>(nodes.size()));
+                        chunkNode->SetParent(node);
+                        nodes.push_back(chunkNode);
+                        AttachSceneMeshesToNode(
+                            sceneNode.name,
+                            sceneNode.meshes,
+                            start,
+                            kMaxMaterialsPerNode,
+                            scale,
+                            smoothAngleDegrees,
+                            chunkNode,
+                            models,
+                            materials);
+                    }
+                }
+            }
+
+            for (const scad::SceneNode& child : sceneNode.children)
+            {
+                BuildScadSceneNodeRecursive(child, node, scale, smoothAngleDegrees, nodes, models, materials);
+            }
+        }
     } // namespace
 
     bool FScadLoader::LoadScadScene(
@@ -348,84 +554,23 @@ namespace Assets
         }
 
         // ---- Evaluate ----
-        scad::EvalResult result;
+        scad::SceneEvalResult result;
         std::string evalErr;
-        scad::ScadEvaluator::Evaluate(mainTopLevel, moduleTable, functionTable, options, result, evalErr);
+        scad::ScadEvaluator::EvaluateScene(mainTopLevel, moduleTable, functionTable, options, result, evalErr);
 
-        if (result.buckets.empty())
+        if (result.roots.empty())
         {
             SPDLOG_WARN("SCAD: no geometry produced from {}", filename);
         }
 
         const double scale = static_cast<double>(options.scadToWorldScale > 0.0f ? options.scadToWorldScale : 1.0f);
 
-        // ---- Build one Model + Node per color bucket ----
-        size_t bucketIndex = 0;
-        for (const auto& entry : result.buckets)
+        // ---- Recreate the SCAD user-module hierarchy ----
+        size_t rootCount = 0;
+        for (const scad::SceneNode& root : result.roots)
         {
-            const scad::ColorBucket& bucket = entry.second;
-            const size_t triCount = bucket.tris.size() / 3;
-            if (triCount == 0)
-            {
-                continue;
-            }
-
-            std::vector<glm::vec3> worldPos(triCount * 3);
-            for (size_t i = 0; i < worldPos.size(); ++i)
-            {
-                worldPos[i] = ScadToWorldPos(bucket.tris[i], scale);
-            }
-            const std::vector<glm::vec3> normals = ScadComputeSmoothNormals(worldPos, options.smoothAngleDegrees);
-
-            std::vector<Vertex> vertices;
-            std::vector<uint32_t> indices;
-            vertices.reserve(worldPos.size());
-            indices.reserve(worldPos.size());
-            for (uint32_t i = 0; i < static_cast<uint32_t>(worldPos.size()); ++i)
-            {
-                vertices.push_back(Vertex{worldPos[i], normals[i], glm::vec4(1, 0, 0, 1), glm::vec2(0, 0), 0});
-                indices.push_back(i);
-            }
-
-            const std::string modelName = fmt::format("scad_part_{}", bucketIndex);
-            const uint32_t modelIdx = static_cast<uint32_t>(models.size());
-            models.push_back(FProcModel::CreateFromBuffers(modelName, std::move(vertices), std::move(indices), false));
-
-            const glm::vec3 rgb(bucket.color.r, bucket.color.g, bucket.color.b);
-            const float alpha = bucket.color.a;
-            Material material;
-            if (alpha < 0.99f)
-            {
-                // Translucent color() -> tinted dielectric (glass / liquid).
-                material = Material::Dielectric(1.45f, 0.0f);
-                material.Diffuse = glm::vec4(rgb, alpha);
-            }
-            else
-            {
-                material = Material::Lambertian(rgb);
-            }
-            const uint32_t materialIdx = static_cast<uint32_t>(materials.size());
-            materials.push_back({material, fmt::format("scad_color_{}", bucketIndex)});
-
-            std::array<uint32_t, 16> nodeMaterials = {0};
-            nodeMaterials[0] = materialIdx;
-
-            auto node = Node::CreateNode(
-                modelName,
-                glm::vec3(0.0f),
-                glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
-                glm::vec3(1.0f),
-                static_cast<uint32_t>(nodes.size()));
-
-            auto renderComp = std::make_shared<Runtime::RenderComponent>();
-            renderComp->SetModelId(modelIdx);
-            renderComp->SetVisible(true);
-            renderComp->SetRayCastVisible(true);
-            renderComp->SetMaterials(nodeMaterials);
-            node->AddComponent(renderComp);
-
-            nodes.push_back(node);
-            ++bucketIndex;
+            BuildScadSceneNodeRecursive(root, nullptr, scale, options.smoothAngleDegrees, nodes, models, materials);
+            ++rootCount;
         }
 
         // ---- Camera + environment ----
@@ -441,8 +586,8 @@ namespace Assets
             cameraInit.cameras.push_back(defaultCam);
         }
 
-        SPDLOG_INFO("SCAD: loaded {} -> {} color groups, {} triangles ({} warnings)",
-                    filename, bucketIndex, result.triangleCount, result.warningCount);
+        SPDLOG_INFO("SCAD: loaded {} -> {} root nodes, {} total nodes, {} triangles ({} warnings)",
+                    filename, rootCount, nodes.size(), result.triangleCount, result.warningCount);
         return true;
     }
 } // namespace Assets

@@ -4,7 +4,7 @@
 
 ## 功能概览
 
-加载 `.scad` 文件，解析 `use`/`include` 闭包，求值出几何，按颜色分组生成可渲染场景。
+加载 `.scad` 文件，解析 `use`/`include` 闭包，求值出几何，并按 user module 调用树重建可渲染场景层级。
 
 - **支持格式**：`.scad`
 - **资源依赖**：`assets/scad/`（示例场景）、`assets/fonts/DroidSansFallback.ttf`（text() 字形，含 CJK）
@@ -20,12 +20,12 @@ src/Engine/Assets/Loaders/
 ├── FScadTypes.h            # ScadLoadOptions、Value 变体、AST（Expr/Stmt）、常量
 ├── FScadLexer.h/.cpp       # 词法（注释/数字/字符串/$特殊变量/运算符/范围）
 ├── FScadParser.h/.cpp      # 递归下降解析 → AST（module/function/for/if/let、表达式、list comprehension）
-├── FScadEvaluator.h/.cpp   # AST + Context → 按颜色分组的三角汤（GeomList）；CSG/2D 子求值
+├── FScadEvaluator.h/.cpp   # AST + Context → 扁平颜色桶 / scene graph；CSG/2D 子求值
 ├── FScadGeometry.h/.cpp    # 图元 cube/sphere/cylinder/polyhedron + linear/rotate extrude
 ├── FScadCsg.h/.cpp         # CSG 布尔后端（Manifold，GK_WITH_MANIFOLD）
 ├── FScadTess.h/.cpp        # earcut 凹多边形/带洞三角化（GK_WITH_EARCUT，排除 unity）
 ├── FScadText.h/.cpp        # text() 字形 → 轮廓（FreeType，GK_WITH_FREETYPE，排除 unity）
-└── FScadLoader.h/.cpp      # 场景组装：颜色桶→Model/Material/Node、法线平滑、相机、环境
+└── FScadLoader.h/.cpp      # 场景组装：scene graph→Node 层级、多 section Model、法线平滑、相机、环境
 ```
 
 修改的现有文件：
@@ -44,8 +44,8 @@ src/Engine/Assets/Loaders/
    → 合并 module/function 定义表 + main 顶层语句
    → Evaluator（transform/color 栈 + Context 动态作用域）
        图元→三角汤(Z-up)；CSG 节点调用 FScadCsg；2D 节点经 Collect2D + FScadTess
-   → 按 quantized RGBA 分组的颜色桶
-   → Loader：Z-up→Y-up(绕 X −90°) + scale；法线平滑；每桶 → Model + Material + Node
+   → Scene graph（user module 调用实例为逻辑节点，直属几何按 quantized RGBA 分桶）
+   → Loader：Z-up→Y-up(绕 X −90°) + scale；法线平滑；重建 Node 父子层级；每个逻辑节点尽量合并为一个多 section Model
 ```
 
 ## 关键设计决策
@@ -54,7 +54,7 @@ src/Engine/Assets/Loaders/
 |------|------|
 | 坐标系 | OpenSCAD Z-up 右手 → 引擎 Y-up 右手，绕 X −90°：`world=(x, z, −y)`，纯旋转 det+1，**不翻 winding** |
 | 缩放 | `ScadLoadOptions::scadToWorldScale`（CVar `sys.scadToWorldScale`，默认 1.0） |
-| 几何→模型 | **按颜色分组**：每种颜色 1 个 Model + 1 个单材质 Node（规避 Node 16 材质槽上限） |
+| 几何→模型 | **按 user module 调用树重建层级**：每个 user module 调用实例生成一个逻辑 Node；直属几何按颜色分桶并尽量合并成单个多 section Model；超过 16 材质槽时退化为同名 `__render` 子节点分块 |
 | CSG | `union/group` = 拼接（不透明等价、省布尔开销）；`difference/intersection` 先 `ScadCsg::Union` 合并正侧再走 **Manifold** 真布尔；`hull` = Manifold Hull |
 | 求值 | 未建独立 CSG 树：Evaluator 带 transform/color 栈遍历，返回 `GeomList`（色→三角汤），CSG/extrude 节点就地调用后端 |
 | 变量/定义作用域 | 变量采用动态作用域（模块/函数体可见调用链变量），比 OpenSCAD 宽松；`$fn` 因此天然动态生效。`module`/`function` 定义按 scope 建局部定义栈，支持模块内 helper 和后向引用 |
@@ -98,7 +98,7 @@ src/Engine/Assets/Loaders/
 5. **`import`（STL/DXF/SVG）/ `surface` 未实现**。
 6. **rotate_extrude 部分扫掠端盖**为扇形（凸轮廓正确）；凹轮廓端盖未走 earcut。
 7. **变量动态作用域**：非严格 OpenSCAD 词法作用域；`include` 顶层语句位置丢失（追加到 main 后，示例全用 use 不受影响）。
-8. **无 per-instance 节点**：一种颜色 = 一个大 Model，编辑器无法单独选中部件；如需可改"顶层模块实例 + 颜色"分组。
+8. **Node 仍受 TRS 表达能力限制**：scene graph 会完整保留 user module 父子关系，但引擎 Node 只有 TRS；`mirror` / 一般仿射最终仍需分解到平移/旋转/缩放，极端 shear 场景可能无法 1:1 还原。
 9. **无磁盘缓存**：每次重新解析（SCAD 解析很快，~40-100ms，暂不需要）。
 
 ## 调试技巧
