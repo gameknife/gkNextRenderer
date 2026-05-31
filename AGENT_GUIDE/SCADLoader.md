@@ -57,7 +57,7 @@ src/Engine/Assets/Loaders/
 | 几何→模型 | **按颜色分组**：每种颜色 1 个 Model + 1 个单材质 Node（规避 Node 16 材质槽上限） |
 | CSG | `union/group` = 拼接（不透明等价、省布尔开销）；`difference/intersection` 先 `ScadCsg::Union` 合并正侧再走 **Manifold** 真布尔；`hull` = Manifold Hull |
 | 求值 | 未建独立 CSG 树：Evaluator 带 transform/color 栈遍历，返回 `GeomList`（色→三角汤），CSG/extrude 节点就地调用后端 |
-| 变量作用域 | 动态作用域（模块/函数体可见调用链变量），比 OpenSCAD 宽松；`$fn` 因此天然动态生效 |
+| 变量/定义作用域 | 变量采用动态作用域（模块/函数体可见调用链变量），比 OpenSCAD 宽松；`$fn` 因此天然动态生效。`module`/`function` 定义按 scope 建局部定义栈，支持模块内 helper 和后向引用 |
 | 法线 | 平滑：按位置焊接相邻面，面积加权，夹角 ≤ `smoothAngleDegrees`（默认 35°）才平滑——曲面光滑、硬边保留 |
 | 材质 | `color` 不透明→`Lambertian`；`alpha < 0.99`→`Dielectric(ior=1.45)` + `Diffuse=(rgb,a)`（玻璃/液体）。颜色分桶含 alpha |
 | 2D | `Collect2D`（`glm::dmat3` 仿射栈）收集 `linear/rotate_extrude` 子轮廓，支持嵌套 translate/rotate/scale/union/circle/square/polygon(含 paths 洞)/用户模块 |
@@ -71,7 +71,7 @@ src/Engine/Assets/Loaders/
 - **CSG**：`union`、`difference`、`intersection`、`hull`（Manifold）；`minkowski`(近似为 union)
 - **拉伸**：`linear_extrude`(凹/带洞/嵌套变换)、`rotate_extrude`(angle，360 闭合/部分端盖)
 - **控制流**：`for`(笛卡尔多绑定)、`if/else`、`let`、`intersection_for`(按 for)
-- **语言**：`module`/`function` 定义与默认参/关键字参、`children()`/`children(i)`/`$children`、list comprehension(`for`/`if`/`let`/`each`)、`echo`/`assert`/`str`、`$fn`/`$fa`/`$fs`
+- **语言**：`module`/`function` 定义（含局部 helper 与后向引用）与默认参/关键字参、`children()`/`children(i)`/`$children`、list comprehension(`for`/`if`/`let`/`each`)、`echo`/`assert`/`str`、`$fn`/`$fa`/`$fs`
 - **内置函数**：`max min abs floor ceil round sqrt pow exp ln log sign sin cos tan asin acos atan atan2 len norm concat str`（三角函数为角度制）
 
 ## 依赖与编译开关

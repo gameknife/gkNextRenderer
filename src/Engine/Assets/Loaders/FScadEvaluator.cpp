@@ -151,6 +151,27 @@ namespace Assets::scad
             int depth_ = 0;
             std::unordered_map<std::string, int> warnOnce_;
             std::vector<const Scope*> childrenStack_; // caller children for children()
+            std::vector<std::unordered_map<std::string, StmtPtr>> localModules_;
+            std::vector<std::unordered_map<std::string, StmtPtr>> localFunctions_;
+
+            struct DefinitionFrameGuard
+            {
+                explicit DefinitionFrameGuard(Evaluator& owner) : owner_(owner)
+                {
+                    owner_.localModules_.emplace_back();
+                    owner_.localFunctions_.emplace_back();
+                }
+                DefinitionFrameGuard(const DefinitionFrameGuard&) = delete;
+                DefinitionFrameGuard& operator=(const DefinitionFrameGuard&) = delete;
+
+                ~DefinitionFrameGuard()
+                {
+                    owner_.localFunctions_.pop_back();
+                    owner_.localModules_.pop_back();
+                }
+
+                Evaluator& owner_;
+            };
 
             void Warn(const std::string& key, const std::string& msg)
             {
@@ -181,6 +202,9 @@ namespace Assets::scad
             // --------------------------------------------------------------
             GeomList EvalScope(const Scope& scope, const glm::dmat4& xform, const glm::dvec4& color, bool hasColor)
             {
+                DefinitionFrameGuard definitionFrame(*this);
+                RegisterLocalDefinitions(scope);
+
                 GeomList out;
                 for (const StmtPtr& s : scope)
                 {
@@ -195,6 +219,46 @@ namespace Assets::scad
                     }
                 }
                 return out;
+            }
+
+            void RegisterLocalDefinitions(const Scope& scope)
+            {
+                for (const StmtPtr& s : scope)
+                {
+                    if (!s) continue;
+                    if (s->kind == StmtKind::ModuleDef)
+                    {
+                        localModules_.back()[s->name] = s;
+                    }
+                    else if (s->kind == StmtKind::FunctionDef)
+                    {
+                        localFunctions_.back()[s->name] = s;
+                    }
+                }
+            }
+
+            StmtPtr FindModule(const std::string& name) const
+            {
+                for (auto it = localModules_.rbegin(); it != localModules_.rend(); ++it)
+                {
+                    auto found = it->find(name);
+                    if (found != it->end()) return found->second;
+                }
+
+                auto found = modules_.find(name);
+                return found != modules_.end() ? found->second : nullptr;
+            }
+
+            StmtPtr FindFunction(const std::string& name) const
+            {
+                for (auto it = localFunctions_.rbegin(); it != localFunctions_.rend(); ++it)
+                {
+                    auto found = it->find(name);
+                    if (found != it->end()) return found->second;
+                }
+
+                auto found = functions_.find(name);
+                return found != functions_.end() ? found->second : nullptr;
             }
 
             GeomList EvalInstance(const Stmt& inst, const glm::dmat4& xform, glm::dvec4 color, bool hasColor)
@@ -333,10 +397,10 @@ namespace Assets::scad
                     return {};
                 }
 
-                auto found = modules_.find(name);
-                if (found != modules_.end())
+                StmtPtr found = FindModule(name);
+                if (found)
                 {
-                    return CallUserModule(*found->second, inst, xform, color, hasColor);
+                    return CallUserModule(*found, inst, xform, color, hasColor);
                 }
 
                 Warn("unknown", "unknown module '" + name + "' (rendering its children verbatim)");
@@ -345,6 +409,9 @@ namespace Assets::scad
 
             GeomList EvalDifference(const Stmt& inst, const glm::dmat4& xform, const glm::dvec4& color, bool hasColor)
             {
+                DefinitionFrameGuard definitionFrame(*this);
+                RegisterLocalDefinitions(inst.children);
+
                 std::vector<TriSoup> positives;
                 std::vector<TriSoup> negatives;
                 glm::dvec4 posColor = color;
@@ -398,6 +465,9 @@ namespace Assets::scad
 
             GeomList EvalIntersection(const Stmt& inst, const glm::dmat4& xform, const glm::dvec4& color, bool hasColor)
             {
+                DefinitionFrameGuard definitionFrame(*this);
+                RegisterLocalDefinitions(inst.children);
+
                 std::vector<TriSoup> operands;
                 glm::dvec4 firstColor = color;
                 bool firstHas = hasColor;
@@ -842,6 +912,9 @@ namespace Assets::scad
             // Collects closed 2D outlines (after nested 2D transforms) from a scope.
             void Collect2D(const Scope& children, const glm::dmat3& m, std::vector<std::vector<glm::dvec2>>& out)
             {
+                DefinitionFrameGuard definitionFrame(*this);
+                RegisterLocalDefinitions(children);
+
                 const double fn = ctx_.GetNumber("$fn", 0.0);
                 const double fa = ctx_.GetNumber("$fa", 12.0);
                 const double fs = ctx_.GetNumber("$fs", 2.0);
@@ -949,13 +1022,13 @@ namespace Assets::scad
                     }
                     else
                     {
-                        auto found = modules_.find(c.name);
-                        if (found != modules_.end() && depth_ < options_.maxRecursionDepth)
+                        StmtPtr found = FindModule(c.name);
+                        if (found && depth_ < options_.maxRecursionDepth)
                         {
                             ++depth_;
                             ctx_.Push();
-                            BindParams(found->second->params, c.args);
-                            Collect2D(found->second->body, m, out);
+                            BindParams(found->params, c.args);
+                            Collect2D(found->body, m, out);
                             ctx_.Pop();
                             --depth_;
                         }
@@ -1414,8 +1487,8 @@ namespace Assets::scad
             {
                 const std::string& name = e->str;
 
-                auto fn = functions_.find(name);
-                if (fn != functions_.end())
+                StmtPtr fn = FindFunction(name);
+                if (fn)
                 {
                     if (depth_ >= options_.maxRecursionDepth)
                     {
@@ -1424,8 +1497,8 @@ namespace Assets::scad
                     }
                     ++depth_;
                     ctx_.Push();
-                    BindParams(fn->second->params, e->args);
-                    const Value r = EvalExpr(fn->second->value);
+                    BindParams(fn->params, e->args);
+                    const Value r = EvalExpr(fn->value);
                     ctx_.Pop();
                     --depth_;
                     return r;

@@ -150,6 +150,82 @@ TEST_CASE("Scad evaluator resolves user modules, functions and for-loops", "[Uni
     CHECK(TotalTriangles(result) == 48);
 }
 
+TEST_CASE("Scad evaluator resolves local module and function definitions", "[Unit][Scad]")
+{
+    const EvalResult result = EvalProgram(
+        "module outer() {\n"
+        "  marker(3);\n"
+        "  function y(x) = x + 2;\n"
+        "  module marker(x) { translate([0, y(x), 0]) cube([1,1,1]); }\n"
+        "}\n"
+        "outer();\n");
+
+    CHECK(result.warningCount == 0);
+    CHECK(TotalTriangles(result) == 12);
+
+    double minY = std::numeric_limits<double>::max();
+    double maxY = std::numeric_limits<double>::lowest();
+    for (const auto& entry : result.buckets)
+    {
+        for (const glm::dvec3& p : entry.second.tris)
+        {
+            minY = std::min(minY, p.y);
+            maxY = std::max(maxY, p.y);
+        }
+    }
+    CHECK(minY == Catch::Approx(5.0).margin(1e-6));
+    CHECK(maxY == Catch::Approx(6.0).margin(1e-6));
+}
+
+TEST_CASE("Scad evaluator handles generated city helpers nested inside a module", "[Unit][Scad]")
+{
+    const EvalResult result = EvalProgram(
+        "$fn = 16;\n"
+        "module city() {\n"
+        "  function wave_y(x) = -14 + 5 * sin((x + 50) * 3.2);\n"
+        "  module _tree(x, y, s=1) {\n"
+        "    color([0.42,0.22,0.08]) translate([x, y, 0.9*s]) cylinder(r=0.16*s, h=1.8*s, center=true);\n"
+        "    color([0.05,0.45,0.16]) translate([x, y, 2.0*s]) sphere(r=0.72*s);\n"
+        "  }\n"
+        "  color([0.72,0.74,0.69]) translate([0, 0, -0.08]) cube([100, 80, 0.16], center=true);\n"
+        "  color([0.08,0.38,0.78,0.68]) translate([0,0,0.18]) linear_extrude(height=0.12)\n"
+        "    polygon(points = concat(\n"
+        "      [for (x = [-50:10:50]) [x, wave_y(x)+3.2]],\n"
+        "      [for (x = [50:-10:-50]) [x, wave_y(x)-3.2]]\n"
+        "    ));\n"
+        "  for (x = [-48:8:48]) {\n"
+        "    _tree(x, wave_y(x)+5.2, 0.55);\n"
+        "    _tree(x+3, wave_y(x)-5.0, 0.5);\n"
+        "  }\n"
+        "}\n"
+        "city();\n");
+
+    CHECK(result.warningCount == 0);
+    CHECK(TotalTriangles(result) > 12);
+
+    const ColorBucket* river = nullptr;
+    for (const auto& entry : result.buckets)
+    {
+        const glm::vec4& c = entry.second.color;
+        if (c.r == Catch::Approx(0.08f).margin(1e-3f) && c.b == Catch::Approx(0.78f).margin(1e-3f) &&
+            c.a == Catch::Approx(0.68f).margin(1e-3f))
+        {
+            river = &entry.second;
+            break;
+        }
+    }
+    REQUIRE(river != nullptr);
+
+    double minY = std::numeric_limits<double>::max();
+    double maxY = std::numeric_limits<double>::lowest();
+    for (const glm::dvec3& p : river->tris)
+    {
+        minY = std::min(minY, p.y);
+        maxY = std::max(maxY, p.y);
+    }
+    CHECK((maxY - minY) > 8.0);
+}
+
 TEST_CASE("Scad difference subtracts when a CSG backend is present", "[Unit][Scad]")
 {
     // Inner cube fully contained -> hollow shell when the boolean backend runs;
