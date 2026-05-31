@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Runtime/Subsystems/AI/AIChat.hpp"
+#include "Engine/Runtime/Subsystems/AIService.hpp"
 
 #include <atomic>
 #include <mutex>
@@ -33,6 +34,13 @@ namespace ScadStudio
         bool IsConfigured() const;
         bool IsGenerating() const { return generating_.load(); }
         std::string ProviderName() const;
+        NextAI::EAIProviderType ProviderType() const;
+        std::vector<std::pair<NextAI::EAIProviderType, std::string>> Providers() const;
+        bool IsProviderConfigured(NextAI::EAIProviderType type) const;
+        bool SwitchProvider(NextAI::EAIProviderType type);
+        std::vector<std::string> CurrentProviderModels() const;
+        std::string CurrentModel() const;
+        bool SetCurrentModel(const std::string& model);
 
         // Kick off a generation. `currentSource` is the authoritative model state fed
         // back so multi-turn edits ("make it taller") resolve correctly; pass empty for

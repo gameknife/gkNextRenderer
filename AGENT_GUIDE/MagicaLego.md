@@ -152,20 +152,31 @@ end
 - 配置文件: `assets/configs/ai_config.json`
 
 ### 配置格式
-多 provider 配置，默认 `provider: localllm`（复用 `gnb llm` 启动的本地 llama-server，详见 AGENTS.md 的 Local LLM 段），可切到 `gemini` / `ollama` / `zhipu` / `deepseek`：
+多 provider 配置，默认 `provider: localllm`（复用 `gnb llm` 启动的本地 llama-server，详见 AGENTS.md 的 Local LLM 段），可切到 `gemini` / `ollama` / `zhipu` / `deepseek` / `openai`：
 ```json
 {
     "provider": "localllm",
     "useAgentLoop": true,
     "localllm": {
         "endpoint": "http://127.0.0.1:8765",
+        "defaultModel": "",
         "pidFile": "external/llm/run/server.pid",
         "autoDiscoverPid": true
     },
-    "gemini":   { "apiKey": "...", "model": "gemini-3-flash-preview", "endpoint": "..." },
-    "ollama":   { "endpoint": "http://localhost:11434", "model": "gemma3:12b" },
-    "zhipu":    { "apiKey": "...", "model": "glm-4.7", "endpoint": "..." },
-    "deepseek": { "apiKey": "...", "model": "deepseek-chat", "endpoint": "..." }
+    "gemini":   { "endpoint": "...", "defaultModel": "gemini-3-flash-preview", "models": ["gemini-3-flash-preview"] },
+    "ollama":   { "endpoint": "http://localhost:11434", "defaultModel": "gemma3:12b", "models": ["gemma3:12b"] },
+    "zhipu":    { "endpoint": "...", "defaultModel": "glm-4.7", "models": ["glm-4.7"] },
+    "deepseek": { "endpoint": "https://api.deepseek.com/v1", "defaultModel": "deepseek-chat", "models": ["deepseek-chat"] },
+    "openai":   { "endpoint": "https://api.openai.com/v1", "defaultModel": "gpt-4.1-mini", "models": ["gpt-4.1-mini"] }
+}
+```
+敏感信息不要写入 `ai_config.json`。默认从本地 `GKNEXT_AI_SECRETS` 指定文件、Windows `%LOCALAPPDATA%/gkNextEngine/ai_secrets.json`、或平台用户数据目录 `gkNextEngine/ai_secrets.json` 读取：
+```json
+{
+    "openai": { "apiKey": "..." },
+    "deepseek": { "apiKey": "..." },
+    "gemini": { "apiKey": "..." },
+    "zhipu": { "apiKey": "..." }
 }
 ```
 
