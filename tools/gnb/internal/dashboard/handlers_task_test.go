@@ -196,3 +196,65 @@ func TestHandleTaskCreateSpecRejectsDuplicate(t *testing.T) {
 		t.Fatalf("status = %d, want 409 conflict", rec.Code)
 	}
 }
+
+func TestHandleTaskSpecEditFormRendersTextarea(t *testing.T) {
+	s := setupTODORepo(t)
+	if _, err := spec.WriteSpecStub(s.opts.RepoRoot, spec.SpecStub{
+		TaskID: 1,
+		Title:  "可编辑 spec",
+		Body:   "## 背景\n\n旧内容",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/task/00001/spec/edit", nil)
+	req.SetPathValue("id", "00001")
+	rec := httptest.NewRecorder()
+
+	s.handleTaskSpecEditForm(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("status = %d (%s), want 200", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `hx-post="/task/00001/spec/save"`) {
+		t.Fatalf("edit form missing save action:\n%s", body)
+	}
+	if !strings.Contains(body, "<textarea") {
+		t.Fatalf("edit form missing textarea:\n%s", body)
+	}
+}
+
+func TestHandleTaskSpecSaveWritesFile(t *testing.T) {
+	s := setupTODORepo(t)
+	if _, err := spec.WriteSpecStub(s.opts.RepoRoot, spec.SpecStub{
+		TaskID: 1,
+		Title:  "可编辑 spec",
+		Body:   "旧内容",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	form := url.Values{}
+	form.Set("body", "## 背景\r\n\r\n新内容")
+	req := httptest.NewRequest("POST", "/task/00001/spec/save", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetPathValue("id", "00001")
+	rec := httptest.NewRecorder()
+
+	s.handleTaskSpecSave(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("status = %d (%s), want 200", rec.Code, rec.Body.String())
+	}
+	data, err := os.ReadFile(spec.SpecPath(s.opts.RepoRoot, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "## 背景\n\n新内容\n" {
+		t.Fatalf("saved spec = %q, want normalized markdown", string(data))
+	}
+	if !strings.Contains(rec.Body.String(), "新内容") {
+		t.Fatalf("response did not re-render updated spec:\n%s", rec.Body.String())
+	}
+}

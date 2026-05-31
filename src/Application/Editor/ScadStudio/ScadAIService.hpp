@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ScadSession.hpp"
+
 #include "Engine/Runtime/Subsystems/AI/AIChat.hpp"
 #include "Engine/Runtime/Subsystems/AIService.hpp"
 
@@ -18,6 +20,7 @@ namespace ScadStudio
         bool success = false;
         std::string assistantText; // full model reply (for the chat bubble)
         std::string scadSource;    // extracted ```scad``` block (empty if none)
+        std::vector<FScadProjectFile> files; // extracted ```scad-project``` files (empty for single-file replies)
         std::string error;         // populated when success == false
     };
 
@@ -45,10 +48,15 @@ namespace ScadStudio
         // Kick off a generation. `currentSource` is the authoritative model state fed
         // back so multi-turn edits ("make it taller") resolve correctly; pass empty for
         // a fresh model. Safe to call only when !IsGenerating().
-        void SubmitAsync(const std::string& currentSource, const std::string& instruction);
+        void SubmitAsync(
+            const std::string& currentSource,
+            const std::vector<FScadProjectFile>& files,
+            const std::string& activeFilePath,
+            const std::string& instruction);
 
         bool HasPendingResult() const { return hasPending_.load(); }
         FScadGenResult TakePendingResult();
+        std::string StreamingText() const;
 
         // Drop multi-turn history (e.g. when switching sessions).
         void ResetConversation();
@@ -56,13 +64,15 @@ namespace ScadStudio
     private:
         std::string BuildSystemPrompt() const;
         static std::string ExtractScadBlock(const std::string& text);
+        static std::vector<FScadProjectFile> ExtractProjectFiles(const std::string& text);
 
         NextEngine& engine_;
 
         std::atomic<bool> generating_{false};
         std::atomic<bool> hasPending_{false};
-        std::mutex mutex_;
+        mutable std::mutex mutex_;
         FScadGenResult pending_;
+        std::string streamingText_;
 
         // Plain-text turn history (no embedded source); the live source is injected into
         // the latest user message at request-build time. Main-thread only.

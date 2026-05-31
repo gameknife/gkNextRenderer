@@ -35,6 +35,10 @@ func (s *Server) handleTodoPanel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
+	s.renderTaskDetail(w, r, false)
+}
+
+func (s *Server) renderTaskDetail(w http.ResponseWriter, r *http.Request, editingSpec bool) {
 	id, err := parsePathID(r)
 	if err != nil {
 		httpError(w, err)
@@ -58,6 +62,7 @@ func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 		SpecBody:    specBody, HasSpec: hasSpec,
 		JournalBody: jBody, HasJournal: hasJ,
 		BlockerBody: bBody, HasBlocker: hasB,
+		EditingSpec: editingSpec,
 	}
 	s.render(w, "task_detail", vm)
 }
@@ -295,6 +300,51 @@ func (s *Server) handleTaskCreateSpec(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// Re-render the detail panel so the new spec card shows up immediately.
+	r2 := r.Clone(r.Context())
+	r2.SetPathValue("id", r.PathValue("id"))
+	s.handleTaskDetail(w, r2)
+}
+
+func (s *Server) handleTaskSpecEditForm(w http.ResponseWriter, r *http.Request) {
+	id, err := parsePathID(r)
+	if err != nil {
+		httpError(w, err)
+		return
+	}
+	if _, ok := spec.ReadIfExists(spec.SpecPath(s.opts.RepoRoot, id)); !ok {
+		http.Error(w, fmt.Sprintf("spec #%05d not found", id), http.StatusNotFound)
+		return
+	}
+	s.renderTaskDetail(w, r, true)
+}
+
+func (s *Server) handleTaskSpecSave(w http.ResponseWriter, r *http.Request) {
+	id, err := parsePathID(r)
+	if err != nil {
+		httpError(w, err)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err)
+		return
+	}
+	path := spec.SpecPath(s.opts.RepoRoot, id)
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			http.Error(w, fmt.Sprintf("spec #%05d not found", id), http.StatusNotFound)
+			return
+		}
+		httpError(w, err)
+		return
+	}
+	body := strings.ReplaceAll(r.FormValue("body"), "\r\n", "\n")
+	if body != "" && !strings.HasSuffix(body, "\n") {
+		body += "\n"
+	}
+	if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+		httpError(w, err)
+		return
+	}
 	r2 := r.Clone(r.Context())
 	r2.SetPathValue("id", r.PathValue("id"))
 	s.handleTaskDetail(w, r2)

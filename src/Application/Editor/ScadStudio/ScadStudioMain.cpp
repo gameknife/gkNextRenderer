@@ -12,6 +12,8 @@
 #include <imgui.h>
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
+
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
                                                          NextEngine* engine)
 {
@@ -71,8 +73,22 @@ void ScadStudioGameInstance::OnDestroy() {}
 
 void ScadStudioGameInstance::OnSceneLoaded()
 {
-    // Re-frame the freshly loaded SCAD model.
-    cameraController_.Reset(GetEngine().GetScene().GetRenderCamera());
+    // Re-frame the freshly loaded SCAD model and make right-drag orbit around it
+    // by default. Module preview loads a temporary scene, so the same path focuses
+    // the selected module without needing module-level render nodes.
+    Assets::Scene& scene = GetEngine().GetScene();
+    cameraController_.Reset(scene.GetRenderCamera());
+
+    const glm::vec3 minBounds = scene.GetSceneAABBMin();
+    const glm::vec3 maxBounds = scene.GetSceneAABBMax();
+    if (glm::all(glm::lessThan(minBounds, maxBounds)))
+    {
+        const glm::vec3 center = (minBounds + maxBounds) * 0.5f;
+        const float radius = std::max(glm::length(maxBounds - minBounds) * 0.5f, 0.5f);
+        cameraController_.SetOrbitTarget(center);
+        cameraController_.SetAltPressed(true);
+        cameraController_.Focus(center, radius);
+    }
 }
 
 void ScadStudioGameInstance::OnPreConfigUI() { ui_->Config(); }

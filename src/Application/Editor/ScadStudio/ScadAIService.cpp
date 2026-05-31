@@ -4,10 +4,121 @@
 #include "Engine/Runtime/Subsystems/AIService.hpp"
 
 #include <spdlog/spdlog.h>
+
+#include <algorithm>
+#include <cctype>
+#include <sstream>
 #include <thread>
 
 namespace ScadStudio
 {
+    namespace
+    {
+        std::string TrimCopy(std::string text)
+        {
+            const size_t b = text.find_first_not_of(" \t\r\n");
+            if (b == std::string::npos)
+            {
+                return "";
+            }
+            const size_t e = text.find_last_not_of(" \t\r\n");
+            return text.substr(b, e - b + 1);
+        }
+
+        std::string ToLower(std::string text)
+        {
+            std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
+            return text;
+        }
+
+        std::string SanitiseProjectPath(std::string path)
+        {
+            path = TrimCopy(std::move(path));
+            std::replace(path.begin(), path.end(), '\\', '/');
+            while (!path.empty() && path.front() == '/')
+            {
+                path.erase(path.begin());
+            }
+            if (path.empty() || path.find("..") != std::string::npos || path.find(':') != std::string::npos)
+            {
+                return "";
+            }
+
+            std::string clean;
+            clean.reserve(path.size());
+            for (char c : path)
+            {
+                const unsigned char uc = static_cast<unsigned char>(c);
+                if (std::isalnum(uc) || c == '_' || c == '-' || c == '/' || c == '.')
+                {
+                    clean.push_back(c);
+                }
+            }
+            if (clean.empty())
+            {
+                return "";
+            }
+            const std::string lower = ToLower(clean);
+            if (lower.size() < 5 || lower.substr(lower.size() - 5) != ".scad")
+            {
+                clean += ".scad";
+            }
+            return clean;
+        }
+
+        std::string FindFencedBlock(const std::string& text, const std::string& tag)
+        {
+            size_t cursor = 0;
+            while (cursor < text.size())
+            {
+                const size_t fence = text.find("```", cursor);
+                if (fence == std::string::npos)
+                {
+                    return "";
+                }
+                const size_t headerEnd = text.find('\n', fence + 3);
+                if (headerEnd == std::string::npos)
+                {
+                    return "";
+                }
+                const std::string header = ToLower(TrimCopy(text.substr(fence + 3, headerEnd - fence - 3)));
+                const size_t blockStart = headerEnd + 1;
+                const size_t blockEnd = text.find("```", blockStart);
+                if (header.find(tag) != std::string::npos)
+                {
+                    return blockEnd == std::string::npos ? text.substr(blockStart)
+                                                         : text.substr(blockStart, blockEnd - blockStart);
+                }
+                cursor = blockEnd == std::string::npos ? text.size() : blockEnd + 3;
+            }
+            return "";
+        }
+
+        std::string ProjectToPrompt(const std::vector<FScadProjectFile>& files, const std::string& currentSource)
+        {
+            if (files.empty())
+            {
+                return currentSource.empty() ? std::string()
+                                             : "Current single-file model:\n```scad\n" + currentSource + "\n```";
+            }
+
+            std::string out = "Current multi-file project (authoritative):\n```scad-project\n";
+            for (const FScadProjectFile& file : files)
+            {
+                out += "--- file: " + file.path + "\n";
+                out += file.source;
+                if (!out.empty() && out.back() != '\n')
+                {
+                    out += "\n";
+                }
+            }
+            out += "```";
+            return out;
+        }
+    } // namespace
+
     ScadAIService::ScadAIService(NextEngine& engine)
         : engine_(engine)
     {
@@ -78,6 +189,14 @@ namespace ScadStudio
     void ScadAIService::ResetConversation()
     {
         conversation_.clear();
+        std::lock_guard<std::mutex> lock(mutex_);
+        streamingText_.clear();
+    }
+
+    std::string ScadAIService::StreamingText() const
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return streamingText_;
     }
 
     std::string ScadAIService::BuildSystemPrompt() const
@@ -88,9 +207,14 @@ namespace ScadStudio
 .scad source that is rendered live by a built-in OpenSCAD subset loader.
 
 ## Output contract (STRICT)
-- Reply with a SHORT one-sentence description, then EXACTLY ONE fenced code block tagged ```scad
-  containing the COMPLETE .scad file. No second code block.
-- When the user asks to modify an existing model, return the FULL revised file, not a diff or snippet.
+- Reply with a SHORT one-sentence description, then EXACTLY ONE fenced code block.
+- Prefer a multi-file block tagged ```scad-project for structured models. Use this exact format:
+  --- file: main.scad
+  <root file: $fn, use <module.scad>, and top-level assembly call>
+  --- file: module_name.scad
+  <one public module per file>
+- For very small one-part models, a single ```scad block is acceptable.
+- When editing an existing multi-file project, return the COMPLETE project block, not a diff or snippet.
 - Keep triangle counts reasonable; prefer $fn between 24 and 64 for round shapes.
 
 ## Supported subset (use ONLY these)
@@ -114,7 +238,10 @@ namespace ScadStudio
 - OpenSCAD is Z-up; the engine converts to its own axes automatically.
 - Use color([r,g,b]) to give parts distinct colours — the loader groups geometry by colour,
   so colour is also the visual part breakdown. alpha < 0.99 becomes glass/liquid.
-- Organise the model with named modules instantiated at the top level so its structure is clear.
+- Organise the model as module files. The root main.scad should use <...> those files and instantiate
+  the complete model. Each module file should define one named module and helper functions/constants
+  needed by that module.
+- File paths must be relative, portable, and end in .scad. Do not use absolute paths or '..'.
 - Keep overall size roughly in the 1..100 unit range.)";
     }
 
@@ -153,13 +280,69 @@ namespace ScadStudio
         return code.substr(b, e - b + 1);
     }
 
-    void ScadAIService::SubmitAsync(const std::string& currentSource, const std::string& instruction)
+    std::vector<FScadProjectFile> ScadAIService::ExtractProjectFiles(const std::string& text)
+    {
+        const std::string block = FindFencedBlock(text, "scad-project");
+        if (block.empty())
+        {
+            return {};
+        }
+
+        std::vector<FScadProjectFile> files;
+        std::istringstream in(block);
+        std::string line;
+        std::string currentPath;
+        std::string currentSource;
+
+        auto flush = [&]() {
+            if (currentPath.empty())
+            {
+                return;
+            }
+            const std::string trimmed = TrimCopy(currentSource);
+            if (!trimmed.empty())
+            {
+                files.push_back(FScadProjectFile{currentPath, trimmed});
+            }
+            currentPath.clear();
+            currentSource.clear();
+        };
+
+        while (std::getline(in, line))
+        {
+            const std::string trimmedLine = TrimCopy(line);
+            const std::string lower = ToLower(trimmedLine);
+            if (lower.rfind("--- file:", 0) == 0)
+            {
+                flush();
+                currentPath = SanitiseProjectPath(trimmedLine.substr(9));
+                continue;
+            }
+
+            if (!currentPath.empty())
+            {
+                currentSource += line;
+                currentSource += '\n';
+            }
+        }
+        flush();
+
+        return files;
+    }
+
+    void ScadAIService::SubmitAsync(
+        const std::string& currentSource,
+        const std::vector<FScadProjectFile>& files,
+        const std::string& activeFilePath,
+        const std::string& instruction)
     {
         auto* ai = engine_.GetAIService();
         if (!ai || !ai->IsConfigured())
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            pending_ = FScadGenResult{false, "", "", "AI service not configured. Check assets/configs/ai_config.json"};
+            pending_ = FScadGenResult{};
+            pending_.success = false;
+            pending_.error = "AI service not configured. Check assets/configs/ai_config.json";
             hasPending_.store(true);
             return;
         }
@@ -174,14 +357,19 @@ namespace ScadStudio
         }
 
         std::string userContent;
-        if (currentSource.empty())
+        if (currentSource.empty() && files.empty())
         {
             userContent = "Create a new model.\n\nRequest: " + instruction;
         }
         else
         {
-            userContent = "Current model source (authoritative — modify this):\n```scad\n" + currentSource +
-                          "\n```\n\nRequest: " + instruction;
+            userContent = ProjectToPrompt(files, currentSource);
+            if (!activeFilePath.empty())
+            {
+                userContent += "\n\nActive file/module to edit: " + activeFilePath +
+                               "\nModify that module when possible, but return the complete project block.";
+            }
+            userContent += "\n\nRequest: " + instruction;
         }
         request.messages.push_back(NextAI::FChatMessage::User(userContent));
 
@@ -190,18 +378,37 @@ namespace ScadStudio
 
         generating_.store(true);
         hasPending_.store(false);
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            streamingText_.clear();
+        }
 
         std::thread([this, request = std::move(request)]() mutable
         {
             auto* svc = engine_.GetAIService();
-            NextAI::FChatResponse response = svc->Chat(request);
+            NextAI::FChatResponse response = svc->ChatStream(request, [this](const std::string& delta)
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                streamingText_ += delta;
+            });
 
             FScadGenResult result;
             if (response.success)
             {
                 result.success = true;
                 result.assistantText = response.content;
-                result.scadSource = ExtractScadBlock(response.content);
+                result.files = ExtractProjectFiles(response.content);
+                if (!result.files.empty())
+                {
+                    const auto root = std::find_if(result.files.begin(), result.files.end(), [](const FScadProjectFile& file) {
+                        return ToLower(file.path) == "main.scad";
+                    });
+                    result.scadSource = (root != result.files.end()) ? root->source : result.files.front().source;
+                }
+                else
+                {
+                    result.scadSource = ExtractScadBlock(response.content);
+                }
             }
             else
             {
@@ -225,6 +432,7 @@ namespace ScadStudio
             std::lock_guard<std::mutex> lock(mutex_);
             result = std::move(pending_);
             pending_ = FScadGenResult{};
+            streamingText_.clear();
             hasPending_.store(false);
         }
 

@@ -3,6 +3,7 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
+#include <chrono>
 
 namespace ScadStudio
 {
@@ -10,12 +11,39 @@ namespace ScadStudio
     {
         nlohmann::json TurnToJson(const FChatTurn& turn)
         {
+            nlohmann::json files = nlohmann::json::array();
+            for (const FScadProjectFile& file : turn.files)
+            {
+                files.push_back(nlohmann::json{{"path", file.path}, {"source", file.source}});
+            }
             return nlohmann::json{
                 {"role", turn.role},
                 {"content", turn.content},
                 {"scadSource", turn.scadSource},
+                {"files", std::move(files)},
+                {"targetFilePath", turn.targetFilePath},
                 {"isError", turn.isError},
             };
+        }
+
+        std::vector<FScadProjectFile> FilesFromJson(const nlohmann::json& j)
+        {
+            std::vector<FScadProjectFile> files;
+            if (!j.is_array())
+            {
+                return files;
+            }
+            for (const auto& f : j)
+            {
+                FScadProjectFile file;
+                file.path = f.value("path", "");
+                file.source = f.value("source", "");
+                if (!file.path.empty())
+                {
+                    files.push_back(std::move(file));
+                }
+            }
+            return files;
         }
 
         FChatTurn TurnFromJson(const nlohmann::json& j)
@@ -24,8 +52,33 @@ namespace ScadStudio
             turn.role = j.value("role", "user");
             turn.content = j.value("content", "");
             turn.scadSource = j.value("scadSource", "");
+            if (j.contains("files"))
+            {
+                turn.files = FilesFromJson(j["files"]);
+            }
+            turn.targetFilePath = j.value("targetFilePath", "");
             turn.isError = j.value("isError", false);
             return turn;
+        }
+
+        int64_t NowUnixSeconds()
+        {
+            return std::chrono::duration_cast<std::chrono::seconds>(
+                       std::chrono::system_clock::now().time_since_epoch())
+                .count();
+        }
+
+        int64_t FileTimeUnixSeconds(const std::filesystem::path& path)
+        {
+            std::error_code ec;
+            const auto ft = std::filesystem::last_write_time(path, ec);
+            if (ec)
+            {
+                return NowUnixSeconds();
+            }
+            const auto st = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                ft - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now());
+            return std::chrono::duration_cast<std::chrono::seconds>(st.time_since_epoch()).count();
         }
     } // namespace
 
@@ -48,7 +101,17 @@ namespace ScadStudio
 
     std::filesystem::path ScadSessionStore::ScadPath(const std::string& id) const
     {
+        return ProjectDir(id) / "main.scad";
+    }
+
+    std::filesystem::path ScadSessionStore::LegacyScadPath(const std::string& id) const
+    {
         return workspaceDir_ / (id + ".scad");
+    }
+
+    std::filesystem::path ScadSessionStore::ProjectDir(const std::string& id) const
+    {
+        return workspaceDir_ / id;
     }
 
     std::vector<FScadSession> ScadSessionStore::LoadAll() const
@@ -84,6 +147,10 @@ namespace ScadStudio
             {
                 continue;
             }
+            if (entry.value("archived", false))
+            {
+                continue;
+            }
 
             std::ifstream sessionFile(JsonPath(id), std::ios::binary);
             if (!sessionFile)
@@ -107,6 +174,27 @@ namespace ScadStudio
             session.id = id;
             session.title = doc.value("title", entry.value("title", id));
             session.currentSource = doc.value("currentSource", "");
+            session.createdAt = doc.value("createdAt", entry.value("createdAt", int64_t{0}));
+            session.updatedAt = doc.value("updatedAt", entry.value("updatedAt", int64_t{0}));
+            session.archived = doc.value("archived", entry.value("archived", false));
+            if (session.archived)
+            {
+                continue;
+            }
+            const int64_t fallbackTime = FileTimeUnixSeconds(JsonPath(id));
+            if (session.createdAt <= 0)
+            {
+                session.createdAt = fallbackTime;
+            }
+            if (session.updatedAt <= 0)
+            {
+                session.updatedAt = fallbackTime;
+            }
+            if (doc.contains("files"))
+            {
+                session.files = FilesFromJson(doc["files"]);
+            }
+            session.activeFilePath = doc.value("activeFilePath", "");
             if (doc.contains("turns") && doc["turns"].is_array())
             {
                 for (const auto& t : doc["turns"])
@@ -125,6 +213,16 @@ namespace ScadStudio
         nlohmann::json doc;
         doc["title"] = session.title;
         doc["currentSource"] = session.currentSource;
+        doc["activeFilePath"] = session.activeFilePath;
+        doc["createdAt"] = session.createdAt;
+        doc["updatedAt"] = session.updatedAt;
+        doc["archived"] = session.archived;
+        nlohmann::json files = nlohmann::json::array();
+        for (const FScadProjectFile& file : session.files)
+        {
+            files.push_back(nlohmann::json{{"path", file.path}, {"source", file.source}});
+        }
+        doc["files"] = std::move(files);
         nlohmann::json turns = nlohmann::json::array();
         for (const FChatTurn& turn : session.turns)
         {
@@ -147,7 +245,17 @@ namespace ScadStudio
         nlohmann::json arr = nlohmann::json::array();
         for (const FScadSession& session : sessions)
         {
-            arr.push_back(nlohmann::json{{"id", session.id}, {"title", session.title}});
+            if (session.archived)
+            {
+                continue;
+            }
+            arr.push_back(nlohmann::json{
+                {"id", session.id},
+                {"title", session.title},
+                {"createdAt", session.createdAt},
+                {"updatedAt", session.updatedAt},
+                {"archived", false},
+            });
         }
         index["sessions"] = std::move(arr);
 
@@ -165,5 +273,7 @@ namespace ScadStudio
         std::error_code ec;
         std::filesystem::remove(JsonPath(id), ec);
         std::filesystem::remove(ScadPath(id), ec);
+        std::filesystem::remove(LegacyScadPath(id), ec);
+        std::filesystem::remove_all(ProjectDir(id), ec);
     }
 }

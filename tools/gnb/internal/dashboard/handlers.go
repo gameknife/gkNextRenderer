@@ -26,7 +26,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /task/{id}/edit", s.handleTaskEditForm)
 	mux.HandleFunc("POST /task/{id}/edit", s.handleTaskEdit)
 	mux.HandleFunc("POST /task/{id}/move", s.handleTaskMove)
+	mux.HandleFunc("GET /task/{id}/spec/edit", s.handleTaskSpecEditForm)
 	mux.HandleFunc("POST /task/{id}/spec", s.handleTaskCreateSpec)
+	mux.HandleFunc("POST /task/{id}/spec/save", s.handleTaskSpecSave)
 	mux.HandleFunc("POST /task/{id}/delete", s.handleTaskDelete)
 	mux.HandleFunc("GET /tab/{kind}", s.handleTab)
 	mux.HandleFunc("POST /jobs/{kind}", s.handleJobStart)
@@ -193,6 +195,7 @@ type taskDetailVM struct {
 	HasSpec     bool
 	HasJournal  bool
 	HasBlocker  bool
+	EditingSpec bool
 }
 
 func (s *Server) buildIndex() (indexVM, error) {
