@@ -11,6 +11,7 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
+#include <sstream>
 #include <thread>
 #include <utility>
 
@@ -35,6 +36,15 @@ namespace NextAI
         virtual bool IsConfigured() const = 0;
         virtual FAIResponse Generate(const std::string& prompt) = 0;
         virtual FChatResponse Chat(const FChatRequest& request) = 0;
+        virtual FChatResponse ChatStream(const FChatRequest& request, FChatStreamCallback onDelta)
+        {
+            FChatResponse response = Chat(request);
+            if (response.success && onDelta && !response.content.empty())
+            {
+                onDelta(response.content);
+            }
+            return response;
+        }
         virtual bool SupportsTools() const = 0;
         virtual std::string GetName() const = 0;
     };
@@ -47,6 +57,16 @@ namespace NextAI
             std::string body;
             std::string error;
             long statusCode = 0;
+        };
+
+        struct FStreamState
+        {
+            std::string lineBuffer;
+            std::string rawBody;
+            std::string content;
+            std::string error;
+            std::string finishReason;
+            FChatStreamCallback onDelta;
         };
 
         FHttpResult HttpPostJson(const std::string& url, const std::string& jsonBody,
@@ -88,6 +108,166 @@ namespace NextAI
             curl_slist_free_all(headers);
             curl_easy_cleanup(curl);
             return result;
+        }
+
+        std::string TrimStreamLine(std::string line)
+        {
+            while (!line.empty() && (line.back() == '\r' || line.back() == '\n'))
+            {
+                line.pop_back();
+            }
+            const size_t b = line.find_first_not_of(" \t");
+            if (b == std::string::npos)
+            {
+                return "";
+            }
+            return line.substr(b);
+        }
+
+        void ConsumeOpenAIStreamLine(FStreamState& state, std::string line)
+        {
+            line = TrimStreamLine(std::move(line));
+            if (line.empty())
+            {
+                return;
+            }
+            if (line.rfind("data:", 0) != 0)
+            {
+                return;
+            }
+
+            std::string payload = TrimStreamLine(line.substr(5));
+            if (payload == "[DONE]")
+            {
+                return;
+            }
+
+            try
+            {
+                const json body = json::parse(payload);
+                if (body.contains("error"))
+                {
+                    const auto& err = body["error"];
+                    state.error = err.is_object() && err.contains("message") ? err["message"].get<std::string>()
+                                                                              : err.dump();
+                    return;
+                }
+                if (!body.contains("choices") || body["choices"].empty())
+                {
+                    return;
+                }
+
+                const auto& choice = body["choices"][0];
+                if (choice.contains("finish_reason") && choice["finish_reason"].is_string())
+                {
+                    state.finishReason = choice["finish_reason"].get<std::string>();
+                }
+                if (!choice.contains("delta") || !choice["delta"].is_object())
+                {
+                    return;
+                }
+
+                const auto& delta = choice["delta"];
+                if (delta.contains("content") && delta["content"].is_string())
+                {
+                    std::string text = delta["content"].get<std::string>();
+                    if (!text.empty())
+                    {
+                        state.content += text;
+                        if (state.onDelta)
+                        {
+                            state.onDelta(text);
+                        }
+                    }
+                }
+            }
+            catch (const std::exception& e)
+            {
+                state.error = fmt::format("Stream parse error: {}", e.what());
+            }
+        }
+
+        size_t AIServiceStreamWriteCallback(void* contents, size_t size, size_t nmemb, void* userp)
+        {
+            auto* state = static_cast<FStreamState*>(userp);
+            const size_t byteCount = size * nmemb;
+            const char* data = static_cast<const char*>(contents);
+            state->rawBody.append(data, byteCount);
+            state->lineBuffer.append(data, byteCount);
+
+            size_t newline = std::string::npos;
+            while ((newline = state->lineBuffer.find('\n')) != std::string::npos)
+            {
+                std::string line = state->lineBuffer.substr(0, newline + 1);
+                state->lineBuffer.erase(0, newline + 1);
+                ConsumeOpenAIStreamLine(*state, std::move(line));
+            }
+
+            return byteCount;
+        }
+
+        FChatResponse HttpPostOpenAIChatStream(
+            const std::string& url,
+            json body,
+            const std::vector<std::string>& extraHeaders,
+            FChatStreamCallback onDelta)
+        {
+            body["stream"] = true;
+
+            CURL* curl = curl_easy_init();
+            if (!curl)
+            {
+                return FChatResponse::Failure("Failed to initialize CURL");
+            }
+
+            FStreamState state;
+            state.onDelta = std::move(onDelta);
+            const std::string jsonBody = body.dump();
+
+            struct curl_slist* headers = nullptr;
+            headers = curl_slist_append(headers, "Content-Type: application/json");
+            headers = curl_slist_append(headers, "Accept: text/event-stream");
+            for (const std::string& h : extraHeaders)
+            {
+                headers = curl_slist_append(headers, h.c_str());
+            }
+
+            curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonBody.c_str());
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, AIServiceStreamWriteCallback);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &state);
+            curl_easy_setopt(curl, CURLOPT_TIMEOUT, AIConfig::RequestTimeoutSeconds);
+
+            const CURLcode res = curl_easy_perform(curl);
+            long statusCode = 0;
+            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &statusCode);
+
+            curl_slist_free_all(headers);
+            curl_easy_cleanup(curl);
+
+            if (res != CURLE_OK)
+            {
+                return FChatResponse::Failure(fmt::format("Network error: {}", curl_easy_strerror(res)));
+            }
+            if (statusCode >= 400)
+            {
+                return FChatResponse::Failure(fmt::format("HTTP {}: {}", statusCode, state.rawBody));
+            }
+            if (!state.lineBuffer.empty())
+            {
+                ConsumeOpenAIStreamLine(state, std::move(state.lineBuffer));
+            }
+            if (!state.error.empty())
+            {
+                return FChatResponse::Failure(state.error);
+            }
+
+            FChatResponse response;
+            response.success = true;
+            response.content = std::move(state.content);
+            response.finishReason = std::move(state.finishReason);
+            return response;
         }
 
         FAIResponse ChatToLegacyResponse(const FChatResponse& chatResp)
@@ -197,6 +377,7 @@ namespace NextAI
         bool IsConfigured() const override;
         FAIResponse Generate(const std::string& prompt) override;
         FChatResponse Chat(const FChatRequest& request) override;
+        FChatResponse ChatStream(const FChatRequest& request, FChatStreamCallback onDelta) override;
         bool SupportsTools() const override { return true; }
         std::string GetName() const override { return "Zhipu"; }
 
@@ -214,6 +395,7 @@ namespace NextAI
         bool IsConfigured() const override;
         FAIResponse Generate(const std::string& prompt) override;
         FChatResponse Chat(const FChatRequest& request) override;
+        FChatResponse ChatStream(const FChatRequest& request, FChatStreamCallback onDelta) override;
         bool SupportsTools() const override { return true; }
         std::string GetName() const override { return "DeepSeek"; }
 
@@ -231,6 +413,7 @@ namespace NextAI
         bool IsConfigured() const override;
         FAIResponse Generate(const std::string& prompt) override;
         FChatResponse Chat(const FChatRequest& request) override;
+        FChatResponse ChatStream(const FChatRequest& request, FChatStreamCallback onDelta) override;
         bool SupportsTools() const override { return true; }
         std::string GetName() const override { return "OpenAI"; }
 
@@ -248,6 +431,7 @@ namespace NextAI
         bool IsConfigured() const override;
         FAIResponse Generate(const std::string& prompt) override;
         FChatResponse Chat(const FChatRequest& request) override;
+        FChatResponse ChatStream(const FChatRequest& request, FChatStreamCallback onDelta) override;
         bool SupportsTools() const override { return true; }
         std::string GetName() const override { return "LocalLlama"; }
 
@@ -475,6 +659,21 @@ namespace NextAI
         }
     }
 
+    FChatResponse FZhipuProvider::ChatStream(const FChatRequest& request, FChatStreamCallback onDelta)
+    {
+        if (!configured_)
+        {
+            return FChatResponse::Failure("Zhipu provider not configured");
+        }
+        FChatRequest req = request;
+        if (req.model.empty()) req.model = model_;
+
+        const std::string url = endpoint_ + "/chat/completions";
+        json body = BuildOpenAIChatRequestBody(req);
+        std::vector<std::string> headers{fmt::format("Authorization: Bearer {}", apiKey_)};
+        return HttpPostOpenAIChatStream(url, std::move(body), headers, std::move(onDelta));
+    }
+
     FAIResponse FZhipuProvider::Generate(const std::string& prompt)
     {
         FChatRequest req;
@@ -547,6 +746,21 @@ namespace NextAI
         }
     }
 
+    FChatResponse FDeepSeekProvider::ChatStream(const FChatRequest& request, FChatStreamCallback onDelta)
+    {
+        if (!configured_)
+        {
+            return FChatResponse::Failure("DeepSeek provider not configured");
+        }
+        FChatRequest req = request;
+        if (req.model.empty()) req.model = model_;
+
+        const std::string url = endpoint_ + "/chat/completions";
+        json body = BuildOpenAIChatRequestBody(req);
+        std::vector<std::string> headers{fmt::format("Authorization: Bearer {}", apiKey_)};
+        return HttpPostOpenAIChatStream(url, std::move(body), headers, std::move(onDelta));
+    }
+
     FAIResponse FDeepSeekProvider::Generate(const std::string& prompt)
     {
         FChatRequest req;
@@ -617,6 +831,21 @@ namespace NextAI
             SPDLOG_ERROR("Failed to parse OpenAI response: {}", e.what());
             return FChatResponse::Failure(fmt::format("Response parse error: {}", e.what()));
         }
+    }
+
+    FChatResponse FOpenAIProvider::ChatStream(const FChatRequest& request, FChatStreamCallback onDelta)
+    {
+        if (!configured_)
+        {
+            return FChatResponse::Failure("OpenAI provider not configured");
+        }
+        FChatRequest req = request;
+        if (req.model.empty()) req.model = model_;
+
+        const std::string url = endpoint_ + "/chat/completions";
+        json body = BuildOpenAIChatRequestBody(req);
+        std::vector<std::string> headers{fmt::format("Authorization: Bearer {}", apiKey_)};
+        return HttpPostOpenAIChatStream(url, std::move(body), headers, std::move(onDelta));
     }
 
     FAIResponse FOpenAIProvider::Generate(const std::string& prompt)
@@ -720,6 +949,25 @@ namespace NextAI
             SPDLOG_ERROR("Failed to parse LocalLlama response: {}", e.what());
             return FChatResponse::Failure(fmt::format("Response parse error: {}", e.what()));
         }
+    }
+
+    FChatResponse FLocalLlamaProvider::ChatStream(const FChatRequest& request, FChatStreamCallback onDelta)
+    {
+        if (!configured_)
+        {
+            return FChatResponse::Failure("LocalLlama provider not configured");
+        }
+        if (autoDiscoverPid_)
+        {
+            RefreshFromPidFile();
+        }
+
+        FChatRequest req = request;
+        if (req.model.empty()) req.model = model_;
+
+        const std::string url = endpoint_ + "/v1/chat/completions";
+        json body = BuildOpenAIChatRequestBody(req, /*injectThinkingControl=*/true);
+        return HttpPostOpenAIChatStream(url, std::move(body), {}, std::move(onDelta));
     }
 
     FAIResponse FLocalLlamaProvider::Generate(const std::string& prompt)
@@ -1289,6 +1537,34 @@ namespace NextAI
             req.model = GetCurrentModel();
         }
         FChatResponse response = provider_->Chat(req);
+        if (response.success)
+        {
+            status_ = EAIStatus::Ready;
+            statusMessage_ = "Ready";
+        }
+        else
+        {
+            status_ = EAIStatus::Error;
+            statusMessage_ = response.errorMessage;
+        }
+        return response;
+    }
+
+    FChatResponse FAIService::ChatStream(const FChatRequest& request, FChatStreamCallback onDelta)
+    {
+        if (!configured_ || !provider_)
+        {
+            return FChatResponse::Failure("AI service not configured");
+        }
+
+        status_ = EAIStatus::Generating;
+        statusMessage_ = "Generating...";
+        FChatRequest req = request;
+        if (req.model.empty())
+        {
+            req.model = GetCurrentModel();
+        }
+        FChatResponse response = provider_->ChatStream(req, std::move(onDelta));
         if (response.success)
         {
             status_ = EAIStatus::Ready;

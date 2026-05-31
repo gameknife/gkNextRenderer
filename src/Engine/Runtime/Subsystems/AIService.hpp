@@ -65,6 +65,7 @@ namespace NextAI
 
         // Multi-message chat with optional tool calling (used by FAgentLoop).
         FChatResponse Chat(const FChatRequest& request);
+        FChatResponse ChatStream(const FChatRequest& request, FChatStreamCallback onDelta);
         bool SupportsTools() const;
 
         std::string GetProviderName() const;

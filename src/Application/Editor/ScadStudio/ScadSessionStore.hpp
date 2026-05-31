@@ -30,6 +30,8 @@ namespace ScadStudio
         void DeleteSession(const std::string& id) const;
 
         std::filesystem::path ScadPath(const std::string& id) const;
+        std::filesystem::path LegacyScadPath(const std::string& id) const;
+        std::filesystem::path ProjectDir(const std::string& id) const;
 
     private:
         std::filesystem::path JsonPath(const std::string& id) const;

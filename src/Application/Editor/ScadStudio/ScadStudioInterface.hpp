@@ -9,6 +9,7 @@
 #include <vector>
 
 class NextEngine;
+struct ImVec2;
 
 namespace ScadStudio
 {
@@ -24,16 +25,23 @@ namespace ScadStudio
         void Render(); // OnRenderUI: dockspace + panels + viewport mapping
 
     private:
-        void BuildDockLayout(unsigned int dockId);
-        void DrawSessionPanel();
-        void DrawOutline(const std::vector<FOutlineNode>& nodes);
-        void DrawChatPanel();
+        void DrawTitleBar();
+        void DrawBottomBar();
+        void DrawSessionPanel(const ImVec2& pos, const ImVec2& size);
+        void DrawProjectFiles(FScadSession& session);
+        void DrawOutline(FScadSession& session, const std::vector<FOutlineNode>& nodes);
+        void DrawChatPanel(const ImVec2& pos, const ImVec2& size);
         void PollAI();
         void SubmitCurrentInput();
         FScadSession& NewSession();
         void DeleteSession(int index);
+        void ArchiveSession(int index);
         void SelectSession(int index);
+        bool WriteSessionFiles(FScadSession& session, std::filesystem::path& outRootPath);
         void WriteAndReload(FScadSession& session);
+        void PreviewActiveFile(FScadSession& session);
+        void PreviewModule(FScadSession& session, const std::string& moduleName, const std::string& moduleFilePath);
+        void RestoreSessionToTurn(FScadSession& session, int turnIndex);
         void RefreshOutline(FScadSession& session);
         void ExportSession(const FScadSession& session);
         void PersistSession(const FScadSession& session);
@@ -57,8 +65,9 @@ namespace ScadStudio
         char inputBuf_[8192] = {};
         char renameBuf_[256] = {};
         int renamingIndex_ = -1;
-        bool firstRun_ = true;
         bool welcomeLoaded_ = false;
         bool scrollChatToBottom_ = false;
+        bool sessionsCollapsed_ = false;
+        bool chatCollapsed_ = false;
     };
 }

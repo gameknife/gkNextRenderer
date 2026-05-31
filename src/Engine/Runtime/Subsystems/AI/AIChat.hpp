@@ -1,5 +1,6 @@
 #pragma once
 #include <nlohmann/json_fwd.hpp>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -128,6 +129,8 @@ namespace NextAI
             return r;
         }
     };
+
+    using FChatStreamCallback = std::function<void(const std::string& delta)>;
 
     // Serializers for OpenAI-compatible /v1/chat/completions endpoints
     // (Zhipu, DeepSeek, llama-server, Ollama-with-tools).

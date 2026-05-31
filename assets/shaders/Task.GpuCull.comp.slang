@@ -200,6 +200,11 @@ bool IsAABBInFrustum(float3 min, float3 max, float4x4 wvp)
 [numthreads(64, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
+    if (DTid.x >= Bindless.GetGpuscene().custom_data_1)
+    {
+        return;
+    }
+
     NodeProxy node = Bindless.GetGpuscene().Nodes[DTid.x];
     ModelData model = Bindless.GetGpuscene().Offsets[node.modelId];
     float4x4 mvp = mul(Bindless.GetGpuscene().Camera[0].PrevViewProjectionUnJit, node.worldTS);

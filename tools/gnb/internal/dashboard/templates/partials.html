@@ -276,8 +276,31 @@
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
       </span>
       <span class="label">spec</span>
+      <span style="margin-left:auto;">
+        {{if .EditingSpec}}
+        <button class="btn-secondary small" type="button"
+                hx-get="/task/{{printf "%05d" .Task.ID}}"
+                hx-target="#detail-panel" hx-swap="innerHTML">取消</button>
+        {{else}}
+        <button class="btn-secondary small" type="button"
+                hx-get="/task/{{printf "%05d" .Task.ID}}/spec/edit"
+                hx-target="#detail-panel" hx-swap="innerHTML">编辑</button>
+        {{end}}
+      </span>
     </div>
+    {{if .EditingSpec}}
+    <form class="spec-form"
+          hx-post="/task/{{printf "%05d" .Task.ID}}/spec/save"
+          hx-target="#detail-panel" hx-swap="innerHTML">
+      <textarea name="body" rows="18" spellcheck="false">{{.SpecBody}}</textarea>
+      <div class="spec-form-actions">
+        <span class="muted">直接编辑 `.spec/specs/{{printf "%05d" .Task.ID}}.md` 原文。</span>
+        <button type="submit" class="btn-primary small">保存 spec</button>
+      </div>
+    </form>
+    {{else}}
     <div class="md-content" data-md>{{.SpecBody}}</div>
+    {{end}}
   </div>
   {{end}}
 

@@ -1214,6 +1214,12 @@ namespace Vulkan
     {
         SCOPED_GPU_TIMER("gpu cull");
 
+        const uint32_t indirectDrawBatchCount = GetScene().GetIndirectDrawBatchCount();
+        if (indirectDrawBatchCount == 0)
+        {
+            return;
+        }
+
         VkBufferMemoryBarrier nodeMatrixBarrier = {};
         nodeMatrixBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
         nodeMatrixBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
@@ -1227,7 +1233,11 @@ namespace Vulkan
                              0, 0, nullptr, 1, &nodeMatrixBarrier, 0, nullptr);
 
         overlay_.gpuCullPipeline->BindPipeline(commandBuffer, GetScene(), imageIndex);
-        uint32_t groupCount = GetScene().GetIndirectDrawBatchCount() / 64 + 1;
+        Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
+        gpuScene.custom_data_1 = indirectDrawBatchCount;
+        vkCmdPushConstants(commandBuffer, overlay_.gpuCullPipeline->PipelineLayout().Handle(),
+                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
+        uint32_t groupCount = (indirectDrawBatchCount + 63) / 64;
         vkCmdDispatch(commandBuffer, groupCount, 1, 1);
 
         VkBufferMemoryBarrier bufferBarrier = {};
@@ -2445,12 +2455,25 @@ namespace Vulkan
 
         std::vector<VkAccelerationStructureInstanceKHR> instances;
         auto& nodeTrans = scene.GetNodeProxys();
+        if (nodeTrans.empty() || rt_->blas.empty())
+        {
+            rt_->tlasUpdateRequest = 0;
+            return;
+        }
+
         instances.reserve(nodeTrans.size());
         for (size_t i = 0; i < nodeTrans.size(); i++)
         {
             auto& node = nodeTrans[i];
+            const size_t blasIndex = node.modelId / 10;
+            if (blasIndex >= rt_->blas.size())
+            {
+                SPDLOG_WARN("Skipping TLAS instance with stale model index {} (BLAS count {})", blasIndex,
+                            rt_->blas.size());
+                continue;
+            }
             instances.push_back(RayTracing::TopLevelAccelerationStructure::CreateInstance(
-                rt_->blas[node.modelId / 10], glm::transpose(node.worldTS), node.instanceId, node.visible && !node.nort));
+                rt_->blas[blasIndex], glm::transpose(node.worldTS), node.instanceId, node.visible && !node.nort));
         }
 
         int instanceCount = static_cast<int>(instances.size());

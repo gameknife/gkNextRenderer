@@ -231,6 +231,18 @@ namespace Assets
         selectionState_.Clear();
         hoveredId_ = SceneSelectionState::invalidNodeId;
         lockedIds_.clear();
+        nodeProxys.clear();
+        indirectDrawBatchCount_ = 0;
+        indicesCount_ = 0;
+        verticeCount_ = 0;
+        lightCount_ = 0;
+        gpuDrivenStat_ = {};
+        shadowGpuDrivenStats_.fill({});
+        sceneAABBMin_ = glm::vec3(0.0f);
+        sceneAABBMax_ = glm::vec3(0.0f);
+        sceneDirty_ = true;
+        sceneDirtyForCpuAS_ = true;
+        materialDirty_ = true;
     }
 
     std::shared_ptr<Node> Scene::Append(const std::string& sceneName, std::vector<std::shared_ptr<Node>>& nodes,
@@ -316,6 +328,14 @@ namespace Assets
 
     void Scene::RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing)
     {
+        nodeProxys.clear();
+        indirectDrawBatchCount_ = 0;
+        indicesCount_ = 0;
+        verticeCount_ = 0;
+        lightCount_ = 0;
+        gpuDrivenStat_ = {};
+        shadowGpuDrivenStats_.fill({});
+
         // Rebuild the cpu bvh
         cpuAccelerationStructure_.InitBVH(*this);
 
@@ -349,6 +369,7 @@ namespace Assets
         // calculate the scene aabb
         sceneAABBMin_ = {FLT_MAX, FLT_MAX, FLT_MAX};
         sceneAABBMax_ = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+        bool hasSceneBounds = false;
         for (auto& node : nodes_)
         {
             auto render = node->GetComponent<Runtime::RenderComponent>();
@@ -381,7 +402,13 @@ namespace Assets
                 // Update the scene's AABB
                 sceneAABBMin_ = glm::min(sceneAABBMin_, worldAABBMin);
                 sceneAABBMax_ = glm::max(sceneAABBMax_, worldAABBMax);
+                hasSceneBounds = true;
             }
+        }
+        if (!hasSceneBounds)
+        {
+            sceneAABBMin_ = glm::vec3(0.0f);
+            sceneAABBMax_ = glm::vec3(0.0f);
         }
 
         // static mesh to jolt mesh shape
@@ -453,7 +480,10 @@ namespace Assets
             // create 6 plane bodys, it makes negtive space, so keep the bottom plane only
             // physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(1,0,0), NextMotionType::Static);
             // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(-1,0,0), NextMotionType::Static);
-            physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0, 1, 0), NextMotionType::Static);
+            if (hasSceneBounds)
+            {
+                physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0, 1, 0), NextMotionType::Static);
+            }
             // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,-1,0), NextMotionType::Static);
             // physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(0,0,1), NextMotionType::Static);
             // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(0,0,-1), NextMotionType::Static);
@@ -1105,70 +1135,70 @@ namespace Assets
 
     bool Scene::UpdateNodesGpuDriven()
     {
-        if (nodes_.size() > 0)
+        // do always, no flicker now
+        if (sceneDirty_)
         {
-            // do always, no flicker now
-            if (sceneDirty_)
+            sceneDirty_ = false;
             {
-                sceneDirty_ = false;
+                SCOPED_CPU_TIMER("update nodeproxy");
+
+                nodeProxys.clear();
+                indirectDrawBatchCount_ = 0;
+
+                uint32_t currentJointOffset = 0;
+                for (auto& node : nodes_)
                 {
-                    SCOPED_CPU_TIMER("update nodeproxy");
-
-                    nodeProxys.clear();
-                    indirectDrawBatchCount_ = 0;
-
-                    uint32_t currentJointOffset = 0;
-                    for (auto& node : nodes_)
+                    // record all
+                    auto* render = node->GetComponentPtr<Runtime::RenderComponent>();
+                    if (render && render->IsDrawable())
                     {
-                        // record all
-                        auto* render = node->GetComponentPtr<Runtime::RenderComponent>();
-                        if (render && render->IsDrawable())
+                        glm::mat4 combined;
+                        if (node->TickVelocity(combined))
                         {
-                            glm::mat4 combined;
-                            if (node->TickVelocity(combined))
+                            sceneDirty_ = true;
+                            // MarkDirty();
+                        }
+
+                        auto model = GetModel(render->GetModelId());
+                        if (model)
+                        {
+                            uint32_t nodeJointOffset = 0;
+                            const uint32_t instanceId = node->GetInstanceId();
+                            const uint32_t outlineFlags = render->GetOutlineFlags();
+                            const uint32_t selectedBit =
+                                (IsSelected(instanceId) || (outlineFlags & Runtime::RenderOutlineFlags::selected) != 0u) ? 1u : 0u;
+                            const uint32_t hoveredBit =
+                                (hoveredId_ == instanceId || (outlineFlags & Runtime::RenderOutlineFlags::hovered) != 0u) ? 1u : 0u;
+                            const uint32_t lockedBit =
+                                (IsLocked(instanceId) || (outlineFlags & Runtime::RenderOutlineFlags::locked) != 0u) ? 1u : 0u;
+                            const uint32_t dangerBit =
+                                ((outlineFlags & Runtime::RenderOutlineFlags::danger) != 0u) ? 1u : 0u;
+                            const uint32_t stateBits = hoveredBit | (lockedBit << 1u) | (dangerBit << 2u);
+                            if (auto* skinnedMesh = node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
                             {
-                                sceneDirty_ = true;
-                                // MarkDirty();
+                                nodeJointOffset = currentJointOffset;
+                                currentJointOffset += (uint32_t)skinnedMesh->GetJointMatrices().size();
                             }
 
-                            auto model = GetModel(render->GetModelId());
-                            if (model)
+                            for (uint32_t section = 0; section < model->SectionCount(); ++section)
                             {
-                                uint32_t nodeJointOffset = 0;
-                                const uint32_t instanceId = node->GetInstanceId();
-                                const uint32_t outlineFlags = render->GetOutlineFlags();
-                                const uint32_t selectedBit =
-                                    (IsSelected(instanceId) || (outlineFlags & Runtime::RenderOutlineFlags::selected) != 0u) ? 1u : 0u;
-                                const uint32_t hoveredBit =
-                                    (hoveredId_ == instanceId || (outlineFlags & Runtime::RenderOutlineFlags::hovered) != 0u) ? 1u : 0u;
-                                const uint32_t lockedBit =
-                                    (IsLocked(instanceId) || (outlineFlags & Runtime::RenderOutlineFlags::locked) != 0u) ? 1u : 0u;
-                                const uint32_t dangerBit =
-                                    ((outlineFlags & Runtime::RenderOutlineFlags::danger) != 0u) ? 1u : 0u;
-                                const uint32_t stateBits = hoveredBit | (lockedBit << 1u) | (dangerBit << 2u);
-                                if (auto* skinnedMesh = node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
-                                {
-                                    nodeJointOffset = currentJointOffset;
-                                    currentJointOffset += (uint32_t)skinnedMesh->GetJointMatrices().size();
-                                }
-
-                                for (uint32_t section = 0; section < model->SectionCount(); ++section)
-                                {
-                                    NodeProxy proxy = node->GetNodeProxy();
-                                    proxy.combinedPrevTS = combined;
-                                    proxy.modelId = render->GetModelId() * 10 + section;
-                                    proxy.nort = section == 0 ? 0 : 1;
-                                    proxy.reserved1 = selectedBit;
-                                    proxy.reserved2 = stateBits;
-                                    proxy.jointMatrixOffset = nodeJointOffset;
-                                    nodeProxys.push_back(proxy);
-                                    indirectDrawBatchCount_++;
-                                }
+                                NodeProxy proxy = node->GetNodeProxy();
+                                proxy.combinedPrevTS = combined;
+                                proxy.modelId = render->GetModelId() * 10 + section;
+                                proxy.nort = section == 0 ? 0 : 1;
+                                proxy.reserved1 = selectedBit;
+                                proxy.reserved2 = stateBits;
+                                proxy.jointMatrixOffset = nodeJointOffset;
+                                nodeProxys.push_back(proxy);
+                                indirectDrawBatchCount_++;
                             }
                         }
                     }
                 }
+            }
 
+            if (!nodeProxys.empty())
+            {
                 {
                     SCOPED_CPU_TIMER("upload nodeproxy");
                     NodeProxy* data = reinterpret_cast<NodeProxy*>(
@@ -1177,8 +1207,8 @@ namespace Assets
                     std::memcpy(data, nodeProxys.data(), nodeProxys.size() * sizeof(NodeProxy));
                     sceneDynamicBufferMemory_->Unmap();
                 }
-                return true;
             }
+            return true;
         }
         return false;
     }
