@@ -9,6 +9,8 @@ namespace ScadStudio
 {
     namespace
     {
+        constexpr auto kJsonWriteErrorHandler = nlohmann::json::error_handler_t::replace;
+
         nlohmann::json TurnToJson(const FChatTurn& turn)
         {
             nlohmann::json files = nlohmann::json::array();
@@ -236,7 +238,14 @@ namespace ScadStudio
             SPDLOG_WARN("[ScadStudio] failed to write session {}", session.id);
             return;
         }
-        out << doc.dump(2);
+        try
+        {
+            out << doc.dump(2, ' ', false, kJsonWriteErrorHandler);
+        }
+        catch (const std::exception& e)
+        {
+            SPDLOG_WARN("[ScadStudio] failed to serialize session {}: {}", session.id, e.what());
+        }
     }
 
     void ScadSessionStore::SaveIndex(const std::vector<FScadSession>& sessions) const
@@ -265,7 +274,14 @@ namespace ScadStudio
             SPDLOG_WARN("[ScadStudio] failed to write sessions.json");
             return;
         }
-        out << index.dump(2);
+        try
+        {
+            out << index.dump(2, ' ', false, kJsonWriteErrorHandler);
+        }
+        catch (const std::exception& e)
+        {
+            SPDLOG_WARN("[ScadStudio] failed to serialize sessions.json: {}", e.what());
+        }
     }
 
     void ScadSessionStore::DeleteSession(const std::string& id) const

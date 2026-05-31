@@ -56,6 +56,10 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_LlamaPidFile.cpp
 	Tests/Test_AgentLoop.cpp
 	Tests/Test_RepoTools.cpp
+	Tests/Test_ScadPromptContext.cpp
+	Tests/Test_ScadSessionStore.cpp
+	Application/Editor/ScadStudio/ScadPromptContext.cpp
+	Application/Editor/ScadStudio/ScadSessionStore.cpp
 )
 
 list(APPEND UNIT_TEST_SOURCES Tests/Test_PhysicsComponent.cpp)

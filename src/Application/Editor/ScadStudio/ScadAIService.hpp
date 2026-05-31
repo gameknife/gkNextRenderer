@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ScadPromptContext.hpp"
 #include "ScadSession.hpp"
 
 #include "Engine/Runtime/Subsystems/AI/AIChat.hpp"
@@ -51,7 +52,7 @@ namespace ScadStudio
         void SubmitAsync(
             const std::string& currentSource,
             const std::vector<FScadProjectFile>& files,
-            const std::string& activeFilePath,
+            const FScadEditScope& editScope,
             const std::string& instruction);
 
         bool HasPendingResult() const { return hasPending_.load(); }
