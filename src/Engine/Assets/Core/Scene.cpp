@@ -17,6 +17,7 @@
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.h"
+#include "Engine/Vulkan/CommandExecution.hpp"
 #include "Engine/Vulkan/SyncAndTiming.hpp"
 
 #include <algorithm>
@@ -113,11 +114,12 @@ namespace Assets
         // gpu local buffers
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(VkDrawIndexedIndirectCommand) * 65535, indirectDrawBuffer_,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(VkDrawIndexedIndirectCommand) * kMaxIndirectDrawCount, indirectDrawBuffer_,
             indirectDrawBufferMemory_); // support 65535 nodes
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "ShadowIndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(VkDrawIndexedIndirectCommand) * 65535,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            sizeof(VkDrawIndexedIndirectCommand) * kMaxIndirectDrawCount * kSunShadowCascadeCount,
             shadowIndirectDrawBuffer_, shadowIndirectDrawBufferMemory_); // support 65535 nodes
         // shadow maps
         cpuShadowMap_.reset(
@@ -131,7 +133,8 @@ namespace Assets
             const VkExtent2D extent{kSunShadowResolution, kSunShadowResolution};
             constexpr VkFormat shadowFormat = VK_FORMAT_D32_SFLOAT;
             constexpr VkImageUsageFlags shadowUsage =
-                VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+                VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
+                VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
             for (uint32_t i = 0; i < kSunShadowCascadeCount; ++i)
             {
@@ -142,11 +145,54 @@ namespace Assets
                     sunShadowImages_[i]->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
                 sunShadowMemories_[i]->SetName(fmt::format("SunShadowCascade{} Memory", i).c_str());
 
-                sunShadowImages_[i]->TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);
-
                 sunShadowViews_[i].reset(new Vulkan::ImageView(
                     device, sunShadowImages_[i]->Handle(), shadowFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1));
             }
+
+            Vulkan::SingleTimeCommands::Submit(commandPool, [&](VkCommandBuffer commandBuffer)
+            {
+                VkImageSubresourceRange range{};
+                range.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+                range.baseMipLevel = 0;
+                range.levelCount = 1;
+                range.baseArrayLayer = 0;
+                range.layerCount = 1;
+
+                for (uint32_t i = 0; i < kSunShadowCascadeCount; ++i)
+                {
+                    VkImageMemoryBarrier toTransfer{};
+                    toTransfer.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                    toTransfer.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+                    toTransfer.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                    toTransfer.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                    toTransfer.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                    toTransfer.image = sunShadowImages_[i]->Handle();
+                    toTransfer.subresourceRange = range;
+                    toTransfer.srcAccessMask = 0;
+                    toTransfer.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                    vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                         VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                                         0, nullptr, 0, nullptr, 1, &toTransfer);
+
+                    VkClearDepthStencilValue clearValue{1.0f, 0};
+                    vkCmdClearDepthStencilImage(commandBuffer, sunShadowImages_[i]->Handle(),
+                                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
+
+                    VkImageMemoryBarrier toReadOnly{};
+                    toReadOnly.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                    toReadOnly.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                    toReadOnly.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+                    toReadOnly.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                    toReadOnly.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                    toReadOnly.image = sunShadowImages_[i]->Handle();
+                    toReadOnly.subresourceRange = range;
+                    toReadOnly.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                    toReadOnly.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                    vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                         0, 0, nullptr, 0, nullptr, 1, &toReadOnly);
+                }
+            });
 
             Vulkan::SamplerConfig samplerConfig;
             samplerConfig.MagFilter = VK_FILTER_NEAREST;
@@ -882,6 +928,12 @@ namespace Assets
         return BuildGPUScene(imageIndex, indirectDrawCommands);
     }
 
+    VkDeviceSize Scene::ShadowIndirectDrawByteOffset(uint32_t cascade) const
+    {
+        return static_cast<VkDeviceSize>(std::min(cascade, kSunShadowCascadeCount - 1)) *
+               sizeof(VkDrawIndexedIndirectCommand) * kMaxIndirectDrawCount;
+    }
+
     void Scene::PlayAllTracks()
     {
         for (auto& track : tracks_)
@@ -1106,7 +1158,12 @@ namespace Assets
         std::memcpy(&gpuDrivenStat_, gpuData, sizeof(GPUDrivenStat));
         std::memcpy(shadowGpuDrivenStats_.data(), gpuData + 1,
                     sizeof(Assets::GPUDrivenStat) * Assets::Scene::kSunShadowCascadeCount);
-        std::fill_n(gpuData, 1 + Assets::Scene::kSunShadowCascadeCount, zero); // reset to zero
+        gpuData[0] = zero;
+        if (!HasSun())
+        {
+            std::fill(shadowGpuDrivenStats_.begin(), shadowGpuDrivenStats_.end(), zero);
+            std::fill_n(gpuData + 1, Assets::Scene::kSunShadowCascadeCount, zero);
+        }
         sceneDynamicBufferMemory_->Unmap();
 
 

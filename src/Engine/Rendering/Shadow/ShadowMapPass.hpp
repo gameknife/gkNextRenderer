@@ -23,7 +23,7 @@ namespace Vulkan::Shadow
 
         // 绘制单个 cascade 的 shadow map。调用前对应 indirect buffer 已完成 GPU cull。
         void DrawCascade(VkCommandBuffer commandBuffer, const Assets::Scene& scene, const Assets::GPUScene& gpuScene,
-                         uint32_t cascade);
+                         uint32_t cascade, VkDeviceSize indirectDrawOffset);
 
     private:
         const Vulkan::Device& device_;

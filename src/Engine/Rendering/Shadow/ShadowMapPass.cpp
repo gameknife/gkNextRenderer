@@ -219,7 +219,7 @@ namespace Vulkan::Shadow
 
     void ShadowMapPass::DrawCascade(
         VkCommandBuffer commandBuffer, const Assets::Scene& scene, const Assets::GPUScene& gpuSceneBase,
-        uint32_t cascade)
+        uint32_t cascade, VkDeviceSize indirectDrawOffset)
     {
         if (!pipeline_)
         {
@@ -251,7 +251,7 @@ namespace Vulkan::Shadow
                            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                            0, sizeof(Assets::GPUScene), &gpuScene);
 
-        vkCmdDrawIndexedIndirect(commandBuffer, scene.ShadowIndirectDrawBuffer().Handle(), 0,
+        vkCmdDrawIndexedIndirect(commandBuffer, scene.ShadowIndirectDrawBuffer().Handle(), indirectDrawOffset,
                                  scene.GetIndirectDrawBatchCount(),
                                  sizeof(VkDrawIndexedIndirectCommand));
         vkCmdEndRenderPass(commandBuffer);
