@@ -123,10 +123,13 @@ namespace Vulkan
 		std::vector<RayTracing::TopLevelAccelerationStructure>& TLAS();
 
 	private:
+        bool UseSoftMeshShaderSubmit();
+
 		// Internal resource groups
 		struct DeviceCaps
 		{
 			bool supportRayTracing       = false;
+            bool supportMDI              = false;
 			bool supportDLSS             = false;
 			bool supportDLSSRR           = false;
 			bool supportDenoiser         = false;
@@ -222,13 +225,19 @@ namespace Vulkan
 		struct OverlayPipelines
 		{
 			std::unique_ptr<PipelineCommon::GraphicsPipeline> wireframePipeline;
+            std::unique_ptr<PipelineCommon::GraphicsPipeline> wireframeSoftMeshShaderPipeline;
 			std::unique_ptr<PipelineCommon::VisibilityPipeline> visibilityPipeline;
+            std::unique_ptr<PipelineCommon::VisibilityPipeline> visibilitySoftMeshShaderPipeline;
 			std::unique_ptr<Shadow::ShadowMapPass> sunShadowPass;
 			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> bufferClearPipeline;
 			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> simpleComposePipeline;
 			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> visualDebuggerPipeline;
 			std::unique_ptr<PipelineCommon::ZeroBindPipeline> gpuCullPipeline;
+            std::unique_ptr<PipelineCommon::ZeroBindPipeline> gpuCullCompactPipeline;
+            std::unique_ptr<PipelineCommon::ZeroBindPipeline> softMeshShaderFinalizePipeline;
+            std::unique_ptr<PipelineCommon::ZeroBindPipeline> softMeshShaderExpandPipeline;
 			std::unique_ptr<PipelineCommon::ZeroBindPipeline> shadowGpuCullPipeline;
+            std::unique_ptr<PipelineCommon::ZeroBindPipeline> shadowGpuCullCompactPipeline;
 			std::unique_ptr<FrameBuffer> visibilityFrameBuffer;
 			std::vector<FrameBuffer> wireframeFrameBuffers;
 		};

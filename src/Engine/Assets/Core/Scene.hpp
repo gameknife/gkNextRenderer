@@ -26,6 +26,7 @@ namespace Assets
         static constexpr uint32_t kSunShadowCascadeCount = 4;
         static constexpr uint32_t kSunShadowResolution = 1024;
         static constexpr uint32_t kMaxIndirectDrawCount = 65535;
+        static constexpr uint32_t kSoftMeshShaderDrawSlotCount = 1 + kSunShadowCascadeCount;
         static constexpr uint32_t kSunShadowCascadeMask = (1u << kSunShadowCascadeCount) - 1u;
         static constexpr std::array<int32_t, 16> kSunShadowHighCascadeSchedule = {
             1, -1, 2, -1, 1, -1, 3, -1,
@@ -95,6 +96,14 @@ namespace Assets
         const Vulkan::Buffer& NodeMatrixBuffer() const { return *sceneDynamicBuffer_; }
         const Vulkan::Buffer& IndirectDrawBuffer() const { return *indirectDrawBuffer_; }
         const Vulkan::Buffer& ShadowIndirectDrawBuffer() const { return *shadowIndirectDrawBuffer_; }
+        const Vulkan::Buffer& SoftMeshShaderPrimBuffer() const { return *softMeshShaderPrimBuffer_; }
+        const Vulkan::Buffer& SoftMeshShaderShadowPrimBuffer() const { return *softMeshShaderShadowPrimBuffer_; }
+        const Vulkan::Buffer& SoftMeshShaderVisibleItemBuffer() const { return *softMeshShaderVisibleItemBuffer_; }
+        const Vulkan::Buffer& SoftMeshShaderDrawArgBuffer() const { return *softMeshShaderDrawArgBuffer_; }
+        const Vulkan::Buffer& SoftMeshShaderDispatchArgBuffer() const { return *softMeshShaderDispatchArgBuffer_; }
+        const Vulkan::Buffer& SoftMeshShaderCounterBuffer() const { return *softMeshShaderCounterBuffer_; }
+        VkDeviceSize SoftMeshShaderDrawArgByteOffset(uint32_t slot) const;
+        uint32_t SoftMeshShaderDrawSlotForShadowCascade(uint32_t cascade) const;
         VkDeviceSize ShadowIndirectDrawByteOffset(uint32_t cascade) const;
         const Vulkan::Buffer& ReorderBuffer() const { return *reorderBuffer_; }
         const Vulkan::Buffer& PrimAddressBuffer() const { return *primAddressBuffer_; }
@@ -105,6 +114,7 @@ namespace Assets
         const uint32_t GetIndicesCount() const { return indicesCount_; }
         const uint32_t GetVerticeCount() const { return verticeCount_; }
         const uint32_t GetIndirectDrawBatchCount() const { return indirectDrawBatchCount_; }
+        const uint32_t GetMaxSceneTriangles() const { return maxSceneTriangles_; }
 
         int32_t FindNodeIdWithComponent(const std::string& componentType) const;
         Node* GetNodeById(uint32_t nodeId);
@@ -261,6 +271,27 @@ namespace Assets
         std::unique_ptr<Vulkan::Buffer> shadowIndirectDrawBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> shadowIndirectDrawBufferMemory_;
 
+        std::unique_ptr<Vulkan::Buffer> softMeshShaderPrimBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> softMeshShaderPrimBufferMemory_;
+
+        std::unique_ptr<Vulkan::Buffer> softMeshShaderShadowPrimBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> softMeshShaderShadowPrimBufferMemory_;
+
+        std::unique_ptr<Vulkan::Buffer> softMeshShaderVisibleItemBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> softMeshShaderVisibleItemBufferMemory_;
+
+        std::unique_ptr<Vulkan::Buffer> softMeshShaderDrawArgBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> softMeshShaderDrawArgBufferMemory_;
+
+        std::unique_ptr<Vulkan::Buffer> softMeshShaderDispatchArgBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> softMeshShaderDispatchArgBufferMemory_;
+
+        std::unique_ptr<Vulkan::Buffer> softMeshShaderCounterBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> softMeshShaderCounterBufferMemory_;
+
+        std::unique_ptr<Vulkan::Buffer> softMeshShaderResourcesBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> softMeshShaderResourcesBufferMemory_;
+
         std::unique_ptr<Vulkan::Buffer> ambientArenaBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> ambientArenaBufferMemory_;
 
@@ -281,6 +312,7 @@ namespace Assets
         uint32_t indicesCount_{};
         uint32_t verticeCount_{};
         uint32_t indirectDrawBatchCount_{};
+        uint32_t maxSceneTriangles_{1};
 
         mutable SceneSelectionState selectionState_;
         mutable uint32_t hoveredId_ = SceneSelectionState::invalidNodeId;

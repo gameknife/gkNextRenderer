@@ -46,6 +46,8 @@ namespace Assets
         static_assert(sizeof(Assets::NodeProxy) == Assets::GPU_SCENE_NODE_PROXY_SIZE);
         static_assert(sizeof(Assets::Material) == Assets::GPU_SCENE_MATERIAL_SIZE);
         static_assert(sizeof(Assets::GPUDrivenStat) == Assets::GPU_SCENE_GPU_DRIVEN_STAT_SIZE);
+        static_assert(sizeof(Assets::SoftMeshShaderVisibleItem) == 16);
+        static_assert(sizeof(Assets::SoftMeshShaderResources) == 48);
         static_assert(sizeof(Assets::SphericalHarmonics) == Assets::GPU_SCENE_SPHERICAL_HARMONICS_SIZE);
         static_assert(sizeof(Assets::AmbientCube) == Assets::GPU_SCENE_AMBIENT_CUBE_SIZE);
         static_assert(sizeof(Assets::VoxelData) == Assets::GPU_SCENE_VOXEL_DATA_SIZE);
@@ -229,6 +231,22 @@ namespace Assets
         indirectDrawBufferMemory_.reset();
         shadowIndirectDrawBuffer_.reset();
         shadowIndirectDrawBufferMemory_.reset();
+
+        softMeshShaderPrimBuffer_.reset();
+        softMeshShaderPrimBufferMemory_.reset();
+        softMeshShaderShadowPrimBuffer_.reset();
+        softMeshShaderShadowPrimBufferMemory_.reset();
+        softMeshShaderVisibleItemBuffer_.reset();
+        softMeshShaderVisibleItemBufferMemory_.reset();
+        softMeshShaderDrawArgBuffer_.reset();
+        softMeshShaderDrawArgBufferMemory_.reset();
+        softMeshShaderDispatchArgBuffer_.reset();
+        softMeshShaderDispatchArgBufferMemory_.reset();
+        softMeshShaderCounterBuffer_.reset();
+        softMeshShaderCounterBufferMemory_.reset();
+        softMeshShaderResourcesBuffer_.reset();
+        softMeshShaderResourcesBufferMemory_.reset();
+
         sceneDynamicBuffer_.reset();
         sceneDynamicBufferMemory_.reset();
         ambientArenaBuffer_.reset();
@@ -669,6 +687,46 @@ namespace Assets
         lightCount_ = static_cast<uint32_t>(lights_.size());
         indicesCount_ = static_cast<uint32_t>(indices.size());
         verticeCount_ = static_cast<uint32_t>(vertices.size());
+        maxSceneTriangles_ = std::max<uint32_t>(1u, indicesCount_ / 3u);
+
+        const VkBufferUsageFlags softMeshShaderFlags =
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "SoftMeshShaderPrim", softMeshShaderFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            sizeof(uint32_t) * maxSceneTriangles_, softMeshShaderPrimBuffer_, softMeshShaderPrimBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "SoftMeshShaderShadowPrim", softMeshShaderFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            sizeof(uint32_t) * maxSceneTriangles_ * kSunShadowCascadeCount,
+            softMeshShaderShadowPrimBuffer_, softMeshShaderShadowPrimBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "SoftMeshShaderVisibleItems", softMeshShaderFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            sizeof(Assets::SoftMeshShaderVisibleItem) * kMaxIndirectDrawCount * kSoftMeshShaderDrawSlotCount,
+            softMeshShaderVisibleItemBuffer_, softMeshShaderVisibleItemBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "SoftMeshShaderDrawArgs", softMeshShaderFlags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(VkDrawIndirectCommand) * kSoftMeshShaderDrawSlotCount,
+            softMeshShaderDrawArgBuffer_, softMeshShaderDrawArgBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "SoftMeshShaderDispatchArgs", softMeshShaderFlags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(VkDispatchIndirectCommand) * kSoftMeshShaderDrawSlotCount,
+            softMeshShaderDispatchArgBuffer_, softMeshShaderDispatchArgBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "SoftMeshShaderCounters", softMeshShaderFlags | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(uint32_t) * kSoftMeshShaderDrawSlotCount * 2u,
+            softMeshShaderCounterBuffer_, softMeshShaderCounterBufferMemory_);
+
+        const std::vector<Assets::SoftMeshShaderResources> softMeshShaderResources = {
+            {
+                softMeshShaderPrimBuffer_->GetDeviceAddress(),
+                softMeshShaderShadowPrimBuffer_->GetDeviceAddress(),
+                softMeshShaderVisibleItemBuffer_->GetDeviceAddress(),
+                softMeshShaderDrawArgBuffer_->GetDeviceAddress(),
+                softMeshShaderDispatchArgBuffer_->GetDeviceAddress(),
+                softMeshShaderCounterBuffer_->GetDeviceAddress(),
+            },
+        };
+        Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "SoftMeshShaderResources", softMeshShaderFlags, softMeshShaderResources,
+                                               softMeshShaderResourcesBuffer_, softMeshShaderResourcesBufferMemory_);
 
         UpdateAllMaterials();
         UpdateNodesGpuDriven();
@@ -908,7 +966,7 @@ namespace Assets
         gpuScene.SkinJoints = skinJointBuffer_->GetDeviceAddress();
         gpuScene.SkinnedVertices = skinnedVerticesAddr_;
         gpuScene.JointMatrices = jointMatricesAddr_;
-        gpuScene.ReservedAddress0 = 0;
+        gpuScene.ReservedAddress0 = softMeshShaderResourcesBuffer_ ? softMeshShaderResourcesBuffer_->GetDeviceAddress() : 0;
 
         gpuScene.SwapChainIndex = imageIndex;
 
@@ -932,6 +990,16 @@ namespace Assets
     {
         return static_cast<VkDeviceSize>(std::min(cascade, kSunShadowCascadeCount - 1)) *
                sizeof(VkDrawIndexedIndirectCommand) * kMaxIndirectDrawCount;
+    }
+
+    uint32_t Scene::SoftMeshShaderDrawSlotForShadowCascade(uint32_t cascade) const
+    {
+        return 1u + std::min(cascade, kSunShadowCascadeCount - 1);
+    }
+
+    VkDeviceSize Scene::SoftMeshShaderDrawArgByteOffset(uint32_t slot) const
+    {
+        return static_cast<VkDeviceSize>(std::min(slot, kSoftMeshShaderDrawSlotCount - 1)) * sizeof(VkDrawIndirectCommand);
     }
 
     void Scene::PlayAllTracks()
