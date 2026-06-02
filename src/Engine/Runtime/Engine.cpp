@@ -1113,14 +1113,61 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         glm::vec4(renderer_->SwapChain().RenderOffset().x, renderer_->SwapChain().RenderOffset().y,
                   renderer_->SwapChain().RenderExtent().width, renderer_->SwapChain().RenderExtent().height);
 
+    const glm::vec4 sunDirection = glm::vec4(scene_->GetEnvSettings().SunDirection(), 0.0f);
+    const bool hasSun = scene_->GetEnvSettings().HasSun && scene_->GetEnvSettings().SunIntensity > 0;
     {
         const auto cascades = scene_->GetEnvSettings().ComputeSunCascades(
             ubo.ViewProjectionUnJit, renderCam.NearPlane, renderCam.FarPlane, 400.f);
+        const uint32_t frameIndex = static_cast<uint32_t>(std::max(renderer_->FrameCount(), 0));
+        const bool forceRefresh = !renderState_.cachedSunCascadesValid ||
+                                  renderState_.previousUniformBuffer.HasSun != hasSun ||
+                                  renderState_.previousUniformBuffer.SunDirection != sunDirection;
+
+        if (!hasSun)
+        {
+            renderState_.cachedSunCascadesValid = false;
+            renderState_.sunShadowCascadeUpdateMask = 0u;
+            renderState_.sunShadowInitializedMask = 0u;
+            renderState_.sunShadowDirtyMask = Assets::Scene::kSunShadowCascadeMask;
+        }
+        else
+        {
+            if (!renderState_.cachedSunCascadesValid)
+            {
+                // 未初始化 cascade 对应的贴图已经被清成 depth=1，先给 UBO 一个有效矩阵。
+                renderState_.cachedSunCascades = cascades;
+            }
+            if (forceRefresh)
+            {
+                renderState_.sunShadowDirtyMask = Assets::Scene::kSunShadowCascadeMask;
+            }
+
+            const uint32_t priorityCascadeMask =
+                renderState_.sunShadowDirtyMask |
+                (Assets::Scene::kSunShadowCascadeMask & ~renderState_.sunShadowInitializedMask);
+            const uint32_t activeCascadeMask =
+                Assets::Scene::BuildSunShadowCascadeUpdateMask(frameIndex, priorityCascadeMask);
+
+            for (uint32_t cascade = 0; cascade < Assets::Scene::kSunShadowCascadeCount; ++cascade)
+            {
+                if ((activeCascadeMask & (1u << cascade)) != 0u)
+                {
+                    renderState_.cachedSunCascades.viewProjection[cascade] = cascades.viewProjection[cascade];
+                    renderState_.cachedSunCascades.splits[cascade] = cascades.splits[cascade];
+                }
+            }
+
+            renderState_.sunShadowCascadeUpdateMask = activeCascadeMask;
+            renderState_.sunShadowInitializedMask |= activeCascadeMask;
+            renderState_.sunShadowDirtyMask &= ~activeCascadeMask;
+            renderState_.cachedSunCascadesValid = true;
+        }
+
         for (int i = 0; i < 4; ++i)
         {
-            ubo.SunCascadeViewProjection[i] = cascades.viewProjection[i];
+            ubo.SunCascadeViewProjection[i] = renderState_.cachedSunCascades.viewProjection[i];
         }
-        ubo.CascadeSplits = cascades.splits;
+        ubo.CascadeSplits = renderState_.cachedSunCascades.splits;
     }
 
     ubo.SelectedId = scene_->GetSelectedId();
@@ -1140,13 +1187,13 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.AdaptiveSteps = config_.userSettings.AdaptiveSteps;
     ubo.TAA = config_.userSettings.TAA;
     ubo.RandomSeed = rand();
-    ubo.SunDirection = glm::vec4(scene_->GetEnvSettings().SunDirection(), 0.0f);
+    ubo.SunDirection = sunDirection;
     ubo.SunColor = glm::vec4(1, 1, 1, 0) * scene_->GetEnvSettings().SunIntensity;
     ubo.SkyIntensity = scene_->GetEnvSettings().SkyIntensity;
     ubo.SkyIdx = scene_->GetEnvSettings().SkyIdx;
     ubo.BackGroundColor = glm::vec4(0.4, 0.6, 1.0, 0.0) * 4.0f * scene_->GetEnvSettings().SkyIntensity;
     ubo.HasSky = scene_->GetEnvSettings().HasSky;
-    ubo.HasSun = scene_->GetEnvSettings().HasSun && scene_->GetEnvSettings().SunIntensity > 0;
+    ubo.HasSun = hasSun;
 
     if (ubo.HasSun != renderState_.previousUniformBuffer.HasSun ||
         ubo.SunDirection != renderState_.previousUniformBuffer.SunDirection)

@@ -341,6 +341,7 @@ namespace
         SPDLOG_WARN("{} disabled because device extension {} is unavailable", featureName, extensionName);
         return false;
     }
+
 }
 
 namespace Vulkan
@@ -1351,50 +1352,65 @@ namespace Vulkan
         const uint32_t groupCount = (indirectDrawBatchCount + 63) / 64;
         const VkBuffer shadowIndirectBuffer = scene.ShadowIndirectDrawBuffer().Handle();
         const VkDeviceAddress shadowIndirectAddress = scene.ShadowIndirectDrawBuffer().GetDeviceAddress();
+        const uint32_t activeCascadeMask = NextEngine::GetInstance()->GetSunShadowCascadeUpdateMask();
+        Assets::GPUScene shadowGpuScene =
+            scene.FetchGPUSceneWithIndirectBuffer(imageIndex, shadowIndirectAddress);
+
+        if (activeCascadeMask != 0)
+        {
+            vkCmdFillBuffer(commandBuffer, scene.NodeMatrixBuffer().Handle(),
+                            Assets::GPU_SCENE_DYNAMIC_SHADOW_GPU_DRIVEN_STATS_OFFSET,
+                            sizeof(Assets::GPUDrivenStat) * Assets::Scene::kSunShadowCascadeCount, 0);
+
+            VkBufferMemoryBarrier statsClearBarrier = {};
+            statsClearBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+            statsClearBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            statsClearBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+            statsClearBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            statsClearBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            statsClearBarrier.buffer = scene.NodeMatrixBuffer().Handle();
+            statsClearBarrier.offset = Assets::GPU_SCENE_DYNAMIC_SHADOW_GPU_DRIVEN_STATS_OFFSET;
+            statsClearBarrier.size = sizeof(Assets::GPUDrivenStat) * Assets::Scene::kSunShadowCascadeCount;
+            vkCmdPipelineBarrier(commandBuffer,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                0, 0, nullptr, 1, &statsClearBarrier, 0, nullptr);
+        }
+
+        if (groupCount > 0 && activeCascadeMask != 0)
+        {
+            shadowGpuScene.custom_data_0 = activeCascadeMask;
+            shadowGpuScene.custom_data_1 = indirectDrawBatchCount;
+            shadowGpuScene.custom_data_2 = 0;
+
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, overlay_.shadowGpuCullPipeline->Handle());
+            overlay_.shadowGpuCullPipeline->PipelineLayout().BindDescriptorSets(commandBuffer, 0);
+            vkCmdPushConstants(commandBuffer, overlay_.shadowGpuCullPipeline->PipelineLayout().Handle(),
+                               VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &shadowGpuScene);
+            vkCmdDispatch(commandBuffer, groupCount, 1, 1);
+
+            VkBufferMemoryBarrier postCullBarrier = {};
+            postCullBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+            postCullBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+            postCullBarrier.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+            postCullBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            postCullBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            postCullBarrier.buffer = shadowIndirectBuffer;
+            postCullBarrier.offset = 0;
+            postCullBarrier.size = VK_WHOLE_SIZE;
+            vkCmdPipelineBarrier(commandBuffer,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+                0, 0, nullptr, 1, &postCullBarrier, 0, nullptr);
+        }
 
         for (uint32_t cascade = 0; cascade < Assets::Scene::kSunShadowCascadeCount; ++cascade)
         {
-            Assets::GPUScene shadowGpuScene =
-                scene.FetchGPUSceneWithIndirectBuffer(imageIndex, shadowIndirectAddress);
-            shadowGpuScene.custom_data_0 = cascade;
-            shadowGpuScene.custom_data_1 = indirectDrawBatchCount;
-
-            if (groupCount > 0)
+            if ((activeCascadeMask & (1u << cascade)) == 0u)
             {
-                VkBufferMemoryBarrier preCullBarrier = {};
-                preCullBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-                preCullBarrier.srcAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
-                preCullBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-                preCullBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                preCullBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                preCullBarrier.buffer = shadowIndirectBuffer;
-                preCullBarrier.offset = 0;
-                preCullBarrier.size = VK_WHOLE_SIZE;
-                vkCmdPipelineBarrier(commandBuffer,
-                    VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                    0, 0, nullptr, 1, &preCullBarrier, 0, nullptr);
-
-                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, overlay_.shadowGpuCullPipeline->Handle());
-                overlay_.shadowGpuCullPipeline->PipelineLayout().BindDescriptorSets(commandBuffer, 0);
-                vkCmdPushConstants(commandBuffer, overlay_.shadowGpuCullPipeline->PipelineLayout().Handle(),
-                                   VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &shadowGpuScene);
-                vkCmdDispatch(commandBuffer, groupCount, 1, 1);
-
-                VkBufferMemoryBarrier postCullBarrier = {};
-                postCullBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-                postCullBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-                postCullBarrier.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
-                postCullBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                postCullBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                postCullBarrier.buffer = shadowIndirectBuffer;
-                postCullBarrier.offset = 0;
-                postCullBarrier.size = VK_WHOLE_SIZE;
-                vkCmdPipelineBarrier(commandBuffer,
-                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
-                    0, 0, nullptr, 1, &postCullBarrier, 0, nullptr);
+                continue;
             }
 
-            overlay_.sunShadowPass->DrawCascade(commandBuffer, scene, shadowGpuScene, cascade);
+            overlay_.sunShadowPass->DrawCascade(
+                commandBuffer, scene, shadowGpuScene, cascade, scene.ShadowIndirectDrawByteOffset(cascade));
         }
     }
 
@@ -1443,6 +1459,26 @@ namespace Vulkan
                 Throw(std::runtime_error(std::string("failed to acquire next image (") + ToString(result) + ")"));
             }
 
+            // Wait before CPU-side uniform/stat writes and command-buffer reuse.
+            auto* const previousSubmitFence = frame_.currentFence;
+            auto* const frameSlotFence = &frame_.inFlightFences[frame_.currentFrame];
+            if (previousSubmitFence)
+            {
+                SCOPED_CPU_TIMER("fence");
+                previousSubmitFence->Wait(noTimeout);
+            }
+            if (frameSlotFence != previousSubmitFence)
+            {
+                SCOPED_CPU_TIMER("frame-slot-fence");
+                frameSlotFence->Wait(noTimeout);
+            }
+            frame_.currentFence = frameSlotFence;
+
+            {
+                SCOPED_CPU_TIMER("update uniform");
+                UpdateUniformBuffer(frame_.currentImageIndex);
+            }
+
             const auto commandBuffer = frame_.commandBuffers->Begin(frame_.currentFrame);
             ctx_.gpuTimer->Reset(commandBuffer);
 
@@ -1472,18 +1508,6 @@ namespace Vulkan
                 }
             }
             frame_.commandBuffers->End(frame_.currentFrame);
-
-            {
-                SCOPED_CPU_TIMER("update uniform");
-                UpdateUniformBuffer(frame_.currentImageIndex);
-            }
-
-            // wait the last frame command buffer to complete
-            if (frame_.currentFence)
-            {
-                SCOPED_CPU_TIMER("fence");
-                frame_.currentFence->Wait(noTimeout);
-            }
 
             {
                 SCOPED_CPU_TIMER("update nodes");

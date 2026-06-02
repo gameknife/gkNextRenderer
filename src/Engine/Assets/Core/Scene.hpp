@@ -25,6 +25,38 @@ namespace Assets
         static void RegisterReflection();
         static constexpr uint32_t kSunShadowCascadeCount = 4;
         static constexpr uint32_t kSunShadowResolution = 1024;
+        static constexpr uint32_t kMaxIndirectDrawCount = 65535;
+        static constexpr uint32_t kSunShadowCascadeMask = (1u << kSunShadowCascadeCount) - 1u;
+        static constexpr std::array<int32_t, 16> kSunShadowHighCascadeSchedule = {
+            1, -1, 2, -1, 1, -1, 3, -1,
+            1, -1, 2, -1, 1, -1, -1, -1,
+        };
+        static constexpr uint32_t BuildSunShadowCascadeUpdateMask(uint32_t frameIndex, uint32_t priorityCascadeMask)
+        {
+            uint32_t updateMask = 1u << 0;
+            const uint32_t priorityHighMask = priorityCascadeMask & (kSunShadowCascadeMask & ~(1u << 0));
+            int32_t highCascade = kSunShadowHighCascadeSchedule[frameIndex % kSunShadowHighCascadeSchedule.size()];
+            if (priorityHighMask != 0u &&
+                (highCascade <= 0 || (priorityHighMask & (1u << static_cast<uint32_t>(highCascade))) == 0u))
+            {
+                highCascade = -1;
+                for (uint32_t offset = 0; offset < kSunShadowHighCascadeSchedule.size(); ++offset)
+                {
+                    const int32_t candidate =
+                        kSunShadowHighCascadeSchedule[(frameIndex + offset) % kSunShadowHighCascadeSchedule.size()];
+                    if (candidate > 0 && (priorityHighMask & (1u << static_cast<uint32_t>(candidate))) != 0u)
+                    {
+                        highCascade = candidate;
+                        break;
+                    }
+                }
+            }
+            if (highCascade > 0)
+            {
+                updateMask |= (1u << static_cast<uint32_t>(highCascade));
+            }
+            return updateMask;
+        }
         Scene(const Scene&) = delete;
         Scene(Scene&&) = delete;
         Scene& operator=(const Scene&) = delete;
@@ -63,6 +95,7 @@ namespace Assets
         const Vulkan::Buffer& NodeMatrixBuffer() const { return *sceneDynamicBuffer_; }
         const Vulkan::Buffer& IndirectDrawBuffer() const { return *indirectDrawBuffer_; }
         const Vulkan::Buffer& ShadowIndirectDrawBuffer() const { return *shadowIndirectDrawBuffer_; }
+        VkDeviceSize ShadowIndirectDrawByteOffset(uint32_t cascade) const;
         const Vulkan::Buffer& ReorderBuffer() const { return *reorderBuffer_; }
         const Vulkan::Buffer& PrimAddressBuffer() const { return *primAddressBuffer_; }
         const glm::vec3 GetSunDir() const { return envSettings_.SunDirection(); }

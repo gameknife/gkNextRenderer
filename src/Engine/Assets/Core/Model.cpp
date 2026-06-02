@@ -52,6 +52,7 @@ namespace Assets
     {
         constexpr int CASCADE_COUNT = 4;
         constexpr float SPLIT_LAMBDA = 0.75f;   // 偏 log
+        constexpr float SHADOW_MAP_RESOLUTION = 1024.0f;
 
         const float n = std::max(cameraNear, 1e-3f);
         const float f = std::max(std::min(shadowFar, cameraFar), n * 2.0f);
@@ -111,7 +112,16 @@ namespace Assets
             const glm::vec3 lightUp = std::abs(lightDir.y) > 0.99f ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
             const float backOff = radius + 50.0f;       // 让光源相机后挪一段，吃到背面阻挡物
             const glm::vec3 lightPos = center - lightDir * backOff;
-            const glm::mat4 lightView = glm::lookAt(lightPos, center, lightUp);
+            glm::mat4 lightView = glm::lookAt(lightPos, center, lightUp);
+
+            // Stable CSM: 把 cascade 中心在光空间按 texel 尺寸吸附，避免镜头移动时高层 cascade 整体抖动。
+            const float worldUnitsPerTexel = (radius * 2.0f) / SHADOW_MAP_RESOLUTION;
+            glm::vec4 centerLS = lightView * glm::vec4(center, 1.0f);
+            centerLS.x = std::floor(centerLS.x / worldUnitsPerTexel) * worldUnitsPerTexel;
+            centerLS.y = std::floor(centerLS.y / worldUnitsPerTexel) * worldUnitsPerTexel;
+            const glm::vec3 snappedCenter = glm::vec3(glm::inverse(lightView) * centerLS);
+            lightView = glm::lookAt(snappedCenter - lightDir * backOff, snappedCenter, lightUp);
+
             const glm::mat4 lightProj = glm::ortho(-radius, radius, -radius, radius, 0.0f, 2.0f * backOff);
 
             result.viewProjection[c] = lightProj * lightView;

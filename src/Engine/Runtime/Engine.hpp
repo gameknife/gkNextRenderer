@@ -2,6 +2,7 @@
 
 #include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Assets/Core/Model.hpp"
+#include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Options.hpp"
@@ -158,6 +159,7 @@ public:
     void SetProgressiveRendering(bool enable, bool directly);
     bool IsProgressiveRendering() const { return progressiveRender_.enabled; }
     Assets::UniformBufferObject& GetLastUniformBufferObject() { return renderState_.previousUniformBuffer; }
+    uint32_t GetSunShadowCascadeUpdateMask() const { return renderState_.sunShadowCascadeUpdateMask; }
     VkDeviceAddress TryGetGPUAccelerationStructureAddress() const;
     VkAccelerationStructureKHR TryGetGPUAccelerationStructureHandle() const;
 
@@ -220,6 +222,11 @@ private:
     struct FRenderState
     {
         mutable Assets::UniformBufferObject previousUniformBuffer{};
+        mutable Assets::CascadeShadowSetup cachedSunCascades{};
+        mutable bool cachedSunCascadesValid = false;
+        mutable uint32_t sunShadowCascadeUpdateMask = 0;
+        mutable uint32_t sunShadowInitializedMask = 0;
+        mutable uint32_t sunShadowDirtyMask = Assets::Scene::kSunShadowCascadeMask;
     };
 
     // Per-frame timing and statistics

@@ -94,35 +94,46 @@ bool IsAABBInFrustum(float3 min, float3 max, float4x4 wvp)
 [numthreads(64, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    if (DTid.x >= Bindless.GetGpuscene().custom_data_1)
+    let scene = Bindless.GetGpuscene();
+    uint indirectDrawCount = scene.custom_data_1;
+    if (DTid.x >= indirectDrawCount)
     {
         return;
     }
 
-    NodeProxy node = Bindless.GetGpuscene().Nodes[DTid.x];
-    ModelData model = Bindless.GetGpuscene().Offsets[node.modelId];
-    uint cascadeIdx = min(Bindless.GetGpuscene().custom_data_0, 3u);
-    float4x4 lightMvp = mul(Bindless.GetGpuscene().Camera[0].SunCascadeViewProjection[cascadeIdx], node.worldTS);
+    NodeProxy node = scene.Nodes[DTid.x];
+    ModelData model = scene.Offsets[node.modelId];
     uint triangleCount = model.indexCount / 3;
-
     bool isCandidate = node.visible > 0;
-    bool shouldDraw = isCandidate && IsAABBInFrustum(model.localAabbMin.xyz, model.localAabbMax.xyz, lightMvp);
+    uint activeCascadeMask = scene.custom_data_0;
 
-    if (isCandidate)
+    for (uint cascadeIdx = 0; cascadeIdx < 4; ++cascadeIdx)
     {
-        InterlockedAdd(Bindless.GetGpuscene().ShadowGPUDrivenStats[cascadeIdx].ProcessedCount, 1);
-        InterlockedAdd(Bindless.GetGpuscene().ShadowGPUDrivenStats[cascadeIdx].TriangleCount, triangleCount);
-
-        if (!shouldDraw)
+        if ((activeCascadeMask & (1u << cascadeIdx)) == 0u)
         {
-            InterlockedAdd(Bindless.GetGpuscene().ShadowGPUDrivenStats[cascadeIdx].CulledCount, 1);
-            InterlockedAdd(Bindless.GetGpuscene().ShadowGPUDrivenStats[cascadeIdx].CulledTriangleCount, triangleCount);
+            continue;
         }
-    }
 
-    Bindless.GetGpuscene().IndirectDrawCommands[DTid.x].instanceCount = shouldDraw ? 1 : 0;
-    Bindless.GetGpuscene().IndirectDrawCommands[DTid.x].firstInstance = shouldDraw ? DTid.x : 0;
-    Bindless.GetGpuscene().IndirectDrawCommands[DTid.x].indexCount = shouldDraw ? model.indexCount : 0;
-    Bindless.GetGpuscene().IndirectDrawCommands[DTid.x].firstIndex = shouldDraw ? model.indexOffset : 0;
-    Bindless.GetGpuscene().IndirectDrawCommands[DTid.x].vertexOffset = shouldDraw ? model.reorderOffset : 0;
+        float4x4 lightMvp = mul(scene.Camera[0].SunCascadeViewProjection[cascadeIdx], node.worldTS);
+        bool shouldDraw = isCandidate && IsAABBInFrustum(model.localAabbMin.xyz, model.localAabbMax.xyz, lightMvp);
+
+        if (isCandidate)
+        {
+            InterlockedAdd(scene.ShadowGPUDrivenStats[cascadeIdx].ProcessedCount, 1);
+            InterlockedAdd(scene.ShadowGPUDrivenStats[cascadeIdx].TriangleCount, triangleCount);
+
+            if (!shouldDraw)
+            {
+                InterlockedAdd(scene.ShadowGPUDrivenStats[cascadeIdx].CulledCount, 1);
+                InterlockedAdd(scene.ShadowGPUDrivenStats[cascadeIdx].CulledTriangleCount, triangleCount);
+            }
+        }
+
+        uint commandIndex = cascadeIdx * MAX_NODES + DTid.x;
+        scene.IndirectDrawCommands[commandIndex].instanceCount = shouldDraw ? 1 : 0;
+        scene.IndirectDrawCommands[commandIndex].firstInstance = shouldDraw ? DTid.x : 0;
+        scene.IndirectDrawCommands[commandIndex].indexCount = shouldDraw ? model.indexCount : 0;
+        scene.IndirectDrawCommands[commandIndex].firstIndex = shouldDraw ? model.indexOffset : 0;
+        scene.IndirectDrawCommands[commandIndex].vertexOffset = shouldDraw ? model.reorderOffset : 0;
+    }
 }
