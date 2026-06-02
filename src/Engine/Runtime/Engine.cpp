@@ -1120,7 +1120,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
             ubo.ViewProjectionUnJit, renderCam.NearPlane, renderCam.FarPlane, 400.f);
         const uint32_t frameIndex = static_cast<uint32_t>(std::max(renderer_->FrameCount(), 0));
         const bool forceRefresh = !renderState_.cachedSunCascadesValid ||
-                                  renderState_.previousUniformBuffer.HasSun != hasSun ||
+                                  (bool)renderState_.previousUniformBuffer.HasSun != hasSun ||
                                   renderState_.previousUniformBuffer.SunDirection != sunDirection;
 
         if (!hasSun)
