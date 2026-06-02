@@ -2546,19 +2546,22 @@ namespace Vulkan
 
     void VulkanBaseRenderer::DeleteAccelerationStructures()
     {
-        rt_->tlas.clear();
-        rt_->instancesBuffer.reset();
-        rt_->instancesMemory.reset();
-        rt_->tlasScratch.reset();
-        rt_->tlasScratchMemory.reset();
-        rt_->tlasBuffer.reset();
-        rt_->tlasMemory.reset();
+        if (rt_)
+        {
+            rt_->tlas.clear();
+            rt_->instancesBuffer.reset();
+            rt_->instancesMemory.reset();
+            rt_->tlasScratch.reset();
+            rt_->tlasScratchMemory.reset();
+            rt_->tlasBuffer.reset();
+            rt_->tlasMemory.reset();
 
-        rt_->blas.clear();
-        rt_->blasScratch.reset();
-        rt_->blasScratchMemory.reset();
-        rt_->blasBuffer.reset();
-        rt_->blasMemory.reset();
+            rt_->blas.clear();
+            rt_->blasScratch.reset();
+            rt_->blasScratchMemory.reset();
+            rt_->blasBuffer.reset();
+            rt_->blasMemory.reset();
+        }
     }
 
     void VulkanBaseRenderer::CreateBottomLevelStructures(VkCommandBuffer commandBuffer)
