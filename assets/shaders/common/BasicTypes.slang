@@ -67,6 +67,24 @@ public struct ALIGN_16 GPUDrivenStat
     public uint ReservedAlign3;
 };
 
+public struct ALIGN_16 SoftMeshShaderVisibleItem
+{
+    public uint primBase;
+    public uint instanceIdx;
+    public uint modelOffsetIdx;
+    public uint triCount;
+};
+
+public struct ALIGN_16 SoftMeshShaderResources
+{
+    public uint64_t Prim;
+    public uint64_t ShadowPrim;
+    public uint64_t VisibleItems;
+    public uint64_t DrawArgs;
+    public uint64_t DispatchArgs;
+    public uint64_t Counters;
+};
+
 public struct ALIGN_16 UniformBufferObject
 {
     public float4x4 ModelView;
@@ -278,6 +296,19 @@ public struct VkDrawIndexedIndirectCommand {
     public uint firstInstance;
 };
 
+public struct VkDrawIndirectCommand {
+    public uint vertexCount;
+    public uint instanceCount;
+    public uint firstVertex;
+    public uint firstInstance;
+};
+
+public struct VkDispatchIndirectCommand {
+    public uint x;
+    public uint y;
+    public uint z;
+};
+
 public struct ALIGN_16 Material
 {
     public float4 Diffuse;
@@ -415,6 +446,10 @@ public struct ALIGN_8 GPUScene
     public GPUVertex *SkinnedVertices;
     public float4x4 *JointMatrices;
     public uint64_t ReservedAddress0;
+    public property SoftMeshShaderResources* SoftMeshShader
+    {
+        get { return (SoftMeshShaderResources*)ReservedAddress0; }
+    }
 
     public RaytracingAccelerationStructure GetTLAS() {
 		return RaytracingAccelerationStructure(TLAS);
@@ -540,6 +575,10 @@ public struct ALIGN_8 GPUScene
     public property float4x4* JointMatrices
     {
         get { return (float4x4*)JointMatrices_Reserved_Address.x; }
+    }
+    public property SoftMeshShaderResources* SoftMeshShader
+    {
+        get { return (SoftMeshShaderResources*)JointMatrices_Reserved_Address.y; }
     }
 
     public RaytracingAccelerationStructure GetTLAS() {

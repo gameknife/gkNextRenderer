@@ -148,30 +148,38 @@ namespace Vulkan::Shadow
             colorBlending.attachmentCount = 0;
             colorBlending.pAttachments = nullptr;
 
-            const ShaderModule vertShader(device_, "assets/shaders/Rast.ShadowMap.vert.slang.spv");
             const ShaderModule fragShader(device_, "assets/shaders/Rast.ShadowMap.frag.slang.spv");
-            VkPipelineShaderStageCreateInfo stages[] = {
-                vertShader.CreateShaderStage(VK_SHADER_STAGE_VERTEX_BIT),
-                fragShader.CreateShaderStage(VK_SHADER_STAGE_FRAGMENT_BIT),
+            auto createPipeline = [&](const char* vertexShaderPath, VkPipeline& outPipeline, const char* debugName)
+            {
+                const ShaderModule vertShader(device_, vertexShaderPath);
+                VkPipelineShaderStageCreateInfo stages[] = {
+                    vertShader.CreateShaderStage(VK_SHADER_STAGE_VERTEX_BIT),
+                    fragShader.CreateShaderStage(VK_SHADER_STAGE_FRAGMENT_BIT),
+                };
+
+                VkGraphicsPipelineCreateInfo pipelineInfo{};
+                pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+                pipelineInfo.stageCount = 2;
+                pipelineInfo.pStages = stages;
+                pipelineInfo.pVertexInputState = &vertexInputInfo;
+                pipelineInfo.pInputAssemblyState = &inputAssembly;
+                pipelineInfo.pViewportState = &viewportState;
+                pipelineInfo.pRasterizationState = &rasterizer;
+                pipelineInfo.pMultisampleState = &multisampling;
+                pipelineInfo.pDepthStencilState = &depthStencil;
+                pipelineInfo.pColorBlendState = &colorBlending;
+                pipelineInfo.layout = pipelineLayout_->Handle();
+                pipelineInfo.renderPass = renderPass_;
+                pipelineInfo.subpass = 0;
+
+                Check(vkCreateGraphicsPipelines(device_.Handle(), nullptr, 1, &pipelineInfo, nullptr, &outPipeline),
+                    debugName);
             };
 
-            VkGraphicsPipelineCreateInfo pipelineInfo{};
-            pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-            pipelineInfo.stageCount = 2;
-            pipelineInfo.pStages = stages;
-            pipelineInfo.pVertexInputState = &vertexInputInfo;
-            pipelineInfo.pInputAssemblyState = &inputAssembly;
-            pipelineInfo.pViewportState = &viewportState;
-            pipelineInfo.pRasterizationState = &rasterizer;
-            pipelineInfo.pMultisampleState = &multisampling;
-            pipelineInfo.pDepthStencilState = &depthStencil;
-            pipelineInfo.pColorBlendState = &colorBlending;
-            pipelineInfo.layout = pipelineLayout_->Handle();
-            pipelineInfo.renderPass = renderPass_;
-            pipelineInfo.subpass = 0;
-
-            Check(vkCreateGraphicsPipelines(device_.Handle(), nullptr, 1, &pipelineInfo, nullptr, &pipeline_),
-                "create shadow graphics pipeline");
+            createPipeline("assets/shaders/Rast.ShadowMap.vert.slang.spv", pipeline_,
+                           "create shadow graphics pipeline");
+            createPipeline("assets/shaders/Rast.ShadowMapSoftMeshShader.vert.slang.spv", softMeshShaderPipeline_,
+                           "create shadow SoftMeshShader graphics pipeline");
         }
 
         // 4 个 framebuffer
@@ -207,6 +215,11 @@ namespace Vulkan::Shadow
             vkDestroyPipeline(device_.Handle(), pipeline_, nullptr);
             pipeline_ = VK_NULL_HANDLE;
         }
+        if (softMeshShaderPipeline_)
+        {
+            vkDestroyPipeline(device_.Handle(), softMeshShaderPipeline_, nullptr);
+            softMeshShaderPipeline_ = VK_NULL_HANDLE;
+        }
 
         pipelineLayout_.reset();
 
@@ -219,15 +232,19 @@ namespace Vulkan::Shadow
 
     void ShadowMapPass::DrawCascade(
         VkCommandBuffer commandBuffer, const Assets::Scene& scene, const Assets::GPUScene& gpuSceneBase,
-        uint32_t cascade, VkDeviceSize indirectDrawOffset)
+        uint32_t cascade, VkDeviceSize indirectDrawOffset, bool softMeshShader)
     {
-        if (!pipeline_)
+        VkPipeline activePipeline = softMeshShader ? softMeshShaderPipeline_ : pipeline_;
+        if (!activePipeline)
         {
             return;
         }
 
-        const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
-        vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+        if (!softMeshShader)
+        {
+            const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
+            vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+        }
 
         VkClearValue clearValue{};
         clearValue.depthStencil = {1.0f, 0};
@@ -242,18 +259,28 @@ namespace Vulkan::Shadow
         rpBegin.pClearValues = &clearValue;
 
         vkCmdBeginRenderPass(commandBuffer, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, activePipeline);
         pipelineLayout_->BindDescriptorSets(commandBuffer, 0, VK_PIPELINE_BIND_POINT_GRAPHICS);
 
         Assets::GPUScene gpuScene = gpuSceneBase;
         gpuScene.custom_data_0 = cascade;
+        gpuScene.custom_data_2 = cascade * scene.GetMaxSceneTriangles();
         vkCmdPushConstants(commandBuffer, pipelineLayout_->Handle(),
                            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                            0, sizeof(Assets::GPUScene), &gpuScene);
 
-        vkCmdDrawIndexedIndirect(commandBuffer, scene.ShadowIndirectDrawBuffer().Handle(), indirectDrawOffset,
-                                 scene.GetIndirectDrawBatchCount(),
-                                 sizeof(VkDrawIndexedIndirectCommand));
+        if (softMeshShader)
+        {
+            const uint32_t slot = scene.SoftMeshShaderDrawSlotForShadowCascade(cascade);
+            vkCmdDrawIndirect(commandBuffer, scene.SoftMeshShaderDrawArgBuffer().Handle(), scene.SoftMeshShaderDrawArgByteOffset(slot),
+                              1, sizeof(VkDrawIndirectCommand));
+        }
+        else
+        {
+            vkCmdDrawIndexedIndirect(commandBuffer, scene.ShadowIndirectDrawBuffer().Handle(), indirectDrawOffset,
+                                     scene.GetIndirectDrawBatchCount(),
+                                     sizeof(VkDrawIndexedIndirectCommand));
+        }
         vkCmdEndRenderPass(commandBuffer);
     }
 }

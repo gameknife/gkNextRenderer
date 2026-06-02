@@ -49,7 +49,8 @@ namespace Vulkan::PipelineCommon
 			const SwapChain& swapChain, 
 			const DepthBuffer& depthBuffer,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
-			const Assets::Scene& scene);
+			const Assets::Scene& scene,
+            bool softMeshShader = false);
 		~VisibilityPipeline();
 		
 		const Vulkan::RenderPass& RenderPass() const { return *renderPass_; }
@@ -70,7 +71,8 @@ namespace Vulkan::PipelineCommon
 			const DepthBuffer& depthBuffer,
 			const std::vector<Assets::UniformBuffer>& uniformBuffers,
 			const Assets::Scene& scene,
-			bool isWireFrame);
+			bool isWireFrame,
+            bool softMeshShader = false);
 		~GraphicsPipeline();
 		
 		const class RenderPass& RenderPass() const { return *renderPass_; }
