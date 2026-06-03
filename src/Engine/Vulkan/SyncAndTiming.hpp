@@ -7,7 +7,12 @@
 #include <memory>
 #include <unordered_map>
 #include <chrono>
+#include <atomic>
+#include <condition_variable>
+#include <deque>
 #include <limits>
+#include <mutex>
+#include <thread>
 
 #define GK_CONCAT_IMPL(a, b) a##b
 #define GK_CONCAT(a, b) GK_CONCAT_IMPL(a, b)
@@ -151,6 +156,9 @@ public:
         {
             Vulkan::Check(vkCreateQueryPool(device_.Handle(), &query_pool_info, nullptr, &query_pool_timestamps), "create timestamp pool");
             valid_ = true;
+#if WITH_SUPERLUMINAL
+            StartGpuTimerReplayThread();
+#endif
         }
         catch (...)
         {
@@ -160,6 +168,9 @@ public:
     }
     virtual ~VulkanGpuTimer()
     {
+#if WITH_SUPERLUMINAL
+        StopGpuTimerReplayThread();
+#endif
         if (GetActiveTimer() == this)
         {
             SetActiveTimer(nullptr);
@@ -231,6 +242,9 @@ public:
             record.elapsedMilliseconds =
                 (time_stamps[record.endQuery] - time_stamps[record.startQuery]) * timeStampPeriod_ * 1e-6f;
         }
+#if WITH_SUPERLUMINAL
+        SubmitGpuTimerReplayFrame();
+#endif
     }
 
     uint32_t Start(VkCommandBuffer commandBuffer, const char* name)
@@ -422,6 +436,26 @@ private:
         return parent.stableKey + "/" + name + "#" + std::to_string(occurrence);
     }
 
+#if WITH_SUPERLUMINAL
+    struct GpuReplayScope
+    {
+        std::string name;
+        uint32_t color = 0;
+        uint32_t startQuery = invalidTimerId;
+        uint32_t endQuery = invalidTimerId;
+        double startNanoseconds = 0.0;
+        double endNanoseconds = 0.0;
+    };
+
+    using GpuReplayFrame = std::vector<GpuReplayScope>;
+
+    void StartGpuTimerReplayThread();
+    void StopGpuTimerReplayThread();
+    void SubmitGpuTimerReplayFrame();
+    void GpuTimerReplayThreadMain();
+    void ReplayGpuTimerFrame(const GpuReplayFrame& frame);
+#endif
+
 public:
     std::vector<TimerStat> lastStats;
     std::vector<TimerStat> lastCpuStats;
@@ -442,6 +476,15 @@ public:
 
 private:
     inline static VulkanGpuTimer* activeTimer_ = nullptr;
+
+#if WITH_SUPERLUMINAL
+    std::thread gpuReplayThread_;
+    std::mutex gpuReplayMutex_;
+    std::condition_variable gpuReplayCondition_;
+    std::deque<GpuReplayFrame> gpuReplayQueue_;
+    std::unordered_map<std::string, std::string> gpuReplayNameStorage_;
+    std::atomic_bool gpuReplayStop_{false};
+#endif
 };
 
 // ============================================================================
