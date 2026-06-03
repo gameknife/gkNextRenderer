@@ -134,7 +134,7 @@ namespace Assets
 
     bool Node::TickVelocity(glm::mat4& combinedTS)
     {
-        auto physComp = GetComponent<Runtime::PhysicsComponent>();
+        auto* physComp = physicsComponent_;
         if (physComp && physComp->GetMobility() == ENodeMobility::Dynamic)
         {
             auto body = NextEngine::GetInstance()->GetPhysicsEngine()->GetBody(physComp->GetPhysicsBody());
