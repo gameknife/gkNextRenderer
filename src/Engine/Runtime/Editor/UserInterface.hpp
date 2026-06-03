@@ -97,6 +97,26 @@ public:
 	void RenderConsoleOverlay();
 
 private:
+	struct UiDrawSegment
+	{
+		uint32_t vertexOffset = 0;
+		uint32_t vertexCount = 0;
+	};
+
+	struct UiDrawOp
+	{
+		enum class EType : uint8_t
+		{
+			Draw,
+			Callback,
+		};
+
+		EType type = EType::Draw;
+		UiDrawSegment segment{};
+		const ImDrawList* drawList = nullptr;
+		const ImDrawCmd* drawCmd = nullptr;
+	};
+
 	struct FUiRenderBuffers;
 
 	NextEngine& GetEngine() {return *engine_;}
@@ -158,6 +178,7 @@ private:
 		std::unique_ptr<Vulkan::Buffer> vertexBuffer;
 		std::unique_ptr<Vulkan::DeviceMemory> vertexBufferMemory;
 		VkDeviceSize vertexBufferSize = 0;
+		std::vector<UiDrawOp> drawOps;
 	};
 	std::vector<FUiRenderBuffers> uiRenderBuffers_;
 	VkPipelineLayout uiPipelineLayout_ = VK_NULL_HANDLE;

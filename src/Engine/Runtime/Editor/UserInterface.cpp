@@ -94,26 +94,6 @@ namespace
         uint32_t textureIndex = 0;
     };
 
-    struct UiDrawSegment
-    {
-        uint32_t vertexOffset = 0;
-        uint32_t vertexCount = 0;
-    };
-
-    struct UiDrawOp
-    {
-        enum class EType : uint8_t
-        {
-            Draw,
-            Callback,
-        };
-
-        EType type = EType::Draw;
-        UiDrawSegment segment{};
-        const ImDrawList* drawList = nullptr;
-        const ImDrawCmd* drawCmd = nullptr;
-    };
-
     struct UiRendererRenderState
     {
         VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
@@ -1125,15 +1105,31 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
     pushConsts.hdrOutput = hdrOutput ? 1u : 0u;
     pushConsts.hdrReferenceWhiteNit = kUiHdrReferenceWhiteNit;
 
-    std::vector<UiBatchedVertex> batchedVertices;
-    batchedVertices.reserve(static_cast<size_t>(std::max(drawData->TotalIdxCount, 0)));
+    const auto& device = engine_->GetRenderer().Device();
+    const size_t maxBatchedVertexCount = static_cast<size_t>(std::max(drawData->TotalIdxCount, 0));
+    const VkDeviceSize maxVertexSize = static_cast<VkDeviceSize>(maxBatchedVertexCount) * sizeof(UiBatchedVertex);
+    if (maxVertexSize > 0 && (!renderBuffers.vertexBuffer || renderBuffers.vertexBufferSize < maxVertexSize))
+    {
+        renderBuffers.vertexBuffer.reset(new Vulkan::Buffer(device, maxVertexSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT));
+        renderBuffers.vertexBufferMemory.reset(new Vulkan::DeviceMemory(renderBuffers.vertexBuffer->AllocateMemory(
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+        renderBuffers.vertexBufferSize = maxVertexSize;
+    }
 
-    std::vector<UiDrawOp> drawOps;
+    UiBatchedVertex* mappedVertices = nullptr;
+    if (maxVertexSize > 0 && renderBuffers.vertexBufferMemory)
+    {
+        mappedVertices = static_cast<UiBatchedVertex*>(renderBuffers.vertexBufferMemory->Map(0, maxVertexSize));
+    }
+
+    std::vector<UiDrawOp>& drawOps = renderBuffers.drawOps;
+    drawOps.clear();
     drawOps.reserve(static_cast<size_t>(drawData->CmdListsCount) * 2);
 
+    uint32_t currentBatchedVertexCount = 0;
     auto FlushPendingDraw = [&](uint32_t& segmentStartVertex)
     {
-        const uint32_t vertexCount = static_cast<uint32_t>(batchedVertices.size()) - segmentStartVertex;
+        const uint32_t vertexCount = currentBatchedVertexCount - segmentStartVertex;
         if (vertexCount == 0)
         {
             return;
@@ -1141,7 +1137,7 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
 
         drawOps.push_back(
             UiDrawOp{UiDrawOp::EType::Draw, UiDrawSegment{segmentStartVertex, vertexCount}, nullptr, nullptr});
-        segmentStartVertex = static_cast<uint32_t>(batchedVertices.size());
+        segmentStartVertex = currentBatchedVertexCount;
     };
 
     uint32_t currentSegmentStartVertex = 0;
@@ -1203,6 +1199,11 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
 
             for (uint32_t elemIndex = 0; elemIndex < drawCmd->ElemCount; ++elemIndex)
             {
+                if (mappedVertices == nullptr || currentBatchedVertexCount >= maxBatchedVertexCount)
+                {
+                    break;
+                }
+
                 const uint32_t vertexIndex = static_cast<uint32_t>(drawList->IdxBuffer[drawCmd->IdxOffset + elemIndex]) +
                                              drawCmd->VtxOffset;
                 if (vertexIndex >= static_cast<uint32_t>(drawList->VtxBuffer.Size))
@@ -1211,7 +1212,7 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
                 }
 
                 const ImDrawVert& sourceVertex = drawList->VtxBuffer[vertexIndex];
-                UiBatchedVertex& batchedVertex = batchedVertices.emplace_back();
+                UiBatchedVertex& batchedVertex = mappedVertices[currentBatchedVertexCount++];
                 batchedVertex.position = sourceVertex.pos;
                 batchedVertex.uv = sourceVertex.uv;
                 batchedVertex.color = sourceVertex.col;
@@ -1225,23 +1226,12 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
     }
     FlushPendingDraw(currentSegmentStartVertex);
 
-    const auto& device = engine_->GetRenderer().Device();
-    const VkDeviceSize vertexSize = static_cast<VkDeviceSize>(batchedVertices.size()) * sizeof(UiBatchedVertex);
-    if (vertexSize > 0)
+    if (mappedVertices != nullptr)
     {
-        if (!renderBuffers.vertexBuffer || renderBuffers.vertexBufferSize < vertexSize)
-        {
-            renderBuffers.vertexBuffer.reset(new Vulkan::Buffer(device, vertexSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT));
-            renderBuffers.vertexBufferMemory.reset(new Vulkan::DeviceMemory(
-                renderBuffers.vertexBuffer->AllocateMemory(
-                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
-            renderBuffers.vertexBufferSize = vertexSize;
-        }
-
-        void* mappedData = renderBuffers.vertexBufferMemory->Map(0, vertexSize);
-        memcpy(mappedData, batchedVertices.data(), static_cast<size_t>(vertexSize));
         renderBuffers.vertexBufferMemory->Unmap();
     }
+
+    const VkDeviceSize vertexSize = static_cast<VkDeviceSize>(currentBatchedVertexCount) * sizeof(UiBatchedVertex);
 
     VkViewport viewport{};
     viewport.x = 0.0f;
@@ -1256,7 +1246,7 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
 
     const VkDescriptorSet bindlessDescriptorSet = Assets::GlobalTexturePool::GetInstance()->DescriptorSet(0);
     const VkBuffer vertexBufferHandle =
-        renderBuffers.vertexBuffer ? renderBuffers.vertexBuffer->Handle() : VK_NULL_HANDLE;
+        vertexSize > 0 && renderBuffers.vertexBuffer ? renderBuffers.vertexBuffer->Handle() : VK_NULL_HANDLE;
     BindUiRenderState(commandBuffer, pipeline, uiPipelineLayout_, bindlessDescriptorSet, vertexBufferHandle,
                       viewport, scissor, pushConsts);
 
