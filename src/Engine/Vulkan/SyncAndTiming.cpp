@@ -1,6 +1,47 @@
 #include "SyncAndTiming.hpp"
 #include "Device.hpp"
 
+#include <algorithm>
+
+#if WITH_SUPERLUMINAL
+#include "Superluminal/PerformanceAPI.h"
+
+namespace
+{
+    uint32_t HashGpuReplayName(const char* name)
+    {
+        uint32_t hash = 2166136261u;
+        if (name == nullptr)
+        {
+            return hash;
+        }
+
+        while (*name != '\0')
+        {
+            hash ^= static_cast<uint8_t>(*name);
+            hash *= 16777619u;
+            ++name;
+        }
+        return hash;
+    }
+
+    uint32_t MakeGpuReplayColor(const char* name)
+    {
+        uint32_t hash = HashGpuReplayName(name);
+        hash ^= hash >> 16u;
+        hash *= 0x7feb352du;
+        hash ^= hash >> 15u;
+        hash *= 0x846ca68bu;
+        hash ^= hash >> 16u;
+
+        const uint32_t red = 80u + (hash & 0x7fu);
+        const uint32_t green = 80u + ((hash >> 8u) & 0x7fu);
+        const uint32_t blue = 80u + ((hash >> 16u) & 0x7fu);
+        return PERFORMANCEAPI_MAKE_COLOR(red, green, blue);
+    }
+}
+#endif
+
 namespace Vulkan
 {
 
@@ -78,3 +119,208 @@ Semaphore::~Semaphore()
 }
 
 }
+
+#if WITH_SUPERLUMINAL
+void VulkanGpuTimer::StartGpuTimerReplayThread()
+{
+    if (gpuReplayThread_.joinable())
+    {
+        return;
+    }
+
+    gpuReplayStop_.store(false, std::memory_order_release);
+    gpuReplayThread_ = std::thread([this]()
+    {
+        GpuTimerReplayThreadMain();
+    });
+}
+
+void VulkanGpuTimer::StopGpuTimerReplayThread()
+{
+    gpuReplayStop_.store(true, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lock(gpuReplayMutex_);
+        gpuReplayQueue_.clear();
+    }
+    gpuReplayCondition_.notify_all();
+
+    if (gpuReplayThread_.joinable())
+    {
+        gpuReplayThread_.join();
+    }
+}
+
+void VulkanGpuTimer::SubmitGpuTimerReplayFrame()
+{
+    if (!valid_ || gpuTimerRecords_.empty() || time_stamps.empty())
+    {
+        return;
+    }
+
+    uint32_t frameStartQuery = invalidTimerId;
+    for (const auto& record : gpuTimerRecords_)
+    {
+        if (record.startQuery == invalidTimerId || record.endQuery == invalidTimerId)
+        {
+            continue;
+        }
+        if (record.endQuery >= time_stamps.size() || record.startQuery >= time_stamps.size())
+        {
+            continue;
+        }
+        if (time_stamps[record.endQuery] <= time_stamps[record.startQuery])
+        {
+            continue;
+        }
+
+        frameStartQuery = std::min(frameStartQuery, record.startQuery);
+    }
+
+    if (frameStartQuery == invalidTimerId)
+    {
+        return;
+    }
+
+    const uint64_t frameStartTimestamp = time_stamps[frameStartQuery];
+    GpuReplayFrame replayFrame;
+    replayFrame.reserve(gpuTimerRecords_.size());
+
+    for (const auto& record : gpuTimerRecords_)
+    {
+        if (record.startQuery == invalidTimerId || record.endQuery == invalidTimerId)
+        {
+            continue;
+        }
+        if (record.endQuery >= time_stamps.size() || record.startQuery >= time_stamps.size())
+        {
+            continue;
+        }
+        if (time_stamps[record.endQuery] <= time_stamps[record.startQuery])
+        {
+            continue;
+        }
+
+        GpuReplayScope scope{};
+        scope.name = record.name;
+        scope.color = MakeGpuReplayColor(scope.name.c_str());
+        scope.startQuery = record.startQuery;
+        scope.endQuery = record.endQuery;
+        scope.startNanoseconds = static_cast<double>(time_stamps[record.startQuery] - frameStartTimestamp) *
+            static_cast<double>(timeStampPeriod_);
+        scope.endNanoseconds = static_cast<double>(time_stamps[record.endQuery] - frameStartTimestamp) *
+            static_cast<double>(timeStampPeriod_);
+        replayFrame.push_back(std::move(scope));
+    }
+
+    if (replayFrame.empty())
+    {
+        return;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(gpuReplayMutex_);
+        while (gpuReplayQueue_.size() >= 2)
+        {
+            gpuReplayQueue_.pop_front();
+        }
+        gpuReplayQueue_.push_back(std::move(replayFrame));
+    }
+    gpuReplayCondition_.notify_one();
+}
+
+void VulkanGpuTimer::GpuTimerReplayThreadMain()
+{
+    PerformanceAPI::SetCurrentThreadName("gk GPU Timer Replay");
+
+    for (;;)
+    {
+        GpuReplayFrame frame;
+        {
+            std::unique_lock<std::mutex> lock(gpuReplayMutex_);
+            gpuReplayCondition_.wait(lock, [this]()
+            {
+                return gpuReplayStop_.load(std::memory_order_acquire) || !gpuReplayQueue_.empty();
+            });
+
+            if (gpuReplayStop_.load(std::memory_order_acquire) && gpuReplayQueue_.empty())
+            {
+                return;
+            }
+
+            frame = std::move(gpuReplayQueue_.front());
+            gpuReplayQueue_.pop_front();
+        }
+
+        ReplayGpuTimerFrame(frame);
+    }
+}
+
+void VulkanGpuTimer::ReplayGpuTimerFrame(const GpuReplayFrame& frame)
+{
+    struct ReplayEvent
+    {
+        uint32_t query = invalidTimerId;
+        uint32_t scope = invalidTimerId;
+        bool begin = false;
+    };
+
+    std::vector<ReplayEvent> events;
+    events.reserve(frame.size() * 2);
+    for (uint32_t index = 0; index < frame.size(); ++index)
+    {
+        events.push_back({frame[index].startQuery, index, true});
+        events.push_back({frame[index].endQuery, index, false});
+    }
+
+    std::sort(events.begin(), events.end(), [](const ReplayEvent& lhs, const ReplayEvent& rhs)
+    {
+        return lhs.query < rhs.query;
+    });
+
+    using ReplayClock = std::chrono::high_resolution_clock;
+    const auto replayStartTime = ReplayClock::now();
+    std::vector<uint32_t> openScopes;
+    openScopes.reserve(frame.size());
+
+    for (const auto& event : events)
+    {
+        if (gpuReplayStop_.load(std::memory_order_acquire))
+        {
+            break;
+        }
+
+        const auto& scope = frame[event.scope];
+        const double targetNanoseconds = event.begin ? scope.startNanoseconds : scope.endNanoseconds;
+        const auto targetTime = replayStartTime + std::chrono::duration_cast<ReplayClock::duration>(
+            std::chrono::duration<double, std::nano>(targetNanoseconds));
+
+        while (!gpuReplayStop_.load(std::memory_order_acquire) && ReplayClock::now() < targetTime)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(0));
+        }
+
+        if (gpuReplayStop_.load(std::memory_order_acquire))
+        {
+            break;
+        }
+
+        if (event.begin)
+        {
+            const auto nameIter = gpuReplayNameStorage_.try_emplace(scope.name, scope.name).first;
+            PerformanceAPI::BeginEvent(nameIter->second.c_str(), nullptr, scope.color);
+            openScopes.push_back(event.scope);
+        }
+        else if (!openScopes.empty())
+        {
+            PerformanceAPI::EndEvent();
+            openScopes.pop_back();
+        }
+    }
+
+    while (!openScopes.empty())
+    {
+        PerformanceAPI::EndEvent();
+        openScopes.pop_back();
+    }
+}
+#endif
