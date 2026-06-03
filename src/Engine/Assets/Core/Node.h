@@ -65,6 +65,11 @@ namespace Assets
         {
             static_assert(std::is_base_of<Component, T>::value, "T must inherit from Component");
             const auto componentTypeId = ComponentTypeId<T>();
+
+            if constexpr (std::is_same_v<T, Runtime::PhysicsComponent>)
+            {
+                physicsComponent_ = nullptr;
+            }
             
             // Remove existing component of same type
             for (auto it = components_.begin(); it != components_.end(); )
@@ -84,6 +89,11 @@ namespace Assets
                 component->SetOwner(this);
                 components_.push_back(component);
                 componentTypeMask_ |= ComponentTypeMask<T>();
+
+                if constexpr (std::is_same_v<T, Runtime::PhysicsComponent>)
+                {
+                    physicsComponent_ = component.get();
+                }
             }
         }
 
@@ -166,5 +176,6 @@ namespace Assets
 
         std::vector<std::shared_ptr<Component>> components_;
         uint64_t componentTypeMask_ = 0;
+        Runtime::PhysicsComponent* physicsComponent_ = nullptr;
     };
 }
