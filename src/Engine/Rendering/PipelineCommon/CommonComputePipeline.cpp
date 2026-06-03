@@ -158,8 +158,7 @@ namespace Vulkan::PipelineCommon
         const SwapChain& swapChain,
         const DepthBuffer& depthBuffer,
         const std::vector<Assets::UniformBuffer>& uniformBuffers,
-        const Assets::Scene& scene,
-        bool softMeshShader) :
+        const Assets::Scene& scene) :
         PipelineBase(swapChain)
     {
         const auto& device = swapChain.Device();
@@ -266,9 +265,7 @@ namespace Vulkan::PipelineCommon
         renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_R32_UINT, depthBuffer, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
         renderPass_->SetDebugName("Visibility Render Pass");
         // Load shaders.
-        const ShaderModule vertShader(
-            device, softMeshShader ? "assets/shaders/Rast.VisibilityPassSoftMeshShader.vert.slang.spv"
-                             : "assets/shaders/Rast.VisibilityPass.vert.slang.spv");
+        const ShaderModule vertShader(device, "assets/shaders/Rast.VisibilityPassSoftMeshShader.vert.slang.spv");
         const ShaderModule fragShader(device, "assets/shaders/Rast.VisibilityPass.frag.slang.spv");
 
         VkPipelineShaderStageCreateInfo shaderStages[] =
@@ -310,8 +307,7 @@ namespace Vulkan::PipelineCommon
 	const DepthBuffer& depthBuffer,
 	const std::vector<Assets::UniformBuffer>& uniformBuffers,
 	const Assets::Scene& scene,
-	const bool isWireFrame,
-    bool softMeshShader) :
+	const bool isWireFrame) :
 	PipelineBase(swapChain)
 	{
         (void)uniformBuffers;
@@ -426,9 +422,7 @@ namespace Vulkan::PipelineCommon
 		renderPass_->SetDebugName("Wireframe Render Pass");
 
 		// Load shaders.
-		const ShaderModule vertShader(
-            device, softMeshShader ? "assets/shaders/Rast.WireframeSoftMeshShader.vert.slang.spv"
-                             : "assets/shaders/Rast.Wireframe.vert.slang.spv");
+		const ShaderModule vertShader(device, "assets/shaders/Rast.WireframeSoftMeshShader.vert.slang.spv");
 		const ShaderModule fragShader(device, "assets/shaders/Rast.Wireframe.frag.slang.spv");
 
 		VkPipelineShaderStageCreateInfo shaderStages[] =

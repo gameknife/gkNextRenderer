@@ -594,13 +594,6 @@ namespace Vulkan
             Throw(std::runtime_error("VK_KHR_buffer_device_address is required"));
         }
 
-        caps_.supportMDI = supportedFeatures.multiDrawIndirect && supportedFeatures.drawIndirectFirstInstance;
-        deviceFeatures.multiDrawIndirect = supportedFeatures.multiDrawIndirect;
-        deviceFeatures.drawIndirectFirstInstance = supportedFeatures.drawIndirectFirstInstance;
-        if (!caps_.supportMDI)
-        {
-            SPDLOG_INFO("MultiDrawIndirect or drawIndirectFirstInstance is unavailable; using softMeshShader single-draw submit.");
-        }
         deviceFeatures.fillModeNonSolid = supportedFeatures.fillModeNonSolid;
         deviceFeatures.samplerAnisotropy = supportedFeatures.samplerAnisotropy;
         deviceFeatures.shaderStorageImageReadWithoutFormat = supportedFeatures.shaderStorageImageReadWithoutFormat;
@@ -835,7 +828,6 @@ namespace Vulkan
         CreateRenderImages();
 
         overlay_.wireframePipeline.reset(new class PipelineCommon::GraphicsPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), true));
-        overlay_.wireframeSoftMeshShaderPipeline.reset(new class PipelineCommon::GraphicsPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), true, true));
         overlay_.wireframeFrameBuffers.clear();
         overlay_.wireframeFrameBuffers.reserve(frame_.swapChain->ImageViews().size());
         for (const auto& imageView : frame_.swapChain->ImageViews())
@@ -863,17 +855,14 @@ namespace Vulkan
                 rt_->directLightGenPipeline.reset(new PipelineCommon::ZeroBindWithTLASPipeline(SwapChain(), "assets/shaders/Bake.HwAmbientCube.comp.slang.spv", GetScene()));
             }
         }
-        overlay_.gpuCullPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.GpuCull.comp.slang.spv", GetScene()));
         overlay_.gpuCullCompactPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.SoftMeshShaderGpuCullCompact.comp.slang.spv", GetScene()));
         overlay_.softMeshShaderFinalizePipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.SoftMeshShaderFinalize.comp.slang.spv", GetScene()));
         overlay_.softMeshShaderExpandPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.SoftMeshShaderExpand.comp.slang.spv", GetScene()));
-        overlay_.shadowGpuCullPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.ShadowGpuCull.comp.slang.spv", GetScene()));
         overlay_.shadowGpuCullCompactPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.SoftMeshShaderShadowGpuCullCompact.comp.slang.spv", GetScene()));
         skin_.pipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.Skinning.comp.slang.spv", GetScene()));
         overlay_.visualDebuggerPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*frame_.swapChain, "assets/shaders/Util.VisualDebugger.comp.slang.spv", 20));
 
         overlay_.visibilityPipeline.reset(new PipelineCommon::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
-        overlay_.visibilitySoftMeshShaderPipeline.reset(new PipelineCommon::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), true));
         overlay_.visibilityFrameBuffer.reset(new FrameBuffer(frame_.swapChain->RenderExtent(), GetStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(), overlay_.visibilityPipeline->RenderPass()));
 
         // 太阳方向光 CSM 阴影 pass + 注册 4 个 cascade 到 Bindless
@@ -920,7 +909,6 @@ namespace Vulkan
         bindless_.tempCreated = 0;
 
         overlay_.visibilityPipeline.reset();
-        overlay_.visibilitySoftMeshShaderPipeline.reset();
         overlay_.visibilityFrameBuffer.reset();
         overlay_.sunShadowPass.reset();
         
@@ -929,7 +917,6 @@ namespace Vulkan
         frame_.commandBuffers.reset();
         overlay_.wireframeFrameBuffers.clear();
         overlay_.wireframePipeline.reset();
-        overlay_.wireframeSoftMeshShaderPipeline.reset();
         overlay_.bufferClearPipeline.reset();
         ambient_.softBake.reset();
         ambient_.clearCache.reset();
@@ -942,11 +929,9 @@ namespace Vulkan
         {
             rt_->directLightGenPipeline.reset();
         }
-        overlay_.gpuCullPipeline.reset();
         overlay_.gpuCullCompactPipeline.reset();
         overlay_.softMeshShaderFinalizePipeline.reset();
         overlay_.softMeshShaderExpandPipeline.reset();
-        overlay_.shadowGpuCullPipeline.reset();
         overlay_.shadowGpuCullCompactPipeline.reset();
         skin_.pipeline.reset();
 
@@ -977,14 +962,6 @@ namespace Vulkan
     void VulkanBaseRenderer::ReloadShaders()
     {
         RecreateSwapChain();
-    }
-
-    bool VulkanBaseRenderer::UseSoftMeshShaderSubmit()
-    {
-        auto* engine = NextEngine::GetInstance();
-        const bool requested =
-            engine && engine->GetUserSettings().DrawSubmitMode == 1;
-        return requested || !caps_.supportMDI;
     }
 
     void VulkanBaseRenderer::CaptureScreenShot()
@@ -1259,132 +1236,108 @@ namespace Vulkan
                              0, 0, nullptr, 1, &nodeMatrixBarrier, 0, nullptr);
 
         auto& scene = GetScene();
-        if (UseSoftMeshShaderSubmit())
+        vkCmdFillBuffer(commandBuffer, scene.SoftMeshShaderCounterBuffer().Handle(), 0, VK_WHOLE_SIZE, 0);
+
+        VkBufferMemoryBarrier counterClearBarrier = {};
+        counterClearBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        counterClearBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        counterClearBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        counterClearBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        counterClearBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        counterClearBarrier.buffer = scene.SoftMeshShaderCounterBuffer().Handle();
+        counterClearBarrier.offset = 0;
+        counterClearBarrier.size = VK_WHOLE_SIZE;
+        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr,
+                             1, &counterClearBarrier, 0, nullptr);
+
+        auto bindCompute = [&](const PipelineCommon::ZeroBindPipeline& pipeline)
         {
-            vkCmdFillBuffer(commandBuffer, scene.SoftMeshShaderCounterBuffer().Handle(), 0, VK_WHOLE_SIZE, 0);
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.Handle());
+            pipeline.PipelineLayout().BindDescriptorSets(commandBuffer, 0);
+        };
 
-            VkBufferMemoryBarrier counterClearBarrier = {};
-            counterClearBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            counterClearBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            counterClearBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-            counterClearBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            counterClearBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            counterClearBarrier.buffer = scene.SoftMeshShaderCounterBuffer().Handle();
-            counterClearBarrier.offset = 0;
-            counterClearBarrier.size = VK_WHOLE_SIZE;
-            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr,
-                                 1, &counterClearBarrier, 0, nullptr);
-
-            auto bindCompute = [&](const PipelineCommon::ZeroBindPipeline& pipeline)
-            {
-                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.Handle());
-                pipeline.PipelineLayout().BindDescriptorSets(commandBuffer, 0);
-            };
-
-            Assets::GPUScene gpuScene = scene.FetchGPUScene(imageIndex);
-            gpuScene.custom_data_0 = 0;
-            gpuScene.custom_data_1 = indirectDrawBatchCount;
-            gpuScene.custom_data_2 = scene.GetMaxSceneTriangles();
-
-            bindCompute(*overlay_.gpuCullCompactPipeline);
-            vkCmdPushConstants(commandBuffer, overlay_.gpuCullCompactPipeline->PipelineLayout().Handle(),
-                               VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
-            uint32_t groupCount = (indirectDrawBatchCount + 63) / 64;
-            vkCmdDispatch(commandBuffer, groupCount, 1, 1);
-
-            std::array<VkBufferMemoryBarrier, 2> compactBarriers{};
-            compactBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            compactBarriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            compactBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            compactBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            compactBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            compactBarriers[0].buffer = scene.SoftMeshShaderCounterBuffer().Handle();
-            compactBarriers[0].offset = 0;
-            compactBarriers[0].size = VK_WHOLE_SIZE;
-            compactBarriers[1] = compactBarriers[0];
-            compactBarriers[1].buffer = scene.SoftMeshShaderVisibleItemBuffer().Handle();
-            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr,
-                                 static_cast<uint32_t>(compactBarriers.size()), compactBarriers.data(),
-                                 0, nullptr);
-
-            bindCompute(*overlay_.softMeshShaderFinalizePipeline);
-            gpuScene.custom_data_0 = 0;
-            vkCmdPushConstants(commandBuffer, overlay_.softMeshShaderFinalizePipeline->PipelineLayout().Handle(),
-                               VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
-            vkCmdDispatch(commandBuffer, 1, 1, 1);
-
-            std::array<VkBufferMemoryBarrier, 2> expandInputBarriers{};
-            expandInputBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            expandInputBarriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            expandInputBarriers[0].dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
-            expandInputBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            expandInputBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            expandInputBarriers[0].buffer = scene.SoftMeshShaderDispatchArgBuffer().Handle();
-            expandInputBarriers[0].offset = 0;
-            expandInputBarriers[0].size = sizeof(VkDispatchIndirectCommand);
-            expandInputBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            expandInputBarriers[1].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            expandInputBarriers[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            expandInputBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            expandInputBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            expandInputBarriers[1].buffer = scene.SoftMeshShaderVisibleItemBuffer().Handle();
-            expandInputBarriers[1].offset = 0;
-            expandInputBarriers[1].size = sizeof(Assets::SoftMeshShaderVisibleItem) * Assets::Scene::kMaxIndirectDrawCount;
-            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                 VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                 0, 0, nullptr, static_cast<uint32_t>(expandInputBarriers.size()),
-                                 expandInputBarriers.data(), 0, nullptr);
-
-            bindCompute(*overlay_.softMeshShaderExpandPipeline);
-            vkCmdPushConstants(commandBuffer, overlay_.softMeshShaderExpandPipeline->PipelineLayout().Handle(),
-                               VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
-            vkCmdDispatchIndirect(commandBuffer, scene.SoftMeshShaderDispatchArgBuffer().Handle(), 0);
-
-            std::array<VkBufferMemoryBarrier, 2> drawBarriers{};
-            drawBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            drawBarriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            drawBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            drawBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            drawBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            drawBarriers[0].buffer = scene.SoftMeshShaderPrimBuffer().Handle();
-            drawBarriers[0].offset = 0;
-            drawBarriers[0].size = VK_WHOLE_SIZE;
-            drawBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            drawBarriers[1].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            drawBarriers[1].dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
-            drawBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            drawBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            drawBarriers[1].buffer = scene.SoftMeshShaderDrawArgBuffer().Handle();
-            drawBarriers[1].offset = 0;
-            drawBarriers[1].size = sizeof(VkDrawIndirectCommand);
-            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                 VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
-                                 0, 0, nullptr, static_cast<uint32_t>(drawBarriers.size()), drawBarriers.data(),
-                                 0, nullptr);
-            return;
-        }
-
-        overlay_.gpuCullPipeline->BindPipeline(commandBuffer, scene, imageIndex);
         Assets::GPUScene gpuScene = scene.FetchGPUScene(imageIndex);
+        gpuScene.custom_data_0 = 0;
         gpuScene.custom_data_1 = indirectDrawBatchCount;
-        vkCmdPushConstants(commandBuffer, overlay_.gpuCullPipeline->PipelineLayout().Handle(),
+        gpuScene.custom_data_2 = scene.GetMaxSceneTriangles();
+
+        bindCompute(*overlay_.gpuCullCompactPipeline);
+        vkCmdPushConstants(commandBuffer, overlay_.gpuCullCompactPipeline->PipelineLayout().Handle(),
                            VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
         uint32_t groupCount = (indirectDrawBatchCount + 63) / 64;
         vkCmdDispatch(commandBuffer, groupCount, 1, 1);
 
-        VkBufferMemoryBarrier bufferBarrier = {};
-        bufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        bufferBarrier.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
-        bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        bufferBarrier.buffer = scene.IndirectDrawBuffer().Handle();
-        bufferBarrier.offset = 0;
-        bufferBarrier.size = VK_WHOLE_SIZE;
-        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
-                             0, 0, nullptr, 1, &bufferBarrier, 0, nullptr);
+        std::array<VkBufferMemoryBarrier, 2> compactBarriers{};
+        compactBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        compactBarriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        compactBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        compactBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        compactBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        compactBarriers[0].buffer = scene.SoftMeshShaderCounterBuffer().Handle();
+        compactBarriers[0].offset = 0;
+        compactBarriers[0].size = VK_WHOLE_SIZE;
+        compactBarriers[1] = compactBarriers[0];
+        compactBarriers[1].buffer = scene.SoftMeshShaderVisibleItemBuffer().Handle();
+        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr,
+                             static_cast<uint32_t>(compactBarriers.size()), compactBarriers.data(),
+                             0, nullptr);
+
+        bindCompute(*overlay_.softMeshShaderFinalizePipeline);
+        gpuScene.custom_data_0 = 0;
+        vkCmdPushConstants(commandBuffer, overlay_.softMeshShaderFinalizePipeline->PipelineLayout().Handle(),
+                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
+        vkCmdDispatch(commandBuffer, 1, 1, 1);
+
+        std::array<VkBufferMemoryBarrier, 2> expandInputBarriers{};
+        expandInputBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        expandInputBarriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        expandInputBarriers[0].dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+        expandInputBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        expandInputBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        expandInputBarriers[0].buffer = scene.SoftMeshShaderDispatchArgBuffer().Handle();
+        expandInputBarriers[0].offset = 0;
+        expandInputBarriers[0].size = sizeof(VkDispatchIndirectCommand);
+        expandInputBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        expandInputBarriers[1].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        expandInputBarriers[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        expandInputBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        expandInputBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        expandInputBarriers[1].buffer = scene.SoftMeshShaderVisibleItemBuffer().Handle();
+        expandInputBarriers[1].offset = 0;
+        expandInputBarriers[1].size = sizeof(Assets::SoftMeshShaderVisibleItem) * Assets::Scene::kMaxIndirectDrawCount;
+        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                             VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                             0, 0, nullptr, static_cast<uint32_t>(expandInputBarriers.size()),
+                             expandInputBarriers.data(), 0, nullptr);
+
+        bindCompute(*overlay_.softMeshShaderExpandPipeline);
+        vkCmdPushConstants(commandBuffer, overlay_.softMeshShaderExpandPipeline->PipelineLayout().Handle(),
+                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
+        vkCmdDispatchIndirect(commandBuffer, scene.SoftMeshShaderDispatchArgBuffer().Handle(), 0);
+
+        std::array<VkBufferMemoryBarrier, 2> drawBarriers{};
+        drawBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        drawBarriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        drawBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        drawBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        drawBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        drawBarriers[0].buffer = scene.SoftMeshShaderPrimBuffer().Handle();
+        drawBarriers[0].offset = 0;
+        drawBarriers[0].size = VK_WHOLE_SIZE;
+        drawBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        drawBarriers[1].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        drawBarriers[1].dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+        drawBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        drawBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        drawBarriers[1].buffer = scene.SoftMeshShaderDrawArgBuffer().Handle();
+        drawBarriers[1].offset = 0;
+        drawBarriers[1].size = sizeof(VkDrawIndirectCommand);
+        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                             VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+                             0, 0, nullptr, static_cast<uint32_t>(drawBarriers.size()), drawBarriers.data(),
+                             0, nullptr);
     }
 
     void VulkanBaseRenderer::DispatchClearPass(VkCommandBuffer commandBuffer, uint32_t imageIndex)
@@ -1421,8 +1374,7 @@ namespace Vulkan
 
         VkRenderPassBeginInfo renderPassInfo = {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        auto& activeVisibilityPipeline =
-            UseSoftMeshShaderSubmit() ? *overlay_.visibilitySoftMeshShaderPipeline : *overlay_.visibilityPipeline;
+        auto& activeVisibilityPipeline = *overlay_.visibilityPipeline;
         renderPassInfo.renderPass = activeVisibilityPipeline.RenderPass().Handle();
         renderPassInfo.framebuffer = overlay_.visibilityFrameBuffer->Handle();
         renderPassInfo.renderArea.offset = {0, 0};
@@ -1433,7 +1385,6 @@ namespace Vulkan
         vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
         {
             const auto& scene = GetScene();
-            const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
 
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, activeVisibilityPipeline.Handle());
             const Assets::GPUScene& gpuScene = scene.FetchGPUScene(imageIndex);
@@ -1442,19 +1393,10 @@ namespace Vulkan
             vkCmdPushConstants(commandBuffer, activeVisibilityPipeline.PipelineLayout().Handle(),
                                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                                0, sizeof(Assets::GPUScene), &gpuScene);
-            if (UseSoftMeshShaderSubmit())
+            if (scene.GetIndirectDrawBatchCount() > 0)
             {
-                if (scene.GetIndirectDrawBatchCount() > 0)
-                {
-                    vkCmdDrawIndirect(commandBuffer, scene.SoftMeshShaderDrawArgBuffer().Handle(), 0,
-                                      1, sizeof(VkDrawIndirectCommand));
-                }
-            }
-            else
-            {
-                vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-                vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0,
-                                         scene.GetIndirectDrawBatchCount(), sizeof(VkDrawIndexedIndirectCommand));
+                vkCmdDrawIndirect(commandBuffer, scene.SoftMeshShaderDrawArgBuffer().Handle(), 0,
+                                  1, sizeof(VkDrawIndirectCommand));
             }
         }
         vkCmdEndRenderPass(commandBuffer);
@@ -1496,11 +1438,8 @@ namespace Vulkan
         auto& scene = GetScene();
         const uint32_t indirectDrawBatchCount = scene.GetIndirectDrawBatchCount();
         const uint32_t groupCount = (indirectDrawBatchCount + 63) / 64;
-        const VkBuffer shadowIndirectBuffer = scene.ShadowIndirectDrawBuffer().Handle();
-        const VkDeviceAddress shadowIndirectAddress = scene.ShadowIndirectDrawBuffer().GetDeviceAddress();
         const uint32_t activeCascadeMask = NextEngine::GetInstance()->GetSunShadowCascadeUpdateMask();
-        Assets::GPUScene shadowGpuScene =
-            scene.FetchGPUSceneWithIndirectBuffer(imageIndex, shadowIndirectAddress);
+        Assets::GPUScene shadowGpuScene = scene.FetchGPUScene(imageIndex);
 
         if (activeCascadeMask != 0)
         {
@@ -1522,8 +1461,7 @@ namespace Vulkan
                 0, 0, nullptr, 1, &statsClearBarrier, 0, nullptr);
         }
 
-        const bool softMeshShaderSubmit = UseSoftMeshShaderSubmit();
-        if (softMeshShaderSubmit && activeCascadeMask != 0)
+        if (activeCascadeMask != 0)
         {
             vkCmdFillBuffer(commandBuffer, scene.SoftMeshShaderCounterBuffer().Handle(), 0, VK_WHOLE_SIZE, 0);
             vkCmdFillBuffer(commandBuffer, scene.SoftMeshShaderDrawArgBuffer().Handle(), sizeof(VkDrawIndirectCommand),
@@ -1552,32 +1490,7 @@ namespace Vulkan
                 0, 0, nullptr, static_cast<uint32_t>(clearBarriers.size()), clearBarriers.data(), 0, nullptr);
         }
 
-        if (groupCount > 0 && activeCascadeMask != 0 && !softMeshShaderSubmit)
-        {
-            shadowGpuScene.custom_data_0 = activeCascadeMask;
-            shadowGpuScene.custom_data_1 = indirectDrawBatchCount;
-            shadowGpuScene.custom_data_2 = 0;
-
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, overlay_.shadowGpuCullPipeline->Handle());
-            overlay_.shadowGpuCullPipeline->PipelineLayout().BindDescriptorSets(commandBuffer, 0);
-            vkCmdPushConstants(commandBuffer, overlay_.shadowGpuCullPipeline->PipelineLayout().Handle(),
-                               VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &shadowGpuScene);
-            vkCmdDispatch(commandBuffer, groupCount, 1, 1);
-
-            VkBufferMemoryBarrier postCullBarrier = {};
-            postCullBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            postCullBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            postCullBarrier.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
-            postCullBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            postCullBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            postCullBarrier.buffer = shadowIndirectBuffer;
-            postCullBarrier.offset = 0;
-            postCullBarrier.size = VK_WHOLE_SIZE;
-            vkCmdPipelineBarrier(commandBuffer,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
-                0, 0, nullptr, 1, &postCullBarrier, 0, nullptr);
-        }
-        else if (groupCount > 0 && activeCascadeMask != 0)
+        if (groupCount > 0 && activeCascadeMask != 0)
         {
             auto bindCompute = [&](const PipelineCommon::ZeroBindPipeline& pipeline)
             {
@@ -1695,8 +1608,7 @@ namespace Vulkan
             }
 
             overlay_.sunShadowPass->DrawCascade(
-                commandBuffer, scene, shadowGpuScene, cascade, scene.ShadowIndirectDrawByteOffset(cascade),
-                softMeshShaderSubmit);
+                commandBuffer, scene, shadowGpuScene, cascade);
         }
     }
 
@@ -2139,8 +2051,7 @@ namespace Vulkan
 
         VkRenderPassBeginInfo renderPassInfo = {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        auto& activeWireframePipeline =
-            UseSoftMeshShaderSubmit() ? *overlay_.wireframeSoftMeshShaderPipeline : *overlay_.wireframePipeline;
+        auto& activeWireframePipeline = *overlay_.wireframePipeline;
         renderPassInfo.renderPass = activeWireframePipeline.RenderPass().Handle();
         renderPassInfo.framebuffer = overlay_.wireframeFrameBuffers[imageIndex].Handle();
         renderPassInfo.renderArea.offset = {0, 0};
@@ -2158,19 +2069,10 @@ namespace Vulkan
                 commandBuffer, 0, VK_PIPELINE_BIND_POINT_GRAPHICS);
             vkCmdPushConstants(commandBuffer, activeWireframePipeline.PipelineLayout().Handle(),
                                VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
-            if (UseSoftMeshShaderSubmit())
+            if (scene.GetIndirectDrawBatchCount() > 0)
             {
-                if (scene.GetIndirectDrawBatchCount() > 0)
-                {
-                    vkCmdDrawIndirect(commandBuffer, scene.SoftMeshShaderDrawArgBuffer().Handle(), 0,
-                                      1, sizeof(VkDrawIndirectCommand));
-                }
-            }
-            else
-            {
-                vkCmdBindIndexBuffer(commandBuffer, scene.IndexBuffer().Handle(), 0, VK_INDEX_TYPE_UINT32);
-                vkCmdDrawIndexedIndirect(commandBuffer, scene.IndirectDrawBuffer().Handle(), 0,
-                                         scene.GetIndirectDrawBatchCount(), sizeof(VkDrawIndexedIndirectCommand));
+                vkCmdDrawIndirect(commandBuffer, scene.SoftMeshShaderDrawArgBuffer().Handle(), 0,
+                                  1, sizeof(VkDrawIndirectCommand));
             }
         }
         vkCmdEndRenderPass(commandBuffer);

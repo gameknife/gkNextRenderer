@@ -60,8 +60,6 @@ namespace NextCVar
                      "Ray bounce count");
         GK_CVAR_INT("r.rendererType", settings, RendererType, 0, ECVarFlags::Archive,
                     "Renderer type (0=PathTracing,1=SoftTracing,2=PureAmbient,3=VoxelTracing)");
-        GK_CVAR_INT("r.drawSubmitMode", settings, DrawSubmitMode, 0, ECVarFlags::Archive,
-                    "GPU-driven submit mode (0=MDI,1=SoftMeshShader SingleDraw)");
         GK_CVAR_UINT("r.maxBounces", settings, MaxNumberOfBounces, 10, ECVarFlags::Archive,
                      "Maximum ray bounce count");
         GK_CVAR_BOOL("r.denoiser", settings, Denoiser, false, ECVarFlags::Archive,

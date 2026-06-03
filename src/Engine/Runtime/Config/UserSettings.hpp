@@ -9,7 +9,6 @@ namespace Runtime::Config
 struct UserSettings final
 {
 	int32_t RendererType;
-    int32_t DrawSubmitMode = 0; // 0: MDI, 1: softMeshShader single draw
 	
 	// Scene
 	int SceneIndex {};

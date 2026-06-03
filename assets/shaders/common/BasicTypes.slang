@@ -288,14 +288,6 @@ public struct ALIGN_16 RayCastContext
 
 #ifndef __cplusplus
 
-public struct VkDrawIndexedIndirectCommand {
-    public uint indexCount;
-    public uint instanceCount;
-    public uint firstIndex;
-    public int vertexOffset;
-    public uint firstInstance;
-};
-
 public struct VkDrawIndirectCommand {
     public uint vertexCount;
     public uint instanceCount;
@@ -350,7 +342,7 @@ public struct ALIGN_16 GPUVertex
 
 
 #ifdef __cplusplus
-// 13 addresses + one reserved address slot + 4 uint params; aligned size is 128 bytes for Vulkan push_constant.
+// 14 addresses + 4 uint params; aligned size is 128 bytes for Vulkan push_constant.
 public struct ALIGN_16 GPUScene
 {
     uint64_t Camera;
@@ -359,7 +351,7 @@ public struct ALIGN_16 GPUScene
     uint64_t Vertices;
     uint64_t Indices;
     uint64_t Offsets;
-    uint64_t IndirectDrawCommands;
+    uint64_t ReservedAddress0;
     uint64_t AmbientBase;
     uint64_t TLAS;
 
@@ -367,7 +359,7 @@ public struct ALIGN_16 GPUScene
     uint64_t SkinJoints;
     uint64_t SkinnedVertices;
     uint64_t JointMatrices;
-    uint64_t ReservedAddress0;
+    uint64_t SoftMeshShaderResourcesAddress;
 
     uint32_t SwapChainIndex;
     uint32_t custom_data_0;
@@ -402,7 +394,7 @@ public struct ALIGN_8 GPUScene
         return Materials[min(MAX_MATERIALS - 1, max(0, idx))];
     }
     public ModelData *Offsets;
-    public VkDrawIndexedIndirectCommand *IndirectDrawCommands;
+    public uint64_t ReservedAddress0;
 
     public uint64_t AmbientBase;
     public property AmbientCube* Cubes
@@ -445,10 +437,10 @@ public struct ALIGN_8 GPUScene
 
     public GPUVertex *SkinnedVertices;
     public float4x4 *JointMatrices;
-    public uint64_t ReservedAddress0;
+    public uint64_t SoftMeshShaderResourcesAddress;
     public property SoftMeshShaderResources* SoftMeshShader
     {
-        get { return (SoftMeshShaderResources*)ReservedAddress0; }
+        get { return (SoftMeshShaderResources*)SoftMeshShaderResourcesAddress; }
     }
 
     public RaytracingAccelerationStructure GetTLAS() {
@@ -508,24 +500,20 @@ public struct ALIGN_8 GPUScene
     }
 
     /* Others */
-    uint64_t2 IndirectDrawCommands_AmbientBase_Address;
-    public property VkDrawIndexedIndirectCommand* IndirectDrawCommands
-    {
-        get { return (VkDrawIndexedIndirectCommand*)IndirectDrawCommands_AmbientBase_Address.x; }
-    }
+    uint64_t2 Reserved_AmbientBase_Address;
 
     public property AmbientCube* Cubes
     {
-        get { return (AmbientCube*)(IndirectDrawCommands_AmbientBase_Address.y + GPU_SCENE_AMBIENT_CUBES_OFFSET); }
+        get { return (AmbientCube*)(Reserved_AmbientBase_Address.y + GPU_SCENE_AMBIENT_CUBES_OFFSET); }
     }
     public property VoxelData* Voxels
     {
-        get { return (VoxelData*)(IndirectDrawCommands_AmbientBase_Address.y + GPU_SCENE_AMBIENT_VOXELS_OFFSET); }
+        get { return (VoxelData*)(Reserved_AmbientBase_Address.y + GPU_SCENE_AMBIENT_VOXELS_OFFSET); }
     }
 
     public property PageIndex* Pages
     {
-        get { return (PageIndex*)(IndirectDrawCommands_AmbientBase_Address.y + GPU_SCENE_AMBIENT_PAGES_OFFSET); }
+        get { return (PageIndex*)(Reserved_AmbientBase_Address.y + GPU_SCENE_AMBIENT_PAGES_OFFSET); }
     }
     public property SphericalHarmonics* HDRSHs
     {
@@ -534,11 +522,11 @@ public struct ALIGN_8 GPUScene
 
     public property AmbientCube* CubesPong
     {
-        get { return (AmbientCube*)(IndirectDrawCommands_AmbientBase_Address.y + GPU_SCENE_AMBIENT_CUBES_PONG_OFFSET); }
+        get { return (AmbientCube*)(Reserved_AmbientBase_Address.y + GPU_SCENE_AMBIENT_CUBES_PONG_OFFSET); }
     }
     public property uint4* AmbientSdfScratch
     {
-        get { return (uint4*)(IndirectDrawCommands_AmbientBase_Address.y + GPU_SCENE_AMBIENT_SDF_SCRATCH_OFFSET); }
+        get { return (uint4*)(Reserved_AmbientBase_Address.y + GPU_SCENE_AMBIENT_SDF_SCRATCH_OFFSET); }
     }
 
     uint64_t2 TLAS_SkinWeights_Address;

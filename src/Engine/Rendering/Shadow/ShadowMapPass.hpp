@@ -21,9 +21,9 @@ namespace Vulkan::Shadow
         void CreateResources(const Assets::Scene& scene);
         void DestroyResources();
 
-        // 绘制单个 cascade 的 shadow map。调用前对应 indirect buffer 已完成 GPU cull。
+        // 绘制单个 cascade 的 shadow map。调用前 soft mesh shader draw args 已完成 GPU cull。
         void DrawCascade(VkCommandBuffer commandBuffer, const Assets::Scene& scene, const Assets::GPUScene& gpuScene,
-                         uint32_t cascade, VkDeviceSize indirectDrawOffset, bool softMeshShader = false);
+                         uint32_t cascade);
 
     private:
         const Vulkan::Device& device_;
@@ -31,7 +31,6 @@ namespace Vulkan::Shadow
         VkRenderPass renderPass_ = VK_NULL_HANDLE;
         std::unique_ptr<class PipelineLayout> pipelineLayout_;
         VkPipeline pipeline_ = VK_NULL_HANDLE;
-        VkPipeline softMeshShaderPipeline_ = VK_NULL_HANDLE;
         std::array<VkFramebuffer, 4> frameBuffers_{};
     };
 }

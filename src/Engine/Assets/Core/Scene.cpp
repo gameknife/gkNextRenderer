@@ -113,16 +113,6 @@ namespace Assets
             commandPool, "AmbientArena", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
             AmbientArenaSizeForCascadeCapacity(ambientCubeCascadeCapacity), ambientArenaBuffer_, ambientArenaBufferMemory_);
 
-        // gpu local buffers
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(
-            commandPool, "IndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(VkDrawIndexedIndirectCommand) * kMaxIndirectDrawCount, indirectDrawBuffer_,
-            indirectDrawBufferMemory_); // support 65535 nodes
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(
-            commandPool, "ShadowIndirectDraws", flags | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            sizeof(VkDrawIndexedIndirectCommand) * kMaxIndirectDrawCount * kSunShadowCascadeCount,
-            shadowIndirectDrawBuffer_, shadowIndirectDrawBufferMemory_); // support 65535 nodes
         // shadow maps
         cpuShadowMap_.reset(
             new TextureImage(commandPool, SHADOWMAP_SIZE, SHADOWMAP_SIZE, 1, VK_FORMAT_R32_SFLOAT, nullptr, 0));
@@ -226,11 +216,6 @@ namespace Assets
         primAddressBufferMemory_.reset(); // release memory after bound buffer has been destroyed
         lightBuffer_.reset();
         lightBufferMemory_.reset();
-
-        indirectDrawBuffer_.reset();
-        indirectDrawBufferMemory_.reset();
-        shadowIndirectDrawBuffer_.reset();
-        shadowIndirectDrawBufferMemory_.reset();
 
         softMeshShaderPrimBuffer_.reset();
         softMeshShaderPrimBufferMemory_.reset();
@@ -948,7 +933,7 @@ namespace Assets
         }
     }
 
-    Assets::GPUScene Scene::BuildGPUScene(const uint32_t imageIndex, const VkDeviceAddress indirectDrawCommands) const
+    Assets::GPUScene Scene::BuildGPUScene(const uint32_t imageIndex) const
     {
         Assets::GPUScene gpuScene{};
         gpuScene.Camera =
@@ -958,7 +943,7 @@ namespace Assets
         gpuScene.Indices = primAddressBuffer_->GetDeviceAddress();
         gpuScene.Vertices = vertexBuffer_->GetDeviceAddress();
         gpuScene.Reorders = reorderBuffer_->GetDeviceAddress();
-        gpuScene.IndirectDrawCommands = indirectDrawCommands;
+        gpuScene.ReservedAddress0 = 0;
         gpuScene.AmbientBase = ambientArenaBuffer_->GetDeviceAddress();
         gpuScene.TLAS = NextEngine::GetInstance()->TryGetGPUAccelerationStructureAddress();
 
@@ -966,7 +951,8 @@ namespace Assets
         gpuScene.SkinJoints = skinJointBuffer_->GetDeviceAddress();
         gpuScene.SkinnedVertices = skinnedVerticesAddr_;
         gpuScene.JointMatrices = jointMatricesAddr_;
-        gpuScene.ReservedAddress0 = softMeshShaderResourcesBuffer_ ? softMeshShaderResourcesBuffer_->GetDeviceAddress() : 0;
+        gpuScene.SoftMeshShaderResourcesAddress =
+            softMeshShaderResourcesBuffer_ ? softMeshShaderResourcesBuffer_->GetDeviceAddress() : 0;
 
         gpuScene.SwapChainIndex = imageIndex;
 
@@ -975,21 +961,9 @@ namespace Assets
 
     const Assets::GPUScene& Scene::FetchGPUScene(const uint32_t imageIndex) const
     {
-        gpuScene_ = BuildGPUScene(imageIndex, indirectDrawBuffer_->GetDeviceAddress());
+        gpuScene_ = BuildGPUScene(imageIndex);
 
         return gpuScene_;
-    }
-
-    Assets::GPUScene Scene::FetchGPUSceneWithIndirectBuffer(
-        const uint32_t imageIndex, const VkDeviceAddress indirectDrawCommands) const
-    {
-        return BuildGPUScene(imageIndex, indirectDrawCommands);
-    }
-
-    VkDeviceSize Scene::ShadowIndirectDrawByteOffset(uint32_t cascade) const
-    {
-        return static_cast<VkDeviceSize>(std::min(cascade, kSunShadowCascadeCount - 1)) *
-               sizeof(VkDrawIndexedIndirectCommand) * kMaxIndirectDrawCount;
     }
 
     uint32_t Scene::SoftMeshShaderDrawSlotForShadowCascade(uint32_t cascade) const
