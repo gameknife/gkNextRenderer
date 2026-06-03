@@ -422,6 +422,8 @@ foreach(target IN LISTS AllTargets)
 		target_compile_definitions(${target} PUBLIC WITH_SUPERLUMINAL=1)
 		target_include_directories(${target} SYSTEM PRIVATE ${SuperluminalAPI_INCLUDE_DIRS})
 		target_link_libraries(${target} PRIVATE SuperluminalAPI)
+	else()
+		target_compile_definitions(${target} PUBLIC WITH_SUPERLUMINAL=0)
 	endif()
 
 	if ( WITH_PHYSIC )

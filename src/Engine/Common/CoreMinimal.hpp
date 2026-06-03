@@ -18,6 +18,7 @@
 #include <iostream>
 #include <filesystem>
 #include <chrono>
+#include <cstdint>
 
 // fmt library (still needed for formatting)
 #include <fmt/printf.h>
@@ -63,6 +64,73 @@
 
 #if WITH_SUPERLUMINAL
 #include "Superluminal/PerformanceAPI.h"
+
+namespace GkPerformance
+{
+	inline uint32_t HashInstrumentationName(const char* name)
+	{
+		uint32_t hash = 2166136261u;
+		if (name == nullptr)
+		{
+			return hash;
+		}
+
+		while (*name != '\0')
+		{
+			hash ^= static_cast<uint8_t>(*name);
+			hash *= 16777619u;
+			++name;
+		}
+		return hash;
+	}
+
+	inline uint32_t HashInstrumentationName(const wchar_t* name)
+	{
+		uint32_t hash = 2166136261u;
+		if (name == nullptr)
+		{
+			return hash;
+		}
+
+		while (*name != L'\0')
+		{
+			const auto value = static_cast<uint32_t>(*name);
+			hash ^= value & 0xffu;
+			hash *= 16777619u;
+			hash ^= (value >> 8u) & 0xffu;
+			hash *= 16777619u;
+			++name;
+		}
+		return hash;
+	}
+
+	inline uint32_t MakeInstrumentationColor(uint32_t hash)
+	{
+		hash ^= hash >> 16u;
+		hash *= 0x7feb352du;
+		hash ^= hash >> 15u;
+		hash *= 0x846ca68bu;
+		hash ^= hash >> 16u;
+
+		const uint32_t red = 80u + (hash & 0x7fu);
+		const uint32_t green = 80u + ((hash >> 8u) & 0x7fu);
+		const uint32_t blue = 80u + ((hash >> 16u) & 0x7fu);
+		return PERFORMANCEAPI_MAKE_COLOR(red, green, blue);
+	}
+
+	inline uint32_t MakeInstrumentationColor(const char* name)
+	{
+		return MakeInstrumentationColor(HashInstrumentationName(name));
+	}
+
+	inline uint32_t MakeInstrumentationColor(const wchar_t* name)
+	{
+		return MakeInstrumentationColor(HashInstrumentationName(name));
+	}
+}
+
+#undef PERFORMANCEAPI_INSTRUMENT_DATA
+#define PERFORMANCEAPI_INSTRUMENT_DATA(InstrumentationID, InstrumentationData) PERFORMANCEAPI_INSTRUMENT_DATA_COLOR((InstrumentationID), (InstrumentationData), GkPerformance::MakeInstrumentationColor((InstrumentationID)))
 #else
 #define PERFORMANCEAPI_INSTRUMENT(InstrumentationID)
 #define PERFORMANCEAPI_INSTRUMENT_DATA(InstrumentationID, InstrumentationData)
