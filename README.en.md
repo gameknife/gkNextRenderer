@@ -39,7 +39,7 @@ This project is especially relevant if you are interested in:
   The project keeps pushing on 1spp + temporal reuse, denoising, reprojection, and multi-pipeline switching so path tracing becomes part of a practical runtime workflow instead of a pure offline showcase.
 
 - **Game-oriented GPU architecture**  
-  With Visibility Buffer, fully bindless resources, GPU-driven rendering, and Multi-Draw Indirect, the design tries to spend CPU time on content and gameplay while keeping GPU budget focused on what actually improves the frame.
+  With Visibility Buffer, fully bindless resources, and single-draw GPU-driven submission, the design tries to spend CPU time on content and gameplay while keeping GPU budget focused on what actually improves the frame.
 
 - **Engine systems that serve content and gameplay prototypes**  
   ECS, reflection, editor tooling, script hot reload, physics sync, runtime import, and stable rendering behavior all work together to support playable content rather than isolated subsystems.
@@ -87,7 +87,7 @@ This project is especially relevant if you are interested in:
 
 - **Visibility Buffer**
 - **Fully Bindless + GPU-Driven**
-- **Multi-Draw Indirect**
+- **Single-Draw GPU-Driven Submit**
 - **Hardware / Software Ray Tracing**
 - **Temporal Reprojection / JBF / FSR / DLSS RR**
 

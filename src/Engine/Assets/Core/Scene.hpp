@@ -94,8 +94,6 @@ namespace Assets
         const Vulkan::Buffer& OffsetsBuffer() const { return *offsetBuffer_; }
         const Vulkan::Buffer& LightBuffer() const { return *lightBuffer_; }
         const Vulkan::Buffer& NodeMatrixBuffer() const { return *sceneDynamicBuffer_; }
-        const Vulkan::Buffer& IndirectDrawBuffer() const { return *indirectDrawBuffer_; }
-        const Vulkan::Buffer& ShadowIndirectDrawBuffer() const { return *shadowIndirectDrawBuffer_; }
         const Vulkan::Buffer& SoftMeshShaderPrimBuffer() const { return *softMeshShaderPrimBuffer_; }
         const Vulkan::Buffer& SoftMeshShaderShadowPrimBuffer() const { return *softMeshShaderShadowPrimBuffer_; }
         const Vulkan::Buffer& SoftMeshShaderVisibleItemBuffer() const { return *softMeshShaderVisibleItemBuffer_; }
@@ -104,7 +102,6 @@ namespace Assets
         const Vulkan::Buffer& SoftMeshShaderCounterBuffer() const { return *softMeshShaderCounterBuffer_; }
         VkDeviceSize SoftMeshShaderDrawArgByteOffset(uint32_t slot) const;
         uint32_t SoftMeshShaderDrawSlotForShadowCascade(uint32_t cascade) const;
-        VkDeviceSize ShadowIndirectDrawByteOffset(uint32_t cascade) const;
         const Vulkan::Buffer& ReorderBuffer() const { return *reorderBuffer_; }
         const Vulkan::Buffer& PrimAddressBuffer() const { return *primAddressBuffer_; }
         const glm::vec3 GetSunDir() const { return envSettings_.SunDirection(); }
@@ -192,7 +189,6 @@ namespace Assets
                           const std::shared_ptr<Node>& root);
 
         void SetSkinningBuffers(VkDeviceAddress skinnedVertices, VkDeviceAddress jointMatrices);
-        Assets::GPUScene FetchGPUSceneWithIndirectBuffer(uint32_t imageIndex, VkDeviceAddress indirectDrawCommands) const;
 
         // Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);
 
@@ -265,12 +261,6 @@ namespace Assets
         std::unique_ptr<Vulkan::Buffer> lightBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> lightBufferMemory_;
 
-        std::unique_ptr<Vulkan::Buffer> indirectDrawBuffer_;
-        std::unique_ptr<Vulkan::DeviceMemory> indirectDrawBufferMemory_;
-
-        std::unique_ptr<Vulkan::Buffer> shadowIndirectDrawBuffer_;
-        std::unique_ptr<Vulkan::DeviceMemory> shadowIndirectDrawBufferMemory_;
-
         std::unique_ptr<Vulkan::Buffer> softMeshShaderPrimBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> softMeshShaderPrimBufferMemory_;
 
@@ -324,7 +314,6 @@ namespace Assets
         bool gpuSdfDirty_ = false;
 
         std::vector<NodeProxy> nodeProxys;
-        std::vector<VkDrawIndexedIndirectCommand> indirectDrawBufferInstanced;
 
         glm::mat4 overrideModelView;
         bool requestOverrideModelView = false;
@@ -345,6 +334,6 @@ namespace Assets
         VkDeviceAddress skinnedVerticesAddr_ = 0;
         VkDeviceAddress jointMatricesAddr_ = 0;
 
-        Assets::GPUScene BuildGPUScene(uint32_t imageIndex, VkDeviceAddress indirectDrawCommands) const;
+        Assets::GPUScene BuildGPUScene(uint32_t imageIndex) const;
     };
 } // namespace Assets

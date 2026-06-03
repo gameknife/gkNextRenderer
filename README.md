@@ -39,7 +39,7 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
   围绕 1spp + temporal reuse、降噪、重投影和多管线切换持续推进，让路径追踪不只停留在离线效果演示，而是面向真实运行时表现。
 
 - **游戏级性能取向的 GPU 架构**  
-  通过 Visibility Buffer、全 Bindless、GPU-Driven、Multi-Draw Indirect 等设计，尽量把 CPU 开销留给内容与玩法，把 GPU 算力用在真正影响画面的地方。
+  通过 Visibility Buffer、全 Bindless、GPU-Driven 单 draw 提交等设计，尽量把 CPU 开销留给内容与玩法，把 GPU 算力用在真正影响画面的地方。
 
 - **引擎能力服务于内容与玩法原型**  
   包括 ECS、反射、编辑器、脚本热重载、物理同步、运行时导入和稳定的渲染行为。这些能力共同支撑更完整的可玩内容系统。
@@ -87,7 +87,7 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 - **Visibility Buffer**
 - **全 Bindless + GPU-Driven**
-- **Multi-Draw Indirect**
+- **Single-Draw GPU-Driven Submit**
 - **Hardware / Software Ray Tracing**
 - **Temporal Reprojection / JBF / FSR / DLSS RR**
 

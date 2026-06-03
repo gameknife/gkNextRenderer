@@ -149,37 +149,29 @@ namespace Vulkan::Shadow
             colorBlending.pAttachments = nullptr;
 
             const ShaderModule fragShader(device_, "assets/shaders/Rast.ShadowMap.frag.slang.spv");
-            auto createPipeline = [&](const char* vertexShaderPath, VkPipeline& outPipeline, const char* debugName)
-            {
-                const ShaderModule vertShader(device_, vertexShaderPath);
-                VkPipelineShaderStageCreateInfo stages[] = {
-                    vertShader.CreateShaderStage(VK_SHADER_STAGE_VERTEX_BIT),
-                    fragShader.CreateShaderStage(VK_SHADER_STAGE_FRAGMENT_BIT),
-                };
-
-                VkGraphicsPipelineCreateInfo pipelineInfo{};
-                pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-                pipelineInfo.stageCount = 2;
-                pipelineInfo.pStages = stages;
-                pipelineInfo.pVertexInputState = &vertexInputInfo;
-                pipelineInfo.pInputAssemblyState = &inputAssembly;
-                pipelineInfo.pViewportState = &viewportState;
-                pipelineInfo.pRasterizationState = &rasterizer;
-                pipelineInfo.pMultisampleState = &multisampling;
-                pipelineInfo.pDepthStencilState = &depthStencil;
-                pipelineInfo.pColorBlendState = &colorBlending;
-                pipelineInfo.layout = pipelineLayout_->Handle();
-                pipelineInfo.renderPass = renderPass_;
-                pipelineInfo.subpass = 0;
-
-                Check(vkCreateGraphicsPipelines(device_.Handle(), nullptr, 1, &pipelineInfo, nullptr, &outPipeline),
-                    debugName);
+            const ShaderModule vertShader(device_, "assets/shaders/Rast.ShadowMapSoftMeshShader.vert.slang.spv");
+            VkPipelineShaderStageCreateInfo stages[] = {
+                vertShader.CreateShaderStage(VK_SHADER_STAGE_VERTEX_BIT),
+                fragShader.CreateShaderStage(VK_SHADER_STAGE_FRAGMENT_BIT),
             };
 
-            createPipeline("assets/shaders/Rast.ShadowMap.vert.slang.spv", pipeline_,
-                           "create shadow graphics pipeline");
-            createPipeline("assets/shaders/Rast.ShadowMapSoftMeshShader.vert.slang.spv", softMeshShaderPipeline_,
-                           "create shadow SoftMeshShader graphics pipeline");
+            VkGraphicsPipelineCreateInfo pipelineInfo{};
+            pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+            pipelineInfo.stageCount = 2;
+            pipelineInfo.pStages = stages;
+            pipelineInfo.pVertexInputState = &vertexInputInfo;
+            pipelineInfo.pInputAssemblyState = &inputAssembly;
+            pipelineInfo.pViewportState = &viewportState;
+            pipelineInfo.pRasterizationState = &rasterizer;
+            pipelineInfo.pMultisampleState = &multisampling;
+            pipelineInfo.pDepthStencilState = &depthStencil;
+            pipelineInfo.pColorBlendState = &colorBlending;
+            pipelineInfo.layout = pipelineLayout_->Handle();
+            pipelineInfo.renderPass = renderPass_;
+            pipelineInfo.subpass = 0;
+
+            Check(vkCreateGraphicsPipelines(device_.Handle(), nullptr, 1, &pipelineInfo, nullptr, &pipeline_),
+                  "create shadow graphics pipeline");
         }
 
         // 4 个 framebuffer
@@ -215,12 +207,6 @@ namespace Vulkan::Shadow
             vkDestroyPipeline(device_.Handle(), pipeline_, nullptr);
             pipeline_ = VK_NULL_HANDLE;
         }
-        if (softMeshShaderPipeline_)
-        {
-            vkDestroyPipeline(device_.Handle(), softMeshShaderPipeline_, nullptr);
-            softMeshShaderPipeline_ = VK_NULL_HANDLE;
-        }
-
         pipelineLayout_.reset();
 
         if (renderPass_)
@@ -232,18 +218,11 @@ namespace Vulkan::Shadow
 
     void ShadowMapPass::DrawCascade(
         VkCommandBuffer commandBuffer, const Assets::Scene& scene, const Assets::GPUScene& gpuSceneBase,
-        uint32_t cascade, VkDeviceSize indirectDrawOffset, bool softMeshShader)
+        uint32_t cascade)
     {
-        VkPipeline activePipeline = softMeshShader ? softMeshShaderPipeline_ : pipeline_;
-        if (!activePipeline)
+        if (!pipeline_)
         {
             return;
-        }
-
-        if (!softMeshShader)
-        {
-            const VkBuffer indexBuffer = scene.IndexBuffer().Handle();
-            vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
         }
 
         VkClearValue clearValue{};
@@ -259,7 +238,7 @@ namespace Vulkan::Shadow
         rpBegin.pClearValues = &clearValue;
 
         vkCmdBeginRenderPass(commandBuffer, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, activePipeline);
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
         pipelineLayout_->BindDescriptorSets(commandBuffer, 0, VK_PIPELINE_BIND_POINT_GRAPHICS);
 
         Assets::GPUScene gpuScene = gpuSceneBase;
@@ -269,18 +248,9 @@ namespace Vulkan::Shadow
                            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                            0, sizeof(Assets::GPUScene), &gpuScene);
 
-        if (softMeshShader)
-        {
-            const uint32_t slot = scene.SoftMeshShaderDrawSlotForShadowCascade(cascade);
-            vkCmdDrawIndirect(commandBuffer, scene.SoftMeshShaderDrawArgBuffer().Handle(), scene.SoftMeshShaderDrawArgByteOffset(slot),
-                              1, sizeof(VkDrawIndirectCommand));
-        }
-        else
-        {
-            vkCmdDrawIndexedIndirect(commandBuffer, scene.ShadowIndirectDrawBuffer().Handle(), indirectDrawOffset,
-                                     scene.GetIndirectDrawBatchCount(),
-                                     sizeof(VkDrawIndexedIndirectCommand));
-        }
+        const uint32_t slot = scene.SoftMeshShaderDrawSlotForShadowCascade(cascade);
+        vkCmdDrawIndirect(commandBuffer, scene.SoftMeshShaderDrawArgBuffer().Handle(),
+                          scene.SoftMeshShaderDrawArgByteOffset(slot), 1, sizeof(VkDrawIndirectCommand));
         vkCmdEndRenderPass(commandBuffer);
     }
 }
