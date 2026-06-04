@@ -104,7 +104,7 @@ src/Engine/Assets/Loaders/
 ## 调试技巧
 
 - 日志前缀 `SCAD:`，`grep "SCAD"` 过滤；`ECHO:` 为 `echo()` 输出。
-- 启动：`--load-scene "assets/scad/<file>.scad"`；`--agent-validation` 自动截图。
+- 启动：`--load-scene "assets/scad/<file>.scad"`。快速肉眼验证用 `gnb shot --target ScadStudio --scene assets/scad/<file>.scad`（隐藏窗口、自动截图到 `out/build/<preset>/screenshots/agent_validation.jpg`、自动退出，详见 AGENTS.md "Agent Visual Validation"）。
 - 单测：`gkNextUnitTests "[Scad]"`（lexer/parser/evaluator/几何/CSG/text/loader 全覆盖）。
 - warning 数 > 0 时检查降级特性（unknown module / text 缺后端 / difference 无后端）。
 - 几何朝向/黑面：检查法线平滑阈值与 polyhedron face winding（OpenSCAD 约定 clockwise-from-outside，加载器已 reverse）。

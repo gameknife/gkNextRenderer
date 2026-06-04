@@ -69,7 +69,6 @@ private:
     struct ImFont* titleBarFont_ {};
 
     bool isTakingScreenshot_ = false;
-    bool agentValidationCaptured_ = false;
     bool playbackPaused_ = false;
     bool stepRequested_ = false;
 };

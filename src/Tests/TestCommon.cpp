@@ -14,12 +14,14 @@ EngineTestFixture::EngineTestFixture()
 {
     // Mock arguments
     // Using a minimal resolution to speed up tests, renderer=0 (usually path tracer or default)
-    const char* argv[] = { 
-        "gkNextUnitTests", 
-        "--width=800", 
+    const char* argv[] = {
+        "gkNextUnitTests",
+        "--width=800",
         "--height=600",
         "--fastexit=false",
-        "--no-shader-hotreload"
+        "--no-shader-hotreload",
+        // Hidden window: tests render a real swapchain but should never pop a window or steal focus.
+        "--hidden-window"
     };
     int argc = sizeof(argv) / sizeof(argv[0]);
 

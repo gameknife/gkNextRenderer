@@ -67,7 +67,7 @@ Desktop binaries can be launched from any working directory; no `cd out/build/<p
 
 ## Testing
 
-Tests no longer require the current working directory to be `bin`; launch them via their executable path.
+Tests no longer require the current working directory to be `bin`; launch them via their executable path. 需要完整引擎的集成测试用 `EngineTestFixture`，它会建真实的 Vulkan swapchain 渲染——fixture 默认带 `--hidden-window`，**测试时不再弹窗抢焦点**（仍真实渲染，可截图）。
 
 ```bash
 # Unit tests (Catch2)
@@ -86,6 +86,25 @@ Tests no longer require the current working directory to be `bin`; launch them v
 ```
 
 **Visual Test Config:** `assets/configs/visual_test.json` defines scenes, frame counts, output directory.
+
+### Agent Visual Validation (快速肉眼验证渲染改动)
+
+当 AGENT 想快速确认一个渲染/场景/着色改动"看起来对不对"，**首选 `gnb shot`**，不要手动开窗口等截图：
+
+```bash
+# 渲染一个场景到稳定帧 → 截一张图 → 自动退出。完成后会打印截图绝对路径。
+gnb shot --scene assets/models/playground.glb
+gnb shot --target ScadStudio --scene assets/scad/beer_cup.scad --frames 60
+```
+
+机制（引擎层统一实现，所有 target 行为一致）：
+- 底层是 `--agent-validation` flag：渲染到 `--agent-validation-frames`（默认 90）后，截图到**固定路径** `out/build/<preset>/screenshots/agent_validation.jpg`（覆盖式，无时间戳），随后**自动退出**。
+- 窗口用 `SDL_WINDOW_HIDDEN` 创建：**不弹窗、不抢焦点**，不会打断你的 dev loop；present 自动切 immediate mode，渲染不受 vsync 限制，wall-clock 很快（几秒一张图）。
+- AGENT 读那张 `agent_validation.jpg` 即可肉眼判断。需要换帧数用 `--frames`，换输出路径用 `--agent-validation-out <path-without-ext>`。
+
+**何时用哪条路径：**
+- **改了某个场景/材质/光照/着色，只想看一眼对不对** → `gnb shot --scene <X>`（最轻、最快）。
+- **做渲染回归、需要和 baseline 对比 / 一次性扫多个场景** → 跑全量 `gkNextVisualTest`（生成 report + baseline diff + manifest，较重）。
 
 ## Linting
 
@@ -203,7 +222,7 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
    - 仅大型重构 / 广泛 header / ABI 改动 / 用户要求时才用 `./gnb build --reconfigure` 全量验证
 2. **Run:** Verify application starts and logs `uploaded scene [...] to gpu`
 3. **Test:** Run unit tests if touching core systems
-4. **Visual:** For rendering changes, validate visually in gkNextRenderer or run gkNextVisualTest
+4. **Visual:** 渲染类改动 → `gnb shot --scene <X>` 截一张图肉眼验证（不弹窗、自动退出，见上文 "Agent Visual Validation"）；需要 baseline 回归再跑 `gkNextVisualTest`
 
 **Assistant Note:** 只有大型重构或不确定影响面的改动，才需要全量 `gnb build --reconfigure` 并修复全部编译错误后再报告完成；常规改动用对应的 targeted build 即可。
 

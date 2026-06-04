@@ -282,12 +282,6 @@ void NextRendererGameInstance::OnPreConfigUI()
 
 bool NextRendererGameInstance::OnRenderUI()
 {
-	if (GOption->AgentValidation && !agentValidationCaptured_ && GetEngine().GetTotalFrames() >= 120)
-	{
-		RequestScreenshot(false, "agent_validation");
-		agentValidationCaptured_ = true;
-	}
-
 	if (isTakingScreenshot_)
 	{
 		return true;

@@ -51,22 +51,7 @@ void ScadStudioGameInstance::OnInit() {}
 void ScadStudioGameInstance::OnTick(double deltaSeconds)
 {
     cameraController_.UpdateCamera(1.0, deltaSeconds);
-
-    // agent validation: capture a screenshot once the scene has rendered, then exit
-    // a few frames later so the pending-screenshot frame logic actually runs.
-    if (GOption->AgentValidation)
-    {
-        const uint32_t frame = GetEngine().GetTotalFrames();
-        if (!agentValidationCaptured_ && frame >= 120)
-        {
-            agentValidationCaptured_ = true;
-            GetEngine().RequestScreenShot({.filename = "agent_validation.png"});
-        }
-        else if (agentValidationCaptured_ && frame >= 140)
-        {
-            GetEngine().RequestClose();
-        }
-    }
+    // Agent validation (capture + auto-exit) is handled centrally by NextEngine.
 }
 
 void ScadStudioGameInstance::OnDestroy() {}
