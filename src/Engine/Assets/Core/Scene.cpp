@@ -183,6 +183,20 @@ namespace Assets
             commandPool, "AmbientArena", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
             ambientLayout.totalSize, ambientArenaBuffer_, ambientArenaBufferMemory_);
 
+        if (allocateAmbientCube)
+        {
+            const double mb = 1024.0 * 1024.0;
+            SPDLOG_INFO("[AmbientArena] total {:.1f} MB | cascades {} | pool {}/{} bricks/cascade | "
+                        "cubes {:.1f} voxels {:.1f} pong {:.1f} sdfScratch {:.1f} sdfSeedA {:.1f} MB",
+                        ambientLayout.totalSize / mb, ambientCubeCascadeCapacity, poolBricksPerCascade_,
+                        static_cast<uint32_t>(GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE),
+                        (ambientLayout.voxelsOffset - ambientLayout.cubesOffset) / mb,
+                        (ambientLayout.pagesOffset - ambientLayout.voxelsOffset) / mb,
+                        (ambientLayout.scratchOffset - ambientLayout.pongOffset) / mb,
+                        (ambientLayout.sdfSeedAOffset - ambientLayout.scratchOffset) / mb,
+                        (ambientLayout.brickTableOffset - ambientLayout.sdfSeedAOffset) / mb);
+        }
+
         // Ambient GI resource table (see AmbientResources in BasicTypes.slang). GPUScene carries a
         // single AmbientBase pointer to this table rather than inlining every region address, which
         // keeps the push constant at 128B and decouples the GPU-visible layout from the compile-time
