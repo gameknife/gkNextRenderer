@@ -428,7 +428,8 @@ namespace NextUI::Theme
         ImGui::PopStyleVar(4);
     }
 
-    void DrawStandardBottomBar(NextEngine& engine, const char* windowId, float height)
+    void DrawStandardBottomBar(NextEngine& engine, const char* windowId, float height,
+                               std::function<void()> onMemoryClicked, bool memoryActive)
     {
         NextUI::UserInterface* ui = engine.GetUserInterface();
         const NextEngine::FHotReloadStatus hotReloadStatus = engine.GetHotReloadStatus();
@@ -479,9 +480,11 @@ namespace NextUI::Theme
         constexpr float kSeparatorWidth = 25.0f;
         constexpr float kGapWidth = 8.0f;
 
+        const float memoryTextWidth = ImGui::CalcTextSize(memoryText.c_str()).x;
+        const float memoryWidgetWidth = memoryTextWidth + (onMemoryClicked ? 12.0f : 0.0f);
         const float rightWidth = kConsoleButtonWidth + kGapWidth + kStatsButtonWidth + kGapWidth + kCaptureButtonWidth +
             kSeparatorWidth + CalcBadgeWidth(shaderLabel) + kSeparatorWidth + ImGui::CalcTextSize(fpsText.c_str()).x +
-            kSeparatorWidth + ImGui::CalcTextSize(memoryText.c_str()).x + 18.0f;
+            kSeparatorWidth + memoryWidgetWidth + 18.0f;
 
         FBottomBarConfig config{};
         config.WindowId = windowId;
@@ -523,7 +526,26 @@ namespace NextUI::Theme
             DrawVerticalSeparator(14.0f, 10.0f, 0.72f);
             ImGui::TextColored(Color(EColor::TextMuted), "%s", fpsText.c_str());
             DrawVerticalSeparator(14.0f, 10.0f, 0.72f);
-            ImGui::TextColored(Color(EColor::TextMuted), "%s", memoryText.c_str());
+            if (onMemoryClicked)
+            {
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 2.0f));
+                ImGui::PushStyleColor(ImGuiCol_Header, Color(EColor::SurfaceElevated, memoryActive ? 0.92f : 0.0f));
+                ImGui::PushStyleColor(ImGuiCol_HeaderHovered, Color(EColor::SurfaceHover, 0.92f));
+                ImGui::PushStyleColor(ImGuiCol_HeaderActive, Color(EColor::Accent, 0.42f));
+                ImGui::PushStyleColor(ImGuiCol_Text, Color(memoryActive ? EColor::Text : EColor::TextMuted));
+                if (ImGui::Selectable(memoryText.c_str(), memoryActive, ImGuiSelectableFlags_None,
+                                      ImVec2(memoryWidgetWidth, kButtonHeight)))
+                {
+                    onMemoryClicked();
+                }
+                ImGui::PopStyleColor(4);
+                ImGui::PopStyleVar();
+                DrawTooltip("Show VRAM details");
+            }
+            else
+            {
+                ImGui::TextColored(Color(EColor::TextMuted), "%s", memoryText.c_str());
+            }
         };
         DrawBottomBar(config);
     }
@@ -818,13 +840,13 @@ namespace NextUI::Theme
     {
         ImGui::SetNextWindowPos(position, ImGuiCond_Always, pivot);
         ImGui::SetNextWindowSize(size, ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(0.94f);
+        ImGui::SetNextWindowBgAlpha(0.99f);
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
         ImGui::PushStyleColor(ImGuiCol_Border, Color(EColor::Border, 0.85f));
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, Color(EColor::Surface, 0.96f));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, Color(EColor::Surface, 0.99f));
 
         constexpr ImGuiWindowFlags flags =
             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
@@ -889,7 +911,7 @@ namespace NextUI::Theme
 
         // Move cursor below header & start a child for the body so padding works as expected.
         ImGui::SetCursorScreenPos(ImVec2(winPos.x, winPos.y + headerHeight));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 10.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18.0f, 14.0f));
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
         ImGui::BeginChild("##FloatingPanelBody", ImVec2(0, 0), false, ImGuiWindowFlags_NoBackground);
         return true;

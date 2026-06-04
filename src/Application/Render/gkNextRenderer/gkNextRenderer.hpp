@@ -71,4 +71,5 @@ private:
     bool isTakingScreenshot_ = false;
     bool playbackPaused_ = false;
     bool stepRequested_ = false;
+    bool memoryStatisticsPanelOpen_ = false;
 };

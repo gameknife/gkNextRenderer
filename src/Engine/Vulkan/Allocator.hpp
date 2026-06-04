@@ -3,6 +3,7 @@
 #include "DebugUtilities.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
+#include <string>
 #include <vector>
 
 struct VmaAllocator_T;
@@ -23,9 +24,33 @@ namespace Vulkan
         uint32_t allocationCount{};
     };
 
+    struct MemoryAllocationStats final
+    {
+        std::string name;
+        std::string type;
+        VkDeviceSize offsetBytes{};
+        VkDeviceSize sizeBytes{};
+        VkDeviceSize usageFlags{};
+        bool free{};
+    };
+
+    struct MemoryBlockStats final
+    {
+        uint32_t heapIndex{};
+        uint32_t memoryTypeIndex{};
+        uint32_t blockId{};
+        VkDeviceSize blockBytes{};
+        VkDeviceSize unusedBytes{};
+        uint32_t allocationCount{};
+        uint32_t unusedRangeCount{};
+        bool dedicated{};
+        std::vector<MemoryAllocationStats> allocations;
+    };
+
     struct MemoryStatsSnapshot final
     {
         std::vector<MemoryHeapStats> heaps;
+        std::vector<MemoryBlockStats> blocks;
 
         VkDeviceSize totalHeapSizeBytes{};
         VkDeviceSize totalBudgetBytes{};
@@ -74,7 +99,7 @@ namespace Vulkan
         void Unmap(VmaAllocationHandle allocation) const;
         void SetAllocationName(VmaAllocationHandle allocation, const char* name) const;
 
-        MemoryStatsSnapshot CaptureStats() const;
+        MemoryStatsSnapshot CaptureStats(bool includeDetails = false) const;
 
     private:
 

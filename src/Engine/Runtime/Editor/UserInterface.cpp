@@ -1113,6 +1113,8 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
         renderBuffers.vertexBuffer.reset(new Vulkan::Buffer(device, maxVertexSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT));
         renderBuffers.vertexBufferMemory.reset(new Vulkan::DeviceMemory(renderBuffers.vertexBuffer->AllocateMemory(
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+        device.DebugUtils().SetObjectName(renderBuffers.vertexBuffer->Handle(), "ImGui Batched Vertex Buffer");
+        renderBuffers.vertexBufferMemory->SetName("ImGui Batched Vertex Buffer Memory");
         renderBuffers.vertexBufferSize = maxVertexSize;
     }
 
