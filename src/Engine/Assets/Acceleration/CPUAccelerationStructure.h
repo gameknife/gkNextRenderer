@@ -119,7 +119,7 @@ public:
     void ClearAllTasks();
 
 private:
-    bool InitCascadeBakers(const Runtime::Config::UserSettings& settings);
+    bool InitCascadeBakers(const Runtime::Config::UserSettings& settings, uint32_t maxCascadeCapacity);
     uint32_t GetActiveCascadeCount() const { return static_cast<uint32_t>(cascadeBakers.size()); }
 
     void UpdateBVH(Assets::Scene& scene);

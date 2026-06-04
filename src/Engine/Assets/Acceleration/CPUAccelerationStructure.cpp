@@ -429,11 +429,13 @@ void FCPUProbeBaker::RebuildDistanceField()
     }
 }
 
-bool FCPUAccelerationStructure::InitCascadeBakers(const Runtime::Config::UserSettings& settings)
+bool FCPUAccelerationStructure::InitCascadeBakers(const Runtime::Config::UserSettings& settings, uint32_t maxCascadeCapacity)
 {
     const float baseUnit = SanitizeAmbientCubeUnit(settings.AmbientCubeUnit);
     const vec3 cubeOffsetBias = vec3(settings.AmbientCubeOffsetX, settings.AmbientCubeOffsetY, settings.AmbientCubeOffsetZ);
-    const uint32_t cascadeCount = SanitizeAmbientCubeCascadeCount(settings.AmbientCubeCascadeCount);
+    // Clamp to the GPU arena's allocated capacity so the per-cascade upload never writes out of bounds.
+    const uint32_t cascadeCount =
+        std::min(SanitizeAmbientCubeCascadeCount(settings.AmbientCubeCascadeCount), std::max(1u, maxCascadeCapacity));
     const float cascadeRatio = SanitizeAmbientCubeCascadeRatio(settings.AmbientCubeCascadeRatio);
 
     bool needRebuild = cascadeBakers.size() != cascadeCount;
@@ -530,7 +532,7 @@ void FCPUAccelerationStructure::InitBVH(Scene& scene)
     }
     
     const Runtime::Config::UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
-    InitCascadeBakers(settings);
+    InitCascadeBakers(settings, scene.AmbientCubeCascadeCapacity());
 
     UpdateBVH(scene);
 }
@@ -730,7 +732,7 @@ bool FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::D
     lastBatchTasks.clear();
 
     const Runtime::Config::UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
-    if (InitCascadeBakers(settings))
+    if (InitCascadeBakers(settings, scene.AmbientCubeCascadeCapacity()))
     {
         incremental = false;
     }

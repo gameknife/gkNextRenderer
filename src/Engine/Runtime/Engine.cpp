@@ -131,8 +131,18 @@ namespace
 
         const VkDeviceSize perCascadeCount =
             static_cast<VkDeviceSize>(Assets::CUBE_SIZE_XY) * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
+        // Estimate against the configured cascade count (Phase 2 right-sizing), matching the arena
+        // layout in Scene.cpp, so devices that can hold the right-sized arena keep GI instead of
+        // falling back to NoAmbient. Cubes+Voxels scale with the count; Pages is fixed; pong+scratch
+        // are one cascade each.
+        uint32_t cascadeCount = Assets::CUBE_CASCADE_MAX;
+        if (NextEngine::GetInstance())
+        {
+            cascadeCount = Assets::SanitizeAmbientCubeCascadeCount(
+                NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount);
+        }
         const VkDeviceSize fullAmbientCubeAllocationSize =
-            static_cast<VkDeviceSize>(Assets::CUBE_CASCADE_MAX) * perCascadeCount *
+            static_cast<VkDeviceSize>(cascadeCount) * perCascadeCount *
                 (sizeof(Assets::VoxelData) + sizeof(Assets::AmbientCube)) +
             static_cast<VkDeviceSize>(Assets::ACGI_PAGE_COUNT) * Assets::ACGI_PAGE_COUNT * sizeof(Assets::PageIndex) +
             perCascadeCount * (sizeof(Assets::AmbientCube) + sizeof(glm::u32vec4));
@@ -1242,8 +1252,13 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     const glm::vec3 ambientCubeOffsetBias =
         glm::vec3(config_.userSettings.AmbientCubeOffsetX, config_.userSettings.AmbientCubeOffsetY,
                   config_.userSettings.AmbientCubeOffsetZ);
-    const uint32_t ambientCubeCascadeCount =
+    uint32_t ambientCubeCascadeCount =
         Assets::SanitizeAmbientCubeCascadeCount(config_.userSettings.AmbientCubeCascadeCount);
+    if (scene_)
+    {
+        // Never advertise more cascades than the arena was sized for (Phase 2 right-sizing).
+        ambientCubeCascadeCount = std::min(ambientCubeCascadeCount, scene_->AmbientCubeCascadeCapacity());
+    }
     const float ambientCubeCascadeRatio =
         Assets::SanitizeAmbientCubeCascadeRatio(config_.userSettings.AmbientCubeCascadeRatio);
     ubo.AmbientCubeUnit = ambientCubeUnit;
