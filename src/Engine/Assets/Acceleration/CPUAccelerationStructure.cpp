@@ -884,7 +884,9 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
                 cpuPageIndex.UpdateData(cascadeBakers);
                 cpuBrickTable.UpdateData(cascadeBakers, scene.AmbientCubeCascadeCapacity(),
                                          scene.AmbientPoolBricksPerCascade(), kAmbientBrickDilationRadius);
-                cpuBrickTable.UploadGPU(*voxelGpuMemory, scene.AmbientBrickTableByteOffset());
+                scene.SetAmbientActiveBrickCounts(cpuBrickTable.activeBricksPerCascade);
+                cpuBrickTable.UploadGPU(*voxelGpuMemory, scene.AmbientBrickTableByteOffset(),
+                                        scene.AmbientActiveBrickListByteOffset());
             }
             cpuPageIndex.UploadGPU(*pageIndexMemory, scene.AmbientPagesByteOffset());
             needFlush = false;
@@ -919,7 +921,9 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
                 cpuPageIndex.UpdateData(cascadeBakers);
                 cpuBrickTable.UpdateData(cascadeBakers, scene.AmbientCubeCascadeCapacity(),
                                          scene.AmbientPoolBricksPerCascade(), kAmbientBrickDilationRadius);
-                cpuBrickTable.UploadGPU(*voxelGpuMemory, scene.AmbientBrickTableByteOffset());
+                scene.SetAmbientActiveBrickCounts(cpuBrickTable.activeBricksPerCascade);
+                cpuBrickTable.UploadGPU(*voxelGpuMemory, scene.AmbientBrickTableByteOffset(),
+                                        scene.AmbientActiveBrickListByteOffset());
             }
             cpuPageIndex.UploadGPU(*pageIndexMemory, scene.AmbientPagesByteOffset());
             needFlush = false;
@@ -1035,6 +1039,8 @@ void FCPUBrickTable::UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint3
     const uint32_t kInvalid = Assets::GPU_SCENE_AMBIENT_BRICK_INVALID;
 
     brickTable.assign(static_cast<size_t>(cascadeCapacity) * BPC, kInvalid);
+    activeBrickList.assign(static_cast<size_t>(cascadeCapacity) * poolBricksPerCascade, kInvalid);
+    activeBricksPerCascade.assign(cascadeCapacity, 0u);
 
     const uint32_t cascadesToProcess = std::min<uint32_t>(cascadeCapacity, static_cast<uint32_t>(bakers.size()));
     uint32_t totalActive = 0;
@@ -1089,12 +1095,14 @@ void FCPUBrickTable::UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint3
             if (slot < poolBricksPerCascade)
             {
                 brickTable[static_cast<size_t>(c) * BPC + b] = slot++;
+                activeBrickList[static_cast<size_t>(c) * poolBricksPerCascade + (slot - 1u)] = b;
             }
             else
             {
                 ++totalOverflow;
             }
         }
+        activeBricksPerCascade[c] = slot;
         totalActive += slot;
     }
 
@@ -1108,16 +1116,25 @@ void FCPUBrickTable::UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint3
                 poolBricksPerCascade * cascadesToProcess, poolBricksPerCascade, cascadesToProcess);
 }
 
-void FCPUBrickTable::UploadGPU(Vulkan::DeviceMemory& deviceMemory, size_t byteBaseOffset)
+void FCPUBrickTable::UploadGPU(Vulkan::DeviceMemory& deviceMemory, size_t tableByteOffset, size_t activeListByteOffset)
 {
     if (brickTable.empty())
     {
         return;
     }
     const size_t bytes = brickTable.size() * sizeof(uint32_t);
-    void* mapped = deviceMemory.Map(static_cast<VkDeviceSize>(byteBaseOffset), static_cast<VkDeviceSize>(bytes));
+    void* mapped = deviceMemory.Map(static_cast<VkDeviceSize>(tableByteOffset), static_cast<VkDeviceSize>(bytes));
     std::memcpy(mapped, brickTable.data(), bytes);
     deviceMemory.Unmap();
+
+    if (!activeBrickList.empty())
+    {
+        const size_t activeListBytes = activeBrickList.size() * sizeof(uint32_t);
+        mapped = deviceMemory.Map(static_cast<VkDeviceSize>(activeListByteOffset),
+                                  static_cast<VkDeviceSize>(activeListBytes));
+        std::memcpy(mapped, activeBrickList.data(), activeListBytes);
+        deviceMemory.Unmap();
+    }
 }
 
 void FCPUPageIndex::UpdateData(const std::vector<FCPUProbeBaker>& bakers)

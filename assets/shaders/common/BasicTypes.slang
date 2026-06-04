@@ -272,7 +272,7 @@ public struct ALIGN_16 AmbientResources
     public uint64_t SdfScratch;  // SDF jump-flood SeedB (one dense cascade of uint4)
     public uint64_t SdfSeedA;    // SDF jump-flood SeedA (one dense cascade of uint4; decoupled from CubesPong)
     public uint64_t BrickTable;  // Phase 3: per-cascade brick -> pool slot table (uint per brick)
-    public uint64_t PoolParams;  // Phase 3: x16 = pool bricks per cascade, packed in low bits
+    public uint64_t PoolParams;  // Phase 3: low32 = pool bricks/cascade, high32 = active-list byte offset from BrickTable
 };
 
 public struct ALIGN_16 SphericalHarmonics
@@ -458,9 +458,17 @@ public struct ALIGN_8 GPUScene
     {
         get { return (uint*)((AmbientResources*)AmbientBase)[0].BrickTable; }
     }
+    public property uint* AmbientActiveBrickList
+    {
+        get
+        {
+            uint64_t params = ((AmbientResources*)AmbientBase)[0].PoolParams;
+            return (uint*)(((AmbientResources*)AmbientBase)[0].BrickTable + (params >> 32));
+        }
+    }
     public property uint AmbientPoolBricksPerCascade
     {
-        get { return uint(((AmbientResources*)AmbientBase)[0].PoolParams); }
+        get { return uint(((AmbientResources*)AmbientBase)[0].PoolParams & 0xFFFFFFFF); }
     }
     public property SphericalHarmonics* HDRSHs
     {
@@ -581,9 +589,17 @@ public struct ALIGN_8 GPUScene
     {
         get { return (uint*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].BrickTable; }
     }
+    public property uint* AmbientActiveBrickList
+    {
+        get
+        {
+            uint64_t params = ((AmbientResources*)Reserved_AmbientBase_Address.y)[0].PoolParams;
+            return (uint*)(((AmbientResources*)Reserved_AmbientBase_Address.y)[0].BrickTable + (params >> 32));
+        }
+    }
     public property uint AmbientPoolBricksPerCascade
     {
-        get { return uint(((AmbientResources*)Reserved_AmbientBase_Address.y)[0].PoolParams); }
+        get { return uint(((AmbientResources*)Reserved_AmbientBase_Address.y)[0].PoolParams & 0xFFFFFFFF); }
     }
 
     uint64_t2 TLAS_SkinWeights_Address;

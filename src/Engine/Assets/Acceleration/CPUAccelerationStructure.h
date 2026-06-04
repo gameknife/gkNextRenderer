@@ -102,11 +102,13 @@ struct FCPUPageIndex
 struct FCPUBrickTable
 {
     std::vector<uint32_t> brickTable;
+    std::vector<uint32_t> activeBrickList;
+    std::vector<uint32_t> activeBricksPerCascade;
     uint32_t activeBricksLastBuild = 0;
 
     void UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint32_t cascadeCapacity,
                     uint32_t poolBricksPerCascade, int dilationRadius);
-    void UploadGPU(Vulkan::DeviceMemory& deviceMemory, size_t byteBaseOffset);
+    void UploadGPU(Vulkan::DeviceMemory& deviceMemory, size_t tableByteOffset, size_t activeListByteOffset);
 };
 
 class FCPUAccelerationStructure
