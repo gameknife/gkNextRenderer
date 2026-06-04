@@ -35,6 +35,12 @@ namespace Assets
 	class GlobalTexturePool final
 	{
 	public:
+		enum class EHDRTextureResidency : uint8
+		{
+			LowestMip,
+			FullMip,
+		};
+
 		GlobalTexturePool(const Vulkan::Device& device, Vulkan::CommandPool& command_pool, Vulkan::CommandPool& command_pool_mt);
 		~GlobalTexturePool();
 
@@ -58,6 +64,7 @@ namespace Assets
 
 		void FreeTransientTextures();
 		void CreateDefaultTextures();
+		void TickHDRTextureResidency(uint32_t activeTextureIdx, bool hasSky, uint32_t frameIndex, bool streamingEnabled);
 		
 		static GlobalTexturePool* GetInstance() {return instance_;}
 		static uint32_t LoadTexture(const std::string& texname, const std::string& mime, const unsigned char* data,
@@ -74,6 +81,20 @@ namespace Assets
 
 		Vulkan::DescriptorSetManager& GetDescriptorManager() { return *descriptorSetManager_; }
 	private:
+		struct FHDRTextureResidencyState
+		{
+			std::string TextureName;
+			ETextureLifetime Lifetime = ETextureLifetime::ETL_Persistent;
+			EHDRTextureResidency Current = EHDRTextureResidency::LowestMip;
+			EHDRTextureResidency Target = EHDRTextureResidency::LowestMip;
+			uint32_t LastTouchedFrame = 0;
+			uint32_t DemandFrames = 0;
+			bool IsHDR = false;
+			bool Pending = false;
+		};
+
+		void QueueHDRTextureResidency(uint32_t textureIdx, EHDRTextureResidency targetResidency);
+
 		static GlobalTexturePool* instance_;
 
 		const class Vulkan::Device& device_;
@@ -85,6 +106,7 @@ namespace Assets
 		std::unordered_map<std::string, FTextureBindingGroup> textureNameMap_;
 
 		std::vector<SphericalHarmonics> hdrSphericalHarmonics_;
+		std::vector<FHDRTextureResidencyState> hdrTextureResidency_;
 
 		std::unique_ptr<TextureImage> defaultWhiteTexture_;
 

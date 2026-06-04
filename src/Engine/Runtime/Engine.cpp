@@ -1235,6 +1235,11 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.SkyIdx = scene_->GetEnvSettings().SkyIdx;
     ubo.BackGroundColor = glm::vec4(0.4, 0.6, 1.0, 0.0) * 4.0f * scene_->GetEnvSettings().SkyIntensity;
     ubo.HasSky = scene_->GetEnvSettings().HasSky;
+    if (auto* texturePool = Assets::GlobalTexturePool::GetInstance())
+    {
+        texturePool->TickHDRTextureResidency(
+            ubo.SkyIdx, ubo.HasSky, frameState_.totalFrames, config_.userSettings.StreamHDRTextures);
+    }
     ubo.HasSun = hasSun;
 
     if (ubo.HasSun != renderState_.previousUniformBuffer.HasSun ||

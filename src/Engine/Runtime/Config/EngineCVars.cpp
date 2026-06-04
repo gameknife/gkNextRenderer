@@ -130,6 +130,8 @@ namespace NextCVar
                       "Ambient cube sparse pool capacity as a ratio of full bricks per cascade");
         GK_CVAR_BOOL("sys.ambientCubeGpuSdf", settings, UseGpuAmbientCubeSdf, false, ECVarFlags::Archive,
                      "Use GPU jump-flood distance field rebuild for ambient cube voxels");
+        GK_CVAR_BOOL("sys.hdrTextureStreaming", settings, StreamHDRTextures, true, ECVarFlags::Archive,
+                     "Keep inactive HDR environment textures at their lowest mip and promote the active sky on demand");
 
         if (engine != nullptr)
         {
