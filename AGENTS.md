@@ -33,6 +33,14 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
 - Clean rebuild: `./gnb build --clean`
 - Force vcpkg update: `./gnb setup --refresh`
 
+**Targeted builds (IMPORTANT — prefer over full `gnb build`):**
+随着 program 增多，全量 `gnb build` 很慢。AGENT 在验证改动时**默认只构建受影响的目标**，不要无脑全量构建：
+- **改动 Engine 层**（`src/Engine/**`、shaders、公共 runtime/reflection）：只需 `./gnb build gkNextRenderer` + `./gnb build gkNextUnitTests`（可写成 `./gnb build gkNextRenderer gkNextUnitTests`）。这两个目标编译通过即代表 engine API 没有破坏面上调用。
+- **改动某个具体 program**（`src/Application/**` 下的单一子项目，如 MagicaLego、Brotato3D、ScadStudio 等）：只构建该目标自身，例如 `./gnb build MagicaLego`。
+- **改动 gnb / tools / 纯文档**：无需 C++ 构建。
+- **大型 engine 重构、改动 ABI/广泛 header、不确定影响面，或用户明确要求**：才执行全量 `./gnb build --reconfigure`，确认所有 program 都能编译。
+- 增量构建无需 `--reconfigure`；仅在改了 CMake/preset/新增文件未被 glob 收录时才加 `--reconfigure`。
+
 **CMake presets:** `windows`, `linux`, `macos-arm64`, `ios`.
 
 **Optional Features:**
@@ -189,15 +197,15 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 
 ## Verification After Changes
 
-1. **Build:** For AI assistant verification, run the platform default through gnb:
-   - macOS/Linux: `./gnb build --reconfigure`
-   - Windows: `gnb.bat build --reconfigure`
-   - If only one target needs verification, pass it as `./gnb build <target>`
+1. **Build:** 按改动范围选择目标构建（详见上文 "Targeted builds"），默认**不要**全量构建：
+   - Engine 层改动：`./gnb build gkNextRenderer gkNextUnitTests`（Windows: `gnb.bat build ...`）
+   - 单个 program 改动：`./gnb build <该 target>`
+   - 仅大型重构 / 广泛 header / ABI 改动 / 用户要求时才用 `./gnb build --reconfigure` 全量验证
 2. **Run:** Verify application starts and logs `uploaded scene [...] to gpu`
 3. **Test:** Run unit tests if touching core systems
 4. **Visual:** For rendering changes, validate visually in gkNextRenderer or run gkNextVisualTest
 
-**Assistant Note:** Large refactors must include a full `gnb build --reconfigure` and fix any compile errors before reporting completion.
+**Assistant Note:** 只有大型重构或不确定影响面的改动，才需要全量 `gnb build --reconfigure` 并修复全部编译错误后再报告完成；常规改动用对应的 targeted build 即可。
 
 ## Key References
 
