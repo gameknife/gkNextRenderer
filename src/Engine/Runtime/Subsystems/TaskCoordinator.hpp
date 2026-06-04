@@ -236,7 +236,7 @@ class TaskCoordinator;
 class TaskThread
 {
 public:
-    TaskThread(TaskCoordinator* coordinator = nullptr);
+    explicit TaskThread(std::string threadName = {});
    
     ~TaskThread()
     {
@@ -260,6 +260,7 @@ public:
     std::unique_ptr<event_signal> terminate_;
     std::unique_ptr<event_signal> complete_;
     std::unique_ptr<std::thread> thread_;
+    std::string threadName_;
     tsqueue<ResTask> taskQueue_;
     Tasks::Detail::atomic_acq_rel<bool> busy_{ false };
 };
@@ -271,7 +272,7 @@ public:
     {
         for (int i = 0; i < 4; i++)
         {
-            threads_.push_back(std::make_unique<TaskThread>());
+            threads_.push_back(std::make_unique<TaskThread>("TaskCoordinator Worker " + std::to_string(i)));
         }
 
         // Get the number of CPU cores (use half of available cores for low-priority threads)
@@ -281,7 +282,7 @@ public:
         // Create low-priority threads based on CPU cores
         for (unsigned int i = 0; i < lowThreadCount; i++)
         {
-            lowThreads_.push_back(std::make_unique<TaskThread>());
+            lowThreads_.push_back(std::make_unique<TaskThread>("TaskCoordinator Parallel " + std::to_string(i)));
         }
 
         //SPDLOG_INFO("low parallel thread count: {}", lowThreadCount);
