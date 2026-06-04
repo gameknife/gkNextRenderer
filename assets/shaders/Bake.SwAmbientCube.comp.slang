@@ -8,19 +8,21 @@ void main(uint3 DTid : SV_DispatchThreadID)
     FGpuProbeGenerator probeGen;
 
     uint cascadeIndex = Bindless.GetGpuscene().custom_data_1;
-    uint cascadeBase = GetCascadeBaseOffset(cascadeIndex);
-    uint gIdx = DTid.x + Bindless.GetGpuscene().custom_data_0;
-    uint localIdx = gIdx - cascadeBase;
-    
-    uint y = localIdx / (CUBE_SIZE_XY * CUBE_SIZE_XY);
-    uint z = (localIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY) / CUBE_SIZE_XY;
-    uint x = localIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY - z * CUBE_SIZE_XY;
+    uint activeProbeIdx = DTid.x + Bindless.GetGpuscene().custom_data_0;
+    uint activeBrickIndex = activeProbeIdx / uint(GPU_SCENE_AMBIENT_BRICK_VOLUME);
+    uint localProbeOffset = activeProbeIdx % uint(GPU_SCENE_AMBIENT_BRICK_VOLUME);
+    int3 probePos;
+    uint voxelIdx;
+    int cubeIdx;
+    if (!DecodeAmbientActiveBrickProbe(cascadeIndex, activeBrickIndex, localProbeOffset, probePos, voxelIdx, cubeIdx))
+    {
+        return;
+    }
     
     UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
     float cubeUnit = GetAmbientCubeUnitAtCascade(cascadeIndex);
-    uint4 RandomSeed = InitRandomSeed(x + y, y + z, camera.TotalFrames);
-    float3 origin = float3(x, y, z) * cubeUnit + GetAmbientCubeOffsetAtCascade(cascadeIndex);
+    uint4 RandomSeed = InitRandomSeed(uint(probePos.x + probePos.y), uint(probePos.y + probePos.z), camera.TotalFrames);
+    float3 origin = float3(probePos) * cubeUnit + GetAmbientCubeOffsetAtCascade(cascadeIndex);
 
-    int cubeIdx = AmbientCubePoolIndex(cascadeIndex, int3(int(x), int(y), int(z)));
-    probeGen.RenderAmbientCubeOnly(tracer, origin, cubeIdx, gIdx, RandomSeed);
+    probeGen.RenderAmbientCubeOnly(tracer, origin, cubeIdx, voxelIdx, RandomSeed);
 }

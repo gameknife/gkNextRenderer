@@ -2268,11 +2268,19 @@ namespace Vulkan
         }
 
         const int cubesPerGroup = 64;
-        const int perCascadeCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
-        const int group = perCascadeCount / cubesPerGroup;
         const uint32_t cascadeCount = std::min(
             Assets::SanitizeAmbientCubeCascadeCount(NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount),
             GetScene().AmbientCubeCascadeCapacity());
+        const uint32_t safeCascadeCount = std::max(1u, cascadeCount);
+        const uint32_t cascadeIndex = static_cast<uint32_t>(frame_.frameCount % safeCascadeCount);
+        const uint32_t activeBrickCount = GetScene().AmbientActiveBrickCount(cascadeIndex);
+        if (activeBrickCount == 0u)
+        {
+            return;
+        }
+        const int activeProbeCount =
+            static_cast<int>(activeBrickCount * static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME));
+        const int group = (activeProbeCount + cubesPerGroup - 1) / cubesPerGroup;
 
         int temporalFrames = 120;
         switch (NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel)
@@ -2285,7 +2293,6 @@ namespace Vulkan
 
         SCOPED_GPU_TIMER(useHardware ? "hw-lightbake" : "sw-lightbake");
 
-        const uint32_t safeCascadeCount = std::max(1u, cascadeCount);
         const int frame = static_cast<int>((frame_.frameCount / safeCascadeCount) % temporalFrames);
         const int groupPerFrame = std::max(1, (group + temporalFrames - 1) / temporalFrames);
         const int offset = frame * groupPerFrame;
@@ -2295,9 +2302,7 @@ namespace Vulkan
         }
 
         const int dispatchGroupCount = std::min(groupPerFrame, group - offset);
-        const int offsetInCubes = offset * cubesPerGroup;
-        const uint32_t cascadeIndex = static_cast<uint32_t>(frame_.frameCount % safeCascadeCount);
-        const uint32_t cascadeBaseOffset = cascadeIndex * static_cast<uint32_t>(perCascadeCount);
+        const int offsetInActiveProbes = offset * cubesPerGroup;
         VkBuffer cubeBuffer = GetScene().AmbientCubeBuffer().Handle();
         VkBuffer pongBuffer = GetScene().AmbientCubePongBuffer().Handle();
         // The cube pool is laid out per cascade with poolCubesPerCascade cubes; the ping-pong copy and
@@ -2362,7 +2367,7 @@ namespace Vulkan
         }
 
         Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
-        gpuScene.custom_data_0 = cascadeBaseOffset + offsetInCubes;
+        gpuScene.custom_data_0 = static_cast<uint32_t>(offsetInActiveProbes);
         gpuScene.custom_data_1 = cascadeIndex;
         gpuScene.custom_data_2 = NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation ? 1u : 0u;
 
@@ -2376,14 +2381,19 @@ namespace Vulkan
         SCOPED_GPU_TIMER("propagation-lightbake");
 
         const int cubesPerGroup = 64;
-        const int perCascadeCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
-        const int group = perCascadeCount / cubesPerGroup;
         const uint32_t cascadeCount = std::min(
             Assets::SanitizeAmbientCubeCascadeCount(NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount),
             GetScene().AmbientCubeCascadeCapacity());
         const uint32_t safeCascadeCount = std::max(1u, cascadeCount);
         const uint32_t cascadeIndex = static_cast<uint32_t>(frame_.frameCount % safeCascadeCount);
-        const uint32_t cascadeBaseOffset = cascadeIndex * static_cast<uint32_t>(perCascadeCount);
+        const uint32_t activeBrickCount = GetScene().AmbientActiveBrickCount(cascadeIndex);
+        if (activeBrickCount == 0u)
+        {
+            return;
+        }
+        const uint32_t activeProbeCount =
+            activeBrickCount * static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME);
+        const uint32_t group = (activeProbeCount + cubesPerGroup - 1) / cubesPerGroup;
 
         VkBuffer cubeBuffer = GetScene().AmbientCubeBuffer().Handle();
         VkBuffer pongBuffer = GetScene().AmbientCubePongBuffer().Handle();
@@ -2440,7 +2450,7 @@ namespace Vulkan
         ambient_.propagation->BindPipeline(commandBuffer, GetScene(), imageIndex);
 
         Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
-        gpuScene.custom_data_0 = cascadeBaseOffset;
+        gpuScene.custom_data_0 = 0;
         gpuScene.custom_data_1 = cascadeIndex;
         gpuScene.custom_data_2 = 0;
 

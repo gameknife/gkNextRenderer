@@ -56,6 +56,7 @@ namespace Assets
             VkDeviceSize scratchOffset;
             VkDeviceSize sdfSeedAOffset;
             VkDeviceSize brickTableOffset;
+            VkDeviceSize activeBrickListOffset;
             VkDeviceSize totalSize;
         };
 
@@ -82,9 +83,12 @@ namespace Assets
             // Phase 3: per-cascade brick -> pool slot table (uint per brick), sized to the capacity.
             layout.brickTableOffset = layout.sdfSeedAOffset +
                 static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_SEED_SIZE) * perAmbientCascadeCount;
-            layout.totalSize = layout.brickTableOffset +
+            layout.activeBrickListOffset = layout.brickTableOffset +
                 sizeof(uint32_t) * static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE) *
                     cascadeCapacity;
+            // Phase 3c: per-cascade active brick list, one packed brick-linear id per pool slot.
+            layout.totalSize = layout.activeBrickListOffset +
+                sizeof(uint32_t) * static_cast<VkDeviceSize>(poolBricksPerCascade) * cascadeCapacity;
             return layout;
         }
 
@@ -181,6 +185,7 @@ namespace Assets
         ambientScratchOffset_ = static_cast<size_t>(ambientLayout.scratchOffset);
         ambientSdfSeedAOffset_ = static_cast<size_t>(ambientLayout.sdfSeedAOffset);
         ambientBrickTableOffset_ = static_cast<size_t>(ambientLayout.brickTableOffset);
+        ambientActiveBrickListOffset_ = static_cast<size_t>(ambientLayout.activeBrickListOffset);
 
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SceneDynamic", flags,
@@ -222,15 +227,16 @@ namespace Assets
             resources.SdfScratch = arenaBase + ambientLayout.scratchOffset;
             resources.SdfSeedA = arenaBase + ambientLayout.sdfSeedAOffset;
             resources.BrickTable = arenaBase + ambientLayout.brickTableOffset;
-            resources.PoolParams = poolBricksPerCascade_;
+            const uint64_t activeListByteOffset =
+                static_cast<uint64_t>(ambientLayout.activeBrickListOffset - ambientLayout.brickTableOffset);
+            resources.PoolParams = (activeListByteOffset << 32u) | poolBricksPerCascade_;
             const std::vector<AmbientResources> resourcesData = {resources};
             Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "AmbientResources", flags, resourcesData,
                                                    ambientResourcesBuffer_, ambientResourcesBufferMemory_);
         }
 
-        // Phase 3b: initialise the brick table to "all unallocated" (INVALID). The CPU brick classifier
-        // (FCPUBrickTable, run on each voxel flush in FCPUAccelerationStructure::Tick) fills compacted
-        // pool slots for near-surface bricks once the scene is voxelized; until then there is no cube GI.
+        // Phase 3b/3c: initialise the brick table and active list to "all unallocated" (INVALID).
+        // The CPU brick classifier fills compacted pool slots and the list once the scene is voxelized.
         if (allocateAmbientCube)
         {
             const uint32_t bricksPerCascade = static_cast<uint32_t>(GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE);
@@ -239,6 +245,14 @@ namespace Assets
             void* mapped = ambientArenaBufferMemory_->Map(static_cast<VkDeviceSize>(ambientLayout.brickTableOffset),
                                                           tableCount * sizeof(uint32_t));
             std::memcpy(mapped, brickTable.data(), tableCount * sizeof(uint32_t));
+            ambientArenaBufferMemory_->Unmap();
+
+            const size_t activeListCount =
+                static_cast<size_t>(ambientCubeCascadeCapacity) * poolBricksPerCascade_;
+            std::vector<uint32_t> activeList(activeListCount, GPU_SCENE_AMBIENT_BRICK_INVALID);
+            mapped = ambientArenaBufferMemory_->Map(static_cast<VkDeviceSize>(ambientActiveBrickListOffset_),
+                                                    activeListCount * sizeof(uint32_t));
+            std::memcpy(mapped, activeList.data(), activeListCount * sizeof(uint32_t));
             ambientArenaBufferMemory_->Unmap();
         }
 
@@ -397,6 +411,21 @@ namespace Assets
             cpuShadowMap_->SetDebugName("Shadowmap");
         }
         return *cpuShadowMap_;
+    }
+
+    uint32_t Scene::AmbientActiveBrickCount(uint32_t cascade) const
+    {
+        return activeBrickCounts_[std::min<uint32_t>(cascade, CUBE_CASCADE_MAX - 1u)];
+    }
+
+    void Scene::SetAmbientActiveBrickCounts(const std::vector<uint32_t>& counts)
+    {
+        activeBrickCounts_.fill(0u);
+        const size_t countToCopy = std::min(counts.size(), activeBrickCounts_.size());
+        for (size_t i = 0; i < countToCopy; ++i)
+        {
+            activeBrickCounts_[i] = std::min(counts[i], poolBricksPerCascade_);
+        }
     }
 
     void Scene::PostLoad(const std::vector<Skeleton>& skeletons)

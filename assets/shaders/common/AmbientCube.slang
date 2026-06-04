@@ -367,6 +367,46 @@ public int AmbientCubePongPoolIndex(uint cascadeIndex, int3 probePos)
     return int(slot * uint(GPU_SCENE_AMBIENT_BRICK_VOLUME) + AmbientBrickLocalOffset(probePos));
 }
 
+public bool DecodeAmbientActiveBrickProbe(uint cascadeIndex,
+                                          uint activeBrickIndex,
+                                          uint localProbeOffset,
+                                          out int3 probePos,
+                                          out uint voxelIdx,
+                                          out int cubeIdx)
+{
+    uint poolBricks = Bindless.GetGpuscene().AmbientPoolBricksPerCascade;
+    uint packedBrick = Bindless.GetGpuscene().AmbientActiveBrickList[cascadeIndex * poolBricks + activeBrickIndex];
+    if (packedBrick == GPU_SCENE_AMBIENT_BRICK_INVALID)
+    {
+        probePos = int3(0, 0, 0);
+        voxelIdx = 0;
+        cubeIdx = -1;
+        return false;
+    }
+
+    uint bricksPerY = uint(GPU_SCENE_AMBIENT_BRICKS_X * GPU_SCENE_AMBIENT_BRICKS_Z);
+    uint by = packedBrick / bricksPerY;
+    uint bz = (packedBrick - by * bricksPerY) / uint(GPU_SCENE_AMBIENT_BRICKS_X);
+    uint bx = packedBrick - by * bricksPerY - bz * uint(GPU_SCENE_AMBIENT_BRICKS_X);
+
+    uint ly = localProbeOffset / uint(GPU_SCENE_AMBIENT_BRICK_EDGE * GPU_SCENE_AMBIENT_BRICK_EDGE);
+    uint lz = (localProbeOffset - ly * uint(GPU_SCENE_AMBIENT_BRICK_EDGE * GPU_SCENE_AMBIENT_BRICK_EDGE)) /
+              uint(GPU_SCENE_AMBIENT_BRICK_EDGE);
+    uint lx = localProbeOffset - ly * uint(GPU_SCENE_AMBIENT_BRICK_EDGE * GPU_SCENE_AMBIENT_BRICK_EDGE) -
+              lz * uint(GPU_SCENE_AMBIENT_BRICK_EDGE);
+
+    uint x = bx * uint(GPU_SCENE_AMBIENT_BRICK_EDGE) + lx;
+    uint y = by * uint(GPU_SCENE_AMBIENT_BRICK_EDGE) + ly;
+    uint z = bz * uint(GPU_SCENE_AMBIENT_BRICK_EDGE) + lz;
+    probePos = int3(int(x), int(y), int(z));
+
+    uint localVoxelIdx = y * CUBE_SIZE_XY * CUBE_SIZE_XY + z * CUBE_SIZE_XY + x;
+    voxelIdx = GetCascadeBaseOffset(cascadeIndex) + localVoxelIdx;
+    cubeIdx = int((cascadeIndex * poolBricks + activeBrickIndex) * uint(GPU_SCENE_AMBIENT_BRICK_VOLUME) +
+                  localProbeOffset);
+    return true;
+}
+
 AmbientCube FetchCubePool(int3 probePos, uint cascadeIndex)
 {
     int idx = AmbientCubePoolIndex(cascadeIndex, probePos);
