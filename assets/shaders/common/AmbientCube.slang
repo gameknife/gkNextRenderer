@@ -414,11 +414,35 @@ AmbientCube FetchCubePool(int3 probePos, uint cascadeIndex)
     return Bindless.GetGpuscene().Cubes[idx];
 }
 
+bool TryFetchCubePool(int3 probePos, uint cascadeIndex, out AmbientCube cube)
+{
+    int idx = AmbientCubePoolIndex(cascadeIndex, probePos);
+    if (idx < 0)
+    {
+        cube = ZeroAmbientCube();
+        return false;
+    }
+    cube = Bindless.GetGpuscene().Cubes[idx];
+    return true;
+}
+
 AmbientCube FetchCubePongPool(int3 probePos, uint cascadeIndex)
 {
     int idx = AmbientCubePongPoolIndex(cascadeIndex, probePos);
     if (idx < 0) return ZeroAmbientCube();
     return Bindless.GetGpuscene().CubesPong[idx];
+}
+
+bool TryFetchCubePongPool(int3 probePos, uint cascadeIndex, out AmbientCube cube)
+{
+    int idx = AmbientCubePongPoolIndex(cascadeIndex, probePos);
+    if (idx < 0)
+    {
+        cube = ZeroAmbientCube();
+        return false;
+    }
+    cube = Bindless.GetGpuscene().CubesPong[idx];
+    return true;
 }
 
 AmbientCube FetchCube(int3 probePos, in AmbientCube* Cubes)
@@ -484,7 +508,11 @@ public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, flo
             int3 offset = int3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
 
             int3 probePos = baseIdx + offset;
-            AmbientCube cube = FetchCubePool(probePos, cascadeIndex);
+            AmbientCube cube;
+            if (!TryFetchCubePool(probePos, cascadeIndex, cube))
+            {
+                continue;
+            }
             VoxelData voxel = FetchVoxel(probePos, Voxels, baseOffset);
 
             uint4 unpacked0 = UnpackBytes(voxel.distanceToSolid_gg_z01);
@@ -571,9 +599,14 @@ public float4 interpolateAmbientCubesStable<T : IAmbientCubeSampler>(float3 inPo
             int3 offset = int3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
 
             int3 probePos = baseIdx + offset;
-            AmbientCube cube = (cascadeIndex == stableCascadeIndex)
-                ? FetchCubePongPool(probePos, cascadeIndex)
-                : FetchCubePool(probePos, cascadeIndex);
+            AmbientCube cube;
+            bool hasCube = (cascadeIndex == stableCascadeIndex)
+                ? TryFetchCubePongPool(probePos, cascadeIndex, cube)
+                : TryFetchCubePool(probePos, cascadeIndex, cube);
+            if (!hasCube)
+            {
+                continue;
+            }
             VoxelData voxel = FetchVoxel(probePos, Voxels, baseOffset);
 
             uint4 unpacked0 = UnpackBytes(voxel.distanceToSolid_gg_z01);
