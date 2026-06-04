@@ -22,6 +22,7 @@
 #include "Engine/Utilities/Exception.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <spdlog/spdlog.h>
 #include <entt/meta/factory.hpp>
 
@@ -32,12 +33,14 @@ namespace Assets
         constexpr VkDeviceSize perAmbientCascadeCount =
             static_cast<VkDeviceSize>(Assets::CUBE_SIZE_XY) * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
 
-        // Phase 3b sparse pool cap: cube bricks allocated per cascade. The full grid is 3456 bricks/
-        // cascade; near-surface active sets are typically well under half (measured ~1100 for the
-        // playground), so a 50% cap (1728) halves cube/pong memory while leaving headroom. Scenes that
-        // exceed the cap degrade gracefully (overflow bricks lose GI, logged) per the agreed policy.
-        constexpr uint32_t kAmbientPoolBricksPerCascade =
-            static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE) / 2u;
+        uint32_t ResolveAmbientPoolBricksPerCascade(float poolBrickRatio)
+        {
+            const float clampedRatio = std::clamp(poolBrickRatio, 0.0f, 1.0f);
+            const auto requestedBricks = static_cast<uint32_t>(std::ceil(
+                static_cast<float>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE) * clampedRatio));
+            return std::clamp(requestedBricks, 1u,
+                              static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE));
+        }
 
         // Byte layout of the ambient arena for a given allocated cascade capacity. Cubes and Voxels
         // scale with the capacity; Pages is a fixed world grid; CubesPong and the SDF seed scratch are
@@ -164,8 +167,12 @@ namespace Assets
         }
         const uint32_t ambientCubeCascadeCapacity = allocateAmbientCube ? configuredCascadeCount : 1u;
         ambientCubeCascadeCapacity_ = ambientCubeCascadeCapacity;
-        // Phase 3b: sparse pool capped at kAmbientPoolBricksPerCascade bricks/cascade.
-        poolBricksPerCascade_ = kAmbientPoolBricksPerCascade;
+        float poolBrickRatio = 0.66f;
+        if (NextEngine::GetInstance())
+        {
+            poolBrickRatio = NextEngine::GetInstance()->GetUserSettings().AmbientCubePoolBrickRatio;
+        }
+        poolBricksPerCascade_ = ResolveAmbientPoolBricksPerCascade(poolBrickRatio);
         const AmbientArenaLayout ambientLayout =
             ComputeAmbientArenaLayout(ambientCubeCascadeCapacity, poolBricksPerCascade_);
         ambientVoxelsOffset_ = static_cast<size_t>(ambientLayout.voxelsOffset);

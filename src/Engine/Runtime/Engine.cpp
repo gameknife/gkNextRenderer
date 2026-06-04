@@ -29,6 +29,7 @@
 #include "Engine/Vulkan/ShaderHotReloader.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fmt/chrono.h>
@@ -141,11 +142,24 @@ namespace
             cascadeCount = Assets::SanitizeAmbientCubeCascadeCount(
                 NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount);
         }
+        float poolBrickRatio = 1.0f;
+        if (NextEngine::GetInstance())
+        {
+            poolBrickRatio = NextEngine::GetInstance()->GetUserSettings().AmbientCubePoolBrickRatio;
+        }
+        const float clampedPoolBrickRatio = std::clamp(poolBrickRatio, 0.0f, 1.0f);
+        const auto poolBricksPerCascade = static_cast<VkDeviceSize>(std::max(
+            1.0f, std::ceil(static_cast<float>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE) * clampedPoolBrickRatio)));
+        const VkDeviceSize poolCubesPerCascade =
+            poolBricksPerCascade * static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME);
+
         const VkDeviceSize fullAmbientCubeAllocationSize =
-            static_cast<VkDeviceSize>(cascadeCount) * perCascadeCount *
-                (sizeof(Assets::VoxelData) + sizeof(Assets::AmbientCube)) +
+            static_cast<VkDeviceSize>(cascadeCount) *
+                (perCascadeCount * sizeof(Assets::VoxelData) + poolCubesPerCascade * sizeof(Assets::AmbientCube)) +
             static_cast<VkDeviceSize>(Assets::ACGI_PAGE_COUNT) * Assets::ACGI_PAGE_COUNT * sizeof(Assets::PageIndex) +
-            perCascadeCount * (sizeof(Assets::AmbientCube) + sizeof(glm::u32vec4));
+            poolCubesPerCascade * sizeof(Assets::AmbientCube) +
+            perCascadeCount * sizeof(glm::u32vec4) +
+            perCascadeCount * sizeof(glm::u32vec4);
         return largestDeviceLocalHeapSize >= fullAmbientCubeAllocationSize;
     }
 
@@ -298,6 +312,7 @@ Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options&
     userSettings.AmbientCubeOffsetZ = 0.0f;
     userSettings.AmbientCubeCascadeCount = 3;
     userSettings.AmbientCubeCascadeRatio = 2.0f;
+    userSettings.AmbientCubePoolBrickRatio = 0.66f;
 
     return userSettings;
 }
