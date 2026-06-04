@@ -15,7 +15,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
-    uint4* SeedBuffer = (uint4*)Bindless.GetGpuscene().CubesPong;
+    uint4* SeedBuffer = Bindless.GetGpuscene().AmbientSdfSeedA;
 
     uint y = localIdx / (CUBE_SIZE_XY * CUBE_SIZE_XY);
     uint z = (localIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY) / CUBE_SIZE_XY;

@@ -14,7 +14,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    uint4* SeedA = (uint4*)Bindless.GetGpuscene().CubesPong;
+    uint4* SeedA = Bindless.GetGpuscene().AmbientSdfSeedA;
     uint4* SeedB = Bindless.GetGpuscene().AmbientSdfScratch;
     uint lastPassParity = Bindless.GetGpuscene().custom_data_1;
     uint4 seed = (lastPassParity & 1u) == 0u ? SeedB[localIdx] : SeedA[localIdx];
