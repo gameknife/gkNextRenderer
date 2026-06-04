@@ -242,6 +242,23 @@ public struct ALIGN_16 PageIndex
     public uint probeDataIdx;
 };
 
+// Ambient GI resource table. GPUScene is capped at 128B (push constant), so instead of inlining
+// every ambient region address it carries a single AmbientBase pointer to this table. Region
+// addresses are filled CPU-side (Scene.cpp) from the arena base, which decouples the GPU-visible
+// layout from the compile-time GPU_SCENE_AMBIENT_*_OFFSET constants and lets each region be sized
+// or relocated independently (right-size cascades, sparse brick pool). 8 x uint64 = 64 bytes.
+public struct ALIGN_16 AmbientResources
+{
+    public uint64_t Cubes;
+    public uint64_t Voxels;
+    public uint64_t Pages;
+    public uint64_t CubesPong;
+    public uint64_t SdfScratch;
+    public uint64_t Reserved0; // future: sparse brick table (Phase 3)
+    public uint64_t Reserved1; // future: sparse brick pool  (Phase 3)
+    public uint64_t Reserved2;
+};
+
 public struct ALIGN_16 SphericalHarmonics
 {
     // 3 bands (9 coefficients per color channel)
@@ -396,26 +413,26 @@ public struct ALIGN_8 GPUScene
     public ModelData *Offsets;
     public uint64_t ReservedAddress0;
 
-    public uint64_t AmbientBase;
+    public uint64_t AmbientBase; // -> AmbientResources table (see BasicTypes.slang AmbientResources)
     public property AmbientCube* Cubes
     {
-        get { return (AmbientCube*)(AmbientBase + GPU_SCENE_AMBIENT_CUBES_OFFSET); }
+        get { return (AmbientCube*)((AmbientResources*)AmbientBase)[0].Cubes; }
     }
     public property VoxelData* Voxels
     {
-        get { return (VoxelData*)(AmbientBase + GPU_SCENE_AMBIENT_VOXELS_OFFSET); }
+        get { return (VoxelData*)((AmbientResources*)AmbientBase)[0].Voxels; }
     }
     public property PageIndex* Pages
     {
-        get { return (PageIndex*)(AmbientBase + GPU_SCENE_AMBIENT_PAGES_OFFSET); }
+        get { return (PageIndex*)((AmbientResources*)AmbientBase)[0].Pages; }
     }
     public property AmbientCube* CubesPong
     {
-        get { return (AmbientCube*)(AmbientBase + GPU_SCENE_AMBIENT_CUBES_PONG_OFFSET); }
+        get { return (AmbientCube*)((AmbientResources*)AmbientBase)[0].CubesPong; }
     }
     public property uint4* AmbientSdfScratch
     {
-        get { return (uint4*)(AmbientBase + GPU_SCENE_AMBIENT_SDF_SCRATCH_OFFSET); }
+        get { return (uint4*)((AmbientResources*)AmbientBase)[0].SdfScratch; }
     }
     public property SphericalHarmonics* HDRSHs
     {
@@ -504,16 +521,16 @@ public struct ALIGN_8 GPUScene
 
     public property AmbientCube* Cubes
     {
-        get { return (AmbientCube*)(Reserved_AmbientBase_Address.y + GPU_SCENE_AMBIENT_CUBES_OFFSET); }
+        get { return (AmbientCube*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].Cubes; }
     }
     public property VoxelData* Voxels
     {
-        get { return (VoxelData*)(Reserved_AmbientBase_Address.y + GPU_SCENE_AMBIENT_VOXELS_OFFSET); }
+        get { return (VoxelData*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].Voxels; }
     }
 
     public property PageIndex* Pages
     {
-        get { return (PageIndex*)(Reserved_AmbientBase_Address.y + GPU_SCENE_AMBIENT_PAGES_OFFSET); }
+        get { return (PageIndex*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].Pages; }
     }
     public property SphericalHarmonics* HDRSHs
     {
@@ -522,11 +539,11 @@ public struct ALIGN_8 GPUScene
 
     public property AmbientCube* CubesPong
     {
-        get { return (AmbientCube*)(Reserved_AmbientBase_Address.y + GPU_SCENE_AMBIENT_CUBES_PONG_OFFSET); }
+        get { return (AmbientCube*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].CubesPong; }
     }
     public property uint4* AmbientSdfScratch
     {
-        get { return (uint4*)(Reserved_AmbientBase_Address.y + GPU_SCENE_AMBIENT_SDF_SCRATCH_OFFSET); }
+        get { return (uint4*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].SdfScratch; }
     }
 
     uint64_t2 TLAS_SkinWeights_Address;

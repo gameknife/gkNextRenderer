@@ -197,11 +197,17 @@ namespace Assets
         Vulkan::Buffer& AmbientCubeSdfScratchBuffer() const { return *ambientArenaBuffer_; }
         Vulkan::Buffer& FarAmbientCubeBuffer() const { return *ambientArenaBuffer_; }
         Vulkan::Buffer& PageIndexBuffer() const { return *ambientArenaBuffer_; }
-        size_t AmbientCubesByteOffset() const { return GPU_SCENE_AMBIENT_CUBES_OFFSET; }
-        size_t AmbientVoxelsByteOffset() const { return GPU_SCENE_AMBIENT_VOXELS_OFFSET; }
-        size_t AmbientPagesByteOffset() const { return GPU_SCENE_AMBIENT_PAGES_OFFSET; }
-        size_t AmbientCubesPongByteOffset() const { return GPU_SCENE_AMBIENT_CUBES_PONG_OFFSET; }
-        size_t AmbientSdfScratchByteOffset() const { return GPU_SCENE_AMBIENT_SDF_SCRATCH_OFFSET; }
+        // Runtime byte offsets into the arena, sized to the actual allocated cascade capacity (Phase 2)
+        // rather than the compile-time GPU_SCENE_AMBIENT_*_OFFSET constants (which assume CASCADE_MAX).
+        size_t AmbientCubesByteOffset() const { return 0; }
+        size_t AmbientVoxelsByteOffset() const { return ambientVoxelsOffset_; }
+        size_t AmbientPagesByteOffset() const { return ambientPagesOffset_; }
+        size_t AmbientCubesPongByteOffset() const { return ambientPongOffset_; }
+        size_t AmbientSdfScratchByteOffset() const { return ambientScratchOffset_; }
+        // Allocated cascade capacity for this Scene. The effective cascade count used by the bake,
+        // the CPU baker and the UBO is clamped to this so a runtime cascade-count change never reads
+        // or writes outside the arena allocation.
+        uint32_t AmbientCubeCascadeCapacity() const { return ambientCubeCascadeCapacity_; }
 
         Vulkan::Buffer& SkinWeightBuffer() const { return *skinWeightBuffer_; }
         Vulkan::Buffer& SkinJointBuffer() const { return *skinJointBuffer_; }
@@ -284,6 +290,19 @@ namespace Assets
 
         std::unique_ptr<Vulkan::Buffer> ambientArenaBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> ambientArenaBufferMemory_;
+
+        // Small indirection table holding device addresses of each ambient region inside the arena
+        // (see AmbientResources in BasicTypes.slang). GPUScene.AmbientBase points here.
+        std::unique_ptr<Vulkan::Buffer> ambientResourcesBuffer_;
+        std::unique_ptr<Vulkan::DeviceMemory> ambientResourcesBufferMemory_;
+
+        // Allocated ambient cascade capacity and the runtime byte offsets into the arena (Phase 2
+        // right-sizing). Set once at construction from the configured cascade count.
+        uint32_t ambientCubeCascadeCapacity_ = 0;
+        size_t ambientVoxelsOffset_ = 0;
+        size_t ambientPagesOffset_ = 0;
+        size_t ambientPongOffset_ = 0;
+        size_t ambientScratchOffset_ = 0;
 
         std::unique_ptr<Vulkan::Buffer> skinWeightBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> skinWeightBufferMemory_;

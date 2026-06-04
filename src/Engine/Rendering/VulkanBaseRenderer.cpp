@@ -2262,8 +2262,9 @@ namespace Vulkan
         const int cubesPerGroup = 64;
         const int perCascadeCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
         const int group = perCascadeCount / cubesPerGroup;
-        const uint32_t cascadeCount = Assets::SanitizeAmbientCubeCascadeCount(
-            NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount);
+        const uint32_t cascadeCount = std::min(
+            Assets::SanitizeAmbientCubeCascadeCount(NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount),
+            GetScene().AmbientCubeCascadeCapacity());
 
         int temporalFrames = 120;
         switch (NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel)
@@ -2364,8 +2365,9 @@ namespace Vulkan
         const int cubesPerGroup = 64;
         const int perCascadeCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
         const int group = perCascadeCount / cubesPerGroup;
-        const uint32_t cascadeCount = Assets::SanitizeAmbientCubeCascadeCount(
-            NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount);
+        const uint32_t cascadeCount = std::min(
+            Assets::SanitizeAmbientCubeCascadeCount(NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount),
+            GetScene().AmbientCubeCascadeCapacity());
         const uint32_t safeCascadeCount = std::max(1u, cascadeCount);
         const uint32_t cascadeIndex = static_cast<uint32_t>(frame_.frameCount % safeCascadeCount);
         const uint32_t cascadeBaseOffset = cascadeIndex * static_cast<uint32_t>(perCascadeCount);
@@ -2494,8 +2496,9 @@ namespace Vulkan
         const int cubesPerGroup = 64;
         const int perCascadeCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
         const int group = perCascadeCount / cubesPerGroup;
-        const uint32_t cascadeCount = Assets::SanitizeAmbientCubeCascadeCount(
-            NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount);
+        const uint32_t cascadeCount = std::min(
+            Assets::SanitizeAmbientCubeCascadeCount(NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount),
+            GetScene().AmbientCubeCascadeCapacity());
 
         VkBuffer voxelBuffer = GetScene().FarAmbientCubeBuffer().Handle();
         VkBuffer seedBufferA = GetScene().AmbientCubePongBuffer().Handle();

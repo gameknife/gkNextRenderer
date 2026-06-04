@@ -31,16 +31,42 @@ namespace Assets
         constexpr VkDeviceSize perAmbientCascadeCount =
             static_cast<VkDeviceSize>(Assets::CUBE_SIZE_XY) * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
 
+        // Byte layout of the ambient arena for a given allocated cascade capacity. Cubes and Voxels
+        // scale with the capacity; Pages is a fixed world grid; CubesPong and the SDF seed scratch are
+        // a single cascade each. With cascadeCapacity == CUBE_CASCADE_MAX this reproduces the
+        // compile-time GPU_SCENE_AMBIENT_*_OFFSET constants (asserted below), so right-sizing the
+        // capacity (Phase 2) only shrinks the arena without touching the GPU-visible struct layout.
+        struct AmbientArenaLayout
+        {
+            VkDeviceSize cubesOffset;
+            VkDeviceSize voxelsOffset;
+            VkDeviceSize pagesOffset;
+            VkDeviceSize pongOffset;
+            VkDeviceSize scratchOffset;
+            VkDeviceSize totalSize;
+        };
+
+        constexpr AmbientArenaLayout ComputeAmbientArenaLayout(uint32_t cascadeCapacity)
+        {
+            AmbientArenaLayout layout{};
+            layout.cubesOffset = 0;
+            layout.voxelsOffset = layout.cubesOffset +
+                static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_CUBE_SIZE) * perAmbientCascadeCount * cascadeCapacity;
+            layout.pagesOffset = layout.voxelsOffset +
+                static_cast<VkDeviceSize>(Assets::GPU_SCENE_VOXEL_DATA_SIZE) * perAmbientCascadeCount * cascadeCapacity;
+            layout.pongOffset = layout.pagesOffset +
+                static_cast<VkDeviceSize>(Assets::GPU_SCENE_PAGE_INDEX_SIZE) * Assets::ACGI_PAGE_COUNT *
+                    Assets::ACGI_PAGE_COUNT;
+            layout.scratchOffset = layout.pongOffset +
+                static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_CUBE_SIZE) * perAmbientCascadeCount;
+            layout.totalSize = layout.scratchOffset +
+                static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_SEED_SIZE) * perAmbientCascadeCount;
+            return layout;
+        }
+
         constexpr VkDeviceSize AmbientArenaSizeForCascadeCapacity(uint32_t cascadeCapacity)
         {
-            return static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_CUBE_SIZE) * perAmbientCascadeCount *
-                       cascadeCapacity +
-                   static_cast<VkDeviceSize>(Assets::GPU_SCENE_VOXEL_DATA_SIZE) * perAmbientCascadeCount *
-                       cascadeCapacity +
-                   static_cast<VkDeviceSize>(Assets::GPU_SCENE_PAGE_INDEX_SIZE) * Assets::ACGI_PAGE_COUNT *
-                       Assets::ACGI_PAGE_COUNT +
-                   static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_CUBE_SIZE) * perAmbientCascadeCount +
-                   static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_SEED_SIZE) * perAmbientCascadeCount;
+            return ComputeAmbientArenaLayout(cascadeCapacity).totalSize;
         }
 
         static_assert(sizeof(Assets::NodeProxy) == Assets::GPU_SCENE_NODE_PROXY_SIZE);
@@ -50,6 +76,7 @@ namespace Assets
         static_assert(sizeof(Assets::SoftMeshShaderResources) == 48);
         static_assert(sizeof(Assets::SphericalHarmonics) == Assets::GPU_SCENE_SPHERICAL_HARMONICS_SIZE);
         static_assert(sizeof(Assets::AmbientCube) == Assets::GPU_SCENE_AMBIENT_CUBE_SIZE);
+        static_assert(sizeof(Assets::AmbientResources) == 64);
         static_assert(sizeof(Assets::VoxelData) == Assets::GPU_SCENE_VOXEL_DATA_SIZE);
         static_assert(sizeof(Assets::PageIndex) == Assets::GPU_SCENE_PAGE_INDEX_SIZE);
         static_assert(Assets::GPU_SCENE_AMBIENT_PER_CASCADE_COUNT == perAmbientCascadeCount);
@@ -102,7 +129,23 @@ namespace Assets
         const bool allocateAmbientCube =
             !NextEngine::GetInstance() ||
             NextEngine::GetInstance()->GetRenderer().RegisteredRendererRequirements().requestAmbientCube;
-        const uint32_t ambientCubeCascadeCapacity = allocateAmbientCube ? Assets::CUBE_CASCADE_MAX : 1u;
+        // Phase 2 right-sizing: allocate Cubes/Voxels for the configured cascade count (default 3)
+        // rather than always CUBE_CASCADE_MAX (4). The capacity is fixed for this Scene's lifetime;
+        // consumers clamp the effective cascade count to it (a runtime cvar increase only takes
+        // effect after a scene reload, but never reads/writes outside the allocation).
+        uint32_t configuredCascadeCount = Assets::CUBE_CASCADE_MAX;
+        if (NextEngine::GetInstance())
+        {
+            configuredCascadeCount = Assets::SanitizeAmbientCubeCascadeCount(
+                NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount);
+        }
+        const uint32_t ambientCubeCascadeCapacity = allocateAmbientCube ? configuredCascadeCount : 1u;
+        ambientCubeCascadeCapacity_ = ambientCubeCascadeCapacity;
+        const AmbientArenaLayout ambientLayout = ComputeAmbientArenaLayout(ambientCubeCascadeCapacity);
+        ambientVoxelsOffset_ = static_cast<size_t>(ambientLayout.voxelsOffset);
+        ambientPagesOffset_ = static_cast<size_t>(ambientLayout.pagesOffset);
+        ambientPongOffset_ = static_cast<size_t>(ambientLayout.pongOffset);
+        ambientScratchOffset_ = static_cast<size_t>(ambientLayout.scratchOffset);
 
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "SceneDynamic", flags,
@@ -111,7 +154,27 @@ namespace Assets
 
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             commandPool, "AmbientArena", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            AmbientArenaSizeForCascadeCapacity(ambientCubeCascadeCapacity), ambientArenaBuffer_, ambientArenaBufferMemory_);
+            ambientLayout.totalSize, ambientArenaBuffer_, ambientArenaBufferMemory_);
+
+        // Ambient GI resource table (see AmbientResources in BasicTypes.slang). GPUScene carries a
+        // single AmbientBase pointer to this table rather than inlining every region address, which
+        // keeps the push constant at 128B and decouples the GPU-visible layout from the compile-time
+        // GPU_SCENE_AMBIENT_*_OFFSET constants. Region addresses are derived from the arena base once
+        // here (they are stable for the arena's lifetime). When ambient cubes are not requested the
+        // arena is shrunk to one cascade; the table still stores the nominal offsets, but the shaders
+        // in NoAmbient paths never dereference them.
+        {
+            const VkDeviceAddress arenaBase = ambientArenaBuffer_->GetDeviceAddress();
+            AmbientResources resources{};
+            resources.Cubes = arenaBase + ambientLayout.cubesOffset;
+            resources.Voxels = arenaBase + ambientLayout.voxelsOffset;
+            resources.Pages = arenaBase + ambientLayout.pagesOffset;
+            resources.CubesPong = arenaBase + ambientLayout.pongOffset;
+            resources.SdfScratch = arenaBase + ambientLayout.scratchOffset;
+            const std::vector<AmbientResources> resourcesData = {resources};
+            Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "AmbientResources", flags, resourcesData,
+                                                   ambientResourcesBuffer_, ambientResourcesBufferMemory_);
+        }
 
         // shadow maps
         cpuShadowMap_.reset(
@@ -234,6 +297,8 @@ namespace Assets
 
         sceneDynamicBuffer_.reset();
         sceneDynamicBufferMemory_.reset();
+        ambientResourcesBuffer_.reset();
+        ambientResourcesBufferMemory_.reset();
         ambientArenaBuffer_.reset();
         ambientArenaBufferMemory_.reset();
 
@@ -944,7 +1009,7 @@ namespace Assets
         gpuScene.Vertices = vertexBuffer_->GetDeviceAddress();
         gpuScene.Reorders = reorderBuffer_->GetDeviceAddress();
         gpuScene.ReservedAddress0 = 0;
-        gpuScene.AmbientBase = ambientArenaBuffer_->GetDeviceAddress();
+        gpuScene.AmbientBase = ambientResourcesBuffer_->GetDeviceAddress();
         gpuScene.TLAS = NextEngine::GetInstance()->TryGetGPUAccelerationStructureAddress();
 
         gpuScene.SkinWeights = skinWeightBuffer_->GetDeviceAddress();
