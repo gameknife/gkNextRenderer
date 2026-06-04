@@ -89,6 +89,7 @@ func main() {
 	root.AddCommand(newRunCommand(ctx))
 	root.AddCommand(newTestCommand(ctx))
 	root.AddCommand(newVisualCommand(ctx))
+	root.AddCommand(newShotCommand(ctx))
 	root.AddCommand(newEditorCommand(ctx))
 	root.AddCommand(newAndroidCommand(ctx))
 	root.AddCommand(newIOSCommand(ctx))
@@ -462,6 +463,44 @@ func newVisualCommand(ctx appContext) *cobra.Command {
 			return runner.Run(ctx.repoRoot, runner.Options{Target: "gkNextVisualTest", Preset: ctx.preset, Args: args})
 		},
 	}
+}
+
+func newShotCommand(ctx appContext) *cobra.Command {
+	var scene string
+	var target string
+	var frames int
+	cmd := &cobra.Command{
+		Use:   "shot [--scene <path>] [--target <name>] [--frames N]",
+		Short: "Capture one validation screenshot, then auto-exit (no focus-stealing window)",
+		Long: "Render a scene to a stable frame, capture a single screenshot to a fixed path, then exit.\n\n" +
+			"The window is hidden so it never pops to the foreground or steals focus during an agent\n" +
+			"dev loop, and the app exits on its own. The screenshot path is printed when finished.\n\n" +
+			"Examples:\n" +
+			"  gnb shot --scene assets/models/playground.glb\n" +
+			"  gnb shot --target ScadStudio --scene assets/scad/beer_cup.scad --frames 60",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			runArgs := []string{"--agent-validation"}
+			if frames > 0 {
+				runArgs = append(runArgs, fmt.Sprintf("--agent-validation-frames=%d", frames))
+			}
+			runArgs = append(runArgs, args...)
+			opts := runner.Options{Target: target, Preset: ctx.preset, Args: runArgs}
+			if scene != "" {
+				opts.Scenes = append(opts.Scenes, scene)
+			}
+			if err := runner.Run(ctx.repoRoot, opts); err != nil {
+				return err
+			}
+			shot := filepath.Join(filepath.Dir(platform.BinDir(ctx.repoRoot, ctx.preset)),
+				"screenshots", "agent_validation.jpg")
+			console.Info("screenshot: " + shot)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&scene, "scene", "", "scene to load (file path or built-in .proc name)")
+	cmd.Flags().StringVar(&target, "target", "gkNextRenderer", "target executable to run")
+	cmd.Flags().IntVar(&frames, "frames", 0, "frames to render before capture (0 = engine default)")
+	return cmd
 }
 
 func newEditorCommand(ctx appContext) *cobra.Command {

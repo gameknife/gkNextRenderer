@@ -93,6 +93,14 @@ Window::Window(const WindowConfig& config) :
     {
         flags |= SDL_WINDOW_BORDERLESS;
     }
+    if (config.HiddenWindow)
+    {
+        // Keep the window out of the way: hidden so it never pops to foreground and steals focus
+        // (agent validation captures, unit-test engine fixture). If a driver cannot present to a
+        // hidden swapchain this can be relaxed to SDL_WINDOW_NOT_FOCUSABLE (still presents, just
+        // never activates).
+        flags |= SDL_WINDOW_HIDDEN;
+    }
 
     uint32_t windowWidth = config.Width;
     uint32_t windowHeight = config.Height;

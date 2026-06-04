@@ -469,7 +469,12 @@ namespace Vulkan
 
         OnDeviceSet();
         CreateSwapChain();
-        ctx_.window->Show();
+        // Keep hidden windows hidden (agent validation captures, unit-test engine fixture):
+        // showing here would override SDL_WINDOW_HIDDEN and pop a window that steals focus.
+        if (!ctx_.window->Config().HiddenWindow)
+        {
+            ctx_.window->Show();
+        }
     }
 
     void VulkanBaseRenderer::Start()

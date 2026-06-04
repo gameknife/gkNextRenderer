@@ -205,6 +205,7 @@ private:
     void OnScroll(double xoffset, double yoffset);
     void OnDropFile(const char* path);
     void TickGamepadInput();
+    void TickAgentValidation();
     bool HandleDebugShortcut(SDL_Keycode key);
 
     // Lifecycle helpers
@@ -261,6 +262,17 @@ private:
         bool IsCapturing() const { return hasPending || captureFramesRemaining > 0; }
     };
 
+    // Agent validation: render to a stable frame, capture one screenshot to a fixed path,
+    // then auto-exit. Centralized here so every target behaves identically.
+    struct FAgentValidationState
+    {
+        bool active = false;
+        bool captured = false;
+        uint32_t waitFrames = 90;
+        uint32_t postCaptureFrames = 0;
+        std::string outputPath = "screenshots/agent_validation";
+    };
+
     // Main-thread task queues
     struct FTaskQueues
     {
@@ -298,6 +310,7 @@ private:
     FFrameState frameState_{};
     FProgressiveRenderState progressiveRender_{};
     FScreenShotState screenShot_{};
+    FAgentValidationState agentValidation_{};
     FTaskQueues taskQueues_{};
     NextRenderer::EApplicationStatus status_{};
 

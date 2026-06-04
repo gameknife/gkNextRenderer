@@ -34,6 +34,9 @@ public:
 	bool Validation{};
 	bool FastExit{true};
 	bool AgentValidation{};
+	uint32_t AgentValidationFrames{90};
+	std::string AgentValidationOutput{"screenshots/agent_validation"};
+	bool HiddenWindow{};
 	bool KeepCPUMeshData{};  // 保留CPU网格数据（编辑器模式需要）
 	bool UpdateVisualTestBaseline{};
 	bool FlappyReplay{};

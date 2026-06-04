@@ -323,6 +323,10 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
 
     status_ = NextRenderer::EApplicationStatus::Starting;
 
+    agentValidation_.active = options.AgentValidation;
+    agentValidation_.waitFrames = options.AgentValidationFrames;
+    agentValidation_.outputPath = options.AgentValidationOutput;
+
     services_.packageFileSystem.reset(new Utilities::Package::FPackageFileSystem(Utilities::Package::EPM_OsFile));
 
     // Optional pak: assets moved out of the repo to reduce its size. Mounted automatically when present
@@ -357,6 +361,9 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     gameInstance_->ApplyDefaultCVars(*services_.cvarSystem);
     services_.cvarSystem->LoadUserFile("assets/configs/cvar_user.json");
     windowConfig.Fullscreen = config_.userSettings.BorderlessFullscreen;
+    // Hide the window for agent validation captures and for any caller that asked for it (e.g. the
+    // unit-test engine fixture). The capture+auto-exit state machine stays gated on AgentValidation.
+    windowConfig.HiddenWindow = options.AgentValidation || options.HiddenWindow;
     window_.reset(new Vulkan::Window(windowConfig));
     SetBorderlessFullscreen(config_.userSettings.BorderlessFullscreen);
     services_.quickJSEngine = std::make_unique<QuickJSEngine>();
@@ -444,8 +451,13 @@ void NextEngine::Start()
     // Initialize Renderer
     bool shouldEnableValidation = GOption->Validation;
     
+    // Agent validation renders as fast as the GPU allows (uncapped) so the fixed frame budget is
+    // reached in a fraction of the wall-clock time a vsync-locked present mode would take.
+    const VkPresentModeKHR presentMode = options_->AgentValidation
+                                             ? VK_PRESENT_MODE_IMMEDIATE_KHR
+                                             : static_cast<VkPresentModeKHR>(options_->PresentMode);
     renderer_.reset(NextRenderer::CreateRenderer(static_cast<uint32_t>(config_.userSettings.RendererType), window_.get(),
-                                                 static_cast<VkPresentModeKHR>(options_->PresentMode),
+                                                 presentMode,
                                                  shouldEnableValidation));
     config_.userSettings.RendererType = static_cast<int32_t>(renderer_->CurrentLogicRendererType());
 
@@ -743,6 +755,11 @@ bool NextEngine::Tick(bool forcingDelta)
         {
             SCOPED_CPU_TIMER("gamepad");
             TickGamepadInput();
+        }
+
+        if (agentValidation_.active)
+        {
+            TickAgentValidation();
         }
     }
 
@@ -1669,6 +1686,48 @@ void NextEngine::OnDropFile(const char* dropPath)
         scene_->GetEnvSettings().SkyIdx = newTextureId;
     }
 }
+void NextEngine::TickAgentValidation()
+{
+    // Only act once a scene is live and rendering. GetTotalFrames() resets to 0 on every scene
+    // load, so this naturally waits for the loaded scene to settle before capturing.
+    if (status_ != NextRenderer::EApplicationStatus::Running)
+    {
+        return;
+    }
+
+    if (!agentValidation_.captured)
+    {
+        if (GetTotalFrames() < agentValidation_.waitFrames)
+        {
+            return;
+        }
+
+        // Resolve against the runtime root so both the directory we create and the file the
+        // screenshot writer emits land in the same place (matches RequestScreenshot convention).
+        const std::string resolvedPath =
+            Utilities::FileHelper::GetPlatformFilePath(agentValidation_.outputPath.c_str());
+        const std::string outputDir = std::filesystem::path(resolvedPath).parent_path().string();
+        if (!outputDir.empty())
+        {
+            Utilities::FileHelper::EnsureDirectoryExists(outputDir);
+        }
+
+        RequestScreenShot({.filename = resolvedPath});
+        agentValidation_.captured = true;
+        SPDLOG_INFO("[AgentValidation] capturing screenshot -> {}.jpg ({} frames)",
+                    resolvedPath, GetTotalFrames());
+        return;
+    }
+
+    // The pending screenshot is flushed at the top of the next frame; give it a couple of frames
+    // to land on disk before closing so the file is guaranteed to exist for the agent to inspect.
+    if (++agentValidation_.postCaptureFrames >= 3)
+    {
+        SPDLOG_INFO("[AgentValidation] screenshot saved -> {}.jpg, exiting", agentValidation_.outputPath);
+        RequestClose();
+    }
+}
+
 void NextEngine::TickGamepadInput()
 {
     int gamepadCount = 0;

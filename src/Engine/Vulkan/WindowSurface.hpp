@@ -25,6 +25,11 @@ struct WindowConfig final
     void* AndroidNativeWindow;
     bool ForceSDR;
     bool HideTitleBar {};
+    // Create the window with SDL_WINDOW_HIDDEN so it never pops to foreground or steals focus.
+    // Used by agent validation captures and by the unit-test engine fixture. The swapchain still
+    // renders and can be captured; relax to SDL_WINDOW_NOT_FOCUSABLE if a driver refuses to
+    // present a hidden swapchain.
+    bool HiddenWindow {};
 };
 
 // ============================================================================

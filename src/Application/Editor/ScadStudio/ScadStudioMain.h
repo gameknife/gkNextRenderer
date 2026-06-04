@@ -38,5 +38,4 @@ public:
 private:
     std::unique_ptr<ScadStudio::ScadStudioInterface> ui_;
     Runtime::Camera::ModelViewController cameraController_;
-    bool agentValidationCaptured_ = false;
 };
