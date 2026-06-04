@@ -11,7 +11,7 @@ namespace NextUI::FontLoader
     {
         std::string filePath;
         float pixelSize = 16.0f;
-        bool includeChineseFull = true;
+        bool includeChineseFull = false;
         const char* extraGlyphsUtf8 = nullptr;
         const ImWchar* glyphRanges = nullptr;
         const ImFontConfig* fontConfig = nullptr;

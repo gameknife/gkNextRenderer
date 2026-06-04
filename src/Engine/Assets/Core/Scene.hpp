@@ -220,7 +220,8 @@ namespace Assets
 
         Vulkan::Buffer& HDRSHBuffer() const { return *sceneDynamicBuffer_; }
 
-        TextureImage& ShadowMap() const { return *cpuShadowMap_; }
+        TextureImage& ShadowMap() const;
+        TextureImage& EnsureCpuShadowMap(Vulkan::CommandPool& commandPool);
 
         // GPU CSM 资源（4 个 cascade，单层 D32_SFLOAT，独立 image）。
         Vulkan::Image& SunShadowImage(uint32_t cascade) const { return *sunShadowImages_[cascade]; }

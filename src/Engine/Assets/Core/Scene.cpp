@@ -19,6 +19,7 @@
 #include "Engine/Runtime/Utilities/NextEngineHelper.h"
 #include "Engine/Vulkan/CommandExecution.hpp"
 #include "Engine/Vulkan/SyncAndTiming.hpp"
+#include "Engine/Utilities/Exception.hpp"
 
 #include <algorithm>
 #include <spdlog/spdlog.h>
@@ -234,12 +235,6 @@ namespace Assets
             ambientArenaBufferMemory_->Unmap();
         }
 
-        // shadow maps
-        cpuShadowMap_.reset(
-            new TextureImage(commandPool, SHADOWMAP_SIZE, SHADOWMAP_SIZE, 1, VK_FORMAT_R32_SFLOAT, nullptr, 0));
-        cpuShadowMap_->Image().TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_GENERAL);
-        cpuShadowMap_->SetDebugName("Shadowmap");
-
         // 太阳方向光 CSM：4 个单层 D32_SFLOAT 阴影图，初始 layout = DEPTH_READ_ONLY。
         {
             const auto& device = commandPool.Device();
@@ -374,6 +369,27 @@ namespace Assets
             sunShadowImages_[i].reset();
             sunShadowMemories_[i].reset();
         }
+    }
+
+    TextureImage& Scene::ShadowMap() const
+    {
+        if (!cpuShadowMap_)
+        {
+            Throw(std::runtime_error("CPU shadow map was requested before it was allocated"));
+        }
+        return *cpuShadowMap_;
+    }
+
+    TextureImage& Scene::EnsureCpuShadowMap(Vulkan::CommandPool& commandPool)
+    {
+        if (!cpuShadowMap_)
+        {
+            cpuShadowMap_.reset(
+                new TextureImage(commandPool, SHADOWMAP_SIZE, SHADOWMAP_SIZE, 1, VK_FORMAT_R32_SFLOAT, nullptr, 0));
+            cpuShadowMap_->Image().TransitionImageLayout(commandPool, VK_IMAGE_LAYOUT_GENERAL);
+            cpuShadowMap_->SetDebugName("Shadowmap");
+        }
+        return *cpuShadowMap_;
     }
 
     void Scene::PostLoad(const std::vector<Skeleton>& skeletons)

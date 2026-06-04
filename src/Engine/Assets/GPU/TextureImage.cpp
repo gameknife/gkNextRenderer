@@ -11,7 +11,14 @@
 
 namespace Assets {
 
-TextureImage::TextureImage(Vulkan::CommandPool& commandPool, size_t width, size_t height, uint32_t miplevel, VkFormat format, const unsigned char* data, uint32_t size)
+TextureImage::TextureImage(Vulkan::CommandPool& commandPool,
+                           size_t width,
+                           size_t height,
+                           uint32_t miplevel,
+                           VkFormat format,
+                           const unsigned char* data,
+                           uint32_t size,
+                           VkComponentMapping componentMapping)
 {
 	// Create a host staging buffer and copy the image into it.
 	const VkDeviceSize imageSize = size;
@@ -20,7 +27,8 @@ TextureImage::TextureImage(Vulkan::CommandPool& commandPool, size_t width, size_
 	// Create the device side image, memory, view and sampler.
 	image_.reset(new Vulkan::Image(device, VkExtent2D{ static_cast<uint32_t>(width), static_cast<uint32_t>(height) }, miplevel, format));
 	imageMemory_.reset(new Vulkan::DeviceMemory(image_->AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)));
-	imageView_.reset(new Vulkan::ImageView(device, image_->Handle(), image_->Format(), VK_IMAGE_ASPECT_COLOR_BIT));
+	imageView_.reset(new Vulkan::ImageView(
+        device, image_->Handle(), image_->Format(), VK_IMAGE_ASPECT_COLOR_BIT, miplevel, componentMapping));
 	device.DebugUtils().SetObjectName(image_->Handle(), "TextureImage Image");
 	imageMemory_->SetName("TextureImage Memory");
 	device.DebugUtils().SetObjectName(imageView_->Handle(), "TextureImage ImageView");
