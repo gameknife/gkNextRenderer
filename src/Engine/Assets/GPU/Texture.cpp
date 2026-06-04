@@ -469,6 +469,8 @@ namespace Assets
             return static_cast<uint32_t>(-1);
         }
 
+        textureImage->SetDebugName(fmt::format("Texture {}", textureName));
+
         uint32_t textureIdx = 0;
         auto textureIt = textureNameMap_.find(textureName);
         if (textureIt != textureNameMap_.end())
@@ -953,6 +955,7 @@ namespace Assets
                     throw std::runtime_error(fmt::format("failed to create texture '{}'", texname));
                 }
 
+                textureImages_[newTextureIdx]->SetDebugName(fmt::format("Texture {}", texname));
                 BindTexture(newTextureIdx, *(textureImages_[newTextureIdx]));
 
                 // clean up
@@ -1034,6 +1037,7 @@ namespace Assets
     void GlobalTexturePool::CreateDefaultTextures()
     {
         defaultWhiteTexture_ = std::make_unique<TextureImage>(commandPool_, 16, 16, 1, VK_FORMAT_R8G8B8A8_UNORM, nullptr, 0);
+        defaultWhiteTexture_->SetDebugName("Texture DefaultWhite");
     }
 
     GlobalTexturePool* GlobalTexturePool::instance_ = nullptr;

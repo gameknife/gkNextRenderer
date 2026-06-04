@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <tuple>
 
 #include "Engine/Assets/Loaders/FProcModel.h"
 #include "Engine/Assets/Core/Node.h"
@@ -152,6 +153,152 @@ float SafeFraction(VkDeviceSize numerator, VkDeviceSize denominator)
 {
     return denominator > 0 ? static_cast<float>(static_cast<double>(numerator) / static_cast<double>(denominator)) : 0.0f;
 }
+
+void DrawMemoryMetricCard(const char* label, const std::string& value, const std::string& subValue, float width,
+                          ImVec4 accentColor)
+{
+    const ImVec2 pos = ImGui::GetCursorScreenPos();
+    constexpr float height = 82.0f;
+    const ImVec2 size(width, height);
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+    drawList->AddRectFilled(pos, pos + size, NextUI::Theme::ColorU32(NextUI::Theme::EColor::Background, 0.86f), 7.0f);
+    drawList->AddRect(pos, pos + size, NextUI::Theme::ColorU32(NextUI::Theme::EColor::Border, 0.82f), 7.0f);
+    drawList->AddRectFilled(pos, ImVec2(pos.x + 3.0f, pos.y + size.y),
+                            ImGui::GetColorU32(ImVec4(accentColor.x, accentColor.y, accentColor.z, 0.82f)),
+                            7.0f, ImDrawFlags_RoundCornersLeft);
+
+    const ImVec2 pad(14.0f, 10.0f);
+    const float textRight = pos.x + width - pad.x;
+    const float lineHeight = ImGui::GetTextLineHeight();
+    const float valueY = pos.y + pad.y + lineHeight + 8.0f;
+    const float subValueY = valueY + lineHeight + 6.0f;
+    drawList->AddText(pos + pad, NextUI::Theme::ColorU32(NextUI::Theme::EColor::TextMuted), label);
+    drawList->PushClipRect(pos + pad, ImVec2(textRight, pos.y + size.y - pad.y), true);
+    drawList->AddText(ImVec2(pos.x + pad.x, valueY), NextUI::Theme::ColorU32(NextUI::Theme::EColor::Text), value.c_str());
+    drawList->AddText(ImVec2(pos.x + pad.x, subValueY), NextUI::Theme::ColorU32(NextUI::Theme::EColor::TextDim),
+                      subValue.c_str());
+    drawList->PopClipRect();
+    ImGui::Dummy(size);
+}
+
+void DrawRightAlignedText(const std::string& text)
+{
+    const float columnWidth = ImGui::GetContentRegionAvail().x;
+    const float textWidth = ImGui::CalcTextSize(text.c_str()).x;
+    if (columnWidth > textWidth)
+    {
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + columnWidth - textWidth);
+    }
+    ImGui::TextUnformatted(text.c_str());
+}
+
+void DrawAllocationTypeText(const Vulkan::MemoryAllocationStats& allocation)
+{
+    const NextUI::Theme::EColor color = allocation.free
+        ? NextUI::Theme::EColor::TextDim
+        : (allocation.type == "IMAGE" ? NextUI::Theme::EColor::Blue : NextUI::Theme::EColor::Success);
+    ImGui::TextColored(NextUI::Theme::Color(color), "%s", allocation.type.empty() ? "UNKNOWN" : allocation.type.c_str());
+}
+
+void DrawMemoryBlockAllocationTable(const Vulkan::MemoryBlockStats& block)
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(10.0f, 6.0f));
+    if (ImGui::BeginTable("##BlockAllocations", 5,
+                          ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
+                              ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_ScrollY,
+                          ImVec2(0.0f, std::min(190.0f, ImGui::GetTextLineHeightWithSpacing() *
+                              static_cast<float>(block.allocations.size() + 2)))))
+    {
+        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch, 0.48f);
+        ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 78.0f);
+        ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed, 96.0f);
+        ImGui::TableSetupColumn("Offset", ImGuiTableColumnFlags_WidthFixed, 96.0f);
+        ImGui::TableSetupColumn("Usage", ImGuiTableColumnFlags_WidthFixed, 82.0f);
+        ImGui::TableHeadersRow();
+
+        for (const Vulkan::MemoryAllocationStats& allocation : block.allocations)
+        {
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            const std::string name = allocation.name.empty() ? "(unnamed allocation)" : allocation.name;
+            ImGui::TextColored(NextUI::Theme::Color(allocation.free
+                                   ? NextUI::Theme::EColor::TextDim
+                                   : NextUI::Theme::EColor::Text),
+                               "%s", name.c_str());
+
+            ImGui::TableSetColumnIndex(1);
+            DrawAllocationTypeText(allocation);
+
+            ImGui::TableSetColumnIndex(2);
+            DrawRightAlignedText(FormatBytes(allocation.sizeBytes));
+
+            ImGui::TableSetColumnIndex(3);
+            DrawRightAlignedText(FormatBytes(allocation.offsetBytes));
+
+            ImGui::TableSetColumnIndex(4);
+            DrawRightAlignedText(allocation.free ? "-" : fmt::format("0x{:X}", allocation.usageFlags));
+        }
+
+        ImGui::EndTable();
+    }
+    ImGui::PopStyleVar();
+}
+
+void DrawMemoryBlockDetails(const Vulkan::MemoryStatsSnapshot& memoryStats)
+{
+    if (memoryStats.blocks.empty())
+    {
+        ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted),
+                           "No VMA block details available. Named allocations appear after DeviceMemory::SetName().");
+        return;
+    }
+
+    std::vector<const Vulkan::MemoryBlockStats*> blocks;
+    blocks.reserve(memoryStats.blocks.size());
+    for (const Vulkan::MemoryBlockStats& block : memoryStats.blocks)
+    {
+        blocks.push_back(&block);
+    }
+    std::sort(blocks.begin(), blocks.end(),
+              [](const Vulkan::MemoryBlockStats* lhs, const Vulkan::MemoryBlockStats* rhs)
+              {
+                  return std::tie(lhs->heapIndex, lhs->memoryTypeIndex, lhs->dedicated, lhs->blockId) <
+                      std::tie(rhs->heapIndex, rhs->memoryTypeIndex, rhs->dedicated, rhs->blockId);
+              });
+
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 7.0f));
+    for (const Vulkan::MemoryBlockStats* block : blocks)
+    {
+        const float usedFraction = SafeFraction(block->blockBytes - block->unusedBytes, block->blockBytes);
+        const std::string label = fmt::format("Heap {} / Type {} / {} {}    {} used of {}    {} allocations",
+                                              block->heapIndex,
+                                              block->memoryTypeIndex,
+                                              block->dedicated ? "Dedicated" : "Block",
+                                              block->blockId,
+                                              FormatBytes(block->blockBytes - block->unusedBytes),
+                                              FormatBytes(block->blockBytes),
+                                              block->allocationCount);
+        const bool open = ImGui::TreeNodeEx(label.c_str(),
+                                            ImGuiTreeNodeFlags_SpanAvailWidth |
+                                                ImGuiTreeNodeFlags_DefaultOpen);
+        if (open)
+        {
+            ImGui::Indent(10.0f);
+            NextUI::Theme::DrawProgressBar(usedFraction,
+                                           usedFraction > 0.85f
+                                               ? NextUI::Theme::Color(NextUI::Theme::EColor::Warning)
+                                               : NextUI::Theme::Color(NextUI::Theme::EColor::Blue),
+                                           ImVec2(ImGui::GetContentRegionAvail().x, 7.0f));
+            ImGui::Dummy(ImVec2(0.0f, 6.0f));
+            DrawMemoryBlockAllocationTable(*block);
+            ImGui::Unindent(10.0f);
+            ImGui::TreePop();
+        }
+    }
+    ImGui::PopStyleVar();
+}
 } // namespace
 
 // should use 1em instead of 1px
@@ -290,12 +437,12 @@ bool NextRendererGameInstance::OnRenderUI()
 	UpdateUiScaledMetrics();
 
 	DrawTitleBar();
-	DrawModeRail();
-	DrawSettings();
+    DrawModeRail();
+    DrawSettings();
     DrawViewportTopBar();
     DrawViewportBottomBar();
-    DrawMemoryStatisticsPanel();
     DrawBottomStatusBar();
+    DrawMemoryStatisticsPanel();
 
 	if (ImGui::GetCurrentContext() != nullptr)
 	{
@@ -1183,61 +1330,99 @@ void NextRendererGameInstance::DrawTitleBar()
 
 void NextRendererGameInstance::DrawBottomStatusBar()
 {
-    NextUI::Theme::DrawStandardBottomBar(GetEngine(), "RendererStatusBar", 30.0f);
+    NextUI::Theme::DrawStandardBottomBar(GetEngine(), "RendererStatusBar", 30.0f,
+                                         [&]()
+                                         {
+                                             memoryStatisticsPanelOpen_ = !memoryStatisticsPanelOpen_;
+                                         },
+                                         memoryStatisticsPanelOpen_);
 }
 
 void NextRendererGameInstance::DrawMemoryStatisticsPanel()
 {
-    if (workMode_ != EWorkMode::Profiler)
+    const bool profilerMode = workMode_ == EWorkMode::Profiler;
+    if (!profilerMode && !memoryStatisticsPanelOpen_)
     {
         return;
     }
 
     bool keepOpen = true;
     ImGuiViewport* viewport = ImGui::GetMainViewport();
-    const ImVec2 panelPos(viewport->Pos.x + viewport->Size.x - 16.0f, viewport->Pos.y + TitlebarSize + 16.0f);
-    const ImVec2 panelSize(440.0f, 360.0f);
+    const float panelWidth = std::clamp(viewport->Size.x - 24.0f, 640.0f, 820.0f);
+    const float availablePanelHeight = viewport->Size.y - TitlebarSize - 30.0f - 28.0f;
+    const float panelHeight = std::clamp(availablePanelHeight, 430.0f, 680.0f);
+    const ImVec2 panelSize(panelWidth, panelHeight);
+    const ImVec2 panelPos = profilerMode
+        ? ImVec2(viewport->Pos.x + viewport->Size.x - 16.0f, viewport->Pos.y + TitlebarSize + 16.0f)
+        : ImVec2(viewport->Pos.x + viewport->Size.x - 16.0f,
+                 viewport->Pos.y + viewport->Size.y - 30.0f - 12.0f);
+    const ImVec2 panelPivot = profilerMode ? ImVec2(1.0f, 0.0f) : ImVec2(1.0f, 1.0f);
 
     if (!NextUI::Theme::BeginFloatingPanel("##RendererMemoryStats", ICON_FA_CHART_COLUMN, "Memory Statistics",
-                                              &keepOpen, panelPos, panelSize, ImVec2(1.0f, 0.0f)))
+                                              &keepOpen, panelPos, panelSize, panelPivot))
     {
         if (!keepOpen)
         {
-            workMode_ = EWorkMode::Renderer;
+            memoryStatisticsPanelOpen_ = false;
+            if (profilerMode)
+            {
+                workMode_ = EWorkMode::Renderer;
+            }
         }
         return;
     }
 
-    const Vulkan::MemoryStatsSnapshot memoryStats = GetEngine().GetRenderer().Device().CaptureMemoryStats();
+    const Vulkan::MemoryStatsSnapshot memoryStats = GetEngine().GetRenderer().Device().CaptureMemoryStats(true);
 
-    const std::string vramUsage = fmt::format("{} / {}",
-                                              FormatBytes(memoryStats.deviceLocalUsageBytes),
-                                              FormatBytes(memoryStats.deviceLocalBudgetBytes));
-    const std::string vmaManaged = fmt::format("{} / {}",
-                                               FormatBytes(memoryStats.deviceLocalAllocationBytes),
-                                               FormatBytes(memoryStats.deviceLocalBlockBytes));
-    const std::string heapCount = fmt::format("{} heaps", memoryStats.heaps.size());
+    ImGui::Indent(4.0f);
+    const float vramUsageFraction =
+        SafeFraction(memoryStats.deviceLocalUsageBytes, memoryStats.deviceLocalBudgetBytes);
+    const float managedFraction =
+        SafeFraction(memoryStats.deviceLocalAllocationBytes, memoryStats.deviceLocalBlockBytes);
+    const float cardGap = 12.0f;
+    const float cardWidth = (ImGui::GetContentRegionAvail().x - cardGap * 2.0f) / 3.0f;
+    const ImVec4 vramColor = vramUsageFraction > 0.85f
+        ? NextUI::Theme::Color(NextUI::Theme::EColor::Danger)
+        : (vramUsageFraction > 0.70f ? NextUI::Theme::Color(NextUI::Theme::EColor::Warning)
+                                     : NextUI::Theme::Color(NextUI::Theme::EColor::Blue));
 
-    NextUI::Theme::DrawMetricCard("VRAM usage", vramUsage.c_str(),
-                                     NextUI::Theme::Color(NextUI::Theme::EColor::Text), 124.0f);
-    ImGui::SameLine();
-    NextUI::Theme::DrawMetricCard("VMA managed", vmaManaged.c_str(),
-                                     NextUI::Theme::Color(NextUI::Theme::EColor::Text), 124.0f);
-    ImGui::SameLine();
-    NextUI::Theme::DrawMetricCard("Heaps", heapCount.c_str(),
-                                     NextUI::Theme::Color(NextUI::Theme::EColor::Text), 90.0f);
+    DrawMemoryMetricCard("VRAM usage",
+                         fmt::format("{} / {}", FormatBytes(memoryStats.deviceLocalUsageBytes),
+                                     FormatBytes(memoryStats.deviceLocalBudgetBytes)),
+                         fmt::format("{:.1f}% of budget", vramUsageFraction * 100.0f),
+                         cardWidth, vramColor);
+    ImGui::SameLine(0.0f, cardGap);
+    DrawMemoryMetricCard("VMA managed",
+                         fmt::format("{} / {}", FormatBytes(memoryStats.deviceLocalAllocationBytes),
+                                     FormatBytes(memoryStats.deviceLocalBlockBytes)),
+                         fmt::format("{:.1f}% committed", managedFraction * 100.0f),
+                         cardWidth, NextUI::Theme::Color(NextUI::Theme::EColor::AccentHover));
+    ImGui::SameLine(0.0f, cardGap);
+    DrawMemoryMetricCard("Heaps",
+                         fmt::format("{}", memoryStats.heaps.size()),
+                         fmt::format("{} total", FormatBytes(memoryStats.totalHeapSizeBytes)),
+                         cardWidth, NextUI::Theme::Color(NextUI::Theme::EColor::Success));
 
+    ImGui::Dummy(ImVec2(0.0f, 14.0f));
+    NextUI::Theme::DrawProgressBar(vramUsageFraction, vramColor, ImVec2(ImGui::GetContentRegionAvail().x, 9.0f));
+    ImGui::Dummy(ImVec2(0.0f, 12.0f));
     NextUI::Theme::DrawThinSeparator();
+    ImGui::Dummy(ImVec2(0.0f, 8.0f));
 
+    ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted), "Heap summary");
+    ImGui::Dummy(ImVec2(0.0f, 8.0f));
+
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(10.0f, 8.0f));
     if (ImGui::BeginTable("##MemoryHeapTable", 6,
-                          ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp))
+                          ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_BordersOuter |
+                              ImGuiTableFlags_SizingFixedFit))
     {
-        ImGui::TableSetupColumn("Heap");
+        ImGui::TableSetupColumn("Heap", ImGuiTableColumnFlags_WidthFixed, 66.0f);
         ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 72.0f);
-        ImGui::TableSetupColumn("Usage");
-        ImGui::TableSetupColumn("Budget");
-        ImGui::TableSetupColumn("Managed");
-        ImGui::TableSetupColumn("Blocks", ImGuiTableColumnFlags_WidthFixed, 62.0f);
+        ImGui::TableSetupColumn("Usage", ImGuiTableColumnFlags_WidthFixed, 92.0f);
+        ImGui::TableSetupColumn("Budget", ImGuiTableColumnFlags_WidthFixed, 92.0f);
+        ImGui::TableSetupColumn("Managed", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+        ImGui::TableSetupColumn("Blocks", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableHeadersRow();
 
         for (const Vulkan::MemoryHeapStats& heap : memoryStats.heaps)
@@ -1254,25 +1439,41 @@ void NextRendererGameInstance::DrawMemoryStatisticsPanel()
                                "%s", heap.deviceLocal ? "Local" : "Shared");
 
             ImGui::TableSetColumnIndex(2);
-            ImGui::TextUnformatted(FormatBytes(heap.usageBytes).c_str());
+            DrawRightAlignedText(FormatBytes(heap.usageBytes));
 
             ImGui::TableSetColumnIndex(3);
-            ImGui::TextUnformatted(FormatBytes(heap.budgetBytes).c_str());
+            DrawRightAlignedText(FormatBytes(heap.budgetBytes));
 
             ImGui::TableSetColumnIndex(4);
-            ImGui::Text("%s / %s", FormatBytes(heap.allocationBytes).c_str(), FormatBytes(heap.blockBytes).c_str());
+            DrawRightAlignedText(fmt::format("{} / {}", FormatBytes(heap.allocationBytes), FormatBytes(heap.blockBytes)));
 
             ImGui::TableSetColumnIndex(5);
-            ImGui::Text("%u", heap.blockCount);
+            DrawRightAlignedText(fmt::format("{}", heap.blockCount));
         }
 
         ImGui::EndTable();
     }
+    ImGui::PopStyleVar();
+
+    ImGui::Dummy(ImVec2(0.0f, 12.0f));
+    ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted), "Block allocation details");
+    ImGui::Dummy(ImVec2(0.0f, 8.0f));
+    if (NextUI::Theme::BeginInsetPanel("##MemoryBlockDetailsPanel", ImVec2(0.0f, 0.0f), true,
+                                       ImGuiWindowFlags_AlwaysVerticalScrollbar, ImVec2(12.0f, 10.0f), 0.18f))
+    {
+        DrawMemoryBlockDetails(memoryStats);
+    }
+    NextUI::Theme::EndInsetPanel();
+    ImGui::Unindent(4.0f);
 
     NextUI::Theme::EndFloatingPanel();
 
     if (!keepOpen)
     {
-        workMode_ = EWorkMode::Renderer;
+        memoryStatisticsPanelOpen_ = false;
+        if (profilerMode)
+        {
+            workMode_ = EWorkMode::Renderer;
+        }
     }
 }

@@ -17,6 +17,8 @@ UniformBuffer::UniformBuffer(const Vulkan::Device& device)
 		{
 			.AllocateFlags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT
 		})));
+	device.DebugUtils().SetObjectName(buffer_->Handle(), "Frame Uniform Buffer");
+	memory_->SetName("Frame Uniform Buffer Memory");
 }
 
 UniformBuffer::UniformBuffer(UniformBuffer&& other) noexcept :

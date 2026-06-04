@@ -174,9 +174,9 @@ Device::~Device()
 	}
 }
 
-MemoryStatsSnapshot Device::CaptureMemoryStats() const
+MemoryStatsSnapshot Device::CaptureMemoryStats(bool includeDetails) const
 {
-	return memoryAllocator_->CaptureStats();
+	return memoryAllocator_->CaptureStats(includeDetails);
 }
 
 void Device::WaitIdle() const

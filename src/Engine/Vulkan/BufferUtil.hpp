@@ -58,6 +58,8 @@ namespace Vulkan
 		// Create a temporary host-visible staging buffer.
 		auto stagingBuffer = std::make_unique<Buffer>(device, contentSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 		auto stagingBufferMemory = stagingBuffer->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		device.DebugUtils().SetObjectName(stagingBuffer->Handle(), "BufferUpload Staging Buffer");
+		stagingBufferMemory.SetName("BufferUpload Staging Memory");
 
 		// Copy the host data into the staging buffer.
 		const auto data = stagingBufferMemory.Map(0, contentSize);
@@ -80,6 +82,8 @@ namespace Vulkan
 		// Create a temporary host-visible staging buffer.
 		auto stagingBuffer = std::make_unique<Buffer>(device, contentSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 		auto stagingBufferMemory = stagingBuffer->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		device.DebugUtils().SetObjectName(stagingBuffer->Handle(), "BufferReadback Staging Buffer");
+		stagingBufferMemory.SetName("BufferReadback Staging Memory");
 
 		// Copy the staging buffer to the device buffer.
 		srcBuffer.CopyTo(commandPool, *stagingBuffer, contentSize);

@@ -42,7 +42,7 @@ namespace Vulkan
 		VkQueue TransferQueue() const { return transferQueue_; }
 
 		VkPhysicalDeviceProperties DeviceProperties() const { return deviceProp_; }
-		MemoryStatsSnapshot CaptureMemoryStats() const;
+		MemoryStatsSnapshot CaptureMemoryStats(bool includeDetails = false) const;
 
 		void WaitIdle() const;
 
