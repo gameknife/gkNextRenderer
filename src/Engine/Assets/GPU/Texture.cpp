@@ -30,6 +30,8 @@ namespace
 {
     constexpr uint32_t kHdrCacheMagic = 0x48445243; // 'HDRC'
     constexpr uint32_t kHdrCacheVersion = 1;
+    constexpr uint32_t kHdrTexturePromotionFrames = 8;
+    constexpr uint32_t kHdrTextureDemotionFrames = 180;
 
     struct HdrCacheHeader
     {
@@ -75,6 +77,7 @@ namespace Assets
         TextureImage* transferPtr;
         float elapsed;
         bool needFlushHDRSH;
+        uint8_t hdrResidency;
         std::array<char, 256> outputInfo;
     };
     
@@ -301,6 +304,315 @@ namespace Assets
         }
                 
         return result;
+    }
+
+    struct FHDRTexturePayload
+    {
+        int Width = 1;
+        int Height = 1;
+        uint32_t MipLevels = 1;
+        VkFormat Format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        std::vector<float> BasePixels = {0.0f, 0.0f, 0.0f, 1.0f};
+        std::vector<std::vector<float>> MipLevelData;
+        std::vector<std::pair<int, int>> MipDimensions;
+        SphericalHarmonics SH {};
+    };
+
+    const char* HDRResidencyName(GlobalTexturePool::EHDRTextureResidency residency)
+    {
+        return residency == GlobalTexturePool::EHDRTextureResidency::FullMip ? "full" : "lowest-mip";
+    }
+
+    std::string HDRCacheFileName(const std::string& textureName)
+    {
+        std::hash<std::string> hasher;
+        return Utilities::CookHelper::GetCookedFileName(fmt::format("{:016x}", hasher(textureName)), "texhdr");
+    }
+
+    bool LoadHDRTexturePayloadFromCache(const std::string& textureName, FHDRTexturePayload& payload)
+    {
+        const std::string cacheFileName = HDRCacheFileName(textureName);
+        std::filesystem::path cacheFilePath(cacheFileName);
+        if (!std::filesystem::exists(cacheFilePath))
+        {
+            return false;
+        }
+
+        bool validCache = false;
+        std::ifstream cacheFile(cacheFileName, std::ios::binary);
+        if (cacheFile.is_open())
+        {
+            HdrCacheHeader header {};
+            cacheFile.read(reinterpret_cast<char*>(&header), sizeof(header));
+
+            validCache = cacheFile.gcount() == sizeof(header)
+                && header.magic == kHdrCacheMagic
+                && header.version == kHdrCacheVersion
+                && header.originalSize > 0
+                && header.compressedSize > 0
+                && header.originalSize <= static_cast<uint64_t>(std::numeric_limits<size_t>::max())
+                && header.compressedSize <= static_cast<uint64_t>(std::numeric_limits<size_t>::max())
+                && header.originalSize <= static_cast<uint64_t>(std::numeric_limits<int>::max())
+                && header.compressedSize <= static_cast<uint64_t>(std::numeric_limits<int>::max());
+
+            if (validCache)
+            {
+                const size_t compressedSize = static_cast<size_t>(header.compressedSize);
+                const size_t originalSize = static_cast<size_t>(header.originalSize);
+
+                std::vector<uint8_t> compressedData(compressedSize);
+                cacheFile.read(reinterpret_cast<char*>(compressedData.data()), compressedSize);
+                if (!cacheFile)
+                {
+                    validCache = false;
+                }
+                else
+                {
+                    std::vector<uint8_t> uncompressedData(originalSize);
+                    const size_t decompressedSize = lzav_decompress(
+                        compressedData.data(), uncompressedData.data(),
+                        static_cast<int>(compressedSize), static_cast<int>(originalSize));
+
+                    if (decompressedSize != originalSize
+                        || HashBuffer(uncompressedData.data(), uncompressedData.size()) != header.dataHash)
+                    {
+                        validCache = false;
+                    }
+                    else
+                    {
+                        size_t offset = 0;
+                        auto readFromBuffer = [&](void* dst, size_t readSize) -> bool
+                        {
+                            if (offset + readSize > uncompressedData.size())
+                            {
+                                return false;
+                            }
+                            std::memcpy(dst, uncompressedData.data() + offset, readSize);
+                            offset += readSize;
+                            return true;
+                        };
+
+                        size_t mipCount = 0;
+                        if (!readFromBuffer(&payload.Width, sizeof(int))
+                            || !readFromBuffer(&payload.Height, sizeof(int))
+                            || !readFromBuffer(&payload.MipLevels, sizeof(uint32_t))
+                            || !readFromBuffer(&payload.SH, sizeof(SphericalHarmonics))
+                            || !readFromBuffer(&mipCount, sizeof(size_t))
+                            || payload.Width <= 0
+                            || payload.Height <= 0
+                            || mipCount == 0)
+                        {
+                            validCache = false;
+                        }
+                        else
+                        {
+                            payload.Format = VK_FORMAT_R32G32B32A32_SFLOAT;
+                            payload.MipDimensions.resize(mipCount);
+                            for (auto& dim : payload.MipDimensions)
+                            {
+                                if (!readFromBuffer(&dim.first, sizeof(int))
+                                    || !readFromBuffer(&dim.second, sizeof(int))
+                                    || dim.first <= 0
+                                    || dim.second <= 0)
+                                {
+                                    validCache = false;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (validCache)
+                        {
+                            const size_t baseFloats = static_cast<size_t>(payload.Width) * payload.Height * 4;
+                            payload.BasePixels.resize(baseFloats);
+                            if (!readFromBuffer(payload.BasePixels.data(), baseFloats * sizeof(float)))
+                            {
+                                validCache = false;
+                            }
+                        }
+
+                        if (validCache)
+                        {
+                            payload.MipLevelData.clear();
+                            payload.MipLevelData.resize(mipCount);
+                            for (auto& mipData : payload.MipLevelData)
+                            {
+                                size_t mipSize = 0;
+                                if (!readFromBuffer(&mipSize, sizeof(size_t)))
+                                {
+                                    validCache = false;
+                                    break;
+                                }
+                                mipData.resize(mipSize);
+                                if (mipSize > 0 && !readFromBuffer(mipData.data(), mipSize * sizeof(float)))
+                                {
+                                    validCache = false;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            cacheFile.close();
+        }
+
+        if (!validCache)
+        {
+            std::error_code removeError;
+            std::filesystem::remove(cacheFilePath, removeError);
+        }
+        return validCache;
+    }
+
+    void SaveHDRTexturePayloadToCache(const std::string& textureName, const FHDRTexturePayload& payload)
+    {
+        std::vector<uint8_t> uncompressedData;
+        auto writeToBuffer = [&](const void* src, size_t writeSize)
+        {
+            const uint8_t* bytes = static_cast<const uint8_t*>(src);
+            uncompressedData.insert(uncompressedData.end(), bytes, bytes + writeSize);
+        };
+
+        writeToBuffer(&payload.Width, sizeof(int));
+        writeToBuffer(&payload.Height, sizeof(int));
+        writeToBuffer(&payload.MipLevels, sizeof(uint32_t));
+        writeToBuffer(&payload.SH, sizeof(SphericalHarmonics));
+
+        const size_t mipCount = payload.MipDimensions.size();
+        writeToBuffer(&mipCount, sizeof(size_t));
+        for (const auto& dim : payload.MipDimensions)
+        {
+            writeToBuffer(&dim.first, sizeof(int));
+            writeToBuffer(&dim.second, sizeof(int));
+        }
+
+        writeToBuffer(payload.BasePixels.data(), payload.BasePixels.size() * sizeof(float));
+
+        for (const auto& mipData : payload.MipLevelData)
+        {
+            const size_t mipSize = mipData.size();
+            writeToBuffer(&mipSize, sizeof(size_t));
+            writeToBuffer(mipData.data(), mipSize * sizeof(float));
+        }
+
+        const size_t uncompressedSize = uncompressedData.size();
+        if (uncompressedSize > static_cast<size_t>(std::numeric_limits<int>::max()))
+        {
+            return;
+        }
+
+        const size_t compressedBound = lzav_compress_bound_hi(int(uncompressedSize));
+        std::vector<uint8_t> compressedData(compressedBound);
+        const size_t actualCompressedSize = lzav_compress_hi(
+            uncompressedData.data(), compressedData.data(), int(uncompressedSize), int(compressedBound));
+        if (actualCompressedSize == 0)
+        {
+            return;
+        }
+
+        HdrCacheHeader header {};
+        header.magic = kHdrCacheMagic;
+        header.version = kHdrCacheVersion;
+        header.originalSize = static_cast<uint64_t>(uncompressedSize);
+        header.compressedSize = static_cast<uint64_t>(actualCompressedSize);
+        header.dataHash = HashBuffer(uncompressedData.data(), uncompressedData.size());
+
+        const std::string cacheFileName = HDRCacheFileName(textureName);
+        std::filesystem::path cacheFilePath(cacheFileName);
+        std::filesystem::path tempCachePath = cacheFilePath;
+        tempCachePath += ".tmp";
+
+        std::ofstream cacheFile(tempCachePath, std::ios::binary | std::ios::trunc);
+        if (!cacheFile.is_open())
+        {
+            std::error_code removeTempError;
+            std::filesystem::remove(tempCachePath, removeTempError);
+            return;
+        }
+
+        cacheFile.write(reinterpret_cast<const char*>(&header), sizeof(header));
+        cacheFile.write(reinterpret_cast<const char*>(compressedData.data()), actualCompressedSize);
+        cacheFile.flush();
+        cacheFile.close();
+
+        std::error_code removeError;
+        std::filesystem::remove(cacheFilePath, removeError);
+
+        std::error_code renameError;
+        std::filesystem::rename(tempCachePath, cacheFilePath, renameError);
+        if (renameError)
+        {
+            std::filesystem::remove(tempCachePath);
+        }
+    }
+
+    FHDRTexturePayload LoadHDRTexturePayload(const std::string& textureName, const uint8_t* data, size_t byteLength)
+    {
+        FHDRTexturePayload payload {};
+        if (LoadHDRTexturePayloadFromCache(textureName, payload))
+        {
+            return payload;
+        }
+
+        if (data == nullptr || byteLength == 0)
+        {
+            return payload;
+        }
+
+        int channels = 4;
+        float* pixels = stbi_loadf_from_memory(data, static_cast<uint32_t>(byteLength), &payload.Width, &payload.Height,
+                                               &channels, STBI_rgb_alpha);
+        if (pixels == nullptr)
+        {
+            return payload;
+        }
+
+        payload.Format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        const size_t baseFloats = static_cast<size_t>(payload.Width) * payload.Height * 4;
+        payload.BasePixels.assign(pixels, pixels + baseFloats);
+        payload.SH = ProjectHdrToSh(payload.BasePixels.data(), payload.Width, payload.Height);
+        PrefilterHdrEnvironmentMap(payload.BasePixels.data(), payload.Width, payload.Height, payload.MipLevelData,
+                                   payload.MipDimensions);
+        payload.MipLevels = static_cast<uint32_t>(payload.MipLevelData.size());
+        stbi_image_free(pixels);
+
+        SaveHDRTexturePayloadToCache(textureName, payload);
+        return payload;
+    }
+
+    std::unique_ptr<TextureImage> CreateHDRTextureImage(
+        Vulkan::CommandPool& commandPool, const FHDRTexturePayload& payload,
+        GlobalTexturePool::EHDRTextureResidency residency)
+    {
+        const uint32_t baseSize = static_cast<uint32_t>(payload.BasePixels.size() * sizeof(float));
+        if (residency == GlobalTexturePool::EHDRTextureResidency::FullMip
+            && payload.MipLevelData.size() > 1
+            && payload.MipDimensions.size() == payload.MipLevelData.size())
+        {
+            return std::make_unique<TextureImage>(
+                commandPool, payload.Width, payload.Height, static_cast<uint32_t>(payload.MipLevelData.size()),
+                payload.Format, reinterpret_cast<const unsigned char*>(payload.BasePixels.data()), baseSize,
+                payload.MipLevelData, payload.MipDimensions);
+        }
+
+        if (residency == GlobalTexturePool::EHDRTextureResidency::LowestMip
+            && payload.MipLevelData.size() > 1
+            && payload.MipDimensions.size() == payload.MipLevelData.size()
+            && !payload.MipLevelData.back().empty())
+        {
+            const auto& dim = payload.MipDimensions.back();
+            const auto& mipData = payload.MipLevelData.back();
+            const uint32_t mipSize = static_cast<uint32_t>(mipData.size() * sizeof(float));
+            return std::make_unique<TextureImage>(
+                commandPool, dim.first, dim.second, 1, payload.Format,
+                reinterpret_cast<const unsigned char*>(mipData.data()), mipSize);
+        }
+
+        return std::make_unique<TextureImage>(
+            commandPool, payload.Width, payload.Height, 1, payload.Format,
+            reinterpret_cast<const unsigned char*>(payload.BasePixels.data()), baseSize);
     }
 
     uint32_t GlobalTexturePool::LoadTexture(const std::string& filename, bool srgb)
@@ -540,8 +852,28 @@ namespace Assets
             copyedData = new uint8_t[bytelength];
             memcpy(copyedData, data, bytelength);
         }
+        const bool streamHDRAtLoad = hdr && NextEngine::GetInstance() != nullptr
+            && NextEngine::GetInstance()->GetUserSettings().StreamHDRTextures;
+        const EHDRTextureResidency initialHDRResidency =
+            streamHDRAtLoad ? EHDRTextureResidency::LowestMip : EHDRTextureResidency::FullMip;
+        if (hdr)
+        {
+            if (hdrTextureResidency_.size() <= newTextureIdx)
+            {
+                hdrTextureResidency_.resize(static_cast<size_t>(newTextureIdx) + 1);
+            }
+            auto& residency = hdrTextureResidency_[newTextureIdx];
+            residency.TextureName = texname;
+            residency.Lifetime = lifetime;
+            residency.IsHDR = true;
+            residency.Current = initialHDRResidency;
+            residency.Target = initialHDRResidency;
+            residency.Pending = true;
+            residency.DemandFrames = 0;
+            residency.LastTouchedFrame = 0;
+        }
         auto textureLoadTask =
-            [this, hdr, srgb, texname, mime, copyedData, bytelength, newTextureIdx](Tasks::ResTask& task)
+            [this, hdr, srgb, texname, mime, copyedData, bytelength, newTextureIdx, initialHDRResidency](Tasks::ResTask& task)
             {
                 TextureTaskContext taskContext{};
                 const auto timer = std::chrono::high_resolution_clock::now();
@@ -630,6 +962,21 @@ namespace Assets
                     std::hash<std::string> hasher;
                     // load from texture files
                     if (hdr)
+                    {
+                        const FHDRTexturePayload payload = LoadHDRTexturePayload(texname, copyedData, bytelength);
+                        width = payload.Width;
+                        height = payload.Height;
+                        channels = 4;
+                        miplevel = initialHDRResidency == EHDRTextureResidency::FullMip
+                            ? std::max<uint32_t>(1, payload.MipLevels)
+                            : 1;
+                        format = payload.Format;
+                        hdrSphericalHarmonics_[newTextureIdx] = payload.SH;
+                        textureImages_[newTextureIdx] = CreateHDRTextureImage(commandPool_, payload, initialHDRResidency);
+                        textureCreated = textureImages_[newTextureIdx] != nullptr;
+                    }
+
+                    if (hdr && !textureCreated)
                     {
                         if (copyedData == nullptr || bytelength == 0)
                         {
@@ -881,7 +1228,7 @@ namespace Assets
                             }
                         }
                     }
-                    else
+                    else if (!hdr)
                     {
 #if WITH_KTX2
                         // ldr texture, try cache fist
@@ -972,10 +1319,14 @@ namespace Assets
                 // transfer
                 taskContext.textureId = newTextureIdx;
                 taskContext.needFlushHDRSH = hdr;
+                taskContext.hdrResidency = static_cast<uint8_t>(initialHDRResidency);
                 taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
                     std::chrono::high_resolution_clock::now() - timer).count();
-                std::string info = fmt::format("loaded {} ({} x {} x {}) in {:.2f}ms", texname, width, height, miplevel,
-                                               taskContext.elapsed * 1000.f);
+                std::string info = hdr
+                    ? fmt::format("loaded {} ({} x {} x {}, {}) in {:.2f}ms", texname, width, height, miplevel,
+                                  HDRResidencyName(initialHDRResidency), taskContext.elapsed * 1000.f)
+                    : fmt::format("loaded {} ({} x {} x {}) in {:.2f}ms", texname, width, height, miplevel,
+                                  taskContext.elapsed * 1000.f);
                 std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
                 task.SetContext(taskContext);
             };
@@ -990,6 +1341,13 @@ namespace Assets
 
                 if (taskContext.needFlushHDRSH)
                 {
+                    if (static_cast<size_t>(taskContext.textureId) < hdrTextureResidency_.size())
+                    {
+                        auto& residency = hdrTextureResidency_[taskContext.textureId];
+                        residency.Current = static_cast<EHDRTextureResidency>(taskContext.hdrResidency);
+                        residency.Target = residency.Current;
+                        residency.Pending = false;
+                    }
                     NextEngine::GetInstance()->GetScene().UpdateHDRSH();
                 }
             };
@@ -1004,6 +1362,146 @@ namespace Assets
         }
 
         return newTextureIdx;
+    }
+
+    void GlobalTexturePool::TickHDRTextureResidency(
+        uint32_t activeTextureIdx, bool hasSky, uint32_t frameIndex, bool streamingEnabled)
+    {
+        if (!streamingEnabled)
+        {
+            for (uint32_t textureIdx = 0; textureIdx < hdrTextureResidency_.size(); ++textureIdx)
+            {
+                const auto& residency = hdrTextureResidency_[textureIdx];
+                if (residency.IsHDR && !residency.Pending && residency.Current != EHDRTextureResidency::FullMip)
+                {
+                    QueueHDRTextureResidency(textureIdx, EHDRTextureResidency::FullMip);
+                }
+            }
+            return;
+        }
+
+        for (uint32_t textureIdx = 0; textureIdx < hdrTextureResidency_.size(); ++textureIdx)
+        {
+            auto& residency = hdrTextureResidency_[textureIdx];
+            if (!residency.IsHDR)
+            {
+                continue;
+            }
+
+            const bool touched = hasSky && textureIdx == activeTextureIdx;
+            if (touched)
+            {
+                residency.DemandFrames =
+                    (residency.LastTouchedFrame + 1 == frameIndex) ? residency.DemandFrames + 1 : 1;
+                residency.LastTouchedFrame = frameIndex;
+
+                if (!residency.Pending
+                    && residency.Current == EHDRTextureResidency::LowestMip
+                    && residency.DemandFrames >= kHdrTexturePromotionFrames)
+                {
+                    QueueHDRTextureResidency(textureIdx, EHDRTextureResidency::FullMip);
+                }
+                continue;
+            }
+
+            if (!residency.Pending
+                && residency.Current == EHDRTextureResidency::FullMip
+                && frameIndex > residency.LastTouchedFrame + kHdrTextureDemotionFrames)
+            {
+                QueueHDRTextureResidency(textureIdx, EHDRTextureResidency::LowestMip);
+            }
+        }
+    }
+
+    void GlobalTexturePool::QueueHDRTextureResidency(uint32_t textureIdx, EHDRTextureResidency targetResidency)
+    {
+        if (textureIdx >= hdrTextureResidency_.size()
+            || textureIdx >= textureImages_.size()
+            || !hdrTextureResidency_[textureIdx].IsHDR)
+        {
+            return;
+        }
+
+        auto& residency = hdrTextureResidency_[textureIdx];
+        if (residency.Pending || residency.Current == targetResidency)
+        {
+            return;
+        }
+
+        residency.Pending = true;
+        residency.Target = targetResidency;
+        const std::string textureName = residency.TextureName;
+
+        auto sourceData = std::make_shared<std::vector<uint8_t>>();
+        if (!std::filesystem::exists(HDRCacheFileName(textureName)))
+        {
+            Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(textureName, *sourceData);
+        }
+
+        auto textureResidencyTask =
+            [this, textureIdx, textureName, targetResidency, sourceData](Tasks::ResTask& task)
+            {
+                TextureTaskContext taskContext {};
+                const auto timer = std::chrono::high_resolution_clock::now();
+
+                const uint8_t* data = sourceData->empty() ? nullptr : sourceData->data();
+                const FHDRTexturePayload payload = LoadHDRTexturePayload(textureName, data, sourceData->size());
+                auto textureImage = CreateHDRTextureImage(commandPool_, payload, targetResidency);
+                textureImage->SetDebugName(fmt::format("Texture {}", textureName));
+
+                device_.WaitIdle();
+                textureImages_[textureIdx] = std::move(textureImage);
+                hdrSphericalHarmonics_[textureIdx] = payload.SH;
+
+                taskContext.textureId = static_cast<int32_t>(textureIdx);
+                taskContext.needFlushHDRSH = true;
+                taskContext.hdrResidency = static_cast<uint8_t>(targetResidency);
+                taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
+                    std::chrono::high_resolution_clock::now() - timer).count();
+                const std::string info = fmt::format(
+                    "[HDRTextureResidency] {} -> {} in {:.2f}ms",
+                    textureName, HDRResidencyName(targetResidency), taskContext.elapsed * 1000.f);
+                std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
+                task.SetContext(taskContext);
+            };
+
+        auto textureResidencyCompleteTask = [this](Tasks::ResTask& task)
+            {
+                TextureTaskContext taskContext {};
+                task.GetContext(taskContext);
+                const uint32_t textureIdx = static_cast<uint32_t>(taskContext.textureId);
+                if (textureIdx < textureImages_.size() && textureImages_[textureIdx])
+                {
+                    textureImages_[textureIdx]->MainThreadPostLoading(mainThreadCommandPool_);
+                    BindTexture(textureIdx, *textureImages_[textureIdx]);
+                }
+
+                if (textureIdx < hdrTextureResidency_.size())
+                {
+                    auto& residency = hdrTextureResidency_[textureIdx];
+                    residency.Current = static_cast<EHDRTextureResidency>(taskContext.hdrResidency);
+                    residency.Target = residency.Current;
+                    residency.Pending = false;
+                    if (residency.Current == EHDRTextureResidency::LowestMip)
+                    {
+                        residency.DemandFrames = 0;
+                    }
+                }
+
+                SPDLOG_INFO("{}", taskContext.outputInfo.data());
+                NextEngine::GetInstance()->GetScene().UpdateHDRSH();
+            };
+
+        if (textureWorkerUploadEnabled_)
+        {
+            Tasks::TaskCoordinator::GetInstance()->AddTask(
+                std::move(textureResidencyTask), std::move(textureResidencyCompleteTask), 0);
+        }
+        else
+        {
+            Tasks::TaskCoordinator::GetInstance()->AddMainThreadTask(
+                std::move(textureResidencyTask), std::move(textureResidencyCompleteTask), 0);
+        }
     }
 
     void GlobalTexturePool::FreeTransientTextures()

@@ -65,6 +65,7 @@ struct UserSettings final
     float AmbientCubePoolBrickRatio = 0.66f;
     bool UseAmbientCubePropagation = true;
     bool UseGpuAmbientCubeSdf = false;
+    bool StreamHDRTextures = true;
 };
 
 }
