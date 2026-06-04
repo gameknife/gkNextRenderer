@@ -716,7 +716,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     if (!NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
             .filePath = "assets/fonts/Roboto-Regular.ttf",
             .pixelSize = fontSize * scaleFactor,
-            .includeChineseFull = true,
+            .includeChineseFull = false,
         }))
     {
         Throw(std::runtime_error("failed to load basic ImGui Text font"));
@@ -907,19 +907,26 @@ void UserInterface::InitializeFontTexture(Vulkan::CommandPool& commandPool)
     unsigned char* pixels = nullptr;
     int width = 0;
     int height = 0;
-    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+    io.Fonts->GetTexDataAsAlpha8(&pixels, &width, &height);
 
     if (pixels == nullptr || width <= 0 || height <= 0)
     {
         Throw(std::runtime_error("failed to build imgui font atlas"));
     }
 
-    const uint32_t fontTextureSize = static_cast<uint32_t>(width * height * 4);
+    const uint32_t fontTextureSize = static_cast<uint32_t>(width * height);
+    const VkComponentMapping fontComponentMapping{
+        VK_COMPONENT_SWIZZLE_ONE,
+        VK_COMPONENT_SWIZZLE_ONE,
+        VK_COMPONENT_SWIZZLE_ONE,
+        VK_COMPONENT_SWIZZLE_R,
+    };
     auto fontTexture = std::make_unique<Assets::TextureImage>(
-        commandPool, static_cast<size_t>(width), static_cast<size_t>(height), 1, VK_FORMAT_R8G8B8A8_UNORM, pixels,
-        fontTextureSize);
+        commandPool, static_cast<size_t>(width), static_cast<size_t>(height), 1, VK_FORMAT_R8_UNORM, pixels,
+        fontTextureSize, fontComponentMapping);
     fontTexture->MainThreadPostLoading(commandPool);
     fontTexture->SetDebugName(kUiFontAtlasTextureName);
+    io.Fonts->ClearTexData();
 
     auto* texturePool = Assets::GlobalTexturePool::GetInstance();
     if (texturePool == nullptr)

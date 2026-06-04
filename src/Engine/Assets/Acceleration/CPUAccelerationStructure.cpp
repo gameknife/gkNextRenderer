@@ -1269,7 +1269,7 @@ void FCPUAccelerationStructure::GenShadowMap(Scene& scene)
                     // 更新当前tile到GPU
                     Vulkan::CommandPool& commandPool = GlobalTexturePool::GetInstance()->GetMainThreadCommandPool();
                     const unsigned char* tileData = reinterpret_cast<const unsigned char*>(shadowMapR32.data());
-                    scene.ShadowMap().UpdateDataMainThread(commandPool, startX, startY, tileSize, tileSize, shadowMapSize, shadowMapSize,
+                    scene.EnsureCpuShadowMap(commandPool).UpdateDataMainThread(commandPool, startX, startY, tileSize, tileSize, shadowMapSize, shadowMapSize,
                         tileData, shadowMapSize * shadowMapSize * sizeof(float));
                 }
             );

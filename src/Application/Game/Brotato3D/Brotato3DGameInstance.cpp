@@ -137,7 +137,7 @@ void Brotato3DGameInstance::OnInitUI()
         bigFont_ = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
             .filePath = bigFontPath,
             .pixelSize = 32.0f,
-            .includeChineseFull = !hasPlaceholderBigFont && displayIncludesChinese,
+            .includeChineseFull = false,
         });
         if (!bigFont_)
         {

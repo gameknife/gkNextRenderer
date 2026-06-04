@@ -113,7 +113,7 @@ void Voyage3DGameInstance::OnInitUI()
     titleFont_ = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/DroidSansFallback.ttf",
         .pixelSize = 34.0f,
-        .includeChineseFull = true,
+        .includeChineseFull = false,
         .extraGlyphsUtf8 = Voyage3D::U8Text(u8"✓"),
     });
     if (!titleFont_)

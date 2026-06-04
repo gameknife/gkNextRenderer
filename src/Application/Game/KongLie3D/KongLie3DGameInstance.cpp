@@ -302,12 +302,12 @@ void KongLie3DGameInstance::OnInitUI()
 {
     NextGameInstanceBase::OnInitUI();
 
-    auto loadFont = [&](float size, std::string_view tag)
+    auto loadFont = [&](float size, std::string_view tag, bool includeChineseFull)
     {
         ImFont* font = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
             .filePath = "assets/fonts/DroidSansFallback.ttf",
             .pixelSize = size,
-            .includeChineseFull = true,
+            .includeChineseFull = includeChineseFull,
             .extraGlyphsUtf8 = KongLie3D::U8Text(u8"✓⚡◈◆◇★◎"),
         });
         if (!font)
@@ -317,9 +317,9 @@ void KongLie3DGameInstance::OnInitUI()
         return font;
     };
 
-    KongLie3D::KongLieFonts::Body = loadFont(KongLie3D::ScaleUi(18.0f), "body");
-    KongLie3D::KongLieFonts::Title = loadFont(KongLie3D::ScaleUi(32.0f), "title");
-    KongLie3D::KongLieFonts::Display = loadFont(KongLie3D::ScaleUi(56.0f), "display");
+    KongLie3D::KongLieFonts::Body = loadFont(KongLie3D::ScaleUi(18.0f), "body", true);
+    KongLie3D::KongLieFonts::Title = loadFont(KongLie3D::ScaleUi(32.0f), "title", false);
+    KongLie3D::KongLieFonts::Display = loadFont(KongLie3D::ScaleUi(56.0f), "display", false);
     if (KongLie3D::KongLieFonts::Body)
     {
         ImGui::GetIO().FontDefault = KongLie3D::KongLieFonts::Body;
