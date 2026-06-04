@@ -51,9 +51,25 @@ public static const int GPU_SCENE_AMBIENT_CUBES_PONG_OFFSET =
 public static const int GPU_SCENE_AMBIENT_SDF_SCRATCH_OFFSET =
     GPU_SCENE_AMBIENT_CUBES_PONG_OFFSET +
     GPU_SCENE_AMBIENT_CUBE_SIZE * GPU_SCENE_AMBIENT_PER_CASCADE_COUNT;
-public static const int GPU_SCENE_AMBIENT_SIZE =
+// Dedicated SDF jump-flood SeedA scratch (one dense cascade of uint4). Previously aliased onto
+// CubesPong; decoupled (Phase 3) so CubesPong can become a brick pool without breaking the SDF pass.
+public static const int GPU_SCENE_AMBIENT_SDF_SEEDA_OFFSET =
     GPU_SCENE_AMBIENT_SDF_SCRATCH_OFFSET +
     GPU_SCENE_AMBIENT_SEED_SIZE * GPU_SCENE_AMBIENT_PER_CASCADE_COUNT;
+public static const int GPU_SCENE_AMBIENT_SIZE =
+    GPU_SCENE_AMBIENT_SDF_SEEDA_OFFSET +
+    GPU_SCENE_AMBIENT_SEED_SIZE * GPU_SCENE_AMBIENT_PER_CASCADE_COUNT;
+
+// Phase 3 sparse brick storage. The cube grid (192x192x48 per cascade) is tiled into 8^3 bricks;
+// only bricks near surfaces are allocated in the cube pool, indexed via a per-cascade brick table.
+// 192/8 = 24 (x,z), 48/8 = 6 (y) -> 24*6*24 = 3456 bricks/cascade, 3456*512 = 1,769,472 = per-cascade.
+public static const int GPU_SCENE_AMBIENT_BRICK_EDGE = 8;
+public static const int GPU_SCENE_AMBIENT_BRICK_VOLUME = 512; // 8*8*8
+public static const int GPU_SCENE_AMBIENT_BRICKS_X = 24;
+public static const int GPU_SCENE_AMBIENT_BRICKS_Y = 6;
+public static const int GPU_SCENE_AMBIENT_BRICKS_Z = 24;
+public static const int GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE = 3456; // BRICKS_X * BRICKS_Y * BRICKS_Z
+public static const uint GPU_SCENE_AMBIENT_BRICK_INVALID = 0xffffffffu;
 
 public struct ALIGN_16 GPUDrivenStat
 {
@@ -249,14 +265,14 @@ public struct ALIGN_16 PageIndex
 // or relocated independently (right-size cascades, sparse brick pool). 8 x uint64 = 64 bytes.
 public struct ALIGN_16 AmbientResources
 {
-    public uint64_t Cubes;
-    public uint64_t Voxels;
+    public uint64_t Cubes;       // brick pool base (Phase 3) / dense cube array (pre-3a)
+    public uint64_t Voxels;      // dense voxel array (kept dense; Phase 4 may sparsify)
     public uint64_t Pages;
-    public uint64_t CubesPong;
-    public uint64_t SdfScratch;
-    public uint64_t Reserved0; // future: sparse brick table (Phase 3)
-    public uint64_t Reserved1; // future: sparse brick pool  (Phase 3)
-    public uint64_t Reserved2;
+    public uint64_t CubesPong;   // ping-pong copy of the baking cascade's cubes (brick-organized in Phase 3)
+    public uint64_t SdfScratch;  // SDF jump-flood SeedB (one dense cascade of uint4)
+    public uint64_t SdfSeedA;    // SDF jump-flood SeedA (one dense cascade of uint4; decoupled from CubesPong)
+    public uint64_t BrickTable;  // Phase 3: per-cascade brick -> pool slot table (uint per brick)
+    public uint64_t PoolParams;  // Phase 3: x16 = pool bricks per cascade, packed in low bits
 };
 
 public struct ALIGN_16 SphericalHarmonics
@@ -434,6 +450,18 @@ public struct ALIGN_8 GPUScene
     {
         get { return (uint4*)((AmbientResources*)AmbientBase)[0].SdfScratch; }
     }
+    public property uint4* AmbientSdfSeedA
+    {
+        get { return (uint4*)((AmbientResources*)AmbientBase)[0].SdfSeedA; }
+    }
+    public property uint* AmbientBrickTable
+    {
+        get { return (uint*)((AmbientResources*)AmbientBase)[0].BrickTable; }
+    }
+    public property uint AmbientPoolBricksPerCascade
+    {
+        get { return uint(((AmbientResources*)AmbientBase)[0].PoolParams); }
+    }
     public property SphericalHarmonics* HDRSHs
     {
         get { return (SphericalHarmonics*)(SceneDynamicBase + GPU_SCENE_DYNAMIC_HDRSHS_OFFSET); }
@@ -544,6 +572,18 @@ public struct ALIGN_8 GPUScene
     public property uint4* AmbientSdfScratch
     {
         get { return (uint4*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].SdfScratch; }
+    }
+    public property uint4* AmbientSdfSeedA
+    {
+        get { return (uint4*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].SdfSeedA; }
+    }
+    public property uint* AmbientBrickTable
+    {
+        get { return (uint*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].BrickTable; }
+    }
+    public property uint AmbientPoolBricksPerCascade
+    {
+        get { return uint(((AmbientResources*)Reserved_AmbientBase_Address.y)[0].PoolParams); }
     }
 
     uint64_t2 TLAS_SkinWeights_Address;

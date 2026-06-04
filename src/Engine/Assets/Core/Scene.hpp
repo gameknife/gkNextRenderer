@@ -195,6 +195,7 @@ namespace Assets
         Vulkan::Buffer& AmbientCubeBuffer() const { return *ambientArenaBuffer_; }
         Vulkan::Buffer& AmbientCubePongBuffer() const { return *ambientArenaBuffer_; }
         Vulkan::Buffer& AmbientCubeSdfScratchBuffer() const { return *ambientArenaBuffer_; }
+        Vulkan::Buffer& AmbientSdfSeedABuffer() const { return *ambientArenaBuffer_; }
         Vulkan::Buffer& FarAmbientCubeBuffer() const { return *ambientArenaBuffer_; }
         Vulkan::Buffer& PageIndexBuffer() const { return *ambientArenaBuffer_; }
         // Runtime byte offsets into the arena, sized to the actual allocated cascade capacity (Phase 2)
@@ -204,6 +205,7 @@ namespace Assets
         size_t AmbientPagesByteOffset() const { return ambientPagesOffset_; }
         size_t AmbientCubesPongByteOffset() const { return ambientPongOffset_; }
         size_t AmbientSdfScratchByteOffset() const { return ambientScratchOffset_; }
+        size_t AmbientSdfSeedAByteOffset() const { return ambientSdfSeedAOffset_; }
         // Allocated cascade capacity for this Scene. The effective cascade count used by the bake,
         // the CPU baker and the UBO is clamped to this so a runtime cascade-count change never reads
         // or writes outside the arena allocation.
@@ -303,6 +305,9 @@ namespace Assets
         size_t ambientPagesOffset_ = 0;
         size_t ambientPongOffset_ = 0;
         size_t ambientScratchOffset_ = 0;
+        size_t ambientSdfSeedAOffset_ = 0;
+        size_t ambientBrickTableOffset_ = 0;
+        uint32_t poolBricksPerCascade_ = 0;
 
         std::unique_ptr<Vulkan::Buffer> skinWeightBuffer_;
         std::unique_ptr<Vulkan::DeviceMemory> skinWeightBufferMemory_;

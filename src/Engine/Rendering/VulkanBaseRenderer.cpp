@@ -2216,7 +2216,13 @@ namespace Vulkan
 
         constexpr uint32_t cubesPerGroup = 64;
         constexpr uint32_t perCascadeCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
-        constexpr uint32_t totalCubeCount = Assets::CUBE_CASCADE_MAX * perCascadeCount;
+        // Clear only the allocated cascades (Phase 2 right-sizing); clearing CUBE_CASCADE_MAX would write
+        // past the right-sized cube/voxel regions. For 3a-full the cube pool and the dense voxel array
+        // share the same per-cascade count, so one count clears both.
+        const uint32_t clearCascadeCount = std::min(
+            Assets::SanitizeAmbientCubeCascadeCount(NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount),
+            GetScene().AmbientCubeCascadeCapacity());
+        const uint32_t totalCubeCount = clearCascadeCount * perCascadeCount;
         const uint32_t groupCount = (totalCubeCount + cubesPerGroup - 1) / cubesPerGroup;
 
         ambient_.clearCache->BindPipeline(commandBuffer, GetScene(), imageIndex);
@@ -2501,11 +2507,11 @@ namespace Vulkan
             GetScene().AmbientCubeCascadeCapacity());
 
         VkBuffer voxelBuffer = GetScene().FarAmbientCubeBuffer().Handle();
-        VkBuffer seedBufferA = GetScene().AmbientCubePongBuffer().Handle();
+        VkBuffer seedBufferA = GetScene().AmbientSdfSeedABuffer().Handle();
         VkBuffer seedBufferB = GetScene().AmbientCubeSdfScratchBuffer().Handle();
         const VkDeviceSize cascadeByteSize = static_cast<VkDeviceSize>(perCascadeCount) * sizeof(Assets::VoxelData);
         const VkDeviceSize seedByteSize = static_cast<VkDeviceSize>(perCascadeCount) * sizeof(glm::u32vec4);
-        const VkDeviceSize seedAByteOffset = GetScene().AmbientCubesPongByteOffset();
+        const VkDeviceSize seedAByteOffset = GetScene().AmbientSdfSeedAByteOffset();
         const VkDeviceSize seedBByteOffset = GetScene().AmbientSdfScratchByteOffset();
 
         for (uint32_t cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex)

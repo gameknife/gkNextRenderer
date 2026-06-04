@@ -21,5 +21,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
     uint4 RandomSeed = InitRandomSeed(x + y, y + z, camera.TotalFrames);
     float3 origin = float3(x, y, z) * cubeUnit + GetAmbientCubeOffsetAtCascade(cascadeIndex);
 
-    probeGen.RenderAmbientCubeOnly(tracer, origin, gIdx, RandomSeed);
+    int cubeIdx = AmbientCubePoolIndex(cascadeIndex, int3(int(x), int(y), int(z)));
+    probeGen.RenderAmbientCubeOnly(tracer, origin, cubeIdx, gIdx, RandomSeed);
 }
