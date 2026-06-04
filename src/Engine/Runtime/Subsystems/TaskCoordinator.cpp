@@ -5,12 +5,18 @@
 namespace Tasks
 {
 
-TaskThread::TaskThread(TaskCoordinator* coordinator)
+TaskThread::TaskThread(std::string threadName) : threadName_(std::move(threadName))
 {
     complete_.reset(new event_signal());
     terminate_.reset(new event_signal());
     complete_->set();
     thread_.reset(new std::thread([this] {
+#if WITH_SUPERLUMINAL
+        if (!threadName_.empty())
+        {
+            PerformanceAPI::SetCurrentThreadName(threadName_.c_str());
+        }
+#endif
         while (true)
         {
             if(terminate_->is_set())

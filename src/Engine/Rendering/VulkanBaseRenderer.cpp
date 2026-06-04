@@ -1681,7 +1681,7 @@ namespace Vulkan
             ctx_.gpuTimer->Reset(commandBuffer);
 
             {
-                SCOPED_GPU_TIMER("[gpu time]");
+                SCOPED_GPU_TIMER("[gpu]");
 
                 {
                     SCOPED_GPU_TIMER("[pre-render]");
@@ -2086,7 +2086,7 @@ namespace Vulkan
             // 然后就跳过后面的resolve流程了
             for (auto& logicRenderer : logicRenderers_.renderers)
             {
-                std::string rendererName = "";
+                const char* rendererName = "";
                 switch (logicRenderer.first)
                 {
                 case ERendererType::ERT_PathTracing:
@@ -2110,7 +2110,7 @@ namespace Vulkan
                 }
 
                 {
-                    SCOPED_GPU_TIMER(rendererName.c_str());
+                    SCOPED_GPU_TIMER(rendererName);
                     logicRenderer.second->Render(commandBuffer, imageIndex);
                 }
 

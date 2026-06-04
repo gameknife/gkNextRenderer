@@ -258,16 +258,17 @@ public:
             return invalidTimerId;
         }
 
+        const char* timerName = name ? name : "";
         const uint32_t timerId = static_cast<uint32_t>(gpuTimerRecords_.size());
         GpuTimerRecord record{};
-        record.name = name ? name : "";
+        record.name = timerName;
         record.depth = static_cast<int>(gpuActiveStack_.size());
         record.stableKey = BuildGpuStableKey(record.name);
         record.startQuery = queryIdx;
         gpuTimerRecords_.push_back(std::move(record));
 
         vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query_pool_timestamps, queryIdx);
-        device_.DebugUtils().BeginMarker(commandBuffer, name);
+        device_.DebugUtils().BeginMarker(commandBuffer, timerName);
         queryIdx++;
         gpuActiveStack_.push_back(timerId);
         return timerId;
@@ -440,7 +441,6 @@ private:
     struct GpuReplayScope
     {
         std::string name;
-        uint32_t color = 0;
         uint32_t startQuery = invalidTimerId;
         uint32_t endQuery = invalidTimerId;
         double startNanoseconds = 0.0;
@@ -454,6 +454,7 @@ private:
     void SubmitGpuTimerReplayFrame();
     void GpuTimerReplayThreadMain();
     void ReplayGpuTimerFrame(const GpuReplayFrame& frame);
+    bool IsGpuReplayStopRequested() const;
 #endif
 
 public:
@@ -482,7 +483,6 @@ private:
     std::mutex gpuReplayMutex_;
     std::condition_variable gpuReplayCondition_;
     std::deque<GpuReplayFrame> gpuReplayQueue_;
-    std::unordered_map<std::string, std::string> gpuReplayNameStorage_;
     std::atomic_bool gpuReplayStop_{false};
 #endif
 };
@@ -502,7 +502,7 @@ public:
         {
             return;
         }
-        timerId_ = timer_->Start(commandBuffer_, name_.c_str());
+        timerId_ = timer_->Start(commandBuffer_, name_);
     }
     virtual ~ScopedGpuTimer()
     {
@@ -513,7 +513,7 @@ public:
     }
     VkCommandBuffer commandBuffer_;
     VulkanGpuTimer* timer_;
-    std::string name_;
+    const char* name_;
     uint32_t timerId_ = VulkanGpuTimer::invalidTimerId;
 };
 
