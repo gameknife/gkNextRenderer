@@ -95,6 +95,20 @@ struct FCPUPageIndex
     void UploadGPU(Vulkan::DeviceMemory& deviceMemory, size_t byteBaseOffset);
 };
 
+// Phase 3 sparse cube storage: per-cascade brick -> cube-pool slot table (GPU_SCENE_AMBIENT_BRICK_INVALID
+// when a brick is unallocated). Rebuilt from the CPU voxel occupancy each flush: bricks within
+// dilationRadius of a solid voxel get a compacted slot (capped at poolBricksPerCascade); far/empty
+// bricks stay INVALID so the GPU fetch returns zero there and no cube storage is spent on them.
+struct FCPUBrickTable
+{
+    std::vector<uint32_t> brickTable;
+    uint32_t activeBricksLastBuild = 0;
+
+    void UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint32_t cascadeCapacity,
+                    uint32_t poolBricksPerCascade, int dilationRadius);
+    void UploadGPU(Vulkan::DeviceMemory& deviceMemory, size_t byteBaseOffset);
+};
+
 class FCPUAccelerationStructure
 {
 public:
@@ -143,6 +157,7 @@ private:
 
     std::vector<FCPUProbeBaker> cascadeBakers;
     FCPUPageIndex cpuPageIndex;
+    FCPUBrickTable cpuBrickTable;
 };
 
 }

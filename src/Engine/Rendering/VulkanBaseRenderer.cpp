@@ -2216,20 +2216,22 @@ namespace Vulkan
 
         constexpr uint32_t cubesPerGroup = 64;
         constexpr uint32_t perCascadeCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
-        // Clear only the allocated cascades (Phase 2 right-sizing); clearing CUBE_CASCADE_MAX would write
-        // past the right-sized cube/voxel regions. For 3a-full the cube pool and the dense voxel array
-        // share the same per-cascade count, so one count clears both.
+        // Clear only the allocated cascades (Phase 2 right-sizing). The sparse cube pool (Phase 3b) is
+        // smaller than the dense voxel array, so cubes and voxel ages are cleared over separate counts.
         const uint32_t clearCascadeCount = std::min(
             Assets::SanitizeAmbientCubeCascadeCount(NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount),
             GetScene().AmbientCubeCascadeCapacity());
-        const uint32_t totalCubeCount = clearCascadeCount * perCascadeCount;
-        const uint32_t groupCount = (totalCubeCount + cubesPerGroup - 1) / cubesPerGroup;
+        const uint32_t poolCubesPerCascade =
+            GetScene().AmbientPoolBricksPerCascade() * static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME);
+        const uint32_t cubePoolTotal = clearCascadeCount * poolCubesPerCascade;
+        const uint32_t voxelDenseTotal = clearCascadeCount * perCascadeCount;
+        const uint32_t groupCount = (std::max(cubePoolTotal, voxelDenseTotal) + cubesPerGroup - 1) / cubesPerGroup;
 
         ambient_.clearCache->BindPipeline(commandBuffer, GetScene(), imageIndex);
 
         Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
-        gpuScene.custom_data_0 = totalCubeCount;
-        gpuScene.custom_data_1 = 0;
+        gpuScene.custom_data_0 = cubePoolTotal;
+        gpuScene.custom_data_1 = voxelDenseTotal;
         gpuScene.custom_data_2 = 0;
 
         vkCmdPushConstants(commandBuffer, ambient_.clearCache->PipelineLayout().Handle(),
@@ -2244,12 +2246,12 @@ namespace Vulkan
         barriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barriers[0].buffer = GetScene().AmbientCubeBuffer().Handle();
         barriers[0].offset = GetScene().AmbientCubesByteOffset();
-        barriers[0].size = static_cast<VkDeviceSize>(totalCubeCount) * sizeof(Assets::AmbientCube);
+        barriers[0].size = static_cast<VkDeviceSize>(cubePoolTotal) * sizeof(Assets::AmbientCube);
 
         barriers[1] = barriers[0];
         barriers[1].buffer = GetScene().FarAmbientCubeBuffer().Handle();
         barriers[1].offset = GetScene().AmbientVoxelsByteOffset();
-        barriers[1].size = static_cast<VkDeviceSize>(totalCubeCount) * sizeof(Assets::VoxelData);
+        barriers[1].size = static_cast<VkDeviceSize>(voxelDenseTotal) * sizeof(Assets::VoxelData);
 
         vkCmdPipelineBarrier(commandBuffer,
             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -2298,10 +2300,15 @@ namespace Vulkan
         const uint32_t cascadeBaseOffset = cascadeIndex * static_cast<uint32_t>(perCascadeCount);
         VkBuffer cubeBuffer = GetScene().AmbientCubeBuffer().Handle();
         VkBuffer pongBuffer = GetScene().AmbientCubePongBuffer().Handle();
+        // The cube pool is laid out per cascade with poolCubesPerCascade cubes; the ping-pong copy and
+        // its barriers operate on that pool stride, not the dense per-cascade probe count.
+        const VkDeviceSize poolCubesPerCascade =
+            static_cast<VkDeviceSize>(GetScene().AmbientPoolBricksPerCascade()) * Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME;
         const VkDeviceSize cascadeByteOffset =
-            GetScene().AmbientCubesByteOffset() + static_cast<VkDeviceSize>(cascadeBaseOffset) * sizeof(Assets::AmbientCube);
+            GetScene().AmbientCubesByteOffset() +
+            static_cast<VkDeviceSize>(cascadeIndex) * poolCubesPerCascade * sizeof(Assets::AmbientCube);
         const VkDeviceSize pongByteOffset = GetScene().AmbientCubesPongByteOffset();
-        const VkDeviceSize cascadeByteSize = static_cast<VkDeviceSize>(perCascadeCount) * sizeof(Assets::AmbientCube);
+        const VkDeviceSize cascadeByteSize = poolCubesPerCascade * sizeof(Assets::AmbientCube);
 
         // ping (cube) -> pong copy with surrounding barriers
         VkBufferMemoryBarrier preCopyBarrier{};
@@ -2380,10 +2387,15 @@ namespace Vulkan
 
         VkBuffer cubeBuffer = GetScene().AmbientCubeBuffer().Handle();
         VkBuffer pongBuffer = GetScene().AmbientCubePongBuffer().Handle();
+        // The cube pool is laid out per cascade with poolCubesPerCascade cubes; the ping-pong copy and
+        // its barriers operate on that pool stride, not the dense per-cascade probe count.
+        const VkDeviceSize poolCubesPerCascade =
+            static_cast<VkDeviceSize>(GetScene().AmbientPoolBricksPerCascade()) * Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME;
         const VkDeviceSize cascadeByteOffset =
-            GetScene().AmbientCubesByteOffset() + static_cast<VkDeviceSize>(cascadeBaseOffset) * sizeof(Assets::AmbientCube);
+            GetScene().AmbientCubesByteOffset() +
+            static_cast<VkDeviceSize>(cascadeIndex) * poolCubesPerCascade * sizeof(Assets::AmbientCube);
         const VkDeviceSize pongByteOffset = GetScene().AmbientCubesPongByteOffset();
-        const VkDeviceSize cascadeByteSize = static_cast<VkDeviceSize>(perCascadeCount) * sizeof(Assets::AmbientCube);
+        const VkDeviceSize cascadeByteSize = poolCubesPerCascade * sizeof(Assets::AmbientCube);
 
         VkBufferMemoryBarrier preCopyBarrier{};
         preCopyBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
