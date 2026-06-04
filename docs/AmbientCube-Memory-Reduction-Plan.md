@@ -1,11 +1,11 @@
 # AmbientCube 显存占用降低 — 可行性评估与开发计划
 
-> 状态：**Phase 1–3 已实现并提交到 `dev`**（2026-06-04）。下方原始计划保留作设计依据；实现实况见「实现状态」。
+> 状态：**Phase 1–3 + 后续 A/C/E/F 已实现并提交到 `dev`**（2026-06-04）。下方原始计划保留作设计依据；实现实况见「实现状态」。
 > 方向：**保持当前 storage buffer / BDA 路径，不引入实时块压缩**；通过稀疏存储 + 右尺寸分配降低显存。
 
 ## 实现状态（2026-06-04）
 
-已落地并各自截图验证（playground.glb，单测 4145 断言全过）：
+已落地并各自截图验证（playground.glb，`--frames 3000`，单测 4145 断言全过）：
 
 | 阶段 | commit | 内容 | 结果 |
 |---|---|---|---|
@@ -13,18 +13,23 @@
 | Phase 1+2 | `a7a8fa5a` | 解耦 + 右尺寸 | 608 → ~486 MiB |
 | Phase 3a | `8fb48715` | brick 池间接（行为等价） | 内存中性，验证间接管线 |
 | Phase 3b | `2b092b8c` | 稀疏分类 + 缩池 | ~486 → **~324 MiB** |
+| 后续 A | `d96a4d8f` | pool cap 配置化 + heap 预算按 pool 估算 | 默认 `sys.ambientCubePoolBrickRatio=0.66`；playground arena **384.6 MiB**，active ~3336/6843，无溢出 |
+| 后续 C | `537b0265` | 烘焙/propagation/inject 改由活跃 brick list dispatch | 不再遍历 dense probe；playground long-shot 通过 |
+| 后续 E | `13618f01` | sparse tap 无效时跳过并下坠到更粗 cascade | 未分配/溢出 brick 不再直接稀释成黑 GI |
+| 后续 F | `43f3006e` | HDRI bindless 贴图按当前 sky 需求驻留 | 默认只上传最低 mip；当前 `SkyIdx` 连续需求后升 full，闲置后降回最低 mip |
 
 **实现中发现、与原计划的关键偏差（后续务必知悉）：**
 
 1. **GPUScene 是 128B push constant（`static_assert(sizeof==128)`），塞不下多个独立地址。** 因此 Phase 1 没有内联多地址，而是仿照 `SoftMeshShaderResources` 引入 **`AmbientResources` 间接结构**（`AmbientBase` 指向它，内含 Cubes/Voxels/Pages/CubesPong/SdfScratch/SdfSeedA/BrickTable/PoolParams 八个地址）。所有 GPUScene 取数属性经它转发。
 2. **SDF SeedA 必须解耦**：原先 jump-flood 把 `CubesPong` 别名当 SeedA；CubesPong 变 brick 池后失效，故新增独立稠密 `SdfSeedA` 区（+27 MiB，但换来 pong 可缩）。
-3. **固定 cap ⇒ 节省是 cap 绑定、不随场景稀疏度缩放。** 决策选了「固定上限」，所以池恒为 `cap × cascade` 大小，稀疏场景只是空 slot 更多、并不更省。cap 受**最密场景的 cascade-0 活跃数**下界约束（playground cascade-0 ~2076）。当前 `kAmbientPoolBricksPerCascade = 1728`（50%），playground cascade-0 溢出 348 块、被天空 IBL 掩盖、视觉可接受（即约定的「溢出降级」）。**这是内存/质量的可调旋钮**（`Scene.cpp` 常量；将来可做成 UserSetting）。
-4. **烘焙仍遍历全部 dense probe**（对 inactive brick 跳过 cube 写），所以本轮只拿到**内存收益**；「只 dispatch 活跃 brick 的烘焙提速」是后续工作。
+3. **固定 cap ⇒ 节省是 cap 绑定、不随场景稀疏度缩放。** 决策选了「固定上限」，所以池恒为 `cap × cascade` 大小，稀疏场景只是空 slot 更多、并不更省。cap 受**最密场景的 cascade-0 活跃数**下界约束（playground cascade-0 ~2076）。当前已改为 `UserSettings.AmbientCubePoolBrickRatio` / `sys.ambientCubePoolBrickRatio`（默认 0.66，约 2281/3456 bricks/cascade），playground long-shot 无溢出。想更激进省显存可下调该 cvar。
+4. **烘焙已改为遍历活跃 brick list**：CPU flush 时额外上传 `active brick -> brickLinear` 紧凑列表，shader 由 list index 反推 probe/world/voxel/cube pool 索引；Cubes 仍走 pool，Voxels 仍走稠密索引。
 5. **Voxels 保持稠密**（按决策），故 cube 池索引与 voxel 稠密索引在烘焙里分离传递（`cubeIdx`/`voxelIdx`）。
 6. **验证坑（重要）**：`gnb shot` 默认 90 帧内 **CPU 体素化根本没跑完**，cube 不会烘焙 → 画面主要是天空 IBL，**看不出 cube GI 是否正确**。验证 ambient cube 改动必须用大帧数（`--frames 3000`）让体素化+flush+烘焙跑完，并查 `[AmbientBrick]` 日志确认分类执行。
 7. 修了一个 Phase 2 引入的潜在越界：`ClearAmbientCubeCache` 原按 `CUBE_CASCADE_MAX` 清，超出右尺寸后的区域。
+8. HDRI 贴图新增按需驻留：`sys.hdrTextureStreaming=true` 时，所有 HDR 环境贴图初始只保留最低 mip；当前 `SkyIdx` 连续使用 8 帧后异步升到 full mip，闲置约 180 帧后降回最低 mip。SH 仍由缓存/CPU 数据更新到 scene dynamic buffer，bindless slot 不变。
 
-**后续可做**：① cap 做成 UserSetting/cvar（低 heap 设备选激进 cap）；② 烘焙只 dispatch 活跃 brick（提速）；③ 溢出 brick 在 `interpolateAmbientCubes` 里下坠到更粗 cascade（更平滑降级）；④ Phase 4 稀疏 Voxels；⑤ `HasFullAmbientCubeBudget` 按缩池后的实际大小估算（当前偏保守）。
+**后续可做**：① Phase 4 稀疏 Voxels；② Phase 5 远 cascade 降分辨率；③ `VoxelData` 16B → ~8–12B（age/matId 位打包）；④ 给 HDRI residency 增加编辑器可视化/统计，或扩展到非 HDR 材质贴图的 CPU 侧需求统计。
 
 ---
 
