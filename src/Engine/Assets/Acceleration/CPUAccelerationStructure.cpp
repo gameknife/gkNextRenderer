@@ -30,6 +30,9 @@ Assets::SphericalHarmonics HdrsHs[100];
 namespace
 {
     constexpr uint32_t kCascadeVoxelCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
+    // Dilate the solid-brick set by this many bricks when classifying active cube bricks, so the
+    // near-surface shell the bake writes (distanceToSolid < ~16 voxels = 2 bricks) is fully covered.
+    constexpr int kAmbientBrickDilationRadius = 3;
     constexpr uint8_t kMaxDistanceFieldSeed = 255;
     std::atomic_bool GLoggedInvalidCpuAsHit{false};
     std::atomic_bool GLoggedInvalidCpuAsMaterial{false};
@@ -879,6 +882,9 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
             if (!cascadeBakers.empty())
             {
                 cpuPageIndex.UpdateData(cascadeBakers);
+                cpuBrickTable.UpdateData(cascadeBakers, scene.AmbientCubeCascadeCapacity(),
+                                         scene.AmbientPoolBricksPerCascade(), kAmbientBrickDilationRadius);
+                cpuBrickTable.UploadGPU(*voxelGpuMemory, scene.AmbientBrickTableByteOffset());
             }
             cpuPageIndex.UploadGPU(*pageIndexMemory, scene.AmbientPagesByteOffset());
             needFlush = false;
@@ -911,6 +917,9 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
             if (!cascadeBakers.empty())
             {
                 cpuPageIndex.UpdateData(cascadeBakers);
+                cpuBrickTable.UpdateData(cascadeBakers, scene.AmbientCubeCascadeCapacity(),
+                                         scene.AmbientPoolBricksPerCascade(), kAmbientBrickDilationRadius);
+                cpuBrickTable.UploadGPU(*voxelGpuMemory, scene.AmbientBrickTableByteOffset());
             }
             cpuPageIndex.UploadGPU(*pageIndexMemory, scene.AmbientPagesByteOffset());
             needFlush = false;
@@ -1013,6 +1022,102 @@ void FCPUProbeBaker::ClearAmbientCubes()
 void FCPUPageIndex::Init()
 {
     pageIndex.resize(Assets::ACGI_PAGE_COUNT * Assets::ACGI_PAGE_COUNT);
+}
+
+void FCPUBrickTable::UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint32_t cascadeCapacity,
+                                uint32_t poolBricksPerCascade, int dilationRadius)
+{
+    const int BX = Assets::GPU_SCENE_AMBIENT_BRICKS_X;
+    const int BY = Assets::GPU_SCENE_AMBIENT_BRICKS_Y;
+    const int BZ = Assets::GPU_SCENE_AMBIENT_BRICKS_Z;
+    const int EDGE = Assets::GPU_SCENE_AMBIENT_BRICK_EDGE;
+    const uint32_t BPC = static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE);
+    const uint32_t kInvalid = Assets::GPU_SCENE_AMBIENT_BRICK_INVALID;
+
+    brickTable.assign(static_cast<size_t>(cascadeCapacity) * BPC, kInvalid);
+
+    const uint32_t cascadesToProcess = std::min<uint32_t>(cascadeCapacity, static_cast<uint32_t>(bakers.size()));
+    uint32_t totalActive = 0;
+    uint32_t totalOverflow = 0;
+    std::vector<uint8_t> active(BPC, 0);
+    for (uint32_t c = 0; c < cascadesToProcess; ++c)
+    {
+        const FCPUProbeBaker& baker = bakers[c];
+        std::fill(active.begin(), active.end(), uint8_t(0));
+
+        const uint32_t voxelCount = static_cast<uint32_t>(baker.voxels.size());
+        for (uint32_t v = 0; v < voxelCount; ++v)
+        {
+            if (baker.voxels[v].matId == 0)
+            {
+                continue;
+            }
+            const uint32_t y = v / (Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY);
+            const uint32_t z = (v - y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY) / Assets::CUBE_SIZE_XY;
+            const uint32_t x = v - y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY - z * Assets::CUBE_SIZE_XY;
+            const int sbx = static_cast<int>(x) / EDGE;
+            const int sby = static_cast<int>(y) / EDGE;
+            const int sbz = static_cast<int>(z) / EDGE;
+            for (int dy = -dilationRadius; dy <= dilationRadius; ++dy)
+            {
+                const int nby = sby + dy;
+                if (nby < 0 || nby >= BY) continue;
+                for (int dz = -dilationRadius; dz <= dilationRadius; ++dz)
+                {
+                    const int nbz = sbz + dz;
+                    if (nbz < 0 || nbz >= BZ) continue;
+                    for (int dx = -dilationRadius; dx <= dilationRadius; ++dx)
+                    {
+                        const int nbx = sbx + dx;
+                        if (nbx < 0 || nbx >= BX) continue;
+                        active[static_cast<uint32_t>(nby) * (BX * BZ) + static_cast<uint32_t>(nbz) * BX +
+                               static_cast<uint32_t>(nbx)] = 1;
+                    }
+                }
+            }
+        }
+
+        // Compact active bricks into pool slots in deterministic brick-linear order (stable for static
+        // scenes, so the GPU cube pool stays coherent across flushes). Beyond the cap they stay INVALID.
+        uint32_t slot = 0;
+        for (uint32_t b = 0; b < BPC; ++b)
+        {
+            if (!active[b])
+            {
+                continue;
+            }
+            if (slot < poolBricksPerCascade)
+            {
+                brickTable[static_cast<size_t>(c) * BPC + b] = slot++;
+            }
+            else
+            {
+                ++totalOverflow;
+            }
+        }
+        totalActive += slot;
+    }
+
+    activeBricksLastBuild = totalActive;
+    if (totalOverflow > 0)
+    {
+        SPDLOG_WARN("[AmbientBrick] cube pool overflow: {} bricks dropped (cap {}/cascade); GI missing there",
+                    totalOverflow, poolBricksPerCascade);
+    }
+    SPDLOG_INFO("[AmbientBrick] active bricks {} / capacity {} ({}/cascade x {} cascades)", totalActive,
+                poolBricksPerCascade * cascadesToProcess, poolBricksPerCascade, cascadesToProcess);
+}
+
+void FCPUBrickTable::UploadGPU(Vulkan::DeviceMemory& deviceMemory, size_t byteBaseOffset)
+{
+    if (brickTable.empty())
+    {
+        return;
+    }
+    const size_t bytes = brickTable.size() * sizeof(uint32_t);
+    void* mapped = deviceMemory.Map(static_cast<VkDeviceSize>(byteBaseOffset), static_cast<VkDeviceSize>(bytes));
+    std::memcpy(mapped, brickTable.data(), bytes);
+    deviceMemory.Unmap();
 }
 
 void FCPUPageIndex::UpdateData(const std::vector<FCPUProbeBaker>& bakers)

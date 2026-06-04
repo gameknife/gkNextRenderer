@@ -31,6 +31,13 @@ namespace Assets
         constexpr VkDeviceSize perAmbientCascadeCount =
             static_cast<VkDeviceSize>(Assets::CUBE_SIZE_XY) * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
 
+        // Phase 3b sparse pool cap: cube bricks allocated per cascade. The full grid is 3456 bricks/
+        // cascade; near-surface active sets are typically well under half (measured ~1100 for the
+        // playground), so a 50% cap (1728) halves cube/pong memory while leaving headroom. Scenes that
+        // exceed the cap degrade gracefully (overflow bricks lose GI, logged) per the agreed policy.
+        constexpr uint32_t kAmbientPoolBricksPerCascade =
+            static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE) / 2u;
+
         // Byte layout of the ambient arena for a given allocated cascade capacity. Cubes and Voxels
         // scale with the capacity; Pages is a fixed world grid; CubesPong and the SDF seed scratch are
         // a single cascade each. With cascadeCapacity == CUBE_CASCADE_MAX this reproduces the
@@ -48,19 +55,24 @@ namespace Assets
             VkDeviceSize totalSize;
         };
 
-        constexpr AmbientArenaLayout ComputeAmbientArenaLayout(uint32_t cascadeCapacity)
+        // poolBricksPerCascade sizes the sparse cube pool (Cubes) and its ping-pong copy (CubesPong);
+        // Voxels/Pages/SDF scratch stay dense (full per-cascade). With poolBricksPerCascade ==
+        // BRICKS_PER_CASCADE the cube pool equals the dense grid (Phase 3a behaviour).
+        constexpr AmbientArenaLayout ComputeAmbientArenaLayout(uint32_t cascadeCapacity, uint32_t poolBricksPerCascade)
         {
+            const VkDeviceSize poolCubesPerCascade =
+                static_cast<VkDeviceSize>(poolBricksPerCascade) * Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME;
             AmbientArenaLayout layout{};
             layout.cubesOffset = 0;
             layout.voxelsOffset = layout.cubesOffset +
-                static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_CUBE_SIZE) * perAmbientCascadeCount * cascadeCapacity;
+                static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_CUBE_SIZE) * poolCubesPerCascade * cascadeCapacity;
             layout.pagesOffset = layout.voxelsOffset +
                 static_cast<VkDeviceSize>(Assets::GPU_SCENE_VOXEL_DATA_SIZE) * perAmbientCascadeCount * cascadeCapacity;
             layout.pongOffset = layout.pagesOffset +
                 static_cast<VkDeviceSize>(Assets::GPU_SCENE_PAGE_INDEX_SIZE) * Assets::ACGI_PAGE_COUNT *
                     Assets::ACGI_PAGE_COUNT;
             layout.scratchOffset = layout.pongOffset +
-                static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_CUBE_SIZE) * perAmbientCascadeCount;
+                static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_CUBE_SIZE) * poolCubesPerCascade;
             layout.sdfSeedAOffset = layout.scratchOffset +
                 static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_SEED_SIZE) * perAmbientCascadeCount;
             // Phase 3: per-cascade brick -> pool slot table (uint per brick), sized to the capacity.
@@ -70,11 +82,6 @@ namespace Assets
                 sizeof(uint32_t) * static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE) *
                     cascadeCapacity;
             return layout;
-        }
-
-        constexpr VkDeviceSize AmbientArenaSizeForCascadeCapacity(uint32_t cascadeCapacity)
-        {
-            return ComputeAmbientArenaLayout(cascadeCapacity).totalSize;
         }
 
         static_assert(sizeof(Assets::NodeProxy) == Assets::GPU_SCENE_NODE_PROXY_SIZE);
@@ -156,9 +163,10 @@ namespace Assets
         }
         const uint32_t ambientCubeCascadeCapacity = allocateAmbientCube ? configuredCascadeCount : 1u;
         ambientCubeCascadeCapacity_ = ambientCubeCascadeCapacity;
-        // Phase 3a: full pool (every brick allocated). Phase 3b will reduce this to a sparse cap.
-        poolBricksPerCascade_ = static_cast<uint32_t>(GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE);
-        const AmbientArenaLayout ambientLayout = ComputeAmbientArenaLayout(ambientCubeCascadeCapacity);
+        // Phase 3b: sparse pool capped at kAmbientPoolBricksPerCascade bricks/cascade.
+        poolBricksPerCascade_ = kAmbientPoolBricksPerCascade;
+        const AmbientArenaLayout ambientLayout =
+            ComputeAmbientArenaLayout(ambientCubeCascadeCapacity, poolBricksPerCascade_);
         ambientVoxelsOffset_ = static_cast<size_t>(ambientLayout.voxelsOffset);
         ambientPagesOffset_ = static_cast<size_t>(ambientLayout.pagesOffset);
         ambientPongOffset_ = static_cast<size_t>(ambientLayout.pongOffset);
@@ -198,22 +206,14 @@ namespace Assets
                                                    ambientResourcesBuffer_, ambientResourcesBufferMemory_);
         }
 
-        // Phase 3a: identity brick table (every brick allocated; slot == brick-linear within the
-        // cascade), so the cube pool is a brick-reordered but complete copy of the dense grid. The
-        // arena memory is host-coherent, so map and write the table in place. Phase 3b will instead
-        // classify active bricks on the CPU and mark the rest GPU_SCENE_AMBIENT_BRICK_INVALID.
+        // Phase 3b: initialise the brick table to "all unallocated" (INVALID). The CPU brick classifier
+        // (FCPUBrickTable, run on each voxel flush in FCPUAccelerationStructure::Tick) fills compacted
+        // pool slots for near-surface bricks once the scene is voxelized; until then there is no cube GI.
         if (allocateAmbientCube)
         {
             const uint32_t bricksPerCascade = static_cast<uint32_t>(GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE);
             const size_t tableCount = static_cast<size_t>(ambientCubeCascadeCapacity) * bricksPerCascade;
-            std::vector<uint32_t> brickTable(tableCount);
-            for (uint32_t cascade = 0; cascade < ambientCubeCascadeCapacity; ++cascade)
-            {
-                for (uint32_t brick = 0; brick < bricksPerCascade; ++brick)
-                {
-                    brickTable[static_cast<size_t>(cascade) * bricksPerCascade + brick] = brick;
-                }
-            }
+            std::vector<uint32_t> brickTable(tableCount, GPU_SCENE_AMBIENT_BRICK_INVALID);
             void* mapped = ambientArenaBufferMemory_->Map(static_cast<VkDeviceSize>(ambientLayout.brickTableOffset),
                                                           tableCount * sizeof(uint32_t));
             std::memcpy(mapped, brickTable.data(), tableCount * sizeof(uint32_t));

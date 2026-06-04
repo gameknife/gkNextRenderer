@@ -210,6 +210,10 @@ namespace Assets
         // the CPU baker and the UBO is clamped to this so a runtime cascade-count change never reads
         // or writes outside the arena allocation.
         uint32_t AmbientCubeCascadeCapacity() const { return ambientCubeCascadeCapacity_; }
+        // Phase 3 sparse cube pool: byte offset of the per-cascade brick table inside the arena and the
+        // number of cube bricks allocated per cascade (the sparse pool cap).
+        size_t AmbientBrickTableByteOffset() const { return ambientBrickTableOffset_; }
+        uint32_t AmbientPoolBricksPerCascade() const { return poolBricksPerCascade_; }
 
         Vulkan::Buffer& SkinWeightBuffer() const { return *skinWeightBuffer_; }
         Vulkan::Buffer& SkinJointBuffer() const { return *skinJointBuffer_; }
