@@ -132,6 +132,20 @@ namespace NextCVar
                      "Use GPU jump-flood distance field rebuild for ambient cube voxels");
         GK_CVAR_BOOL("sys.hdrTextureStreaming", settings, StreamHDRTextures, true, ECVarFlags::Archive,
                      "Keep inactive HDR environment textures at their lowest mip and promote the active sky on demand");
+        GK_CVAR_BOOL("r.sharc.enable", settings, SharcEnable, false, ECVarFlags::Archive,
+                     "Enable experimental SHARC path tracing radiance cache");
+        GK_CVAR_UINT("r.sharc.entriesPow2", settings, SharcEntriesPow2, 21, ECVarFlags::Archive,
+                     "SHARC cache entry count as log2");
+        GK_CVAR_FLOAT("r.sharc.updateSampleRatio", settings, SharcUpdateSampleRatio, 0.25f, ECVarFlags::Archive,
+                      "Fraction of pixels used by SHARC update pass");
+        GK_CVAR_INT("r.sharc.debugMode", settings, SharcDebugMode, 0, ECVarFlags::Archive,
+                    "SHARC debug mode (0=off,1=cache hit,2=cache miss)");
+        GK_CVAR_UINT("r.sharc.queryMinBounce", settings, SharcQueryMinBounce, 1, ECVarFlags::Archive,
+                     "Minimum bounce index for SHARC query");
+        GK_CVAR_FLOAT("r.sharc.queryRoughnessMin", settings, SharcQueryRoughnessMin, 0.35f, ECVarFlags::Archive,
+                      "Minimum material roughness for SHARC query");
+        GK_CVAR_FLOAT("r.sharc.voxelSize", settings, SharcVoxelSize, 0.75f, ECVarFlags::Archive,
+                      "World-space SHARC hash voxel size");
 
         if (engine != nullptr)
         {

@@ -9,12 +9,46 @@
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 
 #include <chrono>
+#include <cstring>
 #include <numeric>
 
 #include "Engine/Runtime/Engine.hpp"
 
 namespace Vulkan::RayTracing
 {
+    namespace
+    {
+        constexpr uint32_t kSharcResolveThreadCount = 64;
+        constexpr uint32_t kSharcMinEntriesPow2 = 10;
+        constexpr uint32_t kSharcMaxEntriesPow2 = 22;
+        constexpr uint32_t kSharcStaleFrameCount = 180;
+
+        void CreateSharcBuffer(
+            Vulkan::CommandPool& commandPool,
+            const char* name,
+            VkDeviceSize size,
+            VkMemoryPropertyFlags memoryFlags,
+            PathTracingRenderer::FSharcBuffer& outBuffer)
+        {
+            Vulkan::BufferUtil::CreateDeviceBufferLocal(
+                commandPool,
+                name,
+                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                memoryFlags,
+                static_cast<size_t>(size),
+                outBuffer.buffer,
+                outBuffer.memory);
+            outBuffer.size = size;
+        }
+
+        void WriteHostVisibleBuffer(PathTracingRenderer::FSharcBuffer& dst, const void* data, size_t size)
+        {
+            void* mapped = dst.memory->Map(0, size);
+            std::memcpy(mapped, data, size);
+            dst.memory->Unmap();
+        }
+    }
+
     PathTracingRenderer::~PathTracingRenderer()
     {
         PathTracingRenderer::DeleteSwapChain();
@@ -43,8 +77,170 @@ namespace Vulkan::RayTracing
     void PathTracingRenderer::DeleteSwapChain()
     {
         rayTracingPipeline_.reset();
+        sharcUpdatePipeline_.reset();
+        sharcResolvePipeline_.reset();
+        sharcQueryPipeline_.reset();
         accumulatePipeline_.reset();
         composePipelineNonDenoiser_.reset();
+    }
+
+    void PathTracingRenderer::EnsureSharcPipelines()
+    {
+        if (!sharcUpdatePipeline_)
+        {
+            sharcUpdatePipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline(
+                SwapChain(), "assets/shaders/Core.SharcUpdate.comp.slang.spv", GetScene()));
+        }
+        if (!sharcResolvePipeline_)
+        {
+            sharcResolvePipeline_.reset(new PipelineCommon::ZeroBindPipeline(
+                SwapChain(), "assets/shaders/Core.SharcResolve.comp.slang.spv", GetScene()));
+        }
+        if (!sharcQueryPipeline_)
+        {
+            sharcQueryPipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline(
+                SwapChain(), "assets/shaders/Core.SharcQuery.comp.slang.spv", GetScene()));
+        }
+    }
+
+    void PathTracingRenderer::EnsureSharcResources()
+    {
+        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        const uint32_t entriesPow2 = std::clamp(settings.SharcEntriesPow2, kSharcMinEntriesPow2, kSharcMaxEntriesPow2);
+        const uint32_t entryCount = 1u << entriesPow2;
+        if (sharc_.entryCount == entryCount && sharc_.resources.buffer)
+        {
+            return;
+        }
+
+        sharc_ = {};
+        sharc_.entriesPow2 = entriesPow2;
+        sharc_.entryCount = entryCount;
+
+        CreateSharcBuffer(CommandPool(), "SharcHashEntries",
+                          sizeof(Assets::SharcHashEntry) * entryCount,
+                          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                          sharc_.hashEntries);
+        CreateSharcBuffer(CommandPool(), "SharcLockBuffer",
+                          sizeof(uint32_t) * entryCount,
+                          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                          sharc_.lockBuffer);
+        CreateSharcBuffer(CommandPool(), "SharcAccumulation",
+                          sizeof(Assets::SharcAccumulationEntry) * entryCount,
+                          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                          sharc_.accumulation);
+        CreateSharcBuffer(CommandPool(), "SharcResolved",
+                          sizeof(Assets::SharcResolvedEntry) * entryCount,
+                          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                          sharc_.resolved);
+        CreateSharcBuffer(CommandPool(), "SharcParameters",
+                          sizeof(Assets::SharcParameters),
+                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                          sharc_.parameters);
+        CreateSharcBuffer(CommandPool(), "SharcResources",
+                          sizeof(Assets::SharcResources),
+                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                          sharc_.resources);
+
+        Assets::SharcResources resources{};
+        resources.HashEntries = sharc_.hashEntries.buffer->GetDeviceAddress();
+        resources.LockBuffer = sharc_.lockBuffer.buffer->GetDeviceAddress();
+        resources.Accumulation = sharc_.accumulation.buffer->GetDeviceAddress();
+        resources.Resolved = sharc_.resolved.buffer->GetDeviceAddress();
+        resources.Parameters = sharc_.parameters.buffer->GetDeviceAddress();
+        WriteHostVisibleBuffer(sharc_.resources, &resources, sizeof(resources));
+
+        sharc_.pendingClear = true;
+        const uint64_t totalBytes = sharc_.hashEntries.size + sharc_.lockBuffer.size + sharc_.accumulation.size +
+            sharc_.resolved.size + sharc_.parameters.size + sharc_.resources.size;
+        SPDLOG_INFO("SHARC cache allocated: entries=2^{} ({}), memory={:.2f} MiB",
+                    entriesPow2,
+                    entryCount,
+                    static_cast<double>(totalBytes) / (1024.0 * 1024.0));
+    }
+
+    void PathTracingRenderer::UpdateSharcParameters()
+    {
+        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        Assets::SharcParameters parameters{};
+        parameters.EntryCount = sharc_.entryCount;
+        parameters.EntryMask = sharc_.entryCount - 1u;
+        parameters.FrameIndex = static_cast<uint32_t>(std::max(FrameCount(), 0));
+        parameters.DebugMode = static_cast<uint32_t>(std::max(settings.SharcDebugMode, 0));
+        parameters.VoxelSize = std::max(settings.SharcVoxelSize, 0.001f);
+        parameters.UpdateSampleRatio = std::clamp(settings.SharcUpdateSampleRatio, 0.0f, 1.0f);
+        parameters.QueryRoughnessMin = std::clamp(settings.SharcQueryRoughnessMin, 0.0f, 1.0f);
+        parameters.QueryMinBounce = settings.SharcQueryMinBounce;
+        parameters.StaleFrameCount = kSharcStaleFrameCount;
+        WriteHostVisibleBuffer(sharc_.parameters, &parameters, sizeof(parameters));
+    }
+
+    void PathTracingRenderer::ClearSharcResources(VkCommandBuffer commandBuffer)
+    {
+        if (!sharc_.pendingClear)
+        {
+            return;
+        }
+
+        vkCmdFillBuffer(commandBuffer, sharc_.hashEntries.buffer->Handle(), 0, sharc_.hashEntries.size, 0);
+        vkCmdFillBuffer(commandBuffer, sharc_.lockBuffer.buffer->Handle(), 0, sharc_.lockBuffer.size, 0);
+        vkCmdFillBuffer(commandBuffer, sharc_.accumulation.buffer->Handle(), 0, sharc_.accumulation.size, 0);
+        vkCmdFillBuffer(commandBuffer, sharc_.resolved.buffer->Handle(), 0, sharc_.resolved.size, 0);
+
+        InsertSharcBarrier(commandBuffer, VK_ACCESS_TRANSFER_WRITE_BIT,
+                           VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+        sharc_.pendingClear = false;
+    }
+
+    void PathTracingRenderer::InsertSharcBarrier(
+        VkCommandBuffer commandBuffer,
+        VkAccessFlags srcAccessMask,
+        VkAccessFlags dstAccessMask) const
+    {
+        if (!sharc_.resources.buffer)
+        {
+            return;
+        }
+
+        std::array<VkBufferMemoryBarrier, 4> barriers{};
+        const std::array<const FSharcBuffer*, 4> buffers{
+            &sharc_.hashEntries,
+            &sharc_.lockBuffer,
+            &sharc_.accumulation,
+            &sharc_.resolved,
+        };
+        for (size_t i = 0; i < barriers.size(); ++i)
+        {
+            barriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+            barriers[i].srcAccessMask = srcAccessMask;
+            barriers[i].dstAccessMask = dstAccessMask;
+            barriers[i].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barriers[i].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barriers[i].buffer = buffers[i]->buffer->Handle();
+            barriers[i].offset = 0;
+            barriers[i].size = VK_WHOLE_SIZE;
+        }
+
+        const VkPipelineStageFlags srcStage =
+            (srcAccessMask & VK_ACCESS_TRANSFER_WRITE_BIT) != 0 ? VK_PIPELINE_STAGE_TRANSFER_BIT :
+                                                                  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        vkCmdPipelineBarrier(commandBuffer,
+                             srcStage,
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                             0,
+                             0,
+                             nullptr,
+                             static_cast<uint32_t>(barriers.size()),
+                             barriers.data(),
+                             0,
+                             nullptr);
+    }
+
+    Assets::GPUScene PathTracingRenderer::BuildSharcGPUScene(uint32_t imageIndex)
+    {
+        Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
+        gpuScene.ReservedAddress0 = sharc_.resources.buffer ? sharc_.resources.buffer->GetDeviceAddress() : 0;
+        return gpuScene;
     }
 
     void PathTracingRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
@@ -54,10 +250,53 @@ namespace Vulkan::RayTracing
 
         // Execute ray tracing shaders.
         {
-            SCOPED_GPU_TIMER("rt pass");
-            rayTracingPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
-            vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
-                          Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+            const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+            if (settings.SharcEnable)
+            {
+                EnsureSharcPipelines();
+                EnsureSharcResources();
+                UpdateSharcParameters();
+                ClearSharcResources(commandBuffer);
+
+                const Assets::GPUScene sharcGpuScene = BuildSharcGPUScene(imageIndex);
+                {
+                    SCOPED_GPU_TIMER("sharc update pass");
+                    sharcUpdatePipeline_->BindPipeline(commandBuffer, sharcGpuScene);
+                    vkCmdDispatch(commandBuffer,
+                                  Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
+                                  Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+                }
+
+                InsertSharcBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
+                                   VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+
+                {
+                    SCOPED_GPU_TIMER("sharc resolve pass");
+                    sharcResolvePipeline_->BindPipeline(commandBuffer, sharcGpuScene);
+                    vkCmdDispatch(commandBuffer,
+                                  Utilities::Math::GetSafeDispatchCount(sharc_.entryCount, kSharcResolveThreadCount),
+                                  1,
+                                  1);
+                }
+
+                InsertSharcBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
+                                   VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+
+                {
+                    SCOPED_GPU_TIMER("sharc query pass");
+                    sharcQueryPipeline_->BindPipeline(commandBuffer, sharcGpuScene);
+                    vkCmdDispatch(commandBuffer,
+                                  Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
+                                  Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+                }
+            }
+            else
+            {
+                SCOPED_GPU_TIMER("rt pass");
+                rayTracingPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+                vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
+                              Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+            }
 
             baseRender_.GetStorageImage(Assets::Bindless::RT_SINGLE_DIFFUSE)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
             baseRender_.GetStorageImage(Assets::Bindless::RT_SINGLE_SPECULAR)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
