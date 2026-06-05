@@ -426,13 +426,6 @@ bool TryFetchCubePool(int3 probePos, uint cascadeIndex, out AmbientCube cube)
     return true;
 }
 
-AmbientCube FetchCubePongPool(int3 probePos, uint cascadeIndex)
-{
-    int idx = AmbientCubePongPoolIndex(cascadeIndex, probePos);
-    if (idx < 0) return ZeroAmbientCube();
-    return Bindless.GetGpuscene().CubesPong[idx];
-}
-
 bool TryFetchCubePongPool(int3 probePos, uint cascadeIndex, out AmbientCube cube)
 {
     int idx = AmbientCubePongPoolIndex(cascadeIndex, probePos);
@@ -747,40 +740,4 @@ public interface IProbeGenerator
     void RenderAmbientCubeOnly(IRayTracer tracer, float3 origin, int cubeIdx, uint voxelIdx, inout uint4 RandomSeed);
 }
 
-// Axis-face indexing convention for propagation:
-// 0:+Y  1:-Y  2:+Z  3:-Z  4:+X  5:-X
-// Opposite face index = face ^ 1
-uint GetFaceDirectByIdx(AmbientCube cube, uint faceIdx)
-{
-    if (faceIdx == 0) return cube.PosY_D;
-    if (faceIdx == 1) return cube.NegY_D;
-    if (faceIdx == 2) return cube.PosZ_D;
-    if (faceIdx == 3) return cube.NegZ_D;
-    if (faceIdx == 4) return cube.PosX_D;
-    return cube.NegX_D;
-}
-
-uint GetFaceIndirectByIdx(AmbientCube cube, uint faceIdx)
-{
-    if (faceIdx == 0) return cube.PosY;
-    if (faceIdx == 1) return cube.NegY;
-    if (faceIdx == 2) return cube.PosZ;
-    if (faceIdx == 3) return cube.NegZ;
-    if (faceIdx == 4) return cube.PosX;
-    return cube.NegX;
-}
-
-float GetVoxelFaceVisibilityByIdx(VoxelData voxel, uint faceIdx)
-{
-    uint4 unpacked0 = UnpackBytes(voxel.distanceToSolid_gg_z01);
-    uint4 unpacked1 = UnpackBytes(voxel.distanceToSolid_x01_y01);
-
-    if (faceIdx == 0) return float(unpacked1.z) / 255.0f;
-    if (faceIdx == 1) return float(unpacked1.w) / 255.0f;
-    if (faceIdx == 2) return float(unpacked0.z) / 255.0f;
-    if (faceIdx == 3) return float(unpacked0.w) / 255.0f;
-    if (faceIdx == 4) return float(unpacked1.x) / 255.0f;
-    return float(unpacked1.y) / 255.0f;
-}
-
-// Bake-side logic (FGpuProbeGenerator + propagation helpers) lives in AmbientCubeBaker.slang.
+// Bake-side logic (FGpuProbeGenerator) lives in AmbientCubeBaker.slang.
