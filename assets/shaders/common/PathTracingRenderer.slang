@@ -156,6 +156,40 @@ public struct FPathTracingRenderer{
     public bool FuzzyTracing = false;
     public bool ForceExitAfterFirst = false;
     public bool EnableSoftTracingAdaptiveOffset = false;
+    public bool EnableSharcUpdate = false;
+    public bool EnableSharcQuery = false;
+    public uint SharcDebugMode = 0;
+    public float SharcUpdateSampleRatio = 1.0f;
+    public float SharcQueryRoughnessMin = 0.35f;
+    public uint SharcQueryMinBounce = 1u;
+
+    public float GetMaterialRoughness(Vertex vertex)
+    {
+        Material mat = Bindless.GetGpuscene().GetMaterial(vertex.MaterialIndex);
+        float roughness = mat.Fuzziness;
+        if (mat.MRATextureId >= 0)
+        {
+            float4 mra = Bindless.GetSampleTexture(mat.MRATextureId).SampleLevel(vertex.TexCoord, 0);
+            roughness = roughness * mra.g;
+        }
+        return roughness;
+    }
+
+    public bool CanUseSharcAtBounce(Vertex vertex, bool hitReflect, bool hitMetal, uint bounce)
+    {
+        if (!EnableSharcQuery || bounce < SharcQueryMinBounce || hitReflect || hitMetal)
+        {
+            return false;
+        }
+
+        Material mat = Bindless.GetGpuscene().GetMaterial(vertex.MaterialIndex);
+        if (mat.MaterialModel == MaterialDielectric || mat.MaterialModel == MaterialDiffuseLight)
+        {
+            return false;
+        }
+
+        return GetMaterialRoughness(vertex) >= SharcQueryRoughnessMin;
+    }
 
     bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, inout bool hitReflect, inout bool hitMetal, out float outHitDist)
     {
@@ -244,6 +278,10 @@ public struct FPathTracingRenderer{
             }
             if (hitMat.MaterialModel == MaterialDiffuseLight)
             {
+                if (EnableSharcUpdate)
+                {
+                    SharcAccumulate(inVertex.Position, inVertex.Normal, outAlbedo.rgb);
+                }
                 return true;
             }
             return false;
@@ -258,6 +296,10 @@ public struct FPathTracingRenderer{
             // else
             {
                 float4 skyColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
+                if (EnableSharcUpdate)
+                {
+                    SharcAccumulate(inVertex.Position, inVertex.Normal, skyColor.rgb);
+                }
                 rayColor *= skyColor;
             }
             outHitDist = PT_MAX_TRACE_DISTANCE;
@@ -269,6 +311,11 @@ public struct FPathTracingRenderer{
     public void Render(IRayTracer tracer, IDirectIlluminator directIllum, int sampleMultiplier)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
+
+        if (EnableSharcUpdate && RandomFloat(RandomSeed_) > SharcUpdateSampleRatio)
+        {
+            return;
+        }
 
         float4 FinalColor = float4(0, 0, 0, 0);
         float4 FinalReflection = float4(0, 0, 0, 0);
@@ -304,11 +351,33 @@ public struct FPathTracingRenderer{
             bool hitMetal = false;
             float hitDist = 0;
             bool exitFirst = GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed_, hitReflect, hitMetal, hitDist);
+            if (!exitFirst && CanUseSharcAtBounce(vertexStart, hitReflect, hitMetal, 1u))
+            {
+                float4 cachedRadiance = float4(0, 0, 0, 0);
+                if (SharcQuery(vertexStart.Position, vertexStart.Normal, cachedRadiance))
+                {
+                    RayColor *= SharcDebugMode == 1u ? float4(0, 1, 0, 1) : cachedRadiance;
+                    exitFirst = true;
+                }
+                else if (SharcDebugMode == 2u)
+                {
+                    RayColor *= float4(1, 0, 0, 1);
+                    exitFirst = true;
+                }
+            }
             if (!exitFirst)
             {
                 if(ForceExitAfterFirst || (ExitAfterFirst && mat.MaterialModel != MaterialDielectric) )
                 {
-                    if(!FuzzyTracing) RayColor *= interpolateAmbientCubes<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal);
+                    if(!FuzzyTracing)
+                    {
+                        float4 terminalRadiance = interpolateAmbientCubes<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal);
+                        if (EnableSharcUpdate)
+                        {
+                            SharcAccumulate(vertexStart.Position, vertexStart.Normal, terminalRadiance.rgb);
+                        }
+                        RayColor *= terminalRadiance;
+                    }
                 }
                 else
                 {
@@ -320,6 +389,21 @@ public struct FPathTracingRenderer{
                         if (GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed_, hitReflectDontCare, hitMetalDontCare, hitDistDontCare))
                         {
                             break;
+                        }
+
+                        if (CanUseSharcAtBounce(vertexStart, hitReflectDontCare, hitMetalDontCare, b + 1u))
+                        {
+                            float4 cachedRadiance = float4(0, 0, 0, 0);
+                            if (SharcQuery(vertexStart.Position, vertexStart.Normal, cachedRadiance))
+                            {
+                                RayColor *= SharcDebugMode == 1u ? float4(0, 1, 0, 1) : cachedRadiance;
+                                break;
+                            }
+                            else if (SharcDebugMode == 2u)
+                            {
+                                RayColor *= float4(1, 0, 0, 1);
+                                break;
+                            }
                         }
 
                         if (!hitReflectDontCare && Camera.HasSun && (RandomFloat(RandomSeed_) < 0.5f))
@@ -350,7 +434,12 @@ public struct FPathTracingRenderer{
                             }
                             else
                             {
-                                RayColor *= interpolateAmbientCubes<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal);
+                                float4 terminalRadiance = interpolateAmbientCubes<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal);
+                                if (EnableSharcUpdate)
+                                {
+                                    SharcAccumulate(vertexStart.Position, vertexStart.Normal, terminalRadiance.rgb);
+                                }
+                                RayColor *= terminalRadiance;
                             }
                             break;
                         }

@@ -313,6 +313,13 @@ Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options&
     userSettings.AmbientCubeCascadeCount = 3;
     userSettings.AmbientCubeCascadeRatio = 2.0f;
     userSettings.AmbientCubePoolBrickRatio = 0.66f;
+    userSettings.SharcEnable = false;
+    userSettings.SharcEntriesPow2 = 21;
+    userSettings.SharcUpdateSampleRatio = 0.25f;
+    userSettings.SharcDebugMode = 0;
+    userSettings.SharcQueryMinBounce = 1;
+    userSettings.SharcQueryRoughnessMin = 0.35f;
+    userSettings.SharcVoxelSize = 0.75f;
 
     return userSettings;
 }

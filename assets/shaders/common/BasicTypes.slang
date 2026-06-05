@@ -275,6 +275,59 @@ public struct ALIGN_16 AmbientResources
     public uint64_t PoolParams;  // Phase 3: low32 = pool bricks/cascade, high32 = active-list byte offset from BrickTable
 };
 
+public struct ALIGN_16 SharcHashEntry
+{
+    public uint Key;
+    public uint PackedNormal;
+    public uint LastFrame;
+    public uint Reserved;
+};
+
+public struct ALIGN_16 SharcAccumulationEntry
+{
+    public uint RadianceR;
+    public uint RadianceG;
+    public uint RadianceB;
+    public uint SampleCount;
+};
+
+public struct ALIGN_16 SharcResolvedEntry
+{
+    public float4 Radiance;
+    public uint PackedNormal;
+    public uint LastFrame;
+    public uint SampleCount;
+    public uint Reserved;
+};
+
+public struct ALIGN_16 SharcParameters
+{
+    public uint EntryCount;
+    public uint EntryMask;
+    public uint FrameIndex;
+    public uint DebugMode;
+    public float VoxelSize;
+    public float UpdateSampleRatio;
+    public float QueryRoughnessMin;
+    public uint QueryMinBounce;
+    public uint StaleFrameCount;
+    public uint Reserved0;
+    public uint Reserved1;
+    public uint Reserved2;
+};
+
+public struct ALIGN_16 SharcResources
+{
+    public uint64_t HashEntries;
+    public uint64_t LockBuffer;
+    public uint64_t Accumulation;
+    public uint64_t Resolved;
+    public uint64_t Parameters;
+    public uint64_t Reserved0;
+    public uint64_t Reserved1;
+    public uint64_t Reserved2;
+};
+
 public struct ALIGN_16 SphericalHarmonics
 {
     // 3 bands (9 coefficients per color channel)
@@ -430,6 +483,10 @@ public struct ALIGN_8 GPUScene
     public uint64_t ReservedAddress0;
 
     public uint64_t AmbientBase; // -> AmbientResources table (see BasicTypes.slang AmbientResources)
+    public property SharcResources* Sharc
+    {
+        get { return (SharcResources*)ReservedAddress0; }
+    }
     public property AmbientCube* Cubes
     {
         get { return (AmbientCube*)((AmbientResources*)AmbientBase)[0].Cubes; }
@@ -554,6 +611,11 @@ public struct ALIGN_8 GPUScene
 
     /* Others */
     uint64_t2 Reserved_AmbientBase_Address;
+
+    public property SharcResources* Sharc
+    {
+        get { return (SharcResources*)Reserved_AmbientBase_Address.x; }
+    }
 
     public property AmbientCube* Cubes
     {

@@ -80,6 +80,14 @@ namespace Vulkan::PipelineCommon
 		vkCmdPushConstants(commandBuffer, PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
 						   0, sizeof(Assets::GPUScene), &(scene.FetchGPUScene(imageIndex)));
 	}
+
+	void ZeroBindWithTLASPipeline::BindPipeline(VkCommandBuffer commandBuffer, const Assets::GPUScene& gpuScene)
+	{
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, Handle());
+		PipelineLayout().BindDescriptorSets(commandBuffer, 0);
+		vkCmdPushConstants(commandBuffer, PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+						   0, sizeof(Assets::GPUScene), &gpuScene);
+	}
     
 	ZeroBindPipeline::ZeroBindPipeline(
 	const SwapChain& swapChain,
@@ -117,6 +125,14 @@ namespace Vulkan::PipelineCommon
 		PipelineLayout().BindDescriptorSets(commandBuffer, 0);
 		vkCmdPushConstants(commandBuffer, PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
 						   0, sizeof(Assets::GPUScene), &(scene.FetchGPUScene(imageIndex)));
+	}
+
+	void ZeroBindPipeline::BindPipeline(VkCommandBuffer commandBuffer, const Assets::GPUScene& gpuScene)
+	{
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, Handle());
+		PipelineLayout().BindDescriptorSets(commandBuffer, 0);
+		vkCmdPushConstants(commandBuffer, PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
+						   0, sizeof(Assets::GPUScene), &gpuScene);
 	}
 	
 	ZeroBindCustomPushConstantPipeline::ZeroBindCustomPushConstantPipeline(const SwapChain& swapChain,

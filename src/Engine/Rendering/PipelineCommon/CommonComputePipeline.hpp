@@ -18,6 +18,7 @@ namespace Vulkan::PipelineCommon
 		ZeroBindWithTLASPipeline(const SwapChain& swapChain, const char* shaderfile, const Assets::Scene& scene);
 
 		void BindPipeline(VkCommandBuffer commandBuffer, const Assets::Scene& scene, uint32_t imageIndex);
+		void BindPipeline(VkCommandBuffer commandBuffer, const Assets::GPUScene& gpuScene);
 	};
 	
 	class ZeroBindPipeline : public PipelineBase
@@ -27,6 +28,7 @@ namespace Vulkan::PipelineCommon
 		ZeroBindPipeline(const SwapChain& swapChain, const char* shaderfile, const Assets::Scene& scene);
 
 		void BindPipeline(VkCommandBuffer commandBuffer, const Assets::Scene& scene, uint32_t imageIndex);
+		void BindPipeline(VkCommandBuffer commandBuffer, const Assets::GPUScene& gpuScene);
 	};
 	
 	class ZeroBindCustomPushConstantPipeline : public PipelineBase

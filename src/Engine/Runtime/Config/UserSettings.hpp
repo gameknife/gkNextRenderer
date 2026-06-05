@@ -65,6 +65,13 @@ struct UserSettings final
     float AmbientCubePoolBrickRatio = 0.66f;
     bool UseGpuAmbientCubeSdf = false;
     bool StreamHDRTextures = true;
+    bool SharcEnable = false;
+    uint32_t SharcEntriesPow2 = 21;
+    float SharcUpdateSampleRatio = 0.25f;
+    int SharcDebugMode = 0;
+    uint32_t SharcQueryMinBounce = 1;
+    float SharcQueryRoughnessMin = 0.35f;
+    float SharcVoxelSize = 0.75f;
 };
 
 }
