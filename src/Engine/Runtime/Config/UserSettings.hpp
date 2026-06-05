@@ -63,7 +63,6 @@ struct UserSettings final
     int AmbientCubeCascadeCount = 3;
     float AmbientCubeCascadeRatio = 2.0f;
     float AmbientCubePoolBrickRatio = 0.66f;
-    bool UseAmbientCubePropagation = true;
     bool UseGpuAmbientCubeSdf = false;
     bool StreamHDRTextures = true;
 };

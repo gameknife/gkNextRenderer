@@ -989,7 +989,6 @@ void NextRendererGameInstance::DrawSettings()
 
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Lighting"), false))
     {
-        DrawSettingCheckboxRow(LOCTEXT("UseAmbientCubePropagation"), &userSetting.UseAmbientCubePropagation);
         if (DrawSettingCheckboxRow(LOCTEXT("UseGpuAmbientCubeSdf"), &userSetting.UseGpuAmbientCubeSdf))
         {
             GetEngine().GetScene().RequestGpuDistanceFieldRebuild();

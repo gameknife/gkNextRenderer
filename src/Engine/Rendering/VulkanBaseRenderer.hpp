@@ -162,14 +162,10 @@ namespace Vulkan
 		{
 			std::unique_ptr<PipelineCommon::ZeroBindPipeline> softBake;
 			std::unique_ptr<PipelineCommon::ZeroBindPipeline> clearCache;
-			std::unique_ptr<PipelineCommon::ZeroBindPipeline> propagation;
-			std::unique_ptr<PipelineCommon::ZeroBindPipeline> inject;
 			std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldInit;
 			std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldJump;
 			std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldResolve;
 			bool requestClearCache = true;
-			bool propagationStateInitialized = false;
-			bool lastPropagation = false;
 		};
 
 		struct SkinnedMeshResources
@@ -304,7 +300,6 @@ namespace Vulkan
 		// Post-render passes
 		void ClearAmbientCubeCache(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void BakeAmbientCubeCascade(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool useHardware);
-		void BakeAmbientCubePropagation(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void RebuildDistanceFieldCascades(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void DispatchVisualDebugger(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void CopyObjectIdHistory(VkCommandBuffer commandBuffer);

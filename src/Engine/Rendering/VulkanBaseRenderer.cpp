@@ -849,8 +849,6 @@ namespace Vulkan
         {
             ambient_.softBake.reset( new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.SwAmbientCube.comp.slang.spv", GetScene()));
             ambient_.clearCache.reset( new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.ClearAmbientCubeCache.comp.slang.spv", GetScene()));
-            ambient_.propagation.reset( new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.PropagationAmbientCube.comp.slang.spv", GetScene()));
-            ambient_.inject.reset( new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.InjectAmbientCube.comp.slang.spv", GetScene()));
             ambient_.distanceFieldInit.reset( new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.DistanceFieldInit.comp.slang.spv", GetScene()));
             ambient_.distanceFieldJump.reset( new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.DistanceFieldJump.comp.slang.spv", GetScene()));
             ambient_.distanceFieldResolve.reset( new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.DistanceFieldResolve.comp.slang.spv", GetScene()));
@@ -925,8 +923,6 @@ namespace Vulkan
         overlay_.bufferClearPipeline.reset();
         ambient_.softBake.reset();
         ambient_.clearCache.reset();
-        ambient_.propagation.reset();
-        ambient_.inject.reset();
         ambient_.distanceFieldInit.reset();
         ambient_.distanceFieldJump.reset();
         ambient_.distanceFieldResolve.reset();
@@ -1108,18 +1104,6 @@ namespace Vulkan
         if (!CurrentRendererRequirements().requestAmbientCube)
         {
             return;
-        }
-
-        const bool useAmbientCubePropagation = NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation;
-        if (!ambient_.propagationStateInitialized)
-        {
-            ambient_.lastPropagation = useAmbientCubePropagation;
-            ambient_.propagationStateInitialized = true;
-        }
-        else if (ambient_.lastPropagation != useAmbientCubePropagation)
-        {
-            ambient_.lastPropagation = useAmbientCubePropagation;
-            RequestClearAmbientCubeCache();
         }
 
         if (ambient_.requestClearCache)
@@ -2369,126 +2353,10 @@ namespace Vulkan
         Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
         gpuScene.custom_data_0 = static_cast<uint32_t>(offsetInActiveProbes);
         gpuScene.custom_data_1 = cascadeIndex;
-        gpuScene.custom_data_2 = NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation ? 1u : 0u;
 
         vkCmdPushConstants(commandBuffer, pipeline->PipelineLayout().Handle(),
                            VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
         vkCmdDispatch(commandBuffer, dispatchGroupCount, 1, 1);
-    }
-
-    void VulkanBaseRenderer::BakeAmbientCubePropagation(VkCommandBuffer commandBuffer, uint32_t imageIndex)
-    {
-        SCOPED_GPU_TIMER("propagation-lightbake");
-
-        const int cubesPerGroup = 64;
-        const uint32_t cascadeCount = std::min(
-            Assets::SanitizeAmbientCubeCascadeCount(NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount),
-            GetScene().AmbientCubeCascadeCapacity());
-        const uint32_t safeCascadeCount = std::max(1u, cascadeCount);
-        const uint32_t cascadeIndex = static_cast<uint32_t>(frame_.frameCount % safeCascadeCount);
-        const uint32_t activeBrickCount = GetScene().AmbientActiveBrickCount(cascadeIndex);
-        if (activeBrickCount == 0u)
-        {
-            return;
-        }
-        const uint32_t activeProbeCount =
-            activeBrickCount * static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME);
-        const uint32_t group = (activeProbeCount + cubesPerGroup - 1) / cubesPerGroup;
-
-        VkBuffer cubeBuffer = GetScene().AmbientCubeBuffer().Handle();
-        VkBuffer pongBuffer = GetScene().AmbientCubePongBuffer().Handle();
-        // The cube pool is laid out per cascade with poolCubesPerCascade cubes; the ping-pong copy and
-        // its barriers operate on that pool stride, not the dense per-cascade probe count.
-        const VkDeviceSize poolCubesPerCascade =
-            static_cast<VkDeviceSize>(GetScene().AmbientPoolBricksPerCascade()) * Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME;
-        const VkDeviceSize cascadeByteOffset =
-            GetScene().AmbientCubesByteOffset() +
-            static_cast<VkDeviceSize>(cascadeIndex) * poolCubesPerCascade * sizeof(Assets::AmbientCube);
-        const VkDeviceSize pongByteOffset = GetScene().AmbientCubesPongByteOffset();
-        const VkDeviceSize cascadeByteSize = poolCubesPerCascade * sizeof(Assets::AmbientCube);
-
-        VkBufferMemoryBarrier preCopyBarrier{};
-        preCopyBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        preCopyBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        preCopyBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        preCopyBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        preCopyBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        preCopyBarrier.buffer = cubeBuffer;
-        preCopyBarrier.offset = cascadeByteOffset;
-        preCopyBarrier.size = cascadeByteSize;
-        vkCmdPipelineBarrier(commandBuffer,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-            0, 0, nullptr, 1, &preCopyBarrier, 0, nullptr);
-
-        VkBufferCopy copyRegion{};
-        copyRegion.srcOffset = cascadeByteOffset;
-        copyRegion.dstOffset = pongByteOffset;
-        copyRegion.size = cascadeByteSize;
-        vkCmdCopyBuffer(commandBuffer, cubeBuffer, pongBuffer, 1, &copyRegion);
-
-        VkBufferMemoryBarrier postCopyBarriers[2]{};
-        postCopyBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        postCopyBarriers[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        postCopyBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        postCopyBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        postCopyBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        postCopyBarriers[0].buffer = pongBuffer;
-        postCopyBarriers[0].offset = pongByteOffset;
-        postCopyBarriers[0].size = cascadeByteSize;
-        postCopyBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        postCopyBarriers[1].srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        postCopyBarriers[1].dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
-        postCopyBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        postCopyBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        postCopyBarriers[1].buffer = cubeBuffer;
-        postCopyBarriers[1].offset = cascadeByteOffset;
-        postCopyBarriers[1].size = cascadeByteSize;
-        vkCmdPipelineBarrier(commandBuffer,
-            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            0, 0, nullptr, 2, postCopyBarriers, 0, nullptr);
-
-        ambient_.propagation->BindPipeline(commandBuffer, GetScene(), imageIndex);
-
-        Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
-        gpuScene.custom_data_0 = 0;
-        gpuScene.custom_data_1 = cascadeIndex;
-        gpuScene.custom_data_2 = 0;
-
-        vkCmdPushConstants(commandBuffer, ambient_.propagation->PipelineLayout().Handle(),
-                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
-        vkCmdDispatch(commandBuffer, group, 1, 1);
-
-        VkBufferMemoryBarrier propagationToInjectionBarrier{};
-        propagationToInjectionBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        propagationToInjectionBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        propagationToInjectionBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-        propagationToInjectionBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        propagationToInjectionBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        propagationToInjectionBarrier.buffer = cubeBuffer;
-        propagationToInjectionBarrier.offset = cascadeByteOffset;
-        propagationToInjectionBarrier.size = cascadeByteSize;
-        vkCmdPipelineBarrier(commandBuffer,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            0, 0, nullptr, 1, &propagationToInjectionBarrier, 0, nullptr);
-
-        ambient_.inject->BindPipeline(commandBuffer, GetScene(), imageIndex);
-
-        vkCmdPushConstants(commandBuffer, ambient_.inject->PipelineLayout().Handle(),
-                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
-        vkCmdDispatch(commandBuffer, group, 1, 1);
-
-        VkBufferMemoryBarrier postInjectionBarrier{};
-        postInjectionBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        postInjectionBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        postInjectionBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        postInjectionBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        postInjectionBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        postInjectionBarrier.buffer = cubeBuffer;
-        postInjectionBarrier.offset = cascadeByteOffset;
-        postInjectionBarrier.size = cascadeByteSize;
-        vkCmdPipelineBarrier(commandBuffer,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            0, 0, nullptr, 1, &postInjectionBarrier, 0, nullptr);
     }
 
     void VulkanBaseRenderer::PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
@@ -2505,11 +2373,6 @@ namespace Vulkan
             {
                 const bool useHardware = caps_.supportRayTracing && !GOption->ForceSoftGen;
                 BakeAmbientCubeCascade(commandBuffer, imageIndex, useHardware);
-
-                if (NextEngine::GetInstance()->GetUserSettings().UseAmbientCubePropagation)
-                {
-                    BakeAmbientCubePropagation(commandBuffer, imageIndex);
-                }
             }
         }
 
