@@ -13,11 +13,14 @@
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/Element.h>
 #include <RmlUi/Core/ElementDocument.h>
+#include <RmlUi/Core/ElementText.h>
 #include <RmlUi/Core/Event.h>
 #include <RmlUi/Core/EventListener.h>
 #include <RmlUi/Core/Input.h>
 #include <RmlUi/Core/RenderInterface.h>
 #include <RmlUi/Core/SystemInterface.h>
+#include <RmlUi/Core/TextInputContext.h>
+#include <RmlUi/Core/TextInputHandler.h>
 
 #include <SDL3/SDL.h>
 #include <imgui.h>
@@ -275,6 +278,87 @@ namespace
         std::function<void()> callback_;
     };
 
+    class RmlTextInputHandler final : public Rml::TextInputHandler
+    {
+    public:
+        explicit RmlTextInputHandler(NextEngine& engine)
+            : engine_(engine)
+        {
+        }
+
+        void OnActivate(Rml::TextInputContext* inputContext) override
+        {
+            activeInputContext_ = inputContext;
+            SDL_Window* window = engine_.GetWindow().Handle();
+            if (!window)
+            {
+                return;
+            }
+
+            if (!SDL_TextInputActive(window))
+            {
+                SDL_StartTextInput(window);
+            }
+            UpdateTextInputArea();
+        }
+
+        void OnDeactivate(Rml::TextInputContext* inputContext) override
+        {
+            SDL_Window* window = engine_.GetWindow().Handle();
+            if (activeInputContext_ != inputContext)
+            {
+                return;
+            }
+
+            activeInputContext_ = nullptr;
+            if (window && SDL_TextInputActive(window))
+            {
+                SDL_StopTextInput(window);
+            }
+        }
+
+        void OnDestroy(Rml::TextInputContext* inputContext) override
+        {
+            OnDeactivate(inputContext);
+        }
+
+        void UpdateTextInputArea()
+        {
+            if (!activeInputContext_)
+            {
+                return;
+            }
+
+            SDL_Window* window = engine_.GetWindow().Handle();
+            if (!window || !SDL_TextInputActive(window))
+            {
+                return;
+            }
+
+            Rml::Rectanglef boundingBox;
+            if (!activeInputContext_->GetBoundingBox(boundingBox))
+            {
+                return;
+            }
+
+            int selectionStart = 0;
+            int selectionEnd = 0;
+            activeInputContext_->GetSelectionRange(selectionStart, selectionEnd);
+
+            const SDL_Rect textInputArea = {
+                static_cast<int>(boundingBox.Left()),
+                static_cast<int>(boundingBox.Top()),
+                std::max(1, static_cast<int>(boundingBox.Right() - boundingBox.Left())),
+                std::max(1, static_cast<int>(boundingBox.Bottom() - boundingBox.Top())),
+            };
+            SDL_SetTextInputArea(window, &textInputArea, selectionEnd);
+        }
+
+    private:
+        NextEngine& engine_;
+        Rml::TextInputContext* activeInputContext_ = nullptr;
+    };
+
     struct CompiledGeometry
     {
         std::vector<Rml::Vertex> vertices;
@@ -360,10 +444,231 @@ a {
 }
 button, input, select, textarea {
     display: inline-block;
+    font-family: inherit;
     font-size: 16px;
+    line-height: 1.2;
+    vertical-align: middle;
+}
+button {
+    padding: 2px 6px;
+    text-align: center;
+    white-space: nowrap;
+    color: #000000;
+    background-color: #f0f0f0;
+    border: 1px #767676;
+}
+input, select, textarea {
+    padding: 2px 4px;
+    color: #000000;
+    background-color: #ffffff;
+    border: 1px #767676;
+}
+textarea {
+    min-height: 3em;
+}
+select selectvalue {
+    width: auto;
+    margin-right: 18px;
+    padding: 2px 4px;
+    color: #000000;
+    background-color: #ffffff;
+}
+select selectarrow {
+    width: 18px;
+    background-color: #e9e9e9;
+    border-left: 1px #767676;
+}
+select selectbox {
+    margin-top: 1px;
+    width: auto;
+    padding: 2px 0;
+    color: #000000;
+    background-color: #ffffff;
+    border: 1px #767676;
+}
+select selectbox option {
+    width: auto;
+    padding: 2px 4px;
+    color: #000000;
+    background-color: #ffffff;
+}
+select selectbox option:hover,
+select selectbox option:checked {
+    background-color: #d9d9d9;
+}
+scrollbarvertical {
+    width: 12px;
+}
+scrollbarhorizontal {
+    height: 12px;
+}
+scrollbarvertical sliderarrowdec,
+scrollbarvertical sliderarrowinc,
+scrollbarhorizontal sliderarrowdec,
+scrollbarhorizontal sliderarrowinc {
+    width: 0;
+    height: 0;
+}
+scrollbarvertical slidertrack {
+    width: 8px;
+    margin-left: 2px;
+    background-color: rgba(0, 0, 0, 0.12);
+}
+scrollbarvertical sliderbar {
+    width: 8px;
+    min-height: 28px;
+    margin-left: 2px;
+    background-color: rgba(0, 0, 0, 0.28);
+}
+scrollbarhorizontal slidertrack {
+    height: 8px;
+    margin-top: 2px;
+    background-color: rgba(0, 0, 0, 0.12);
+}
+scrollbarhorizontal sliderbar {
+    height: 8px;
+    min-width: 28px;
+    margin-top: 2px;
+    background-color: rgba(0, 0, 0, 0.28);
+}
+scrollbarvertical sliderbar:hover,
+scrollbarvertical sliderbar:active,
+scrollbarhorizontal sliderbar:hover,
+scrollbarhorizontal sliderbar:active {
+    background-color: rgba(0, 0, 0, 0.4);
 }
 </style>
 )RCSS";
+    }
+
+    bool DecodeUtf8(std::string_view text, size_t position, uint32_t& codePoint, size_t& codeUnitLength)
+    {
+        if (position >= text.size())
+        {
+            return false;
+        }
+
+        const unsigned char lead = static_cast<unsigned char>(text[position]);
+        if ((lead & 0x80u) == 0)
+        {
+            codePoint = lead;
+            codeUnitLength = 1;
+            return true;
+        }
+        if ((lead & 0xE0u) == 0xC0u && position + 1 < text.size())
+        {
+            codePoint = ((lead & 0x1Fu) << 6) | (static_cast<unsigned char>(text[position + 1]) & 0x3Fu);
+            codeUnitLength = 2;
+            return true;
+        }
+        if ((lead & 0xF0u) == 0xE0u && position + 2 < text.size())
+        {
+            codePoint = ((lead & 0x0Fu) << 12)
+                | ((static_cast<unsigned char>(text[position + 1]) & 0x3Fu) << 6)
+                | (static_cast<unsigned char>(text[position + 2]) & 0x3Fu);
+            codeUnitLength = 3;
+            return true;
+        }
+        if ((lead & 0xF8u) == 0xF0u && position + 3 < text.size())
+        {
+            codePoint = ((lead & 0x07u) << 18)
+                | ((static_cast<unsigned char>(text[position + 1]) & 0x3Fu) << 12)
+                | ((static_cast<unsigned char>(text[position + 2]) & 0x3Fu) << 6)
+                | (static_cast<unsigned char>(text[position + 3]) & 0x3Fu);
+            codeUnitLength = 4;
+            return true;
+        }
+
+        codePoint = lead;
+        codeUnitLength = 1;
+        return true;
+    }
+
+    bool IsCjkBreakableCodePoint(uint32_t codePoint)
+    {
+        return (codePoint >= 0x2E80u && codePoint <= 0x2EFFu)
+            || (codePoint >= 0x3000u && codePoint <= 0x303Fu)
+            || (codePoint >= 0x3040u && codePoint <= 0x30FFu)
+            || (codePoint >= 0x3400u && codePoint <= 0x4DBFu)
+            || (codePoint >= 0x4E00u && codePoint <= 0x9FFFu)
+            || (codePoint >= 0xAC00u && codePoint <= 0xD7AFu)
+            || (codePoint >= 0xF900u && codePoint <= 0xFAFFu)
+            || (codePoint >= 0xFF00u && codePoint <= 0xFFEFu);
+    }
+
+    bool ContainsCjkText(std::string_view text)
+    {
+        for (size_t position = 0; position < text.size();)
+        {
+            uint32_t codePoint = 0;
+            size_t codeUnitLength = 0;
+            DecodeUtf8(text, position, codePoint, codeUnitLength);
+            if (IsCjkBreakableCodePoint(codePoint))
+            {
+                return true;
+            }
+
+            position += codeUnitLength;
+        }
+
+        return false;
+    }
+
+    bool ElementHasDirectCjkText(Rml::Element* element)
+    {
+        if (!element)
+        {
+            return false;
+        }
+
+        const int childCount = element->GetNumChildren(true);
+        for (int childIndex = 0; childIndex < childCount; ++childIndex)
+        {
+            if (auto* textElement = rmlui_dynamic_cast<Rml::ElementText*>(element->GetChild(childIndex)))
+            {
+                if (ContainsCjkText(textElement->GetText()))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    void ApplyCjkWordBreakFallback(Rml::Element* element)
+    {
+        if (!element)
+        {
+            return;
+        }
+
+        if (ElementHasDirectCjkText(element) && !element->GetLocalProperty("word-break"))
+        {
+            element->SetProperty("word-break", "break-word");
+        }
+
+        const int childCount = element->GetNumChildren(true);
+        for (int childIndex = 0; childIndex < childCount; ++childIndex)
+        {
+            Rml::Element* child = element->GetChild(childIndex);
+            if (!child || rmlui_dynamic_cast<Rml::ElementText*>(child))
+            {
+                continue;
+            }
+            ApplyCjkWordBreakFallback(child);
+        }
+    }
+
+    bool HasOptInCjkWordBreakFallback(const Rml::ElementDocument& document)
+    {
+        const Rml::Variant* attribute = document.GetAttribute("data-gk-cjk-word-break-fallback");
+        if (!attribute)
+        {
+            return false;
+        }
+
+        return attribute->Get<Rml::String>() == "true";
     }
 
     std::string InjectDefaultHtmlStyleSheet(std::string_view source)
@@ -481,6 +786,13 @@ button, input, select, textarea {
             }
 
             const std::string textureName = source;
+            if (!Utilities::FileHelper::IsAssetAvailable(textureName))
+            {
+                SPDLOG_WARN("RmlUi texture '{}' is unavailable; using white fallback.", textureName);
+                textureDimensions = Rml::Vector2i(1, 1);
+                return EnsureWhiteTextureHandle();
+            }
+
             int width = 0;
             int height = 0;
             int comp = 0;
@@ -494,6 +806,12 @@ button, input, select, textarea {
             if (textureIndex == static_cast<uint32_t>(-1))
             {
                 textureIndex = Assets::GlobalTexturePool::LoadTexture(textureName, true);
+            }
+            if (textureIndex == static_cast<uint32_t>(-1))
+            {
+                SPDLOG_WARN("RmlUi texture '{}' failed to load; using white fallback.", textureName);
+                textureDimensions = Rml::Vector2i(1, 1);
+                return EnsureWhiteTextureHandle();
             }
             return static_cast<Rml::TextureHandle>(textureIndex + 1u);
         }
@@ -639,10 +957,12 @@ struct RmlUiSystem::Impl
     explicit Impl(NextEngine& inEngine)
         : engine(inEngine),
           systemInterface(inEngine),
-          renderInterface(inEngine)
+          renderInterface(inEngine),
+          textInputHandler(inEngine)
     {
         Rml::SetSystemInterface(&systemInterface);
         Rml::SetRenderInterface(&renderInterface);
+        Rml::SetTextInputHandler(&textInputHandler);
         if (!Rml::Initialise())
         {
             SPDLOG_ERROR("RmlUi initialization failed");
@@ -674,6 +994,7 @@ struct RmlUiSystem::Impl
         {
             Rml::Shutdown();
         }
+        Rml::SetTextInputHandler(nullptr);
         initialized = false;
         context = nullptr;
     }
@@ -710,6 +1031,7 @@ struct RmlUiSystem::Impl
     NextEngine& engine;
     RmlSystemInterface systemInterface;
     RmlRenderInterface renderInterface;
+    RmlTextInputHandler textInputHandler;
     Rml::Context* context = nullptr;
     bool initialized = false;
     std::unordered_map<std::string, Rml::ElementDocument*> documents;
@@ -775,6 +1097,7 @@ void RmlUiSystem::BeginFrame()
     const VkExtent2D extent = impl_->engine.GetWindow().WindowSize();
     impl_->context->SetDimensions(Rml::Vector2i(static_cast<int>(extent.width), static_cast<int>(extent.height)));
     impl_->context->SetDensityIndependentPixelRatio(impl_->engine.GetWindow().ContentScale());
+    impl_->textInputHandler.UpdateTextInputArea();
 }
 
 void RmlUiSystem::RenderFrame()
@@ -814,6 +1137,10 @@ Rml::ElementDocument* RmlUiSystem::EnsureDocument(const std::string& documentId,
     {
         SPDLOG_ERROR("Failed to load RmlUi document '{}'", documentId);
         return nullptr;
+    }
+    if (HasOptInCjkWordBreakFallback(*document))
+    {
+        ApplyCjkWordBreakFallback(document);
     }
     document->SetId(documentId);
     document->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);

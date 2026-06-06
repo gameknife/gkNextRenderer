@@ -617,8 +617,21 @@ namespace Assets
 
     uint32_t GlobalTexturePool::LoadTexture(const std::string& filename, bool srgb)
     {
+        auto& pakSystem = Utilities::Package::FPackageFileSystem::GetInstance();
+        const bool hasMountedEntry = pakSystem.HasMountedEntry(filename);
+        const std::string absPath = Utilities::FileHelper::GetPlatformFilePath(filename.c_str());
+        std::error_code existsError;
+        const bool hasOsFile = std::filesystem::exists(absPath, existsError);
+
+        if (!hasMountedEntry && !hasOsFile)
+        {
+            SPDLOG_WARN("Texture '{}' is unavailable; using a placeholder texture.", filename);
+            return GetInstance()->RequestNewTextureMemAsync(
+                filename, "image/png", false, nullptr, 0, srgb, ETextureLifetime::ETL_Transient);
+        }
+
         std::vector<uint8_t> data;
-        Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(filename, data);
+        pakSystem.LoadFile(filename, data);
         std::filesystem::path path(filename);
         std::string mime = std::string("image/") + path.extension().string().substr(1);
         return GetInstance()->RequestNewTextureMemAsync(
@@ -1315,6 +1328,16 @@ namespace Assets
                 // create texture image
                 if (!hdr)
                 {
+                    if (pixels == nullptr || size == 0)
+                    {
+                        static constexpr std::array<uint8_t, 4> kPlaceholderPixel = {255, 255, 255, 255};
+                        width = 1;
+                        height = 1;
+                        miplevel = 1;
+                        format = srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
+                        pixels = const_cast<uint8_t*>(kPlaceholderPixel.data());
+                        size = static_cast<uint32_t>(kPlaceholderPixel.size());
+                    }
                     textureImages_[newTextureIdx] = std::make_unique<TextureImage>(commandPool_, width, height, miplevel, format, pixels, size);
                     textureCreated = true;
                 }

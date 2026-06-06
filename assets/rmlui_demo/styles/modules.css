@@ -106,6 +106,17 @@
     font-size: 18px;
 }
 
+.type-scale,
+.type-scale p,
+.type-scale h1,
+.type-scale h2,
+.type-scale h3,
+.type-scale h4,
+.type-scale h5,
+.type-scale h6 {
+    width: 100%;
+}
+
 .layout-board {
     display: flex;
     height: 330px;
