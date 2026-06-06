@@ -180,6 +180,11 @@ add_executable(CharacterDemo
 	DesktopMain.cpp
 )
 target_include_directories(CharacterDemo PRIVATE Application/Game/CharacterDemo)
+add_executable(StudioSim
+	${src_files_studiosim}
+	DesktopMain.cpp
+)
+target_include_directories(StudioSim PRIVATE Application/Game/StudioSim)
 add_executable(Packager
 	Application/Util/Packager/PackagerMain.cpp
 )
@@ -252,6 +257,7 @@ gkNextStillBenchmark
 	FlappyJs
 	BrickPlayer
 	CharacterDemo
+	StudioSim
 	gkNextUnitTests
 )
 endif()
@@ -524,6 +530,9 @@ endforeach()
 
 if ( TARGET CharacterDemo )
 target_link_libraries(CharacterDemo PRIVATE NextGameplay)
+endif()
+if ( TARGET StudioSim )
+target_link_libraries(StudioSim PRIVATE NextGameplay)
 endif()
 
 # Test Target
