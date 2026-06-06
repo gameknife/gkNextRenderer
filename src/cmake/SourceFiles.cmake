@@ -120,3 +120,9 @@ file(GLOB_RECURSE src_files_characterdemo
     "Application/Game/CharacterDemo/*.cpp"
     "Application/Game/CharacterDemo/*.hpp"
 )
+
+file(GLOB_RECURSE src_files_studiosim
+    "Application/Game/StudioSim/*.cpp"
+    "Application/Game/StudioSim/*.hpp"
+    "Application/Game/StudioSim/*.h"
+)
