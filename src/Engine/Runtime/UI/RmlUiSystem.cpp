@@ -322,6 +322,8 @@ namespace
             OnDeactivate(inputContext);
         }
 
+        bool IsActive() const { return activeInputContext_ != nullptr; }
+
         void UpdateTextInputArea()
         {
             if (!activeInputContext_)
@@ -1073,12 +1075,24 @@ bool RmlUiSystem::HandleEvent(const SDL_Event& event)
         propagates = impl_->context->ProcessMouseWheel(Rml::Vector2f(-event.wheel.x, -event.wheel.y), modifiers);
         break;
     case SDL_EVENT_KEY_DOWN:
+        if (!impl_->textInputHandler.IsActive())
+        {
+            return false;
+        }
         propagates = impl_->context->ProcessKeyDown(ConvertKey(event.key.key), modifiers);
         break;
     case SDL_EVENT_KEY_UP:
+        if (!impl_->textInputHandler.IsActive())
+        {
+            return false;
+        }
         propagates = impl_->context->ProcessKeyUp(ConvertKey(event.key.key), modifiers);
         break;
     case SDL_EVENT_TEXT_INPUT:
+        if (!impl_->textInputHandler.IsActive())
+        {
+            return false;
+        }
         propagates = impl_->context->ProcessTextInput(event.text.text);
         break;
     default:
@@ -1232,7 +1246,7 @@ bool RmlUiSystem::WantsToCaptureMouse() const
 
 bool RmlUiSystem::WantsToCaptureKeyboard() const
 {
-    return IsAvailable() && impl_->context->GetFocusElement() != nullptr;
+    return IsAvailable() && impl_->textInputHandler.IsActive();
 }
 #else
 struct RmlUiSystem::Impl
