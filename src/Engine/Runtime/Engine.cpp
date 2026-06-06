@@ -16,6 +16,7 @@
 #include "Engine/Runtime/ScreenShot.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Editor/ConsoleLogBuffer.hpp"
+#include "Engine/Runtime/UI/RmlUiSystem.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Runtime/Utilities/GraphicsDebugPanel.hpp"
@@ -466,6 +467,8 @@ NextEngine::~NextEngine()
         services_.localization->SaveToTxt(fmt::format("assets/locale/{}.txt", options_->locale));
     }
 
+    rmlUi_.reset();
+    userInterface_.reset();
     scene_.reset();
     renderer_.reset();
     window_.reset();
@@ -548,6 +551,7 @@ void NextEngine::Start()
 bool NextEngine::HandleEvent(SDL_Event& event)
 {
     userInterface_->HandleEvent(&event);
+    const bool rmlUiConsumed = rmlUi_ && rmlUi_->HandleEvent(event);
 
     if (services_.quickJSEngine)
     {
@@ -559,7 +563,10 @@ bool NextEngine::HandleEvent(SDL_Event& event)
         case SDL_EVENT_GAMEPAD_BUTTON_UP:
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
         case SDL_EVENT_MOUSE_BUTTON_UP:
-            services_.quickJSEngine->HandleInputEvent(event);
+            if (!rmlUiConsumed)
+            {
+                services_.quickJSEngine->HandleInputEvent(event);
+            }
             break;
         default:
             break;
@@ -583,13 +590,23 @@ bool NextEngine::HandleEvent(SDL_Event& event)
     case SDL_EVENT_KEY_UP:
     case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
     case SDL_EVENT_GAMEPAD_BUTTON_UP:
-        OnKey(event);
+        if (!rmlUiConsumed)
+        {
+            OnKey(event);
+        }
         break;
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
     case SDL_EVENT_MOUSE_BUTTON_UP:
-        OnMouseButton(event);
+        if (!rmlUiConsumed)
+        {
+            OnMouseButton(event);
+        }
         break;
     case SDL_EVENT_MOUSE_MOTION:
+        if (rmlUiConsumed)
+        {
+            break;
+        }
         if (window_ && SDL_GetWindowRelativeMouseMode(window_->Handle()))
         {
             OnCursorPosition(event.motion.xrel, event.motion.yrel);
@@ -600,7 +617,10 @@ bool NextEngine::HandleEvent(SDL_Event& event)
         }
         break;
     case SDL_EVENT_MOUSE_WHEEL:
-        OnScroll(event.wheel.x, event.wheel.y);
+        if (!rmlUiConsumed)
+        {
+            OnScroll(event.wheel.x, event.wheel.y);
+        }
         break;
     case SDL_EVENT_DROP_FILE:
         OnDropFile(event.drop.data);
@@ -1346,6 +1366,10 @@ void NextEngine::OnRendererCreateSwapChain()
             this, renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(), config_.userSettings,
             [this]() -> void { gameInstance_->OnPreConfigUI(); }, [this]() -> void { gameInstance_->OnInitUI(); }));
     }
+    if (rmlUi_.get() == nullptr)
+    {
+        rmlUi_ = std::make_unique<NextUI::RmlUiSystem>(*this);
+    }
     userInterface_->OnCreateSurface(renderer_->SwapChain(), renderer_->DepthBuffer());
 }
 
@@ -1396,13 +1420,23 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
     {
         SCOPED_CPU_TIMER("pre render");
         userInterface_->PreRender();
+        if (rmlUi_)
+        {
+            rmlUi_->BeginFrame();
+        }
     }
     bool uiHandled = false;
     {
         SCOPED_CPU_TIMER("game ui");
         uiHandled = gameInstance_->OnRenderUI();
     }
-    const bool suppressAllUi = screenShot_.hasPending;
+    const bool suppressAllUi = screenShot_.hasPending &&
+        (!gameInstance_ || !gameInstance_->ShouldRenderUiDuringScreenshot());
+    if (!suppressAllUi && rmlUi_)
+    {
+        SCOPED_CPU_TIMER("rmlui render");
+        rmlUi_->RenderFrame();
+    }
     if (!suppressAllUi)
     {
         if (config_.showFlags.DebugPhysicsOverlay)
@@ -1473,7 +1507,7 @@ void NextEngine::OnKey(SDL_Event& event)
         }
     }
 
-    if (userInterface_->WantsToCaptureKeyboard())
+    if (userInterface_->WantsToCaptureKeyboard() || (rmlUi_ && rmlUi_->WantsToCaptureKeyboard()))
     {
         return;
     }
@@ -1675,7 +1709,7 @@ void NextEngine::OnTouchMove(double xpos, double ypos) { OnCursorPosition(xpos, 
 void NextEngine::OnCursorPosition(const double xpos, const double ypos)
 {
     if (!renderer_->HasSwapChain() || userInterface_->WantsToCaptureKeyboard() ||
-        userInterface_->WantsToCaptureMouse())
+        userInterface_->WantsToCaptureMouse() || (rmlUi_ && (rmlUi_->WantsToCaptureKeyboard() || rmlUi_->WantsToCaptureMouse())))
     {
         return;
     }
@@ -1688,7 +1722,7 @@ void NextEngine::OnCursorPosition(const double xpos, const double ypos)
 
 void NextEngine::OnMouseButton(SDL_Event& event)
 {
-    if (!renderer_->HasSwapChain() || userInterface_->WantsToCaptureMouse())
+    if (!renderer_->HasSwapChain() || userInterface_->WantsToCaptureMouse() || (rmlUi_ && rmlUi_->WantsToCaptureMouse()))
     {
         return;
     }
@@ -1701,7 +1735,7 @@ void NextEngine::OnMouseButton(SDL_Event& event)
 
 void NextEngine::OnScroll(const double xoffset, const double yoffset)
 {
-    if (!renderer_->HasSwapChain() || userInterface_->WantsToCaptureMouse())
+    if (!renderer_->HasSwapChain() || userInterface_->WantsToCaptureMouse() || (rmlUi_ && rmlUi_->WantsToCaptureMouse()))
     {
         return;
     }

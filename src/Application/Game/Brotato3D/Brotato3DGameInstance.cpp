@@ -164,6 +164,7 @@ void Brotato3DGameInstance::OnTick(double deltaSeconds)
         screenShakeIntensity_ = 0.0f;
     }
     damageFlashMs_ = std::max(0.0f, damageFlashMs_ - deltaMs);
+    bossKillFlashMs_ = std::max(0.0f, bossKillFlashMs_ - deltaMs);
     weaponMergeBannerMs_ = std::max(0.0f, weaponMergeBannerMs_ - deltaMs);
     UpdateSkyTransition(deltaSeconds);
     UpdateWaveBanner(deltaSeconds);
@@ -467,15 +468,6 @@ bool Brotato3DGameInstance::OnRenderUI()
     else if (appState_ == Brotato3D::EAppState::Result)
     {
         Brotato3D::RenderResultModal(*this);
-    }
-    if (bossKillFlashMs_ > 0.0f)
-    {
-        ImGuiIO& io = ImGui::GetIO();
-        bossKillFlashMs_ = std::max(0.0f, bossKillFlashMs_ - io.DeltaTime * 1000.0f);
-        const float alpha = std::clamp(bossKillFlashMs_ / 100.0f, 0.0f, 1.0f);
-        ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(0.0f, 0.0f),
-                                                      ImVec2(io.DisplaySize.x, io.DisplaySize.y),
-                                                      ImColor(1.0f, 1.0f, 1.0f, alpha));
     }
     return false;
 }

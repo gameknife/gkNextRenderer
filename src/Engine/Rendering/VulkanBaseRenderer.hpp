@@ -75,6 +75,7 @@ namespace Vulkan
 		bool HasSwapChain() const { return frame_.swapChain.operator bool(); }
 		int FrameCount() const {return frame_.frameCount;}
 		DeviceMemory* GetScreenShotMemory() const {return screenshot_.imageMemory.get();}
+		const Image* GetScreenShotImage() const { return screenshot_.image.get(); }
 
 		// Scene
 		Assets::Scene& GetScene();

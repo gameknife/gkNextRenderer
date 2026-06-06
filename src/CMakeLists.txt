@@ -129,6 +129,11 @@ add_executable(gkNextVisualTest
 	DesktopMain.cpp
 )
 target_include_directories(gkNextVisualTest PRIVATE Application/Render/gkNextVisualTest)
+add_executable(RmlUiDemo
+	${src_files_rmluidemo}
+	DesktopMain.cpp
+)
+target_include_directories(RmlUiDemo PRIVATE Application/Render/RmlUiDemo)
 add_executable(gkNextEditor
 	${src_files_editor}
 	DesktopMain.cpp
@@ -234,8 +239,9 @@ gkNextEngine
 NextGameplay
 gkNextRenderer
 gkNextStillBenchmark
-gkNextMotionBenchmark
+	gkNextMotionBenchmark
 	gkNextVisualTest
+	RmlUiDemo
 	gkNextEditor
 	ScadStudio
 	Packager
@@ -284,6 +290,7 @@ foreach(target IN LISTS AllTargets)
 	else()
 		target_compile_definitions(${target} PUBLIC GK_ENABLE_SHADER_CLOCK=0)
 	endif()
+	target_compile_definitions(${target} PUBLIC GK_WITH_RMLUI=1)
 
 	if( IOS )
 	target_compile_definitions(${target} PUBLIC IOS=1)
@@ -318,6 +325,8 @@ foreach(target IN LISTS AllTargets)
 		find_package(WebP CONFIG REQUIRED)
 		target_link_libraries(${target} PRIVATE SDL3::SDL3 xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp GPUOpen::VulkanMemoryAllocator ${extra_libs})
 		target_link_libraries(${target} PUBLIC spdlog::spdlog)
+		find_package(RmlUi CONFIG REQUIRED)
+		target_link_libraries(${target} PRIVATE RmlUi::RmlUi)
 
 		# Manifold: robust CSG boolean backend for the SCAD loader (desktop only).
 		find_package(manifold CONFIG QUIET)

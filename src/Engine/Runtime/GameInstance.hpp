@@ -19,6 +19,7 @@ public:
     virtual void OnTick(double deltaSeconds) = 0;
     virtual void OnDestroy() = 0;
     virtual bool OnRenderUI() = 0;
+    virtual bool ShouldRenderUiDuringScreenshot() const { return false; }
     virtual void OnPreConfigUI() {}
     virtual void OnInitUI() {}
     virtual void OnRayHitResponse(Assets::RayCastResult& result) {}
