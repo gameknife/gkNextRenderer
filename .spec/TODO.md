@@ -32,6 +32,7 @@
 - [ ] `#00007` [FEAT] 目前的vcpkg是固定在一个老版本的，把项目依赖升级到最新的vcpkg版本，2026.04.27。并绑定版本，解决各种编译和运行问题。
 - [ ] `#00011` [IDEA] gnb在gkmini上host一个持久的todolist，作为一个“服务器”同步，可以随时随地进行任务管理
 - [ ] `#00012` [FEAT] 让 gkNextRenderer 主管线原生运行在浏览器（WebGPU 后端） → specs/00012.md
+- [ ] `#00028` [IDEA] 深化agent-validation模式，可以模拟键盘和鼠标操作，让agent验证更方便
 
 ### 最近完成
 
