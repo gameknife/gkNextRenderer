@@ -105,6 +105,7 @@ public:
 
     // Runtime services
     NextUI::UserInterface* GetUserInterface() { return userInterface_.get(); }
+    NextUI::RmlUiSystem* GetRmlUi() { return rmlUi_.get(); }
     NextAudio* GetAudio() { return services_.audio.get(); }
     const NextAudio* GetAudio() const { return services_.audio.get(); }
     NextLocalization* GetLocalization() { return services_.localization.get(); }
@@ -316,6 +317,7 @@ private:
 
     // Runtime services and UI
     std::unique_ptr<NextUI::UserInterface> userInterface_;
+    std::unique_ptr<NextUI::RmlUiSystem> rmlUi_;
     FRuntimeServices services_{};
 
     // Editor and tooling state

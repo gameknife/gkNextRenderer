@@ -807,6 +807,28 @@ namespace Assets
         return textureIdx;
     }
 
+    void GlobalTexturePool::ReleaseTexture(uint32_t textureIdx)
+    {
+        if (textureIdx >= textureImages_.size() || !textureImages_[textureIdx])
+        {
+            return;
+        }
+
+        // Descriptor sets may still be referenced by in-flight UI command buffers.
+        device_.WaitIdle();
+
+        textureImages_[textureIdx].reset();
+        if (defaultWhiteTexture_)
+        {
+            BindTexture(textureIdx, *defaultWhiteTexture_);
+        }
+
+        std::erase_if(textureNameMap_, [textureIdx](const auto& item)
+        {
+            return item.second.GlobalIdx_ == textureIdx;
+        });
+    }
+
     uint32_t GlobalTexturePool::TryGetTexureIndex(const std::string& textureName) const
     {
         if (textureNameMap_.find(textureName) != textureNameMap_.end())

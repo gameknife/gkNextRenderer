@@ -1,0 +1,28 @@
+<body>
+<div class="demo-shell {{theme_class}} {{density_class}}">
+{{module_nav}}
+<main class="demo-main">
+{{demo_toolbar}}
+<section class="demo-content content-grid">
+<div class="primary-column">
+<div class="module-panel">
+<h1>Forms module</h1>
+<p>Focus an input to validate keyboard capture, text input, caret behavior, and clipboard handling.</p>
+<div class="form-row"><label>Project name</label><input type="text" value="Agent generated layout"/></div>
+<div class="form-row"><label>Mode</label><select><option>Landing page</option><option>HUD overlay</option><option>Editor panel</option></select></div>
+<div class="form-row"><label>Prompt notes</label><textarea>Describe the UI state that the agent should generate.</textarea></div>
+<div class="control-strip">
+<button id="primary_action">Submit</button>
+<button id="secondary_action" class="secondary">Save draft</button>
+</div>
+</div>
+</div>
+<div class="secondary-column">
+<div class="module-panel"><h3>Expected</h3><p>Typing inside fields should not move the camera or trigger game shortcuts.</p></div>
+</div>
+</section>
+</main>
+{{demo_state}}
+{{demo_modal}}
+</div>
+</body>

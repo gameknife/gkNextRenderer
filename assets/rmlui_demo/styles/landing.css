@@ -1,0 +1,24 @@
+.landing-section {
+    margin-top: 22px;
+}
+
+.landing-kicker {
+    margin-bottom: 12px;
+    color: #9dd9ff;
+    font-size: 15px;
+}
+
+.logo-strip {
+    display: flex;
+    margin-top: 18px;
+}
+
+.logo-box {
+    flex: 1;
+    margin-right: 10px;
+    padding: 14px;
+    text-align: center;
+    color: #91a0b5;
+    background-color: #171d26;
+    border: 1px #303c4f;
+}

@@ -16,6 +16,30 @@
 
 namespace Runtime::ScreenShot
 {
+    namespace
+    {
+        VkSubresourceLayout GetScreenShotImageLayout(Vulkan::VulkanBaseRenderer* renderer)
+        {
+            VkSubresourceLayout layout{};
+            const Vulkan::Image* image = renderer->GetScreenShotImage();
+            if (!image)
+            {
+                return layout;
+            }
+
+            VkImageSubresource subresource{};
+            subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            subresource.mipLevel = 0;
+            subresource.arrayLayer = 0;
+            vkGetImageSubresourceLayout(
+                renderer->Device().Handle(),
+                image->Handle(),
+                &subresource,
+                &layout);
+            return layout;
+        }
+    }
+
     void SaveSwapChainToFileFast(Vulkan::VulkanBaseRenderer* renderer, const std::string& filePathWithoutExtension, int inX, int inY, int inWidth, int inHeight)
     {
         // screenshot stuffs
@@ -44,13 +68,15 @@ namespace Runtime::ScreenShot
         uint32_t rowBytes = 0;
         constexpr uint32_t kCompCnt = 3;
         dataBytes = extent.width * extent.height * kCompCnt;
-        uint32_t rawDataBytes = extent.width * extent.height * 4;
         rowBytes = extent.width * 3 * sizeof(uint8_t);
     
         Vulkan::DeviceMemory* vkMemory = renderer->GetScreenShotMemory();
+        const VkSubresourceLayout imageLayout = GetScreenShotImageLayout(renderer);
+        const uint32_t srcRowBytes = static_cast<uint32_t>(imageLayout.rowPitch);
+        const uint32_t rawDataBytes = srcRowBytes * orgExtent.height;
         uint8_t* mappedGPUData = (uint8_t*)vkMemory->Map(0, VK_WHOLE_SIZE);
         uint8_t* mappedData = (uint8_t*)malloc(rawDataBytes);
-        memcpy(mappedData, mappedGPUData, rawDataBytes);
+        memcpy(mappedData, mappedGPUData + imageLayout.offset, rawDataBytes);
         vkMemory->Unmap();
         Tasks::TaskCoordinator::GetInstance()->AddTask([=](Tasks::ResTask& task)->void
         {
@@ -58,7 +84,7 @@ namespace Runtime::ScreenShot
             {
                 uint32_t yDelta = extent.width * kCompCnt;
                 uint32_t xDelta = kCompCnt;
-                uint32_t srcYDelta = orgExtent.width * 4;
+                uint32_t srcYDelta = srcRowBytes;
                 uint32_t srcXDelta = 4;
             
                 uint32_t yy = 0;
@@ -120,6 +146,8 @@ namespace Runtime::ScreenShot
         void* data = nullptr;
         uint32_t dataBytes = 0;
         uint32_t rowBytes = 0;
+        const VkSubresourceLayout imageLayout = GetScreenShotImageLayout(renderer);
+        const uint32_t srcRowBytes = static_cast<uint32_t>(imageLayout.rowPitch);
 
         constexpr uint32_t kCompCnt = 3;
         if(swapChain.IsHDR())
@@ -132,8 +160,9 @@ namespace Runtime::ScreenShot
             {
                 Vulkan::DeviceMemory* vkMemory = renderer->GetScreenShotMemory();
                 uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, VK_WHOLE_SIZE);
+                uint8_t* imageData = mappedData + imageLayout.offset;
 
-                uint32_t srcYDelta = orgExtent.width * 4;
+                uint32_t srcYDelta = srcRowBytes;
                 uint32_t srcXDelta = 4;
             
                 uint32_t yDelta = extent.width * kCompCnt;
@@ -149,7 +178,7 @@ namespace Runtime::ScreenShot
                     srcX = inX * srcXDelta;
                     for (uint32_t x = 0; x < extent.width; x++)
                     {
-                        uint32_t* pInPixel = (uint32_t*)&mappedData[srcY + srcX];
+                        uint32_t* pInPixel = (uint32_t*)&imageData[srcY + srcX];
                         uint32_t uInPixel = *pInPixel;
                         dataview[yy + xx + 2] = (uInPixel & (0b1111111111 << 20)) >> 20;
                         dataview[yy + xx + 1] = (uInPixel & (0b1111111111 << 10)) >> 10;
@@ -174,9 +203,10 @@ namespace Runtime::ScreenShot
             {
                 Vulkan::DeviceMemory* vkMemory = renderer->GetScreenShotMemory();
                 uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, VK_WHOLE_SIZE);
+                uint8_t* imageData = mappedData + imageLayout.offset;
                 uint32_t yDelta = extent.width * kCompCnt;
                 uint32_t xDelta = kCompCnt;
-                uint32_t srcYDelta = orgExtent.width * 4;
+                uint32_t srcYDelta = srcRowBytes;
                 uint32_t srcXDelta = 4;
             
                 uint32_t yy = 0;
@@ -190,7 +220,7 @@ namespace Runtime::ScreenShot
                     srcX = inX * srcXDelta;
                     for (uint32_t x = 0; x < extent.width; x++)
                     {
-                        uint32_t* pInPixel = (uint32_t*)&mappedData[srcY + srcX];
+                        uint32_t* pInPixel = (uint32_t*)&imageData[srcY + srcX];
                         uint32_t uInPixel = *pInPixel;
                         dataview[yy + xx] = (uInPixel & (0b11111111 << 16)) >> 16;
                         dataview[yy + xx + 1] = (uInPixel & (0b11111111 << 8)) >> 8;

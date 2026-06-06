@@ -21,6 +21,7 @@ namespace NextCVar
 
 namespace NextUI
 {
+    class RmlUiSystem;
     class UserInterface;
     struct Statistics;
 }

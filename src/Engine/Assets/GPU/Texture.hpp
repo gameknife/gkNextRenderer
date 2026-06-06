@@ -52,6 +52,7 @@ namespace Assets
 		void BindShadowMap(uint32_t slot, const Vulkan::ImageView& view, const Vulkan::Sampler& sampler);
 		uint32_t RegisterTexture(const std::string& textureName, std::unique_ptr<TextureImage> textureImage,
 		                         ETextureLifetime lifetime = ETextureLifetime::ETL_Transient);
+		void ReleaseTexture(uint32_t textureIdx);
 		uint32_t TryGetTexureIndex(const std::string& textureName) const;
 		uint32_t RequestNewTextureFileAsync(const std::string& filename, bool hdr,
 		                                    ETextureLifetime lifetime = ETextureLifetime::ETL_Transient);

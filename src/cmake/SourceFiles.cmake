@@ -91,6 +91,8 @@ file(GLOB_RECURSE src_files_gkmotionbenchmark "Application/Render/gkNextBenchmar
 file(GLOB_RECURSE src_files_gkvisualtest "Application/Render/gkNextVisualTest/*"
 )
 
+file(GLOB_RECURSE src_files_rmluidemo "Application/Render/RmlUiDemo/*")
+
 file(GLOB_RECURSE src_files_konglie3d
     "Application/Game/KongLie3D/*.cpp"
     "Application/Game/KongLie3D/*.hpp"

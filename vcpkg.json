@@ -40,6 +40,10 @@
       ],
       "platform": "android"
     },
+    {
+      "name": "rmlui",
+      "features": ["freetype"]
+    },
     "stb",
     "curl",
     "nlohmann-json",
