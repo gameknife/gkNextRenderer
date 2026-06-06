@@ -115,6 +115,7 @@ class FCPUAccelerationStructure
 {
 public:
     void InitBVH(Assets::Scene& scene);
+    void RebuildBVHOnly(Assets::Scene& scene);
 
     
     Assets::RayCastResult RayCastInCPU(glm::vec3 rayOrigin, glm::vec3 rayDir);

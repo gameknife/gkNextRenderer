@@ -664,6 +664,11 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
     }
 }
 
+void FCPUAccelerationStructure::RebuildBVHOnly(Scene& scene)
+{
+    UpdateBVH(scene);
+}
+
 RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDir)
 {
     RayCastResult result {};

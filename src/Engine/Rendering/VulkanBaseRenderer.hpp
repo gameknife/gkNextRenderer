@@ -92,6 +92,7 @@ namespace Vulkan
 		ERendererType CurrentLogicRendererType() const { return logicRenderers_.current; }
 		FRendererRequirements CurrentRendererRequirements() const;
 		FRendererRequirements RegisteredRendererRequirements() const;
+		bool ShouldSkipAmbientCubeUpdates() const;
 
 		// Capabilities / flags
 		bool VisualDebug() const {return visualDebug_;}

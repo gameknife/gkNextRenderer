@@ -156,6 +156,7 @@ public struct FPathTracingRenderer{
     public bool FuzzyTracing = false;
     public bool ForceExitAfterFirst = false;
     public bool EnableSoftTracingAdaptiveOffset = false;
+    public bool UseAmbientCubeTerminal = true;
     public bool EnableSharcUpdate = false;
     public bool EnableSharcQuery = false;
     public uint SharcDebugMode = 0;
@@ -189,6 +190,20 @@ public struct FPathTracingRenderer{
         }
 
         return GetMaterialRoughness(vertex) >= SharcQueryRoughnessMin;
+    }
+
+    public void ApplyTerminalRadiance(Vertex vertex, inout float4 rayColor)
+    {
+        float4 terminalRadiance = float4(0, 0, 0, 1);
+        if (UseAmbientCubeTerminal)
+        {
+            terminalRadiance = interpolateAmbientCubes<FullAmbientCubeSampler>(vertex.Position, vertex.Normal);
+            if (EnableSharcUpdate)
+            {
+                SharcAccumulate(vertex.Position, vertex.Normal, terminalRadiance.rgb);
+            }
+        }
+        rayColor *= terminalRadiance;
     }
 
     bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, inout bool hitReflect, inout bool hitMetal, out float outHitDist)
@@ -247,6 +262,8 @@ public struct FPathTracingRenderer{
 
         NodeProxy hitNode;
         float4 tempColor = float4(0, 0, 0, 1);
+        float3 cachePosition = inVertex.Position;
+        float3 cacheNormal = inVertex.Normal;
         float surfaceOffset = HitNormalOffset;
         if (EnableSoftTracingAdaptiveOffset)
         {
@@ -280,7 +297,7 @@ public struct FPathTracingRenderer{
             {
                 if (EnableSharcUpdate)
                 {
-                    SharcAccumulate(inVertex.Position, inVertex.Normal, outAlbedo.rgb);
+                    SharcAccumulate(cachePosition, cacheNormal, outAlbedo.rgb);
                 }
                 return true;
             }
@@ -371,12 +388,7 @@ public struct FPathTracingRenderer{
                 {
                     if(!FuzzyTracing)
                     {
-                        float4 terminalRadiance = interpolateAmbientCubes<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal);
-                        if (EnableSharcUpdate)
-                        {
-                            SharcAccumulate(vertexStart.Position, vertexStart.Normal, terminalRadiance.rgb);
-                        }
-                        RayColor *= terminalRadiance;
+                        ApplyTerminalRadiance(vertexStart, RayColor);
                     }
                 }
                 else
@@ -396,12 +408,12 @@ public struct FPathTracingRenderer{
                             float4 cachedRadiance = float4(0, 0, 0, 0);
                             if (SharcQuery(vertexStart.Position, vertexStart.Normal, cachedRadiance))
                             {
-                                RayColor *= SharcDebugMode == 1u ? float4(0, 1, 0, 1) : cachedRadiance;
+                                RayColor *= SharcDebugMode == 1u ? float4(0, 1000, 0, 1) : cachedRadiance;
                                 break;
                             }
                             else if (SharcDebugMode == 2u)
                             {
-                                RayColor *= float4(1, 0, 0, 1);
+                                RayColor *= float4(1000, 0, 0, 1);
                                 break;
                             }
                         }
@@ -417,6 +429,10 @@ public struct FPathTracingRenderer{
                             }
                             if (!tracer.TraceOcclusion(vertexStart.Position + vertexStart.Normal * shadowTraceOffset, lightVectorCone))
                             {
+                                if (EnableSharcUpdate)
+                                {
+                                    SharcAccumulate(vertexStart.Position, vertexStart.Normal, Camera.SunColor.rgb);
+                                }
                                 RayColor *= Camera.SunColor;
                                 break;
                             }
@@ -434,12 +450,7 @@ public struct FPathTracingRenderer{
                             }
                             else
                             {
-                                float4 terminalRadiance = interpolateAmbientCubes<FullAmbientCubeSampler>(vertexStart.Position, vertexStart.Normal);
-                                if (EnableSharcUpdate)
-                                {
-                                    SharcAccumulate(vertexStart.Position, vertexStart.Normal, terminalRadiance.rgb);
-                                }
-                                RayColor *= terminalRadiance;
+                                ApplyTerminalRadiance(vertexStart, RayColor);
                             }
                             break;
                         }

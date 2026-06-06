@@ -1324,22 +1324,33 @@ namespace Assets
             }
         }
 
-        if (NextEngine::GetInstance()->GetRenderer().CurrentRendererRequirements().requestAmbientCube &&
-            NextEngine::GetInstance()->GetTotalFrames() % 30 == 0)
+        if (NextEngine::GetInstance()->GetTotalFrames() % 30 == 0)
         {
-            const bool voxelUploadCompleted = cpuAccelerationStructure_.Tick(
-                *this, ambientArenaBufferMemory_.get(), ambientArenaBufferMemory_.get(), ambientArenaBufferMemory_.get());
-            if (voxelUploadCompleted && NextEngine::GetInstance()->GetUserSettings().UseGpuAmbientCubeSdf)
+            auto& renderer = NextEngine::GetInstance()->GetRenderer();
+            const bool shouldUpdateAmbientCube =
+                renderer.CurrentRendererRequirements().requestAmbientCube && !renderer.ShouldSkipAmbientCubeUpdates();
+
+            if (shouldUpdateAmbientCube)
             {
-                RequestGpuDistanceFieldRebuild();
-            }
-            
-            if (sceneDirtyForCpuAS_ && !cpuAccelerationStructure_.HasPendingWork())
-            {
-                if (cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), true))
+                const bool voxelUploadCompleted = cpuAccelerationStructure_.Tick(
+                    *this, ambientArenaBufferMemory_.get(), ambientArenaBufferMemory_.get(), ambientArenaBufferMemory_.get());
+                if (voxelUploadCompleted && NextEngine::GetInstance()->GetUserSettings().UseGpuAmbientCubeSdf)
                 {
-                    sceneDirtyForCpuAS_ = false;
+                    RequestGpuDistanceFieldRebuild();
                 }
+
+                if (sceneDirtyForCpuAS_ && !cpuAccelerationStructure_.HasPendingWork())
+                {
+                    if (cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), true))
+                    {
+                        sceneDirtyForCpuAS_ = false;
+                    }
+                }
+            }
+            else if (sceneDirtyForCpuAS_)
+            {
+                cpuAccelerationStructure_.RebuildBVHOnly(*this);
+                sceneDirtyForCpuAS_ = false;
             }
         }
     }

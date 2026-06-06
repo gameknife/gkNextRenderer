@@ -1101,7 +1101,7 @@ namespace Vulkan
 
     void VulkanBaseRenderer::HandleAmbientCubeCacheInvalidation(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
-        if (!CurrentRendererRequirements().requestAmbientCube)
+        if (!CurrentRendererRequirements().requestAmbientCube || ShouldSkipAmbientCubeUpdates())
         {
             return;
         }
@@ -2018,6 +2018,12 @@ namespace Vulkan
         return requirements;
     }
 
+    bool VulkanBaseRenderer::ShouldSkipAmbientCubeUpdates() const
+    {
+        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        return CurrentLogicRendererType() == ERendererType::ERT_PathTracing && settings.SharcEnable;
+    }
+
     void VulkanBaseRenderer::SwitchLogicRenderer(ERendererType type)
     {
         logicRenderers_.current = type;
@@ -2361,15 +2367,17 @@ namespace Vulkan
 
     void VulkanBaseRenderer::PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
-        if (CurrentRendererRequirements().requestAmbientCube)
+        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+
+        if (CurrentRendererRequirements().requestAmbientCube && !ShouldSkipAmbientCubeUpdates())
         {
-            if (NextEngine::GetInstance()->GetUserSettings().UseGpuAmbientCubeSdf &&
+            if (settings.UseGpuAmbientCubeSdf &&
                 GetScene().ConsumeGpuDistanceFieldRebuild())
             {
                 RebuildDistanceFieldCascades(commandBuffer, imageIndex);
             }
 
-            if (NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel != 2)
+            if (settings.BakeSpeedLevel != 2)
             {
                 const bool useHardware = caps_.supportRayTracing && !GOption->ForceSoftGen;
                 BakeAmbientCubeCascade(commandBuffer, imageIndex, useHardware);
