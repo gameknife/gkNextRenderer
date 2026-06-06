@@ -1,0 +1,52 @@
+select selectvalue {
+    width: auto;
+    margin-right: 24px;
+    padding: 8px;
+    color: #edf2f7;
+    background-color: #171d26;
+}
+
+select selectarrow {
+    width: 24px;
+    height: 34px;
+    background-color: #202735;
+    border-left: 1px #435167;
+}
+
+select selectbox {
+    margin-top: 2px;
+    width: auto;
+    padding: 4px 0;
+    color: #edf2f7;
+    background-color: #171d26;
+    border: 1px #435167;
+}
+
+select selectbox option {
+    width: auto;
+    padding: 6px 8px;
+    color: #edf2f7;
+    background-color: #171d26;
+}
+
+select selectbox option:hover,
+select selectbox option:checked {
+    background-color: #344255;
+}
+
+.theme-light select selectvalue,
+.theme-light select selectbox,
+.theme-light select selectbox option {
+    color: #1d2430;
+    background-color: #f8fafc;
+}
+
+.theme-light select selectarrow {
+    background-color: #e6ebf2;
+    border-left: 1px #cbd4df;
+}
+
+.theme-light select selectbox option:hover,
+.theme-light select selectbox option:checked {
+    background-color: #d8e0eb;
+}

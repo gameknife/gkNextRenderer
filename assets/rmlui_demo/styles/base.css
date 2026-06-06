@@ -8,12 +8,20 @@ body {
 }
 
 button, input, textarea, select {
+    box-sizing: border-box;
     font-family: "Droid Sans Fallback";
+    font-size: 16px;
+    line-height: 1.2;
 }
 
 button {
-    min-height: 36px;
-    padding: 8px 12px;
+    display: inline-block;
+    height: 36px;
+    padding: 0 12px;
+    line-height: 36px;
+    text-align: center;
+    vertical-align: middle;
+    white-space: nowrap;
     color: #101318;
     background-color: #f3c94e;
     border: 1px #342811;
@@ -124,6 +132,7 @@ strong {
 }
 
 .demo-nav {
+    box-sizing: border-box;
     width: 235px;
     height: 100%;
     padding: 14px;
@@ -138,10 +147,16 @@ strong {
 }
 
 .nav-item {
+    display: block;
+    box-sizing: border-box;
     width: 100%;
+    height: auto;
     min-height: 58px;
     margin-bottom: 8px;
     padding: 9px;
+    line-height: 1.2;
+    white-space: normal;
+    vertical-align: baseline;
     text-align: left;
     color: #dce5f2;
     background-color: #202735;
@@ -159,22 +174,28 @@ strong {
 }
 
 .demo-main {
+    box-sizing: border-box;
     width: 815px;
+    min-width: 0;
     height: 100%;
     overflow: auto;
 }
 
 .demo-toolbar {
     display: flex;
-    width: 779px;
+    box-sizing: border-box;
+    width: 100%;
     min-height: 40px;
-    padding: 14px 18px;
+    padding: 14px 24px;
     background-color: #151a22;
     border-bottom: 1px #2f3948;
 }
 
 .toolbar-title {
-    width: 360px;
+    width: auto;
+    padding-right: 24px;
+    flex: 1;
+    min-width: 0;
 }
 
 .toolbar-title strong,
@@ -184,22 +205,30 @@ strong {
 
 .toolbar-actions {
     display: flex;
-    width: 410px;
+    width: auto;
+    flex: 0 0 auto;
+    margin-left: auto;
 }
 
 .toolbar-actions button {
     margin-left: 8px;
     width: 92px;
-    min-height: 34px;
-    padding: 7px 8px;
+    height: 34px;
+    line-height: 34px;
+    padding: 0 8px;
 }
 
 .demo-content {
-    width: 767px;
+    box-sizing: border-box;
+    width: 100%;
     padding: 24px;
 }
 
 .density-compact .demo-content {
+    padding: 14px;
+}
+
+.density-compact .demo-toolbar {
     padding: 14px;
 }
 
@@ -213,6 +242,7 @@ strong {
 }
 
 .state-panel {
+    box-sizing: border-box;
     width: 250px;
     height: 100%;
     padding: 16px;
@@ -249,11 +279,13 @@ strong {
 
 .content-grid .primary-column {
     width: 426px;
+    min-width: 0;
     margin-right: 18px;
 }
 
 .content-grid .secondary-column {
     width: 280px;
+    min-width: 0;
 }
 
 .module-panel {

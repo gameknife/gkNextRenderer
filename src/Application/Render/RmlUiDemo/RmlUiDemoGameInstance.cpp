@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 #include <string_view>
@@ -107,6 +108,114 @@ namespace
         }
         return result;
     }
+
+    bool StartsWith(std::string_view text, std::string_view prefix)
+    {
+        return text.size() >= prefix.size() && text.substr(0, prefix.size()) == prefix;
+    }
+
+    bool EndsWith(std::string_view text, std::string_view suffix)
+    {
+        return text.size() >= suffix.size() && text.substr(text.size() - suffix.size()) == suffix;
+    }
+
+    bool IsHexColor(std::string_view token)
+    {
+        if (token.size() != 4 && token.size() != 7 && token.size() != 9)
+        {
+            return false;
+        }
+        if (token.front() != '#')
+        {
+            return false;
+        }
+        return std::all_of(token.begin() + 1, token.end(), [](unsigned char ch)
+        {
+            return std::isxdigit(ch) != 0;
+        });
+    }
+
+    std::optional<std::string> RewriteBrowserInvalidBorderShorthandLine(std::string_view line)
+    {
+        constexpr std::string_view prefixes[] = {
+            "border:",
+            "border-left:",
+            "border-right:",
+            "border-top:",
+            "border-bottom:",
+        };
+
+        const std::string trimmed = Trim(line);
+        if (trimmed.empty())
+        {
+            return std::nullopt;
+        }
+        std::string_view prefix;
+        for (const std::string_view candidate : prefixes)
+        {
+            if (StartsWith(trimmed, candidate))
+            {
+                prefix = candidate;
+                break;
+            }
+        }
+        if (prefix.empty() || trimmed.back() != ';')
+        {
+            return std::nullopt;
+        }
+
+        const std::string value = Trim(trimmed.substr(prefix.size(), trimmed.size() - prefix.size() - 1));
+        std::istringstream stream(value);
+        std::string widthToken;
+        std::string colorToken;
+        std::string trailingToken;
+        if (!(stream >> widthToken >> colorToken))
+        {
+            return std::nullopt;
+        }
+        if (stream >> trailingToken)
+        {
+            return std::nullopt;
+        }
+
+        if (!EndsWith(widthToken, "px") || !IsHexColor(colorToken))
+        {
+            return std::nullopt;
+        }
+
+        return fmt::format("{} 0px {};", prefix, colorToken);
+    }
+
+    std::string StripBrowserInvalidBorderShorthands(std::string_view css)
+    {
+        std::ostringstream sanitized;
+        std::istringstream input{std::string(css)};
+        std::string line;
+        while (std::getline(input, line))
+        {
+            if (const std::optional<std::string> rewrittenLine = RewriteBrowserInvalidBorderShorthandLine(line))
+            {
+                sanitized << *rewrittenLine << '\n';
+            }
+            else
+            {
+                sanitized << line << '\n';
+            }
+        }
+        return sanitized.str();
+    }
+
+    std::optional<size_t> FindModuleIndexById(const std::vector<RmlUiDemo::FDemoModule>& modules, std::string_view moduleId)
+    {
+        for (size_t index = 0; index < modules.size(); ++index)
+        {
+            if (modules[index].id == moduleId)
+            {
+                return index;
+            }
+        }
+        return std::nullopt;
+    }
 }
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(
@@ -140,11 +249,19 @@ namespace RmlUiDemo
             {"responsive", "Responsive", "Adaptive layout under narrow widths"},
             {"images", "Images", "Texture loading through RmlUi and the engine pool"},
         };
+
+        if (const char* startModule = std::getenv("GK_RMLUI_DEMO_MODULE"))
+        {
+            if (const auto startIndex = FindModuleIndexById(modules_, startModule); startIndex.has_value())
+            {
+                currentModule_ = *startIndex;
+            }
+        }
     }
 
     void RmlUiDemoGameInstance::OnInit()
     {
-        statusMessage_ = "Loaded landing page";
+        statusMessage_ = fmt::format("Loaded {} page", CurrentModule().id);
     }
 
     void RmlUiDemoGameInstance::OnTick(double deltaSeconds)
@@ -317,6 +434,11 @@ namespace RmlUiDemo
         std::string css = ReadAssetText(fmt::format("{}/styles/base.css", kAssetRoot));
         css += "\n";
         css += ReadAssetText(fmt::format("{}/styles/modules.css", kAssetRoot));
+        // Browsers drop shorthand borders without a style token (`border: 1px #fff;`),
+        // while RmlUi currently renders them. Strip those declarations here so the
+        // in-engine demo matches the browser reference page. Keep page-specific
+        // overrides unsanitized so they can use RmlUi-only generated element tags.
+        css = StripBrowserInvalidBorderShorthands(css);
         css += "\n";
         css += ReadOptionalAssetText(CurrentPageCssPath());
 
@@ -328,7 +450,7 @@ namespace RmlUiDemo
 {}
 </style>
 </head>
-<body>
+<body data-gk-cjk-word-break-fallback="true">
 {}
 </body>
 </rml>)RML",

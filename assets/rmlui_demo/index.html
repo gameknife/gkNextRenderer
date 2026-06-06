@@ -6,7 +6,7 @@
     <title>RmlUiDemo Browser Reference</title>
     <link rel="stylesheet" href="styles/base.css">
     <link rel="stylesheet" href="styles/modules.css">
-    <link rel="stylesheet" href="styles/landing.css">
+    <link rel="stylesheet" id="module-style">
     <style>
         html {
             width: 100%;
@@ -329,9 +329,9 @@
 <h1>Images module</h1>
 <p>Images load through RmlUi texture handles and the engine global texture pool.</p>
 <div class="image-grid">
-<div class="image-card"><img src="assets/backup/textures/Vulkan.png"><h3>Vulkan texture</h3><p>Existing engine asset.</p></div>
-<div class="image-card"><img src="assets/backup/models/KayKit_Platformer_Pack/Samples/sample1.png"><h3>Sample preview</h3><p>Tests larger image scaling.</p></div>
-<div class="image-card"><img src="assets/backup/textures/white.png"><h3>Fallback white</h3><p>Small image sampling.</p></div>
+<div class="image-card"><img src="assets/textures/Vulkan.png"><h3>Vulkan texture</h3><p>Existing engine asset.</p></div>
+<div class="image-card"><img src="assets/models/KayKit_Platformer_Pack/Samples/sample1.png"><h3>Sample preview</h3><p>Tests larger image scaling.</p></div>
+<div class="image-card"><img src="assets/textures/white.png"><h3>Fallback white</h3><p>Small image sampling.</p></div>
 </div>
 </div>
 </section>
@@ -354,6 +354,12 @@ const modules = [
     { id: "responsive", title: "Responsive", description: "Adaptive layout under narrow widths" },
     { id: "images", title: "Images", description: "Texture loading through RmlUi and the engine pool" },
 ];
+
+const moduleStyleHrefs = Object.freeze({
+    landing: "styles/landing.css",
+    forms: "styles/forms.css",
+    scroll: "styles/scroll.css",
+});
 
 const state = {
     moduleId: "landing",
@@ -431,7 +437,22 @@ function buildModal() {
 </div>`;
 }
 
+function syncModuleStyle() {
+    const moduleStyle = document.getElementById("module-style");
+    if (!moduleStyle) {
+        return;
+    }
+
+    const href = moduleStyleHrefs[state.moduleId] || "";
+    if (href) {
+        moduleStyle.setAttribute("href", href);
+    } else {
+        moduleStyle.removeAttribute("href");
+    }
+}
+
 function render() {
+    syncModuleStyle();
     const template = document.getElementById(`page_${state.moduleId}`) || document.getElementById("page_landing");
     let html = template.innerHTML;
     html = html.replaceAll("{{module_nav}}", buildNavigation());
