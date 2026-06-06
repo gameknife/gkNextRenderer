@@ -17,6 +17,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.SampleDownscale = 2;
     renderer.FuzzyTracing = false;
     renderer.ForceExitAfterFirst = false;
+    renderer.UseAmbientCubeTerminal = false;
     renderer.EnableSharcUpdate = true;
     renderer.SharcUpdateSampleRatio = params.UpdateSampleRatio;
     renderer.Init(DTid.xy);
@@ -28,4 +29,3 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     renderer.Render(tracer, dIlluminator, 1);
 }
-

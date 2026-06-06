@@ -15,11 +15,12 @@ void main(uint3 DTid : SV_DispatchThreadID)
     FPathTracingRenderer renderer;
     SharcParameters params = SharcGetParameters();
     renderer.ExitProbability = 0.5f;
-    renderer.ExitAfterFirst = Bindless.GetGpuscene().Camera->FastGather;
+    renderer.ExitAfterFirst = false;
     renderer.HitNormalOffset = 0.001f * Bindless.GetGpuscene().Camera->SceneEpsilonScale;
     renderer.SampleDownscale = 1;
     renderer.FuzzyTracing = false;
     renderer.ForceExitAfterFirst = false;
+    renderer.UseAmbientCubeTerminal = false;
     renderer.EnableSharcQuery = true;
     renderer.SharcDebugMode = params.DebugMode;
     renderer.SharcQueryRoughnessMin = params.QueryRoughnessMin;
@@ -36,4 +37,3 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.Render(tracer, dIlluminator, sampleMultiplier);
     END_SHADERCLOCK(DTid.xy)
 }
-
