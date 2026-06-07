@@ -132,8 +132,8 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 ### 通用说明
 
-- 推荐先执行 `./gnb doctor`（Windows: `gnb.bat doctor`）检查宿主机缺失的基础工具
-- `./gnb setup`（Windows: `gnb.bat setup`）会准备 vcpkg、项目外部工具链与可选资源包；如果直接执行 `./gnb build`，首次缺少 toolchain 时也会自动补齐核心依赖
+- 推荐先执行 `./gnb doctor`（Windows: `./gnb.bat doctor`）检查宿主机缺失的基础工具
+- `./gnb setup`（Windows: `./gnb.bat setup`）会准备 vcpkg、项目外部工具链与可选资源包；如果直接执行 `./gnb build`，首次缺少 toolchain 时也会自动补齐核心依赖
 - 桌面平台现在通过 `gnb` 统一构建和运行，通常不再需要先 `cd` 到 `out/build/<platform>/bin`
 - 可用 CMake 预设收敛为：`windows`、`linux`、`macos-arm64`、`ios`
 
@@ -150,9 +150,9 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 - 启用“使用 Unicode UTF-8 提供全球语言支持”
 
 ```bat
-gnb.bat setup
-gnb.bat build
-gnb.bat run gkNextRenderer
+./gnb.bat setup
+./gnb.bat build
+./gnb.bat run gkNextRenderer
 ```
 
 除 Visual Studio 这类宿主工具外，其余项目依赖通常都由 `gnb` 自动准备；默认会拉取项目约定版本的 Vulkan SDK、Slang 与 TypeScript 工具链到仓库内。
@@ -220,8 +220,8 @@ gnb.bat run gkNextRenderer
 ```bat
 set ANDROID_HOME=C:\Android\Sdk
 set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\27.0.12077973
-gnb.bat setup --vcpkg-only
-gnb.bat android
+./gnb.bat setup --vcpkg-only
+./gnb.bat android
 ```
 
 Android 主机侧仍需要提供 JDK / SDK / NDK；项目内的 vcpkg 依赖与外部工具链则继续由 `gnb` 处理。
@@ -264,7 +264,7 @@ Android 主机侧仍需要提供 JDK / SDK / NDK；项目内的 vcpkg 依赖与�
 ./gnb.sh paks fetch ffmpeg sfx
 
 # Windows
-gnb.bat paks fetch
+./gnb.bat paks fetch
 ```
 
 ## 子项目

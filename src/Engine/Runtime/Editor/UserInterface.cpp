@@ -9,6 +9,7 @@
 #include "Engine/Runtime/Editor/ProfessionalUI.hpp"
 #include "ThirdParty/imgui-custom/imgui_impl_sdl3_custom.h"
 #include "Engine/Utilities/Exception.hpp"
+#include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
 #include "Engine/Vulkan/Instance.hpp"
@@ -679,8 +680,8 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     ImGui::CreateContext();
 
     auto& io = ImGui::GetIO();
-    // No ini file.
-    io.IniFilename = "imgui.ini";
+    imguiIniPath_ = Utilities::FileHelper::GetPlatformFilePath("imgui.ini");
+    io.IniFilename = imguiIniPath_.c_str();
     io.WantCaptureMouse = false;
     io.WantCaptureKeyboard = false;
 

@@ -13,8 +13,8 @@
 ### 1. 构建 (Build)
 ```bash
 # Windows
-gnb.bat build
-gnb.bat build --clean  # 清理重编
+./gnb.bat build
+./gnb.bat build --clean  # 清理重编
 
 # macOS / Linux
 ./gnb.sh build
@@ -26,10 +26,10 @@ gnb.bat build --clean  # 清理重编
 **⚠️ 按范围选目标，默认不要全量 `gnb build`（program 多，全量很慢）：**
 ```bash
 # 改 Engine 层 (src/Engine/**、shaders、公共 runtime)：只编渲染器 + 单测
-gnb.bat build gkNextRenderer gkNextUnitTests
+./gnb.bat build gkNextRenderer gkNextUnitTests
 
 # 改某个具体 program (src/Application/** 单一子项目)：只编它自己
-gnb.bat build MagicaLego
+./gnb.bat build MagicaLego
 
 # 改 gnb/tools/纯文档：无需 C++ 构建
 ```
@@ -38,7 +38,7 @@ gnb.bat build MagicaLego
 ### 2. 单元测试 (Test)
 ```bash
 ./gnb.sh test
-gnb.bat test
+./gnb.bat test
 ```
 
 ### 3. 运行主程序 (Run)
@@ -48,13 +48,13 @@ gnb.bat test
 
 # 指定 Target
 ./gnb.sh run gkNextEditor
-gnb.bat run gkNextEditor
+./gnb.bat run gkNextEditor
 ```
 
 ### 4. 依赖管理 (Vcpkg)
 首次 `gnb build` 会自动引导 vcpkg。仅在需要强制更新 vcpkg 版本时手动调用：
 ```bash
-gnb.bat setup --refresh   # Windows
+./gnb.bat setup --refresh   # Windows
 ./gnb.sh setup --refresh  # Unix
 ```
 

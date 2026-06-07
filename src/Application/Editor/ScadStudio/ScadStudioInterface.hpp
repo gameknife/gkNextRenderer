@@ -50,6 +50,7 @@ namespace ScadStudio
         NextEngine& engine_;
         ScadAIService ai_;
         ScadSessionStore store_;
+        std::string imguiIniPath_;
 
         std::vector<FScadSession> sessions_;
         int current_ = -1;
