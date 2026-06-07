@@ -28,7 +28,7 @@ func List(repoRoot string, cfg config.Config) error {
 }
 
 func Fetch(repoRoot string, cfg config.Config, groups []string, force bool) error {
-	selected := selectedGroups(groups)
+	selected := selectedGroups(cfg, groups)
 	baseURL := os.Getenv("PAKS_BASE_URL")
 	if baseURL == "" {
 		repo := cfg.Paks.Repo
@@ -64,7 +64,7 @@ func Publish(repoRoot string, cfg config.Config, groups []string, dryRun bool, t
 	if token == "" {
 		return fmt.Errorf("GITHUB_TOKEN is required for `gnb paks publish`")
 	}
-	selected := selectedGroups(groups)
+	selected := selectedGroups(cfg, groups)
 	assets := make([]config.PakAsset, 0)
 	for _, asset := range cfg.Paks.Assets {
 		if !selected[asset.ID] {
@@ -94,9 +94,17 @@ func Publish(repoRoot string, cfg config.Config, groups []string, dryRun bool, t
 	return nil
 }
 
-func selectedGroups(groups []string) map[string]bool {
+// selectedGroups returns the set of asset IDs to operate on. When the caller passes
+// no groups (or "all"), every distinct asset ID declared in gnb.toml is selected so
+// adding a new [[paks.assets]] entry is automatically picked up by `gnb setup` and
+// `gnb paks fetch` without further code changes.
+func selectedGroups(cfg config.Config, groups []string) map[string]bool {
 	if len(groups) == 0 || contains(groups, "all") {
-		return map[string]bool{"ldraw": true, "optional": true, "sfx": true, "ffmpeg": true}
+		selected := map[string]bool{}
+		for _, asset := range cfg.Paks.Assets {
+			selected[strings.ToLower(asset.ID)] = true
+		}
+		return selected
 	}
 	selected := map[string]bool{}
 	for _, group := range groups {
@@ -172,7 +180,13 @@ func uploadAsset(repoRoot string, token string, uploadURL string, asset config.P
 	}
 	defer file.Close()
 
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+
 	req, _ := http.NewRequest(http.MethodPost, uploadURL, file)
+	req.ContentLength = info.Size()
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("Accept", "application/vnd.github+json")

@@ -1,0 +1,40 @@
+.scroll-box {
+    overflow-x: hidden;
+}
+
+.scroll-box scrollbarvertical slidertrack {
+    background-color: #10151d;
+}
+
+.scroll-box scrollbarvertical sliderbar {
+    background-color: #344255;
+}
+
+.scroll-box scrollbarvertical sliderbar:hover,
+.scroll-box scrollbarvertical sliderbar:active {
+    background-color: #4b607d;
+}
+
+.theme-light .scroll-box scrollbarvertical slidertrack {
+    background-color: #e1e7ee;
+}
+
+.theme-light .scroll-box scrollbarvertical sliderbar {
+    background-color: #a2b2c6;
+}
+
+.scroll-item {
+    display: block;
+    width: 100%;
+}
+
+.scroll-item strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #edf2f7;
+    line-height: 1.2;
+}
+
+.scroll-item p {
+    margin-bottom: 0;
+}

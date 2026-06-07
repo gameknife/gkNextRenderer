@@ -12,7 +12,8 @@
     ".glb",
     ".gltf",
     ".ldr",
-    ".mpd"
+    ".mpd",
+    ".scad"
   ],
   "excludeScenes": [],
   "excludeSceneContains": [],
@@ -27,12 +28,23 @@
     {
       "path": "PhysicsShowcase.proc",
       "frames": 180
+    },
+    {
+      "path": "assets/scad/acient_city.scad",
+      "frames": 90
+    },
+    {
+      "path": "assets/scad/beer_cup.scad",
+      "frames": 90
     }
   ],
   "sceneTimeouts": {
-    "PhysicsShowcase.proc": 30.0
+    "PhysicsShowcase.proc": 30.0,
+    "assets/scad/acient_city.scad": 30.0,
+    "assets/scad/beer_cup.scad": 30.0
   },
   "notes": {
-    "PhysicsShowcase.proc": "Physics motion can have small platform-dependent variance; visual baseline is informational."
+    "PhysicsShowcase.proc": "Physics motion can have small platform-dependent variance; visual baseline is informational.",
+    "assets/scad/acient_city.scad": "SCAD loader uses Manifold for CSG on desktop; mobile/no-backend builds may still fall back to approximations."
   }
 }

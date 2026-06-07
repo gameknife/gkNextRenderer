@@ -1,6 +1,7 @@
 # Gradle
 
-This folder contains a minimal Android gradle project that builds the SDL_helloworld application.
+This folder contains the Android gradle project that builds gkNextEngine for Android
+(`applicationId com.gknext.renderer`, based on SDL's helloworld activity template).
 Instead of building SDL3 itself, it uses a prebuilt SDL3.
 
 > The required `SDL3-*.aar` is **not** committed to this repo and is no longer

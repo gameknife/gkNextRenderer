@@ -1,6 +1,6 @@
 # Reflection System Documentation
 
-This document describes the unified property reflection system using **entt::meta** for gkNextRenderer.
+This document describes the unified property reflection system using **entt::meta** for gkNextEngine.
 
 ## Overview
 
@@ -12,7 +12,7 @@ The reflection system provides:
 ## Architecture
 
 ```
-src/Runtime/Reflection/
+src/Engine/Runtime/Reflection/
 ├── PropertyTypes.h         # PropertyType enum and PropertyInfo struct
 ├── PropertyMeta.h          # PropertyMeta (displayName, category, flags)
 ├── PropertyAccessor.h/cpp  # Get/set properties via reflection
@@ -20,12 +20,8 @@ src/Runtime/Reflection/
 ├── ReflectionMacros.h      # REFLECT_COMPONENT macro
 └── ReflectionRegistry.h/cpp # Central registration
 
-src/Editor/Panels/
+src/Application/Editor/gkNextEditor/Panels/
 ├── PropertyWidgets.h/cpp   # ImGui widgets based on PropertyType
-
-src/Editor/Commands/
-├── CommandHistory.h/cpp    # Undo/redo stack
-└── PropertyCommand.h/cpp   # Property modification command
 ```
 
 ## Supported Property Types
@@ -52,8 +48,8 @@ src/Editor/Commands/
 In your component's `.cpp` file, add registration in an anonymous namespace:
 
 ```cpp
-#include "Runtime/Reflection/ReflectionRegistry.h"
-#include "Runtime/Reflection/ReflectionMacros.h"
+#include "Engine/Runtime/Reflection/ReflectionRegistry.h"
+#include "Engine/Runtime/Reflection/ReflectionMacros.h"
 
 namespace
 {
@@ -247,8 +243,8 @@ The project uses unity builds. New `.cpp` files are auto-detected via `GLOB_RECU
 ```cpp
 // PhysicsComponent.cpp
 #include "PhysicsComponent.h"
-#include "Runtime/Reflection/ReflectionRegistry.h"
-#include "Runtime/Reflection/ReflectionMacros.h"
+#include "Engine/Runtime/Reflection/ReflectionRegistry.h"
+#include "Engine/Runtime/Reflection/ReflectionMacros.h"
 
 namespace
 {

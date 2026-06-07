@@ -42,11 +42,19 @@ namespace Bindless
     public static const int RT_SWAPCHAIN2 = 102;
 
     public static const int RT_COUNT = 128;
+
+    // Sun CSM cascade slots in ShadowMapArray (bindless binding 2).
+    public static const int SM_SUN_CASCADE_0 = 0;
+    public static const int SM_SUN_CASCADE_1 = 1;
+    public static const int SM_SUN_CASCADE_2 = 2;
+    public static const int SM_SUN_CASCADE_3 = 3;
+    public static const int SM_SUN_CASCADE_COUNT = 4;
 }
 
 #ifndef __cplusplus
 [[vk::binding(0, 0)]] __DynamicResource SampleTextureArray[];
 [[vk::binding(1, 0)]] __DynamicResource StorageTextureArray[];
+[[vk::binding(2, 0)]] __DynamicResource ShadowMapArray[];
 
 namespace Bindless
 {
@@ -65,6 +73,11 @@ namespace Bindless
         uint2 dim;
         StorageTextureArray[NonUniformResourceIndex(index)].as<RWTexture2D<T>>().GetDimensions(dim.x, dim.y);
         return dim;
+    }
+
+    public Sampler2D GetShadowMap(int index)
+    {
+        return ShadowMapArray[NonUniformResourceIndex(index)].as<Sampler2D>();
     }
 }
 #endif

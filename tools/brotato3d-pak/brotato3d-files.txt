@@ -1,0 +1,8 @@
+# Brotato3D pak manifest. Relative to project root.
+# Lines starting with '#' and blank lines are ignored.
+# Paths ending with '/' are treated as directory entries and packed recursively
+# (excluding .DS_Store). Otherwise the line must be a single file.
+# Update this list whenever you want to add/remove brotato3d assets, then re-run build-brotato3d-pak.sh.
+
+assets/sounds/brotato3d/sfx/
+assets/textures/brotato3d/icons/

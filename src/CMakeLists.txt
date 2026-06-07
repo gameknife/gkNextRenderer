@@ -19,7 +19,7 @@ else()
 endif()
 
 if (IOS)
-    set_source_files_properties(Runtime/Subsystems/NextAudio.cpp PROPERTIES LANGUAGE "OBJCXX")
+    set_source_files_properties(Engine/Runtime/Subsystems/NextAudio.cpp PROPERTIES LANGUAGE "OBJCXX")
 endif()
 
 # unit test files
@@ -38,17 +38,28 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_LDrawConnectivity.cpp
 	Tests/Test_CVarSystem.cpp
 	Tests/Test_SceneList.cpp
+	Tests/Test_ScadLoader.cpp
 	Tests/Test_RenderComponent.cpp
+	Tests/Test_Brotato3DPcg.cpp
 	Tests/Test_ImAnimIntegration.cpp
 	Tests/Test_BrickPlayerSnapLogic.cpp
-	Application/BrickPlayer/BrickPlayerSnapLogic.cpp
+	Application/Game/BrickPlayer/BrickPlayerSnapLogic.cpp
 	Tests/Test_MagicaLegoStyle.cpp
 	Tests/Test_MagicaLegoScript.cpp
 	Tests/Test_MagicaLegoPlacementRules.cpp
-	Application/MagicaLego/MagicaLegoStyle.cpp
-	Application/MagicaLego/MagicaLegoScriptParser.cpp
-	Application/MagicaLego/MagicaLegoPlacementRules.cpp
+	Application/Game/MagicaLego/MagicaLegoStyle.cpp
+	Application/Game/MagicaLego/MagicaLegoScriptParser.cpp
+	Application/Game/MagicaLego/MagicaLegoPlacementRules.cpp
 	Tests/Test_FlappyRng.cpp
+	Application/Game/Brotato3D/Brotato3DPcgGenerator.cpp
+	Tests/Test_AIChatProtocol.cpp
+	Tests/Test_LlamaPidFile.cpp
+	Tests/Test_AgentLoop.cpp
+	Tests/Test_RepoTools.cpp
+	Tests/Test_ScadPromptContext.cpp
+	Tests/Test_ScadSessionStore.cpp
+	Application/Editor/ScadStudio/ScadPromptContext.cpp
+	Application/Editor/ScadStudio/ScadSessionStore.cpp
 )
 
 list(APPEND UNIT_TEST_SOURCES Tests/Test_PhysicsComponent.cpp)
@@ -63,7 +74,6 @@ add_library(gkNextRenderer SHARED
 	${src_files_vulkan} 
 	${src_files_rendering}
 	${src_files_thirdparty}
-	${src_files_customimgui}
 	${src_files_gkrenderer}
 	AndroidMain.cpp
 	#GameActivitySources.cpp
@@ -101,55 +111,82 @@ add_executable(gkNextRenderer
 	${src_files_gkrenderer}
 	DesktopMain.cpp
 )
+target_include_directories(gkNextRenderer PRIVATE Application/Render/gkNextRenderer)
 add_executable(gkNextStillBenchmark
 	${src_files_benchmarkcommon}
 	${src_files_gkstillbenchmark}
 	DesktopMain.cpp
 )
+target_include_directories(gkNextStillBenchmark PRIVATE Application/Render/gkNextBenchmark)
 add_executable(gkNextMotionBenchmark
 	${src_files_benchmarkcommon}
 	${src_files_gkmotionbenchmark}
 	DesktopMain.cpp
 )
+target_include_directories(gkNextMotionBenchmark PRIVATE Application/Render/gkNextBenchmark)
 add_executable(gkNextVisualTest
 	${src_files_gkvisualtest}
 	DesktopMain.cpp
 )
+target_include_directories(gkNextVisualTest PRIVATE Application/Render/gkNextVisualTest)
+add_executable(RmlUiDemo
+	${src_files_rmluidemo}
+	DesktopMain.cpp
+)
+target_include_directories(RmlUiDemo PRIVATE Application/Render/RmlUiDemo)
 add_executable(gkNextEditor
 	${src_files_editor}
 	DesktopMain.cpp
 )
+target_include_directories(gkNextEditor PRIVATE Application/Editor/gkNextEditor)
+add_executable(ScadStudio
+	${src_files_scadstudio}
+	DesktopMain.cpp
+)
+target_include_directories(ScadStudio PRIVATE Application/Editor/ScadStudio)
 add_executable(MagicaLego
 	${src_files_magicalego}
 	DesktopMain.cpp
 )
+target_include_directories(MagicaLego PRIVATE Application/Game/MagicaLego)
 add_executable(KongLie3D
 	${src_files_konglie3d}
 	DesktopMain.cpp
 )
+target_include_directories(KongLie3D PRIVATE Application/Game/KongLie3D)
 add_executable(Brotato3D
 	${src_files_brotato3d}
 	DesktopMain.cpp
 )
+target_include_directories(Brotato3D PRIVATE Application/Game/Brotato3D)
 target_compile_definitions(Brotato3D PRIVATE DEV_MODE=1)
 add_executable(FlappyCpp
 	${src_files_flappycpp}
 	DesktopMain.cpp
 )
+target_include_directories(FlappyCpp PRIVATE Application/Game/Flappy)
 add_executable(FlappyJs
 	${src_files_flappyjs}
 	DesktopMain.cpp
 )
+target_include_directories(FlappyJs PRIVATE Application/Game/Flappy)
 add_executable(BrickPlayer
 	${src_files_brickplayer}
 	DesktopMain.cpp
 )
+target_include_directories(BrickPlayer PRIVATE Application/Game/BrickPlayer)
 add_executable(CharacterDemo
 	${src_files_characterdemo}
 	DesktopMain.cpp
 )
+target_include_directories(CharacterDemo PRIVATE Application/Game/CharacterDemo)
+add_executable(StudioSim
+	${src_files_studiosim}
+	DesktopMain.cpp
+)
+target_include_directories(StudioSim PRIVATE Application/Game/StudioSim)
 add_executable(Packager
-	Application/Packager/PackagerMain.cpp
+	Application/Util/Packager/PackagerMain.cpp
 )
 
 find_package(Catch2 3 REQUIRED)
@@ -207,9 +244,11 @@ gkNextEngine
 NextGameplay
 gkNextRenderer
 gkNextStillBenchmark
-gkNextMotionBenchmark
+	gkNextMotionBenchmark
 	gkNextVisualTest
+	RmlUiDemo
 	gkNextEditor
+	ScadStudio
 	Packager
 	MagicaLego
 	KongLie3D
@@ -218,6 +257,7 @@ gkNextMotionBenchmark
 	FlappyJs
 	BrickPlayer
 	CharacterDemo
+	StudioSim
 	gkNextUnitTests
 )
 endif()
@@ -251,6 +291,12 @@ foreach(target IN LISTS AllTargets)
 	else()
 		target_compile_definitions(${target} PUBLIC GK_ENABLE_HOT_RELOAD=0)
 	endif()
+	if (GK_ENABLE_SHADER_CLOCK)
+		target_compile_definitions(${target} PUBLIC GK_ENABLE_SHADER_CLOCK=1)
+	else()
+		target_compile_definitions(${target} PUBLIC GK_ENABLE_SHADER_CLOCK=0)
+	endif()
+	target_compile_definitions(${target} PUBLIC GK_WITH_RMLUI=1)
 
 	if( IOS )
 	target_compile_definitions(${target} PUBLIC IOS=1)
@@ -275,12 +321,55 @@ foreach(target IN LISTS AllTargets)
 		set_source_files_properties(${src_files_thirdparty} PROPERTIES UNITY_GROUP "thirdparty")
 
 		# Exclude files with STB implementation from Unity Build to avoid redefinition conflicts
-		set_source_files_properties(Assets/Loaders/FSceneLoader.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-		set_source_files_properties(Assets/Savers/FSceneSaver.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+		set_source_files_properties(Engine/Assets/Loaders/FSceneLoader.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+		set_source_files_properties(Engine/Assets/Savers/FSceneSaver.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+		set_source_files_properties(Engine/Vulkan/Allocator.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+		# Isolated 3rd-party-heavy SCAD sources (FreeType / earcut) kept out of unity.
+		set_source_files_properties(Engine/Assets/Loaders/FScadText.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+		set_source_files_properties(Engine/Assets/Loaders/FScadTess.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 		endif()
 		find_package(WebP CONFIG REQUIRED)
-		target_link_libraries(${target} PRIVATE SDL3::SDL3 xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp ${extra_libs})
+		target_link_libraries(${target} PRIVATE SDL3::SDL3 xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp GPUOpen::VulkanMemoryAllocator ${extra_libs})
 		target_link_libraries(${target} PUBLIC spdlog::spdlog)
+		find_package(RmlUi CONFIG REQUIRED)
+		target_link_libraries(${target} PRIVATE RmlUi::RmlUi)
+
+		# Manifold: robust CSG boolean backend for the SCAD loader (desktop only).
+		find_package(manifold CONFIG QUIET)
+		if ( manifold_FOUND AND NOT GK_DISABLE_MANIFOLD )
+			# Manifold's imported target advertises cxx_std_17 + -D flags through its
+			# INTERFACE, which clobbers the engine's C++20 standard. Strip those and
+			# re-apply only the defines the headers need as proper definitions.
+			set_target_properties(manifold::manifold PROPERTIES
+				INTERFACE_COMPILE_FEATURES ""
+				INTERFACE_COMPILE_OPTIONS "")
+			target_link_libraries(${target} PRIVATE manifold::manifold)
+			target_compile_definitions(${target} PRIVATE GK_WITH_MANIFOLD=1 MANIFOLD_CROSS_SECTION MANIFOLD_PAR=-1)
+			message(STATUS "Manifold found: SCAD CSG boolean backend enabled")
+		else()
+			target_compile_definitions(${target} PRIVATE GK_WITH_MANIFOLD=0)
+			message(STATUS "Manifold not found: SCAD CSG falls back to first-child approximation")
+		endif()
+
+		# FreeType: SCAD text() glyph outlines (earcut header comes from the same
+		# vcpkg include root). FScadText.cpp also includes <mapbox/earcut.hpp>.
+		find_package(Freetype QUIET)
+		if ( Freetype_FOUND AND NOT GK_DISABLE_SCAD_TEXT )
+			target_link_libraries(${target} PRIVATE Freetype::Freetype)
+			target_compile_definitions(${target} PRIVATE GK_WITH_FREETYPE=1)
+			message(STATUS "FreeType found: SCAD text() enabled")
+		else()
+			target_compile_definitions(${target} PRIVATE GK_WITH_FREETYPE=0)
+			message(STATUS "FreeType not found: SCAD text() skipped")
+		endif()
+
+		# earcut-hpp (header-only, from the vcpkg include root) for concave/holed
+		# polygon tessellation. Desktop only (matches the vcpkg.json platform gate).
+		if ( NOT IOS )
+			target_compile_definitions(${target} PRIVATE GK_WITH_EARCUT=1)
+		else()
+			target_compile_definitions(${target} PRIVATE GK_WITH_EARCUT=0)
+		endif()
 		if ( GK_WHISPER_LINK_LIBS )
 			target_link_libraries(${target} PRIVATE ${GK_WHISPER_LINK_LIBS})
 		endif()
@@ -304,6 +393,10 @@ foreach(target IN LISTS AllTargets)
 			target_include_directories(${target} PRIVATE ${STREAMLINE_INCLUDE_DIR})
 			target_link_directories(${target} PRIVATE ${STREAMLINE_LIB_DIR})
 			target_link_libraries(${target} PRIVATE sl.interposer)
+			if ( WIN32 )
+				target_link_libraries(${target} PRIVATE delayimp)
+				target_link_options(${target} PRIVATE "/DELAYLOAD:sl.interposer.dll")
+			endif()
 		endif()
 	elseif ( ${target} STREQUAL NextGameplay )
 		set_target_properties(${target} PROPERTIES FOLDER "Gameplay")
@@ -316,18 +409,23 @@ foreach(target IN LISTS AllTargets)
 		if ( WITH_STREAMLINE ) 
 		target_link_directories(${target} PRIVATE ${STREAMLINE_LIB_DIR})
 		target_link_libraries(${target} PRIVATE sl.interposer)
+		if ( WIN32 )
+			target_link_libraries(${target} PRIVATE delayimp)
+			target_link_options(${target} PRIVATE "/DELAYLOAD:sl.interposer.dll")
+		endif()
 		endif()
 	endif()
 
 	# for android
 	if ( ANDROID )
 		find_package(WebP CONFIG REQUIRED)
+		find_package(RmlUi CONFIG REQUIRED)
 		target_link_options(${target} PRIVATE
 	    -Wl,-z,max-page-size=16384
 		-Wl,-z,common-page-size=16384
 		-Wl,--hash-style=gnu
 		)
-		target_link_libraries(${target} PRIVATE android SDL3::SDL3 spdlog::spdlog xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp ${Vulkan_LIBRARIES} ${extra_libs})
+		target_link_libraries(${target} PRIVATE android SDL3::SDL3 spdlog::spdlog xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp RmlUi::RmlUi ${Vulkan_LIBRARIES} ${extra_libs})
 	endif()
 
 	if ( WITH_AVIF )
@@ -340,6 +438,8 @@ foreach(target IN LISTS AllTargets)
 		target_compile_definitions(${target} PUBLIC WITH_SUPERLUMINAL=1)
 		target_include_directories(${target} SYSTEM PRIVATE ${SuperluminalAPI_INCLUDE_DIRS})
 		target_link_libraries(${target} PRIVATE SuperluminalAPI)
+	else()
+		target_compile_definitions(${target} PUBLIC WITH_SUPERLUMINAL=0)
 	endif()
 
 	if ( WITH_PHYSIC )
@@ -358,6 +458,9 @@ foreach(target IN LISTS AllTargets)
 
 	if ( GK_WHISPER_COMPILE_DEFINITIONS )
 		target_compile_definitions(${target} PUBLIC ${GK_WHISPER_COMPILE_DEFINITIONS})
+	endif()
+	if (APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 13)
+		target_compile_definitions(${target} PRIVATE JSON_HAS_FILESYSTEM=0 JSON_HAS_EXPERIMENTAL_FILESYSTEM=0)
 	endif()
 
 	if ( WITH_OZZ )
@@ -380,9 +483,12 @@ foreach(target IN LISTS AllTargets)
 		target_compile_options(${target} PRIVATE /WX)
 		target_compile_options(${target} PRIVATE /wd4200)
 	else()
-	target_compile_options(${target} PRIVATE -Wall -Werror -Wno-unused-but-set-variable -Wno-inconsistent-missing-override -Wno-unused-const-variable -Wno-unused-variable -Wno-unused-private-field -Wno-unused-function -Wno-sign-compare -Wno-unused-result)
+		if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+			target_compile_options(${target} PRIVATE -Wno-unknown-warning-option)
+		endif()
+		target_compile_options(${target} PRIVATE -Wall -Werror -Wno-unused-but-set-variable -Wno-inconsistent-missing-override -Wno-unused-const-variable -Wno-unused-variable -Wno-unused-private-field -Wno-unused-function -Wno-sign-compare -Wno-unused-result)
 		if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-			target_compile_options(${target} PRIVATE -Wno-stringop-overflow)
+			target_compile_options(${target} PRIVATE -Wno-stringop-overflow -Wno-ignored-attributes)
 		endif()
 	endif()
 
@@ -426,6 +532,9 @@ endforeach()
 if ( TARGET CharacterDemo )
 target_link_libraries(CharacterDemo PRIVATE NextGameplay)
 endif()
+if ( TARGET StudioSim )
+target_link_libraries(StudioSim PRIVATE NextGameplay)
+endif()
 
 # Test Target
 if ( NOT ANDROID AND NOT IOS )
@@ -436,6 +545,9 @@ endif()
 
 
 set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	target_compile_options(ImNodeFlow PRIVATE -include cstdint)
+endif()
 
 if ( WITH_QUICKJS )
 set_target_properties(quickjs PROPERTIES FOLDER "ThirdParty")

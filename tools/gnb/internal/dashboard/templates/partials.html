@@ -1,0 +1,1609 @@
+{{define "tab_todo"}}
+<div class="tab-todo">
+  <aside>
+    <div class="card">
+      <h2 class="card-title">
+        <span class="ico">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          </svg>
+        </span>
+        项目信息
+      </h2>
+      <div class="info-row">
+        <span class="k">repo</span>
+        <span class="v" title="{{.RepoRoot}}">
+          {{.RepoRoot}}
+          <button class="copy-btn" type="button" onclick="navigator.clipboard.writeText('{{.RepoRoot}}')" title="copy">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+        </span>
+      </div>
+      <div class="info-row"><span class="k">preset</span><span class="v">{{.Preset}}</span></div>
+      <div class="info-row">
+        <span class="k">git</span>
+        <span class="v">
+          {{shortHash .Version}}
+          <button class="copy-btn" type="button" onclick="navigator.clipboard.writeText('{{.Version}}')" title="copy">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+        </span>
+      </div>
+      <div class="info-row"><span class="k">最近完成</span><span class="v">{{.RecentSize}} 条</span></div>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">
+        <span class="ico">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </span>
+        添加任务
+      </h2>
+      <form hx-post="/task/add" hx-target="#todo-panel" hx-swap="innerHTML" hx-on::after-request="this.reset()">
+        <div class="form-field">
+          <label>标题</label>
+          <input class="input" name="title" placeholder="请输入任务标题" required>
+        </div>
+        <div class="form-row">
+          <div class="form-field" style="margin: 0;">
+            <label>type</label>
+            <div class="select-with-dot">
+              <select class="select" name="type" required>
+                <option value="IDEA">IDEA 想法</option>
+                <option value="BUG">BUG 缺陷</option>
+                <option value="FEAT">FEAT 功能</option>
+                <option value="SPIKE">SPIKE 探针</option>
+                <option value="REFACTOR">REFACTOR 重构</option>
+                <option value="DOC">DOC 文档</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-field" style="margin: 0;">
+            <label>priority</label>
+            <select class="select" name="priority">
+              <option value="">priority</option>
+              <option>P0</option>
+              <option>P1</option>
+              <option>P2</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-field">
+          <label>section</label>
+          <select class="select" name="section">
+            <option value="next">下一步</option>
+            <option value="backlog">待规划</option>
+          </select>
+        </div>
+        <button class="btn-primary" type="submit">添加任务</button>
+      </form>
+    </div>
+
+    <div class="sidebar-footer">
+      <span>gnb dashboard</span>
+      <span class="ver">{{shortHash .Version}}</span>
+    </div>
+  </aside>
+
+  <section class="col" id="todo-panel">
+    {{template "todo_panel" .}}
+  </section>
+
+  <section class="col" id="detail-panel">
+    <div class="card detail-empty">点击任意任务查看详情（spec / journal / blocker）。</div>
+  </section>
+</div>
+{{end}}
+
+
+{{define "todo_panel"}}
+{{if gt .RecentSize 10}}
+<div class="archive-hint">
+  最近完成 已有 {{.RecentSize}} 条，建议在终端运行 <code>gnb todo archive</code> 归档。
+</div>
+{{end}}
+
+<div class="card">
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px;">
+    <h2 class="card-title" style="margin-bottom: 0;">
+      <span class="ico">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+        </svg>
+      </span>
+      TODO
+    </h2>
+    <form hx-post="/todo/cleanup" hx-target="#todo-panel" hx-swap="innerHTML" style="margin: 0;">
+      <button class="btn-secondary" type="submit" style="width: auto; padding: 7px 12px;">
+        整理已完成
+      </button>
+    </form>
+  </div>
+
+  {{range .Sections}}
+  {{$secHeading := .Heading}}
+  {{$secSlug := sectionSlug .Kind}}
+  {{$draggable := or (eq $secSlug "next") (eq $secSlug "backlog")}}
+  <div style="margin-bottom: 18px;">
+    <h2 class="card-title" style="font-size: 12.5px; margin-bottom: 10px;">
+      <span class="ico" style="background: {{sectionTint .Kind}}; color: {{sectionColor .Kind}};">
+        {{sectionIcon .Kind | safeHTML}}
+      </span>
+      {{.Heading}}
+      <span class="count">{{len .Tasks}}</span>
+    </h2>
+    {{if .Tasks}}
+      <div class="task-list{{if $draggable}} task-list-droppable{{end}}" data-section="{{$secSlug}}">
+        {{range .Tasks}}
+          <div class="task {{statusClass (printf "%s" .Status)}}"
+               data-id="{{printf "%05d" .ID}}"
+               data-section="{{$secSlug}}"
+               {{if $draggable}}draggable="true"{{end}}
+               hx-get="/task/{{printf "%05d" .ID}}"
+               hx-target="#detail-panel"
+               hx-swap="innerHTML">
+            <span class="dot {{if eq $secHeading "待规划"}}backlog-dot{{end}}"></span>
+            <div class="body">
+              <div class="head">
+                <span class="tid">#{{printf "%05d" .ID}}</span>
+                {{if .Priority}}<span class="tag pri-{{.Priority}}">{{.Priority}}</span>{{end}}
+                {{if .Type}}<span class="tag type-{{.Type}}">{{.Type}}</span>{{end}}
+                <span class="title">{{.Title}}</span>
+              </div>
+              {{if or .Arrow .Paren}}
+              <div class="meta-line">
+                {{if .Arrow}}<span class="arrow">→ {{.Arrow}}</span>{{end}}
+                {{if .Paren}}<span class="date">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  {{.Paren}}
+                </span>{{end}}
+              </div>
+              {{end}}
+            </div>
+            <div class="menu" onclick="event.stopPropagation()">
+              <button class="menu-btn" type="button" title="操作">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+              </button>
+              <div class="menu-dropdown">
+                {{if eq (printf "%s" .Status) " "}}
+                  <button type="button"
+                          hx-get="/task/{{printf "%05d" .ID}}/edit"
+                          hx-target="closest .task" hx-swap="outerHTML">编辑</button>
+                {{end}}
+                {{if ne (printf "%s" .Status) "x"}}
+                  <button type="button"
+                          hx-post="/task/{{printf "%05d" .ID}}/done"
+                          hx-target="#todo-panel" hx-swap="innerHTML"
+                          hx-confirm="标 #{{printf "%05d" .ID}} 为完成？">标为完成</button>
+                {{end}}
+                {{if and (ne (printf "%s" .Status) "!") (ne (printf "%s" .Status) "x")}}
+                  <button type="button" class="danger"
+                          hx-post="/task/{{printf "%05d" .ID}}/block"
+                          hx-target="#todo-panel" hx-swap="innerHTML"
+                          hx-confirm="标 #{{printf "%05d" .ID}} 为卡住？">标为卡住</button>
+                {{end}}
+                <button type="button" class="danger"
+                        hx-post="/task/{{printf "%05d" .ID}}/delete"
+                        hx-target="#todo-panel" hx-swap="innerHTML"
+                        hx-confirm="确认删除 #{{printf "%05d" .ID}} ？同时会删除 specs/{{printf "%05d" .ID}}.md（如存在）">删除任务</button>
+              </div>
+            </div>
+          </div>
+        {{end}}
+      </div>
+    {{else}}
+      <div class="empty-row{{if $draggable}} task-list-droppable{{end}}" data-section="{{$secSlug}}">{{emptyHint .Kind}}</div>
+    {{end}}
+  </div>
+  {{end}}
+
+  <div style="margin-top: 8px;">
+    <h2 class="card-title" style="font-size: 12.5px; margin-bottom: 8px;">
+      <span class="ico">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h12a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4V4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="14" y2="13"/></svg>
+      </span>
+      最新 JOURNAL
+    </h2>
+    {{if .Journals}}
+      <div class="journal-list">
+        {{range .Journals}}
+        <div class="journal-item"
+             data-id="{{printf "%05d" .ID}}"
+             hx-get="/task/{{printf "%05d" .ID}}"
+             hx-target="#detail-panel"
+             hx-swap="innerHTML">
+          <div class="left">
+            <div class="meta-line">
+              <span>{{.Date}}</span>
+              <span>#{{printf "%05d" .ID}}</span>
+              <span class="tag type-{{.Type}}" style="padding: 0 5px;">{{.Type}}</span>
+            </div>
+            <div class="title">{{.Title}}</div>
+          </div>
+          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+        {{end}}
+      </div>
+    {{else}}
+      <div class="empty-row">尚无最近完成的任务</div>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
+
+{{define "task_detail"}}
+<div class="card detail-card" data-selected-id="{{printf "%05d" .Task.ID}}">
+  <div class="detail-head">
+    <button class="back" type="button" onclick="document.getElementById('detail-panel').innerHTML='<div class=\'card detail-empty\'>点击任意任务查看详情（spec / journal / blocker）。</div>'; document.querySelectorAll('.task.selected').forEach(t=>t.classList.remove('selected'));" title="返回">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <div class="head-body">
+      <h1>
+        {{if .Task.Type}}<span class="tag type-{{.Task.Type}}">{{.Task.Type}}</span>{{end}}
+        {{if .Task.Priority}}<span class="tag pri-{{.Task.Priority}}">{{.Task.Priority}}</span>{{end}}
+        <span>{{.Task.Title}}</span>
+      </h1>
+      <div class="breadcrumb">
+        <span>#{{printf "%05d" .Task.ID}}</span>
+        <span class="sep">·</span>
+        <span>{{.SectionName}}</span>
+        {{if .Task.Arrow}}<span class="sep">·</span><span>{{.Task.Arrow}}</span>{{end}}
+        {{if .Task.Paren}}<span class="sep">·</span><span>{{.Task.Paren}}</span>{{end}}
+      </div>
+    </div>
+    <div class="actions">
+      <button class="action-btn danger" type="button" title="删除任务"
+              hx-post="/task/{{printf "%05d" .Task.ID}}/delete"
+              hx-target="#todo-panel" hx-swap="innerHTML"
+              hx-confirm="确认删除 #{{printf "%05d" .Task.ID}} ？同时会删除 specs/{{printf "%05d" .Task.ID}}.md（如存在）">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+      </button>
+    </div>
+  </div>
+
+  {{if .HasJournal}}
+  <div class="file-card">
+    <div class="file-card-head">
+      <span class="ico">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h12a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4V4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="14" y2="13"/></svg>
+      </span>
+      <span class="label">journal</span>
+    </div>
+    <div class="md-content" data-md>{{.JournalBody}}</div>
+  </div>
+  {{end}}
+
+  {{if .HasSpec}}
+  <div class="file-card">
+    <div class="file-card-head">
+      <span class="ico">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      </span>
+      <span class="label">spec</span>
+      <span style="margin-left:auto;">
+        {{if .EditingSpec}}
+        <button class="btn-secondary small" type="button"
+                hx-get="/task/{{printf "%05d" .Task.ID}}"
+                hx-target="#detail-panel" hx-swap="innerHTML">取消</button>
+        {{else}}
+        <button class="btn-secondary small" type="button"
+                hx-get="/task/{{printf "%05d" .Task.ID}}/spec/edit"
+                hx-target="#detail-panel" hx-swap="innerHTML">编辑</button>
+        {{end}}
+      </span>
+    </div>
+    {{if .EditingSpec}}
+    <form class="spec-form"
+          hx-post="/task/{{printf "%05d" .Task.ID}}/spec/save"
+          hx-target="#detail-panel" hx-swap="innerHTML">
+      <textarea name="body" rows="18" spellcheck="false">{{.SpecBody}}</textarea>
+      <div class="spec-form-actions">
+        <span class="muted">直接编辑 `.spec/specs/{{printf "%05d" .Task.ID}}.md` 原文。</span>
+        <button type="submit" class="btn-primary small">保存 spec</button>
+      </div>
+    </form>
+    {{else}}
+    <div class="md-content" data-md>{{.SpecBody}}</div>
+    {{end}}
+  </div>
+  {{end}}
+
+  {{if .HasBlocker}}
+  <div class="file-card">
+    <div class="file-card-head">
+      <span class="ico" style="background: rgba(239, 68, 68, 0.12); color: var(--red);">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      </span>
+      <span class="label">blocker</span>
+    </div>
+    <div class="md-content" data-md>{{.BlockerBody}}</div>
+  </div>
+  {{end}}
+
+  {{if not .HasSpec}}
+  <div class="file-card spec-create" data-spec-create>
+    <div class="file-card-head">
+      <span class="ico">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+      </span>
+      <span class="label">spec</span>
+      <span class="hint">这个任务还没有 spec，写点背景信息把它创建出来 →</span>
+    </div>
+    <form class="spec-form"
+          hx-post="/task/{{printf "%05d" .Task.ID}}/spec"
+          hx-target="#detail-panel" hx-swap="innerHTML">
+      <textarea name="body" rows="6" placeholder="## 背景&#10;&#10;…&#10;&#10;## 目标&#10;&#10;- …"></textarea>
+      <div class="spec-form-actions">
+        <span class="muted">留空则使用默认模板（背景/目标/执行细节/验收）</span>
+        <button type="submit" class="btn-primary small">创建 spec</button>
+      </div>
+    </form>
+  </div>
+  {{end}}
+
+  <div class="detail-foot">
+    <span>创建于 {{or .Task.Paren "—"}}</span>
+    <span>更新时间 {{or .Task.Paren "—"}}</span>
+  </div>
+</div>
+{{end}}
+
+
+{{define "tab_docs"}}
+<div class="tab-jobs">
+  <aside class="tab-side">
+    <div class="card">
+      <h2 class="card-title">
+        <span class="ico">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>
+        </span>
+        Docs
+        <span class="count">{{len .DocsVM.Files}}</span>
+      </h2>
+      {{if .DocsVM.Files}}
+      <div class="docs-file-list">
+        {{range .DocsVM.Files}}
+        <button class="docs-file-item {{if .Active}}active{{end}}"
+                type="button"
+                hx-get="/tab/docs?file={{urlquery .RelPath}}"
+                hx-target="#tab-content"
+                hx-swap="innerHTML"
+                {{if $.DocsVM.Editing}}hx-confirm="当前编辑未保存，切换文档将丢失修改，确定继续？"{{end}}>
+          <span class="docs-file-name">{{.Name}}</span>
+          <span class="docs-file-path">{{.RelPath}}</span>
+        </button>
+        {{end}}
+      </div>
+      {{else}}
+      <div class="empty-row">docs/ 下暂无 markdown 文档</div>
+      {{end}}
+    </div>
+  </aside>
+
+  <section class="tab-main">
+    <div class="card docs-card">
+      {{if .DocsVM.Error}}
+      <div class="chat-error" style="margin: 0 0 12px;">{{.DocsVM.Error}}</div>
+      {{end}}
+      {{if .DocsVM.HasDoc}}
+      <div class="docs-head">
+        <div class="docs-head-main">
+          <h2 class="card-title" style="margin-bottom: 4px;">
+            <span class="ico">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </span>
+            {{.DocsVM.Selected.Name}}
+          </h2>
+          <div class="breadcrumb">
+            <span>{{.DocsVM.Selected.RelPath}}</span>
+            <span class="sep">·</span>
+            <span>更新于 {{date .DocsVM.Selected.UpdatedAt}}</span>
+          </div>
+        </div>
+        <div class="commit-card-actions">
+          {{if .DocsVM.Editing}}
+          <button class="btn-secondary" type="button"
+                  hx-get="/tab/docs?file={{urlquery .DocsVM.Selected.RelPath}}"
+                  hx-target="#tab-content"
+                  hx-swap="innerHTML">
+            取消
+          </button>
+          {{else}}
+          <button class="btn-secondary" type="button"
+                  hx-get="/tab/docs?file={{urlquery .DocsVM.Selected.RelPath}}&edit=1"
+                  hx-target="#tab-content"
+                  hx-swap="innerHTML">
+            编辑
+          </button>
+          {{end}}
+        </div>
+      </div>
+
+      {{if .DocsVM.Editing}}
+      <form class="spec-form docs-edit-form"
+            hx-post="/docs/save"
+            hx-target="#tab-content"
+            hx-swap="innerHTML">
+        <input type="hidden" name="path" value="{{.DocsVM.Selected.RelPath}}">
+        <textarea name="body">{{.DocsVM.EditorBody}}</textarea>
+        <div class="spec-form-actions">
+          <span class="muted">保存后会直接回到预览模式。</span>
+          <button type="submit" class="btn-primary small">保存文档</button>
+        </div>
+      </form>
+      {{else}}
+      <div class="md-content docs-preview" data-md data-doc-path="{{.DocsVM.Selected.RelPath}}">{{.DocsVM.Content}}</div>
+      {{end}}
+      {{else}}
+      <div class="empty-row" style="height: 100%;">选择左侧文档开始阅读或编辑。</div>
+      {{end}}
+    </div>
+  </section>
+</div>
+
+<style>
+  .docs-file-list {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow-y: auto;
+    min-height: 0;
+    padding-right: 4px;
+  }
+  .docs-file-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 10px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--fg);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .docs-file-item:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-strong);
+  }
+  .docs-file-item.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-ring);
+    background: var(--bg-card-hover);
+  }
+  .docs-file-name {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--fg);
+  }
+  .docs-file-path {
+    font-size: 11px;
+    color: var(--fg-dim);
+    font-family: var(--font-mono);
+    word-break: break-all;
+  }
+  .docs-card {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .docs-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .docs-head-main {
+    min-width: 0;
+    flex: 1;
+  }
+  .docs-preview {
+    flex: 1 1 auto;
+    overflow: auto;
+    min-height: 0;
+    padding-right: 4px;
+  }
+  .docs-edit-form {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+  }
+  .docs-edit-form textarea {
+    flex: 1 1 auto;
+    min-height: 420px;
+  }
+</style>
+{{end}}
+
+
+{{define "tab_build"}}
+<div class="tab-jobs">
+  <aside class="tab-side">
+    <div class="card">
+      <h2 class="card-title">
+        <span class="ico">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13l2 2 4-4"/></svg>
+        </span>
+        Build target
+      </h2>
+      <form data-job-form hx-post="/jobs/build" hx-target="#log-panel-host" hx-swap="innerHTML">
+        <input type="hidden" name="target" value="all">
+        <div class="target-list" style="margin-bottom: 12px;">
+          <div class="target-item selected" data-target="all">
+            <span class="radio"></span>
+            <span class="name">all targets</span>
+            <span class="tag-mini">build all</span>
+          </div>
+          {{range .BuildVM.Targets}}
+          <div class="target-item" data-target="{{.}}">
+            <span class="radio"></span>
+            <span class="name">{{.}}</span>
+          </div>
+          {{end}}
+        </div>
+        <label class="build-opt">
+          <input type="checkbox" name="reconfigure" value="1">
+          <span>Reconfigure（先跑 <code>cmake --preset</code> 再 build）</span>
+        </label>
+        <button class="btn-primary" type="submit">开始构建</button>
+      </form>
+    </div>
+  </aside>
+
+  <section class="tab-main">
+    <div id="log-panel-host" style="display: contents;">
+      {{if .BuildVM.HasJob}}
+        {{template "log_panel" .BuildVM.Latest}}
+      {{else}}
+        {{template "log_panel_empty" "build"}}
+      {{end}}
+    </div>
+  </section>
+</div>
+{{end}}
+
+
+{{define "tab_run"}}
+<div class="tab-run-3col">
+  <!-- col 1: target list -->
+  <aside class="tab-side">
+    <div class="card">
+      <h2 class="card-title">
+        <span class="ico">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><polygon points="6 4 20 12 6 20 6 4" fill="currentColor"/></svg>
+        </span>
+        Run target
+      </h2>
+      <form data-job-form hx-post="/jobs/run" hx-target="#log-panel-host" hx-swap="innerHTML">
+        <input type="hidden" name="target" value="">
+        <input type="hidden" name="extraArgs" value="" id="run-extra-args">
+        <div class="target-list" style="margin-bottom: 12px;">
+          {{range .RunVM.Targets}}
+          <div class="target-item" data-target="{{.}}">
+            <span class="radio"></span>
+            <span class="name">{{.}}</span>
+          </div>
+          {{end}}
+        </div>
+        <button class="btn-primary" type="submit">运行</button>
+      </form>
+    </div>
+  </aside>
+
+  <!-- col 2: args panel -->
+  <aside class="tab-side run-args-col">
+    <div class="card" style="flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column;">
+      <h2 class="card-title">
+        <span class="ico">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        </span>
+        命令行参数
+      </h2>
+      <div id="run-args-list" style="flex: 1 1 auto; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; min-height: 0;">
+        <div class="run-args-empty" style="color: var(--fg-dim); font-size: 12px; font-style: italic;">选择左侧 target 后显示可用参数</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- col 3: log -->
+  <section class="tab-main">
+    <div id="log-panel-host" style="display: contents;">
+      {{if .RunVM.HasJob}}
+        {{template "log_panel" .RunVM.Latest}}
+      {{else}}
+        {{template "log_panel_empty" "run"}}
+      {{end}}
+    </div>
+  </section>
+</div>
+
+<style>
+  .tab-run-3col {
+    display: grid;
+    grid-template-columns: 330px 360px minmax(0, 1fr);
+    gap: 16px;
+    padding: 16px;
+    height: 100%;
+    overflow: hidden;
+  }
+  .run-args-col { overflow: hidden; gap: 0; }
+  .arg-item {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 7px 9px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  }
+  .arg-item input[type="checkbox"] { accent-color: var(--accent); width: 13px; height: 13px; flex: 0 0 auto; margin-top: 2px; }
+  .arg-item .arg-body { flex: 1; min-width: 0; }
+  .arg-item .arg-flag { font-family: var(--font-mono); font-size: 11.5px; color: var(--fg); display: block; }
+  .arg-item .arg-desc { font-size: 10.5px; color: var(--fg-dim); display: block; margin-top: 1px; }
+  .arg-item .arg-val { margin-top: 5px; }
+  .arg-item .arg-val input {
+    width: 100%; background: var(--bg-input); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 3px 6px; font-size: 12px; font-family: var(--font-mono); outline: none;
+  }
+  .arg-item .arg-val input:focus { border-color: var(--accent); }
+</style>
+
+<script>
+(function() {
+  // Actual args from src/Options.cpp (cxxopts definitions).
+  // Common args shared by gkNextRenderer, gkNextEditor, MagicaLego, gkNextBenchmark, gkNextVisualTest.
+  const COMMON_ARGS = [
+    { flag: '--width',                    desc: '帧缓冲宽度',                           hasVal: true,  valDefault: '1920' },
+    { flag: '--height',                   desc: '帧缓冲高度',                           hasVal: true,  valDefault: '1080' },
+    { flag: '--load-scene',               desc: '加载场景（绝对路径或相对项目根目录）', hasVal: true,  valDefault: ''     },
+    { flag: '--hdri',                     desc: '加载 HDRI 文件路径',                   hasVal: true,  valDefault: ''     },
+    { flag: '--gpu',                      desc: '指定 GPU 索引',                        hasVal: true,  valDefault: '0'    },
+    { flag: '--present-mode',             desc: '呈现模式 (0=Immediate 1=Mailbox 2=FIFO 3=FIFORelaxed)', hasVal: true, valDefault: '3' },
+    { flag: '--locale',                   desc: '区域设置 (en / zhCN / RU)',            hasVal: true,  valDefault: 'en'   },
+    { flag: '--fullscreen',               desc: '切换全屏模式',                         hasVal: false                     },
+    { flag: '--savefile',                 desc: '基准测试完成后保存截图',               hasVal: false                     },
+    { flag: '--renderdoc',                desc: '附加 RenderDoc（如可用）',             hasVal: false                     },
+    { flag: '--forcesdr',                 desc: '即使支持 HDR 也强制使用 SDR',          hasVal: false                     },
+    { flag: '--reference',                desc: '开启参考渲染器对比模式',              hasVal: false                     },
+    { flag: '--forcenort',                desc: '强制不使用硬件光追',                   hasVal: false                     },
+    { flag: '--forcesoftgen',             desc: '强制环境立方体使用软件光追',           hasVal: false                     },
+    { flag: '--validation',               desc: '开启 Vulkan 校验层',                  hasVal: false                     },
+    { flag: '--no-shader-hotreload',      desc: '关闭 Slang 着色器热重载',             hasVal: false                     },
+    { flag: '--shader-hotreload-interval',desc: '着色器热重载轮询间隔（秒）',          hasVal: true,  valDefault: '0.5'  },
+    { flag: '--agent-validation',         desc: '开启 Agent 校验（自动截图）',         hasVal: false                     },
+    { flag: '--flappy-replay',            desc: '运行 Flappy 确定性回放',              hasVal: false                     },
+    { flag: '--test-gltf',                desc: '运行 glTF 健壮性测试',               hasVal: false                     },
+    { flag: '--test-gltf-filter',         desc: 'glTF 测试过滤器（部分名称匹配）',    hasVal: true,  valDefault: ''     },
+    { flag: '--update-baseline',          desc: '更新视觉测试基准图片',               hasVal: false                     },
+  ];
+
+  const TARGET_ARGS = {
+    gkNextRenderer:  COMMON_ARGS,
+    gkNextEditor:    COMMON_ARGS,
+    MagicaLego:      COMMON_ARGS,
+    gkNextBenchmark: COMMON_ARGS,
+    gkNextVisualTest: COMMON_ARGS,
+  };
+
+  function lsKey(target) { return 'gnb-run-args-' + target; }
+
+  function loadSaved(target) {
+    try { return JSON.parse(localStorage.getItem(lsKey(target)) || '{}'); } catch { return {}; }
+  }
+
+  function saveCurrent(target) {
+    const saved = {};
+    document.querySelectorAll('#run-args-list .arg-item').forEach(item => {
+      const flag = item.dataset.flag;
+      const cb = item.querySelector('input[type="checkbox"]');
+      const valInput = item.querySelector('.arg-val input');
+      saved[flag] = { checked: cb.checked, val: valInput ? valInput.value : '' };
+    });
+    localStorage.setItem(lsKey(target), JSON.stringify(saved));
+    rebuildExtraArgs();
+  }
+
+  function rebuildExtraArgs() {
+    const parts = [];
+    document.querySelectorAll('#run-args-list .arg-item').forEach(item => {
+      const cb = item.querySelector('input[type="checkbox"]');
+      if (!cb.checked) return;
+      parts.push(item.dataset.flag);
+      const valInput = item.querySelector('.arg-val input');
+      if (valInput && valInput.value.trim()) parts.push(valInput.value.trim());
+    });
+    const el = document.getElementById('run-extra-args');
+    if (el) el.value = parts.join(' ');
+  }
+
+  function renderArgsPanel(target) {
+    const list = document.getElementById('run-args-list');
+    if (!list) return;
+    const defs = TARGET_ARGS[target];
+    if (!defs || defs.length === 0) {
+      list.innerHTML = '<div class="run-args-empty" style="color:var(--fg-dim);font-size:12px;font-style:italic;">该 target 无可配置参数</div>';
+      return;
+    }
+    const saved = loadSaved(target);
+    list.innerHTML = '';
+    defs.forEach(def => {
+      const s = saved[def.flag] || {};
+      const checked = s.checked || false;
+      const val = s.val !== undefined ? s.val : (def.valDefault || '');
+      const item = document.createElement('div');
+      item.className = 'arg-item';
+      item.dataset.flag = def.flag;
+      const valHtml = def.hasVal
+        ? '<div class="arg-val"><input type="text" value="' + val.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '" placeholder="值"></div>'
+        : '';
+      item.innerHTML =
+        '<input type="checkbox"' + (checked ? ' checked' : '') + '>' +
+        '<div class="arg-body">' +
+          '<span class="arg-flag">' + def.flag + '</span>' +
+          '<span class="arg-desc">' + def.desc + '</span>' +
+          valHtml +
+        '</div>';
+      item.querySelector('input[type="checkbox"]').addEventListener('change', () => saveCurrent(target));
+      if (def.hasVal) item.querySelector('.arg-val input').addEventListener('input', () => saveCurrent(target));
+      list.appendChild(item);
+    });
+    rebuildExtraArgs();
+  }
+
+  // On target click (capture phase so it runs before selection highlight)
+  document.body.addEventListener('click', e => {
+    const item = e.target.closest('.target-item');
+    if (!item || !item.dataset.target) return;
+    if (!document.querySelector('[data-tab="run"].active')) return;
+    // slight delay so the selected class is already applied
+    setTimeout(() => renderArgsPanel(item.dataset.target), 0);
+  });
+
+  // After htmx swaps (tab switch, job start, etc.)
+  document.body.addEventListener('htmx:afterSwap', () => {
+    if (!document.querySelector('[data-tab="run"].active')) return;
+    const sel = document.querySelector('.target-item.selected');
+    if (sel) renderArgsPanel(sel.dataset.target);
+  });
+})();
+</script>
+{{end}}
+
+
+{{define "tab_test"}}
+<div class="tab-jobs">
+  <aside class="tab-side">
+    <div class="card">
+      <h2 class="card-title">
+        <span class="ico">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 2v8L4 20a2 2 0 0 0 1.7 3h12.6A2 2 0 0 0 20 20l-5-10V2"/><line x1="9" y1="2" x2="15" y2="2"/></svg>
+        </span>
+        Test case
+      </h2>
+      {{if not .TestVM.BinExists}}
+        <div class="archive-hint" style="margin-bottom: 10px;">
+          未找到 <code>gkNextUnitTests</code>，请先在 Build 页构建该 target。
+          {{if .TestVM.ListErr}}<br><span style="opacity:0.7; font-size: 11px;">{{.TestVM.ListErr}}</span>{{end}}
+        </div>
+      {{end}}
+      <form data-job-form hx-post="/jobs/test" hx-target="#log-panel-host" hx-swap="innerHTML">
+        <input type="hidden" name="target" value="all">
+        <div class="target-list" style="margin-bottom: 12px;">
+          <div class="target-item selected" data-target="all">
+            <span class="radio"></span>
+            <span class="name">all tests</span>
+            <span class="tag-mini">run all</span>
+          </div>
+          {{range .TestVM.Tests}}
+          <div class="target-item" data-target="{{.Name}}" title="{{.Tags}}">
+            <span class="radio"></span>
+            <span class="name">{{.Name}}</span>
+            {{if .Tags}}<span class="tag-mini">{{.Tags}}</span>{{end}}
+          </div>
+          {{end}}
+        </div>
+        <button class="btn-primary" type="submit" {{if not .TestVM.BinExists}}disabled style="opacity:0.5; cursor:not-allowed"{{end}}>运行测试</button>
+      </form>
+    </div>
+  </aside>
+
+  <section class="tab-main">
+    <div id="log-panel-host" style="display: contents;">
+      {{if .TestVM.HasJob}}
+        {{template "log_panel" .TestVM.Latest}}
+      {{else}}
+        {{template "log_panel_empty" "test"}}
+      {{end}}
+    </div>
+  </section>
+</div>
+{{end}}
+
+
+{{define "log_panel"}}
+<div class="log-panel"
+     data-started-at="{{.StartedAt.Unix}}"
+     {{if jobIsTerminal .}}data-finished-at="{{.FinishedAt.Unix}}"{{end}}
+     {{if jobIsRunning .}}data-stream="/jobs/{{.ID}}/stream?from={{len .Lines}}"{{end}}>
+  <div class="log-head">
+    <div class="label">
+      <span class="ico">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+      </span>
+      {{.Kind}}
+    </div>
+    <span class="target-pill">{{.Target}}</span>
+    <span class="spacer"></span>
+    <div class="meta">
+      <span data-elapsed>{{jobElapsed .}}</span>
+      <span data-stream-status>{{jobStatusBadge .}}</span>
+    </div>
+    <div class="log-actions">
+      {{if jobIsRunning .}}
+      <button class="action-btn danger" type="button"
+              hx-post="/jobs/{{.ID}}/cancel"
+              hx-target="#log-panel-host" hx-swap="innerHTML"
+              hx-confirm="终止当前任务？"
+              title="终止">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+      </button>
+      {{end}}
+      <button class="action-btn" type="button" title="清空显示" onclick="this.closest('.log-panel').querySelector('.log-body').innerHTML='';">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="log-body">{{jobLines .}}</div>
+</div>
+{{end}}
+
+
+{{define "log_panel_empty"}}
+<div class="log-panel">
+  <div class="log-head">
+    <div class="label">
+      <span class="ico">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+      </span>
+      {{.}}
+    </div>
+    <span class="spacer"></span>
+    <div class="meta"><span>暂无任务</span></div>
+  </div>
+  <div class="log-empty">选择左侧 target 后点击按钮开始 —— 日志会在这里实时显示（带 ANSI 颜色）。</div>
+</div>
+{{end}}
+
+
+{{define "tab_chat"}}
+<div class="tab-chat">
+  {{template "chat_panel" .ChatVM}}
+</div>
+{{end}}
+
+
+{{define "chat_panel"}}
+<div id="chat-panel">
+  <div class="chat-layout">
+    <aside class="chat-side">
+      <div class="card">
+        <h2 class="card-title">
+          <span class="ico">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </span>
+          LLM
+        </h2>
+
+        <div class="form-field">
+          <label>model</label>
+          <select id="chat-model" class="select" name="model" form="chat-send-form">
+            {{range .Models}}
+            <option value="{{.ID}}" {{if .Active}}selected{{end}}>{{.ID}}</option>
+            {{end}}
+          </select>
+        </div>
+
+        <div class="chat-model-list">
+          {{range .Models}}
+          <div class="model-row">
+            <span class="model-id" title="{{.ID}}">{{.ID}}</span>
+            {{if .Downloaded}}<span class="model-pill ready">ready</span>{{else}}<span class="model-pill">missing</span>{{end}}
+            {{if .Running}}<span class="model-pill running">running</span>{{end}}
+          </div>
+          {{end}}
+        </div>
+        <div class="info-row compact"><span class="k">server</span><span class="v">{{if .ServerRunning}}running{{else}}stopped{{end}} · {{.Endpoint}}</span></div>
+        <div class="info-row"><span class="k">model</span><span class="v">{{if .RunningModel}}{{.RunningModel}}{{else}}—{{end}}</span></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">
+          <span class="ico">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/></svg>
+          </span>
+          Sessions
+          <form class="chat-title-action"
+                hx-post="/chat/new"
+                hx-include="#chat-model"
+                hx-target="#chat-panel"
+                hx-swap="outerHTML">
+            <button class="icon-btn" type="submit" title="新建对话" aria-label="新建对话">+</button>
+          </form>
+        </h2>
+        <div class="chat-session-list">
+          {{if .Sessions}}
+            {{range .Sessions}}
+            <div class="chat-session-item {{if .Active}}active{{end}}" data-session-id="{{.ID}}">
+              <button class="chat-session-open"
+                      type="button"
+                      hx-get="/chat/session?id={{.ID}}"
+                      hx-target="#chat-panel"
+                      hx-swap="outerHTML">
+                <span class="chat-session-title" data-session-title>{{.Title}}</span>
+                <span class="chat-session-age" data-session-age>{{.RelativeTime}}</span>
+              </button>
+              <form class="chat-session-archive"
+                    hx-post="/chat/archive"
+                    hx-target="#chat-panel"
+                    hx-swap="outerHTML">
+                <input type="hidden" name="session_id" value="{{.ID}}">
+                <input type="hidden" name="model" value="{{$.SelectedModel}}">
+                <button class="icon-btn" type="submit" title="归档对话" aria-label="归档对话">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>
+                </button>
+              </form>
+            </div>
+            {{end}}
+          {{else}}
+            <div class="chat-session-empty">暂无历史对话</div>
+          {{end}}
+        </div>
+      </div>
+    </aside>
+
+    <section class="chat-main">
+      <div class="chat-head">
+        <div class="title">
+          <span class="ico">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>
+          </span>
+          Chat
+        </div>
+        <span class="target-pill">{{.SelectedModel}}</span>
+        <span class="spacer"></span>
+        <span class="chat-status">{{len .Messages}} messages</span>
+      </div>
+
+      <div class="chat-messages">
+        {{if .Messages}}
+          {{range .Messages}}
+            <div class="chat-msg {{.Role}}">
+              <div class="chat-avatar">{{if eq .Role "user"}}U{{else}}AI{{end}}</div>
+              <div class="chat-bubble">
+                <div class="chat-role">{{.Role}}</div>
+                <div class="chat-text" data-md>{{.Content}}</div>
+              </div>
+            </div>
+          {{end}}
+        {{else}}
+          <div class="chat-empty">选择模型后直接提问；首次请求会按需启动 llama-server。</div>
+        {{end}}
+      </div>
+
+      {{if .Error}}
+      <div class="chat-error">{{.Error}}</div>
+      {{end}}
+
+      <form id="chat-send-form"
+            class="chat-composer"
+            data-chat-form>
+        <input id="chat-session-id" type="hidden" name="session_id" value="{{.SessionID}}">
+        <textarea id="chat-input" class="input" name="message" placeholder="输入消息" required></textarea>
+        <div class="chat-actions">
+          <button class="btn-primary" type="submit">发送</button>
+          <label class="chat-thinking-opt">
+            <input id="chat-thinking" type="checkbox" name="thinking" value="1">
+            <span>思考模式</span>
+          </label>
+          <label class="chat-token-opt">
+            <span>输出上限</span>
+            <input id="chat-max-tokens" type="number" name="max_tokens" min="256" max="32768" step="256" value="4096">
+          </label>
+          <div class="chat-context-compact" data-chat-context title="包含 AGENTS.md 标准上下文的估算 token 用量">
+            <div class="chat-context-ring" data-chat-context-fill style="--ctx-pct: {{.Context.Percent}}%;">
+              <span>{{.Context.Percent}}%</span>
+            </div>
+            <span data-chat-context-label>{{tokenK .Context.Used}} / {{tokenK .Context.Limit}}</span>
+          </div>
+          <span class="muted">temperature 0.7</span>
+        </div>
+      </form>
+    </section>
+  </div>
+</div>
+{{end}}
+
+
+{{define "tab_git"}}
+<div id="git-tab-body">
+  {{template "git_body" .}}
+</div>
+{{end}}
+
+
+{{define "git_body"}}
+<div class="tab-git">
+  <aside>
+    {{template "git_panel" .}}
+  </aside>
+  <section class="git-commits-col">
+    <div class="card git-history-card">
+      <h2 class="card-title">
+        <span class="ico">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h12a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4V4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="14" y2="13"/></svg>
+        </span>
+        最近提交
+        <span class="count">{{len .GitVM.Commits}}</span>
+        {{if .GitVM.RemoteCommits}}
+          <span class="remote-commit-count">远端 +{{len .GitVM.RemoteCommits}}</span>
+        {{end}}
+      </h2>
+      {{if or .GitVM.RemoteCommits .GitVM.Status.Dirty .GitVM.Commits}}
+        <div class="commit-list">
+          {{if .GitVM.RemoteCommits}}
+          <div class="commit-list-label">远端未拉取 · {{.GitVM.Status.Upstream}}</div>
+          {{range .GitVM.RemoteCommits}}
+          <div class="commit-row remote-commit-row"
+               data-git-selectable
+               hx-get="/git/commit/{{.Full}}"
+               hx-trigger="click[!event.target.closest('.commit-reset')]"
+               hx-target="#git-side-panel"
+               hx-swap="innerHTML">
+            <span class="hash">{{.Hash}}</span>
+            <span class="date">{{.Date}}</span>
+            <span class="author">{{.Author}}</span>
+            <span class="subject">{{.Subject}}</span>
+            <button class="commit-reset" type="button"
+                    title="reset --hard 到此远端提交"
+                    hx-post="/git/reset"
+                    hx-vals='{"ref":"{{.Full}}"}'
+                    hx-target="#git-tab-body" hx-swap="innerHTML"
+                    hx-confirm="⚠️ 执行 git reset --hard {{.Hash}}？这会让当前分支直接指向这个远端提交，并丢弃当前未提交改动。">⤺</button>
+          </div>
+          {{end}}
+          {{end}}
+
+          {{if .GitVM.Status.Dirty}}
+          <div class="commit-list-label">本地工作区</div>
+          <div class="commit-row local-change-row selected"
+               data-git-selectable
+               hx-get="/git/local-changes"
+               hx-target="#git-side-panel"
+               hx-swap="innerHTML">
+            <span class="hash">LOCAL</span>
+            <span class="date">{{if .GitVM.Status.Branch}}{{.GitVM.Status.Branch}}{{else}}detached{{end}}</span>
+            <span class="author">working tree</span>
+            <span class="subject">本地修改 · {{len .GitVM.Status.DirtyFiles}} files · {{dirtySummary .GitVM.Status.DirtyFiles}}</span>
+            <span class="commit-row-spacer"></span>
+          </div>
+          {{end}}
+
+          {{if .GitVM.Commits}}
+          <div class="commit-list-label">本地提交</div>
+          {{range .GitVM.Commits}}
+          <div class="commit-row"
+               data-git-selectable
+               hx-get="/git/commit/{{.Full}}"
+               hx-trigger="click[!event.target.closest('.commit-reset')]"
+               hx-target="#git-side-panel"
+               hx-swap="innerHTML">
+            <span class="hash">{{.Hash}}</span>
+            <span class="date">{{.Date}}</span>
+            <span class="author">{{.Author}}</span>
+            <span class="subject">{{.Subject}}</span>
+            <button class="commit-reset" type="button"
+                    title="reset --hard 到此提交"
+                    hx-post="/git/reset"
+                    hx-vals='{"ref":"{{.Full}}"}'
+                    hx-target="#git-tab-body" hx-swap="innerHTML"
+                    hx-confirm="⚠️ 执行 git reset --hard {{.Hash}}？这会丢弃当前分支所有未提交改动以及 HEAD 之后到此 commit 之间的所有提交。">⤺</button>
+          </div>
+          {{end}}
+          {{end}}
+        </div>
+      {{else}}
+        <div class="empty-row">暂无提交</div>
+      {{end}}
+    </div>
+  </section>
+
+  <section class="git-detail-col">
+    <div id="git-side-panel">
+      {{if .GitVM.Status.Dirty}}
+        {{template "git_commit_card" .}}
+      {{else}}
+      <div class="card detail-empty">点击 hash 或 subject 查看完整 message；点击 ⤺ 重置 HEAD。</div>
+      {{end}}
+    </div>
+  </section>
+</div>
+{{end}}
+
+
+{{define "git_commit_card"}}
+<div class="card commit-card">
+  <h2 class="card-title">
+    <span class="ico" style="background: rgba(99, 102, 241, 0.12); color: var(--accent);">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><line x1="2" y1="12" x2="8" y2="12"/><line x1="16" y1="12" x2="22" y2="12"/></svg>
+    </span>
+    新提交
+    {{if .GitVM.Status.Dirty}}
+      <span class="count">{{len .GitVM.Status.DirtyFiles}}</span>
+    {{end}}
+  </h2>
+
+  {{if .GitVM.Status.Dirty}}
+    <div class="commit-card-hint">分支 <code>{{if .GitVM.Status.Branch}}{{.GitVM.Status.Branch}}{{else}}(detached){{end}}</code> · 工作区 <span class="dirty">dirty</span>（{{.GitVM.Status.DirtyHint}}）</div>
+  {{else}}
+    <div class="commit-card-hint">分支 <code>{{if .GitVM.Status.Branch}}{{.GitVM.Status.Branch}}{{else}}(detached){{end}}</code> · 工作区 <span class="clean">clean</span></div>
+  {{end}}
+
+  {{if .GitVM.Status.Dirty}}
+  <div class="stage-panel">
+    <div class="stage-panel-head">
+      <span>文件 stage</span>
+      <span>{{dirtySummary .GitVM.Status.DirtyFiles}}</span>
+    </div>
+    <div class="stage-actions">
+      <button class="btn-secondary" type="button"
+              hx-post="/git/stage"
+              hx-target="#git-tab-body" hx-swap="innerHTML">stage all</button>
+      <button class="btn-secondary" type="button"
+              hx-post="/git/unstage"
+              hx-target="#git-tab-body" hx-swap="innerHTML">unstage all</button>
+    </div>
+    <div class="stage-file-list">
+      {{range .GitVM.Status.DirtyFiles}}
+      <div class="stage-file">
+        <span class="dirty-code dirty-code-{{dirtyCodeClass .Code}}">{{.Code}}</span>
+        <span class="dirty-path" title="{{.Path}}">{{.Path}}</span>
+        <div class="stage-file-actions">
+          {{if dirtyIsUnstaged .Code}}
+          <form hx-post="/git/stage" hx-target="#git-tab-body" hx-swap="innerHTML">
+            <input type="hidden" name="path" value="{{.Path}}">
+            <button type="submit">stage</button>
+          </form>
+          {{end}}
+          {{if dirtyIsStaged .Code}}
+          <form hx-post="/git/unstage" hx-target="#git-tab-body" hx-swap="innerHTML">
+            <input type="hidden" name="path" value="{{.Path}}">
+            <button type="submit">unstage</button>
+          </form>
+          {{end}}
+        </div>
+      </div>
+      {{end}}
+    </div>
+  </div>
+  {{end}}
+
+  <form class="commit-card-form" onsubmit="return false;">
+    <textarea id="commit-msg-textarea" name="message" class="input commit-msg-textarea" rows="10" placeholder="点击 AI 补全让本地 LLM 根据 diff 生成；也可手动编辑"></textarea>
+
+    <label class="build-opt commit-card-opt">
+      <input type="checkbox" name="stage_all" value="1">
+      <span>提交前 <code>git add -A</code></span>
+    </label>
+
+    <div class="commit-card-actions">
+      <button class="btn-secondary commit-ai-btn" type="button"
+              hx-post="/git/commit-message"
+              hx-target="#commit-msg-textarea"
+              hx-swap="outerHTML"
+              hx-disabled-elt="this"
+              hx-indicator=".commit-ai-indicator"
+              title="调用本地 LLM 根据 diff 生成 commit message（首次会加载模型）">
+        <span class="ai-btn-label">✨ AI 补全</span>
+        <span class="commit-ai-indicator htmx-indicator">生成中…</span>
+      </button>
+      <button class="btn-primary small" type="button"
+              hx-post="/git/commit"
+              hx-include="closest form"
+              hx-target="#git-tab-body" hx-swap="innerHTML"
+              hx-confirm="使用当前 commit message 创建提交？"
+              {{if not .GitVM.Status.Dirty}}disabled title="工作区无改动"{{end}}>
+        Commit
+      </button>
+    </div>
+  </form>
+</div>
+{{end}}
+
+
+{{define "git_panel"}}
+{{if .GitVM.Flash}}
+<div class="git-flash{{if .GitVM.Error}} error{{end}}">{{.GitVM.Flash}}</div>
+{{end}}
+{{if .GitVM.Error}}
+<div class="git-flash error">{{.GitVM.Error}}</div>
+{{end}}
+
+<div class="card">
+  <h2 class="card-title">
+    <span class="ico">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 15V9a6 6 0 0 1 6-6"/><path d="M18 9v3a6 6 0 0 1-6 6"/></svg>
+    </span>
+    当前状态
+  </h2>
+  <div class="git-status-row"><span class="k">分支</span><span class="v">{{if .GitVM.Status.Branch}}{{.GitVM.Status.Branch}}{{else}}(detached){{end}}</span></div>
+  <div class="git-status-row"><span class="k">HEAD</span><span class="v">{{.GitVM.Status.Head}}</span></div>
+  {{if .GitVM.Status.Upstream}}
+  <div class="git-status-row"><span class="k">upstream</span><span class="v">{{.GitVM.Status.Upstream}}</span></div>
+  <div class="git-status-row"><span class="k">ahead / behind</span><span class="v">+{{.GitVM.Status.Ahead}} / -{{.GitVM.Status.Behind}}</span></div>
+  {{end}}
+  <div class="git-status-row">
+    <span class="k">工作区</span>
+    {{if .GitVM.Status.Dirty}}
+      <span class="v dirty">dirty ({{.GitVM.Status.DirtyHint}})</span>
+    {{else}}
+      <span class="v clean">clean</span>
+    {{end}}
+  </div>
+
+  <div class="git-actions" style="margin-top: 12px;">
+    <button class="btn-primary small" type="button"
+            hx-post="/git/pull"
+            hx-target="#git-tab-body" hx-swap="innerHTML"
+            hx-confirm="对当前分支执行 git pull --ff-only？">Pull (--ff-only)</button>
+    <button class="btn-secondary" type="button"
+            hx-post="/git/fetch"
+            hx-target="#git-tab-body" hx-swap="innerHTML">Fetch</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2 class="card-title">
+    <span class="ico">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="6" y1="9" x2="6" y2="15"/><path d="M9 6h7a3 3 0 0 1 3 3v3"/><path d="M19 21l3-3-3-3"/></svg>
+    </span>
+    本地分支
+    <span class="count">{{len .GitVM.Branches}}</span>
+  </h2>
+  {{range .GitVM.Branches}}
+  <div class="branch-row{{if .Current}} current{{end}}" style="margin-bottom: 6px;">
+    {{if .Current}}<span class="star">●</span>{{else}}<span style="width:8px;"></span>{{end}}
+    <span class="name"><code>{{.Name}}</code></span>
+    {{if .Remote}}<span class="remote">{{.Remote}}</span>{{end}}
+    {{if not .Current}}
+    <button type="button"
+            hx-post="/git/switch"
+            hx-vals='{"branch":"{{.Name}}"}'
+            hx-target="#git-tab-body" hx-swap="innerHTML"
+            hx-confirm="切换到分支 {{.Name}}？（脏工作区会被拒绝）">switch</button>
+    {{end}}
+  </div>
+  {{end}}
+  <form style="margin-top: 12px; display: flex; gap: 6px;"
+        hx-post="/git/create-branch"
+        hx-target="#git-tab-body" hx-swap="innerHTML"
+        hx-on::after-request="this.reset()">
+    <input class="input" type="text" name="name" placeholder="新分支名" required style="flex: 1; min-width: 0; padding: 6px 8px; font-size: 12px;">
+    <button class="btn-secondary" type="submit" style="padding: 6px 10px;">new</button>
+  </form>
+</div>
+
+{{if .GitVM.RemoteBranches}}
+<div class="card">
+  <h2 class="card-title">
+    <span class="ico">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12a10 10 0 1 0 20 0 10 10 0 0 0-20 0z"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+    </span>
+    远程分支
+    <span class="count">{{len .GitVM.RemoteBranches}}</span>
+  </h2>
+  {{range .GitVM.RemoteBranches}}
+  <div class="branch-row" style="margin-bottom: 6px;">
+    <span style="width:8px;"></span>
+    <span class="name"><code>{{.FullName}}</code></span>
+    {{if .HasLocal}}
+      <span class="remote">本地已存在</span>
+    {{else}}
+    <button type="button"
+            hx-post="/git/switch-remote"
+            hx-vals='{"ref":"{{.FullName}}"}'
+            hx-target="#git-tab-body" hx-swap="innerHTML"
+            hx-confirm="基于 {{.FullName}} 创建本地分支 {{.ShortName}} 并切换？（脏工作区会被拒绝）">track</button>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+{{end}}
+
+<div class="card">
+  <h2 class="card-title">
+    <span class="ico" style="background: rgba(234, 179, 8, 0.12); color: var(--yellow);">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18M5 7v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+    </span>
+    Stash
+    <span class="count">{{len .GitVM.Stashes}}</span>
+  </h2>
+  {{if .GitVM.Status.Dirty}}
+  <div class="dirty-files">
+    <div class="dirty-files-head">工作区改动 <span class="count">{{len .GitVM.Status.DirtyFiles}}</span></div>
+    <div class="dirty-files-list">
+      {{range .GitVM.Status.DirtyFiles}}
+      <div class="dirty-file" title="{{.Code}} {{.Path}}">
+        <span class="dirty-code dirty-code-{{dirtyCodeClass .Code}}">{{.Code}}</span>
+        <span class="dirty-path">{{.Path}}</span>
+      </div>
+      {{end}}
+    </div>
+  </div>
+  {{end}}
+  {{range .GitVM.Stashes}}
+  <div class="branch-row" style="margin-bottom: 6px;">
+    <span class="name" title="{{.Message}}"><code>{{.Ref}}</code> {{.Message}}</span>
+    <button type="button"
+            hx-post="/git/stash/pop"
+            hx-vals='{"ref":"{{.Ref}}"}'
+            hx-target="#git-tab-body" hx-swap="innerHTML"
+            hx-confirm="弹出并应用 {{.Ref}}？">pop</button>
+    <button type="button"
+            hx-post="/git/stash/apply"
+            hx-vals='{"ref":"{{.Ref}}"}'
+            hx-target="#git-tab-body" hx-swap="innerHTML"
+            hx-confirm="仅应用 {{.Ref}}（保留 stash）？">apply</button>
+    <button type="button"
+            hx-post="/git/stash/drop"
+            hx-vals='{"ref":"{{.Ref}}"}'
+            hx-target="#git-tab-body" hx-swap="innerHTML"
+            hx-confirm="删除 {{.Ref}}？此操作不可恢复。">drop</button>
+  </div>
+  {{end}}
+  <form style="margin-top: 12px;"
+        hx-post="/git/stash/push"
+        hx-target="#git-tab-body" hx-swap="innerHTML"
+        hx-on::after-request="this.reset()">
+    <input class="input" type="text" name="message" placeholder="stash 说明（可选）" style="margin-bottom: 6px; padding: 6px 8px; font-size: 12px;">
+    <label class="build-opt" style="margin-bottom: 6px;">
+      <input type="checkbox" name="untracked" value="1">
+      <span>包含未跟踪文件 (<code>-u</code>)</span>
+    </label>
+    <button class="btn-secondary" type="submit" style="width: 100%;">stash push</button>
+  </form>
+</div>
+{{end}}
+
+
+{{define "git_commit_detail"}}
+<div class="commit-detail">
+  <h3>{{.Subject}}</h3>
+  <div class="meta">{{.Hash}} · {{.Author}} · {{.Date}}</div>
+  {{if .Body}}
+  <pre>{{.Body}}</pre>
+  {{end}}
+</div>
+{{end}}
+
+
+{{define "task_edit_form"}}
+<form class="task-edit"
+      hx-post="/task/{{printf "%05d" .ID}}/edit"
+      hx-target="#todo-panel" hx-swap="innerHTML"
+      onclick="event.stopPropagation()">
+  <div class="form-field">
+    <label>标题 · #{{printf "%05d" .ID}}</label>
+    <input class="input" name="title" value="{{.Title}}" required autofocus>
+  </div>
+  <div class="row">
+    <select class="select" name="type">
+      <option value="">type</option>
+      <option value="BUG"      {{if eq .Type "BUG"}}selected{{end}}>BUG</option>
+      <option value="FEAT"     {{if eq .Type "FEAT"}}selected{{end}}>FEAT</option>
+      <option value="IDEA"     {{if eq .Type "IDEA"}}selected{{end}}>IDEA</option>
+      <option value="SPIKE"    {{if eq .Type "SPIKE"}}selected{{end}}>SPIKE</option>
+      <option value="REFACTOR" {{if eq .Type "REFACTOR"}}selected{{end}}>REFACTOR</option>
+      <option value="DOC"      {{if eq .Type "DOC"}}selected{{end}}>DOC</option>
+    </select>
+    <select class="select" name="priority">
+      <option value="">priority</option>
+      <option value="P0" {{if eq .Priority "P0"}}selected{{end}}>P0</option>
+      <option value="P1" {{if eq .Priority "P1"}}selected{{end}}>P1</option>
+      <option value="P2" {{if eq .Priority "P2"}}selected{{end}}>P2</option>
+    </select>
+  </div>
+  <div class="actions">
+    <button type="button" class="btn-secondary"
+            hx-get="/todo-panel" hx-target="#todo-panel" hx-swap="innerHTML">取消</button>
+    <button type="submit" class="btn-primary small">保存</button>
+  </div>
+</form>
+{{end}}
+
+
+{{define "tab_loc"}}
+<div class="tab-loc">
+  <style>
+    .tab-loc {
+      padding: 16px;
+      height: 100%;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+      gap: 16px;
+    }
+    .loc-col {
+      min-height: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .loc-summary {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+    }
+    .loc-stat {
+      flex: 1;
+      padding: 14px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+    }
+    .loc-stat .k { color: var(--fg-mute); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .loc-stat .v { color: var(--fg); font-family: var(--font-mono); font-size: 20px; font-weight: 600; margin-top: 4px; }
+    .loc-chart-rows { display: flex; flex-direction: column; gap: 10px; }
+    .loc-bar-row { display: grid; grid-template-columns: 140px minmax(0, 1fr) 110px; gap: 12px; align-items: center; }
+    .loc-bar-name { font-size: 12.5px; color: var(--fg); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .loc-bar-track {
+      height: 18px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+    .loc-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #6366f1);
+      border-right: 1px solid rgba(255,255,255,0.18);
+    }
+    .loc-bar-fill.app { background: linear-gradient(90deg, var(--green), #16a34a); }
+    .loc-bar-fill.eng { background: linear-gradient(90deg, var(--accent), #6366f1); }
+    .loc-bar-fill.tst { background: linear-gradient(90deg, var(--yellow), #ca8a04); }
+    .loc-bar-fill.tp  { background: linear-gradient(90deg, #9aa3b2, #6b7384); }
+    .loc-bar-meta { color: var(--fg-mute); font-family: var(--font-mono); font-size: 11.5px; text-align: right; white-space: nowrap; }
+    .loc-bar-meta .pct { color: var(--fg-dim); margin-left: 6px; }
+    .loc-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .loc-table thead th {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      color: var(--fg-mute);
+      font-weight: 500;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .loc-table tbody td {
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--font-mono);
+      vertical-align: top;
+    }
+    .loc-table tbody td.num { text-align: right; color: var(--fg); }
+    .loc-table tr.cat-row td { background: var(--bg-card-hover); color: var(--fg); font-weight: 650; }
+    .loc-table tr.sub-row td.name { padding-left: 22px; color: var(--fg-mute); }
+    .loc-table tr.leaf-row td.name { padding-left: 38px; color: var(--fg-dim); font-style: italic; }
+    .loc-toolbar { display: flex; align-items: center; gap: 12px; }
+    .loc-toolbar .tp-opt { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-mute); font-size: 12px; cursor: pointer; }
+    .loc-toolbar .tp-opt input { accent-color: var(--accent); width: 13px; height: 13px; }
+    .loc-error { color: var(--red); background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.32); border-radius: var(--radius-md); padding: 10px 12px; font-size: 12.5px; }
+  </style>
+
+  {{with .LocVM}}
+    {{if .Error}}
+      <div class="loc-col"><div class="loc-error">LOC 扫描失败：{{.Error}}</div></div>
+    {{else}}
+      <section class="loc-col">
+        <div class="loc-summary">
+          <div class="loc-stat"><div class="k">文件数</div><div class="v">{{intCommas .Snapshot.TotalFiles}}</div></div>
+          <div class="loc-stat"><div class="k">代码行</div><div class="v">{{intCommas .Snapshot.TotalLines}}</div></div>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">
+            <span class="ico">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="20" x2="4" y2="10"/><line x1="10" y1="20" x2="10" y2="4"/><line x1="16" y1="20" x2="16" y2="14"/></svg>
+            </span>
+            类别行数对比
+            <span style="margin-left:auto; display:inline-flex; gap:12px; align-items:center;">
+              <label class="tp-opt" style="display:inline-flex;align-items:center;gap:6px;color:var(--fg-mute);font-size:12px;cursor:pointer;">
+                <input type="checkbox" {{if .IncludeThirdParty}}checked{{end}}
+                       hx-get="/tab/loc{{if not .IncludeThirdParty}}?thirdparty=1{{end}}"
+                       hx-target="#tab-content" hx-swap="innerHTML"
+                       hx-trigger="change">
+                <span>包含 ThirdParty</span>
+              </label>
+            </span>
+          </h2>
+          <div class="loc-chart-rows">
+            {{$max := .MaxCategoryLines}}
+            {{$total := .Snapshot.TotalLines}}
+            {{range .Snapshot.Categories}}
+              <div class="loc-bar-row">
+                <div class="loc-bar-name" title="{{.Name}}">{{.Name}}</div>
+                <div class="loc-bar-track">
+                  {{$cls := "eng"}}
+                  {{if eq .Name "Application"}}{{$cls = "app"}}{{end}}
+                  {{if eq .Name "Tests"}}{{$cls = "tst"}}{{end}}
+                  {{if eq .Name "ThirdParty"}}{{$cls = "tp"}}{{end}}
+                  <div class="loc-bar-fill {{$cls}}" style="width: {{locBarPct .Lines $max}}%;"></div>
+                </div>
+                <div class="loc-bar-meta">{{intCommas .Lines}}<span class="pct">{{locShare .Lines $total}}%</span></div>
+              </div>
+            {{end}}
+          </div>
+        </div>
+      </section>
+
+      <section class="loc-col">
+        <div class="card" style="padding: 8px 0;">
+          <h2 class="card-title" style="padding: 0 16px;">
+            <span class="ico">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+            </span>
+            分类明细
+          </h2>
+          <table class="loc-table">
+            <thead>
+              <tr>
+                <th>类别 / 子项</th>
+                <th class="num" style="text-align:right;">文件</th>
+                <th class="num" style="text-align:right;">行数</th>
+                <th class="num" style="text-align:right;">占比</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{$total := .Snapshot.TotalLines}}
+              {{range .Snapshot.Categories}}
+                <tr class="cat-row">
+                  <td class="name">{{.Name}}</td>
+                  <td class="num">{{intCommas .Files}}</td>
+                  <td class="num">{{intCommas .Lines}}</td>
+                  <td class="num">{{locShare .Lines $total}}%</td>
+                </tr>
+                {{range .Subs}}
+                  <tr class="sub-row">
+                    <td class="name">{{.Name}}</td>
+                    <td class="num">{{intCommas .Files}}</td>
+                    <td class="num">{{intCommas .Lines}}</td>
+                    <td class="num">{{locShare .Lines $total}}%</td>
+                  </tr>
+                  {{range .Leaves}}
+                    <tr class="leaf-row">
+                      <td class="name">{{.Name}}</td>
+                      <td class="num">{{intCommas .Files}}</td>
+                      <td class="num">{{intCommas .Lines}}</td>
+                      <td class="num">{{locShare .Lines $total}}%</td>
+                    </tr>
+                  {{end}}
+                {{end}}
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    {{end}}
+  {{end}}
+</div>
+{{end}}

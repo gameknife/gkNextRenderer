@@ -15,6 +15,64 @@
       ]
     },
     {
+      "id": "grassland_pcg",
+      "name": "绿野 PCG",
+      "halfExtent": [30.0, 20.0],
+      "baseGroundColor": [0.28, 0.36, 0.22],
+      "borderColor": [0.45, 0.55, 0.35],
+      "pcg": {
+        "enabled": true,
+        "targetCells": 320,
+        "lloydRelaxIterations": 2,
+        "vertexJitterAmplitude": 0.48,
+        "vertexJitterFrequency": 0.18,
+        "borderPattern": "cluster",
+        "borderSegments": 56,
+        "propPoissonRadius": 4.6,
+        "propPoissonMaxAttempts": 30,
+        "spawnSafeRadius": 4.5,
+        "edgeKeepout": 1.8,
+        "props": [
+          {
+            "id": "rock_small",
+            "footprintXZ": [0.8, 0.8],
+            "visualHeight": 0.7,
+            "colliderHeight": 0.5,
+            "baseColor": [0.45, 0.45, 0.48],
+            "weight": 3.0
+          },
+          {
+            "id": "rock_wide",
+            "footprintXZ": [1.4, 1.0],
+            "visualHeight": 0.9,
+            "colliderHeight": 0.6,
+            "baseColor": [0.38, 0.40, 0.42],
+            "weight": 1.5
+          },
+          {
+            "id": "crate",
+            "footprintXZ": [1.2, 1.2],
+            "visualHeight": 1.2,
+            "colliderHeight": 1.0,
+            "baseColor": [0.62, 0.45, 0.25],
+            "weight": 1.0
+          }
+        ],
+        "palette": [
+          [0.36, 0.55, 0.30],
+          [0.32, 0.50, 0.28],
+          [0.42, 0.58, 0.32],
+          [0.34, 0.52, 0.29],
+          [0.39, 0.56, 0.31],
+          [0.30, 0.46, 0.25],
+          [0.37, 0.53, 0.27],
+          [0.43, 0.60, 0.34],
+          [0.52, 0.55, 0.42],
+          [0.44, 0.48, 0.34]
+        ]
+      }
+    },
+    {
       "id": "wasteland",
       "name": "荒地",
       "halfExtent": [34.0, 22.0],

@@ -1,6 +1,7 @@
 package cmakerun
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -18,10 +19,15 @@ type BuildOptions struct {
 	Jobs        int
 	NoUnity     bool
 	LTO         bool
+	MakeProgram string
 	PrintCmd    bool
 }
 
 func Build(repoRoot string, preset string, opts BuildOptions) error {
+	return BuildWithCMake(repoRoot, "cmake", preset, opts)
+}
+
+func BuildWithCMake(repoRoot string, cmakePath string, preset string, opts BuildOptions) error {
 	buildDir := filepath.Join(repoRoot, "out", "build", preset)
 	cache := filepath.Join(buildDir, "CMakeCache.txt")
 	if opts.Clean {
@@ -38,13 +44,20 @@ func Build(repoRoot string, preset string, opts BuildOptions) error {
 	if opts.LTO {
 		configureArgs = append(configureArgs, "-DENABLE_LTO=ON")
 	}
+	if opts.MakeProgram != "" {
+		configureArgs = append(configureArgs, "-DCMAKE_MAKE_PROGRAM="+opts.MakeProgram)
+	}
 
 	needsConfigure := opts.Clean || opts.Reconfigure || opts.NoUnity || opts.LTO
 	if _, err := os.Stat(cache); os.IsNotExist(err) {
 		needsConfigure = true
 	}
+	if !needsConfigure && requiresMakeProgramRefresh(cache, opts.MakeProgram) {
+		console.Info("reconfigure required to refresh CMAKE_MAKE_PROGRAM")
+		needsConfigure = true
+	}
 	if needsConfigure {
-		if err := run(repoRoot, opts.PrintCmd, "cmake", configureArgs...); err != nil {
+		if err := run(repoRoot, opts.PrintCmd, cmakePath, configureArgs...); err != nil {
 			return err
 		}
 	} else {
@@ -58,7 +71,7 @@ func Build(repoRoot string, preset string, opts BuildOptions) error {
 	if opts.Jobs > 0 {
 		buildArgs = append(buildArgs, "--parallel", fmt.Sprintf("%d", opts.Jobs))
 	}
-	return run(repoRoot, opts.PrintCmd, "cmake", buildArgs...)
+	return run(repoRoot, opts.PrintCmd, cmakePath, buildArgs...)
 }
 
 func ListPresets(repoRoot string) error {
@@ -94,4 +107,39 @@ func run(dir string, printOnly bool, name string, args ...string) error {
 		return fmt.Errorf("%s failed: %w", name, err)
 	}
 	return nil
+}
+
+func requiresMakeProgramRefresh(cachePath string, want string) bool {
+	if want == "" {
+		return false
+	}
+
+	file, err := os.Open(cachePath)
+	if err != nil {
+		return true
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "CMAKE_MAKE_PROGRAM:") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			return true
+		}
+		current := filepath.Clean(parts[1])
+		expected := filepath.Clean(want)
+		if current != expected {
+			return true
+		}
+		if _, err := os.Stat(current); err != nil {
+			return true
+		}
+		return false
+	}
+
+	return true
 }

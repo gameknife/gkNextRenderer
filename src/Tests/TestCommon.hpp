@@ -1,8 +1,9 @@
 #pragma once
 
 #include <catch2/catch_all.hpp>
-#include "Runtime/Engine.hpp"
-#include "Options.hpp"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/GameInstance.hpp"
+#include "Engine/Options.hpp"
 #include <memory>
 
 // Common Test Game Instance that does nothing but allows the engine to run
@@ -20,7 +21,7 @@ public:
 class EngineTestFixture
 {
 protected:
-    std::unique_ptr<Options> options_;
+    std::unique_ptr<Runtime::Config::Options> options_;
     std::unique_ptr<NextEngine> engine_;
 
 public:

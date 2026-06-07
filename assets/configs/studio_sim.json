@@ -1,0 +1,10 @@
+{
+    "employees": [
+        {"id": "alice", "name": "Alice", "role": "engineer", "color": [0.30, 0.80, 0.40], "desk": "desk_engineer_01", "personality": "话痨、乐观、爱摸鱼"},
+        {"id": "bob",   "name": "Bob",   "role": "engineer", "color": [0.30, 0.65, 0.85], "desk": "desk_engineer_02", "personality": "沉默寡言、技术控、完美主义"},
+        {"id": "carol", "name": "Carol", "role": "artist",   "color": [0.95, 0.55, 0.25], "desk": "desk_artist_01",   "personality": "感性、爱拖延、追求美感"},
+        {"id": "dave",  "name": "Dave",  "role": "designer", "color": [0.55, 0.45, 0.90], "desk": "desk_designer_01", "personality": "点子多、话密、爱开会"},
+        {"id": "erin",  "name": "Erin",  "role": "pm",       "color": [0.90, 0.40, 0.75], "desk": "desk_pm_01",       "personality": "焦虑、爱催进度、操心"},
+        {"id": "frank", "name": "Frank", "role": "qa",       "color": [0.90, 0.30, 0.30], "desk": "desk_qa_01",       "personality": "细致、毒舌、爱挑刺"}
+    ]
+}

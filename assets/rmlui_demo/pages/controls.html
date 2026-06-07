@@ -1,0 +1,38 @@
+<body>
+<div class="demo-shell {{theme_class}} {{density_class}}">
+{{module_nav}}
+<main class="demo-main">
+{{demo_toolbar}}
+<section class="demo-content">
+<div class="module-panel">
+<h1>Controls module</h1>
+<p>Buttons below bind to C++ callbacks and force a document reload with updated state.</p>
+<div class="control-strip">
+<button id="primary_action">Primary action</button>
+<button id="secondary_action" class="secondary">Secondary action</button>
+<button id="danger_action" class="danger">Danger action</button>
+</div>
+</div>
+<div class="module-panel">
+<h2>Counter</h2>
+<div class="counter-panel">
+<div class="counter-value">{{counter_value}}</div>
+<button id="counter_dec" class="secondary">-</button>
+<button id="counter_inc">+</button>
+<button id="counter_reset" class="secondary">Reset</button>
+</div>
+</div>
+<div class="module-panel">
+<h2>Segmented mode</h2>
+<div class="control-strip">
+<button id="action_theme">Toggle theme</button>
+<button id="action_density" class="secondary">Toggle density</button>
+<button id="action_modal" class="secondary">Open modal</button>
+</div>
+</div>
+</section>
+</main>
+{{demo_state}}
+{{demo_modal}}
+</div>
+</body>

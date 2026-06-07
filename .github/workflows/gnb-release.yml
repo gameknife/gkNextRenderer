@@ -7,8 +7,12 @@ on:
       - dev
     paths:
       - 'tools/gnb/**/*.go'
+      - 'tools/gnb/**/*.html'
       - 'tools/gnb/go.mod'
       - 'tools/gnb/go.sum'
+      - 'scripts/gnb-init.sh'
+      - 'scripts/gnb-init.ps1'
+      - 'scripts/publish-gnb.ps1'
   workflow_dispatch:
 
 concurrency:

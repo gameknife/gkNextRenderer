@@ -43,7 +43,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
     outVertex.Normal_Ty   = half4((half)skinnedNormal.x, (half)skinnedNormal.y, (half)skinnedNormal.z, baseVertex.Normal_Ty.w);
     outVertex.Tangent     = half4((half)skinnedTangent.x, (half)skinnedTangent.y, (half)skinnedTangent.z, baseVertex.Tangent.w);
     
-    // Write to SkinnedVertices
     scene.SkinnedVertices[vertexIdx] = outVertex;
-    scene.SkinnedVerticesSimple[vertexIdx] = outVertex.Position_Tx;
 }

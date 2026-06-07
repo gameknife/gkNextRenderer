@@ -9,7 +9,7 @@ FragmentOutput main()
     FragmentOutput output;
     
     output.OutColor = float4(0, 0, 0, 0);
-    output.OutColor.a = 0.15;
+    output.OutColor.a = 0.85;
     
     return output;
 }

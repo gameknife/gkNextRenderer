@@ -1,5 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
-#include "Application/MagicaLego/MagicaLegoStyle.hpp"
+#include "Application/Game/MagicaLego/MagicaLegoStyle.hpp"
 #include <imgui.h>
 
 TEST_CASE("MagicaLego Style Definitions", "[Style]") {

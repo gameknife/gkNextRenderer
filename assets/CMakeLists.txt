@@ -11,7 +11,7 @@ endif()
 # ============================================================
 # 非 Shader 资源 - 目录拷贝
 # ============================================================
-set(ASSET_DIRS anims configs fonts legos locale models omr paks sfx sounds textures typescript)
+set(ASSET_DIRS anims configs fonts legos locale models omr paks rmlui_demo scad scripts sfx sounds textures typescript)
 
 # 收集所有资源文件
 set(all_asset_files "")
@@ -105,6 +105,18 @@ source_group("Shaders" FILES ${shader_files} ${shader_common_files})
 
 set(all_shader_outputs "")
 
+execute_process(
+    COMMAND ${Vulkan_SLANGC} -v
+    OUTPUT_VARIABLE slangc_version
+    ERROR_VARIABLE slangc_version_error
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_STRIP_TRAILING_WHITESPACE
+)
+if(NOT slangc_version)
+    set(slangc_version ${slangc_version_error})
+endif()
+message(STATUS "slangc compiler version: ${slangc_version}")
+
 foreach(shader ${shader_files})
     get_filename_component(file_name ${shader} NAME)
     get_filename_component(full_path ${shader} ABSOLUTE)
@@ -117,7 +129,7 @@ foreach(shader ${shader_files})
     set_source_files_properties(${shader} PROPERTIES VS_TOOL_OVERRIDE "None")
 
     set(slangc_args "")
-    if(WIN32)
+    if(WIN32 AND GK_ENABLE_SHADER_CLOCK)
         set(slangc_args "-DSHADER_CLOCK")
     endif()
     if(APPLE)

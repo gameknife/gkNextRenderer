@@ -15,6 +15,7 @@ import (
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/fetcher"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ios"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/loc"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/packager"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/paks"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
@@ -32,13 +33,14 @@ type appContext struct {
 }
 
 func main() {
-	repoRoot, err := config.FindRepoRoot(".")
-	if err != nil {
-		fatal(err)
-	}
-	cfg, err := config.Load(repoRoot)
-	if err != nil {
-		fatal(err)
+	repoRoot, repoErr := config.FindRepoRoot(".")
+	var cfg config.Config
+	if repoErr == nil {
+		var err error
+		cfg, err = config.Load(repoRoot)
+		if err != nil {
+			fatal(err)
+		}
 	}
 	preset, _ := cmakerun.DefaultPreset()
 	ctx := appContext{repoRoot: repoRoot, cfg: cfg, preset: preset}
@@ -49,18 +51,45 @@ func main() {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = cmd.Help()
-			fmt.Println()
-			return printOverview(ctx)
+			// Bare `gnb` launches the dashboard.
+			return runDashboard(ctx, dashboardCmdOpts{})
 		},
+	}
+	// Commands listed here run without a discovered repository — everything
+	// else fails fast with a friendly hint instead of crashing inside a
+	// command implementation that assumed a repo root.
+	repolessCommands := map[string]bool{
+		"init":       true,
+		"help":       true,
+		"version":    true,
+		"completion": true,
+	}
+	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if repoErr == nil {
+			return nil
+		}
+		name := cmd.Name()
+		parentName := ""
+		if p := cmd.Parent(); p != nil {
+			parentName = p.Name()
+		}
+		if repolessCommands[name] || repolessCommands[parentName] {
+			return nil
+		}
+		console.Error("%s", repoErr)
+		fmt.Println()
+		console.Info("cd into a gkNextEngine checkout, or run `gnb init` to clone one.")
+		return repoErr
 	}
 	root.AddCommand(newInfoCommand(ctx))
 	root.AddCommand(newDoctorCommand(ctx))
 	root.AddCommand(newSetupCommand(ctx))
+	root.AddCommand(newDepsCommand(ctx))
 	root.AddCommand(newBuildCommand(ctx))
 	root.AddCommand(newRunCommand(ctx))
 	root.AddCommand(newTestCommand(ctx))
 	root.AddCommand(newVisualCommand(ctx))
+	root.AddCommand(newShotCommand(ctx))
 	root.AddCommand(newEditorCommand(ctx))
 	root.AddCommand(newAndroidCommand(ctx))
 	root.AddCommand(newIOSCommand(ctx))
@@ -68,6 +97,12 @@ func main() {
 	root.AddCommand(newPackageCommand(ctx))
 	root.AddCommand(newCleanCommand(ctx))
 	root.AddCommand(newInstallCommand(ctx))
+	root.AddCommand(newTodoCommand(ctx))
+	root.AddCommand(newDashboardCommand(ctx))
+	root.AddCommand(newLocCommand(ctx))
+	root.AddCommand(newGitCommand(ctx))
+	root.AddCommand(newLLMCommand(ctx))
+	root.AddCommand(newInitCommand())
 
 	if err := root.Execute(); err != nil {
 		fatal(err)
@@ -121,7 +156,7 @@ func newDoctorCommand(ctx appContext) *cobra.Command {
 		Use:   "doctor",
 		Short: "Check required build tools",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			checks := []string{"git", "cmake"}
+			checks := []string{"git"}
 			if runtime.GOOS == "linux" {
 				checks = append(checks, "pkg-config")
 			}
@@ -137,9 +172,41 @@ func newDoctorCommand(ctx appContext) *cobra.Command {
 					failed = true
 				}
 			}
-			if runtime.GOOS == "windows" && os.Getenv("VULKAN_SDK") == "" {
-				console.Warn("missing VULKAN_SDK")
+			if cmakePath, err := vcpkg.ResolveCMake(ctx.repoRoot, ctx.cfg); err == nil {
+				if platform.CommandExists("cmake") {
+					console.Success("cmake")
+				} else {
+					console.Success("cmake (bundled)")
+					console.Label("cmake-path", cmakePath)
+				}
+			} else {
+				console.Warn("missing cmake")
 				failed = true
+			}
+			if runtime.GOOS == "linux" || runtime.GOOS == "darwin" {
+				if ninjaPath, err := vcpkg.ResolveNinja(ctx.repoRoot, ctx.cfg); err == nil {
+					if platform.CommandExists("ninja") || platform.CommandExists("ninja-build") {
+						console.Success("ninja")
+					} else {
+						console.Success("ninja (bundled)")
+						console.Label("ninja-path", ninjaPath)
+					}
+				} else {
+					console.Warn("missing ninja")
+					failed = true
+				}
+			}
+			if runtime.GOOS == "windows" || runtime.GOOS == "linux" || runtime.GOOS == "darwin" {
+				if sdkRoot := fetcher.DiscoverVulkanSDK(ctx.repoRoot, ctx.cfg); sdkRoot != "" {
+					console.Success("Vulkan SDK")
+					console.Label("vulkan-sdk-path", sdkRoot)
+				} else {
+					console.Warn("missing Vulkan SDK (run `gnb setup`)")
+					if envRoot := os.Getenv("VULKAN_SDK"); envRoot != "" {
+						console.Label("VULKAN_SDK", envRoot)
+					}
+					failed = true
+				}
 			}
 			if err := platform.EnsureLinuxDesktopPackages(); err != nil {
 				console.Warn("%s", err)
@@ -193,6 +260,24 @@ func newSetupCommand(ctx appContext) *cobra.Command {
 	return cmd
 }
 
+func newDepsCommand(ctx appContext) *cobra.Command {
+	root := &cobra.Command{
+		Use:   "deps",
+		Short: "Fetch project-managed external toolchains",
+	}
+
+	fetch := &cobra.Command{
+		Use:   "fetch [all|tsc|vulkan|streamline]",
+		Short: "Fetch one or more external dependencies",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return fetcher.EnsureNamedExternal(ctx.repoRoot, ctx.cfg, args)
+		},
+	}
+
+	root.AddCommand(fetch)
+	return root
+}
+
 func newBuildCommand(ctx appContext) *cobra.Command {
 	opts := cmakerun.BuildOptions{}
 	skipSetup := false
@@ -218,10 +303,26 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 					}
 				}
 			}
+			if !opts.PrintCmd {
+				if err := fetcher.EnsureHostBuildTools(ctx.repoRoot, ctx.cfg); err != nil {
+					return err
+				}
+			}
 			if err := platform.EnsureLinuxDesktopPackages(); err != nil {
 				return err
 			}
-			return cmakerun.Build(ctx.repoRoot, ctx.preset, opts)
+			cmakePath, err := vcpkg.EnsureBundledCMake(ctx.repoRoot, ctx.cfg)
+			if err != nil {
+				return err
+			}
+			if ctx.preset == "linux" || ctx.preset == "macos-arm64" {
+				ninjaPath, err := vcpkg.EnsureBundledNinja(ctx.repoRoot, ctx.cfg)
+				if err != nil {
+					return err
+				}
+				opts.MakeProgram = ninjaPath
+			}
+			return cmakerun.BuildWithCMake(ctx.repoRoot, cmakePath, ctx.preset, opts)
 		},
 	}
 	cmd.Flags().BoolVar(&opts.Clean, "clean", false, "delete the CMake build directory before building")
@@ -235,17 +336,20 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 }
 
 func newRunCommand(ctx appContext) *cobra.Command {
-	opts := runner.Options{Preset: ctx.preset}
 	cmd := &cobra.Command{
-		Use:   "run [target] [-- app-args]",
+		Use:   "run [gnb-flags] [target] [app-args]",
 		Short: "List runnable applications or run a built target",
-		Args:  cobra.ArbitraryArgs,
+		Long: "List runnable applications or run a built target.\n\n" +
+			"Arguments after the target are passed to the target executable, so `gnb run gkNextRenderer --help` prints the application help.",
+		Args:               cobra.ArbitraryArgs,
+		DisableFlagParsing: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-				opts.Target = args[0]
-				opts.Args = args[1:]
-			} else {
-				opts.Args = args
+			opts, showHelp, err := parseRunArgs(ctx.preset, args)
+			if err != nil {
+				return err
+			}
+			if showHelp {
+				return cmd.Help()
 			}
 			if opts.Target == "" && len(opts.Args) == 0 && !opts.List {
 				printRunnableTargets(ctx)
@@ -254,12 +358,66 @@ func newRunCommand(ctx appContext) *cobra.Command {
 			return runner.Run(ctx.repoRoot, opts)
 		},
 	}
+	var opts runner.Options
 	cmd.Flags().StringVar(&opts.BinDir, "bin-dir", "", "override binary directory")
 	cmd.Flags().BoolVar(&opts.List, "list", false, "list binary directory entries")
 	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "print command without running")
 	cmd.Flags().StringArrayVar(&opts.PresentModes, "present-mode", nil, "append --present-mode=value")
 	cmd.Flags().StringArrayVar(&opts.Scenes, "scene", nil, "append --load-scene=value")
 	return cmd
+}
+
+func parseRunArgs(preset string, args []string) (runner.Options, bool, error) {
+	opts := runner.Options{Preset: preset}
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			opts.Args = append(opts.Args, args[i+1:]...)
+			return opts, false, nil
+		}
+		if !strings.HasPrefix(arg, "-") {
+			opts.Target = arg
+			opts.Args = append(opts.Args, args[i+1:]...)
+			return opts, false, nil
+		}
+
+		switch {
+		case arg == "-h" || arg == "--help":
+			return opts, true, nil
+		case arg == "--dry-run":
+			opts.DryRun = true
+		case arg == "--list":
+			opts.List = true
+		case arg == "--bin-dir":
+			i++
+			if i >= len(args) {
+				return opts, false, fmt.Errorf("--bin-dir requires a value")
+			}
+			opts.BinDir = args[i]
+		case strings.HasPrefix(arg, "--bin-dir="):
+			opts.BinDir = strings.TrimPrefix(arg, "--bin-dir=")
+		case arg == "--present-mode":
+			i++
+			if i >= len(args) {
+				return opts, false, fmt.Errorf("--present-mode requires a value")
+			}
+			opts.PresentModes = append(opts.PresentModes, args[i])
+		case strings.HasPrefix(arg, "--present-mode="):
+			opts.PresentModes = append(opts.PresentModes, strings.TrimPrefix(arg, "--present-mode="))
+		case arg == "--scene":
+			i++
+			if i >= len(args) {
+				return opts, false, fmt.Errorf("--scene requires a value")
+			}
+			opts.Scenes = append(opts.Scenes, args[i])
+		case strings.HasPrefix(arg, "--scene="):
+			opts.Scenes = append(opts.Scenes, strings.TrimPrefix(arg, "--scene="))
+		default:
+			opts.Args = append(opts.Args, args[i:]...)
+			return opts, false, nil
+		}
+	}
+	return opts, false, nil
 }
 
 func printRunnableTargets(ctx appContext) {
@@ -307,6 +465,44 @@ func newVisualCommand(ctx appContext) *cobra.Command {
 	}
 }
 
+func newShotCommand(ctx appContext) *cobra.Command {
+	var scene string
+	var target string
+	var frames int
+	cmd := &cobra.Command{
+		Use:   "shot [--scene <path>] [--target <name>] [--frames N]",
+		Short: "Capture one validation screenshot, then auto-exit (no focus-stealing window)",
+		Long: "Render a scene to a stable frame, capture a single screenshot to a fixed path, then exit.\n\n" +
+			"The window is hidden so it never pops to the foreground or steals focus during an agent\n" +
+			"dev loop, and the app exits on its own. The screenshot path is printed when finished.\n\n" +
+			"Examples:\n" +
+			"  gnb shot --scene assets/models/playground.glb\n" +
+			"  gnb shot --target ScadStudio --scene assets/scad/beer_cup.scad --frames 60",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			runArgs := []string{"--agent-validation"}
+			if frames > 0 {
+				runArgs = append(runArgs, fmt.Sprintf("--agent-validation-frames=%d", frames))
+			}
+			runArgs = append(runArgs, args...)
+			opts := runner.Options{Target: target, Preset: ctx.preset, Args: runArgs}
+			if scene != "" {
+				opts.Scenes = append(opts.Scenes, scene)
+			}
+			if err := runner.Run(ctx.repoRoot, opts); err != nil {
+				return err
+			}
+			shot := filepath.Join(filepath.Dir(platform.BinDir(ctx.repoRoot, ctx.preset)),
+				"screenshots", "agent_validation.jpg")
+			console.Info("screenshot: " + shot)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&scene, "scene", "", "scene to load (file path or built-in .proc name)")
+	cmd.Flags().StringVar(&target, "target", "gkNextRenderer", "target executable to run")
+	cmd.Flags().IntVar(&frames, "frames", 0, "frames to render before capture (0 = engine default)")
+	return cmd
+}
+
 func newEditorCommand(ctx appContext) *cobra.Command {
 	return &cobra.Command{
 		Use:   "editor",
@@ -327,7 +523,7 @@ func newAndroidCommand(ctx appContext) *cobra.Command {
 			if len(args) == 1 {
 				mode = args[0]
 			}
-			return android.Run(ctx.repoRoot, mode)
+			return android.Run(ctx.repoRoot, ctx.cfg, mode)
 		},
 	}
 }
@@ -339,6 +535,9 @@ func newIOSCommand(ctx appContext) *cobra.Command {
 		Use:   "ios",
 		Short: "Build iOS target with CMake preset",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := fetcher.EnsureExternal(ctx.repoRoot, ctx.cfg); err != nil {
+				return err
+			}
 			if err := fetcher.EnsureIOSExternal(ctx.repoRoot, ctx.cfg); err != nil {
 				return err
 			}
@@ -346,7 +545,11 @@ func newIOSCommand(ctx appContext) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return ios.Build(ctx.repoRoot, skip)
+			cmakePath, err := vcpkg.ResolveCMake(ctx.repoRoot, ctx.cfg)
+			if err != nil {
+				return err
+			}
+			return ios.Build(ctx.repoRoot, cmakePath, skip)
 		},
 	}
 	cmd.Flags().BoolVar(&skipCodeSign, "skip-codesign", true, "disable code signing")
@@ -462,12 +665,25 @@ func newInstallCommand(ctx appContext) *cobra.Command {
 	}
 }
 
-func printOverview(ctx appContext) error {
-	console.Label("repo", ctx.repoRoot)
-	console.Label("platform", runtime.GOOS+"/"+runtime.GOARCH)
-	console.Label("preset", ctx.preset)
-	console.Info("try: gnb setup | gnb build | gnb doctor")
-	return nil
+func newLocCommand(ctx appContext) *cobra.Command {
+	var (
+		includeThirdParty bool
+		extensions        []string
+	)
+	cmd := &cobra.Command{
+		Use:   "loc",
+		Short: "Print a line-of-code summary of src/, grouped by category and subproject",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return loc.Run(loc.Options{
+				Root:              ctx.repoRoot,
+				Extensions:        extensions,
+				IncludeThirdParty: includeThirdParty,
+			})
+		},
+	}
+	cmd.Flags().BoolVar(&includeThirdParty, "thirdparty", false, "include src/ThirdParty in the report")
+	cmd.Flags().StringSliceVar(&extensions, "ext", nil, "override file extensions (e.g. --ext .cpp,.h)")
+	return cmd
 }
 
 func gitCommit(repoRoot string) (string, error) {

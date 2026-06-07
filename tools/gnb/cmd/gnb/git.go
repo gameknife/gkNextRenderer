@@ -1,0 +1,401 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/gitops"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/llm"
+	"github.com/spf13/cobra"
+)
+
+func newGitCommand(ctx appContext) *cobra.Command {
+	root := &cobra.Command{
+		Use:   "git",
+		Short: "Common git operations (status / branch / switch / pull / log)",
+	}
+	root.AddCommand(newGitStatusCommand(ctx))
+	root.AddCommand(newGitBranchCommand(ctx))
+	root.AddCommand(newGitSwitchCommand(ctx))
+	root.AddCommand(newGitPullCommand(ctx))
+	root.AddCommand(newGitFetchCommand(ctx))
+	root.AddCommand(newGitLogCommand(ctx))
+	root.AddCommand(newGitResetCommand(ctx))
+	root.AddCommand(newGitStashCommand(ctx))
+	root.AddCommand(newGitCommitMsgCommand(ctx))
+	return root
+}
+
+// newGitCommitMsgCommand wires the MVP: ask the local LLM for a commit
+// message describing the current working tree / staged changes. The diff is
+// truncated to keep the request inside the model context window.
+func newGitCommitMsgCommand(ctx appContext) *cobra.Command {
+	var (
+		doCommit    bool
+		stageAll    bool
+		maxDiffChar int
+		temperature float64
+		dryRun      bool
+		modelID     string
+	)
+	cmd := &cobra.Command{
+		Use:     "commit-msg",
+		Aliases: []string{"ai-commit"},
+		Short:   "Generate a commit message from local changes using the local LLM",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if stageAll {
+				if err := gitops.AddAll(ctx.repoRoot); err != nil {
+					return err
+				}
+			}
+			if dryRun {
+				diff, source, truncated, err := llm.CollectDiff(ctx.repoRoot, llm.DiffBudget{TotalChars: maxDiffChar})
+				if err != nil {
+					return err
+				}
+				suffix := ""
+				if truncated {
+					suffix = " (truncated)"
+				}
+				console.Info("source: %s%s · prompt bytes: %d", source, suffix, len(diff))
+				fmt.Println()
+				console.Header("prompt that would be sent to the LLM")
+				fmt.Println(diff)
+				return nil
+			}
+			c, cancel := context.WithTimeout(cmd.Context(), 5*time.Minute)
+			defer cancel()
+			llmCfg, err := selectLLMModel(ctx.cfg.External.LLM, modelID)
+			if err != nil {
+				return err
+			}
+			res, err := llm.GenerateCommitMessage(c, ctx.repoRoot, llmCfg, maxDiffChar, temperature)
+			if err != nil {
+				return err
+			}
+			suffix := ""
+			if res.Truncated {
+				suffix = " (diff truncated)"
+			}
+			console.Info("source: %s%s", res.Source, suffix)
+
+			fmt.Println()
+			console.Header("generated commit message")
+			fmt.Println(res.Message)
+			fmt.Println()
+
+			if doCommit {
+				out, err := gitops.CreateCommit(ctx.repoRoot, res.Message)
+				if err != nil {
+					return err
+				}
+				if out != "" {
+					fmt.Println(out)
+				}
+				console.Success("committed")
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&doCommit, "commit", false, "create the commit using the generated message")
+	cmd.Flags().BoolVar(&stageAll, "stage-all", false, "run `git add -A` before diffing")
+	cmd.Flags().IntVar(&maxDiffChar, "max-diff-chars", 16000, "truncate the diff sent to the model after this many characters")
+	cmd.Flags().Float64Var(&temperature, "temperature", 0.2, "sampling temperature for the model")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the prompt that would be sent without calling the LLM")
+	cmd.Flags().StringVar(&modelID, "model", "", "override the active LLM model (id from [[external.llm.models]])")
+	return cmd
+}
+
+func newGitStatusCommand(ctx appContext) *cobra.Command {
+	return &cobra.Command{
+		Use:   "status",
+		Short: "Show current branch, head, and dirty/upstream summary",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			st, err := gitops.GetStatus(ctx.repoRoot)
+			if err != nil {
+				return err
+			}
+			console.Label("branch", emptyDash(st.Branch))
+			console.Label("head", st.Head)
+			if st.Upstream != "" {
+				console.Label("upstream", st.Upstream)
+				console.Label("ahead/behind", fmt.Sprintf("+%d / -%d", st.Ahead, st.Behind))
+			}
+			if st.Dirty {
+				console.Warn("working tree dirty (e.g. %s)", st.DirtyHint)
+			} else {
+				console.Success("working tree clean")
+			}
+			return nil
+		},
+	}
+}
+
+func newGitBranchCommand(ctx appContext) *cobra.Command {
+	showRemote := false
+	cmd := &cobra.Command{
+		Use:   "branch",
+		Short: "List local (and optionally remote) branches",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			branches, err := gitops.Branches(ctx.repoRoot)
+			if err != nil {
+				return err
+			}
+			for _, b := range branches {
+				marker := "  "
+				if b.Current {
+					marker = "* "
+				}
+				remote := ""
+				if b.Remote != "" {
+					remote = " [" + b.Remote + "]"
+				}
+				fmt.Printf("%s%s%s  %s\n", marker, b.Name, remote, b.Subject)
+			}
+			if !showRemote {
+				return nil
+			}
+			rb, err := gitops.RemoteBranches(ctx.repoRoot)
+			if err != nil {
+				return err
+			}
+			if len(rb) > 0 {
+				fmt.Println()
+				console.Header("remote branches")
+				for _, r := range rb {
+					mark := "  "
+					if r.HasLocal {
+						mark = "= "
+					}
+					fmt.Printf("%s%s  %s\n", mark, r.FullName, r.Subject)
+				}
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVarP(&showRemote, "remote", "r", false, "also list remote-tracking branches")
+	return cmd
+}
+
+func newGitSwitchCommand(ctx appContext) *cobra.Command {
+	var (
+		force      bool
+		create     bool
+		track      bool
+		startPoint string
+	)
+	cmd := &cobra.Command{
+		Use:   "switch [-c|--create] [--track] <branch>",
+		Short: "Switch branches; with -c create a new branch; with --track create a local branch tracking a remote ref",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+			switch {
+			case create:
+				if err := gitops.CreateBranch(ctx.repoRoot, name, startPoint, force); err != nil {
+					if errors.Is(err, gitops.ErrDirty) {
+						return fmt.Errorf("%w: commit/stash first or pass --force", err)
+					}
+					return err
+				}
+				console.Success("created and switched to %s", name)
+			case track:
+				if err := gitops.CheckoutRemote(ctx.repoRoot, name, force); err != nil {
+					if errors.Is(err, gitops.ErrDirty) {
+						return fmt.Errorf("%w: commit/stash first or pass --force", err)
+					}
+					return err
+				}
+				console.Success("created local branch tracking %s", name)
+			default:
+				if err := gitops.Checkout(ctx.repoRoot, name, force); err != nil {
+					if errors.Is(err, gitops.ErrDirty) {
+						return fmt.Errorf("%w: commit/stash first or pass --force", err)
+					}
+					return err
+				}
+				console.Success("switched to %s", name)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&force, "force", false, "switch even if the working tree is dirty")
+	cmd.Flags().BoolVarP(&create, "create", "c", false, "create a new branch and switch to it")
+	cmd.Flags().BoolVar(&track, "track", false, "treat <branch> as a remote ref (e.g. origin/foo) and create a local tracking branch")
+	cmd.Flags().StringVar(&startPoint, "start", "", "start point for the new branch (with -c); defaults to HEAD")
+	return cmd
+}
+
+func newGitPullCommand(ctx appContext) *cobra.Command {
+	return &cobra.Command{
+		Use:   "pull",
+		Short: "Fast-forward pull current branch (refuses if working tree is dirty)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			out, err := gitops.Pull(ctx.repoRoot)
+			if err != nil {
+				if errors.Is(err, gitops.ErrDirty) {
+					return fmt.Errorf("%w: commit/stash first", err)
+				}
+				return err
+			}
+			if out != "" {
+				fmt.Println(out)
+			}
+			console.Success("pulled")
+			return nil
+		},
+	}
+}
+
+func newGitFetchCommand(ctx appContext) *cobra.Command {
+	return &cobra.Command{
+		Use:   "fetch",
+		Short: "Fetch all remotes with prune",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			out, err := gitops.Fetch(ctx.repoRoot)
+			if err != nil {
+				return err
+			}
+			if out != "" {
+				fmt.Println(out)
+			}
+			console.Success("fetched")
+			return nil
+		},
+	}
+}
+
+func newGitLogCommand(ctx appContext) *cobra.Command {
+	limit := 30
+	cmd := &cobra.Command{
+		Use:   "log",
+		Short: "Show recent commits (oneline)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			commits, err := gitops.Log(ctx.repoRoot, limit)
+			if err != nil {
+				return err
+			}
+			for _, c := range commits {
+				fmt.Printf("%s  %s  %s  %s\n", c.Hash, c.Date, truncate(c.Author, 16), c.Subject)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().IntVarP(&limit, "limit", "n", 30, "number of commits to show")
+	return cmd
+}
+
+func newGitResetCommand(ctx appContext) *cobra.Command {
+	hard := false
+	cmd := &cobra.Command{
+		Use:   "reset <ref> --hard",
+		Short: "Reset current branch to <ref> (destructive: requires --hard)",
+		Long: "Move the current branch pointer to <ref> and discard all local " +
+			"changes. This permanently drops uncommitted work and any commits not " +
+			"reachable elsewhere. --hard must be passed explicitly so it isn't " +
+			"triggered by accident.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !hard {
+				return fmt.Errorf("refusing to reset without --hard (only --hard is supported)")
+			}
+			ref := args[0]
+			if err := gitops.ResetHard(ctx.repoRoot, ref); err != nil {
+				return err
+			}
+			console.Success("reset HEAD --hard %s", ref)
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&hard, "hard", false, "required; confirms destructive intent")
+	return cmd
+}
+
+func newGitStashCommand(ctx appContext) *cobra.Command {
+	root := &cobra.Command{
+		Use:   "stash",
+		Short: "Wrap git stash (push / pop / apply / list / drop)",
+	}
+	var (
+		message          string
+		includeUntracked bool
+	)
+	push := &cobra.Command{
+		Use:   "push",
+		Short: "Stash uncommitted changes",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			out, err := gitops.StashPush(ctx.repoRoot, message, includeUntracked)
+			if err != nil {
+				return err
+			}
+			if out != "" {
+				fmt.Println(out)
+			}
+			console.Success("stashed")
+			return nil
+		},
+	}
+	push.Flags().StringVarP(&message, "message", "m", "", "stash message")
+	push.Flags().BoolVarP(&includeUntracked, "include-untracked", "u", false, "also stash untracked files")
+
+	list := &cobra.Command{
+		Use:   "list",
+		Short: "List stash entries",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			stashes, err := gitops.StashList(ctx.repoRoot)
+			if err != nil {
+				return err
+			}
+			for _, s := range stashes {
+				fmt.Printf("%-12s %s\n", s.Ref, s.Message)
+			}
+			return nil
+		},
+	}
+
+	mkAction := func(action string) *cobra.Command {
+		return &cobra.Command{
+			Use:   action + " [stash@{N}]",
+			Short: fmt.Sprintf("%s a stash entry (default: most recent)", action),
+			Args:  cobra.MaximumNArgs(1),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				ref := ""
+				if len(args) == 1 {
+					ref = args[0]
+				}
+				out, err := gitops.StashAction(ctx.repoRoot, action, ref)
+				if err != nil {
+					return err
+				}
+				if out != "" {
+					fmt.Println(out)
+				}
+				console.Success("%s %s", action, ref)
+				return nil
+			},
+		}
+	}
+
+	root.AddCommand(push, list, mkAction("pop"), mkAction("apply"), mkAction("drop"))
+	return root
+}
+
+func emptyDash(s string) string {
+	if s == "" {
+		return "(detached)"
+	}
+	return s
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	if n <= 1 {
+		return s[:n]
+	}
+	return s[:n-1] + "…"
+}

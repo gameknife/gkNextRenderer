@@ -9,6 +9,67 @@ implementing Common;
 
 public static const int MAX_NODES = 65535; // 256;
 public static const int MAX_MATERIALS = 16384;
+public static const int MAX_HDR_SH = 100;
+
+public static const int GPU_SCENE_NODE_PROXY_SIZE = 224;
+public static const int GPU_SCENE_MATERIAL_SIZE = 64;
+public static const int GPU_SCENE_GPU_DRIVEN_STAT_SIZE = 32;
+public static const int GPU_SCENE_SHADOW_GPU_DRIVEN_STAT_COUNT = 4;
+public static const int GPU_SCENE_SPHERICAL_HARMONICS_SIZE = 112;
+
+public static const int GPU_SCENE_DYNAMIC_NODES_OFFSET = 0;
+public static const int GPU_SCENE_DYNAMIC_MATERIALS_OFFSET =
+    GPU_SCENE_DYNAMIC_NODES_OFFSET + GPU_SCENE_NODE_PROXY_SIZE * MAX_NODES;
+public static const int GPU_SCENE_DYNAMIC_GPU_DRIVEN_STATS_OFFSET =
+    GPU_SCENE_DYNAMIC_MATERIALS_OFFSET + GPU_SCENE_MATERIAL_SIZE * MAX_MATERIALS;
+public static const int GPU_SCENE_DYNAMIC_SHADOW_GPU_DRIVEN_STATS_OFFSET =
+    GPU_SCENE_DYNAMIC_GPU_DRIVEN_STATS_OFFSET + GPU_SCENE_GPU_DRIVEN_STAT_SIZE;
+public static const int GPU_SCENE_DYNAMIC_HDRSHS_OFFSET =
+    GPU_SCENE_DYNAMIC_SHADOW_GPU_DRIVEN_STATS_OFFSET +
+    GPU_SCENE_GPU_DRIVEN_STAT_SIZE * GPU_SCENE_SHADOW_GPU_DRIVEN_STAT_COUNT;
+public static const int GPU_SCENE_DYNAMIC_SIZE =
+    GPU_SCENE_DYNAMIC_HDRSHS_OFFSET + GPU_SCENE_SPHERICAL_HARMONICS_SIZE * MAX_HDR_SH;
+
+public static const int GPU_SCENE_AMBIENT_PER_CASCADE_COUNT = 192 * 192 * 48;
+public static const int GPU_SCENE_AMBIENT_CASCADE_MAX = 4;
+public static const int GPU_SCENE_AMBIENT_CUBE_SIZE = 56;
+public static const int GPU_SCENE_VOXEL_DATA_SIZE = 16;
+public static const int GPU_SCENE_PAGE_INDEX_SIZE = 16;
+public static const int GPU_SCENE_AMBIENT_SEED_SIZE = 16;
+public static const int GPU_SCENE_ACGI_PAGE_COUNT = 64;
+
+public static const int GPU_SCENE_AMBIENT_CUBES_OFFSET = 0;
+public static const int GPU_SCENE_AMBIENT_VOXELS_OFFSET =
+    GPU_SCENE_AMBIENT_CUBES_OFFSET +
+    GPU_SCENE_AMBIENT_CUBE_SIZE * GPU_SCENE_AMBIENT_PER_CASCADE_COUNT * GPU_SCENE_AMBIENT_CASCADE_MAX;
+public static const int GPU_SCENE_AMBIENT_PAGES_OFFSET =
+    GPU_SCENE_AMBIENT_VOXELS_OFFSET +
+    GPU_SCENE_VOXEL_DATA_SIZE * GPU_SCENE_AMBIENT_PER_CASCADE_COUNT * GPU_SCENE_AMBIENT_CASCADE_MAX;
+public static const int GPU_SCENE_AMBIENT_CUBES_PONG_OFFSET =
+    GPU_SCENE_AMBIENT_PAGES_OFFSET +
+    GPU_SCENE_PAGE_INDEX_SIZE * GPU_SCENE_ACGI_PAGE_COUNT * GPU_SCENE_ACGI_PAGE_COUNT;
+public static const int GPU_SCENE_AMBIENT_SDF_SCRATCH_OFFSET =
+    GPU_SCENE_AMBIENT_CUBES_PONG_OFFSET +
+    GPU_SCENE_AMBIENT_CUBE_SIZE * GPU_SCENE_AMBIENT_PER_CASCADE_COUNT;
+// Dedicated SDF jump-flood SeedA scratch (one dense cascade of uint4). Previously aliased onto
+// CubesPong; decoupled (Phase 3) so CubesPong can become a brick pool without breaking the SDF pass.
+public static const int GPU_SCENE_AMBIENT_SDF_SEEDA_OFFSET =
+    GPU_SCENE_AMBIENT_SDF_SCRATCH_OFFSET +
+    GPU_SCENE_AMBIENT_SEED_SIZE * GPU_SCENE_AMBIENT_PER_CASCADE_COUNT;
+public static const int GPU_SCENE_AMBIENT_SIZE =
+    GPU_SCENE_AMBIENT_SDF_SEEDA_OFFSET +
+    GPU_SCENE_AMBIENT_SEED_SIZE * GPU_SCENE_AMBIENT_PER_CASCADE_COUNT;
+
+// Phase 3 sparse brick storage. The cube grid (192x192x48 per cascade) is tiled into 8^3 bricks;
+// only bricks near surfaces are allocated in the cube pool, indexed via a per-cascade brick table.
+// 192/8 = 24 (x,z), 48/8 = 6 (y) -> 24*6*24 = 3456 bricks/cascade, 3456*512 = 1,769,472 = per-cascade.
+public static const int GPU_SCENE_AMBIENT_BRICK_EDGE = 8;
+public static const int GPU_SCENE_AMBIENT_BRICK_VOLUME = 512; // 8*8*8
+public static const int GPU_SCENE_AMBIENT_BRICKS_X = 24;
+public static const int GPU_SCENE_AMBIENT_BRICKS_Y = 6;
+public static const int GPU_SCENE_AMBIENT_BRICKS_Z = 24;
+public static const int GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE = 3456; // BRICKS_X * BRICKS_Y * BRICKS_Z
+public static const uint GPU_SCENE_AMBIENT_BRICK_INVALID = 0xffffffffu;
 
 public struct ALIGN_16 GPUDrivenStat
 {
@@ -17,6 +78,27 @@ public struct ALIGN_16 GPUDrivenStat
     public uint CulledCount;
     public uint TriangleCount;
     public uint CulledTriangleCount;
+    public uint ReservedAlign1;
+    public uint ReservedAlign2;
+    public uint ReservedAlign3;
+};
+
+public struct ALIGN_16 SoftMeshShaderVisibleItem
+{
+    public uint primBase;
+    public uint instanceIdx;
+    public uint modelOffsetIdx;
+    public uint triCount;
+};
+
+public struct ALIGN_16 SoftMeshShaderResources
+{
+    public uint64_t Prim;
+    public uint64_t ShadowPrim;
+    public uint64_t VisibleItems;
+    public uint64_t DrawArgs;
+    public uint64_t DispatchArgs;
+    public uint64_t Counters;
 };
 
 public struct ALIGN_16 UniformBufferObject
@@ -38,7 +120,8 @@ public struct ALIGN_16 UniformBufferObject
     public float4 SunColor;
     public float4 BackGroundColor;    //not used
 
-    public float4x4 SunViewProjection;
+    public float4x4 SunCascadeViewProjection[4];
+    public float4 CascadeSplits;      // view-space positive distance at the far edge of each cascade
 
     public float Aperture;
     public float FocusDistance;
@@ -81,11 +164,15 @@ public struct ALIGN_16 UniformBufferObject
     public bool ReservedBool1;
 
     public bool DebugDraw_Lighting;
-    public bool ReservedBool2;
+    public bool DebugDraw_ShadowCascadeCoverage;
     public uint SuperResolution;
     public float SceneEpsilonScale;
     public float AmbientCubeUnit;
+    public float AmbientCubeOffsetPadding0;
+    public float AmbientCubeOffsetPadding1;
+    public float AmbientCubeOffsetPadding2;
     public float3 AmbientCubeOffset;
+    public float AmbientCubeOffsetPadding3;
     public float4 AmbientCubeCascadeParams;
 };
 
@@ -171,6 +258,76 @@ public struct ALIGN_16 PageIndex
     public uint probeDataIdx;
 };
 
+// Ambient GI resource table. GPUScene is capped at 128B (push constant), so instead of inlining
+// every ambient region address it carries a single AmbientBase pointer to this table. Region
+// addresses are filled CPU-side (Scene.cpp) from the arena base, which decouples the GPU-visible
+// layout from the compile-time GPU_SCENE_AMBIENT_*_OFFSET constants and lets each region be sized
+// or relocated independently (right-size cascades, sparse brick pool). 8 x uint64 = 64 bytes.
+public struct ALIGN_16 AmbientResources
+{
+    public uint64_t Cubes;       // brick pool base (Phase 3) / dense cube array (pre-3a)
+    public uint64_t Voxels;      // dense voxel array (kept dense; Phase 4 may sparsify)
+    public uint64_t Pages;
+    public uint64_t CubesPong;   // ping-pong copy of the baking cascade's cubes (brick-organized in Phase 3)
+    public uint64_t SdfScratch;  // SDF jump-flood SeedB (one dense cascade of uint4)
+    public uint64_t SdfSeedA;    // SDF jump-flood SeedA (one dense cascade of uint4; decoupled from CubesPong)
+    public uint64_t BrickTable;  // Phase 3: per-cascade brick -> pool slot table (uint per brick)
+    public uint64_t PoolParams;  // Phase 3: low32 = pool bricks/cascade, high32 = active-list byte offset from BrickTable
+};
+
+public struct ALIGN_16 SharcHashEntry
+{
+    public uint Key;
+    public uint PackedNormal;
+    public uint LastFrame;
+    public uint Reserved;
+};
+
+public struct ALIGN_16 SharcAccumulationEntry
+{
+    public uint RadianceR;
+    public uint RadianceG;
+    public uint RadianceB;
+    public uint SampleCount;
+};
+
+public struct ALIGN_16 SharcResolvedEntry
+{
+    public float4 Radiance;
+    public uint PackedNormal;
+    public uint LastFrame;
+    public uint SampleCount;
+    public uint Reserved;
+};
+
+public struct ALIGN_16 SharcParameters
+{
+    public uint EntryCount;
+    public uint EntryMask;
+    public uint FrameIndex;
+    public uint DebugMode;
+    public float VoxelSize;
+    public float UpdateSampleRatio;
+    public float QueryRoughnessMin;
+    public uint QueryMinBounce;
+    public uint StaleFrameCount;
+    public uint Reserved0;
+    public uint Reserved1;
+    public uint Reserved2;
+};
+
+public struct ALIGN_16 SharcResources
+{
+    public uint64_t HashEntries;
+    public uint64_t LockBuffer;
+    public uint64_t Accumulation;
+    public uint64_t Resolved;
+    public uint64_t Parameters;
+    public uint64_t Reserved0;
+    public uint64_t Reserved1;
+    public uint64_t Reserved2;
+};
+
 public struct ALIGN_16 SphericalHarmonics
 {
     // 3 bands (9 coefficients per color channel)
@@ -217,12 +374,17 @@ public struct ALIGN_16 RayCastContext
 
 #ifndef __cplusplus
 
-public struct VkDrawIndexedIndirectCommand {
-    public uint indexCount;
+public struct VkDrawIndirectCommand {
+    public uint vertexCount;
     public uint instanceCount;
-    public uint firstIndex;
-    public int vertexOffset;
+    public uint firstVertex;
     public uint firstInstance;
+};
+
+public struct VkDispatchIndirectCommand {
+    public uint x;
+    public uint y;
+    public uint z;
 };
 
 public struct ALIGN_16 Material
@@ -266,42 +428,24 @@ public struct ALIGN_16 GPUVertex
 
 
 #ifdef __cplusplus
-// still 144bytes, need to shrink into 128 bytes to make full compatible with vulkan
-// some static address can be pack together
+// 14 addresses + 4 uint params; aligned size is 128 bytes for Vulkan push_constant.
 public struct ALIGN_16 GPUScene
 {
     uint64_t Camera;
-    uint64_t Nodes;
-
+    uint64_t SceneDynamicBase;
     uint64_t Reorders;
-    uint64_t VerticesSimple;
-
     uint64_t Vertices;
     uint64_t Indices;
-
-    uint64_t Materials;
     uint64_t Offsets;
-
-    uint64_t Cubes;
-    uint64_t Voxels;
-    
-    uint64_t Pages;
-    uint64_t HDRSHs;
-
-    uint64_t Lights;
-    uint64_t IndirectDrawCommands;
-
-    uint64_t GPUDrivenStats;
+    uint64_t ReservedAddress0;
+    uint64_t AmbientBase;
     uint64_t TLAS;
 
     uint64_t SkinWeights;
     uint64_t SkinJoints;
-
     uint64_t SkinnedVertices;
     uint64_t JointMatrices;
-
-    uint64_t SkinnedVerticesSimple;
-    uint64_t CubesPong;
+    uint64_t SoftMeshShaderResourcesAddress;
 
     uint32_t SwapChainIndex;
     uint32_t custom_data_0;
@@ -315,30 +459,87 @@ public struct ALIGN_16 GPUScene
 public struct ALIGN_8 GPUScene
 {
     /* Scene Info */
-    public UniformBufferObject *Camera; 
+    public UniformBufferObject *Camera;
+    public uint64_t SceneDynamicBase;
 
     /* Scene Node Tree */
-    public NodeProxy *Nodes;
+    public property NodeProxy* Nodes
+    {
+        get { return (NodeProxy*)(SceneDynamicBase + GPU_SCENE_DYNAMIC_NODES_OFFSET); }
+    }
 
     public uint *Reorders;
-    public half4 *VerticesSimple;
     public GPUVertex *Vertices;
     public uint *Indices;
-    public Material *Materials;
+    public property Material* Materials
+    {
+        get { return (Material*)(SceneDynamicBase + GPU_SCENE_DYNAMIC_MATERIALS_OFFSET); }
+    }
     public Material GetMaterial(int idx)
     {
         return Materials[min(MAX_MATERIALS - 1, max(0, idx))];
     }
     public ModelData *Offsets;
-    public AmbientCube *Cubes;
-    public VoxelData *Voxels;
-    public PageIndex *Pages;
-    public SphericalHarmonics *HDRSHs;
+    public uint64_t ReservedAddress0;
 
-    public LightObject *Lights;
-    public VkDrawIndexedIndirectCommand *IndirectDrawCommands;
-   
-    public GPUDrivenStat *GPUDrivenStats;
+    public uint64_t AmbientBase; // -> AmbientResources table (see BasicTypes.slang AmbientResources)
+    public property SharcResources* Sharc
+    {
+        get { return (SharcResources*)ReservedAddress0; }
+    }
+    public property AmbientCube* Cubes
+    {
+        get { return (AmbientCube*)((AmbientResources*)AmbientBase)[0].Cubes; }
+    }
+    public property VoxelData* Voxels
+    {
+        get { return (VoxelData*)((AmbientResources*)AmbientBase)[0].Voxels; }
+    }
+    public property PageIndex* Pages
+    {
+        get { return (PageIndex*)((AmbientResources*)AmbientBase)[0].Pages; }
+    }
+    public property AmbientCube* CubesPong
+    {
+        get { return (AmbientCube*)((AmbientResources*)AmbientBase)[0].CubesPong; }
+    }
+    public property uint4* AmbientSdfScratch
+    {
+        get { return (uint4*)((AmbientResources*)AmbientBase)[0].SdfScratch; }
+    }
+    public property uint4* AmbientSdfSeedA
+    {
+        get { return (uint4*)((AmbientResources*)AmbientBase)[0].SdfSeedA; }
+    }
+    public property uint* AmbientBrickTable
+    {
+        get { return (uint*)((AmbientResources*)AmbientBase)[0].BrickTable; }
+    }
+    public property uint* AmbientActiveBrickList
+    {
+        get
+        {
+            uint64_t params = ((AmbientResources*)AmbientBase)[0].PoolParams;
+            return (uint*)(((AmbientResources*)AmbientBase)[0].BrickTable + (params >> 32));
+        }
+    }
+    public property uint AmbientPoolBricksPerCascade
+    {
+        get { return uint(((AmbientResources*)AmbientBase)[0].PoolParams & 0xFFFFFFFF); }
+    }
+    public property SphericalHarmonics* HDRSHs
+    {
+        get { return (SphericalHarmonics*)(SceneDynamicBase + GPU_SCENE_DYNAMIC_HDRSHS_OFFSET); }
+    }
+
+    public property GPUDrivenStat* GPUDrivenStats
+    {
+        get { return (GPUDrivenStat*)(SceneDynamicBase + GPU_SCENE_DYNAMIC_GPU_DRIVEN_STATS_OFFSET); }
+    }
+    public property GPUDrivenStat* ShadowGPUDrivenStats
+    {
+        get { return (GPUDrivenStat*)(SceneDynamicBase + GPU_SCENE_DYNAMIC_SHADOW_GPU_DRIVEN_STATS_OFFSET); }
+    }
     public uint64_t TLAS;
 
     public float4 *SkinWeights;
@@ -346,9 +547,11 @@ public struct ALIGN_8 GPUScene
 
     public GPUVertex *SkinnedVertices;
     public float4x4 *JointMatrices;
-
-    public half4 *SkinnedVerticesSimple;
-    public AmbientCube *CubesPong;
+    public uint64_t SoftMeshShaderResourcesAddress;
+    public property SoftMeshShaderResources* SoftMeshShader
+    {
+        get { return (SoftMeshShaderResources*)SoftMeshShaderResourcesAddress; }
+    }
 
     public RaytracingAccelerationStructure GetTLAS() {
 		return RaytracingAccelerationStructure(TLAS);
@@ -363,44 +566,39 @@ public struct ALIGN_8 GPUScene
 public struct ALIGN_8 GPUScene
 {
     /* Scene Info */
-    uint64_t2 Camera_Node_Address;
+    uint64_t2 Camera_SceneDynamicBase_Address;
     public property UniformBufferObject* Camera
     {
-        get { return (UniformBufferObject*)Camera_Node_Address.x; }
+        get { return (UniformBufferObject*)Camera_SceneDynamicBase_Address.x; }
     }
 
     /* Scene Node Tree */
     public property NodeProxy* Nodes
     {
-        get { return (NodeProxy*)Camera_Node_Address.y; }
+        get { return (NodeProxy*)(Camera_SceneDynamicBase_Address.y + GPU_SCENE_DYNAMIC_NODES_OFFSET); }
     }
 
     /* Global Vertice Buffer */
-    uint64_t2 Reorders_VerticesSimple_Address;
+    uint64_t2 Reorders_Vertices_Address;
     public property uint* Reorders
     {
-        get { return (uint*)Reorders_VerticesSimple_Address.x; }
+        get { return (uint*)Reorders_Vertices_Address.x; }
     }
-    public property half4* VerticesSimple
-    {
-        get { return (half4*)Reorders_VerticesSimple_Address.y; }
-    }
-    
-    uint64_t2 Vertices_Indices_Address;
     public property GPUVertex* Vertices
     {
-        get { return (GPUVertex*)Vertices_Indices_Address.x; }
+        get { return (GPUVertex*)Reorders_Vertices_Address.y; }
     }
+
+    uint64_t2 Indices_Offsets_Address;
     public property uint* Indices
     {
-        get { return (uint*)Vertices_Indices_Address.y; }
+        get { return (uint*)Indices_Offsets_Address.x; }
     }
 
     /* Resources */
-    uint64_t2 Materials_OffsetsAddress;
     public property Material* Materials
     {
-        get { return (Material*)Materials_OffsetsAddress.x; }
+        get { return (Material*)(Camera_SceneDynamicBase_Address.y + GPU_SCENE_DYNAMIC_MATERIALS_OFFSET); }
     }
     public Material GetMaterial(int idx)
     {
@@ -408,81 +606,109 @@ public struct ALIGN_8 GPUScene
     }
     public property ModelData* Offsets
     {
-        get { return (ModelData*)Materials_OffsetsAddress.y; }
+        get { return (ModelData*)Indices_Offsets_Address.y; }
     }
 
     /* Others */
-    uint64_t2 Cubes_Voxels_Address;
+    uint64_t2 Reserved_AmbientBase_Address;
+
+    public property SharcResources* Sharc
+    {
+        get { return (SharcResources*)Reserved_AmbientBase_Address.x; }
+    }
+
     public property AmbientCube* Cubes
     {
-        get { return (AmbientCube*)Cubes_Voxels_Address.x; }
+        get { return (AmbientCube*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].Cubes; }
     }
     public property VoxelData* Voxels
     {
-        get { return (VoxelData*)Cubes_Voxels_Address.y; }
+        get { return (VoxelData*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].Voxels; }
     }
-    
-    uint64_t2 Pages_HDRSHs_Address;
+
     public property PageIndex* Pages
     {
-        get { return (PageIndex*)Pages_HDRSHs_Address.x; }
+        get { return (PageIndex*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].Pages; }
     }
     public property SphericalHarmonics* HDRSHs
     {
-        get { return (SphericalHarmonics*)Pages_HDRSHs_Address.y; }
+        get { return (SphericalHarmonics*)(Camera_SceneDynamicBase_Address.y + GPU_SCENE_DYNAMIC_HDRSHS_OFFSET); }
     }
 
-    uint64_t2 Lights_IndirectDrawCommands_Address;
-    public property LightObject* Lights
-    {
-        get { return (LightObject*)Lights_IndirectDrawCommands_Address.x; }
-    }
-    public property VkDrawIndexedIndirectCommand* IndirectDrawCommands
-    {
-        get { return (VkDrawIndexedIndirectCommand*)Lights_IndirectDrawCommands_Address.y; }
-    }
-    
-    uint64_t2 GPUDrivenStats_TLAS_Address;
-    public property GPUDrivenStat* GPUDrivenStats
-    {
-        get { return (GPUDrivenStat*)GPUDrivenStats_TLAS_Address.x; }
-    }
-
-    uint64_t2 SkinWeights_SkinJoints_Address;
-    public property float4* SkinWeights
-    {
-        get { return (float4*)SkinWeights_SkinJoints_Address.x; }
-    }
-    public property uint4* SkinJoints
-    {
-        get { return (uint4*)SkinWeights_SkinJoints_Address.y; }
-    }
-
-    uint64_t2 SkinnedVertices_JointMatrices_Address;
-    public property GPUVertex* SkinnedVertices
-    {
-        get { return (GPUVertex*)SkinnedVertices_JointMatrices_Address.x; }
-    }
-    public property float4x4* JointMatrices
-    {
-        get { return (float4x4*)SkinnedVertices_JointMatrices_Address.y; }
-    }
-    
-    uint64_t2 SkinnedVerticesSimple_Reserved_Address;
-    public property half4* SkinnedVerticesSimple
-    {
-        get { return (half4*)SkinnedVerticesSimple_Reserved_Address.x; }
-    }
     public property AmbientCube* CubesPong
     {
-        get { return (AmbientCube*)SkinnedVerticesSimple_Reserved_Address.y; }
+        get { return (AmbientCube*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].CubesPong; }
+    }
+    public property uint4* AmbientSdfScratch
+    {
+        get { return (uint4*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].SdfScratch; }
+    }
+    public property uint4* AmbientSdfSeedA
+    {
+        get { return (uint4*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].SdfSeedA; }
+    }
+    public property uint* AmbientBrickTable
+    {
+        get { return (uint*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].BrickTable; }
+    }
+    public property uint* AmbientActiveBrickList
+    {
+        get
+        {
+            uint64_t params = ((AmbientResources*)Reserved_AmbientBase_Address.y)[0].PoolParams;
+            return (uint*)(((AmbientResources*)Reserved_AmbientBase_Address.y)[0].BrickTable + (params >> 32));
+        }
+    }
+    public property uint AmbientPoolBricksPerCascade
+    {
+        get { return uint(((AmbientResources*)Reserved_AmbientBase_Address.y)[0].PoolParams & 0xFFFFFFFF); }
+    }
+
+    uint64_t2 TLAS_SkinWeights_Address;
+    public property GPUDrivenStat* GPUDrivenStats
+    {
+        get { return (GPUDrivenStat*)(Camera_SceneDynamicBase_Address.y + GPU_SCENE_DYNAMIC_GPU_DRIVEN_STATS_OFFSET); }
+    }
+    public property GPUDrivenStat* ShadowGPUDrivenStats
+    {
+        get
+        {
+            return (GPUDrivenStat*)(Camera_SceneDynamicBase_Address.y +
+                                    GPU_SCENE_DYNAMIC_SHADOW_GPU_DRIVEN_STATS_OFFSET);
+        }
+    }
+
+    public property float4* SkinWeights
+    {
+        get { return (float4*)TLAS_SkinWeights_Address.y; }
+    }
+
+    uint64_t2 SkinJoints_SkinnedVertices_Address;
+    public property uint4* SkinJoints
+    {
+        get { return (uint4*)SkinJoints_SkinnedVertices_Address.x; }
+    }
+
+    public property GPUVertex* SkinnedVertices
+    {
+        get { return (GPUVertex*)SkinJoints_SkinnedVertices_Address.y; }
+    }
+
+    uint64_t2 JointMatrices_Reserved_Address;
+    public property float4x4* JointMatrices
+    {
+        get { return (float4x4*)JointMatrices_Reserved_Address.x; }
+    }
+    public property SoftMeshShaderResources* SoftMeshShader
+    {
+        get { return (SoftMeshShaderResources*)JointMatrices_Reserved_Address.y; }
     }
 
     public RaytracingAccelerationStructure GetTLAS() {
 #ifdef PLATFORM_ANDROID
         return BindedTLAS;
 #else
-        return RaytracingAccelerationStructure(GPUDrivenStats_TLAS_Address.y);
+        return RaytracingAccelerationStructure(TLAS_SkinWeights_Address.x);
 #endif
 	}
 

@@ -70,3 +70,13 @@ func CommandLine(line string) {
 func Muted(format string, args ...any) {
 	fmt.Println(color(dim, fmt.Sprintf(format, args...)))
 }
+
+// Bold returns the text wrapped with ANSI bold codes when the terminal supports color.
+func Bold(text string) string {
+	return color(bold, text)
+}
+
+// Dim returns the text wrapped with ANSI dim codes when the terminal supports color.
+func Dim(text string) string {
+	return color(dim, text)
+}

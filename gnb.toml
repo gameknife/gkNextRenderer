@@ -21,10 +21,41 @@ macos_arm64 = "https://github.com/rxliuli/tsgo-npm-release/releases/download/v20
 when = "ios"
 url = "https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.0/MoltenVK-ios.tar"
 
-[external.slang]
-linux = "https://github.com/shader-slang/slang/releases/download/v2025.6.1/slang-2025.6.1-linux-x86_64.zip"
-macos_amd64 = "https://github.com/shader-slang/slang/releases/download/v2025.6.1/slang-2025.6.1-macos-x86_64.zip"
-macos_arm64 = "https://github.com/shader-slang/slang/releases/download/v2025.6.1/slang-2025.6.1-macos-aarch64.zip"
+[external.vulkansdk]
+version = "1.4.341.1"
+root = "external/VulkanSDK"
+
+[external.llm]
+# 当前默认使用的模型 id，必须匹配下面 [[external.llm.models]] 中的某一个 id
+active = "gemma-4-E4B-it-Q4_K_M"
+
+[external.llm.llama]
+# llama.cpp 预编译 release（来自 ggml-org/llama.cpp）
+# Gemma 4 需要新版 llama.cpp。
+version = "b9296"
+windows_vulkan = "https://github.com/ggml-org/llama.cpp/releases/download/b9296/llama-b9296-bin-win-vulkan-x64.zip"
+windows_cpu    = "https://github.com/ggml-org/llama.cpp/releases/download/b9296/llama-b9296-bin-win-cpu-x64.zip"
+linux_vulkan   = "https://github.com/ggml-org/llama.cpp/releases/download/b9296/llama-b9296-bin-ubuntu-vulkan-x64.tar.gz"
+linux_cpu      = "https://github.com/ggml-org/llama.cpp/releases/download/b9296/llama-b9296-bin-ubuntu-x64.tar.gz"
+macos_arm64    = "https://github.com/ggml-org/llama.cpp/releases/download/b9296/llama-b9296-bin-macos-arm64.tar.gz"
+
+[[external.llm.models]]
+id      = "gemma-4-E4B-it-Q4_K_M"
+file    = "gemma-4-E4B-it-Q4_K_M.gguf"
+url     = "https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf"
+context = 131072
+
+[[external.llm.models]]
+id      = "gemma-4-E2B-it-Q4_K_M"
+file    = "gemma-4-E2B-it-Q4_K_M.gguf"
+url     = "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_K_M.gguf"
+context = 131072
+
+[external.llm.server]
+host         = "127.0.0.1"
+port         = 8765
+gpu_layers   = 99
+idle_seconds = 600
 
 [paks]
 repo = "gameknife/gkNextEngine"
@@ -39,6 +70,11 @@ dest = "assets/paks/ldraw.pak"
 id = "optional"
 name = "optional.pak"
 dest = "assets/paks/optional.pak"
+
+[[paks.assets]]
+id = "brotato3d"
+name = "brotato3d.pak"
+dest = "assets/paks/brotato3d.pak"
 
 [[paks.assets]]
 id = "sfx"

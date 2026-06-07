@@ -1,6 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
-#include "Application/MagicaLego/MagicaLegoScriptParser.hpp"
-#include "Application/MagicaLego/MagicaLegoCommands.hpp"
+#include "Application/Game/MagicaLego/MagicaLegoScriptParser.hpp"
+#include "Application/Game/MagicaLego/MagicaLegoCommands.hpp"
 
 // ==================== Cursor Tests ====================
 // Note: These tests use header-only FCursor implementation

@@ -14,10 +14,13 @@
 ## 文件结构
 
 ```
-src/Assets/Loaders/
-├── FLDrawConfig.h/.cpp    # 颜色表解析 + 文件路径解析器
-├── FLDrawParser.h/.cpp    # 递归 .dat/.ldr 解析器 + BFC 状态机
-└── FLDrawLoader.h/.cpp    # 场景组装（材质/Model/Node 创建）
+src/Engine/Assets/Loaders/
+├── FLDrawTypes.h             # 共享类型与 LDrawLoadOptions（含 lduToWorldScale）
+├── FLDrawConfig.h/.cpp       # 颜色表解析 + 资源/路径解析（含 ldraw.pak 挂载）
+├── FLDrawParser.h/.cpp       # 递归 .dat/.ldr 解析器 + BFC 状态机
+├── FLDrawGeometry.h/.cpp     # 几何组装（按颜色分组 + 法线平滑）
+├── FLDrawConnectivity.h/.cpp # 连接点语义（shadow library / connector 抽象）
+└── FLDrawLoader.h/.cpp       # 场景组装（材质/Model/Node 创建）
 ```
 
 修改的现有文件:

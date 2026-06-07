@@ -39,7 +39,7 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
   围绕 1spp + temporal reuse、降噪、重投影和多管线切换持续推进，让路径追踪不只停留在离线效果演示，而是面向真实运行时表现。
 
 - **游戏级性能取向的 GPU 架构**  
-  通过 Visibility Buffer、全 Bindless、GPU-Driven、Multi-Draw Indirect 等设计，尽量把 CPU 开销留给内容与玩法，把 GPU 算力用在真正影响画面的地方。
+  通过 Visibility Buffer、全 Bindless、GPU-Driven 单 draw 提交等设计，尽量把 CPU 开销留给内容与玩法，把 GPU 算力用在真正影响画面的地方。
 
 - **引擎能力服务于内容与玩法原型**  
   包括 ECS、反射、编辑器、脚本热重载、物理同步、运行时导入和稳定的渲染行为。这些能力共同支撑更完整的可玩内容系统。
@@ -62,7 +62,7 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 - **ECS + Reflection**：基于 entt 的组件系统，加上反射层，服务于运行时、编辑器和脚本绑定
 - **ImGui 编辑器**：`gkNextEditor` 面向材质、场景和运行时内容的编辑工作流
-- **QuickJS 脚本热重载**：运行时使用仓库内置 `tools/tsc/tsc[.exe]` 编译 TypeScript（Windows 为 `tsc.exe`，macOS/Linux 为 `tsc`），无需 Node/npm 或全局 `tsc`
+- **QuickJS 脚本热重载**：运行时使用仓库内置 `tools/tsc/tsc[.exe]` 编译 TypeScript（Windows 为 `tsc.exe`，macOS/Linux 为 `tsc`），无需 Node/npm 或全局 `tsc`；整合链路见 [docs/typescript-integration.md](docs/typescript-integration.md)
 - **Jolt Physics**：为交互原型、拖拽玩法和游戏化验证提供更真实的物理基础
 
 ### 3. 代码规模可控，适合学习和扩展
@@ -87,9 +87,9 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 - **Visibility Buffer**
 - **全 Bindless + GPU-Driven**
-- **Multi-Draw Indirect**
+- **Single-Draw GPU-Driven Submit**
 - **Hardware / Software Ray Tracing**
-- **Temporal Reprojection / JBF / OIDN / DLSS RR**
+- **Temporal Reprojection / JBF / FSR / DLSS RR**
 
 ### 引擎与工具链
 
@@ -146,7 +146,7 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 - CMake 3.26+
 - Visual Studio 2022（C++ 工作负载）
-- Vulkan SDK 1.4.313.2
+- Vulkan SDK 1.4.341.1（默认由 `gnb` 自动下载到仓库内；若设置 `VULKAN_SDK` 则优先使用环境里的 SDK）
 - 启用“使用 Unicode UTF-8 提供全球语言支持”
 
 ```bat
@@ -155,7 +155,7 @@ gnb.bat build
 gnb.bat run gkNextRenderer
 ```
 
-除 Visual Studio / Vulkan SDK 这类宿主工具外，其余项目依赖通常都由 `gnb` 自动准备。
+除 Visual Studio 这类宿主工具外，其余项目依赖通常都由 `gnb` 自动准备；默认会拉取项目约定版本的 Vulkan SDK、Slang 与 TypeScript 工具链到仓库内。
 
 </details>
 
@@ -185,6 +185,7 @@ gnb.bat run gkNextRenderer
 
 说明：
 
+- 如果机器上没有可用的 `VULKAN_SDK`，`gnb setup` 会自动下载项目约定版本的 LunarG Vulkan SDK 到 `external/VulkanSDK/`
 - 如果机器上还没有 `slangc`，`gnb setup` 会自动下载项目约定的 Slang 工具链到 `external/`
 - 在 pacman 环境下，`gnb setup` / Linux 首轮 `gnb build` 会在 vcpkg bootstrap 前自动安装系统包；如果自动安装不可用，可手动执行 `sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxrandr wayland-protocols libxkbcommon systemd-libs`
 - 如果 vcpkg 阶段遇到 GitHub 归档下载失败，优先直接重试同一条构建命令
@@ -207,7 +208,7 @@ gnb.bat run gkNextRenderer
 ./gnb.sh run gkNextRenderer
 ```
 
-`gnb setup` 会自动下载项目使用的 Slang 与 TypeScript 工具链，无需再单独准备这些项目级依赖。
+`gnb setup` 会自动下载项目使用的 Vulkan SDK、Slang 与 TypeScript 工具链，无需再单独准备这些项目级依赖。若显式设置 `VULKAN_SDK`，则优先使用该环境变量指向的 SDK。
 
 </details>
 
@@ -273,7 +274,9 @@ gnb.bat paks fetch
 | `gkNextRenderer` | 主渲染器，路径追踪 / Hybrid Rendering / 多管线对比 |
 | `gkNextEditor` | ImGui 编辑器，服务于材质、场景与运行时工具链 |
 | `BrickPlayer` | 基于 LDraw 的数字乐高搭建原型 |
+| `Brotato3D` | 俯视角 3D 生存射击原型，介绍见 [docs/projects/brotato-3d/introduction.md](docs/projects/brotato-3d/introduction.md) |
 | `CharacterDemo` | 角色控制、AI 行为、导航与战斗交互实验 |
+| `FlappyCpp` / `FlappyJs` | Flappy Bird 双实现回归样例，用于验证 C++ 与 QuickJS/TypeScript 行为一致性，介绍见 [docs/projects/flappy-bird-parity/introduction.md](docs/projects/flappy-bird-parity/introduction.md) |
 | `MagicaLego` | 更轻量的乐高 / voxel 风格玩法实验场 |
 | `gkNextStillBenchmark` | 静态场景渲染基准测试 |
 | `gkNextMotionBenchmark` | 动态场景渲染基准测试 |

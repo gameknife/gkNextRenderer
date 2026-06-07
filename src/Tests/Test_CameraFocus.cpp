@@ -1,7 +1,7 @@
 #include <catch2/catch_all.hpp>
 
-#include "Assets/Core/Model.hpp"
-#include "Runtime/Camera/ModelViewController.hpp"
+#include "Engine/Assets/Core/Model.hpp"
+#include "Engine/Runtime/Camera/ModelViewController.hpp"
 
 TEST_CASE("Camera focus moves closer for small targets", "[Unit][Camera]")
 {
@@ -12,7 +12,7 @@ TEST_CASE("Camera focus moves closer for small targets", "[Unit][Camera]")
         glm::vec3(0.0f, 0.0f, 0.0f),
         glm::vec3(0.0f, 1.0f, 0.0f));
 
-    ModelViewController controller;
+    Runtime::Camera::ModelViewController controller;
     controller.Reset(camera);
 
     controller.Focus(glm::vec3(0.0f), 0.02f);

@@ -1,10 +1,10 @@
-#include "Utilities/Exception.hpp"
-#include "Options.hpp"
-#include "Runtime/Engine.hpp"
+#include "Engine/Utilities/Exception.hpp"
+#include "Engine/Options.hpp"
+#include "Engine/Runtime/Engine.hpp"
 
 #include <fmt/format.h>
 #include <filesystem>
-#include "Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Platform/PlatformCommon.h"
 
 #if WIN32
 #include "ThirdParty/renderdoc/renderdoc_app.h"
@@ -14,8 +14,10 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include <cstdlib>
+
 std::unique_ptr<NextEngine> GApplication;
-std::unique_ptr<Options> GOptionPtr;
+std::unique_ptr<Runtime::Config::Options> GOptionPtr;
 
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
@@ -39,10 +41,10 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
 #if ANDROID
     const char* argv1[] = { "gkNextRenderer", "--renderer=0", "--forcesoftgen", "--load-scene=assets/models/playground.glb" };
-    GOptionPtr.reset(new Options(4, argv1));
+    GOptionPtr.reset(new Runtime::Config::Options(4, argv1));
 #else
     // Handle command line options.
-    GOptionPtr.reset(new Options(argc, const_cast<const char**>(argv)));
+    GOptionPtr.reset(new Runtime::Config::Options(argc, const_cast<const char**>(argv)));
 #endif
     // Global GOption, can access from everywhere
     GOption = GOptionPtr.get();

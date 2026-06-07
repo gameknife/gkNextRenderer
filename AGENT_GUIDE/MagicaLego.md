@@ -1,6 +1,6 @@
 # MagicaLego 小游戏代码梳理
 
-本文档梳理 `src/Application/MagicaLego` 目录下乐高搭建小游戏的结构与关键流程，便于后续扩展与维护。
+本文档梳理 `src/Application/Game/MagicaLego` 目录下乐高搭建小游戏的结构与关键流程，便于后续扩展与维护。
 
 ## 功能概览
 - 玩法：基于网格的乐高方块搭建，支持放置/挖掘/选择、朝向旋转、基座尺寸切换。
@@ -8,14 +8,14 @@
 - 辅助：存档读写、时间轴回放、截图与录屏、背景音乐。
 
 ## 目录与入口
-- `src/Application/MagicaLego/MagicaLegoGameInstance.hpp`
+- `src/Application/Game/MagicaLego/MagicaLegoGameInstance.hpp`
   - `MagicaLegoGameInstance`：核心运行逻辑。
   - 枚举：`ELegoMode`、`ECamMode`、`EBasePlane`、`EOrientation`。
   - 数据结构：`FBasicBlock`、`FPlacedBlock`、`FMagicaLegoSave`。
-- `src/Application/MagicaLego/MagicaLegoGameInstance.cpp`
+- `src/Application/Game/MagicaLego/MagicaLegoGameInstance.cpp`
   - 主要运行流程与核心行为实现。
   - `CreateGameInstance` 为游戏入口工厂。
-- `src/Application/MagicaLego/MagicaLegoUserInterface.hpp/.cpp`
+- `src/Application/Game/MagicaLego/MagicaLegoUserInterface.hpp/.cpp`
   - `MagicaLegoUserInterface`：ImGui UI 逻辑。
 
 ## 核心数据结构
@@ -148,15 +148,35 @@ end
 ## AI 助手集成
 
 ### 核心文件
-- `MagicaLegoAIService.hpp/.cpp` - Gemini API 集成
+- `MagicaLegoAIService.hpp/.cpp` - 薄封装，委托给引擎级 `NextAI::AIService`（`src/Engine/Runtime/Subsystems/AIService.{hpp,cpp}`）
 - 配置文件: `assets/configs/ai_config.json`
 
 ### 配置格式
+多 provider 配置，默认 `provider: localllm`（复用 `gnb llm` 启动的本地 llama-server，详见 AGENTS.md 的 Local LLM 段），可切到 `gemini` / `ollama` / `zhipu` / `deepseek` / `openai`：
 ```json
 {
-    "apiKey": "YOUR_GOOGLE_API_KEY",
-    "model": "gemini-2.0-flash",
-    "endpoint": "https://generativelanguage.googleapis.com/v1beta"
+    "provider": "localllm",
+    "useAgentLoop": true,
+    "localllm": {
+        "endpoint": "http://127.0.0.1:8765",
+        "defaultModel": "",
+        "pidFile": "external/llm/run/server.pid",
+        "autoDiscoverPid": true
+    },
+    "gemini":   { "endpoint": "...", "defaultModel": "gemini-3-flash-preview", "models": ["gemini-3-flash-preview"] },
+    "ollama":   { "endpoint": "http://localhost:11434", "defaultModel": "gemma3:12b", "models": ["gemma3:12b"] },
+    "zhipu":    { "endpoint": "...", "defaultModel": "glm-4.7", "models": ["glm-4.7"] },
+    "deepseek": { "endpoint": "https://api.deepseek.com/v1", "defaultModel": "deepseek-chat", "models": ["deepseek-chat"] },
+    "openai":   { "endpoint": "https://api.openai.com/v1", "defaultModel": "gpt-4.1-mini", "models": ["gpt-4.1-mini"] }
+}
+```
+敏感信息不要写入 `ai_config.json`。默认从本地 `GKNEXT_AI_SECRETS` 指定文件、Windows `%LOCALAPPDATA%/gkNextEngine/ai_secrets.json`、或平台用户数据目录 `gkNextEngine/ai_secrets.json` 读取：
+```json
+{
+    "openai": { "apiKey": "..." },
+    "deepseek": { "apiKey": "..." },
+    "gemini": { "apiKey": "..." },
+    "zhipu": { "apiKey": "..." }
 }
 ```
 
@@ -176,12 +196,13 @@ end
 
 ### 文件结构
 ```
-src/Application/MagicaLego/
-├── MagicaLegoGameInstance.hpp/cpp   # 核心游戏逻辑 (~1200行)
-├── MagicaLegoUserInterface.hpp/cpp  # UI 渲染 (~1700行)
-├── MagicaLegoCommands.hpp/cpp       # 命令系统 (~700行)
-├── MagicaLegoScriptParser.hpp/cpp   # 脚本解析 (~500行)
-├── MagicaLegoAIService.hpp/cpp      # AI 集成 (~800行)
+src/Application/Game/MagicaLego/
+├── MagicaLegoGameInstance.hpp/cpp   # 核心游戏逻辑
+├── MagicaLegoUserInterface.hpp/cpp  # ImGui UI 渲染
+├── MagicaLegoCommands.hpp/cpp       # 命令系统
+├── MagicaLegoScriptParser.hpp/cpp   # mlscript 脚本解析（变量/循环）
+├── MagicaLegoPlacementRules.hpp/cpp # 方块放置规则
+├── MagicaLegoAIService.hpp/cpp      # AI 集成（封装引擎 NextAI::AIService）
 ├── MagicaLegoConstants.hpp          # 集中常量定义
 ├── MagicaLegoUIHelpers.hpp          # UI 辅助函数
 └── MagicaLegoStyle.hpp/cpp          # ImGui 样式
@@ -226,17 +247,17 @@ namespace MagicaLego
 - AI 生成的脚本会显示在 "Last Generated Script" 区域
 
 ## 关联文件速查
-- `src/Application/MagicaLego/MagicaLegoGameInstance.hpp`
-- `src/Application/MagicaLego/MagicaLegoGameInstance.cpp`
-- `src/Application/MagicaLego/MagicaLegoUserInterface.hpp`
-- `src/Application/MagicaLego/MagicaLegoUserInterface.cpp`
-- `src/Application/MagicaLego/MagicaLegoCommands.hpp`
-- `src/Application/MagicaLego/MagicaLegoCommands.cpp`
-- `src/Application/MagicaLego/MagicaLegoScriptParser.hpp`
-- `src/Application/MagicaLego/MagicaLegoScriptParser.cpp`
-- `src/Application/MagicaLego/MagicaLegoAIService.hpp`
-- `src/Application/MagicaLego/MagicaLegoAIService.cpp`
-- `src/Application/MagicaLego/MagicaLegoConstants.hpp`
-- `src/Application/MagicaLego/MagicaLegoUIHelpers.hpp`
+- `src/Application/Game/MagicaLego/MagicaLegoGameInstance.hpp`
+- `src/Application/Game/MagicaLego/MagicaLegoGameInstance.cpp`
+- `src/Application/Game/MagicaLego/MagicaLegoUserInterface.hpp`
+- `src/Application/Game/MagicaLego/MagicaLegoUserInterface.cpp`
+- `src/Application/Game/MagicaLego/MagicaLegoCommands.hpp`
+- `src/Application/Game/MagicaLego/MagicaLegoCommands.cpp`
+- `src/Application/Game/MagicaLego/MagicaLegoScriptParser.hpp`
+- `src/Application/Game/MagicaLego/MagicaLegoScriptParser.cpp`
+- `src/Application/Game/MagicaLego/MagicaLegoAIService.hpp`
+- `src/Application/Game/MagicaLego/MagicaLegoAIService.cpp`
+- `src/Application/Game/MagicaLego/MagicaLegoConstants.hpp`
+- `src/Application/Game/MagicaLego/MagicaLegoUIHelpers.hpp`
 - `assets/configs/ai_config.json`
 - `assets/scripts/*.mlscript`

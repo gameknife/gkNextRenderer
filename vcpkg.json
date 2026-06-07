@@ -15,6 +15,10 @@
       "platform": "!(android)"
     },
     {
+      "name": "vulkan-headers",
+      "platform": "!(android | ios)"
+    },
+    {
       "name": "dbus",
       "default-features": false,
       "platform": "linux"
@@ -24,8 +28,6 @@
       "name": "imgui",
       "features": [
         "freetype",
-        "sdl3-binding",
-        "vulkan-binding",
         "docking-experimental"
       ],
       "platform": "!(android)"
@@ -38,6 +40,10 @@
       ],
       "platform": "android"
     },
+    {
+      "name": "rmlui",
+      "features": ["freetype"]
+    },
     "stb",
     "curl",
     "nlohmann-json",
@@ -49,6 +55,18 @@
     "joltphysics",
     "xxhash",
     "spdlog",
+    {
+      "name": "manifold",
+      "platform": "!(android | ios)"
+    },
+    {
+      "name": "earcut-hpp",
+      "platform": "!(android | ios)"
+    },
+    {
+      "name": "freetype",
+      "platform": "!(android | ios)"
+    },
     "cpp-base64",
     "catch2",
     "entt",
@@ -65,7 +83,12 @@
         "xlib",
         "wayland"
       ]
-    }
+    },
+    {
+      "name": "vulkan-loader",
+      "platform": "windows"
+    },
+    "vulkan-memory-allocator"
   ],
   "features": {
     "avif": {

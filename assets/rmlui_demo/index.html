@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RmlUiDemo Browser Reference</title>
+    <link rel="stylesheet" href="styles/base.css">
+    <link rel="stylesheet" href="styles/modules.css">
+    <link rel="stylesheet" id="module-style">
+    <style>
+        html {
+            width: 100%;
+            height: 100%;
+        }
+
+        body {
+            overflow: hidden;
+        }
+
+        #app {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+<div id="app"></div>
+
+<template id="page_landing">
+<div class="demo-shell {{theme_class}} {{density_class}}">
+{{module_nav}}
+<main class="demo-main">
+{{demo_toolbar}}
+<section class="hero">
+<div class="hero-copy">
+<div class="landing-kicker">RmlUi-compatible HTML + CSS authoring surface</div>
+<h1>Build rich game UI with familiar markup.</h1>
+<p>RmlUiDemo validates the subset of HTML and CSS that agents can generate for this engine: layout, type, controls, state, modals, scrolling, images, and responsive behavior.</p>
+<div class="hero-actions">
+<button id="primary_action">Generate a screen</button>
+<button id="action_modal" class="secondary">Open modal</button>
+</div>
+<div class="metric-row">
+<div class="metric"><h3>10</h3><p>Focused test modules</p></div>
+<div class="metric"><h3>HTML</h3><p>External page files</p></div>
+<div class="metric"><h3>CSS</h3><p>External style sheets</p></div>
+</div>
+</div>
+<div class="hero-visual">
+<div class="browser-frame">
+<div class="browser-bar"><span class="browser-dot"></span><span class="browser-dot"></span><span class="browser-dot"></span></div>
+<div class="preview-body">
+<div class="preview-line"></div>
+<div class="preview-line short"></div>
+<div class="preview-card-row">
+<div class="preview-card"></div>
+<div class="preview-card"></div>
+<div class="preview-card"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section class="demo-content landing-section">
+<div class="card-row">
+<div class="card"><h3>Declarative layout</h3><p>Use markup and CSS-like rules for dense interface structure.</p></div>
+<div class="card"><h3>Engine textures</h3><p>Images route through RmlUi into the global texture pool.</p></div>
+<div class="card"><h3>Interaction hooks</h3><p>Buttons bind to C++ callbacks through stable element ids.</p></div>
+</div>
+<div class="card-row">
+<div class="card pricing-card"><h3>Starter</h3><p>Typography, cards, buttons, and simple navigation.</p><button class="secondary">Inspect</button></div>
+<div class="card pricing-card featured"><h3>Production</h3><p>Forms, modal capture, scroll clipping, and responsive panels.</p><button>Use this profile</button></div>
+<div class="card pricing-card"><h3>Stress</h3><p>Animation, images, and larger nested layouts.</p><button class="secondary">Compare</button></div>
+</div>
+<div class="faq-item"><strong>FAQ:</strong> This is not browser compatibility. It is an agent-facing HTML/CSS surface constrained to RmlUi.</div>
+</section>
+</main>
+{{demo_state}}
+{{demo_modal}}
+</div>
+</template>
+
+<template id="page_typography">
+<div class="demo-shell {{theme_class}} {{density_class}}">
+{{module_nav}}
+<main class="demo-main">
+{{demo_toolbar}}
+<section class="demo-content content-grid">
+<div class="primary-column">
+<div class="module-panel type-scale">
+<h1>Typography scale</h1>
+<p class="sample-h1">Display headline for landing pages</p>
+<p class="sample-h2">Section headline for dense tools</p>
+<p class="sample-body">Readable body copy with inline <strong>emphasis</strong>, numbers 0123456789, and punctuation.</p>
+</div>
+<div class="module-panel">
+<h2>Multilingual fallback</h2>
+<p>中文字体回退测试：界面生成器需要稳定显示菜单、按钮、说明文字和较长段落。</p>
+<p>Long unbroken label test: SuperLongGeneratedControlNameWithoutManualLineBreaksShouldStillStayReadable</p>
+</div>
+</div>
+<div class="secondary-column">
+<div class="module-panel">
+<h3>Inline tokens</h3>
+<span class="pill">alpha</span>
+<span class="pill">beta</span>
+<span class="pill">release-candidate</span>
+<span class="pill">本地化</span>
+</div>
+</div>
+</section>
+</main>
+{{demo_state}}
+{{demo_modal}}
+</div>
+</template>
+
+<template id="page_layout">
+<div class="demo-shell {{theme_class}} {{density_class}}">
+{{module_nav}}
+<main class="demo-main">
+{{demo_toolbar}}
+<section class="demo-content">
+<div class="module-panel">
+<h1>Layout module</h1>
+<p>Validates flex sizing, fixed sidebars, card rows, and percentage-based panels.</p>
+<div class="layout-board">
+<aside class="layout-sidebar">
+<h3>Filters</h3>
+<button class="secondary">All</button>
+<button class="secondary">Active</button>
+<button class="secondary">Archived</button>
+</aside>
+<div class="layout-canvas">
+<div class="layout-tile"><strong>Row A</strong><p>Flexible content area</p></div>
+<div class="layout-tile"><strong>Row B</strong><p>Stable height tile</p></div>
+<div class="layout-tile"><strong>Row C</strong><p>Repeated item layout</p></div>
+</div>
+</div>
+</div>
+<div class="card-row">
+<div class="card"><h3>Card one</h3><p>Equal width column.</p></div>
+<div class="card"><h3>Card two</h3><p>Equal width column.</p></div>
+<div class="card"><h3>Card three</h3><p>Equal width column.</p></div>
+</div>
+</section>
+</main>
+{{demo_state}}
+{{demo_modal}}
+</div>
+</template>
+
+<template id="page_controls">
+<div class="demo-shell {{theme_class}} {{density_class}}">
+{{module_nav}}
+<main class="demo-main">
+{{demo_toolbar}}
+<section class="demo-content">
+<div class="module-panel">
+<h1>Controls module</h1>
+<p>Buttons below bind to C++ callbacks and force a document reload with updated state.</p>
+<div class="control-strip">
+<button id="primary_action">Primary action</button>
+<button id="secondary_action" class="secondary">Secondary action</button>
+<button id="danger_action" class="danger">Danger action</button>
+</div>
+</div>
+<div class="module-panel">
+<h2>Counter</h2>
+<div class="counter-panel">
+<div class="counter-value">{{counter_value}}</div>
+<button id="counter_dec" class="secondary">-</button>
+<button id="counter_inc">+</button>
+<button id="counter_reset" class="secondary">Reset</button>
+</div>
+</div>
+<div class="module-panel">
+<h2>Segmented mode</h2>
+<div class="control-strip">
+<button id="action_theme">Toggle theme</button>
+<button id="action_density" class="secondary">Toggle density</button>
+<button id="action_modal" class="secondary">Open modal</button>
+</div>
+</div>
+</section>
+</main>
+{{demo_state}}
+{{demo_modal}}
+</div>
+</template>
+
+<template id="page_forms">
+<div class="demo-shell {{theme_class}} {{density_class}}">
+{{module_nav}}
+<main class="demo-main">
+{{demo_toolbar}}
+<section class="demo-content content-grid">
+<div class="primary-column">
+<div class="module-panel">
+<h1>Forms module</h1>
+<p>Focus an input to validate keyboard capture, text input, caret behavior, and clipboard handling.</p>
+<div class="form-row"><label>Project name</label><input type="text" value="Agent generated layout"></div>
+<div class="form-row"><label>Mode</label><select><option>Landing page</option><option>HUD overlay</option><option>Editor panel</option></select></div>
+<div class="form-row"><label>Prompt notes</label><textarea>Describe the UI state that the agent should generate.</textarea></div>
+<div class="control-strip">
+<button id="primary_action">Submit</button>
+<button id="secondary_action" class="secondary">Save draft</button>
+</div>
+</div>
+</div>
+<div class="secondary-column">
+<div class="module-panel"><h3>Expected</h3><p>Typing inside fields should not move the camera or trigger game shortcuts.</p></div>
+</div>
+</section>
+</main>
+{{demo_state}}
+{{demo_modal}}
+</div>
+</template>
+
+<template id="page_modal">
+<div class="demo-shell {{theme_class}} {{density_class}}">
+{{module_nav}}
+<main class="demo-main">
+{{demo_toolbar}}
+<section class="demo-content">
+<div class="module-panel">
+<h1>Modal module</h1>
+<p>This module focuses on stacking, dimmed backgrounds, centered dialogs, and input capture.</p>
+<button id="action_modal">Open modal</button>
+</div>
+<div class="card-row">
+<div class="card"><h3>Background action</h3><p>Use this card to verify modal overlay visual priority.</p><button id="secondary_action" class="secondary">Background button</button></div>
+<div class="card"><h3>Keyboard</h3><p>Escape closes the modal through the game instance key handler.</p></div>
+</div>
+</section>
+</main>
+{{demo_state}}
+{{demo_modal}}
+</div>
+</template>
+
+<template id="page_scroll">
+<div class="demo-shell {{theme_class}} {{density_class}}">
+{{module_nav}}
+<main class="demo-main">
+{{demo_toolbar}}
+<section class="demo-content content-grid">
+<div class="primary-column">
+<div class="module-panel">
+<h1>Scroll module</h1>
+<p>The list below validates overflow clipping, wheel routing, and repeated element cost.</p>
+<div class="scroll-box">
+<div class="scroll-item"><strong>Item 01</strong><p>Generated content row with wrapped text.</p></div>
+<div class="scroll-item"><strong>Item 02</strong><p>Generated content row with wrapped text.</p></div>
+<div class="scroll-item"><strong>Item 03</strong><p>Generated content row with wrapped text.</p></div>
+<div class="scroll-item"><strong>Item 04</strong><p>Generated content row with wrapped text.</p></div>
+<div class="scroll-item"><strong>Item 05</strong><p>Generated content row with wrapped text.</p></div>
+<div class="scroll-item"><strong>Item 06</strong><p>Generated content row with wrapped text.</p></div>
+<div class="scroll-item"><strong>Item 07</strong><p>Generated content row with wrapped text.</p></div>
+<div class="scroll-item"><strong>Item 08</strong><p>Generated content row with wrapped text.</p></div>
+<div class="scroll-item"><strong>Item 09</strong><p>Generated content row with wrapped text.</p></div>
+<div class="scroll-item"><strong>Item 10</strong><p>Generated content row with wrapped text.</p></div>
+</div>
+</div>
+</div>
+<div class="secondary-column">{{demo_state}}</div>
+</section>
+</main>
+{{demo_modal}}
+</div>
+</template>
+
+<template id="page_animation">
+<div class="demo-shell {{theme_class}} {{density_class}}">
+{{module_nav}}
+<main class="demo-main">
+{{demo_toolbar}}
+<section class="demo-content">
+<div class="module-panel">
+<h1>Animation module</h1>
+<p>Hover the card to validate transition and transform support through the current RmlUi render bridge.</p>
+<div class="animation-stage">
+<div class="motion-card">
+<h3>Hover motion</h3>
+<p>translate + scale + color transition</p>
+</div>
+</div>
+</div>
+</section>
+</main>
+{{demo_state}}
+{{demo_modal}}
+</div>
+</template>
+
+<template id="page_responsive">
+<div class="demo-shell {{theme_class}} {{density_class}}">
+{{module_nav}}
+<main class="demo-main">
+{{demo_toolbar}}
+<section class="demo-content">
+<div class="module-panel">
+<h1>Responsive module</h1>
+<p>Resize the window or use agent validation viewports to inspect wrapping and minimum widths.</p>
+<div class="responsive-row">
+<div class="responsive-card"><h3>Navigation</h3><p>Fixed sidebar plus flexible content.</p></div>
+<div class="responsive-card"><h3>Cards</h3><p>Percentage width with a minimum size.</p></div>
+<div class="responsive-card"><h3>Controls</h3><p>Buttons keep stable padding.</p></div>
+<div class="responsive-card"><h3>Text</h3><p>Long copy should wrap inside the card.</p></div>
+<div class="responsive-card"><h3>State</h3><p>Runtime panel remains inspectable.</p></div>
+<div class="responsive-card"><h3>Density</h3><p>Compact mode reduces padding.</p></div>
+</div>
+</div>
+</section>
+</main>
+{{demo_state}}
+{{demo_modal}}
+</div>
+</template>
+
+<template id="page_images">
+<div class="demo-shell {{theme_class}} {{density_class}}">
+{{module_nav}}
+<main class="demo-main">
+{{demo_toolbar}}
+<section class="demo-content">
+<div class="module-panel">
+<h1>Images module</h1>
+<p>Images load through RmlUi texture handles and the engine global texture pool.</p>
+<div class="image-grid">
+<div class="image-card"><img src="assets/textures/Vulkan.png"><h3>Vulkan texture</h3><p>Existing engine asset.</p></div>
+<div class="image-card"><img src="assets/models/KayKit_Platformer_Pack/Samples/sample1.png"><h3>Sample preview</h3><p>Tests larger image scaling.</p></div>
+<div class="image-card"><img src="assets/textures/white.png"><h3>Fallback white</h3><p>Small image sampling.</p></div>
+</div>
+</div>
+</section>
+</main>
+{{demo_state}}
+{{demo_modal}}
+</div>
+</template>
+
+<script>
+const modules = [
+    { id: "landing", title: "Landing", description: "Classic product landing page" },
+    { id: "typography", title: "Typography", description: "Fonts, wrapping, emphasis, and multilingual text" },
+    { id: "layout", title: "Layout", description: "Flex rows, cards, sidebars, and percentage sizing" },
+    { id: "controls", title: "Controls", description: "Buttons, states, segmented controls, and counters" },
+    { id: "forms", title: "Forms", description: "Input, textarea, select, and focus capture" },
+    { id: "modal", title: "Modal", description: "Overlay, dialog stacking, and event capture" },
+    { id: "scroll", title: "Scroll", description: "Overflow regions and long list clipping" },
+    { id: "animation", title: "Animation", description: "Transitions, transforms, and hover feedback" },
+    { id: "responsive", title: "Responsive", description: "Adaptive layout under narrow widths" },
+    { id: "images", title: "Images", description: "Texture loading through RmlUi and the engine pool" },
+];
+
+const moduleStyleHrefs = Object.freeze({
+    landing: "styles/landing.css",
+    forms: "styles/forms.css",
+    scroll: "styles/scroll.css",
+});
+
+const state = {
+    moduleId: "landing",
+    darkTheme: true,
+    compactMode: false,
+    modalOpen: false,
+    counter: 0,
+    statusMessage: "Loaded landing page",
+    startTime: performance.now(),
+};
+
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, (ch) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#39;",
+    })[ch]);
+}
+
+function currentModule() {
+    return modules.find((module) => module.id === state.moduleId) || modules[0];
+}
+
+function buildNavigation() {
+    return `<nav class="demo-nav">${modules.map((module) => {
+        const active = module.id === state.moduleId ? " active" : "";
+        return `<button id="nav_${module.id}" class="nav-item${active}"><span>${escapeHtml(module.title)}</span><small>${escapeHtml(module.description)}</small></button>`;
+    }).join("")}</nav>`;
+}
+
+function buildToolbar() {
+    const module = currentModule();
+    return `<div class="demo-toolbar">
+<div class="toolbar-title">
+<strong>${escapeHtml(module.title)}</strong>
+<span>${escapeHtml(module.description)}</span>
+</div>
+<div class="toolbar-actions">
+<button id="action_reload">Reload F5</button>
+<button id="action_theme">${state.darkTheme ? "Light" : "Dark"}</button>
+<button id="action_density">${state.compactMode ? "Comfort" : "Compact"}</button>
+<button id="action_modal">Modal</button>
+</div>
+</div>`;
+}
+
+function buildStatePanel() {
+    const module = currentModule();
+    const elapsed = ((performance.now() - state.startTime) / 1000).toFixed(1);
+    return `<aside class="state-panel">
+<h3>Runtime State</h3>
+<div class="state-row"><span>Module</span><strong>${escapeHtml(module.title)}</strong></div>
+<div class="state-row"><span>Window</span><strong>${window.innerWidth} x ${window.innerHeight}</strong></div>
+<div class="state-row"><span>Theme</span><strong>${state.darkTheme ? "dark" : "light"}</strong></div>
+<div class="state-row"><span>Density</span><strong>${state.compactMode ? "compact" : "comfortable"}</strong></div>
+<div class="state-row"><span>Counter</span><strong>${state.counter}</strong></div>
+<div class="state-row"><span>Elapsed</span><strong>${elapsed}s</strong></div>
+<p class="status-line">${escapeHtml(state.statusMessage)}</p>
+</aside>`;
+}
+
+function buildModal() {
+    if (!state.modalOpen) {
+        return "";
+    }
+
+    return `<div class="modal-scrim">
+<div class="modal-card">
+<h2>Modal and Event Capture</h2>
+<p>This overlay validates stacking, alpha blending, centered layout, button interaction, and Escape key handling.</p>
+<button id="modal_close">Close modal</button>
+</div>
+</div>`;
+}
+
+function syncModuleStyle() {
+    const moduleStyle = document.getElementById("module-style");
+    if (!moduleStyle) {
+        return;
+    }
+
+    const href = moduleStyleHrefs[state.moduleId] || "";
+    if (href) {
+        moduleStyle.setAttribute("href", href);
+    } else {
+        moduleStyle.removeAttribute("href");
+    }
+}
+
+function render() {
+    syncModuleStyle();
+    const template = document.getElementById(`page_${state.moduleId}`) || document.getElementById("page_landing");
+    let html = template.innerHTML;
+    html = html.replaceAll("{{module_nav}}", buildNavigation());
+    html = html.replaceAll("{{demo_toolbar}}", buildToolbar());
+    html = html.replaceAll("{{demo_state}}", buildStatePanel());
+    html = html.replaceAll("{{demo_modal}}", buildModal());
+    html = html.replaceAll("{{counter_value}}", String(state.counter));
+    html = html.replaceAll("{{theme_class}}", state.darkTheme ? "theme-dark" : "theme-light");
+    html = html.replaceAll("{{density_class}}", state.compactMode ? "density-compact" : "density-comfortable");
+    html = html.replaceAll("{{current_module}}", escapeHtml(currentModule().title));
+    html = html.replaceAll("{{status_message}}", escapeHtml(state.statusMessage));
+    html = html.replaceAll('src="assets/', 'src="../../assets/');
+    document.getElementById("app").innerHTML = html;
+}
+
+function selectModule(moduleId) {
+    if (!modules.some((module) => module.id === moduleId)) {
+        return;
+    }
+    state.moduleId = moduleId;
+    state.modalOpen = false;
+    state.statusMessage = `Loaded ${moduleId} page`;
+    render();
+}
+
+document.addEventListener("click", (event) => {
+    const target = event.target.closest("button");
+    if (!target) {
+        return;
+    }
+
+    if (target.id.startsWith("nav_")) {
+        selectModule(target.id.slice(4));
+    } else if (target.id === "action_reload") {
+        state.statusMessage = `Reloaded ${state.moduleId} page`;
+        render();
+    } else if (target.id === "action_theme") {
+        state.darkTheme = !state.darkTheme;
+        state.statusMessage = state.darkTheme ? "Switched to dark theme" : "Switched to light theme";
+        render();
+    } else if (target.id === "action_density") {
+        state.compactMode = !state.compactMode;
+        state.statusMessage = state.compactMode ? "Compact density enabled" : "Comfortable density enabled";
+        render();
+    } else if (target.id === "action_modal") {
+        state.modalOpen = true;
+        state.statusMessage = "Modal opened";
+        render();
+    } else if (target.id === "modal_close") {
+        state.modalOpen = false;
+        state.statusMessage = "Modal closed";
+        render();
+    } else if (target.id === "counter_inc") {
+        state.counter += 1;
+        state.statusMessage = "Counter incremented";
+        render();
+    } else if (target.id === "counter_dec") {
+        state.counter -= 1;
+        state.statusMessage = "Counter decremented";
+        render();
+    } else if (target.id === "counter_reset") {
+        state.counter = 0;
+        state.statusMessage = "Counter reset";
+        render();
+    } else if (target.id === "primary_action") {
+        state.counter += 1;
+        state.statusMessage = "Primary action clicked";
+        render();
+    } else if (target.id === "secondary_action") {
+        state.statusMessage = "Secondary action clicked";
+        render();
+    } else if (target.id === "danger_action") {
+        state.statusMessage = "Danger action clicked";
+        render();
+    }
+});
+
+document.addEventListener("keydown", (event) => {
+    if (event.key === "F5") {
+        event.preventDefault();
+        state.statusMessage = `Reloaded ${state.moduleId} page`;
+        render();
+    } else if (event.key === "Escape" && state.modalOpen) {
+        state.modalOpen = false;
+        state.statusMessage = "Modal closed";
+        render();
+    } else if (/^[1-9]$/.test(event.key)) {
+        const index = Number(event.key) - 1;
+        if (modules[index]) {
+            selectModule(modules[index].id);
+        }
+    } else if (event.key === "0") {
+        selectModule(modules[9].id);
+    }
+});
+
+window.addEventListener("resize", render);
+setInterval(() => {
+    const statePanels = document.querySelectorAll(".state-panel");
+    if (statePanels.length === 0) {
+        return;
+    }
+    const panel = document.createElement("div");
+    panel.innerHTML = buildStatePanel();
+    statePanels.forEach((oldPanel) => oldPanel.replaceWith(panel.firstElementChild.cloneNode(true)));
+}, 500);
+
+render();
+</script>
+</body>
+</html>

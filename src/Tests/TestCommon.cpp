@@ -5,7 +5,7 @@
 
 // Define the global hook for creating the game instance.
 // This is called by NextEngine internally.
-std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Options& options, NextEngine* engine)
+std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
 {
     return std::make_unique<TestGameInstance>(config, options, engine);
 }
@@ -14,16 +14,18 @@ EngineTestFixture::EngineTestFixture()
 {
     // Mock arguments
     // Using a minimal resolution to speed up tests, renderer=0 (usually path tracer or default)
-    const char* argv[] = { 
-        "gkNextUnitTests", 
-        "--width=800", 
+    const char* argv[] = {
+        "gkNextUnitTests",
+        "--width=800",
         "--height=600",
         "--fastexit=false",
-        "--no-hot-reload"
+        "--no-shader-hotreload",
+        // Hidden window: tests render a real swapchain but should never pop a window or steal focus.
+        "--hidden-window"
     };
     int argc = sizeof(argv) / sizeof(argv[0]);
 
-    options_ = std::make_unique<Options>(argc, argv);
+    options_ = std::make_unique<Runtime::Config::Options>(argc, argv);
     GOption = options_.get();
 
     engine_ = std::make_unique<NextEngine>(*GOption);

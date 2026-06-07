@@ -1,6 +1,6 @@
 #include <catch2/catch_all.hpp>
-#include "Assets/Core/Node.h"
-#include "Runtime/Components/RenderComponent.h"
+#include "Engine/Assets/Core/Node.h"
+#include "Engine/Runtime/Components/RenderComponent.h"
 #include <memory>
 #include <array>
 

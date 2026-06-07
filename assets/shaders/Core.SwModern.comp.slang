@@ -9,8 +9,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
     START_SHADERCLOCK()
 
     FVisibilityBufferRayCaster rayCaster;
-    FAmbientCubeRayTracer tracer;
-    FAmbientCubeIlluminator dIlluminator;
+    FAmbientCubeRayTracerIndirect tracer;
+    FShadowMapDirectIlluminator dIlluminator;
 
     FPathTracingRenderer renderer;
     renderer.ExitProbability = 0.5f;

@@ -26,7 +26,6 @@
             "name": "windows",
             "inherits": "base",
             "displayName": "Windows",
-            "generator": "Visual Studio 17 2022",
             "architecture": "x64",
             "condition": {
                 "type": "equals",
@@ -64,6 +63,7 @@
                 "rhs": "Darwin"
             },
             "cacheVariables": {
+                "CMAKE_OSX_SYSROOT": "macosx",
                 "VCPKG_TARGET_TRIPLET": "arm64-osx",
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo"
             }

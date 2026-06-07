@@ -39,7 +39,7 @@ This project is especially relevant if you are interested in:
   The project keeps pushing on 1spp + temporal reuse, denoising, reprojection, and multi-pipeline switching so path tracing becomes part of a practical runtime workflow instead of a pure offline showcase.
 
 - **Game-oriented GPU architecture**  
-  With Visibility Buffer, fully bindless resources, GPU-driven rendering, and Multi-Draw Indirect, the design tries to spend CPU time on content and gameplay while keeping GPU budget focused on what actually improves the frame.
+  With Visibility Buffer, fully bindless resources, and single-draw GPU-driven submission, the design tries to spend CPU time on content and gameplay while keeping GPU budget focused on what actually improves the frame.
 
 - **Engine systems that serve content and gameplay prototypes**  
   ECS, reflection, editor tooling, script hot reload, physics sync, runtime import, and stable rendering behavior all work together to support playable content rather than isolated subsystems.
@@ -87,9 +87,9 @@ This project is especially relevant if you are interested in:
 
 - **Visibility Buffer**
 - **Fully Bindless + GPU-Driven**
-- **Multi-Draw Indirect**
+- **Single-Draw GPU-Driven Submit**
 - **Hardware / Software Ray Tracing**
-- **Temporal Reprojection / JBF / OIDN / DLSS RR**
+- **Temporal Reprojection / JBF / FSR / DLSS RR**
 
 ### Engine and tooling
 
@@ -146,7 +146,7 @@ The project uses CMake + Ninja, with dependencies managed through vcpkg. Beyond 
 
 - CMake 3.26+
 - Visual Studio 2022 with C++ workload
-- Vulkan SDK 1.4.313.2
+- Vulkan SDK 1.4.341.1 (downloaded into the repository by default; if `VULKAN_SDK` is set, that SDK is used first)
 - Enable "Use Unicode UTF-8 for worldwide language support"
 
 ```bat
@@ -155,7 +155,7 @@ gnb.bat build
 gnb.bat run gkNextRenderer
 ```
 
-Aside from host-side requirements such as Visual Studio and the Vulkan SDK, the rest of the project dependencies are usually prepared by `gnb`.
+Aside from host-side requirements such as Visual Studio, the rest of the project dependencies are usually prepared by `gnb`, including the pinned Vulkan SDK, Slang, and TypeScript toolchains.
 
 </details>
 
@@ -185,7 +185,8 @@ Aside from host-side requirements such as Visual Studio and the Vulkan SDK, the 
 
 Notes:
 
-- if `slangc` is not installed yet, `gnb setup` will automatically fetch the project-managed Slang toolchain into `external/`
+- if no usable `VULKAN_SDK` is available, `gnb setup` automatically downloads the pinned LunarG Vulkan SDK into `external/VulkanSDK/`
+- if `slangc` is not installed yet, `gnb setup` automatically fetches the project-managed Slang toolchain into `external/`
 - on pacman hosts, `gnb setup` and the first Linux `gnb build` automatically install the required system packages before vcpkg bootstrap; if that is unavailable, run `sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxrandr wayland-protocols libxkbcommon systemd-libs` manually
 - if a GitHub archive download fails during vcpkg setup, rerun the same build command once before doing deeper troubleshooting
 - deployment notes from a real Steam Deck setup are available in [docs/steamdeck-deployment-notes.md](docs/steamdeck-deployment-notes.md)
@@ -207,7 +208,7 @@ Notes:
 ./gnb.sh run gkNextRenderer
 ```
 
-`gnb setup` automatically downloads the Slang and TypeScript toolchains used by the project, so those project-level dependencies no longer need to be installed separately.
+`gnb setup` automatically downloads the Vulkan SDK, Slang, and TypeScript toolchains used by the project, so those project-level dependencies no longer need to be installed separately. If `VULKAN_SDK` is explicitly set, that SDK takes precedence.
 
 </details>
 
@@ -273,7 +274,9 @@ gnb.bat paks fetch
 | `gkNextRenderer` | Main renderer for path tracing / hybrid rendering / multi-pipeline comparison |
 | `gkNextEditor` | ImGui editor for materials, scenes, and runtime-oriented tooling |
 | `BrickPlayer` | Digital LEGO building prototype based on LDraw |
+| `Brotato3D` | Top-down 3D survival shooter prototype, intro in [docs/projects/brotato-3d/introduction.md](docs/projects/brotato-3d/introduction.md) |
 | `CharacterDemo` | Character control, AI behavior, navigation, and combat interaction experiments |
+| `FlappyCpp` / `FlappyJs` | Flappy Bird dual implementation used to verify C++/QuickJS behavior parity, intro in [docs/projects/flappy-bird-parity/introduction.md](docs/projects/flappy-bird-parity/introduction.md) |
 | `MagicaLego` | A lighter LEGO / voxel-style gameplay playground |
 | `gkNextStillBenchmark` | Static-scene rendering benchmark |
 | `gkNextMotionBenchmark` | Dynamic-scene rendering benchmark |

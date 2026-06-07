@@ -1,0 +1,240 @@
+.hero {
+    display: flex;
+    width: 659px;
+    min-height: 430px;
+    padding: 54px;
+}
+
+.hero-copy {
+    width: 345px;
+    padding-right: 32px;
+}
+
+.hero-visual {
+    width: 245px;
+    padding: 18px;
+    background-color: #111720;
+    border: 1px #334158;
+}
+
+.hero-actions {
+    display: flex;
+    margin-top: 22px;
+}
+
+.hero-actions button {
+    margin-right: 10px;
+}
+
+.browser-frame {
+    background-color: #0d1118;
+    border: 1px #40506a;
+}
+
+.browser-bar {
+    height: 28px;
+    padding: 7px 10px;
+    background-color: #1e2633;
+}
+
+.browser-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    margin-right: 5px;
+    background-color: #f3c94e;
+}
+
+.preview-body {
+    padding: 18px;
+}
+
+.preview-line {
+    height: 16px;
+    margin-bottom: 10px;
+    background-color: #38465c;
+}
+
+.preview-line.short {
+    width: 52%;
+}
+
+.preview-card-row {
+    display: flex;
+    margin-top: 20px;
+}
+
+.preview-card {
+    width: 98px;
+    height: 96px;
+    margin-right: 10px;
+    background-color: #253044;
+    border: 1px #4f6078;
+}
+
+.metric-row {
+    display: flex;
+    margin-top: 18px;
+}
+
+.metric {
+    width: 210px;
+    margin-right: 12px;
+    padding: 16px;
+}
+
+.pricing-card.featured {
+    border: 2px #f3c94e;
+}
+
+.faq-item {
+    margin-bottom: 10px;
+    padding: 14px;
+    background-color: #171d26;
+    border: 1px #303c4f;
+}
+
+.type-scale .sample-h1 {
+    font-size: 48px;
+}
+
+.type-scale .sample-h2 {
+    font-size: 32px;
+}
+
+.type-scale .sample-body {
+    font-size: 18px;
+}
+
+.type-scale,
+.type-scale p,
+.type-scale h1,
+.type-scale h2,
+.type-scale h3,
+.type-scale h4,
+.type-scale h5,
+.type-scale h6 {
+    width: 100%;
+}
+
+.layout-board {
+    display: flex;
+    height: 330px;
+}
+
+.layout-sidebar {
+    width: 180px;
+    padding: 14px;
+    background-color: #202735;
+}
+
+.layout-canvas {
+    width: 500px;
+    padding: 14px;
+}
+
+.layout-tile {
+    height: 68px;
+    margin-bottom: 10px;
+    padding: 12px;
+    background-color: #263247;
+    border: 1px #52647d;
+}
+
+.control-strip {
+    display: flex;
+}
+
+.control-strip button {
+    margin-right: 10px;
+}
+
+.counter-panel {
+    display: flex;
+    align-items: center;
+}
+
+.counter-value {
+    width: 90px;
+    margin-right: 10px;
+    text-align: center;
+    font-size: 42px;
+    color: #ffe08a;
+}
+
+.form-row {
+    display: flex;
+    margin-bottom: 12px;
+}
+
+.form-row label {
+    width: 150px;
+    padding-top: 8px;
+    color: #b9c5d6;
+}
+
+.scroll-box {
+    height: 380px;
+    overflow-y: auto;
+    padding: 12px;
+    background-color: #111720;
+    border: 1px #303c4f;
+}
+
+.scroll-item {
+    margin-bottom: 8px;
+    padding: 12px;
+    background-color: #202735;
+    border: 1px #303c4f;
+}
+
+.animation-stage {
+    height: 320px;
+    padding: 20px;
+}
+
+.motion-card {
+    width: 220px;
+    height: 120px;
+    padding: 18px;
+    background-color: #2d5c78;
+    border: 1px #9dd9ff;
+    transition: transform 0.25s, background-color 0.25s;
+}
+
+.motion-card:hover {
+    transform: translateX(40px) scale(1.08);
+    background-color: #9469d6;
+}
+
+.responsive-row {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.responsive-card {
+    width: 30%;
+    min-width: 190px;
+    margin: 8px;
+    padding: 16px;
+    background-color: #202735;
+    border: 1px #303c4f;
+}
+
+.image-grid {
+    display: flex;
+}
+
+.image-card {
+    width: 210px;
+    margin-right: 14px;
+    padding: 14px;
+    background-color: #171d26;
+    border: 1px #303c4f;
+}
+
+.image-card img {
+    width: 100%;
+    height: 170px;
+    background-color: #0b0f15;
+}

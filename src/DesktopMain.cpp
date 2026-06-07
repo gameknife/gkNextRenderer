@@ -1,8 +1,8 @@
-#include "Utilities/Exception.hpp"
-#include "Options.hpp"
-#include "Runtime/Engine.hpp"
-#include "Runtime/Scene/GltfTestRunner.hpp"
-#include "Runtime/Platform/PlatformCommon.h"
+#include "Engine/Utilities/Exception.hpp"
+#include "Engine/Options.hpp"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Scene/GltfTestRunner.hpp"
+#include "Engine/Runtime/Platform/PlatformCommon.h"
 
 #if WIN32
 #include "ThirdParty/renderdoc/renderdoc_app.h"
@@ -12,9 +12,11 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include <cstdlib>
+
 std::unique_ptr<NextEngine> GApplication;
-std::unique_ptr<Options> GOptionPtr;
-std::unique_ptr<GltfTestRunner> GTestRunner;
+std::unique_ptr<Runtime::Config::Options> GOptionPtr;
+std::unique_ptr<Runtime::Scene::GltfTestRunner> GTestRunner;
 
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
@@ -39,9 +41,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     // Handle command line options.
 #if IOS
     const char* argv1[] = { "gkNextRenderer", "--load-scene=assets/models/playground.glb" };
-    GOptionPtr.reset(new Options(2, argv1));
+    GOptionPtr.reset(new Runtime::Config::Options(2, argv1));
 #else
-    GOptionPtr.reset(new Options(argc, const_cast<const char**>(argv)));
+    GOptionPtr.reset(new Runtime::Config::Options(argc, const_cast<const char**>(argv)));
 #endif
     // Global GOption, can access from everywhere
     GOption = GOptionPtr.get();
@@ -70,6 +72,11 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 //         setenv("MTL_CAPTURE_ENABLED", "1", 1);
 //         setenv("MVK_CONFIG_AUTO_GPU_CAPTURE_SCOPE","2",1);
 // #endif
+        
+#if __APPLE__
+    setenv("MESA_KK_GPU_CAPTURE", "1", 1);
+    setenv("MESA_KK_GPU_CAPTURE_DIRECTORY", "~/capture", 1);
+#endif
     }
 
     // Init
@@ -80,7 +87,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
     if (GOption->TestGltfRobustness)
     {
-        GTestRunner = std::make_unique<GltfTestRunner>(GApplication.get());
+        GTestRunner = std::make_unique<Runtime::Scene::GltfTestRunner>(GApplication.get());
         GApplication->AddTickedTask([](double dt){ return GTestRunner->Update(dt); });
     }
 
@@ -96,7 +103,11 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
     
     if (GOption->FastExit)
     {
+#if __APPLE__
+        std::exit(0);
+#else
         std::quick_exit(0);
+#endif
     }
 
     GTestRunner.reset();

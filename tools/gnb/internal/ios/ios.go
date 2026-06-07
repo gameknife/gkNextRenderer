@@ -9,12 +9,12 @@ import (
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 )
 
-func Build(repoRoot string, skipCodeSign bool) error {
-	if err := run(repoRoot, "cmake", configureArgs(skipCodeSign)...); err != nil {
+func Build(repoRoot string, cmakePath string, skipCodeSign bool) error {
+	if err := run(repoRoot, cmakePath, configureArgs(skipCodeSign)...); err != nil {
 		return err
 	}
 
-	return run(repoRoot, "cmake", buildArgs("gkNextRenderer")...)
+	return run(repoRoot, cmakePath, buildArgs("gkNextRenderer")...)
 }
 
 func configureArgs(skipCodeSign bool) []string {
