@@ -213,7 +213,7 @@ glm::vec3 Brotato3DGameInstance::ResolveEnemyGroundedPosition(
 
 ```bash
 # 构建（删/加文件后必须 --reconfigure）
-gnb.bat build Brotato3D --reconfigure      # Windows
+./gnb.bat build Brotato3D --reconfigure      # Windows
 ./gnb build Brotato3D --reconfigure        # macOS/Linux
 
 # 运行：看到 "uploaded scene [...] to gpu" 即初始化通过

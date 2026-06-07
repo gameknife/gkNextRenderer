@@ -6,7 +6,7 @@ The repository build CLI is `gnb`.
 
 ```bash
 ./gnb.sh build [target]
-gnb.bat build [target]
+./gnb.bat build [target]
 ```
 
 Options: `--clean`, `--reconfigure`, `--jobs N`, `--no-unity`, `--lto`, `--print-cmd`.
@@ -15,7 +15,7 @@ Options: `--clean`, `--reconfigure`, `--jobs N`, `--no-unity`, `--lto`, `--print
 
 ```bash
 ./gnb.sh run [target] [-- app-args]
-gnb.bat run [target] [-- app-args]
+./gnb.bat run [target] [-- app-args]
 ```
 
 Options: `--bin-dir`, `--present-mode`, `--scene`, `--list`, `--dry-run`.
@@ -24,7 +24,7 @@ Options: `--bin-dir`, `--present-mode`, `--scene`, `--list`, `--dry-run`.
 
 ```bash
 ./gnb.sh setup
-gnb.bat setup
+./gnb.bat setup
 ```
 
 Options: `--skip-paks`, `--vcpkg-only`, `--refresh`.

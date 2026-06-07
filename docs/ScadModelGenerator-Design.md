@@ -303,7 +303,7 @@ SCAD 多为静态场景：默认 `SwModernNoAmbient`（快、稳，适合迭代�
 
 ## 9. 分阶段开发计划（里程碑）
 
-> 每个里程碑可独立验收。每完成一项跑 `gnb build --reconfigure`（Windows: `gnb.bat build gkScadStudio`），并启动到日志 `uploaded scene [...] to gpu`。
+> 每个里程碑可独立验收。每完成一项跑 `gnb build --reconfigure`（Windows: `./gnb.bat build gkScadStudio`），并启动到日志 `uploaded scene [...] to gpu`。
 
 ### M0 — 脚手架与 target（0.5d）
 - 建 `src/Application/Editor/ScadStudio/` 目录、`CMakeLists.txt`、`ScadStudioMain.cpp`、`ScadStudioInstance`（继承 `NextGameInstance`，空实现）。
@@ -375,7 +375,7 @@ SCAD 多为静态场景：默认 `SwModernNoAmbient`（快、稳，适合迭代�
 
 ## 11. 测试与验收
 
-- **构建**：`gnb build --reconfigure`（或 `gnb.bat build gkScadStudio`），零编译错误。
+- **构建**：`gnb build --reconfigure`（或 `./gnb.bat build gkScadStudio`），零编译错误。
 - **运行**：启动到 `uploaded scene [...] to gpu`。
 - **端到端**：
   1. 「一个带把手的啤酒杯」→ 视口出现杯子，结构树有层级，0 warning。

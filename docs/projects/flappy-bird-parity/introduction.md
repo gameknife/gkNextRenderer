@@ -67,8 +67,8 @@ Flappy Bird Parity 是 gkNextEngine 里的双实现玩法样例：同一套 Flap
 常规运行：
 
 ```powershell
-gnb.bat run FlappyCpp
-gnb.bat run FlappyJs
+./gnb.bat run FlappyCpp
+./gnb.bat run FlappyJs
 ```
 
 确定性 replay 对比：

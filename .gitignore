@@ -359,6 +359,9 @@ cmake-build-*/
 # Runtime-generated files (ImGui layout, profiler traces)
 /imgui.ini
 /editor.ini
+/scadstudio.ini
+/commit_msg.txt
+/ldraw_loader_*.mpd
 /traces/
 /ai_secrets.local.json
 

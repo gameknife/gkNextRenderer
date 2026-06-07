@@ -5,6 +5,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 
 #include <memory>
+#include <string>
 
 struct EditorContext;
 
@@ -31,6 +32,7 @@ private:
 
     EditorGameInstance* editor_;
     Editor::EditorUiState uiState_{};
+    std::string imguiIniPath_;
 
     bool firstRun_ = true;
 };

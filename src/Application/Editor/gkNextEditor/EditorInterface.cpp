@@ -65,7 +65,8 @@ void EditorInterface::Config()
 {
     auto& io = ImGui::GetIO();
 
-    io.IniFilename = "editor.ini";
+    imguiIniPath_ = Utilities::FileHelper::GetPlatformFilePath("editor.ini");
+    io.IniFilename = imguiIniPath_.c_str();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad; // Enable Gamepad Controls
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // Enable Docking

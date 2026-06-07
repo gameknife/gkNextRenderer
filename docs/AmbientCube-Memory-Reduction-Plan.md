@@ -201,7 +201,7 @@ Cubes/Voxels 按 `AmbientCubeCascadeCount`（默认 3）分配，而非恒定 4�
 ---
 
 ## 7. 验证策略
-1. **Build**：`gnb.bat build --reconfigure`，修净编译错误（含 Slang）。
+1. **Build**：`./gnb.bat build --reconfigure`，修净编译错误（含 Slang）。
 2. **Run**：`gkNextRenderer` 见 `uploaded scene [...] to gpu`，GI 正常。
 3. **视觉回归**：`gkNextVisualTest`（`assets/configs/visual_test.json`）固定场景与稠密版截图 diff；重点漏光/接缝/反弹。
 4. **性能**：`SCOPED_GPU_TIMER`（`sw-lightbake`/`propagation-lightbake` 等）对比烘焙耗时（应**下降**）与采样耗时；记活跃 brick 占比。

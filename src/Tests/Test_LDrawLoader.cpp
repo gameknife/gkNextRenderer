@@ -25,7 +25,9 @@ namespace
         {
             auto uniqueSuffix = std::to_string(
                 std::chrono::steady_clock::now().time_since_epoch().count());
-            path_ = std::filesystem::temp_directory_path() / ("ldraw_loader_" + uniqueSuffix + ".mpd");
+            dir_ = std::filesystem::temp_directory_path() / "gkNextEngine" / "tests" / ("ldraw_loader_" + uniqueSuffix);
+            std::filesystem::create_directories(dir_);
+            path_ = dir_ / "scene.mpd";
 
             std::ofstream out(path_, std::ios::binary | std::ios::trunc);
             REQUIRE(out.is_open());
@@ -35,7 +37,7 @@ namespace
         ~ScopedLDrawSceneFile()
         {
             std::error_code ec;
-            std::filesystem::remove(path_, ec);
+            std::filesystem::remove_all(dir_, ec);
         }
 
         std::filesystem::path Path() const
@@ -44,6 +46,7 @@ namespace
         }
 
     private:
+        std::filesystem::path dir_;
         std::filesystem::path path_;
     };
 }

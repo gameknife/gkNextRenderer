@@ -179,7 +179,7 @@ slangc <shader> -o <out.spv> -entry main -target spirv
 
 验收：
 
-- `gnb.bat build gkNextRenderer` 通过。
+- `./gnb.bat build gkNextRenderer` 通过。
 - `Util.SharcCompileTest.comp.slang.spv` 生成。
 - 不影响现有 shader hot reload。
 
@@ -298,20 +298,20 @@ slangc <shader> -o <out.spv> -entry main -target spirv
 按 AGENTS.md 的 targeted build：
 
 ```bash
-gnb.bat build gkNextRenderer gkNextUnitTests
+./gnb.bat build gkNextRenderer gkNextUnitTests
 ```
 
 若新增 shader 文件未被 glob 收录或改了 CMake：
 
 ```bash
-gnb.bat build gkNextRenderer gkNextUnitTests --reconfigure
+./gnb.bat build gkNextRenderer gkNextUnitTests --reconfigure
 ```
 
 ### 快速截图
 
 ```bash
-gnb.bat shot --scene assets/models/playground.glb --frames 300
-gnb.bat shot --scene assets/models/GIBootcampLarge.proc --frames 300
+./gnb.bat shot --scene assets/models/playground.glb --frames 300
+./gnb.bat shot --scene assets/models/GIBootcampLarge.proc --frames 300
 ```
 
 需要对 AmbientCube 交互影响做验证时，仍按 AmbientCube 文档使用更高帧数（例如 3000），因为 CPU voxelization + bake 需要时间收敛。
@@ -359,5 +359,5 @@ r.sharc.responsiveLighting = false
 3. Debug view 能显示 cache hit / miss。
 4. SHARC off/on 可热切或重启后切换。
 5. GPU timer 能证明性能/噪声至少一项有明确收益。
-6. `gnb.bat build gkNextRenderer gkNextUnitTests` 通过。
+6. `./gnb.bat build gkNextRenderer gkNextUnitTests` 通过。
 

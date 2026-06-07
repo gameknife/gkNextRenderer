@@ -1,9 +1,0 @@
-Polish: Boss HP, Gamepad Nav, Results UI, SFX
-
-- Increase Boss Warden HP 10x
-- Enable ImGui Gamepad Navigation and fix HUD focus
-- Add Start button pause functionality
-- Fix transparent background on result screen
-- Vertically stagger XP and MAT floating text
-- Fix looping hover sound effect with gamepad nav
-- Fix compilation issue with missing brace in Brotato3DPlayerSystem

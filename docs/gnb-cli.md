@@ -1,6 +1,6 @@
 # gnb CLI
 
-`gnb` is the single build entry point for gkNextEngine. Use `gnb.bat` on
+`gnb` is the single build entry point for gkNextEngine. Use `./gnb.bat` on
 Windows and `./gnb.sh` on macOS/Linux when a system-wide `gnb` is not installed.
 
 For implementation details and architecture notes, see
@@ -139,7 +139,7 @@ Create a desktop package:
 Create a MagicaLego package:
 
 ```bash
-gnb.bat package magicalego --version v1.0.0
+./gnb.bat package magicalego --version v1.0.0
 ```
 
 ## Info And Doctor
@@ -162,12 +162,12 @@ AVIF remains a manual CMake feature and is not exposed as a `gnb build` flag:
 
 ```bash
 cmake --preset windows -DENABLE_AVIF=ON -DVCPKG_MANIFEST_FEATURES=avif
-gnb.bat build
+./gnb.bat build
 ```
 
 ## Publish gnb Binaries
 
-`gnb.bat` and `gnb.sh` use the `paks-latest` GitHub release as their single
+`./gnb.bat` and `gnb.sh` use the `paks-latest` GitHub release as their single
 bootstrap source. Pushes to `main` / `dev` that modify `tools/gnb` Go sources
 automatically rebuild and publish the platform binaries plus `gnb-version.txt`
 through `.github/workflows/gnb-release.yml`.

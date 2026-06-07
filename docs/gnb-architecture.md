@@ -211,7 +211,7 @@ go test ./...         # 跑单测（Catch2 之外，这里是 gnb 自己的 Go �
 
 - 单测覆盖了 `spec` / `dashboard` / `llm` / `fetcher` / `cmakerun` / `platform` / `ios` / `cmd/gnb` 等关键包。
 - **已知例外**：Windows 上 `fetcher` 的 `TestUntarPreservesSymlink` 会因「创建符号链接需要权限」失败，这是宿主环境限制（需要开发者模式/管理员），与逻辑无关。
-- 发布：根目录 `gnb.bat` / `gnb.sh` 是很薄的 shim——本机有 Go 就从 `tools/gnb` 重新编译，否则用 `tools/gnb-bin/` 缓存或从 GitHub Release（`paks-latest`）下载，机制见 `gnb-cli.md` 的「Publish gnb Binaries」。
+- 发布：根目录 `./gnb.bat` / `gnb.sh` 是很薄的 shim——本机有 Go 就从 `tools/gnb` 重新编译，否则用 `tools/gnb-bin/` 缓存或从 GitHub Release（`paks-latest`）下载，机制见 `gnb-cli.md` 的「Publish gnb Binaries」。
 
 ## 12. 代码约定
 

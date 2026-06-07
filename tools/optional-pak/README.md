@@ -18,7 +18,7 @@ project's GitHub release:
 ./gnb.sh paks fetch optional
 
 # Windows
-gnb.bat paks fetch optional
+./gnb.bat paks fetch optional
 ```
 
 The legacy `tools/optional-pak/fetch-optional-pak.{sh,ps1}` scripts still work
@@ -41,7 +41,7 @@ Edit [`optional-files.txt`](./optional-files.txt) to add or remove entries
 PowerShell equivalent:
 
 ```powershell
-gnb.bat build Packager
+./gnb.bat build Packager
 pwsh ./tools/optional-pak/build-optional-pak.ps1
 ```
 

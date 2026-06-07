@@ -151,8 +151,8 @@ tools/tsc/tsc -p assets/typescript/tsconfig.json
 涉及 C++ 绑定、资源复制或运行时加载路径时，使用项目默认构建验证：
 
 ```powershell
-gnb.bat build --reconfigure
-gnb.bat run gkNextRenderer
+./gnb.bat build --reconfigure
+./gnb.bat run gkNextRenderer
 ```
 
 启动成功后，日志应能到达：

@@ -255,8 +255,8 @@ SoftMeshShader 路径依赖几个关键 barrier：
 
 ## 验证建议
 
-- 编译：`gnb.bat build gkNextRenderer`
-- 渲染冒烟：`gnb.bat run gkNextRenderer`，确认日志出现 `uploaded scene [...] to gpu`
+- 编译：`./gnb.bat build gkNextRenderer`
+- 渲染冒烟：`./gnb.bat run gkNextRenderer`，确认日志出现 `uploaded scene [...] to gpu`
 - 单元测试：`out/build/windows/bin/gkNextUnitTests.exe`
 - 渲染改动：运行 `gkNextVisualTest`，重点检查 visibility buffer、wireframe overlay、CSM shadow、selected/hovered object id 是否一致。
 

@@ -4,7 +4,7 @@
 
 ## 一句话概览
 
-- 启动层：仓库根目录的 `gnb.bat` / `gnb.sh` 负责 bootstrap、本地重编译和缓存二进制切换
+- 启动层：仓库根目录的 `./gnb.bat` / `gnb.sh` 负责 bootstrap、本地重编译和缓存二进制切换
 - CLI 层：`tools/gnb/cmd/gnb/main.go` 使用 `cobra` 注册子命令与参数
 - 配置层：仓库根 `gnb.toml` 保存版本约束、vcpkg、外部工具链、pak 资源和目标列表
 - 执行层：`tools/gnb/internal/*` 分模块封装 CMake、vcpkg、资源下载、运行器、打包和平台逻辑
@@ -15,13 +15,13 @@
 - `gnb` 是独立二进制，不依赖引擎本体，也不需要先把 C++ 工程编出来
 - 单文件分发适合做仓库根命令入口，Windows / Linux / macOS 都能保持一致体验
 - 标准库已经足够覆盖文件系统、进程启动、HTTP 下载、ZIP/TAR 解包等基础能力
-- 本地如果装了 Go，`gnb.bat` / `gnb.sh` 会优先从 `tools/gnb` 重新编译，方便维护者直接改 CLI
+- 本地如果装了 Go，`./gnb.bat` / `gnb.sh` 会优先从 `tools/gnb` 重新编译，方便维护者直接改 CLI
 
 ## 实现分层
 
 ### 1. 启动与分发层
 
-根目录的 `gnb.bat` 和 `gnb.sh` 不是完整业务脚本，而是很薄的 shim：
+根目录的 `./gnb.bat` 和 `gnb.sh` 不是完整业务脚本，而是很薄的 shim：
 
 - 优先使用仓库本地 `gnb(.exe)`，必要时从 `tools/gnb` 重新编译
 - 没有本地二进制时，使用 `tools/gnb-bin/<platform>/` 下的缓存副本

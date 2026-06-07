@@ -172,6 +172,7 @@ private:
 	};
 
 	std::unique_ptr<Vulkan::RenderPass> renderPass_;
+	std::string imguiIniPath_;
 	std::vector< Vulkan::FrameBuffer > uiFrameBuffers_;
 	struct FUiRenderBuffers
 	{
