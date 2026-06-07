@@ -432,6 +432,54 @@ func (d *Document) DeleteTask(id int) (Task, error) {
 	return removed, nil
 }
 
+// MoveDoneTasksFromNextToRecent moves every completed task from "下一步" to the
+// end of "最近完成", preserving their original line formatting and order.
+func (d *Document) MoveDoneTasksFromNextToRecent() ([]Task, error) {
+	nextTasks := d.SectionTasks(SectionNext)
+	moved := make([]Task, 0, len(nextTasks))
+	movedLines := make([]string, 0, len(nextTasks))
+	lineNums := make([]int, 0, len(nextTasks))
+	for _, t := range nextTasks {
+		if t.Status != StatusDone {
+			continue
+		}
+		moved = append(moved, t)
+		movedLines = append(movedLines, d.Lines[t.LineNum-1])
+		lineNums = append(lineNums, t.LineNum)
+	}
+	if len(moved) == 0 {
+		return nil, nil
+	}
+
+	d.RemoveLines(lineNums)
+	if len(d.SectionTasks(SectionNext)) == 0 {
+		insertPlaceholderIfEmpty(d, SectionNext)
+		if err := d.reloadFromLines(); err != nil {
+			return nil, err
+		}
+	}
+
+	insertAt, err := d.sectionAppendIndex(SectionRecent)
+	if err != nil {
+		return nil, err
+	}
+	if insertAt < 0 {
+		insertAt = 0
+	}
+	if insertAt > len(d.Lines) {
+		insertAt = len(d.Lines)
+	}
+	newLines := make([]string, 0, len(d.Lines)+len(movedLines))
+	newLines = append(newLines, d.Lines[:insertAt]...)
+	newLines = append(newLines, movedLines...)
+	newLines = append(newLines, d.Lines[insertAt:]...)
+	d.Lines = newLines
+	if err := d.reloadFromLines(); err != nil {
+		return nil, err
+	}
+	return moved, nil
+}
+
 // RemoveLines removes the given 1-indexed line numbers from the buffer and
 // updates section ranges accordingly. Task parsing is NOT re-done; callers that
 // need a fresh task slice should re-Parse.
@@ -522,6 +570,12 @@ func (d *Document) sectionAppendIndex(section SectionKind) (int, error) {
 	rng, ok := d.sectionRanges[section]
 	if !ok {
 		return 0, fmt.Errorf("section %q not present in %s", section.Heading(), filepath.Base(d.Path))
+	}
+	if rng[0] > len(d.Lines) {
+		rng[0] = len(d.Lines)
+	}
+	if rng[1] > len(d.Lines) {
+		rng[1] = len(d.Lines)
 	}
 	insertAt := rng[1]
 	for insertAt > rng[0] && strings.TrimSpace(d.Lines[insertAt-1]) == "" {

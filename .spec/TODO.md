@@ -2,10 +2,16 @@
 
 ## Milestone: 工作流落地  <!-- status: active -->
 
-里程碑目标：完成 spec 工作流的三步落地（规范 + gnb todo + dashboard）。
-
 ### 下一步
 
+### 待规划
+- [ ] `#00024` [FEAT] AIService Agent 化 Phase 8：MagicaLego AI 接入 agent loop → specs/00024.md
+- [ ] `#00025` [DOC] AIService Agent 化 Phase 9：端到端集成测试 + AGENT_GUIDE/AIAgentSystem.md → specs/00025.md
+- [ ] `#00007` [FEAT] 目前的vcpkg是固定在一个老版本的，把项目依赖升级到最新的vcpkg版本，2026.04.27。并绑定版本，解决各种编译和运行问题。
+- [ ] `#00011` [IDEA] gnb在gkmini上host一个持久的todolist，作为一个“服务器”同步，可以随时随地进行任务管理
+- [ ] `#00012` [FEAT] 让 gkNextRenderer 主管线原生运行在浏览器（WebGPU 后端） → specs/00012.md
+
+### 最近完成
 - [x] `#00001` [IDEA] 介绍gnb技术栈  → journal/00001.md (2026-05-14)
 - [x] `#00002` [IDEA] 介绍typescript整合  → journal/00002.md (2026-05-14)
 - [x] `#00003` 介绍brotato3D  → journal/00003.md (2026-05-18)
@@ -24,16 +30,4 @@
 - [x] `#00022` [FEAT] AIService Agent 化 Phase 6：AI Panel UI 升级（步骤可视化 + 停止 + 模式开关） → journal/00022.md (2026-05-27)
 - [x] `#00023` [REFACTOR] AIService Agent 化 Phase 7：FEditorAIService 主路径切换到 agent，砍掉大 system prompt → journal/00023.md (2026-05-27)
 - [x] `#00026` [IDEA] 让SCAD的LLM生成结果更加结构化，按module拆分文件 → specs/00026.md → journal/00026.md (2026-05-31)
-- [!] `#00027` [IDEA] 优化SCAD Studio的交互逻辑 → specs/00027.md (blockers/00027.md)
-
-### 待规划
-- [ ] `#00024` [FEAT] AIService Agent 化 Phase 8：MagicaLego AI 接入 agent loop → specs/00024.md
-- [ ] `#00025` [DOC] AIService Agent 化 Phase 9：端到端集成测试 + AGENT_GUIDE/AIAgentSystem.md → specs/00025.md
-- [ ] `#00007` [FEAT] 目前的vcpkg是固定在一个老版本的，把项目依赖升级到最新的vcpkg版本，2026.04.27。并绑定版本，解决各种编译和运行问题。
-- [ ] `#00011` [IDEA] gnb在gkmini上host一个持久的todolist，作为一个“服务器”同步，可以随时随地进行任务管理
-- [ ] `#00012` [FEAT] 让 gkNextRenderer 主管线原生运行在浏览器（WebGPU 后端） → specs/00012.md
-- [ ] `#00028` [IDEA] 深化agent-validation模式，可以模拟键盘和鼠标操作，让agent验证更方便
-
-### 最近完成
-
-(暂无)
+- [x] `#00027` [IDEA] 优化SCAD Studio的交互逻辑 → specs/00027.md (blockers/00027.md)

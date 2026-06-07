@@ -34,6 +34,22 @@ func (s *Server) handleTodoPanel(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "todo_panel", vm)
 }
 
+func (s *Server) handleTodoCleanup(w http.ResponseWriter, r *http.Request) {
+	doc, ok := s.loadTODO(w)
+	if !ok {
+		return
+	}
+	if _, err := doc.MoveDoneTasksFromNextToRecent(); err != nil {
+		httpError(w, err)
+		return
+	}
+	if err := doc.Save(); err != nil {
+		httpError(w, err)
+		return
+	}
+	s.respondTodoPanel(w, r)
+}
+
 func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 	s.renderTaskDetail(w, r, false)
 }
@@ -115,6 +131,10 @@ func (s *Server) handleTaskDone(w http.ResponseWriter, r *http.Request) {
 		spec.WithArrow(spec.JournalRel(id)),
 		spec.WithParen(date),
 	); err != nil {
+		httpError(w, err)
+		return
+	}
+	if _, err := doc.MoveDoneTasksFromNextToRecent(); err != nil {
 		httpError(w, err)
 		return
 	}
