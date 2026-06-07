@@ -523,7 +523,7 @@ func newAndroidCommand(ctx appContext) *cobra.Command {
 			if len(args) == 1 {
 				mode = args[0]
 			}
-			return android.Run(ctx.repoRoot, mode)
+			return android.Run(ctx.repoRoot, ctx.cfg, mode)
 		},
 	}
 }
