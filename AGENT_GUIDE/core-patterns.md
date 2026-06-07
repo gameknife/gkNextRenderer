@@ -21,27 +21,27 @@
 ### 1. 依赖安装
 `gnb build` 会在首次运行时自动引导 vcpkg，无需手动调用。强制更新：
 ```bash
-gnb.bat setup --refresh   # Windows
+./gnb.bat setup --refresh   # Windows
 ./gnb.sh setup --refresh  # macOS/Linux
 ```
 
 ### 2. 项目构建
 ```bash
-gnb.bat build      # Windows
+./gnb.bat build      # Windows
 ./gnb.sh build     # macOS/Linux
 ./gnb.sh android   # Android
 ```
 
 ### 3. 单元测试
 ```bash
-gnb.bat test
+./gnb.bat test
 ./gnb.sh test
 ```
 
 ### 4. 快速运行主程序
 ```bash
-gnb.bat run                 # 列出可启动 application
-gnb.bat run gkNextRenderer
+./gnb.bat run                 # 列出可启动 application
+./gnb.bat run gkNextRenderer
 ./gnb.sh run gkNextRenderer
 ```
 

@@ -27,7 +27,7 @@ Edit [`brotato3d-files.txt`](./brotato3d-files.txt) to add or remove entries
 PowerShell equivalent:
 
 ```powershell
-gnb.bat build Packager
+./gnb.bat build Packager
 pwsh ./tools/brotato3d-pak/build-brotato3d-pak.ps1
 ```
 

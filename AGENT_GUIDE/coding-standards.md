@@ -161,7 +161,7 @@
 **工具链:**
 - CMake 3.26+, Ninja
 - vcpkg 管理依赖（`vcpkg.json` / `vcpkg-configuration.json`）
-- 平台脚本入口在根：`gnb.sh` / `gnb.bat`
+- 平台脚本入口在根：`gnb.sh` / `./gnb.bat`
 - 实现位于 `tools/gnb/`
 - vcpkg 在首次 `gnb build` 时由 gnb 自动引导，开发者无需手动运行；仅在需要更新时调用 `gnb setup --refresh`
 

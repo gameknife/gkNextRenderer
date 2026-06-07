@@ -503,7 +503,8 @@ namespace ScadStudio
     void ScadStudioInterface::Config()
     {
         ImGuiIO& io = ImGui::GetIO();
-        io.IniFilename = "scadstudio.ini";
+        imguiIniPath_ = Utilities::FileHelper::GetPlatformFilePath("scadstudio.ini");
+        io.IniFilename = imguiIniPath_.c_str();
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         io.ConfigFlags &= ~ImGuiConfigFlags_DockingEnable;
     }

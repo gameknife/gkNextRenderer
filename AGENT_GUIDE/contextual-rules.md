@@ -13,7 +13,7 @@
 ## 🛠️ 构建系统规则
 
 ### 统一入口 gnb
-- **唯一入口**: 一律通过 `gnb`（Windows `gnb.bat`、macOS/Linux `./gnb.sh`）构建、运行、测试，不再有 `build.bat`/`build.sh`。
+- **唯一入口**: 一律通过 `gnb`（Windows `./gnb.bat`、macOS/Linux `./gnb.sh`）构建、运行、测试，不再有 `build.bat`/`build.sh`。
 - **可用 CMake 预设**: `windows`、`linux`、`macos-arm64`、`ios`。
 
 ### 构建输出管理

@@ -132,8 +132,8 @@ The project uses CMake + Ninja, with dependencies managed through vcpkg. Beyond 
 
 ### General Notes
 
-- Start with `./gnb doctor` (Windows: `gnb.bat doctor`) to see which host-side tools are still missing
-- `./gnb setup` (Windows: `gnb.bat setup`) prepares vcpkg, project external toolchains, and optional pak assets; if you go straight to `./gnb build`, the first build will also bootstrap the core toolchain when needed
+- Start with `./gnb doctor` (Windows: `./gnb.bat doctor`) to see which host-side tools are still missing
+- `./gnb setup` (Windows: `./gnb.bat setup`) prepares vcpkg, project external toolchains, and optional pak assets; if you go straight to `./gnb build`, the first build will also bootstrap the core toolchain when needed
 - Desktop binaries are now built and launched through `gnb`, so you usually no longer need to `cd` into `out/build/<platform>/bin`
 - CMake presets are now: `windows`, `linux`, `macos-arm64`, `ios`
 
@@ -150,9 +150,9 @@ The project uses CMake + Ninja, with dependencies managed through vcpkg. Beyond 
 - Enable "Use Unicode UTF-8 for worldwide language support"
 
 ```bat
-gnb.bat setup
-gnb.bat build
-gnb.bat run gkNextRenderer
+./gnb.bat setup
+./gnb.bat build
+./gnb.bat run gkNextRenderer
 ```
 
 Aside from host-side requirements such as Visual Studio, the rest of the project dependencies are usually prepared by `gnb`, including the pinned Vulkan SDK, Slang, and TypeScript toolchains.
@@ -220,8 +220,8 @@ Notes:
 ```bat
 set ANDROID_HOME=C:\Android\Sdk
 set ANDROID_NDK_HOME=C:\Android\Sdk\ndk\27.0.12077973
-gnb.bat setup --vcpkg-only
-gnb.bat android
+./gnb.bat setup --vcpkg-only
+./gnb.bat android
 ```
 
 Android still depends on the host machine to provide JDK / SDK / NDK, while project-local vcpkg dependencies and external toolchains continue to be prepared by `gnb`.
@@ -264,7 +264,7 @@ Some larger binary assets are not committed to the repo. Fetch them as needed:
 ./gnb.sh paks fetch ffmpeg sfx
 
 # Windows
-gnb.bat paks fetch
+./gnb.bat paks fetch
 ```
 
 ## Subprojects

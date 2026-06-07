@@ -133,8 +133,8 @@ OnSceneUnloaded ResetCharacterState（销毁 actor/AI/导航）
 ## 6. 验证
 
 ```bash
-gnb.bat build CharacterDemo          # Windows（macOS/Linux: ./gnb build CharacterDemo）
-gnb.bat build gkNextUnitTests        # 改了 NextGameplay 必须连带构建
+./gnb.bat build CharacterDemo          # Windows（macOS/Linux: ./gnb build CharacterDemo）
+./gnb.bat build gkNextUnitTests        # 改了 NextGameplay 必须连带构建
 ./out/build/windows/bin/gkNextUnitTests "[Gameplay]"   # 跑 4 个 gameplay 组件单测
 ./gnb run CharacterDemo              # 看到 "uploaded scene [...] to gpu" 即初始化通过
 ```

@@ -26,8 +26,8 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
 ## Build Commands
 
 **Build (vcpkg is auto-bootstrapped on first run):**
-- Setup once: `./gnb setup` (Windows: `gnb.bat setup`)
-- Desktop build: `./gnb build` (Windows: `gnb.bat build`)
+- Setup once: `./gnb setup` (Windows: `./gnb.bat setup`)
+- Desktop build: `./gnb build` (Windows: `./gnb.bat build`)
 - Specific target: `./gnb build gkNextEditor`
 - Android: `./gnb android`
 - Clean rebuild: `./gnb build --clean`
@@ -217,7 +217,7 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 ## Verification After Changes
 
 1. **Build:** 按改动范围选择目标构建（详见上文 "Targeted builds"），默认**不要**全量构建：
-   - Engine 层改动：`./gnb build gkNextRenderer gkNextUnitTests`（Windows: `gnb.bat build ...`）
+   - Engine 层改动：`./gnb build gkNextRenderer gkNextUnitTests`（Windows: `./gnb.bat build ...`）
    - 单个 program 改动：`./gnb build <该 target>`
    - 仅大型重构 / 广泛 header / ABI 改动 / 用户要求时才用 `./gnb build --reconfigure` 全量验证
 2. **Run:** Verify application starts and logs `uploaded scene [...] to gpu`
