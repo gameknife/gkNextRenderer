@@ -83,6 +83,9 @@ void NextEngine::RegisterReflection()
 
 namespace
 {
+    // Older Android NDK Vulkan headers do not name this newer registry value yet.
+    constexpr VkDriverId kMesaKosmicKrispDriverId = static_cast<VkDriverId>(28);
+
     VkDriverId GetDriverId(VkPhysicalDevice physicalDevice)
     {
         VkPhysicalDeviceDriverProperties driverProperties{};
@@ -97,7 +100,7 @@ namespace
 
     bool IsKosmicKrispDriver(VkPhysicalDevice physicalDevice)
     {
-        return GetDriverId(physicalDevice) == VK_DRIVER_ID_MESA_KOSMICKRISP;
+        return GetDriverId(physicalDevice) == kMesaKosmicKrispDriverId;
     }
 
     Vulkan::ERendererType ResolveRendererType(
