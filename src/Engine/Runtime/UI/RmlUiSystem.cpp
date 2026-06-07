@@ -954,8 +954,10 @@ scrollbarhorizontal sliderbar:active {
     };
 }
 
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_MSC_VER)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsubobject-linkage"
+#endif
 struct RmlUiSystem::Impl
 {
     explicit Impl(NextEngine& inEngine)
@@ -1041,7 +1043,9 @@ struct RmlUiSystem::Impl
     std::unordered_map<std::string, Rml::ElementDocument*> documents;
     std::vector<BoundEventListener> listeners;
 };
+#if defined(__GNUC__) && !defined(__clang__) && !defined(_MSC_VER)
 #pragma GCC diagnostic pop
+#endif
 
 RmlUiSystem::RmlUiSystem(NextEngine& engine)
     : impl_(std::make_unique<Impl>(engine))
