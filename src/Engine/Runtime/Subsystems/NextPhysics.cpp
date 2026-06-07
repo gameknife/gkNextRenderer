@@ -736,8 +736,8 @@ NextBodyID NextPhysics::CreateMeshBody(NextRefConst<NextMeshShapeSettings> meshS
 
 	//bodyCreation.mRestitution = 0.05f;
 	bodyCreation.mFriction = 0.5f;
-	bodyCreation.mOverrideMassProperties = EOverrideMassProperties::MassAndInertiaProvided;
-	bodyCreation.mMassPropertiesOverride = MassProperties(1.0);
+	bodyCreation.mOverrideMassProperties = EOverrideMassProperties::CalculateInertia;
+	bodyCreation.mMassPropertiesOverride.mMass = 1.0f;
 	
 	bodyId = bodyInterface.CreateAndAddBody(bodyCreation, EActivation::Activate);
 
