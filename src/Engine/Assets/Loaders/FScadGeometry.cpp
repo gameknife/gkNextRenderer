@@ -1,5 +1,7 @@
 #include "Engine/Assets/Loaders/FScadGeometry.h"
 
+#include "Engine/Assets/Loaders/FScadTypes.h"
+
 #include <algorithm>
 #include <cmath>
 

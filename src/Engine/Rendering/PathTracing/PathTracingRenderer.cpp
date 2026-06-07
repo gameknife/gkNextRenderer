@@ -12,6 +12,8 @@
 #include <cstring>
 #include <numeric>
 
+#include <spdlog/spdlog.h>
+
 #include "Engine/Runtime/Engine.hpp"
 
 namespace Vulkan::RayTracing
