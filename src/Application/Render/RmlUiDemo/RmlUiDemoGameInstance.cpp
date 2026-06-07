@@ -151,7 +151,7 @@ namespace
             return std::nullopt;
         }
         std::string_view prefix;
-        for (const std::string_view candidate : prefixes)
+        for (const std::string_view& candidate : prefixes)
         {
             if (StartsWith(trimmed, candidate))
             {
