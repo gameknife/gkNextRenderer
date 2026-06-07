@@ -260,6 +260,55 @@ func TestDeleteTaskNotFound(t *testing.T) {
 	}
 }
 
+func TestMoveDoneTasksFromNextToRecent(t *testing.T) {
+	todo := `# TODO
+
+## Milestone: 测试
+
+### 下一步
+
+- [x] ` + "`#00001`" + ` [BUG] 修 A → journal/00001.md (2026-05-10)
+- [x] ` + "`#00002`" + ` [FEAT] 修 B → journal/00002.md (2026-05-11)
+
+### 待规划
+
+(暂无)
+
+### 最近完成
+
+- [x] ` + "`#00009`" + ` [DOC] 老任务 → journal/00009.md (2026-05-09)
+`
+	doc, err := parseBytes("TODO.md", []byte(todo))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	moved, err := doc.MoveDoneTasksFromNextToRecent()
+	if err != nil {
+		t.Fatalf("MoveDoneTasksFromNextToRecent: %v", err)
+	}
+	if len(moved) != 2 || moved[0].ID != 1 || moved[1].ID != 2 {
+		t.Fatalf("moved = %+v, want [#00001 #00002]", moved)
+	}
+
+	joined := strings.Join(doc.Lines, "\n")
+	if !strings.Contains(joined, "### 下一步\n\n(暂无)") {
+		t.Fatalf("expected next placeholder after cleanup:\n%s", joined)
+	}
+
+	doc2, err := parseBytes("TODO.md", []byte(joined+"\n"))
+	if err != nil {
+		t.Fatalf("re-parse: %v", err)
+	}
+	recents := doc2.SectionTasks(SectionRecent)
+	if len(recents) != 3 {
+		t.Fatalf("recent count = %d, want 3", len(recents))
+	}
+	if recents[0].ID != 9 || recents[1].ID != 1 || recents[2].ID != 2 {
+		t.Fatalf("recent ids = [%d %d %d], want [9 1 2]", recents[0].ID, recents[1].ID, recents[2].ID)
+	}
+}
+
 func TestSwapTasksAcrossSections(t *testing.T) {
 	doc, _ := parseBytes("TODO.md", []byte(sampleTODO))
 	if err := doc.SwapTasks(18, 21); err != nil {

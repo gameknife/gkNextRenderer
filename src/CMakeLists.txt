@@ -487,7 +487,7 @@ foreach(target IN LISTS AllTargets)
 		endif()
 		target_compile_options(${target} PRIVATE -Wall -Werror -Wno-unused-but-set-variable -Wno-inconsistent-missing-override -Wno-unused-const-variable -Wno-unused-variable -Wno-unused-private-field -Wno-unused-function -Wno-sign-compare -Wno-unused-result)
 		if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-			target_compile_options(${target} PRIVATE -Wno-stringop-overflow)
+			target_compile_options(${target} PRIVATE -Wno-stringop-overflow -Wno-ignored-attributes)
 		endif()
 	endif()
 
@@ -544,6 +544,9 @@ endif()
 
 
 set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	target_compile_options(ImNodeFlow PRIVATE -include cstdint)
+endif()
 
 if ( WITH_QUICKJS )
 set_target_properties(quickjs PROPERTIES FOLDER "ThirdParty")

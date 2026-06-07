@@ -106,14 +106,21 @@
 {{end}}
 
 <div class="card">
-  <h2 class="card-title">
-    <span class="ico">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-      </svg>
-    </span>
-    TODO
-  </h2>
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px;">
+    <h2 class="card-title" style="margin-bottom: 0;">
+      <span class="ico">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+        </svg>
+      </span>
+      TODO
+    </h2>
+    <form hx-post="/todo/cleanup" hx-target="#todo-panel" hx-swap="innerHTML" style="margin: 0;">
+      <button class="btn-secondary" type="submit" style="width: auto; padding: 7px 12px;">
+        整理已完成
+      </button>
+    </form>
+  </div>
 
   {{range .Sections}}
   {{$secHeading := .Heading}}
@@ -342,6 +349,181 @@
     <span>更新时间 {{or .Task.Paren "—"}}</span>
   </div>
 </div>
+{{end}}
+
+
+{{define "tab_docs"}}
+<div class="tab-jobs">
+  <aside class="tab-side">
+    <div class="card">
+      <h2 class="card-title">
+        <span class="ico">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>
+        </span>
+        Docs
+        <span class="count">{{len .DocsVM.Files}}</span>
+      </h2>
+      {{if .DocsVM.Files}}
+      <div class="docs-file-list">
+        {{range .DocsVM.Files}}
+        <button class="docs-file-item {{if .Active}}active{{end}}"
+                type="button"
+                hx-get="/tab/docs?file={{urlquery .RelPath}}"
+                hx-target="#tab-content"
+                hx-swap="innerHTML"
+                {{if $.DocsVM.Editing}}hx-confirm="当前编辑未保存，切换文档将丢失修改，确定继续？"{{end}}>
+          <span class="docs-file-name">{{.Name}}</span>
+          <span class="docs-file-path">{{.RelPath}}</span>
+        </button>
+        {{end}}
+      </div>
+      {{else}}
+      <div class="empty-row">docs/ 下暂无 markdown 文档</div>
+      {{end}}
+    </div>
+  </aside>
+
+  <section class="tab-main">
+    <div class="card docs-card">
+      {{if .DocsVM.Error}}
+      <div class="chat-error" style="margin: 0 0 12px;">{{.DocsVM.Error}}</div>
+      {{end}}
+      {{if .DocsVM.HasDoc}}
+      <div class="docs-head">
+        <div class="docs-head-main">
+          <h2 class="card-title" style="margin-bottom: 4px;">
+            <span class="ico">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </span>
+            {{.DocsVM.Selected.Name}}
+          </h2>
+          <div class="breadcrumb">
+            <span>{{.DocsVM.Selected.RelPath}}</span>
+            <span class="sep">·</span>
+            <span>更新于 {{date .DocsVM.Selected.UpdatedAt}}</span>
+          </div>
+        </div>
+        <div class="commit-card-actions">
+          {{if .DocsVM.Editing}}
+          <button class="btn-secondary" type="button"
+                  hx-get="/tab/docs?file={{urlquery .DocsVM.Selected.RelPath}}"
+                  hx-target="#tab-content"
+                  hx-swap="innerHTML">
+            取消
+          </button>
+          {{else}}
+          <button class="btn-secondary" type="button"
+                  hx-get="/tab/docs?file={{urlquery .DocsVM.Selected.RelPath}}&edit=1"
+                  hx-target="#tab-content"
+                  hx-swap="innerHTML">
+            编辑
+          </button>
+          {{end}}
+        </div>
+      </div>
+
+      {{if .DocsVM.Editing}}
+      <form class="spec-form docs-edit-form"
+            hx-post="/docs/save"
+            hx-target="#tab-content"
+            hx-swap="innerHTML">
+        <input type="hidden" name="path" value="{{.DocsVM.Selected.RelPath}}">
+        <textarea name="body">{{.DocsVM.EditorBody}}</textarea>
+        <div class="spec-form-actions">
+          <span class="muted">保存后会直接回到预览模式。</span>
+          <button type="submit" class="btn-primary small">保存文档</button>
+        </div>
+      </form>
+      {{else}}
+      <div class="md-content docs-preview" data-md data-doc-path="{{.DocsVM.Selected.RelPath}}">{{.DocsVM.Content}}</div>
+      {{end}}
+      {{else}}
+      <div class="empty-row" style="height: 100%;">选择左侧文档开始阅读或编辑。</div>
+      {{end}}
+    </div>
+  </section>
+</div>
+
+<style>
+  .docs-file-list {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow-y: auto;
+    min-height: 0;
+    padding-right: 4px;
+  }
+  .docs-file-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 10px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--fg);
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .docs-file-item:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-strong);
+  }
+  .docs-file-item.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-ring);
+    background: var(--bg-card-hover);
+  }
+  .docs-file-name {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--fg);
+  }
+  .docs-file-path {
+    font-size: 11px;
+    color: var(--fg-dim);
+    font-family: var(--font-mono);
+    word-break: break-all;
+  }
+  .docs-card {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .docs-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .docs-head-main {
+    min-width: 0;
+    flex: 1;
+  }
+  .docs-preview {
+    flex: 1 1 auto;
+    overflow: auto;
+    min-height: 0;
+    padding-right: 4px;
+  }
+  .docs-edit-form {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+  }
+  .docs-edit-form textarea {
+    flex: 1 1 auto;
+    min-height: 420px;
+  }
+</style>
 {{end}}
 
 

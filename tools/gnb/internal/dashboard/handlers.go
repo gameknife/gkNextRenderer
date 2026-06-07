@@ -19,6 +19,8 @@ func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
 	mux.HandleFunc("GET /todo-panel", s.handleTodoPanel)
+	mux.HandleFunc("POST /todo/cleanup", s.handleTodoCleanup)
+	mux.HandleFunc("POST /docs/save", s.handleDocsSave)
 	mux.HandleFunc("GET /task/{id}", s.handleTaskDetail)
 	mux.HandleFunc("POST /task/add", s.handleTaskAdd)
 	mux.HandleFunc("POST /task/{id}/done", s.handleTaskDone)
@@ -84,13 +86,14 @@ type indexVM struct {
 	Preset     string
 	OS         string
 	RecentSize int
-	ActiveTab  string // "todo" | "build" | "run" | "test" | "git"
+	ActiveTab  string // "todo" | "docs" | "build" | "run" | "test" | "git" | "chat" | "loc"
 	BuildVM    buildVM
 	RunVM      runVM
 	TestVM     testVM
 	GitVM      gitVM
 	ChatVM     chatVM
 	LocVM      locVM
+	DocsVM     docsVM
 }
 
 type locVM struct {
@@ -198,6 +201,8 @@ type taskDetailVM struct {
 	EditingSpec bool
 }
 
+const recentDisplayLimit = 10
+
 func (s *Server) buildIndex() (indexVM, error) {
 	doc, err := spec.Parse(spec.TODOPath(s.opts.RepoRoot))
 	if err != nil {
@@ -213,14 +218,18 @@ func (s *Server) buildIndex() (indexVM, error) {
 		ActiveTab: "todo",
 	}
 	for _, kind := range []spec.SectionKind{spec.SectionNext, spec.SectionBacklog, spec.SectionRecent} {
+		tasks := doc.SectionTasks(kind)
+		if kind == spec.SectionRecent && len(tasks) > recentDisplayLimit {
+			tasks = append([]spec.Task(nil), tasks[len(tasks)-recentDisplayLimit:]...)
+		}
 		vm.Sections = append(vm.Sections, sectionVM{
 			Kind:    kind,
 			Heading: kind.Heading(),
-			Tasks:   doc.SectionTasks(kind),
+			Tasks:   tasks,
 		})
 	}
 	vm.RecentSize = len(doc.SectionTasks(spec.SectionRecent))
-	vm.Journals = collectJournals(s.opts.RepoRoot, doc, 10)
+	vm.Journals = collectJournals(s.opts.RepoRoot, doc, recentDisplayLimit)
 	return vm, nil
 }
 
@@ -390,6 +399,10 @@ func (s *Server) handleTab(w http.ResponseWriter, r *http.Request) {
 		vm := s.buildHeader("build")
 		vm.BuildVM = s.buildBuildVM()
 		s.render(w, "tab_build", vm)
+	case "docs":
+		vm := s.buildHeader("docs")
+		vm.DocsVM = s.buildDocsVM(r.URL.Query().Get("file"), r.URL.Query().Get("edit") == "1", "", "")
+		s.render(w, "tab_docs", vm)
 	case "run":
 		vm := s.buildHeader("run")
 		vm.RunVM = s.buildRunVM()

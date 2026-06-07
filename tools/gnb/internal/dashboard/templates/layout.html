@@ -1801,6 +1801,11 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
       <span>TODO</span>
     </button>
+    <button class="tab-item {{if eq .ActiveTab "docs"}}active{{end}}" type="button" data-tab="docs"
+            hx-get="/tab/docs" hx-target="#tab-content" hx-swap="innerHTML">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>
+      <span>Docs</span>
+    </button>
     <button class="tab-item {{if eq .ActiveTab "build"}}active{{end}}" type="button" data-tab="build"
             hx-get="/tab/build" hx-target="#tab-content" hx-swap="innerHTML">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13l2 2 4-4"/></svg>
@@ -1834,7 +1839,9 @@
   </nav>
 
   <div id="tab-content">
-    {{if eq .ActiveTab "build"}}
+    {{if eq .ActiveTab "docs"}}
+      {{template "tab_docs" .}}
+    {{else if eq .ActiveTab "build"}}
       {{template "tab_build" .}}
     {{else if eq .ActiveTab "run"}}
       {{template "tab_run" .}}
@@ -2005,6 +2012,30 @@
     (root || document).querySelectorAll('[data-md]:not([data-md-rendered])').forEach(el => {
       renderMarkdownText(el);
     });
+  }
+  function normalizeDocsMarkdownLink(basePath, href) {
+    const raw = String(href || '').trim();
+    if (!basePath || !raw || raw.startsWith('#') || /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) {
+      return '';
+    }
+    const pathOnly = raw.split('#', 1)[0];
+    if (!pathOnly) return '';
+    const baseParts = String(basePath).split('/').slice(0, -1);
+    const targetParts = pathOnly.startsWith('/') ? pathOnly.replace(/^\/+/, '').split('/') : baseParts.concat(pathOnly.split('/'));
+    const normalized = [];
+    for (const part of targetParts) {
+      if (!part || part === '.') continue;
+      if (part === '..') {
+        if (normalized.length) normalized.pop();
+        continue;
+      }
+      normalized.push(part);
+    }
+    const rel = normalized.join('/');
+    if (!rel.startsWith('docs/') || !rel.toLowerCase().endsWith('.md')) {
+      return '';
+    }
+    return rel;
   }
   function currentSwapRoot(target) {
     if (!target) return document;
@@ -2347,6 +2378,17 @@
     const tab = e.target.closest('[data-tab]');
     if (!tab) return;
     document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b === tab));
+  });
+  document.body.addEventListener('click', (e) => {
+    const link = e.target.closest('.docs-preview a');
+    if (!link) return;
+    const rel = normalizeDocsMarkdownLink(link.closest('.docs-preview')?.dataset?.docPath, link.getAttribute('href'));
+    if (!rel) return;
+    e.preventDefault();
+    htmx.ajax('GET', '/tab/docs?file=' + encodeURIComponent(rel), {
+      target: '#tab-content',
+      swap: 'innerHTML',
+    });
   });
   function selectGitItem(item) {
     if (!item) return;
