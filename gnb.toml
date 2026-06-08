@@ -2,7 +2,7 @@
 min_version = "0.1.0"
 
 [vcpkg]
-ref = "2025.12.12"
+ref = "2026.04.27"
 binary_cache = ".vcpkg_bincache"
 root = ".vcpkg"
 

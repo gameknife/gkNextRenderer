@@ -38,7 +38,9 @@ namespace StudioSim
         void Tick(NextAI::FAIService* ai, std::vector<FEmployee>& employees);
         void ChooseGoal(int index, NextAI::FAIService* ai, std::vector<FEmployee>& employees);
         void ChooseCustom(const std::string& title, NextAI::FAIService* ai, std::vector<FEmployee>& employees);
-        void Summarize(NextAI::FAIService* ai, const std::vector<FEmployee>& employees);
+        void SetActiveGoal(const FDailyGoal& goal, std::vector<FEmployee>& employees);
+        void Summarize(NextAI::FAIService* ai, const std::vector<FEmployee>& employees,
+                       const FGameProject& gameProject);
         void Reset();
 
         EState State() const { return state_; }
@@ -70,6 +72,8 @@ namespace StudioSim
         FDailyGoal goal_;
         std::string summary_;
         bool summarizeRequested_ = false;
+        int localScore_ = -1;
+        std::string nextBriefingContext_;
         uint64_t generation_ = 0;
     };
 }

@@ -24,8 +24,9 @@ namespace StudioSim
     {
     public:
         // 主线程每帧调用：排空已完成的决策并 apply，然后视情况发起下一个决策。
-        void Tick(double gameMinutes, const FDailyGoal& goal, const std::string& eventsSummary,
-                  NextAI::FAIService* ai, std::vector<FEmployee>& employees, const OfficeMap& office);
+        void Tick(double gameMinutes, const FDailyGoal& goal, const FGameProject& gameProject,
+                  const std::string& eventsSummary, NextAI::FAIService* ai, std::vector<FEmployee>& employees,
+                  const OfficeMap& office);
         void Reset();
 
         bool InFlight() const { return inFlight_; }
