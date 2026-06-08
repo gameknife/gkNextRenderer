@@ -84,11 +84,10 @@ namespace Runtime
             }
 
             ImGui::PushItemWidth(width);
-            auto renderersGetter = [](void* data, int index, const char** outText)
+            auto renderersGetter = [](void* data, int index) -> const char*
             {
                 const auto* options = static_cast<const FRendererOption*>(data);
-                *outText = options[index].label;
-                return true;
+                return options[index].label;
             };
             if (ImGui::Combo(comboId,
                              &currentRendererIndex,

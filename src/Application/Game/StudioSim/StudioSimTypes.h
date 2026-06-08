@@ -77,6 +77,160 @@ namespace StudioSim
         }
     }
 
+    enum class EProjectStage
+    {
+        Planning,
+        Production,
+        Polish,
+        Done
+    };
+
+    inline const char* ProjectStageName(EProjectStage stage)
+    {
+        switch (stage)
+        {
+        case EProjectStage::Planning:   return "Planning";
+        case EProjectStage::Production: return "Production";
+        case EProjectStage::Polish:     return "Polish";
+        case EProjectStage::Done:       return "Done";
+        default:                        return "?";
+        }
+    }
+
+    enum class EGameGenre
+    {
+        RPG,
+        Action,
+        Simulation,
+        Puzzle,
+        Shooter,
+        Adventure,
+        Unknown
+    };
+
+    inline const char* GameGenreName(EGameGenre genre)
+    {
+        switch (genre)
+        {
+        case EGameGenre::RPG:        return "RPG";
+        case EGameGenre::Action:     return "Action";
+        case EGameGenre::Simulation: return "Simulation";
+        case EGameGenre::Puzzle:     return "Puzzle";
+        case EGameGenre::Shooter:    return "Shooter";
+        case EGameGenre::Adventure:  return "Adventure";
+        default:                     return "Unknown";
+        }
+    }
+
+    enum class EGameTheme
+    {
+        Fantasy,
+        SciFi,
+        Sports,
+        Romance,
+        Horror,
+        Daily,
+        Unknown
+    };
+
+    inline const char* GameThemeName(EGameTheme theme)
+    {
+        switch (theme)
+        {
+        case EGameTheme::Fantasy: return "Fantasy";
+        case EGameTheme::SciFi:   return "SciFi";
+        case EGameTheme::Sports:  return "Sports";
+        case EGameTheme::Romance: return "Romance";
+        case EGameTheme::Horror:  return "Horror";
+        case EGameTheme::Daily:   return "Daily";
+        default:                  return "Unknown";
+        }
+    }
+
+    enum class EProjectSizeTier
+    {
+        Small,
+        Standard,
+        Big
+    };
+
+    inline const char* ProjectSizeTierName(EProjectSizeTier tier)
+    {
+        switch (tier)
+        {
+        case EProjectSizeTier::Small:    return "Small";
+        case EProjectSizeTier::Standard: return "Standard";
+        case EProjectSizeTier::Big:      return "Big";
+        default:                         return "Standard";
+        }
+    }
+
+    struct FProjectMeters
+    {
+        float tech = 0.0f;
+        float design = 0.0f;
+        float art = 0.0f;
+        float polish = 0.0f;
+    };
+
+    struct FProjectState
+    {
+        EProjectStage stage = EProjectStage::Planning;
+        FProjectMeters meters;
+        FProjectMeters targetMeters;
+        int bugCount = 0;
+        int bugsFixed = 0;
+        float overallProgress = 0.0f;
+        bool shipped = false;
+    };
+
+    struct FHighlight
+    {
+        std::string text;
+        std::string meter;
+        bool achieved = false;
+    };
+
+    struct FGameProject
+    {
+        std::string name;
+        EGameGenre genre = EGameGenre::Unknown;
+        EGameTheme theme = EGameTheme::Unknown;
+        std::vector<FHighlight> highlights;
+        float comboFit = 1.0f;
+
+        int plannedDays = 7;
+        int elapsedDays = 0;
+        int64_t budget = 0;
+
+        FProjectState production;
+
+        float quality = 0.0f;
+        int reviewScore = 0;
+        std::vector<int> reviewerScores;
+        std::vector<std::string> reviewQuotes;
+        int64_t unitsSold = 0;
+        int64_t revenue = 0;
+        int64_t cost = 0;
+        int64_t profit = 0;
+        bool launched = false;
+    };
+
+    struct FCompanyState
+    {
+        int64_t funds = 50000;
+        std::vector<FGameProject> shipped;
+        int projectIndex = 0;
+    };
+
+    struct FWorkOutput
+    {
+        std::string meter;
+        float amount = 0.0f;
+        bool foundBug = false;
+        bool fixedBug = false;
+    };
+
     // 玩家注入的事件（见计划 §11）。
     struct FWorldEvent
     {
@@ -164,6 +318,8 @@ namespace StudioSim
         std::string title;
         std::string description;
         std::string source;        // "llm" / "player" / "fallback"
+        std::string category;      // "ship_demo" / "fix_crash" / "brainstorm"
+        FProjectMeters targetMeters;
         bool        set = false;
     };
 
@@ -171,5 +327,46 @@ namespace StudioSim
     {
         std::string speaker;
         std::string text;
+    };
+
+    enum class EGatheringKind
+    {
+        Meeting,
+        Pantry
+    };
+
+    enum class EGatheringState
+    {
+        Forming,
+        Talking,
+        Deciding,
+        Dispersing
+    };
+
+    struct FGroupDecision
+    {
+        std::string summary;
+        std::string focusMeter;
+        bool valid = false;
+        bool accepted = false;
+        bool rejected = false;
+    };
+
+    struct FGathering
+    {
+        int id = -1;
+        EGatheringKind kind = EGatheringKind::Meeting;
+        EGatheringState state = EGatheringState::Forming;
+        std::string topic;
+        std::string anchorCategory;
+        std::vector<size_t> participants;
+        double startGameMinutes = 0.0;
+        double endGameMinutes = 0.0;
+        double elapsedRealSeconds = 0.0;
+        double nextLineRealSeconds = 1.0;
+        size_t nextLineIndex = 0;
+        std::vector<FMeetingLine> lines;
+        FGroupDecision decision;
+        bool awaitingConfirm = false;
     };
 }

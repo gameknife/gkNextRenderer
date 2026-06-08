@@ -36,6 +36,8 @@ namespace StudioSim
         std::string homeDeskPoi;
         std::string personality;   // M4：喂进 LLM prompt
         std::string todayTask;     // M5：今日目标分解出的个人重点
+        FProjectMeters myContribution; // 当日个人产出累计（R1：确定性产出状态机）
+        std::vector<std::string> shortMemory; // 最近几条经历摘要，喂回 LLM 决策 prompt
 
         std::shared_ptr<Assets::Node> node;
         glm::vec3   position{0.0f};
@@ -47,11 +49,16 @@ namespace StudioSim
         std::string overrideTargetPoi;
         double      overrideUntilMinutes = 0.0;
         std::string bubbleText;    // 头顶气泡（LLM 对话）
+        double      bubbleClearAt = 0.0;
         std::string pendingFrom;   // M7：谁刚对我说了话
         std::string pendingText;   // M7：对方说的内容
         EMood       mood = EMood::Calm;
         bool        decisionPending = false;
+        bool        eventReactionPending = false;
+        int         gatheringId = -1;
         double      nextDecisionAt = 0.0;
+        double      nextChatterAt = 0.0;
+        double      nextWorkOutputAt = 0.0;
     };
 
     // 生成员工几何体、从场景 BVH 建 NavGrid、用 PathFollower 驱动移动。

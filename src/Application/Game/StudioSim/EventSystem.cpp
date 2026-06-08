@@ -59,6 +59,7 @@ namespace StudioSim
         for (auto& emp : employees)
         {
             emp.overrideTargetPoi.clear();
+            emp.eventReactionPending = true;
             emp.nextDecisionAt = gameMinutes;
         }
 

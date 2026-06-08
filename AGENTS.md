@@ -306,7 +306,6 @@ commit-msg prompt 内容包含：模式（staged / working tree）、文件清�
      - **活跃模式**（等待计数器 < 10）：sleep 60 秒，计数器 +1，**sleep 返回后立即回到步骤 2，不要输出总结/结束 turn**
      - **低功耗模式**（等待计数器 ≥ 10）：sleep 600 秒，**sleep 返回后立即回到步骤 2，不要输出总结/结束 turn**
    - 任一任务完成（步骤 5）会重置回活跃模式
-   - **禁止行为**：在此步骤输出"无任务可做"、"工作流完成"、"等待用户指示"之类的话并结束 session。唯一允许的输出是简短状态行（如"无任务，活跃等待 60s"），然后必须紧接 sleep 工具调用
 8. **唯一退出条件**：里程碑状态被改为 `done` → 退出工作流。除此之外（包括"下一步"段为空、所有任务已完成但里程碑未 done），都必须按步骤 7 继续轮询
 
 特殊情况：
@@ -316,6 +315,8 @@ commit-msg prompt 内容包含：模式（staged / working tree）、文件清�
 
 边界：
 - AGENT **可改**：TODO.md 中任务的状态字符、行末 journal 链接；`journal/`、`blockers/` 下的文件
-- AGENT **不可改**：TODO.md 中任务标题/ID/优先级/类型/所属段落；`specs/` 下的文件；`ARCHIVE.md`；"待规划"段任何任务
+- AGENT **不可改**：TODO.md 中任务标题/ID/优先级/类型/所属段落；`specs/` 下的文件；`ARCHIVE.md`；"待规划"段任何
+
+任务
 - 不要建立自动化任务（hooks、scheduled tasks 等）
 - 不要调用其他 agent 处理任务
