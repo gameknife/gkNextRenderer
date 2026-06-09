@@ -1,7 +1,9 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/Remote/VideoPipeline.hpp"
 
+#include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Vulkan/BufferUtil.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
@@ -16,7 +18,15 @@ namespace Runtime::Remote
 {
     namespace
     {
-        uint32_t MakeEven(uint32_t value, uint32_t fallback)
+        // The convert shader stores packed 4-byte words into every plane, which requires the
+        // destination width to be a multiple of 8 (chroma rows are width/2).
+        uint32_t AlignWidth(uint32_t value, uint32_t fallback)
+        {
+            const uint32_t selected = value == 0 ? fallback : value;
+            return std::max(8u, selected & ~7u);
+        }
+
+        uint32_t AlignHeight(uint32_t value, uint32_t fallback)
         {
             const uint32_t selected = value == 0 ? fallback : value;
             return std::max(2u, selected & ~1u);
@@ -27,13 +37,25 @@ namespace Runtime::Remote
             return std::chrono::duration_cast<std::chrono::steady_clock::duration>(
                 std::chrono::duration<double>(1.0 / static_cast<double>(std::max(1u, fps))));
         }
+
+        // Must match PushConsts in assets/shaders/Remote.BgraToYuv.comp.slang.
+        struct FConvertPushConsts
+        {
+            uint64_t outAddress;
+            uint32_t swapChainIndex;
+            uint32_t dstWidth;
+            uint32_t dstHeight;
+            uint32_t srcWidth;
+            uint32_t srcHeight;
+            uint32_t pad0;
+        };
     }
 
     FVideoPipeline::FVideoPipeline(RemoteServer::FConfig config)
         : config_(std::move(config))
-        , frameSource_(MakeEven(config_.width, 640u), MakeEven(config_.height, 360u))
-        , encoder_({MakeEven(config_.width, 640u), MakeEven(config_.height, 360u), std::max(1u, config_.fps),
-                    std::max(1u, config_.bitrateKbps)})
+        , dstWidth_(AlignWidth(config_.width, 640u))
+        , dstHeight_(AlignHeight(config_.height, 360u))
+        , encoder_({dstWidth_, dstHeight_, std::max(1u, config_.fps), std::max(1u, config_.bitrateKbps)})
     {
     }
 
@@ -63,17 +85,23 @@ namespace Runtime::Remote
         }
         encoder_.Stop();
 
-        // Capture commands may still be in flight inside the renderer's frame command buffers.
+        // Convert dispatches may still be in flight inside the renderer's frame command buffers.
         if (device_ && !slots_.empty())
         {
             device_->WaitIdle();
         }
+        convertPipeline_.reset();
         for (auto& slot : slots_)
         {
             DestroySlotResources(*slot);
         }
         slots_.clear();
         device_ = nullptr;
+    }
+
+    void FVideoPipeline::ReleaseSwapChainResources()
+    {
+        convertPipeline_.reset();
     }
 
     uint64_t FVideoPipeline::AddSink(FPacketSink sink)
@@ -158,15 +186,6 @@ namespace Runtime::Remote
             return;
         }
 
-        FSlot* freeSlot = nullptr;
-        for (auto& slot : slots_)
-        {
-            if (slot->state.load(std::memory_order_acquire) == ESlotState::Free)
-            {
-                freeSlot = slot.get();
-                break;
-            }
-        }
         const auto interval = FrameInterval(config_.fps);
         const auto advanceThrottle = [&]()
         {
@@ -177,6 +196,15 @@ namespace Runtime::Remote
             }
         };
 
+        FSlot* freeSlot = nullptr;
+        for (auto& slot : slots_)
+        {
+            if (slot->state.load(std::memory_order_acquire) == ESlotState::Free)
+            {
+                freeSlot = slot.get();
+                break;
+            }
+        }
         if (!freeSlot)
         {
             // Drop this frame instead of back-pressuring the renderer; keep the throttle advancing
@@ -195,29 +223,38 @@ namespace Runtime::Remote
             return;
         }
 
+        if (!convertPipeline_)
+        {
+            convertPipeline_ = std::make_unique<Vulkan::PipelineCommon::ZeroBindCustomPushConstantPipeline>(
+                swapChain, "assets/shaders/Remote.BgraToYuv.comp.slang.spv",
+                static_cast<uint32_t>(sizeof(FConvertPushConsts)));
+        }
+
         const VkImage swapImage = swapChain.Images()[imageIndex];
-        const VkExtent2D extent = swapChain.Extent();
+        const VkExtent2D srcExtent = swapChain.Extent();
+        if (srcExtent.width == 0 || srcExtent.height == 0)
+        {
+            return;
+        }
 
-        Vulkan::ImageMemoryBarrier::FullInsert(commandBuffer, swapImage, 0, VK_ACCESS_TRANSFER_READ_BIT,
-                                               VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-        Vulkan::ImageMemoryBarrier::FullInsert(commandBuffer, freeSlot->image->Handle(), 0,
-                                               VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        Vulkan::ImageMemoryBarrier::FullInsert(commandBuffer, swapImage, 0, VK_ACCESS_SHADER_READ_BIT,
+                                               VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
 
-        VkImageCopy copyRegion{};
-        copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        copyRegion.extent = {extent.width, extent.height, 1};
-        vkCmdCopyImage(commandBuffer, swapImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, freeSlot->image->Handle(),
-                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+        FConvertPushConsts pushConsts{};
+        pushConsts.outAddress = freeSlot->address;
+        pushConsts.swapChainIndex = imageIndex;
+        pushConsts.dstWidth = dstWidth_;
+        pushConsts.dstHeight = dstHeight_;
+        pushConsts.srcWidth = srcExtent.width;
+        pushConsts.srcHeight = srcExtent.height;
+        convertPipeline_->BindPipeline(commandBuffer, &pushConsts);
 
-        // GENERAL keeps host reads of the linear image well-defined; visibility to the host is
-        // guaranteed by the frame fence + HOST_COHERENT memory.
-        Vulkan::ImageMemoryBarrier::FullInsert(commandBuffer, freeSlot->image->Handle(),
-                                               VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                               VK_IMAGE_LAYOUT_GENERAL);
-        Vulkan::ImageMemoryBarrier::FullInsert(commandBuffer, swapImage, VK_ACCESS_TRANSFER_READ_BIT, 0,
-                                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        // Thread = 8x2 destination pixels, group = 8x8 threads -> 64x16 pixels per group.
+        vkCmdDispatch(commandBuffer, (dstWidth_ + 63) / 64, (dstHeight_ + 15) / 16, 1);
+
+        Vulkan::ImageMemoryBarrier::FullInsert(commandBuffer, swapImage, VK_ACCESS_SHADER_READ_BIT, 0,
+                                               VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        // Buffer visibility to the host is guaranteed by the frame fence + HOST_COHERENT memory.
 
         freeSlot->frameId = currentFrameId;
         freeSlot->captureTimestampUs = static_cast<uint64_t>(
@@ -229,67 +266,34 @@ namespace Runtime::Remote
 
     bool FVideoPipeline::EnsureSlotResources(FSlot& slot, Vulkan::VulkanBaseRenderer& renderer)
     {
-        const Vulkan::SwapChain& swapChain = renderer.SwapChain();
-        const VkExtent2D extent = swapChain.Extent();
-        const VkFormat format = swapChain.Format();
-        if (extent.width == 0 || extent.height == 0)
-        {
-            return false;
-        }
-        if (slot.image && slot.extent.width == extent.width && slot.extent.height == extent.height &&
-            slot.image->Format() == format)
+        if (slot.buffer)
         {
             return true;
         }
 
-        DestroySlotResources(slot);
         device_ = &renderer.Device();
+        const size_t bufferSize = static_cast<size_t>(dstWidth_) * dstHeight_ * 3u / 2u;
 
-        slot.image = std::make_unique<Vulkan::Image>(*device_, extent, 1, format, VK_IMAGE_TILING_LINEAR,
-                                                     VK_IMAGE_USAGE_TRANSFER_DST_BIT);
-        // The CPU converter reads this memory every frame: prefer HOST_CACHED readback memory,
+        // The encoder thread reads this memory every frame: prefer HOST_CACHED readback memory,
         // because reads from write-combined (coherent-only) memory are an order of magnitude slower.
         try
         {
-            slot.memory = std::make_unique<Vulkan::DeviceMemory>(
-                slot.image->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                           VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
-                                           VK_MEMORY_PROPERTY_HOST_CACHED_BIT));
+            Vulkan::BufferUtil::CreateDeviceBufferLocal(
+                renderer.CommandPool(), "RemoteVideo I420", VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
+                    VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+                bufferSize, slot.buffer, slot.memory);
         }
         catch (const std::exception&)
         {
-            slot.memory = std::make_unique<Vulkan::DeviceMemory>(
-                slot.image->AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                           VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+            Vulkan::BufferUtil::CreateDeviceBufferLocal(
+                renderer.CommandPool(), "RemoteVideo I420", VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferSize, slot.buffer,
+                slot.memory);
         }
-        device_->DebugUtils().SetObjectName(slot.image->Handle(), "RemoteVideo Capture Slot");
 
-        VkImageSubresource subresource{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0};
-        vkGetImageSubresourceLayout(device_->Handle(), slot.image->Handle(), &subresource, &slot.layout);
-
-        slot.mapped = static_cast<uint8_t*>(slot.memory->Map(0, VK_WHOLE_SIZE));
-        slot.extent = extent;
-
-        switch (format)
-        {
-        case VK_FORMAT_B8G8R8A8_UNORM:
-        case VK_FORMAT_B8G8R8A8_SRGB:
-            slot.swapRedBlue = false;
-            break;
-        case VK_FORMAT_R8G8B8A8_UNORM:
-        case VK_FORMAT_R8G8B8A8_SRGB:
-            slot.swapRedBlue = true;
-            break;
-        default:
-            slot.swapRedBlue = false;
-            if (!warnedFormat_)
-            {
-                warnedFormat_ = true;
-                SPDLOG_WARN("RemotePlay: unexpected swapchain format {}, assuming BGRA byte order",
-                            static_cast<int>(format));
-            }
-            break;
-        }
+        slot.address = slot.buffer->GetDeviceAddress();
+        slot.mapped = static_cast<uint8_t*>(slot.memory->Map(0, bufferSize));
         return slot.mapped != nullptr;
     }
 
@@ -300,9 +304,9 @@ namespace Runtime::Remote
             slot.memory->Unmap();
         }
         slot.mapped = nullptr;
+        slot.address = 0;
+        slot.buffer.reset();
         slot.memory.reset();
-        slot.image.reset();
-        slot.extent = {0, 0};
         slot.state.store(ESlotState::Free, std::memory_order_release);
     }
 
@@ -329,11 +333,16 @@ namespace Runtime::Remote
                 continue;
             }
 
-            const FI420Frame& frame =
-                frameSource_.ConvertBgra(slot.mapped + slot.layout.offset, static_cast<size_t>(slot.layout.rowPitch),
-                                         slot.extent.width, slot.extent.height, slot.swapRedBlue);
+            const uint32_t ySize = dstWidth_ * dstHeight_;
+            FI420View view;
+            view.y = slot.mapped;
+            view.u = slot.mapped + ySize;
+            view.v = slot.mapped + ySize + ySize / 4u;
+            view.width = dstWidth_;
+            view.height = dstHeight_;
+            view.strideY = dstWidth_;
+            view.strideC = dstWidth_ / 2u;
             const uint64_t timestampUs = slot.captureTimestampUs;
-            slot.state.store(ESlotState::Free, std::memory_order_release);
 
             if (keyframeRequested_.exchange(false, std::memory_order_relaxed))
             {
@@ -342,7 +351,9 @@ namespace Runtime::Remote
 
             std::vector<std::byte> encodedFrame;
             bool keyframe = false;
-            if (!encoder_.Encode(frame, timestampUs / 1000u, encodedFrame, keyframe))
+            const bool encoded = encoder_.Encode(view, timestampUs / 1000u, encodedFrame, keyframe);
+            slot.state.store(ESlotState::Free, std::memory_order_release);
+            if (!encoded)
             {
                 continue;
             }

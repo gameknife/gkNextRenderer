@@ -30,6 +30,7 @@ namespace Runtime::Remote
         void SetBitrate(uint32_t bitrateKbps);
 
         bool Encode(const FI420Frame& frame, uint64_t timestampMs, std::vector<std::byte>& outFrame, bool& keyframe);
+        bool Encode(const FI420View& view, uint64_t timestampMs, std::vector<std::byte>& outFrame, bool& keyframe);
 
     private:
         FConfig config_;

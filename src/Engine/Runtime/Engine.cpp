@@ -1423,6 +1423,10 @@ void NextEngine::OnRendererDeleteSwapChain()
     {
         userInterface_->OnDestroySurface();
     }
+    if (remoteServer_)
+    {
+        remoteServer_->OnRendererDeleteSwapChain();
+    }
 }
 
 void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)

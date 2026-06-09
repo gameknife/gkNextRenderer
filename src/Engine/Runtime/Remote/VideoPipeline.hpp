@@ -22,8 +22,13 @@ namespace Vulkan
 {
     class VulkanBaseRenderer;
     class Device;
-    class Image;
+    class Buffer;
     class DeviceMemory;
+
+    namespace PipelineCommon
+    {
+        class ZeroBindCustomPushConstantPipeline;
+    }
 }
 
 namespace Runtime::Remote
@@ -35,9 +40,9 @@ namespace Runtime::Remote
         uint64_t timestampUs = 0;
     };
 
-    // Single engine-wide video pipeline: captures the swapchain inside the in-flight frame
-    // command buffer (no blocking submit), converts + encodes on a dedicated worker thread and
-    // fans the encoded bitstream out to every subscribed session.
+    // Single engine-wide video pipeline: converts the swapchain to I420 with a compute pass
+    // recorded inside the in-flight frame command buffer (GPU scale + BT.709, zero CPU pixel
+    // work), encodes on a dedicated worker thread and fans the bitstream out to every session.
     class FVideoPipeline final
     {
     public:
@@ -51,6 +56,10 @@ namespace Runtime::Remote
 
         // Render thread only: called while the frame command buffer is being recorded.
         void RecordFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex, Vulkan::VulkanBaseRenderer& renderer);
+
+        // Render thread, just before the renderer destroys the swapchain the convert pipeline
+        // was created against.
+        void ReleaseSwapChainResources();
 
         // Thread-safe; sinks are invoked on the encoder thread.
         uint64_t AddSink(FPacketSink sink);
@@ -67,12 +76,10 @@ namespace Runtime::Remote
 
         struct FSlot
         {
-            std::unique_ptr<Vulkan::Image> image;
+            std::unique_ptr<Vulkan::Buffer> buffer;
             std::unique_ptr<Vulkan::DeviceMemory> memory;
             uint8_t* mapped = nullptr;
-            VkSubresourceLayout layout{};
-            VkExtent2D extent{0, 0};
-            bool swapRedBlue = false;
+            VkDeviceAddress address = 0;
             uint64_t frameId = 0;
             uint64_t captureTimestampUs = 0;
             std::atomic<ESlotState> state{ESlotState::Free};
@@ -85,17 +92,19 @@ namespace Runtime::Remote
         void Broadcast(const FEncodedPacket& packet);
 
         RemoteServer::FConfig config_;
+        uint32_t dstWidth_ = 0;   // multiple of 8 (shader writes packed uints)
+        uint32_t dstHeight_ = 0;  // multiple of 2
 
         // Capture slots (render thread records, encoder thread reads). The vector is filled once
         // on first RecordFrame and never resized afterwards.
         std::vector<std::unique_ptr<FSlot>> slots_;
         const Vulkan::Device* device_ = nullptr;
+        std::unique_ptr<Vulkan::PipelineCommon::ZeroBindCustomPushConstantPipeline> convertPipeline_;
 
         std::chrono::steady_clock::time_point startedAt_;
         std::chrono::steady_clock::time_point nextFrameTime_;
         uint64_t droppedFrames_ = 0;
         bool warnedHdr_ = false;
-        bool warnedFormat_ = false;
 
         // Encoder worker
         std::mutex encodeQueueMutex_;
@@ -105,7 +114,6 @@ namespace Runtime::Remote
         std::atomic_bool keyframeRequested_ = true;
 
         // Owned by the encoder thread after Start().
-        FFrameSource frameSource_;
         FOpenH264Encoder encoder_;
 
         // Fan-out

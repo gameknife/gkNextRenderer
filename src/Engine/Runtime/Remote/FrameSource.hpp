@@ -15,16 +15,26 @@ namespace Runtime::Remote
         std::vector<uint8_t> v;
     };
 
-    // CPU-side BGRA → I420 conversion helper (scaling + BT.601-ish matrix). Pure CPU utility, no
-    // Vulkan dependency; runs on the encoder worker thread.
+    // Non-owning view over planar I420 data (e.g. a GPU-converted readback buffer).
+    struct FI420View
+    {
+        const uint8_t* y = nullptr;
+        const uint8_t* u = nullptr;
+        const uint8_t* v = nullptr;
+        uint32_t width = 0;
+        uint32_t height = 0;
+        uint32_t strideY = 0;
+        uint32_t strideC = 0;
+    };
+
+    // CPU-side I420 test pattern generator (color conversion itself runs on the GPU, see
+    // assets/shaders/Remote.BgraToYuv.comp.slang).
     class FFrameSource final
     {
     public:
         FFrameSource(uint32_t width, uint32_t height);
 
         const FI420Frame& BuildTestPattern(uint64_t frameIndex);
-        const FI420Frame& ConvertBgra(const uint8_t* data, size_t rowPitch, uint32_t srcWidth, uint32_t srcHeight,
-                                      bool swapRedBlue);
         const FI420Frame& LatestFrame() const { return frame_; }
 
     private:

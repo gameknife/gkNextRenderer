@@ -74,4 +74,12 @@ namespace Runtime::Remote
             videoPipeline_->RecordFrame(commandBuffer, imageIndex, renderer);
         }
     }
+
+    void RemoteServer::OnRendererDeleteSwapChain()
+    {
+        if (videoPipeline_)
+        {
+            videoPipeline_->ReleaseSwapChainResources();
+        }
+    }
 }

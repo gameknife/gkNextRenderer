@@ -122,6 +122,20 @@ namespace Runtime::Remote
     bool FOpenH264Encoder::Encode(const FI420Frame& frame, uint64_t timestampMs, std::vector<std::byte>& outFrame,
                                   bool& keyframe)
     {
+        FI420View view;
+        view.y = frame.y.data();
+        view.u = frame.u.data();
+        view.v = frame.v.data();
+        view.width = frame.width;
+        view.height = frame.height;
+        view.strideY = frame.width;
+        view.strideC = frame.width / 2u;
+        return Encode(view, timestampMs, outFrame, keyframe);
+    }
+
+    bool FOpenH264Encoder::Encode(const FI420View& view, uint64_t timestampMs, std::vector<std::byte>& outFrame,
+                                  bool& keyframe)
+    {
         outFrame.clear();
         keyframe = false;
 
@@ -139,15 +153,15 @@ namespace Runtime::Remote
 
         SSourcePicture picture;
         std::memset(&picture, 0, sizeof(picture));
-        picture.iPicWidth = static_cast<int>(frame.width);
-        picture.iPicHeight = static_cast<int>(frame.height);
+        picture.iPicWidth = static_cast<int>(view.width);
+        picture.iPicHeight = static_cast<int>(view.height);
         picture.iColorFormat = videoFormatI420;
-        picture.iStride[0] = static_cast<int>(frame.width);
-        picture.iStride[1] = static_cast<int>(frame.width / 2u);
-        picture.iStride[2] = static_cast<int>(frame.width / 2u);
-        picture.pData[0] = const_cast<uint8_t*>(frame.y.data());
-        picture.pData[1] = const_cast<uint8_t*>(frame.u.data());
-        picture.pData[2] = const_cast<uint8_t*>(frame.v.data());
+        picture.iStride[0] = static_cast<int>(view.strideY);
+        picture.iStride[1] = static_cast<int>(view.strideC);
+        picture.iStride[2] = static_cast<int>(view.strideC);
+        picture.pData[0] = const_cast<uint8_t*>(view.y);
+        picture.pData[1] = const_cast<uint8_t*>(view.u);
+        picture.pData[2] = const_cast<uint8_t*>(view.v);
         picture.uiTimeStamp = static_cast<long long>(timestampMs);
 
         SFrameBSInfo frameInfo;

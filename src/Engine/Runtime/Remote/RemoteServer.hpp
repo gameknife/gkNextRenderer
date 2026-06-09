@@ -41,6 +41,9 @@ namespace Runtime::Remote
         void RecordVideoFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex,
                               Vulkan::VulkanBaseRenderer& renderer);
 
+        // Render thread: the renderer is about to destroy its swapchain.
+        void OnRendererDeleteSwapChain();
+
         bool IsRunning() const { return running_; }
         const FConfig& Config() const { return config_; }
 
