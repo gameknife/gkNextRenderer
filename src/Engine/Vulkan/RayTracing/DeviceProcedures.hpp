@@ -106,6 +106,20 @@ namespace Vulkan
 			int* pFd)>
 		vkGetMemoryFdKHR;
 #endif
+
+		// VK_KHR_video_queue / VK_KHR_video_encode_queue (null when the extensions are not enabled).
+		const PFN_vkCreateVideoSessionKHR vkCreateVideoSessionKHR;
+		const PFN_vkDestroyVideoSessionKHR vkDestroyVideoSessionKHR;
+		const PFN_vkGetVideoSessionMemoryRequirementsKHR vkGetVideoSessionMemoryRequirementsKHR;
+		const PFN_vkBindVideoSessionMemoryKHR vkBindVideoSessionMemoryKHR;
+		const PFN_vkCreateVideoSessionParametersKHR vkCreateVideoSessionParametersKHR;
+		const PFN_vkDestroyVideoSessionParametersKHR vkDestroyVideoSessionParametersKHR;
+		const PFN_vkGetEncodedVideoSessionParametersKHR vkGetEncodedVideoSessionParametersKHR;
+		const PFN_vkCmdBeginVideoCodingKHR vkCmdBeginVideoCodingKHR;
+		const PFN_vkCmdEndVideoCodingKHR vkCmdEndVideoCodingKHR;
+		const PFN_vkCmdControlVideoCodingKHR vkCmdControlVideoCodingKHR;
+		const PFN_vkCmdEncodeVideoKHR vkCmdEncodeVideoKHR;
+
 	private:
 
 		const class Device& device_;

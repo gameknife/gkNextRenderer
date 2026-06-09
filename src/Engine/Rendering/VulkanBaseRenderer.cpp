@@ -546,6 +546,38 @@ namespace Vulkan
             nextDeviceFeatures = &rayQueryFeatures;
         }
 
+        // Vulkan Video H.264 encode (remote play hardware path). Probe before device creation;
+        // the feature struct must outlive ctx_.device.reset().
+        VkPhysicalDeviceSynchronization2FeaturesKHR synchronization2Features = {};
+        if (GOption->RemoteMode && GOption->RemoteEncoder != "openh264")
+        {
+            videoCaps_ = Runtime::Remote::FVulkanVideoCaps::Probe(ctx_.instance->Handle(), physicalDevice);
+            videoCaps_.LogSummary();
+            if (videoCaps_.Usable())
+            {
+                requiredExtensions.insert(requiredExtensions.end(),
+                    {
+                        VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
+                        VK_KHR_VIDEO_QUEUE_EXTENSION_NAME,
+                        VK_KHR_VIDEO_ENCODE_QUEUE_EXTENSION_NAME,
+                        VK_KHR_VIDEO_ENCODE_H264_EXTENSION_NAME,
+                    });
+                if (videoCaps_.maintenance1Present)
+                {
+                    requiredExtensions.push_back(VK_KHR_VIDEO_MAINTENANCE_1_EXTENSION_NAME);
+                }
+                synchronization2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
+                synchronization2Features.pNext = nextDeviceFeatures;
+                synchronization2Features.synchronization2 = true;
+                nextDeviceFeatures = &synchronization2Features;
+            }
+            else if (GOption->RemoteEncoder == "vulkan")
+            {
+                SPDLOG_WARN("RemotePlay: --remote-encoder vulkan requested but Vulkan Video H.264 encode is not "
+                            "usable on this device; falling back to openh264");
+            }
+        }
+
         VkPhysicalDeviceFeatures supportedFeatures = {};
         vkGetPhysicalDeviceFeatures(physicalDevice, &supportedFeatures);
 

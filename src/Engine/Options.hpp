@@ -46,6 +46,7 @@ public:
 	uint32_t RemoteFps{30};
 	uint32_t RemoteWidth{};
 	uint32_t RemoteHeight{};
+	std::string RemoteEncoder{"auto"};
 	bool KeepCPUMeshData{};  // 保留CPU网格数据（编辑器模式需要）
 	bool UpdateVisualTestBaseline{};
 	bool FlappyReplay{};
