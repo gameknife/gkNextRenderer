@@ -44,6 +44,7 @@ Options::Options(const int argc, const char* argv[])
 		("remote-bitrate", "Remote Play starting video bitrate in kbps.", cxxopts::value<uint32_t>(RemoteBitrateKbps)->default_value("4000"))
 		("remote-fps", "Remote Play target stream frame rate.", cxxopts::value<uint32_t>(RemoteFps)->default_value("30"))
 		("remote-res", "Remote Play encode resolution, e.g. 1280x720. Empty means source resolution.", cxxopts::value<std::string>(remoteResolution)->default_value(""))
+		("remote-encoder", "Remote Play video encoder: auto, vulkan or openh264.", cxxopts::value<std::string>(RemoteEncoder)->default_value("auto"))
 		("keep-cpu-mesh-data", "Keep CPU mesh data for editor mode.", cxxopts::value<bool>(KeepCPUMeshData)->default_value("false"))
 		("update-baseline", "Update visual test baseline images from the current run.", cxxopts::value<bool>(UpdateVisualTestBaseline)->default_value("false")->implicit_value("true"))
 		("flappy-replay", "Run Flappy deterministic replay and write trace output.", cxxopts::value<bool>(FlappyReplay)->default_value("false")->implicit_value("true"))
@@ -111,6 +112,10 @@ Options::Options(const int argc, const char* argv[])
 			if (RemoteHttpPort > 65535 || RemotePort > 65535)
 			{
 				Throw(std::out_of_range("Remote Play ports must be in range 0..65535."));
+			}
+			if (RemoteEncoder != "auto" && RemoteEncoder != "vulkan" && RemoteEncoder != "openh264")
+			{
+				Throw(std::out_of_range("Invalid --remote-encoder. Expected auto, vulkan or openh264."));
 			}
 		}
 

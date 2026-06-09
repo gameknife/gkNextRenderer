@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Assets/AssetsFwd.hpp"
+#include "Engine/Runtime/Remote/VulkanVideoCaps.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
 #include "Engine/Vulkan/SyncAndTiming.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
@@ -102,6 +103,7 @@ namespace Vulkan
 		bool HasFullAmbientCubeBudget() const { return caps_.fullAmbientCubeBudget; }
 		void SetDenoiserEnabled(bool enabled) { caps_.supportDenoiser = enabled; }
 		void SetVisualDebugEnabled(bool enabled) { visualDebug_ = enabled; }
+		const Runtime::Remote::FVulkanVideoCaps& VideoCaps() const { return videoCaps_; }
 
 		// Engine callbacks
 		struct Delegates
@@ -247,6 +249,7 @@ namespace Vulkan
 		};
 
 		DeviceCaps caps_;
+		Runtime::Remote::FVulkanVideoCaps videoCaps_;
 		DeviceContext ctx_;
 		FrameResources frame_;
 		SkinnedMeshResources skin_;
