@@ -57,6 +57,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /chat/new", s.handleChatNew)
 	mux.HandleFunc("POST /chat/archive", s.handleChatArchive)
 	mux.HandleFunc("POST /chat/clear", s.handleChatClear)
+	mux.HandleFunc("POST /chat/serve", s.handleChatServe)
+	mux.HandleFunc("POST /chat/stop", s.handleChatStop)
 	return logRequests(mux)
 }
 
@@ -143,6 +145,7 @@ type chatVM struct {
 	Messages      []llm.ChatMessage
 	Context       chatContextVM
 	Error         string
+	Flash         string
 	ServerRunning bool
 	RunningModel  string
 	Endpoint      string
@@ -417,7 +420,7 @@ func (s *Server) handleTab(w http.ResponseWriter, r *http.Request) {
 		s.render(w, "tab_git", vm)
 	case "chat":
 		vm := s.buildHeader("chat")
-		vm.ChatVM = s.buildChatVM("", "")
+		vm.ChatVM = s.buildChatVM("", "", "", "")
 		s.render(w, "tab_chat", vm)
 	case "loc":
 		vm := s.buildHeader("loc")

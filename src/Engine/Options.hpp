@@ -37,6 +37,15 @@ public:
 	uint32_t AgentValidationFrames{90};
 	std::string AgentValidationOutput{"screenshots/agent_validation"};
 	bool HiddenWindow{};
+	bool RemoteMode{};
+	bool RemoteShowWindow{};
+	std::string RemoteBind{"0.0.0.0"};
+	uint32_t RemoteHttpPort{8088};
+	uint32_t RemotePort{8089};
+	uint32_t RemoteBitrateKbps{4000};
+	uint32_t RemoteFps{30};
+	uint32_t RemoteWidth{};
+	uint32_t RemoteHeight{};
 	bool KeepCPUMeshData{};  // 保留CPU网格数据（编辑器模式需要）
 	bool UpdateVisualTestBaseline{};
 	bool FlappyReplay{};

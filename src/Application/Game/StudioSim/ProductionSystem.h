@@ -43,6 +43,7 @@ namespace StudioSim
         bool polishBugBatchGenerated_ = false;
         std::string activeGoalTitle_;
         int lastLoggedProgressBucket_ = -1;
+        double lastTickGameMinutes_ = -1.0; // 检测跨天（时钟回到 09:00）以重新错开各员工首拍
         std::vector<FProductionVisualEvent> visualEvents_;
         std::string focusMeter_;
         float focusBoost_ = 1.0f;

@@ -161,6 +161,10 @@ namespace
     constexpr int kProjectPitchSizeCount = 3;
     constexpr int64_t kTeamDailyWage = 1800;
     constexpr int64_t kUnitPrice = 30;
+    // 一支 6 人团队在一个工作日（09:00–18:00）内大致能产出的四仪表点数总量，
+    // 已扣除午休/走动/开会等非产出时间。项目目标 = 此值 × 工期天数，
+    // 使项目大致需要约 plannedDays 天完成，而不是开工当天就把仪表打满（修复"晨会后猛加"）。
+    constexpr float kTeamDailyMeterOutput = 760.0f;
 
     const char* GameGenreLabelZh(StudioSim::EGameGenre genre)
     {
@@ -250,17 +254,6 @@ namespace
         }
     }
 
-    float ProjectSizeScale(StudioSim::EProjectSizeTier tier)
-    {
-        switch (tier)
-        {
-        case StudioSim::EProjectSizeTier::Small:    return 0.7f;
-        case StudioSim::EProjectSizeTier::Standard: return 1.0f;
-        case StudioSim::EProjectSizeTier::Big:      return 1.5f;
-        default:                                    return 1.0f;
-        }
-    }
-
     std::string DefaultProjectName(StudioSim::EGameTheme theme, int projectIndex)
     {
         static const char* kFantasy[] = {"秘境传说", "龙之纪元", "魔导之书"};
@@ -320,7 +313,8 @@ namespace
         project.production.stage = StudioSim::EProjectStage::Planning;
 
         const StudioSim::FProjectMeters weights = GenreWeights(genre);
-        const float total = 440.0f * ProjectSizeScale(sizeTier);
+        // 目标随工期天数放大：一天的团队产出 × 工期 ≈ 项目总目标，确保跨多天连续推进而非当天打满。
+        const float total = kTeamDailyMeterOutput * static_cast<float>(std::max(1, project.plannedDays));
         project.production.targetMeters = {weights.tech * total, weights.design * total, weights.art * total,
                                            weights.polish * total};
         return project;
@@ -800,8 +794,9 @@ void StudioSimGameInstance::OnTick(double deltaSeconds)
             if (!IsAwaitingPlayerDecision())
             {
                 const double gatheringDeltaSeconds = GOption->AgentValidation ? deltaSeconds * 12.0 : deltaSeconds;
+                NextAI::FAIService* gatheringAi = GOption->AgentValidation ? nullptr : GetEngine().GetAIService();
                 gatheringSystem_.Tick(gatheringDeltaSeconds, worldState_, employeeSystem_.EmployeesMutable(),
-                                      officeMap_, gameProject_);
+                                      officeMap_, gameProject_, gatheringAi);
             }
             if (GOption->AgentValidation)
             {
@@ -1809,6 +1804,14 @@ void StudioSimGameInstance::DrawGatheringDecisionModal()
     ImGui::TextWrapped("会议：%s", pendingGathering->topic.c_str());
     ImGui::Separator();
     ImGui::TextWrapped("决议：%s", pendingGathering->decision.summary.c_str());
+    if (!pendingGathering->decision.focusMeter.empty())
+    {
+        ImGui::TextDisabled("集中补：%s", ProjectMeterLabelZh(pendingGathering->decision.focusMeter));
+    }
+    for (const auto& reassign : pendingGathering->decision.reassign)
+    {
+        ImGui::BulletText("%s → %s", reassign.first.c_str(), reassign.second.c_str());
+    }
     ImGui::Spacing();
 
     const int gatheringId = pendingGathering->id;

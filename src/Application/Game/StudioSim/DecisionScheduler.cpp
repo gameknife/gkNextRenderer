@@ -188,6 +188,26 @@ namespace StudioSim
             }
         }
 
+        // 取员工当日产出最高的那项，作为"进度感知"的记忆片段（让记忆/对白挂钩真实开发进度）。
+        std::string DominantContribution(const FProjectMeters& c)
+        {
+            struct FEntry { const char* zh; float value; };
+            const FEntry entries[] = {{"技术", c.tech}, {"玩法", c.design}, {"美术", c.art}, {"品质", c.polish}};
+            const FEntry* best = &entries[0];
+            for (const auto& entry : entries)
+            {
+                if (entry.value > best->value)
+                {
+                    best = &entry;
+                }
+            }
+            if (best->value <= 0.0f)
+            {
+                return {};
+            }
+            return fmt::format("已产出{}+{:.0f}", best->zh, best->value);
+        }
+
         int ChatterBudgetPerHour(const std::string& personality)
         {
             if (personality.find("沉默寡言") != std::string::npos)
@@ -284,10 +304,11 @@ namespace StudioSim
                 "办公室里你可以去的点位有：{}\n"
                 "结合你的职位、性格、今日目标和当前状况，决定你接下来做一件事。需要群体决策/重排计划时用 action=MEETING "
                 "并选择会议室 meet_seat_*；想找某位同事说话就用 action=TALK 并在 target_employee 填同事名。"
-                "dialogue 可以留空；常规 WORK 不要说话，只有事件、搭话、会议或真的有必要提醒时才说。"
+                "dialogue 可以留空；常规 WORK 不要说话。一旦开口，必须引用上面看到的具体进度/最短板/你自己的累计产出"
+                "（例如「技术补到120了」「美术还差40」「我今天写了60技术」），不要说「加油」「没问题」这类空话。"
                 "只输出一个JSON对象，不要任何解释或markdown：\n"
                 "{{\"action\":\"WORK|REST|TALK|MEETING|IDLE\",\"target_poi\":\"<上面列表里的一个点位名>\","
-                "\"target_employee\":\"<TALK时填一个同事名，否则空字符串>\",\"dialogue\":\"<可为空，一句不超过15字>\","
+                "\"target_employee\":\"<TALK时填一个同事名，否则空字符串>\",\"dialogue\":\"<可为空；要说就带上具体进度数字，一句不超过15字>\","
                 "\"mood\":\"calm|focused|stressed|excited|bored|panicked\",\"duration_minutes\":<10到60的整数>}}",
                 emp.displayName, RoleName(emp.role), emp.personality, hh, mm, goalLine, projectIdentityLine,
                 projectLine, memoryLine, eventLine, incomingLine, mates, poiList);
@@ -438,6 +459,11 @@ namespace StudioSim
         if (!result.dialogue.empty())
         {
             memory += fmt::format("，说「{}」", result.dialogue);
+        }
+        const std::string contribution = DominantContribution(emp.myContribution);
+        if (!contribution.empty())
+        {
+            memory += "，" + contribution;
         }
         PushShortMemory(emp, gameMinutes, memory);
 

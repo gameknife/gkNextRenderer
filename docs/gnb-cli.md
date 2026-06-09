@@ -199,6 +199,7 @@ List and inspect `.spec/TODO.md` tasks:
 ./gnb.sh todo list
 ./gnb.sh todo show 00021
 ./gnb.sh todo next --json
+./gnb.sh todo next --wait --timeout 590s --json
 ```
 
 Add a task, optionally creating a linked `specs/<id>.md` background file:

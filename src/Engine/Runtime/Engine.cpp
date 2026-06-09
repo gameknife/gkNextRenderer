@@ -5,6 +5,8 @@
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
+#include "Engine/Runtime/Remote/RemoteProtocol.hpp"
+#include "Engine/Runtime/Remote/RemoteServer.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Config/EngineCVars.hpp"
 #include "Engine/Runtime/Subsystems/QuickJSEngine.hpp"
@@ -472,6 +474,7 @@ NextEngine::~NextEngine()
 
     rmlUi_.reset();
     userInterface_.reset();
+    remoteServer_.reset();
     scene_.reset();
     renderer_.reset();
     window_.reset();
@@ -548,6 +551,38 @@ void NextEngine::Start()
 
     gameInstance_->OnInit();
 
+    if (options_->RemoteMode)
+    {
+        uint32_t remoteWidth = options_->RemoteWidth != 0 ? options_->RemoteWidth : options_->Width;
+        uint32_t remoteHeight = options_->RemoteHeight != 0 ? options_->RemoteHeight : options_->Height;
+        if (options_->RemoteWidth == 0 && options_->RemoteHeight == 0 && remoteWidth > 0 && remoteHeight > 0)
+        {
+            constexpr uint32_t maxDefaultRemoteWidth = 1280;
+            constexpr uint32_t maxDefaultRemoteHeight = 720;
+            const double scale = std::min(
+                1.0, std::min(static_cast<double>(maxDefaultRemoteWidth) / static_cast<double>(remoteWidth),
+                              static_cast<double>(maxDefaultRemoteHeight) / static_cast<double>(remoteHeight)));
+            remoteWidth = std::max(2u, static_cast<uint32_t>(static_cast<double>(remoteWidth) * scale) & ~1u);
+            remoteHeight = std::max(2u, static_cast<uint32_t>(static_cast<double>(remoteHeight) * scale) & ~1u);
+        }
+
+        Runtime::Remote::RemoteServer::FConfig remoteConfig;
+        remoteConfig.enabled = true;
+        remoteConfig.bindAddress = options_->RemoteBind;
+        remoteConfig.httpPort = options_->RemoteHttpPort;
+        remoteConfig.signalingPort = options_->RemotePort;
+        remoteConfig.bitrateKbps = options_->RemoteBitrateKbps;
+        remoteConfig.fps = options_->RemoteFps;
+        remoteConfig.width = remoteWidth;
+        remoteConfig.height = remoteHeight;
+        remoteServer_ = std::make_unique<Runtime::Remote::RemoteServer>(std::move(remoteConfig));
+        if (!remoteServer_->Start())
+        {
+            SPDLOG_ERROR("RemotePlay: failed to start remote server");
+            remoteServer_.reset();
+        }
+    }
+
     SPDLOG_INFO("---- Next Engine Started in {}", stopwatch.elapsed_ms());
 }
 
@@ -608,6 +643,11 @@ bool NextEngine::HandleEvent(SDL_Event& event)
     case SDL_EVENT_MOUSE_MOTION:
         if (rmlUiConsumed)
         {
+            break;
+        }
+        if (event.motion.which == Runtime::Remote::remoteMouseId)
+        {
+            OnCursorPosition(event.motion.xrel, event.motion.yrel);
             break;
         }
         if (window_ && SDL_GetWindowRelativeMouseMode(window_->Handle()))
@@ -754,6 +794,12 @@ bool NextEngine::Tick(bool forcingDelta)
             }
         }
 
+        if (remoteServer_)
+        {
+            SCOPED_CPU_TIMER("remote");
+            remoteServer_->Tick();
+        }
+
         {
             PERFORMANCEAPI_INSTRUMENT_COLOR("Engine::TickRenderer", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
             renderer_->DrawFrame();
@@ -843,6 +889,7 @@ void NextEngine::End()
     {
         services_.physics->Stop();
     }
+    remoteServer_.reset();
     if (gameInstance_)
     {
         gameInstance_->OnDestroy();

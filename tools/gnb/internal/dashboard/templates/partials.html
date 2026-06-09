@@ -911,6 +911,21 @@
           </select>
         </div>
 
+        <div class="chat-server-actions">
+          <form hx-post="/chat/serve"
+                hx-include="#chat-model,#chat-session-id"
+                hx-target="#chat-panel"
+                hx-swap="outerHTML">
+            <button class="btn-secondary" type="submit" title="启动或切换到当前选择的模型">Serve</button>
+          </form>
+          <form hx-post="/chat/stop"
+                hx-include="#chat-model,#chat-session-id"
+                hx-target="#chat-panel"
+                hx-swap="outerHTML">
+            <button class="btn-secondary danger" type="submit" title="停止后台 llama-server" {{if not .ServerRunning}}disabled{{end}}>Stop</button>
+          </form>
+        </div>
+
         <div class="chat-model-list">
           {{range .Models}}
           <div class="model-row">
@@ -1000,6 +1015,9 @@
 
       {{if .Error}}
       <div class="chat-error">{{.Error}}</div>
+      {{end}}
+      {{if .Flash}}
+      <div class="chat-flash">{{.Flash}}</div>
       {{end}}
 
       <form id="chat-send-form"

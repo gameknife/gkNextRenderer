@@ -7,7 +7,10 @@
 #include <algorithm>
 
 #include <fmt/format.h>
+#include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
+
+#include "Engine/Runtime/Subsystems/AIService.hpp"
 
 namespace StudioSim
 {
@@ -85,6 +88,172 @@ namespace StudioSim
                 return "核心卖点";
             }
             return gameProject.highlights.front().text;
+        }
+
+        const char* StageLabelZh(EProjectStage stage)
+        {
+            switch (stage)
+            {
+            case EProjectStage::Planning:   return "企划";
+            case EProjectStage::Production: return "生产";
+            case EProjectStage::Polish:     return "打磨";
+            case EProjectStage::Done:       return "完成";
+            default:                        return "?";
+            }
+        }
+
+        const char* GameGenreLabelZh(EGameGenre genre)
+        {
+            switch (genre)
+            {
+            case EGameGenre::RPG:        return "RPG";
+            case EGameGenre::Action:     return "动作";
+            case EGameGenre::Simulation: return "模拟经营";
+            case EGameGenre::Puzzle:     return "解谜";
+            case EGameGenre::Shooter:    return "射击";
+            case EGameGenre::Adventure:  return "冒险";
+            default:                     return "未知";
+            }
+        }
+
+        std::string AllHighlightsText(const FGameProject& gameProject)
+        {
+            if (gameProject.highlights.empty())
+            {
+                return "核心卖点";
+            }
+            std::string text;
+            for (size_t i = 0; i < gameProject.highlights.size(); ++i)
+            {
+                if (i > 0)
+                {
+                    text += "、";
+                }
+                text += gameProject.highlights[i].text;
+            }
+            return text;
+        }
+
+        std::string ParticipantsText(const std::vector<FEmployee>& employees, const std::vector<size_t>& participants)
+        {
+            std::string text;
+            for (size_t idx : participants)
+            {
+                if (idx >= employees.size())
+                {
+                    continue;
+                }
+                if (!text.empty())
+                {
+                    text += "、";
+                }
+                text += fmt::format("{}（{}）", employees[idx].displayName, RoleName(employees[idx].role));
+            }
+            return text;
+        }
+
+        // 会议/茶水间的 LLM 提示词：注入项目类型/题材/体验要点 + 真实进度/最短板/Bug，
+        // 让对白与决策都"针对这款游戏的当前状态"，而非套模板。
+        std::string BuildGatheringPrompt(const FGathering& gathering, const std::vector<FEmployee>& employees,
+                                         const FGameProject& gameProject)
+        {
+            const FProjectState& project = gameProject.production;
+            const std::string projectName = gameProject.name.empty() ? std::string("项目") : gameProject.name;
+            const std::string participants = ParticipantsText(employees, gathering.participants);
+
+            if (gathering.kind == EGatheringKind::Pantry)
+            {
+                return fmt::format(
+                    "你是游戏工作室茶水间闲聊编剧。大家在做游戏《{}》（{}·{}）。话题：{}。\n"
+                    "参与者：{}。\n"
+                    "生成 4-5 句轻松的多人闲聊：每句由一名参与者发言、不超过16字，可以吐槽/打气/聊这款游戏的题材或手感，"
+                    "别谈正式分工或具体数字。只输出JSON，不要解释：\n"
+                    "{{\"lines\":[{{\"speaker\":\"姓名\",\"line\":\"...\"}}]}}",
+                    projectName, GameGenreLabelZh(gameProject.genre), GameThemeLabelZh(gameProject.theme),
+                    gathering.topic, participants);
+            }
+
+            const FMeterSnapshot weakest = WeakestMeter(project);
+            const int plannedDays = std::max(1, gameProject.plannedDays);
+            const int projectDay = std::clamp(gameProject.elapsedDays + 1, 1, plannedDays);
+            return fmt::format(
+                "你是游戏工作室会议编剧，围绕这款具体游戏写一段简短会议。\n"
+                "项目：《{}》，类型 {}，题材 {}。体验要点：{}。工期 第 {}/{} 天。\n"
+                "进度：{}期，总进度 {:.0f}%。最短板：{} {:.0f}/{:.0f}。待修 Bug：{}。\n"
+                "议题：{}。参会者：{}。\n"
+                "生成 6-8 句多人对话：每句由一名参会者发言、不超过16字，必须结合上面的真实数字/最短板/这款游戏的特性来说，"
+                "不要喊空泛口号。最后给出一个群体决策（团队接下来集中补哪块仪表，可选地让谁改做什么）。\n"
+                "只输出JSON，不要解释：\n"
+                "{{\"lines\":[{{\"speaker\":\"姓名\",\"line\":\"≤16字\"}}],"
+                "\"decision\":{{\"summary\":\"≤20字\",\"focus_meter\":\"tech|design|art|polish\","
+                "\"reassign\":[{{\"who\":\"姓名\",\"task\":\"≤12字\"}}]}}}}",
+                projectName, GameGenreLabelZh(gameProject.genre), GameThemeLabelZh(gameProject.theme),
+                AllHighlightsText(gameProject), projectDay, plannedDays, StageLabelZh(project.stage),
+                project.overallProgress * 100.0f, MeterLabelZh(weakest.key), weakest.value, weakest.target,
+                project.bugCount, gathering.topic, participants);
+        }
+
+        void ParseGatheringResult(const std::string& text, std::vector<FMeetingLine>& outLines,
+                                  FGroupDecision& outDecision, bool& outHasDecision)
+        {
+            outLines.clear();
+            outHasDecision = false;
+            const size_t open = text.find('{');
+            const size_t close = text.rfind('}');
+            if (open == std::string::npos || close == std::string::npos || close <= open)
+            {
+                return;
+            }
+            try
+            {
+                const nlohmann::json json = nlohmann::json::parse(text.substr(open, close - open + 1));
+                if (json.contains("lines") && json["lines"].is_array())
+                {
+                    for (const auto& item : json["lines"])
+                    {
+                        FMeetingLine line;
+                        line.speaker = item.value("speaker", std::string());
+                        line.text = item.value("line", std::string());
+                        if (!line.speaker.empty() && !line.text.empty())
+                        {
+                            outLines.push_back(std::move(line));
+                        }
+                        if (outLines.size() >= 10)
+                        {
+                            break;
+                        }
+                    }
+                }
+                if (json.contains("decision") && json["decision"].is_object())
+                {
+                    const auto& dec = json["decision"];
+                    outDecision.summary = dec.value("summary", std::string());
+                    const std::string focus = dec.value("focus_meter", std::string());
+                    if (focus == "tech" || focus == "design" || focus == "art" || focus == "polish")
+                    {
+                        outDecision.focusMeter = focus;
+                    }
+                    outDecision.reassign.clear();
+                    if (dec.contains("reassign") && dec["reassign"].is_array())
+                    {
+                        for (const auto& r : dec["reassign"])
+                        {
+                            const std::string who = r.value("who", std::string());
+                            const std::string task = r.value("task", std::string());
+                            if (!who.empty() && !task.empty())
+                            {
+                                outDecision.reassign.emplace_back(who, task);
+                            }
+                        }
+                    }
+                    outHasDecision = !outDecision.summary.empty() || !outDecision.focusMeter.empty();
+                }
+            }
+            catch (...)
+            {
+                outLines.clear();
+                outHasDecision = false;
+            }
         }
 
         bool HasKind(const std::vector<FGathering>& gatherings, EGatheringKind kind)
@@ -172,6 +341,9 @@ namespace StudioSim
         pendingMeetingTopics_.clear();
         nextEvalGameMinutes_ = 0.0;
         nextId_ = 1;
+        std::lock_guard<std::mutex> lock(mutex_);
+        ++generation_; // 作废所有在途 LLM 回调
+        completed_.clear();
     }
 
     void GatheringSystem::RequestMeeting(const std::string& topic)
@@ -185,7 +357,8 @@ namespace StudioSim
     }
 
     void GatheringSystem::EvaluateTriggers(const FWorldState& world, std::vector<FEmployee>& employees,
-                                           const OfficeMap& office, const FGameProject& gameProject)
+                                           const OfficeMap& office, const FGameProject& gameProject,
+                                           NextAI::FAIService* ai)
     {
         const FProjectState& project = gameProject.production;
         const std::string projectName = gameProject.name.empty() ? std::string("项目") : gameProject.name;
@@ -199,7 +372,7 @@ namespace StudioSim
             project.bugCount >= 6)
         {
             StartGathering(EGatheringKind::Meeting, fmt::format("《{}》Bug 太多，重新分工", projectName),
-                           world.gameClockMinutes, employees, office, gameProject);
+                           world.gameClockMinutes, employees, office, gameProject, ai);
         }
         else if (!HasKind(gatherings_, EGatheringKind::Meeting) && world.gameClockMinutes >= 13.0 * 60.0)
         {
@@ -208,7 +381,7 @@ namespace StudioSim
             {
                 StartGathering(EGatheringKind::Meeting,
                                fmt::format("《{}》{}进度落后，临时碰头", projectName, MeterLabelZh(weakest.key)),
-                               world.gameClockMinutes, employees, office, gameProject);
+                               world.gameClockMinutes, employees, office, gameProject, ai);
             }
         }
 
@@ -218,13 +391,13 @@ namespace StudioSim
         {
             StartGathering(EGatheringKind::Pantry,
                            fmt::format("茶水间聊《{}》{}", projectName, GameThemeLabelZh(gameProject.theme)),
-                           world.gameClockMinutes, employees, office, gameProject);
+                           world.gameClockMinutes, employees, office, gameProject, ai);
         }
     }
 
     void GatheringSystem::StartGathering(EGatheringKind kind, const std::string& topic, double gameMinutes,
                                          std::vector<FEmployee>& employees, const OfficeMap& office,
-                                         const FGameProject& gameProject)
+                                         const FGameProject& gameProject, NextAI::FAIService* ai)
     {
         const FProjectState& project = gameProject.production;
         if (HasKind(gatherings_, kind))
@@ -296,22 +469,69 @@ namespace StudioSim
             emp.bubbleClearAt = gameMinutes + 8.0;
         }
 
+        // 先有模板对白/决策垫底；同时异步请求 LLM 生成进度感知的对白与决策，回来后在 Tick 回灌。
+        RequestGatheringContent(gathering, employees, gameProject, ai);
+
         SPDLOG_INFO("StudioSim/Gathering started {} id={} topic='{}' participants={}", GatheringKindName(kind),
                     gathering.id, topic, participants.size());
         gatherings_.push_back(std::move(gathering));
     }
 
     void GatheringSystem::Tick(double deltaSeconds, FWorldState& world, std::vector<FEmployee>& employees,
-                               const OfficeMap& office, const FGameProject& gameProject)
+                               const OfficeMap& office, const FGameProject& gameProject, NextAI::FAIService* ai)
     {
+        // 回灌 LLM 异步生成的聚集内容（主线程消费）。
+        {
+            std::vector<FPendingContent> ready;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                ready.swap(completed_);
+            }
+            for (const auto& pending : ready)
+            {
+                for (auto& gathering : gatherings_)
+                {
+                    if (gathering.id != pending.id || gathering.state == EGatheringState::Dispersing)
+                    {
+                        continue;
+                    }
+                    // 对白：仅在尚未进入决策确认、仍在播放时整体替换并从头重播（保证一致连续）。
+                    if (!pending.lines.empty() && !gathering.awaitingConfirm &&
+                        gathering.state == EGatheringState::Talking)
+                    {
+                        gathering.lines = pending.lines;
+                        gathering.nextLineIndex = 0;
+                        gathering.elapsedRealSeconds = 0.0;
+                        gathering.nextLineRealSeconds = 1.0;
+                    }
+                    // 决策：会议未被采纳/否决前，用 LLM 决策覆盖模板决策。
+                    if (pending.hasDecision && gathering.kind == EGatheringKind::Meeting &&
+                        !gathering.decision.accepted && !gathering.decision.rejected)
+                    {
+                        if (!pending.decision.summary.empty())
+                        {
+                            gathering.decision.summary = pending.decision.summary;
+                        }
+                        if (!pending.decision.focusMeter.empty())
+                        {
+                            gathering.decision.focusMeter = pending.decision.focusMeter;
+                        }
+                        gathering.decision.reassign = pending.decision.reassign;
+                        gathering.decision.valid = true;
+                    }
+                    break;
+                }
+            }
+        }
+
         if (!pendingMeetingTopics_.empty() && !HasKind(gatherings_, EGatheringKind::Meeting))
         {
             const std::string topic = pendingMeetingTopics_.front();
             pendingMeetingTopics_.erase(pendingMeetingTopics_.begin());
-            StartGathering(EGatheringKind::Meeting, topic, world.gameClockMinutes, employees, office, gameProject);
+            StartGathering(EGatheringKind::Meeting, topic, world.gameClockMinutes, employees, office, gameProject, ai);
         }
 
-        EvaluateTriggers(world, employees, office, gameProject);
+        EvaluateTriggers(world, employees, office, gameProject, ai);
 
         for (auto& gathering : gatherings_)
         {
@@ -381,6 +601,50 @@ namespace StudioSim
                           gatherings_.end());
     }
 
+    void GatheringSystem::RequestGatheringContent(FGathering& gathering, const std::vector<FEmployee>& employees,
+                                                  const FGameProject& gameProject, NextAI::FAIService* ai)
+    {
+        if (ai == nullptr || gathering.participants.empty())
+        {
+            return; // 无 LLM：保留模板对白/决策（确定性 fallback）。
+        }
+
+        const std::string prompt = BuildGatheringPrompt(gathering, employees, gameProject);
+        const int gatheringId = gathering.id;
+        uint64_t generation = 0;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            generation = generation_;
+        }
+
+        ai->GenerateTextAsync(prompt,
+                              [this, gatheringId, generation](NextAI::FAIResponse response)
+                              {
+                                  // Worker thread：只解析 + 入队，绝不触碰 gatherings_/employees。
+                                  std::vector<FMeetingLine> lines;
+                                  FGroupDecision decision;
+                                  bool hasDecision = false;
+                                  ParseGatheringResult(response.success ? response.text : std::string(), lines, decision,
+                                                       hasDecision);
+                                  if (lines.empty() && !hasDecision)
+                                  {
+                                      return;
+                                  }
+                                  std::lock_guard<std::mutex> lock(mutex_);
+                                  if (generation != generation_)
+                                  {
+                                      return;
+                                  }
+                                  FPendingContent pending;
+                                  pending.id = gatheringId;
+                                  pending.generation = generation;
+                                  pending.lines = std::move(lines);
+                                  pending.decision = std::move(decision);
+                                  pending.hasDecision = hasDecision;
+                                  completed_.push_back(std::move(pending));
+                              });
+    }
+
     void GatheringSystem::AcceptDecision(int gatheringId, double gameMinutes, std::vector<FEmployee>& employees,
                                          ProductionSystem& production)
     {
@@ -398,6 +662,19 @@ namespace StudioSim
                 {
                     employees[idx].todayTask = fmt::format("集中补{}", MeterLabelZh(gathering.decision.focusMeter));
                     PushMemory(employees[idx], gameMinutes, fmt::format("会议采纳：{}", gathering.decision.summary));
+                }
+            }
+            // LLM 群体决策里的改派覆盖到具体同事（让"开会→执行"接上）。
+            for (const auto& r : gathering.decision.reassign)
+            {
+                for (auto& emp : employees)
+                {
+                    if (emp.displayName == r.first)
+                    {
+                        emp.todayTask = r.second;
+                        PushMemory(emp, gameMinutes, fmt::format("会议改派：{}", r.second));
+                        break;
+                    }
                 }
             }
             ReleaseGathering(gathering, gameMinutes, employees);

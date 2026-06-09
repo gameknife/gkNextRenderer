@@ -1,0 +1,41 @@
+#pragma once
+
+#include <cstdint>
+#include <memory>
+#include <string>
+
+namespace Runtime::Remote
+{
+    class FSignalingServer;
+
+    class RemoteServer final
+    {
+    public:
+        struct FConfig
+        {
+            bool enabled = false;
+            std::string bindAddress = "0.0.0.0";
+            uint32_t httpPort = 8088;
+            uint32_t signalingPort = 8089;
+            uint32_t bitrateKbps = 4000;
+            uint32_t fps = 30;
+            uint32_t width = 0;
+            uint32_t height = 0;
+        };
+
+        explicit RemoteServer(FConfig config);
+        ~RemoteServer();
+
+        bool Start();
+        void Stop();
+        void Tick();
+
+        bool IsRunning() const { return running_; }
+        const FConfig& Config() const { return config_; }
+
+    private:
+        FConfig config_;
+        bool running_ = false;
+        std::unique_ptr<FSignalingServer> signalingServer_;
+    };
+}
