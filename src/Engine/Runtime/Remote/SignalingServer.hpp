@@ -18,16 +18,16 @@
 namespace Runtime::Remote
 {
     class FRemoteSession;
+    class FVideoPipeline;
 
     class FSignalingServer final
     {
     public:
-        explicit FSignalingServer(RemoteServer::FConfig config);
+        FSignalingServer(RemoteServer::FConfig config, FVideoPipeline* videoPipeline);
         ~FSignalingServer();
 
         bool Start();
         void Stop();
-        void Tick();
 
         bool IsRunning() const { return running_; }
 
@@ -37,6 +37,7 @@ namespace Runtime::Remote
         std::string PublicHostForClient() const;
 
         RemoteServer::FConfig config_;
+        FVideoPipeline* videoPipeline_ = nullptr;
         bool running_ = false;
 
 #if GK_WITH_REMOTE

@@ -14,8 +14,9 @@
 
 namespace Runtime::Remote
 {
-    FSignalingServer::FSignalingServer(RemoteServer::FConfig config)
+    FSignalingServer::FSignalingServer(RemoteServer::FConfig config, FVideoPipeline* videoPipeline)
         : config_(std::move(config))
+        , videoPipeline_(videoPipeline)
     {
     }
 
@@ -65,7 +66,7 @@ namespace Runtime::Remote
         const std::string id = message.value("id", "default");
         if (type == "request")
         {
-            auto session = std::make_shared<FRemoteSession>(config_, id, ws);
+            auto session = std::make_shared<FRemoteSession>(config_, id, ws, videoPipeline_);
             {
                 std::lock_guard lock(sessionsMutex_);
                 sessions_[id] = session;
@@ -277,24 +278,5 @@ namespace Runtime::Remote
         }
 #endif
         running_ = false;
-    }
-
-    void FSignalingServer::Tick()
-    {
-#if GK_WITH_REMOTE
-        std::vector<std::shared_ptr<FRemoteSession>> sessions;
-        {
-            std::lock_guard lock(sessionsMutex_);
-            sessions.reserve(sessions_.size());
-            for (const auto& [id, session] : sessions_)
-            {
-                sessions.push_back(session);
-            }
-        }
-        for (const auto& session : sessions)
-        {
-            session->Tick();
-        }
-#endif
     }
 }

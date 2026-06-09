@@ -1,12 +1,20 @@
 #pragma once
 
+#include <vulkan/vulkan.h>
+
 #include <cstdint>
 #include <memory>
 #include <string>
 
+namespace Vulkan
+{
+    class VulkanBaseRenderer;
+}
+
 namespace Runtime::Remote
 {
     class FSignalingServer;
+    class FVideoPipeline;
 
     class RemoteServer final
     {
@@ -28,7 +36,10 @@ namespace Runtime::Remote
 
         bool Start();
         void Stop();
-        void Tick();
+
+        // Render thread: records the per-frame video capture into the frame command buffer.
+        void RecordVideoFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex,
+                              Vulkan::VulkanBaseRenderer& renderer);
 
         bool IsRunning() const { return running_; }
         const FConfig& Config() const { return config_; }
@@ -36,6 +47,7 @@ namespace Runtime::Remote
     private:
         FConfig config_;
         bool running_ = false;
+        std::unique_ptr<FVideoPipeline> videoPipeline_;
         std::unique_ptr<FSignalingServer> signalingServer_;
     };
 }

@@ -1,10 +1,6 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/Remote/FrameSource.hpp"
 
-#include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Engine/Vulkan/MemoryAndShader.hpp"
-#include "Engine/Vulkan/SwapChain.hpp"
-
 #include <algorithm>
 #include <array>
 
@@ -20,23 +16,6 @@ namespace Runtime::Remote
         uint32_t MakeEven(uint32_t value)
         {
             return std::max(2u, value & ~1u);
-        }
-
-        VkSubresourceLayout GetScreenShotImageLayout(Vulkan::VulkanBaseRenderer& renderer)
-        {
-            VkSubresourceLayout layout{};
-            const Vulkan::Image* image = renderer.GetScreenShotImage();
-            if (!image)
-            {
-                return layout;
-            }
-
-            VkImageSubresource subresource{};
-            subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            subresource.mipLevel = 0;
-            subresource.arrayLayer = 0;
-            vkGetImageSubresourceLayout(renderer.Device().Handle(), image->Handle(), &subresource, &layout);
-            return layout;
         }
 
         std::array<uint8_t, 3> BgraToYuv(uint8_t b, uint8_t g, uint8_t r)
@@ -90,36 +69,9 @@ namespace Runtime::Remote
         return frame_;
     }
 
-    bool FFrameSource::CaptureSwapChainFrame(Vulkan::VulkanBaseRenderer& renderer)
+    const FI420Frame& FFrameSource::ConvertBgra(const uint8_t* data, size_t rowPitch, uint32_t srcWidth,
+                                                uint32_t srcHeight, bool swapRedBlue)
     {
-        const Vulkan::SwapChain& swapChain = renderer.SwapChain();
-        if (swapChain.IsHDR())
-        {
-            return false;
-        }
-
-        Vulkan::DeviceMemory* memory = renderer.GetScreenShotMemory();
-        if (!memory || !renderer.GetScreenShotImage())
-        {
-            return false;
-        }
-
-        renderer.CaptureScreenShot();
-
-        const VkExtent2D sourceExtent = swapChain.Extent();
-        const VkSubresourceLayout layout = GetScreenShotImageLayout(renderer);
-        if (sourceExtent.width == 0 || sourceExtent.height == 0 || layout.rowPitch == 0)
-        {
-            return false;
-        }
-
-        uint8_t* mappedData = static_cast<uint8_t*>(memory->Map(0, VK_WHOLE_SIZE));
-        if (!mappedData)
-        {
-            return false;
-        }
-
-        const uint8_t* imageData = mappedData + layout.offset;
         const uint32_t width = frame_.width;
         const uint32_t height = frame_.height;
         const uint32_t chromaWidth = width / 2u;
@@ -128,16 +80,17 @@ namespace Runtime::Remote
 
         for (uint32_t y = 0; y < height; ++y)
         {
-            const uint32_t srcY = std::min(sourceExtent.height - 1u,
-                                           static_cast<uint32_t>((static_cast<uint64_t>(y) * sourceExtent.height) /
+            const uint32_t srcY = std::min(srcHeight - 1u,
+                                           static_cast<uint32_t>((static_cast<uint64_t>(y) * srcHeight) /
                                                                  std::max(1u, height)));
             for (uint32_t x = 0; x < width; ++x)
             {
-                const uint32_t srcX = std::min(sourceExtent.width - 1u,
-                                               static_cast<uint32_t>((static_cast<uint64_t>(x) * sourceExtent.width) /
+                const uint32_t srcX = std::min(srcWidth - 1u,
+                                               static_cast<uint32_t>((static_cast<uint64_t>(x) * srcWidth) /
                                                                      std::max(1u, width)));
-                const uint8_t* pixel = imageData + static_cast<size_t>(srcY) * layout.rowPitch + srcX * 4u;
-                const auto yuv = BgraToYuv(pixel[0], pixel[1], pixel[2]);
+                const uint8_t* pixel = data + static_cast<size_t>(srcY) * rowPitch + srcX * 4u;
+                const auto yuv = swapRedBlue ? BgraToYuv(pixel[2], pixel[1], pixel[0])
+                                             : BgraToYuv(pixel[0], pixel[1], pixel[2]);
                 frame_.y[static_cast<size_t>(y) * width + x] = yuv[0];
 
                 const size_t chromaIndex = static_cast<size_t>(y / 2u) * chromaWidth + x / 2u;
@@ -146,7 +99,6 @@ namespace Runtime::Remote
             }
         }
 
-        memory->Unmap();
-        return true;
+        return frame_;
     }
 }

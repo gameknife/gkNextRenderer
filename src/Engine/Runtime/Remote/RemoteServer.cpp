@@ -2,6 +2,7 @@
 #include "Engine/Runtime/Remote/RemoteServer.hpp"
 
 #include "Engine/Runtime/Remote/SignalingServer.hpp"
+#include "Engine/Runtime/Remote/VideoPipeline.hpp"
 
 #include <spdlog/spdlog.h>
 
@@ -28,10 +29,14 @@ namespace Runtime::Remote
             return false;
         }
 
-        signalingServer_ = std::make_unique<FSignalingServer>(config_);
+        videoPipeline_ = std::make_unique<FVideoPipeline>(config_);
+        videoPipeline_->Start();
+
+        signalingServer_ = std::make_unique<FSignalingServer>(config_, videoPipeline_.get());
         if (!signalingServer_->Start())
         {
             signalingServer_.reset();
+            videoPipeline_.reset();
             return false;
         }
 
@@ -43,10 +48,16 @@ namespace Runtime::Remote
 
     void RemoteServer::Stop()
     {
+        // Sessions unregister their packet sinks on destruction, so they must go before the pipeline.
         if (signalingServer_)
         {
             signalingServer_->Stop();
             signalingServer_.reset();
+        }
+        if (videoPipeline_)
+        {
+            videoPipeline_->Stop();
+            videoPipeline_.reset();
         }
         if (running_)
         {
@@ -55,11 +66,12 @@ namespace Runtime::Remote
         running_ = false;
     }
 
-    void RemoteServer::Tick()
+    void RemoteServer::RecordVideoFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex,
+                                        Vulkan::VulkanBaseRenderer& renderer)
     {
-        if (signalingServer_)
+        if (videoPipeline_)
         {
-            signalingServer_->Tick();
+            videoPipeline_->RecordFrame(commandBuffer, imageIndex, renderer);
         }
     }
 }

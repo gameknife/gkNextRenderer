@@ -1,8 +1,8 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/Remote/RemoteSession.hpp"
 
-#include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Remote/RemoteProtocol.hpp"
+#include "Engine/Runtime/Remote/VideoPipeline.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -25,28 +25,14 @@ namespace Runtime::Remote
     {
         constexpr uint8_t videoPayloadType = 102;
         constexpr uint32_t videoSsrc = 42;
-
-        uint32_t MakeEven(uint32_t value, uint32_t fallback)
-        {
-            const uint32_t selected = value == 0 ? fallback : value;
-            return std::max(2u, selected & ~1u);
-        }
-
-        std::chrono::steady_clock::duration FrameInterval(uint32_t fps)
-        {
-            return std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-                std::chrono::duration<double>(1.0 / static_cast<double>(std::max(1u, fps))));
-        }
     }
 
     FRemoteSession::FRemoteSession(RemoteServer::FConfig config, std::string id,
-                                   std::weak_ptr<rtc::WebSocket> signalingSocket)
+                                   std::weak_ptr<rtc::WebSocket> signalingSocket, FVideoPipeline* videoPipeline)
         : config_(config)
         , id_(std::move(id))
         , signalingSocket_(std::move(signalingSocket))
-        , frameSource_(MakeEven(config_.width, 640u), MakeEven(config_.height, 360u))
-        , encoder_({MakeEven(config_.width, 640u), MakeEven(config_.height, 360u), std::max(1u, config_.fps),
-                    std::max(1u, config_.bitrateKbps)})
+        , videoPipeline_(videoPipeline)
     {
     }
 
@@ -62,12 +48,6 @@ namespace Runtime::Remote
         if (peerConnection_)
         {
             return true;
-        }
-
-        if (!encoder_.Start())
-        {
-            SendJson(R"({"type":"error","message":"OpenH264 encoder failed"})");
-            return false;
         }
 
         rtc::Configuration rtcConfig;
@@ -125,7 +105,11 @@ namespace Runtime::Remote
         rtc::Description::Video video("video", rtc::Description::Direction::SendOnly);
         video.addH264Codec(videoPayloadType);
         video.addSSRC(videoSsrc, "gkNextRemoteVideo", id_, "video");
-        videoTrack_ = peerConnection_->addTrack(video);
+        auto track = peerConnection_->addTrack(video);
+        {
+            std::lock_guard trackLock(trackMutex_);
+            videoTrack_ = track;
+        }
 
         const auto cname = "gkNextRemoteVideo";
         auto rtpConfig =
@@ -134,14 +118,26 @@ namespace Runtime::Remote
         auto packetizer = std::make_shared<rtc::H264RtpPacketizer>(rtc::NalUnit::Separator::StartSequence, rtpConfig);
         packetizer->addToChain(std::make_shared<rtc::RtcpSrReporter>(rtpConfig));
         packetizer->addToChain(std::make_shared<rtc::RtcpNackResponder>());
-        videoTrack_->setMediaHandler(packetizer);
-        videoTrack_->onOpen(
+        track->setMediaHandler(packetizer);
+        track->onOpen(
             [weakSelf]()
             {
                 if (auto self = weakSelf.lock())
                 {
                     self->trackOpen_ = true;
-                    self->encoder_.RequestKeyframe();
+                    if (self->videoPipeline_ && self->sinkId_.load() == 0)
+                    {
+                        std::weak_ptr<FRemoteSession> weakSession = weakSelf;
+                        const uint64_t sinkId = self->videoPipeline_->AddSink(
+                            [weakSession](const FEncodedPacket& packet)
+                            {
+                                if (auto session = weakSession.lock())
+                                {
+                                    session->OnEncodedPacket(packet);
+                                }
+                            });
+                        self->sinkId_.store(sinkId);
+                    }
                     SPDLOG_INFO("RemotePlay: session {} video track open", self->id_);
                 }
             });
@@ -169,7 +165,10 @@ namespace Runtime::Remote
                         if (!bytes.empty() &&
                             static_cast<ERemoteInputMessage>(bytes[0]) == ERemoteInputMessage::RequestKeyframe)
                         {
-                            self->encoder_.RequestKeyframe();
+                            if (self->videoPipeline_)
+                            {
+                                self->videoPipeline_->RequestKeyframe();
+                            }
                         }
                         else
                         {
@@ -183,8 +182,6 @@ namespace Runtime::Remote
                 }
             });
 
-        startedAt_ = std::chrono::steady_clock::now();
-        nextFrameTime_ = startedAt_;
         peerConnection_->setLocalDescription(rtc::Description::Type::Offer);
         SPDLOG_INFO("RemotePlay: session {} offer started", id_);
         return true;
@@ -196,11 +193,25 @@ namespace Runtime::Remote
     void FRemoteSession::Stop()
     {
 #if GK_WITH_REMOTE
-        std::lock_guard lock(peerMutex_);
-        if (videoTrack_)
+        // Unsubscribe first (outside of peerMutex_): the encoder thread may be inside
+        // OnEncodedPacket and we must never hold peerMutex_ while waiting for the sinks lock.
+        if (videoPipeline_)
         {
-            videoTrack_->close();
-            videoTrack_.reset();
+            if (const uint64_t sinkId = sinkId_.exchange(0); sinkId != 0)
+            {
+                videoPipeline_->RemoveSink(sinkId);
+            }
+        }
+        trackOpen_ = false;
+
+        std::lock_guard lock(peerMutex_);
+        {
+            std::lock_guard trackLock(trackMutex_);
+            if (videoTrack_)
+            {
+                videoTrack_->close();
+                videoTrack_.reset();
+            }
         }
         if (inputChannel_)
         {
@@ -214,17 +225,6 @@ namespace Runtime::Remote
         }
 #endif
         inputRouter_.Stop();
-        encoder_.Stop();
-        trackOpen_ = false;
-    }
-
-    void FRemoteSession::Tick()
-    {
-        if (!trackOpen_)
-        {
-            return;
-        }
-        SendVideoFrame(std::chrono::steady_clock::now());
     }
 
     bool FRemoteSession::ApplyAnswer(const std::string& sdp)
@@ -319,17 +319,17 @@ namespace Runtime::Remote
 #endif
     }
 
-    void FRemoteSession::SendVideoFrame(std::chrono::steady_clock::time_point now)
+    void FRemoteSession::OnEncodedPacket(const FEncodedPacket& packet)
     {
 #if GK_WITH_REMOTE
-        if (now < nextFrameTime_)
+        if (!trackOpen_ || !packet.annexb || packet.annexb->empty())
         {
             return;
         }
 
         std::shared_ptr<rtc::Track> track;
         {
-            std::lock_guard lock(peerMutex_);
+            std::lock_guard lock(trackMutex_);
             track = videoTrack_;
         }
         if (!track || !track->isOpen())
@@ -337,37 +337,22 @@ namespace Runtime::Remote
             return;
         }
 
-        const uint64_t timestampMs =
-            static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now - startedAt_).count());
-        const FI420Frame* frame = nullptr;
-        if (NextEngine* engine = NextEngine::GetInstance())
+        try
         {
-            if (frameSource_.CaptureSwapChainFrame(engine->GetRenderer()))
-            {
-                frame = &frameSource_.LatestFrame();
-            }
-        }
-        if (!frame)
-        {
-            frame = &frameSource_.BuildTestPattern(frameIndex_);
-        }
-        ++frameIndex_;
-
-        std::vector<std::byte> encodedFrame;
-        bool keyframe = false;
-        if (encoder_.Encode(*frame, timestampMs, encodedFrame, keyframe))
-        {
-            const auto timestamp = std::chrono::duration<double, std::milli>(static_cast<double>(timestampMs));
-            track->sendFrame(encodedFrame.data(), encodedFrame.size(), rtc::FrameInfo(timestamp));
+            const auto timestamp =
+                std::chrono::duration<double, std::milli>(static_cast<double>(packet.timestampUs) / 1000.0);
+            track->sendFrame(packet.annexb->data(), packet.annexb->size(), rtc::FrameInfo(timestamp));
             ++sentFrameCount_;
-            if (sentFrameCount_ == 1 || sentFrameCount_ % std::max(1u, config_.fps * 5u) == 0)
+            if (sentFrameCount_ == 1 || sentFrameCount_ % std::max<uint64_t>(1u, config_.fps * 5u) == 0)
             {
-                SPDLOG_INFO("RemotePlay: session {} sent video frame {} bytes keyframe={}", id_, encodedFrame.size(),
-                            keyframe);
+                SPDLOG_INFO("RemotePlay: session {} sent video frame {} bytes keyframe={}", id_,
+                            packet.annexb->size(), packet.keyframe);
             }
         }
-
-        nextFrameTime_ = now + FrameInterval(config_.fps);
+        catch (const std::exception& error)
+        {
+            SPDLOG_WARN("RemotePlay: session {} failed to send video frame: {}", id_, error.what());
+        }
 #endif
     }
 #endif

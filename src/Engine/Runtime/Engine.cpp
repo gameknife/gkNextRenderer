@@ -794,12 +794,6 @@ bool NextEngine::Tick(bool forcingDelta)
             }
         }
 
-        if (remoteServer_)
-        {
-            SCOPED_CPU_TIMER("remote");
-            remoteServer_->Tick();
-        }
-
         {
             PERFORMANCEAPI_INSTRUMENT_COLOR("Engine::TickRenderer", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
             renderer_->DrawFrame();
@@ -1517,6 +1511,13 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
     {
         SCOPED_CPU_TIMER("imgui submit");
         userInterface_->PostRender(commandBuffer, renderer_->SwapChain(), imageIndex, suppressAllUi);
+    }
+
+    // Remote play capture: recorded into the same frame command buffer, after all UI passes.
+    if (remoteServer_)
+    {
+        SCOPED_CPU_TIMER("remote");
+        remoteServer_->RecordVideoFrame(commandBuffer, imageIndex, *renderer_);
     }
 }
 
