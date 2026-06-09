@@ -18,7 +18,7 @@ import (
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/llm"
 )
 
-func (s *Server) buildChatVM(sessionID string, errText string) chatVM {
+func (s *Server) buildChatVM(sessionID string, selectedOverride string, errText string, flashText string) chatVM {
 	if s.chats == nil {
 		s.chats = NewChatStore(chatStorePath(s.opts))
 	}
@@ -34,6 +34,9 @@ func (s *Server) buildChatVM(sessionID string, errText string) chatVM {
 	if selected == "" {
 		selected = active
 	}
+	if selectedOverride != "" {
+		selected = selectedOverride
+	}
 	contextLimit := chatContextLimit(cfg.Models, selected)
 	contextUsed := EstimateChatContextTokens(s.opts.RepoRoot, sess.Messages)
 	status := llm.NewServer(s.opts.RepoRoot, cfg).Status()
@@ -48,6 +51,7 @@ func (s *Server) buildChatVM(sessionID string, errText string) chatVM {
 			Percent: percentOf(contextUsed, contextLimit),
 		},
 		Error:         errText,
+		Flash:         flashText,
 		ServerRunning: status.Running,
 		RunningModel:  status.Model,
 		Endpoint:      fmt.Sprintf("%s:%d", status.Host, status.Port),
@@ -86,7 +90,11 @@ func (s *Server) buildChatVM(sessionID string, errText string) chatVM {
 }
 
 func (s *Server) renderChatPanel(w http.ResponseWriter, sessionID string, errText string) {
-	s.render(w, "chat_panel", s.buildChatVM(sessionID, errText))
+	s.render(w, "chat_panel", s.buildChatVM(sessionID, "", errText, ""))
+}
+
+func (s *Server) renderChatPanelFlash(w http.ResponseWriter, sessionID string, selectedModel string, flashText string) {
+	s.render(w, "chat_panel", s.buildChatVM(sessionID, selectedModel, "", flashText))
 }
 
 func (s *Server) handleChatClear(w http.ResponseWriter, r *http.Request) {
@@ -146,6 +154,44 @@ func (s *Server) handleChatArchive(w http.ResponseWriter, r *http.Request) {
 	}
 	sess := s.chats.Archive(strings.TrimSpace(r.FormValue("session_id")), cfg.ActiveModel().ID)
 	s.renderChatPanel(w, sess.ID, "")
+}
+
+func (s *Server) handleChatServe(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err)
+		return
+	}
+	sessionID := strings.TrimSpace(r.FormValue("session_id"))
+	modelID := strings.TrimSpace(r.FormValue("model"))
+	cfg, err := llm.SelectModel(s.opts.Config.External.LLM, modelID)
+	if err != nil {
+		s.renderChatPanel(w, sessionID, err.Error())
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
+	defer cancel()
+	srv := llm.NewServer(s.opts.RepoRoot, cfg)
+	info, err := srv.EnsureRunning(ctx)
+	if err != nil {
+		s.renderChatPanel(w, sessionID, "启动 LLM 失败: "+err.Error())
+		return
+	}
+	s.renderChatPanelFlash(w, sessionID, cfg.ActiveModel().ID, fmt.Sprintf("llama-server running pid=%d model=%s", info.PID, info.Model))
+}
+
+func (s *Server) handleChatStop(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err)
+		return
+	}
+	sessionID := strings.TrimSpace(r.FormValue("session_id"))
+	modelID := strings.TrimSpace(r.FormValue("model"))
+	srv := llm.NewServer(s.opts.RepoRoot, s.opts.Config.External.LLM)
+	if err := srv.Stop(); err != nil {
+		s.renderChatPanel(w, sessionID, "停止 LLM 失败: "+err.Error())
+		return
+	}
+	s.renderChatPanelFlash(w, sessionID, modelID, "llama-server stopped")
 }
 
 func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {

@@ -9,6 +9,7 @@ namespace Runtime::Config
 Options::Options(const int argc, const char* argv[])
 {	
 	cxxopts::Options options("options", "");
+	std::string remoteResolution;
 	options.add_options()
 		("load-scene", "The scene to load. absolute path or relative path to project root.", cxxopts::value<std::string>(SceneName)->default_value(""))
 		("hdri", "The HDRI file to load.", cxxopts::value<std::string>(HDRIfile)->default_value(""))
@@ -35,6 +36,14 @@ Options::Options(const int argc, const char* argv[])
 		("agent-validation-frames", "Frames to render before the agent validation screenshot.", cxxopts::value<uint32_t>(AgentValidationFrames)->default_value("90"))
 		("agent-validation-out", "Output path (without extension) for the agent validation screenshot.", cxxopts::value<std::string>(AgentValidationOutput)->default_value("screenshots/agent_validation"))
 		("hidden-window", "Create the window hidden (no focus steal / no popup). Implied by --agent-validation; useful for unit tests.", cxxopts::value<bool>(HiddenWindow)->default_value("false")->implicit_value("true"))
+		("remote", "Enable WebRTC Remote Play host mode. Implies --hidden-window and --forcesdr unless --remote-show-window is set.", cxxopts::value<bool>(RemoteMode)->default_value("false")->implicit_value("true"))
+		("remote-show-window", "Keep the desktop window visible while --remote is active.", cxxopts::value<bool>(RemoteShowWindow)->default_value("false")->implicit_value("true"))
+		("remote-bind", "Remote Play bind address.", cxxopts::value<std::string>(RemoteBind)->default_value("0.0.0.0"))
+		("remote-http-port", "Remote Play HTTP client port.", cxxopts::value<uint32_t>(RemoteHttpPort)->default_value("8088"))
+		("remote-port", "Remote Play signaling WebSocket port.", cxxopts::value<uint32_t>(RemotePort)->default_value("8089"))
+		("remote-bitrate", "Remote Play starting video bitrate in kbps.", cxxopts::value<uint32_t>(RemoteBitrateKbps)->default_value("4000"))
+		("remote-fps", "Remote Play target stream frame rate.", cxxopts::value<uint32_t>(RemoteFps)->default_value("30"))
+		("remote-res", "Remote Play encode resolution, e.g. 1280x720. Empty means source resolution.", cxxopts::value<std::string>(remoteResolution)->default_value(""))
 		("keep-cpu-mesh-data", "Keep CPU mesh data for editor mode.", cxxopts::value<bool>(KeepCPUMeshData)->default_value("false"))
 		("update-baseline", "Update visual test baseline images from the current run.", cxxopts::value<bool>(UpdateVisualTestBaseline)->default_value("false")->implicit_value("true"))
 		("flappy-replay", "Run Flappy deterministic replay and write trace output.", cxxopts::value<bool>(FlappyReplay)->default_value("false")->implicit_value("true"))
@@ -64,6 +73,45 @@ Options::Options(const int argc, const char* argv[])
 		if (ShaderHotReloadInterval < 0.1f)
 		{
 			ShaderHotReloadInterval = 0.1f;
+		}
+
+		if (!remoteResolution.empty())
+		{
+			const size_t separator = remoteResolution.find('x');
+			if (separator == std::string::npos || separator == 0 || separator + 1 >= remoteResolution.size())
+			{
+				Throw(std::out_of_range("Invalid --remote-res. Expected WIDTHxHEIGHT."));
+			}
+			try
+			{
+				RemoteWidth = static_cast<uint32_t>(std::stoul(remoteResolution.substr(0, separator)));
+				RemoteHeight = static_cast<uint32_t>(std::stoul(remoteResolution.substr(separator + 1)));
+			}
+			catch (const std::exception&)
+			{
+				Throw(std::out_of_range("Invalid --remote-res. Expected WIDTHxHEIGHT."));
+			}
+		}
+
+		if (RemoteMode)
+		{
+			ForceSDR = true;
+			if (!RemoteShowWindow)
+			{
+				HiddenWindow = true;
+			}
+			if (RemoteFps == 0)
+			{
+				RemoteFps = 30;
+			}
+			if (RemoteBitrateKbps == 0)
+			{
+				RemoteBitrateKbps = 4000;
+			}
+			if (RemoteHttpPort > 65535 || RemotePort > 65535)
+			{
+				Throw(std::out_of_range("Remote Play ports must be in range 0..65535."));
+			}
 		}
 
 		if (PresentMode > 3)

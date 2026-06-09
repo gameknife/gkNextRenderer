@@ -279,6 +279,34 @@
   .chat-model-list {
     margin-top: 8px;
   }
+  .chat-server-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .chat-server-actions form {
+    margin: 0;
+    min-width: 0;
+  }
+  .chat-server-actions .btn-secondary {
+    width: 100%;
+    padding: 7px 10px;
+  }
+  .chat-server-actions .btn-secondary.danger {
+    color: var(--red);
+  }
+  .chat-server-actions .btn-secondary.danger:hover {
+    border-color: rgba(239, 68, 68, 0.4);
+    background: rgba(239, 68, 68, 0.12);
+  }
+  .chat-server-actions .btn-secondary:disabled {
+    cursor: default;
+    opacity: 0.45;
+    color: var(--fg-dim);
+    border-color: var(--border);
+    background: var(--bg-card);
+  }
   .chat-side .model-row,
   .chat-side .info-row {
     padding: 5px 0;
@@ -660,6 +688,15 @@
     color: var(--red);
     border: 1px solid rgba(239, 68, 68, 0.32);
     background: rgba(239, 68, 68, 0.08);
+    border-radius: var(--radius-md);
+    padding: 8px 10px;
+    font-size: 12.5px;
+  }
+  .chat-flash {
+    margin: 0 18px 12px;
+    color: var(--green);
+    border: 1px solid rgba(34, 197, 94, 0.32);
+    background: rgba(34, 197, 94, 0.08);
     border-radius: var(--radius-md);
     padding: 8px 10px;
     font-size: 12.5px;

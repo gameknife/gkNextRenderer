@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <string>
 
 #include <fmt/format.h>
 #include <glm/glm.hpp>
@@ -19,7 +20,11 @@ namespace StudioSim
         constexpr double kRetryWhenAwayMinutes = 5.0;
         constexpr float kWorkPoiArrivalDistance = 1.8f;
         constexpr float kProductionToPolishRatio = 0.8f;
-        constexpr int kMaxPolishBugs = 12;
+        constexpr int kMaxPolishBugs = 16;
+
+        constexpr double kDayStartMinutes = 9.0 * 60.0;   // 每个工作日从 09:00 开工
+        constexpr double kMorningRampMinutes = 60.0;      // 开工后 1 小时内产能从下限爬到满
+        constexpr float kMorningRampFloor = 0.5f;         // 晨会刚散时的起始产能（避免瞬间猛加）
 
         float MeterTotal(const FProjectMeters& meters)
         {
@@ -121,6 +126,34 @@ namespace StudioSim
                 hash *= 1099511628211ull;
             }
             return hash;
+        }
+
+        // 开工后的产能爬升系数：晨会刚散时 = kMorningRampFloor，1 小时后到满 1.0。
+        float MorningRamp(double gameMinutes)
+        {
+            const double since = gameMinutes - kDayStartMinutes;
+            if (since <= 0.0)
+            {
+                return kMorningRampFloor;
+            }
+            const float t = static_cast<float>(std::clamp(since / kMorningRampMinutes, 0.0, 1.0));
+            return kMorningRampFloor + (1.0f - kMorningRampFloor) * t;
+        }
+
+        // 把每位员工当天首拍分散到开工后 [0, interval) 内，避免全员同拍齐射（台阶式跳进度）。
+        double StaggeredFirstOutput(const FEmployee& emp)
+        {
+            const double phase = static_cast<double>(StableHash(emp.id) % 1000ull) / 1000.0;
+            return kDayStartMinutes + phase * kWorkOutputIntervalMinutes;
+        }
+
+        // 给后续产出节拍加 ±15% 抖动，保持各员工错峰、不重新同步。
+        double JitteredInterval(const FEmployee& emp, double gameMinutes)
+        {
+            const int bucket = static_cast<int>(gameMinutes / kWorkOutputIntervalMinutes);
+            const uint64_t h = StableHash(emp.id + ":" + std::to_string(bucket));
+            const double j = static_cast<double>(h % 1000ull) / 1000.0; // [0,1)
+            return kWorkOutputIntervalMinutes * (0.85 + 0.30 * j);
         }
 
         bool IsAtWorkDesk(const FEmployee& emp, const OfficeMap& office)
@@ -226,6 +259,17 @@ namespace StudioSim
             return;
         }
 
+        // 跨天检测：时钟回到 09:00（gameMinutes 比上一拍小）→ 重新错开每位员工的首拍，避免新一天又齐射。
+        const bool newDay = lastTickGameMinutes_ < 0.0 || gameMinutes + 1.0 < lastTickGameMinutes_;
+        if (newDay)
+        {
+            for (auto& emp : employees)
+            {
+                emp.nextWorkOutputAt = StaggeredFirstOutput(emp);
+            }
+        }
+        lastTickGameMinutes_ = gameMinutes;
+
         const float teamBoost = TeamBoost(employees, office);
         for (auto& emp : employees)
         {
@@ -259,7 +303,7 @@ namespace StudioSim
             else if (roleOutput.baseAmount > 0.0f)
             {
                 output.meter = roleOutput.meter;
-                output.amount = roleOutput.baseAmount * MoodFactor(emp.mood) * teamBoost;
+                output.amount = roleOutput.baseAmount * MoodFactor(emp.mood) * teamBoost * MorningRamp(gameMinutes);
                 if (!focusMeter_.empty() && output.meter == focusMeter_)
                 {
                     output.amount *= focusBoost_;
@@ -292,7 +336,7 @@ namespace StudioSim
                             state_.meters.design, state_.meters.art, state_.meters.polish);
             }
 
-            emp.nextWorkOutputAt = gameMinutes + kWorkOutputIntervalMinutes;
+            emp.nextWorkOutputAt = gameMinutes + JitteredInterval(emp, gameMinutes);
         }
 
         AdvanceStage(gameMinutes);
@@ -314,6 +358,7 @@ namespace StudioSim
         polishBugBatchGenerated_ = false;
         activeGoalTitle_.clear();
         lastLoggedProgressBucket_ = -1;
+        lastTickGameMinutes_ = -1.0;
         visualEvents_.clear();
         ClearFocusBoost();
     }
@@ -378,7 +423,7 @@ namespace StudioSim
             if (!polishBugBatchGenerated_)
             {
                 const int generatedBugs =
-                    std::clamp(static_cast<int>(std::round(MeterTotal(state_.meters) / 50.0f)), 4, kMaxPolishBugs);
+                    std::clamp(static_cast<int>(std::round(MeterTotal(state_.meters) / 500.0f)), 4, kMaxPolishBugs);
                 state_.bugCount += generatedBugs;
                 polishBugBatchGenerated_ = true;
                 SPDLOG_INFO("StudioSim/Prod: entered Polish at {:.0f}min, generated {} bugs", gameMinutes,

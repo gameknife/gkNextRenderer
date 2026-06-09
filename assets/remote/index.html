@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>gkNext Remote Play</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: #101318;
+      color: #e8edf2;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+    }
+    main {
+      width: min(1100px, calc(100vw - 32px));
+      border: 1px solid #303844;
+      border-radius: 8px;
+      background: #181d24;
+      padding: 24px;
+      box-shadow: 0 12px 34px rgba(0, 0, 0, 0.32);
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 24px;
+      font-weight: 650;
+    }
+    .status {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 8px 18px;
+      margin-top: 18px;
+      font-size: 14px;
+    }
+    .label {
+      color: #9aa7b6;
+    }
+    #log {
+      margin-top: 18px;
+      min-height: 120px;
+      max-height: 220px;
+      overflow: auto;
+      padding: 12px;
+      border-radius: 6px;
+      background: #0d1117;
+      color: #c9d1d9;
+      white-space: pre-wrap;
+      font: 13px ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+    video {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      margin-top: 16px;
+      border-radius: 6px;
+      background: #05070a;
+      object-fit: contain;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>gkNext Remote Play</h1>
+  <div class="status">
+    <div class="label">HTTP</div><div id="httpState">connected</div>
+    <div class="label">Signaling</div><div id="wsState">connecting</div>
+    <div class="label">Peer</div><div id="pcState">new</div>
+    <div class="label">Input</div><div id="inputState">waiting</div>
+    <div class="label">Stream</div><div id="streamState">waiting</div>
+    <div class="label">Video bytes</div><div id="bytesState">0</div>
+  </div>
+  <video id="video" autoplay playsinline muted controls></video>
+  <div id="log"></div>
+</main>
+<script>
+const logEl = document.querySelector("#log");
+const wsState = document.querySelector("#wsState");
+const pcState = document.querySelector("#pcState");
+const inputState = document.querySelector("#inputState");
+const streamState = document.querySelector("#streamState");
+const bytesState = document.querySelector("#bytesState");
+const videoEl = document.querySelector("#video");
+const clientId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+let ws = null;
+let pc = null;
+let inputChannel = null;
+
+const InputType = {
+  key: 1,
+  mouseMove: 2,
+  mouseButton: 3,
+  wheel: 4,
+  gamepad: 5,
+  requestKeyframe: 6,
+};
+const MoveMode = {
+  relative: 0,
+  absolute: 1,
+};
+const scancodes = new Map(Object.entries({
+  KeyA: 4, KeyB: 5, KeyC: 6, KeyD: 7, KeyE: 8, KeyF: 9, KeyG: 10, KeyH: 11, KeyI: 12, KeyJ: 13,
+  KeyK: 14, KeyL: 15, KeyM: 16, KeyN: 17, KeyO: 18, KeyP: 19, KeyQ: 20, KeyR: 21, KeyS: 22,
+  KeyT: 23, KeyU: 24, KeyV: 25, KeyW: 26, KeyX: 27, KeyY: 28, KeyZ: 29,
+  Digit1: 30, Digit2: 31, Digit3: 32, Digit4: 33, Digit5: 34, Digit6: 35, Digit7: 36, Digit8: 37,
+  Digit9: 38, Digit0: 39, Enter: 40, Escape: 41, Backspace: 42, Tab: 43, Space: 44, Minus: 45,
+  Equal: 46, BracketLeft: 47, BracketRight: 48, Backslash: 49, Semicolon: 51, Quote: 52, Backquote: 53,
+  Comma: 54, Period: 55, Slash: 56, CapsLock: 57, F1: 58, F2: 59, F3: 60, F4: 61, F5: 62,
+  F6: 63, F7: 64, F8: 65, F9: 66, F10: 67, F11: 68, F12: 69, PrintScreen: 70, ScrollLock: 71,
+  Pause: 72, Insert: 73, Home: 74, PageUp: 75, Delete: 76, End: 77, PageDown: 78, ArrowRight: 79,
+  ArrowLeft: 80, ArrowDown: 81, ArrowUp: 82, NumLock: 83, NumpadDivide: 84, NumpadMultiply: 85,
+  NumpadSubtract: 86, NumpadAdd: 87, NumpadEnter: 88, Numpad1: 89, Numpad2: 90, Numpad3: 91,
+  Numpad4: 92, Numpad5: 93, Numpad6: 94, Numpad7: 95, Numpad8: 96, Numpad9: 97, Numpad0: 98,
+  NumpadDecimal: 99, ControlLeft: 224, ShiftLeft: 225, AltLeft: 226, MetaLeft: 227, ControlRight: 228,
+  ShiftRight: 229, AltRight: 230, MetaRight: 231,
+}));
+
+function log(line) {
+  const stamp = new Date().toLocaleTimeString();
+  logEl.textContent += `[${stamp}] ${line}\n`;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function waitForIceGatheringComplete(peer) {
+  if (peer.iceGatheringState === "complete") {
+    return Promise.resolve();
+  }
+  return new Promise(resolve => {
+    const onState = () => {
+      if (peer.iceGatheringState === "complete") {
+        peer.removeEventListener("icegatheringstatechange", onState);
+        resolve();
+      }
+    };
+    peer.addEventListener("icegatheringstatechange", onState);
+  });
+}
+
+function ensurePeerConnection() {
+  if (pc) {
+    return pc;
+  }
+  pc = new RTCPeerConnection({ bundlePolicy: "max-bundle" });
+  pc.onconnectionstatechange = () => {
+    pcState.textContent = pc.connectionState;
+    log(`peer ${pc.connectionState}`);
+  };
+  pc.oniceconnectionstatechange = () => {
+    pcState.textContent = `${pc.connectionState}/${pc.iceConnectionState}`;
+  };
+  pc.ontrack = event => {
+    videoEl.srcObject = event.streams[0] || new MediaStream([event.track]);
+    streamState.textContent = `${event.track.kind} ${event.track.readyState}`;
+    log(`track ${event.track.kind}`);
+  };
+  pc.ondatachannel = event => {
+    if (event.channel.label !== "input") {
+      return;
+    }
+    inputChannel = event.channel;
+    inputChannel.binaryType = "arraybuffer";
+    inputChannel.onopen = () => {
+      inputState.textContent = "open";
+      log("input channel open");
+      sendInput(Uint8Array.from([InputType.requestKeyframe]).buffer);
+    };
+    inputChannel.onclose = () => {
+      inputState.textContent = "closed";
+      log("input channel closed");
+    };
+  };
+  setInterval(async () => {
+    if (!pc) {
+      return;
+    }
+    const stats = await pc.getStats();
+    let videoBytes = 0;
+    stats.forEach(report => {
+      if (report.type === "inbound-rtp" && report.kind === "video") {
+        videoBytes += report.bytesReceived || 0;
+        streamState.textContent = `${report.framesDecoded || 0} frames decoded`;
+      }
+    });
+    bytesState.textContent = String(videoBytes);
+  }, 1000);
+  return pc;
+}
+
+function sendInput(buffer) {
+  if (!inputChannel || inputChannel.readyState !== "open") {
+    return;
+  }
+  inputChannel.send(buffer);
+}
+
+function currentMod() {
+  return 0;
+}
+
+function packKey(event, down) {
+  const scancode = scancodes.get(event.code);
+  if (!scancode) {
+    return null;
+  }
+  const buffer = new ArrayBuffer(7);
+  const view = new DataView(buffer);
+  view.setUint8(0, InputType.key);
+  view.setUint8(1, down ? 1 : 0);
+  view.setUint8(2, event.repeat ? 1 : 0);
+  view.setUint16(3, scancode, true);
+  view.setUint16(5, currentMod(), true);
+  return buffer;
+}
+
+function packMouseMove(mode, x, y) {
+  const buffer = new ArrayBuffer(10);
+  const view = new DataView(buffer);
+  view.setUint8(0, InputType.mouseMove);
+  view.setUint8(1, mode);
+  view.setFloat32(2, x, true);
+  view.setFloat32(6, y, true);
+  return buffer;
+}
+
+function packMouseButton(event, down) {
+  const button = event.button === 1 ? 2 : event.button === 2 ? 3 : 1;
+  const rect = videoEl.getBoundingClientRect();
+  const buffer = new ArrayBuffer(11);
+  const view = new DataView(buffer);
+  view.setUint8(0, InputType.mouseButton);
+  view.setUint8(1, down ? 1 : 0);
+  view.setUint8(2, button);
+  view.setFloat32(3, event.clientX - rect.left, true);
+  view.setFloat32(7, event.clientY - rect.top, true);
+  return buffer;
+}
+
+function packWheel(event) {
+  const buffer = new ArrayBuffer(9);
+  const view = new DataView(buffer);
+  view.setUint8(0, InputType.wheel);
+  view.setFloat32(1, -event.deltaX / 120, true);
+  view.setFloat32(5, -event.deltaY / 120, true);
+  return buffer;
+}
+
+function scaleAxis(value) {
+  const clamped = Math.max(-1, Math.min(1, Number.isFinite(value) ? value : 0));
+  return Math.round(clamped * 32767);
+}
+
+function pollGamepad() {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  const pad = Array.from(pads).find(Boolean);
+  if (pad && inputChannel && inputChannel.readyState === "open") {
+    const buffer = new ArrayBuffer(17);
+    const view = new DataView(buffer);
+    view.setUint8(0, InputType.gamepad);
+    view.setInt16(1, scaleAxis(pad.axes[0] || 0), true);
+    view.setInt16(3, scaleAxis(pad.axes[1] || 0), true);
+    view.setInt16(5, scaleAxis(pad.axes[2] || 0), true);
+    view.setInt16(7, scaleAxis(pad.axes[3] || 0), true);
+    view.setInt16(9, scaleAxis((pad.buttons[6]?.value || 0) * 2 - 1), true);
+    view.setInt16(11, scaleAxis((pad.buttons[7]?.value || 0) * 2 - 1), true);
+    const browserToSdl = [0, 1, 2, 3, 9, 10, 7, 8, 4, 6, 11, 12, 13, 14, 15, 5];
+    let buttons = 0;
+    for (let i = 0; i < browserToSdl.length; ++i) {
+      if (pad.buttons[i]?.pressed) {
+        buttons |= 1 << browserToSdl[i];
+      }
+    }
+    view.setUint32(13, buttons, true);
+    sendInput(buffer);
+  }
+  requestAnimationFrame(pollGamepad);
+}
+
+document.addEventListener("keydown", event => {
+  const buffer = packKey(event, true);
+  if (buffer) {
+    event.preventDefault();
+    sendInput(buffer);
+  }
+});
+document.addEventListener("keyup", event => {
+  const buffer = packKey(event, false);
+  if (buffer) {
+    event.preventDefault();
+    sendInput(buffer);
+  }
+});
+videoEl.addEventListener("click", () => {
+  if (document.pointerLockElement !== videoEl) {
+    videoEl.requestPointerLock?.();
+  }
+});
+videoEl.addEventListener("mousemove", event => {
+  if (document.pointerLockElement === videoEl) {
+    sendInput(packMouseMove(MoveMode.relative, event.movementX, event.movementY));
+  } else {
+    const rect = videoEl.getBoundingClientRect();
+    sendInput(packMouseMove(MoveMode.absolute, event.clientX - rect.left, event.clientY - rect.top));
+  }
+});
+videoEl.addEventListener("mousedown", event => {
+  event.preventDefault();
+  sendInput(packMouseButton(event, true));
+});
+videoEl.addEventListener("mouseup", event => {
+  event.preventDefault();
+  sendInput(packMouseButton(event, false));
+});
+videoEl.addEventListener("contextmenu", event => event.preventDefault());
+videoEl.addEventListener("wheel", event => {
+  event.preventDefault();
+  sendInput(packWheel(event));
+}, { passive: false });
+
+async function handleOffer(message) {
+  const peer = ensurePeerConnection();
+  await peer.setRemoteDescription({ type: "offer", sdp: message.sdp });
+  const answer = await peer.createAnswer();
+  await peer.setLocalDescription(answer);
+  await waitForIceGatheringComplete(peer);
+  ws.send(JSON.stringify({ type: "answer", id: clientId, sdp: peer.localDescription.sdp }));
+  log("answer sent");
+}
+
+async function connect() {
+  const config = await fetch("/config").then(r => r.json());
+  log(`config ${JSON.stringify(config)}`);
+  const host = config.bindAddress || location.hostname || "127.0.0.1";
+  ws = new WebSocket(`ws://${host}:${config.signalingPort}`);
+  ws.onopen = () => {
+    wsState.textContent = "open";
+    log("websocket open");
+    ws.send(JSON.stringify({ type: "request", id: clientId }));
+  };
+  ws.onclose = () => {
+    wsState.textContent = "closed";
+    log("websocket closed");
+  };
+  ws.onerror = () => {
+    wsState.textContent = "error";
+    log("websocket error");
+  };
+  ws.onmessage = async event => {
+    log(`server ${event.data}`);
+    const message = JSON.parse(event.data);
+    if (message.type === "offer") {
+      await handleOffer(message);
+    } else if (message.type === "candidate" && pc) {
+      await pc.addIceCandidate({ candidate: message.candidate, sdpMid: message.mid });
+    } else if (message.type === "error") {
+      streamState.textContent = message.message || "error";
+    }
+  };
+}
+
+connect().catch(error => {
+  wsState.textContent = "error";
+  log(error.message || String(error));
+});
+requestAnimationFrame(pollGamepad);
+</script>
+</body>
+</html>

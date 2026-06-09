@@ -31,6 +31,11 @@ namespace NextRenderer
                                                const VkPresentModeKHR presentMode, const bool enableValidationLayers);
 } // namespace NextRenderer
 
+namespace Runtime::Remote
+{
+    class RemoteServer;
+}
+
 typedef std::function<bool(double DeltaSeconds)> TickedTask;
 typedef std::function<bool()> DelayedTask;
 
@@ -318,6 +323,7 @@ private:
     // Runtime services and UI
     std::unique_ptr<NextUI::UserInterface> userInterface_;
     std::unique_ptr<NextUI::RmlUiSystem> rmlUi_;
+    std::unique_ptr<Runtime::Remote::RemoteServer> remoteServer_;
     FRuntimeServices services_{};
 
     // Editor and tooling state

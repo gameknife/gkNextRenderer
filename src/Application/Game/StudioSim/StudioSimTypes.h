@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -347,6 +348,8 @@ namespace StudioSim
     {
         std::string summary;
         std::string focusMeter;
+        // 可选改派：员工名 -> 新的今日重点（LLM 群体决策产出，采纳后写入 todayTask）。
+        std::vector<std::pair<std::string, std::string>> reassign;
         bool valid = false;
         bool accepted = false;
         bool rejected = false;
