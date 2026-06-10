@@ -15,5 +15,5 @@ Android 平台模块源直接并入单一 SHARED target。
 | ScadLoader | 原 `Engine/Assets/Loaders/FScad*` |
 | NextAI | `Engine/Runtime/Subsystems/AI*` |
 | NextRemote | `Modules/NextRemote/` |
-| NextRmlUi | `Engine/Runtime/UI/RmlUiSystem` |
+| NextRmlUi | `Modules/NextRmlUi/RmlUiSystem` |
 | DevTools | 控制台 UI、调试 overlay、ProfessionalUI、Gizmo 等 |

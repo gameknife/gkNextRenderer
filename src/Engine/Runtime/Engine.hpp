@@ -105,7 +105,7 @@ public:
 
     // Runtime services
     NextUI::UserInterface* GetUserInterface() { return userInterface_.get(); }
-    NextUI::RmlUiSystem* GetRmlUi() { return rmlUi_.get(); }
+    Runtime::IUiOverlay* GetUiOverlay() { return uiOverlay_.get(); }
     NextAudio* GetAudio() { return services_.audio.get(); }
     const NextAudio* GetAudio() const { return services_.audio.get(); }
     NextLocalization* GetLocalization() { return services_.localization.get(); }
@@ -177,6 +177,13 @@ public:
     // Frame streamer injection (implementation in Modules/NextRemote);
     // assembled by the application entry when remote mode is requested.
     void SetFrameStreamer(std::unique_ptr<Runtime::IFrameStreamer> streamer);
+
+    // Optional UI overlay (implementation in Modules/NextRmlUi); the factory is
+    // installed by the application entry and instantiated with the renderer.
+    void SetUiOverlayFactory(std::function<std::unique_ptr<Runtime::IUiOverlay>(NextEngine&)> factory)
+    {
+        uiOverlayFactory_ = std::move(factory);
+    }
 
     // Type-erased service slots for optional modules (e.g. Modules/NextAI).
     // Modules attach their engine-scoped singletons here so the core stays
@@ -334,7 +341,8 @@ private:
 
     // Runtime services and UI
     std::unique_ptr<NextUI::UserInterface> userInterface_;
-    std::unique_ptr<NextUI::RmlUiSystem> rmlUi_;
+    std::unique_ptr<Runtime::IUiOverlay> uiOverlay_;
+    std::function<std::unique_ptr<Runtime::IUiOverlay>(NextEngine&)> uiOverlayFactory_;
     std::unique_ptr<Runtime::IFrameStreamer> frameStreamer_;
     FRuntimeServices services_{};
     Runtime::IDebugUiProvider* debugUiProvider_ = nullptr;

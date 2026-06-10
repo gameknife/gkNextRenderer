@@ -15,7 +15,6 @@ namespace NextCVar
 
 namespace NextUI
 {
-    class RmlUiSystem;
     class UserInterface;
     struct Statistics;
 }
@@ -24,6 +23,7 @@ namespace Runtime
 {
     class IDebugUiProvider;
     class IFrameStreamer;
+    class IUiOverlay;
 }
 
 namespace Runtime::Config
