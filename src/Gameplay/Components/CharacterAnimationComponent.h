@@ -2,7 +2,7 @@
 
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/Core/Component.h"
-#include "Engine/NextGameplay/Gameplay/GameplayTypes.h"
+#include "Gameplay/Gameplay/GameplayTypes.h"
 #include "Engine/Runtime/Reflection/ReflectionMacros.h"
 
 #include <glm/glm.hpp>

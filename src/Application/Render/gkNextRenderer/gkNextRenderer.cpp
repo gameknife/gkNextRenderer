@@ -18,7 +18,7 @@
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.h"
 #include "Engine/Runtime/Utilities/NextEngineHelper.h"
-#include "Engine/Runtime/Utilities/GraphicsDebugPanel.hpp"
+#include "Modules/DevTools/GraphicsDebugPanel.hpp"
 #include "Engine/Utilities/Localization.hpp"
 #include "Engine/Utilities/ImGui.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.h"

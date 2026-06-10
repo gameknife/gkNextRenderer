@@ -1,7 +1,7 @@
-#include "Engine/NextGameplay/Components/CharacterAnimationComponent.h"
+#include "Gameplay/Components/CharacterAnimationComponent.h"
 
-#include "Engine/NextGameplay/Components/CharacterGameplayComponent.h"
-#include "Engine/NextGameplay/Gameplay/GameplayMath.hpp"
+#include "Gameplay/Components/CharacterGameplayComponent.h"
+#include "Gameplay/Gameplay/GameplayMath.hpp"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 #include "Engine/Runtime/Reflection/PropertyMeta.h"
 

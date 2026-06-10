@@ -1,6 +1,6 @@
 #include "Engine/Common/CoreMinimal.hpp"
 
-#include "Engine/Runtime/Utilities/ProfileDebugOverlay.hpp"
+#include "Modules/DevTools/ProfileDebugOverlay.hpp"
 
 #include <string>
 #include <array>

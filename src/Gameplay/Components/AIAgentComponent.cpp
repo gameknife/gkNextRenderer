@@ -1,4 +1,4 @@
-#include "Engine/NextGameplay/Components/AIAgentComponent.h"
+#include "Gameplay/Components/AIAgentComponent.h"
 
 #include "Engine/Runtime/Reflection/PropertyMeta.h"
 

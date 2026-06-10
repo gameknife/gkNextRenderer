@@ -178,6 +178,11 @@ public:
     void AddTickedTask(TickedTask task) { taskQueues_.ticked.push_back(task); }
     void AddTimerTask(double delay, DelayedTask task);
 
+    // Developer debug UI hook (implementation lives in Modules/DevTools,
+    // registered by the application entry point; nullptr disables overlays)
+    void SetDebugUiProvider(Runtime::IDebugUiProvider* provider) { debugUiProvider_ = provider; }
+    Runtime::IDebugUiProvider* GetDebugUiProvider() const { return debugUiProvider_; }
+
 private:
     // Scene loading payload
     struct SceneLoadContext
@@ -325,6 +330,7 @@ private:
     std::unique_ptr<NextUI::RmlUiSystem> rmlUi_;
     std::unique_ptr<Runtime::Remote::RemoteServer> remoteServer_;
     FRuntimeServices services_{};
+    Runtime::IDebugUiProvider* debugUiProvider_ = nullptr;
 
     // Editor and tooling state
     Runtime::Command::CommandHistory commandHistory_{};

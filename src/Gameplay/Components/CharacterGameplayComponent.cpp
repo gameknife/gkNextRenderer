@@ -1,4 +1,4 @@
-#include "Engine/NextGameplay/Components/CharacterGameplayComponent.h"
+#include "Gameplay/Components/CharacterGameplayComponent.h"
 
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 #include "Engine/Runtime/Reflection/PropertyMeta.h"

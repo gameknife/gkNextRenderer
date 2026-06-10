@@ -1,4 +1,4 @@
-#include "Engine/NextGameplay/Utilities/SceneNodeUtils.hpp"
+#include "Gameplay/Utilities/SceneNodeUtils.hpp"
 
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Core/Scene.hpp"

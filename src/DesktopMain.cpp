@@ -1,8 +1,9 @@
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Scene/GltfTestRunner.hpp"
+#include "Tests/GltfTestRunner.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
 
 #if WIN32
 #include "ThirdParty/renderdoc/renderdoc_app.h"
@@ -84,6 +85,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         
     // Start the application.
     GApplication.reset( new NextEngine(*GOption) );
+    GApplication->SetDebugUiProvider(&DevTools::DefaultDebugUiProvider());
 
     if (GOption->TestGltfRobustness)
     {

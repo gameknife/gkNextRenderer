@@ -1,4 +1,4 @@
-#include "Engine/NextGameplay/Components/CharacterControlComponent.h"
+#include "Gameplay/Components/CharacterControlComponent.h"
 
 #include "Engine/Runtime/Reflection/PropertyMeta.h"
 

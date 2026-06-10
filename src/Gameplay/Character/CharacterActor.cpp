@@ -1,8 +1,8 @@
-#include "Engine/NextGameplay/Character/CharacterActor.h"
+#include "Gameplay/Character/CharacterActor.h"
 
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/NextGameplay/Utilities/SceneNodeUtils.hpp"
+#include "Gameplay/Utilities/SceneNodeUtils.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 #include "Engine/Runtime/Scene/SceneBuilder.h"

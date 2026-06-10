@@ -26,6 +26,11 @@ namespace NextUI
     struct Statistics;
 }
 
+namespace Runtime
+{
+    class IDebugUiProvider;
+}
+
 namespace Runtime::Config
 {
     class Options;

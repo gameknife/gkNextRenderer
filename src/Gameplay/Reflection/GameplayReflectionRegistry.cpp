@@ -1,9 +1,9 @@
-#include "Engine/NextGameplay/Reflection/GameplayReflectionRegistry.h"
+#include "Gameplay/Reflection/GameplayReflectionRegistry.h"
 
-#include "Engine/NextGameplay/Components/AIAgentComponent.h"
-#include "Engine/NextGameplay/Components/CharacterAnimationComponent.h"
-#include "Engine/NextGameplay/Components/CharacterControlComponent.h"
-#include "Engine/NextGameplay/Components/CharacterGameplayComponent.h"
+#include "Gameplay/Components/AIAgentComponent.h"
+#include "Gameplay/Components/CharacterAnimationComponent.h"
+#include "Gameplay/Components/CharacterControlComponent.h"
+#include "Gameplay/Components/CharacterGameplayComponent.h"
 
 namespace NextGameplay
 {

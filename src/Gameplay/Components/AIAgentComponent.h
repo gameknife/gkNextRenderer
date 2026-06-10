@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Engine/Assets/Core/Component.h"
-#include "Engine/NextGameplay/AI/PathFollower.h"
-#include "Engine/NextGameplay/Gameplay/GameplayTypes.h"
+#include "Gameplay/AI/PathFollower.h"
+#include "Gameplay/Gameplay/GameplayTypes.h"
 #include "Engine/Runtime/Reflection/ReflectionMacros.h"
 
 namespace NextGameplay

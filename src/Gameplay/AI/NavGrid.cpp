@@ -1,4 +1,4 @@
-#include "Engine/NextGameplay/AI/NavGrid.h"
+#include "Gameplay/AI/NavGrid.h"
 #include "Engine/Assets/Acceleration/CPUAccelerationStructure.h"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 

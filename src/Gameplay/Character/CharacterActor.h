@@ -2,9 +2,9 @@
 
 #include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/NextGameplay/Components/CharacterAnimationComponent.h"
-#include "Engine/NextGameplay/Components/CharacterControlComponent.h"
-#include "Engine/NextGameplay/Components/CharacterGameplayComponent.h"
+#include "Gameplay/Components/CharacterAnimationComponent.h"
+#include "Gameplay/Components/CharacterControlComponent.h"
+#include "Gameplay/Components/CharacterGameplayComponent.h"
 #include "Engine/Runtime/RuntimeFwd.hpp"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 #include "Engine/Runtime/Subsystems/NextCharacterController.h"

@@ -1,4 +1,4 @@
-#include "Engine/Runtime/Scene/GltfTestRunner.hpp"
+#include "Tests/GltfTestRunner.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Utilities/FileHelper.hpp"

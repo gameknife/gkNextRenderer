@@ -21,9 +21,7 @@
 #include "Engine/Runtime/UI/RmlUiSystem.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Engine/Runtime/Utilities/GraphicsDebugPanel.hpp"
-#include "Engine/Runtime/Utilities/PhysicsDebugOverlay.hpp"
-#include "Engine/Runtime/Utilities/ProfileDebugOverlay.hpp"
+#include "Engine/Runtime/DebugUiProvider.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/Instance.hpp"
 #include "Engine/Vulkan/SyncAndTiming.hpp"
@@ -1492,19 +1490,23 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
             SCOPED_CPU_TIMER("physics debug ui");
             Assets::Camera debugCamera = scene_->GetRenderCamera();
             gameInstance_->OverrideRenderCamera(debugCamera);
-            Runtime::DrawPhysicsDebugOverlay(*scene_, debugCamera);
+            if (debugUiProvider_)
+            {
+                debugUiProvider_->DrawPhysicsOverlay(*scene_, debugCamera);
+            }
             gameInstance_->DrawAdditionalPhysicsDebugOverlay(debugCamera);
         }
+        if (debugUiProvider_)
         {
             SCOPED_CPU_TIMER("graphics debug ui");
-            Runtime::GraphicsDebugPanel::DrawPanel(*this, config_.showFlags.DebugGraphicsPanel,
-                                                   gameInstance_->GetGraphicsDebugPanelTopOffset());
+            debugUiProvider_->DrawGraphicsPanel(*this, config_.showFlags.DebugGraphicsPanel,
+                                                gameInstance_->GetGraphicsDebugPanelTopOffset());
         }
-        if (config_.showFlags.DebugProfileOverlay)
+        if (debugUiProvider_ && config_.showFlags.DebugProfileOverlay)
         {
             SCOPED_CPU_TIMER("profile debug ui");
-            Runtime::DrawProfileDebugOverlay(*this, stats, renderer_->GpuTimer(),
-                                             gameInstance_->GetGraphicsDebugPanelTopOffset());
+            debugUiProvider_->DrawProfileOverlay(*this, stats, renderer_->GpuTimer(),
+                                                 gameInstance_->GetGraphicsDebugPanelTopOffset());
         }
     }
     if (!uiHandled && !suppressAllUi)
@@ -1569,8 +1571,8 @@ void NextEngine::OnKey(SDL_Event& event)
 
     if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat)
     {
-        if (Runtime::GraphicsDebugPanel::TryHandleRendererShortcut(event.key.key, true,
-                                                                   config_.showFlags.DebugGraphicsPanel, *this))
+        if (debugUiProvider_ && debugUiProvider_->HandleRendererShortcut(event.key.key, true,
+                                                                         config_.showFlags.DebugGraphicsPanel, *this))
         {
             return;
         }
@@ -1677,7 +1679,7 @@ void NextEngine::OnKey(SDL_Event& event)
 
     if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat)
     {
-        if (Runtime::GraphicsDebugPanel::TryHandleViewModeShortcut(
+        if (debugUiProvider_ && debugUiProvider_->HandleViewModeShortcut(
                 event.key.key, true, config_.showFlags.DebugGraphicsPanel, config_.showFlags))
         {
             return;

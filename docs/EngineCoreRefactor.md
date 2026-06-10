@@ -253,6 +253,7 @@ src/
 | 时间 | Phase | gnb loc (src/Engine 纯代码) | 备注 |
 |---|---|---:|---|
 | 2026-06-10 | Phase 0 基线 | 55,279 | 290 文件；含 NextGameplay 2,217（Phase 1 移出）。`gnb loc` 非注释非空行口径 |
+| 2026-06-10 | Phase 1 完成 | 51,465 | −3,814（NextGameplay→src/Gameplay 2,217；GltfTestRunner→Tests 203；overlays→Modules/DevTools ~950；KayKit 删除 ~440）。全 target 构建过、118 单测过、playground/CharacterDemo `gnb shot` 与 HEAD 基线一致 |
 
 ---
 
