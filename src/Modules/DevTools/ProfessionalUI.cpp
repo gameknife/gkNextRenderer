@@ -1,6 +1,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 
-#include "Engine/Runtime/Editor/ProfessionalUI.hpp"
+#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Modules/DevTools/UiDevPanels.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 
@@ -500,16 +501,10 @@ namespace NextUI::Theme
         };
         config.DrawRightContent = [&]()
         {
-            if (ui != nullptr)
+            DevTools::FUiDevPanels& devPanels = DevTools::FUiDevPanels::Get();
+            if (ToolbarButton("Console", "Toggle Console", devPanels.IsConsoleOpen(), ImVec2(kConsoleButtonWidth, kButtonHeight)))
             {
-                if (ToolbarButton("Console", "Toggle Console", ui->IsConsoleOpen(), ImVec2(kConsoleButtonWidth, kButtonHeight)))
-                {
-                    ui->ToggleConsole();
-                }
-            }
-            else
-            {
-                ToolbarButton("Console", "Console Unavailable", false, ImVec2(kConsoleButtonWidth, kButtonHeight));
+                devPanels.ToggleConsole();
             }
 
             ImGui::SameLine();

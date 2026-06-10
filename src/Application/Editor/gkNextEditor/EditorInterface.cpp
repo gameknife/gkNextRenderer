@@ -24,8 +24,9 @@
 #include "Engine/Options.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Engine/Runtime/Editor/ProfessionalUI.hpp"
+#include "Modules/DevTools/ProfessionalUI.hpp"
 #include "Modules/DevTools/GraphicsDebugPanel.hpp"
+#include "Modules/DevTools/UiDevPanels.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Utilities/Localization.hpp"
@@ -407,7 +408,7 @@ void EditorInterface::Render()
     if (uiState_.viewport)
         Editor::DrawViewportOverlay(ctx, uiState_);
 
-    ctx.ui.RenderConsoleOverlay();
+    DevTools::FUiDevPanels::Get().RenderConsoleOverlay();
 
     if (uiState_.child_style)
         utils::ShowStyleEditorWindow(&uiState_.child_style);

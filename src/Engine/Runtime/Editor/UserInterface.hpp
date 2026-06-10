@@ -84,17 +84,8 @@ public:
 	};
 	FUiTextureHandle RequestUiTexture(const std::string& path, bool srgb = true);
 	
-	static void SetStyle();
-
 	void DrawPoint(float x, float y, float size, glm::vec4 color);
 	void DrawLine(float fromx, float fromy,float tox, float toy, float size, glm::vec4 color);
-	void SubmitConsoleCommand(const std::string& command);
-	bool DrawConsoleCommandInput(const char* label, const char* hint, float width = 0.0f, bool closeConsoleOnSubmit = false,
-		bool showMatchPopup = false, const char* matchPopupId = nullptr, bool refreshMatches = true);
-	void DrawConsoleLogOutput(const char* childId, const ImVec2& size = ImVec2(0.0f, 0.0f), bool bordered = true);
-	void ToggleConsole();
-	bool IsConsoleOpen() const { return showConsole_; }
-	void RenderConsoleOverlay();
 
 private:
 	struct UiDrawSegment
@@ -120,12 +111,8 @@ private:
 	struct FUiRenderBuffers;
 
 	NextEngine& GetEngine() {return *engine_;}
-	
-	void DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gpuTimer);
+
 	void DrawIndicator(uint32_t frameCount);
-	void DrawConsoleWindow();
-	void RefreshConsoleMatches(size_t matchLimit);
-	void DrawConsoleMatchPopup(float width, const char* popupId);
 	void InitializeRendererBackend();
 	void ShutdownRendererBackend();
 	void BeginRendererBackendFrame();
@@ -149,27 +136,6 @@ private:
 	                    VkExtent2D framebufferExtent, bool hdrOutput, VkPipeline pipeline);
 	static ImTextureID EncodeBindlessTextureId(uint32_t textureIndex);
 	static bool DecodeBindlessTextureId(ImTextureID textureId, uint32_t& outTextureIndex);
-	static int ConsoleInputTextCallback(ImGuiInputTextCallbackData* data);
-	int HandleConsoleInputTextCallback(ImGuiInputTextCallbackData* data);
-	void DrawConsoleLogOutputInternal(const char* childId, const ImVec2& size, bool bordered);
-
-	struct TimingSample
-	{
-		double sampleTime = 0.0;
-		float milliseconds = 0.0f;
-	};
-
-	struct TimingHistory
-	{
-		std::deque<TimingSample> samples;
-		std::string displayName;
-		double lastSeenTime = 0.0;
-		float average = 0.0f;
-		float minimum = 0.0f;
-		float maximum = 0.0f;
-		int depth = 0;
-		uint32_t displayOrder = 0;
-	};
 
 	std::unique_ptr<Vulkan::RenderPass> renderPass_;
 	std::string imguiIniPath_;
@@ -193,30 +159,6 @@ private:
 	std::unordered_map<std::string, ImVec2> uiTexturePixelSizeCache_;
 	uint32_t fontTextureIndex_ = UINT32_MAX;
 	std::vector< std::function<void ()> > auxDrawRequest_;
-	std::vector<std::string> consoleHistory_;
-	std::vector<std::string> consoleMatches_;
-	std::string consoleInput_;
-	std::string consoleLastInput_;
-	std::string consoleCompletionBase_;
-	int consoleHistoryIndex_ = -1;
-	int consoleMatchIndex_ = 0;
-	bool consoleSkipEditReset_ = false;
-	bool showConsole_ = false;
-	bool consoleScrollToBottom_ = false;
-	bool requestConsoleFocus_ = false;
-	bool suppressConsoleToggleTextInput_ = false;
-	uint64_t consoleLogRevision_ = 0;
-	std::unordered_map<std::string, TimingHistory> gpuTimeHistory_;
-	std::unordered_map<std::string, TimingHistory> cpuTimeHistory_;
-
-	static constexpr int kOverlaySparklineSampleCount = 64;
-	static constexpr int kOverlaySparklineSampleStride = 2;
-	std::array<float, kOverlaySparklineSampleCount> frameRateSamples_{};
-	std::array<float, kOverlaySparklineSampleCount> frameTimeSamples_{};
-	int overlaySampleCursor_ = 0;
-	int overlaySampleFilled_ = 0;
-	int overlaySampleStrideCounter_ = 0;
-
 	NextEngine* engine_;
 };
 

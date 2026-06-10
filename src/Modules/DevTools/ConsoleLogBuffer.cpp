@@ -1,4 +1,4 @@
-#include "Engine/Runtime/Editor/ConsoleLogBuffer.hpp"
+#include "Modules/DevTools/ConsoleLogBuffer.hpp"
 
 #include <algorithm>
 #include <atomic>

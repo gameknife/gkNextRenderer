@@ -12,8 +12,9 @@
 #include <SDL3/SDL_dialog.h>
 
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Editor/ProfessionalUI.hpp"
+#include "Modules/DevTools/ProfessionalUI.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Modules/DevTools/UiDevPanels.hpp"
 
 namespace Editor
 {
@@ -269,10 +270,10 @@ namespace Editor
                 ImGui::MenuItem("Outliner", nullptr, &ui.sidebar);
                 ImGui::MenuItem("Properties", nullptr, &ui.properties);
                 ImGui::MenuItem("Content Browser", nullptr, &ui.contentBrowser);
-                const bool consoleOpen = ctx.ui.IsConsoleOpen();
+                const bool consoleOpen = DevTools::FUiDevPanels::Get().IsConsoleOpen();
                 if (ImGui::MenuItem("Console", nullptr, consoleOpen))
                 {
-                    ctx.ui.ToggleConsole();
+                    DevTools::FUiDevPanels::Get().ToggleConsole();
                 }
                 ImGui::MenuItem("Material Editor", nullptr, &ui.child_mat_editor);
 
