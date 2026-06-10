@@ -8,11 +8,6 @@ class NextPhysics;
 class QuickJSEngine;
 class VulkanGpuTimer;
 
-namespace NextAI
-{
-    class FAIService;
-}
-
 namespace NextCVar
 {
     class FCVarSystem;
@@ -28,6 +23,7 @@ namespace NextUI
 namespace Runtime
 {
     class IDebugUiProvider;
+    class IFrameStreamer;
 }
 
 namespace Runtime::Config

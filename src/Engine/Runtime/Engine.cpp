@@ -5,12 +5,11 @@
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
-#include "Engine/Runtime/Remote/RemoteProtocol.hpp"
-#include "Engine/Runtime/Remote/RemoteServer.hpp"
+#include "Engine/Runtime/RemoteProtocol.hpp"
+#include "Engine/Runtime/FrameStreamer.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Config/EngineCVars.hpp"
 #include "Engine/Runtime/Subsystems/QuickJSEngine.hpp"
-#include "Engine/Runtime/Subsystems/AIService.hpp"
 #include "Engine/Runtime/Subsystems/NextLocalization.h"
 #include "Engine/Runtime/Command/DeleteNodesCommand.hpp"
 #include "Engine/Runtime/Command/DuplicateNodesCommand.hpp"
@@ -375,7 +374,6 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
         }
     }
 
-    services_.aiService = std::make_unique<NextAI::FAIService>();
 
     Vulkan::Window::InitGLFW();
     // Create Window
@@ -471,7 +469,7 @@ NextEngine::~NextEngine()
 
     rmlUi_.reset();
     userInterface_.reset();
-    remoteServer_.reset();
+    frameStreamer_.reset();
     scene_.reset();
     renderer_.reset();
     window_.reset();
@@ -540,35 +538,12 @@ void NextEngine::Start()
 
     gameInstance_->OnInit();
 
-    if (options_->RemoteMode)
+    if (frameStreamer_)
     {
-        uint32_t remoteWidth = options_->RemoteWidth != 0 ? options_->RemoteWidth : options_->Width;
-        uint32_t remoteHeight = options_->RemoteHeight != 0 ? options_->RemoteHeight : options_->Height;
-        if (options_->RemoteWidth == 0 && options_->RemoteHeight == 0 && remoteWidth > 0 && remoteHeight > 0)
+        if (!frameStreamer_->Start())
         {
-            constexpr uint32_t maxDefaultRemoteWidth = 1280;
-            constexpr uint32_t maxDefaultRemoteHeight = 720;
-            const double scale = std::min(
-                1.0, std::min(static_cast<double>(maxDefaultRemoteWidth) / static_cast<double>(remoteWidth),
-                              static_cast<double>(maxDefaultRemoteHeight) / static_cast<double>(remoteHeight)));
-            remoteWidth = std::max(2u, static_cast<uint32_t>(static_cast<double>(remoteWidth) * scale) & ~1u);
-            remoteHeight = std::max(2u, static_cast<uint32_t>(static_cast<double>(remoteHeight) * scale) & ~1u);
-        }
-
-        Runtime::Remote::RemoteServer::FConfig remoteConfig;
-        remoteConfig.enabled = true;
-        remoteConfig.bindAddress = options_->RemoteBind;
-        remoteConfig.httpPort = options_->RemoteHttpPort;
-        remoteConfig.signalingPort = options_->RemotePort;
-        remoteConfig.bitrateKbps = options_->RemoteBitrateKbps;
-        remoteConfig.fps = options_->RemoteFps;
-        remoteConfig.width = remoteWidth;
-        remoteConfig.height = remoteHeight;
-        remoteServer_ = std::make_unique<Runtime::Remote::RemoteServer>(std::move(remoteConfig));
-        if (!remoteServer_->Start())
-        {
-            SPDLOG_ERROR("RemotePlay: failed to start remote server");
-            remoteServer_.reset();
+            SPDLOG_ERROR("RemotePlay: failed to start frame streamer");
+            frameStreamer_.reset();
         }
     }
 
@@ -872,7 +847,7 @@ void NextEngine::End()
     {
         services_.physics->Stop();
     }
-    remoteServer_.reset();
+    frameStreamer_.reset();
     if (gameInstance_)
     {
         gameInstance_->OnDestroy();
@@ -887,6 +862,11 @@ void NextEngine::End()
     {
         services_.localization->SaveToTxt(fmt::format("assets/locale/{}.txt", options_->locale));
     }
+}
+
+void NextEngine::SetFrameStreamer(std::unique_ptr<Runtime::IFrameStreamer> streamer)
+{
+    frameStreamer_ = std::move(streamer);
 }
 
 void NextEngine::RegisterJSCallback(std::function<void(double)> callback)
@@ -1412,9 +1392,9 @@ void NextEngine::OnRendererDeleteSwapChain()
     {
         userInterface_->OnDestroySurface();
     }
-    if (remoteServer_)
+    if (frameStreamer_)
     {
-        remoteServer_->OnRendererDeleteSwapChain();
+        frameStreamer_->OnRendererDeleteSwapChain();
     }
 }
 
@@ -1511,10 +1491,10 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
     }
 
     // Remote play capture: recorded into the same frame command buffer, after all UI passes.
-    if (remoteServer_)
+    if (frameStreamer_)
     {
         SCOPED_CPU_TIMER("remote");
-        remoteServer_->RecordVideoFrame(commandBuffer, imageIndex, *renderer_);
+        frameStreamer_->RecordVideoFrame(commandBuffer, imageIndex, *renderer_);
     }
 }
 

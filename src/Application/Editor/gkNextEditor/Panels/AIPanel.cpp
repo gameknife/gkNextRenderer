@@ -3,7 +3,7 @@
 #include "AI/EditorAIService.hpp"
 #include "Panels/imgui_markdown_custom.h"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Subsystems/AIService.hpp"
+#include "Modules/NextAI/AIService.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
 #include <algorithm>
@@ -11,6 +11,7 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <sstream>
+#include "Modules/NextAI/NextAIModule.hpp"
 
 namespace Editor
 {
@@ -65,7 +66,7 @@ namespace Editor
 
     static void DrawProviderSelector(NextEngine& engine, FEditorAIService& service)
     {
-        auto* ai = engine.GetAIService();
+        auto* ai = NextAI::GetAIService(engine);
         if (!ai)
         {
             ImGui::TextDisabled("AI service unavailable");

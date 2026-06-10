@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Engine/Assets/AssetsFwd.hpp"
-#include "Engine/Runtime/Remote/VulkanVideoCaps.hpp"
+#include "Engine/Vulkan/VulkanVideoCaps.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
 #include "Engine/Vulkan/SyncAndTiming.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"

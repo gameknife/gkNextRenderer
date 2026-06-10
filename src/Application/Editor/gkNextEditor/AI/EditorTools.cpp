@@ -5,8 +5,8 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "EditorContext.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Subsystems/AI/IAITool.hpp"
-#include "Engine/Runtime/Subsystems/AI/ToolRegistry.hpp"
+#include "Modules/NextAI/AI/IAITool.hpp"
+#include "Modules/NextAI/AI/ToolRegistry.hpp"
 
 #include <fmt/format.h>
 #include <glm/gtc/quaternion.hpp>

@@ -31,11 +31,6 @@ namespace NextRenderer
                                                const VkPresentModeKHR presentMode, const bool enableValidationLayers);
 } // namespace NextRenderer
 
-namespace Runtime::Remote
-{
-    class RemoteServer;
-}
-
 typedef std::function<bool(double DeltaSeconds)> TickedTask;
 typedef std::function<bool()> DelayedTask;
 
@@ -115,8 +110,6 @@ public:
     const NextAudio* GetAudio() const { return services_.audio.get(); }
     NextLocalization* GetLocalization() { return services_.localization.get(); }
     const NextLocalization* GetLocalization() const { return services_.localization.get(); }
-    NextAI::FAIService* GetAIService() { return services_.aiService.get(); }
-    const NextAI::FAIService* GetAIService() const { return services_.aiService.get(); }
     NextCVar::FCVarSystem& GetCVarSystem() { return *services_.cvarSystem; }
     const NextCVar::FCVarSystem& GetCVarSystem() const { return *services_.cvarSystem; }
     QuickJSEngine* GetQuickJSEngine() { return services_.quickJSEngine.get(); }
@@ -180,6 +173,23 @@ public:
     // registered by the application entry point; nullptr disables overlays)
     void SetDebugUiProvider(Runtime::IDebugUiProvider* provider) { debugUiProvider_ = provider; }
     Runtime::IDebugUiProvider* GetDebugUiProvider() const { return debugUiProvider_; }
+
+    // Frame streamer injection (implementation in Modules/NextRemote);
+    // assembled by the application entry when remote mode is requested.
+    void SetFrameStreamer(std::unique_ptr<Runtime::IFrameStreamer> streamer);
+
+    // Type-erased service slots for optional modules (e.g. Modules/NextAI).
+    // Modules attach their engine-scoped singletons here so the core stays
+    // free of module types; lifetime ends with the engine.
+    void SetExternalService(const std::string& key, std::shared_ptr<void> service)
+    {
+        services_.externalServices[key] = std::move(service);
+    }
+    std::shared_ptr<void> GetExternalService(const std::string& key) const
+    {
+        auto it = services_.externalServices.find(key);
+        return it != services_.externalServices.end() ? it->second : nullptr;
+    }
 
 private:
     // Scene loading payload
@@ -296,13 +306,13 @@ private:
         ~FRuntimeServices();
 
         std::unique_ptr<NextLocalization> localization;
-        std::unique_ptr<NextAI::FAIService> aiService;
         std::unique_ptr<NextCVar::FCVarSystem> cvarSystem;
         std::unique_ptr<NextAudio> audio;
         std::unique_ptr<NextPhysics> physics;
         std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem;
         std::unique_ptr<QuickJSEngine> quickJSEngine;
         std::unique_ptr<Vulkan::ShaderHotReloader> shaderHotReloader;
+            std::unordered_map<std::string, std::shared_ptr<void>> externalServices;
     };
 
     // Core ownership
@@ -325,7 +335,7 @@ private:
     // Runtime services and UI
     std::unique_ptr<NextUI::UserInterface> userInterface_;
     std::unique_ptr<NextUI::RmlUiSystem> rmlUi_;
-    std::unique_ptr<Runtime::Remote::RemoteServer> remoteServer_;
+    std::unique_ptr<Runtime::IFrameStreamer> frameStreamer_;
     FRuntimeServices services_{};
     Runtime::IDebugUiProvider* debugUiProvider_ = nullptr;
 
