@@ -1,10 +1,10 @@
 #include <catch2/catch_all.hpp>
 #include <nlohmann/json.hpp>
 
-#include "Engine/Runtime/Subsystems/AI/IAITool.hpp"
-#include "Engine/Runtime/Subsystems/AI/ToolRegistry.hpp"
-#include "Engine/Runtime/Subsystems/AI/Tools/PathSandbox.hpp"
-#include "Engine/Runtime/Subsystems/AI/Tools/RepoTools.hpp"
+#include "Modules/NextAI/AI/IAITool.hpp"
+#include "Modules/NextAI/AI/ToolRegistry.hpp"
+#include "Modules/NextAI/AI/Tools/PathSandbox.hpp"
+#include "Modules/NextAI/AI/Tools/RepoTools.hpp"
 
 #include <filesystem>
 #include <fstream>

@@ -1,9 +1,9 @@
 #include <catch2/catch_all.hpp>
 #include <nlohmann/json.hpp>
 
-#include "Engine/Runtime/Subsystems/AI/AgentLoop.hpp"
-#include "Engine/Runtime/Subsystems/AI/MainThreadDispatcher.hpp"
-#include "Engine/Runtime/Subsystems/AI/ToolRegistry.hpp"
+#include "Modules/NextAI/AI/AgentLoop.hpp"
+#include "Modules/NextAI/AI/MainThreadDispatcher.hpp"
+#include "Modules/NextAI/AI/ToolRegistry.hpp"
 
 #include <atomic>
 #include <chrono>

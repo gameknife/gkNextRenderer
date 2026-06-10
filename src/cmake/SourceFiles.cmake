@@ -58,9 +58,29 @@ file(GLOB_RECURSE src_files_engine
 
 # --- Gameplay Layer ---
 file(GLOB_RECURSE src_files_nextgameplay
-    "Engine/NextGameplay/*.cpp"
-    "Engine/NextGameplay/*.hpp"
-    "Engine/NextGameplay/*.h"
+    "Gameplay/*.cpp"
+    "Gameplay/*.hpp"
+    "Gameplay/*.h"
+)
+
+# --- Optional Engine Modules (src/Modules/<Name>, one static library each) ---
+set(GK_MODULE_NAMES LDrawLoader ScadLoader NextAI NextRemote NextRmlUi DevTools)
+foreach(gk_module IN LISTS GK_MODULE_NAMES)
+    file(GLOB_RECURSE src_files_module_${gk_module}
+        "Modules/${gk_module}/*.cpp"
+        "Modules/${gk_module}/*.hpp"
+        "Modules/${gk_module}/*.h"
+    )
+endforeach()
+set(src_files_modules_all "")
+foreach(gk_module IN LISTS GK_MODULE_NAMES)
+    list(APPEND src_files_modules_all ${src_files_module_${gk_module}})
+endforeach()
+
+# --- Application shared code (demo scenes etc.) ---
+file(GLOB_RECURSE src_files_appcommon
+    "Application/Common/*.cpp"
+    "Application/Common/*.hpp"
 )
 
 # --- Editor ---

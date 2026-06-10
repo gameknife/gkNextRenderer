@@ -2,7 +2,7 @@
 #include "BrickPlayerGameInstance.hpp"
 #include "BrickPlayerSnapLogic.hpp"
 #include "BrickPlayerUserInterface.hpp"
-#include "Engine/Assets/Loaders/FLDrawLoader.h"
+#include "Modules/LDrawLoader/FLDrawLoader.h"
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
@@ -16,6 +16,7 @@
 #include <SDL3/SDL_dialog.h>
 #include <spdlog/spdlog.h>
 #include <glm/ext/scalar_constants.hpp>
+#include "Modules/LDrawLoader/LDrawModule.hpp"
 
 namespace
 {
@@ -183,6 +184,7 @@ namespace
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
 {
+    Modules::LDraw::Register();
     return std::make_unique<BrickPlayerGameInstance>(config, options, engine);
 }
 

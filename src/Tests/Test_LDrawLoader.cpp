@@ -2,7 +2,7 @@
 
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Data/Material.hpp"
-#include "Engine/Assets/Loaders/FLDrawLoader.h"
+#include "Modules/LDrawLoader/FLDrawLoader.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
 
 #include <chrono>

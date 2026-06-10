@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <map>
 #include <thread>
+#include "Modules/NextAI/NextAIModule.hpp"
 
 namespace
 {
@@ -41,7 +42,7 @@ namespace MagicaLego
     {
         if (gameInstance_)
         {
-            aiService_ = gameInstance_->GetEngine().GetAIService();
+            aiService_ = NextAI::GetAIService(gameInstance_->GetEngine());
         }
 
         if (aiService_)

@@ -34,12 +34,6 @@ if (ANDROID OR IOS)
     set(GK_ENABLE_HOT_RELOAD OFF CACHE BOOL "Enable desktop Slang shader hot reload" FORCE)
 endif()
 
-if (ANDROID OR IOS)
-    set(WITH_WHISPERCPP OFF CACHE BOOL "Enable whisper.cpp" FORCE)
-else()
-    set(WITH_WHISPERCPP ON CACHE BOOL "Enable whisper.cpp" FORCE)
-endif()
-
 include(cmake/SetupExternalLibs.cmake)
 include(cmake/SetupDependencies.cmake)
 

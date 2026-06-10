@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Engine/Assets/AssetsFwd.hpp"
-#include "Engine/Runtime/Remote/VulkanVideoCaps.hpp"
+#include "Engine/Vulkan/VulkanVideoCaps.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
 #include "Engine/Vulkan/SyncAndTiming.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
@@ -15,14 +15,6 @@
 #include <cassert>
 #include <functional>
 #include <map>
-
-namespace StreamlineWrapper
-{
-	bool ShouldInitialize();
-	void Initialize();
-	void LazyInit(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily, bool& outSupportDLSS, bool& outSupportDLSSRR);
-	void Shutdown();
-}
 
 namespace Vulkan 
 {

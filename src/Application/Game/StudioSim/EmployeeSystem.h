@@ -3,8 +3,8 @@
 #include "StudioSimTypes.h"
 
 #include "Engine/Assets/AssetsFwd.hpp"
-#include "Engine/NextGameplay/AI/NavGrid.h"
-#include "Engine/NextGameplay/AI/PathFollower.h"
+#include "Gameplay/AI/NavGrid.h"
+#include "Gameplay/AI/PathFollower.h"
 
 #include <glm/glm.hpp>
 #include <memory>

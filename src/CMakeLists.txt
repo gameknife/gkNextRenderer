@@ -64,16 +64,25 @@ set(UNIT_TEST_SOURCES
 
 list(APPEND UNIT_TEST_SOURCES Tests/Test_PhysicsComponent.cpp)
 
+# Desktop entry point + dev-only glTF robustness runner (lives in src/Tests).
+set(DESKTOP_MAIN_SOURCES
+	DesktopMain.cpp
+	Tests/GltfTestRunner.cpp
+	Tests/GltfTestRunner.hpp
+)
+
 
 # libray and app
 if ( ANDROID )
 add_library(gkNextRenderer SHARED
-	${src_files_assets} 
-	${src_files_utilities} 
+	${src_files_assets}
+	${src_files_utilities}
 	${src_files_engine}
-	${src_files_vulkan} 
+	${src_files_vulkan}
 	${src_files_rendering}
 	${src_files_thirdparty}
+	${src_files_modules_all}
+	${src_files_appcommon}
 	${src_files_gkrenderer}
 	AndroidMain.cpp
 	#GameActivitySources.cpp
@@ -93,7 +102,8 @@ add_library(NextGameplay
 add_executable(gkNextRenderer
 	MACOSX_BUNDLE
 	${src_files_gkrenderer}
-	DesktopMain.cpp
+	${src_files_appcommon}
+	${DESKTOP_MAIN_SOURCES}
 )
 else()
 add_library(gkNextEngine
@@ -109,80 +119,85 @@ add_library(NextGameplay
 )
 add_executable(gkNextRenderer
 	${src_files_gkrenderer}
-	DesktopMain.cpp
+	${src_files_appcommon}
+	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(gkNextRenderer PRIVATE Application/Render/gkNextRenderer)
 add_executable(gkNextStillBenchmark
 	${src_files_benchmarkcommon}
 	${src_files_gkstillbenchmark}
-	DesktopMain.cpp
+	${src_files_appcommon}
+	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(gkNextStillBenchmark PRIVATE Application/Render/gkNextBenchmark)
 add_executable(gkNextMotionBenchmark
 	${src_files_benchmarkcommon}
 	${src_files_gkmotionbenchmark}
-	DesktopMain.cpp
+	${src_files_appcommon}
+	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(gkNextMotionBenchmark PRIVATE Application/Render/gkNextBenchmark)
 add_executable(gkNextVisualTest
 	${src_files_gkvisualtest}
-	DesktopMain.cpp
+	${src_files_appcommon}
+	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(gkNextVisualTest PRIVATE Application/Render/gkNextVisualTest)
 add_executable(RmlUiDemo
 	${src_files_rmluidemo}
-	DesktopMain.cpp
+	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(RmlUiDemo PRIVATE Application/Render/RmlUiDemo)
 add_executable(gkNextEditor
 	${src_files_editor}
-	DesktopMain.cpp
+	${src_files_appcommon}
+	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(gkNextEditor PRIVATE Application/Editor/gkNextEditor)
 add_executable(ScadStudio
 	${src_files_scadstudio}
-	DesktopMain.cpp
+	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(ScadStudio PRIVATE Application/Editor/ScadStudio)
 add_executable(MagicaLego
 	${src_files_magicalego}
-	DesktopMain.cpp
+	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(MagicaLego PRIVATE Application/Game/MagicaLego)
 add_executable(KongLie3D
 	${src_files_konglie3d}
-	DesktopMain.cpp
+	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(KongLie3D PRIVATE Application/Game/KongLie3D)
 add_executable(Brotato3D
 	${src_files_brotato3d}
-	DesktopMain.cpp
+	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(Brotato3D PRIVATE Application/Game/Brotato3D)
 target_compile_definitions(Brotato3D PRIVATE DEV_MODE=1)
 add_executable(FlappyCpp
 	${src_files_flappycpp}
-	DesktopMain.cpp
+	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(FlappyCpp PRIVATE Application/Game/Flappy)
 add_executable(FlappyJs
 	${src_files_flappyjs}
-	DesktopMain.cpp
+	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(FlappyJs PRIVATE Application/Game/Flappy)
 add_executable(BrickPlayer
 	${src_files_brickplayer}
-	DesktopMain.cpp
+	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(BrickPlayer PRIVATE Application/Game/BrickPlayer)
 add_executable(CharacterDemo
 	${src_files_characterdemo}
-	DesktopMain.cpp
+	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(CharacterDemo PRIVATE Application/Game/CharacterDemo)
 add_executable(StudioSim
 	${src_files_studiosim}
-	DesktopMain.cpp
+	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(StudioSim PRIVATE Application/Game/StudioSim)
 add_executable(Packager
@@ -192,6 +207,58 @@ add_executable(Packager
 find_package(Catch2 3 REQUIRED)
 add_executable(gkNextUnitTests ${UNIT_TEST_SOURCES})
 
+endif()
+
+# Optional engine modules: one static library per module directory that has
+# sources (empty module skeletons are skipped). Android compiles module
+# sources directly into the single SHARED target above.
+set(GK_MODULE_TARGETS "")
+if ( NOT ANDROID )
+foreach(gk_module IN LISTS GK_MODULE_NAMES)
+	if ( src_files_module_${gk_module} )
+		add_library(${gk_module} STATIC ${src_files_module_${gk_module}})
+		list(APPEND GK_MODULE_TARGETS ${gk_module})
+	endif()
+endforeach()
+endif()
+
+if ( TARGET ScadLoader )
+	# Manifold: robust CSG boolean backend for the SCAD loader (desktop only).
+	find_package(manifold CONFIG QUIET)
+	if ( manifold_FOUND AND NOT GK_DISABLE_MANIFOLD )
+		# Manifold's imported target advertises cxx_std_17 + -D flags through its
+		# INTERFACE, which clobbers the engine's C++20 standard. Strip those and
+		# re-apply only the defines the headers need as proper definitions.
+		set_target_properties(manifold::manifold PROPERTIES
+			INTERFACE_COMPILE_FEATURES ""
+			INTERFACE_COMPILE_OPTIONS "")
+		target_link_libraries(ScadLoader PRIVATE manifold::manifold)
+		target_compile_definitions(ScadLoader PRIVATE GK_WITH_MANIFOLD=1 MANIFOLD_CROSS_SECTION MANIFOLD_PAR=-1)
+		message(STATUS "Manifold found: SCAD CSG boolean backend enabled")
+	else()
+		target_compile_definitions(ScadLoader PRIVATE GK_WITH_MANIFOLD=0)
+		message(STATUS "Manifold not found: SCAD CSG falls back to first-child approximation")
+	endif()
+
+	# FreeType: SCAD text() glyph outlines (earcut header comes from the same
+	# vcpkg include root). FScadText.cpp also includes <mapbox/earcut.hpp>.
+	find_package(Freetype QUIET)
+	if ( Freetype_FOUND AND NOT GK_DISABLE_SCAD_TEXT )
+		target_link_libraries(ScadLoader PRIVATE Freetype::Freetype)
+		target_compile_definitions(ScadLoader PRIVATE GK_WITH_FREETYPE=1)
+		message(STATUS "FreeType found: SCAD text() enabled")
+	else()
+		target_compile_definitions(ScadLoader PRIVATE GK_WITH_FREETYPE=0)
+		message(STATUS "FreeType not found: SCAD text() skipped")
+	endif()
+
+	# earcut-hpp (header-only, from the vcpkg include root) for concave/holed
+	# polygon tessellation. Desktop only (matches the vcpkg.json platform gate).
+	if ( NOT IOS )
+		target_compile_definitions(ScadLoader PRIVATE GK_WITH_EARCUT=1)
+	else()
+		target_compile_definitions(ScadLoader PRIVATE GK_WITH_EARCUT=0)
+	endif()
 endif()
 
 if (UNIX AND NOT APPLE AND NOT ANDROID)
@@ -263,22 +330,6 @@ else()
     message(STATUS "Remote Play disabled for this platform or by GK_WITH_REMOTE=OFF")
 endif()
 
-set(GK_WHISPER_LINK_LIBS "")
-set(GK_WHISPER_COMPILE_DEFINITIONS "")
-if (WITH_WHISPERCPP)
-	find_package(whisper CONFIG REQUIRED)
-	if (MSVC)
-		message(STATUS "Whisper.cpp is disabled for MSVC Debug builds due to upstream static runtime mismatch")
-		set(GK_WHISPER_LINK_LIBS "$<$<NOT:$<CONFIG:Debug>>:whisper>")
-		list(APPEND GK_WHISPER_COMPILE_DEFINITIONS
-			"$<$<CONFIG:Debug>:WITH_WHISPERCPP=0>"
-			"$<$<NOT:$<CONFIG:Debug>>:WITH_WHISPERCPP=1>")
-	else()
-		set(GK_WHISPER_LINK_LIBS whisper)
-		list(APPEND GK_WHISPER_COMPILE_DEFINITIONS WITH_WHISPERCPP=1)
-	endif()
-endif()
-
 # postprocess: target setup
 if ( ANDROID )
 set(AllTargets
@@ -289,6 +340,7 @@ set(AllTargets
 gkNextEngine
 NextGameplay
 gkNextRenderer
+${GK_MODULE_TARGETS}
 )
 else()
 set(AllTargets
@@ -311,6 +363,7 @@ gkNextStillBenchmark
 	CharacterDemo
 	StudioSim
 	gkNextUnitTests
+	${GK_MODULE_TARGETS}
 )
 endif()
 
@@ -381,58 +434,11 @@ foreach(target IN LISTS AllTargets)
 		set_source_files_properties(Engine/Assets/Loaders/FSceneLoader.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 		set_source_files_properties(Engine/Assets/Savers/FSceneSaver.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 		set_source_files_properties(Engine/Vulkan/Allocator.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-		# Isolated 3rd-party-heavy SCAD sources (FreeType / earcut) kept out of unity.
-		set_source_files_properties(Engine/Assets/Loaders/FScadText.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-		set_source_files_properties(Engine/Assets/Loaders/FScadTess.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 		endif()
 		find_package(WebP CONFIG REQUIRED)
 		target_link_libraries(${target} PRIVATE SDL3::SDL3 xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp GPUOpen::VulkanMemoryAllocator ${extra_libs})
 		target_link_libraries(${target} PUBLIC spdlog::spdlog)
-		find_package(RmlUi CONFIG REQUIRED)
-		target_link_libraries(${target} PRIVATE RmlUi::RmlUi)
-		if (GK_REMOTE_ENABLED)
-            target_link_libraries(${target} PRIVATE ${GK_REMOTE_LINK_LIBS})
-		endif()
 
-		# Manifold: robust CSG boolean backend for the SCAD loader (desktop only).
-		find_package(manifold CONFIG QUIET)
-		if ( manifold_FOUND AND NOT GK_DISABLE_MANIFOLD )
-			# Manifold's imported target advertises cxx_std_17 + -D flags through its
-			# INTERFACE, which clobbers the engine's C++20 standard. Strip those and
-			# re-apply only the defines the headers need as proper definitions.
-			set_target_properties(manifold::manifold PROPERTIES
-				INTERFACE_COMPILE_FEATURES ""
-				INTERFACE_COMPILE_OPTIONS "")
-			target_link_libraries(${target} PRIVATE manifold::manifold)
-			target_compile_definitions(${target} PRIVATE GK_WITH_MANIFOLD=1 MANIFOLD_CROSS_SECTION MANIFOLD_PAR=-1)
-			message(STATUS "Manifold found: SCAD CSG boolean backend enabled")
-		else()
-			target_compile_definitions(${target} PRIVATE GK_WITH_MANIFOLD=0)
-			message(STATUS "Manifold not found: SCAD CSG falls back to first-child approximation")
-		endif()
-
-		# FreeType: SCAD text() glyph outlines (earcut header comes from the same
-		# vcpkg include root). FScadText.cpp also includes <mapbox/earcut.hpp>.
-		find_package(Freetype QUIET)
-		if ( Freetype_FOUND AND NOT GK_DISABLE_SCAD_TEXT )
-			target_link_libraries(${target} PRIVATE Freetype::Freetype)
-			target_compile_definitions(${target} PRIVATE GK_WITH_FREETYPE=1)
-			message(STATUS "FreeType found: SCAD text() enabled")
-		else()
-			target_compile_definitions(${target} PRIVATE GK_WITH_FREETYPE=0)
-			message(STATUS "FreeType not found: SCAD text() skipped")
-		endif()
-
-		# earcut-hpp (header-only, from the vcpkg include root) for concave/holed
-		# polygon tessellation. Desktop only (matches the vcpkg.json platform gate).
-		if ( NOT IOS )
-			target_compile_definitions(${target} PRIVATE GK_WITH_EARCUT=1)
-		else()
-			target_compile_definitions(${target} PRIVATE GK_WITH_EARCUT=0)
-		endif()
-		if ( GK_WHISPER_LINK_LIBS )
-			target_link_libraries(${target} PRIVATE ${GK_WHISPER_LINK_LIBS})
-		endif()
 		
 		# handle moltenvk for iOS
 		if ( IOS )
@@ -461,10 +467,17 @@ foreach(target IN LISTS AllTargets)
 	elseif ( ${target} STREQUAL NextGameplay )
 		set_target_properties(${target} PROPERTIES FOLDER "Gameplay")
 		target_link_libraries(${target} PRIVATE gkNextEngine)
+	elseif ( ${target} IN_LIST GK_MODULE_TARGETS )
+		set_target_properties(${target} PROPERTIES FOLDER "Modules")
+		target_link_libraries(${target} PRIVATE gkNextEngine)
 	else()
 		set_target_properties(${target} PROPERTIES FOLDER "Programs")
-		if ( NOT ANDROID ) 
+		if ( NOT ANDROID )
 		target_link_libraries(${target} PRIVATE gkNextEngine)
+		# DesktopMain registers the DevTools debug UI provider for every program.
+		if ( TARGET DevTools )
+		target_link_libraries(${target} PRIVATE DevTools)
+		endif()
 		endif()
 		if ( WITH_STREAMLINE ) 
 		target_link_directories(${target} PRIVATE ${STREAMLINE_LIB_DIR})
@@ -516,9 +529,6 @@ foreach(target IN LISTS AllTargets)
 		target_link_libraries(${target} PRIVATE quickjs )
 	endif()
 
-	if ( GK_WHISPER_COMPILE_DEFINITIONS )
-		target_compile_definitions(${target} PUBLIC ${GK_WHISPER_COMPILE_DEFINITIONS})
-	endif()
 	if (APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 13)
 		target_compile_definitions(${target} PRIVATE JSON_HAS_FILESYSTEM=0 JSON_HAS_EXPERIMENTAL_FILESYSTEM=0)
 	endif()
@@ -594,6 +604,56 @@ target_link_libraries(CharacterDemo PRIVATE NextGameplay)
 endif()
 if ( TARGET StudioSim )
 target_link_libraries(StudioSim PRIVATE NextGameplay)
+endif()
+
+# Optional loader modules: linked only by the applications that use them.
+if ( TARGET LDrawLoader )
+	foreach(t gkNextRenderer gkNextVisualTest gkNextStillBenchmark gkNextMotionBenchmark gkNextEditor BrickPlayer gkNextUnitTests)
+		if ( TARGET ${t} )
+			target_link_libraries(${t} PRIVATE LDrawLoader)
+		endif()
+	endforeach()
+endif()
+if ( TARGET ScadLoader )
+	foreach(t gkNextRenderer gkNextVisualTest gkNextStillBenchmark gkNextMotionBenchmark gkNextEditor ScadStudio StudioSim gkNextUnitTests)
+		if ( TARGET ${t} )
+			target_link_libraries(${t} PRIVATE ScadLoader)
+		endif()
+	endforeach()
+endif()
+if ( TARGET NextAI )
+	foreach(t gkNextEditor ScadStudio MagicaLego StudioSim gkNextUnitTests)
+		if ( TARGET ${t} )
+			target_link_libraries(${t} PRIVATE NextAI)
+		endif()
+	endforeach()
+endif()
+if ( TARGET NextRmlUi )
+	find_package(RmlUi CONFIG REQUIRED)
+	target_link_libraries(NextRmlUi PRIVATE RmlUi::RmlUi)
+	# DesktopMain installs the RmlUi overlay factory for every program.
+	foreach(t IN LISTS AllTargets)
+		if ( NOT ${t} STREQUAL gkNextEngine AND TARGET ${t} )
+			get_target_property(_ttype ${t} TYPE)
+			if ( _ttype STREQUAL "EXECUTABLE" )
+				target_link_libraries(${t} PRIVATE NextRmlUi)
+			endif()
+		endif()
+	endforeach()
+endif()
+if ( TARGET NextRemote )
+	if (GK_REMOTE_ENABLED)
+		target_link_libraries(NextRemote PRIVATE ${GK_REMOTE_LINK_LIBS})
+	endif()
+	# DesktopMain assembles the remote frame streamer for every program.
+	foreach(t IN LISTS AllTargets)
+		if ( NOT ${t} STREQUAL gkNextEngine AND NOT ${t} STREQUAL NextRemote AND TARGET ${t} )
+			get_target_property(_ttype ${t} TYPE)
+			if ( _ttype STREQUAL "EXECUTABLE" )
+				target_link_libraries(${t} PRIVATE NextRemote)
+			endif()
+		endif()
+	endforeach()
 endif()
 
 # Test Target

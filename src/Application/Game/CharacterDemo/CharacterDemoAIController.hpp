@@ -2,9 +2,9 @@
 
 #include "Engine/Common/CoreMinimal.hpp"
 #include "CharacterDemoConfig.hpp"
-#include "Engine/NextGameplay/AI/NavGrid.h"
-#include "Engine/NextGameplay/Character/CharacterActor.h"
-#include "Engine/NextGameplay/Components/AIAgentComponent.h"
+#include "Gameplay/AI/NavGrid.h"
+#include "Gameplay/Character/CharacterActor.h"
+#include "Gameplay/Components/AIAgentComponent.h"
 
 class CharacterDemoAIController
 {

@@ -31,11 +31,6 @@ namespace NextRenderer
                                                const VkPresentModeKHR presentMode, const bool enableValidationLayers);
 } // namespace NextRenderer
 
-namespace Runtime::Remote
-{
-    class RemoteServer;
-}
-
 typedef std::function<bool(double DeltaSeconds)> TickedTask;
 typedef std::function<bool()> DelayedTask;
 
@@ -110,15 +105,11 @@ public:
 
     // Runtime services
     NextUI::UserInterface* GetUserInterface() { return userInterface_.get(); }
-    NextUI::RmlUiSystem* GetRmlUi() { return rmlUi_.get(); }
+    Runtime::IUiOverlay* GetUiOverlay() { return uiOverlay_.get(); }
     NextAudio* GetAudio() { return services_.audio.get(); }
     const NextAudio* GetAudio() const { return services_.audio.get(); }
     NextLocalization* GetLocalization() { return services_.localization.get(); }
     const NextLocalization* GetLocalization() const { return services_.localization.get(); }
-    NextAI::FAIService* GetAIService() { return services_.aiService.get(); }
-    const NextAI::FAIService* GetAIService() const { return services_.aiService.get(); }
-    NextAI::VoiceInputService* GetVoiceInputService() { return services_.voiceInputService.get(); }
-    const NextAI::VoiceInputService* GetVoiceInputService() const { return services_.voiceInputService.get(); }
     NextCVar::FCVarSystem& GetCVarSystem() { return *services_.cvarSystem; }
     const NextCVar::FCVarSystem& GetCVarSystem() const { return *services_.cvarSystem; }
     QuickJSEngine* GetQuickJSEngine() { return services_.quickJSEngine.get(); }
@@ -177,6 +168,35 @@ public:
     void RegisterJSCallback(std::function<void(double)> callback);
     void AddTickedTask(TickedTask task) { taskQueues_.ticked.push_back(task); }
     void AddTimerTask(double delay, DelayedTask task);
+
+    // Developer debug UI hook (implementation lives in Modules/DevTools,
+    // registered by the application entry point; nullptr disables overlays)
+    void SetDebugUiProvider(Runtime::IDebugUiProvider* provider) { debugUiProvider_ = provider; }
+    Runtime::IDebugUiProvider* GetDebugUiProvider() const { return debugUiProvider_; }
+
+    // Frame streamer injection (implementation in Modules/NextRemote);
+    // assembled by the application entry when remote mode is requested.
+    void SetFrameStreamer(std::unique_ptr<Runtime::IFrameStreamer> streamer);
+
+    // Optional UI overlay (implementation in Modules/NextRmlUi); the factory is
+    // installed by the application entry and instantiated with the renderer.
+    void SetUiOverlayFactory(std::function<std::unique_ptr<Runtime::IUiOverlay>(NextEngine&)> factory)
+    {
+        uiOverlayFactory_ = std::move(factory);
+    }
+
+    // Type-erased service slots for optional modules (e.g. Modules/NextAI).
+    // Modules attach their engine-scoped singletons here so the core stays
+    // free of module types; lifetime ends with the engine.
+    void SetExternalService(const std::string& key, std::shared_ptr<void> service)
+    {
+        services_.externalServices[key] = std::move(service);
+    }
+    std::shared_ptr<void> GetExternalService(const std::string& key) const
+    {
+        auto it = services_.externalServices.find(key);
+        return it != services_.externalServices.end() ? it->second : nullptr;
+    }
 
 private:
     // Scene loading payload
@@ -293,14 +313,13 @@ private:
         ~FRuntimeServices();
 
         std::unique_ptr<NextLocalization> localization;
-        std::unique_ptr<NextAI::FAIService> aiService;
-        std::unique_ptr<NextAI::VoiceInputService> voiceInputService;
         std::unique_ptr<NextCVar::FCVarSystem> cvarSystem;
         std::unique_ptr<NextAudio> audio;
         std::unique_ptr<NextPhysics> physics;
         std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem;
         std::unique_ptr<QuickJSEngine> quickJSEngine;
         std::unique_ptr<Vulkan::ShaderHotReloader> shaderHotReloader;
+            std::unordered_map<std::string, std::shared_ptr<void>> externalServices;
     };
 
     // Core ownership
@@ -322,9 +341,11 @@ private:
 
     // Runtime services and UI
     std::unique_ptr<NextUI::UserInterface> userInterface_;
-    std::unique_ptr<NextUI::RmlUiSystem> rmlUi_;
-    std::unique_ptr<Runtime::Remote::RemoteServer> remoteServer_;
+    std::unique_ptr<Runtime::IUiOverlay> uiOverlay_;
+    std::function<std::unique_ptr<Runtime::IUiOverlay>(NextEngine&)> uiOverlayFactory_;
+    std::unique_ptr<Runtime::IFrameStreamer> frameStreamer_;
     FRuntimeServices services_{};
+    Runtime::IDebugUiProvider* debugUiProvider_ = nullptr;
 
     // Editor and tooling state
     Runtime::Command::CommandHistory commandHistory_{};

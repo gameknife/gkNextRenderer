@@ -799,8 +799,8 @@ namespace
         const char* secondaryText = KongLie3D::U8Text(u8"按 F3 切换渲染管线，体验光追画质");
         ImFont* primaryFont = KongLie3D::KongLieFonts::Title ? KongLie3D::KongLieFonts::Title : ImGui::GetFont();
         ImFont* secondaryFont = KongLie3D::KongLieFonts::Body ? KongLie3D::KongLieFonts::Body : ImGui::GetFont();
-        const float primarySize = primaryFont ? primaryFont->FontSize : 22.0f;
-        const float secondarySize = secondaryFont ? secondaryFont->FontSize : 18.0f;
+        const float primarySize = primaryFont ? primaryFont->LegacySize : 22.0f;
+        const float secondarySize = secondaryFont ? secondaryFont->LegacySize : 18.0f;
         const ImVec2 primaryTextSize = primaryFont->CalcTextSizeA(primarySize, FLT_MAX, 0.0f, primaryText);
         const ImVec2 secondaryTextSize = secondaryFont->CalcTextSizeA(secondarySize, FLT_MAX, 0.0f, secondaryText);
         const float centerX = viewport->Pos.x + viewport->Size.x * 0.5f;
@@ -1159,8 +1159,8 @@ namespace
 
         ImFont* bodyFont = KongLie3D::KongLieFonts::Body ? KongLie3D::KongLieFonts::Body : ImGui::GetFont();
         ImFont* titleFont = KongLie3D::KongLieFonts::Title ? KongLie3D::KongLieFonts::Title : ImGui::GetFont();
-        const float bodyFontSize = bodyFont ? bodyFont->FontSize : 18.0f;
-        const float titleFontSize = titleFont ? titleFont->FontSize : 32.0f;
+        const float bodyFontSize = bodyFont ? bodyFont->LegacySize : 18.0f;
+        const float titleFontSize = titleFont ? titleFont->LegacySize : 32.0f;
 
         if (state == KongLie3D::EBattleState::Deployment)
         {
@@ -1542,7 +1542,7 @@ namespace
                                                         : std::clamp((OvertimeBannerDurationMs - bannerElapsedMs) / 1000.0f, 0.0f, 1.0f);
             const char* text = KongLie3D::U8Text(u8"⚡ 加 时 ⚡");
             ImFont* bannerFont = KongLie3D::KongLieFonts::Title ? KongLie3D::KongLieFonts::Title : ImGui::GetFont();
-            const float bannerFontSize = bannerFont ? bannerFont->FontSize : ImGui::GetFontSize();
+            const float bannerFontSize = bannerFont ? bannerFont->LegacySize : ImGui::GetFontSize();
             const ImVec2 textSize = bannerFont->CalcTextSizeA(bannerFontSize, FLT_MAX, 0.0f, text);
             const ImVec2 textPos(viewport->Pos.x + (viewport->Size.x - textSize.x) * 0.5f,
                                  viewport->Pos.y + viewport->Size.y * 0.18f);
@@ -1639,7 +1639,7 @@ namespace
                                         ImGui::ColorConvertFloat4ToU32(ImVec4(borderColor.x, borderColor.y, borderColor.z, fade)));
 
             ImFont* bannerFont = KongLie3D::KongLieFonts::Display ? KongLie3D::KongLieFonts::Display : ImGui::GetFont();
-            const float bannerFontSize = bannerFont ? bannerFont->FontSize : 56.0f;
+            const float bannerFontSize = bannerFont ? bannerFont->LegacySize : 56.0f;
             const ImVec2 titleSize = bannerFont->CalcTextSizeA(bannerFontSize, FLT_MAX, 0.0f, title);
             const ImVec2 titlePos(bannerMin.x + (bannerMax.x - bannerMin.x - titleSize.x) * 0.5f,
                                   bannerMin.y + (Ui(90.0f) - titleSize.y) * 0.5f - Ui(4.0f));
@@ -1813,7 +1813,7 @@ namespace
             }
 
             ImFont* font = KongLie3D::KongLieFonts::Display ? KongLie3D::KongLieFonts::Display : ImGui::GetFont();
-            const float fontSize = font ? font->FontSize : 56.0f;
+            const float fontSize = font ? font->LegacySize : 56.0f;
             const ImVec2 textSize = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, presentation.title.c_str());
             const ImVec2 textPos(viewport->Pos.x + (viewport->Size.x - textSize.x) * 0.5f,
                                  viewport->Pos.y + viewport->Size.y * 0.22f);
@@ -1852,7 +1852,7 @@ namespace
 
         const char* text = KongLie3D::U8Text(u8"开战！");
         ImFont* font = KongLie3D::KongLieFonts::Display ? KongLie3D::KongLieFonts::Display : ImGui::GetFont();
-        const float fontSize = font ? font->FontSize : 56.0f;
+        const float fontSize = font ? font->LegacySize : 56.0f;
         const ImVec2 textSize = font->CalcTextSizeA(fontSize, FLT_MAX, 0.0f, text);
         const ImVec2 textPos(viewport->Pos.x + (viewport->Size.x - textSize.x) * 0.5f,
                              viewport->Pos.y + viewport->Size.y * 0.16f);

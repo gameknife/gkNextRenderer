@@ -168,6 +168,14 @@ namespace Assets
 
         void FreeMemory();
 
+        // Public factory for external mesh loaders (modules) that build models
+        // from raw vertex/index streams without friend access.
+        static Model CreateFromGeometry(const std::string& name, std::vector<Vertex>&& vertices,
+                                        std::vector<uint32_t>&& indices, bool needGenTSpace = true)
+        {
+            return Model(name, std::move(vertices), std::move(indices), needGenTSpace);
+        }
+
     private:
         Model(const std::string& name, std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, bool needGenTSpace = true);
 
@@ -191,6 +199,5 @@ namespace Assets
 
         friend class FProcModel;
         friend class FSceneLoader;
-        friend class FLDrawLoader;
     };
 }
