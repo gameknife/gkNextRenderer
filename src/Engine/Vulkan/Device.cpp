@@ -5,7 +5,7 @@
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Vulkan/RayTracing/DeviceProcedures.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Engine/Runtime/Remote/VulkanVideoCaps.hpp"
+#include "Engine/Vulkan/VulkanVideoCaps.hpp"
 #include <algorithm>
 #include <cstring>
 #include <set>

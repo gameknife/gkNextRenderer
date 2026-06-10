@@ -13,10 +13,12 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include "Modules/ScadLoader/ScadModule.hpp"
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
                                                          NextEngine* engine)
 {
+    Modules::Scad::Register();
     return std::make_unique<ScadStudioGameInstance>(config, options, engine);
 }
 

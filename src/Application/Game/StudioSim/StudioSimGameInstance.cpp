@@ -16,9 +16,11 @@
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Engine/Runtime/Subsystems/AIService.hpp"
+#include "Modules/NextAI/AIService.hpp"
 
 #include <nlohmann/json.hpp>
+#include "Modules/ScadLoader/ScadModule.hpp"
+#include "Modules/NextAI/NextAIModule.hpp"
 
 namespace
 {
@@ -672,6 +674,7 @@ namespace
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
                                                          NextEngine* engine)
 {
+    Modules::Scad::Register();
     return std::make_unique<StudioSimGameInstance>(config, options, engine);
 }
 
@@ -700,7 +703,7 @@ void StudioSimGameInstance::OnInit()
     // M4 self-test: switch to the local LLM and fire one async probe to confirm the
     // engine -> llama-server link before wiring up the decision scheduler.
     // Prefer the local llama-server for employee decisions.
-    if (auto* ai = GetEngine().GetAIService())
+    if (auto* ai = NextAI::GetAIService(GetEngine()))
     {
         const bool ok = ai->SwitchProvider(NextAI::EAIProviderType::LocalLlama);
         SPDLOG_INFO("StudioSim: SwitchProvider(LocalLlama) -> {} (provider='{}')", ok, ai->GetProviderName());
@@ -739,7 +742,7 @@ void StudioSimGameInstance::OnTick(double deltaSeconds)
         }
 
         // 晨会：等 LLM 给目标 → 玩家选/自定义 → 分解 → 开工（时钟暂停在 09:00）。
-        goalSystem_.Tick(GOption->AgentValidation ? nullptr : GetEngine().GetAIService(),
+        goalSystem_.Tick(GOption->AgentValidation ? nullptr : NextAI::GetAIService(GetEngine()),
                          employeeSystem_.EmployeesMutable());
         if (GOption->AgentValidation && goalSystem_.State() == StudioSim::GoalSystem::EState::AwaitingChoice &&
             !goalSystem_.Options().empty())
@@ -784,7 +787,7 @@ void StudioSimGameInstance::OnTick(double deltaSeconds)
                     SyncGameProjectProduction();
                 }
                 FinalizeProjectSettlement();
-                NextAI::FAIService* summaryAi = GOption->AgentValidation ? nullptr : GetEngine().GetAIService();
+                NextAI::FAIService* summaryAi = GOption->AgentValidation ? nullptr : NextAI::GetAIService(GetEngine());
                 goalSystem_.Summarize(summaryAi, employeeSystem_.EmployeesMutable(), gameProject_);
             }
         }
@@ -794,7 +797,7 @@ void StudioSimGameInstance::OnTick(double deltaSeconds)
             if (!IsAwaitingPlayerDecision())
             {
                 const double gatheringDeltaSeconds = GOption->AgentValidation ? deltaSeconds * 12.0 : deltaSeconds;
-                NextAI::FAIService* gatheringAi = GOption->AgentValidation ? nullptr : GetEngine().GetAIService();
+                NextAI::FAIService* gatheringAi = GOption->AgentValidation ? nullptr : NextAI::GetAIService(GetEngine());
                 gatheringSystem_.Tick(gatheringDeltaSeconds, worldState_, employeeSystem_.EmployeesMutable(),
                                       officeMap_, gameProject_, gatheringAi);
             }
@@ -816,7 +819,7 @@ void StudioSimGameInstance::OnTick(double deltaSeconds)
             }
             if (!IsPlayerDecisionFlowActive() && !IsAwaitingPlayerDecision() && !gatheringSystem_.HasActiveMeeting())
             {
-                NextAI::FAIService* decisionAi = GOption->AgentValidation ? nullptr : GetEngine().GetAIService();
+                NextAI::FAIService* decisionAi = GOption->AgentValidation ? nullptr : NextAI::GetAIService(GetEngine());
                 scheduler_.Tick(worldState_.gameClockMinutes, goalSystem_.Goal(), gameProject_,
                                 StudioSim::EventSystem::BuildSummary(worldState_), decisionAi,
                                 employeeSystem_.EmployeesMutable(), officeMap_);
@@ -826,7 +829,7 @@ void StudioSimGameInstance::OnTick(double deltaSeconds)
     else if (worldState_.phase == StudioSim::EDayPhase::Review)
     {
         // 收尾：排空 LLM 结算总结。
-        goalSystem_.Tick(GOption->AgentValidation ? nullptr : GetEngine().GetAIService(),
+        goalSystem_.Tick(GOption->AgentValidation ? nullptr : NextAI::GetAIService(GetEngine()),
                          employeeSystem_.EmployeesMutable());
         if (GOption->AgentValidation && !goalSystem_.Summary().empty())
         {
@@ -939,7 +942,7 @@ void StudioSimGameInstance::StartProjectPitch(StudioSim::EGameGenre genre, Studi
     gameProject_ = BuildProjectFromPitch(genre, theme, sizeTier, companyState_.projectIndex);
     productionSystem_.Reset();
     goalSystem_.Reset();
-    goalSystem_.BeginDay(GOption->AgentValidation ? nullptr : GetEngine().GetAIService());
+    goalSystem_.BeginDay(GOption->AgentValidation ? nullptr : NextAI::GetAIService(GetEngine()));
     goalMeetingStarted_ = false;
     customGoalBuf_[0] = '\0';
 
@@ -1170,7 +1173,7 @@ void StudioSimGameInstance::StartMeeting(const std::string& topic, double durati
         emp.nextDecisionAt = meeting_.endGameMinutes + 1.0;
     }
 
-    if (auto* ai = GetEngine().GetAIService())
+    if (auto* ai = NextAI::GetAIService(GetEngine()))
     {
         std::string attendees;
         for (const auto& emp : employeeSystem_.Employees())
@@ -1751,7 +1754,7 @@ void StudioSimGameInstance::DrawGoalChoiceModal()
         TextDisabledWrapped(options[i].description);
         if (ImGui::Button("选择此目标"))
         {
-            goalSystem_.ChooseGoal(static_cast<int>(i), GetEngine().GetAIService(),
+            goalSystem_.ChooseGoal(static_cast<int>(i), NextAI::GetAIService(GetEngine()),
                                    employeeSystem_.EmployeesMutable());
             ImGui::CloseCurrentPopup();
         }
@@ -1767,7 +1770,7 @@ void StudioSimGameInstance::DrawGoalChoiceModal()
     ImGui::SameLine();
     if (ImGui::Button("使用自定义", ImVec2(customButtonWidth, 0.0f)) && customGoalBuf_[0] != '\0')
     {
-        goalSystem_.ChooseCustom(customGoalBuf_, GetEngine().GetAIService(), employeeSystem_.EmployeesMutable());
+        goalSystem_.ChooseCustom(customGoalBuf_, NextAI::GetAIService(GetEngine()), employeeSystem_.EmployeesMutable());
         ImGui::CloseCurrentPopup();
     }
     ImGui::EndPopup();

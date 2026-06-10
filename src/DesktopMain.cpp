@@ -1,8 +1,11 @@
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Scene/GltfTestRunner.hpp"
+#include "Tests/GltfTestRunner.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
+#include "Modules/NextRemote/NextRemoteModule.hpp"
+#include "Modules/NextRmlUi/NextRmlUiModule.hpp"
 
 #if WIN32
 #include "ThirdParty/renderdoc/renderdoc_app.h"
@@ -83,7 +86,16 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     NextRenderer::PlatformInit();
         
     // Start the application.
+    // Create the DevTools provider first: its constructor attaches the console
+    // log sink so engine startup logs are captured.
+    Runtime::IDebugUiProvider& debugUiProvider = DevTools::DefaultDebugUiProvider();
     GApplication.reset( new NextEngine(*GOption) );
+    GApplication->SetDebugUiProvider(&debugUiProvider);
+    Modules::NextRmlUi::Install(*GApplication);
+    if (GOption->RemoteMode)
+    {
+        GApplication->SetFrameStreamer(Modules::NextRemote::CreateRemoteServer(*GOption));
+    }
 
     if (GOption->TestGltfRobustness)
     {

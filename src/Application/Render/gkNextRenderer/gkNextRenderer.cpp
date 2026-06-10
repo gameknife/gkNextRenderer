@@ -14,11 +14,11 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Editor/FontLoader.h"
-#include "Engine/Runtime/Editor/ProfessionalUI.hpp"
+#include "Modules/DevTools/ProfessionalUI.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.h"
 #include "Engine/Runtime/Utilities/NextEngineHelper.h"
-#include "Engine/Runtime/Utilities/GraphicsDebugPanel.hpp"
+#include "Modules/DevTools/GraphicsDebugPanel.hpp"
 #include "Engine/Utilities/Localization.hpp"
 #include "Engine/Utilities/ImGui.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.h"
@@ -29,6 +29,9 @@
 #include "Engine/Vulkan/Allocator.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/Device.hpp"
+#include "Modules/LDrawLoader/LDrawModule.hpp"
+#include "Modules/ScadLoader/ScadModule.hpp"
+#include "Application/Common/DemoScenes.hpp"
 
 extern float GAndroidMagicScale;
 
@@ -413,6 +416,9 @@ static void UpdateUiScaledMetrics()
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
 {
+    Modules::LDraw::Register();
+    Modules::Scad::Register();
+    AppCommon::RegisterDemoScenes();
     return std::make_unique<NextRendererGameInstance>(config, options, engine);
 }
 

@@ -11,7 +11,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Runtime/Subsystems/AIService.hpp"
+#include "Modules/NextAI/AIService.hpp"
 
 namespace StudioSim
 {

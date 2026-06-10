@@ -3,7 +3,7 @@
 #include "EditorActionDispatcher.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
-#include "Engine/Runtime/Editor/GizmoController.hpp"
+#include "Modules/DevTools/GizmoController.hpp"
 #include "Engine/Runtime/Camera/ModelViewController.hpp"
 
 #include <glm/glm.hpp>

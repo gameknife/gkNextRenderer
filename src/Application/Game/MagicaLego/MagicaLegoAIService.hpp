@@ -1,6 +1,6 @@
 #pragma once
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Runtime/Subsystems/AIService.hpp"
+#include "Modules/NextAI/AIService.hpp"
 #include <atomic>
 #include <functional>
 #include <glm/glm.hpp>

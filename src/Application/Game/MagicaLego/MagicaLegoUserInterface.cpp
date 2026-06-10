@@ -11,7 +11,6 @@
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Editor/FontLoader.h"
 #include "Engine/Runtime/Platform/PlatformCommon.h"
-#include "Engine/Runtime/Subsystems/VoiceInputService.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Utilities/ImGui.hpp"
@@ -1342,21 +1341,7 @@ void MagicaLegoUserInterface::DrawScriptLoadPopup()
 void MagicaLegoUserInterface::DrawAISection()
 {
     ImGui::Dummy(ImVec2(0, 5));
-    auto* voiceService = GetGameInstance()->GetEngine().GetVoiceInputService();
 
-    if (voiceService && voiceService->HasPendingResult())
-    {
-        auto voiceResult = voiceService->ConsumePendingResult();
-        if (voiceResult.success)
-        {
-            aiInput_ = voiceResult.text;
-        }
-        else
-        {
-            consoleOutput_.push_back(fmt::format("> [Voice] {}", voiceResult.message));
-            scrollToBottom_ = true;
-        }
-    }
 
     // Check for pending AI results
     if (aiService_ && aiService_->HasPendingResult())
@@ -1653,10 +1638,7 @@ void MagicaLegoUserInterface::DrawAISection()
 
     bool executeGenerate = false;
     const float inputHeight = 3 * ImGui::GetTextLineHeightWithSpacing();
-    const float micButtonWidth = 42.0f;
-    const float itemSpacing = ImGui::GetStyle().ItemSpacing.x;
-    float inputWidth = ImGui::GetContentRegionAvail().x - micButtonWidth - itemSpacing;
-    inputWidth = std::max(inputWidth, 100.0f);
+    float inputWidth = std::max(ImGui::GetContentRegionAvail().x, 100.0f);
 
     if (ImGui::InputTextMultiline("##AIInput", &aiInput_, ImVec2(inputWidth, inputHeight),
                                   ImGuiInputTextFlags_CtrlEnterForNewLine))
@@ -1667,55 +1649,6 @@ void MagicaLegoUserInterface::DrawAISection()
     if (ImGui::IsItemFocused() && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Enter))
     {
         executeGenerate = true;
-    }
-
-    ImGui::SameLine();
-    bool micEnabled = voiceService && voiceService->IsEnabled() && !voiceService->IsTranscribing();
-    if (!micEnabled)
-    {
-        ImGui::BeginDisabled();
-    }
-
-    ImGui::Button(ICON_FA_MICROPHONE, ImVec2(micButtonWidth, inputHeight));
-    if (voiceService)
-    {
-        if (ImGui::IsItemActivated())
-        {
-            if (!voiceService->BeginCapture())
-            {
-                consoleOutput_.push_back(fmt::format("> [Voice] {}", voiceService->GetStatusMessage()));
-                scrollToBottom_ = true;
-            }
-        }
-        if (ImGui::IsItemDeactivated() && voiceService->IsCapturing())
-        {
-            voiceService->EndCaptureAndTranscribeAsync();
-        }
-    }
-
-    if (ImGui::IsItemHovered())
-    {
-        if (!voiceService || !voiceService->IsEnabled())
-        {
-            ImGui::SetTooltip("%s", voiceService ? voiceService->GetStatusMessage().c_str() : "Voice input unavailable");
-        }
-        else if (voiceService->IsCapturing())
-        {
-            ImGui::SetTooltip("Release to transcribe");
-        }
-        else if (voiceService->IsTranscribing())
-        {
-            ImGui::SetTooltip("Transcribing...");
-        }
-        else
-        {
-            ImGui::SetTooltip("Hold to talk");
-        }
-    }
-
-    if (!micEnabled)
-    {
-        ImGui::EndDisabled();
     }
 
     // Build on existing toggle
@@ -1776,17 +1709,6 @@ void MagicaLegoUserInterface::DrawAISection()
         ImGui::EndDisabled();
     }
 
-    if (voiceService && voiceService->IsEnabled())
-    {
-        if (voiceService->IsCapturing())
-        {
-            ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.6f, 1.0f), ICON_FA_MICROPHONE " Recording...");
-        }
-        else if (voiceService->IsTranscribing())
-        {
-            ImGui::TextColored(ImVec4(0.9f, 0.8f, 0.4f, 1.0f), ICON_FA_SPINNER " Transcribing...");
-        }
-    }
 
     BUTTON_TOOLTIP(aiBuildOnExisting_
         ? LOCTEXT("AI will enhance your existing build based on the description (Ctrl+Enter)")

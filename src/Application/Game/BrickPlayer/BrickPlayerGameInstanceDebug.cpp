@@ -2,7 +2,7 @@
 #include "BrickPlayerSnapLogic.hpp"
 
 #include "Engine/Assets/Core/Node.h"
-#include "Engine/Assets/Loaders/FLDrawTypes.h"
+#include "Modules/LDrawLoader/FLDrawTypes.h"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Subsystems/NextPhysics.h"
 
