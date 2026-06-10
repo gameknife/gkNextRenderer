@@ -12,7 +12,6 @@
 #include "Engine/Runtime/Subsystems/QuickJSEngine.hpp"
 #include "Engine/Runtime/Subsystems/AIService.hpp"
 #include "Engine/Runtime/Subsystems/NextLocalization.h"
-#include "Engine/Runtime/Subsystems/VoiceInputService.hpp"
 #include "Engine/Runtime/Command/DeleteNodesCommand.hpp"
 #include "Engine/Runtime/Command/DuplicateNodesCommand.hpp"
 #include "Engine/Runtime/ScreenShot.hpp"
@@ -533,14 +532,6 @@ void NextEngine::Start()
 
     services_.audio = std::make_unique<NextAudio>();
     services_.audio->Start();
-
-    services_.voiceInputService = std::make_unique<NextAI::VoiceInputService>();
-    NextAI::FVoiceInputConfig voiceConfig;
-    if (services_.aiService)
-    {
-        services_.aiService->TryGetVoiceInputConfig(voiceConfig);
-    }
-    services_.voiceInputService->Initialize(voiceConfig);
 
     if (services_.quickJSEngine)
     {
