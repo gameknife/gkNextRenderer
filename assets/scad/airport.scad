@@ -4,19 +4,24 @@
 //   锚点 = 具名 user module，加载后节点名 = module 名，WorldTranslation = 点位坐标。
 //   锚点调用必须 translate(...) 在 rotate(...) 外层。
 //   锚点类别前缀（未来 AirportMap 按前缀归类）：
-//     entrance_<id>  航站楼出入口（旅客生成/离场点）×2
-//     checkin_<id>   人工值机柜台 ×4         kiosk_<id>   自助值机机 ×3
-//     security_<id>  安检通道（南进北出）×3   gate_<id>    登机口 ×4
-//     wait_<id>      候机排椅 ×6             cafe_<id>    咖啡店柜台 ×1
-//     shop_<id>      便利店收银 ×1           toilet_<id>  卫生间门（01=男 02=女）
-//     staff_<id>     员工办公桌 ×2           info_<id>    问询台 ×1
-//     atm_<id>       ATM ×1                  vending_<id> 自动售货机 ×3
+//     entrance_<id>  航站楼出入口（旅客生成/离场点）×3
+//     checkin_<id>   人工值机柜台 ×6         kiosk_<id>   自助值机机 ×4
+//     security_<id>  安检通道（南进北出）×4   gate_<id>    登机口 ×6
+//     wait_<id>      候机排椅 ×12            cafe_<id>    咖啡岛柜台 ×1
+//     food_<id>      快餐店柜台 ×1           shop_<id>    便利店收银 ×1
+//     book_<id>      书店收银 ×1             gift_<id>    礼品店收银 ×1
+//     toilet_<id>    卫生间门（01=男 02=女）  staff_<id>   员工办公桌 ×2
+//     info_<id>      问询台 ×1               atm_<id>     ATM ×1
+//     vending_<id>   自动售货机 ×5
 //   非锚点一律 wall_* / part_* / furn_* / prop_* / veh_* / ground_* 前缀。
 //   所有带朝向的 module 约定 front = -y；布局处 rotate 调整朝向，正面前方留行走净空。
 //
 // OpenSCAD Z-up；地面顶面 z = 0.15（与 office.scad / kGroundY 一致）。
-// 场地 56x46：航站楼 30x20（x∈[-16,14], y∈[-8,12]，玻璃幕墙、无顶棚切顶视角），
-// 北侧 y>12 停机坪（2 架客机 + 地勤车），南侧 y<-8 陆侧（人行道/马路/停车场/公交）。
+// 场地 84x80：航站楼 60x40（x∈[-30,30], y∈[-12,28]，玻璃幕墙、无顶棚切顶视角），
+// 北侧 y>28 停机坪（3 架客机 + 地勤车队），南侧 y<-12 陆侧（人行道/马路/停车场/公交）。
+// 室内分区：陆侧大厅（值机×6/自助值机/问询/ATM）→ 中部安检 ×4 → 空侧
+// 西餐饮区（BURGER 快餐 + COFFEE 咖啡岛）/ 东零售街（SHOP/BOOKS/GIFTS 三连铺）
+// → 北侧 6 登机口 + 双候机排椅集群；东北卫生间、东侧员工办公室。
 
 $fn = 16;
 
@@ -41,6 +46,9 @@ SIGNBLUE = [0.16, 0.32, 0.62];    // 标识蓝
 AIRBLUE  = [0.20, 0.40, 0.68];    // 设施蓝（柜台/kiosk）
 SEATBLUE = [0.28, 0.45, 0.72];    // 候机排椅
 BROWNC   = [0.48, 0.32, 0.20];    // 咖啡店墙
+TEALC    = [0.16, 0.62, 0.55];    // 礼品店
+REDFOOD  = [0.78, 0.25, 0.20];    // 快餐店
+SHOPWALL = [0.82, 0.81, 0.78];    // 零售街隔墙
 OAKC     = [0.78, 0.57, 0.34];
 PLANTC   = [0.34, 0.58, 0.31];
 PLANTDC  = [0.24, 0.45, 0.24];
@@ -53,16 +61,18 @@ function goods6(i) = i == 0 ? [0.80, 0.30, 0.28] : i == 1 ? [0.95, 0.72, 0.25] :
                    : i == 3 ? [0.45, 0.68, 0.38] : i == 4 ? [0.70, 0.45, 0.72] : [0.90, 0.88, 0.84];
 function carc5(i)  = i == 0 ? [0.75, 0.28, 0.24] : i == 1 ? [0.90, 0.90, 0.92] : i == 2 ? [0.60, 0.62, 0.66]
                    : i == 3 ? [0.22, 0.30, 0.45] : [0.85, 0.55, 0.25];
+function book5(i)  = i == 0 ? [0.62, 0.30, 0.26] : i == 1 ? [0.28, 0.45, 0.60] : i == 2 ? [0.80, 0.70, 0.45]
+                   : i == 3 ? [0.36, 0.55, 0.38] : [0.50, 0.38, 0.58];
 
 // ================= 地面 =================
-module ground_base() color(CONCC) cube([56, 46, 0.26], center = true);
+module ground_base() color(CONCC) translate([0, 7, 0]) cube([84, 80, 0.26], center = true);
 
-// 航站楼蓝色方块地毯（15x10 块 2x2，棋盘 + 少量深色点缀）
+// 航站楼蓝色方块地毯（30x20 块 2x2，棋盘 + 少量深色点缀）
 module ground_carpet()
 {
-    color(CARPETD) translate([-1, 2, 0.135]) cube([30, 20, 0.01], center = true);
-    for (ix = [0 : 14], iy = [0 : 9])
-        translate([-15 + ix * 2, -7 + iy * 2, 0.143])
+    color(CARPETD) translate([0, 8, 0.135]) cube([60, 40, 0.01], center = true);
+    for (ix = [0 : 29], iy = [0 : 19])
+        translate([-29 + ix * 2, -11 + iy * 2, 0.143])
             color(((ix * 7 + iy * 11) % 13 == 0) ? CARPETD : ((ix + iy) % 2 == 0) ? CARPETA : CARPETB)
                 cube([1.94, 1.94, 0.014], center = true);
 }
@@ -70,33 +80,37 @@ module ground_carpet()
 // 停机坪面板 + 接缝 + 黄/红标线
 module ground_apron()
 {
-    color(APRONC) translate([5, 17.5, 0.14]) cube([46, 11, 0.02], center = true);
-    color(APRONC) translate([21.1, 2, 0.14]) cube([13.8, 19.6, 0.02], center = true);   // 东侧服务区
-    for (ix = [0 : 9])
-        color([0.58, 0.58, 0.56]) translate([-13.4 + ix * 4.6, 17.5, 0.152]) cube([0.06, 11, 0.012], center = true);
-    color([0.58, 0.58, 0.56]) translate([5, 17.5, 0.152]) cube([46, 0.06, 0.012], center = true);
-    // 滑行引导黄线 + 机位线 + 红色边界线
-    color(YELLINE) translate([5, 20.8, 0.153]) cube([44, 0.14, 0.012], center = true);
-    color(YELLINE) translate([0.8, 18.0, 0.153]) cube([0.14, 5.6, 0.012], center = true);
-    color(YELLINE) translate([21.5, 18.6, 0.153]) cube([0.14, 4.4, 0.012], center = true);
-    color(REDLINE) translate([5, 12.7, 0.153]) cube([46, 0.10, 0.012], center = true);
+    color(APRONC) translate([6, 37, 0.14]) cube([72, 18, 0.02], center = true);
+    color(APRONC) translate([36, 8, 0.14]) cube([12, 40, 0.02], center = true);   // 东侧服务区
+    for (ix = [0 : 15])
+        color([0.58, 0.58, 0.56]) translate([-27 + ix * 4.5, 37, 0.152]) cube([0.06, 18, 0.012], center = true);
+    color([0.58, 0.58, 0.56]) translate([6, 37, 0.152]) cube([72, 0.06, 0.012], center = true);
+    // 滑行引导黄线 + 三机位引入线 + 红色边界线
+    color(YELLINE) translate([6, 43.5, 0.153]) cube([68, 0.14, 0.012], center = true);
+    color(YELLINE) translate([-14, 37, 0.153]) cube([0.14, 13, 0.012], center = true);
+    color(YELLINE) translate([8, 37.2, 0.153]) cube([0.14, 12.6, 0.012], center = true);
+    color(YELLINE) translate([27, 38.7, 0.153]) cube([0.14, 9.5, 0.012], center = true);
+    color(REDLINE) translate([6, 28.8, 0.153]) cube([72, 0.10, 0.012], center = true);
 }
 
 module ground_landside()
 {
-    color(PAVEC) translate([0, -9.4, 0.14]) cube([56, 2.8, 0.02], center = true);        // 人行道
-    color([0.45, 0.45, 0.44]) translate([0, -10.74, 0.155]) cube([56, 0.12, 0.03], center = true);  // 路缘
-    color(ROADC) translate([0, -13, 0.13]) cube([56, 4.4, 0.012], center = true);         // 马路
-    for (ix = [0 : 12])
-        color(WHITEC) translate([-26 + ix * 4.4, -13, 0.142]) cube([1.6, 0.14, 0.008], center = true);
-    for (i = [0 : 5])                                                                     // 入口前斑马线
-        color(WHITEC) translate([-13.6 + i * 0.62, -13, 0.144]) cube([0.42, 3.6, 0.008], center = true);
-    color(LOTC) translate([-14.3, -18.85, 0.13]) cube([23.4, 7.3, 0.012], center = true); // 停车场
-    for (i = [0 : 8])
-        color(WHITEC) translate([-25 + i * 2.7, -19.9, 0.142]) cube([0.08, 5.0, 0.008], center = true);
-    color(GRASSC) translate([12.7, -18.85, 0.145]) cube([30.6, 7.3, 0.022], center = true);  // 东南草地
-    color(GRASSC) translate([-22.2, 2, 0.145]) cube([11.6, 19.6, 0.022], center = true);     // 西侧草地
-    color(GRASSC) translate([-23, 17.5, 0.145]) cube([10, 11, 0.022], center = true);        // 西北草地
+    color(PAVEC) translate([0, -13.5, 0.14]) cube([84, 3.0, 0.02], center = true);        // 人行道
+    color([0.45, 0.45, 0.44]) translate([0, -14.97, 0.155]) cube([84, 0.12, 0.03], center = true);  // 路缘
+    color(ROADC) translate([0, -17.7, 0.13]) cube([84, 5.4, 0.012], center = true);        // 马路
+    for (ix = [0 : 18])
+        color(WHITEC) translate([-40 + ix * 4.4, -17.7, 0.142]) cube([1.6, 0.14, 0.008], center = true);
+    for (i = [0 : 6])                                                                      // 两处入口斑马线
+    {
+        color(WHITEC) translate([-19.9 + i * 0.62, -17.7, 0.144]) cube([0.42, 4.6, 0.008], center = true);
+        color(WHITEC) translate([-1.9 + i * 0.62, -17.7, 0.144]) cube([0.42, 4.6, 0.008], center = true);
+    }
+    color(LOTC) translate([-19, -25.7, 0.13]) cube([42, 10.6, 0.012], center = true);      // 停车场
+    for (i = [0 : 15])
+        color(WHITEC) translate([-38 + i * 2.4, -28.6, 0.142]) cube([0.08, 4.8, 0.008], center = true);
+    color(GRASSC) translate([23, -25.7, 0.145]) cube([38, 10.6, 0.022], center = true);    // 东南草地
+    color(GRASSC) translate([-36, 7.9, 0.145]) cube([12, 39.8, 0.022], center = true);     // 西侧草地
+    color(GRASSC) translate([-36, 37.5, 0.145]) cube([12, 19, 0.022], center = true);      // 西北草地
 }
 
 // ================= 玻璃幕墙 =================
@@ -301,17 +315,18 @@ module prop_fids()
     }
 }
 
-// 悬挂指示牌（双柱 + 蓝牌 + 文字 + 右向箭头）
-module prop_hang_sign(label = "ALL GATES")
+// 悬挂指示牌（双柱 + 色牌 + 文字 + 可选右向箭头）
+module prop_hang_sign(label = "ALL GATES", c = SIGNBLUE, arrow = true)
 {
     color(DARKMETC) for (sx = [-1, 1]) translate([1.30 * sx, 0.04, 1.30]) cube([0.07, 0.07, 2.60], center = true);
-    color(SIGNBLUE) translate([0, 0, 2.42]) cube([2.80, 0.10, 0.60], center = true);
+    color(c) translate([0, 0, 2.42]) cube([2.80, 0.10, 0.60], center = true);
     color(WHITEC) translate([-1.05, -0.055, 2.28]) rotate([90, 0, 0]) linear_extrude(0.03) text(label, size = 0.26);
-    color(WHITEC)
-    {
-        translate([1.02, -0.06, 2.48]) rotate([0, 45, 0]) cube([0.04, 0.012, 0.26], center = true);
-        translate([1.02, -0.06, 2.32]) rotate([0, -45, 0]) cube([0.04, 0.012, 0.26], center = true);
-    }
+    if (arrow)
+        color(WHITEC)
+        {
+            translate([1.02, -0.06, 2.48]) rotate([0, 45, 0]) cube([0.04, 0.012, 0.26], center = true);
+            translate([1.02, -0.06, 2.32]) rotate([0, -45, 0]) cube([0.04, 0.012, 0.26], center = true);
+        }
 }
 
 // 咖啡柜台：木柜 + 糕点柜 + 咖啡机 + 收银
@@ -337,7 +352,7 @@ module furn_cafe_counter()
     color([0.90, 0.60, 0.40]) translate([1.45, 0.12, 1.10]) cylinder(h = 0.26, r1 = 0.06, r2 = 0.045, $fn = 10);
 }
 
-module furn_cafe_table()
+module furn_cafe_table(c = BROWNC)
 {
     color(DARKMETC)
     {
@@ -348,7 +363,7 @@ module furn_cafe_table()
     for (a = [40, 220])
         rotate([0, 0, a]) translate([0, -0.62, 0])
         {
-            color(BROWNC)
+            color(c)
             {
                 for (sx = [-1, 1], sy = [-1, 1]) translate([0.14 * sx, 0.13 * sy, 0.21]) cube([0.04, 0.04, 0.42], center = true);
                 translate([0, 0, 0.43]) cube([0.36, 0.34, 0.04], center = true);
@@ -795,6 +810,152 @@ module prop_fence(len)
     color([0.70, 0.72, 0.75, 0.35]) translate([len / 2, 0, 0.72]) cube([len, 0.02, 0.80], center = true);
 }
 
+// 广告灯箱塔（双面彩屏）
+module prop_ad_totem(c = [0.90, 0.55, 0.25])
+{
+    color(DARKMETC) translate([0, 0, 0.06]) cube([0.90, 0.34, 0.12], center = true);
+    color(DARKMETC) translate([0, 0, 1.32]) cube([0.80, 0.16, 2.40], center = true);
+    for (sy = [-1, 1])
+    {
+        color(c) translate([0, 0.085 * sy, 1.60]) cube([0.66, 0.012, 1.50], center = true);
+        color(WHITEC) translate([0, 0.092 * sy, 1.18]) cube([0.50, 0.012, 0.14], center = true);
+        color(WHITEC) translate([0, 0.092 * sy, 2.05]) cube([0.42, 0.012, 0.20], center = true);
+    }
+}
+
+// 行李推车队（3 辆嵌套停放）
+module prop_trolley_row()
+{
+    for (i = [0 : 2])
+        translate([0, i * 0.42, 0])
+        {
+            color(METALC)
+            {
+                for (sx = [-1, 1]) translate([0.26 * sx, 0, 0.50]) cube([0.04, 0.66, 1.00], center = true);
+                translate([0, 0.30, 0.96]) cube([0.56, 0.05, 0.05], center = true);    // 推把
+                translate([0, -0.05, 0.32]) cube([0.52, 0.55, 0.04], center = true);   // 底篮
+            }
+            color(BLACKC) for (sx = [-1, 1], sy = [-1, 1])
+                translate([0.24 * sx, 0.25 * sy, 0.085]) rotate([90, 0, 0]) cylinder(h = 0.04, r = 0.085, $fn = 10, center = true);
+        }
+}
+
+// 书架（书店用，front = -y）
+module prop_bookshelf_tall()
+{
+    color([0.42, 0.30, 0.20])
+    {
+        for (sx = [-1, 1]) translate([0.50 * sx, 0, 1.0]) cube([0.06, 0.34, 2.0], center = true);
+        translate([0, 0.15, 1.0]) cube([1.06, 0.04, 2.0], center = true);
+        for (i = [0 : 3]) translate([0, 0, 0.04 + i * 0.63]) cube([1.00, 0.32, 0.05], center = true);
+        translate([0, 0, 1.975]) cube([1.06, 0.34, 0.05], center = true);
+    }
+    for (row = [0 : 2], i = [0 : 5])
+        color(book5((i + row * 2) % 5))
+            translate([-0.38 + i * 0.13, 0.03, 0.255 + row * 0.63 + ((i % 3 == 1) ? -0.02 : 0)])
+                cube([0.085, 0.22, (i % 3 == 1) ? 0.34 : 0.38], center = true);
+}
+
+// ================= 商店细化库（front = -y） =================
+// 快餐柜台：红色柜体 + 托盘滑轨 + 双收银 + 餐品 + 头顶菜单板（局部宽 5）
+module furn_food_counter()
+{
+    color(REDFOOD) translate([0, 0, 0.50]) cube([5.00, 0.65, 1.00], center = true);
+    color(WHITEC) translate([0, 0, 1.025]) cube([5.12, 0.72, 0.05], center = true);
+    color(METALC) translate([0, -0.42, 0.88]) cube([4.60, 0.06, 0.04], center = true);   // 托盘轨
+    color(METALC) for (sx = [-2.2, 0, 2.2]) translate([sx, -0.42, 0.70]) cube([0.05, 0.06, 0.36], center = true);
+    for (sx = [-1.4, 1.4])
+    {
+        color(BLACKC) translate([sx, 0.08, 1.05]) cube([0.30, 0.24, 0.05], center = true);
+        translate([sx, 0.18, 1.07]) rotate([0, 0, 180]) furn_monitor(SCREENC, 0.30);
+    }
+    // 餐品：汉堡 + 薯条盒 + 饮料杯 + 托盘
+    color([0.85, 0.62, 0.30]) translate([-0.35, -0.10, 1.05]) cylinder(h = 0.05, r = 0.09, $fn = 12);
+    color([0.55, 0.30, 0.16]) translate([-0.35, -0.10, 1.10]) cylinder(h = 0.04, r = 0.085, $fn = 12);
+    color([0.90, 0.72, 0.38]) translate([-0.35, -0.10, 1.14]) scale([1, 1, 0.55]) sphere(r = 0.09);
+    color(REDFOOD) translate([0.05, -0.12, 1.10]) cube([0.10, 0.10, 0.16], center = true);
+    color([0.95, 0.82, 0.35]) translate([0.05, -0.12, 1.17]) cube([0.07, 0.07, 0.10], center = true);
+    color([0.90, 0.30, 0.25]) translate([0.42, -0.08, 1.05]) cylinder(h = 0.16, r1 = 0.05, r2 = 0.065, $fn = 10);
+    color([0.62, 0.64, 0.66]) translate([0.0, -0.05, 1.045]) cube([0.85, 0.50, 0.015], center = true);
+    // 头顶菜单板
+    color(DARKMETC) for (sx = [-1.9, 1.9]) translate([sx, 0.15, 1.85]) cube([0.07, 0.07, 1.60], center = true);
+    for (i = [-1 : 1])
+    {
+        color([0.16, 0.13, 0.11]) translate([i * 1.45, 0.15, 2.30]) cube([1.32, 0.06, 0.80], center = true);
+        color((i == 0) ? [0.85, 0.62, 0.30] : (i < 0) ? [0.90, 0.30, 0.25] : [0.95, 0.82, 0.35])
+            translate([i * 1.45 - 0.30, 0.10, 2.42]) cube([0.45, 0.012, 0.40], center = true);
+        color([0.92, 0.85, 0.70]) translate([i * 1.45 + 0.32, 0.10, 2.46]) cube([0.50, 0.012, 0.07], center = true);
+        color([0.92, 0.85, 0.70]) translate([i * 1.45 + 0.30, 0.10, 2.28]) cube([0.46, 0.012, 0.07], center = true);
+        color([0.92, 0.85, 0.70]) translate([i * 1.45 + 0.33, 0.10, 2.10]) cube([0.40, 0.012, 0.07], center = true);
+    }
+}
+
+// 后厨条（贴墙）：钢制台 + 炸炉/扒炉 + 排烟罩
+module furn_kitchen_strip(len = 5)
+{
+    color(METALC) translate([0, 0.05, 0.45]) cube([len, 0.70, 0.90], center = true);
+    color([0.30, 0.32, 0.36])
+    {
+        translate([-len / 4, 0.0, 1.08]) cube([0.70, 0.55, 0.36], center = true);    // 炸炉
+        translate([len / 4, 0.0, 1.00]) cube([0.80, 0.55, 0.20], center = true);     // 扒炉
+    }
+    color([0.95, 0.70, 0.25]) translate([-len / 4 - 0.12, -0.18, 1.28]) cube([0.10, 0.04, 0.04], center = true);
+    color(METALC) translate([0, 0.10, 2.10]) cube([len * 0.7, 0.75, 0.45], center = true);   // 排烟罩
+    color([0.55, 0.58, 0.62]) translate([0, 0.10, 1.60]) cube([0.35, 0.45, 0.55], center = true); // 烟道
+}
+
+// 书店展台：矮桌 + 平摊书堆 + 立书
+module furn_book_table()
+{
+    color(OAKC) translate([0, 0, 0.70]) cube([1.50, 0.95, 0.06], center = true);
+    color([0.60, 0.42, 0.25]) for (sx = [-1, 1]) translate([0.65 * sx, 0, 0.34]) cube([0.08, 0.85, 0.68], center = true);
+    for (i = [0 : 2])
+        color(book5(i)) translate([-0.45 + i * 0.45, 0.18, 0.765 + (i == 1 ? 0.02 : 0)])
+            rotate([0, 0, i * 14 - 10]) cube([0.30, 0.40, 0.07 + i * 0.02], center = true);
+    for (i = [0 : 2])
+        color(book5(i + 2)) translate([-0.40 + i * 0.42, -0.24, 0.755]) rotate([0, 0, -i * 8]) cube([0.28, 0.38, 0.05], center = true);
+    color(book5(4)) translate([0.55, 0.10, 0.90]) rotate([78, 0, -15]) cube([0.26, 0.36, 0.03], center = true);
+}
+
+// 杂志架（斜板三层）
+module furn_mag_rack()
+{
+    color([0.60, 0.42, 0.25]) translate([0, 0.12, 0.80]) cube([1.20, 0.06, 1.60], center = true);
+    color([0.60, 0.42, 0.25]) for (sx = [-1, 1]) translate([0.60 * sx, 0, 0.80]) cube([0.05, 0.32, 1.60], center = true);
+    for (lv = [0 : 2])
+    {
+        color([0.70, 0.52, 0.33]) translate([0, -0.02, 0.40 + lv * 0.48]) rotate([16, 0, 0]) cube([1.12, 0.04, 0.34], center = true);
+        for (i = [0 : 3])
+            color(goods6((i + lv * 2 + 1) % 6))
+                translate([-0.41 + i * 0.27, -0.05, 0.43 + lv * 0.48]) rotate([16, 0, 0]) cube([0.22, 0.015, 0.30], center = true);
+    }
+}
+
+// 礼品展示柜：白基座 + 玻璃罩（items=false 时罩内留空，用于摆大件）
+module furn_display_case(items = true)
+{
+    color(WHITEC) translate([0, 0, 0.36]) cube([1.60, 0.70, 0.72], center = true);
+    color(GLASSC) translate([0, 0, 1.11]) cube([1.50, 0.60, 0.78], center = true);
+    color(METALC) translate([0, 0, 1.515]) cube([1.54, 0.64, 0.03], center = true);
+    if (items)
+    {
+        color(goods6(0)) translate([-0.45, 0.05, 0.82]) cube([0.18, 0.18, 0.20], center = true);
+        color(goods6(2)) translate([0.0, -0.08, 0.80]) cube([0.15, 0.15, 0.16], center = true);
+        color(goods6(4)) translate([0.40, 0.06, 0.84]) cube([0.16, 0.16, 0.24], center = true);
+        color([0.85, 0.75, 0.40]) translate([0.18, 0.14, 0.72]) cylinder(h = 0.22, r = 0.05, $fn = 10);
+    }
+}
+
+// 冰柜（卧式 + 玻璃顶）
+module furn_freezer_chest()
+{
+    color(WHITEC) translate([0, 0, 0.42]) cube([1.30, 0.68, 0.84], center = true);
+    color([0.55, 0.72, 0.85, 0.40]) translate([0, -0.05, 0.865]) cube([1.18, 0.50, 0.04], center = true);
+    for (i = [0 : 3])
+        color(goods6((i * 2 + 1) % 6)) translate([-0.42 + i * 0.28, -0.05, 0.74]) cube([0.20, 0.40, 0.10], center = true);
+    color(SIGNBLUE) translate([0, 0.345, 0.62]) cube([1.30, 0.012, 0.28], center = true);
+}
+
 // 室内玻璃隔断（员工办公室用，h2.4，可留门洞；同 office.scad）
 module part_glass_run(x0, x1)
 {
@@ -814,28 +975,44 @@ module part_glass_wall(len, g0 = -1, g1 = -1)
 // ================= 功能点位（锚点；translate 必须在 rotate 外层） =================
 module entrance_01() furn_entrance();
 module entrance_02() furn_entrance();
+module entrance_03() furn_entrance();
 module checkin_01() furn_checkin_desk("1");
 module checkin_02() furn_checkin_desk("2");
 module checkin_03() furn_checkin_desk("3");
 module checkin_04() furn_checkin_desk("4");
+module checkin_05() furn_checkin_desk("5");
+module checkin_06() furn_checkin_desk("6");
 module kiosk_01() furn_kiosk();
 module kiosk_02() furn_kiosk();
 module kiosk_03() furn_kiosk();
+module kiosk_04() furn_kiosk();
 module security_01() furn_security_lane();
 module security_02() furn_security_lane();
 module security_03() furn_security_lane();
+module security_04() furn_security_lane();
 module gate_01() furn_gate_door("GATE 1");
 module gate_02() furn_gate_door("GATE 2");
 module gate_03() furn_gate_door("GATE 3");
 module gate_04() furn_gate_door("GATE 4");
+module gate_05() furn_gate_door("GATE 5");
+module gate_06() furn_gate_door("GATE 6");
 module wait_01() furn_bench_row();
 module wait_02() furn_bench_row();
 module wait_03() furn_bench_row();
 module wait_04() furn_bench_row();
 module wait_05() furn_bench_row();
 module wait_06() furn_bench_row();
+module wait_07() furn_bench_row();
+module wait_08() furn_bench_row();
+module wait_09() furn_bench_row();
+module wait_10() furn_bench_row();
+module wait_11() furn_bench_row();
+module wait_12() furn_bench_row();
 module cafe_01() furn_cafe_counter();
+module food_01() furn_food_counter();
 module shop_01() furn_checkout();
+module book_01() furn_checkout();
+module gift_01() furn_checkout();
 module toilet_01() furn_wc_door(false);
 module toilet_02() furn_wc_door(true);
 module staff_01() furn_staff_desk();
@@ -845,6 +1022,8 @@ module atm_01() furn_atm();
 module vending_01() furn_vending([0.80, 0.30, 0.28]);
 module vending_02() furn_vending([0.25, 0.45, 0.75]);
 module vending_03() furn_vending([0.30, 0.60, 0.45]);
+module vending_04() furn_vending([0.90, 0.62, 0.20]);
+module vending_05() furn_vending([0.55, 0.45, 0.75]);
 
 // ======================== 布局 ========================
 FZ = 0.15;   // 地面顶面
@@ -854,190 +1033,311 @@ ground_carpet();
 ground_apron();
 ground_landside();
 
-// ---- 玻璃幕墙（南墙两处入口洞，北墙四处登机口洞） ----
-translate([-16, -8, FZ]) wall_glass_seg(2.4);
-translate([-10.6, -8, FZ]) wall_glass_seg(3.0);
-translate([-4.6, -8, FZ]) wall_glass_seg(18.6);
-translate([-16, 12, FZ]) wall_glass_seg(11.6);
-translate([-2.6, 12, FZ]) wall_glass_seg(3.2);
-translate([2.4, 12, FZ]) wall_glass_seg(3.2);
-translate([7.4, 12, FZ]) wall_glass_seg(3.2);
-translate([12.4, 12, FZ]) wall_glass_seg(1.6);
-translate([-16, -8, FZ]) rotate([0, 0, 90]) wall_glass_seg(20);
-translate([14, -8, FZ]) rotate([0, 0, 90]) wall_glass_seg(20);
-translate([-16, -8, 1.66 + FZ]) wall_corner_col();
-translate([-16, 12, 1.66 + FZ]) wall_corner_col();
-translate([14, 12, 1.66 + FZ]) wall_corner_col();
-translate([14, -8, 1.66 + FZ]) wall_corner_col();
+// ---- 玻璃幕墙（南墙三入口洞，北墙六登机口洞） ----
+translate([-30, -12, FZ]) wall_glass_seg(10.5);
+translate([-16.5, -12, FZ]) wall_glass_seg(15.0);
+translate([1.5, -12, FZ]) wall_glass_seg(11.0);
+translate([15.5, -12, FZ]) wall_glass_seg(14.5);
+translate([-30, 28, FZ]) wall_glass_seg(9.1);
+translate([-19.1, 28, FZ]) wall_glass_seg(6.2);
+translate([-11.1, 28, FZ]) wall_glass_seg(6.2);
+translate([-3.1, 28, FZ]) wall_glass_seg(6.2);
+translate([4.9, 28, FZ]) wall_glass_seg(6.2);
+translate([12.9, 28, FZ]) wall_glass_seg(6.2);
+translate([20.9, 28, FZ]) wall_glass_seg(9.1);
+translate([-30, -12, FZ]) rotate([0, 0, 90]) wall_glass_seg(40);
+translate([30, -12, FZ]) rotate([0, 0, 90]) wall_glass_seg(40);
+translate([-30, -12, 1.66 + FZ]) wall_corner_col();
+translate([-30, 28, 1.66 + FZ]) wall_corner_col();
+translate([30, 28, 1.66 + FZ]) wall_corner_col();
+translate([30, -12, 1.66 + FZ]) wall_corner_col();
 // 入口 + 大招牌
-translate([-12.1, -8, FZ]) entrance_01();
-translate([-6.1, -8, FZ]) entrance_02();
-translate([-12.1, -8.25, 3.70 + FZ]) prop_big_sign("AIRPORT");
+translate([-18, -12, FZ]) entrance_01();
+translate([0, -12, FZ]) entrance_02();
+translate([14, -12, FZ]) entrance_03();
+translate([-18, -12.25, 3.70 + FZ]) prop_big_sign("AIRPORT");
+translate([0, -12.25, 3.70 + FZ]) prop_big_sign("AIRPORT");
 
-// ---- 值机区（西北）：4 柜台 + 排队线 + 航显 ----
-translate([-14.2, 9.6, FZ]) checkin_01();
-translate([-12.2, 9.6, FZ]) checkin_02();
-translate([-10.2, 9.6, FZ]) checkin_03();
-translate([-8.2, 9.6, FZ]) checkin_04();
-translate([-15.2, 8.3, FZ]) prop_queue_line(6);
-translate([-15.2, 7.2, FZ]) prop_queue_line(6);
-translate([-11.2, 11.2, FZ]) prop_fids();
+// ---- 值机区（西北陆侧）：6 柜台 + 行李墙 + 排队线 + 航显 ----
+translate([-27.0, 1.2, FZ]) checkin_01();
+translate([-24.4, 1.2, FZ]) checkin_02();
+translate([-21.8, 1.2, FZ]) checkin_03();
+translate([-19.2, 1.2, FZ]) checkin_04();
+translate([-16.6, 1.2, FZ]) checkin_05();
+translate([-14.0, 1.2, FZ]) checkin_06();
+translate([-30, 4, FZ]) wall_solid_seg(19.2, [0.88, 0.87, 0.84]);
+translate([-10.8, 4, FZ]) wall_solid_seg(1.0, [0.88, 0.87, 0.84]);
+translate([-27.5, -0.6, FZ]) prop_queue_line(13);
+translate([-27.5, -1.8, FZ]) prop_queue_line(13);
+translate([-21, 3.3, FZ]) prop_fids();
 
 // ---- 自助值机（值机区东侧，面东） ----
-translate([-6.2, 8.8, FZ]) rotate([0, 0, 90]) kiosk_01();
-translate([-6.2, 7.4, FZ]) rotate([0, 0, 90]) kiosk_02();
-translate([-6.2, 6.0, FZ]) rotate([0, 0, 90]) kiosk_03();
+translate([-10.5, 0.6, FZ]) rotate([0, 0, 90]) kiosk_01();
+translate([-10.5, -0.8, FZ]) rotate([0, 0, 90]) kiosk_02();
+translate([-10.5, -2.2, FZ]) rotate([0, 0, 90]) kiosk_03();
+translate([-10.5, -3.6, FZ]) rotate([0, 0, 90]) kiosk_04();
 
-// ---- 安检区（中央，南进北出）：3 通道 + 排队线 + ALL GATES 牌 ----
-translate([-5.6, 4.0, FZ]) security_01();
-translate([-3.4, 4.0, FZ]) security_02();
-translate([-1.2, 4.0, FZ]) security_03();
-translate([-6.6, 2.2, FZ]) prop_queue_line(7);
-translate([-6.6, 1.2, FZ]) prop_queue_line(7);
-translate([-7.0, 5.5, FZ]) rotate([0, 0, 90]) prop_planter(2.4);
-translate([-2.9, 8.3, FZ]) prop_hang_sign("ALL GATES");
+// ---- 安检区（中央，南进北出）：4 通道 + 排队线 + 指示牌 + 东侧玻璃界墙 ----
+translate([-9.3, 4.6, FZ]) security_01();
+translate([-7.1, 4.6, FZ]) security_02();
+translate([-4.9, 4.6, FZ]) security_03();
+translate([-2.7, 4.6, FZ]) security_04();
+translate([-0.7, 4, FZ]) part_glass_wall(30.7, 24.7, 26.1);
+translate([-10.2, 2.6, FZ]) prop_queue_line(9);
+translate([-10.2, 1.5, FZ]) prop_queue_line(9);
+translate([-5.8, 0.6, FZ]) prop_hang_sign("DEPARTURES");
+translate([-5, 9.6, FZ]) prop_hang_sign("ALL GATES");
+translate([24.7, 4.4, FZ]) prop_hang_sign("EXIT", [0.22, 0.58, 0.35], false);
+translate([24.0, 3.0, FZ]) prop_stanchion();
+translate([25.4, 3.0, FZ]) prop_stanchion();
 
-// ---- 登机口（北墙 4 门） ----
-translate([-3.5, 11.6, FZ]) gate_01();
-translate([1.5, 11.6, FZ]) gate_02();
-translate([6.5, 11.6, FZ]) gate_03();
-translate([11.5, 11.6, FZ]) gate_04();
+// ---- 登机口（北墙 6 门） ----
+translate([-20, 27.6, FZ]) gate_01();
+translate([-12, 27.6, FZ]) gate_02();
+translate([-4, 27.6, FZ]) gate_03();
+translate([4, 27.6, FZ]) gate_04();
+translate([12, 27.6, FZ]) gate_05();
+translate([20, 27.6, FZ]) gate_06();
 
-// ---- 候机区（东侧）：6 组排椅 + 绿植隔断 + 售货机 ----
-translate([4.5, 4.5, FZ]) rotate([0, 0, 180]) wait_01();
-translate([8.0, 4.5, FZ]) rotate([0, 0, 180]) wait_02();
-translate([11.2, 4.5, FZ]) rotate([0, 0, 180]) wait_03();
-translate([4.5, 7.0, FZ]) rotate([0, 0, 180]) wait_04();
-translate([8.0, 7.0, FZ]) rotate([0, 0, 180]) wait_05();
-translate([11.2, 7.0, FZ]) rotate([0, 0, 180]) wait_06();
-translate([6.25, 5.75, FZ]) rotate([0, 0, 90]) prop_planter(1.6);
-translate([9.75, 5.75, FZ]) rotate([0, 0, 90]) prop_planter(1.6);
-translate([13.55, 4.4, FZ]) rotate([0, 0, -90]) vending_01();
-translate([13.55, 5.6, FZ]) rotate([0, 0, -90]) vending_02();
+// ---- 候机区（东西双集群 12 组排椅）+ 绿植 + 航显 ----
+translate([-22.0, 16.5, FZ]) rotate([0, 0, 180]) wait_01();
+translate([-18.6, 16.5, FZ]) rotate([0, 0, 180]) wait_02();
+translate([-15.2, 16.5, FZ]) rotate([0, 0, 180]) wait_03();
+translate([-22.0, 19.5, FZ]) rotate([0, 0, 180]) wait_04();
+translate([-18.6, 19.5, FZ]) rotate([0, 0, 180]) wait_05();
+translate([-15.2, 19.5, FZ]) rotate([0, 0, 180]) wait_06();
+translate([9.0, 16.5, FZ]) rotate([0, 0, 180]) wait_07();
+translate([12.4, 16.5, FZ]) rotate([0, 0, 180]) wait_08();
+translate([15.8, 16.5, FZ]) rotate([0, 0, 180]) wait_09();
+translate([9.0, 19.5, FZ]) rotate([0, 0, 180]) wait_10();
+translate([12.4, 19.5, FZ]) rotate([0, 0, 180]) wait_11();
+translate([15.8, 19.5, FZ]) rotate([0, 0, 180]) wait_12();
+translate([-18.6, 18.0, FZ]) prop_planter(2.4);
+translate([12.4, 18.0, FZ]) prop_planter(2.4);
+translate([1.0, 21.5, FZ]) prop_fids();
+translate([-6, 10.2, FZ]) prop_fids();
+translate([-29.55, 18.6, FZ]) rotate([0, 0, 90]) vending_03();
+translate([-29.5, 17.2, FZ]) rotate([0, 0, 90]) prop_fountain();
+translate([29.55, 11.4, FZ]) rotate([0, 0, -90]) vending_01();
+translate([29.55, 12.6, FZ]) rotate([0, 0, -90]) vending_02();
 
-// ---- 咖啡店（中西南）：棕墙 + 门头 + 柜台 + 桌椅 ----
-translate([-4.5, -6.45, FZ]) wall_solid_seg(5.0, BROWNC);
-translate([-4.45, -6.4, FZ]) rotate([0, 0, 90]) wall_solid_seg(4.2, BROWNC);
-translate([0.45, -6.4, FZ]) rotate([0, 0, 90]) wall_solid_seg(2.0, BROWNC);
-translate([-2.0, -2.3, FZ]) prop_shop_portal(5.0, "COFFEE", BROWNC);
-translate([-1.9, -4.7, FZ]) rotate([0, 0, 180]) cafe_01();
-translate([-2.6, -6.3, 1.75 + FZ]) rotate([0, 0, 180]) prop_menu_board();
-translate([-3.5, -3.3, FZ]) furn_cafe_table();
-translate([-1.0, -3.1, FZ]) rotate([0, 0, 70]) furn_cafe_table();
+// ---- 西餐饮区：BURGER 快餐（后厨 + 柜台 + 门头 + 6 桌）----
+translate([-27.6, 7, FZ]) rotate([0, 0, 90]) wall_solid_seg(6.4, [0.55, 0.35, 0.22]);
+translate([-29.3, 10.0, FZ]) rotate([0, 0, 90]) furn_kitchen_strip(5);
+translate([-26.8, 10.2, FZ]) rotate([0, 0, 90]) food_01();
+translate([-25.9, 10.2, FZ]) rotate([0, 0, 90]) prop_shop_portal(6.4, "BURGER", REDFOOD);
+translate([-23.0, 8.5, FZ]) furn_cafe_table(REDFOOD);
+translate([-19.6, 8.5, FZ]) rotate([0, 0, 55]) furn_cafe_table(REDFOOD);
+translate([-16.2, 8.5, FZ]) rotate([0, 0, -30]) furn_cafe_table(REDFOOD);
+translate([-23.0, 11.8, FZ]) rotate([0, 0, 90]) furn_cafe_table(REDFOOD);
+translate([-19.6, 11.8, FZ]) rotate([0, 0, -70]) furn_cafe_table(REDFOOD);
+translate([-16.2, 11.8, FZ]) rotate([0, 0, 20]) furn_cafe_table(REDFOOD);
+translate([-13.2, 10.0, FZ]) rotate([0, 0, 90]) prop_planter(3.0);
 
-// ---- 便利店（中南）：门头 + 收银 + 货架 + 冷柜 ----
-translate([4.5, -2.3, FZ]) prop_shop_portal(4.8, "SHOP", AIRBLUE);
-translate([2.9, -3.2, FZ]) rotate([0, 0, 180]) shop_01();
-translate([4.6, -4.4, FZ]) furn_gondola();
-translate([4.6, -5.9, FZ]) furn_gondola();
-translate([6.55, -4.2, FZ]) rotate([0, 0, -90]) furn_fridge_case([0.80, 0.30, 0.28]);
-translate([6.55, -5.3, FZ]) rotate([0, 0, -90]) furn_fridge_case([0.25, 0.45, 0.75]);
+// ---- 中央咖啡岛：柜台 + 吊牌 + 3 桌 ----
+translate([-7, 12.5, FZ]) cafe_01();
+translate([-7, 13.5, FZ]) prop_hang_sign("COFFEE", BROWNC, false);
+translate([-9.8, 14.8, FZ]) rotate([0, 0, 30]) furn_cafe_table();
+translate([-6.2, 15.4, FZ]) rotate([0, 0, -45]) furn_cafe_table();
+translate([-3.4, 13.6, FZ]) rotate([0, 0, 80]) furn_cafe_table();
 
-// ---- 卫生间（东南）：实墙围合 + 男/女门 + 饮水器 ----
-translate([8.6, -3.2, FZ]) wall_solid_seg(5.05);
-translate([8.6, -7.65, FZ]) wall_solid_seg(5.05);
-translate([13.65, -7.65, FZ]) rotate([0, 0, 90]) wall_solid_seg(4.45);
-translate([8.6, -3.8, FZ]) rotate([0, 0, 90]) wall_solid_seg(0.6);
-translate([8.6, -6.0, FZ]) rotate([0, 0, 90]) wall_solid_seg(1.1);
-translate([8.6, -7.65, FZ]) rotate([0, 0, 90]) wall_solid_seg(0.55);
-translate([8.6, -5.45, FZ]) wall_solid_seg(5.05);
-translate([8.6, -4.35, FZ]) rotate([0, 0, -90]) toilet_01();
-translate([8.6, -6.55, FZ]) rotate([0, 0, -90]) toilet_02();
-translate([9.0, -4.5, FZ]) furn_wc_interior();
-translate([13.25, -6.35, FZ]) rotate([0, 0, 180]) furn_wc_interior();
-translate([9.5, -2.95, FZ]) rotate([0, 0, 180]) prop_fountain();
-translate([7.7, -7.2, FZ]) rotate([0, 0, 180]) vending_03();
-translate([11.1, -3.1, 2.05 + FZ]) rotate([0, 0, 180]) prop_clock();
+// ---- 东零售街三连铺（front y=8.4，背墙 y=13.9） ----
+// SHOP 便利店 x∈[3,11]
+translate([3, 13.9, FZ]) wall_solid_seg(8.0, SHOPWALL);
+translate([3, 8.4, FZ]) rotate([0, 0, 90]) wall_solid_seg(5.5, SHOPWALL);
+translate([11, 8.4, FZ]) rotate([0, 0, 90]) wall_solid_seg(5.5, SHOPWALL);
+translate([7, 8.5, FZ]) prop_shop_portal(7.6, "SHOP", AIRBLUE);
+translate([4.4, 9.4, FZ]) rotate([0, 0, 180]) shop_01();
+translate([5.9, 10.8, FZ]) furn_gondola();
+translate([8.7, 10.8, FZ]) furn_gondola();
+translate([5.9, 12.3, FZ]) furn_gondola();
+translate([8.7, 12.3, FZ]) furn_gondola();
+translate([4.0, 13.4, FZ]) furn_fridge_case([0.80, 0.30, 0.28]);
+translate([5.1, 13.4, FZ]) furn_fridge_case([0.25, 0.45, 0.75]);
+translate([6.2, 13.4, FZ]) furn_fridge_case([0.30, 0.60, 0.45]);
+translate([9.9, 13.3, FZ]) furn_freezer_chest();
+translate([10.6, 9.6, FZ]) rotate([0, 0, -90]) furn_mag_rack();
+// BOOKS 书店 x∈[12,19]
+translate([12, 13.9, FZ]) wall_solid_seg(7.0, [0.62, 0.50, 0.38]);
+translate([12, 8.4, FZ]) rotate([0, 0, 90]) wall_solid_seg(5.5, [0.62, 0.50, 0.38]);
+translate([19, 8.4, FZ]) rotate([0, 0, 90]) wall_solid_seg(5.5, [0.62, 0.50, 0.38]);
+translate([15.5, 8.5, FZ]) prop_shop_portal(6.6, "BOOKS", BROWNC);
+translate([13.4, 9.4, FZ]) rotate([0, 0, 180]) book_01();
+translate([13.4, 13.45, FZ]) prop_bookshelf_tall();
+translate([14.5, 13.45, FZ]) prop_bookshelf_tall();
+translate([15.6, 13.45, FZ]) prop_bookshelf_tall();
+translate([16.7, 13.45, FZ]) prop_bookshelf_tall();
+translate([18.6, 10.6, FZ]) rotate([0, 0, -90]) prop_bookshelf_tall();
+translate([18.6, 12.0, FZ]) rotate([0, 0, -90]) prop_bookshelf_tall();
+translate([15.5, 11.0, FZ]) rotate([0, 0, 8]) furn_book_table();
+translate([12.4, 10.8, FZ]) rotate([0, 0, 90]) furn_mag_rack();
+// GIFTS 礼品店 x∈[20,28]
+translate([20, 13.9, FZ]) wall_solid_seg(8.0, TEALC);
+translate([20, 8.4, FZ]) rotate([0, 0, 90]) wall_solid_seg(5.5, TEALC);
+translate([28, 8.4, FZ]) rotate([0, 0, 90]) wall_solid_seg(5.5, TEALC);
+translate([24, 8.5, FZ]) prop_shop_portal(7.6, "GIFTS", TEALC);
+translate([21.4, 9.4, FZ]) rotate([0, 0, 180]) gift_01();
+translate([23.4, 11.2, FZ]) furn_display_case();
+translate([26.2, 11.2, FZ]) furn_display_case(false);
+translate([26.2, 11.2, 0.72 + FZ]) rotate([0, 0, -15]) scale([0.085, 0.085, 0.085])
+    veh_airliner([0.92, 0.78, 0.20], [0.78, 0.25, 0.20]);   // 玻璃罩里的飞机模型
+translate([24.8, 13.2, FZ]) furn_gondola();
+translate([21.2, 12.8, FZ]) furn_freezer_chest();
+translate([27.3, 9.8, FZ]) rotate([0, 0, -90]) furn_mag_rack();
 
-// ---- 员工办公室（东）：玻璃隔断 + 2 工位 + 机柜 ----
-translate([9.4, -1.6, FZ]) rotate([0, 0, 90]) part_glass_wall(4.2, 1.7, 2.9);
-translate([9.4, -1.6, FZ]) part_glass_wall(4.25);
-translate([9.4, 2.6, FZ]) part_glass_wall(4.25);
-translate([10.7, 1.35, FZ]) rotate([0, 0, 180]) staff_01();
-translate([12.4, 1.35, FZ]) rotate([0, 0, 180]) staff_02();
-translate([13.3, -0.9, FZ]) rotate([0, 0, -90]) prop_server_rack();
+// ---- 卫生间（东北空侧）：实墙围合 + 男/女门 + 室内 + 饮水器 ----
+translate([24, 22, FZ]) wall_solid_seg(6.0);
+translate([24, 16, FZ]) wall_solid_seg(6.0);
+translate([24, 19, FZ]) wall_solid_seg(6.0);
+translate([30, 16, FZ]) rotate([0, 0, 90]) wall_solid_seg(6.0);
+translate([24, 16, FZ]) rotate([0, 0, 90]) wall_solid_seg(0.85);
+translate([24, 17.95, FZ]) rotate([0, 0, 90]) wall_solid_seg(2.1);
+translate([24, 21.15, FZ]) rotate([0, 0, 90]) wall_solid_seg(0.85);
+translate([24, 17.4, FZ]) rotate([0, 0, -90]) toilet_01();
+translate([24, 20.6, FZ]) rotate([0, 0, -90]) toilet_02();
+translate([24.7, 17.6, FZ]) furn_wc_interior();
+translate([29.3, 20.4, FZ]) rotate([0, 0, 180]) furn_wc_interior();
+translate([25.0, 15.4, FZ]) prop_fountain();
 
-// ---- 入口大厅（西南）：问询台 + 航显 + ATM ----
-translate([-12.3, -4.2, FZ]) info_01();
-translate([-8.6, -4.9, FZ]) prop_fids();
-translate([-15.6, -5.6, FZ]) rotate([0, 0, 90]) atm_01();
+// ---- 员工办公室（东侧陆侧）：玻璃隔断 + 2 工位 + 机柜 ----
+translate([25, -6, FZ]) rotate([0, 0, 90]) part_glass_wall(5.0, 1.9, 3.1);
+translate([25, -6, FZ]) part_glass_wall(5.0);
+translate([25, -1, FZ]) part_glass_wall(5.0);
+translate([26.7, -2.4, FZ]) rotate([0, 0, 180]) staff_01();
+translate([28.7, -2.4, FZ]) rotate([0, 0, 180]) staff_02();
+translate([29.3, -5.2, FZ]) rotate([0, 0, -90]) prop_server_rack();
+
+// ---- 陆侧大厅：问询台 + 航显 + ATM + 售货机 + 长椅 ----
+translate([-2.5, -7.5, FZ]) info_01();
+translate([6.5, -7.0, FZ]) prop_fids();
+translate([-29.55, -7.0, FZ]) rotate([0, 0, 90]) atm_01();
+translate([29.55, -8.6, FZ]) rotate([0, 0, -90]) vending_04();
+translate([29.55, -9.8, FZ]) rotate([0, 0, -90]) vending_05();
+translate([10.0, -8.5, FZ]) furn_bench_row();
+translate([14.5, -8.5, FZ]) furn_bench_row();
 
 // ---- 室内点缀 ----
-translate([-5.4, 9.2, FZ]) prop_palm();
-translate([13.1, 9.3, FZ]) prop_palm();
-translate([1.0, 2.6, FZ]) prop_palm();
-translate([-14.7, -2.0, FZ]) prop_palm();
-translate([-6.9, -0.5, FZ]) prop_bins();
-translate([0.9, 9.2, FZ]) prop_bins();
-translate([7.7, -2.5, FZ]) prop_bins();
+translate([-28.5, -10.5, FZ]) prop_palm();
+translate([-8, -6, FZ]) prop_palm();
+translate([20, -7, FZ]) prop_palm();
+translate([28.3, -10.8, FZ]) prop_palm();
+translate([-24.5, 21.5, FZ]) prop_palm();
+translate([-12.8, 17.5, FZ]) prop_palm();
+translate([18.5, 22.0, FZ]) prop_palm();
+translate([1.5, 14.5, FZ]) prop_palm();
+translate([28.9, 6.2, FZ]) prop_palm();
+translate([-13.6, 15.6, FZ]) prop_bins();
+translate([7, 17, FZ]) prop_bins();
+translate([3, -9, FZ]) prop_bins();
+translate([-12, -5, FZ]) prop_bins();
+translate([19.5, 6.0, FZ]) prop_bins();
+// 广告灯箱 + 行李推车 + 登机口间绿植带（填充大空间）
+translate([0.8, 10.8, FZ]) rotate([0, 0, 90]) prop_ad_totem([0.90, 0.55, 0.25]);
+translate([-2.5, 21.0, FZ]) prop_ad_totem([0.30, 0.60, 0.80]);
+translate([20.5, 17.8, FZ]) rotate([0, 0, 90]) prop_ad_totem([0.45, 0.68, 0.38]);
+translate([8.0, -4.5, FZ]) rotate([0, 0, 90]) prop_ad_totem([0.70, 0.45, 0.72]);
+translate([-14.5, -7.5, FZ]) prop_ad_totem([0.25, 0.45, 0.75]);
+translate([-21.5, -10.2, FZ]) rotate([0, 0, 15]) prop_trolley_row();
+translate([17.0, -10.6, FZ]) rotate([0, 0, -75]) prop_trolley_row();
+translate([-16.0, 24.5, FZ]) prop_planter(3.0);
+translate([0.0, 24.5, FZ]) prop_planter(3.0);
+translate([16.0, 24.5, FZ]) prop_planter(3.0);
+translate([-26.5, 24.0, FZ]) prop_palm();
+translate([8.0, 23.0, FZ]) prop_palm();
+translate([26.5, 24.5, FZ]) prop_palm();
+translate([18.0, -7.2, FZ]) prop_fids();
+translate([5.5, 19.5, FZ]) prop_bins();
+translate([-25.5, 6.2, FZ]) prop_bins();
 
-// ---- 停机坪：客机 ×2 + 地勤车队 + 客梯 + 灯杆 + 风向袋 ----
-translate([0.8, 17.9, FZ]) rotate([0, 0, 174]) veh_airliner();
-translate([21.5, 17.3, FZ]) rotate([0, 0, -24]) scale([0.72, 0.72, 0.72])
+// ---- 停机坪：3 客机 + 双客梯 + 地勤车队 + 灯杆 + 风向袋 ----
+translate([-14, 36, FZ]) rotate([0, 0, 174]) veh_airliner();
+translate([8, 36.5, FZ]) rotate([0, 0, 188]) veh_airliner([0.94, 0.95, 0.96], [0.28, 0.58, 0.42]);
+translate([27, 34, FZ]) rotate([0, 0, -24]) scale([0.72, 0.72, 0.72])
     veh_airliner([0.92, 0.78, 0.20], [0.30, 0.34, 0.42]);
-translate([-3.1, 14.95, FZ]) veh_stairs_truck();
-translate([-8.2, 14.6, FZ]) rotate([0, 0, 195]) veh_baggage_tug();
-translate([-9.8, 14.15, FZ]) rotate([0, 0, 185]) veh_baggage_cart();
-translate([-11.4, 14.0, FZ]) rotate([0, 0, 178]) veh_baggage_cart([0.35, 0.55, 0.75], [0.72, 0.40, 0.26]);
-translate([7.2, 16.0, FZ]) rotate([0, 0, 8]) veh_fuel_truck();
-translate([-1.2, 14.4, FZ]) prop_cone();
-translate([5.0, 14.7, FZ]) prop_cone();
-translate([-5.9, 16.3, FZ]) prop_cone();
-translate([-13, 13.3, FZ]) prop_light_mast();
-translate([12, 13.3, FZ]) prop_light_mast();
-translate([24.5, 21.5, FZ]) prop_windsock();
+translate([-17.9, 33.1, FZ]) veh_stairs_truck();
+translate([4.35, 32.6, FZ]) veh_stairs_truck();
+translate([-22, 31.5, FZ]) rotate([0, 0, 195]) veh_baggage_tug();
+translate([-23.6, 31.0, FZ]) rotate([0, 0, 185]) veh_baggage_cart();
+translate([-25.1, 30.8, FZ]) rotate([0, 0, 176]) veh_baggage_cart([0.35, 0.55, 0.75], [0.72, 0.40, 0.26]);
+translate([12.5, 33.5, FZ]) rotate([0, 0, 10]) veh_fuel_truck();
+translate([-4, 30.6, FZ]) veh_taxi();
+translate([20, 30.2, FZ]) rotate([0, 0, 180]) veh_bus([0.90, 0.90, 0.92]);
+translate([-16, 31.8, FZ]) prop_cone();
+translate([2, 32, FZ]) prop_cone();
+translate([9.5, 33.2, FZ]) prop_cone();
+translate([-6, 30.2, FZ]) prop_cone();
+translate([-26, 29.6, FZ]) prop_light_mast();
+translate([-2, 29.6, FZ]) prop_light_mast();
+translate([22, 29.6, FZ]) prop_light_mast();
+translate([39, 43, FZ]) prop_windsock();
 
 // ---- 东侧服务区：集装箱 + 服务车 + 围栏 ----
-translate([17.2, -5.6, FZ]) prop_container();
-translate([18.9, -5.3, FZ]) rotate([0, 0, 12]) prop_container([0.62, 0.50, 0.36]);
-translate([17.6, -3.9, FZ]) rotate([0, 0, -6]) prop_container([0.40, 0.55, 0.62]);
-translate([16.5, 2.5, FZ]) rotate([0, 0, 90]) veh_car([0.90, 0.90, 0.92]);
-translate([14.2, -7.8, FZ]) prop_fence(13.8);
-translate([-28, 11.8, FZ]) prop_fence(12);
+translate([34, -7.5, FZ]) prop_container();
+translate([35.7, -7.2, FZ]) rotate([0, 0, 12]) prop_container([0.62, 0.50, 0.36]);
+translate([34.8, -5.8, FZ]) rotate([0, 0, -6]) prop_container([0.40, 0.55, 0.62]);
+translate([33.5, 4, FZ]) rotate([0, 0, 90]) veh_car([0.90, 0.90, 0.92]);
+translate([36, 14, FZ]) prop_light_mast();
+translate([30, -12, FZ]) prop_fence(12);
+translate([-42, 27.8, FZ]) prop_fence(12);
 
 // ---- 陆侧：候车亭 + 公交 + 出租 + 行道树/绿篱/路灯/长椅 ----
-translate([3.2, -9.7, FZ]) prop_bus_shelter();
-translate([3.6, -11.9, FZ]) rotate([0, 0, 180]) veh_bus();
-translate([-15.8, -11.9, FZ]) rotate([0, 0, 180]) veh_taxi();
-translate([9.0, -14.1, FZ]) veh_car([0.60, 0.62, 0.66]);
-translate([18.0, -11.9, FZ]) rotate([0, 0, 180]) veh_car([0.90, 0.90, 0.92]);
-translate([-22, -9.5, FZ]) prop_tree();
-translate([-17.5, -9.5, FZ]) prop_tree();
-translate([8.5, -9.5, FZ]) prop_tree();
-translate([13.5, -9.5, FZ]) prop_tree();
-translate([-14.9, -8.7, FZ]) prop_hedge();
-translate([-9.1, -8.7, FZ]) prop_hedge();
-translate([-2.0, -8.7, FZ]) prop_hedge();
-translate([5.8, -8.7, FZ]) prop_hedge();
-translate([10.5, -8.7, FZ]) prop_hedge();
-translate([-9.3, -8.85, FZ]) prop_bench_out();
-translate([0.2, -8.85, FZ]) prop_bench_out();
-translate([-25, -10.3, FZ]) rotate([0, 0, 180]) prop_lamp_post();
-translate([-14, -10.3, FZ]) rotate([0, 0, 180]) prop_lamp_post();
-translate([-2, -10.3, FZ]) rotate([0, 0, 180]) prop_lamp_post();
-translate([10, -10.3, FZ]) rotate([0, 0, 180]) prop_lamp_post();
-translate([20, -10.3, FZ]) rotate([0, 0, 180]) prop_lamp_post();
+translate([8, -13.7, FZ]) prop_bus_shelter();
+translate([8.4, -16.4, FZ]) rotate([0, 0, 180]) veh_bus();
+translate([-13.5, -16.4, FZ]) rotate([0, 0, 180]) veh_taxi();
+translate([-9, -16.4, FZ]) rotate([0, 0, 180]) veh_taxi();
+translate([15, -19.1, FZ]) veh_car([0.60, 0.62, 0.66]);
+translate([30, -16.4, FZ]) rotate([0, 0, 180]) veh_car([0.90, 0.90, 0.92]);
+translate([-30, -19.1, FZ]) veh_car([0.22, 0.30, 0.45]);
+translate([-36, -16.4, FZ]) rotate([0, 0, 180]) veh_car([0.85, 0.55, 0.25]);
+translate([-34, -13.9, FZ]) prop_tree();
+translate([-25, -13.9, FZ]) prop_tree();
+translate([-8, -13.9, FZ]) prop_tree();
+translate([20, -13.9, FZ]) prop_tree();
+translate([32, -13.9, FZ]) prop_tree();
+translate([-26, -12.7, FZ]) prop_hedge();
+translate([-9, -12.7, FZ]) prop_hedge();
+translate([6, -12.7, FZ]) prop_hedge();
+translate([20, -12.7, FZ]) prop_hedge();
+translate([26, -12.7, FZ]) prop_hedge();
+translate([-12, -13.0, FZ]) prop_bench_out();
+translate([3.5, -13.0, FZ]) prop_bench_out();
+translate([17.5, -13.0, FZ]) prop_bench_out();
+translate([-38, -15.7, FZ]) rotate([0, 0, 180]) prop_lamp_post();
+translate([-26, -15.7, FZ]) rotate([0, 0, 180]) prop_lamp_post();
+translate([-14, -15.7, FZ]) rotate([0, 0, 180]) prop_lamp_post();
+translate([2, -15.7, FZ]) rotate([0, 0, 180]) prop_lamp_post();
+translate([14, -15.7, FZ]) rotate([0, 0, 180]) prop_lamp_post();
+translate([26, -15.7, FZ]) rotate([0, 0, 180]) prop_lamp_post();
+translate([38, -15.7, FZ]) rotate([0, 0, 180]) prop_lamp_post();
 
-// ---- 停车场：5 辆车 + 道闸 + P 牌 ----
-translate([-23.65, -19.9, FZ]) rotate([0, 0, 90]) veh_car(carc5(0));
-translate([-18.25, -19.9, FZ]) rotate([0, 0, 90]) veh_car(carc5(3));
-translate([-15.55, -19.9, FZ]) rotate([0, 0, 90]) veh_car(carc5(1));
-translate([-10.15, -19.9, FZ]) rotate([0, 0, 90]) veh_car(carc5(4));
-translate([-4.75, -19.9, FZ]) rotate([0, 0, 90]) veh_car(carc5(2));
-translate([-3.2, -16.0, FZ]) rotate([0, 0, 180]) prop_barrier_gate();
-translate([-2.2, -16.4, FZ]) prop_p_sign();
+// ---- 停车场：7 辆车 + 道闸 + P 牌 ----
+translate([-36.8, -28.6, FZ]) rotate([0, 0, 90]) veh_car(carc5(0));
+translate([-32.0, -28.6, FZ]) rotate([0, 0, 90]) veh_car(carc5(3));
+translate([-29.6, -28.6, FZ]) rotate([0, 0, 90]) veh_car(carc5(1));
+translate([-22.4, -28.6, FZ]) rotate([0, 0, 90]) veh_car(carc5(4));
+translate([-17.6, -28.6, FZ]) rotate([0, 0, 90]) veh_car(carc5(2));
+translate([-10.4, -28.6, FZ]) rotate([0, 0, 90]) veh_car([0.45, 0.60, 0.42]);
+translate([-5.6, -28.6, FZ]) rotate([0, 0, 90]) veh_car(carc5(0));
+translate([1.2, -21.2, FZ]) prop_barrier_gate();
+translate([3.4, -22.3, FZ]) prop_p_sign();
 
 // ---- 东南草地 / 西侧花园 / 西北草地 ----
-translate([14, -17.5, FZ]) prop_tree();
-translate([19, -20, FZ]) prop_tree();
-translate([24, -16.5, FZ]) prop_tree();
-translate([27, -21, FZ]) prop_tree();
-translate([-24, 8, FZ]) prop_tree();
-translate([-20, 4, FZ]) prop_palm();
-translate([-19, -3.5, FZ]) prop_tree();
-translate([-22, -6.5, FZ]) prop_hedge();
-translate([-21, 10, FZ]) prop_hedge();
-translate([-24, 16, FZ]) prop_tree();
-translate([-21, 20, FZ]) prop_tree();
-translate([-26, 21, FZ]) prop_tree();
-translate([-20, 14.5, FZ]) prop_tree();
+translate([10, -27, FZ]) prop_tree();
+translate([16, -24, FZ]) prop_tree();
+translate([24, -28.5, FZ]) prop_tree();
+translate([32, -23.5, FZ]) prop_tree();
+translate([38, -29, FZ]) prop_tree();
+translate([12, -21.2, FZ]) prop_hedge();
+translate([22, -21.2, FZ]) prop_hedge();
+translate([34, -21.2, FZ]) prop_hedge();
+translate([-36, -6, FZ]) prop_tree();
+translate([-38, 4, FZ]) prop_tree();
+translate([-35, 14, FZ]) prop_tree();
+translate([-37, 22, FZ]) prop_tree();
+translate([-33, 0, FZ]) prop_palm();
+translate([-36, -10, FZ]) prop_hedge();
+translate([-34, 8, FZ]) prop_hedge();
+translate([-36, 32, FZ]) prop_tree();
+translate([-39, 38, FZ]) prop_tree();
+translate([-33, 42, FZ]) prop_tree();
+translate([-37, 45, FZ]) prop_tree();
