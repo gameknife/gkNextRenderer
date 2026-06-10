@@ -19,6 +19,7 @@
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Runtime/DebugUiProvider.hpp"
+#include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/Instance.hpp"
 #include "Engine/Vulkan/SyncAndTiming.hpp"
@@ -252,12 +253,6 @@ namespace NextRenderer
 
 namespace
 {
-    struct SceneTaskContext
-    {
-        bool success;
-        float elapsed;
-        std::array<char, 256> outputInfo;
-    };
 } // namespace
 
 Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options& options)
@@ -507,6 +502,19 @@ void NextEngine::Start()
     { OnRendererPostRender(commandBuffer, imageIndex); };
 
     renderer_->Start();
+
+    // Assets layer hooks (GlobalTexturePool must not depend on Runtime).
+    if (auto* texturePool = Assets::GlobalTexturePool::GetInstance())
+    {
+        texturePool->SetHdrStreamingPolicy([this]() { return config_.userSettings.StreamHDRTextures; });
+        texturePool->SetHdrShUpdatedCallback([this]()
+        {
+            if (scene_)
+            {
+                scene_->UpdateHDRSH();
+            }
+        });
+    }
     auto resolvedRendererType = ResolveRendererType(
         renderer_->CurrentLogicRendererType(), renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget());
     if (resolvedRendererType != renderer_->CurrentLogicRendererType())
@@ -1496,298 +1504,6 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
     }
 }
 
-void NextEngine::OnKey(SDL_Event& event)
-{
-    if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat)
-    {
-        const SDL_Keymod modifiers = SDL_GetModState();
-#if __APPLE__
-        const bool hasCommand = (modifiers & SDL_KMOD_GUI) != 0;
-        if (hasCommand && event.key.key == SDLK_Q)
-        {
-            RequestClose();
-            return;
-        }
-#endif
-
-        const bool altPressed = (modifiers & SDL_KMOD_ALT) != 0;
-        const bool isAltEnter =
-            altPressed && (event.key.key == SDLK_RETURN || event.key.key == SDLK_KP_ENTER);
-        const bool isF11 = event.key.key == SDLK_F11;
-
-        if (isAltEnter || isF11)
-        {
-            if (services_.cvarSystem)
-            {
-                auto result = services_.cvarSystem->ExecuteCommand("cvar.toggle sys.fullscreen");
-                if (!result.success)
-                {
-                    ToggleBorderlessFullscreen();
-                }
-            }
-            else
-            {
-                ToggleBorderlessFullscreen();
-            }
-            return;
-        }
-    }
-
-    if (userInterface_->WantsToCaptureKeyboard() || (uiOverlay_ && uiOverlay_->WantsToCaptureKeyboard()))
-    {
-        return;
-    }
-
-    if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat)
-    {
-        if (debugUiProvider_ && debugUiProvider_->HandleRendererShortcut(event.key.key, true,
-                                                                         config_.showFlags.DebugGraphicsPanel, *this))
-        {
-            return;
-        }
-
-        if (HandleDebugShortcut(event.key.key))
-        {
-            return;
-        }
-    }
-
-    if (event.type == SDL_EVENT_KEY_DOWN)
-    {
-        const SDL_Keymod modifiers = SDL_GetModState();
-        const bool hasCtrlOrCmd = (modifiers & (SDL_KMOD_CTRL | SDL_KMOD_GUI)) != 0;
-        if (hasCtrlOrCmd)
-        {
-            const bool hasShift = (modifiers & SDL_KMOD_SHIFT) != 0;
-            std::vector<uint32_t> selectedIds;
-            const auto& currentSelection = GetScene().GetSelectedIds();
-            selectedIds.reserve(currentSelection.size() + 1);
-            for (uint32_t id : currentSelection)
-            {
-                selectedIds.push_back(id);
-            }
-            if (selectedIds.empty())
-            {
-                const uint32_t selectedId = GetScene().GetSelectedId();
-                if (selectedId != static_cast<uint32_t>(-1))
-                {
-                    selectedIds.push_back(selectedId);
-                }
-            }
-
-            if (event.key.key == SDLK_Z)
-            {
-                if (hasShift)
-                {
-                    if (commandHistory_.Redo())
-                    {
-                        return;
-                    }
-                }
-                else
-                {
-                    if (commandHistory_.Undo())
-                    {
-                        return;
-                    }
-                }
-            }
-            else if (event.key.key == SDLK_Y)
-            {
-                if (commandHistory_.Redo())
-                {
-                    return;
-                }
-            }
-            else if (event.key.key == SDLK_D)
-            {
-                if (!selectedIds.empty())
-                {
-                    auto command = std::make_unique<Runtime::Command::DuplicateNodesCommand>(GetScene(), selectedIds);
-                    if (commandHistory_.Execute(std::move(command)))
-                    {
-                        return;
-                    }
-                }
-            }
-        }
-
-        if (event.key.key == SDLK_DELETE || event.key.key == SDLK_BACKSPACE)
-        {
-            std::vector<uint32_t> selectedIds;
-            const auto& currentSelection = GetScene().GetSelectedIds();
-            selectedIds.reserve(currentSelection.size() + 1);
-            for (uint32_t id : currentSelection)
-            {
-                selectedIds.push_back(id);
-            }
-            if (selectedIds.empty())
-            {
-                const uint32_t selectedId = GetScene().GetSelectedId();
-                if (selectedId != static_cast<uint32_t>(-1))
-                {
-                    selectedIds.push_back(selectedId);
-                }
-            }
-
-            if (!selectedIds.empty())
-            {
-                auto command = std::make_unique<Runtime::Command::DeleteNodesCommand>(GetScene(), selectedIds);
-                if (commandHistory_.Execute(std::move(command)))
-                {
-                    return;
-                }
-            }
-        }
-    }
-
-    if (gameInstance_->OnKey(event))
-    {
-        return;
-    }
-
-    if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat)
-    {
-        if (debugUiProvider_ && debugUiProvider_->HandleViewModeShortcut(
-                event.key.key, true, config_.showFlags.DebugGraphicsPanel, config_.showFlags))
-        {
-            return;
-        }
-    }
-}
-
-bool NextEngine::HandleDebugShortcut(SDL_Keycode key)
-{
-    struct FDebugShortcutOps
-    {
-        std::function<bool()> IsActive;
-        std::function<void(bool)> SetActive;
-    };
-
-    if (key < SDLK_F1 || key > SDLK_F10)
-    {
-        return false;
-    }
-
-    std::optional<FDebugShortcutOps> shortcutOps;
-    switch (key)
-    {
-    case SDLK_F1:
-        shortcutOps = FDebugShortcutOps{
-            .IsActive = [this]() { return config_.showFlags.DebugPhysicsOverlay; },
-            .SetActive = [this](bool active) { config_.showFlags.DebugPhysicsOverlay = active; },
-        };
-        break;
-    case SDLK_F2:
-        shortcutOps = FDebugShortcutOps{
-            .IsActive = [this]() { return config_.showFlags.DebugGraphicsPanel; },
-            .SetActive = [this](bool active) { config_.showFlags.DebugGraphicsPanel = active; },
-        };
-        break;
-    case SDLK_F3:
-        shortcutOps = FDebugShortcutOps{
-            .IsActive = [this]() { return config_.showFlags.DebugProfileOverlay; },
-            .SetActive = [this](bool active) { config_.showFlags.DebugProfileOverlay = active; },
-        };
-        break;
-    default:
-        if (gameInstance_ && gameInstance_->SupportsAppDebugShortcut(key))
-        {
-            shortcutOps = FDebugShortcutOps{
-                .IsActive = [this, key]() { return gameInstance_->IsAppDebugShortcutActive(key); },
-                .SetActive = [this, key](bool active) { (void)gameInstance_->SetAppDebugShortcutActive(key, active); },
-            };
-        }
-        break;
-    }
-
-    if (!shortcutOps.has_value())
-    {
-        return false;
-    }
-
-    const bool isActive = shortcutOps->IsActive();
-    const bool engineOwnsShortcut = key == SDLK_F1 || key == SDLK_F2 || key == SDLK_F3;
-
-    if (engineOwnsShortcut)
-    {
-        config_.showFlags.DebugPhysicsOverlay = false;
-        config_.showFlags.DebugGraphicsPanel = false;
-        config_.showFlags.DebugProfileOverlay = false;
-        if (!isActive)
-        {
-            shortcutOps->SetActive(true);
-        }
-        return true;
-    }
-
-    shortcutOps->SetActive(!isActive);
-    return true;
-}
-
-void NextEngine::OnTouch(bool down, double xpos, double ypos)
-{
-    // OnMouseButton(GLFW_MOUSE_BUTTON_RIGHT, down ? GLFW_PRESS : GLFW_RELEASE, 0);
-}
-
-void NextEngine::OnTouchMove(double xpos, double ypos) { OnCursorPosition(xpos, ypos); }
-
-void NextEngine::OnCursorPosition(const double xpos, const double ypos)
-{
-    if (!renderer_->HasSwapChain() || userInterface_->WantsToCaptureKeyboard() ||
-        userInterface_->WantsToCaptureMouse() || (uiOverlay_ && (uiOverlay_->WantsToCaptureKeyboard() || uiOverlay_->WantsToCaptureMouse())))
-    {
-        return;
-    }
-
-    if (gameInstance_->OnCursorPosition(xpos, ypos))
-    {
-        return;
-    }
-}
-
-void NextEngine::OnMouseButton(SDL_Event& event)
-{
-    if (!renderer_->HasSwapChain() || userInterface_->WantsToCaptureMouse() || (uiOverlay_ && uiOverlay_->WantsToCaptureMouse()))
-    {
-        return;
-    }
-
-    if (gameInstance_->OnMouseButton(event))
-    {
-        return;
-    }
-}
-
-void NextEngine::OnScroll(const double xoffset, const double yoffset)
-{
-    if (!renderer_->HasSwapChain() || userInterface_->WantsToCaptureMouse() || (uiOverlay_ && uiOverlay_->WantsToCaptureMouse()))
-    {
-        return;
-    }
-
-    gameInstance_->OnScroll(xoffset, yoffset);
-}
-
-void NextEngine::OnDropFile(const char* dropPath)
-{
-    const std::string path(dropPath);
-    const std::filesystem::path droppedPath(path);
-
-    if (Runtime::Scene::SceneList::IsSupportedScenePath(droppedPath))
-    {
-        RequestLoadScene({.filename = path});
-        return;
-    }
-
-    std::string ext = droppedPath.has_extension() ? droppedPath.extension().string() : std::string();
-    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-    if (ext == ".hdr")
-    {
-        uint32_t newTextureId = Assets::GlobalTexturePool::GetInstance()->LoadHDRTexture(path);
-        scene_->GetEnvSettings().SkyIdx = newTextureId;
-    }
-}
 void NextEngine::TickAgentValidation()
 {
     // Only act once a scene is live and rendering. GetTotalFrames() resets to 0 on every scene
@@ -1830,166 +1546,9 @@ void NextEngine::TickAgentValidation()
     }
 }
 
-void NextEngine::TickGamepadInput()
-{
-    int gamepadCount = 0;
-    SDL_JoystickID* gamepads = SDL_GetGamepads(&gamepadCount);
-
-    if (gamepadCount > 0)
-    {
-        SDL_Gamepad* masterGamepad = SDL_GetGamepadFromID(*gamepads);
-
-        gameInstance_->OnGamepadInput(SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_LEFTX),
-                                      SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_LEFTY),
-                                      SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_RIGHTX),
-                                      SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_RIGHTY),
-                                      SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER),
-                                      SDL_GetGamepadAxis(masterGamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER));
-    }
-
-    SDL_free(gamepads);
-}
-
 void NextEngine::OnRendererBeforeNextFrame()
 {
     SCOPED_CPU_TIMER("task coordinator");
     Tasks::TaskCoordinator::GetInstance()->Tick();
 }
 
-void NextEngine::RequestLoadScene(FSceneLoadRequest request)
-{
-    AddTickedTask(
-        [this, request = std::move(request)](double deltaSeconds) -> bool
-        {
-            if (status_ != NextRenderer::EApplicationStatus::Running)
-            {
-                return false;
-            }
-
-            LoadScene(request);
-            return true;
-        });
-}
-
-void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<void(SceneLoadContext&)> onGpuLoad)
-{
-    // wait all task finish
-    Tasks::TaskCoordinator::GetInstance()->CancelAllParralledTasks();
-    Tasks::TaskCoordinator::GetInstance()->WaitForAllParralledTask();
-
-    status_ = NextRenderer::EApplicationStatus::Loading;
-
-    SceneLoadContext ctx;
-    ctx.models = std::make_shared<std::vector<Assets::Model>>();
-    ctx.nodes = std::make_shared<std::vector<std::shared_ptr<Assets::Node>>>();
-    ctx.materials = std::make_shared<std::vector<Assets::FMaterial>>();
-    ctx.lights = std::make_shared<std::vector<Assets::LightObject>>();
-    ctx.tracks = std::make_shared<std::vector<Assets::AnimationTrack>>();
-    ctx.skeletons = std::make_shared<std::vector<Assets::Skeleton>>();
-    ctx.cameraState = std::make_shared<Assets::EnvironmentSetting>();
-
-    // dispatch in thread task and reset in main thread
-    Tasks::TaskCoordinator::GetInstance()->AddTask(
-        [ctx, sceneFileName](Tasks::ResTask& task)
-        {
-            SceneTaskContext taskContext{};
-            const auto timer = std::chrono::high_resolution_clock::now();
-
-            taskContext.success = Runtime::Scene::SceneList::LoadScene(sceneFileName, *ctx.cameraState, *ctx.nodes, *ctx.models,
-                                                       *ctx.materials, *ctx.lights, *ctx.tracks, *ctx.skeletons);
-
-            taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
-                                      std::chrono::high_resolution_clock::now() - timer)
-                                      .count();
-
-            std::string info =
-                fmt::format("parsed scene [{}] on cpu in {:.2f}ms",
-                            std::filesystem::path(sceneFileName).filename().string(), taskContext.elapsed * 1000.f);
-            std::copy(info.begin(), info.end(), taskContext.outputInfo.data());
-            task.SetContext(taskContext);
-        },
-        [this, ctx, sceneFileName, onGpuLoad](Tasks::ResTask& task) mutable
-        {
-            SceneTaskContext taskContext{};
-            task.GetContext(taskContext);
-            if (taskContext.success)
-            {
-                SPDLOG_INFO("{}", taskContext.outputInfo.data());
-
-                renderer_->Device().WaitIdle();
-                renderer_->DeleteSwapChain();
-
-                // Execute the specific GPU load logic
-                onGpuLoad(ctx);
-
-                frameState_.totalFrames = 0;
-                renderer_->OnPostLoadScene();
-                renderer_->CreateSwapChain();
-            }
-            else
-            {
-                SPDLOG_ERROR("failed to load scene [{}]", std::filesystem::path(sceneFileName).filename().string());
-            }
-
-            status_ = NextRenderer::EApplicationStatus::Running;
-        },
-        1);
-}
-
-void NextEngine::LoadScene(const FSceneLoadRequest& request)
-{
-    if (!request.append)
-    {
-        scene_->CleanUp();
-        services_.physics->OnSceneDestroyed();
-        Assets::GlobalTexturePool::GetInstance()->FreeTransientTextures();
-    }
-
-    LaunchLoadSceneTask(
-        request.filename,
-        [this, request](SceneLoadContext& ctx)
-        {
-            const auto timer = std::chrono::high_resolution_clock::now();
-            renderer_->OnPreLoadScene();
-            gameInstance_->BeforeSceneRebuild(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
-
-            if (!request.append)
-            {
-                scene_->GetEnvSettings().Reset();
-                scene_->SetEnvSettings(*ctx.cameraState);
-                gameInstance_->OnSceneUnloaded();
-                services_.physics->OnSceneStarted();
-
-                scene_->Reload(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
-                scene_->PostLoad(*ctx.skeletons);
-                scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->SupportsRayTracing());
-                renderer_->SetScene(scene_);
-
-                config_.userSettings.CameraIdx = 0;
-                assert(!scene_->GetEnvSettings().cameras.empty());
-                scene_->SetRenderCamera(scene_->GetEnvSettings().cameras[0]);
-                gameInstance_->OnSceneLoaded();
-            }
-            else
-            {
-                std::string name = std::filesystem::path(request.filename).stem().string();
-                std::shared_ptr<Assets::Node> rootNode =
-                    scene_->Append(name, *ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks,
-                                   *ctx.skeletons);
-                if (request.placeOnHit && rootNode)
-                {
-                    rootNode->SetTranslation(request.hitPosition);
-                }
-                scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->SupportsRayTracing());
-                renderer_->SetScene(scene_);
-            }
-
-            const float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
-                                      std::chrono::high_resolution_clock::now() - timer)
-                                      .count();
-            SPDLOG_INFO("uploaded scene [{}] to gpu in {:.2f}ms",
-                        std::filesystem::path(request.filename).filename().string(), elapsed * 1000.f);
-        });
-}
-
-void NextEngine::InitPhysics() {}
