@@ -63,6 +63,20 @@ file(GLOB_RECURSE src_files_nextgameplay
     "Engine/NextGameplay/*.h"
 )
 
+# --- Optional Engine Modules (src/Modules/<Name>, one static library each) ---
+set(GK_MODULE_NAMES LDrawLoader ScadLoader NextAI NextRemote NextRmlUi DevTools)
+foreach(gk_module IN LISTS GK_MODULE_NAMES)
+    file(GLOB_RECURSE src_files_module_${gk_module}
+        "Modules/${gk_module}/*.cpp"
+        "Modules/${gk_module}/*.hpp"
+        "Modules/${gk_module}/*.h"
+    )
+endforeach()
+set(src_files_modules_all "")
+foreach(gk_module IN LISTS GK_MODULE_NAMES)
+    list(APPEND src_files_modules_all ${src_files_module_${gk_module}})
+endforeach()
+
 # --- Editor ---
 file(GLOB_RECURSE src_files_editor "Application/Editor/gkNextEditor/*")
 

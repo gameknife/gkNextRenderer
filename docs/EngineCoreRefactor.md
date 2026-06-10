@@ -252,7 +252,7 @@ src/
 
 | 时间 | Phase | gnb loc (src/Engine 纯代码) | 备注 |
 |---|---|---:|---|
-| 基线 | Phase 0 | （待填） | |
+| 2026-06-10 | Phase 0 基线 | 55,279 | 290 文件；含 NextGameplay 2,217（Phase 1 移出）。`gnb loc` 非注释非空行口径 |
 
 ---
 
