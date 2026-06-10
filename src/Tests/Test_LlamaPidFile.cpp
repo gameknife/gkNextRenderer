@@ -1,6 +1,6 @@
 #include <catch2/catch_all.hpp>
 
-#include "Engine/Runtime/Subsystems/AI/LlamaPidFile.hpp"
+#include "Modules/NextAI/AI/LlamaPidFile.hpp"
 
 using namespace NextAI;
 

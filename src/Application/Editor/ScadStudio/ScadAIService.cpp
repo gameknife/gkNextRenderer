@@ -1,7 +1,7 @@
 #include "ScadAIService.hpp"
 
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Subsystems/AIService.hpp"
+#include "Modules/NextAI/AIService.hpp"
 
 #include <spdlog/spdlog.h>
 
@@ -9,6 +9,7 @@
 #include <cctype>
 #include <sstream>
 #include <thread>
+#include "Modules/NextAI/NextAIModule.hpp"
 
 namespace ScadStudio
 {
@@ -101,7 +102,7 @@ namespace ScadStudio
     ScadAIService::ScadAIService(NextEngine& engine)
         : engine_(engine)
     {
-        if (auto* ai = engine_.GetAIService())
+        if (auto* ai = NextAI::GetAIService(engine_))
         {
             ai->LoadConfig();
         }
@@ -109,19 +110,19 @@ namespace ScadStudio
 
     bool ScadAIService::IsConfigured() const
     {
-        auto* ai = engine_.GetAIService();
+        auto* ai = NextAI::GetAIService(engine_);
         return ai && ai->IsConfigured();
     }
 
     std::string ScadAIService::ProviderName() const
     {
-        auto* ai = engine_.GetAIService();
+        auto* ai = NextAI::GetAIService(engine_);
         return ai ? ai->GetProviderName() : std::string("None");
     }
 
     NextAI::EAIProviderType ScadAIService::ProviderType() const
     {
-        auto* ai = engine_.GetAIService();
+        auto* ai = NextAI::GetAIService(engine_);
         return ai ? ai->GetProviderType() : NextAI::EAIProviderType::Gemini;
     }
 
@@ -132,13 +133,13 @@ namespace ScadStudio
 
     bool ScadAIService::IsProviderConfigured(NextAI::EAIProviderType type) const
     {
-        auto* ai = engine_.GetAIService();
+        auto* ai = NextAI::GetAIService(engine_);
         return ai && ai->IsProviderConfigured(type);
     }
 
     bool ScadAIService::SwitchProvider(NextAI::EAIProviderType type)
     {
-        auto* ai = engine_.GetAIService();
+        auto* ai = NextAI::GetAIService(engine_);
         if (!ai || !ai->SwitchProvider(type))
         {
             return false;
@@ -149,19 +150,19 @@ namespace ScadStudio
 
     std::vector<std::string> ScadAIService::CurrentProviderModels() const
     {
-        auto* ai = engine_.GetAIService();
+        auto* ai = NextAI::GetAIService(engine_);
         return ai ? ai->GetProviderModels(ai->GetProviderType()) : std::vector<std::string>{};
     }
 
     std::string ScadAIService::CurrentModel() const
     {
-        auto* ai = engine_.GetAIService();
+        auto* ai = NextAI::GetAIService(engine_);
         return ai ? ai->GetCurrentModel() : std::string();
     }
 
     bool ScadAIService::SetCurrentModel(const std::string& model)
     {
-        auto* ai = engine_.GetAIService();
+        auto* ai = NextAI::GetAIService(engine_);
         return ai && ai->SetCurrentModel(model);
     }
 
@@ -315,7 +316,7 @@ namespace ScadStudio
         const FScadEditScope& editScope,
         const std::string& instruction)
     {
-        auto* ai = engine_.GetAIService();
+        auto* ai = NextAI::GetAIService(engine_);
         if (!ai || !ai->IsConfigured())
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -350,7 +351,7 @@ namespace ScadStudio
 
         std::thread([this, request = std::move(request)]() mutable
         {
-            auto* svc = engine_.GetAIService();
+            auto* svc = NextAI::GetAIService(engine_);
             NextAI::FChatResponse response = svc->ChatStream(request, [this](const std::string& delta)
             {
                 std::lock_guard<std::mutex> lock(mutex_);

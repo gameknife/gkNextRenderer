@@ -1,7 +1,7 @@
 #include <catch2/catch_all.hpp>
 #include <nlohmann/json.hpp>
 
-#include "Engine/Runtime/Subsystems/AI/AIChat.hpp"
+#include "Modules/NextAI/AI/AIChat.hpp"
 
 using json = nlohmann::json;
 using namespace NextAI;
