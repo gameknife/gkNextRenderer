@@ -26,10 +26,12 @@
 #include "Modules/DevTools/PhysicsDebugOverlay.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
+#include "CharacterPlaygroundScene.hpp"
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
                                                          NextEngine* engine)
 {
+    RegisterCharacterPlaygroundScene();
     return std::make_unique<CharacterDemoGameInstance>(config, options, engine);
 }
 

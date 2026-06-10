@@ -1,6 +1,6 @@
 #include <catch2/catch_all.hpp>
 
-#include "Engine/Assets/Loaders/FLDrawConfig.h"
+#include "Modules/LDrawLoader/FLDrawConfig.h"
 
 #include <chrono>
 #include <filesystem>

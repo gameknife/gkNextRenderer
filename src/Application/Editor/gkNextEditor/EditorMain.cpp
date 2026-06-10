@@ -16,10 +16,16 @@
 #include "Engine/Runtime/Command/DuplicateNodesCommand.hpp"
 
 #include <spdlog/spdlog.h>
+#include "Modules/LDrawLoader/LDrawModule.hpp"
+#include "Modules/ScadLoader/ScadModule.hpp"
+#include "Application/Common/DemoScenes.hpp"
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
                                                          NextEngine* engine)
 {
+    Modules::LDraw::Register();
+    Modules::Scad::Register();
+    AppCommon::RegisterDemoScenes();
     return std::make_unique<EditorGameInstance>(config, options, engine);
 }
 

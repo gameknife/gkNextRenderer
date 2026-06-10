@@ -19,6 +19,7 @@
 #include "Engine/Runtime/Subsystems/AIService.hpp"
 
 #include <nlohmann/json.hpp>
+#include "Modules/ScadLoader/ScadModule.hpp"
 
 namespace
 {
@@ -672,6 +673,7 @@ namespace
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
                                                          NextEngine* engine)
 {
+    Modules::Scad::Register();
     return std::make_unique<StudioSimGameInstance>(config, options, engine);
 }
 

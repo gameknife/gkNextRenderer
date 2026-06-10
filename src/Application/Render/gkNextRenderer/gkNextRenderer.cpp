@@ -29,6 +29,9 @@
 #include "Engine/Vulkan/Allocator.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/Device.hpp"
+#include "Modules/LDrawLoader/LDrawModule.hpp"
+#include "Modules/ScadLoader/ScadModule.hpp"
+#include "Application/Common/DemoScenes.hpp"
 
 extern float GAndroidMagicScale;
 
@@ -413,6 +416,9 @@ static void UpdateUiScaledMetrics()
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
 {
+    Modules::LDraw::Register();
+    Modules::Scad::Register();
+    AppCommon::RegisterDemoScenes();
     return std::make_unique<NextRendererGameInstance>(config, options, engine);
 }
 
