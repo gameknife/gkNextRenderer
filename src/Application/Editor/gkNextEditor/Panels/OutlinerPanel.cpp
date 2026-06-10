@@ -9,7 +9,7 @@
 #include "Engine/Runtime/Command/DeleteNodesCommand.hpp"
 #include "Engine/Runtime/Command/RenameNodeCommand.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Editor/ProfessionalUI.hpp"
+#include "Modules/DevTools/ProfessionalUI.hpp"
 
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include <imgui_stdlib.h>

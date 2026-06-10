@@ -6,7 +6,7 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "EditorActionDispatcher.hpp"
 #include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Editor/ProfessionalUI.hpp"
+#include "Modules/DevTools/ProfessionalUI.hpp"
 #include "Modules/DevTools/GizmoController.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.h"

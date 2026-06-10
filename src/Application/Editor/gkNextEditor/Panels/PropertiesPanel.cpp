@@ -8,7 +8,7 @@
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 #include "Engine/Runtime/Command/RenameNodeCommand.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Editor/ProfessionalUI.hpp"
+#include "Modules/DevTools/ProfessionalUI.hpp"
 #include "Engine/Runtime/Reflection/PropertyAccessor.h"
 
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"

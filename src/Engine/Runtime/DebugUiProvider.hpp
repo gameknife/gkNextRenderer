@@ -6,6 +6,8 @@
 
 #include <SDL3/SDL_keycode.h>
 
+union SDL_Event;
+
 namespace Runtime
 {
     // Hook interface for developer debug UI (overlays, panels and their
@@ -24,5 +26,18 @@ namespace Runtime
         virtual bool HandleRendererShortcut(SDL_Keycode key, bool pressed, bool panelVisible, NextEngine& engine) = 0;
         virtual bool HandleViewModeShortcut(SDL_Keycode key, bool pressed, bool panelVisible,
                                             Runtime::Config::ShowFlags& showFlags) = 0;
+
+        // ImGui style applied when the core UI backend initializes; default keeps
+        // the stock ImGui style.
+        virtual void ApplyUiStyle() {}
+
+        // Per-frame developer panels (statistics overlay, console). Called from
+        // the core ImGui backend inside the frame.
+        virtual void DrawUiPanels(NextEngine& engine, const NextUI::Statistics& statistics,
+                                  VulkanGpuTimer* gpuTimer, bool suppressStatsOverlay) {}
+
+        // First-chance UI event hook (e.g. grave-key console toggle); return
+        // true to consume the event before ImGui sees it.
+        virtual bool HandleUiEvent(const SDL_Event& event) { return false; }
     };
 }

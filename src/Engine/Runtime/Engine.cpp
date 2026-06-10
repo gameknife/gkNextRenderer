@@ -15,7 +15,6 @@
 #include "Engine/Runtime/Command/DuplicateNodesCommand.hpp"
 #include "Engine/Runtime/ScreenShot.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Engine/Runtime/Editor/ConsoleLogBuffer.hpp"
 #include "Engine/Runtime/UiOverlay.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
@@ -345,7 +344,6 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     android_logger->critical("Use \"adb shell logcat\" to view this message.");
     spdlog::set_default_logger(android_logger);
 #endif
-    Runtime::Editor::AttachConsoleLogSinkToDefaultLogger();
 
     SPDLOG_INFO("---- Next Engine Initializing...");
     spdlog::stopwatch stopwatch;

@@ -3,6 +3,9 @@
 #include "Modules/DevTools/GraphicsDebugPanel.hpp"
 #include "Modules/DevTools/PhysicsDebugOverlay.hpp"
 #include "Modules/DevTools/ProfileDebugOverlay.hpp"
+#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Modules/DevTools/ConsoleLogBuffer.hpp"
+#include "Modules/DevTools/UiDevPanels.hpp"
 
 namespace DevTools
 {
@@ -11,6 +14,34 @@ namespace DevTools
         class FDebugUiProvider final : public Runtime::IDebugUiProvider
         {
         public:
+            FDebugUiProvider()
+            {
+                // Capture logs into the console buffer from the moment the
+                // provider exists (the entry point creates it before the engine).
+                Runtime::Editor::AttachConsoleLogSinkToDefaultLogger();
+            }
+
+            void ApplyUiStyle() override
+            {
+                NextUI::Theme::ApplyProfessionalTheme();
+            }
+
+            void DrawUiPanels(NextEngine& engine, const NextUI::Statistics& statistics,
+                              VulkanGpuTimer* gpuTimer, bool suppressStatsOverlay) override
+            {
+                FUiDevPanels& panels = FUiDevPanels::Get();
+                if (!suppressStatsOverlay)
+                {
+                    panels.DrawOverlay(statistics, gpuTimer);
+                }
+                panels.RenderConsoleOverlay();
+            }
+
+            bool HandleUiEvent(const SDL_Event& event) override
+            {
+                return FUiDevPanels::Get().HandleEvent(event);
+            }
+
             void DrawPhysicsOverlay(const Assets::Scene& scene, const Assets::Camera& camera) override
             {
                 Runtime::DrawPhysicsDebugOverlay(scene, camera);
