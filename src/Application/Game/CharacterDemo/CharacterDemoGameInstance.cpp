@@ -10,9 +10,9 @@
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Loaders/FProcModel.h"
 #include "Engine/Assets/Loaders/FSceneLoader.h"
-#include "Engine/NextGameplay/Gameplay/GameplayMath.hpp"
-#include "Engine/NextGameplay/Reflection/GameplayReflectionRegistry.h"
-#include "Engine/NextGameplay/Utilities/SceneNodeUtils.hpp"
+#include "Gameplay/Gameplay/GameplayMath.hpp"
+#include "Gameplay/Reflection/GameplayReflectionRegistry.h"
+#include "Gameplay/Utilities/SceneNodeUtils.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
@@ -23,7 +23,7 @@
 #include "Engine/Runtime/Scene/NodeUtils.h"
 #include "Engine/Runtime/Scene/SceneBuilder.h"
 #include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Engine/Runtime/Utilities/PhysicsDebugOverlay.hpp"
+#include "Modules/DevTools/PhysicsDebugOverlay.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
 
@@ -59,15 +59,13 @@ void CharacterDemoGameInstance::OnInit()
 {
     NextGameplay::RegisterGameplayReflection();
 
-    // CharacterDemo depends on optional assets (KayKit playground pieces + skinned character mesh).
-    // Bail out with a helpful prompt instead of crashing later in CharacterPlayground / SkinnedMesh setup.
-    constexpr const char* kKayKitProbe = "assets/models/KayKit_Platformer_Pack/Assets/gltf/neutral/cone.gltf";
+    // CharacterDemo depends on an optional asset (skinned character mesh).
+    // Bail out with a helpful prompt instead of crashing later in SkinnedMesh setup.
     constexpr const char* kCharacterProbe = "assets/models/characters/Mannequin_Medium.glb";
-    if (!Utilities::FileHelper::IsAssetAvailable(kKayKitProbe) ||
-        !Utilities::FileHelper::IsAssetAvailable(kCharacterProbe))
+    if (!Utilities::FileHelper::IsAssetAvailable(kCharacterProbe))
     {
         const char* message =
-            "CharacterDemo needs the optional asset pack (KayKit pieces + character mesh).\n\n"
+            "CharacterDemo needs the optional asset pack (character mesh).\n\n"
             "Run one of the following from the repo root, then relaunch:\n"
             "  scripts/fetch-paks.sh --optional      (Linux / macOS / Git Bash)\n"
             "  scripts\\fetch-paks.bat --optional    (Windows)";

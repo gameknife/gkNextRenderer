@@ -58,9 +58,9 @@ file(GLOB_RECURSE src_files_engine
 
 # --- Gameplay Layer ---
 file(GLOB_RECURSE src_files_nextgameplay
-    "Engine/NextGameplay/*.cpp"
-    "Engine/NextGameplay/*.hpp"
-    "Engine/NextGameplay/*.h"
+    "Gameplay/*.cpp"
+    "Gameplay/*.hpp"
+    "Gameplay/*.h"
 )
 
 # --- Optional Engine Modules (src/Modules/<Name>, one static library each) ---

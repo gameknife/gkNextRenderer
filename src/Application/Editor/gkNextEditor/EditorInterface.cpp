@@ -25,7 +25,7 @@
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Editor/ProfessionalUI.hpp"
-#include "Engine/Runtime/Utilities/GraphicsDebugPanel.hpp"
+#include "Modules/DevTools/GraphicsDebugPanel.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Utilities/Localization.hpp"
@@ -81,8 +81,13 @@ void EditorInterface::Init()
     const auto scaleFactor = 1.0;
     // ImGui::GetStyle().ScaleAllSizes(scaleFactor);
 
+#if IMGUI_VERSION_NUM >= 19200
+    io.Fonts->SetFontLoader(ImGuiFreeType::GetFontLoader());
+    io.Fonts->FontLoaderFlags = ImGuiFreeTypeLoaderFlags_NoHinting;
+#else
     io.Fonts->FontBuilderIO = ImGuiFreeType::GetBuilderForFreeType();
     io.Fonts->FontBuilderFlags = ImGuiFreeTypeBuilderFlags_NoHinting;
+#endif
     const ImWchar* glyphRange = GOption->locale == "RU" ? io.Fonts->GetGlyphRangesCyrillic()
         : GOption->locale == "zhCN"                     ? io.Fonts->GetGlyphRangesChineseFull()
                                                         : io.Fonts->GetGlyphRangesDefault();
@@ -411,7 +416,11 @@ void EditorInterface::Render()
     if (uiState_.child_metrics)
         ImGui::ShowMetricsWindow(&uiState_.child_metrics);
     if (uiState_.child_stack)
+#if IMGUI_VERSION_NUM >= 18925
+        ImGui::ShowIDStackToolWindow(&uiState_.child_stack);
+#else
         ImGui::ShowStackToolWindow(&uiState_.child_stack);
+#endif
     if (uiState_.child_color)
         utils::ShowColorExportWindow(&uiState_.child_color);
     if (uiState_.child_resources)

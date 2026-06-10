@@ -1,6 +1,6 @@
 #include "CharacterDemoAIController.hpp"
 
-#include "Engine/NextGameplay/Gameplay/GameplayMath.hpp"
+#include "Gameplay/Gameplay/GameplayMath.hpp"
 
 #include <cassert>
 

@@ -1,6 +1,7 @@
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
 
 #include <fmt/format.h>
 #include <filesystem>
@@ -84,6 +85,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         
     // Start the application.
     GApplication.reset( new NextEngine(*GOption) );
+    GApplication->SetDebugUiProvider(&DevTools::DefaultDebugUiProvider());
     GApplication->Start();
     
     return SDL_APP_CONTINUE;

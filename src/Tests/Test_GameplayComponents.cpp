@@ -1,10 +1,10 @@
 #include <catch2/catch_all.hpp>
 
 #include "Engine/Assets/Core/Node.h"
-#include "Engine/NextGameplay/Components/AIAgentComponent.h"
-#include "Engine/NextGameplay/Components/CharacterAnimationComponent.h"
-#include "Engine/NextGameplay/Components/CharacterControlComponent.h"
-#include "Engine/NextGameplay/Components/CharacterGameplayComponent.h"
+#include "Gameplay/Components/AIAgentComponent.h"
+#include "Gameplay/Components/CharacterAnimationComponent.h"
+#include "Gameplay/Components/CharacterControlComponent.h"
+#include "Gameplay/Components/CharacterGameplayComponent.h"
 
 TEST_CASE("CharacterGameplayComponent stores runtime-facing gameplay flags", "[Unit][Gameplay]")
 {
