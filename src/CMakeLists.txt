@@ -68,12 +68,13 @@ list(APPEND UNIT_TEST_SOURCES Tests/Test_PhysicsComponent.cpp)
 # libray and app
 if ( ANDROID )
 add_library(gkNextRenderer SHARED
-	${src_files_assets} 
-	${src_files_utilities} 
+	${src_files_assets}
+	${src_files_utilities}
 	${src_files_engine}
-	${src_files_vulkan} 
+	${src_files_vulkan}
 	${src_files_rendering}
 	${src_files_thirdparty}
+	${src_files_modules_all}
 	${src_files_gkrenderer}
 	AndroidMain.cpp
 	#GameActivitySources.cpp
@@ -194,6 +195,19 @@ add_executable(gkNextUnitTests ${UNIT_TEST_SOURCES})
 
 endif()
 
+# Optional engine modules: one static library per module directory that has
+# sources (empty module skeletons are skipped). Android compiles module
+# sources directly into the single SHARED target above.
+set(GK_MODULE_TARGETS "")
+if ( NOT ANDROID )
+foreach(gk_module IN LISTS GK_MODULE_NAMES)
+	if ( src_files_module_${gk_module} )
+		add_library(${gk_module} STATIC ${src_files_module_${gk_module}})
+		list(APPEND GK_MODULE_TARGETS ${gk_module})
+	endif()
+endforeach()
+endif()
+
 if (UNIX AND NOT APPLE AND NOT ANDROID)
 	set(extra_libs -lstdc++fs ${Backtrace_LIBRARIES})
 endif()
@@ -289,6 +303,7 @@ set(AllTargets
 gkNextEngine
 NextGameplay
 gkNextRenderer
+${GK_MODULE_TARGETS}
 )
 else()
 set(AllTargets
@@ -311,6 +326,7 @@ gkNextStillBenchmark
 	CharacterDemo
 	StudioSim
 	gkNextUnitTests
+	${GK_MODULE_TARGETS}
 )
 endif()
 
@@ -460,6 +476,9 @@ foreach(target IN LISTS AllTargets)
 		endif()
 	elseif ( ${target} STREQUAL NextGameplay )
 		set_target_properties(${target} PROPERTIES FOLDER "Gameplay")
+		target_link_libraries(${target} PRIVATE gkNextEngine)
+	elseif ( ${target} IN_LIST GK_MODULE_TARGETS )
+		set_target_properties(${target} PROPERTIES FOLDER "Modules")
 		target_link_libraries(${target} PRIVATE gkNextEngine)
 	else()
 		set_target_properties(${target} PROPERTIES FOLDER "Programs")
