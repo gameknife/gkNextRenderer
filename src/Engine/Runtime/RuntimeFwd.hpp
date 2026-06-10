@@ -11,7 +11,6 @@ class VulkanGpuTimer;
 namespace NextAI
 {
     class FAIService;
-    class VoiceInputService;
 }
 
 namespace NextCVar

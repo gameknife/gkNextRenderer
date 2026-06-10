@@ -117,8 +117,6 @@ public:
     const NextLocalization* GetLocalization() const { return services_.localization.get(); }
     NextAI::FAIService* GetAIService() { return services_.aiService.get(); }
     const NextAI::FAIService* GetAIService() const { return services_.aiService.get(); }
-    NextAI::VoiceInputService* GetVoiceInputService() { return services_.voiceInputService.get(); }
-    const NextAI::VoiceInputService* GetVoiceInputService() const { return services_.voiceInputService.get(); }
     NextCVar::FCVarSystem& GetCVarSystem() { return *services_.cvarSystem; }
     const NextCVar::FCVarSystem& GetCVarSystem() const { return *services_.cvarSystem; }
     QuickJSEngine* GetQuickJSEngine() { return services_.quickJSEngine.get(); }
@@ -299,7 +297,6 @@ private:
 
         std::unique_ptr<NextLocalization> localization;
         std::unique_ptr<NextAI::FAIService> aiService;
-        std::unique_ptr<NextAI::VoiceInputService> voiceInputService;
         std::unique_ptr<NextCVar::FCVarSystem> cvarSystem;
         std::unique_ptr<NextAudio> audio;
         std::unique_ptr<NextPhysics> physics;

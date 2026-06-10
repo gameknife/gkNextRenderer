@@ -1142,17 +1142,6 @@ namespace NextAI
         return true;
     }
 
-    bool FAIService::TryGetVoiceInputConfig(FVoiceInputConfig& outConfig) const
-    {
-        if (!hasVoiceInputConfig_)
-        {
-            return false;
-        }
-
-        outConfig = voiceInputConfig_;
-        return true;
-    }
-
     void FAIService::UpdateProviderConfigCache()
     {
         providerConfigCache_.clear();
@@ -1303,110 +1292,6 @@ namespace NextAI
                 }
             }
 
-            hasVoiceInputConfig_ = false;
-            voiceInputConfig_ = FVoiceInputConfig{};
-
-            if (j.contains("voiceInput") && j["voiceInput"].is_object())
-            {
-                const json& voiceConfig = j["voiceInput"];
-
-                auto readBool = [&voiceConfig](const char* key, bool& value) {
-                    if (!voiceConfig.contains(key))
-                    {
-                        return;
-                    }
-                    if (voiceConfig[key].is_boolean())
-                    {
-                        value = voiceConfig[key].get<bool>();
-                    }
-                    else
-                    {
-                        SPDLOG_WARN("voiceInput.{} expects boolean", key);
-                    }
-                };
-
-                auto readInt = [&voiceConfig](const char* key, int& value) {
-                    if (!voiceConfig.contains(key))
-                    {
-                        return;
-                    }
-                    if (voiceConfig[key].is_number_integer())
-                    {
-                        value = voiceConfig[key].get<int>();
-                    }
-                    else
-                    {
-                        SPDLOG_WARN("voiceInput.{} expects integer", key);
-                    }
-                };
-
-                auto readString = [&voiceConfig](const char* key, std::string& value) {
-                    if (!voiceConfig.contains(key))
-                    {
-                        return;
-                    }
-                    if (voiceConfig[key].is_string())
-                    {
-                        value = voiceConfig[key].get<std::string>();
-                    }
-                    else
-                    {
-                        SPDLOG_WARN("voiceInput.{} expects string", key);
-                    }
-                };
-
-                readBool("enabled", voiceInputConfig_.enabled);
-                readString("model", voiceInputConfig_.model);
-                readString("language", voiceInputConfig_.language);
-                readInt("threads", voiceInputConfig_.threads);
-                readInt("maxRecordSeconds", voiceInputConfig_.maxRecordSeconds);
-                readInt("sampleRate", voiceInputConfig_.sampleRate);
-                readBool("autoSend", voiceInputConfig_.autoSend);
-                readBool("keepTempFiles", voiceInputConfig_.keepTempFiles);
-
-                // Backward compatibility: old config used modelPath.
-                if (voiceConfig.contains("modelPath") && voiceConfig["modelPath"].is_string())
-                {
-                    std::string legacyPath = voiceConfig["modelPath"].get<std::string>();
-                    std::string lowerPath = legacyPath;
-                    std::transform(lowerPath.begin(), lowerPath.end(), lowerPath.begin(), ::tolower);
-                    if (lowerPath.find("tiny") != std::string::npos)
-                    {
-                        voiceInputConfig_.model = "tiny";
-                    }
-                    else if (lowerPath.find("small") != std::string::npos)
-                    {
-                        voiceInputConfig_.model = "small";
-                    }
-                    else
-                    {
-                        voiceInputConfig_.model = "base";
-                    }
-                }
-
-                if (voiceInputConfig_.language.empty())
-                {
-                    voiceInputConfig_.language = "zh";
-                }
-                if (voiceInputConfig_.model.empty())
-                {
-                    voiceInputConfig_.model = "base";
-                }
-                if (voiceInputConfig_.threads <= 0)
-                {
-                    voiceInputConfig_.threads = 4;
-                }
-                if (voiceInputConfig_.maxRecordSeconds <= 0)
-                {
-                    voiceInputConfig_.maxRecordSeconds = 20;
-                }
-                if (voiceInputConfig_.sampleRate <= 0)
-                {
-                    voiceInputConfig_.sampleRate = 16000;
-                }
-
-                hasVoiceInputConfig_ = true;
-            }
 
             fullConfig_ = std::make_unique<nlohmann::json>(j);
             UpdateProviderConfigCache();

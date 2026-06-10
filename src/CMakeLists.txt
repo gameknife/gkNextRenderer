@@ -330,22 +330,6 @@ else()
     message(STATUS "Remote Play disabled for this platform or by GK_WITH_REMOTE=OFF")
 endif()
 
-set(GK_WHISPER_LINK_LIBS "")
-set(GK_WHISPER_COMPILE_DEFINITIONS "")
-if (WITH_WHISPERCPP)
-	find_package(whisper CONFIG REQUIRED)
-	if (MSVC)
-		message(STATUS "Whisper.cpp is disabled for MSVC Debug builds due to upstream static runtime mismatch")
-		set(GK_WHISPER_LINK_LIBS "$<$<NOT:$<CONFIG:Debug>>:whisper>")
-		list(APPEND GK_WHISPER_COMPILE_DEFINITIONS
-			"$<$<CONFIG:Debug>:WITH_WHISPERCPP=0>"
-			"$<$<NOT:$<CONFIG:Debug>>:WITH_WHISPERCPP=1>")
-	else()
-		set(GK_WHISPER_LINK_LIBS whisper)
-		list(APPEND GK_WHISPER_COMPILE_DEFINITIONS WITH_WHISPERCPP=1)
-	endif()
-endif()
-
 # postprocess: target setup
 if ( ANDROID )
 set(AllTargets
@@ -460,9 +444,6 @@ foreach(target IN LISTS AllTargets)
             target_link_libraries(${target} PRIVATE ${GK_REMOTE_LINK_LIBS})
 		endif()
 
-		if ( GK_WHISPER_LINK_LIBS )
-			target_link_libraries(${target} PRIVATE ${GK_WHISPER_LINK_LIBS})
-		endif()
 		
 		# handle moltenvk for iOS
 		if ( IOS )
@@ -553,9 +534,6 @@ foreach(target IN LISTS AllTargets)
 		target_link_libraries(${target} PRIVATE quickjs )
 	endif()
 
-	if ( GK_WHISPER_COMPILE_DEFINITIONS )
-		target_compile_definitions(${target} PUBLIC ${GK_WHISPER_COMPILE_DEFINITIONS})
-	endif()
 	if (APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 13)
 		target_compile_definitions(${target} PRIVATE JSON_HAS_FILESYSTEM=0 JSON_HAS_EXPERIMENTAL_FILESYSTEM=0)
 	endif()
