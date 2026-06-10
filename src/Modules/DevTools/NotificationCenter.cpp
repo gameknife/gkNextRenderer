@@ -1,4 +1,4 @@
-#include "Engine/Runtime/Editor/NotificationCenter.h"
+#include "Modules/DevTools/NotificationCenter.h"
 
 namespace
 {

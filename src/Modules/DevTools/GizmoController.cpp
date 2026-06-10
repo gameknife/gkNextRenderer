@@ -1,6 +1,6 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include <imgui.h>
-#include "Engine/Runtime/Editor/GizmoController.hpp"
+#include "Modules/DevTools/GizmoController.hpp"
 
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Core/Scene.hpp"

@@ -7,7 +7,7 @@
 #include "EditorActionDispatcher.hpp"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Editor/ProfessionalUI.hpp"
-#include "Engine/Runtime/Editor/GizmoController.hpp"
+#include "Modules/DevTools/GizmoController.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.h"
 #include "ThirdParty/ImGuizmo/ImGuizmo.h"
