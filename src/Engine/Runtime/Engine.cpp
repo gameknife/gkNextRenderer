@@ -16,7 +16,7 @@
 #include "Engine/Runtime/ScreenShot.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Editor/ConsoleLogBuffer.hpp"
-#include "Engine/Runtime/UI/RmlUiSystem.hpp"
+#include "Engine/Runtime/UiOverlay.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Runtime/DebugUiProvider.hpp"
@@ -467,7 +467,7 @@ NextEngine::~NextEngine()
         services_.localization->SaveToTxt(fmt::format("assets/locale/{}.txt", options_->locale));
     }
 
-    rmlUi_.reset();
+    uiOverlay_.reset();
     userInterface_.reset();
     frameStreamer_.reset();
     scene_.reset();
@@ -553,7 +553,7 @@ void NextEngine::Start()
 bool NextEngine::HandleEvent(SDL_Event& event)
 {
     userInterface_->HandleEvent(&event);
-    const bool rmlUiConsumed = rmlUi_ && rmlUi_->HandleEvent(event);
+    const bool rmlUiConsumed = uiOverlay_ && uiOverlay_->HandleEvent(event);
 
     if (services_.quickJSEngine)
     {
@@ -1379,9 +1379,9 @@ void NextEngine::OnRendererCreateSwapChain()
             this, renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(), config_.userSettings,
             [this]() -> void { gameInstance_->OnPreConfigUI(); }, [this]() -> void { gameInstance_->OnInitUI(); }));
     }
-    if (rmlUi_.get() == nullptr)
+    if (uiOverlay_.get() == nullptr && uiOverlayFactory_)
     {
-        rmlUi_ = std::make_unique<NextUI::RmlUiSystem>(*this);
+        uiOverlay_ = uiOverlayFactory_(*this);
     }
     userInterface_->OnCreateSurface(renderer_->SwapChain(), renderer_->DepthBuffer());
 }
@@ -1437,9 +1437,9 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
     {
         SCOPED_CPU_TIMER("pre render");
         userInterface_->PreRender();
-        if (rmlUi_)
+        if (uiOverlay_)
         {
-            rmlUi_->BeginFrame();
+            uiOverlay_->BeginFrame();
         }
     }
     bool uiHandled = false;
@@ -1449,10 +1449,10 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
     }
     const bool suppressAllUi = screenShot_.hasPending &&
         (!gameInstance_ || !gameInstance_->ShouldRenderUiDuringScreenshot());
-    if (!suppressAllUi && rmlUi_)
+    if (!suppressAllUi && uiOverlay_)
     {
-        SCOPED_CPU_TIMER("rmlui render");
-        rmlUi_->RenderFrame();
+        SCOPED_CPU_TIMER("overlay render");
+        uiOverlay_->RenderFrame();
     }
     if (!suppressAllUi)
     {
@@ -1535,7 +1535,7 @@ void NextEngine::OnKey(SDL_Event& event)
         }
     }
 
-    if (userInterface_->WantsToCaptureKeyboard() || (rmlUi_ && rmlUi_->WantsToCaptureKeyboard()))
+    if (userInterface_->WantsToCaptureKeyboard() || (uiOverlay_ && uiOverlay_->WantsToCaptureKeyboard()))
     {
         return;
     }
@@ -1737,7 +1737,7 @@ void NextEngine::OnTouchMove(double xpos, double ypos) { OnCursorPosition(xpos, 
 void NextEngine::OnCursorPosition(const double xpos, const double ypos)
 {
     if (!renderer_->HasSwapChain() || userInterface_->WantsToCaptureKeyboard() ||
-        userInterface_->WantsToCaptureMouse() || (rmlUi_ && (rmlUi_->WantsToCaptureKeyboard() || rmlUi_->WantsToCaptureMouse())))
+        userInterface_->WantsToCaptureMouse() || (uiOverlay_ && (uiOverlay_->WantsToCaptureKeyboard() || uiOverlay_->WantsToCaptureMouse())))
     {
         return;
     }
@@ -1750,7 +1750,7 @@ void NextEngine::OnCursorPosition(const double xpos, const double ypos)
 
 void NextEngine::OnMouseButton(SDL_Event& event)
 {
-    if (!renderer_->HasSwapChain() || userInterface_->WantsToCaptureMouse() || (rmlUi_ && rmlUi_->WantsToCaptureMouse()))
+    if (!renderer_->HasSwapChain() || userInterface_->WantsToCaptureMouse() || (uiOverlay_ && uiOverlay_->WantsToCaptureMouse()))
     {
         return;
     }
@@ -1763,7 +1763,7 @@ void NextEngine::OnMouseButton(SDL_Event& event)
 
 void NextEngine::OnScroll(const double xoffset, const double yoffset)
 {
-    if (!renderer_->HasSwapChain() || userInterface_->WantsToCaptureMouse() || (rmlUi_ && rmlUi_->WantsToCaptureMouse()))
+    if (!renderer_->HasSwapChain() || userInterface_->WantsToCaptureMouse() || (uiOverlay_ && uiOverlay_->WantsToCaptureMouse()))
     {
         return;
     }

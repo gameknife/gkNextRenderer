@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Runtime/UiOverlay.hpp"
 
 #include <functional>
 #include <string>
@@ -17,18 +18,18 @@ class NextEngine;
 
 namespace NextUI
 {
-    class RmlUiSystem final
+    class RmlUiSystem final : public Runtime::IUiOverlay
     {
     public:
         GK_NON_COPIABLE(RmlUiSystem)
 
         explicit RmlUiSystem(NextEngine& engine);
-        ~RmlUiSystem();
+        ~RmlUiSystem() override;
 
         bool IsAvailable() const;
-        bool HandleEvent(const SDL_Event& event);
-        void BeginFrame();
-        void RenderFrame();
+        bool HandleEvent(const SDL_Event& event) override;
+        void BeginFrame() override;
+        void RenderFrame() override;
         void Shutdown();
 
         Rml::ElementDocument* EnsureDocument(const std::string& documentId, const std::string& rmlSource);
@@ -38,8 +39,8 @@ namespace NextUI
         void ClearEventListeners();
         bool ListenClick(const std::string& documentId, const std::string& elementId, std::function<void()> callback);
 
-        bool WantsToCaptureMouse() const;
-        bool WantsToCaptureKeyboard() const;
+        bool WantsToCaptureMouse() const override;
+        bool WantsToCaptureKeyboard() const override;
 
     private:
         struct Impl;

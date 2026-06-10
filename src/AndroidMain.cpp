@@ -3,6 +3,7 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
 #include "Modules/NextRemote/NextRemoteModule.hpp"
+#include "Modules/NextRmlUi/NextRmlUiModule.hpp"
 
 #include <fmt/format.h>
 #include <filesystem>
@@ -87,6 +88,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     // Start the application.
     GApplication.reset( new NextEngine(*GOption) );
     GApplication->SetDebugUiProvider(&DevTools::DefaultDebugUiProvider());
+    Modules::NextRmlUi::Install(*GApplication);
     if (GOption->RemoteMode)
     {
         GApplication->SetFrameStreamer(Modules::NextRemote::CreateRemoteServer(*GOption));
