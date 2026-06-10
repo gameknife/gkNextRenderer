@@ -515,8 +515,13 @@ namespace ScadStudio
         ImGuiIO& io = ImGui::GetIO();
         // The vcpkg imgui is built with the FreeType feature, so the font atlas must use
         // the FreeType builder (matches gkNextEditor); otherwise atlas build crashes.
+#if IMGUI_VERSION_NUM >= 19200
+        io.Fonts->SetFontLoader(ImGuiFreeType::GetFontLoader());
+        io.Fonts->FontLoaderFlags = ImGuiFreeTypeLoaderFlags_NoHinting;
+#else
         io.Fonts->FontBuilderIO = ImGuiFreeType::GetBuilderForFreeType();
         io.Fonts->FontBuilderFlags = ImGuiFreeTypeBuilderFlags_NoHinting;
+#endif
 
         const std::string fontPath =
             Utilities::FileHelper::GetPlatformFilePath("assets/fonts/DroidSansFallback.ttf");
