@@ -1,6 +1,6 @@
-#include "Engine/Assets/Loaders/FLDrawLoader.h"
-#include "Engine/Assets/Loaders/FLDrawGeometry.h"
-#include "Engine/Assets/Loaders/FLDrawParser.h"
+#include "Modules/LDrawLoader/FLDrawLoader.h"
+#include "Modules/LDrawLoader/FLDrawGeometry.h"
+#include "Modules/LDrawLoader/FLDrawParser.h"
 #include "Engine/Assets/Loaders/FProcModel.h"
 #include "Engine/Assets/Loaders/FSceneLoader.h"
 #include "Engine/Assets/Data/Material.hpp"
@@ -613,7 +613,7 @@ namespace Assets
 
         if (!geometry.vertices.empty())
         {
-            Model model(tmpl.filename, std::move(geometry.vertices), std::move(geometry.indices), false);
+            Model model = Model::CreateFromGeometry(tmpl.filename, std::move(geometry.vertices), std::move(geometry.indices), false);
             info.modelIdx = static_cast<uint32_t>(models.size());
             models.push_back(std::move(model));
         }

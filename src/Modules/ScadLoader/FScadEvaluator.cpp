@@ -1,9 +1,9 @@
-#include "Engine/Assets/Loaders/FScadEvaluator.h"
+#include "Modules/ScadLoader/FScadEvaluator.h"
 
-#include "Engine/Assets/Loaders/FScadCsg.h"
-#include "Engine/Assets/Loaders/FScadGeometry.h"
-#include "Engine/Assets/Loaders/FScadTess.h"
-#include "Engine/Assets/Loaders/FScadText.h"
+#include "Modules/ScadLoader/FScadCsg.h"
+#include "Modules/ScadLoader/FScadGeometry.h"
+#include "Modules/ScadLoader/FScadTess.h"
+#include "Modules/ScadLoader/FScadText.h"
 
 #include <algorithm>
 #include <cctype>

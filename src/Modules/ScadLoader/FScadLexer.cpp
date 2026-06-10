@@ -1,4 +1,4 @@
-#include "Engine/Assets/Loaders/FScadLexer.h"
+#include "Modules/ScadLoader/FScadLexer.h"
 
 #include <cctype>
 #include <cstdlib>

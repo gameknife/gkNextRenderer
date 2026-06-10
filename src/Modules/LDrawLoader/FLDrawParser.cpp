@@ -1,4 +1,4 @@
-#include "Engine/Assets/Loaders/FLDrawParser.h"
+#include "Modules/LDrawLoader/FLDrawParser.h"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <spdlog/spdlog.h>

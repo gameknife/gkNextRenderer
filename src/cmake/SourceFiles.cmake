@@ -77,6 +77,12 @@ foreach(gk_module IN LISTS GK_MODULE_NAMES)
     list(APPEND src_files_modules_all ${src_files_module_${gk_module}})
 endforeach()
 
+# --- Application shared code (demo scenes etc.) ---
+file(GLOB_RECURSE src_files_appcommon
+    "Application/Common/*.cpp"
+    "Application/Common/*.hpp"
+)
+
 # --- Editor ---
 file(GLOB_RECURSE src_files_editor "Application/Editor/gkNextEditor/*")
 

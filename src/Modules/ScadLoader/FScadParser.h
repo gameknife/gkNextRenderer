@@ -7,8 +7,8 @@
 // loader before tokenizing, so the parser never sees them.
 // ============================================================================
 
-#include "Engine/Assets/Loaders/FScadLexer.h"
-#include "Engine/Assets/Loaders/FScadTypes.h"
+#include "Modules/ScadLoader/FScadLexer.h"
+#include "Modules/ScadLoader/FScadTypes.h"
 
 namespace Assets::scad
 {

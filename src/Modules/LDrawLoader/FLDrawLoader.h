@@ -2,7 +2,7 @@
 #include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Data/Skeleton.hpp"
-#include "Engine/Assets/Loaders/FLDrawTypes.h"
+#include "Modules/LDrawLoader/FLDrawTypes.h"
 
 #include <unordered_map>
 

@@ -1,4 +1,4 @@
-#include "Engine/Assets/Loaders/FScadTess.h"
+#include "Modules/ScadLoader/FScadTess.h"
 
 #ifndef GK_WITH_EARCUT
 #define GK_WITH_EARCUT 0

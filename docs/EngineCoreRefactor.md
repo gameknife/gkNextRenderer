@@ -254,6 +254,7 @@ src/
 |---|---|---:|---|
 | 2026-06-10 | Phase 0 基线 | 55,279 | 290 文件；含 NextGameplay 2,217（Phase 1 移出）。`gnb loc` 非注释非空行口径 |
 | 2026-06-10 | Phase 1 完成 | 51,465 | −3,814（NextGameplay→src/Gameplay 2,217；GltfTestRunner→Tests 203；overlays→Modules/DevTools ~950；KayKit 删除 ~440）。全 target 构建过、118 单测过、playground/CharacterDemo `gnb shot` 与 HEAD 基线一致 |
+| 2026-06-10 | Phase 2 完成 | 43,804 | −7,661（FLDraw→Modules/LDrawLoader 2,507；FScad→Modules/ScadLoader 4,412；SceneList 1,385→247 行，demo 场景→Application/Common/DemoScenes (977)，CharacterPlayground→CharacterDemo）。核心新增 LoaderRegistry（~200）；Model 去 FLDrawLoader friend。全 target 构建过、118 单测过、playground 截图与基线一致、beer_cup.scad / CharacterPlayground.proc 经注册表加载成功 |
 
 ---
 

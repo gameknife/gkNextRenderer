@@ -16,7 +16,7 @@
 #include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Data/Skeleton.hpp"
-#include "Engine/Assets/Loaders/FScadTypes.h"
+#include "Modules/ScadLoader/FScadTypes.h"
 
 namespace Assets
 {

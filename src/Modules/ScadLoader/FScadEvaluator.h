@@ -24,7 +24,7 @@
 
 #include <glm/glm.hpp>
 
-#include "Engine/Assets/Loaders/FScadTypes.h"
+#include "Modules/ScadLoader/FScadTypes.h"
 
 namespace Assets::scad
 {

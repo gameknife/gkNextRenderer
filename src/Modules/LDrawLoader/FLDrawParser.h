@@ -1,7 +1,7 @@
 #pragma once
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Utilities/Glm.hpp"
-#include "Engine/Assets/Loaders/FLDrawConfig.h"
+#include "Modules/LDrawLoader/FLDrawConfig.h"
 
 namespace Assets
 {

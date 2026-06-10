@@ -13,7 +13,7 @@
 
 #include <glm/glm.hpp>
 
-#include "Engine/Assets/Loaders/FScadGeometry.h" // TriSoup
+#include "Modules/ScadLoader/FScadGeometry.h" // TriSoup
 
 namespace Assets::scad
 {

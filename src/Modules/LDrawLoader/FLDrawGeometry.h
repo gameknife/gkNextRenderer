@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Engine/Assets/Data/Vertex.hpp"
-#include "Engine/Assets/Loaders/FLDrawParser.h"
-#include "Engine/Assets/Loaders/FLDrawTypes.h"
+#include "Modules/LDrawLoader/FLDrawParser.h"
+#include "Modules/LDrawLoader/FLDrawTypes.h"
 
 namespace Assets
 {

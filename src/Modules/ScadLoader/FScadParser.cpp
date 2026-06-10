@@ -1,4 +1,4 @@
-#include "Engine/Assets/Loaders/FScadParser.h"
+#include "Modules/ScadLoader/FScadParser.h"
 
 namespace Assets::scad
 {

@@ -11,8 +11,8 @@ Android 平台模块源直接并入单一 SHARED target。
 
 | 模块 | 来源 |
 |---|---|
-| LDrawLoader | `Engine/Assets/Loaders/FLDraw*` |
-| ScadLoader | `Engine/Assets/Loaders/FScad*` |
+| LDrawLoader | 原 `Engine/Assets/Loaders/FLDraw*` |
+| ScadLoader | 原 `Engine/Assets/Loaders/FScad*` |
 | NextAI | `Engine/Runtime/Subsystems/AI*` |
 | NextRemote | `Engine/Runtime/Remote/` |
 | NextRmlUi | `Engine/Runtime/UI/RmlUiSystem` |

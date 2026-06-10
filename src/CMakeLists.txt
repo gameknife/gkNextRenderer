@@ -82,6 +82,7 @@ add_library(gkNextRenderer SHARED
 	${src_files_rendering}
 	${src_files_thirdparty}
 	${src_files_modules_all}
+	${src_files_appcommon}
 	${src_files_gkrenderer}
 	AndroidMain.cpp
 	#GameActivitySources.cpp
@@ -101,6 +102,7 @@ add_library(NextGameplay
 add_executable(gkNextRenderer
 	MACOSX_BUNDLE
 	${src_files_gkrenderer}
+	${src_files_appcommon}
 	${DESKTOP_MAIN_SOURCES}
 )
 else()
@@ -117,23 +119,27 @@ add_library(NextGameplay
 )
 add_executable(gkNextRenderer
 	${src_files_gkrenderer}
+	${src_files_appcommon}
 	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(gkNextRenderer PRIVATE Application/Render/gkNextRenderer)
 add_executable(gkNextStillBenchmark
 	${src_files_benchmarkcommon}
 	${src_files_gkstillbenchmark}
+	${src_files_appcommon}
 	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(gkNextStillBenchmark PRIVATE Application/Render/gkNextBenchmark)
 add_executable(gkNextMotionBenchmark
 	${src_files_benchmarkcommon}
 	${src_files_gkmotionbenchmark}
+	${src_files_appcommon}
 	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(gkNextMotionBenchmark PRIVATE Application/Render/gkNextBenchmark)
 add_executable(gkNextVisualTest
 	${src_files_gkvisualtest}
+	${src_files_appcommon}
 	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(gkNextVisualTest PRIVATE Application/Render/gkNextVisualTest)
@@ -144,6 +150,7 @@ add_executable(RmlUiDemo
 target_include_directories(RmlUiDemo PRIVATE Application/Render/RmlUiDemo)
 add_executable(gkNextEditor
 	${src_files_editor}
+	${src_files_appcommon}
 	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(gkNextEditor PRIVATE Application/Editor/gkNextEditor)
@@ -213,6 +220,45 @@ foreach(gk_module IN LISTS GK_MODULE_NAMES)
 		list(APPEND GK_MODULE_TARGETS ${gk_module})
 	endif()
 endforeach()
+endif()
+
+if ( TARGET ScadLoader )
+	# Manifold: robust CSG boolean backend for the SCAD loader (desktop only).
+	find_package(manifold CONFIG QUIET)
+	if ( manifold_FOUND AND NOT GK_DISABLE_MANIFOLD )
+		# Manifold's imported target advertises cxx_std_17 + -D flags through its
+		# INTERFACE, which clobbers the engine's C++20 standard. Strip those and
+		# re-apply only the defines the headers need as proper definitions.
+		set_target_properties(manifold::manifold PROPERTIES
+			INTERFACE_COMPILE_FEATURES ""
+			INTERFACE_COMPILE_OPTIONS "")
+		target_link_libraries(ScadLoader PRIVATE manifold::manifold)
+		target_compile_definitions(ScadLoader PRIVATE GK_WITH_MANIFOLD=1 MANIFOLD_CROSS_SECTION MANIFOLD_PAR=-1)
+		message(STATUS "Manifold found: SCAD CSG boolean backend enabled")
+	else()
+		target_compile_definitions(ScadLoader PRIVATE GK_WITH_MANIFOLD=0)
+		message(STATUS "Manifold not found: SCAD CSG falls back to first-child approximation")
+	endif()
+
+	# FreeType: SCAD text() glyph outlines (earcut header comes from the same
+	# vcpkg include root). FScadText.cpp also includes <mapbox/earcut.hpp>.
+	find_package(Freetype QUIET)
+	if ( Freetype_FOUND AND NOT GK_DISABLE_SCAD_TEXT )
+		target_link_libraries(ScadLoader PRIVATE Freetype::Freetype)
+		target_compile_definitions(ScadLoader PRIVATE GK_WITH_FREETYPE=1)
+		message(STATUS "FreeType found: SCAD text() enabled")
+	else()
+		target_compile_definitions(ScadLoader PRIVATE GK_WITH_FREETYPE=0)
+		message(STATUS "FreeType not found: SCAD text() skipped")
+	endif()
+
+	# earcut-hpp (header-only, from the vcpkg include root) for concave/holed
+	# polygon tessellation. Desktop only (matches the vcpkg.json platform gate).
+	if ( NOT IOS )
+		target_compile_definitions(ScadLoader PRIVATE GK_WITH_EARCUT=1)
+	else()
+		target_compile_definitions(ScadLoader PRIVATE GK_WITH_EARCUT=0)
+	endif()
 endif()
 
 if (UNIX AND NOT APPLE AND NOT ANDROID)
@@ -404,9 +450,6 @@ foreach(target IN LISTS AllTargets)
 		set_source_files_properties(Engine/Assets/Loaders/FSceneLoader.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 		set_source_files_properties(Engine/Assets/Savers/FSceneSaver.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 		set_source_files_properties(Engine/Vulkan/Allocator.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-		# Isolated 3rd-party-heavy SCAD sources (FreeType / earcut) kept out of unity.
-		set_source_files_properties(Engine/Assets/Loaders/FScadText.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-		set_source_files_properties(Engine/Assets/Loaders/FScadTess.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 		endif()
 		find_package(WebP CONFIG REQUIRED)
 		target_link_libraries(${target} PRIVATE SDL3::SDL3 xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp GPUOpen::VulkanMemoryAllocator ${extra_libs})
@@ -417,42 +460,6 @@ foreach(target IN LISTS AllTargets)
             target_link_libraries(${target} PRIVATE ${GK_REMOTE_LINK_LIBS})
 		endif()
 
-		# Manifold: robust CSG boolean backend for the SCAD loader (desktop only).
-		find_package(manifold CONFIG QUIET)
-		if ( manifold_FOUND AND NOT GK_DISABLE_MANIFOLD )
-			# Manifold's imported target advertises cxx_std_17 + -D flags through its
-			# INTERFACE, which clobbers the engine's C++20 standard. Strip those and
-			# re-apply only the defines the headers need as proper definitions.
-			set_target_properties(manifold::manifold PROPERTIES
-				INTERFACE_COMPILE_FEATURES ""
-				INTERFACE_COMPILE_OPTIONS "")
-			target_link_libraries(${target} PRIVATE manifold::manifold)
-			target_compile_definitions(${target} PRIVATE GK_WITH_MANIFOLD=1 MANIFOLD_CROSS_SECTION MANIFOLD_PAR=-1)
-			message(STATUS "Manifold found: SCAD CSG boolean backend enabled")
-		else()
-			target_compile_definitions(${target} PRIVATE GK_WITH_MANIFOLD=0)
-			message(STATUS "Manifold not found: SCAD CSG falls back to first-child approximation")
-		endif()
-
-		# FreeType: SCAD text() glyph outlines (earcut header comes from the same
-		# vcpkg include root). FScadText.cpp also includes <mapbox/earcut.hpp>.
-		find_package(Freetype QUIET)
-		if ( Freetype_FOUND AND NOT GK_DISABLE_SCAD_TEXT )
-			target_link_libraries(${target} PRIVATE Freetype::Freetype)
-			target_compile_definitions(${target} PRIVATE GK_WITH_FREETYPE=1)
-			message(STATUS "FreeType found: SCAD text() enabled")
-		else()
-			target_compile_definitions(${target} PRIVATE GK_WITH_FREETYPE=0)
-			message(STATUS "FreeType not found: SCAD text() skipped")
-		endif()
-
-		# earcut-hpp (header-only, from the vcpkg include root) for concave/holed
-		# polygon tessellation. Desktop only (matches the vcpkg.json platform gate).
-		if ( NOT IOS )
-			target_compile_definitions(${target} PRIVATE GK_WITH_EARCUT=1)
-		else()
-			target_compile_definitions(${target} PRIVATE GK_WITH_EARCUT=0)
-		endif()
 		if ( GK_WHISPER_LINK_LIBS )
 			target_link_libraries(${target} PRIVATE ${GK_WHISPER_LINK_LIBS})
 		endif()
@@ -624,6 +631,22 @@ target_link_libraries(CharacterDemo PRIVATE NextGameplay)
 endif()
 if ( TARGET StudioSim )
 target_link_libraries(StudioSim PRIVATE NextGameplay)
+endif()
+
+# Optional loader modules: linked only by the applications that use them.
+if ( TARGET LDrawLoader )
+	foreach(t gkNextRenderer gkNextVisualTest gkNextStillBenchmark gkNextMotionBenchmark gkNextEditor BrickPlayer gkNextUnitTests)
+		if ( TARGET ${t} )
+			target_link_libraries(${t} PRIVATE LDrawLoader)
+		endif()
+	endforeach()
+endif()
+if ( TARGET ScadLoader )
+	foreach(t gkNextRenderer gkNextVisualTest gkNextStillBenchmark gkNextMotionBenchmark gkNextEditor ScadStudio StudioSim gkNextUnitTests)
+		if ( TARGET ${t} )
+			target_link_libraries(${t} PRIVATE ScadLoader)
+		endif()
+	endforeach()
 endif()
 
 # Test Target

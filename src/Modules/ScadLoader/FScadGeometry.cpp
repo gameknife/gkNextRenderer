@@ -1,6 +1,6 @@
-#include "Engine/Assets/Loaders/FScadGeometry.h"
+#include "Modules/ScadLoader/FScadGeometry.h"
 
-#include "Engine/Assets/Loaders/FScadTypes.h"
+#include "Modules/ScadLoader/FScadTypes.h"
 
 #include <algorithm>
 #include <cmath>

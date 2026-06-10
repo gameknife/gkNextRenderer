@@ -1,6 +1,6 @@
-#include "Engine/Assets/Loaders/FScadText.h"
+#include "Modules/ScadLoader/FScadText.h"
 
-#include "Engine/Assets/Loaders/FScadTess.h"
+#include "Modules/ScadLoader/FScadTess.h"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #ifndef GK_WITH_FREETYPE

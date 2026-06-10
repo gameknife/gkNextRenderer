@@ -1,4 +1,4 @@
-#include "Engine/Assets/Loaders/FScadCsg.h"
+#include "Modules/ScadLoader/FScadCsg.h"
 
 #ifndef GK_WITH_MANIFOLD
 #define GK_WITH_MANIFOLD 0
