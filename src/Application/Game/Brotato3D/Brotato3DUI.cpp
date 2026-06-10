@@ -5,7 +5,7 @@
 #include "Brotato3DAudio.hpp"
 #include "Brotato3DAssetPaths.hpp"
 #include "Brotato3DGameInstance.hpp"
-#include "Engine/Runtime/Editor/ImGuiPainter.h"
+#include "Modules/DevTools/ImGuiPainter.h"
 #include "Engine/Runtime/Editor/ImGuiScaling.h"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Subsystems/NextLocalization.h"

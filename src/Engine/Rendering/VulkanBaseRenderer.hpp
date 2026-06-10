@@ -16,14 +16,6 @@
 #include <functional>
 #include <map>
 
-namespace StreamlineWrapper
-{
-	bool ShouldInitialize();
-	void Initialize();
-	void LazyInit(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily, bool& outSupportDLSS, bool& outSupportDLSSRR);
-	void Shutdown();
-}
-
 namespace Vulkan 
 {
 	enum ERendererType

@@ -257,6 +257,7 @@ src/
 | 2026-06-10 | Phase 2 完成 | 43,804 | −7,661（FLDraw→Modules/LDrawLoader 2,507；FScad→Modules/ScadLoader 4,412；SceneList 1,385→247 行，demo 场景→Application/Common/DemoScenes (977)，CharacterPlayground→CharacterDemo）。核心新增 LoaderRegistry（~200）；Model 去 FLDrawLoader friend。全 target 构建过、118 单测过、playground 截图与基线一致、beer_cup.scad / CharacterPlayground.proc 经注册表加载成功 |
 | 2026-06-10 | Phase 3 完成 | 37,944 | −5,860（VoiceInput+whisper 删除 ~560；AIService+AI 子树→Modules/NextAI 3,418，引擎改类型擦除服务槽+NextAI::GetAIService adapter；Runtime/Remote→Modules/NextRemote 1,867，引擎只留 IFrameStreamer 注入点；VulkanVideoCaps→Engine/Vulkan、RemoteProtocol.hpp 留核心）。全 target 构建过、118 单测过、playground 截图与基线一致 |
 | 2026-06-10 | Phase 4 完成 | 34,139 | −3,805（RmlUiSystem→NextRmlUi 1,227 + IUiOverlay 注入点；Gizmo/NotificationCenter→DevTools ~510；UserInterface 控制台+统计 overlay+SetStyle→DevTools::FUiDevPanels ~1,050；ProfessionalUI/ConsoleLogBuffer→DevTools ~1,100；IDebugUiProvider 扩展 ApplyUiStyle/DrawUiPanels/HandleUiEvent 三个 hook；FontLoader 留核心）。全 target 构建过、118 单测过、playground/编辑器/MagicaLego 截图正常 |
+| 2026-06-10 | Phase 5 完成 | 33,924 | god class 拆分：VulkanBaseRenderer 2,839→2,434（Streamline→Rendering/Upscaler/StreamlineIntegration，macOS 仅语法迁移待 Windows 验证）；QuickJSEngine 2,715→656（绑定→QuickJSBindings.cpp + 内部头）；Engine.cpp 2,009→1,560（Engine.Input/Engine.SceneLoad 分部）；Scene.cpp 1,647→858（Build/Update 分部）；Texture.cpp 1,587→782（HdrTextureCache 抽离 + 删 250 行重复遗留路径 + 去 Runtime 反向依赖改注入）；ImGuiPainter→DevTools。净减约 215（拆分样板抵消了去重）。FlappyJs 绑定回归正常 |
 
 ---
 

@@ -81,7 +81,16 @@ namespace Assets
 		Vulkan::CommandPool& GetMainThreadCommandPool() { return mainThreadCommandPool_; }
 
 		Vulkan::DescriptorSetManager& GetDescriptorManager() { return *descriptorSetManager_; }
+		// Engine integration hooks (Assets must not depend on Runtime):
+		// streaming policy decides whether HDR textures stream in at lowest mip;
+		// the SH-updated callback fires after an HDR texture (re)load.
+		void SetHdrStreamingPolicy(std::function<bool()> policy) { hdrStreamingPolicy_ = std::move(policy); }
+		void SetHdrShUpdatedCallback(std::function<void()> callback) { hdrShUpdatedCallback_ = std::move(callback); }
+
 	private:
+		std::function<bool()> hdrStreamingPolicy_;
+		std::function<void()> hdrShUpdatedCallback_;
+
 		struct FHDRTextureResidencyState
 		{
 			std::string TextureName;
