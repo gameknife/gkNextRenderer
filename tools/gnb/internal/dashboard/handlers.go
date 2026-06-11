@@ -21,6 +21,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /todo-panel", s.handleTodoPanel)
 	mux.HandleFunc("POST /todo/cleanup", s.handleTodoCleanup)
 	mux.HandleFunc("POST /docs/save", s.handleDocsSave)
+	mux.HandleFunc("GET /docs/source", s.handleDocsSource)
 	mux.HandleFunc("GET /task/{id}", s.handleTaskDetail)
 	mux.HandleFunc("POST /task/add", s.handleTaskAdd)
 	mux.HandleFunc("POST /task/{id}/done", s.handleTaskDone)

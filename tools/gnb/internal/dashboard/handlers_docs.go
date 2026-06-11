@@ -7,9 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
+
+const maxDocsSourceBytes = 2 << 20
 
 type docFileVM struct {
 	RelPath   string
@@ -34,6 +37,21 @@ type docsVM struct {
 	Error      string
 	Content    string
 	EditorBody string
+}
+
+type docsSourceLineVM struct {
+	Number int
+	Text   string
+	Focus  bool
+}
+
+type docsSourceVM struct {
+	RelPath   string
+	Name      string
+	Line      int
+	LineCount int
+	Lines     []docsSourceLineVM
+	Error     string
 }
 
 func (s *Server) buildDocsVM(selectedRel string, editing bool, errText string, draftBody string) docsVM {
@@ -142,6 +160,113 @@ func (s *Server) handleDocsSave(w http.ResponseWriter, r *http.Request) {
 	vm := s.buildHeader("docs")
 	vm.DocsVM = s.buildDocsVM(normalizedRel, false, "", "")
 	s.render(w, "tab_docs", vm)
+}
+
+func (s *Server) handleDocsSource(w http.ResponseWriter, r *http.Request) {
+	vm := buildDocsSourceVM(s.opts.RepoRoot, r.URL.Query().Get("path"), r.URL.Query().Get("line"))
+	s.render(w, "docs_source_panel", vm)
+}
+
+func buildDocsSourceVM(repoRoot string, rel string, lineText string) docsSourceVM {
+	vm := docsSourceVM{}
+	normalizedRel, fullPath, err := resolveRepoDocumentPath(repoRoot, rel)
+	if err != nil {
+		vm.Error = err.Error()
+		return vm
+	}
+	vm.RelPath = normalizedRel
+	vm.Name = filepath.Base(fullPath)
+
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		vm.Error = err.Error()
+		return vm
+	}
+	if !info.Mode().IsRegular() {
+		vm.Error = fmt.Sprintf("不是普通文件：%s", normalizedRel)
+		return vm
+	}
+	if info.Size() > maxDocsSourceBytes {
+		vm.Error = fmt.Sprintf("文件过大，无法预览：%s", normalizedRel)
+		return vm
+	}
+
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		vm.Error = err.Error()
+		return vm
+	}
+	if isProbablyBinary(data) {
+		vm.Error = fmt.Sprintf("二进制文件无法预览：%s", normalizedRel)
+		return vm
+	}
+
+	content := strings.ReplaceAll(string(data), "\r\n", "\n")
+	content = strings.TrimSuffix(content, "\n")
+	lines := strings.Split(content, "\n")
+	if len(lines) == 1 && lines[0] == "" {
+		lines = nil
+	}
+	vm.LineCount = len(lines)
+	vm.Line = parseDocsSourceLine(lineText, vm.LineCount)
+	vm.Lines = make([]docsSourceLineVM, 0, len(lines))
+	for i, text := range lines {
+		number := i + 1
+		vm.Lines = append(vm.Lines, docsSourceLineVM{
+			Number: number,
+			Text:   text,
+			Focus:  number == vm.Line,
+		})
+	}
+	return vm
+}
+
+func parseDocsSourceLine(raw string, lineCount int) int {
+	line, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || line < 1 || lineCount < 1 {
+		return 0
+	}
+	if line > lineCount {
+		return lineCount
+	}
+	return line
+}
+
+func resolveRepoDocumentPath(repoRoot string, rel string) (string, string, error) {
+	rel = strings.TrimSpace(strings.TrimPrefix(rel, "/"))
+	if rel == "" {
+		return "", "", fmt.Errorf("缺少文件路径")
+	}
+	full, ok := safeRepoPath(repoRoot, rel)
+	if !ok {
+		return "", "", fmt.Errorf("非法文件路径：%s", rel)
+	}
+
+	rootAbs, err := filepath.Abs(repoRoot)
+	if err != nil {
+		return "", "", err
+	}
+	fullAbs, err := filepath.Abs(full)
+	if err != nil {
+		return "", "", err
+	}
+	rootReal, err := filepath.EvalSymlinks(rootAbs)
+	if err != nil {
+		return "", "", err
+	}
+	fullReal, err := filepath.EvalSymlinks(fullAbs)
+	if err != nil {
+		return "", "", err
+	}
+	if fullReal != rootReal && !strings.HasPrefix(fullReal, rootReal+string(os.PathSeparator)) {
+		return "", "", fmt.Errorf("文件路径超出仓库目录")
+	}
+
+	normalizedRel, err := filepath.Rel(rootAbs, fullAbs)
+	if err != nil {
+		return "", "", err
+	}
+	return filepath.ToSlash(normalizedRel), fullAbs, nil
 }
 
 func listDocsMarkdownFiles(repoRoot string) ([]docFileVM, error) {
