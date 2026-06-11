@@ -33,6 +33,18 @@ namespace Vulkan
 		void SetDebugName(const std::string& name);
 	private:
 
+		// Declarative attachment layout shared by all public constructors
+		struct FRenderPassSpec
+		{
+			std::vector<VkFormat> colorFormats;
+			bool hasDepth = false;
+			VkAttachmentLoadOp colorLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			VkAttachmentLoadOp depthLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			VkAttachmentStoreOp depthStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			VkAccessFlags dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		};
+		void Init(const FRenderPassSpec& spec);
+
 		const class SwapChain& swapChain_;
 		const class DepthBuffer& depthBuffer_;
 
@@ -82,6 +94,9 @@ namespace Vulkan
 			uint32_t idx,
 			VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_COMPUTE) const;
 	private:
+
+		// Shared vkCreatePipelineLayout call over cachedDescriptorSetLayouts_
+		void CreateLayout(const VkPushConstantRange* pushConstantRanges, uint32_t pushConstantRangeCount);
 
 		const Device& device_;
 

@@ -12,6 +12,7 @@
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
 #include "Engine/Vulkan/Instance.hpp"
+#include "Engine/Vulkan/GraphicsPipelineBuilder.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
 #include "Engine/Vulkan/CommandExecution.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
@@ -118,115 +119,44 @@ namespace
 } // namespace
 
 VkPipeline CreateUiGraphicsPipeline(const Vulkan::Device& device, VkPipelineLayout pipelineLayout,
-                                        VkRenderPass renderPass)
-    {
-        const Vulkan::ShaderModule vertShader(device, kUiVertexShaderPath);
-        const Vulkan::ShaderModule fragShader(device, kUiFragmentShaderPath);
+                                    VkRenderPass renderPass)
+{
+    const Vulkan::ShaderModule vertShader(device, kUiVertexShaderPath);
+    const Vulkan::ShaderModule fragShader(device, kUiFragmentShaderPath);
 
-        VkVertexInputBindingDescription vertexBinding{};
-        vertexBinding.binding = 0;
-        vertexBinding.stride = sizeof(UiBatchedVertex);
-        vertexBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    VkVertexInputBindingDescription vertexBinding{};
+    vertexBinding.binding = 0;
+    vertexBinding.stride = sizeof(UiBatchedVertex);
+    vertexBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-        std::array<VkVertexInputAttributeDescription, 5> vertexAttributes{};
-        vertexAttributes[0].location = 0;
-        vertexAttributes[0].binding = 0;
-        vertexAttributes[0].format = VK_FORMAT_R32G32_SFLOAT;
-        vertexAttributes[0].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, position));
-        vertexAttributes[1].location = 1;
-        vertexAttributes[1].binding = 0;
-        vertexAttributes[1].format = VK_FORMAT_R32G32_SFLOAT;
-        vertexAttributes[1].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, uv));
-        vertexAttributes[2].location = 2;
-        vertexAttributes[2].binding = 0;
-        vertexAttributes[2].format = VK_FORMAT_R8G8B8A8_UNORM;
-        vertexAttributes[2].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, color));
-        vertexAttributes[3].location = 3;
-        vertexAttributes[3].binding = 0;
-        vertexAttributes[3].format = VK_FORMAT_R32G32B32A32_SFLOAT;
-        vertexAttributes[3].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, clipRect));
-        vertexAttributes[4].location = 4;
-        vertexAttributes[4].binding = 0;
-        vertexAttributes[4].format = VK_FORMAT_R32_UINT;
-        vertexAttributes[4].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, textureIndex));
+    std::array<VkVertexInputAttributeDescription, 5> vertexAttributes{};
+    vertexAttributes[0].location = 0;
+    vertexAttributes[0].binding = 0;
+    vertexAttributes[0].format = VK_FORMAT_R32G32_SFLOAT;
+    vertexAttributes[0].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, position));
+    vertexAttributes[1].location = 1;
+    vertexAttributes[1].binding = 0;
+    vertexAttributes[1].format = VK_FORMAT_R32G32_SFLOAT;
+    vertexAttributes[1].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, uv));
+    vertexAttributes[2].location = 2;
+    vertexAttributes[2].binding = 0;
+    vertexAttributes[2].format = VK_FORMAT_R8G8B8A8_UNORM;
+    vertexAttributes[2].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, color));
+    vertexAttributes[3].location = 3;
+    vertexAttributes[3].binding = 0;
+    vertexAttributes[3].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    vertexAttributes[3].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, clipRect));
+    vertexAttributes[4].location = 4;
+    vertexAttributes[4].binding = 0;
+    vertexAttributes[4].format = VK_FORMAT_R32_UINT;
+    vertexAttributes[4].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, textureIndex));
 
-        VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-        vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertexInputInfo.vertexBindingDescriptionCount = 1;
-        vertexInputInfo.pVertexBindingDescriptions = &vertexBinding;
-        vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertexAttributes.size());
-        vertexInputInfo.pVertexAttributeDescriptions = vertexAttributes.data();
-
-        VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-        inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-        VkPipelineViewportStateCreateInfo viewportState{};
-        viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-        viewportState.viewportCount = 1;
-        viewportState.scissorCount = 1;
-
-        VkPipelineRasterizationStateCreateInfo rasterizer{};
-        rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-        rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-        rasterizer.cullMode = VK_CULL_MODE_NONE;
-        rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-        rasterizer.lineWidth = 1.0f;
-
-        VkPipelineMultisampleStateCreateInfo multisampling{};
-        multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-        multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-        VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-        colorBlendAttachment.blendEnable = VK_TRUE;
-        colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-        colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-        colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-        colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-        colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-        colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
-        colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                                              VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-
-        VkPipelineColorBlendStateCreateInfo colorBlending{};
-        colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-        colorBlending.attachmentCount = 1;
-        colorBlending.pAttachments = &colorBlendAttachment;
-
-        VkPipelineDepthStencilStateCreateInfo depthStencil{};
-        depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-
-        VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
-        VkPipelineDynamicStateCreateInfo dynamicState{};
-        dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-        dynamicState.dynamicStateCount = static_cast<uint32_t>(std::size(dynamicStates));
-        dynamicState.pDynamicStates = dynamicStates;
-
-        VkPipelineShaderStageCreateInfo shaderStages[] = {
-            vertShader.CreateShaderStage(VK_SHADER_STAGE_VERTEX_BIT),
-            fragShader.CreateShaderStage(VK_SHADER_STAGE_FRAGMENT_BIT)};
-
-        VkGraphicsPipelineCreateInfo pipelineInfo{};
-        pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipelineInfo.stageCount = static_cast<uint32_t>(std::size(shaderStages));
-        pipelineInfo.pStages = shaderStages;
-        pipelineInfo.pVertexInputState = &vertexInputInfo;
-        pipelineInfo.pInputAssemblyState = &inputAssembly;
-        pipelineInfo.pViewportState = &viewportState;
-        pipelineInfo.pRasterizationState = &rasterizer;
-        pipelineInfo.pMultisampleState = &multisampling;
-        pipelineInfo.pDepthStencilState = &depthStencil;
-        pipelineInfo.pColorBlendState = &colorBlending;
-        pipelineInfo.pDynamicState = &dynamicState;
-        pipelineInfo.layout = pipelineLayout;
-        pipelineInfo.renderPass = renderPass;
-        pipelineInfo.subpass = 0;
-
-        VkPipeline pipeline = VK_NULL_HANDLE;
-        Vulkan::Check(vkCreateGraphicsPipelines(device.Handle(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline),
-                      "create ui pipeline");
-        return pipeline;
+    return Vulkan::GraphicsPipelineBuilder(device)
+        .SetShaders(vertShader, fragShader)
+        .SetVertexInput(vertexBinding, vertexAttributes.data(), static_cast<uint32_t>(vertexAttributes.size()))
+        .SetDynamicViewportAndScissor()
+        .SetAlphaBlend(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA)
+        .Build(pipelineLayout, renderPass, "create ui pipeline");
 }
 
 UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPool, const Vulkan::SwapChain& swapChain,
