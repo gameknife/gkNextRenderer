@@ -101,13 +101,6 @@ void FCPUBrickTable::UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint3
     }
 
     activeBricksLastBuild = totalActive;
-    if (totalOverflow > 0)
-    {
-        SPDLOG_WARN("[AmbientBrick] cube pool overflow: {} bricks dropped (cap {}/cascade); GI missing there",
-                    totalOverflow, poolBricksPerCascade);
-    }
-    // SPDLOG_INFO("[AmbientBrick] active bricks {} / capacity {} ({}/cascade x {} cascades)", totalActive,
-    //             poolBricksPerCascade * cascadesToProcess, poolBricksPerCascade, cascadesToProcess);
 }
 
 void FCPUBrickTable::UploadGPU(Vulkan::DeviceMemory& deviceMemory, size_t tableByteOffset, size_t activeListByteOffset)
