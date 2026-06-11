@@ -19,8 +19,15 @@ type docFileVM struct {
 	Active    bool
 }
 
+type docFolderVM struct {
+	Dir    string
+	Files  []docFileVM
+	Active bool
+}
+
 type docsVM struct {
 	Files      []docFileVM
+	Folders    []docFolderVM
 	Selected   docFileVM
 	HasDoc     bool
 	Editing    bool
@@ -79,6 +86,8 @@ func (s *Server) buildDocsVM(selectedRel string, editing bool, errText string, d
 			return vm
 		}
 	}
+
+	vm.Folders = groupDocsFiles(vm.Files)
 
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
@@ -180,9 +189,32 @@ func listDocsMarkdownFiles(repoRoot string) ([]docFileVM, error) {
 	}
 
 	sort.Slice(files, func(i, j int) bool {
+		leftDir := strings.ToLower(files[i].Dir)
+		rightDir := strings.ToLower(files[j].Dir)
+		if leftDir != rightDir {
+			return leftDir < rightDir
+		}
+		leftName := strings.ToLower(files[i].Name)
+		rightName := strings.ToLower(files[j].Name)
+		if leftName != rightName {
+			return leftName < rightName
+		}
 		return files[i].RelPath < files[j].RelPath
 	})
 	return files, nil
+}
+
+func groupDocsFiles(files []docFileVM) []docFolderVM {
+	folders := make([]docFolderVM, 0)
+	for _, file := range files {
+		if len(folders) == 0 || folders[len(folders)-1].Dir != file.Dir {
+			folders = append(folders, docFolderVM{Dir: file.Dir})
+		}
+		folder := &folders[len(folders)-1]
+		folder.Files = append(folder.Files, file)
+		folder.Active = folder.Active || file.Active
+	}
+	return folders
 }
 
 func resolveDocMarkdownPath(repoRoot string, rel string) (string, string, error) {

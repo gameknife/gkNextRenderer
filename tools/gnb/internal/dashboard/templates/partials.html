@@ -365,16 +365,37 @@
       </h2>
       {{if .DocsVM.Files}}
       <div class="docs-file-list">
-        {{range .DocsVM.Files}}
-        <button class="docs-file-item {{if .Active}}active{{end}}"
-                type="button"
-                hx-get="/tab/docs?file={{urlquery .RelPath}}"
-                hx-target="#tab-content"
-                hx-swap="innerHTML"
-                {{if $.DocsVM.Editing}}hx-confirm="当前编辑未保存，切换文档将丢失修改，确定继续？"{{end}}>
-          <span class="docs-file-name">{{.Name}}</span>
-          <span class="docs-file-path">{{.RelPath}}</span>
-        </button>
+        {{range .DocsVM.Folders}}
+        <details class="docs-folder {{if .Active}}active{{end}}"
+                 data-doc-folder="{{.Dir}}"
+                 {{if .Active}}open{{end}}>
+          <summary class="docs-folder-summary">
+            <span class="docs-folder-chevron">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="9 18 15 12 9 6"/></svg>
+            </span>
+            <span class="docs-folder-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+            </span>
+            <span class="docs-folder-name">{{.Dir}}</span>
+            <span class="docs-folder-count">{{len .Files}}</span>
+          </summary>
+          <div class="docs-folder-files">
+            {{range .Files}}
+            <button class="docs-file-item {{if .Active}}active{{end}}"
+                    type="button"
+                    hx-get="/tab/docs?file={{urlquery .RelPath}}"
+                    hx-target="#tab-content"
+                    hx-swap="innerHTML"
+                    title="{{.RelPath}}"
+                    {{if $.DocsVM.Editing}}hx-confirm="当前编辑未保存，切换文档将丢失修改，确定继续？"{{end}}>
+              <span class="docs-file-icon">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              </span>
+              <span class="docs-file-name">{{.Name}}</span>
+            </button>
+            {{end}}
+          </div>
+        </details>
         {{end}}
       </div>
       {{else}}
@@ -449,20 +470,85 @@
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     overflow-y: auto;
     min-height: 0;
     padding-right: 4px;
   }
-  .docs-file-item {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-    padding: 10px 12px;
-    background: var(--bg-card);
+  .docs-folder {
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
+    background: var(--bg-card);
+    overflow: hidden;
+  }
+  .docs-folder.active {
+    border-color: var(--border-strong);
+  }
+  .docs-folder-summary {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 36px;
+    padding: 7px 9px;
+    color: var(--fg-mute);
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    transition: background 0.15s, color 0.15s;
+  }
+  .docs-folder-summary::-webkit-details-marker {
+    display: none;
+  }
+  .docs-folder-summary:hover {
+    color: var(--fg);
+    background: var(--bg-card-hover);
+  }
+  .docs-folder-chevron {
+    display: inline-flex;
+    color: var(--fg-dim);
+    transition: transform 0.15s;
+  }
+  .docs-folder[open] .docs-folder-chevron {
+    transform: rotate(90deg);
+  }
+  .docs-folder-icon {
+    display: inline-flex;
+    color: var(--yellow);
+  }
+  .docs-folder-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11.5px;
+    font-family: var(--font-mono);
+  }
+  .docs-folder-count {
+    min-width: 20px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--bg-input);
+    color: var(--fg-dim);
+    font-size: 10.5px;
+    text-align: center;
+  }
+  .docs-folder-files {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 3px 5px 6px 25px;
+    border-top: 1px solid var(--border);
+  }
+  .docs-file-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    padding: 7px 8px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
     color: var(--fg);
     cursor: pointer;
     text-align: left;
@@ -475,18 +561,21 @@
   .docs-file-item.active {
     border-color: var(--accent);
     box-shadow: 0 0 0 1px var(--accent-ring);
-    background: var(--bg-card-hover);
+    background: var(--accent-soft);
+  }
+  .docs-file-icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    color: var(--fg-dim);
   }
   .docs-file-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: 12.5px;
-    font-weight: 600;
+    font-weight: 500;
     color: var(--fg);
-  }
-  .docs-file-path {
-    font-size: 11px;
-    color: var(--fg-dim);
-    font-family: var(--font-mono);
-    word-break: break-all;
   }
   .docs-card {
     height: 100%;

@@ -110,6 +110,27 @@ func TestParseRunArgsShowsRunHelpWithoutTarget(t *testing.T) {
 	}
 }
 
+func TestShotRunArgsIncludesUI(t *testing.T) {
+	got := shotRunArgs(60, true, []string{"--width=1280"})
+	want := []string{
+		"--agent-validation",
+		"--agent-validation-frames=60",
+		"--agent-validation-ui",
+		"--width=1280",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("shotRunArgs() = %#v, want %#v", got, want)
+	}
+}
+
+func TestShotRunArgsKeepsDefaultCaptureClean(t *testing.T) {
+	got := shotRunArgs(0, false, nil)
+	want := []string{"--agent-validation"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("shotRunArgs() = %#v, want %#v", got, want)
+	}
+}
+
 func TestTodoAddWithSpecTextCreatesLinkedSpec(t *testing.T) {
 	dir := t.TempDir()
 	specDir := filepath.Join(dir, ".spec")

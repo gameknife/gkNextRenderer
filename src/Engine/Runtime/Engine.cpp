@@ -346,6 +346,7 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     status_ = NextRenderer::EApplicationStatus::Starting;
 
     agentValidation_.active = options.AgentValidation;
+    agentValidation_.includeUi = options.AgentValidationUI;
     agentValidation_.waitFrames = options.AgentValidationFrames;
     agentValidation_.outputPath = options.AgentValidationOutput;
 
@@ -1176,7 +1177,7 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
         SCOPED_CPU_TIMER("game ui");
         uiHandled = gameInstance_->OnRenderUI();
     }
-    const bool suppressAllUi = screenShot_.hasPending &&
+    const bool suppressAllUi = screenShot_.hasPending && !screenShot_.pending.includeUi &&
         (!gameInstance_ || !gameInstance_->ShouldRenderUiDuringScreenshot());
     if (!suppressAllUi && uiOverlay_)
     {
@@ -1253,7 +1254,7 @@ void NextEngine::TickAgentValidation()
             Utilities::FileHelper::EnsureDirectoryExists(outputDir);
         }
 
-        RequestScreenShot({.filename = resolvedPath});
+        RequestScreenShot({.filename = resolvedPath, .includeUi = agentValidation_.includeUi});
         agentValidation_.captured = true;
         SPDLOG_INFO("[AgentValidation] capturing screenshot -> {}.jpg ({} frames)",
                     resolvedPath, GetTotalFrames());

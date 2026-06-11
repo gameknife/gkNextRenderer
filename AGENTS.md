@@ -95,10 +95,12 @@ Tests no longer require the current working directory to be `bin`; launch them v
 # 渲染一个场景到稳定帧 → 截一张图 → 自动退出。完成后会打印截图绝对路径。
 gnb shot --scene assets/models/playground.glb
 gnb shot --target ScadStudio --scene assets/scad/beer_cup.scad --frames 60
+gnb shot --target AirportSim --ui  # 截图包含 ImGui，适合验证 HUD / 面板
 ```
 
 机制（引擎层统一实现，所有 target 行为一致）：
 - 底层是 `--agent-validation` flag：渲染到 `--agent-validation-frames`（默认 90）后，截图到**固定路径** `out/build/<preset>/screenshots/agent_validation.jpg`（覆盖式，无时间戳），随后**自动退出**。
+- 默认截图隐藏 ImGui；传 `gnb shot --ui` 时会追加 `--agent-validation-ui`，让截图包含当帧 UI。
 - 窗口用 `SDL_WINDOW_HIDDEN` 创建：**不弹窗、不抢焦点**，不会打断你的 dev loop；present 自动切 immediate mode，渲染不受 vsync 限制，wall-clock 很快（几秒一张图）。
 - AGENT 读那张 `agent_validation.jpg` 即可肉眼判断。需要换帧数用 `--frames`，换输出路径用 `--agent-validation-out <path-without-ext>`。
 

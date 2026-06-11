@@ -2088,6 +2088,25 @@
       el.scrollTop = el.scrollHeight;
     });
   }
+  function initDocsFolders(root) {
+    (root || document).querySelectorAll('details[data-doc-folder]:not([data-doc-folder-ready])').forEach(folder => {
+      folder.dataset.docFolderReady = '1';
+      const key = 'gnb-doc-folder-' + folder.dataset.docFolder;
+      try {
+        const saved = localStorage.getItem(key);
+        if (folder.classList.contains('active')) {
+          folder.open = true;
+        } else if (saved !== null) {
+          folder.open = saved === 'open';
+        }
+      } catch (_) {}
+      folder.addEventListener('toggle', () => {
+        try {
+          localStorage.setItem(key, folder.open ? 'open' : 'closed');
+        } catch (_) {}
+      });
+    });
+  }
   // Highlight the active task row when a detail request fires (skip the row's
   // own action buttons/inline-edit triggers, which set hx-target to #todo-panel).
   document.body.addEventListener('htmx:configRequest', (e) => {
@@ -2108,11 +2127,13 @@
     }
     restoreTargetSelection(root);
     restoreGitSelection(root);
+    initDocsFolders(root);
     scrollChatToBottom(root);
   });
   // Initial pass for any server-rendered markdown on first load.
   document.addEventListener('DOMContentLoaded', () => {
     renderMarkdown(document);
+    initDocsFolders(document);
     scrollChatToBottom(document);
   });
 
