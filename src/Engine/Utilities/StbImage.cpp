@@ -1,3 +1,3 @@
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "StbImage.hpp"
+#include "Engine/Utilities/StbImage.hpp"

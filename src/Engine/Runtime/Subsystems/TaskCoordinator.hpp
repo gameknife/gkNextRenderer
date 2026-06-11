@@ -1,13 +1,10 @@
 #pragma once
-#include <functional>
 #include <mutex>
 #include <condition_variable>
 #include <queue>
 #include <thread>
 #include <atomic>
 #include "Engine/Common/CoreMinimal.hpp"
-#include <cstring>
-#include <unordered_set>
 
 namespace Tasks::Detail
 {

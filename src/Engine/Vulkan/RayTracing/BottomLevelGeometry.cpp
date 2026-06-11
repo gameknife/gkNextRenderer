@@ -1,5 +1,5 @@
-#include "BottomLevelGeometry.hpp"
-#include "DeviceProcedures.hpp"
+#include "Engine/Vulkan/RayTracing/BottomLevelGeometry.hpp"
+#include "Engine/Vulkan/RayTracing/DeviceProcedures.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Data/Vertex.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"

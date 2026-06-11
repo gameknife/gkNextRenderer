@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Engine/Assets/AssetsFwd.hpp"
-#include "AccelerationStructure.hpp"
-#include "BottomLevelGeometry.hpp"
+#include "Engine/Vulkan/RayTracing/AccelerationStructure.hpp"
+#include "Engine/Vulkan/RayTracing/BottomLevelGeometry.hpp"
 
 namespace Vulkan::RayTracing
 {

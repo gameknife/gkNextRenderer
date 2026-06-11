@@ -1,6 +1,6 @@
-#include "MemoryAndShader.hpp"
-#include "Device.hpp"
-#include "GpuResources.hpp"
+#include "Engine/Vulkan/MemoryAndShader.hpp"
+#include "Engine/Vulkan/Device.hpp"
+#include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 

@@ -1,7 +1,7 @@
-#include "Instance.hpp"
-#include "DebugUtilities.hpp"
-#include "DebugUtilities.hpp"
-#include "WindowSurface.hpp"
+#include "Engine/Vulkan/Instance.hpp"
+#include "Engine/Vulkan/DebugUtilities.hpp"
+#include "Engine/Vulkan/DebugUtilities.hpp"
+#include "Engine/Vulkan/WindowSurface.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include <algorithm>
 #include <cstring>

@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Allocator.hpp"
+#include "Engine/Vulkan/Allocator.hpp"
 #include <memory>
 #include <vector>
 
-#include "DebugUtilities.hpp"
+#include "Engine/Vulkan/DebugUtilities.hpp"
 
 namespace Vulkan
 {

@@ -1,4 +1,4 @@
-#include "ShadowMapPass.hpp"
+#include "Engine/Rendering/Shadow/ShadowMapPass.hpp"
 
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Data/Vertex.hpp"

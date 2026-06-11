@@ -1,9 +1,9 @@
 #pragma once
 
-#include "DebugUtilities.hpp"
-#include "Device.hpp"
-#include "SwapChain.hpp"
-#include "DescriptorSystem.hpp"
+#include "Engine/Vulkan/DebugUtilities.hpp"
+#include "Engine/Vulkan/Device.hpp"
+#include "Engine/Vulkan/SwapChain.hpp"
+#include "Engine/Vulkan/DescriptorSystem.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 #include <string>
 #include <vector>

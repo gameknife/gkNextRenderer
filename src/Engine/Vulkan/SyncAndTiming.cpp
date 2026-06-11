@@ -1,5 +1,5 @@
-#include "SyncAndTiming.hpp"
-#include "Device.hpp"
+#include "Engine/Vulkan/SyncAndTiming.hpp"
+#include "Engine/Vulkan/Device.hpp"
 
 #include <algorithm>
 

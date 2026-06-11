@@ -1,11 +1,7 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
-#include <functional>
-#include <string>
-#include <unordered_map>
 #include <variant>
-#include <vector>
 
 namespace NextCVar
 {

@@ -1,6 +1,6 @@
 // NextEngine scene loading pipeline: load requests, async parse task and
 // GPU upload. Split from Engine.cpp; same class, separate TU.
-#include "Engine.hpp"
+#include "Engine/Runtime/Engine.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Core/Node.h"
@@ -29,7 +29,6 @@
 
 #include <SDL3/SDL.h>
 #include <algorithm>
-#include <filesystem>
 #include <fmt/format.h>
 #include <spdlog/stopwatch.h>
 

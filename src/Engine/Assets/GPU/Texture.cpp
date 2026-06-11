@@ -13,8 +13,6 @@
 #include "Engine/Vulkan/DescriptorSystem.hpp"
 #include "ThirdParty/lzav/lzav.h"
 
-#include <cstdint>
-#include <filesystem>
 #include <limits>
 #include <system_error>
 #include <webp/decode.h>

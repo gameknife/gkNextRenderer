@@ -3,19 +3,11 @@
 #include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
-#include <functional>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
-#include <vector>
-#include <array>
 #include <deque>
-#include <memory>
-#include <string>
-#include <unordered_map>
-#include <unordered_set>
-#include <cstdint>
 #include <glm/vec4.hpp>
 
 namespace NextUI

@@ -4,10 +4,6 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
-#include <memory>
-#include <string>
-#include <unordered_map>
-#include <vector>
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Vulkan/DescriptorSystem.hpp"
 

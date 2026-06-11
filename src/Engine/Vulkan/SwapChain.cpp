@@ -1,14 +1,14 @@
-#include "SwapChain.hpp"
-#include "Device.hpp"
-#include "DebugUtilities.hpp"
-#include "GpuResources.hpp"
-#include "Instance.hpp"
-#include "WindowSurface.hpp"
+#include "Engine/Vulkan/SwapChain.hpp"
+#include "Engine/Vulkan/Device.hpp"
+#include "Engine/Vulkan/DebugUtilities.hpp"
+#include "Engine/Vulkan/GpuResources.hpp"
+#include "Engine/Vulkan/Instance.hpp"
+#include "Engine/Vulkan/WindowSurface.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include <algorithm>
 #include <limits>
 
-#include "DebugUtilities.hpp"
+#include "Engine/Vulkan/DebugUtilities.hpp"
 
 float GAndroidMagicScale = 1.0f;
 

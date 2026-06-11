@@ -1,4 +1,4 @@
-#include "DeviceProcedures.hpp"
+#include "Engine/Vulkan/RayTracing/DeviceProcedures.hpp"
 #include "Engine/Vulkan/Device.hpp"
 
 namespace Vulkan

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "GpuResources.hpp"
-#include "CommandExecution.hpp"
-#include "Device.hpp"
-#include "MemoryAndShader.hpp"
+#include "Engine/Vulkan/GpuResources.hpp"
+#include "Engine/Vulkan/CommandExecution.hpp"
+#include "Engine/Vulkan/Device.hpp"
+#include "Engine/Vulkan/MemoryAndShader.hpp"
 #include <cstring>
 #include <memory>
 #include <string>

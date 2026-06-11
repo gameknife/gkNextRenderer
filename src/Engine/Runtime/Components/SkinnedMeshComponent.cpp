@@ -1,4 +1,4 @@
-#include "SkinnedMeshComponent.h"
+#include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.h"
 #include "Engine/Runtime/Reflection/PropertyMeta.h"

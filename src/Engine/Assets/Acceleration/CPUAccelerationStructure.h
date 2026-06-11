@@ -6,7 +6,6 @@
 #include "Engine/Vulkan/VulkanFwd.hpp"
 #include <glm/glm.hpp>
 #include "ThirdParty/tinybvh/tiny_bvh.h"
-#include <functional>
 #include <queue>
 
 #include "Engine/Assets/Data/Material.hpp"

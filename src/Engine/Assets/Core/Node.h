@@ -7,8 +7,6 @@
 
 #include "glm/ext.hpp"
 
-#include <vector>
-#include <memory>
 #include <type_traits>
 
 namespace Runtime { class SkinnedMeshComponent; }
