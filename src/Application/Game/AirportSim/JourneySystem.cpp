@@ -41,6 +41,7 @@ namespace AirportSim
         queuesReady_ = false;
         lastDay_ = -1;
         passengerNameCursor_ = 0;
+        nextPassengerGroupId_ = 1;
     }
 
     double JourneySystem::Rand(double lo, double hi)
@@ -71,6 +72,37 @@ namespace AirportSim
             }
         }
         return best;
+    }
+
+    std::string JourneySystem::PreferredGroupQueue(const FAgent& agent, const std::string& prefix,
+                                                   const AgentSystem& agents, const QueueSystem& queues) const
+    {
+        if (agent.IsGroupedPassenger())
+        {
+            for (const auto& other : agents.Agents())
+            {
+                if (!other.active || other.id == agent.id || other.groupId != agent.groupId ||
+                    other.queueId.rfind(prefix, 0) != 0)
+                {
+                    continue;
+                }
+                return other.queueId;
+            }
+        }
+        return queues.ShortestQueue(prefix);
+    }
+
+    glm::vec3 JourneySystem::GroupTargetPosition(const FAgent& agent, const FPointOfInterest& poi,
+                                                 float frontOffset) const
+    {
+        glm::vec3 target = AirportMap::ServicePoint(poi, frontOffset);
+        if (!agent.IsGroupedPassenger())
+        {
+            return target;
+        }
+        const glm::vec3 right = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), poi.frontDir));
+        const float center = (static_cast<float>(agent.groupSize) - 1.0f) * 0.5f;
+        return target + right * (static_cast<float>(agent.groupMemberIndex) - center) * Config::kGroupTargetSpacing;
     }
 
     void JourneySystem::EnsureQueues(AirportMap& map, QueueSystem& queues)
@@ -417,28 +449,108 @@ namespace AirportSim
             }
             const double progress = std::clamp((dayMinutes - spawnStart) / (spawnEnd - spawnStart), 0.0, 1.0);
             const int expected = static_cast<int>(std::ceil(progress * flight.paxTotal));
-            if (flight.paxSpawned >= expected ||
-                agents.ActivePassengerCount() >= Config::kMaxConcurrentPassengers)
+            if (flight.paxSpawned >= expected)
+            {
+                continue;
+            }
+            const int availablePool = Config::kMaxConcurrentPassengers - agents.ActivePassengerCount();
+            const int spawnBudget = std::min(flight.paxTotal - flight.paxSpawned, availablePool);
+            if (spawnBudget <= 0)
             {
                 continue;
             }
 
-            const std::string name = Config::kPassengerNames[passengerNameCursor_ % Config::kPassengerNameCount];
-            ++passengerNameCursor_;
-            const std::string personality = Config::kPersonalities[rng_() % Config::kPersonalityCount];
-            const float speedScale = 1.0f + Config::kWalkSpeedJitter * static_cast<float>(Rand(-1.0, 1.0));
             const glm::vec3 spawn = Config::kSpawnPoints[rng_() % 3];
-
-            if (FAgent* pax = agents.SpawnPassenger(name, personality, spawn, speedScale))
+            int groupSize = 1;
+            EPassengerGroupType groupType = EPassengerGroupType::Solo;
+            if (spawnBudget >= 2 && Rand(0.0, 1.0) < Config::kPassengerGroupFraction)
             {
+                const int roll = static_cast<int>(rng_() % 100);
+                if (roll < 45)
+                {
+                    groupSize = 2;
+                    groupType = EPassengerGroupType::Couple;
+                }
+                else if (roll < 80)
+                {
+                    groupSize = 3;
+                    groupType = EPassengerGroupType::Family;
+                }
+                else
+                {
+                    groupSize = Config::kMaxPassengerGroupSize;
+                    groupType = EPassengerGroupType::Tour;
+                }
+                groupSize = std::min(groupSize, spawnBudget);
+                groupType = groupSize >= 4 ? EPassengerGroupType::Tour
+                                          : (groupSize == 3 ? EPassengerGroupType::Family
+                                                            : EPassengerGroupType::Couple);
+            }
+
+            const int groupId = groupSize > 1 ? nextPassengerGroupId_++ : -1;
+            std::vector<FAgent*> spawned;
+            spawned.reserve(static_cast<size_t>(groupSize));
+            for (int member = 0; member < groupSize; ++member)
+            {
+                const std::string name =
+                    Config::kPassengerNames[passengerNameCursor_ % Config::kPassengerNameCount];
+                ++passengerNameCursor_;
+                const std::string personality = Config::kPersonalities[rng_() % Config::kPersonalityCount];
+                const float speedScale =
+                    1.0f + Config::kWalkSpeedJitter * static_cast<float>(Rand(-1.0, 1.0));
+                glm::vec3 memberSpawn = spawn;
+                memberSpawn.x +=
+                    (static_cast<float>(member) - (static_cast<float>(groupSize) - 1.0f) * 0.5f) *
+                    Config::kGroupSpawnSpacing;
+
+                FAgent* pax = agents.SpawnPassenger(name, personality, memberSpawn, speedScale);
+                if (pax == nullptr)
+                {
+                    break;
+                }
                 pax->flightIdx = static_cast<int>(fi);
+                pax->groupId = groupId;
+                pax->groupType = groupType;
+                pax->groupMemberIndex = member;
+                pax->groupSize = groupSize;
+                spawned.push_back(pax);
                 ++flight.paxSpawned;
+            }
+
+            if (spawned.size() > 1)
+            {
+                const int leaderId = spawned.front()->id;
+                for (FAgent* member : spawned)
+                {
+                    member->groupLeaderId = leaderId;
+                }
+                SPDLOG_INFO("AirportSim/Group: {} G{} spawned {} passengers for {}", PassengerGroupLabelZh(groupType),
+                            groupId, spawned.size(), flight.number);
             }
         }
     }
 
     void JourneySystem::StartAirsideActivity(FAgent& agent, AgentSystem& agents, AirportMap& map, double gameMinutes)
     {
+        if (agent.IsGroupedPassenger() && !agent.IsGroupLeader())
+        {
+            for (const auto& other : agents.Agents())
+            {
+                if (!other.active || other.groupId != agent.groupId || other.id == agent.id ||
+                    other.targetPoi.empty())
+                {
+                    continue;
+                }
+                if (const FPointOfInterest* poi = map.FindByName(other.targetPoi))
+                {
+                    ApplyAirsideChoiceSingle(agent, *poi, agents, map);
+                }
+                return;
+            }
+            agent.stateUntil = gameMinutes + 1.0;
+            return;
+        }
+
         // 规则 fallback 活动选择（§5.1 AirsideFree）：LLM 结果会通过 ApplyAirsideChoice 覆盖下一轮。
         // 权重：坐下 37 / 餐饮 24 / 零售街 18 / 售货机·ATM 13 / 如厕 8——空侧消费区要有人气。
         const int roll = static_cast<int>(rng_() % 100);
@@ -463,11 +575,8 @@ namespace AirportSim
                 const int slot = map.ClaimSeat(bench->name, agent.id, seatPos);
                 if (slot >= 0)
                 {
-                    agent.seatPoi = bench->name;
-                    agent.seatSlot = slot;
-                    agent.targetPoi = bench->name;
-                    agent.pstate = EPassengerState::AirsideWalk;
-                    agents.MoveTo(agent, seatPos);
+                    map.ReleaseSeat(bench->name, slot, agent.id);
+                    ApplyAirsideChoice(agent, bench->name, agents, map);
                     return;
                 }
             }
@@ -482,19 +591,12 @@ namespace AirportSim
             return;
         }
         const FPointOfInterest* poi = pois[rng_() % pois.size()];
-        agent.targetPoi = poi->name;
-        agent.pstate = EPassengerState::AirsideWalk;
-        agents.MoveTo(agent, AirportMap::ServicePoint(*poi, Config::kGenericUseOffset));
+        ApplyAirsideChoice(agent, poi->name, agents, map);
     }
 
-    void JourneySystem::ApplyAirsideChoice(FAgent& agent, const std::string& poiName, AgentSystem& agents,
-                                           AirportMap& map)
+    void JourneySystem::ApplyAirsideChoiceSingle(FAgent& agent, const FPointOfInterest& poi, AgentSystem& agents,
+                                                 AirportMap& map)
     {
-        const FPointOfInterest* poi = map.FindByName(poiName);
-        if (poi == nullptr || !IsAirsideLeisureCategory(poi->category))
-        {
-            return;
-        }
         if (agent.pstate != EPassengerState::AirsideIdle && agent.pstate != EPassengerState::AirsideWalk &&
             agent.pstate != EPassengerState::AirsideUse)
         {
@@ -514,25 +616,49 @@ namespace AirportSim
         }
         agent.anim = EAgentAnimHint::Idle;
 
-        if (poi->category == "wait")
+        if (poi.category == "wait")
         {
             glm::vec3 seatPos;
-            const int slot = map.ClaimSeat(poi->name, agent.id, seatPos);
+            const int slot = map.ClaimSeat(poi.name, agent.id, seatPos);
             if (slot < 0)
             {
                 return;
             }
-            agent.seatPoi = poi->name;
+            agent.seatPoi = poi.name;
             agent.seatSlot = slot;
-            agent.targetPoi = poi->name;
+            agent.targetPoi = poi.name;
             agent.pstate = EPassengerState::AirsideWalk;
             agents.MoveTo(agent, seatPos);
             return;
         }
 
-        agent.targetPoi = poi->name;
+        agent.targetPoi = poi.name;
         agent.pstate = EPassengerState::AirsideWalk;
-        agents.MoveTo(agent, AirportMap::ServicePoint(*poi, Config::kGenericUseOffset));
+        agents.MoveTo(agent, GroupTargetPosition(agent, poi, Config::kGenericUseOffset));
+    }
+
+    void JourneySystem::ApplyAirsideChoice(FAgent& agent, const std::string& poiName, AgentSystem& agents,
+                                           AirportMap& map)
+    {
+        const FPointOfInterest* poi = map.FindByName(poiName);
+        if (poi == nullptr || !IsAirsideLeisureCategory(poi->category))
+        {
+            return;
+        }
+
+        if (!agent.IsGroupedPassenger())
+        {
+            ApplyAirsideChoiceSingle(agent, *poi, agents, map);
+            return;
+        }
+
+        for (auto& member : agents.Agents())
+        {
+            if (member.active && member.groupId == agent.groupId)
+            {
+                ApplyAirsideChoiceSingle(member, *poi, agents, map);
+            }
+        }
     }
 
     void JourneySystem::TickPassengers(double gameMinutes, double dayMinutes, AgentSystem& agents, AirportMap& map,
@@ -540,6 +666,20 @@ namespace AirportSim
     {
         // 队列服务完成事件。
         const std::vector<int> completed = queues.ConsumeCompleted();
+        struct FCompletedGroupService
+        {
+            int groupId = -1;
+            std::string queueId;
+        };
+        std::vector<FCompletedGroupService> completedGroups;
+        for (int completedId : completed)
+        {
+            if (FAgent* completedAgent = agents.FindById(completedId);
+                completedAgent != nullptr && completedAgent->IsGroupedPassenger())
+            {
+                completedGroups.push_back({completedAgent->groupId, completedAgent->queueId});
+            }
+        }
 
         for (auto& agent : agents.Agents())
         {
@@ -554,7 +694,16 @@ namespace AirportSim
             }
             const FFlight& flight = flights.Flights()[static_cast<size_t>(agent.flightIdx)];
             const double toDepart = flight.departMinutes - dayMinutes;
-            const bool serviceDone = std::find(completed.begin(), completed.end(), agent.id) != completed.end();
+            bool serviceDone = std::find(completed.begin(), completed.end(), agent.id) != completed.end();
+            if (!serviceDone && agent.IsGroupedPassenger())
+            {
+                serviceDone = std::any_of(
+                    completedGroups.begin(), completedGroups.end(),
+                    [&agent](const FCompletedGroupService& service)
+                    {
+                        return service.groupId == agent.groupId && service.queueId == agent.queueId;
+                    });
+            }
 
             // 起飞：未登机旅客直接"传送登机"（§4.3，MVP 不做误机）。
             if (flight.state == EFlightState::Departed)
@@ -569,10 +718,31 @@ namespace AirportSim
             case EPassengerState::ToEntrance:
                 if (agent.targetPoi.empty())
                 {
-                    if (const FPointOfInterest* entrance = NearestOfCategory(map, "entrance", agent.position))
+                    const FPointOfInterest* entrance = nullptr;
+                    if (agent.IsGroupedPassenger())
+                    {
+                        for (const auto& other : agents.Agents())
+                        {
+                            if (other.active && other.id != agent.id && other.groupId == agent.groupId &&
+                                !other.targetPoi.empty())
+                            {
+                                const FPointOfInterest* peerTarget = map.FindByName(other.targetPoi);
+                                if (peerTarget != nullptr && peerTarget->category == "entrance")
+                                {
+                                    entrance = peerTarget;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (entrance == nullptr)
+                    {
+                        entrance = NearestOfCategory(map, "entrance", agent.position);
+                    }
+                    if (entrance != nullptr)
                     {
                         agent.targetPoi = entrance->name;
-                        agents.MoveTo(agent, AirportMap::ServicePoint(*entrance, 0.0f));
+                        agents.MoveTo(agent, GroupTargetPosition(agent, *entrance, 0.0f));
                     }
                 }
                 else if (agents.Arrived(agent))
@@ -580,7 +750,7 @@ namespace AirportSim
                     agent.targetPoi.clear();
                     // 30% 自助 kiosk，70% 人工值机（§5.1）。
                     FPointOfInterest* kiosk = nullptr;
-                    if (Rand(0.0, 1.0) < Config::kKioskFraction)
+                    if (!agent.IsGroupedPassenger() && Rand(0.0, 1.0) < Config::kKioskFraction)
                     {
                         kiosk = map.ClaimFree("kiosk", agent.id);
                     }
@@ -592,7 +762,7 @@ namespace AirportSim
                     }
                     else
                     {
-                        const std::string queueId = queues.ShortestQueue("checkin");
+                        const std::string queueId = PreferredGroupQueue(agent, "checkin", agents, queues);
                         if (!queueId.empty())
                         {
                             agent.queueId = queueId;
@@ -619,7 +789,7 @@ namespace AirportSim
                     map.Release(agent.targetPoi, agent.id);
                     agent.targetPoi.clear();
                     agent.anim = EAgentAnimHint::Idle;
-                    const std::string queueId = queues.ShortestQueue("security");
+                    const std::string queueId = PreferredGroupQueue(agent, "security", agents, queues);
                     if (!queueId.empty())
                     {
                         agent.queueId = queueId;
@@ -637,11 +807,12 @@ namespace AirportSim
                 if (serviceDone)
                 {
                     const std::string doneQueue = agent.queueId;
+                    queues.Leave(doneQueue, agent.id);
                     agent.queueId.clear();
                     agent.queuedSlot = -1;
                     if (agent.pstate == EPassengerState::QueueCheckin)
                     {
-                        const std::string next = queues.ShortestQueue("security");
+                        const std::string next = PreferredGroupQueue(agent, "security", agents, queues);
                         if (!next.empty())
                         {
                             agent.queueId = next;

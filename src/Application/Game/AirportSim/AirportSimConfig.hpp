@@ -48,6 +48,11 @@ namespace AirportSim::Config
     // ---- 旅客（§3.2）----
     constexpr int   kMaxConcurrentPassengers = 24;
     constexpr float kKioskFraction = 0.30f;     // 30% 走自助值机
+    constexpr float kPassengerGroupFraction = 0.60f;
+    constexpr int   kMaxPassengerGroupSize = 4;
+    constexpr float kGroupSpawnSpacing = 0.65f;
+    constexpr float kGroupTargetSpacing = 0.55f;
+    constexpr double kGroupDiscussionCooldownMinutes = 28.0;
     // 1 游戏日 = 12 真实分钟（时间压缩 120×），步速也按压缩感放大，
     // 否则横穿航站楼要吃掉 ~90 游戏分钟，旅客赶不上登机。
     constexpr float kBaseWalkSpeed = 4.2f;      // m/s

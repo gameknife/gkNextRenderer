@@ -285,6 +285,12 @@ namespace AirportSim
                 const FFlight& flight = flights.Flights()[static_cast<size_t>(agent->flightIdx)];
                 row("航班", fmt::format("{} · {} · {}", flight.number, flight.gatePoi,
                                         FlightStateName(flight.state)));
+                if (agent->IsGroupedPassenger())
+                {
+                    row("同行", fmt::format("{} · G{} · {}/{}{}", PassengerGroupLabelZh(agent->groupType),
+                                            agent->groupId, agent->groupMemberIndex + 1, agent->groupSize,
+                                            agent->IsGroupLeader() ? " · 领队" : ""));
+                }
             }
             else if (agent->role != EAgentRole::Passenger)
             {
@@ -576,7 +582,9 @@ namespace AirportSim
                 continue;
             }
             // 名牌 + 情绪图标。
-            const std::string tag = fmt::format("{}{}", agent.name, MoodIcon(agent.mood));
+            const std::string groupTag =
+                agent.IsGroupedPassenger() ? fmt::format(" G{}", agent.groupId) : std::string();
+            const std::string tag = fmt::format("{}{}{}", agent.name, groupTag, MoodIcon(agent.mood));
             const ImVec2 tagSize = ImGui::CalcTextSize(tag.c_str());
             if (agent.id == state_.followAgentId)
             {

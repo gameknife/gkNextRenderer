@@ -64,6 +64,48 @@ namespace AirportSim
 
         auto& all = agents.Agents();
 
+        // 同行讨论：领队定期和附近成员确认行程，给 Layer 1 一个共同决策时刻。
+        for (auto& leader : all)
+        {
+            if (!leader.active || !leader.IsGroupLeader() || !CanReceiveEvent(leader) ||
+                gameMinutes - leader.lastGroupDiscussionAt < Config::kGroupDiscussionCooldownMinutes)
+            {
+                continue;
+            }
+
+            FAgent* companion = nullptr;
+            for (auto& other : all)
+            {
+                if (!other.active || other.groupId != leader.groupId || other.id == leader.id)
+                {
+                    continue;
+                }
+                const glm::vec3 d = leader.position - other.position;
+                if (glm::length(glm::vec2(d.x, d.z)) <= Config::kNeighborRadius * 1.5f)
+                {
+                    companion = &other;
+                    break;
+                }
+            }
+            if (companion == nullptr)
+            {
+                continue;
+            }
+
+            const bool inJourneyDiscussion =
+                !leader.queueId.empty() || leader.pstate == EPassengerState::AirsideIdle ||
+                leader.pstate == EPassengerState::AirsideUse;
+            if (!inJourneyDiscussion)
+            {
+                continue;
+            }
+
+            leader.eventNote = fmt::format("和同行的{}讨论接下来的安排", companion->name);
+            leader.nextDecisionAt = gameMinutes;
+            leader.lastGroupDiscussionAt = gameMinutes;
+            companion->lastGroupDiscussionAt = gameMinutes;
+        }
+
         // 相遇寒暄：3m 内邻居，带冷却（§5.3 感知事件）。
         for (size_t i = 0; i < all.size(); ++i)
         {
@@ -76,6 +118,10 @@ namespace AirportSim
             {
                 FAgent& b = all[j];
                 if (!b.active)
+                {
+                    continue;
+                }
+                if (a.IsGroupedPassenger() && b.groupId == a.groupId)
                 {
                     continue;
                 }

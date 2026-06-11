@@ -144,6 +144,11 @@ namespace AirportSim
             agent.anim = EAgentAnimHint::Idle;
             agent.pstate = EPassengerState::Despawned;
             agent.flightIdx = -1;
+            agent.groupId = -1;
+            agent.groupType = EPassengerGroupType::Solo;
+            agent.groupLeaderId = -1;
+            agent.groupMemberIndex = 0;
+            agent.groupSize = 1;
             agent.stateUntil = 0.0;
             agent.targetPoi.clear();
             agent.queueId.clear();
@@ -160,6 +165,7 @@ namespace AirportSim
             agent.nextDecisionAt = 0.0;
             agent.eventNote.clear();
             agent.lastGreetAt = -1e9;
+            agent.lastGroupDiscussionAt = -1e9;
             agent.chatChain = 0;
             agent.lastChatWith.clear();
             agent.recentSpeech.clear();
