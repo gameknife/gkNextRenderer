@@ -38,6 +38,9 @@ namespace AirportSim
                      const DecisionScheduler& scheduler, bool llmConnected);
         void DrawFlightBoardHud(const FlightBoard& flights);
         void DrawAgentPanel(const FlightBoard& flights, AgentSystem& agents, const DecisionScheduler& scheduler);
+        void DrawAnnouncement(const FlightBoard& flights);
+        void DrawBottomNavigation();
+        void DrawPlaceholderPanel();
         void DrawDebugPanel(double gameMinutes, TimeSystem& time, AgentSystem& agents, const QueueSystem& queues,
                             const DecisionScheduler& scheduler);
         void DrawDecisionHistory(const DecisionScheduler& scheduler, int agentId, const char* childId);
@@ -48,6 +51,11 @@ namespace AirportSim
         FState state_;
         glm::vec3 cameraEye_{0.0f};
         uint64_t selectedDecisionId_ = 0;
+        int inspectedAgentId_ = -1;
+        int activeAgentTab_ = 0;
+        int activeNavigation_ = 0;
+        double toastUntil_ = 0.0;
+        std::string toastText_;
 
     public:
         void SetCameraEye(const glm::vec3& eye) { cameraEye_ = eye; }

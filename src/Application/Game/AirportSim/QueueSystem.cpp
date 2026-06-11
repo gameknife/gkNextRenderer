@@ -1,13 +1,23 @@
 #include "QueueSystem.h"
 
+#include "AgentSystem.h"
 #include "AirportSimConfig.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 #include <spdlog/spdlog.h>
 
 namespace AirportSim
 {
+    namespace
+    {
+        bool StartsWith(const std::string& value, const char* prefix)
+        {
+            return value.rfind(prefix, 0) == 0;
+        }
+    }
+
     void QueueSystem::Reset(unsigned seed)
     {
         queues_.clear();
@@ -93,6 +103,9 @@ namespace AirportSim
         if (wasFront)
         {
             q->serving = false;
+            q->serviceStartedAt = 0.0;
+            q->serviceEndAt = 0.0;
+            q->currentServiceMinutes = 0.0;
         }
     }
 
@@ -160,26 +173,73 @@ namespace AirportSim
         return best != nullptr ? best->id : std::string();
     }
 
-    void QueueSystem::Tick(double gameMinutes)
+    void QueueSystem::Tick(double gameMinutes, const AgentSystem& agents)
     {
         for (auto& q : queues_)
         {
             if (!q.staffed || q.agents.empty())
             {
                 q.serving = false;
+                q.serviceStartedAt = 0.0;
+                q.serviceEndAt = 0.0;
+                q.currentServiceMinutes = 0.0;
                 continue;
             }
             if (!q.serving)
             {
+                const FAgent* passenger = agents.FindById(q.agents.front());
+                if (passenger == nullptr || !agents.Arrived(*passenger))
+                {
+                    continue;
+                }
+
+                std::uniform_real_distribution<double> baseDist(q.serviceMin, q.serviceMax);
+                std::uniform_real_distribution<double> facilityDist(Config::kFacilityDelayMultiplierMin,
+                                                                    Config::kFacilityDelayMultiplierMax);
+                std::uniform_real_distribution<double> passengerDist(Config::kPassengerDelayMultiplierMin,
+                                                                     Config::kPassengerDelayMultiplierMax);
+                std::uniform_real_distribution<double> unitDist(0.0, 1.0);
+
+                double duration = baseDist(rng_);
+                if (StartsWith(q.id, "checkin") || StartsWith(q.id, "security"))
+                {
+                    const double waitingPassengers = static_cast<double>(q.agents.size() - 1);
+                    const double congestionMultiplier =
+                        std::min(Config::kCongestionDelayMultiplierMax,
+                                 1.0 + waitingPassengers * Config::kCongestionDelayPerWaitingPassenger);
+                    double passengerMultiplier = passengerDist(rng_);
+                    if (passenger->IsGroupedPassenger())
+                    {
+                        passengerMultiplier += 0.05 * static_cast<double>(passenger->groupSize - 1);
+                    }
+                    if (passenger->personality == "急躁")
+                    {
+                        passengerMultiplier += 0.08;
+                    }
+                    duration *= facilityDist(rng_) * congestionMultiplier * passengerMultiplier;
+                    if (unitDist(rng_) < Config::kServiceIncidentChance)
+                    {
+                        std::uniform_real_distribution<double> incidentDist(
+                            Config::kServiceIncidentMultiplierMin, Config::kServiceIncidentMultiplierMax);
+                        duration *= incidentDist(rng_);
+                    }
+                }
+
                 q.serving = true;
-                std::uniform_real_distribution<double> dist(q.serviceMin, q.serviceMax);
-                q.serviceEndAt = gameMinutes + dist(rng_);
+                q.serviceStartedAt = gameMinutes;
+                q.currentServiceMinutes = duration;
+                q.serviceEndAt = gameMinutes + duration;
+                SPDLOG_DEBUG("AirportSim/Queue: {} serving {} for {:.1f} min (waiting {})", q.id,
+                             passenger->name, duration, q.agents.size() - 1);
             }
             else if (gameMinutes >= q.serviceEndAt)
             {
                 completed_.push_back(q.agents.front());
                 q.agents.erase(q.agents.begin());
                 q.serving = false;
+                q.serviceStartedAt = 0.0;
+                q.serviceEndAt = 0.0;
+                q.currentServiceMinutes = 0.0;
             }
         }
     }

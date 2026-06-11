@@ -135,6 +135,7 @@ namespace AirportSim
         std::vector<FAgent>& Agents() { return agents_; }
         const std::vector<FAgent>& Agents() const { return agents_; }
         FAgent* FindById(int id);
+        const FAgent* FindById(int id) const;
         int ActiveCount(EAgentRole role) const;
         int ActivePassengerCount() const;
         bool NavReady() const { return navReady_; }

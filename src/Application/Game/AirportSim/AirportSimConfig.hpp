@@ -40,10 +40,10 @@ namespace AirportSim::Config
     constexpr double kCheckinOpenLead = 120.0;  // 起飞前 120 分钟开值机
     constexpr double kBoardingLead = 30.0;
     constexpr double kFinalCallLead = 10.0;
-    // 旅客在起飞前 130~70 分钟生成：值机+安检全链约耗 40~50 游戏分钟，
-    // 这样到空侧还有 30~60 分钟富余时间逛店/喝咖啡/候机（早窗口=活的空侧）。
-    constexpr double kSpawnWindowStart = 130.0;
-    constexpr double kSpawnWindowEnd = 70.0;
+    // 旅客在起飞前 240~160 分钟生成。动态值机/安检在拥堵时可能耗时 40~70 分钟，
+    // 该窗口可让大多数旅客在登机前保留 90~150 分钟空侧消费或候机时间。
+    constexpr double kSpawnWindowStart = 240.0;
+    constexpr double kSpawnWindowEnd = 160.0;
 
     // ---- 旅客（§3.2）----
     constexpr int   kMaxConcurrentPassengers = 24;
@@ -57,13 +57,23 @@ namespace AirportSim::Config
     // 否则横穿航站楼要吃掉 ~90 游戏分钟，旅客赶不上登机。
     constexpr float kBaseWalkSpeed = 4.2f;      // m/s
     constexpr float kWalkSpeedJitter = 0.15f;   // ±15%
-    constexpr double kForceToGateMinutes = 15.0; // 富余 <15 游戏分钟强制收敛去 gate
+    constexpr double kForceToGateMinutes = 5.0; // 距开始登机不足 5 分钟时强制收敛去 gate
 
     // ---- 服务计时（游戏分钟）----
-    constexpr double kCheckinServiceMin = 8.0,  kCheckinServiceMax = 15.0;
-    constexpr double kKioskServiceMin = 2.0,    kKioskServiceMax = 4.0;
-    constexpr double kSecurityServiceMin = 2.0, kSecurityServiceMax = 5.0;
+    // 服务时间从旅客真正到达服务位后开始。实际耗时还会叠加设施状态、拥堵和旅客复杂度波动。
+    constexpr double kCheckinServiceMin = 9.0,   kCheckinServiceMax = 18.0;
+    constexpr double kKioskServiceMin = 4.0,     kKioskServiceMax = 8.0;
+    constexpr double kSecurityServiceMin = 5.0,  kSecurityServiceMax = 10.0;
     constexpr double kGateServiceMin = 0.5,     kGateServiceMax = 1.5;
+    constexpr double kFacilityDelayMultiplierMin = 0.85;
+    constexpr double kFacilityDelayMultiplierMax = 1.45;
+    constexpr double kPassengerDelayMultiplierMin = 0.90;
+    constexpr double kPassengerDelayMultiplierMax = 1.35;
+    constexpr double kCongestionDelayPerWaitingPassenger = 0.04;
+    constexpr double kCongestionDelayMultiplierMax = 1.28;
+    constexpr double kServiceIncidentChance = 0.12;
+    constexpr double kServiceIncidentMultiplierMin = 1.35;
+    constexpr double kServiceIncidentMultiplierMax = 1.90;
     constexpr double kShopUseMin = 3.0,         kShopUseMax = 8.0;
     constexpr double kToiletUseMin = 1.0,       kToiletUseMax = 2.5;
     constexpr double kVendingUseMin = 0.8,      kVendingUseMax = 1.5;

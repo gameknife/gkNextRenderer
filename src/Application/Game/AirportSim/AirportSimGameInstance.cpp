@@ -127,7 +127,7 @@ void AirportSimGameInstance::OnSceneLoaded()
     if (GOption->AgentValidation)
     {
         // 截图验证：直接跳到客流高峰并提速，让画面里有人。
-        time_.Skip(4.5 * 60.0); // 05:00 -> 09:30
+        time_.Skip(1.5 * 60.0); // 05:00 -> 06:30，保留旅客分批到达过程
         time_.TimeScaleRef() = AirportSim::Config::kMaxTimeScale;
         ui_.State().llmEnabled = false;
         zoom_ = 0.6f; // 拉近一档，截图里能看清角色
@@ -168,7 +168,7 @@ void AirportSimGameInstance::OnTick(double deltaSeconds)
     {
         flightBoard_.Tick(time_.DayIndex(), dayMinutes);
         journey_.Tick(gameMinutes, dayMinutes, time_.DayIndex(), agents_, map_, queues_, flightBoard_, time_);
-        queues_.Tick(gameMinutes);
+        queues_.Tick(gameMinutes, agents_);
         perception_.Tick(deltaSeconds, gameMinutes, agents_, queues_, flightBoard_);
 
         NextAI::FAIService* ai =

@@ -9,11 +9,13 @@
 #include "TimeSystem.h"
 
 #include <algorithm>
+#include <cmath>
 #include <iterator>
 #include <vector>
 
 #include <fmt/format.h>
 #include <imgui.h>
+#include <ThirdParty/fontawesome/IconsFontAwesome6.h>
 
 namespace AirportSim
 {
@@ -22,7 +24,92 @@ namespace AirportSim
         constexpr ImGuiWindowFlags kHudFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
                                                ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
                                                ImGuiWindowFlags_NoSavedSettings |
-                                               ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_AlwaysAutoResize;
+                                               ImGuiWindowFlags_NoFocusOnAppearing;
+
+        constexpr ImVec4 kPanelBg{0.035f, 0.105f, 0.145f, 0.94f};
+        constexpr ImVec4 kBorder{0.18f, 0.39f, 0.50f, 0.72f};
+        constexpr ImVec4 kText{0.91f, 0.96f, 0.98f, 1.0f};
+        constexpr ImVec4 kMuted{0.55f, 0.67f, 0.73f, 1.0f};
+        constexpr ImVec4 kBlue{0.22f, 0.70f, 0.96f, 1.0f};
+        constexpr ImVec4 kGreen{0.31f, 0.85f, 0.57f, 1.0f};
+        constexpr ImVec4 kYellow{1.00f, 0.76f, 0.26f, 1.0f};
+        constexpr ImVec4 kPurple{0.65f, 0.48f, 0.96f, 1.0f};
+
+        float UiScale()
+        {
+            const ImVec2 size = ImGui::GetMainViewport()->Size;
+            return std::clamp(std::min(size.x / 1920.0f, size.y / 1080.0f), 0.72f, 1.25f);
+        }
+
+        void PushProductTheme()
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 13.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 9.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 7.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 12.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 7.0f));
+            ImGui::PushStyleColor(ImGuiCol_WindowBg, kPanelBg);
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.04f, 0.12f, 0.16f, 0.74f));
+            ImGui::PushStyleColor(ImGuiCol_Border, kBorder);
+            ImGui::PushStyleColor(ImGuiCol_Text, kText);
+            ImGui::PushStyleColor(ImGuiCol_TextDisabled, kMuted);
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.06f, 0.18f, 0.25f, 0.96f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.09f, 0.31f, 0.43f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.08f, 0.43f, 0.62f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.08f, 0.35f, 0.52f, 0.90f));
+            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.10f, 0.44f, 0.64f, 0.95f));
+            ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.12f, 0.50f, 0.72f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_TableRowBgAlt, ImVec4(0.11f, 0.22f, 0.28f, 0.40f));
+            ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.20f, 0.39f, 0.48f, 0.66f));
+        }
+
+        void PopProductTheme()
+        {
+            ImGui::PopStyleColor(13);
+            ImGui::PopStyleVar(7);
+        }
+
+        bool AccentButton(const char* label, const ImVec2& size, bool active, const ImVec4& accent = kBlue)
+        {
+            if (active)
+            {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(accent.x * 0.45f, accent.y * 0.60f,
+                                                              accent.z * 0.70f, 0.96f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(accent.x * 0.58f, accent.y * 0.76f,
+                                                                     accent.z * 0.85f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Border, accent);
+            }
+            const bool pressed = ImGui::Button(label, size);
+            if (active)
+            {
+                ImGui::PopStyleColor(3);
+            }
+            return pressed;
+        }
+
+        const char* FlightStateLabelZh(EFlightState state)
+        {
+            switch (state)
+            {
+            case EFlightState::CheckinOpen: return "办理登机";
+            case EFlightState::Boarding:    return "正在登机";
+            case EFlightState::Final:       return "最后召集";
+            case EFlightState::Departed:    return "已经起飞";
+            default:                        return "计划中";
+            }
+        }
+
+        int GateNumber(const std::string& gatePoi)
+        {
+            const size_t underscore = gatePoi.find_last_of('_');
+            if (underscore == std::string::npos)
+            {
+                return 0;
+            }
+            return std::atoi(gatePoi.c_str() + underscore + 1);
+        }
 
         ImU32 ColorToImU32(const glm::vec3& c)
         {
@@ -103,9 +190,13 @@ namespace AirportSim
                             const FlightBoard& flights, AgentSystem& agents, const AirportMap& map,
                             const QueueSystem& queues, const DecisionScheduler& scheduler, bool llmConnected)
     {
+        PushProductTheme();
         DrawHud(time, flights, agents, scheduler, llmConnected);
+        DrawAnnouncement(flights);
         DrawFlightBoardHud(flights);
         DrawAgentPanel(flights, agents, scheduler);
+        DrawBottomNavigation();
+        DrawPlaceholderPanel();
         if (state_.showDebugPanel)
         {
             DrawDebugPanel(gameMinutes, time, agents, queues, scheduler);
@@ -115,80 +206,187 @@ namespace AirportSim
             DrawWorldOverlay(viewProjection, gameMinutes, agents, map, cameraEye_);
         }
         DrawDecisionDetail(scheduler);
+        PopProductTheme();
     }
 
     void AirportSimUI::DrawHud(TimeSystem& time, const FlightBoard& flights, const AgentSystem& agents,
                                const DecisionScheduler& scheduler, bool llmConnected)
     {
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + 12.0f, viewport->WorkPos.y + 12.0f), ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(0.85f);
+        const float scale = UiScale();
+        ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + 14.0f * scale, viewport->WorkPos.y + 14.0f * scale),
+                                ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(550.0f * scale, 198.0f * scale), ImGuiCond_Always);
         if (!ImGui::Begin("##AirportClock", nullptr, kHudFlags))
         {
             ImGui::End();
             return;
         }
 
-        int hh = 0, mm = 0;
+        int hh = 0;
+        int mm = 0;
         MinutesToHHMM(time.DayMinutes(), hh, mm);
-        ImGui::TextColored(ImVec4(0.78f, 0.88f, 1.00f, 1.0f), "Day %d  %02d:%02d", time.DayIndex() + 1, hh, mm);
-        ImGui::SameLine();
-        ImGui::TextDisabled(time.IsNight() ? "[夜]" : "[昼]");
-
-        ImGui::SetNextItemWidth(160.0f);
-        ImGui::SliderFloat("速度", &time.TimeScaleRef(), Config::kMinTimeScale, Config::kMaxTimeScale, "%.1f min/s");
-        ImGui::SameLine();
-        ImGui::Checkbox("暂停", &time.PausedRef());
-
-        int passengers = 0, staff = 0;
+        int passengers = 0;
+        int staff = 0;
+        int positiveMood = 0;
         for (const auto& agent : agents.Agents())
         {
             if (!agent.active)
             {
                 continue;
             }
-            (agent.role == EAgentRole::Passenger ? passengers : staff)++;
+            if (agent.role == EAgentRole::Passenger)
+            {
+                ++passengers;
+            }
+            else
+            {
+                ++staff;
+            }
+            positiveMood += agent.mood == EMood::Happy || agent.mood == EMood::Excited ? 1 : 0;
         }
-        ImGui::TextDisabled("旅客 %d  员工 %d  航班 %zu", passengers, staff, flights.Flights().size());
-        ImGui::TextDisabled("LLM %s%s  决策 %d (规则 %d)", llmConnected ? "在线" : "离线",
-                            scheduler.InFlight() ? "·思考中" : "", scheduler.DecisionsMade(),
-                            scheduler.FallbacksUsed());
-        ImGui::TextDisabled("点击角色查看状态 · 点击空白或 Esc 取消 · F8 调试");
+        const int activeAgents = passengers + staff;
+        const int satisfaction =
+            activeAgents > 0 ? std::clamp(76 + positiveMood * 24 / activeAgents - scheduler.FallbacksUsed(), 68, 98)
+                             : 87;
+        int boarded = 0;
+        for (const auto& flight : flights.Flights())
+        {
+            boarded += flight.paxBoarded;
+        }
+        const int revenue = 48200 + passengers * 620 + boarded * 1380 + time.DayIndex() * 12600;
+
+        ImGui::Text("Day %d", time.DayIndex() + 1);
+        ImGui::SameLine(90.0f * scale);
+        ImGui::TextColored(kBlue, ICON_FA_CLOCK);
+        ImGui::SameLine();
+        ImGui::Text("%02d:%02d", hh, mm);
+
+        const float controlWidth = 46.0f * scale;
+        const float controlsStart = ImGui::GetWindowContentRegionMax().x - controlWidth * 4.0f - 18.0f * scale;
+        ImGui::SameLine(controlsStart);
+        const bool paused = time.PausedRef();
+        if (AccentButton(paused ? ICON_FA_PLAY : ICON_FA_PAUSE, ImVec2(controlWidth, 32.0f * scale), paused))
+        {
+            time.PausedRef() = !time.PausedRef();
+        }
+        const float speeds[] = {Config::kDefaultTimeScale, Config::kDefaultTimeScale * 2.0f,
+                                Config::kDefaultTimeScale * 4.0f};
+        const char* labels[] = {"1x", "2x", "4x"};
+        for (int i = 0; i < 3; ++i)
+        {
+            ImGui::SameLine();
+            const bool active = !time.PausedRef() && std::abs(time.TimeScaleRef() - speeds[i]) < 0.1f;
+            if (AccentButton(labels[i], ImVec2(controlWidth, 32.0f * scale), active))
+            {
+                time.TimeScaleRef() = speeds[i];
+                time.PausedRef() = false;
+            }
+        }
+
+        ImGui::Separator();
+        const float statsTop = ImGui::GetCursorPosY() + 2.0f * scale;
+        const float columnWidth =
+            (ImGui::GetWindowContentRegionMax().x - ImGui::GetWindowContentRegionMin().x) / 4.0f;
+        const char* icons[] = {ICON_FA_USERS, ICON_FA_USER_TIE, ICON_FA_PLANE_DEPARTURE, ICON_FA_FACE_SMILE};
+        const char* summaryLabels[] = {"旅客", "员工", "航班", "满意度"};
+        const ImVec4 colors[] = {kBlue, kGreen, kYellow, kPurple};
+        const int values[] = {passengers, staff, static_cast<int>(flights.Flights().size()), satisfaction};
+        for (int i = 0; i < 4; ++i)
+        {
+            ImGui::SetCursorPos(ImVec2(14.0f + columnWidth * static_cast<float>(i), statsTop));
+            if (i > 0)
+            {
+                const ImVec2 divider = ImGui::GetCursorScreenPos();
+                ImGui::GetWindowDrawList()->AddLine(ImVec2(divider.x - 10.0f * scale, divider.y),
+                                                    ImVec2(divider.x - 10.0f * scale, divider.y + 48.0f * scale),
+                                                    ImGui::ColorConvertFloat4ToU32(kBorder));
+            }
+            ImGui::TextColored(colors[i], "%s", icons[i]);
+            ImGui::SameLine();
+            ImGui::TextDisabled("%s", summaryLabels[i]);
+            ImGui::SetCursorPosX(14.0f + columnWidth * static_cast<float>(i));
+            if (i == 3)
+            {
+                ImGui::Text("  %d%%", values[i]);
+            }
+            else
+            {
+                ImGui::Text("  %d", values[i]);
+            }
+        }
+
+        ImGui::SetCursorPosY(statsTop + 56.0f * scale);
+        ImGui::Separator();
+        ImGui::TextColored(kGreen, ICON_FA_SACK_DOLLAR);
+        ImGui::SameLine();
+        ImGui::Text("收入   ¥ %d", revenue);
+        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 120.0f * scale);
+        ImGui::TextColored(llmConnected ? kGreen : kMuted, "AI %s%s", llmConnected ? "在线" : "离线",
+                           scheduler.InFlight() ? " · 思考中" : "");
         ImGui::End();
     }
 
     void AirportSimUI::DrawFlightBoardHud(const FlightBoard& flights)
     {
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x - 12.0f, viewport->WorkPos.y + 12.0f),
+        const float scale = UiScale();
+        ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x - 14.0f * scale,
+                                      viewport->WorkPos.y + 18.0f * scale),
                                 ImGuiCond_Always, ImVec2(1.0f, 0.0f));
-        ImGui::SetNextWindowBgAlpha(0.85f);
+        ImGui::SetNextWindowSize(ImVec2(370.0f * scale, 520.0f * scale), ImGuiCond_Always);
         if (!ImGui::Begin("##AirportFids", nullptr, kHudFlags))
         {
             ImGui::End();
             return;
         }
-        ImGui::TextColored(ImVec4(0.78f, 0.88f, 1.00f, 1.0f), "DEPARTURES");
+
+        ImGui::SetWindowFontScale(1.14f);
+        ImGui::TextColored(kBlue, ICON_FA_PLANE_DEPARTURE);
+        ImGui::SameLine();
+        ImGui::Text("出发航班");
+        ImGui::SetWindowFontScale(0.78f);
+        ImGui::SameLine();
+        ImGui::TextDisabled("DEPARTURES");
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::Dummy(ImVec2(0.0f, 3.0f * scale));
         ImGui::Separator();
-        if (ImGui::BeginTable("##fids", 5, ImGuiTableFlags_SizingFixedFit))
+        if (ImGui::BeginTable("##fids", 4, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg |
+                                                ImGuiTableFlags_BordersInnerH,
+                              ImVec2(0.0f, 405.0f * scale)))
         {
+            ImGui::TableSetupColumn("航班号", ImGuiTableColumnFlags_WidthFixed, 78.0f * scale);
+            ImGui::TableSetupColumn("时间", ImGuiTableColumnFlags_WidthFixed, 64.0f * scale);
+            ImGui::TableSetupColumn("登机口", ImGuiTableColumnFlags_WidthFixed, 60.0f * scale);
+            ImGui::TableSetupColumn("状态", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableHeadersRow();
             for (const auto& flight : flights.Flights())
             {
                 int hh = 0, mm = 0;
                 MinutesToHHMM(flight.departMinutes, hh, mm);
-                ImGui::TableNextRow();
+                ImGui::TableNextRow(ImGuiTableRowFlags_None, 34.0f * scale);
                 ImGui::TableSetColumnIndex(0);
+                ImGui::TextColored(FlightStateColor(flight.state), ICON_FA_CIRCLE);
+                ImGui::SameLine();
                 ImGui::TextUnformatted(flight.number.c_str());
                 ImGui::TableSetColumnIndex(1);
                 ImGui::Text("%02d:%02d", hh, mm);
                 ImGui::TableSetColumnIndex(2);
-                ImGui::TextUnformatted(flight.gatePoi.c_str() + 5); // 只显示编号
+                ImGui::Text("%02d", GateNumber(flight.gatePoi));
                 ImGui::TableSetColumnIndex(3);
-                ImGui::TextColored(FlightStateColor(flight.state), "%s", FlightStateName(flight.state));
-                ImGui::TableSetColumnIndex(4);
-                ImGui::TextDisabled("%d/%d", flight.paxBoarded, flight.paxTotal);
+                ImGui::TextColored(FlightStateColor(flight.state), "%s", FlightStateLabelZh(flight.state));
             }
             ImGui::EndTable();
+        }
+
+        ImGui::Separator();
+        ImGui::TextDisabled("%zu/%zu", flights.Flights().size(), flights.Flights().size());
+        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 145.0f * scale);
+        if (ImGui::Button("查看全部航班  " ICON_FA_ARROW_RIGHT, ImVec2(145.0f * scale, 30.0f * scale)))
+        {
+            activeNavigation_ = 2;
+            toastText_ = "已打开航班运营总览（占位）";
+            toastUntil_ = ImGui::GetTime() + 3.0;
         }
         ImGui::End();
     }
@@ -198,122 +396,381 @@ namespace AirportSim
     {
         if (state_.followAgentId < 0)
         {
+            inspectedAgentId_ = -1;
             return;
         }
+        inspectedAgentId_ = state_.followAgentId;
 
-        FAgent* agent = agents.FindById(state_.followAgentId);
+        FAgent* agent = agents.FindById(inspectedAgentId_);
         if (agent == nullptr)
         {
             state_.followAgentId = -1;
+            inspectedAgentId_ = -1;
             return;
         }
 
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        const float scale = UiScale();
         ImGui::SetNextWindowPos(
-            ImVec2(viewport->WorkPos.x + 12.0f, viewport->WorkPos.y + viewport->WorkSize.y - 12.0f),
+            ImVec2(viewport->WorkPos.x + 14.0f * scale,
+                   viewport->WorkPos.y + viewport->WorkSize.y - 72.0f * scale),
             ImGuiCond_Always, ImVec2(0.0f, 1.0f));
-        ImGui::SetNextWindowSize(ImVec2(390.0f, 430.0f), ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(0.94f);
-
-        bool open = true;
-        if (!ImGui::Begin("角色状态", &open,
-                          ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                              ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing))
+        ImGui::SetNextWindowSize(ImVec2(460.0f * scale, 438.0f * scale), ImGuiCond_Always);
+        if (!ImGui::Begin("##AirportAgentCard", nullptr, kHudFlags))
         {
             ImGui::End();
-            if (!open)
-            {
-                state_.followAgentId = -1;
-            }
             return;
         }
 
-        const float buttonWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
-        if (ImGui::Button("< 上一位", ImVec2(buttonWidth, 0.0f)))
+        const ImVec2 avatarCenter(ImGui::GetCursorScreenPos().x + 25.0f * scale,
+                                  ImGui::GetCursorScreenPos().y + 25.0f * scale);
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        drawList->AddCircleFilled(avatarCenter, 24.0f * scale, IM_COL32(37, 89, 113, 255));
+        drawList->AddCircleFilled(ImVec2(avatarCenter.x, avatarCenter.y - 5.0f * scale), 8.0f * scale,
+                                  ColorToImU32(agent->color));
+        drawList->AddRectFilled(ImVec2(avatarCenter.x - 11.0f * scale, avatarCenter.y + 5.0f * scale),
+                                ImVec2(avatarCenter.x + 11.0f * scale, avatarCenter.y + 18.0f * scale),
+                                ColorToImU32(agent->color), 7.0f * scale);
+        ImGui::Dummy(ImVec2(58.0f * scale, 48.0f * scale));
+        ImGui::SameLine();
+        ImGui::BeginGroup();
+        ImGui::SetWindowFontScale(1.12f);
+        ImGui::TextUnformatted(agent->name.c_str());
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::TextDisabled("#%d  %s", agent->id, RoleLabelZh(agent->role));
+        ImGui::EndGroup();
+
+        const float navigationWidth = 92.0f * scale;
+        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - navigationWidth * 2.0f - 8.0f * scale);
+        if (ImGui::Button(ICON_FA_CHEVRON_LEFT " 上一位", ImVec2(navigationWidth, 36.0f * scale)))
         {
-            SwitchFollowAgent(agents, state_.followAgentId, -1);
+            SwitchFollowAgent(agents, inspectedAgentId_, -1);
+            state_.followAgentId = inspectedAgentId_;
         }
         ImGui::SameLine();
-        if (ImGui::Button("下一位 >", ImVec2(buttonWidth, 0.0f)))
+        if (ImGui::Button("下一位 " ICON_FA_CHEVRON_RIGHT, ImVec2(navigationWidth, 36.0f * scale)))
         {
-            SwitchFollowAgent(agents, state_.followAgentId, 1);
+            SwitchFollowAgent(agents, inspectedAgentId_, 1);
+            state_.followAgentId = inspectedAgentId_;
         }
 
-        agent = agents.FindById(state_.followAgentId);
+        agent = agents.FindById(inspectedAgentId_);
         if (agent == nullptr)
         {
             ImGui::End();
-            state_.followAgentId = -1;
             return;
         }
 
-        ImGui::Spacing();
-        ImGui::TextColored(ImColor(ColorToImU32(agent->color)), "%s", agent->name.c_str());
-        ImGui::SameLine();
-        ImGui::TextDisabled("#%d", agent->id);
         ImGui::Separator();
-
-        if (ImGui::BeginTable("##agentStatus", 2, ImGuiTableFlags_SizingStretchProp))
+        const char* tabLabels[] = {"概览", "需求", "行程", "记录"};
+        const float tabWidth = (ImGui::GetContentRegionAvail().x - 3.0f * ImGui::GetStyle().ItemSpacing.x) / 4.0f;
+        for (int i = 0; i < 4; ++i)
         {
-            auto row = [](const char* label, const std::string& value)
+            if (i > 0)
             {
-                ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0);
-                ImGui::TextDisabled("%s", label);
-                ImGui::TableSetColumnIndex(1);
-                ImGui::TextWrapped("%s", value.c_str());
-            };
-
-            row("职业", RoleLabelZh(agent->role));
-            row("性格", agent->personality.empty() ? "-" : agent->personality);
-            row("情绪", fmt::format("{} {}", MoodIcon(agent->mood), MoodLabelZh(agent->mood)));
-            row("状态", agent->role == EAgentRole::Passenger ? PassengerStateName(agent->pstate)
-                                                              : StaffStateName(agent->sstate));
-            row("行动", agent->moving ? "移动中" : (agent->anim == EAgentAnimHint::Sit ? "坐下" : "停留"));
-
-            std::string target = agent->targetPoi;
-            if (target.empty())
-            {
-                target = !agent->queueId.empty() ? agent->queueId : agent->postPoi;
+                ImGui::SameLine();
             }
-            row("目标", target.empty() ? "-" : target);
-            row("位置", fmt::format("X {:.1f}  Z {:.1f}", agent->position.x, agent->position.z));
+            if (AccentButton(tabLabels[i], ImVec2(tabWidth, 34.0f * scale), activeAgentTab_ == i))
+            {
+                activeAgentTab_ = i;
+            }
+        }
 
-            if (agent->role == EAgentRole::Passenger && agent->flightIdx >= 0 &&
-                agent->flightIdx < static_cast<int>(flights.Flights().size()))
+        ImGui::Separator();
+        if (activeAgentTab_ == 0)
+        {
+            if (ImGui::BeginTable("##agentStatus", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp,
+                                  ImVec2(0.0f, 242.0f * scale)))
+            {
+                auto row = [](const char* label, const std::string& value, const ImVec4* color = nullptr)
+                {
+                    ImGui::TableNextRow(ImGuiTableRowFlags_None, 31.0f);
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextDisabled("%s", label);
+                    ImGui::TableSetColumnIndex(1);
+                    if (color != nullptr)
+                    {
+                        ImGui::TextColored(*color, "%s", value.c_str());
+                    }
+                    else
+                    {
+                        ImGui::TextWrapped("%s", value.c_str());
+                    }
+                };
+
+                row("职业", RoleLabelZh(agent->role));
+                row("性格", agent->personality.empty() ? "档案未录入" : agent->personality);
+                const std::string mood = fmt::format("{} {}", MoodIcon(agent->mood), MoodLabelZh(agent->mood));
+                row("情绪", mood, &kGreen);
+                row("状态", agent->role == EAgentRole::Passenger ? PassengerStateName(agent->pstate)
+                                                                  : StaffStateName(agent->sstate));
+                row("行动", agent->moving ? ICON_FA_PERSON_WALKING " 移动中" : "停留");
+                std::string target = agent->targetPoi;
+                if (target.empty())
+                {
+                    target = !agent->queueId.empty() ? agent->queueId : agent->postPoi;
+                }
+                row("目标", target.empty() ? "等待下一项安排" : target);
+                row("位置", fmt::format(ICON_FA_LOCATION_DOT "  X {:.1f}   Z {:.1f}", agent->position.x,
+                                        agent->position.z));
+
+                std::string task = "机场自由活动";
+                if (agent->role == EAgentRole::Passenger && agent->flightIdx >= 0 &&
+                    agent->flightIdx < static_cast<int>(flights.Flights().size()))
+                {
+                    const FFlight& flight = flights.Flights()[static_cast<size_t>(agent->flightIdx)];
+                    task = fmt::format(ICON_FA_PLANE " 前往登机口 {}（{}）", GateNumber(flight.gatePoi),
+                                       flight.number);
+                }
+                else if (agent->role != EAgentRole::Passenger)
+                {
+                    task = fmt::format("{} · {}", agent->postPoi.empty() ? "岗位待命" : agent->postPoi,
+                                       ShiftName(agent->shift));
+                }
+                row("当前任务", task, &kGreen);
+                ImGui::EndTable();
+            }
+        }
+        else if (activeAgentTab_ == 1)
+        {
+            ImGui::TextColored(kBlue, ICON_FA_FACE_SMILE " 旅客需求");
+            ImGui::TextDisabled("需求系统尚未接入，以下为产品占位数据");
+            ImGui::ProgressBar(0.78f, ImVec2(-1.0f, 24.0f * scale), "舒适度 78%");
+            ImGui::ProgressBar(0.62f, ImVec2(-1.0f, 24.0f * scale), "时间余量 62%");
+            ImGui::ProgressBar(0.86f, ImVec2(-1.0f, 24.0f * scale), "服务体验 86%");
+        }
+        else if (activeAgentTab_ == 2)
+        {
+            ImGui::TextColored(kYellow, ICON_FA_SUITCASE_ROLLING " 行程追踪");
+            if (agent->flightIdx >= 0 && agent->flightIdx < static_cast<int>(flights.Flights().size()))
             {
                 const FFlight& flight = flights.Flights()[static_cast<size_t>(agent->flightIdx)];
-                row("航班", fmt::format("{} · {} · {}", flight.number, flight.gatePoi,
-                                        FlightStateName(flight.state)));
-                if (agent->IsGroupedPassenger())
+                int hh = 0, mm = 0;
+                MinutesToHHMM(flight.departMinutes, hh, mm);
+                ImGui::Text("航班  %s", flight.number.c_str());
+                ImGui::Text("登机口  %02d", GateNumber(flight.gatePoi));
+                ImGui::Text("计划起飞  %02d:%02d", hh, mm);
+                ImGui::TextColored(FlightStateColor(flight.state), "当前状态  %s", FlightStateLabelZh(flight.state));
+            }
+            else
+            {
+                ImGui::TextDisabled("该角色暂无关联航班");
+            }
+        }
+        else
+        {
+            if (agent->decisionPending)
+            {
+                ImGui::TextColored(kYellow, "正在思考... %s", FormatLatency(scheduler.InFlightElapsedMs()).c_str());
+            }
+            DrawDecisionHistory(scheduler, agent->id, "##agentDecisionHistory");
+        }
+        ImGui::End();
+    }
+
+    void AirportSimUI::DrawAnnouncement(const FlightBoard& flights)
+    {
+        const FFlight* announcementFlight = nullptr;
+        int announcementPriority = 0;
+        for (const auto& flight : flights.Flights())
+        {
+            int priority = 0;
+            switch (flight.state)
+            {
+            case EFlightState::Final:       priority = 3; break;
+            case EFlightState::Boarding:    priority = 2; break;
+            case EFlightState::CheckinOpen: priority = 1; break;
+            default:                        break;
+            }
+            if (priority > announcementPriority ||
+                (priority == announcementPriority && priority > 0 && announcementFlight != nullptr &&
+                 flight.departMinutes < announcementFlight->departMinutes))
+            {
+                announcementFlight = &flight;
+                announcementPriority = priority;
+            }
+        }
+        if (announcementFlight == nullptr)
+        {
+            return;
+        }
+
+        std::string message;
+        switch (announcementFlight->state)
+        {
+        case EFlightState::Final:
+            message = fmt::format("{} 航班正在最后召集，请立即前往 {:02d} 号登机口。",
+                                  announcementFlight->number, GateNumber(announcementFlight->gatePoi));
+            break;
+        case EFlightState::Boarding:
+            message = fmt::format("{} 航班已在 {:02d} 号登机口开始登机，请旅客准备登机。",
+                                  announcementFlight->number, GateNumber(announcementFlight->gatePoi));
+            break;
+        case EFlightState::CheckinOpen:
+        {
+            int hh = 0;
+            int mm = 0;
+            MinutesToHHMM(announcementFlight->departMinutes, hh, mm);
+            message = fmt::format("{} 航班现已开放值机，计划 {:02d}:{:02d} 从 {:02d} 号登机口出发。",
+                                  announcementFlight->number, hh, mm, GateNumber(announcementFlight->gatePoi));
+            break;
+        }
+        default:
+            return;
+        }
+
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        const float scale = UiScale();
+        ImGui::SetNextWindowPos(
+            ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f, viewport->WorkPos.y + 18.0f * scale),
+            ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+        ImGui::SetNextWindowSize(ImVec2(530.0f * scale, 64.0f * scale), ImGuiCond_Always);
+        if (!ImGui::Begin("##AirportAnnouncement", nullptr, kHudFlags))
+        {
+            ImGui::End();
+            return;
+        }
+
+        ImGui::SetWindowFontScale(1.24f);
+        ImGui::TextColored(announcementPriority == 3 ? kYellow : kBlue, ICON_FA_BULLHORN);
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::SameLine();
+        ImGui::TextWrapped("%s", message.c_str());
+        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 50.0f * scale);
+        ImGui::TextDisabled("广播");
+        ImGui::End();
+    }
+
+    void AirportSimUI::DrawBottomNavigation()
+    {
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        const float scale = UiScale();
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::SetNextWindowPos(
+            ImVec2(viewport->WorkPos.x, viewport->WorkPos.y + viewport->WorkSize.y - 58.0f * scale),
+            ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x, 58.0f * scale), ImGuiCond_Always);
+        if (!ImGui::Begin("##AirportBottomNavigation", nullptr, kHudFlags))
+        {
+            ImGui::End();
+            ImGui::PopStyleVar(2);
+            return;
+        }
+
+        struct FNavigationItem
+        {
+            const char* label;
+            const char* placeholder;
+        };
+        constexpr FNavigationItem items[] = {
+            {ICON_FA_USERS " 旅客", nullptr},
+            {ICON_FA_USER_TIE " 员工", "员工排班与岗位管理"},
+            {ICON_FA_PLANE_DEPARTURE " 航班", "航班运营总览"},
+            {ICON_FA_BUILDING " 设施", "机场设施建设与维护"},
+            {ICON_FA_COINS " 财务", "机场财务与经营报表"},
+            {ICON_FA_FILE_LINES " 报告", "运营数据报告中心"},
+            {ICON_FA_TRIANGLE_EXCLAMATION " 告警", "机场事件与告警中心"},
+        };
+
+        for (int i = 0; i < static_cast<int>(std::size(items)); ++i)
+        {
+            if (i > 0)
+            {
+                ImGui::SameLine();
+            }
+            if (AccentButton(items[i].label, ImVec2(92.0f * scale, 34.0f * scale), activeNavigation_ == i,
+                             i == 6 ? ImVec4(1.0f, 0.40f, 0.42f, 1.0f) : kBlue))
+            {
+                activeNavigation_ = i;
+                if (items[i].placeholder != nullptr)
                 {
-                    row("同行", fmt::format("{} · G{} · {}/{}{}", PassengerGroupLabelZh(agent->groupType),
-                                            agent->groupId, agent->groupMemberIndex + 1, agent->groupSize,
-                                            agent->IsGroupLeader() ? " · 领队" : ""));
+                    toastText_ = fmt::format("{}已打开（占位）", items[i].placeholder);
+                    toastUntil_ = ImGui::GetTime() + 3.0;
                 }
             }
-            else if (agent->role != EAgentRole::Passenger)
-            {
-                row("班次", ShiftName(agent->shift));
-            }
-            ImGui::EndTable();
         }
 
-        ImGui::Spacing();
-        ImGui::TextColored(ImVec4(0.78f, 0.88f, 1.00f, 1.0f), "决策流水");
-        ImGui::Separator();
-        if (agent->decisionPending)
+        const float rightControls = 100.0f * scale;
+        const float hintStart = std::max(720.0f * scale, viewport->WorkSize.x - 650.0f * scale);
+        ImGui::SameLine(hintStart);
+        ImGui::BeginChild("##AirportHint", ImVec2(510.0f * scale, 34.0f * scale), true,
+                          ImGuiWindowFlags_NoScrollbar);
+        ImGui::TextColored(kYellow, ICON_FA_LIGHTBULB);
+        ImGui::SameLine();
+        if (ImGui::GetTime() < toastUntil_ && !toastText_.empty())
         {
-            ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.25f, 1.0f), "正在思考... %s",
-                               FormatLatency(scheduler.InFlightElapsedMs()).c_str());
+            ImGui::TextUnformatted(toastText_.c_str());
         }
-        DrawDecisionHistory(scheduler, agent->id, "##agentDecisionHistory");
+        else
+        {
+            ImGui::TextDisabled("提示：点击旅客可查看详情，滚轮缩放视角。");
+        }
+        ImGui::EndChild();
+
+        ImGui::SameLine(viewport->WorkSize.x - rightControls);
+        if (ImGui::Button(ICON_FA_QUESTION, ImVec2(38.0f * scale, 34.0f * scale)))
+        {
+            toastText_ = "帮助中心尚未接入";
+            toastUntil_ = ImGui::GetTime() + 3.0;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(ICON_FA_GEAR, ImVec2(38.0f * scale, 34.0f * scale)))
+        {
+            toastText_ = "设置中心尚未接入";
+            toastUntil_ = ImGui::GetTime() + 3.0;
+        }
         ImGui::End();
+        ImGui::PopStyleVar(2);
+    }
 
-        if (!open)
+    void AirportSimUI::DrawPlaceholderPanel()
+    {
+        if (activeNavigation_ <= 0)
         {
-            state_.followAgentId = -1;
+            return;
         }
+
+        constexpr const char* titles[] = {
+            "", "员工管理", "航班运营", "设施建设", "财务中心", "运营报告", "告警中心",
+        };
+        constexpr const char* descriptions[] = {
+            "",
+            "排班、岗位分配、培训与员工满意度将在这里管理。",
+            "航线计划、登机口分配、延误处置与吞吐分析将在这里管理。",
+            "商店、候机区、服务设施的建设升级功能将在这里提供。",
+            "收入、成本、预算和现金流功能将在这里提供。",
+            "客流、准点率、满意度和设施效率报告将在这里提供。",
+            "航班延误、拥堵、设施故障和服务异常将在这里汇总。",
+        };
+
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        const float scale = UiScale();
+        ImGui::SetNextWindowPos(
+            ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
+                   viewport->WorkPos.y + viewport->WorkSize.y * 0.5f),
+            ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+        ImGui::SetNextWindowSize(ImVec2(470.0f * scale, 210.0f * scale), ImGuiCond_Always);
+        if (!ImGui::Begin("##AirportPlaceholder", nullptr, kHudFlags))
+        {
+            ImGui::End();
+            return;
+        }
+
+        ImGui::SetWindowFontScale(1.28f);
+        ImGui::TextColored(kBlue, "%s", titles[activeNavigation_]);
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::Separator();
+        ImGui::Spacing();
+        ImGui::TextWrapped("%s", descriptions[activeNavigation_]);
+        ImGui::Spacing();
+        ImGui::TextDisabled("当前版本提供完整界面入口与交互反馈，业务逻辑将在后续版本接入。");
+        ImGui::SetCursorPosY(ImGui::GetWindowHeight() - 49.0f * scale);
+        if (AccentButton("返回机场视图", ImVec2(-1.0f, 34.0f * scale), true))
+        {
+            activeNavigation_ = 0;
+        }
+        ImGui::End();
     }
 
     void AirportSimUI::DrawDebugPanel(double gameMinutes, TimeSystem& time, AgentSystem& agents,

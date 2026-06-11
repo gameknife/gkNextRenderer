@@ -10,6 +10,8 @@
 
 namespace AirportSim
 {
+    class AgentSystem;
+
     // 服务点队列：slot 链生成/占用/推进 + 队首服务计时（§7.3）。
     // 队列从服务点沿 queueDir（POI front 方向）向外延伸。
     class QueueSystem
@@ -25,7 +27,9 @@ namespace AirportSim
             bool        staffed = false;    // 无员工在岗时队列不推进
             std::vector<int> agents;        // 队首在前
             bool        serving = false;
+            double      serviceStartedAt = 0.0;
             double      serviceEndAt = 0.0;
+            double      currentServiceMinutes = 0.0;
         };
 
         void Reset(unsigned seed);
@@ -45,7 +49,7 @@ namespace AirportSim
         std::string ShortestQueue(const std::string& prefix) const;
 
         // 推进服务计时；服务完成的队首 agent id 进入完成列表（消费即清空）。
-        void Tick(double gameMinutes);
+        void Tick(double gameMinutes, const AgentSystem& agents);
         std::vector<int> ConsumeCompleted();
 
         const std::vector<FQueue>& Queues() const { return queues_; }
