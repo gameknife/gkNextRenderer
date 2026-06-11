@@ -146,3 +146,9 @@ file(GLOB_RECURSE src_files_studiosim
     "Application/Game/StudioSim/*.hpp"
     "Application/Game/StudioSim/*.h"
 )
+
+file(GLOB_RECURSE src_files_airportsim
+    "Application/Game/AirportSim/*.cpp"
+    "Application/Game/AirportSim/*.hpp"
+    "Application/Game/AirportSim/*.h"
+)

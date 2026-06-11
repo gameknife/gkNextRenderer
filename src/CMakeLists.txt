@@ -200,6 +200,11 @@ add_executable(StudioSim
 	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(StudioSim PRIVATE Application/Game/StudioSim)
+add_executable(AirportSim
+	${src_files_airportsim}
+	${DESKTOP_MAIN_SOURCES}
+)
+target_include_directories(AirportSim PRIVATE Application/Game/AirportSim)
 add_executable(Packager
 	Application/Util/Packager/PackagerMain.cpp
 )
@@ -362,6 +367,7 @@ gkNextStillBenchmark
 	BrickPlayer
 	CharacterDemo
 	StudioSim
+	AirportSim
 	gkNextUnitTests
 	${GK_MODULE_TARGETS}
 )
@@ -605,6 +611,9 @@ endif()
 if ( TARGET StudioSim )
 target_link_libraries(StudioSim PRIVATE NextGameplay)
 endif()
+if ( TARGET AirportSim )
+target_link_libraries(AirportSim PRIVATE NextGameplay)
+endif()
 
 # Optional loader modules: linked only by the applications that use them.
 if ( TARGET LDrawLoader )
@@ -615,14 +624,14 @@ if ( TARGET LDrawLoader )
 	endforeach()
 endif()
 if ( TARGET ScadLoader )
-	foreach(t gkNextRenderer gkNextVisualTest gkNextStillBenchmark gkNextMotionBenchmark gkNextEditor ScadStudio StudioSim gkNextUnitTests)
+	foreach(t gkNextRenderer gkNextVisualTest gkNextStillBenchmark gkNextMotionBenchmark gkNextEditor ScadStudio StudioSim AirportSim gkNextUnitTests)
 		if ( TARGET ${t} )
 			target_link_libraries(${t} PRIVATE ScadLoader)
 		endif()
 	endforeach()
 endif()
 if ( TARGET NextAI )
-	foreach(t gkNextEditor ScadStudio MagicaLego StudioSim gkNextUnitTests)
+	foreach(t gkNextEditor ScadStudio MagicaLego StudioSim AirportSim gkNextUnitTests)
 		if ( TARGET ${t} )
 			target_link_libraries(${t} PRIVATE NextAI)
 		endif()
