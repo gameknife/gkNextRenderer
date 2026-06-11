@@ -14,8 +14,6 @@ namespace
 {
     constexpr uint32_t kHdrCacheMagic = 0x48445243; // 'HDRC'
     constexpr uint32_t kHdrCacheVersion = 1;
-    constexpr uint32_t kHdrTexturePromotionFrames = 8;
-    constexpr uint32_t kHdrTextureDemotionFrames = 180;
 
     struct HdrCacheHeader
     {
