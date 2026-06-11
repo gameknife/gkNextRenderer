@@ -106,6 +106,13 @@ namespace NextCVar
                                        size_t* totalMatches = nullptr) const;
 
     private:
+        // Shared implementation behind the five typed Register* entry points.
+        // StoredT is the variant alternative the value is stored as.
+        template <typename StoredT, typename T>
+        bool RegisterTyped(const std::string& name, T defaultValue, T* target,
+                           ECVarFlags flags, std::string description,
+                           std::function<void()> onChanged);
+
         struct FCVarEntry
         {
             std::string name;
