@@ -63,6 +63,11 @@ namespace AirportSim
         // 旅客旅程（Layer 0）
         EPassengerState pstate = EPassengerState::Despawned;
         int         flightIdx = -1;
+        int         groupId = -1;
+        EPassengerGroupType groupType = EPassengerGroupType::Solo;
+        int         groupLeaderId = -1;
+        int         groupMemberIndex = 0;
+        int         groupSize = 1;
         double      stateUntil = 0.0;     // 当前停留状态的结束时刻（游戏分钟）
         std::string targetPoi;            // 当前去/在用的 POI
         std::string queueId;
@@ -86,9 +91,20 @@ namespace AirportSim
         double      nextDecisionAt = 0.0;
         std::string eventNote;            // 感知事件（优先触发决策）
         double      lastGreetAt = -1e9;
+        double      lastGroupDiscussionAt = -1e9;
         int         chatChain = 0;        // 当前对话来回深度（say_to 链，超限不再插队）
         std::string lastChatWith;         // 上一次对话对象（喂回 prompt 防复读）
         std::vector<std::string> recentSpeech; // 自己最近说过的台词（喂回 prompt 防复读）
+
+        bool IsGroupedPassenger() const
+        {
+            return role == EAgentRole::Passenger && groupId >= 0 && groupSize > 1;
+        }
+
+        bool IsGroupLeader() const
+        {
+            return IsGroupedPassenger() && id == groupLeaderId;
+        }
     };
 
     // 角色池（spawn/despawn）+ NavGrid + 移动/分离力 + 视觉驱动（§6/§7.2/§7.4）。

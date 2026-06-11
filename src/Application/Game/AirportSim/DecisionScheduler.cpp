@@ -67,6 +67,7 @@ namespace AirportSim
         const char* kBoardingLines[] = {"该登机了！", "走走走，登机去", "终于登机了", "别忘了登机牌"};
         const char* kShopLines[] = {"来杯咖啡提提神", "买点路上吃的", "这个挺有意思", "候机就得逛逛"};
         const char* kSitLines[] = {"坐会儿歇歇脚", "还有点时间", "刷会儿手机", "眯一会儿"};
+        const char* kGroupLines[] = {"大家跟紧，别走散了", "我们一起去那边看看", "先确认一下登机口", "都准备好了吗"};
         const char* kStaffIdleLines[] = {"今天客流还行", "整理一下台面", "喝口水先", "下一位～"};
         const char* kClerkGreetLines[] = {"欢迎光临～", "随便看看哈", "这款卖得最好", "需要帮忙喊我"};
         const char* kNightLines[] = {"夜里真安静", "再巡一圈", "地拖完就收工", "哼哼小曲～"};
@@ -151,7 +152,12 @@ namespace AirportSim
             std::string actions;
             std::string poiList;
             const bool isAirsidePassenger = agent.role == EAgentRole::Passenger;
-            if (isAirsidePassenger)
+            const bool canLeadGroupChoice =
+                !agent.IsGroupedPassenger() || agent.IsGroupLeader();
+            const bool canChooseAirsidePoi =
+                isAirsidePassenger && canLeadGroupChoice &&
+                (agent.pstate == EPassengerState::AirsideIdle || agent.pstate == EPassengerState::AirsideUse);
+            if (canChooseAirsidePoi)
             {
                 actions = "goto（去一个空侧点位）/ say_to / emote / idle";
                 for (const auto& poi : map.Points())
@@ -162,6 +168,11 @@ namespace AirportSim
                         poiList += ' ';
                     }
                 }
+            }
+            else if (isAirsidePassenger)
+            {
+                actions = "say_to（和同行或身边人说话）/ emote / idle";
+                poiList = "（跟随同行领队的共同目标）";
             }
             else
             {
@@ -185,6 +196,29 @@ namespace AirportSim
             {
                 situation = fmt::format("你在岗位 {} 上{}。", agent.postPoi,
                                         agent.sstate == EStaffState::Patrol ? "巡逻" : "值班");
+            }
+
+            std::string groupLine;
+            if (agent.IsGroupedPassenger())
+            {
+                std::string members;
+                for (const auto& other : agents.Agents())
+                {
+                    if (other.active && other.groupId == agent.groupId && other.id != agent.id)
+                    {
+                        if (!members.empty())
+                        {
+                            members += "、";
+                        }
+                        members += other.name;
+                    }
+                }
+                groupLine = fmt::format(
+                    "你和{}结伴出行（同行组G{}，共{}人），成员：{}。{}"
+                    "你们共享航班并倾向一起行动；讨论后应选择共同目标，不要独自走散。\n",
+                    PassengerGroupLabelZh(agent.groupType), agent.groupId, agent.groupSize,
+                    members.empty() ? "暂时不在身边" : members,
+                    agent.IsGroupLeader() ? "你是领队，goto 会成为全组共同目标。" : "跟随领队的目标，主动和同行交流。");
             }
 
             std::string eventLine;
@@ -214,7 +248,7 @@ namespace AirportSim
 
             return fmt::format(
                 "你是机场里的{}「{}」，性格：{}。现在是{:02d}:{:02d}，{}。\n"
-                "{}{}{}"
+                "{}{}{}{}"
                 "你周围的人：{}\n"
                 "你可选动作：{}\n"
                 "可去点位：{}\n"
@@ -223,7 +257,7 @@ namespace AirportSim
                 "{{\"action\":\"goto|say_to|emote|idle\",\"target\":\"<点位名或人名，可空>\","
                 "\"say\":\"<不超过20字的台词，可空>\",\"mood\":\"neutral|happy|tired|annoyed|excited|anxious\"}}",
                 RoleLabelZh(agent.role), agent.name, agent.personality, hh, mm, isNight ? "夜深人静" : "航站楼运转中",
-                situation, eventLine, chatMemory, neighbors, actions, poiList,
+                situation, groupLine, eventLine, chatMemory, neighbors, actions, poiList,
                 IsChattyPersonality(agent.personality)
                     ? "你性格外向，看到什么新鲜事都乐意聊一句（自言自语的感想也行），但每次要说不一样的话。"
                     : (IsQuietPersonality(agent.personality)
@@ -459,6 +493,16 @@ namespace AirportSim
         else
         {
             agent.chatChain = 0; // 非对话动作 = 话题结束
+            if (result.action == "emote" && agent.IsGroupedPassenger())
+            {
+                for (auto& member : agents.Agents())
+                {
+                    if (member.active && member.groupId == agent.groupId)
+                    {
+                        member.mood = result.mood;
+                    }
+                }
+            }
         }
 
         const std::string latency = FormatLatency(llmElapsedMs);
@@ -478,7 +522,12 @@ namespace AirportSim
         const char* line = nullptr;
         EMood mood = EMood::Neutral;
 
-        if (agent.eventNote.find("顾客") != std::string::npos)
+        if (agent.eventNote.find("同行") != std::string::npos)
+        {
+            line = Pick(rng_, kGroupLines, std::size(kGroupLines));
+            mood = EMood::Happy;
+        }
+        else if (agent.eventNote.find("顾客") != std::string::npos)
         {
             line = Pick(rng_, kClerkGreetLines, std::size(kClerkGreetLines));
             mood = EMood::Happy;

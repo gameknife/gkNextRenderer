@@ -40,15 +40,21 @@ namespace AirportSim
         void UpdateQueueStaffing(AgentSystem& agents, QueueSystem& queues);
         void EnsureQueues(AirportMap& map, QueueSystem& queues);
         void StartAirsideActivity(FAgent& agent, AgentSystem& agents, AirportMap& map, double gameMinutes);
+        void ApplyAirsideChoiceSingle(FAgent& agent, const FPointOfInterest& poi, AgentSystem& agents,
+                                      AirportMap& map);
         void ReleaseClaims(FAgent& agent, AirportMap& map, QueueSystem& queues);
         void DespawnPassenger(FAgent& agent, AgentSystem& agents, AirportMap& map, QueueSystem& queues);
         const FPointOfInterest* NearestOfCategory(const AirportMap& map, const std::string& category,
                                                   const glm::vec3& pos) const;
+        std::string PreferredGroupQueue(const FAgent& agent, const std::string& prefix,
+                                        const AgentSystem& agents, const QueueSystem& queues) const;
+        glm::vec3 GroupTargetPosition(const FAgent& agent, const FPointOfInterest& poi, float frontOffset) const;
         double Rand(double lo, double hi);
 
         std::mt19937 rng_{2024};
         bool queuesReady_ = false;
         int lastDay_ = -1;
         int passengerNameCursor_ = 0;
+        int nextPassengerGroupId_ = 1;
     };
 }

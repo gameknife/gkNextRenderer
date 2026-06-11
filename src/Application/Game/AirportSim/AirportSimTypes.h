@@ -146,6 +146,26 @@ namespace AirportSim
         }
     }
 
+    enum class EPassengerGroupType
+    {
+        Solo,
+        Couple,
+        Family,
+        Tour
+    };
+
+    inline const char* PassengerGroupLabelZh(EPassengerGroupType type)
+    {
+        switch (type)
+        {
+        case EPassengerGroupType::Solo:   return "独行";
+        case EPassengerGroupType::Couple: return "情侣";
+        case EPassengerGroupType::Family: return "一家三口";
+        case EPassengerGroupType::Tour:   return "旅行团";
+        default:                          return "独行";
+        }
+    }
+
     // 旅客旅程状态机（§5.1，Layer 0 刚性主线）。
     enum class EPassengerState
     {
