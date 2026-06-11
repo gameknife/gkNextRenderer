@@ -66,6 +66,21 @@ namespace NextQuickJSBindings
     NextEngine* GetEngine();
     Assets::Scene* GetSceneForGlobal();
 
+    // Small JS value conversion / lookup helpers shared between the
+    // QuickJSBindings.*.cpp partial TUs
+    Assets::Node* FindNodeById(uint32_t nodeId);
+    Assets::Component* FindComponentByTypeName(uint32_t nodeId, const std::string& componentType);
+    bool JSValueToVec3(JSContext* ctx, JSValueConst value, glm::vec3& outVec);
+    JSValue Vec2ToJS(JSContext* ctx, const glm::vec2& value);
+    std::string ToCString(JSContext* ctx, JSValueConst value);
+    void JSToFloat(JSContext* ctx, JSValueConst value, float& outValue);
+    std::string GetObjectString(JSContext* ctx, JSValueConst object, const char* key, std::string fallback = {});
+    float GetObjectFloat(JSContext* ctx, JSValueConst object, const char* key, float fallback = 0.0f);
+    uint32_t GetObjectUint32(JSContext* ctx, JSValueConst object, const char* key, uint32_t fallback = 0);
+    bool GetObjectBool(JSContext* ctx, JSValueConst object, const char* key, bool fallback = false);
+    glm::vec3 GetObjectVec3(JSContext* ctx, JSValueConst object, const char* key,
+                            const glm::vec3& fallback = glm::vec3(0.0f));
+
     // Raw JSCFunction bindings registered on the Engine module
     JSValue InputIsKeyDown(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv);
     JSValue InputIsKeyPressed(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv);
