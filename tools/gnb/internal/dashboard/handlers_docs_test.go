@@ -13,11 +13,14 @@ func setupDocsRepo(t *testing.T) *Server {
 	t.Helper()
 	dir := t.TempDir()
 	for path, body := range map[string]string{
-		"docs/alpha.md":            "# Alpha\n\n第一篇文档。\n",
-		"docs/projects/guide.md":   "# Guide\n\n项目文档。\n",
-		"docs/gallery/ignore.avif": "not-markdown",
-		"docs/projects/ignore.txt": "ignore me",
-		".spec/TODO.md":            "# TODO\n\n## Milestone: 测试  <!-- status: active -->\n\n### 下一步\n\n(暂无)\n\n### 待规划\n\n(暂无)\n\n### 最近完成\n\n(暂无)\n",
+		"docs/zeta.md":                  "# Zeta\n\n根目录末尾文档。\n",
+		"docs/alpha.md":                 "# Alpha\n\n第一篇文档。\n",
+		"docs/architecture/overview.md": "# Overview\n\n架构文档。\n",
+		"docs/projects/zeta.md":         "# Project Zeta\n\n项目末尾文档。\n",
+		"docs/projects/guide.md":        "# Guide\n\n项目文档。\n",
+		"docs/gallery/ignore.avif":      "not-markdown",
+		"docs/projects/ignore.txt":      "ignore me",
+		".spec/TODO.md":                 "# TODO\n\n## Milestone: 测试  <!-- status: active -->\n\n### 下一步\n\n(暂无)\n\n### 待规划\n\n(暂无)\n\n### 最近完成\n\n(暂无)\n",
 	} {
 		full := filepath.Join(dir, filepath.FromSlash(path))
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
@@ -46,14 +49,35 @@ func TestBuildDocsVMListsMarkdownFilesOnly(t *testing.T) {
 
 	vm := s.buildDocsVM("", false, "", "")
 
-	if len(vm.Files) != 2 {
-		t.Fatalf("len(files) = %d, want 2", len(vm.Files))
+	if len(vm.Files) != 5 {
+		t.Fatalf("len(files) = %d, want 5", len(vm.Files))
 	}
-	if vm.Files[0].RelPath != "docs/alpha.md" || vm.Files[1].RelPath != "docs/projects/guide.md" {
-		t.Fatalf("files = %+v, want markdown files only", vm.Files)
+	wantFiles := []string{
+		"docs/alpha.md",
+		"docs/zeta.md",
+		"docs/architecture/overview.md",
+		"docs/projects/guide.md",
+		"docs/projects/zeta.md",
+	}
+	for i, want := range wantFiles {
+		if vm.Files[i].RelPath != want {
+			t.Fatalf("files[%d] = %q, want %q; files = %+v", i, vm.Files[i].RelPath, want, vm.Files)
+		}
+	}
+	if len(vm.Folders) != 3 {
+		t.Fatalf("len(folders) = %d, want 3", len(vm.Folders))
+	}
+	wantFolders := []string{"docs", "docs/architecture", "docs/projects"}
+	for i, want := range wantFolders {
+		if vm.Folders[i].Dir != want {
+			t.Fatalf("folders[%d] = %q, want %q; folders = %+v", i, vm.Folders[i].Dir, want, vm.Folders)
+		}
 	}
 	if !vm.HasDoc || vm.Selected.RelPath != "docs/alpha.md" {
 		t.Fatalf("selected = %+v, want docs/alpha.md", vm.Selected)
+	}
+	if !vm.Folders[0].Active || vm.Folders[1].Active || vm.Folders[2].Active {
+		t.Fatalf("folder active states = %+v, want only docs active", vm.Folders)
 	}
 	if !strings.Contains(vm.Content, "第一篇文档") {
 		t.Fatalf("content = %q, want alpha markdown", vm.Content)
@@ -95,6 +119,12 @@ func TestHandleTabDocsRendersEditView(t *testing.T) {
 	}
 	if !strings.Contains(body, "项目文档") {
 		t.Fatalf("rendered body missing markdown text:\n%s", body)
+	}
+	if !strings.Contains(body, `data-doc-folder="docs/projects"`) {
+		t.Fatalf("rendered body missing projects folder group:\n%s", body)
+	}
+	if !strings.Contains(body, `class="docs-folder active"`) {
+		t.Fatalf("rendered body missing active folder:\n%s", body)
 	}
 }
 

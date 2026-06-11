@@ -469,21 +469,20 @@ func newShotCommand(ctx appContext) *cobra.Command {
 	var scene string
 	var target string
 	var frames int
+	var includeUI bool
 	cmd := &cobra.Command{
-		Use:   "shot [--scene <path>] [--target <name>] [--frames N]",
+		Use:   "shot [--scene <path>] [--target <name>] [--frames N] [--ui]",
 		Short: "Capture one validation screenshot, then auto-exit (no focus-stealing window)",
 		Long: "Render a scene to a stable frame, capture a single screenshot to a fixed path, then exit.\n\n" +
 			"The window is hidden so it never pops to the foreground or steals focus during an agent\n" +
-			"dev loop, and the app exits on its own. The screenshot path is printed when finished.\n\n" +
+			"dev loop, and the app exits on its own. Pass --ui to include ImGui in the capture.\n" +
+			"The screenshot path is printed when finished.\n\n" +
 			"Examples:\n" +
 			"  gnb shot --scene assets/models/playground.glb\n" +
-			"  gnb shot --target ScadStudio --scene assets/scad/beer_cup.scad --frames 60",
+			"  gnb shot --target ScadStudio --scene assets/scad/beer_cup.scad --frames 60\n" +
+			"  gnb shot --target AirportSim --ui",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			runArgs := []string{"--agent-validation"}
-			if frames > 0 {
-				runArgs = append(runArgs, fmt.Sprintf("--agent-validation-frames=%d", frames))
-			}
-			runArgs = append(runArgs, args...)
+			runArgs := shotRunArgs(frames, includeUI, args)
 			opts := runner.Options{Target: target, Preset: ctx.preset, Args: runArgs}
 			if scene != "" {
 				opts.Scenes = append(opts.Scenes, scene)
@@ -500,7 +499,19 @@ func newShotCommand(ctx appContext) *cobra.Command {
 	cmd.Flags().StringVar(&scene, "scene", "", "scene to load (file path or built-in .proc name)")
 	cmd.Flags().StringVar(&target, "target", "gkNextRenderer", "target executable to run")
 	cmd.Flags().IntVar(&frames, "frames", 0, "frames to render before capture (0 = engine default)")
+	cmd.Flags().BoolVar(&includeUI, "ui", false, "include ImGui UI in the screenshot")
 	return cmd
+}
+
+func shotRunArgs(frames int, includeUI bool, trailingArgs []string) []string {
+	runArgs := []string{"--agent-validation"}
+	if frames > 0 {
+		runArgs = append(runArgs, fmt.Sprintf("--agent-validation-frames=%d", frames))
+	}
+	if includeUI {
+		runArgs = append(runArgs, "--agent-validation-ui")
+	}
+	return append(runArgs, trailingArgs...)
 }
 
 func newEditorCommand(ctx appContext) *cobra.Command {

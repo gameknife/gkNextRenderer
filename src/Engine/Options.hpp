@@ -34,6 +34,7 @@ public:
 	bool Validation{};
 	bool FastExit{true};
 	bool AgentValidation{};
+	bool AgentValidationUI{};
 	uint32_t AgentValidationFrames{90};
 	std::string AgentValidationOutput{"screenshots/agent_validation"};
 	bool HiddenWindow{};

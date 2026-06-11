@@ -64,6 +64,7 @@ public:
         int height = 0;
         uint32_t accumulateFrames = 0;
         bool sync = false;
+        bool includeUi = false;
     };
 
     struct FHotReloadStatus
@@ -294,6 +295,7 @@ private:
     {
         bool active = false;
         bool captured = false;
+        bool includeUi = false;
         uint32_t waitFrames = 90;
         uint32_t postCaptureFrames = 0;
         std::string outputPath = "screenshots/agent_validation";
