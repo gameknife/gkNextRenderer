@@ -8,7 +8,6 @@
 
 namespace Vulkan::PipelineCommon
 {
-	class AccumulatePipeline;
 }
 
 namespace Vulkan::ModernDeferred

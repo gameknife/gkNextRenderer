@@ -704,7 +704,6 @@ namespace Assets
     void Scene::MarkEnvDirty()
     {
         // cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), true);
-        // cpuAccelerationStructure_.GenShadowMap(*this);
     }
 
     Node* Scene::GetNode(std::string name)

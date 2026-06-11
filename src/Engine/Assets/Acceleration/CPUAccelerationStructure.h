@@ -130,7 +130,6 @@ public:
     bool ConsumeNavRelevantDirtyBounds(glm::vec3& outWorldMin, glm::vec3& outWorldMax);
     void ClearNavRelevantDirtyBounds();
 
-    void GenShadowMap(Assets::Scene& scene);
     
     void ClearAllTasks();
 

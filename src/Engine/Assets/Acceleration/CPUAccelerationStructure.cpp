@@ -17,8 +17,6 @@
 namespace Assets::CPU
 {
 
-Assets::SphericalHarmonics HdrsHs[100];
-
 namespace
 {
     struct FWorldBounds
@@ -122,9 +120,6 @@ bool FCPUAccelerationStructure::InitCascadeBakers(const Runtime::Config::UserSet
 
 void FCPUAccelerationStructure::InitBVH(Scene& scene)
 {
-    auto& hdr = GlobalTexturePool::GetInstance()->GetHDRSphericalHarmonics();
-    std::memcpy(HdrsHs, hdr.data(), hdr.size() * sizeof(SphericalHarmonics));
-    
     const auto timer = std::chrono::high_resolution_clock::now();
 
     bvhBLASList.clear();
@@ -633,93 +628,6 @@ void FCPUAccelerationStructure::ClearNavRelevantDirtyBounds()
     hasNavRelevantDirtyBounds_ = false;
     navRelevantDirtyWorldMin_ = glm::vec3(0.0f);
     navRelevantDirtyWorldMax_ = glm::vec3(0.0f);
-}
-
-void FCPUAccelerationStructure::GenShadowMap(Scene& scene)
-{
-    if (bvhInstanceList.empty())
-    {
-        return;
-    }
-
-    if (!scene.GetEnvSettings().HasSun)
-    {
-        return;
-    }
-    
-    const vec3& sunDir = scene.GetEnvSettings().SunDirection();
-    
-    // 阴影图分辨率设置
-    int shadowMapSize = SHADOWMAP_SIZE;
-    int tileSize = 256; // 每个tile的大小
-    int tilesPerRow = shadowMapSize / tileSize;
-    shadowMapR32.resize(shadowMapSize * shadowMapSize, 0); // 初始化为1.0（不被遮挡）
-
-    // 使用环境设置中的方法获取光源视图投影矩阵
-    mat4 lightViewProj = scene.GetEnvSettings().GetSunViewProjection();
-    mat4 invLVP = inverse(lightViewProj);
-    vec3 lightDir = normalize(-sunDir);
-
-    
-    // 计算当前tile的起始像素坐标
-    for ( int currentTileX = 0; currentTileX < tilesPerRow; ++currentTileX )
-    {
-        for ( int currentTileY = 0; currentTileY < tilesPerRow; ++currentTileY )
-        {
-            int startX = currentTileX * tileSize;
-            int startY = currentTileY * tileSize;
-
-                // 处理当前tile
-            Tasks::TaskCoordinator::GetInstance()->AddParralledTask(
-                [this, lightViewProj, invLVP, lightDir, startX, startY, tileSize, shadowMapSize](Tasks::ResTask& task)
-                {
-                    for (int y = 0; y < tileSize; y++)
-                    {
-                        for (int x = 0; x < tileSize; x++)
-                        {
-                            int pixelX = startX + x;
-                            int pixelY = startY + y;
-                            
-                            // 计算NDC坐标
-                            float ndcX = (pixelX / static_cast<float>(shadowMapSize - 1)) * 2.0f - 1.0f;
-                            float ndcY = 1.0f - (pixelY / static_cast<float>(shadowMapSize - 1)) * 2.0f;
-                            
-                            // 从NDC空间变换到世界空间
-                            vec4 worldPos = invLVP * vec4(ndcX, ndcY, 0.0f, 1.0f);
-                            worldPos /= worldPos.w;
-                            
-                            // 发射光线
-                            vec3 origin = vec3(worldPos);
-                            vec3 rayDir = normalize(lightDir);
-                            
-                            tinybvh::Ray ray(
-                                tinybvh::bvhvec3(origin.x, origin.y, origin.z),
-                                tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z),
-                                10000.0f
-                            );
-                            
-                            GetCpuBvhState().bvh.Intersect(ray);
-                            if (ray.hit.t < 9999.0f)
-                            {
-                                vec3 hitPoint = origin + rayDir * ray.hit.t;
-                                vec4 hitPosInLightSpace = lightViewProj * vec4(hitPoint, 1.0f);
-                                float depth = (hitPosInLightSpace.z / hitPosInLightSpace.w + 1.0f) * 0.5f;
-                                shadowMapR32[pixelY * shadowMapSize + pixelX] = depth;
-                            }
-                        }
-                    }
-                },
-                [this, &scene, shadowMapSize, startX, startY, tileSize](Tasks::ResTask& task)
-                {
-                    // 更新当前tile到GPU
-                    Vulkan::CommandPool& commandPool = GlobalTexturePool::GetInstance()->GetMainThreadCommandPool();
-                    const unsigned char* tileData = reinterpret_cast<const unsigned char*>(shadowMapR32.data());
-                    scene.EnsureCpuShadowMap(commandPool).UpdateDataMainThread(commandPool, startX, startY, tileSize, tileSize, shadowMapSize, shadowMapSize,
-                        tileData, shadowMapSize * shadowMapSize * sizeof(float));
-                }
-            );
-        }
-    }
 }
 
 }
