@@ -210,33 +210,6 @@ namespace Vulkan
 			VkImageLayout newLayout);
 	};
 
-	class BufferMemoryBarrier final
-	{
-	public:
-		static void Insert(const VkCommandBuffer commandBuffer, const VkBuffer buffer)
-		{
-			VkBufferMemoryBarrier bufferBarrier = {};
-			bufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-			bufferBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-			bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			bufferBarrier.buffer = buffer;
-			bufferBarrier.offset = 0;
-			bufferBarrier.size = VK_WHOLE_SIZE;
-
-			vkCmdPipelineBarrier(
-				commandBuffer,
-				VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-				VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-				0,
-				0, nullptr,
-				1, &bufferBarrier,
-				0, nullptr
-			);
-		}
-	};
-
 	// ============================================================================
 	// DebugUtils
 	// ============================================================================

@@ -6,7 +6,6 @@
 
 namespace Vulkan::RayTracing
 {
-	class PathTracingPipeline;
 
 	class PathTracingRenderer final : public Vulkan::LogicRendererBase
 	{
