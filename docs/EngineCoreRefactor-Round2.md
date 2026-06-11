@@ -213,7 +213,10 @@ Vulkan 目录内部互相用相对路径，目录外用全路径，同一个头�
 
 | 时间 | 步骤 | gnb loc (src/Engine) | 备注 |
 |---|---|---:|---|
-| 2026-06-11 | Round 2 基线 | 33,924（上轮 Phase 5 终值；本轮 ripgrep 含注释口径 35,476） | 待执行前用 `./gnb loc` 复测 |
+| 2026-06-11 | Round 2 基线 | 33,924（上轮 Phase 5 终值；本轮 ripgrep 含注释口径 35,476） | `./gnb loc` 复测确认 33,924 / 200 files |
+| 2026-06-11 | R2-P1 include 卫生 | 33,807 | spdlog 进 CoreMinimal（37 处）、66+ 处 std 冗余、116 处相对路径改全路径；NextPhysicsTypes.h 实际被 Scene.hpp 值成员使用，仅 NextPhysics.h 是死头 |
+| 2026-06-11 | R2-P2~P9 | 33,924 (214 files) | god class 拆分净减被 22 个新 TU 的 include/注释样板抵消；P2 中 RegisterReflection 已在 Round 1 表驱动化，仅做了 GetUniformBufferObject 抽离 + 删 4 个无人调用的 jitter helper |
+| 2026-06-11 | R2-P10 终值 | **33,690 (216 files)** | 较基线 −234。P9 实收：GlmJsonConverter/BufferMemoryBarrier/残留 fwd decl/HdrsHs(写后不读)/GenShadowMap(仅注释引用)≈200 行；SetRunMode 误判，MagicaLego 在用，保留 |
 
 ---
 
