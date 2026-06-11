@@ -1,6 +1,6 @@
 #pragma once
 #include "Engine/Common/CoreMinimal.hpp"
-#include "AccelerationStructure.hpp"
+#include "Engine/Vulkan/RayTracing/AccelerationStructure.hpp"
 #include "Engine/Utilities/Glm.hpp"
 
 namespace Vulkan::RayTracing

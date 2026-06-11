@@ -9,8 +9,6 @@
 #include "Engine/Assets/Core/Node.h"
 
 #include <entt/meta/meta.hpp>
-#include <functional>
-#include <string>
 #include <string_view>
 #include <spdlog/fmt/fmt.h>
 #include <glm/glm.hpp>

@@ -1,4 +1,4 @@
-#include "CommonComputePipeline.hpp"
+#include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 
 #include "Engine/Runtime/Engine.hpp"
 

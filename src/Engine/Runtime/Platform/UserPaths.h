@@ -2,7 +2,6 @@
 
 #include "Engine/Common/CoreMinimal.hpp"
 
-#include <filesystem>
 #include <string_view>
 
 namespace NextPlatform::UserPaths

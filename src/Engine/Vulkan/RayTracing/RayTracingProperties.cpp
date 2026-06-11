@@ -1,4 +1,4 @@
-#include "RayTracingProperties.hpp"
+#include "Engine/Vulkan/RayTracing/RayTracingProperties.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include <algorithm>
 #include <cstring>

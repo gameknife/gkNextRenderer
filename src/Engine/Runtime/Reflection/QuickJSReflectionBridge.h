@@ -1,8 +1,8 @@
 #pragma once
 
 #if WITH_QUICKJS
-#include "PropertyAccessor.h"
-#include "QuickJSTypeConverter.h"
+#include "Engine/Runtime/Reflection/PropertyAccessor.h"
+#include "Engine/Runtime/Reflection/QuickJSTypeConverter.h"
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
 #include <entt/meta/meta.hpp>
 #include <entt/meta/resolve.hpp>

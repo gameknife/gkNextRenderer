@@ -5,10 +5,6 @@
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Core/Component.h"
 #include "Engine/Runtime/Reflection/ReflectionMacros.h"
-#include <map>
-#include <memory>
-#include <vector>
-#include <string>
 
 namespace Runtime
 {

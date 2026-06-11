@@ -1,5 +1,5 @@
-#include "WindowSurface.hpp"
-#include "Instance.hpp"
+#include "Engine/Vulkan/WindowSurface.hpp"
+#include "Engine/Vulkan/Instance.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Utilities/StbImage.hpp"
 #include "Engine/Common/CoreMinimal.hpp"

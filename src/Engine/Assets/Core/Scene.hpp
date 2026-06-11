@@ -1,20 +1,14 @@
 #pragma once
 #include <glm/vec2.hpp>
-#include <array>
-#include <memory>
-#include <string>
-#include <vector>
-#include <unordered_set>
 #include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysicsTypes.h"
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include "Engine/Assets/Acceleration/CPUAccelerationStructure.h"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Core/SceneSelectionState.hpp"
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
-#include "Engine/Runtime/Subsystems/NextPhysicsTypes.h"
 #include "Engine/Assets/Data/Skeleton.hpp"
 
 namespace Assets

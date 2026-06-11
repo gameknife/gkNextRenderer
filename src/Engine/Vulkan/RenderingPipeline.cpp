@@ -1,9 +1,9 @@
-#include "RenderingPipeline.hpp"
-#include "GpuResources.hpp"
-#include "Device.hpp"
-#include "SwapChain.hpp"
-#include "GpuResources.hpp"
-#include "DescriptorSystem.hpp"
+#include "Engine/Vulkan/RenderingPipeline.hpp"
+#include "Engine/Vulkan/GpuResources.hpp"
+#include "Engine/Vulkan/Device.hpp"
+#include "Engine/Vulkan/SwapChain.hpp"
+#include "Engine/Vulkan/GpuResources.hpp"
+#include "Engine/Vulkan/DescriptorSystem.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include <array>
 

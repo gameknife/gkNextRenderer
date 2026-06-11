@@ -3,12 +3,8 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/AssetsFwd.hpp"
 
-#include <functional>
 #include <initializer_list>
-#include <memory>
-#include <string>
 #include <string_view>
-#include <vector>
 
 namespace Assets
 {

@@ -4,8 +4,6 @@
 #include <glm/gtc/quaternion.hpp>
 #include <entt/meta/factory.hpp>
 #include <entt/core/hashed_string.hpp>
-#include <array>
-#include <vector>
 
 namespace Reflection
 {

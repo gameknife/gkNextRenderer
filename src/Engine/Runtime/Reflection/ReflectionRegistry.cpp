@@ -1,5 +1,5 @@
-#include "ReflectionRegistry.h"
-#include "GlmTypeSupport.h"
+#include "Engine/Runtime/Reflection/ReflectionRegistry.h"
+#include "Engine/Runtime/Reflection/GlmTypeSupport.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"

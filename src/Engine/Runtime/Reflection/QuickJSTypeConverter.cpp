@@ -1,8 +1,8 @@
-#include "QuickJSTypeConverter.h"
+#include "Engine/Runtime/Reflection/QuickJSTypeConverter.h"
 
 #if WITH_QUICKJS
-#include "PropertyAccessor.h"
-#include "ReflectionMacros.h"
+#include "Engine/Runtime/Reflection/PropertyAccessor.h"
+#include "Engine/Runtime/Reflection/ReflectionMacros.h"
 #include <entt/meta/resolve.hpp>
 
 namespace Reflection

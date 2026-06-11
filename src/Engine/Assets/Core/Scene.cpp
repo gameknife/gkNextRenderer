@@ -2,7 +2,6 @@
 #include <glm/detail/type_half.hpp>
 #include <meshoptimizer.h>
 #include <tiny_gltf.h>
-#include <unordered_set>
 #include "Engine/Assets/GPU/TextureImage.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/Savers/FSceneSaver.h"

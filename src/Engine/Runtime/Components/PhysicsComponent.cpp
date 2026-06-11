@@ -1,4 +1,4 @@
-#include "PhysicsComponent.h"
+#include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Reflection/PropertyMeta.h"
 #include <entt/meta/factory.hpp>
 

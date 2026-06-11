@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Allocator.hpp"
-#include "DebugUtilities.hpp"
+#include "Engine/Vulkan/Allocator.hpp"
+#include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 #include <string>
 #include <vector>

@@ -1,4 +1,4 @@
-#include "RenderComponent.h"
+#include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Reflection/PropertyMeta.h"
 #include <entt/meta/factory.hpp>
 

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "DebugUtilities.hpp"
-#include "Device.hpp"
+#include "Engine/Vulkan/DebugUtilities.hpp"
+#include "Engine/Vulkan/Device.hpp"
 #include "Engine/Options.hpp"
 #include <vector>
 #include <memory>

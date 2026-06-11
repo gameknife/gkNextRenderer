@@ -1,4 +1,4 @@
-#include "SoftwareTracingRenderer.hpp"
+#include "Engine/Rendering/SoftwareTracing/SoftwareTracingRenderer.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Runtime/Engine.hpp"
 

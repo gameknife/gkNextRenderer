@@ -12,12 +12,7 @@
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
 
 #include <SDL3/SDL.h>
-#include <filesystem>
 #include <glm/glm.hpp>
-#include <memory>
-#include <string>
-#include <vector>
-#include <unordered_set>
 
 namespace NextQuickJSBindings
 {

@@ -1,4 +1,4 @@
-#include "PathTracingRenderer.hpp"
+#include "Engine/Rendering/PathTracing/PathTracingRenderer.hpp"
 #include "Engine/Vulkan/BufferUtil.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"

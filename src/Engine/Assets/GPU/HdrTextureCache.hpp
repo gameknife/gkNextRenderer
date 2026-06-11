@@ -3,10 +3,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 
-#include <memory>
-#include <string>
 #include <utility>
-#include <vector>
 
 namespace Vulkan
 {
