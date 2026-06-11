@@ -361,6 +361,18 @@ namespace AirportSim
         return nullptr;
     }
 
+    const FAgent* AgentSystem::FindById(int id) const
+    {
+        for (const auto& agent : agents_)
+        {
+            if (agent.active && agent.id == id)
+            {
+                return &agent;
+            }
+        }
+        return nullptr;
+    }
+
     int AgentSystem::ActiveCount(EAgentRole role) const
     {
         int count = 0;

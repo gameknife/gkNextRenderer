@@ -49,6 +49,7 @@ namespace AirportSim
         std::string PreferredGroupQueue(const FAgent& agent, const std::string& prefix,
                                         const AgentSystem& agents, const QueueSystem& queues) const;
         glm::vec3 GroupTargetPosition(const FAgent& agent, const FPointOfInterest& poi, float frontOffset) const;
+        double DynamicKioskServiceMinutes(const FAgent& agent);
         double Rand(double lo, double hi);
 
         std::mt19937 rng_{2024};
@@ -56,5 +57,6 @@ namespace AirportSim
         int lastDay_ = -1;
         int passengerNameCursor_ = 0;
         int nextPassengerGroupId_ = 1;
+        int lastFlowDiagnosticBucket_ = -1;
     };
 }

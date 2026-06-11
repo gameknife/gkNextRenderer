@@ -42,12 +42,29 @@ namespace AirportSim
         lastDay_ = -1;
         passengerNameCursor_ = 0;
         nextPassengerGroupId_ = 1;
+        lastFlowDiagnosticBucket_ = -1;
     }
 
     double JourneySystem::Rand(double lo, double hi)
     {
         std::uniform_real_distribution<double> dist(lo, hi);
         return dist(rng_);
+    }
+
+    double JourneySystem::DynamicKioskServiceMinutes(const FAgent& agent)
+    {
+        double duration = Rand(Config::kKioskServiceMin, Config::kKioskServiceMax);
+        duration *= Rand(Config::kFacilityDelayMultiplierMin, Config::kFacilityDelayMultiplierMax);
+        duration *= Rand(Config::kPassengerDelayMultiplierMin, Config::kPassengerDelayMultiplierMax);
+        if (agent.personality == "急躁")
+        {
+            duration *= 1.12;
+        }
+        if (Rand(0.0, 1.0) < Config::kServiceIncidentChance)
+        {
+            duration *= Rand(Config::kServiceIncidentMultiplierMin, Config::kServiceIncidentMultiplierMax);
+        }
+        return duration;
     }
 
     bool JourneySystem::IsAirsideLeisureCategory(const std::string& category)
@@ -778,8 +795,11 @@ namespace AirportSim
                 if (agents.Arrived(agent))
                 {
                     agent.pstate = EPassengerState::UseKiosk;
-                    agent.stateUntil = gameMinutes + Rand(Config::kKioskServiceMin, Config::kKioskServiceMax);
+                    const double serviceMinutes = DynamicKioskServiceMinutes(agent);
+                    agent.stateUntil = gameMinutes + serviceMinutes;
                     agent.anim = EAgentAnimHint::Work;
+                    SPDLOG_DEBUG("AirportSim/Kiosk: {} using {} for {:.1f} min", agent.name, agent.targetPoi,
+                                 serviceMinutes);
                 }
                 break;
 
@@ -946,6 +966,41 @@ namespace AirportSim
             default:
                 break;
             }
+        }
+
+        const int diagnosticBucket = static_cast<int>(dayMinutes / 30.0);
+        if (diagnosticBucket != lastFlowDiagnosticBucket_)
+        {
+            lastFlowDiagnosticBucket_ = diagnosticBucket;
+            int checkin = 0;
+            int kiosk = 0;
+            int security = 0;
+            int airside = 0;
+            int gate = 0;
+            for (const auto& passenger : agents.Agents())
+            {
+                if (!passenger.active || passenger.role != EAgentRole::Passenger)
+                {
+                    continue;
+                }
+                switch (passenger.pstate)
+                {
+                case EPassengerState::QueueCheckin: ++checkin; break;
+                case EPassengerState::ToKiosk:
+                case EPassengerState::UseKiosk:     ++kiosk; break;
+                case EPassengerState::QueueSecurity:
+                case EPassengerState::PassSecurity: ++security; break;
+                case EPassengerState::AirsideIdle:
+                case EPassengerState::AirsideWalk:
+                case EPassengerState::AirsideUse:   ++airside; break;
+                case EPassengerState::ToGate:
+                case EPassengerState::QueueGate:    ++gate; break;
+                default:                            break;
+                }
+            }
+            SPDLOG_DEBUG("AirportSim/Flow: {:02d}:{:02d} checkin={} kiosk={} security={} airside={} gate={}",
+                         static_cast<int>(dayMinutes) / 60, static_cast<int>(dayMinutes) % 60, checkin, kiosk,
+                         security, airside, gate);
         }
     }
 }
