@@ -2074,6 +2074,65 @@
     }
     return rel;
   }
+  function normalizeRepoDocumentLink(basePath, href, label) {
+    const raw = String(href || '').trim();
+    if (!basePath || !raw || raw.startsWith('#')) return null;
+
+    let url;
+    try {
+      url = new URL(raw, window.location.href);
+    } catch (_) {
+      return null;
+    }
+    if (url.origin !== window.location.origin) return null;
+
+    let line = Number(url.searchParams.get('line') || 0);
+    if (!line) {
+      const hashMatch = /^#(?:L)?(\d+)(?:C\d+)?$/i.exec(url.hash);
+      if (hashMatch) line = Number(hashMatch[1]);
+    }
+    if (!line) {
+      const labelMatch = /:(\d+)(?::\d+)?\s*$/.exec(String(label || '').trim());
+      if (labelMatch) line = Number(labelMatch[1]);
+    }
+
+    const rawIsAbsolute = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw);
+    let pathOnly;
+    try {
+      pathOnly = decodeURIComponent(
+        rawIsAbsolute ? url.pathname : raw.split(/[?#]/, 1)[0]
+      ).replace(/^\/+/, '');
+    } catch (_) {
+      return null;
+    }
+    const rawIsRootRelative = raw.startsWith('/') || rawIsAbsolute;
+    const baseParts = String(basePath).split('/').slice(0, -1);
+    const targetParts = rawIsRootRelative ? pathOnly.split('/') : baseParts.concat(pathOnly.split('/'));
+    const normalized = [];
+    for (const part of targetParts) {
+      if (!part || part === '.') continue;
+      if (part === '..') {
+        if (!normalized.length) return null;
+        normalized.pop();
+        continue;
+      }
+      normalized.push(part);
+    }
+    const path = normalized.join('/');
+    if (!path || path.startsWith('docs/') && path.toLowerCase().endsWith('.md')) return null;
+    return { path, line: Number.isFinite(line) && line > 0 ? Math.floor(line) : 0 };
+  }
+  function initDocsSourcePanel(root) {
+    const scope = root || document;
+    const panel = scope.matches?.('[data-docs-source-panel]')
+      ? scope
+      : scope.querySelector?.('[data-docs-source-panel]');
+    if (!panel) return;
+    const focus = panel.querySelector('.docs-source-line.focus');
+    if (focus) {
+      window.requestAnimationFrame(() => focus.scrollIntoView({ block: 'center', inline: 'nearest' }));
+    }
+  }
   function currentSwapRoot(target) {
     if (!target) return document;
     if (target.isConnected) return target;
@@ -2128,12 +2187,14 @@
     restoreTargetSelection(root);
     restoreGitSelection(root);
     initDocsFolders(root);
+    initDocsSourcePanel(root);
     scrollChatToBottom(root);
   });
   // Initial pass for any server-rendered markdown on first load.
   document.addEventListener('DOMContentLoaded', () => {
     renderMarkdown(document);
     initDocsFolders(document);
+    initDocsSourcePanel(document);
     scrollChatToBottom(document);
   });
 
@@ -2440,13 +2501,31 @@
   document.body.addEventListener('click', (e) => {
     const link = e.target.closest('.docs-preview a');
     if (!link) return;
-    const rel = normalizeDocsMarkdownLink(link.closest('.docs-preview')?.dataset?.docPath, link.getAttribute('href'));
-    if (!rel) return;
+    const basePath = link.closest('.docs-preview')?.dataset?.docPath;
+    const href = link.getAttribute('href');
+    const rel = normalizeDocsMarkdownLink(basePath, href);
+    if (rel) {
+      e.preventDefault();
+      htmx.ajax('GET', '/tab/docs?file=' + encodeURIComponent(rel), {
+        target: '#tab-content',
+        swap: 'innerHTML',
+      });
+      return;
+    }
+    const source = normalizeRepoDocumentLink(basePath, href, link.textContent);
+    if (!source) return;
     e.preventDefault();
-    htmx.ajax('GET', '/tab/docs?file=' + encodeURIComponent(rel), {
-      target: '#tab-content',
+    const query = new URLSearchParams({ path: source.path });
+    if (source.line) query.set('line', String(source.line));
+    htmx.ajax('GET', '/docs/source?' + query.toString(), {
+      target: '#docs-source-panel-host',
       swap: 'innerHTML',
     });
+  });
+  document.body.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-docs-source-close]')) return;
+    const host = document.getElementById('docs-source-panel-host');
+    if (host) host.replaceChildren();
   });
   function selectGitItem(item) {
     if (!item) return;

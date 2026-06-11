@@ -353,7 +353,7 @@
 
 
 {{define "tab_docs"}}
-<div class="tab-jobs">
+<div class="tab-jobs docs-tab">
   <aside class="tab-side">
     <div class="card">
       <h2 class="card-title">
@@ -463,9 +463,13 @@
       {{end}}
     </div>
   </section>
+  <div id="docs-source-panel-host" class="docs-source-panel-host"></div>
 </div>
 
 <style>
+  .docs-tab {
+    position: relative;
+  }
   .docs-file-list {
     flex: 1 1 auto;
     display: flex;
@@ -612,7 +616,147 @@
     flex: 1 1 auto;
     min-height: 420px;
   }
+  .docs-source-panel-host:empty {
+    display: none;
+  }
+  .docs-source-panel-host {
+    position: absolute;
+    z-index: 20;
+    top: 16px;
+    right: 16px;
+    bottom: 16px;
+    width: min(760px, calc(100% - 348px));
+    min-width: 420px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    background: var(--bg-panel);
+    box-shadow: -18px 0 48px rgba(0, 0, 0, 0.42);
+    overflow: hidden;
+  }
+  .docs-source-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
+  .docs-source-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 58px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-card);
+  }
+  .docs-source-title {
+    flex: 1;
+    min-width: 0;
+  }
+  .docs-source-title strong,
+  .docs-source-title span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .docs-source-title strong {
+    font-size: 13px;
+  }
+  .docs-source-title span {
+    margin-top: 2px;
+    color: var(--fg-dim);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+  }
+  .docs-source-close {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--fg-mute);
+    cursor: pointer;
+    font-size: 19px;
+    line-height: 1;
+  }
+  .docs-source-close:hover {
+    border-color: var(--border-strong);
+    background: var(--bg-card-hover);
+    color: var(--fg);
+  }
+  .docs-source-code {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 10px 0 18px;
+    background: var(--bg-code);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.65;
+    tab-size: 4;
+  }
+  .docs-source-line {
+    display: grid;
+    grid-template-columns: 58px minmax(max-content, 1fr);
+    min-height: 20px;
+  }
+  .docs-source-line.focus {
+    background: rgba(234, 179, 8, 0.13);
+    box-shadow: inset 3px 0 0 var(--yellow);
+  }
+  .docs-source-line-number {
+    position: sticky;
+    left: 0;
+    padding: 0 12px 0 8px;
+    border-right: 1px solid var(--border);
+    background: var(--bg-code);
+    color: var(--fg-dim);
+    text-align: right;
+    user-select: none;
+  }
+  .docs-source-line.focus .docs-source-line-number {
+    background: #2b2715;
+    color: var(--yellow);
+    font-weight: 600;
+  }
+  .docs-source-line-text {
+    padding: 0 16px;
+    white-space: pre;
+    color: var(--fg);
+  }
+  .docs-source-error {
+    margin: 14px;
+  }
+  @media (max-width: 900px) {
+    .docs-source-panel-host {
+      left: 16px;
+      width: auto;
+      min-width: 0;
+    }
+  }
 </style>
+{{end}}
+
+{{define "docs_source_panel"}}
+<div class="docs-source-panel" data-docs-source-panel data-focus-line="{{.Line}}">
+  <div class="docs-source-head">
+    <div class="docs-source-title">
+      <strong>{{if .Name}}{{.Name}}{{else}}文件预览{{end}}</strong>
+      <span>{{if .RelPath}}{{.RelPath}}{{if .Line}}:{{.Line}}{{end}}{{else}}无法打开文件{{end}}</span>
+    </div>
+    <button class="docs-source-close" type="button" data-docs-source-close title="关闭">×</button>
+  </div>
+  {{if .Error}}
+  <div class="chat-error docs-source-error">{{.Error}}</div>
+  {{else}}
+  <div class="docs-source-code">
+    {{range .Lines}}<div class="docs-source-line {{if .Focus}}focus{{end}}" data-line="{{.Number}}">
+      <span class="docs-source-line-number">{{.Number}}</span><span class="docs-source-line-text">{{.Text}}</span>
+    </div>{{end}}
+  </div>
+  {{end}}
+</div>
 {{end}}
 
 

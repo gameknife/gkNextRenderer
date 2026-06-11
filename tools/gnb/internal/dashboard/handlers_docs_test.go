@@ -20,6 +20,8 @@ func setupDocsRepo(t *testing.T) *Server {
 		"docs/projects/guide.md":        "# Guide\n\n项目文档。\n",
 		"docs/gallery/ignore.avif":      "not-markdown",
 		"docs/projects/ignore.txt":      "ignore me",
+		"src/example.hpp":               "#pragma once\n\nstruct Example\n{\n    int value;\n};\n",
+		"assets/binary.dat":             "binary\x00data",
 		".spec/TODO.md":                 "# TODO\n\n## Milestone: 测试  <!-- status: active -->\n\n### 下一步\n\n(暂无)\n\n### 待规划\n\n(暂无)\n\n### 最近完成\n\n(暂无)\n",
 	} {
 		full := filepath.Join(dir, filepath.FromSlash(path))
@@ -154,5 +156,51 @@ func TestHandleDocsSaveWritesFileAndReturnsPreview(t *testing.T) {
 	}
 	if !strings.Contains(body, "修改后") {
 		t.Fatalf("preview missing saved body:\n%s", body)
+	}
+}
+
+func TestBuildDocsSourceVMReadsRepoFileAndFocusesLine(t *testing.T) {
+	s := setupDocsRepo(t)
+
+	vm := buildDocsSourceVM(s.opts.RepoRoot, "src/example.hpp", "5")
+
+	if vm.Error != "" {
+		t.Fatalf("unexpected error: %s", vm.Error)
+	}
+	if vm.RelPath != "src/example.hpp" || vm.Line != 5 || vm.LineCount != 6 {
+		t.Fatalf("source metadata = %+v", vm)
+	}
+	if len(vm.Lines) != 6 || !vm.Lines[4].Focus || vm.Lines[4].Text != "    int value;" {
+		t.Fatalf("focused source line = %+v", vm.Lines)
+	}
+}
+
+func TestBuildDocsSourceVMRejectsTraversalAndBinary(t *testing.T) {
+	s := setupDocsRepo(t)
+
+	if vm := buildDocsSourceVM(s.opts.RepoRoot, "../outside.txt", ""); vm.Error == "" {
+		t.Fatal("expected traversal path to fail")
+	}
+	if vm := buildDocsSourceVM(s.opts.RepoRoot, "assets/binary.dat", ""); vm.Error == "" {
+		t.Fatal("expected binary file to fail")
+	}
+}
+
+func TestHandleDocsSourceRendersHighlightedLine(t *testing.T) {
+	s := setupDocsRepo(t)
+	req := httptest.NewRequest("GET", "/docs/source?path=src/example.hpp&line=5", nil)
+	rec := httptest.NewRecorder()
+
+	s.handleDocsSource(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("status = %d (%s), want 200", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `class="docs-source-line focus" data-line="5"`) {
+		t.Fatalf("rendered body missing focused line:\n%s", body)
+	}
+	if !strings.Contains(body, "int value;") {
+		t.Fatalf("rendered body missing source text:\n%s", body)
 	}
 }
