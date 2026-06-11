@@ -28,7 +28,15 @@ namespace Assets
         std::vector<std::pair<int, int>> MipDimensions;
     };
 
+    // HDR residency promotion/demotion policy (frames), consumed by
+    // GlobalTexturePool::TickHDRTextureResidency in Texture.cpp.
+    inline constexpr uint32_t kHdrTexturePromotionFrames = 8;
+    inline constexpr uint32_t kHdrTextureDemotionFrames = 180;
+
     const char* HDRResidencyName(GlobalTexturePool::EHDRTextureResidency residency);
+
+    // Cooked cache file path for a named HDR texture
+    std::string HDRCacheFileName(const std::string& textureName);
 
     // Cache-first load: disk cache, else stbi decode + prefilter + SH project,
     // then writes the cache. Empty payload (Width==0) on failure.

@@ -1,4 +1,5 @@
 #include "Engine/Assets/Acceleration/CPUAccelerationStructure.h"
+#include "Engine/Assets/Acceleration/CPUAccelerationStructure.Internal.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
 #include "Engine/Assets/Core/Node.h"
@@ -13,29 +14,13 @@
 #include <unordered_map>
 #include <xxhash.h>
 
-#define TINYBVH_IMPLEMENTATION
-#include "ThirdParty/tinybvh/tiny_bvh.h"
-
 namespace Assets::CPU
 {
-
-static tinybvh::BVH GCpuBvh;
-static std::vector<tinybvh::BLASInstance>* GbvhInstanceList;
-static std::vector<FCPUTLASInstanceInfo>* GbvhTlasContexts;
-static std::vector<FCPUBLASContext>* GbvhBlasContexts;
 
 Assets::SphericalHarmonics HdrsHs[100];
 
 namespace
 {
-    constexpr uint32_t kCascadeVoxelCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
-    // Dilate the solid-brick set by this many bricks when classifying active cube bricks, so the
-    // near-surface shell the bake writes (distanceToSolid < ~16 voxels = 2 bricks) is fully covered.
-    constexpr int kAmbientBrickDilationRadius = 3;
-    constexpr uint8_t kMaxDistanceFieldSeed = 255;
-    std::atomic_bool GLoggedInvalidCpuAsHit{false};
-    std::atomic_bool GLoggedInvalidCpuAsMaterial{false};
-
     struct FWorldBounds
     {
         glm::vec3 min{FLT_MAX, FLT_MAX, FLT_MAX};
@@ -88,348 +73,9 @@ namespace
         maxBounds = glm::max(maxBounds, bounds.max);
     }
 
-    uint8_t GetPackedByteX(uint32_t packedValue)
-    {
-        return static_cast<uint8_t>(packedValue & 0xFFu);
-    }
-
-    uint32_t SetPackedByteX(uint32_t packedValue, uint8_t value)
-    {
-        return (packedValue & 0xFFFFFF00u) | value;
-    }
-
-    uint32_t GetVoxelAddress(int x, int y, int z)
-    {
-        return static_cast<uint32_t>(y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x);
-    }
-
-    struct FChamferNeighbor
-    {
-        int dx;
-        int dy;
-        int dz;
-        float weight;
-    };
-
-    constexpr std::array<FChamferNeighbor, 13> kForwardChamferNeighbors = {
-        FChamferNeighbor{-1, -1, -1, 1.73205081f},
-        FChamferNeighbor{0, -1, -1, 1.41421356f},
-        FChamferNeighbor{1, -1, -1, 1.73205081f},
-        FChamferNeighbor{-1, -1, 0, 1.41421356f},
-        FChamferNeighbor{0, -1, 0, 1.0f},
-        FChamferNeighbor{1, -1, 0, 1.41421356f},
-        FChamferNeighbor{-1, -1, 1, 1.73205081f},
-        FChamferNeighbor{0, -1, 1, 1.41421356f},
-        FChamferNeighbor{1, -1, 1, 1.73205081f},
-        FChamferNeighbor{-1, 0, -1, 1.41421356f},
-        FChamferNeighbor{0, 0, -1, 1.0f},
-        FChamferNeighbor{1, 0, -1, 1.41421356f},
-        FChamferNeighbor{-1, 0, 0, 1.0f},
-    };
-
-    constexpr std::array<FChamferNeighbor, 13> kBackwardChamferNeighbors = {
-        FChamferNeighbor{1, 0, 0, 1.0f},
-        FChamferNeighbor{-1, 0, 1, 1.41421356f},
-        FChamferNeighbor{0, 0, 1, 1.0f},
-        FChamferNeighbor{1, 0, 1, 1.41421356f},
-        FChamferNeighbor{-1, 1, -1, 1.73205081f},
-        FChamferNeighbor{0, 1, -1, 1.41421356f},
-        FChamferNeighbor{1, 1, -1, 1.73205081f},
-        FChamferNeighbor{-1, 1, 0, 1.41421356f},
-        FChamferNeighbor{0, 1, 0, 1.0f},
-        FChamferNeighbor{1, 1, 0, 1.41421356f},
-        FChamferNeighbor{-1, 1, 1, 1.73205081f},
-        FChamferNeighbor{0, 1, 1, 1.41421356f},
-        FChamferNeighbor{1, 1, 1, 1.73205081f},
-    };
-
-    void ApplyChamferPass(std::vector<float>& distanceField, const std::array<FChamferNeighbor, 13>& neighbors, bool reverseSweep)
-    {
-        const int xStart = reverseSweep ? Assets::CUBE_SIZE_XY - 1 : 0;
-        const int xEnd = reverseSweep ? -1 : Assets::CUBE_SIZE_XY;
-        const int xStep = reverseSweep ? -1 : 1;
-        const int yStart = reverseSweep ? Assets::CUBE_SIZE_Z - 1 : 0;
-        const int yEnd = reverseSweep ? -1 : Assets::CUBE_SIZE_Z;
-        const int yStep = reverseSweep ? -1 : 1;
-        const int zStart = reverseSweep ? Assets::CUBE_SIZE_XY - 1 : 0;
-        const int zEnd = reverseSweep ? -1 : Assets::CUBE_SIZE_XY;
-        const int zStep = reverseSweep ? -1 : 1;
-
-        for (int y = yStart; y != yEnd; y += yStep)
-        {
-            for (int z = zStart; z != zEnd; z += zStep)
-            {
-                for (int x = xStart; x != xEnd; x += xStep)
-                {
-                    const uint32_t voxelIndex = GetVoxelAddress(x, y, z);
-                    float bestDistance = distanceField[voxelIndex];
-
-                    for (const FChamferNeighbor& neighbor : neighbors)
-                    {
-                        const int nx = x + neighbor.dx;
-                        const int ny = y + neighbor.dy;
-                        const int nz = z + neighbor.dz;
-                        if (nx < 0 || nx >= Assets::CUBE_SIZE_XY ||
-                            ny < 0 || ny >= Assets::CUBE_SIZE_Z ||
-                            nz < 0 || nz >= Assets::CUBE_SIZE_XY)
-                        {
-                            continue;
-                        }
-
-                        const uint32_t neighborIndex = GetVoxelAddress(nx, ny, nz);
-                        bestDistance = std::min(bestDistance, distanceField[neighborIndex] + neighbor.weight);
-                    }
-
-                    distanceField[voxelIndex] = bestDistance;
-                }
-            }
-        }
-    }
 }
 
 using namespace Assets;
-
-uint PackBytes(glm::u32vec4 values)
-{
-    return (values.x & 0xFF) |
-           ((values.y & 0xFF) << 8) |
-           ((values.z & 0xFF) << 16) |
-           ((values.w & 0xFF) << 24);
-}
-
-FMaterial& FetchMaterial(uint matId)
-{
-    auto& materials = NextEngine::GetInstance()->GetScene().Materials();
-    assert(matId < materials.size());
-    matId = matId % materials.size(); // wrap around
-    return materials[matId];
-}
-
-uint FetchMaterialId(uint materialIdx, uint instanceId)
-{
-    if (GbvhTlasContexts == nullptr || instanceId >= GbvhTlasContexts->size())
-    {
-        if (!GLoggedInvalidCpuAsMaterial.exchange(true))
-        {
-            SPDLOG_WARN("CPUAccelerationStructure: invalid TLAS instance {} while resolving material id.", instanceId);
-        }
-        return 0;
-    }
-
-    if (materialIdx >= (*GbvhTlasContexts)[instanceId].matIdxs.size())
-    {
-        if (!GLoggedInvalidCpuAsMaterial.exchange(true))
-        {
-            SPDLOG_WARN(
-                "CPUAccelerationStructure: section/material index {} exceeds supported material slots ({}); falling back to material 0.",
-                materialIdx, (*GbvhTlasContexts)[instanceId].matIdxs.size());
-        }
-        return 0;
-    }
-
-    return (*GbvhTlasContexts)[instanceId].matIdxs[materialIdx];
-}
-
-bool TraceRay(vec3 origin, vec3 rayDir, float dist, vec3& outNormal, uint& outMaterialId, float& outRayDist, uint& outInstanceId )
-{
-    tinybvh::Ray ray(tinybvh::bvhvec3(origin.x, origin.y, origin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z), dist);
-    GCpuBvh.Intersect(ray);
-
-    if (ray.hit.t < dist)
-    {
-        uint32_t primIdx = ray.hit.prim;
-        if (GbvhInstanceList == nullptr || GbvhTlasContexts == nullptr || GbvhBlasContexts == nullptr ||
-            ray.hit.inst >= GbvhInstanceList->size() || ray.hit.inst >= GbvhTlasContexts->size())
-        {
-            if (!GLoggedInvalidCpuAsHit.exchange(true))
-            {
-                SPDLOG_WARN("CPUAccelerationStructure: invalid hit instance {} during CPU ray trace.", ray.hit.inst);
-            }
-            return false;
-        }
-
-        tinybvh::BLASInstance& instance = (*GbvhInstanceList)[ray.hit.inst];
-        FCPUTLASInstanceInfo& instContext = (*GbvhTlasContexts)[ray.hit.inst];
-        if (instance.blasIdx >= GbvhBlasContexts->size())
-        {
-            if (!GLoggedInvalidCpuAsHit.exchange(true))
-            {
-                SPDLOG_WARN("CPUAccelerationStructure: invalid BLAS index {} during CPU ray trace.", instance.blasIdx);
-            }
-            return false;
-        }
-
-        FCPUBLASContext& context = (*GbvhBlasContexts)[instance.blasIdx];
-        if (primIdx >= context.extinfos.size())
-        {
-            if (!GLoggedInvalidCpuAsHit.exchange(true))
-            {
-                SPDLOG_WARN("CPUAccelerationStructure: invalid primitive index {} during CPU ray trace.", primIdx);
-            }
-            return false;
-        }
-
-        mat4* worldTS = (mat4*)instance.transform;
-        vec4 normalWS = vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
-
-        outRayDist = ray.hit.t;
-        outNormal = vec3(normalWS.x, normalWS.y, normalWS.z);
-        outMaterialId =  FetchMaterialId( context.extinfos[primIdx].matIdx, ray.hit.inst );
-        outInstanceId = instContext.nodeId;
-        return true;
-    }
-    
-    return false;
-}
-
-#define FLOAT2 vec2
-#define FLOAT3 vec3
-#define FLOAT4 vec4
-
-float DetectDistance(FLOAT3 origin, FLOAT3 rayDir, float cubeUnit)
-{
-    vec3 outNormal;
-    float outRayDist;
-    uint tempMaterialId;
-    uint tempInstanceId;
-    if (TraceRay(origin, rayDir, cubeUnit * 64.0f, outNormal, tempMaterialId, outRayDist, tempInstanceId))
-    {
-        return outRayDist;
-    }
-    return 255;
-}
-
-bool InsideGeometry(FLOAT3& origin, FLOAT3 rayDir, VoxelData& outCube, float& distance, float cubeUnit)
-{
-    // 求交测试
-    vec3 outNormal;
-    float outRayDist;
-    uint tempMaterialId;
-    uint tempInstanceId;
-
-    if (TraceRay(origin, rayDir, cubeUnit * 64.0f, outNormal, tempMaterialId, outRayDist, tempInstanceId))
-    {
-        distance = outRayDist;
-        if (distance <= cubeUnit)
-        {
-            FMaterial hitMaterial = FetchMaterial(tempMaterialId);
-            outCube.matId = tempMaterialId;
-
-            // 命中反面，识别为固体，并将lightprobe推出体外
-            if (dot(outNormal, rayDir) > 0.0 || ((hitMaterial.gpuMaterial_.MaterialModel == Material::Enum::DiffuseLight)))// && OutRayDist < 0.02f))
-            {
-                distance = 0;
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-void VoxelizeCube(VoxelData& cube, FLOAT3 origin, float cubeUnit)
-{
-    // just write matid and solid status
-    cube.age = 0;
-    cube.matId = 0;
-
-    float distPY = 255.0f;
-    float distNY = 255.0f;
-    float distPX = 255.0f;
-    float distNX = 255.0f;
-    float distPZ = 255.0f;
-    float distNZ = 255.0f;
-
-    // 现在是向轴向上发射了6根光线，记录下距离，并用于后续采样判断
-    InsideGeometry(origin, FLOAT3(0, 1, 0), cube, distPY, cubeUnit);
-    InsideGeometry(origin, FLOAT3(0, -1, 0), cube, distNY, cubeUnit);
-    InsideGeometry(origin, FLOAT3(1, 0, 0), cube, distPX, cubeUnit);
-    InsideGeometry(origin, FLOAT3(-1, 0, 0), cube, distNX, cubeUnit);
-    InsideGeometry(origin, FLOAT3(0, 0, 1), cube, distPZ, cubeUnit);
-    InsideGeometry(origin, FLOAT3(0, 0, -1), cube, distNZ, cubeUnit);
-
-    // get the min dist of each direction
-    float minDist = std::min({distPY, distNY, distPX, distNX, distPZ, distNZ});
-    if (minDist > 254.0f)
-    {
-        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(1, 1, 1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, 1, 1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, -1, 1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, 1, 1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(1, 1, -1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, 1, -1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, -1, -1), cubeUnit)});
-        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, 1, -1), cubeUnit)});
-    }
-
-    // 现在，相当于每一个体素，都有了一个距离场，通过判断这个，可以快速跳过？
-    distPY = glm::fclamp(distPY / cubeUnit, 0.0f, 1.0f);
-    distNY = glm::fclamp(distNY / cubeUnit, 0.0f, 1.0f);
-    distPX = glm::fclamp(distPX / cubeUnit, 0.0f, 1.0f);
-    distNX = glm::fclamp(distNX / cubeUnit, 0.0f, 1.0f);
-    distPZ = glm::fclamp(distPZ / cubeUnit, 0.0f, 1.0f);
-    distNZ = glm::fclamp(distNZ / cubeUnit, 0.0f, 1.0f);
-
-    float inside = distPY * distNY * distPX * distNX * distPZ * distNZ;
-
-    cube.distanceToSolid_gg_z01 =
-        PackBytes(glm::u32vec4(minDist / cubeUnit, uint(inside * 255.0f), uint(distPZ * 255.0f), uint(distNZ * 255.0f)));
-    cube.distanceToSolid_x01_y01 = PackBytes(glm::u32vec4(uint(distPX * 255.0f), uint(distNX * 255.0f), uint(distPY * 255.0f), uint(distNY * 255.0f)));
-}
-
-#undef float2
-#undef float3
-#undef float4
-
-void FCPUProbeBaker::Init(uint32_t cascadeIdx, float unitSize, vec3 offset)
-{
-    cascadeIndex = cascadeIdx;
-    UNIT_SIZE = unitSize;
-    CUBE_OFFSET = offset;
-    voxels.resize(kCascadeVoxelCount);
-    distanceToSolidSeeds.resize(kCascadeVoxelCount, kMaxDistanceFieldSeed);
-}
-
-void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& voxelGpuMemory, uint32_t elementOffset)
-{
-    UploadGPU(voxelGpuMemory, 0, elementOffset);
-}
-
-void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& voxelGpuMemory, size_t byteBaseOffset, uint32_t elementOffset)
-{
-    const size_t byteOffset = byteBaseOffset + static_cast<size_t>(elementOffset) * sizeof(VoxelData);
-    VoxelData* data = reinterpret_cast<VoxelData*>(voxelGpuMemory.Map(byteOffset, sizeof(VoxelData) * voxels.size()));
-    std::memcpy(data, voxels.data(), voxels.size() * sizeof(VoxelData));
-    voxelGpuMemory.Unmap();
-}
-
-void FCPUProbeBaker::RebuildDistanceField()
-{
-    if (voxels.empty() || distanceToSolidSeeds.size() != voxels.size())
-    {
-        return;
-    }
-
-    std::vector<float> distanceField(voxels.size(), 0.0f);
-    for (size_t voxelIndex = 0; voxelIndex < voxels.size(); ++voxelIndex)
-    {
-        distanceField[voxelIndex] = static_cast<float>(distanceToSolidSeeds[voxelIndex]);
-    }
-
-    constexpr int kChamferPassCount = 2;
-    for (int passIndex = 0; passIndex < kChamferPassCount; ++passIndex)
-    {
-        ApplyChamferPass(distanceField, kForwardChamferNeighbors, false);
-        ApplyChamferPass(distanceField, kBackwardChamferNeighbors, true);
-    }
-
-    for (size_t voxelIndex = 0; voxelIndex < voxels.size(); ++voxelIndex)
-    {
-        const float clampedDistance = glm::clamp(distanceField[voxelIndex], 0.0f, 255.0f);
-        const uint8_t packedDistance = static_cast<uint8_t>(glm::floor(clampedDistance));
-        voxels[voxelIndex].distanceToSolid_gg_z01 =
-            SetPackedByteX(voxels[voxelIndex].distanceToSolid_gg_z01, packedDistance);
-    }
-}
 
 bool FCPUAccelerationStructure::InitCascadeBakers(const Runtime::Config::UserSettings& settings, uint32_t maxCascadeCapacity)
 {
@@ -634,7 +280,7 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
 
     if (tmpbvhInstanceList.size() > 0)
     {
-        GCpuBvh.Build( tmpbvhInstanceList.data(), static_cast<int>(tmpbvhInstanceList.size()), bvhBLASList.data(), static_cast<int>(bvhBLASList.size()) );
+        GetCpuBvhState().bvh.Build( tmpbvhInstanceList.data(), static_cast<int>(tmpbvhInstanceList.size()), bvhBLASList.data(), static_cast<int>(bvhBLASList.size()) );
     }
 
     Tasks::TaskCoordinator::GetInstance()->WaitForAllParralledTask();
@@ -643,9 +289,9 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
     bvhTLASContexts.swap(tmpbvhTLASContexts);
     
     // rebind with new address
-    GbvhInstanceList = &bvhInstanceList;
-    GbvhTlasContexts = &bvhTLASContexts;
-    GbvhBlasContexts = &bvhBLASContexts;
+    GetCpuBvhState().instanceList = &bvhInstanceList;
+    GetCpuBvhState().tlasContexts = &bvhTLASContexts;
+    GetCpuBvhState().blasContexts = &bvhBLASContexts;
 
     if (hasNavDirtyBounds)
     {
@@ -672,18 +318,18 @@ RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDi
 {
     RayCastResult result {};
 
-    if (GCpuBvh.blasCount > 0)
+    if (GetCpuBvhState().bvh.blasCount > 0)
     {
         tinybvh::Ray ray(tinybvh::bvhvec3(rayOrigin.x, rayOrigin.y, rayOrigin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z), 2000.0f);
-        GCpuBvh.Intersect(ray);
+        GetCpuBvhState().bvh.Intersect(ray);
 
         if (ray.hit.t < 2000.f)
         {
             vec3 hitPos = rayOrigin + rayDir * ray.hit.t;
             uint32_t primIdx = ray.hit.prim;
-            tinybvh::BLASInstance& instance = (*GbvhInstanceList)[ray.hit.inst];
-            FCPUTLASInstanceInfo& instContext = (*GbvhTlasContexts)[ray.hit.inst];
-            FCPUBLASContext& context = (*GbvhBlasContexts)[instance.blasIdx];
+            tinybvh::BLASInstance& instance = (*GetCpuBvhState().instanceList)[ray.hit.inst];
+            FCPUTLASInstanceInfo& instContext = (*GetCpuBvhState().tlasContexts)[ray.hit.inst];
+            FCPUBLASContext& context = (*GetCpuBvhState().blasContexts)[instance.blasIdx];
             mat4* worldTS = (mat4*)instance.transform;
             vec4 normalWS = vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
             // Ensure normal faces toward the ray origin (flip if we hit a back face)
@@ -698,33 +344,6 @@ RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDi
     }
 
     return result;
-}
-
-void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
-{
-    vec3 probePos = vec3(x, y, z) * UNIT_SIZE + CUBE_OFFSET;
-    uint32_t addressIdx = GetVoxelAddress(x, y, z);
-    VoxelData& voxel = voxels[addressIdx];
-        
-    switch (procType)
-    {
-        case ECubeProcType::ECPT_Clear:
-            voxel = {};
-            voxel.distanceToSolid_gg_z01 = SetPackedByteX(voxel.distanceToSolid_gg_z01, kMaxDistanceFieldSeed);
-            distanceToSolidSeeds[addressIdx] = kMaxDistanceFieldSeed;
-            break;
-        case ECubeProcType::ECPT_Fence:
-            break;
-        case ECubeProcType::ECPT_Voxelize:
-            VoxelizeCube(voxel, probePos, UNIT_SIZE);
-            distanceToSolidSeeds[addressIdx] = GetPackedByteX(voxel.distanceToSolid_gg_z01);
-            break;
-    }
-}
-
-void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& voxelGpuMemory)
-{
-    UploadGPU(voxelGpuMemory, 0);
 }
 
 bool FCPUAccelerationStructure::AsyncProcessFull(Assets::Scene& scene, Vulkan::DeviceMemory* voxelGpuMemory, bool incremental)
@@ -1016,201 +635,6 @@ void FCPUAccelerationStructure::ClearNavRelevantDirtyBounds()
     navRelevantDirtyWorldMax_ = glm::vec3(0.0f);
 }
 
-void FCPUProbeBaker::ClearAmbientCubes()
-{
-    for (size_t voxelIndex = 0; voxelIndex < voxels.size(); ++voxelIndex)
-    {
-        VoxelData& voxel = voxels[voxelIndex];
-        voxel = {};
-        voxel.distanceToSolid_gg_z01 = SetPackedByteX(voxel.distanceToSolid_gg_z01, kMaxDistanceFieldSeed);
-        distanceToSolidSeeds[voxelIndex] = kMaxDistanceFieldSeed;
-    }
-}
-
-void FCPUPageIndex::Init()
-{
-    pageIndex.resize(Assets::ACGI_PAGE_COUNT * Assets::ACGI_PAGE_COUNT);
-}
-
-void FCPUBrickTable::UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint32_t cascadeCapacity,
-                                uint32_t poolBricksPerCascade, int dilationRadius)
-{
-    const int BX = Assets::GPU_SCENE_AMBIENT_BRICKS_X;
-    const int BY = Assets::GPU_SCENE_AMBIENT_BRICKS_Y;
-    const int BZ = Assets::GPU_SCENE_AMBIENT_BRICKS_Z;
-    const int EDGE = Assets::GPU_SCENE_AMBIENT_BRICK_EDGE;
-    const uint32_t BPC = static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE);
-    const uint32_t kInvalid = Assets::GPU_SCENE_AMBIENT_BRICK_INVALID;
-
-    brickTable.assign(static_cast<size_t>(cascadeCapacity) * BPC, kInvalid);
-    activeBrickList.assign(static_cast<size_t>(cascadeCapacity) * poolBricksPerCascade, kInvalid);
-    activeBricksPerCascade.assign(cascadeCapacity, 0u);
-
-    const uint32_t cascadesToProcess = std::min<uint32_t>(cascadeCapacity, static_cast<uint32_t>(bakers.size()));
-    uint32_t totalActive = 0;
-    uint32_t totalOverflow = 0;
-    std::vector<uint8_t> active(BPC, 0);
-    for (uint32_t c = 0; c < cascadesToProcess; ++c)
-    {
-        const FCPUProbeBaker& baker = bakers[c];
-        std::fill(active.begin(), active.end(), uint8_t(0));
-
-        const uint32_t voxelCount = static_cast<uint32_t>(baker.voxels.size());
-        for (uint32_t v = 0; v < voxelCount; ++v)
-        {
-            if (baker.voxels[v].matId == 0)
-            {
-                continue;
-            }
-            const uint32_t y = v / (Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY);
-            const uint32_t z = (v - y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY) / Assets::CUBE_SIZE_XY;
-            const uint32_t x = v - y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY - z * Assets::CUBE_SIZE_XY;
-            const int sbx = static_cast<int>(x) / EDGE;
-            const int sby = static_cast<int>(y) / EDGE;
-            const int sbz = static_cast<int>(z) / EDGE;
-            for (int dy = -dilationRadius; dy <= dilationRadius; ++dy)
-            {
-                const int nby = sby + dy;
-                if (nby < 0 || nby >= BY) continue;
-                for (int dz = -dilationRadius; dz <= dilationRadius; ++dz)
-                {
-                    const int nbz = sbz + dz;
-                    if (nbz < 0 || nbz >= BZ) continue;
-                    for (int dx = -dilationRadius; dx <= dilationRadius; ++dx)
-                    {
-                        const int nbx = sbx + dx;
-                        if (nbx < 0 || nbx >= BX) continue;
-                        active[static_cast<uint32_t>(nby) * (BX * BZ) + static_cast<uint32_t>(nbz) * BX +
-                               static_cast<uint32_t>(nbx)] = 1;
-                    }
-                }
-            }
-        }
-
-        // Compact active bricks into pool slots in deterministic brick-linear order (stable for static
-        // scenes, so the GPU cube pool stays coherent across flushes). Beyond the cap they stay INVALID.
-        uint32_t slot = 0;
-        for (uint32_t b = 0; b < BPC; ++b)
-        {
-            if (!active[b])
-            {
-                continue;
-            }
-            if (slot < poolBricksPerCascade)
-            {
-                brickTable[static_cast<size_t>(c) * BPC + b] = slot++;
-                activeBrickList[static_cast<size_t>(c) * poolBricksPerCascade + (slot - 1u)] = b;
-            }
-            else
-            {
-                ++totalOverflow;
-            }
-        }
-        activeBricksPerCascade[c] = slot;
-        totalActive += slot;
-    }
-
-    activeBricksLastBuild = totalActive;
-    if (totalOverflow > 0)
-    {
-        SPDLOG_WARN("[AmbientBrick] cube pool overflow: {} bricks dropped (cap {}/cascade); GI missing there",
-                    totalOverflow, poolBricksPerCascade);
-    }
-    // SPDLOG_INFO("[AmbientBrick] active bricks {} / capacity {} ({}/cascade x {} cascades)", totalActive,
-    //             poolBricksPerCascade * cascadesToProcess, poolBricksPerCascade, cascadesToProcess);
-}
-
-void FCPUBrickTable::UploadGPU(Vulkan::DeviceMemory& deviceMemory, size_t tableByteOffset, size_t activeListByteOffset)
-{
-    if (brickTable.empty())
-    {
-        return;
-    }
-    const size_t bytes = brickTable.size() * sizeof(uint32_t);
-    void* mapped = deviceMemory.Map(static_cast<VkDeviceSize>(tableByteOffset), static_cast<VkDeviceSize>(bytes));
-    std::memcpy(mapped, brickTable.data(), bytes);
-    deviceMemory.Unmap();
-
-    if (!activeBrickList.empty())
-    {
-        const size_t activeListBytes = activeBrickList.size() * sizeof(uint32_t);
-        mapped = deviceMemory.Map(static_cast<VkDeviceSize>(activeListByteOffset),
-                                  static_cast<VkDeviceSize>(activeListBytes));
-        std::memcpy(mapped, activeBrickList.data(), activeListBytes);
-        deviceMemory.Unmap();
-    }
-}
-
-void FCPUPageIndex::UpdateData(const std::vector<FCPUProbeBaker>& bakers)
-{
-    // 粗暴实现，先全部page置空
-    for (auto& page : pageIndex)
-    {
-        page = {};
-        page.voxelCount = 0;
-    }
-
-    // 聚合所有cascade，构建全局PageIndex覆盖
-    for (const FCPUProbeBaker& baker : bakers)
-    {
-        const uint32_t voxelCount = static_cast<uint32_t>(baker.voxels.size());
-        for (uint32_t gIdx = 0; gIdx < voxelCount; ++gIdx)
-        {
-            const VoxelData& voxel = baker.voxels[gIdx];
-            if (voxel.matId == 0)
-            {
-                continue;
-            }
-
-            // convert to local position
-            uint y = gIdx / (CUBE_SIZE_XY * CUBE_SIZE_XY);
-            uint z = (gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY) / CUBE_SIZE_XY;
-            uint x = gIdx - y * CUBE_SIZE_XY * CUBE_SIZE_XY - z * CUBE_SIZE_XY;
-
-            vec3 worldPos = vec3(x, y, z) * baker.UNIT_SIZE + baker.CUBE_OFFSET;
-
-            Assets::PageIndex& page = GetPage(worldPos);
-
-            // 当前仅使用voxelCount>0做粗粒度裁剪，保持占用标记语义即可
-            page.voxelCount = 1;
-        }
-    }
-}
-
-Assets::PageIndex& FCPUPageIndex::GetPage(glm::vec3 worldpos)
-{
-    // 假设CUBE_OFFSET定义了世界空间的起始位置
-    glm::vec3 relativePos = worldpos - Assets::ACGI_PAGE_OFFSET;
-
-    // 计算页面索引，假设每个page对应PAGE_UNIT的世界空间距离
-    // 使用xz平面进行映射
-    int pageX = static_cast<int>(relativePos.x / Assets::ACGI_PAGE_SIZE);
-    int pageZ = static_cast<int>(relativePos.z / Assets::ACGI_PAGE_SIZE);
-
-    // 限制在有效范围内
-    pageX = glm::clamp(pageX, 0, Assets::ACGI_PAGE_COUNT - 1);
-    pageZ = glm::clamp(pageZ, 0, Assets::ACGI_PAGE_COUNT - 1);
-
-    // 计算一维索引
-    int index = pageZ * Assets::ACGI_PAGE_COUNT + pageX;
-
-    // 返回对应的PageIndex引用
-    return pageIndex[index];
-}
-
-void FCPUPageIndex::UploadGPU(Vulkan::DeviceMemory& gpuMemory)
-{
-    UploadGPU(gpuMemory, 0);
-}
-
-void FCPUPageIndex::UploadGPU(Vulkan::DeviceMemory& gpuMemory, size_t byteBaseOffset)
-{
-    PageIndex* data = reinterpret_cast<PageIndex*>(
-        gpuMemory.Map(byteBaseOffset, sizeof(PageIndex) * pageIndex.size()));
-    std::memcpy(data, pageIndex.data(), pageIndex.size() * sizeof(PageIndex));
-    gpuMemory.Unmap();
-}
-
 void FCPUAccelerationStructure::GenShadowMap(Scene& scene)
 {
     if (bvhInstanceList.empty())
@@ -1274,7 +698,7 @@ void FCPUAccelerationStructure::GenShadowMap(Scene& scene)
                                 10000.0f
                             );
                             
-                            GCpuBvh.Intersect(ray);
+                            GetCpuBvhState().bvh.Intersect(ray);
                             if (ray.hit.t < 9999.0f)
                             {
                                 vec3 hitPoint = origin + rayDir * ray.hit.t;
