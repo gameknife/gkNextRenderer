@@ -14,63 +14,8 @@ using json = nlohmann::json;
 
 namespace NextCVar
 {
-    bool FCVarSystem::RegisterInt(const std::string& name, int32_t defaultValue, int32_t* target,
-                                  ECVarFlags flags, std::string description,
-                                  std::function<void()> onChanged)
-    {
-        if (cvars_.contains(name))
-        {
-            return false;
-        }
-
-        FCVarEntry entry{};
-        entry.name = name;
-        entry.description = std::move(description);
-        entry.type = ECVarType::Int;
-        entry.flags = flags;
-        entry.defaultValue = static_cast<int64_t>(defaultValue);
-        entry.value = static_cast<int64_t>(defaultValue);
-        entry.onChanged = std::move(onChanged);
-
-        if (target)
-        {
-            entry.boundTarget = target;
-            *target = defaultValue;
-        }
-
-        cvars_.emplace(name, std::move(entry));
-        return true;
-    }
-
-    bool FCVarSystem::RegisterUInt(const std::string& name, uint32_t defaultValue, uint32_t* target,
-                                   ECVarFlags flags, std::string description,
-                                   std::function<void()> onChanged)
-    {
-        if (cvars_.contains(name))
-        {
-            return false;
-        }
-
-        FCVarEntry entry{};
-        entry.name = name;
-        entry.description = std::move(description);
-        entry.type = ECVarType::Int;
-        entry.flags = flags;
-        entry.defaultValue = static_cast<int64_t>(defaultValue);
-        entry.value = static_cast<int64_t>(defaultValue);
-        entry.onChanged = std::move(onChanged);
-
-        if (target)
-        {
-            entry.boundTarget = target;
-            *target = defaultValue;
-        }
-
-        cvars_.emplace(name, std::move(entry));
-        return true;
-    }
-
-    bool FCVarSystem::RegisterFloat(const std::string& name, float defaultValue, float* target,
+    template <typename StoredT, typename T>
+    bool FCVarSystem::RegisterTyped(const std::string& name, T defaultValue, T* target,
                                     ECVarFlags flags, std::string description,
                                     std::function<void()> onChanged)
     {
@@ -82,10 +27,17 @@ namespace NextCVar
         FCVarEntry entry{};
         entry.name = name;
         entry.description = std::move(description);
-        entry.type = ECVarType::Float;
+        if constexpr (std::is_same_v<StoredT, int64_t>)
+            entry.type = ECVarType::Int;
+        else if constexpr (std::is_same_v<StoredT, double>)
+            entry.type = ECVarType::Float;
+        else if constexpr (std::is_same_v<StoredT, bool>)
+            entry.type = ECVarType::Bool;
+        else
+            entry.type = ECVarType::String;
         entry.flags = flags;
-        entry.defaultValue = static_cast<double>(defaultValue);
-        entry.value = static_cast<double>(defaultValue);
+        entry.defaultValue = static_cast<StoredT>(defaultValue);
+        entry.value = static_cast<StoredT>(defaultValue);
         entry.onChanged = std::move(onChanged);
 
         if (target)
@@ -96,62 +48,42 @@ namespace NextCVar
 
         cvars_.emplace(name, std::move(entry));
         return true;
+    }
+
+    bool FCVarSystem::RegisterInt(const std::string& name, int32_t defaultValue, int32_t* target,
+                                  ECVarFlags flags, std::string description,
+                                  std::function<void()> onChanged)
+    {
+        return RegisterTyped<int64_t>(name, defaultValue, target, flags, std::move(description), std::move(onChanged));
+    }
+
+    bool FCVarSystem::RegisterUInt(const std::string& name, uint32_t defaultValue, uint32_t* target,
+                                   ECVarFlags flags, std::string description,
+                                   std::function<void()> onChanged)
+    {
+        return RegisterTyped<int64_t>(name, defaultValue, target, flags, std::move(description), std::move(onChanged));
+    }
+
+    bool FCVarSystem::RegisterFloat(const std::string& name, float defaultValue, float* target,
+                                    ECVarFlags flags, std::string description,
+                                    std::function<void()> onChanged)
+    {
+        return RegisterTyped<double>(name, defaultValue, target, flags, std::move(description), std::move(onChanged));
     }
 
     bool FCVarSystem::RegisterBool(const std::string& name, bool defaultValue, bool* target,
                                    ECVarFlags flags, std::string description,
                                    std::function<void()> onChanged)
     {
-        if (cvars_.contains(name))
-        {
-            return false;
-        }
-
-        FCVarEntry entry{};
-        entry.name = name;
-        entry.description = std::move(description);
-        entry.type = ECVarType::Bool;
-        entry.flags = flags;
-        entry.defaultValue = defaultValue;
-        entry.value = defaultValue;
-        entry.onChanged = std::move(onChanged);
-
-        if (target)
-        {
-            entry.boundTarget = target;
-            *target = defaultValue;
-        }
-
-        cvars_.emplace(name, std::move(entry));
-        return true;
+        return RegisterTyped<bool>(name, defaultValue, target, flags, std::move(description), std::move(onChanged));
     }
 
     bool FCVarSystem::RegisterString(const std::string& name, std::string defaultValue, std::string* target,
                                      ECVarFlags flags, std::string description,
                                      std::function<void()> onChanged)
     {
-        if (cvars_.contains(name))
-        {
-            return false;
-        }
-
-        FCVarEntry entry{};
-        entry.name = name;
-        entry.description = std::move(description);
-        entry.type = ECVarType::String;
-        entry.flags = flags;
-        entry.defaultValue = defaultValue;
-        entry.value = defaultValue;
-        entry.onChanged = std::move(onChanged);
-
-        if (target)
-        {
-            entry.boundTarget = target;
-            *target = defaultValue;
-        }
-
-        cvars_.emplace(name, std::move(entry));
-        return true;
+        return RegisterTyped<std::string>(name, std::move(defaultValue), target, flags, std::move(description),
+                                          std::move(onChanged));
     }
 
     bool FCVarSystem::LoadDefaultFile(const std::string& path)
