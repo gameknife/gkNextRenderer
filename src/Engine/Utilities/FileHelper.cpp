@@ -1,5 +1,4 @@
 #include "FileHelper.hpp"
-#include <spdlog/spdlog.h>
 #include <optional>
 #include <system_error>
 #include <cstring>

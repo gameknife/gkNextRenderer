@@ -8,7 +8,6 @@
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 
-#include <spdlog/spdlog.h>
 
 #if WITH_STREAMLINE && WIN32
 #include <dxgi1_6.h>

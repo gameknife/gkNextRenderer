@@ -60,7 +60,6 @@
 #include "Reflection/ReflectionRegistry.h"
 
 // spdlog logging
-#include <spdlog/spdlog.h>
 #include <spdlog/stopwatch.h>
 
 #if ANDROID

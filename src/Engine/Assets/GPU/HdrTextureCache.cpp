@@ -5,7 +5,6 @@
 #include "Engine/Utilities/StbImage.hpp"
 #include "ThirdParty/lzav/lzav.h"
 
-#include <spdlog/spdlog.h>
 #include <cstring>
 #include <filesystem>
 #include <fstream>

@@ -4,7 +4,6 @@
 
 #include <chrono>
 #include <random>
-#include <spdlog/spdlog.h>
 
 #if WITH_AUDIO
 #define MINIAUDIO_IMPLEMENTATION

@@ -7,7 +7,6 @@
 #include "Engine/Utilities/Exception.hpp"
 #include <algorithm>
 #include <limits>
-#include <spdlog/spdlog.h>
 
 #include "DebugUtilities.hpp"
 

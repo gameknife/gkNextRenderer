@@ -5,7 +5,6 @@
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Loaders/OzzAnimationBuilder.h"
 #include <algorithm>
-#include <spdlog/spdlog.h>
 #include <functional>
 #include <unordered_map>
 #include <entt/meta/factory.hpp>

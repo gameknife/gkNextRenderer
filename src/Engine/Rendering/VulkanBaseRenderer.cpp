@@ -44,7 +44,6 @@
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Rendering/Shadow/ShadowMapPass.hpp"
 #include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
-#include <spdlog/spdlog.h>
 #include <utility>
 
 namespace

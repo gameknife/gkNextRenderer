@@ -5,7 +5,6 @@
 #include <cstring>
 #include <vector>
 
-#include <spdlog/spdlog.h>
 
 namespace Runtime::Remote
 {

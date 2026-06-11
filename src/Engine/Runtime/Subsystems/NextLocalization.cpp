@@ -6,7 +6,6 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <sstream>
-#include <spdlog/spdlog.h>
 
 namespace
 {

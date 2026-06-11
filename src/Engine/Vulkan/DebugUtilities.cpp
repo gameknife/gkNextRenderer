@@ -2,7 +2,6 @@
 #include "Instance.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
-#include <spdlog/spdlog.h>
 
 #ifdef VK_USE_PLATFORM_WIN32_KHR
 #	include <aclapi.h>
