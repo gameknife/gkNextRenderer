@@ -6,6 +6,7 @@
 #include "JourneySystem.h"
 
 #include <algorithm>
+#include <chrono>
 #include <iterator>
 
 #include <fmt/format.h>
@@ -50,6 +51,15 @@ namespace AirportSim
             return Config::kDecisionCooldownMinutes;
         }
         constexpr size_t kLogLimit = 60;
+
+        std::string FormatLatency(double elapsedMs)
+        {
+            if (elapsedMs < 1000.0)
+            {
+                return fmt::format("{:.0f} ms", elapsedMs);
+            }
+            return fmt::format("{:.2f} s", elapsedMs / 1000.0);
+        }
 
         // ---- 预制台词库（fallback，§5.3）----
         const char* kGreetLines[] = {"嗨，今天人真多", "又见面啦", "辛苦辛苦", "吃了吗您", "今天天气不错"};
@@ -222,13 +232,39 @@ namespace AirportSim
         }
     }
 
-    void DecisionScheduler::PushLog(std::string line)
+    void DecisionScheduler::PushLog(FAgent& agent, double gameMinutes, std::string summary, std::string prompt,
+                                    std::string response, double elapsedMs, bool llmAttempted, bool success)
     {
-        log_.push_back(std::move(line));
+        int hh = 0;
+        int mm = 0;
+        MinutesToHHMM(gameMinutes, hh, mm);
+        log_.push_back({
+            .id = nextLogId_++,
+            .agentId = agent.id,
+            .agentName = agent.name,
+            .timeLabel = fmt::format("{:02d}:{:02d}", hh, mm),
+            .summary = std::move(summary),
+            .prompt = std::move(prompt),
+            .response = std::move(response),
+            .elapsedMs = elapsedMs,
+            .llmAttempted = llmAttempted,
+            .success = success,
+        });
         if (log_.size() > kLogLimit)
         {
             log_.erase(log_.begin(), log_.begin() + static_cast<long long>(log_.size() - kLogLimit));
         }
+    }
+
+    double DecisionScheduler::InFlightElapsedMs() const
+    {
+        if (!inFlight_)
+        {
+            return 0.0;
+        }
+        return std::chrono::duration<double, std::milli>(
+                   std::chrono::steady_clock::now() - inFlightStartedAt_)
+            .count();
     }
 
     void DecisionScheduler::Tick(double gameMinutes, NextAI::FAIService* ai, AgentSystem& agents, AirportMap& map,
@@ -243,11 +279,19 @@ namespace AirportSim
                 {
                     if (pending.result.valid)
                     {
-                        ApplyResult(*agent, pending.result, gameMinutes, agents, map, journey);
+                        ApplyResult(*agent, pending.result, gameMinutes, agents, map, journey, pending.elapsedMs,
+                                    pending.prompt, pending.response);
                     }
                     else
                     {
-                        ApplyFallback(*agent, gameMinutes, agents, map, journey, isNight);
+                        const std::string reason = pending.serviceSuccess
+                                                       ? "响应解析失败"
+                                                       : fmt::format("服务失败{}",
+                                                                     pending.errorMessage.empty()
+                                                                         ? ""
+                                                                         : fmt::format(": {}", pending.errorMessage));
+                        ApplyFallback(*agent, gameMinutes, agents, map, journey, isNight, pending.elapsedMs, reason,
+                                      pending.prompt, pending.response);
                     }
                     agent->decisionPending = false;
                 }
@@ -255,6 +299,7 @@ namespace AirportSim
                 {
                     inFlight_ = false;
                     inFlightAgentId_ = -1;
+                    inFlightPrompt_.clear();
                 }
             }
             completed_.clear();
@@ -263,15 +308,17 @@ namespace AirportSim
         // 超时弃单 → fallback 兜底（§10 风险表）。
         if (inFlight_ && gameMinutes - inFlightSince_ > kLlmTimeoutGameMinutes)
         {
+            const double elapsedMs = InFlightElapsedMs();
             ++generation_; // 迟到的结果作废
             if (FAgent* agent = agents.FindById(inFlightAgentId_))
             {
-                ApplyFallback(*agent, gameMinutes, agents, map, journey, isNight);
+                ApplyFallback(*agent, gameMinutes, agents, map, journey, isNight, elapsedMs, "请求超时",
+                              inFlightPrompt_, {});
                 agent->decisionPending = false;
             }
             inFlight_ = false;
             inFlightAgentId_ = -1;
-            PushLog("[超时] LLM 请求弃单，走 fallback");
+            inFlightPrompt_.clear();
         }
 
         if (inFlight_)
@@ -334,12 +381,14 @@ namespace AirportSim
         chosen->decisionPending = true;
         inFlight_ = true;
         inFlightSince_ = gameMinutes;
+        inFlightStartedAt_ = std::chrono::steady_clock::now();
         inFlightAgentId_ = chosen->id;
+        inFlightPrompt_ = prompt;
 
         const int agentId = chosen->id;
         const uint64_t generation = generation_;
         ai->GenerateTextAsync(prompt,
-                              [this, agentId, generation](NextAI::FAIResponse response)
+                              [this, agentId, generation, prompt](NextAI::FAIResponse response)
                               {
                                   // Worker 线程：只解析 + 入队，绝不碰 Scene/agents（§7.4）。
                                   FDecisionResult result =
@@ -349,12 +398,16 @@ namespace AirportSim
                                   {
                                       return;
                                   }
-                                  completed_.push_back({agentId, result});
+                                  completed_.push_back({agentId, result, response.elapsedMs, response.success,
+                                                        response.message, prompt,
+                                                        response.success ? std::move(response.text)
+                                                                         : std::move(response.message)});
                               });
     }
 
     void DecisionScheduler::ApplyResult(FAgent& agent, const FDecisionResult& result, double gameMinutes,
-                                        AgentSystem& agents, AirportMap& map, JourneySystem& journey)
+                                        AgentSystem& agents, AirportMap& map, JourneySystem& journey,
+                                        double llmElapsedMs, std::string prompt, std::string response)
     {
         agent.mood = result.mood;
         const std::string incoming = agent.eventNote; // 本次决策的触发事件
@@ -408,14 +461,18 @@ namespace AirportSim
             agent.chatChain = 0; // 非对话动作 = 话题结束
         }
 
-        PushLog(fmt::format("[LLM] {}: {} {} 「{}」({})", agent.name, result.action, result.target, result.say,
-                            MoodName(result.mood)));
-        SPDLOG_INFO("AirportSim/LLM {}: action={} target='{}' say='{}' mood={}", agent.name, result.action,
-                    result.target, result.say, MoodName(result.mood));
+        const std::string latency = FormatLatency(llmElapsedMs);
+        PushLog(agent, gameMinutes,
+                fmt::format("LLM · {} · {}{}{} · {}", latency, result.action,
+                            result.target.empty() ? "" : " → ", result.target, MoodLabelZh(result.mood)),
+                std::move(prompt), std::move(response), llmElapsedMs, true, true);
+        SPDLOG_INFO("AirportSim/LLM {}: action={} target='{}' say='{}' mood={} latency={}", agent.name,
+                    result.action, result.target, result.say, MoodName(result.mood), latency);
     }
 
     void DecisionScheduler::ApplyFallback(FAgent& agent, double gameMinutes, AgentSystem& agents, AirportMap& map,
-                                          JourneySystem& journey, bool isNight)
+                                          JourneySystem& journey, bool isNight, double llmElapsedMs,
+                                          std::string fallbackReason, std::string prompt, std::string response)
     {
         ++fallbacksUsed_;
         const char* line = nullptr;
@@ -470,7 +527,20 @@ namespace AirportSim
                 agent.recentSpeech.erase(agent.recentSpeech.begin());
             }
         }
-        PushLog(fmt::format("[规则] {}: 「{}」({})", agent.name, line != nullptr ? line : "", MoodName(mood)));
+        if (llmElapsedMs >= 0.0)
+        {
+            const std::string latency = FormatLatency(llmElapsedMs);
+            PushLog(agent, gameMinutes,
+                    fmt::format("LLM失败 → 规则 · {} · {} · {}{}", latency, fallbackReason, MoodLabelZh(mood),
+                                line != nullptr ? fmt::format(" · 「{}」", line) : std::string()),
+                    std::move(prompt), std::move(response), llmElapsedMs, true, false);
+        }
+        else
+        {
+            PushLog(agent, gameMinutes,
+                    fmt::format("规则 · {}{}", MoodLabelZh(mood),
+                                line != nullptr ? fmt::format(" · 「{}」", line) : std::string()));
+        }
     }
 
     void DecisionScheduler::Reset()
@@ -479,9 +549,12 @@ namespace AirportSim
         ++generation_;
         completed_.clear();
         inFlight_ = false;
+        inFlightStartedAt_ = {};
         inFlightAgentId_ = -1;
+        inFlightPrompt_.clear();
         decisionsMade_ = 0;
         fallbacksUsed_ = 0;
+        nextLogId_ = 1;
         log_.clear();
     }
 }

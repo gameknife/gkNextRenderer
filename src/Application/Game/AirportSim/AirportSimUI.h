@@ -37,13 +37,17 @@ namespace AirportSim
         void DrawHud(TimeSystem& time, const FlightBoard& flights, const AgentSystem& agents,
                      const DecisionScheduler& scheduler, bool llmConnected);
         void DrawFlightBoardHud(const FlightBoard& flights);
+        void DrawAgentPanel(const FlightBoard& flights, AgentSystem& agents, const DecisionScheduler& scheduler);
         void DrawDebugPanel(double gameMinutes, TimeSystem& time, AgentSystem& agents, const QueueSystem& queues,
                             const DecisionScheduler& scheduler);
+        void DrawDecisionHistory(const DecisionScheduler& scheduler, int agentId, const char* childId);
+        void DrawDecisionDetail(const DecisionScheduler& scheduler);
         void DrawWorldOverlay(const glm::mat4& viewProjection, double gameMinutes, const AgentSystem& agents,
                               const AirportMap& map, const glm::vec3& cameraEye);
 
         FState state_;
         glm::vec3 cameraEye_{0.0f};
+        uint64_t selectedDecisionId_ = 0;
 
     public:
         void SetCameraEye(const glm::vec3& eye) { cameraEye_ = eye; }

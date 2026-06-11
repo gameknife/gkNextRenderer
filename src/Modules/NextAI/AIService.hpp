@@ -22,18 +22,19 @@ namespace NextAI
 
     struct FAIResponse
     {
-        bool success;
+        bool success = false;
         std::string text;
         std::string message;
+        double elapsedMs = 0.0;
 
-        static FAIResponse Success(const std::string& generatedText)
+        static FAIResponse Success(const std::string& generatedText, double elapsedMs = 0.0)
         {
-            return {true, generatedText, ""};
+            return {true, generatedText, "", elapsedMs};
         }
 
-        static FAIResponse Failure(const std::string& errorMessage)
+        static FAIResponse Failure(const std::string& errorMessage, double elapsedMs = 0.0)
         {
-            return {false, "", errorMessage};
+            return {false, "", errorMessage, elapsedMs};
         }
     };
 

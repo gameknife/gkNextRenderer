@@ -9,6 +9,7 @@
 #include "TimeSystem.h"
 
 #include <algorithm>
+#include <iterator>
 #include <vector>
 
 #include <fmt/format.h>
@@ -58,6 +59,44 @@ namespace AirportSim
                 ImVec2(vpPos.x + (ndc.x * 0.5f + 0.5f) * vpSize.x, vpPos.y + (-ndc.y * 0.5f + 0.5f) * vpSize.y);
             return true;
         }
+
+        void SwitchFollowAgent(AgentSystem& agents, int& followAgentId, int direction)
+        {
+            std::vector<int> activeIds;
+            activeIds.reserve(agents.Agents().size());
+            for (const auto& agent : agents.Agents())
+            {
+                if (agent.active)
+                {
+                    activeIds.push_back(agent.id);
+                }
+            }
+            if (activeIds.empty())
+            {
+                followAgentId = -1;
+                return;
+            }
+
+            const auto current = std::find(activeIds.begin(), activeIds.end(), followAgentId);
+            if (current == activeIds.end())
+            {
+                followAgentId = direction < 0 ? activeIds.back() : activeIds.front();
+                return;
+            }
+
+            const int currentIndex = static_cast<int>(std::distance(activeIds.begin(), current));
+            const int count = static_cast<int>(activeIds.size());
+            followAgentId = activeIds[static_cast<size_t>((currentIndex + direction + count) % count)];
+        }
+
+        std::string FormatLatency(double elapsedMs)
+        {
+            if (elapsedMs < 1000.0)
+            {
+                return fmt::format("{:.0f} ms", elapsedMs);
+            }
+            return fmt::format("{:.2f} s", elapsedMs / 1000.0);
+        }
     }
 
     void AirportSimUI::Draw(const glm::mat4& viewProjection, double gameMinutes, TimeSystem& time,
@@ -66,6 +105,7 @@ namespace AirportSim
     {
         DrawHud(time, flights, agents, scheduler, llmConnected);
         DrawFlightBoardHud(flights);
+        DrawAgentPanel(flights, agents, scheduler);
         if (state_.showDebugPanel)
         {
             DrawDebugPanel(gameMinutes, time, agents, queues, scheduler);
@@ -74,6 +114,7 @@ namespace AirportSim
         {
             DrawWorldOverlay(viewProjection, gameMinutes, agents, map, cameraEye_);
         }
+        DrawDecisionDetail(scheduler);
     }
 
     void AirportSimUI::DrawHud(TimeSystem& time, const FlightBoard& flights, const AgentSystem& agents,
@@ -112,7 +153,7 @@ namespace AirportSim
         ImGui::TextDisabled("LLM %s%s  决策 %d (规则 %d)", llmConnected ? "在线" : "离线",
                             scheduler.InFlight() ? "·思考中" : "", scheduler.DecisionsMade(),
                             scheduler.FallbacksUsed());
-        ImGui::TextDisabled("F8 调试面板");
+        ImGui::TextDisabled("点击角色查看状态 · 点击空白或 Esc 取消 · F8 调试");
         ImGui::End();
     }
 
@@ -150,6 +191,123 @@ namespace AirportSim
             ImGui::EndTable();
         }
         ImGui::End();
+    }
+
+    void AirportSimUI::DrawAgentPanel(const FlightBoard& flights, AgentSystem& agents,
+                                      const DecisionScheduler& scheduler)
+    {
+        if (state_.followAgentId < 0)
+        {
+            return;
+        }
+
+        FAgent* agent = agents.FindById(state_.followAgentId);
+        if (agent == nullptr)
+        {
+            state_.followAgentId = -1;
+            return;
+        }
+
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(
+            ImVec2(viewport->WorkPos.x + 12.0f, viewport->WorkPos.y + viewport->WorkSize.y - 12.0f),
+            ImGuiCond_Always, ImVec2(0.0f, 1.0f));
+        ImGui::SetNextWindowSize(ImVec2(390.0f, 430.0f), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.94f);
+
+        bool open = true;
+        if (!ImGui::Begin("角色状态", &open,
+                          ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                              ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing))
+        {
+            ImGui::End();
+            if (!open)
+            {
+                state_.followAgentId = -1;
+            }
+            return;
+        }
+
+        const float buttonWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+        if (ImGui::Button("< 上一位", ImVec2(buttonWidth, 0.0f)))
+        {
+            SwitchFollowAgent(agents, state_.followAgentId, -1);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("下一位 >", ImVec2(buttonWidth, 0.0f)))
+        {
+            SwitchFollowAgent(agents, state_.followAgentId, 1);
+        }
+
+        agent = agents.FindById(state_.followAgentId);
+        if (agent == nullptr)
+        {
+            ImGui::End();
+            state_.followAgentId = -1;
+            return;
+        }
+
+        ImGui::Spacing();
+        ImGui::TextColored(ImColor(ColorToImU32(agent->color)), "%s", agent->name.c_str());
+        ImGui::SameLine();
+        ImGui::TextDisabled("#%d", agent->id);
+        ImGui::Separator();
+
+        if (ImGui::BeginTable("##agentStatus", 2, ImGuiTableFlags_SizingStretchProp))
+        {
+            auto row = [](const char* label, const std::string& value)
+            {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextDisabled("%s", label);
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextWrapped("%s", value.c_str());
+            };
+
+            row("职业", RoleLabelZh(agent->role));
+            row("性格", agent->personality.empty() ? "-" : agent->personality);
+            row("情绪", fmt::format("{} {}", MoodIcon(agent->mood), MoodLabelZh(agent->mood)));
+            row("状态", agent->role == EAgentRole::Passenger ? PassengerStateName(agent->pstate)
+                                                              : StaffStateName(agent->sstate));
+            row("行动", agent->moving ? "移动中" : (agent->anim == EAgentAnimHint::Sit ? "坐下" : "停留"));
+
+            std::string target = agent->targetPoi;
+            if (target.empty())
+            {
+                target = !agent->queueId.empty() ? agent->queueId : agent->postPoi;
+            }
+            row("目标", target.empty() ? "-" : target);
+            row("位置", fmt::format("X {:.1f}  Z {:.1f}", agent->position.x, agent->position.z));
+
+            if (agent->role == EAgentRole::Passenger && agent->flightIdx >= 0 &&
+                agent->flightIdx < static_cast<int>(flights.Flights().size()))
+            {
+                const FFlight& flight = flights.Flights()[static_cast<size_t>(agent->flightIdx)];
+                row("航班", fmt::format("{} · {} · {}", flight.number, flight.gatePoi,
+                                        FlightStateName(flight.state)));
+            }
+            else if (agent->role != EAgentRole::Passenger)
+            {
+                row("班次", ShiftName(agent->shift));
+            }
+            ImGui::EndTable();
+        }
+
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.78f, 0.88f, 1.00f, 1.0f), "决策流水");
+        ImGui::Separator();
+        if (agent->decisionPending)
+        {
+            ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.25f, 1.0f), "正在思考... %s",
+                               FormatLatency(scheduler.InFlightElapsedMs()).c_str());
+        }
+        DrawDecisionHistory(scheduler, agent->id, "##agentDecisionHistory");
+        ImGui::End();
+
+        if (!open)
+        {
+            state_.followAgentId = -1;
+        }
     }
 
     void AirportSimUI::DrawDebugPanel(double gameMinutes, TimeSystem& time, AgentSystem& agents,
@@ -233,11 +391,133 @@ namespace AirportSim
             }
             if (ImGui::BeginTabItem("决策日志"))
             {
-                ImGui::BeginChild("##declog");
-                const auto& log = scheduler.Log();
-                for (auto it = log.rbegin(); it != log.rend(); ++it)
+                if (scheduler.InFlight())
                 {
-                    ImGui::TextWrapped("%s", it->c_str());
+                    ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.25f, 1.0f), "LLM 请求进行中 · %s",
+                                       FormatLatency(scheduler.InFlightElapsedMs()).c_str());
+                    ImGui::Separator();
+                }
+                DrawDecisionHistory(scheduler, -1, "##declog");
+                ImGui::EndTabItem();
+            }
+            ImGui::EndTabBar();
+        }
+        ImGui::End();
+    }
+
+    void AirportSimUI::DrawDecisionHistory(const DecisionScheduler& scheduler, int agentId, const char* childId)
+    {
+        if (!ImGui::BeginChild(childId, ImVec2(0.0f, 0.0f), true))
+        {
+            ImGui::EndChild();
+            return;
+        }
+
+        bool found = false;
+        int shown = 0;
+        for (auto it = scheduler.Log().rbegin(); it != scheduler.Log().rend(); ++it)
+        {
+            if (agentId >= 0 && it->agentId != agentId)
+            {
+                continue;
+            }
+            if (agentId >= 0 && shown >= 10)
+            {
+                break;
+            }
+
+            found = true;
+            ++shown;
+            ImGui::PushID(static_cast<int>(it->id));
+            const std::string label = fmt::format("[{}] {}{}{}", it->timeLabel,
+                                                  agentId < 0 ? fmt::format("{} · ", it->agentName) : "",
+                                                  it->summary,
+                                                  it->llmAttempted ? "  [详情]" : "");
+            if (ImGui::Selectable(label.c_str(), selectedDecisionId_ == it->id,
+                                  ImGuiSelectableFlags_AllowDoubleClick))
+            {
+                selectedDecisionId_ = it->id;
+            }
+            ImGui::PopID();
+        }
+        if (!found)
+        {
+            ImGui::TextDisabled("暂无决策记录");
+        }
+        ImGui::EndChild();
+    }
+
+    void AirportSimUI::DrawDecisionDetail(const DecisionScheduler& scheduler)
+    {
+        if (selectedDecisionId_ == 0)
+        {
+            return;
+        }
+
+        const DecisionScheduler::FDecisionLogEntry* selected = nullptr;
+        for (const auto& entry : scheduler.Log())
+        {
+            if (entry.id == selectedDecisionId_)
+            {
+                selected = &entry;
+                break;
+            }
+        }
+        if (selected == nullptr)
+        {
+            selectedDecisionId_ = 0;
+            return;
+        }
+
+        bool open = true;
+        ImGui::SetNextWindowSize(ImVec2(760.0f, 620.0f), ImGuiCond_FirstUseEver);
+        if (!ImGui::Begin("决策详情", &open, ImGuiWindowFlags_NoSavedSettings))
+        {
+            ImGui::End();
+            if (!open)
+            {
+                selectedDecisionId_ = 0;
+            }
+            return;
+        }
+
+        ImGui::Text("%s · %s", selected->timeLabel.c_str(), selected->agentName.c_str());
+        ImGui::TextWrapped("%s", selected->summary.c_str());
+        if (selected->elapsedMs >= 0.0)
+        {
+            ImGui::TextDisabled("耗时 %s · %s", FormatLatency(selected->elapsedMs).c_str(),
+                                selected->success ? "成功" : "失败/回退");
+        }
+        else
+        {
+            ImGui::TextDisabled("规则决策 · 未调用 LLM");
+        }
+        ImGui::Separator();
+
+        if (ImGui::BeginTabBar("##decisionDetailTabs"))
+        {
+            if (ImGui::BeginTabItem("Prompt"))
+            {
+                if (ImGui::BeginChild("##decisionPrompt", ImVec2(0.0f, 0.0f), true,
+                                      ImGuiWindowFlags_HorizontalScrollbar))
+                {
+                    ImGui::PushTextWrapPos(0.0f);
+                    ImGui::TextUnformatted(selected->prompt.empty() ? "（该记录没有 Prompt）"
+                                                                    : selected->prompt.c_str());
+                    ImGui::PopTextWrapPos();
+                }
+                ImGui::EndChild();
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Response"))
+            {
+                if (ImGui::BeginChild("##decisionResponse", ImVec2(0.0f, 0.0f), true,
+                                      ImGuiWindowFlags_HorizontalScrollbar))
+                {
+                    ImGui::PushTextWrapPos(0.0f);
+                    ImGui::TextUnformatted(selected->response.empty() ? "（服务未返回响应）"
+                                                                      : selected->response.c_str());
+                    ImGui::PopTextWrapPos();
                 }
                 ImGui::EndChild();
                 ImGui::EndTabItem();
@@ -245,6 +525,11 @@ namespace AirportSim
             ImGui::EndTabBar();
         }
         ImGui::End();
+
+        if (!open)
+        {
+            selectedDecisionId_ = 0;
+        }
     }
 
     void AirportSimUI::DrawWorldOverlay(const glm::mat4& viewProjection, double gameMinutes,
@@ -293,6 +578,10 @@ namespace AirportSim
             // 名牌 + 情绪图标。
             const std::string tag = fmt::format("{}{}", agent.name, MoodIcon(agent.mood));
             const ImVec2 tagSize = ImGui::CalcTextSize(tag.c_str());
+            if (agent.id == state_.followAgentId)
+            {
+                drawList->AddCircle(screen, 12.0f, IM_COL32(255, 220, 80, 255), 0, 2.5f);
+            }
             drawList->AddText(ImVec2(screen.x - tagSize.x * 0.5f, screen.y - tagSize.y),
                               ColorToImU32(agent.color), tag.c_str());
 

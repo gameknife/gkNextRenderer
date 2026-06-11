@@ -3,11 +3,13 @@
 #include "AirportSimConfig.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 #include <imgui.h>
 #include <spdlog/spdlog.h>
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_keycode.h>
+#include <SDL3/SDL_mouse.h>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "Engine/Assets/Core/Model.hpp"
@@ -27,6 +29,40 @@ namespace
     constexpr glm::vec3 kOverviewTarget{0.0f, 0.0f, -2.0f};
     constexpr glm::vec3 kOverviewOffset{0.0f, 58.0f, 44.0f};
     constexpr glm::vec3 kFollowOffset{0.0f, 9.0f, 9.0f};
+    constexpr float kAgentPickRadiusPixels = 18.0f;
+    constexpr float kCameraTransitionSharpness = 9.0f;
+
+    bool ProjectWorld(const glm::mat4& viewProjection, const ImVec2& viewportPos, const ImVec2& viewportSize,
+                      const glm::vec3& world, glm::vec2& outScreen)
+    {
+        const glm::vec4 clip = viewProjection * glm::vec4(world, 1.0f);
+        if (clip.w <= 0.0f)
+        {
+            return false;
+        }
+        const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+        if (ndc.x < -1.0f || ndc.x > 1.0f || ndc.y < -1.0f || ndc.y > 1.0f)
+        {
+            return false;
+        }
+        outScreen = {
+            viewportPos.x + (ndc.x * 0.5f + 0.5f) * viewportSize.x,
+            viewportPos.y + (-ndc.y * 0.5f + 0.5f) * viewportSize.y,
+        };
+        return true;
+    }
+
+    float DistanceToSegment(const glm::vec2& point, const glm::vec2& start, const glm::vec2& end)
+    {
+        const glm::vec2 segment = end - start;
+        const float lengthSquared = glm::dot(segment, segment);
+        if (lengthSquared <= 0.001f)
+        {
+            return glm::distance(point, start);
+        }
+        const float t = std::clamp(glm::dot(point - start, segment) / lengthSquared, 0.0f, 1.0f);
+        return glm::distance(point, start + segment * t);
+    }
 }
 
 // Each game executable provides this factory; DesktopMain.cpp binds it at link time.
@@ -77,6 +113,7 @@ void AirportSimGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asse
 void AirportSimGameInstance::OnSceneLoaded()
 {
     Assets::Scene& scene = GetEngine().GetScene();
+    ui_.State().followAgentId = -1;
     map_.BuildFromScene(scene);
     agents_.OnSceneLoaded(scene);
 
@@ -97,6 +134,9 @@ void AirportSimGameInstance::OnSceneLoaded()
         panOffset_ = glm::vec2(-4.0f, 4.0f); // 值机大厅~安检一带
     }
 
+    cameraTarget_ = DesiredCameraTarget();
+    cameraEye_ = DesiredCameraEye();
+    cameraInitialized_ = true;
     sceneReady_ = true;
     SPDLOG_INFO("AirportSim: scene loaded ({} nodes, {} POIs)", scene.Nodes().size(), map_.Count());
 }
@@ -104,6 +144,8 @@ void AirportSimGameInstance::OnSceneLoaded()
 void AirportSimGameInstance::OnSceneUnloaded()
 {
     sceneReady_ = false;
+    cameraInitialized_ = false;
+    ui_.State().followAgentId = -1;
     map_.Clear();
     agents_.Clear();
     scheduler_.Reset();
@@ -138,6 +180,13 @@ void AirportSimGameInstance::OnTick(double deltaSeconds)
                                 (time_.TimeScaleRef() / AirportSim::Config::kDefaultTimeScale);
         agents_.Tick(moveDelta, scene);
     }
+
+    if (ui_.State().followAgentId >= 0 && agents_.FindById(ui_.State().followAgentId) == nullptr)
+    {
+        ui_.State().followAgentId = -1;
+    }
+
+    UpdateCamera(deltaSeconds);
 }
 
 void AirportSimGameInstance::OnDestroy()
@@ -145,6 +194,16 @@ void AirportSimGameInstance::OnDestroy()
 }
 
 glm::vec3 AirportSimGameInstance::CameraTarget() const
+{
+    return cameraInitialized_ ? cameraTarget_ : DesiredCameraTarget();
+}
+
+glm::vec3 AirportSimGameInstance::CameraEye() const
+{
+    return cameraInitialized_ ? cameraEye_ : DesiredCameraEye();
+}
+
+glm::vec3 AirportSimGameInstance::DesiredCameraTarget() const
 {
     if (ui_.State().followAgentId >= 0)
     {
@@ -159,11 +218,29 @@ glm::vec3 AirportSimGameInstance::CameraTarget() const
     return kOverviewTarget + glm::vec3(panOffset_.x, 0.0f, panOffset_.y);
 }
 
-glm::vec3 AirportSimGameInstance::CameraEye() const
+glm::vec3 AirportSimGameInstance::DesiredCameraEye() const
 {
     const bool following = ui_.State().followAgentId >= 0;
     const glm::vec3 offset = following ? kFollowOffset : kOverviewOffset * zoom_;
-    return CameraTarget() + offset;
+    return DesiredCameraTarget() + offset;
+}
+
+void AirportSimGameInstance::UpdateCamera(double deltaSeconds)
+{
+    const glm::vec3 desiredTarget = DesiredCameraTarget();
+    const glm::vec3 desiredEye = DesiredCameraEye();
+    if (!cameraInitialized_)
+    {
+        cameraTarget_ = desiredTarget;
+        cameraEye_ = desiredEye;
+        cameraInitialized_ = true;
+        return;
+    }
+
+    const float lerpFactor =
+        1.0f - std::exp(-kCameraTransitionSharpness * std::max(0.0f, static_cast<float>(deltaSeconds)));
+    cameraTarget_ = glm::mix(cameraTarget_, desiredTarget, lerpFactor);
+    cameraEye_ = glm::mix(cameraEye_, desiredEye, lerpFactor);
 }
 
 glm::mat4 AirportSimGameInstance::ViewMatrix() const
@@ -234,6 +311,59 @@ bool AirportSimGameInstance::OnKey(SDL_Event& event)
     }
 }
 
+int AirportSimGameInstance::PickAgentAtScreen(const glm::vec2& screenPos) const
+{
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    if (viewport == nullptr || viewport->Size.x <= 1.0f || viewport->Size.y <= 1.0f)
+    {
+        return -1;
+    }
+
+    const float aspect = viewport->Size.x / viewport->Size.y;
+    const glm::mat4 viewProjection =
+        glm::perspective(glm::radians(kFov), aspect, 0.05f, 2000.0f) * ViewMatrix();
+
+    int pickedId = -1;
+    float nearestDistance = kAgentPickRadiusPixels;
+    for (const auto& agent : agents_.Agents())
+    {
+        if (!agent.active)
+        {
+            continue;
+        }
+
+        glm::vec2 feetScreen;
+        glm::vec2 headScreen;
+        if (!ProjectWorld(viewProjection, viewport->Pos, viewport->Size,
+                          agent.position + glm::vec3(0.0f, 0.1f, 0.0f), feetScreen) ||
+            !ProjectWorld(viewProjection, viewport->Pos, viewport->Size,
+                          agent.position + glm::vec3(0.0f, 2.1f, 0.0f), headScreen))
+        {
+            continue;
+        }
+
+        const float distance = DistanceToSegment(screenPos, feetScreen, headScreen);
+        if (distance < nearestDistance)
+        {
+            nearestDistance = distance;
+            pickedId = agent.id;
+        }
+    }
+    return pickedId;
+}
+
+bool AirportSimGameInstance::OnMouseButton(SDL_Event& event)
+{
+    if (!sceneReady_ || event.type != SDL_EVENT_MOUSE_BUTTON_DOWN || event.button.button != SDL_BUTTON_LEFT)
+    {
+        return false;
+    }
+
+    const ImVec2 mousePos = ImGui::GetMousePos();
+    ui_.State().followAgentId = PickAgentAtScreen(glm::vec2(mousePos.x, mousePos.y));
+    return true;
+}
+
 bool AirportSimGameInstance::OnScroll(double /*xoffset*/, double yoffset)
 {
     zoom_ = std::clamp(zoom_ - static_cast<float>(yoffset) * 0.08f, 0.45f, 1.6f);
@@ -243,5 +373,6 @@ bool AirportSimGameInstance::OnScroll(double /*xoffset*/, double yoffset)
 void AirportSimGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
 {
     //std::string error;
+    //cvars.SetDefaultFromString("r.samples", "4", &error);
     //cvars.SetDefaultFromString("r.superResolution", "4", &error);
 }
