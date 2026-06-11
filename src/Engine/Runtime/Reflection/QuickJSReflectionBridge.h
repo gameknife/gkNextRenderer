@@ -10,7 +10,6 @@
 #include <string>
 #include <string_view>
 #include <vector>
-#include <spdlog/spdlog.h>
 
 namespace Reflection
 {

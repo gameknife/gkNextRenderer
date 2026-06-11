@@ -23,7 +23,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <spdlog/spdlog.h>
 #include <entt/meta/factory.hpp>
 
 namespace Assets

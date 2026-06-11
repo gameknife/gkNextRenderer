@@ -6,7 +6,6 @@
 #include "Engine/Runtime/Platform/PlatformCommon.h"
 #include "Engine/Utilities/FileHelper.hpp"
 
-#include <spdlog/spdlog.h>
 #include <spdlog/stopwatch.h>
 
 namespace Vulkan

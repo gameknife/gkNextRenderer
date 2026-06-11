@@ -29,7 +29,6 @@
 #include <filesystem>
 #include <fmt/chrono.h>
 #include <fmt/format.h>
-#include <spdlog/spdlog.h>
 
 #include "Engine/Assets/GPU/TextureImage.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"

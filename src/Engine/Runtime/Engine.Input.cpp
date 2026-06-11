@@ -31,7 +31,6 @@
 #include <algorithm>
 #include <filesystem>
 #include <fmt/format.h>
-#include <spdlog/spdlog.h>
 #include <spdlog/stopwatch.h>
 
 void NextEngine::OnKey(SDL_Event& event)

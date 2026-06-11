@@ -10,7 +10,6 @@
 #include <cctype>
 #include <filesystem>
 
-#include <spdlog/spdlog.h>
 
 using namespace glm;
 

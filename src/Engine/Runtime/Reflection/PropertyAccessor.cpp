@@ -4,7 +4,6 @@
 #include <glm/gtc/quaternion.hpp>
 #include <array>
 #include <vector>
-#include <spdlog/spdlog.h>
 #include <entt/core/hashed_string.hpp>
 
 namespace Reflection

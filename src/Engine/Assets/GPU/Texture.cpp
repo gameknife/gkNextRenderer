@@ -13,7 +13,6 @@
 #include "Engine/Vulkan/DescriptorSystem.hpp"
 #include "ThirdParty/lzav/lzav.h"
 
-#include <spdlog/spdlog.h>
 #include <cstdint>
 #include <filesystem>
 #include <limits>

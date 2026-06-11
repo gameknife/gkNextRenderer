@@ -6,7 +6,6 @@
 #include "Engine/Options.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include <algorithm>
-#include <spdlog/spdlog.h>
 
 namespace Vulkan
 {

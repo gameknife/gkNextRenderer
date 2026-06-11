@@ -25,6 +25,9 @@
 #include <fmt/format.h>
 #include <fmt/chrono.h>
 
+// spdlog logging (used pervasively across the engine)
+#include <spdlog/spdlog.h>
+
 #if WIN32
 #define DISABLE_OPTIMIZATION __pragma(optimize("", off))
 #define ENABLE_OPTIMIZATION __pragma(optimize("", on))

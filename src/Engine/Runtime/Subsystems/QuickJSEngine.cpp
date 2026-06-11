@@ -18,7 +18,6 @@
 
 #include <imgui.h>
 #include <nlohmann/json.hpp>
-#include <spdlog/spdlog.h>
 #include <spdlog/stopwatch.h>
 #include <fstream>
 #include <entt/core/hashed_string.hpp>

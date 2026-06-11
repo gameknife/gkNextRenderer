@@ -14,7 +14,6 @@
 #include "ozz/base/maths/simd_math.h"
 #include "ozz/base/platform.h"
 
-#include <spdlog/spdlog.h>
 #include <algorithm>
 #include <functional>
 #include <unordered_map>

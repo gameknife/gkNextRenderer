@@ -2,7 +2,6 @@
 #include "Engine/Assets/Savers/FSceneSaver.h"
 
 #include <tiny_gltf.h>
-#include <spdlog/spdlog.h>
 #include <map>
 
 #include "Engine/Assets/Core/Scene.hpp"

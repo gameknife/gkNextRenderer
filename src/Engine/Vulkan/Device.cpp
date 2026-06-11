@@ -10,7 +10,6 @@
 #include <cstring>
 #include <set>
 #include <fmt/format.h>
-#include <spdlog/spdlog.h>
 
 namespace Vulkan {
 
