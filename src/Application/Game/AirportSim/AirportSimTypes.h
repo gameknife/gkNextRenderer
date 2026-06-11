@@ -77,6 +77,20 @@ namespace AirportSim
         }
     }
 
+    inline const char* MoodLabelZh(EMood mood)
+    {
+        switch (mood)
+        {
+        case EMood::Neutral: return "平静";
+        case EMood::Happy:   return "开心";
+        case EMood::Tired:   return "疲惫";
+        case EMood::Annoyed: return "烦躁";
+        case EMood::Excited: return "兴奋";
+        case EMood::Anxious: return "焦虑";
+        default:             return "平静";
+        }
+    }
+
     inline EMood MoodFromString(const std::string& s)
     {
         if (s == "happy")   return EMood::Happy;

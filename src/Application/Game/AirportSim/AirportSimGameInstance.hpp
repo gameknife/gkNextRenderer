@@ -35,6 +35,7 @@ public:
 
     bool OverrideRenderCamera(Assets::Camera& outRenderCamera) const override;
     bool OnKey(SDL_Event& event) override;
+    bool OnMouseButton(SDL_Event& event) override;
     bool OnScroll(double xoffset, double yoffset) override;
 
     void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) override;
@@ -43,6 +44,10 @@ private:
     glm::mat4 ViewMatrix() const;
     glm::vec3 CameraEye() const;
     glm::vec3 CameraTarget() const;
+    glm::vec3 DesiredCameraEye() const;
+    glm::vec3 DesiredCameraTarget() const;
+    void UpdateCamera(double deltaSeconds);
+    int PickAgentAtScreen(const glm::vec2& screenPos) const;
 
     AirportSim::AirportMap map_;
     AirportSim::TimeSystem time_;
@@ -57,4 +62,7 @@ private:
     bool sceneReady_ = false;
     float zoom_ = 1.0f;        // 0.55（近）~ 1.6（远）
     glm::vec2 panOffset_{0.0f}; // 方向键平移观察点
+    glm::vec3 cameraEye_{0.0f};
+    glm::vec3 cameraTarget_{0.0f};
+    bool cameraInitialized_ = false;
 };

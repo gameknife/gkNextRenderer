@@ -4,6 +4,7 @@
 #include "Engine/Runtime/Platform/UserPaths.h"
 #include "Engine/Utilities/FileHelper.hpp"
 #include <algorithm>
+#include <chrono>
 #include <cctype>
 #include <cstdlib>
 #include <curl/curl.h>
@@ -1388,10 +1389,13 @@ namespace NextAI
 
     FAIResponse FAIService::GenerateText(const std::string& prompt)
     {
+        const auto startedAt = std::chrono::steady_clock::now();
         status_ = EAIStatus::Generating;
         statusMessage_ = "Generating...";
 
         auto response = CallProvider(prompt);
+        response.elapsedMs =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count();
 
         if (response.success)
         {
@@ -1470,12 +1474,15 @@ namespace NextAI
 
     void FAIService::GenerateTextAsync(const std::string& prompt, std::function<void(FAIResponse)> callback)
     {
+        const auto startedAt = std::chrono::steady_clock::now();
         status_ = EAIStatus::Generating;
         statusMessage_ = "Generating...";
 
-        std::thread([this, prompt, callback]()
+        std::thread([this, prompt, callback, startedAt]()
         {
             auto response = CallProvider(prompt);
+            response.elapsedMs =
+                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startedAt).count();
 
             if (response.success)
             {
