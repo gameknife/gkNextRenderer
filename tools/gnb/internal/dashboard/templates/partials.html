@@ -353,16 +353,17 @@
 
 
 {{define "tab_docs"}}
-<div class="tab-jobs docs-tab">
-  <aside class="tab-side">
-    <div class="card">
-      <h2 class="card-title">
-        <span class="ico">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>
-        </span>
-        Docs
-        <span class="count">{{len .DocsVM.Files}}</span>
-      </h2>
+<div class="docs-tab">
+  <aside class="docs-sidebar">
+    <div class="docs-sidebar-head">
+      <h2>Docs</h2>
+      <span class="docs-total">{{len .DocsVM.Files}}</span>
+    </div>
+    <label class="docs-search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" placeholder="Search docs..." data-docs-search autocomplete="off">
+      <kbd>Ctrl K</kbd>
+    </label>
       {{if .DocsVM.Files}}
       <div class="docs-file-list">
         {{range .DocsVM.Folders}}
@@ -401,27 +402,24 @@
       {{else}}
       <div class="empty-row">docs/ 下暂无 markdown 文档</div>
       {{end}}
-    </div>
   </aside>
 
-  <section class="tab-main">
-    <div class="card docs-card">
+  <section class="docs-main">
+    <div class="docs-card">
       {{if .DocsVM.Error}}
       <div class="chat-error" style="margin: 0 0 12px;">{{.DocsVM.Error}}</div>
       {{end}}
       {{if .DocsVM.HasDoc}}
       <div class="docs-head">
         <div class="docs-head-main">
-          <h2 class="card-title" style="margin-bottom: 4px;">
-            <span class="ico">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            </span>
-            {{.DocsVM.Selected.Name}}
-          </h2>
           <div class="breadcrumb">
-            <span>{{.DocsVM.Selected.RelPath}}</span>
-            <span class="sep">·</span>
-            <span>更新于 {{date .DocsVM.Selected.UpdatedAt}}</span>
+            <span>{{.DocsVM.Selected.Dir}}</span>
+            <span class="sep">/</span>
+            <strong>{{.DocsVM.Selected.Name}}</strong>
+          </div>
+          <div class="docs-updated">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            Updated {{date .DocsVM.Selected.UpdatedAt}}
           </div>
         </div>
         <div class="commit-card-actions">
@@ -463,7 +461,7 @@
       {{end}}
     </div>
   </section>
-  <div id="docs-source-panel-host" class="docs-source-panel-host"></div>
+  <aside id="docs-source-panel-host" class="docs-source-panel-host"></aside>
 </div>
 
 <style>
@@ -689,41 +687,75 @@
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
-    padding: 10px 0 18px;
     background: var(--bg-code);
     font-family: var(--font-mono);
     font-size: 12px;
     line-height: 1.65;
     tab-size: 4;
   }
-  .docs-source-line {
+  .docs-source-grid {
+    position: relative;
     display: grid;
     grid-template-columns: 58px minmax(max-content, 1fr);
-    min-height: 20px;
+    width: max-content;
+    min-width: 100%;
+    min-height: 100%;
+    padding: 10px 0 18px;
   }
-  .docs-source-line.focus {
+  .docs-source-focus {
+    position: absolute;
+    z-index: 0;
+    top: calc(10px + var(--focus-index, 0) * 1.65em);
+    right: 0;
+    left: 58px;
+    height: 1.65em;
     background: rgba(234, 179, 8, 0.13);
     box-shadow: inset 3px 0 0 var(--yellow);
+    pointer-events: none;
   }
-  .docs-source-line-number {
+  .docs-source-line-numbers {
     position: sticky;
+    z-index: 2;
     left: 0;
-    padding: 0 12px 0 8px;
     border-right: 1px solid var(--border);
     background: var(--bg-code);
+  }
+  .docs-source-line-number {
+    display: block;
+    height: 1.65em;
+    padding: 0 12px 0 8px;
     color: var(--fg-dim);
     text-align: right;
     user-select: none;
   }
-  .docs-source-line.focus .docs-source-line-number {
+  .docs-source-line-number.focus {
     background: #2b2715;
     color: var(--yellow);
     font-weight: 600;
   }
-  .docs-source-line-text {
+  .docs-source-pre {
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+    margin: 0;
     padding: 0 16px;
-    white-space: pre;
+    overflow: visible;
+    background: transparent;
+    font: inherit;
+    line-height: inherit;
+  }
+  .docs-source-pre code.hljs {
+    display: block;
+    overflow: visible;
+    padding: 0;
+    background: transparent;
     color: var(--fg);
+    font-family: var(--font-mono);
+    font-size: inherit;
+    line-height: inherit;
+  }
+  .docs-source-pre code.hljs * {
+    font-family: inherit;
   }
   .docs-source-error {
     margin: 14px;
@@ -733,6 +765,256 @@
       left: 16px;
       width: auto;
       min-width: 0;
+    }
+  }
+
+  /* Docs workspace: file tree, reading canvas, source inspector. */
+  .docs-tab {
+    position: relative;
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  .docs-tab:has(.docs-source-panel-host:not(:empty)) {
+    grid-template-columns: 260px minmax(420px, 1fr) minmax(420px, 0.82fr);
+  }
+  .docs-sidebar {
+    min-width: 0;
+    min-height: 0;
+    padding: 16px 12px 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    background: #151617;
+  }
+  .docs-sidebar-head {
+    display: flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 0 2px 10px;
+  }
+  .docs-sidebar-head h2 {
+    margin: 0;
+    color: var(--fg);
+    font-size: 13px;
+    font-weight: 650;
+  }
+  .docs-total {
+    margin-left: auto;
+    min-width: 24px;
+    padding: 1px 7px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--fg-mute);
+    background: var(--bg-card);
+    font-size: 10.5px;
+    text-align: center;
+  }
+  .docs-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    margin-bottom: 10px;
+    padding: 0 9px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg-input);
+    color: var(--fg-dim);
+  }
+  .docs-search:focus-within {
+    border-color: rgba(79, 140, 255, 0.65);
+    box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.1);
+  }
+  .docs-search input {
+    min-width: 0;
+    flex: 1;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--fg);
+    font-size: 11.5px;
+  }
+  .docs-search input::placeholder { color: var(--fg-dim); }
+  .docs-search kbd {
+    padding: 1px 4px;
+    border: 0;
+    border-radius: 3px;
+    background: #202224;
+    color: var(--fg-dim);
+    font-size: 9px;
+  }
+  .docs-file-list {
+    gap: 5px;
+    padding-right: 2px;
+  }
+  .docs-folder {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+  }
+  .docs-folder.active { border-color: transparent; }
+  .docs-folder-summary {
+    min-height: 28px;
+    padding: 4px 3px;
+    border-radius: var(--radius-sm);
+  }
+  .docs-folder-summary:hover { background: var(--bg-card); }
+  .docs-folder-icon { color: #d1a827; }
+  .docs-folder-name { font-size: 10.5px; }
+  .docs-folder-count {
+    min-width: 21px;
+    padding: 0 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    font-size: 9.5px;
+  }
+  .docs-folder-files {
+    gap: 1px;
+    padding: 1px 0 5px 14px;
+    border-top: 0;
+  }
+  .docs-file-item {
+    min-height: 27px;
+    padding: 4px 7px;
+    gap: 7px;
+    border-radius: 4px;
+  }
+  .docs-file-item:hover {
+    background: var(--bg-card);
+    border-color: transparent;
+  }
+  .docs-file-item.active {
+    border-color: rgba(79, 140, 255, 0.75);
+    box-shadow: none;
+    background: rgba(79, 140, 255, 0.15);
+  }
+  .docs-file-name { font-size: 10.5px; font-weight: 450; }
+  .docs-file-item.active .docs-file-name { color: #f0f3f8; }
+  .docs-main {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: #121314;
+  }
+  .docs-card {
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    background: transparent;
+  }
+  .docs-head {
+    min-height: 68px;
+    margin: 0;
+    padding: 12px 24px 10px;
+    border-bottom: 1px solid var(--border);
+    background: #141516;
+  }
+  .breadcrumb {
+    color: var(--fg-dim);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+  }
+  .breadcrumb strong { color: var(--fg); font-weight: 550; }
+  .docs-updated {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 7px;
+    color: var(--fg-dim);
+    font-size: 9.5px;
+  }
+  .docs-head .btn-secondary {
+    padding: 5px 10px;
+    border-color: transparent;
+    background: transparent;
+    color: var(--fg-mute);
+    font-size: 10.5px;
+  }
+  .docs-head .btn-secondary:hover {
+    border-color: var(--border);
+    background: var(--bg-card);
+  }
+  .docs-preview {
+    padding: 18px 24px 64px;
+    scrollbar-gutter: stable;
+  }
+  .docs-preview > * {
+    max-width: 920px;
+  }
+  .docs-preview h1 {
+    margin-top: 0;
+    padding-bottom: 12px;
+    font-size: 20px;
+    border-bottom-color: var(--border);
+  }
+  .docs-preview h2 { margin-top: 26px; font-size: 15px; }
+  .docs-preview h3 { margin-top: 20px; font-size: 13px; color: var(--fg); }
+  .docs-preview p, .docs-preview li { color: #c7c8ca; }
+  .docs-preview table {
+    font-size: 11px;
+    background: #151617;
+  }
+  .docs-preview th { background: #1a1b1d; }
+  .docs-preview pre {
+    border-radius: 5px;
+    background: #151617;
+  }
+  .docs-edit-form { padding: 18px 24px 24px; }
+  .docs-source-panel-host:empty { display: none; }
+  .docs-source-panel-host {
+    position: static;
+    z-index: auto;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    width: auto;
+    min-width: 0;
+    height: 100%;
+    border: 0;
+    border-left: 1px solid var(--border);
+    border-radius: 0;
+    box-shadow: none;
+    background: #111213;
+  }
+  .docs-source-head {
+    min-height: 50px;
+    padding: 9px 14px;
+    background: #151617;
+  }
+  .docs-source-title strong { font-size: 11.5px; }
+  .docs-source-title span { font-size: 9px; }
+  .docs-source-close {
+    width: 26px;
+    height: 26px;
+    border-color: transparent;
+    font-size: 16px;
+  }
+  .docs-source-code { font-size: 10.5px; line-height: 1.7; }
+  .docs-source-grid { grid-template-columns: 48px minmax(max-content, 1fr); }
+  .docs-source-focus { left: 48px; }
+  .docs-source-line-number { padding-right: 10px; }
+  @media (max-width: 1150px) {
+    .docs-tab:has(.docs-source-panel-host:not(:empty)) {
+      grid-template-columns: 230px minmax(360px, 1fr) minmax(360px, 0.85fr);
+    }
+  }
+  @media (max-width: 900px) {
+    .docs-tab, .docs-tab:has(.docs-source-panel-host:not(:empty)) {
+      grid-template-columns: 220px minmax(0, 1fr);
+    }
+    .docs-source-panel-host:not(:empty) {
+      position: absolute;
+      inset: 0 0 0 220px;
+      width: auto;
+      height: auto;
+      border-left: 1px solid var(--border);
     }
   }
 </style>
@@ -751,9 +1033,13 @@
   <div class="chat-error docs-source-error">{{.Error}}</div>
   {{else}}
   <div class="docs-source-code">
-    {{range .Lines}}<div class="docs-source-line {{if .Focus}}focus{{end}}" data-line="{{.Number}}">
-      <span class="docs-source-line-number">{{.Number}}</span><span class="docs-source-line-text">{{.Text}}</span>
-    </div>{{end}}
+    <div class="docs-source-grid">
+      {{if .Line}}<div class="docs-source-focus" data-docs-source-focus></div>{{end}}
+      <div class="docs-source-line-numbers">
+        {{range .Lines}}<span class="docs-source-line-number {{if .Focus}}focus{{end}}" data-line="{{.Number}}">{{.Number}}</span>{{end}}
+      </div>
+      <pre class="docs-source-pre"><code{{if .Language}} class="language-{{.Language}}"{{end}}>{{.Content}}</code></pre>
+    </div>
   </div>
   {{end}}
 </div>
@@ -774,13 +1060,11 @@
         <input type="hidden" name="target" value="all">
         <div class="target-list" style="margin-bottom: 12px;">
           <div class="target-item selected" data-target="all">
-            <span class="radio"></span>
             <span class="name">all targets</span>
             <span class="tag-mini">build all</span>
           </div>
           {{range .BuildVM.Targets}}
           <div class="target-item" data-target="{{.}}">
-            <span class="radio"></span>
             <span class="name">{{.}}</span>
           </div>
           {{end}}
@@ -824,7 +1108,6 @@
         <div class="target-list" style="margin-bottom: 12px;">
           {{range .RunVM.Targets}}
           <div class="target-item" data-target="{{.}}">
-            <span class="radio"></span>
             <span class="name">{{.}}</span>
           </div>
           {{end}}
@@ -1031,13 +1314,11 @@
         <input type="hidden" name="target" value="all">
         <div class="target-list" style="margin-bottom: 12px;">
           <div class="target-item selected" data-target="all">
-            <span class="radio"></span>
             <span class="name">all tests</span>
             <span class="tag-mini">run all</span>
           </div>
           {{range .TestVM.Tests}}
           <div class="target-item" data-target="{{.Name}}" title="{{.Tags}}">
-            <span class="radio"></span>
             <span class="name">{{.Name}}</span>
             {{if .Tags}}<span class="tag-mini">{{.Tags}}</span>{{end}}
           </div>
@@ -1677,6 +1958,94 @@
     <button type="submit" class="btn-primary small">保存</button>
   </div>
 </form>
+{{end}}
+
+
+{{define "tab_settings"}}
+<div class="settings-tab" data-display-settings>
+  <aside class="settings-nav">
+    <div class="settings-kicker">Preferences</div>
+    <h1>显示设置</h1>
+    <p>调整 dashboard 的阅读尺寸和信息密度。设置保存在当前浏览器中，并会即时应用到所有页面。</p>
+  </aside>
+
+  <section class="settings-main">
+    <div class="settings-group">
+      <h2>Typography</h2>
+      <p>控制普通界面与代码区域的字号。</p>
+
+      <label class="setting-row">
+        <span class="setting-label">
+          <strong>界面字号</strong>
+          <span>导航、按钮、表格和正文的基础字号。</span>
+        </span>
+        <span class="setting-control">
+          <input type="range" min="13" max="18" step="0.5" data-display-setting="uiFontSize">
+          <span class="setting-value" data-setting-value="uiFontSize"></span>
+        </span>
+      </label>
+
+      <label class="setting-row">
+        <span class="setting-label">
+          <strong>代码字号</strong>
+          <span>源码预览、日志与 Markdown 代码框。</span>
+        </span>
+        <span class="setting-control">
+          <input type="range" min="11" max="17" step="0.5" data-display-setting="codeFontSize">
+          <span class="setting-value" data-setting-value="codeFontSize"></span>
+        </span>
+      </label>
+    </div>
+
+    <div class="settings-group">
+      <h2>Layout</h2>
+      <p>调整导航宽度和页面留白。</p>
+
+      <label class="setting-row">
+        <span class="setting-label">
+          <strong>导航宽度</strong>
+          <span>左侧主导航的占用空间。</span>
+        </span>
+        <span class="setting-control">
+          <input type="range" min="104" max="168" step="4" data-display-setting="navWidth">
+          <span class="setting-value" data-setting-value="navWidth"></span>
+        </span>
+      </label>
+
+      <label class="setting-row">
+        <span class="setting-label">
+          <strong>信息密度</strong>
+          <span>控制面板内边距和表单间距。</span>
+        </span>
+        <span class="setting-control">
+          <select class="select" data-display-setting="density">
+            <option value="compact">紧凑</option>
+            <option value="comfortable">舒适</option>
+            <option value="spacious">宽松</option>
+          </select>
+        </span>
+      </label>
+    </div>
+
+    <div class="settings-actions">
+      <button class="btn-secondary" type="button" data-display-reset>恢复默认</button>
+    </div>
+  </section>
+
+  <aside class="settings-preview">
+    <div class="settings-preview-box">
+      <div class="settings-preview-head">实时预览</div>
+      <div class="settings-preview-body">
+        <h3>gkNextEngine Dashboard</h3>
+        <p>界面字号会影响正文和操作控件，代码字号独立控制等宽内容。</p>
+        <pre><code class="language-cpp">struct RenderSettings
+{
+    float exposure = 1.0f; // 中文注释
+};</code></pre>
+      </div>
+    </div>
+  </aside>
+</div>
 {{end}}
 
 
