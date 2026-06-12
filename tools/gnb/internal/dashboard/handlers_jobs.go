@@ -50,7 +50,7 @@ func (s *Server) handleJobStart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.render(w, "log_panel", job.snapshot())
+	s.render(w, "log_panel", s.jobSnapshot(job))
 }
 
 func (s *Server) handleJobCancel(w http.ResponseWriter, r *http.Request) {
@@ -64,13 +64,49 @@ func (s *Server) handleJobCancel(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "job not found", http.StatusNotFound)
 		return
 	}
-	s.render(w, "log_panel", job.snapshot())
+	s.render(w, "log_panel", s.jobSnapshot(job))
+}
+
+func (s *Server) jobSnapshot(job *Job) JobSnapshot {
+	snap := job.snapshot()
+	snap.StreamBase = s.streamBaseURL
+	return snap
+}
+
+func (s *Server) handleJobStreamOptions(w http.ResponseWriter, r *http.Request) {
+	if !setStreamCORSHeaders(w, r) {
+		http.Error(w, "origin not allowed", http.StatusForbidden)
+		return
+	}
+	w.Header().Set("Access-Control-Allow-Methods", http.MethodGet)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func setStreamCORSHeaders(w http.ResponseWriter, r *http.Request) bool {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return true
+	}
+	requestOrigin := "http://" + r.Host
+	if origin != requestOrigin &&
+		origin != "wails://wails" &&
+		!strings.HasPrefix(origin, "http://wails.localhost") {
+		return false
+	}
+	w.Header().Set("Access-Control-Allow-Origin", origin)
+	w.Header().Set("Vary", "Origin")
+	w.Header().Set("Access-Control-Allow-Private-Network", "true")
+	return true
 }
 
 // handleJobStream serves Server-Sent Events for one job. The initial buffered
 // output is replayed before the live channel takes over. The connection ends
 // when the job terminates or the client disconnects.
 func (s *Server) handleJobStream(w http.ResponseWriter, r *http.Request) {
+	if !setStreamCORSHeaders(w, r) {
+		http.Error(w, "origin not allowed", http.StatusForbidden)
+		return
+	}
 	id := r.PathValue("id")
 	job, ok := s.jobs.Get(id)
 	if !ok {

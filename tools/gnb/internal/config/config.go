@@ -147,6 +147,26 @@ func FindRepoRoot(start string) (string, error) {
 	}
 }
 
+// FindRepoRootFromCandidates supports both shell launches, where the working
+// directory identifies the checkout, and desktop launches, where only the
+// executable location is reliable.
+func FindRepoRootFromCandidates(starts ...string) (string, error) {
+	var firstErr error
+	for _, start := range starts {
+		repoRoot, err := FindRepoRoot(start)
+		if err == nil {
+			return repoRoot, nil
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+	if firstErr != nil {
+		return "", firstErr
+	}
+	return "", fmt.Errorf("no repository root search paths provided")
+}
+
 func Load(repoRoot string) (Config, error) {
 	cfg := Config{}
 	_, err := toml.DecodeFile(filepath.Join(repoRoot, "gnb.toml"), &cfg)

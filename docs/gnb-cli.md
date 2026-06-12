@@ -73,6 +73,30 @@ Pass application arguments:
 ./gnb.sh run -- --scene=foo --present-mode=mailbox
 ```
 
+## Dashboard
+
+Bare `gnb` or the explicit command opens the dashboard in a native Wails window:
+
+```bash
+./gnb.sh
+./gnb.sh dashboard
+```
+
+The Wails asset server handles regular htmx requests. A random loopback HTTP
+port carries SSE build logs and streaming chat because WebView asset responses
+cannot be flushed incrementally. No external browser is required.
+
+Compatibility modes:
+
+```bash
+./gnb.sh dashboard --browser  # open in the system browser
+./gnb.sh dashboard --no-open  # server only
+./gnb.sh dashboard --port 7788
+```
+
+Windows uses the WebView2 runtime; release and shim builds embed its bootstrapper.
+Linux/macOS use the platform WebKit runtime required by Wails.
+
 ## Test And Visual
 
 Run unit tests:

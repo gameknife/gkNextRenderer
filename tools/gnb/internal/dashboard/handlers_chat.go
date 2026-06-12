@@ -253,6 +253,10 @@ func (s *Server) handleChatSend(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleChatSendStream(w http.ResponseWriter, r *http.Request) {
+	if !setStreamCORSHeaders(w, r) {
+		http.Error(w, "origin not allowed", http.StatusForbidden)
+		return
+	}
 	if s.chats == nil {
 		s.chats = NewChatStore(chatStorePath(s.opts))
 	}
@@ -378,6 +382,16 @@ func (s *Server) handleChatSendStream(w http.ResponseWriter, r *http.Request) {
 		"session_title": sess.Title,
 		"session_age":   relativeTime(sess.UpdatedAt),
 	})
+}
+
+func (s *Server) handleChatSendStreamOptions(w http.ResponseWriter, r *http.Request) {
+	if !setStreamCORSHeaders(w, r) {
+		http.Error(w, "origin not allowed", http.StatusForbidden)
+		return
+	}
+	w.Header().Set("Access-Control-Allow-Methods", http.MethodPost)
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func parseChatMaxTokens(raw string) int {

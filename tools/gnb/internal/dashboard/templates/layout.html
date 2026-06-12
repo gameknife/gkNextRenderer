@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-stream-base="{{.StreamBase}}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -93,6 +93,9 @@
     align-items: center;
     gap: 18px;
     background: var(--bg-panel);
+    position: relative;
+    user-select: none;
+    --wails-draggable: drag;
   }
   .brand { display: flex; align-items: center; gap: 10px; }
   .brand .logo {
@@ -140,6 +143,44 @@
     color: white; font-weight: 600; font-size: 12px;
     cursor: pointer;
   }
+  .window-controls {
+    display: none;
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+    --wails-draggable: none;
+  }
+  html.wails-desktop .window-controls { display: flex; }
+  .window-control {
+    width: 46px;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    display: grid;
+    place-items: center;
+    color: var(--fg-mute);
+    background: transparent;
+    cursor: default;
+    --wails-draggable: none;
+  }
+  .window-control:hover {
+    color: var(--fg);
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .window-control.close:hover {
+    color: #fff;
+    background: #c42b1c;
+  }
+  .window-control svg {
+    width: 11px;
+    height: 11px;
+    pointer-events: none;
+  }
+  .window-control .restore-icon { display: none; }
+  html.window-maximised .window-control .maximise-icon { display: none; }
+  html.window-maximised .window-control .restore-icon { display: block; }
 
   /* ----- Main layout ----- */
   main {
@@ -1884,14 +1925,16 @@
     --radius-lg: 8px;
     --radius-md: 6px;
     --radius-sm: 5px;
+    --shell-header-height: 50px;
   }
   header {
-    height: 44px;
+    height: var(--shell-header-height);
     padding: 0 20px;
     gap: 20px;
     background: #151617;
   }
-  .brand .logo { width: 24px; height: 24px; border-radius: 6px; }
+  html.wails-desktop header { padding-right: 150px; }
+  .brand .logo { width: 26px; height: 26px; border-radius: 6px; }
   .brand .name { font-size: 13px; font-weight: 650; letter-spacing: 0.1px; }
   .brand .chevron { color: var(--fg-dim); display: inline-flex; }
   .header-tab {
@@ -1903,10 +1946,16 @@
   .header-tab > svg, .header-tab > span:not(.pill) { display: none; }
   .header-tab .pill { padding: 3px 10px; }
   .header-workspace { color: var(--fg-dim); font-size: 10.5px; }
+  .header-workspace {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .header-workspace strong { color: var(--fg-mute); font-weight: 500; }
   .header-meta { gap: 20px; font-size: 10.5px; }
   .header-meta .avatar { width: 24px; height: 24px; }
-  main { height: calc(100vh - 44px); }
+  main { height: calc(100vh - var(--shell-header-height)); }
   .tab-strip {
     width: var(--nav-width);
     padding: 10px 7px;
@@ -2235,6 +2284,20 @@
     <div class="item"><span>{{.Preset}}/amd64</span></div>
     <div class="avatar" title="user">{{userInitial}}</div>
   </div>
+  <div class="window-controls" aria-label="窗口控制">
+    <button class="window-control" type="button" data-window-action="minimise" title="最小化" aria-label="最小化">
+      <svg viewBox="0 0 10 10" fill="none" stroke="currentColor"><path d="M1 5.5h8"/></svg>
+    </button>
+    <button class="window-control" type="button" data-window-action="maximise" title="最大化" aria-label="最大化或还原">
+      <svg class="maximise-icon" viewBox="0 0 10 10" fill="none" stroke="currentColor"><rect x="1.5" y="1.5" width="7" height="7"/></svg>
+      <svg class="restore-icon" viewBox="0 0 10 10" fill="none" stroke="currentColor">
+        <path d="M3.5 1.5h5v5M1.5 3.5h5v5h-5z"/>
+      </svg>
+    </button>
+    <button class="window-control close" type="button" data-window-action="close" title="关闭" aria-label="关闭">
+      <svg viewBox="0 0 10 10" fill="none" stroke="currentColor"><path d="M1.5 1.5l7 7m0-7l-7 7"/></svg>
+    </button>
+  </div>
 </header>
 
 <main>
@@ -2305,6 +2368,46 @@
 </main>
 
 <script>
+  function initWailsWindowControls(attempt = 0) {
+    const wailsRuntime = window.runtime;
+    if (!wailsRuntime || typeof wailsRuntime.WindowToggleMaximise !== 'function') {
+      if (attempt < 100) {
+        window.setTimeout(() => initWailsWindowControls(attempt + 1), 50);
+      }
+      return;
+    }
+
+    document.documentElement.classList.add('wails-desktop');
+
+    const updateWindowState = async () => {
+      try {
+        const maximised = await wailsRuntime.WindowIsMaximised();
+        document.documentElement.classList.toggle('window-maximised', maximised);
+      } catch (_) {}
+    };
+
+    document.querySelector('.window-controls')?.addEventListener('click', (event) => {
+      const action = event.target.closest('[data-window-action]')?.dataset.windowAction;
+      if (action === 'minimise') {
+        wailsRuntime.WindowMinimise();
+      } else if (action === 'maximise') {
+        wailsRuntime.WindowToggleMaximise();
+        window.setTimeout(updateWindowState, 100);
+      } else if (action === 'close') {
+        wailsRuntime.Quit();
+      }
+    });
+
+    document.querySelector('header')?.addEventListener('dblclick', (event) => {
+      if (event.target.closest('button, input, select, textarea, a')) return;
+      wailsRuntime.WindowToggleMaximise();
+      window.setTimeout(updateWindowState, 100);
+    });
+    window.addEventListener('resize', updateWindowState);
+    updateWindowState();
+  }
+  initWailsWindowControls();
+
   // Configure marked once. GFM + line breaks for readability.
   if (window.marked) {
     marked.setOptions({ gfm: true, breaks: false, headerIds: false, mangle: false });
@@ -2806,7 +2909,8 @@
     input.value = '';
 
     try {
-      const resp = await fetch('/chat/send-stream', { method: 'POST', body });
+      const streamBase = document.documentElement.dataset.streamBase || '';
+      const resp = await fetch(streamBase + '/chat/send-stream', { method: 'POST', body });
       if (!resp.ok || !resp.body) throw new Error('HTTP ' + resp.status);
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();

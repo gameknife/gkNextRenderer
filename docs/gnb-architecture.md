@@ -13,11 +13,11 @@
 
 ## 1. 一句话定位
 
-`gnb` 是一个**独立的 Go 命令行工具**，不链接引擎本体，职责是统一驱动「构建前准备 → 构建 → 运行 / 测试 / 打包」的全流程，并附带一个本地 Web 控制台（`.spec` 工作流 + 构建/运行/测试/Git/本地 LLM 聊天）。
+`gnb` 是一个**独立的 Go 命令行工具 + Wails 桌面应用**，不链接引擎本体，职责是统一驱动「构建前准备 → 构建 → 运行 / 测试 / 打包」的全流程，并附带一个原生窗口承载的本地控制台（`.spec` 工作流 + 构建/运行/测试/Git/本地 LLM 聊天）。
 
 - 模块路径：`github.com/gameknife/gknextrenderer/tools/gnb`
 - Go 版本：1.22（用到 `net/http` 的方法路由 `mux.HandleFunc("GET /path/{id}", ...)`）
-- 第三方依赖只有两个：`spf13/cobra`（CLI 框架）、`BurntSushi/toml`（解析 `gnb.toml`）
+- 关键第三方依赖：`spf13/cobra`（CLI）、`BurntSushi/toml`（TOML）、`fsnotify`（文件通知）、`Wails v2`（桌面窗口）
 
 ## 2. 目录结构
 
@@ -45,7 +45,7 @@ tools/gnb/
     ├── spec/             # .spec/ 工作流文件（TODO.md 等）的解析与回写
     ├── gitops/           # 对 git 命令的类型化封装
     ├── llm/              # 本地 llama-server 生命周期 + OpenAI 兼容客户端
-    └── dashboard/        # 本地 Web 控制台（HTTP + 内嵌模板 + SSE + 聊天）
+    └── dashboard/        # Wails 桌面壳 + loopback HTTP + 内嵌模板/SSE/聊天
 ```
 
 **心智模型**：`cmd/gnb` 只负责「定义命令、解析参数、拼装上下文」，真正的行为全部下沉到 `internal/*`。新增功能时保持这个边界——别把业务逻辑写进命令定义里。
@@ -63,7 +63,7 @@ tools/gnb/
 7. `build` 的 `RunE` 调用 `internal` 各包：必要时 `vcpkg.Ensure` + `fetcher.EnsureExternal` 自举依赖，再 `cmakerun.BuildWithCMake(...)` 执行 configure + build。
 8. 错误一路 `return` 回 `main()`，由 `fatal()` 统一打印并 `os.Exit(1)`。
 
-**裸 `gnb`（无子命令）** 走 `root.RunE`，直接启动 dashboard。
+**裸 `gnb`（无子命令）** 走 `root.RunE`，直接启动 Wails dashboard。
 
 ## 4. CLI 命令层（`cmd/gnb`）
 
@@ -137,13 +137,16 @@ dashboard 的 Git 标签页、`gnb git` 命令都复用它——想改 git 行�
 
 ## 9. dashboard：本地 Web 控制台
 
-这是代码量最大的包，`gnb`（裸命令）或 `gnb dashboard` 启动它。
+这是代码量最大的包，`gnb`（裸命令）或 `gnb dashboard` 默认在 Wails 原生窗口中启动它。
 
 ### 9.1 启动与请求生命周期
 
 - `Server`（`server.go`）持有 4 样东西：`opts`、`tpl`（解析好的模板）、`jobs`（任务管理器）、`chats`（聊天会话存储）。
 - 模板用 `//go:embed templates/*.html` 内嵌进二进制，`New()` 里**一次性**解析（解析失败在绑定端口前就报错）。
-- `Run()` 监听 `127.0.0.1:<port>`（默认 7777），用 `routes()` 返回的 mux 提供服务，并尽力打开浏览器。
+- `Start()` 监听 `127.0.0.1:<port>`（默认 7777），返回已启动 server 的 URL 和生命周期句柄。
+- `RunDesktop()` 把普通 dashboard handler 直接挂到 Wails AssetServer，以保留 Wails runtime 和原生窗口控制。
+- Wails 的自定义 AssetServer 会缓冲完整响应，不能实时 flush；因此 Build/Run/Test 日志和 Chat 流式响应单独走一个随机 loopback HTTP 端口。
+- `Run()` 是兼容模式：`--browser` 打开系统浏览器，`--no-open` 只启动 server。
 - `routes()` 是**唯一的路由表**：用 Go 1.22 的方法路由把每条 `METHOD /path` 映射到一个 handler，最外面包一层 `logRequests` 打访问日志。
 
 前端是 htmx 驱动的服务端渲染：大多数交互是 POST 一个动作 → 服务端改文件/起任务 → 返回一段 HTML 局部，由 htmx 换入页面。
@@ -204,7 +207,7 @@ dashboard 的 Git 标签页、`gnb git` 命令都复用它——想改 git 行�
 
 ```bash
 cd tools/gnb
-go build ./...        # 编译全部包
+go build -tags "desktop,production,wv2runtime.embed" ./... # 编译全部包
 go vet ./...          # 静态检查
 go test ./...         # 跑单测（Catch2 之外，这里是 gnb 自己的 Go 测试）
 ```

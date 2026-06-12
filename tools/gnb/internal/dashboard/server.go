@@ -39,10 +39,22 @@ type Options struct {
 
 // Server holds runtime state for the dashboard.
 type Server struct {
-	opts  Options
-	tpl   *template.Template
-	jobs  *JobManager
-	chats *ChatStore
+	opts          Options
+	tpl           *template.Template
+	jobs          *JobManager
+	chats         *ChatStore
+	streamBaseURL string
+}
+
+// RunningServer is a started dashboard HTTP server.
+type RunningServer struct {
+	URL  string
+	done <-chan error
+}
+
+// Wait blocks until the server stops.
+func (s *RunningServer) Wait() error {
+	return <-s.done
 }
 
 // New constructs a Server. Template parsing happens eagerly so problems surface
@@ -57,12 +69,16 @@ func New(opts Options) (*Server, error) {
 	return &Server{opts: opts, tpl: tpl, jobs: NewJobManager(), chats: NewChatStore(chatStorePath(opts))}, nil
 }
 
-// Run binds the configured port and serves until ctx is canceled.
-func (s *Server) Run(ctx context.Context) error {
-	addr := fmt.Sprintf("127.0.0.1:%d", s.opts.Port)
+// Start binds the configured port and starts serving in the background.
+func (s *Server) Start(ctx context.Context) (*RunningServer, error) {
+	return s.start(ctx, s.opts.Port)
+}
+
+func (s *Server) start(ctx context.Context, port int) (*RunningServer, error) {
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("bind %s: %w", addr, err)
+		return nil, fmt.Errorf("bind %s: %w", addr, err)
 	}
 	mux := s.routes()
 	httpSrv := &http.Server{
@@ -70,27 +86,40 @@ func (s *Server) Run(ctx context.Context) error {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	fmt.Printf("dashboard listening on http://%s\n", addr)
-	if !s.opts.NoOpen {
-		go openBrowser("http://" + addr)
-	}
-
-	errCh := make(chan error, 1)
+	done := make(chan error, 1)
 	go func() {
-		if err := httpSrv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			errCh <- err
+		serveErr := httpSrv.Serve(ln)
+		if errors.Is(serveErr, http.ErrServerClosed) {
+			serveErr = nil
 		}
+		done <- serveErr
+		close(done)
 	}()
 
-	select {
-	case <-ctx.Done():
+	go func() {
+		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		_ = httpSrv.Shutdown(shutdownCtx)
-		return nil
-	case err := <-errCh:
+	}()
+
+	return &RunningServer{
+		URL:  "http://" + ln.Addr().String(),
+		done: done,
+	}, nil
+}
+
+// Run serves the dashboard in browser-compatible mode until ctx is canceled.
+func (s *Server) Run(ctx context.Context) error {
+	running, err := s.Start(ctx)
+	if err != nil {
 		return err
 	}
+	fmt.Printf("dashboard listening on %s\n", running.URL)
+	if !s.opts.NoOpen {
+		go openBrowser(running.URL)
+	}
+	return running.Wait()
 }
 
 // openBrowser is best-effort; failure is silent (URL is already printed).

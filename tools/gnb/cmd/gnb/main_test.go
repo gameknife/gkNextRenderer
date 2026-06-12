@@ -204,16 +204,17 @@ func TestTodoNextWaitReturnsWhenTodoChanges(t *testing.T) {
 	dir := t.TempDir()
 	writeTestTODO(t, dir, "(暂无)")
 
+	start := time.Now()
 	writeDone := make(chan error, 1)
 	go func() {
-		time.Sleep(30 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		writeDone <- writeTestTODOFile(dir, `- [ ] `+"`#00049`"+` [BUG] 新任务`)
 	}()
 
 	out, err := runTodoNext(appContext{repoRoot: dir}, todoNextOptions{
 		wait:    true,
-		timeout: time.Second,
-		poll:    10 * time.Millisecond,
+		timeout: 2 * time.Second,
+		poll:    time.Second,
 	})
 	if err != nil {
 		t.Fatalf("runTodoNext: %v", err)
@@ -226,6 +227,9 @@ func TestTodoNextWaitReturnsWhenTodoChanges(t *testing.T) {
 	}
 	if out.WaitedMillis <= 0 {
 		t.Fatalf("WaitedMillis = %d, want > 0", out.WaitedMillis)
+	}
+	if elapsed := time.Since(start); elapsed >= 700*time.Millisecond {
+		t.Fatalf("runTodoNext took %s; file notification did not beat 1s polling fallback", elapsed)
 	}
 }
 
@@ -246,6 +250,13 @@ func TestTodoNextWaitTimesOutWithoutTask(t *testing.T) {
 	}
 	if !out.TimedOut {
 		t.Fatalf("TimedOut = false, want true; out = %+v", out)
+	}
+}
+
+func TestDashboardRejectsBrowserAndNoOpenTogether(t *testing.T) {
+	err := runDashboard(appContext{}, dashboardCmdOpts{Browser: true, NoOpen: true})
+	if err == nil || !strings.Contains(err.Error(), "cannot be used together") {
+		t.Fatalf("runDashboard error = %v, want conflicting flags error", err)
 	}
 }
 

@@ -6,6 +6,7 @@
 
 - 启动层：仓库根目录的 `./gnb.bat` / `gnb.sh` 负责 bootstrap、本地重编译和缓存二进制切换
 - CLI 层：`tools/gnb/cmd/gnb/main.go` 使用 `cobra` 注册子命令与参数
+- 桌面壳：Wails v2 在原生 WebView 窗口中承载 dashboard
 - 配置层：仓库根 `gnb.toml` 保存版本约束、vcpkg、外部工具链、pak 资源和目标列表
 - 执行层：`tools/gnb/internal/*` 分模块封装 CMake、vcpkg、资源下载、运行器、打包和平台逻辑
 - 产物层：构建结果仍然落在 `out/build/<preset>/bin/`，`gnb` 只是统一驱动这些流程
@@ -13,7 +14,7 @@
 ## 为什么用 Go
 
 - `gnb` 是独立二进制，不依赖引擎本体，也不需要先把 C++ 工程编出来
-- 单文件分发适合做仓库根命令入口，Windows / Linux / macOS 都能保持一致体验
+- 单文件分发适合做仓库根命令入口，CLI 与 Wails dashboard 共用同一个二进制
 - 标准库已经足够覆盖文件系统、进程启动、HTTP 下载、ZIP/TAR 解包等基础能力
 - 本地如果装了 Go，`./gnb.bat` / `gnb.sh` 会优先从 `tools/gnb` 重新编译，方便维护者直接改 CLI
 
@@ -28,6 +29,9 @@
 - 缓存缺失或版本落后时，从 GitHub release 下载预编译二进制和 `gnb-version.txt`
 
 这层的目标是让普通用户不必理解 Go 工具链，也能直接使用 `gnb`。
+
+shim 与发布脚本使用 `wv2runtime.embed` 构建标签；Windows 缺少 WebView2 runtime
+时可由同一个 exe 启动内嵌 bootstrapper，不需要旁置 DLL。
 
 ### 2. CLI 命令层
 
@@ -64,6 +68,7 @@
 - `android` / `ios`：移动端专用入口
 - `platform`：平台识别、可执行扩展名、Linux 包依赖检查
 - `console`：统一 `[gnb]` 风格输出和命令回显
+- `dashboard`：内嵌模板、Wails AssetServer、流式 loopback HTTP、htmx/SSE handler 与原生窗口
 
 这个拆法的好处是边界清晰。比如“下载工具链”不需要知道 CMake 参数怎么拼，“运行目标”也不需要关心 pak 发布逻辑。
 
@@ -73,11 +78,15 @@
 
 - `spf13/cobra`：CLI 命令和参数系统
 - `BurntSushi/toml`：解析 `gnb.toml`
+- `fsnotify`：交互式 TODO 工作流的文件变更通知
+- `Wails v2`：Windows / Linux / macOS 原生 dashboard 窗口
 - `CMake` / `Ninja`：原生工程配置与构建后端
 - `vcpkg`：C++ 依赖管理与二进制缓存
 - GitHub Releases：预编译 `gnb` 二进制和可选 pak 资源的分发通道
 
-换句话说，`gnb` 本身不是新的构建系统，而是站在现有 CMake + vcpkg 之上的统一控制面。
+换句话说，`gnb` 本身不是新的构建系统，而是站在现有 CMake + vcpkg 之上的统一控制面；
+Wails 负责桌面承载和普通请求；需要增量 flush 的构建日志与 Chat 流使用进程内
+随机 loopback HTTP server，业务仍复用同一组 Go handler。
 
 ## 与主工程的关系
 

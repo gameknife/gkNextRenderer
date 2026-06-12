@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/spec"
 	"github.com/spf13/cobra"
@@ -278,7 +280,8 @@ func newTodoNextCommand(ctx appContext) *cobra.Command {
 		Short: "Print the next pending task in 下一步, optionally waiting for TODO.md updates",
 		Long: "Print the next pending task in 下一步 (intended for AGENT/orchestrator use).\n\n" +
 			"With --wait, the command returns immediately if a task exists. If no task exists,\n" +
-			"it polls TODO.md for changes until a task appears or --timeout elapses.",
+			"it watches TODO.md and returns when a task appears or --timeout elapses.\n" +
+			"Polling remains enabled as a fallback for missed or unsupported file events.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			out, err := runTodoNext(ctx, opts)
 			if err != nil {
@@ -293,7 +296,7 @@ func newTodoNextCommand(ctx appContext) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.asJSON, "json", false, "emit JSON (orchestrator-friendly)")
 	cmd.Flags().BoolVar(&opts.wait, "wait", false, "wait for TODO.md changes when no pending task exists")
 	cmd.Flags().DurationVar(&opts.timeout, "timeout", 590*time.Second, "maximum wait time for --wait")
-	cmd.Flags().DurationVar(&opts.poll, "poll", 2*time.Second, "TODO.md polling interval for --wait")
+	cmd.Flags().DurationVar(&opts.poll, "poll", 2*time.Second, "fallback polling interval for --wait")
 	return cmd
 }
 
@@ -311,47 +314,144 @@ func runTodoNext(ctx appContext, opts todoNextOptions) (nextOutput, error) {
 	}
 
 	start := time.Now()
-	deadline := start.Add(opts.timeout)
 	todoPath := spec.TODOPath(ctx.repoRoot)
-	stat, err := os.Stat(todoPath)
+	watcher := newTodoWatcher(todoPath)
+	if watcher != nil {
+		defer watcher.Close()
+	}
+
+	// Close the race between the initial parse and installing the directory
+	// watcher. Editors commonly save by renaming a temporary file over TODO.md.
+	out, err = loadNextOutput(ctx)
 	if err != nil {
 		return out, err
 	}
-	lastMod := stat.ModTime()
-	lastSize := stat.Size()
+	if out.Found || strings.EqualFold(out.MilestoneStatus, "done") {
+		out.WaitedMillis = time.Since(start).Milliseconds()
+		return out, nil
+	}
+
+	pollTicker := time.NewTicker(opts.poll)
+	defer pollTicker.Stop()
+	timeoutTimer := time.NewTimer(opts.timeout)
+	defer timeoutTimer.Stop()
+
+	var watchEvents <-chan fsnotify.Event
+	var watchErrors <-chan error
+	if watcher != nil {
+		watchEvents = watcher.Events
+		watchErrors = watcher.Errors
+	}
+
+	var debounceTimer *time.Timer
+	var debounce <-chan time.Time
+	defer func() {
+		if debounceTimer != nil {
+			debounceTimer.Stop()
+		}
+	}()
+
+	reload := func() (bool, error) {
+		var reloadErr error
+		out, reloadErr = loadNextOutputWithRetry(ctx)
+		if reloadErr != nil {
+			return false, reloadErr
+		}
+		if out.Found || strings.EqualFold(out.MilestoneStatus, "done") {
+			out.WaitedMillis = time.Since(start).Milliseconds()
+			return true, nil
+		}
+		return false, nil
+	}
 
 	for {
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
+		select {
+		case <-timeoutTimer.C:
 			out.TimedOut = true
 			out.WaitedMillis = time.Since(start).Milliseconds()
 			return out, nil
-		}
-		sleepFor := opts.poll
-		if remaining < sleepFor {
-			sleepFor = remaining
-		}
-		time.Sleep(sleepFor)
-
-		stat, err = os.Stat(todoPath)
-		if err != nil {
-			return out, err
-		}
-		if stat.ModTime().Equal(lastMod) && stat.Size() == lastSize {
-			continue
-		}
-		lastMod = stat.ModTime()
-		lastSize = stat.Size()
-
-		out, err = loadNextOutput(ctx)
-		if err != nil {
-			return out, err
-		}
-		out.WaitedMillis = time.Since(start).Milliseconds()
-		if out.Found || strings.EqualFold(out.MilestoneStatus, "done") {
-			return out, nil
+		case event, ok := <-watchEvents:
+			if !ok {
+				watchEvents = nil
+				continue
+			}
+			if !isTodoChange(event, todoPath) {
+				continue
+			}
+			if debounceTimer == nil {
+				debounceTimer = time.NewTimer(25 * time.Millisecond)
+			} else {
+				if !debounceTimer.Stop() {
+					select {
+					case <-debounceTimer.C:
+					default:
+					}
+				}
+				debounceTimer.Reset(25 * time.Millisecond)
+			}
+			debounce = debounceTimer.C
+		case <-debounce:
+			debounce = nil
+			done, reloadErr := reload()
+			if reloadErr != nil {
+				return out, reloadErr
+			}
+			if done {
+				return out, nil
+			}
+		case <-pollTicker.C:
+			done, reloadErr := reload()
+			if reloadErr != nil {
+				return out, reloadErr
+			}
+			if done {
+				return out, nil
+			}
+		case _, ok := <-watchErrors:
+			if !ok {
+				watchErrors = nil
+			}
+			// The ticker remains active as a reliable fallback.
 		}
 	}
+}
+
+func newTodoWatcher(todoPath string) *fsnotify.Watcher {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil
+	}
+	if err := watcher.Add(filepath.Dir(todoPath)); err != nil {
+		watcher.Close()
+		return nil
+	}
+	return watcher
+}
+
+func isTodoChange(event fsnotify.Event, todoPath string) bool {
+	if filepath.Clean(event.Name) != filepath.Clean(todoPath) {
+		return false
+	}
+	const relevantOps = fsnotify.Write | fsnotify.Create | fsnotify.Remove | fsnotify.Rename
+	return event.Op&relevantOps != 0
+}
+
+func loadNextOutputWithRetry(ctx appContext) (nextOutput, error) {
+	const attempts = 5
+	const retryDelay = 20 * time.Millisecond
+
+	var out nextOutput
+	var err error
+	for attempt := 0; attempt < attempts; attempt++ {
+		out, err = loadNextOutput(ctx)
+		if err == nil {
+			return out, nil
+		}
+		if attempt+1 < attempts {
+			time.Sleep(retryDelay)
+		}
+	}
+	return out, err
 }
 
 func loadNextOutput(ctx appContext) (nextOutput, error) {
