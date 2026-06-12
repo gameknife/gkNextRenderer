@@ -7,12 +7,9 @@
 - [ ] `#00052` [FEAT] 优化gnb dashboard的git页
 
 ### 待规划
-- [ ] `#00024` [FEAT] AIService Agent 化 Phase 8：MagicaLego AI 接入 agent loop → specs/00024.md
-- [ ] `#00025` [DOC] AIService Agent 化 Phase 9：端到端集成测试 + AGENT_GUIDE/AIAgentSystem.md → specs/00025.md
 - [ ] `#00011` [IDEA] gnb在gkmini上host一个持久的todolist，作为一个“服务器”同步，可以随时随地进行任务管理
 - [ ] `#00012` [FEAT] 让 gkNextRenderer 主管线原生运行在浏览器（WebGPU 后端） → specs/00012.md
 - [ ] `#00045` [FEAT] gnb需要及时响应TODO文件的修改
-- [ ] `#00049` [IDEA] gnb的docs界面的文档列表，需要能够按文件夹收纳。并且文档需要有个规范，在markdown的开头有一些元信息，可以添加标签
 
 ### 最近完成
 - [x] `#00001` [IDEA] 介绍gnb技术栈  → journal/00001.md (2026-05-14)
