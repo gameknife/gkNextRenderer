@@ -110,7 +110,7 @@ if command -v go >/dev/null 2>&1; then
     NEED_BUILD=1
   fi
   if [ "$NEED_BUILD" -eq 1 ]; then
-    (cd "$ROOT/tools/gnb" && go build -trimpath -ldflags="-s -w -X main.version=$LOCAL_VERSION" -o "$LOCAL_GNB" ./cmd/gnb)
+    (cd "$ROOT/tools/gnb" && go build -tags "desktop,production,wv2runtime.embed" -trimpath -ldflags="-s -w -X main.version=$LOCAL_VERSION" -o "$LOCAL_GNB" ./cmd/gnb)
   fi
   GNB="$LOCAL_GNB"
 else

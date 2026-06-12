@@ -71,6 +71,7 @@ type JobSnapshot struct {
 	Kind       JobKind
 	Target     string
 	Command    string
+	StreamBase string
 	Status     JobStatus
 	StartedAt  time.Time
 	FinishedAt time.Time

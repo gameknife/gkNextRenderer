@@ -33,7 +33,14 @@ type appContext struct {
 }
 
 func main() {
-	repoRoot, repoErr := config.FindRepoRoot(".")
+	repoRootCandidates := []string{"."}
+	if executable, err := os.Executable(); err == nil {
+		if resolvedExecutable, resolveErr := filepath.EvalSymlinks(executable); resolveErr == nil {
+			executable = resolvedExecutable
+		}
+		repoRootCandidates = append(repoRootCandidates, filepath.Dir(executable))
+	}
+	repoRoot, repoErr := config.FindRepoRootFromCandidates(repoRootCandidates...)
 	var cfg config.Config
 	if repoErr == nil {
 		var err error

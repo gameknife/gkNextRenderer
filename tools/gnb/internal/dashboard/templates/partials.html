@@ -1365,7 +1365,7 @@
 <div class="log-panel"
      data-started-at="{{.StartedAt.Unix}}"
      {{if jobIsTerminal .}}data-finished-at="{{.FinishedAt.Unix}}"{{end}}
-     {{if jobIsRunning .}}data-stream="/jobs/{{.ID}}/stream?from={{len .Lines}}"{{end}}>
+     {{if jobIsRunning .}}data-stream="{{.StreamBase}}/jobs/{{.ID}}/stream?from={{len .Lines}}"{{end}}>
   <div class="log-head">
     <div class="label">
       <span class="ico">
@@ -2143,12 +2143,18 @@
       font-size: 11px;
     }
     .contrib-scroll {
-      margin-top: 15px;
       overflow-x: auto;
       overflow-y: hidden;
       scrollbar-width: thin;
     }
-    .contrib-chart { min-width: 790px; width: max-content; }
+    .contrib-content {
+      min-width: 790px;
+      width: max-content;
+    }
+    .contrib-chart {
+      width: max-content;
+      margin-top: 15px;
+    }
     .contrib-months {
       display: grid;
       grid-template-columns: repeat(53, 12px);
@@ -2289,48 +2295,54 @@
       <div class="loc-col"><div class="loc-error">LOC 扫描失败：{{.Error}}</div></div>
     {{else}}
       <div class="loc-contributions">
-        <div class="contrib-head">
-          <h2>{{intCommas .Contributions.Total}} commits in the last year</h2>
-          <span>Git activity across all refs</span>
-        </div>
         {{if .Contributions.Error}}
+          <div class="contrib-head">
+            <h2>{{intCommas .Contributions.Total}} commits in the last year</h2>
+            <span>Git activity across all refs</span>
+          </div>
           <div class="contrib-error">Unable to load git history: {{.Contributions.Error}}</div>
         {{else}}
           <div class="contrib-scroll">
-            <div class="contrib-chart">
-              <div class="contrib-months">
-                {{range .Contributions.Months}}
-                  <span style="grid-column: {{.Column}}">{{.Label}}</span>
-                {{end}}
+            <div class="contrib-content">
+              <div class="contrib-head">
+                <h2>{{intCommas .Contributions.Total}} commits in the last year</h2>
+                <span>Git activity across all refs</span>
               </div>
-              <div class="contrib-body">
-                <div class="contrib-weekdays">
-                  <span class="mon">Mon</span>
-                  <span class="wed">Wed</span>
-                  <span class="fri">Fri</span>
-                </div>
-                <div class="contrib-weeks">
-                  {{range .Contributions.Weeks}}
-                    <div class="contrib-week">
-                      {{range .Days}}
-                        <span class="contrib-day level-{{.Level}}{{if .Future}} future{{end}}" title="{{.Label}}: {{.Count}} commits"></span>
-                      {{end}}
-                    </div>
+              <div class="contrib-chart">
+                <div class="contrib-months">
+                  {{range .Contributions.Months}}
+                    <span style="grid-column: {{.Column}}">{{.Label}}</span>
                   {{end}}
                 </div>
+                <div class="contrib-body">
+                  <div class="contrib-weekdays">
+                    <span class="mon">Mon</span>
+                    <span class="wed">Wed</span>
+                    <span class="fri">Fri</span>
+                  </div>
+                  <div class="contrib-weeks">
+                    {{range .Contributions.Weeks}}
+                      <div class="contrib-week">
+                        {{range .Days}}
+                          <span class="contrib-day level-{{.Level}}{{if .Future}} future{{end}}" title="{{.Label}}: {{.Count}} commits"></span>
+                        {{end}}
+                      </div>
+                    {{end}}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          <div class="contrib-foot">
-            <span>Based on local git log</span>
-            <div class="contrib-legend" aria-label="Commit intensity legend">
-              <span>Less</span>
-              <i class="contrib-day"></i>
-              <i class="contrib-day level-1"></i>
-              <i class="contrib-day level-2"></i>
-              <i class="contrib-day level-3"></i>
-              <i class="contrib-day level-4"></i>
-              <span>More</span>
+              <div class="contrib-foot">
+                <span>Based on local git log</span>
+                <div class="contrib-legend" aria-label="Commit intensity legend">
+                  <span>Less</span>
+                  <i class="contrib-day"></i>
+                  <i class="contrib-day level-1"></i>
+                  <i class="contrib-day level-2"></i>
+                  <i class="contrib-day level-3"></i>
+                  <i class="contrib-day level-4"></i>
+                  <span>More</span>
+                </div>
+              </div>
             </div>
           </div>
         {{end}}

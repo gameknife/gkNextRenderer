@@ -36,6 +36,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /tab/{kind}", s.handleTab)
 	mux.HandleFunc("POST /jobs/{kind}", s.handleJobStart)
 	mux.HandleFunc("POST /jobs/{id}/cancel", s.handleJobCancel)
+	mux.HandleFunc("OPTIONS /jobs/{id}/stream", s.handleJobStreamOptions)
 	mux.HandleFunc("GET /jobs/{id}/stream", s.handleJobStream)
 	mux.HandleFunc("POST /git/switch", s.handleGitSwitch)
 	mux.HandleFunc("POST /git/switch-remote", s.handleGitSwitchRemote)
@@ -53,6 +54,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /git/commit-message", s.handleGitCommitMessage)
 	mux.HandleFunc("POST /git/commit", s.handleGitCommitCreate)
 	mux.HandleFunc("POST /chat/send", s.handleChatSend)
+	mux.HandleFunc("OPTIONS /chat/send-stream", s.handleChatSendStreamOptions)
 	mux.HandleFunc("POST /chat/send-stream", s.handleChatSendStream)
 	mux.HandleFunc("GET /chat/session", s.handleChatSession)
 	mux.HandleFunc("POST /chat/new", s.handleChatNew)
@@ -81,6 +83,7 @@ type sectionVM struct {
 
 type indexVM struct {
 	RepoRoot   string
+	StreamBase string
 	Milestone  string
 	Status     string
 	Sections   []sectionVM
@@ -232,13 +235,14 @@ func (s *Server) buildIndex() (indexVM, error) {
 		return indexVM{}, err
 	}
 	vm := indexVM{
-		RepoRoot:  s.opts.RepoRoot,
-		Milestone: doc.Milestone,
-		Status:    doc.MilestoneStatus,
-		Version:   s.opts.Version,
-		Preset:    s.opts.Preset,
-		OS:        runtime.GOOS + "/" + runtime.GOARCH,
-		ActiveTab: "todo",
+		RepoRoot:   s.opts.RepoRoot,
+		StreamBase: s.streamBaseURL,
+		Milestone:  doc.Milestone,
+		Status:     doc.MilestoneStatus,
+		Version:    s.opts.Version,
+		Preset:     s.opts.Preset,
+		OS:         runtime.GOOS + "/" + runtime.GOARCH,
+		ActiveTab:  "todo",
 	}
 	for _, kind := range []spec.SectionKind{spec.SectionNext, spec.SectionBacklog, spec.SectionRecent} {
 		tasks := doc.SectionTasks(kind)
@@ -261,11 +265,12 @@ func (s *Server) buildIndex() (indexVM, error) {
 // re-parsing TODO.md when not needed.
 func (s *Server) buildHeader(activeTab string) indexVM {
 	return indexVM{
-		RepoRoot:  s.opts.RepoRoot,
-		Version:   s.opts.Version,
-		Preset:    s.opts.Preset,
-		OS:        runtime.GOOS + "/" + runtime.GOARCH,
-		ActiveTab: activeTab,
+		RepoRoot:   s.opts.RepoRoot,
+		StreamBase: s.streamBaseURL,
+		Version:    s.opts.Version,
+		Preset:     s.opts.Preset,
+		OS:         runtime.GOOS + "/" + runtime.GOARCH,
+		ActiveTab:  activeTab,
 	}
 }
 
@@ -275,6 +280,8 @@ func (s *Server) buildBuildRunVM() buildRunVM {
 	}
 	build, hasBuild := s.jobs.LatestSnapshot(JobBuild)
 	run, hasRun := s.jobs.LatestSnapshot(JobRun)
+	build.StreamBase = s.streamBaseURL
+	run.StreamBase = s.streamBaseURL
 	switch {
 	case hasBuild && hasRun:
 		if run.StartedAt.After(build.StartedAt) {
@@ -305,6 +312,7 @@ func (s *Server) buildTestVM() testVM {
 		vm.BinExists = true
 	}
 	if snap, ok := s.jobs.LatestSnapshot(JobTest); ok {
+		snap.StreamBase = s.streamBaseURL
 		vm.Latest = snap
 		vm.HasJob = true
 	}

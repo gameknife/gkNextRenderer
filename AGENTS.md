@@ -59,7 +59,7 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
 - Android: `./gnb android`
 - Optional assets: `./gnb paks fetch` / `./gnb paks list`
 - Source-line stats: `./gnb loc` (CLI) — also browsable in `./gnb dashboard`
-- Local web dashboard: `./gnb dashboard` (todo / build / run / test / git / chat / LOC tabs)
+- Native dashboard: `./gnb dashboard` (Wails window; todo / build / run / test / git / chat / LOC tabs)
 
 Desktop binaries can be launched from any working directory; no `cd out/build/<preset>/bin` is required.
 
@@ -246,7 +246,7 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 
 ## gnb Dashboard
 
-`gnb dashboard` 启动本地 HTTP UI（默认 127.0.0.1:某端口，自动开浏览器），htmx 驱动的 SPA。提供 tabs：
+`gnb dashboard` 默认启动 Wails 原生窗口；普通 htmx 请求由 Wails AssetServer 直接处理，Build/Run/Test 和 Chat 的流式响应走随机 loopback 端口。`--browser` 可显式使用系统浏览器，`--no-open` 只启动 server。提供 tabs：
 - **TODO**：可视化 `.spec/TODO.md` 的工作流操作（增删改、move、spec 创建、标 done/blocked）
 - **Build / Run / Test**：触发 cmake build、运行 target、Catch2 测试，SSE 实时流日志
 - **Git**：分支管理、stash、commits、本地改动 stage/unstage、LLM 生成 commit message
