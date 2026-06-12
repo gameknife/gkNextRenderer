@@ -31,7 +31,7 @@ export function RunGameInstance(instance: NextGameInstanceBase): void {
         onInputEvent: (event: NE.InputEvent) => instance.OnInputEvent(event),
     });
 
-    NE.Global.GetEngine().RegisterJSCallback((deltaSeconds: number) => {
+    NE.RegisterTickCallback((deltaSeconds: number) => {
         applyOverrideCamera(instance);
         instance.OnTick(deltaSeconds);
     });

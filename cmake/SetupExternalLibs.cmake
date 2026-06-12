@@ -27,7 +27,7 @@ if(WITH_STREAMLINE)
 endif()
 
 # --- TypeScript Compiler (for QuickJS) ---
-if(WITH_QUICKJS)
+if(GK_WITH_NEXT_QUICKJS AND NOT ANDROID)
     if(CMAKE_HOST_WIN32)
         set(TSC_FILENAME "tsc.exe")
     else()

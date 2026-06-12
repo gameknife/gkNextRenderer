@@ -8,7 +8,6 @@ export class NextEngine {
     GetTime(): number;
     GetDeltaSeconds(): number;
     GetSmoothDeltaSeconds(): number;
-    RegisterJSCallback(arg0: any): void;
 }
 export class Node {
     readonly InstanceId: number;
@@ -141,6 +140,7 @@ export interface LifecycleHooks {
 }
 export interface CameraOverride { position: Vec3; target: Vec3; up: Vec3; fov: number; }
 export function RegisterLifecycleHooks(hooks: LifecycleHooks): void;
+export function RegisterTickCallback(callback: (deltaSeconds: number) => void): void;
 export function LoadJson(path: string): any;
 export function RequestLoadScene(filename: string): void;
 export function RequestClose(): void;

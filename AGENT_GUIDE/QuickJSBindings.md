@@ -1,6 +1,6 @@
 # QuickJS Bindings Cookbook
 
-This note documents the binding path used by the Flappy parity demo. Keep it aligned with `src/Engine/Runtime/Subsystems/QuickJSEngine.cpp`.
+This note documents the binding path used by the Flappy parity demo. Keep it aligned with `src/Modules/NextQuickJS/QuickJSEngine.cpp`.
 
 For a higher-level overview of the TypeScript source, compile, hot reload, and runtime loading pipeline, see `docs/typescript-integration.md`.
 
@@ -9,13 +9,14 @@ For a higher-level overview of the TypeScript source, compile, hot reload, and r
 - TypeScript sources live under `assets/typescript`.
 - `QuickJSEngine` compiles the root `assets/typescript/tsconfig.json` into `assets/scripts` when sources are newer than `.tsc.stamp`.
 - Runtime hot reload uses the bundled compiler at `tools/tsc/tsc[.exe]` (`tsc.exe` on Windows, `tsc` on macOS/Linux), copied by CMake to `out/build/<preset>/tools/tsc/tsc[.exe]`. Do not require Node, npm, npx, or a globally installed `tsc`.
+- Applications opt in with `Modules::NextQuickJS::Install(engine, config)`. Targets that do not link/install `NextQuickJS` create no JS runtime and do not compile TypeScript.
 - The runtime module loader resolves relative ESM imports from the compiled `assets/scripts` tree and appends `.js` when needed.
 - Use `import * as NE from "../Engine"` or `import * as NE from "Engine"` depending on the compiled module depth. The loader maps `./Engine`, `../Engine`, and `assets/scripts/Engine` style imports back to the built-in `Engine` module.
 - Scripted game targets should extend `NextGameInstanceBase` from `assets/typescript/NextGameInstanceBase.ts` and call `RunGameInstance(new YourGameInstance())` from their entry module. That keeps `OnInit`, `BeforeSceneRebuild`, `OnSceneLoaded`, `OnTick`, `OnRenderUI`, input, and camera override responsibilities aligned with native game instances.
 
 ## Adding A Binding
 
-1. Add the C++ function in `QuickJSEngine.cpp`.
+1. Add the C++ function under `src/Modules/NextQuickJS/`.
 2. Register it in `ResetContextAndLoadScript()` on the `Engine` module or one of its namespace objects.
 3. Add matching declarations in `BuildTypeScriptDefinitions()`.
 4. Add a minimal call in `assets/typescript/test.ts` unless the binding is only meaningful for a dedicated host.
@@ -26,7 +27,8 @@ Prefer raw `JS_NewCFunction` for object-shaped arguments, JSON values, optional 
 ## Current Engine Module Surface
 
 - `Global.GetEngine()`, `Global.GetScene()`, `Global.spdlog(...)`
-- `NextEngine.GetTotalFrames()`, `GetTime()`, `GetDeltaSeconds()`, `GetSmoothDeltaSeconds()`, `RegisterJSCallback(...)`
+- `NextEngine.GetTotalFrames()`, `GetTime()`, `GetDeltaSeconds()`, `GetSmoothDeltaSeconds()`
+- `RegisterTickCallback(...)`
 - `Input.IsKeyDown()`, `IsKeyPressed()`, `IsMouseButtonDown()`, `IsMouseButtonPressed()`, `GetGamepadButton()`
 - `Audio.PlaySfx()`, `PlayMusic()`, `StopMusic()`
 - `UI.Begin()`, `End()`, `Text()`, `SetCursorPos()`, `GetWindowSize()`, `SetWindowFontScale()`, `GetScreenSize()`

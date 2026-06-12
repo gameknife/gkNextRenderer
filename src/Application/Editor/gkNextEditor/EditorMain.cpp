@@ -18,6 +18,7 @@
 #include <spdlog/spdlog.h>
 #include "Modules/LDrawLoader/LDrawModule.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
+#include "Modules/NextQuickJS/NextQuickJSModule.hpp"
 #include "Application/Common/DemoScenes.hpp"
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
@@ -32,6 +33,7 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine) :
     NextGameInstanceBase(config, options, engine)
 {
+    Modules::NextQuickJS::Install(*engine, {.compileTypeScript = false, .enableHotReload = false});
     editorUserInterface_ = std::make_unique<EditorInterface>(this);
 
     NextRenderer::HideConsole();

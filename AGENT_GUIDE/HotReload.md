@@ -10,11 +10,11 @@
 
 | 链路 | 入口 | 触发 | 当前行为 |
 |---|---|---|---|
-| TypeScript -> QuickJS | `QuickJSEngine::TickHotReload()` | 0.5 s 轮询 | 失败保留旧脚本 |
+| TypeScript -> QuickJS | `Modules/NextQuickJS/QuickJSEngine::TickHotReload()` | 安装模块且启用配置后 0.5 s 轮询 | 失败保留旧脚本 |
 | Slang -> SPIR-V -> Vulkan pipeline | `Vulkan::ShaderHotReloader` | 0.5 s 默认轮询或 Editor 手动触发 | 编译变更 `.slang`，`common` 变更触发全量重编，成功后 `VulkanBaseRenderer::ReloadShaders()` |
 | Editor/CVar | `Hot Reload` 面板 + CVar console | 手动 | 可开关 shader reload，调整轮询间隔，手动触发 shader rebuild |
 
-移动端（Android/iOS）不启用 shader hot reload 路径。
+移动端（Android/iOS）不启用 shader hot reload 路径。未链接并安装 `NextQuickJS` 的 program 也不启用 TypeScript 热重载。
 
 ---
 

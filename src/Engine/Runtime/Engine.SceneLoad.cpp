@@ -20,7 +20,6 @@
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Runtime/Subsystems/NextAudio.h"
 #include "Engine/Runtime/Subsystems/NextPhysics.h"
-#include "Engine/Runtime/Subsystems/QuickJSEngine.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.h"
 #include "Engine/Vulkan/SwapChain.hpp"
