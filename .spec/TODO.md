@@ -3,8 +3,8 @@
 ## Milestone: StudioSim 打磨  <!-- status: active -->
 
 ### 下一步
-- [x] `#00047` [FEAT] 根据docs\WebRTC-RemotePlay-Design.md的开发计划，继续推进到结束 → journal/00047.md (2026-06-08)
-- [x] `#00050` [FEAT] 根据docs\WebRTC-RemotePlay-Design.md的开发计划，继续推进 → journal/00050.md (2026-06-08)
+- [ ] `#00051` [FEAT] 用https://wails.io/的方案包裹gnb，单可执行文件直接启动，不再依赖浏览器
+- [ ] `#00052` [FEAT] 优化gnb dashboard的git页
 
 ### 待规划
 - [ ] `#00024` [FEAT] AIService Agent 化 Phase 8：MagicaLego AI 接入 agent loop → specs/00024.md
@@ -54,3 +54,5 @@
 - [x] `#00044` [FEAT] 根据docs\WebRTC-RemotePlay-Design.md的开发计划，实现引擎的webrtc远程游戏功能 → journal/00044.md (2026-06-08)
 - [x] `#00046` [FEAT] 根据docs\WebRTC-RemotePlay-Design.md的开发计划，继续推进 → journal/00046.md (2026-06-08)
 - [x] `#00048` [IDEA] todo任务的获取和等待，在gnb上做一个命令来实现。llm有时会思考出错误的指令导致交互式工作流终端 → journal/00048.md (2026-06-08)
+- [x] `#00047` [FEAT] 根据docs\WebRTC-RemotePlay-Design.md的开发计划，继续推进到结束 → journal/00047.md (2026-06-08)
+- [x] `#00050` [FEAT] 根据docs\WebRTC-RemotePlay-Design.md的开发计划，继续推进 → journal/00050.md (2026-06-08)

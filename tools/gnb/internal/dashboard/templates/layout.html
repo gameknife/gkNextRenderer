@@ -162,7 +162,7 @@
     height: 100%;
     overflow: hidden;
   }
-  /* Build / Run / Test tabs share a 2-column layout. */
+  /* Test uses the standard 2-column job layout. */
   .tab-jobs {
     display: grid;
     grid-template-columns: 300px minmax(0, 1fr);
@@ -800,7 +800,9 @@
   /* ----- Job (build/run/test) target list ----- */
   .target-item {
     display: flex; align-items: center; gap: 10px;
-    padding: 10px 12px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0 12px;
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -834,7 +836,7 @@
     font-size: 10.5px;
     color: var(--fg-dim);
   }
-  .target-list { display: flex; flex-direction: column; gap: 6px; max-height: 100%; overflow-y: auto; }
+  .target-list { display: flex; flex-direction: column; gap: 1px; max-height: 100%; overflow-y: auto; }
 
   /* ----- Log panel ----- */
   .log-panel {
@@ -1449,10 +1451,12 @@
   }
 
   /* ----- Task item ----- */
-  .task-list { display: flex; flex-direction: column; gap: 8px; }
+  .task-list { display: flex; flex-direction: column; gap: 1px; }
   .task {
     display: flex; align-items: center; gap: 12px;
-    padding: 12px 14px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0 10px;
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -1478,10 +1482,12 @@
   .task.blocked .dot { background: var(--red); box-shadow: 0 0 8px rgba(239, 68, 68, 0.5); }
   .task .backlog-dot { background: var(--accent); box-shadow: 0 0 8px rgba(59, 130, 246, 0.5); }
 
-  .task .body { flex: 1; min-width: 0; }
+  .task .body { flex: 1; min-width: 0; overflow: hidden; }
   .task .head {
     display: flex; align-items: center; gap: 8px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow: hidden;
   }
   .task .tid {
     color: var(--fg-mute);
@@ -1513,17 +1519,12 @@
     color: var(--fg);
     font-size: 13.5px;
     font-weight: 500;
-    word-break: break-word;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .task .meta-line {
-    display: flex; align-items: center; gap: 12px;
-    color: var(--fg-mute);
-    font-size: 11.5px;
-    margin-top: 4px;
-    font-family: var(--font-mono);
-  }
-  .task .meta-line .arrow { display: inline-flex; align-items: center; gap: 4px; }
-  .task .meta-line .date  { display: inline-flex; align-items: center; gap: 4px; }
   .task.done .title { color: var(--fg-mute); }
 
   .task .menu-btn {
@@ -1699,26 +1700,29 @@
   }
   .sidebar-footer .ver { color: var(--fg-mute); font-family: var(--font-mono); }
 
-  /* ----- Markdown rendering inside file cards ----- */
-  .md-content { color: var(--fg); font-size: 13.5px; line-height: 1.65; }
-  .md-content > *:first-child { margin-top: 0; }
-  .md-content > *:last-child { margin-bottom: 0; }
-  .md-content h1, .md-content h2, .md-content h3, .md-content h4 {
+  /* ----- Markdown rendering (parsed by marked, highlighted by highlight.js) ----- */
+  [data-md] { color: var(--fg); line-height: 1.65; overflow-wrap: anywhere; }
+  [data-md] > *:first-child { margin-top: 0; }
+  [data-md] > *:last-child { margin-bottom: 0; }
+  [data-md] h1, [data-md] h2, [data-md] h3,
+  [data-md] h4, [data-md] h5, [data-md] h6 {
     color: var(--fg);
     font-weight: 600;
-    line-height: 1.35;
+    line-height: 1.3;
     margin: 18px 0 8px 0;
   }
-  .md-content h1 { font-size: 18px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
-  .md-content h2 { font-size: 15px; }
-  .md-content h3 { font-size: 13.5px; color: var(--fg-mute); text-transform: none; letter-spacing: 0; }
-  .md-content p  { margin: 8px 0; }
-  .md-content ul, .md-content ol { margin: 8px 0; padding-left: 22px; }
-  .md-content li { margin: 3px 0; }
-  .md-content li::marker { color: var(--fg-dim); }
-  .md-content a { color: var(--accent); text-decoration: none; }
-  .md-content a:hover { text-decoration: underline; }
-  .md-content code {
+  [data-md] h1 { font-size: 1.75em; padding-bottom: 0.3em; border-bottom: 1px solid var(--border); }
+  [data-md] h2 { font-size: 1.4em; padding-bottom: 0.25em; border-bottom: 1px solid var(--border); }
+  [data-md] h3 { font-size: 1.2em; }
+  [data-md] h4 { font-size: 1.08em; }
+  [data-md] h5, [data-md] h6 { font-size: 1em; color: var(--fg-mute); }
+  [data-md] p { margin: 8px 0; }
+  [data-md] ul, [data-md] ol { margin: 8px 0; padding-left: 22px; }
+  [data-md] li { margin: 3px 0; }
+  [data-md] li::marker { color: var(--fg-dim); }
+  [data-md] a { color: var(--accent); text-decoration: none; }
+  [data-md] a:hover { text-decoration: underline; }
+  [data-md] code {
     background: var(--bg-code);
     border: 1px solid var(--border);
     padding: 1px 5px;
@@ -1726,7 +1730,7 @@
     font-family: var(--font-mono);
     font-size: 12px;
   }
-  .md-content pre {
+  [data-md] pre {
     background: var(--bg-code);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -1737,20 +1741,20 @@
     font-size: 12px;
     line-height: 1.65;
   }
-  .md-content pre code {
+  [data-md] pre code {
     background: transparent;
     border: 0;
     padding: 0;
     font-size: inherit;
   }
-  .md-content pre code.hljs {
+  [data-md] pre code.hljs {
     overflow-x: visible;
     font-family: var(--font-mono);
   }
-  .md-content pre code.hljs * {
+  [data-md] pre code.hljs * {
     font-family: inherit;
   }
-  .md-content blockquote {
+  [data-md] blockquote {
     border-left: 3px solid var(--accent);
     background: var(--accent-soft);
     padding: 6px 12px;
@@ -1758,10 +1762,23 @@
     color: var(--fg-mute);
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   }
-  .md-content hr { border: 0; border-top: 1px solid var(--border); margin: 14px 0; }
-  .md-content table { border-collapse: collapse; margin: 10px 0; width: 100%; }
-  .md-content th, .md-content td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
-  .md-content th { background: var(--bg-card); color: var(--fg-mute); font-weight: 600; }
+  [data-md] hr { border: 0; border-top: 1px solid var(--border); margin: 14px 0; }
+  [data-md] table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 10px 0;
+    table-layout: fixed;
+    font-size: inherit;
+  }
+  [data-md] th, [data-md] td {
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  [data-md] th { background: var(--bg-card); color: var(--fg); font-weight: 600; }
 
   /* ----- Inline edit form (task row) ----- */
   .task-edit { padding: 14px; background: var(--bg-card); border: 1px solid var(--accent); box-shadow: 0 0 0 1px var(--accent-ring); border-radius: var(--radius-md); }
@@ -1892,7 +1909,7 @@
   /* ----- Flat workspace layout ----- */
   #tab-content > .tab-todo,
   #tab-content > .tab-jobs,
-  #tab-content > .tab-run-3col,
+  #tab-content > .tab-build-run,
   #tab-content > .tab-chat,
   #tab-content > #git-tab-body,
   #tab-content > .tab-loc {
@@ -1904,8 +1921,8 @@
   .tab-todo > section,
   .tab-jobs > aside,
   .tab-jobs > section,
-  .tab-run-3col > aside,
-  .tab-run-3col > section,
+  .tab-build-run > aside,
+  .tab-build-run > section,
   .chat-layout > aside,
   .chat-layout > section,
   .tab-git > aside,
@@ -1917,7 +1934,7 @@
   }
   .tab-todo > :last-child,
   .tab-jobs > :last-child,
-  .tab-run-3col > :last-child,
+  .tab-build-run > :last-child,
   .chat-layout > :last-child,
   .tab-git > :last-child,
   .tab-loc > :last-child {
@@ -2126,7 +2143,6 @@
   #tab-content .docs-updated,
   #tab-content .target-item .tag-mini,
   #tab-content .task .tid,
-  #tab-content .task .meta-line,
   #tab-content .info-row .k,
   .header-meta,
   .header-workspace,
@@ -2135,14 +2151,11 @@
   #tab-content .commit-row .hash {
     font-size: calc(var(--ui-font-size) - 2.5px);
   }
-  #tab-content .md-content,
-  #tab-content .docs-preview p,
-  #tab-content .docs-preview li,
-  #tab-content .chat-text {
+  #tab-content [data-md] {
     font-size: var(--ui-font-size);
   }
-  #tab-content .md-content pre,
-  #tab-content .md-content code,
+  #tab-content [data-md] pre,
+  #tab-content [data-md] code,
   #tab-content .log-body,
   #tab-content .docs-source-code,
   #tab-content .commit-detail pre,
@@ -2221,13 +2234,8 @@
     </button>
     <button class="tab-item {{if eq .ActiveTab "build"}}active{{end}}" type="button" data-tab="build"
             hx-get="/tab/build" hx-target="#tab-content" hx-swap="innerHTML">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13l2 2 4-4"/></svg>
-      <span>Build</span>
-    </button>
-    <button class="tab-item {{if eq .ActiveTab "run"}}active{{end}}" type="button" data-tab="run"
-            hx-get="/tab/run" hx-target="#tab-content" hx-swap="innerHTML">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="none"/></svg>
-      <span>Run</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h10v6H4z"/><path d="M4 15h7v4H4z"/><polygon points="15 13 21 17 15 21 15 13" fill="currentColor" stroke="none"/></svg>
+      <span>Build/Run</span>
     </button>
     <button class="tab-item {{if eq .ActiveTab "test"}}active{{end}}" type="button" data-tab="test"
             hx-get="/tab/test" hx-target="#tab-content" hx-swap="innerHTML">
@@ -2261,8 +2269,6 @@
       {{template "tab_docs" .}}
     {{else if eq .ActiveTab "build"}}
       {{template "tab_build" .}}
-    {{else if eq .ActiveTab "run"}}
-      {{template "tab_run" .}}
     {{else if eq .ActiveTab "test"}}
       {{template "tab_test" .}}
     {{else if eq .ActiveTab "git"}}
@@ -2290,120 +2296,6 @@
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[ch]));
   }
-  function renderInlineMarkdown(s) {
-    let out = escapeHTML(s);
-    out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
-    out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    out = out.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    out = out.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
-    return out;
-  }
-  function fallbackMarkdown(source) {
-    const lines = String(source || '').replace(/\r\n/g, '\n').split('\n');
-    const out = [];
-    let paragraph = [];
-    let list = null;
-    let inCode = false;
-    let codeLang = '';
-    let codeLines = [];
-    const flushParagraph = () => {
-      if (!paragraph.length) return;
-      out.push('<p>' + renderInlineMarkdown(paragraph.join(' ')) + '</p>');
-      paragraph = [];
-    };
-    const closeList = () => {
-      if (!list) return;
-      out.push('</' + list + '>');
-      list = null;
-    };
-    const startList = (type) => {
-      flushParagraph();
-      if (list === type) return;
-      closeList();
-      list = type;
-      out.push('<' + type + '>');
-    };
-    const splitTableRow = (line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
-    const isTableSep = (line) => /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line || '');
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const trimmed = line.trim();
-      if (inCode) {
-        if (trimmed.startsWith('```')) {
-          out.push('<pre><code' + (codeLang ? ' class="language-' + escapeHTML(codeLang) + '"' : '') + '>' + escapeHTML(codeLines.join('\n')) + '</code></pre>');
-          inCode = false;
-          codeLang = '';
-          codeLines = [];
-        } else {
-          codeLines.push(line);
-        }
-        continue;
-      }
-      if (trimmed.startsWith('```')) {
-        flushParagraph();
-        closeList();
-        inCode = true;
-        codeLang = trimmed.slice(3).trim().split(/\s+/)[0] || '';
-        continue;
-      }
-      if (!trimmed) {
-        flushParagraph();
-        closeList();
-        continue;
-      }
-      if (trimmed.includes('|') && isTableSep(lines[i + 1])) {
-        flushParagraph();
-        closeList();
-        const headers = splitTableRow(trimmed);
-        i += 2;
-        const rows = [];
-        while (i < lines.length && lines[i].trim().includes('|') && lines[i].trim()) {
-          rows.push(splitTableRow(lines[i]));
-          i++;
-        }
-        i--;
-        out.push('<table><thead><tr>' + headers.map(h => '<th>' + renderInlineMarkdown(h) + '</th>').join('') + '</tr></thead><tbody>' +
-          rows.map(row => '<tr>' + row.map(c => '<td>' + renderInlineMarkdown(c) + '</td>').join('') + '</tr>').join('') +
-          '</tbody></table>');
-        continue;
-      }
-      const heading = /^(#{1,6})\s+(.+)$/.exec(trimmed);
-      if (heading) {
-        flushParagraph();
-        closeList();
-        const level = heading[1].length;
-        out.push('<h' + level + '>' + renderInlineMarkdown(heading[2]) + '</h' + level + '>');
-        continue;
-      }
-      const bullet = /^[-*+]\s+(.+)$/.exec(trimmed);
-      if (bullet) {
-        startList('ul');
-        out.push('<li>' + renderInlineMarkdown(bullet[1]) + '</li>');
-        continue;
-      }
-      const ordered = /^\d+\.\s+(.+)$/.exec(trimmed);
-      if (ordered) {
-        startList('ol');
-        out.push('<li>' + renderInlineMarkdown(ordered[1]) + '</li>');
-        continue;
-      }
-      const quote = /^>\s?(.+)$/.exec(trimmed);
-      if (quote) {
-        flushParagraph();
-        closeList();
-        out.push('<blockquote>' + renderInlineMarkdown(quote[1]) + '</blockquote>');
-        continue;
-      }
-      closeList();
-      paragraph.push(trimmed);
-    }
-    if (inCode) {
-      out.push('<pre><code' + (codeLang ? ' class="language-' + escapeHTML(codeLang) + '"' : '') + '>' + escapeHTML(codeLines.join('\n')) + '</code></pre>');
-    }
-    flushParagraph();
-    closeList();
-    return out.join('');
-  }
   function highlightCodeBlocks(root) {
     if (!window.hljs) return;
     const scope = root || document;
@@ -2428,7 +2320,9 @@
     if (!el) return;
     const markdown = source == null ? (el.dataset.mdSource || el.textContent || '') : String(source || '');
     el.dataset.mdSource = markdown;
-    el.innerHTML = window.marked ? marked.parse(markdown) : fallbackMarkdown(markdown);
+    el.innerHTML = window.marked
+      ? marked.parse(markdown)
+      : '<pre class="markdown-unavailable">' + escapeHTML(markdown) + '</pre>';
     highlightCodeBlocks(el);
     el.dataset.mdRendered = '1';
   }
@@ -3072,11 +2966,11 @@
     const match = list.querySelector('[data-target="' + saved + '"]');
     if (!match) return;
     list.querySelectorAll('.target-item').forEach(t => t.classList.toggle('selected', t === match));
-    const form = list.closest('.tab-side')?.querySelector('form[data-job-form]');
-    if (form) {
-      const hidden = form.querySelector('input[name="target"]');
-      if (hidden) hidden.value = saved;
-    }
+    const page = list.closest('.tab-build-run');
+    const inputs = page
+      ? page.querySelectorAll('input[name="target"]')
+      : list.closest('.tab-side')?.querySelectorAll('form[data-job-form] input[name="target"]');
+    inputs?.forEach(hidden => { hidden.value = saved; });
   }
   document.body.addEventListener('click', (e) => {
     const item = e.target.closest('.target-item');
@@ -3084,11 +2978,11 @@
     const list = item.closest('.target-list');
     if (!list) return;
     list.querySelectorAll('.target-item').forEach(t => t.classList.toggle('selected', t === item));
-    const form = list.closest('.tab-side')?.querySelector('form[data-job-form]');
-    if (form) {
-      const hidden = form.querySelector('input[name="target"]');
-      if (hidden) hidden.value = item.dataset.target;
-    }
+    const page = list.closest('.tab-build-run');
+    const inputs = page
+      ? page.querySelectorAll('input[name="target"]')
+      : list.closest('.tab-side')?.querySelectorAll('form[data-job-form] input[name="target"]');
+    inputs?.forEach(hidden => { hidden.value = item.dataset.target; });
     saveTargetSelection(getTabKind(), item.dataset.target);
   });
   // ----- Log panel streaming ------------------------------------------

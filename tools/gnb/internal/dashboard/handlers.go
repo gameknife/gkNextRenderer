@@ -89,9 +89,8 @@ type indexVM struct {
 	Preset     string
 	OS         string
 	RecentSize int
-	ActiveTab  string // "todo" | "docs" | "build" | "run" | "test" | "git" | "chat" | "loc" | "settings"
-	BuildVM    buildVM
-	RunVM      runVM
+	ActiveTab  string // "todo" | "docs" | "build" | "test" | "git" | "chat" | "loc" | "settings"
+	BuildVM    buildRunVM
 	TestVM     testVM
 	GitVM      gitVM
 	ChatVM     chatVM
@@ -104,6 +103,32 @@ type locVM struct {
 	IncludeThirdParty bool
 	Error             string
 	MaxCategoryLines  int
+	Contributions     contributionGraphVM
+}
+
+type contributionDayVM struct {
+	Date   string
+	Label  string
+	Count  int
+	Level  int
+	Future bool
+}
+
+type contributionWeekVM struct {
+	Days []contributionDayVM
+}
+
+type contributionMonthVM struct {
+	Label  string
+	Column int
+}
+
+type contributionGraphVM struct {
+	Weeks  []contributionWeekVM
+	Months []contributionMonthVM
+	Total  int
+	Max    int
+	Error  string
 }
 
 type gitVM struct {
@@ -117,14 +142,8 @@ type gitVM struct {
 	Flash          string // success / info message after an action
 }
 
-type buildVM struct {
-	Targets []string
-	Latest  JobSnapshot
-	HasJob  bool
-}
-
-type runVM struct {
-	Targets []string
+type buildRunVM struct {
+	Targets []targetVM
 	Latest  JobSnapshot
 	HasJob  bool
 }
@@ -250,25 +269,25 @@ func (s *Server) buildHeader(activeTab string) indexVM {
 	}
 }
 
-func (s *Server) buildBuildVM() buildVM {
-	vm := buildVM{Targets: append([]string(nil), s.opts.Config.Targets.All...)}
-	if snap, ok := s.jobs.LatestSnapshot(JobBuild); ok {
-		vm.Latest = snap
-		vm.HasJob = true
+func (s *Server) buildBuildRunVM() buildRunVM {
+	vm := buildRunVM{
+		Targets: discoverTargets(s.opts.RepoRoot, s.opts.Preset, s.opts.Config.Targets.All),
 	}
-	return vm
-}
-
-func (s *Server) buildRunVM() runVM {
-	vm := runVM{}
-	for _, t := range s.opts.Config.Targets.All {
-		if t == "gkNextUnitTests" {
-			continue // tests live in the Test tab
+	build, hasBuild := s.jobs.LatestSnapshot(JobBuild)
+	run, hasRun := s.jobs.LatestSnapshot(JobRun)
+	switch {
+	case hasBuild && hasRun:
+		if run.StartedAt.After(build.StartedAt) {
+			vm.Latest = run
+		} else {
+			vm.Latest = build
 		}
-		vm.Targets = append(vm.Targets, t)
-	}
-	if snap, ok := s.jobs.LatestSnapshot(JobRun); ok {
-		vm.Latest = snap
+		vm.HasJob = true
+	case hasBuild:
+		vm.Latest = build
+		vm.HasJob = true
+	case hasRun:
+		vm.Latest = run
 		vm.HasJob = true
 	}
 	return vm
@@ -308,7 +327,88 @@ func (s *Server) buildLocVM(includeThirdParty bool) locVM {
 			vm.MaxCategoryLines = c.Lines
 		}
 	}
+	today := time.Now()
+	chartStart := contributionChartStart(today)
+	counts, err := gitops.DailyCommitCounts(s.opts.RepoRoot, chartStart)
+	if err != nil {
+		vm.Contributions.Error = err.Error()
+	} else {
+		vm.Contributions = buildContributionGraph(counts, today)
+	}
 	return vm
+}
+
+func contributionChartStart(today time.Time) time.Time {
+	today = dateOnly(today)
+	currentWeekStart := today.AddDate(0, 0, -int(today.Weekday()))
+	return currentWeekStart.AddDate(0, 0, -52*7)
+}
+
+func buildContributionGraph(counts map[string]int, today time.Time) contributionGraphVM {
+	today = dateOnly(today)
+	start := contributionChartStart(today)
+	vm := contributionGraphVM{
+		Weeks: make([]contributionWeekVM, 53),
+	}
+	for offset := 0; offset < 53*7; offset++ {
+		date := start.AddDate(0, 0, offset)
+		if date.After(today) {
+			break
+		}
+		if count := counts[date.Format("2006-01-02")]; count > vm.Max {
+			vm.Max = count
+		}
+	}
+
+	lastMonth := time.Month(0)
+	for week := 0; week < 53; week++ {
+		weekStart := start.AddDate(0, 0, week*7)
+		if weekStart.Month() != lastMonth {
+			vm.Months = append(vm.Months, contributionMonthVM{
+				Label:  weekStart.Format("Jan"),
+				Column: week + 1,
+			})
+			lastMonth = weekStart.Month()
+		}
+		days := make([]contributionDayVM, 0, 7)
+		for day := 0; day < 7; day++ {
+			date := weekStart.AddDate(0, 0, day)
+			future := date.After(today)
+			count := 0
+			if !future {
+				count = counts[date.Format("2006-01-02")]
+				vm.Total += count
+			}
+			days = append(days, contributionDayVM{
+				Date:   date.Format("2006-01-02"),
+				Label:  date.Format("Jan 2, 2006"),
+				Count:  count,
+				Level:  contributionLevel(count, vm.Max),
+				Future: future,
+			})
+		}
+		vm.Weeks[week] = contributionWeekVM{Days: days}
+	}
+	return vm
+}
+
+func contributionLevel(count, maxCount int) int {
+	if count <= 0 || maxCount <= 0 {
+		return 0
+	}
+	level := (count*4 + maxCount - 1) / maxCount
+	if level < 1 {
+		return 1
+	}
+	if level > 4 {
+		return 4
+	}
+	return level
+}
+
+func dateOnly(value time.Time) time.Time {
+	year, month, day := value.Date()
+	return time.Date(year, month, day, 0, 0, 0, 0, value.Location())
 }
 
 func sectionName(s spec.SectionKind) string {
@@ -401,16 +501,16 @@ func (s *Server) handleTab(w http.ResponseWriter, r *http.Request) {
 		s.render(w, "tab_todo", vm)
 	case "build":
 		vm := s.buildHeader("build")
-		vm.BuildVM = s.buildBuildVM()
+		vm.BuildVM = s.buildBuildRunVM()
 		s.render(w, "tab_build", vm)
 	case "docs":
 		vm := s.buildHeader("docs")
 		vm.DocsVM = s.buildDocsVM(r.URL.Query().Get("file"), r.URL.Query().Get("edit") == "1", "", "")
 		s.render(w, "tab_docs", vm)
 	case "run":
-		vm := s.buildHeader("run")
-		vm.RunVM = s.buildRunVM()
-		s.render(w, "tab_run", vm)
+		vm := s.buildHeader("build")
+		vm.BuildVM = s.buildBuildRunVM()
+		s.render(w, "tab_build", vm)
 	case "test":
 		vm := s.buildHeader("test")
 		vm.TestVM = s.buildTestVM()
