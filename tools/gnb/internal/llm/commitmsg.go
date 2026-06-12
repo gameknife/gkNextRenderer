@@ -51,13 +51,22 @@ func (b DiffBudget) withDefaults() DiffBudget {
 	return b
 }
 
-// GenerateCommitMessage is the single source of truth for "LLM, write a commit
-// message from current changes". Collects the diff (including untracked file
-// contents — git diff alone misses those), ensures llama-server is up, calls
-// the model, post-processes the output.
+// GenerateCommitMessage collects the diff, ensures the configured active model
+// is running, calls it, and post-processes the output.
 //
 // maxDiffChars <= 0 keeps the default budget.
 func GenerateCommitMessage(ctx context.Context, repoRoot string, cfg config.LLMConfig, maxDiffChars int, temperature float64) (CommitMessageResult, error) {
+	return generateCommitMessage(ctx, repoRoot, cfg, maxDiffChars, temperature, false)
+}
+
+// GenerateCommitMessageReuseRunning reuses any healthy llama-server without
+// switching its model. It starts the configured active model only when no
+// server is currently available.
+func GenerateCommitMessageReuseRunning(ctx context.Context, repoRoot string, cfg config.LLMConfig, maxDiffChars int, temperature float64) (CommitMessageResult, error) {
+	return generateCommitMessage(ctx, repoRoot, cfg, maxDiffChars, temperature, true)
+}
+
+func generateCommitMessage(ctx context.Context, repoRoot string, cfg config.LLMConfig, maxDiffChars int, temperature float64, reuseRunning bool) (CommitMessageResult, error) {
 	res := CommitMessageResult{}
 	budget := DiffBudget{TotalChars: maxDiffChars}
 	diff, source, truncated, err := CollectDiff(repoRoot, budget)
@@ -71,10 +80,16 @@ func GenerateCommitMessage(ctx context.Context, repoRoot string, cfg config.LLMC
 	}
 
 	srv := NewServer(repoRoot, cfg)
-	if _, err := srv.EnsureRunning(ctx); err != nil {
+	var info ServerInfo
+	if reuseRunning {
+		info, err = srv.EnsureRunningOrReuse(ctx)
+	} else {
+		info, err = srv.EnsureRunning(ctx)
+	}
+	if err != nil {
 		return res, err
 	}
-	client := NewClient(srv.BaseURL())
+	client := NewClient(info.BaseURL())
 	reply, err := client.Chat(ctx, ChatRequest{
 		Messages: []ChatMessage{
 			{Role: "system", Content: CommitMsgSystemPrompt},

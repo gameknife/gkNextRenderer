@@ -1624,10 +1624,17 @@
             <span class="subject">{{.Subject}}</span>
             <button class="commit-reset" type="button"
                     title="reset --hard 到此远端提交"
+                    aria-label="reset --hard 到提交 {{.Hash}}"
                     hx-post="/git/reset"
                     hx-vals='{"ref":"{{.Full}}"}'
                     hx-target="#git-tab-body" hx-swap="innerHTML"
-                    hx-confirm="⚠️ 执行 git reset --hard {{.Hash}}？这会让当前分支直接指向这个远端提交，并丢弃当前未提交改动。">⤺</button>
+                    hx-confirm="⚠️ 执行 git reset --hard {{.Hash}}？这会让当前分支直接指向这个远端提交，并丢弃当前未提交改动。">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/>
+                <path d="M3 3v5h5"/>
+              </svg>
+            </button>
           </div>
           {{end}}
           {{end}}
@@ -1662,10 +1669,17 @@
             <span class="subject">{{.Subject}}</span>
             <button class="commit-reset" type="button"
                     title="reset --hard 到此提交"
+                    aria-label="reset --hard 到提交 {{.Hash}}"
                     hx-post="/git/reset"
                     hx-vals='{"ref":"{{.Full}}"}'
                     hx-target="#git-tab-body" hx-swap="innerHTML"
-                    hx-confirm="⚠️ 执行 git reset --hard {{.Hash}}？这会丢弃当前分支所有未提交改动以及 HEAD 之后到此 commit 之间的所有提交。">⤺</button>
+                    hx-confirm="⚠️ 执行 git reset --hard {{.Hash}}？这会丢弃当前分支所有未提交改动以及 HEAD 之后到此 commit 之间的所有提交。">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/>
+                <path d="M3 3v5h5"/>
+              </svg>
+            </button>
           </div>
           {{end}}
           {{end}}
@@ -1900,23 +1914,47 @@
   </div>
   {{end}}
   {{range .GitVM.Stashes}}
-  <div class="branch-row" style="margin-bottom: 6px;">
+  <div class="branch-row stash-row">
     <span class="name" title="{{.Message}}"><code>{{.Ref}}</code> {{.Message}}</span>
-    <button type="button"
-            hx-post="/git/stash/pop"
-            hx-vals='{"ref":"{{.Ref}}"}'
-            hx-target="#git-tab-body" hx-swap="innerHTML"
-            hx-confirm="弹出并应用 {{.Ref}}？">pop</button>
-    <button type="button"
-            hx-post="/git/stash/apply"
-            hx-vals='{"ref":"{{.Ref}}"}'
-            hx-target="#git-tab-body" hx-swap="innerHTML"
-            hx-confirm="仅应用 {{.Ref}}（保留 stash）？">apply</button>
-    <button type="button"
-            hx-post="/git/stash/drop"
-            hx-vals='{"ref":"{{.Ref}}"}'
-            hx-target="#git-tab-body" hx-swap="innerHTML"
-            hx-confirm="删除 {{.Ref}}？此操作不可恢复。">drop</button>
+    <div class="stash-actions">
+      <button type="button" title="Pop：应用并移除 {{.Ref}}" aria-label="应用并移除 {{.Ref}}"
+              hx-post="/git/stash/pop"
+              hx-vals='{"ref":"{{.Ref}}"}'
+              hx-target="#git-tab-body" hx-swap="innerHTML"
+              hx-confirm="弹出并应用 {{.Ref}}？">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <path d="m7 10 5 5 5-5"/>
+          <path d="M12 15V3"/>
+        </svg>
+      </button>
+      <button type="button" title="Apply：应用并保留 {{.Ref}}" aria-label="应用并保留 {{.Ref}}"
+              hx-post="/git/stash/apply"
+              hx-vals='{"ref":"{{.Ref}}"}'
+              hx-target="#git-tab-body" hx-swap="innerHTML"
+              hx-confirm="仅应用 {{.Ref}}（保留 stash）？">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3v12"/>
+          <path d="m7 10 5 5 5-5"/>
+          <path d="M5 21h14"/>
+        </svg>
+      </button>
+      <button type="button" title="Drop：删除 {{.Ref}}" aria-label="删除 {{.Ref}}"
+              hx-post="/git/stash/drop"
+              hx-vals='{"ref":"{{.Ref}}"}'
+              hx-target="#git-tab-body" hx-swap="innerHTML"
+              hx-confirm="删除 {{.Ref}}？此操作不可恢复。">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 6h18"/>
+          <path d="M8 6V4h8v2"/>
+          <path d="m19 6-1 14H6L5 6"/>
+          <path d="M10 11v5M14 11v5"/>
+        </svg>
+      </button>
+    </div>
   </div>
   {{end}}
   <form style="margin-top: 12px;"
@@ -1939,7 +1977,7 @@
   <h3>{{.Subject}}</h3>
   <div class="meta">{{.Hash}} · {{.Author}} · {{.Date}}</div>
   {{if .Body}}
-  <pre>{{.Body}}</pre>
+  <div class="commit-message" data-md>{{.Body}}</div>
   {{end}}
 </div>
 {{end}}

@@ -280,7 +280,7 @@ func firstLine(s string) string {
 func (s *Server) handleGitCommitMessage(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
-	res, err := llm.GenerateCommitMessage(ctx, s.opts.RepoRoot, s.opts.Config.External.LLM, 16000, 0.2)
+	res, err := llm.GenerateCommitMessageReuseRunning(ctx, s.opts.RepoRoot, s.opts.Config.External.LLM, 16000, 0.2)
 	if err != nil {
 		// Surface error inside the textarea so the user can see what went wrong
 		// without breaking the rest of the page.
