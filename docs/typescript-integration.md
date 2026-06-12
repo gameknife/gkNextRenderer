@@ -7,7 +7,7 @@ gkNextEngine 的 TypeScript 链路不是独立的 Web 工具链，而是服务�
 - 源码层：TypeScript 源文件位于 `assets/typescript`
 - 编译层：`assets/typescript/tsconfig.json` 输出 JavaScript 到 `assets/scripts`
 - 工具链层：`gnb setup` 准备 `tools/tsc/tsc[.exe]`，CMake 把它复制到运行时 `tools/tsc`
-- 运行层：`QuickJSEngine` 启动时先编译 TypeScript，再重建 QuickJS 上下文并加载入口脚本
+- 运行层：应用显式安装 `NextQuickJS` 后，`QuickJSEngine` 启动时按配置编译 TypeScript、重建上下文并加载入口脚本
 - 热重载层：桌面端每 0.5 秒检查一次源文件变化，编译成功后重载 QuickJS 上下文，编译失败时保留旧脚本
 - 绑定层：C++ 反射与手写 QuickJS API 共同生成 `Engine.d.ts` 和运行时 `Engine` 模块
 
@@ -29,9 +29,15 @@ assets/
 tools/
 └── tsc/
     └── tsc.exe 或 tsc
+
+src/Modules/NextQuickJS/
+├── NextQuickJSModule.hpp/.cpp
+├── QuickJSEngine.hpp/.cpp
+├── QuickJSBindings*.cpp
+└── Reflection/
 ```
 
-`assets/typescript` 是人工维护的脚本源码目录。`assets/scripts` 是运行时读取的编译输出目录，里面的 `.tsc.stamp` 用于避免每帧重复编译。运行时默认入口是 `assets/scripts/test.js`，具体应用也可以通过 `GOption->QuickJSEntry` 指向自己的编译后脚本，例如 `FlappyJs` 使用 `assets/scripts/flappy/FlappyJs/FlappyJsGameInstance.js`。
+`assets/typescript` 是人工维护的脚本源码目录。`assets/scripts` 是运行时读取的编译输出目录，里面的 `.tsc.stamp` 用于避免每帧重复编译。核心引擎没有默认脚本入口；应用通过 `Modules::NextQuickJS::Install()` 的 `FConfig::entryScript` 显式指定，例如 `FlappyJs` 使用 `assets/scripts/flappy/FlappyJs/FlappyJsGameInstance.js`。
 
 ## 构建和工具链准备
 
@@ -53,7 +59,7 @@ out/build/<preset>/tools/tsc/tsc[.exe]
 
 ## 运行时编译流程
 
-`QuickJSEngine::Initialize()` 会先调用 `CompileTypeScriptSources()`，再调用 `ResetContextAndLoadScript()`。
+当 `FConfig::compileTypeScript` 为 true 时，`QuickJSEngine::Initialize()` 会先调用 `CompileTypeScriptSources()`，再调用 `ResetContextAndLoadScript()`。
 
 编译流程的核心步骤是：
 
@@ -98,7 +104,7 @@ class MyGameInstance extends NextGameInstanceBase {
 RunGameInstance(new MyGameInstance());
 ```
 
-`RunGameInstance()` 会把 TypeScript 类方法注册到 QuickJS 生命周期钩子，并用 `RegisterJSCallback()` 接入每帧 tick。当前常用生命周期包括：
+`RunGameInstance()` 会把 TypeScript 类方法注册到 QuickJS 生命周期钩子，并用模块函数 `RegisterTickCallback()` 接入每帧 tick。当前常用生命周期包括：
 
 - `OnInit`
 - `BeforeSceneRebuild`
@@ -122,7 +128,7 @@ TypeScript API 的来源分两类：
 
 新增绑定时，需要同步做三件事：
 
-1. 在 `QuickJSEngine.cpp` 中注册 QuickJS 函数或反射类型
+1. 在 `src/Modules/NextQuickJS/` 中注册 QuickJS 函数或反射类型
 2. 在 `BuildTypeScriptDefinitions()` 中补齐 TypeScript 声明
 3. 在 `assets/typescript/test.ts` 或对应示例脚本里加最小调用验证
 
@@ -130,7 +136,7 @@ TypeScript API 的来源分两类：
 
 ## 热重载行为
 
-桌面端 `QuickJSEngine::TickHotReload()` 以 0.5 秒间隔调用 `CompileTypeScriptSources()`。如果编译输出更新成功，运行时会打印 TypeScript 输出更新日志，并重置 QuickJS context 重新加载入口脚本。
+桌面端安装 `NextQuickJS` 且启用 `compileTypeScript`、`enableHotReload` 后，`QuickJSEngine::TickHotReload()` 以 0.5 秒间隔调用 `CompileTypeScriptSources()`。如果编译输出更新成功，运行时会打印 TypeScript 输出更新日志，并重置 QuickJS context 重新加载入口脚本。
 
 移动端当前不走这条热重载路径。Android/iOS 更偏向打包后的稳定运行布局，脚本变更需要通过正常资源构建或打包流程进入应用。
 

@@ -106,6 +106,7 @@ namespace NextQuickJSBindings
     JSValue SceneBuildAddDiffuseLightMaterial(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv);
     JSValue SceneBuildAddRenderNode(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv);
     JSValue RegisterLifecycleHooks(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv);
+    JSValue RegisterTickCallbackBinding(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv);
     JSValue LoadJson(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv);
     JSValue RequestLoadScene(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv);
     JSValue RequestClose(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv);

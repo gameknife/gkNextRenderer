@@ -1,8 +1,8 @@
 // QuickJS TypeScript toolchain helpers: source timestamp scanning and
 // Engine.d.ts definition generation. Development-time only.
 // Split from QuickJSBindings.cpp; same namespace, separate TU.
-#include "Engine/Runtime/Subsystems/QuickJSEngine.hpp"
-#include "Engine/Runtime/Subsystems/QuickJSBindings.Internal.hpp"
+#include "Modules/NextQuickJS/QuickJSEngine.hpp"
+#include "Modules/NextQuickJS/QuickJSBindings.Internal.hpp"
 
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
@@ -12,8 +12,8 @@
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 #include "Engine/Runtime/Scene/SceneBuilder.h"
 #include "Engine/Runtime/Reflection/PropertyAccessor.h"
-#include "Engine/Runtime/Reflection/QuickJSReflectionBridge.h"
-#include "Engine/Runtime/Reflection/QuickJSTypeConverter.h"
+#include "Modules/NextQuickJS/Reflection/QuickJSReflectionBridge.hpp"
+#include "Modules/NextQuickJS/Reflection/QuickJSTypeConverter.hpp"
 #include "Engine/Runtime/Subsystems/NextAudio.h"
 #include "Engine/Runtime/Utilities/JsonHelpers.h"
 #include "Engine/Assets/Loaders/FProcModel.h"
@@ -291,7 +291,6 @@ namespace NextQuickJSBindings
         result += "    GetTime(): number;\n";
         result += "    GetDeltaSeconds(): number;\n";
         result += "    GetSmoothDeltaSeconds(): number;\n";
-        result += "    RegisterJSCallback(arg0: any): void;\n";
         result += "}\n";
         result += Reflection::QuickJSReflectionBridge::GenerateTypeScriptDef<Assets::Node>("Node");
         result += "export interface Node {\n";
@@ -377,6 +376,7 @@ namespace NextQuickJSBindings
         result += "}\n";
         result += "export interface CameraOverride { position: Vec3; target: Vec3; up: Vec3; fov: number; }\n";
         result += "export function RegisterLifecycleHooks(hooks: LifecycleHooks): void;\n";
+        result += "export function RegisterTickCallback(callback: (deltaSeconds: number) => void): void;\n";
         result += "export function LoadJson(path: string): any;\n";
         result += "export function RequestLoadScene(filename: string): void;\n";
         result += "export function RequestClose(): void;\n";

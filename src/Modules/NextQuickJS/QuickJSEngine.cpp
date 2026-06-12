@@ -1,4 +1,4 @@
-#include "Engine/Runtime/Subsystems/QuickJSEngine.hpp"
+#include "Modules/NextQuickJS/QuickJSEngine.hpp"
 
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
@@ -8,8 +8,8 @@
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 #include "Engine/Runtime/Scene/SceneBuilder.h"
 #include "Engine/Runtime/Reflection/PropertyAccessor.h"
-#include "Engine/Runtime/Reflection/QuickJSReflectionBridge.h"
-#include "Engine/Runtime/Reflection/QuickJSTypeConverter.h"
+#include "Modules/NextQuickJS/Reflection/QuickJSReflectionBridge.hpp"
+#include "Modules/NextQuickJS/Reflection/QuickJSTypeConverter.hpp"
 #include "Engine/Runtime/Subsystems/NextAudio.h"
 #include "Engine/Runtime/Utilities/JsonHelpers.h"
 #include "Engine/Assets/Loaders/FProcModel.h"
@@ -24,27 +24,31 @@
 #include <cstdlib>
 #include <limits>
 
-#if WITH_QUICKJS
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
-#endif
 
-#include "Engine/Runtime/Subsystems/QuickJSBindings.Internal.hpp"
+#include "Modules/NextQuickJS/QuickJSBindings.Internal.hpp"
 
 using namespace NextQuickJSBindings;
 
-QuickJSEngine::QuickJSEngine() = default;
+namespace Modules::NextQuickJS
+{
+QuickJSEngine::QuickJSEngine(NextEngine& engine, FConfig config)
+    : engine_(engine)
+    , config_(std::move(config))
+{
+}
 
 QuickJSEngine::~QuickJSEngine() = default;
 
 void QuickJSEngine::Initialize()
 {
-#if WITH_QUICKJS
-    CompileTypeScriptSources();
+    if (config_.compileTypeScript)
+    {
+        CompileTypeScriptSources();
+    }
     ResetContextAndLoadScript();
-#endif
 }
 
-#if WITH_QUICKJS
 void QuickJSEngine::ResetContextAndLoadScript()
 {
     tickCallback_ = nullptr;
@@ -144,12 +148,14 @@ void QuickJSEngine::ResetContextAndLoadScript()
         module.add("IsReplayMode", JS_NewCFunction(ctx, IsReplayMode, "IsReplayMode", 0));
         module.add("WriteFile", JS_NewCFunction(ctx, WriteFile, "WriteFile", 2));
 
+        module.add("RegisterTickCallback",
+                   JS_NewCFunction(ctx, RegisterTickCallbackBinding, "RegisterTickCallback", 1));
+
         module.class_<NextEngine>("NextEngine")
                 .fun<&NextEngine::GetTotalFrames>("GetTotalFrames")
                 .fun<&NextEngine::GetTime>("GetTime")
                 .fun<&NextEngine::GetDeltaSeconds>("GetDeltaSeconds")
-                .fun<&NextEngine::GetSmoothDeltaSeconds>("GetSmoothDeltaSeconds")
-                .fun<&NextEngine::RegisterJSCallback>("RegisterJSCallback");
+                .fun<&NextEngine::GetSmoothDeltaSeconds>("GetSmoothDeltaSeconds");
         module.class_<Assets::Scene>("Scene")
                 .fun<&Assets::Scene::GetIndicesCount>("GetIndicesCount")
                 .fun<&Assets::Scene::FindNodeIdWithComponent>("FindNodeIdWithComponent");
@@ -162,10 +168,10 @@ void QuickJSEngine::ResetContextAndLoadScript()
             editorBindingsCallback_(jsContext->ctx);
         }
 
-        const std::string entryScript = (GOption && !GOption->QuickJSEntry.empty()) ?
-            GOption->QuickJSEntry : std::string("assets/scripts/test.js");
+        const std::string& entryScript = config_.entryScript;
         std::vector<uint8_t> scriptBuffer;
-        if (Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(entryScript, scriptBuffer))
+        if (!entryScript.empty() &&
+            Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(entryScript, scriptBuffer))
         {
             std::string moduleName = entryScript;
             if (moduleName.size() >= 3 && moduleName.substr(moduleName.size() - 3) == ".js")
@@ -187,11 +193,9 @@ void QuickJSEngine::ResetContextAndLoadScript()
         }
     }
 }
-#endif
 
 void QuickJSEngine::Tick(double deltaSeconds)
 {
-#if WITH_QUICKJS
     if (tickCallback_)
     {
         tickCallback_(deltaSeconds);
@@ -199,23 +203,15 @@ void QuickJSEngine::Tick(double deltaSeconds)
     GQuickJSInput.ClearPressed();
 
     TickHotReload(deltaSeconds);
-#else
-    (void)deltaSeconds;
-#endif
 }
 
 void QuickJSEngine::RegisterTickCallback(std::function<void(double)> callback)
 {
-#if WITH_QUICKJS
     tickCallback_ = std::move(callback);
-#else
-    (void)callback;
-#endif
 }
 
-void QuickJSEngine::HandleInputEvent(const SDL_Event& event)
+void QuickJSEngine::HandleEvent(const SDL_Event& event)
 {
-#if WITH_QUICKJS
     switch (event.type)
     {
     case SDL_EVENT_KEY_DOWN:
@@ -298,14 +294,10 @@ void QuickJSEngine::HandleInputEvent(const SDL_Event& event)
         return;
     }
     JS_FreeValue(ctx, result);
-#else
-    (void)event;
-#endif
 }
 
 bool QuickJSEngine::CallLifecycleHook(const char* hookName, double deltaSeconds)
 {
-#if WITH_QUICKJS
     if (!context_ || !hookName)
     {
         return false;
@@ -359,11 +351,6 @@ bool QuickJSEngine::CallLifecycleHook(const char* hookName, double deltaSeconds)
     }
     JS_FreeValue(ctx, result);
     return true;
-#else
-    (void)hookName;
-    (void)deltaSeconds;
-    return false;
-#endif
 }
 
 bool QuickJSEngine::CallBeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
@@ -372,7 +359,6 @@ bool QuickJSEngine::CallBeforeSceneRebuild(std::vector<std::shared_ptr<Assets::N
                                            std::vector<Assets::LightObject>& lights,
                                            std::vector<Assets::AnimationTrack>& tracks)
 {
-#if WITH_QUICKJS
     GQuickJSSceneBuild = FQuickJSSceneBuildContext{
         .nodes = &nodes,
         .models = &models,
@@ -383,19 +369,10 @@ bool QuickJSEngine::CallBeforeSceneRebuild(std::vector<std::shared_ptr<Assets::N
     const bool called = CallLifecycleHook("onBeforeSceneRebuild");
     GQuickJSSceneBuild = FQuickJSSceneBuildContext{};
     return called;
-#else
-    (void)nodes;
-    (void)models;
-    (void)materials;
-    (void)lights;
-    (void)tracks;
-    return false;
-#endif
 }
 
 bool QuickJSEngine::TryGetOverrideCamera(Assets::Camera& outCamera) const
 {
-#if WITH_QUICKJS
     if (!GQuickJSCamera.enabled)
     {
         return false;
@@ -403,19 +380,19 @@ bool QuickJSEngine::TryGetOverrideCamera(Assets::Camera& outCamera) const
     outCamera.ModelView = glm::lookAtRH(GQuickJSCamera.position, GQuickJSCamera.target, GQuickJSCamera.up);
     outCamera.FieldOfView = GQuickJSCamera.fieldOfView;
     return true;
-#else
-    (void)outCamera;
-    return false;
-#endif
 }
 
-#if WITH_QUICKJS
 void QuickJSEngine::TickHotReload(double deltaSeconds)
 {
 #if ANDROID || IOS
     (void)deltaSeconds;
     return;
 #else
+    if (!config_.enableHotReload || !config_.compileTypeScript)
+    {
+        return;
+    }
+
     constexpr double hotReloadIntervalSeconds = 0.5;
     hotReloadElapsed_ += deltaSeconds;
     if (hotReloadElapsed_ < hotReloadIntervalSeconds)
@@ -638,18 +615,4 @@ std::string QuickJSEngine::Eval(const std::string& code)
         return e.what();
     }
 }
-#endif
-
-// Non-QuickJS stubs
-#if !WITH_QUICKJS
-std::string QuickJSEngine::Eval(const std::string& code)
-{
-    (void)code;
-    return "QuickJS not available";
 }
-
-void QuickJSEngine::SetEditorBindingsCallback(BindingsCallback callback)
-{
-    (void)callback;
-}
-#endif

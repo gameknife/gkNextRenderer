@@ -21,6 +21,7 @@
 #include <nlohmann/json.hpp>
 #include "Modules/ScadLoader/ScadModule.hpp"
 #include "Modules/NextAI/NextAIModule.hpp"
+#include "Modules/NextQuickJS/NextQuickJSModule.hpp"
 
 namespace
 {
@@ -682,7 +683,7 @@ StudioSimGameInstance::StudioSimGameInstance(Vulkan::WindowConfig& config, Runti
                                              NextEngine* engine)
     : NextGameInstanceBase(config, options, engine)
 {
-    options.QuickJSEntry = "assets/scripts/studiosim_entry.js";
+    Modules::NextQuickJS::Install(*engine, {.entryScript = "assets/scripts/studiosim_entry.js"});
     ConfigureWindow(config, options, "StudioSim", 1280, 720, false);
 }
 

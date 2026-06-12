@@ -1,8 +1,8 @@
 // QuickJS Input/Audio/UI bindings: key/gamepad mapping, input event objects,
 // audio playback and immediate-mode UI drawing.
 // Split from QuickJSBindings.cpp; same namespace, separate TU.
-#include "Engine/Runtime/Subsystems/QuickJSEngine.hpp"
-#include "Engine/Runtime/Subsystems/QuickJSBindings.Internal.hpp"
+#include "Modules/NextQuickJS/QuickJSEngine.hpp"
+#include "Modules/NextQuickJS/QuickJSBindings.Internal.hpp"
 
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
@@ -12,8 +12,8 @@
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 #include "Engine/Runtime/Scene/SceneBuilder.h"
 #include "Engine/Runtime/Reflection/PropertyAccessor.h"
-#include "Engine/Runtime/Reflection/QuickJSReflectionBridge.h"
-#include "Engine/Runtime/Reflection/QuickJSTypeConverter.h"
+#include "Modules/NextQuickJS/Reflection/QuickJSReflectionBridge.hpp"
+#include "Modules/NextQuickJS/Reflection/QuickJSTypeConverter.hpp"
 #include "Engine/Runtime/Subsystems/NextAudio.h"
 #include "Engine/Runtime/Utilities/JsonHelpers.h"
 #include "Engine/Assets/Loaders/FProcModel.h"

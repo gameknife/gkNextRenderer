@@ -1,8 +1,8 @@
 // QuickJS engine bindings: JS<->engine glue (Global/Input/Audio/UI/SceneBuild
 // namespaces, node/component reflection objects, lifecycle hooks) plus the
 // TypeScript compile helpers. Split out of QuickJSEngine.cpp.
-#include "Engine/Runtime/Subsystems/QuickJSEngine.hpp"
-#include "Engine/Runtime/Subsystems/QuickJSBindings.Internal.hpp"
+#include "Modules/NextQuickJS/QuickJSEngine.hpp"
+#include "Modules/NextQuickJS/QuickJSBindings.Internal.hpp"
 
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
@@ -12,8 +12,8 @@
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 #include "Engine/Runtime/Scene/SceneBuilder.h"
 #include "Engine/Runtime/Reflection/PropertyAccessor.h"
-#include "Engine/Runtime/Reflection/QuickJSReflectionBridge.h"
-#include "Engine/Runtime/Reflection/QuickJSTypeConverter.h"
+#include "Modules/NextQuickJS/Reflection/QuickJSReflectionBridge.hpp"
+#include "Modules/NextQuickJS/Reflection/QuickJSTypeConverter.hpp"
 #include "Engine/Runtime/Subsystems/NextAudio.h"
 #include "Engine/Runtime/Utilities/JsonHelpers.h"
 #include "Engine/Assets/Loaders/FProcModel.h"
@@ -28,13 +28,10 @@
 #include <cstdlib>
 #include <limits>
 
-#if WITH_QUICKJS
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
-#endif
 
 namespace NextQuickJSBindings
 {
-#if WITH_QUICKJS
     std::string JoinArgs(const qjs::rest<std::string>& args, size_t startIndex)
     {
         std::string result;
@@ -270,6 +267,45 @@ namespace NextQuickJSBindings
         return JS_UNDEFINED;
     }
 
+    JSValue RegisterTickCallbackBinding(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
+    {
+        (void)thisVal;
+        if (argc < 1 || !JS_IsFunction(ctx, argv[0]))
+        {
+            return JS_ThrowTypeError(ctx, "RegisterTickCallback expects a function");
+        }
+
+        auto* engine = NextEngine::GetInstance();
+        auto* runtime = engine ? Modules::NextQuickJS::Get(*engine) : nullptr;
+        if (!runtime)
+        {
+            return JS_ThrowInternalError(ctx, "NextQuickJS runtime is not installed");
+        }
+
+        qjs::Value callback(ctx, JS_DupValue(ctx, argv[0]));
+        runtime->RegisterTickCallback(
+            [ctx, callback = std::move(callback)](double deltaSeconds) mutable
+            {
+                JSValue argument = JS_NewFloat64(ctx, deltaSeconds);
+                JSValue result = JS_Call(ctx, callback.v, JS_UNDEFINED, 1, &argument);
+                JS_FreeValue(ctx, argument);
+                if (JS_IsException(result))
+                {
+                    JSValue exception = JS_GetException(ctx);
+                    const char* message = JS_ToCString(ctx, exception);
+                    SPDLOG_ERROR("[QuickJS] tick callback failed: {}", message ? message : "unknown");
+                    if (message)
+                    {
+                        JS_FreeCString(ctx, message);
+                    }
+                    JS_FreeValue(ctx, exception);
+                    return;
+                }
+                JS_FreeValue(ctx, result);
+            });
+        return JS_UNDEFINED;
+    }
+
 
     JSValue LoadJson(JSContext* ctx, JSValueConst thisVal, int argc, JSValueConst* argv)
     {
@@ -381,5 +417,4 @@ namespace NextQuickJSBindings
         return JS_UNDEFINED;
     }
 
-#endif
 }

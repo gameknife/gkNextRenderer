@@ -9,7 +9,8 @@
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Modules/NextAI/AI/AgentLoop.hpp"
 #include "Modules/NextAI/AI/Tools/RepoTools.hpp"
-#include "Engine/Runtime/Subsystems/QuickJSEngine.hpp"
+#include "Modules/NextQuickJS/NextQuickJSModule.hpp"
+#include "Modules/NextQuickJS/QuickJSEngine.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <algorithm>
@@ -29,7 +30,7 @@ namespace Editor
         , executor_(engine)
     {
         // Register Editor.* JS bindings into QuickJS
-        auto* qjs = engine_.GetQuickJSEngine();
+        auto* qjs = Modules::NextQuickJS::Get(engine_);
         if (qjs)
         {
             qjs->SetEditorBindingsCallback([this](void* ctx) { executor_.RegisterEditorBindings(ctx); });

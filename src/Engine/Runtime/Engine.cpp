@@ -9,7 +9,6 @@
 #include "Engine/Runtime/FrameStreamer.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Config/EngineCVars.hpp"
-#include "Engine/Runtime/Subsystems/QuickJSEngine.hpp"
 #include "Engine/Runtime/Subsystems/NextLocalization.h"
 #include "Engine/Runtime/Command/DeleteNodesCommand.hpp"
 #include "Engine/Runtime/Command/DuplicateNodesCommand.hpp"
@@ -70,8 +69,7 @@ void NextEngine::RegisterReflection()
 
     entt::meta_factory<NextEngine>()
         .type("NextEngine"_hs)
-        .func<&NextEngine::GetTotalFrames>("GetTotalFrames")
-        .func<&NextEngine::RegisterJSCallback>("RegisterJSCallback");
+        .func<&NextEngine::GetTotalFrames>("GetTotalFrames");
 }
 
 namespace
@@ -388,8 +386,6 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     windowConfig.HiddenWindow = options.AgentValidation || options.HiddenWindow;
     window_.reset(new Vulkan::Window(windowConfig));
     SetBorderlessFullscreen(config_.userSettings.BorderlessFullscreen);
-    services_.quickJSEngine = std::make_unique<QuickJSEngine>();
-
     services_.localization = std::make_unique<NextLocalization>();
     services_.localization->LoadFromTxt(fmt::format("assets/locale/{}.txt", options_->locale), options_->locale);
 
@@ -533,9 +529,13 @@ void NextEngine::Start()
     services_.audio = std::make_unique<NextAudio>();
     services_.audio->Start();
 
-    if (services_.quickJSEngine)
+    if (scriptRuntimeFactory_)
     {
-        services_.quickJSEngine->Initialize();
+        scriptRuntime_ = scriptRuntimeFactory_(*this);
+    }
+    if (scriptRuntime_)
+    {
+        scriptRuntime_->Initialize();
     }
 
     gameInstance_->OnInit();
@@ -557,7 +557,7 @@ bool NextEngine::HandleEvent(SDL_Event& event)
     userInterface_->HandleEvent(&event);
     const bool rmlUiConsumed = uiOverlay_ && uiOverlay_->HandleEvent(event);
 
-    if (services_.quickJSEngine)
+    if (scriptRuntime_)
     {
         switch (event.type)
         {
@@ -569,7 +569,7 @@ bool NextEngine::HandleEvent(SDL_Event& event)
         case SDL_EVENT_MOUSE_BUTTON_UP:
             if (!rmlUiConsumed)
             {
-                services_.quickJSEngine->HandleInputEvent(event);
+                scriptRuntime_->HandleEvent(event);
             }
             break;
         default:
@@ -702,10 +702,10 @@ bool NextEngine::Tick(bool forcingDelta)
         }
 #endif
 
-        if (services_.quickJSEngine)
+        if (scriptRuntime_)
         {
-            SCOPED_CPU_TIMER("quickjs");
-            services_.quickJSEngine->Tick(frameState_.deltaSeconds);
+            SCOPED_CPU_TIMER("script runtime");
+            scriptRuntime_->Tick(frameState_.deltaSeconds);
         }
 
         // tick
@@ -869,14 +869,6 @@ void NextEngine::End()
 void NextEngine::SetFrameStreamer(std::unique_ptr<Runtime::IFrameStreamer> streamer)
 {
     frameStreamer_ = std::move(streamer);
-}
-
-void NextEngine::RegisterJSCallback(std::function<void(double)> callback)
-{
-    if (services_.quickJSEngine)
-    {
-        services_.quickJSEngine->RegisterTickCallback(std::move(callback));
-    }
 }
 
 void NextEngine::AddTimerTask(double delay, DelayedTask task)

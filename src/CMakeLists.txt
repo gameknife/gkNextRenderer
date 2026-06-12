@@ -148,12 +148,14 @@ add_executable(RmlUiDemo
 	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(RmlUiDemo PRIVATE Application/Render/RmlUiDemo)
-add_executable(gkNextEditor
-	${src_files_editor}
-	${src_files_appcommon}
-	${DESKTOP_MAIN_SOURCES}
-)
-target_include_directories(gkNextEditor PRIVATE Application/Editor/gkNextEditor)
+if ( GK_WITH_NEXT_QUICKJS )
+	add_executable(gkNextEditor
+		${src_files_editor}
+		${src_files_appcommon}
+		${DESKTOP_MAIN_SOURCES}
+	)
+	target_include_directories(gkNextEditor PRIVATE Application/Editor/gkNextEditor)
+endif()
 add_executable(ScadStudio
 	${src_files_scadstudio}
 	${DESKTOP_MAIN_SOURCES}
@@ -180,11 +182,13 @@ add_executable(FlappyCpp
 	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(FlappyCpp PRIVATE Application/Game/Flappy)
-add_executable(FlappyJs
-	${src_files_flappyjs}
-	${DESKTOP_MAIN_SOURCES}
-)
-target_include_directories(FlappyJs PRIVATE Application/Game/Flappy)
+if ( GK_WITH_NEXT_QUICKJS )
+	add_executable(FlappyJs
+		${src_files_flappyjs}
+		${DESKTOP_MAIN_SOURCES}
+	)
+	target_include_directories(FlappyJs PRIVATE Application/Game/Flappy)
+endif()
 add_executable(BrickPlayer
 	${src_files_brickplayer}
 	${DESKTOP_MAIN_SOURCES}
@@ -195,11 +199,13 @@ add_executable(CharacterDemo
 	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(CharacterDemo PRIVATE Application/Game/CharacterDemo)
-add_executable(StudioSim
-	${src_files_studiosim}
-	${DESKTOP_MAIN_SOURCES}
-)
-target_include_directories(StudioSim PRIVATE Application/Game/StudioSim)
+if ( GK_WITH_NEXT_QUICKJS )
+	add_executable(StudioSim
+		${src_files_studiosim}
+		${DESKTOP_MAIN_SOURCES}
+	)
+	target_include_directories(StudioSim PRIVATE Application/Game/StudioSim)
+endif()
 add_executable(AirportSim
 	${src_files_airportsim}
 	${DESKTOP_MAIN_SOURCES}
@@ -278,7 +284,7 @@ endif()
 add_subdirectory(ThirdParty/ImNodeFlow)
 target_link_libraries(ImNodeFlow PRIVATE gk_project_options)
 
-if( WITH_QUICKJS)
+if( GK_WITH_NEXT_QUICKJS AND NOT ANDROID)
 add_subdirectory(ThirdParty/quickjs-ng)
 target_link_libraries(quickjs PRIVATE gk_project_options)
 endif()
@@ -356,21 +362,23 @@ gkNextStillBenchmark
 	gkNextMotionBenchmark
 	gkNextVisualTest
 	RmlUiDemo
-	gkNextEditor
 	ScadStudio
 	Packager
 	MagicaLego
 	KongLie3D
 	Brotato3D
 	FlappyCpp
-	FlappyJs
 	BrickPlayer
 	CharacterDemo
-	StudioSim
 	AirportSim
 	gkNextUnitTests
 	${GK_MODULE_TARGETS}
 )
+foreach(gk_quickjs_program gkNextEditor FlappyJs StudioSim)
+	if ( TARGET ${gk_quickjs_program} )
+		list(APPEND AllTargets ${gk_quickjs_program})
+	endif()
+endforeach()
 endif()
 
 # Unity Build option (default ON, can be disabled with -DENABLE_UNITY_BUILD=OFF)
@@ -532,11 +540,6 @@ foreach(target IN LISTS AllTargets)
 		target_compile_definitions(${target} PUBLIC WITH_AUDIO=1)
 	endif()
 
-	if ( WITH_QUICKJS )
-		target_compile_definitions(${target} PUBLIC WITH_QUICKJS=1)
-		target_link_libraries(${target} PRIVATE quickjs )
-	endif()
-
 	if (APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 13)
 		target_compile_definitions(${target} PRIVATE JSON_HAS_FILESYSTEM=0 JSON_HAS_EXPERIMENTAL_FILESYSTEM=0)
 	endif()
@@ -617,6 +620,16 @@ if ( TARGET AirportSim )
 target_link_libraries(AirportSim PRIVATE NextGameplay)
 endif()
 
+if ( TARGET NextQuickJS )
+	target_compile_definitions(NextQuickJS PUBLIC WITH_QUICKJS=1 PRIVATE GK_NEXT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+	target_link_libraries(NextQuickJS PRIVATE quickjs SDL3::SDL3 imgui::imgui)
+	foreach(t FlappyJs StudioSim gkNextEditor)
+		if ( TARGET ${t} )
+			target_link_libraries(${t} PRIVATE NextQuickJS)
+		endif()
+	endforeach()
+endif()
+
 # Optional loader modules: linked only by the applications that use them.
 if ( TARGET LDrawLoader )
 	foreach(t gkNextRenderer gkNextVisualTest gkNextStillBenchmark gkNextMotionBenchmark gkNextEditor BrickPlayer gkNextUnitTests)
@@ -680,7 +693,7 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 	target_compile_options(ImNodeFlow PRIVATE -include cstdint)
 endif()
 
-if ( WITH_QUICKJS )
+if ( TARGET quickjs )
 set_target_properties(quickjs PROPERTIES FOLDER "ThirdParty")
 endif()
 

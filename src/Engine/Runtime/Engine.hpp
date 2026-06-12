@@ -9,6 +9,7 @@
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Command/CommandHistory.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Engine/Runtime/ScriptRuntime.hpp"
 #include "Engine/Runtime/Config/ShowFlags.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
@@ -113,7 +114,6 @@ public:
     const NextLocalization* GetLocalization() const { return services_.localization.get(); }
     NextCVar::FCVarSystem& GetCVarSystem() { return *services_.cvarSystem; }
     const NextCVar::FCVarSystem& GetCVarSystem() const { return *services_.cvarSystem; }
-    QuickJSEngine* GetQuickJSEngine() { return services_.quickJSEngine.get(); }
     NextPhysics* GetPhysicsEngine() { return services_.physics.get(); }
     Utilities::Package::FPackageFileSystem& GetPakSystem() { return *services_.packageFileSystem; }
 
@@ -165,8 +165,7 @@ public:
     FHotReloadStatus GetHotReloadStatus() const;
     void RequestShaderHotReload();
 
-    // Main-thread tasks and scripting callbacks
-    void RegisterJSCallback(std::function<void(double)> callback);
+    // Main-thread tasks
     void AddTickedTask(TickedTask task) { taskQueues_.ticked.push_back(task); }
     void AddTimerTask(double delay, DelayedTask task);
 
@@ -178,6 +177,13 @@ public:
     // Frame streamer injection (implementation in Modules/NextRemote);
     // assembled by the application entry when remote mode is requested.
     void SetFrameStreamer(std::unique_ptr<Runtime::IFrameStreamer> streamer);
+
+    void SetScriptRuntimeFactory(Runtime::ScriptRuntimeFactory factory)
+    {
+        scriptRuntimeFactory_ = std::move(factory);
+    }
+    Runtime::IScriptRuntime* GetScriptRuntime() { return scriptRuntime_.get(); }
+    const Runtime::IScriptRuntime* GetScriptRuntime() const { return scriptRuntime_.get(); }
 
     // Optional UI overlay (implementation in Modules/NextRmlUi); the factory is
     // installed by the application entry and instantiated with the renderer.
@@ -319,9 +325,8 @@ private:
         std::unique_ptr<NextAudio> audio;
         std::unique_ptr<NextPhysics> physics;
         std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem;
-        std::unique_ptr<QuickJSEngine> quickJSEngine;
         std::unique_ptr<Vulkan::ShaderHotReloader> shaderHotReloader;
-            std::unordered_map<std::string, std::shared_ptr<void>> externalServices;
+        std::unordered_map<std::string, std::shared_ptr<void>> externalServices;
     };
 
     // Core ownership
@@ -346,6 +351,8 @@ private:
     std::unique_ptr<Runtime::IUiOverlay> uiOverlay_;
     std::function<std::unique_ptr<Runtime::IUiOverlay>(NextEngine&)> uiOverlayFactory_;
     std::unique_ptr<Runtime::IFrameStreamer> frameStreamer_;
+    Runtime::ScriptRuntimeFactory scriptRuntimeFactory_;
+    std::unique_ptr<Runtime::IScriptRuntime> scriptRuntime_;
     FRuntimeServices services_{};
     Runtime::IDebugUiProvider* debugUiProvider_ = nullptr;
 

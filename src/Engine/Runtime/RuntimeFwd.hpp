@@ -5,7 +5,6 @@ class NextEngine;
 class NextGameInstanceBase;
 class NextLocalization;
 class NextPhysics;
-class QuickJSEngine;
 class VulkanGpuTimer;
 
 namespace NextCVar
@@ -23,6 +22,7 @@ namespace Runtime
 {
     class IDebugUiProvider;
     class IFrameStreamer;
+    class IScriptRuntime;
     class IUiOverlay;
 }
 

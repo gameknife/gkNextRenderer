@@ -1,4 +1,4 @@
-#include "Engine/Runtime/Reflection/QuickJSTypeConverter.h"
+#include "Modules/NextQuickJS/Reflection/QuickJSTypeConverter.hpp"
 
 #if WITH_QUICKJS
 #include "Engine/Runtime/Reflection/PropertyAccessor.h"

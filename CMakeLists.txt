@@ -15,7 +15,7 @@ endif()
 set(WITH_KTX2 ON CACHE BOOL "Enable KTX2" FORCE)
 set(WITH_PHYSIC ON CACHE BOOL "Enable Physics" FORCE)
 set(WITH_AUDIO ON CACHE BOOL "Enable Audio" FORCE)
-set(WITH_QUICKJS ON CACHE BOOL "Enable QuickJS" FORCE)
+option(GK_WITH_NEXT_QUICKJS "Build the optional NextQuickJS scripting module" ON)
 set(WITH_OZZ ON CACHE BOOL "Enable ozz-animation" FORCE)
 
 if (WIN32)

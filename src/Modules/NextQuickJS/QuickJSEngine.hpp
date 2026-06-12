@@ -4,6 +4,8 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
+#include "Engine/Runtime/ScriptRuntime.hpp"
+#include "Modules/NextQuickJS/NextQuickJSModule.hpp"
 
 #include <SDL3/SDL.h>
 
@@ -13,16 +15,18 @@ namespace qjs
     class Runtime;
 }
 
-class QuickJSEngine final
+namespace Modules::NextQuickJS
+{
+class QuickJSEngine final : public Runtime::IScriptRuntime
 {
 public:
-    QuickJSEngine();
-    ~QuickJSEngine();
+    QuickJSEngine(NextEngine& engine, FConfig config);
+    ~QuickJSEngine() override;
 
-    void Initialize();
-    void Tick(double deltaSeconds);
+    void Initialize() override;
+    void Tick(double deltaSeconds) override;
+    void HandleEvent(const SDL_Event& event) override;
     void RegisterTickCallback(std::function<void(double)> callback);
-    void HandleInputEvent(const SDL_Event& event);
     bool CallLifecycleHook(const char* hookName, double deltaSeconds = 0.0);
     bool CallBeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
                                 std::vector<Assets::Model>& models,
@@ -39,12 +43,13 @@ public:
     void SetEditorBindingsCallback(BindingsCallback callback);
 
 private:
-#if WITH_QUICKJS
     bool CompileTypeScriptSources();
     void ResetContextAndLoadScript();
     void TickHotReload(double deltaSeconds);
     std::filesystem::path ResolveBundledTscExecutable();
 
+    NextEngine& engine_;
+    FConfig config_;
     std::unique_ptr<qjs::Runtime> runtime_;
     std::unique_ptr<qjs::Context> context_;
     std::function<void(double)> tickCallback_;
@@ -53,5 +58,5 @@ private:
     bool tscChecked_ = false;
     bool forceTscCompileConsumed_ = false;
     std::filesystem::path bundledTscPath_;
-#endif
 };
+}

@@ -60,8 +60,6 @@ public:
 	// Scene options.
 	std::string SceneName{};
 	std::string HDRIfile{};
-	std::string QuickJSEntry{"assets/scripts/test.js"};
-
 	// Vulkan options
 	uint32_t GpuIdx{};
 

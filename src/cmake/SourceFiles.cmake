@@ -65,6 +65,9 @@ file(GLOB_RECURSE src_files_nextgameplay
 
 # --- Optional Engine Modules (src/Modules/<Name>, one static library each) ---
 set(GK_MODULE_NAMES LDrawLoader ScadLoader NextAI NextRemote NextRmlUi DevTools)
+if(GK_WITH_NEXT_QUICKJS AND NOT ANDROID)
+    list(APPEND GK_MODULE_NAMES NextQuickJS)
+endif()
 foreach(gk_module IN LISTS GK_MODULE_NAMES)
     file(GLOB_RECURSE src_files_module_${gk_module}
         "Modules/${gk_module}/*.cpp"

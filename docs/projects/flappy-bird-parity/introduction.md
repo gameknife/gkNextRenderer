@@ -28,7 +28,7 @@ Flappy Bird Parity 是 gkNextEngine 里的双实现玩法样例：同一套 Flap
 
 `FlappyCpp` 是行为基准。它是标准 `NextGameInstanceBase` 子类，直接在 C++ 中实现状态机、固定步长、鸟、管道、碰撞、UI、音效和 trace 输出。
 
-`FlappyJs` 是脚本绑定验收目标。宿主侧只有一个很薄的 C++ 壳，负责设置 QuickJS 入口并把生命周期转发给脚本；玩法逻辑、场景构建、输入处理、相机覆盖、UI 和 replay 写文件都在 TypeScript 中完成。
+`FlappyJs` 是脚本绑定验收目标。宿主侧只有一个很薄的 C++ 壳，负责安装 `NextQuickJS`、设置入口并把生命周期转发给脚本；玩法逻辑、场景构建、输入处理、相机覆盖、UI 和 replay 写文件都在 TypeScript 中完成。
 
 这能回答一个很具体的问题：如果同一份规则和同一份输入序列在 C++ 与 TypeScript 中得到完全相同的 trace，那么 QuickJS 绑定至少覆盖了一个完整小游戏所需的关键能力，并且具备可重复验证的回归信号。
 
@@ -57,7 +57,7 @@ Flappy Bird Parity 是 gkNextEngine 里的双实现玩法样例：同一套 Flap
 | C++ 鸟 | `FlappyCpp/FlappyCppBird.cpp/.hpp` | 位置、速度、flap、视觉同步 |
 | C++ 管道 | `FlappyCpp/FlappyCppPipes.cpp/.hpp` | 管道池、生成、移动、碰撞、计分 |
 | C++ RNG | `FlappyCpp/FlappyCppRng.hpp` | xorshift32，与 TS 端逐位对齐 |
-| JS 宿主 | `FlappyJs/FlappyJsGameInstance.cpp/.hpp` | 设置 `QuickJSEntry`，转发生命周期和场景构建 |
+| JS 宿主 | `FlappyJs/FlappyJsGameInstance.cpp/.hpp` | 安装 `NextQuickJS`，转发生命周期和场景构建 |
 | TS 入口 | `assets/typescript/flappy/FlappyJs/FlappyJsGameInstance.ts` | TypeScript 版完整玩法 |
 | TS 模块 | `FlappyJsBird.ts`, `FlappyJsPipes.ts`, `FlappyJsRng.ts` | 对齐 C++ 端鸟、管道和 RNG |
 | 对比工具 | `tools/flappy/diff_traces.py` | 比较 C++ / JS trace 并生成报告 |

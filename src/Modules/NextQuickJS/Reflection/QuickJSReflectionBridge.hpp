@@ -2,7 +2,7 @@
 
 #if WITH_QUICKJS
 #include "Engine/Runtime/Reflection/PropertyAccessor.h"
-#include "Engine/Runtime/Reflection/QuickJSTypeConverter.h"
+#include "Modules/NextQuickJS/Reflection/QuickJSTypeConverter.hpp"
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
 #include <entt/meta/meta.hpp>
 #include <entt/meta/resolve.hpp>
