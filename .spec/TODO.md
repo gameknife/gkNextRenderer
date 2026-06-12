@@ -3,13 +3,15 @@
 ## Milestone: StudioSim 打磨  <!-- status: active -->
 
 ### 下一步
-- [ ] `#00051` [FEAT] 用https://wails.io/的方案包裹gnb，单可执行文件直接启动，不再依赖浏览器
-- [ ] `#00052` [FEAT] 优化gnb dashboard的git页
+- [x] `#00053` [FEAT] 写一个把quickjs移动到module的计划，落到docs文件夹 → journal/00053.md (2026-06-12)
+- [x] `#00045` [FEAT] gnb需要及时响应TODO文件的修改 → journal/00045.md (2026-06-12)
 
 ### 待规划
 - [ ] `#00011` [IDEA] gnb在gkmini上host一个持久的todolist，作为一个“服务器”同步，可以随时随地进行任务管理
+- [ ] `#00055` [FEAT] 根据WebRTC-RemotePlay-HWEncode-Plan.md的计划，继续推进到B6，目前B1应该是已经完成
+- [ ] `#00051` [FEAT] 用https://wails.io/的方案包裹gnb，单可执行文件直接启动，不再依赖浏览器
 - [ ] `#00012` [FEAT] 让 gkNextRenderer 主管线原生运行在浏览器（WebGPU 后端） → specs/00012.md
-- [ ] `#00045` [FEAT] gnb需要及时响应TODO文件的修改
+- [ ] `#00054` [FEAT] 根据ScadRig-Design.md的计划，逐步实施最终替换airportsim内的角色表现
 
 ### 最近完成
 - [x] `#00001` [IDEA] 介绍gnb技术栈  → journal/00001.md (2026-05-14)
