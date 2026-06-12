@@ -372,7 +372,10 @@ bool AirportSimGameInstance::OnScroll(double /*xoffset*/, double yoffset)
 
 void AirportSimGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
 {
-    //std::string error;
-    //cvars.SetDefaultFromString("r.samples", "4", &error);
+    std::string error;
+    cvars.SetDefaultFromString("r.temporalFrames", "8", &error);
+    cvars.SetDefaultFromString("r.samples", "4", &error);
+    cvars.SetDefaultFromString("r.sharc.enable", "true", &error);
     //cvars.SetDefaultFromString("r.superResolution", "4", &error);
+    cvars.SetDefaultFromString("r.dlss", "true", &error);
 }

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // ErrDirty is returned by guarded write operations when the working tree has
@@ -416,6 +417,29 @@ func Log(repoRoot string, n int) ([]Commit, error) {
 		return nil, err
 	}
 	return parseLog(out), nil
+}
+
+// DailyCommitCounts returns repository-wide commit counts grouped by local
+// calendar date. All refs are included so activity on non-current branches is
+// represented without counting the same commit more than once.
+func DailyCommitCounts(repoRoot string, since time.Time) (map[string]int, error) {
+	out, err := run(repoRoot, "log",
+		"--all",
+		"--since="+since.Format("2006-01-02"),
+		"--date=format-local:%Y-%m-%d",
+		"--pretty=format:%ad",
+	)
+	if err != nil {
+		return nil, err
+	}
+	counts := make(map[string]int)
+	for _, line := range strings.Split(out, "\n") {
+		date := strings.TrimSpace(line)
+		if date != "" {
+			counts[date]++
+		}
+	}
+	return counts, nil
 }
 
 // LogRange returns commits in a revision range such as "HEAD..origin/main".
