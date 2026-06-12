@@ -48,6 +48,8 @@ type docsSourceLineVM struct {
 type docsSourceVM struct {
 	RelPath   string
 	Name      string
+	Content   string
+	Language  string
 	Line      int
 	LineCount int
 	Lines     []docsSourceLineVM
@@ -203,6 +205,8 @@ func buildDocsSourceVM(repoRoot string, rel string, lineText string) docsSourceV
 
 	content := strings.ReplaceAll(string(data), "\r\n", "\n")
 	content = strings.TrimSuffix(content, "\n")
+	vm.Content = content
+	vm.Language = docsSourceLanguage(normalizedRel)
 	lines := strings.Split(content, "\n")
 	if len(lines) == 1 && lines[0] == "" {
 		lines = nil
@@ -219,6 +223,76 @@ func buildDocsSourceVM(repoRoot string, rel string, lineText string) docsSourceV
 		})
 	}
 	return vm
+}
+
+func docsSourceLanguage(rel string) string {
+	name := strings.ToLower(filepath.Base(rel))
+	switch name {
+	case "cmakelists.txt":
+		return "cmake"
+	case "dockerfile":
+		return "dockerfile"
+	case "makefile":
+		return "makefile"
+	}
+
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".c":
+		return "c"
+	case ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".slang", ".hlsl":
+		return "cpp"
+	case ".cmake":
+		return "cmake"
+	case ".vert", ".frag", ".geom", ".tesc", ".tese", ".glsl":
+		return "glsl"
+	case ".scad":
+		return "openscad"
+	case ".go":
+		return "go"
+	case ".js", ".mjs", ".cjs":
+		return "javascript"
+	case ".ts", ".mts", ".cts":
+		return "typescript"
+	case ".json":
+		return "json"
+	case ".html", ".htm", ".xml", ".svg":
+		return "xml"
+	case ".css":
+		return "css"
+	case ".sh", ".bash", ".zsh":
+		return "bash"
+	case ".ps1", ".psm1", ".psd1":
+		return "powershell"
+	case ".bat", ".cmd":
+		return "dos"
+	case ".py":
+		return "python"
+	case ".rs":
+		return "rust"
+	case ".java":
+		return "java"
+	case ".kt", ".kts":
+		return "kotlin"
+	case ".swift":
+		return "swift"
+	case ".lua":
+		return "lua"
+	case ".sql":
+		return "sql"
+	case ".yaml", ".yml":
+		return "yaml"
+	case ".toml", ".ini":
+		return "ini"
+	case ".md":
+		return "markdown"
+	case ".diff", ".patch":
+		return "diff"
+	case ".proto":
+		return "protobuf"
+	case ".graphql", ".gql":
+		return "graphql"
+	}
+	return ""
 }
 
 func parseDocsSourceLine(raw string, lineCount int) int {

@@ -89,7 +89,7 @@ type indexVM struct {
 	Preset     string
 	OS         string
 	RecentSize int
-	ActiveTab  string // "todo" | "docs" | "build" | "run" | "test" | "git" | "chat" | "loc"
+	ActiveTab  string // "todo" | "docs" | "build" | "run" | "test" | "git" | "chat" | "loc" | "settings"
 	BuildVM    buildVM
 	RunVM      runVM
 	TestVM     testVM
@@ -427,6 +427,9 @@ func (s *Server) handleTab(w http.ResponseWriter, r *http.Request) {
 		vm := s.buildHeader("loc")
 		vm.LocVM = s.buildLocVM(r.URL.Query().Get("thirdparty") == "1")
 		s.render(w, "tab_loc", vm)
+	case "settings":
+		vm := s.buildHeader("settings")
+		s.render(w, "tab_settings", vm)
 	default:
 		http.Error(w, "unknown tab "+kind, http.StatusNotFound)
 	}

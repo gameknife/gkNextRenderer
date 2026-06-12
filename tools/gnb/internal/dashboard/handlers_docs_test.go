@@ -128,6 +128,9 @@ func TestHandleTabDocsRendersEditView(t *testing.T) {
 	if !strings.Contains(body, `class="docs-folder active"`) {
 		t.Fatalf("rendered body missing active folder:\n%s", body)
 	}
+	if !strings.Contains(body, `data-docs-search`) || !strings.Contains(body, `class="docs-main"`) {
+		t.Fatalf("rendered body missing docs workspace controls:\n%s", body)
+	}
 }
 
 func TestHandleDocsSaveWritesFileAndReturnsPreview(t *testing.T) {
@@ -170,6 +173,9 @@ func TestBuildDocsSourceVMReadsRepoFileAndFocusesLine(t *testing.T) {
 	if vm.RelPath != "src/example.hpp" || vm.Line != 5 || vm.LineCount != 6 {
 		t.Fatalf("source metadata = %+v", vm)
 	}
+	if vm.Language != "cpp" || !strings.Contains(vm.Content, "struct Example") {
+		t.Fatalf("source highlighting metadata = %+v", vm)
+	}
 	if len(vm.Lines) != 6 || !vm.Lines[4].Focus || vm.Lines[4].Text != "    int value;" {
 		t.Fatalf("focused source line = %+v", vm.Lines)
 	}
@@ -197,10 +203,59 @@ func TestHandleDocsSourceRendersHighlightedLine(t *testing.T) {
 		t.Fatalf("status = %d (%s), want 200", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, `class="docs-source-line focus" data-line="5"`) {
+	if !strings.Contains(body, `class="docs-source-line-number focus" data-line="5"`) {
 		t.Fatalf("rendered body missing focused line:\n%s", body)
+	}
+	if !strings.Contains(body, `<code class="language-cpp">`) {
+		t.Fatalf("rendered body missing source language:\n%s", body)
 	}
 	if !strings.Contains(body, "int value;") {
 		t.Fatalf("rendered body missing source text:\n%s", body)
+	}
+}
+
+func TestDocsSourceLanguageUsesProjectRelevantHighlighters(t *testing.T) {
+	cases := map[string]string{
+		"src/main.cpp":                   "cpp",
+		"src/Common/CoreMinimal.hpp":     "cpp",
+		"assets/shaders/main.frag.slang": "cpp",
+		"assets/shaders/shared.glsl":     "glsl",
+		"assets/scad/example.scad":       "openscad",
+		"tools/gnb/internal/main.go":     "go",
+		"tools/build.ps1":                "powershell",
+		"assets/scripts/game.ts":         "typescript",
+		"cmake/toolchain.cmake":          "cmake",
+		"CMakeLists.txt":                 "cmake",
+		"docs/unknown.custom-extension":  "",
+	}
+	for path, want := range cases {
+		if got := docsSourceLanguage(path); got != want {
+			t.Errorf("docsSourceLanguage(%q) = %q, want %q", path, got, want)
+		}
+	}
+}
+
+func TestHandleTabSettingsRendersDisplayControls(t *testing.T) {
+	s := setupDocsRepo(t)
+	req := httptest.NewRequest("GET", "/tab/settings", nil)
+	req.SetPathValue("kind", "settings")
+	rec := httptest.NewRecorder()
+
+	s.handleTab(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("status = %d (%s), want 200", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`data-display-settings`,
+		`data-display-setting="uiFontSize"`,
+		`data-display-setting="codeFontSize"`,
+		`data-display-setting="density"`,
+		`data-display-reset`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("settings response missing %q:\n%s", want, body)
+		}
 	}
 }

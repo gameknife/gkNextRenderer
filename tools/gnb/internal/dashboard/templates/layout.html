@@ -7,8 +7,27 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark-dimmed.min.css">
 <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/cmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/glsl.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/openscad.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/powershell.min.js"></script>
+<script>
+  (() => {
+    const defaults = { uiFontSize: 14.5, codeFontSize: 13, navWidth: 120, density: 'comfortable' };
+    try {
+      const saved = Object.assign(defaults, JSON.parse(localStorage.getItem('gnb-display-settings') || '{}'));
+      const root = document.documentElement;
+      root.style.setProperty('--ui-font-size', saved.uiFontSize + 'px');
+      root.style.setProperty('--code-font-size', saved.codeFontSize + 'px');
+      root.style.setProperty('--nav-width', saved.navWidth + 'px');
+      root.dataset.density = saved.density;
+    } catch (_) {}
+  })();
+</script>
 <style>
   :root {
     --bg: #0a0d14;
@@ -33,7 +52,11 @@
     --radius-md: 8px;
     --radius-sm: 6px;
     --font-sans: "Inter", "Noto Sans SC", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif;
-    --font-mono: "Cascadia Mono", "Cascadia Code", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, "DejaVu Sans Mono", "Liberation Mono", "Ubuntu Mono", Consolas, monospace;
+    --font-mono: "JetBrains Mono", "Cascadia Mono", "Cascadia Code", Consolas, "Microsoft YaHei UI", "Microsoft YaHei", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, "DejaVu Sans Mono", "Liberation Mono", "Ubuntu Mono", monospace;
+    --ui-font-size: 14.5px;
+    --code-font-size: 13px;
+    --nav-width: 120px;
+    --density-scale: 1;
   }
   * {
     box-sizing: border-box;
@@ -44,14 +67,18 @@
     background: var(--bg);
     color: var(--fg);
     font-family: var(--font-sans);
-    font-size: 13.5px;
+    font-size: var(--ui-font-size);
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
   button, input, select, textarea, pre, code, kbd, samp { font-family: var(--font-sans); }
-  pre, code, kbd, samp, .mono { font-family: var(--font-mono); }
+  pre, code, kbd, samp, .mono,
+  pre *, code *, kbd *, samp *, .mono * { font-family: var(--font-mono); }
+  pre, code, kbd, samp, .mono { font-size: var(--code-font-size); }
+  html[data-density="compact"] { --density-scale: 0.84; }
+  html[data-density="spacious"] { --density-scale: 1.16; }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
@@ -1716,6 +1743,13 @@
     padding: 0;
     font-size: inherit;
   }
+  .md-content pre code.hljs {
+    overflow-x: visible;
+    font-family: var(--font-mono);
+  }
+  .md-content pre code.hljs * {
+    font-family: inherit;
+  }
   .md-content blockquote {
     border-left: 3px solid var(--accent);
     background: var(--accent-soft);
@@ -1795,6 +1829,344 @@
 
   .action-btn.danger { color: var(--red); }
   .action-btn.danger:hover { background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.4); }
+
+  /* ----- Compact desktop shell ----- */
+  :root {
+    --bg: #101112;
+    --bg-panel: #141516;
+    --bg-card: #191a1c;
+    --bg-card-hover: #202224;
+    --bg-input: #171819;
+    --bg-code: #111213;
+    --fg: #e4e4e5;
+    --fg-mute: #a2a4a8;
+    --fg-dim: #6d7075;
+    --accent: #4f8cff;
+    --accent-soft: rgba(79, 140, 255, 0.13);
+    --accent-ring: rgba(79, 140, 255, 0.42);
+    --border: #292b2e;
+    --border-strong: #383b40;
+    --radius-lg: 8px;
+    --radius-md: 6px;
+    --radius-sm: 5px;
+  }
+  header {
+    height: 44px;
+    padding: 0 20px;
+    gap: 20px;
+    background: #151617;
+  }
+  .brand .logo { width: 24px; height: 24px; border-radius: 6px; }
+  .brand .name { font-size: 13px; font-weight: 650; letter-spacing: 0.1px; }
+  .brand .chevron { color: var(--fg-dim); display: inline-flex; }
+  .header-tab {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-size: 11.5px;
+  }
+  .header-tab > svg, .header-tab > span:not(.pill) { display: none; }
+  .header-tab .pill { padding: 3px 10px; }
+  .header-workspace { color: var(--fg-dim); font-size: 10.5px; }
+  .header-workspace strong { color: var(--fg-mute); font-weight: 500; }
+  .header-meta { gap: 20px; font-size: 10.5px; }
+  .header-meta .avatar { width: 24px; height: 24px; }
+  main { height: calc(100vh - 44px); }
+  .tab-strip {
+    width: var(--nav-width);
+    padding: 10px 7px;
+    gap: 4px;
+    background: #131415;
+  }
+  .tab-item {
+    min-height: 38px;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .tab-item svg { width: 16px; height: 16px; flex: 0 0 auto; }
+  .card { border-radius: var(--radius-md); padding: 14px; }
+
+  /* ----- Flat workspace layout ----- */
+  #tab-content > .tab-todo,
+  #tab-content > .tab-jobs,
+  #tab-content > .tab-run-3col,
+  #tab-content > .tab-chat,
+  #tab-content > #git-tab-body,
+  #tab-content > .tab-loc {
+    padding: 0;
+    gap: 0;
+    background: var(--bg);
+  }
+  .tab-todo > aside,
+  .tab-todo > section,
+  .tab-jobs > aside,
+  .tab-jobs > section,
+  .tab-run-3col > aside,
+  .tab-run-3col > section,
+  .chat-layout > aside,
+  .chat-layout > section,
+  .tab-git > aside,
+  .tab-git > section,
+  .tab-loc > section {
+    padding: calc(14px * var(--density-scale));
+    border-right: 1px solid var(--border);
+    background: var(--bg-panel);
+  }
+  .tab-todo > :last-child,
+  .tab-jobs > :last-child,
+  .tab-run-3col > :last-child,
+  .chat-layout > :last-child,
+  .tab-git > :last-child,
+  .tab-loc > :last-child {
+    border-right: 0;
+  }
+  #tab-content > :not(.docs-tab):not(.settings-tab) .card {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  #tab-content > :not(.docs-tab):not(.settings-tab) .card + .card {
+    margin-top: 1px;
+    border-top: 1px solid var(--border);
+  }
+  #tab-content > :not(.docs-tab):not(.settings-tab) .file-card {
+    border: 0;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+    padding: calc(14px * var(--density-scale)) 0;
+  }
+  #tab-content > :not(.docs-tab):not(.settings-tab) .log-panel {
+    border: 0;
+    border-radius: 0;
+  }
+  #tab-content > .tab-chat { padding: 0; }
+  #tab-content > .tab-chat .chat-layout { gap: 0; }
+  #tab-content > #git-tab-body,
+  #tab-content > #git-tab-body .tab-git { height: 100%; }
+  #tab-content > .tab-loc .loc-col { gap: 0; }
+  .target-item,
+  .task,
+  .journal-item,
+  .branch-row,
+  .arg-item {
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .target-item:hover,
+  .task:hover,
+  .journal-item:hover,
+  .branch-row:hover,
+  .arg-item:hover {
+    border-color: var(--border);
+    background: var(--bg-card);
+  }
+  .target-item.selected,
+  .task.selected,
+  .branch-row.current {
+    border-color: var(--border);
+    box-shadow: inset 2px 0 0 var(--accent);
+    background: var(--accent-soft);
+  }
+  #tab-content .target-item.selected {
+    border-color: transparent;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.065);
+    box-shadow: none;
+  }
+  #tab-content .target-item.selected:hover {
+    background: rgba(255, 255, 255, 0.085);
+  }
+  #tab-content .target-item.selected .name {
+    color: #f2f3f4;
+    font-weight: 550;
+  }
+  /* Unified selection treatment: neutral raised row, no outlines or dividers. */
+  .tab-item,
+  #tab-content .target-item,
+  #tab-content .task,
+  #tab-content .journal-item,
+  #tab-content .branch-row,
+  #tab-content .chat-session-item,
+  #tab-content .docs-file-item,
+  #tab-content .commit-row,
+  #tab-content .local-changes-card {
+    border: 0;
+    border-radius: 6px;
+    box-shadow: none;
+  }
+  #tab-content .target-item,
+  #tab-content .task,
+  #tab-content .journal-item,
+  #tab-content .branch-row,
+  #tab-content .chat-session-item,
+  #tab-content .docs-file-item,
+  #tab-content .commit-row {
+    margin: 1px 0;
+  }
+  .tab-item.active,
+  #tab-content .target-item.selected,
+  #tab-content .task.selected,
+  #tab-content .branch-row.current,
+  #tab-content .chat-session-item.active,
+  #tab-content .docs-file-item.active,
+  #tab-content .commit-row.selected,
+  #tab-content .commit-row.remote-commit-row.selected,
+  #tab-content .commit-row.local-change-row.selected,
+  #tab-content .local-changes-card.selected {
+    border: 0;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.065);
+    box-shadow: none;
+    color: #f2f3f4;
+  }
+  .tab-item.active:hover,
+  #tab-content .target-item.selected:hover,
+  #tab-content .task.selected:hover,
+  #tab-content .branch-row.current:hover,
+  #tab-content .chat-session-item.active:hover,
+  #tab-content .docs-file-item.active:hover,
+  #tab-content .commit-row.selected:hover,
+  #tab-content .local-changes-card.selected:hover {
+    background: rgba(255, 255, 255, 0.085);
+  }
+  .tab-item.active {
+    color: var(--fg);
+  }
+  #tab-content .target-item .radio {
+    display: none;
+  }
+  .chat-msg.assistant .chat-bubble {
+    border-color: transparent;
+    background: transparent;
+  }
+  .card-title { margin-bottom: calc(12px * var(--density-scale)); }
+  .form-field { margin-bottom: calc(12px * var(--density-scale)); }
+
+  /* ----- Display settings ----- */
+  .settings-tab {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 720px) minmax(0, 1fr);
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  .settings-nav, .settings-main, .settings-preview {
+    min-width: 0;
+    min-height: 0;
+    padding: 20px;
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    background: var(--bg-panel);
+  }
+  .settings-preview { border-right: 0; background: var(--bg); }
+  .settings-kicker {
+    color: var(--fg-dim);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .settings-nav h1 { margin: 5px 0 10px; font-size: 19px; }
+  .settings-nav p { margin: 0; color: var(--fg-mute); line-height: 1.65; }
+  .settings-group + .settings-group { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--border); }
+  .settings-group h2 { margin: 0 0 5px; font-size: 15px; }
+  .settings-group > p { margin: 0 0 18px; color: var(--fg-mute); font-size: 12px; }
+  .setting-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 220px;
+    align-items: center;
+    gap: 24px;
+    min-height: 64px;
+    border-bottom: 1px solid var(--border);
+  }
+  .setting-row:last-child { border-bottom: 0; }
+  .setting-label strong { display: block; font-size: 13px; }
+  .setting-label span { display: block; margin-top: 3px; color: var(--fg-dim); font-size: 11px; }
+  .setting-control { display: flex; align-items: center; gap: 10px; }
+  .setting-control input[type="range"] { min-width: 0; flex: 1; accent-color: var(--accent); }
+  .setting-value {
+    width: 54px;
+    color: var(--fg-mute);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-align: right;
+  }
+  .setting-control select { width: 100%; }
+  .settings-actions { display: flex; justify-content: flex-end; margin-top: 22px; }
+  .settings-preview-box {
+    border: 1px solid var(--border);
+    background: var(--bg-panel);
+  }
+  .settings-preview-head { padding: 12px 14px; border-bottom: 1px solid var(--border); font-weight: 600; }
+  .settings-preview-body { padding: 16px; color: var(--fg-mute); }
+  .settings-preview-body h3 { margin: 0 0 10px; color: var(--fg); }
+  .settings-preview-body pre { margin: 14px 0 0; padding: 12px; background: var(--bg-code); overflow: auto; }
+
+  /* Keep formerly hard-coded small labels in sync with display settings. */
+  .tab-item,
+  .card-title,
+  #tab-content .target-item .name,
+  #tab-content .task .title,
+  #tab-content .journal-item .title,
+  #tab-content .branch-row .name,
+  #tab-content .chat-session-title,
+  #tab-content .chat-head .title,
+  #tab-content .docs-file-name,
+  #tab-content .docs-folder-name {
+    font-size: calc(var(--ui-font-size) - 1px);
+  }
+  #tab-content .breadcrumb,
+  #tab-content .docs-updated,
+  #tab-content .target-item .tag-mini,
+  #tab-content .task .tid,
+  #tab-content .task .meta-line,
+  #tab-content .info-row .k,
+  .header-meta,
+  .header-workspace,
+  #tab-content .chat-status,
+  #tab-content .commit-row .date,
+  #tab-content .commit-row .hash {
+    font-size: calc(var(--ui-font-size) - 2.5px);
+  }
+  #tab-content .md-content,
+  #tab-content .docs-preview p,
+  #tab-content .docs-preview li,
+  #tab-content .chat-text {
+    font-size: var(--ui-font-size);
+  }
+  #tab-content .md-content pre,
+  #tab-content .md-content code,
+  #tab-content .log-body,
+  #tab-content .docs-source-code,
+  #tab-content .commit-detail pre,
+  #tab-content .arg-item .arg-flag,
+  #tab-content .loc-table tbody td {
+    font-size: var(--code-font-size);
+  }
+  #tab-content .docs-source-title strong { font-size: calc(var(--ui-font-size) - 1.5px); }
+  #tab-content .docs-source-title span { font-size: calc(var(--ui-font-size) - 3px); }
+  #tab-content .docs-search input { font-size: calc(var(--ui-font-size) - 1.5px); }
+  #tab-content .loc-bar-name,
+  #tab-content .arg-item .arg-desc,
+  #tab-content .chat-role,
+  #tab-content .docs-folder-count,
+  #tab-content .docs-total {
+    font-size: calc(var(--ui-font-size) - 2px);
+  }
+  #tab-content .loc-bar-meta { font-size: var(--code-font-size); }
+  #tab-content .loc-stat {
+    border: 0;
+    border-radius: 0;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+  }
 </style>
 </head>
 <body>
@@ -1808,6 +2180,9 @@
       </svg>
     </div>
     <span class="name">gnb dashboard</span>
+    <span class="chevron">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+    </span>
   </div>
 
   <div class="header-tab">
@@ -1818,6 +2193,7 @@
     <span>工作流活跃</span>
     <span class="pill {{.Status}}">{{.Status}}</span>
   </div>
+  <div class="header-workspace">Workspace: <strong>{{.Milestone}}</strong></div>
 
   <div class="header-meta">
     <div class="item">
@@ -1873,6 +2249,11 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="20" x2="4" y2="10"/><line x1="10" y1="20" x2="10" y2="4"/><line x1="16" y1="20" x2="16" y2="14"/><line x1="22" y1="20" x2="22" y2="8"/></svg>
       <span>LOC</span>
     </button>
+    <button class="tab-item {{if eq .ActiveTab "settings"}}active{{end}}" type="button" data-tab="settings"
+            hx-get="/tab/settings" hx-target="#tab-content" hx-swap="innerHTML">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.6v-.1A1.7 1.7 0 0 0 8.5 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3V9.6h.1A1.7 1.7 0 0 0 4.6 8.5a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.1A1.7 1.7 0 0 0 15.5 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.15.37.36.7.6 1 .3.34.7.5 1.1.5h.1v4h-.1a1.7 1.7 0 0 0-1.7.5z"/></svg>
+      <span>Settings</span>
+    </button>
   </nav>
 
   <div id="tab-content">
@@ -1890,6 +2271,8 @@
       {{template "tab_chat" .}}
     {{else if eq .ActiveTab "loc"}}
       {{template "tab_loc" .}}
+    {{else if eq .ActiveTab "settings"}}
+      {{template "tab_settings" .}}
     {{else}}
       {{template "tab_todo" .}}
     {{end}}
@@ -2021,11 +2404,32 @@
     closeList();
     return out.join('');
   }
+  function highlightCodeBlocks(root) {
+    if (!window.hljs) return;
+    const scope = root || document;
+    const blocks = [];
+    if (scope.matches?.('pre code')) blocks.push(scope);
+    scope.querySelectorAll?.('pre code:not([data-highlighted])').forEach(code => blocks.push(code));
+    blocks.forEach(code => {
+      if (code.dataset.highlighted) return;
+      const languageClass = Array.from(code.classList).find(name => name.startsWith('language-'));
+      const language = languageClass ? languageClass.slice('language-'.length).toLowerCase() : '';
+      if (language && !hljs.getLanguage(language)) {
+        const result = hljs.highlightAuto(code.textContent || '');
+        code.innerHTML = result.value;
+        code.classList.add('hljs');
+        code.dataset.highlighted = 'yes';
+        return;
+      }
+      hljs.highlightElement(code);
+    });
+  }
   function renderMarkdownText(el, source) {
     if (!el) return;
     const markdown = source == null ? (el.dataset.mdSource || el.textContent || '') : String(source || '');
     el.dataset.mdSource = markdown;
     el.innerHTML = window.marked ? marked.parse(markdown) : fallbackMarkdown(markdown);
+    highlightCodeBlocks(el);
     el.dataset.mdRendered = '1';
   }
   function scheduleMarkdownRender(el, source) {
@@ -2128,8 +2532,14 @@
       ? scope
       : scope.querySelector?.('[data-docs-source-panel]');
     if (!panel) return;
-    const focus = panel.querySelector('.docs-source-line.focus');
+    highlightCodeBlocks(panel);
+    const focus = panel.querySelector('.docs-source-line-number.focus');
     if (focus) {
+      const focusLine = Number(panel.dataset.focusLine || 0);
+      const marker = panel.querySelector('[data-docs-source-focus]');
+      if (marker && focusLine > 0) {
+        marker.style.setProperty('--focus-index', String(focusLine - 1));
+      }
       window.requestAnimationFrame(() => focus.scrollIntoView({ block: 'center', inline: 'nearest' }));
     }
   }
@@ -2166,6 +2576,95 @@
       });
     });
   }
+  function initDocsSearch(root) {
+    const scope = root || document;
+    const input = scope.matches?.('[data-docs-search]')
+      ? scope
+      : scope.querySelector?.('[data-docs-search]');
+    if (!input || input.dataset.ready) return;
+    input.dataset.ready = '1';
+    const sidebar = input.closest('.docs-sidebar');
+    const applyFilter = () => {
+      const query = input.value.trim().toLowerCase();
+      sidebar?.querySelectorAll('.docs-folder').forEach(folder => {
+        let visibleCount = 0;
+        folder.querySelectorAll('.docs-file-item').forEach(item => {
+          const match = !query || (item.title || item.textContent || '').toLowerCase().includes(query);
+          item.hidden = !match;
+          if (match) visibleCount++;
+        });
+        folder.hidden = visibleCount === 0;
+        if (query && visibleCount > 0) folder.open = true;
+      });
+    };
+    input.addEventListener('input', applyFilter);
+  }
+  const displaySettingDefaults = {
+    uiFontSize: 14.5,
+    codeFontSize: 13,
+    navWidth: 120,
+    density: 'comfortable',
+  };
+  function readDisplaySettings() {
+    try {
+      return Object.assign({}, displaySettingDefaults, JSON.parse(localStorage.getItem('gnb-display-settings') || '{}'));
+    } catch (_) {
+      return { ...displaySettingDefaults };
+    }
+  }
+  function applyDisplaySettings(settings, persist) {
+    const next = Object.assign({}, displaySettingDefaults, settings || {});
+    const root = document.documentElement;
+    root.style.setProperty('--ui-font-size', Number(next.uiFontSize) + 'px');
+    root.style.setProperty('--code-font-size', Number(next.codeFontSize) + 'px');
+    root.style.setProperty('--nav-width', Number(next.navWidth) + 'px');
+    root.dataset.density = next.density;
+    if (persist) localStorage.setItem('gnb-display-settings', JSON.stringify(next));
+    return next;
+  }
+  function initDisplaySettings(root) {
+    const scope = root || document;
+    const panel = scope.matches?.('[data-display-settings]')
+      ? scope
+      : scope.querySelector?.('[data-display-settings]');
+    if (!panel || panel.dataset.ready) return;
+    panel.dataset.ready = '1';
+    highlightCodeBlocks(panel);
+    const settings = readDisplaySettings();
+    const sync = (name, value) => {
+      panel.querySelectorAll('[data-setting-value="' + name + '"]').forEach(el => {
+        el.textContent = name === 'navWidth' ? value + ' px' : value + ' px';
+      });
+    };
+    panel.querySelectorAll('[data-display-setting]').forEach(control => {
+      const name = control.dataset.displaySetting;
+      control.value = settings[name];
+      if (control.type === 'range') sync(name, control.value);
+      control.addEventListener('input', () => {
+        const next = readDisplaySettings();
+        next[name] = control.type === 'range' ? Number(control.value) : control.value;
+        applyDisplaySettings(next, true);
+        if (control.type === 'range') sync(name, control.value);
+      });
+    });
+    panel.querySelector('[data-display-reset]')?.addEventListener('click', () => {
+      localStorage.removeItem('gnb-display-settings');
+      applyDisplaySettings(displaySettingDefaults, false);
+      panel.querySelectorAll('[data-display-setting]').forEach(control => {
+        const name = control.dataset.displaySetting;
+        control.value = displaySettingDefaults[name];
+        if (control.type === 'range') sync(name, control.value);
+      });
+    });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'k') return;
+    const input = document.querySelector('[data-docs-search]');
+    if (!input) return;
+    e.preventDefault();
+    input.focus();
+    input.select();
+  });
   // Highlight the active task row when a detail request fires (skip the row's
   // own action buttons/inline-edit triggers, which set hx-target to #todo-panel).
   document.body.addEventListener('htmx:configRequest', (e) => {
@@ -2187,6 +2686,8 @@
     restoreTargetSelection(root);
     restoreGitSelection(root);
     initDocsFolders(root);
+    initDocsSearch(root);
+    initDisplaySettings(root);
     initDocsSourcePanel(root);
     scrollChatToBottom(root);
   });
@@ -2194,6 +2695,8 @@
   document.addEventListener('DOMContentLoaded', () => {
     renderMarkdown(document);
     initDocsFolders(document);
+    initDocsSearch(document);
+    initDisplaySettings(document);
     initDocsSourcePanel(document);
     scrollChatToBottom(document);
   });
