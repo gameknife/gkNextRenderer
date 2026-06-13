@@ -170,7 +170,7 @@ namespace AirportSim::Config
 
     // ---- 角色表现（§3.3 / docs/ScadRig-Design.md §5）----
     // true = ScadRig 骨骼角色（assets/scad/characters/agent_basic.scad）；
-    // false 或 rig 加载失败 = 回退 GeometryVisual 直立 box。
+    // false 或 rig 加载失败 = 回退 Sim Kit 的直立 box 视觉。
     constexpr bool kUseScadRigVisual = true;
     inline const char* kAgentRigPath = "assets/scad/characters/agent_basic.scad";
     constexpr glm::vec3 kParkedPos{0.0f, -100.0f, 0.0f}; // 池空位藏在地下

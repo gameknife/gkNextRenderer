@@ -163,7 +163,7 @@ namespace StudioSim
                 return false;
             }
             const FPointOfInterest* poi = office.FindByName(emp.targetPoi);
-            if (poi == nullptr || !poi->workable || poi->category != "desk")
+            if (poi == nullptr || !poi->enabled || poi->category != "desk")
             {
                 return false;
             }

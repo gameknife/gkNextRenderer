@@ -3,13 +3,9 @@
 #include "AirportSimTypes.h"
 
 #include "Engine/Assets/AssetsFwd.hpp"
-#include "Engine/Assets/Data/RigAsset.hpp"
-#include "Gameplay/AI/NavGrid.h"
-#include "Gameplay/AI/PathFollower.h"
+#include "Gameplay/Sim/CharacterPool.h"
 
-#include <array>
 #include <glm/glm.hpp>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -17,54 +13,13 @@ namespace AirportSim
 {
     class AirportMap;
 
-    // 视觉层接口（§3.3 换装预留）：游戏逻辑只通过此接口与外观交互。
-    class IAgentVisual
-    {
-    public:
-        virtual ~IAgentVisual() = default;
-        virtual void SetWorldTransform(const glm::vec3& pos, float yaw) = 0;
-        virtual void SetAnimHint(EAgentAnimHint hint) = 0;
-        virtual void SetVisible(bool visible) = 0;
-        // 行走动画速度匹配（ScadRig 用；box 表现忽略）。
-        virtual void SetMoveSpeed(float /*metersPerSecond*/) {}
-        // 每帧动画推进（ScadRig 用；box 表现忽略）。
-        virtual void Tick(float /*deltaSeconds*/) {}
-    };
-
-    // MVP 几何体外观：单个职业色直立 box，坐下 = 身体压矮（第二阶段换 SkinnedVisual）。
-    class GeometryVisual final : public IAgentVisual
-    {
-    public:
-        explicit GeometryVisual(std::shared_ptr<Assets::Node> node) : node_(std::move(node)) {}
-        void SetWorldTransform(const glm::vec3& pos, float yaw) override;
-        void SetAnimHint(EAgentAnimHint hint) override;
-        void SetVisible(bool visible) override;
-
-    private:
-        std::shared_ptr<Assets::Node> node_;
-        EAgentAnimHint hint_ = EAgentAnimHint::Idle;
-    };
-
     // 一个角色的运行态（旅客与员工共用，按 role 区分字段含义）。
-    struct FAgent
+    struct FAgent : NextGameplay::Sim::FSimCharacter
     {
-        int         id = -1;
-        bool        active = false;
         EAgentRole  role = EAgentRole::Passenger;
         std::string name;
         std::string personality;
         glm::vec3   color{1.0f};
-
-        // 移动（kinematic mover，§7.2）
-        glm::vec3 position{0.0f};
-        float     yaw = 0.0f;
-        float     speed = 1.8f;
-        NextGameplay::FPathFollower follower;
-        bool      moving = false;
-        glm::vec3 moveTarget{0.0f};
-        std::vector<glm::vec3> scriptWaypoints; // PassSecurity 等脚本走点（绕过 NavGrid）
-        EAgentAnimHint anim = EAgentAnimHint::Idle;
-        std::unique_ptr<IAgentVisual> visual;
 
         // 旅客旅程（Layer 0）
         EPassengerState pstate = EPassengerState::Despawned;
@@ -144,27 +99,14 @@ namespace AirportSim
         const FAgent* FindById(int id) const;
         int ActiveCount(EAgentRole role) const;
         int ActivePassengerCount() const;
-        bool NavReady() const { return navReady_; }
-        const NextGameplay::FNavGrid& NavGrid() const { return navGrid_; }
+        bool NavReady() const { return characterPool_.NavReady(); }
+        const NextGameplay::FNavGrid& NavGrid() const { return characterPool_.NavGrid(); }
 
     private:
-        void BuildNavGrid(Assets::Scene& scene);
+        NextGameplay::Sim::FCharacterPoolConfig BuildPoolConfig() const;
 
-        NextGameplay::FNavGrid navGrid_;
+        NextGameplay::Sim::FCharacterPool characterPool_;
         std::vector<FAgent> agents_;       // 固定大小池
-        std::vector<uint32_t> matIds_;     // 每池位材质（box 回退路径）
-        std::vector<uint32_t> modelIds_;   // 每池位模型（box 回退路径）
-
-        // ScadRig 路径：当前 GPU-driven primitive buffer 按已注入 model
-        // 三角数定容，因此每个池位保留独立 part model；材质仍尽量共享。
-        Assets::FRigAsset rigAsset_;
-        bool rigLoaded_ = false;
-        std::vector<std::vector<uint32_t>> rigSlotPartModelIds_; // [pool slot][part]
-        std::vector<std::array<uint32_t, 16>> rigBaseMaterials_; // 每 part 的非 tint 材质
-        std::vector<uint32_t> rigSlotTintMats_;                  // 每池位 tint 材质
-
-        bool assetsInjected_ = false;
-        bool navReady_ = false;
         int nextId_ = 1;
     };
 }

@@ -1,29 +1,15 @@
 #include "AgentSystem.h"
 
-#include "AirportMap.h"
 #include "AirportSimConfig.hpp"
-#include "ScadRigVisual.h"
 
-#include <algorithm>
-#include <cmath>
-
-#include <fmt/format.h>
-#include <glm/gtc/quaternion.hpp>
 #include <spdlog/spdlog.h>
 
-#include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Assets/Loaders/FProcModel.h"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Scene/SceneBuilder.h"
-#include "Modules/ScadLoader/FScadRig.h"
 
 namespace AirportSim
 {
     namespace
     {
-        using Config::kParkedPos;
-
         glm::vec3 AgentPoolColor(int slot)
         {
             return slot < Config::kStaffCount
@@ -31,189 +17,7 @@ namespace AirportSim
                        : Config::kPassengerPalette[(slot - Config::kStaffCount) %
                                                    Config::kPassengerPaletteCount];
         }
-    }
 
-    void GeometryVisual::SetWorldTransform(const glm::vec3& pos, float yaw)
-    {
-        node_->SetTranslation(pos);
-        node_->SetRotation(glm::angleAxis(yaw, glm::vec3(0.0f, 1.0f, 0.0f)));
-        node_->RecalcTransform();
-    }
-
-    void GeometryVisual::SetAnimHint(EAgentAnimHint hint)
-    {
-        if (hint == hint_)
-        {
-            return;
-        }
-        hint_ = hint;
-        // 坐下 = 压矮身体；其余姿态 MVP 不区分（§3.3：换骨骼模型后由动画接管）。
-        node_->SetScale(glm::vec3(1.0f, hint == EAgentAnimHint::Sit ? 0.55f : 1.0f, 1.0f));
-        node_->RecalcTransform();
-    }
-
-    void GeometryVisual::SetVisible(bool visible)
-    {
-        if (!visible)
-        {
-            node_->SetTranslation(kParkedPos);
-            node_->RecalcTransform();
-        }
-    }
-
-    void AgentSystem::InjectAssets(std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials)
-    {
-        if (assetsInjected_)
-        {
-            return;
-        }
-
-        // GPU-driven primitive buffer 当前按注入 model 的总三角数定容。每个池位
-        // 注入独立 part model，确保容量覆盖所有角色实例；材质仍按 section 共享。
-        rigLoaded_ = false;
-        if (Config::kUseScadRigVisual)
-        {
-            std::string rigErr;
-            rigLoaded_ = Assets::FScadRigLoader::LoadRig(Config::kAgentRigPath, {}, rigAsset_, rigErr);
-            if (!rigLoaded_)
-            {
-                SPDLOG_WARN("AirportSim/Agents: rig load failed ({}), falling back to box visuals", rigErr);
-            }
-        }
-
-        if (rigLoaded_)
-        {
-            rigBaseMaterials_.clear();
-            for (const Assets::FRigPart& part : rigAsset_.parts)
-            {
-                std::array<uint32_t, 16> sectionMats = {0};
-                for (size_t s = 0; s < part.sectionColors.size() && s < sectionMats.size(); ++s)
-                {
-                    if (!part.sectionTintable[s])
-                    {
-                        sectionMats[s] = Assets::SceneBuilder::AddLambertianMaterial(
-                            materials, glm::vec3(part.sectionColors[s]));
-                    }
-                }
-                rigBaseMaterials_.push_back(sectionMats);
-            }
-
-            rigSlotPartModelIds_.assign(static_cast<size_t>(Config::kMaxAgents), {});
-            rigSlotTintMats_.clear();
-            for (int i = 0; i < Config::kMaxAgents; ++i)
-            {
-                auto& slotModelIds = rigSlotPartModelIds_[static_cast<size_t>(i)];
-                slotModelIds.reserve(rigAsset_.parts.size());
-                for (const Assets::FRigPart& part : rigAsset_.parts)
-                {
-                    models.push_back(rigAsset_.partModels[part.modelIndex]);
-                    slotModelIds.push_back(static_cast<uint32_t>(models.size() - 1));
-                }
-                rigSlotTintMats_.push_back(
-                    Assets::SceneBuilder::AddLambertianMaterial(materials, AgentPoolColor(i)));
-            }
-            assetsInjected_ = true;
-            return;
-        }
-
-        // 回退：0.5 x 1.6 x 0.5 直立 box，每个池位独立 model+材质。
-        modelIds_.clear();
-        matIds_.clear();
-        for (int i = 0; i < Config::kMaxAgents; ++i)
-        {
-            models.push_back(
-                Assets::FProcModel::CreateBox(glm::vec3(-0.25f, 0.0f, -0.25f), glm::vec3(0.25f, 1.6f, 0.25f)));
-            modelIds_.push_back(static_cast<uint32_t>(models.size() - 1));
-            matIds_.push_back(Assets::SceneBuilder::AddLambertianMaterial(materials, AgentPoolColor(i)));
-        }
-        assetsInjected_ = true;
-    }
-
-    void AgentSystem::BuildNavGrid(Assets::Scene& scene)
-    {
-        const glm::vec3 sceneMin = scene.GetSceneAABBMin();
-        const glm::vec3 sceneMax = scene.GetSceneAABBMax();
-
-        NextGameplay::FNavGridSettings settings;
-        settings.cellSize = Config::kNavCellSize;
-        settings.agentRadius = Config::kAgentRadius;
-        settings.maxSlopeAngle = 50.0f;
-        settings.clearanceHeight = 1.7f;
-        settings.maxStepHeight = 0.35f;
-        settings.worldMin = glm::vec3(sceneMin.x - 2.0f, 0.0f, sceneMin.z - 2.0f);
-        settings.worldMax = glm::vec3(sceneMax.x + 2.0f, 0.0f, sceneMax.z + 2.0f);
-        settings.sampleCeiling = sceneMax.y + 5.0f;
-        settings.floorHeightTolerance = 1.0f;
-
-        navGrid_.Build(scene.GetCPUAccelerationStructure(), settings);
-        navReady_ = navGrid_.IsBuilt();
-        SPDLOG_INFO("AirportSim/Agents: NavGrid built={} size={}x{}", navReady_, navGrid_.GetWidth(),
-                    navGrid_.GetHeight());
-    }
-
-    void AgentSystem::OnSceneLoaded(Assets::Scene& scene)
-    {
-        BuildNavGrid(scene);
-
-        agents_.clear();
-        agents_.resize(static_cast<size_t>(Config::kMaxAgents));
-        for (int i = 0; i < Config::kMaxAgents; ++i)
-        {
-            FAgent& agent = agents_[static_cast<size_t>(i)];
-            agent.id = nextId_++;
-
-            if (rigLoaded_)
-            {
-                NextGameplay::FRigInstanceDesc desc;
-                desc.namePrefix = fmt::format("agent_{:02d}", i);
-                desc.partModelIds = rigSlotPartModelIds_[static_cast<size_t>(i)];
-                desc.partMaterialIds = rigBaseMaterials_;
-                for (size_t p = 0; p < rigAsset_.parts.size(); ++p)
-                {
-                    const Assets::FRigPart& part = rigAsset_.parts[p];
-                    for (size_t s = 0; s < part.sectionTintable.size() && s < 16; ++s)
-                    {
-                        if (part.sectionTintable[s])
-                        {
-                            desc.partMaterialIds[p][s] = rigSlotTintMats_[static_cast<size_t>(i)];
-                        }
-                    }
-                }
-                agent.visual = std::make_unique<ScadRigVisual>(scene, rigAsset_, desc, i);
-                continue;
-            }
-
-            const uint32_t instanceId = scene.GenerateInstanceId();
-            const uint32_t matId = matIds_.empty() ? 0 : matIds_[static_cast<size_t>(i) % matIds_.size()];
-            const uint32_t modelId = modelIds_.empty() ? 0 : modelIds_[static_cast<size_t>(i) % modelIds_.size()];
-            auto node = Assets::SceneBuilder::CreateRenderNode(fmt::format("agent_{:02d}", i), kParkedPos,
-                                                               glm::vec3(1.0f), instanceId, modelId, matId);
-            auto phys = std::make_shared<Runtime::PhysicsComponent>();
-            phys->SetMobility(Runtime::ENodeMobility::Dynamic);
-            node->AddComponent(phys);
-            scene.AddNode(node);
-            agent.visual = std::make_unique<GeometryVisual>(std::move(node));
-        }
-        scene.MarkDirty();
-        SPDLOG_INFO("AirportSim/Agents: pool of {} agents created (staff {}, passengers {})", agents_.size(),
-                    Config::kStaffCount, Config::kMaxConcurrentPassengers);
-    }
-
-    void AgentSystem::Clear()
-    {
-        agents_.clear();
-        navGrid_ = NextGameplay::FNavGrid{};
-        navReady_ = false;
-        // 注意：OnSceneUnloaded（→Clear）发生在 BeforeSceneRebuild 注入之后、
-        // OnSceneLoaded 之前，注入产物（rig 资产、model/材质 id 表）必须保留，
-        // 否则 OnSceneLoaded 会回退到 box 分支且 modelId 兜底成 0（场景首个大网格）。
-        // assetsInjected_ 复位即可让下一次 rebuild 重新注入。
-        assetsInjected_ = false;
-    }
-
-    namespace
-    {
-        // 复位池位上一次使用残留的逻辑状态（保留 id/visual）。
         void ResetAgentState(FAgent& agent)
         {
             agent.follower.Clear();
@@ -250,6 +54,60 @@ namespace AirportSim
         }
     }
 
+    NextGameplay::Sim::FCharacterPoolConfig AgentSystem::BuildPoolConfig() const
+    {
+        NextGameplay::Sim::FCharacterPoolConfig config;
+        config.poolCapacity = Config::kMaxAgents;
+        config.navCellSize = Config::kNavCellSize;
+        config.agentRadius = Config::kAgentRadius;
+        config.separationRadius = Config::kSeparationRadius;
+        config.separationStrength = Config::kSeparationStrength;
+        config.groundY = Config::kGroundY;
+        config.parkedPosition = Config::kParkedPos;
+        config.useRig = Config::kUseScadRigVisual;
+        config.rigPath = Config::kAgentRigPath;
+        config.rigVisual.baseWalkSpeed = Config::kBaseWalkSpeed;
+        config.nodeNamePrefix = "agent";
+        config.slotTints.reserve(static_cast<size_t>(Config::kMaxAgents));
+        for (int slot = 0; slot < Config::kMaxAgents; ++slot)
+        {
+            config.slotTints.push_back(AgentPoolColor(slot));
+        }
+        return config;
+    }
+
+    void AgentSystem::InjectAssets(std::vector<Assets::Model>& models,
+                                   std::vector<Assets::FMaterial>& materials)
+    {
+        characterPool_.Configure(BuildPoolConfig());
+        characterPool_.InjectAssets(models, materials);
+    }
+
+    void AgentSystem::OnSceneLoaded(Assets::Scene& scene)
+    {
+        characterPool_.OnSceneLoaded(scene);
+
+        agents_.clear();
+        agents_.resize(static_cast<size_t>(Config::kMaxAgents));
+        auto& poolCharacters = characterPool_.Characters();
+        for (int slot = 0; slot < Config::kMaxAgents; ++slot)
+        {
+            FAgent& agent = agents_[static_cast<size_t>(slot)];
+            agent.id = nextId_++;
+            agent.visual = std::move(poolCharacters[static_cast<size_t>(slot)].visual);
+        }
+
+        SPDLOG_INFO("AirportSim/Agents: pool of {} agents created (staff {}, passengers {}), NavGrid {}x{}",
+                    agents_.size(), Config::kStaffCount, Config::kMaxConcurrentPassengers,
+                    characterPool_.NavGrid().GetWidth(), characterPool_.NavGrid().GetHeight());
+    }
+
+    void AgentSystem::Clear()
+    {
+        agents_.clear();
+        characterPool_.Clear();
+    }
+
     FAgent* AgentSystem::SpawnStaff(int rosterIdx, const glm::vec3& pos)
     {
         if (rosterIdx < 0 || rosterIdx >= Config::kStaffCount ||
@@ -282,9 +140,9 @@ namespace AirportSim
     FAgent* AgentSystem::SpawnPassenger(const std::string& name, const std::string& personality,
                                         const glm::vec3& pos, float speedScale)
     {
-        for (size_t i = static_cast<size_t>(Config::kStaffCount); i < agents_.size(); ++i)
+        for (size_t slot = static_cast<size_t>(Config::kStaffCount); slot < agents_.size(); ++slot)
         {
-            FAgent& agent = agents_[i];
+            FAgent& agent = agents_[slot];
             if (agent.active)
             {
                 continue;
@@ -294,7 +152,7 @@ namespace AirportSim
             agent.role = EAgentRole::Passenger;
             agent.name = name;
             agent.personality = personality;
-            agent.color = Config::kPassengerPalette[i % Config::kPassengerPaletteCount];
+            agent.color = Config::kPassengerPalette[slot % Config::kPassengerPaletteCount];
             agent.position = pos;
             agent.speed = Config::kBaseWalkSpeed * speedScale;
             agent.rosterIdx = -1;
@@ -307,131 +165,43 @@ namespace AirportSim
 
     void AgentSystem::Despawn(FAgent& agent)
     {
-        agent.active = false;
+        characterPool_.Release(agent);
         agent.pstate = EPassengerState::Despawned;
         agent.sstate = EStaffState::Despawned;
-        agent.visual->SetAnimHint(EAgentAnimHint::Idle);
-        agent.visual->SetVisible(false);
     }
 
     bool AgentSystem::MoveTo(FAgent& agent, const glm::vec3& target)
     {
-        agent.scriptWaypoints.clear();
-        glm::vec3 goal = target;
-        goal.y = Config::kGroundY;
-        std::vector<glm::vec3> path;
-        if (navReady_)
-        {
-            path = navGrid_.FindPath(agent.position, goal, Config::kGroundY);
-        }
-        const bool found = !path.empty();
-        if (!found)
-        {
-            path.push_back(goal); // 兜底直线走，避免卡死
-        }
-        agent.follower.SetPath(std::move(path), goal);
-        agent.moveTarget = goal;
-        agent.moving = true;
-        return found;
+        return characterPool_.MoveTo(agent, target);
     }
 
     void AgentSystem::MoveAlong(FAgent& agent, std::vector<glm::vec3> waypoints)
     {
-        if (waypoints.empty())
-        {
-            return;
-        }
-        for (auto& wp : waypoints)
-        {
-            wp.y = Config::kGroundY;
-        }
-        agent.moveTarget = waypoints.back();
-        agent.follower.SetPath(std::move(waypoints), agent.moveTarget);
-        agent.moving = true;
+        characterPool_.MoveAlong(agent, std::move(waypoints));
     }
 
     bool AgentSystem::Arrived(const FAgent& agent) const
     {
-        return !agent.moving || agent.follower.IsFinished(agent.position, 0.45f);
+        return characterPool_.Arrived(agent);
     }
 
     void AgentSystem::Tick(float deltaSeconds, Assets::Scene& scene)
     {
-        // 收集活跃角色做 O(n²) 分离（n≤40，§7.4）。
-        std::vector<FAgent*> activeAgents;
-        activeAgents.reserve(agents_.size());
-        for (auto& agent : agents_)
+        std::vector<NextGameplay::Sim::FSimCharacter*> activeCharacters;
+        activeCharacters.reserve(agents_.size());
+        for (FAgent& agent : agents_)
         {
             if (agent.active)
             {
-                activeAgents.push_back(&agent);
+                activeCharacters.push_back(&agent);
             }
         }
-
-        for (FAgent* agentPtr : activeAgents)
-        {
-            FAgent& agent = *agentPtr;
-            glm::vec3 velocity{0.0f};
-
-            if (agent.moving)
-            {
-                if (agent.follower.IsFinished(agent.position, 0.35f))
-                {
-                    agent.moving = false;
-                }
-                else
-                {
-                    velocity = agent.follower.GetMoveDirection(agent.position, 0.6f) * agent.speed;
-                }
-            }
-
-            // 邻居分离力（仅行走时；坐着/服务中不被推开）。
-            if (agent.moving)
-            {
-                glm::vec3 separation{0.0f};
-                for (const FAgent* other : activeAgents)
-                {
-                    if (other == agentPtr)
-                    {
-                        continue;
-                    }
-                    glm::vec3 away = agent.position - other->position;
-                    away.y = 0.0f;
-                    const float dist = glm::length(away);
-                    if (dist > 0.001f && dist < Config::kSeparationRadius)
-                    {
-                        separation += away / dist * (1.0f - dist / Config::kSeparationRadius);
-                    }
-                }
-                velocity += separation * Config::kSeparationStrength;
-            }
-
-            const float speed = glm::length(velocity);
-            if (speed > 0.01f)
-            {
-                agent.position += velocity * deltaSeconds;
-                agent.position.y = Config::kGroundY;
-                const glm::vec3 dir = velocity / speed;
-                agent.yaw = std::atan2(dir.x, dir.z);
-                agent.anim = EAgentAnimHint::Walk;
-            }
-            else if (agent.anim == EAgentAnimHint::Walk)
-            {
-                agent.anim = EAgentAnimHint::Idle;
-            }
-
-            agent.visual->SetMoveSpeed(agent.speed);
-            agent.visual->SetAnimHint(agent.anim);
-            agent.visual->SetWorldTransform(agent.position, agent.yaw);
-            agent.visual->Tick(deltaSeconds);
-        }
-
-        scene.MarkTransformDirty();
+        characterPool_.Tick(deltaSeconds, scene, activeCharacters);
     }
 
     FAgent* AgentSystem::FindById(int id)
     {
-        for (auto& agent : agents_)
+        for (FAgent& agent : agents_)
         {
             if (agent.id == id && agent.active)
             {
@@ -443,7 +213,7 @@ namespace AirportSim
 
     const FAgent* AgentSystem::FindById(int id) const
     {
-        for (const auto& agent : agents_)
+        for (const FAgent& agent : agents_)
         {
             if (agent.active && agent.id == id)
             {
@@ -456,7 +226,7 @@ namespace AirportSim
     int AgentSystem::ActiveCount(EAgentRole role) const
     {
         int count = 0;
-        for (const auto& agent : agents_)
+        for (const FAgent& agent : agents_)
         {
             if (agent.active && agent.role == role)
             {
