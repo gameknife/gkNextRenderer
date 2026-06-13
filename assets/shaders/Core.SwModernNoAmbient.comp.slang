@@ -64,6 +64,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
         Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, skyColor);
         Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(pixel, 0);
         Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(pixel, 1000);
+        Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR).Store(pixel, float4(0));
+        Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL).Store(pixel, float4(0));
+        Bindless.GetStorageTexture<uint>(Bindless.RT_MOTIONMOMENT).Store(pixel, Camera.TemporalFrames);
         return;
     }
 
@@ -132,11 +135,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
             float3 N = normalize(hitVertex.Normal);
             float3 albedo = primaryAlbedo.rgb;
 
-            // 天光：HDRSH irradiance (SampleIBLRough 走 EvaluateSH，相当于 SH-irradiance)
+            // 天光：HDR radiance SH 经 Lambert cosine kernel 卷积后的 diffuse radiance。
             float3 ambient = float3(0);
             if (Camera.HasSky)
             {
-                float3 irr = Common.SampleIBLRough(Camera.SkyIdx, N, Camera.SkyRotation).rgb * Camera.SkyIntensity;
+                float3 irr = Common.SampleIBLDiffuse(Camera.SkyIdx, N, Camera.SkyRotation).rgb * Camera.SkyIntensity;
                 ambient = albedo * irr;
             }
 
@@ -156,6 +159,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     float4 clipPos = mul(Camera.ViewProjection, float4(hitVertex.Position, 1.0));
     float ndcDepth = clipPos.z / clipPos.w;
+    float2 motion = Common.CalculateMotionVector(Camera, hitNode, hitVertex, pixel) * float2(size);
     const bool selected = hitNode.reserved1 != 0;
     const bool hovered = (hitNode.reserved2 & 1u) != 0;
     const bool locked = (hitNode.reserved2 & 2u) != 0;
@@ -163,4 +167,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
     Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, color);
     Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(pixel, Common.EncodeObjectId(hitNode.instanceId, selected, hovered, locked, danger));
     Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(pixel, ndcDepth);
+    Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR).Store(pixel, float4(motion, 0, 0));
+    Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL).Store(pixel, float4(normalize(hitVertex.Normal), 1));
 }

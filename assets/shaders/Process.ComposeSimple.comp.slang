@@ -55,7 +55,7 @@ float ComputeEdgeStrengthTwoSided(RWTexture2D<uint> objectImage, int2 ipos, int2
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     let OutImage = Bindless.GetStorageTexture<float4>(Bindless.RT_DENOISED);
-    let LightingImage = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE);
+    let LightingImage = Bindless.GetStorageTexture<float4>(Bindless.RT_ACCUMLATE_DIFFUSE);
     let ObjectIdImage = Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
 
     uint2 size = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_DENOISED);

@@ -38,6 +38,9 @@ namespace Assets
     // Cooked cache file path for a named HDR texture
     std::string HDRCacheFileName(const std::string& textureName);
 
+    // Projects an equirectangular HDR texture into the engine's 3-band SH basis.
+    SphericalHarmonics ProjectHdrToSh(const float* hdrPixels, int width, int height);
+
     // Cache-first load: disk cache, else stbi decode + prefilter + SH project,
     // then writes the cache. Empty payload (Width==0) on failure.
     FHDRTexturePayload LoadHDRTexturePayload(const std::string& textureName, const uint8_t* data, size_t byteLength);

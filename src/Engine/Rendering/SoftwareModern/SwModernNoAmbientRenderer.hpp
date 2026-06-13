@@ -8,6 +8,7 @@ namespace Vulkan
 {
     namespace PipelineCommon
     {
+        class ZeroBindCustomPushConstantPipeline;
         class ZeroBindPipeline;
     }
 }
@@ -15,7 +16,7 @@ namespace Vulkan
 namespace Vulkan::NoAmbientDeferred
 {
     // 不走 AmbientCube 的轻量 deferred renderer：
-    //   visibility (PreRender 共享) -> Core.SwModernNoAmbient.comp -> Process.ComposeSimple.comp
+    //   visibility -> shading -> temporal accumulation -> compose
     class Renderer final : public Vulkan::LogicRendererBase
     {
     public:
@@ -31,6 +32,11 @@ namespace Vulkan::NoAmbientDeferred
 
     private:
         std::unique_ptr<PipelineCommon::ZeroBindPipeline> shadingPipeline_;
+        std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> accumulatePipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindPipeline> composePipeline_;
+
+        uint32_t prevSingleDiffuseId_{};
+        int lastRenderedFrame_{-1};
+        bool historyValid_{false};
     };
 }

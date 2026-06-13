@@ -139,18 +139,21 @@ namespace Common
         }
     }
 
-    public float3 EvaluateSH(float SHCoefficients[3][9], float3 normal, float rotate)
+    float3 EvaluateSHWithBandWeights(
+        float SHCoefficients[3][9],
+        float3 direction,
+        float rotate,
+        float3 bandWeights)
     {
         // Apply rotation around Y-axis (0 to 2 maps to 0 to 360 degrees)
         float angle = rotate * 3.14159265358979323846f;
         float cosAngle = cos(angle);
         float sinAngle = sin(angle);
 
-        // Rotate the normal vector around Y-axis
-        float3 rotatedNormal = float3(
-            normal.x * cosAngle + normal.z * sinAngle,
-            normal.y,
-            -normal.x * sinAngle + normal.z * cosAngle);
+        float3 rotatedDirection = float3(
+            direction.x * cosAngle + direction.z * sinAngle,
+            direction.y,
+            -direction.x * sinAngle + direction.z * cosAngle);
 
         // SH basis function evaluation
         static const float SH_C0 = 0.282095f;
@@ -161,31 +164,51 @@ namespace Common
 
         float basis[9];
         basis[0] = SH_C0;
-        basis[1] = -SH_C1 * rotatedNormal.y;
-        basis[2] = SH_C1 * rotatedNormal.z;
-        basis[3] = -SH_C1 * rotatedNormal.x;
-        basis[4] = SH_C2 * rotatedNormal.x * rotatedNormal.y;
-        basis[5] = -SH_C2 * rotatedNormal.y * rotatedNormal.z;
-        basis[6] = SH_C3 * (3.f * rotatedNormal.y * rotatedNormal.y - 1.0f);
-        basis[7] = -SH_C2 * rotatedNormal.x * rotatedNormal.z;
-        basis[8] = SH_C4 * (rotatedNormal.x * rotatedNormal.x - rotatedNormal.z * rotatedNormal.z);
+        basis[1] = -SH_C1 * rotatedDirection.y;
+        basis[2] = SH_C1 * rotatedDirection.z;
+        basis[3] = -SH_C1 * rotatedDirection.x;
+        basis[4] = SH_C2 * rotatedDirection.x * rotatedDirection.y;
+        basis[5] = -SH_C2 * rotatedDirection.y * rotatedDirection.z;
+        basis[6] = SH_C3 * (3.f * rotatedDirection.y * rotatedDirection.y - 1.0f);
+        basis[7] = -SH_C2 * rotatedDirection.x * rotatedDirection.z;
+        basis[8] = SH_C4 * (rotatedDirection.x * rotatedDirection.x - rotatedDirection.z * rotatedDirection.z);
 
         float3 color = float3(0.0, 0.0, 0.0);
         for (int i = 0; i < 9; ++i)
         {
-            color.r += SHCoefficients[0][i] * basis[i];
-            color.g += SHCoefficients[1][i] * basis[i];
-            color.b += SHCoefficients[2][i] * basis[i];
+            float bandWeight = i == 0 ? bandWeights.x : (i <= 3 ? bandWeights.y : bandWeights.z);
+            color.r += SHCoefficients[0][i] * basis[i] * bandWeight;
+            color.g += SHCoefficients[1][i] * basis[i] * bandWeight;
+            color.b += SHCoefficients[2][i] * basis[i] * bandWeight;
         }
 
         return color;
     };
 
+    public float3 EvaluateSH(float SHCoefficients[3][9], float3 direction, float rotate)
+    {
+        return EvaluateSHWithBandWeights(SHCoefficients, direction, rotate, float3(1.0f));
+    }
+
+    public float3 EvaluateDiffuseSH(float SHCoefficients[3][9], float3 normal, float rotate)
+    {
+        // Lambert cosine convolution divided by pi, yielding reflected radiance
+        // for a unit-albedo diffuse surface.
+        return EvaluateSHWithBandWeights(SHCoefficients, normal, rotate, float3(1.0f, 2.0f / 3.0f, 0.25f));
+    }
+
     public float4 SampleIBLRough(uint skyIdx, float3 direction, float rotate)
     {
-        float3 rayColor = EvaluateSH(Bindless.GetGpuscene().HDRSHs[skyIdx].coefficients, direction, 1.0 - rotate);
+        float3 rayColor = EvaluateSH(Bindless.GetGpuscene().HDRSHs[skyIdx].coefficients, direction, rotate);
         return float4(rayColor * 1.0f, 1.0);
     };
+
+    public float4 SampleIBLDiffuse(uint skyIdx, float3 normal, float rotate)
+    {
+        float3 irradiance = EvaluateDiffuseSH(
+            Bindless.GetGpuscene().HDRSHs[skyIdx].coefficients, normalize(normal), rotate);
+        return float4(max(irradiance, float3(0.0f)), 1.0f);
+    }
 
     public float4 SampleIBL(uint skyIdx, float3 direction, float rotate, float roughness)
     {

@@ -29,6 +29,7 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_GpuTimerLogic.cpp
 	Tests/Test_GltfSkinning.cpp
 	Tests/Test_CameraFocus.cpp
+	Tests/Test_HdrTextureCache.cpp
 	Tests/Test_ComponentSystem.cpp
 	Tests/Test_GameplayComponents.cpp
 	Tests/Test_LDrawConfig.cpp
