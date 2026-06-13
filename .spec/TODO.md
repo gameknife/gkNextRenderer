@@ -5,6 +5,7 @@
 ### 下一步
 - [x] `#00053` [FEAT] 写一个把quickjs移动到module的计划，落到docs文件夹 → journal/00053.md (2026-06-12)
 - [x] `#00045` [FEAT] gnb需要及时响应TODO文件的修改 → journal/00045.md (2026-06-12)
+- [ ] `#00056` [FEAT] 优化ModernNoAmbient的渲染效果 → specs/00056.md
 
 ### 待规划
 - [ ] `#00011` [IDEA] gnb在gkmini上host一个持久的todolist，作为一个“服务器”同步，可以随时随地进行任务管理
