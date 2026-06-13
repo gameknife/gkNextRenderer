@@ -6,6 +6,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_keycode.h>
+#include <SDL3/SDL_mouse.h>
 
 #include <algorithm>
 #include <cmath>
@@ -18,150 +19,19 @@
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Modules/NextAI/AIService.hpp"
 
-#include <nlohmann/json.hpp>
 #include "Modules/ScadLoader/ScadModule.hpp"
 #include "Modules/NextAI/NextAIModule.hpp"
-#include "Modules/NextQuickJS/NextQuickJSModule.hpp"
 
 namespace
 {
     // Fixed isometric-ish overhead camera shared by the render override and the
     // debug overlay so projected anchors line up with the rendered scene.
     constexpr float kOfficeFov = 50.0f;
-    constexpr double kBubbleFadeMinutes = 5.0;
-    constexpr double kMeetingBubbleDurationMinutes = 20.0;
-    constexpr ImGuiWindowFlags kStudioSimModalFlags =
-        ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
-    constexpr ImGuiWindowFlags kStudioSimHudFlags =
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
-        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing;
-
-    float StudioSimModalWidth(float minWidth, float maxWidth)
-    {
-        const ImGuiViewport* viewport = ImGui::GetMainViewport();
-        const float viewportWidth = viewport != nullptr ? viewport->WorkSize.x : 1280.0f;
-        const float viewportLimit = std::max(360.0f, viewportWidth - 64.0f);
-        const float maxAllowed = std::min(maxWidth, viewportLimit);
-        const float minAllowed = std::min(minWidth, maxAllowed);
-        return std::clamp(viewportWidth * 0.52f, minAllowed, maxAllowed);
-    }
-
-    float StudioSimModalMaxHeight()
-    {
-        const ImGuiViewport* viewport = ImGui::GetMainViewport();
-        const float viewportHeight = viewport != nullptr ? viewport->WorkSize.y : 720.0f;
-        return std::max(260.0f, viewportHeight * 0.82f);
-    }
-
-    void PrepareStudioSimModal(float minWidth, float maxWidth)
-    {
-        const float width = StudioSimModalWidth(minWidth, maxWidth);
-        ImGui::SetNextWindowSizeConstraints(ImVec2(width, 0.0f), ImVec2(width, StudioSimModalMaxHeight()));
-    }
-
-    void TextDisabledWrapped(const std::string& text)
-    {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-        ImGui::TextWrapped("%s", text.c_str());
-        ImGui::PopStyleColor();
-    }
-
-    bool BeginStudioSimHudPanel(const char* name, const ImVec2& pos, const ImVec2& size)
-    {
-        ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
-        ImGui::SetNextWindowSize(size, ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(0.88f);
-        return ImGui::Begin(name, nullptr, kStudioSimHudFlags);
-    }
-
-    void DrawHudTitle(const char* title)
-    {
-        ImGui::TextColored(ImVec4(0.78f, 0.88f, 1.00f, 1.0f), "%s", title);
-        ImGui::Separator();
-    }
-
-    glm::mat4 OfficeViewMatrix()
-    {
-        return glm::lookAt(glm::vec3(0.0f, 18.0f, 18.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-    }
-
-    ImU32 CategoryColor(const std::string& category)
-    {
-        if (category == "desk")   return IM_COL32(230, 150, 60, 255);
-        if (category == "meet")   return IM_COL32(70, 140, 230, 255);
-        if (category == "pantry") return IM_COL32(220, 200, 80, 255);
-        if (category == "lounge") return IM_COL32(190, 120, 210, 255);
-        return IM_COL32(200, 200, 200, 255);
-    }
-
-    ImU32 ColorToImU32(const glm::vec3& c)
-    {
-        return IM_COL32(static_cast<int>(c.r * 255.0f), static_cast<int>(c.g * 255.0f), static_cast<int>(c.b * 255.0f),
-                        255);
-    }
-
-    ImU32 ColorToImU32(const glm::vec4& c)
-    {
-        const auto channel = [](float v) { return static_cast<int>(std::clamp(v, 0.0f, 1.0f) * 255.0f); };
-        return IM_COL32(channel(c.r), channel(c.g), channel(c.b), channel(c.a));
-    }
-
-    ImVec4 ToImVec4(const glm::vec4& c)
-    {
-        return ImVec4(c.r, c.g, c.b, c.a);
-    }
-
-    glm::vec4 MeterColor(const std::string& meter)
-    {
-        if (meter == "tech") return {0.20f, 0.60f, 1.00f, 1.0f};
-        if (meter == "design") return {0.28f, 0.82f, 0.44f, 1.0f};
-        if (meter == "art") return {1.00f, 0.55f, 0.18f, 1.0f};
-        if (meter == "polish") return {0.74f, 0.52f, 1.00f, 1.0f};
-        if (meter == "bug_found") return {1.00f, 0.25f, 0.22f, 1.0f};
-        if (meter == "bug_fixed") return {0.35f, 0.95f, 0.85f, 1.0f};
-        return {0.92f, 0.92f, 0.92f, 1.0f};
-    }
-
-    const char* ProjectStageLabelZh(StudioSim::EProjectStage stage)
-    {
-        switch (stage)
-        {
-        case StudioSim::EProjectStage::Planning:   return "企划";
-        case StudioSim::EProjectStage::Production: return "生产";
-        case StudioSim::EProjectStage::Polish:     return "打磨";
-        case StudioSim::EProjectStage::Done:       return "完成";
-        default:                                   return "?";
-        }
-    }
-
-    glm::vec4 ProjectStageColor(StudioSim::EProjectStage stage)
-    {
-        switch (stage)
-        {
-        case StudioSim::EProjectStage::Planning:   return {0.78f, 0.78f, 0.78f, 1.0f};
-        case StudioSim::EProjectStage::Production: return {0.20f, 0.60f, 1.00f, 1.0f};
-        case StudioSim::EProjectStage::Polish:     return {0.74f, 0.52f, 1.00f, 1.0f};
-        case StudioSim::EProjectStage::Done:       return {0.28f, 0.82f, 0.44f, 1.0f};
-        default:                                   return {0.92f, 0.92f, 0.92f, 1.0f};
-        }
-    }
-
-    constexpr StudioSim::EGameGenre kProjectPitchGenres[] = {
-        StudioSim::EGameGenre::RPG,        StudioSim::EGameGenre::Action,  StudioSim::EGameGenre::Simulation,
-        StudioSim::EGameGenre::Puzzle,     StudioSim::EGameGenre::Shooter, StudioSim::EGameGenre::Adventure,
-    };
-    constexpr StudioSim::EGameTheme kProjectPitchThemes[] = {
-        StudioSim::EGameTheme::Fantasy, StudioSim::EGameTheme::SciFi,  StudioSim::EGameTheme::Sports,
-        StudioSim::EGameTheme::Romance, StudioSim::EGameTheme::Horror, StudioSim::EGameTheme::Daily,
-    };
-    constexpr StudioSim::EProjectSizeTier kProjectPitchSizes[] = {
-        StudioSim::EProjectSizeTier::Small,
-        StudioSim::EProjectSizeTier::Standard,
-        StudioSim::EProjectSizeTier::Big,
-    };
-    constexpr int kProjectPitchGenreCount = 6;
-    constexpr int kProjectPitchThemeCount = 6;
-    constexpr int kProjectPitchSizeCount = 3;
+    constexpr glm::vec3 kOfficeOverviewTarget{0.0f, 0.0f, 0.0f};
+    constexpr glm::vec3 kOfficeOverviewOffset{0.0f, 18.0f, 18.0f};
+    constexpr glm::vec3 kOfficeFollowOffset{0.0f, 7.0f, 7.0f};
+    constexpr float kCameraTransitionSharpness = 9.0f;
+    constexpr float kEmployeePickRadiusPixels = 18.0f;
     constexpr int64_t kTeamDailyWage = 1800;
     constexpr int64_t kUnitPrice = 30;
     // 一支 6 人团队在一个工作日（09:00–18:00）内大致能产出的四仪表点数总量，
@@ -194,17 +64,6 @@ namespace
         case StudioSim::EGameTheme::Horror:  return "恐怖";
         case StudioSim::EGameTheme::Daily:   return "日常";
         default:                             return "未知";
-        }
-    }
-
-    const char* ProjectSizeTierLabelZh(StudioSim::EProjectSizeTier tier)
-    {
-        switch (tier)
-        {
-        case StudioSim::EProjectSizeTier::Small:    return "小品";
-        case StudioSim::EProjectSizeTier::Standard: return "标准";
-        case StudioSim::EProjectSizeTier::Big:      return "大作";
-        default:                                    return "标准";
         }
     }
 
@@ -538,20 +397,6 @@ namespace
             "需要更多打磨"};
     }
 
-    float MeterRatio(float value, float target)
-    {
-        return target > 0.0f ? std::clamp(value / target, 0.0f, 1.0f) : 0.0f;
-    }
-
-    void DrawMeterProgress(const char* label, float value, float target, const glm::vec4& color)
-    {
-        const float ratio = MeterRatio(value, target);
-        const std::string overlay = fmt::format("{} {:.0f}/{:.0f}", label, value, target);
-        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ToImVec4(color));
-        ImGui::ProgressBar(ratio, ImVec2(-1.0f, 0.0f), overlay.c_str());
-        ImGui::PopStyleColor();
-    }
-
     bool ProjectWorld(const glm::mat4& viewProjection, const ImVec2& vpPos, const ImVec2& vpSize,
                       const glm::vec3& world, ImVec2& outScreen)
     {
@@ -567,6 +412,18 @@ namespace
         }
         outScreen = ImVec2(vpPos.x + (ndc.x * 0.5f + 0.5f) * vpSize.x, vpPos.y + (-ndc.y * 0.5f + 0.5f) * vpSize.y);
         return true;
+    }
+
+    float DistanceToSegment(const glm::vec2& point, const glm::vec2& start, const glm::vec2& end)
+    {
+        const glm::vec2 segment = end - start;
+        const float lengthSquared = glm::dot(segment, segment);
+        if (lengthSquared <= 0.001f)
+        {
+            return glm::distance(point, start);
+        }
+        const float t = std::clamp(glm::dot(point - start, segment) / lengthSquared, 0.0f, 1.0f);
+        return glm::distance(point, start + segment * t);
     }
 
     bool ContainsAny(const std::string& text, std::initializer_list<const char*> keywords)
@@ -601,74 +458,6 @@ namespace
         return "临时群体决策";
     }
 
-    std::vector<StudioSim::FMeetingLine> BuildFallbackMeetingLines(const std::vector<StudioSim::FEmployee>& employees,
-                                                                    const std::string& topic)
-    {
-        std::vector<StudioSim::FMeetingLine> lines;
-        for (const auto& emp : employees)
-        {
-            if (emp.role == StudioSim::ERole::ProducerPM)
-            {
-                lines.push_back({emp.displayName, "先定优先级"});
-            }
-            else if (emp.role == StudioSim::ERole::Engineer)
-            {
-                lines.push_back({emp.displayName, "我评估技术风险"});
-            }
-            else if (emp.role == StudioSim::ERole::Designer)
-            {
-                lines.push_back({emp.displayName, "玩法目标要收敛"});
-            }
-            else if (emp.role == StudioSim::ERole::Artist)
-            {
-                lines.push_back({emp.displayName, "美术量要砍一刀"});
-            }
-            else if (emp.role == StudioSim::ERole::QA)
-            {
-                lines.push_back({emp.displayName, "测试范围要明确"});
-            }
-        }
-        if (lines.empty())
-        {
-            lines.push_back({"Team", topic});
-        }
-        return lines;
-    }
-
-    std::vector<StudioSim::FMeetingLine> ParseMeetingLines(const std::string& text)
-    {
-        std::vector<StudioSim::FMeetingLine> lines;
-        const size_t open = text.find('[');
-        const size_t close = text.rfind(']');
-        if (open == std::string::npos || close == std::string::npos || close <= open)
-        {
-            return lines;
-        }
-
-        try
-        {
-            const nlohmann::json json = nlohmann::json::parse(text.substr(open, close - open + 1));
-            for (const auto& item : json)
-            {
-                StudioSim::FMeetingLine line;
-                line.speaker = item.value("speaker", std::string());
-                line.text = item.value("line", std::string());
-                if (!line.speaker.empty() && !line.text.empty())
-                {
-                    lines.push_back(std::move(line));
-                }
-                if (lines.size() >= 10)
-                {
-                    break;
-                }
-            }
-        }
-        catch (...)
-        {
-            lines.clear();
-        }
-        return lines;
-    }
 }
 
 // Each game executable provides this factory; DesktopMain.cpp binds it at link time.
@@ -683,7 +472,6 @@ StudioSimGameInstance::StudioSimGameInstance(Vulkan::WindowConfig& config, Runti
                                              NextEngine* engine)
     : NextGameInstanceBase(config, options, engine)
 {
-    Modules::NextQuickJS::Install(*engine, {.entryScript = "assets/scripts/studiosim_entry.js"});
     ConfigureWindow(config, options, "StudioSim", 1280, 720, false);
 }
 
@@ -733,8 +521,7 @@ void StudioSimGameInstance::OnTick(double deltaSeconds)
         {
             if (GOption->AgentValidation)
             {
-                StartProjectPitch(kProjectPitchGenres[pitchGenreIndex_], kProjectPitchThemes[pitchThemeIndex_],
-                                  kProjectPitchSizes[pitchSizeIndex_]);
+                StartProjectPitch(ui_.SelectedGenre(), ui_.SelectedTheme(), ui_.SelectedSize());
             }
             else
             {
@@ -758,7 +545,7 @@ void StudioSimGameInstance::OnTick(double deltaSeconds)
                                                employeeSystem_.EmployeesMutable());
                 SyncGameProjectProduction();
             }
-            worldState_.phase = StudioSim::EDayPhase::Working;
+            dayClock_.BeginWorking(worldState_);
             SPDLOG_INFO("StudioSim: goal set, entering Working");
             if (!goalMeetingStarted_ && GoalNeedsMeeting(goalSystem_.Goal()))
             {
@@ -770,31 +557,29 @@ void StudioSimGameInstance::OnTick(double deltaSeconds)
     }
     else if (worldState_.phase == StudioSim::EDayPhase::Working && !worldState_.paused)
     {
-        const bool decisionFlowActive = IsPlayerDecisionFlowActive();
-        if (!decisionFlowActive)
+        const bool dayEnded = dayClock_.TickWorking(worldState_, deltaSeconds,
+                                                    IsPlayerDecisionFlowActive());
+        if (dayEnded)
         {
-            worldState_.gameClockMinutes += deltaSeconds * worldState_.timeScale;
-            if (worldState_.gameClockMinutes >= 18.0 * 60.0)
+            SPDLOG_INFO("StudioSim: day {} ended -> Review (goal was '{}')", worldState_.dayIndex,
+                        goalSystem_.Goal().title);
+            SyncGameProjectProduction();
+            if (HasActiveGameProject() && !gameProject_.production.shipped &&
+                gameProject_.elapsedDays + 1 >= gameProject_.plannedDays)
             {
-                worldState_.gameClockMinutes = 18.0 * 60.0;
-                worldState_.phase = StudioSim::EDayPhase::Review;
-                SPDLOG_INFO("StudioSim: day {} ended -> Review (goal was '{}')", worldState_.dayIndex,
-                            goalSystem_.Goal().title);
+                productionSystem_.ForceShip(worldState_.gameClockMinutes, "deadline");
                 SyncGameProjectProduction();
-                if (HasActiveGameProject() && !gameProject_.production.shipped &&
-                    gameProject_.elapsedDays + 1 >= gameProject_.plannedDays)
-                {
-                    productionSystem_.ForceShip(worldState_.gameClockMinutes, "deadline");
-                    SyncGameProjectProduction();
-                }
-                FinalizeProjectSettlement();
-                NextAI::FAIService* summaryAi = GOption->AgentValidation ? nullptr : NextAI::GetAIService(GetEngine());
-                goalSystem_.Summarize(summaryAi, employeeSystem_.EmployeesMutable(), gameProject_);
             }
+            FinalizeProjectSettlement();
+            NextAI::FAIService* summaryAi =
+                GOption->AgentValidation ? nullptr : NextAI::GetAIService(GetEngine());
+            goalSystem_.Summarize(summaryAi, employeeSystem_.EmployeesMutable(), gameProject_);
         }
 
         if (worldState_.phase == StudioSim::EDayPhase::Working)
         {
+            perceptionSystem_.Tick(deltaSeconds, worldState_, employeeSystem_.EmployeesMutable(),
+                                   productionSystem_, gatheringSystem_);
             if (!IsAwaitingPlayerDecision())
             {
                 const double gatheringDeltaSeconds = GOption->AgentValidation ? deltaSeconds * 12.0 : deltaSeconds;
@@ -847,9 +632,9 @@ void StudioSimGameInstance::OnTick(double deltaSeconds)
         productionSystem_.Tick(worldState_.gameClockMinutes, productionPaused, employeeSystem_.EmployeesMutable(),
                                officeMap_);
         SyncGameProjectProduction();
-        CollectProductionVisualEvents();
+        ui_.CollectProductionVisualEvents(productionSystem_);
     }
-    TickFloatingText(deltaSeconds);
+    ui_.Tick(deltaSeconds);
     for (auto& emp : employeeSystem_.EmployeesMutable())
     {
         if (emp.bubbleClearAt > 0.0 && worldState_.gameClockMinutes >= emp.bubbleClearAt)
@@ -858,6 +643,7 @@ void StudioSimGameInstance::OnTick(double deltaSeconds)
             emp.bubbleClearAt = 0.0;
         }
     }
+    UpdateCamera(deltaSeconds);
 }
 
 bool StudioSimGameInstance::IsAwaitingPlayerDecision() const
@@ -903,38 +689,10 @@ void StudioSimGameInstance::OnDestroy()
 {
 }
 
-void StudioSimGameInstance::CollectProductionVisualEvents()
-{
-    for (const auto& event : productionSystem_.ConsumeVisualEvents())
-    {
-        FFloatingTextParticle particle;
-        particle.worldPos = event.worldPos;
-        particle.text = event.text;
-        particle.color = MeterColor(event.meter);
-        floatingText_.push_back(std::move(particle));
-    }
-}
-
-void StudioSimGameInstance::TickFloatingText(double deltaSeconds)
-{
-    for (auto& particle : floatingText_)
-    {
-        particle.ageSeconds += static_cast<float>(deltaSeconds);
-    }
-    floatingText_.erase(std::remove_if(floatingText_.begin(), floatingText_.end(),
-                                       [](const FFloatingTextParticle& particle)
-                                       {
-                                           return particle.ageSeconds >= particle.durationSeconds;
-                                       }),
-                        floatingText_.end());
-}
-
 void StudioSimGameInstance::ResetProjectPitchSelection()
 {
     gameProject_ = StudioSim::FGameProject{};
-    pitchGenreIndex_ = 0;
-    pitchThemeIndex_ = 0;
-    pitchSizeIndex_ = 1;
+    ui_.ResetProjectPitchSelection();
 }
 
 void StudioSimGameInstance::StartProjectPitch(StudioSim::EGameGenre genre, StudioSim::EGameTheme theme,
@@ -945,7 +703,7 @@ void StudioSimGameInstance::StartProjectPitch(StudioSim::EGameGenre genre, Studi
     goalSystem_.Reset();
     goalSystem_.BeginDay(GOption->AgentValidation ? nullptr : NextAI::GetAIService(GetEngine()));
     goalMeetingStarted_ = false;
-    customGoalBuf_[0] = '\0';
+    ui_.ResetGoalInput();
 
     SPDLOG_INFO(
         "StudioSim/Proj: pitched project '{}' {} x {} size={} plannedDays={} budget={} comboFit={:.2f} funds={}",
@@ -1014,20 +772,20 @@ void StudioSimGameInstance::OnSceneLoaded()
     sceneNodeCount_ = scene.Nodes().size();
     officeMap_.BuildFromScene(scene);
     employeeSystem_.OnSceneLoaded(scene, officeMap_);
-    worldState_ = StudioSim::FWorldState{};
-    worldState_.phase = StudioSim::EDayPhase::Briefing; // 晨会先定今日目标
-    if (GOption->AgentValidation)
-    {
-        worldState_.timeScale = 240.0f;
-    }
+    dayClock_.Reset(worldState_, GOption->AgentValidation);
     scheduler_.Reset();
+    perceptionSystem_.Reset();
     goalSystem_.Reset();
     gatheringSystem_.Reset();
     productionSystem_.Reset();
     companyState_ = StudioSim::FCompanyState{};
     ResetProjectPitchSelection();
-    floatingText_.clear();
+    ui_.Reset();
     goalMeetingStarted_ = false;
+    followEmployeeIndex_ = -1;
+    cameraTarget_ = DesiredCameraTarget();
+    cameraEye_ = DesiredCameraEye();
+    cameraInitialized_ = true;
     sceneReady_ = true;
     SPDLOG_INFO("StudioSim: scene loaded ({} nodes, {} POIs, {} employees)", sceneNodeCount_, officeMap_.Count(),
                 employeeSystem_.Count());
@@ -1036,18 +794,18 @@ void StudioSimGameInstance::OnSceneLoaded()
 void StudioSimGameInstance::OnSceneUnloaded()
 {
     sceneReady_ = false;
+    cameraInitialized_ = false;
+    followEmployeeIndex_ = -1;
     sceneNodeCount_ = 0;
     employeeSystem_.Clear();
     officeMap_.Clear();
     productionSystem_.Reset();
     gatheringSystem_.Reset();
-    floatingText_.clear();
+    ui_.Reset();
 }
 
 void StudioSimGameInstance::StartNextDay()
 {
-    const int nextDay = worldState_.dayIndex + 1;
-    const float timeScale = worldState_.timeScale;
     SyncGameProjectProduction();
     if (productionSystem_.Active() && !gameProject_.launched)
     {
@@ -1060,11 +818,7 @@ void StudioSimGameInstance::StartNextDay()
     const bool projectLaunched = gameProject_.launched;
     const StudioSim::FGameProject finishedProject = gameProject_;
 
-    worldState_ = StudioSim::FWorldState{};
-    worldState_.dayIndex = nextDay;
-    worldState_.timeScale = timeScale;
-    worldState_.phase = StudioSim::EDayPhase::Briefing;
-    worldState_.paused = false;
+    dayClock_.BeginNextDay(worldState_);
 
     officeMap_.ResetWorkable();
     for (auto& emp : employeeSystem_.EmployeesMutable())
@@ -1089,10 +843,11 @@ void StudioSimGameInstance::StartNextDay()
     }
 
     scheduler_.Reset();
+    perceptionSystem_.Reset();
     goalSystem_.Reset();
     gatheringSystem_.Reset();
     productionSystem_.ClearFocusBoost();
-    floatingText_.clear();
+    ui_.Reset();
     if (projectLaunched)
     {
         companyState_.shipped.push_back(finishedProject);
@@ -1105,14 +860,8 @@ void StudioSimGameInstance::StartNextDay()
         const StudioSim::FDailyGoal focusGoal = BuildProjectFocusGoal(gameProject_);
         goalSystem_.SetActiveGoal(focusGoal, employeeSystem_.EmployeesMutable());
     }
-    customGoalBuf_[0] = '\0';
+    ui_.ResetGoalInput();
     goalMeetingStarted_ = false;
-    meeting_ = FMeetingRuntime{};
-    {
-        std::lock_guard<std::mutex> lock(meetingMutex_);
-        ++meetingGeneration_;
-        pendingMeetingLines_.clear();
-    }
 
     const auto& project = finishedProject.production;
     if (projectLaunched)
@@ -1136,149 +885,9 @@ void StudioSimGameInstance::StartNextDay()
     SPDLOG_INFO("StudioSim: starting day {}", worldState_.dayIndex);
 }
 
-void StudioSimGameInstance::StartMeeting(const std::string& topic, double durationMinutes)
-{
-    const auto seats = officeMap_.PointsOfCategory("meet");
-    if (seats.empty() || employeeSystem_.EmployeesMutable().empty())
-    {
-        SPDLOG_WARN("StudioSim/Meeting: cannot start '{}', no meeting seats or employees", topic);
-        return;
-    }
-
-    scheduler_.Reset();
-    {
-        std::lock_guard<std::mutex> lock(meetingMutex_);
-        ++meetingGeneration_;
-        pendingMeetingLines_.clear();
-    }
-
-    meeting_ = FMeetingRuntime{};
-    meeting_.active = true;
-    meeting_.topic = topic;
-    meeting_.endGameMinutes = worldState_.gameClockMinutes + durationMinutes;
-    meeting_.nextLineRealSeconds = 1.0;
-    meeting_.lines = BuildFallbackMeetingLines(employeeSystem_.Employees(), topic);
-
-    auto& employees = employeeSystem_.EmployeesMutable();
-    for (size_t i = 0; i < employees.size(); ++i)
-    {
-        auto& emp = employees[i];
-        emp.targetPoi.clear();
-        emp.overrideTargetPoi = seats[i % seats.size()]->name;
-        emp.overrideUntilMinutes = meeting_.endGameMinutes;
-        emp.bubbleText = "去会议室";
-        emp.bubbleClearAt = worldState_.gameClockMinutes + 8.0;
-        emp.pendingFrom.clear();
-        emp.pendingText.clear();
-        emp.decisionPending = false;
-        emp.nextDecisionAt = meeting_.endGameMinutes + 1.0;
-    }
-
-    if (auto* ai = NextAI::GetAIService(GetEngine()))
-    {
-        std::string attendees;
-        for (const auto& emp : employeeSystem_.Employees())
-        {
-            attendees += fmt::format("{}({}) ", emp.displayName, StudioSim::RoleName(emp.role));
-        }
-
-        const std::string prompt = fmt::format(
-            "你是游戏工作室会议编剧。会议主题：{}。\n"
-            "今日目标：{}（{}）。当日事件：{}。\n"
-            "参会者：{}。\n"
-            "生成一段多人群聊会议记录，6到10句。每句必须由参会者之一发言，围绕是否调整计划、谁负责什么。"
-            "只输出JSON数组，不要解释：[{{\"speaker\":\"Alice\",\"line\":\"一句不超过16字\"}}]",
-            topic, goalSystem_.Goal().set ? goalSystem_.Goal().title : "未定",
-            goalSystem_.Goal().set ? goalSystem_.Goal().description : "", StudioSim::EventSystem::BuildSummary(worldState_),
-            attendees);
-
-        uint64_t generation = 0;
-        {
-            std::lock_guard<std::mutex> lock(meetingMutex_);
-            generation = meetingGeneration_;
-        }
-
-        ai->GenerateTextAsync(prompt,
-                              [this, generation](NextAI::FAIResponse response)
-                              {
-                                  auto lines = ParseMeetingLines(response.success ? response.text : std::string());
-                                  if (lines.empty())
-                                  {
-                                      return;
-                                  }
-
-                                  std::lock_guard<std::mutex> lock(meetingMutex_);
-                                  if (generation != meetingGeneration_)
-                                  {
-                                      return;
-                                  }
-                                  pendingMeetingLines_ = std::move(lines);
-                              });
-    }
-
-    SPDLOG_INFO("StudioSim/Meeting started: '{}' ({} employees, {:.0f} game minutes)", topic, employees.size(),
-                durationMinutes);
-}
-
-void StudioSimGameInstance::TickMeeting(double deltaSeconds)
-{
-    {
-        std::lock_guard<std::mutex> lock(meetingMutex_);
-        if (!pendingMeetingLines_.empty())
-        {
-            meeting_.lines = std::move(pendingMeetingLines_);
-            pendingMeetingLines_.clear();
-            meeting_.nextLineIndex = 0;
-            meeting_.elapsedRealSeconds = 0.0;
-            meeting_.nextLineRealSeconds = 1.0;
-        }
-    }
-
-    if (!meeting_.active)
-    {
-        return;
-    }
-
-    if (worldState_.gameClockMinutes >= meeting_.endGameMinutes)
-    {
-        meeting_.active = false;
-        for (auto& emp : employeeSystem_.EmployeesMutable())
-        {
-            emp.overrideTargetPoi.clear();
-            emp.overrideUntilMinutes = 0.0;
-            emp.bubbleText.clear();
-            emp.bubbleClearAt = 0.0;
-            emp.nextDecisionAt = worldState_.gameClockMinutes;
-        }
-        SPDLOG_INFO("StudioSim/Meeting ended: '{}'", meeting_.topic);
-        return;
-    }
-
-    meeting_.elapsedRealSeconds += deltaSeconds;
-    if (meeting_.lines.empty() || meeting_.elapsedRealSeconds < meeting_.nextLineRealSeconds)
-    {
-        return;
-    }
-
-    const StudioSim::FMeetingLine& line = meeting_.lines[meeting_.nextLineIndex % meeting_.lines.size()];
-    for (auto& emp : employeeSystem_.EmployeesMutable())
-    {
-        if (emp.displayName == line.speaker)
-        {
-            emp.bubbleText = line.text;
-            emp.bubbleClearAt = worldState_.gameClockMinutes + kMeetingBubbleDurationMinutes;
-            emp.mood = StudioSim::EMood::Focused;
-            break;
-        }
-    }
-    meeting_.nextLineIndex++;
-    meeting_.nextLineRealSeconds += 3.0;
-}
-
 void StudioSimGameInstance::RaiseEventAndMaybeStartMeeting(const std::string& eventId)
 {
-    eventSystem_.Raise(eventId, worldState_.gameClockMinutes, worldState_, employeeSystem_.EmployeesMutable(),
-                       officeMap_);
+    eventSystem_.Raise(eventId, worldState_.gameClockMinutes, worldState_, officeMap_);
     if (worldState_.phase == StudioSim::EDayPhase::Working && EventNeedsMeeting(eventId))
     {
         gatheringSystem_.RequestMeeting(MeetingTopicForEvent(eventId));
@@ -1287,623 +896,184 @@ void StudioSimGameInstance::RaiseEventAndMaybeStartMeeting(const std::string& ev
 
 bool StudioSimGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera) const
 {
-    outRenderCamera.ModelView = OfficeViewMatrix();
+    outRenderCamera.ModelView = ViewMatrix();
     outRenderCamera.FieldOfView = kOfficeFov;
     return true;
 }
 
-void StudioSimGameInstance::DrawWorldOverlay() const
+glm::vec3 StudioSimGameInstance::DesiredCameraTarget() const
 {
-    const ImVec2 vpSize = ImGui::GetMainViewport()->Size;
-    const ImVec2 vpPos = ImGui::GetMainViewport()->Pos;
-    if (vpSize.x <= 1.0f || vpSize.y <= 1.0f)
+    if (followEmployeeIndex_ >= 0 &&
+        followEmployeeIndex_ < static_cast<int>(employeeSystem_.Employees().size()))
     {
+        return employeeSystem_.Employees()[static_cast<size_t>(followEmployeeIndex_)].position;
+    }
+    return kOfficeOverviewTarget + glm::vec3(cameraPan_.x, 0.0f, cameraPan_.y);
+}
+
+glm::vec3 StudioSimGameInstance::DesiredCameraEye() const
+{
+    const glm::vec3 offset =
+        followEmployeeIndex_ >= 0 ? kOfficeFollowOffset : kOfficeOverviewOffset * cameraZoom_;
+    return DesiredCameraTarget() + offset;
+}
+
+glm::mat4 StudioSimGameInstance::ViewMatrix() const
+{
+    const glm::vec3 eye = cameraInitialized_ ? cameraEye_ : DesiredCameraEye();
+    const glm::vec3 target = cameraInitialized_ ? cameraTarget_ : DesiredCameraTarget();
+    return glm::lookAt(eye, target, glm::vec3(0.0f, 1.0f, 0.0f));
+}
+
+void StudioSimGameInstance::UpdateCamera(double deltaSeconds)
+{
+    const glm::vec3 desiredTarget = DesiredCameraTarget();
+    const glm::vec3 desiredEye = DesiredCameraEye();
+    if (!cameraInitialized_)
+    {
+        cameraTarget_ = desiredTarget;
+        cameraEye_ = desiredEye;
+        cameraInitialized_ = true;
         return;
     }
+    const float factor =
+        1.0f - std::exp(-kCameraTransitionSharpness *
+                        std::max(0.0f, static_cast<float>(deltaSeconds)));
+    cameraTarget_ = glm::mix(cameraTarget_, desiredTarget, factor);
+    cameraEye_ = glm::mix(cameraEye_, desiredEye, factor);
+}
 
-    const float aspect = vpSize.x / vpSize.y;
+int StudioSimGameInstance::PickEmployeeAtScreen(const glm::vec2& screenPosition) const
+{
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    if (viewport == nullptr || viewport->Size.x <= 1.0f || viewport->Size.y <= 1.0f)
+    {
+        return -1;
+    }
+
+    const float aspect = viewport->Size.x / viewport->Size.y;
     const glm::mat4 viewProjection =
-        glm::perspective(glm::radians(kOfficeFov), aspect, 0.05f, 2000.0f) * OfficeViewMatrix();
-
-    auto* drawList = ImGui::GetBackgroundDrawList();
-    ImVec2 screen;
-
-    // POI anchors.
-    for (const auto& poi : officeMap_.Points())
+        glm::perspective(glm::radians(kOfficeFov), aspect, 0.05f, 2000.0f) * ViewMatrix();
+    int pickedIndex = -1;
+    float nearestDistance = kEmployeePickRadiusPixels;
+    const auto& employees = employeeSystem_.Employees();
+    for (size_t index = 0; index < employees.size(); ++index)
     {
-        if (ProjectWorld(viewProjection, vpPos, vpSize, poi.worldPos + glm::vec3(0.0f, 0.9f, 0.0f), screen))
-        {
-            const ImU32 color = CategoryColor(poi.category);
-            drawList->AddCircleFilled(screen, 4.0f, color);
-            drawList->AddText(ImVec2(screen.x + 6.0f, screen.y - 6.0f), color, poi.name.c_str());
-        }
-    }
-
-    // Employee name tags floating above each agent.
-    for (const auto& emp : employeeSystem_.Employees())
-    {
-        if (ProjectWorld(viewProjection, vpPos, vpSize, emp.position + glm::vec3(0.0f, 2.0f, 0.0f), screen))
-        {
-            const ImU32 color = ColorToImU32(emp.color);
-            drawList->AddText(ImVec2(screen.x - 12.0f, screen.y - 8.0f), color, emp.displayName.c_str());
-            const char* bubble = emp.decisionPending ? "..." : emp.bubbleText.c_str();
-            if (bubble != nullptr && bubble[0] != '\0')
-            {
-                constexpr float bubbleMaxWidth = 240.0f;
-                const ImVec2 padding(8.0f, 5.0f);
-                const ImVec2 textSize = ImGui::CalcTextSize(bubble, nullptr, false, bubbleMaxWidth);
-                const ImVec2 textPos(screen.x - textSize.x * 0.5f, screen.y + 8.0f);
-                const ImVec2 bubbleMin(textPos.x - padding.x, textPos.y - padding.y);
-                const ImVec2 bubbleMax(textPos.x + textSize.x + padding.x, textPos.y + textSize.y + padding.y);
-                float alphaScale = 1.0f;
-                if (emp.bubbleClearAt > worldState_.gameClockMinutes)
-                {
-                    const double remaining = emp.bubbleClearAt - worldState_.gameClockMinutes;
-                    alphaScale = static_cast<float>(std::clamp(remaining / kBubbleFadeMinutes, 0.0, 1.0));
-                }
-                const auto alpha = [alphaScale](int value)
-                {
-                    return static_cast<int>(static_cast<float>(value) * alphaScale);
-                };
-                drawList->AddRectFilled(bubbleMin, bubbleMax, IM_COL32(20, 24, 28, alpha(220)), 6.0f);
-                drawList->AddRect(bubbleMin, bubbleMax, IM_COL32(255, 255, 255, alpha(70)), 6.0f);
-                drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(), textPos, IM_COL32(255, 255, 255, alpha(245)),
-                                  bubble, nullptr, bubbleMaxWidth);
-            }
-        }
-    }
-
-    for (const auto& particle : floatingText_)
-    {
-        const float t = particle.durationSeconds > 0.0f ? particle.ageSeconds / particle.durationSeconds : 1.0f;
-        const glm::vec3 pos = particle.worldPos + glm::vec3(0.0f, t * 0.9f, 0.0f);
-        if (!ProjectWorld(viewProjection, vpPos, vpSize, pos, screen))
+        ImVec2 feet;
+        ImVec2 head;
+        if (!ProjectWorld(viewProjection, viewport->Pos, viewport->Size,
+                          employees[index].position + glm::vec3(0.0f, 0.1f, 0.0f), feet) ||
+            !ProjectWorld(viewProjection, viewport->Pos, viewport->Size,
+                          employees[index].position + glm::vec3(0.0f, 2.1f, 0.0f), head))
         {
             continue;
         }
-
-        glm::vec4 color = particle.color;
-        color.a *= std::clamp(1.0f - t, 0.0f, 1.0f);
-        const ImVec2 textSize = ImGui::CalcTextSize(particle.text.c_str());
-        const ImVec2 textPos(screen.x - textSize.x * 0.5f, screen.y - 24.0f);
-        drawList->AddText(ImVec2(textPos.x + 1.0f, textPos.y + 1.0f), IM_COL32(0, 0, 0, 180),
-                          particle.text.c_str());
-        drawList->AddText(textPos, ColorToImU32(color), particle.text.c_str());
-    }
-}
-
-void StudioSimGameInstance::DrawStatusHud(const ImVec2& pos, const ImVec2& size)
-{
-    if (!BeginStudioSimHudPanel("##StudioSimStatusHud", pos, size))
-    {
-        ImGui::End();
-        return;
-    }
-
-    DrawHudTitle("工作日");
-    int hh = 0;
-    int mm = 0;
-    StudioSim::MinutesToHHMM(worldState_.gameClockMinutes, hh, mm);
-    ImGui::Text("Day %d", worldState_.dayIndex);
-    ImGui::SameLine();
-    ImGui::TextDisabled("%s  %02d:%02d", StudioSim::DayPhaseName(worldState_.phase), hh, mm);
-    ImGui::TextWrapped("%s", goalSystem_.Goal().set ? goalSystem_.Goal().title.c_str() : "晨会准备中...");
-    ImGui::SliderFloat("速度", &worldState_.timeScale, 1.0f, 240.0f, "%.0f min/s");
-    ImGui::Checkbox("暂停", &worldState_.paused);
-    if (IsAwaitingPlayerDecision())
-    {
-        ImGui::TextColored(ImVec4(1.0f, 0.78f, 0.25f, 1.0f), "等待玩家判断，游戏进度已暂停");
-    }
-    else if (IsPlayerDecisionFlowActive())
-    {
-        ImGui::TextColored(ImVec4(1.0f, 0.78f, 0.25f, 1.0f), "会议决策中，游戏进度已暂停");
-    }
-
-    ImGui::Separator();
-    ImGui::TextDisabled("scene %s  nav %s", sceneReady_ ? "ready" : "loading",
-                        employeeSystem_.NavReady() ? "ok" : "no");
-    ImGui::TextDisabled("LLM %s  decisions %d", scheduler_.InFlight() ? "thinking" : "idle",
-                        scheduler_.DecisionsMade());
-    ImGui::End();
-}
-
-void StudioSimGameInstance::DrawProgressHud(const ImVec2& pos, const ImVec2& size)
-{
-    if (!BeginStudioSimHudPanel("##StudioSimProgressHud", pos, size))
-    {
-        ImGui::End();
-        return;
-    }
-
-    DrawHudTitle("项目进度");
-    if (gameProject_.name.empty())
-    {
-        ImGui::TextWrapped("等待新项目立项...");
-        ImGui::Text("公司资金 %lld", static_cast<long long>(companyState_.funds));
-        ImGui::Text("已发行 %zu 款", companyState_.shipped.size());
-        ImGui::End();
-        return;
-    }
-
-    const int plannedDays = std::max(1, gameProject_.plannedDays);
-    const bool projectLaunched = gameProject_.launched || gameProject_.production.shipped;
-    const int displayDay =
-        projectLaunched ? std::clamp(gameProject_.elapsedDays, 1, plannedDays)
-                        : std::clamp(gameProject_.elapsedDays + 1, 1, plannedDays);
-    ImGui::TextWrapped("《%s》 %s x %s", gameProject_.name.c_str(), StudioSim::GameGenreName(gameProject_.genre),
-                       StudioSim::GameThemeName(gameProject_.theme));
-    const int daysLeft = projectLaunched ? 0 : std::max(0, plannedDays - gameProject_.elapsedDays);
-    ImGui::Text("%s %d/%d 天 | 剩余 %d 天 | 预算 %lld", projectLaunched ? "已上线" : "工期第", displayDay,
-                plannedDays, daysLeft, static_cast<long long>(gameProject_.budget));
-    ImGui::Text("公司资金 %lld", static_cast<long long>(companyState_.funds));
-    if (!gameProject_.highlights.empty())
-    {
-        std::string highlights;
-        for (const auto& highlight : gameProject_.highlights)
+        const float distance =
+            DistanceToSegment(screenPosition, {feet.x, feet.y}, {head.x, head.y});
+        if (distance < nearestDistance)
         {
-            if (!highlights.empty())
-            {
-                highlights += " / ";
-            }
-            highlights += highlight.text;
-            if (highlight.achieved)
-            {
-                highlights += "(已做实)";
-            }
-        }
-        ImGui::TextWrapped("卖点: %s", highlights.c_str());
-    }
-    ImGui::Separator();
-    if (!productionSystem_.Active())
-    {
-        ImGui::TextWrapped("等待今日目标...");
-        ImGui::End();
-        return;
-    }
-
-    const auto& project = productionSystem_.State();
-    ImGui::TextUnformatted("阶段:");
-    ImGui::SameLine();
-    ImGui::TextColored(ToImVec4(ProjectStageColor(project.stage)), "%s", ProjectStageLabelZh(project.stage));
-    ImGui::SameLine();
-    ImGui::Text("| Bug %d | 已修 %d | %s", project.bugCount, project.bugsFixed,
-                project.shipped ? "已交付" : "未交付");
-
-    const std::string overallLabel = fmt::format("总进度 {:.0f}%", project.overallProgress * 100.0f);
-    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ToImVec4({0.20f, 0.60f, 1.00f, 1.0f}));
-    ImGui::ProgressBar(std::clamp(project.overallProgress, 0.0f, 1.0f), ImVec2(-1.0f, 0.0f),
-                       overallLabel.c_str());
-    ImGui::PopStyleColor();
-
-    DrawMeterProgress("技术", project.meters.tech, project.targetMeters.tech, MeterColor("tech"));
-    DrawMeterProgress("玩法", project.meters.design, project.targetMeters.design, MeterColor("design"));
-    DrawMeterProgress("美术", project.meters.art, project.targetMeters.art, MeterColor("art"));
-    DrawMeterProgress("品质", project.meters.polish, project.targetMeters.polish, MeterColor("polish"));
-    ImGui::End();
-}
-
-void StudioSimGameInstance::DrawEmployeeHud(const ImVec2& pos, const ImVec2& size)
-{
-    if (!BeginStudioSimHudPanel("##StudioSimEmployeeHud", pos, size))
-    {
-        ImGui::End();
-        return;
-    }
-
-    DrawHudTitle("员工状态");
-    constexpr ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
-                                           ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_ScrollY;
-    if (ImGui::BeginTable("##StudioSimEmployees", 5, tableFlags, ImVec2(0.0f, 0.0f)))
-    {
-        ImGui::TableSetupScrollFreeze(0, 1);
-        ImGui::TableSetupColumn("姓名", ImGuiTableColumnFlags_WidthFixed, 72.0f);
-        ImGui::TableSetupColumn("职位", ImGuiTableColumnFlags_WidthFixed, 72.0f);
-        ImGui::TableSetupColumn("情绪", ImGuiTableColumnFlags_WidthFixed, 76.0f);
-        ImGui::TableSetupColumn("目标", ImGuiTableColumnFlags_WidthStretch, 1.2f);
-        ImGui::TableSetupColumn("贡献 T/D/A/P", ImGuiTableColumnFlags_WidthStretch, 1.1f);
-        ImGui::TableHeadersRow();
-
-        for (const auto& emp : employeeSystem_.Employees())
-        {
-            const std::string target =
-                emp.decisionPending ? "thinking..." : (emp.targetPoi.empty() ? "(idle)" : emp.targetPoi);
-
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::TextColored(ImColor(ColorToImU32(emp.color)), "%s", emp.displayName.c_str());
-            ImGui::TableSetColumnIndex(1);
-            ImGui::TextUnformatted(StudioSim::RoleName(emp.role));
-            ImGui::TableSetColumnIndex(2);
-            ImGui::TextUnformatted(StudioSim::MoodName(emp.mood));
-            ImGui::TableSetColumnIndex(3);
-            ImGui::TextWrapped("%s", target.c_str());
-            if (!emp.bubbleText.empty())
-            {
-                ImGui::TextDisabled("%s", emp.bubbleText.c_str());
-            }
-            ImGui::TableSetColumnIndex(4);
-            ImGui::Text("%.0f / %.0f / %.0f / %.0f", emp.myContribution.tech, emp.myContribution.design,
-                        emp.myContribution.art, emp.myContribution.polish);
-        }
-        ImGui::EndTable();
-    }
-    ImGui::End();
-}
-
-void StudioSimGameInstance::DrawEventHud(const ImVec2& pos, const ImVec2& size)
-{
-    if (!BeginStudioSimHudPanel("##StudioSimEventHud", pos, size))
-    {
-        ImGui::End();
-        return;
-    }
-
-    DrawHudTitle("事件 / 会议");
-    if (meeting_.active)
-    {
-        ImGui::TextWrapped("Meeting: %s", meeting_.topic.c_str());
-    }
-    for (const auto& gathering : gatheringSystem_.Gatherings())
-    {
-        ImGui::TextWrapped("%s #%d: %s", gathering.kind == StudioSim::EGatheringKind::Meeting ? "Meeting" : "Pantry",
-                           gathering.id, gathering.topic.c_str());
-        if (gathering.awaitingConfirm && gathering.decision.valid)
-        {
-            ImGui::TextDisabled("等待会议决策弹窗");
+            nearestDistance = distance;
+            pickedIndex = static_cast<int>(index);
         }
     }
-
-    if (worldState_.todaysEvents.empty())
-    {
-        ImGui::TextDisabled("今日暂无随机事件");
-    }
-    else
-    {
-        ImGui::Text("Mood: %s", worldState_.globalMood.c_str());
-        for (const auto& ev : worldState_.todaysEvents)
-        {
-            ImGui::BulletText("%s", ev.title.c_str());
-        }
-    }
-
-    ImGui::Separator();
-    for (const auto& def : eventSystem_.Catalog())
-    {
-        ImGui::PushID(def.id.c_str());
-        if (ImGui::Button(def.title.c_str(), ImVec2(-1.0f, 0.0f)))
-        {
-            RaiseEventAndMaybeStartMeeting(def.id);
-        }
-        ImGui::PopID();
-    }
-
-    ImGui::Separator();
-    ImGui::Checkbox("Show overlay", &showOverlay_);
-    ImGui::TextDisabled("nodes %zu  POIs %zu  employees %zu", sceneNodeCount_, officeMap_.Count(),
-                        employeeSystem_.Count());
-    ImGui::End();
+    return pickedIndex;
 }
 
 bool StudioSimGameInstance::OnRenderUI()
 {
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    const ImVec2 workPos = viewport != nullptr ? viewport->WorkPos : ImVec2(0.0f, 0.0f);
-    const ImVec2 workSize = viewport != nullptr ? viewport->WorkSize : ImVec2(1280.0f, 720.0f);
-    constexpr float margin = 16.0f;
-
-    const float leftWidth = std::clamp(workSize.x * 0.28f, 320.0f, 420.0f);
-    const float rightWidth = std::clamp(workSize.x * 0.30f, 340.0f, 460.0f);
-    const float statusHeight = std::clamp(workSize.y * 0.23f, 160.0f, 198.0f);
-    const float progressHeight = std::clamp(workSize.y * 0.34f, 230.0f, 310.0f);
-    const float bottomHeight = std::clamp(workSize.y * 0.31f, 220.0f, 280.0f);
-    const float employeeMaxWidth = std::max(320.0f, workSize.x - rightWidth - margin * 3.0f);
-    const float employeeWidth = std::min(std::clamp(workSize.x * 0.46f, 380.0f, 660.0f), employeeMaxWidth);
-
-    DrawStatusHud(ImVec2(workPos.x + margin, workPos.y + margin), ImVec2(leftWidth, statusHeight));
-    DrawProgressHud(ImVec2(workPos.x + workSize.x - rightWidth - margin, workPos.y + margin),
-                    ImVec2(rightWidth, progressHeight));
-    DrawEmployeeHud(ImVec2(workPos.x + margin, workPos.y + workSize.y - bottomHeight - margin),
-                    ImVec2(employeeWidth, bottomHeight));
-    DrawEventHud(ImVec2(workPos.x + workSize.x - rightWidth - margin,
-                        workPos.y + workSize.y - bottomHeight - margin),
-                 ImVec2(rightWidth, bottomHeight));
-
-    DrawProjectPitchModal();
-    DrawGoalChoiceModal();
-    DrawGatheringDecisionModal();
-    DrawReviewModal();
-
-    if (sceneReady_ && showOverlay_)
+    const StudioSim::FGathering* activeMeeting = nullptr;
+    for (const StudioSim::FGathering& gathering : gatheringSystem_.Gatherings())
     {
-        DrawWorldOverlay();
-    }
-    return true;
-}
-
-void StudioSimGameInstance::DrawProjectPitchModal()
-{
-    if (HasActiveGameProject() || worldState_.phase != StudioSim::EDayPhase::Briefing)
-    {
-        return;
-    }
-
-    ImGui::OpenPopup("游戏立项");
-    PrepareStudioSimModal(640.0f, 860.0f);
-    if (!ImGui::BeginPopupModal("游戏立项", nullptr, kStudioSimModalFlags))
-    {
-        return;
-    }
-
-    pitchGenreIndex_ = std::clamp(pitchGenreIndex_, 0, kProjectPitchGenreCount - 1);
-    pitchThemeIndex_ = std::clamp(pitchThemeIndex_, 0, kProjectPitchThemeCount - 1);
-    pitchSizeIndex_ = std::clamp(pitchSizeIndex_, 0, kProjectPitchSizeCount - 1);
-
-    const StudioSim::EGameGenre selectedGenre = kProjectPitchGenres[pitchGenreIndex_];
-    const StudioSim::EGameTheme selectedTheme = kProjectPitchThemes[pitchThemeIndex_];
-    const StudioSim::EProjectSizeTier selectedSize = kProjectPitchSizes[pitchSizeIndex_];
-
-    ImGui::TextUnformatted("选择下一款游戏项目");
-    ImGui::Text("公司资金 %lld", static_cast<long long>(companyState_.funds));
-    if (!companyState_.shipped.empty())
-    {
-        const StudioSim::FGameProject& lastProject = companyState_.shipped.back();
-        ImGui::TextWrapped("上一作：《%s》 评分 %d  销量 %lld  利润 %lld", lastProject.name.c_str(),
-                           lastProject.reviewScore, static_cast<long long>(lastProject.unitsSold),
-                           static_cast<long long>(lastProject.profit));
-    }
-    ImGui::Separator();
-    if (ImGui::BeginCombo("类型", GameGenreLabelZh(selectedGenre)))
-    {
-        for (int i = 0; i < kProjectPitchGenreCount; ++i)
+        if (gathering.kind == StudioSim::EGatheringKind::Meeting &&
+            gathering.state != StudioSim::EGatheringState::Dispersing)
         {
-            const bool selected = i == pitchGenreIndex_;
-            if (ImGui::Selectable(GameGenreLabelZh(kProjectPitchGenres[i]), selected))
-            {
-                pitchGenreIndex_ = i;
-            }
-            if (selected)
-            {
-                ImGui::SetItemDefaultFocus();
-            }
-        }
-        ImGui::EndCombo();
-    }
-    if (ImGui::BeginCombo("题材", GameThemeLabelZh(selectedTheme)))
-    {
-        for (int i = 0; i < kProjectPitchThemeCount; ++i)
-        {
-            const bool selected = i == pitchThemeIndex_;
-            if (ImGui::Selectable(GameThemeLabelZh(kProjectPitchThemes[i]), selected))
-            {
-                pitchThemeIndex_ = i;
-            }
-            if (selected)
-            {
-                ImGui::SetItemDefaultFocus();
-            }
-        }
-        ImGui::EndCombo();
-    }
-    if (ImGui::BeginCombo("规模", ProjectSizeTierLabelZh(selectedSize)))
-    {
-        for (int i = 0; i < kProjectPitchSizeCount; ++i)
-        {
-            const bool selected = i == pitchSizeIndex_;
-            if (ImGui::Selectable(ProjectSizeTierLabelZh(kProjectPitchSizes[i]), selected))
-            {
-                pitchSizeIndex_ = i;
-            }
-            if (selected)
-            {
-                ImGui::SetItemDefaultFocus();
-            }
-        }
-        ImGui::EndCombo();
-    }
-
-    const StudioSim::FGameProject preview =
-        BuildProjectFromPitch(selectedGenre, selectedTheme, selectedSize, companyState_.projectIndex);
-    ImGui::Separator();
-    ImGui::TextWrapped("《%s》 %s x %s", preview.name.c_str(), StudioSim::GameGenreName(preview.genre),
-                       StudioSim::GameThemeName(preview.theme));
-    ImGui::Text("工期 %d 天 | 预算 %lld | 契合 %.0f%%", preview.plannedDays,
-                static_cast<long long>(preview.budget), preview.comboFit * 100.0f);
-    ImGui::Text("目标 T/D/A/P %.0f / %.0f / %.0f / %.0f", preview.production.targetMeters.tech,
-                preview.production.targetMeters.design, preview.production.targetMeters.art,
-                preview.production.targetMeters.polish);
-    for (const auto& highlight : preview.highlights)
-    {
-        ImGui::BulletText("%s", highlight.text.c_str());
-    }
-    ImGui::Spacing();
-    if (ImGui::Button("开始研发"))
-    {
-        StartProjectPitch(selectedGenre, selectedTheme, selectedSize);
-        ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndPopup();
-}
-
-void StudioSimGameInstance::DrawGoalChoiceModal()
-{
-    const bool awaitingChoice = worldState_.phase == StudioSim::EDayPhase::Briefing &&
-                                goalSystem_.State() == StudioSim::GoalSystem::EState::AwaitingChoice;
-    if (awaitingChoice)
-    {
-        ImGui::OpenPopup("今日目标选择");
-    }
-
-    PrepareStudioSimModal(640.0f, 860.0f);
-    if (!ImGui::BeginPopupModal("今日目标选择", nullptr, kStudioSimModalFlags))
-    {
-        return;
-    }
-    if (!awaitingChoice)
-    {
-        ImGui::CloseCurrentPopup();
-        ImGui::EndPopup();
-        return;
-    }
-
-    ImGui::TextUnformatted("选择今天要推进的目标");
-    ImGui::Separator();
-    const auto& options = goalSystem_.Options();
-    for (size_t i = 0; i < options.size(); ++i)
-    {
-        ImGui::PushID(static_cast<int>(i));
-        ImGui::TextWrapped("%s", options[i].title.c_str());
-        TextDisabledWrapped(options[i].description);
-        if (ImGui::Button("选择此目标"))
-        {
-            goalSystem_.ChooseGoal(static_cast<int>(i), NextAI::GetAIService(GetEngine()),
-                                   employeeSystem_.EmployeesMutable());
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::Separator();
-        ImGui::PopID();
-    }
-
-    const float customButtonWidth = ImGui::CalcTextSize("使用自定义").x + ImGui::GetStyle().FramePadding.x * 2.0f;
-    const float customInputWidth =
-        std::max(260.0f, ImGui::GetContentRegionAvail().x - customButtonWidth - ImGui::GetStyle().ItemSpacing.x);
-    ImGui::SetNextItemWidth(customInputWidth);
-    ImGui::InputTextWithHint("##custom_goal", "自定义目标", customGoalBuf_, sizeof(customGoalBuf_));
-    ImGui::SameLine();
-    if (ImGui::Button("使用自定义", ImVec2(customButtonWidth, 0.0f)) && customGoalBuf_[0] != '\0')
-    {
-        goalSystem_.ChooseCustom(customGoalBuf_, NextAI::GetAIService(GetEngine()), employeeSystem_.EmployeesMutable());
-        ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndPopup();
-}
-
-void StudioSimGameInstance::DrawGatheringDecisionModal()
-{
-    const StudioSim::FGathering* pendingGathering = nullptr;
-    for (const auto& gathering : gatheringSystem_.Gatherings())
-    {
-        if (gathering.awaitingConfirm && gathering.decision.valid)
-        {
-            pendingGathering = &gathering;
+            activeMeeting = &gathering;
             break;
         }
     }
-    if (pendingGathering != nullptr)
-    {
-        ImGui::OpenPopup("会议决策");
-    }
+    const std::string emptyMeetingTopic;
+    const std::string& meetingTopic =
+        activeMeeting != nullptr ? activeMeeting->topic : emptyMeetingTopic;
 
-    PrepareStudioSimModal(560.0f, 780.0f);
-    if (!ImGui::BeginPopupModal("会议决策", nullptr, kStudioSimModalFlags))
-    {
-        return;
-    }
-    if (pendingGathering == nullptr)
-    {
-        ImGui::CloseCurrentPopup();
-        ImGui::EndPopup();
-        return;
-    }
+    const StudioSim::StudioSimUI::FHudContext hudContext{
+        .world = worldState_,
+        .gameProject = gameProject_,
+        .company = companyState_,
+        .goalSystem = goalSystem_,
+        .productionSystem = productionSystem_,
+        .employeeSystem = employeeSystem_,
+        .scheduler = scheduler_,
+        .eventSystem = eventSystem_,
+        .gatheringSystem = gatheringSystem_,
+        .officeMap = officeMap_,
+        .sceneReady = sceneReady_,
+        .sceneNodeCount = sceneNodeCount_,
+        .meetingActive = activeMeeting != nullptr,
+        .meetingTopic = meetingTopic,
+        .awaitingPlayerDecision = IsAwaitingPlayerDecision(),
+        .playerDecisionFlowActive = IsPlayerDecisionFlowActive(),
+        .raiseEvent = [this](const std::string& eventId) { RaiseEventAndMaybeStartMeeting(eventId); },
+    };
+    ui_.DrawHud(hudContext);
 
-    ImGui::TextWrapped("会议：%s", pendingGathering->topic.c_str());
-    ImGui::Separator();
-    ImGui::TextWrapped("决议：%s", pendingGathering->decision.summary.c_str());
-    if (!pendingGathering->decision.focusMeter.empty())
-    {
-        ImGui::TextDisabled("集中补：%s", ProjectMeterLabelZh(pendingGathering->decision.focusMeter));
-    }
-    for (const auto& reassign : pendingGathering->decision.reassign)
-    {
-        ImGui::BulletText("%s → %s", reassign.first.c_str(), reassign.second.c_str());
-    }
-    ImGui::Spacing();
-
-    const int gatheringId = pendingGathering->id;
-    if (ImGui::Button("采纳"))
-    {
-        gatheringSystem_.AcceptDecision(gatheringId, worldState_.gameClockMinutes, employeeSystem_.EmployeesMutable(),
-                                        productionSystem_);
-        ImGui::CloseCurrentPopup();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("否决"))
-    {
-        gatheringSystem_.RejectDecision(gatheringId, worldState_.gameClockMinutes, employeeSystem_.EmployeesMutable());
-        ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndPopup();
-}
-
-void StudioSimGameInstance::DrawReviewModal()
-{
-    const bool inReview = worldState_.phase == StudioSim::EDayPhase::Review;
-    if (inReview)
-    {
-        ImGui::OpenPopup("当天复盘");
-    }
-
-    PrepareStudioSimModal(600.0f, 820.0f);
-    if (!ImGui::BeginPopupModal("当天复盘", nullptr, kStudioSimModalFlags))
-    {
-        return;
-    }
-    if (!inReview)
-    {
-        ImGui::CloseCurrentPopup();
-        ImGui::EndPopup();
-        return;
-    }
-
-    const bool launchReview = gameProject_.launched;
-    ImGui::TextUnformatted(launchReview ? "上线结算" : "当天复盘");
-    ImGui::Separator();
-    if (launchReview)
-    {
-        ImGui::TextWrapped("《%s》 %s x %s", gameProject_.name.c_str(), GameGenreLabelZh(gameProject_.genre),
-                           GameThemeLabelZh(gameProject_.theme));
-        ImGui::Text("质量 %.0f/100 | 媒体评分 %d/40 | 销量 %lld", gameProject_.quality * 100.0f,
-                    gameProject_.reviewScore, static_cast<long long>(gameProject_.unitsSold));
-        if (!gameProject_.reviewerScores.empty())
-        {
-            std::string reviewerLine;
-            for (size_t i = 0; i < gameProject_.reviewerScores.size(); ++i)
+    const StudioSim::StudioSimUI::FModalContext modalContext{
+        .world = worldState_,
+        .gameProject = gameProject_,
+        .company = companyState_,
+        .goalSystem = goalSystem_,
+        .gatheringSystem = gatheringSystem_,
+        .hasActiveGameProject = HasActiveGameProject(),
+        .buildProjectPreview =
+            [this](StudioSim::EGameGenre genre, StudioSim::EGameTheme theme,
+                   StudioSim::EProjectSizeTier size)
             {
-                if (i > 0)
-                {
-                    reviewerLine += " / ";
-                }
-                reviewerLine += fmt::format("{}", gameProject_.reviewerScores[i]);
-            }
-            ImGui::TextWrapped("评委分：%s", reviewerLine.c_str());
-        }
-        ImGui::Text("营收 %lld | 成本 %lld | 利润 %lld", static_cast<long long>(gameProject_.revenue),
-                    static_cast<long long>(gameProject_.cost), static_cast<long long>(gameProject_.profit));
-        ImGui::Text("公司资金 %lld", static_cast<long long>(companyState_.funds));
-        if (!gameProject_.reviewQuotes.empty())
-        {
-            ImGui::Separator();
-            for (const auto& quote : gameProject_.reviewQuotes)
+                return BuildProjectFromPitch(genre, theme, size, companyState_.projectIndex);
+            },
+        .startProject =
+            [this](StudioSim::EGameGenre genre, StudioSim::EGameTheme theme,
+                   StudioSim::EProjectSizeTier size)
             {
-                ImGui::BulletText("%s", quote.c_str());
-            }
-        }
-        ImGui::Separator();
-    }
-    if (goalSystem_.Summary().empty())
+                StartProjectPitch(genre, theme, size);
+            },
+        .chooseGoal =
+            [this](int index)
+            {
+                goalSystem_.ChooseGoal(index, NextAI::GetAIService(GetEngine()),
+                                       employeeSystem_.EmployeesMutable());
+            },
+        .chooseCustomGoal =
+            [this](const std::string& goal)
+            {
+                goalSystem_.ChooseCustom(goal, NextAI::GetAIService(GetEngine()),
+                                         employeeSystem_.EmployeesMutable());
+            },
+        .acceptGathering =
+            [this](int gatheringId)
+            {
+                gatheringSystem_.AcceptDecision(gatheringId, worldState_.gameClockMinutes,
+                                                employeeSystem_.EmployeesMutable(), productionSystem_);
+            },
+        .rejectGathering =
+            [this](int gatheringId)
+            {
+                gatheringSystem_.RejectDecision(gatheringId, worldState_.gameClockMinutes,
+                                                employeeSystem_.EmployeesMutable());
+            },
+        .startNextDay = [this]() { StartNextDay(); },
+    };
+    ui_.DrawModals(modalContext);
+
+    if (sceneReady_ && ui_.ShowOverlay())
     {
-        ImGui::TextUnformatted(launchReview ? "结算点评生成中..." : "复盘生成中...");
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        const float aspect = viewport != nullptr && viewport->Size.y > 1.0f
+                                 ? viewport->Size.x / viewport->Size.y
+                                 : 16.0f / 9.0f;
+        const glm::mat4 viewProjection =
+            glm::perspective(glm::radians(kOfficeFov), aspect, 0.05f, 2000.0f) * ViewMatrix();
+        ui_.DrawOverlay(viewProjection, officeMap_, employeeSystem_, worldState_);
     }
-    else
-    {
-        ImGui::TextWrapped("%s", goalSystem_.Summary().c_str());
-    }
-    ImGui::Spacing();
-    if (ImGui::Button(launchReview ? "开下一个项目" : "进入下一天"))
-    {
-        StartNextDay();
-        ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndPopup();
+    return true;
 }
 
 bool StudioSimGameInstance::OnKey(SDL_Event& event)
@@ -1912,6 +1082,32 @@ bool StudioSimGameInstance::OnKey(SDL_Event& event)
     {
         return false;
     }
+    if (event.key.key == SDLK_ESCAPE && followEmployeeIndex_ >= 0)
+    {
+        followEmployeeIndex_ = -1;
+        return true;
+    }
+    if (event.key.key == SDLK_LEFT)
+    {
+        cameraPan_.x = std::max(cameraPan_.x - 2.0f, -12.0f);
+        return true;
+    }
+    if (event.key.key == SDLK_RIGHT)
+    {
+        cameraPan_.x = std::min(cameraPan_.x + 2.0f, 12.0f);
+        return true;
+    }
+    if (event.key.key == SDLK_UP)
+    {
+        cameraPan_.y = std::max(cameraPan_.y - 2.0f, -10.0f);
+        return true;
+    }
+    if (event.key.key == SDLK_DOWN)
+    {
+        cameraPan_.y = std::min(cameraPan_.y + 2.0f, 10.0f);
+        return true;
+    }
+
     int index = -1;
     if (event.key.key == SDLK_1) index = 0;
     else if (event.key.key == SDLK_2) index = 1;
@@ -1922,4 +1118,22 @@ bool StudioSimGameInstance::OnKey(SDL_Event& event)
         return true;
     }
     return false;
+}
+
+bool StudioSimGameInstance::OnMouseButton(SDL_Event& event)
+{
+    if (!sceneReady_ || event.type != SDL_EVENT_MOUSE_BUTTON_DOWN ||
+        event.button.button != SDL_BUTTON_LEFT)
+    {
+        return false;
+    }
+    const ImVec2 mousePosition = ImGui::GetMousePos();
+    followEmployeeIndex_ = PickEmployeeAtScreen({mousePosition.x, mousePosition.y});
+    return followEmployeeIndex_ >= 0;
+}
+
+bool StudioSimGameInstance::OnScroll(double /*xoffset*/, double yoffset)
+{
+    cameraZoom_ = std::clamp(cameraZoom_ - static_cast<float>(yoffset) * 0.08f, 0.55f, 1.6f);
+    return true;
 }

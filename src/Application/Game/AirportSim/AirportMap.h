@@ -2,10 +2,7 @@
 
 #include "AirportSimTypes.h"
 
-#include <string>
-#include <vector>
-
-#include <glm/glm.hpp>
+#include "Gameplay/Sim/AnchorMap.h"
 
 namespace Assets
 {
@@ -20,11 +17,11 @@ namespace AirportSim
     {
     public:
         void BuildFromScene(Assets::Scene& scene);
-        void Clear() { points_.clear(); }
+        void Clear() { anchors_.Clear(); }
 
-        const std::vector<FPointOfInterest>& Points() const { return points_; }
-        std::vector<FPointOfInterest>& PointsMutable() { return points_; }
-        size_t Count() const { return points_.size(); }
+        const std::vector<FPointOfInterest>& Points() const { return anchors_.Points(); }
+        std::vector<FPointOfInterest>& PointsMutable() { return anchors_.PointsMutable(); }
+        size_t Count() const { return anchors_.Count(); }
 
         std::vector<const FPointOfInterest*> PointsOfCategory(const std::string& category) const;
         const FPointOfInterest* FindByName(const std::string& name) const;
@@ -43,6 +40,6 @@ namespace AirportSim
         static glm::vec3 SeatPosition(const FPointOfInterest& poi, int slot);
 
     private:
-        std::vector<FPointOfInterest> points_;
+        NextGameplay::Sim::FAnchorMap anchors_;
     };
 }

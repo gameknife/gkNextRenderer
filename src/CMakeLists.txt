@@ -39,6 +39,7 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_CVarSystem.cpp
 	Tests/Test_SceneList.cpp
 	Tests/Test_ScadLoader.cpp
+	Tests/Test_SimKit.cpp
 	Tests/Test_ScadRig.cpp
 	Tests/Test_RigAnimator.cpp
 	Tests/Test_RenderComponent.cpp
@@ -201,13 +202,11 @@ add_executable(CharacterDemo
 	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(CharacterDemo PRIVATE Application/Game/CharacterDemo)
-if ( GK_WITH_NEXT_QUICKJS )
-	add_executable(StudioSim
-		${src_files_studiosim}
-		${DESKTOP_MAIN_SOURCES}
-	)
-	target_include_directories(StudioSim PRIVATE Application/Game/StudioSim)
-endif()
+add_executable(StudioSim
+	${src_files_studiosim}
+	${DESKTOP_MAIN_SOURCES}
+)
+target_include_directories(StudioSim PRIVATE Application/Game/StudioSim)
 add_executable(AirportSim
 	${src_files_airportsim}
 	${DESKTOP_MAIN_SOURCES}
@@ -372,11 +371,12 @@ gkNextStillBenchmark
 	FlappyCpp
 	BrickPlayer
 	CharacterDemo
+	StudioSim
 	AirportSim
 	gkNextUnitTests
 	${GK_MODULE_TARGETS}
 )
-foreach(gk_quickjs_program gkNextEditor FlappyJs StudioSim)
+foreach(gk_quickjs_program gkNextEditor FlappyJs)
 	if ( TARGET ${gk_quickjs_program} )
 		list(APPEND AllTargets ${gk_quickjs_program})
 	endif()
@@ -625,7 +625,7 @@ endif()
 if ( TARGET NextQuickJS )
 	target_compile_definitions(NextQuickJS PUBLIC WITH_QUICKJS=1 PRIVATE GK_NEXT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 	target_link_libraries(NextQuickJS PRIVATE quickjs SDL3::SDL3 imgui::imgui)
-	foreach(t FlappyJs StudioSim gkNextEditor)
+	foreach(t FlappyJs gkNextEditor)
 		if ( TARGET ${t} )
 			target_link_libraries(${t} PRIVATE NextQuickJS)
 		endif()
@@ -641,14 +641,14 @@ if ( TARGET LDrawLoader )
 	endforeach()
 endif()
 if ( TARGET ScadLoader )
-	foreach(t gkNextRenderer gkNextVisualTest gkNextStillBenchmark gkNextMotionBenchmark gkNextEditor ScadStudio StudioSim AirportSim gkNextUnitTests)
+	foreach(t NextGameplay gkNextRenderer gkNextVisualTest gkNextStillBenchmark gkNextMotionBenchmark gkNextEditor ScadStudio StudioSim AirportSim gkNextUnitTests)
 		if ( TARGET ${t} )
 			target_link_libraries(${t} PRIVATE ScadLoader)
 		endif()
 	endforeach()
 endif()
 if ( TARGET NextAI )
-	foreach(t gkNextEditor ScadStudio MagicaLego StudioSim AirportSim gkNextUnitTests)
+	foreach(t NextGameplay gkNextEditor ScadStudio MagicaLego StudioSim AirportSim gkNextUnitTests)
 		if ( TARGET ${t} )
 			target_link_libraries(${t} PRIVATE NextAI)
 		endif()

@@ -29,7 +29,7 @@ namespace StudioSim
         const std::vector<FEventDef>& Catalog() const { return catalog_; }
 
         void Raise(const std::string& eventId, double gameMinutes, FWorldState& world,
-                   std::vector<FEmployee>& employees, OfficeMap& office);
+                   OfficeMap& office);
 
         // 拼出喂进决策 prompt 的当日事件摘要（无事件时返回 "暂无"）。
         static std::string BuildSummary(const FWorldState& world);

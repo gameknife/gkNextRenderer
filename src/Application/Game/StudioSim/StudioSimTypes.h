@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Gameplay/Sim/AnchorMap.h"
+
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -47,17 +49,7 @@ namespace StudioSim
         return ERole::Unknown;
     }
 
-    // 从 SCAD 具名节点解析出的功能点位锚点。
-    struct FPointOfInterest
-    {
-        std::string name;       // 节点名，如 "desk_engineer_01"
-        std::string category;   // "desk" / "meet" / "pantry" / "lounge"
-        ERole       roleTag = ERole::Unknown; // desk 专属职位标签
-        glm::vec3   worldPos{0.0f};
-        uint32_t    nodeId = 0;
-        bool        workable = true;   // 断电/宕机等事件会置 false（M6）
-        uint32_t    occupiedBy = 0;    // 占用员工序号，0 = 空（M2+）
-    };
+    using FPointOfInterest = NextGameplay::Sim::FAnchorPoi;
 
     // 一天的阶段机（见计划 §10）。M3 主要跑 Working；Briefing/Review 在 M5 接 LLM 目标。
     enum class EDayPhase

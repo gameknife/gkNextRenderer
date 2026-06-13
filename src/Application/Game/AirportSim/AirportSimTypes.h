@@ -1,5 +1,8 @@
 #pragma once
 
+#include "Gameplay/Sim/AnchorMap.h"
+#include "Gameplay/Sim/SimVisual.h"
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -115,14 +118,8 @@ namespace AirportSim
         }
     }
 
-    // 视觉层动画提示（§3.3）。GeometryVisual 用简单姿态变化表达。
-    enum class EAgentAnimHint
-    {
-        Idle,
-        Walk,
-        Sit,
-        Work
-    };
+    // 视觉层动画提示由 Sim Kit 统一定义。
+    using EAgentAnimHint = NextGameplay::Sim::EAnimHint;
 
     enum class EFlightState
     {
@@ -251,16 +248,7 @@ namespace AirportSim
     }
 
     // 从 SCAD 具名节点解析出的功能点位锚点（§2.2）。
-    struct FPointOfInterest
-    {
-        std::string name;       // 节点名，如 "checkin_01"
-        std::string category;   // 前缀，如 "checkin"
-        glm::vec3   worldPos{0.0f};
-        glm::vec3   frontDir{0.0f, 0.0f, 1.0f}; // 世界系 front（scad 局部 -y）
-        uint32_t    nodeId = 0;
-        int         occupiedBy = -1;        // 占用 agent id，-1 = 空
-        int         seatOccupied[4] = {-1, -1, -1, -1}; // wait 类 4 联座占用
-    };
+    using FPointOfInterest = NextGameplay::Sim::FAnchorPoi;
 
     // 离港航班（§4.3）。
     struct FFlight

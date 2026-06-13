@@ -2,7 +2,6 @@
 
 #include <spdlog/spdlog.h>
 
-#include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Core/Scene.hpp"
 
 namespace StudioSim
@@ -39,80 +38,72 @@ namespace StudioSim
 
     void OfficeMap::BuildFromScene(Assets::Scene& scene)
     {
-        points_.clear();
+        NextGameplay::Sim::FAnchorParseConfig config;
+        config.recoverFrontDir = false;
+        config.acceptCategories = {"desk", "meet_seat", "pantry", "lounge"};
+        anchors_.BuildFromScene(scene, config);
+        roleTags_.clear();
 
-        for (const auto& node : scene.Nodes())
+        for (auto& point : anchors_.PointsMutable())
         {
-            if (!node)
+            if (point.category == "meet_seat")
             {
-                continue;
+                point.category = "meet";
             }
-
-            std::string category;
-            ERole role = ERole::Unknown;
-            if (!ClassifyNode(node->GetName(), category, role))
+            if (point.category == "desk")
             {
-                continue;
+                std::string category;
+                ERole role = ERole::Unknown;
+                ClassifyNode(point.name, category, role);
+                roleTags_[point.name] = role;
             }
-
-            FPointOfInterest poi;
-            poi.name = node->GetName();
-            poi.category = category;
-            poi.roleTag = role;
-            poi.worldPos = node->WorldTranslation();
-            poi.nodeId = node->GetInstanceId();
-            points_.push_back(std::move(poi));
         }
 
-        SPDLOG_INFO("StudioSim/OfficeMap: parsed {} POIs", points_.size());
-        for (const auto& p : points_)
+        SPDLOG_INFO("StudioSim/OfficeMap: parsed {} POIs", anchors_.Count());
+        for (const auto& point : anchors_.Points())
         {
-            SPDLOG_INFO("  POI {:<18} [{}] role={} world=({:.2f}, {:.2f}, {:.2f})", p.name, p.category,
-                        RoleName(p.roleTag), p.worldPos.x, p.worldPos.y, p.worldPos.z);
+            SPDLOG_INFO("  POI {:<18} [{}] role={} world=({:.2f}, {:.2f}, {:.2f})", point.name,
+                        point.category, RoleName(RoleForPoint(point.name)), point.worldPos.x,
+                        point.worldPos.y, point.worldPos.z);
         }
+    }
+
+    void OfficeMap::Clear()
+    {
+        anchors_.Clear();
+        roleTags_.clear();
     }
 
     std::vector<const FPointOfInterest*> OfficeMap::PointsOfCategory(const std::string& category) const
     {
-        std::vector<const FPointOfInterest*> result;
-        for (const auto& p : points_)
-        {
-            if (p.category == category)
-            {
-                result.push_back(&p);
-            }
-        }
-        return result;
+        return anchors_.PointsOfCategory(category);
     }
 
     const FPointOfInterest* OfficeMap::FindByName(const std::string& name) const
     {
-        for (const auto& p : points_)
-        {
-            if (p.name == name)
-            {
-                return &p;
-            }
-        }
-        return nullptr;
+        return anchors_.FindByName(name);
+    }
+
+    ERole OfficeMap::RoleForPoint(const std::string& name) const
+    {
+        const auto found = roleTags_.find(name);
+        return found == roleTags_.end() ? ERole::Unknown : found->second;
     }
 
     void OfficeMap::SetWorkable(const std::string& category, const std::string& roleTag, bool workable)
     {
-        for (auto& poi : points_)
+        for (auto& point : anchors_.PointsMutable())
         {
-            if (poi.category == category && (roleTag.empty() || RoleName(poi.roleTag) == roleTag))
+            if (point.category == category &&
+                (roleTag.empty() || RoleName(RoleForPoint(point.name)) == roleTag))
             {
-                poi.workable = workable;
+                point.enabled = workable;
             }
         }
     }
 
     void OfficeMap::ResetWorkable()
     {
-        for (auto& poi : points_)
-        {
-            poi.workable = true;
-        }
+        anchors_.ResetEnabled();
     }
 }

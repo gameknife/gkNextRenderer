@@ -4,6 +4,7 @@
 #include "OfficeMap.h"
 
 #include <algorithm>
+#include <chrono>
 
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
@@ -17,7 +18,9 @@ namespace StudioSim
     {
         // 每个员工两次 LLM 决策之间的最小游戏时间间隔（分钟）。
         constexpr double kDecisionIntervalMinutes = 60.0;
+        constexpr double kLlmTimeoutSeconds = 15.0;
         constexpr size_t kShortMemoryLimit = 4;
+        constexpr size_t kLogLimit = 60;
         constexpr double kBubbleDurationMinutes = 25.0;
 
         const char* ProjectStageLabelZh(EProjectStage stage)
@@ -255,7 +258,7 @@ namespace StudioSim
             std::string poiList;
             for (const auto& poi : office.Points())
             {
-                if (!poi.workable)
+                if (!poi.enabled)
                 {
                     continue; // 断电/宕机的点位不列给 LLM
                 }
@@ -342,6 +345,37 @@ namespace StudioSim
         }
     }
 
+    double DecisionScheduler::InFlightElapsedMs() const
+    {
+        if (!inFlight_)
+        {
+            return 0.0;
+        }
+        return std::chrono::duration<double, std::milli>(
+                   std::chrono::steady_clock::now() - inFlightStartedAt_)
+            .count();
+    }
+
+    void DecisionScheduler::PushLog(const FEmployee& employee, std::string summary,
+                                    std::string prompt, std::string response, double elapsedMs,
+                                    bool success)
+    {
+        log_.push_back({
+            .id = nextLogId_++,
+            .employeeName = employee.displayName,
+            .summary = std::move(summary),
+            .prompt = std::move(prompt),
+            .response = std::move(response),
+            .elapsedMs = elapsedMs,
+            .success = success,
+        });
+        if (log_.size() > kLogLimit)
+        {
+            log_.erase(log_.begin(), log_.begin() +
+                                         static_cast<long long>(log_.size() - kLogLimit));
+        }
+    }
+
     void DecisionScheduler::Tick(double gameMinutes, const FDailyGoal& goal, const FGameProject& gameProject,
                                  const std::string& eventsSummary, NextAI::FAIService* ai,
                                  std::vector<FEmployee>& employees, const OfficeMap& office)
@@ -353,7 +387,23 @@ namespace StudioSim
             {
                 if (pending.empIndex < employees.size())
                 {
-                    ApplyResult(employees, pending.empIndex, pending.result, gameMinutes, office);
+                    if (pending.result.valid)
+                    {
+                        ApplyResult(employees, pending.empIndex, pending.result, gameMinutes, office);
+                        PushLog(employees[pending.empIndex],
+                                fmt::format("LLM · {}", pending.result.action), pending.prompt,
+                                pending.response, pending.elapsedMs, true);
+                    }
+                    else
+                    {
+                        const std::string reason =
+                            pending.serviceSuccess ? "响应解析失败"
+                                                   : (pending.errorMessage.empty()
+                                                          ? "服务失败"
+                                                          : fmt::format("服务失败: {}", pending.errorMessage));
+                        ApplyFallback(employees, pending.empIndex, gameMinutes, office, reason,
+                                      pending.elapsedMs, pending.prompt, pending.response);
+                    }
                 }
             }
             if (!completed_.empty())
@@ -363,43 +413,94 @@ namespace StudioSim
             }
         }
 
+        if (inFlight_ && InFlightElapsedMs() >= kLlmTimeoutSeconds * 1000.0)
+        {
+            ++generation_;
+            if (inFlightEmployeeIndex_ < employees.size())
+            {
+                ApplyFallback(employees, inFlightEmployeeIndex_, gameMinutes, office, "请求超时",
+                              InFlightElapsedMs(), inFlightPrompt_, {});
+            }
+            inFlight_ = false;
+            inFlightPrompt_.clear();
+        }
+
         // 2. 空闲则发起下一个决策（在途上限 1，匹配 llama-server parallel:1）。
-        if (inFlight_ || ai == nullptr)
+        if (inFlight_ || employees.empty())
         {
             return;
         }
-        for (size_t i = 0; i < employees.size(); ++i)
+
+        size_t chosenIndex = employees.size();
+        size_t idleIndex = employees.size();
+        for (size_t offset = 0; offset < employees.size(); ++offset)
         {
+            const size_t i = (scanCursor_ + offset) % employees.size();
             FEmployee& emp = employees[i];
             if (emp.gatheringId >= 0 || emp.decisionPending || gameMinutes < emp.nextDecisionAt)
             {
                 continue;
             }
-
-            const std::string prompt =
-                BuildPrompt(emp, goal, gameProject, eventsSummary, employees, gameMinutes, office);
-            emp.decisionPending = true;
-            emp.nextDecisionAt = gameMinutes + kDecisionIntervalMinutes;
-            inFlight_ = true;
-            ++decisionsMade_;
-
-            const size_t idx = i;
-            const uint64_t generation = generation_;
-            ai->GenerateTextAsync(prompt,
-                                  [this, idx, generation](NextAI::FAIResponse response)
-                                  {
-                                      // Worker thread: only parse + enqueue, never touch Scene/employees.
-                                      FDecisionResult result =
-                                          ParseDecision(response.success ? response.text : std::string());
-                                      std::lock_guard<std::mutex> lock(mutex_);
-                                      if (generation != generation_)
-                                      {
-                                          return;
-                                      }
-                                      completed_.push_back({idx, result});
-                                  });
-            break;
+            if (emp.eventReactionPending || !emp.pendingFrom.empty())
+            {
+                chosenIndex = i;
+                break;
+            }
+            if (idleIndex == employees.size())
+            {
+                idleIndex = i;
+            }
         }
+        if (chosenIndex == employees.size())
+        {
+            chosenIndex = idleIndex;
+        }
+        if (chosenIndex == employees.size())
+        {
+            return;
+        }
+
+        scanCursor_ = (chosenIndex + 1) % employees.size();
+        FEmployee& employee = employees[chosenIndex];
+        employee.nextDecisionAt = gameMinutes + kDecisionIntervalMinutes;
+        ++decisionsMade_;
+
+        if (ai == nullptr)
+        {
+            ApplyFallback(employees, chosenIndex, gameMinutes, office, "AI 不可用");
+            return;
+        }
+
+        const std::string prompt =
+            BuildPrompt(employee, goal, gameProject, eventsSummary, employees, gameMinutes, office);
+        employee.decisionPending = true;
+        inFlight_ = true;
+        inFlightEmployeeIndex_ = chosenIndex;
+        inFlightStartedAt_ = std::chrono::steady_clock::now();
+        inFlightPrompt_ = prompt;
+
+        const uint64_t generation = generation_;
+        ai->GenerateTextAsync(prompt,
+                              [this, chosenIndex, generation, prompt](NextAI::FAIResponse response)
+                              {
+                                  FDecisionResult result =
+                                      ParseDecision(response.success ? response.text : std::string());
+                                  std::lock_guard<std::mutex> lock(mutex_);
+                                  if (generation != generation_)
+                                  {
+                                      return;
+                                  }
+                                  completed_.push_back({
+                                      .empIndex = chosenIndex,
+                                      .result = std::move(result),
+                                      .elapsedMs = response.elapsedMs,
+                                      .serviceSuccess = response.success,
+                                      .errorMessage = response.message,
+                                      .prompt = prompt,
+                                      .response = response.success ? std::move(response.text)
+                                                                   : std::move(response.message),
+                                  });
+                              });
     }
 
     void DecisionScheduler::ApplyResult(std::vector<FEmployee>& employees, size_t empIndex,
@@ -444,7 +545,7 @@ namespace StudioSim
         }
 
         const FPointOfInterest* targetPoi = office.FindByName(targetName);
-        if (targetPoi != nullptr && targetPoi->workable)
+        if (targetPoi != nullptr && targetPoi->enabled)
         {
             emp.overrideTargetPoi = targetName;
             emp.overrideUntilMinutes = gameMinutes + result.durationMinutes;
@@ -488,12 +589,55 @@ namespace StudioSim
                     result.targetPoi, result.targetEmployee, MoodName(result.mood), result.dialogue);
     }
 
+    void DecisionScheduler::ApplyFallback(std::vector<FEmployee>& employees, size_t empIndex,
+                                          double gameMinutes, const OfficeMap& office,
+                                          std::string reason, double elapsedMs, std::string prompt,
+                                          std::string response)
+    {
+        if (empIndex >= employees.size())
+        {
+            return;
+        }
+
+        ++fallbacksUsed_;
+        FEmployee& employee = employees[empIndex];
+        FDecisionResult fallback;
+        fallback.valid = true;
+        fallback.action = "WORK";
+        fallback.targetPoi = employee.homeDeskPoi;
+        fallback.mood = employee.eventReactionPending ? EMood::Focused : EMood::Calm;
+        fallback.durationMinutes = 30;
+        if (!employee.pendingFrom.empty())
+        {
+            fallback.action = "TALK";
+            fallback.targetEmployee = employee.pendingFrom;
+            fallback.dialogue = "收到，我先处理";
+        }
+        const FPointOfInterest* desk = office.FindByName(fallback.targetPoi);
+        if (desk == nullptr || !desk->enabled)
+        {
+            fallback.action = "REST";
+            fallback.targetPoi = "pantry_01";
+        }
+
+        ApplyResult(employees, empIndex, fallback, gameMinutes, office);
+        PushLog(employee, fmt::format("规则 fallback · {}", reason), std::move(prompt),
+                std::move(response), elapsedMs, false);
+    }
+
     void DecisionScheduler::Reset()
     {
         std::lock_guard<std::mutex> lock(mutex_);
         ++generation_;
         completed_.clear();
         inFlight_ = false;
+        inFlightEmployeeIndex_ = 0;
+        inFlightStartedAt_ = {};
+        inFlightPrompt_.clear();
         decisionsMade_ = 0;
+        fallbacksUsed_ = 0;
+        nextLogId_ = 1;
+        scanCursor_ = 0;
+        log_.clear();
     }
 }

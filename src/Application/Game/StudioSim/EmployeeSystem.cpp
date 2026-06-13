@@ -2,28 +2,21 @@
 
 #include "DaySchedule.h"
 #include "OfficeMap.h"
+#include "StudioSimConfig.hpp"
 
 #include <fstream>
 #include <iterator>
 
-#include <glm/gtc/quaternion.hpp>
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
-#include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Assets/Loaders/FProcModel.h"
-#include "Engine/Runtime/Components/PhysicsComponent.h"
-#include "Engine/Runtime/Scene/SceneBuilder.h"
 #include "Engine/Utilities/FileHelper.hpp"
 
 namespace StudioSim
 {
     namespace
     {
-        constexpr float kGroundY = 0.15f;     // 地板顶面高度
-        constexpr float kWalkSpeed = 3.0f;    // m/s（游戏单位）
-
         std::vector<FEmployeeCardDef> DefaultCards()
         {
             return {
@@ -40,7 +33,7 @@ namespace StudioSim
         glm::vec3 CourtyardSide(glm::vec3 p)
         {
             p.z += (p.z > 0.0f) ? -1.2f : 1.2f;
-            p.y = kGroundY;
+            p.y = Config::kGroundY;
             return p;
         }
     }
@@ -99,48 +92,32 @@ namespace StudioSim
 
     void EmployeeSystem::InjectAssets(std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials)
     {
-        if (assetsInjected_)
-        {
-            return;
-        }
         LoadCards();
 
-        // 员工 = 一个 0.5 x 1.6 x 0.5 的直立 box，底面在 y=0。
-        employeeModelIds_.clear();
-        employeeMatIds_.clear();
-        for (const auto& card : cards_)
+        NextGameplay::Sim::FCharacterPoolConfig config;
+        config.poolCapacity = static_cast<int>(cards_.size());
+        config.navCellSize = Config::kNavCellSize;
+        config.agentRadius = Config::kAgentRadius;
+        config.separationRadius = Config::kSeparationRadius;
+        config.separationStrength = Config::kSeparationStrength;
+        config.groundY = Config::kGroundY;
+        config.parkedPosition = Config::kParkedPosition;
+        config.useRig = Config::kUseScadRigVisual;
+        config.rigPath = Config::kAgentRigPath;
+        config.rigVisual.baseWalkSpeed = Config::kWalkSpeed;
+        config.nodeNamePrefix = "employee";
+        config.slotTints.reserve(cards_.size());
+        for (const FEmployeeCardDef& card : cards_)
         {
-            models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.25f, 0.0f, -0.25f), glm::vec3(0.25f, 1.6f, 0.25f)));
-            employeeModelIds_.push_back(static_cast<uint32_t>(models.size() - 1));
-            employeeMatIds_.push_back(Assets::SceneBuilder::AddLambertianMaterial(materials, card.color));
+            config.slotTints.push_back(card.color);
         }
-
-        assetsInjected_ = true;
-    }
-
-    void EmployeeSystem::BuildNavGrid(Assets::Scene& scene)
-    {
-        const glm::vec3 sceneMin = scene.GetSceneAABBMin();
-        const glm::vec3 sceneMax = scene.GetSceneAABBMax();
-
-        NextGameplay::FNavGridSettings settings;
-        settings.cellSize = 0.5f;
-        settings.agentRadius = 0.3f;
-        settings.maxSlopeAngle = 50.0f;
-        settings.clearanceHeight = 1.7f;
-        settings.maxStepHeight = 0.35f;
-        settings.worldMin = glm::vec3(sceneMin.x - 2.0f, 0.0f, sceneMin.z - 2.0f);
-        settings.worldMax = glm::vec3(sceneMax.x + 2.0f, 0.0f, sceneMax.z + 2.0f);
-        settings.sampleCeiling = sceneMax.y + 5.0f;
-        settings.floorHeightTolerance = 1.0f;
-
-        navGrid_.Build(scene.GetCPUAccelerationStructure(), settings);
-        navReady_ = navGrid_.IsBuilt();
+        characterPool_.Configure(config);
+        characterPool_.InjectAssets(models, materials);
     }
 
     void EmployeeSystem::OnSceneLoaded(Assets::Scene& scene, const OfficeMap& office)
     {
-        BuildNavGrid(scene);
+        characterPool_.OnSceneLoaded(scene);
 
         employees_.clear();
         for (size_t i = 0; i < cards_.size(); ++i)
@@ -154,41 +131,37 @@ namespace StudioSim
             emp.color = card.color;
             emp.homeDeskPoi = card.desk;
             emp.personality = card.personality;
+            emp.active = true;
+            emp.speed = Config::kWalkSpeed;
 
             const FPointOfInterest* desk = office.FindByName(card.desk);
-            emp.position = desk ? CourtyardSide(desk->worldPos) : glm::vec3(0.0f, kGroundY, 0.0f);
-
-            const uint32_t instanceId = scene.GenerateInstanceId();
-            const uint32_t matId = employeeMatIds_.empty() ? 0 : employeeMatIds_[i % employeeMatIds_.size()];
-            const uint32_t modelId = employeeModelIds_.empty() ? 0 : employeeModelIds_[i % employeeModelIds_.size()];
-            emp.node = Assets::SceneBuilder::CreateRenderNode(card.id, emp.position, glm::vec3(1.0f), instanceId,
-                                                              modelId, matId);
-
-            // Dynamic mobility so the renderer refreshes the transform every frame.
-            auto phys = std::make_shared<Runtime::PhysicsComponent>();
-            phys->SetMobility(Runtime::ENodeMobility::Dynamic);
-            emp.node->AddComponent(phys);
-
-            scene.AddNode(emp.node);
+            emp.position =
+                desk ? CourtyardSide(desk->worldPos) : glm::vec3(0.0f, Config::kGroundY, 0.0f);
+            emp.visual = std::move(characterPool_.Characters()[i].visual);
+            if (emp.visual)
+            {
+                emp.visual->SetVisible(true);
+                emp.visual->SetWorldTransform(emp.position, 0.0f);
+            }
             employees_.push_back(std::move(emp));
         }
 
         scene.MarkDirty();
-        SPDLOG_INFO("StudioSim/Employees: spawned {} employees (navReady={})", employees_.size(), navReady_);
+        SPDLOG_INFO("StudioSim/Employees: spawned {} employees (navReady={})", employees_.size(),
+                    characterPool_.NavReady());
     }
 
     void EmployeeSystem::RepathTo(FEmployee& emp, const FPointOfInterest& poi)
     {
         const glm::vec3 target = CourtyardSide(poi.worldPos);
-        std::vector<glm::vec3> path = navGrid_.FindPath(emp.position, target, emp.position.y);
-        emp.follower.SetPath(std::move(path), target);
+        characterPool_.MoveTo(emp, target);
         emp.targetPoi = poi.name;
     }
 
     void EmployeeSystem::Tick(float deltaSeconds, double gameMinutes, bool paused, Assets::Scene& scene,
                               const OfficeMap& office)
     {
-        if (!navReady_ || employees_.empty() || paused)
+        if (!characterPool_.NavReady() || employees_.empty() || paused)
         {
             return;
         }
@@ -201,7 +174,7 @@ namespace StudioSim
 
             // 目标点位不可用（断电/宕机）→ 退到茶水间（休息区不受影响）。
             const FPointOfInterest* targetPoi = office.FindByName(targetName);
-            if (targetPoi != nullptr && !targetPoi->workable)
+            if (targetPoi != nullptr && !targetPoi->enabled)
             {
                 targetName = "pantry_01";
                 targetPoi = office.FindByName(targetName);
@@ -212,27 +185,38 @@ namespace StudioSim
                 RepathTo(emp, *targetPoi);
             }
 
-            const glm::vec3 dir = emp.follower.GetMoveDirection(emp.position);
-            if (glm::length(dir) > 0.001f)
-            {
-                emp.position += dir * (kWalkSpeed * deltaSeconds);
-                emp.position.y = kGroundY;
-                emp.yaw = std::atan2(dir.x, dir.z);
-
-                emp.node->SetTranslation(emp.position);
-                emp.node->SetRotation(glm::angleAxis(emp.yaw, glm::vec3(0.0f, 1.0f, 0.0f)));
-                emp.node->RecalcTransform();
-            }
         }
 
-        scene.MarkDirty();
+        std::vector<NextGameplay::Sim::FSimCharacter*> characters;
+        characters.reserve(employees_.size());
+        for (FEmployee& employee : employees_)
+        {
+            if (characterPool_.Arrived(employee))
+            {
+                const FPointOfInterest* point = office.FindByName(employee.targetPoi);
+                if (point != nullptr && point->category == "desk")
+                {
+                    employee.anim = NextGameplay::Sim::EAnimHint::Work;
+                }
+                else if (point != nullptr &&
+                         (point->category == "meet" || point->category == "pantry" ||
+                          point->category == "lounge"))
+                {
+                    employee.anim = NextGameplay::Sim::EAnimHint::Sit;
+                }
+                else
+                {
+                    employee.anim = NextGameplay::Sim::EAnimHint::Idle;
+                }
+            }
+            characters.push_back(&employee);
+        }
+        characterPool_.Tick(deltaSeconds, scene, characters);
     }
 
     void EmployeeSystem::Clear()
     {
         employees_.clear();
-        navGrid_ = NextGameplay::FNavGrid{};
-        navReady_ = false;
-        assetsInjected_ = false;
+        characterPool_.Clear();
     }
 }

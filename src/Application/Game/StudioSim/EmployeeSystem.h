@@ -3,11 +3,9 @@
 #include "StudioSimTypes.h"
 
 #include "Engine/Assets/AssetsFwd.hpp"
-#include "Gameplay/AI/NavGrid.h"
-#include "Gameplay/AI/PathFollower.h"
+#include "Gameplay/Sim/CharacterPool.h"
 
 #include <glm/glm.hpp>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -27,7 +25,7 @@ namespace StudioSim
     };
 
     // 一个员工的运行态（M2：卡片 + 可视节点 + 寻路）。后续里程碑会扩 mood/action/task。
-    struct FEmployee
+    struct FEmployee : NextGameplay::Sim::FSimCharacter
     {
         std::string id;
         std::string displayName;
@@ -39,11 +37,7 @@ namespace StudioSim
         FProjectMeters myContribution; // 当日个人产出累计（R1：确定性产出状态机）
         std::vector<std::string> shortMemory; // 最近几条经历摘要，喂回 LLM 决策 prompt
 
-        std::shared_ptr<Assets::Node> node;
-        glm::vec3   position{0.0f};
-        float       yaw = 0.0f;
         std::string targetPoi;
-        NextGameplay::FPathFollower follower;
 
         // M4：LLM 决策态。overrideTargetPoi 非空且未过期 → 覆盖脚本日程。
         std::string overrideTargetPoi;
@@ -77,19 +71,14 @@ namespace StudioSim
         const std::vector<FEmployee>& Employees() const { return employees_; }
         std::vector<FEmployee>& EmployeesMutable() { return employees_; }
         size_t Count() const { return employees_.size(); }
-        bool NavReady() const { return navReady_; }
+        bool NavReady() const { return characterPool_.NavReady(); }
 
     private:
-        void BuildNavGrid(Assets::Scene& scene);
         void RepathTo(FEmployee& emp, const FPointOfInterest& poi);
         void LoadCards();
 
         std::vector<FEmployeeCardDef> cards_;
-        std::vector<uint32_t> employeeModelIds_;
-        std::vector<uint32_t> employeeMatIds_;
-        NextGameplay::FNavGrid navGrid_;
+        NextGameplay::Sim::FCharacterPool characterPool_;
         std::vector<FEmployee> employees_;
-        bool assetsInjected_ = false;
-        bool navReady_ = false;
     };
 }
