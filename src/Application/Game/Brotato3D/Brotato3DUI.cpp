@@ -948,12 +948,14 @@ namespace Brotato3D
                   IM_COL32(78, 92, 110, 245));
         ImGui::SetWindowFontScale(uiScale);
         ImGui::SetCursorPos(Scale(16.0f, 17.0f, uiScale));
+        const ImVec2 statusBarSize = Scale(164.0f, 24.0f, uiScale);
         DrawBar(ImGui::GetCursorScreenPos(),
-                Scale(164.0f, 24.0f, uiScale),
+                statusBarSize,
                 hpRatio,
                 IM_COL32(210, 68, 58, 255),
                 fmt::format("HP {} / {}", player.currentHp, player.maxHp).c_str(),
                 uiScale);
+        ImGui::Dummy(statusBarSize);
 
         const std::string levelText = fmt::format("Lv {}", player.level);
         const float levelFontSize = ImGui::GetFontSize() * 1.18f;
@@ -972,11 +974,12 @@ namespace Brotato3D
 
         ImGui::SetCursorPos(Scale(250.0f, 17.0f, uiScale));
         DrawBar(ImGui::GetCursorScreenPos(),
-                Scale(164.0f, 24.0f, uiScale),
+                statusBarSize,
                 xpToNext > 0 ? static_cast<float>(player.currentXp) / static_cast<float>(xpToNext) : 0.0f,
                 IM_COL32(72, 135, 245, 255),
                 fmt::format("XP {} / {}", player.currentXp, xpToNext).c_str(),
                 uiScale);
+        ImGui::Dummy(statusBarSize);
         ImGui::End();
 
         ImDrawList* foregroundDrawList = ImGui::GetForegroundDrawList();

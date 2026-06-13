@@ -471,7 +471,7 @@ namespace Editor
             ImGui::PopTextWrapPos();
             ImGui::PopItemWidth();
 
-            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + kIconPadding);
+            ImGui::Dummy(ImVec2(0.0f, kIconPadding));
             ImGui::EndGroup();
 
             if (callbacks.onContextMenu)
