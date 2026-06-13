@@ -117,7 +117,7 @@ bool IsAABBInFrustum(float3 min, float3 max, float4x4 wvp)
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     let scene = Bindless.GetGpuscene();
-    if (DTid.x >= scene.custom_data_1)
+    if (DTid.x >= scene.custom_data_1 || DTid.x >= MAX_NODES)
     {
         return;
     }
@@ -151,8 +151,23 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    uint primBase;
-    InterlockedAdd(counters[0], triangleCount, primBase);
+    uint primBase = counters[0];
+    for (;;)
+    {
+        if (primBase >= scene.custom_data_2 || triangleCount > scene.custom_data_2 - primBase)
+        {
+            return;
+        }
+
+        uint observed;
+        InterlockedCompareExchange(counters[0], primBase, primBase + triangleCount, observed);
+        if (observed == primBase)
+        {
+            break;
+        }
+        primBase = observed;
+    }
+
     uint itemIdx;
     InterlockedAdd(counters[1], 1, itemIdx);
 

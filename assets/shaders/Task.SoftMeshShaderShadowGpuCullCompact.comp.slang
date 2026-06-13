@@ -72,7 +72,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 {
     let scene = Bindless.GetGpuscene();
     uint indirectDrawCount = scene.custom_data_1;
-    if (DTid.x >= indirectDrawCount)
+    if (DTid.x >= indirectDrawCount || DTid.x >= MAX_NODES)
     {
         return;
     }
@@ -117,16 +117,31 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
         uint slot = cascadeIdx + 1;
         uint counterBase = slot * 2;
-        uint primBase;
-        InterlockedAdd(counters[counterBase], triangleCount, primBase);
-        uint itemIdx;
-        InterlockedAdd(counters[counterBase + 1], 1, itemIdx);
+        uint primBase = counters[counterBase];
+        for (;;)
+        {
+            if (primBase >= maxSceneTriangles || triangleCount > maxSceneTriangles - primBase)
+            {
+                break;
+            }
 
-        SoftMeshShaderVisibleItem item;
-        item.primBase = cascadeIdx * maxSceneTriangles + primBase;
-        item.instanceIdx = DTid.x + 1;
-        item.modelOffsetIdx = node.modelId;
-        item.triCount = triangleCount;
-        visibleItems[slot * MAX_NODES + itemIdx] = item;
+            uint observed;
+            InterlockedCompareExchange(
+                counters[counterBase], primBase, primBase + triangleCount, observed);
+            if (observed == primBase)
+            {
+                uint itemIdx;
+                InterlockedAdd(counters[counterBase + 1], 1, itemIdx);
+
+                SoftMeshShaderVisibleItem item;
+                item.primBase = cascadeIdx * maxSceneTriangles + primBase;
+                item.instanceIdx = DTid.x + 1;
+                item.modelOffsetIdx = node.modelId;
+                item.triCount = triangleCount;
+                visibleItems[slot * MAX_NODES + itemIdx] = item;
+                break;
+            }
+            primBase = observed;
+        }
     }
 }
