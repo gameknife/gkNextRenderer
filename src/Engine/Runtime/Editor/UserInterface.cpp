@@ -266,7 +266,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/DroidSansFallback.ttf",
         .pixelSize = (fontSize + 2.0f) * scaleFactor,
-        .includeChineseFull = true,
+        .glyphRanges = io.Fonts->GetGlyphRangesChineseSimplifiedCommon(),
         .fontConfig = &configLocale,
         .warnOnFailure = false,
     });
