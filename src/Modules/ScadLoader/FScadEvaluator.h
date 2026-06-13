@@ -80,6 +80,10 @@ namespace Assets::scad
     struct SceneEvalResult
     {
         std::vector<SceneNode> roots;
+        // Final top-level variable bindings (snapshot of the global scope after
+        // the main file's top level runs). Lets rig/animation loaders read data
+        // variables (e.g. anim_*) without re-evaluating expressions.
+        std::map<std::string, Value> topLevelVariables;
         int warningCount = 0;
         size_t triangleCount = 0;
     };

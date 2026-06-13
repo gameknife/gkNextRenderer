@@ -3,9 +3,11 @@
 #include "AirportSimTypes.h"
 
 #include "Engine/Assets/AssetsFwd.hpp"
+#include "Engine/Assets/Data/RigAsset.hpp"
 #include "Gameplay/AI/NavGrid.h"
 #include "Gameplay/AI/PathFollower.h"
 
+#include <array>
 #include <glm/glm.hpp>
 #include <memory>
 #include <string>
@@ -23,6 +25,10 @@ namespace AirportSim
         virtual void SetWorldTransform(const glm::vec3& pos, float yaw) = 0;
         virtual void SetAnimHint(EAgentAnimHint hint) = 0;
         virtual void SetVisible(bool visible) = 0;
+        // 行走动画速度匹配（ScadRig 用；box 表现忽略）。
+        virtual void SetMoveSpeed(float /*metersPerSecond*/) {}
+        // 每帧动画推进（ScadRig 用；box 表现忽略）。
+        virtual void Tick(float /*deltaSeconds*/) {}
     };
 
     // MVP 几何体外观：单个职业色直立 box，坐下 = 身体压矮（第二阶段换 SkinnedVisual）。
@@ -146,8 +152,17 @@ namespace AirportSim
 
         NextGameplay::FNavGrid navGrid_;
         std::vector<FAgent> agents_;       // 固定大小池
-        std::vector<uint32_t> matIds_;     // 每池位材质
-        std::vector<uint32_t> modelIds_;   // 每池位模型
+        std::vector<uint32_t> matIds_;     // 每池位材质（box 回退路径）
+        std::vector<uint32_t> modelIds_;   // 每池位模型（box 回退路径）
+
+        // ScadRig 路径：当前 GPU-driven primitive buffer 按已注入 model
+        // 三角数定容，因此每个池位保留独立 part model；材质仍尽量共享。
+        Assets::FRigAsset rigAsset_;
+        bool rigLoaded_ = false;
+        std::vector<std::vector<uint32_t>> rigSlotPartModelIds_; // [pool slot][part]
+        std::vector<std::array<uint32_t, 16>> rigBaseMaterials_; // 每 part 的非 tint 材质
+        std::vector<uint32_t> rigSlotTintMats_;                  // 每池位 tint 材质
+
         bool assetsInjected_ = false;
         bool navReady_ = false;
         int nextId_ = 1;
