@@ -13,7 +13,7 @@
 namespace
 {
     constexpr uint32_t kHdrCacheMagic = 0x48445243; // 'HDRC'
-    constexpr uint32_t kHdrCacheVersion = 1;
+    constexpr uint32_t kHdrCacheVersion = 2;
 
     struct HdrCacheHeader
     {
@@ -226,9 +226,10 @@ namespace Assets
                 float cosPhi = std::cos(phi);
                 
                 // Convert to direction vector
-                float dx = sinTheta * cosPhi;
+                // Match Common.SampleIBL's atan2(direction.x, direction.z) mapping.
+                float dx = sinTheta * sinPhi;
                 float dy = cosTheta;
-                float dz = sinTheta * sinPhi;
+                float dz = sinTheta * cosPhi;
                 
                 // Evaluate SH basis functions
                 float basis[9];
