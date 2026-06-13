@@ -2,6 +2,7 @@
 
 #include "AirportMap.h"
 #include "AirportSimConfig.hpp"
+#include "ScadRigVisual.h"
 
 #include <algorithm>
 #include <cmath>
@@ -15,12 +16,21 @@
 #include "Engine/Assets/Loaders/FProcModel.h"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Scene/SceneBuilder.h"
+#include "Modules/ScadLoader/FScadRig.h"
 
 namespace AirportSim
 {
     namespace
     {
-        constexpr glm::vec3 kParkedPos{0.0f, -100.0f, 0.0f}; // 池空位藏在地下
+        using Config::kParkedPos;
+
+        glm::vec3 AgentPoolColor(int slot)
+        {
+            return slot < Config::kStaffCount
+                       ? Config::kStaffRoster[slot].color
+                       : Config::kPassengerPalette[(slot - Config::kStaffCount) %
+                                                   Config::kPassengerPaletteCount];
+        }
     }
 
     void GeometryVisual::SetWorldTransform(const glm::vec3& pos, float yaw)
@@ -58,8 +68,55 @@ namespace AirportSim
             return;
         }
 
-        // 角色 = 0.5 x 1.6 x 0.5 直立 box，底面 y=0。每个池位独立 model+材质
-        // （同 StudioSim 惯例：材质按 model 绑定，共享 model 改 per-node 材质不可靠）。
+        // GPU-driven primitive buffer 当前按注入 model 的总三角数定容。每个池位
+        // 注入独立 part model，确保容量覆盖所有角色实例；材质仍按 section 共享。
+        rigLoaded_ = false;
+        if (Config::kUseScadRigVisual)
+        {
+            std::string rigErr;
+            rigLoaded_ = Assets::FScadRigLoader::LoadRig(Config::kAgentRigPath, {}, rigAsset_, rigErr);
+            if (!rigLoaded_)
+            {
+                SPDLOG_WARN("AirportSim/Agents: rig load failed ({}), falling back to box visuals", rigErr);
+            }
+        }
+
+        if (rigLoaded_)
+        {
+            rigBaseMaterials_.clear();
+            for (const Assets::FRigPart& part : rigAsset_.parts)
+            {
+                std::array<uint32_t, 16> sectionMats = {0};
+                for (size_t s = 0; s < part.sectionColors.size() && s < sectionMats.size(); ++s)
+                {
+                    if (!part.sectionTintable[s])
+                    {
+                        sectionMats[s] = Assets::SceneBuilder::AddLambertianMaterial(
+                            materials, glm::vec3(part.sectionColors[s]));
+                    }
+                }
+                rigBaseMaterials_.push_back(sectionMats);
+            }
+
+            rigSlotPartModelIds_.assign(static_cast<size_t>(Config::kMaxAgents), {});
+            rigSlotTintMats_.clear();
+            for (int i = 0; i < Config::kMaxAgents; ++i)
+            {
+                auto& slotModelIds = rigSlotPartModelIds_[static_cast<size_t>(i)];
+                slotModelIds.reserve(rigAsset_.parts.size());
+                for (const Assets::FRigPart& part : rigAsset_.parts)
+                {
+                    models.push_back(rigAsset_.partModels[part.modelIndex]);
+                    slotModelIds.push_back(static_cast<uint32_t>(models.size() - 1));
+                }
+                rigSlotTintMats_.push_back(
+                    Assets::SceneBuilder::AddLambertianMaterial(materials, AgentPoolColor(i)));
+            }
+            assetsInjected_ = true;
+            return;
+        }
+
+        // 回退：0.5 x 1.6 x 0.5 直立 box，每个池位独立 model+材质。
         modelIds_.clear();
         matIds_.clear();
         for (int i = 0; i < Config::kMaxAgents; ++i)
@@ -67,11 +124,7 @@ namespace AirportSim
             models.push_back(
                 Assets::FProcModel::CreateBox(glm::vec3(-0.25f, 0.0f, -0.25f), glm::vec3(0.25f, 1.6f, 0.25f)));
             modelIds_.push_back(static_cast<uint32_t>(models.size() - 1));
-            const glm::vec3 color = i < Config::kStaffCount
-                                        ? Config::kStaffRoster[i].color
-                                        : Config::kPassengerPalette[(i - Config::kStaffCount) %
-                                                                    Config::kPassengerPaletteCount];
-            matIds_.push_back(Assets::SceneBuilder::AddLambertianMaterial(materials, color));
+            matIds_.push_back(Assets::SceneBuilder::AddLambertianMaterial(materials, AgentPoolColor(i)));
         }
         assetsInjected_ = true;
     }
@@ -108,6 +161,28 @@ namespace AirportSim
         {
             FAgent& agent = agents_[static_cast<size_t>(i)];
             agent.id = nextId_++;
+
+            if (rigLoaded_)
+            {
+                NextGameplay::FRigInstanceDesc desc;
+                desc.namePrefix = fmt::format("agent_{:02d}", i);
+                desc.partModelIds = rigSlotPartModelIds_[static_cast<size_t>(i)];
+                desc.partMaterialIds = rigBaseMaterials_;
+                for (size_t p = 0; p < rigAsset_.parts.size(); ++p)
+                {
+                    const Assets::FRigPart& part = rigAsset_.parts[p];
+                    for (size_t s = 0; s < part.sectionTintable.size() && s < 16; ++s)
+                    {
+                        if (part.sectionTintable[s])
+                        {
+                            desc.partMaterialIds[p][s] = rigSlotTintMats_[static_cast<size_t>(i)];
+                        }
+                    }
+                }
+                agent.visual = std::make_unique<ScadRigVisual>(scene, rigAsset_, desc, i);
+                continue;
+            }
+
             const uint32_t instanceId = scene.GenerateInstanceId();
             const uint32_t matId = matIds_.empty() ? 0 : matIds_[static_cast<size_t>(i) % matIds_.size()];
             const uint32_t modelId = modelIds_.empty() ? 0 : modelIds_[static_cast<size_t>(i) % modelIds_.size()];
@@ -129,8 +204,11 @@ namespace AirportSim
         agents_.clear();
         navGrid_ = NextGameplay::FNavGrid{};
         navReady_ = false;
+        // 注意：OnSceneUnloaded（→Clear）发生在 BeforeSceneRebuild 注入之后、
+        // OnSceneLoaded 之前，注入产物（rig 资产、model/材质 id 表）必须保留，
+        // 否则 OnSceneLoaded 会回退到 box 分支且 modelId 兜底成 0（场景首个大网格）。
+        // assetsInjected_ 复位即可让下一次 rebuild 重新注入。
         assetsInjected_ = false;
-        matIds_.clear();
     }
 
     namespace
@@ -342,11 +420,13 @@ namespace AirportSim
                 agent.anim = EAgentAnimHint::Idle;
             }
 
+            agent.visual->SetMoveSpeed(agent.speed);
             agent.visual->SetAnimHint(agent.anim);
             agent.visual->SetWorldTransform(agent.position, agent.yaw);
+            agent.visual->Tick(deltaSeconds);
         }
 
-        scene.MarkDirty();
+        scene.MarkTransformDirty();
     }
 
     FAgent* AgentSystem::FindById(int id)

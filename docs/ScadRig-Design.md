@@ -4,7 +4,7 @@
 >
 > 前置阅读：`AGENT_GUIDE/SCADLoader.md`、`docs/SCADLoader-Design.md`、`docs/AirportSim-MVP-Plan.md`（§3.3 视觉层接口）。
 >
-> 状态：**设计完成，待实施**。已确认决策：动画用 in-scad `anim_*` 变量（非独立 JSON）；AirportSim 用单一角色模型 + 职业/个体换色。
+> 状态：**已实施（Phase 0–4 完成）**。使用手册与实现纪要见 `AGENT_GUIDE/ScadRig.md`。已确认决策：动画用 in-scad `anim_*` 变量（非独立 JSON）；AirportSim 用单一角色模型 + 职业/个体换色。
 
 ---
 
@@ -281,6 +281,8 @@ IAgentVisual
 ### 5.3 共享 Model + per-node 材质的风险验证（Phase 4 第一步）
 
 `AgentSystem.cpp` L61 注释称"共享 model 改 per-node 材质不可靠"，但 `RenderComponent` 有 per-node `materialIdx_[16]`（`RenderComponent.h` L28）且 FScadLoader 已按节点 `SetMaterials`。实施时**先做最小实验**：两个节点共享同一 box model、`SetMaterials` 指向不同材质，`gnb shot` 确认双色。若不可靠（GPU-driven 路径按 model 绑材质），回退 Plan B：**tintable part 的 Model 按池位复制**（部件均为数十~百级三角形，28 份开销可忽略），非 tint part 仍共享。结论写回本文档。
+
+> **实施结论（2026-06）**：材质维度 Plan A 成立——per-node `materialIdx` 可靠（MagicaLego 即此机制），非 tint section 材质全池共享、tint section 每池位一份。**model 维度采用 Plan B 的变体**：GPU-driven primitive buffer 按注入 model 总三角数定容，为保证容量覆盖全部实例，每池位注入独立 part model 拷贝（成本 ~250 tris × 42 池位，可忽略）。另一实施纪要：引擎回调顺序是 `BeforeSceneRebuild` → `OnSceneUnloaded` → `OnSceneLoaded`，`AgentSystem::Clear()`（挂在 unload）不可清空注入产物，详见 `AGENT_GUIDE/ScadRig.md`。
 
 ---
 

@@ -39,6 +39,8 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_CVarSystem.cpp
 	Tests/Test_SceneList.cpp
 	Tests/Test_ScadLoader.cpp
+	Tests/Test_ScadRig.cpp
+	Tests/Test_RigAnimator.cpp
 	Tests/Test_RenderComponent.cpp
 	Tests/Test_Brotato3DPcg.cpp
 	Tests/Test_ImAnimIntegration.cpp

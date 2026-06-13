@@ -112,9 +112,13 @@ namespace Assets
     struct AnimationChannel
     {
         std::vector<AnimationKey<T>> Keys;
-        T Sample(float time);
+        T Sample(float time) const;
     };
-    
+
+    template <>
+    glm::quat AnimationChannel<glm::quat>::Sample(float time) const;
+    extern template glm::vec3 AnimationChannel<glm::vec3>::Sample(float time) const;
+
     struct AnimationTrack
     {
         bool Playing() const { return Playing_; }

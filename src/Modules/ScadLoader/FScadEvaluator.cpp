@@ -101,6 +101,11 @@ namespace Assets::scad
                 if (frames_.empty()) frames_.emplace_back();
                 frames_.back()[name] = v;
             }
+            const std::unordered_map<std::string, Value>& TopFrame() const
+            {
+                static const std::unordered_map<std::string, Value> kEmpty;
+                return frames_.empty() ? kEmpty : frames_.back();
+            }
             const Value* Get(const std::string& name) const
             {
                 for (auto it = frames_.rbegin(); it != frames_.rend(); ++it)
@@ -190,6 +195,16 @@ namespace Assets::scad
                         currentTopLevelFallbackRoot_ = nullptr;
                         topLevelFallbackLabel_.clear();
                         topLevelFallbackInstanceId_ = 0;
+                    }
+                }
+
+                // Snapshot the final top-level bindings (the global frame) so
+                // data-only variables (anim_*, palettes, ...) survive evaluation.
+                if (sceneResult_)
+                {
+                    for (const auto& entry : ctx_.TopFrame())
+                    {
+                        sceneResult_->topLevelVariables[entry.first] = entry.second;
                     }
                 }
 

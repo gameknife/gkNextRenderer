@@ -105,13 +105,18 @@ Windows 上 `./gnb.bat run AirportSim` →
 
 ### 3.3 视觉层接口（换装预留，本 MVP 的关键架构约束）
 
+> 状态：**已落地 ScadRig 换装**（见 `docs/ScadRig-Design.md`、`AGENT_GUIDE/ScadRig.md`）。
+> 默认 `Config::kUseScadRigVisual = true` 走 `ScadRigVisual`（刚体骨骼角色 + idle/walk/sit/work clip + 职业换色）；
+> rig 加载失败或开关关闭时回退 `GeometryVisual` 直立 box。
+
 ```
 IAgentVisual（纯虚）
- ├── GeometryVisual   // MVP：胶囊身体 + 球头 + 职业色材质，程序化构建（参考 StudioSim 员工几何体 / CharacterDemo 占位胶囊）
- └── SkinnedVisual    // 第二阶段：append Mannequin/KayKit glb，复用 CharacterActor 的
-                      //   modelLoadRequested/FindAppendedCharacterRoot 异步装配 + CharacterAnimationComponent
-接口面：Attach(scene, agentId) / SetWorldTransform(pos, yaw) / SetAnimHint(EAgentAnimHint) / Destroy()
-EAgentAnimHint: Idle / Walk / Sit / Work（GeometryVisual 可忽略或做简单姿态变化，如坐下=降低身体高度）
+ ├── GeometryVisual   // 回退：直立 box + 职业色材质（坐下=压矮 hack）
+ └── ScadRigVisual    // 默认：assets/scad/characters/agent_basic.scad 的 ScadRig 实例
+                      //   FRigAnimator 播 4 个 clip；tint section 按池位换职业/调色板色
+接口面：SetWorldTransform(pos, yaw) / SetAnimHint(EAgentAnimHint) / SetVisible(bool)
+        / SetMoveSpeed(m/s)（走路动画相位匹配）/ Tick(dt)（动画推进）
+EAgentAnimHint: Idle / Walk / Sit / Work
 ```
 
 游戏逻辑**只**通过 `IAgentVisual` 与外观交互、只发 `AnimHint`，绝不直接摸 mesh 节点——这是后续换骨骼模型不动玩法代码的保证。头顶气泡/名牌不属于 visual 层，由 UI 层用世界坐标投影绘制（§7.5）。
