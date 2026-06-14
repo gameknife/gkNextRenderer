@@ -1,8 +1,17 @@
+---
+title: "SCAD 刚体骨骼角色（ScadRig）设计与开发计划"
+category: design
+status: 已完成
+owner: engine
+created: 2026-06-12
+last_updated: 2026-06-13
+---
+
 # SCAD 刚体骨骼角色（ScadRig）设计与开发计划
 
 > 目标：给引擎增加一种**基于文本（OpenSCAD DSL）的角色建模 + 动作机制**，对标 Blockbench 制作 Minecraft entity 的工作流——刚体部件挂在骨骼层级上，**无蒙皮**。建模复用现有 SCAD loader，骨骼层级通过**模块命名标注**实现，动画 clip 以**同文件顶层 `anim_*` 变量**定义。首个落地场景：把 AirportSim 的角色代理表现从直立 box（`GeometryVisual`）换成 ScadRig 角色。
 >
-> 前置阅读：`AGENT_GUIDE/SCADLoader.md`、`docs/SCADLoader-Design.md`、`docs/AirportSim-MVP-Plan.md`（§3.3 视觉层接口）。
+> 前置阅读：`AGENT_GUIDE/SCADLoader.md`、`docs/designs/scad-loader-design.md`、`docs/plans/airport-sim-mvp-plan.md`（§3.3 视觉层接口）。
 >
 > 状态：**已实施（Phase 0–4 完成）**。使用手册与实现纪要见 `AGENT_GUIDE/ScadRig.md`。已确认决策：动画用 in-scad `anim_*` 变量（非独立 JSON）；AirportSim 用单一角色模型 + 职业/个体换色。
 
@@ -135,7 +144,7 @@ anim_idle = [
 ```
 src/Engine/Assets/Data/RigAsset.hpp          # 格式无关 rig 资产（Engine 层，仅数据）
 src/Modules/ScadLoader/FScadRig.h/.cpp       # FScadRigLoader：.scad → FRigAsset
-src/Engine/NextGameplay/Rig/RigInstance.h/.cpp   # 实例化（建 Node 树）+ FRigAnimator（clip 播放）
+src/Gameplay/Rig/RigInstance.h/.cpp   # 实例化（建 Node 树）+ FRigAnimator（clip 播放）
 src/Application/Game/AirportSim/ScadRigVisual.h/.cpp  # IAgentVisual 适配层
 assets/scad/characters/agent_basic.scad      # 角色资产（模型 + 4 clips）
 src/Tests/Test_ScadRig.cpp                   # 单测
@@ -311,7 +320,7 @@ IAgentVisual
 ### Phase 4 — AirportSim 接入（1d）
 - §5.3 材质共享实验 → 定 Plan A/B；`ScadRigVisual` + `IAgentVisual::Tick` + AgentSystem 改造 + `kUseScadRigVisual` 开关。
 - 验收：`./gnb build AirportSim` + `gnb shot --target AirportSim --frames 300` 截图见多色角色行走/坐姿；日志 `uploaded scene`；帧耗时与 box 版相比无明显回退（28 实例 × 7 骨骼采样应 «1ms）。
-- 收尾：更新 `docs/AirportSim-MVP-Plan.md` §3.3 状态、新建 `AGENT_GUIDE/ScadRig.md`（使用手册 + 实现纪要，含 §5.3 结论）。
+- 收尾：更新 `docs/plans/airport-sim-mvp-plan.md` §3.3 状态、新建 `AGENT_GUIDE/ScadRig.md`（使用手册 + 实现纪要，含 §5.3 结论）。
 
 ### Phase 5 — 可选增强（按需，不阻塞）
 - ScadStudio：大纲显示骨骼树/clip 列表、clip 预览播放条。
@@ -338,4 +347,4 @@ IAgentVisual
 - 关键帧模板：`Model.hpp` `AnimationKey/AnimationChannel`
 - 替换面：`AgentSystem.h` `IAgentVisual`；注入/实例化范式：`AgentSystem.cpp` `InjectAssets/OnSceneLoaded`
 - 节点递归刷新：`Node.cpp` `RecalcTransform(bool full)`
-- 既有文档：`AGENT_GUIDE/SCADLoader.md`、`docs/AirportSim-MVP-Plan.md` §3.3、`AGENT_GUIDE/CharacterDemo.md`（动画状态机命名参考，本方案不复用其蒙皮路径）
+- 既有文档：`AGENT_GUIDE/SCADLoader.md`、`docs/plans/airport-sim-mvp-plan.md` §3.3、`AGENT_GUIDE/CharacterDemo.md`（动画状态机命名参考，本方案不复用其蒙皮路径）

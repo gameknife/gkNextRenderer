@@ -1,8 +1,17 @@
+---
+title: "StudioSim —— 游戏项目化迭代计划（向《游戏发展国》再进一步）"
+category: plan
+status: 进行中
+owner: engine
+created: 2026-06-08
+last_updated: 2026-06-08
+---
+
 # StudioSim —— 游戏项目化迭代计划（向《游戏发展国》再进一步）
 
 > **状态**：设计草案（待评审 → 交后续 agent 实现）
 > **目标读者**：负责把 StudioSim 推进到"经营 demo"的后续 AI agent / 开发者
-> **前置必读**：[`StudioSim-MVP-Plan.md`](StudioSim-MVP-Plan.md)、[`StudioSim-Production-Model-Refinement.md`](StudioSim-Production-Model-Refinement.md)、本仓 `src/Application/Game/StudioSim/` 全部源码
+> **前置必读**：[`StudioSim-MVP-Plan.md`](studiosim-mvp-plan.md)、[`StudioSim-Production-Model-Refinement.md`](studiosim-production-model-refinement.md)、本仓 `src/Application/Game/StudioSim/` 全部源码
 > **设计北极星**：开罗游戏《游戏发展国 / Game Dev Story》—— **选类型×题材立项 → 多天连续研发 → 团队围绕这款游戏的特性协作 → 上线评分、卖出销量、入账资金 → 拿钱开下一个项目**
 > **一句话**：把现在"每天换一个抽象目标、天黑给个分"升级成"**一个有名字、有类型/题材/体验要点的具体游戏项目，用若干天连续开发，团队的交流与决策都围绕这款游戏的特性，做完上线赚钱**"。
 
@@ -418,7 +427,7 @@ struct FCompanyState
 
 ## 9. 与前两份文档的关系
 
-本文是 [`StudioSim-MVP-Plan.md`](StudioSim-MVP-Plan.md)、[`StudioSim-Production-Model-Refinement.md`](StudioSim-Production-Model-Refinement.md) 的**第三段增量**，不推翻任何已有架构：
+本文是 [`StudioSim-MVP-Plan.md`](studiosim-mvp-plan.md)、[`StudioSim-Production-Model-Refinement.md`](studiosim-production-model-refinement.md) 的**第三段增量**，不推翻任何已有架构：
 
 - **复用**：阶段机 `EDayPhase`/`EProjectStage`、`ProductionSystem` 四仪表与 bug 循环、`GoalSystem` 晨会异步、`GatheringSystem` 聚集与玩家确认制、`DecisionScheduler` 串行预算与短记忆、`EventSystem`、多天骨架 `dayIndex`/`StartNextDay`。
 - **兑现前文预留**：Refinement Q1 的"跨天累积字段"、§3.6 的"残留写入次日 Briefing"，在本文升级为**项目级跨天**与**经济结算**。

@@ -1,3 +1,12 @@
+---
+title: "thoughts"
+category: note
+status: 现行
+owner: gameknife
+created: 2026-01-25
+last_updated: 2026-04-06
+---
+
 ## 项目起源
 
 本项目开始于[GPSnoopy的RayTracingInVulkan](https://github.com/GPSnoopy/RayTracingInVulkan) 工程的fork，本身是一个非常工整的Vulkan渲染管线，作者在使用Vulkan的RayTracing管线实现了RayTracingInOneWeekend的GPU版本，性能很高。

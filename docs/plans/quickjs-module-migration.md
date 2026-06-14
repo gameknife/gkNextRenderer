@@ -1,3 +1,12 @@
+---
+title: "QuickJS 模块化迁移计划"
+category: plan
+status: 已完成
+owner: engine
+created: 2026-06-12
+last_updated: 2026-06-12
+---
+
 # QuickJS 模块化迁移计划
 
 > 状态：已完成（2026-06-12）
@@ -258,7 +267,7 @@ iOS/桌面继续使用独立静态库，需验证静态链接不会因未引用�
 
 ### Phase 5：文档与清理
 
-- 更新 `docs/typescript-integration.md`、`AGENT_GUIDE/QuickJSBindings.md`、
+- 更新 `docs/guides/typescript-integration.md`、`AGENT_GUIDE/QuickJSBindings.md`、
   `AGENT_GUIDE/HotReload.md` 和 `src/Modules/README.md`。
 - 全仓 grep 确认 `src/Engine` 内无 `QuickJS|quickjs|JSContext|JSValue`。
 - 清理过渡 alias、stubs 和失效的 `WITH_QUICKJS` 分支。

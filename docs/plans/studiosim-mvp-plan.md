@@ -1,9 +1,18 @@
+---
+title: "StudioSim —— LLM 驱动的游戏工作室办公室模拟（MVP 开发计划）"
+category: plan
+status: 已完成
+owner: engine
+created: 2026-06-07
+last_updated: 2026-06-07
+---
+
 # StudioSim —— LLM 驱动的游戏工作室办公室模拟（MVP 开发计划）
 
 > **状态**：规划草案（待评审）
 > **目标读者**：负责实现本原型的后续 AI agent / 开发者
 > **代号**：`StudioSim`（target 名，可改；备选 `CrunchTime` / `OfficeLLM`）
-> **前置必读**：[`AGENT_GUIDE/CharacterDemo.md`](../AGENT_GUIDE/CharacterDemo.md)（最接近的实现模板）、[`AGENT_GUIDE/SCADLoader.md`](../AGENT_GUIDE/SCADLoader.md)、[`AGENT_GUIDE/QuickJSBindings.md`](../AGENT_GUIDE/QuickJSBindings.md)、[`AGENTS.md`](../AGENTS.md)
+> **前置必读**：[`AGENT_GUIDE/CharacterDemo.md`](../../AGENT_GUIDE/CharacterDemo.md)（最接近的实现模板）、[`AGENT_GUIDE/SCADLoader.md`](../../AGENT_GUIDE/SCADLoader.md)、[`AGENT_GUIDE/QuickJSBindings.md`](../../AGENT_GUIDE/QuickJSBindings.md)、[`AGENTS.md`](../../AGENTS.md)
 > **本文写作前已调研的真实引擎设施**：`NextAI::FAIService` / `FAgentLoop`、`NextGameplay::FNavGrid` / `FPathFollower` / `CharacterActor`、SCAD loader 的 `sceneNode.name` 语义节点、`Assets::Scene` 节点查询 API、`NextGameInstanceBase` 生命周期钩子。下文所有 API 引用均为代码中已存在的符号。
 
 ---
@@ -111,50 +120,50 @@
 
 ### 4.1 本地 LLM —— `NextAI::FAIService`
 
-- 获取：`engine.GetAIService()` → `NextAI::FAIService*`（见 [Engine.hpp:112](../src/Engine/Runtime/Engine.hpp)）。
-- 切到本地：`SwitchProvider(NextAI::EAIProviderType::LocalLlama)`；配置在 [`assets/configs/ai_config.json`](../assets/configs/ai_config.json) 的 `localllm` 段（`endpoint: 127.0.0.1:8765`，`autoDiscoverPid: true` 会读 `external/llm/run/server.pid`）。
+- 获取：`engine.GetAIService()` → `NextAI::FAIService*`（见 [Engine.hpp:112](../../src/Engine/Runtime/Engine.hpp)）。
+- 切到本地：`SwitchProvider(NextAI::EAIProviderType::LocalLlama)`；配置在 [`assets/configs/ai_config.json`](../../assets/configs/ai_config.json) 的 `localllm` 段（`endpoint: 127.0.0.1:8765`，`autoDiscoverPid: true` 会读 `external/llm/run/server.pid`）。
 - 调用（MVP 主路径）：`GenerateTextAsync(prompt, callback)` —— **异步**，回调在内部线程触发；NPC 决策、晨会生成目标、目标分解、结算都走这个，避免阻塞渲染线程。同步版 `GenerateText(prompt)` 仅供单测/工具脚本。
-- 多轮 + 工具（扩展路径）：`Chat(FChatRequest)` / `ChatStream(...)`，`SupportsTools()`。见 [AIService.hpp](../src/Engine/Runtime/Subsystems/AIService.hpp)、[AIChat.hpp](../src/Engine/Runtime/Subsystems/AI/AIChat.hpp)。
+- 多轮 + 工具（扩展路径）：`Chat(FChatRequest)` / `ChatStream(...)`，`SupportsTools()`。见 [AIService.hpp](../../src/Modules/NextAI/AIService.hpp)、[AIChat.hpp](../../src/Modules/NextAI/AI/AIChat.hpp)。
 - 启动本地 server：`gnb llm serve`（详见 AGENTS.md "Local LLM"），当前模型 `gemma-4-E4B-it (Q4_K_M)`。
 
 ### 4.2 多步 Agent 循环（扩展用）—— `NextAI::FAgentLoop`
 
-- `FAgentLoop::Run(seed, tools, provider, options, sink, mainThread, cancelFlag)` → `FAgentResult`（`finalContent` / `transcript`）。见 [AgentLoop.hpp](../src/Engine/Runtime/Subsystems/AI/AgentLoop.hpp)。
-- 工具实现 `IAITool`（`RequiresMainThread()` → 改场景的工具会被 marshal 回主线程），注册进 `FToolRegistry`。见 [IAITool.hpp](../src/Engine/Runtime/Subsystems/AI/IAITool.hpp)。
+- `FAgentLoop::Run(seed, tools, provider, options, sink, mainThread, cancelFlag)` → `FAgentResult`（`finalContent` / `transcript`）。见 [AgentLoop.hpp](../../src/Modules/NextAI/AI/AgentLoop.hpp)。
+- 工具实现 `IAITool`（`RequiresMainThread()` → 改场景的工具会被 marshal 回主线程），注册进 `FToolRegistry`。见 [IAITool.hpp](../../src/Modules/NextAI/AI/IAITool.hpp)。
 - `FAgentLoop::ParseFallbackToolCalls(content)`：从 ```json fence / 裸对象里**容错解析** JSON —— **MVP 解析 LLM 决策/目标 JSON 时直接复用这套思路**。
 - **MVP 取舍**：先**不**用 FAgentLoop / 工具调用（每步多次往返、慢、贵 token）。用 4.1 的 `GenerateTextAsync` + 强约束 prompt + 容错 JSON 解析。FAgentLoop 留给"员工自主用工具查信息/改场景"的进阶版。
 
 ### 4.3 SCAD 语义点位 —— loader 的 `sceneNode.name`
 
-- SCAD 的**每个 user module 调用实例 → 一个逻辑 `Node`，节点名 = module 名**（见 SCADLoader.md §"几何→模型"；实现 [FScadLoader.cpp](../src/Engine/Assets/Loaders/FScadLoader.cpp) 的 `sceneNode.name`）。
+- SCAD 的**每个 user module 调用实例 → 一个逻辑 `Node`，节点名 = module 名**（见 SCADLoader.md §"几何→模型"；实现 [FScadLoader.cpp](../../src/Modules/ScadLoader/FScadLoader.cpp) 的 `sceneNode.name`）。
 - 因此：在 `office.scad` 里把功能点位写成**命名约定化的 module 调用**，加载后即可在场景里按名字找到带世界坐标的锚点。详见 §6。
 - 验证 SCAD：`gnb shot --target StudioSim --scene assets/scad/office.scad`（隐藏窗口、自动截图、自动退出）。
 
 ### 4.4 场景 / 节点查询 —— `Assets::Scene` & `Assets::Node`
 
-- `scene.Nodes()` → `std::vector<std::shared_ptr<Node>>&`：遍历全部节点，**按名字前缀**筛出 POI（见 [Scene.hpp:83](../src/Engine/Assets/Core/Scene.hpp)）。
+- `scene.Nodes()` → `std::vector<std::shared_ptr<Node>>&`：遍历全部节点，**按名字前缀**筛出 POI（见 [Scene.hpp:77](../../src/Engine/Assets/Core/Scene.hpp)）。
 - `scene.GetNode(name)` / `GetNodeById(id)` / `FindNodeIdWithComponent(type)`；`GetNodeBounds(nodeId, center, radius)` 拿世界包围球。
-- `Node`：`GetName()`、`WorldTranslation()` / `WorldTransform()`、`SetTranslation/Rotation/Scale`、`RecalcTransform()`、`AddComponent<T>()`、`GetComponentByTypeName()`。见 [Node.h](../src/Engine/Assets/Core/Node.h)。
+- `Node`：`GetName()`、`WorldTranslation()` / `WorldTransform()`、`SetTranslation/Rotation/Scale`、`RecalcTransform()`、`AddComponent<T>()`、`GetComponentByTypeName()`。见 [Node.h](../../src/Engine/Assets/Core/Node.h)。
 - 运行时建节点：`Node::CreateNode(name, t, r, s)`。
 
 ### 4.5 导航 —— `NextGameplay::FNavGrid` + `FPathFollower`
 
-- `FNavGrid::Build(bvh, FNavGridSettings)`：用场景 CPU BVH 朝下射线采样可走性（地面高度/坡度/净空）。`FindPath(from, to, refHeight)` → A* + 平滑路径。`BuildReachabilityMask(from, refH)`、`RebuildDirtyRegion(...)`。见 [NavGrid.h](../src/Engine/NextGameplay/AI/NavGrid.h)。
-- `FPathFollower`：`SetPath` / `GetMoveDirection` / `NeedsRepath`（header-only，[PathFollower.h](../src/Engine/NextGameplay/AI/PathFollower.h)）。
+- `FNavGrid::Build(bvh, FNavGridSettings)`：用场景 CPU BVH 朝下射线采样可走性（地面高度/坡度/净空）。`FindPath(from, to, refHeight)` → A* + 平滑路径。`BuildReachabilityMask(from, refH)`、`RebuildDirtyRegion(...)`。见 [NavGrid.h](../../src/Gameplay/AI/NavGrid.h)。
+- `FPathFollower`：`SetPath` / `GetMoveDirection` / `NeedsRepath`（header-only，[PathFollower.h](../../src/Gameplay/AI/PathFollower.h)）。
 - CPU BVH 来自 `Assets::CPU::FCPUAccelerationStructure`（CharacterDemo 在 `OnSceneLoaded` 里 `KeepCPUMeshData=true` 后 Build——照抄）。
 
 ### 4.6 简单几何体表示员工 —— 程序化模型
 
-- `Assets::FProcModel::CreateBox(...)` 生成程序化盒子；`Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3 color)` 加材质返回 matId。**范例**：[CharacterDemoGameInstance.cpp:177-188](../src/Application/Game/CharacterDemo/CharacterDemoGameInstance.cpp)（注入胶囊占位 + 着色）。
+- `Assets::FProcModel::CreateBox(...)` 生成程序化盒子；`Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3 color)` 加材质返回 matId。**范例**：[CharacterDemoGameInstance.cpp:177-188](../../src/Application/Game/CharacterDemo/CharacterDemoGameInstance.cpp)（注入胶囊占位 + 着色）。
 - 员工 = 一个根 `Node`（移动） + 一个 box/capsule 可视子节点；职位用材质颜色区分；头顶气泡用 ImGui 世界→屏幕投影画文字（见 §12 / `OnRenderUI`）。
 
 ### 4.7 GameInstance 生命周期 —— `NextGameInstanceBase`
 
-钩子（照搬 CharacterDemo 的 override 集）：`OnInit` / `OnTick(double dt)` / `OnDestroy` / `ApplyDefaultCVars` / `BeforeSceneRebuild(nodes, models, materials, ...)` / `OnSceneLoaded` / `OnSceneUnloaded` / `OnRenderUI` / `OverrideRenderCamera` / `OnKey/OnCursorPosition/OnMouseButton/OnScroll` / App debug shortcuts。见 [CharacterDemoGameInstance.hpp](../src/Application/Game/CharacterDemo/CharacterDemoGameInstance.hpp)。
+钩子（照搬 CharacterDemo 的 override 集）：`OnInit` / `OnTick(double dt)` / `OnDestroy` / `ApplyDefaultCVars` / `BeforeSceneRebuild(nodes, models, materials, ...)` / `OnSceneLoaded` / `OnSceneUnloaded` / `OnRenderUI` / `OverrideRenderCamera` / `OnKey/OnCursorPosition/OnMouseButton/OnScroll` / App debug shortcuts。见 [CharacterDemoGameInstance.hpp](../../src/Application/Game/CharacterDemo/CharacterDemoGameInstance.hpp)。
 
 ### 4.8 反射（可选）—— `REFLECT_COMPONENT`
 
-若把 `EmployeeComponent` 做成 ECS 反射组件，可在编辑器 PropertyPanel 调参/调试。见 [ReflectionSystem.md](../AGENT_GUIDE/ReflectionSystem.md)。MVP 可先用纯 C++ 结构体（像 `CharacterDemoConfig`），不强制反射。
+若把 `EmployeeComponent` 做成 ECS 反射组件，可在编辑器 PropertyPanel 调参/调试。见 [ReflectionSystem.md](../../AGENT_GUIDE/ReflectionSystem.md)。MVP 可先用纯 C++ 结构体（像 `CharacterDemoConfig`），不强制反射。
 
 ---
 
@@ -216,7 +225,7 @@
 ### 6.2 示例 SCAD 片段
 
 ```openscad
-// office.scad —— 命名约定见 docs/StudioSim-MVP-Plan.md §6
+// office.scad —— 命名约定见 docs/plans/studiosim-mvp-plan.md §6
 $fn = 24;
 
 module desk_proto()  { color("LightGray") cube([1.2, 0.75, 0.6], center=true); }
@@ -582,8 +591,8 @@ assets/
 ```
 
 构建接入：
-- 在 [`src/CMakeLists.txt`](../src/CMakeLists.txt) 加 `StudioSim` 可执行目标，`links` → `NextGameplay` → `gkNextEngine`（仿 CharacterDemo 的 target 定义）。
-- [`assets/CMakeLists.txt`](../assets/CMakeLists.txt) 已拷贝 `scad/`、`configs/`，新增文件随之带走（必要时 `--reconfigure`）。
+- 在 [`src/CMakeLists.txt`](../../src/CMakeLists.txt) 加 `StudioSim` 可执行目标，`links` → `NextGameplay` → `gkNextEngine`（仿 CharacterDemo 的 target 定义）。
+- [`assets/CMakeLists.txt`](../../assets/CMakeLists.txt) 已拷贝 `scad/`、`configs/`，新增文件随之带走（必要时 `--reconfigure`）。
 - 改了 `NextGameplay` 才需连带构建 `gkNextUnitTests`；本原型只**消费**不改 NextGameplay，则只 `gnb build StudioSim`。
 
 ---

@@ -1,3 +1,12 @@
+---
+title: "AmbientCube 显存占用降低 — 可行性评估与开发计划"
+category: plan
+status: 已完成
+owner: engine
+created: 2026-06-04
+last_updated: 2026-06-07
+---
+
 # AmbientCube 显存占用降低 — 可行性评估与开发计划
 
 > 状态：**Phase 1–3 + 后续 A/C/E/F 已实现并提交到 `dev`**（2026-06-04）。下方原始计划保留作设计依据；实现实况见「实现状态」。

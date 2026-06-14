@@ -1,9 +1,18 @@
+---
+title: "AirportSim —— Jumbo Airport Story 风格机场生态观察 Demo（MVP 设计与开发计划）"
+category: plan
+status: 进行中
+owner: engine
+created: 2026-06-10
+last_updated: 2026-06-13
+---
+
 # AirportSim —— Jumbo Airport Story 风格机场生态观察 Demo（MVP 设计与开发计划）
 
 > **状态**：规划草案（已与需求方确认三项关键取向，见 §1.3）
 > **目标读者**：负责实现本原型的后续 AI agent / 开发者
 > **代号**：`AirportSim`（target 名）
-> **前置必读**：[`AGENT_GUIDE/CharacterDemo.md`](../AGENT_GUIDE/CharacterDemo.md)（NavGrid/CharacterActor 模板）、[`docs/StudioSim-MVP-Plan.md`](StudioSim-MVP-Plan.md) 与 `src/Application/Game/StudioSim/`（**最接近的实现先例**：SCAD 锚点解析、LLM 决策调度、气泡 UI 全部有现成代码可参考）、[`AGENT_GUIDE/SCADLoader.md`](../AGENT_GUIDE/SCADLoader.md)、[`AGENTS.md`](../AGENTS.md)
+> **前置必读**：[`AGENT_GUIDE/CharacterDemo.md`](../../AGENT_GUIDE/CharacterDemo.md)（NavGrid/CharacterActor 模板）、[`docs/plans/studiosim-mvp-plan.md`](studiosim-mvp-plan.md) 与 `src/Application/Game/StudioSim/`（**最接近的实现先例**：SCAD 锚点解析、LLM 决策调度、气泡 UI 全部有现成代码可参考）、[`AGENT_GUIDE/SCADLoader.md`](../../AGENT_GUIDE/SCADLoader.md)、[`AGENTS.md`](../../AGENTS.md)
 > **本文写作前已核实的真实引擎设施**：`assets/scad/airport.scad` 全部 POI 锚点（§2 坐标表摘自源文件）、`NextGameplay::FNavGrid`/`FPathFollower`/`CharacterActor`、`StudioSim::OfficeMap`/`DecisionScheduler`、`NextAI::FAIService::GenerateTextAsync`、`Assets::EnvironmentSetting`（`SunRotation`/`SunIntensity`/`SkyIntensity`，见 `src/Engine/Assets/Core/Model.hpp`）、`Scene::GetEnvSettings()`。下文 API 引用均为代码中已存在的符号。
 
 ---
@@ -105,7 +114,7 @@ Windows 上 `./gnb.bat run AirportSim` →
 
 ### 3.3 视觉层接口（换装预留，本 MVP 的关键架构约束）
 
-> 状态：**已落地 ScadRig 换装**（见 `docs/ScadRig-Design.md`、`AGENT_GUIDE/ScadRig.md`）。
+> 状态：**已落地 ScadRig 换装**（见 `docs/designs/scad-rig-design.md`、`AGENT_GUIDE/ScadRig.md`）。
 > 默认 `Config::kUseScadRigVisual = true` 走 `ScadRigVisual`（刚体骨骼角色 + idle/walk/sit/work clip + 职业换色）；
 > rig 加载失败或开关关闭时回退 `GeometryVisual` 直立 box。
 
@@ -370,7 +379,7 @@ gnb llm stop  && ./gnb.bat run AirportSim     # fallback
 
 ## 12. 参考
 
-- `docs/StudioSim-MVP-Plan.md` + `src/Application/Game/StudioSim/`：OfficeMap/DecisionScheduler/气泡 UI/LLM fallback 的直接先例
+- `docs/plans/studiosim-mvp-plan.md` + `src/Application/Game/StudioSim/`：OfficeMap/DecisionScheduler/气泡 UI/LLM fallback 的直接先例
 - `AGENT_GUIDE/CharacterDemo.md`：NavGrid/PathFollower/CharacterActor 用法、F8 调试面板惯例
 - `AGENT_GUIDE/SCADLoader.md`：scad 解析与节点命名语义
 - `assets/scad/airport.scad` 头部注释：锚点命名约定权威来源

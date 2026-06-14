@@ -1,3 +1,12 @@
+---
+title: "gnb 架构与代码导览"
+category: guide
+status: 现行
+owner: engine
+created: 2026-05-29
+last_updated: 2026-06-12
+---
+
 # gnb 架构与代码导览
 
 本文面向**要改 `gnb` 源码的人**，讲清楚 `tools/gnb/` 这套 Go 代码是怎么组织的、一次命令从输入到执行经过哪些环节、每个包负责什么，以及如何安全地新增功能。
@@ -7,7 +16,7 @@
 - 想知道**怎么用命令** → [`gnb-cli.md`](gnb-cli.md)
 - 想要**技术栈/分层概览** → [`gnb-tech-stack.md`](gnb-tech-stack.md)
 - 想**读懂并修改源码**（本文）→ 继续往下看
-- 本地开发入口 → [`tools/gnb/README.md`](../tools/gnb/README.md)
+- 本地开发入口 → [`tools/gnb/README.md`](../../tools/gnb/README.md)
 
 ---
 
@@ -54,13 +63,13 @@ tools/gnb/
 
 以 `gnb build gkNextEditor --clean` 为例：
 
-1. **`main()`**（`cmd/gnb/main.go`）启动。
-2. `config.FindRepoRoot(".")` 从当前目录向上找，第一个含 `gnb.toml` 或 `.git` 的目录就是仓库根。
-3. `config.Load(repoRoot)` 解析 `gnb.toml` 得到 `config.Config`，并补上默认值（Vulkan SDK 版本、LLM 模型清单等）。
+1. **`main()`**（[cmd/gnb/main.go:35](../../tools/gnb/cmd/gnb/main.go)）启动。
+2. `config.FindRepoRoot(".")` 从当前目录向上找，第一个含 `gnb.toml` 或 `.git` 的目录就是仓库根（[config.go:130](../../tools/gnb/internal/config/config.go)）。
+3. `config.Load(repoRoot)` 解析 `gnb.toml` 得到 `config.Config`，并补上默认值（Vulkan SDK 版本、LLM 模型清单等）（[config.go:170](../../tools/gnb/internal/config/config.go)）。
 4. `cmakerun.DefaultPreset()` → `platform.Detect()` 得到当前平台的 CMake preset（windows / linux / macos-arm64）。
 5. 三者打包进 `appContext{repoRoot, cfg, preset}`，传给每个 `newXxxCommand(ctx)`。
 6. cobra 解析命令行，匹配到 `build` 子命令；`PersistentPreRunE` 先做一道检查：**没找到仓库根**时，除 `init/help/version/completion` 外的命令都会带提示快速失败。
-7. `build` 的 `RunE` 调用 `internal` 各包：必要时 `vcpkg.Ensure` + `fetcher.EnsureExternal` 自举依赖，再 `cmakerun.BuildWithCMake(...)` 执行 configure + build。
+7. `build` 的 `RunE` 调用 `internal` 各包：必要时 `vcpkg.Ensure` + `fetcher.EnsureExternal` 自举依赖，再 `cmakerun.BuildWithCMake(...)`（[cmakerun.go:30](../../tools/gnb/internal/cmakerun/cmakerun.go)）执行 configure + build。
 8. 错误一路 `return` 回 `main()`，由 `fatal()` 统一打印并 `os.Exit(1)`。
 
 **裸 `gnb`（无子命令）** 走 `root.RunE`，直接启动 Wails dashboard。
@@ -75,7 +84,7 @@ tools/gnb/
 
 ### `run` 的特殊参数解析
 
-`gnb run` 需要把 target 之后的参数**原样透传**给目标程序（`gnb run gkNextRenderer --help` 要把 `--help` 给引擎而不是 cobra）。所以它设了 `DisableFlagParsing: true`，由 `parseRunArgs` 手写解析：遇到第一个非 `-` 开头的参数当作 target，其余全部进 `opts.Args`；`--` 之后的也全部透传。改 `run` 的参数行为时改这个函数。
+`gnb run` 需要把 target 之后的参数**原样透传**给目标程序（`gnb run gkNextRenderer --help` 要把 `--help` 给引擎而不是 cobra）。所以它设了 `DisableFlagParsing: true`，由 `parseRunArgs`（[main.go:354](../../tools/gnb/cmd/gnb/main.go)）手写解析：遇到第一个非 `-` 开头的参数当作 target，其余全部进 `opts.Args`；`--` 之后的也全部透传。改 `run` 的参数行为时改这个函数。
 
 ### 子命令族
 
@@ -119,7 +128,7 @@ tools/gnb/
 
 ## 7. gitops：git 的类型化封装
 
-`gitops` 把零散的 `git` 子进程调用收敛成一组返回结构体的函数：`Status` / `Branch` / `RemoteBranch` / `Commit` / `Stash` / `FileChange`。所有调用最终都走私有的 `run(dir, args...)`，统一处理工作目录和错误。
+`gitops` 把零散的 `git` 子进程调用收敛成一组返回结构体的函数：`Status` / `Branch` / `RemoteBranch` / `Commit` / `Stash` / `FileChange`。所有调用最终都走私有的 `run(dir, args...)`（[gitops.go:635](../../tools/gnb/internal/gitops/gitops.go)），统一处理工作目录和错误。
 
 dashboard 的 Git 标签页、`gnb git` 命令都复用它——想改 git 行为，改这里一处即可，不要在 handler 里直接拼 `git` 命令。
 
@@ -127,7 +136,7 @@ dashboard 的 Git 标签页、`gnb git` 命令都复用它——想改 git 行�
 
 `.spec/` 工作流（见仓库根 `.spec/README.md`）的所有文件读写都在 `spec` 包：
 
-- `Parse(path)` → `*Document`：解析 `TODO.md`，**同时保留原始行缓冲**，这样编辑后 `Save()` 能最小改动地写回（保留无关行的原样）。
+- `Parse(path)`（[spec.go:102](../../tools/gnb/internal/spec/spec.go)）→ `*Document`：解析 `TODO.md`，**同时保留原始行缓冲**，这样编辑后 `Save()` 能最小改动地写回（保留无关行的原样）。
 - `Task` 是 TODO.md 里的一行；`FormatLine(t)` 生成它的规范文本。
 - 三个区段：`SectionNext`（下一步）、`SectionBacklog`（待规划）、`SectionRecent`（最近完成）。
 - 编辑操作：`AppendTask` / `EditTask` / `MarkStatus` / `MoveTask` / `SwapTasks` / `DeleteTask`，都走「改行缓冲 → 必要时 `reloadFromLines` 重解析」。
@@ -142,12 +151,12 @@ dashboard 的 Git 标签页、`gnb git` 命令都复用它——想改 git 行�
 ### 9.1 启动与请求生命周期
 
 - `Server`（`server.go`）持有 4 样东西：`opts`、`tpl`（解析好的模板）、`jobs`（任务管理器）、`chats`（聊天会话存储）。
-- 模板用 `//go:embed templates/*.html` 内嵌进二进制，`New()` 里**一次性**解析（解析失败在绑定端口前就报错）。
+- 模板用 `//go:embed templates/*.html` 内嵌进二进制，`New()`（[server.go:62](../../tools/gnb/internal/dashboard/server.go)）里**一次性**解析（解析失败在绑定端口前就报错）。
 - `Start()` 监听 `127.0.0.1:<port>`（默认 7777），返回已启动 server 的 URL 和生命周期句柄。
 - `RunDesktop()` 把普通 dashboard handler 直接挂到 Wails AssetServer，以保留 Wails runtime 和原生窗口控制。
 - Wails 的自定义 AssetServer 会缓冲完整响应，不能实时 flush；因此 Build/Run/Test 日志和 Chat 流式响应单独走一个随机 loopback HTTP 端口。
 - `Run()` 是兼容模式：`--browser` 打开系统浏览器，`--no-open` 只启动 server。
-- `routes()` 是**唯一的路由表**：用 Go 1.22 的方法路由把每条 `METHOD /path` 映射到一个 handler，最外面包一层 `logRequests` 打访问日志。
+- `routes()`（[handlers.go:18](../../tools/gnb/internal/dashboard/handlers.go)）是**唯一的路由表**：用 Go 1.22 的方法路由把每条 `METHOD /path` 映射到一个 handler，最外面包一层 `logRequests` 打访问日志。
 
 前端是 htmx 驱动的服务端渲染：大多数交互是 POST 一个动作 → 服务端改文件/起任务 → 返回一段 HTML 局部，由 htmx 换入页面。
 
@@ -180,7 +189,7 @@ dashboard 的 Git 标签页、`gnb git` 命令都复用它——想改 git 行�
 ### 9.5 聊天与工具调用（`chat.go` + `chat_tools.go`）
 
 - `ChatStore`（`chat.go`）管理多会话，持久化到一个 JSON 文件（`chatStorePath`）。
-- `runChatToolLoop`（`chat_tools.go`）是**本地 LLM 智能体**的核心：多轮地让模型产出「工具调用 JSON」，执行**只读**工具（列目录、找文件、搜文本、找符号、读文件、跑只读命令），把结果回灌给模型，直到模型给出最终回答。`validateReadOnlyCommand` 保证 `run_cmd` 工具只能跑安全命令。
+- `runChatToolLoop`（[chat_tools.go:89](../../tools/gnb/internal/dashboard/chat_tools.go)）是**本地 LLM 智能体**的核心：多轮地让模型产出「工具调用 JSON」，执行**只读**工具（列目录、找文件、搜文本、找符号、读文件、跑只读命令），把结果回灌给模型，直到模型给出最终回答。`validateReadOnlyCommand` 保证 `run_cmd` 工具只能跑安全命令。
 - 引擎层和 dashboard 复用同一个 `llama-server`，host/port/model 通过 `external/llm/run/server.pid` 自动发现。
 
 ## 10. 实操指南

@@ -1,3 +1,12 @@
+---
+title: "WebRTC 远程游玩（Remote Play）设计与开发计划"
+category: design
+status: 进行中
+owner: engine
+created: 2026-06-08
+last_updated: 2026-06-08
+---
+
 # WebRTC 远程游玩（Remote Play）设计与开发计划
 
 > 状态：调研完成，待实现（设计稿，供后续 agent 接手开发）。
@@ -26,7 +35,7 @@
 - **信令 / 自托管：** `rtc::WebSocketServer` 跑信令（offer/answer 交换），外加一个极小 HTTP 服务（推荐 header-only 的 cpp-httplib）把 Web 客户端单页发出去。LAN / 可直连优先，只配 STUN。
 - **输入转发：** 浏览器经 **DataChannel**（无序、低延迟）把键鼠 / 手柄事件发回，服务端 `InputRouter` 译成 `SDL_Event` 用 `SDL_PushEvent` 注入；手柄注入到 `SDL_AttachVirtualJoystick` 建的虚拟手柄，`TickGamepadInput()` 的轮询会透明读到。
 
-整体落成一个新模块 `src/Engine/Runtime/Remote/`，用 `GK_WITH_REMOTE` CMake 开关守卫，`--remote` 时实例化。对引擎其余部分**零侵入**（只在 `Engine.cpp` 加一个成员 + 一处 `postRender` tap + 一处 tick）。
+整体落成一个新模块 `src/Modules/NextRemote/`，用 `GK_WITH_REMOTE` CMake 开关守卫，`--remote` 时实例化。对引擎其余部分**零侵入**（只在 `Engine.cpp` 加一个成员 + 一处 `postRender` tap + 一处 tick）。
 
 ---
 
@@ -209,7 +218,7 @@ wsServer->onClient([](std::shared_ptr<rtc::WebSocket> ws){
 抽象成接口，三者可热插拔：
 
 ```cpp
-// src/Engine/Runtime/Remote/VideoEncoder.hpp
+// src/Modules/NextRemote/VideoEncoder.hpp
 class IVideoEncoder {
 public:
     struct Config { uint32_t width, height, fps, bitrateKbps; };
@@ -246,7 +255,7 @@ openh264 吃 **I420（YUV420p）**，Vulkan Video 吃 **NV12**。swapchain 是 B
 ### 5.1 新模块布局
 
 ```text
-src/Engine/Runtime/Remote/            # 新增，GK_WITH_REMOTE 守卫
+src/Modules/NextRemote/            # 新增，GK_WITH_REMOTE 守卫
 ├── RemoteServer.{hpp,cpp}            # 编排器：持有信令 + 会话表 + 编码器 + 帧源；--remote 时由 Engine 创建
 ├── SignalingServer.{hpp,cpp}         # rtc::WebSocketServer（信令） + cpp-httplib（发 Web 客户端单页）
 ├── RemoteSession.{hpp,cpp}           # 每客户端：PeerConnection + video track + input DataChannel + 状态机

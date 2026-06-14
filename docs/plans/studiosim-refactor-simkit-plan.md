@@ -1,3 +1,12 @@
+---
+title: "StudioSim 重构 + 公共仿真层（Sim Kit）抽取与开发计划"
+category: plan
+status: 草案
+owner: engine
+created: 2026-06-13
+last_updated: 2026-06-13
+---
+
 # StudioSim 重构 + 公共仿真层（Sim Kit）抽取与开发计划
 
 > **状态**：规划草案（已与需求方确认三项关键取向，见 §0.2），待后续 agent 落地。
@@ -6,8 +15,8 @@
 > **前置必读**：
 > - `src/Application/Game/AirportSim/`（**重构后的目标架构样板**：分层、`IAgentVisual`、`AgentSystem` rig 池、`AirportSimUI`、薄 `GameInstance`）。
 > - `src/Application/Game/StudioSim/`（**被重构对象**：1925 行单体 `StudioSimGameInstance`、box 视觉、丰富经营玩法）。
-> - `docs/AirportSim-MVP-Plan.md`、`docs/StudioSim-MVP-Plan.md`、`docs/StudioSim-GameProject-Iteration-Plan.md`、`docs/StudioSim-Production-Model-Refinement.md`（两个 app 的设计史与玩法语义来源）。
-> - `docs/ScadRig-Design.md` + `AGENT_GUIDE/ScadRig.md`（ScadRig 已实施，使用手册）。
+> - `docs/plans/airport-sim-mvp-plan.md`、`docs/plans/studiosim-mvp-plan.md`、`docs/plans/studiosim-gameproject-iteration-plan.md`、`docs/plans/studiosim-production-model-refinement.md`（两个 app 的设计史与玩法语义来源）。
+> - `docs/designs/scad-rig-design.md` + `AGENT_GUIDE/ScadRig.md`（ScadRig 已实施，使用手册）。
 > - `AGENT_GUIDE/CharacterDemo.md`、`AGENT_GUIDE/SCADLoader.md`、`AGENTS.md`（构建/验证/分层纪律）。
 > **本文写作前已核实的真实代码**：两个 app 全部 `.h/.cpp`；`NextGameplay::FNavGrid`/`FPathFollower`/`FRigInstance`/`FRigAnimator`；`Assets::FRigAsset`/`Assets::FScadRigLoader::LoadRig`；`NextGameInstanceBase` 生命周期；`NextAI::FAIService`/`NextAI::GetAIService`；`src/CMakeLists.txt` 的 target 注册与 `NextGameplay` 依赖（仅依赖 `gkNextEngine`）。下文 API 引用均为已存在符号，新符号一律标注 **【新增】**。
 

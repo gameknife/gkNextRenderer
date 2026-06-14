@@ -1,3 +1,12 @@
+---
+title: "NoAmbientDeferred TAA 抖动 + 过曝 —— 问题定位与修复计划（方案 A：实现真 TAA）"
+category: plan
+status: 已完成
+owner: engine
+created: 2026-06-13
+last_updated: 2026-06-13
+---
+
 # NoAmbientDeferred TAA 抖动 + 过曝 —— 问题定位与修复计划（方案 A：实现真 TAA）
 
 > 状态：已完成（2026-06-13）

@@ -1,3 +1,12 @@
+---
+title: "src/Engine 核心层精简重构：分析与执行计划"
+category: plan
+status: 已完成
+owner: engine
+created: 2026-06-10
+last_updated: 2026-06-10
+---
+
 # src/Engine 核心层精简重构：分析与执行计划
 
 > 状态：待执行 | 编写日期：2026-06-10 | 面向：执行重构的 AI agents
@@ -90,7 +99,7 @@
 
 6. **测试设施**（209 行）：`Runtime/Scene/GltfTestRunner` 应在 `src/Tests` 或工具层。
 
-7. **NextGameplay**（2,224 行）：CMake 中已是独立库 target（`NextGameplay`），但源码目录在 `src/Engine/NextGameplay/`，把它计入了核心层行数。目录归位即可。
+7. **NextGameplay**（2,224 行）：CMake 中已是独立库 target（`NextGameplay`），但源码目录在 `src/Gameplay/`，把它计入了核心层行数。目录归位即可。
 
 8. **RmlUi 中间件**（1,195 行）：`Runtime/UI/RmlUiSystem.cpp` 是 RmlUi 的集成胶水，单文件 1,158 行，属可选 UI 中间件。
 

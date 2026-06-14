@@ -1,3 +1,12 @@
+---
+title: "Engine 层精简重构计划"
+category: plan
+status: 草案
+owner: engine
+created: 2026-06-08
+last_updated: 2026-06-08
+---
+
 # Engine 层精简重构计划
 
 > 状态：草案 / 待评审

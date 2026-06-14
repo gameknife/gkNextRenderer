@@ -1,3 +1,12 @@
+---
+title: "Steam Deck 首次部署与编译复盘"
+category: note
+status: 现行
+owner: gameknife
+created: 2026-04-20
+last_updated: 2026-05-29
+---
+
 # Steam Deck 首次部署与编译复盘
 
 本文记录一次在 Steam Deck 上从零部署并编译 `gkNextRenderer` 的实际过程，目标是把首轮阻塞点沉淀下来，降低后续全新环境部署的摩擦。

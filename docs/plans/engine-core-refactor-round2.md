@@ -1,6 +1,15 @@
+---
+title: "src/Engine 核心层精炼 Round 2：god class 拆解 + include 卫生"
+category: plan
+status: 草案
+owner: engine
+created: 2026-06-11
+last_updated: 2026-06-11
+---
+
 # src/Engine 核心层精炼 Round 2：god class 拆解 + include 卫生
 
-> 状态：分析/待讨论 | 编写日期：2026-06-11 | 前置：[EngineCoreRefactor.md](EngineCoreRefactor.md)（Phase 0~5 已完成）
+> 状态：分析/待讨论 | 编写日期：2026-06-11 | 前置：[EngineCoreRefactor.md](engine-core-refactor.md)（Phase 0~5 已完成）
 >
 > 本轮主题：**易读优雅**优先，LOC 净减为辅。Round 1 把核心层从 55,279 降到 33,924（gnb loc 口径），距 30k 目标还差约 3.9k；本轮 god class 拆解预计净减有限（~600-900），缺口补齐方案见第 5 节。
 

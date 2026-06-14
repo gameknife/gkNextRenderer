@@ -1,3 +1,12 @@
+---
+title: "CMake 结构"
+category: guide
+status: 现行
+owner: engine
+created: 2026-01-02
+last_updated: 2026-05-29
+---
+
 # CMake 结构
 
 `CMakeLists.txt` 的逻辑按职责拆到 `cmake/`（项目级配置）与 `src/cmake/`（源文件/目标）下的模块里。根 `CMakeLists.txt` 只负责按顺序 `include` 这些模块并 `add_subdirectory(assets)` / `add_subdirectory(src)`。

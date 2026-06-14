@@ -1,8 +1,17 @@
+---
+title: "SCAD Model Generator（SCAD Studio）设计与开发计划"
+category: design
+status: 已完成
+owner: engine
+created: 2026-05-30
+last_updated: 2026-06-07
+---
+
 # SCAD Model Generator（SCAD Studio）设计与开发计划
 
 > 本文是 **SCAD Model Generator**（产品名 *SCAD Studio*，CMake target **`ScadStudio`**）的整体设计与分阶段开发计划。
 >
-> 前置：OpenSCAD `.scad` loader 已接入（见 `AGENT_GUIDE/SCADLoader.md`、`docs/SCADLoader-Design.md`）。本工具在其之上构建一个「对话式 SCAD 生成器」。
+> 前置：OpenSCAD `.scad` loader 已接入（见 `AGENT_GUIDE/SCADLoader.md`、`docs/designs/scad-loader-design.md`）。本工具在其之上构建一个「对话式 SCAD 生成器」。
 >
 > **实现状态（2026-05-30）：M0–M7 全部完成**。源码 `src/Application/Editor/ScadStudio/`（11 文件）。
 > - M0–M4 + 视口相机：脚手架 / 三栏 / 视口+SCAD 重载 / AI 多轮 / 生成→渲染闭环。
@@ -66,7 +75,7 @@
 - 已实现子集（写进 system prompt，见 §6.2）：图元 cube/sphere/cylinder/polyhedron；2D circle/square/polygon/text(CJK)；变换 translate/rotate/scale/mirror/multmatrix/color；CSG union/difference/intersection/hull；linear/rotate_extrude；for/if/let/list-comprehension；module/function；常用内置函数（三角为角度制）。
 - 调试：日志前缀 `SCAD:`（warning）、`ECHO:`（echo()）；warning 数 > 0 表示触发了降级。`gkNextUnitTests "[Scad]"` 覆盖全管线。
 
-### 2.2 引擎 AI 服务（`src/Engine/Runtime/Subsystems/AIService.*`）
+### 2.2 引擎 AI 服务（`src/Modules/NextAI/AIService.*`）
 - 取得：`engine.GetAIService()` → `NextAI::FAIService*`（已确认）。
 - 周边：`AI/AIChat.{hpp,cpp}`（多轮消息/工具结构 + provider 序列化）、`AI/IAITool.{hpp,cpp}`（工具/`FAgentLoop`）、`AI/LlamaPidFile.{hpp,cpp}`（本地 llama-server PID 发现）；配置常量 `src/Engine/Runtime/Config/AISettings.hpp`。
 - **已确认 API**（`AIService.hpp`）：

@@ -1,3 +1,12 @@
+---
+title: "gnb 技术栈说明"
+category: guide
+status: 现行
+owner: engine
+created: 2026-05-14
+last_updated: 2026-06-12
+---
+
 # gnb 技术栈说明
 
 `gnb` 是 `gkNextEngine` 的统一工程入口，负责把原来分散的构建、运行、测试、资源准备、移动端入口和打包流程收敛到一个跨平台 CLI 里。命令面向使用者保持简洁，但实现上分成了几层明确的技术栈。
@@ -112,7 +121,7 @@ Wails 负责桌面承载和普通请求；需要增量 flush 的构建日志与 
 
 ## 相关文档
 
-- 架构与代码导览（改 `gnb` 源码必读）：`docs/gnb-architecture.md`
-- 命令用法手册：`docs/gnb-cli.md`
-- 最小命令规格：`docs/CLI_SPEC.md`
+- 架构与代码导览（改 `gnb` 源码必读）：`docs/guides/gnb-architecture.md`
+- 命令用法手册：`docs/guides/gnb-cli.md`
+- 最小命令规格：`docs/guides/cli-spec.md`
 - 本地开发入口：`tools/gnb/README.md`

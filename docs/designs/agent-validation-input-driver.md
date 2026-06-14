@@ -1,3 +1,12 @@
+---
+title: "Agent 自动验证（输入驱动 + 断言）系统 — 设计与开发计划"
+category: design
+status: 待实现
+owner: engine
+created: 2026-06-09
+last_updated: 2026-06-09
+---
+
 # Agent 自动验证（输入驱动 + 断言）系统 — 设计与开发计划
 
 > 状态：设计完成，待实现（设计稿，供后续 agent 接手开发）。
@@ -6,7 +15,7 @@
 > 验证深度（已与用户确认）：**输入模拟 + 截图 + 状态查询 / 断言**——验证可自动判定 pass/fail（非零退出码），适合无人值守与 CI。
 > 非目标（v1）：录制真人操作回放、跨进程多窗口编排、网络远端验证（那是 WebRTC RemotePlay 的范畴，见第 1.3 节）、模糊 / 随机 fuzz 测试、像素级 golden 全量比对（沿用 `gkNextVisualTest`）。
 > 日期：2026-06-08
-> 关联代码：`src/DesktopMain.cpp`、`src/Engine/Runtime/Engine.{hpp,cpp}`、`src/Engine/Runtime/GameInstance.hpp`、`src/Engine/Runtime/Config/CVarSystem.{hpp,cpp}`、`src/Engine/Vulkan/WindowSurface.cpp`、`src/Engine/Options.{hpp,cpp}`、`tools/gnb/cmd/gnb/main.go`、`tools/gnb/internal/runner/runner.go`、`docs/WebRTC-RemotePlay-Design.md`。
+> 关联代码：`src/DesktopMain.cpp`、`src/Engine/Runtime/Engine.{hpp,cpp}`、`src/Engine/Runtime/GameInstance.hpp`、`src/Engine/Runtime/Config/CVarSystem.{hpp,cpp}`、`src/Engine/Vulkan/WindowSurface.cpp`、`src/Engine/Options.{hpp,cpp}`、`tools/gnb/cmd/gnb/main.go`、`tools/gnb/internal/runner/runner.go`、`docs/designs/webrtc-remoteplay-design.md`。
 
 ---
 
@@ -25,7 +34,7 @@
 
 - **主路径 = 声明式验证脚本**：一个 JSON 文件描述有序步骤（按键 / 点击 / 拖拽 / 等待 / 等到条件 / 截图 / 断言 / 退出）。引擎以 `--agent-script=<path>` 启动，逐步回放，跑完写 report 并按断言结果决定退出码。确定性、可 diff、可进 CI。
 - **辅路径 = 实时命令通道**：`--agent-control[=port]` 让引擎在 `127.0.0.1` 起一个极小的 loopback TCP 行协议服务，agent 实时发命令、读回结果（含截图路径 / 查询值 / 断言结果）。用于交互式探索；命令词汇与脚本步骤同源。
-- **输入注入层 = `SyntheticInput`**：纯函数式地把高层意图（"按下 W"、"在 (0.5,0.5) 点左键"）构造成 `SDL_Event` 并 `SDL_PushEvent`。**与 `docs/WebRTC-RemotePlay-Design.md` 的 `InputRouter` 是同一层**——两者都把"某种来源的输入"译成 SDL 事件，应抽到 `Runtime/Input/` 共享，避免重复实现。
+- **输入注入层 = `SyntheticInput`**：纯函数式地把高层意图（"按下 W"、"在 (0.5,0.5) 点左键"）构造成 `SDL_Event` 并 `SDL_PushEvent`。**与 `docs/designs/webrtc-remoteplay-design.md` 的 `InputRouter` 是同一层**——两者都把"某种来源的输入"译成 SDL 事件，应抽到 `Runtime/Input/` 共享，避免重复实现。
 - **驱动器入口 = `gnb`**：新增 `gnb validate --script <path>`（镜像现有 `gnb shot`，阻塞运行、转发退出码、打印 report 路径）；实时模式 `gnb drive`（phase 2）。
 
 整体落成一个新模块 `src/Engine/Runtime/AgentDriver/`，用 `GK_WITH_AGENT_DRIVER` CMake 开关守卫，仅在 `--agent-script` / `--agent-control` 时实例化。对引擎其余部分**低侵入**：`Engine.cpp` 加一个成员 `agentDriver_`（与既有 `remoteServer_` 并列）、一处 `Tick()` 推进、若干 `Inject*` 公共入口。
@@ -69,7 +78,7 @@ worldState_.timeScale = 240.0f;                                        // 验证
 
 ### 1.3 与 WebRTC RemotePlay 的关系（务必对齐，避免重复造轮子）
 
-`docs/WebRTC-RemotePlay-Design.md` 已经把"**任何来源的输入都译成 `SDL_Event` 经 `SDL_PushEvent` 注入 `HandleEvent`**"这条路径论证清楚，并规划了 `InputRouter` / `InjectRelativeMouse` / SDL 虚拟手柄。本系统与它**共享输入注入底座**，区别只在"输入从哪来、为什么注入"：
+`docs/designs/webrtc-remoteplay-design.md` 已经把"**任何来源的输入都译成 `SDL_Event` 经 `SDL_PushEvent` 注入 `HandleEvent`**"这条路径论证清楚，并规划了 `InputRouter` / `InjectRelativeMouse` / SDL 虚拟手柄。本系统与它**共享输入注入底座**，区别只在"输入从哪来、为什么注入"：
 
 | | 输入来源 | 触发者 | 目的 | 读回 |
 |---|---|---|---|---|
@@ -78,7 +87,7 @@ worldState_.timeScale = 240.0f;                                        // 验证
 
 **强约束：** 两者的"高层意图 → `SDL_Event`"代码必须是同一份 `SyntheticInput`（见第 6 节）。谁先落地谁就把它抽到 `src/Engine/Runtime/Input/`，另一方复用。`InjectRelativeMouse(dx,dy)` 这个薄封装两篇都需要，定义一次。
 
-> 现状（2026-06-08）：`src/Engine/Runtime/Remote/` 已落地**视频侧**（`FrameSource`、`OpenH264Encoder`、`RemoteSession`、`SignalingServer`、`RemoteServer`，已在 `Engine.cpp` 实例化并 `Tick`），**输入侧（`InputRouter` / `SyntheticInput` / `InjectRelativeMouse`）尚未实现**。因此本系统 M1 很可能是**第一个**创建 `SyntheticInput` 的人——请直接建在 `Runtime/Input/` 公共位置，让 Remote 的输入里程碑日后复用，不要塞进 `AgentDriver/` 私有目录。
+> 现状（2026-06-08）：`src/Modules/NextRemote/` 已落地**视频侧**（`FrameSource`、`OpenH264Encoder`、`RemoteSession`、`SignalingServer`、`RemoteServer`，已在 `Engine.cpp` 实例化并 `Tick`），**输入侧（`InputRouter` / `SyntheticInput` / `InjectRelativeMouse`）尚未实现**。因此本系统 M1 很可能是**第一个**创建 `SyntheticInput` 的人——请直接建在 `Runtime/Input/` 公共位置，让 Remote 的输入里程碑日后复用，不要塞进 `AgentDriver/` 私有目录。
 
 ---
 
@@ -489,7 +498,7 @@ void RegisterAgentQueries(AgentQueryRegistry& reg) override {
 
 `runner.Options` 已支持 `Target/Preset/Scenes/Args`；`validate` 仅需把脚本路径作为 `--agent-script=` 追加，并在 `cmd.Run()` 返回后据 `exec.ExitError` 取退出码。
 
-文档：更新 `AGENTS.md` "Agent Visual Validation" 段，增"Agent Interactive Validation"小节，并在 `docs/gnb-cli.md` 补 `validate`/`drive`。
+文档：更新 `AGENTS.md` "Agent Visual Validation" 段，增"Agent Interactive Validation"小节，并在 `docs/guides/gnb-cli.md` 补 `validate`/`drive`。
 
 ---
 
@@ -522,7 +531,7 @@ void RegisterAgentQueries(AgentQueryRegistry& reg) override {
 
 ### M5 — 迁移 StudioSim + 文档
 - 任务：用脚本复现 StudioSim 一天流程，**删除/收敛 `if(GOption->AgentValidation)` 硬分支**（保留必要的"无 LLM/加速"开关，由 `--agent-script` 语义统一驱动）；实现其 `RegisterAgentQueries`；写 2~3 条代表脚本（晨会、生产、结算）。
-- 改动：`StudioSimGameInstance.{hpp,cpp}`、`assets/agentscripts/*`、`AGENTS.md`、`docs/gnb-cli.md`。
+- 改动：`StudioSimGameInstance.{hpp,cpp}`、`assets/agentscripts/*`、`AGENTS.md`、`docs/guides/gnb-cli.md`。
 - 验收：三条脚本在 `gnb validate` 全绿；StudioSim 代码里 `AgentValidation` 硬分支显著减少；其他游戏不受影响（抽样 `gnb shot` 各 program 仍 OK）。
 
 ---
@@ -594,7 +603,7 @@ gnb drive --target MagicaLego --scene assets/models/playground.glb
 
 ### 14.2 给后续 agent 的接手须知
 
-1. **先读 `docs/WebRTC-RemotePlay-Design.md` 的 §2.2/§2.3/§7.4**——输入注入的论证与 `InjectRelativeMouse` 设计在那已有，本系统复用，不要另起炉灶。
+1. **先读 `docs/designs/webrtc-remoteplay-design.md` 的 §2.2/§2.3/§7.4**——输入注入的论证与 `InjectRelativeMouse` 设计在那已有，本系统复用，不要另起炉灶。
 2. 行号会漂，**以函数名定位**：`NextEngine::HandleEvent` / `OnKey` / `OnMouseButton` / `OnCursorPosition` / `TickAgentValidation` / `RequestScreenShot` / `FCVarSystem::ExecuteCommand` / `Window::Close`（PushEvent 先例）。
 3. **按里程碑提交**，M1 的单测是整个系统的地基，务必先绿。
 4. 迁移 StudioSim（M5）时**保留**"无 LLM / 加速时钟"这类确定性开关，只删"自动点按钮/自动选项"这类**本该由脚本驱动**的硬分支。

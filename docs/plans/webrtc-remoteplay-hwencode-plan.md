@@ -1,10 +1,19 @@
+---
+title: "Remote Play 硬件编码改造计划（HW Texture → Vulkan Video → WebRTC）"
+category: plan
+status: 进行中
+owner: engine
+created: 2026-06-10
+last_updated: 2026-06-10
+---
+
 # Remote Play 硬件编码改造计划（HW Texture → Vulkan Video → WebRTC）
 
 > 状态：设计完成，待实现（供后续 agent 接手开发，建议按 Phase 拆 `.spec/TODO.md` 任务逐个推进）。
-> 前置：`docs/WebRTC-RemotePlay-Design.md`（总体设计）已落地到 Phase 3 附近——openh264 软编 + WebRTC 推流 + 输入转发**已可用但很慢**。本文是其 Phase 4（硬件编码）的细化执行计划，并先修掉当前软件路径的结构性瓶颈。
+> 前置：`docs/designs/webrtc-remoteplay-design.md`（总体设计）已落地到 Phase 3 附近——openh264 软编 + WebRTC 推流 + 输入转发**已可用但很慢**。本文是其 Phase 4（硬件编码）的细化执行计划，并先修掉当前软件路径的结构性瓶颈。
 > 目标：`--remote` 推流从"主线程阻塞式 CPU 全软路径"改为"渲染帧命令缓冲内零拷贝 NV12 转换 + Vulkan Video 硬件 H.264 编码 + 异步码流回读"，达到 1080p@60 推流、渲染线程每帧额外开销 < 0.5ms、远程相关 CPU 占用 < 5%。
 > 日期：2026-06-10
-> 关联代码：`src/Engine/Runtime/Remote/*`、`src/Engine/Rendering/VulkanBaseRenderer.{hpp,cpp}`、`src/Engine/Vulkan/Device.{hpp,cpp}`、`src/Engine/Vulkan/CommandExecution.cpp`、`src/Engine/Runtime/Engine.cpp`。
+> 关联代码：`src/Modules/NextRemote/*`、`src/Engine/Rendering/VulkanBaseRenderer.{hpp,cpp}`、`src/Engine/Vulkan/Device.{hpp,cpp}`、`src/Engine/Vulkan/CommandExecution.cpp`、`src/Engine/Runtime/Engine.cpp`。
 
 ---
 
@@ -209,5 +218,5 @@ RemoteServer
 - Khronos 官方示例（编码会话/DPB/RC 的权威参考实现）：vk_video_samples <https://github.com/KhronosGroup/Vulkan-Video-Samples>（`vk_video_encoder` 目录）
 - NVIDIA Vulkan Video encode 博文（队列/NV12/反馈 query 实务）：<https://developer.nvidia.com/blog/encoding-video-with-vulkan-video/>
 - vulkan-headers 自带 `vk_video/vulkan_video_codec_h264std_encode.h`（StdVideoEncodeH264* 结构，无需新依赖）
-- 既有总体设计：`docs/WebRTC-RemotePlay-Design.md` §4/§5/§11 Phase 4
+- 既有总体设计：`docs/designs/webrtc-remoteplay-design.md` §4/§5/§11 Phase 4
 - 开工前在目标机跑：`vulkaninfo | grep -i -E "video_(queue|encode)"` 确认扩展三件套在列

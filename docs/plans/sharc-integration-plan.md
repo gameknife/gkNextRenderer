@@ -1,3 +1,12 @@
+---
+title: "SHARC Spatially Hashed Radiance Cache — 可行性评估与开发计划"
+category: plan
+status: 待实现
+owner: engine
+created: 2026-06-05
+last_updated: 2026-06-07
+---
+
 # SHARC Spatially Hashed Radiance Cache — 可行性评估与开发计划
 
 > 状态：调研完成，待实现。

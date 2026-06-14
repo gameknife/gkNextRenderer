@@ -1,8 +1,17 @@
+---
+title: "StudioSim —— 产出与进度系统改进方案（打磨前结构性调整）"
+category: plan
+status: 已完成
+owner: engine
+created: 2026-06-08
+last_updated: 2026-06-08
+---
+
 # StudioSim —— 产出与进度系统改进方案（打磨前结构性调整）
 
 > **状态**：设计草案（待评审 → 交后续 agent 实现）
 > **目标读者**：负责打磨 StudioSim 的后续 AI agent / 开发者
-> **前置必读**：[`StudioSim-MVP-Plan.md`](StudioSim-MVP-Plan.md)（原始 MVP 计划）、本仓 `src/Application/Game/StudioSim/` 全部源码
+> **前置必读**：[`StudioSim-MVP-Plan.md`](studiosim-mvp-plan.md)（原始 MVP 计划）、本仓 `src/Application/Game/StudioSim/` 全部源码
 > **设计北极星**：开罗游戏《游戏发展国 / Game Dev Story》的"研发点数 + 工序阶段 + 可见浮字"产出循环
 > **一句话**：把"员工围着目标漫游、不停说话、天黑给个幻觉评分"改成"项目有可量化的产出仪表，员工的工作真正推动仪表、并据此减少废话、增加连续性"。
 
@@ -478,7 +487,7 @@ struct FGathering
 
 ## 9. 与原 MVP 计划的关系
 
-本文是对 [`StudioSim-MVP-Plan.md`](StudioSim-MVP-Plan.md) 的**增量打磨设计**，不推翻原架构：
+本文是对 [`StudioSim-MVP-Plan.md`](studiosim-mvp-plan.md) 的**增量打磨设计**，不推翻原架构：
 
 - 复用：阶段机 `EDayPhase`、`DecisionScheduler` 串行预算、`GoalSystem` 晨会、`EventSystem`、`EmployeeSystem` 移动、会议台词生成/解析/逐句节拍（`ParseMeetingLines`/`TickMeeting` 思路）。
 - 补回原计划设计过但实现时遗漏的：`FDailyGoal.progress`（→ 升级为 `FProjectState`）、`FEmployee.shortMemory`、目标分解的静态映射表（→ `goalTemplates`）。

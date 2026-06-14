@@ -1,3 +1,12 @@
+---
+title: "CLI Spec"
+category: guide
+status: 现行
+owner: engine
+created: 2026-01-02
+last_updated: 2026-06-07
+---
+
 # CLI Spec
 
 The repository build CLI is `gnb`.

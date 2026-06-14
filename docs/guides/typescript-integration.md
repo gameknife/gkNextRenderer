@@ -1,3 +1,12 @@
+---
+title: "TypeScript 整合说明"
+category: guide
+status: 现行
+owner: engine
+created: 2026-05-14
+last_updated: 2026-06-12
+---
+
 # TypeScript 整合说明
 
 gkNextEngine 的 TypeScript 链路不是独立的 Web 工具链，而是服务于引擎运行时的脚本层：开发者在 `assets/typescript` 编写 TypeScript，运行时使用仓库内置的 `tools/tsc/tsc[.exe]` 编译到 `assets/scripts`，然后由 QuickJS 以 ES module 形式加载。这个设计让脚本热重载、编辑器验证和玩法原型都能在不依赖 Node/npm/全局 `tsc` 的前提下运行。
@@ -115,7 +124,7 @@ RunGameInstance(new MyGameInstance());
 - `OverrideRenderCamera`
 - `OnDestroy`
 
-这条路径让脚本游戏和原生 `NextGameInstanceBase` 保持类似职责边界，便于做 Flappy 这类 C++/TypeScript 行为一致性验证；Flappy 双实现的项目定位见 [docs/projects/flappy-bird-parity/introduction.md](projects/flappy-bird-parity/introduction.md)。
+这条路径让脚本游戏和原生 `NextGameInstanceBase` 保持类似职责边界，便于做 Flappy 这类 C++/TypeScript 行为一致性验证；Flappy 双实现的项目定位见 [docs/projects/flappy-bird-parity/introduction.md](../projects/flappy-bird-parity/introduction.md)。
 
 ## 绑定和类型定义
 

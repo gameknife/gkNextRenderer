@@ -1,3 +1,12 @@
+---
+title: "SCAD 场景生成指引（AGENT 向）"
+category: guide
+status: 现行
+owner: engine
+created: 2026-06-12
+last_updated: 2026-06-12
+---
+
 # SCAD 场景生成指引（AGENT 向）
 
 本文沉淀 `assets/scad/` 下场景（`office` → `airport` → `habor_city` → `habor_city_hd`）的生成经验，

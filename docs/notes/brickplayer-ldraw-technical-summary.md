@@ -1,3 +1,12 @@
+---
+title: "BrickPlayer / LDraw 技术总结（2026-03）"
+category: note
+status: 已归档
+owner: gameknife
+created: 2026-03-21
+last_updated: 2026-03-21
+---
+
 # BrickPlayer / LDraw 技术总结（2026-03）
 
 ## 当前阶段结论

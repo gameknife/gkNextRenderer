@@ -1,3 +1,12 @@
+---
+title: "Soft Mesh Shader GPU-Driven 提交路径"
+category: guide
+status: 现行
+owner: engine
+created: 2026-06-03
+last_updated: 2026-06-07
+---
+
 # Soft Mesh Shader GPU-Driven 提交路径
 
 本文记录 gkNextEngine 当前唯一的 GPU-driven draw submit 方案：**Soft Mesh Shader single draw**。

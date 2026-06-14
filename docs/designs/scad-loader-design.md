@@ -1,3 +1,12 @@
+---
+title: "SCAD 加载器（SCADLoader）设计与开发计划"
+category: design
+status: 已完成
+owner: engine
+created: 2026-05-30
+last_updated: 2026-05-30
+---
+
 # SCAD 加载器（SCADLoader）设计与开发计划
 
 > 状态：**Phase 0–7 基本完成**（Manifold 真·CSG + 法线平滑 + FreeType text + rotate_extrude + 半透明材质 + earcut 凹/带洞 + children()/list comprehension/echo/assert/str + 编辑器集成 + AGENT_GUIDE 文档）。剩 `offset`/`projection`/`resize`/`minkowski`/`import`（示例未用）。
