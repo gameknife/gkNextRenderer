@@ -1,5 +1,6 @@
 ---
 title: Flappy Bird Parity 项目介绍
+category: project
 status: 现行
 owner: docs
 last_updated: 2026-05-18

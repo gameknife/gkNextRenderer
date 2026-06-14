@@ -189,7 +189,7 @@ Notes:
 - if `slangc` is not installed yet, `gnb setup` automatically fetches the project-managed Slang toolchain into `external/`
 - on pacman hosts, `gnb setup` and the first Linux `gnb build` automatically install the required system packages before vcpkg bootstrap; if that is unavailable, run `sudo pacman -S --needed base-devel cmake ninja curl zip unzip tar pkgconf libxrandr wayland-protocols libxkbcommon systemd-libs` manually
 - if a GitHub archive download fails during vcpkg setup, rerun the same build command once before doing deeper troubleshooting
-- deployment notes from a real Steam Deck setup are available in [docs/steamdeck-deployment-notes.md](docs/steamdeck-deployment-notes.md)
+- deployment notes from a real Steam Deck setup are available in [docs/notes/steamdeck-deployment-notes.md](docs/notes/steamdeck-deployment-notes.md)
 
 </details>
 
