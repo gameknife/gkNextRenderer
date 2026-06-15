@@ -117,12 +117,14 @@ const static float2 grid5x5[25] = {
 
 uint PackColor(float4 source)
 {
-    return packRGB10A2(source);
+    // Cube color faces carry no alpha; RGB9E5 gives wider HDR range + better
+    // dark-tone precision at the same 32 bits (see ConstFunc.slang packRGB9E5).
+    return packRGB9E5(source.rgb);
 }
 
 float4 UnpackColor(uint packed)
 {
-    return unpackRGB10A2(packed);
+    return float4(unpackRGB9E5(packed), 0.0f);
 }
 
 uint LerpPackedColor(uint c0, uint c1, float t)

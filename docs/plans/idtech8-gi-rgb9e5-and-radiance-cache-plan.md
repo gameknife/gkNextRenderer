@@ -5,6 +5,7 @@ status: 待实现
 owner: engine
 created: 2026-06-15
 last_updated: 2026-06-15
+progress: "Part A 完成 (A-1/A-2/A-3 全部验证通过, 2026-06-15); C 未开始"
 related:
   - docs/notes/idtech8-hybrid-gi-vs-ambientcube.md
   - docs/plans/ambient-cube-memory-reduction.md
