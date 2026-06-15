@@ -1,10 +1,11 @@
 #pragma once
 
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
+#include "Engine/Rendering/PipelineCommon/TemporalResolve.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
-namespace Vulkan::RayTracing
+namespace Vulkan::PathTracing
 {
 
 	class PathTracingRenderer final : public Vulkan::LogicRendererBase
@@ -53,9 +54,7 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> composePipelineNonDenoiser_;
 		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> accumulatePipeline_;
 
-		uint32_t prevSingleDiffuseId_{};
-		uint32_t prevSingleSpecularId_{};
-		uint32_t prevSingleAlbedoId_{};
+		PipelineCommon::TemporalResolve temporalResolve_;
 		FSharcState sharc_;
 
 		void EnsureSharcPipelines();

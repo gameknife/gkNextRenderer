@@ -520,7 +520,8 @@ bool NextRendererGameInstance::OnRenderUI()
 	{
 		ImGuiIO& io = ImGui::GetIO();
 		const auto viewport = io.DisplaySize;
-		static constexpr std::array<const char*, 4> rendererNames{"SoftModern", "SoftTracing", "VoxelTracing", "PathTracing"};
+		static constexpr std::array<const char*, 4> rendererNames{
+			"SoftwareModern", "SoftwareTracing", "VoxelTracing", "PathTracing"};
 		const std::array<ImVec2, rendererNames.size()> labelPositions{
 			ImVec2(viewport.x * 0.25f, viewport.y * 0.45f),
 			ImVec2(viewport.x * 0.75f, viewport.y * 0.45f),

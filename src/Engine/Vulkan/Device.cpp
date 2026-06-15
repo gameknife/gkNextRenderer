@@ -120,7 +120,7 @@ Device::Device(
 		});
 	if (videoEncodeRequested)
 	{
-		videoEncodeFamilyIndex_ = Runtime::Remote::FVulkanVideoCaps::FindEncodeH264QueueFamily(physicalDevice);
+		videoEncodeFamilyIndex_ = FVulkanVideoCaps::FindEncodeH264QueueFamily(physicalDevice);
 		if (videoEncodeFamilyIndex_ == UINT32_MAX)
 		{
 			SPDLOG_WARN("Video encode extensions requested but no H.264 encode queue family was found");

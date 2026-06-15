@@ -58,7 +58,6 @@ namespace Vulkan::PipelineCommon
 
 	private:
 		std::unique_ptr<Vulkan::RenderPass> renderPass_;
-		std::unique_ptr<Vulkan::RenderPass> swapRenderPass_;
 	};
 
 	class GraphicsPipeline : public PipelineBase
