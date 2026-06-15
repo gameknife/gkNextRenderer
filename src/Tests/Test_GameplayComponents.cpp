@@ -6,13 +6,12 @@
 #include "Gameplay/Components/CharacterControlComponent.h"
 #include "Gameplay/Components/CharacterGameplayComponent.h"
 
-TEST_CASE("CharacterGameplayComponent stores runtime-facing gameplay flags", "[Unit][Gameplay]")
+TEST_CASE("CharacterGameplayComponent stores runtime-facing gameplay state", "[Unit][Gameplay]")
 {
     auto node = Assets::Node::CreateNode("GameplayActor", glm::vec3(0.0f), glm::quat(1, 0, 0, 0), glm::vec3(1.0f), 1);
     auto component = std::make_shared<NextGameplay::CharacterGameplayComponent>();
 
     component->SetFirstPersonMode(true);
-    component->SetFootIKEnabled(false);
     component->SetMovementMode(NextGameplay::ECharacterMovementMode::MoveAligned);
     component->SetEyeHeight(1.8f);
     component->modelLoadRequested = true;
@@ -22,7 +21,6 @@ TEST_CASE("CharacterGameplayComponent stores runtime-facing gameplay flags", "[U
     auto stored = node->GetComponent<NextGameplay::CharacterGameplayComponent>();
     REQUIRE(stored != nullptr);
     CHECK(stored->GetFirstPersonMode());
-    CHECK_FALSE(stored->GetFootIKEnabled());
     CHECK(stored->GetMovementMode() == NextGameplay::ECharacterMovementMode::MoveAligned);
     CHECK(stored->GetEyeHeight() == Catch::Approx(1.8f));
     CHECK(stored->modelLoadRequested);

@@ -18,8 +18,6 @@
 #if WITH_OZZ
 #include "ozz/animation/runtime/animation.h"
 #include "ozz/animation/runtime/blending_job.h"
-#include "ozz/animation/runtime/ik_aim_job.h"
-#include "ozz/animation/runtime/ik_two_bone_job.h"
 #include "ozz/animation/runtime/local_to_model_job.h"
 #include "ozz/animation/runtime/sampling_job.h"
 #include "ozz/animation/runtime/skeleton.h"
@@ -34,25 +32,6 @@
 #include "Engine/Runtime/Components/SkinnedMeshComponent.Internal.hpp"
 namespace Runtime
 {
-    namespace
-    {
-        std::string NormalizeJointName(std::string_view name)
-        {
-            std::string normalized;
-            normalized.reserve(name.size());
-            for (char ch : name)
-            {
-                if (ch == ' ' || ch == '_' || ch == '-' || ch == '.')
-                {
-                    continue;
-                }
-                normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
-            }
-            return normalized;
-        }
-
-    }
-
     void SkinnedMeshComponent::RegisterReflection()
     {
         using namespace entt::literals;
@@ -228,7 +207,6 @@ namespace Runtime
         }
 #endif
 
-        ApplyFootPlacementIK(deltaTime);
     }
 
     void SkinnedMeshComponent::DrawDebugSkeleton(const glm::mat4& worldTransform)
@@ -444,53 +422,6 @@ namespace Runtime
                 state.Playing = false;
             }
         }
-    }
-
-    int SkinnedMeshComponent::FindJointIndex(std::initializer_list<std::string_view> aliases,
-                                             std::initializer_list<std::string_view> containsTokens) const
-    {
-        for (const auto& joint : jointMap_)
-        {
-            const std::string normalized = NormalizeJointName(joint.first);
-            for (std::string_view alias : aliases)
-            {
-                if (normalized == NormalizeJointName(alias))
-                {
-                    return joint.second;
-                }
-            }
-        }
-
-        for (const auto& joint : jointMap_)
-        {
-            const std::string normalized = NormalizeJointName(joint.first);
-            bool matches = !containsTokens.size();
-            for (std::string_view token : containsTokens)
-            {
-                if (normalized.find(NormalizeJointName(token)) == std::string::npos)
-                {
-                    matches = false;
-                    break;
-                }
-                matches = true;
-            }
-
-            if (matches)
-            {
-                return joint.second;
-            }
-        }
-
-        return -1;
-    }
-
-    glm::quat SkinnedMeshComponent::ExtractJointGlobalRotation(int jointIndex) const
-    {
-        if (jointIndex < 0 || jointIndex >= static_cast<int>(runtimeJoints_.size()))
-        {
-            return glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-        }
-        return glm::normalize(glm::quat_cast(glm::mat3(runtimeJoints_[jointIndex].GlobalTransform)));
     }
 
 }

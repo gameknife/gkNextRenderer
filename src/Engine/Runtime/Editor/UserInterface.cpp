@@ -50,6 +50,39 @@ extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
 namespace NextUI
 {
 
+struct UiRenderBuffer::Impl
+{
+    struct DrawSegment
+    {
+        uint32_t vertexOffset = 0;
+        uint32_t vertexCount = 0;
+    };
+
+    struct DrawOp
+    {
+        enum class EType : uint8_t
+        {
+            Draw,
+            Callback,
+        };
+
+        EType type = EType::Draw;
+        DrawSegment segment{};
+        const ImDrawList* drawList = nullptr;
+        const ImDrawCmd* drawCmd = nullptr;
+    };
+
+    std::unique_ptr<Vulkan::Buffer> vertexBuffer;
+    std::unique_ptr<Vulkan::DeviceMemory> vertexBufferMemory;
+    VkDeviceSize vertexBufferSize = 0;
+    std::vector<DrawOp> drawOps;
+};
+
+UiRenderBuffer::UiRenderBuffer() : impl_(std::make_unique<Impl>()) {}
+UiRenderBuffer::~UiRenderBuffer() = default;
+UiRenderBuffer::UiRenderBuffer(UiRenderBuffer&&) noexcept = default;
+UiRenderBuffer& UiRenderBuffer::operator=(UiRenderBuffer&&) noexcept = default;
+
 namespace
 {
 
@@ -161,8 +194,9 @@ VkPipeline CreateUiGraphicsPipeline(const Vulkan::Device& device, VkPipelineLayo
 
 UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPool, const Vulkan::SwapChain& swapChain,
                              const Vulkan::DepthBuffer& depthBuffer, Runtime::Config::UserSettings& userSettings,
-                             std::function<void()> funcPreConfig, std::function<void()> funcInit) :
-    userSettings_(userSettings), engine_(engine)
+                             std::function<void()> funcPreConfig, std::function<void()> funcInit,
+                             std::unique_ptr<IMultiViewportBackend> multiViewportBackend) :
+    userSettings_(userSettings), multiViewportBackend_(std::move(multiViewportBackend)), engine_(engine)
 {
     const auto& window = swapChain.Device().Surface().Instance().Window();
 
@@ -284,11 +318,49 @@ UserInterface::~UserInterface()
     DestroyUiPipeline();
     uiFrameBuffers_.clear();
     uiRenderBuffers_.clear();
-    platformUiRenderBuffers_.clear();
 
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
 }
+
+void UserInterface::InitializeRendererBackend()
+{
+    auto& io = ImGui::GetIO();
+    if (io.BackendRendererUserData != nullptr)
+    {
+        Throw(std::runtime_error("imgui renderer backend already initialized"));
+    }
+
+    io.BackendRendererUserData = this;
+    io.BackendRendererName = "gk_imgui_renderer";
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
+
+    if (multiViewportBackend_)
+    {
+        multiViewportBackend_->Initialize(*this);
+    }
+}
+
+void UserInterface::ShutdownRendererBackend()
+{
+    if (ImGui::GetCurrentContext() == nullptr)
+    {
+        return;
+    }
+
+    if (multiViewportBackend_)
+    {
+        multiViewportBackend_->Shutdown();
+    }
+
+    auto& io = ImGui::GetIO();
+    ImGui::GetPlatformIO().Renderer_RenderState = nullptr;
+    io.BackendRendererName = nullptr;
+    io.BackendRendererUserData = nullptr;
+    io.BackendFlags &= ~ImGuiBackendFlags_RendererHasVtxOffset;
+}
+
+void UserInterface::BeginRendererBackendFrame() {}
 
 void UserInterface::OnCreateSurface(const Vulkan::SwapChain& swapChain, const Vulkan::DepthBuffer& depthBuffer)
 {
@@ -309,7 +381,6 @@ void UserInterface::OnDestroySurface()
     renderPass_.reset();
     uiFrameBuffers_.clear();
     uiRenderBuffers_.clear();
-    platformUiRenderBuffers_.clear();
 }
 
 ImTextureID UserInterface::EncodeBindlessTextureId(uint32_t textureIndex)
@@ -471,17 +542,15 @@ void UserInterface::DestroyUiPipeline()
     }
 
     const auto& device = engine_->GetRenderer().Device();
+    if (multiViewportBackend_)
+    {
+        multiViewportBackend_->OnUiPipelineDestroyed();
+    }
     if (uiPipeline_ != VK_NULL_HANDLE)
     {
         vkDestroyPipeline(device.Handle(), uiPipeline_, nullptr);
         uiPipeline_ = VK_NULL_HANDLE;
     }
-    if (uiPlatformViewportPipeline_ != VK_NULL_HANDLE)
-    {
-        vkDestroyPipeline(device.Handle(), uiPlatformViewportPipeline_, nullptr);
-        uiPlatformViewportPipeline_ = VK_NULL_HANDLE;
-    }
-    uiPlatformViewportRenderPass_ = VK_NULL_HANDLE;
     if (uiPipelineLayout_ != VK_NULL_HANDLE)
     {
         vkDestroyPipelineLayout(device.Handle(), uiPipelineLayout_, nullptr);
@@ -489,7 +558,31 @@ void UserInterface::DestroyUiPipeline()
     }
 }
 
-void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, FUiRenderBuffers& renderBuffers,
+VkPipeline UserInterface::CreateViewportPipeline(VkRenderPass renderPass) const
+{
+    if (renderPass == VK_NULL_HANDLE)
+    {
+        return VK_NULL_HANDLE;
+    }
+    return CreateUiGraphicsPipeline(engine_->GetRenderer().Device(), uiPipelineLayout_, renderPass);
+}
+
+void UserInterface::DestroyViewportPipeline(VkPipeline pipeline) const
+{
+    if (pipeline != VK_NULL_HANDLE)
+    {
+        vkDestroyPipeline(engine_->GetRenderer().Device().Handle(), pipeline, nullptr);
+    }
+}
+
+void UserInterface::RenderViewportDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer,
+                                           UiRenderBuffer& renderBuffer, VkExtent2D framebufferExtent,
+                                           bool hdrOutput, VkPipeline pipeline)
+{
+    RenderDrawData(drawData, commandBuffer, renderBuffer, framebufferExtent, hdrOutput, pipeline);
+}
+
+void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, UiRenderBuffer& renderBuffer,
                                    VkExtent2D framebufferExtent, bool hdrOutput, VkPipeline pipeline)
 {
     if (drawData == nullptr || drawData->CmdListsCount <= 0 || pipeline == VK_NULL_HANDLE)
@@ -523,6 +616,10 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
     pushConsts.hdrOutput = hdrOutput ? 1u : 0u;
     pushConsts.hdrReferenceWhiteNit = kUiHdrReferenceWhiteNit;
 
+    UiRenderBuffer::Impl& renderBuffers = *renderBuffer.impl_;
+    using DrawOp = UiRenderBuffer::Impl::DrawOp;
+    using DrawSegment = UiRenderBuffer::Impl::DrawSegment;
+
     const auto& device = engine_->GetRenderer().Device();
     const size_t maxBatchedVertexCount = static_cast<size_t>(std::max(drawData->TotalIdxCount, 0));
     const VkDeviceSize maxVertexSize = static_cast<VkDeviceSize>(maxBatchedVertexCount) * sizeof(UiBatchedVertex);
@@ -542,7 +639,7 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
         mappedVertices = static_cast<UiBatchedVertex*>(renderBuffers.vertexBufferMemory->Map(0, maxVertexSize));
     }
 
-    std::vector<UiDrawOp>& drawOps = renderBuffers.drawOps;
+    std::vector<DrawOp>& drawOps = renderBuffers.drawOps;
     drawOps.clear();
     drawOps.reserve(static_cast<size_t>(drawData->CmdListsCount) * 2);
 
@@ -556,7 +653,7 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
         }
 
         drawOps.push_back(
-            UiDrawOp{UiDrawOp::EType::Draw, UiDrawSegment{segmentStartVertex, vertexCount}, nullptr, nullptr});
+            DrawOp{DrawOp::EType::Draw, DrawSegment{segmentStartVertex, vertexCount}, nullptr, nullptr});
         segmentStartVertex = currentBatchedVertexCount;
     };
 
@@ -575,7 +672,7 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
             if (drawCmd->UserCallback != nullptr)
             {
                 FlushPendingDraw(currentSegmentStartVertex);
-                drawOps.push_back(UiDrawOp{UiDrawOp::EType::Callback, UiDrawSegment{}, drawList, drawCmd});
+                drawOps.push_back(DrawOp{DrawOp::EType::Callback, DrawSegment{}, drawList, drawCmd});
                 continue;
             }
 
@@ -677,9 +774,9 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
     renderState.pipelineLayout = uiPipelineLayout_;
     platformIo.Renderer_RenderState = &renderState;
 
-    for (const UiDrawOp& drawOp : drawOps)
+    for (const DrawOp& drawOp : drawOps)
     {
-        if (drawOp.type == UiDrawOp::EType::Draw)
+        if (drawOp.type == DrawOp::EType::Draw)
         {
             if (drawOp.segment.vertexCount > 0)
             {
@@ -792,9 +889,10 @@ void UserInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::Swap
     auto& io = ImGui::GetIO();
     if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
     {
-        ImGui::UpdatePlatformWindows();
-        PrunePlatformViewportRenderBuffers();
-        ImGui::RenderPlatformWindowsDefault(nullptr, this);
+        if (multiViewportBackend_)
+        {
+            multiViewportBackend_->RenderPlatformWindows();
+        }
     }
 }
 

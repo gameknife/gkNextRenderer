@@ -1099,7 +1099,8 @@ void NextEngine::OnRendererCreateSwapChain()
     {
         userInterface_.reset(new NextUI::UserInterface(
             this, renderer_->CommandPool(), renderer_->SwapChain(), renderer_->DepthBuffer(), config_.userSettings,
-            [this]() -> void { gameInstance_->OnPreConfigUI(); }, [this]() -> void { gameInstance_->OnInitUI(); }));
+            [this]() -> void { gameInstance_->OnPreConfigUI(); }, [this]() -> void { gameInstance_->OnInitUI(); },
+            gameInstance_->CreateMultiViewportBackend()));
     }
     if (uiOverlay_.get() == nullptr && uiOverlayFactory_)
     {

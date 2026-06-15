@@ -87,6 +87,7 @@ file(GLOB_RECURSE src_files_appcommon
 )
 
 # --- Editor ---
+file(GLOB_RECURSE src_files_editorcommon "Application/Editor/Common/*")
 file(GLOB_RECURSE src_files_editor "Application/Editor/gkNextEditor/*")
 
 # --- SCAD Studio (conversational SCAD model generator) ---

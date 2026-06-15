@@ -32,6 +32,7 @@ public:
     void OnPreConfigUI() override;
     bool OnRenderUI() override;
     void OnInitUI() override;
+    std::unique_ptr<NextUI::IMultiViewportBackend> CreateMultiViewportBackend() override;
 
     void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) override;
 

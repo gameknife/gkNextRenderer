@@ -50,7 +50,7 @@ namespace NextGameplay
         void ClearRuntimeState();
         void MapAnimationNames(const std::vector<std::string>& names);
         bool UpdateAnimation(CharacterGameplayComponent& gameplayComponent,
-                             const FCharacterAnimationUpdateInput& input, bool footIKEnabled, bool debugDraw);
+                             const FCharacterAnimationUpdateInput& input);
 
     private:
         std::string animIdle_;

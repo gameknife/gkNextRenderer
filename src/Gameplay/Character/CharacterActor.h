@@ -7,7 +7,7 @@
 #include "Gameplay/Components/CharacterGameplayComponent.h"
 #include "Engine/Runtime/RuntimeFwd.hpp"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
-#include "Engine/Runtime/Subsystems/NextCharacterController.h"
+#include "Gameplay/Character/NextCharacterController.h"
 
 namespace NextGameplay
 {
@@ -20,7 +20,6 @@ namespace NextGameplay
         ECharacterControlSource controlSource = ECharacterControlSource::Player;
         ECharacterMovementMode movementMode = ECharacterMovementMode::CameraAligned;
         bool firstPersonMode = false;
-        bool footIKEnabled = true;
         float eyeHeight = 1.55f;
         float facingYaw = 0.0f;
         float walkStrafePlaySpeed = 0.82f;
@@ -40,7 +39,6 @@ namespace NextGameplay
         void SetModelLoadRequested(bool requested);
         void SetModelLoaded(bool loaded);
         void SetFirstPersonMode(bool enabled);
-        void SetFootIKEnabled(bool enabled);
         void SetMovementMode(ECharacterMovementMode mode);
         void SetFacingYaw(float yaw);
         void ClearControlFrameState() const;
@@ -52,8 +50,7 @@ namespace NextGameplay
                                     const std::shared_ptr<Assets::Node>& excludeRoot = nullptr);
         void AttachSkinnedModel(NextPhysics* physicsEngine);
         void RemoveVisualRoot(Assets::Scene& scene, NextPhysics* physicsEngine);
-        void ConfigureFootPlacementIK(const Runtime::SkinnedMeshComponent::FootPlacementIKSettings& settings) const;
-        bool UpdateAnimation(const FCharacterAnimationUpdateInput& input, bool footIKEnabled, bool debugDraw) const;
+        bool UpdateAnimation(const FCharacterAnimationUpdateInput& input) const;
         void PlayAnimation(const std::string& name, bool loop, float playSpeed = 1.0f) const;
         bool IsAnimationReady() const;
         Runtime::SkinnedMeshComponent* GetPrimarySkinnedMeshComponent() const { return primarySkinnedMeshComp; }

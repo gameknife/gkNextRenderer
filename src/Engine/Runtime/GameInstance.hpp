@@ -4,6 +4,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
+#include "Engine/Runtime/Editor/MultiViewportBackend.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
 
 class NextGameInstanceBase
@@ -22,6 +23,7 @@ public:
     virtual bool ShouldRenderUiDuringScreenshot() const { return false; }
     virtual void OnPreConfigUI() {}
     virtual void OnInitUI() {}
+    virtual std::unique_ptr<NextUI::IMultiViewportBackend> CreateMultiViewportBackend() { return nullptr; }
     virtual void OnRayHitResponse(Assets::RayCastResult& result) {}
     virtual void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) {}
     virtual float GetGraphicsDebugPanelTopOffset() const { return 0.0f; }

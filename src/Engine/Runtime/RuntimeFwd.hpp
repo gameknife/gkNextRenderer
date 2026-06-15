@@ -14,6 +14,7 @@ namespace NextCVar
 
 namespace NextUI
 {
+    class IMultiViewportBackend;
     class UserInterface;
     struct Statistics;
 }

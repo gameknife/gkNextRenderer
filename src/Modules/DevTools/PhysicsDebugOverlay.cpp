@@ -12,7 +12,6 @@
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Subsystems/NextCharacterController.h"
 #include "Engine/Runtime/Subsystems/NextPhysics.h"
 
 namespace
@@ -76,24 +75,6 @@ namespace
         {
             drawList->AddLine(sa, sb, color, thickness);
         }
-    }
-
-    float ComputeCapsuleRadiusAtHeight(float localY, float height, float radius)
-    {
-        if (localY < radius)
-        {
-            const float delta = localY - radius;
-            return std::sqrt(std::max(0.0f, radius * radius - delta * delta));
-        }
-
-        const float upperHemisphereStart = height - radius;
-        if (localY > upperHemisphereStart)
-        {
-            const float delta = localY - upperHemisphereStart;
-            return std::sqrt(std::max(0.0f, radius * radius - delta * delta));
-        }
-
-        return radius;
     }
 
     struct FPhysicsLegendEntry
@@ -290,104 +271,6 @@ void Runtime::DrawPhysicsDebugOverlay(const Assets::Scene& scene, const Assets::
     DrawPhysicsDebugLegend(stats);
 #else
     (void)scene;
-    (void)camera;
-#endif
-}
-
-void Runtime::DrawCharacterControllerDebugOverlay(const NextCharacterController& controller, const Assets::Camera& camera)
-{
-#if WITH_PHYSIC
-    if (!controller.IsValid())
-    {
-        return;
-    }
-
-    const std::optional<FOverlayProjector> projector = BuildOverlayProjector(camera);
-    if (!projector.has_value())
-    {
-        return;
-    }
-
-    const float height = controller.GetHeight();
-    const float radius = controller.GetRadius();
-    if (height <= 0.0f || radius <= 0.0f)
-    {
-        return;
-    }
-
-    auto* drawList = ImGui::GetForegroundDrawList();
-    const glm::vec3 basePosition = controller.GetPosition();
-    const ImU32 color = controller.IsOnGround() ? IM_COL32(90, 255, 140, 230) : IM_COL32(255, 180, 70, 230);
-
-    constexpr int kVerticalSamples = 18;
-    constexpr int kRingSegments = 24;
-    constexpr float kLineThickness = 1.5f;
-    const std::array<float, 4> meridians = {
-        0.0f,
-        glm::half_pi<float>(),
-        glm::pi<float>(),
-        glm::half_pi<float>() * 3.0f,
-    };
-
-    for (float phi : meridians)
-    {
-        std::vector<glm::vec3> points;
-        points.reserve(kVerticalSamples + 1);
-        for (int i = 0; i <= kVerticalSamples; ++i)
-        {
-            const float t = static_cast<float>(i) / static_cast<float>(kVerticalSamples);
-            const float localY = t * height;
-            const float ringRadius = ComputeCapsuleRadiusAtHeight(localY, height, radius);
-            points.emplace_back(basePosition.x + std::cos(phi) * ringRadius,
-                                basePosition.y + localY,
-                                basePosition.z + std::sin(phi) * ringRadius);
-        }
-
-        for (size_t i = 1; i < points.size(); ++i)
-        {
-            DrawProjectedLine(drawList, *projector, points[i - 1], points[i], color, kLineThickness);
-        }
-    }
-
-    const std::array<float, 5> ringHeights = {
-        radius * 0.35f,
-        radius,
-        height * 0.5f,
-        height - radius,
-        height - radius * 0.35f,
-    };
-
-    for (float localY : ringHeights)
-    {
-        const float ringRadius = ComputeCapsuleRadiusAtHeight(localY, height, radius);
-        if (ringRadius <= 0.001f)
-        {
-            continue;
-        }
-
-        std::vector<glm::vec3> ringPoints;
-        ringPoints.reserve(kRingSegments + 1);
-        for (int segment = 0; segment <= kRingSegments; ++segment)
-        {
-            const float angle = glm::two_pi<float>() * static_cast<float>(segment) / static_cast<float>(kRingSegments);
-            ringPoints.emplace_back(basePosition.x + std::cos(angle) * ringRadius,
-                                    basePosition.y + localY,
-                                    basePosition.z + std::sin(angle) * ringRadius);
-        }
-
-        for (size_t i = 1; i < ringPoints.size(); ++i)
-        {
-            DrawProjectedLine(drawList, *projector, ringPoints[i - 1], ringPoints[i], color, kLineThickness);
-        }
-    }
-
-    ImVec2 center;
-    if (projector->Project(basePosition + glm::vec3(0.0f, height * 0.5f, 0.0f), center))
-    {
-        drawList->AddCircle(center, 3.5f, color, 12, kLineThickness);
-    }
-#else
-    (void)controller;
     (void)camera;
 #endif
 }
