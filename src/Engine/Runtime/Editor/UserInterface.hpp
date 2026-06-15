@@ -2,6 +2,7 @@
 #include "Engine/Common/CoreMinimal.hpp" // GK_NON_COPIABLE
 #include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
+#include "Engine/Runtime/Editor/MultiViewportBackend.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -46,7 +47,8 @@ public:
 		const Vulkan::DepthBuffer& depthBuffer,
 		Runtime::Config::UserSettings& userSettings,
 		std::function<void()> funcPreConfig,
-		std::function<void()> funcInit);
+		std::function<void()> funcInit,
+		std::unique_ptr<IMultiViewportBackend> multiViewportBackend);
 	~UserInterface();
 
 	void PreRender();
@@ -79,29 +81,12 @@ public:
 	void DrawPoint(float x, float y, float size, glm::vec4 color);
 	void DrawLine(float fromx, float fromy,float tox, float toy, float size, glm::vec4 color);
 
+	VkPipeline CreateViewportPipeline(VkRenderPass renderPass) const;
+	void DestroyViewportPipeline(VkPipeline pipeline) const;
+	void RenderViewportDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, UiRenderBuffer& renderBuffer,
+	                            VkExtent2D framebufferExtent, bool hdrOutput, VkPipeline pipeline);
+
 private:
-	struct UiDrawSegment
-	{
-		uint32_t vertexOffset = 0;
-		uint32_t vertexCount = 0;
-	};
-
-	struct UiDrawOp
-	{
-		enum class EType : uint8_t
-		{
-			Draw,
-			Callback,
-		};
-
-		EType type = EType::Draw;
-		UiDrawSegment segment{};
-		const ImDrawList* drawList = nullptr;
-		const ImDrawCmd* drawCmd = nullptr;
-	};
-
-	struct FUiRenderBuffers;
-
 	NextEngine& GetEngine() {return *engine_;}
 
 	void DrawIndicator(uint32_t frameCount);
@@ -111,20 +96,7 @@ private:
 	void CreateUiPipeline(const Vulkan::SwapChain& swapChain);
 	void DestroyUiPipeline();
 	void InitializeFontTexture(Vulkan::CommandPool& commandPool);
-	VkPipeline GetOrCreatePlatformViewportPipeline(VkRenderPass renderPass);
-	void CreatePlatformViewportWindow(ImGuiViewport* viewport);
-	void DestroyPlatformViewportWindow(ImGuiViewport* viewport);
-	void ResizePlatformViewportWindow(ImGuiViewport* viewport, ImVec2 size);
-	void RenderPlatformViewportWindow(ImGuiViewport* viewport);
-	void SwapPlatformViewportBuffers(ImGuiViewport* viewport);
-	static UserInterface* GetRendererBackendOwner();
-	static void CreatePlatformViewportWindowCallback(ImGuiViewport* viewport);
-	static void DestroyPlatformViewportWindowCallback(ImGuiViewport* viewport);
-	static void ResizePlatformViewportWindowCallback(ImGuiViewport* viewport, ImVec2 size);
-	static void RenderPlatformViewportWindowCallback(ImGuiViewport* viewport, void* renderArg);
-	static void SwapPlatformViewportBuffersCallback(ImGuiViewport* viewport, void* renderArg);
-	void PrunePlatformViewportRenderBuffers();
-	void RenderDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, FUiRenderBuffers& renderBuffers,
+	void RenderDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, UiRenderBuffer& renderBuffers,
 	                    VkExtent2D framebufferExtent, bool hdrOutput, VkPipeline pipeline);
 	static ImTextureID EncodeBindlessTextureId(uint32_t textureIndex);
 	static bool DecodeBindlessTextureId(ImTextureID textureId, uint32_t& outTextureIndex);
@@ -132,21 +104,12 @@ private:
 	std::unique_ptr<Vulkan::RenderPass> renderPass_;
 	std::string imguiIniPath_;
 	std::vector< Vulkan::FrameBuffer > uiFrameBuffers_;
-	struct FUiRenderBuffers
-	{
-		std::unique_ptr<Vulkan::Buffer> vertexBuffer;
-		std::unique_ptr<Vulkan::DeviceMemory> vertexBufferMemory;
-		VkDeviceSize vertexBufferSize = 0;
-		std::vector<UiDrawOp> drawOps;
-	};
-	std::vector<FUiRenderBuffers> uiRenderBuffers_;
+	std::vector<UiRenderBuffer> uiRenderBuffers_;
 	VkPipelineLayout uiPipelineLayout_ = VK_NULL_HANDLE;
 	VkPipeline uiPipeline_ = VK_NULL_HANDLE;
-	VkPipeline uiPlatformViewportPipeline_ = VK_NULL_HANDLE;
-	VkRenderPass uiPlatformViewportRenderPass_ = VK_NULL_HANDLE;
 	Runtime::Config::UserSettings& userSettings_;	
 	
-	std::unordered_map<ImGuiID, std::vector<FUiRenderBuffers>> platformUiRenderBuffers_;
+	std::unique_ptr<IMultiViewportBackend> multiViewportBackend_;
 	std::unordered_set<std::string> uiTextureLoadRequests_;
 	std::unordered_map<std::string, ImVec2> uiTexturePixelSizeCache_;
 	uint32_t fontTextureIndex_ = UINT32_MAX;

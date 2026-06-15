@@ -23,10 +23,6 @@ namespace NextGameplay
                 "FirstPersonMode")
                 .custom<PropertyMeta>(PropertyPresets::Editable("First Person", "Gameplay",
                                                                 "Whether the actor is rendered in first-person"))
-            .data<&CharacterGameplayComponent::SetFootIKEnabled, &CharacterGameplayComponent::GetFootIKEnabled>(
-                "FootIKEnabled")
-                .custom<PropertyMeta>(PropertyPresets::Editable("Foot IK", "Gameplay",
-                                                                "Enable runtime foot placement IK"))
             .data<&CharacterGameplayComponent::SetMovementMode, &CharacterGameplayComponent::GetMovementMode>(
                 "MovementMode")
                 .custom<PropertyMeta>(PropertyPresets::Editable("Movement Mode", "Gameplay",
@@ -74,20 +70,4 @@ namespace NextGameplay
         }
     }
 
-    void CharacterGameplayComponent::ConfigureFootPlacementIK(bool enabled, bool debugDraw, float weight) const
-    {
-        for (Runtime::SkinnedMeshComponent* skinnedMeshComp : skinnedMeshComps)
-        {
-            if (!skinnedMeshComp)
-            {
-                continue;
-            }
-
-            skinnedMeshComp->SetFootPlacementIKEnabled(enabled);
-            skinnedMeshComp->SetFootPlacementIKWeight(weight);
-            auto settings = skinnedMeshComp->GetFootPlacementIKSettings();
-            settings.DebugDraw = debugDraw;
-            skinnedMeshComp->SetFootPlacementIKSettings(settings);
-        }
-    }
 }

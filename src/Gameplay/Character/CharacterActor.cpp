@@ -37,7 +37,6 @@ namespace NextGameplay
         control = std::make_shared<CharacterControlComponent>();
 
         gameplay->SetFirstPersonMode(setup.firstPersonMode);
-        gameplay->SetFootIKEnabled(setup.footIKEnabled);
         gameplay->SetMovementMode(setup.movementMode);
         gameplay->SetEyeHeight(setup.eyeHeight);
         gameplay->facingYaw = setup.facingYaw;
@@ -119,14 +118,6 @@ namespace NextGameplay
         if (gameplay)
         {
             gameplay->SetFirstPersonMode(enabled);
-        }
-    }
-
-    void CharacterActor::SetFootIKEnabled(bool enabled)
-    {
-        if (gameplay)
-        {
-            gameplay->SetFootIKEnabled(enabled);
         }
     }
 
@@ -247,29 +238,14 @@ namespace NextGameplay
         gameplay->visualRoot.reset();
     }
 
-    void CharacterActor::ConfigureFootPlacementIK(
-        const Runtime::SkinnedMeshComponent::FootPlacementIKSettings& settings) const
-    {
-        for (Runtime::SkinnedMeshComponent* skinnedMeshComp : skinnedMeshComps)
-        {
-            if (!skinnedMeshComp)
-            {
-                continue;
-            }
-
-            skinnedMeshComp->SetFootPlacementIKSettings(settings);
-        }
-    }
-
-    bool CharacterActor::UpdateAnimation(const FCharacterAnimationUpdateInput& input, bool footIKEnabled,
-                                         bool debugDraw) const
+    bool CharacterActor::UpdateAnimation(const FCharacterAnimationUpdateInput& input) const
     {
         if (!gameplay || !animation || !control || skinnedMeshComps.empty())
         {
             return false;
         }
 
-        return animation->UpdateAnimation(*gameplay, input, footIKEnabled, debugDraw);
+        return animation->UpdateAnimation(*gameplay, input);
     }
 
     void CharacterActor::PlayAnimation(const std::string& name, bool loop, float playSpeed) const

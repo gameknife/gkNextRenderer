@@ -11,7 +11,7 @@
 #include "Gameplay/Components/CharacterControlComponent.h"
 #include "Gameplay/Components/CharacterGameplayComponent.h"
 #include "Engine/Runtime/GameInstance.hpp"
-#include "Engine/Runtime/Subsystems/NextCharacterController.h"
+#include "Gameplay/Character/NextCharacterController.h"
 
 #include <random>
 
@@ -40,9 +40,6 @@ public:
     bool OverrideRenderCamera(Assets::Camera& OutRenderCamera) const override;
     void DrawAdditionalPhysicsDebugOverlay(const Assets::Camera& camera) const override;
 
-    bool SupportsAppDebugShortcut(SDL_Keycode key) const override;
-    bool IsAppDebugShortcutActive(SDL_Keycode key) const override;
-    bool SetAppDebugShortcutActive(SDL_Keycode key, bool active) override;
     bool OnKey(SDL_Event& event) override;
     bool OnCursorPosition(double xpos, double ypos) override;
     bool OnMouseButton(SDL_Event& event) override;
@@ -124,8 +121,6 @@ private:
     bool keySprint_ = false;
     bool mouseCaptured_ = false;
     bool resetMouse_ = true;
-    bool footIKEnabled_ = true;
-    bool showFootIKDebug_ = false;
     bool showAIDebugMenu_ = false;
     bool showBehaviorTreeDebug_ = false;
     bool showNavGridDebug_ = false;

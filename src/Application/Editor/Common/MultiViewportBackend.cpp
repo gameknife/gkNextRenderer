@@ -1,53 +1,18 @@
-// UserInterface multi-viewport platform-window backend: per-viewport
-// swapchains, frame resources and the ImGui Renderer_* viewport callbacks.
-// Split from UserInterface.cpp; same class, separate TU.
-#include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Application/Editor/Common/MultiViewportBackend.hpp"
 
+#include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/DebugUiProvider.hpp"
-#include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Engine/Runtime/Config/UserSettings.hpp"
-#include "Engine/Runtime/Editor/FontLoader.h"
-#include "ThirdParty/imgui-custom/imgui_impl_sdl3_custom.h"
 #include "Engine/Utilities/Exception.hpp"
-#include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Vulkan/Device.hpp"
-#include "Engine/Vulkan/MemoryAndShader.hpp"
 #include "Engine/Vulkan/Instance.hpp"
-#include "Engine/Vulkan/RenderingPipeline.hpp"
-#include "Engine/Vulkan/CommandExecution.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
 
 #include <imgui.h>
-#include <imgui_freetype.h>
-#include <imgui_stdlib.h>
-#include <SDL3/SDL.h>
 
 #include <algorithm>
 #include <array>
-#include <cstddef>
-#include <cmath>
-#include <cstring>
-#include <filesystem>
-#include <fmt/chrono.h>
-#include <fmt/format.h>
-
-#include "Engine/Assets/GPU/TextureImage.hpp"
-#include "Engine/Assets/GPU/Texture.hpp"
-#include "Engine/Options.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
-#include "ThirdParty/fontawesome/IconsFontAwesome6.h"
-#include "Engine/Utilities/FileHelper.hpp"
-#include "Engine/Utilities/ImGui.hpp"
-#include "Engine/Utilities/Math.hpp"
-#include "Engine/Utilities/StbImage.hpp"
-#include "Engine/Vulkan/GpuResources.hpp"
-
-extern float GAndroidMagicScale;
-extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
-#include "Engine/Runtime/Editor/UserInterface.Internal.hpp"
 
 namespace NextUI
 {
@@ -459,17 +424,15 @@ namespace
 
 } // namespace
 
-void UserInterface::InitializeRendererBackend()
-{
-    auto& io = ImGui::GetIO();
-    if (io.BackendRendererUserData != nullptr)
-    {
-        Throw(std::runtime_error("imgui renderer backend already initialized"));
-    }
+MultiViewportBackend::MultiViewportBackend(NextEngine& engine) : engine_(engine) {}
 
+MultiViewportBackend::~MultiViewportBackend() = default;
+
+void MultiViewportBackend::Initialize(UserInterface& userInterface)
+{
+    userInterface_ = &userInterface;
+    auto& io = ImGui::GetIO();
     io.BackendRendererUserData = this;
-    io.BackendRendererName = "gk_imgui_renderer";
-    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
     io.BackendFlags |= ImGuiBackendFlags_RendererHasViewports;
 
     ImGuiPlatformIO& platformIo = ImGui::GetPlatformIO();
@@ -481,11 +444,11 @@ void UserInterface::InitializeRendererBackend()
         }
     }
 
-    platformIo.Renderer_CreateWindow = &UserInterface::CreatePlatformViewportWindowCallback;
-    platformIo.Renderer_DestroyWindow = &UserInterface::DestroyPlatformViewportWindowCallback;
-    platformIo.Renderer_SetWindowSize = &UserInterface::ResizePlatformViewportWindowCallback;
-    platformIo.Renderer_RenderWindow = &UserInterface::RenderPlatformViewportWindowCallback;
-    platformIo.Renderer_SwapBuffers = &UserInterface::SwapPlatformViewportBuffersCallback;
+    platformIo.Renderer_CreateWindow = &MultiViewportBackend::CreatePlatformViewportWindowCallback;
+    platformIo.Renderer_DestroyWindow = &MultiViewportBackend::DestroyPlatformViewportWindowCallback;
+    platformIo.Renderer_SetWindowSize = &MultiViewportBackend::ResizePlatformViewportWindowCallback;
+    platformIo.Renderer_RenderWindow = &MultiViewportBackend::RenderPlatformViewportWindowCallback;
+    platformIo.Renderer_SwapBuffers = &MultiViewportBackend::SwapPlatformViewportBuffersCallback;
 
     ImGuiViewport* mainViewport = ImGui::GetMainViewport();
     if (mainViewport->RendererUserData == nullptr)
@@ -494,7 +457,7 @@ void UserInterface::InitializeRendererBackend()
     }
 }
 
-void UserInterface::ShutdownRendererBackend()
+void MultiViewportBackend::Shutdown()
 {
     if (ImGui::GetCurrentContext() == nullptr)
     {
@@ -521,16 +484,33 @@ void UserInterface::ShutdownRendererBackend()
     platformIo.Renderer_SwapBuffers = nullptr;
     platformIo.Renderer_RenderState = nullptr;
 
-    io.BackendRendererName = nullptr;
-    io.BackendRendererUserData = nullptr;
-    io.BackendFlags &= ~(ImGuiBackendFlags_RendererHasVtxOffset | ImGuiBackendFlags_RendererHasViewports);
+    io.BackendRendererUserData = userInterface_;
+    io.BackendFlags &= ~ImGuiBackendFlags_RendererHasViewports;
+    platformUiRenderBuffers_.clear();
+    OnUiPipelineDestroyed();
+    userInterface_ = nullptr;
 }
 
-void UserInterface::BeginRendererBackendFrame() {}
-
-VkPipeline UserInterface::GetOrCreatePlatformViewportPipeline(VkRenderPass renderPass)
+void MultiViewportBackend::OnUiPipelineDestroyed()
 {
-    if (renderPass == VK_NULL_HANDLE)
+    if (uiPlatformViewportPipeline_ != VK_NULL_HANDLE && userInterface_ != nullptr)
+    {
+        userInterface_->DestroyViewportPipeline(uiPlatformViewportPipeline_);
+    }
+    uiPlatformViewportPipeline_ = VK_NULL_HANDLE;
+    uiPlatformViewportRenderPass_ = VK_NULL_HANDLE;
+}
+
+void MultiViewportBackend::RenderPlatformWindows()
+{
+    ImGui::UpdatePlatformWindows();
+    PrunePlatformViewportRenderBuffers();
+    ImGui::RenderPlatformWindowsDefault(nullptr, this);
+}
+
+VkPipeline MultiViewportBackend::GetOrCreatePlatformViewportPipeline(VkRenderPass renderPass)
+{
+    if (renderPass == VK_NULL_HANDLE || userInterface_ == nullptr)
     {
         return VK_NULL_HANDLE;
     }
@@ -540,71 +520,71 @@ VkPipeline UserInterface::GetOrCreatePlatformViewportPipeline(VkRenderPass rende
         return uiPlatformViewportPipeline_;
     }
 
-    const auto& device = engine_->GetRenderer().Device();
     if (uiPlatformViewportPipeline_ != VK_NULL_HANDLE)
     {
-        vkDestroyPipeline(device.Handle(), uiPlatformViewportPipeline_, nullptr);
-        uiPlatformViewportPipeline_ = VK_NULL_HANDLE;
+        userInterface_->DestroyViewportPipeline(uiPlatformViewportPipeline_);
     }
 
-    uiPlatformViewportPipeline_ = CreateUiGraphicsPipeline(device, uiPipelineLayout_, renderPass);
+    uiPlatformViewportPipeline_ = userInterface_->CreateViewportPipeline(renderPass);
     uiPlatformViewportRenderPass_ = renderPass;
     return uiPlatformViewportPipeline_;
 }
 
-UserInterface* UserInterface::GetRendererBackendOwner()
+MultiViewportBackend* MultiViewportBackend::GetRendererBackendOwner()
 {
     if (ImGui::GetCurrentContext() == nullptr)
     {
         return nullptr;
     }
 
-    return static_cast<UserInterface*>(ImGui::GetIO().BackendRendererUserData);
+    return static_cast<MultiViewportBackend*>(ImGui::GetIO().BackendRendererUserData);
 }
 
-void UserInterface::CreatePlatformViewportWindowCallback(ImGuiViewport* viewport)
+void MultiViewportBackend::CreatePlatformViewportWindowCallback(ImGuiViewport* viewport)
 {
-    if (UserInterface* owner = GetRendererBackendOwner(); owner != nullptr)
+    if (MultiViewportBackend* owner = GetRendererBackendOwner(); owner != nullptr)
     {
         owner->CreatePlatformViewportWindow(viewport);
     }
 }
 
-void UserInterface::DestroyPlatformViewportWindowCallback(ImGuiViewport* viewport)
+void MultiViewportBackend::DestroyPlatformViewportWindowCallback(ImGuiViewport* viewport)
 {
-    if (UserInterface* owner = GetRendererBackendOwner(); owner != nullptr)
+    if (MultiViewportBackend* owner = GetRendererBackendOwner(); owner != nullptr)
     {
         owner->DestroyPlatformViewportWindow(viewport);
     }
 }
 
-void UserInterface::ResizePlatformViewportWindowCallback(ImGuiViewport* viewport, ImVec2 size)
+void MultiViewportBackend::ResizePlatformViewportWindowCallback(ImGuiViewport* viewport, ImVec2 size)
 {
-    if (UserInterface* owner = GetRendererBackendOwner(); owner != nullptr)
+    if (MultiViewportBackend* owner = GetRendererBackendOwner(); owner != nullptr)
     {
         owner->ResizePlatformViewportWindow(viewport, size);
     }
 }
 
-void UserInterface::RenderPlatformViewportWindowCallback(ImGuiViewport* viewport, void* renderArg)
+void MultiViewportBackend::RenderPlatformViewportWindowCallback(ImGuiViewport* viewport, void* renderArg)
 {
-    UserInterface* owner = renderArg != nullptr ? static_cast<UserInterface*>(renderArg) : GetRendererBackendOwner();
+    MultiViewportBackend* owner =
+        renderArg != nullptr ? static_cast<MultiViewportBackend*>(renderArg) : GetRendererBackendOwner();
     if (owner != nullptr)
     {
         owner->RenderPlatformViewportWindow(viewport);
     }
 }
 
-void UserInterface::SwapPlatformViewportBuffersCallback(ImGuiViewport* viewport, void* renderArg)
+void MultiViewportBackend::SwapPlatformViewportBuffersCallback(ImGuiViewport* viewport, void* renderArg)
 {
-    UserInterface* owner = renderArg != nullptr ? static_cast<UserInterface*>(renderArg) : GetRendererBackendOwner();
+    MultiViewportBackend* owner =
+        renderArg != nullptr ? static_cast<MultiViewportBackend*>(renderArg) : GetRendererBackendOwner();
     if (owner != nullptr)
     {
         owner->SwapPlatformViewportBuffers(viewport);
     }
 }
 
-void UserInterface::CreatePlatformViewportWindow(ImGuiViewport* viewport)
+void MultiViewportBackend::CreatePlatformViewportWindow(ImGuiViewport* viewport)
 {
     if (viewport == nullptr)
     {
@@ -615,7 +595,7 @@ void UserInterface::CreatePlatformViewportWindow(ImGuiViewport* viewport)
     viewport->RendererUserData = viewportData;
 
     UiPlatformWindow& window = viewportData->window;
-    const auto& renderer = engine_->GetRenderer();
+    const auto& renderer = engine_.GetRenderer();
     const auto& device = renderer.Device();
 
     ImGuiPlatformIO& platformIo = ImGui::GetPlatformIO();
@@ -657,7 +637,7 @@ void UserInterface::CreatePlatformViewportWindow(ImGuiViewport* viewport)
     viewportData->windowOwned = true;
 }
 
-void UserInterface::DestroyPlatformViewportWindow(ImGuiViewport* viewport)
+void MultiViewportBackend::DestroyPlatformViewportWindow(ImGuiViewport* viewport)
 {
     if (viewport == nullptr || viewport->RendererUserData == nullptr)
     {
@@ -667,7 +647,7 @@ void UserInterface::DestroyPlatformViewportWindow(ImGuiViewport* viewport)
     auto* viewportData = static_cast<UiPlatformViewportData*>(viewport->RendererUserData);
     if (viewportData->windowOwned)
     {
-        const auto& device = engine_->GetRenderer().Device();
+        const auto& device = engine_.GetRenderer().Device();
         DestroyPlatformWindow(device.Surface().Instance().Handle(), device.Handle(), viewportData->window);
     }
 
@@ -676,7 +656,7 @@ void UserInterface::DestroyPlatformViewportWindow(ImGuiViewport* viewport)
     viewport->RendererUserData = nullptr;
 }
 
-void UserInterface::ResizePlatformViewportWindow(ImGuiViewport* viewport, ImVec2 size)
+void MultiViewportBackend::ResizePlatformViewportWindow(ImGuiViewport* viewport, ImVec2 size)
 {
     if (viewport == nullptr || viewport->RendererUserData == nullptr)
     {
@@ -685,7 +665,7 @@ void UserInterface::ResizePlatformViewportWindow(ImGuiViewport* viewport, ImVec2
 
     auto* viewportData = static_cast<UiPlatformViewportData*>(viewport->RendererUserData);
     UiPlatformWindow& window = viewportData->window;
-    const auto& renderer = engine_->GetRenderer();
+    const auto& renderer = engine_.GetRenderer();
     const auto& device = renderer.Device();
 
     window.clearEnable = (viewport->Flags & ImGuiViewportFlags_NoRendererClear) == 0;
@@ -696,7 +676,7 @@ void UserInterface::ResizePlatformViewportWindow(ImGuiViewport* viewport, ImVec2
     viewportData->swapChainSuboptimal = false;
 }
 
-void UserInterface::RenderPlatformViewportWindow(ImGuiViewport* viewport)
+void MultiViewportBackend::RenderPlatformViewportWindow(ImGuiViewport* viewport)
 {
     if (viewport == nullptr || viewport->RendererUserData == nullptr || viewport->DrawData == nullptr)
     {
@@ -705,7 +685,7 @@ void UserInterface::RenderPlatformViewportWindow(ImGuiViewport* viewport)
 
     auto* viewportData = static_cast<UiPlatformViewportData*>(viewport->RendererUserData);
     UiPlatformWindow& window = viewportData->window;
-    const auto& renderer = engine_->GetRenderer();
+    const auto& renderer = engine_.GetRenderer();
     const auto& device = renderer.Device();
     VkResult result = VK_SUCCESS;
 
@@ -769,9 +749,9 @@ void UserInterface::RenderPlatformViewportWindow(ImGuiViewport* viewport)
         viewportRenderBuffers.resize(window.imageCount);
     }
 
-    RenderDrawData(viewport->DrawData, frame.commandBuffer, viewportRenderBuffers[window.frameIndex],
-                   VkExtent2D{static_cast<uint32_t>(window.width), static_cast<uint32_t>(window.height)}, false,
-                   viewportPipeline);
+    userInterface_->RenderViewportDrawData(
+        viewport->DrawData, frame.commandBuffer, viewportRenderBuffers[window.frameIndex],
+        VkExtent2D{static_cast<uint32_t>(window.width), static_cast<uint32_t>(window.height)}, false, viewportPipeline);
 
     vkCmdEndRenderPass(frame.commandBuffer);
 
@@ -792,7 +772,7 @@ void UserInterface::RenderPlatformViewportWindow(ImGuiViewport* viewport)
                   "submit ui platform viewport command buffer");
 }
 
-void UserInterface::SwapPlatformViewportBuffers(ImGuiViewport* viewport)
+void MultiViewportBackend::SwapPlatformViewportBuffers(ImGuiViewport* viewport)
 {
     if (viewport == nullptr || viewport->RendererUserData == nullptr)
     {
@@ -817,7 +797,7 @@ void UserInterface::SwapPlatformViewportBuffers(ImGuiViewport* viewport)
     presentInfo.pSwapchains = &window.swapchain;
     presentInfo.pImageIndices = &presentIndex;
 
-    VkResult result = vkQueuePresentKHR(engine_->GetRenderer().Device().GraphicsQueue(), &presentInfo);
+    VkResult result = vkQueuePresentKHR(engine_.GetRenderer().Device().GraphicsQueue(), &presentInfo);
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
     {
         viewportData->swapChainNeedRebuild = true;
@@ -835,7 +815,7 @@ void UserInterface::SwapPlatformViewportBuffers(ImGuiViewport* viewport)
     window.semaphoreIndex = (window.semaphoreIndex + 1) % window.semaphoreCount;
 }
 
-void UserInterface::PrunePlatformViewportRenderBuffers()
+void MultiViewportBackend::PrunePlatformViewportRenderBuffers()
 {
     std::unordered_set<ImGuiID> activeViewportIds;
     ImGuiPlatformIO& platformIo = ImGui::GetPlatformIO();

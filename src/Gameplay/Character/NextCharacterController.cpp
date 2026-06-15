@@ -1,4 +1,4 @@
-#include "Engine/Runtime/Subsystems/NextCharacterController.h"
+#include "Gameplay/Character/NextCharacterController.h"
 #include "Engine/Runtime/Subsystems/NextPhysics.h"
 
 #if WITH_PHYSIC

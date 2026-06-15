@@ -1,7 +1,6 @@
 #pragma once
 
-// Internal ozz runtime state shared between SkinnedMeshComponent.cpp and
-// SkinnedMeshComponent.IK.cpp. Not engine public API.
+// Internal ozz runtime state for SkinnedMeshComponent.cpp.
 
 #include "Engine/Common/CoreMinimal.hpp"
 
@@ -13,8 +12,6 @@
 #if WITH_OZZ
 #include "ozz/animation/runtime/animation.h"
 #include "ozz/animation/runtime/blending_job.h"
-#include "ozz/animation/runtime/ik_aim_job.h"
-#include "ozz/animation/runtime/ik_two_bone_job.h"
 #include "ozz/animation/runtime/local_to_model_job.h"
 #include "ozz/animation/runtime/sampling_job.h"
 #include "ozz/animation/runtime/skeleton.h"

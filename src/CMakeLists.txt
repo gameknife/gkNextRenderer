@@ -154,6 +154,7 @@ add_executable(RmlUiDemo
 target_include_directories(RmlUiDemo PRIVATE Application/Render/RmlUiDemo)
 if ( GK_WITH_NEXT_QUICKJS )
 	add_executable(gkNextEditor
+		${src_files_editorcommon}
 		${src_files_editor}
 		${src_files_appcommon}
 		${DESKTOP_MAIN_SOURCES}

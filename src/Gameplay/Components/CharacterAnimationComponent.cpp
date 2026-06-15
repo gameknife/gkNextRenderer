@@ -167,8 +167,7 @@ namespace NextGameplay
     }
 
     bool CharacterAnimationComponent::UpdateAnimation(CharacterGameplayComponent& gameplayComponent,
-                                                      const FCharacterAnimationUpdateInput& input,
-                                                      bool footIKEnabled, bool debugDraw)
+                                                       const FCharacterAnimationUpdateInput& input)
     {
         if (gameplayComponent.skinnedMeshComps.empty())
         {
@@ -353,8 +352,6 @@ namespace NextGameplay
             gameplayComponent.PlayAnimation(animationToPlay, loop, playSpeed);
         }
 
-        const float ikWeight = footIKEnabled && input.onGround && animState_ == ECharacterAnimState::Idle ? 1.0f : 0.0f;
-        gameplayComponent.ConfigureFootPlacementIK(footIKEnabled, debugDraw, ikWeight);
         return true;
     }
 }

@@ -1,7 +1,6 @@
 #pragma once
 
-// Internal declarations shared between UserInterface.cpp and
-// UserInterface.ViewportBackend.cpp. Not engine public API.
+// Internal declarations used by UserInterface.cpp. Not engine public API.
 
 #include "Engine/Vulkan/DebugUtilities.hpp"
 
@@ -12,8 +11,7 @@ namespace Vulkan
 
 namespace NextUI
 {
-    // Builds the bindless UI graphics pipeline used by both the main swapchain
-    // pass and the per-viewport platform windows (UserInterface.cpp).
+    // Builds the bindless UI graphics pipeline used by the main swapchain pass.
     VkPipeline CreateUiGraphicsPipeline(const Vulkan::Device& device, VkPipelineLayout pipelineLayout,
                                         VkRenderPass renderPass);
 }

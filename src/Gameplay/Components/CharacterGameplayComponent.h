@@ -22,9 +22,6 @@ namespace NextGameplay
         void SetFirstPersonMode(bool enabled) { firstPersonMode_ = enabled; }
         bool GetFirstPersonMode() const { return firstPersonMode_; }
 
-        void SetFootIKEnabled(bool enabled) { footIKEnabled_ = enabled; }
-        bool GetFootIKEnabled() const { return footIKEnabled_; }
-
         void SetMovementMode(ECharacterMovementMode mode) { movementMode_ = mode; }
         ECharacterMovementMode GetMovementMode() const { return movementMode_; }
 
@@ -37,7 +34,6 @@ namespace NextGameplay
         void ClearRuntimeState();
         void SetSkinnedMeshComponents(std::vector<Runtime::SkinnedMeshComponent*> components);
         void PlayAnimation(const std::string& name, bool loop, float playSpeed = 1.0f) const;
-        void ConfigureFootPlacementIK(bool enabled, bool debugDraw, float weight) const;
 
         // Runtime-only state owned by gameplay systems.
         std::shared_ptr<Assets::Node> visualRoot;
@@ -51,7 +47,6 @@ namespace NextGameplay
 
     private:
         bool firstPersonMode_ = false;
-        bool footIKEnabled_ = true;
         ECharacterMovementMode movementMode_ = ECharacterMovementMode::CameraAligned;
         float eyeHeight_ = 1.55f;
     };

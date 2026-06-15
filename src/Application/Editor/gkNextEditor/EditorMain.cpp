@@ -20,6 +20,7 @@
 #include "Modules/ScadLoader/ScadModule.hpp"
 #include "Modules/NextQuickJS/NextQuickJSModule.hpp"
 #include "Application/Common/DemoScenes.hpp"
+#include "Application/Editor/Common/MultiViewportBackend.hpp"
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
                                                          NextEngine* engine)
@@ -49,6 +50,11 @@ EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Runtime::Co
 
     options.ForceSDR = true;
     options.KeepCPUMeshData = true; // 编辑器模式保留CPU网格数据用于场景保存
+}
+
+std::unique_ptr<NextUI::IMultiViewportBackend> EditorGameInstance::CreateMultiViewportBackend()
+{
+    return std::make_unique<NextUI::MultiViewportBackend>(GetEngine());
 }
 
 void EditorGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
