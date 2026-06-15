@@ -62,6 +62,7 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_RepoTools.cpp
 	Tests/Test_ScadPromptContext.cpp
 	Tests/Test_ScadSessionStore.cpp
+	Tests/Test_Rgb9e5Pack.cpp
 	Application/Editor/ScadStudio/ScadPromptContext.cpp
 	Application/Editor/ScadStudio/ScadSessionStore.cpp
 )
