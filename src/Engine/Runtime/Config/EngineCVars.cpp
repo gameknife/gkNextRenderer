@@ -59,7 +59,7 @@ namespace NextCVar
         GK_CVAR_UINT("r.bounces", settings, NumberOfBounces, 5, ECVarFlags::Archive,
                      "Ray bounce count");
         GK_CVAR_INT("r.rendererType", settings, RendererType, 0, ECVarFlags::Archive,
-                    "Renderer type (0=PathTracing,1=SoftTracing,2=PureAmbient,3=VoxelTracing)");
+                    "Renderer type (0=PathTracing,1=SoftwareTracing,2=SoftwareModern,3=VoxelTracing,4=SoftwareModernNoAmbient)");
         GK_CVAR_UINT("r.maxBounces", settings, MaxNumberOfBounces, 10, ECVarFlags::Archive,
                      "Maximum ray bounce count");
         GK_CVAR_BOOL("r.denoiser", settings, Denoiser, false, ECVarFlags::Archive,

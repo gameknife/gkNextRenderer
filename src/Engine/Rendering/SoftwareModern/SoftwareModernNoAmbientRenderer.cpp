@@ -1,4 +1,4 @@
-#include "Engine/Rendering/SoftwareModern/SwModernNoAmbientRenderer.hpp"
+#include "Engine/Rendering/SoftwareModern/SoftwareModernNoAmbientRenderer.hpp"
 
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
@@ -9,19 +9,19 @@
 
 #include <array>
 
-namespace Vulkan::NoAmbientDeferred
+namespace Vulkan::SoftwareModernNoAmbient
 {
-    Renderer::Renderer(Vulkan::VulkanBaseRenderer& baseRender) :
+    SoftwareModernNoAmbientRenderer::SoftwareModernNoAmbientRenderer(Vulkan::VulkanBaseRenderer& baseRender) :
         LogicRendererBase(baseRender)
     {
     }
 
-    Renderer::~Renderer()
+    SoftwareModernNoAmbientRenderer::~SoftwareModernNoAmbientRenderer()
     {
         DeleteSwapChain();
     }
 
-    void Renderer::CreateSwapChain(const VkExtent2D& extent)
+    void SoftwareModernNoAmbientRenderer::CreateSwapChain(const VkExtent2D& extent)
     {
         (void)extent;
         shadingPipeline_.reset(new PipelineCommon::ZeroBindPipeline(
@@ -31,22 +31,16 @@ namespace Vulkan::NoAmbientDeferred
         composePipeline_.reset(new PipelineCommon::ZeroBindPipeline(
             SwapChain(), "assets/shaders/Process.ComposeSimple.comp.slang.spv", GetScene()));
 
-        if (GOption->ReferenceMode)
-        {
-            prevSingleDiffuseId_ = baseRender_.GetTemporalStorageImage(
-                VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL,
-                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, "noAmbientPrevDiffuseTmp");
-        }
-        else
-        {
-            prevSingleDiffuseId_ = Assets::Bindless::RT_SINGLE_PREV_DIFFUSE;
-        }
+        temporalResolve_.SetupHistory(baseRender_, {
+            {PipelineCommon::ETemporalChannel::Diffuse, Assets::Bindless::RT_SINGLE_PREV_DIFFUSE,
+             "noAmbientPrevDiffuseTmp"},
+        });
 
         historyValid_ = false;
         lastRenderedFrame_ = -1;
     }
 
-    void Renderer::DeleteSwapChain()
+    void SoftwareModernNoAmbientRenderer::DeleteSwapChain()
     {
         shadingPipeline_.reset();
         accumulatePipeline_.reset();
@@ -55,7 +49,7 @@ namespace Vulkan::NoAmbientDeferred
         lastRenderedFrame_ = -1;
     }
 
-    void Renderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+    void SoftwareModernNoAmbientRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         baseRender_.InitializeBarriers(commandBuffer);
         const int currentFrame = FrameCount();
@@ -86,7 +80,7 @@ namespace Vulkan::NoAmbientDeferred
             SCOPED_GPU_TIMER("reproject pass");
             const std::array<uint32_t, 4> pushConst {
                 uint32_t(NextEngine::GetInstance()->GetUserSettings().TemporalFrames),
-                prevSingleDiffuseId_,
+                temporalResolve_.History(PipelineCommon::ETemporalChannel::Diffuse),
                 canUseHistory ? 1u : 0u,
                 NextEngine::GetInstance()->GetUserSettings().TAA ? 1u : 0u
             };
@@ -110,20 +104,9 @@ namespace Vulkan::NoAmbientDeferred
 
         {
             SCOPED_GPU_TIMER("copy pass");
-            const auto* accumulated = baseRender_.GetStorageImage(Assets::Bindless::RT_ACCUMLATE_DIFFUSE);
-            const auto* history = baseRender_.GetStorageImage(prevSingleDiffuseId_);
-            accumulated->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                                       VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-            history->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-                                   VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-            VkImageCopy copyRegion {};
-            copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-            copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-            copyRegion.extent = {history->GetImage().Extent().width, history->GetImage().Extent().height, 1};
-
-            vkCmdCopyImage(commandBuffer, accumulated->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                           history->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+            temporalResolve_.CopyToHistory(baseRender_, commandBuffer, {
+                {Assets::Bindless::RT_ACCUMLATE_DIFFUSE, PipelineCommon::ETemporalChannel::Diffuse},
+            });
         }
 
         historyValid_ = true;

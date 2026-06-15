@@ -101,11 +101,11 @@ namespace
     {
         if (!supportsRayTracing && Vulkan::GetRendererRequirements(requestedType).requestRayTracing)
         {
-            requestedType = Vulkan::ERT_ModernDeferred;
+            requestedType = Vulkan::ERT_SoftwareTracing;
         }
         if (!hasFullAmbientCubeBudget && Vulkan::GetRendererRequirements(requestedType).requestAmbientCube)
         {
-            return Vulkan::ERT_LegacyDeferredNoAmbient;
+            return Vulkan::ERT_SoftwareModernNoAmbient;
         }
         return requestedType;
     }
@@ -211,12 +211,12 @@ namespace NextRenderer
         std::vector<Vulkan::ERendererType> supportedTypes;
         if (hasFullAmbientCubeBudget)
         {
-            supportedTypes = {Vulkan::ERT_ModernDeferred, Vulkan::ERT_LegacyDeferred,
-                              Vulkan::ERT_VoxelTracing, Vulkan::ERT_LegacyDeferredNoAmbient};
+            supportedTypes = {Vulkan::ERT_SoftwareTracing, Vulkan::ERT_SoftwareModern,
+                              Vulkan::ERT_VoxelTracing, Vulkan::ERT_SoftwareModernNoAmbient};
         }
         else
         {
-            supportedTypes = {Vulkan::ERT_LegacyDeferredNoAmbient};
+            supportedTypes = {Vulkan::ERT_SoftwareModernNoAmbient};
         }
         Vulkan::VulkanBaseRenderer* renderer =
             new Vulkan::VulkanBaseRenderer(window, presentMode, enableValidationLayers, instance);

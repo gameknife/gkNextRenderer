@@ -848,16 +848,7 @@ void VisualTestGameInstance::GenerateHtmlReport()
 
 std::string VisualTestGameInstance::GetRendererName()
 {
-    auto rendererType = GetEngine().GetRenderer().CurrentLogicRendererType();
-    switch (rendererType)
-    {
-    case Vulkan::ERT_PathTracing:    return "PathTracing";
-    case Vulkan::ERT_ModernDeferred: return "SoftTracing";
-    case Vulkan::ERT_LegacyDeferred: return "SoftModern";
-    case Vulkan::ERT_LegacyDeferredNoAmbient: return "SoftModernNoAmbient";
-    case Vulkan::ERT_VoxelTracing:   return "VoxelTracing";
-    default:                         return "Unknown";
-    }
+    return Vulkan::GetRendererName(GetEngine().GetRenderer().CurrentLogicRendererType());
 }
 
 std::string VisualTestGameInstance::GetSceneName(const std::string& path) const

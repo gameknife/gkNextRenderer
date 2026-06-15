@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Rendering/PipelineCommon/TemporalResolve.hpp"
 
 #include <memory>
 
@@ -13,29 +14,29 @@ namespace Vulkan
     }
 }
 
-namespace Vulkan::NoAmbientDeferred
+namespace Vulkan::SoftwareModernNoAmbient
 {
     // 不走 AmbientCube 的轻量 deferred renderer：
     //   visibility -> shading -> temporal accumulation -> compose
-    class Renderer final : public Vulkan::LogicRendererBase
+    class SoftwareModernNoAmbientRenderer final : public Vulkan::LogicRendererBase
     {
     public:
-        VULKAN_NON_COPIABLE(Renderer)
+        VULKAN_NON_COPIABLE(SoftwareModernNoAmbientRenderer)
 
-        explicit Renderer(Vulkan::VulkanBaseRenderer& baseRender);
-        ~Renderer();
+        explicit SoftwareModernNoAmbientRenderer(Vulkan::VulkanBaseRenderer& baseRender);
+        ~SoftwareModernNoAmbientRenderer();
 
         void CreateSwapChain(const VkExtent2D& extent) override;
         void DeleteSwapChain() override;
         void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
-        FRendererRequirements Requirements() const override { return GetRendererRequirements(ERT_LegacyDeferredNoAmbient); }
+        FRendererRequirements Requirements() const override { return GetRendererRequirements(ERT_SoftwareModernNoAmbient); }
 
     private:
         std::unique_ptr<PipelineCommon::ZeroBindPipeline> shadingPipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> accumulatePipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindPipeline> composePipeline_;
 
-        uint32_t prevSingleDiffuseId_{};
+        PipelineCommon::TemporalResolve temporalResolve_;
         int lastRenderedFrame_{-1};
         bool historyValid_{false};
     };

@@ -34,9 +34,9 @@ namespace Runtime
         };
 
         inline constexpr std::array<FRendererOption, 5> RendererOptions = {{
-            {"SoftTracing", Vulkan::ERT_ModernDeferred},
-            {"SoftModern", Vulkan::ERT_LegacyDeferred},
-            {"SoftModernNoAmbient", Vulkan::ERT_LegacyDeferredNoAmbient},
+            {"SoftwareTracing", Vulkan::ERT_SoftwareTracing},
+            {"SoftwareModern", Vulkan::ERT_SoftwareModern},
+            {"SoftwareModernNoAmbient", Vulkan::ERT_SoftwareModernNoAmbient},
             {"VoxelTracing", Vulkan::ERT_VoxelTracing},
             {"PathTracing", Vulkan::ERT_PathTracing},
         }};

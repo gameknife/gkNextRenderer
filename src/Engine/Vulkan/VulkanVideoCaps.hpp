@@ -4,7 +4,7 @@
 
 #include <cstdint>
 
-namespace Runtime::Remote
+namespace Vulkan
 {
     // Physical-device probe result for VK_KHR_video_encode_h264. Probed before logical device
     // creation; drives the --remote-encoder auto path selection and which device extensions get

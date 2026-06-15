@@ -21,10 +21,10 @@ namespace Vulkan
 	enum ERendererType
 	{
 		ERT_PathTracing,
-		ERT_ModernDeferred,
-		ERT_LegacyDeferred,
+		ERT_SoftwareTracing,
+		ERT_SoftwareModern,
 		ERT_VoxelTracing,
-		ERT_LegacyDeferredNoAmbient,
+		ERT_SoftwareModernNoAmbient,
 	};
 
 	struct FRendererRequirements
@@ -40,6 +40,7 @@ namespace Vulkan
 	};
 
 	FRendererRequirements GetRendererRequirements(ERendererType type);
+	const char* GetRendererName(ERendererType type);
 		
 	class VulkanBaseRenderer
 	{
@@ -95,7 +96,7 @@ namespace Vulkan
 		bool HasFullAmbientCubeBudget() const { return caps_.fullAmbientCubeBudget; }
 		void SetDenoiserEnabled(bool enabled) { caps_.supportDenoiser = enabled; }
 		void SetVisualDebugEnabled(bool enabled) { visualDebug_ = enabled; }
-		const Runtime::Remote::FVulkanVideoCaps& VideoCaps() const { return videoCaps_; }
+		const FVulkanVideoCaps& VideoCaps() const { return videoCaps_; }
 
 		// Engine callbacks
 		struct Delegates
@@ -230,7 +231,7 @@ namespace Vulkan
 		struct LogicRendererRegistry
 		{
 			std::map< ERendererType, std::unique_ptr<class LogicRendererBase> > renderers;
-			ERendererType current = ERT_LegacyDeferred;
+			ERendererType current = ERT_SoftwareModern;
 		};
 
 		struct ScreenshotResources
@@ -241,7 +242,7 @@ namespace Vulkan
 		};
 
 		DeviceCaps caps_;
-		Runtime::Remote::FVulkanVideoCaps videoCaps_;
+		FVulkanVideoCaps videoCaps_;
 		DeviceContext ctx_;
 		FrameResources frame_;
 		SkinnedMeshResources skin_;

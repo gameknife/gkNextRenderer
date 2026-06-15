@@ -13,6 +13,7 @@
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Utilities/Math.hpp"
 #include "Engine/Vulkan/BufferUtil.hpp"
 #include "Engine/Vulkan/CommandExecution.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
@@ -297,7 +298,10 @@ namespace Vulkan
         SCOPED_GPU_TIMER("clear pass");
 
         overlay_.bufferClearPipeline->BindPipeline(commandBuffer, &imageIndex);
-        vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 8, 1);
+        vkCmdDispatch(
+            commandBuffer,
+            Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().width, 8),
+            Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().height, 8), 1);
 
         VkClearColorValue clearColor = {{0.0f, 0.0f, 0.0f, 1.0f}};
         VkImageSubresourceRange imageRange = {};
@@ -624,7 +628,10 @@ namespace Vulkan
             uint32_t(SwapChain().OutputExtent().width), uint32_t(SwapChain().OutputExtent().height)
         };
         overlay_.visualDebuggerPipeline->BindPipeline(commandBuffer, pushConst.data());
-        vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 8, 1);
+        vkCmdDispatch(
+            commandBuffer,
+            Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().width, 8),
+            Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().height, 8), 1);
 
         SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
     }

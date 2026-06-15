@@ -20,13 +20,15 @@
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 
 #include "Engine/Utilities/Exception.hpp"
+#include "Engine/Utilities/Math.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 
 #include "Engine/Options.hpp"
 #include "Engine/Rendering/SoftwareModern/SoftwareModernRenderer.hpp"
-#include "Engine/Rendering/SoftwareModern/SwModernNoAmbientRenderer.hpp"
+#include "Engine/Rendering/SoftwareModern/SoftwareModernNoAmbientRenderer.hpp"
 #include "Engine/Rendering/SoftwareTracing/SoftwareTracingRenderer.hpp"
 #include "Engine/Rendering/PathTracing/PathTracingRenderer.hpp"
+#include "Engine/Rendering/VoxelTracing/VoxelTracingRenderer.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Rendering/Shadow/ShadowMapPass.hpp"
@@ -115,22 +117,57 @@ namespace
 
 namespace Vulkan
 {
+    namespace
+    {
+        using RendererFactory = std::unique_ptr<LogicRendererBase> (*)(VulkanBaseRenderer&);
+
+        struct RendererDescriptor
+        {
+            ERendererType type;
+            const char* name;
+            FRendererRequirements requirements;
+            uint32_t referenceColumn;
+            uint32_t referenceRow;
+            RendererFactory factory;
+        };
+
+        template <typename T>
+        std::unique_ptr<LogicRendererBase> CreateLogicRenderer(VulkanBaseRenderer& baseRenderer)
+        {
+            return std::make_unique<T>(baseRenderer);
+        }
+
+        const std::array RendererDescriptors{
+            RendererDescriptor{ERT_PathTracing, "PathTracing", {true, true}, 1, 1,
+                               &CreateLogicRenderer<PathTracing::PathTracingRenderer>},
+            RendererDescriptor{ERT_SoftwareTracing, "SoftwareTracing", {true, false}, 1, 0,
+                               &CreateLogicRenderer<SoftwareTracing::SoftwareTracingRenderer>},
+            RendererDescriptor{ERT_SoftwareModern, "SoftwareModern", {true, false}, 0, 0,
+                               &CreateLogicRenderer<SoftwareModern::SoftwareModernRenderer>},
+            RendererDescriptor{ERT_VoxelTracing, "VoxelTracing", {true, false}, 0, 1,
+                               &CreateLogicRenderer<VoxelTracing::VoxelTracingRenderer>},
+            RendererDescriptor{ERT_SoftwareModernNoAmbient, "SoftwareModernNoAmbient", {}, 0, 1,
+                               &CreateLogicRenderer<SoftwareModernNoAmbient::SoftwareModernNoAmbientRenderer>},
+        };
+
+        const RendererDescriptor& GetRendererDescriptor(ERendererType type)
+        {
+            const auto descriptor = std::find_if(
+                RendererDescriptors.begin(), RendererDescriptors.end(),
+                [type](const RendererDescriptor& candidate) { return candidate.type == type; });
+            assert(descriptor != RendererDescriptors.end());
+            return descriptor != RendererDescriptors.end() ? *descriptor : RendererDescriptors.front();
+        }
+    }
+
     FRendererRequirements GetRendererRequirements(ERendererType type)
     {
-        switch (type)
-        {
-        case ERT_PathTracing:
-            return {.requestAmbientCube = true, .requestRayTracing = true};
-        case ERT_ModernDeferred:
-        case ERT_LegacyDeferred:
-        case ERT_VoxelTracing:
-            return {.requestAmbientCube = true};
-        case ERT_LegacyDeferredNoAmbient:
-            return {};
-        default:
-            assert(false);
-            return {};
-        }
+        return GetRendererDescriptor(type).requirements;
+    }
+
+    const char* GetRendererName(ERendererType type)
+    {
+        return GetRendererDescriptor(type).name;
     }
 
     VulkanBaseRenderer::VulkanBaseRenderer(Vulkan::Window* window, const VkPresentModeKHR presentMode,
@@ -320,7 +357,7 @@ namespace Vulkan
         VkPhysicalDeviceSynchronization2FeaturesKHR synchronization2Features = {};
         if (GOption->RemoteMode && GOption->RemoteEncoder != "openh264")
         {
-            videoCaps_ = Runtime::Remote::FVulkanVideoCaps::Probe(ctx_.instance->Handle(), physicalDevice);
+            videoCaps_ = FVulkanVideoCaps::Probe(ctx_.instance->Handle(), physicalDevice);
             videoCaps_.LogSummary();
             if (videoCaps_.Usable())
             {
@@ -996,26 +1033,7 @@ namespace Vulkan
 
     void VulkanBaseRenderer::RegisterLogicRenderer(ERendererType type)
     {
-        switch (type)
-        {
-        case ERendererType::ERT_PathTracing:
-            logicRenderers_.renderers[type] = std::make_unique<RayTracing::PathTracingRenderer>(*this);
-            break;
-        case ERendererType::ERT_ModernDeferred:
-            logicRenderers_.renderers[type] = std::make_unique<ModernDeferred::SoftwareTracingRenderer>(*this);
-            break;
-        case ERendererType::ERT_LegacyDeferred:
-            logicRenderers_.renderers[type] = std::make_unique<LegacyDeferred::SoftwareModernRenderer>(*this);
-            break;
-        case ERendererType::ERT_LegacyDeferredNoAmbient:
-            logicRenderers_.renderers[type] = std::make_unique<NoAmbientDeferred::Renderer>(*this);
-            break;
-        case ERendererType::ERT_VoxelTracing:
-            logicRenderers_.renderers[type] = std::make_unique<VoxelTracing::VoxelTracingRenderer>(*this);
-            break;
-        default:
-            assert(false);
-        }
+        logicRenderers_.renderers[type] = GetRendererDescriptor(type).factory(*this);
         logicRenderers_.current = type;
     }
 
@@ -1053,31 +1071,10 @@ namespace Vulkan
             // 然后就跳过后面的resolve流程了
             for (auto& logicRenderer : logicRenderers_.renderers)
             {
-                const char* rendererName = "";
-                switch (logicRenderer.first)
-                {
-                case ERendererType::ERT_PathTracing:
-                    rendererName = "PathTracing";
-                    break;
-                case ERendererType::ERT_ModernDeferred:
-                    rendererName = "SoftTracing";
-                    break;
-                case ERendererType::ERT_LegacyDeferred:
-                    rendererName = "SoftModern";
-                    break;
-                case ERendererType::ERT_LegacyDeferredNoAmbient:
-                    rendererName = "SoftModernNoAmbient";
-                    break;
-                case ERendererType::ERT_VoxelTracing:
-                    rendererName = "VoxelTracing";
-                    break;
-                default:
-                    rendererName = "UnknownRenderer";
-                    break;
-                }
+                const auto& rendererDescriptor = GetRendererDescriptor(logicRenderer.first);
 
                 {
-                    SCOPED_GPU_TIMER(rendererName);
+                    SCOPED_GPU_TIMER(rendererDescriptor.name);
                     logicRenderer.second->Render(commandBuffer, imageIndex);
                 }
 
@@ -1088,28 +1085,19 @@ namespace Vulkan
                     GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                                               VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
                 
-                    std::array<uint32_t, 5> pushConst;
-                    
-                    switch (logicRenderer.first)
-                    {
-                    case ERendererType::ERT_PathTracing:
-                        pushConst = { imageIndex,SwapChain().Extent().width / 2, SwapChain().Extent().height / 2, SwapChain().RenderExtent().width, SwapChain().RenderExtent().height};
-                        break;
-                    case ERendererType::ERT_ModernDeferred:
-                        pushConst = { imageIndex,SwapChain().Extent().width / 2, 0, SwapChain().RenderExtent().width, SwapChain().RenderExtent().height};
-                        break;
-                    case ERendererType::ERT_LegacyDeferred:
-                        pushConst = { imageIndex,0, 0, SwapChain().RenderExtent().width, SwapChain().RenderExtent().height};
-                        break;
-                    default:
-                        pushConst = { imageIndex,0,SwapChain().Extent().height / 2, SwapChain().RenderExtent().width, SwapChain().RenderExtent().height};
-                        break;
-                    }
+                    const std::array<uint32_t, 5> pushConst{
+                        imageIndex,
+                        rendererDescriptor.referenceColumn * SwapChain().Extent().width / 2,
+                        rendererDescriptor.referenceRow * SwapChain().Extent().height / 2,
+                        SwapChain().RenderExtent().width,
+                        SwapChain().RenderExtent().height};
                 
                     overlay_.simpleComposePipeline->BindPipeline(commandBuffer, pushConst.data());
                   
-                    vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8,
-                                  SwapChain().RenderExtent().height / 8, 1);
+                    vkCmdDispatch(
+                        commandBuffer,
+                        Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
+                        Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
                     SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
                 }
             }
@@ -1141,7 +1129,10 @@ namespace Vulkan
                 std::array<uint32_t, 5> pushConst = { imageIndex, uint32_t(SwapChain().OutputOffset().x), uint32_t(SwapChain().OutputOffset().y), uint32_t(SwapChain().OutputExtent().width), uint32_t(SwapChain().OutputExtent().height) };
                 overlay_.simpleComposePipeline->BindPipeline(commandBuffer, pushConst.data());
 
-                vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 8, 1);
+                vkCmdDispatch(
+                    commandBuffer,
+                    Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().width, 8),
+                    Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().height, 8), 1);
 #else
                 VkImageBlit blitRegion = {};
                 blitRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
