@@ -47,6 +47,8 @@
 | [StudioSim —— 产出与进度系统改进方案（打磨前结构性调整）](plans/studiosim-production-model-refinement.md) | ✅ 已完成 | 2026-06-08 |
 | [StudioSim 重构 + 公共仿真层（Sim Kit）抽取与开发计划](plans/studiosim-refactor-simkit-plan.md) | 📝 草案 | 2026-06-13 |
 | [Remote Play 硬件编码改造计划（HW Texture → Vulkan Video → WebRTC）](plans/webrtc-remoteplay-hwencode-plan.md) | 🔵 进行中 | 2026-06-10 |
+| [Vulkan + Renderer 专项精炼：命名归一 + 渲染器去重](plans/vulkan-renderer-refinement-plan.md) | 📝 草案 | 2026-06-15 |
+| [Vulkan 后端精简与第三方包装评估（引入 vk-bootstrap）](plans/vulkan-backend-thirdparty-wrapper-plan.md) | 📝 草案 | 2026-06-15 |
 
 ## 随笔与复盘 · notes/
 
