@@ -64,6 +64,7 @@ namespace Vulkan::PathTracing
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> sharcResolvePipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> composePipelineNonDenoiser_;
 		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> accumulatePipeline_;
+		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> atrousPipeline_;
 
 		PipelineCommon::TemporalResolve temporalResolve_;
 		FSharcState sharc_;

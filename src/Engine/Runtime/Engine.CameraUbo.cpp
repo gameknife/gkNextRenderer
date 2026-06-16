@@ -220,8 +220,20 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.BFSigma = config_.userSettings.DenoiseSigma;
     ubo.BFSigmaLum = config_.userSettings.DenoiseSigmaLum;
     ubo.BFSigmaNormal = config_.userSettings.DenoiseSigmaNormal;
+    ubo.BFSigmaDepth = config_.userSettings.DenoiseSigmaDepth;
 
-    ubo.BFSize = config_.userSettings.Denoiser ? config_.userSettings.DenoiseSize : 0;
+    // Denoiser routing: when the variance-guided a-trous path is active it does the spatial
+    // filtering, so the JBF in the compose pass is disabled (BFSize = 0) and compose reads the
+    // a-trous output. With the denoiser on but a-trous disabled, fall back to the JBF (Phase 0).
+    const bool denoiserOn = config_.userSettings.Denoiser;
+    const int atrousIterations = denoiserOn ? std::clamp(config_.userSettings.DenoiseAtrousIterations, 0, 6) : 0;
+    ubo.BFSize = (denoiserOn && atrousIterations == 0) ? config_.userSettings.DenoiseSize : 0;
+    ubo.DenoiseDiffuseSourceSlot = (atrousIterations > 0)
+        ? static_cast<uint32_t>(Assets::Bindless::RT_ATROUS_OUT)
+        : static_cast<uint32_t>(Assets::Bindless::RT_ACCUMLATE_DIFFUSE);
+    ubo.DenoiseSpecularSourceSlot = (atrousIterations > 0)
+        ? static_cast<uint32_t>(Assets::Bindless::RT_ATROUS_SPEC_OUT)
+        : static_cast<uint32_t>(Assets::Bindless::RT_ACCUMLATE_SPECULAR);
 
     ubo.ShowEdge = config_.showFlags.ShowEdge;
     ubo.ProgressiveRender = progressiveRender_.enabled;

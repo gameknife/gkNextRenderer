@@ -70,8 +70,18 @@ namespace NextCVar
                       "Denoise sigma (luminance)");
         GK_CVAR_FLOAT("r.denoiseSigmaNormal", settings, DenoiseSigmaNormal, 0.1f, ECVarFlags::Archive,
                       "Denoise sigma (normal)");
+        GK_CVAR_FLOAT("r.denoiseSigmaDepth", settings, DenoiseSigmaDepth, 2.0f, ECVarFlags::Archive,
+                      "Denoise planar depth tolerance (multiples of local depth slope)");
         GK_CVAR_INT("r.denoiseSize", settings, DenoiseSize, 5, ECVarFlags::Archive,
                     "Denoise kernel size");
+        GK_CVAR_INT("r.denoiseAtrousIterations", settings, DenoiseAtrousIterations, 5, ECVarFlags::Archive,
+                    "Variance-guided a-trous iteration count (0 = fall back to JBF)");
+        GK_CVAR_FLOAT("r.denoiseAtrousSigmaLuma", settings, DenoiseAtrousSigmaLuma, 4.0f, ECVarFlags::Archive,
+                      "A-trous luminance edge-stop sigma (lower = sharper detail, more residual noise)");
+        GK_CVAR_FLOAT("r.denoiseAtrousNormalPower", settings, DenoiseAtrousNormalPower, 64.0f, ECVarFlags::Archive,
+                      "A-trous normal edge-stop exponent");
+        GK_CVAR_FLOAT("r.denoiseSpecFootprint", settings, DenoiseSpecFootprint, 32.0f, ECVarFlags::Archive,
+                      "Specular a-trous filter radius in pixels per unit roughness");
         GK_CVAR_UINT_CB("r.superResolution", settings, SuperResolution, 0, ECVarFlags::Archive,
                         "Super resolution mode (0-4)", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.dlss", settings, DLSS, false, ECVarFlags::Archive,

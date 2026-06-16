@@ -49,7 +49,12 @@ struct UserSettings final
 	float DenoiseSigma;
 	float DenoiseSigmaLum;
 	float DenoiseSigmaNormal;
+	float DenoiseSigmaDepth;
 	int DenoiseSize;
+	int DenoiseAtrousIterations;
+	float DenoiseAtrousSigmaLuma;   // variance-guided luminance edge-stop (lower = sharper, noisier)
+	float DenoiseAtrousNormalPower; // a-trous normal edge-stop exponent
+	float DenoiseSpecFootprint;     // specular filter radius (pixels) per unit roughness
 
 	float PaperWhiteNit;
 
