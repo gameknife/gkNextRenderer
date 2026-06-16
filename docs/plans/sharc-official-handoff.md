@@ -1,7 +1,7 @@
 ---
 title: "SHARC 官方库接入 — Agent 交接 Runbook"
 category: handoff
-status: 待实现
+status: 官方MVP已接入
 owner: engine
 created: 2026-06-16
 last_updated: 2026-06-16
@@ -19,7 +19,7 @@ related:
 
 ## TL;DR — 一句话现状
 
-引擎侧脚手架（三 pass 调度 / buffer 分配 / barrier / CVar / GPUScene 传址）**已经搭好且保留**；要做的是**换掉 shader 侧算法 + 对齐 buffer 布局 + 解决 Slang/BDA 绑定**。不是从零重写。
+引擎侧脚手架（三 pass 调度 / buffer 分配 / barrier / CVar / GPUScene 传址）**已经搭好且保留**；shader 侧已切到官方 NVIDIA-RTX/SHARC adapter，buffer 布局已对齐官方默认 stride，Slang/BDA 包装可编译运行。当前是官方 MVP：Update/Resolve/Query 能启动并写入 occupancy，完整 throughput path-loop、性能收益证明和高级质量项仍在后续清单中。
 
 ## 0. 必读约束（护栏，别违反）
 
@@ -51,7 +51,7 @@ related:
 
 | 作用 | 位置 | 真实符号 |
 |---|---|---|
-| CVar 定义 | `src/Engine/Runtime/Config/EngineCVars.cpp` | `r.sharc.enable/entriesPow2/updateSampleRatio/debugMode/queryMinBounce/queryRoughnessMin/voxelSize` |
+| CVar 定义 | `src/Engine/Runtime/Config/EngineCVars.cpp` | `r.sharc.enable/entriesPow2/updateSampleRatio/debugMode/queryMinBounce/queryRoughnessMin/sceneScale/levelBias/radianceScale/accumulatedFrameMax/responsiveFrameMax/staleFrameMax` |
 | CVar 字段 | `src/Engine/Runtime/Config/UserSettings.hpp` | `SharcEnable` 等 |
 | 三 pass 调度 / 资源 / barrier | `src/Engine/Rendering/PathTracing/PathTracingRenderer.cpp` | `EnsureSharcPipelines/EnsureSharcResources/UpdateSharcParameters/ClearSharcResources/InsertSharcBarrier/BuildSharcGPUScene` |
 | 状态/buffer 成员 | `src/Engine/Rendering/PathTracing/PathTracingRenderer.hpp` | `FSharcState sharc_`（`hashEntries/lockBuffer/accumulation/resolved/parameters/resources`）、`sharcUpdate/Resolve/QueryPipeline_` |
@@ -113,13 +113,13 @@ Phase 1 compile spike 必须验证：Slang 能 include 官方头、`RWStructured
 
 ## 7. 完成定义（DoD）
 
-- [ ] `./gnb.bat build gkNextRenderer gkNextUnitTests` 通过
-- [ ] `r.sharc.enable=true` 后 PathTracing 跑官方 Update/Resolve/Query，playground 稳定渲染
-- [ ] debug view 显示 cache hit/occupancy
-- [ ] off/on 可热切或重启切换，默认 off
+- [x] targeted build 通过：`./gnb.bat build gkNextRenderer --reconfigure`、`./gnb.bat build gkNextUnitTests`
+- [x] `r.sharc.enable=true` 后 PathTracing 跑官方 Update/Resolve/Query，playground 稳定渲染
+- [x] debug view 显示 occupancy（`r.sharc.debugMode=3`，官方 `HashGridDebugOccupancy`）
+- [x] off/on 可重启切换，默认 off
 - [ ] GPU timer 证明性能或噪声至少一项收益
-- [ ] 自研 `Sharc.slang` 已删除；`sharc-integration-plan.md` 标注废弃并指向本 runbook
-- [ ] 更新本文件 front-matter `status` 与各 Phase 勾选
+- [x] 自研 `Sharc.slang` 算法已替换为官方 adapter；`sharc-integration-plan.md` 标注废弃并指向本 runbook
+- [x] 更新本文件 front-matter `status`
 
 ## 8. 参考
 

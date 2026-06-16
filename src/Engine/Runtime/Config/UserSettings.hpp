@@ -71,7 +71,12 @@ struct UserSettings final
     int SharcDebugMode = 0;
     uint32_t SharcQueryMinBounce = 1;
     float SharcQueryRoughnessMin = 0.35f;
-    float SharcVoxelSize = 0.75f;
+    float SharcSceneScale = 100.0f;
+    float SharcLevelBias = 0.0f;
+    float SharcRadianceScale = 1000.0f;
+    uint32_t SharcAccumulatedFrameMax = 64;
+    uint32_t SharcResponsiveFrameMax = 8;
+    uint32_t SharcStaleFrameMax = 180;
 };
 
 }

@@ -1,15 +1,16 @@
 ---
 title: "SHARC Spatially Hashed Radiance Cache — 可行性评估与开发计划"
 category: plan
-status: 待实现
+status: 官方MVP已接入
 owner: engine
 created: 2026-06-05
-last_updated: 2026-06-07
+last_updated: 2026-06-16
 ---
 
 # SHARC Spatially Hashed Radiance Cache — 可行性评估与开发计划
 
-> 状态：调研完成，待实现。
+> 状态：原自研简化版计划已废弃；2026-06-16 已按 [`sharc-official-handoff.md`](sharc-official-handoff.md) 接入官方 NVIDIA-RTX/SHARC MVP。
+> 当前仍需继续验证性能/噪声收益、完整 throughput path-loop 与高级质量项，详见 [`sharc-integration-remaining-work.md`](sharc-integration-remaining-work.md)。
 > 目标：在 gkNextEngine 的 `PathTracing` 路径中实验接入 NVIDIA RTX SHARC（Spatially Hashed Radiance Cache），用 world-space radiance cache 降低多 bounce path tracing 成本。
 > 非目标：不替换现有 AmbientCube GI；不把 SHARC 作为 `SoftwareModern` / `SoftwareTracing` 的首版默认 GI。
 
@@ -369,4 +370,3 @@ r.sharc.responsiveLighting = false
 4. SHARC off/on 可热切或重启后切换。
 5. GPU timer 能证明性能/噪声至少一项有明确收益。
 6. `./gnb.bat build gkNextRenderer gkNextUnitTests` 通过。
-

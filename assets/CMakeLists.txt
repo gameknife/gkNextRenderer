@@ -99,7 +99,12 @@ source_group("Assets" FILES ${all_asset_files})
 # Shader 编译
 # ============================================================
 file(GLOB shader_files shaders/*.comp.slang shaders/*.vert.slang shaders/*.frag.slang)
-file(GLOB shader_common_files shaders/common/*.h shaders/common/*.slang)
+file(GLOB_RECURSE shader_common_files CONFIGURE_DEPENDS
+    shaders/Common.slang
+    shaders/common/*.h
+    shaders/common/*.slang
+    shaders/third_party/*.h
+)
 
 source_group("Shaders" FILES ${shader_files} ${shader_common_files})
 
@@ -130,13 +135,24 @@ foreach(shader ${shader_files})
 
     set(slangc_args "")
     if(WIN32 AND GK_ENABLE_SHADER_CLOCK)
-        set(slangc_args "-DSHADER_CLOCK")
+        list(APPEND slangc_args "-DSHADER_CLOCK")
     endif()
     if(APPLE)
-        set(slangc_args "-DPLATFORM_APPLE")
+        list(APPEND slangc_args "-DPLATFORM_APPLE")
     endif()
     if(ANDROID)
-        set(slangc_args "-DPLATFORM_ANDROID")
+        list(APPEND slangc_args "-DPLATFORM_ANDROID")
+    endif()
+    if(file_name STREQUAL "Core.SharcUpdate.comp.slang")
+        list(APPEND slangc_args "-DGK_ENABLE_OFFICIAL_SHARC" "-DSHARC_UPDATE=1" "-DSHARC_QUERY=0")
+    elseif(file_name STREQUAL "Core.SharcQuery.comp.slang")
+        list(APPEND slangc_args "-DGK_ENABLE_OFFICIAL_SHARC" "-DSHARC_UPDATE=0" "-DSHARC_QUERY=1")
+    elseif(file_name STREQUAL "Core.SharcResolve.comp.slang")
+        list(APPEND slangc_args "-DGK_ENABLE_OFFICIAL_SHARC" "-DSHARC_UPDATE=0" "-DSHARC_QUERY=0")
+    elseif(file_name STREQUAL "Util.SharcCompileTest.comp.slang")
+        list(APPEND slangc_args "-DGK_ENABLE_OFFICIAL_SHARC" "-DSHARC_UPDATE=1" "-DSHARC_QUERY=1")
+    elseif(file_name MATCHES "^Core\\.Sharc")
+        list(APPEND slangc_args "-DGK_ENABLE_OFFICIAL_SHARC")
     endif()
 
     add_custom_command(

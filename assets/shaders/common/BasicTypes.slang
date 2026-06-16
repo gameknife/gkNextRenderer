@@ -275,45 +275,41 @@ public struct ALIGN_16 AmbientResources
     public uint64_t PoolParams;  // Phase 3: low32 = pool bricks/cascade, high32 = active-list byte offset from BrickTable
 };
 
-public struct ALIGN_16 SharcHashEntry
+public struct ALIGN_8 SharcHashEntry
 {
-    public uint Key;
-    public uint PackedNormal;
-    public uint LastFrame;
-    public uint Reserved;
+    public uint64_t Key;
 };
 
 public struct ALIGN_16 SharcAccumulationEntry
 {
-    public uint RadianceR;
-    public uint RadianceG;
-    public uint RadianceB;
-    public uint SampleCount;
+    public uint DataX;
+    public uint DataY;
+    public uint DataZ;
+    public uint DataW;
 };
 
 public struct ALIGN_16 SharcResolvedEntry
 {
-    public float4 Radiance;
-    public uint PackedNormal;
-    public uint LastFrame;
-    public uint SampleCount;
-    public uint Reserved;
+    public uint64_t RadianceData;
+    public uint SampleData;
+    public uint SampleDataExt;
 };
 
-public struct ALIGN_16 SharcParameters
+public struct ALIGN_16 SharcRuntimeParameters
 {
     public uint EntryCount;
-    public uint EntryMask;
     public uint FrameIndex;
     public uint DebugMode;
-    public float VoxelSize;
+    public uint QueryMinBounce;
+    public float SceneScale;
+    public float LevelBias;
+    public float RadianceScale;
     public float UpdateSampleRatio;
     public float QueryRoughnessMin;
-    public uint QueryMinBounce;
-    public uint StaleFrameCount;
-    public uint Reserved0;
-    public uint Reserved1;
-    public uint Reserved2;
+    public uint AccumulatedFrameMax;
+    public uint ResponsiveFrameMax;
+    public uint StaleFrameMax;
+    public float4 CameraPositionPrev;
 };
 
 public struct ALIGN_16 SharcResources
