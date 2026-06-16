@@ -41,6 +41,17 @@ namespace Vulkan::PathTracing
 			FSharcBuffer resources;
 			uint32_t entriesPow2 = 0;
 			uint32_t entryCount = 0;
+			uint32_t lastFrameIndex = ~0u;
+			glm::vec4 lastCameraPosition = glm::vec4(0.0f);
+			bool hasLastCameraPosition = false;
+			glm::vec4 lastSunDirection = glm::vec4(0.0f);
+			glm::vec4 lastSunColor = glm::vec4(0.0f);
+			uint32_t lastSkyIdx = 0;
+			float lastSkyIntensity = 0.0f;
+			float lastSkyRotation = 0.0f;
+			uint32_t lastHasSun = 0;
+			uint32_t lastHasSky = 0;
+			bool hasLastLightingState = false;
 			bool pendingClear = false;
 		};
 

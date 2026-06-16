@@ -291,7 +291,15 @@ namespace Vulkan
         namespace fs = std::filesystem;
 
         const std::vector<fs::path> shaderFiles = CollectFiles(sourceRoot_, {".slang"});
-        const std::vector<fs::path> commonFiles = CollectFiles(sourceRoot_ / "common", {".slang", ".h"});
+        std::vector<fs::path> commonFiles = CollectFiles(sourceRoot_ / "common", {".slang", ".h"});
+        const std::vector<fs::path> thirdPartyFiles = CollectFiles(sourceRoot_ / "third_party", {".slang", ".h"});
+        commonFiles.insert(commonFiles.end(), thirdPartyFiles.begin(), thirdPartyFiles.end());
+        const fs::path commonModule = sourceRoot_ / "Common.slang";
+        std::error_code moduleEc;
+        if (fs::exists(commonModule, moduleEc) && fs::is_regular_file(commonModule, moduleEc))
+        {
+            commonFiles.push_back(commonModule);
+        }
 
         fs::file_time_type latestSourceTimestamp{};
         std::vector<fs::path> allSourceFiles = shaderFiles;
@@ -364,6 +372,27 @@ namespace Vulkan
 #if ANDROID
         platformDefines += " -DPLATFORM_ANDROID";
 #endif
+        const std::string sourceFilename = request.sourcePath.filename().string();
+        if (sourceFilename == "Core.SharcUpdate.comp.slang")
+        {
+            platformDefines += " -DGK_ENABLE_OFFICIAL_SHARC -DSHARC_UPDATE=1 -DSHARC_QUERY=0";
+        }
+        else if (sourceFilename == "Core.SharcQuery.comp.slang")
+        {
+            platformDefines += " -DGK_ENABLE_OFFICIAL_SHARC -DSHARC_UPDATE=0 -DSHARC_QUERY=1";
+        }
+        else if (sourceFilename == "Core.SharcResolve.comp.slang")
+        {
+            platformDefines += " -DGK_ENABLE_OFFICIAL_SHARC -DSHARC_UPDATE=0 -DSHARC_QUERY=0";
+        }
+        else if (sourceFilename == "Util.SharcCompileTest.comp.slang")
+        {
+            platformDefines += " -DGK_ENABLE_OFFICIAL_SHARC -DSHARC_UPDATE=1 -DSHARC_QUERY=1";
+        }
+        else if (sourceFilename.starts_with("Core.Sharc"))
+        {
+            platformDefines += " -DGK_ENABLE_OFFICIAL_SHARC";
+        }
 
         const std::string command = fmt::format("{} {} -o {} -entry main -target spirv{}",
                                                 QuotePath(slangExecutable_),

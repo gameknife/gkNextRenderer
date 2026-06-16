@@ -22,7 +22,12 @@ namespace Vulkan::PathTracing
         constexpr uint32_t kSharcResolveThreadCount = 64;
         constexpr uint32_t kSharcMinEntriesPow2 = 10;
         constexpr uint32_t kSharcMaxEntriesPow2 = 22;
-        constexpr uint32_t kSharcStaleFrameCount = 180;
+        constexpr uint32_t kSharcProbePadding = 16;
+
+        static_assert(sizeof(Assets::SharcHashEntry) == 8);
+        static_assert(sizeof(Assets::SharcAccumulationEntry) == 16);
+        static_assert(sizeof(Assets::SharcResolvedEntry) == 16);
+        static_assert(sizeof(Assets::SharcRuntimeParameters) == 64);
 
         void CreateSharcBuffer(
             Vulkan::CommandPool& commandPool,
@@ -110,25 +115,26 @@ namespace Vulkan::PathTracing
         sharc_ = {};
         sharc_.entriesPow2 = entriesPow2;
         sharc_.entryCount = entryCount;
+        const uint32_t allocationEntryCount = entryCount + kSharcProbePadding;
 
         CreateSharcBuffer(CommandPool(), "SharcHashEntries",
-                          sizeof(Assets::SharcHashEntry) * entryCount,
+                          sizeof(Assets::SharcHashEntry) * allocationEntryCount,
                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                           sharc_.hashEntries);
         CreateSharcBuffer(CommandPool(), "SharcLockBuffer",
-                          sizeof(uint32_t) * entryCount,
+                          sizeof(uint32_t) * allocationEntryCount,
                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                           sharc_.lockBuffer);
         CreateSharcBuffer(CommandPool(), "SharcAccumulation",
-                          sizeof(Assets::SharcAccumulationEntry) * entryCount,
+                          sizeof(Assets::SharcAccumulationEntry) * allocationEntryCount,
                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                           sharc_.accumulation);
         CreateSharcBuffer(CommandPool(), "SharcResolved",
-                          sizeof(Assets::SharcResolvedEntry) * entryCount,
+                          sizeof(Assets::SharcResolvedEntry) * allocationEntryCount,
                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                           sharc_.resolved);
         CreateSharcBuffer(CommandPool(), "SharcParameters",
-                          sizeof(Assets::SharcParameters),
+                          sizeof(Assets::SharcRuntimeParameters),
                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                           sharc_.parameters);
         CreateSharcBuffer(CommandPool(), "SharcResources",
@@ -156,17 +162,55 @@ namespace Vulkan::PathTracing
     void PathTracingRenderer::UpdateSharcParameters()
     {
         const auto& settings = NextEngine::GetInstance()->GetUserSettings();
-        Assets::SharcParameters parameters{};
+        const uint32_t frameIndex = static_cast<uint32_t>(std::max(FrameCount(), 0));
+        const auto& currentUbo = NextEngine::GetInstance()->GetLastUniformBufferObject();
+        const glm::vec4 currentCameraPosition(currentUbo.ModelViewInverse[3][0],
+                                              currentUbo.ModelViewInverse[3][1],
+                                              currentUbo.ModelViewInverse[3][2],
+                                              1.0f);
+        const bool frameCounterReset = sharc_.lastFrameIndex != ~0u && frameIndex < sharc_.lastFrameIndex;
+        const bool lightingChanged = sharc_.hasLastLightingState &&
+            (currentUbo.HasSun != sharc_.lastHasSun ||
+             currentUbo.HasSky != sharc_.lastHasSky ||
+             currentUbo.SkyIdx != sharc_.lastSkyIdx ||
+             currentUbo.SunDirection != sharc_.lastSunDirection ||
+             currentUbo.SunColor != sharc_.lastSunColor ||
+             currentUbo.SkyIntensity != sharc_.lastSkyIntensity ||
+             currentUbo.SkyRotation != sharc_.lastSkyRotation);
+        if (frameCounterReset || lightingChanged)
+        {
+            sharc_.pendingClear = true;
+            sharc_.hasLastCameraPosition = false;
+        }
+
+        Assets::SharcRuntimeParameters parameters{};
         parameters.EntryCount = sharc_.entryCount;
-        parameters.EntryMask = sharc_.entryCount - 1u;
-        parameters.FrameIndex = static_cast<uint32_t>(std::max(FrameCount(), 0));
+        parameters.FrameIndex = frameIndex;
         parameters.DebugMode = static_cast<uint32_t>(std::max(settings.SharcDebugMode, 0));
-        parameters.VoxelSize = std::max(settings.SharcVoxelSize, 0.001f);
+        parameters.SceneScale = std::max(settings.SharcSceneScale, 0.001f);
+        parameters.LevelBias = settings.SharcLevelBias;
+        parameters.RadianceScale = std::max(settings.SharcRadianceScale, 1.0f);
         parameters.UpdateSampleRatio = std::clamp(settings.SharcUpdateSampleRatio, 0.0f, 1.0f);
         parameters.QueryRoughnessMin = std::clamp(settings.SharcQueryRoughnessMin, 0.0f, 1.0f);
         parameters.QueryMinBounce = settings.SharcQueryMinBounce;
-        parameters.StaleFrameCount = kSharcStaleFrameCount;
+        parameters.AccumulatedFrameMax = std::clamp(settings.SharcAccumulatedFrameMax, 1u, 1024u);
+        parameters.ResponsiveFrameMax = std::clamp(settings.SharcResponsiveFrameMax, 1u, 1024u);
+        parameters.StaleFrameMax = std::clamp(settings.SharcStaleFrameMax, 8u, 1024u);
+        parameters.CameraPositionPrev =
+            sharc_.hasLastCameraPosition ? sharc_.lastCameraPosition : currentCameraPosition;
         WriteHostVisibleBuffer(sharc_.parameters, &parameters, sizeof(parameters));
+
+        sharc_.lastFrameIndex = frameIndex;
+        sharc_.lastCameraPosition = currentCameraPosition;
+        sharc_.hasLastCameraPosition = true;
+        sharc_.lastSunDirection = currentUbo.SunDirection;
+        sharc_.lastSunColor = currentUbo.SunColor;
+        sharc_.lastSkyIdx = currentUbo.SkyIdx;
+        sharc_.lastSkyIntensity = currentUbo.SkyIntensity;
+        sharc_.lastSkyRotation = currentUbo.SkyRotation;
+        sharc_.lastHasSun = currentUbo.HasSun;
+        sharc_.lastHasSky = currentUbo.HasSky;
+        sharc_.hasLastLightingState = true;
     }
 
     void PathTracingRenderer::ClearSharcResources(VkCommandBuffer commandBuffer)

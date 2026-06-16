@@ -308,7 +308,12 @@ Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options&
     userSettings.SharcDebugMode = 0;
     userSettings.SharcQueryMinBounce = 1;
     userSettings.SharcQueryRoughnessMin = 0.35f;
-    userSettings.SharcVoxelSize = 0.75f;
+    userSettings.SharcSceneScale = 100.0f;
+    userSettings.SharcLevelBias = 0.0f;
+    userSettings.SharcRadianceScale = 1000.0f;
+    userSettings.SharcAccumulatedFrameMax = 64;
+    userSettings.SharcResponsiveFrameMax = 8;
+    userSettings.SharcStaleFrameMax = 180;
 
     return userSettings;
 }

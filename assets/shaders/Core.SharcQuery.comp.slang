@@ -13,7 +13,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     FHardwareDirectIlluminator dIlluminator;
 
     FPathTracingRenderer renderer;
-    SharcParameters params = SharcGetParameters();
+    SharcRuntimeParameters params = SharcGetRuntimeParameters();
     renderer.ExitProbability = 0.5f;
     renderer.ExitAfterFirst = false;
     renderer.HitNormalOffset = 0.001f * Bindless.GetGpuscene().Camera->SceneEpsilonScale;
@@ -27,8 +27,29 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.SharcQueryMinBounce = params.QueryMinBounce;
     renderer.Init(DTid.xy);
 
+    if (renderer.SharcDebugMode == 3u)
+    {
+        renderer.WriteSharcDebugOccupancy();
+        END_SHADERCLOCK(DTid.xy)
+        return;
+    }
+
+    if (renderer.SharcDebugMode == 5u)
+    {
+        renderer.WriteSharcDebugSampleStale();
+        END_SHADERCLOCK(DTid.xy)
+        return;
+    }
+
     if (!renderer.PrimaryHit(rayCaster))
     {
+        END_SHADERCLOCK(DTid.xy)
+        return;
+    }
+
+    if (renderer.SharcDebugMode == 4u)
+    {
+        renderer.WriteSharcDebugRadiance();
         END_SHADERCLOCK(DTid.xy)
         return;
     }

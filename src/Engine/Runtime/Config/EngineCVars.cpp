@@ -139,13 +139,23 @@ namespace NextCVar
         GK_CVAR_FLOAT("r.sharc.updateSampleRatio", settings, SharcUpdateSampleRatio, 0.25f, ECVarFlags::Archive,
                       "Fraction of pixels used by SHARC update pass");
         GK_CVAR_INT("r.sharc.debugMode", settings, SharcDebugMode, 0, ECVarFlags::Archive,
-                    "SHARC debug mode (0=off,1=cache hit,2=cache miss)");
+                    "SHARC debug mode (0=off,1=cache hit,2=cache miss,3=occupancy,4=radiance mosaic,5=stale/sample/frame heatmap)");
         GK_CVAR_UINT("r.sharc.queryMinBounce", settings, SharcQueryMinBounce, 1, ECVarFlags::Archive,
                      "Minimum bounce index for SHARC query");
         GK_CVAR_FLOAT("r.sharc.queryRoughnessMin", settings, SharcQueryRoughnessMin, 0.35f, ECVarFlags::Archive,
                       "Minimum material roughness for SHARC query");
-        GK_CVAR_FLOAT("r.sharc.voxelSize", settings, SharcVoxelSize, 0.75f, ECVarFlags::Archive,
-                      "World-space SHARC hash voxel size");
+        GK_CVAR_FLOAT("r.sharc.sceneScale", settings, SharcSceneScale, 100.0f, ECVarFlags::Archive,
+                      "Official SHARC hash grid world-space scene scale; higher values produce smaller voxels");
+        GK_CVAR_FLOAT("r.sharc.levelBias", settings, SharcLevelBias, 0.0f, ECVarFlags::Archive,
+                      "Official SHARC hash grid LOD bias");
+        GK_CVAR_FLOAT("r.sharc.radianceScale", settings, SharcRadianceScale, 1000.0f, ECVarFlags::Archive,
+                      "Official SHARC integer accumulation radiance scale");
+        GK_CVAR_UINT("r.sharc.accumulatedFrameMax", settings, SharcAccumulatedFrameMax, 64, ECVarFlags::Archive,
+                     "Official SHARC maximum temporal accumulation frames");
+        GK_CVAR_UINT("r.sharc.responsiveFrameMax", settings, SharcResponsiveFrameMax, 8, ECVarFlags::Archive,
+                     "Official SHARC responsive temporal accumulation frames");
+        GK_CVAR_UINT("r.sharc.staleFrameMax", settings, SharcStaleFrameMax, 180, ECVarFlags::Archive,
+                     "Official SHARC stale frame eviction threshold");
 
         if (engine != nullptr)
         {
