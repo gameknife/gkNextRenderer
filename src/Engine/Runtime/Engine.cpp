@@ -282,7 +282,12 @@ Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options&
     userSettings.DenoiseSigma = 0.5f;
     userSettings.DenoiseSigmaLum = 10.0f;
     userSettings.DenoiseSigmaNormal = 0.1f;
+    userSettings.DenoiseSigmaDepth = 2.0f;
     userSettings.DenoiseSize = 5;
+    userSettings.DenoiseAtrousIterations = 5;
+    userSettings.DenoiseAtrousSigmaLuma = 4.0f;
+    userSettings.DenoiseAtrousNormalPower = 64.0f;
+    userSettings.DenoiseSpecFootprint = 32.0f;
 
     userSettings.PaperWhiteNit = 600.f;
     

@@ -16,6 +16,7 @@ groupshared float3 diffuse[WINDOW_LEN][WINDOW_LEN];
 groupshared float3 spec[WINDOW_LEN][WINDOW_LEN];
 groupshared float3 normal[WINDOW_LEN][WINDOW_LEN];
 groupshared uint visibility[WINDOW_LEN][WINDOW_LEN];
+groupshared float depth[WINDOW_LEN][WINDOW_LEN];
 
 float3 FetchDiffuse(int2 ipos)
 {
@@ -35,6 +36,11 @@ float3 FetchNormal(int2 ipos)
 uint FetchVisibility(int2 ipos)
 {
     return visibility[ipos.x][ipos.y];
+}
+
+float FetchDepth(int2 ipos)
+{
+    return depth[ipos.x][ipos.y];
 }
 
 bool HasObjectFlag(uint objectId, uint flag)
@@ -75,30 +81,42 @@ float ComputeEdgeStrengthTwoSided(RWTexture2D<uint> ObjectImage, int2 ipos, uint
     return smoothstep(0.1, 0.4, rawEdge);
 }
 
-void JBF(int2 coord, int2 localCoord, inout float3 Total, inout float Weight, float CenterLum, float3 CenterNormal, uint CenterVisibility)
+void JBF(int2 coord, int2 localCoord, inout float3 Total, inout float Weight, float CenterLum, float3 CenterNormal, uint CenterVisibility, float CenterDepth, float GradDepth)
 {
     const float sigma = Bindless.GetGpuscene().Camera->BFSigma; // spatial sigma
-    const float sigmaL = Bindless.GetGpuscene().Camera->BFSigmaLum * 100.0; // 
+    const float sigmaL = Bindless.GetGpuscene().Camera->BFSigmaLum * 100.0; //
     const float sigmaN = Bindless.GetGpuscene().Camera->BFSigmaNormal;
+    const float sigmaZ = Bindless.GetGpuscene().Camera->BFSigmaDepth; // planar depth tolerance (in gradient steps)
     const int N = int(WINDOW_R); // filter size
-    
+
     const float3 FinalCol = FetchDiffuse(coord);
     const float3 Ci = FinalCol;
     const float3 Ni = FetchNormal(coord);
     const uint Pi = FetchVisibility(coord);
+    const float Zi = FetchDepth(coord);
     const float lumi = dot(Ci, float3(0.212671f, 0.715160f, 0.072169f));
 
     const float dist = clamp(float(localCoord.x * localCoord.x + localCoord.y * localCoord.y) / float(N * N), 0.0, 1.0);
     const float normaldist = 1.0 - dot(Ni, CenterNormal);
     const float dlum = (CenterLum - lumi) * (CenterLum - lumi);
 
+    // Spatial gaussian falloff.
     const float Fi = exp(-dist * dist / (2.0 * sigma * sigma));
+    // Normal edge-stop: reject taps whose normal diverges from the center.
     const float Ai = exp(-normaldist * normaldist / (2.0 * sigmaN * sigmaN));
+    // Luminance edge-stop (kept loose; variance-normalized version lands in Phase 2).
     const float Li = exp(-dlum * dlum / (2.0 * sigmaL * sigmaL));
+    // Object-id hard rejection: never bleed across instance boundaries.
     const float Oi = float(CenterVisibility == Pi);
+    // Planar depth edge-stop (SVGF-style): tolerance scales with the local depth slope so
+    // grazing/slanted surfaces stay sharp while true depth discontinuities are rejected.
+    const float depthDiff = abs(CenterDepth - Zi);
+    const float phiDepth = sigmaZ * GradDepth * length(float2(localCoord)) + 1e-5;
+    const float Wz = exp(-depthDiff / phiDepth);
 
-    Total += Ci * Fi * Li; // * Ai; // * Oi;
-    Weight += Fi * Li;// * Ai;// * Oi;
+    const float w = Fi * Li * Ai * Oi * Wz;
+    Total += Ci * w;
+    Weight += w;
 }
 
 [shader("compute")]
@@ -111,10 +129,13 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
     UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
 
     let OutImage = Bindless.GetStorageTexture<float4>(Bindless.RT_DENOISED);
-    let FinalImage = Bindless.GetStorageTexture<float4>(Bindless.RT_ACCUMLATE_DIFFUSE);
-    let FinalImageSpec = Bindless.GetStorageTexture<float4>(Bindless.RT_ACCUMLATE_SPECULAR);
+    // Diffuse source is routed by the renderer: the a-trous output when the variance-guided
+    // path is active, otherwise the temporal accumulation buffer (JBF/passthrough).
+    let FinalImage = Bindless.GetStorageTexture<float4>(Camera.DenoiseDiffuseSourceSlot);
+    let FinalImageSpec = Bindless.GetStorageTexture<float4>(Camera.DenoiseSpecularSourceSlot);
     let AccumlateAlbedo = Bindless.GetStorageTexture<float4>(Bindless.RT_ACCUMLATE_ALBEDO);
     let OutNormalBuffer = Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL);
+    let DepthBuffer = Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER);
     let ObjectId0 = Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
     let ObjectId1 = Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_1);
 
@@ -134,7 +155,8 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
         spec[row][col] = FinalImageSpec[coord].rgb;
         normal[row][col] = OutNormalBuffer[coord].rgb;
         visibility[row][col] = ObjectId0[coord].r;
-        
+        depth[row][col] = DepthBuffer[coord];
+
         int idx = int(groupIndex + WORK_GROUP_AXIS_SIZE * WORK_GROUP_AXIS_SIZE);
         while (idx < WINDOW_LEN * WINDOW_LEN)
         {
@@ -145,6 +167,7 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
             spec[row][col] = FinalImageSpec[coord].rgb;
             normal[row][col] = OutNormalBuffer[coord].rgb;
             visibility[row][col] = ObjectId0[coord].r;
+            depth[row][col] = DepthBuffer[coord];
 
             idx += WORK_GROUP_AXIS_SIZE * WORK_GROUP_AXIS_SIZE;
         }
@@ -158,6 +181,13 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
         const float3 CenterSpec = FetchSpec(coord.xy).rgb;
         const float3 Normal = FetchNormal(coord.xy).rgb;
         uint current_primitive_index = FetchVisibility(coord.xy);
+        const float CenterDepth = FetchDepth(coord.xy);
+
+        // Estimate the local screen-space depth slope (central differences) so the planar
+        // depth edge-stop tolerates slanted surfaces without leaking across true edges.
+        const float gradX = abs(FetchDepth(coord.xy + int2(1, 0)) - FetchDepth(coord.xy - int2(1, 0))) * 0.5;
+        const float gradY = abs(FetchDepth(coord.xy + int2(0, 1)) - FetchDepth(coord.xy - int2(0, 1))) * 0.5;
+        const float GradDepth = max(gradX, gradY);
 
         const float CenterLum = dot(CenterColor, float3(0.212671f, 0.715160f, 0.072169f));
 
@@ -166,10 +196,10 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
         {
             for (int j = -WINDOW_R; j <= WINDOW_R; j += 2)
             {
-                JBF(coord.xy + int2(i, j), int2(i, j), Total, Weight, CenterLum, Normal, current_primitive_index);
+                JBF(coord.xy + int2(i, j), int2(i, j), Total, Weight, CenterLum, Normal, current_primitive_index, CenterDepth, GradDepth);
             }
         }
-        Total /= Weight;
+        Total /= max(Weight, 1e-5);
 
         if (!Camera.DebugDraw_Lighting)
         {

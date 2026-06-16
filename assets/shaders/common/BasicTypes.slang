@@ -161,7 +161,7 @@ public struct ALIGN_16 UniformBufferObject
     public float BFSigmaNormal;
     public uint BFSize;
     public bool FastGather;
-    public bool ReservedBool1;
+    public float BFSigmaDepth;
 
     public bool DebugDraw_Lighting;
     public bool DebugDraw_ShadowCascadeCoverage;
@@ -174,6 +174,13 @@ public struct ALIGN_16 UniformBufferObject
     public float3 AmbientCubeOffset;
     public float AmbientCubeOffsetPadding3;
     public float4 AmbientCubeCascadeParams;
+
+    // Denoiser: bindless slots holding the final diffuse / specular the compose pass should read
+    // (a-trous outputs when enabled, else the temporal accumulation buffers).
+    public uint DenoiseDiffuseSourceSlot;
+    public uint DenoiseSpecularSourceSlot;
+    public uint DenoiseReservedUint1;
+    public uint DenoiseReservedUint2;
 };
 
 public struct ALIGN_16 NodeProxy

@@ -952,6 +952,7 @@ void NextRendererGameInstance::DrawSettings()
         DrawFloatSetting(LOCTEXT("DenoiseSigma"), &userSetting.DenoiseSigma, 0.01f, 2.0f, "%.2f", 0.01f);
         DrawFloatSetting(LOCTEXT("DenoiseSigma Lum"), &userSetting.DenoiseSigmaLum, 0.01f, 50.0f, "%.2f", 0.05f);
         DrawFloatSetting(LOCTEXT("DenoiseSigma Norm"), &userSetting.DenoiseSigmaNormal, 0.0f, 0.2f, "%.3f", 0.001f);
+        DrawFloatSetting(LOCTEXT("DenoiseSigma Depth"), &userSetting.DenoiseSigmaDepth, 0.0f, 8.0f, "%.2f", 0.05f);
         DrawIntSetting(LOCTEXT("DenoiseSize"), &userSetting.DenoiseSize, 1, 10);
         NextUI::Theme::EndPanelSection();
     }
