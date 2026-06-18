@@ -380,6 +380,7 @@ namespace Vulkan
     {
         scene_ = scene;
         RequestClearAmbientCubeCache();
+        resetUpscalerHistory_ = true;
     }
 
     Rendering::Upscaler::FFrameGenerationState VulkanBaseRenderer::GetFrameGenerationState() const
@@ -939,6 +940,7 @@ namespace Vulkan
         ctx_.device->WaitIdle();
         DeleteSwapChain();
         CreateSwapChain();
+        resetUpscalerHistory_ = true;
     }
 
     void VulkanBaseRenderer::ReloadShaders()
@@ -1216,6 +1218,7 @@ namespace Vulkan
             }
 
             frame_.currentFrame = (frame_.currentFrame + 1) % frame_.inFlightFences.size();
+            resetUpscalerHistory_ = false;
             frame_.frameCount++;
         }
     }
@@ -1474,7 +1477,7 @@ namespace Vulkan
         inputs.frameToken = frame_.streamlineFrameToken;
         inputs.frameIndex = static_cast<uint32_t>(frame_.frameCount);
         inputs.imageIndex = imageIndex;
-        inputs.reset = frame_.frameCount < 2;
+        inputs.reset = resetUpscalerHistory_ || frame_.frameCount < 2;
         inputs.enableDLSS = caps_.supportDLSS && settings.DLSS;
         inputs.enableDLSSRR = caps_.supportDLSSRR && settings.DLSSRR;
         inputs.enableDLSSG = caps_.supportDLSSG && settings.DLSSG;

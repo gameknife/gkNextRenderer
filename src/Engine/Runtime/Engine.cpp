@@ -375,7 +375,7 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
 #if WITH_STREAMLINE
     if (options.DisableStreamline)
     {
-        SPDLOG_INFO("Streamline DLSS plugins disabled by command line");
+        SPDLOG_INFO("Streamline DLSS plugins disabled for this application");
     }
     else if (StreamlineWrapper::ShouldInitialize())
     {

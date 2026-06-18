@@ -280,6 +280,7 @@ namespace Vulkan
 		bool forceSDR_{};
 		bool visualDebug_{};
 		bool requestRecreateSwapChain_ = false;
+		bool resetUpscalerHistory_ = true;
 
 		// Device / swapchain internals
 		void SelectPhysicalDevice(uint32_t gpuIdx);

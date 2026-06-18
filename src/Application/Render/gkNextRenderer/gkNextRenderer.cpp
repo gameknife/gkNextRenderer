@@ -1034,7 +1034,7 @@ void NextRendererGameInstance::DrawSettings()
         if (userSetting.DLSSG && frameGenerationState.valid)
         {
             ImGui::TextDisabled("DLSS-G presented x%u, status 0x%X",
-                                std::max(1u, frameGenerationState.numFramesActuallyPresented),
+                                frameGenerationState.numFramesActuallyPresented,
                                 frameGenerationState.statusMask);
         }
         if (upscaleMethod == 1 && !canUseFrameGeneration)

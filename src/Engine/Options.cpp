@@ -1,13 +1,18 @@
 #include "Engine/Options.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include <cxxopts.hpp>
+#include <filesystem>
 #include <iostream>
 
 namespace Runtime::Config
 {
 
 Options::Options(const int argc, const char* argv[])
-{	
+{
+	const bool disableStreamlineForApplication =
+		argc > 0 && argv[0] != nullptr &&
+		std::filesystem::path(argv[0]).stem().string() == "gkNextEditor";
+
 	cxxopts::Options options("options", "");
 	std::string remoteResolution;
 	options.add_options()
@@ -62,6 +67,7 @@ Options::Options(const int argc, const char* argv[])
 	try
 	{
 		auto result = options.parse(argc, argv);
+		DisableStreamline = DisableStreamline || disableStreamlineForApplication || AgentValidation;
 
 		if (result.count("help"))
 		{
