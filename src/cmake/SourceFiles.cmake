@@ -64,7 +64,7 @@ file(GLOB_RECURSE src_files_nextgameplay
 )
 
 # --- Optional Engine Modules (src/Modules/<Name>, one static library each) ---
-set(GK_MODULE_NAMES LDrawLoader ScadLoader NextAI NextRemote NextRmlUi DevTools)
+set(GK_MODULE_NAMES LDrawLoader ScadLoader SplatLoader NextAI NextRemote NextRmlUi DevTools)
 if(GK_WITH_NEXT_QUICKJS AND NOT ANDROID)
     list(APPEND GK_MODULE_NAMES NextQuickJS)
 endif()

@@ -17,6 +17,7 @@ struct ShowFlags final
     bool ShowDebugSkeleton = false;
     bool ShowGrid = true;
     bool ShowWireframe = false;
+    bool ShowGaussianSplats = true;
 };
 
 }

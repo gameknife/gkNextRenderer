@@ -215,6 +215,7 @@ private:
         std::shared_ptr<std::vector<Assets::LightObject>> lights;
         std::shared_ptr<std::vector<Assets::AnimationTrack>> tracks;
         std::shared_ptr<std::vector<Assets::Skeleton>> skeletons;
+        std::shared_ptr<std::vector<Assets::FGaussianSplatData>> splats;
         std::shared_ptr<Assets::EnvironmentSetting> cameraState;
     };
 

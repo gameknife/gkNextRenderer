@@ -49,6 +49,13 @@ export class RenderComponent {
     ToggleRayCastVisible(): boolean;
     ToggleVisible(): boolean;
 }
+export class GaussianSplatComponent {
+    readonly SplatModelId: number;
+    Visible: boolean;
+    RayCastVisible: boolean;
+    OpacityScale: number;
+    ToggleVisible(): boolean;
+}
 export class PhysicsComponent {
     AngularDamping: number;
     CollisionPresets: string;

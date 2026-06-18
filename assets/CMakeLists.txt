@@ -11,7 +11,7 @@ endif()
 # ============================================================
 # 非 Shader 资源 - 目录拷贝
 # ============================================================
-set(ASSET_DIRS anims configs fonts legos locale models omr paks remote rmlui_demo scad scripts sfx sounds textures typescript)
+set(ASSET_DIRS anims configs fonts legos locale models omr paks remote rmlui_demo scad sog scripts sfx sounds textures typescript)
 
 # 收集所有资源文件
 set(all_asset_files "")
