@@ -1,5 +1,5 @@
 ---
-title: "gnb CLI"
+title: "gnb CLI 手册"
 category: guide
 status: 现行
 owner: engine
@@ -7,183 +7,178 @@ created: 2026-05-09
 last_updated: 2026-06-12
 ---
 
-# gnb CLI
+# gnb CLI 手册
 
-`gnb` is the single build entry point for gkNextEngine. Use `./gnb.bat` on
-Windows and `./gnb.sh` on macOS/Linux when a system-wide `gnb` is not installed.
+`gnb` 是 gkNextEngine 的统一构建入口。没有安装系统级 `gnb` 时，Windows 使用 `./gnb.bat`，macOS/Linux 使用 `./gnb.sh`。
 
-For implementation details and architecture notes, see
-[gnb-tech-stack.md](gnb-tech-stack.md).
+实现细节和架构说明见 [gnb-tech-stack.md](gnb-tech-stack.md)。
 
-## Setup
+## 初始化
 
-Prepare vcpkg, external SDKs, TypeScript compiler, Slang, and optional assets:
+准备 vcpkg、外部 SDK、TypeScript 编译器、Slang 和可选资源：
 
 ```bash
 ./gnb.sh setup
 ```
 
-Skip optional assets:
+跳过可选资源：
 
 ```bash
 ./gnb.sh setup --skip-paks
 ```
 
-Refresh vcpkg:
+刷新 vcpkg：
 
 ```bash
 ./gnb.sh setup --refresh
 ```
 
-## Build
+## 构建
 
-Build the default platform preset:
+构建默认平台 preset：
 
 ```bash
 ./gnb.sh build
 ```
 
-Build a target:
+构建指定 target：
 
 ```bash
 ./gnb.sh build gkNextEditor
 ```
 
-Clean and reconfigure:
+清理并重新 configure：
 
 ```bash
 ./gnb.sh build --clean --reconfigure
 ```
 
-Disable unity builds or enable LTO:
+关闭 unity build 或启用 LTO：
 
 ```bash
 ./gnb.sh build --no-unity
 ./gnb.sh build --lto
 ```
 
-## Run
+## 运行
 
-List runnable applications:
+列出可运行应用：
 
 ```bash
 ./gnb.sh run
 ```
 
-Run a target:
+运行指定 target：
 
 ```bash
 ./gnb.sh run BrickPlayer
 ```
 
-Pass application arguments:
+透传应用参数：
 
 ```bash
 ./gnb.sh run -- --scene=foo --present-mode=mailbox
 ```
 
-## Dashboard
+## Dashboard 控制台
 
-Bare `gnb` or the explicit command opens the dashboard in a native Wails window:
+直接运行 `gnb` 或显式执行 dashboard 命令，会在 Wails 原生窗口中打开 dashboard：
 
 ```bash
 ./gnb.sh
 ./gnb.sh dashboard
 ```
 
-The Wails asset server handles regular htmx requests. A random loopback HTTP
-port carries SSE build logs and streaming chat because WebView asset responses
-cannot be flushed incrementally. No external browser is required.
+Wails asset server 负责普通 htmx 请求。由于 WebView asset 响应不能增量 flush，构建日志 SSE 和流式 Chat 会走一个随机 loopback HTTP 端口。不需要外部浏览器。
 
-Compatibility modes:
+兼容模式：
 
 ```bash
-./gnb.sh dashboard --browser  # open in the system browser
-./gnb.sh dashboard --no-open  # server only
+./gnb.sh dashboard --browser  # 在系统浏览器中打开
+./gnb.sh dashboard --no-open  # 只启动 server
 ./gnb.sh dashboard --port 7788
 ```
 
-Windows uses the WebView2 runtime; release and shim builds embed its bootstrapper.
-Linux/macOS use the platform WebKit runtime required by Wails.
+Windows 使用 WebView2 runtime；release 和 shim 构建会内嵌它的 bootstrapper。Linux/macOS 使用 Wails 所需的平台 WebKit runtime。
 
-## Test And Visual
+## 测试与可视化
 
-Run unit tests:
+运行单元测试：
 
 ```bash
 ./gnb.sh test "[Unit]"
 ```
 
-Run visual tests:
+运行可视化测试：
 
 ```bash
 ./gnb.sh visual
 ```
 
-## Mobile
+## 移动端
 
-Android:
+Android：
 
 ```bash
 ./gnb.sh android release
 ```
 
-iOS:
+iOS：
 
 ```bash
-./gnb.sh ios              # default: skip code signing
-./gnb.sh ios --codesign   # enable code signing
+./gnb.sh ios              # 默认：跳过代码签名
+./gnb.sh ios --codesign   # 启用代码签名
 ```
 
-## Paks
+## Pak 资源
 
-Fetch all optional assets:
+拉取全部可选资源：
 
 ```bash
 ./gnb.sh paks fetch
 ```
 
-Fetch selected groups:
+拉取指定资源组：
 
 ```bash
 ./gnb.sh paks fetch optional ldraw
 ```
 
-List status:
+列出状态：
 
 ```bash
 ./gnb.sh paks list
 ```
 
-Publish selected assets:
+发布指定资源：
 
 ```bash
 GITHUB_TOKEN=... ./gnb.sh paks publish optional
 ```
 
-## Package
+## 打包
 
-Create a desktop package:
+创建桌面分发包：
 
 ```bash
 ./gnb.sh package linux --version v1.0.0
 ```
 
-Create a MagicaLego package:
+创建 MagicaLego 分发包：
 
 ```bash
 ./gnb.bat package magicalego --version v1.0.0
 ```
 
-## Info And Doctor
+## 信息与诊断
 
-Print environment info:
+打印环境信息：
 
 ```bash
 ./gnb.sh info
 ```
 
-Check required tools:
+检查必要工具：
 
 ```bash
 ./gnb.sh doctor
@@ -191,42 +186,35 @@ Check required tools:
 
 ## AVIF
 
-AVIF remains a manual CMake feature and is not exposed as a `gnb build` flag:
+AVIF 仍然是手动 CMake feature，不通过 `gnb build` flag 暴露：
 
 ```bash
 cmake --preset windows -DENABLE_AVIF=ON -DVCPKG_MANIFEST_FEATURES=avif
 ./gnb.bat build
 ```
 
-## Publish gnb Binaries
+## 发布 gnb 二进制
 
-`./gnb.bat` and `gnb.sh` use the `paks-latest` GitHub release as their single
-bootstrap source. Pushes to `main` / `dev` that modify `tools/gnb` Go sources
-automatically rebuild and publish the platform binaries plus `gnb-version.txt`
-through `.github/workflows/gnb-release.yml`.
+`./gnb.bat` 和 `gnb.sh` 使用 `paks-latest` GitHub release 作为唯一 bootstrap 来源。推送到 `main` / `dev` 且修改了 `tools/gnb` Go 源码时，`.github/workflows/gnb-release.yml` 会自动重新构建并发布各平台二进制以及 `gnb-version.txt`。
 
-The shims compare the local cached version with `gnb-version.txt` and refresh
-their cached bootstrap binary automatically when a newer release is available.
-If Go is installed locally, the shims still prefer a local rebuild from
-`tools/gnb`.
+shim 会把本地缓存版本与 `gnb-version.txt` 对比；当有更新 release 时，会自动刷新缓存的 bootstrap 二进制。如果本机安装了 Go，shim 仍会优先从 `tools/gnb` 本地重新构建。
 
-For manual publishing or backfilling from a machine with Go and GitHub CLI
-installed:
+在安装了 Go 和 GitHub CLI 的机器上手动发布或补发：
 
 ```powershell
 gh auth login
 .\scripts\publish-gnb.ps1
 ```
 
-Preview the local build and target release URL without uploading:
+只预览本地构建和目标 release URL，不上传：
 
 ```powershell
 .\scripts\publish-gnb.ps1 -DryRun
 ```
 
-## Todo Workflow
+## TODO 工作流
 
-List and inspect `.spec/TODO.md` tasks:
+列出并查看 `.spec/TODO.md` 任务：
 
 ```bash
 ./gnb.sh todo list
@@ -235,14 +223,14 @@ List and inspect `.spec/TODO.md` tasks:
 ./gnb.sh todo next --wait --timeout 590s --json
 ```
 
-Add a task, optionally creating a linked `specs/<id>.md` background file:
+添加任务，可选择同时创建关联的 `specs/<id>.md` 背景文件：
 
 ```bash
 ./gnb.sh todo add -t feat -p P1 "重构材质缓存" --spec
 ./gnb.sh todo add -t feat "重构材质缓存" --spec-from docs/material-cache.md
 ```
 
-Maintain ordering between `下一步` and `待规划`:
+维护 `下一步` 与 `待规划` 中的任务顺序：
 
 ```bash
 ./gnb.sh todo move 00021 --to next
@@ -250,11 +238,11 @@ Maintain ordering between `下一步` and `待规划`:
 ./gnb.sh todo swap 00018 00021
 ```
 
-Delete a task (defaults to also removing `specs/<id>.md`):
+删除任务（默认也删除 `specs/<id>.md`）：
 
 ```bash
-./gnb.sh todo delete 00021          # dry-run: show what would be removed
-./gnb.sh todo delete 00021 -y       # actually remove the task line + its spec
+./gnb.sh todo delete 00021          # dry-run：显示将删除的内容
+./gnb.sh todo delete 00021 -y       # 实际删除任务行及其 spec
 ./gnb.sh todo delete 00021 -y --keep-spec
-./gnb.sh todo delete 00021 -y --also-files   # also drop journal/blocker
+./gnb.sh todo delete 00021 -y --also-files   # 同时删除 journal/blocker
 ```

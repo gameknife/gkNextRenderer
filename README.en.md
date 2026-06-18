@@ -90,6 +90,7 @@ This project is especially relevant if you are interested in:
 - **Single-Draw GPU-Driven Submit**
 - **Hardware / Software Ray Tracing**
 - **Temporal Reprojection / JBF / FSR / DLSS RR**
+- **NVIDIA Streamline DLSS SR / RR / Frame Generation on Windows**
 
 ### Engine and tooling
 

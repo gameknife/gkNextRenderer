@@ -20,6 +20,7 @@ EngineTestFixture::EngineTestFixture()
         "--height=600",
         "--fastexit=false",
         "--no-shader-hotreload",
+        "--disable-streamline",
         // Hidden window: tests render a real swapchain but should never pop a window or steal focus.
         "--hidden-window"
     };

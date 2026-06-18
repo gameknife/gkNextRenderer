@@ -968,6 +968,10 @@ void NextRendererGameInstance::DrawSettings()
                            if (ImGui::Combo("##UpscaleMethod", &upscaleMethod, methods, IM_ARRAYSIZE(methods)))
                            {
                                userSetting.DLSS = upscaleMethod == 1 && GetEngine().GetRenderer().SupportDLSS();
+                               if (!userSetting.DLSS)
+                               {
+                                   userSetting.DLSSG = false;
+                               }
                                GetEngine().GetRenderer().RequestRecreateSwapChain();
                                return true;
                            }
@@ -991,6 +995,51 @@ void NextRendererGameInstance::DrawSettings()
         if (upscaleMethod == 1 && !GetEngine().GetRenderer().SupportDLSS())
         {
             ImGui::TextDisabled("DLSS not supported on this hardware.");
+        }
+
+        const bool canUseFrameGeneration =
+            upscaleMethod == 1 &&
+            GetEngine().GetRenderer().SupportDLSSG() &&
+            GetEngine().GetRenderer().SupportReflex();
+        DrawSettingRow("Frame Generation",
+                       [&]()
+                       {
+                           bool enabled = userSetting.DLSSG;
+                           ImGui::BeginDisabled(!canUseFrameGeneration);
+                           const bool changed = ImGui::Checkbox("##DLSSG", &enabled);
+                           ImGui::EndDisabled();
+                           if (changed)
+                           {
+                               userSetting.DLSSG = enabled && canUseFrameGeneration;
+                               GetEngine().GetRenderer().RequestRecreateSwapChain();
+                               return true;
+                           }
+                           return false;
+                       });
+
+        int frameMultiplier = static_cast<int>(std::clamp(userSetting.DLSSGFrameMultiplier, 2u, 4u));
+        if (DrawIntSetting("FG Multiplier", &frameMultiplier, 2, 4))
+        {
+            userSetting.DLSSGFrameMultiplier = static_cast<uint32_t>(std::clamp(frameMultiplier, 2, 4));
+            GetEngine().GetRenderer().RequestRecreateSwapChain();
+        }
+
+        int frameLimitFps = static_cast<int>(std::min(userSetting.DLSSGFrameLimitFps, 1000u));
+        if (DrawIntSetting("FG Base FPS Limit", &frameLimitFps, 0, 1000))
+        {
+            userSetting.DLSSGFrameLimitFps = static_cast<uint32_t>(std::clamp(frameLimitFps, 0, 1000));
+        }
+
+        const auto frameGenerationState = GetEngine().GetRenderer().GetFrameGenerationState();
+        if (userSetting.DLSSG && frameGenerationState.valid)
+        {
+            ImGui::TextDisabled("DLSS-G presented x%u, status 0x%X",
+                                std::max(1u, frameGenerationState.numFramesActuallyPresented),
+                                frameGenerationState.statusMask);
+        }
+        if (upscaleMethod == 1 && !canUseFrameGeneration)
+        {
+            ImGui::TextDisabled("DLSS Frame Generation requires Streamline DLSS-G and Reflex support.");
         }
         NextUI::Theme::EndPanelSection();
     }

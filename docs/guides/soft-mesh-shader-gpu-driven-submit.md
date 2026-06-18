@@ -40,7 +40,7 @@ struct SoftMeshShaderResources
 
 C++ 侧在 `Scene::RebuildMeshBuffer()` 中创建这些 buffer，并把资源表地址写入 `GPUScene::SoftMeshShaderResourcesAddress`。
 
-### Buffer 用途
+### 缓冲区用途
 
 | Buffer | 作用 | 尺寸策略 |
 |---|---|---|
@@ -61,7 +61,7 @@ Slot 约定：
 | `3` | sun shadow cascade 2 |
 | `4` | sun shadow cascade 3 |
 
-## Primitive 编码
+## 图元编码
 
 Expand 阶段写出的每个 primitive 是一个 `uint`：
 
@@ -76,7 +76,7 @@ prim = ((instanceIdx & 0x7FFF) << 17) | (triangleIdx & 0x1FFFF)
 
 当前编码把 `instanceIdx` 放在高 15 bit、`triangleIdx` 放在低 17 bit。也就是说，单个 section 的三角形索引必须小于 `131072`，可编码的 non-zero instance 范围是 1..32767。这个限制来自 32-bit visibility/primitive id 的历史编码约束，后续如果要超过该规模，需要改成 64-bit primitive stream 或拆分更多 draw slot。
 
-## 主 Pass 流程
+## 主渲染 Pass 流程
 
 实现入口：`VulkanBaseRenderer::DispatchGpuCulling()`
 
@@ -182,7 +182,7 @@ vkCmdDrawIndirect(commandBuffer, scene.SoftMeshShaderDrawArgBuffer().Handle(),
                   0, 1, sizeof(VkDrawIndirectCommand));
 ```
 
-## Shadow Pass 流程
+## 阴影 Pass 流程
 
 实现入口：`VulkanBaseRenderer::DispatchSunShadow()`
 
@@ -216,7 +216,7 @@ uint prim = prims[scene.custom_data_2 + vertexIndex / 3];
 gpuScene.custom_data_2 = cascade * scene.GetMaxSceneTriangles();
 ```
 
-## Synchronization
+## 同步
 
 SoftMeshShader 路径依赖几个关键 barrier：
 
@@ -268,4 +268,3 @@ SoftMeshShader 路径依赖几个关键 barrier：
 - 渲染冒烟：`./gnb.bat run gkNextRenderer`，确认日志出现 `uploaded scene [...] to gpu`
 - 单元测试：`out/build/windows/bin/gkNextUnitTests.exe`
 - 渲染改动：运行 `gkNextVisualTest`，重点检查 visibility buffer、wireframe overlay、CSM shadow、selected/hovered object id 是否一致。
-

@@ -1,5 +1,5 @@
 ---
-title: "CLI Spec"
+title: "CLI 规格"
 category: guide
 status: 现行
 owner: engine
@@ -7,35 +7,35 @@ created: 2026-01-02
 last_updated: 2026-06-07
 ---
 
-# CLI Spec
+# CLI 规格
 
-The repository build CLI is `gnb`.
+仓库构建 CLI 是 `gnb`。
 
-## Build
+## 构建
 
 ```bash
 ./gnb.sh build [target]
 ./gnb.bat build [target]
 ```
 
-Options: `--clean`, `--reconfigure`, `--jobs N`, `--no-unity`, `--lto`, `--print-cmd`.
+选项：`--clean`、`--reconfigure`、`--jobs N`、`--no-unity`、`--lto`、`--print-cmd`。
 
-## Run
+## 运行
 
 ```bash
 ./gnb.sh run [target] [-- app-args]
 ./gnb.bat run [target] [-- app-args]
 ```
 
-Options: `--bin-dir`, `--present-mode`, `--scene`, `--list`, `--dry-run`.
+选项：`--bin-dir`、`--present-mode`、`--scene`、`--list`、`--dry-run`。
 
-## Setup
+## 初始化
 
 ```bash
 ./gnb.sh setup
 ./gnb.bat setup
 ```
 
-Options: `--skip-paks`, `--vcpkg-only`, `--refresh`.
+选项：`--skip-paks`、`--vcpkg-only`、`--refresh`。
 
-See [gnb-cli.md](gnb-cli.md) for the full command manual.
+完整命令手册见 [gnb-cli.md](gnb-cli.md)。

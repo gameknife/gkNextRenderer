@@ -32,6 +32,7 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Rendering/Shadow/ShadowMapPass.hpp"
+#include "Engine/Rendering/Upscaler/IUpscaler.hpp"
 #include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
 #include <utility>
 
@@ -105,12 +106,73 @@ namespace
     {
         if (HasDeviceExtension(physicalDevice, extensionName))
         {
-            requiredExtensions.push_back(extensionName);
+            if (std::find(requiredExtensions.begin(), requiredExtensions.end(), extensionName) == requiredExtensions.end())
+            {
+                requiredExtensions.push_back(extensionName);
+            }
             return true;
         }
 
         SPDLOG_WARN("{} disabled because device extension {} is unavailable", featureName, extensionName);
         return false;
+    }
+
+    Rendering::Upscaler::FImageResource MakeRenderImageResource(
+        const Vulkan::RenderImage* image,
+        VkImageLayout layout,
+        VkImageUsageFlags usage)
+    {
+        if (image == nullptr)
+        {
+            return {};
+        }
+
+        const auto& vkImage = image->GetImage();
+        return {
+            vkImage.Handle(),
+            image->GetImageMemory().Handle(),
+            image->GetImageView().Handle(),
+            vkImage.Extent(),
+            vkImage.Format(),
+            layout,
+            usage};
+    }
+
+    Rendering::Upscaler::FImageResource MakeDepthResource(
+        const Vulkan::DepthBuffer& depthBuffer,
+        VkExtent2D extent,
+        VkImageLayout layout)
+    {
+        return {
+            depthBuffer.GetImage().Handle(),
+            depthBuffer.GetImageMemory().Handle(),
+            depthBuffer.ImageView().Handle(),
+            extent,
+            depthBuffer.Format(),
+            layout,
+            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT};
+    }
+
+    Rendering::Upscaler::FImageResource MakeSwapchainResource(
+        const Vulkan::SwapChain& swapChain,
+        uint32_t imageIndex,
+        VkExtent2D extent,
+        VkImageLayout layout)
+    {
+        if (imageIndex >= swapChain.Images().size() || imageIndex >= swapChain.ImageViews().size())
+        {
+            return {};
+        }
+
+        return {
+            swapChain.Images()[imageIndex],
+            VK_NULL_HANDLE,
+            swapChain.ImageViews()[imageIndex]->Handle(),
+            extent,
+            swapChain.Format(),
+            layout,
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT};
     }
 
 }
@@ -185,6 +247,7 @@ namespace Vulkan
         forceSDR_ = GOption->ForceSDR;
 
         caps_.supportRayTracing = false;
+        upscaler_ = Rendering::Upscaler::CreateStreamlineUpscaler();
     }
 
     VulkanBaseRenderer::~VulkanBaseRenderer()
@@ -291,15 +354,19 @@ namespace Vulkan
         SelectPhysicalDevice(GOption->GpuIdx);
         PrintVulkanSwapChainInformation(*this);
         frame_.currentFrame = 0;
-
-        caps_.supportDLSS = caps_.streamlineExtsEnabled;
-        caps_.supportDLSSRR = caps_.streamlineExtsEnabled;
     }
 
     void VulkanBaseRenderer::End()
     {
+        if (ctx_.device)
+        {
+            ctx_.device->WaitIdle();
+        }
+        if (upscaler_)
+        {
+            upscaler_->Shutdown();
+        }
         StreamlineWrapper::Shutdown();
-        ctx_.device->WaitIdle();
         ctx_.gpuTimer.reset();
         ctx_.globalTexturePool.reset();
     }
@@ -313,6 +380,11 @@ namespace Vulkan
     {
         scene_ = scene;
         RequestClearAmbientCubeCache();
+    }
+
+    Rendering::Upscaler::FFrameGenerationState VulkanBaseRenderer::GetFrameGenerationState() const
+    {
+        return upscaler_ ? upscaler_->FrameGenerationState() : Rendering::Upscaler::FFrameGenerationState{};
     }
 
     Assets::UniformBufferObject VulkanBaseRenderer::GetUniformBufferObject(
@@ -503,21 +575,29 @@ namespace Vulkan
         storage16BitFeatures.storagePushConstant16 = supportedStorage16BitFeatures.storagePushConstant16;
 
 #if WITH_STREAMLINE
-        VkPhysicalDeviceVulkan12Features deviceVulkan12Features = {};
-        deviceVulkan12Features.timelineSemaphore = true;
-        deviceVulkan12Features.pNext = &shaderDrawParametersFeatures;
-        const bool hasStreamlineExtensions =
+        VkPhysicalDeviceTimelineSemaphoreFeatures timelineSemaphoreFeatures = {};
+        timelineSemaphoreFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
+        timelineSemaphoreFeatures.timelineSemaphore = true;
+        timelineSemaphoreFeatures.pNext = &shaderDrawParametersFeatures;
+        const auto streamlineCaps = StreamlineWrapper::AppendRequiredDeviceExtensions(physicalDevice, requiredExtensions);
+        const bool hasLegacyStreamlineExtensions =
             AddDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
                                           VK_NVX_BINARY_IMPORT_EXTENSION_NAME, "Streamline binary import") &&
             AddDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
-                                          VK_NVX_IMAGE_VIEW_HANDLE_EXTENSION_NAME, "Streamline image view handles") &&
-            AddDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
-                                          VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, "Streamline buffer device address") &&
-            AddDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
-                                          VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, "Streamline EXT buffer device address");
+                                          VK_NVX_IMAGE_VIEW_HANDLE_EXTENSION_NAME, "Streamline image view handles");
+        AddDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
+                                      VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, "Streamline buffer device address");
+        if (HasDeviceExtension(physicalDevice, VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME))
+        {
+            enableDeviceExtensionIfAvailable(VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+        }
+        const bool hasStreamlineExtensions =
+            streamlineCaps.streamlineInitialized &&
+            streamlineCaps.requestedDeviceExtensionsAvailable &&
+            hasLegacyStreamlineExtensions;
         if (hasStreamlineExtensions)
         {
-            storage16BitFeatures.pNext = &deviceVulkan12Features;
+            storage16BitFeatures.pNext = &timelineSemaphoreFeatures;
             caps_.streamlineExtsEnabled = true;
         }
         else
@@ -535,6 +615,29 @@ namespace Vulkan
 
     void VulkanBaseRenderer::OnDeviceSet()
     {
+        if (upscaler_)
+        {
+            Rendering::Upscaler::FDeviceInfo deviceInfo{};
+            deviceInfo.device = ctx_.device->Handle();
+            deviceInfo.instance = ctx_.instance->Handle();
+            deviceInfo.physicalDevice = ctx_.device->PhysicalDevice();
+            deviceInfo.computeQueueIndex = 0;
+            deviceInfo.computeQueueFamily = ctx_.device->ComputeFamilyIndex();
+            deviceInfo.graphicsQueueIndex = 0;
+            deviceInfo.graphicsQueueFamily = ctx_.device->GraphicsFamilyIndex();
+            deviceInfo.opticalFlowQueueIndex = 0;
+            deviceInfo.opticalFlowQueueFamily = UINT32_MAX;
+            deviceInfo.useNativeOpticalFlowMode = false;
+
+            auto featureCaps = StreamlineWrapper::CachedCaps();
+            upscaler_->OnDeviceCreated(deviceInfo, featureCaps);
+            caps_.supportDLSS = caps_.streamlineExtsEnabled && featureCaps.supportDLSS;
+            caps_.supportDLSSRR = caps_.streamlineExtsEnabled && featureCaps.supportDLSSRR;
+            caps_.supportDLSSG = caps_.streamlineExtsEnabled && featureCaps.supportDLSSG;
+            caps_.supportReflex = featureCaps.supportReflex;
+            caps_.supportPCL = featureCaps.supportPCL;
+        }
+
         if (caps_.supportRayTracing)
         {
             rt_->properties.reset(new RayTracing::RayTracingProperties(Device()));
@@ -624,6 +727,23 @@ namespace Vulkan
             ctx_.globalTexturePool->BindStorageTexture( Assets::Bindless::RT_SWAPCHAIN0 + i, *frame_.swapChain->ImageViews()[i] );
         }
 
+        frameGeneration_.hudlessImages.clear();
+        if (caps_.supportDLSSG)
+        {
+            frameGeneration_.hudlessImages.reserve(frame_.swapChain->Images().size());
+            for (size_t i = 0; i < frame_.swapChain->Images().size(); ++i)
+            {
+                const std::string debugName = fmt::format("DLSS-G HUD-less {}", i);
+                frameGeneration_.hudlessImages.emplace_back(std::make_unique<RenderImage>(
+                    Device(),
+                    frame_.swapChain->OutputExtent(),
+                    frame_.swapChain->Format(),
+                    VK_IMAGE_TILING_OPTIMAL,
+                    VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                    false,
+                    debugName.c_str()));
+            }
+        }
     }
 
     void VulkanBaseRenderer::CreateSwapChain()
@@ -634,24 +754,33 @@ namespace Vulkan
             ctx_.window->WaitForEvents();
         }
 
-        // SwapChaine
-        float scale = 1.0f;
-        auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        // SwapChain
+        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        const VkPresentModeKHR requestedPresentMode =
+            caps_.supportDLSSG && settings.DLSSG
+                ? VK_PRESENT_MODE_IMMEDIATE_KHR
+                : presentMode_;
+        frame_.swapChain.reset(new class SwapChain(*ctx_.device, requestedPresentMode, forceSDR_));
+        VkExtent2D renderExtent = frame_.swapChain->Extent();
         if (!GOption->ReferenceMode)
         {
-            switch(settings.SuperResolution)
+            const bool dlssEnabled = caps_.supportDLSS && settings.DLSS && upscaler_;
+            if (upscaler_)
             {
-                case 0: scale = 1.5f; break; // Quality
-                case 1: scale = 1.7f; break; // Balanced
-                case 2: scale = 2.0f; break; // Performance
-                case 3: scale = 3.0f; break; // UltraPerformance
-                case 4: scale = 1.0f; break; // Native
-                default: scale = 1.5f; break;
+                const auto optimal = upscaler_->GetOptimalRenderSettings(
+                    settings.SuperResolution,
+                    frame_.swapChain->Extent(),
+                    dlssEnabled);
+                renderExtent = optimal.renderExtent;
+            }
+            else
+            {
+                const auto& modeInfo = Rendering::Upscaler::GetUpscaleModeInfo(settings.SuperResolution);
+                renderExtent = Rendering::Upscaler::ScaleExtent(frame_.swapChain->Extent(), modeInfo.fallbackScale);
             }
         }
-        
-        frame_.swapChain.reset(new class SwapChain(*ctx_.device, presentMode_, forceSDR_));
-        frame_.swapChain->UpdateRenderViewport(0, 0, (uint32_t)(frame_.swapChain->Extent().width / scale), (uint32_t)(frame_.swapChain->Extent().height / scale));
+
+        frame_.swapChain->UpdateRenderViewport(0, 0, renderExtent.width, renderExtent.height);
         frame_.swapChain->UpdateOutputViewport( 0, 0, frame_.swapChain->Extent().width, frame_.swapChain->Extent().height);
 
         // depthBuffer
@@ -737,6 +866,11 @@ namespace Vulkan
 
     void VulkanBaseRenderer::DeleteSwapChain()
     {
+        if (upscaler_)
+        {
+            upscaler_->OnSwapChainDestroyed();
+        }
+
         for (auto& logicRenderer : logicRenderers_.renderers)
         {
             logicRenderer.second->DeleteSwapChain();
@@ -759,6 +893,7 @@ namespace Vulkan
         
         screenshot_.image.reset();
         screenshot_.imageMemory.reset();
+        frameGeneration_.hudlessImages.clear();
         frame_.commandBuffers.reset();
         overlay_.wireframeFrameBuffers.clear();
         overlay_.wireframePipeline.reset();
@@ -797,6 +932,10 @@ namespace Vulkan
 
     void VulkanBaseRenderer::RecreateSwapChain()
     {
+        if (upscaler_)
+        {
+            upscaler_->OnSwapChainDestroyed();
+        }
         ctx_.device->WaitIdle();
         DeleteSwapChain();
         CreateSwapChain();
@@ -864,10 +1003,36 @@ namespace Vulkan
         {
             SCOPED_CPU_TIMER("draw-frame");
             const auto noTimeout = std::numeric_limits<uint64_t>::max();
+            const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+            const bool frameGenerationEnabled =
+                caps_.supportDLSSG &&
+                settings.DLSSG &&
+                NextEngine::GetInstance()->GetEngineStatus() != NextRenderer::EApplicationStatus::Loading;
+
+            frame_.streamlineFrameToken = upscaler_
+                ? upscaler_->BeginFrame(static_cast<uint32_t>(frame_.frameCount),
+                                        frameGenerationEnabled,
+                                        settings.DLSSGFrameLimitFps)
+                : Rendering::Upscaler::FFrameToken{};
+            if (upscaler_ && frame_.streamlineFrameToken)
+            {
+                upscaler_->ReflexSleep(frame_.streamlineFrameToken);
+                if (frame_.frameCount > 0 && frame_.frameCount % 60 == 0)
+                {
+                    upscaler_->UpdateFrameGenerationState();
+                }
+                upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::SimulationStart,
+                                     frame_.streamlineFrameToken);
+            }
 
             {
                 SCOPED_CPU_TIMER("prepare");
                 BeforeNextFrame();
+            }
+            if (upscaler_ && frame_.streamlineFrameToken)
+            {
+                upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::SimulationEnd,
+                                     frame_.streamlineFrameToken);
             }
 
             {
@@ -882,8 +1047,8 @@ namespace Vulkan
             auto result = VkResult(VK_SUCCESS);
             {
                 SCOPED_CPU_TIMER("acquire-frame");
-                result = vkAcquireNextImageKHR(ctx_.device->Handle(), frame_.swapChain->Handle(), noTimeout,
-                                                imageAvailableSemaphore, nullptr, &frame_.currentImageIndex);
+                result = StreamlineWrapper::AcquireNextImageKHR(ctx_.device->Handle(), frame_.swapChain->Handle(), noTimeout,
+                                                                imageAvailableSemaphore, nullptr, &frame_.currentImageIndex);
             }
             
             if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
@@ -939,6 +1104,25 @@ namespace Vulkan
                     PostRender(commandBuffer, frame_.currentImageIndex);
                 }
 
+                if (upscaler_ && frameGenerationEnabled)
+                {
+                    SCOPED_GPU_TIMER("dlssg-tag");
+                    CaptureFrameGenerationHudless(commandBuffer, frame_.currentImageIndex);
+                    auto inputs = BuildUpscalerFrameInputs(
+                        commandBuffer,
+                        frame_.currentImageIndex,
+                        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+                    if (frame_.currentImageIndex < frameGeneration_.hudlessImages.size())
+                    {
+                        inputs.hudlessColor = MakeRenderImageResource(
+                            frameGeneration_.hudlessImages[frame_.currentImageIndex].get(),
+                            VK_IMAGE_LAYOUT_GENERAL,
+                            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+                    }
+                    inputs.enableDLSSG = true;
+                    upscaler_->TagFrameGeneration(inputs);
+                }
+
                 if (delegates_.postRender)
                 {
                     SCOPED_GPU_TIMER("imgui");
@@ -966,6 +1150,12 @@ namespace Vulkan
                 SCOPED_CPU_TIMER("submit");
                 frame_.currentFence = &(frame_.inFlightFences[frame_.currentFrame]);
                 {
+                    if (upscaler_ && frame_.streamlineFrameToken)
+                    {
+                        upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::RenderSubmitStart,
+                                             frame_.streamlineFrameToken);
+                    }
+
                     submitInfo.waitSemaphoreCount = 1;
                     submitInfo.pWaitSemaphores = waitSemaphores;
                     submitInfo.pWaitDstStageMask = waitStages;
@@ -978,6 +1168,12 @@ namespace Vulkan
 
                     Check(vkQueueSubmit(ctx_.device->GraphicsQueue(), 1, &submitInfo, frame_.currentFence->Handle()),
                           "submit draw command buffer");
+
+                    if (upscaler_ && frame_.streamlineFrameToken)
+                    {
+                        upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::RenderSubmitEnd,
+                                             frame_.streamlineFrameToken);
+                    }
                 }
             }
 
@@ -993,7 +1189,19 @@ namespace Vulkan
                 presentInfo.pImageIndices = &frame_.currentImageIndex;
                 presentInfo.pResults = nullptr; // Optional
 
-                result = vkQueuePresentKHR(ctx_.device->PresentQueue(), &presentInfo);
+                if (upscaler_ && frame_.streamlineFrameToken)
+                {
+                    upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::PresentStart,
+                                         frame_.streamlineFrameToken);
+                }
+
+                result = StreamlineWrapper::QueuePresentKHR(ctx_.device->PresentQueue(), &presentInfo);
+
+                if (upscaler_ && frame_.streamlineFrameToken)
+                {
+                    upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::PresentEnd,
+                                         frame_.streamlineFrameToken);
+                }
 
                 if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
                 {
@@ -1117,17 +1325,17 @@ namespace Vulkan
             {
                 SCOPED_GPU_TIMER("resolve pass");
 
-                //SwapChain().InsertBarrierToWrite(commandBuffer, imageIndex);
+                SwapChain().InsertBarrierToWrite(commandBuffer, imageIndex);
                 GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                                           VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 
-#if WITH_STREAMLINE
-                if (SupportDLSS() && NextEngine::GetInstance()->GetUserSettings().DLSS)
+                bool resolvedByUpscaler = false;
+                if (upscaler_ && SupportDLSS() && NextEngine::GetInstance()->GetUserSettings().DLSS)
                 {
-                    UpdateStreamline(commandBuffer, imageIndex);
+                    resolvedByUpscaler = upscaler_->Evaluate(
+                        BuildUpscalerFrameInputs(commandBuffer, imageIndex, VK_IMAGE_LAYOUT_GENERAL));
                 }
-                else
-#endif
+                if (!resolvedByUpscaler)
                 {
 #if false
                 std::array<uint32_t, 5> pushConst = { imageIndex, uint32_t(SwapChain().OutputOffset().x), uint32_t(SwapChain().OutputOffset().y), uint32_t(SwapChain().OutputExtent().width), uint32_t(SwapChain().OutputExtent().height) };
@@ -1194,6 +1402,149 @@ namespace Vulkan
     {
         frame_.lastUBO = GetUniformBufferObject(frame_.swapChain->RenderOffset(), frame_.swapChain->OutputExtent());
         frame_.uniformBuffers[imageIndex].SetValue(frame_.lastUBO);
+    }
+
+    void VulkanBaseRenderer::CaptureFrameGenerationHudless(
+        VkCommandBuffer commandBuffer,
+        const uint32_t imageIndex)
+    {
+        if (imageIndex >= frameGeneration_.hudlessImages.size())
+        {
+            return;
+        }
+
+        const VkImage swapchainImage = frame_.swapChain->Images()[imageIndex];
+        auto& hudlessImage = *frameGeneration_.hudlessImages[imageIndex];
+
+        ImageMemoryBarrier::FullInsert(
+            commandBuffer,
+            swapchainImage,
+            0,
+            VK_ACCESS_TRANSFER_READ_BIT,
+            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        hudlessImage.InsertBarrier(
+            commandBuffer,
+            0,
+            VK_ACCESS_TRANSFER_WRITE_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+        VkImageCopy copyRegion{};
+        copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        copyRegion.extent = {
+            frame_.swapChain->OutputExtent().width,
+            frame_.swapChain->OutputExtent().height,
+            1};
+        vkCmdCopyImage(
+            commandBuffer,
+            swapchainImage,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            hudlessImage.GetImage().Handle(),
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1,
+            &copyRegion);
+
+        hudlessImage.InsertBarrier(
+            commandBuffer,
+            VK_ACCESS_TRANSFER_WRITE_BIT,
+            VK_ACCESS_SHADER_READ_BIT,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_GENERAL);
+        ImageMemoryBarrier::FullInsert(
+            commandBuffer,
+            swapchainImage,
+            VK_ACCESS_TRANSFER_READ_BIT,
+            0,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+    }
+
+    Rendering::Upscaler::FFrameInputs VulkanBaseRenderer::BuildUpscalerFrameInputs(
+        VkCommandBuffer commandBuffer,
+        uint32_t imageIndex,
+        VkImageLayout swapchainLayout)
+    {
+        Rendering::Upscaler::FFrameInputs inputs{};
+        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        const auto& swapChain = SwapChain();
+
+        inputs.commandBuffer = commandBuffer;
+        inputs.frameToken = frame_.streamlineFrameToken;
+        inputs.frameIndex = static_cast<uint32_t>(frame_.frameCount);
+        inputs.imageIndex = imageIndex;
+        inputs.reset = frame_.frameCount < 2;
+        inputs.enableDLSS = caps_.supportDLSS && settings.DLSS;
+        inputs.enableDLSSRR = caps_.supportDLSSRR && settings.DLSSRR;
+        inputs.enableDLSSG = caps_.supportDLSSG && settings.DLSSG;
+        inputs.superResolutionMode = settings.SuperResolution;
+        inputs.frameGenerationMultiplier = std::clamp(settings.DLSSGFrameMultiplier, 2u, 4u);
+        inputs.hdrOutput = swapChain.IsHDR();
+        inputs.renderExtent = swapChain.RenderExtent();
+        inputs.outputExtent = swapChain.OutputExtent();
+        inputs.outputOffset = swapChain.OutputOffset();
+        inputs.swapchainFormat = swapChain.Format();
+        inputs.backBufferCount = static_cast<uint32_t>(swapChain.Images().size());
+        inputs.ubo = &frame_.lastUBO;
+
+        auto& camera = GetScene().GetRenderCamera();
+        inputs.camera.nearPlane = camera.NearPlane;
+        inputs.camera.farPlane = camera.FarPlane;
+        inputs.camera.verticalFovRadians = glm::radians(camera.FieldOfView);
+        inputs.camera.aspectRatio =
+            static_cast<float>(std::max(1u, swapChain.Extent().width)) /
+            static_cast<float>(std::max(1u, swapChain.Extent().height));
+
+        inputs.depth = MakeDepthResource(
+            DepthBuffer(),
+            swapChain.RenderExtent(),
+            VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+        inputs.motionVectors = MakeRenderImageResource(
+            GetStorageImage(Assets::Bindless::RT_MOTIONVECTOR),
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_USAGE_STORAGE_BIT);
+        inputs.scalingInputColor = MakeRenderImageResource(
+            GetStorageImage(Assets::Bindless::RT_DENOISED),
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+        inputs.scalingOutputColor = MakeSwapchainResource(
+            swapChain,
+            imageIndex,
+            swapChain.OutputExtent(),
+            swapchainLayout);
+        inputs.hudlessColor = inputs.scalingOutputColor;
+
+        inputs.albedo = MakeRenderImageResource(
+            GetStorageImage(Assets::Bindless::RT_ALBEDO),
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_USAGE_STORAGE_BIT);
+        inputs.specularAlbedo = MakeRenderImageResource(
+            GetStorageImage(Assets::Bindless::RT_SPECULAR_ALBEDO),
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_USAGE_STORAGE_BIT);
+        inputs.normalRoughness = MakeRenderImageResource(
+            GetStorageImage(Assets::Bindless::RT_NORMAL),
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_USAGE_STORAGE_BIT);
+        inputs.diffuseNoisy = MakeRenderImageResource(
+            GetStorageImage(Assets::Bindless::RT_ACCUMLATE_DIFFUSE),
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+        inputs.specularNoisy = MakeRenderImageResource(
+            GetStorageImage(Assets::Bindless::RT_ACCUMLATE_SPECULAR),
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+        inputs.diffuseHitDistance = MakeRenderImageResource(
+            GetStorageImage(Assets::Bindless::RT_DIFFUSE_HITDIST),
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_USAGE_STORAGE_BIT);
+        inputs.specularHitDistance = MakeRenderImageResource(
+            GetStorageImage(Assets::Bindless::RT_SPECULAR_HITDIST),
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_USAGE_STORAGE_BIT);
+
+        return inputs;
     }
 
     void VulkanBaseRenderer::OnPreLoadScene()

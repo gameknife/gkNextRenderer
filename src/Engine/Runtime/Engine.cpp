@@ -185,13 +185,11 @@ namespace NextRenderer
             validationLayers.push_back("VK_LAYER_KHRONOS_validation");
         }
 #if WITH_STREAMLINE
-        if (StreamlineWrapper::ShouldInitialize())
+        if ((GOption == nullptr || !GOption->DisableStreamline) &&
+            !StreamlineWrapper::IsInitialized() &&
+            StreamlineWrapper::ShouldInitialize())
         {
             StreamlineWrapper::Initialize();
-        }
-        else
-        {
-            SPDLOG_INFO("Streamline DLSS plugins disabled because no NVIDIA adapter is present");
         }
 #endif
         Vulkan::Instance* instance = new Vulkan::Instance(*window, validationLayers, VK_API_VERSION_1_2);
@@ -294,6 +292,8 @@ Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options&
     userSettings.SuperResolution = 0;
     userSettings.DLSS = false;
     userSettings.DLSSRR = false;
+    userSettings.DLSSG = false;
+    userSettings.DLSSGFrameMultiplier = 2;
 
     userSettings.BakeSpeedLevel = 1;
 
@@ -372,6 +372,20 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     }
 
 
+#if WITH_STREAMLINE
+    if (options.DisableStreamline)
+    {
+        SPDLOG_INFO("Streamline DLSS plugins disabled by command line");
+    }
+    else if (StreamlineWrapper::ShouldInitialize())
+    {
+        StreamlineWrapper::Initialize();
+    }
+    else
+    {
+        SPDLOG_INFO("Streamline DLSS plugins disabled because no NVIDIA adapter is present");
+    }
+#endif
     Vulkan::Window::InitGLFW();
     // Create Window
     Vulkan::WindowConfig windowConfig{"gkNextRenderer " + NextRenderer::GetBuildVersion(),
@@ -390,6 +404,14 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     services_.cvarSystem->LoadDefaultFile("assets/configs/cvar_default.json");
     gameInstance_->ApplyDefaultCVars(*services_.cvarSystem);
     services_.cvarSystem->LoadUserFile("assets/configs/cvar_user.json");
+    for (const std::string& overrideCommand : options_->CVarOverrides)
+    {
+        const auto result = services_.cvarSystem->ExecuteCommand(overrideCommand);
+        if (!result.success)
+        {
+            SPDLOG_WARN("Startup CVar override failed '{}': {}", overrideCommand, result.message);
+        }
+    }
     windowConfig.Fullscreen = config_.userSettings.BorderlessFullscreen;
     // Hide the window for agent validation captures and for any caller that asked for it (e.g. the
     // unit-test engine fixture). The capture+auto-exit state machine stays gated on AgentValidation.
@@ -482,9 +504,8 @@ void NextEngine::Start()
     // Initialize Renderer
     bool shouldEnableValidation = GOption->Validation;
     
-    // Agent validation renders as fast as the GPU allows (uncapped) so the fixed frame budget is
-    // reached in a fraction of the wall-clock time a vsync-locked present mode would take.
-    const VkPresentModeKHR presentMode = options_->AgentValidation
+    const bool useFastAgentPresent = options_->AgentValidation;
+    const VkPresentModeKHR presentMode = useFastAgentPresent
                                              ? VK_PRESENT_MODE_IMMEDIATE_KHR
                                              : static_cast<VkPresentModeKHR>(options_->PresentMode);
     renderer_.reset(NextRenderer::CreateRenderer(static_cast<uint32_t>(config_.userSettings.RendererType), window_.get(),

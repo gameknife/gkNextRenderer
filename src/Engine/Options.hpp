@@ -38,6 +38,7 @@ public:
 	uint32_t AgentValidationFrames{90};
 	std::string AgentValidationOutput{"screenshots/agent_validation"};
 	bool HiddenWindow{};
+	bool DisableStreamline{};
 	bool RemoteMode{};
 	bool RemoteShowWindow{};
 	std::string RemoteBind{"0.0.0.0"};
@@ -53,6 +54,7 @@ public:
 	bool FlappyReplay{};
 	bool ShaderHotReload{true};
 	float ShaderHotReloadInterval{0.5f};
+	std::vector<std::string> CVarOverrides{};
 	std::string locale{};
 
 
