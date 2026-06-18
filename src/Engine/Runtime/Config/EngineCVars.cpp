@@ -88,6 +88,12 @@ namespace NextCVar
                         "Enable NVIDIA DLSS", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.dlssrr", settings, DLSSRR, false, ECVarFlags::Archive,
                         "Enable NVIDIA DLSS Ray Reconstruction", std::bind(RequestSwapChainIfPossible, engine));
+        GK_CVAR_BOOL_CB("r.dlssg", settings, DLSSG, false, ECVarFlags::Archive,
+                        "Enable NVIDIA DLSS Frame Generation", std::bind(RequestSwapChainIfPossible, engine));
+        GK_CVAR_UINT_CB("r.dlssg.multiplier", settings, DLSSGFrameMultiplier, 2, ECVarFlags::Archive,
+                        "DLSS Frame Generation multiplier (2-4)", std::bind(RequestSwapChainIfPossible, engine));
+        GK_CVAR_UINT("r.dlssg.frameLimitFps", settings, DLSSGFrameLimitFps, 0, ECVarFlags::Archive,
+                     "Reflex base frame-rate limit while DLSS Frame Generation is enabled (0=unlimited)");
         GK_CVAR_BOOL("r.taa", settings, TAA, true, ECVarFlags::Archive,
                      "Enable temporal anti-aliasing");
         GK_CVAR_BOOL("r.adaptiveSample", settings, AdaptiveSample, false, ECVarFlags::Archive,

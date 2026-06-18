@@ -10,13 +10,19 @@
 #include "Engine/Vulkan/VulkanFwd.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
+#include "Engine/Rendering/Upscaler/UpscalerTypes.hpp"
 #include <vector>
 #include <memory>
 #include <cassert>
 #include <functional>
 #include <map>
 
-namespace Vulkan 
+namespace Rendering::Upscaler
+{
+	class IUpscaler;
+}
+
+namespace Vulkan
 {
 	enum ERendererType
 	{
@@ -93,6 +99,9 @@ namespace Vulkan
 		bool SupportsRayTracing() const { return caps_.supportRayTracing; }
 		bool SupportDLSS() const { return caps_.supportDLSS; }
 		bool SupportDLSSRR() const { return caps_.supportDLSSRR; }
+		bool SupportDLSSG() const { return caps_.supportDLSSG; }
+		bool SupportReflex() const { return caps_.supportReflex; }
+		Rendering::Upscaler::FFrameGenerationState GetFrameGenerationState() const;
 		bool HasFullAmbientCubeBudget() const { return caps_.fullAmbientCubeBudget; }
 		void SetDenoiserEnabled(bool enabled) { caps_.supportDenoiser = enabled; }
 		void SetVisualDebugEnabled(bool enabled) { visualDebug_ = enabled; }
@@ -126,6 +135,9 @@ namespace Vulkan
 			bool supportRayTracing       = false;
 			bool supportDLSS             = false;
 			bool supportDLSSRR           = false;
+			bool supportDLSSG            = false;
+			bool supportReflex           = false;
+			bool supportPCL              = false;
 			bool supportDenoiser         = false;
 			bool streamlineExtsEnabled   = false;
 			bool fullAmbientCubeBudget   = true;
@@ -204,6 +216,7 @@ namespace Vulkan
 			Fence* currentFence = nullptr;
 			int frameCount = 0;
 			Assets::UniformBufferObject lastUBO;
+			Rendering::Upscaler::FFrameToken streamlineFrameToken;
 		};
 
 		struct BindlessStorageImages
@@ -241,6 +254,11 @@ namespace Vulkan
 			std::unique_ptr<ImageView> imageView;
 		};
 
+		struct FrameGenerationResources
+		{
+			std::vector<std::unique_ptr<RenderImage>> hudlessImages;
+		};
+
 		DeviceCaps caps_;
 		FVulkanVideoCaps videoCaps_;
 		DeviceContext ctx_;
@@ -249,10 +267,12 @@ namespace Vulkan
 		BindlessStorageImages bindless_;
 		std::unique_ptr<RayTracingResources> rt_;
 		ScreenshotResources screenshot_;
+		FrameGenerationResources frameGeneration_;
 		AmbientCubePipelines ambient_;
 		OverlayPipelines overlay_;
 		LogicRendererRegistry logicRenderers_;
 		Delegates delegates_;
+		std::unique_ptr<Rendering::Upscaler::IUpscaler> upscaler_;
 
 		std::weak_ptr<Assets::Scene> scene_;
 		const VkPresentModeKHR presentMode_;
@@ -282,7 +302,11 @@ namespace Vulkan
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void AfterUpdateScene();
-		void UpdateStreamline(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void CaptureFrameGenerationHudless(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		Rendering::Upscaler::FFrameInputs BuildUpscalerFrameInputs(
+			VkCommandBuffer commandBuffer,
+			uint32_t imageIndex,
+			VkImageLayout swapchainLayout);
 
 		// Pre-render passes
 		void UpdateSkinningBuffers();

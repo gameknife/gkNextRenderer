@@ -63,6 +63,7 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_ScadPromptContext.cpp
 	Tests/Test_ScadSessionStore.cpp
 	Tests/Test_Rgb9e5Pack.cpp
+	Tests/Test_UpscalerTypes.cpp
 	Application/Editor/ScadStudio/ScadPromptContext.cpp
 	Application/Editor/ScadStudio/ScadSessionStore.cpp
 )
@@ -467,6 +468,12 @@ foreach(target IN LISTS AllTargets)
 		list(REMOVE_ITEM _ifaces Vulkan::Vulkan)
 		set_target_properties(imgui::imgui PROPERTIES INTERFACE_LINK_LIBRARIES "${_ifaces}")
 		target_link_libraries(${target} PRIVATE ${MOLTENVK_LIBRARY})
+		elseif ( WIN32 AND WITH_STREAMLINE )
+		get_target_property(_ifaces imgui::imgui INTERFACE_LINK_LIBRARIES)
+		list(REMOVE_ITEM _ifaces Vulkan::Vulkan)
+		set_target_properties(imgui::imgui PROPERTIES INTERFACE_LINK_LIBRARIES "${_ifaces}")
+		target_link_directories(${target} PRIVATE ${STREAMLINE_LIB_DIR})
+		target_link_libraries(${target} PRIVATE sl.interposer)
 		else()
 		target_link_libraries(${target} PRIVATE ${Vulkan_LIBRARIES})
 		endif()
@@ -477,13 +484,9 @@ foreach(target IN LISTS AllTargets)
 
 		if ( WITH_STREAMLINE )
 			target_compile_definitions(${target} PUBLIC WITH_STREAMLINE=1)
+			target_compile_definitions(${target} PRIVATE GK_STREAMLINE_INTERPOSER_DLL="${STREAMLINE_BIN_DIR}/sl.interposer.dll")
 			target_include_directories(${target} PRIVATE ${STREAMLINE_INCLUDE_DIR})
 			target_link_directories(${target} PRIVATE ${STREAMLINE_LIB_DIR})
-			target_link_libraries(${target} PRIVATE sl.interposer)
-			if ( WIN32 )
-				target_link_libraries(${target} PRIVATE delayimp)
-				target_link_options(${target} PRIVATE "/DELAYLOAD:sl.interposer.dll")
-			endif()
 		endif()
 	elseif ( ${target} STREQUAL NextGameplay )
 		set_target_properties(${target} PROPERTIES FOLDER "Gameplay")
@@ -503,10 +506,6 @@ foreach(target IN LISTS AllTargets)
 		if ( WITH_STREAMLINE ) 
 		target_link_directories(${target} PRIVATE ${STREAMLINE_LIB_DIR})
 		target_link_libraries(${target} PRIVATE sl.interposer)
-		if ( WIN32 )
-			target_link_libraries(${target} PRIVATE delayimp)
-			target_link_options(${target} PRIVATE "/DELAYLOAD:sl.interposer.dll")
-		endif()
 		endif()
 	endif()
 

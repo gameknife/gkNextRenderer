@@ -90,6 +90,7 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 - **Single-Draw GPU-Driven Submit**
 - **Hardware / Software Ray Tracing**
 - **Temporal Reprojection / JBF / FSR / DLSS RR**
+- **Windows 上的 NVIDIA Streamline DLSS SR / RR / Frame Generation**
 
 ### 引擎与工具链
 

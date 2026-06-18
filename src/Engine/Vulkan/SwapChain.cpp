@@ -4,6 +4,7 @@
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/Instance.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
+#include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include <algorithm>
 #include <limits>
@@ -81,7 +82,7 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
 		createInfo.pQueueFamilyIndices = nullptr; // Optional
 	}
 
-	Check(vkCreateSwapchainKHR(device.Handle(), &createInfo, nullptr, &swapChain_),
+	Check(StreamlineWrapper::CreateSwapchainKHR(device.Handle(), &createInfo, nullptr, &swapChain_),
 		"create swap chain!");
 
 	minImageCount_ = std::max(2u, details.Capabilities.minImageCount);
@@ -91,7 +92,7 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
 	renderExtent_ = extent_;
 	renderOffset_ = {0,0};
 	
-	images_ = GetEnumerateVector(device_.Handle(), swapChain_, vkGetSwapchainImagesKHR);
+	images_ = GetEnumerateVector(device_.Handle(), swapChain_, StreamlineWrapper::GetSwapchainImagesKHR);
 	imageViews_.reserve(images_.size());
 
 	for (const auto image : images_)
@@ -114,7 +115,7 @@ SwapChain::~SwapChain()
 
 	if (swapChain_ != nullptr)
 	{
-		vkDestroySwapchainKHR(device_.Handle(), swapChain_, nullptr);
+		StreamlineWrapper::DestroySwapchainKHR(device_.Handle(), swapChain_, nullptr);
 		swapChain_ = nullptr;
 	}
 }
