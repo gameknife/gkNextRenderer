@@ -735,6 +735,7 @@ namespace
             const VkAllocationCallbacks* allocator,
             VkDevice* device)
         {
+            std::lock_guard lock(mutex_);
             if (!initialized_ || proxyInstance_ == VK_NULL_HANDLE)
             {
                 return vkCreateDevice(physicalDevice, createInfo, allocator, device);
@@ -752,6 +753,7 @@ namespace
 
         void DestroyDevice(VkDevice device, const VkAllocationCallbacks* allocator)
         {
+            std::lock_guard lock(mutex_);
             if (initialized_ && proxyDevice_ == device)
             {
                 hooks_.DestroyDevice(device, allocator);
@@ -765,6 +767,7 @@ namespace
 
         void AppendRequiredInstanceExtensions(std::vector<const char*>& extensions)
         {
+            std::lock_guard lock(mutex_);
             if (!initialized_)
             {
                 return;
@@ -788,6 +791,7 @@ namespace
             VkPhysicalDevice physicalDevice,
             std::vector<const char*>& extensions)
         {
+            std::lock_guard lock(mutex_);
             if (!initialized_)
             {
                 return caps_;
@@ -814,6 +818,7 @@ namespace
 
         void SetVulkanInfo(const Rendering::Upscaler::FDeviceInfo& info)
         {
+            std::lock_guard lock(mutex_);
             if (!initialized_)
             {
                 return;
@@ -869,11 +874,13 @@ namespace
 
         Rendering::Upscaler::FFeatureCaps Caps() const
         {
+            std::lock_guard lock(mutex_);
             return caps_;
         }
 
         Rendering::Upscaler::FFrameToken GetFrameToken(uint32_t frameIndex)
         {
+            std::lock_guard lock(mutex_);
             Rendering::Upscaler::FFrameToken result{};
             result.frameIndex = frameIndex;
             if (!initialized_ || !deviceReady_)
@@ -932,9 +939,12 @@ namespace
                     continue;
                 }
 
-                caps_.requiredGraphicsQueues += requirements.vkNumGraphicsQueuesRequired;
-                caps_.requiredComputeQueues += requirements.vkNumComputeQueuesRequired;
-                caps_.requiredOpticalFlowQueues += requirements.vkNumOpticalFlowQueuesRequired;
+                caps_.requiredGraphicsQueues = std::max(
+                    caps_.requiredGraphicsQueues, requirements.vkNumGraphicsQueuesRequired);
+                caps_.requiredComputeQueues = std::max(
+                    caps_.requiredComputeQueues, requirements.vkNumComputeQueuesRequired);
+                caps_.requiredOpticalFlowQueues = std::max(
+                    caps_.requiredOpticalFlowQueues, requirements.vkNumOpticalFlowQueuesRequired);
 
                 for (uint32_t i = 0; i < requirements.vkNumInstanceExtensions; ++i)
                 {
@@ -1234,6 +1244,21 @@ namespace
                 return;
             }
 
+            const bool hdrFormatSupported =
+                IsHDRFormatSupportedForDLSSG(inputs.swapchainFormat, inputs.hdrOutput);
+            if (inputs.enableDLSSG && inputs.hdrOutput && !hdrFormatSupported &&
+                lastUnsupportedDLSSGHDRFormat_ != inputs.swapchainFormat)
+            {
+                SPDLOG_WARN(
+                    "DLSS-G disabled: HDR swapchain format {} is unsupported; use an HDR10 10-bit packed format",
+                    static_cast<uint32_t>(inputs.swapchainFormat));
+                lastUnsupportedDLSSGHDRFormat_ = inputs.swapchainFormat;
+            }
+            else if (hdrFormatSupported)
+            {
+                lastUnsupportedDLSSGHDRFormat_ = VK_FORMAT_UNDEFINED;
+            }
+
             const bool canEnable =
                 inputs.enableDLSSG &&
                 caps.supportReflex &&
@@ -1241,7 +1266,7 @@ namespace
                 inputs.depth.IsValid() &&
                 inputs.motionVectors.IsValid() &&
                 inputs.hudlessColor.IsValid() &&
-                IsHDRFormatSupportedForDLSSG(inputs.swapchainFormat, inputs.hdrOutput);
+                hdrFormatSupported;
 
             SetFrameGenerationOptions(inputs, canEnable);
             if (!canEnable)
@@ -1574,6 +1599,7 @@ namespace
         uint32_t lastStatusMask_ = 0;
         uint32_t lastNumFramesActuallyPresented_ = 0;
         bool frameGenerationStateLogged_ = false;
+        VkFormat lastUnsupportedDLSSGHDRFormat_ = VK_FORMAT_UNDEFINED;
         bool lastDLSSGEnabled_ = false;
         bool lastDLSSActive_ = false;
         bool lastDLSSRRActive_ = false;
