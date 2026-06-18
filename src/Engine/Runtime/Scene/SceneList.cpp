@@ -2,6 +2,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Assets/Data/Material.hpp"
+#include "Engine/Assets/Core/GaussianSplat.hpp"
 #include "Engine/Assets/Loaders/FSceneLoader.h"
 #include "Engine/Assets/Loaders/LoaderRegistry.hpp"
 
@@ -93,6 +94,10 @@ bool SceneList::IsSupportedSceneExtension(std::string_view extension)
 
 bool SceneList::IsSupportedScenePath(const std::filesystem::path& path)
 {
+    if (ToLowerCopy(path.filename().string()) == "meta.json")
+    {
+        return Assets::FLoaderRegistry::Get().FindSceneLoader(".sog") != nullptr;
+    }
     return path.has_extension() && IsSupportedSceneExtension(path.extension().string());
 }
 
@@ -154,6 +159,20 @@ void SceneList::ScanScenes()
         }
     }
 
+    // SOG supports both packaged *.sog files and unpacked directories whose
+    // entry point is meta.json. Nested unpacked datasets are listed as scenes.
+    const std::string sogPath = "assets/sog/";
+    const std::filesystem::path sogDir = Utilities::FileHelper::GetPlatformFilePath(sogPath.c_str());
+    if (std::filesystem::exists(sogDir))
+    {
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(sogDir))
+        {
+            if (!entry.is_regular_file() || !IsSupportedScenePath(entry.path())) continue;
+            AllScenes.push_back((std::filesystem::path(sogPath) /
+                                 std::filesystem::relative(entry.path(), sogDir)).generic_string());
+        }
+    }
+
     // Pull additional top-level scene entries from any mounted paks (e.g. optional.pak),
     // so files moved out of the on-disk tree still appear in the scene list.
     auto* pakSystem = Utilities::Package::FPackageFileSystem::TryGetInstance();
@@ -208,7 +227,8 @@ int32_t SceneList::AddExternalScene(std::string absPath)
 bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& camera, std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Assets::Model>& models,
                           std::vector<Assets::FMaterial>& materials,
                           std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks,
-                          std::vector<Assets::Skeleton>& skeletons)
+                          std::vector<Assets::Skeleton>& skeletons,
+                          std::vector<Assets::FGaussianSplatData>* splats)
 {
     std::filesystem::path filepath = filename;
     std::string ext = ToLowerCopy(filepath.extension().string());
@@ -234,7 +254,18 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
     }
     if (const Assets::FSceneLoaderFn* load = Assets::FLoaderRegistry::Get().FindSceneLoader(ext))
     {
-        return (*load)(filename, camera, nodes, models, materials, lights, tracks, skeletons);
+        std::vector<Assets::FGaussianSplatData> ignoredSplats;
+        return (*load)(filename, camera, nodes, models, materials, lights, tracks, skeletons,
+                       splats ? *splats : ignoredSplats);
+    }
+    if (ToLowerCopy(filepath.filename().string()) == "meta.json")
+    {
+        if (const Assets::FSceneLoaderFn* load = Assets::FLoaderRegistry::Get().FindSceneLoader(".sog"))
+        {
+            std::vector<Assets::FGaussianSplatData> ignoredSplats;
+            return (*load)(filename, camera, nodes, models, materials, lights, tracks, skeletons,
+                           splats ? *splats : ignoredSplats);
+        }
     }
 
     SPDLOG_ERROR("No scene loader registered for extension '{}': {}", ext, filename);

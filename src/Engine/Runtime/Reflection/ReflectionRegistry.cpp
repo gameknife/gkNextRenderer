@@ -3,6 +3,7 @@
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
+#include "Engine/Runtime/Components/GaussianSplatComponent.h"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Core/Node.h"
@@ -28,6 +29,7 @@ namespace Reflection
         Runtime::RenderComponent::RegisterReflection();
         Runtime::PhysicsComponent::RegisterReflection();
         Runtime::SkinnedMeshComponent::RegisterReflection();
+        Runtime::GaussianSplatComponent::RegisterReflection();
         Assets::Node::RegisterReflection();
         
         NextEngine::RegisterReflection();

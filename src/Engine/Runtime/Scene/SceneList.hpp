@@ -25,7 +25,8 @@ public:
                      std::vector<Assets::FMaterial>& materials,
                      std::vector<Assets::LightObject>& lights,
                      std::vector<Assets::AnimationTrack>& tracks,
-                     std::vector<Assets::Skeleton>& skeletons);
+                     std::vector<Assets::Skeleton>& skeletons,
+                     std::vector<Assets::FGaussianSplatData>* splats = nullptr);
 };
 
 }

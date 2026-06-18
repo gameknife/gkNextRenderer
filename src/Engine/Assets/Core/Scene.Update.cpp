@@ -179,6 +179,25 @@ namespace Assets
             }
         }
 
+        for (const auto& splat : gaussianSplats_)
+        {
+            if (!IsSelected(splat.nodeInstanceId) &&
+                !NextEngine::GetInstance()->GetShowFlags().DebugDraw_BoundingBox)
+            {
+                continue;
+            }
+
+            glm::vec3 boundsMin;
+            glm::vec3 boundsMax;
+            if (GetGaussianSplatWorldBounds(splat.nodeInstanceId, boundsMin, boundsMax))
+            {
+                const glm::vec4 color = IsSelected(splat.nodeInstanceId)
+                    ? glm::vec4(1.0f, 0.65f, 0.1f, 1.0f)
+                    : glm::vec4(0.2f, 0.8f, 1.0f, 1.0f);
+                Runtime::EngineHelper::DrawAuxBox(boundsMin, boundsMax, color, 2.0f);
+            }
+        }
+
         if (NextEngine::GetInstance()->GetShowFlags().DebugDraw_PhysicsBodies)
         {
             if (NextPhysics* physicsEngine = NextEngine::GetInstance()->GetPhysicsEngine())

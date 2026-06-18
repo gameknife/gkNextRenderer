@@ -64,6 +64,7 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_ScadSessionStore.cpp
 	Tests/Test_Rgb9e5Pack.cpp
 	Tests/Test_UpscalerTypes.cpp
+	Tests/Test_SogLoader.cpp
 	Application/Editor/ScadStudio/ScadPromptContext.cpp
 	Application/Editor/ScadStudio/ScadSessionStore.cpp
 )
@@ -275,6 +276,12 @@ if ( TARGET ScadLoader )
 	else()
 		target_compile_definitions(ScadLoader PRIVATE GK_WITH_EARCUT=0)
 	endif()
+endif()
+
+if ( TARGET SplatLoader )
+	find_package(WebP CONFIG REQUIRED)
+	find_package(ZLIB REQUIRED)
+	target_link_libraries(SplatLoader PRIVATE WebP::webp ZLIB::ZLIB)
 endif()
 
 if (UNIX AND NOT APPLE AND NOT ANDROID)
@@ -646,6 +653,13 @@ if ( TARGET ScadLoader )
 	foreach(t NextGameplay gkNextRenderer gkNextVisualTest gkNextStillBenchmark gkNextMotionBenchmark gkNextEditor ScadStudio StudioSim AirportSim gkNextUnitTests)
 		if ( TARGET ${t} )
 			target_link_libraries(${t} PRIVATE ScadLoader)
+		endif()
+	endforeach()
+endif()
+if ( TARGET SplatLoader )
+	foreach(t gkNextRenderer gkNextVisualTest gkNextUnitTests)
+		if ( TARGET ${t} )
+			target_link_libraries(${t} PRIVATE SplatLoader)
 		endif()
 	endforeach()
 endif()

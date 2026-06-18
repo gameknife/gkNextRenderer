@@ -34,6 +34,7 @@ namespace Assets
     {
         nodes_ = std::move(nodes);
         models_ = std::move(models);
+        gaussianSplats_.clear();
         materials_ = std::move(materials);
         lights_ = std::move(lights);
         tracks_ = std::move(tracks);

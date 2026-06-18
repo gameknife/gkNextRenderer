@@ -14,7 +14,8 @@ namespace Modules::LDraw
             [](const std::string& filename, Assets::EnvironmentSetting& camera,
                std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Assets::Model>& models,
                std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights,
-               std::vector<Assets::AnimationTrack>& tracks, std::vector<Assets::Skeleton>& skeletons)
+               std::vector<Assets::AnimationTrack>& tracks, std::vector<Assets::Skeleton>& skeletons,
+               std::vector<Assets::FGaussianSplatData>&)
             {
                 Assets::LDrawLoadOptions options;
                 if (NextEngine* engine = NextEngine::GetInstance())

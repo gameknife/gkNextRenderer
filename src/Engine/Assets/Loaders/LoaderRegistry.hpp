@@ -15,7 +15,8 @@ namespace Assets
         const std::string& filename, EnvironmentSetting& camera,
         std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models,
         std::vector<FMaterial>& materials, std::vector<LightObject>& lights,
-        std::vector<AnimationTrack>& tracks, std::vector<Skeleton>& skeletons)>;
+        std::vector<AnimationTrack>& tracks, std::vector<Skeleton>& skeletons,
+        std::vector<FGaussianSplatData>& splats)>;
 
     // Procedural scene builder (a ".proc" entry in the scene list).
     using FProcSceneFn = std::function<void(

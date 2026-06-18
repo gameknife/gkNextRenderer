@@ -22,6 +22,11 @@ namespace Rendering::Upscaler
 	class IUpscaler;
 }
 
+namespace Vulkan::GaussianSplat
+{
+    class GaussianSplatPass;
+}
+
 namespace Vulkan
 {
 	enum ERendererType
@@ -230,6 +235,7 @@ namespace Vulkan
 			std::unique_ptr<PipelineCommon::GraphicsPipeline> wireframePipeline;
 			std::unique_ptr<PipelineCommon::VisibilityPipeline> visibilityPipeline;
 			std::unique_ptr<Shadow::ShadowMapPass> sunShadowPass;
+			std::unique_ptr<GaussianSplat::GaussianSplatPass> gaussianSplatPass;
 			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> bufferClearPipeline;
 			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> simpleComposePipeline;
 			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> visualDebuggerPipeline;
