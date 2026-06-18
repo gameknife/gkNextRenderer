@@ -103,6 +103,21 @@ sync_remote_gnb() {
 }
 
 if command -v go >/dev/null 2>&1; then
+  if [ -z "${GOCACHE:-}" ]; then
+    GOCACHE="$ROOT/tools/gnb-bin/go-build-cache"
+    export GOCACHE
+  fi
+  GO_BUILD_TAGS="production"
+  if [ "$OS" = "Linux" ]; then
+    if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists gtk+-3.0 webkit2gtk-4.0; then
+      GO_BUILD_TAGS="desktop,production,wv2runtime.embed"
+    else
+      echo "[gnb] warning: GTK/WebKitGTK development packages not found; building browser-mode gnb" >&2
+      echo "[gnb] warning: install gtk+-3.0 and webkit2gtk-4.0 pkg-config packages to enable native dashboard" >&2
+    fi
+  else
+    GO_BUILD_TAGS="desktop,production,wv2runtime.embed"
+  fi
   NEED_BUILD=0
   if [ ! -x "$LOCAL_GNB" ]; then
     NEED_BUILD=1
@@ -110,7 +125,7 @@ if command -v go >/dev/null 2>&1; then
     NEED_BUILD=1
   fi
   if [ "$NEED_BUILD" -eq 1 ]; then
-    (cd "$ROOT/tools/gnb" && go build -tags "desktop,production,wv2runtime.embed" -trimpath -ldflags="-s -w -X main.version=$LOCAL_VERSION" -o "$LOCAL_GNB" ./cmd/gnb)
+    (cd "$ROOT/tools/gnb" && go build -tags "$GO_BUILD_TAGS" -trimpath -ldflags="-s -w -X main.version=$LOCAL_VERSION" -o "$LOCAL_GNB" ./cmd/gnb)
   fi
   GNB="$LOCAL_GNB"
 else
