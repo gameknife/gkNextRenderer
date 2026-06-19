@@ -5,6 +5,7 @@ module Common;
 __include "common/BasicTypes.slang";
 __include "common/Shading.slang";
 __include "common/RayTracers.slang";
+__include "common/RadianceCache.slang";
 __include "common/Sharc.slang";
 __include "common/PathTracingRenderer.slang";
 __include "common/ConstFunc.slang";

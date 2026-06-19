@@ -18,9 +18,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.FuzzyTracing = false;
     renderer.ForceExitAfterFirst = false;
     renderer.UseAmbientCubeTerminal = false;
-    renderer.EnableSharcUpdate = true;
     renderer.WriteOutputs = false;
-    renderer.SharcUpdateSampleRatio = params.UpdateSampleRatio;
+    renderer.SecondaryDirectMode = 2;
     renderer.Init(DTid.xy);
 
     if (!renderer.PrimaryHit(rayCaster))
@@ -28,5 +27,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    renderer.Render(tracer, dIlluminator, 1);
+    FSharcUpdateCache cache;
+    cache.UpdateSampleRatio = params.UpdateSampleRatio;
+    renderer.Render(tracer, dIlluminator, cache, 1);
 }
