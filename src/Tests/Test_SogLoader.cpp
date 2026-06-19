@@ -4,8 +4,11 @@
 #include "Modules/SplatLoader/FSplatQuant.hpp"
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Runtime/Components/GaussianSplatComponent.h"
+#include "Modules/SplatLoader/SplatModule.hpp"
+#include "TestCommon.hpp"
 
 #include <glm/gtc/quaternion.hpp>
+#include <thread>
 
 TEST_CASE("SOG log position inverse", "[Unit][SOG]")
 {
@@ -51,4 +54,27 @@ TEST_CASE("Gaussian splat component properties", "[Unit][SOG][GaussianSplatCompo
     retrieved->SetOpacityScale(-2.0f);
     CHECK(retrieved->GetOpacityScale() == Catch::Approx(0.0f));
     CHECK_FALSE(retrieved->ToggleVisible());
+}
+
+TEST_CASE_METHOD(EngineTestFixture, "SOG scene loads and renders on Vulkan", "[.Integration][SOG]")
+{
+    Modules::Splat::Register();
+    engine_->RequestLoadScene({.filename = "assets/sog/Grape.sog"});
+
+    bool loaded = false;
+    for (int attempt = 0; attempt < 300 && !loaded; ++attempt)
+    {
+        Simulate(1);
+        loaded = engine_->GetScene().HasGaussianSplats();
+        if (!loaded)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
+
+    REQUIRE(loaded);
+    REQUIRE(engine_->GetScene().GaussianSplats().size() == 1);
+    CHECK(engine_->GetScene().GaussianSplats()[0].splats.size() == 309008);
+
+    Simulate(5);
 }

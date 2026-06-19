@@ -54,6 +54,7 @@ namespace Vulkan::GaussianSplat
         std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> histogramPipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> prefixPipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> scatterPipeline_;
+        std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> composePipeline_;
         uint32_t splatCount_ = 0;
         uint32_t modelCount_ = 0;
     };

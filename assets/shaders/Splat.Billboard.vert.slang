@@ -25,7 +25,7 @@ struct PushConstants
     uint count;
     uint width;
     uint height;
-    uint reserved;
+    float sigma;
 };
 
 [[vk::push_constant]] PushConstants push;
@@ -134,7 +134,8 @@ VertexOutput main(uint vertexIndex : SV_VertexID, uint instanceIndex : SV_Instan
                    (a >= d ? float2(1.0, 0.0) : float2(0.0, 1.0));
     const float2 axis1 = float2(-axis0.y, axis0.x);
     const float2 local = corners[vertexIndex];
-    const float2 pixelOffset = 3.0 * (axis0 * sqrt(lambda0) * local.x + axis1 * sqrt(lambda1) * local.y);
+    const float2 pixelOffset = push.sigma *
+        (axis0 * sqrt(lambda0) * local.x + axis1 * sqrt(lambda1) * local.y);
     clip.xy += pixelOffset * float2(2.0 / push.width, 2.0 / push.height) * clip.w;
     if (viewPosition.z >= -1e-4 || clip.w <= 0.0)
     {
@@ -143,7 +144,7 @@ VertexOutput main(uint vertexIndex : SV_VertexID, uint instanceIndex : SV_Instan
 
     const float3 eye = mul(camera[0].ModelViewInverse, float4(0.0, 0.0, 0.0, 1.0)).xyz;
     output.position = clip;
-    output.local = local;
+    output.local = local * (push.sigma / 3.0);
     output.colorOpacity = float4(EvaluateColor(splat, normalize(worldPosition - eye)),
                                  splat.positionOpacity.w * model.parameters.x);
     return output;

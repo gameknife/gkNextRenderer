@@ -18,7 +18,7 @@ namespace Vulkan::GaussianSplat
 {
     namespace
     {
-        constexpr uint32_t splatBucketCount = 4096;
+        constexpr uint32_t maxSplatBucketCount = 4096;
         constexpr uint32_t splatSortGroupSize = 256;
 
         struct alignas(16) FSplatPushConstants
@@ -31,7 +31,7 @@ namespace Vulkan::GaussianSplat
             uint32_t count;
             uint32_t width;
             uint32_t height;
-            uint32_t reserved;
+            float sigma;
         };
         static_assert(sizeof(FSplatPushConstants) == 64);
 
@@ -123,13 +123,13 @@ namespace Vulkan::GaussianSplat
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, splatCount_ * sizeof(uint32_t),
             sortedIndexBuffer_, sortedIndexMemory_);
         BufferUtil::CreateDeviceBufferLocal(renderer_.CommandPool(), "GaussianSplatBucketCounts", bufferUsage,
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, splatBucketCount * sizeof(uint32_t),
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, maxSplatBucketCount * sizeof(uint32_t),
             bucketCountBuffer_, bucketCountMemory_);
         BufferUtil::CreateDeviceBufferLocal(renderer_.CommandPool(), "GaussianSplatBucketOffsets", bufferUsage,
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, splatBucketCount * sizeof(uint32_t),
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, maxSplatBucketCount * sizeof(uint32_t),
             bucketOffsetBuffer_, bucketOffsetMemory_);
         BufferUtil::CreateDeviceBufferLocal(renderer_.CommandPool(), "GaussianSplatBucketCursors", bufferUsage,
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, splatBucketCount * sizeof(uint32_t),
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, maxSplatBucketCount * sizeof(uint32_t),
             bucketCursorBuffer_, bucketCursorMemory_);
         BufferUtil::CreateDeviceBufferLocal(renderer_.CommandPool(), "GaussianSplatDrawIndirect",
             bufferUsage | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
@@ -144,12 +144,15 @@ namespace Vulkan::GaussianSplat
         scatterPipeline_ = std::make_unique<PipelineCommon::ZeroBindCustomPushConstantPipeline>(
             renderer_.SwapChain(), "assets/shaders/Splat.SortScatter.comp.slang.spv",
             static_cast<uint32_t>(sizeof(FSplatSortPushConstants)));
+        composePipeline_ = std::make_unique<PipelineCommon::ZeroBindCustomPushConstantPipeline>(
+            renderer_.SwapChain(), "assets/shaders/Splat.Compose.comp.slang.spv",
+            static_cast<uint32_t>(sizeof(uint32_t)));
 
         const Device& device = renderer_.Device();
         VkAttachmentDescription attachments[2]{};
         attachments[0].format = VK_FORMAT_R16G16B16A16_SFLOAT;
         attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
-        attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+        attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -176,8 +179,8 @@ namespace Vulkan::GaussianSplat
         dependency.dstSubpass = 0;
         dependency.srcStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
         dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependency.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        dependency.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
         VkRenderPassCreateInfo renderPassInfo{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
         renderPassInfo.attachmentCount = 2;
         renderPassInfo.pAttachments = attachments;
@@ -189,7 +192,7 @@ namespace Vulkan::GaussianSplat
               "create Gaussian splat render pass");
 
         const VkImageView framebufferAttachments[]{
-            renderer_.GetStorageImage(Assets::Bindless::RT_DENOISED)->GetImageView().Handle(),
+            renderer_.GetStorageImage(Assets::Bindless::RT_SPLAT_ACCUM)->GetImageView().Handle(),
             renderer_.DepthBuffer().ImageView().Handle(),
         };
         const VkExtent2D extent = renderer_.SwapChain().RenderExtent();
@@ -222,6 +225,7 @@ namespace Vulkan::GaussianSplat
 
     void GaussianSplatPass::DestroyResources()
     {
+        composePipeline_.reset();
         scatterPipeline_.reset();
         prefixPipeline_.reset();
         histogramPipeline_.reset();
@@ -284,6 +288,11 @@ namespace Vulkan::GaussianSplat
 
     void GaussianSplatPass::DispatchGpuSort(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
+        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        const uint32_t activeSplatCount =
+            settings.SplatMaxCount == 0 ? splatCount_ : std::min(splatCount_, settings.SplatMaxCount);
+        const uint32_t bucketCount = std::clamp(settings.SplatBucketCount, 16u, maxSplatBucketCount);
+
         VkMemoryBarrier previousFrameBarrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
         previousFrameBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT |
                                              VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
@@ -320,10 +329,10 @@ namespace Vulkan::GaussianSplat
             modelStateBuffers_[imageIndex]->GetDeviceAddress(), sortedIndexBuffer_->GetDeviceAddress(),
             bucketCountBuffer_->GetDeviceAddress(),
             bucketOffsetBuffer_->GetDeviceAddress(), bucketCursorBuffer_->GetDeviceAddress(),
-            drawIndirectBuffer_->GetDeviceAddress(), splatCount_, extent.width, extent.height, splatBucketCount};
+            drawIndirectBuffer_->GetDeviceAddress(), activeSplatCount, extent.width, extent.height, bucketCount};
 
         histogramPipeline_->BindPipeline(commandBuffer, &push);
-        vkCmdDispatch(commandBuffer, (splatCount_ + splatSortGroupSize - 1) / splatSortGroupSize, 1, 1);
+        vkCmdDispatch(commandBuffer, (activeSplatCount + splatSortGroupSize - 1) / splatSortGroupSize, 1, 1);
 
         VkBufferMemoryBarrier histogramBarrier{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
         histogramBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
@@ -359,7 +368,7 @@ namespace Vulkan::GaussianSplat
                              static_cast<uint32_t>(prefixBarriers.size()), prefixBarriers.data(), 0, nullptr);
 
         scatterPipeline_->BindPipeline(commandBuffer, &push);
-        vkCmdDispatch(commandBuffer, (splatCount_ + splatSortGroupSize - 1) / splatSortGroupSize, 1, 1);
+        vkCmdDispatch(commandBuffer, (activeSplatCount + splatSortGroupSize - 1) / splatSortGroupSize, 1, 1);
 
         std::array<VkBufferMemoryBarrier, 2> drawBarriers{};
         drawBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
@@ -403,20 +412,37 @@ namespace Vulkan::GaussianSplat
         beginInfo.renderPass = renderPass_;
         beginInfo.framebuffer = frameBuffer_;
         beginInfo.renderArea.extent = extent;
+        VkClearValue clearValue{};
+        beginInfo.clearValueCount = 1;
+        beginInfo.pClearValues = &clearValue;
         vkCmdBeginRenderPass(commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
+        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
         const FSplatPushConstants push{
             renderer_.UniformBuffers()[imageIndex].Buffer().GetDeviceAddress(),
             splatBuffer_->GetDeviceAddress(), paletteBuffer_->GetDeviceAddress(),
             sortedIndexBuffer_->GetDeviceAddress(), modelStateBuffers_[imageIndex]->GetDeviceAddress(), splatCount_,
-            extent.width, extent.height, 0u};
+            extent.width, extent.height, std::clamp(settings.SplatSigma, 1.0f, 4.0f)};
         vkCmdPushConstants(commandBuffer, pipelineLayout_->Handle(), VK_SHADER_STAGE_VERTEX_BIT,
                            0, sizeof(push), &push);
         vkCmdDrawIndirect(commandBuffer, drawIndirectBuffer_->Handle(), 0, 1, sizeof(VkDrawIndirectCommand));
         vkCmdEndRenderPass(commandBuffer);
 
-        renderer_.GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
+        renderer_.GetStorageImage(Assets::Bindless::RT_SPLAT_ACCUM)->InsertBarrier(
             commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            VK_ACCESS_SHADER_READ_BIT,
+            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+        renderer_.GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
+            commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
+            VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+
+        const uint32_t composePush = 0;
+        composePipeline_->BindPipeline(commandBuffer, &composePush);
+        vkCmdDispatch(commandBuffer, (extent.width + 7) / 8, (extent.height + 7) / 8, 1);
+
+        renderer_.GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
+            commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
             VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT,
             VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
     }
