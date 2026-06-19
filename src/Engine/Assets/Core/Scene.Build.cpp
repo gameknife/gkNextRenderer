@@ -28,6 +28,79 @@
 
 namespace Assets
 {
+    uint32_t Scene::ComputeRequiredGpuDrivenTriangleCapacity() const
+    {
+        uint64_t expandedTriangleCapacity = 0;
+        for (const auto& node : nodes_)
+        {
+            const auto* render = node->GetComponentPtr<Runtime::RenderComponent>();
+            if (!render || !render->IsDrawable())
+            {
+                continue;
+            }
+
+            const uint32_t modelId = render->GetModelId();
+            const Model* model = GetModel(modelId);
+            if (!model)
+            {
+                continue;
+            }
+
+            for (uint32_t section = 0; section < model->SectionCount(); ++section)
+            {
+                expandedTriangleCapacity += offsets_[modelId * 10 + section].indexCount / 3u;
+            }
+        }
+
+        if (expandedTriangleCapacity > std::numeric_limits<uint32_t>::max())
+        {
+            throw std::overflow_error("GPU-driven scene triangle capacity exceeds uint32_t");
+        }
+        return std::max<uint32_t>(1u, static_cast<uint32_t>(expandedTriangleCapacity));
+    }
+
+    void Scene::EnsureGpuDrivenBufferCapacity(Vulkan::CommandPool& commandPool)
+    {
+        const uint32_t requiredCapacity = ComputeRequiredGpuDrivenTriangleCapacity();
+        if (requiredCapacity <= maxSceneTriangles_)
+        {
+            return;
+        }
+
+        const uint64_t doubledCapacity = static_cast<uint64_t>(maxSceneTriangles_) * 2u;
+        const uint64_t grownCapacity = std::max<uint64_t>(requiredCapacity, doubledCapacity);
+        if (grownCapacity > std::numeric_limits<uint32_t>::max())
+        {
+            throw std::overflow_error("GPU-driven scene triangle capacity exceeds uint32_t");
+        }
+
+        maxSceneTriangles_ = static_cast<uint32_t>(grownCapacity);
+        const VkBufferUsageFlags flags =
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "SoftMeshShaderPrim", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            sizeof(uint32_t) * maxSceneTriangles_, softMeshShaderPrimBuffer_, softMeshShaderPrimBufferMemory_);
+        Vulkan::BufferUtil::CreateDeviceBufferLocal(
+            commandPool, "SoftMeshShaderShadowPrim", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            sizeof(uint32_t) * maxSceneTriangles_ * kSunShadowCascadeCount,
+            softMeshShaderShadowPrimBuffer_, softMeshShaderShadowPrimBufferMemory_);
+
+        const std::vector<Assets::SoftMeshShaderResources> resources = {
+            {
+                softMeshShaderPrimBuffer_->GetDeviceAddress(),
+                softMeshShaderShadowPrimBuffer_->GetDeviceAddress(),
+                softMeshShaderVisibleItemBuffer_->GetDeviceAddress(),
+                softMeshShaderDrawArgBuffer_->GetDeviceAddress(),
+                softMeshShaderDispatchArgBuffer_->GetDeviceAddress(),
+                softMeshShaderCounterBuffer_->GetDeviceAddress(),
+            },
+        };
+        Vulkan::BufferUtil::CreateDeviceBuffer(
+            commandPool, "SoftMeshShaderResources", flags, resources,
+            softMeshShaderResourcesBuffer_, softMeshShaderResourcesBufferMemory_);
+        SPDLOG_INFO("GPU-driven triangle capacity grown to {}", maxSceneTriangles_);
+    }
+
     void Scene::Reload(std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models,
                        std::vector<FMaterial>& materials, std::vector<LightObject>& lights,
                        std::vector<AnimationTrack>& tracks)
@@ -433,7 +506,11 @@ namespace Assets
         lightCount_ = static_cast<uint32_t>(lights_.size());
         indicesCount_ = static_cast<uint32_t>(indices.size());
         verticeCount_ = static_cast<uint32_t>(vertices.size());
-        maxSceneTriangles_ = std::max<uint32_t>(1u, indicesCount_ / 3u);
+
+        // The GPU-driven primitive buffers contain expanded triangles per instance, not just
+        // the unique model geometry stored in the index buffer. Sizing them from indicesCount_
+        // silently dropped later instances when several nodes shared a model.
+        maxSceneTriangles_ = ComputeRequiredGpuDrivenTriangleCapacity();
 
         const VkBufferUsageFlags softMeshShaderFlags =
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
