@@ -1,7 +1,7 @@
 ---
 title: "SoftMeshShader GPU Cull 原子竞争优化 —— 海量 drawcall 下的 primBase 分配开销治理"
 category: plan
-status: 草案
+status: Phase1+2+3 已实现
 owner: engine
 created: 2026-06-19
 last_updated: 2026-06-19
@@ -9,7 +9,11 @@ last_updated: 2026-06-19
 
 # SoftMeshShader GPU Cull 原子竞争优化 —— 海量 drawcall 下的 primBase 分配开销治理
 
-> 状态：**草案（待开发）**。本文为交接文档，后续由其他 agent 接手实现。
+> 状态：**Phase 1 + 2（LDS 主方案）+ Phase 3（subgroup 快路径 + 能力检测 + 回退）全部已实现**（2026-06-19）。缓冲区布局 / Finalize / Expand / C++ dispatch / barrier 均未改动。
+> - **Phase 1/2**：`Task.SoftMeshShaderGpuCullCompact` / `Task.SoftMeshShaderShadowGpuCullCompact` 改为 workgroup-LDS 两级聚合（方案 A），逐 cascade。
+> - **Phase 3**：新增 wave 变体 `Task.SoftMeshShaderGpuCullCompactWave` / `Task.SoftMeshShaderShadowGpuCullCompactWave`（`WavePrefixSum`/`WaveActiveSum`/`WavePrefixCountBits`/`WaveIsFirstLane`/`WaveReadLaneFirst`，免 LDS scan + barrier，per-subgroup 聚合）；公共剔除函数抽到模块 `SoftMeshShaderCull.slang`（`import`）被 4 个 shader 共享，消除重复。C++ 在 `VulkanBaseRenderer` 查询 `VkPhysicalDeviceSubgroupProperties`（要求 `BASIC|ARITHMETIC|BALLOT` + COMPUTE stage），存入 `caps_.supportSubgroupCull`，在管线创建处择 wave/LDS `.spv`，不支持自动回退 LDS。
+> 验证：`gnb build` 两路 `.spv` 均编译、链接通过；`gnb shot --scene assets/models/complex.glb`（高 drawcall，~21k node）在 **wave 路径（log: subgroup size 32, wave fast-path enabled）** 与**强制 LDS 回退路径**下渲染结果均完整无空洞/无垃圾三角形（gapless 紧致分配正确），HUD 的 Scene Stats / Shadow Stats（逐 cascade）正常填充。
+> 本文为交接文档。
 > 范围：仅改 `Task.SoftMeshShaderGpuCullCompact.comp.slang` 与 `Task.SoftMeshShaderShadowGpuCullCompact.comp.slang` 两个 compute shader 的**原子分配逻辑**；Finalize / Expand / 顶点着色器 / C++ dispatch / 缓冲区布局**默认不动**（仅可选快路径需要少量 C++）。
 > 目标：在海量 drawcall（`indirectDrawBatchCount` 数万级，最高到 `MAX_NODES=65535`）下，把 `gpu cull` pass 里逐线程全局原子（尤其是 `counters[0]` 的 CAS 自旋）造成的串行化开销降下来，**不改变可见性输出与统计语义**。
 
@@ -317,11 +321,13 @@ uint itemIdx  = itemBase + laneItemIndex;
 - `VulkanBaseRenderer.GpuDriven.cpp`：counter `vkCmdFillBuffer` 清零、barrier、dispatch、indirect 参数全部不变。
 - `Scene.Build.cpp` 缓冲区布局、`Counters` 尺寸（`slotCount*2`）、`BasicTypes.slang` 结构体不变。
 
-可选（Phase 3，需少量 C++）：
+Phase 3（已实现，2026-06-19）：
 
-- `Engine/Vulkan/Device.*`：查询并缓存 subgroup 能力。
-- 管线创建处：按能力选 `*_wave` / `*_lds` 变体或设 spec constant。
-- 可加一个 overflow 诊断计数器（见 3.2）。
+- `assets/shaders/SoftMeshShaderCull.slang` —— 新增模块，抽出 `IsAABBInFrustum` / `IsOccludedVolume` 供 4 个 cull shader `import` 共享。
+- `assets/shaders/Task.SoftMeshShaderGpuCullCompactWave.comp.slang`、`Task.SoftMeshShaderShadowGpuCullCompactWave.comp.slang` —— 新增 subgroup 快路径变体。
+- `src/Engine/Rendering/VulkanBaseRenderer.{hpp,cpp}` —— 查询 `VkPhysicalDeviceSubgroupProperties` 存 `caps_.supportSubgroupCull`；管线创建按能力择 wave/LDS `.spv`，不支持回退 LDS。
+- 注意：新增 `.spv` 入口需 `gnb build --reconfigure` 重跑 shader glob（`shader_files` 无 CONFIGURE_DEPENDS）。
+- overflow 诊断计数器（见 3.2）仍未做，属可选。
 
 ---
 

@@ -146,6 +146,7 @@ namespace Vulkan
 			bool supportDenoiser         = false;
 			bool streamlineExtsEnabled   = false;
 			bool fullAmbientCubeBudget   = true;
+			bool supportSubgroupCull     = false;
 		};
 
 		struct RayTracingResources
