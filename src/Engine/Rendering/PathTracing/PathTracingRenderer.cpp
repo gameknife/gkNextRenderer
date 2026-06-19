@@ -24,22 +24,6 @@ namespace Vulkan::PathTracing
         constexpr uint32_t kSharcMaxEntriesPow2 = 22;
         constexpr uint32_t kSharcProbePadding = 16;
 
-        // Mirrors PushConsts in Process.AtrousWavelet.comp.slang.
-        struct FAtrousPushConstants
-        {
-            uint32_t inColorSlot;
-            uint32_t outSlot;
-            uint32_t stepSize;
-            uint32_t firstIteration;
-            float sigmaDepth;
-            float sigmaLuma;
-            float sigmaNormalPower;
-            uint32_t isSpecular;
-            float specFootprintScale;
-            float pad0;
-            float pad1;
-        };
-
         static_assert(sizeof(Assets::SharcHashEntry) == 8);
         static_assert(sizeof(Assets::SharcAccumulationEntry) == 16);
         static_assert(sizeof(Assets::SharcResolvedEntry) == 16);
@@ -80,7 +64,7 @@ namespace Vulkan::PathTracing
     {
         rayTracingPipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline( SwapChain(), "assets/shaders/Core.PathTracing.comp.slang.spv", GetScene()));
         accumulatePipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.ReProject.comp.slang.spv", 24));
-        atrousPipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.AtrousWavelet.comp.slang.spv", sizeof(FAtrousPushConstants)));
+        atrousDenoiser_.CreateSwapChain(SwapChain());
         composePipelineNonDenoiser_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Process.DenoiseJBF.comp.slang.spv", GetScene()));
 
         temporalResolve_.SetupHistory(baseRender_, {
@@ -97,7 +81,7 @@ namespace Vulkan::PathTracing
         sharcResolvePipeline_.reset();
         sharcQueryPipeline_.reset();
         accumulatePipeline_.reset();
-        atrousPipeline_.reset();
+        atrousDenoiser_.DeleteSwapChain();
         composePipelineNonDenoiser_.reset();
     }
 
@@ -383,47 +367,8 @@ namespace Vulkan::PathTracing
         // reads via Camera.Denoise*SourceSlot. The diffuse and specular passes run sequentially and
         // share the ping/pong scratch. When disabled, compose falls back to the accumulation buffers.
         {
-            const auto& settings = NextEngine::GetInstance()->GetUserSettings();
-            const int atrousIterations = settings.Denoiser ? std::clamp(settings.DenoiseAtrousIterations, 0, 6) : 0;
-            if (atrousIterations > 0)
-            {
-                SCOPED_GPU_TIMER("atrous pass");
-                const std::array<uint32_t, 2> pingPong{Assets::Bindless::RT_ATROUS_PING, Assets::Bindless::RT_ATROUS_PONG};
-                const uint32_t dispatchX = Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8);
-                const uint32_t dispatchY = Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8);
-
-                auto runAtrous = [&](uint32_t accumSlot, uint32_t finalSlot, bool isSpecular)
-                {
-                    for (int i = 0; i < atrousIterations; ++i)
-                    {
-                        FAtrousPushConstants push{};
-                        push.inColorSlot = (i == 0) ? accumSlot : pingPong[(i - 1) & 1];
-                        push.outSlot = (i == atrousIterations - 1) ? finalSlot : pingPong[i & 1];
-                        push.stepSize = 1u << i;
-                        push.firstIteration = (i == 0) ? 1u : 0u;
-                        push.sigmaDepth = settings.DenoiseSigmaDepth;
-                        push.sigmaLuma = settings.DenoiseAtrousSigmaLuma;
-                        push.sigmaNormalPower = settings.DenoiseAtrousNormalPower;
-                        push.isSpecular = isSpecular ? 1u : 0u;
-                        push.specFootprintScale = settings.DenoiseSpecFootprint;
-                        push.pad0 = 0.0f;
-                        push.pad1 = 0.0f;
-
-                        atrousPipeline_->BindPipeline(commandBuffer, &push);
-                        vkCmdDispatch(commandBuffer, dispatchX, dispatchY, 1);
-
-                        baseRender_.GetStorageImage(push.outSlot)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-                    }
-                };
-
-                runAtrous(Assets::Bindless::RT_ACCUMLATE_DIFFUSE, Assets::Bindless::RT_ATROUS_OUT, false);
-
-                // Serialize the shared ping/pong scratch before the specular pass reuses it (WAR).
-                baseRender_.GetStorageImage(Assets::Bindless::RT_ATROUS_PING)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-                baseRender_.GetStorageImage(Assets::Bindless::RT_ATROUS_PONG)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-
-                runAtrous(Assets::Bindless::RT_ACCUMLATE_SPECULAR, Assets::Bindless::RT_ATROUS_SPEC_OUT, true);
-            }
+            SCOPED_GPU_TIMER("atrous pass");
+            atrousDenoiser_.Run(baseRender_, SwapChain(), commandBuffer, NextEngine::GetInstance()->GetUserSettings());
         }
 
         {

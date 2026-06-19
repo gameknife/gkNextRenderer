@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Engine/Rendering/PipelineCommon/AtrousDenoiser.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Rendering/PipelineCommon/TemporalResolve.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
@@ -64,8 +65,8 @@ namespace Vulkan::PathTracing
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> sharcResolvePipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> composePipelineNonDenoiser_;
 		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> accumulatePipeline_;
-		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> atrousPipeline_;
 
+		PipelineCommon::AtrousDenoiser atrousDenoiser_;
 		PipelineCommon::TemporalResolve temporalResolve_;
 		FSharcState sharc_;
 

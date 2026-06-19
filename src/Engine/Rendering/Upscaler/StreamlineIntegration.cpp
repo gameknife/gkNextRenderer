@@ -46,7 +46,7 @@ namespace
         }
     }
 
-    bool HasDeviceExtension(VkPhysicalDevice physicalDevice, const char* extensionName)
+    bool StreamlineHasDeviceExtension(VkPhysicalDevice physicalDevice, const char* extensionName)
     {
         const auto extensions = Vulkan::GetEnumerateVector(
             physicalDevice,
@@ -801,7 +801,7 @@ namespace
             bool allAvailable = true;
             for (const char* extension : deviceExtensions_)
             {
-                if (HasDeviceExtension(physicalDevice, extension))
+                if (StreamlineHasDeviceExtension(physicalDevice, extension))
                 {
                     AppendUnique(extensions, extension);
                 }

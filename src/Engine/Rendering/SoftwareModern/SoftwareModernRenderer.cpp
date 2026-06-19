@@ -27,6 +27,7 @@ void SoftwareModernRenderer::CreateSwapChain(const VkExtent2D& extent)
 	deferredShadingPipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Core.SwModern.comp.slang.spv", GetScene()));
 
 	accumulatePipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.ReProject.comp.slang.spv", 24));
+	atrousDenoiser_.CreateSwapChain(SwapChain());
 	composePipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Process.DenoiseJBF.comp.slang.spv", GetScene()));
 
 	temporalResolve_.SetupHistory(baseRender_, {
@@ -40,6 +41,7 @@ void SoftwareModernRenderer::DeleteSwapChain()
 {
 	deferredShadingPipeline_.reset();
 	accumulatePipeline_.reset();
+	atrousDenoiser_.DeleteSwapChain();
 	composePipeline_.reset();
 }
 
@@ -88,6 +90,10 @@ void SoftwareModernRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		baseRender_.GetStorageImage(Assets::Bindless::RT_ACCUMLATE_DIFFUSE)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 		baseRender_.GetStorageImage(Assets::Bindless::RT_ACCUMLATE_SPECULAR)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 		baseRender_.GetStorageImage(Assets::Bindless::RT_ACCUMLATE_ALBEDO)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+	}
+	{
+		SCOPED_GPU_TIMER("atrous pass");
+		atrousDenoiser_.Run(baseRender_, SwapChain(), commandBuffer, NextEngine::GetInstance()->GetUserSettings());
 	}
 	{
 		SCOPED_GPU_TIMER("compose pass");
