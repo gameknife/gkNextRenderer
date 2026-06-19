@@ -333,6 +333,26 @@ namespace Vulkan
             rt_ = std::make_unique<RayTracingResources>();
         }
 
+        // Subgroup support gates the wave fast-path of the soft-mesh GPU cull compute
+        // pass (Task.SoftMeshShaderGpuCullCompactWave). We need arithmetic + ballot +
+        // basic ops available in the COMPUTE stage; otherwise fall back to the LDS variant.
+        {
+            VkPhysicalDeviceSubgroupProperties subgroupProps = {};
+            subgroupProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
+            VkPhysicalDeviceProperties2 props2 = {};
+            props2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+            props2.pNext = &subgroupProps;
+            vkGetPhysicalDeviceProperties2(physicalDevice, &props2);
+
+            const VkSubgroupFeatureFlags requiredOps =
+                VK_SUBGROUP_FEATURE_BASIC_BIT | VK_SUBGROUP_FEATURE_ARITHMETIC_BIT | VK_SUBGROUP_FEATURE_BALLOT_BIT;
+            caps_.supportSubgroupCull =
+                ((subgroupProps.supportedOperations & requiredOps) == requiredOps) &&
+                ((subgroupProps.supportedStages & VK_SHADER_STAGE_COMPUTE_BIT) != 0);
+            SPDLOG_INFO("Soft-mesh GPU cull: subgroup size {}, wave fast-path {}",
+                        subgroupProps.subgroupSize, caps_.supportSubgroupCull ? "enabled" : "disabled (LDS fallback)");
+        }
+
         SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nullptr);
 
         ctx_.globalTexturePool.reset(new Assets::GlobalTexturePool(*ctx_.device, *ctx_.commandPool2, *ctx_.commandPool));
@@ -832,10 +852,17 @@ namespace Vulkan
                 rt_->directLightGenPipeline.reset(new PipelineCommon::ZeroBindWithTLASPipeline(SwapChain(), "assets/shaders/Bake.HwAmbientCube.comp.slang.spv", GetScene()));
             }
         }
-        overlay_.gpuCullCompactPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.SoftMeshShaderGpuCullCompact.comp.slang.spv", GetScene()));
+        // Pick the subgroup (wave) fast-path of the GPU cull when the device supports it; otherwise the LDS variant.
+        const char* gpuCullSpv = caps_.supportSubgroupCull
+            ? "assets/shaders/Task.SoftMeshShaderGpuCullCompactWave.comp.slang.spv"
+            : "assets/shaders/Task.SoftMeshShaderGpuCullCompact.comp.slang.spv";
+        const char* shadowGpuCullSpv = caps_.supportSubgroupCull
+            ? "assets/shaders/Task.SoftMeshShaderShadowGpuCullCompactWave.comp.slang.spv"
+            : "assets/shaders/Task.SoftMeshShaderShadowGpuCullCompact.comp.slang.spv";
+        overlay_.gpuCullCompactPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, gpuCullSpv, GetScene()));
         overlay_.softMeshShaderFinalizePipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.SoftMeshShaderFinalize.comp.slang.spv", GetScene()));
         overlay_.softMeshShaderExpandPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.SoftMeshShaderExpand.comp.slang.spv", GetScene()));
-        overlay_.shadowGpuCullCompactPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.SoftMeshShaderShadowGpuCullCompact.comp.slang.spv", GetScene()));
+        overlay_.shadowGpuCullCompactPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, shadowGpuCullSpv, GetScene()));
         skin_.pipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.Skinning.comp.slang.spv", GetScene()));
         overlay_.visualDebuggerPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*frame_.swapChain, "assets/shaders/Util.VisualDebugger.comp.slang.spv", 20));
 
