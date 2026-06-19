@@ -13,7 +13,7 @@ import (
 )
 
 type BuildOptions struct {
-	Target      string
+	Targets     []string
 	Clean       bool
 	Reconfigure bool
 	Jobs        int
@@ -64,14 +64,19 @@ func BuildWithCMake(repoRoot string, cmakePath string, preset string, opts Build
 		console.Info("configure skipped; use --reconfigure to force")
 	}
 
-	buildArgs := []string{"--build", "--preset", preset}
-	if opts.Target != "" {
-		buildArgs = append(buildArgs, "--target", opts.Target)
+	return run(repoRoot, opts.PrintCmd, cmakePath, makeBuildArgs(preset, opts)...)
+}
+
+func makeBuildArgs(preset string, opts BuildOptions) []string {
+	args := []string{"--build", "--preset", preset}
+	if len(opts.Targets) > 0 {
+		args = append(args, "--target")
+		args = append(args, opts.Targets...)
 	}
 	if opts.Jobs > 0 {
-		buildArgs = append(buildArgs, "--parallel", fmt.Sprintf("%d", opts.Jobs))
+		args = append(args, "--parallel", fmt.Sprintf("%d", opts.Jobs))
 	}
-	return run(repoRoot, opts.PrintCmd, cmakePath, buildArgs...)
+	return args
 }
 
 func ListPresets(repoRoot string) error {

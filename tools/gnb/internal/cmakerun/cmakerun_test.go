@@ -3,8 +3,34 @@ package cmakerun
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
+
+func TestMakeBuildArgs(t *testing.T) {
+	t.Run("multiple targets", func(t *testing.T) {
+		got := makeBuildArgs("windows", BuildOptions{
+			Targets: []string{"gkNextRenderer", "gkNextUnitTests"},
+			Jobs:    8,
+		})
+		want := []string{
+			"--build", "--preset", "windows",
+			"--target", "gkNextRenderer", "gkNextUnitTests",
+			"--parallel", "8",
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("makeBuildArgs() = %#v, want %#v", got, want)
+		}
+	})
+
+	t.Run("default target", func(t *testing.T) {
+		got := makeBuildArgs("linux", BuildOptions{})
+		want := []string{"--build", "--preset", "linux"}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("makeBuildArgs() = %#v, want %#v", got, want)
+		}
+	})
+}
 
 func TestRequiresMakeProgramRefresh(t *testing.T) {
 	t.Run("missing want does not force refresh", func(t *testing.T) {

@@ -289,13 +289,11 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 	opts := cmakerun.BuildOptions{}
 	skipSetup := false
 	cmd := &cobra.Command{
-		Use:   "build [target]",
+		Use:   "build [targets...]",
 		Short: "Configure and build the native project",
-		Args:  cobra.MaximumNArgs(1),
+		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 1 {
-				opts.Target = args[0]
-			}
+			opts.Targets = append([]string(nil), args...)
 			if !skipSetup {
 				if _, err := os.Stat(vcpkg.Toolchain(ctx.repoRoot, ctx.cfg)); err != nil {
 					console.Info("首次构建：自动执行 setup（如需跳过用 --skip-setup）")
