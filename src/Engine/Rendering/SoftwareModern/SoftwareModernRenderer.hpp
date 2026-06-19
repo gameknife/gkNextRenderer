@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Assets/AssetsFwd.hpp"
+#include "Engine/Rendering/PipelineCommon/AtrousDenoiser.hpp"
 #include "Engine/Rendering/PipelineCommon/TemporalResolve.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
@@ -29,6 +30,7 @@ namespace Vulkan::SoftwareModern
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> composePipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> accumulatePipeline_;
 
+		PipelineCommon::AtrousDenoiser atrousDenoiser_;
 		PipelineCommon::TemporalResolve temporalResolve_;
 	};
 

@@ -23,6 +23,7 @@ void SoftwareTracingRenderer::CreateSwapChain(const VkExtent2D& extent)
 {
 	deferredShadingPipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Core.SwTracing.comp.slang.spv", GetScene()));
 	accumulatePipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.ReProject.comp.slang.spv", 24));
+	atrousDenoiser_.CreateSwapChain(SwapChain());
 	composePipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Process.DenoiseJBF.comp.slang.spv", GetScene()));
 
 	temporalResolve_.SetupHistory(baseRender_, {
@@ -36,6 +37,7 @@ void SoftwareTracingRenderer::DeleteSwapChain()
 {
 	deferredShadingPipeline_.reset();
 	accumulatePipeline_.reset();
+	atrousDenoiser_.DeleteSwapChain();
 	composePipeline_.reset();
 }
 
@@ -67,8 +69,12 @@ void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t ima
 		baseRender_.GetStorageImage(Assets::Bindless::RT_ACCUMLATE_ALBEDO)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	}
 	{
+		SCOPED_GPU_TIMER("atrous pass");
+		atrousDenoiser_.Run(baseRender_, SwapChain(), commandBuffer, NextEngine::GetInstance()->GetUserSettings());
+	}
+	{
 		SCOPED_GPU_TIMER("compose pass");
-		
+
 		composePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
 		vkCmdDispatch(commandBuffer,
 			Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
