@@ -923,39 +923,24 @@ void NextRendererGameInstance::DrawSettings()
 
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Ray Tracing"), true))
     {
-        static bool rayTracingEnabled = true;
-        DrawSettingCheckboxRow("Enable", &rayTracingEnabled);
-        ImGui::BeginDisabled(!rayTracingEnabled);
         DrawSettingCheckboxRow(LOCTEXT("AntiAlias"), &userSetting.TAA);
         DrawIntSetting(LOCTEXT("Samples"), &userSetting.NumberOfSamples, 1, 16);
         DrawIntSetting(LOCTEXT("Temporal Steps"), &userSetting.AdaptiveSteps, 2, 64);
         DrawSettingCheckboxRow(LOCTEXT("FastGather"), &userSetting.FastGather);
         DrawIntSetting(LOCTEXT("Ambient Speed"), &userSetting.BakeSpeedLevel, 0, 2);
-        ImGui::EndDisabled();
         NextUI::Theme::EndPanelSection();
     }
 
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Denoiser"), true))
     {
-        static int denoiserAlgorithm = 0;
-        const char* denoiserAlgorithms[] = {"HDR JBF", "SVGF", "Atrous", "None"};
-        DrawSettingRow("Algorithm",
-                       [&]()
-                       {
-                           ImGui::SetNextItemWidth(-FLT_MIN);
-                           if (ImGui::Combo("##DenoiserAlgo", &denoiserAlgorithm, denoiserAlgorithms,
-                                            IM_ARRAYSIZE(denoiserAlgorithms)))
-                           {
-                               userSetting.Denoiser = denoiserAlgorithm != 3;
-                               return true;
-                           }
-                           return false;
-                       });
-        DrawFloatSetting(LOCTEXT("DenoiseSigma"), &userSetting.DenoiseSigma, 0.01f, 2.0f, "%.2f", 0.01f);
-        DrawFloatSetting(LOCTEXT("DenoiseSigma Lum"), &userSetting.DenoiseSigmaLum, 0.01f, 50.0f, "%.2f", 0.05f);
-        DrawFloatSetting(LOCTEXT("DenoiseSigma Norm"), &userSetting.DenoiseSigmaNormal, 0.0f, 0.2f, "%.3f", 0.001f);
-        DrawFloatSetting(LOCTEXT("DenoiseSigma Depth"), &userSetting.DenoiseSigmaDepth, 0.0f, 8.0f, "%.2f", 0.05f);
-        DrawIntSetting(LOCTEXT("DenoiseSize"), &userSetting.DenoiseSize, 1, 10);
+        // Single variance-guided a-trous wavelet denoiser. Iterations is the quality/perf knob;
+        // the edge-stop sigmas trade residual noise against detail preservation.
+        DrawSettingCheckboxRow(LOCTEXT("Enable"), &userSetting.Denoiser);
+        DrawIntSetting(LOCTEXT("Atrous Iterations"), &userSetting.DenoiseAtrousIterations, 1, 6);
+        DrawFloatSetting(LOCTEXT("Sigma Luma"), &userSetting.DenoiseAtrousSigmaLuma, 0.5f, 16.0f, "%.2f", 0.1f);
+        DrawFloatSetting(LOCTEXT("Normal Power"), &userSetting.DenoiseAtrousNormalPower, 1.0f, 128.0f, "%.0f", 1.0f);
+        DrawFloatSetting(LOCTEXT("Sigma Depth"), &userSetting.DenoiseSigmaDepth, 0.0f, 8.0f, "%.2f", 0.05f);
+        DrawFloatSetting(LOCTEXT("Spec Footprint"), &userSetting.DenoiseSpecFootprint, 0.0f, 64.0f, "%.1f", 0.5f);
         NextUI::Theme::EndPanelSection();
     }
 

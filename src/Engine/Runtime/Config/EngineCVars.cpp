@@ -63,23 +63,15 @@ namespace NextCVar
         GK_CVAR_UINT("r.maxBounces", settings, MaxNumberOfBounces, 10, ECVarFlags::Archive,
                      "Maximum ray bounce count");
         GK_CVAR_BOOL("r.denoiser", settings, Denoiser, false, ECVarFlags::Archive,
-                     "Enable denoiser");
-        GK_CVAR_FLOAT("r.denoiseSigma", settings, DenoiseSigma, 0.5f, ECVarFlags::Archive,
-                      "Denoise sigma");
-        GK_CVAR_FLOAT("r.denoiseSigmaLum", settings, DenoiseSigmaLum, 10.0f, ECVarFlags::Archive,
-                      "Denoise sigma (luminance)");
-        GK_CVAR_FLOAT("r.denoiseSigmaNormal", settings, DenoiseSigmaNormal, 0.1f, ECVarFlags::Archive,
-                      "Denoise sigma (normal)");
-        GK_CVAR_FLOAT("r.denoiseSigmaDepth", settings, DenoiseSigmaDepth, 2.0f, ECVarFlags::Archive,
-                      "Denoise planar depth tolerance (multiples of local depth slope)");
-        GK_CVAR_INT("r.denoiseSize", settings, DenoiseSize, 5, ECVarFlags::Archive,
-                    "Denoise kernel size");
+                     "Enable the variance-guided a-trous denoiser");
         GK_CVAR_INT("r.denoiseAtrousIterations", settings, DenoiseAtrousIterations, 5, ECVarFlags::Archive,
-                    "Variance-guided a-trous iteration count (0 = fall back to JBF)");
+                    "A-trous wavelet iterations: quality/perf knob (higher = smoother, slower; 1-6)");
         GK_CVAR_FLOAT("r.denoiseAtrousSigmaLuma", settings, DenoiseAtrousSigmaLuma, 4.0f, ECVarFlags::Archive,
                       "A-trous luminance edge-stop sigma (lower = sharper detail, more residual noise)");
         GK_CVAR_FLOAT("r.denoiseAtrousNormalPower", settings, DenoiseAtrousNormalPower, 64.0f, ECVarFlags::Archive,
                       "A-trous normal edge-stop exponent");
+        GK_CVAR_FLOAT("r.denoiseSigmaDepth", settings, DenoiseSigmaDepth, 2.0f, ECVarFlags::Archive,
+                      "A-trous planar depth tolerance (multiples of local depth slope)");
         GK_CVAR_FLOAT("r.denoiseSpecFootprint", settings, DenoiseSpecFootprint, 32.0f, ECVarFlags::Archive,
                       "Specular a-trous filter radius in pixels per unit roughness");
         GK_CVAR_UINT_CB("r.superResolution", settings, SuperResolution, 0, ECVarFlags::Archive,

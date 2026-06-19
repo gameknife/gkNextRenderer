@@ -217,17 +217,11 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.PaperWhiteNit = config_.userSettings.PaperWhiteNit;
     ubo.LightCount = scene_->GetLightCount();
 
-    ubo.BFSigma = config_.userSettings.DenoiseSigma;
-    ubo.BFSigmaLum = config_.userSettings.DenoiseSigmaLum;
-    ubo.BFSigmaNormal = config_.userSettings.DenoiseSigmaNormal;
-    ubo.BFSigmaDepth = config_.userSettings.DenoiseSigmaDepth;
-
-    // Denoiser routing: when the variance-guided a-trous path is active it does the spatial
-    // filtering, so the JBF in the compose pass is disabled (BFSize = 0) and compose reads the
-    // a-trous output. With the denoiser on but a-trous disabled, fall back to the JBF (Phase 0).
+    // Denoiser routing: when the variance-guided a-trous path is active (denoiser on with a
+    // positive iteration count) the compose pass reads the a-trous output; otherwise it reads
+    // the temporal accumulation buffers directly (no spatial filtering).
     const bool denoiserOn = config_.userSettings.Denoiser;
     const int atrousIterations = denoiserOn ? std::clamp(config_.userSettings.DenoiseAtrousIterations, 0, 6) : 0;
-    ubo.BFSize = (denoiserOn && atrousIterations == 0) ? config_.userSettings.DenoiseSize : 0;
     ubo.DenoiseDiffuseSourceSlot = (atrousIterations > 0)
         ? static_cast<uint32_t>(Assets::Bindless::RT_ATROUS_OUT)
         : static_cast<uint32_t>(Assets::Bindless::RT_ACCUMLATE_DIFFUSE);
