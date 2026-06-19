@@ -110,6 +110,12 @@ namespace NextCVar
                       "Profiler heatmap scale");
         GK_CVAR_BOOL("r.checkerboard", settings, UseCheckerBoardRendering, false, ECVarFlags::Archive,
                      "Enable checkerboard rendering");
+        GK_CVAR_UINT("r.splat.bucketCount", settings, SplatBucketCount, 4096, ECVarFlags::Archive,
+                     "Gaussian splat depth-sort bucket count (clamped to 16-4096)");
+        GK_CVAR_UINT("r.splat.maxCount", settings, SplatMaxCount, 0, ECVarFlags::Archive,
+                     "Maximum Gaussian splats processed per frame (0=all)");
+        GK_CVAR_FLOAT("r.splat.sigma", settings, SplatSigma, 3.0f, ECVarFlags::Archive,
+                      "Gaussian billboard radius in standard deviations (clamped to 1-4)");
         GK_CVAR_FLOAT("r.paperWhiteNit", settings, PaperWhiteNit, 600.0f, ECVarFlags::Archive,
                       "Paper white nit");
         GK_CVAR_BOOL("ui.showSettings", settings, ShowSettings, true, ECVarFlags::Archive,
@@ -207,6 +213,8 @@ namespace NextCVar
                      "Show grid");
         GK_CVAR_BOOL("show.wireframe", showFlags, ShowWireframe, false, ECVarFlags::None,
                      "Show wireframe");
+        GK_CVAR_BOOL("show.gaussianSplats", showFlags, ShowGaussianSplats, true, ECVarFlags::None,
+                     "Show Gaussian splat models");
     }
 
 }

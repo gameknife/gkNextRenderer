@@ -36,6 +36,7 @@ namespace Bindless
     public static const int RT_ATROUS_PONG = 19;
     public static const int RT_ATROUS_OUT = 24;
     public static const int RT_ATROUS_SPEC_OUT = 25;
+    public static const int RT_SPLAT_ACCUM = 26;
 
     public static const int RT_SINGLE_PREV_DIFFUSE = 20;
     public static const int RT_SINGLE_PREV_SPECULAR = 21;

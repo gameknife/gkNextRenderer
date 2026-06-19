@@ -15,6 +15,7 @@
 | [gnb 架构与代码导览](guides/gnb-architecture.md) | 🟢 现行 | 2026-06-12 |
 | [gnb CLI](guides/gnb-cli.md) | 🟢 现行 | 2026-06-12 |
 | [gnb 技术栈说明](guides/gnb-tech-stack.md) | 🟢 现行 | 2026-06-12 |
+| [Gaussian Splat / SOG](../AGENT_GUIDE/GaussianSplat.md) | 🟢 现行 | 2026-06-18 |
 | [SCAD 场景生成指引（AGENT 向）](guides/scad-scene-authoring-guide.md) | 🟢 现行 | 2026-06-12 |
 | [Soft Mesh Shader GPU-Driven 提交路径](guides/soft-mesh-shader-gpu-driven-submit.md) | 🟢 现行 | 2026-06-07 |
 | [TypeScript 整合说明](guides/typescript-integration.md) | 🟢 现行 | 2026-06-12 |
@@ -24,7 +25,7 @@
 | 文档 | 状态 | 更新 |
 | --- | --- | --- |
 | [Agent 自动验证（输入驱动 + 断言）系统 — 设计与开发计划](designs/agent-validation-input-driver.md) | ⚪ 待实现 | 2026-06-09 |
-| [高斯溅射（SOG 加载 + GS 渲染模式）设计与开发计划](designs/gaussian-splatting-sog-design.md) | ⚪ 待实现 | 2026-06-18 |
+| [高斯溅射（SOG 加载 + GS 渲染模式）设计与开发计划](designs/gaussian-splatting-sog-design.md) | ✅ 已完成 | 2026-06-18 |
 | [SCAD 加载器（SCADLoader）设计与开发计划](designs/scad-loader-design.md) | ✅ 已完成 | 2026-05-30 |
 | [SCAD Model Generator（SCAD Studio）设计与开发计划](designs/scad-model-generator-design.md) | ✅ 已完成 | 2026-06-07 |
 | [SCAD 刚体骨骼角色（ScadRig）设计与开发计划](designs/scad-rig-design.md) | ✅ 已完成 | 2026-06-13 |

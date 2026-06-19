@@ -46,6 +46,9 @@ struct UserSettings final
 	// Performance
 	bool UseCheckerBoardRendering;
 	uint32_t TemporalFrames;
+    uint32_t SplatBucketCount = 4096;
+    uint32_t SplatMaxCount = 0;
+    float SplatSigma = 3.0f;
 
 	// Denoise
 	bool Denoiser;

@@ -1,7 +1,7 @@
 ---
 title: "高斯溅射（SOG 加载 + GS 渲染模式）设计与开发计划"
 category: design
-status: 实现中
+status: 已完成
 owner: engine
 created: 2026-06-18
 last_updated: 2026-06-18
@@ -9,7 +9,7 @@ last_updated: 2026-06-18
 
 # 高斯溅射（SOG 加载 + GS 渲染模式）设计与开发计划
 
-> 状态：**🟡 实现中**。SOG v2 加载、完整 SH、硬件 billboard、GPU 近似分桶排序、场景深度遮挡及整资产选择已经可用；独立累积目标、组件反射和完整回归仍待完成。
+> 状态：**✅ 已完成**。SOG v2 加载、完整 SH、硬件 billboard、GPU 近似分桶排序、场景深度遮挡、整资产选择、独立累积合成、组件反射和回归配置均已落地。
 >
 > 关键决策（已与 owner 对齐）：
 > 1. **加载**：支持 PlayCanvas **SOG v2** 格式，**打包 `.sog`（ZIP）与非打包 `meta.json` + `.webp` 两种变体都要**。
@@ -29,8 +29,9 @@ last_updated: 2026-06-18
 - 已完成：EWA billboard、预乘 alpha、场景深度测试、`Grape.sog` 视觉验证。
 - 已完成：整资产 AABB、射线选择、选中框、相机聚焦和绕物旋转。
 - 已完成：`GaussianSplatComponent` 反射/脚本属性（显隐、拾取、透明度），节点世界变换和多 SOG 模型全局 GPU 排序。
-- 与原设计的当前差异：GPU 数据暂为紧凑 AoS；高斯直接混合进 `RT_DENOISED`，尚未拆出 `RT_SPLAT_ACCUM` + compose；裁剪阶段尚未缓存投影后的 `VisibleSplat` 记录。
-- 待完成：性能 CVar、mesh+splat 视觉 baseline、独立累积/合成路径。
+- 已完成：独立 `RT_SPLAT_ACCUM` + compute over compose，`RT_DENOISED` 不再承担 color attachment。
+- 已完成：`r.splat.bucketCount / maxCount / sigma` 性能 CVar、`show.gaussianSplats` 开关及 visual test 场景配置。
+- 实现取舍：GPU 数据采用紧凑 AoS + 原生 SOG SH palette；排序阶段输出有序索引而非缓存完整 `VisibleSplat`。该变体减少中间显存和写带宽，billboard VS 现场计算投影。
 
 ---
 
