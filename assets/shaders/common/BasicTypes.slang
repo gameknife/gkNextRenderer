@@ -155,13 +155,8 @@ public struct ALIGN_16 UniformBufferObject
  
     public bool ShowEdge;
     public bool ProgressiveRender;
-    public float BFSigma;
-    public float BFSigmaLum;
- 
-    public float BFSigmaNormal;
-    public uint BFSize;
     public bool FastGather;
-    public float BFSigmaDepth;
+    public uint DenoiseReservedUint0;
 
     public bool DebugDraw_Lighting;
     public bool DebugDraw_ShadowCascadeCoverage;

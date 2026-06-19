@@ -50,16 +50,12 @@ struct UserSettings final
     uint32_t SplatMaxCount = 0;
     float SplatSigma = 3.0f;
 
-	// Denoise
+	// Denoise (variance-guided a-trous wavelet; see PipelineCommon::AtrousDenoiser)
 	bool Denoiser;
-	float DenoiseSigma;
-	float DenoiseSigmaLum;
-	float DenoiseSigmaNormal;
-	float DenoiseSigmaDepth;
-	int DenoiseSize;
-	int DenoiseAtrousIterations;
+	int DenoiseAtrousIterations;    // wavelet iterations: quality/perf knob (higher = smoother, slower)
 	float DenoiseAtrousSigmaLuma;   // variance-guided luminance edge-stop (lower = sharper, noisier)
 	float DenoiseAtrousNormalPower; // a-trous normal edge-stop exponent
+	float DenoiseSigmaDepth;        // planar depth tolerance (multiples of local depth slope)
 	float DenoiseSpecFootprint;     // specular filter radius (pixels) per unit roughness
 
 	float PaperWhiteNit;
