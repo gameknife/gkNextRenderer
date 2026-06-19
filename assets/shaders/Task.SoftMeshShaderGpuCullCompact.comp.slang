@@ -1,52 +1,6 @@
 import Common;
 import Bindless;
 
-bool IsOccludedVolume(float3 min, float3 max, float4x4 wvp)
-{
-    const int GRID_SIZE = 6;
-    const float GRID_SIZE_MINUS_ONE = GRID_SIZE - 1;
-
-    uint2 screenSize = Bindless.GetStorageTextureDimensions<float>(Bindless.RT_PREV_DEPTHBUFFER);
-
-    for (int x = 0; x < GRID_SIZE; x++)
-    {
-        for (int y = 0; y < GRID_SIZE; y++)
-        {
-            for (int z = 0; z < GRID_SIZE; z++)
-            {
-                float3 gridPoint = min + float3(
-                    (max.x - min.x) * (float(x) / GRID_SIZE_MINUS_ONE),
-                    (max.y - min.y) * (float(y) / GRID_SIZE_MINUS_ONE),
-                    (max.z - min.z) * (float(z) / GRID_SIZE_MINUS_ONE));
-
-                float4 clipPos = mul(wvp, float4(gridPoint, 1.0));
-                float3 ndc = clipPos.xyz / clipPos.w;
-                if (any(abs(ndc.xy) > 1.0) || ndc.z < 0.0 || ndc.z > 1.0)
-                {
-                    return false;
-                }
-
-                float2 screenUV = ndc.xy * 0.5 + 0.5;
-                int2 pixelCoord = int2(screenUV * float2(screenSize));
-                if (pixelCoord.x < 0 || pixelCoord.x >= screenSize.x ||
-                    pixelCoord.y < 0 || pixelCoord.y >= screenSize.y)
-                {
-                    return false;
-                }
-
-                float previousDepth = Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER)[pixelCoord];
-                float currentDepth = ndc.z - 0.0001;
-                if (previousDepth > currentDepth)
-                {
-                    return false;
-                }
-            }
-        }
-    }
-
-    return true;
-}
-
 bool IsAABBInFrustum(float3 min, float3 max, float4x4 wvp)
 {
     float3 corners[8];
@@ -129,7 +83,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
     NodeProxy node = scene.Nodes[DTid.x];
     ModelData model = scene.Offsets[node.modelId];
     uint triangleCount = model.indexCount / 3;
-    float4x4 mvp = mul(scene.Camera[0].PrevViewProjectionUnJit, node.worldTS);
+    // Frustum culling must use the current camera. The previous camera was only
+    // needed by the removed temporal depth test and caused one-frame edge pops.
+    float4x4 mvp = mul(scene.Camera[0].ViewProjectionUnJit, node.worldTS);
 
     bool shouldDraw = (node.visible > 0) && IsAABBInFrustum(model.localAabbMin.xyz, model.localAabbMax.xyz, mvp);
 
@@ -137,13 +93,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
     {
         InterlockedAdd(scene.GPUDrivenStats[0].ProcessedCount, 1);
         InterlockedAdd(scene.GPUDrivenStats[0].TriangleCount, triangleCount);
-
-        if (IsOccludedVolume(model.localAabbMin.xyz, model.localAabbMax.xyz, mvp))
-        {
-            InterlockedAdd(scene.GPUDrivenStats[0].CulledCount, 1);
-            InterlockedAdd(scene.GPUDrivenStats[0].CulledTriangleCount, triangleCount);
-            shouldDraw = false;
-        }
     }
 
     if (!shouldDraw || triangleCount == 0)

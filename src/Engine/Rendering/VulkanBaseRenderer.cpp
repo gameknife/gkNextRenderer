@@ -1086,6 +1086,10 @@ namespace Vulkan
             }
             frame_.currentFence = frameSlotFence;
 
+            // Runtime node creation can increase the expanded primitive count. Resize only after
+            // the previous queue submission has completed so no in-flight work retains old addresses.
+            GetScene().EnsureGpuDrivenBufferCapacity(*ctx_.commandPool);
+
             {
                 SCOPED_CPU_TIMER("update uniform");
                 UpdateUniformBuffer(frame_.currentImageIndex);

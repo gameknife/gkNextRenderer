@@ -71,6 +71,7 @@ namespace Assets
                                      std::vector<LightObject>& lights, std::vector<AnimationTrack>& tracks,
                                      const std::vector<Skeleton>& skeletons);
         void RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing);
+        void EnsureGpuDrivenBufferCapacity(Vulkan::CommandPool& commandPool);
         void CleanUp();
         // void RebuildBVH();
 
@@ -369,6 +370,7 @@ namespace Assets
         VkDeviceAddress skinnedVerticesAddr_ = 0;
         VkDeviceAddress jointMatricesAddr_ = 0;
 
+        uint32_t ComputeRequiredGpuDrivenTriangleCapacity() const;
         Assets::GPUScene BuildGPUScene(uint32_t imageIndex) const;
     };
 } // namespace Assets
