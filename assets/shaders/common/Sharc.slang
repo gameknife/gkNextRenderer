@@ -193,6 +193,151 @@ public void SharcResolveOfficialEntry(uint entryIndex)
     SharcResolveEntry(entryIndex, SharcBuildParameters(), resolveParameters);
 }
 
+// Segment throughput ratio (after / before), only needed by the SHARC update cache.
+float3 SharcComputeSegmentThroughput(float3 rayColorBefore, float3 rayColorAfter)
+{
+    return float3(
+        rayColorBefore.x > 1e-6f ? rayColorAfter.x / rayColorBefore.x : 0.0f,
+        rayColorBefore.y > 1e-6f ? rayColorAfter.y / rayColorBefore.y : 0.0f,
+        rayColorBefore.z > 1e-6f ? rayColorAfter.z / rayColorBefore.z : 0.0f);
+}
+
+float SharcMaterialRoughness(Vertex vertex)
+{
+    Material mat = Bindless.GetGpuscene().GetMaterial(vertex.MaterialIndex);
+    float roughness = mat.Fuzziness;
+    if (mat.MRATextureId >= 0)
+    {
+        float4 mra = Bindless.GetSampleTexture(mat.MRATextureId).SampleLevel(vertex.TexCoord, 0);
+        roughness = roughness * mra.g;
+    }
+    return roughness;
+}
+
+// IRadianceCache implementation feeding the SHARC update pass.
+public struct FSharcUpdateCache : IRadianceCache
+{
+    public float UpdateSampleRatio = 1.0f;
+    SharcState state;
+
+    [mutating] public void BeginPath()
+    {
+        SharcInitPathState(state);
+    }
+
+    public bool ShouldShadePixel(int2 pixel, UniformBufferObject camera)
+    {
+        if (UpdateSampleRatio <= 0.0f)
+        {
+            return false;
+        }
+        if (UpdateSampleRatio >= 1.0f)
+        {
+            return true;
+        }
+
+        const uint tileSize = 5u;
+        const uint tileSampleCount = tileSize * tileSize;
+        uint activeSlots = clamp(uint(ceil(UpdateSampleRatio * float(tileSampleCount))), 1u, tileSampleCount);
+        uint tileIndex = uint(pixel.x % int(tileSize)) + uint(pixel.y % int(tileSize)) * tileSize;
+        uint frameOffset = (camera.TotalFrames * 7u) % tileSampleCount;
+        uint rotatedTileIndex = (tileIndex + frameOffset) % tileSampleCount;
+        return rotatedTileIndex < activeSlots;
+    }
+
+    public bool WantsDirectLighting() { return true; }
+
+    [mutating] public bool OnSurfaceHit(float3 position, float3 normal, float3 directLighting, inout uint4 randomSeed)
+    {
+        return SharcUpdatePathHit(state, position, normal, directLighting, RandomFloat(randomSeed));
+    }
+
+    [mutating] public void OnSegmentThroughput(float3 rayColorBefore, float3 rayColorAfter)
+    {
+        SharcSetPathThroughput(state, SharcComputeSegmentThroughput(rayColorBefore, rayColorAfter));
+    }
+
+    [mutating] public void OnMiss(float3 radiance)
+    {
+        SharcUpdatePathMiss(state, radiance);
+    }
+
+    [mutating] public bool TryQueryRadiance(Vertex vertex, bool hitReflect, bool hitMetal,
+                                            uint bounce, float segmentLength, out float4 radiance)
+    {
+        radiance = float4(0, 0, 0, 0);
+        return false;
+    }
+}
+
+// IRadianceCache implementation that short-circuits paths with SHARC-cached radiance.
+public struct FSharcQueryCache : IRadianceCache
+{
+    public float RoughnessMin = 0.35f;
+    public uint MinBounce = 1u;
+    public uint DebugMode = 0u;
+
+    [mutating] public void BeginPath() {}
+
+    public bool ShouldShadePixel(int2 pixel, UniformBufferObject camera) { return true; }
+
+    public bool WantsDirectLighting() { return false; }
+
+    [mutating] public bool OnSurfaceHit(float3 position, float3 normal, float3 directLighting, inout uint4 randomSeed)
+    {
+        return true;
+    }
+
+    [mutating] public void OnSegmentThroughput(float3 rayColorBefore, float3 rayColorAfter) {}
+
+    [mutating] public void OnMiss(float3 radiance) {}
+
+    bool CanQueryAtBounce(Vertex vertex, bool hitReflect, bool hitMetal, uint bounce, float segmentLength)
+    {
+        if (bounce < MinBounce || hitReflect || hitMetal)
+        {
+            return false;
+        }
+
+        Material mat = Bindless.GetGpuscene().GetMaterial(vertex.MaterialIndex);
+        if (mat.MaterialModel == MaterialDielectric || mat.MaterialModel == MaterialDiffuseLight)
+        {
+            return false;
+        }
+
+        if (SharcMaterialRoughness(vertex) < RoughnessMin)
+        {
+            return false;
+        }
+
+        float voxelSize = SharcGetVoxelSizeAt(vertex.Position);
+        return voxelSize <= 0.0f || segmentLength >= voxelSize;
+    }
+
+    [mutating] public bool TryQueryRadiance(Vertex vertex, bool hitReflect, bool hitMetal,
+                                            uint bounce, float segmentLength, out float4 radiance)
+    {
+        radiance = float4(0, 0, 0, 0);
+        if (!CanQueryAtBounce(vertex, hitReflect, hitMetal, bounce, segmentLength))
+        {
+            return false;
+        }
+
+        float4 cachedRadiance = float4(0, 0, 0, 0);
+        if (SharcQuery(vertex.Position, vertex.Normal, cachedRadiance))
+        {
+            radiance = DebugMode == 1u ? float4(0, 1, 0, 1) : cachedRadiance;
+            return true;
+        }
+        else if (DebugMode == 2u)
+        {
+            radiance = float4(1, 0, 0, 1);
+            return true;
+        }
+        return false;
+    }
+}
+
 #else
 
 public struct SharcState

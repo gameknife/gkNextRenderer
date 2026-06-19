@@ -19,6 +19,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.SampleDownscale = 2;
     renderer.FuzzyTracing = true;
     renderer.ForceExitAfterFirst = true;
+    renderer.SecondaryDirectMode = 0;
     renderer.Init(DTid.xy);
 
     if( !renderer.PrimaryHit(rayCaster) )
@@ -27,6 +28,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    renderer.Render(tracer, dIlluminator, 1);
+    FNullRadianceCache cache;
+    renderer.Render(tracer, dIlluminator, cache, 1);
     END_SHADERCLOCK(DTid.xy)
 }

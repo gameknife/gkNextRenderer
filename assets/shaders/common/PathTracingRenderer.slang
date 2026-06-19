@@ -157,55 +157,12 @@ public struct FPathTracingRenderer{
     public bool ForceExitAfterFirst = false;
     public bool EnableSoftTracingAdaptiveOffset = false;
     public bool UseAmbientCubeTerminal = true;
-    public bool EnableSharcUpdate = false;
-    public bool EnableSharcQuery = false;
     public bool WriteOutputs = true;
-    public uint SharcDebugMode = 0;
-    public float SharcUpdateSampleRatio = 1.0f;
-    public float SharcQueryRoughnessMin = 0.35f;
-    public uint SharcQueryMinBounce = 1u;
-
-    public float GetMaterialRoughness(Vertex vertex)
-    {
-        Material mat = Bindless.GetGpuscene().GetMaterial(vertex.MaterialIndex);
-        float roughness = mat.Fuzziness;
-        if (mat.MRATextureId >= 0)
-        {
-            float4 mra = Bindless.GetSampleTexture(mat.MRATextureId).SampleLevel(vertex.TexCoord, 0);
-            roughness = roughness * mra.g;
-        }
-        return roughness;
-    }
-
-    public bool CanUseSharcAtBounce(Vertex vertex, bool hitReflect, bool hitMetal, uint bounce, float segmentLength)
-    {
-        if (!EnableSharcQuery || bounce < SharcQueryMinBounce || hitReflect || hitMetal)
-        {
-            return false;
-        }
-
-        Material mat = Bindless.GetGpuscene().GetMaterial(vertex.MaterialIndex);
-        if (mat.MaterialModel == MaterialDielectric || mat.MaterialModel == MaterialDiffuseLight)
-        {
-            return false;
-        }
-
-        if (GetMaterialRoughness(vertex) < SharcQueryRoughnessMin)
-        {
-            return false;
-        }
-
-        float voxelSize = SharcGetVoxelSizeAt(vertex.Position);
-        return voxelSize <= 0.0f || segmentLength >= voxelSize;
-    }
-
-    public float3 ComputeSegmentThroughput(float3 rayColorBefore, float3 rayColorAfter)
-    {
-        return float3(
-            rayColorBefore.x > 1e-6f ? rayColorAfter.x / rayColorBefore.x : 0.0f,
-            rayColorBefore.y > 1e-6f ? rayColorAfter.y / rayColorBefore.y : 0.0f,
-            rayColorBefore.z > 1e-6f ? rayColorAfter.z / rayColorBefore.z : 0.0f);
-    }
+    // Secondary (post-first-bounce) direct lighting strategy, decoupled from any cache:
+    //   0 = PlainSunNEE          : naive PT 50% random sun next-event estimation
+    //   1 = DirectTerminateIfLit : terminate the path once it sees direct light (cache provides indirect)
+    //   2 = None                 : no secondary direct lighting (direct already fed to the cache)
+    public uint SecondaryDirectMode = 0;
 
     [mutating]
     public float3 EvaluateDirectLighting(IDirectIlluminator directIllum, Vertex vertex)
@@ -215,42 +172,16 @@ public struct FPathTracingRenderer{
         return max(directIllumColor.rgb, float3(0, 0, 0));
     }
 
-    public bool ShouldRunSharcUpdateSample(UniformBufferObject Camera)
+    // Radiance applied when a path is forced to terminate on a surface.
+    // Returns the terminal radiance; the caller multiplies it into RayColor and,
+    // when ambient-cube terminal is active, feeds it to the cache as a miss.
+    float4 ApplyTerminalRadiance(Vertex vertex)
     {
-        if (!EnableSharcUpdate)
-        {
-            return true;
-        }
-        if (SharcUpdateSampleRatio <= 0.0f)
-        {
-            return false;
-        }
-        if (SharcUpdateSampleRatio >= 1.0f)
-        {
-            return true;
-        }
-
-        const uint tileSize = 5u;
-        const uint tileSampleCount = tileSize * tileSize;
-        uint activeSlots = clamp(uint(ceil(SharcUpdateSampleRatio * float(tileSampleCount))), 1u, tileSampleCount);
-        uint tileIndex = uint(pixel_.x % int(tileSize)) + uint(pixel_.y % int(tileSize)) * tileSize;
-        uint frameOffset = (Camera.TotalFrames * 7u) % tileSampleCount;
-        uint rotatedTileIndex = (tileIndex + frameOffset) % tileSampleCount;
-        return rotatedTileIndex < activeSlots;
-    }
-
-    void ApplyTerminalRadiance(Vertex vertex, inout float4 rayColor, inout SharcState sharcState)
-    {
-        float4 terminalRadiance = float4(0, 0, 0, 1);
         if (UseAmbientCubeTerminal)
         {
-            terminalRadiance = interpolateAmbientCubes<FullAmbientCubeSampler>(vertex.Position, vertex.Normal);
-            if (EnableSharcUpdate)
-            {
-                SharcUpdatePathMiss(sharcState, terminalRadiance.rgb);
-            }
+            return interpolateAmbientCubes<FullAmbientCubeSampler>(vertex.Position, vertex.Normal);
         }
-        rayColor *= terminalRadiance;
+        return float4(0, 0, 0, 1);
     }
 
     bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, inout bool hitReflect, inout bool hitMetal, out float outHitDist, out bool outHitMiss, out float3 outTerminalRadiance)
@@ -369,11 +300,11 @@ public struct FPathTracingRenderer{
     }
 
     [mutating]
-    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, int sampleMultiplier)
+    public void Render<TCache : IRadianceCache>(IRayTracer tracer, IDirectIlluminator directIllum, inout TCache cache, int sampleMultiplier)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
 
-        if (!ShouldRunSharcUpdateSample(Camera))
+        if (!cache.ShouldShadePixel(pixel_, Camera))
         {
             return;
         }
@@ -398,15 +329,12 @@ public struct FPathTracingRenderer{
         }
 
         const int sample = max(1, Camera.NumberOfSamples / SampleDownscale * sampleMultiplier);
+        const bool wantsDirect = cache.WantsDirectLighting();
 
         for (int i = 0; i < sample; i++)
         {
             float4 RayColor = float4(1, 1, 1, 1);
-            SharcState sharcState;
-            if (EnableSharcUpdate)
-            {
-                SharcInitPathState(sharcState);
-            }
+            cache.BeginPath();
 
             float4 eye = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
             float3 ray_dir = normalize(hitPrimaryVertex_.Position - eye.xyz);
@@ -416,130 +344,85 @@ public struct FPathTracingRenderer{
 
             uint maxBounces = mat.MaterialModel == MaterialDielectric ? Camera.MaxNumberOfBounces : Camera.NumberOfBounces;
 
+            // Accumulation flags / hit distance come from the first bounce only.
             bool hitReflect = false;
             bool hitMetal = false;
             float hitDist = 0;
-            bool sharcContinue = true;
-            if (EnableSharcUpdate)
-            {
-                sharcContinue = SharcUpdatePathHit(
-                    sharcState,
-                    vertexStart.Position,
-                    vertexStart.Normal,
-                    EvaluateDirectLighting(directIllum, vertexStart),
-                    RandomFloat(RandomSeed_));
-            }
 
-            bool hitMiss = false;
-            float3 terminalRadiance = float3(0, 0, 0);
-            float3 rayColorBefore = RayColor.rgb;
-            bool exitFirst = !sharcContinue || GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed_, hitReflect, hitMetal, hitDist, hitMiss, terminalRadiance);
-            if (EnableSharcUpdate && sharcContinue)
+            // Record the primary vertex as the path start.
+            float3 startDirect = wantsDirect ? EvaluateDirectLighting(directIllum, vertexStart) : float3(0, 0, 0);
+            bool pathContinue = cache.OnSurfaceHit(vertexStart.Position, vertexStart.Normal, startDirect, RandomSeed_);
+
+            for (uint b = 0; b < maxBounces && pathContinue; ++b)
             {
-                if (exitFirst)
+                bool bHitReflect = false;
+                bool bHitMetal = false;
+                float bHitDist = 0;
+                bool bHitMiss = false;
+                float3 bTerminalRadiance = float3(0, 0, 0);
+                float3 rayColorBefore = RayColor.rgb;
+                bool segmentExit = GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed_, bHitReflect, bHitMetal, bHitDist, bHitMiss, bTerminalRadiance);
+
+                if (b == 0)
                 {
-                    if (hitMiss)
-                    {
-                        SharcUpdatePathMiss(sharcState, terminalRadiance);
-                    }
-                    else if (any(terminalRadiance > float3(0, 0, 0)))
-                    {
-                        SharcUpdatePathHit(sharcState, vertexStart.Position, vertexStart.Normal, terminalRadiance, RandomFloat(RandomSeed_));
-                    }
+                    hitReflect = bHitReflect;
+                    hitMetal = bHitMetal;
+                    hitDist = bHitDist;
                 }
-                else
+
+                if (segmentExit)
                 {
-                    SharcSetPathThroughput(sharcState, ComputeSegmentThroughput(rayColorBefore, RayColor.rgb));
-                    sharcContinue = SharcUpdatePathHit(
-                        sharcState,
-                        vertexStart.Position,
-                        vertexStart.Normal,
-                        EvaluateDirectLighting(directIllum, vertexStart),
-                        RandomFloat(RandomSeed_));
-                    exitFirst = !sharcContinue;
+                    if (bHitMiss)
+                    {
+                        cache.OnMiss(bTerminalRadiance);
+                    }
+                    else if (any(bTerminalRadiance > float3(0, 0, 0)))
+                    {
+                        // Emissive terminator: record it as a hit with emissive radiance.
+                        cache.OnSurfaceHit(vertexStart.Position, vertexStart.Normal, bTerminalRadiance, RandomSeed_);
+                    }
+                    break;
                 }
-            }
-            if (!exitFirst && CanUseSharcAtBounce(vertexStart, hitReflect, hitMetal, 1u, hitDist))
-            {
+
+                cache.OnSegmentThroughput(rayColorBefore, RayColor.rgb);
+                float3 segmentDirect = wantsDirect ? EvaluateDirectLighting(directIllum, vertexStart) : float3(0, 0, 0);
+                pathContinue = cache.OnSurfaceHit(vertexStart.Position, vertexStart.Normal, segmentDirect, RandomSeed_);
+                if (!pathContinue)
+                {
+                    break;
+                }
+
                 float4 cachedRadiance = float4(0, 0, 0, 0);
-                if (SharcQuery(vertexStart.Position, vertexStart.Normal, cachedRadiance))
+                if (cache.TryQueryRadiance(vertexStart, bHitReflect, bHitMetal, b + 1u, bHitDist, cachedRadiance))
                 {
-                    RayColor *= SharcDebugMode == 1u ? float4(0, 1, 0, 1) : cachedRadiance;
-                    exitFirst = true;
+                    RayColor *= cachedRadiance;
+                    break;
                 }
-                else if (SharcDebugMode == 2u)
+
+                if (b == 0)
                 {
-                    RayColor *= float4(1, 0, 0, 1);
-                    exitFirst = true;
-                }
-            }
-            if (!exitFirst)
-            {
-                if(ForceExitAfterFirst || (ExitAfterFirst && mat.MaterialModel != MaterialDielectric) )
-                {
-                    if(!FuzzyTracing)
+                    // First-bounce tail: optionally terminate immediately after the first hit.
+                    if (ForceExitAfterFirst || (ExitAfterFirst && mat.MaterialModel != MaterialDielectric))
                     {
-                        ApplyTerminalRadiance(vertexStart, RayColor, sharcState);
+                        if (!FuzzyTracing)
+                        {
+                            float4 terminalRadiance = ApplyTerminalRadiance(vertexStart);
+                            RayColor *= terminalRadiance;
+                            if (UseAmbientCubeTerminal)
+                            {
+                                cache.OnMiss(terminalRadiance.rgb);
+                            }
+                        }
+                        break;
                     }
+                    // Otherwise fall through to the next bounce (no secondary direct, no RR at bounce 0).
                 }
                 else
                 {
-                    for (uint b = 1; b < maxBounces; ++b)
+                    // Secondary (post-first-bounce) direct lighting strategy.
+                    if (!bHitReflect)
                     {
-                        bool hitReflectDontCare = false;
-                        bool hitMetalDontCare = false;
-                        float hitDistDontCare = 0;
-                        bool segmentHitMiss = false;
-                        float3 segmentTerminalRadiance = float3(0, 0, 0);
-                        rayColorBefore = RayColor.rgb;
-                        bool segmentExit = GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed_, hitReflectDontCare, hitMetalDontCare, hitDistDontCare, segmentHitMiss, segmentTerminalRadiance);
-                        if (EnableSharcUpdate && sharcContinue)
-                        {
-                            if (segmentExit)
-                            {
-                                if (segmentHitMiss)
-                                {
-                                    SharcUpdatePathMiss(sharcState, segmentTerminalRadiance);
-                                }
-                                else if (any(segmentTerminalRadiance > float3(0, 0, 0)))
-                                {
-                                    SharcUpdatePathHit(sharcState, vertexStart.Position, vertexStart.Normal, segmentTerminalRadiance, RandomFloat(RandomSeed_));
-                                }
-                            }
-                            else
-                            {
-                                SharcSetPathThroughput(sharcState, ComputeSegmentThroughput(rayColorBefore, RayColor.rgb));
-                                sharcContinue = SharcUpdatePathHit(
-                                    sharcState,
-                                    vertexStart.Position,
-                                    vertexStart.Normal,
-                                    EvaluateDirectLighting(directIllum, vertexStart),
-                                    RandomFloat(RandomSeed_));
-                                segmentExit = !sharcContinue;
-                            }
-                        }
-
-                        if (segmentExit)
-                        {
-                            break;
-                        }
-
-                        if (CanUseSharcAtBounce(vertexStart, hitReflectDontCare, hitMetalDontCare, b + 1u, hitDistDontCare))
-                        {
-                            float4 cachedRadiance = float4(0, 0, 0, 0);
-                            if (SharcQuery(vertexStart.Position, vertexStart.Normal, cachedRadiance))
-                            {
-                                RayColor *= SharcDebugMode == 1u ? float4(0, 1, 0, 1) : cachedRadiance;
-                                break;
-                            }
-                            else if (SharcDebugMode == 2u)
-                            {
-                                RayColor *= float4(1, 0, 0, 1);
-                                break;
-                            }
-                        }
-
-                        if (!hitReflectDontCare && EnableSharcQuery)
+                        if (SecondaryDirectMode == 1u)
                         {
                             float3 directRadiance = EvaluateDirectLighting(directIllum, vertexStart);
                             if (any(directRadiance > float3(0, 0, 0)))
@@ -548,7 +431,7 @@ public struct FPathTracingRenderer{
                                 break;
                             }
                         }
-                        else if (!hitReflectDontCare && !EnableSharcUpdate && Camera.HasSun && (RandomFloat(RandomSeed_) < 0.5f))
+                        else if (SecondaryDirectMode == 0u && Camera.HasSun && (RandomFloat(RandomSeed_) < 0.5f))
                         {
                             const float3 lightVector = Camera.SunDirection.xyz;
                             const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed_, cos(0.25f / 180.f * M_PI)), lightVector);
@@ -563,23 +446,28 @@ public struct FPathTracingRenderer{
                                 break;
                             }
                         }
+                    }
 
-                        // 提前退出
-                        const bool earlyExit = b > 0 && (mat.MaterialModel != MaterialDielectric) && (RandomFloat(RandomSeed_) < ExitProbability);
+                    // 提前退出
+                    const bool earlyExit = (mat.MaterialModel != MaterialDielectric) && (RandomFloat(RandomSeed_) < ExitProbability);
 
-                        // 终结路径
-                        if (b == maxBounces - 1 || earlyExit)
+                    // 终结路径
+                    if (b == maxBounces - 1 || earlyExit)
+                    {
+                        if (mat.MaterialModel == MaterialDielectric)
                         {
-                            if (mat.MaterialModel == MaterialDielectric)
-                            {
-                                RayColor *= float4(0, 0, 0, 1);
-                            }
-                            else
-                            {
-                                ApplyTerminalRadiance(vertexStart, RayColor, sharcState);
-                            }
-                            break;
+                            RayColor *= float4(0, 0, 0, 1);
                         }
+                        else
+                        {
+                            float4 terminalRadiance = ApplyTerminalRadiance(vertexStart);
+                            RayColor *= terminalRadiance;
+                            if (UseAmbientCubeTerminal)
+                            {
+                                cache.OnMiss(terminalRadiance.rgb);
+                            }
+                        }
+                        break;
                     }
                 }
             }
@@ -678,7 +566,11 @@ public struct FPathTracingRenderer{
         return true;
     }
 
-    public void WriteSharcDebugOutput(float4 color)
+    public uint2 GetSize() { return size_; }
+    public Vertex GetPrimaryVertex() { return hitPrimaryVertex_; }
+
+    // Generic debug-color G-buffer write (used by entry-shader debug views).
+    public void WriteDebugColor(float4 color)
     {
         OutSingleDiffuse.Store(pixel_, color);
         OutSingleSpecular.Store(pixel_, float4(0, 0, 0, 0));
@@ -692,24 +584,17 @@ public struct FPathTracingRenderer{
         OutSpecularAlbedo.Store(pixel_, float4(0, 0, 0, 0));
     }
 
-    public void WriteSharcDebugOccupancy()
+    // Debug view: cached radiance modulated by primary albedo. The cache query
+    // is performed by the entry shader and its result passed in here so the
+    // renderer stays free of any cache-specific symbols.
+    public void WriteDebugCachedRadiance(float4 cachedRadiance, bool hit)
     {
-        WriteSharcDebugOutput(float4(SharcDebugOccupancy(uint2(pixel_), size_), 1));
-    }
-
-    public void WriteSharcDebugRadiance()
-    {
-        float4 cachedRadiance = float4(0, 0, 0, 1);
-        if (SharcQuery(hitPrimaryVertex_.Position, hitPrimaryVertex_.Normal, cachedRadiance))
+        float4 outColor = float4(0, 0, 0, 1);
+        if (hit)
         {
-            cachedRadiance = float4(max(cachedRadiance.rgb * primaryAlbedo_.rgb, float3(0, 0, 0)), 1);
+            outColor = float4(max(cachedRadiance.rgb * primaryAlbedo_.rgb, float3(0, 0, 0)), 1);
         }
-        WriteSharcDebugOutput(cachedRadiance);
-    }
-
-    public void WriteSharcDebugSampleStale()
-    {
-        WriteSharcDebugOutput(float4(SharcDebugSampleStale(uint2(pixel_), size_), 1));
+        WriteDebugColor(outColor);
     }
 
     [mutating]

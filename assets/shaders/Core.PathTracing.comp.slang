@@ -19,6 +19,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.SampleDownscale = 1;
     renderer.FuzzyTracing = false;
     renderer.ForceExitAfterFirst = false;
+    renderer.SecondaryDirectMode = 0;
     renderer.Init(DTid.xy);
 
     if( !renderer.PrimaryHit(rayCaster) )
@@ -27,7 +28,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
+    FNullRadianceCache cache;
     int sampleMultiplier = Bindless.GetStorageTexture<uint>(Bindless.RT_MOTIONMOMENT)[DTid.xy] > 0 ? 4 : 1;
-    renderer.Render(tracer, dIlluminator, sampleMultiplier);
+    renderer.Render(tracer, dIlluminator, cache, sampleMultiplier);
     END_SHADERCLOCK(DTid.xy)
 }
