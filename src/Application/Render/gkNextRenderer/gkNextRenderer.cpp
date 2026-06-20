@@ -932,10 +932,11 @@ void NextRendererGameInstance::DrawSettings()
 
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Denoiser"), true))
     {
-        // Single variance-guided a-trous wavelet denoiser. Iterations is the quality/perf knob;
-        // the edge-stop sigmas trade residual noise against detail preservation.
+        // Variance-guided a-trous wavelet denoiser. Diffuse/specular run in one fused pass;
+        // specular often needs fewer iterations to preserve glossy detail.
         DrawSettingCheckboxRow(LOCTEXT("Enable"), &userSetting.Denoiser);
-        DrawIntSetting(LOCTEXT("Atrous Iterations"), &userSetting.DenoiseAtrousIterations, 1, 6);
+        DrawIntSetting(LOCTEXT("Diffuse Iterations"), &userSetting.DenoiseAtrousIterations, 1, 6);
+        DrawIntSetting(LOCTEXT("Specular Iterations"), &userSetting.DenoiseAtrousSpecularIterations, 0, 6);
         DrawFloatSetting(LOCTEXT("Sigma Luma"), &userSetting.DenoiseAtrousSigmaLuma, 0.5f, 16.0f, "%.2f", 0.1f);
         DrawFloatSetting(LOCTEXT("Normal Power"), &userSetting.DenoiseAtrousNormalPower, 1.0f, 128.0f, "%.0f", 1.0f);
         DrawFloatSetting(LOCTEXT("Sigma Depth"), &userSetting.DenoiseSigmaDepth, 0.0f, 8.0f, "%.2f", 0.05f);

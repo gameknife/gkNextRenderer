@@ -6,6 +6,7 @@
   "r.maxBounces": 10,
   "r.denoiser": false,
   "r.denoiseAtrousIterations": 5,
+  "r.denoiseAtrousSpecularIterations": 3,
   "r.denoiseAtrousSigmaLuma": 4.0,
   "r.denoiseAtrousNormalPower": 64.0,
   "r.denoiseSigmaDepth": 2.0,

@@ -29,14 +29,14 @@ namespace Bindless
     public static const int RT_SPECULAR_HITDIST = 16;
     public static const int RT_SPECULAR_ALBEDO = 17;
 
-    // Variance-guided a-trous wavelet ping-pong (Phase 2). RGBA16F: rgb = filtered diffuse, a = variance.
-    // The ping/pong scratch is shared between the diffuse and specular passes (run sequentially);
-    // each channel keeps its own final output so the compose pass can read both.
+    // Variance-guided a-trous wavelet ping-pong (Phase 2). RGBA16F: rgb = filtered color, a = variance.
     public static const int RT_ATROUS_PING = 18;
     public static const int RT_ATROUS_PONG = 19;
     public static const int RT_ATROUS_OUT = 24;
     public static const int RT_ATROUS_SPEC_OUT = 25;
     public static const int RT_SPLAT_ACCUM = 26;
+    public static const int RT_ATROUS_SPEC_PING = 27;
+    public static const int RT_ATROUS_SPEC_PONG = 28;
 
     public static const int RT_SINGLE_PREV_DIFFUSE = 20;
     public static const int RT_SINGLE_PREV_SPECULAR = 21;
