@@ -925,7 +925,6 @@ void NextRendererGameInstance::DrawSettings()
     {
         DrawSettingCheckboxRow(LOCTEXT("AntiAlias"), &userSetting.TAA);
         DrawIntSetting(LOCTEXT("Samples"), &userSetting.NumberOfSamples, 1, 16);
-        DrawIntSetting(LOCTEXT("Temporal Steps"), &userSetting.AdaptiveSteps, 2, 64);
         DrawSettingCheckboxRow(LOCTEXT("FastGather"), &userSetting.FastGather);
         DrawIntSetting(LOCTEXT("Ambient Speed"), &userSetting.BakeSpeedLevel, 0, 2);
         NextUI::Theme::EndPanelSection();

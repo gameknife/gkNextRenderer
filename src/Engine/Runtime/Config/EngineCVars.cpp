@@ -88,20 +88,12 @@ namespace NextCVar
                      "Reflex base frame-rate limit while DLSS Frame Generation is enabled (0=unlimited)");
         GK_CVAR_BOOL("r.taa", settings, TAA, true, ECVarFlags::Archive,
                      "Enable temporal anti-aliasing");
-        GK_CVAR_BOOL("r.adaptiveSample", settings, AdaptiveSample, false, ECVarFlags::Archive,
-                     "Enable adaptive sampling");
-        GK_CVAR_FLOAT("r.adaptiveVariance", settings, AdaptiveVariance, 6.0f, ECVarFlags::Archive,
-                      "Adaptive sampling variance");
-        GK_CVAR_INT("r.adaptiveSteps", settings, AdaptiveSteps, 4, ECVarFlags::Archive,
-                    "Adaptive sampling steps");
         GK_CVAR_BOOL("r.fastGather", settings, FastGather, false, ECVarFlags::Archive,
                      "Enable fast gather");
         GK_CVAR_INT("r.bakeSpeedLevel", settings, BakeSpeedLevel, 1, ECVarFlags::Archive,
                     "Bake speed level (0=realtime,1=normal,2=low)");
         GK_CVAR_FLOAT("r.heatmapScale", settings, HeatmapScale, 1.0f, ECVarFlags::Archive,
                       "Profiler heatmap scale");
-        GK_CVAR_BOOL("r.checkerboard", settings, UseCheckerBoardRendering, false, ECVarFlags::Archive,
-                     "Enable checkerboard rendering");
         GK_CVAR_UINT("r.splat.bucketCount", settings, SplatBucketCount, 4096, ECVarFlags::Archive,
                      "Gaussian splat depth-sort bucket count (clamped to 16-4096)");
         GK_CVAR_UINT("r.splat.maxCount", settings, SplatMaxCount, 0, ECVarFlags::Archive,
@@ -146,7 +138,7 @@ namespace NextCVar
                      "Use GPU jump-flood distance field rebuild for ambient cube voxels");
         GK_CVAR_BOOL("sys.hdrTextureStreaming", settings, StreamHDRTextures, true, ECVarFlags::Archive,
                      "Keep inactive HDR environment textures at their lowest mip and promote the active sky on demand");
-        GK_CVAR_BOOL("r.sharc.enable", settings, SharcEnable, false, ECVarFlags::Archive,
+        GK_CVAR_BOOL("r.sharc.enable", settings, SharcEnable, true, ECVarFlags::Archive,
                      "Enable experimental SHARC path tracing radiance cache");
         GK_CVAR_UINT("r.sharc.entriesPow2", settings, SharcEntriesPow2, 21, ECVarFlags::Archive,
                      "SHARC cache entry count as log2");

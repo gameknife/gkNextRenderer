@@ -19,9 +19,6 @@ struct UserSettings final
 	int32_t NumberOfSamples;
 	uint32_t NumberOfBounces;
 	uint32_t MaxNumberOfBounces;
-	bool AdaptiveSample;
-	float AdaptiveVariance;
-	int AdaptiveSteps;
 	bool TAA {};
 	bool FastGather = false;
 	uint32_t SuperResolution = 1;
@@ -44,7 +41,6 @@ struct UserSettings final
     bool BorderlessFullscreen = false;
 
 	// Performance
-	bool UseCheckerBoardRendering;
 	uint32_t TemporalFrames;
     uint32_t SplatBucketCount = 4096;
     uint32_t SplatMaxCount = 0;
@@ -72,7 +68,7 @@ struct UserSettings final
     float AmbientCubePoolBrickRatio = 0.66f;
     bool UseGpuAmbientCubeSdf = false;
     bool StreamHDRTextures = true;
-    bool SharcEnable = false;
+    bool SharcEnable = true;
     uint32_t SharcEntriesPow2 = 21;
     float SharcUpdateSampleRatio = 0.25f;
     int SharcDebugMode = 0;

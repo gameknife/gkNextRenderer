@@ -261,10 +261,6 @@ Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options&
     userSettings.NumberOfBounces = 5;
     userSettings.MaxNumberOfBounces = 10;
 
-    userSettings.AdaptiveSample = false;
-    userSettings.AdaptiveVariance = 6.0f;
-    userSettings.AdaptiveSteps = 4;
-
     userSettings.TAA = true;
 
     userSettings.ShowSettings = true;
@@ -273,7 +269,6 @@ Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options&
 
     userSettings.HeatmapScale = 1.0f;
 
-    userSettings.UseCheckerBoardRendering = false;
     userSettings.TemporalFrames = 16;
 
     userSettings.Denoiser = false;

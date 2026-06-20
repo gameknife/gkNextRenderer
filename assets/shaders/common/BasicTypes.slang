@@ -118,7 +118,6 @@ public struct ALIGN_16 UniformBufferObject
     public float4 ViewportRect;
     public float4 SunDirection;
     public float4 SunColor;
-    public float4 BackGroundColor;    //not used
 
     public float4x4 SunCascadeViewProjection[4];
     public float4 CascadeSplits;      // view-space positive distance at the far edge of each cascade
@@ -127,55 +126,46 @@ public struct ALIGN_16 UniformBufferObject
     public float FocusDistance;
     public float SkyRotation;
     public float HeatmapScale;
- 
+
     public float PaperWhiteNit;
     public float SkyIntensity;
     public uint SkyIdx;
     public uint TotalFrames;
- 
+
     public uint MaxNumberOfBounces;
     public uint NumberOfSamples;
     public uint NumberOfBounces;
-    public uint RandomSeed;
- 
     public uint LightCount;
+
     public bool HasSky;
     public bool ShowHeatmap;
-    public bool UseCheckerBoard;    //not used
- 
     public uint TemporalFrames;
     public bool HasSun;
+
     public bool HDR;
-    public bool AdaptiveSample;
- 
-    public float AdaptiveVariance;
-    public uint AdaptiveSteps;
     public bool TAA;
-    public uint SelectedId;
- 
-    public bool ShowEdge;
     public bool ProgressiveRender;
     public bool FastGather;
-    public uint DenoiseReservedUint0;
 
     public bool DebugDraw_Lighting;
     public bool DebugDraw_ShadowCascadeCoverage;
     public uint SuperResolution;
     public float SceneEpsilonScale;
+
     public float AmbientCubeUnit;
     public float AmbientCubeOffsetPadding0;
     public float AmbientCubeOffsetPadding1;
     public float AmbientCubeOffsetPadding2;
+
     public float3 AmbientCubeOffset;
     public float AmbientCubeOffsetPadding3;
+
     public float4 AmbientCubeCascadeParams;
 
     // Denoiser: bindless slots holding the final diffuse / specular the compose pass should read
     // (a-trous outputs when enabled, else the temporal accumulation buffers).
     public uint DenoiseDiffuseSourceSlot;
     public uint DenoiseSpecularSourceSlot;
-    public uint DenoiseReservedUint1;
-    public uint DenoiseReservedUint2;
 };
 
 public struct ALIGN_16 NodeProxy
@@ -184,9 +174,12 @@ public struct ALIGN_16 NodeProxy
     public uint modelId;
     public uint skinId;
     public uint jointMatrixOffset;
+
     public float4x4 worldTS;
     public float4x4 combinedPrevTS;
+
     public uint matId[16];
+    
     public uint visible;
     public uint nort;
     public uint reserved1;

@@ -26,12 +26,8 @@
   "show.debugSkeleton": false,
   "show.grid": true,
   "show.wireframe": false,
-  "r.adaptiveSample": false,
-  "r.adaptiveVariance": 6.0,
-  "r.adaptiveSteps": 4,
   "r.fastGather": false,
   "r.bakeSpeedLevel": 1,
   "r.heatmapScale": 1.0,
-  "r.checkerboard": false,
   "r.paperWhiteNit": 600.0
 }
