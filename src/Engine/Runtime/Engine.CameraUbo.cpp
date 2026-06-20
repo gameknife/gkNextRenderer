@@ -59,7 +59,6 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
                          renderCam.NearPlane, renderCam.FarPlane);
 
     ubo.FastGather = config_.userSettings.FastGather;
-    ubo.SelectedId = scene_->GetSelectedId();
     ubo.SuperResolution = GOption->ReferenceMode ? 2 : config_.userSettings.SuperResolution;
     ubo.Projection[1][1] *= -1;
 
@@ -170,8 +169,6 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         ubo.CascadeSplits = renderState_.cachedSunCascades.splits;
     }
 
-    ubo.SelectedId = scene_->GetSelectedId();
-
     // Camera Stuff
     ubo.Aperture = renderCam.Aperture;
     ubo.FocusDistance = renderCam.FocalDistance;
@@ -182,16 +179,11 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.TotalFrames = frameState_.totalFrames;
     ubo.NumberOfSamples = config_.userSettings.NumberOfSamples;
     ubo.NumberOfBounces = config_.userSettings.NumberOfBounces;
-    ubo.AdaptiveSample = config_.userSettings.AdaptiveSample;
-    ubo.AdaptiveVariance = config_.userSettings.AdaptiveVariance;
-    ubo.AdaptiveSteps = config_.userSettings.AdaptiveSteps;
     ubo.TAA = config_.userSettings.TAA;
-    ubo.RandomSeed = rand();
     ubo.SunDirection = sunDirection;
     ubo.SunColor = glm::vec4(1, 1, 1, 0) * scene_->GetEnvSettings().SunIntensity;
     ubo.SkyIntensity = scene_->GetEnvSettings().SkyIntensity;
     ubo.SkyIdx = scene_->GetEnvSettings().SkyIdx;
-    ubo.BackGroundColor = glm::vec4(0.4, 0.6, 1.0, 0.0) * 4.0f * scene_->GetEnvSettings().SkyIntensity;
     ubo.HasSky = scene_->GetEnvSettings().HasSky;
     if (auto* texturePool = Assets::GlobalTexturePool::GetInstance())
     {
@@ -210,7 +202,6 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.HeatmapScale = config_.userSettings.HeatmapScale;
     ubo.DebugDraw_Lighting = config_.showFlags.DebugDraw_Lighting;
     ubo.DebugDraw_ShadowCascadeCoverage = config_.showFlags.DebugDraw_ShadowCascadeCoverage;
-    ubo.UseCheckerBoard = config_.userSettings.UseCheckerBoardRendering;
     ubo.TemporalFrames = progressiveRender_.enabled ? 256 : config_.userSettings.TemporalFrames;
     ubo.HDR = renderer_->SwapChain().IsHDR();
 
@@ -229,7 +220,6 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         ? static_cast<uint32_t>(Assets::Bindless::RT_ATROUS_SPEC_OUT)
         : static_cast<uint32_t>(Assets::Bindless::RT_ACCUMLATE_SPECULAR);
 
-    ubo.ShowEdge = config_.showFlags.ShowEdge;
     ubo.ProgressiveRender = progressiveRender_.enabled;
     ubo.SceneEpsilonScale = config_.userSettings.SceneEpsilonScale;
     const float ambientCubeUnit = Assets::SanitizeAmbientCubeUnit(config_.userSettings.AmbientCubeUnit);
