@@ -78,11 +78,14 @@ namespace Vulkan::SoftwareModernNoAmbient
 
         {
             SCOPED_GPU_TIMER("reproject pass");
+            const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+            const bool dlssSuperResolutionActive = settings.DLSS && baseRender_.SupportDLSS();
+            const uint32_t taaEnabled = settings.TAA && !dlssSuperResolutionActive ? 1u : 0u;
             const std::array<uint32_t, 4> pushConst {
-                uint32_t(NextEngine::GetInstance()->GetUserSettings().TemporalFrames),
+                uint32_t(settings.TemporalFrames),
                 temporalResolve_.History(PipelineCommon::ETemporalChannel::Diffuse),
                 canUseHistory ? 1u : 0u,
-                NextEngine::GetInstance()->GetUserSettings().TAA ? 1u : 0u
+                taaEnabled
             };
             accumulatePipeline_->BindPipeline(commandBuffer, pushConst.data());
             vkCmdDispatch(commandBuffer,

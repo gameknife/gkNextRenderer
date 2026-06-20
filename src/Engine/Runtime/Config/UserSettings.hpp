@@ -23,10 +23,13 @@ struct UserSettings final
 	bool FastGather = false;
 	uint32_t SuperResolution = 1;
 	bool DLSS = false;
+    bool FSR = false;
 	bool DLSSRR = false;
 	bool DLSSG = false;
 	uint32_t DLSSGFrameMultiplier = 2;
 	uint32_t DLSSGFrameLimitFps = 0;
+    uint32_t DLSSJitterFrames = 16;
+    bool DLSSJitterInvertY = false;
 	int BakeSpeedLevel = 1; // 0: realtime 1: normal 2: low
 
 	// Camera

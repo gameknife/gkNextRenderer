@@ -84,6 +84,8 @@ namespace NextCVar
                         "Super resolution mode (0-4)", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.dlss", settings, DLSS, false, ECVarFlags::Archive,
                         "Enable NVIDIA DLSS", std::bind(RequestSwapChainIfPossible, engine));
+        GK_CVAR_BOOL_CB("r.fsr", settings, FSR, false, ECVarFlags::Archive,
+                        "Enable FSR1 spatial upscaling", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.dlssrr", settings, DLSSRR, false, ECVarFlags::Archive,
                         "Enable NVIDIA DLSS Ray Reconstruction", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.dlssg", settings, DLSSG, false, ECVarFlags::Archive,
@@ -92,6 +94,10 @@ namespace NextCVar
                         "DLSS Frame Generation multiplier (2-4)", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_UINT("r.dlssg.frameLimitFps", settings, DLSSGFrameLimitFps, 0, ECVarFlags::Archive,
                      "Reflex base frame-rate limit while DLSS Frame Generation is enabled (0=unlimited)");
+        GK_CVAR_UINT("r.dlss.jitterFrames", settings, DLSSJitterFrames, 16, ECVarFlags::Archive,
+                     "DLSS projection jitter sequence length (clamped to 1-256)");
+        GK_CVAR_BOOL("r.dlss.jitterInvertY", settings, DLSSJitterInvertY, false, ECVarFlags::Archive,
+                     "Invert DLSS/TAA projection jitter Y for Streamline sign validation");
         GK_CVAR_BOOL("r.taa", settings, TAA, true, ECVarFlags::Archive,
                      "Enable temporal anti-aliasing");
         GK_CVAR_BOOL("r.fastGather", settings, FastGather, false, ECVarFlags::Archive,

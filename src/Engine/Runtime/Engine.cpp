@@ -282,8 +282,11 @@ Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options&
     
     userSettings.SuperResolution = 0;
     userSettings.DLSS = false;
+    userSettings.FSR = false;
     userSettings.DLSSRR = false;
     userSettings.DLSSG = false;
+    userSettings.DLSSJitterFrames = 16;
+    userSettings.DLSSJitterInvertY = false;
     userSettings.DLSSGFrameMultiplier = 2;
 
     userSettings.BakeSpeedLevel = 1;

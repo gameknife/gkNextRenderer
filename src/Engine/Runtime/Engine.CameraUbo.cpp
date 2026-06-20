@@ -12,10 +12,13 @@
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 
+#include <array>
 #include <cstdlib>
 
 namespace
 {
+    constexpr uint32_t maxJitterFrameCount = 256;
+
     // 生成Halton序列的单一维度
     float HaltonSequence(int index, int base)
     {
@@ -30,17 +33,26 @@ namespace
         return result;
     }
 
-    // 生成2D Halton序列
-    std::vector<glm::vec2> GenerateHaltonSequence(int count)
+    const std::array<glm::vec2, maxJitterFrameCount>& HaltonJitterSequence()
     {
-        std::vector<glm::vec2> sequence;
-        for (int i = 0; i < count; ++i)
+        static const std::array<glm::vec2, maxJitterFrameCount> sequence = []
         {
-            float x = HaltonSequence(i + 1, 2); // 基数2
-            float y = HaltonSequence(i + 1, 3); // 基数3
-            sequence.push_back(glm::vec2(x, y));
-        }
+            std::array<glm::vec2, maxJitterFrameCount> result{};
+            for (uint32_t i = 0; i < maxJitterFrameCount; ++i)
+            {
+                const float x = HaltonSequence(static_cast<int>(i + 1), 2);
+                const float y = HaltonSequence(static_cast<int>(i + 1), 3);
+                result[i] = glm::vec2(x, y) - glm::vec2(0.5f, 0.5f);
+            }
+            return result;
+        }();
         return sequence;
+    }
+
+    glm::vec2 GetTemporalJitter(uint32_t frameIndex, uint32_t frameCount)
+    {
+        frameCount = std::clamp(frameCount, 1u, maxJitterFrameCount);
+        return HaltonJitterSequence()[frameIndex % frameCount];
     }
 } // namespace
 
@@ -79,12 +91,18 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
 
     if (config_.userSettings.TAA || config_.userSettings.DLSS)
     {
-        std::vector<glm::vec2> haltonSeq = GenerateHaltonSequence(config_.userSettings.TemporalFrames);
-        glm::vec2 jitter =
-            haltonSeq[frameState_.totalFrames % config_.userSettings.TemporalFrames] - glm::vec2(0.5f, 0.5f);
+        const VkExtent2D renderExtent = renderer_->SwapChain().RenderExtent();
+        const uint32_t jitterFrames = config_.userSettings.DLSS
+            ? config_.userSettings.DLSSJitterFrames
+            : config_.userSettings.TemporalFrames;
+        glm::vec2 jitter = GetTemporalJitter(frameState_.totalFrames, jitterFrames);
+        if (config_.userSettings.DLSSJitterInvertY)
+        {
+            jitter.y = -jitter.y;
+        }
 
-        ubo.Projection[2][0] = jitter.x / static_cast<float>(extent.width) * 2.0f;
-        ubo.Projection[2][1] = jitter.y / static_cast<float>(extent.height) * 2.0f;
+        ubo.Projection[2][0] = jitter.x / static_cast<float>(renderExtent.width) * 2.0f;
+        ubo.Projection[2][1] = jitter.y / static_cast<float>(renderExtent.height) * 2.0f;
 
         ubo.Jitter = glm::vec4(jitter.x, jitter.y, 0, 0);
     }
