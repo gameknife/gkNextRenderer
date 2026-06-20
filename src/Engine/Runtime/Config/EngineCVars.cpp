@@ -74,6 +74,12 @@ namespace NextCVar
                       "A-trous planar depth tolerance (multiples of local depth slope)");
         GK_CVAR_FLOAT("r.denoiseSpecFootprint", settings, DenoiseSpecFootprint, 32.0f, ECVarFlags::Archive,
                       "Specular a-trous filter radius in pixels per unit roughness");
+        GK_CVAR_FLOAT("r.reproject.clampGammaHi", settings, ReprojectClampGammaHi, 2.5f, ECVarFlags::Archive,
+                      "ReProject history clamp: tight upper YCoCg-luma box half-width in sigmas (lower = less ghosting)");
+        GK_CVAR_FLOAT("r.reproject.clampGammaLo", settings, ReprojectClampGammaLo, 5.0f, ECVarFlags::Archive,
+                      "ReProject history clamp: tight lower box half-width in sigmas (kept looser than upper to avoid black dots)");
+        GK_CVAR_FLOAT("r.reproject.clampFloor", settings, ReprojectClampFloor, 0.5f, ECVarFlags::Archive,
+                      "ReProject history clamp: relative luma floor as a fraction of the filtered mean (guards against black dots)");
         GK_CVAR_UINT_CB("r.superResolution", settings, SuperResolution, 0, ECVarFlags::Archive,
                         "Super resolution mode (0-4)", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.dlss", settings, DLSS, false, ECVarFlags::Archive,

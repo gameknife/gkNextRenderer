@@ -54,6 +54,11 @@ struct UserSettings final
 	float DenoiseSigmaDepth;        // planar depth tolerance (multiples of local depth slope)
 	float DenoiseSpecFootprint;     // specular filter radius (pixels) per unit roughness
 
+	// ReProject history clamp (Phase A black-dot fix; see Process.ReProject.comp.slang).
+	float ReprojectClampGammaHi = 2.5f;    // tight (low-confidence) upper YCoCg luma box half-width in sigmas
+	float ReprojectClampGammaLo = 5.0f;    // tight lower box half-width (kept looser than upper to avoid black dots)
+	float ReprojectClampFloor = 0.5f;      // relative luma floor (history luma >= floor * filtered mean)
+
 	float PaperWhiteNit;
 
     bool TickPhysics = true;
