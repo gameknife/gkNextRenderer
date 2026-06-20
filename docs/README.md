@@ -37,6 +37,7 @@
 | --- | --- | --- |
 | [AirportSim —— Jumbo Airport Story 风格机场生态观察 Demo（MVP 设计与开发计划）](plans/airport-sim-mvp-plan.md) | 🔵 进行中 | 2026-06-13 |
 | [AmbientCube 显存占用降低 — 可行性评估与开发计划](plans/ambient-cube-memory-reduction.md) | ✅ 已完成 | 2026-06-07 |
+| [DLSS 超分无抗锯齿 / scale 无收益 —— 根因定位与修复开发计划](plans/dlss-superres-no-aa-fix.md) | 📝 草案 | 2026-06-20 |
 | [src/Engine 核心层精炼 Round 2：god class 拆解 + include 卫生](plans/engine-core-refactor-round2.md) | 📝 草案 | 2026-06-11 |
 | [src/Engine 核心层精炼 Round 3：模块归位 + SkinnedMesh 瘦身](plans/engine-core-refactor-round3.md) | 📝 草案 | 2026-06-14 |
 | [src/Engine 核心层精简重构：分析与执行计划](plans/engine-core-refactor.md) | ✅ 已完成 | 2026-06-10 |
