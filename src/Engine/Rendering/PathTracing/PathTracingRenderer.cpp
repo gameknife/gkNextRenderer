@@ -19,6 +19,21 @@ namespace Vulkan::PathTracing
 {
     namespace
     {
+        // Mirrors PushConsts in Process.ReProject.comp.slang (bool/uint/int are 4 bytes each in Slang
+        // push constants). The trailing 3 floats are the Phase A history-clamp tuning knobs.
+        struct FReprojectPushConstants
+        {
+            uint32_t ProgressiveRender;
+            uint32_t TemporalFrames;
+            uint32_t PrevDiffuseBindlessIdx;
+            uint32_t PrevSpecularBindlessIdx;
+            uint32_t PrevAlbedoBindlessIdx;
+            uint32_t FastReproject;
+            float ClampGammaHi;
+            float ClampGammaLo;
+            float ClampFloor;
+        };
+
         constexpr uint32_t kSharcResolveThreadCount = 64;
         constexpr uint32_t kSharcMinEntriesPow2 = 10;
         constexpr uint32_t kSharcMaxEntriesPow2 = 22;
@@ -63,7 +78,7 @@ namespace Vulkan::PathTracing
     void PathTracingRenderer::CreateSwapChain(const VkExtent2D& extent)
     {
         rayTracingPipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline( SwapChain(), "assets/shaders/Core.PathTracing.comp.slang.spv", GetScene()));
-        accumulatePipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.ReProject.comp.slang.spv", 24));
+        accumulatePipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.ReProject.comp.slang.spv", sizeof(FReprojectPushConstants)));
         atrousDenoiser_.CreateSwapChain(SwapChain());
         composePipelineNonDenoiser_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Process.DenoiseJBF.comp.slang.spv", GetScene()));
 
@@ -349,11 +364,18 @@ namespace Vulkan::PathTracing
          // accumulate with reproject
         {
             SCOPED_GPU_TIMER("reproject pass");
-            std::array<uint32_t, 6> pushConst { NextEngine::GetInstance()->IsProgressiveRendering(), uint32_t(NextEngine::GetInstance()->GetUserSettings().TemporalFrames),
-                temporalResolve_.History(PipelineCommon::ETemporalChannel::Diffuse),
-                temporalResolve_.History(PipelineCommon::ETemporalChannel::Specular),
-                temporalResolve_.History(PipelineCommon::ETemporalChannel::Albedo), 0 };
-            accumulatePipeline_->BindPipeline(commandBuffer, pushConst.data());
+            const Runtime::Config::UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
+            FReprojectPushConstants pushConst{};
+            pushConst.ProgressiveRender = NextEngine::GetInstance()->IsProgressiveRendering();
+            pushConst.TemporalFrames = uint32_t(settings.TemporalFrames);
+            pushConst.PrevDiffuseBindlessIdx = temporalResolve_.History(PipelineCommon::ETemporalChannel::Diffuse);
+            pushConst.PrevSpecularBindlessIdx = temporalResolve_.History(PipelineCommon::ETemporalChannel::Specular);
+            pushConst.PrevAlbedoBindlessIdx = temporalResolve_.History(PipelineCommon::ETemporalChannel::Albedo);
+            pushConst.FastReproject = 0;
+            pushConst.ClampGammaHi = settings.ReprojectClampGammaHi;
+            pushConst.ClampGammaLo = settings.ReprojectClampGammaLo;
+            pushConst.ClampFloor = settings.ReprojectClampFloor;
+            accumulatePipeline_->BindPipeline(commandBuffer, &pushConst);
             vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
 
             baseRender_.GetStorageImage(Assets::Bindless::RT_ACCUMLATE_DIFFUSE)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL );

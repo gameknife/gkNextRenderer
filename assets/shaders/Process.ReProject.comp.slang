@@ -5,12 +5,19 @@ struct PushConsts
 {
     bool ProgressiveRender;
     int TemporalFrames;
-    
+
     uint PrevDiffuseBindlessIdx;
     uint PrevSpecularBindlessIdx;
     uint PrevAlbedoBindlessIdx;
 
     bool FastReproject;
+
+    // History-clamp tuning (Phase A black-dot fix). gammaHi/gammaLo are the *tight* (low-confidence)
+    // YCoCg luma box half-widths in sigmas; floorK is the relative luma floor. See ClampHistorySoft /
+    // ClampStrengthFromConfidence.
+    float ClampGammaHi;
+    float ClampGammaLo;
+    float ClampFloor;
 };
 
 [[vk::push_constant]]
@@ -28,15 +35,22 @@ uint FetchPrimitiveIndex(uint objectId)
 
 static const float3 kLumaWeights = float3(0.212671f, 0.715160f, 0.072169f);
 
-// Relative firefly suppression (G9). Estimate the neighborhood luminance statistics from the
-// 8 surrounding taps *excluding the center*, then clamp a bright center down to neighborMean +
-// k*sigma. Excluding the center is what makes isolated single-pixel fireflies catchable: if the
-// center is included it inflates its own sigma and escapes the clamp. Only ever darkens, so
-// genuine multi-pixel highlights (whose neighbors are also bright) survive untouched.
-float3 FireflyClamp(RWTexture2D<float4> src, int2 ipos, int2 imageMax, float3 center, float k)
+// Relative firefly suppression (G9), object-aware. Estimate the neighborhood luminance statistics
+// from the 8 surrounding taps *excluding the center*, then clamp a bright center down to
+// neighborMean + k*sigma. Excluding the center is what makes isolated single-pixel fireflies
+// catchable: if the center is included it inflates its own sigma and escapes the clamp. Only ever
+// darkens, so genuine multi-pixel highlights (whose neighbors are also bright) survive untouched.
+//
+// Taps on a different primitive (silhouette edges, geometry next to bright sky) are skipped: mixing
+// in a bright background neighbor used to inflate the stats so an edge firefly escaped the clamp,
+// leaving the sparse bright dots seen along object edges during camera motion. When too few
+// same-object neighbors exist to form a reliable estimate the center is left untouched.
+float3 FireflyClamp(RWTexture2D<float4> src, RWTexture2D<uint> objId, int2 ipos, int2 imageMax,
+                    uint centerPrim, float3 center, float k)
 {
     float lumSum = 0.0;
     float lumSqSum = 0.0;
+    float count = 0.0;
     for (int y = -1; y <= 1; ++y)
     {
         for (int x = -1; x <= 1; ++x)
@@ -46,13 +60,22 @@ float3 FireflyClamp(RWTexture2D<float4> src, int2 ipos, int2 imageMax, float3 ce
                 continue;
             }
             const int2 p = clamp(ipos + int2(x, y), int2(0, 0), imageMax);
+            if (FetchPrimitiveIndex(objId[p]) != centerPrim)
+            {
+                continue;
+            }
             const float l = dot(src[p].rgb, kLumaWeights);
             lumSum += l;
             lumSqSum += l * l;
+            count += 1.0;
         }
     }
-    const float mean = lumSum / 8.0;
-    const float sigma = sqrt(max(0.0, lumSqSum / 8.0 - mean * mean));
+    if (count < 2.0)
+    {
+        return center;
+    }
+    const float mean = lumSum / count;
+    const float sigma = sqrt(max(0.0, lumSqSum / count - mean * mean));
     const float lumCenter = dot(center, kLumaWeights);
     const float lumMax = mean + k * sigma + 1e-4;
     if (lumCenter > lumMax)
@@ -62,29 +85,64 @@ float3 FireflyClamp(RWTexture2D<float4> src, int2 ipos, int2 imageMax, float3 ce
     return center;
 }
 
-// Variance-based YCoCg history clipping (G5). Unlike the strict min/max AABB used by the
-// SoftwareModern path, a 1spp path-traced neighborhood is too noisy for hard clamping, so we
-// build a loose [mean - gamma*sigma, mean + gamma*sigma] box that only catches gross ghosting
-// (moving highlights/shadows) while leaving temporal accumulation intact.
-float3 ClampHistoryVariance(RWTexture2D<float4> currentImage, int2 ipos, int2 imageMax, float3 history, float gamma)
+// Temporal-confidence-driven clamp strength (Phase A black-dot + camera-motion-noise fix). The old
+// fixed-gamma symmetric clamp fought temporal accumulation on every pixel and randomly clamped clean
+// bright history to the per-frame 1spp noise floor -> flickering black dots.
+//
+// Strength is driven *only* by history length: well-accumulated pixels -> ~0 (history trusted, never
+// clamped) so it stays clean both when static AND while the camera pans over it; young / freshly
+// reset pixels -> ~1 (history unreliable, clamp pulls it toward the spatial estimate). Camera motion
+// is deliberately NOT a trigger: panning over well-accumulated static geometry would otherwise clamp
+// clean history into the jittery 1spp box every frame and reintroduce salt noise. Ghosting of moving
+// highlights/shadows on long-history surfaces is left to the temporal-moment variance (Phase B).
+float ClampStrengthFromConfidence(float historyLen, float nMax)
 {
-    float3 m1 = float3(0, 0, 0);
-    float3 m2 = float3(0, 0, 0);
+    const float histConf = saturate(historyLen / max(nMax, 1.0));
+    return saturate(1.0 - histConf);
+}
+
+// Soft, asymmetric, luminance-dominated history clamp. The box is centered on a *spatially
+// prefiltered* current estimate (geometry-weighted, far less noisy than a raw 1spp neighborhood),
+// so its mean is no longer dragged toward zero by dark/occluded taps. The half-width comes from a
+// 3x3 neighborhood luma variance. The upper bound is tightened to suppress bright ghost trails
+// while the lower bound + relative luma floor stay loose, so a clean bright history is never
+// clamped down to a 1spp black dot. strength fades the whole operation toward the untouched history.
+float3 ClampHistorySoft(RWTexture2D<float4> currentImage, int2 ipos, int2 imageMax, float3 history,
+                        float3 filteredCur, float strength,
+                        float gammaHiTight, float gammaLoTight, float floorTight)
+{
+    float lumSum = 0.0;
+    float lumSqSum = 0.0;
     for (int y = -1; y <= 1; ++y)
     {
         for (int x = -1; x <= 1; ++x)
         {
             const int2 p = clamp(ipos + int2(x, y), int2(0, 0), imageMax);
-            const float3 c = rgb2ycocg(currentImage[p].rgb);
-            m1 += c;
-            m2 += c * c;
+            const float l = dot(currentImage[p].rgb, kLumaWeights);
+            lumSum += l;
+            lumSqSum += l * l;
         }
     }
-    const float3 mean = m1 / 9.0;
-    const float3 sigma = sqrt(max(float3(0, 0, 0), m2 / 9.0 - mean * mean));
-    const float3 lo = mean - gamma * sigma;
-    const float3 hi = mean + gamma * sigma;
-    return ycocg2rgb(clamp(rgb2ycocg(history), lo, hi));
+    const float lumMean = lumSum / 9.0;
+    const float sigma = sqrt(max(0.0, lumSqSum / 9.0 - lumMean * lumMean));
+
+    const float3 hy = rgb2ycocg(history);
+    const float3 cy = rgb2ycocg(filteredCur);
+
+    // Relaxed end of every gamma is fixed (almost no clamp); the tight end is CVar-driven.
+    const float gammaHiY = lerp(8.0, gammaHiTight, strength); // upper bound: tightened to kill ghost trails
+    const float gammaLoY = lerp(8.0, gammaLoTight, strength); // lower bound: always looser than upper
+    const float gammaC = lerp(12.0, 6.0, strength);           // chroma: very loose, Co/Cg tolerate noise
+
+    const float3 lo = float3(cy.x - gammaLoY * sigma, cy.yz - gammaC * sigma);
+    const float3 hi = float3(cy.x + gammaHiY * sigma, cy.yz + gammaC * sigma);
+    float3 clamped = clamp(hy, lo, hi);
+
+    // Relative luma floor: history luma is never pulled below floorK * filtered mean -> no black dots.
+    clamped.x = max(clamped.x, cy.x * lerp(0.9, floorTight, strength));
+
+    // Soft blend: fade between untouched history and the hard clamp by strength, removing hard edges.
+    return ycocg2rgb(lerp(hy, clamped, strength));
 }
 
 float calculateWeight(float centerDist, bool sameObject, bool isCenter, float3 Normal, float3 CenterNormal)
@@ -164,18 +222,21 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float4 currSpecularSample = SourceSpecular[ipos];
     float4 currAlbedoSample = SourceAlbedo[ipos];
 
+    uint current_primitive_index0 = FetchPrimitiveIndex(ObjectId0[ipos]);
+
     // Firefly pre-clamp on the freshly traced lighting before it enters temporal accumulation.
     // Diffuse is clamped loosely (the a-trous pass recovers any over-suppression spatially);
     // specular is clamped tighter since it has no spatial denoiser yet (specular is Phase 4).
-    currDiffuseSample.rgb = FireflyClamp(SourceDiffuse, ipos, imageMax, currDiffuseSample.rgb, 3.0f);
-    currSpecularSample.rgb = FireflyClamp(SourceSpecular, ipos, imageMax, currSpecularSample.rgb, 1.5f);
+    // Stats are restricted to same-primitive neighbors so edge fireflies can't hide behind a bright
+    // background tap.
+    currDiffuseSample.rgb = FireflyClamp(SourceDiffuse, ObjectId0, ipos, imageMax, current_primitive_index0, currDiffuseSample.rgb, 3.0f);
+    currSpecularSample.rgb = FireflyClamp(SourceSpecular, ObjectId0, ipos, imageMax, current_primitive_index0, currSpecularSample.rgb, 1.5f);
 
     bool useHistory = true;
     float2 motion = MotionVector[ipos].rg;
     int2 previpos = int2(floor(float2(ipos) + motion));
     const bool inside = all(previpos >= int2(0, 0)) &&
                         all(previpos + int2(1, 1) < imageSize);
-    uint current_primitive_index0 = FetchPrimitiveIndex(ObjectId0[ipos]);
     uint prev_primitive_index0 = OBJECT_ID_INVALID_INSTANCE;
     if (inside)
     {
@@ -261,17 +322,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
                           prev_primitive_index3,
                           currAlbedoSample);
 
-        // Neighborhood clipping to fight ghosting of moving highlights/shadows. Albedo is a stable
-        // demodulated material signal, so only the lighting channels are clipped.
-        const float kHistoryClampGamma = 4.0f;
-        historyDiffuse = ClampHistoryVariance(SourceDiffuse, ipos, imageMax, historyDiffuse, kHistoryClampGamma);
-        historySpecular = ClampHistoryVariance(SourceSpecular, ipos, imageMax, historySpecular, kHistoryClampGamma);
-
         // Adaptive temporal blend (Phase 3): historyLen is carried in the diffuse accumulation
         // alpha. Young / freshly-disoccluded pixels (small historyLen) use a large alpha to
         // converge fast; once historyLen saturates at TemporalFrames the blend matches the old
         // fixed 1/TemporalFrames behaviour. historyLen resets when the primary reprojected tap
-        // crosses an object boundary.
+        // crosses an object boundary. Computed before the clamp so it can drive clamp strength.
         const float nMax = float(max(1u, pushConsts.TemporalFrames));
         const float prevHistlen = clamp(PrevDiffuse[previpos].a, 0.0, nMax);
         const float historyLen = (prev_primitive_index0 == current_primitive_index0)
@@ -279,8 +334,30 @@ void main(uint3 DTid : SV_DispatchThreadID)
             : 1.0;
         const float currKeep = clamp(1.0 / historyLen, 0.0, 1.0);
 
-        AccumlateDiffuse[ipos] = float4(lerp(historyDiffuse, currDiffuseSample.rgb, currKeep), historyLen);
-        AccumlateSpecular[ipos] = float4(lerp(historySpecular, currSpecularSample.rgb, currKeep), historyLen);
+        // Adaptive soft clipping. Box is centered on the geometry-weighted spatial estimate; strength
+        // is driven purely by history confidence so well-accumulated pixels are never clamped (stays
+        // clean while static AND while the camera pans). Albedo is a stable demodulated material
+        // signal, so only the lighting channels are clipped.
+        const float clampStrength = ClampStrengthFromConfidence(historyLen, nMax);
+        historyDiffuse = ClampHistorySoft(SourceDiffuse, ipos, imageMax, historyDiffuse,
+            spatialDiffuseSample.rgb, clampStrength,
+            pushConsts.ClampGammaHi, pushConsts.ClampGammaLo, pushConsts.ClampFloor);
+        historySpecular = ClampHistorySoft(SourceSpecular, ipos, imageMax, historySpecular,
+            spatialSpecularSample.rgb, clampStrength,
+            pushConsts.ClampGammaHi, pushConsts.ClampGammaLo, pushConsts.ClampFloor);
+
+        // Spatial fallback for young pixels (camera-motion noise fix). With only reproject and no
+        // a-trous, a pixel whose history just reset (reprojection crossed an object boundary while
+        // the camera moved) would blend in the raw 1spp center -> visible salt noise. Lean on the
+        // geometry-weighted spatial estimate while history is short, then fade back to the raw sample
+        // as temporal integration takes over so well-accumulated pixels keep their full sharpness.
+        const float kSpatialFallbackFrames = 6.0;
+        const float spatialFallback = saturate(1.0 - (historyLen - 1.0) / kSpatialFallbackFrames);
+        const float3 currDiffuseEst = lerp(currDiffuseSample.rgb, spatialDiffuseSample.rgb, spatialFallback);
+        const float3 currSpecularEst = lerp(currSpecularSample.rgb, spatialSpecularSample.rgb, spatialFallback);
+
+        AccumlateDiffuse[ipos] = float4(lerp(historyDiffuse, currDiffuseEst, currKeep), historyLen);
+        AccumlateSpecular[ipos] = float4(lerp(historySpecular, currSpecularEst, currKeep), historyLen);
         AccumlateAlbedo[ipos].rgb = lerp(historyAlbedo, currAlbedoSample.rgb, currKeep);
     }
     else
