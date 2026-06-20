@@ -51,7 +51,8 @@ struct UserSettings final
 
 	// Denoise (variance-guided a-trous wavelet; see PipelineCommon::AtrousDenoiser)
 	bool Denoiser;
-	int DenoiseAtrousIterations;    // wavelet iterations: quality/perf knob (higher = smoother, slower)
+	int DenoiseAtrousIterations;    // diffuse wavelet iterations: quality/perf knob (higher = smoother, slower)
+	int DenoiseAtrousSpecularIterations; // specular wavelet iterations (usually lower than diffuse)
 	float DenoiseAtrousSigmaLuma;   // variance-guided luminance edge-stop (lower = sharper, noisier)
 	float DenoiseAtrousNormalPower; // a-trous normal edge-stop exponent
 	float DenoiseSigmaDepth;        // planar depth tolerance (multiples of local depth slope)

@@ -65,7 +65,9 @@ namespace NextCVar
         GK_CVAR_BOOL("r.denoiser", settings, Denoiser, false, ECVarFlags::Archive,
                      "Enable the variance-guided a-trous denoiser");
         GK_CVAR_INT("r.denoiseAtrousIterations", settings, DenoiseAtrousIterations, 5, ECVarFlags::Archive,
-                    "A-trous wavelet iterations: quality/perf knob (higher = smoother, slower; 1-6)");
+                    "Diffuse a-trous wavelet iterations: quality/perf knob (higher = smoother, slower; 1-6)");
+        GK_CVAR_INT("r.denoiseAtrousSpecularIterations", settings, DenoiseAtrousSpecularIterations, 3, ECVarFlags::Archive,
+                    "Specular a-trous wavelet iterations (lower is faster and preserves glossy detail; 0-6)");
         GK_CVAR_FLOAT("r.denoiseAtrousSigmaLuma", settings, DenoiseAtrousSigmaLuma, 4.0f, ECVarFlags::Archive,
                       "A-trous luminance edge-stop sigma (lower = sharper detail, more residual noise)");
         GK_CVAR_FLOAT("r.denoiseAtrousNormalPower", settings, DenoiseAtrousNormalPower, 64.0f, ECVarFlags::Archive,

@@ -15,19 +15,20 @@ namespace Vulkan::PipelineCommon
     namespace
     {
         // Mirrors PushConsts in Process.AtrousWavelet.comp.slang.
-        struct FAtrousPushConstants
+        struct FFusedAtrousPushConstants
         {
-            uint32_t inColorSlot;
-            uint32_t outSlot;
+            uint32_t diffuseInSlot;
+            uint32_t diffuseOutSlot;
+            uint32_t specularInSlot;
+            uint32_t specularOutSlot;
             uint32_t stepSize;
             uint32_t firstIteration;
+            uint32_t filterDiffuse;
+            uint32_t filterSpecular;
             float sigmaDepth;
             float sigmaLuma;
             float sigmaNormalPower;
-            uint32_t isSpecular;
             float specFootprintScale;
-            float pad0;
-            float pad1;
         };
     }
 
@@ -37,7 +38,7 @@ namespace Vulkan::PipelineCommon
     void AtrousDenoiser::CreateSwapChain(const SwapChain& swapChain)
     {
         pipeline_.reset(new ZeroBindCustomPushConstantPipeline(
-            swapChain, "assets/shaders/Process.AtrousWavelet.comp.slang.spv", sizeof(FAtrousPushConstants)));
+            swapChain, "assets/shaders/Process.AtrousWavelet.comp.slang.spv", sizeof(FFusedAtrousPushConstants)));
     }
 
     void AtrousDenoiser::DeleteSwapChain()
@@ -51,46 +52,59 @@ namespace Vulkan::PipelineCommon
         VkCommandBuffer commandBuffer,
         const Runtime::Config::UserSettings& settings) const
     {
-        const int atrousIterations = settings.Denoiser ? std::clamp(settings.DenoiseAtrousIterations, 0, 6) : 0;
-        if (atrousIterations <= 0 || !pipeline_)
+        const int diffuseIterations = settings.Denoiser ? std::clamp(settings.DenoiseAtrousIterations, 0, 6) : 0;
+        const int specularIterations = settings.Denoiser ? std::clamp(settings.DenoiseAtrousSpecularIterations, 0, 6) : 0;
+        const int maxIterations = std::max(diffuseIterations, specularIterations);
+        if (maxIterations <= 0 || !pipeline_)
         {
             return;
         }
 
-        const std::array<uint32_t, 2> pingPong{Assets::Bindless::RT_ATROUS_PING, Assets::Bindless::RT_ATROUS_PONG};
+        const std::array<uint32_t, 2> diffusePingPong{Assets::Bindless::RT_ATROUS_PING, Assets::Bindless::RT_ATROUS_PONG};
+        const std::array<uint32_t, 2> specularPingPong{Assets::Bindless::RT_ATROUS_SPEC_PING, Assets::Bindless::RT_ATROUS_SPEC_PONG};
         const uint32_t dispatchX = Utilities::Math::GetSafeDispatchCount(swapChain.RenderExtent().width, 8);
         const uint32_t dispatchY = Utilities::Math::GetSafeDispatchCount(swapChain.RenderExtent().height, 8);
 
-        auto runAtrous = [&](uint32_t accumSlot, uint32_t finalSlot, bool isSpecular)
+        auto getSourceSlot = [](int iteration, uint32_t accumSlot, const std::array<uint32_t, 2>& pingPong)
         {
-            for (int i = 0; i < atrousIterations; ++i)
-            {
-                FAtrousPushConstants push{};
-                push.inColorSlot = (i == 0) ? accumSlot : pingPong[(i - 1) & 1];
-                push.outSlot = (i == atrousIterations - 1) ? finalSlot : pingPong[i & 1];
-                push.stepSize = 1u << i;
-                push.firstIteration = (i == 0) ? 1u : 0u;
-                push.sigmaDepth = settings.DenoiseSigmaDepth;
-                push.sigmaLuma = settings.DenoiseAtrousSigmaLuma;
-                push.sigmaNormalPower = settings.DenoiseAtrousNormalPower;
-                push.isSpecular = isSpecular ? 1u : 0u;
-                push.specFootprintScale = settings.DenoiseSpecFootprint;
-                push.pad0 = 0.0f;
-                push.pad1 = 0.0f;
-
-                pipeline_->BindPipeline(commandBuffer, &push);
-                vkCmdDispatch(commandBuffer, dispatchX, dispatchY, 1);
-
-                baseRenderer.GetStorageImage(push.outSlot)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-            }
+            return (iteration == 0) ? accumSlot : pingPong[(iteration - 1) & 1];
         };
 
-        runAtrous(Assets::Bindless::RT_ACCUMLATE_DIFFUSE, Assets::Bindless::RT_ATROUS_OUT, false);
+        auto getOutputSlot = [](int iteration, int iterations, uint32_t finalSlot, const std::array<uint32_t, 2>& pingPong)
+        {
+            return (iteration == iterations - 1) ? finalSlot : pingPong[iteration & 1];
+        };
 
-        // Serialize the shared ping/pong scratch before the specular pass reuses it (WAR).
-        baseRenderer.GetStorageImage(Assets::Bindless::RT_ATROUS_PING)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-        baseRenderer.GetStorageImage(Assets::Bindless::RT_ATROUS_PONG)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+        for (int i = 0; i < maxIterations; ++i)
+        {
+            const bool filterDiffuse = i < diffuseIterations;
+            const bool filterSpecular = i < specularIterations;
 
-        runAtrous(Assets::Bindless::RT_ACCUMLATE_SPECULAR, Assets::Bindless::RT_ATROUS_SPEC_OUT, true);
+            FFusedAtrousPushConstants push{};
+            push.diffuseInSlot = getSourceSlot(i, Assets::Bindless::RT_ACCUMLATE_DIFFUSE, diffusePingPong);
+            push.diffuseOutSlot = getOutputSlot(i, diffuseIterations, Assets::Bindless::RT_ATROUS_OUT, diffusePingPong);
+            push.specularInSlot = getSourceSlot(i, Assets::Bindless::RT_ACCUMLATE_SPECULAR, specularPingPong);
+            push.specularOutSlot = getOutputSlot(i, specularIterations, Assets::Bindless::RT_ATROUS_SPEC_OUT, specularPingPong);
+            push.stepSize = 1u << i;
+            push.firstIteration = (i == 0) ? 1u : 0u;
+            push.filterDiffuse = filterDiffuse ? 1u : 0u;
+            push.filterSpecular = filterSpecular ? 1u : 0u;
+            push.sigmaDepth = settings.DenoiseSigmaDepth;
+            push.sigmaLuma = settings.DenoiseAtrousSigmaLuma;
+            push.sigmaNormalPower = settings.DenoiseAtrousNormalPower;
+            push.specFootprintScale = settings.DenoiseSpecFootprint;
+
+            pipeline_->BindPipeline(commandBuffer, &push);
+            vkCmdDispatch(commandBuffer, dispatchX, dispatchY, 1);
+
+            if (filterDiffuse)
+            {
+                baseRenderer.GetStorageImage(push.diffuseOutSlot)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+            }
+            if (filterSpecular)
+            {
+                baseRenderer.GetStorageImage(push.specularOutSlot)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+            }
+        }
     }
 }

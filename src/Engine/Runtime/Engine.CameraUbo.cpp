@@ -230,11 +230,12 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     // positive iteration count) the compose pass reads the a-trous output; otherwise it reads
     // the temporal accumulation buffers directly (no spatial filtering).
     const bool denoiserOn = config_.userSettings.Denoiser;
-    const int atrousIterations = denoiserOn ? std::clamp(config_.userSettings.DenoiseAtrousIterations, 0, 6) : 0;
-    ubo.DenoiseDiffuseSourceSlot = (atrousIterations > 0)
+    const int diffuseAtrousIterations = denoiserOn ? std::clamp(config_.userSettings.DenoiseAtrousIterations, 0, 6) : 0;
+    const int specularAtrousIterations = denoiserOn ? std::clamp(config_.userSettings.DenoiseAtrousSpecularIterations, 0, 6) : 0;
+    ubo.DenoiseDiffuseSourceSlot = (diffuseAtrousIterations > 0)
         ? static_cast<uint32_t>(Assets::Bindless::RT_ATROUS_OUT)
         : static_cast<uint32_t>(Assets::Bindless::RT_ACCUMLATE_DIFFUSE);
-    ubo.DenoiseSpecularSourceSlot = (atrousIterations > 0)
+    ubo.DenoiseSpecularSourceSlot = (specularAtrousIterations > 0)
         ? static_cast<uint32_t>(Assets::Bindless::RT_ATROUS_SPEC_OUT)
         : static_cast<uint32_t>(Assets::Bindless::RT_ACCUMLATE_SPECULAR);
 

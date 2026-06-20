@@ -273,6 +273,7 @@ Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options&
 
     userSettings.Denoiser = false;
     userSettings.DenoiseAtrousIterations = 5;
+    userSettings.DenoiseAtrousSpecularIterations = 3;
     userSettings.DenoiseAtrousSigmaLuma = 4.0f;
     userSettings.DenoiseAtrousNormalPower = 64.0f;
     userSettings.DenoiseSigmaDepth = 2.0f;
