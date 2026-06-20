@@ -1,17 +1,6 @@
 implementing Common;
 #include "PreProcessor.slang"
 
-static const float2 haltonSeq[8] = {
-    float2(0.5, 0.3333),
-    float2(0.25, 0.6667),
-    float2(0.75, 0.1111),
-    float2(0.125, 0.4444),
-    float2(0.625, 0.7778),
-    float2(0.375, 0.2222),
-    float2(0.875, 0.5556),
-    float2(0.0625, 0.8889)
-};
-
 static const float PT_MAX_TRACE_DISTANCE = 1000.f;
 static const float FAST_MAX_TRACE_DISTANCE = 20.f;
 static const float GENERAL_MAX_TRACE_DISTANCE = 50.f;
@@ -307,8 +296,7 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
         float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
         if (Camera.TAA)
         {
-            // here should offset a non-random offset and consider in motion vector
-            uvOffset = (haltonSeq[Camera.TotalFrames % 8] - float2(0.5, 0.5)) / isize;
+            uvOffset = Camera.Jitter.xy * 2.0 / float2(isize);
         }
         uv += uvOffset;
         float2 offset = Camera.Aperture / 2 * RandomInUnitDisk(RandomSeed);

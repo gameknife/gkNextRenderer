@@ -788,7 +788,7 @@ namespace Vulkan
         if (!GOption->ReferenceMode)
         {
             const bool dlssEnabled = caps_.supportDLSS && settings.DLSS && upscaler_;
-            if (upscaler_)
+            if (dlssEnabled && upscaler_)
             {
                 const auto optimal = upscaler_->GetOptimalRenderSettings(
                     settings.SuperResolution,
@@ -796,7 +796,7 @@ namespace Vulkan
                     dlssEnabled);
                 renderExtent = optimal.renderExtent;
             }
-            else
+            else if (settings.FSR)
             {
                 const auto& modeInfo = Rendering::Upscaler::GetUpscaleModeInfo(settings.SuperResolution);
                 renderExtent = Rendering::Upscaler::ScaleExtent(frame_.swapChain->Extent(), modeInfo.fallbackScale);
@@ -1384,30 +1384,54 @@ namespace Vulkan
                 }
                 if (!resolvedByUpscaler)
                 {
-#if false
-                std::array<uint32_t, 5> pushConst = { imageIndex, uint32_t(SwapChain().OutputOffset().x), uint32_t(SwapChain().OutputOffset().y), uint32_t(SwapChain().OutputExtent().width), uint32_t(SwapChain().OutputExtent().height) };
-                overlay_.simpleComposePipeline->BindPipeline(commandBuffer, pushConst.data());
+                    const bool fsrEnabled = NextEngine::GetInstance()->GetUserSettings().FSR;
+                    if (fsrEnabled)
+                    {
+                        const std::array<uint32_t, 5> pushConst = {
+                            imageIndex,
+                            uint32_t(SwapChain().OutputOffset().x),
+                            uint32_t(SwapChain().OutputOffset().y),
+                            uint32_t(SwapChain().OutputExtent().width),
+                            uint32_t(SwapChain().OutputExtent().height)
+                        };
+                        overlay_.simpleComposePipeline->BindPipeline(commandBuffer, pushConst.data());
 
-                vkCmdDispatch(
-                    commandBuffer,
-                    Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().width, 8),
-                    Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().height, 8), 1);
-#else
-                VkImageBlit blitRegion = {};
-                blitRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-                blitRegion.srcOffsets[0] = {0, 0, 0};
-                blitRegion.srcOffsets[1] = {static_cast<int32_t>(SwapChain().RenderExtent().width), static_cast<int32_t>(SwapChain().RenderExtent().height), 1};
-                blitRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-                blitRegion.dstOffsets[0] = {static_cast<int32_t>(SwapChain().OutputOffset().x), static_cast<int32_t>(SwapChain().OutputOffset().y), 0};
-                blitRegion.dstOffsets[1] = {static_cast<int32_t>(SwapChain().OutputOffset().x + SwapChain().OutputExtent().width),
-                                           static_cast<int32_t>(SwapChain().OutputOffset().y + SwapChain().OutputExtent().height), 1};
+                        vkCmdDispatch(
+                            commandBuffer,
+                            Utilities::Math::GetSafeDispatchCount(SwapChain().OutputExtent().width, 8),
+                            Utilities::Math::GetSafeDispatchCount(SwapChain().OutputExtent().height, 8), 1);
+                    }
+                    else
+                    {
+                        VkImageBlit blitRegion = {};
+                        blitRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                        blitRegion.srcOffsets[0] = {0, 0, 0};
+                        blitRegion.srcOffsets[1] = {
+                            static_cast<int32_t>(SwapChain().RenderExtent().width),
+                            static_cast<int32_t>(SwapChain().RenderExtent().height),
+                            1
+                        };
+                        blitRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                        blitRegion.dstOffsets[0] = {
+                            static_cast<int32_t>(SwapChain().OutputOffset().x),
+                            static_cast<int32_t>(SwapChain().OutputOffset().y),
+                            0
+                        };
+                        blitRegion.dstOffsets[1] = {
+                            static_cast<int32_t>(SwapChain().OutputOffset().x + SwapChain().OutputExtent().width),
+                            static_cast<int32_t>(SwapChain().OutputOffset().y + SwapChain().OutputExtent().height),
+                            1
+                        };
 
-                vkCmdBlitImage(commandBuffer,
-                               GetStorageImage(Assets::Bindless::RT_DENOISED)->GetImage().Handle(), VK_IMAGE_LAYOUT_GENERAL,
-                               SwapChain().Images()[imageIndex], VK_IMAGE_LAYOUT_GENERAL,
-                               1, &blitRegion,
-                               VK_FILTER_LINEAR);
-#endif
+                        vkCmdBlitImage(commandBuffer,
+                                       GetStorageImage(Assets::Bindless::RT_DENOISED)->GetImage().Handle(),
+                                       VK_IMAGE_LAYOUT_GENERAL,
+                                       SwapChain().Images()[imageIndex],
+                                       VK_IMAGE_LAYOUT_GENERAL,
+                                       1,
+                                       &blitRegion,
+                                       VK_FILTER_LINEAR);
+                    }
                 }
 
                 if (NextEngine::GetInstance()->GetShowFlags().ShowWireframe)

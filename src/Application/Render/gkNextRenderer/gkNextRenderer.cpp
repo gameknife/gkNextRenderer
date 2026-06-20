@@ -945,8 +945,8 @@ void NextRendererGameInstance::DrawSettings()
 
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Upscaling"), true))
     {
-        static int upscaleMethod = userSetting.DLSS ? 1 : 0;
-        const char* methods[] = {"None", "DLSS", "FSR", "TAAU"};
+        int upscaleMethod = userSetting.DLSS ? 1 : userSetting.FSR ? 2 : 0;
+        const char* methods[] = {"None", "DLSS", "FSR"};
         DrawSettingRow("Method",
                        [&]()
                        {
@@ -954,6 +954,7 @@ void NextRendererGameInstance::DrawSettings()
                            if (ImGui::Combo("##UpscaleMethod", &upscaleMethod, methods, IM_ARRAYSIZE(methods)))
                            {
                                userSetting.DLSS = upscaleMethod == 1 && GetEngine().GetRenderer().SupportDLSS();
+                               userSetting.FSR = upscaleMethod == 2;
                                if (!userSetting.DLSS)
                                {
                                    userSetting.DLSSG = false;
