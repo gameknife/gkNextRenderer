@@ -6,6 +6,9 @@
 #include "stb_image_write.h"
 
 #define _USE_MATH_DEFINES
+#include <algorithm>
+#include <cmath>
+#include <cstring>
 #include <filesystem>
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
@@ -18,6 +21,54 @@ namespace Runtime::ScreenShot
 {
     namespace
     {
+        float HalfToFloat(uint16_t value)
+        {
+            const uint32_t sign = (value & 0x8000u) << 16u;
+            int32_t exponent = static_cast<int32_t>((value >> 10u) & 0x1fu);
+            uint32_t mantissa = value & 0x03ffu;
+
+            uint32_t bits = 0;
+            if (exponent == 0)
+            {
+                if (mantissa == 0)
+                {
+                    bits = sign;
+                }
+                else
+                {
+                    exponent = 1;
+                    while ((mantissa & 0x0400u) == 0)
+                    {
+                        mantissa <<= 1u;
+                        --exponent;
+                    }
+                    mantissa &= 0x03ffu;
+                    bits = sign | (static_cast<uint32_t>(exponent + 112) << 23u) | (mantissa << 13u);
+                }
+            }
+            else if (exponent == 31)
+            {
+                bits = sign | 0x7f800000u | (mantissa << 13u);
+            }
+            else
+            {
+                bits = sign | (static_cast<uint32_t>(exponent + 112) << 23u) | (mantissa << 13u);
+            }
+
+            float result = 0.0f;
+            std::memcpy(&result, &bits, sizeof(result));
+            return result;
+        }
+
+        uint8_t LinearToSrgbByte(float linear)
+        {
+            linear = std::clamp(linear, 0.0f, 1.0f);
+            const float srgb = linear <= 0.0031308f
+                ? linear * 12.92f
+                : 1.055f * std::pow(linear, 1.0f / 2.4f) - 0.055f;
+            return static_cast<uint8_t>(std::clamp(srgb * 255.0f, 0.0f, 255.0f));
+        }
+
         VkSubresourceLayout GetScreenShotImageLayout(Vulkan::VulkanBaseRenderer* renderer)
         {
             VkSubresourceLayout layout{};
@@ -148,9 +199,12 @@ namespace Runtime::ScreenShot
         uint32_t rowBytes = 0;
         const VkSubresourceLayout imageLayout = GetScreenShotImageLayout(renderer);
         const uint32_t srcRowBytes = static_cast<uint32_t>(imageLayout.rowPitch);
+        const bool hdr10Screenshot = swapChain.OutputMode() == Vulkan::ESwapChainOutputMode::HDR10_ST2084;
+        const bool extendedLinearScreenshot =
+            swapChain.OutputMode() == Vulkan::ESwapChainOutputMode::ExtendedSrgbLinear;
 
         constexpr uint32_t kCompCnt = 3;
-        if(swapChain.IsHDR())
+        if(hdr10Screenshot)
         {
             dataBytes = extent.width * extent.height * 3 * 2;
             rowBytes = extent.width * 3 * sizeof(uint16_t);
@@ -184,6 +238,45 @@ namespace Runtime::ScreenShot
                         dataview[yy + xx + 1] = (uInPixel & (0b1111111111 << 10)) >> 10;
                         dataview[yy + xx + 0] = (uInPixel & (0b1111111111 << 0)) >> 0;
                         
+                        srcX += srcXDelta;
+                        xx += xDelta;
+                    }
+                    srcY += srcYDelta;
+                    yy += yDelta;
+                }
+                vkMemory->Unmap();
+            }
+        }
+        else if (extendedLinearScreenshot)
+        {
+            dataBytes = extent.width * extent.height * kCompCnt;
+            rowBytes = extent.width * kCompCnt * sizeof(uint8_t);
+            data = malloc(dataBytes);
+
+            uint8_t* dataview = static_cast<uint8_t*>(data);
+            {
+                Vulkan::DeviceMemory* vkMemory = renderer->GetScreenShotMemory();
+                uint8_t* mappedData = static_cast<uint8_t*>(vkMemory->Map(0, VK_WHOLE_SIZE));
+                uint8_t* imageData = mappedData + imageLayout.offset;
+
+                const uint32_t yDelta = extent.width * kCompCnt;
+                const uint32_t xDelta = kCompCnt;
+                const uint32_t srcYDelta = srcRowBytes;
+                const uint32_t srcXDelta = 8;
+
+                uint32_t yy = 0;
+                uint32_t srcY = inY * srcYDelta;
+                for (uint32_t y = 0; y < extent.height; y++)
+                {
+                    uint32_t xx = 0;
+                    uint32_t srcX = inX * srcXDelta;
+                    for (uint32_t x = 0; x < extent.width; x++)
+                    {
+                        uint16_t* pInPixel = reinterpret_cast<uint16_t*>(&imageData[srcY + srcX]);
+                        dataview[yy + xx] = LinearToSrgbByte(HalfToFloat(pInPixel[0]));
+                        dataview[yy + xx + 1] = LinearToSrgbByte(HalfToFloat(pInPixel[1]));
+                        dataview[yy + xx + 2] = LinearToSrgbByte(HalfToFloat(pInPixel[2]));
+
                         srcX += srcXDelta;
                         xx += xDelta;
                     }
@@ -237,14 +330,14 @@ namespace Runtime::ScreenShot
         }
         
 #if WITH_AVIF
-        avifImage* image = avifImageCreate(extent.width, extent.height, swapChain.IsHDR() ? 10 : 8, AVIF_PIXEL_FORMAT_YUV444); // these values dictate what goes into the final AVIF
+        avifImage* image = avifImageCreate(extent.width, extent.height, hdr10Screenshot ? 10 : 8, AVIF_PIXEL_FORMAT_YUV444); // these values dictate what goes into the final AVIF
         if (!image)
         {
             Throw(std::runtime_error("avif image creation failed"));
         }
         image->yuvRange = AVIF_RANGE_FULL;
-        image->colorPrimaries = swapChain.IsHDR() ? AVIF_COLOR_PRIMARIES_BT2020 : AVIF_COLOR_PRIMARIES_BT709;
-        image->transferCharacteristics = swapChain.IsHDR() ? AVIF_TRANSFER_CHARACTERISTICS_SMPTE2084 : AVIF_TRANSFER_CHARACTERISTICS_BT709;
+        image->colorPrimaries = hdr10Screenshot ? AVIF_COLOR_PRIMARIES_BT2020 : AVIF_COLOR_PRIMARIES_BT709;
+        image->transferCharacteristics = hdr10Screenshot ? AVIF_TRANSFER_CHARACTERISTICS_SMPTE2084 : AVIF_TRANSFER_CHARACTERISTICS_BT709;
         image->matrixCoefficients = AVIF_MATRIX_COEFFICIENTS_IDENTITY;
         image->clli.maxCLL = static_cast<uint16_t>(600); //maxCLLNits;
         image->clli.maxPALL = 0; //maxFALLNits;
@@ -300,7 +393,7 @@ namespace Runtime::ScreenShot
         std::string filename = filePathWithoutExtension + ".jpg";
         
         // if hdr, transcode 16bit to 8bit
-        if(swapChain.IsHDR())
+        if(hdr10Screenshot)
         {
             uint16_t* dataview = (uint16_t*)data;
             uint8_t* sdrData = (uint8_t*)malloc(extent.width * extent.height * kCompCnt);

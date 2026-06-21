@@ -84,7 +84,7 @@ public:
 	VkPipeline CreateViewportPipeline(VkRenderPass renderPass) const;
 	void DestroyViewportPipeline(VkPipeline pipeline) const;
 	void RenderViewportDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, UiRenderBuffer& renderBuffer,
-	                            VkExtent2D framebufferExtent, bool hdrOutput, VkPipeline pipeline);
+	                            VkExtent2D framebufferExtent, uint32_t hdrOutputMode, VkPipeline pipeline);
 
 private:
 	NextEngine& GetEngine() {return *engine_;}
@@ -97,7 +97,7 @@ private:
 	void DestroyUiPipeline();
 	void InitializeFontTexture(Vulkan::CommandPool& commandPool);
 	void RenderDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, UiRenderBuffer& renderBuffers,
-	                    VkExtent2D framebufferExtent, bool hdrOutput, VkPipeline pipeline);
+	                    VkExtent2D framebufferExtent, uint32_t hdrOutputMode, VkPipeline pipeline);
 	static ImTextureID EncodeBindlessTextureId(uint32_t textureIndex);
 	static bool DecodeBindlessTextureId(ImTextureID textureId, uint32_t& outTextureIndex);
 

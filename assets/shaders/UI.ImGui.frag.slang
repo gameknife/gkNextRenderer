@@ -5,7 +5,7 @@ struct PushConsts
     float2 scale;
     float2 translate;
     float4 rotation;
-    uint hdrOutput;
+    uint hdrOutputMode;
     float hdrReferenceWhiteNit;
     float2 padding;
 };
@@ -70,11 +70,15 @@ FragmentOutput main(FragmentInput input)
     }
 
     float4 sdrColor = Bindless.GetSampleTexture(input.textureIndex).SampleLevel(input.uv, 0.0) * input.color;
-    if (pushConsts.hdrOutput != 0)
+    if (pushConsts.hdrOutputMode == 1)
     {
         float3 linear709 = SrgbToLinear(saturate(sdrColor.rgb));
         float3 linear2020 = Bt709ToBt2020(linear709);
         output.color = float4(LinearToST2084UE(linear2020 * pushConsts.hdrReferenceWhiteNit), sdrColor.a);
+    }
+    else if (pushConsts.hdrOutputMode == 2)
+    {
+        output.color = float4(SrgbToLinear(saturate(sdrColor.rgb)), sdrColor.a);
     }
     else
     {

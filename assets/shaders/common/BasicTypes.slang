@@ -11,6 +11,10 @@ public static const int MAX_NODES = 65535; // 256;
 public static const int MAX_MATERIALS = 16384;
 public static const int MAX_HDR_SH = 100;
 
+public static const int HDR_OUTPUT_MODE_SDR = 0;
+public static const int HDR_OUTPUT_MODE_HDR10_ST2084 = 1;
+public static const int HDR_OUTPUT_MODE_EXTENDED_SRGB_LINEAR = 2;
+
 public static const int GPU_SCENE_NODE_PROXY_SIZE = 224;
 public static const int GPU_SCENE_MATERIAL_SIZE = 64;
 public static const int GPU_SCENE_GPU_DRIVEN_STAT_SIZE = 32;
@@ -143,6 +147,7 @@ public struct ALIGN_16 UniformBufferObject
     public bool HasSun;
 
     public bool HDR;
+    public uint HDROutputMode;
     public bool TAA;
     public bool ProgressiveRender;
     public bool FastGather;

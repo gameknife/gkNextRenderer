@@ -3,7 +3,7 @@ struct PushConsts
     float2 scale;
     float2 translate;
     float4 rotation;
-    uint hdrOutput;
+    uint hdrOutputMode;
     float hdrReferenceWhiteNit;
     float2 padding;
 };

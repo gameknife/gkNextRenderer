@@ -96,7 +96,7 @@ namespace
         float scale[2];
         float translate[2];
         float rotation[4];
-        uint32_t hdrOutput;
+        uint32_t hdrOutputMode;
         float hdrReferenceWhiteNit;
         float padding[2];
     };
@@ -577,13 +577,13 @@ void UserInterface::DestroyViewportPipeline(VkPipeline pipeline) const
 
 void UserInterface::RenderViewportDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer,
                                            UiRenderBuffer& renderBuffer, VkExtent2D framebufferExtent,
-                                           bool hdrOutput, VkPipeline pipeline)
+                                           uint32_t hdrOutputMode, VkPipeline pipeline)
 {
-    RenderDrawData(drawData, commandBuffer, renderBuffer, framebufferExtent, hdrOutput, pipeline);
+    RenderDrawData(drawData, commandBuffer, renderBuffer, framebufferExtent, hdrOutputMode, pipeline);
 }
 
 void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, UiRenderBuffer& renderBuffer,
-                                   VkExtent2D framebufferExtent, bool hdrOutput, VkPipeline pipeline)
+                                   VkExtent2D framebufferExtent, uint32_t hdrOutputMode, VkPipeline pipeline)
 {
     if (drawData == nullptr || drawData->CmdListsCount <= 0 || pipeline == VK_NULL_HANDLE)
     {
@@ -613,7 +613,7 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
     pushConsts.rotation[2] = -1.0f;
     pushConsts.rotation[3] = 0.0f;
 #endif
-    pushConsts.hdrOutput = hdrOutput ? 1u : 0u;
+    pushConsts.hdrOutputMode = hdrOutputMode;
     pushConsts.hdrReferenceWhiteNit = kUiHdrReferenceWhiteNit;
 
     UiRenderBuffer::Impl& renderBuffers = *renderBuffer.impl_;
@@ -882,8 +882,8 @@ void UserInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::Swap
     renderPassInfo.pClearValues = nullptr;
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    RenderDrawData(ImGui::GetDrawData(), commandBuffer, uiRenderBuffers_[imageIdx], swapChain.Extent(), swapChain.IsHDR(),
-                   uiPipeline_);
+    RenderDrawData(ImGui::GetDrawData(), commandBuffer, uiRenderBuffers_[imageIdx], swapChain.Extent(),
+                   swapChain.HDROutputMode(), uiPipeline_);
     vkCmdEndRenderPass(commandBuffer);
 
     auto& io = ImGui::GetIO();
