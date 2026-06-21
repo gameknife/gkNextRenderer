@@ -6,11 +6,14 @@
 - [x] `#00057` [FEAT] 根据docs/plans/sharc-official-handoff.md的规划，将官方sharc整合到引擎并成功运转 → journal/00057.md (2026-06-16)
 - [x] `#00058` [BUG] sharc目前有过亮的问题，请定位并解决 → journal/00058.md (2026-06-16)
 - [x] `#00059` [FEAT] 希望给sharc增加一个debug模式，能够在场景上显示出radiance cache的实际颜色，按照设定的grid尺寸，看起来就像场景上的小马赛克图案 → journal/00059.md (2026-06-16)
-- [ ] `#00060` [IDEA] 目前debugmode=4时，显示的radiance cache看起来只有亮度，是黑白的，能否显示出cache的色彩。其次，大部分场景，我需要把r.sharc.sceneScale调到100左右，看到的马赛克格子才是比较符合尺寸的。是否是因为显示的不是LOD0层级的radiance cache。请就这两个问题，进行修复
+- [ ] `#00061` [FEAT] 根据docs\designs\swmodern-noambient-sky-occlusion-design.md的计划，一口气做完整个实现
+- [ ] `#00062` [REFACTOR] gkNextEditor的uiState_.fontIcon没必要了，默认系统字体带了所有icon，去掉这个字体
+- [ ] `#00063` [REFACTOR] imgui的版本是比较高的，目前非第三方代码里的#if IMGUI_VERSION_NUM宏判断都可以去掉，整体处理一遍，完成后提交
 
 ### 待规划
 - [ ] `#00011` [IDEA] gnb在gkmini上host一个持久的todolist，作为一个“服务器”同步，可以随时随地进行任务管理
 - [ ] `#00056` [FEAT] 优化ModernNoAmbient的渲染效果 → specs/00056.md
+- [ ] `#00060` [IDEA] 目前debugmode=4时，显示的radiance cache看起来只有亮度，是黑白的，能否显示出cache的色彩。其次，大部分场景，我需要把r.sharc.sceneScale调到100左右，看到的马赛克格子才是比较符合尺寸的。是否是因为显示的不是LOD0层级的radiance cache。请就这两个问题，进行修复
 - [x] `#00045` [FEAT] gnb需要及时响应TODO文件的修改 → journal/00045.md (2026-06-12)
 - [ ] `#00055` [FEAT] 根据docs/plans/webrtc-remoteplay-hwencode-plan.md的计划，继续推进到B6，目前B1应该是已经完成
 - [ ] `#00051` [FEAT] 用https://wails.io/的方案包裹gnb，单可执行文件直接启动，不再依赖浏览器
