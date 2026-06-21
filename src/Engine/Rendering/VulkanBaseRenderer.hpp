@@ -309,6 +309,8 @@ namespace Vulkan
 		void OnDeviceSet();
 		void CreateRenderImages();
 		void CreateStorageImage(uint32_t bindlessIdx, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName);
+		void CreateStorageImage(uint32_t bindlessIdx, VkExtent2D extent, VkFormat format, VkImageTiling tiling,
+                                VkImageUsageFlags usage, const char* debugName);
 		void RequestClearAmbientCubeCache() { ambient_.requestClearCache = true; }
 		void RecreateSwapChain();
 		void UpdateUniformBuffer(uint32_t imageIndex);

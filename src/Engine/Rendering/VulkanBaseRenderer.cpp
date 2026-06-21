@@ -678,7 +678,13 @@ namespace Vulkan
 
     void VulkanBaseRenderer::CreateStorageImage(uint32_t bindlessIdx, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName)
     {
-        bindless_.images[bindlessIdx].reset(new RenderImage(Device(), frame_.swapChain->RenderExtent(), format, tiling, usage, false, debugName));
+        CreateStorageImage(bindlessIdx, frame_.swapChain->RenderExtent(), format, tiling, usage, debugName);
+    }
+
+    void VulkanBaseRenderer::CreateStorageImage(uint32_t bindlessIdx, VkExtent2D extent, VkFormat format,
+        VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName)
+    {
+        bindless_.images[bindlessIdx].reset(new RenderImage(Device(), extent, format, tiling, usage, false, debugName));
         if (usage & VK_IMAGE_USAGE_STORAGE_BIT)
         {
             ctx_.globalTexturePool->BindStorageTexture(bindlessIdx, bindless_.images[bindlessIdx]->GetImageView());
@@ -746,6 +752,12 @@ namespace Vulkan
         CREATE_STORAGE_IMAGE(RT_ATROUS_SPEC_PING, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
         CREATE_STORAGE_IMAGE(RT_ATROUS_SPEC_PONG, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
         CREATE_STORAGE_IMAGE(RT_SPLAT_ACCUM, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+        CREATE_STORAGE_IMAGE(RT_AMBIENT, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
+        const VkExtent2D gtaoExtent{
+            (frame_.swapChain->RenderExtent().width + 1u) / 2u,
+            (frame_.swapChain->RenderExtent().height + 1u) / 2u};
+        CreateStorageImage(Assets::Bindless::RT_GTAO, gtaoExtent, VK_FORMAT_R16_SFLOAT,
+                           VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, "RT_GTAO");
 
         for (uint32_t i = 0; i != frame_.swapChain->Images().size(); i++)
         {

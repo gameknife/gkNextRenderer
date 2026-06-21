@@ -82,11 +82,7 @@ namespace NextUI
         }
 
         font = font ? font : ImGui::GetFont();
-#if IMGUI_VERSION_NUM >= 19200
         const float fontSize = font ? font->LegacySize : ImGui::GetFontSize();
-#else
-        const float fontSize = font ? font->FontSize : ImGui::GetFontSize();
-#endif
         const float scale = std::max(0.01f, style_.uiScale);
         const float toastWidth = 280.0f * scale;
         const float toastHeight = 44.0f * scale;

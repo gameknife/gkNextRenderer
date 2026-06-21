@@ -239,6 +239,11 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.DenoiseSpecularSourceSlot = (specularAtrousIterations > 0)
         ? static_cast<uint32_t>(Assets::Bindless::RT_ATROUS_SPEC_OUT)
         : static_cast<uint32_t>(Assets::Bindless::RT_ACCUMLATE_SPECULAR);
+    ubo.GTAORadius = std::max(config_.userSettings.GTAORadius, 0.01f);
+    ubo.GTAOStrength = std::max(config_.userSettings.GTAOStrength, 0.0f);
+    ubo.GTAOThickness = std::max(config_.userSettings.GTAOThickness, 0.01f);
+    ubo.GTAODebugMode = static_cast<uint32_t>(std::clamp(config_.userSettings.GTAODebugMode, 0, 2));
+    ubo.GTAOEnable = config_.userSettings.GTAOEnable;
 
     ubo.ProgressiveRender = progressiveRender_.enabled;
     ubo.SceneEpsilonScale = config_.userSettings.SceneEpsilonScale;

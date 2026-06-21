@@ -171,6 +171,18 @@ public struct ALIGN_16 UniformBufferObject
     // (a-trous outputs when enabled, else the temporal accumulation buffers).
     public uint DenoiseDiffuseSourceSlot;
     public uint DenoiseSpecularSourceSlot;
+
+    // SwModernNoAmbient GTAO. Kept in the camera UBO so both GTAO compute stages can
+    // use the regular GPUScene push constant without introducing another pipeline ABI.
+    public float GTAORadius;
+    public float GTAOStrength;
+    public float GTAOThickness;
+    public uint GTAODebugMode;
+
+    public bool GTAOEnable;
+    public uint GTAOPadding0;
+    public uint GTAOPadding1;
+    public uint GTAOPadding2;
 };
 
 public struct ALIGN_16 NodeProxy

@@ -82,34 +82,13 @@ void EditorInterface::Init()
     const auto scaleFactor = 1.0;
     // ImGui::GetStyle().ScaleAllSizes(scaleFactor);
 
-#if IMGUI_VERSION_NUM >= 19200
     io.Fonts->SetFontLoader(ImGuiFreeType::GetFontLoader());
     io.Fonts->FontLoaderFlags = ImGuiFreeTypeLoaderFlags_NoHinting;
-#else
-    io.Fonts->FontBuilderIO = ImGuiFreeType::GetBuilderForFreeType();
-    io.Fonts->FontBuilderFlags = ImGuiFreeTypeBuilderFlags_NoHinting;
-#endif
-    const ImWchar* glyphRange = GOption->locale == "RU" ? io.Fonts->GetGlyphRangesCyrillic()
-        : GOption->locale == "zhCN"                     ? io.Fonts->GetGlyphRangesChineseFull()
-                                                        : io.Fonts->GetGlyphRangesDefault();
-
     const ImWchar* iconRange = GetGlyphRangesFontAwesome();
-    ImFontConfig config;
-    config.MergeMode = true;
-    ImFont* fontIcon = io.Fonts->AddFontFromFileTTF(
-        Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-BoldCondensed.ttf").c_str(), 18 * scaleFactor,
-        nullptr, glyphRange);
-
-    config.GlyphMinAdvanceX = 20.0f;
-    config.GlyphOffset = ImVec2(0, 0);
-    io.Fonts->AddFontFromFileTTF(Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(),
-                                 18 * scaleFactor, &config, iconRange);
-
     ImFont* fontBigIcon = io.Fonts->AddFontFromFileTTF(
         Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 32 * scaleFactor, nullptr,
         iconRange);
 
-    uiState_.fontIcon = fontIcon;
     uiState_.bigIcon = fontBigIcon;
     Editor::LoadRecentScenes(uiState_);
     firstRun_ = true;
@@ -225,10 +204,6 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
     ImGui::SameLine(0.0f, 12.0f);
 
     ImGui::BeginGroup();
-    if (uiState_.fontIcon)
-    {
-        ImGui::PushFont(uiState_.fontIcon);
-    }
     if (NextUI::Theme::ToolbarButton(ICON_FA_FLOPPY_DISK, "Save Scene", false,
                                         ImVec2(kToolbarIconWidth, kToolbarIconHeight)))
     {
@@ -272,18 +247,10 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
     ImGui::SameLine();
     NextUI::Theme::ToolbarButton(ICON_FA_CUBE, "Create Actor (placeholder)", false,
                                     ImVec2(kToolbarIconWidth, kToolbarIconHeight));
-    if (uiState_.fontIcon)
-    {
-        ImGui::PopFont();
-    }
     ImGui::EndGroup();
     ImGui::SameLine(0.0f, 12.0f);
 
     ImGui::BeginGroup();
-    if (uiState_.fontIcon)
-    {
-        ImGui::PushFont(uiState_.fontIcon);
-    }
     NextUI::Theme::ToolbarButton(ICON_FA_GEAR, "Project Settings (placeholder)", false,
                                     ImVec2(kToolbarIconWidth, kToolbarIconHeight));
     ImGui::SameLine();
@@ -296,10 +263,6 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
     NextUI::Theme::ToolbarButton(ICON_FA_MAGNET, "Snap Settings (placeholder)", false,
                                     ImVec2(kToolbarIconWidth, kToolbarIconHeight));
     ImGui::SameLine();
-    if (uiState_.fontIcon)
-    {
-        ImGui::PopFont();
-    }
     ImGui::EndGroup();
     ImGui::SameLine(0.0f, 14.0f);
 
@@ -329,16 +292,8 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
     {
         ImGui::SameLine(rightStart);
     }
-    if (uiState_.fontIcon)
-    {
-        ImGui::PushFont(uiState_.fontIcon);
-    }
     NextUI::Theme::ToolbarButton(ICON_FA_GEAR, "Editor Settings", false,
                                     ImVec2(kToolbarIconWidth, kToolbarIconHeight));
-    if (uiState_.fontIcon)
-    {
-        ImGui::PopFont();
-    }
     ImGui::SameLine(0.0f, 8.0f);
 
     ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -407,11 +362,7 @@ void EditorInterface::Render()
     if (uiState_.child_metrics)
         ImGui::ShowMetricsWindow(&uiState_.child_metrics);
     if (uiState_.child_stack)
-#if IMGUI_VERSION_NUM >= 18925
         ImGui::ShowIDStackToolWindow(&uiState_.child_stack);
-#else
-        ImGui::ShowStackToolWindow(&uiState_.child_stack);
-#endif
     if (uiState_.child_color)
         utils::ShowColorExportWindow(&uiState_.child_color);
     if (uiState_.child_resources)

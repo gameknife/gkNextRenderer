@@ -26,6 +26,10 @@ namespace Vulkan::SoftwareModernNoAmbient
         (void)extent;
         shadingPipeline_.reset(new PipelineCommon::ZeroBindPipeline(
             SwapChain(), "assets/shaders/Core.SwModernNoAmbient.comp.slang.spv", GetScene()));
+        gtaoPipeline_.reset(new PipelineCommon::ZeroBindPipeline(
+            SwapChain(), "assets/shaders/Core.GTAO.comp.slang.spv", GetScene()));
+        gtaoComposePipeline_.reset(new PipelineCommon::ZeroBindPipeline(
+            SwapChain(), "assets/shaders/Process.GTAOCompose.comp.slang.spv", GetScene()));
         accumulatePipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(
             SwapChain(), "assets/shaders/Process.ReProjectSimple.comp.slang.spv", 16));
         composePipeline_.reset(new PipelineCommon::ZeroBindPipeline(
@@ -43,6 +47,8 @@ namespace Vulkan::SoftwareModernNoAmbient
     void SoftwareModernNoAmbientRenderer::DeleteSwapChain()
     {
         shadingPipeline_.reset();
+        gtaoPipeline_.reset();
+        gtaoComposePipeline_.reset();
         accumulatePipeline_.reset();
         composePipeline_.reset();
         historyValid_ = false;
@@ -74,6 +80,35 @@ namespace Vulkan::SoftwareModernNoAmbient
             transition(Assets::Bindless::RT_MOTIONVECTOR);
             transition(Assets::Bindless::RT_MOTIONMOMENT);
             transition(Assets::Bindless::RT_NORMAL);
+            transition(Assets::Bindless::RT_AMBIENT);
+        }
+
+        {
+            SCOPED_GPU_TIMER("gtao pass");
+            const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+            if (settings.GTAOEnable)
+            {
+                baseRender_.GetStorageImage(Assets::Bindless::RT_GTAO)->InsertBarrier(
+                    commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                    VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+                gtaoPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+                const VkExtent2D extent = SwapChain().RenderExtent();
+                vkCmdDispatch(commandBuffer,
+                              Utilities::Math::GetSafeDispatchCount((extent.width + 1u) / 2u, 8),
+                              Utilities::Math::GetSafeDispatchCount((extent.height + 1u) / 2u, 8), 1);
+
+                baseRender_.GetStorageImage(Assets::Bindless::RT_GTAO)->InsertBarrier(
+                    commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                    VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+            }
+
+            gtaoComposePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+            vkCmdDispatch(commandBuffer,
+                          Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
+                          Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+            baseRender_.GetStorageImage(Assets::Bindless::RT_SINGLE_DIFFUSE)->InsertBarrier(
+                commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
         }
 
         {

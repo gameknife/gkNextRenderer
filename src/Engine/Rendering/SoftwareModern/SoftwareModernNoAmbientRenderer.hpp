@@ -33,6 +33,8 @@ namespace Vulkan::SoftwareModernNoAmbient
 
     private:
         std::unique_ptr<PipelineCommon::ZeroBindPipeline> shadingPipeline_;
+        std::unique_ptr<PipelineCommon::ZeroBindPipeline> gtaoPipeline_;
+        std::unique_ptr<PipelineCommon::ZeroBindPipeline> gtaoComposePipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> accumulatePipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindPipeline> composePipeline_;
 

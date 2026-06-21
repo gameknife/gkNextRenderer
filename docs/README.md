@@ -30,6 +30,7 @@
 | [SCAD 加载器（SCADLoader）设计与开发计划](designs/scad-loader-design.md) | ✅ 已完成 | 2026-05-30 |
 | [SCAD Model Generator（SCAD Studio）设计与开发计划](designs/scad-model-generator-design.md) | ✅ 已完成 | 2026-06-07 |
 | [SCAD 刚体骨骼角色（ScadRig）设计与开发计划](designs/scad-rig-design.md) | ✅ 已完成 | 2026-06-13 |
+| [SwModernNoAmbient 天光遮蔽（屏幕空间 GTAO）设计与开发计划](designs/swmodern-noambient-sky-occlusion-design.md) | ✅ 已完成 | 2026-06-21 |
 | [WebRTC 远程游玩（Remote Play）设计与开发计划](designs/webrtc-remoteplay-design.md) | 🔵 进行中 | 2026-06-08 |
 
 ## 开发计划 · plans/
