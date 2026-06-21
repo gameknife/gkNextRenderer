@@ -60,7 +60,7 @@ std::unique_ptr<NextUI::IMultiViewportBackend> EditorGameInstance::CreateMultiVi
 void EditorGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
-    cvars.SetDefaultFromString("r.samples", "8", &error);
+    cvars.SetDefaultFromString("r.samples", "4", &error);
     cvars.SetDefaultFromString("r.temporalFrames", "16", &error);
     cvars.SetDefaultFromString("r.denoiser", "0", &error);
     cvars.SetDefaultFromString("r.superResolution", "2", &error);
@@ -141,10 +141,6 @@ void EditorGameInstance::OnInit()
                             });
 
     GetEngine().GetShowFlags().ShowEdge = true;
-    // GetEngine().GetUserSettings().SceneEpsilonScale = 0.01f;
-    // GetEngine().GetUserSettings().AmbientCubeUnit = 0.02f;
-    // GetEngine().GetUserSettings().AmbientCubeOffsetX = 0.0f;
-    // GetEngine().GetUserSettings().AmbientCubeOffsetZ = 0.0f;
 }
 
 void EditorGameInstance::OnTick(double deltaSeconds)
