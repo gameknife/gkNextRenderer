@@ -80,6 +80,23 @@ const char* GetSceneListGroupLabel(ESceneListGroup group)
     }
 }
 
+const char* GetPresentModeLabel(VkPresentModeKHR presentMode)
+{
+    switch (presentMode)
+    {
+    case VK_PRESENT_MODE_IMMEDIATE_KHR:
+        return "Immediate";
+    case VK_PRESENT_MODE_MAILBOX_KHR:
+        return "Mailbox";
+    case VK_PRESENT_MODE_FIFO_KHR:
+        return "FIFO";
+    case VK_PRESENT_MODE_FIFO_RELAXED_KHR:
+        return "FIFO Relaxed";
+    default:
+        return "Unknown";
+    }
+}
+
 template <typename T>
 bool DrawSettingSliderRow(const char* label, ImGuiDataType dataType, T* value,
                           T minValue, T maxValue, const char* format, float dragSpeed,
@@ -840,6 +857,47 @@ void NextRendererGameInstance::DrawSettings()
                            Runtime::GraphicsDebugPanel::DrawRendererSelector(GetEngine(), userSetting, "##RendererList");
                            return false;
                        });
+        DrawSettingRow(LOCTEXT("Present Mode"),
+                       [&]()
+                       {
+                           static constexpr VkPresentModeKHR presentModes[] = {
+                               VK_PRESENT_MODE_IMMEDIATE_KHR,
+                               VK_PRESENT_MODE_MAILBOX_KHR,
+                               VK_PRESENT_MODE_FIFO_KHR,
+                               VK_PRESENT_MODE_FIFO_RELAXED_KHR,
+                           };
+
+                           int selectedMode = 0;
+                           const VkPresentModeKHR requestedPresentMode =
+                               static_cast<VkPresentModeKHR>(userSetting.PresentMode);
+                           for (int i = 0; i < static_cast<int>(std::size(presentModes)); ++i)
+                           {
+                               if (presentModes[i] == requestedPresentMode)
+                               {
+                                   selectedMode = i;
+                                   break;
+                               }
+                           }
+
+                           const char* labels[] = {"Immediate", "Mailbox", "FIFO", "FIFO Relaxed"};
+                           ImGui::SetNextItemWidth(-FLT_MIN);
+                           if (ImGui::Combo("##PresentMode", &selectedMode, labels, IM_ARRAYSIZE(labels)))
+                           {
+                               const VkPresentModeKHR nextPresentMode = presentModes[selectedMode];
+                               userSetting.PresentMode = static_cast<uint32_t>(nextPresentMode);
+                               GetEngine().GetRenderer().SetRequestedPresentMode(nextPresentMode);
+                               return true;
+                           }
+                           return false;
+                       });
+        if (GetEngine().GetRenderer().HasSwapChain())
+        {
+            const VkPresentModeKHR actualPresentMode = GetEngine().GetRenderer().SwapChain().PresentMode();
+            if (actualPresentMode != static_cast<VkPresentModeKHR>(userSetting.PresentMode))
+            {
+                ImGui::TextDisabled("Actual present mode: %s", GetPresentModeLabel(actualPresentMode));
+            }
+        }
         NextUI::Theme::EndPanelSection();
     }
 
@@ -1062,7 +1120,6 @@ void NextRendererGameInstance::DrawSettings()
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Animation"), false))
     {
         DrawSettingCheckboxRow(LOCTEXT("Tick Animation"), &userSetting.TickAnimation);
-        DrawSettingCheckboxRow(LOCTEXT("Show Debug Skeleton"), &GetEngine().GetShowFlags().ShowDebugSkeleton);
 
         ImGui::Separator();
         for (auto& node : GetEngine().GetScene().Nodes())
@@ -1112,12 +1169,7 @@ void NextRendererGameInstance::DrawSettings()
 
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Misc"), false))
     {
-        DrawSettingCheckboxRow(LOCTEXT("ShowWireframe"), &GetEngine().GetShowFlags().ShowWireframe);
         DrawSettingCheckboxRow(LOCTEXT("TickPhysics"), &userSetting.TickPhysics);
-        DrawSettingCheckboxRow(LOCTEXT("DebugDraw"), &GetEngine().GetShowFlags().ShowVisualDebug);
-        DrawSettingCheckboxRow(LOCTEXT("DebugDraw_Lighting"), &GetEngine().GetShowFlags().DebugDraw_Lighting);
-        DrawSettingCheckboxRow(LOCTEXT("ShadowCascadeCoverage"), &GetEngine().GetShowFlags().DebugDraw_ShadowCascadeCoverage);
-        DrawSettingCheckboxRow(LOCTEXT("DebugDraw_BoundingBox"), &GetEngine().GetShowFlags().DebugDraw_BoundingBox);
 
         ImGui::SliderFloat(LOCTEXT("Time Scaling"), &userSetting.HeatmapScale, 0.10f, 2.0f, "%.2f",
                            ImGuiSliderFlags_Logarithmic);

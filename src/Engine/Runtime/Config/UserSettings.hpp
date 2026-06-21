@@ -21,6 +21,7 @@ struct UserSettings final
 	uint32_t MaxNumberOfBounces;
 	bool TAA {};
 	bool FastGather = false;
+	uint32_t PresentMode = 3;
 	uint32_t SuperResolution = 1;
 	bool DLSS = false;
     bool FSR = false;

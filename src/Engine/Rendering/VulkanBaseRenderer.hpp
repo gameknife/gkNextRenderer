@@ -67,6 +67,15 @@ namespace Vulkan
 		void DrawFrame();
 		void ReloadShaders();
 		void RequestRecreateSwapChain() { requestRecreateSwapChain_ = true; }
+		VkPresentModeKHR RequestedPresentMode() const { return presentMode_; }
+		void SetRequestedPresentMode(VkPresentModeKHR presentMode)
+		{
+			if (presentMode_ != presentMode)
+			{
+				presentMode_ = presentMode;
+				RequestRecreateSwapChain();
+			}
+		}
 
 		// Device / swapchain access
 		const class Device& Device() const { return *ctx_.device; }
@@ -282,7 +291,7 @@ namespace Vulkan
 		std::unique_ptr<Rendering::Upscaler::IUpscaler> upscaler_;
 
 		std::weak_ptr<Assets::Scene> scene_;
-		const VkPresentModeKHR presentMode_;
+		VkPresentModeKHR presentMode_;
 		bool checkerboxRendering_{};
 		bool forceSDR_{};
 		bool visualDebug_{};

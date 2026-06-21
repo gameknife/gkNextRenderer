@@ -798,7 +798,7 @@ namespace Vulkan
                     dlssEnabled);
                 renderExtent = optimal.renderExtent;
             }
-            else if (settings.FSR)
+            else
             {
                 const auto& modeInfo = Rendering::Upscaler::GetUpscaleModeInfo(settings.SuperResolution);
                 renderExtent = Rendering::Upscaler::ScaleExtent(frame_.swapChain->Extent(), modeInfo.fallbackScale);

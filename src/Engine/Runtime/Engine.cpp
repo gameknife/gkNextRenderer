@@ -503,6 +503,7 @@ void NextEngine::Start()
     const VkPresentModeKHR presentMode = useFastAgentPresent
                                              ? VK_PRESENT_MODE_IMMEDIATE_KHR
                                              : static_cast<VkPresentModeKHR>(options_->PresentMode);
+    config_.userSettings.PresentMode = static_cast<uint32_t>(presentMode);
     renderer_.reset(NextRenderer::CreateRenderer(static_cast<uint32_t>(config_.userSettings.RendererType), window_.get(),
                                                  presentMode,
                                                  shouldEnableValidation));
