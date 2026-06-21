@@ -222,6 +222,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.DebugDraw_ShadowCascadeCoverage = config_.showFlags.DebugDraw_ShadowCascadeCoverage;
     ubo.TemporalFrames = progressiveRender_.enabled ? 256 : config_.userSettings.TemporalFrames;
     ubo.HDR = renderer_->SwapChain().IsHDR();
+    ubo.HDROutputMode = renderer_->SwapChain().HDROutputMode();
 
     ubo.PaperWhiteNit = config_.userSettings.PaperWhiteNit;
     ubo.LightCount = scene_->GetLightCount();

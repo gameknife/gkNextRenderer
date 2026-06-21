@@ -112,11 +112,7 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
 
     if(Camera.HDR)
     {
-        Total = Total / 2000;
-        Total = GT_Tonemapping(Total);
-        Total = Total * 2000;
-        float3 st2084 = LinearToST2084UE(Total * Camera.PaperWhiteNit / 230.0);
-        OutImage[ipos] = float4(st2084, 1.0);
+        OutImage[ipos] = float4(EncodeHdrOutput(Total, Camera.PaperWhiteNit, Camera.HDROutputMode), 1.0);
     }
     else
     {

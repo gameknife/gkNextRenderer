@@ -12,6 +12,7 @@
 | --- | --- | --- |
 | [CLI Spec](guides/cli-spec.md) | 🟢 现行 | 2026-06-07 |
 | [CMake 结构](guides/cmake-structure.md) | 🟢 现行 | 2026-05-29 |
+| [SDR / HDR10 / EDR 输出模式](guides/display-output-modes.md) | 🟢 现行 | 2026-06-21 |
 | [gnb 架构与代码导览](guides/gnb-architecture.md) | 🟢 现行 | 2026-06-12 |
 | [gnb CLI](guides/gnb-cli.md) | 🟢 现行 | 2026-06-12 |
 | [gnb 技术栈说明](guides/gnb-tech-stack.md) | 🟢 现行 | 2026-06-12 |

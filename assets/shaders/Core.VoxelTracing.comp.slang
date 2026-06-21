@@ -6,7 +6,7 @@ void OutputColor(int2 ipos, float3 Total)
 {
     if (Bindless.GetGpuscene().Camera->HDR)
     {
-        Bindless.GetStorageTexture<float4>(Bindless.RT_DENOISED)[ipos] = float4(LinearToST2084UE(Total * Bindless.GetGpuscene().Camera->PaperWhiteNit / 230.0), 0.0);
+        Bindless.GetStorageTexture<float4>(Bindless.RT_DENOISED)[ipos] = float4(EncodeHdrOutput(Total, Bindless.GetGpuscene().Camera->PaperWhiteNit, Bindless.GetGpuscene().Camera->HDROutputMode), 0.0);
     }
     else
     {

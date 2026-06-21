@@ -751,7 +751,7 @@ void MultiViewportBackend::RenderPlatformViewportWindow(ImGuiViewport* viewport)
 
     userInterface_->RenderViewportDrawData(
         viewport->DrawData, frame.commandBuffer, viewportRenderBuffers[window.frameIndex],
-        VkExtent2D{static_cast<uint32_t>(window.width), static_cast<uint32_t>(window.height)}, false, viewportPipeline);
+        VkExtent2D{static_cast<uint32_t>(window.width), static_cast<uint32_t>(window.height)}, 0u, viewportPipeline);
 
     vkCmdEndRenderPass(frame.commandBuffer);
 
