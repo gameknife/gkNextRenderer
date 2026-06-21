@@ -28,7 +28,7 @@ namespace Editor
     namespace
     {
         float GContentBrowserIconSize = 82.0f;
-        constexpr float kIconPadding = 10.0f;
+        constexpr float kCardAspect = 1.65f;
 
         struct ContentBrowserCallbacks
         {
@@ -298,7 +298,7 @@ namespace Editor
             (void)ui;
             ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.48f));
             ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.82f));
-            ImGui::BeginChild("ContentBrowserSidebar", ImVec2(170.0f, 0.0f), true);
+            ImGui::BeginChild("ContentBrowserSidebar", ImVec2(200.0f, 0.0f), true);
             ImGui::TextDisabled("Favorites");
             DrawQuickAccessDirectory(ICON_FA_STAR " Assets", rootPath, currentPath);
             DrawQuickAccessDirectory(ICON_FA_FOLDER " Models", rootPath / "models", currentPath);
@@ -400,10 +400,18 @@ namespace Editor
             {
                 ImGui::PushFont(ui.bigIcon);
             }
+            
+            const ImVec2 cardMin = ImGui::GetCursorPos() + ImGui::GetWindowPos() - ImVec2(0, ImGui::GetScrollY());
+            const ImVec2 cardMid = cardMin + ImVec2(0, GContentBrowserIconSize);
+            const ImVec2 cardMax = cardMin + ImVec2(GContentBrowserIconSize, GContentBrowserIconSize * kCardAspect);
+            
+            ImGui::GetWindowDrawList()->AddRectFilled(
+            cardMin, cardMax,NextUI::Theme::ColorU32(NextUI::Theme::EColor::Background, 0.84f), 6);
+                    
             ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Background));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover));
             ImGui::PushID(static_cast<int>(globalId));
-
+            
             ImTextureID textureId = ctx.ui.RequestImTextureId(globalId);
             if (iconOrTex || textureId == 0)
             {
@@ -442,36 +450,32 @@ namespace Editor
                     selectionId = globalId;
                 }
             }
-
-            auto cursorPos = ImGui::GetCursorPos() + ImGui::GetWindowPos() - ImVec2(0, 4 + ImGui::GetScrollY());
+            
             const bool selected = selectionId == globalId;
-            const ImVec2 cardMin = cursorPos - ImVec2(6.0f, GContentBrowserIconSize + 6.0f);
-            const ImVec2 cardMax = cardMin + ImVec2(GContentBrowserIconSize + 12.0f, GContentBrowserIconSize + 54.0f);
-            ImGui::GetWindowDrawList()->AddRectFilled(
-                cardMin, cardMax,
-                selected ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Accent, 0.14f)
-                         : NextUI::Theme::ColorU32(NextUI::Theme::EColor::Background, 0.84f),
-                8.0f);
+            
             ImGui::GetWindowDrawList()->AddRect(
                 cardMin, cardMax,
                 selected ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::AccentHover, 0.92f)
                          : NextUI::Theme::ColorU32(NextUI::Theme::EColor::Border, 0.84f),
-                8.0f, 0, selected ? 1.4f : 1.0f);
+                6, 0, selected ? 1.4f : 1.0f);
             ImGui::GetWindowDrawList()->AddRectFilled(
-                cursorPos, cursorPos + ImVec2(GContentBrowserIconSize, GContentBrowserIconSize / 5.0f * 3.0f),
+                cardMid, cardMax,
                 selected ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Accent, 0.72f)
                          : NextUI::Theme::ColorU32(NextUI::Theme::EColor::SurfaceElevated),
                 6);
-            ImGui::GetWindowDrawList()->AddLine(cursorPos, cursorPos + ImVec2(GContentBrowserIconSize, 0), color, 2);
+            ImGui::GetWindowDrawList()->AddLine(cardMid, cardMid + ImVec2(GContentBrowserIconSize, 0), color, 2);
 
+            float cursorPosY = ImGui::GetCursorPosY();
             ImGui::PushItemWidth(GContentBrowserIconSize);
             ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + GContentBrowserIconSize);
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 5);
             ImGui::Text("%s", name.c_str());
             ImGui::PopTextWrapPos();
             ImGui::PopItemWidth();
+            
+            ImGui::SetCursorPosY(cursorPosY);
 
-            ImGui::Dummy(ImVec2(0.0f, kIconPadding));
+            ImGui::Dummy(ImVec2(0.0f, GContentBrowserIconSize * (kCardAspect - 1.0f)));
             ImGui::EndGroup();
 
             if (callbacks.onContextMenu)
@@ -605,7 +609,6 @@ namespace Editor
     {
         ImGui::Begin("Content Browser", nullptr);
         {
-            NextUI::Theme::DrawPanelHeader(ICON_FA_FOLDER_TREE, "Assets", "Project content browser");
             static const std::filesystem::path rootPath =
                 std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets"));
             static std::filesystem::path currentPath = rootPath;
@@ -620,9 +623,11 @@ namespace Editor
                 {
                     DrawContentBrowserSidebar(ui, rootPath, currentPath, directoryCache);
                     ImGui::SameLine();
-
+                    
                     ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.28f));
                     ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.82f));
+
+                    ImGui::BeginChild("ContentRightFrame", ImVec2(0.0f, 0.0f));
                     ImGui::BeginChild("ContentBrowserMain", ImVec2(0.0f, -24.0f), true);
 
                     if (ImGui::Button(ICON_FA_PLUS " Add"))
@@ -729,40 +734,38 @@ namespace Editor
                         grid.Next();
                         ++itemCount;
                     }
-
                     ImGui::EndChild();
+                    ImGui::EndChild();
+                    selectedCount = ui.selectedContentItemId != InvalidId ? 1 : 0;
+                    ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
                     ImGui::EndChild();
                     ImGui::PopStyleColor(2);
-                    selectedCount = ui.selectedContentItemId != InvalidId ? 1 : 0;
+                    
                     ImGui::EndTabItem();
                 }
                 if (ImGui::BeginTabItem("Material Browser"))
                 {
                     ImGui::BeginChild("Material Items", ImVec2(0.0f, -24.0f));
-                    itemCount = DrawMaterialBrowserContents(ctx, ui, &contentFilter);
-                    selectedCount = ui.selectedMaterialId != InvalidId ? 1 : 0;
+                    DrawMaterialBrowserContents(ctx, ui, &contentFilter);
                     ImGui::EndChild();
                     ImGui::EndTabItem();
                 }
                 if (ImGui::BeginTabItem("Texture Browser"))
                 {
                     ImGui::BeginChild("Texture Items", ImVec2(0.0f, -24.0f));
-                    itemCount = DrawTextureBrowserContents(ctx, ui, &contentFilter);
-                    selectedCount = ui.selectedTextureId != InvalidId ? 1 : 0;
+                    DrawTextureBrowserContents(ctx, ui, &contentFilter);
                     ImGui::EndChild();
                     ImGui::EndTabItem();
                 }
                 if (ImGui::BeginTabItem("Mesh Browser"))
                 {
                     ImGui::BeginChild("Mesh Items", ImVec2(0.0f, -24.0f));
-                    itemCount = DrawMeshBrowserContents(ctx, ui, &contentFilter);
-                    selectedCount = 0;
+                     DrawMeshBrowserContents(ctx, ui, &contentFilter);
                     ImGui::EndChild();
                     ImGui::EndTabItem();
                 }
                 ImGui::EndTabBar();
             }
-            ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
         }
         ImGui::End();
     }

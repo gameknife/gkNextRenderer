@@ -272,7 +272,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
 
     NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/fa-regular-400.ttf",
-        .pixelSize = fontSize * scaleFactor,
+        .pixelSize = (fontSize - 2) * scaleFactor,
         .includeChineseFull = false,
         .glyphRanges = iconRange,
         .fontConfig = &config,
@@ -280,7 +280,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     });
     NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/fa-solid-900.ttf",
-        .pixelSize = fontSize * scaleFactor,
+        .pixelSize = (fontSize - 2) * scaleFactor,
         .includeChineseFull = false,
         .glyphRanges = iconRange,
         .fontConfig = &config,
@@ -288,7 +288,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     });
     NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/fa-brands-400.ttf",
-        .pixelSize = fontSize * scaleFactor,
+        .pixelSize = (fontSize - 2) * scaleFactor,
         .includeChineseFull = false,
         .glyphRanges = iconRange,
         .fontConfig = &config,
@@ -299,7 +299,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     configLocale.MergeMode = true;
     NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
         .filePath = "assets/fonts/DroidSansFallback.ttf",
-        .pixelSize = (fontSize + 2.0f) * scaleFactor,
+        .pixelSize = fontSize * scaleFactor,
         .glyphRanges = io.Fonts->GetGlyphRangesChineseSimplifiedCommon(),
         .fontConfig = &configLocale,
         .warnOnFailure = false,

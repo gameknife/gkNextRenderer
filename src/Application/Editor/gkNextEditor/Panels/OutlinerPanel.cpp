@@ -364,12 +364,10 @@ namespace Editor
         ImGui::Begin("Outliner", nullptr);
         {
             const std::string subtitle = std::to_string(ctx.scene.Nodes().size()) + " scene nodes";
-            NextUI::Theme::DrawPanelHeader(ICON_FA_DIAGRAM_PROJECT, "Outliner", subtitle.c_str());
 
             NextUI::Theme::IconButton(ICON_FA_PLUS "##CreateActor", "Create Actor (placeholder)", false,
-                                         ImVec2(26.0f, 24.0f));
-            NextUI::Theme::DrawThinSeparator();
-
+                                         ImVec2(26.0f, 24.0f)); ImGui::SameLine();
+            
             const bool autoScrollWasEnabled = ui.outlinerAutoScrollToSelection;
             if (NextUI::Theme::IconButton(ICON_FA_LOCATION_CROSSHAIRS "##AutoScrollToSelection",
                                              "Auto Scroll To Selection", autoScrollWasEnabled,
@@ -380,9 +378,7 @@ namespace Editor
             ImGui::SameLine();
             NextUI::Theme::IconButton(ICON_FA_LAYER_GROUP, "Create Group (placeholder)", false,
                                          ImVec2(28.0f, 24.0f));
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            nodeFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##OutlinerFilter", -FLT_MIN);
+            nodeFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##OutlinerFilter");
             NextUI::Theme::DrawThinSeparator();
 
             const uint32_t currentSelectionId = ctx.scene.GetSelectedId();

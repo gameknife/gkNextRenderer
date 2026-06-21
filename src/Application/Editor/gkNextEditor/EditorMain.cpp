@@ -45,10 +45,7 @@ EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Runtime::Co
     config.Title = "gkNextEditor";
     config.Width = static_cast<uint32_t>(monitorSize.x * 0.75f);
     config.Height = static_cast<uint32_t>(monitorSize.y * 0.75f);
-    config.ForceSDR = true;
     config.HideTitleBar = true;
-
-    options.ForceSDR = true;
     options.KeepCPUMeshData = true; // 编辑器模式保留CPU网格数据用于场景保存
 }
 

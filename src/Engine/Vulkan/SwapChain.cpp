@@ -209,14 +209,17 @@ VkSurfaceFormatKHR SwapChain::ChooseSwapSurfaceFormat(const std::vector<VkSurfac
 	// hdr first
 	if(!forceSDR)
 	{
+#if _APPLE_
 		for (const auto& format : formats)
 		{
+
 			if (IsExtendedSrgbLinearSurfaceFormat(format))
 			{
 				outputMode_ = ESwapChainOutputMode::ExtendedSrgbLinear;
 				return format;
 			}
 		}
+#endif
 
 		for (const auto& format : formats)
 		{
