@@ -54,9 +54,9 @@ namespace NextCVar
     {
         GK_CVAR_UINT("r.temporalFrames", settings, TemporalFrames, 16, ECVarFlags::Archive,
                      "Temporal accumulation frames");
-        GK_CVAR_INT("r.samples", settings, NumberOfSamples, 8, ECVarFlags::Archive,
+        GK_CVAR_INT("r.samples", settings, NumberOfSamples, 4, ECVarFlags::Archive,
                     "Samples per pixel");
-        GK_CVAR_UINT("r.bounces", settings, NumberOfBounces, 5, ECVarFlags::Archive,
+        GK_CVAR_UINT("r.bounces", settings, NumberOfBounces, 8, ECVarFlags::Archive,
                      "Ray bounce count");
         GK_CVAR_INT("r.rendererType", settings, RendererType, 0, ECVarFlags::Archive,
                     "Renderer type (0=PathTracing,1=SoftwareTracing,2=SoftwareModern,3=VoxelTracing,4=SoftwareModernNoAmbient)");
@@ -64,7 +64,7 @@ namespace NextCVar
                      "Maximum ray bounce count");
         GK_CVAR_BOOL("r.denoiser", settings, Denoiser, false, ECVarFlags::Archive,
                      "Enable the variance-guided a-trous denoiser");
-        GK_CVAR_INT("r.denoiseAtrousIterations", settings, DenoiseAtrousIterations, 5, ECVarFlags::Archive,
+        GK_CVAR_INT("r.denoiseAtrousIterations", settings, DenoiseAtrousIterations, 3, ECVarFlags::Archive,
                     "Diffuse a-trous wavelet iterations: quality/perf knob (higher = smoother, slower; 1-6)");
         GK_CVAR_INT("r.denoiseAtrousSpecularIterations", settings, DenoiseAtrousSpecularIterations, 3, ECVarFlags::Archive,
                     "Specular a-trous wavelet iterations (lower is faster and preserves glossy detail; 0-6)");

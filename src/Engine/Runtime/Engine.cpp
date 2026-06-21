@@ -257,8 +257,8 @@ Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options&
     userSettings.SceneIndex = 0;
     userSettings.CameraIdx = 0;
 
-    userSettings.NumberOfSamples = 8;
-    userSettings.NumberOfBounces = 5;
+    userSettings.NumberOfSamples = 4;
+    userSettings.NumberOfBounces = 8;
     userSettings.MaxNumberOfBounces = 10;
 
     userSettings.TAA = true;
