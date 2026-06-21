@@ -1,7 +1,7 @@
 ---
 title: "SwModernNoAmbient 天光遮蔽（屏幕空间 GTAO）设计与开发计划"
 category: design
-status: 待实现
+status: 已完成
 owner: engine
 created: 2026-06-21
 last_updated: 2026-06-21
@@ -9,7 +9,7 @@ last_updated: 2026-06-21
 
 # SwModernNoAmbient 天光遮蔽（屏幕空间 GTAO）设计与开发计划
 
-> 状态：⚪ 待实现（草案，供后续 agent 开发）
+> 状态：✅ 已完成（2026-06-21）
 > 目标渲染器：`Vulkan::SoftwareModernNoAmbient::SoftwareModernNoAmbientRenderer`（枚举 `ERT_SoftwareModernNoAmbient`，UI 名 `SoftwareModernNoAmbient`）
 > 本期范围：**仅屏幕空间 GTAO**。体素大尺度天光遮蔽**本期不做**，列入 §8 未来工作（不排期）。
 > 关联文件：
@@ -18,6 +18,13 @@ last_updated: 2026-06-21
 > - `assets/shaders/Process.ReProjectSimple.comp.slang`、`assets/shaders/Process.ComposeSimple.comp.slang`
 > - `assets/shaders/common/BindlessTexture.slang`（RT slot 枚举）
 > - 参考：`Process.DenoiseJBF.comp.slang`（双边滤波 / tonemap 一致性）、`SoftwareModernRenderer.cpp`（完整路径编排）
+
+## 实现结果
+
+- 天光已拆分到全分辨率 `RT_AMBIENT`，太阳直射、自发光与 sky miss 不参与 GTAO 遮蔽。
+- `Core.GTAO.comp.slang` 以半分辨率 `R16F`、2 切片 × 4 步计算时序抖动 horizon AO；`Process.GTAOCompose.comp.slang` 用深度与法线联合双边上采样并合回天光。
+- 已提供 `r.gtao.enable/radius/strength/thickness/debugMode`，调试模式支持 AO 与未遮蔽天光。
+- 复用 `ReProjectSimple` 颜色 history 收敛；独立 AO history 与 bent normal 保持为未来可选增强，不属于本次必要交付。
 
 ---
 

@@ -32,11 +32,7 @@ namespace NextUI::Theme
             }
 
             ImFont* activeFont = font != nullptr ? font : ImGui::GetFont();
-#if IMGUI_VERSION_NUM >= 19200
             return activeFont->CalcTextSizeA(activeFont->LegacySize, FLT_MAX, 0.0f, text).x;
-#else
-            return activeFont->CalcTextSizeA(activeFont->FontSize, FLT_MAX, 0.0f, text).x;
-#endif
         }
 
         bool DrawWindowControlButton(const char* label, const char* tooltip, ImVec2 size, ImVec4 hoverColor,

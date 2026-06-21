@@ -311,8 +311,7 @@ namespace Editor
             ImGui::PopStyleColor(2);
         }
 
-        void DrawContentBrowserNavigation(EditorUiState& ui, const std::filesystem::path& rootPath,
-                                          std::filesystem::path& currentPath,
+        void DrawContentBrowserNavigation(const std::filesystem::path& rootPath, std::filesystem::path& currentPath,
                                           DirectoryCache& directoryCache)
         {
             const std::string rootStr = rootPath.string();
@@ -322,10 +321,6 @@ namespace Editor
                 currentPath = rootPath;
             }
 
-            if (ui.fontIcon)
-            {
-                ImGui::PushFont(ui.fontIcon);
-            }
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 4));
 
             if (ImGui::Button(ICON_FA_HOUSE))
@@ -374,10 +369,6 @@ namespace Editor
             }
 
             ImGui::PopStyleVar();
-            if (ui.fontIcon)
-            {
-                ImGui::PopFont();
-            }
         }
 
         uint32_t Fnv1a32(std::string_view s)
@@ -653,7 +644,7 @@ namespace Editor
                         SPDLOG_INFO("Content Browser save all placeholder");
                     }
                     ImGui::SameLine();
-                    DrawContentBrowserNavigation(ui, rootPath, currentPath, directoryCache);
+                    DrawContentBrowserNavigation(rootPath, currentPath, directoryCache);
 
                     NextUI::Theme::DrawThinSeparator();
                     ImGui::SetNextItemWidth(200.0f);

@@ -240,13 +240,8 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
 
     // Upload ImGui fonts (use ImGuiFreeType for better font rendering, see
     // https://github.com/ocornut/imgui/tree/master/misc/freetype).
-#if IMGUI_VERSION_NUM >= 19200
     io.Fonts->SetFontLoader(ImGuiFreeType::GetFontLoader());
     io.Fonts->FontLoaderFlags = ImGuiFreeTypeLoaderFlags_NoHinting;
-#else
-    io.Fonts->FontBuilderIO = ImGuiFreeType::GetBuilderForFreeType();
-    io.Fonts->FontBuilderFlags = ImGuiFreeTypeBuilderFlags_NoHinting;
-#endif
     // const ImWchar* glyphRange = GOption->locale == "RU" ? io.Fonts->GetGlyphRangesCyrillic()
     //     : GOption->locale == "zhCN"                     ? io.Fonts->GetGlyphRangesChineseFull()
     //                                                     : io.Fonts->GetGlyphRangesDefault();

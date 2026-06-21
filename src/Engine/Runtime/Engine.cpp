@@ -278,6 +278,11 @@ Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options&
     userSettings.DenoiseAtrousNormalPower = 64.0f;
     userSettings.DenoiseSigmaDepth = 2.0f;
     userSettings.DenoiseSpecFootprint = 32.0f;
+    userSettings.GTAOEnable = true;
+    userSettings.GTAORadius = 1.0f;
+    userSettings.GTAOStrength = 1.0f;
+    userSettings.GTAOThickness = 0.5f;
+    userSettings.GTAODebugMode = 0;
 
     userSettings.PaperWhiteNit = 600.f;
     

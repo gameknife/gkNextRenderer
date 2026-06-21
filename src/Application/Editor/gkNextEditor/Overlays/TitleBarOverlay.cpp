@@ -33,7 +33,6 @@ namespace Editor
         config.RightWindowId = "EditorWindowControls";
         config.AppName = kWindowTitle;
         config.Height = kTitleBarHeight;
-        config.TitleFont = ui.fontIcon;
         config.IsMaximized = ctx.engine.IsMaximized();
         config.DrawMenuBar = [&]() -> float
         {

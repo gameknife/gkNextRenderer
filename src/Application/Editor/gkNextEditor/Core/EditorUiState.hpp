@@ -74,7 +74,6 @@ namespace Editor
         bool child_mat_editor = false;
 
         // Fonts
-        ImFont* fontIcon = nullptr;
         ImFont* bigIcon = nullptr;
         
     };

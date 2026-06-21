@@ -62,6 +62,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
                 ? Common.SampleIBL(Camera.SkyIdx, primaryRayDir, Camera.SkyRotation, 0) * Camera.SkyIntensity
                 : float4(0, 0, 0, 1));
         Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, skyColor);
+        Bindless.GetStorageTexture<float4>(Bindless.RT_AMBIENT).Store(pixel, float4(0));
         Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(pixel, 0);
         Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(pixel, 1000);
         Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR).Store(pixel, float4(0));
@@ -110,6 +111,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     hitVertex.MaterialIndex = FetchMaterialId(hitNode, v0.MaterialIndex);
 
     float4 color;
+    float4 ambientColor = float4(0);
     float4 primaryAlbedo = float4(1, 1, 1, 1);
     if (Camera.DebugDraw_ShadowCascadeCoverage)
     {
@@ -142,6 +144,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
                 float3 irr = Common.SampleIBLDiffuse(Camera.SkyIdx, N, Camera.SkyRotation).rgb * Camera.SkyIntensity;
                 ambient = albedo * irr;
             }
+            ambientColor = float4(ambient, 1.0f);
 
             // 太阳：Lambert + CSM 阴影
             float3 direct = float3(0);
@@ -153,7 +156,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
                 direct = albedo * Camera.SunColor.rgb * (NoL * shadow * M_1_PI);
             }
 
-            color = float4(ambient + direct, 1.0f);
+            // GTAO is applied only to the sky term in Process.GTAOCompose. Direct sun
+            // (already CSM-shadowed) and emissive lighting remain untouched.
+            color = float4(direct, 1.0f);
         }
     }
 
@@ -165,6 +170,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     const bool locked = (hitNode.reserved2 & 2u) != 0;
     const bool danger = (hitNode.reserved2 & 4u) != 0;
     Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, color);
+    Bindless.GetStorageTexture<float4>(Bindless.RT_AMBIENT).Store(pixel, ambientColor);
     Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(pixel, Common.EncodeObjectId(hitNode.instanceId, selected, hovered, locked, danger));
     Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(pixel, ndcDepth);
     Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR).Store(pixel, float4(motion, 0, 0));

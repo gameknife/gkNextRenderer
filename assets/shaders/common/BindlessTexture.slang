@@ -37,6 +37,8 @@ namespace Bindless
     public static const int RT_SPLAT_ACCUM = 26;
     public static const int RT_ATROUS_SPEC_PING = 27;
     public static const int RT_ATROUS_SPEC_PONG = 28;
+    public static const int RT_AMBIENT = 29;
+    public static const int RT_GTAO = 30;
 
     public static const int RT_SINGLE_PREV_DIFFUSE = 20;
     public static const int RT_SINGLE_PREV_SPECULAR = 21;

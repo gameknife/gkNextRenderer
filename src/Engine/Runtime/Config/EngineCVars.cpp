@@ -76,6 +76,16 @@ namespace NextCVar
                       "A-trous planar depth tolerance (multiples of local depth slope)");
         GK_CVAR_FLOAT("r.denoiseSpecFootprint", settings, DenoiseSpecFootprint, 32.0f, ECVarFlags::Archive,
                       "Specular a-trous filter radius in pixels per unit roughness");
+        GK_CVAR_BOOL("r.gtao.enable", settings, GTAOEnable, true, ECVarFlags::Archive,
+                     "Enable half-resolution GTAO for SoftwareModernNoAmbient sky lighting");
+        GK_CVAR_FLOAT("r.gtao.radius", settings, GTAORadius, 1.0f, ECVarFlags::Archive,
+                      "GTAO world-space sampling radius");
+        GK_CVAR_FLOAT("r.gtao.strength", settings, GTAOStrength, 1.0f, ECVarFlags::Archive,
+                      "GTAO sky occlusion strength");
+        GK_CVAR_FLOAT("r.gtao.thickness", settings, GTAOThickness, 0.5f, ECVarFlags::Archive,
+                      "GTAO depth-discontinuity thickness heuristic in world units");
+        GK_CVAR_INT("r.gtao.debugMode", settings, GTAODebugMode, 0, ECVarFlags::Archive,
+                    "GTAO debug mode (0=off,1=occlusion,2=unoccluded sky lighting)");
         GK_CVAR_FLOAT("r.reproject.clampGammaHi", settings, ReprojectClampGammaHi, 2.5f, ECVarFlags::Archive,
                       "ReProject history clamp: tight upper YCoCg-luma box half-width in sigmas (lower = less ghosting)");
         GK_CVAR_FLOAT("r.reproject.clampGammaLo", settings, ReprojectClampGammaLo, 5.0f, ECVarFlags::Archive,
