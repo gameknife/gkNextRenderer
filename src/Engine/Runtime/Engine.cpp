@@ -614,7 +614,15 @@ bool NextEngine::HandleEvent(SDL_Event& event)
     case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
         if (renderer_)
         {
-            renderer_->RequestRecreateSwapChain();
+            const bool hasSwapChain = renderer_->HasSwapChain();
+            const VkExtent2D framebufferSize = window_ ? window_->FramebufferSize() : VkExtent2D{0, 0};
+            const VkExtent2D swapChainExtent = hasSwapChain ? renderer_->SwapChain().Extent() : VkExtent2D{0, 0};
+
+            if (!hasSwapChain || framebufferSize.width != swapChainExtent.width ||
+                framebufferSize.height != swapChainExtent.height)
+            {
+                renderer_->RequestRecreateSwapChain();
+            }
         }
         break;
     case SDL_EVENT_KEY_DOWN:
@@ -1296,4 +1304,3 @@ void NextEngine::OnRendererBeforeNextFrame()
     SCOPED_CPU_TIMER("task coordinator");
     Tasks::TaskCoordinator::GetInstance()->Tick();
 }
-
