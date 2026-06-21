@@ -636,15 +636,15 @@ namespace NextUI::Theme
         ImGui::SetNextWindowSize(config.Size, ImGuiCond_Always);
         ImGui::SetNextWindowBgAlpha(config.BackgroundAlpha);
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, config.Padding);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(config.Padding.x, 8.0f));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, config.ItemSpacing);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, config.Rounding);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
         ImGui::PushStyleColor(ImGuiCol_WindowBg, Color(config.BackgroundColor, config.BackgroundAlpha));
         ImGui::PushStyleColor(ImGuiCol_Border, Color(EColor::BorderStrong, config.BorderAlpha));
 
         const ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings |
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar |
             ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | config.ExtraFlags;
         return ImGui::Begin(config.WindowId, nullptr, flags);
     }

@@ -96,14 +96,6 @@ void EditorInterface::Init()
     const ImWchar* iconRange = GetGlyphRangesFontAwesome();
     ImFontConfig config;
     config.MergeMode = true;
-    config.GlyphMinAdvanceX = 14.0f;
-    config.GlyphOffset = ImVec2(0, 0);
-    if (!io.Fonts->AddFontFromFileTTF(
-            Utilities::FileHelper::GetPlatformFilePath("assets/fonts/fa-solid-900.ttf").c_str(), 14 * scaleFactor,
-            &config, iconRange))
-    {
-    }
-
     ImFont* fontIcon = io.Fonts->AddFontFromFileTTF(
         Utilities::FileHelper::GetPlatformFilePath("assets/fonts/Roboto-BoldCondensed.ttf").c_str(), 18 * scaleFactor,
         nullptr, glyphRange);
@@ -405,8 +397,6 @@ void EditorInterface::Render()
     Editor::TickAIAgentMainThread(ctx);
     if (uiState_.aiPanel)
         Editor::DrawAIPanel(ctx, uiState_);
-    if (uiState_.viewport)
-        Editor::DrawViewportOverlay(ctx, uiState_);
 
     DevTools::FUiDevPanels::Get().RenderConsoleOverlay();
 
@@ -458,6 +448,9 @@ void EditorInterface::Render()
             editor_->DrawGizmo(glm::vec2(node->Pos.x, node->Pos.y), glm::vec2(node->Size.x, node->Size.y));
         }
     }
+    
+    if (uiState_.viewport)
+        Editor::DrawViewportOverlay(ctx, uiState_);
 
     firstRun_ = false;
     ImGui::GetIO().UserData = previousUserData;

@@ -1277,7 +1277,7 @@ void NextRendererGameInstance::DrawViewportTopBar()
         config.WindowId = "##ViewportTopLeftBadge";
         config.Position = ImVec2(leftEdge, topEdge);
         config.Size = ImVec2(badgeWidth, badgeHeight);
-        config.Padding = ImVec2(12.0f, 6.0f);
+        config.Padding = ImVec2(12.0f, 8.0f);
         config.ItemSpacing = ImVec2(8.0f, 0.0f);
         config.BackgroundColor = NextUI::Theme::EColor::Background;
         config.BackgroundAlpha = 0.82f;
