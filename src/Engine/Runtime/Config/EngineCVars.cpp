@@ -96,7 +96,7 @@ namespace NextCVar
                       "Voxel sky-visibility soft-trace max distance in meters (large-scale range)");
         GK_CVAR_FLOAT("r.skyvis.strength", settings, SkyVisStrength, 1.0f, ECVarFlags::Archive,
                       "Voxel sky-visibility occlusion strength (0=off, 1=full baked occlusion)");
-        GK_CVAR_INT("r.skyvis.combineMode", settings, SkyVisCombineMode, 1, ECVarFlags::Archive,
+        GK_CVAR_INT("r.skyvis.combineMode", settings, SkyVisCombineMode, 0, ECVarFlags::Archive,
                     "Voxel sky-visibility combine with GTAO (0=mul,1=min,2=near-bright: GTAO owns corners)");
         GK_CVAR_INT("r.skyvis.blur", settings, SkyVisBlurRadius, 2, ECVarFlags::Archive,
                     "Voxel sky-visibility bilateral blur radius in pixels in compose (0=off, smooths voxel-scale edges/noise)");
