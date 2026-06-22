@@ -35,7 +35,7 @@ last_updated: 2026-06-22
 **两个必须先解决的前提（也是本期主要工作量）**：
 
 - **前提 A — 体素数据在 NoAmbient 下不存在**：体素 CPU 化（`cpuAccelerationStructure_.Tick`）与 GI 烘焙都被 `CurrentRendererRequirements().requestAmbientCube` 门控（`Scene.Update.cpp:212-213`、`VulkanBaseRenderer.cpp:1467`），而 NoAmbient 该标志为 `false`（`VulkanBaseRenderer.cpp:212-213`）。**NoAmbient 当前根本不灌体素**。需新增一个 `requestVoxelGeometry` 门控并把体素化/arena 分配从 `requestAmbientCube` 解耦。
-- **前提 B — `VoxelData` 已满 16B**：`VoxelData` 是紧打包的 16 字节（`BasicTypes.slang`，`GPU_SCENE_VOXEL_DATA_SIZE = 16`），无空闲字段。需要给 skyVisibility 腾位（**推荐复用 `age` 高字节**，零显存增长；备选放大到 32B）。
+- **前提 B — `VoxelData` 已满 16B，且本期不扩容**：`VoxelData` 是紧打包的 16 字节（`BasicTypes.slang`，`GPU_SCENE_VOXEL_DATA_SIZE = 16`），无空闲字段。本期固定复用 `age` 高字节存 skyVisibility，保持 `VoxelData` 尺寸不变，零显存增长。
 
 ---
 
@@ -52,7 +52,7 @@ last_updated: 2026-06-22
 
 ### 目标（In Scope）
 
-- `VoxelData` 增加一个 per-voxel skyVisibility 标量（0–255）。
+- `VoxelData` 在不改变 16B 布局的前提下，通过 `age` 高字节携带一个 per-voxel skyVisibility 标量（0–255）。
 - 新增一个 GPU compute 烘焙 pass：对体素距离场做半球 soft tracing（复用 `TraceOcclusionDDA`），时序累积写回 voxel。
 - 把体素化 / 距离场 / arena 分配从 `requestAmbientCube` 解耦，使 NoAmbient 独立运行也能维护体素 SDF。
 - 运行时在 `Process.GTAOCompose` 三线性采样 skyVis，与 GTAO 相乘只压暗天光项。
@@ -60,7 +60,7 @@ last_updated: 2026-06-22
 
 ### 非目标（Out of Scope）
 
-- **方向性（6 面）skyVisibility**：本期只做标量；方向版列入 §8 演进（与放大 `VoxelData` 到 32B 绑定）。
+- **方向性（6 面）skyVisibility**：本期只做标量；方向版列入 §8 演进，但不进入本期数据结构方案。
 - **AmbientCube 颜色烘焙 / 多次反弹 GI**：那是 `SoftwareModern` 的职责，NoAmbient 不碰。
 - **sunVisibility / 体积光**：`VoxelData` 注释里预留的 sunVisibility 不在本期。
 - **逐像素运行时 DDA 天光遮蔽**（每帧每像素现算半球，不烘）：成本过高，本期明确走「GPU 烘到 voxel + 运行时采样」的缓存式路线。
@@ -157,7 +157,7 @@ float4 output = float4(directOrEmissive.rgb + ambient.rgb * ao * skyVis, 1.0f);
 **memory 量级**（`GPU_SCENE_AMBIENT_PER_CASCADE_COUNT = 192×192×48 = 1,769,472`）：
 
 - 单 cascade Voxels：1.77M × 16B ≈ **28.3 MB**；4 cascade ≈ **113 MB**。
-- 若放大 `VoxelData` 到 32B：单 cascade ≈ 56.6 MB（+28.3），4 cascade ≈ 226 MB（+113）。
+- 本期不放大 `VoxelData`，因此 skyVisibility 存储不增加 voxel 显存；若未来另案扩容，需单独重新评估显存预算。
 
 ---
 
@@ -190,7 +190,7 @@ float4 output = float4(directOrEmissive.rgb + ambient.rgb * ao * skyVis, 1.0f);
    │   for 每个"近表面" voxel:                                       │
    │     半球 N 根射线 TraceOcclusionDDA(voxel SDF)                  │
    │     skyVis = unoccluded/N  →  时序 lerp(age)                    │
-   │     写回 VoxelData (age 高字节 / 新字段)                        │
+   │     写回 VoxelData (age 高字节)                                  │
    └──────────────────────────────────────────────────────────────┘
                           │  Voxels.skyVis 持久驻留 GPU
                           ▼
@@ -216,11 +216,11 @@ float4 output = float4(directOrEmissive.rgb + ambient.rgb * ao * skyVis, 1.0f);
 
 ## 5. 详细设计
 
-### 5.1 skyVisibility 落位（腾位方案）
+### 5.1 skyVisibility 落位（固定方案）
 
-`VoxelData` 已满 16B，给标量 skyVis（1 字节足够）腾位有两个方案：
+`VoxelData` 已满 16B。本期数据结构决策固定为：**不扩张 `VoxelData` 尺寸，不修改 `GPU_SCENE_VOXEL_DATA_SIZE`，skyVisibility 复用 `age` 高字节**。后续实现不得引入 32B voxel 布局作为本计划的一部分。
 
-#### 方案 A（推荐）— 复用 `age` 高字节，零显存增长
+#### 方案 A（已定）— 复用 `age` 高字节，零显存增长
 
 把 `age`（uint）切分：
 
@@ -243,28 +243,7 @@ void  SetVoxelSkyVis(inout VoxelData v, uint s)
 - **优点**：不改 `VoxelData` 尺寸 → 不动 `GPU_SCENE_VOXEL_DATA_SIZE`、`ComputeAmbientArenaLayout`（`Scene.cpp:65-92`）、`static_assert(sizeof(VoxelData)==16)`（`Scene.cpp:102`）、CPU memcpy 上传（`ProbeBaker.cpp:241-247`）。零显存增长。复用 `age` 的「几何变更即清零」语义。
 - **必须同步处理的副作用**：AmbientCubeBaker 现在对**整个** `age` 自增（`AmbientCubeBaker.slang:182-183,211-212`），会溢出进高字节。**对策**：把这两处也改用 `GetVoxelAgeCounter/SetVoxelAgeCounter`（低 24 位自增 + clamp），高字节永不被它污染。SoftwareModern 模式本就不读 voxel skyVis，但统一用 helper 可保证模式互切时高字节干净（配合 §5.5 的 clear）。
 
-#### 方案 B（备选）— 放大 `VoxelData` 到 32B
-
-新增独立字段（标量现在、留作将来 6 面方向版）：
-
-```slang
-public struct ALIGN_16 VoxelData
-{
-    public uint matId;
-    public uint age;
-    public uint distanceToSolid_gg_z01;
-    public uint distanceToSolid_x01_y01;
-    public uint skyVisibility;     // 标量(低字节) 或 6 面打包(将来)
-    public uint reserved0;         // sunVisibility / airMatId 预留
-    public uint reserved1;
-    public uint reserved2;
-};
-```
-
-- **优点**：语义干净，不动 AmbientCubeBaker；为方向性 skyVis / sunVis 预留空间。
-- **代价**：`GPU_SCENE_VOXEL_DATA_SIZE 16→32`；需同步 `BasicTypes.slang` 偏移常量、`Scene.cpp` 的 `ComputeAmbientArenaLayout` 与 `static_assert`、`Engine.cpp` 的 `HasFullAmbientCubeBudget` 预算估算（`:151-158`）、CPU 端 `sizeof(VoxelData)` memcpy 自动跟随。**显存 +28~113 MB**。
-
-> **建议**：本期取**方案 A**（标量、零显存、改动面最小）。若后续要做 6 面方向性 skyVis（§8），再迁移到方案 B。两方案都通过 helper 隔离读写点，迁移成本可控。
+> **已定结论**：本期只实现方案 A。32B `VoxelData` 不作为本计划的备选实施路径；如果未来要做 6 面方向性 skyVis 或 sunVisibility 独立字段，需要另开设计并重新评估显存、arena layout、CPU/GPU 结构一致性和迁移成本。
 
 ### 5.2 体素数据可用性解耦（前提 A）
 
@@ -396,7 +375,7 @@ float4 output = float4(directOrEmissive.rgb + ambient.rgb * ao * skyVis, 1.0f);
 
 | # | 文件 | 改动 |
 | --- | --- | --- |
-| 6.1 | `assets/shaders/common/BasicTypes.slang` | 方案 A：无（仅注释 `age` 高字节语义）；方案 B：`VoxelData` 扩 32B + `GPU_SCENE_VOXEL_DATA_SIZE`/偏移常量 |
+| 6.1 | `assets/shaders/common/BasicTypes.slang` | 不改变 `VoxelData` 尺寸；仅补充 `age` 高字节语义注释，确认 `GPU_SCENE_VOXEL_DATA_SIZE` 仍为 16 |
 | 6.2 | `assets/shaders/common/AmbientCube.slang`（或新 `VoxelSkyVis.slang`） | 新增 `Get/SetVoxelSkyVis`、`Get/SetVoxelAgeCounter`、`SampleVoxelSkyVisibility` |
 | 6.3 | `assets/shaders/common/AmbientCubeBaker.slang` | `:182-183,211-212` 两处 `age++` 改用计数器 helper（方案 A 必做） |
 | 6.4 | `assets/shaders/Bake.VoxelSkyVisibility.comp.slang`（新） | sky-vis 烘焙核（§5.3） |
@@ -406,9 +385,8 @@ float4 output = float4(directOrEmissive.rgb + ambient.rgb * ao * skyVis, 1.0f);
 | 6.8 | `src/Engine/Rendering/VulkanBaseRenderer.GiBake.cpp` | 新增 `BakeVoxelSkyVisibility` 调度（dispatch + barrier + timer，仿 `:97-211`） |
 | 6.9 | `src/Engine/Assets/Core/Scene.Update.cpp` | `:212-217` `shouldUpdateAmbientCube` 拆 voxel/cube 两级门控 |
 | 6.10 | `src/Engine/Assets/Core/Scene.cpp` | `:158-171` arena 分配按 voxel/cube 拆分；Cubes 池 NoAmbient 可省 |
-| 6.11 | `src/Engine/Runtime/Engine.cpp` | （方案 B）`HasFullAmbientCubeBudget` 预算估算跟随 `sizeof(VoxelData)` |
-| 6.12 | `src/Engine/Runtime/Config/EngineCVars.cpp` | 新增 `r.skyvis.*`（见 §6.13）；`UserSettings.hpp` + UBO 字段 |
-| 6.13 | `assets/shaders/common/BasicTypes.slang`（UBO） | 加 `SkyVisEnable / SkyVisStrength / SkyVisMaxDistance / SkyVisRayCount / SkyVisCombineMode`（UBO 现有 padding 可吸收，仿 GTAO 字段） |
+| 6.11 | `src/Engine/Runtime/Config/EngineCVars.cpp` | 新增 `r.skyvis.*`（见 §6.12）；`UserSettings.hpp` + UBO 字段 |
+| 6.12 | `assets/shaders/common/BasicTypes.slang`（UBO） | 加 `SkyVisEnable / SkyVisStrength / SkyVisMaxDistance / SkyVisRayCount / SkyVisCombineMode`（UBO 现有 padding 可吸收，仿 GTAO 字段） |
 
 新增 cvar（仿 `r.gtao.*`，`EngineCVars.cpp:79-90`）：
 
@@ -456,8 +434,8 @@ r.skyvis.combineMode   (int)   0=mul 1=min 2=near-bright
 
 ## 8. 演进方向（本期不做）
 
-- **方向性 skyVis（6 面）**：迁移方案 B（32B），把标量换成 6 字节方向可见度，采样时按法线加权（同 `sampleAmbientCubeHL2_*` 思路），方向感更准、可驱动 bent-normal 式天光偏移。
-- **sunVisibility / 体积**：`VoxelData` 注释已预留 sunVisibility（大尺度软阴影 / 体积光遮蔽），可在 Phase B 复用同一 soft-trace 框架朝太阳方向烘。
+- **方向性 skyVis（6 面）**：另开数据结构设计，评估是否需要独立存储或新 buffer；不在本期把 `VoxelData` 扩到 32B。方向版可把标量换成 6 字节方向可见度，采样时按法线加权（同 `sampleAmbientCubeHL2_*` 思路），方向感更准、可驱动 bent-normal 式天光偏移。
+- **sunVisibility / 体积**：`VoxelData` 注释已预留 sunVisibility（大尺度软阴影 / 体积光遮蔽），但本期不新增字段；未来可在另案中复用同一 soft-trace 框架朝太阳方向烘。
 - **稀疏化**：voxel 也可像 cube 走 brick pool（`BasicTypes.slang` Phase 4 备注），仅近表面 brick 分配 skyVis 存储，进一步省显存。
 
 ---
@@ -472,10 +450,10 @@ r.skyvis.combineMode   (int)   0=mul 1=min 2=near-bright
 | 风险 | 影响 | 对策 |
 | --- | --- | --- |
 | 门控解耦影响其它渲染器 | SoftwareModern/PathTracing 回归 | Phase 0 单独验证三模式；`requestVoxelGeometry` 仅加法，cube 路径维持 `requestAmbientCube` |
-| `age` 高字节被 cube 烘焙污染 | SoftwareModern 切回 NoAmbient 时 skyVis 脏 | AmbientCubeBaker 改计数器 helper；切换 clear（§5.5）；或取方案 B 彻底隔离 |
+| `age` 高字节被 cube 烘焙污染 | SoftwareModern 切回 NoAmbient 时 skyVis 脏 | AmbientCubeBaker 必须改计数器 helper；切换 clear（§5.5）；本期不通过扩容规避 |
 | voxel 分辨率粗 → skyVis 块状/漏光 | 大尺度遮蔽边界硬 | 三线性插值 + 有效性门控；与 GTAO 叠加由 GTAO 补细节；maxDistance/band 调参 |
 | 动态场景频繁 flush 重收敛 | skyVis 闪烁/迟滞 | 复用 cube 同款时序；必要时对 skyVis 单独限制重烘频率 |
-| 显存（方案 B） | +28~113MB | 默认方案 A 零增长；方案 B 仅在需方向性时启用 |
+| 未来方向性数据需求 | 标量 skyVis 不够表达方向遮蔽 | 本期保持 16B；方向性/独立字段另开设计，不在当前计划扩容 |
 | 双重压暗（GTAO×skyVis） | 接触处过暗 | `combineMode`（mul/min/near-bright）实测选型（§5.4） |
 | 体素未灌就采样 | 全黑/错误遮蔽 | 采样 fallback=1.0；Phase 0 确保灌入早于采样 |
 
@@ -515,7 +493,7 @@ r.skyvis.combineMode   (int)   0=mul 1=min 2=near-bright
 ## 12. 给后续开发 agent 的提示
 
 - **先做 Phase 0 门控解耦**：没有体素数据，后面全是空中楼阁。先用调试可视化确认 NoAmbient 下 Voxels 真被灌入，再写烘焙。
-- **storage 默认取方案 A（`age` 高字节）**，零显存、复用失效语义；但**务必**同步把 `AmbientCubeBaker` 的两处 `age++` 改成低 24 位计数器 helper，否则 SoftwareModern 模式会污染 skyVis 高字节。
+- **storage 固定取方案 A（`age` 高字节）**，零显存、复用失效语义；**不要扩张 `VoxelData` 尺寸**。务必同步把 `AmbientCubeBaker` 的两处 `age++` 改成低 24 位计数器 helper，否则 SoftwareModern 模式会污染 skyVis 高字节。
 - **soft trace 不要重写步进核**：直接 `FHiVoxelDDARayTracer::TraceOcclusionDDA`，它已对 voxel 距离场做好 cascade 选择与 DDA。
 - **只烘近表面 air 体素**，开阔处维持默认 255、实心不烘；采样 fallback=1.0 保证优雅降级为纯 GTAO。
 - **采样优先放在着色 pass 写 `RT_AMBIENT.a`**（已有 worldPos，省反投影），合成 pass 只读回相乘。
