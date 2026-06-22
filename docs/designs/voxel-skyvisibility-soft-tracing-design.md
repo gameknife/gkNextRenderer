@@ -1,7 +1,7 @@
 ---
 title: "VoxelData 体素天光可见度（GPU Soft Tracing）设计与开发计划"
 category: design
-status: 待实现
+status: 已实现
 owner: engine
 created: 2026-06-22
 last_updated: 2026-06-22
@@ -9,7 +9,7 @@ last_updated: 2026-06-22
 
 # VoxelData 体素天光可见度（GPU Soft Tracing）设计与开发计划
 
-> 状态：⚪ 待实现（草案，供后续 agent 接手）
+> 状态：✅ 已实现（Phase 0–2 落地；门控解耦 + age 高字节存储 + GPU 半球 soft-trace 烘焙 + 运行时三线性采样并入 GTAOCompose）。`office.scad` 调试视图（`r.gtao.debugMode 3`）确认室内地面/墙根处 skyVis 明显变暗、开阔处趋近 1，SwModern/PathTracing 无回归。
 > 目标渲染器：`Vulkan::SoftwareModernNoAmbient::SoftwareModernNoAmbientRenderer`（枚举 `ERT_SoftwareModernNoAmbient`）
 > 本期目标：在**不依赖 AmbientCube** 的前提下，在 **GPU 上对体素距离场做 soft tracing**，把一个 **per-voxel skyVisibility** 标量写回 `VoxelData`，运行时三线性采样，**与已落地的 GTAO 正交叠加**，为 `SwModernNoAmbient` 补上 GTAO 屏幕空间方法天然缺失的「大尺度 / 屏幕外」天光遮蔽。
 > 前置依赖：[SwModernNoAmbient 天光遮蔽（屏幕空间 GTAO）](swmodern-noambient-sky-occlusion-design.md)（✅ 已完成）。本设计即该文 **§8「未来工作：体素大尺度天光遮蔽」** 的正式排期方案。

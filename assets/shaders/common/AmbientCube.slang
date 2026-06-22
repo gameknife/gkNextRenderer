@@ -76,6 +76,24 @@ public uint GetCascadeBaseOffset(uint cascadeIndex)
     return cascadeIndex * uint(CUBE_SIZE_XY * CUBE_SIZE_XY * CUBE_SIZE_Z);
 }
 
+// VoxelData.age bit layout (no struct growth, see voxel-skyvisibility design §5.1):
+//   bits [23..0]  : temporal counter (saturated to kTraceHistoryLength / mod 9 for jitter)
+//   bits [31..24] : per-voxel sky visibility (0-255), baked by Bake.VoxelSkyVisibility
+// All age mutations must go through these helpers so the cube baker's counter increment never
+// bleeds into the sky-visibility high byte.
+public uint GetVoxelAgeCounter(VoxelData v) { return v.age & 0x00FFFFFFu; }
+public uint GetVoxelSkyVis(VoxelData v) { return (v.age >> 24) & 0xFFu; }
+
+public void SetVoxelAgeCounter(inout VoxelData v, uint counter)
+{
+    v.age = (v.age & 0xFF000000u) | min(counter, 0x00FFFFFFu);
+}
+
+public void SetVoxelSkyVis(inout VoxelData v, uint skyVis)
+{
+    v.age = (v.age & 0x00FFFFFFu) | ((skyVis & 0xFFu) << 24);
+}
+
 public static const float3 cubeVectors[6] = {
     float3(0, 1, 0),
     float3(0, -1, 0),
@@ -563,6 +581,133 @@ public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, flo
     }
 
     return float4(0.0, 0.0, 0.0, 1.0);
+}
+
+// Trilinear sample of the per-voxel baked sky visibility (VoxelData.age high byte).
+// Returns [0,1] where 1 = fully open to the sky. `normal` is the shading surface normal.
+//
+// Anti-leak is done with SMOOTH multiplicative weights, not hard accept/reject. Hard rejections
+// (binary continue) make the 8-tap footprint flip discontinuously as the sample point moves, which
+// reads as blocky "grid" artifacts; instead each probe's trilinear weight is scaled by a continuous
+// visibility factor (directional distance field) and a continuous normal-side factor, so leaked
+// probes fade out smoothly. The result stays a convex combination of probe values -> always smooth
+// and bounded. A plain-trilinear fallback (no visibility weighting) covers silhouette edges so we
+// never snap to 1.0 and punch a bright hole; 1.0 is returned only when no valid baked voxel exists.
+public float SampleVoxelSkyVisibility(float3 worldPos, float3 normal)
+{
+    VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
+    uint cascadeCount = GetAmbientCubeCascadeCount();
+
+    // Default when no cascade has any valid baked voxel (warmup / outside every cascade): fully
+    // visible, so callers degrade gracefully to pure GTAO.
+    float fallback = 1.0f;
+
+    for (uint cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex)
+    {
+        float cubeUnit = GetAmbientCubeUnitAtCascade(cascadeIndex);
+        float3 cubeOffset = GetAmbientCubeOffsetAtCascade(cascadeIndex);
+        float3 nearpos = (worldPos - cubeOffset) / cubeUnit;
+
+        if (nearpos.x < 0 || nearpos.y < 0 || nearpos.z < 0 || nearpos.x > CUBE_SIZE_XY - 2 ||
+            nearpos.y > CUBE_SIZE_Z - 2 || nearpos.z > CUBE_SIZE_XY - 2)
+        {
+            continue;
+        }
+
+        uint baseOffset = GetCascadeBaseOffset(cascadeIndex);
+        int3 baseIdx = int3(floor(nearpos));
+        float3 f = frac(nearpos);
+
+        float totalWeight = 0.0f;
+        float result = 0.0f;
+        float fbWeight = 0.0f;
+        float fbResult = 0.0f;
+
+        for (int i = 0; i < 8; i++)
+        {
+            int3 offset = int3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
+            int3 probePos = baseIdx + offset;
+            VoxelData voxel = FetchVoxel(probePos, Voxels, baseOffset);
+
+            uint4 unpacked0 = UnpackBytes(voxel.distanceToSolid_gg_z01);
+            uint4 unpacked1 = UnpackBytes(voxel.distanceToSolid_x01_y01);
+
+            float wx = offset.x == 0 ? (1.0f - f.x) : f.x;
+            float wy = offset.y == 0 ? (1.0f - f.y) : f.y;
+            float wz = offset.z == 0 ? (1.0f - f.z) : f.z;
+            float weight = wx * wy * wz;
+
+            // Solid / interior voxel (inside ~= 0): zero sky visibility. Count it as a known occluder
+            // (skyv = 0, full weight) instead of skipping, so a tight gap whose footprint is all solid
+            // resolves dark rather than falling back to fully-visible (the bright-cell artifact in
+            // crevices). Open surfaces are unaffected: with the 1-voxel normal bias their footprint is
+            // air, so no solid voxel enters the 8-tap.
+            if (float(unpacked0.y) / 255.0f < 0.01f)
+            {
+                fbWeight += weight;     // skyv = 0
+                totalWeight += weight;  // skyv = 0
+                continue;
+            }
+            // Sky-vis byte 0 == not yet baked (the baker stores [1,255]); skip during warmup.
+            uint skyVisByte = GetVoxelSkyVis(voxel);
+            if (skyVisByte == 0u)
+            {
+                continue;
+            }
+
+            float skyv = float(skyVisByte) / 255.0f;
+
+            // Plain-trilinear fallback (no visibility weighting) for silhouette edges.
+            fbResult += skyv * weight;
+            fbWeight += weight;
+
+            // --- smooth visibility weighting (anti-leak, no hard cutoff) ---
+            float3 probeToLocal = f - float3(offset);
+            float distanceToProbe = length(probeToLocal);
+            float3 dir = distanceToProbe > 1e-5f ? probeToLocal / distanceToProbe : float3(0, 1, 0);
+
+            // 1) directional distance-field visibility: how much can the probe "see" toward the sample?
+            float distPZ = float(unpacked0.z) / 255.0f;
+            float distNZ = float(unpacked0.w) / 255.0f;
+            float distPX = float(unpacked1.x) / 255.0f;
+            float distNX = float(unpacked1.y) / 255.0f;
+            float distPY = float(unpacked1.z) / 255.0f;
+            float distNY = float(unpacked1.w) / 255.0f;
+            float hitLength = sqrt(max(dir.x, 0.0f)) * distPX + sqrt(max(-dir.x, 0.0f)) * distNX +
+                              sqrt(max(dir.y, 0.0f)) * distPY + sqrt(max(-dir.y, 0.0f)) * distNY +
+                              sqrt(max(dir.z, 0.0f)) * distPZ + sqrt(max(-dir.z, 0.0f)) * distNZ;
+            // 1 when the probe clearly reaches the sample, ramping to 0 over half a voxel once the
+            // path is blocked (smooth instead of a binary reject).
+            float visFactor = saturate((hitLength + 0.1f - distanceToProbe) / 0.5f);
+
+            // 2) normal-side factor: probes behind the shading surface (other side of a thin wall)
+            // fade out; co-planar / front probes keep full weight.
+            float3 probeWorld = float3(probePos) * cubeUnit + cubeOffset;
+            float3 toProbe = probeWorld - worldPos;
+            float normalSide = saturate(dot(normalize(toProbe + normal * 1e-3f), normal) * 2.0f + 1.0f);
+
+            float w = weight * visFactor * normalSide;
+            result += skyv * w;
+            totalWeight += w;
+        }
+
+        // Blend the visibility-weighted (anti-leak) result with the plain-trilinear average by a
+        // smooth coverage confidence, instead of a hard switch. `conf` = how much of the trilinear
+        // footprint survived the visibility weighting. Where coverage is full (open surfaces) we trust
+        // the anti-leak result; where it collapses (concave edges / sparse pockets, where dividing by a
+        // tiny weight would otherwise amplify a single dark probe into a blocky black patch) we ease
+        // toward the smooth plain-trilinear average. This removes the hard black voxel blocks at edges
+        // while keeping leak suppression on well-covered surfaces.
+        if (fbWeight > 1e-5f)
+        {
+            float fbAvg = fbResult / fbWeight;
+            float visAvg = totalWeight > 1e-5f ? result / totalWeight : fbAvg;
+            float conf = smoothstep(0.05f, 0.6f, totalWeight / fbWeight);
+            return lerp(fbAvg, visAvg, conf);
+        }
+    }
+
+    return fallback;
 }
 
 public float4 interpolateAmbientCubesStable<T : IAmbientCubeSampler>(float3 inPos, float3 normal, uint stableCascadeIndex)
