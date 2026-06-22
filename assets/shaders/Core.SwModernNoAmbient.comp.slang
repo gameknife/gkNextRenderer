@@ -135,7 +135,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         else
         {
             float3 N = normalize(hitVertex.Normal);
-            float3 albedo = primaryAlbedo.rgb;
+            float3 albedo = Camera.DebugDraw_Lighting ? float3(1.0f, 1.0f, 1.0f) : primaryAlbedo.rgb;
 
             // 天光：HDR radiance SH 经 Lambert cosine kernel 卷积后的 diffuse radiance。
             float3 ambient = float3(0);

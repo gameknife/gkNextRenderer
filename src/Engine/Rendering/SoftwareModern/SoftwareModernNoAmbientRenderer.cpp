@@ -84,10 +84,11 @@ namespace Vulkan::SoftwareModernNoAmbient
         }
 
         {
-            SCOPED_GPU_TIMER("gtao pass");
+            
             const auto& settings = NextEngine::GetInstance()->GetUserSettings();
             if (settings.GTAOEnable)
             {
+                SCOPED_GPU_TIMER("gtao pass");
                 baseRender_.GetStorageImage(Assets::Bindless::RT_GTAO)->InsertBarrier(
                     commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
                     VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
@@ -102,13 +103,16 @@ namespace Vulkan::SoftwareModernNoAmbient
                     VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
             }
 
-            gtaoComposePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
-            vkCmdDispatch(commandBuffer,
-                          Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
-                          Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
-            baseRender_.GetStorageImage(Assets::Bindless::RT_SINGLE_DIFFUSE)->InsertBarrier(
-                commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+            {
+                SCOPED_GPU_TIMER("gtao compose pass");
+                gtaoComposePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+                vkCmdDispatch(commandBuffer,
+                              Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
+                              Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+                baseRender_.GetStorageImage(Assets::Bindless::RT_SINGLE_DIFFUSE)->InsertBarrier(
+                    commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                    VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+            }
         }
 
         {
