@@ -82,7 +82,7 @@ namespace NextCVar
                     "GTAO sampling quality (0=low 16 taps,1=medium 36 taps,2=high 64 taps,3=ultra 120 taps)");
         GK_CVAR_FLOAT("r.gtao.radius", settings, GTAORadius, 1.0f, ECVarFlags::Archive,
                       "GTAO world-space sampling radius");
-        GK_CVAR_FLOAT("r.gtao.strength", settings, GTAOStrength, 1.5f, ECVarFlags::Archive,
+        GK_CVAR_FLOAT("r.gtao.strength", settings, GTAOStrength, 1.0f, ECVarFlags::Archive,
                       "Master sky-occlusion strength: scales the combined GTAO + voxel skyVis darkening (1=natural, lower=lighter)");
         GK_CVAR_FLOAT("r.gtao.thickness", settings, GTAOThickness, 0.5f, ECVarFlags::Archive,
                       "GTAO depth-discontinuity thickness heuristic in world units");
@@ -100,7 +100,7 @@ namespace NextCVar
                     "Voxel sky-visibility combine with GTAO (0=mul,1=min,2=near-bright: GTAO owns corners)");
         GK_CVAR_INT("r.skyvis.blur", settings, SkyVisBlurRadius, 2, ECVarFlags::Archive,
                     "Voxel sky-visibility bilateral blur radius in pixels in compose (0=off, smooths voxel-scale edges/noise)");
-        GK_CVAR_FLOAT("r.skyvis.jitterRadius", settings, SkyVisJitterRadius, 0.5f, ECVarFlags::Archive,
+        GK_CVAR_FLOAT("r.skyvis.jitterRadius", settings, SkyVisJitterRadius, 2.0f, ECVarFlags::Archive,
                       "Voxel sky-visibility random hemisphere sample jitter radius in voxel units (0=off)");
         GK_CVAR_FLOAT("r.reproject.clampGammaHi", settings, ReprojectClampGammaHi, 2.5f, ECVarFlags::Archive,
                       "ReProject history clamp: tight upper YCoCg-luma box half-width in sigmas (lower = less ghosting)");
