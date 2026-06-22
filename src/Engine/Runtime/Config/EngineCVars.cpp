@@ -100,6 +100,8 @@ namespace NextCVar
                     "Voxel sky-visibility combine with GTAO (0=mul,1=min,2=near-bright: GTAO owns corners)");
         GK_CVAR_INT("r.skyvis.blur", settings, SkyVisBlurRadius, 2, ECVarFlags::Archive,
                     "Voxel sky-visibility bilateral blur radius in pixels in compose (0=off, smooths voxel-scale edges/noise)");
+        GK_CVAR_FLOAT("r.skyvis.jitterRadius", settings, SkyVisJitterRadius, 0.5f, ECVarFlags::Archive,
+                      "Voxel sky-visibility random hemisphere sample jitter radius in voxel units (0=off)");
         GK_CVAR_FLOAT("r.reproject.clampGammaHi", settings, ReprojectClampGammaHi, 2.5f, ECVarFlags::Archive,
                       "ReProject history clamp: tight upper YCoCg-luma box half-width in sigmas (lower = less ghosting)");
         GK_CVAR_FLOAT("r.reproject.clampGammaLo", settings, ReprojectClampGammaLo, 5.0f, ECVarFlags::Archive,

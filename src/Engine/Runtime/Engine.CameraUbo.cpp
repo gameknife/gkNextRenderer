@@ -252,6 +252,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.SkyVisRayCount = static_cast<uint32_t>(std::clamp(config_.userSettings.SkyVisRayCount, 1, 64));
     ubo.SkyVisCombineMode = static_cast<uint32_t>(std::clamp(config_.userSettings.SkyVisCombineMode, 0, 2));
     ubo.SkyVisBlurRadius = static_cast<uint32_t>(std::clamp(config_.userSettings.SkyVisBlurRadius, 0, 4));
+    ubo.SkyVisJitterRadius = std::clamp(config_.userSettings.SkyVisJitterRadius, 0.0f, 4.0f);
 
     ubo.ProgressiveRender = progressiveRender_.enabled;
     ubo.SceneEpsilonScale = config_.userSettings.SceneEpsilonScale;

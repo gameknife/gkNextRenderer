@@ -159,6 +159,13 @@ void main(uint3 DTid : SV_DispatchThreadID)
                 // single master knob scales both GTAO and sky-visibility darkening.
                 float svUnit = GetAmbientCubeUnitAtPosition(hitVertex.Position);
                 float3 svPos = hitVertex.Position + N * svUnit * 1.0f;
+                float svJitterRadius = max(Camera.SkyVisJitterRadius, 0.0f) * svUnit;
+                if (svJitterRadius > 0.0f)
+                {
+                    uint4 svRandomSeed = InitRandomSeed(uint(pixel.x), uint(pixel.y), Camera.TotalFrames);
+                    float3 hemiJitter = AlignWithNormal(RandomInHemiSphere1(svRandomSeed), N);
+                    svPos += hemiJitter * (pow(RandomFloat(svRandomSeed), 1.0f / 3.0f) * svJitterRadius);
+                }
                 skyVis = SampleVoxelSkyVisibility(svPos, N);
             }
             ambientColor = float4(ambient, skyVis);
