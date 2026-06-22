@@ -180,7 +180,7 @@ public struct ALIGN_16 UniformBufferObject
     public uint GTAODebugMode;
 
     public bool GTAOEnable;
-    public uint GTAOPadding0;
+    public uint GTAOQuality;
     public uint GTAOPadding1;
     public uint GTAOPadding2;
 };
