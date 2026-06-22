@@ -143,17 +143,24 @@ void main(uint3 DTid : SV_DispatchThreadID)
     {
         combinedVis = min(ao, skyVisEff);               // avoid double darkening at contacts
     }
-    else if (camera.SkyVisCombineMode == 2u)
-    {
-        combinedVis = ao * lerp(1.0f, skyVisEff, ao);   // near-bright: GTAO owns the close range
-    }
-    else
+    else if (camera.SkyVisCombineMode == 0u)
     {
         combinedVis = ao * skyVisEff;                   // independent occlusions multiply
     }
+    else
+    {
+        // near-bright (default): where ao is low (tight corners/contacts) skyVis fades out and GTAO's
+        // fine gradient takes over; where ao is high (open) the coarse voxel skyVis applies its
+        // large-scale darkening. Stops a coarse skyVis voxel from slamming a corner to flat black and
+        // masking GTAO's detail transition.
+        combinedVis = ao * lerp(1.0f, skyVisEff, ao);
+    }
 
+    // Gamma-style master strength: monotone and never hard-clips to pure black (unlike a linear
+    // 1 - strength*(1-vis), which zeroes everything below 1-1/strength). This keeps GTAO's gradient
+    // visible in deep corners as a soft falloff instead of a dead-black patch.
     const float strength = max(camera.GTAOStrength, 0.0f);
-    const float skyOcclusion = saturate(1.0f - strength * (1.0f - combinedVis));
+    const float skyOcclusion = pow(saturate(combinedVis), strength);
 
     float4 output = float4(directOrEmissive.rgb + ambient.rgb * skyOcclusion, 1.0f);
     if (camera.GTAODebugMode == 1u)

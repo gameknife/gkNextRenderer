@@ -72,7 +72,7 @@ struct UserSettings final
     float SkyVisStrength = 1.0f;
     float SkyVisMaxDistance = 32.0f;
     int SkyVisRayCount = 16;
-    int SkyVisCombineMode = 0; // 0=mul 1=min 2=near-bright
+    int SkyVisCombineMode = 2; // 0=mul 1=min 2=near-bright (GTAO owns corners, skyVis the large scale)
     int SkyVisBlurRadius = 2;  // bilateral blur radius (pixels) for skyVis in compose; 0=off
 
 	// ReProject history clamp (Phase A black-dot fix; see Process.ReProject.comp.slang).
