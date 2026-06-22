@@ -1002,6 +1002,24 @@ void NextRendererGameInstance::DrawSettings()
         NextUI::Theme::EndPanelSection();
     }
 
+    if (NextUI::Theme::BeginPanelSection(LOCTEXT("GTAO"), true))
+    {
+        DrawSettingCheckboxRow(LOCTEXT("Enable"), &userSetting.GTAOEnable);
+        const char* qualityLevels[] = {"Low (16 taps)", "Medium (36 taps)", "High (64 taps)",
+                                       "Ultra (120 taps)"};
+        DrawSettingRow(LOCTEXT("Quality"),
+                       [&]()
+                       {
+                           ImGui::SetNextItemWidth(-FLT_MIN);
+                           return ImGui::Combo("##GTAOQuality", &userSetting.GTAOQuality, qualityLevels,
+                                               IM_ARRAYSIZE(qualityLevels));
+                       });
+        DrawFloatSetting(LOCTEXT("Radius"), &userSetting.GTAORadius, 0.01f, 5.0f, "%.2f", 0.05f);
+        DrawFloatSetting(LOCTEXT("Strength"), &userSetting.GTAOStrength, 0.0f, 4.0f, "%.2f", 0.05f);
+        DrawFloatSetting(LOCTEXT("Thickness"), &userSetting.GTAOThickness, 0.01f, 3.0f, "%.2f", 0.05f);
+        NextUI::Theme::EndPanelSection();
+    }
+
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Upscaling"), true))
     {
         int upscaleMethod = userSetting.DLSS ? 1 : userSetting.FSR ? 2 : 0;

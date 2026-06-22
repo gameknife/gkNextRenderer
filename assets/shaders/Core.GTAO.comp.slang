@@ -1,8 +1,6 @@
 import Common;
 import Bindless;
 
-static const uint kSliceCount = 2u;
-static const uint kStepCount = 4u;
 static const float kPi = 3.14159265359f;
 
 bool IsSurfaceDepth(float depth)
@@ -57,19 +55,27 @@ void main(uint3 DTid : SV_DispatchThreadID)
     const float focalY = 0.5f * float(fullSize.y) * abs(camera.Projection[1][1]);
     const float projectedRadius = clamp(focalY * radius / max(-centerPosition.z, 0.05f), 2.0f, 64.0f);
     const float noise = PixelNoise(uint2(halfPixel), camera.TotalFrames);
+    // Low preserves the original 2x4 cost. Higher levels increase both angular coverage
+    // and radial density; increasing only the step count leaves visible directional bands
+    // when the world-space radius is large.
+    const uint quality = min(camera.GTAOQuality, 3u);
+    const uint sliceCounts[4] = {2u, 3u, 4u, 6u};
+    const uint stepCounts[4] = {4u, 6u, 8u, 10u};
+    const uint sliceCount = sliceCounts[quality];
+    const uint stepCount = stepCounts[quality];
     float horizonOcclusion = 0.0f;
 
-    for (uint slice = 0u; slice < kSliceCount; ++slice)
+    for (uint slice = 0u; slice < sliceCount; ++slice)
     {
-        const float angle = (float(slice) + noise) * (kPi / float(kSliceCount));
+        const float angle = (float(slice) + noise) * (kPi / float(sliceCount));
         const float2 axis = float2(cos(angle), sin(angle));
 
         for (int side = -1; side <= 1; side += 2)
         {
             float horizon = 0.0f;
-            for (uint step = 1u; step <= kStepCount; ++step)
+            for (uint step = 1u; step <= stepCount; ++step)
             {
-                const float stepPhase = (float(step) - 0.5f + frac(noise * 1.6180339f)) / float(kStepCount);
+                const float stepPhase = (float(step) - 0.5f + frac(noise * 1.6180339f)) / float(stepCount);
                 const float2 offset = axis * float(side) * projectedRadius * stepPhase;
                 const int2 samplePixel = clamp(int2(round(float2(centerPixel) + offset)), int2(0, 0), fullMax);
                 const float sampleDepth = Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER)[samplePixel];
@@ -97,6 +103,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     const float visibility = saturate(1.0f - camera.GTAOStrength * horizonOcclusion /
-                                      float(kSliceCount * 2u));
+                                      float(sliceCount * 2u));
     Bindless.GetStorageTexture<float>(Bindless.RT_GTAO).Store(halfPixel, visibility);
 }

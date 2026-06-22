@@ -61,6 +61,7 @@ struct UserSettings final
 
     // SwModernNoAmbient screen-space sky occlusion.
     bool GTAOEnable = true;
+    int GTAOQuality = 1;
     float GTAORadius = 1.0f;
     float GTAOStrength = 1.0f;
     float GTAOThickness = 0.5f;
