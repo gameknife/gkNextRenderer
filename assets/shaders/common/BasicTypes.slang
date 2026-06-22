@@ -193,7 +193,7 @@ public struct ALIGN_16 UniformBufferObject
 
     public uint SkyVisCombineMode;   // 0 = multiply, 1 = min(ao, skyVis), 2 = near-bright
     public uint SkyVisBlurRadius;    // bilateral blur radius (pixels) applied to skyVis in compose; 0 = off
-    public uint SkyVisPadding1;
+    public float SkyVisJitterRadius; // random normal-hemisphere sample jitter radius in voxel units; 0 = off
     public uint SkyVisPadding2;
 };
 
