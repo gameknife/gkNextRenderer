@@ -281,7 +281,7 @@ Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options&
     userSettings.GTAOEnable = true;
     userSettings.GTAOQuality = 1;
     userSettings.GTAORadius = 1.0f;
-    userSettings.GTAOStrength = 1.5f;
+    userSettings.GTAOStrength = 1.0f;
     userSettings.GTAOThickness = 0.5f;
     userSettings.GTAODebugMode = 0;
 
