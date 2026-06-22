@@ -242,9 +242,16 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.GTAORadius = std::max(config_.userSettings.GTAORadius, 0.01f);
     ubo.GTAOStrength = std::max(config_.userSettings.GTAOStrength, 0.0f);
     ubo.GTAOThickness = std::max(config_.userSettings.GTAOThickness, 0.01f);
-    ubo.GTAODebugMode = static_cast<uint32_t>(std::clamp(config_.userSettings.GTAODebugMode, 0, 2));
+    ubo.GTAODebugMode = static_cast<uint32_t>(std::clamp(config_.userSettings.GTAODebugMode, 0, 4));
     ubo.GTAOEnable = config_.userSettings.GTAOEnable;
     ubo.GTAOQuality = static_cast<uint32_t>(std::clamp(config_.userSettings.GTAOQuality, 0, 3));
+
+    ubo.SkyVisEnable = config_.userSettings.SkyVisEnable;
+    ubo.SkyVisStrength = std::clamp(config_.userSettings.SkyVisStrength, 0.0f, 1.0f);
+    ubo.SkyVisMaxDistance = std::max(config_.userSettings.SkyVisMaxDistance, 1.0f);
+    ubo.SkyVisRayCount = static_cast<uint32_t>(std::clamp(config_.userSettings.SkyVisRayCount, 1, 64));
+    ubo.SkyVisCombineMode = static_cast<uint32_t>(std::clamp(config_.userSettings.SkyVisCombineMode, 0, 2));
+    ubo.SkyVisBlurRadius = static_cast<uint32_t>(std::clamp(config_.userSettings.SkyVisBlurRadius, 0, 4));
 
     ubo.ProgressiveRender = progressiveRender_.enabled;
     ubo.SceneEpsilonScale = config_.userSettings.SceneEpsilonScale;

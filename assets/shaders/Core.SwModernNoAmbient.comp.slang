@@ -144,7 +144,24 @@ void main(uint3 DTid : SV_DispatchThreadID)
                 float3 irr = Common.SampleIBLDiffuse(Camera.SkyIdx, N, Camera.SkyRotation).rgb * Camera.SkyIntensity;
                 ambient = albedo * irr;
             }
-            ambientColor = float4(ambient, 1.0f);
+
+            // Large-scale / off-screen sky occlusion from the baked voxel sky-visibility field.
+            // Stored in the alpha channel (worldPos already available here, saving a reprojection in
+            // GTAOCompose); degrades to 1.0 when voxel data is missing. Strength fades it toward 1.
+            float skyVis = 1.0f;
+            if (Camera.SkyVisEnable)
+            {
+                // Push the sample point off the surface along the normal by ~one voxel so the 8-tap
+                // footprint lands on valid air voxels (at the exact surface floor(nearpos) lands on the
+                // skipped solid voxel, which shifts/blocks the result). The sampler's smooth visibility
+                // and normal-side weights then suppress probes that leak through thin walls.
+                // Store the RAW visibility; occlusion strength is applied once in GTAOCompose so a
+                // single master knob scales both GTAO and sky-visibility darkening.
+                float svUnit = GetAmbientCubeUnitAtPosition(hitVertex.Position);
+                float3 svPos = hitVertex.Position + N * svUnit * 1.0f;
+                skyVis = SampleVoxelSkyVisibility(svPos, N);
+            }
+            ambientColor = float4(ambient, skyVis);
 
             // 太阳：Lambert + CSM 阴影
             float3 direct = float3(0);

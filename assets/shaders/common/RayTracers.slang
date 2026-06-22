@@ -55,7 +55,7 @@ public struct FHiVoxelDDARayTracer : IRayTracer
         return stepDistance;
     }
 
-    bool TraceOcclusionDDA(float3 rayOrigin, float3 rayDir, float maxDistance)
+    public bool TraceOcclusionDDA(float3 rayOrigin, float3 rayDir, float maxDistance)
     {
         VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
         uint cascadeCount = GetAmbientCubeCascadeCount();

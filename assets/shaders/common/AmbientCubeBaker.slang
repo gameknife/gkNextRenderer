@@ -179,8 +179,10 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
         if (minDist < 8 && cubeIdx >= 0) // 只处理表面，增值算法的时候可以具体的把他做好
         {
-            uint iterate = Voxels[voxelIdx].age;
-            Voxels[voxelIdx].age = Voxels[voxelIdx].age + 1;
+            // Only touch the low 24 bits; the high byte holds the voxel sky-visibility baked by the
+            // NoAmbient path and must not be polluted by the cube baker's counter (design §5.5).
+            uint iterate = GetVoxelAgeCounter(Voxels[voxelIdx]);
+            SetVoxelAgeCounter(Voxels[voxelIdx], iterate + 1);
 
             uint4 skyvis_pznzpynyx = UnpackBytes(Cubes[cubeIdx].skyVisibility_pznzpyny);
             uint4 skyvis_pxnxs0s1 = UnpackBytes(Cubes[cubeIdx].skyVisibility_pxnxs0s1);
@@ -208,8 +210,9 @@ public struct FGpuProbeGenerator : IProbeGenerator
         uint4 upacked = UnpackBytes(Voxels[voxelIdx].distanceToSolid_gg_z01);
         if (upacked.x < 16 && cubeIdx >= 0) // 只处理表面，增值算法的时候可以具体的把他做好
         {
-            uint iterate = Voxels[voxelIdx].age;
-            Voxels[voxelIdx].age = Voxels[voxelIdx].age + 1;
+            // Counter lives in the low 24 bits; preserve the sky-visibility high byte (design §5.5).
+            uint iterate = GetVoxelAgeCounter(Voxels[voxelIdx]);
+            SetVoxelAgeCounter(Voxels[voxelIdx], iterate + 1);
 
             uint4 skyvis_pznzpynyx = UnpackBytes(Cubes[cubeIdx].skyVisibility_pznzpyny);
             uint4 skyvis_pxnxs0s1 = UnpackBytes(Cubes[cubeIdx].skyVisibility_pxnxs0s1);

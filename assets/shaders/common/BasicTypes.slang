@@ -183,6 +183,18 @@ public struct ALIGN_16 UniformBufferObject
     public uint GTAOQuality;
     public uint GTAOPadding1;
     public uint GTAOPadding2;
+
+    // SwModernNoAmbient voxel sky-visibility (large-scale / off-screen occlusion, orthogonal to GTAO).
+    // Sampled in the shading pass (written to RT_AMBIENT.a) and combined with GTAO in GTAOCompose.
+    public bool SkyVisEnable;
+    public float SkyVisStrength;     // 0 = no darkening, 1 = full baked occlusion
+    public float SkyVisMaxDistance;  // soft-trace max distance (meters); large-scale range
+    public uint SkyVisRayCount;      // hemisphere rays per voxel for the bake
+
+    public uint SkyVisCombineMode;   // 0 = multiply, 1 = min(ao, skyVis), 2 = near-bright
+    public uint SkyVisBlurRadius;    // bilateral blur radius (pixels) applied to skyVis in compose; 0 = off
+    public uint SkyVisPadding1;
+    public uint SkyVisPadding2;
 };
 
 public struct ALIGN_16 NodeProxy

@@ -42,12 +42,20 @@ namespace Vulkan
 	{
 		bool requestAmbientCube = false;
 		bool requestRayTracing = false;
+		// Needs voxel SDF geometry (matId + per-axis distance field) but not necessarily ambient cubes.
+		// SwModernNoAmbient sets this to drive voxel sky-visibility baking without the cube pool.
+		bool requestVoxelGeometry = false;
 
 		void Merge(const FRendererRequirements& other)
 		{
 			requestAmbientCube = requestAmbientCube || other.requestAmbientCube;
 			requestRayTracing = requestRayTracing || other.requestRayTracing;
+			requestVoxelGeometry = requestVoxelGeometry || other.requestVoxelGeometry;
 		}
+
+		// Ambient cube baking implies voxel geometry (the cube bake reads/writes the voxel SDF),
+		// so any cube-requesting renderer also needs voxel geometry available.
+		bool NeedsVoxelGeometry() const { return requestAmbientCube || requestVoxelGeometry; }
 	};
 
 	FRendererRequirements GetRendererRequirements(ERendererType type);
@@ -189,6 +197,9 @@ namespace Vulkan
 			std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldInit;
 			std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldJump;
 			std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldResolve;
+			// Voxel sky-visibility bake (SwModernNoAmbient): present whenever voxel geometry is
+			// requested, independent of the ambient cube pool.
+			std::unique_ptr<PipelineCommon::ZeroBindPipeline> voxelSkyVisBake;
 			bool requestClearCache = true;
 		};
 
@@ -341,6 +352,7 @@ namespace Vulkan
 		// Post-render passes
 		void ClearAmbientCubeCache(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void BakeAmbientCubeCascade(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool useHardware);
+		void BakeVoxelSkyVisibility(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void RebuildDistanceFieldCascades(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void DispatchVisualDebugger(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void CopyObjectIdHistory(VkCommandBuffer commandBuffer);

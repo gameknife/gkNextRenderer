@@ -102,7 +102,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
         }
     }
 
-    const float visibility = saturate(1.0f - camera.GTAOStrength * horizonOcclusion /
-                                      float(sliceCount * 2u));
+    // Output RAW horizon visibility [0,1]; the user-facing occlusion strength is applied once in
+    // Process.GTAOCompose so a single knob scales the combined GTAO + voxel sky-visibility darkening.
+    const float visibility = saturate(1.0f - horizonOcclusion / float(sliceCount * 2u));
     Bindless.GetStorageTexture<float>(Bindless.RT_GTAO).Store(halfPixel, visibility);
 }

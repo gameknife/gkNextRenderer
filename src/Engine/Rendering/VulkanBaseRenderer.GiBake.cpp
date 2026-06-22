@@ -211,6 +211,75 @@ namespace Vulkan
         vkCmdDispatch(commandBuffer, dispatchGroupCount, 1, 1);
     }
 
+    void VulkanBaseRenderer::BakeVoxelSkyVisibility(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+    {
+        if (!ambient_.voxelSkyVisBake)
+        {
+            return;
+        }
+
+        constexpr int voxelsPerGroup = 64;
+        constexpr int perCascadeCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
+        const int group = perCascadeCount / voxelsPerGroup;
+
+        const uint32_t cascadeCount = std::min(
+            Assets::SanitizeAmbientCubeCascadeCount(NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount),
+            GetScene().AmbientCubeCascadeCapacity());
+        const uint32_t safeCascadeCount = std::max(1u, cascadeCount);
+        const uint32_t cascadeIndex = static_cast<uint32_t>(frame_.frameCount % safeCascadeCount);
+
+        // Temporally slice the dense voxel grid across frames (same cadence as the cube bake) so a
+        // single frame never sweeps all 1.77M voxels per cascade.
+        int temporalFrames = 120;
+        switch (NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel)
+        {
+        case 0: temporalFrames = 30; break;
+        case 1: temporalFrames = 120; break;
+        case 2: temporalFrames = 300; break;
+        default: temporalFrames = 120; break;
+        }
+
+        SCOPED_GPU_TIMER("voxel skyvis bake");
+
+        const int frame = static_cast<int>((frame_.frameCount / safeCascadeCount) % temporalFrames);
+        const int groupPerFrame = std::max(1, (group + temporalFrames - 1) / temporalFrames);
+        const int offset = frame * groupPerFrame;
+        if (offset >= group)
+        {
+            return;
+        }
+        const int dispatchGroupCount = std::min(groupPerFrame, group - offset);
+        const uint32_t localVoxelBase = static_cast<uint32_t>(offset * voxelsPerGroup);
+
+        ambient_.voxelSkyVisBake->BindPipeline(commandBuffer, GetScene(), imageIndex);
+
+        Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
+        gpuScene.custom_data_0 = localVoxelBase;
+        gpuScene.custom_data_1 = cascadeIndex;
+        gpuScene.custom_data_2 = 0;
+        vkCmdPushConstants(commandBuffer, ambient_.voxelSkyVisBake->PipelineLayout().Handle(),
+                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
+        vkCmdDispatch(commandBuffer, dispatchGroupCount, 1, 1);
+
+        // The bake writes VoxelData.age (sky-vis high byte). Make it visible to next frame's shading
+        // pass which trilinearly samples the voxel sky-visibility.
+        const VkDeviceSize cascadeByteOffset =
+            GetScene().AmbientVoxelsByteOffset() +
+            static_cast<VkDeviceSize>(cascadeIndex) * perCascadeCount * sizeof(Assets::VoxelData);
+        VkBufferMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.buffer = GetScene().FarAmbientCubeBuffer().Handle();
+        barrier.offset = cascadeByteOffset;
+        barrier.size = static_cast<VkDeviceSize>(perCascadeCount) * sizeof(Assets::VoxelData);
+        vkCmdPipelineBarrier(commandBuffer,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            0, 0, nullptr, 1, &barrier, 0, nullptr);
+    }
+
     void VulkanBaseRenderer::RebuildDistanceFieldCascades(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         SCOPED_GPU_TIMER("gpu-distance-field");
