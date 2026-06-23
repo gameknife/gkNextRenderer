@@ -372,7 +372,7 @@ public struct FAmbientCubeRayTracerIndirect : IRayTracer
 
     public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor, out float outHitDist)
     {
-        float4 probeData = interpolateAmbientCubes<FullAmbientCubeWNSunSampler>(rayOrigin, rayDir);
+        float4 probeData = interpolateAmbientCubes<FullAmbientCubeSampler>(rayOrigin, rayDir);
         inoutRayColor.rgb = probeData.rgb;
         outHitDist = 100.0f;
         return probeData.a < 0.6;
