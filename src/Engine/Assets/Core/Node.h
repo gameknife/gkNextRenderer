@@ -39,6 +39,10 @@ namespace Assets
         
         const std::string& GetName() const {return name_; }
         void SetName(std::string name);
+        const std::string& GetTag() const { return tag_; }
+        void SetTag(std::string tag) { tag_ = std::move(tag); }
+        const std::string& GetLayer() const { return layer_; }
+        void SetLayer(std::string layer) { layer_ = std::move(layer); }
 
         Component* GetComponentByTypeName(const std::string& componentType) const;
 
@@ -158,6 +162,8 @@ namespace Assets
         }
 
         std::string name_;
+        std::string tag_ = "Untagged";
+        std::string layer_ = "Default";
 
         mutable glm::vec3 translation_;
         mutable glm::quat rotation_;

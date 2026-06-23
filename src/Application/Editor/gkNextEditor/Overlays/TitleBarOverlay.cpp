@@ -6,6 +6,7 @@
 
 #include "Core/RecentScenes.hpp"
 #include "Core/EditorLayoutConstants.hpp"
+#include "Core/SceneSavePolicy.hpp"
 #include "EditorUtils.h"
 
 #include <spdlog/spdlog.h>
@@ -21,10 +22,69 @@ namespace Editor
     namespace
     {
         constexpr const char* kWindowTitle = "gkNextEditor";
+        constexpr SDL_DialogFileFilter kSceneOpenFilters[] = {
+            {"Scenes", "glb;gltf;ldr;mpd"},
+            {"All Files", "*"},
+        };
+        constexpr SDL_DialogFileFilter kSceneSaveFilters[] = {
+            {"GLB Scene", "glb"},
+            {"All Files", "*"},
+        };
+
+        struct FSaveSceneDialogContext
+        {
+            EditorUiState* Ui = nullptr;
+            std::string DefaultLocation;
+        };
+
+        struct FOpenSceneDialogContext
+        {
+            EditorUiState* Ui = nullptr;
+        };
+
+        void SaveSceneToPath(EditorContext& ctx, EditorUiState& ui, const std::string& filename)
+        {
+            if (!IsGlbScenePath(filename))
+            {
+                SPDLOG_ERROR("Scene save target must be a .glb file: {}", filename);
+                return;
+            }
+
+            const std::string savePath = ResolveSceneFilesystemPath(filename).string();
+            const bool success = ctx.scene.Save(savePath);
+            if (success)
+            {
+                ui.currentScenePath = filename;
+                PushRecentScene(ui, filename);
+                SPDLOG_INFO("Scene saved successfully: {}", savePath);
+            }
+            else
+            {
+                SPDLOG_ERROR("Failed to save scene: {}", savePath);
+            }
+        }
     } // namespace
 
     void DrawTitleBarOverlay(EditorContext& ctx, EditorUiState& ui)
     {
+        std::string pendingSaveScenePath;
+        std::string pendingOpenScenePath;
+        {
+            std::scoped_lock lock(ui.sceneDialogMutex);
+            pendingOpenScenePath = std::move(ui.pendingOpenScenePath);
+            ui.pendingOpenScenePath.clear();
+            pendingSaveScenePath = std::move(ui.pendingSaveScenePath);
+            ui.pendingSaveScenePath.clear();
+        }
+        if (!pendingOpenScenePath.empty())
+        {
+            ctx.actions.Dispatch(ctx, EEditorAction::IO_LoadScene, pendingOpenScenePath);
+        }
+        if (!pendingSaveScenePath.empty())
+        {
+            SaveSceneToPath(ctx, ui, pendingSaveScenePath);
+        }
+
         ImGuiViewport* viewport = ImGui::GetMainViewport();
 
         NextUI::Theme::FAppTitleBarConfig config{};
@@ -43,28 +103,31 @@ namespace Editor
             {
                 if (ImGui::MenuItem("Open Scene...", "Ctrl+O"))
                 {
-                    SDL_DialogFileFilter filters[] = {
-                        {"Scenes", "glb;gltf;ldr;mpd"},
-                        {"All Files", "*"},
-                    };
+                    auto* dialogContext = new FOpenSceneDialogContext{&ui};
                     SDL_ShowOpenFileDialog(
                         [](void* userdata, const char* const* filelist, int /*filter*/)
                         {
-                            auto* editorCtx = static_cast<EditorContext*>(userdata);
+                            std::unique_ptr<FOpenSceneDialogContext> dialogContext(
+                                static_cast<FOpenSceneDialogContext*>(userdata));
+                            if (!dialogContext || !dialogContext->Ui)
+                            {
+                                return;
+                            }
+
                             if (filelist && filelist[0])
                             {
                                 SPDLOG_INFO("Open Scene: {}", filelist[0]);
-                                editorCtx->actions.Dispatch(*editorCtx, EEditorAction::IO_LoadScene,
-                                                            std::string(filelist[0]));
+                                std::scoped_lock lock(dialogContext->Ui->sceneDialogMutex);
+                                dialogContext->Ui->pendingOpenScenePath = filelist[0];
                             }
                             else
                             {
                                 SPDLOG_DEBUG("Open Scene dialog cancelled");
                             }
                         },
-                        &ctx,
+                        dialogContext,
                         ctx.engine.GetWindow().Handle(),
-                        filters, 2, nullptr, false);
+                        kSceneOpenFilters, 2, nullptr, false);
                 }
 
                 if (ImGui::BeginMenu("Recent Scenes"))
@@ -97,33 +160,38 @@ namespace Editor
                     ImGui::EndMenu();
                 }
 
-                if (ImGui::MenuItem("Save Scene", "Ctrl+S"))
+                const bool canSaveCurrentScene = CanOverwriteCurrentScene(ui.currentScenePath);
+                if (ImGui::MenuItem("Save Scene", "Ctrl+S", false, canSaveCurrentScene))
                 {
-                    const std::string filename = ui.currentScenePath.empty() ? "saved_scene.glb" : ui.currentScenePath;
-                    const bool success = ctx.scene.Save(filename);
-                    if (success)
-                    {
-                        ui.currentScenePath = filename;
-                        SPDLOG_INFO("Scene saved successfully: {}", filename);
-                    }
-                    else
-                    {
-                        SPDLOG_ERROR("Failed to save scene: {}", filename);
-                    }
+                    SaveSceneToPath(ctx, ui, ui.currentScenePath);
                 }
                 if (ImGui::MenuItem("Save Scene As...", "Ctrl+Shift+S"))
                 {
-                    const std::string filename = "saved_scene.glb";
-                    const bool success = ctx.scene.Save(filename);
-                    if (success)
-                    {
-                        ui.currentScenePath = filename;
-                        SPDLOG_INFO("Scene saved successfully: {}", filename);
-                    }
-                    else
-                    {
-                        SPDLOG_ERROR("Failed to save scene: {}", filename);
-                    }
+                    auto* dialogContext = new FSaveSceneDialogContext{&ui, DefaultSceneSaveDirectory().string()};
+                    SDL_ShowSaveFileDialog(
+                        [](void* userdata, const char* const* filelist, int /*filter*/)
+                        {
+                            std::unique_ptr<FSaveSceneDialogContext> dialogContext(
+                                static_cast<FSaveSceneDialogContext*>(userdata));
+                            if (!dialogContext || !dialogContext->Ui)
+                            {
+                                return;
+                            }
+
+                            if (filelist && filelist[0])
+                            {
+                                std::string filename = NormalizeSaveAsScenePath(filelist[0]);
+                                std::scoped_lock lock(dialogContext->Ui->sceneDialogMutex);
+                                dialogContext->Ui->pendingSaveScenePath = std::move(filename);
+                            }
+                            else
+                            {
+                                SPDLOG_DEBUG("Save Scene As dialog cancelled");
+                            }
+                        },
+                        dialogContext,
+                        ctx.engine.GetWindow().Handle(),
+                        kSceneSaveFilters, 2, dialogContext->DefaultLocation.c_str());
                 }
 
                 ImGui::Separator();

@@ -135,6 +135,24 @@ namespace Assets
         return -1;
     }
 
+    const FTextureCpuSource* GlobalTexturePool::GetTextureCpuSource(uint32_t idx)
+    {
+        if (!GetInstance())
+        {
+            return nullptr;
+        }
+        return GetInstance()->GetCpuSource(idx);
+    }
+
+    const FTextureCpuSource* GlobalTexturePool::GetCpuSource(uint32_t textureIdx) const
+    {
+        if (textureIdx >= textureCpuSources_.size() || textureCpuSources_[textureIdx].Bytes.empty())
+        {
+            return nullptr;
+        }
+        return &textureCpuSources_[textureIdx];
+    }
+
     GlobalTexturePool::GlobalTexturePool(const Vulkan::Device& device, Vulkan::CommandPool& commandPool,
                                          Vulkan::CommandPool& commandPoolMt) :
         device_(device),
@@ -269,6 +287,10 @@ namespace Assets
         {
             BindTexture(textureIdx, *defaultWhiteTexture_);
         }
+        if (textureIdx < textureCpuSources_.size())
+        {
+            textureCpuSources_[textureIdx] = {};
+        }
 
         std::erase_if(textureNameMap_, [textureIdx](const auto& item)
         {
@@ -320,6 +342,20 @@ namespace Assets
         {
             copyedData = new uint8_t[bytelength];
             memcpy(copyedData, data, bytelength);
+        }
+        if (textureCpuSources_.size() <= newTextureIdx)
+        {
+            textureCpuSources_.resize(static_cast<size_t>(newTextureIdx) + 1);
+        }
+        auto& cpuSource = textureCpuSources_[newTextureIdx];
+        cpuSource.TextureName = texname;
+        cpuSource.Mime = mime;
+        cpuSource.Srgb = srgb;
+        cpuSource.Hdr = hdr;
+        cpuSource.Bytes.clear();
+        if (copyedData && bytelength > 0)
+        {
+            cpuSource.Bytes.assign(copyedData, copyedData + bytelength);
         }
         const bool streamHDRAtLoad = hdr && hdrStreamingPolicy_ && hdrStreamingPolicy_();
         const EHDRTextureResidency initialHDRResidency =

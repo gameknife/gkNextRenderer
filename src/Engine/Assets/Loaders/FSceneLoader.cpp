@@ -158,6 +158,15 @@ namespace Assets
 
         uint32_t primaryMatIdx = 0;
         std::shared_ptr<Node> sceneNode = Node::CreateNode(node.name, translation, rotation, scale, uint32_t(outNodes.size()));
+        if (node.extras.Has("tag") && node.extras.Get("tag").IsString())
+        {
+            sceneNode->SetTag(node.extras.Get("tag").Get<std::string>());
+        }
+        if (node.extras.Has("layer") && node.extras.Get("layer").IsString())
+        {
+            sceneNode->SetLayer(node.extras.Get("layer").Get<std::string>());
+        }
+
         if (meshId != -1)
         {
             auto renderComp = std::make_shared<Runtime::RenderComponent>();
@@ -172,6 +181,33 @@ namespace Assets
                 primaryMatIdx = primitive.material + materialOffset;
             }
             renderComp->SetMaterials(materialIdx);
+
+            auto readBoolExtra = [&node](const char* key, bool fallback)
+            {
+                if (!node.extras.Has(key))
+                {
+                    return fallback;
+                }
+                const tinygltf::Value& value = node.extras.Get(key);
+                if (value.IsBool())
+                {
+                    return value.Get<bool>();
+                }
+                if (value.IsNumber())
+                {
+                    return value.GetNumberAsInt() != 0;
+                }
+                return fallback;
+            };
+
+            renderComp->SetVisible(readBoolExtra("visible", renderComp->GetVisible()));
+            renderComp->SetCastShadows(readBoolExtra("castShadows", renderComp->GetCastShadows()));
+            renderComp->SetReceiveGI(readBoolExtra("receiveGI", renderComp->GetReceiveGI()));
+            if (node.extras.Has("layerMask") && node.extras.Get("layerMask").IsNumber())
+            {
+                renderComp->SetLayerMask(static_cast<uint32_t>(node.extras.Get("layerMask").GetNumberAsDouble()));
+            }
+
             sceneNode->AddComponent(renderComp);
         }
 
@@ -421,10 +457,11 @@ namespace Assets
                 }
                 else
                 {
+                    const tinygltf::BufferView& imageView = model.bufferViews[image.bufferView];
                     uint32_t texIdx = GlobalTexturePool::LoadTexture(
                         currSceneName + texname, model.images[imageIdx].mimeType,
-                        model.buffers[0].data.data() + model.bufferViews[image.bufferView].byteOffset,
-                        model.bufferViews[image.bufferView].byteLength, srgb);
+                        model.buffers[imageView.buffer].data.data() + imageView.byteOffset,
+                        imageView.byteLength, srgb);
                     textureIdMap[imageIdx] = texIdx;
                 }
             }
