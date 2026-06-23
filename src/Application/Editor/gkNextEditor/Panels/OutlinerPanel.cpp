@@ -77,6 +77,38 @@ namespace Editor
             return path;
         }
 
+        int GetNodeDepth(Assets::Node& node)
+        {
+            int depth = 0;
+            Assets::Node* parent = node.GetParent();
+            while (parent != nullptr)
+            {
+                ++depth;
+                parent = parent->GetParent();
+            }
+            return depth;
+        }
+
+        void UndoOutlinerIndentForCurrentColumn(float indentWidth)
+        {
+            if (indentWidth <= 0.0f)
+            {
+                return;
+            }
+
+            ImGui::SetCursorPosX(std::max(0.0f, ImGui::GetCursorPosX() - indentWidth));
+        }
+
+        void ApplyOutlinerIndentForCurrentColumn(float indentWidth)
+        {
+            if (indentWidth <= 0.0f)
+            {
+                return;
+            }
+
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + indentWidth);
+        }
+
         bool SetSubtreeVisibility(Assets::Node& root, bool visible)
         {
             bool changed = false;
@@ -122,7 +154,7 @@ namespace Editor
         void DrawNode(EditorContext& ctx, EditorUiState& ui, Assets::Node& node, uint32_t& renameTargetId,
                       std::string& renameBuffer, bool& openRenamePopup, bool& focusRenameInput,
                       uint32_t& hoveredIdCandidate, bool autoScrollEnabled, uint32_t& pendingScrollTargetId,
-                      const ImGuiTextFilter& filter)
+                      bool& suppressNextSelectionAutoScroll, const ImGuiTextFilter& filter)
         {
             const bool filterActive = filter.IsActive();
             const bool nodePassesFilter = !filterActive || filter.PassFilter(node.GetName().c_str());
@@ -132,8 +164,10 @@ namespace Editor
                 return;
             }
 
+            const float indentWidth = static_cast<float>(GetNodeDepth(node)) * ImGui::GetStyle().IndentSpacing;
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
+            UndoOutlinerIndentForCurrentColumn(indentWidth);
 
             const bool selected = ctx.scene.IsSelected(node.GetInstanceId());
             const bool locked = ctx.scene.IsLocked(node.GetInstanceId());
@@ -187,6 +221,7 @@ namespace Editor
             }
 
             ImGui::TableSetColumnIndex(2);
+            ApplyOutlinerIndentForCurrentColumn(indentWidth);
             ImGuiTreeNodeFlags flag = ImGuiTreeNodeFlags_FramePadding |
                 ImGuiTreeNodeFlags_OpenOnArrow |      // Only expand on arrow click
                 ImGuiTreeNodeFlags_SpanAvailWidth |   // Make the whole row clickable
@@ -254,6 +289,7 @@ namespace Editor
                 {
                     ctx.scene.SetSelectedId(node.GetInstanceId());
                 }
+                suppressNextSelectionAutoScroll = true;
             }
 
             // Double-click to focus camera on the node
@@ -268,6 +304,7 @@ namespace Editor
                 {
                     ctx.scene.SetSelectedId(node.GetInstanceId());
                 }
+                suppressNextSelectionAutoScroll = true;
                 ctx.actions.Dispatch(ctx, EEditorAction::Camera_FocusSelected,
                                      std::to_string(node.GetInstanceId()));
             }
@@ -320,7 +357,8 @@ namespace Editor
                 for (auto& child : node.Children())
                 {
                     DrawNode(ctx, ui, *child, renameTargetId, renameBuffer, openRenamePopup, focusRenameInput,
-                             hoveredIdCandidate, autoScrollEnabled, pendingScrollTargetId, filter);
+                             hoveredIdCandidate, autoScrollEnabled, pendingScrollTargetId,
+                             suppressNextSelectionAutoScroll, filter);
                 }
                 ImGui::TreePop();
             }
@@ -370,6 +408,7 @@ namespace Editor
         static bool prevAutoScrollEnabled = true;
         static uint32_t lastSelectionId = InvalidId;
         static uint32_t pendingScrollTargetId = InvalidId;
+        static bool suppressNextSelectionAutoScroll = false;
         static ImGuiTextFilter nodeFilter;
         uint32_t hoveredIdCandidate = InvalidId;
 
@@ -400,13 +439,17 @@ namespace Editor
                 const bool selectionChanged = currentSelectionId != lastSelectionId;
                 if (currentSelectionId != InvalidId && (toggledOn || selectionChanged))
                 {
-                    pendingScrollTargetId = currentSelectionId;
+                    if (!selectionChanged || !suppressNextSelectionAutoScroll)
+                    {
+                        pendingScrollTargetId = currentSelectionId;
+                    }
                 }
             }
             else
             {
                 pendingScrollTargetId = InvalidId;
             }
+            suppressNextSelectionAutoScroll = false;
             prevAutoScrollEnabled = ui.outlinerAutoScrollToSelection;
             lastSelectionId = currentSelectionId;
 
@@ -432,7 +475,8 @@ namespace Editor
                     }
 
                     DrawNode(ctx, ui, *node, renameTargetId, renameBuffer, openRenamePopup, focusRenameInput,
-                             hoveredIdCandidate, ui.outlinerAutoScrollToSelection, pendingScrollTargetId, nodeFilter);
+                             hoveredIdCandidate, ui.outlinerAutoScrollToSelection, pendingScrollTargetId,
+                             suppressNextSelectionAutoScroll, nodeFilter);
 
                     if (!filterActive && limit-- <= 0)
                     {
