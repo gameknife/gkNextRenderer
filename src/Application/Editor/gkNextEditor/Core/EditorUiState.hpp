@@ -67,6 +67,7 @@ namespace Editor
         bool child_style = false;
         bool child_demo = false;
         bool child_metrics = false;
+        bool child_debug_log = false;
         bool child_color = false;
         bool child_stack = false;
         bool child_resources = false;

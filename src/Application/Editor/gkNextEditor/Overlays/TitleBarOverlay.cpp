@@ -239,10 +239,21 @@ namespace Editor
             menuRight = std::max(menuRight, ImGui::GetItemRectMax().x);
             if (toolsMenuOpen)
             {
+                if (ImGui::BeginMenu("ImGui Debugger"))
+                {
+                    if (ImGui::MenuItem("Item Picker", "Ctrl+Shift+C"))
+                    {
+                        ImGui::DebugStartItemPicker();
+                    }
+                    ImGui::MenuItem("Stack Tool", nullptr, &ui.child_stack);
+                    ImGui::MenuItem("Metrics / Debugger", nullptr, &ui.child_metrics);
+                    ImGui::MenuItem("Debug Log", nullptr, &ui.child_debug_log);
+                    ImGui::MenuItem("Demo Window", nullptr, &ui.child_demo);
+                    ImGui::EndMenu();
+                }
+
+                ImGui::Separator();
                 ImGui::MenuItem("Style Editor", nullptr, &ui.child_style);
-                ImGui::MenuItem("Demo Window", nullptr, &ui.child_demo);
-                ImGui::MenuItem("Metrics", nullptr, &ui.child_metrics);
-                ImGui::MenuItem("Stack Tool", nullptr, &ui.child_stack);
                 ImGui::MenuItem("Color Export", nullptr, &ui.child_color);
                 ImGui::MenuItem("Command History", nullptr, &ui.commandHistoryPanel);
                 ImGui::MenuItem("Hot Reload", nullptr, &ui.hotReloadPanel);

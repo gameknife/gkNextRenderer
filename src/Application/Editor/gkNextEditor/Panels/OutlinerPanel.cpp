@@ -137,16 +137,61 @@ namespace Editor
 
             const bool selected = ctx.scene.IsSelected(node.GetInstanceId());
             const bool locked = ctx.scene.IsLocked(node.GetInstanceId());
+            ImGui::PushID(static_cast<int>(node.GetInstanceId()));
+
+            auto render = node.GetComponent<Runtime::RenderComponent>();
+            const int modelId = render ? render->GetModelId() : -1;
+            const bool visible = render == nullptr || render->GetVisible();
+
+            if (render != nullptr)
+            {
+                if (!visible)
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetColorU32(ImGuiCol_TextDisabled));
+                }
+                ImGui::TextUnformatted(visible ? ICON_FA_EYE : ICON_FA_EYE_SLASH);
+                if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+                {
+                    render->SetVisible(!visible);
+                    ctx.scene.MarkDirty();
+                }
+                if (ImGui::IsItemHovered())
+                {
+                    hoveredIdCandidate = node.GetInstanceId();
+                    ImGui::SetTooltip("%s", visible ? "Hide Node" : "Show Node");
+                }
+                if (!visible)
+                {
+                    ImGui::PopStyleColor();
+                }
+            }
+            else
+            {
+                ImGui::TextDisabled(ICON_FA_EYE);
+                if (ImGui::IsItemHovered())
+                {
+                    hoveredIdCandidate = node.GetInstanceId();
+                }
+            }
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::TextUnformatted(locked ? ICON_FA_LOCK : ICON_FA_LOCK_OPEN);
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+            {
+                ctx.scene.ToggleLocked(node.GetInstanceId());
+            }
+            if (ImGui::IsItemHovered())
+            {
+                hoveredIdCandidate = node.GetInstanceId();
+                ImGui::SetTooltip("%s", locked ? "Unlock Node" : "Lock Node");
+            }
+
+            ImGui::TableSetColumnIndex(2);
             ImGuiTreeNodeFlags flag = ImGuiTreeNodeFlags_FramePadding |
                 ImGuiTreeNodeFlags_OpenOnArrow |      // Only expand on arrow click
                 ImGuiTreeNodeFlags_SpanAvailWidth |   // Make the whole row clickable
                 (selected ? ImGuiTreeNodeFlags_Selected : 0) |
                 (node.Children().empty() ? ImGuiTreeNodeFlags_Leaf : 0);
-
-            ImGui::PushID(static_cast<int>(node.GetInstanceId()));
-            auto render = node.GetComponent<Runtime::RenderComponent>();
-            const int modelId = render ? render->GetModelId() : -1;
-            const bool visible = render == nullptr || render->GetVisible();
 
             const bool shouldOpenForTarget =
                 autoScrollEnabled && pendingScrollTargetId != InvalidId &&
@@ -176,47 +221,14 @@ namespace Editor
                                              : selected ? ActiveColor : ImGui::GetColorU32(ImGuiCol_Text);
             ImGui::PushStyleColor(ImGuiCol_Text, textColor);
             const bool opened = ImGui::TreeNodeEx(label.c_str(), flag);
+            const bool treeNodeHovered = ImGui::IsItemHovered();
+            const bool treeNodeClicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+            const bool treeNodeDoubleClicked = treeNodeHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
+            const bool treeNodeToggledOpen = ImGui::IsItemToggledOpen();
 
             ImGui::PopStyleColor();
-            const float columnWidth = ImGui::GetColumnWidth();
-            ImGui::SameLine(std::max(ImGui::GetCursorPosX(), columnWidth - 56.0f));
-            if (render != nullptr)
-            {
-                if (!visible)
-                {
-                    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetColorU32(ImGuiCol_TextDisabled));
-                }
-                ImGui::TextUnformatted(visible ? ICON_FA_EYE : ICON_FA_EYE_SLASH);
-                if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
-                {
-                    render->SetVisible(!visible);
-                    ctx.scene.MarkDirty();
-                }
-                if (!visible)
-                {
-                    ImGui::PopStyleColor();
-                }
-                if (ImGui::IsItemHovered())
-                {
-                    ImGui::SetTooltip("%s", visible ? "Hide Node" : "Show Node");
-                }
-            }
-            else
-            {
-                ImGui::TextDisabled(ICON_FA_EYE);
-            }
-            ImGui::SameLine(0.0f, 10.0f);
-            ImGui::TextUnformatted(locked ? ICON_FA_LOCK : ICON_FA_LOCK_OPEN);
-            if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
-            {
-                ctx.scene.ToggleLocked(node.GetInstanceId());
-            }
-            if (ImGui::IsItemHovered())
-            {
-                ImGui::SetTooltip("%s", locked ? "Unlock Node" : "Lock Node");
-            }
 
-            if (ImGui::IsItemHovered())
+            if (treeNodeHovered)
             {
                 hoveredIdCandidate = node.GetInstanceId();
             }
@@ -228,7 +240,7 @@ namespace Editor
             }
 
             // Single click to select
-            if (!locked && ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen())
+            if (!locked && treeNodeClicked && !treeNodeToggledOpen)
             {
                 // Ensure Outliner gets keyboard focus so shortcuts (Delete, F2, arrows) work immediately
                 ImGui::SetWindowFocus(nullptr);
@@ -245,7 +257,7 @@ namespace Editor
             }
 
             // Double-click to focus camera on the node
-            if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+            if (treeNodeDoubleClicked)
             {
                 const ImGuiIO& io = ImGui::GetIO();
                 if (!locked && (io.KeyCtrl || io.KeySuper))
@@ -402,9 +414,13 @@ namespace Editor
             ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.82f));
             ImGui::BeginChild("ListBox", ImVec2(0, -132.0f), true);
 
-            if (ImGui::BeginTable("NodesList", 1, ImGuiTableFlags_NoBordersInBodyUntilResize | ImGuiTableFlags_RowBg))
+            if (ImGui::BeginTable("NodesList", 3, ImGuiTableFlags_NoBordersInBodyUntilResize | ImGuiTableFlags_RowBg))
             {
-                ImGui::TableSetupColumn("NodeName");
+                ImGui::TableSetupColumn("Visible", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoResize,
+                                        20.0f);
+                ImGui::TableSetupColumn("Locked", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoResize,
+                                        20.0f);
+                ImGui::TableSetupColumn("NodeName", ImGuiTableColumnFlags_WidthStretch);
                 auto& allnodes = ctx.scene.Nodes();
                 const bool filterActive = nodeFilter.IsActive();
                 uint32_t limit = 1000;

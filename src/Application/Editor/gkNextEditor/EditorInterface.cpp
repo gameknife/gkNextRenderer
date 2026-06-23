@@ -202,70 +202,7 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
     ImGui::Combo("##BackendSelector", &backendIndex, "Vulkan\0Metal\0DirectX 12\0\0");
     NextUI::Theme::DrawTooltip("Backend");
     ImGui::SameLine(0.0f, 12.0f);
-
-    ImGui::BeginGroup();
-    if (NextUI::Theme::ToolbarButton(ICON_FA_FLOPPY_DISK, "Save Scene", false,
-                                        ImVec2(kToolbarIconWidth, kToolbarIconHeight)))
-    {
-        if (!uiState_.currentScenePath.empty())
-        {
-            ctx.scene.Save(uiState_.currentScenePath);
-            SPDLOG_INFO("Scene saved: {}", uiState_.currentScenePath);
-        }
-        else
-        {
-            const std::string filename = "saved_scene.glb";
-            ctx.scene.Save(filename);
-            uiState_.currentScenePath = filename;
-            SPDLOG_INFO("Scene saved: {}", filename);
-        }
-    }
-    ImGui::SameLine();
-    if (NextUI::Theme::ToolbarButton(ICON_FA_FOLDER_OPEN, "Open Scene", false,
-                                        ImVec2(kToolbarIconWidth, kToolbarIconHeight)))
-    {
-        SDL_DialogFileFilter filters[] = {
-            {"Scenes", "glb;gltf;ldr;mpd"},
-            {"All Files", "*"},
-        };
-        SDL_ShowOpenFileDialog(
-            [](void* userdata, const char* const* filelist, int /*filter*/)
-            {
-                auto* editorCtx = static_cast<EditorContext*>(userdata);
-                if (filelist && filelist[0])
-                {
-                    editorCtx->actions.Dispatch(*editorCtx, EEditorAction::IO_LoadScene, std::string(filelist[0]));
-                }
-            },
-            &ctx,
-            ctx.engine.GetWindow().Handle(),
-            filters, 2, nullptr, false);
-    }
-    ImGui::SameLine();
-    NextUI::Theme::ToolbarButton(ICON_FA_FILE_IMPORT, "Import Asset (placeholder)", false,
-                                    ImVec2(kToolbarIconWidth, kToolbarIconHeight));
-    ImGui::SameLine();
-    NextUI::Theme::ToolbarButton(ICON_FA_CUBE, "Create Actor (placeholder)", false,
-                                    ImVec2(kToolbarIconWidth, kToolbarIconHeight));
-    ImGui::EndGroup();
-    ImGui::SameLine(0.0f, 12.0f);
-
-    ImGui::BeginGroup();
-    NextUI::Theme::ToolbarButton(ICON_FA_GEAR, "Project Settings (placeholder)", false,
-                                    ImVec2(kToolbarIconWidth, kToolbarIconHeight));
-    ImGui::SameLine();
-    NextUI::Theme::ToolbarButton(ICON_FA_CIRCLE_NODES, "Node Graph (placeholder)", false,
-                                    ImVec2(kToolbarIconWidth, kToolbarIconHeight));
-    ImGui::SameLine();
-    NextUI::Theme::ToolbarButton(ICON_FA_ARROWS_ROTATE, "Refresh Assets (placeholder)", false,
-                                    ImVec2(kToolbarIconWidth, kToolbarIconHeight));
-    ImGui::SameLine();
-    NextUI::Theme::ToolbarButton(ICON_FA_MAGNET, "Snap Settings (placeholder)", false,
-                                    ImVec2(kToolbarIconWidth, kToolbarIconHeight));
-    ImGui::SameLine();
-    ImGui::EndGroup();
-    ImGui::SameLine(0.0f, 14.0f);
-
+    
     ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Success, 0.92f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::Success));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, NextUI::Theme::Color(NextUI::Theme::EColor::Success, 0.75f));
@@ -361,6 +298,8 @@ void EditorInterface::Render()
         ImGui::ShowDemoWindow(&uiState_.child_demo);
     if (uiState_.child_metrics)
         ImGui::ShowMetricsWindow(&uiState_.child_metrics);
+    if (uiState_.child_debug_log)
+        ImGui::ShowDebugLogWindow(&uiState_.child_debug_log);
     if (uiState_.child_stack)
         ImGui::ShowIDStackToolWindow(&uiState_.child_stack);
     if (uiState_.child_color)
