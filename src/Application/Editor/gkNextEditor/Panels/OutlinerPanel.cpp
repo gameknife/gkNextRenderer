@@ -127,6 +127,123 @@ namespace Editor
             return changed;
         }
 
+        struct FLayerStats
+        {
+            std::string Name;
+            uint32_t NodeCount = 0;
+            uint32_t DrawableCount = 0;
+            uint32_t VisibleDrawableCount = 0;
+            uint32_t LockedCount = 0;
+        };
+
+        std::string NormalizedLayerName(const Assets::Node& node)
+        {
+            return node.GetLayer().empty() ? "Default" : node.GetLayer();
+        }
+
+        ImVec4 LayerColor(const std::string& layer)
+        {
+            if (layer == "Default") return ImVec4(0.42f, 0.63f, 0.95f, 1.0f);
+            if (layer == "Gameplay") return ImVec4(0.24f, 0.80f, 0.44f, 1.0f);
+            if (layer == "Props") return ImVec4(0.95f, 0.68f, 0.24f, 1.0f);
+            if (layer == "Colliders") return ImVec4(0.88f, 0.28f, 0.28f, 1.0f);
+            if (layer == "Lighting") return ImVec4(0.80f, 0.70f, 1.0f, 1.0f);
+
+            const uint32_t hash = static_cast<uint32_t>(std::hash<std::string>{}(layer));
+            const float hue = static_cast<float>(hash % 360u) / 360.0f;
+            ImVec4 color;
+            ImGui::ColorConvertHSVtoRGB(hue, 0.56f, 0.92f, color.x, color.y, color.z);
+            color.w = 1.0f;
+            return color;
+        }
+
+        std::vector<FLayerStats> CollectLayerStats(Assets::Scene& scene)
+        {
+            std::map<std::string, FLayerStats> layers;
+            layers["Default"].Name = "Default";
+            for (const auto& node : scene.Nodes())
+            {
+                const std::string layerName = NormalizedLayerName(*node);
+                FLayerStats& stats = layers[layerName];
+                stats.Name = layerName;
+                stats.NodeCount++;
+                if (scene.IsLocked(node->GetInstanceId()))
+                {
+                    stats.LockedCount++;
+                }
+
+                auto render = node->GetComponent<Runtime::RenderComponent>();
+                if (render != nullptr)
+                {
+                    stats.DrawableCount++;
+                    if (render->GetVisible())
+                    {
+                        stats.VisibleDrawableCount++;
+                    }
+                }
+            }
+
+            std::vector<FLayerStats> result;
+            result.reserve(layers.size());
+            for (auto& [name, stats] : layers)
+            {
+                result.push_back(std::move(stats));
+            }
+            return result;
+        }
+
+        bool SetLayerVisibility(Assets::Scene& scene, const std::string& layerName, bool visible)
+        {
+            bool changed = false;
+            for (const auto& node : scene.Nodes())
+            {
+                if (NormalizedLayerName(*node) != layerName)
+                {
+                    continue;
+                }
+
+                auto render = node->GetComponent<Runtime::RenderComponent>();
+                if (render != nullptr && render->GetVisible() != visible)
+                {
+                    render->SetVisible(visible);
+                    changed = true;
+                }
+            }
+            if (changed)
+            {
+                scene.MarkDirty();
+            }
+            return changed;
+        }
+
+        void SetLayerLocked(Assets::Scene& scene, const std::string& layerName, bool locked)
+        {
+            for (const auto& node : scene.Nodes())
+            {
+                if (NormalizedLayerName(*node) == layerName)
+                {
+                    scene.SetLocked(node->GetInstanceId(), locked);
+                }
+            }
+        }
+
+        std::vector<uint32_t> CollectLayerNodeIds(Assets::Scene& scene, const std::string& layerName, bool includeLocked)
+        {
+            std::vector<uint32_t> ids;
+            for (const auto& node : scene.Nodes())
+            {
+                if (NormalizedLayerName(*node) != layerName)
+                {
+                    continue;
+                }
+                if (includeLocked || !scene.IsLocked(node->GetInstanceId()))
+                {
+                    ids.push_back(node->GetInstanceId());
+                }
+            }
+            return ids;
+        }
+
         void CollectOutlinerVisibleIds(Assets::Scene& scene, Assets::Node& node, const ImGuiTextFilter& filter,
                                        bool includeLocked, std::vector<uint32_t>& visibleIds)
         {
@@ -366,35 +483,109 @@ namespace Editor
             ImGui::PopID();
         }
 
-        void DrawLayersPanel()
+        void DrawLayersPanel(EditorContext& ctx)
         {
-            struct FLayerRow
-            {
-                const char* name;
-                ImVec4 color;
-            };
-            constexpr FLayerRow layers[] = {
-                {"Default", ImVec4(0.42f, 0.63f, 0.95f, 1.0f)},
-                {"Gameplay", ImVec4(0.24f, 0.80f, 0.44f, 1.0f)},
-                {"Props", ImVec4(0.95f, 0.68f, 0.24f, 1.0f)},
-                {"Colliders", ImVec4(0.88f, 0.28f, 0.28f, 1.0f)},
-                {"Lighting", ImVec4(0.80f, 0.70f, 1.0f, 1.0f)},
-            };
-
+            std::vector<FLayerStats> layers = CollectLayerStats(ctx.scene);
             ImDrawList* drawList = ImGui::GetWindowDrawList();
-            for (const FLayerRow& layer : layers)
+
+            if (ImGui::BeginTable("LayerList", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_NoBordersInBodyUntilResize))
             {
-                const ImVec2 pos = ImGui::GetCursorScreenPos();
-                const float rowHeight = ImGui::GetFrameHeight();
-                drawList->AddCircleFilled(ImVec2(pos.x + 6.0f, pos.y + rowHeight * 0.5f), 4.0f,
-                                          ImGui::GetColorU32(layer.color), 12);
-                ImGui::Dummy(ImVec2(16.0f, rowHeight));
-                ImGui::SameLine();
-                ImGui::TextUnformatted(layer.name);
-                ImGui::SameLine(std::max(ImGui::GetCursorPosX(), ImGui::GetColumnWidth() - 56.0f));
-                ImGui::TextUnformatted(ICON_FA_EYE);
-                ImGui::SameLine(0.0f, 10.0f);
-                ImGui::TextUnformatted(ICON_FA_LOCK_OPEN);
+                ImGui::TableSetupColumn("Layer", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("Count", ImGuiTableColumnFlags_WidthFixed, 42.0f);
+                ImGui::TableSetupColumn("Visible", ImGuiTableColumnFlags_WidthFixed, 28.0f);
+                ImGui::TableSetupColumn("Locked", ImGuiTableColumnFlags_WidthFixed, 28.0f);
+                ImGui::TableSetupColumn("Select", ImGuiTableColumnFlags_WidthFixed, 28.0f);
+
+                for (const FLayerStats& layer : layers)
+                {
+                    const bool allDrawableVisible =
+                        layer.DrawableCount == 0 || layer.VisibleDrawableCount == layer.DrawableCount;
+                    const bool allLocked = layer.NodeCount > 0 && layer.LockedCount == layer.NodeCount;
+                    const bool partiallyVisible =
+                        layer.DrawableCount > 0 && layer.VisibleDrawableCount > 0 &&
+                        layer.VisibleDrawableCount < layer.DrawableCount;
+                    const bool partiallyLocked = layer.LockedCount > 0 && !allLocked;
+
+                    ImGui::PushID(layer.Name.c_str());
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+
+                    const ImVec2 pos = ImGui::GetCursorScreenPos();
+                    const float rowHeight = ImGui::GetFrameHeight();
+                    drawList->AddCircleFilled(ImVec2(pos.x + 6.0f, pos.y + rowHeight * 0.5f), 4.0f,
+                                              ImGui::GetColorU32(LayerColor(layer.Name)), 12);
+                    ImGui::Dummy(ImVec2(16.0f, rowHeight));
+                    ImGui::SameLine();
+                    ImGui::TextUnformatted(layer.Name.c_str());
+                    if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
+                    {
+                        ctx.scene.SetSelection(CollectLayerNodeIds(ctx.scene, layer.Name, false));
+                    }
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip("Select layer nodes");
+                    }
+
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::Text("%u", layer.NodeCount);
+
+                    ImGui::TableSetColumnIndex(2);
+                    if (layer.DrawableCount == 0)
+                    {
+                        ImGui::BeginDisabled();
+                    }
+                    if (partiallyVisible)
+                    {
+                        ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted));
+                    }
+                    if (ImGui::SmallButton(allDrawableVisible ? ICON_FA_EYE : ICON_FA_EYE_SLASH))
+                    {
+                        SetLayerVisibility(ctx.scene, layer.Name, !allDrawableVisible);
+                    }
+                    if (partiallyVisible)
+                    {
+                        ImGui::PopStyleColor();
+                    }
+                    if (layer.DrawableCount == 0)
+                    {
+                        ImGui::EndDisabled();
+                    }
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip("%s", allDrawableVisible ? "Hide layer" : "Show layer");
+                    }
+
+                    ImGui::TableSetColumnIndex(3);
+                    if (partiallyLocked)
+                    {
+                        ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted));
+                    }
+                    if (ImGui::SmallButton(allLocked ? ICON_FA_LOCK : ICON_FA_LOCK_OPEN))
+                    {
+                        SetLayerLocked(ctx.scene, layer.Name, !allLocked);
+                    }
+                    if (partiallyLocked)
+                    {
+                        ImGui::PopStyleColor();
+                    }
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip("%s", allLocked ? "Unlock layer" : "Lock layer");
+                    }
+
+                    ImGui::TableSetColumnIndex(4);
+                    if (ImGui::SmallButton(ICON_FA_ARROW_POINTER))
+                    {
+                        ctx.scene.SetSelection(CollectLayerNodeIds(ctx.scene, layer.Name, false));
+                    }
+                    if (ImGui::IsItemHovered())
+                    {
+                        ImGui::SetTooltip("Select layer nodes");
+                    }
+
+                    ImGui::PopID();
+                }
+                ImGui::EndTable();
             }
         }
     } // namespace
@@ -683,15 +874,13 @@ namespace Editor
                 }
                 if (ImGui::BeginTabItem("Layers"))
                 {
-                    DrawLayersPanel();
+                    DrawLayersPanel(ctx);
                     ImGui::EndTabItem();
                 }
                 ImGui::EndTabBar();
             }
 
             NextUI::Theme::DrawThinSeparator(0.65f);
-            ImGui::Text("%d actors (%d selected)", static_cast<int>(ctx.scene.Nodes().size()),
-                        static_cast<int>(ctx.scene.GetSelectedIds().size()));
 
             if ((ImGui::GetIO().KeyAlt) && (ImGui::IsKeyPressed(ImGuiKey_F4)))
             {

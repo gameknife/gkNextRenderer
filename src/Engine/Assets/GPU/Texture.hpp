@@ -27,6 +27,15 @@ namespace Assets
 		ETextureStatus Status_;
 		ETextureLifetime Lifetime_ = ETextureLifetime::ETL_Transient;
 	};
+
+	struct FTextureCpuSource
+	{
+		std::string TextureName;
+		std::string Mime;
+		std::vector<uint8_t> Bytes;
+		bool Srgb = false;
+		bool Hdr = false;
+	};
 	
 	class GlobalTexturePool final
 	{
@@ -72,8 +81,10 @@ namespace Assets
 		static TextureImage* GetTextureImage(uint32_t idx);
 		static TextureImage* GetTextureImageByName(const std::string& name);
 		static uint32_t GetTextureIndexByName(const std::string& name);
+		static const FTextureCpuSource* GetTextureCpuSource(uint32_t idx);
 
 		std::vector<SphericalHarmonics>& GetHDRSphericalHarmonics() { return hdrSphericalHarmonics_; }
+		const FTextureCpuSource* GetCpuSource(uint32_t textureIdx) const;
 		Vulkan::CommandPool& GetMainThreadCommandPool() { return mainThreadCommandPool_; }
 
 		Vulkan::DescriptorSetManager& GetDescriptorManager() { return *descriptorSetManager_; }
@@ -110,6 +121,7 @@ namespace Assets
 
 		std::vector<std::unique_ptr<TextureImage>> textureImages_;
 		std::unordered_map<std::string, FTextureBindingGroup> textureNameMap_;
+		std::vector<FTextureCpuSource> textureCpuSources_;
 
 		std::vector<SphericalHarmonics> hdrSphericalHarmonics_;
 		std::vector<FHDRTextureResidencyState> hdrTextureResidency_;

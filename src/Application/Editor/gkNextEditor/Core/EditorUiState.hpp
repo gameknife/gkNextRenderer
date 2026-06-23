@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <limits>
+#include <mutex>
 
 namespace Assets
 {
@@ -45,6 +46,9 @@ namespace Editor
 
         // Current scene file path (set on load, used by Ctrl+S save)
         std::string currentScenePath;
+        std::mutex sceneDialogMutex;
+        std::string pendingOpenScenePath;
+        std::string pendingSaveScenePath;
 
         // Selection
         uint32_t selected_obj_id = InvalidId;

@@ -246,14 +246,35 @@ namespace Editor
                 ctx.scene.MarkDirty();
             }
 
-            static int tagIndex = 0;
-            static int layerIndex = 0;
+            static constexpr const char* tagItems[] = {"Untagged", "Player", "Environment", "Interactable"};
+            static constexpr const char* layerItems[] = {"Default", "Gameplay", "Props", "Colliders", "Lighting"};
+            auto findItemIndex = [](const char* const* items, int count, const std::string& value)
+            {
+                for (int i = 0; i < count; ++i)
+                {
+                    if (value == items[i])
+                    {
+                        return i;
+                    }
+                }
+                return 0;
+            };
+            int tagIndex = findItemIndex(tagItems, IM_ARRAYSIZE(tagItems), selectedObj->GetTag());
+            int layerIndex = findItemIndex(layerItems, IM_ARRAYSIZE(layerItems), selectedObj->GetLayer());
             ImGui::SetNextItemWidth((ImGui::GetContentRegionAvail().x - 8.0f) * 0.5f);
-            ImGui::Combo("##TagSelector", &tagIndex, "Untagged\0Player\0Environment\0Interactable\0\0");
+            if (ImGui::Combo("##TagSelector", &tagIndex, "Untagged\0Player\0Environment\0Interactable\0\0"))
+            {
+                selectedObj->SetTag(tagItems[tagIndex]);
+                ctx.scene.MarkDirty();
+            }
             NextUI::Theme::DrawTooltip("Tag");
             ImGui::SameLine();
             ImGui::SetNextItemWidth(-FLT_MIN);
-            ImGui::Combo("##LayerSelector", &layerIndex, "Default\0Gameplay\0Props\0Colliders\0Lighting\0\0");
+            if (ImGui::Combo("##LayerSelector", &layerIndex, "Default\0Gameplay\0Props\0Colliders\0Lighting\0\0"))
+            {
+                selectedObj->SetLayer(layerItems[layerIndex]);
+                ctx.scene.MarkDirty();
+            }
             NextUI::Theme::DrawTooltip("Layer");
 
             ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted));

@@ -12,6 +12,7 @@
 #include "EditorActionDispatcher.hpp"
 #include "EditorContext.hpp"
 #include "Core/RecentScenes.hpp"
+#include "Core/SceneSavePolicy.hpp"
 #include "Engine/Runtime/Command/DeleteNodesCommand.hpp"
 #include "Engine/Runtime/Command/DuplicateNodesCommand.hpp"
 
@@ -202,22 +203,21 @@ bool EditorGameInstance::OnKey(SDL_Event& event)
             if (ImGui::GetIO().WantTextInput) break;
             if (!(event.key.mod & (SDL_KMOD_CTRL | SDL_KMOD_GUI))) break;
             auto& ui = GetEditorInterface().GetEditorUiState();
-            if (!ui.currentScenePath.empty())
+            if (Editor::CanOverwriteCurrentScene(ui.currentScenePath))
             {
-                std::error_code ec;
-                if (std::filesystem::exists(ui.currentScenePath, ec))
+                const std::string savePath = Editor::ResolveSceneFilesystemPath(ui.currentScenePath).string();
+                if (GetEngine().GetScene().Save(savePath))
                 {
-                    GetEngine().GetScene().Save(ui.currentScenePath);
-                    SPDLOG_INFO("Scene saved: {}", ui.currentScenePath);
+                    SPDLOG_INFO("Scene saved: {}", savePath);
                 }
                 else
                 {
-                    SPDLOG_INFO("Scene file not found: {}; use File > Open Scene... to reload", ui.currentScenePath);
+                    SPDLOG_ERROR("Failed to save scene: {}", savePath);
                 }
             }
             else
             {
-                SPDLOG_INFO("No current scene path; use File > Save Scene As...");
+                SPDLOG_INFO("Current scene is not writable as GLB; use File > Save Scene As...");
             }
             break;
         }
