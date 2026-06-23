@@ -20,6 +20,32 @@ namespace Editor
     namespace
     {
         constexpr float kToolIconWidth = 34.0f;
+
+        std::vector<Vulkan::ERendererType> BuildSupportedRendererList(NextEngine& engine)
+        {
+            std::vector<Vulkan::ERendererType> supportedTypes;
+            const bool hasFullAmbientCubeBudget = engine.GetRenderer().HasFullAmbientCubeBudget();
+            if (hasFullAmbientCubeBudget)
+            {
+                supportedTypes = {
+                    Vulkan::ERT_SoftwareTracing,
+                    Vulkan::ERT_SoftwareModern,
+                    Vulkan::ERT_VoxelTracing,
+                    Vulkan::ERT_SoftwareModernNoAmbient,
+                };
+            }
+            else
+            {
+                supportedTypes = {Vulkan::ERT_SoftwareModernNoAmbient};
+            }
+
+            if (engine.GetRenderer().SupportsRayTracing() && hasFullAmbientCubeBudget)
+            {
+                supportedTypes.emplace_back(Vulkan::ERT_PathTracing);
+            }
+
+            return supportedTypes;
+        }
     }
 
     void DrawViewportOverlay(EditorContext& ctx, EditorUiState& ui)
@@ -151,6 +177,40 @@ namespace Editor
         static int cameraIndex = 0;
         static float angleSnap = 10.0f;
         static float distanceSnap = 0.25f;
+        Runtime::Config::UserSettings& userSettings = ctx.engine.GetUserSettings();
+        auto& renderer = ctx.engine.GetRenderer();
+        const auto supportedRenderers = BuildSupportedRendererList(ctx.engine);
+        Vulkan::ERendererType currentRendererType = renderer.CurrentLogicRendererType();
+        if (std::find(supportedRenderers.begin(), supportedRenderers.end(), currentRendererType) ==
+            supportedRenderers.end())
+        {
+            currentRendererType = supportedRenderers.empty() ? Vulkan::ERT_SoftwareModernNoAmbient
+                                                             : supportedRenderers.front();
+        }
+
+        ImGui::SetNextItemWidth(170.0f);
+        if (ImGui::BeginCombo("##ViewportRenderer", Vulkan::GetRendererName(currentRendererType)))
+        {
+            for (Vulkan::ERendererType rendererType : supportedRenderers)
+            {
+                const bool isSelected = rendererType == currentRendererType;
+                if (ImGui::Selectable(Vulkan::GetRendererName(rendererType), isSelected))
+                {
+                    userSettings.RendererType = static_cast<int32_t>(rendererType);
+                    if (renderer.CurrentLogicRendererType() != rendererType)
+                    {
+                        renderer.SwitchLogicRenderer(rendererType);
+                    }
+                }
+                if (isSelected)
+                {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+        NextUI::Theme::DrawTooltip("Active Renderer");
+        ImGui::SameLine();
 
         ImGui::SetNextItemWidth(126.0f);
         ImGui::Combo("##ViewportProjection", &projectionMode, "Perspective\0Orthographic\0\0");

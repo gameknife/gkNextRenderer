@@ -1042,7 +1042,10 @@ glm::ivec2 NextEngine::GetMonitorSize() const
 
     SDL_Rect rect;
     SDL_DisplayID id = SDL_GetPrimaryDisplay();
-    SDL_GetDisplayBounds(id, &rect);
+    if (!SDL_GetDisplayUsableBounds(id, &rect))
+    {
+        SDL_GetDisplayBounds(id, &rect);
+    }
     size.x = rect.w;
     size.y = rect.h;
 

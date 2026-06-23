@@ -109,7 +109,11 @@ Window::Window(const WindowConfig& config) :
     {
         const SDL_DisplayID displayId = SDL_GetPrimaryDisplay();
         SDL_Rect bounds;
-        if (SDL_GetDisplayBounds(displayId, &bounds))
+        if (!SDL_GetDisplayUsableBounds(displayId, &bounds))
+        {
+            SDL_GetDisplayBounds(displayId, &bounds);
+        }
+        if (bounds.w > 0 && bounds.h > 0)
         {
             const uint32_t maxW = static_cast<uint32_t>(bounds.w);
             const uint32_t maxH = static_cast<uint32_t>(bounds.h);

@@ -82,6 +82,14 @@ namespace Editor
         using DirectoryEntries = std::vector<std::filesystem::directory_entry>;
         using DirectoryCache = std::unordered_map<std::filesystem::path, DirectoryEntries, FilesystemPathHash>;
 
+        enum class EBrowserSection
+        {
+            Content,
+            Material,
+            Texture,
+            Mesh,
+        };
+
         ContentGridLayout BeginContentGrid()
         {
             const float windowWidth = ImGui::GetContentRegionAvail().x;
@@ -371,6 +379,39 @@ namespace Editor
             ImGui::PopStyleVar();
         }
 
+        void DrawBrowserSectionSidebar(EBrowserSection& section)
+        {
+            struct FSectionEntry
+            {
+                EBrowserSection section;
+                const char* label;
+            };
+
+            static const std::array<FSectionEntry, 4> entries{{
+                {EBrowserSection::Content, ICON_FA_FOLDER_TREE},
+                {EBrowserSection::Material, ICON_FA_CIRCLE_HALF_STROKE},
+                {EBrowserSection::Texture, ICON_FA_IMAGE},
+                {EBrowserSection::Mesh, ICON_FA_BOXES_PACKING},
+            }};
+
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.48f));
+            ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.82f));
+            ImGui::BeginChild("ContentBrowserModeSidebar", ImVec2(40.0f, 0.0f), true);
+
+            for (const auto& entry : entries)
+            {
+                const bool selected = section == entry.section;
+                const float rowWidth = ImGui::GetContentRegionAvail().x;
+                if (ImGui::Selectable(entry.label, selected, ImGuiSelectableFlags_SpanAvailWidth,
+                                      ImVec2(rowWidth, 20.0f)))
+                {
+                    section = entry.section;
+                }
+            }
+            ImGui::EndChild();
+            ImGui::PopStyleColor(2);
+        }
+
         uint32_t Fnv1a32(std::string_view s)
         {
             uint32_t hash = 2166136261u;
@@ -605,19 +646,21 @@ namespace Editor
             static std::filesystem::path currentPath = rootPath;
             static DirectoryCache directoryCache;
             static ImGuiTextFilter contentFilter;
+            static EBrowserSection currentSection = EBrowserSection::Content;
             int itemCount = 0;
             int selectedCount = ui.selectedContentItemId != InvalidId ? 1 : 0;
 
-            if (ImGui::BeginTabBar("ContentBrowserTabs"))
+            DrawBrowserSectionSidebar(currentSection);
+            ImGui::SameLine();
+
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.28f));
+            ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.82f));
+            //ImGui::BeginChild("ContentBrowserSectionFrame", ImVec2(0.0f, 0.0f), true);
             {
-                if (ImGui::BeginTabItem("Content Browser"))
+                if (currentSection == EBrowserSection::Content)
                 {
                     DrawContentBrowserSidebar(ui, rootPath, currentPath, directoryCache);
                     ImGui::SameLine();
-                    
-                    ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.28f));
-                    ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.82f));
-
                     ImGui::BeginChild("ContentRightFrame", ImVec2(0.0f, 0.0f));
                     ImGui::BeginChild("ContentBrowserMain", ImVec2(0.0f, -24.0f), true);
 
@@ -645,12 +688,11 @@ namespace Editor
                     }
                     ImGui::SameLine();
                     DrawContentBrowserNavigation(rootPath, currentPath, directoryCache);
-
-                    NextUI::Theme::DrawThinSeparator();
-                    ImGui::SetNextItemWidth(200.0f);
-                    contentFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##ContentBrowserFilter", 200.0f);
                     ImGui::SameLine();
-                    ImGui::SetNextItemWidth(118.0f);
+                    ImGui::SetNextItemWidth(190.0f);
+                    contentFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##ContentBrowserFilter", 190.0f);
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(104.0f);
                     ImGui::SliderFloat("Thumbnail", &GContentBrowserIconSize, 52.0f, 108.0f, "%.0f");
 
                     NextUI::Theme::DrawThinSeparator(0.70f);
@@ -730,33 +772,37 @@ namespace Editor
                     selectedCount = ui.selectedContentItemId != InvalidId ? 1 : 0;
                     ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
                     ImGui::EndChild();
-                    ImGui::PopStyleColor(2);
-                    
-                    ImGui::EndTabItem();
                 }
-                if (ImGui::BeginTabItem("Material Browser"))
+                else if (currentSection == EBrowserSection::Material)
                 {
+                    ImGui::SetNextItemWidth(220.0f);
+                    contentFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##MaterialBrowserFilter", 220.0f);
+                    NextUI::Theme::DrawThinSeparator(0.70f);
                     ImGui::BeginChild("Material Items", ImVec2(0.0f, -24.0f));
                     DrawMaterialBrowserContents(ctx, ui, &contentFilter);
                     ImGui::EndChild();
-                    ImGui::EndTabItem();
                 }
-                if (ImGui::BeginTabItem("Texture Browser"))
+                else if (currentSection == EBrowserSection::Texture)
                 {
+                    ImGui::SetNextItemWidth(220.0f);
+                    contentFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##TextureBrowserFilter", 220.0f);
+                    NextUI::Theme::DrawThinSeparator(0.70f);
                     ImGui::BeginChild("Texture Items", ImVec2(0.0f, -24.0f));
                     DrawTextureBrowserContents(ctx, ui, &contentFilter);
                     ImGui::EndChild();
-                    ImGui::EndTabItem();
                 }
-                if (ImGui::BeginTabItem("Mesh Browser"))
+                else if (currentSection == EBrowserSection::Mesh)
                 {
+                    ImGui::SetNextItemWidth(220.0f);
+                    contentFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##MeshBrowserFilter", 220.0f);
+                    NextUI::Theme::DrawThinSeparator(0.70f);
                     ImGui::BeginChild("Mesh Items", ImVec2(0.0f, -24.0f));
-                     DrawMeshBrowserContents(ctx, ui, &contentFilter);
+                    DrawMeshBrowserContents(ctx, ui, &contentFilter);
                     ImGui::EndChild();
-                    ImGui::EndTabItem();
                 }
-                ImGui::EndTabBar();
             }
+            //ImGui::EndChild();
+            ImGui::PopStyleColor(2);
         }
         ImGui::End();
     }
