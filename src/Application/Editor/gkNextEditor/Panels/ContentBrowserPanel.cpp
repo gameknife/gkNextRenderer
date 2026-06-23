@@ -685,11 +685,11 @@ namespace Editor
             {
                 ImFont* badgeFont = ImGui::GetFont();
                 const float badgeFontSize = ImGui::GetFontSize() * 0.75f;
-                const ImVec2 badgePadding(3.0f, 1.5f);
+                const ImVec2 badgePadding(10.0f, 2.0f);
                 const ImVec2 badgeTextSize = badgeFont->CalcTextSizeA(badgeFontSize, FLT_MAX, 0.0f, sourceBadge);
                 const ImVec2 badgeMin(cardMax.x - badgeTextSize.x - badgePadding.x * 2.0f - 3.0f, cardMin.y + 3.0f);
                 const ImVec2 badgeMax(cardMax.x - 3.0f, badgeMin.y + badgeTextSize.y + badgePadding.y * 2.0f);
-                ImGui::GetWindowDrawList()->AddRectFilled(badgeMin, badgeMax, sourceBadgeColor, 2.0f);
+                ImGui::GetWindowDrawList()->AddRectFilled(badgeMin, badgeMax, sourceBadgeColor, badgeTextSize.y * 0.5f);
                 ImGui::GetWindowDrawList()->AddText(badgeFont, badgeFontSize, badgeMin + badgePadding,
                                                     IM_COL32(255, 255, 255, 255), sourceBadge);
             }
