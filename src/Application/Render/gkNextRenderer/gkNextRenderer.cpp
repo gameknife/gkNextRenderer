@@ -1110,12 +1110,6 @@ void NextRendererGameInstance::DrawSettings()
 
     if (NextUI::Theme::BeginPanelSection(LOCTEXT("Lighting"), false))
     {
-        if (DrawSettingCheckboxRow(LOCTEXT("UseGpuAmbientCubeSdf"), &userSetting.UseGpuAmbientCubeSdf))
-        {
-            GetEngine().GetScene().RequestGpuDistanceFieldRebuild();
-            GetEngine().GetScene().MarkDirty();
-        }
-
         DrawSettingCheckboxRow(LOCTEXT("HasSky"), &GetEngine().GetScene().GetEnvSettings().HasSky);
         if (GetEngine().GetScene().GetEnvSettings().HasSky)
         {

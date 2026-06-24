@@ -195,8 +195,6 @@ namespace Assets
 
         Vulkan::Buffer& AmbientCubeBuffer() const { return *ambientArenaBuffer_; }
         Vulkan::Buffer& AmbientCubePongBuffer() const { return *ambientArenaBuffer_; }
-        Vulkan::Buffer& AmbientCubeSdfScratchBuffer() const { return *ambientArenaBuffer_; }
-        Vulkan::Buffer& AmbientSdfSeedABuffer() const { return *ambientArenaBuffer_; }
         Vulkan::Buffer& FarAmbientCubeBuffer() const { return *ambientArenaBuffer_; }
         Vulkan::Buffer& PageIndexBuffer() const { return *ambientArenaBuffer_; }
         // Runtime byte offsets into the arena, sized to the actual allocated cascade capacity (Phase 2)
@@ -205,8 +203,6 @@ namespace Assets
         size_t AmbientVoxelsByteOffset() const { return ambientVoxelsOffset_; }
         size_t AmbientPagesByteOffset() const { return ambientPagesOffset_; }
         size_t AmbientCubesPongByteOffset() const { return ambientPongOffset_; }
-        size_t AmbientSdfScratchByteOffset() const { return ambientScratchOffset_; }
-        size_t AmbientSdfSeedAByteOffset() const { return ambientSdfSeedAOffset_; }
         // Allocated cascade capacity for this Scene. The effective cascade count used by the bake,
         // the CPU baker and the UBO is clamped to this so a runtime cascade-count change never reads
         // or writes outside the arena allocation.
@@ -236,14 +232,6 @@ namespace Assets
         Assets::CPU::FCPUAccelerationStructure& GetCPUAccelerationStructure() { return cpuAccelerationStructure_; }
         glm::vec3 GetSceneAABBMin() const { return sceneAABBMin_; }
         glm::vec3 GetSceneAABBMax() const { return sceneAABBMax_; }
-        void RequestGpuDistanceFieldRebuild() { gpuSdfDirty_ = true; }
-        bool ConsumeGpuDistanceFieldRebuild()
-        {
-            const bool rebuild = gpuSdfDirty_;
-            gpuSdfDirty_ = false;
-            return rebuild;
-        }
-
         // Scene saving功能
         bool Save(const std::string& filename) const;
         bool SaveAsGLB(const std::string& filename) const;
@@ -315,8 +303,6 @@ namespace Assets
         size_t ambientVoxelsOffset_ = 0;
         size_t ambientPagesOffset_ = 0;
         size_t ambientPongOffset_ = 0;
-        size_t ambientScratchOffset_ = 0;
-        size_t ambientSdfSeedAOffset_ = 0;
         size_t ambientBrickTableOffset_ = 0;
         size_t ambientActiveBrickListOffset_ = 0;
         size_t ambientResidencyOffset_ = 0;
@@ -349,7 +335,6 @@ namespace Assets
         bool sceneDirtyForCpuAS_ = false;
         bool sceneDirty_ = true;
         bool materialDirty_ = true;
-        bool gpuSdfDirty_ = false;
 
         std::vector<NodeProxy> nodeProxys;
 

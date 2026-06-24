@@ -218,10 +218,6 @@ namespace Assets
             {
                 const bool voxelUploadCompleted = cpuAccelerationStructure_.Tick(
                     *this, ambientArenaBufferMemory_.get(), ambientArenaBufferMemory_.get(), ambientArenaBufferMemory_.get());
-                if (voxelUploadCompleted && NextEngine::GetInstance()->GetUserSettings().UseGpuAmbientCubeSdf)
-                {
-                    RequestGpuDistanceFieldRebuild();
-                }
 
                 if (sceneDirtyForCpuAS_ && !cpuAccelerationStructure_.HasPendingWork())
                 {

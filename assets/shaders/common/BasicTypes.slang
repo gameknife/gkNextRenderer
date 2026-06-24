@@ -52,17 +52,9 @@ public static const int GPU_SCENE_AMBIENT_PAGES_OFFSET =
 public static const int GPU_SCENE_AMBIENT_CUBES_PONG_OFFSET =
     GPU_SCENE_AMBIENT_PAGES_OFFSET +
     GPU_SCENE_PAGE_INDEX_SIZE * GPU_SCENE_ACGI_PAGE_COUNT * GPU_SCENE_ACGI_PAGE_COUNT;
-public static const int GPU_SCENE_AMBIENT_SDF_SCRATCH_OFFSET =
+public static const int GPU_SCENE_AMBIENT_SIZE =
     GPU_SCENE_AMBIENT_CUBES_PONG_OFFSET +
     GPU_SCENE_AMBIENT_CUBE_SIZE * GPU_SCENE_AMBIENT_PER_CASCADE_COUNT;
-// Dedicated SDF jump-flood SeedA scratch (one dense cascade of uint4). Previously aliased onto
-// CubesPong; decoupled (Phase 3) so CubesPong can become a brick pool without breaking the SDF pass.
-public static const int GPU_SCENE_AMBIENT_SDF_SEEDA_OFFSET =
-    GPU_SCENE_AMBIENT_SDF_SCRATCH_OFFSET +
-    GPU_SCENE_AMBIENT_SEED_SIZE * GPU_SCENE_AMBIENT_PER_CASCADE_COUNT;
-public static const int GPU_SCENE_AMBIENT_SIZE =
-    GPU_SCENE_AMBIENT_SDF_SEEDA_OFFSET +
-    GPU_SCENE_AMBIENT_SEED_SIZE * GPU_SCENE_AMBIENT_PER_CASCADE_COUNT;
 
 // Phase 3 sparse brick storage. The cube grid (192x192x48 per cascade) is tiled into 8^3 bricks;
 // only bricks near surfaces are allocated in the cube pool, indexed via a per-cascade brick table.
@@ -294,12 +286,12 @@ public struct ALIGN_16 AmbientResources
     public uint64_t Voxels;      // dense voxel array (kept dense; Phase 4 may sparsify)
     public uint64_t Pages;
     public uint64_t CubesPong;   // ping-pong copy of the baking cascade's cubes (brick-organized in Phase 3)
-    public uint64_t SdfScratch;  // SDF jump-flood SeedB (one dense cascade of uint4)
-    public uint64_t SdfSeedA;    // SDF jump-flood SeedA (one dense cascade of uint4; decoupled from CubesPong)
     public uint64_t BrickTable;  // Phase 3: per-cascade brick -> pool slot table (uint per brick)
     public uint64_t PoolParams;  // Phase 3: low32 = pool bricks/cascade, high32 = active-list byte offset from BrickTable
     public uint64_t Residency;   // per-cascade AmbientBrickResidency array
     public uint64_t Reserved0;
+    public uint64_t Reserved1;
+    public uint64_t Reserved2;
 };
 
 public struct ALIGN_8 SharcHashEntry
@@ -526,14 +518,6 @@ public struct ALIGN_8 GPUScene
     {
         get { return (AmbientCube*)((AmbientResources*)AmbientBase)[0].CubesPong; }
     }
-    public property uint4* AmbientSdfScratch
-    {
-        get { return (uint4*)((AmbientResources*)AmbientBase)[0].SdfScratch; }
-    }
-    public property uint4* AmbientSdfSeedA
-    {
-        get { return (uint4*)((AmbientResources*)AmbientBase)[0].SdfSeedA; }
-    }
     public property uint* AmbientBrickTable
     {
         get { return (uint*)((AmbientResources*)AmbientBase)[0].BrickTable; }
@@ -665,14 +649,6 @@ public struct ALIGN_8 GPUScene
     public property AmbientCube* CubesPong
     {
         get { return (AmbientCube*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].CubesPong; }
-    }
-    public property uint4* AmbientSdfScratch
-    {
-        get { return (uint4*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].SdfScratch; }
-    }
-    public property uint4* AmbientSdfSeedA
-    {
-        get { return (uint4*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].SdfSeedA; }
     }
     public property uint* AmbientBrickTable
     {
