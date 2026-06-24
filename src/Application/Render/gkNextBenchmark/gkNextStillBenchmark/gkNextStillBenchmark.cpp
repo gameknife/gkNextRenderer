@@ -28,7 +28,7 @@ BenchmarkGameInstance::BenchmarkGameInstance(Vulkan::WindowConfig& config, Runti
     // config.Height = 1080;
 }
 
-void BenchmarkGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
+void BenchmarkGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
     cvars.SetDefaultFromString("r.samples", "1", &error);

@@ -229,8 +229,11 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
     {
         ImGui::SameLine(rightStart);
     }
-    NextUI::Theme::ToolbarButton(ICON_FA_GEAR, "Editor Settings", false,
-                                    ImVec2(kToolbarIconWidth, kToolbarIconHeight));
+    if (NextUI::Theme::ToolbarButton(ICON_FA_GEAR, "Editor Settings", uiState_.settingsPanel,
+                                     ImVec2(kToolbarIconWidth, kToolbarIconHeight)))
+    {
+        uiState_.settingsPanel = !uiState_.settingsPanel;
+    }
     ImGui::SameLine(0.0f, 8.0f);
 
     ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -258,7 +261,8 @@ void EditorInterface::Render()
         return;
     }
 
-    EditorContext ctx{editor_->GetEngine(), editor_->GetEngine().GetScene(), *ui, editor_->Actions(), &editor_->GetGizmoController()};
+    EditorContext ctx{editor_->GetEngine(), editor_->GetEngine().GetScene(), *ui, editor_->Actions(),
+                      editor_->GetEditorSettings(), &editor_->GetGizmoController()};
     void* previousUserData = ImGui::GetIO().UserData;
     ImGui::GetIO().UserData = &ctx;
 
@@ -341,6 +345,8 @@ void EditorInterface::Render()
     
     if (uiState_.viewport)
         Editor::DrawViewportOverlay(ctx, uiState_);
+    if (uiState_.settingsPanel)
+        Editor::DrawSettingsPanel(ctx, uiState_);
 
     firstRun_ = false;
     ImGui::GetIO().UserData = previousUserData;

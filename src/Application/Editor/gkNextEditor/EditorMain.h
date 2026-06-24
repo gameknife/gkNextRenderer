@@ -5,6 +5,7 @@
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Modules/DevTools/GizmoController.hpp"
 #include "Engine/Runtime/Camera/ModelViewController.hpp"
+#include "Core/EditorSettings.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -34,7 +35,7 @@ public:
     void OnInitUI() override;
     std::unique_ptr<NextUI::IMultiViewportBackend> CreateMultiViewportBackend() override;
 
-    void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) override;
+    void ConfigureCVars(NextCVar::FCVarSystem& cvars) override;
 
     bool OnKey(SDL_Event& event) override;
     bool OnCursorPosition(double xpos, double ypos) override;
@@ -48,6 +49,7 @@ public:
     void DrawGizmo(const glm::vec2& viewportPos, const glm::vec2& viewportSize);
     EditorInterface& GetEditorInterface() { return *editorUserInterface_; }
     NextUI::GizmoController& GetGizmoController() { return gizmoController_; }
+    Editor::EditorSettings& GetEditorSettings() { return settings_; }
 
 private:
     EditorActionDispatcher actions_{};
@@ -55,6 +57,7 @@ private:
     std::unique_ptr<EditorInterface> editorUserInterface_;
     Runtime::Camera::ModelViewController modelViewController_;
     NextUI::GizmoController gizmoController_;
+    Editor::EditorSettings settings_{};
 };
 
 inline bool EditorGameInstance::OverrideRenderCamera(Assets::Camera& OutRenderCamera) const

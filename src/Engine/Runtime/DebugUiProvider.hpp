@@ -21,6 +21,7 @@ namespace Runtime
 
         virtual void DrawPhysicsOverlay(const Assets::Scene& scene, const Assets::Camera& camera) = 0;
         virtual void DrawGraphicsPanel(NextEngine& engine, bool& panelVisible, float topOffset) = 0;
+        virtual void DrawCVarEditor(NextEngine& engine, bool& panelVisible) = 0;
         virtual void DrawProfileOverlay(NextEngine& engine, const NextUI::Statistics& statistics,
                                         VulkanGpuTimer* gpuTimer, float topOffset) = 0;
         virtual bool HandleRendererShortcut(SDL_Keycode key, bool pressed, bool panelVisible, NextEngine& engine) = 0;

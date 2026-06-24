@@ -122,7 +122,7 @@ public:
     bool OnRenderUI() override;
     void OnInitUI() override;
     void OnRayHitResponse(Assets::RayCastResult& result) override;
-    void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) override;
+    void ConfigureCVars(NextCVar::FCVarSystem& cvars) override;
     bool OverrideRenderCamera(Assets::Camera& OutRenderCamera) const override;
     void OnSceneLoaded() override;
     void OnSceneUnloaded() override;

@@ -16,7 +16,8 @@ namespace NextUI
 class GizmoController
 {
 public:
-    void Draw(NextEngine& engine, const glm::vec2& viewportPos, const glm::vec2& viewportSize);
+    void Draw(NextEngine& engine, const glm::vec2& viewportPos, const glm::vec2& viewportSize,
+              bool snapEnabled = false, float translateSnap = 1.0f, int defaultOperation = 0);
     bool IsUsing() const { return isUsing_; }
     bool IsInteracting() const { return isUsing_ || isOver_; }
     bool IsShowing() const { return isShowing_; }
@@ -25,7 +26,7 @@ public:
 
 private:
     void DrawToolbar();
-    void EnsureDefaults();
+    void EnsureDefaults(int defaultOperation = 0);
     void HandleShortcuts(const ImGuiIO& io);
     void ResetState();
 

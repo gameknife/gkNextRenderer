@@ -106,7 +106,7 @@ VisualTestGameInstance::VisualTestGameInstance(Vulkan::WindowConfig& config, Run
     updateBaseline_ = options.UpdateVisualTestBaseline;
 }
 
-void VisualTestGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
+void VisualTestGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
     cvars.SetDefaultFromString("r.samples", "1", &error);

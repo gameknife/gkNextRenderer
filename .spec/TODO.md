@@ -8,11 +8,15 @@
 - [x] `#00059` [FEAT] 希望给sharc增加一个debug模式，能够在场景上显示出radiance cache的实际颜色，按照设定的grid尺寸，看起来就像场景上的小马赛克图案 → journal/00059.md (2026-06-16)
 - [x] `#00061` [FEAT] 根据docs\designs\swmodern-noambient-sky-occlusion-design.md的计划，一口气做完整个实现 → journal/00061.md (2026-06-21)
 - [x] `#00062` [REFACTOR] gkNextEditor的uiState_.fontIcon没必要了，默认系统字体带了所有icon，去掉这个字体 → journal/00062.md (2026-06-22)
-- [ ] `#00063` [REFACTOR] imgui的版本是比较高的，目前非第三方代码里的#if IMGUI_VERSION_NUM宏判断都可以去掉，整体处理一遍，完成后提交
-- [ ] `#00064` [IDEA] 探索目前ambientcube探针启发的方式，是否可以参考SHARC的方式，通过实际的ray来更新ambientcube数据，让ambient cube的有效命中率提升，甚至可以进一步缩小池子。请仔细分析现有代码和path tracing渲染器下的sharc方法，写一个设计方案和开发计划，落在docs文件夹。
+- [x] `#00065` [IDEA] 根据gknexteditor-settings-panel-plan.md的计划，一口气做完这个cvar, setting面板的改造计划，完成后提交 → journal/00065.md (2026-06-24)
+- [ ] `#00066` [IDEA] 根据docs\designs\ambientcube-hit-driven-residency-design.md的计划，一口气完成整个计划
+- [ ] `#00067` [IDEA] 提交目前所有修改
+- [ ] `#00068` [IDEA] 阅读docs\designs\webrtc-remoteplay-design.md和docs\plans\webrtc-remoteplay-hwencode-plan.md两篇计划文档，再根据当前的的实现情况，继续推进webrtc功能到最终状态
 
 ### 待规划
 - [ ] `#00011` [IDEA] gnb在gkmini上host一个持久的todolist，作为一个“服务器”同步，可以随时随地进行任务管理
+- [ ] `#00064` [IDEA] 探索目前ambientcube探针启发的方式，是否可以参考SHARC的方式，通过实际的ray来更新ambientcube数据，让ambient cube的有效命中率提升，甚至可以进一步缩小池子。请仔细分析现有代码和path tracing渲染器下的sharc方法，写一个设计方案和开发计划，落在docs文件夹。
+- [ ] `#00063` [REFACTOR] imgui的版本是比较高的，目前非第三方代码里的#if IMGUI_VERSION_NUM宏判断都可以去掉，整体处理一遍，完成后提交
 - [ ] `#00056` [FEAT] 优化ModernNoAmbient的渲染效果 → specs/00056.md
 - [ ] `#00060` [IDEA] 目前debugmode=4时，显示的radiance cache看起来只有亮度，是黑白的，能否显示出cache的色彩。其次，大部分场景，我需要把r.sharc.sceneScale调到100左右，看到的马赛克格子才是比较符合尺寸的。是否是因为显示的不是LOD0层级的radiance cache。请就这两个问题，进行修复
 - [x] `#00045` [FEAT] gnb需要及时响应TODO文件的修改 → journal/00045.md (2026-06-12)
