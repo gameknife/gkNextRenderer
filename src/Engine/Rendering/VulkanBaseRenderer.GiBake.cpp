@@ -42,8 +42,8 @@ namespace Vulkan
 
     bool VulkanBaseRenderer::ShouldSkipAmbientCubeUpdates() const
     {
-        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
-        return CurrentLogicRendererType() == ERendererType::ERT_PathTracing && settings.SharcEnable;
+        return CurrentLogicRendererType() == ERendererType::ERT_PathTracing &&
+            NextEngine::GetInstance()->IsEffectiveSharcEnabled();
     }
 
     void VulkanBaseRenderer::ClearAmbientCubeCache(VkCommandBuffer commandBuffer, uint32_t imageIndex)

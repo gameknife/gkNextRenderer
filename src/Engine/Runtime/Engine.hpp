@@ -156,6 +156,19 @@ public:
                     std::function<bool(Assets::RayCastResult rayResult)> callback);
     void SetProgressiveRendering(bool enable, bool directly);
     bool IsProgressiveRendering() const { return progressiveRender_.enabled; }
+    bool IsOfflineProgressivePathTracing() const
+    {
+        return progressiveRender_.enabled && renderer_ != nullptr &&
+            renderer_->CurrentLogicRendererType() == Vulkan::ERT_PathTracing;
+    }
+    bool IsEffectiveDenoiserEnabled() const
+    {
+        return config_.userSettings.Denoiser && !IsOfflineProgressivePathTracing();
+    }
+    bool IsEffectiveSharcEnabled() const
+    {
+        return config_.userSettings.SharcEnable && !IsOfflineProgressivePathTracing();
+    }
     uint32_t GetProgressiveRenderAccumulatedFrames() const { return progressiveRender_.accumulatedFrames; }
     uint32_t GetProgressiveRenderTargetFrames() const { return FProgressiveRenderState::TargetFrames; }
     Assets::UniformBufferObject& GetLastUniformBufferObject() { return renderState_.previousUniformBuffer; }
@@ -280,7 +293,7 @@ private:
     // Progressive rendering warmup state
     struct FProgressiveRenderState
     {
-        static constexpr uint32_t TargetFrames = 256;
+        static constexpr uint32_t TargetFrames = 1024;
         bool enabled = false;
         uint32_t warmupFramesRemaining = 0;
         uint32_t accumulatedFrames = 0;

@@ -119,6 +119,16 @@ namespace Vulkan::PathTracing
         }
     }
 
+    bool PathTracingRenderer::IsOfflineProgressiveRenderActive() const
+    {
+        return NextEngine::GetInstance()->IsOfflineProgressivePathTracing();
+    }
+
+    bool PathTracingRenderer::IsEffectiveSharcEnabled() const
+    {
+        return NextEngine::GetInstance()->IsEffectiveSharcEnabled();
+    }
+
     void PathTracingRenderer::EnsureSharcResources()
     {
         const auto& settings = NextEngine::GetInstance()->GetUserSettings();
@@ -302,11 +312,13 @@ namespace Vulkan::PathTracing
     {
         // Acquire destination images for rendering.
         baseRender_.InitializeBarriers(commandBuffer);
+        const Runtime::Config::UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
+        const bool offlineProgressiveRender = IsOfflineProgressiveRenderActive();
+        const bool sharcEnabled = IsEffectiveSharcEnabled();
 
         // Execute ray tracing shaders.
         {
-            const auto& settings = NextEngine::GetInstance()->GetUserSettings();
-            if (settings.SharcEnable)
+            if (sharcEnabled)
             {
                 EnsureSharcPipelines();
                 EnsureSharcResources();
@@ -364,10 +376,11 @@ namespace Vulkan::PathTracing
          // accumulate with reproject
         {
             SCOPED_GPU_TIMER("reproject pass");
-            const Runtime::Config::UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
             FReprojectPushConstants pushConst{};
             pushConst.ProgressiveRender = NextEngine::GetInstance()->IsProgressiveRendering();
-            pushConst.TemporalFrames = uint32_t(settings.TemporalFrames);
+            pushConst.TemporalFrames = offlineProgressiveRender
+                ? NextEngine::GetInstance()->GetProgressiveRenderTargetFrames()
+                : uint32_t(settings.TemporalFrames);
             pushConst.PrevDiffuseBindlessIdx = temporalResolve_.History(PipelineCommon::ETemporalChannel::Diffuse);
             pushConst.PrevSpecularBindlessIdx = temporalResolve_.History(PipelineCommon::ETemporalChannel::Specular);
             pushConst.PrevAlbedoBindlessIdx = temporalResolve_.History(PipelineCommon::ETemporalChannel::Albedo);
@@ -389,8 +402,11 @@ namespace Vulkan::PathTracing
         // reads via Camera.Denoise*SourceSlot. The diffuse and specular passes run sequentially and
         // share the ping/pong scratch. When disabled, compose falls back to the accumulation buffers.
         {
-            SCOPED_GPU_TIMER("atrous pass");
-            atrousDenoiser_.Run(baseRender_, SwapChain(), commandBuffer, NextEngine::GetInstance()->GetUserSettings());
+            if (!offlineProgressiveRender)
+            {
+                SCOPED_GPU_TIMER("atrous pass");
+                atrousDenoiser_.Run(baseRender_, SwapChain(), commandBuffer, settings);
+            }
         }
 
         {

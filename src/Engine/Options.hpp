@@ -50,6 +50,7 @@ public:
 	uint32_t RemoteHeight{};
 	std::string RemoteEncoder{"auto"};
 	bool KeepCPUMeshData{};  // 保留CPU网格数据（编辑器模式需要）
+	bool HighPrecisionProgressiveHistory{}; // progressive accumulation/history 使用高精度缓冲
 	bool UpdateVisualTestBaseline{};
 	bool FlappyReplay{};
 	bool ShaderHotReload{true};
