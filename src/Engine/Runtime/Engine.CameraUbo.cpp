@@ -220,7 +220,8 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.HeatmapScale = config_.userSettings.HeatmapScale;
     ubo.DebugDraw_Lighting = config_.showFlags.DebugDraw_Lighting;
     ubo.DebugDraw_ShadowCascadeCoverage = config_.showFlags.DebugDraw_ShadowCascadeCoverage;
-    ubo.TemporalFrames = progressiveRender_.enabled ? 256 : config_.userSettings.TemporalFrames;
+    ubo.TemporalFrames = progressiveRender_.enabled ? FProgressiveRenderState::TargetFrames
+                                                    : config_.userSettings.TemporalFrames;
     ubo.HDR = renderer_->SwapChain().IsHDR();
     ubo.HDROutputMode = renderer_->SwapChain().HDROutputMode();
 
@@ -230,7 +231,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     // Denoiser routing: when the variance-guided a-trous path is active (denoiser on with a
     // positive iteration count) the compose pass reads the a-trous output; otherwise it reads
     // the temporal accumulation buffers directly (no spatial filtering).
-    const bool denoiserOn = config_.userSettings.Denoiser;
+    const bool denoiserOn = IsEffectiveDenoiserEnabled();
     const int diffuseAtrousIterations = denoiserOn ? std::clamp(config_.userSettings.DenoiseAtrousIterations, 0, 6) : 0;
     const int specularAtrousIterations = denoiserOn ? std::clamp(config_.userSettings.DenoiseAtrousSpecularIterations, 0, 6) : 0;
     ubo.DenoiseDiffuseSourceSlot = (diffuseAtrousIterations > 0)
@@ -274,7 +275,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.AmbientCubeCascadeParams = glm::vec4(float(ambientCubeCascadeCount), ambientCubeCascadeRatio, 0.0f, 0.0f);
 
     // Other Setup
-    renderer_->SetDenoiserEnabled(config_.userSettings.Denoiser);
+    renderer_->SetDenoiserEnabled(denoiserOn);
     renderer_->SetVisualDebugEnabled(config_.showFlags.ShowVisualDebug);
     // UBO Backup, for motion vector calc
     renderState_.previousUniformBuffer = ubo;

@@ -50,6 +50,7 @@ EditorGameInstance::EditorGameInstance(Vulkan::WindowConfig& config, Runtime::Co
     config.Height = computedHeight < 1080u ? static_cast<uint32_t>(monitorSize.y) : computedHeight;
     config.HideTitleBar = true;
     options.KeepCPUMeshData = true; // 编辑器模式保留CPU网格数据用于场景保存
+    options.HighPrecisionProgressiveHistory = true;
 }
 
 std::unique_ptr<NextUI::IMultiViewportBackend> EditorGameInstance::CreateMultiViewportBackend()

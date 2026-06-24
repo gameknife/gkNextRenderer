@@ -212,9 +212,31 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     if (pushConsts.ProgressiveRender)
     {
-        AccumlateDiffuse[ipos] = lerp(PrevDiffuse[ipos], SourceDiffuse[ipos], clamp(1.0 / 512.0, 0.0, 1.0));
-        AccumlateSpecular[ipos] = lerp(PrevSpecular[ipos], SourceSpecular[ipos], clamp(1.0 / 512.0, 0.0, 1.0));
-        AccumlateAlbedo[ipos] = lerp(PrevAlbedo[ipos], SourceAlbedo[ipos], clamp(1.0 / 512.0, 0.0, 1.0));
+        if (pushConsts.TemporalFrames >= 1024)
+        {
+            const float nMax = float(max(1, pushConsts.TemporalFrames));
+            const float prevCount = clamp(PrevDiffuse[ipos].a, 0.0, nMax);
+            if (prevCount >= nMax)
+            {
+                AccumlateDiffuse[ipos] = PrevDiffuse[ipos];
+                AccumlateSpecular[ipos] = PrevSpecular[ipos];
+                AccumlateAlbedo[ipos] = PrevAlbedo[ipos];
+                return;
+            }
+
+            const float newCount = min(prevCount + 1.0, nMax);
+            const float currWeight = clamp(1.0 / newCount, 0.0, 1.0);
+
+            AccumlateDiffuse[ipos] = float4(lerp(PrevDiffuse[ipos].rgb, SourceDiffuse[ipos].rgb, currWeight), newCount);
+            AccumlateSpecular[ipos] = float4(lerp(PrevSpecular[ipos].rgb, SourceSpecular[ipos].rgb, currWeight), newCount);
+            AccumlateAlbedo[ipos] = float4(lerp(PrevAlbedo[ipos].rgb, SourceAlbedo[ipos].rgb, currWeight), newCount);
+        }
+        else
+        {
+            AccumlateDiffuse[ipos] = lerp(PrevDiffuse[ipos], SourceDiffuse[ipos], clamp(1.0 / 512.0, 0.0, 1.0));
+            AccumlateSpecular[ipos] = lerp(PrevSpecular[ipos], SourceSpecular[ipos], clamp(1.0 / 512.0, 0.0, 1.0));
+            AccumlateAlbedo[ipos] = lerp(PrevAlbedo[ipos], SourceAlbedo[ipos], clamp(1.0 / 512.0, 0.0, 1.0));
+        }
         return;
     }
 

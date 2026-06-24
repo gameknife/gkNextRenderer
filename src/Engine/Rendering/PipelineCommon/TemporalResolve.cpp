@@ -14,9 +14,12 @@ namespace Vulkan::PipelineCommon
         for (const auto& spec : historySpecs)
         {
             const auto index = static_cast<size_t>(spec.channel);
+            const VkFormat historyFormat = GOption->HighPrecisionProgressiveHistory
+                ? VK_FORMAT_R32G32B32A32_SFLOAT
+                : VK_FORMAT_R16G16B16A16_SFLOAT;
             historyIds_[index] = GOption->ReferenceMode
                 ? baseRenderer.GetTemporalStorageImage(
-                    VK_FORMAT_R16G16B16A16_SFLOAT,
+                    historyFormat,
                     VK_IMAGE_TILING_OPTIMAL,
                     VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                     spec.referenceDebugName)

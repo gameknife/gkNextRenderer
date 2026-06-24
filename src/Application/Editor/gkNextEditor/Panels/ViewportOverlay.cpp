@@ -13,6 +13,7 @@
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Engine/Utilities/ImGui.hpp"
 
+#include <algorithm>
 #include <fmt/format.h>
 #include <string>
 
@@ -256,9 +257,16 @@ namespace Editor
 
         const uint32_t progressiveAccumulatedFrames = ctx.engine.GetProgressiveRenderAccumulatedFrames();
         const uint32_t progressiveTargetFrames = ctx.engine.GetProgressiveRenderTargetFrames();
+        const int progressiveDigits = static_cast<int>(std::max(
+            std::to_string(progressiveAccumulatedFrames).size(),
+            std::to_string(progressiveTargetFrames).size()));
         const std::string progressiveFramesText =
-            fmt::format("{:>3}/{:>3}", progressiveAccumulatedFrames, progressiveTargetFrames);
-        const float progressiveValueWidth = ImGui::CalcTextSize("000/000").x;
+            fmt::format("{:>{}}/{:>{}}",
+                        progressiveAccumulatedFrames, progressiveDigits,
+                        progressiveTargetFrames, progressiveDigits);
+        const std::string progressiveTemplateText =
+            fmt::format("{0:0>{1}}/{0:0>{1}}", 0, progressiveDigits);
+        const float progressiveValueWidth = ImGui::CalcTextSize(progressiveTemplateText.c_str()).x;
         const float progressiveLabelWidth = ImGui::CalcTextSize("Render:").x;
         const float progressivePanelWidth = progressiveLabelWidth + progressiveValueWidth + 30.0f;
 

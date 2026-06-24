@@ -76,6 +76,8 @@ namespace Vulkan::PathTracing
 		void ClearSharcResources(VkCommandBuffer commandBuffer);
 		void InsertSharcBarrier(VkCommandBuffer commandBuffer, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask) const;
 		Assets::GPUScene BuildSharcGPUScene(uint32_t imageIndex);
+        bool IsOfflineProgressiveRenderActive() const;
+        bool IsEffectiveSharcEnabled() const;
 	};
 
 }

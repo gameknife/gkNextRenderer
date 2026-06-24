@@ -22,6 +22,7 @@ BenchmarkGameInstance::BenchmarkGameInstance(Vulkan::WindowConfig& config, Runti
     options.PresentMode = 0;
     options.Width = 1280;
     options.Height = 720;
+    options.HighPrecisionProgressiveHistory = true;
     
     // config.Width = 1920;
     // config.Height = 1080;
