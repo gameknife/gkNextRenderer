@@ -36,7 +36,7 @@ public static const int GPU_SCENE_DYNAMIC_SIZE =
 
 public static const int GPU_SCENE_AMBIENT_PER_CASCADE_COUNT = 192 * 192 * 48;
 public static const int GPU_SCENE_AMBIENT_CASCADE_MAX = 4;
-public static const int GPU_SCENE_AMBIENT_CUBE_SIZE = 56;
+public static const int GPU_SCENE_AMBIENT_CUBE_SIZE = 40;
 public static const int GPU_SCENE_VOXEL_DATA_SIZE = 16;
 public static const int GPU_SCENE_PAGE_INDEX_SIZE = 16;
 public static const int GPU_SCENE_AMBIENT_SEED_SIZE = 16;
@@ -231,7 +231,7 @@ public struct ALIGN_16 ModelData
     public uint reserved2;
 };
 
-// size = 14 x 4 bytes, 56 bytes
+// size = 10 x 4 bytes, 40 bytes
 // if use BC1 to compress color, can reduce to 4 bytes per cube, 1 / 8 size
 // and we can use the active / inactive to adjust lerp value between probe
 public struct ALIGN_8 AmbientCube
@@ -245,15 +245,8 @@ public struct ALIGN_8 AmbientCube
     public uint PosX;
     public uint NegX;
  
-    public uint PosZ_D;
-    public uint NegZ_D;
-
-    public uint PosY_D;
-    public uint NegY_D;
-
-    public uint PosX_D;
-    public uint NegX_D;
-
+    public uint SunDirect;
+    public uint SkyEmissiveDirect;
     public uint skyVisibility_pznzpyny;
     public uint skyVisibility_pxnxs0s1;
 };
