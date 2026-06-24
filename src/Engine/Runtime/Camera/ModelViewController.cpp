@@ -224,6 +224,11 @@ void ModelViewController::Orbit(float deltaX, float deltaY)
         return;
     }
 
+    if (deltaX == 0.0f && deltaY == 0.0f)
+    {
+        return;
+    }
+
     glm::vec3 target = orbitTarget_.value();
 
     // Yaw around world Y, Pitch around camera right
@@ -239,6 +244,7 @@ void ModelViewController::Orbit(float deltaX, float deltaY)
     orientation_ = orientation_ * glm::transpose(rotation);
 
     UpdateVectors();
+    movedByEvent_ = true;
 }
 
 bool ModelViewController::OnTouch(bool down, double xpos, double ypos)

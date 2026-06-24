@@ -827,7 +827,14 @@ bool NextEngine::Tick(bool forcingDelta)
             if (progressiveRender_.warmupFramesRemaining == 0)
             {
                 progressiveRender_.enabled = true;
+                progressiveRender_.accumulatedFrames = 0;
             }
+        }
+
+        if (progressiveRender_.enabled)
+        {
+            progressiveRender_.accumulatedFrames =
+                std::min(progressiveRender_.accumulatedFrames + 1, FProgressiveRenderState::TargetFrames);
         }
 
         // High quality capture: count down accumulated frames after DrawFrame
@@ -1065,14 +1072,25 @@ void NextEngine::SetProgressiveRendering(bool enable, bool directly)
 {
     if (directly)
     {
+        if (enable && !progressiveRender_.enabled)
+        {
+            progressiveRender_.accumulatedFrames = 0;
+            progressiveRender_.warmupFramesRemaining = 0;
+        }
+        else if (!enable)
+        {
+            progressiveRender_.accumulatedFrames = 0;
+            progressiveRender_.warmupFramesRemaining = 0;
+        }
         progressiveRender_.enabled = enable;
         return;
     }
 
     if (enable)
     {
-        if (progressiveRender_.warmupFramesRemaining == 0)
+        if (!progressiveRender_.enabled && progressiveRender_.warmupFramesRemaining == 0)
         {
+            progressiveRender_.accumulatedFrames = 0;
             progressiveRender_.warmupFramesRemaining = config_.userSettings.TemporalFrames * 2;
         }
     }
@@ -1080,6 +1098,7 @@ void NextEngine::SetProgressiveRendering(bool enable, bool directly)
     {
         progressiveRender_.warmupFramesRemaining = 0;
         progressiveRender_.enabled = false;
+        progressiveRender_.accumulatedFrames = 0;
     }
 }
 

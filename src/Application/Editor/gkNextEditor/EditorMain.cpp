@@ -150,8 +150,8 @@ void EditorGameInstance::OnInit()
 
 void EditorGameInstance::OnTick(double deltaSeconds)
 {
-    modelViewController_.UpdateCamera(1.0f, deltaSeconds);
-    //GetEngine().SetProgressiveRendering(!moving, false);
+    const bool moving = modelViewController_.UpdateCamera(1.0f, deltaSeconds);
+    GetEngine().SetProgressiveRendering(!moving, false);
 }
 
 void EditorGameInstance::OnSceneLoaded() { modelViewController_.Reset(GetEngine().GetScene().GetRenderCamera()); }

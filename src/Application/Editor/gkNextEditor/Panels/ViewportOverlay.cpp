@@ -13,6 +13,7 @@
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Engine/Utilities/ImGui.hpp"
 
+#include <fmt/format.h>
 #include <string>
 
 namespace Editor
@@ -250,6 +251,37 @@ namespace Editor
         ImGui::PopStyleVar();
 
         NextUI::Theme::EndOverlayPanel();
+
+        const float toolH = kToolIconWidth;
+
+        const uint32_t progressiveAccumulatedFrames = ctx.engine.GetProgressiveRenderAccumulatedFrames();
+        const uint32_t progressiveTargetFrames = ctx.engine.GetProgressiveRenderTargetFrames();
+        const std::string progressiveFramesText =
+            fmt::format("{:>3}/{:>3}", progressiveAccumulatedFrames, progressiveTargetFrames);
+        const float progressiveValueWidth = ImGui::CalcTextSize("000/000").x;
+        const float progressiveLabelWidth = ImGui::CalcTextSize("Render:").x;
+        const float progressivePanelWidth = progressiveLabelWidth + progressiveValueWidth + 30.0f;
+
+        NextUI::Theme::FOverlayPanelConfig progressiveConfig{};
+        progressiveConfig.WindowId = "ViewportProgressiveStatus";
+        progressiveConfig.Position = pos + ImVec2(
+            std::max(padding, size.x - progressivePanelWidth - padding),
+            padding + toolH + 8.0f);
+        progressiveConfig.Size = ImVec2(progressivePanelWidth, 28.0f);
+        progressiveConfig.Padding = ImVec2(10.0f, 4.0f);
+        progressiveConfig.ItemSpacing = ImVec2(8.0f, 0.0f);
+        progressiveConfig.BackgroundAlpha = 0.0f;
+
+        NextUI::Theme::BeginOverlayPanel(progressiveConfig);
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Render:");
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(
+            ctx.engine.IsProgressiveRendering() ? NextUI::Theme::EColor::Text : NextUI::Theme::EColor::TextMuted));
+        ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - progressiveValueWidth - ImGui::GetStyle().WindowPadding.x);
+        ImGui::TextUnformatted(progressiveFramesText.c_str());
+        ImGui::PopStyleColor();
+        NextUI::Theme::EndOverlayPanel();
         
         const ImVec2 axisOrigin = pos + ImVec2(26.0f, size.y - 42.0f);
         ImDrawList* foreground = ImGui::GetForegroundDrawList(viewport);
@@ -267,7 +299,6 @@ namespace Editor
         foreground->AddText(axisOrigin + ImVec2(-34.0f, 18.0f), NextUI::Theme::ColorU32(NextUI::Theme::EColor::Blue),
                             "Z");
 
-        const float toolH = kToolIconWidth;
         float toolW = kToolIconWidth + 16.0f;
         toolW = std::max(60.0f, std::min(toolW, size.x - padding * 2.0f));
 

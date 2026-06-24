@@ -156,6 +156,8 @@ public:
                     std::function<bool(Assets::RayCastResult rayResult)> callback);
     void SetProgressiveRendering(bool enable, bool directly);
     bool IsProgressiveRendering() const { return progressiveRender_.enabled; }
+    uint32_t GetProgressiveRenderAccumulatedFrames() const { return progressiveRender_.accumulatedFrames; }
+    uint32_t GetProgressiveRenderTargetFrames() const { return FProgressiveRenderState::TargetFrames; }
     Assets::UniformBufferObject& GetLastUniformBufferObject() { return renderState_.previousUniformBuffer; }
     uint32_t GetSunShadowCascadeUpdateMask() const { return renderState_.sunShadowCascadeUpdateMask; }
     VkDeviceAddress TryGetGPUAccelerationStructureAddress() const;
@@ -278,8 +280,10 @@ private:
     // Progressive rendering warmup state
     struct FProgressiveRenderState
     {
+        static constexpr uint32_t TargetFrames = 256;
         bool enabled = false;
         uint32_t warmupFramesRemaining = 0;
+        uint32_t accumulatedFrames = 0;
     };
 
     // Deferred and accumulated screenshot state
