@@ -166,6 +166,27 @@ namespace Runtime
             ImGui::TextColored(active ? ImVec4(0.95f, 0.97f, 1.0f, 1.0f) : ImVec4(0.72f, 0.76f, 0.82f, 1.0f), "%s", label);
         }
 
+        inline void DrawAmbientCubeBrickStats(NextEngine& engine)
+        {
+            if (!engine.GetRenderer().CurrentRendererRequirements().requestAmbientCube)
+            {
+                return;
+            }
+
+            const Assets::Scene& scene = engine.GetScene();
+            uint32_t activeBricks = 0u;
+            const uint32_t cascadeCapacity = scene.AmbientCubeCascadeCapacity();
+            for (uint32_t cascadeIndex = 0; cascadeIndex < cascadeCapacity; ++cascadeIndex)
+            {
+                activeBricks += scene.AmbientActiveBrickCount(cascadeIndex);
+            }
+
+            const uint32_t totalBricks =
+                cascadeCapacity * static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE);
+            const std::string brickStats = fmt::format("{} / {}", activeBricks, totalBricks);
+            DrawValueRow(LOCTEXT("AC Bricks"), brickStats.c_str(), ImVec4(0.70f, 0.94f, 1.0f, 1.0f));
+        }
+
         inline bool CycleRenderer(NextEngine& engine)
         {
             Runtime::Config::UserSettings& userSetting = engine.GetUserSettings();
@@ -343,9 +364,11 @@ namespace Runtime
             Runtime::Config::ShowFlags& showFlags = engine.GetShowFlags();
             ImGuiViewport* viewport = ImGui::GetMainViewport();
             const float margin = 12.0f;
+            const float rightReservedWidth = userSetting.ShowOverlay ? 400.0f : 0.0f;
 
             ImGui::SetNextWindowPos(
-                ImVec2(viewport->Pos.x + viewport->Size.x - margin, viewport->Pos.y + topOffset + margin),
+                ImVec2(viewport->Pos.x + viewport->Size.x - margin - rightReservedWidth,
+                       viewport->Pos.y + topOffset + margin),
                 ImGuiCond_Always,
                 ImVec2(1.0f, 0.0f));
             ImGui::SetNextWindowBgAlpha(0.88f);
@@ -368,6 +391,7 @@ namespace Runtime
 
                 DrawSectionHeader(LOCTEXT("Renderer"));
                 DrawValueRow(LOCTEXT("Current"), GetCurrentRendererLabel(engine, userSetting), ImVec4(0.93f, 0.96f, 1.0f, 1.0f));
+                DrawAmbientCubeBrickStats(engine);
                 ImGui::TextColored(ImVec4(0.52f, 0.57f, 0.65f, 1.0f), "%s", LOCTEXT("Available Renderers"));
                 for (int index = 0; index < GetRendererOptionCount(engine); ++index)
                 {

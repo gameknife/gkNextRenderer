@@ -308,6 +308,12 @@ Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options&
     userSettings.AmbientCubeCascadeCount = 3;
     userSettings.AmbientCubeCascadeRatio = 2.0f;
     userSettings.AmbientCubePoolBrickRatio = 0.66f;
+    userSettings.AmbientCubeHitDrivenResidency = false;
+    userSettings.AmbientCubeBounceHitAffectsResidency = false;
+    userSettings.AmbientCubeEvictFrames = 180;
+    userSettings.AmbientCubeGraceFrames = 30;
+    userSettings.AmbientCubeHitMarkTileRatio = 0.25f;
+    userSettings.AmbientCubeResidencyDebug = 0;
     userSettings.SharcEnable = false;
     userSettings.SharcEntriesPow2 = 21;
     userSettings.SharcUpdateSampleRatio = 0.25f;
@@ -1254,12 +1260,6 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
             }
             gameInstance_->DrawAdditionalPhysicsDebugOverlay(debugCamera);
         }
-        if (debugUiProvider_)
-        {
-            SCOPED_CPU_TIMER("graphics debug ui");
-            debugUiProvider_->DrawGraphicsPanel(*this, config_.showFlags.DebugGraphicsPanel,
-                                                gameInstance_->GetGraphicsDebugPanelTopOffset());
-        }
         if (debugUiProvider_ && config_.showFlags.DebugCVarPanel)
         {
             SCOPED_CPU_TIMER("cvar editor ui");
@@ -1276,6 +1276,12 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
     {
         SCOPED_CPU_TIMER("overlay ui");
         userInterface_->Render(stats, renderer_->GpuTimer(), scene_.get(), config_.showFlags.DebugProfileOverlay);
+    }
+    if (!suppressAllUi && debugUiProvider_)
+    {
+        SCOPED_CPU_TIMER("graphics debug ui");
+        debugUiProvider_->DrawGraphicsPanel(*this, config_.showFlags.DebugGraphicsPanel,
+                                            gameInstance_->GetGraphicsDebugPanelTopOffset());
     }
     {
         SCOPED_CPU_TIMER("imgui submit");

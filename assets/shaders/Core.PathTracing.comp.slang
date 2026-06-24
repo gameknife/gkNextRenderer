@@ -28,6 +28,14 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
+    float4 residencyDebugColor;
+    if (TryAmbientResidencyDebug(renderer.GetPrimaryVertex().Position, residencyDebugColor))
+    {
+        renderer.WriteDebugColor(residencyDebugColor);
+        END_SHADERCLOCK(DTid.xy)
+        return;
+    }
+
     FNullRadianceCache cache;
     int sampleMultiplier = Bindless.GetStorageTexture<uint>(Bindless.RT_MOTIONMOMENT)[DTid.xy] > 0 ? 4 : 1;
     renderer.Render(tracer, dIlluminator, cache, sampleMultiplier);

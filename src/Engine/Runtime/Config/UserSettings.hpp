@@ -94,6 +94,12 @@ struct UserSettings final
     float AmbientCubeCascadeRatio = 2.0f;
     float AmbientCubePoolBrickRatio = 0.66f;
     bool UseGpuAmbientCubeSdf = false;
+    bool AmbientCubeHitDrivenResidency = false;
+    bool AmbientCubeBounceHitAffectsResidency = false;
+    uint32_t AmbientCubeEvictFrames = 180;
+    uint32_t AmbientCubeGraceFrames = 30;
+    float AmbientCubeHitMarkTileRatio = 0.25f;
+    int AmbientCubeResidencyDebug = 0;
     bool StreamHDRTextures = true;
     bool SharcEnable = true;
     uint32_t SharcEntriesPow2 = 21;

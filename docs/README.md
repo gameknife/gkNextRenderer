@@ -26,7 +26,7 @@
 | 文档 | 状态 | 更新 |
 | --- | --- | --- |
 | [Agent 自动验证（输入驱动 + 断言）系统 — 设计与开发计划](designs/agent-validation-input-driver.md) | ⚪ 待实现 | 2026-06-09 |
-| [AmbientCube 命中驱动探针残留（SHARC 式 insert/evict）— 设计方案与开发计划](designs/ambientcube-hit-driven-residency-design.md) | ⚪ 待实现 | 2026-06-22 |
+| [AmbientCube 命中驱动探针残留（SHARC 式 insert/evict）— 设计方案与开发计划](designs/ambientcube-hit-driven-residency-design.md) | ✅ 已完成 | 2026-06-24 |
 | [高斯溅射（SOG 加载 + GS 渲染模式）设计与开发计划](designs/gaussian-splatting-sog-design.md) | ✅ 已完成 | 2026-06-18 |
 | [SCAD 加载器（SCADLoader）设计与开发计划](designs/scad-loader-design.md) | ✅ 已完成 | 2026-05-30 |
 | [SCAD Model Generator（SCAD Studio）设计与开发计划](designs/scad-model-generator-design.md) | ✅ 已完成 | 2026-06-07 |

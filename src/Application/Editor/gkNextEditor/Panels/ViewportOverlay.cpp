@@ -290,6 +290,44 @@ namespace Editor
         ImGui::TextUnformatted(progressiveFramesText.c_str());
         ImGui::PopStyleColor();
         NextUI::Theme::EndOverlayPanel();
+
+        if (renderer.CurrentRendererRequirements().requestAmbientCube)
+        {
+            uint32_t activeAmbientBricks = 0u;
+            const uint32_t ambientCascadeCapacity = ctx.scene.AmbientCubeCascadeCapacity();
+            for (uint32_t cascadeIndex = 0; cascadeIndex < ambientCascadeCapacity; ++cascadeIndex)
+            {
+                activeAmbientBricks += ctx.scene.AmbientActiveBrickCount(cascadeIndex);
+            }
+            const uint32_t totalAmbientBricks =
+                ambientCascadeCapacity * static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE);
+            const std::string ambientBrickText =
+                fmt::format("{}/{}", activeAmbientBricks, totalAmbientBricks);
+            const float ambientBrickValueWidth = ImGui::CalcTextSize(ambientBrickText.c_str()).x;
+            const float ambientBrickLabelWidth = ImGui::CalcTextSize("AC Bricks:").x;
+            const float ambientBrickPanelWidth =
+                ambientBrickLabelWidth + ambientBrickValueWidth + 30.0f;
+
+            NextUI::Theme::FOverlayPanelConfig ambientBrickConfig{};
+            ambientBrickConfig.WindowId = "ViewportAmbientBrickStatus";
+            ambientBrickConfig.Position = pos + ImVec2(
+                std::max(padding, size.x - ambientBrickPanelWidth - padding),
+                padding + toolH + 44.0f);
+            ambientBrickConfig.Size = ImVec2(ambientBrickPanelWidth, 28.0f);
+            ambientBrickConfig.Padding = ImVec2(10.0f, 4.0f);
+            ambientBrickConfig.ItemSpacing = ImVec2(8.0f, 0.0f);
+            ambientBrickConfig.BackgroundAlpha = 0.0f;
+
+            NextUI::Theme::BeginOverlayPanel(ambientBrickConfig);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("AC Bricks:");
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(
+                ImGui::GetWindowContentRegionMax().x - ambientBrickValueWidth - ImGui::GetStyle().WindowPadding.x);
+            ImGui::TextUnformatted(ambientBrickText.c_str());
+            NextUI::Theme::DrawTooltip("AmbientCube resident bricks / total bricks across allocated cascades");
+            NextUI::Theme::EndOverlayPanel();
+        }
         
         const ImVec2 axisOrigin = pos + ImVec2(26.0f, size.y - 42.0f);
         ImDrawList* foreground = ImGui::GetForegroundDrawList(viewport);

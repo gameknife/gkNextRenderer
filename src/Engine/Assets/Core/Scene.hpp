@@ -215,6 +215,7 @@ namespace Assets
         // number of cube bricks allocated per cascade (the sparse pool cap).
         size_t AmbientBrickTableByteOffset() const { return ambientBrickTableOffset_; }
         size_t AmbientActiveBrickListByteOffset() const { return ambientActiveBrickListOffset_; }
+        size_t AmbientResidencyByteOffset() const { return ambientResidencyOffset_; }
         uint32_t AmbientPoolBricksPerCascade() const { return poolBricksPerCascade_; }
         uint32_t AmbientActiveBrickCount(uint32_t cascade) const;
         void SetAmbientActiveBrickCounts(const std::vector<uint32_t>& counts);
@@ -318,6 +319,7 @@ namespace Assets
         size_t ambientSdfSeedAOffset_ = 0;
         size_t ambientBrickTableOffset_ = 0;
         size_t ambientActiveBrickListOffset_ = 0;
+        size_t ambientResidencyOffset_ = 0;
         uint32_t poolBricksPerCascade_ = 0;
         std::array<uint32_t, CUBE_CASCADE_MAX> activeBrickCounts_{};
 

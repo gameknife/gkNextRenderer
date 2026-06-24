@@ -334,7 +334,7 @@ public struct IDAmbientCubeSampler : IAmbientCubeSampler
     }
 };
 
-static const float kTraceHistoryLength = 16.0f;
+static const float kTraceHistoryLength = 32.0f;
 
 // ---------- Phase 3 sparse brick indirection ----------
 // The cube grid is tiled into 8^3 bricks; the per-cascade brick table maps a brick to a pool slot
@@ -367,6 +367,117 @@ uint AmbientBrickLocalOffset(int3 probePos)
     int lz = probePos.z % GPU_SCENE_AMBIENT_BRICK_EDGE;
     return uint(ly) * uint(GPU_SCENE_AMBIENT_BRICK_EDGE * GPU_SCENE_AMBIENT_BRICK_EDGE)
          + uint(lz) * uint(GPU_SCENE_AMBIENT_BRICK_EDGE) + uint(lx);
+}
+
+uint AmbientBrickLinear(int3 probePos)
+{
+    uint bx = uint(probePos.x / GPU_SCENE_AMBIENT_BRICK_EDGE);
+    uint by = uint(probePos.y / GPU_SCENE_AMBIENT_BRICK_EDGE);
+    uint bz = uint(probePos.z / GPU_SCENE_AMBIENT_BRICK_EDGE);
+    return by * uint(GPU_SCENE_AMBIENT_BRICKS_X * GPU_SCENE_AMBIENT_BRICKS_Z)
+         + bz * uint(GPU_SCENE_AMBIENT_BRICKS_X) + bx;
+}
+
+uint AmbientResidencyHash(uint value)
+{
+    value ^= value >> 16;
+    value *= 0x7feb352du;
+    value ^= value >> 15;
+    value *= 0x846ca68bu;
+    value ^= value >> 16;
+    return value;
+}
+
+public void MarkAmbientBrickHit(uint cascadeIndex, int3 probePos, bool bounceHit)
+{
+    if (probePos.x < 0 || probePos.y < 0 || probePos.z < 0 ||
+        probePos.x >= CUBE_SIZE_XY || probePos.y >= CUBE_SIZE_Z || probePos.z >= CUBE_SIZE_XY)
+    {
+        return;
+    }
+
+    UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
+    float markRatio = saturate(camera.AmbientCubeCascadeParams.z);
+    if (markRatio <= 0.0f)
+    {
+        return;
+    }
+
+    uint brickLinear = AmbientBrickLinear(probePos);
+    uint hashValue = AmbientResidencyHash(
+        brickLinear + cascadeIndex * uint(GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE) +
+        camera.TotalFrames * 1664525u);
+    if (float(hashValue & 0xFFFFu) / 65535.0f > markRatio)
+    {
+        return;
+    }
+
+    AmbientBrickResidency* residency = Bindless.GetGpuscene().AmbientResidency;
+    uint residencyIndex = cascadeIndex * uint(GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE) + brickLinear;
+    if (bounceHit)
+    {
+        InterlockedMax(residency[residencyIndex].lastBounceHitFrame, camera.TotalFrames);
+        InterlockedAdd(residency[residencyIndex].bounceHitCount, 1);
+    }
+    else
+    {
+        InterlockedMax(residency[residencyIndex].lastConsumerHitFrame, camera.TotalFrames);
+        InterlockedAdd(residency[residencyIndex].consumerHitCount, 1);
+    }
+}
+
+public void MarkAmbientBrickHitAtWorld(float3 worldPos, bool bounceHit)
+{
+    uint cascadeIndex = GetAmbientCubeCascadeAtPosition(worldPos);
+    float cubeUnit = GetAmbientCubeUnitAtCascade(cascadeIndex);
+    float3 cubeOffset = GetAmbientCubeOffsetAtCascade(cascadeIndex);
+    int3 probePos = int3(floor((worldPos - cubeOffset) / cubeUnit));
+    MarkAmbientBrickHit(cascadeIndex, probePos, bounceHit);
+}
+
+public bool TryAmbientResidencyDebug(float3 worldPos, out float4 color)
+{
+    uint debugMode = uint(Bindless.GetGpuscene().Camera[0].AmbientCubeCascadeParams.w);
+    if (debugMode == 0u)
+    {
+        color = float4(0.0f);
+        return false;
+    }
+
+    uint cascadeIndex = GetAmbientCubeCascadeAtPosition(worldPos);
+    float cubeUnit = GetAmbientCubeUnitAtCascade(cascadeIndex);
+    float3 cubeOffset = GetAmbientCubeOffsetAtCascade(cascadeIndex);
+    int3 probePos = int3(floor((worldPos - cubeOffset) / cubeUnit));
+    if (probePos.x < 0 || probePos.y < 0 || probePos.z < 0 ||
+        probePos.x >= CUBE_SIZE_XY || probePos.y >= CUBE_SIZE_Z || probePos.z >= CUBE_SIZE_XY)
+    {
+        color = float4(180.0f, 0.0f, 180.0f, 1.0f);
+        return true;
+    }
+
+    uint brickLinear = AmbientBrickLinear(probePos);
+    uint residencyIndex = cascadeIndex * uint(GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE) + brickLinear;
+    AmbientBrickResidency residency = Bindless.GetGpuscene().AmbientResidency[residencyIndex];
+    if (debugMode == 1u)
+    {
+        uint lastHit = max(residency.lastConsumerHitFrame, residency.lastBounceHitFrame);
+        if (lastHit == 0u)
+        {
+            color = float4(28.0f, 28.0f, 28.0f, 1.0f);
+        }
+        else
+        {
+            float age = saturate(float(Bindless.GetGpuscene().Camera[0].TotalFrames - lastHit) / 180.0f);
+            color = float4(255.0f * age, 255.0f * (1.0f - age), 16.0f, 1.0f);
+        }
+        return true;
+    }
+
+    uint slot = Bindless.GetGpuscene().AmbientBrickTable[residencyIndex];
+    color = slot == GPU_SCENE_AMBIENT_BRICK_INVALID
+        ? float4(255.0f, 18.0f, 18.0f, 1.0f)
+        : float4(18.0f, 90.0f, 255.0f, 1.0f);
+    return true;
 }
 
 // Global cube-pool element index for a cascade-local probe, or -1 if its brick is unallocated.
@@ -422,7 +533,8 @@ public bool DecodeAmbientActiveBrickProbe(uint cascadeIndex,
 
     uint localVoxelIdx = y * CUBE_SIZE_XY * CUBE_SIZE_XY + z * CUBE_SIZE_XY + x;
     voxelIdx = GetCascadeBaseOffset(cascadeIndex) + localVoxelIdx;
-    cubeIdx = int((cascadeIndex * poolBricks + activeBrickIndex) * uint(GPU_SCENE_AMBIENT_BRICK_VOLUME) +
+    uint slot = AmbientBrickSlot(cascadeIndex, probePos);
+    cubeIdx = int((cascadeIndex * poolBricks + slot) * uint(GPU_SCENE_AMBIENT_BRICK_VOLUME) +
                   localProbeOffset);
     return true;
 }
@@ -494,6 +606,12 @@ VoxelData FetchVoxel(int3 probePos, in VoxelData* Cubes, uint baseOffset)
 
 public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, float3 normal)
 {
+    float4 residencyDebugColor;
+    if (TryAmbientResidencyDebug(inPos, residencyDebugColor))
+    {
+        return residencyDebugColor;
+    }
+
     VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
     uint cascadeCount = GetAmbientCubeCascadeCount();
 
@@ -521,6 +639,7 @@ public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, flo
             int3 offset = int3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
 
             int3 probePos = baseIdx + offset;
+            MarkAmbientBrickHit(cascadeIndex, probePos, false);
             AmbientCube cube;
             if (!TryFetchCubePool(probePos, cascadeIndex, cube))
             {
@@ -739,6 +858,7 @@ public float4 interpolateAmbientCubesStable<T : IAmbientCubeSampler>(float3 inPo
             int3 offset = int3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
 
             int3 probePos = baseIdx + offset;
+            MarkAmbientBrickHit(cascadeIndex, probePos, false);
             AmbientCube cube;
             bool hasCube = (cascadeIndex == stableCascadeIndex)
                 ? TryFetchCubePongPool(probePos, cascadeIndex, cube)

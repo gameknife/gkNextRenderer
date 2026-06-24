@@ -29,6 +29,14 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
+    float4 residencyDebugColor;
+    if (TryAmbientResidencyDebug(renderer.GetPrimaryVertex().Position, residencyDebugColor))
+    {
+        renderer.WriteDebugColor(residencyDebugColor);
+        END_SHADERCLOCK(DTid.xy)
+        return;
+    }
+
     FNullRadianceCache cache;
     renderer.Render(tracer, dIlluminator, cache, 1);
     END_SHADERCLOCK(DTid.xy)

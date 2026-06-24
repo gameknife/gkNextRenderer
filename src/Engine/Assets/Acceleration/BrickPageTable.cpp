@@ -22,8 +22,11 @@ void FCPUPageIndex::Init()
     pageIndex.resize(Assets::ACGI_PAGE_COUNT * Assets::ACGI_PAGE_COUNT);
 }
 
-void FCPUBrickTable::UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint32_t cascadeCapacity,
-                                uint32_t poolBricksPerCascade, int dilationRadius)
+bool FCPUBrickTable::UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint32_t cascadeCapacity,
+                                uint32_t poolBricksPerCascade, int dilationRadius,
+                                const std::vector<Assets::AmbientBrickResidency>* residency,
+                                uint32_t currentFrame, bool hitDriven, bool bounceHitAffectsResidency,
+                                uint32_t graceFrames, uint32_t evictFrames)
 {
     const int BX = Assets::GPU_SCENE_AMBIENT_BRICKS_X;
     const int BY = Assets::GPU_SCENE_AMBIENT_BRICKS_Y;
@@ -32,14 +35,23 @@ void FCPUBrickTable::UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint3
     const uint32_t BPC = static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE);
     const uint32_t kInvalid = Assets::GPU_SCENE_AMBIENT_BRICK_INVALID;
 
+    const std::vector<uint32_t> oldBrickTable = brickTable;
     brickTable.assign(static_cast<size_t>(cascadeCapacity) * BPC, kInvalid);
     activeBrickList.assign(static_cast<size_t>(cascadeCapacity) * poolBricksPerCascade, kInvalid);
     activeBricksPerCascade.assign(cascadeCapacity, 0u);
+    candidateBricksPerCascade.assign(cascadeCapacity, 0u);
+    recentlyHitBricksPerCascade.assign(cascadeCapacity, 0u);
+    slotsToClear.clear();
+    if (candidateFirstSeenFrames.size() != static_cast<size_t>(cascadeCapacity) * BPC)
+    {
+        candidateFirstSeenFrames.assign(static_cast<size_t>(cascadeCapacity) * BPC, 0u);
+    }
 
     const uint32_t cascadesToProcess = std::min<uint32_t>(cascadeCapacity, static_cast<uint32_t>(bakers.size()));
     uint32_t totalActive = 0;
     uint32_t totalOverflow = 0;
     std::vector<uint8_t> active(BPC, 0);
+    std::vector<uint8_t> requested(BPC, 0);
     for (uint32_t c = 0; c < cascadesToProcess; ++c)
     {
         const FCPUProbeBaker& baker = bakers[c];
@@ -77,30 +89,111 @@ void FCPUBrickTable::UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint3
             }
         }
 
-        // Compact active bricks into pool slots in deterministic brick-linear order (stable for static
-        // scenes, so the GPU cube pool stays coherent across flushes). Beyond the cap they stay INVALID.
-        uint32_t slot = 0;
+        const size_t cascadeBase = static_cast<size_t>(c) * BPC;
+        std::fill(requested.begin(), requested.end(), uint8_t(0));
+        uint32_t candidateCount = 0;
+        uint32_t recentlyHitCount = 0;
         for (uint32_t b = 0; b < BPC; ++b)
         {
             if (!active[b])
             {
+                candidateFirstSeenFrames[cascadeBase + b] = 0u;
                 continue;
             }
-            if (slot < poolBricksPerCascade)
+
+            ++candidateCount;
+            uint32_t& firstSeen = candidateFirstSeenFrames[cascadeBase + b];
+            if (firstSeen == 0u)
             {
-                brickTable[static_cast<size_t>(c) * BPC + b] = slot++;
-                activeBrickList[static_cast<size_t>(c) * poolBricksPerCascade + (slot - 1u)] = b;
+                firstSeen = currentFrame + 1u;
             }
-            else
+
+            bool recentlyHit = false;
+            if (residency && cascadeBase + b < residency->size())
             {
-                ++totalOverflow;
+                const AmbientBrickResidency& state = (*residency)[cascadeBase + b];
+                uint32_t lastHit = state.lastConsumerHitFrame;
+                if (bounceHitAffectsResidency)
+                {
+                    lastHit = std::max(lastHit, state.lastBounceHitFrame);
+                }
+                recentlyHit = lastHit != 0u && currentFrame >= lastHit && currentFrame - lastHit <= evictFrames;
+            }
+            recentlyHitCount += recentlyHit ? 1u : 0u;
+
+            const uint32_t firstSeenFrame = firstSeen - 1u;
+            const bool inGrace = currentFrame >= firstSeenFrame && currentFrame - firstSeenFrame <= graceFrames;
+            requested[b] = (!hitDriven || inGrace || recentlyHit) ? 1u : 0u;
+        }
+
+        candidateBricksPerCascade[c] = candidateCount;
+        recentlyHitBricksPerCascade[c] = recentlyHitCount;
+
+        std::vector<uint32_t> oldOwner(poolBricksPerCascade, kInvalid);
+        std::vector<uint32_t> newOwner(poolBricksPerCascade, kInvalid);
+        std::vector<uint8_t> usedSlots(poolBricksPerCascade, 0u);
+        if (oldBrickTable.size() == brickTable.size())
+        {
+            for (uint32_t b = 0; b < BPC; ++b)
+            {
+                const uint32_t oldSlot = oldBrickTable[cascadeBase + b];
+                if (oldSlot < poolBricksPerCascade)
+                {
+                    oldOwner[oldSlot] = b;
+                    if (requested[b])
+                    {
+                        brickTable[cascadeBase + b] = oldSlot;
+                        newOwner[oldSlot] = b;
+                        usedSlots[oldSlot] = 1u;
+                    }
+                }
             }
         }
-        activeBricksPerCascade[c] = slot;
-        totalActive += slot;
+
+        uint32_t nextFreeSlot = 0u;
+        for (uint32_t b = 0; b < BPC; ++b)
+        {
+            if (!requested[b] || brickTable[cascadeBase + b] != kInvalid)
+            {
+                continue;
+            }
+            while (nextFreeSlot < poolBricksPerCascade && usedSlots[nextFreeSlot])
+            {
+                ++nextFreeSlot;
+            }
+            if (nextFreeSlot >= poolBricksPerCascade)
+            {
+                ++totalOverflow;
+                continue;
+            }
+            brickTable[cascadeBase + b] = nextFreeSlot;
+            newOwner[nextFreeSlot] = b;
+            usedSlots[nextFreeSlot] = 1u;
+        }
+
+        uint32_t activeCount = 0u;
+        for (uint32_t b = 0; b < BPC; ++b)
+        {
+            if (brickTable[cascadeBase + b] == kInvalid)
+            {
+                continue;
+            }
+            activeBrickList[static_cast<size_t>(c) * poolBricksPerCascade + activeCount++] = b;
+        }
+        for (uint32_t slot = 0; slot < poolBricksPerCascade; ++slot)
+        {
+            if (oldOwner[slot] != newOwner[slot] && oldOwner[slot] != kInvalid)
+            {
+                slotsToClear.push_back(c * poolBricksPerCascade + slot);
+            }
+        }
+
+        activeBricksPerCascade[c] = activeCount;
+        totalActive += activeCount;
     }
 
     activeBricksLastBuild = totalActive;
+    return oldBrickTable != brickTable;
 }
 
 void FCPUBrickTable::UploadGPU(Vulkan::DeviceMemory& deviceMemory, size_t tableByteOffset, size_t activeListByteOffset)

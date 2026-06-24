@@ -485,6 +485,57 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
 {
     bool voxelUploadCompleted = false;
     const bool batchComplete = lastBatchTasks.empty() || Tasks::TaskCoordinator::GetInstance()->IsAllTaskComplete(lastBatchTasks);
+    NextEngine* engine = NextEngine::GetInstance();
+    const Runtime::Config::UserSettings& settings = engine->GetUserSettings();
+    const uint32_t currentFrame = engine->GetTotalFrames();
+    auto rebuildBrickResidency = [&]()
+    {
+        const uint32_t residencyCount =
+            scene.AmbientCubeCascadeCapacity() * static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE);
+        std::vector<Assets::AmbientBrickResidency> residency(residencyCount);
+        void* mapped = voxelGpuMemory->Map(scene.AmbientResidencyByteOffset(),
+                                          residency.size() * sizeof(Assets::AmbientBrickResidency));
+        std::memcpy(residency.data(), mapped, residency.size() * sizeof(Assets::AmbientBrickResidency));
+        voxelGpuMemory->Unmap();
+
+        cpuBrickTable.UpdateData(
+            cascadeBakers, scene.AmbientCubeCascadeCapacity(), scene.AmbientPoolBricksPerCascade(),
+            kAmbientBrickDilationRadius, &residency, currentFrame, settings.AmbientCubeHitDrivenResidency,
+            settings.AmbientCubeBounceHitAffectsResidency, settings.AmbientCubeGraceFrames,
+            settings.AmbientCubeEvictFrames);
+
+        if (!cpuBrickTable.slotsToClear.empty())
+        {
+            mapped = gpuMemory->Map(scene.AmbientCubesByteOffset(), scene.AmbientVoxelsByteOffset());
+            auto* cubeBytes = static_cast<std::byte*>(mapped);
+            constexpr size_t brickBytes =
+                static_cast<size_t>(Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME) * sizeof(Assets::AmbientCube);
+            for (uint32_t globalSlot : cpuBrickTable.slotsToClear)
+            {
+                std::memset(cubeBytes + static_cast<size_t>(globalSlot) * brickBytes, 0, brickBytes);
+            }
+            gpuMemory->Unmap();
+        }
+
+        scene.SetAmbientActiveBrickCounts(cpuBrickTable.activeBricksPerCascade);
+        cpuBrickTable.UploadGPU(*voxelGpuMemory, scene.AmbientBrickTableByteOffset(),
+                                scene.AmbientActiveBrickListByteOffset());
+
+        if (currentFrame % 300u == 0u)
+        {
+            for (uint32_t cascadeIndex = 0; cascadeIndex < cpuBrickTable.activeBricksPerCascade.size();
+                 ++cascadeIndex)
+            {
+                const uint32_t candidates = cpuBrickTable.candidateBricksPerCascade[cascadeIndex];
+                const uint32_t hits = cpuBrickTable.recentlyHitBricksPerCascade[cascadeIndex];
+                const uint32_t resident = cpuBrickTable.activeBricksPerCascade[cascadeIndex];
+                SPDLOG_INFO("[AmbientResidency] cascade={} candidates={} residencyHits={} resident={} utilization={:.1f}%",
+                            cascadeIndex, candidates, hits, resident,
+                            candidates > 0u ? 100.0f * static_cast<float>(hits) / static_cast<float>(candidates) : 0.0f);
+            }
+        }
+    };
+
     if (needFlush && batchComplete)
     {
         const bool useGpuAmbientCubeSdf = NextEngine::GetInstance()->GetUserSettings().UseGpuAmbientCubeSdf;
@@ -500,11 +551,7 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
             if (!cascadeBakers.empty())
             {
                 cpuPageIndex.UpdateData(cascadeBakers);
-                cpuBrickTable.UpdateData(cascadeBakers, scene.AmbientCubeCascadeCapacity(),
-                                         scene.AmbientPoolBricksPerCascade(), kAmbientBrickDilationRadius);
-                scene.SetAmbientActiveBrickCounts(cpuBrickTable.activeBricksPerCascade);
-                cpuBrickTable.UploadGPU(*voxelGpuMemory, scene.AmbientBrickTableByteOffset(),
-                                        scene.AmbientActiveBrickListByteOffset());
+                rebuildBrickResidency();
             }
             cpuPageIndex.UploadGPU(*pageIndexMemory, scene.AmbientPagesByteOffset());
             needFlush = false;
@@ -537,11 +584,7 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
             if (!cascadeBakers.empty())
             {
                 cpuPageIndex.UpdateData(cascadeBakers);
-                cpuBrickTable.UpdateData(cascadeBakers, scene.AmbientCubeCascadeCapacity(),
-                                         scene.AmbientPoolBricksPerCascade(), kAmbientBrickDilationRadius);
-                scene.SetAmbientActiveBrickCounts(cpuBrickTable.activeBricksPerCascade);
-                cpuBrickTable.UploadGPU(*voxelGpuMemory, scene.AmbientBrickTableByteOffset(),
-                                        scene.AmbientActiveBrickListByteOffset());
+                rebuildBrickResidency();
             }
             cpuPageIndex.UploadGPU(*pageIndexMemory, scene.AmbientPagesByteOffset());
             needFlush = false;
@@ -549,6 +592,11 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
             distanceFieldRebuildTasks.clear();
             voxelUploadCompleted = true;
         }
+    }
+    else if (!cpuBrickTable.brickTable.empty() &&
+             engine->GetRenderer().CurrentRendererRequirements().requestAmbientCube)
+    {
+        rebuildBrickResidency();
     }
 
     if (!lastBatchTasks.empty())

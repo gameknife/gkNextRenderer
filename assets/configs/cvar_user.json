@@ -1,1 +1,6 @@
-{}
+{
+  "r.rendererType": 2,
+  "r.bakeSpeedLevel": 0,
+  "r.ambientCube.hitDrivenResidency": true,
+  "r.ambientCube.hitMarkTileRatio": 0.25
+}

@@ -272,7 +272,10 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         Assets::SanitizeAmbientCubeCascadeRatio(config_.userSettings.AmbientCubeCascadeRatio);
     ubo.AmbientCubeUnit = ambientCubeUnit;
     ubo.AmbientCubeOffset = Assets::CalculateAmbientCubeOffset(ambientCubeUnit, ambientCubeOffsetBias);
-    ubo.AmbientCubeCascadeParams = glm::vec4(float(ambientCubeCascadeCount), ambientCubeCascadeRatio, 0.0f, 0.0f);
+    ubo.AmbientCubeCascadeParams =
+        glm::vec4(float(ambientCubeCascadeCount), ambientCubeCascadeRatio,
+                  std::clamp(config_.userSettings.AmbientCubeHitMarkTileRatio, 0.01f, 1.0f),
+                  static_cast<float>(std::clamp(config_.userSettings.AmbientCubeResidencyDebug, 0, 2)));
 
     // Other Setup
     renderer_->SetDenoiserEnabled(denoiserOn);
