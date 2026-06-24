@@ -29,7 +29,7 @@ public:
     void OnRayHitResponse(Assets::RayCastResult& result) override;
     bool OverrideRenderCamera(Assets::Camera& OutRenderCamera) const override;
     void OnSceneLoaded() override;
-    void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) override;
+    void ConfigureCVars(NextCVar::FCVarSystem& cvars) override;
 
     // Timeline
     void SetCurrentStep(int32_t step);

@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "id": "rendering",
+      "label": "Rendering",
+      "groups": [
+        {
+          "label": "Renderer",
+          "items": [
+            {
+              "cvar": "r.rendererType",
+              "label": "Renderer",
+              "widget": "combo",
+              "options": ["Path Tracing", "Software Tracing", "Software Modern", "Voxel Tracing", "Modern No Ambient"]
+            },
+            {"cvar": "r.samples", "label": "Samples", "widget": "slider_int", "min": 1, "max": 16},
+            {"cvar": "r.temporalFrames", "label": "Temporal Frames", "widget": "slider_int", "min": 1, "max": 64},
+            {"cvar": "r.bounces", "label": "Ray Bounces", "widget": "slider_int", "min": 1, "max": 16}
+          ]
+        },
+        {
+          "label": "Denoising",
+          "items": [
+            {"cvar": "r.denoiser", "label": "Denoiser", "widget": "checkbox"},
+            {"cvar": "r.denoiseAtrousIterations", "label": "Diffuse Iterations", "widget": "slider_int", "min": 0, "max": 6},
+            {"cvar": "r.denoiseAtrousSpecularIterations", "label": "Specular Iterations", "widget": "slider_int", "min": 0, "max": 6}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "upscaling",
+      "label": "Upscaling",
+      "groups": [
+        {
+          "label": "Super Resolution",
+          "items": [
+            {
+              "cvar": "r.superResolution",
+              "label": "Quality Mode",
+              "widget": "combo",
+              "options": ["Native", "Ultra Quality", "Quality", "Balanced", "Performance"]
+            },
+            {"cvar": "r.dlss", "label": "DLSS", "widget": "checkbox"},
+            {"cvar": "r.fsr", "label": "FSR", "widget": "checkbox"},
+            {"cvar": "r.dlssrr", "label": "Ray Reconstruction", "widget": "checkbox", "advanced": true},
+            {"cvar": "r.dlssg", "label": "Frame Generation", "widget": "checkbox", "advanced": true}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lighting",
+      "label": "Lighting & GI",
+      "groups": [
+        {
+          "label": "Ambient Occlusion",
+          "items": [
+            {"cvar": "r.gtao.enable", "label": "GTAO", "widget": "checkbox"},
+            {
+              "cvar": "r.gtao.quality",
+              "label": "GTAO Quality",
+              "widget": "combo",
+              "options": ["Low", "Medium", "High", "Ultra"]
+            },
+            {"cvar": "r.gtao.radius", "label": "GTAO Radius", "widget": "slider_float", "min": 0.1, "max": 5.0, "step": 0.05, "format": "%.2f"},
+            {"cvar": "r.gtao.strength", "label": "GTAO Strength", "widget": "slider_float", "min": 0.0, "max": 2.0, "step": 0.02, "format": "%.2f"}
+          ]
+        },
+        {
+          "label": "SHARC",
+          "advanced": true,
+          "items": [
+            {"cvar": "r.sharc.enable", "label": "Enable SHARC", "widget": "checkbox"},
+            {"cvar": "r.sharc.updateSampleRatio", "label": "Update Ratio", "widget": "slider_float", "min": 0.01, "max": 1.0, "step": 0.01, "format": "%.2f"},
+            {"cvar": "r.sharc.sceneScale", "label": "Scene Scale", "widget": "drag_float", "min": 1.0, "max": 1000.0, "step": 1.0, "format": "%.1f"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "editor",
+      "label": "Editor",
+      "groups": [
+        {
+          "label": "Interaction",
+          "items": [
+            {"cvar": "ed.hoverHighlight", "label": "Hover Preview Highlight", "widget": "checkbox"},
+            {"cvar": "ed.outlinerAutoScroll", "label": "Auto-scroll Outliner", "widget": "checkbox"},
+            {"cvar": "ed.gizmoSnap", "label": "Gizmo Snap", "widget": "checkbox"},
+            {"cvar": "ed.gizmoSnapTranslate", "label": "Translation Snap", "widget": "drag_float", "min": 0.001, "max": 1000.0, "step": 0.1, "format": "%.3f"},
+            {
+              "cvar": "ed.gizmoDefaultMode",
+              "label": "Default Gizmo",
+              "widget": "combo",
+              "options": ["Translate", "Rotate", "Scale"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

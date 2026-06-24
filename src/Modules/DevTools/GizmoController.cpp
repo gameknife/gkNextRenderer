@@ -118,11 +118,12 @@ namespace
     }
 }
 
-void GizmoController::EnsureDefaults()
+void GizmoController::EnsureDefaults(int defaultOperation)
 {
     if (operation_ == 0)
     {
-        operation_ = static_cast<int>(ImGuizmo::TRANSLATE);
+        constexpr ImGuizmo::OPERATION operations[] = {ImGuizmo::TRANSLATE, ImGuizmo::ROTATE, ImGuizmo::SCALE};
+        operation_ = static_cast<int>(operations[std::clamp(defaultOperation, 0, 2)]);
     }
     if (mode_ == 0)
     {
@@ -245,7 +246,8 @@ void GizmoController::DrawToolbar()
     ImGui::PopStyleVar(2);
 }
 
-void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, const glm::vec2& viewportSize)
+void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, const glm::vec2& viewportSize,
+                           bool snapEnabled, float translateSnap, int defaultOperation)
 {
     Assets::Scene& scene = engine.GetScene();
     std::vector<uint32_t> selectedIds = BuildSelectionList(scene);
@@ -281,6 +283,7 @@ void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, con
     }
 
     isShowing_ = true;
+    EnsureDefaults(defaultOperation);
 
     ImGuiIO& io = ImGui::GetIO();
     HandleShortcuts(io);
@@ -309,12 +312,23 @@ void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, con
     ImGuizmo::SetRect(viewportPos.x, viewportPos.y, viewportSize.x, viewportSize.y);
     ImGuizmo::GetStyle().Colors[ImGuizmo::COLOR::SELECTION] = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 
+    float snapValues[3] = {translateSnap, translateSnap, translateSnap};
+    if (operation_ == static_cast<int>(ImGuizmo::ROTATE))
+    {
+        snapValues[0] = snapValues[1] = snapValues[2] = 15.0f;
+    }
+    else if (operation_ == static_cast<int>(ImGuizmo::SCALE))
+    {
+        snapValues[0] = snapValues[1] = snapValues[2] = 0.1f;
+    }
     ImGuizmo::Manipulate(
         glm::value_ptr(view),
         glm::value_ptr(projection),
         static_cast<ImGuizmo::OPERATION>(operation_),
         gizmoMode,
-        glm::value_ptr(worldMatrix));
+        glm::value_ptr(worldMatrix),
+        nullptr,
+        snapEnabled ? snapValues : nullptr);
 
     isUsing_ = ImGuizmo::IsUsing();
     isOver_ = ImGuizmo::IsOver();

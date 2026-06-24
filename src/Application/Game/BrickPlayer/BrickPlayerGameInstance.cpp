@@ -249,7 +249,7 @@ BrickPlayerGameInstance::BrickPlayerGameInstance(Vulkan::WindowConfig& config, R
     userInterface_ = std::make_unique<BrickPlayerUserInterface>(this);
 }
 
-void BrickPlayerGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
+void BrickPlayerGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
     cvars.SetDefaultFromString("r.samples", "16", &error);

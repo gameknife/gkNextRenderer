@@ -50,3 +50,45 @@ TEST_CASE("CVar complete reports no matches and respects limit", "[Unit][CVar]")
     REQUIRE(limited.output.size() == 21);
     CHECK(limited.output.back() == "... (5 more, refine prefix)");
 }
+
+TEST_CASE("CVar metadata exposes type range and modified state", "[Unit][CVar]")
+{
+    NextCVar::FCVarSystem cvars;
+    int32_t quality = 2;
+    REQUIRE(cvars.RegisterInt("r.quality", quality, &quality, NextCVar::ECVarFlags::Archive,
+                              "Quality", nullptr, 0, 4));
+
+    NextCVar::FCVarInfo info;
+    REQUIRE(cvars.TryGetInfo("r.quality", info));
+    CHECK(info.type == NextCVar::ECVarType::Int);
+    CHECK(info.isDefault);
+    CHECK(info.minValue == 0.0);
+    CHECK(info.maxValue == 4.0);
+
+    std::string error;
+    REQUIRE(cvars.SetValueFromString("r.quality", "9", NextCVar::ECVarSetBy::Console, &error));
+    CHECK(quality == 4);
+    REQUIRE(cvars.TryGetInfo("r.quality", info));
+    CHECK_FALSE(info.isDefault);
+
+    std::vector<std::string> names;
+    cvars.ForEach([&](const NextCVar::FCVarInfo& entry) { names.push_back(entry.name); });
+    CHECK(names == std::vector<std::string>{"r.quality"});
+}
+
+TEST_CASE("CVar change callback only runs for actual value changes", "[Unit][CVar]")
+{
+    NextCVar::FCVarSystem cvars;
+    bool enabled = false;
+    int callbackCount = 0;
+    REQUIRE(cvars.RegisterBool("r.enabled", false, &enabled, NextCVar::ECVarFlags::None,
+                               "Enabled", [&]() { ++callbackCount; }));
+
+    std::string error;
+    REQUIRE(cvars.SetValueFromString("r.enabled", "false", NextCVar::ECVarSetBy::Console, &error));
+    CHECK(callbackCount == 0);
+    REQUIRE(cvars.SetValueFromString("r.enabled", "true", NextCVar::ECVarSetBy::Console, &error));
+    CHECK(callbackCount == 1);
+    REQUIRE(cvars.SetValueFromString("r.enabled", "true", NextCVar::ECVarSetBy::Console, &error));
+    CHECK(callbackCount == 1);
+}

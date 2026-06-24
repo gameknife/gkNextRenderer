@@ -44,7 +44,7 @@ public:
     void OnDestroy() override {}
     void OnSceneLoaded() override;
     bool OnRenderUI() override;
-    void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) override;
+    void ConfigureCVars(NextCVar::FCVarSystem& cvars) override;
 
 private:
     bool LoadConfig();

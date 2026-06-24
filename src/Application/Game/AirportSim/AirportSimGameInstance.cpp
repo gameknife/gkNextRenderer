@@ -370,7 +370,7 @@ bool AirportSimGameInstance::OnScroll(double /*xoffset*/, double yoffset)
     return true;
 }
 
-void AirportSimGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
+void AirportSimGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
     cvars.SetDefaultFromString("r.temporalFrames", "8", &error);

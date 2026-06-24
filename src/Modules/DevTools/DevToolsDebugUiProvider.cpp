@@ -6,6 +6,7 @@
 #include "Modules/DevTools/ProfessionalUI.hpp"
 #include "Modules/DevTools/ConsoleLogBuffer.hpp"
 #include "Modules/DevTools/UiDevPanels.hpp"
+#include "Modules/DevTools/CVarEditorPanel.hpp"
 
 namespace DevTools
 {
@@ -50,6 +51,11 @@ namespace DevTools
             void DrawGraphicsPanel(NextEngine& engine, bool& panelVisible, float topOffset) override
             {
                 Runtime::GraphicsDebugPanel::DrawPanel(engine, panelVisible, topOffset);
+            }
+
+            void DrawCVarEditor(NextEngine& engine, bool& panelVisible) override
+            {
+                DrawCVarEditorPanel(engine, panelVisible);
             }
 
             void DrawProfileOverlay(NextEngine& engine, const NextUI::Statistics& statistics,

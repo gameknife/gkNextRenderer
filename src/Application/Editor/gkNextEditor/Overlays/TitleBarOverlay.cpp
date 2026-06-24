@@ -13,6 +13,7 @@
 #include <SDL3/SDL_dialog.h>
 
 #include "Engine/Runtime/Engine.hpp"
+#include "Modules/DevTools/GraphicsDebugPanel.hpp"
 #include "Modules/DevTools/ProfessionalUI.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Modules/DevTools/UiDevPanels.hpp"
@@ -234,6 +235,8 @@ namespace Editor
                     }
                     ImGui::EndMenu();
                 }
+                ImGui::Separator();
+                ImGui::MenuItem("Preferences...", "Ctrl+,", &ui.settingsPanel);
                 ImGui::EndMenu();
             }
 
@@ -241,65 +244,43 @@ namespace Editor
             menuRight = std::max(menuRight, ImGui::GetItemRectMax().x);
             if (viewMenuOpen)
             {
-                static int viewportMode = 0;
-                static bool showGrid = true;
-                static bool showBounds = false;
-                static bool showIcons = true;
-                static bool gizmoTranslate = true;
-                static bool gizmoRotate = false;
-                static bool gizmoScale = false;
-                static bool snapEnabled = true;
+                Runtime::Config::ShowFlags& showFlags = ctx.engine.GetShowFlags();
+                const Runtime::GraphicsDebugPanel::EViewMode viewportMode =
+                    Runtime::GraphicsDebugPanel::ResolveViewMode(showFlags);
 
                 if (ImGui::BeginMenu("Viewport Display Mode"))
                 {
-                    if (ImGui::MenuItem("Lit", nullptr, viewportMode == 0))
+                    if (ImGui::MenuItem("Lit", nullptr, viewportMode == Runtime::GraphicsDebugPanel::EViewMode::Lit))
                     {
-                        viewportMode = 0;
+                        Runtime::GraphicsDebugPanel::ApplyViewMode(
+                            showFlags, Runtime::GraphicsDebugPanel::EViewMode::Lit);
                     }
-                    if (ImGui::MenuItem("Lighting Only", nullptr, viewportMode == 1))
+                    if (ImGui::MenuItem("Lighting Debug", nullptr,
+                                        viewportMode == Runtime::GraphicsDebugPanel::EViewMode::Lighting))
                     {
-                        viewportMode = 1;
+                        Runtime::GraphicsDebugPanel::ApplyViewMode(
+                            showFlags, Runtime::GraphicsDebugPanel::EViewMode::Lighting);
                     }
-                    if (ImGui::MenuItem("Wireframe", nullptr, viewportMode == 2))
+                    if (ImGui::MenuItem("Wireframe", nullptr,
+                                        viewportMode == Runtime::GraphicsDebugPanel::EViewMode::Wireframe))
                     {
-                        viewportMode = 2;
+                        Runtime::GraphicsDebugPanel::ApplyViewMode(
+                            showFlags, Runtime::GraphicsDebugPanel::EViewMode::Wireframe);
                     }
-                    if (ImGui::MenuItem("Unlit", nullptr, viewportMode == 3))
+                    if (ImGui::MenuItem("Visual Debug", nullptr,
+                                        viewportMode == Runtime::GraphicsDebugPanel::EViewMode::VisualDebug))
                     {
-                        viewportMode = 3;
+                        Runtime::GraphicsDebugPanel::ApplyViewMode(
+                            showFlags, Runtime::GraphicsDebugPanel::EViewMode::VisualDebug);
                     }
                     ImGui::EndMenu();
                 }
 
                 ImGui::Separator();
-                ImGui::MenuItem("Show Grid", nullptr, &showGrid);
-                ImGui::MenuItem("Show Bounds", nullptr, &showBounds);
-                ImGui::MenuItem("Show Icons", nullptr, &showIcons);
-
-                if (ImGui::BeginMenu("Gizmo"))
-                {
-                    if (ImGui::MenuItem("Translate", "W", gizmoTranslate))
-                    {
-                        gizmoTranslate = true;
-                        gizmoRotate = false;
-                        gizmoScale = false;
-                    }
-                    if (ImGui::MenuItem("Rotate", "E", gizmoRotate))
-                    {
-                        gizmoTranslate = false;
-                        gizmoRotate = true;
-                        gizmoScale = false;
-                    }
-                    if (ImGui::MenuItem("Scale", "R", gizmoScale))
-                    {
-                        gizmoTranslate = false;
-                        gizmoRotate = false;
-                        gizmoScale = true;
-                    }
-                    ImGui::Separator();
-                    ImGui::MenuItem("Enable Snap", nullptr, &snapEnabled);
-                    ImGui::EndMenu();
-                }
+                ImGui::MenuItem("Show Grid", nullptr, &showFlags.ShowGrid);
+                ImGui::MenuItem("Show Bounds", nullptr, &showFlags.DebugDraw_BoundingBox);
+                ImGui::MenuItem("Wireframe", nullptr, &showFlags.ShowWireframe);
+                ImGui::MenuItem("Gizmo Snap", nullptr, &ctx.settings.gizmoSnap);
                 ImGui::EndMenu();
             }
 
@@ -362,6 +343,7 @@ namespace Editor
                 ImGui::MenuItem("AI Assistant", nullptr, &ui.aiPanel);
                 ImGui::MenuItem("Command History", nullptr, &ui.commandHistoryPanel);
                 ImGui::MenuItem("Hot Reload", nullptr, &ui.hotReloadPanel);
+                ImGui::MenuItem("Settings", nullptr, &ui.settingsPanel);
                 ImGui::EndMenu();
             }
 

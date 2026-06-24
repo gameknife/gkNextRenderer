@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
+#include "Core/EditorSettings.hpp"
 
 class NextEngine;
 class EditorActionDispatcher;
@@ -22,5 +23,6 @@ struct EditorContext final
     Assets::Scene& scene;
     NextUI::UserInterface& ui;
     EditorActionDispatcher& actions;
+    Editor::EditorSettings& settings;
     NextUI::GizmoController* gizmoController = nullptr;
 };

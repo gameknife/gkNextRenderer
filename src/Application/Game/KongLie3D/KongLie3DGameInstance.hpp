@@ -19,7 +19,7 @@ public:
     void OnTick(double deltaSeconds) override;
     void OnDestroy() override;
     bool OnRenderUI() override;
-    void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) override;
+    void ConfigureCVars(NextCVar::FCVarSystem& cvars) override;
     bool OnKey(SDL_Event& event) override;
     bool OnCursorPosition(double xpos, double ypos) override;
     bool OnMouseButton(SDL_Event& event) override;

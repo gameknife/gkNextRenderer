@@ -150,7 +150,7 @@ void CharacterDemoGameInstance::OnDestroy()
     aiBot_.character.controller.Destroy();
 }
 
-void CharacterDemoGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
+void CharacterDemoGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
     cvars.SetDefaultFromString("r.temporalFrames", "8", &error);

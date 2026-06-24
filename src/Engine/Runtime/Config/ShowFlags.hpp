@@ -7,6 +7,7 @@ struct ShowFlags final
 {
     bool DebugPhysicsOverlay = false;
     bool DebugGraphicsPanel = false;
+    bool DebugCVarPanel = false;
     bool DebugProfileOverlay = false;
     bool DebugDraw_Lighting = false;
     bool DebugDraw_ShadowCascadeCoverage = false;

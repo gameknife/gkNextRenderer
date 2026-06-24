@@ -58,13 +58,24 @@ std::unique_ptr<NextUI::IMultiViewportBackend> EditorGameInstance::CreateMultiVi
     return std::make_unique<NextUI::MultiViewportBackend>(GetEngine());
 }
 
-void EditorGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
+void EditorGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
     cvars.SetDefaultFromString("r.samples", "4", &error);
     cvars.SetDefaultFromString("r.temporalFrames", "16", &error);
     cvars.SetDefaultFromString("r.denoiser", "0", &error);
     cvars.SetDefaultFromString("r.superResolution", "2", &error);
+    cvars.RegisterBool("ed.hoverHighlight", true, &settings_.hoverHighlight, NextCVar::ECVarFlags::Archive,
+                       "Raycast under the cursor and highlight the hovered object");
+    cvars.RegisterBool("ed.outlinerAutoScroll", true, &settings_.outlinerAutoScroll, NextCVar::ECVarFlags::Archive,
+                       "Automatically scroll the Outliner to the selected object");
+    cvars.RegisterBool("ed.gizmoSnap", false, &settings_.gizmoSnap, NextCVar::ECVarFlags::Archive,
+                       "Enable transform gizmo snapping");
+    cvars.RegisterFloat("ed.gizmoSnapTranslate", 1.0f, &settings_.gizmoSnapTranslate,
+                        NextCVar::ECVarFlags::Archive, "Translation gizmo snap distance", nullptr, 0.001, 1000.0);
+    cvars.RegisterInt("ed.gizmoDefaultMode", 0, &settings_.gizmoDefaultMode, NextCVar::ECVarFlags::Archive,
+                      "Default gizmo operation (0=translate,1=rotate,2=scale)", nullptr, 0, 2);
+    cvars.RegisterUserFileChannel("ed.", "assets/configs/cvar_user.editor.json");
 }
 
 void EditorGameInstance::OnInit()
@@ -179,6 +190,13 @@ bool EditorGameInstance::OnKey(SDL_Event& event)
         case SDLK_ESCAPE:
             GetEngine().GetScene().ClearSelection();
             break;
+        case SDLK_COMMA:
+            if ((event.key.mod & (SDL_KMOD_CTRL | SDL_KMOD_GUI)) != 0 && !ImGui::GetIO().WantTextInput)
+            {
+                auto& uiState = GetEditorInterface().GetEditorUiState();
+                uiState.settingsPanel = !uiState.settingsPanel;
+            }
+            break;
         case SDLK_DELETE:
         case SDLK_BACKSPACE:
         {
@@ -264,7 +282,7 @@ bool EditorGameInstance::OnCursorPosition(double xpos, double ypos)
 
     const uint32_t mouseButtons = SDL_GetMouseState(nullptr, nullptr);
     const bool rightMousePressed = (mouseButtons & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
-    if (!gizmoController_.IsInteracting() && !rightMousePressed)
+    if (settings_.hoverHighlight && !gizmoController_.IsInteracting() && !rightMousePressed)
     {
         auto mousePos = GetEngine().GetMousePos();
         glm::vec3 org;
@@ -283,6 +301,10 @@ bool EditorGameInstance::OnCursorPosition(double xpos, double ypos)
                                    }
                                    return true;
                                });
+    }
+    else if (!settings_.hoverHighlight)
+    {
+        GetEngine().GetScene().ClearHoveredId();
     }
 
     return true;
@@ -349,5 +371,6 @@ bool EditorGameInstance::OnScroll(double xoffset, double yoffset)
 
 void EditorGameInstance::DrawGizmo(const glm::vec2& viewportPos, const glm::vec2& viewportSize)
 {
-    gizmoController_.Draw(GetEngine(), viewportPos, viewportSize);
+    gizmoController_.Draw(GetEngine(), viewportPos, viewportSize, settings_.gizmoSnap,
+                          settings_.gizmoSnapTranslate, settings_.gizmoDefaultMode);
 }

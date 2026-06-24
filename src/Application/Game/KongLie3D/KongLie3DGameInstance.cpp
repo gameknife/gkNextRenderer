@@ -338,7 +338,7 @@ void KongLie3DGameInstance::OnInitUI()
     });
 }
 
-void KongLie3DGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
+void KongLie3DGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     cvars.RegisterFloat("audio.sfxVolume",
                         KongLie3D::KongLieSfxVolume,

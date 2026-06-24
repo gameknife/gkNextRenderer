@@ -756,7 +756,7 @@ bool NextRendererGameInstance::OnGamepadInput(int16_t leftStickX, int16_t leftSt
 	return modelViewController_.OnGamepadInput(leftStickX, leftStickY, rightStickX, rightStickY, leftTrigger, rightTrigger);
 }
 
-void NextRendererGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
+void NextRendererGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     //std::string error;
     //cvars.SetDefaultFromString("r.superResolution", "4", &error);

@@ -403,8 +403,8 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     services_.cvarSystem = std::make_unique<NextCVar::FCVarSystem>();
     NextCVar::RegisterEngineCVars(*services_.cvarSystem, config_.userSettings, config_.showFlags, this);
     services_.cvarSystem->LoadDefaultFile("assets/configs/cvar_default.json");
-    gameInstance_->ApplyDefaultCVars(*services_.cvarSystem);
-    services_.cvarSystem->LoadUserFile("assets/configs/cvar_user.json");
+    gameInstance_->ConfigureCVars(*services_.cvarSystem);
+    services_.cvarSystem->LoadUserFiles();
     for (const std::string& overrideCommand : options_->CVarOverrides)
     {
         const auto result = services_.cvarSystem->ExecuteCommand(overrideCommand);
@@ -1259,6 +1259,11 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
             SCOPED_CPU_TIMER("graphics debug ui");
             debugUiProvider_->DrawGraphicsPanel(*this, config_.showFlags.DebugGraphicsPanel,
                                                 gameInstance_->GetGraphicsDebugPanelTopOffset());
+        }
+        if (debugUiProvider_ && config_.showFlags.DebugCVarPanel)
+        {
+            SCOPED_CPU_TIMER("cvar editor ui");
+            debugUiProvider_->DrawCVarEditor(*this, config_.showFlags.DebugCVarPanel);
         }
         if (debugUiProvider_ && config_.showFlags.DebugProfileOverlay)
         {

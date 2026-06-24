@@ -610,12 +610,12 @@ namespace Editor
             NextUI::Theme::IconButton(ICON_FA_PLUS "##CreateActor", "Create Actor (placeholder)", false,
                                          ImVec2(26.0f, 24.0f)); ImGui::SameLine();
             
-            const bool autoScrollWasEnabled = ui.outlinerAutoScrollToSelection;
+            const bool autoScrollWasEnabled = ctx.settings.outlinerAutoScroll;
             if (NextUI::Theme::IconButton(ICON_FA_LOCATION_CROSSHAIRS "##AutoScrollToSelection",
                                              "Auto Scroll To Selection", autoScrollWasEnabled,
                                              ImVec2(28.0f, 24.0f)))
             {
-                ui.outlinerAutoScrollToSelection = !ui.outlinerAutoScrollToSelection;
+                ctx.settings.outlinerAutoScroll = !ctx.settings.outlinerAutoScroll;
             }
             ImGui::SameLine();
             NextUI::Theme::IconButton(ICON_FA_LAYER_GROUP, "Create Group (placeholder)", false,
@@ -624,7 +624,7 @@ namespace Editor
             NextUI::Theme::DrawThinSeparator();
 
             const uint32_t currentSelectionId = ctx.scene.GetSelectedId();
-            if (ui.outlinerAutoScrollToSelection)
+            if (ctx.settings.outlinerAutoScroll)
             {
                 const bool toggledOn = !prevAutoScrollEnabled;
                 const bool selectionChanged = currentSelectionId != lastSelectionId;
@@ -641,7 +641,7 @@ namespace Editor
                 pendingScrollTargetId = InvalidId;
             }
             suppressNextSelectionAutoScroll = false;
-            prevAutoScrollEnabled = ui.outlinerAutoScrollToSelection;
+            prevAutoScrollEnabled = ctx.settings.outlinerAutoScroll;
             lastSelectionId = currentSelectionId;
 
             ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.42f));
@@ -666,7 +666,7 @@ namespace Editor
                     }
 
                     DrawNode(ctx, ui, *node, renameTargetId, renameBuffer, openRenamePopup, focusRenameInput,
-                             hoveredIdCandidate, ui.outlinerAutoScrollToSelection, pendingScrollTargetId,
+                             hoveredIdCandidate, ctx.settings.outlinerAutoScroll, pendingScrollTargetId,
                              suppressNextSelectionAutoScroll, nodeFilter);
 
                     if (!filterActive && limit-- <= 0)

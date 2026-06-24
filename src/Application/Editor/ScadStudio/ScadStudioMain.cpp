@@ -39,7 +39,7 @@ ScadStudioGameInstance::ScadStudioGameInstance(Vulkan::WindowConfig& config, Run
 
 ScadStudioGameInstance::~ScadStudioGameInstance() = default;
 
-void ScadStudioGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
+void ScadStudioGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     // Favour responsiveness over final quality for iterative authoring.
     std::string error;
