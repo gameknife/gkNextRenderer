@@ -23,12 +23,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
         Cubes[idx].NegY = 0;
         Cubes[idx].PosX = 0;
         Cubes[idx].NegX = 0;
-        Cubes[idx].PosZ_D = 0;
-        Cubes[idx].NegZ_D = 0;
-        Cubes[idx].PosY_D = 0;
-        Cubes[idx].NegY_D = 0;
-        Cubes[idx].PosX_D = 0;
-        Cubes[idx].NegX_D = 0;
+        Cubes[idx].SunDirect = 0;
+        Cubes[idx].SkyEmissiveDirect = 0;
         Cubes[idx].skyVisibility_pznzpyny = 0;
         Cubes[idx].skyVisibility_pxnxs0s1 = 0;
     }

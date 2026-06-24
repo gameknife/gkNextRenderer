@@ -352,7 +352,7 @@ public struct FAmbientCubeRayTracer : IRayTracer
         float4 probeData = interpolateAmbientCubes<FullAmbientCubeSampler>(rayOrigin, rayDir);
         inoutRayColor.rgb = probeData.rgb;
         outHitDist = 100.0f; // Fake hit distance for ambient
-        return probeData.a < 0.6;
+        return probeData.a < 0.;
     }
 }
 
@@ -375,7 +375,7 @@ public struct FAmbientCubeRayTracerIndirect : IRayTracer
         float4 probeData = interpolateAmbientCubes<FullAmbientCubeSampler>(rayOrigin, rayDir);
         inoutRayColor.rgb = probeData.rgb;
         outHitDist = 100.0f;
-        return probeData.a < 0.6;
+        return probeData.a < 0.5;
     }
 }
 public struct FHardwareRayTracer : IRayTracer

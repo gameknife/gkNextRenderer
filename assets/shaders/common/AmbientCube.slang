@@ -188,101 +188,49 @@ float4 sampleAmbientCubeHL2_ID(AmbientCube cube, float3 normal)
     return color;
 }
 
-float4 sampleAmbientCubeHL2_DI(AmbientCube cube, float3 normal)
+float AmbientCubeSkyVisibility(AmbientCube cube, float3 normal)
 {
-    float4 color = float4(0.0, 0.0, 0.0, 0.0);
-    float sum = 0.0;
-
-    float wx = max(normal.x, 0.0f);
-    float wnx = max(-normal.x, 0.0f);
-    float wy = max(normal.y, 0.0f);
-    float wny = max(-normal.y, 0.0f);
-    float wz = max(normal.z, 0.0f);
-    float wnz = max(-normal.z, 0.0f);
-
-    sum = wx + wnx + wy + wny + wz + wnz;
-
-    color += wx * UnpackColor(cube.PosX_D);
-    color += wnx * UnpackColor(cube.NegX_D);
-    color += wy * UnpackColor(cube.PosY_D);
-    color += wny * UnpackColor(cube.NegY_D);
-    color += wz * UnpackColor(cube.PosZ_D);
-    color += wnz * UnpackColor(cube.NegZ_D);
-
-    color *= (sum > 0.0) ? (1.0 / sum) : 1.0;
-    return color;
-}
-
-float4 sampleAmbientCubeHL2_LightCache(AmbientCube cube, float3 normal)
-{
-    float4 color = float4(0.0, 0.0, 0.0, 0.0);
-    float sum = 0.0;
-
-    float wx = max(normal.x, 0.0f);
-    float wnx = max(-normal.x, 0.0f);
-    float wy = max(normal.y, 0.0f);
-    float wny = max(-normal.y, 0.0f);
-    float wz = max(normal.z, 0.0f);
-    float wnz = max(-normal.z, 0.0f);
-
-    sum = wx + wnx + wy + wny + wz + wnz;
-
-    color += wx * UnpackColor(cube.PosX_D);
-    color += wnx * UnpackColor(cube.NegX_D);
-    color += wy * UnpackColor(cube.PosY_D);
-    color += wny * UnpackColor(cube.NegY_D);
-    color += wz * UnpackColor(cube.PosZ_D);
-    color += wnz * UnpackColor(cube.NegZ_D);
-
-    color *= (sum > 0.0) ? (1.0 / sum) : 1.0;
-    return color;
-}
-
-
-float4 sampleAmbientCubeHL2_Full(AmbientCube cube, float3 normal, float sunIntensity)
-{
-    float4 color = float4(0.0, 0.0, 0.0, 0.0);
-    float skyvis = 0.0;
-    float sunvis = 0.0;
-    float sum = 0.0;
-
     float wx = max(normal.x, 0.0);
     float wnx = max(-normal.x, 0.0);
     float wy = max(normal.y, 0.0);
     float wny = max(-normal.y, 0.0);
     float wz = max(normal.z, 0.0);
     float wnz = max(-normal.z, 0.0);
+    float sum = wx + wnx + wy + wny + wz + wnz;
 
-    sum = wx + wnx + wy + wny + wz + wnz;
+    uint4 unpacked0 = UnpackBytes(cube.skyVisibility_pznzpyny);
+    uint4 unpacked1 = UnpackBytes(cube.skyVisibility_pxnxs0s1);
 
-    uint4 unpacked_skyvis0 = UnpackBytes(cube.skyVisibility_pznzpyny);
-    uint4 unpacked_skyvis1 = UnpackBytes(cube.skyVisibility_pxnxs0s1);
-
-    skyvis += unpacked_skyvis0.x * wz;
-    skyvis += unpacked_skyvis0.y * wnz;
-    skyvis += unpacked_skyvis0.z * wy;
-    skyvis += unpacked_skyvis0.w * wny;
-    skyvis += unpacked_skyvis1.x * wx;
-    skyvis += unpacked_skyvis1.y * wnx;
-
-    color += wx * UnpackColor(cube.PosX_D) * sunIntensity;
-    color += wnx * UnpackColor(cube.NegX_D) * sunIntensity;
-    color += wy * UnpackColor(cube.PosY_D) * sunIntensity;
-    color += wny * UnpackColor(cube.NegY_D) * sunIntensity;
-    color += wz * UnpackColor(cube.PosZ_D) * sunIntensity;
-    color += wnz * UnpackColor(cube.NegZ_D) * sunIntensity;
-
-    color += wx * UnpackColor(cube.PosX);
-    color += wnx * UnpackColor(cube.NegX);
-    color += wy * UnpackColor(cube.PosY);
-    color += wny * UnpackColor(cube.NegY);
-    color += wz * UnpackColor(cube.PosZ);
-    color += wnz * UnpackColor(cube.NegZ);
-
-    // Normalize
-    color.xyz *= (sum > 0.0) ? (1.0 / sum) : 1.0;
+    float skyvis = 0.0;
+    skyvis += float(unpacked0.x) * wz;
+    skyvis += float(unpacked0.y) * wnz;
+    skyvis += float(unpacked0.z) * wy;
+    skyvis += float(unpacked0.w) * wny;
+    skyvis += float(unpacked1.x) * wx;
+    skyvis += float(unpacked1.y) * wnx;
     skyvis *= (sum > 0.0) ? (1.0 / sum) : 1.0;
-    color.a = skyvis / 255.0f;
+    return skyvis / 255.0f;
+}
+
+float4 sampleAmbientCubeDirectBounce(AmbientCube cube, float3 normal)
+{
+    float4 color = UnpackColor(cube.SunDirect) + UnpackColor(cube.SkyEmissiveDirect);
+    color.a = AmbientCubeSkyVisibility(cube, normal);
+    return color;
+}
+
+float4 sampleAmbientCubeDirectSurface(AmbientCube cube, float3 normal)
+{
+    float4 color = UnpackColor(cube.SkyEmissiveDirect);
+    color.a = AmbientCubeSkyVisibility(cube, normal);
+    return color;
+}
+
+
+float4 sampleAmbientCubeHL2_Full(AmbientCube cube, float3 normal)
+{
+    float4 color = sampleAmbientCubeHL2_ID(cube, normal) + sampleAmbientCubeDirectSurface(cube, normal);
+    color.a = AmbientCubeSkyVisibility(cube, normal);
     return color;
 }
 
@@ -298,7 +246,7 @@ public struct FullAmbientCubeSampler : IAmbientCubeSampler
 {
     static float4 Sample(AmbientCube cube, float3 normal)
     {
-        return sampleAmbientCubeHL2_Full(cube, normal, 1.0);
+        return sampleAmbientCubeHL2_Full(cube, normal);
     }
 };
 
@@ -306,7 +254,7 @@ public struct FullAmbientCubeWNSunSampler : IAmbientCubeSampler
 {
     static float4 Sample(AmbientCube cube, float3 normal)
     {
-        return sampleAmbientCubeHL2_Full(cube, normal, 0.0);
+        return sampleAmbientCubeHL2_Full(cube, normal);
     }
 };
 
@@ -314,7 +262,7 @@ public struct DIAmbientCubeSampler : IAmbientCubeSampler
 {
     static float4 Sample(AmbientCube cube, float3 normal)
     {
-        return sampleAmbientCubeHL2_DI(cube, normal);
+        return sampleAmbientCubeDirectBounce(cube, normal);
     }
 };
 
@@ -322,7 +270,7 @@ public struct LightCacheAmbientCubeSampler : IAmbientCubeSampler
 {
     static float4 Sample(AmbientCube cube, float3 normal)
     {
-        return sampleAmbientCubeHL2_LightCache(cube, normal);
+        return sampleAmbientCubeDirectSurface(cube, normal);
     }
 };
 
@@ -344,7 +292,7 @@ public AmbientCube ZeroAmbientCube()
 {
     AmbientCube c;
     c.PosZ = 0; c.NegZ = 0; c.PosY = 0; c.NegY = 0; c.PosX = 0; c.NegX = 0;
-    c.PosZ_D = 0; c.NegZ_D = 0; c.PosY_D = 0; c.NegY_D = 0; c.PosX_D = 0; c.NegX_D = 0;
+    c.SunDirect = 0; c.SkyEmissiveDirect = 0;
     c.skyVisibility_pznzpyny = 0; c.skyVisibility_pxnxs0s1 = 0;
     return c;
 }
