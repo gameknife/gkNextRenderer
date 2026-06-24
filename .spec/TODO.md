@@ -9,7 +9,7 @@
 - [x] `#00061` [FEAT] 根据docs\designs\swmodern-noambient-sky-occlusion-design.md的计划，一口气做完整个实现 → journal/00061.md (2026-06-21)
 - [x] `#00062` [REFACTOR] gkNextEditor的uiState_.fontIcon没必要了，默认系统字体带了所有icon，去掉这个字体 → journal/00062.md (2026-06-22)
 - [x] `#00065` [IDEA] 根据gknexteditor-settings-panel-plan.md的计划，一口气做完这个cvar, setting面板的改造计划，完成后提交 → journal/00065.md (2026-06-24)
-- [ ] `#00066` [IDEA] 根据docs\designs\ambientcube-hit-driven-residency-design.md的计划，一口气完成整个计划
+- [x] `#00066` [IDEA] 根据docs\designs\ambientcube-hit-driven-residency-design.md的计划，一口气完成整个计划 → journal/00066.md (2026-06-24)
 - [ ] `#00067` [IDEA] 提交目前所有修改
 - [ ] `#00068` [IDEA] 阅读docs\designs\webrtc-remoteplay-design.md和docs\plans\webrtc-remoteplay-hwencode-plan.md两篇计划文档，再根据当前的的实现情况，继续推进webrtc功能到最终状态
 

@@ -8,6 +8,64 @@ implementing Common;
 // always bakes direct+indirect: the indirect bounce samples neighbour cubes via
 // interpolateAmbientCubesStable, so there is no separate propagation pass.
 
+uint AmbientBakeHash(uint value)
+{
+    value ^= value >> 16u;
+    value *= 0x7feb352du;
+    value ^= value >> 15u;
+    value *= 0x846ca68bu;
+    value ^= value >> 16u;
+    return value;
+}
+
+float AmbientBakeHash01(uint value)
+{
+    return float(AmbientBakeHash(value) & 0x00FFFFFFu) / 16777216.0f;
+}
+
+float AmbientBakeRadicalInverseVdc(uint bits)
+{
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return float(bits) * 2.3283064365386963e-10f;
+}
+
+float2 AmbientBakeHammersley2D(uint index, uint sampleCount)
+{
+    return float2((float(index) + 0.5f) / float(sampleCount), AmbientBakeRadicalInverseVdc(index));
+}
+
+float3 AmbientBakeUniformHemisphere(float2 u)
+{
+    float z = saturate(u.x);
+    float phi = M_TWO_PI * u.y;
+    float r = sqrt(max(0.0f, 1.0f - z * z));
+    return float3(r * cos(phi), r * sin(phi), z);
+}
+
+uint AmbientBakeFaceId(float3 basis)
+{
+    if (abs(basis.y) > 0.5f)
+    {
+        return basis.y > 0.0f ? 0u : 1u;
+    }
+    if (abs(basis.x) > 0.5f)
+    {
+        return basis.x > 0.0f ? 2u : 3u;
+    }
+    return basis.z > 0.0f ? 4u : 5u;
+}
+
+float2 AmbientBakeSample2D(uint sampleIndex, uint sampleCount, uint scramble)
+{
+    float2 u = AmbientBakeHammersley2D(sampleIndex, sampleCount);
+    float2 shift = float2(AmbientBakeHash01(scramble), AmbientBakeHash01(scramble ^ 0x9e3779b9u));
+    return frac(u + shift);
+}
+
 public struct FGpuProbeGenerator : IProbeGenerator
 {
     bool FaceTask(IRayTracer tracer, float3 origin, float3 basis, uint iterate, uint bakeCascadeIndex, inout uint DirectLight, inout uint IndirectLight, inout uint SkyVisOut, inout uint SunVisOut)
@@ -22,13 +80,16 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
         float skyVisibility = 0.0;
 
-        // 抖动
-        const float2 offset = grid3x3[iterate % 9] * 0.25f;
+        uint scramble = AmbientBakeHash(asuint(origin.x) ^ (asuint(origin.y) * 0x9e3779b9u) ^
+                                        (asuint(origin.z) * 0x85ebca6bu));
+        scramble ^= AmbientBakeHash(AmbientBakeFaceId(basis) + bakeCascadeIndex * 17u);
+        scramble ^= AmbientBakeHash(iterate * 131u + Camera.TotalFrames * 8191u);
 
         // 这个采样还是有点过重，可以考虑用probe间的光能传递来完成，而非直接tracing
         for (uint i = 0; i < FACE_TRACING; i++)
         {
-            float3 hemiVec = normalize(float3(grid4x4[i] + offset, 1.0));
+            float2 sampleUv = AmbientBakeSample2D(i, FACE_TRACING, scramble);
+            float3 hemiVec = AmbientBakeUniformHemisphere(sampleUv);
             float3 rayDir = AlignWithNormal(hemiVec, basis);
 
             Vertex hitVertex;
@@ -51,6 +112,7 @@ public struct FGpuProbeGenerator : IProbeGenerator
                 }
                 else
                 {
+                    MarkAmbientBrickHitAtWorld(hitVertex.Position, true);
                     bounceColor += outAlbedo * interpolateAmbientCubesStable<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, bakeCascadeIndex) * 1.25f; // magic bounce twice
                 }
             }

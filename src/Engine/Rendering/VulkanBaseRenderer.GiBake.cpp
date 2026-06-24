@@ -61,20 +61,23 @@ namespace Vulkan
             GetScene().AmbientPoolBricksPerCascade() * static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME);
         const uint32_t cubePoolTotal = clearCascadeCount * poolCubesPerCascade;
         const uint32_t voxelDenseTotal = clearCascadeCount * perCascadeCount;
-        const uint32_t groupCount = (std::max(cubePoolTotal, voxelDenseTotal) + cubesPerGroup - 1) / cubesPerGroup;
+        const uint32_t residencyTotal =
+            clearCascadeCount * static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE);
+        const uint32_t groupCount =
+            (std::max({cubePoolTotal, voxelDenseTotal, residencyTotal}) + cubesPerGroup - 1) / cubesPerGroup;
 
         ambient_.clearCache->BindPipeline(commandBuffer, GetScene(), imageIndex);
 
         Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
         gpuScene.custom_data_0 = cubePoolTotal;
         gpuScene.custom_data_1 = voxelDenseTotal;
-        gpuScene.custom_data_2 = 0;
+        gpuScene.custom_data_2 = residencyTotal;
 
         vkCmdPushConstants(commandBuffer, ambient_.clearCache->PipelineLayout().Handle(),
                            VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
         vkCmdDispatch(commandBuffer, groupCount, 1, 1);
 
-        VkBufferMemoryBarrier barriers[2]{};
+        VkBufferMemoryBarrier barriers[3]{};
         barriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
         barriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
         barriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
@@ -89,9 +92,14 @@ namespace Vulkan
         barriers[1].offset = GetScene().AmbientVoxelsByteOffset();
         barriers[1].size = static_cast<VkDeviceSize>(voxelDenseTotal) * sizeof(Assets::VoxelData);
 
+        barriers[2] = barriers[0];
+        barriers[2].buffer = GetScene().AmbientCubeBuffer().Handle();
+        barriers[2].offset = GetScene().AmbientResidencyByteOffset();
+        barriers[2].size = static_cast<VkDeviceSize>(residencyTotal) * sizeof(Assets::AmbientBrickResidency);
+
         vkCmdPipelineBarrier(commandBuffer,
             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            0, 0, nullptr, 2, barriers, 0, nullptr);
+            0, 0, nullptr, 3, barriers, 0, nullptr);
     }
 
     void VulkanBaseRenderer::BakeAmbientCubeCascade(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool useHardware)

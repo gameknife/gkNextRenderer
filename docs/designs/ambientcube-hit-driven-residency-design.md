@@ -1,10 +1,10 @@
 ---
 title: "AmbientCube 命中驱动探针残留（SHARC 式 insert/evict）— 设计方案与开发计划"
 category: design
-status: 待实现
+status: 已实现（路线 A MVP）
 owner: engine
 created: 2026-06-22
-last_updated: 2026-06-22
+last_updated: 2026-06-24
 ---
 
 # AmbientCube 命中驱动探针残留（SHARC 式 insert/evict）
@@ -19,6 +19,13 @@ last_updated: 2026-06-22
 ---
 
 ## 0. 结论（TL;DR）
+
+> 2026-06-24 实现记录：已落地 Phase 0–2 / 路线 A。当前实现保留几何候选集作为上界，新增 GPU 端
+> `AmbientBrickResidency` 命中记录、消费侧/烘焙 bounce 侧标记、CPU 周期性 readback 重分类、grace/evict
+> 驱逐、slot 复用与被驱逐 slot 清零、resident/debug cvar 与日志指标。路线 B 的全 GPU free-list /
+> indirect dispatch 闭环未落地；它仍是后续在路线 A 收益确认后可做的进阶优化，而不是当前默认路径。
+> 默认驻留判定只使用消费侧命中；烘焙 bounce 命中仍会记录与可视化，但需显式开启
+> `r.ambientCube.bounceHitAffectsResidency` 才会参与保活，避免 bake 自反馈扩大 active set。
 
 当前 AmbientCube 的探针池由**几何启发式**决定：CPU 体素化整张 `192×192×48` 网格，凡是 `matId != 0`（近表面）的体素，其所在 brick（`8³`）连同膨胀半径 3 个 brick 一律标活跃、进池、被烘焙（`BrickPageTable.cpp:25-104`、`AmbientCubeBaker.slang:180`）。这套策略**保守、过度分配**：近表面壳层里有大量探针——墙体内部、封闭夹缝、从不被相机/任何被着色表面采样、也从不作为 bounce 源的——照样占 slot、照样吃满 96 条 bake 光线，但对最终画面零贡献。**「分配量」与「真实工作集」之间存在结构性冗余**，这正是 bake 速度与池大小的天花板。
 
@@ -214,7 +221,8 @@ struct AmbientBrickResidency {   // 建议 8 B
 
 ```text
 r.ambientCube.hitDrivenResidency   = false   # 总开关（默认关，保持现有行为）
-r.ambientCube.evictFrames          = 180      # 连续无命中超过此帧数 → 驱逐（对齐 sharc.staleFrameMax）
+r.ambientCube.bounceHitAffectsResidency = false # 默认只让消费侧命中驱动驻留；true 恢复 bounce 命中保活
+r.ambientCube.evictFrames          = 180      # 连续无 residency-driving 命中超过此帧数 → 驱逐
 r.ambientCube.graceFrames          = 30       # 新候选先烤这么多帧再判命中（解决鸡蛋问题）
 r.ambientCube.hitMarkTileRatio     = 0.25     # 消费侧稀疏标记比例（仿 sharc.updateSampleRatio）
 r.ambientCube.residencyDebug       = 0        # 0=off 1=命中热力 2=驱逐/grace 状态
@@ -228,7 +236,7 @@ r.ambientCube.residencyDebug       = 0        # 0=off 1=命中热力 2=驱逐/gr
 
 - **R1 鸡蛋问题（中）**：探针必须先被烤才能被消费、但只有被命中才驻留。→ 候选集白名单 + grace 烘焙窗口兜底。
 - **R2 一帧延迟 / 镜头响应（中，路线 A）**：readback 滞后导致快速移动时残留集追不上 → 走 grace + hysteresis；根治靠路线 B。
-- **R3 off-screen bounce 源被误删（中）**：相机看不到但参与反弹的探针若只靠消费命中会被删。→ **bounce 命中并入命中信号**（§4.2 第二路），保证多次反弹链上的探针被保活。
+- **R3 off-screen bounce 源被误删（中）**：相机看不到但参与反弹的探针若只靠消费命中会被删。→ 当前默认不让 bounce 命中保活，以避免 bake 自反馈扩大 active set；需要更完整二级反弹覆盖时可开启 `r.ambientCube.bounceHitAffectsResidency` 对比收益/成本。
 - **R4 原子争用（低-中）**：消费侧逐像素标记 → 稀疏 tile 标记降争用；命中标记是幂等 max，无需精确计数。
 - **R5 slot churn 稳定性（中，路线 B）**：驱逐/重分配导致 slot 抖动 → 优先复用同 brick 历史 slot、驱逐设滞后阈值；驱逐时务必清零旧 radiance 防串味。
 - **R6 收益场景相关（已知）**：开阔/散布场景收益大，全封闭铺满表面的房间命中集≈几何集、收益小——Phase 0 正是为量化这一点。

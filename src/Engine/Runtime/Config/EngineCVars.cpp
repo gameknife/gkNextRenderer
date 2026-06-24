@@ -176,6 +176,20 @@ namespace NextCVar
                       "Ambient cube sparse pool capacity as a ratio of full bricks per cascade");
         GK_CVAR_BOOL("sys.ambientCubeGpuSdf", settings, UseGpuAmbientCubeSdf, false, ECVarFlags::Archive,
                      "Use GPU jump-flood distance field rebuild for ambient cube voxels");
+        cvars.RegisterBool("r.ambientCube.hitDrivenResidency", false, &settings.AmbientCubeHitDrivenResidency,
+                           ECVarFlags::Archive, "Enable hit-driven ambient cube brick residency");
+        cvars.RegisterBool("r.ambientCube.bounceHitAffectsResidency", false,
+                           &settings.AmbientCubeBounceHitAffectsResidency, ECVarFlags::Archive,
+                           "Allow ambient cube bake bounce hits to keep bricks resident");
+        cvars.RegisterUInt("r.ambientCube.evictFrames", 180, &settings.AmbientCubeEvictFrames,
+                           ECVarFlags::Archive, "Frames without a residency-driving hit before eviction", nullptr, 30, 3600);
+        cvars.RegisterUInt("r.ambientCube.graceFrames", 30, &settings.AmbientCubeGraceFrames,
+                           ECVarFlags::Archive, "Initial candidate residency grace period", nullptr, 1, 600);
+        cvars.RegisterFloat("r.ambientCube.hitMarkTileRatio", 0.25f, &settings.AmbientCubeHitMarkTileRatio,
+                            ECVarFlags::Archive, "Sparse query hit marking ratio", nullptr, 0.01, 1.0);
+        cvars.RegisterInt("r.ambientCube.residencyDebug", 0, &settings.AmbientCubeResidencyDebug,
+                          ECVarFlags::None, "Ambient residency debug (0=off,1=hit age,2=resident state)",
+                          nullptr, 0, 2);
         GK_CVAR_BOOL("sys.hdrTextureStreaming", settings, StreamHDRTextures, true, ECVarFlags::Archive,
                      "Keep inactive HDR environment textures at their lowest mip and promote the active sky on demand");
         GK_CVAR_BOOL("r.sharc.enable", settings, SharcEnable, true, ECVarFlags::Archive,

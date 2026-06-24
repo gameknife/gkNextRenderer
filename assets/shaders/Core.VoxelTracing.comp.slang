@@ -40,6 +40,14 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float2 pixelOffset = float2(0, 0);
     if (rayCasterVoxel.TracePrimaryRay(ipos, size, RandomSeed, hitVertex, hitNode, rayDir, rayLength, pixelOffset))
     {
+        float4 residencyDebugColor;
+        if (TryAmbientResidencyDebug(hitVertex.Position, residencyDebugColor))
+        {
+            Bindless.GetStorageTexture<float4>(Bindless.RT_DENOISED)[ipos] = residencyDebugColor;
+            END_SHADERCLOCK(ipos)
+            return;
+        }
+
         float4 radiance = interpolateAmbientCubes<FullAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal);
         outColor = Bindless.GetGpuscene().GetMaterial(hitVertex.MaterialIndex).Diffuse * radiance;
         if (Camera.DebugDraw_Lighting)
