@@ -307,7 +307,7 @@ Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options&
     userSettings.AmbientCubeOffsetZ = 0.0f;
     userSettings.AmbientCubeCascadeCount = 3;
     userSettings.AmbientCubeCascadeRatio = 2.0f;
-    userSettings.AmbientCubePoolBrickRatio = 0.66f;
+    userSettings.AmbientCubePoolBrickRatio = 0.5f;
     userSettings.AmbientCubeHitDrivenResidency = false;
     userSettings.AmbientCubeBounceHitAffectsResidency = false;
     userSettings.AmbientCubeEvictFrames = 180;

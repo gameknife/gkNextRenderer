@@ -860,9 +860,6 @@ namespace Vulkan
         {
             ambient_.softBake.reset( new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.SwAmbientCube.comp.slang.spv", GetScene()));
             ambient_.clearCache.reset( new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.ClearAmbientCubeCache.comp.slang.spv", GetScene()));
-            ambient_.distanceFieldInit.reset( new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.DistanceFieldInit.comp.slang.spv", GetScene()));
-            ambient_.distanceFieldJump.reset( new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.DistanceFieldJump.comp.slang.spv", GetScene()));
-            ambient_.distanceFieldResolve.reset( new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.DistanceFieldResolve.comp.slang.spv", GetScene()));
 
             if (caps_.supportRayTracing)
             {
@@ -960,9 +957,6 @@ namespace Vulkan
         ambient_.softBake.reset();
         ambient_.voxelSkyVisBake.reset();
         ambient_.clearCache.reset();
-        ambient_.distanceFieldInit.reset();
-        ambient_.distanceFieldJump.reset();
-        ambient_.distanceFieldResolve.reset();
         if (rt_)
         {
             rt_->directLightGenPipeline.reset();
@@ -1477,12 +1471,6 @@ namespace Vulkan
 
         if (CurrentRendererRequirements().requestAmbientCube && !ShouldSkipAmbientCubeUpdates())
         {
-            if (settings.UseGpuAmbientCubeSdf &&
-                GetScene().ConsumeGpuDistanceFieldRebuild())
-            {
-                RebuildDistanceFieldCascades(commandBuffer, imageIndex);
-            }
-
             if (settings.BakeSpeedLevel != 2)
             {
                 const bool useHardware = caps_.supportRayTracing && !GOption->ForceSoftGen;

@@ -42,8 +42,8 @@ namespace Assets
         }
 
         // Byte layout of the ambient arena for a given allocated cascade capacity. Cubes and Voxels
-        // scale with the capacity; Pages is a fixed world grid; CubesPong and the SDF seed scratch are
-        // a single cascade each. With cascadeCapacity == CUBE_CASCADE_MAX this reproduces the
+        // scale with the capacity; Pages is a fixed world grid; CubesPong is a single cascade.
+        // With cascadeCapacity == CUBE_CASCADE_MAX this reproduces the
         // compile-time GPU_SCENE_AMBIENT_*_OFFSET constants (asserted below), so right-sizing the
         // capacity (Phase 2) only shrinks the arena without touching the GPU-visible struct layout.
         struct AmbientArenaLayout
@@ -52,8 +52,6 @@ namespace Assets
             VkDeviceSize voxelsOffset;
             VkDeviceSize pagesOffset;
             VkDeviceSize pongOffset;
-            VkDeviceSize scratchOffset;
-            VkDeviceSize sdfSeedAOffset;
             VkDeviceSize brickTableOffset;
             VkDeviceSize activeBrickListOffset;
             VkDeviceSize residencyOffset;
@@ -61,8 +59,8 @@ namespace Assets
         };
 
         // poolBricksPerCascade sizes the sparse cube pool (Cubes) and its ping-pong copy (CubesPong);
-        // Voxels/Pages/SDF scratch stay dense (full per-cascade). With poolBricksPerCascade ==
-        // BRICKS_PER_CASCADE the cube pool equals the dense grid (Phase 3a behaviour).
+        // Voxels stay dense (full per-cascade). With poolBricksPerCascade == BRICKS_PER_CASCADE the
+        // cube pool equals the dense grid (Phase 3a behaviour).
         constexpr AmbientArenaLayout ComputeAmbientArenaLayout(uint32_t cascadeCapacity, uint32_t poolBricksPerCascade)
         {
             const VkDeviceSize poolCubesPerCascade =
@@ -76,13 +74,9 @@ namespace Assets
             layout.pongOffset = layout.pagesOffset +
                 static_cast<VkDeviceSize>(Assets::GPU_SCENE_PAGE_INDEX_SIZE) * Assets::ACGI_PAGE_COUNT *
                     Assets::ACGI_PAGE_COUNT;
-            layout.scratchOffset = layout.pongOffset +
+            layout.brickTableOffset = layout.pongOffset +
                 static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_CUBE_SIZE) * poolCubesPerCascade;
-            layout.sdfSeedAOffset = layout.scratchOffset +
-                static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_SEED_SIZE) * perAmbientCascadeCount;
             // Phase 3: per-cascade brick -> pool slot table (uint per brick), sized to the capacity.
-            layout.brickTableOffset = layout.sdfSeedAOffset +
-                static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_SEED_SIZE) * perAmbientCascadeCount;
             layout.activeBrickListOffset = layout.brickTableOffset +
                 sizeof(uint32_t) * static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE) *
                     cascadeCapacity;
@@ -109,8 +103,8 @@ namespace Assets
         static_assert(Assets::GPU_SCENE_AMBIENT_PER_CASCADE_COUNT == perAmbientCascadeCount);
         static_assert(Assets::GPU_SCENE_AMBIENT_CASCADE_MAX == Assets::CUBE_CASCADE_MAX);
         static_assert(Assets::GPU_SCENE_ACGI_PAGE_COUNT == Assets::ACGI_PAGE_COUNT);
-        // The runtime ComputeAmbientArenaLayout (which also covers the decoupled SDF SeedA scratch and
-        // the Phase 3 brick table) is now the authoritative arena layout; the compile-time
+        // The runtime ComputeAmbientArenaLayout (which also covers the Phase 3 brick table) is now
+        // the authoritative arena layout; the compile-time
         // GPU_SCENE_AMBIENT_* offsets remain only as a reference for the dense cube/voxel sub-regions.
         static_assert(Assets::GPU_SCENE_AMBIENT_BRICKS_X * Assets::GPU_SCENE_AMBIENT_BRICKS_Y *
                           Assets::GPU_SCENE_AMBIENT_BRICKS_Z ==
@@ -186,8 +180,6 @@ namespace Assets
         ambientVoxelsOffset_ = static_cast<size_t>(ambientLayout.voxelsOffset);
         ambientPagesOffset_ = static_cast<size_t>(ambientLayout.pagesOffset);
         ambientPongOffset_ = static_cast<size_t>(ambientLayout.pongOffset);
-        ambientScratchOffset_ = static_cast<size_t>(ambientLayout.scratchOffset);
-        ambientSdfSeedAOffset_ = static_cast<size_t>(ambientLayout.sdfSeedAOffset);
         ambientBrickTableOffset_ = static_cast<size_t>(ambientLayout.brickTableOffset);
         ambientActiveBrickListOffset_ = static_cast<size_t>(ambientLayout.activeBrickListOffset);
         ambientResidencyOffset_ = static_cast<size_t>(ambientLayout.residencyOffset);
@@ -205,14 +197,12 @@ namespace Assets
         {
             const double mb = 1024.0 * 1024.0;
             SPDLOG_INFO("[AmbientArena] total {:.1f} MB | cascades {} | pool {}/{} bricks/cascade | "
-                        "cubes {:.1f} voxels {:.1f} pong {:.1f} sdfScratch {:.1f} sdfSeedA {:.1f} MB",
+                        "cubes {:.1f} voxels {:.1f} pong {:.1f} MB",
                         ambientLayout.totalSize / mb, ambientCubeCascadeCapacity, poolBricksPerCascade_,
                         static_cast<uint32_t>(GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE),
                         (ambientLayout.voxelsOffset - ambientLayout.cubesOffset) / mb,
                         (ambientLayout.pagesOffset - ambientLayout.voxelsOffset) / mb,
-                        (ambientLayout.scratchOffset - ambientLayout.pongOffset) / mb,
-                        (ambientLayout.sdfSeedAOffset - ambientLayout.scratchOffset) / mb,
-                        (ambientLayout.brickTableOffset - ambientLayout.sdfSeedAOffset) / mb);
+                        (ambientLayout.brickTableOffset - ambientLayout.pongOffset) / mb);
         }
 
         // Ambient GI resource table (see AmbientResources in BasicTypes.slang). GPUScene carries a
@@ -229,8 +219,6 @@ namespace Assets
             resources.Voxels = arenaBase + ambientLayout.voxelsOffset;
             resources.Pages = arenaBase + ambientLayout.pagesOffset;
             resources.CubesPong = arenaBase + ambientLayout.pongOffset;
-            resources.SdfScratch = arenaBase + ambientLayout.scratchOffset;
-            resources.SdfSeedA = arenaBase + ambientLayout.sdfSeedAOffset;
             resources.BrickTable = arenaBase + ambientLayout.brickTableOffset;
             const uint64_t activeListByteOffset =
                 static_cast<uint64_t>(ambientLayout.activeBrickListOffset - ambientLayout.brickTableOffset);

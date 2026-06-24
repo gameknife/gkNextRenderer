@@ -194,9 +194,6 @@ namespace Vulkan
 		{
 			std::unique_ptr<PipelineCommon::ZeroBindPipeline> softBake;
 			std::unique_ptr<PipelineCommon::ZeroBindPipeline> clearCache;
-			std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldInit;
-			std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldJump;
-			std::unique_ptr<PipelineCommon::ZeroBindPipeline> distanceFieldResolve;
 			// Voxel sky-visibility bake (SwModernNoAmbient): present whenever voxel geometry is
 			// requested, independent of the ambient cube pool.
 			std::unique_ptr<PipelineCommon::ZeroBindPipeline> voxelSkyVisBake;
@@ -353,7 +350,6 @@ namespace Vulkan
 		void ClearAmbientCubeCache(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void BakeAmbientCubeCascade(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool useHardware);
 		void BakeVoxelSkyVisibility(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-		void RebuildDistanceFieldCascades(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void DispatchVisualDebugger(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void CopyObjectIdHistory(VkCommandBuffer commandBuffer);
 		void DrawWireframeOverlay(VkCommandBuffer commandBuffer, uint32_t imageIndex);

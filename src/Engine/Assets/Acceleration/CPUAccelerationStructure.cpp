@@ -538,26 +538,7 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
 
     if (needFlush && batchComplete)
     {
-        const bool useGpuAmbientCubeSdf = NextEngine::GetInstance()->GetUserSettings().UseGpuAmbientCubeSdf;
-        if (useGpuAmbientCubeSdf)
-        {
-            distanceFieldRebuildScheduled_ = false;
-            distanceFieldRebuildTasks.clear();
-            for (uint32_t cascadeIndex = 0; cascadeIndex < GetActiveCascadeCount(); ++cascadeIndex)
-            {
-                cascadeBakers[cascadeIndex].UploadGPU(
-                    *voxelGpuMemory, scene.AmbientVoxelsByteOffset(), cascadeIndex * kCascadeVoxelCount);
-            }
-            if (!cascadeBakers.empty())
-            {
-                cpuPageIndex.UpdateData(cascadeBakers);
-                rebuildBrickResidency();
-            }
-            cpuPageIndex.UploadGPU(*pageIndexMemory, scene.AmbientPagesByteOffset());
-            needFlush = false;
-            voxelUploadCompleted = true;
-        }
-        else if (!distanceFieldRebuildScheduled_)
+        if (!distanceFieldRebuildScheduled_)
         {
             distanceFieldRebuildTasks.clear();
             distanceFieldRebuildTasks.reserve(GetActiveCascadeCount());
