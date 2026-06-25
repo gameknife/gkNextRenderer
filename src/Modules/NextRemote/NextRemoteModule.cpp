@@ -7,6 +7,22 @@
 
 namespace Modules::NextRemote
 {
+    namespace
+    {
+        Runtime::Remote::EVideoEncoderBackend ParseEncoderBackend(const std::string& encoder)
+        {
+            if (encoder == "openh264")
+            {
+                return Runtime::Remote::EVideoEncoderBackend::OpenH264;
+            }
+            if (encoder == "vulkan")
+            {
+                return Runtime::Remote::EVideoEncoderBackend::Vulkan;
+            }
+            return Runtime::Remote::EVideoEncoderBackend::Auto;
+        }
+    }
+
     std::unique_ptr<Runtime::IRenderFrameConsumer> CreateRemoteServer(const Runtime::Config::Options& options)
     {
         uint32_t remoteWidth = options.RemoteWidth != 0 ? options.RemoteWidth : options.Width;
@@ -31,6 +47,7 @@ namespace Modules::NextRemote
         remoteConfig.fps = options.RemoteFps;
         remoteConfig.width = remoteWidth;
         remoteConfig.height = remoteHeight;
+        remoteConfig.encoderBackend = ParseEncoderBackend(options.RemoteEncoder);
         return std::make_unique<Runtime::Remote::RemoteServer>(std::move(remoteConfig));
     }
 }

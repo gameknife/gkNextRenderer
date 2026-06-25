@@ -130,6 +130,7 @@ namespace Vulkan
 		void SetDenoiserEnabled(bool enabled) { caps_.supportDenoiser = enabled; }
 		void SetVisualDebugEnabled(bool enabled) { visualDebug_ = enabled; }
 		const FVulkanVideoCaps& VideoCaps() const { return videoCaps_; }
+		void QueueSubmitSignalSemaphore(VkSemaphore semaphore, uint64_t value = 0);
 
 		// Engine callbacks
 		struct Delegates
@@ -244,6 +245,8 @@ namespace Vulkan
 			uint64_t recordingSubmitSerial = 0;
 			uint64_t nextSubmitSerial = 1;
 			std::vector<uint64_t> inFlightFenceSubmitSerials;
+			std::vector<VkSemaphore> queuedSignalSemaphores;
+			std::vector<uint64_t> queuedSignalValues;
 			int frameCount = 0;
 			Assets::UniformBufferObject lastUBO;
 			Rendering::Upscaler::FFrameToken streamlineFrameToken;

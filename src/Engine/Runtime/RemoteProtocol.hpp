@@ -14,6 +14,7 @@ namespace Runtime::Remote
         Wheel = 4,
         Gamepad = 5,
         RequestKeyframe = 6,
+        SetBitrate = 7,
     };
 
     enum class ERemoteMouseMoveMode : uint8_t

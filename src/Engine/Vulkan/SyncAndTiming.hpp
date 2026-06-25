@@ -79,6 +79,35 @@ private:
     VULKAN_HANDLE(VkSemaphore, semaphore_)
 };
 
+// ============================================================================
+// TimelineSemaphore
+// ============================================================================
+
+class TimelineSemaphore final
+{
+public:
+
+    TimelineSemaphore(const TimelineSemaphore&) = delete;
+    TimelineSemaphore& operator = (const TimelineSemaphore&) = delete;
+    TimelineSemaphore& operator = (TimelineSemaphore&&) = delete;
+
+    explicit TimelineSemaphore(const Device& device, uint64_t initialValue = 0);
+    TimelineSemaphore(TimelineSemaphore&& other) noexcept;
+    ~TimelineSemaphore();
+
+    const class Device& Device() const { return device_; }
+
+    uint64_t CurrentValue() const;
+    void Signal(uint64_t value) const;
+    void Wait(uint64_t value, uint64_t timeout = UINT64_MAX) const;
+
+private:
+
+    const class Device& device_;
+
+    VULKAN_HANDLE(VkSemaphore, semaphore_)
+};
+
 } // namespace Vulkan
 
 // ============================================================================

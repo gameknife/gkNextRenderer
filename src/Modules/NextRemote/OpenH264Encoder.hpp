@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Modules/NextRemote/FrameSource.hpp"
+#include "Modules/NextRemote/VideoEncoder.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -10,30 +10,24 @@ class ISVCEncoder;
 
 namespace Runtime::Remote
 {
-    class FOpenH264Encoder final
+    class FOpenH264Encoder final : public IVideoEncoder
     {
     public:
-        struct FConfig
-        {
-            uint32_t width = 640;
-            uint32_t height = 360;
-            uint32_t fps = 30;
-            uint32_t bitrateKbps = 4000;
-        };
-
-        explicit FOpenH264Encoder(FConfig config);
+        explicit FOpenH264Encoder(FVideoEncoderConfig config);
         ~FOpenH264Encoder();
 
-        bool Start();
-        void Stop();
-        void RequestKeyframe();
-        void SetBitrate(uint32_t bitrateKbps);
+        const char* Name() const override { return "openh264"; }
+        bool Start() override;
+        void Stop() override;
+        void RequestKeyframe() override;
+        void SetBitrate(uint32_t bitrateKbps) override;
 
         bool Encode(const FI420Frame& frame, uint64_t timestampMs, std::vector<std::byte>& outFrame, bool& keyframe);
-        bool Encode(const FI420View& view, uint64_t timestampMs, std::vector<std::byte>& outFrame, bool& keyframe);
+        bool Encode(const FI420View& view, uint64_t timestampMs, std::vector<std::byte>& outFrame,
+                    bool& keyframe) override;
 
     private:
-        FConfig config_;
+        FVideoEncoderConfig config_;
         ISVCEncoder* encoder_ = nullptr;
         bool forceKeyframe_ = true;
     };

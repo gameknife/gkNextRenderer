@@ -150,6 +150,8 @@ namespace Vulkan
             caps.maxActiveReferencePictures = videoCaps.maxActiveReferencePictures;
             caps.minBitstreamBufferOffsetAlignment = videoCaps.minBitstreamBufferOffsetAlignment;
             caps.minBitstreamBufferSizeAlignment = videoCaps.minBitstreamBufferSizeAlignment;
+            caps.rateControlModes = encodeCaps.rateControlModes;
+            caps.supportedEncodeFeedbackFlags = encodeCaps.supportedEncodeFeedbackFlags;
             break;
         }
         if (!caps.h264Supported)
@@ -222,9 +224,11 @@ namespace Vulkan
         }
         SPDLOG_INFO(
             "RemotePlay: Vulkan Video H.264 encode available: queueFamily={} profile={} coded={}x{}..{}x{} "
-            "granularity={}x{} dpb={} refs={} nv12EncodeSrc={} nv12+storage={} maintenance1={}",
+            "granularity={}x{} dpb={} refs={} rcModes=0x{:x} feedback=0x{:x} nv12EncodeSrc={} "
+            "nv12+storage={} maintenance1={}",
             encodeQueueFamily, ProfileIdcName(profileIdc), minExtent.width, minExtent.height, maxExtent.width,
             maxExtent.height, pictureAccessGranularity.width, pictureAccessGranularity.height, maxDpbSlots,
-            maxActiveReferencePictures, nv12EncodeSrc, nv12EncodeSrcStorage, maintenance1Present);
+            maxActiveReferencePictures, rateControlModes, supportedEncodeFeedbackFlags, nv12EncodeSrc,
+            nv12EncodeSrcStorage, maintenance1Present);
     }
 }

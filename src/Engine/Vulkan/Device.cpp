@@ -210,6 +210,31 @@ void Device::WaitIdle() const
 		"wait for device idle");
 }
 
+VkQueue Device::QueueForFamilyIndex(uint32_t queueFamilyIndex) const
+{
+	if (queueFamilyIndex == graphicsFamilyIndex_)
+	{
+		return graphicsQueue_;
+	}
+	if (queueFamilyIndex == computeFamilyIndex_)
+	{
+		return computeQueue_;
+	}
+	if (queueFamilyIndex == presentFamilyIndex_)
+	{
+		return presentQueue_;
+	}
+	if (queueFamilyIndex == static_cast<uint32_t>(transferFamilyIndex_))
+	{
+		return transferQueue_;
+	}
+	if (queueFamilyIndex == videoEncodeFamilyIndex_)
+	{
+		return videoEncodeQueue_;
+	}
+	Throw(std::runtime_error(fmt::format("queue family {} is not available on this device", queueFamilyIndex)));
+}
+
 void Device::CheckRequiredExtensions(VkPhysicalDevice physicalDevice, const std::vector<const char*>& requiredExtensions) const
 {
 	const auto availableExtensions = GetEnumerateVector(physicalDevice, static_cast<const char*>(nullptr), vkEnumerateDeviceExtensionProperties);

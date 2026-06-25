@@ -24,6 +24,8 @@ namespace Vulkan
         uint32_t maxActiveReferencePictures = 0;
         VkDeviceSize minBitstreamBufferOffsetAlignment = 1;
         VkDeviceSize minBitstreamBufferSizeAlignment = 1;
+        VkVideoEncodeRateControlModeFlagsKHR rateControlModes = 0;
+        VkVideoEncodeFeedbackFlagsKHR supportedEncodeFeedbackFlags = 0;
 
         bool nv12EncodeSrc = false;        // G8_B8R8_2PLANE_420 usable as ENCODE_SRC
         bool nv12EncodeSrcStorage = false; // ... with STORAGE usage as well (zero-copy compute write)

@@ -32,7 +32,7 @@ namespace Runtime::Remote
     }
 #endif
 
-    FOpenH264Encoder::FOpenH264Encoder(FConfig config)
+    FOpenH264Encoder::FOpenH264Encoder(FVideoEncoderConfig config)
         : config_(config)
     {
     }

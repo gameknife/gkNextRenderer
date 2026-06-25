@@ -41,8 +41,8 @@ namespace Runtime::Remote
         }
 
         running_ = true;
-        SPDLOG_INFO("RemotePlay: server started fps={} bitrate={}kbps target={}x{}", config_.fps,
-                    config_.bitrateKbps, config_.width, config_.height);
+        SPDLOG_INFO("RemotePlay: server started fps={} bitrate={}kbps target={}x{} requestedEncoder={}", config_.fps,
+                    config_.bitrateKbps, config_.width, config_.height, ToString(config_.encoderBackend));
         return true;
     }
 

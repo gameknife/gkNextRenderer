@@ -81,6 +81,25 @@
     }
     .topbar button:hover { background: #2d333b; }
     .topbar button.active { background: #1f6feb; border-color: #388bfd; color: #fff; }
+    .toolbar {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+    }
+    .toolbar input[type="range"] {
+      width: 120px;
+      accent-color: #58a6ff;
+    }
+    .toolbar .mini {
+      width: 64px;
+      padding: 3px 6px;
+      font-size: 12px;
+      color: #c9d1d9;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 5px;
+    }
 
     /* Stage holds the video; fills remaining viewport, so the window can be
        resized freely and the stream scales with it. */
@@ -178,9 +197,17 @@
       <span class="pill" id="pill-pc"><span class="dot"></span><b>Peer</b> <span id="pcState">new</span></span>
       <span class="pill" id="pill-in"><span class="dot"></span><b>Input</b> <span id="inputState">waiting</span></span>
       <span class="pill" id="pill-stream"><span class="dot"></span><b>Stream</b> <span id="streamState">waiting</span></span>
+      <span class="pill" id="pill-encoder"><b>Encoder</b> <span id="encoderState">openh264</span></span>
+      <span class="pill" id="pill-rtt"><b>RTT</b> <span id="rttState">-</span></span>
+      <span class="pill" id="pill-bitrate"><b>Bitrate</b> <span id="bitrateState">4000 kbps</span></span>
       <span class="pill" id="pill-bytes"><b>↓</b> <span id="bytesState">0 B</span></span>
     </div>
     <span class="spacer"></span>
+    <div class="toolbar">
+      <input id="bitrateSlider" type="range" min="1000" max="20000" step="250" value="4000" title="码率 (kbps)">
+      <input id="bitrateInput" class="mini" type="number" min="1000" max="20000" step="250" value="4000" title="码率 (kbps)">
+      <button id="btnKeyframe" title="请求关键帧 (IDR)">IDR</button>
+    </div>
     <button id="btnActual" title="100% 原始像素大小 (1:1)">100%</button>
     <button id="btnFullscreen" title="全屏 (F)">⤢ 全屏</button>
   </div>
@@ -205,11 +232,17 @@ const wsState = document.querySelector("#wsState");
 const pcState = document.querySelector("#pcState");
 const inputState = document.querySelector("#inputState");
 const streamState = document.querySelector("#streamState");
+const encoderState = document.querySelector("#encoderState");
+const rttState = document.querySelector("#rttState");
+const bitrateState = document.querySelector("#bitrateState");
 const bytesState = document.querySelector("#bytesState");
 const pillWs = document.querySelector("#pill-ws");
 const pillPc = document.querySelector("#pill-pc");
 const pillIn = document.querySelector("#pill-in");
 const pillStream = document.querySelector("#pill-stream");
+const bitrateSlider = document.querySelector("#bitrateSlider");
+const bitrateInput = document.querySelector("#bitrateInput");
+const btnKeyframe = document.querySelector("#btnKeyframe");
 const videoEl = document.querySelector("#video");
 const stageEl = document.querySelector("#stage");
 const clientId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
@@ -239,6 +272,7 @@ const InputType = {
   wheel: 4,
   gamepad: 5,
   requestKeyframe: 6,
+  setBitrate: 7,
 };
 const MoveMode = {
   relative: 0,
@@ -315,6 +349,7 @@ function ensurePeerConnection() {
       setPill(pillIn, true);
       log("input channel open");
       sendInput(Uint8Array.from([InputType.requestKeyframe]).buffer);
+      applyBitrate(bitrateInput.value);
     };
     inputChannel.onclose = () => {
       inputState.textContent = "closed";
@@ -334,6 +369,10 @@ function ensurePeerConnection() {
         streamState.textContent = `${report.framesDecoded || 0} frames`;
         setPill(pillStream, true);
       }
+      if (report.type === "candidate-pair" && report.nominated && report.state === "succeeded" &&
+          typeof report.currentRoundTripTime === "number") {
+        rttState.textContent = `${Math.round(report.currentRoundTripTime * 1000)} ms`;
+      }
     });
     bytesState.textContent = formatBytes(videoBytes);
   }, 1000);
@@ -345,6 +384,34 @@ function sendInput(buffer) {
     return;
   }
   inputChannel.send(buffer);
+}
+
+function clampBitrate(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 4000;
+  return Math.max(1000, Math.min(20000, Math.round(numeric / 250) * 250));
+}
+
+function setBitrateUi(value) {
+  const clamped = clampBitrate(value);
+  bitrateSlider.value = String(clamped);
+  bitrateInput.value = String(clamped);
+  bitrateState.textContent = `${clamped} kbps`;
+  return clamped;
+}
+
+function packBitrate(kbps) {
+  const clamped = clampBitrate(kbps);
+  const buffer = new ArrayBuffer(5);
+  const view = new DataView(buffer);
+  view.setUint8(0, InputType.setBitrate);
+  view.setUint32(1, clamped, true);
+  return buffer;
+}
+
+function applyBitrate(kbps) {
+  const clamped = setBitrateUi(kbps);
+  sendInput(packBitrate(clamped));
 }
 
 const KMOD = {
@@ -512,6 +579,10 @@ function toggleActual() {
   document.querySelector("#btnActual").classList.toggle("active", actualMode);
 }
 document.querySelector("#btnActual").addEventListener("click", toggleActual);
+btnKeyframe.addEventListener("click", () => sendInput(Uint8Array.from([InputType.requestKeyframe]).buffer));
+bitrateSlider.addEventListener("input", () => setBitrateUi(bitrateSlider.value));
+bitrateSlider.addEventListener("change", () => applyBitrate(bitrateSlider.value));
+bitrateInput.addEventListener("change", () => applyBitrate(bitrateInput.value));
 
 document.addEventListener("keydown", event => {
   updateModifierState(event, true);
@@ -607,6 +678,14 @@ async function handleOffer(message) {
 async function connect() {
   const config = await fetch("/config").then(r => r.json());
   log(`config ${JSON.stringify(config)}`);
+  if (encoderState) {
+    const active = config.activeEncoder || "openh264";
+    const requested = config.requestedEncoder && config.requestedEncoder !== active
+      ? ` (${config.requestedEncoder})`
+      : "";
+    encoderState.textContent = `${active}${requested}`;
+  }
+  setBitrateUi(config.activeBitrateKbps || config.bitrateKbps || 4000);
   const host = config.bindAddress || location.hostname || "127.0.0.1";
   ws = new WebSocket(`ws://${host}:${config.signalingPort}`);
   ws.onopen = () => {

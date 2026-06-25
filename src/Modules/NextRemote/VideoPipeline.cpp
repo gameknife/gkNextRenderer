@@ -9,8 +9,10 @@
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
+#include "Engine/Vulkan/SyncAndTiming.hpp"
 
 #include <algorithm>
+#include <utility>
 
 #include <spdlog/spdlog.h>
 
@@ -55,8 +57,11 @@ namespace Runtime::Remote
         : config_(std::move(config))
         , dstWidth_(AlignWidth(config_.width, 640u))
         , dstHeight_(AlignHeight(config_.height, 360u))
-        , encoder_({dstWidth_, dstHeight_, std::max(1u, config_.fps), std::max(1u, config_.bitrateKbps)})
+        , requestedEncoder_(config_.encoderBackend)
+        , requestedEncoderName_(ToString(config_.encoderBackend))
+        , desiredBitrateKbps_(std::max(1u, config_.bitrateKbps))
     {
+        CreateFallbackEncoder();
     }
 
     FVideoPipeline::~FVideoPipeline()
@@ -83,7 +88,10 @@ namespace Runtime::Remote
             encodeCv_.notify_all();
             encodeThread_.join();
         }
-        encoder_.Stop();
+        if (encoder_)
+        {
+            encoder_->Stop();
+        }
 
         // Convert dispatches may still be in flight inside the renderer's frame command buffers.
         if (device_ && !slots_.empty())
@@ -91,6 +99,7 @@ namespace Runtime::Remote
             device_->WaitIdle();
         }
         convertPipeline_.reset();
+        graphicsCompletionSemaphore_.reset();
         for (auto& slot : slots_)
         {
             DestroySlotResources(*slot);
@@ -129,6 +138,98 @@ namespace Runtime::Remote
         keyframeRequested_.store(true, std::memory_order_relaxed);
     }
 
+    void FVideoPipeline::SetBitrate(uint32_t bitrateKbps)
+    {
+        const uint32_t clamped = std::max(1u, bitrateKbps);
+        desiredBitrateKbps_.store(clamped, std::memory_order_relaxed);
+    }
+
+    void FVideoPipeline::ResolveEncoderBackend(const Vulkan::VulkanBaseRenderer& renderer)
+    {
+        if (resolvedEncoderBackend_)
+        {
+            return;
+        }
+        resolvedEncoderBackend_ = true;
+
+        const bool vulkanCapsUsable = renderer.VideoCaps().Usable();
+        const auto makeOpenH264Fallback = [this]()
+        {
+            if (!encoder_ || std::string_view(encoder_->Name()) != "openh264")
+            {
+                CreateFallbackEncoder();
+            }
+        };
+
+        switch (requestedEncoder_)
+        {
+        case EVideoEncoderBackend::OpenH264:
+            makeOpenH264Fallback();
+            SPDLOG_INFO("RemotePlay: video pipeline backend = {} (forced)", activeEncoderName_);
+            break;
+        case EVideoEncoderBackend::Vulkan:
+            if (vulkanCapsUsable)
+            {
+                try
+                {
+                    encoder_ = std::make_unique<FVulkanVideoEncoder>(
+                        renderer.Device(), renderer.VideoCaps(),
+                        FVideoEncoderConfig{dstWidth_, dstHeight_, std::max(1u, config_.fps),
+                                            desiredBitrateKbps_.load(std::memory_order_relaxed)});
+                    activeEncoderName_ = encoder_->Name();
+                    SPDLOG_INFO("RemotePlay: video pipeline backend = {} (forced)", activeEncoderName_);
+                }
+                catch (const std::exception& error)
+                {
+                    makeOpenH264Fallback();
+                    SPDLOG_WARN("RemotePlay: Vulkan Video encoder creation failed ({}); falling back to {}",
+                                error.what(), activeEncoderName_);
+                }
+            }
+            else
+            {
+                makeOpenH264Fallback();
+                SPDLOG_WARN("RemotePlay: --remote-encoder vulkan requested but this renderer cannot supply a usable "
+                            "Vulkan Video H.264 path; falling back to {}",
+                            activeEncoderName_);
+            }
+            break;
+        case EVideoEncoderBackend::Auto:
+        default:
+            if (vulkanCapsUsable)
+            {
+                try
+                {
+                    encoder_ = std::make_unique<FVulkanVideoEncoder>(
+                        renderer.Device(), renderer.VideoCaps(),
+                        FVideoEncoderConfig{dstWidth_, dstHeight_, std::max(1u, config_.fps),
+                                            desiredBitrateKbps_.load(std::memory_order_relaxed)});
+                    activeEncoderName_ = encoder_->Name();
+                    SPDLOG_INFO("RemotePlay: video pipeline backend = {}", activeEncoderName_);
+                }
+                catch (const std::exception& error)
+                {
+                    makeOpenH264Fallback();
+                    SPDLOG_WARN("RemotePlay: Vulkan Video encoder creation failed ({}); using {}",
+                                error.what(), activeEncoderName_);
+                }
+            }
+            else
+            {
+                makeOpenH264Fallback();
+                SPDLOG_INFO("RemotePlay: video pipeline backend = {}", activeEncoderName_);
+            }
+            break;
+        }
+    }
+
+    void FVideoPipeline::CreateFallbackEncoder()
+    {
+        encoder_ = std::make_unique<FOpenH264Encoder>(FVideoEncoderConfig{
+            dstWidth_, dstHeight_, std::max(1u, config_.fps), desiredBitrateKbps_.load(std::memory_order_relaxed)});
+        activeEncoderName_ = encoder_ ? encoder_->Name() : "openh264";
+    }
+
     void FVideoPipeline::HarvestCompletedSlots(uint64_t currentFrameId)
     {
         // DrawFrame waits the previous submit fence before recording the current frame, so every
@@ -151,6 +252,8 @@ namespace Runtime::Remote
     void FVideoPipeline::RecordFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex,
                                      Vulkan::VulkanBaseRenderer& renderer)
     {
+        ResolveEncoderBackend(renderer);
+
         if (slots_.empty())
         {
             const size_t slotCount = std::max<size_t>(renderer.SwapChain().Images().size(), 3);
@@ -167,6 +270,13 @@ namespace Runtime::Remote
         if (sinkCount_.load(std::memory_order_relaxed) == 0)
         {
             return;
+        }
+
+        if (!graphicsCompletionSemaphore_)
+        {
+            graphicsCompletionSemaphore_ = std::make_unique<Vulkan::TimelineSemaphore>(renderer.Device(), 0);
+            useTimelineCompletion_ = true;
+            SPDLOG_INFO("RemotePlay: video pipeline armed graphics timeline completion semaphore");
         }
 
         const auto now = std::chrono::steady_clock::now();
@@ -197,11 +307,13 @@ namespace Runtime::Remote
         };
 
         FSlot* freeSlot = nullptr;
-        for (auto& slot : slots_)
+        size_t freeSlotIndex = 0;
+        for (size_t slotIndex = 0; slotIndex < slots_.size(); ++slotIndex)
         {
-            if (slot->state.load(std::memory_order_acquire) == ESlotState::Free)
+            if (slots_[slotIndex]->state.load(std::memory_order_acquire) == ESlotState::Free)
             {
-                freeSlot = slot.get();
+                freeSlot = slots_[slotIndex].get();
+                freeSlotIndex = slotIndex;
                 break;
             }
         }
@@ -259,7 +371,22 @@ namespace Runtime::Remote
         freeSlot->frameId = currentFrameId;
         freeSlot->captureTimestampUs = static_cast<uint64_t>(
             std::chrono::duration_cast<std::chrono::microseconds>(now - startedAt_).count());
-        freeSlot->state.store(ESlotState::Recorded, std::memory_order_release);
+        if (useTimelineCompletion_ && graphicsCompletionSemaphore_)
+        {
+            freeSlot->completionValue = nextCompletionValue_++;
+            renderer.QueueSubmitSignalSemaphore(graphicsCompletionSemaphore_->Handle(), freeSlot->completionValue);
+            freeSlot->state.store(ESlotState::Encoding, std::memory_order_release);
+            {
+                std::lock_guard lock(encodeQueueMutex_);
+                encodeQueue_.push_back(freeSlotIndex);
+            }
+            encodeCv_.notify_one();
+        }
+        else
+        {
+            freeSlot->completionValue = 0;
+            freeSlot->state.store(ESlotState::Recorded, std::memory_order_release);
+        }
 
         advanceThrottle();
     }
@@ -313,6 +440,7 @@ namespace Runtime::Remote
     void FVideoPipeline::EncodeLoop(const std::stop_token& stopToken)
     {
         uint64_t sentFrames = 0;
+        uint32_t appliedBitrateKbps = desiredBitrateKbps_.load(std::memory_order_relaxed);
         while (!stopToken.stop_requested())
         {
             size_t slotIndex = 0;
@@ -344,14 +472,27 @@ namespace Runtime::Remote
             view.strideC = dstWidth_ / 2u;
             const uint64_t timestampUs = slot.captureTimestampUs;
 
+            if (useTimelineCompletion_ && graphicsCompletionSemaphore_ && slot.completionValue != 0)
+            {
+                graphicsCompletionSemaphore_->Wait(slot.completionValue);
+            }
+
+            const uint32_t desiredBitrateKbps = desiredBitrateKbps_.load(std::memory_order_relaxed);
+            if (desiredBitrateKbps != appliedBitrateKbps)
+            {
+                encoder_->SetBitrate(desiredBitrateKbps);
+                appliedBitrateKbps = desiredBitrateKbps;
+                SPDLOG_INFO("RemotePlay: encoder bitrate updated to {}kbps", appliedBitrateKbps);
+            }
+
             if (keyframeRequested_.exchange(false, std::memory_order_relaxed))
             {
-                encoder_.RequestKeyframe();
+                encoder_->RequestKeyframe();
             }
 
             std::vector<std::byte> encodedFrame;
             bool keyframe = false;
-            const bool encoded = encoder_.Encode(view, timestampUs / 1000u, encodedFrame, keyframe);
+            const bool encoded = encoder_->Encode(view, timestampUs / 1000u, encodedFrame, keyframe);
             slot.state.store(ESlotState::Free, std::memory_order_release);
             if (!encoded)
             {
