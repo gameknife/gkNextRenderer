@@ -36,6 +36,7 @@
 #include "Engine/Rendering/Upscaler/IUpscaler.hpp"
 #include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
 #include <utility>
+#include <vector>
 
 namespace
 {
@@ -392,6 +393,16 @@ namespace Vulkan
         ctx_.globalTexturePool.reset();
     }
 
+    void VulkanBaseRenderer::QueueSubmitSignalSemaphore(VkSemaphore semaphore, uint64_t value)
+    {
+        if (semaphore == VK_NULL_HANDLE)
+        {
+            return;
+        }
+        frame_.queuedSignalSemaphores.push_back(semaphore);
+        frame_.queuedSignalValues.push_back(value);
+    }
+
     Assets::Scene& VulkanBaseRenderer::GetScene()
     {
         return *scene_.lock();
@@ -476,6 +487,18 @@ namespace Vulkan
                 SPDLOG_WARN("RemotePlay: --remote-encoder vulkan requested but Vulkan Video H.264 encode is not "
                             "usable on this device; falling back to openh264");
             }
+        }
+
+        // Remote play uses timeline semaphores to decouple GPU frame completion from the main
+        // thread and, later, to bridge graphics -> video encode queue submissions.
+        VkPhysicalDeviceTimelineSemaphoreFeatures timelineSemaphoreFeatures = {};
+        const bool requestTimelineSemaphores = GOption->RemoteMode;
+        if (requestTimelineSemaphores)
+        {
+            timelineSemaphoreFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
+            timelineSemaphoreFeatures.timelineSemaphore = true;
+            timelineSemaphoreFeatures.pNext = nextDeviceFeatures;
+            nextDeviceFeatures = &timelineSemaphoreFeatures;
         }
 
         VkPhysicalDeviceFeatures supportedFeatures = {};
@@ -597,10 +620,10 @@ namespace Vulkan
         storage16BitFeatures.storagePushConstant16 = supportedStorage16BitFeatures.storagePushConstant16;
 
 #if WITH_STREAMLINE
-        VkPhysicalDeviceTimelineSemaphoreFeatures timelineSemaphoreFeatures = {};
-        timelineSemaphoreFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
-        timelineSemaphoreFeatures.timelineSemaphore = true;
-        timelineSemaphoreFeatures.pNext = &shaderDrawParametersFeatures;
+        VkPhysicalDeviceTimelineSemaphoreFeatures streamlineTimelineSemaphoreFeatures = {};
+        streamlineTimelineSemaphoreFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
+        streamlineTimelineSemaphoreFeatures.timelineSemaphore = true;
+        streamlineTimelineSemaphoreFeatures.pNext = &shaderDrawParametersFeatures;
         const auto streamlineCaps = StreamlineWrapper::AppendRequiredDeviceExtensions(physicalDevice, requiredExtensions);
         const bool hasLegacyStreamlineExtensions =
             AddDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
@@ -619,7 +642,10 @@ namespace Vulkan
             hasLegacyStreamlineExtensions;
         if (hasStreamlineExtensions)
         {
-            storage16BitFeatures.pNext = &timelineSemaphoreFeatures;
+            if (!requestTimelineSemaphores)
+            {
+                storage16BitFeatures.pNext = &streamlineTimelineSemaphoreFeatures;
+            }
             caps_.streamlineExtsEnabled = true;
         }
         else
@@ -842,6 +868,8 @@ namespace Vulkan
         frame_.currentFence = nullptr;
         frame_.currentFenceSerial = 0;
         frame_.recordingSubmitSerial = 0;
+        frame_.queuedSignalSemaphores.clear();
+        frame_.queuedSignalValues.clear();
 
         // 公用RenderImages
         CreateRenderImages();
@@ -982,6 +1010,8 @@ namespace Vulkan
         frame_.inFlightFences.clear();
         frame_.renderFinishedSemaphores.clear();
         frame_.imageAvailableSemaphores.clear();
+        frame_.queuedSignalSemaphores.clear();
+        frame_.queuedSignalValues.clear();
         frame_.depthBuffer.reset();
         frame_.swapChain.reset();
 
@@ -1142,6 +1172,8 @@ namespace Vulkan
             }
             frame_.currentFence = frameSlotFence;
             frame_.recordingSubmitSerial = frame_.nextSubmitSerial;
+            frame_.queuedSignalSemaphores.clear();
+            frame_.queuedSignalValues.clear();
 
             // Runtime node creation can increase the expanded primitive count. Resize only after
             // the previous queue submission has completed so no in-flight work retains old addresses.
@@ -1215,7 +1247,6 @@ namespace Vulkan
             VkCommandBuffer commandBuffers[]{commandBuffer};
             VkSemaphore waitSemaphores[] = {imageAvailableSemaphore};
             VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-            VkSemaphore signalSemaphores[] = {renderFinishedSemaphore};
             {
                 SCOPED_CPU_TIMER("submit");
                 frame_.currentFence = &(frame_.inFlightFences[frame_.currentFrame]);
@@ -1231,8 +1262,30 @@ namespace Vulkan
                     submitInfo.pWaitDstStageMask = waitStages;
                     submitInfo.commandBufferCount = 1;
                     submitInfo.pCommandBuffers = commandBuffers;
-                    submitInfo.signalSemaphoreCount = 1;
-                    submitInfo.pSignalSemaphores = signalSemaphores;
+
+                    std::vector<VkSemaphore> signalSemaphores;
+                    signalSemaphores.reserve(1 + frame_.queuedSignalSemaphores.size());
+                    signalSemaphores.push_back(renderFinishedSemaphore);
+                    signalSemaphores.insert(signalSemaphores.end(), frame_.queuedSignalSemaphores.begin(),
+                                            frame_.queuedSignalSemaphores.end());
+
+                    submitInfo.signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
+                    submitInfo.pSignalSemaphores = signalSemaphores.data();
+
+                    std::vector<uint64_t> signalSemaphoreValues;
+                    VkTimelineSemaphoreSubmitInfo timelineSubmitInfo = {};
+                    if (!frame_.queuedSignalValues.empty())
+                    {
+                        signalSemaphoreValues.reserve(signalSemaphores.size());
+                        signalSemaphoreValues.push_back(0);
+                        signalSemaphoreValues.insert(signalSemaphoreValues.end(), frame_.queuedSignalValues.begin(),
+                                                     frame_.queuedSignalValues.end());
+                        timelineSubmitInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+                        timelineSubmitInfo.signalSemaphoreValueCount =
+                            static_cast<uint32_t>(signalSemaphoreValues.size());
+                        timelineSubmitInfo.pSignalSemaphoreValues = signalSemaphoreValues.data();
+                        submitInfo.pNext = &timelineSubmitInfo;
+                    }
 
                     frame_.currentFence->Reset();
 
@@ -1259,7 +1312,7 @@ namespace Vulkan
                 VkPresentInfoKHR presentInfo = {};
                 presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
                 presentInfo.waitSemaphoreCount = 1;
-                presentInfo.pWaitSemaphores = signalSemaphores;
+                presentInfo.pWaitSemaphores = &renderFinishedSemaphore;
                 presentInfo.swapchainCount = 1;
                 presentInfo.pSwapchains = swapChains;
                 presentInfo.pImageIndices = &frame_.currentImageIndex;

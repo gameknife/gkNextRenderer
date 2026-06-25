@@ -520,20 +520,6 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
         scene.SetAmbientActiveBrickCounts(cpuBrickTable.activeBricksPerCascade);
         cpuBrickTable.UploadGPU(*voxelGpuMemory, scene.AmbientBrickTableByteOffset(),
                                 scene.AmbientActiveBrickListByteOffset());
-
-        if (currentFrame % 300u == 0u)
-        {
-            for (uint32_t cascadeIndex = 0; cascadeIndex < cpuBrickTable.activeBricksPerCascade.size();
-                 ++cascadeIndex)
-            {
-                const uint32_t candidates = cpuBrickTable.candidateBricksPerCascade[cascadeIndex];
-                const uint32_t hits = cpuBrickTable.recentlyHitBricksPerCascade[cascadeIndex];
-                const uint32_t resident = cpuBrickTable.activeBricksPerCascade[cascadeIndex];
-                SPDLOG_INFO("[AmbientResidency] cascade={} candidates={} residencyHits={} resident={} utilization={:.1f}%",
-                            cascadeIndex, candidates, hits, resident,
-                            candidates > 0u ? 100.0f * static_cast<float>(hits) / static_cast<float>(candidates) : 0.0f);
-            }
-        }
     };
 
     if (needFlush && batchComplete)

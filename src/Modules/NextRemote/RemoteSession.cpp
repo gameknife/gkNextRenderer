@@ -5,6 +5,7 @@
 #include "Modules/NextRemote/VideoPipeline.hpp"
 
 #include <algorithm>
+#include <cstring>
 #include <sstream>
 
 #if GK_WITH_REMOTE
@@ -168,6 +169,16 @@ namespace Runtime::Remote
                             if (self->videoPipeline_)
                             {
                                 self->videoPipeline_->RequestKeyframe();
+                            }
+                        }
+                        else if (bytes.size() >= 1 + sizeof(uint32_t) &&
+                                 static_cast<ERemoteInputMessage>(bytes[0]) == ERemoteInputMessage::SetBitrate)
+                        {
+                            if (self->videoPipeline_)
+                            {
+                                uint32_t bitrateKbps = 0;
+                                std::memcpy(&bitrateKbps, bytes.data() + 1, sizeof(uint32_t));
+                                self->videoPipeline_->SetBitrate(bitrateKbps);
                             }
                         }
                         else

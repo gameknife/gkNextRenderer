@@ -2,6 +2,7 @@
 #include "Modules/NextRemote/SignalingServer.hpp"
 
 #include "Modules/NextRemote/RemoteSession.hpp"
+#include "Modules/NextRemote/VideoPipeline.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <algorithm>
@@ -135,10 +136,15 @@ namespace Runtime::Remote
 
     std::string FSignalingServer::BuildConfigJson() const
     {
+        const std::string requestedEncoder = videoPipeline_ ? std::string(videoPipeline_->RequestedEncoderName())
+                                                            : std::string(ToString(config_.encoderBackend));
+        const std::string activeEncoder =
+            videoPipeline_ ? std::string(videoPipeline_->ActiveEncoderName()) : std::string("openh264");
+        const uint32_t activeBitrateKbps = videoPipeline_ ? videoPipeline_->BitrateKbps() : config_.bitrateKbps;
         return fmt::format(
-            R"({{"signalingPort":{},"bindAddress":"{}","fps":{},"bitrateKbps":{},"width":{},"height":{}}})",
+            R"({{"signalingPort":{},"bindAddress":"{}","fps":{},"bitrateKbps":{},"width":{},"height":{},"requestedEncoder":"{}","activeEncoder":"{}","activeBitrateKbps":{}}})",
             config_.signalingPort, PublicHostForClient(), config_.fps, config_.bitrateKbps, config_.width,
-            config_.height);
+            config_.height, requestedEncoder, activeEncoder, activeBitrateKbps);
     }
 
     bool FSignalingServer::Start()

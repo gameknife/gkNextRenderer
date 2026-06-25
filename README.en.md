@@ -15,17 +15,17 @@
 
 ---
 
-gkNextEngine is a cross-platform 3D game engine and rendering playground built with modern C++20 and Vulkan. It is primarily focused on two goals:
+gkNextEngine is a cross-platform 3D game engine and rendering playground built with modern C++20 and Vulkan. Its goals have stayed the same:
 
-- delivering visually compelling results with **real-time path tracing, hybrid rendering, and HDR lighting**
-- building **runtime systems that are usable, extensible, and suitable for actual gameplay prototyping**, instead of stopping at isolated rendering demos
+- deliver visually compelling results with **real-time path tracing, hybrid rendering, and HDR lighting** that actually hold up inside a runtime, not just offline renders
+- build **runtime systems that are usable, extensible, and suitable for actual gameplay prototyping**, instead of stopping at isolated rendering demos
 
-The project is renderer-first, but it keeps expanding around editor tooling, scripting, physics, asset import, and gameplay experiments. LDraw / BrickPlayer is one of the clearest examples of that direction: the engine can import LDraw models directly and bring those structured assets into a unified runtime, rendering, and interaction pipeline.
+The project is renderer-first, but it keeps expanding around editor tooling, scripting, physics, asset import, and gameplay experiments. **Recent work has clearly centered on rendering efficiency and image quality**: a world-space radiance cache (SHARC), AmbientCube memory reduction with hit-driven residency, RGB9E5 indirect-light encoding, atomic-contention treatment in GPU-driven culling, denoising, and reprojection stability — all aimed at producing the same frame with less VRAM and less GPU time. See [Performance & Rendering Efficiency](#performance--rendering-efficiency) below.
 
 This project is especially relevant if you are interested in:
 
 - seeing actual real-time results for path tracing, metal / glass / plastic materials, HDR environments, and dense scenes
-- studying a Vulkan renderer that is closer to a real game runtime than an offline-style tech demo
+- studying a Vulkan renderer that is genuinely **constrained by runtime performance**, rather than an offline-style tech demo
 - understanding how an engine ties together **rendering, editor tooling, scripting, physics, asset import, and gameplay prototyping**
 - reading a codebase with controlled scope, clear engineering priorities, and a structure that is approachable for learning modern engine implementation
 
@@ -35,17 +35,48 @@ This project is especially relevant if you are interested in:
 
 ## Project Highlights
 
-- **Real-time path tracing and hybrid rendering**  
+- **Real-time path tracing and hybrid rendering**
   The project keeps pushing on 1spp + temporal reuse, denoising, reprojection, and multi-pipeline switching so path tracing becomes part of a practical runtime workflow instead of a pure offline showcase.
 
-- **Game-oriented GPU architecture**  
+- **A performance-constrained rendering pipeline**
+  Radiance-cache reuse, sparse VRAM layouts, GPU-driven mass submission, on-demand residency, and multi-tier upscaling all aim to produce more frame for a fixed GPU budget while keeping memory in check — rather than throwing unlimited resources at a single still.
+
+- **Game-oriented GPU architecture**
   With Visibility Buffer, fully bindless resources, and single-draw GPU-driven submission, the design tries to spend CPU time on content and gameplay while keeping GPU budget focused on what actually improves the frame.
 
-- **Engine systems that serve content and gameplay prototypes**  
+- **Engine systems that serve content and gameplay prototypes**
   ECS, reflection, editor tooling, script hot reload, physics sync, runtime import, and stable rendering behavior all work together to support playable content rather than isolated subsystems.
 
-- **Multi-format asset import and interoperability**  
-  The engine supports full runtime glTF import with partial export, and can also import `.ldr` / `.mpd` directly so structured LDraw scenes become first-class runtime assets.
+- **Multi-format asset import and interoperability**
+  Full runtime glTF import with partial export, plus direct import of `.ldr` / `.mpd`, OpenSCAD `.scad` DSL, and PlayCanvas `.sog` Gaussian-splat assets, bringing structured scenes into a unified runtime, rendering, and interaction pipeline.
+
+---
+
+## Performance & Rendering Efficiency
+
+Performance is one of the project's core constraints. The engine leans on radiance-cache reuse, sparse VRAM layouts, GPU-driven mass submission, on-demand residency, and multi-tier upscaling to produce more frame for a fixed GPU budget while keeping memory in check. Below is a set of **runtime performance references** for typical scenes, backed by a built-in per-pass profiler and a Superluminal integration for deeper analysis.
+
+### Performance Reference Data
+
+> ⚠️ The table below is a placeholder template. The numbers are to be filled in manually after measuring on uniform hardware / drivers — for now it only lists the scene + pipeline combinations.
+
+| Scene | Resolution | Pipeline | GPU | Frame time (ms) | FPS | VRAM |
+|------|------------|----------|-----|-----------------|-----|------|
+| playground | 1920×1080 | PathTracing (1spp + temporal) | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+| living room | 1920×1080 | PathTracing (1spp + temporal) | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+| lego (LDraw) | 1920×1080 | SoftwareModern | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+| luxball | 1920×1080 | SoftwareTracing | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+| brickplayer | 1920×1080 | Hybrid | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+
+> These figures can be reproduced on uniform hardware via `gkNextBenchmark` (static / dynamic scene benchmarks) and `gkNextVisualTest`.
+
+### Built-in Profiler
+
+The engine ships a CPU / GPU per-pass timing system: every render pass is annotated with a named scope, `VulkanGpuTimer` collects per-pass GPU-side timings, and an ImGui overlay (`ProfileDebugOverlay`) shows per-pass frame time and statistics live at runtime. You can locate rendering hotspots and compare the cost of different pipelines and settings without any external tooling.
+
+### Superluminal Integration
+
+On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is installed (probed by default at `C:/Program Files/Superluminal/Performance/API`), the build automatically enables `WITH_SUPERLUMINAL` and forwards the engine's named CPU and GPU events to the Superluminal timeline (GPU events emitted from a dedicated replay thread), enabling fine-grained sampling profiles and cross-frame analysis. When it is not installed, the integration is skipped and the build is unaffected.
 
 ---
 
@@ -54,30 +85,32 @@ This project is especially relevant if you are interested in:
 ### 1. High-quality rendering designed for runtime use
 
 - **Real-time path tracing**: built around 1spp + temporal reuse with attention to image quality under actual runtime constraints
+- **World-space radiance-cache GI**: SHARC world-space radiance cache as the indirect-light reuse layer, reused across frames and probes, on by default
 - **Hybrid rendering**: combines rasterization and ray tracing in a way that is practical for mobile targets and game-like workloads
-- **Hot-swappable renderers**: the same scene and asset set can be switched across multiple pipelines for comparison and validation
+- **Hot-swappable renderers**: the same scene and asset set can be switched across path-tracing / software-tracing / Modern pipelines for comparison and validation
 - **HDR screenshots and high-quality media export**: useful for visual validation, presentation materials, and regression tracking
 
 ### 2. Full runtime and tooling support
 
 - **ECS + reflection**: based on entt, with a reflection layer shared across runtime systems, editor workflows, and scripting bindings
-- **ImGui editor**: `gkNextEditor` supports scene, material, and runtime-oriented editing workflows
-- **QuickJS hot reload scripting**: makes gameplay logic, tools, and experiments much faster to iterate on
+- **ImGui editor**: `gkNextEditor` supports scene, material, and runtime-oriented editing workflows, with progressive render iteration and data-driven settings / cvar panels
+- **QuickJS hot reload scripting**: TypeScript compiled at runtime via the bundled `tools/tsc/tsc[.exe]` (`tsc.exe` on Windows, `tsc` on macOS/Linux), with no Node/npm or global `tsc` dependency; see [docs/guides/typescript-integration.md](docs/guides/typescript-integration.md)
 - **Jolt Physics**: provides a more realistic base for interaction prototypes, drag-and-drop workflows, and gameplay validation
+- **TUI terminal rendering**: `gnb tui` streams the final frame to the terminal as truecolor half-block characters for quick previews in headless environments; see [docs/guides/tui-mode.md](docs/guides/tui-mode.md)
 
 ### 3. Controlled codebase size for learning and extension
 
-- **Target code size under 50k LOC**: the project is intentionally kept within a range that remains understandable and maintainable
+- **First-party engine code targeted under 50k LOC**: the engine core is intentionally kept understandable and maintainable (~85k LOC including all sample games + tests; browse the breakdown with `gnb loc`)
 - **Clarity over over-engineering**: favors explicit data flow, clear ownership, and mature third-party libraries over unnecessary abstraction
 - **A good engine codebase to study**: from Vulkan rendering and resource management to scripting, editor integration, reflection, and testing
 
-### 4. glTF and LDraw content pipelines
+### 4. glTF, LDraw, OpenSCAD, and Gaussian-splat content pipelines
 
 - **Full glTF import**: runtime support for scenes, materials, animation, and skeletal content
 - **Partial glTF export**: selected runtime content can be written back into a glTF-oriented workflow
-- **Direct LDraw runtime import**: `.ldr` / `.mpd` assets can be loaded directly into the engine runtime
-- **Color and material mapping**: from `LDConfig.ldr` and LGEO realistic colors into engine-side PBR materials
-- **Shadow / Connector abstraction**: not just raw mesh import, but a path toward converting brick connectivity semantics into data the building system can understand
+- **Direct LDraw runtime import**: `.ldr` / `.mpd` load directly into the runtime, with full color/material mapping from `LDConfig.ldr` and LGEO realistic colors into engine PBR materials, and brick connectivity semantics converted into data the building system can understand
+- **OpenSCAD DSL import**: parse / evaluate `.scad` directly — geometry through Manifold CSG, text through FreeType — turning procedural modeling scripts into renderable meshes; `ScadStudio` is built on this for modeling and character-rig experiments
+- **Gaussian-splat assets**: load PlayCanvas `.sog` directly (packed ZIP or `meta.json` + `.webp`) and co-render with mesh scenes
 
 ---
 
@@ -87,10 +120,14 @@ This project is especially relevant if you are interested in:
 
 - **Visibility Buffer**
 - **Fully Bindless + GPU-Driven**
-- **Single-Draw GPU-Driven Submit**
-- **Hardware / Software Ray Tracing**
-- **Temporal Reprojection / JBF / FSR / DLSS RR**
-- **NVIDIA Streamline DLSS SR / RR / Frame Generation on Windows**
+- **Single-Draw GPU-Driven Submit (Soft Mesh Shader)**
+- **Hardware / Software Ray Tracing (ray query)**
+- **SHARC world radiance cache / RGB9E5 indirect light**
+- **AmbientCube GI: sparse VRAM + hit-driven residency**
+- **Denoising: ReLAX-style variance-guided / à-trous / JBF**
+- **Temporal Reprojection / Sky Occlusion (GTAO + voxel sky-visibility)**
+- **Upscaler: FSR / NVIDIA Streamline DLSS SR / RR / Frame Generation on Windows**
+- **Gaussian Splatting (SOG v2 + hardware billboards)**
 
 ### Engine and tooling
 
@@ -98,12 +135,13 @@ This project is especially relevant if you are interested in:
 - **Cross-platform runtime: desktop / Android / iOS**
 - **ImGui Editor + node-based material workflow**
 - **QuickJS runtime scripting with bundled TypeScript hot reload via `tools/tsc/tsc[.exe]`, no Node/npm dependency**
-- **Visual Test / Benchmark / Packager**
+- **TUI terminal rendering / Visual Test / Benchmark / Packager**
+- **`gnb` project CLI (build / run / screenshot validation / dashboard / local LLM)**
 
 ### AI Native
 
 - **Built-in AI agent infrastructure with room for runtime LLM features**
-- **Codex-native development for engine infrastructure and sample demos**
+- **Codex / agentic-coding-native development for engine infrastructure and sample demos**
 - **Moving away from low-code narratives toward a more direct agentic coding workflow**
 
 ---
@@ -156,7 +194,7 @@ The project uses CMake + Ninja, with dependencies managed through vcpkg. Beyond 
 ./gnb.bat run gkNextRenderer
 ```
 
-Aside from host-side requirements such as Visual Studio, the rest of the project dependencies are usually prepared by `gnb`, including the pinned Vulkan SDK, Slang, and TypeScript toolchains.
+Aside from host-side requirements such as Visual Studio, the rest of the project dependencies are usually prepared by `gnb`, including the pinned Vulkan SDK, Slang, and TypeScript toolchains. NVIDIA Streamline (DLSS) is enabled by default on Windows.
 
 </details>
 
@@ -243,6 +281,9 @@ Android still depends on the host machine to provide JDK / SDK / NDK, while proj
 
 # CharacterDemo (character control / AI / navigation experiment)
 ./gnb.sh run CharacterDemo
+
+# TUI terminal mode (headless, frame streamed to the terminal)
+./gnb.sh tui --scene assets/models/playground.glb
 ```
 
 ### Optional Assets
@@ -274,15 +315,17 @@ Some larger binary assets are not committed to the repo. Fetch them as needed:
 |------|------|
 | `gkNextRenderer` | Main renderer for path tracing / hybrid rendering / multi-pipeline comparison |
 | `gkNextEditor` | ImGui editor for materials, scenes, and runtime-oriented tooling |
+| `ScadStudio` | OpenSCAD (`.scad`) DSL modeling / character-rig experiment editor |
 | `BrickPlayer` | Digital LEGO building prototype based on LDraw |
+| `MagicaLego` | A lighter LEGO / voxel-style gameplay playground |
 | `Brotato3D` | Top-down 3D survival shooter prototype, intro in [docs/projects/brotato-3d/introduction.md](docs/projects/brotato-3d/introduction.md) |
 | `CharacterDemo` | Character control, AI behavior, navigation, and combat interaction experiments |
 | `FlappyCpp` / `FlappyJs` | Flappy Bird dual implementation used to verify C++/QuickJS behavior parity, intro in [docs/projects/flappy-bird-parity/introduction.md](docs/projects/flappy-bird-parity/introduction.md) |
-| `MagicaLego` | A lighter LEGO / voxel-style gameplay playground |
-| `gkNextStillBenchmark` | Static-scene rendering benchmark |
-| `gkNextMotionBenchmark` | Dynamic-scene rendering benchmark |
+| `gkNextBenchmark` | Static / dynamic scene rendering benchmarks |
 | `gkNextVisualTest` | Automated visual testing and screenshot reports |
 | `Packager` | Packs assets into `.pkg` archives |
+
+> The repo also hosts several early-stage gameplay / simulation prototypes (AirportSim, StudioSim, Voyage3D, KongLie3D, and others) that mainly drive engine evolution; their interfaces are not yet stable.
 
 ---
 
@@ -299,7 +342,7 @@ Some larger binary assets are not committed to the repo. Fetch them as needed:
 Issues and PRs are welcome.
 
 - See `AGENTS.md` for collaboration guidelines
-- If you are interested in real-time path tracing, modern rendering architecture, LDraw, editor tooling, AI-native workflows, or gameplay prototyping, feel free to reach out
+- If you are interested in real-time path tracing, modern rendering architecture, rendering performance optimization, LDraw, editor tooling, AI-native workflows, or gameplay prototyping, feel free to reach out
 
 ---
 

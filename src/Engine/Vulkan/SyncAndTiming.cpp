@@ -83,6 +83,65 @@ Semaphore::~Semaphore()
     }
 }
 
+TimelineSemaphore::TimelineSemaphore(const class Device& device, uint64_t initialValue) :
+    device_(device)
+{
+    VkSemaphoreTypeCreateInfo typeInfo = {};
+    typeInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
+    typeInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
+    typeInfo.initialValue = initialValue;
+
+    VkSemaphoreCreateInfo semaphoreInfo = {};
+    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    semaphoreInfo.pNext = &typeInfo;
+
+    Check(vkCreateSemaphore(device.Handle(), &semaphoreInfo, nullptr, &semaphore_),
+        "create timeline semaphore");
+}
+
+TimelineSemaphore::TimelineSemaphore(TimelineSemaphore&& other) noexcept :
+    device_(other.device_),
+    semaphore_(other.semaphore_)
+{
+    other.semaphore_ = nullptr;
+}
+
+TimelineSemaphore::~TimelineSemaphore()
+{
+    if (semaphore_ != nullptr)
+    {
+        vkDestroySemaphore(device_.Handle(), semaphore_, nullptr);
+        semaphore_ = nullptr;
+    }
+}
+
+uint64_t TimelineSemaphore::CurrentValue() const
+{
+    uint64_t value = 0;
+    Check(vkGetSemaphoreCounterValue(device_.Handle(), semaphore_, &value),
+        "get timeline semaphore counter");
+    return value;
+}
+
+void TimelineSemaphore::Signal(uint64_t value) const
+{
+    VkSemaphoreSignalInfo signalInfo = {};
+    signalInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO;
+    signalInfo.semaphore = semaphore_;
+    signalInfo.value = value;
+    Check(vkSignalSemaphore(device_.Handle(), &signalInfo), "signal timeline semaphore");
+}
+
+void TimelineSemaphore::Wait(uint64_t value, uint64_t timeout) const
+{
+    VkSemaphoreWaitInfo waitInfo = {};
+    waitInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
+    waitInfo.semaphoreCount = 1;
+    waitInfo.pSemaphores = &semaphore_;
+    waitInfo.pValues = &value;
+    Check(vkWaitSemaphores(device_.Handle(), &waitInfo, timeout), "wait timeline semaphore");
+}
+
 }
 
 // ============================================================================

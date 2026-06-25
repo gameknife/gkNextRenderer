@@ -42,6 +42,7 @@ namespace Vulkan
 		VkQueue PresentQueue() const { return presentQueue_; }
 		VkQueue TransferQueue() const { return transferQueue_; }
 		VkQueue VideoEncodeQueue() const { return videoEncodeQueue_; } // VK_NULL_HANDLE if absent
+		VkQueue QueueForFamilyIndex(uint32_t queueFamilyIndex) const;
 
 		VkPhysicalDeviceProperties DeviceProperties() const { return deviceProp_; }
 		MemoryStatsSnapshot CaptureMemoryStats(bool includeDetails = false) const;

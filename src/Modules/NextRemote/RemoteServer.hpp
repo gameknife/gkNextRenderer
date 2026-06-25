@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Runtime/RenderFrameConsumer.hpp"
+#include "Modules/NextRemote/VideoEncoder.hpp"
 
 #include <vulkan/vulkan.h>
 
@@ -31,6 +32,7 @@ namespace Runtime::Remote
             uint32_t fps = 30;
             uint32_t width = 0;
             uint32_t height = 0;
+            EVideoEncoderBackend encoderBackend = EVideoEncoderBackend::Auto;
         };
 
         const char* Name() const override { return "RemoteServer"; }
