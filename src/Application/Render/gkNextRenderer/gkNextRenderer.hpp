@@ -61,6 +61,7 @@ private:
     NextUI::GizmoController gizmoController_;
 
     EWorkMode workMode_ = EWorkMode::Renderer;
+    EWorkMode lastWorkMode_ = EWorkMode::Count;
 
     uint32_t modelId_;
     uint32_t boxModelId_;
