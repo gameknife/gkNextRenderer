@@ -65,6 +65,7 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_Rgb9e5Pack.cpp
 	Tests/Test_UpscalerTypes.cpp
 	Tests/Test_SogLoader.cpp
+	Tests/Test_TerminalBlitter.cpp
 	Application/Editor/ScadStudio/ScadPromptContext.cpp
 	Application/Editor/ScadStudio/ScadSessionStore.cpp
 )
@@ -428,6 +429,11 @@ foreach(target IN LISTS AllTargets)
 	else()
 		target_compile_definitions(${target} PUBLIC GK_ENABLE_SHADER_CLOCK=0)
 	endif()
+	if (GK_WITH_TUI)
+		target_compile_definitions(${target} PUBLIC GK_WITH_TUI=1)
+	else()
+		target_compile_definitions(${target} PUBLIC GK_WITH_TUI=0)
+	endif()
 	target_compile_definitions(${target} PUBLIC GK_WITH_RMLUI=1)
 	if (GK_REMOTE_ENABLED)
         target_compile_definitions(${target} PUBLIC GK_WITH_REMOTE=1)
@@ -693,6 +699,16 @@ if ( TARGET NextRemote )
 			get_target_property(_ttype ${t} TYPE)
 			if ( _ttype STREQUAL "EXECUTABLE" )
 				target_link_libraries(${t} PRIVATE NextRemote)
+			endif()
+		endif()
+	endforeach()
+endif()
+if ( TARGET NextTui )
+	foreach(t IN LISTS AllTargets)
+		if ( NOT ${t} STREQUAL gkNextEngine AND NOT ${t} STREQUAL NextTui AND TARGET ${t} )
+			get_target_property(_ttype ${t} TYPE)
+			if ( _ttype STREQUAL "EXECUTABLE" )
+				target_link_libraries(${t} PRIVATE NextTui)
 			endif()
 		endif()
 	endforeach()

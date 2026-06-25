@@ -832,6 +832,7 @@ namespace Vulkan
             frame_.imageAvailableSemaphores.emplace_back(*ctx_.device);
             frame_.renderFinishedSemaphores.emplace_back(*ctx_.device);
             frame_.inFlightFences.emplace_back(*ctx_.device, true);
+            frame_.inFlightFenceSubmitSerials.emplace_back(0);
             frame_.uniformBuffers.emplace_back(*ctx_.device);
         }
 
@@ -839,6 +840,8 @@ namespace Vulkan
         frame_.commandBuffers.reset(new CommandBuffers(*ctx_.commandPool, static_cast<uint32_t>(frame_.swapChain->ImageViews().size())));
 
         frame_.currentFence = nullptr;
+        frame_.currentFenceSerial = 0;
+        frame_.recordingSubmitSerial = 0;
 
         // 公用RenderImages
         CreateRenderImages();
@@ -954,6 +957,7 @@ namespace Vulkan
         overlay_.wireframeFrameBuffers.clear();
         overlay_.wireframePipeline.reset();
         overlay_.bufferClearPipeline.reset();
+        frame_.inFlightFenceSubmitSerials.clear();
         ambient_.softBake.reset();
         ambient_.voxelSkyVisBake.reset();
         ambient_.clearCache.reset();
@@ -1124,13 +1128,20 @@ namespace Vulkan
             {
                 SCOPED_CPU_TIMER("fence");
                 previousSubmitFence->Wait(noTimeout);
+                frame_.completedSubmitSerial = std::max(frame_.completedSubmitSerial, frame_.currentFenceSerial);
             }
             if (frameSlotFence != previousSubmitFence)
             {
                 SCOPED_CPU_TIMER("frame-slot-fence");
                 frameSlotFence->Wait(noTimeout);
+                if (frame_.currentFrame < frame_.inFlightFenceSubmitSerials.size())
+                {
+                    frame_.completedSubmitSerial = std::max(
+                        frame_.completedSubmitSerial, frame_.inFlightFenceSubmitSerials[frame_.currentFrame]);
+                }
             }
             frame_.currentFence = frameSlotFence;
+            frame_.recordingSubmitSerial = frame_.nextSubmitSerial;
 
             // Runtime node creation can increase the expanded primitive count. Resize only after
             // the previous queue submission has completed so no in-flight work retains old addresses.
@@ -1227,6 +1238,12 @@ namespace Vulkan
 
                     Check(vkQueueSubmit(ctx_.device->GraphicsQueue(), 1, &submitInfo, frame_.currentFence->Handle()),
                           "submit draw command buffer");
+                    frame_.currentFenceSerial = frame_.recordingSubmitSerial;
+                    if (frame_.currentFrame < frame_.inFlightFenceSubmitSerials.size())
+                    {
+                        frame_.inFlightFenceSubmitSerials[frame_.currentFrame] = frame_.recordingSubmitSerial;
+                    }
+                    frame_.nextSubmitSerial = frame_.recordingSubmitSerial + 1;
 
                     if (upscaler_ && frame_.streamlineFrameToken)
                     {

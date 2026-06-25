@@ -7,7 +7,7 @@
 
 namespace Modules::NextRemote
 {
-    std::unique_ptr<Runtime::IFrameStreamer> CreateRemoteServer(const Runtime::Config::Options& options)
+    std::unique_ptr<Runtime::IRenderFrameConsumer> CreateRemoteServer(const Runtime::Config::Options& options)
     {
         uint32_t remoteWidth = options.RemoteWidth != 0 ? options.RemoteWidth : options.Width;
         uint32_t remoteHeight = options.RemoteHeight != 0 ? options.RemoteHeight : options.Height;

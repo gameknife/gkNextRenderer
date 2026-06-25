@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Engine/Runtime/FrameStreamer.hpp"
+#include "Engine/Runtime/RenderFrameConsumer.hpp"
 
 #include <memory>
 
@@ -11,8 +11,8 @@ namespace Runtime::Config
 
 namespace Modules::NextRemote
 {
-    // Builds the WebRTC remote-play frame streamer from the engine options
+    // Builds the WebRTC remote-play frame consumer from the engine options
     // (resolution clamping, ports, bitrate). Attach via
-    // NextEngine::SetFrameStreamer before NextEngine::Start.
-    std::unique_ptr<Runtime::IFrameStreamer> CreateRemoteServer(const Runtime::Config::Options& options);
+    // NextEngine::AddRenderFrameConsumer before NextEngine::Start.
+    std::unique_ptr<Runtime::IRenderFrameConsumer> CreateRemoteServer(const Runtime::Config::Options& options);
 }

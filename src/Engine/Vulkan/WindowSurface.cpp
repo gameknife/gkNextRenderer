@@ -237,6 +237,26 @@ void Window::Show() const
     SDL_ShowWindow(window_);
 }
 
+bool Window::SetSize(uint32_t width, uint32_t height) const
+{
+    if (width == 0 || height == 0)
+    {
+        return false;
+    }
+
+    if (!SDL_SetWindowSize(window_, static_cast<int>(width), static_cast<int>(height)))
+    {
+        SPDLOG_WARN("Failed to resize SDL window to {}x{}: {}", width, height, SDL_GetError());
+        return false;
+    }
+
+    if (!SDL_SyncWindow(window_))
+    {
+        SPDLOG_WARN("Window size synchronization timed out after resize: {}", SDL_GetError());
+    }
+    return true;
+}
+
 void Window::Minimize()
 {
     SDL_MinimizeWindow(window_);

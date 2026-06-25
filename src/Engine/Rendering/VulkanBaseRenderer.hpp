@@ -96,6 +96,8 @@ namespace Vulkan
 		class VulkanGpuTimer* GpuTimer() const {return ctx_.gpuTimer.get();}
 		bool HasSwapChain() const { return frame_.swapChain.operator bool(); }
 		int FrameCount() const {return frame_.frameCount;}
+		uint64_t RecordingSubmitSerial() const { return frame_.recordingSubmitSerial; }
+		uint64_t CompletedSubmitSerial() const { return frame_.completedSubmitSerial; }
 		DeviceMemory* GetScreenShotMemory() const {return screenshot_.imageMemory.get();}
 		const Image* GetScreenShotImage() const { return screenshot_.image.get(); }
 
@@ -237,6 +239,11 @@ namespace Vulkan
 			uint32_t currentImageIndex = 0;
 			size_t currentFrame = 0;
 			Fence* currentFence = nullptr;
+			uint64_t currentFenceSerial = 0;
+			uint64_t completedSubmitSerial = 0;
+			uint64_t recordingSubmitSerial = 0;
+			uint64_t nextSubmitSerial = 1;
+			std::vector<uint64_t> inFlightFenceSubmitSerials;
 			int frameCount = 0;
 			Assets::UniformBufferObject lastUBO;
 			Rendering::Upscaler::FFrameToken streamlineFrameToken;

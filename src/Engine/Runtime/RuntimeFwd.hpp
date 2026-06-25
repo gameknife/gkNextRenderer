@@ -22,7 +22,7 @@ namespace NextUI
 namespace Runtime
 {
     class IDebugUiProvider;
-    class IFrameStreamer;
+    class IRenderFrameConsumer;
     class IScriptRuntime;
     class IUiOverlay;
 }

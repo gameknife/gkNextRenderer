@@ -80,6 +80,15 @@ last_updated: 2026-06-12
 ./gnb.sh run -- --scene=foo --present-mode=mailbox
 ```
 
+终端 TUI 模式（隐藏窗口真实渲染，画面持续刷到当前终端）：
+
+```bash
+./gnb.sh tui --scene assets/models/playground.glb
+./gnb.sh tui --target ScadStudio --scene assets/scad/beer_cup.scad
+./gnb.sh tui --target gkNextRenderer --tui-fps 20
+./gnb.sh tui --scene assets/models/playground.glb --tui-ssaa 2
+```
+
 ## Dashboard 控制台
 
 直接运行 `gnb` 或显式执行 dashboard 命令，会在 Wails 原生窗口中打开 dashboard：

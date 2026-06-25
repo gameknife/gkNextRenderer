@@ -6,7 +6,7 @@
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/RemoteProtocol.hpp"
-#include "Engine/Runtime/FrameStreamer.hpp"
+#include "Engine/Runtime/RenderFrameConsumer.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Config/EngineCVars.hpp"
 #include "Engine/Runtime/Subsystems/NextLocalization.h"
@@ -422,7 +422,7 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     windowConfig.Fullscreen = config_.userSettings.BorderlessFullscreen;
     // Hide the window for agent validation captures and for any caller that asked for it (e.g. the
     // unit-test engine fixture). The capture+auto-exit state machine stays gated on AgentValidation.
-    windowConfig.HiddenWindow = options.AgentValidation || options.HiddenWindow;
+    windowConfig.HiddenWindow = options.AgentValidation || options.HiddenWindow || options.Tui;
     window_.reset(new Vulkan::Window(windowConfig));
     SetBorderlessFullscreen(config_.userSettings.BorderlessFullscreen);
     services_.localization = std::make_unique<NextLocalization>();
@@ -493,7 +493,6 @@ NextEngine::~NextEngine()
 
     uiOverlay_.reset();
     userInterface_.reset();
-    frameStreamer_.reset();
     scene_.reset();
     renderer_.reset();
     window_.reset();
@@ -511,7 +510,7 @@ void NextEngine::Start()
     // Initialize Renderer
     bool shouldEnableValidation = GOption->Validation;
     
-    const bool useFastAgentPresent = options_->AgentValidation;
+    const bool useFastAgentPresent = options_->AgentValidation || options_->Tui;
     const VkPresentModeKHR presentMode = useFastAgentPresent
                                              ? VK_PRESENT_MODE_IMMEDIATE_KHR
                                              : static_cast<VkPresentModeKHR>(options_->PresentMode);
@@ -533,6 +532,17 @@ void NextEngine::Start()
     { OnRendererPostRender(commandBuffer, imageIndex); };
 
     renderer_->Start();
+    for (auto it = renderFrameConsumers_.begin(); it != renderFrameConsumers_.end();)
+    {
+        if ((*it)->Start())
+        {
+            ++it;
+            continue;
+        }
+
+        SPDLOG_WARN("Render frame consumer '{}' failed to start; disabling it", (*it)->Name());
+        it = renderFrameConsumers_.erase(it);
+    }
 
     // Assets layer hooks (GlobalTexturePool must not depend on Runtime).
     if (auto* texturePool = Assets::GlobalTexturePool::GetInstance())
@@ -578,15 +588,6 @@ void NextEngine::Start()
     }
 
     gameInstance_->OnInit();
-
-    if (frameStreamer_)
-    {
-        if (!frameStreamer_->Start())
-        {
-            SPDLOG_ERROR("RemotePlay: failed to start frame streamer");
-            frameStreamer_.reset();
-        }
-    }
 
     SPDLOG_INFO("---- Next Engine Started in {}", stopwatch.elapsed_ms());
 }
@@ -876,6 +877,15 @@ bool NextEngine::Tick(bool forcingDelta)
         {
             TickAgentValidation();
         }
+
+        if (!renderFrameConsumers_.empty())
+        {
+            SCOPED_CPU_TIMER("frame consumers tick");
+            for (const auto& consumer : renderFrameConsumers_)
+            {
+                consumer->Tick();
+            }
+        }
     }
 
     if (GpuTimer())
@@ -903,7 +913,6 @@ void NextEngine::End()
     {
         services_.physics->Stop();
     }
-    frameStreamer_.reset();
     if (gameInstance_)
     {
         gameInstance_->OnDestroy();
@@ -918,11 +927,16 @@ void NextEngine::End()
     {
         services_.localization->SaveToTxt(fmt::format("assets/locale/{}.txt", options_->locale));
     }
+
+    renderFrameConsumers_.clear();
 }
 
-void NextEngine::SetFrameStreamer(std::unique_ptr<Runtime::IFrameStreamer> streamer)
+void NextEngine::AddRenderFrameConsumer(std::unique_ptr<Runtime::IRenderFrameConsumer> consumer)
 {
-    frameStreamer_ = std::move(streamer);
+    if (consumer)
+    {
+        renderFrameConsumers_.push_back(std::move(consumer));
+    }
 }
 
 void NextEngine::AddTimerTask(double delay, DelayedTask task)
@@ -1185,9 +1199,9 @@ void NextEngine::OnRendererDeleteSwapChain()
     {
         userInterface_->OnDestroySurface();
     }
-    if (frameStreamer_)
+    for (const auto& consumer : renderFrameConsumers_)
     {
-        frameStreamer_->OnRendererDeleteSwapChain();
+        consumer->OnRendererDeleteSwapChain();
     }
 }
 
@@ -1288,11 +1302,13 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
         userInterface_->PostRender(commandBuffer, renderer_->SwapChain(), imageIndex, suppressAllUi);
     }
 
-    // Remote play capture: recorded into the same frame command buffer, after all UI passes.
-    if (frameStreamer_)
+    if (!renderFrameConsumers_.empty())
     {
-        SCOPED_CPU_TIMER("remote");
-        frameStreamer_->RecordVideoFrame(commandBuffer, imageIndex, *renderer_);
+        SCOPED_CPU_TIMER("frame consumers");
+        for (const auto& consumer : renderFrameConsumers_)
+        {
+            consumer->RecordFrame(commandBuffer, imageIndex, *renderer_);
+        }
     }
 }
 
