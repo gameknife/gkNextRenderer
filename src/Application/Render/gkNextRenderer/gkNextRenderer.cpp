@@ -517,6 +517,43 @@ bool NextRendererGameInstance::OnRenderUI()
 
 	UpdateUiScaledMetrics();
 
+    auto& userSettings = GetEngine().GetUserSettings();
+    if (workMode_ != lastWorkMode_)
+    {
+        switch (workMode_)
+        {
+        case EWorkMode::Renderer:
+            userSettings.ShowSettings = true;
+            userSettings.ShowOverlay = false;
+            memoryStatisticsPanelOpen_ = false;
+            break;
+        case EWorkMode::Profiler:
+            userSettings.ShowSettings = false;
+            userSettings.ShowOverlay = true;
+            memoryStatisticsPanelOpen_ = true;
+            break;
+        case EWorkMode::Settings:
+            userSettings.ShowSettings = true;
+            userSettings.ShowOverlay = false;
+            memoryStatisticsPanelOpen_ = false;
+            break;
+        default:
+            userSettings.ShowSettings = false;
+            userSettings.ShowOverlay = false;
+            memoryStatisticsPanelOpen_ = false;
+            break;
+        }
+        lastWorkMode_ = workMode_;
+    }
+    else if (workMode_ == EWorkMode::Profiler && !userSettings.ShowOverlay)
+    {
+        workMode_ = EWorkMode::Renderer;
+        lastWorkMode_ = workMode_;
+        userSettings.ShowSettings = true;
+        userSettings.ShowOverlay = false;
+        memoryStatisticsPanelOpen_ = false;
+    }
+
 	DrawTitleBar();
     DrawModeRail();
     DrawSettings();
@@ -1512,15 +1549,38 @@ void NextRendererGameInstance::DrawMemoryStatisticsPanel()
 
     bool keepOpen = true;
     ImGuiViewport* viewport = ImGui::GetMainViewport();
-    const float panelWidth = std::clamp(viewport->Size.x - 24.0f, 640.0f, 820.0f);
-    const float availablePanelHeight = viewport->Size.y - TitlebarSize - 30.0f - 28.0f;
-    const float panelHeight = std::clamp(availablePanelHeight, 430.0f, 680.0f);
+
+    constexpr float profilerPanelWidth = 380.0f;
+    constexpr float profilerPanelMargin = 12.0f;
+    const float profilerLeftEdge = viewport->Pos.x + viewport->Size.x - profilerPanelMargin - profilerPanelWidth;
+
+    float panelWidth;
+    float panelHeight;
+    ImVec2 panelPos;
+    ImVec2 panelPivot;
+
+    if (profilerMode)
+    {
+        const float gap = 12.0f;
+        const float rightEdge = profilerLeftEdge - gap;
+        const float leftEdge = viewport->Pos.x + ModeRailWidth + 16.0f;
+        panelWidth = std::max(520.0f, rightEdge - leftEdge);
+        const float availablePanelHeight = viewport->Size.y - TitlebarSize - 30.0f - 28.0f;
+        panelHeight = std::clamp(availablePanelHeight, 480.0f, 800.0f);
+        panelPos = ImVec2(rightEdge, viewport->Pos.y + TitlebarSize + profilerPanelMargin);
+        panelPivot = ImVec2(1.0f, 0.0f);
+    }
+    else
+    {
+        panelWidth = std::clamp(viewport->Size.x - 24.0f, 640.0f, 820.0f);
+        const float availablePanelHeight = viewport->Size.y - TitlebarSize - 30.0f - 28.0f;
+        panelHeight = std::clamp(availablePanelHeight, 430.0f, 680.0f);
+        panelPos = ImVec2(viewport->Pos.x + viewport->Size.x - 16.0f,
+                          viewport->Pos.y + viewport->Size.y - 30.0f - 12.0f);
+        panelPivot = ImVec2(1.0f, 1.0f);
+    }
+
     const ImVec2 panelSize(panelWidth, panelHeight);
-    const ImVec2 panelPos = profilerMode
-        ? ImVec2(viewport->Pos.x + viewport->Size.x - 16.0f, viewport->Pos.y + TitlebarSize + 16.0f)
-        : ImVec2(viewport->Pos.x + viewport->Size.x - 16.0f,
-                 viewport->Pos.y + viewport->Size.y - 30.0f - 12.0f);
-    const ImVec2 panelPivot = profilerMode ? ImVec2(1.0f, 0.0f) : ImVec2(1.0f, 1.0f);
 
     if (!NextUI::Theme::BeginFloatingPanel("##RendererMemoryStats", ICON_FA_CHART_COLUMN, "Memory Statistics",
                                               &keepOpen, panelPos, panelSize, panelPivot))
@@ -1536,9 +1596,10 @@ void NextRendererGameInstance::DrawMemoryStatisticsPanel()
         return;
     }
 
+    NextUI::Theme::BeginInsetPanel("##MemoryStatsBody", ImVec2(0, 0), false, 0, ImVec2(12.0f, 12.0f), 0.0f);
+
     const Vulkan::MemoryStatsSnapshot memoryStats = GetEngine().GetRenderer().Device().CaptureMemoryStats(true);
 
-    ImGui::Indent(4.0f);
     const float vramUsageFraction =
         SafeFraction(memoryStats.deviceLocalUsageBytes, memoryStats.deviceLocalBudgetBytes);
     const float managedFraction =
@@ -1579,14 +1640,14 @@ void NextRendererGameInstance::DrawMemoryStatisticsPanel()
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(10.0f, 8.0f));
     if (ImGui::BeginTable("##MemoryHeapTable", 6,
                           ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_BordersOuter |
-                              ImGuiTableFlags_SizingFixedFit))
+                              ImGuiTableFlags_SizingStretchProp))
     {
-        ImGui::TableSetupColumn("Heap", ImGuiTableColumnFlags_WidthFixed, 66.0f);
-        ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 72.0f);
-        ImGui::TableSetupColumn("Usage", ImGuiTableColumnFlags_WidthFixed, 92.0f);
-        ImGui::TableSetupColumn("Budget", ImGuiTableColumnFlags_WidthFixed, 92.0f);
-        ImGui::TableSetupColumn("Managed", ImGuiTableColumnFlags_WidthFixed, 150.0f);
-        ImGui::TableSetupColumn("Blocks", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Heap", ImGuiTableColumnFlags_WidthFixed, 58.0f);
+        ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 64.0f);
+        ImGui::TableSetupColumn("Usage", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+        ImGui::TableSetupColumn("Budget", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+        ImGui::TableSetupColumn("Managed", ImGuiTableColumnFlags_WidthStretch, 1.2f);
+        ImGui::TableSetupColumn("Blocks", ImGuiTableColumnFlags_WidthFixed, 52.0f);
         ImGui::TableHeadersRow();
 
         for (const Vulkan::MemoryHeapStats& heap : memoryStats.heaps)
@@ -1636,7 +1697,8 @@ void NextRendererGameInstance::DrawMemoryStatisticsPanel()
         DrawMemoryBlockDetails(memoryStats);
     }
     NextUI::Theme::EndInsetPanel();
-    ImGui::Unindent(4.0f);
+
+    NextUI::Theme::EndInsetPanel();
 
     NextUI::Theme::EndFloatingPanel();
 

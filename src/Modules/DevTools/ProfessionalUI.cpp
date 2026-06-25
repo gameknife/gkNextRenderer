@@ -943,6 +943,7 @@ namespace NextUI::Theme
 
         if (open)
         {
+            ImGui::PushID(label);
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 5.0f));
             ImGui::Dummy(ImVec2(0.0f, 1.0f));
         }
@@ -951,6 +952,7 @@ namespace NextUI::Theme
 
     void EndPanelSection()
     {
+        ImGui::PopID();
         ImGui::PopStyleVar();
         ImGui::Dummy(ImVec2(0.0f, 4.0f));
     }
