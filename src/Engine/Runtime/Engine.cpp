@@ -594,6 +594,11 @@ void NextEngine::Start()
 
 bool NextEngine::HandleEvent(SDL_Event& event)
 {
+    if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP)
+    {
+        SDL_SetModState(static_cast<SDL_Keymod>(event.key.mod));
+    }
+
     userInterface_->HandleEvent(&event);
     const bool rmlUiConsumed = uiOverlay_ && uiOverlay_->HandleEvent(event);
 
@@ -649,6 +654,19 @@ bool NextEngine::HandleEvent(SDL_Event& event)
         break;
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
     case SDL_EVENT_MOUSE_BUTTON_UP:
+        inputState_.mousePos = glm::dvec2(event.button.x, event.button.y);
+        if (event.button.button != 0)
+        {
+            const uint32_t mask = SDL_BUTTON_MASK(event.button.button);
+            if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
+            {
+                inputState_.mouseButtons |= mask;
+            }
+            else
+            {
+                inputState_.mouseButtons &= ~mask;
+            }
+        }
         if (!rmlUiConsumed)
         {
             OnMouseButton(event);
@@ -661,15 +679,22 @@ bool NextEngine::HandleEvent(SDL_Event& event)
         }
         if (event.motion.which == Runtime::Remote::remoteMouseId)
         {
-            OnCursorPosition(event.motion.xrel, event.motion.yrel);
+            inputState_.mousePos += glm::dvec2(event.motion.xrel, event.motion.yrel);
+            // Remote relative input arrives as deltas from the browser's
+            // pointer-lock path, but most game/editor controllers interpret
+            // OnCursorPosition() as an absolute cursor stream and compute their
+            // own delta internally. Feed the accumulated absolute position here.
+            OnCursorPosition(inputState_.mousePos.x, inputState_.mousePos.y);
             break;
         }
         if (window_ && SDL_GetWindowRelativeMouseMode(window_->Handle()))
         {
+            inputState_.mousePos += glm::dvec2(event.motion.xrel, event.motion.yrel);
             OnCursorPosition(event.motion.xrel, event.motion.yrel);
         }
         else
         {
+            inputState_.mousePos = glm::dvec2(event.motion.x, event.motion.y);
             OnCursorPosition(event.motion.x, event.motion.y);
         }
         break;
@@ -946,9 +971,7 @@ void NextEngine::AddTimerTask(double delay, DelayedTask task)
 
 glm::dvec2 NextEngine::GetMousePos()
 {
-    float fx{}, fy{};
-    SDL_GetMouseState(&fx, &fy);
-    return glm::dvec2(fx, fy);
+    return inputState_.mousePos;
 }
 
 void NextEngine::RequestClose()

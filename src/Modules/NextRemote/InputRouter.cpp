@@ -9,6 +9,7 @@
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_timer.h>
 #include <SDL3/SDL_keyboard.h>
+#include <SDL3/SDL_video.h>
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
@@ -36,6 +37,46 @@ namespace Runtime::Remote
                 SPDLOG_WARN("RemotePlay: SDL_PushEvent failed: {}", SDL_GetError());
             }
         }
+    }
+
+    uint32_t FInputRouter::ResolveMainWindowId()
+    {
+        int count = 0;
+        SDL_Window** windows = SDL_GetWindows(&count);
+        if (windows && count > 0 && windows[0])
+        {
+            return SDL_GetWindowID(windows[0]);
+        }
+        return 0;
+    }
+
+    SDL_Window* FInputRouter::ResolveMainWindow()
+    {
+        int count = 0;
+        SDL_Window** windows = SDL_GetWindows(&count);
+        return (windows && count > 0) ? windows[0] : nullptr;
+    }
+
+    // Absolute mouse coordinates arrive normalized to [0,1] over the visible frame
+    // (see assets/remote/index.html scaleToVideo). ImGui and the game read mouse
+    // positions in window framebuffer pixels (= swapchain extent), so scale the
+    // normalized value back by the live window pixel size here.
+    void FInputRouter::ScaleNormalizedToWindow(float& x, float& y)
+    {
+        if (SDL_Window* window = ResolveMainWindow())
+        {
+            int width = 0;
+            int height = 0;
+            SDL_GetWindowSizeInPixels(window, &width, &height);
+            if (width > 0 && height > 0)
+            {
+                x *= static_cast<float>(width);
+                y *= static_cast<float>(height);
+                return;
+            }
+        }
+        // Fallback if the window is not available yet: assume normalized == pixel
+        // (caller passed pixel coords already). Better than leaving 0.
     }
 
     FInputRouter::~FInputRouter()
@@ -140,6 +181,7 @@ namespace Runtime::Remote
         SDL_Event event{};
         event.type = down ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
         event.key.type = static_cast<SDL_EventType>(event.type);
+        event.key.windowID = ResolveMainWindowId();
         event.key.scancode = static_cast<SDL_Scancode>(scancodeValue);
         event.key.mod = static_cast<SDL_Keymod>(modValue);
         event.key.key = SDL_GetKeyFromScancode(event.key.scancode, event.key.mod, true);
@@ -153,6 +195,7 @@ namespace Runtime::Remote
         SDL_Event event{};
         event.type = SDL_EVENT_MOUSE_MOTION;
         event.motion.type = static_cast<SDL_EventType>(event.type);
+        event.motion.windowID = ResolveMainWindowId();
         if (mode == static_cast<uint8_t>(ERemoteMouseMoveMode::Relative))
         {
             event.motion.which = remoteMouseId;
@@ -161,6 +204,7 @@ namespace Runtime::Remote
         }
         else
         {
+            ScaleNormalizedToWindow(x, y);
             event.motion.x = x;
             event.motion.y = y;
         }
@@ -169,9 +213,11 @@ namespace Runtime::Remote
 
     void FInputRouter::PushMouseButton(bool down, uint8_t button, float x, float y)
     {
+        ScaleNormalizedToWindow(x, y);
         SDL_Event event{};
         event.type = down ? SDL_EVENT_MOUSE_BUTTON_DOWN : SDL_EVENT_MOUSE_BUTTON_UP;
         event.button.type = static_cast<SDL_EventType>(event.type);
+        event.button.windowID = ResolveMainWindowId();
         event.button.button = button;
         event.button.down = down;
         event.button.x = x;
@@ -184,6 +230,7 @@ namespace Runtime::Remote
         SDL_Event event{};
         event.type = SDL_EVENT_MOUSE_WHEEL;
         event.wheel.type = static_cast<SDL_EventType>(event.type);
+        event.wheel.windowID = ResolveMainWindowId();
         event.wheel.x = x;
         event.wheel.y = y;
         PushEvent(event);
