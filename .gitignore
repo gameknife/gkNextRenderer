@@ -406,8 +406,10 @@ tools/brotato3d-pak/output/
 src/ThirdParty/*/bin/
 src/ThirdParty/oidn/
 src/ThirdParty/Streamline/
-# Claude Code files
+# AI assistant local files
 .claude/
+.mimocode/
+.skills/
 lib/
 
 tools/ldraw/source/ldraw/

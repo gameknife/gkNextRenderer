@@ -117,19 +117,24 @@ void FUiDevPanels::RefreshConsoleMatches(size_t matchLimit)
     if (consoleInput_ != consoleLastInput_)
     {
         consoleLastInput_ = consoleInput_;
-        consoleMatchIndex_ = 0;
-        consoleCompletionBase_.clear();
+        if (consoleCompletionBase_.empty() || consoleInput_.find(consoleCompletionBase_) != 0)
+        {
+            consoleMatchSelection_ = -1;
+            consoleCompletionBase_.clear();
+        }
         consoleHistoryIndex_ = static_cast<int>(consoleHistory_.size());
     }
 
     std::string matchBase = consoleCompletionBase_.empty() ? ExtractConsolePrefix(consoleInput_) : consoleCompletionBase_;
+    std::vector<std::string> newMatches;
     if (!matchBase.empty())
     {
-        consoleMatches_ = Engine().GetCVarSystem().Match(matchBase, {.limit = matchLimit});
+        newMatches = Engine().GetCVarSystem().Match(matchBase, {.limit = matchLimit});
     }
-    else
+    if (newMatches != consoleMatches_)
     {
-        consoleMatches_.clear();
+        consoleMatches_ = std::move(newMatches);
+        consoleMatchSelection_ = consoleMatches_.empty() ? -1 : 0;
     }
 }
 
@@ -205,11 +210,15 @@ bool FUiDevPanels::DrawConsoleCommandInput(
     consoleLastInput_.clear();
     consoleMatches_.clear();
     consoleCompletionBase_.clear();
-    consoleMatchIndex_ = 0;
+    consoleMatchSelection_ = -1;
     if (closeConsoleOnSubmit)
     {
         showConsole_ = false;
         requestConsoleFocus_ = false;
+    }
+    else
+    {
+        requestConsoleFocus_ = true;
     }
     return true;
 }
@@ -234,12 +243,46 @@ int FUiDevPanels::HandleConsoleInputTextCallback(ImGuiInputTextCallbackData* dat
             return 0;
         }
         consoleCompletionBase_.clear();
-        consoleMatchIndex_ = 0;
+        consoleMatchSelection_ = -1;
         return 0;
     }
 
     if (data->EventFlag == ImGuiInputTextFlags_CallbackHistory)
     {
+        if (!consoleMatches_.empty() && consoleMatchSelection_ >= 0)
+        {
+            if (data->EventKey == ImGuiKey_UpArrow)
+            {
+                consoleMatchSelection_ = (consoleMatchSelection_ - 1 + static_cast<int>(consoleMatches_.size())) %
+                    static_cast<int>(consoleMatches_.size());
+            }
+            else if (data->EventKey == ImGuiKey_DownArrow)
+            {
+                consoleMatchSelection_ = (consoleMatchSelection_ + 1) % static_cast<int>(consoleMatches_.size());
+            }
+
+            std::string buffer(data->Buf, data->BufTextLen);
+            size_t start = buffer.find_first_not_of(" \t\r\n");
+            if (start == std::string::npos)
+            {
+                return 0;
+            }
+            size_t end = buffer.find_first_of(" =\t\r\n", start);
+            if (end == std::string::npos)
+            {
+                end = buffer.size();
+            }
+            std::string rest = end < buffer.size() ? buffer.substr(end) : "";
+            const std::string& match = consoleMatches_[consoleMatchSelection_];
+            std::string newBuffer = match + rest;
+
+            consoleSkipEditReset_ = true;
+            data->DeleteChars(0, data->BufTextLen);
+            data->InsertChars(0, newBuffer.c_str());
+            data->CursorPos = static_cast<int>(match.size());
+            return 0;
+        }
+
         if (data->EventKey == ImGuiKey_UpArrow)
         {
             if (consoleHistoryIndex_ > 0)
@@ -305,10 +348,9 @@ int FUiDevPanels::HandleConsoleInputTextCallback(ImGuiInputTextCallbackData* dat
         if (consoleCompletionBase_.empty())
         {
             consoleCompletionBase_ = prefix;
-            consoleMatchIndex_ = 0;
         }
 
-        constexpr size_t kMatchLimit = 8;
+        constexpr size_t kMatchLimit = 16;
         auto matches = Engine().GetCVarSystem().Match(consoleCompletionBase_, {.limit = kMatchLimit});
         consoleMatches_ = matches;
         if (matches.empty())
@@ -316,9 +358,13 @@ int FUiDevPanels::HandleConsoleInputTextCallback(ImGuiInputTextCallbackData* dat
             return 0;
         }
 
-        int index = consoleMatchIndex_ % static_cast<int>(matches.size());
-        const std::string& match = matches[index];
-        consoleMatchIndex_ = (index + 1) % static_cast<int>(matches.size());
+        if (consoleMatchSelection_ < 0 || consoleMatchSelection_ >= static_cast<int>(matches.size()))
+        {
+            consoleMatchSelection_ = 0;
+        }
+
+        const std::string& match = matches[consoleMatchSelection_];
+        consoleMatchSelection_ = (consoleMatchSelection_ + 1) % static_cast<int>(matches.size());
 
         std::string rest = end < buffer.size() ? buffer.substr(end) : "";
         std::string newBuffer = match + rest;
@@ -467,7 +513,20 @@ void FUiDevPanels::DrawConsoleLogOutputInternal(const char* childId, const ImVec
 
 void FUiDevPanels::ToggleConsole()
 {
-    showConsole_ = !showConsole_;
+    if (!showConsole_)
+    {
+        showConsole_ = true;
+        consoleInteractiveMode_ = false;
+    }
+    else if (!consoleInteractiveMode_)
+    {
+        consoleInteractiveMode_ = true;
+    }
+    else
+    {
+        showConsole_ = false;
+        consoleInteractiveMode_ = false;
+    }
     requestConsoleFocus_ = showConsole_;
 }
 
@@ -926,6 +985,14 @@ bool FUiDevPanels::HandleEvent(const SDL_Event& event)
         return true;
     }
 
+    if (showConsole_ && event.type == SDL_EVENT_KEY_DOWN && event.key.repeat == 0 &&
+        event.key.key == SDLK_ESCAPE)
+    {
+        showConsole_ = false;
+        consoleInteractiveMode_ = false;
+        return true;
+    }
+
     if (suppressConsoleToggleTextInput_ && event.type == SDL_EVENT_TEXT_INPUT)
     {
         const bool isConsoleToggleText =
@@ -965,7 +1032,7 @@ void FUiDevPanels::DrawConsoleWindow()
     const auto flags = ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove;
     if (ImGui::Begin("Console", &showConsole_, flags))
     {
-        const size_t kConsoleMatchLimit = 8;
+        const size_t kConsoleMatchLimit = 16;
         RefreshConsoleMatches(kConsoleMatchLimit);
 
         float hintHeight = 0.0f;
@@ -975,10 +1042,23 @@ void FUiDevPanels::DrawConsoleWindow()
         }
 
         float inputHeight = ImGui::GetFrameHeightWithSpacing();
-        float outputHeight = ImGui::GetContentRegionAvail().y - inputHeight - hintHeight;
-        outputHeight = std::max(outputHeight, ImGui::GetFontSize() * 5.0f);
 
-        DrawConsoleLogOutputInternal("ConsoleOutput", ImVec2(0, outputHeight), true);
+        if (consoleInteractiveMode_)
+        {
+            const float totalAvail = ImGui::GetContentRegionAvail().y;
+            const float centerInputY = totalAvail * 0.45f;
+            const float outputHeight = std::max(centerInputY - inputHeight, ImGui::GetFontSize() * 5.0f);
+
+            DrawConsoleLogOutputInternal("ConsoleOutput", ImVec2(0, outputHeight), true);
+
+            ImGui::SetCursorPosY(centerInputY);
+        }
+        else
+        {
+            float outputHeight = std::max(
+                ImGui::GetContentRegionAvail().y - inputHeight - hintHeight, ImGui::GetFontSize() * 5.0f);
+            DrawConsoleLogOutputInternal("ConsoleOutput", ImVec2(0, outputHeight), true);
+        }
 
         if (!consoleMatches_.empty())
         {
@@ -986,9 +1066,18 @@ void FUiDevPanels::DrawConsoleWindow()
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
             ImGui::Text("Matches (%zu/%zu):", consoleMatches_.size(), kConsoleMatchLimit);
             ImGui::PopStyleColor();
-            for (const auto& name : consoleMatches_)
+            for (int i = 0; i < static_cast<int>(consoleMatches_.size()); ++i)
             {
-                ImGui::Text("%s", name.c_str());
+                if (i == consoleMatchSelection_)
+                {
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.85f, 0.3f, 1.0f));
+                    ImGui::Text("> %s", consoleMatches_[i].c_str());
+                    ImGui::PopStyleColor();
+                }
+                else
+                {
+                    ImGui::Text("  %s", consoleMatches_[i].c_str());
+                }
             }
             ImGui::EndChild();
         }
@@ -1000,7 +1089,9 @@ void FUiDevPanels::DrawConsoleWindow()
         }
 
         ImGui::PushItemWidth(-1);
-        DrawConsoleCommandInput("##ConsoleInput", "", -1.0f, true, false, nullptr, false);
+        DrawConsoleCommandInput(
+            "##ConsoleInput", consoleInteractiveMode_ ? "Interactive mode (ESC/` to exit)" : "",
+            -1.0f, !consoleInteractiveMode_, false, nullptr, false);
         ImGui::PopItemWidth();
     }
     ImGui::End();

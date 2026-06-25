@@ -79,9 +79,10 @@ namespace DevTools
         std::string consoleLastInput_;
         std::string consoleCompletionBase_;
         int consoleHistoryIndex_ = -1;
-        int consoleMatchIndex_ = 0;
+        int consoleMatchSelection_ = -1;
         bool consoleSkipEditReset_ = false;
         bool showConsole_ = false;
+        bool consoleInteractiveMode_ = false;
         bool consoleScrollToBottom_ = false;
         bool requestConsoleFocus_ = false;
         bool suppressConsoleToggleTextInput_ = false;
