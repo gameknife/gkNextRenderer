@@ -280,7 +280,7 @@ bool EditorGameInstance::OnCursorPosition(double xpos, double ypos)
         modelViewController_.OnCursorPosition(xpos, ypos);
     }
 
-    const uint32_t mouseButtons = SDL_GetMouseState(nullptr, nullptr);
+    const uint32_t mouseButtons = GetEngine().GetMouseButtons();
     const bool rightMousePressed = (mouseButtons & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
     if (settings_.hoverHighlight && !gizmoController_.IsInteracting() && !rightMousePressed)
     {

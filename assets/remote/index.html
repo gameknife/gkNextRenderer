@@ -8,87 +8,229 @@
     :root {
       color-scheme: dark;
       font-family: "Segoe UI", system-ui, sans-serif;
-      background: #101318;
+      background: #05070a;
       color: #e8edf2;
     }
-    body {
+    html, body {
       margin: 0;
+      height: 100%;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
       min-height: 100vh;
-      display: grid;
-      place-items: center;
     }
-    main {
-      width: min(1100px, calc(100vw - 32px));
-      border: 1px solid #303844;
-      border-radius: 8px;
-      background: #181d24;
-      padding: 24px;
-      box-shadow: 0 12px 34px rgba(0, 0, 0, 0.32);
+
+    /* Top status bar — compact, single row, low visual weight. */
+    .topbar {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: #0d1117;
+      border-bottom: 1px solid #1f2630;
+      font-size: 12px;
     }
-    h1 {
-      margin: 0 0 12px;
-      font-size: 24px;
+    .topbar h1 {
+      margin: 0 12px 0 0;
+      font-size: 13px;
       font-weight: 650;
+      white-space: nowrap;
+      color: #c9d1d9;
     }
-    .status {
-      display: grid;
-      grid-template-columns: 160px 1fr;
-      gap: 8px 18px;
-      margin-top: 18px;
-      font-size: 14px;
+    .pills {
+      display: flex;
+      gap: 6px;
+      flex: 1 1 auto;
+      min-width: 0;
+      flex-wrap: wrap;
     }
-    .label {
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: #161b22;
+      border: 1px solid #21262d;
+      white-space: nowrap;
       color: #9aa7b6;
     }
-    #log {
-      margin-top: 18px;
-      min-height: 120px;
-      max-height: 220px;
-      overflow: auto;
-      padding: 12px;
-      border-radius: 6px;
-      background: #0d1117;
-      color: #c9d1d9;
-      white-space: pre-wrap;
-      font: 13px ui-monospace, SFMono-Regular, Consolas, monospace;
+    .pill b {
+      font-weight: 500;
+      color: #e8edf2;
     }
+    .pill .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #6e7681;
+    }
+    .pill.ok .dot { background: #3fb950; }
+    .pill.warn .dot { background: #d29922; }
+    .pill.err .dot { background: #f85149; }
+    .spacer { flex: 1 1 auto; }
+    .topbar button {
+      flex: 0 0 auto;
+      padding: 3px 10px;
+      font-size: 12px;
+      color: #c9d1d9;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .topbar button:hover { background: #2d333b; }
+    .topbar button.active { background: #1f6feb; border-color: #388bfd; color: #fff; }
+
+    /* Stage holds the video; fills remaining viewport, so the window can be
+       resized freely and the stream scales with it. */
+    .stage {
+      flex: 1 1 auto;
+      position: relative;
+      min-height: 0;
+      display: grid;
+      place-items: center;
+      background: #000;
+      overflow: hidden;
+    }
+    /* Fit mode (default): the video fills the stage, letterboxed via object-fit.
+       Without width/height:100% the element stays at its intrinsic decoded
+       resolution and never grows with the window. */
     video {
       display: block;
       width: 100%;
-      aspect-ratio: 16 / 9;
-      margin-top: 16px;
-      border-radius: 6px;
-      background: #05070a;
+      height: 100%;
+      background: #000;
       object-fit: contain;
+      cursor: default;
     }
+    /* 100% (1:1 decoded-pixel) mode: show the stream at native size, center it,
+       and let the stage scroll if it overflows. */
+    .stage.actual {
+      overflow: auto;
+      place-items: start center;
+    }
+    .stage.actual video {
+      width: auto;
+      height: auto;
+      margin: auto;
+    }
+
+    /* Collapsible log panel — docked at the bottom, hidden by default. */
+    .logwrap {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      border-top: 1px solid #1f2630;
+      background: #0d1117;
+    }
+    .logwrap.collapsed .loghead .chev { transform: rotate(-90deg); }
+    .logwrap.collapsed #log { display: none; }
+    .loghead {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 12px;
+      color: #9aa7b6;
+    }
+    .loghead:hover { color: #c9d1d9; }
+    .chev {
+      transition: transform .12s;
+      font-size: 10px;
+    }
+    .logwrap:not(.collapsed) .chev { transform: rotate(0deg); }
+    .logcount {
+      margin-left: auto;
+      padding: 1px 7px;
+      border-radius: 8px;
+      background: #161b22;
+      font-size: 11px;
+    }
+    #log {
+      flex: 0 0 auto;
+      height: 120px;
+      overflow: auto;
+      padding: 8px 12px;
+      color: #c9d1d9;
+      white-space: pre-wrap;
+      font: 12px ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+
+    /* Fullscreen: hide chrome, let the video own the screen. */
+    :fullscreen .topbar,
+    :fullscreen .logwrap { display: none; }
+    :fullscreen .stage { background: #000; }
+    :fullscreen body,
+    :fullscreen html { height: 100%; }
+    :fullscreen video { cursor: default; }
   </style>
 </head>
 <body>
-<main>
-  <h1>gkNext Remote Play</h1>
-  <div class="status">
-    <div class="label">HTTP</div><div id="httpState">connected</div>
-    <div class="label">Signaling</div><div id="wsState">connecting</div>
-    <div class="label">Peer</div><div id="pcState">new</div>
-    <div class="label">Input</div><div id="inputState">waiting</div>
-    <div class="label">Stream</div><div id="streamState">waiting</div>
-    <div class="label">Video bytes</div><div id="bytesState">0</div>
+  <div class="topbar">
+    <h1>gkNext Remote Play</h1>
+    <div class="pills">
+      <span class="pill" id="pill-http"><span class="dot"></span><b>HTTP</b> <span id="httpState">connected</span></span>
+      <span class="pill" id="pill-ws"><span class="dot"></span><b>WS</b> <span id="wsState">connecting</span></span>
+      <span class="pill" id="pill-pc"><span class="dot"></span><b>Peer</b> <span id="pcState">new</span></span>
+      <span class="pill" id="pill-in"><span class="dot"></span><b>Input</b> <span id="inputState">waiting</span></span>
+      <span class="pill" id="pill-stream"><span class="dot"></span><b>Stream</b> <span id="streamState">waiting</span></span>
+      <span class="pill" id="pill-bytes"><b>↓</b> <span id="bytesState">0 B</span></span>
+    </div>
+    <span class="spacer"></span>
+    <button id="btnActual" title="100% 原始像素大小 (1:1)">100%</button>
+    <button id="btnFullscreen" title="全屏 (F)">⤢ 全屏</button>
   </div>
-  <video id="video" autoplay playsinline muted controls></video>
-  <div id="log"></div>
-</main>
+
+  <div class="stage" id="stage">
+    <video id="video" autoplay playsinline muted></video>
+  </div>
+
+  <div class="logwrap collapsed" id="logwrap">
+    <div class="loghead" id="loghead">
+      <span class="chev">▼</span>
+      <span>调试日志</span>
+      <span class="logcount" id="logcount">0</span>
+    </div>
+    <div id="log"></div>
+  </div>
+
 <script>
 const logEl = document.querySelector("#log");
+const logcountEl = document.querySelector("#logcount");
 const wsState = document.querySelector("#wsState");
 const pcState = document.querySelector("#pcState");
 const inputState = document.querySelector("#inputState");
 const streamState = document.querySelector("#streamState");
 const bytesState = document.querySelector("#bytesState");
+const pillWs = document.querySelector("#pill-ws");
+const pillPc = document.querySelector("#pill-pc");
+const pillIn = document.querySelector("#pill-in");
+const pillStream = document.querySelector("#pill-stream");
 const videoEl = document.querySelector("#video");
+const stageEl = document.querySelector("#stage");
 const clientId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
 let ws = null;
 let pc = null;
 let inputChannel = null;
+let logLines = 0;
+
+function setPill(pill, ok) {
+  pill.classList.remove("ok", "warn", "err");
+  if (ok === true) pill.classList.add("ok");
+  else if (ok === "warn") pill.classList.add("warn");
+  else if (ok === false) pill.classList.add("err");
+}
+
+function formatBytes(n) {
+  if (!n) return "0 B";
+  if (n < 1024) return n + " B";
+  if (n < 1048576) return (n / 1024).toFixed(1) + " KB";
+  return (n / 1048576).toFixed(2) + " MB";
+}
 
 const InputType = {
   key: 1,
@@ -123,6 +265,8 @@ function log(line) {
   const stamp = new Date().toLocaleTimeString();
   logEl.textContent += `[${stamp}] ${line}\n`;
   logEl.scrollTop = logEl.scrollHeight;
+  logLines += 1;
+  logcountEl.textContent = String(logLines);
 }
 
 function waitForIceGatheringComplete(peer) {
@@ -147,6 +291,8 @@ function ensurePeerConnection() {
   pc = new RTCPeerConnection({ bundlePolicy: "max-bundle" });
   pc.onconnectionstatechange = () => {
     pcState.textContent = pc.connectionState;
+    setPill(pillPc, pc.connectionState === "connected" ? true
+              : pc.connectionState === "disconnected" || pc.connectionState === "failed" ? false : "warn");
     log(`peer ${pc.connectionState}`);
   };
   pc.oniceconnectionstatechange = () => {
@@ -155,6 +301,7 @@ function ensurePeerConnection() {
   pc.ontrack = event => {
     videoEl.srcObject = event.streams[0] || new MediaStream([event.track]);
     streamState.textContent = `${event.track.kind} ${event.track.readyState}`;
+    setPill(pillStream, event.track.readyState === "live");
     log(`track ${event.track.kind}`);
   };
   pc.ondatachannel = event => {
@@ -165,11 +312,13 @@ function ensurePeerConnection() {
     inputChannel.binaryType = "arraybuffer";
     inputChannel.onopen = () => {
       inputState.textContent = "open";
+      setPill(pillIn, true);
       log("input channel open");
       sendInput(Uint8Array.from([InputType.requestKeyframe]).buffer);
     };
     inputChannel.onclose = () => {
       inputState.textContent = "closed";
+      setPill(pillIn, false);
       log("input channel closed");
     };
   };
@@ -182,10 +331,11 @@ function ensurePeerConnection() {
     stats.forEach(report => {
       if (report.type === "inbound-rtp" && report.kind === "video") {
         videoBytes += report.bytesReceived || 0;
-        streamState.textContent = `${report.framesDecoded || 0} frames decoded`;
+        streamState.textContent = `${report.framesDecoded || 0} frames`;
+        setPill(pillStream, true);
       }
     });
-    bytesState.textContent = String(videoBytes);
+    bytesState.textContent = formatBytes(videoBytes);
   }, 1000);
   return pc;
 }
@@ -197,8 +347,46 @@ function sendInput(buffer) {
   inputChannel.send(buffer);
 }
 
+const KMOD = {
+  LSHIFT: 0x0001,
+  RSHIFT: 0x0002,
+  LCTRL: 0x0040,
+  RCTRL: 0x0080,
+  LALT: 0x0100,
+  RALT: 0x0200,
+  LGUI: 0x0400,
+  RGUI: 0x0800,
+};
+let activeMods = 0;
+
+function modifierMaskForCode(code) {
+  switch (code) {
+    case "ShiftLeft": return KMOD.LSHIFT;
+    case "ShiftRight": return KMOD.RSHIFT;
+    case "ControlLeft": return KMOD.LCTRL;
+    case "ControlRight": return KMOD.RCTRL;
+    case "AltLeft": return KMOD.LALT;
+    case "AltRight": return KMOD.RALT;
+    case "MetaLeft": return KMOD.LGUI;
+    case "MetaRight": return KMOD.RGUI;
+    default: return 0;
+  }
+}
+
+function updateModifierState(event, down) {
+  const mask = modifierMaskForCode(event.code);
+  if (!mask) {
+    return;
+  }
+  if (down) {
+    activeMods |= mask;
+  } else {
+    activeMods &= ~mask;
+  }
+}
+
 function currentMod() {
-  return 0;
+  return activeMods;
 }
 
 function packKey(event, down) {
@@ -226,16 +414,43 @@ function packMouseMove(mode, x, y) {
   return buffer;
 }
 
+// Map a pointer position inside the video element (CSS px, relative to its top-left)
+// into the server's normalized coordinate space [0,1]. The server scales this back by
+// the real window framebuffer size, so the mapping stays correct regardless of the
+// encode resolution vs window resolution ratio.
+function scaleToVideo(clientX, clientY) {
+  const rect = videoEl.getBoundingClientRect();
+  // object-fit: contain → compute the letterboxed video rect inside the element.
+  const vw = videoEl.videoWidth || rect.width;
+  const vh = videoEl.videoHeight || rect.height;
+  const elementRatio = rect.width / rect.height;
+  const videoRatio = vw / vh;
+  let dispX = rect.left;
+  let dispY = rect.top;
+  let dispW = rect.width;
+  let dispH = rect.height;
+  if (videoRatio > elementRatio) {
+    dispH = rect.width / videoRatio;
+    dispY = rect.top + (rect.height - dispH) / 2;
+  } else if (videoRatio < elementRatio) {
+    dispW = rect.height * videoRatio;
+    dispX = rect.left + (rect.width - dispW) / 2;
+  }
+  const nx = Math.max(0, Math.min(1, (clientX - dispX) / dispW));
+  const ny = Math.max(0, Math.min(1, (clientY - dispY) / dispH));
+  return { x: nx, y: ny };
+}
+
 function packMouseButton(event, down) {
   const button = event.button === 1 ? 2 : event.button === 2 ? 3 : 1;
-  const rect = videoEl.getBoundingClientRect();
+  const p = scaleToVideo(event.clientX, event.clientY);
   const buffer = new ArrayBuffer(11);
   const view = new DataView(buffer);
   view.setUint8(0, InputType.mouseButton);
   view.setUint8(1, down ? 1 : 0);
   view.setUint8(2, button);
-  view.setFloat32(3, event.clientX - rect.left, true);
-  view.setFloat32(7, event.clientY - rect.top, true);
+  view.setFloat32(3, p.x, true);
+  view.setFloat32(7, p.y, true);
   return buffer;
 }
 
@@ -279,7 +494,27 @@ function pollGamepad() {
   requestAnimationFrame(pollGamepad);
 }
 
+// F11 is reserved by the browser; use F to toggle the Fullscreen API on the stage.
+function toggleFullscreen() {
+  if (document.fullscreenElement) {
+    document.exitFullscreen?.();
+  } else {
+    stageEl.requestFullscreen?.();
+  }
+}
+document.querySelector("#btnFullscreen").addEventListener("click", toggleFullscreen);
+
+// Toggle between fit (fill stage, letterboxed) and 100% (1:1 decoded pixels).
+let actualMode = false;
+function toggleActual() {
+  actualMode = !actualMode;
+  stageEl.classList.toggle("actual", actualMode);
+  document.querySelector("#btnActual").classList.toggle("active", actualMode);
+}
+document.querySelector("#btnActual").addEventListener("click", toggleActual);
+
 document.addEventListener("keydown", event => {
+  updateModifierState(event, true);
   const buffer = packKey(event, true);
   if (buffer) {
     event.preventDefault();
@@ -287,38 +522,77 @@ document.addEventListener("keydown", event => {
   }
 });
 document.addEventListener("keyup", event => {
+  updateModifierState(event, false);
   const buffer = packKey(event, false);
   if (buffer) {
     event.preventDefault();
     sendInput(buffer);
   }
 });
-videoEl.addEventListener("click", () => {
-  if (document.pointerLockElement !== videoEl) {
-    videoEl.requestPointerLock?.();
-  }
+window.addEventListener("blur", () => {
+  activeMods = 0;
+});
+// Absolute mode by default: keeps the OS cursor visible in the browser and lets
+// the server place the cursor at the reported window coordinate, which is what
+// UI / ImGui interaction needs. Hold the right mouse button to enter relative
+// (pointer-lock) mode for FPS-style camera look; releasing it exits lock.
+let inPointerLock = false;
+document.addEventListener("pointerlockchange", () => {
+  inPointerLock = document.pointerLockElement === videoEl;
+  inputState.textContent = inPointerLock ? "pointer-lock" : "open";
+  setPill(pillIn, inPointerLock);
 });
 videoEl.addEventListener("mousemove", event => {
-  if (document.pointerLockElement === videoEl) {
+  if (inPointerLock) {
     sendInput(packMouseMove(MoveMode.relative, event.movementX, event.movementY));
   } else {
-    const rect = videoEl.getBoundingClientRect();
-    sendInput(packMouseMove(MoveMode.absolute, event.clientX - rect.left, event.clientY - rect.top));
+    const p = scaleToVideo(event.clientX, event.clientY);
+    sendInput(packMouseMove(MoveMode.absolute, p.x, p.y));
   }
 });
 videoEl.addEventListener("mousedown", event => {
   event.preventDefault();
+  if (event.button === 2) {
+    // Right button: arm relative mode for camera look and still forward the
+    // button state so engine/editor camera controllers can latch RMB-held mode.
+    sendInput(packMouseButton(event, true));
+    if (!inPointerLock) {
+      videoEl.requestPointerLock?.();
+    }
+    return;
+  }
   sendInput(packMouseButton(event, true));
 });
 videoEl.addEventListener("mouseup", event => {
   event.preventDefault();
+  if (event.button === 2) {
+    sendInput(packMouseButton(event, false));
+    if (inPointerLock) {
+      document.exitPointerLock?.();
+    }
+    return;
+  }
   sendInput(packMouseButton(event, false));
 });
-videoEl.addEventListener("contextmenu", event => event.preventDefault());
+// This page is a dedicated remote surface, so suppress browser secondary-click
+// behavior globally. Relying only on videoEl/contextmenu is insufficient because
+// the menu may fire on document after pointer-lock transitions.
+window.addEventListener("contextmenu", event => event.preventDefault());
+window.addEventListener("auxclick", event => event.preventDefault());
+window.addEventListener("dragstart", event => event.preventDefault());
+// Swallow native click/dblclick on the video so the browser never toggles
+// play/pause or fullscreen on pointer interaction — input is fully remote-driven.
+videoEl.addEventListener("click", event => event.preventDefault());
+videoEl.addEventListener("dblclick", event => event.preventDefault());
 videoEl.addEventListener("wheel", event => {
   event.preventDefault();
   sendInput(packWheel(event));
 }, { passive: false });
+
+// Collapsible log panel.
+document.querySelector("#loghead").addEventListener("click", () => {
+  document.querySelector("#logwrap").classList.toggle("collapsed");
+});
 
 async function handleOffer(message) {
   const peer = ensurePeerConnection();
@@ -337,15 +611,18 @@ async function connect() {
   ws = new WebSocket(`ws://${host}:${config.signalingPort}`);
   ws.onopen = () => {
     wsState.textContent = "open";
+    setPill(pillWs, true);
     log("websocket open");
     ws.send(JSON.stringify({ type: "request", id: clientId }));
   };
   ws.onclose = () => {
     wsState.textContent = "closed";
+    setPill(pillWs, false);
     log("websocket closed");
   };
   ws.onerror = () => {
     wsState.textContent = "error";
+    setPill(pillWs, false);
     log("websocket error");
   };
   ws.onmessage = async event => {
@@ -357,12 +634,14 @@ async function connect() {
       await pc.addIceCandidate({ candidate: message.candidate, sdpMid: message.mid });
     } else if (message.type === "error") {
       streamState.textContent = message.message || "error";
+      setPill(pillStream, false);
     }
   };
 }
 
 connect().catch(error => {
   wsState.textContent = "error";
+  setPill(pillWs, false);
   log(error.message || String(error));
 });
 requestAnimationFrame(pollGamepad);

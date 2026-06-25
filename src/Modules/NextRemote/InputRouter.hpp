@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+struct SDL_Window;
+
 namespace Runtime::Remote
 {
     class FInputRouter final
@@ -25,6 +27,16 @@ namespace Runtime::Remote
         void PushMouseButton(bool down, uint8_t button, float x, float y);
         void PushWheel(float x, float y);
         void ApplyGamepad(const std::byte* data, size_t size);
+
+        // Synthetic events need the real SDL window id, otherwise ImGui's
+        // ImGui_ImplSDL3_ProcessEvent drops mouse events whose windowID does not
+        // map to a known viewport (windowID 0 from zero-initialized SDL_Event).
+        // The engine is single-window, so resolve the main window lazily.
+        static uint32_t ResolveMainWindowId();
+        static SDL_Window* ResolveMainWindow();
+        // Absolute mouse coords from the browser are normalized [0,1] over the
+        // visible frame; ImGui reads window framebuffer pixels, so scale back.
+        static void ScaleNormalizedToWindow(float& x, float& y);
 
         FVirtualGamepad virtualGamepad_;
     };

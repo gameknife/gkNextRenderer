@@ -127,6 +127,7 @@ public:
 
     // Window and pointer state
     glm::dvec2 GetMousePos();
+    uint32_t GetMouseButtons() const { return inputState_.mouseButtons; }
     glm::ivec2 GetMonitorSize() const;
     void RequestClose();
     void RequestMinimize();
@@ -290,6 +291,15 @@ private:
         double lastFrameTime = 0.0;
     };
 
+    // Event-driven pointer state. Remote input injects SDL events but does not
+    // necessarily update SDL_GetMouseState(), so gameplay/editor picking must
+    // read the coordinates we last observed on the engine event path.
+    struct FInputState
+    {
+        glm::dvec2 mousePos{0.0, 0.0};
+        uint32_t mouseButtons = 0;
+    };
+
     // Progressive rendering warmup state
     struct FProgressiveRenderState
     {
@@ -358,6 +368,7 @@ private:
     FConfigState config_{};
     FRenderState renderState_{};
     FFrameState frameState_{};
+    FInputState inputState_{};
     FProgressiveRenderState progressiveRender_{};
     FScreenShotState screenShot_{};
     FAgentValidationState agentValidation_{};
