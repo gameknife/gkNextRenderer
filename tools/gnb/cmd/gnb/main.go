@@ -97,6 +97,7 @@ func main() {
 	root.AddCommand(newTestCommand(ctx))
 	root.AddCommand(newVisualCommand(ctx))
 	root.AddCommand(newShotCommand(ctx))
+	root.AddCommand(newTuiCommand(ctx))
 	root.AddCommand(newEditorCommand(ctx))
 	root.AddCommand(newAndroidCommand(ctx))
 	root.AddCommand(newIOSCommand(ctx))
@@ -517,6 +518,59 @@ func shotRunArgs(frames int, includeUI bool, trailingArgs []string) []string {
 		runArgs = append(runArgs, "--agent-validation-ui")
 	}
 	return append(runArgs, trailingArgs...)
+}
+
+func newTuiCommand(ctx appContext) *cobra.Command {
+	var scene string
+	var target string
+	var fps int
+	var maxCols int
+	var maxRows int
+	var ssaa int
+	var noInput bool
+	cmd := &cobra.Command{
+		Use:   "tui [--scene <path>] [--target <name>]",
+		Short: "Run a target in terminal TUI mode (hidden window + truecolor terminal blit)",
+		Long: "Render a target into a hidden swapchain and continuously blit the frames into the\n" +
+			"current terminal using truecolor half-block characters.\n\n" +
+			"Examples:\n" +
+			"  gnb tui --scene assets/models/playground.glb\n" +
+			"  gnb tui --target ScadStudio --scene assets/scad/beer_cup.scad\n" +
+			"  gnb tui --target gkNextRenderer --tui-fps 20",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			runArgs := []string{"--tui"}
+			if fps > 0 {
+				runArgs = append(runArgs, fmt.Sprintf("--tui-fps=%d", fps))
+			}
+			if maxCols > 0 {
+				runArgs = append(runArgs, fmt.Sprintf("--tui-max-cols=%d", maxCols))
+			}
+			if maxRows > 0 {
+				runArgs = append(runArgs, fmt.Sprintf("--tui-max-rows=%d", maxRows))
+			}
+			if ssaa > 0 {
+				runArgs = append(runArgs, fmt.Sprintf("--tui-ssaa=%d", ssaa))
+			}
+			if noInput {
+				runArgs = append(runArgs, "--tui-no-input")
+			}
+			runArgs = append(runArgs, args...)
+
+			opts := runner.Options{Target: target, Preset: ctx.preset, Args: runArgs}
+			if scene != "" {
+				opts.Scenes = append(opts.Scenes, scene)
+			}
+			return runner.Run(ctx.repoRoot, opts)
+		},
+	}
+	cmd.Flags().StringVar(&scene, "scene", "", "scene to load (file path or built-in .proc name)")
+	cmd.Flags().StringVar(&target, "target", "gkNextRenderer", "target executable to run")
+	cmd.Flags().IntVar(&fps, "tui-fps", 0, "terminal refresh cap (0 = engine default)")
+	cmd.Flags().IntVar(&maxCols, "tui-max-cols", 0, "optional terminal column cap")
+	cmd.Flags().IntVar(&maxRows, "tui-max-rows", 0, "optional terminal row cap")
+	cmd.Flags().IntVar(&ssaa, "tui-ssaa", 0, "hidden render supersample factor (0 = engine default)")
+	cmd.Flags().BoolVar(&noInput, "tui-no-input", false, "do not capture stdin in TUI mode")
+	return cmd
 }
 
 func newEditorCommand(ctx appContext) *cobra.Command {

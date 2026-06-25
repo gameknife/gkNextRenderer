@@ -66,8 +66,8 @@ namespace Runtime::Remote
         running_ = false;
     }
 
-    void RemoteServer::RecordVideoFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex,
-                                        Vulkan::VulkanBaseRenderer& renderer)
+    void RemoteServer::RecordFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex,
+                                   Vulkan::VulkanBaseRenderer& renderer)
     {
         if (videoPipeline_)
         {

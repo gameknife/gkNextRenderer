@@ -38,6 +38,12 @@ public:
 	uint32_t AgentValidationFrames{90};
 	std::string AgentValidationOutput{"screenshots/agent_validation"};
 	bool HiddenWindow{};
+	bool Tui{};
+	uint32_t TuiFps{30};
+	uint32_t TuiMaxCols{};
+	uint32_t TuiMaxRows{};
+	uint32_t TuiSsaa{1};
+	bool TuiNoInput{};
 	bool DisableStreamline{};
 	bool RemoteMode{};
 	bool RemoteShowWindow{};

@@ -94,7 +94,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     Modules::NextRmlUi::Install(*GApplication);
     if (GOption->RemoteMode)
     {
-        GApplication->SetFrameStreamer(Modules::NextRemote::CreateRemoteServer(*GOption));
+        GApplication->AddRenderFrameConsumer(Modules::NextRemote::CreateRemoteServer(*GOption));
     }
     GApplication->Start();
     

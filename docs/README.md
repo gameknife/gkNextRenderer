@@ -19,6 +19,7 @@
 | [Gaussian Splat / SOG](../AGENT_GUIDE/GaussianSplat.md) | 🟢 现行 | 2026-06-18 |
 | [SCAD 场景生成指引（AGENT 向）](guides/scad-scene-authoring-guide.md) | 🟢 现行 | 2026-06-12 |
 | [Soft Mesh Shader GPU-Driven 提交路径](guides/soft-mesh-shader-gpu-driven-submit.md) | 🟢 现行 | 2026-06-07 |
+| [TUI 终端模式](guides/tui-mode.md) | 🟢 现行 | 2026-06-25 |
 | [TypeScript 整合说明](guides/typescript-integration.md) | 🟢 现行 | 2026-06-12 |
 
 ## 设计方案 · designs/
@@ -42,6 +43,7 @@
 | [AirportSim —— Jumbo Airport Story 风格机场生态观察 Demo（MVP 设计与开发计划）](plans/airport-sim-mvp-plan.md) | 🔵 进行中 | 2026-06-13 |
 | [AmbientCube 显存占用降低 — 可行性评估与开发计划](plans/ambient-cube-memory-reduction.md) | ✅ 已完成 | 2026-06-07 |
 | [DLSS 超分无抗锯齿 / scale 无收益 —— 根因定位与修复开发计划](plans/dlss-superres-no-aa-fix.md) | 📝 草案 | 2026-06-20 |
+| [gkNextEditor MaterialEditor 扩展设计与开发计划](plans/gknexteditor-material-editor-expansion-plan.md) | ⚪ 待实现 | 2026-06-25 |
 | [src/Engine 核心层精炼 Round 2：god class 拆解 + include 卫生](plans/engine-core-refactor-round2.md) | 📝 草案 | 2026-06-11 |
 | [src/Engine 核心层精炼 Round 3：模块归位 + SkinnedMesh 瘦身](plans/engine-core-refactor-round3.md) | 📝 草案 | 2026-06-14 |
 | [src/Engine 核心层精简重构：分析与执行计划](plans/engine-core-refactor.md) | ✅ 已完成 | 2026-06-10 |
@@ -54,6 +56,7 @@
 | [StudioSim —— LLM 驱动的游戏工作室办公室模拟（MVP 开发计划）](plans/studiosim-mvp-plan.md) | ✅ 已完成 | 2026-06-07 |
 | [StudioSim —— 产出与进度系统改进方案（打磨前结构性调整）](plans/studiosim-production-model-refinement.md) | ✅ 已完成 | 2026-06-08 |
 | [StudioSim 重构 + 公共仿真层（Sim Kit）抽取与开发计划](plans/studiosim-refactor-simkit-plan.md) | 📝 草案 | 2026-06-13 |
+| [TUI 终端渲染运行模式（隐藏窗口 + 终端逐帧刷新）设计与开发计划](plans/tui-terminal-rendering-plan.md) | ⚪ 待实现 | 2026-06-25 |
 | [Remote Play 硬件编码改造计划（HW Texture → Vulkan Video → WebRTC）](plans/webrtc-remoteplay-hwencode-plan.md) | 🔵 进行中 | 2026-06-10 |
 | [Vulkan + Renderer 专项精炼：命名归一 + 渲染器去重](plans/vulkan-renderer-refinement-plan.md) | 📝 草案 | 2026-06-15 |
 | [Vulkan 后端精简与第三方包装评估（引入 vk-bootstrap）](plans/vulkan-backend-thirdparty-wrapper-plan.md) | 📝 草案 | 2026-06-15 |

@@ -42,6 +42,12 @@ Options::Options(const int argc, const char* argv[])
 		("agent-validation-frames", "Frames to render before the agent validation screenshot.", cxxopts::value<uint32_t>(AgentValidationFrames)->default_value("90"))
 		("agent-validation-out", "Output path (without extension) for the agent validation screenshot.", cxxopts::value<std::string>(AgentValidationOutput)->default_value("screenshots/agent_validation"))
 		("hidden-window", "Create the window hidden (no focus steal / no popup). Implied by --agent-validation; useful for unit tests.", cxxopts::value<bool>(HiddenWindow)->default_value("false")->implicit_value("true"))
+		("tui", "Render the hidden swapchain into the current terminal using truecolor block characters.", cxxopts::value<bool>(Tui)->default_value("false")->implicit_value("true"))
+		("tui-fps", "Maximum terminal refresh rate for --tui.", cxxopts::value<uint32_t>(TuiFps)->default_value("30"))
+		("tui-max-cols", "Optional column cap for --tui (0 = auto).", cxxopts::value<uint32_t>(TuiMaxCols)->default_value("0"))
+		("tui-max-rows", "Optional row cap for --tui (0 = auto).", cxxopts::value<uint32_t>(TuiMaxRows)->default_value("0"))
+		("tui-ssaa", "Supersample factor for --tui hidden rendering (1-4).", cxxopts::value<uint32_t>(TuiSsaa)->default_value("1"))
+		("tui-no-input", "Do not capture stdin in --tui mode.", cxxopts::value<bool>(TuiNoInput)->default_value("false")->implicit_value("true"))
 		("disable-streamline", "Disable NVIDIA Streamline/DLSS integration for this process.", cxxopts::value<bool>(DisableStreamline)->default_value("false")->implicit_value("true"))
 		("remote", "Enable WebRTC Remote Play host mode. Implies --hidden-window and --forcesdr unless --remote-show-window is set.", cxxopts::value<bool>(RemoteMode)->default_value("false")->implicit_value("true"))
 		("remote-show-window", "Keep the desktop window visible while --remote is active.", cxxopts::value<bool>(RemoteShowWindow)->default_value("false")->implicit_value("true"))
@@ -126,6 +132,17 @@ Options::Options(const int argc, const char* argv[])
 			{
 				Throw(std::out_of_range("Invalid --remote-encoder. Expected auto, vulkan or openh264."));
 			}
+		}
+
+		if (Tui)
+		{
+			ForceSDR = true;
+			HiddenWindow = true;
+			if (TuiFps == 0)
+			{
+				TuiFps = 30;
+			}
+			TuiSsaa = std::clamp(TuiSsaa, 1u, 4u);
 		}
 
 		if (PresentMode > 3)

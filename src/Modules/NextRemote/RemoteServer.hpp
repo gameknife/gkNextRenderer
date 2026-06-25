@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Engine/Runtime/FrameStreamer.hpp"
+#include "Engine/Runtime/RenderFrameConsumer.hpp"
 
 #include <vulkan/vulkan.h>
 
@@ -18,7 +18,7 @@ namespace Runtime::Remote
     class FSignalingServer;
     class FVideoPipeline;
 
-    class RemoteServer final : public Runtime::IFrameStreamer
+    class RemoteServer final : public Runtime::IRenderFrameConsumer
     {
     public:
         struct FConfig
@@ -33,6 +33,7 @@ namespace Runtime::Remote
             uint32_t height = 0;
         };
 
+        const char* Name() const override { return "RemoteServer"; }
         explicit RemoteServer(FConfig config);
         ~RemoteServer() override;
 
@@ -40,8 +41,8 @@ namespace Runtime::Remote
         void Stop();
 
         // Render thread: records the per-frame video capture into the frame command buffer.
-        void RecordVideoFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex,
-                              Vulkan::VulkanBaseRenderer& renderer) override;
+        void RecordFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex,
+                         Vulkan::VulkanBaseRenderer& renderer) override;
 
         // Render thread: the renderer is about to destroy its swapchain.
         void OnRendererDeleteSwapChain() override;

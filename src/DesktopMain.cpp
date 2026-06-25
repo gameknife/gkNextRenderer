@@ -5,6 +5,9 @@
 #include "Engine/Runtime/Platform/PlatformCommon.h"
 #include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
 #include "Modules/NextRemote/NextRemoteModule.hpp"
+#if GK_WITH_TUI
+#include "Modules/NextTui/NextTuiModule.hpp"
+#endif
 #include "Modules/NextRmlUi/NextRmlUiModule.hpp"
 
 #if WIN32
@@ -50,7 +53,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 #endif
     // Global GOption, can access from everywhere
     GOption = GOptionPtr.get();
-    
+
     if(GOption->RenderDoc)
     {
 #if WIN32
@@ -94,8 +97,14 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     Modules::NextRmlUi::Install(*GApplication);
     if (GOption->RemoteMode)
     {
-        GApplication->SetFrameStreamer(Modules::NextRemote::CreateRemoteServer(*GOption));
+        GApplication->AddRenderFrameConsumer(Modules::NextRemote::CreateRemoteServer(*GOption));
     }
+#if GK_WITH_TUI
+    if (GOption->Tui)
+    {
+        GApplication->AddRenderFrameConsumer(Modules::NextTui::CreateTuiPresenter(*GApplication, *GOption));
+    }
+#endif
 
     if (GOption->TestGltfRobustness)
     {

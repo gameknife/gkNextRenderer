@@ -189,9 +189,9 @@ public:
     void SetDebugUiProvider(Runtime::IDebugUiProvider* provider) { debugUiProvider_ = provider; }
     Runtime::IDebugUiProvider* GetDebugUiProvider() const { return debugUiProvider_; }
 
-    // Frame streamer injection (implementation in Modules/NextRemote);
-    // assembled by the application entry when remote mode is requested.
-    void SetFrameStreamer(std::unique_ptr<Runtime::IFrameStreamer> streamer);
+    // Optional frame consumers (remote play, terminal presenter, recording, etc.)
+    // are assembled by the application entry before Start().
+    void AddRenderFrameConsumer(std::unique_ptr<Runtime::IRenderFrameConsumer> consumer);
 
     void SetScriptRuntimeFactory(Runtime::ScriptRuntimeFactory factory)
     {
@@ -368,7 +368,7 @@ private:
     std::unique_ptr<NextUI::UserInterface> userInterface_;
     std::unique_ptr<Runtime::IUiOverlay> uiOverlay_;
     std::function<std::unique_ptr<Runtime::IUiOverlay>(NextEngine&)> uiOverlayFactory_;
-    std::unique_ptr<Runtime::IFrameStreamer> frameStreamer_;
+    std::vector<std::unique_ptr<Runtime::IRenderFrameConsumer>> renderFrameConsumers_{};
     Runtime::ScriptRuntimeFactory scriptRuntimeFactory_;
     std::unique_ptr<Runtime::IScriptRuntime> scriptRuntime_;
     FRuntimeServices services_{};

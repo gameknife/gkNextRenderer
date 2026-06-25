@@ -56,6 +56,7 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
 - Specific target: `./gnb run gkNextEditor`
 - Editor shortcut: `./gnb editor`
 - Visual test shortcut: `./gnb visual`
+- TUI terminal mode: `./gnb tui --scene assets/models/playground.glb`
 - Android: `./gnb android`
 - Optional assets: `./gnb paks fetch` / `./gnb paks list`
 - Source-line stats: `./gnb loc` (CLI) — also browsable in `./gnb dashboard`
