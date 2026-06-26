@@ -4,13 +4,13 @@ category: plan
 status: 进行中
 owner: engine
 created: 2026-06-10
-last_updated: 2026-06-10
+last_updated: 2026-06-26
 ---
 
 # Remote Play 硬件编码改造计划（HW Texture → Vulkan Video → WebRTC）
 
 > 状态：设计完成，待实现（供后续 agent 接手开发，建议按 Phase 拆 `.spec/TODO.md` 任务逐个推进）。
-> 前置：`docs/designs/webrtc-remoteplay-design.md`（总体设计）已落地到 Phase 3 附近——openh264 软编 + WebRTC 推流 + 输入转发**已可用但很慢**。本文是其 Phase 4（硬件编码）的细化执行计划，并先修掉当前软件路径的结构性瓶颈。
+> 2026-06-26 更新：`openh264` 软编回退已移除；当前 remote 仅支持 Vulkan Video H.264。设备若不支持 Vulkan Video 编码，则直接不支持 remote。
 > 目标：`--remote` 推流从"主线程阻塞式 CPU 全软路径"改为"渲染帧命令缓冲内零拷贝 NV12 转换 + Vulkan Video 硬件 H.264 编码 + 异步码流回读"，达到 1080p@60 推流、渲染线程每帧额外开销 < 0.5ms、远程相关 CPU 占用 < 5%。
 > 日期：2026-06-10
 > 关联代码：`src/Modules/NextRemote/*`、`src/Engine/Rendering/VulkanBaseRenderer.{hpp,cpp}`、`src/Engine/Vulkan/Device.{hpp,cpp}`、`src/Engine/Vulkan/CommandExecution.cpp`、`src/Engine/Runtime/Engine.cpp`。
@@ -195,8 +195,16 @@ RemoteServer
   - 杀浏览器重连、二客户端并发、swapchain resize（拖窗口）均不崩不花屏；
   - `--remote-encoder openh264` 强制回退仍正常。
 
-### P5 — 打磨（沿用原设计 Phase 5）
-- 基于 `getStats`/RTCP 的简易码率自适应（接到 `SetBitrate`，硬编 RC 更新即时生效）；动态 `--remote-res` 切换（重建 session）；统计 overlay；NVENC 后备仅在 Vulkan Video 实测受阻时立项（决策记录 #3）。
+### P5 — 打磨（范围调整）
+- 本阶段已补齐的体验项：
+  - 浏览器端 `getStats()` 统计 overlay / 调试面板；
+  - `gnb remote` 快捷命令与可访问地址打印。
+- 以下事项**不纳入当前阶段交付范围**，后续仅在出现明确产品需求时再立项：
+  - 基于 `getStats`/RTCP 的简易码率自适应；
+  - 动态 `--remote-res` 切换（运行时重建 session）；
+  - 二维码输出；
+  - NVENC 后备路径。
+- 当前阶段继续维持：手动码率调节、启动时固定分辨率、Vulkan Video 不可用时直接禁用 remote。
 
 ---
 
@@ -205,7 +213,7 @@ RemoteServer
 | 风险 | 缓解 |
 |---|---|
 | 驱动不允许 NV12 ENCODE_SRC + STORAGE 共存 | 3.3 的 copy 回退路径（compute→独立 plane image→vkCmdCopyImage），P2 探测时即确定走哪条 |
-| Vulkan Video 驱动 bug / 初始化失败 | P4 回退链自动降级 openh264（P0/P1 已保证软编路径可用且不卡主线程）；NVENC 作最后后备 |
+| Vulkan Video 驱动 bug / 初始化失败 | 启动阶段直接判定 remote 不可用；日志必须明确说明原因 |
 | Main/High profile 与 SDP `42e01f` 不符导致浏览器拒解 | P4 验收项强制实测；必要时改 `addH264Codec` fmtp 或探测时优选 ConstrainedBaseline |
 | timeline semaphore 接入主 submit 引入回归 | 改动收敛为可选 extraSignalSemaphore，非 remote 模式完全不挂；unit tests + agent-validation 回归 |
 | 编码积压反压渲染 | slot ring 取不到即丢帧；输出线程统计丢帧率暴露到日志/overlay |

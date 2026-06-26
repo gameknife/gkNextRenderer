@@ -4,12 +4,13 @@ category: design
 status: 进行中
 owner: engine
 created: 2026-06-08
-last_updated: 2026-06-08
+last_updated: 2026-06-26
 ---
 
 # WebRTC 远程游玩（Remote Play）设计与开发计划
 
-> 状态：调研完成，待实现（设计稿，供后续 agent 接手开发）。
+> 状态：调研完成，持续实现中。
+> 2026-06-26 更新：`openh264` 软编回退已移除；remote 现仅支持 **Vulkan Video H.264**。设备若不支持 Vulkan Video 编码，则直接不支持 remote。
 > 目标：给 gkNextEngine 增加 `--remote` 启动模式，在本机 host 一个自托管服务器；浏览器连上后通过 **WebRTC** 实时看到游戏画面，并用**键盘 / 鼠标 / 手柄**操控游戏。
 > 典型用途：连接远程开发机，配合远程 agent 工作流，做"随时随地"的开发 / 调试环境；顺带天然支持"云游戏"。
 > 非目标（v1）：游戏音频回传、公网穿透（TURN）、鉴权 / TLS、移动端触屏、多人同屏协作。这些在第 12 节列为扩展路径。
@@ -31,7 +32,7 @@ last_updated: 2026-06-08
 技术选型（已与用户确认）：
 
 - **WebRTC 库：[libdatachannel](https://github.com/paullouisageneau/libdatachannel)**（C++17，vcpkg 直接可用，静态库，Release 仅约 20MB vs libWebRTC 约 600MB）。提供 PeerConnection、Media Track（H.264/H.265/AV1 RTP 打包）、DataChannel、以及**内置 `rtc::WebSocketServer`**——信令可在引擎进程内自托管。**不自带编解码器**，正合我们用引擎自己的 GPU 编码。
-- **视频编码：分两步**。Phase 1 用 **openh264**（vcpkg，Constrained Baseline，浏览器全兼容）软件编码先把端到端打通；硬件加速主攻 **Vulkan Video（`VK_KHR_video_encode_h264`）**——厂商中立、复用引擎现有 Vulkan 后端、可对 swapchain 零拷贝编码（不锁定 N 卡）。NVENC 作为可选加速留口，不作为主线。
+- **视频编码：** 仅支持 **Vulkan Video（`VK_KHR_video_encode_h264`）**。它厂商中立、复用现有 Vulkan 后端、可对 swapchain 零拷贝编码；若设备不支持该能力，则 remote 功能不可用。
 - **信令 / 自托管：** `rtc::WebSocketServer` 跑信令（offer/answer 交换），外加一个极小 HTTP 服务（推荐 header-only 的 cpp-httplib）把 Web 客户端单页发出去。LAN / 可直连优先，只配 STUN。
 - **输入转发：** 浏览器经 **DataChannel**（无序、低延迟）把键鼠 / 手柄事件发回，服务端 `InputRouter` 译成 `SDL_Event` 用 `SDL_PushEvent` 注入；手柄注入到 `SDL_AttachVirtualJoystick` 建的虚拟手柄，`TickGamepadInput()` 的轮询会透明读到。
 
@@ -145,7 +146,7 @@ case SDL_EVENT_MOUSE_MOTION:
 
 - **HDR**：远程编码强制 SDR——`--remote` 时置 `Options::ForceSDR = true`（swapchain 走 8-bit BGRA，匹配编码器 / 截图 Fast 路径）。
 - **线程**：重活（颜色转换 + 编码）必须离开渲染线程。仓库有 `Tasks::TaskCoordinator`（`ScreenShot.cpp` 已用它后台存图）；也可起专用编码线程。GPU 内存 `Map/memcpy/Unmap` 这步留在主线程，拷出后立刻交给 worker。
-- **vcpkg 现状**（`vcpkg.json`）：已有 sdl3(vulkan)、curl、imgui、nlohmann-json、vulkan-headers/loader、vma 等。**需新增** libdatachannel（开 srtp）、openh264、cpp-httplib（颜色转换走 GPU compute，不用 libyuv）。
+- **vcpkg 现状**（`vcpkg.json`）：已有 sdl3(vulkan)、curl、imgui、nlohmann-json、vulkan-headers/loader、vma 等。**需新增** libdatachannel（开 srtp）、cpp-httplib（颜色转换走 GPU compute，不用 libyuv）。
 
 ---
 
@@ -261,7 +262,6 @@ src/Modules/NextRemote/            # 新增，GK_WITH_REMOTE 守卫
 ├── RemoteSession.{hpp,cpp}           # 每客户端：PeerConnection + video track + input DataChannel + 状态机
 ├── FrameSource.{hpp,cpp}             # tap 截图拷回 / GPU 颜色转换，产出编码器输入帧（含帧率节流）
 ├── VideoEncoder.hpp                  # IVideoEncoder 接口
-├── OpenH264Encoder.{hpp,cpp}         # Phase 1 软编
 ├── VulkanVideoEncoder.{hpp,cpp}      # Phase 2 硬编（VK_KHR_video_encode_h264）
 ├── InputRouter.{hpp,cpp}            # DataChannel 消息 → SDL_Event（SDL_PushEvent）
 ├── VirtualGamepad.{hpp,cpp}          # SDL3 虚拟手柄（SDL_AttachVirtualJoystick）
@@ -280,7 +280,7 @@ assets/shaders/remote/
 src/Engine/Options.{hpp,cpp}          # +RemoteMode/RemotePort/RemoteHttpPort/RemoteBitrate/RemoteFps/RemoteWidth...
 src/Engine/Runtime/Engine.{hpp,cpp}   # +std::unique_ptr<RemoteServer> remote_; Start()里按需建; Tick()里泵; OnRendererPostRender里tap
 src/DesktopMain.cpp                    # --remote 时默认 HiddenWindow=true、ForceSDR=true（也可保留窗口）
-vcpkg.json                             # +libdatachannel(ws,srtp) +openh264 +cpp-httplib
+vcpkg.json                             # +libdatachannel(ws,srtp) +cpp-httplib
 src/CMakeLists.txt                     # find_package + GK_WITH_REMOTE + 链接
 assets/CMakeLists.txt                  # 拷贝 assets/remote/
 ```
@@ -335,7 +335,7 @@ assets/CMakeLists.txt                  # 拷贝 assets/remote/
   │ ◄═══════ DTLS/SRTP/SCTP 直连 ════►│  视频流 + DataChannel 建立
 ```
 
-`Configuration` 里 `config.iceServers.emplace_back("stun:stun.l.google.com:19302")`，并 `disableAutoNegotiation = true`（streamer 同款）。LAN 直连场景多数无需 STUN 也能成。
+`disableAutoNegotiation = true`（streamer 同款）已纳入当前实现。STUN 是否需要引入，取决于部署拓扑：纯 LAN / 内网穿透由外层网络解决时，可继续不配；若要支持跨子网 / NAT 直连，再单独补 `iceServers` 配置。
 
 ### 6.3 LAN 优先的取舍
 
@@ -389,7 +389,8 @@ Web 客户端点击画面 → `requestPointerLock()`；锁定后用 `movementX/m
 - `RTCPeerConnection` 收 video track → `videoEl.srcObject = stream`；`<video autoplay playsinline muted>` 全屏铺满。
 - 信令：`new WebSocket("ws://"+location.hostname+":8089/<id>")`，收 offer → `setRemoteDescription` → `createAnswer` → 回发。
 - 输入：`document.addEventListener('keydown/keyup')`（`e.code`→scancode 表）；点击 `requestPointerLock`，`mousemove` 取 `movementX/Y`；`mousedown/up`、`wheel`；`navigator.getGamepads()` 每帧轮询打包发送。
-- 控制条（可隐藏）：连接状态、码率 / RTT / 丢包（取 `pc.getStats()`）、分辨率切换、重连。
+- 控制条（可隐藏）：连接状态、码率 / RTT / 手动 IDR / 原始像素显示。
+- 统计面板：基于 `pc.getStats()` 展示视频分辨率、解码 FPS、接收码率、累计字节、抖动、丢包、候选链路与可用带宽，作为当前阶段的浏览器端调试入口。
 - 统一通过 `inputChannel.send(pack(msg))` 发二进制。
 
 > 客户端尽量自包含，方便直接被 cpp-httplib 当静态资源发出去，也方便嵌进二进制（`xxd -i` 或资源打包）做成"零外部文件"部署。
@@ -413,17 +414,18 @@ Web 客户端点击画面 → `requestPointerLock()`；锁定后用 `movementX/m
 
 `DesktopMain.cpp` 在 `--remote` 且用户没显式给窗口选项时设隐藏窗口 + SDR。
 
+`gnb` 侧补一个 `gnb remote` 快捷命令：包装 `gnb run <target> -- --remote ...`，负责打印浏览器访问地址，减少手写 remote 参数的成本。
+
 ---
 
 ## 10. vcpkg / CMake 集成
 
-> 以下已按 vcpkg 上游 portfile 核对（libdatachannel 0.24.3、openh264、libyuv 已弃用）。两个**坑**先记牢：①libdatachannel 的**媒体传输是 feature-gated**，必须显式开 `srtp` 才有 H.264 轨（`ws` 默认开，给 WebSocketServer）；②openh264 的 vcpkg 端口**只装 pkg-config、没有 CMake config**，要用 `PkgConfig::OPENH264` 链接。
+> 以下已按 vcpkg 上游 portfile 核对。当前 remote 依赖的关键点是：libdatachannel 的**媒体传输是 feature-gated**，必须显式开 `srtp` 才有 H.264 轨（`ws` 默认开，给 WebSocketServer）。
 
 `vcpkg.json` dependencies 增（桌面 Win+Linux；按决策排除 macOS / android / ios）：
 
 ```json
 { "name": "libdatachannel", "features": ["ws", "srtp"], "platform": "!(android | ios | osx)" },
-{ "name": "openh264",                                   "platform": "!(android | ios | osx)" },
 { "name": "cpp-httplib",                                "platform": "!(android | ios | osx)" }
 ```
 
@@ -436,17 +438,14 @@ option(GK_WITH_REMOTE "Enable WebRTC remote play" ON)
 # 决策：桌面 Win + Linux 才开；macOS(MoltenVK 无 VK video encode) / 移动端不构建 remote
 if(GK_WITH_REMOTE AND NOT (ANDROID OR IOS OR APPLE))
     find_package(LibDataChannel CONFIG REQUIRED)         # → LibDataChannel::LibDataChannel
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(OPENH264 REQUIRED IMPORTED_TARGET openh264)
     target_compile_definitions(gkNextEngine PUBLIC GK_WITH_REMOTE=1)
-    target_link_libraries(gkNextEngine PRIVATE LibDataChannel::LibDataChannel PkgConfig::OPENH264)
+    target_link_libraries(gkNextEngine PRIVATE LibDataChannel::LibDataChannel httplib::httplib)
 endif()
 ```
 
 > 接手 agent 注意：
 > - 静态 triplet（本仓 `x64-windows-static`）下 `LibDataChannel::LibDataChannel` 即静态目标；若 config 只导出 `LibDataChannel::LibDataChannelStatic`，改用该名。
 > - cpp-httplib 是 header-only：`find_package(httplib CONFIG REQUIRED)` → `httplib::httplib`（仅头文件，无需链接库，但要 include）。
-> - openh264 在 MSVC 下需要 NASM（vcpkg 自动获取）；用 `PkgConfig::OPENH264` 而非 `find_package(openh264)`/`unofficial-openh264`（都不存在）。
 > - Vulkan Video（Phase 4）走引擎已有的 vulkan-headers，无需新 port，但要在 device 创建处启用 `VK_KHR_video_queue` / `VK_KHR_video_encode_queue` / `VK_KHR_video_encode_h264` 扩展并运行期探测可用性。
 
 ---
@@ -477,13 +476,19 @@ endif()
 - 验收：移动相机时画面流畅跟随；720p@30 稳定；二客户端可同时观看；杀掉浏览器再连可恢复；渲染线程帧时间无明显抖动（worker 卸载生效）。
 
 ### Phase 4 — Vulkan Video 硬件编码（厂商中立主线）
-- 任务：device 创建启用 video encode 扩展 + 能力探测；`VulkanVideoEncoder` 用 `VK_KHR_video_encode_h264`；`OnRendererPostRender` 录制 BGRA→NV12 compute + encode 命令，**零回读**直接拿码流；不支持时自动回退 openh264。
+- 任务：device 创建启用 video encode 扩展 + 能力探测；`VulkanVideoEncoder` 用 `VK_KHR_video_encode_h264`；`OnRendererPostRender` 录制 BGRA→NV12 compute + encode 命令，**零回读**直接拿码流；若设备不支持则 remote 不启动。
 - 改动：`Vulkan/Device.*`（扩展）、`Remote/VulkanVideoEncoder.*`、`FrameSource.*`（GPU 路径）、`assets/shaders/`（BGRA→NV12 compute）。
-- 验收：目标 **N 卡**实测 Vulkan Video 硬编出流，CPU 占用相比 Phase 3 明显下降、延迟下降；若该驱动 Vulkan Video 路径遇阻则回退 **NVENC**（同卡必有），再不行回退 openh264 软编仍可用。
+- 验收：目标 **N 卡**实测 Vulkan Video 硬编出流，CPU 占用相比 Phase 3 明显下降、延迟下降；不支持 Vulkan Video 的设备启动时明确提示 remote 不可用。
 
-### Phase 5 — 质量与体验打磨
-- 任务：基于 `getStats`/RTCP 的简易码率自适应（无 BWE，自己按丢包 / RTT 调）；分辨率协商与动态 resize；客户端统计 overlay；`gnb` 集成（如 `gnb remote` 快捷起服务 + 打印地址 / 二维码）。
-- 验收：弱网下不雪崩（降码率而非卡死）；切分辨率即时生效；文档 + README 段落齐全。
+### Phase 5 — 质量与体验打磨（范围调整）
+- 本阶段已完成：
+  - 客户端统计 overlay；
+  - `gnb remote` 快捷起服务与地址打印。
+- 以下事项暂不纳入当前开发范围，后续按需求单独立项：
+  - 基于 `getStats` / RTCP 的简易码率自适应；
+  - 分辨率协商与动态 resize；
+  - 二维码。
+- 当前范围维持：手动码率、启动时固定 remote 分辨率、基础浏览器 stats 展示。
 
 ### Phase 6 —（可选 / later）扩展
 - 音频回传（Opus，接 `NextAudio` 混音输出 → `OpusRtpPacketizer`）。
@@ -496,8 +501,8 @@ endif()
 
 | 项 | 风险 | 缓解 |
 |---|---|---|
-| libdatachannel 无 BWE | 弱网无法自动降码率 | Phase 5 自研简易自适应（按 RTCP 丢包 / RTT）；起步给保守码率 |
-| Vulkan Video 驱动支持参差 | 部分 GPU/驱动无 encode 队列 | 运行期能力探测 + 自动回退 openh264；CI 标注支持矩阵 |
+| libdatachannel 无 BWE | 弱网无法自动降码率 | 当前阶段接受手动码率；若后续有明确弱网诉求，再单独立项做自适应 |
+| Vulkan Video 驱动支持参差 | 部分 GPU/驱动无 encode 队列 | 运行期能力探测；不支持时直接禁用 remote，并在启动日志明确说明 |
 | 颜色转换 / 回读开销 | 软件路径 1080p60 CPU 高 | 默认 720p；worker 线程；Phase 4 GPU NV12 零回读 |
 | 隐藏窗口相对鼠标 | `SDL_GetWindowRelativeMouseMode` 为 false | 用 `InjectRelativeMouse` 直注入，不依赖窗口态（7.4）|
 | SDL 事件注入时序 | 跨线程 PushEvent 顺序 / 焦点 | PushEvent 线程安全；输入 channel 用无序低延迟；必要时主线程批量 drain |
@@ -510,10 +515,10 @@ endif()
 
 | # | 议题 | 决策 |
 |---|---|---|
-| 1 | vcpkg 目标名 | `find_package(LibDataChannel CONFIG)` → `LibDataChannel::LibDataChannel`（静态 triplet 同名；若只导出则用 `LibDataChannel::LibDataChannelStatic`）。**libdatachannel 必须开 `srtp` feature**（`ws` 默认开）否则无媒体轨。openh264 **无 CMake config，走 pkg-config** `PkgConfig::OPENH264`。详见 §10。|
+| 1 | vcpkg 目标名 | `find_package(LibDataChannel CONFIG)` → `LibDataChannel::LibDataChannel`（静态 triplet 同名；若只导出则用 `LibDataChannel::LibDataChannelStatic`）。**libdatachannel 必须开 `srtp` feature**（`ws` 默认开）否则无媒体轨。详见 §10。|
 | 2 | HTTP 静态服务 | **cpp-httplib**（Phase 0 起用，header-only，`httplib::httplib`）；嵌入二进制留作后续可选（Phase 5）。|
-| 3 | 主机 GPU / Vulkan Video | 远程主机 **NVIDIA** → Phase 4 Vulkan Video 优先做；同卡 **NVENC** 作天然后备，优先于回退软编。|
-| 4 | macOS remote | **不做**，桌面仅 **Win + Linux**（`GK_WITH_REMOTE` 在 APPLE/android/ios 关）。后续若需 mac 再评估 openh264 软编 / VideoToolbox。|
+| 3 | 主机 GPU / Vulkan Video | 远程主机 **NVIDIA** → Phase 4 Vulkan Video 优先做；当前阶段**不实现任何软件/厂商私有后备**，设备不支持则 remote 不可用。|
+| 4 | macOS remote | **不做**，桌面仅 **Win + Linux**（`GK_WITH_REMOTE` 在 APPLE/android/ios 关）。后续若需 mac 再评估 VideoToolbox 等独立路径。|
 | 5 | 颜色转换 | **GPU compute**（`bgra_to_yuv.comp.slang`），**不引入 libyuv**（其 vcpkg/MSVC 端口无 SIMD、很慢）。详见 §4.2。|
 
 仍需开工时跑一次的**运行期探测**（非决策）：在目标 N 卡上 `vulkaninfo | grep -i video_encode` 确认列出 `VK_KHR_video_encode_h264` / `VK_KHR_video_encode_queue` —— 决定 Phase 4 是直接走 Vulkan Video 还是先落 NVENC。

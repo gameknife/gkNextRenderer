@@ -134,6 +134,64 @@
       height: auto;
       margin: auto;
     }
+    .stats-panel {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: min(360px, calc(100vw - 24px));
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: rgba(13, 17, 23, 0.88);
+      border: 1px solid rgba(48, 54, 61, 0.92);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      font-size: 12px;
+      color: #c9d1d9;
+      z-index: 2;
+    }
+    .stats-panel.hidden {
+      display: none;
+    }
+    .stats-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .stats-head strong {
+      font-size: 12px;
+      font-weight: 650;
+      color: #f0f6fc;
+    }
+    .stats-head span {
+      color: #8b949e;
+      font-size: 11px;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .stat {
+      min-width: 0;
+      padding: 8px 9px;
+      border-radius: 6px;
+      background: rgba(22, 27, 34, 0.92);
+      border: 1px solid rgba(48, 54, 61, 0.92);
+    }
+    .stat span {
+      display: block;
+      margin-bottom: 4px;
+      color: #8b949e;
+      font-size: 11px;
+    }
+    .stat b {
+      display: block;
+      color: #f0f6fc;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
 
     /* Collapsible log panel — docked at the bottom, hidden by default. */
     .logwrap {
@@ -197,7 +255,7 @@
       <span class="pill" id="pill-pc"><span class="dot"></span><b>Peer</b> <span id="pcState">new</span></span>
       <span class="pill" id="pill-in"><span class="dot"></span><b>Input</b> <span id="inputState">waiting</span></span>
       <span class="pill" id="pill-stream"><span class="dot"></span><b>Stream</b> <span id="streamState">waiting</span></span>
-      <span class="pill" id="pill-encoder"><b>Encoder</b> <span id="encoderState">openh264</span></span>
+      <span class="pill" id="pill-encoder"><b>Encoder</b> <span id="encoderState">vulkan</span></span>
       <span class="pill" id="pill-rtt"><b>RTT</b> <span id="rttState">-</span></span>
       <span class="pill" id="pill-bitrate"><b>Bitrate</b> <span id="bitrateState">4000 kbps</span></span>
       <span class="pill" id="pill-bytes"><b>↓</b> <span id="bytesState">0 B</span></span>
@@ -208,12 +266,29 @@
       <input id="bitrateInput" class="mini" type="number" min="1000" max="20000" step="250" value="4000" title="码率 (kbps)">
       <button id="btnKeyframe" title="请求关键帧 (IDR)">IDR</button>
     </div>
+    <button id="btnStats" class="active" title="显示 / 隐藏实时统计">Stats</button>
     <button id="btnActual" title="100% 原始像素大小 (1:1)">100%</button>
     <button id="btnFullscreen" title="全屏 (F)">⤢ 全屏</button>
   </div>
 
   <div class="stage" id="stage">
     <video id="video" autoplay playsinline muted></video>
+    <div class="stats-panel" id="statsPanel">
+      <div class="stats-head">
+        <strong>实时统计</strong>
+        <span id="statsUpdated">未采样</span>
+      </div>
+      <div class="stats-grid">
+        <div class="stat"><span>视频分辨率</span><b id="statVideo">-</b></div>
+        <div class="stat"><span>解码 / 丢帧</span><b id="statDecode">-</b></div>
+        <div class="stat"><span>接收码率</span><b id="statRxBitrate">-</b></div>
+        <div class="stat"><span>累计接收</span><b id="statRxBytes">-</b></div>
+        <div class="stat"><span>抖动</span><b id="statJitter">-</b></div>
+        <div class="stat"><span>丢包</span><b id="statLoss">-</b></div>
+        <div class="stat"><span>链路候选</span><b id="statCandidate">-</b></div>
+        <div class="stat"><span>可用带宽</span><b id="statAvailBitrate">-</b></div>
+      </div>
+    </div>
   </div>
 
   <div class="logwrap collapsed" id="logwrap">
@@ -243,13 +318,30 @@ const pillStream = document.querySelector("#pill-stream");
 const bitrateSlider = document.querySelector("#bitrateSlider");
 const bitrateInput = document.querySelector("#bitrateInput");
 const btnKeyframe = document.querySelector("#btnKeyframe");
+const btnStats = document.querySelector("#btnStats");
 const videoEl = document.querySelector("#video");
 const stageEl = document.querySelector("#stage");
+const statsPanel = document.querySelector("#statsPanel");
+const statsUpdated = document.querySelector("#statsUpdated");
+const statVideo = document.querySelector("#statVideo");
+const statDecode = document.querySelector("#statDecode");
+const statRxBitrate = document.querySelector("#statRxBitrate");
+const statRxBytes = document.querySelector("#statRxBytes");
+const statJitter = document.querySelector("#statJitter");
+const statLoss = document.querySelector("#statLoss");
+const statCandidate = document.querySelector("#statCandidate");
+const statAvailBitrate = document.querySelector("#statAvailBitrate");
 const clientId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
 let ws = null;
 let pc = null;
 let inputChannel = null;
 let logLines = 0;
+let statsPollPending = false;
+const statsCache = {
+  lastBytes: 0,
+  lastFramesDecoded: 0,
+  lastTimestampMs: 0,
+};
 
 function setPill(pill, ok) {
   pill.classList.remove("ok", "warn", "err");
@@ -263,6 +355,99 @@ function formatBytes(n) {
   if (n < 1024) return n + " B";
   if (n < 1048576) return (n / 1024).toFixed(1) + " KB";
   return (n / 1048576).toFixed(2) + " MB";
+}
+
+function formatBitrate(bitsPerSecond) {
+  if (!bitsPerSecond || bitsPerSecond < 0) return "-";
+  if (bitsPerSecond < 1000000) return `${(bitsPerSecond / 1000).toFixed(0)} kbps`;
+  return `${(bitsPerSecond / 1000000).toFixed(2)} Mbps`;
+}
+
+function formatMillis(value) {
+  if (!Number.isFinite(value)) return "-";
+  return `${Math.round(value)} ms`;
+}
+
+function formatLoss(packetsLost, packetsReceived) {
+  if (!Number.isFinite(packetsLost)) return "-";
+  const total = Math.max(0, packetsLost) + Math.max(0, packetsReceived || 0);
+  if (total <= 0) return `${packetsLost}`;
+  return `${packetsLost} (${((Math.max(0, packetsLost) / total) * 100).toFixed(1)}%)`;
+}
+
+function candidateLabel(report) {
+  if (!report) return "-";
+  const type = report.candidateType || "?";
+  const protocol = report.protocol || "?";
+  return `${type}/${protocol}`;
+}
+
+function updateStatsPanel(stats) {
+  const reports = new Map();
+  stats.forEach(report => reports.set(report.id, report));
+
+  let inboundVideo = null;
+  let pair = null;
+  reports.forEach(report => {
+    if (report.type === "inbound-rtp" && (report.kind === "video" || report.mediaType === "video")) {
+      inboundVideo = report;
+    }
+    if (report.type === "candidate-pair" && report.nominated && report.state === "succeeded") {
+      pair = report;
+    }
+  });
+
+  if (inboundVideo) {
+    const bytesReceived = Number(inboundVideo.bytesReceived || 0);
+    const framesDecoded = Number(inboundVideo.framesDecoded || 0);
+    const framesDropped = Number(inboundVideo.framesDropped || 0);
+    const width = Number(inboundVideo.frameWidth || videoEl.videoWidth || 0);
+    const height = Number(inboundVideo.frameHeight || videoEl.videoHeight || 0);
+    const packetsLost = Number(inboundVideo.packetsLost || 0);
+    const packetsReceived = Number(inboundVideo.packetsReceived || 0);
+    const jitterMs = Number(inboundVideo.jitter || 0) * 1000;
+    const timestampMs = Number(inboundVideo.timestamp || 0);
+    let bitrate = 0;
+    let fps = Number(inboundVideo.framesPerSecond || 0);
+
+    if (statsCache.lastTimestampMs > 0 && timestampMs > statsCache.lastTimestampMs) {
+      const dtSeconds = (timestampMs - statsCache.lastTimestampMs) / 1000;
+      if (dtSeconds > 0) {
+        bitrate = ((bytesReceived - statsCache.lastBytes) * 8) / dtSeconds;
+        if (!fps) {
+          fps = (framesDecoded - statsCache.lastFramesDecoded) / dtSeconds;
+        }
+      }
+    }
+
+    statsCache.lastBytes = bytesReceived;
+    statsCache.lastFramesDecoded = framesDecoded;
+    statsCache.lastTimestampMs = timestampMs;
+
+    streamState.textContent = `${framesDecoded} frames`;
+    setPill(pillStream, true);
+    bytesState.textContent = formatBytes(bytesReceived);
+    statVideo.textContent = width > 0 && height > 0 ? `${width}x${height}` : "-";
+    statDecode.textContent = `${fps > 0 ? fps.toFixed(1) : "-"} fps / drop ${framesDropped}`;
+    statRxBitrate.textContent = formatBitrate(bitrate);
+    statRxBytes.textContent = formatBytes(bytesReceived);
+    statJitter.textContent = formatMillis(jitterMs);
+    statLoss.textContent = formatLoss(packetsLost, packetsReceived);
+  }
+
+  if (pair) {
+    const rttMs = Number(pair.currentRoundTripTime || 0) * 1000;
+    const availableIncoming = Number(pair.availableIncomingBitrate || 0);
+    const local = reports.get(pair.localCandidateId);
+    const remote = reports.get(pair.remoteCandidateId);
+    const remoteAddress = remote ? (remote.address || remote.ip || "") : "";
+
+    rttState.textContent = formatMillis(rttMs);
+    statCandidate.textContent = `${candidateLabel(local)} -> ${candidateLabel(remote)}${remoteAddress ? ` ${remoteAddress}` : ""}`;
+    statAvailBitrate.textContent = formatBitrate(availableIncoming);
+  }
+
+  statsUpdated.textContent = new Date().toLocaleTimeString();
 }
 
 const InputType = {
@@ -390,20 +575,18 @@ function ensurePeerConnection() {
     if (!pc) {
       return;
     }
-    const stats = await pc.getStats();
-    let videoBytes = 0;
-    stats.forEach(report => {
-      if (report.type === "inbound-rtp" && report.kind === "video") {
-        videoBytes += report.bytesReceived || 0;
-        streamState.textContent = `${report.framesDecoded || 0} frames`;
-        setPill(pillStream, true);
-      }
-      if (report.type === "candidate-pair" && report.nominated && report.state === "succeeded" &&
-          typeof report.currentRoundTripTime === "number") {
-        rttState.textContent = `${Math.round(report.currentRoundTripTime * 1000)} ms`;
-      }
-    });
-    bytesState.textContent = formatBytes(videoBytes);
+    if (statsPollPending) {
+      return;
+    }
+    statsPollPending = true;
+    try {
+      const stats = await pc.getStats();
+      updateStatsPanel(stats);
+    } catch (error) {
+      log(`stats ${error.message || String(error)}`);
+    } finally {
+      statsPollPending = false;
+    }
   }, 1000);
   return pc;
 }
@@ -600,6 +783,12 @@ function toggleFullscreen() {
 }
 document.querySelector("#btnFullscreen").addEventListener("click", toggleFullscreen);
 
+function toggleStats() {
+  const hidden = statsPanel.classList.toggle("hidden");
+  btnStats.classList.toggle("active", !hidden);
+}
+btnStats.addEventListener("click", toggleStats);
+
 // Toggle between fit (fill stage, letterboxed) and 100% (1:1 decoded pixels).
 let actualMode = false;
 function toggleActual() {
@@ -708,7 +897,7 @@ async function connect() {
   const config = await fetch("/config").then(r => r.json());
   log(`config ${JSON.stringify(config)}`);
   if (encoderState) {
-    const active = config.activeEncoder || "openh264";
+    const active = config.activeEncoder || "vulkan";
     const requested = config.requestedEncoder && config.requestedEncoder !== active
       ? ` (${config.requestedEncoder})`
       : "";

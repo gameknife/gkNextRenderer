@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Modules/NextRemote/FrameSource.hpp"
-#include "Modules/NextRemote/OpenH264Encoder.hpp"
 #include "Modules/NextRemote/RemoteServer.hpp"
 #include "Modules/NextRemote/VideoEncoder.hpp"
 #include "Modules/NextRemote/VulkanVideoEncoder.hpp"
@@ -46,9 +45,10 @@ namespace Runtime::Remote
         uint64_t timestampUs = 0;
     };
 
-    // Single engine-wide video pipeline: converts the swapchain to I420 with a compute pass
-    // recorded inside the in-flight frame command buffer (GPU scale + BT.709, zero CPU pixel
-    // work), encodes on a dedicated worker thread and fans the bitstream out to every session.
+    // Single engine-wide video pipeline: converts the swapchain to NV12 with a compute pass
+    // recorded inside the in-flight frame command buffer (GPU scale + BT.709), hands frames to
+    // the Vulkan Video encoder on a dedicated worker thread, and fans the bitstream out to every
+    // session.
     class FVideoPipeline final
     {
     public:
@@ -57,6 +57,7 @@ namespace Runtime::Remote
         explicit FVideoPipeline(RemoteServer::FConfig config);
         ~FVideoPipeline();
 
+        bool Initialize(Vulkan::VulkanBaseRenderer& renderer);
         void Start();
         void Stop();
 
@@ -97,10 +98,6 @@ namespace Runtime::Remote
                 VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
             };
 
-            std::unique_ptr<Vulkan::Buffer> buffer;
-            std::unique_ptr<Vulkan::DeviceMemory> memory;
-            uint8_t* mapped = nullptr;
-            VkDeviceAddress address = 0;
             std::unique_ptr<Vulkan::RenderImage> yPlane;
             std::unique_ptr<Vulkan::RenderImage> uvPlane;
             VkImageLayout yPlaneLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -115,16 +112,11 @@ namespace Runtime::Remote
         };
 
         bool EnsureSlotResources(FSlot& slot, Vulkan::VulkanBaseRenderer& renderer, size_t slotIndex);
-        bool EnsureCpuSlotResources(FSlot& slot, Vulkan::VulkanBaseRenderer& renderer);
         bool EnsureGpuSlotResources(FSlot& slot, Vulkan::VulkanBaseRenderer& renderer, size_t slotIndex);
         bool CreateGpuEncodeImage(FSlot& slot, const Vulkan::Device& device, size_t slotIndex);
-        bool EncoderUsesGpuFrames() const;
         void DestroySlotResources(FSlot& slot);
-        void DestroyCpuSlotResources(FSlot& slot);
         void DestroyGpuSlotResources(FSlot& slot);
         void HarvestCompletedSlots(uint64_t currentFrameId);
-        void ResolveEncoderBackend(const Vulkan::VulkanBaseRenderer& renderer);
-        void CreateFallbackEncoder();
         FVideoEncoderConfig BuildEncoderConfig() const;
         int32_t ActiveH264ProfileIdcLocked() const;
         void RecomputeNegotiatedProfileLocked();
@@ -136,15 +128,14 @@ namespace Runtime::Remote
         uint32_t dstHeight_ = 0;  // multiple of 2
         EVideoEncoderBackend requestedEncoder_ = EVideoEncoderBackend::Auto;
         const char* requestedEncoderName_ = "auto";
-        const char* activeEncoderName_ = "openh264";
-        bool resolvedEncoderBackend_ = false;
+        const char* activeEncoderName_ = "vulkan";
+        bool initialized_ = false;
         std::optional<Vulkan::FVulkanVideoCaps> vulkanCaps_;
 
         // Capture slots (render thread records, encoder thread reads). The vector is filled once
         // on first RecordFrame and never resized afterwards.
         std::vector<std::unique_ptr<FSlot>> slots_;
         const Vulkan::Device* device_ = nullptr;
-        std::unique_ptr<Vulkan::PipelineCommon::ZeroBindCustomPushConstantPipeline> cpuConvertPipeline_;
         std::unique_ptr<Vulkan::PipelineCommon::ZeroBindCustomPushConstantPipeline> gpuConvertPipeline_;
         std::unique_ptr<Vulkan::TimelineSemaphore> graphicsCompletionSemaphore_;
         uint64_t nextCompletionValue_ = 1;

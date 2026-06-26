@@ -4,7 +4,6 @@
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Engine/Vulkan/BufferUtil.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
@@ -90,18 +89,6 @@ namespace Runtime::Remote
             return RemoteYBindlessIndex(slotIndex) + 1u;
         }
 
-        // Must match PushConsts in assets/shaders/Remote.BgraToYuv.comp.slang.
-        struct FCpuConvertPushConsts
-        {
-            uint64_t outAddress;
-            uint32_t swapChainIndex;
-            uint32_t dstWidth;
-            uint32_t dstHeight;
-            uint32_t srcWidth;
-            uint32_t srcHeight;
-            uint32_t pad0;
-        };
-
         // Must match PushConsts in assets/shaders/Remote.BgraToNv12.comp.slang.
         struct FGpuConvertPushConsts
         {
@@ -124,7 +111,6 @@ namespace Runtime::Remote
         , requestedEncoderName_(ToString(config_.encoderBackend))
         , desiredBitrateKbps_(std::max(1u, config_.bitrateKbps))
     {
-        CreateFallbackEncoder();
     }
 
     FVideoPipeline::~FVideoPipeline()
@@ -132,9 +118,46 @@ namespace Runtime::Remote
         Stop();
     }
 
+    bool FVideoPipeline::Initialize(Vulkan::VulkanBaseRenderer& renderer)
+    {
+        if (initialized_)
+        {
+            return true;
+        }
+
+        device_ = &renderer.Device();
+        vulkanCaps_ = renderer.VideoCaps();
+        {
+            std::lock_guard lock(profileMutex_);
+            RecomputeNegotiatedProfileLocked();
+        }
+
+        if (!vulkanCaps_ || !vulkanCaps_->Usable())
+        {
+            SPDLOG_ERROR("RemotePlay: Vulkan Video H.264 encode is unavailable on this device; remote mode is disabled");
+            return false;
+        }
+
+        try
+        {
+            encoder_ = std::make_unique<FVulkanVideoEncoder>(renderer.Device(), *vulkanCaps_, BuildEncoderConfig());
+        }
+        catch (const std::exception& error)
+        {
+            SPDLOG_ERROR("RemotePlay: failed to create Vulkan Video encoder: {}", error.what());
+            encoder_.reset();
+            return false;
+        }
+
+        activeEncoderName_ = encoder_->Name();
+        initialized_ = true;
+        SPDLOG_INFO("RemotePlay: video pipeline backend = {}", activeEncoderName_);
+        return true;
+    }
+
     void FVideoPipeline::Start()
     {
-        if (encodeThread_.joinable())
+        if (encodeThread_.joinable() || !initialized_ || !encoder_)
         {
             return;
         }
@@ -161,7 +184,6 @@ namespace Runtime::Remote
         {
             device_->WaitIdle();
         }
-        cpuConvertPipeline_.reset();
         gpuConvertPipeline_.reset();
         graphicsCompletionSemaphore_.reset();
         for (auto& slot : slots_)
@@ -170,11 +192,12 @@ namespace Runtime::Remote
         }
         slots_.clear();
         device_ = nullptr;
+        initialized_ = false;
+        encoder_.reset();
     }
 
     void FVideoPipeline::ReleaseSwapChainResources()
     {
-        cpuConvertPipeline_.reset();
         gpuConvertPipeline_.reset();
     }
 
@@ -234,96 +257,6 @@ namespace Runtime::Remote
         return BuildH264FmtpLine(ActiveH264ProfileIdcLocked(), dstWidth_, dstHeight_, std::max(1u, config_.fps));
     }
 
-    void FVideoPipeline::ResolveEncoderBackend(const Vulkan::VulkanBaseRenderer& renderer)
-    {
-        if (!vulkanCaps_)
-        {
-            vulkanCaps_ = renderer.VideoCaps();
-            std::lock_guard lock(profileMutex_);
-            const bool wasFrozen = profileFrozen_;
-            profileFrozen_ = false;
-            RecomputeNegotiatedProfileLocked();
-            profileFrozen_ = wasFrozen && !clientH264Profiles_.empty();
-        }
-        if (resolvedEncoderBackend_)
-        {
-            return;
-        }
-        resolvedEncoderBackend_ = true;
-
-        const bool vulkanCapsUsable = renderer.VideoCaps().Usable();
-        const auto makeOpenH264Fallback = [this]()
-        {
-            if (!encoder_ || std::string_view(encoder_->Name()) != "openh264")
-            {
-                CreateFallbackEncoder();
-            }
-        };
-
-        switch (requestedEncoder_)
-        {
-        case EVideoEncoderBackend::OpenH264:
-            makeOpenH264Fallback();
-            SPDLOG_INFO("RemotePlay: video pipeline backend = {} (forced)", activeEncoderName_);
-            break;
-        case EVideoEncoderBackend::Vulkan:
-            if (vulkanCapsUsable)
-            {
-                try
-                {
-                    encoder_ = std::make_unique<FVulkanVideoEncoder>(
-                        renderer.Device(), renderer.VideoCaps(), BuildEncoderConfig());
-                    activeEncoderName_ = encoder_->Name();
-                    SPDLOG_INFO("RemotePlay: video pipeline backend = {} (forced)", activeEncoderName_);
-                }
-                catch (const std::exception& error)
-                {
-                    makeOpenH264Fallback();
-                    SPDLOG_WARN("RemotePlay: Vulkan Video encoder creation failed ({}); falling back to {}",
-                                error.what(), activeEncoderName_);
-                }
-            }
-            else
-            {
-                makeOpenH264Fallback();
-                SPDLOG_WARN("RemotePlay: --remote-encoder vulkan requested but this renderer cannot supply a usable "
-                            "Vulkan Video H.264 path; falling back to {}",
-                            activeEncoderName_);
-            }
-            break;
-        case EVideoEncoderBackend::Auto:
-        default:
-            if (vulkanCapsUsable)
-            {
-                try
-                {
-                    encoder_ = std::make_unique<FVulkanVideoEncoder>(
-                        renderer.Device(), renderer.VideoCaps(), BuildEncoderConfig());
-                    activeEncoderName_ = encoder_->Name();
-                    SPDLOG_INFO("RemotePlay: video pipeline backend = {}", activeEncoderName_);
-                }
-                catch (const std::exception& error)
-                {
-                    makeOpenH264Fallback();
-                    SPDLOG_WARN("RemotePlay: Vulkan Video encoder creation failed ({}); using {}",
-                                error.what(), activeEncoderName_);
-                }
-            }
-            else
-            {
-                makeOpenH264Fallback();
-                SPDLOG_INFO("RemotePlay: video pipeline backend = {}", activeEncoderName_);
-            }
-            break;
-        }
-    }
-
-    void FVideoPipeline::CreateFallbackEncoder()
-    {
-        encoder_ = std::make_unique<FOpenH264Encoder>(BuildEncoderConfig());
-        activeEncoderName_ = encoder_ ? encoder_->Name() : "openh264";
-    }
-
     FVideoEncoderConfig FVideoPipeline::BuildEncoderConfig() const
     {
         FVideoEncoderConfig encoderConfig;
@@ -340,14 +273,6 @@ namespace Runtime::Remote
 
     int32_t FVideoPipeline::ActiveH264ProfileIdcLocked() const
     {
-        if (requestedEncoder_ == EVideoEncoderBackend::OpenH264 || activeEncoderName_ == std::string_view("openh264"))
-        {
-            return STD_VIDEO_H264_PROFILE_IDC_BASELINE;
-        }
-        if (profileFrozen_)
-        {
-            return negotiatedProfileIdc_;
-        }
         return negotiatedProfileIdc_;
     }
 
@@ -371,12 +296,9 @@ namespace Runtime::Remote
             }
         }
 
-        uint32_t encoderMask = h264ProfileBaselineBit;
-        if (requestedEncoder_ != EVideoEncoderBackend::OpenH264 && vulkanCaps_)
-        {
-            encoderMask = vulkanCaps_->supportedProfileMask != 0 ? vulkanCaps_->supportedProfileMask
-                                                                 : h264ProfileBaselineBit;
-        }
+        uint32_t encoderMask =
+            (vulkanCaps_ && vulkanCaps_->supportedProfileMask != 0) ? vulkanCaps_->supportedProfileMask
+                                                                    : h264ProfileBaselineBit;
 
         uint32_t selectedMask = clientMask & encoderMask;
         if (selectedMask == 0)
@@ -388,7 +310,7 @@ namespace Runtime::Remote
         if (newProfileIdc != negotiatedProfileIdc_)
         {
             negotiatedProfileIdc_ = newProfileIdc;
-            if (resolvedEncoderBackend_ && activeEncoderName_ == std::string_view("vulkan"))
+            if (initialized_ && activeEncoderName_ == std::string_view("vulkan"))
             {
                 recreateEncoderRequested_.store(true, std::memory_order_relaxed);
                 keyframeRequested_.store(true, std::memory_order_relaxed);
@@ -421,21 +343,18 @@ namespace Runtime::Remote
         }
     }
 
-    bool FVideoPipeline::EncoderUsesGpuFrames() const
-    {
-        return encoder_ && encoder_->SupportsGpuFrameInput();
-    }
-
     void FVideoPipeline::RecordFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex,
                                      Vulkan::VulkanBaseRenderer& renderer)
     {
-        ResolveEncoderBackend(renderer);
-        const bool useGpuFrames = EncoderUsesGpuFrames();
+        if (!initialized_ || !encoder_)
+        {
+            return;
+        }
 
         if (slots_.empty())
         {
             size_t slotCount = std::max<size_t>(renderer.SwapChain().Images().size(), 3);
-            if (useGpuFrames && slotCount > maxGpuEncodeSlots)
+            if (slotCount > maxGpuEncodeSlots)
             {
                 SPDLOG_WARN("RemotePlay: clamping GPU encode slot count from {} to {} for bindless NV12 staging",
                             slotCount, maxGpuEncodeSlots);
@@ -529,106 +448,81 @@ namespace Runtime::Remote
         Vulkan::ImageMemoryBarrier::FullInsert(commandBuffer, swapImage, 0, VK_ACCESS_SHADER_READ_BIT,
                                                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
 
-        if (!useGpuFrames)
+        if (!gpuConvertPipeline_)
         {
-            if (!cpuConvertPipeline_)
-            {
-                cpuConvertPipeline_ = std::make_unique<Vulkan::PipelineCommon::ZeroBindCustomPushConstantPipeline>(
-                    swapChain, "assets/shaders/Remote.BgraToYuv.comp.slang.spv",
-                    static_cast<uint32_t>(sizeof(FCpuConvertPushConsts)));
-            }
-
-            FCpuConvertPushConsts pushConsts{};
-            pushConsts.outAddress = freeSlot->address;
-            pushConsts.swapChainIndex = imageIndex;
-            pushConsts.dstWidth = dstWidth_;
-            pushConsts.dstHeight = dstHeight_;
-            pushConsts.srcWidth = srcExtent.width;
-            pushConsts.srcHeight = srcExtent.height;
-            cpuConvertPipeline_->BindPipeline(commandBuffer, &pushConsts);
-
-            // Thread = 8x2 destination pixels, group = 8x8 threads -> 64x16 pixels per group.
-            vkCmdDispatch(commandBuffer, (dstWidth_ + 63) / 64, (dstHeight_ + 15) / 16, 1);
+            gpuConvertPipeline_ = std::make_unique<Vulkan::PipelineCommon::ZeroBindCustomPushConstantPipeline>(
+                swapChain, "assets/shaders/Remote.BgraToNv12.comp.slang.spv",
+                static_cast<uint32_t>(sizeof(FGpuConvertPushConsts)));
         }
-        else
-        {
-            if (!gpuConvertPipeline_)
-            {
-                gpuConvertPipeline_ = std::make_unique<Vulkan::PipelineCommon::ZeroBindCustomPushConstantPipeline>(
-                    swapChain, "assets/shaders/Remote.BgraToNv12.comp.slang.spv",
-                    static_cast<uint32_t>(sizeof(FGpuConvertPushConsts)));
-            }
 
-            freeSlot->yPlane->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, freeSlot->yPlaneLayout,
-                                            VK_IMAGE_LAYOUT_GENERAL);
-            freeSlot->uvPlane->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, freeSlot->uvPlaneLayout,
-                                             VK_IMAGE_LAYOUT_GENERAL);
-            freeSlot->yPlaneLayout = VK_IMAGE_LAYOUT_GENERAL;
-            freeSlot->uvPlaneLayout = VK_IMAGE_LAYOUT_GENERAL;
+        freeSlot->yPlane->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, freeSlot->yPlaneLayout,
+                                        VK_IMAGE_LAYOUT_GENERAL);
+        freeSlot->uvPlane->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, freeSlot->uvPlaneLayout,
+                                         VK_IMAGE_LAYOUT_GENERAL);
+        freeSlot->yPlaneLayout = VK_IMAGE_LAYOUT_GENERAL;
+        freeSlot->uvPlaneLayout = VK_IMAGE_LAYOUT_GENERAL;
 
-            FGpuConvertPushConsts pushConsts{};
-            pushConsts.swapChainIndex = imageIndex;
-            pushConsts.outYIndex = freeSlot->yBindlessIndex;
-            pushConsts.outUvIndex = freeSlot->uvBindlessIndex;
-            pushConsts.dstWidth = dstWidth_;
-            pushConsts.dstHeight = dstHeight_;
-            pushConsts.srcWidth = srcExtent.width;
-            pushConsts.srcHeight = srcExtent.height;
-            gpuConvertPipeline_->BindPipeline(commandBuffer, &pushConsts);
-            vkCmdDispatch(commandBuffer, (dstWidth_ + 7) / 8, (dstHeight_ + 7) / 8, 1);
+        FGpuConvertPushConsts pushConsts{};
+        pushConsts.swapChainIndex = imageIndex;
+        pushConsts.outYIndex = freeSlot->yBindlessIndex;
+        pushConsts.outUvIndex = freeSlot->uvBindlessIndex;
+        pushConsts.dstWidth = dstWidth_;
+        pushConsts.dstHeight = dstHeight_;
+        pushConsts.srcWidth = srcExtent.width;
+        pushConsts.srcHeight = srcExtent.height;
+        gpuConvertPipeline_->BindPipeline(commandBuffer, &pushConsts);
+        vkCmdDispatch(commandBuffer, (dstWidth_ + 7) / 8, (dstHeight_ + 7) / 8, 1);
 
-            freeSlot->yPlane->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                                            freeSlot->yPlaneLayout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-            freeSlot->uvPlane->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                                             freeSlot->uvPlaneLayout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-            freeSlot->yPlaneLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-            freeSlot->uvPlaneLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        freeSlot->yPlane->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                                        freeSlot->yPlaneLayout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        freeSlot->uvPlane->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                                         freeSlot->uvPlaneLayout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        freeSlot->yPlaneLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        freeSlot->uvPlaneLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
-            const VkAccessFlags encodeSrcAccess = freeSlot->encodeImage.layout == VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR
-                                                      ? VK_ACCESS_MEMORY_READ_BIT
-                                                      : 0;
-            const VkPipelineStageFlags encodeSrcStage =
-                freeSlot->encodeImage.layout == VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR
-                    ? VK_PIPELINE_STAGE_ALL_COMMANDS_BIT
-                    : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-            InsertImageBarrier(commandBuffer, freeSlot->encodeImage.image, encodeSrcAccess,
-                               VK_ACCESS_TRANSFER_WRITE_BIT, freeSlot->encodeImage.layout,
-                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                               VK_IMAGE_ASPECT_PLANE_0_BIT | VK_IMAGE_ASPECT_PLANE_1_BIT, encodeSrcStage,
-                               VK_PIPELINE_STAGE_TRANSFER_BIT);
-            freeSlot->encodeImage.layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        const VkAccessFlags encodeSrcAccess = freeSlot->encodeImage.layout == VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR
+                                                  ? VK_ACCESS_MEMORY_READ_BIT
+                                                  : 0;
+        const VkPipelineStageFlags encodeSrcStage =
+            freeSlot->encodeImage.layout == VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR
+                ? VK_PIPELINE_STAGE_ALL_COMMANDS_BIT
+                : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        InsertImageBarrier(commandBuffer, freeSlot->encodeImage.image, encodeSrcAccess, VK_ACCESS_TRANSFER_WRITE_BIT,
+                           freeSlot->encodeImage.layout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           VK_IMAGE_ASPECT_PLANE_0_BIT | VK_IMAGE_ASPECT_PLANE_1_BIT, encodeSrcStage,
+                           VK_PIPELINE_STAGE_TRANSFER_BIT);
+        freeSlot->encodeImage.layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
-            VkImageCopy lumaCopy{};
-            lumaCopy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            lumaCopy.srcSubresource.layerCount = 1;
-            lumaCopy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_0_BIT;
-            lumaCopy.dstSubresource.layerCount = 1;
-            lumaCopy.extent = {dstWidth_, dstHeight_, 1};
-            vkCmdCopyImage(commandBuffer, freeSlot->yPlane->GetImage().Handle(), freeSlot->yPlaneLayout,
-                           freeSlot->encodeImage.image, freeSlot->encodeImage.layout, 1, &lumaCopy);
+        VkImageCopy lumaCopy{};
+        lumaCopy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        lumaCopy.srcSubresource.layerCount = 1;
+        lumaCopy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_0_BIT;
+        lumaCopy.dstSubresource.layerCount = 1;
+        lumaCopy.extent = {dstWidth_, dstHeight_, 1};
+        vkCmdCopyImage(commandBuffer, freeSlot->yPlane->GetImage().Handle(), freeSlot->yPlaneLayout,
+                       freeSlot->encodeImage.image, freeSlot->encodeImage.layout, 1, &lumaCopy);
 
-            VkImageCopy chromaCopy{};
-            chromaCopy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            chromaCopy.srcSubresource.layerCount = 1;
-            chromaCopy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_1_BIT;
-            chromaCopy.dstSubresource.layerCount = 1;
-            chromaCopy.extent = {dstWidth_ / 2u, dstHeight_ / 2u, 1};
-            vkCmdCopyImage(commandBuffer, freeSlot->uvPlane->GetImage().Handle(), freeSlot->uvPlaneLayout,
-                           freeSlot->encodeImage.image, freeSlot->encodeImage.layout, 1, &chromaCopy);
+        VkImageCopy chromaCopy{};
+        chromaCopy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        chromaCopy.srcSubresource.layerCount = 1;
+        chromaCopy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_1_BIT;
+        chromaCopy.dstSubresource.layerCount = 1;
+        chromaCopy.extent = {dstWidth_ / 2u, dstHeight_ / 2u, 1};
+        vkCmdCopyImage(commandBuffer, freeSlot->uvPlane->GetImage().Handle(), freeSlot->uvPlaneLayout,
+                       freeSlot->encodeImage.image, freeSlot->encodeImage.layout, 1, &chromaCopy);
 
-            freeSlot->yPlane->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-                                            freeSlot->yPlaneLayout, VK_IMAGE_LAYOUT_GENERAL);
-            freeSlot->uvPlane->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-                                             freeSlot->uvPlaneLayout, VK_IMAGE_LAYOUT_GENERAL);
-            freeSlot->yPlaneLayout = VK_IMAGE_LAYOUT_GENERAL;
-            freeSlot->uvPlaneLayout = VK_IMAGE_LAYOUT_GENERAL;
+        freeSlot->yPlane->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                                        freeSlot->yPlaneLayout, VK_IMAGE_LAYOUT_GENERAL);
+        freeSlot->uvPlane->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                                         freeSlot->uvPlaneLayout, VK_IMAGE_LAYOUT_GENERAL);
+        freeSlot->yPlaneLayout = VK_IMAGE_LAYOUT_GENERAL;
+        freeSlot->uvPlaneLayout = VK_IMAGE_LAYOUT_GENERAL;
 
-            InsertImageBarrier(commandBuffer, freeSlot->encodeImage.image, VK_ACCESS_TRANSFER_WRITE_BIT, 0,
-                               freeSlot->encodeImage.layout, VK_IMAGE_LAYOUT_GENERAL,
-                               VK_IMAGE_ASPECT_PLANE_0_BIT | VK_IMAGE_ASPECT_PLANE_1_BIT,
-                               VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-            freeSlot->encodeImage.layout = VK_IMAGE_LAYOUT_GENERAL;
-        }
+        InsertImageBarrier(commandBuffer, freeSlot->encodeImage.image, VK_ACCESS_TRANSFER_WRITE_BIT, 0,
+                           freeSlot->encodeImage.layout, VK_IMAGE_LAYOUT_GENERAL,
+                           VK_IMAGE_ASPECT_PLANE_0_BIT | VK_IMAGE_ASPECT_PLANE_1_BIT,
+                           VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+        freeSlot->encodeImage.layout = VK_IMAGE_LAYOUT_GENERAL;
 
         Vulkan::ImageMemoryBarrier::FullInsert(commandBuffer, swapImage, VK_ACCESS_SHADER_READ_BIT, 0,
                                                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
@@ -659,41 +553,7 @@ namespace Runtime::Remote
 
     bool FVideoPipeline::EnsureSlotResources(FSlot& slot, Vulkan::VulkanBaseRenderer& renderer, size_t slotIndex)
     {
-        return EncoderUsesGpuFrames() ? EnsureGpuSlotResources(slot, renderer, slotIndex)
-                                      : EnsureCpuSlotResources(slot, renderer);
-    }
-
-    bool FVideoPipeline::EnsureCpuSlotResources(FSlot& slot, Vulkan::VulkanBaseRenderer& renderer)
-    {
-        if (slot.buffer)
-        {
-            return true;
-        }
-
-        device_ = &renderer.Device();
-        const size_t bufferSize = static_cast<size_t>(dstWidth_) * dstHeight_ * 3u / 2u;
-
-        // The encoder thread reads this memory every frame: prefer HOST_CACHED readback memory,
-        // because reads from write-combined (coherent-only) memory are an order of magnitude slower.
-        try
-        {
-            Vulkan::BufferUtil::CreateDeviceBufferLocal(
-                renderer.CommandPool(), "RemoteVideo I420", VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
-                    VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-                bufferSize, slot.buffer, slot.memory);
-        }
-        catch (const std::exception&)
-        {
-            Vulkan::BufferUtil::CreateDeviceBufferLocal(
-                renderer.CommandPool(), "RemoteVideo I420", VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, bufferSize, slot.buffer,
-                slot.memory);
-        }
-
-        slot.address = slot.buffer->GetDeviceAddress();
-        slot.mapped = static_cast<uint8_t*>(slot.memory->Map(0, bufferSize));
-        return slot.mapped != nullptr;
+        return EnsureGpuSlotResources(slot, renderer, slotIndex);
     }
 
     bool FVideoPipeline::CreateGpuEncodeImage(FSlot& slot, const Vulkan::Device& device, size_t slotIndex)
@@ -804,21 +664,8 @@ namespace Runtime::Remote
 
     void FVideoPipeline::DestroySlotResources(FSlot& slot)
     {
-        DestroyCpuSlotResources(slot);
         DestroyGpuSlotResources(slot);
         slot.state.store(ESlotState::Free, std::memory_order_release);
-    }
-
-    void FVideoPipeline::DestroyCpuSlotResources(FSlot& slot)
-    {
-        if (slot.mapped && slot.memory)
-        {
-            slot.memory->Unmap();
-        }
-        slot.mapped = nullptr;
-        slot.address = 0;
-        slot.buffer.reset();
-        slot.memory.reset();
     }
 
     void FVideoPipeline::DestroyGpuSlotResources(FSlot& slot)
@@ -863,10 +710,8 @@ namespace Runtime::Remote
             }
 
             FSlot& slot = *slots_[slotIndex];
-            bool usesGpuFrames = encoder_ && encoder_->SupportsGpuFrameInput();
-            if (sinkCount_.load(std::memory_order_relaxed) == 0 ||
-                (!usesGpuFrames && !slot.mapped) ||
-                (usesGpuFrames && slot.encodeImage.view == VK_NULL_HANDLE))
+            if (sinkCount_.load(std::memory_order_relaxed) == 0 || !encoder_ ||
+                slot.encodeImage.view == VK_NULL_HANDLE)
             {
                 slot.state.store(ESlotState::Free, std::memory_order_release);
                 continue;
@@ -887,8 +732,6 @@ namespace Runtime::Remote
                 SPDLOG_INFO("RemotePlay: recreated Vulkan encoder with H.264 profile {}",
                             H264ProfileNameFromStdProfileIdc(BuildEncoderConfig().h264ProfileIdc));
             }
-            usesGpuFrames = encoder_ && encoder_->SupportsGpuFrameInput();
-
             const uint32_t desiredBitrateKbps = desiredBitrateKbps_.load(std::memory_order_relaxed);
             if (desiredBitrateKbps != appliedBitrateKbps)
             {
@@ -904,30 +747,13 @@ namespace Runtime::Remote
 
             std::vector<std::byte> encodedFrame;
             bool keyframe = false;
-            bool encoded = false;
-            if (!usesGpuFrames)
-            {
-                const uint32_t ySize = dstWidth_ * dstHeight_;
-                FI420View view;
-                view.y = slot.mapped;
-                view.u = slot.mapped + ySize;
-                view.v = slot.mapped + ySize + ySize / 4u;
-                view.width = dstWidth_;
-                view.height = dstHeight_;
-                view.strideY = dstWidth_;
-                view.strideC = dstWidth_ / 2u;
-                encoded = encoder_->Encode(view, timestampUs / 1000u, encodedFrame, keyframe);
-            }
-            else
-            {
-                FGpuVideoFrame frame;
-                frame.image = slot.encodeImage.image;
-                frame.view = slot.encodeImage.view;
-                frame.layout = &slot.encodeImage.layout;
-                frame.width = dstWidth_;
-                frame.height = dstHeight_;
-                encoded = encoder_->EncodeGpu(frame, timestampUs / 1000u, encodedFrame, keyframe);
-            }
+            FGpuVideoFrame frame;
+            frame.image = slot.encodeImage.image;
+            frame.view = slot.encodeImage.view;
+            frame.layout = &slot.encodeImage.layout;
+            frame.width = dstWidth_;
+            frame.height = dstHeight_;
+            const bool encoded = encoder_->EncodeGpu(frame, timestampUs / 1000u, encodedFrame, keyframe);
             slot.state.store(ESlotState::Free, std::memory_order_release);
             if (!encoded)
             {

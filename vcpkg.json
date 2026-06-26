@@ -94,10 +94,6 @@
       "platform": "!(android | ios | osx)"
     },
     {
-      "name": "openh264",
-      "platform": "!(android | ios | osx)"
-    },
-    {
       "name": "cpp-httplib",
       "platform": "!(android | ios | osx)"
     }

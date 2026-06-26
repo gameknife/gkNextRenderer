@@ -1,4 +1,5 @@
 #include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Runtime/Engine.hpp"
 #include "Modules/NextRemote/RemoteServer.hpp"
 
 #include "Modules/NextRemote/SignalingServer.hpp"
@@ -30,6 +31,12 @@ namespace Runtime::Remote
         }
 
         videoPipeline_ = std::make_unique<FVideoPipeline>(config_);
+        NextEngine* engine = NextEngine::GetInstance();
+        if (!engine || !videoPipeline_->Initialize(engine->GetRenderer()))
+        {
+            videoPipeline_.reset();
+            return false;
+        }
         videoPipeline_->Start();
 
         signalingServer_ = std::make_unique<FSignalingServer>(config_, videoPipeline_.get());

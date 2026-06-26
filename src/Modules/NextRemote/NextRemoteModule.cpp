@@ -45,10 +45,6 @@ namespace Modules::NextRemote
 
         Runtime::Remote::EVideoEncoderBackend ParseEncoderBackend(const std::string& encoder)
         {
-            if (encoder == "openh264")
-            {
-                return Runtime::Remote::EVideoEncoderBackend::OpenH264;
-            }
             if (encoder == "vulkan")
             {
                 return Runtime::Remote::EVideoEncoderBackend::Vulkan;
