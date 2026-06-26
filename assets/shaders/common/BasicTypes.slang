@@ -569,6 +569,8 @@ public struct ALIGN_8 GPUScene
 	}
 
     public uint SwapChainIndex;
+    // custom_data_0: active RenderView RT bank base (see Bindless::ViewRT / kViewRtBankStride).
+    // 0 == primary view => screen-space RT slots resolve to absolute (legacy) layout.
     public uint custom_data_0;
     public uint custom_data_1;
     public uint custom_data_2;
