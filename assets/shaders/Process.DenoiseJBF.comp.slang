@@ -64,8 +64,10 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
     let OutImage = Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED);
     // Diffuse/specular source is routed by the renderer: the a-trous output when the
     // variance-guided path is active, otherwise the temporal accumulation buffer.
-    let FinalImage = Bindless.GetStorageTexture<float4>(Camera.DenoiseDiffuseSourceSlot);
-    let FinalImageSpec = Bindless.GetStorageTexture<float4>(Camera.DenoiseSpecularSourceSlot);
+    // Source slots are absolute screen-space slots; resolve into the active view's bank.
+    let vb = Bindless.GetGpuscene().custom_data_0;
+    let FinalImage = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(vb, int(Camera.DenoiseDiffuseSourceSlot)));
+    let FinalImageSpec = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(vb, int(Camera.DenoiseSpecularSourceSlot)));
     let AccumlateAlbedo = Bindless.GetViewStorageTexture<float4>(Bindless.RT_ACCUMLATE_ALBEDO);
     let ObjectId0 = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
     let ObjectId1 = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_1);

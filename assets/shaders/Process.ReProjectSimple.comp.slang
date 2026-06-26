@@ -3,6 +3,13 @@ import Bindless;
 
 struct PushConsts
 {
+    // Unified push-constant header (offset 0..15): aliases gpuScene's header so
+    // gpuScene.custom_data_0 (active view RT bank base) is valid in this custom pass. Params follow.
+    uint _ViewHdr_SwapChainIndex;
+    uint _ViewHdr_custom_data_0;
+    uint _ViewHdr_custom_data_1;
+    uint _ViewHdr_custom_data_2;
+
     uint TemporalFrames;
     uint PrevDiffuseBindlessIdx;
     uint HistoryValid;
@@ -155,7 +162,7 @@ float3 FilterHistoryColor(RWTexture2D<float4> prevFrameTexture, float2 subpixel,
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     int2 ipos = int2(DTid.xy);
-    uint2 isize = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
+    uint2 isize = Bindless.GetStorageTextureDimensions<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_SINGLE_DIFFUSE));
     int2 imageSize = int2(isize);
     int2 imageMax = imageSize - int2(1, 1);
     if (ipos.x >= imageSize.x || ipos.y >= imageSize.y)
@@ -163,14 +170,14 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    let SourceDiffuse = Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE);
-    let PrevDiffuse = Bindless.GetStorageTexture<float4>(pushConsts.PrevDiffuseBindlessIdx);
-    let AccumulateDiffuse = Bindless.GetViewStorageTexture<float4>(Bindless.RT_ACCUMLATE_DIFFUSE);
-    let ObjectId0 = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
-    let ObjectId1 = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_1);
-    let MotionVector = Bindless.GetViewStorageTexture<float4>(Bindless.RT_MOTIONVECTOR);
-    let MotionMoment = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MOTIONMOMENT);
-    let NormalBuffer = Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL);
+    let SourceDiffuse = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_SINGLE_DIFFUSE));
+    let PrevDiffuse = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, int(pushConsts.PrevDiffuseBindlessIdx)));
+    let AccumulateDiffuse = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_ACCUMLATE_DIFFUSE));
+    let ObjectId0 = Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_OBJEDCTID_0));
+    let ObjectId1 = Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_OBJEDCTID_1));
+    let MotionVector = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_MOTIONVECTOR));
+    let MotionMoment = Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_MOTIONMOMENT));
+    let NormalBuffer = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_NORMAL));
 
     float4 currDiffuseSample = SourceDiffuse[ipos];
     uint currentPrimitiveIndex = FetchPrimitiveIndex(ObjectId0[ipos]);

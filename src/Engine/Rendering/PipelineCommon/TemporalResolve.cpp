@@ -37,10 +37,13 @@ namespace Vulkan::PipelineCommon
         VkCommandBuffer commandBuffer,
         std::initializer_list<FTemporalCopy> copies) const
     {
+        // Pure C++ image copy (no shader to read custom_data_0): resolve the accumulation/history
+        // slots into the active RenderView's bank here. Base 0 == primary, unchanged.
+        const uint32_t viewBase = baseRenderer.ActiveViewBankBase();
         for (const auto& copy : copies)
         {
-            const auto* accumulated = baseRenderer.GetStorageImage(copy.accumulatedBindlessId);
-            const auto* history = baseRenderer.GetStorageImage(History(copy.historyChannel));
+            const auto* accumulated = baseRenderer.GetStorageImage(viewBase + copy.accumulatedBindlessId);
+            const auto* history = baseRenderer.GetStorageImage(viewBase + History(copy.historyChannel));
             accumulated->InsertBarrier(
                 commandBuffer,
                 VK_ACCESS_SHADER_READ_BIT,

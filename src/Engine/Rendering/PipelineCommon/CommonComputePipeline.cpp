@@ -14,6 +14,9 @@
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Assets/Data/Vertex.hpp"
 
+#include <algorithm>
+#include <cstring>
+
 namespace Vulkan::PipelineCommon
 {
 	namespace
@@ -141,10 +144,15 @@ namespace Vulkan::PipelineCommon
 		// Create descriptor pool/sets.
 		const auto& device = swapChain.Device();
 
+		// Custom passes share the GPUScene push-constant block: the first 16 bytes are the unified
+		// header (SwapChainIndex + custom_data_0/1/2) that aliases gpuScene's header, so
+		// gpuScene.custom_data_0 (the active view RT bank base) is valid even though this pipeline
+		// pushes a custom struct. The caller's params live right after the header (offset 16). Using
+		// the full GPUScene size keeps the range identical to the gpuScene block the shader declares.
 		VkPushConstantRange pushConstantRange{};
 		pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 		pushConstantRange.offset = 0;
-		pushConstantRange.size = pushConstantSize_;
+		pushConstantRange.size = sizeof(Assets::GPUScene);
 
 		std::vector<DescriptorSetManager*> managers = {
 			&Assets::GlobalTexturePool::GetInstance()->GetDescriptorManager()
@@ -156,7 +164,20 @@ namespace Vulkan::PipelineCommon
 
 	void ZeroBindCustomPushConstantPipeline::BindPipeline(VkCommandBuffer commandBuffer, const void* data)
 	{
-		BindComputeWithPush(commandBuffer, Handle(), PipelineLayout(), pushConstantSize_, data);
+		// Stamp the unified header (offset 0..15), then the caller's params (offset 16..).
+		static constexpr uint32_t kHeaderSize = 16;
+		alignas(16) uint8_t buffer[sizeof(Assets::GPUScene)] = {};
+		uint32_t* header = reinterpret_cast<uint32_t*>(buffer);
+		header[0] = 0; // SwapChainIndex (unused by custom passes)
+		header[1] = NextEngine::GetInstance()->GetRenderer().ActiveViewBankBase(); // custom_data_0
+		header[2] = 0;
+		header[3] = 0;
+		const uint32_t copySize = std::min<uint32_t>(pushConstantSize_, sizeof(buffer) - kHeaderSize);
+		if (data != nullptr && copySize > 0)
+		{
+			std::memcpy(buffer + kHeaderSize, data, copySize);
+		}
+		BindComputeWithPush(commandBuffer, Handle(), PipelineLayout(), sizeof(buffer), buffer);
 	}
 
     VisibilityPipeline::VisibilityPipeline(
