@@ -608,7 +608,7 @@ public struct FPathTracingRenderer{
     public __init()
     {
         pixel_ = int2(0, 0);
-        size_ = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
+        size_ = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
 
         RandomSeed_ = uint4(0, 0, 0, 0);
         hitPrimaryVertex_ = {};
@@ -618,16 +618,16 @@ public struct FPathTracingRenderer{
         primaryPixelOffset_ = float2(0, 0);
         primaryAlbedo_ = float4(0, 0, 0, 0);
 
-        OutAlbedo = Bindless.GetStorageTexture<float4>(Bindless.RT_ALBEDO);
-        OutNormal = Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL);
-        OutObjectID = Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
-        OutMotionVector = Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR);
-        OutPrevDepth = Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER);
-        OutSingleDiffuse = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE);
-        OutSingleSpecular = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR);
-        OutDiffuseHitDist = Bindless.GetStorageTexture<float>(Bindless.RT_DIFFUSE_HITDIST);
-        OutSpecularHitDist = Bindless.GetStorageTexture<float>(Bindless.RT_SPECULAR_HITDIST);
-        OutSpecularAlbedo = Bindless.GetStorageTexture<float4>(Bindless.RT_SPECULAR_ALBEDO);
+        OutAlbedo = Bindless.GetViewStorageTexture<float4>(Bindless.RT_ALBEDO);
+        OutNormal = Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL);
+        OutObjectID = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
+        OutMotionVector = Bindless.GetViewStorageTexture<float4>(Bindless.RT_MOTIONVECTOR);
+        OutPrevDepth = Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER);
+        OutSingleDiffuse = Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE);
+        OutSingleSpecular = Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR);
+        OutDiffuseHitDist = Bindless.GetViewStorageTexture<float>(Bindless.RT_DIFFUSE_HITDIST);
+        OutSpecularHitDist = Bindless.GetViewStorageTexture<float>(Bindless.RT_SPECULAR_HITDIST);
+        OutSpecularAlbedo = Bindless.GetViewStorageTexture<float4>(Bindless.RT_SPECULAR_ALBEDO);
     }
 
     int2 pixel_;

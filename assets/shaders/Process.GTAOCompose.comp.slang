@@ -16,7 +16,7 @@ float3 ReconstructViewPosition(UniformBufferObject camera, int2 pixel, uint2 siz
 
 float UpsampleAO(UniformBufferObject camera, int2 pixel, uint2 fullSize, float centerDepth, float3 centerNormal)
 {
-    const uint2 aoSize = Bindless.GetStorageTextureDimensions<float>(Bindless.RT_GTAO);
+    const uint2 aoSize = Bindless.GetViewStorageTextureDimensions<float>(Bindless.RT_GTAO);
     const int2 aoMax = int2(aoSize) - int2(1, 1);
     const int2 fullMax = int2(fullSize) - int2(1, 1);
     const float3 centerPosition = ReconstructViewPosition(camera, pixel, fullSize, centerDepth);
@@ -33,8 +33,8 @@ float UpsampleAO(UniformBufferObject camera, int2 pixel, uint2 fullSize, float c
         {
             const int2 aoPixel = clamp(halfBase + int2(x, y), int2(0, 0), aoMax);
             const int2 representative = min(aoPixel * 2 + int2(1, 1), fullMax);
-            const float sampleDepth = Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER)[representative];
-            const float3 sampleNormal = Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL)[representative].xyz;
+            const float sampleDepth = Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER)[representative];
+            const float3 sampleNormal = Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL)[representative].xyz;
             if (!IsSurfaceDepth(sampleDepth) || dot(sampleNormal, sampleNormal) < 0.25f)
             {
                 continue;
@@ -47,14 +47,14 @@ float UpsampleAO(UniformBufferObject camera, int2 pixel, uint2 fullSize, float c
             const float2 spatialDelta = float2(aoPixel) - halfPosition;
             const float spatialWeight = exp2(-dot(spatialDelta, spatialDelta));
             const float weight = normalWeight * depthWeight * spatialWeight;
-            weightedAO += Bindless.GetStorageTexture<float>(Bindless.RT_GTAO)[aoPixel] * weight;
+            weightedAO += Bindless.GetViewStorageTexture<float>(Bindless.RT_GTAO)[aoPixel] * weight;
             weightSum += weight;
         }
     }
 
     if (weightSum <= 1e-5f)
     {
-        return Bindless.GetStorageTexture<float>(Bindless.RT_GTAO)[clamp(pixel / 2, int2(0, 0), aoMax)];
+        return Bindless.GetViewStorageTexture<float>(Bindless.RT_GTAO)[clamp(pixel / 2, int2(0, 0), aoMax)];
     }
     return weightedAO / weightSum;
 }
@@ -75,8 +75,8 @@ float BlurSkyVisibility(UniformBufferObject camera, int2 pixel, uint2 size, floa
         for (int x = -radius; x <= radius; ++x)
         {
             const int2 samplePixel = clamp(pixel + int2(x, y), int2(0, 0), maxPixel);
-            const float sampleDepth = Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER)[samplePixel];
-            const float3 sampleNormal = Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL)[samplePixel].xyz;
+            const float sampleDepth = Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER)[samplePixel];
+            const float3 sampleNormal = Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL)[samplePixel].xyz;
             if (!IsSurfaceDepth(sampleDepth) || dot(sampleNormal, sampleNormal) < 0.25f)
             {
                 continue;
@@ -87,13 +87,13 @@ float BlurSkyVisibility(UniformBufferObject camera, int2 pixel, uint2 size, floa
             const float depthScale = max(0.05f, abs(centerViewZ) * 0.05f);
             const float depthWeight = exp2(-abs(sampleViewPos.z - centerViewZ) / depthScale);
             const float weight = normalWeight * depthWeight;
-            weightedVis += Bindless.GetStorageTexture<float4>(Bindless.RT_AMBIENT)[samplePixel].a * weight;
+            weightedVis += Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT)[samplePixel].a * weight;
             weightSum += weight;
         }
     }
 
     return weightSum > 1e-5f ? weightedVis / weightSum
-                             : Bindless.GetStorageTexture<float4>(Bindless.RT_AMBIENT)[pixel].a;
+                             : Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT)[pixel].a;
 }
 
 [shader("compute")]
@@ -101,17 +101,17 @@ float BlurSkyVisibility(UniformBufferObject camera, int2 pixel, uint2 size, floa
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     const UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
-    const uint2 fullSize = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
+    const uint2 fullSize = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
     const int2 pixel = int2(DTid.xy);
     if (DTid.x >= fullSize.x || DTid.y >= fullSize.y)
     {
         return;
     }
 
-    const float4 directOrEmissive = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE)[pixel];
-    const float4 ambient = Bindless.GetStorageTexture<float4>(Bindless.RT_AMBIENT)[pixel];
-    const float depth = Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER)[pixel];
-    const float3 worldNormal = Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL)[pixel].xyz;
+    const float4 directOrEmissive = Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE)[pixel];
+    const float4 ambient = Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT)[pixel];
+    const float depth = Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER)[pixel];
+    const float3 worldNormal = Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL)[pixel].xyz;
     const bool surface = IsSurfaceDepth(depth) && dot(worldNormal, worldNormal) >= 0.25f;
     float ao = 1.0f;
     if (camera.GTAOEnable && surface)
@@ -186,5 +186,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
         output = surface ? float4(float3(skyOcclusion) * debugExposure, 1.0f) : float4(0, 0, 0, 1);
     }
 
-    Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, output);
+    Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, output);
 }

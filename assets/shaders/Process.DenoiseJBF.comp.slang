@@ -61,14 +61,14 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
 {
     UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
 
-    let OutImage = Bindless.GetStorageTexture<float4>(Bindless.RT_DENOISED);
+    let OutImage = Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED);
     // Diffuse/specular source is routed by the renderer: the a-trous output when the
     // variance-guided path is active, otherwise the temporal accumulation buffer.
     let FinalImage = Bindless.GetStorageTexture<float4>(Camera.DenoiseDiffuseSourceSlot);
     let FinalImageSpec = Bindless.GetStorageTexture<float4>(Camera.DenoiseSpecularSourceSlot);
-    let AccumlateAlbedo = Bindless.GetStorageTexture<float4>(Bindless.RT_ACCUMLATE_ALBEDO);
-    let ObjectId0 = Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
-    let ObjectId1 = Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_1);
+    let AccumlateAlbedo = Bindless.GetViewStorageTexture<float4>(Bindless.RT_ACCUMLATE_ALBEDO);
+    let ObjectId0 = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
+    let ObjectId1 = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_1);
 
     const int2 globalOffset = int2(Camera.ViewportRect.xy);
     const int2 ipos = int2(dispatchThreadId.xy) + globalOffset;

@@ -72,7 +72,7 @@ namespace Common
         float4 prevFrameHPos = mul(mul(Camera.PrevViewProjectionUnJit, node.combinedPrevTS), float4(v.Position, 1));
         float2 prevfpos = prevFrameHPos.xy / prevFrameHPos.w * 0.5;
 
-        let MotionMoment = Bindless.GetStorageTexture<uint>(Bindless.RT_MOTIONMOMENT);
+        let MotionMoment = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MOTIONMOMENT);
         
 
         float4 prevPos = mul(node.combinedPrevTS, float4(v.Position, 1));
@@ -231,10 +231,10 @@ namespace Common
             if (any(currentUV < float2(0.0)) || any(currentUV > float2(1.0)))
                 continue;
 
-            int2 size = Bindless.GetStorageTextureDimensions<uint>(Bindless.RT_MINIGBUFFER);
+            int2 size = Bindless.GetViewStorageTextureDimensions<uint>(Bindless.RT_MINIGBUFFER);
 
             int2 sampleCoord = int2(currentUV * float2(size));
-            uint packedValue = Bindless.GetStorageTexture<uint>(Bindless.RT_MINIGBUFFER).Load(sampleCoord).r;
+            uint packedValue = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MINIGBUFFER).Load(sampleCoord).r;
             uint2 vBufferSample = uint2((packedValue >> 17) & 0x7FFF, packedValue & 0x1FFFF);
             if (vBufferSample.r == 0)
                 continue;
@@ -353,7 +353,7 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
         uint* PrimAddress = Bindless.GetGpuscene().Indices;
 
         // 第一步：先追踪一次顶点，计算距离
-        uint packedValue = Bindless.GetStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[ipos];
+        uint packedValue = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[ipos];
         uint2 vBuffer = uint2((packedValue >> 17) & 0x7FFF, packedValue & 0x1FFFF); 
         float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
         
@@ -419,7 +419,7 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
         // 确保偏移后的位置在屏幕范围内
         offsetPos = clamp(offsetPos, int2(0, 0), isize - int2(1, 1));
 
-        uint offsetedPackValue = Bindless.GetStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[offsetPos];
+        uint offsetedPackValue = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[offsetPos];
         uint2 finalVBuffer = uint2((offsetedPackValue >> 17) & 0x7FFF, offsetedPackValue & 0x1FFFF); 
 
         float2 finalUV = (float2(offsetPos) / float2(isize)) * 2.0 - 1.0;

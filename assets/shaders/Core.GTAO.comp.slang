@@ -27,8 +27,8 @@ float PixelNoise(uint2 pixel, uint frame)
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     const UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
-    const uint2 aoSize = Bindless.GetStorageTextureDimensions<float>(Bindless.RT_GTAO);
-    const uint2 fullSize = Bindless.GetStorageTextureDimensions<float>(Bindless.RT_PREV_DEPTHBUFFER);
+    const uint2 aoSize = Bindless.GetViewStorageTextureDimensions<float>(Bindless.RT_GTAO);
+    const uint2 fullSize = Bindless.GetViewStorageTextureDimensions<float>(Bindless.RT_PREV_DEPTHBUFFER);
     const int2 halfPixel = int2(DTid.xy);
     if (DTid.x >= aoSize.x || DTid.y >= aoSize.y)
     {
@@ -39,12 +39,12 @@ void main(uint3 DTid : SV_DispatchThreadID)
     const int2 phaseOffset = int2(int(samplePhase & 1u), int((samplePhase >> 1u) & 1u));
     const int2 fullMax = int2(fullSize) - int2(1, 1);
     const int2 centerPixel = min(halfPixel * 2 + phaseOffset, fullMax);
-    const float centerDepth = Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER)[centerPixel];
-    const float3 worldNormal = Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL)[centerPixel].xyz;
+    const float centerDepth = Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER)[centerPixel];
+    const float3 worldNormal = Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL)[centerPixel].xyz;
 
     if (!camera.GTAOEnable || !IsSurfaceDepth(centerDepth) || dot(worldNormal, worldNormal) < 0.25f)
     {
-        Bindless.GetStorageTexture<float>(Bindless.RT_GTAO).Store(halfPixel, 1.0f);
+        Bindless.GetViewStorageTexture<float>(Bindless.RT_GTAO).Store(halfPixel, 1.0f);
         return;
     }
 
@@ -78,7 +78,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
                 const float stepPhase = (float(step) - 0.5f + frac(noise * 1.6180339f)) / float(stepCount);
                 const float2 offset = axis * float(side) * projectedRadius * stepPhase;
                 const int2 samplePixel = clamp(int2(round(float2(centerPixel) + offset)), int2(0, 0), fullMax);
-                const float sampleDepth = Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER)[samplePixel];
+                const float sampleDepth = Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER)[samplePixel];
                 if (!IsSurfaceDepth(sampleDepth))
                 {
                     continue;
@@ -105,5 +105,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
     // Output RAW horizon visibility [0,1]; the user-facing occlusion strength is applied once in
     // Process.GTAOCompose so a single knob scales the combined GTAO + voxel sky-visibility darkening.
     const float visibility = saturate(1.0f - horizonOcclusion / float(sliceCount * 2u));
-    Bindless.GetStorageTexture<float>(Bindless.RT_GTAO).Store(halfPixel, visibility);
+    Bindless.GetViewStorageTexture<float>(Bindless.RT_GTAO).Store(halfPixel, visibility);
 }

@@ -6,11 +6,11 @@ void OutputColor(int2 ipos, float3 Total)
 {
     if (Bindless.GetGpuscene().Camera->HDR)
     {
-        Bindless.GetStorageTexture<float4>(Bindless.RT_DENOISED)[ipos] = float4(EncodeHdrOutput(Total, Bindless.GetGpuscene().Camera->PaperWhiteNit, Bindless.GetGpuscene().Camera->HDROutputMode), 0.0);
+        Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED)[ipos] = float4(EncodeHdrOutput(Total, Bindless.GetGpuscene().Camera->PaperWhiteNit, Bindless.GetGpuscene().Camera->HDROutputMode), 0.0);
     }
     else
     {
-        Bindless.GetStorageTexture<float4>(Bindless.RT_DENOISED)[ipos] = float4(Uncharted2_Tonemapping(Total * Bindless.GetGpuscene().Camera->PaperWhiteNit / 20000.0), 0.0);
+        Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED)[ipos] = float4(Uncharted2_Tonemapping(Total * Bindless.GetGpuscene().Camera->PaperWhiteNit / 20000.0), 0.0);
     }
 }
 
@@ -27,7 +27,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     FVoxelRayCaster rayCasterVoxel;
 
     int2 ipos = int2(DTid.xy);
-    int2 size = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_DENOISED);
+    int2 size = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_DENOISED);
     uint4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
 
     // 第一次Tracing
@@ -43,7 +43,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         float4 residencyDebugColor;
         if (TryAmbientResidencyDebug(hitVertex.Position, residencyDebugColor))
         {
-            Bindless.GetStorageTexture<float4>(Bindless.RT_DENOISED)[ipos] = residencyDebugColor;
+            Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED)[ipos] = residencyDebugColor;
             END_SHADERCLOCK(ipos)
             return;
         }
@@ -56,7 +56,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         }
 
         //outColor= float4(50,50,50,1);
-        //Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL).Store(ipos, float4(hitVertex.Normal, 0));
+        //Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL).Store(ipos, float4(hitVertex.Normal, 0));
     }
     else
     {
