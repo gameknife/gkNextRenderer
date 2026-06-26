@@ -119,6 +119,11 @@ namespace Vulkan
 		FViewRenderState& PrimaryViewState() { return renderViews_->Primary().State(); }
 		const FViewRenderState& PrimaryViewState() const { return renderViews_->Primary().State(); }
 
+		// RT bank base of the view currently being recorded; injected into GPUScene.custom_data_0
+		// so shaders resolve screen-space RT slots through Bindless::ViewRT. 0 == primary view.
+		uint32_t ActiveViewBankBase() const { return activeViewBankBase_; }
+		void SetActiveViewBankBase(uint32_t bankBase) { activeViewBankBase_ = bankBase; }
+
 		// Renderer registry
 		void RegisterLogicRenderer(ERendererType type);
 		void SwitchLogicRenderer(ERendererType type);
@@ -315,6 +320,7 @@ namespace Vulkan
 		OverlayPipelines overlay_;
 		LogicRendererRegistry logicRenderers_;
 		std::unique_ptr<RenderViewManager> renderViews_ = std::make_unique<RenderViewManager>();
+		uint32_t activeViewBankBase_ = 0;
 		Delegates delegates_;
 		std::unique_ptr<Rendering::Upscaler::IUpscaler> upscaler_;
 
