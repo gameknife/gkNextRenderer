@@ -325,6 +325,8 @@ namespace Vulkan
 		LogicRendererRegistry logicRenderers_;
 		std::unique_ptr<RenderViewManager> renderViews_ = std::make_unique<RenderViewManager>();
 		uint32_t activeViewBankBase_ = 0;
+		bool multiViewDemo_ = false;
+		bool secondaryBankCreated_ = false;
 		Delegates delegates_;
 		std::unique_ptr<Rendering::Upscaler::IUpscaler> upscaler_;
 
@@ -346,6 +348,12 @@ namespace Vulkan
 			void* nextDeviceFeatures);
 		void OnDeviceSet();
 		void CreateRenderImages();
+		// Creates the full screen-space RT set at [bankBase + RT_X]. bankBase 0 == primary view.
+		void CreateRenderTargetBank(uint32_t bankBase);
+		// Multi-viewport demo (GK_MV_DEMO): lazily create the secondary view's RT bank, then render a
+		// second view into it and composite it as a picture-in-picture inset of the swapchain.
+		void EnsureSecondaryViewBank();
+		void DemoRenderSecondView(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void CreateStorageImage(uint32_t bindlessIdx, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName);
 		void CreateStorageImage(uint32_t bindlessIdx, VkExtent2D extent, VkFormat format, VkImageTiling tiling,
                                 VkImageUsageFlags usage, const char* debugName);
