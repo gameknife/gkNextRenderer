@@ -62,6 +62,16 @@ namespace Bindless
 
     public static const int RT_COUNT = 128;
 
+    // --- Multi-viewport (RenderView) RT bank layout ---
+    // Each RenderView owns a contiguous "bank" of screen-space RT slots so it can keep an
+    // independent temporal history. Bank k occupies [k*kViewRtBankStride, k*kViewRtBankStride + RT_X].
+    // Bank 0 == the legacy global layout above (primary view), so existing absolute slots are
+    // unchanged and the primary view is bit-for-bit identical. The active view's bank base travels
+    // in GPUScene.custom_data_0; resolve a logical screen-space RT slot through ViewRT(base, RT_X).
+    // Stride is sized to clear the screen-space range (0..~30) plus headroom while staying below the
+    // global/shared slots (RT_TEMP_USAGE0=50, RT_REMOTE_*=60.., RT_SWAPCHAIN*=100..).
+    public static const int kViewRtBankStride = 256;
+
     // Sun CSM cascade slots in ShadowMapArray (bindless binding 2).
     public static const int SM_SUN_CASCADE_0 = 0;
     public static const int SM_SUN_CASCADE_1 = 1;
@@ -92,6 +102,15 @@ namespace Bindless
         uint2 dim;
         StorageTextureArray[NonUniformResourceIndex(index)].as<RWTexture2D<T>>().GetDimensions(dim.x, dim.y);
         return dim;
+    }
+
+    // Resolve a logical screen-space RT slot into the active RenderView's bank.
+    // viewBase comes from GPUScene.custom_data_0 (0 for the primary view => absolute slot, no change).
+    // Global / world-space / output slots (swapchain, remote encode, temp) must NOT be remapped:
+    // pass those as absolute slots directly, not through ViewRT().
+    public int ViewRT(uint viewBase, int rtSlot)
+    {
+        return int(viewBase) + rtSlot;
     }
 
     public Sampler2D GetShadowMap(int index)

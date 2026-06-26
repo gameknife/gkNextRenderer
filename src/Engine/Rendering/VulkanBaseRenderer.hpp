@@ -11,6 +11,7 @@
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Rendering/Upscaler/UpscalerTypes.hpp"
+#include "Engine/Rendering/RenderView.hpp"
 #include <vector>
 #include <memory>
 #include <cassert>
@@ -109,6 +110,14 @@ namespace Vulkan
 		void OnPostLoadScene();
 		void CreateSwapChain();
 		void DeleteSwapChain();
+
+		// Multi-viewport (RenderView). Currently exposes the single primary view (bank 0).
+		RenderViewManager& RenderViews() { return *renderViews_; }
+		const RenderViewManager& RenderViews() const { return *renderViews_; }
+		RenderView& PrimaryView() { return renderViews_->Primary(); }
+		const RenderView& PrimaryView() const { return renderViews_->Primary(); }
+		FViewRenderState& PrimaryViewState() { return renderViews_->Primary().State(); }
+		const FViewRenderState& PrimaryViewState() const { return renderViews_->Primary().State(); }
 
 		// Renderer registry
 		void RegisterLogicRenderer(ERendererType type);
@@ -305,6 +314,7 @@ namespace Vulkan
 		AmbientCubePipelines ambient_;
 		OverlayPipelines overlay_;
 		LogicRendererRegistry logicRenderers_;
+		std::unique_ptr<RenderViewManager> renderViews_ = std::make_unique<RenderViewManager>();
 		Delegates delegates_;
 		std::unique_ptr<Rendering::Upscaler::IUpscaler> upscaler_;
 

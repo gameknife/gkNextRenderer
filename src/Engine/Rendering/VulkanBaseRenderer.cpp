@@ -849,6 +849,15 @@ namespace Vulkan
         frame_.swapChain->UpdateRenderViewport(0, 0, renderExtent.width, renderExtent.height);
         frame_.swapChain->UpdateOutputViewport( 0, 0, frame_.swapChain->Extent().width, frame_.swapChain->Extent().height);
 
+        // Primary RenderView mirrors the swapchain's render rect (full-window, bank 0).
+        {
+            RenderView& primary = renderViews_->Primary();
+            primary.SetRenderExtent(frame_.swapChain->RenderExtent());
+            primary.SetRenderOffset(frame_.swapChain->RenderOffset());
+            primary.SetSubrect(VkRect2D{frame_.swapChain->OutputOffset(),
+                                        frame_.swapChain->OutputExtent()});
+        }
+
         // depthBuffer
         frame_.depthBuffer.reset(new class DepthBuffer(*ctx_.commandPool, frame_.swapChain->Extent()));
 

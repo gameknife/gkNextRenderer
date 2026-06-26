@@ -6,6 +6,7 @@
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Options.hpp"
+#include "Engine/Rendering/RenderView.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Command/CommandHistory.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
@@ -172,8 +173,8 @@ public:
     }
     uint32_t GetProgressiveRenderAccumulatedFrames() const { return progressiveRender_.accumulatedFrames; }
     uint32_t GetProgressiveRenderTargetFrames() const { return FProgressiveRenderState::TargetFrames; }
-    Assets::UniformBufferObject& GetLastUniformBufferObject() { return renderState_.previousUniformBuffer; }
-    uint32_t GetSunShadowCascadeUpdateMask() const { return renderState_.sunShadowCascadeUpdateMask; }
+    Assets::UniformBufferObject& GetLastUniformBufferObject() { return renderer_->PrimaryViewState().previousUniformBuffer; }
+    uint32_t GetSunShadowCascadeUpdateMask() const { return renderer_->PrimaryViewState().sunShadowCascadeUpdateMask; }
     VkDeviceAddress TryGetGPUAccelerationStructureAddress() const;
     VkAccelerationStructureKHR TryGetGPUAccelerationStructureHandle() const;
 
@@ -269,17 +270,6 @@ private:
         mutable Runtime::Config::ShowFlags showFlags{};
     };
 
-    // Renderer-derived transient state
-    struct FRenderState
-    {
-        mutable Assets::UniformBufferObject previousUniformBuffer{};
-        mutable Assets::CascadeShadowSetup cachedSunCascades{};
-        mutable bool cachedSunCascadesValid = false;
-        mutable uint32_t sunShadowCascadeUpdateMask = 0;
-        mutable uint32_t sunShadowInitializedMask = 0;
-        mutable uint32_t sunShadowDirtyMask = Assets::Scene::kSunShadowCascadeMask;
-    };
-
     // Per-frame timing and statistics
     struct FFrameState
     {
@@ -366,7 +356,6 @@ private:
 
     // Engine state
     FConfigState config_{};
-    FRenderState renderState_{};
     FFrameState frameState_{};
     FInputState inputState_{};
     FProgressiveRenderState progressiveRender_{};

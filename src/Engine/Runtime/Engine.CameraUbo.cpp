@@ -60,6 +60,10 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
 {
     Assets::UniformBufferObject ubo = {};
 
+    // Per-view temporal history now lives in the primary RenderView (bank 0). Multi-viewport will
+    // pass the specific view's state here; the primary view is byte-identical to the old global state.
+    Vulkan::FViewRenderState& viewState = renderer_->PrimaryViewState();
+
     // a copy, simple struct
     Assets::Camera renderCam = scene_->GetRenderCamera();
     gameInstance_->OverrideRenderCamera(renderCam);
@@ -119,11 +123,11 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.ProjectionUnJit = projectionUnJit;
     ubo.ProjectionInverseUnJit = glm::inverse(projectionUnJit);
 
-    ubo.PrevViewProjection = renderState_.previousUniformBuffer.TotalFrames != 0
-                                  ? renderState_.previousUniformBuffer.ViewProjection
+    ubo.PrevViewProjection = viewState.previousUniformBuffer.TotalFrames != 0
+                                  ? viewState.previousUniformBuffer.ViewProjection
                                   : ubo.ViewProjection;
-    ubo.PrevViewProjectionUnJit = renderState_.previousUniformBuffer.TotalFrames != 0
-                                      ? renderState_.previousUniformBuffer.ViewProjectionUnJit
+    ubo.PrevViewProjectionUnJit = viewState.previousUniformBuffer.TotalFrames != 0
+                                      ? viewState.previousUniformBuffer.ViewProjectionUnJit
                                       : ubo.ViewProjectionUnJit;
 
     ubo.ViewportRect =
@@ -136,32 +140,32 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
         const auto cascades = scene_->GetEnvSettings().ComputeSunCascades(
             ubo.ViewProjectionUnJit, renderCam.NearPlane, renderCam.FarPlane, 400.f);
         const uint32_t frameIndex = static_cast<uint32_t>(std::max(renderer_->FrameCount(), 0));
-        const bool forceRefresh = !renderState_.cachedSunCascadesValid ||
-                                  (bool)renderState_.previousUniformBuffer.HasSun != hasSun ||
-                                  renderState_.previousUniformBuffer.SunDirection != sunDirection;
+        const bool forceRefresh = !viewState.cachedSunCascadesValid ||
+                                  (bool)viewState.previousUniformBuffer.HasSun != hasSun ||
+                                  viewState.previousUniformBuffer.SunDirection != sunDirection;
 
         if (!hasSun)
         {
-            renderState_.cachedSunCascadesValid = false;
-            renderState_.sunShadowCascadeUpdateMask = 0u;
-            renderState_.sunShadowInitializedMask = 0u;
-            renderState_.sunShadowDirtyMask = Assets::Scene::kSunShadowCascadeMask;
+            viewState.cachedSunCascadesValid = false;
+            viewState.sunShadowCascadeUpdateMask = 0u;
+            viewState.sunShadowInitializedMask = 0u;
+            viewState.sunShadowDirtyMask = Assets::Scene::kSunShadowCascadeMask;
         }
         else
         {
-            if (!renderState_.cachedSunCascadesValid)
+            if (!viewState.cachedSunCascadesValid)
             {
                 // 未初始化 cascade 对应的贴图已经被清成 depth=1，先给 UBO 一个有效矩阵。
-                renderState_.cachedSunCascades = cascades;
+                viewState.cachedSunCascades = cascades;
             }
             if (forceRefresh)
             {
-                renderState_.sunShadowDirtyMask = Assets::Scene::kSunShadowCascadeMask;
+                viewState.sunShadowDirtyMask = Assets::Scene::kSunShadowCascadeMask;
             }
 
             const uint32_t priorityCascadeMask =
-                renderState_.sunShadowDirtyMask |
-                (Assets::Scene::kSunShadowCascadeMask & ~renderState_.sunShadowInitializedMask);
+                viewState.sunShadowDirtyMask |
+                (Assets::Scene::kSunShadowCascadeMask & ~viewState.sunShadowInitializedMask);
             const uint32_t activeCascadeMask =
                 Assets::Scene::BuildSunShadowCascadeUpdateMask(frameIndex, priorityCascadeMask);
 
@@ -169,22 +173,22 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
             {
                 if ((activeCascadeMask & (1u << cascade)) != 0u)
                 {
-                    renderState_.cachedSunCascades.viewProjection[cascade] = cascades.viewProjection[cascade];
-                    renderState_.cachedSunCascades.splits[cascade] = cascades.splits[cascade];
+                    viewState.cachedSunCascades.viewProjection[cascade] = cascades.viewProjection[cascade];
+                    viewState.cachedSunCascades.splits[cascade] = cascades.splits[cascade];
                 }
             }
 
-            renderState_.sunShadowCascadeUpdateMask = activeCascadeMask;
-            renderState_.sunShadowInitializedMask |= activeCascadeMask;
-            renderState_.sunShadowDirtyMask &= ~activeCascadeMask;
-            renderState_.cachedSunCascadesValid = true;
+            viewState.sunShadowCascadeUpdateMask = activeCascadeMask;
+            viewState.sunShadowInitializedMask |= activeCascadeMask;
+            viewState.sunShadowDirtyMask &= ~activeCascadeMask;
+            viewState.cachedSunCascadesValid = true;
         }
 
         for (int i = 0; i < 4; ++i)
         {
-            ubo.SunCascadeViewProjection[i] = renderState_.cachedSunCascades.viewProjection[i];
+            ubo.SunCascadeViewProjection[i] = viewState.cachedSunCascades.viewProjection[i];
         }
-        ubo.CascadeSplits = renderState_.cachedSunCascades.splits;
+        ubo.CascadeSplits = viewState.cachedSunCascades.splits;
     }
 
     // Camera Stuff
@@ -210,8 +214,8 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     }
     ubo.HasSun = hasSun;
 
-    if (ubo.HasSun != renderState_.previousUniformBuffer.HasSun ||
-        ubo.SunDirection != renderState_.previousUniformBuffer.SunDirection)
+    if (ubo.HasSun != viewState.previousUniformBuffer.HasSun ||
+        ubo.SunDirection != viewState.previousUniformBuffer.SunDirection)
     {
         scene_->MarkEnvDirty();
     }
@@ -281,7 +285,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     renderer_->SetDenoiserEnabled(denoiserOn);
     renderer_->SetVisualDebugEnabled(config_.showFlags.ShowVisualDebug);
     // UBO Backup, for motion vector calc
-    renderState_.previousUniformBuffer = ubo;
+    viewState.previousUniformBuffer = ubo;
 
     return ubo;
 }
