@@ -332,6 +332,7 @@ const statLoss = document.querySelector("#statLoss");
 const statCandidate = document.querySelector("#statCandidate");
 const statAvailBitrate = document.querySelector("#statAvailBitrate");
 const clientId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+const remoteBase = new URLSearchParams(location.search).get("remoteBase") || "";
 let ws = null;
 let pc = null;
 let inputChannel = null;
@@ -342,6 +343,27 @@ const statsCache = {
   lastFramesDecoded: 0,
   lastTimestampMs: 0,
 };
+
+function postToParent(type, payload = {}) {
+  try {
+    if (!window.parent || window.parent === window) {
+      return;
+    }
+    window.parent.postMessage({
+      source: "gkNextRemote",
+      type,
+      ...payload,
+    }, "*");
+  } catch (_) {
+  }
+}
+
+function resolveRemoteURL(path) {
+  if (!remoteBase) {
+    return path;
+  }
+  return new URL(path, remoteBase).toString();
+}
 
 function setPill(pill, ok) {
   pill.classList.remove("ok", "warn", "err");
@@ -542,6 +564,7 @@ function ensurePeerConnection() {
     setPill(pillPc, pc.connectionState === "connected" ? true
               : pc.connectionState === "disconnected" || pc.connectionState === "failed" ? false : "warn");
     log(`peer ${pc.connectionState}`);
+    postToParent("status", { text: `Peer: ${pc.connectionState}` });
   };
   pc.oniceconnectionstatechange = () => {
     pcState.textContent = `${pc.connectionState}/${pc.iceConnectionState}`;
@@ -551,6 +574,7 @@ function ensurePeerConnection() {
     streamState.textContent = `${event.track.kind} ${event.track.readyState}`;
     setPill(pillStream, event.track.readyState === "live");
     log(`track ${event.track.kind}`);
+    postToParent("status", { text: `Stream: ${event.track.kind} ${event.track.readyState}` });
   };
   pc.ondatachannel = event => {
     if (event.channel.label !== "input") {
@@ -564,11 +588,13 @@ function ensurePeerConnection() {
       log("input channel open");
       sendInput(Uint8Array.from([InputType.requestKeyframe]).buffer);
       applyBitrate(bitrateInput.value);
+      postToParent("status", { text: "Input channel: open" });
     };
     inputChannel.onclose = () => {
       inputState.textContent = "closed";
       setPill(pillIn, false);
       log("input channel closed");
+      postToParent("status", { text: "Input channel: closed" });
     };
   };
   setInterval(async () => {
@@ -894,7 +920,12 @@ async function handleOffer(message) {
 }
 
 async function connect() {
-  const config = await fetch("/config").then(r => r.json());
+  const config = await fetch(resolveRemoteURL("/config")).then(r => {
+    if (!r.ok) {
+      throw new Error(`config http ${r.status}`);
+    }
+    return r.json();
+  });
   log(`config ${JSON.stringify(config)}`);
   if (encoderState) {
     const active = config.activeEncoder || "vulkan";
@@ -904,23 +935,27 @@ async function connect() {
     encoderState.textContent = `${active}${requested}`;
   }
   setBitrateUi(config.activeBitrateKbps || config.bitrateKbps || 4000);
-  const host = config.bindAddress || location.hostname || "127.0.0.1";
+  const remoteBaseURL = remoteBase ? new URL(remoteBase) : null;
+  const host = config.bindAddress || remoteBaseURL?.hostname || location.hostname || "127.0.0.1";
   ws = new WebSocket(`ws://${host}:${config.signalingPort}`);
   ws.onopen = () => {
     wsState.textContent = "open";
     setPill(pillWs, true);
     log("websocket open");
+    postToParent("status", { text: "WebSocket: open" });
     ws.send(JSON.stringify({ type: "request", id: clientId, h264ProfileMask: detectH264ProfileMask() }));
   };
   ws.onclose = () => {
     wsState.textContent = "closed";
     setPill(pillWs, false);
     log("websocket closed");
+    postToParent("status", { text: "WebSocket: closed" });
   };
   ws.onerror = () => {
     wsState.textContent = "error";
     setPill(pillWs, false);
     log("websocket error");
+    postToParent("status", { text: "WebSocket: error" });
   };
   ws.onmessage = async event => {
     log(`server ${event.data}`);
@@ -936,10 +971,12 @@ async function connect() {
   };
 }
 
+postToParent("loaded", { text: "Remote client loaded" });
 connect().catch(error => {
   wsState.textContent = "error";
   setPill(pillWs, false);
   log(error.message || String(error));
+  postToParent("status", { text: error.message || String(error) });
 });
 requestAnimationFrame(pollGamepad);
 </script>

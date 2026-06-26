@@ -165,6 +165,8 @@ namespace Runtime::Remote
         httpServer_.Get("/config",
                         [this](const httplib::Request&, httplib::Response& response)
                         {
+                            response.set_header("Access-Control-Allow-Origin", "*");
+                            response.set_header("Access-Control-Allow-Private-Network", "true");
                             response.set_content(BuildConfigJson(), "application/json; charset=utf-8");
                         });
 

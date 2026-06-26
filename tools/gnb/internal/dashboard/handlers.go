@@ -12,12 +12,14 @@ import (
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/llm"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/loc"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/remoteplay"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/spec"
 )
 
 func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
+	mux.HandleFunc("GET /remote/client", s.handleRemoteClient)
 	mux.HandleFunc("GET /todo-panel", s.handleTodoPanel)
 	mux.HandleFunc("POST /todo/cleanup", s.handleTodoCleanup)
 	mux.HandleFunc("POST /docs/save", s.handleDocsSave)
@@ -92,8 +94,9 @@ type indexVM struct {
 	Preset     string
 	OS         string
 	RecentSize int
-	ActiveTab  string // "todo" | "docs" | "build" | "test" | "git" | "chat" | "loc" | "settings"
+	ActiveTab  string // "todo" | "docs" | "build" | "remote" | "test" | "git" | "chat" | "loc" | "settings"
 	BuildVM    buildRunVM
+	RemoteVM   remoteVM
 	TestVM     testVM
 	GitVM      gitVM
 	ChatVM     chatVM
@@ -149,6 +152,23 @@ type buildRunVM struct {
 	Targets []targetVM
 	Latest  JobSnapshot
 	HasJob  bool
+}
+
+type remoteVM struct {
+	Targets        []targetVM
+	Latest         JobSnapshot
+	HasJob         bool
+	LocalHosts     []string
+	URLPreview     []string
+	DefaultTarget  string
+	DefaultBind    string
+	DefaultScene   string
+	DefaultRes     string
+	DefaultEncoder string
+	HTTPPort       uint32
+	SignalingPort  uint32
+	BitrateKbps    uint32
+	Fps            uint32
 }
 
 type testVM struct {
@@ -312,6 +332,42 @@ func (s *Server) buildTestVM() testVM {
 		vm.BinExists = true
 	}
 	if snap, ok := s.jobs.LatestSnapshot(JobTest); ok {
+		snap.StreamBase = s.streamBaseURL
+		vm.Latest = snap
+		vm.HasJob = true
+	}
+	return vm
+}
+
+func (s *Server) buildRemoteVM() remoteVM {
+	targets := discoverTargets(s.opts.RepoRoot, s.opts.Preset, s.opts.Config.Targets.All)
+	runnable := make([]targetVM, 0, len(targets))
+	defaultTarget := "gkNextRenderer"
+	hasDefaultTarget := false
+	for _, target := range targets {
+		if !target.Runnable || target.Name == "Packager" {
+			continue
+		}
+		if target.Name == defaultTarget {
+			hasDefaultTarget = true
+		}
+		runnable = append(runnable, target)
+	}
+	if !hasDefaultTarget && len(runnable) > 0 {
+		defaultTarget = runnable[0].Name
+	}
+	vm := remoteVM{
+		Targets:        runnable,
+		LocalHosts:     remoteplay.LocalIPv4Hosts(),
+		DefaultTarget:  defaultTarget,
+		DefaultBind:    "0.0.0.0",
+		DefaultEncoder: "auto",
+		HTTPPort:       8088,
+		SignalingPort:  8089,
+		Fps:            30,
+	}
+	vm.URLPreview = remoteplay.BuildAccessURLs(vm.DefaultBind, vm.HTTPPort, vm.LocalHosts)
+	if snap, ok := s.jobs.LatestSnapshot(JobRemote); ok {
 		snap.StreamBase = s.streamBaseURL
 		vm.Latest = snap
 		vm.HasJob = true
@@ -511,6 +567,10 @@ func (s *Server) handleTab(w http.ResponseWriter, r *http.Request) {
 		vm := s.buildHeader("build")
 		vm.BuildVM = s.buildBuildRunVM()
 		s.render(w, "tab_build", vm)
+	case "remote":
+		vm := s.buildHeader("remote")
+		vm.RemoteVM = s.buildRemoteVM()
+		s.render(w, "tab_remote", vm)
 	case "docs":
 		vm := s.buildHeader("docs")
 		vm.DocsVM = s.buildDocsVM(r.URL.Query().Get("file"), r.URL.Query().Get("edit") == "1", "", "")

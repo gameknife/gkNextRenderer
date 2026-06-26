@@ -29,6 +29,8 @@
 | [Agent 自动验证（输入驱动 + 断言）系统 — 设计与开发计划](designs/agent-validation-input-driver.md) | ⚪ 待实现 | 2026-06-09 |
 | [AmbientCube 命中驱动探针残留（SHARC 式 insert/evict）— 设计方案与开发计划](designs/ambientcube-hit-driven-residency-design.md) | ✅ 已完成 | 2026-06-24 |
 | [高斯溅射（SOG 加载 + GS 渲染模式）设计与开发计划](designs/gaussian-splatting-sog-design.md) | ✅ 已完成 | 2026-06-18 |
+| [多视口渲染（RenderView：单窗口分区 + 离屏到纹理 + 多相机/缩略图）设计与开发计划](designs/multi-viewport-renderview-design.md) | 📝 草案 | 2026-06-26 |
+| [NextRA —— OpenRA 风格帧同步 RTS 原型（MVP 架构设计）](designs/nextra-rts-mvp-design.md) | 📝 草案 | 2026-06-26 |
 | [SCAD 加载器（SCADLoader）设计与开发计划](designs/scad-loader-design.md) | ✅ 已完成 | 2026-05-30 |
 | [SCAD Model Generator（SCAD Studio）设计与开发计划](designs/scad-model-generator-design.md) | ✅ 已完成 | 2026-06-07 |
 | [SCAD 刚体骨骼角色（ScadRig）设计与开发计划](designs/scad-rig-design.md) | ✅ 已完成 | 2026-06-13 |
@@ -48,6 +50,7 @@
 | [src/Engine 核心层精炼 Round 3：模块归位 + SkinnedMesh 瘦身](plans/engine-core-refactor-round3.md) | 📝 草案 | 2026-06-14 |
 | [src/Engine 核心层精简重构：分析与执行计划](plans/engine-core-refactor.md) | ✅ 已完成 | 2026-06-10 |
 | [Engine 层精简重构计划](plans/engine-refactor-plan.md) | 📝 草案 | 2026-06-08 |
+| [NextRA —— OpenRA 风格帧同步 RTS 原型（MVP 开发计划）](plans/nextra-rts-mvp-plan.md) | 📝 草案 | 2026-06-26 |
 | [NoAmbientDeferred TAA 抖动 + 过曝 —— 问题定位与修复计划（方案 A：实现真 TAA）](plans/noambient-deferred-taa-fix.md) | ✅ 已完成 | 2026-06-13 |
 | [QuickJS 模块化迁移计划](plans/quickjs-module-migration.md) | ✅ 已完成 | 2026-06-12 |
 | [ReProject 历史钳制黑点问题 — 根因分析与改进方案](plans/reproject-history-clamp-blackdot-fix.md) | 🚧 Phase A 已实现 | 2026-06-20 |
