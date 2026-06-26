@@ -1,5 +1,6 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Vulkan/VulkanVideoCaps.hpp"
+#include "Modules/NextRemote/VideoEncoder.hpp"
 
 
 
@@ -17,17 +18,6 @@ namespace Vulkan
                 }
             }
             return false;
-        }
-
-        const char* ProfileIdcName(int32_t idc)
-        {
-            switch (idc)
-            {
-            case STD_VIDEO_H264_PROFILE_IDC_BASELINE: return "ConstrainedBaseline";
-            case STD_VIDEO_H264_PROFILE_IDC_MAIN: return "Main";
-            case STD_VIDEO_H264_PROFILE_IDC_HIGH: return "High";
-            default: return "none";
-            }
         }
 
         VkVideoProfileInfoKHR MakeProfile(VkVideoEncodeH264ProfileInfoKHR& h264Profile,
@@ -109,6 +99,9 @@ namespace Vulkan
             vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceVideoCapabilitiesKHR"));
         const auto pfnGetVideoFormatProperties = reinterpret_cast<PFN_vkGetPhysicalDeviceVideoFormatPropertiesKHR>(
             vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceVideoFormatPropertiesKHR"));
+        const auto pfnGetVideoEncodeQualityLevelProperties =
+            reinterpret_cast<PFN_vkGetPhysicalDeviceVideoEncodeQualityLevelPropertiesKHR>(
+                vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceVideoEncodeQualityLevelPropertiesKHR"));
         if (!pfnGetVideoCapabilities || !pfnGetVideoFormatProperties)
         {
             return caps;
@@ -141,18 +134,54 @@ namespace Vulkan
                 continue;
             }
 
+            caps.supportedProfileMask |= Runtime::Remote::H264ProfileMaskFromStdProfileIdc(candidate);
             caps.h264Supported = true;
-            caps.profileIdc = candidate;
-            caps.minExtent = videoCaps.minCodedExtent;
-            caps.maxExtent = videoCaps.maxCodedExtent;
-            caps.pictureAccessGranularity = videoCaps.pictureAccessGranularity;
-            caps.maxDpbSlots = videoCaps.maxDpbSlots;
-            caps.maxActiveReferencePictures = videoCaps.maxActiveReferencePictures;
-            caps.minBitstreamBufferOffsetAlignment = videoCaps.minBitstreamBufferOffsetAlignment;
-            caps.minBitstreamBufferSizeAlignment = videoCaps.minBitstreamBufferSizeAlignment;
-            caps.rateControlModes = encodeCaps.rateControlModes;
-            caps.supportedEncodeFeedbackFlags = encodeCaps.supportedEncodeFeedbackFlags;
-            break;
+            if (caps.profileIdc < 0)
+            {
+                caps.profileIdc = candidate;
+                caps.minExtent = videoCaps.minCodedExtent;
+                caps.maxExtent = videoCaps.maxCodedExtent;
+                caps.pictureAccessGranularity = videoCaps.pictureAccessGranularity;
+                caps.maxDpbSlots = videoCaps.maxDpbSlots;
+                caps.maxActiveReferencePictures = videoCaps.maxActiveReferencePictures;
+                caps.maxBitrate = encodeCaps.maxBitrate;
+                caps.maxQualityLevels = encodeCaps.maxQualityLevels;
+                caps.minBitstreamBufferOffsetAlignment = videoCaps.minBitstreamBufferOffsetAlignment;
+                caps.minBitstreamBufferSizeAlignment = videoCaps.minBitstreamBufferSizeAlignment;
+                caps.rateControlModes = encodeCaps.rateControlModes;
+                caps.supportedEncodeFeedbackFlags = encodeCaps.supportedEncodeFeedbackFlags;
+                caps.minQp = h264Caps.minQp;
+                caps.maxQp = h264Caps.maxQp;
+
+                if (pfnGetVideoEncodeQualityLevelProperties && encodeCaps.maxQualityLevels > 0)
+                {
+                    caps.preferredQualityLevel = encodeCaps.maxQualityLevels - 1u;
+
+                    VkPhysicalDeviceVideoEncodeQualityLevelInfoKHR qualityLevelInfo{};
+                    qualityLevelInfo.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VIDEO_ENCODE_QUALITY_LEVEL_INFO_KHR;
+                    qualityLevelInfo.pVideoProfile = &profile;
+                    qualityLevelInfo.qualityLevel = caps.preferredQualityLevel;
+
+                    VkVideoEncodeH264QualityLevelPropertiesKHR h264QualityProps{};
+                    h264QualityProps.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H264_QUALITY_LEVEL_PROPERTIES_KHR;
+                    VkVideoEncodeQualityLevelPropertiesKHR qualityProps{};
+                    qualityProps.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_QUALITY_LEVEL_PROPERTIES_KHR;
+                    qualityProps.pNext = &h264QualityProps;
+
+                    if (pfnGetVideoEncodeQualityLevelProperties(physicalDevice, &qualityLevelInfo, &qualityProps) ==
+                        VK_SUCCESS)
+                    {
+                        caps.preferredRateControlMode = qualityProps.preferredRateControlMode;
+                        caps.preferredRateControlFlags = h264QualityProps.preferredRateControlFlags;
+                        caps.preferredGopFrameCount = h264QualityProps.preferredGopFrameCount;
+                        caps.preferredIdrPeriod = h264QualityProps.preferredIdrPeriod;
+                        caps.preferredConstantQp = h264QualityProps.preferredConstantQp;
+                        caps.preferredMaxL0ReferenceCount =
+                            std::max(1u, h264QualityProps.preferredMaxL0ReferenceCount);
+                        caps.preferredEntropyCodingMode = h264QualityProps.preferredStdEntropyCodingModeFlag == VK_TRUE;
+                    }
+                }
+            }
         }
         if (!caps.h264Supported)
         {
@@ -224,11 +253,14 @@ namespace Vulkan
         }
         SPDLOG_INFO(
             "RemotePlay: Vulkan Video H.264 encode available: queueFamily={} profile={} coded={}x{}..{}x{} "
-            "granularity={}x{} dpb={} refs={} rcModes=0x{:x} feedback=0x{:x} nv12EncodeSrc={} "
+            "granularity={}x{} dpb={} refs={} supportedProfiles=0x{:x} maxBitrate={} maxQualityLevels={} rcModes=0x{:x} "
+            "preferredRcMode=0x{:x} preferredQualityLevel={} feedback=0x{:x} nv12EncodeSrc={} "
             "nv12+storage={} maintenance1={}",
-            encodeQueueFamily, ProfileIdcName(profileIdc), minExtent.width, minExtent.height, maxExtent.width,
+            encodeQueueFamily, Runtime::Remote::H264ProfileNameFromStdProfileIdc(profileIdc), minExtent.width, minExtent.height, maxExtent.width,
             maxExtent.height, pictureAccessGranularity.width, pictureAccessGranularity.height, maxDpbSlots,
-            maxActiveReferencePictures, rateControlModes, supportedEncodeFeedbackFlags, nv12EncodeSrc,
-            nv12EncodeSrcStorage, maintenance1Present);
+            maxActiveReferencePictures, supportedProfileMask, maxBitrate, maxQualityLevels, static_cast<uint32_t>(rateControlModes),
+            static_cast<uint32_t>(preferredRateControlMode), preferredQualityLevel,
+            static_cast<uint32_t>(supportedEncodeFeedbackFlags), nv12EncodeSrc, nv12EncodeSrcStorage,
+            maintenance1Present);
     }
 }

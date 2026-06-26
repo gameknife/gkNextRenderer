@@ -16,6 +16,13 @@
 
 namespace Runtime::Remote
 {
+    enum class ERateControlMode : uint8_t
+    {
+        Disabled,
+        Cbr,
+        Vbr,
+    };
+
     namespace
     {
         constexpr VkFormat videoInputFormat = VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
@@ -62,6 +69,16 @@ namespace Runtime::Remote
             }
             return STD_VIDEO_H264_LEVEL_IDC_5_1;
         }
+
+        const char* RateControlModeName(ERateControlMode mode)
+        {
+            switch (mode)
+            {
+            case ERateControlMode::Cbr: return "cbr";
+            case ERateControlMode::Vbr: return "vbr";
+            default: return "disabled";
+            }
+        }
     }
 
     FVulkanVideoEncoder::FVulkanVideoEncoder(const Vulkan::Device& device, Vulkan::FVulkanVideoCaps caps,
@@ -73,10 +90,11 @@ namespace Runtime::Remote
         codedWidth_ = AlignUp(std::max(16u, config_.width), 16u);
         codedHeight_ = AlignUp(std::max(16u, config_.height), 16u);
 
+        const int32_t selectedProfileIdc =
+            config_.h264ProfileIdc >= 0 ? config_.h264ProfileIdc
+                                        : (caps_.profileIdc >= 0 ? caps_.profileIdc : STD_VIDEO_H264_PROFILE_IDC_BASELINE);
         h264ProfileInfo_.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H264_PROFILE_INFO_KHR;
-        h264ProfileInfo_.stdProfileIdc =
-            caps_.profileIdc >= 0 ? static_cast<StdVideoH264ProfileIdc>(caps_.profileIdc)
-                                  : STD_VIDEO_H264_PROFILE_IDC_BASELINE;
+        h264ProfileInfo_.stdProfileIdc = static_cast<StdVideoH264ProfileIdc>(selectedProfileIdc);
 
         usageInfo_.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_USAGE_INFO_KHR;
         usageInfo_.pNext = &h264ProfileInfo_;
@@ -91,6 +109,8 @@ namespace Runtime::Remote
         profileInfo_.chromaSubsampling = VK_VIDEO_CHROMA_SUBSAMPLING_420_BIT_KHR;
         profileInfo_.lumaBitDepth = VK_VIDEO_COMPONENT_BIT_DEPTH_8_BIT_KHR;
         profileInfo_.chromaBitDepth = VK_VIDEO_COMPONENT_BIT_DEPTH_8_BIT_KHR;
+
+        supportsInterFrames_ = caps_.maxDpbSlots >= dpbSlotCount && caps_.maxActiveReferencePictures >= 1;
     }
 
     FVulkanVideoEncoder::~FVulkanVideoEncoder()
@@ -115,7 +135,7 @@ namespace Runtime::Remote
         FillSessionParameters();
 
         if (!CreateVideoSession() || !CreateSessionParameters() || !LoadHeaders() || !CreateInputResources() ||
-            !CreateBitstreamResources() || !CreateQueryPool() || !CreateCommandResources())
+            !CreateDpbResources() || !CreateBitstreamResources() || !CreateQueryPool() || !CreateCommandResources())
         {
             Stop();
             return false;
@@ -126,11 +146,18 @@ namespace Runtime::Remote
         rateControlDirty_ = true;
         firstControlCommand_ = true;
         frameNum_ = 0;
+        pictureOrderCount_ = 0;
         idrPicId_ = 0;
+        lastReferenceSlotIndex_ = -1;
+        for (FDpbSlotState& state : dpbStates_)
+        {
+            state = {};
+        }
 
-        SPDLOG_INFO("RemotePlay: Vulkan Video encoder initialized {}x{} (coded {}x{}) {}fps {}kbps profile={}",
+        SPDLOG_INFO("RemotePlay: Vulkan Video encoder initialized {}x{} (coded {}x{}) {}fps {}kbps profile={} inter={}",
                     config_.width, config_.height, codedWidth_, codedHeight_, config_.fps, config_.bitrateKbps,
-                    caps_.profileIdc >= 0 ? caps_.profileIdc : STD_VIDEO_H264_PROFILE_IDC_BASELINE);
+                    H264ProfileNameFromStdProfileIdc(static_cast<int32_t>(h264ProfileInfo_.stdProfileIdc)),
+                    supportsInterFrames_);
         return true;
     }
 
@@ -160,6 +187,10 @@ namespace Runtime::Remote
         DestroyBuffer(bitstreamBuffer_);
         DestroyBuffer(stagingBuffer_);
         DestroyImage(inputImage_);
+        for (FAllocatedImage& image : dpbImages_)
+        {
+            DestroyImage(image);
+        }
 
         if (sessionParameters_ != VK_NULL_HANDLE)
         {
@@ -203,7 +234,24 @@ namespace Runtime::Remote
         {
             return false;
         }
-        return RecordAndSubmitEncode(timestampMs, outFrame, keyframe);
+        return RecordAndSubmitEncode(nullptr, timestampMs, outFrame, keyframe);
+    }
+
+    bool FVulkanVideoEncoder::EncodeGpu(FGpuVideoFrame& frame, uint64_t timestampMs,
+                                        std::vector<std::byte>& outFrame, bool& keyframe)
+    {
+        outFrame.clear();
+        keyframe = false;
+
+        if (!started_ && !Start())
+        {
+            return false;
+        }
+        if (frame.image == VK_NULL_HANDLE || frame.view == VK_NULL_HANDLE)
+        {
+            return false;
+        }
+        return RecordAndSubmitEncode(&frame, timestampMs, outFrame, keyframe);
     }
 
     bool FVulkanVideoEncoder::CreateVideoSession()
@@ -225,9 +273,9 @@ namespace Runtime::Remote
         createInfo.queueFamilyIndex = device_.VideoEncodeFamilyIndex();
         createInfo.pictureFormat = videoInputFormat;
         createInfo.maxCodedExtent = {codedWidth_, codedHeight_};
-        createInfo.referencePictureFormat = VK_FORMAT_UNDEFINED;
-        createInfo.maxDpbSlots = 0;
-        createInfo.maxActiveReferencePictures = 0;
+        createInfo.referencePictureFormat = supportsInterFrames_ ? videoInputFormat : VK_FORMAT_UNDEFINED;
+        createInfo.maxDpbSlots = supportsInterFrames_ ? dpbSlotCount : 0;
+        createInfo.maxActiveReferencePictures = supportsInterFrames_ ? 1 : 0;
         createInfo.pStdHeaderVersion = &stdHeaderVersion;
 
         const VkResult result = procedures.vkCreateVideoSessionKHR(device_.Handle(), &createInfo, nullptr, &session_);
@@ -414,6 +462,70 @@ namespace Runtime::Remote
         return true;
     }
 
+    bool FVulkanVideoEncoder::CreateDpbResources()
+    {
+        if (!supportsInterFrames_)
+        {
+            return true;
+        }
+
+        for (FAllocatedImage& image : dpbImages_)
+        {
+            const VkExtent3D extent{codedWidth_, codedHeight_, 1};
+
+            VkImageCreateInfo imageInfo{};
+            imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+            imageInfo.imageType = VK_IMAGE_TYPE_2D;
+            imageInfo.format = videoInputFormat;
+            imageInfo.extent = extent;
+            imageInfo.mipLevels = 1;
+            imageInfo.arrayLayers = 1;
+            imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+            imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+            imageInfo.usage = VK_IMAGE_USAGE_VIDEO_ENCODE_DPB_BIT_KHR;
+            imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+            imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+            if (vkCreateImage(device_.Handle(), &imageInfo, nullptr, &image.image) != VK_SUCCESS)
+            {
+                SPDLOG_ERROR("RemotePlay: failed to create Vulkan Video DPB image");
+                return false;
+            }
+
+            VkMemoryRequirements memoryRequirements{};
+            vkGetImageMemoryRequirements(device_.Handle(), image.image, &memoryRequirements);
+            if (!AllocateMemory(memoryRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, image.memory))
+            {
+                SPDLOG_ERROR("RemotePlay: failed to allocate Vulkan Video DPB image memory");
+                return false;
+            }
+            if (vkBindImageMemory(device_.Handle(), image.image, image.memory, 0) != VK_SUCCESS)
+            {
+                SPDLOG_ERROR("RemotePlay: failed to bind Vulkan Video DPB image memory");
+                return false;
+            }
+
+            VkImageViewCreateInfo viewInfo{};
+            viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            viewInfo.image = image.image;
+            viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            viewInfo.format = videoInputFormat;
+            viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            viewInfo.subresourceRange.baseMipLevel = 0;
+            viewInfo.subresourceRange.levelCount = 1;
+            viewInfo.subresourceRange.baseArrayLayer = 0;
+            viewInfo.subresourceRange.layerCount = 1;
+
+            if (vkCreateImageView(device_.Handle(), &viewInfo, nullptr, &image.view) != VK_SUCCESS)
+            {
+                SPDLOG_ERROR("RemotePlay: failed to create Vulkan Video DPB image view");
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     bool FVulkanVideoEncoder::CreateBitstreamResources()
     {
         const VkDeviceSize minimumSize = static_cast<VkDeviceSize>(config_.width) * config_.height * 4u;
@@ -563,13 +675,17 @@ namespace Runtime::Remote
         return true;
     }
 
-    bool FVulkanVideoEncoder::UpdateRateControlState()
+    ERateControlMode FVulkanVideoEncoder::UpdateRateControlState()
     {
-        if ((caps_.rateControlModes & VK_VIDEO_ENCODE_RATE_CONTROL_MODE_CBR_BIT_KHR) == 0)
+        if ((caps_.rateControlModes & VK_VIDEO_ENCODE_RATE_CONTROL_MODE_VBR_BIT_KHR) != 0)
         {
-            return false;
+            return ERateControlMode::Vbr;
         }
-        return true;
+        if ((caps_.rateControlModes & VK_VIDEO_ENCODE_RATE_CONTROL_MODE_CBR_BIT_KHR) != 0)
+        {
+            return ERateControlMode::Cbr;
+        }
+        return ERateControlMode::Disabled;
     }
 
     bool FVulkanVideoEncoder::CopyI420ToNv12(const FI420View& view)
@@ -608,8 +724,8 @@ namespace Runtime::Remote
         return true;
     }
 
-    bool FVulkanVideoEncoder::RecordAndSubmitEncode(uint64_t timestampMs, std::vector<std::byte>& outFrame,
-                                                    bool& keyframe)
+    bool FVulkanVideoEncoder::RecordAndSubmitEncode(FGpuVideoFrame* gpuFrame, uint64_t timestampMs,
+                                                    std::vector<std::byte>& outFrame, bool& keyframe)
     {
         (void)timestampMs;
         if (!ResetAndBeginCommandBuffer(commandBuffer_))
@@ -619,56 +735,187 @@ namespace Runtime::Remote
 
         vkCmdResetQueryPool(commandBuffer_, queryPool_, 0, 1);
 
-        InsertImageBarrier(commandBuffer_, inputImage_.image, 0, VK_ACCESS_TRANSFER_WRITE_BIT, inputImage_.layout,
-                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_PLANE_0_BIT | VK_IMAGE_ASPECT_PLANE_1_BIT,
-                           VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                           VK_PIPELINE_STAGE_TRANSFER_BIT);
-        inputImage_.layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        VkImage srcImage = inputImage_.image;
+        VkImageView srcView = inputImage_.view;
+        VkImageLayout* srcLayout = &inputImage_.layout;
+        if (gpuFrame)
+        {
+            srcImage = gpuFrame->image;
+            srcView = gpuFrame->view;
+            srcLayout = gpuFrame->layout;
+        }
 
-        VkBufferImageCopy copyRegions[2]{};
-        copyRegions[0].bufferOffset = 0;
-        copyRegions[0].bufferRowLength = codedWidth_;
-        copyRegions[0].bufferImageHeight = codedHeight_;
-        copyRegions[0].imageSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_0_BIT;
-        copyRegions[0].imageSubresource.layerCount = 1;
-        copyRegions[0].imageExtent = {config_.width, config_.height, 1};
+        if (!gpuFrame)
+        {
+            InsertImageBarrier(commandBuffer_, srcImage, 0, VK_ACCESS_TRANSFER_WRITE_BIT, *srcLayout,
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                               VK_IMAGE_ASPECT_PLANE_0_BIT | VK_IMAGE_ASPECT_PLANE_1_BIT,
+                               VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+            *srcLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
-        copyRegions[1].bufferOffset = static_cast<VkDeviceSize>(codedWidth_) * codedHeight_;
-        copyRegions[1].bufferRowLength = codedWidth_ / 2u;
-        copyRegions[1].bufferImageHeight = codedHeight_ / 2u;
-        copyRegions[1].imageSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_1_BIT;
-        copyRegions[1].imageSubresource.layerCount = 1;
-        copyRegions[1].imageExtent = {config_.width / 2u, config_.height / 2u, 1};
+            VkBufferImageCopy copyRegions[2]{};
+            copyRegions[0].bufferOffset = 0;
+            copyRegions[0].bufferRowLength = codedWidth_;
+            copyRegions[0].bufferImageHeight = codedHeight_;
+            copyRegions[0].imageSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_0_BIT;
+            copyRegions[0].imageSubresource.layerCount = 1;
+            copyRegions[0].imageExtent = {config_.width, config_.height, 1};
 
-        vkCmdCopyBufferToImage(commandBuffer_, stagingBuffer_.buffer, inputImage_.image,
-                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 2, copyRegions);
+            copyRegions[1].bufferOffset = static_cast<VkDeviceSize>(codedWidth_) * codedHeight_;
+            copyRegions[1].bufferRowLength = codedWidth_ / 2u;
+            copyRegions[1].bufferImageHeight = codedHeight_ / 2u;
+            copyRegions[1].imageSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_1_BIT;
+            copyRegions[1].imageSubresource.layerCount = 1;
+            copyRegions[1].imageExtent = {config_.width / 2u, config_.height / 2u, 1};
 
-        InsertImageBarrier(commandBuffer_, inputImage_.image, VK_ACCESS_TRANSFER_WRITE_BIT, 0,
-                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR,
-                           VK_IMAGE_ASPECT_PLANE_0_BIT | VK_IMAGE_ASPECT_PLANE_1_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
-        inputImage_.layout = VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR;
+            vkCmdCopyBufferToImage(commandBuffer_, stagingBuffer_.buffer, srcImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                   2, copyRegions);
+
+            InsertImageBarrier(commandBuffer_, srcImage, VK_ACCESS_TRANSFER_WRITE_BIT, 0,
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR,
+                               VK_IMAGE_ASPECT_PLANE_0_BIT | VK_IMAGE_ASPECT_PLANE_1_BIT,
+                               VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+            *srcLayout = VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR;
+        }
+        else if (srcLayout && *srcLayout != VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR)
+        {
+            InsertImageBarrier(commandBuffer_, srcImage,
+                               VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT, 0, *srcLayout,
+                               VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR,
+                               VK_IMAGE_ASPECT_PLANE_0_BIT | VK_IMAGE_ASPECT_PLANE_1_BIT,
+                               VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+            *srcLayout = VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR;
+        }
+
+        const bool emitKeyframe = forceKeyframe_ || !supportsInterFrames_ || lastReferenceSlotIndex_ < 0;
+        const bool usePreviousReference =
+            supportsInterFrames_ && !emitKeyframe && lastReferenceSlotIndex_ >= 0 && dpbStates_[lastReferenceSlotIndex_].valid;
+        const bool storeAsReference = supportsInterFrames_;
+        const int32_t setupSlotIndex = storeAsReference ? (lastReferenceSlotIndex_ == 0 ? 1 : 0) : -1;
+        const uint32_t frameNumMask = (1u << (sps_.log2_max_frame_num_minus4 + 4u)) - 1u;
+        const uint32_t currentFrameNum = frameNum_ & frameNumMask;
+        ++frameNum_;
+        const int32_t currentPicOrderCnt = static_cast<int32_t>(pictureOrderCount_);
+        pictureOrderCount_ += 2;
+
+        StdVideoH264PictureType currentPictureType =
+            emitKeyframe ? STD_VIDEO_H264_PICTURE_TYPE_IDR : STD_VIDEO_H264_PICTURE_TYPE_P;
+        StdVideoH264SliceType currentSliceType =
+            emitKeyframe ? STD_VIDEO_H264_SLICE_TYPE_I : STD_VIDEO_H264_SLICE_TYPE_P;
+
+        VkVideoPictureResourceInfoKHR setupPictureResource{};
+        VkVideoReferenceSlotInfoKHR setupReferenceSlot{};
+        setupReferenceSlot.sType = VK_STRUCTURE_TYPE_VIDEO_REFERENCE_SLOT_INFO_KHR;
+        VkVideoEncodeH264DpbSlotInfoKHR setupDpbSlotInfo{};
+        setupDpbSlotInfo.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H264_DPB_SLOT_INFO_KHR;
+        StdVideoEncodeH264ReferenceInfo setupReferenceInfo{};
+
+        VkVideoPictureResourceInfoKHR previousPictureResource{};
+        VkVideoReferenceSlotInfoKHR previousReferenceSlot{};
+        previousReferenceSlot.sType = VK_STRUCTURE_TYPE_VIDEO_REFERENCE_SLOT_INFO_KHR;
+        VkVideoEncodeH264DpbSlotInfoKHR previousDpbSlotInfo{};
+        previousDpbSlotInfo.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H264_DPB_SLOT_INFO_KHR;
+        StdVideoEncodeH264ReferenceInfo previousReferenceInfo{};
+
+        std::array<VkVideoReferenceSlotInfoKHR, dpbSlotCount> beginReferenceSlots{};
+        uint32_t beginReferenceSlotCount = 0;
+
+        if (storeAsReference)
+        {
+            FAllocatedImage& setupImage = dpbImages_[setupSlotIndex];
+            if (setupImage.layout != VK_IMAGE_LAYOUT_VIDEO_ENCODE_DPB_KHR)
+            {
+                InsertImageBarrier(commandBuffer_, setupImage.image, 0, 0, setupImage.layout,
+                                   VK_IMAGE_LAYOUT_VIDEO_ENCODE_DPB_KHR,
+                                   VK_IMAGE_ASPECT_PLANE_0_BIT | VK_IMAGE_ASPECT_PLANE_1_BIT,
+                                   VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+                setupImage.layout = VK_IMAGE_LAYOUT_VIDEO_ENCODE_DPB_KHR;
+            }
+
+            setupReferenceInfo.primary_pic_type = currentPictureType;
+            setupReferenceInfo.FrameNum = currentFrameNum;
+            setupReferenceInfo.PicOrderCnt = currentPicOrderCnt;
+
+            setupDpbSlotInfo.pStdReferenceInfo = &setupReferenceInfo;
+
+            setupPictureResource.sType = VK_STRUCTURE_TYPE_VIDEO_PICTURE_RESOURCE_INFO_KHR;
+            setupPictureResource.codedExtent = {config_.width, config_.height};
+            setupPictureResource.baseArrayLayer = 0;
+            setupPictureResource.imageViewBinding = setupImage.view;
+
+            setupReferenceSlot.pNext = &setupDpbSlotInfo;
+            setupReferenceSlot.slotIndex = setupSlotIndex;
+            setupReferenceSlot.pPictureResource = &setupPictureResource;
+            beginReferenceSlots[beginReferenceSlotCount++] = setupReferenceSlot;
+        }
+
+        if (usePreviousReference)
+        {
+            const FDpbSlotState& previousState = dpbStates_[lastReferenceSlotIndex_];
+            const FAllocatedImage& previousImage = dpbImages_[lastReferenceSlotIndex_];
+
+            previousReferenceInfo.primary_pic_type = previousState.pictureType;
+            previousReferenceInfo.FrameNum = previousState.frameNum;
+            previousReferenceInfo.PicOrderCnt = previousState.picOrderCnt;
+            previousDpbSlotInfo.pStdReferenceInfo = &previousReferenceInfo;
+
+            previousPictureResource.sType = VK_STRUCTURE_TYPE_VIDEO_PICTURE_RESOURCE_INFO_KHR;
+            previousPictureResource.codedExtent = {config_.width, config_.height};
+            previousPictureResource.baseArrayLayer = 0;
+            previousPictureResource.imageViewBinding = previousImage.view;
+
+            previousReferenceSlot.pNext = &previousDpbSlotInfo;
+            previousReferenceSlot.slotIndex = lastReferenceSlotIndex_;
+            previousReferenceSlot.pPictureResource = &previousPictureResource;
+            beginReferenceSlots[beginReferenceSlotCount++] = previousReferenceSlot;
+        }
 
         VkVideoBeginCodingInfoKHR beginInfo{};
         beginInfo.sType = VK_STRUCTURE_TYPE_VIDEO_BEGIN_CODING_INFO_KHR;
         beginInfo.videoSession = session_;
         beginInfo.videoSessionParameters = sessionParameters_;
+        beginInfo.referenceSlotCount = beginReferenceSlotCount;
+        beginInfo.pReferenceSlots = beginReferenceSlotCount != 0 ? beginReferenceSlots.data() : nullptr;
         device_.GetDeviceProcedures().vkCmdBeginVideoCodingKHR(commandBuffer_, &beginInfo);
 
-        const bool canUseCbr = UpdateRateControlState();
+        const ERateControlMode rateControlMode = UpdateRateControlState();
         if (rateControlDirty_ || firstControlCommand_)
         {
+            const uint64_t targetBitrate = std::max<uint64_t>(1u, config_.bitrateKbps) * 1000u;
+            const uint64_t cappedMaxBitrate = caps_.maxBitrate != 0 ? caps_.maxBitrate : targetBitrate * 2u;
+            const uint64_t burstBitrate =
+                std::min<uint64_t>(cappedMaxBitrate, std::max<uint64_t>(targetBitrate + targetBitrate / 2u,
+                                                                        targetBitrate + 1000u * 1000u));
+
             VkVideoEncodeRateControlLayerInfoKHR rateLayerInfo{};
             rateLayerInfo.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_RATE_CONTROL_LAYER_INFO_KHR;
-            rateLayerInfo.averageBitrate = static_cast<uint64_t>(config_.bitrateKbps) * 1000u;
-            rateLayerInfo.maxBitrate = static_cast<uint64_t>(config_.bitrateKbps) * 1000u;
+            rateLayerInfo.averageBitrate = targetBitrate;
+            rateLayerInfo.maxBitrate =
+                rateControlMode == ERateControlMode::Vbr ? burstBitrate : targetBitrate;
             rateLayerInfo.frameRateNumerator = std::max(1u, config_.fps);
             rateLayerInfo.frameRateDenominator = 1;
 
+            VkVideoEncodeH264RateControlLayerInfoKHR h264RateLayerInfo{};
+            h264RateLayerInfo.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H264_RATE_CONTROL_LAYER_INFO_KHR;
+            h264RateLayerInfo.useMinQp = VK_TRUE;
+            h264RateLayerInfo.minQp = {caps_.minQp, caps_.minQp, caps_.minQp};
+            h264RateLayerInfo.useMaxQp = VK_TRUE;
+            h264RateLayerInfo.maxQp = {caps_.maxQp, caps_.maxQp, caps_.maxQp};
+            rateLayerInfo.pNext = &h264RateLayerInfo;
+
             VkVideoEncodeH264RateControlInfoKHR h264RateControl{};
             h264RateControl.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H264_RATE_CONTROL_INFO_KHR;
-            h264RateControl.gopFrameCount = 1;
-            h264RateControl.idrPeriod = 1;
+            h264RateControl.flags = caps_.preferredRateControlFlags;
+            if (h264RateControl.flags == 0)
+            {
+                h264RateControl.flags = VK_VIDEO_ENCODE_H264_RATE_CONTROL_REGULAR_GOP_BIT_KHR |
+                                        VK_VIDEO_ENCODE_H264_RATE_CONTROL_REFERENCE_PATTERN_FLAT_BIT_KHR;
+            }
+            h264RateControl.gopFrameCount =
+                caps_.preferredGopFrameCount != 0 ? caps_.preferredGopFrameCount
+                                                  : std::max(30u, std::max(1u, config_.fps) * 2u);
+            h264RateControl.idrPeriod =
+                caps_.preferredIdrPeriod != 0 ? caps_.preferredIdrPeriod : h264RateControl.gopFrameCount;
             h264RateControl.consecutiveBFrameCount = 0;
             h264RateControl.temporalLayerCount = 1;
 
@@ -676,49 +923,79 @@ namespace Runtime::Remote
             rateControl.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_RATE_CONTROL_INFO_KHR;
             rateControl.pNext = &h264RateControl;
             rateControl.rateControlMode =
-                canUseCbr ? VK_VIDEO_ENCODE_RATE_CONTROL_MODE_CBR_BIT_KHR
-                          : VK_VIDEO_ENCODE_RATE_CONTROL_MODE_DISABLED_BIT_KHR;
+                rateControlMode == ERateControlMode::Vbr ? VK_VIDEO_ENCODE_RATE_CONTROL_MODE_VBR_BIT_KHR
+                : rateControlMode == ERateControlMode::Cbr ? VK_VIDEO_ENCODE_RATE_CONTROL_MODE_CBR_BIT_KHR
+                                                           : VK_VIDEO_ENCODE_RATE_CONTROL_MODE_DISABLED_BIT_KHR;
             rateControl.layerCount = 1;
             rateControl.pLayers = &rateLayerInfo;
-            rateControl.virtualBufferSizeInMs = 1000;
-            rateControl.initialVirtualBufferSizeInMs = 500;
+            rateControl.virtualBufferSizeInMs = rateControlMode == ERateControlMode::Vbr ? 1500 : 1000;
+            rateControl.initialVirtualBufferSizeInMs = rateControl.virtualBufferSizeInMs / 2u;
+
+            VkVideoEncodeQualityLevelInfoKHR qualityLevelInfo{};
+            qualityLevelInfo.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_QUALITY_LEVEL_INFO_KHR;
+            qualityLevelInfo.qualityLevel = caps_.preferredQualityLevel;
+            if (caps_.preferredQualityLevel != UINT32_MAX)
+            {
+                qualityLevelInfo.pNext = &rateControl;
+            }
 
             VkVideoCodingControlInfoKHR controlInfo{};
             controlInfo.sType = VK_STRUCTURE_TYPE_VIDEO_CODING_CONTROL_INFO_KHR;
-            controlInfo.pNext = &rateControl;
+            controlInfo.pNext = caps_.preferredQualityLevel != UINT32_MAX ? static_cast<const void*>(&qualityLevelInfo)
+                                                                          : static_cast<const void*>(&rateControl);
             controlInfo.flags = VK_VIDEO_CODING_CONTROL_ENCODE_RATE_CONTROL_BIT_KHR;
+            if (caps_.preferredQualityLevel != UINT32_MAX)
+            {
+                controlInfo.flags |= VK_VIDEO_CODING_CONTROL_ENCODE_QUALITY_LEVEL_BIT_KHR;
+            }
             if (firstControlCommand_)
             {
                 controlInfo.flags |= VK_VIDEO_CODING_CONTROL_RESET_BIT_KHR;
             }
             device_.GetDeviceProcedures().vkCmdControlVideoCodingKHR(commandBuffer_, &controlInfo);
+            SPDLOG_INFO("RemotePlay: Vulkan Video rate control mode={} avg={}kbps max={}kbps gop={} idr={} quality={}",
+                        RateControlModeName(rateControlMode), targetBitrate / 1000u, rateLayerInfo.maxBitrate / 1000u,
+                        h264RateControl.gopFrameCount, h264RateControl.idrPeriod,
+                        caps_.preferredQualityLevel != UINT32_MAX
+                            ? std::to_string(caps_.preferredQualityLevel)
+                            : std::string("default"));
             rateControlDirty_ = false;
             firstControlCommand_ = false;
         }
-
-        // Bring-up path: every frame is encoded as IDR so we can ship a working hardware
-        // encoder before landing DPB / P-frame management.
-        const bool emitKeyframe = true;
         forceKeyframe_ = false;
 
+        StdVideoEncodeH264ReferenceListsInfo stdReferenceListsInfo{};
+        std::memset(stdReferenceListsInfo.RefPicList0, STD_VIDEO_H264_NO_REFERENCE_PICTURE,
+                    sizeof(stdReferenceListsInfo.RefPicList0));
+        std::memset(stdReferenceListsInfo.RefPicList1, STD_VIDEO_H264_NO_REFERENCE_PICTURE,
+                    sizeof(stdReferenceListsInfo.RefPicList1));
+        if (usePreviousReference)
+        {
+            stdReferenceListsInfo.num_ref_idx_l0_active_minus1 = 0;
+            stdReferenceListsInfo.RefPicList0[0] = static_cast<uint8_t>(lastReferenceSlotIndex_);
+        }
+
         StdVideoEncodeH264PictureInfo stdPictureInfo{};
-        stdPictureInfo.flags.IdrPicFlag = VK_TRUE;
-        stdPictureInfo.flags.is_reference = VK_FALSE;
+        stdPictureInfo.flags.IdrPicFlag = emitKeyframe ? VK_TRUE : VK_FALSE;
+        stdPictureInfo.flags.is_reference = storeAsReference ? VK_TRUE : VK_FALSE;
         stdPictureInfo.seq_parameter_set_id = sps_.seq_parameter_set_id;
         stdPictureInfo.pic_parameter_set_id = pps_.pic_parameter_set_id;
-        stdPictureInfo.idr_pic_id = idrPicId_++;
-        stdPictureInfo.primary_pic_type = STD_VIDEO_H264_PICTURE_TYPE_IDR;
-        stdPictureInfo.frame_num = frameNum_++;
-        stdPictureInfo.PicOrderCnt = 0;
+        stdPictureInfo.idr_pic_id = emitKeyframe ? idrPicId_++ : 0;
+        stdPictureInfo.primary_pic_type = currentPictureType;
+        stdPictureInfo.frame_num = currentFrameNum;
+        stdPictureInfo.PicOrderCnt = currentPicOrderCnt;
+        stdPictureInfo.pRefLists = usePreviousReference ? &stdReferenceListsInfo : nullptr;
 
         StdVideoEncodeH264SliceHeader stdSliceHeader{};
-        stdSliceHeader.slice_type = STD_VIDEO_H264_SLICE_TYPE_I;
+        stdSliceHeader.slice_type = currentSliceType;
         stdSliceHeader.cabac_init_idc = STD_VIDEO_H264_CABAC_INIT_IDC_0;
         stdSliceHeader.disable_deblocking_filter_idc = STD_VIDEO_H264_DISABLE_DEBLOCKING_FILTER_IDC_DISABLED;
 
         VkVideoEncodeH264NaluSliceInfoKHR sliceInfo{};
         sliceInfo.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H264_NALU_SLICE_INFO_KHR;
-        sliceInfo.constantQp = defaultConstantQp;
+        sliceInfo.constantQp = rateControlMode == ERateControlMode::Disabled
+                                   ? std::clamp(emitKeyframe ? 22 : 24, caps_.minQp, caps_.maxQp)
+                                   : 0;
         sliceInfo.pStdSliceHeader = &stdSliceHeader;
 
         VkVideoEncodeH264PictureInfoKHR h264PictureInfo{};
@@ -731,7 +1008,7 @@ namespace Runtime::Remote
         srcPicture.sType = VK_STRUCTURE_TYPE_VIDEO_PICTURE_RESOURCE_INFO_KHR;
         srcPicture.codedExtent = {config_.width, config_.height};
         srcPicture.baseArrayLayer = 0;
-        srcPicture.imageViewBinding = inputImage_.view;
+        srcPicture.imageViewBinding = srcView;
 
         VkVideoEncodeInfoKHR encodeInfo{};
         encodeInfo.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_INFO_KHR;
@@ -740,6 +1017,9 @@ namespace Runtime::Remote
         encodeInfo.dstBufferOffset = 0;
         encodeInfo.dstBufferRange = bitstreamBuffer_.size;
         encodeInfo.srcPictureResource = srcPicture;
+        encodeInfo.pSetupReferenceSlot = storeAsReference ? &setupReferenceSlot : nullptr;
+        encodeInfo.referenceSlotCount = usePreviousReference ? 1u : 0u;
+        encodeInfo.pReferenceSlots = usePreviousReference ? &previousReferenceSlot : nullptr;
 
         vkCmdBeginQuery(commandBuffer_, queryPool_, 0, 0);
         device_.GetDeviceProcedures().vkCmdEncodeVideoKHR(commandBuffer_, &encodeInfo);
@@ -779,6 +1059,16 @@ namespace Runtime::Remote
         }
         std::memcpy(outFrame.data() + headerBytes, bitstreamBuffer_.mapped + feedback.bitstreamOffset,
                     feedback.bitstreamBytes);
+
+        if (storeAsReference)
+        {
+            dpbStates_[setupSlotIndex].valid = true;
+            dpbStates_[setupSlotIndex].frameNum = currentFrameNum;
+            dpbStates_[setupSlotIndex].picOrderCnt = currentPicOrderCnt;
+            dpbStates_[setupSlotIndex].pictureType = currentPictureType;
+            lastReferenceSlotIndex_ = setupSlotIndex;
+        }
+
         keyframe = emitKeyframe;
         return true;
     }
@@ -940,7 +1230,7 @@ namespace Runtime::Remote
         sps_.seq_parameter_set_id = 0;
         sps_.log2_max_frame_num_minus4 = 4;
         sps_.pic_order_cnt_type = STD_VIDEO_H264_POC_TYPE_2;
-        sps_.max_num_ref_frames = 0;
+        sps_.max_num_ref_frames = supportsInterFrames_ ? 1 : 0;
         sps_.pic_width_in_mbs_minus1 = codedWidth_ / 16u - 1u;
         sps_.pic_height_in_map_units_minus1 = codedHeight_ / 16u - 1u;
         sps_.flags.constraint_set0_flag = true;
@@ -958,6 +1248,7 @@ namespace Runtime::Remote
         pps_.seq_parameter_set_id = sps_.seq_parameter_set_id;
         pps_.pic_parameter_set_id = 0;
         pps_.weighted_bipred_idc = STD_VIDEO_H264_WEIGHTED_BIPRED_IDC_DEFAULT;
+        pps_.num_ref_idx_l0_default_active_minus1 = supportsInterFrames_ ? 0 : 0;
         pps_.flags.deblocking_filter_control_present_flag = true;
         pps_.flags.entropy_coding_mode_flag = false;
     }

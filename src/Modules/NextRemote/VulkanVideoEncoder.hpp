@@ -6,6 +6,7 @@
 
 #include <vulkan/vulkan.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -17,6 +18,8 @@ namespace Vulkan
 
 namespace Runtime::Remote
 {
+    enum class ERateControlMode : uint8_t;
+
     class FVulkanVideoEncoder final : public IVideoEncoder
     {
     public:
@@ -28,7 +31,10 @@ namespace Runtime::Remote
         void Stop() override;
         void RequestKeyframe() override;
         void SetBitrate(uint32_t bitrateKbps) override;
+        bool SupportsGpuFrameInput() const override { return true; }
         bool Encode(const FI420View& view, uint64_t timestampMs, std::vector<std::byte>& outFrame, bool& keyframe) override;
+        bool EncodeGpu(FGpuVideoFrame& frame, uint64_t timestampMs, std::vector<std::byte>& outFrame,
+                       bool& keyframe) override;
 
     private:
         struct FAllocatedBuffer
@@ -47,6 +53,14 @@ namespace Runtime::Remote
             VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
         };
 
+        struct FDpbSlotState
+        {
+            bool valid = false;
+            uint32_t frameNum = 0;
+            int32_t picOrderCnt = 0;
+            StdVideoH264PictureType pictureType = STD_VIDEO_H264_PICTURE_TYPE_INVALID;
+        };
+
         struct FSessionMemoryBinding
         {
             VkDeviceMemory memory = VK_NULL_HANDLE;
@@ -57,13 +71,15 @@ namespace Runtime::Remote
         bool CreateVideoSession();
         bool CreateSessionParameters();
         bool CreateInputResources();
+        bool CreateDpbResources();
         bool CreateBitstreamResources();
         bool CreateQueryPool();
         bool CreateCommandResources();
         bool LoadHeaders();
-        bool UpdateRateControlState();
+        ERateControlMode UpdateRateControlState();
         bool CopyI420ToNv12(const FI420View& view);
-        bool RecordAndSubmitEncode(uint64_t timestampMs, std::vector<std::byte>& outFrame, bool& keyframe);
+        bool RecordAndSubmitEncode(FGpuVideoFrame* gpuFrame, uint64_t timestampMs, std::vector<std::byte>& outFrame,
+                                   bool& keyframe);
 
         uint32_t AlignUp(uint32_t value, uint32_t alignment) const;
         VkDeviceSize AlignUp(VkDeviceSize value, VkDeviceSize alignment) const;
@@ -83,11 +99,13 @@ namespace Runtime::Remote
 
         uint32_t codedWidth_ = 0;
         uint32_t codedHeight_ = 0;
+        bool supportsInterFrames_ = false;
         bool started_ = false;
         bool forceKeyframe_ = true;
         bool rateControlDirty_ = true;
         bool firstControlCommand_ = true;
         uint32_t frameNum_ = 0;
+        uint32_t pictureOrderCount_ = 0;
         uint16_t idrPicId_ = 0;
 
         VkVideoProfileInfoKHR profileInfo_{};
@@ -99,6 +117,10 @@ namespace Runtime::Remote
         std::vector<FSessionMemoryBinding> sessionMemory_;
 
         FAllocatedImage inputImage_;
+        static constexpr uint32_t dpbSlotCount = 2;
+        std::array<FAllocatedImage, dpbSlotCount> dpbImages_{};
+        std::array<FDpbSlotState, dpbSlotCount> dpbStates_{};
+        int32_t lastReferenceSlotIndex_ = -1;
         FAllocatedBuffer stagingBuffer_;
         FAllocatedBuffer bitstreamBuffer_;
 

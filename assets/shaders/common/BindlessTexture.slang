@@ -47,6 +47,14 @@ namespace Bindless
     public static const int RT_MINIGBUFFER_DRAW = 23;
 
     public static const int RT_TEMP_USAGE0 = 50;
+    public static const int RT_REMOTE_ENCODE0_Y = 60;
+    public static const int RT_REMOTE_ENCODE0_UV = 61;
+    public static const int RT_REMOTE_ENCODE1_Y = 62;
+    public static const int RT_REMOTE_ENCODE1_UV = 63;
+    public static const int RT_REMOTE_ENCODE2_Y = 64;
+    public static const int RT_REMOTE_ENCODE2_UV = 65;
+    public static const int RT_REMOTE_ENCODE3_Y = 66;
+    public static const int RT_REMOTE_ENCODE3_UV = 67;
     
     public static const int RT_SWAPCHAIN0 = 100;
     public static const int RT_SWAPCHAIN1 = 101;
