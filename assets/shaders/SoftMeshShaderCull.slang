@@ -3,13 +3,14 @@
 // Task.SoftMeshShaderGpuCullCompact / Task.SoftMeshShaderShadowGpuCullCompact.
 module SoftMeshShaderCull;
 import Bindless;
+import Common;
 
 public bool IsOccludedVolume(float3 min, float3 max, float4x4 wvp)
 {
     const int GRID_SIZE = 6;
     const float GRID_SIZE_MINUS_ONE = GRID_SIZE - 1;
 
-    uint2 screenSize = Bindless.GetStorageTextureDimensions<float>(Bindless.RT_PREV_DEPTHBUFFER);
+    uint2 screenSize = Bindless.GetViewStorageTextureDimensions<float>(Bindless.RT_PREV_DEPTHBUFFER);
 
     for (int x = 0; x < GRID_SIZE; x++)
     {
@@ -37,7 +38,7 @@ public bool IsOccludedVolume(float3 min, float3 max, float4x4 wvp)
                     return false;
                 }
 
-                float previousDepth = Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER)[pixelCoord];
+                float previousDepth = Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER)[pixelCoord];
                 float currentDepth = ndc.z - 0.0001;
                 if (previousDepth > currentDepth)
                 {

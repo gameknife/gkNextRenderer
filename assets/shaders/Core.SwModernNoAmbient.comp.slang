@@ -39,7 +39,7 @@ float3 ResolveSunCascadeCoverageDebugColor(UniformBufferObject Camera, float3 wo
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     let Camera = Bindless.GetGpuscene().Camera[0];
-    uint2 size = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
+    uint2 size = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
     int2 pixel = int2(DTid.xy);
     if (DTid.x >= size.x || DTid.y >= size.y)
     {
@@ -52,7 +52,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float4 rayDir4 = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
     float3 primaryRayDir = normalize(rayDir4.xyz);
 
-    uint packedValue = Bindless.GetStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[pixel];
+    uint packedValue = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[pixel];
     uint2 vBuffer = uint2((packedValue >> 17) & 0x7FFF, packedValue & 0x1FFFF);
     if (vBuffer.x == 0)
     {
@@ -61,13 +61,13 @@ void main(uint3 DTid : SV_DispatchThreadID)
             : (Camera.HasSky
                 ? Common.SampleIBL(Camera.SkyIdx, primaryRayDir, Camera.SkyRotation, 0) * Camera.SkyIntensity
                 : float4(0, 0, 0, 1));
-        Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, skyColor);
-        Bindless.GetStorageTexture<float4>(Bindless.RT_AMBIENT).Store(pixel, float4(0));
-        Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(pixel, 0);
-        Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(pixel, 1000);
-        Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR).Store(pixel, float4(0));
-        Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL).Store(pixel, float4(0));
-        Bindless.GetStorageTexture<uint>(Bindless.RT_MOTIONMOMENT).Store(pixel, Camera.TemporalFrames);
+        Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, skyColor);
+        Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT).Store(pixel, float4(0));
+        Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(pixel, 0);
+        Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(pixel, 1000);
+        Bindless.GetViewStorageTexture<float4>(Bindless.RT_MOTIONVECTOR).Store(pixel, float4(0));
+        Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL).Store(pixel, float4(0));
+        Bindless.GetViewStorageTexture<uint>(Bindless.RT_MOTIONMOMENT).Store(pixel, Camera.TemporalFrames);
         return;
     }
 
@@ -193,10 +193,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
     const bool hovered = (hitNode.reserved2 & 1u) != 0;
     const bool locked = (hitNode.reserved2 & 2u) != 0;
     const bool danger = (hitNode.reserved2 & 4u) != 0;
-    Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, color);
-    Bindless.GetStorageTexture<float4>(Bindless.RT_AMBIENT).Store(pixel, ambientColor);
-    Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(pixel, Common.EncodeObjectId(hitNode.instanceId, selected, hovered, locked, danger));
-    Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(pixel, ndcDepth);
-    Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR).Store(pixel, float4(motion, 0, 0));
-    Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL).Store(pixel, float4(normalize(hitVertex.Normal), 1));
+    Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, color);
+    Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT).Store(pixel, ambientColor);
+    Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(pixel, Common.EncodeObjectId(hitNode.instanceId, selected, hovered, locked, danger));
+    Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(pixel, ndcDepth);
+    Bindless.GetViewStorageTexture<float4>(Bindless.RT_MOTIONVECTOR).Store(pixel, float4(motion, 0, 0));
+    Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL).Store(pixel, float4(normalize(hitVertex.Normal), 1));
 }

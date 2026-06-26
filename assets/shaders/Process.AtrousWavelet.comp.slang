@@ -227,9 +227,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
     let DiffuseOut = Bindless.GetStorageTexture<float4>(pushConsts.DiffuseOutSlot);
     let SpecularIn = Bindless.GetStorageTexture<float4>(pushConsts.SpecularInSlot);
     let SpecularOut = Bindless.GetStorageTexture<float4>(pushConsts.SpecularOutSlot);
-    let NormalBuffer = Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL);
-    let DepthBuffer = Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER);
-    let ObjectId0 = Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
+    let NormalBuffer = Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL);
+    let DepthBuffer = Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER);
+    let ObjectId0 = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
 
     const uint2 isize = Bindless.GetStorageTextureDimensions<float4>(filterDiffuse ? pushConsts.DiffuseInSlot : pushConsts.SpecularInSlot);
     const int2 imageMax = int2(isize) - int2(1, 1);

@@ -1,4 +1,5 @@
 import Bindless;
+import Common;
 
 struct PushConsts
 {
@@ -281,7 +282,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     int2 isize = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx);
-    int2 ssize = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_DENOISED);
+    int2 ssize = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_DENOISED);
 
     float4 outColor = float4(0, 0, 0, 1);
 
@@ -289,7 +290,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     {
         const float2 uv = float2(ipos) / float2(pushConsts.output_w, pushConsts.output_h);
         outColor = doUpscale(
-            Bindless.GetStorageTexture<float4>(Bindless.RT_DENOISED),
+            Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED),
             uv,
             float2(ssize),
             float2(isize)
@@ -298,7 +299,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     else
     {
         const int2 iposOffset = int2(ipos * float2(isize) / float2(pushConsts.output_w, pushConsts.output_h));
-        outColor = Bindless.GetStorageTexture<float4>(Bindless.RT_DENOISED)[iposOffset];
+        outColor = Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED)[iposOffset];
     }
 
     Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos + int2(pushConsts.offset_x, pushConsts.offset_y)] = outColor;

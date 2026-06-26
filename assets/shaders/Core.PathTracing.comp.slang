@@ -37,7 +37,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     FNullRadianceCache cache;
-    int sampleMultiplier = Bindless.GetStorageTexture<uint>(Bindless.RT_MOTIONMOMENT)[DTid.xy] > 0 ? 4 : 1;
+    int sampleMultiplier = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MOTIONMOMENT)[DTid.xy] > 0 ? 4 : 1;
     renderer.Render(tracer, dIlluminator, cache, sampleMultiplier);
     END_SHADERCLOCK(DTid.xy)
 }
