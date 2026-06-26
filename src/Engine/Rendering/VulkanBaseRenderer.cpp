@@ -931,7 +931,7 @@ namespace Vulkan
         overlay_.gaussianSplatPass->CreateResources();
 
         overlay_.visibilityPipeline.reset(new PipelineCommon::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
-        overlay_.visibilityFrameBuffer.reset(new FrameBuffer(frame_.swapChain->RenderExtent(), GetStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(), overlay_.visibilityPipeline->RenderPass()));
+        overlay_.visibilityFrameBuffer.reset(new FrameBuffer(frame_.swapChain->RenderExtent(), GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(), overlay_.visibilityPipeline->RenderPass()));
 
         // 太阳方向光 CSM 阴影 pass + 注册 4 个 cascade 到 Bindless
         {
@@ -1433,7 +1433,7 @@ namespace Vulkan
                     SCOPED_GPU_TIMER("resolve pass");
                     SwapChain().InsertBarrierToWrite(commandBuffer, imageIndex);
                 
-                    GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                    GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                                               VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
                 
                     const std::array<uint32_t, 5> pushConst{
@@ -1471,7 +1471,7 @@ namespace Vulkan
                 SCOPED_GPU_TIMER("resolve pass");
 
                 SwapChain().InsertBarrierToWrite(commandBuffer, imageIndex);
-                GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                                           VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 
                 bool resolvedByUpscaler = false;
@@ -1522,7 +1522,7 @@ namespace Vulkan
                         };
 
                         vkCmdBlitImage(commandBuffer,
-                                       GetStorageImage(Assets::Bindless::RT_DENOISED)->GetImage().Handle(),
+                                       GetViewStorageImage(Assets::Bindless::RT_DENOISED)->GetImage().Handle(),
                                        VK_IMAGE_LAYOUT_GENERAL,
                                        SwapChain().Images()[imageIndex],
                                        VK_IMAGE_LAYOUT_GENERAL,
@@ -1672,11 +1672,11 @@ namespace Vulkan
             swapChain.RenderExtent(),
             VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
         inputs.motionVectors = MakeRenderImageResource(
-            GetStorageImage(Assets::Bindless::RT_MOTIONVECTOR),
+            GetViewStorageImage(Assets::Bindless::RT_MOTIONVECTOR),
             VK_IMAGE_LAYOUT_GENERAL,
             VK_IMAGE_USAGE_STORAGE_BIT);
         inputs.scalingInputColor = MakeRenderImageResource(
-            GetStorageImage(Assets::Bindless::RT_DENOISED),
+            GetViewStorageImage(Assets::Bindless::RT_DENOISED),
             VK_IMAGE_LAYOUT_GENERAL,
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
         inputs.scalingOutputColor = MakeSwapchainResource(
@@ -1687,31 +1687,31 @@ namespace Vulkan
         inputs.hudlessColor = inputs.scalingOutputColor;
 
         inputs.albedo = MakeRenderImageResource(
-            GetStorageImage(Assets::Bindless::RT_ALBEDO),
+            GetViewStorageImage(Assets::Bindless::RT_ALBEDO),
             VK_IMAGE_LAYOUT_GENERAL,
             VK_IMAGE_USAGE_STORAGE_BIT);
         inputs.specularAlbedo = MakeRenderImageResource(
-            GetStorageImage(Assets::Bindless::RT_SPECULAR_ALBEDO),
+            GetViewStorageImage(Assets::Bindless::RT_SPECULAR_ALBEDO),
             VK_IMAGE_LAYOUT_GENERAL,
             VK_IMAGE_USAGE_STORAGE_BIT);
         inputs.normalRoughness = MakeRenderImageResource(
-            GetStorageImage(Assets::Bindless::RT_NORMAL),
+            GetViewStorageImage(Assets::Bindless::RT_NORMAL),
             VK_IMAGE_LAYOUT_GENERAL,
             VK_IMAGE_USAGE_STORAGE_BIT);
         inputs.diffuseNoisy = MakeRenderImageResource(
-            GetStorageImage(Assets::Bindless::RT_ACCUMLATE_DIFFUSE),
+            GetViewStorageImage(Assets::Bindless::RT_ACCUMLATE_DIFFUSE),
             VK_IMAGE_LAYOUT_GENERAL,
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
         inputs.specularNoisy = MakeRenderImageResource(
-            GetStorageImage(Assets::Bindless::RT_ACCUMLATE_SPECULAR),
+            GetViewStorageImage(Assets::Bindless::RT_ACCUMLATE_SPECULAR),
             VK_IMAGE_LAYOUT_GENERAL,
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
         inputs.diffuseHitDistance = MakeRenderImageResource(
-            GetStorageImage(Assets::Bindless::RT_DIFFUSE_HITDIST),
+            GetViewStorageImage(Assets::Bindless::RT_DIFFUSE_HITDIST),
             VK_IMAGE_LAYOUT_GENERAL,
             VK_IMAGE_USAGE_STORAGE_BIT);
         inputs.specularHitDistance = MakeRenderImageResource(
-            GetStorageImage(Assets::Bindless::RT_SPECULAR_HITDIST),
+            GetViewStorageImage(Assets::Bindless::RT_SPECULAR_HITDIST),
             VK_IMAGE_LAYOUT_GENERAL,
             VK_IMAGE_USAGE_STORAGE_BIT);
 

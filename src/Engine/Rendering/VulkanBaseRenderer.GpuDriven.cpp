@@ -363,22 +363,22 @@ namespace Vulkan
         copyRegion.srcOffset = {0, 0, 0};
         copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
         copyRegion.dstOffset = {0, 0, 0};
-        copyRegion.extent = {GetStorageImage(Assets::Bindless::RT_MINIGBUFFER)->GetImage().Extent().width,
-                             GetStorageImage(Assets::Bindless::RT_MINIGBUFFER)->GetImage().Extent().height, 1};
+        copyRegion.extent = {GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER)->GetImage().Extent().width,
+                             GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER)->GetImage().Extent().height, 1};
 
-        GetStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW)->InsertBarrier(commandBuffer,
+        GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW)->InsertBarrier(commandBuffer,
             VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
             VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-        GetStorageImage(Assets::Bindless::RT_MINIGBUFFER)->InsertBarrier(commandBuffer,
+        GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER)->InsertBarrier(commandBuffer,
             0, VK_ACCESS_TRANSFER_WRITE_BIT,
             VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
         vkCmdCopyImage(commandBuffer,
-            GetStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            GetStorageImage(Assets::Bindless::RT_MINIGBUFFER)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             1, &copyRegion);
 
-        GetStorageImage(Assets::Bindless::RT_MINIGBUFFER)->InsertBarrier(commandBuffer,
+        GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER)->InsertBarrier(commandBuffer,
             VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
     }
@@ -639,10 +639,10 @@ namespace Vulkan
     void VulkanBaseRenderer::CopyObjectIdHistory(VkCommandBuffer commandBuffer)
     {
         SCOPED_GPU_TIMER("objectid copy");
-        GetStorageImage(Assets::Bindless::RT_OBJEDCTID_0)->InsertBarrier(commandBuffer,
+        GetViewStorageImage(Assets::Bindless::RT_OBJEDCTID_0)->InsertBarrier(commandBuffer,
             VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT,
             VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-        GetStorageImage(Assets::Bindless::RT_OBJEDCTID_1)->InsertBarrier(commandBuffer,
+        GetViewStorageImage(Assets::Bindless::RT_OBJEDCTID_1)->InsertBarrier(commandBuffer,
             VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
             VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
@@ -652,12 +652,12 @@ namespace Vulkan
         copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
         copyRegion.dstOffset = {0, 0, 0};
         copyRegion.extent = {
-            GetStorageImage(Assets::Bindless::RT_OBJEDCTID_0)->GetImage().Extent().width,
-            GetStorageImage(Assets::Bindless::RT_OBJEDCTID_0)->GetImage().Extent().height, 1};
+            GetViewStorageImage(Assets::Bindless::RT_OBJEDCTID_0)->GetImage().Extent().width,
+            GetViewStorageImage(Assets::Bindless::RT_OBJEDCTID_0)->GetImage().Extent().height, 1};
 
         vkCmdCopyImage(commandBuffer,
-            GetStorageImage(Assets::Bindless::RT_OBJEDCTID_0)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            GetStorageImage(Assets::Bindless::RT_OBJEDCTID_1)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            GetViewStorageImage(Assets::Bindless::RT_OBJEDCTID_0)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            GetViewStorageImage(Assets::Bindless::RT_OBJEDCTID_1)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             1, &copyRegion);
     }
 }

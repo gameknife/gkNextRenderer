@@ -89,7 +89,7 @@ namespace Vulkan::SoftwareModernNoAmbient
             if (settings.GTAOEnable)
             {
                 SCOPED_GPU_TIMER("gtao pass");
-                baseRender_.GetStorageImage(Assets::Bindless::RT_GTAO)->InsertBarrier(
+                baseRender_.GetViewStorageImage(Assets::Bindless::RT_GTAO)->InsertBarrier(
                     commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
                     VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
                 gtaoPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
@@ -98,7 +98,7 @@ namespace Vulkan::SoftwareModernNoAmbient
                               Utilities::Math::GetSafeDispatchCount((extent.width + 1u) / 2u, 8),
                               Utilities::Math::GetSafeDispatchCount((extent.height + 1u) / 2u, 8), 1);
 
-                baseRender_.GetStorageImage(Assets::Bindless::RT_GTAO)->InsertBarrier(
+                baseRender_.GetViewStorageImage(Assets::Bindless::RT_GTAO)->InsertBarrier(
                     commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                     VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
             }
@@ -109,7 +109,7 @@ namespace Vulkan::SoftwareModernNoAmbient
                 vkCmdDispatch(commandBuffer,
                               Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
                               Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
-                baseRender_.GetStorageImage(Assets::Bindless::RT_SINGLE_DIFFUSE)->InsertBarrier(
+                baseRender_.GetViewStorageImage(Assets::Bindless::RT_SINGLE_DIFFUSE)->InsertBarrier(
                     commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                     VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
             }
@@ -131,7 +131,7 @@ namespace Vulkan::SoftwareModernNoAmbient
                           Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
                           Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
 
-            baseRender_.GetStorageImage(Assets::Bindless::RT_ACCUMLATE_DIFFUSE)->InsertBarrier(
+            baseRender_.GetViewStorageImage(Assets::Bindless::RT_ACCUMLATE_DIFFUSE)->InsertBarrier(
                 commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                 VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
         }
