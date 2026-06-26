@@ -41,7 +41,7 @@ namespace Vulkan::VoxelTracing
                 Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
                 Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
 
-            baseRender_.GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
+            baseRender_.GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
                 commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                 VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
         }

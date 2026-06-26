@@ -192,7 +192,7 @@ namespace Vulkan::GaussianSplat
               "create Gaussian splat render pass");
 
         const VkImageView framebufferAttachments[]{
-            renderer_.GetStorageImage(Assets::Bindless::RT_SPLAT_ACCUM)->GetImageView().Handle(),
+            renderer_.GetViewStorageImage(Assets::Bindless::RT_SPLAT_ACCUM)->GetImageView().Handle(),
             renderer_.DepthBuffer().ImageView().Handle(),
         };
         const VkExtent2D extent = renderer_.SwapChain().RenderExtent();
@@ -428,11 +428,11 @@ namespace Vulkan::GaussianSplat
         vkCmdDrawIndirect(commandBuffer, drawIndirectBuffer_->Handle(), 0, 1, sizeof(VkDrawIndirectCommand));
         vkCmdEndRenderPass(commandBuffer);
 
-        renderer_.GetStorageImage(Assets::Bindless::RT_SPLAT_ACCUM)->InsertBarrier(
+        renderer_.GetViewStorageImage(Assets::Bindless::RT_SPLAT_ACCUM)->InsertBarrier(
             commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
             VK_ACCESS_SHADER_READ_BIT,
             VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-        renderer_.GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
+        renderer_.GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
             commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
             VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
             VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
@@ -441,7 +441,7 @@ namespace Vulkan::GaussianSplat
         composePipeline_->BindPipeline(commandBuffer, &composePush);
         vkCmdDispatch(commandBuffer, (extent.width + 7) / 8, (extent.height + 7) / 8, 1);
 
-        renderer_.GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
+        renderer_.GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
             commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
             VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT,
             VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);

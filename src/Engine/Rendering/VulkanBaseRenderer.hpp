@@ -162,6 +162,10 @@ namespace Vulkan
 		// Shared render resources used by logic renderers
 		void CaptureScreenShot();
 		const RenderImage* GetStorageImage(uint32_t bindlessIdx) const;
+		// Screen-space RT image of the view currently being recorded (its bank). C++ counterpart
+		// of the shader-side Bindless::GetViewStorageTexture; resolves slot through the active
+		// view's bank base. Primary view (base 0) == GetStorageImage (legacy absolute).
+		const RenderImage* GetViewStorageImage(uint32_t slot) const { return GetStorageImage(activeViewBankBase_ + slot); }
 		uint32_t GetTemporalStorageImage(VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName);
 		void InitializeBarriers(VkCommandBuffer commandBuffer);
 		void RequestSkinUpdate(uint32_t modelId) { skin_.updateRequests.push_back(modelId); }
