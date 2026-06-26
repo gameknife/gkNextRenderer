@@ -29,9 +29,12 @@ namespace Runtime::Remote
     }
 
     FRemoteSession::FRemoteSession(RemoteServer::FConfig config, std::string id,
-                                   std::weak_ptr<rtc::WebSocket> signalingSocket, FVideoPipeline* videoPipeline)
+                                   std::weak_ptr<rtc::WebSocket> signalingSocket, FVideoPipeline* videoPipeline,
+                                   uint32_t h264ProfileMask)
         : config_(config)
         , id_(std::move(id))
+        , h264ProfileMask_((h264ProfileMask & h264ProfileAllBits) != 0 ? (h264ProfileMask & h264ProfileAllBits)
+                                                                        : h264ProfileBaselineBit)
         , signalingSocket_(std::move(signalingSocket))
         , videoPipeline_(videoPipeline)
     {
@@ -103,8 +106,16 @@ namespace Runtime::Remote
                 }
             });
 
+        if (videoPipeline_)
+        {
+            videoPipeline_->RegisterClientH264Profiles(id_, h264ProfileMask_);
+        }
+
         rtc::Description::Video video("video", rtc::Description::Direction::SendOnly);
-        video.addH264Codec(videoPayloadType);
+        video.addH264Codec(videoPayloadType,
+                           videoPipeline_ ? videoPipeline_->OfferH264FmtpLine()
+                                          : BuildH264FmtpLine(STD_VIDEO_H264_PROFILE_IDC_BASELINE, config_.width,
+                                                              config_.height, std::max(1u, config_.fps)));
         video.addSSRC(videoSsrc, "gkNextRemoteVideo", id_, "video");
         auto track = peerConnection_->addTrack(video);
         {
@@ -212,6 +223,7 @@ namespace Runtime::Remote
             {
                 videoPipeline_->RemoveSink(sinkId);
             }
+            videoPipeline_->UnregisterClientH264Profiles(id_);
         }
         trackOpen_ = false;
 

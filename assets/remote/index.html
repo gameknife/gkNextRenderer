@@ -303,6 +303,35 @@ function log(line) {
   logcountEl.textContent = String(logLines);
 }
 
+function detectH264ProfileMask() {
+  const Receiver = window.RTCRtpReceiver;
+  if (!Receiver || typeof Receiver.getCapabilities !== "function") {
+    return 1;
+  }
+  const capabilities = Receiver.getCapabilities("video");
+  if (!capabilities || !Array.isArray(capabilities.codecs)) {
+    return 1;
+  }
+
+  let mask = 0;
+  for (const codec of capabilities.codecs) {
+    if (!codec || codec.mimeType !== "video/H264") {
+      continue;
+    }
+    const fmtp = String(codec.sdpFmtpLine || "");
+    const match = fmtp.match(/profile-level-id=([0-9a-fA-F]{6})/);
+    if (!match) {
+      mask |= 1;
+      continue;
+    }
+    const profileByte = parseInt(match[1].slice(0, 2), 16);
+    if (profileByte === 0x4d) mask |= 2;
+    else if (profileByte === 0x64) mask |= 4;
+    else mask |= 1;
+  }
+  return mask || 1;
+}
+
 function waitForIceGatheringComplete(peer) {
   if (peer.iceGatheringState === "complete") {
     return Promise.resolve();
@@ -692,7 +721,7 @@ async function connect() {
     wsState.textContent = "open";
     setPill(pillWs, true);
     log("websocket open");
-    ws.send(JSON.stringify({ type: "request", id: clientId }));
+    ws.send(JSON.stringify({ type: "request", id: clientId, h264ProfileMask: detectH264ProfileMask() }));
   };
   ws.onclose = () => {
     wsState.textContent = "closed";

@@ -67,7 +67,8 @@ namespace Runtime::Remote
         const std::string id = message.value("id", "default");
         if (type == "request")
         {
-            auto session = std::make_shared<FRemoteSession>(config_, id, ws, videoPipeline_);
+            const uint32_t h264ProfileMask = message.value("h264ProfileMask", h264ProfileBaselineBit);
+            auto session = std::make_shared<FRemoteSession>(config_, id, ws, videoPipeline_, h264ProfileMask);
             {
                 std::lock_guard lock(sessionsMutex_);
                 sessions_[id] = session;

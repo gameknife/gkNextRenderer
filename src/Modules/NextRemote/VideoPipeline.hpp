@@ -17,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string_view>
 #include <thread>
 #include <vector>
@@ -27,6 +28,7 @@ namespace Vulkan
     class Device;
     class Buffer;
     class DeviceMemory;
+    class RenderImage;
     class TimelineSemaphore;
 
     namespace PipelineCommon
@@ -70,9 +72,12 @@ namespace Runtime::Remote
         void RemoveSink(uint64_t sinkId);
         void RequestKeyframe();
         void SetBitrate(uint32_t bitrateKbps);
+        void RegisterClientH264Profiles(std::string sessionId, uint32_t profileMask);
+        void UnregisterClientH264Profiles(const std::string& sessionId);
         uint32_t BitrateKbps() const { return desiredBitrateKbps_.load(std::memory_order_relaxed); }
         std::string_view ActiveEncoderName() const { return activeEncoderName_; }
         std::string_view RequestedEncoderName() const { return requestedEncoderName_; }
+        std::string OfferH264FmtpLine() const;
 
     private:
         enum class ESlotState : int
@@ -84,21 +89,45 @@ namespace Runtime::Remote
 
         struct FSlot
         {
+            struct FExternalImage
+            {
+                VkImage image = VK_NULL_HANDLE;
+                VkDeviceMemory memory = VK_NULL_HANDLE;
+                VkImageView view = VK_NULL_HANDLE;
+                VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+            };
+
             std::unique_ptr<Vulkan::Buffer> buffer;
             std::unique_ptr<Vulkan::DeviceMemory> memory;
             uint8_t* mapped = nullptr;
             VkDeviceAddress address = 0;
+            std::unique_ptr<Vulkan::RenderImage> yPlane;
+            std::unique_ptr<Vulkan::RenderImage> uvPlane;
+            VkImageLayout yPlaneLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            VkImageLayout uvPlaneLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            uint32_t yBindlessIndex = 0;
+            uint32_t uvBindlessIndex = 0;
+            FExternalImage encodeImage;
             uint64_t frameId = 0;
             uint64_t captureTimestampUs = 0;
             uint64_t completionValue = 0;
             std::atomic<ESlotState> state{ESlotState::Free};
         };
 
-        bool EnsureSlotResources(FSlot& slot, Vulkan::VulkanBaseRenderer& renderer);
+        bool EnsureSlotResources(FSlot& slot, Vulkan::VulkanBaseRenderer& renderer, size_t slotIndex);
+        bool EnsureCpuSlotResources(FSlot& slot, Vulkan::VulkanBaseRenderer& renderer);
+        bool EnsureGpuSlotResources(FSlot& slot, Vulkan::VulkanBaseRenderer& renderer, size_t slotIndex);
+        bool CreateGpuEncodeImage(FSlot& slot, const Vulkan::Device& device, size_t slotIndex);
+        bool EncoderUsesGpuFrames() const;
         void DestroySlotResources(FSlot& slot);
+        void DestroyCpuSlotResources(FSlot& slot);
+        void DestroyGpuSlotResources(FSlot& slot);
         void HarvestCompletedSlots(uint64_t currentFrameId);
         void ResolveEncoderBackend(const Vulkan::VulkanBaseRenderer& renderer);
         void CreateFallbackEncoder();
+        FVideoEncoderConfig BuildEncoderConfig() const;
+        int32_t ActiveH264ProfileIdcLocked() const;
+        void RecomputeNegotiatedProfileLocked();
         void EncodeLoop(const std::stop_token& stopToken);
         void Broadcast(const FEncodedPacket& packet);
 
@@ -109,12 +138,14 @@ namespace Runtime::Remote
         const char* requestedEncoderName_ = "auto";
         const char* activeEncoderName_ = "openh264";
         bool resolvedEncoderBackend_ = false;
+        std::optional<Vulkan::FVulkanVideoCaps> vulkanCaps_;
 
         // Capture slots (render thread records, encoder thread reads). The vector is filled once
         // on first RecordFrame and never resized afterwards.
         std::vector<std::unique_ptr<FSlot>> slots_;
         const Vulkan::Device* device_ = nullptr;
-        std::unique_ptr<Vulkan::PipelineCommon::ZeroBindCustomPushConstantPipeline> convertPipeline_;
+        std::unique_ptr<Vulkan::PipelineCommon::ZeroBindCustomPushConstantPipeline> cpuConvertPipeline_;
+        std::unique_ptr<Vulkan::PipelineCommon::ZeroBindCustomPushConstantPipeline> gpuConvertPipeline_;
         std::unique_ptr<Vulkan::TimelineSemaphore> graphicsCompletionSemaphore_;
         uint64_t nextCompletionValue_ = 1;
         bool useTimelineCompletion_ = false;
@@ -131,9 +162,15 @@ namespace Runtime::Remote
         std::jthread encodeThread_;
         std::atomic_bool keyframeRequested_ = true;
         std::atomic<uint32_t> desiredBitrateKbps_{4000};
+        std::atomic_bool recreateEncoderRequested_ = false;
 
         // Owned by the encoder thread after Start().
         std::unique_ptr<IVideoEncoder> encoder_;
+
+        mutable std::mutex profileMutex_;
+        std::map<std::string, uint32_t> clientH264Profiles_;
+        bool profileFrozen_ = false;
+        int32_t negotiatedProfileIdc_ = STD_VIDEO_H264_PROFILE_IDC_BASELINE;
 
         // Fan-out
         std::mutex sinksMutex_;

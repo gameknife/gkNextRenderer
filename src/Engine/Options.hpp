@@ -50,7 +50,7 @@ public:
 	std::string RemoteBind{"0.0.0.0"};
 	uint32_t RemoteHttpPort{8088};
 	uint32_t RemotePort{8089};
-	uint32_t RemoteBitrateKbps{4000};
+	uint32_t RemoteBitrateKbps{};
 	uint32_t RemoteFps{30};
 	uint32_t RemoteWidth{};
 	uint32_t RemoteHeight{};
