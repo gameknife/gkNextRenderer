@@ -2,11 +2,9 @@ package main
 
 import (
 	"fmt"
-	"net"
-	"sort"
-	"strings"
 
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/remoteplay"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/runner"
 	"github.com/spf13/cobra"
 )
@@ -67,27 +65,21 @@ func newRemoteCommand(ctx appContext) *cobra.Command {
 }
 
 func remoteRunArgs(opts remoteCmdOptions, trailingArgs []string) []string {
-	runArgs := []string{
-		"--remote",
-		fmt.Sprintf("--remote-bind=%s", opts.Bind),
-		fmt.Sprintf("--remote-http-port=%d", opts.HttpPort),
-		fmt.Sprintf("--remote-port=%d", opts.SignalingPort),
-		fmt.Sprintf("--remote-bitrate=%d", opts.BitrateKbps),
-		fmt.Sprintf("--remote-fps=%d", opts.Fps),
-		fmt.Sprintf("--remote-encoder=%s", opts.Encoder),
-	}
-	if opts.Resolution != "" {
-		runArgs = append(runArgs, "--remote-res="+opts.Resolution)
-	}
-	if opts.ShowWindow {
-		runArgs = append(runArgs, "--remote-show-window")
-	}
-	return append(runArgs, trailingArgs...)
+	return remoteplay.RunArgs(remoteplay.Options{
+		Bind:          opts.Bind,
+		Resolution:    opts.Resolution,
+		Encoder:       opts.Encoder,
+		HttpPort:      opts.HttpPort,
+		SignalingPort: opts.SignalingPort,
+		BitrateKbps:   opts.BitrateKbps,
+		Fps:           opts.Fps,
+		ShowWindow:    opts.ShowWindow,
+	}, trailingArgs)
 }
 
 func printRemoteAccessUrls(bind string, httpPort uint32) {
 	console.Header("Remote Play")
-	for _, url := range buildRemoteAccessURLs(bind, httpPort, localIPv4Hosts()) {
+	for _, url := range buildRemoteAccessURLs(bind, httpPort, remoteplay.LocalIPv4Hosts()) {
 		fmt.Printf("  %s\n", url)
 	}
 	fmt.Println()
@@ -95,79 +87,9 @@ func printRemoteAccessUrls(bind string, httpPort uint32) {
 }
 
 func buildRemoteAccessURLs(bind string, httpPort uint32, discoveredHosts []string) []string {
-	if bind != "" && bind != "0.0.0.0" && bind != "::" {
-		return []string{fmt.Sprintf("http://%s:%d", formatURLHost(bind), httpPort)}
-	}
-	hosts := make([]string, 0, len(discoveredHosts)+2)
-	hosts = append(hosts, "127.0.0.1", "localhost")
-	sortedHosts := append([]string(nil), discoveredHosts...)
-	sort.Strings(sortedHosts)
-	hosts = append(hosts, sortedHosts...)
-	urls := make([]string, 0, len(hosts))
-	seen := make(map[string]struct{}, len(hosts))
-	for _, host := range hosts {
-		host = strings.TrimSpace(host)
-		if host == "" {
-			continue
-		}
-		if _, ok := seen[host]; ok {
-			continue
-		}
-		seen[host] = struct{}{}
-		urls = append(urls, fmt.Sprintf("http://%s:%d", formatURLHost(host), httpPort))
-	}
-	return urls
-}
-
-func localIPv4Hosts() []string {
-	interfaces, err := net.Interfaces()
-	if err != nil {
-		return nil
-	}
-	privateHosts := make([]string, 0, 4)
-	otherHosts := make([]string, 0, 2)
-	seen := make(map[string]struct{})
-	for _, iface := range interfaces {
-		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
-			continue
-		}
-		addrs, err := iface.Addrs()
-		if err != nil {
-			continue
-		}
-		for _, addr := range addrs {
-			var ip net.IP
-			switch value := addr.(type) {
-			case *net.IPNet:
-				ip = value.IP
-			case *net.IPAddr:
-				ip = value.IP
-			}
-			ip = ip.To4()
-			if ip == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
-				continue
-			}
-			host := ip.String()
-			if _, ok := seen[host]; ok {
-				continue
-			}
-			seen[host] = struct{}{}
-			if ip.IsPrivate() {
-				privateHosts = append(privateHosts, host)
-			} else {
-				otherHosts = append(otherHosts, host)
-			}
-		}
-	}
-	if len(privateHosts) > 0 {
-		return privateHosts
-	}
-	return otherHosts
+	return remoteplay.BuildAccessURLs(bind, httpPort, discoveredHosts)
 }
 
 func formatURLHost(host string) string {
-	if ip := net.ParseIP(host); ip != nil && ip.To4() == nil {
-		return "[" + host + "]"
-	}
-	return host
+	return remoteplay.FormatURLHost(host)
 }

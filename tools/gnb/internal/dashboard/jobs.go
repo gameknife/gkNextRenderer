@@ -18,9 +18,10 @@ import (
 type JobKind string
 
 const (
-	JobBuild JobKind = "build"
-	JobRun   JobKind = "run"
-	JobTest  JobKind = "test"
+	JobBuild  JobKind = "build"
+	JobRun    JobKind = "run"
+	JobRemote JobKind = "remote"
+	JobTest   JobKind = "test"
 )
 
 // JobStatus tracks the lifecycle of a Job.
