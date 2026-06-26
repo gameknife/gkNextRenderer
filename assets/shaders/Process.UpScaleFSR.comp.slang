@@ -3,6 +3,13 @@ import Common;
 
 struct PushConsts
 {
+    // Unified push-constant header (offset 0..15): aliases gpuScene's header so
+    // gpuScene.custom_data_0 (active view RT bank base) is valid in this custom pass. Params follow.
+    uint _ViewHdr_SwapChainIndex;
+    uint _ViewHdr_custom_data_0;
+    uint _ViewHdr_custom_data_1;
+    uint _ViewHdr_custom_data_2;
+
     uint SwapChainIdx;
     uint offset_x;
     uint offset_y;
@@ -282,7 +289,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     int2 isize = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx);
-    int2 ssize = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_DENOISED);
+    int2 ssize = Bindless.GetStorageTextureDimensions<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_DENOISED));
 
     float4 outColor = float4(0, 0, 0, 1);
 
@@ -290,7 +297,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     {
         const float2 uv = float2(ipos) / float2(pushConsts.output_w, pushConsts.output_h);
         outColor = doUpscale(
-            Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED),
+            Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_DENOISED)),
             uv,
             float2(ssize),
             float2(isize)
@@ -299,7 +306,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     else
     {
         const int2 iposOffset = int2(ipos * float2(isize) / float2(pushConsts.output_w, pushConsts.output_h));
-        outColor = Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED)[iposOffset];
+        outColor = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_DENOISED))[iposOffset];
     }
 
     Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos + int2(pushConsts.offset_x, pushConsts.offset_y)] = outColor;

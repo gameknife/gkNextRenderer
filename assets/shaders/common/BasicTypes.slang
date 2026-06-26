@@ -446,6 +446,14 @@ public struct ALIGN_16 GPUVertex
 // 14 addresses + 4 uint params; aligned size is 128 bytes for Vulkan push_constant.
 public struct ALIGN_16 GPUScene
 {
+    // Unified push-constant header: kept FIRST so it aliases the header of every custom push
+    // constant (see ZeroBindCustomPushConstantPipeline). custom_data_0 == active RenderView RT
+    // bank base, readable via gpuScene.custom_data_0 in *all* passes regardless of which pipeline.
+    uint32_t SwapChainIndex;
+    uint32_t custom_data_0;
+    uint32_t custom_data_1;
+    uint32_t custom_data_2;
+
     uint64_t Camera;
     uint64_t SceneDynamicBase;
     uint64_t Reorders;
@@ -461,11 +469,6 @@ public struct ALIGN_16 GPUScene
     uint64_t SkinnedVertices;
     uint64_t JointMatrices;
     uint64_t SoftMeshShaderResourcesAddress;
-
-    uint32_t SwapChainIndex;
-    uint32_t custom_data_0;
-    uint32_t custom_data_1;
-    uint32_t custom_data_2;
 };
 
 #else
@@ -473,6 +476,12 @@ public struct ALIGN_16 GPUScene
 #ifdef PLATFORM_APPLE
 public struct ALIGN_8 GPUScene
 {
+    // Unified push-constant header (FIRST; aliases every custom push constant's header).
+    public uint SwapChainIndex;
+    public uint custom_data_0;
+    public uint custom_data_1;
+    public uint custom_data_2;
+
     /* Scene Info */
     public UniformBufferObject *Camera;
     public uint64_t SceneDynamicBase;
@@ -567,17 +576,16 @@ public struct ALIGN_8 GPUScene
     public RaytracingAccelerationStructure GetTLAS() {
 		return RaytracingAccelerationStructure(TLAS);
 	}
-
-    public uint SwapChainIndex;
-    // custom_data_0: active RenderView RT bank base (see Bindless::ViewRT / kViewRtBankStride).
-    // 0 == primary view => screen-space RT slots resolve to absolute (legacy) layout.
-    public uint custom_data_0;
-    public uint custom_data_1;
-    public uint custom_data_2;
 };
 #else
 public struct ALIGN_8 GPUScene
 {
+    // Unified push-constant header (FIRST; aliases every custom push constant's header).
+    public uint32_t SwapChainIndex;
+    public uint32_t custom_data_0;
+    public uint32_t custom_data_1;
+    public uint32_t custom_data_2;
+
     /* Scene Info */
     uint64_t2 Camera_SceneDynamicBase_Address;
     public property UniformBufferObject* Camera
@@ -720,11 +728,6 @@ public struct ALIGN_8 GPUScene
         return RaytracingAccelerationStructure(TLAS_SkinWeights_Address.x);
 #endif
 	}
-
-    public uint32_t SwapChainIndex;
-    public uint32_t custom_data_0;
-    public uint32_t custom_data_1;
-    public uint32_t custom_data_2;
 };
 #ifdef PLATFORM_ANDROID
 [[vk::binding(0, 1)]] RaytracingAccelerationStructure BindedTLAS;
