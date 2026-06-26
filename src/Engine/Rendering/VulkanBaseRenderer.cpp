@@ -250,6 +250,10 @@ namespace Vulkan
 
         caps_.supportRayTracing = false;
         upscaler_ = Rendering::Upscaler::CreateStreamlineUpscaler();
+
+        // Multi-viewport demo: render a second view into its own RT bank and composite it as a
+        // picture-in-picture inset of the swapchain. Off by default; opt in with GK_MV_DEMO=1.
+        multiViewDemo_ = std::getenv("GK_MV_DEMO") != nullptr;
     }
 
     VulkanBaseRenderer::~VulkanBaseRenderer()
@@ -735,23 +739,20 @@ namespace Vulkan
         return targetIdx;
     }
 
-#define CREATE_STORAGE_IMAGE(idx, fmt, tiling, usage) CreateStorageImage(Assets::Bindless::idx, fmt, tiling, usage, #idx)
-    
-    void VulkanBaseRenderer::CreateRenderImages()
-    {
-        screenshot_.image.reset(new Image(*ctx_.device, frame_.swapChain->Extent(), 1, frame_.swapChain->Format(),
-                                         VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT));
-        screenshot_.imageMemory.reset(new DeviceMemory(
-            screenshot_.image->
-            AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
-        ctx_.device->DebugUtils().SetObjectName(screenshot_.image->Handle(), "Screenshot Image");
-        screenshot_.imageMemory->SetName("Screenshot Memory");
+#define CREATE_STORAGE_IMAGE(idx, fmt, tiling, usage) CreateStorageImage(bankBase + Assets::Bindless::idx, fmt, tiling, usage, #idx)
 
-        bindless_.images.resize(Assets::Bindless::RT_COUNT);
+    void VulkanBaseRenderer::CreateRenderTargetBank(uint32_t bankBase)
+    {
+        // Ensure the bindless image vector reaches into this bank's slot range.
+        if (bindless_.images.size() < bankBase + Assets::Bindless::RT_COUNT)
+        {
+            bindless_.images.resize(bankBase + Assets::Bindless::RT_COUNT);
+        }
+
         const VkFormat progressiveHistoryFormat = GOption->HighPrecisionProgressiveHistory
             ? VK_FORMAT_R32G32B32A32_SFLOAT
             : VK_FORMAT_R16G16B16A16_SFLOAT;
-        
+
         CREATE_STORAGE_IMAGE(RT_ACCUMLATE_DIFFUSE, progressiveHistoryFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT );
         CREATE_STORAGE_IMAGE(RT_SINGLE_DIFFUSE, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
         CREATE_STORAGE_IMAGE(RT_MINIGBUFFER, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
@@ -785,8 +786,27 @@ namespace Vulkan
         const VkExtent2D gtaoExtent{
             (frame_.swapChain->RenderExtent().width + 1u) / 2u,
             (frame_.swapChain->RenderExtent().height + 1u) / 2u};
-        CreateStorageImage(Assets::Bindless::RT_GTAO, gtaoExtent, VK_FORMAT_R16_SFLOAT,
+        CreateStorageImage(bankBase + Assets::Bindless::RT_GTAO, gtaoExtent, VK_FORMAT_R16_SFLOAT,
                            VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, "RT_GTAO");
+    }
+#undef CREATE_STORAGE_IMAGE
+
+    void VulkanBaseRenderer::CreateRenderImages()
+    {
+        screenshot_.image.reset(new Image(*ctx_.device, frame_.swapChain->Extent(), 1, frame_.swapChain->Format(),
+                                         VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT));
+        screenshot_.imageMemory.reset(new DeviceMemory(
+            screenshot_.image->
+            AllocateMemory(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)));
+        ctx_.device->DebugUtils().SetObjectName(screenshot_.image->Handle(), "Screenshot Image");
+        screenshot_.imageMemory->SetName("Screenshot Memory");
+
+        bindless_.images.resize(Assets::Bindless::RT_COUNT);
+
+        // Primary view RT bank (bank 0 == legacy absolute layout).
+        CreateRenderTargetBank(0);
+        // A secondary view bank was destroyed with the swapchain; recreate it on demand next frame.
+        secondaryBankCreated_ = false;
 
         for (uint32_t i = 0; i != frame_.swapChain->Images().size(); i++)
         {
@@ -1532,6 +1552,13 @@ namespace Vulkan
                     }
                 }
 
+                // Multi-viewport demo: render a second view into bank 1 and composite it as a
+                // picture-in-picture inset. Swapchain is in GENERAL here (before the present barrier).
+                if (multiViewDemo_)
+                {
+                    DemoRenderSecondView(commandBuffer, imageIndex);
+                }
+
                 if (NextEngine::GetInstance()->GetShowFlags().ShowWireframe)
                 {
                     DrawWireframeOverlay(commandBuffer, imageIndex);
@@ -1542,6 +1569,70 @@ namespace Vulkan
                 }
             }
         }
+    }
+
+    void VulkanBaseRenderer::EnsureSecondaryViewBank()
+    {
+        if (secondaryBankCreated_)
+        {
+            return;
+        }
+        CreateRenderTargetBank(Assets::Bindless::kViewRtBankStride);
+        secondaryBankCreated_ = true;
+    }
+
+    void VulkanBaseRenderer::DemoRenderSecondView(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+    {
+        const auto it = logicRenderers_.renderers.find(logicRenderers_.current);
+        if (it == logicRenderers_.renderers.end())
+        {
+            return;
+        }
+
+        EnsureSecondaryViewBank();
+        const uint32_t bank = Assets::Bindless::kViewRtBankStride;
+
+        // Render the second view into its own RT bank (same scene/camera for now; SHARC and history
+        // are shared, which is benign for a static converged proof). The logic renderer resolves all
+        // screen-space RTs through GPUScene.custom_data_0 == this bank base.
+        {
+            SCOPED_GPU_TIMER("mv-demo view");
+            SetActiveViewBankBase(bank);
+            it->second->Render(commandBuffer, imageIndex);
+            SetActiveViewBankBase(0);
+        }
+
+        // Picture-in-picture: blit bank-1 RT_DENOISED into the bottom-right quarter of the swapchain.
+        const RenderImage* src = GetStorageImage(bank + Assets::Bindless::RT_DENOISED);
+        if (!src)
+        {
+            return;
+        }
+
+        src->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                           VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+        // Order the primary swapchain blit before this PiP blit (both transfer writes, GENERAL layout).
+        ImageMemoryBarrier::FullInsert(commandBuffer, frame_.swapChain->Images()[imageIndex],
+            VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+
+        const int32_t sw = static_cast<int32_t>(frame_.swapChain->Extent().width);
+        const int32_t sh = static_cast<int32_t>(frame_.swapChain->Extent().height);
+        const int32_t rw = static_cast<int32_t>(frame_.swapChain->RenderExtent().width);
+        const int32_t rh = static_cast<int32_t>(frame_.swapChain->RenderExtent().height);
+
+        VkImageBlit region{};
+        region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.srcOffsets[0] = {0, 0, 0};
+        region.srcOffsets[1] = {rw, rh, 1};
+        region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.dstOffsets[0] = {sw / 2, sh / 2, 0};
+        region.dstOffsets[1] = {sw, sh, 1};
+
+        vkCmdBlitImage(commandBuffer,
+                       src->GetImage().Handle(), VK_IMAGE_LAYOUT_GENERAL,
+                       frame_.swapChain->Images()[imageIndex], VK_IMAGE_LAYOUT_GENERAL,
+                       1, &region, VK_FILTER_LINEAR);
     }
 
     void VulkanBaseRenderer::PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
