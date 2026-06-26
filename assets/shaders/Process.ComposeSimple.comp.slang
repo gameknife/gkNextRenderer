@@ -54,11 +54,12 @@ float ComputeEdgeStrengthTwoSided(RWTexture2D<uint> objectImage, int2 ipos, int2
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    let OutImage = Bindless.GetStorageTexture<float4>(Bindless.RT_DENOISED);
-    let LightingImage = Bindless.GetStorageTexture<float4>(Bindless.RT_ACCUMLATE_DIFFUSE);
-    let ObjectIdImage = Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
+    // Resolve screen-space RT slots through the active RenderView's bank (0 == primary, no change).
+    let OutImage = Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED);
+    let LightingImage = Bindless.GetViewStorageTexture<float4>(Bindless.RT_ACCUMLATE_DIFFUSE);
+    let ObjectIdImage = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
 
-    uint2 size = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_DENOISED);
+    uint2 size = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_DENOISED);
     int2 ipos = int2(DTid.xy);
     if (DTid.x >= size.x || DTid.y >= size.y)
     {
