@@ -315,40 +315,12 @@ if (GK_WITH_REMOTE AND NOT (ANDROID OR IOS OR APPLE))
         set(GK_REMOTE_LIBDATACHANNEL_TARGET LibDataChannel::LibDataChannelStatic)
     endif()
 
-    set(GK_OPENH264_TARGET "")
-    find_path(GK_OPENH264_INCLUDE_DIR
-        NAMES wels/codec_api.h
-        PATHS "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include"
-        NO_DEFAULT_PATH)
-    find_library(GK_OPENH264_LIBRARY_RELEASE
-        NAMES openh264
-        PATHS "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib"
-        NO_DEFAULT_PATH)
-    find_library(GK_OPENH264_LIBRARY_DEBUG
-        NAMES openh264
-        PATHS "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/debug/lib"
-        NO_DEFAULT_PATH)
-    if (GK_OPENH264_INCLUDE_DIR AND GK_OPENH264_LIBRARY_RELEASE)
-        add_library(gk_openh264 UNKNOWN IMPORTED)
-        set_target_properties(gk_openh264 PROPERTIES
-            INTERFACE_INCLUDE_DIRECTORIES "${GK_OPENH264_INCLUDE_DIR}"
-            IMPORTED_LOCATION_RELEASE "${GK_OPENH264_LIBRARY_RELEASE}"
-            IMPORTED_LOCATION_RELWITHDEBINFO "${GK_OPENH264_LIBRARY_RELEASE}"
-            IMPORTED_LOCATION_MINSIZEREL "${GK_OPENH264_LIBRARY_RELEASE}")
-        if (GK_OPENH264_LIBRARY_DEBUG)
-            set_target_properties(gk_openh264 PROPERTIES IMPORTED_LOCATION_DEBUG "${GK_OPENH264_LIBRARY_DEBUG}")
-        else()
-            set_target_properties(gk_openh264 PROPERTIES IMPORTED_LOCATION_DEBUG "${GK_OPENH264_LIBRARY_RELEASE}")
-        endif()
-        set(GK_OPENH264_TARGET gk_openh264)
-    endif()
-
-    if (GK_REMOTE_LIBDATACHANNEL_TARGET AND TARGET httplib::httplib AND GK_OPENH264_TARGET)
+    if (GK_REMOTE_LIBDATACHANNEL_TARGET AND TARGET httplib::httplib)
         set(GK_REMOTE_ENABLED ON)
-        list(APPEND GK_REMOTE_LINK_LIBS ${GK_REMOTE_LIBDATACHANNEL_TARGET} httplib::httplib ${GK_OPENH264_TARGET})
-        message(STATUS "Remote Play enabled: ${GK_REMOTE_LIBDATACHANNEL_TARGET} + httplib::httplib + openh264")
+        list(APPEND GK_REMOTE_LINK_LIBS ${GK_REMOTE_LIBDATACHANNEL_TARGET} httplib::httplib)
+        message(STATUS "Remote Play enabled: ${GK_REMOTE_LIBDATACHANNEL_TARGET} + httplib::httplib")
     else()
-        message(STATUS "Remote Play disabled: libdatachannel/cpp-httplib/openh264 targets not found")
+        message(STATUS "Remote Play disabled: libdatachannel/cpp-httplib targets not found")
     endif()
 else()
     message(STATUS "Remote Play disabled for this platform or by GK_WITH_REMOTE=OFF")

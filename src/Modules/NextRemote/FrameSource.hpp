@@ -27,8 +27,8 @@ namespace Runtime::Remote
         uint32_t strideC = 0;
     };
 
-    // CPU-side I420 test pattern generator (color conversion itself runs on the GPU, see
-    // assets/shaders/Remote.BgraToYuv.comp.slang).
+    // CPU-side I420 test pattern generator kept for test data generation; live remote capture
+    // converts the swapchain to NV12 on the GPU before Vulkan Video encode.
     class FFrameSource final
     {
     public:

@@ -140,7 +140,7 @@ namespace Runtime::Remote
         const std::string requestedEncoder = videoPipeline_ ? std::string(videoPipeline_->RequestedEncoderName())
                                                             : std::string(ToString(config_.encoderBackend));
         const std::string activeEncoder =
-            videoPipeline_ ? std::string(videoPipeline_->ActiveEncoderName()) : std::string("openh264");
+            videoPipeline_ ? std::string(videoPipeline_->ActiveEncoderName()) : std::string("vulkan");
         const uint32_t activeBitrateKbps = videoPipeline_ ? videoPipeline_->BitrateKbps() : config_.bitrateKbps;
         return fmt::format(
             R"({{"signalingPort":{},"bindAddress":"{}","fps":{},"bitrateKbps":{},"width":{},"height":{},"requestedEncoder":"{}","activeEncoder":"{}","activeBitrateKbps":{}}})",

@@ -21,7 +21,6 @@ namespace Runtime::Remote
     enum class EVideoEncoderBackend : uint8_t
     {
         Auto,
-        OpenH264,
         Vulkan,
     };
 
@@ -30,7 +29,6 @@ namespace Runtime::Remote
         switch (backend)
         {
         case EVideoEncoderBackend::Auto: return "auto";
-        case EVideoEncoderBackend::OpenH264: return "openh264";
         case EVideoEncoderBackend::Vulkan: return "vulkan";
         default: return "unknown";
         }

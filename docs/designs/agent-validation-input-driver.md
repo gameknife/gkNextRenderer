@@ -87,7 +87,7 @@ worldState_.timeScale = 240.0f;                                        // 验证
 
 **强约束：** 两者的"高层意图 → `SDL_Event`"代码必须是同一份 `SyntheticInput`（见第 6 节）。谁先落地谁就把它抽到 `src/Engine/Runtime/Input/`，另一方复用。`InjectRelativeMouse(dx,dy)` 这个薄封装两篇都需要，定义一次。
 
-> 现状（2026-06-08）：`src/Modules/NextRemote/` 已落地**视频侧**（`FrameSource`、`OpenH264Encoder`、`RemoteSession`、`SignalingServer`、`RemoteServer`，已在 `Engine.cpp` 实例化并 `Tick`），**输入侧（`InputRouter` / `SyntheticInput` / `InjectRelativeMouse`）尚未实现**。因此本系统 M1 很可能是**第一个**创建 `SyntheticInput` 的人——请直接建在 `Runtime/Input/` 公共位置，让 Remote 的输入里程碑日后复用，不要塞进 `AgentDriver/` 私有目录。
+> 现状（2026-06-08）：`src/Modules/NextRemote/` 已落地**视频侧**（`FrameSource`、`VulkanVideoEncoder`、`RemoteSession`、`SignalingServer`、`RemoteServer`，已在 `Engine.cpp` 实例化并 `Tick`），**输入侧（`InputRouter` / `SyntheticInput` / `InjectRelativeMouse`）尚未实现**。因此本系统 M1 很可能是**第一个**创建 `SyntheticInput` 的人——请直接建在 `Runtime/Input/` 公共位置，让 Remote 的输入里程碑日后复用，不要塞进 `AgentDriver/` 私有目录。
 
 ---
 

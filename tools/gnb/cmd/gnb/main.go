@@ -94,6 +94,7 @@ func main() {
 	root.AddCommand(newDepsCommand(ctx))
 	root.AddCommand(newBuildCommand(ctx))
 	root.AddCommand(newRunCommand(ctx))
+	root.AddCommand(newRemoteCommand(ctx))
 	root.AddCommand(newTestCommand(ctx))
 	root.AddCommand(newVisualCommand(ctx))
 	root.AddCommand(newShotCommand(ctx))

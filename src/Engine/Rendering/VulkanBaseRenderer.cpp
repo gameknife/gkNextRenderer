@@ -460,7 +460,7 @@ namespace Vulkan
         // Vulkan Video H.264 encode (remote play hardware path). Probe before device creation;
         // the feature struct must outlive ctx_.device.reset().
         VkPhysicalDeviceSynchronization2FeaturesKHR synchronization2Features = {};
-        if (GOption->RemoteMode && GOption->RemoteEncoder != "openh264")
+        if (GOption->RemoteMode)
         {
             videoCaps_ = FVulkanVideoCaps::Probe(ctx_.instance->Handle(), physicalDevice);
             videoCaps_.LogSummary();
@@ -482,10 +482,10 @@ namespace Vulkan
                 synchronization2Features.synchronization2 = true;
                 nextDeviceFeatures = &synchronization2Features;
             }
-            else if (GOption->RemoteEncoder == "vulkan")
+            else
             {
-                SPDLOG_WARN("RemotePlay: --remote-encoder vulkan requested but Vulkan Video H.264 encode is not "
-                            "usable on this device; falling back to openh264");
+                SPDLOG_WARN("RemotePlay: Vulkan Video H.264 encode is not usable on this device; remote mode will "
+                            "be unavailable");
             }
         }
 

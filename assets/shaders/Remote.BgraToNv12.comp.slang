@@ -20,9 +20,23 @@ ConstantBuffer<PushConsts> pushConsts;
 
 float3 FetchScaled(RWTexture2D<float4> src, uint dx, uint dy)
 {
-    uint sx = min(pushConsts.srcWidth - 1, (dx * pushConsts.srcWidth) / pushConsts.dstWidth);
-    uint sy = min(pushConsts.srcHeight - 1, (dy * pushConsts.srcHeight) / pushConsts.dstHeight);
-    return src[int2(sx, sy)].rgb;
+    float2 srcSize = float2(pushConsts.srcWidth, pushConsts.srcHeight);
+    float2 dstSize = float2(pushConsts.dstWidth, pushConsts.dstHeight);
+    float2 srcPos = ((float2(dx, dy) + 0.5) * srcSize / dstSize) - 0.5;
+
+    int2 p0 = int2(floor(srcPos));
+    int2 p1 = p0 + int2(1, 1);
+    float2 t = frac(srcPos);
+
+    int2 maxCoord = int2(pushConsts.srcWidth - 1, pushConsts.srcHeight - 1);
+    p0 = clamp(p0, int2(0, 0), maxCoord);
+    p1 = clamp(p1, int2(0, 0), maxCoord);
+
+    float3 c00 = src[p0].rgb;
+    float3 c10 = src[int2(p1.x, p0.y)].rgb;
+    float3 c01 = src[int2(p0.x, p1.y)].rgb;
+    float3 c11 = src[p1].rgb;
+    return lerp(lerp(c00, c10, t.x), lerp(c01, c11, t.x), t.y);
 }
 
 float LumaNorm(float3 rgb)

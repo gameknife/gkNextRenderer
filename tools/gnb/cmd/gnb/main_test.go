@@ -131,6 +131,55 @@ func TestShotRunArgsKeepsDefaultCaptureClean(t *testing.T) {
 	}
 }
 
+func TestRemoteRunArgsIncludesRemoteFlags(t *testing.T) {
+	got := remoteRunArgs(remoteCmdOptions{
+		Bind:          "0.0.0.0",
+		Resolution:    "1280x720",
+		Encoder:       "vulkan",
+		HttpPort:      9000,
+		SignalingPort: 9001,
+		BitrateKbps:   6000,
+		Fps:           60,
+		ShowWindow:    true,
+	}, []string{"--present-mode=0"})
+	want := []string{
+		"--remote",
+		"--remote-bind=0.0.0.0",
+		"--remote-http-port=9000",
+		"--remote-port=9001",
+		"--remote-bitrate=6000",
+		"--remote-fps=60",
+		"--remote-encoder=vulkan",
+		"--remote-res=1280x720",
+		"--remote-show-window",
+		"--present-mode=0",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("remoteRunArgs() = %#v, want %#v", got, want)
+	}
+}
+
+func TestBuildRemoteAccessURLsWildcardIncludesLoopbackAndLan(t *testing.T) {
+	got := buildRemoteAccessURLs("0.0.0.0", 8088, []string{"192.168.1.22", "10.0.0.9", "192.168.1.22"})
+	want := []string{
+		"http://127.0.0.1:8088",
+		"http://localhost:8088",
+		"http://10.0.0.9:8088",
+		"http://192.168.1.22:8088",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("buildRemoteAccessURLs() = %#v, want %#v", got, want)
+	}
+}
+
+func TestBuildRemoteAccessURLSSpecificBindUsesSingleHost(t *testing.T) {
+	got := buildRemoteAccessURLs("192.168.50.12", 8088, []string{"10.0.0.9"})
+	want := []string{"http://192.168.50.12:8088"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("buildRemoteAccessURLs() = %#v, want %#v", got, want)
+	}
+}
+
 func TestTodoAddWithSpecTextCreatesLinkedSpec(t *testing.T) {
 	dir := t.TempDir()
 	specDir := filepath.Join(dir, ".spec")
