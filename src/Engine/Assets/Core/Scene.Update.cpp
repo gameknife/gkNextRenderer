@@ -206,7 +206,7 @@ namespace Assets
             }
         }
 
-        if (NextEngine::GetInstance()->GetTotalFrames() % 30 == 0)
+        if (enableCpuAcceleration_ && NextEngine::GetInstance()->GetTotalFrames() % 30 == 0)
         {
             auto& renderer = NextEngine::GetInstance()->GetRenderer();
             // Voxelize whenever any renderer needs the voxel SDF (ambient-cube paths or the
@@ -214,7 +214,7 @@ namespace Assets
             const bool shouldUpdateVoxel =
                 renderer.CurrentRendererRequirements().NeedsVoxelGeometry() && !renderer.ShouldSkipAmbientCubeUpdates();
 
-            if (shouldUpdateVoxel)
+            if (shouldUpdateVoxel && ambientArenaBufferMemory_)
             {
                 const bool voxelUploadCompleted = cpuAccelerationStructure_.Tick(
                     *this, ambientArenaBufferMemory_.get(), ambientArenaBufferMemory_.get(), ambientArenaBufferMemory_.get());

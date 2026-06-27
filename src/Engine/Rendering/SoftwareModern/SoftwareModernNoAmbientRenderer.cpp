@@ -63,14 +63,15 @@ namespace Vulkan::SoftwareModernNoAmbient
 
         {
             SCOPED_GPU_TIMER("shadingpass");
+            const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
             shadingPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
             vkCmdDispatch(commandBuffer,
-                          Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
-                          Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+                          Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+                          Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
 
             const auto transition = [this, commandBuffer](uint32_t bindlessId)
             {
-                baseRender_.GetStorageImage(bindlessId)->InsertBarrier(commandBuffer,
+                baseRender_.GetViewStorageImage(bindlessId)->InsertBarrier(commandBuffer,
                     VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                     VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
             };
@@ -93,7 +94,7 @@ namespace Vulkan::SoftwareModernNoAmbient
                     commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
                     VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
                 gtaoPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
-                const VkExtent2D extent = SwapChain().RenderExtent();
+                const VkExtent2D extent = baseRender_.ActiveViewRenderExtent();
                 vkCmdDispatch(commandBuffer,
                               Utilities::Math::GetSafeDispatchCount((extent.width + 1u) / 2u, 8),
                               Utilities::Math::GetSafeDispatchCount((extent.height + 1u) / 2u, 8), 1);
@@ -105,10 +106,11 @@ namespace Vulkan::SoftwareModernNoAmbient
 
             {
                 SCOPED_GPU_TIMER("gtao compose pass");
+                const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
                 gtaoComposePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
                 vkCmdDispatch(commandBuffer,
-                              Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
-                              Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+                              Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+                              Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
                 baseRender_.GetViewStorageImage(Assets::Bindless::RT_SINGLE_DIFFUSE)->InsertBarrier(
                     commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                     VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
@@ -126,10 +128,11 @@ namespace Vulkan::SoftwareModernNoAmbient
                 canUseHistory ? 1u : 0u,
                 taaEnabled
             };
+            const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
             accumulatePipeline_->BindPipeline(commandBuffer, pushConst.data());
             vkCmdDispatch(commandBuffer,
-                          Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
-                          Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+                          Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+                          Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
 
             baseRender_.GetViewStorageImage(Assets::Bindless::RT_ACCUMLATE_DIFFUSE)->InsertBarrier(
                 commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
@@ -138,10 +141,11 @@ namespace Vulkan::SoftwareModernNoAmbient
 
         {
             SCOPED_GPU_TIMER("compose pass");
+            const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
             composePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
             vkCmdDispatch(commandBuffer,
-                          Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
-                          Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+                          Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+                          Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
         }
 
         {

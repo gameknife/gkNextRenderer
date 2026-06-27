@@ -35,7 +35,7 @@ last_updated: 2026-06-27
 | Phase 1 Bindless RT bank 贯通 | ✅ | `d632ec7e` `f69ee192` `abc35445` `c7db89b7` | `GPUScene.custom_data_0` = view bank base；shader 侧 `Bindless::ViewRT` + `GetViewStorageTexture`，C++ 侧 `GetViewStorageImage`，全量 sweep；并用**统一 push-constant header**解决 custom-pipeline 拿不到 custom_data_0 的问题（见 0.3）。base 0 像素零回归。 |
 | Phase 2 离屏渲到纹理 | ✅ | `ffdb1db7` | swapchain 子矩形 PiP（`GK_MV_DEMO`）+ 离屏 sampled image → `BindSampleTexture` → `kSecondaryViewSampleSlot=65000` → ImGui。 |
 | Phase 3 每视口时域历史 + per-view 编排 | ✅(核心) | `9cd800f0` `9c0d3c8d` | `PreRender` 拆 `PreRenderSceneGlobal`(每 scene 一次) + `PreRenderPerView`(每视口跑 cull/clear/visibility/shadow)；per-view 独立 RT bank = 独立时域历史；**不同相机**（`ActiveViewCameraAddress` + `MakeOrbitedCameraUbo`）。**未做**：§6 屏障范围收敛到活跃 bank（`InitializeBarriers` 仍遍历整表）；SHARC/shadow 目前所有视口共享。 |
-| Phase 4 gkNextEditor 接入 | 🟡 主体完成 | `f162cf99` | **多相机面板 ✅**（`Panels/CameraViewPanel.cpp`，实时显示第二相机）。**未做**：内容浏览器缩略图（transient view 渲资产/小 scene 缩略图缓存）。 |
+| Phase 4 gkNextEditor 接入 | 🟡 主体完成 | `f162cf99` | **多相机面板 ✅**（`Panels/CameraViewPanel.cpp`，实时显示第二相机）。内容浏览器已接入当前已加载 scene 的实时 RenderView 缩略图链路（`Panels/ContentBrowserPanel.cpp`，匹配 `currentScenePath` 的 scene 卡片显示 secondary offscreen sample slot），图片纹理资产按需加载真实缩略图；Material Browser 已接入单 RenderView 球体预览 scene：逐材质渲染到 secondary view，再 blit 到 per-material sample slot 缓存；thumbnail UBO 使用预览 scene 的相机和 square thumbnail extent，不走主相机 delegate。**未做**：transient view 渲任意资产/小 scene 缩略图缓存与落盘。 |
 | Phase 5 多 scene 同屏 | ⚪ 未开始 | | |
 | Phase 6 独立 OS 窗口 | ⚪ 不做（本期） | | |
 
@@ -69,7 +69,7 @@ last_updated: 2026-06-27
 
 ### 0.5 建议的下一步（按优先级）
 
-1. **Phase 4 收尾：内容浏览器缩略图**。对资产/小 scene 用 `EViewSchedule::kTransient` 思路：建临时 bank + 离屏图，渲 N 帧（光栅 1 帧、PT 多帧）→ copy 到 sample slot 或落盘 `.jpg` 缓存 → `ContentBrowserPanel` 显示。复用 0.2 的离屏路径。
+1. **Phase 4 收尾：内容浏览器缩略图**。当前已完成"当前已加载 scene 卡片显示实时 RenderView 输出"的最小接入、普通图片纹理资产的真实缩略图、Material Browser 单 RenderView 球形材质缩略图缓存。下一步可继续扩展任意资产/小 scene 的 `EViewSchedule::kTransient` 缩略图与落盘，并把 Material Browser 缩略图调度做成可配置队列/缓存上限。
 2. **泛化为多视口列表**：把 `DemoRenderSecondView` 的"单一第二视口"重构成 `RenderViewManager` 持有 `std::vector<RenderView>`，每个 view 自带 bank/camera UBO/visibility framebuffer/离屏图；`FBankAllocator` 已就绪（上限 8 banks）。编辑器面板支持新建/删除多个相机视口。
 3. **Phase 5 多 scene**：`RenderView` 挂独立 `scene`，`PreRenderSceneGlobal` 按 scene 去重。
 4. **性能**：§6 屏障收敛到活跃 bank；profiler 每 view 计时；`kOnDemand` 静止不渲。

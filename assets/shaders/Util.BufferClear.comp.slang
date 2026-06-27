@@ -19,6 +19,11 @@ struct PushConsts
 void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
     int2 ipos = int2(dispatchThreadId.xy);
+    uint2 size = Bindless.GetStorageTextureDimensions<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_SINGLE_DIFFUSE));
+    if (dispatchThreadId.x >= size.x || dispatchThreadId.y >= size.y)
+    {
+        return;
+    }
     //Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + SwapChainIdx)[ipos] = float4(0, 0, 0, 0);
     Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_SINGLE_DIFFUSE))[ipos] = float4(0, 0, 0, 0);
     Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_SINGLE_SPECULAR))[ipos] = float4(0, 0, 0, 0);

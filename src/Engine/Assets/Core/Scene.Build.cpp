@@ -219,8 +219,10 @@ namespace Assets
         gpuDrivenStat_ = {};
         shadowGpuDrivenStats_.fill({});
 
-        // Rebuild the cpu bvh
-        cpuAccelerationStructure_.InitBVH(*this);
+        if (enableCpuAcceleration_)
+        {
+            cpuAccelerationStructure_.InitBVH(*this);
+        }
 
         // force static flag
         std::function<void(Node*)> SetKinematicRecursive = [&](Node* node)
@@ -555,8 +557,9 @@ namespace Assets
         UpdateNodesGpuDriven();
         MarkDirty();
 
-        if (!NextEngine::GetInstance() ||
-            NextEngine::GetInstance()->GetRenderer().CurrentRendererRequirements().requestAmbientCube)
+        if (enableCpuAcceleration_ && ambientArenaBufferMemory_ &&
+            (!NextEngine::GetInstance() ||
+             NextEngine::GetInstance()->GetRenderer().CurrentRendererRequirements().requestAmbientCube))
         {
             cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), false);
         }

@@ -17,8 +17,10 @@
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Loaders/FProcModel.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
+#include "Engine/Runtime/Scene/SceneBuilder.h"
 
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Utilities/Math.hpp"
@@ -36,6 +38,7 @@
 #include "Engine/Rendering/GaussianSplat/GaussianSplatPass.hpp"
 #include "Engine/Rendering/Upscaler/IUpscaler.hpp"
 #include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -411,12 +414,29 @@ namespace Vulkan
 
     Assets::Scene& VulkanBaseRenderer::GetScene()
     {
+        if (activeSceneOverride_ != nullptr)
+        {
+            return *activeSceneOverride_;
+        }
         return *scene_.lock();
     }
 
     void VulkanBaseRenderer::SetScene(std::shared_ptr<Assets::Scene> scene)
     {
         scene_ = scene;
+        materialThumbnailScene_.reset();
+        materialThumbnailCameraUbo_.reset();
+        materialThumbnailImages_.clear();
+        materialThumbnailHashes_.clear();
+        pendingMaterialThumbnails_.clear();
+        materialThumbnailSceneReady_ = false;
+        meshThumbnailScene_.reset();
+        meshThumbnailCameraUbo_.reset();
+        meshThumbnailImages_.clear();
+        meshThumbnailHashes_.clear();
+        pendingMeshThumbnails_.clear();
+        thumbnailVisibilityFrameBuffer_.reset();
+        thumbnailBankCreated_ = false;
         RequestClearAmbientCubeCache();
         resetUpscalerHistory_ = true;
     }
@@ -434,6 +454,15 @@ namespace Vulkan
             return delegates_.getUniformBufferObject(offset, extent);
         }
         return {};
+    }
+
+    VkExtent2D VulkanBaseRenderer::ActiveViewRenderExtent() const
+    {
+        if (activeViewRenderExtent_.width > 0 && activeViewRenderExtent_.height > 0)
+        {
+            return activeViewRenderExtent_;
+        }
+        return frame_.swapChain->RenderExtent();
     }
 
     void VulkanBaseRenderer::SetPhysicalDeviceImpl(
@@ -741,9 +770,14 @@ namespace Vulkan
         return targetIdx;
     }
 
-#define CREATE_STORAGE_IMAGE(idx, fmt, tiling, usage) CreateStorageImage(bankBase + Assets::Bindless::idx, fmt, tiling, usage, #idx)
+#define CREATE_STORAGE_IMAGE(idx, fmt, tiling, usage) CreateStorageImage(bankBase + Assets::Bindless::idx, extent, fmt, tiling, usage, #idx)
 
     void VulkanBaseRenderer::CreateRenderTargetBank(uint32_t bankBase)
+    {
+        CreateRenderTargetBank(bankBase, frame_.swapChain->RenderExtent());
+    }
+
+    void VulkanBaseRenderer::CreateRenderTargetBank(uint32_t bankBase, const VkExtent2D extent)
     {
         // Ensure the bindless image vector reaches into this bank's slot range.
         if (bindless_.images.size() < bankBase + Assets::Bindless::RT_COUNT)
@@ -786,8 +820,8 @@ namespace Vulkan
         CREATE_STORAGE_IMAGE(RT_SPLAT_ACCUM, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
         CREATE_STORAGE_IMAGE(RT_AMBIENT, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
         const VkExtent2D gtaoExtent{
-            (frame_.swapChain->RenderExtent().width + 1u) / 2u,
-            (frame_.swapChain->RenderExtent().height + 1u) / 2u};
+            (extent.width + 1u) / 2u,
+            (extent.height + 1u) / 2u};
         CreateStorageImage(bankBase + Assets::Bindless::RT_GTAO, gtaoExtent, VK_FORMAT_R16_SFLOAT,
                            VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, "RT_GTAO");
     }
@@ -809,6 +843,8 @@ namespace Vulkan
         CreateRenderTargetBank(0);
         // A secondary view bank was destroyed with the swapchain; recreate it on demand next frame.
         secondaryBankCreated_ = false;
+        thumbnailBankCreated_ = false;
+        thumbnailVisibilityFrameBuffer_.reset();
 
         for (uint32_t i = 0; i != frame_.swapChain->Images().size(); i++)
         {
@@ -1014,6 +1050,8 @@ namespace Vulkan
         secondaryOffscreenImage_.reset();
         secondaryOffscreenSampler_.reset();
         secondaryBankCreated_ = false;
+        thumbnailVisibilityFrameBuffer_.reset();
+        thumbnailBankCreated_ = false;
         overlay_.sunShadowPass.reset();
         
         screenshot_.image.reset();
@@ -1410,6 +1448,11 @@ namespace Vulkan
             logicRenderer.second->BeforeNextFrame();
         }
 
+        if (HasPendingMaterialThumbnail())
+        {
+            EnsureMaterialThumbnailScene();
+        }
+
         if (delegates_.beforeNextTick)
         {
             delegates_.beforeNextTick();
@@ -1579,10 +1622,11 @@ namespace Vulkan
                 // Multi-viewport: render the secondary camera view into bank 1 -> offscreen sample
                 // slot (for the editor's ImGui panel) and, in the env demo, a swapchain PiP inset.
                 // Swapchain is in GENERAL here (before the present barrier).
-                if (multiViewDemo_ || secondaryViewEnabled_)
+                if (multiViewDemo_ || secondaryViewEnabled_ || secondaryViewRequested_ || HasPendingThumbnail())
                 {
                     DemoRenderSecondView(commandBuffer, imageIndex);
                 }
+                secondaryViewRequested_ = false;
 
                 if (NextEngine::GetInstance()->GetShowFlags().ShowWireframe)
                 {
@@ -1632,6 +1676,67 @@ namespace Vulkan
         }
     }
 
+    uint32_t VulkanBaseRenderer::RequestMaterialThumbnail(const uint32_t materialIndex, const uint64_t materialHash)
+    {
+        if (materialIndex >= kMaterialThumbnailMaxSlots)
+        {
+            return std::numeric_limits<uint32_t>::max();
+        }
+
+        if (materialThumbnailHashes_.size() <= materialIndex)
+        {
+            materialThumbnailHashes_.resize(static_cast<size_t>(materialIndex) + 1, 0);
+        }
+        if (materialThumbnailImages_.size() <= materialIndex)
+        {
+            materialThumbnailImages_.resize(static_cast<size_t>(materialIndex) + 1);
+        }
+
+        if (materialThumbnailImages_[materialIndex] != nullptr &&
+            materialThumbnailHashes_[materialIndex] == materialHash)
+        {
+            return kMaterialThumbnailSampleSlotBase + materialIndex;
+        }
+
+        materialThumbnailHashes_[materialIndex] = materialHash;
+        if (std::find(pendingMaterialThumbnails_.begin(), pendingMaterialThumbnails_.end(), materialIndex) ==
+            pendingMaterialThumbnails_.end())
+        {
+            pendingMaterialThumbnails_.push_back(materialIndex);
+        }
+        return std::numeric_limits<uint32_t>::max();
+    }
+
+    uint32_t VulkanBaseRenderer::RequestMeshThumbnail(const uint32_t modelIndex, const uint64_t modelHash)
+    {
+        if (modelIndex >= kMeshThumbnailMaxSlots)
+        {
+            return std::numeric_limits<uint32_t>::max();
+        }
+
+        if (meshThumbnailHashes_.size() <= modelIndex)
+        {
+            meshThumbnailHashes_.resize(static_cast<size_t>(modelIndex) + 1, 0);
+        }
+        if (meshThumbnailImages_.size() <= modelIndex)
+        {
+            meshThumbnailImages_.resize(static_cast<size_t>(modelIndex) + 1);
+        }
+
+        if (meshThumbnailImages_[modelIndex] != nullptr && meshThumbnailHashes_[modelIndex] == modelHash)
+        {
+            return kMeshThumbnailSampleSlotBase + modelIndex;
+        }
+
+        meshThumbnailHashes_[modelIndex] = modelHash;
+        if (std::find(pendingMeshThumbnails_.begin(), pendingMeshThumbnails_.end(), modelIndex) ==
+            pendingMeshThumbnails_.end())
+        {
+            pendingMeshThumbnails_.push_back(modelIndex);
+        }
+        return std::numeric_limits<uint32_t>::max();
+    }
+
     void VulkanBaseRenderer::EnsureSecondaryViewBank()
     {
         if (secondaryBankCreated_)
@@ -1668,8 +1773,479 @@ namespace Vulkan
         secondaryBankCreated_ = true;
     }
 
+    void VulkanBaseRenderer::EnsureMaterialThumbnailScene()
+    {
+        if (materialThumbnailSceneReady_)
+        {
+            return;
+        }
+
+        materialThumbnailScene_ = std::make_unique<Assets::Scene>(
+            CommandPool(), false, /*allocateAmbientResources*/ false, /*enableCpuAcceleration*/ false);
+
+        std::vector<std::shared_ptr<Assets::Node>> nodes;
+        std::vector<Assets::Model> models;
+        std::vector<Assets::FMaterial> materials;
+        std::vector<Assets::LightObject> lights;
+        std::vector<Assets::AnimationTrack> tracks;
+        std::vector<Assets::Skeleton> skeletons;
+
+        models.push_back(Assets::FProcModel::CreateSphere(glm::vec3(0.0f), 1.0f));
+        Assets::FMaterial previewMaterial;
+        previewMaterial.gpuMaterial_ = Assets::Material::Lambertian(glm::vec3(0.75f));
+        previewMaterial.name_ = "__material_thumbnail_preview";
+        materials.push_back(previewMaterial);
+        nodes.push_back(Assets::SceneBuilder::CreateRenderNode(
+            "__MaterialThumbnailSphere",
+            glm::vec3(0.0f),
+            glm::vec3(1.0f),
+            1u,
+            0u,
+            0u,
+            true));
+
+        materialThumbnailScene_->Reload(nodes, models, materials, lights, tracks);
+        materialThumbnailScene_->PostLoad(skeletons);
+        materialThumbnailScene_->RebuildMeshBuffer(CommandPool(), false);
+
+        Assets::EnvironmentSetting env;
+        env.Reset();
+        env.HasSky = true;
+        env.HasSun = true;
+        env.SunIntensity = 1000.0f;
+        env.SunRotation = 0.35f;
+        env.SkyIntensity = 100.0f;
+        materialThumbnailScene_->SetEnvSettings(env);
+
+        Assets::Camera camera{};
+        camera.name = "Material Thumbnail";
+        camera.FieldOfView = 38.0f;
+        camera.Aperture = 0.0f;
+        camera.FocalDistance = 3.0f;
+        camera.NearPlane = 0.01f;
+        camera.FarPlane = 20.0f;
+        camera.ModelView = glm::lookAt(glm::vec3(0.0f, 0.0f, 4.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        materialThumbnailScene_->SetRenderCamera(camera);
+        materialThumbnailScene_->UpdateNodes();
+        materialThumbnailSceneReady_ = true;
+    }
+
+    void VulkanBaseRenderer::EnsureThumbnailRenderTarget()
+    {
+        static constexpr VkExtent2D kThumbnailExtent{256, 256};
+        static constexpr uint32_t kThumbnailBank = 2u * Assets::Bindless::kViewRtBankStride;
+
+        if (!thumbnailBankCreated_)
+        {
+            CreateRenderTargetBank(kThumbnailBank, kThumbnailExtent);
+            thumbnailVisibilityFrameBuffer_.reset(new FrameBuffer(
+                kThumbnailExtent,
+                GetStorageImage(kThumbnailBank + Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(),
+                overlay_.visibilityPipeline->RenderPass()));
+            thumbnailBankCreated_ = true;
+        }
+        if (!thumbnailSampler_)
+        {
+            Vulkan::SamplerConfig samplerConfig{};
+            samplerConfig.AddressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            samplerConfig.AddressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            samplerConfig.AnisotropyEnable = false;
+            thumbnailSampler_.reset(new Vulkan::Sampler(*ctx_.device, samplerConfig));
+        }
+    }
+
+    void VulkanBaseRenderer::RebuildMeshThumbnailScene(const Assets::Model& model)
+    {
+        static constexpr VkExtent2D kThumbnailExtent{256, 256};
+        (void)kThumbnailExtent;
+
+        meshThumbnailScene_ = std::make_unique<Assets::Scene>(
+            CommandPool(), false, /*allocateAmbientResources*/ false, /*enableCpuAcceleration*/ false);
+
+        const glm::vec3 aabbMin = model.GetLocalAABBMin();
+        const glm::vec3 aabbMax = model.GetLocalAABBMax();
+        const glm::vec3 center = (aabbMin + aabbMax) * 0.5f;
+        const glm::vec3 extent = glm::max(aabbMax - aabbMin, glm::vec3(0.001f));
+        const float radius = std::max(glm::length(extent) * 0.5f, 0.05f);
+
+        std::vector<std::shared_ptr<Assets::Node>> nodes;
+        std::vector<Assets::Model> models;
+        std::vector<Assets::FMaterial> materials;
+        std::vector<Assets::LightObject> lights;
+        std::vector<Assets::AnimationTrack> tracks;
+        std::vector<Assets::Skeleton> skeletons;
+
+        models.push_back(model);
+        Assets::FMaterial previewMaterial;
+        previewMaterial.gpuMaterial_ = Assets::Material::Lambertian(glm::vec3(0.72f, 0.74f, 0.78f));
+        previewMaterial.name_ = "__mesh_thumbnail_default";
+        materials.push_back(previewMaterial);
+        nodes.push_back(Assets::SceneBuilder::CreateRenderNode(
+            "__MeshThumbnailModel",
+            -center,
+            glm::vec3(1.0f),
+            1u,
+            0u,
+            0u,
+            true));
+
+        meshThumbnailScene_->Reload(nodes, models, materials, lights, tracks);
+        meshThumbnailScene_->PostLoad(skeletons);
+        meshThumbnailScene_->RebuildMeshBuffer(CommandPool(), false);
+
+        Assets::EnvironmentSetting env;
+        env.Reset();
+        env.HasSky = false;
+        env.HasSun = true;
+        env.SunIntensity = 500.0f;
+        env.SunRotation = 0.35f;
+        env.SkyIntensity = 0.0f;
+        meshThumbnailScene_->SetEnvSettings(env);
+
+        Assets::Camera camera{};
+        camera.name = "Mesh Thumbnail";
+        camera.FieldOfView = 38.0f;
+        camera.Aperture = 0.0f;
+        const float halfFov = glm::radians(camera.FieldOfView) * 0.5f;
+        const float distance = std::max(radius / std::max(std::sin(halfFov), 0.01f) * 1.18f, 0.15f);
+        const glm::vec3 viewDir = glm::normalize(glm::vec3(0.72f, 0.42f, 0.86f));
+        const glm::vec3 eye = viewDir * distance;
+        camera.FocalDistance = distance;
+        camera.NearPlane = std::max(0.001f, distance - radius * 2.5f);
+        camera.FarPlane = std::max(camera.NearPlane + 1.0f, distance + radius * 3.5f);
+        camera.ModelView = glm::lookAt(eye, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        meshThumbnailScene_->SetRenderCamera(camera);
+        meshThumbnailScene_->UpdateNodes();
+    }
+
+    Assets::UniformBufferObject VulkanBaseRenderer::BuildThumbnailUbo(Assets::Scene& scene, const VkExtent2D extent) const
+    {
+        Assets::UniformBufferObject ubo{};
+
+        const Assets::Camera camera = scene.GetRenderCamera();
+        const float aspect = static_cast<float>(std::max(1u, extent.width)) /
+            static_cast<float>(std::max(1u, extent.height));
+        ubo.ModelView = camera.ModelView;
+        ubo.Projection = glm::perspective(glm::radians(camera.FieldOfView), aspect, camera.NearPlane, camera.FarPlane);
+        ubo.Projection[1][1] *= -1.0f;
+        ubo.ProjectionUnJit = ubo.Projection;
+        ubo.ModelViewInverse = glm::inverse(ubo.ModelView);
+        ubo.ProjectionInverse = glm::inverse(ubo.Projection);
+        ubo.ProjectionInverseUnJit = ubo.ProjectionInverse;
+        ubo.ViewProjection = ubo.Projection * ubo.ModelView;
+        ubo.ViewProjectionUnJit = ubo.ProjectionUnJit * ubo.ModelView;
+        ubo.PrevViewProjection = ubo.ViewProjection;
+        ubo.PrevViewProjectionUnJit = ubo.ViewProjectionUnJit;
+        ubo.Jitter = glm::vec4(0.0f);
+        ubo.ViewportRect = glm::vec4(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height));
+
+        const Assets::EnvironmentSetting& env = scene.GetEnvSettings();
+        const bool hasSun = env.HasSun && env.SunIntensity > 0.0f;
+        ubo.SunDirection = glm::vec4(env.SunDirection(), 0.0f);
+        ubo.SunColor = hasSun ? glm::vec4(1.0f, 1.0f, 1.0f, 0.0f) * env.SunIntensity : glm::vec4(0.0f);
+        ubo.HasSun = hasSun;
+        ubo.SkyRotation = env.SkyRotation;
+        ubo.SkyIntensity = env.SkyIntensity;
+        ubo.SkyIdx = static_cast<uint32_t>(std::max(env.SkyIdx, 0));
+        ubo.HasSky = env.HasSky;
+        ubo.LightCount = scene.GetLightCount();
+
+        const auto cascades = env.ComputeSunCascades(
+            ubo.ViewProjectionUnJit, camera.NearPlane, camera.FarPlane, 20.0f);
+        for (uint32_t i = 0; i < Assets::Scene::kSunShadowCascadeCount; ++i)
+        {
+            ubo.SunCascadeViewProjection[i] = cascades.viewProjection[i];
+        }
+        ubo.CascadeSplits = cascades.splits;
+
+        ubo.Aperture = camera.Aperture;
+        ubo.FocusDistance = camera.FocalDistance;
+        ubo.FastGather = false;
+        ubo.SuperResolution = 0;
+        ubo.MaxNumberOfBounces = 1;
+        ubo.NumberOfSamples = 1;
+        ubo.NumberOfBounces = 1;
+        ubo.TemporalFrames = 1;
+        ubo.TotalFrames = static_cast<uint32_t>(std::max(frame_.frameCount, 1));
+        ubo.TAA = false;
+        ubo.ProgressiveRender = false;
+        ubo.HDR = false;
+        ubo.HDROutputMode = 0;
+        ubo.PaperWhiteNit = 200.0f;
+        ubo.SceneEpsilonScale = 1.0f;
+        ubo.HeatmapScale = 1.0f;
+        ubo.ShowHeatmap = false;
+        ubo.DebugDraw_Lighting = false;
+        ubo.DebugDraw_ShadowCascadeCoverage = false;
+
+        ubo.DenoiseDiffuseSourceSlot = static_cast<uint32_t>(Assets::Bindless::RT_ACCUMLATE_DIFFUSE);
+        ubo.DenoiseSpecularSourceSlot = static_cast<uint32_t>(Assets::Bindless::RT_ACCUMLATE_SPECULAR);
+        ubo.GTAORadius = 1.0f;
+        ubo.GTAOStrength = 0.0f;
+        ubo.GTAOThickness = 0.1f;
+        ubo.GTAODebugMode = 0;
+        ubo.GTAOEnable = false;
+        ubo.GTAOQuality = 0;
+        ubo.SkyVisEnable = false;
+        ubo.SkyVisStrength = 0.0f;
+        ubo.SkyVisMaxDistance = 1.0f;
+        ubo.SkyVisRayCount = 1;
+        ubo.SkyVisCombineMode = 0;
+        ubo.SkyVisBlurRadius = 0;
+        ubo.SkyVisJitterRadius = 0.0f;
+        return ubo;
+    }
+
+    bool VulkanBaseRenderer::RenderNextMaterialThumbnail(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+    {
+        static constexpr VkExtent2D kThumbnailExtent{256, 256};
+        static constexpr uint32_t kThumbnailBank = 2u * Assets::Bindless::kViewRtBankStride;
+
+        if (pendingMaterialThumbnails_.empty())
+        {
+            return false;
+        }
+
+        auto mainScene = scene_.lock();
+        if (!mainScene)
+        {
+            pendingMaterialThumbnails_.clear();
+            return false;
+        }
+
+        const uint32_t materialIndex = pendingMaterialThumbnails_.front();
+        pendingMaterialThumbnails_.erase(pendingMaterialThumbnails_.begin());
+        if (materialIndex >= mainScene->Materials().size() || materialIndex >= kMaterialThumbnailMaxSlots)
+        {
+            return false;
+        }
+
+        if (!materialThumbnailSceneReady_)
+        {
+            return false;
+        }
+        if (!materialThumbnailScene_ || materialThumbnailScene_->Materials().empty())
+        {
+            return false;
+        }
+
+        EnsureThumbnailRenderTarget();
+
+        const uint32_t bank = kThumbnailBank;
+        const uint32_t sampleSlot = kMaterialThumbnailSampleSlotBase + materialIndex;
+
+        if (materialThumbnailImages_.size() <= materialIndex)
+        {
+            materialThumbnailImages_.resize(static_cast<size_t>(materialIndex) + 1);
+        }
+        if (!materialThumbnailImages_[materialIndex])
+        {
+            const std::string debugName = fmt::format("Material Thumbnail {}", materialIndex);
+            materialThumbnailImages_[materialIndex].reset(new RenderImage(
+                Device(), kThumbnailExtent, VK_FORMAT_R16G16B16A16_SFLOAT,
+                VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                false, debugName.c_str()));
+            ctx_.globalTexturePool->BindSampleTexture(
+                sampleSlot, materialThumbnailImages_[materialIndex]->GetImageView(), *thumbnailSampler_);
+        }
+
+        materialThumbnailScene_->Materials()[0] = mainScene->Materials()[materialIndex];
+        materialThumbnailScene_->Materials()[0].name_ = "__material_thumbnail_preview";
+
+        const auto rendererIt = logicRenderers_.renderers.find(ERT_SoftwareModernNoAmbient);
+        const auto fallbackIt = logicRenderers_.renderers.find(logicRenderers_.current);
+        if (rendererIt == logicRenderers_.renderers.end() && fallbackIt == logicRenderers_.renderers.end())
+        {
+            return false;
+        }
+
+        activeSceneOverride_ = materialThumbnailScene_.get();
+        materialThumbnailScene_->UpdateAllMaterials();
+        materialThumbnailScene_->UpdateNodes();
+        if (!materialThumbnailCameraUbo_)
+        {
+            materialThumbnailCameraUbo_ = std::make_unique<Assets::UniformBuffer>(*ctx_.device);
+        }
+        const Assets::UniformBufferObject previewCamera = BuildThumbnailUbo(*materialThumbnailScene_, kThumbnailExtent);
+        materialThumbnailCameraUbo_->SetValue(previewCamera);
+
+        {
+            SCOPED_GPU_TIMER("material thumbnail view");
+            SetActiveViewBankBase(bank);
+            SetActiveViewRenderExtent(kThumbnailExtent);
+            SetActiveViewCameraAddress(materialThumbnailCameraUbo_->Buffer().GetDeviceAddress());
+            activeVisibilityFrameBuffer_ = thumbnailVisibilityFrameBuffer_.get();
+            PreRenderPerView(commandBuffer, imageIndex, /*isPrimaryView*/ false);
+            (rendererIt != logicRenderers_.renderers.end() ? rendererIt : fallbackIt)->second->Render(commandBuffer, imageIndex);
+            activeVisibilityFrameBuffer_ = nullptr;
+            SetActiveViewCameraAddress(0);
+            SetActiveViewRenderExtent({0, 0});
+            SetActiveViewBankBase(0);
+        }
+        activeSceneOverride_ = nullptr;
+
+        const RenderImage* src = GetStorageImage(bank + Assets::Bindless::RT_DENOISED);
+        RenderImage* dst = materialThumbnailImages_[materialIndex].get();
+        if (!src || !dst)
+        {
+            return true;
+        }
+
+        src->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                           VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        dst->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                           VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+        VkImageBlit region{};
+        region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.srcOffsets[0] = {0, 0, 0};
+        region.srcOffsets[1] = {static_cast<int32_t>(kThumbnailExtent.width), static_cast<int32_t>(kThumbnailExtent.height), 1};
+        region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.dstOffsets[0] = {0, 0, 0};
+        region.dstOffsets[1] = {static_cast<int32_t>(kThumbnailExtent.width), static_cast<int32_t>(kThumbnailExtent.height), 1};
+        vkCmdBlitImage(commandBuffer,
+                       src->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                       dst->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                       1, &region, VK_FILTER_LINEAR);
+
+        dst->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        src->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+
+        return true;
+    }
+
+    bool VulkanBaseRenderer::RenderNextMeshThumbnail(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+    {
+        static constexpr VkExtent2D kThumbnailExtent{256, 256};
+        static constexpr uint32_t kThumbnailBank = 2u * Assets::Bindless::kViewRtBankStride;
+
+        if (pendingMeshThumbnails_.empty())
+        {
+            return false;
+        }
+
+        auto mainScene = scene_.lock();
+        if (!mainScene)
+        {
+            pendingMeshThumbnails_.clear();
+            return false;
+        }
+
+        const uint32_t modelIndex = pendingMeshThumbnails_.front();
+        pendingMeshThumbnails_.erase(pendingMeshThumbnails_.begin());
+        if (modelIndex >= mainScene->Models().size() || modelIndex >= kMeshThumbnailMaxSlots)
+        {
+            return false;
+        }
+
+        const Assets::Model& model = mainScene->Models()[modelIndex];
+        if (model.NumberOfVertices() == 0)
+        {
+            return false;
+        }
+
+        EnsureThumbnailRenderTarget();
+        RebuildMeshThumbnailScene(model);
+        if (!meshThumbnailScene_)
+        {
+            return false;
+        }
+
+        const uint32_t bank = kThumbnailBank;
+        const uint32_t sampleSlot = kMeshThumbnailSampleSlotBase + modelIndex;
+
+        if (meshThumbnailImages_.size() <= modelIndex)
+        {
+            meshThumbnailImages_.resize(static_cast<size_t>(modelIndex) + 1);
+        }
+        if (!meshThumbnailImages_[modelIndex])
+        {
+            const std::string debugName = fmt::format("Mesh Thumbnail {}", modelIndex);
+            meshThumbnailImages_[modelIndex].reset(new RenderImage(
+                Device(), kThumbnailExtent, VK_FORMAT_R16G16B16A16_SFLOAT,
+                VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                false, debugName.c_str()));
+            ctx_.globalTexturePool->BindSampleTexture(
+                sampleSlot, meshThumbnailImages_[modelIndex]->GetImageView(), *thumbnailSampler_);
+        }
+
+        const auto rendererIt = logicRenderers_.renderers.find(ERT_SoftwareModernNoAmbient);
+        const auto fallbackIt = logicRenderers_.renderers.find(logicRenderers_.current);
+        if (rendererIt == logicRenderers_.renderers.end() && fallbackIt == logicRenderers_.renderers.end())
+        {
+            return false;
+        }
+
+        activeSceneOverride_ = meshThumbnailScene_.get();
+        meshThumbnailScene_->UpdateAllMaterials();
+        meshThumbnailScene_->UpdateNodes();
+        if (!meshThumbnailCameraUbo_)
+        {
+            meshThumbnailCameraUbo_ = std::make_unique<Assets::UniformBuffer>(*ctx_.device);
+        }
+        const Assets::UniformBufferObject previewCamera = BuildThumbnailUbo(*meshThumbnailScene_, kThumbnailExtent);
+        meshThumbnailCameraUbo_->SetValue(previewCamera);
+
+        {
+            SCOPED_GPU_TIMER("mesh thumbnail view");
+            SetActiveViewBankBase(bank);
+            SetActiveViewRenderExtent(kThumbnailExtent);
+            SetActiveViewCameraAddress(meshThumbnailCameraUbo_->Buffer().GetDeviceAddress());
+            activeVisibilityFrameBuffer_ = thumbnailVisibilityFrameBuffer_.get();
+            PreRenderPerView(commandBuffer, imageIndex, /*isPrimaryView*/ false);
+            (rendererIt != logicRenderers_.renderers.end() ? rendererIt : fallbackIt)->second->Render(commandBuffer, imageIndex);
+            activeVisibilityFrameBuffer_ = nullptr;
+            SetActiveViewCameraAddress(0);
+            SetActiveViewRenderExtent({0, 0});
+            SetActiveViewBankBase(0);
+        }
+        activeSceneOverride_ = nullptr;
+
+        const RenderImage* src = GetStorageImage(bank + Assets::Bindless::RT_DENOISED);
+        RenderImage* dst = meshThumbnailImages_[modelIndex].get();
+        if (!src || !dst)
+        {
+            return true;
+        }
+
+        src->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                           VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        dst->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                           VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+        VkImageBlit region{};
+        region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.srcOffsets[0] = {0, 0, 0};
+        region.srcOffsets[1] = {static_cast<int32_t>(kThumbnailExtent.width), static_cast<int32_t>(kThumbnailExtent.height), 1};
+        region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.dstOffsets[0] = {0, 0, 0};
+        region.dstOffsets[1] = {static_cast<int32_t>(kThumbnailExtent.width), static_cast<int32_t>(kThumbnailExtent.height), 1};
+        vkCmdBlitImage(commandBuffer,
+                       src->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                       dst->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                       1, &region, VK_FILTER_LINEAR);
+
+        dst->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        src->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+
+        return true;
+    }
+
     void VulkanBaseRenderer::DemoRenderSecondView(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
+        if (RenderNextMaterialThumbnail(commandBuffer, imageIndex))
+        {
+            return;
+        }
+        if (RenderNextMeshThumbnail(commandBuffer, imageIndex))
+        {
+            return;
+        }
+
         const auto it = logicRenderers_.renderers.find(logicRenderers_.current);
         if (it == logicRenderers_.renderers.end())
         {

@@ -58,7 +58,8 @@ namespace Assets
         Scene& operator=(const Scene&) = delete;
         Scene& operator=(Scene&&) = delete;
 
-        Scene(Vulkan::CommandPool& commandPool, bool supportRayTracing);
+        Scene(Vulkan::CommandPool& commandPool, bool supportRayTracing,
+              bool allocateAmbientResources = true, bool enableCpuAcceleration = true);
         ~Scene();
 
         void PostLoad(const std::vector<Skeleton>& skeletons);
@@ -345,6 +346,8 @@ namespace Assets
         Camera renderCamera_;
 
         Assets::CPU::FCPUAccelerationStructure cpuAccelerationStructure_;
+        bool allocateAmbientResources_ = true;
+        bool enableCpuAcceleration_ = true;
 
         Assets::GPUDrivenStat gpuDrivenStat_;
         std::array<Assets::GPUDrivenStat, kSunShadowCascadeCount> shadowGpuDrivenStats_{};

@@ -115,12 +115,19 @@ namespace Vulkan
 		// sample slot each frame (shown via ImGui::Image in the editor). Off by default.
 		void SetSecondaryViewEnabled(bool enabled) { secondaryViewEnabled_ = enabled; }
 		bool IsSecondaryViewEnabled() const { return secondaryViewEnabled_; }
+		void RequestSecondaryViewThisFrame() { secondaryViewRequested_ = true; }
 		// Bindless sample-texture slot holding the latest secondary view (valid after a frame with the
 		// secondary view enabled). Display via UserInterface::RequestImTextureId.
 		static constexpr uint32_t kSecondaryViewSampleSlot = 65000;
 		uint32_t SecondaryViewSampleSlot() const { return kSecondaryViewSampleSlot; }
 		// True once the offscreen image exists + its sample slot is bound (safe to ImGui::Image).
 		bool IsSecondaryViewReady() const { return secondaryOffscreenImage_ != nullptr; }
+		static constexpr uint32_t kMaterialThumbnailSampleSlotBase = 64000;
+		static constexpr uint32_t kMaterialThumbnailMaxSlots = 512;
+		uint32_t RequestMaterialThumbnail(uint32_t materialIndex, uint64_t materialHash);
+		static constexpr uint32_t kMeshThumbnailSampleSlotBase = 63200;
+		static constexpr uint32_t kMeshThumbnailMaxSlots = 512;
+		uint32_t RequestMeshThumbnail(uint32_t modelIndex, uint64_t modelHash);
 
 		// Multi-viewport (RenderView). Currently exposes the single primary view (bank 0).
 		RenderViewManager& RenderViews() { return *renderViews_; }
@@ -139,6 +146,8 @@ namespace Vulkan
 		// 0 == primary view (uses the per-image uniform buffer).
 		VkDeviceAddress ActiveViewCameraAddress(uint32_t imageIndex) const;
 		void SetActiveViewCameraAddress(VkDeviceAddress address) { activeViewCameraAddress_ = address; }
+		VkExtent2D ActiveViewRenderExtent() const;
+		void SetActiveViewRenderExtent(VkExtent2D extent) { activeViewRenderExtent_ = extent; }
 
 		// Renderer registry
 		void RegisterLogicRenderer(ERendererType type);
@@ -340,12 +349,15 @@ namespace Vulkan
 		OverlayPipelines overlay_;
 		LogicRendererRegistry logicRenderers_;
 		std::unique_ptr<RenderViewManager> renderViews_ = std::make_unique<RenderViewManager>();
+		Assets::Scene* activeSceneOverride_ = nullptr;
 		uint32_t activeViewBankBase_ = 0;
+		VkExtent2D activeViewRenderExtent_{0, 0};
 		bool multiViewDemo_ = false;
 		bool secondaryBankCreated_ = false;
 		VkDeviceAddress activeViewCameraAddress_ = 0;
 		std::unique_ptr<Assets::UniformBuffer> secondaryCameraUbo_;
 		bool secondaryViewEnabled_ = false;
+		bool secondaryViewRequested_ = false;
 		// Offscreen sampled copy of the secondary view's composed output (bank-1 RT_DENOISED), bound
 		// into the sample-texture array at kSecondaryViewSampleSlot for ImGui display.
 		std::unique_ptr<RenderImage> secondaryOffscreenImage_;
@@ -355,6 +367,20 @@ namespace Vulkan
 		std::unique_ptr<FrameBuffer> secondaryVisibilityFrameBuffer_;
 		// Visibility framebuffer for the view currently being recorded (null => primary/bank-0).
 		FrameBuffer* activeVisibilityFrameBuffer_ = nullptr;
+		std::unique_ptr<Assets::Scene> materialThumbnailScene_;
+		std::unique_ptr<Assets::UniformBuffer> materialThumbnailCameraUbo_;
+		std::vector<std::unique_ptr<RenderImage>> materialThumbnailImages_;
+		std::vector<uint64_t> materialThumbnailHashes_;
+		std::vector<uint32_t> pendingMaterialThumbnails_;
+		bool materialThumbnailSceneReady_ = false;
+		std::unique_ptr<Assets::Scene> meshThumbnailScene_;
+		std::unique_ptr<Assets::UniformBuffer> meshThumbnailCameraUbo_;
+		std::vector<std::unique_ptr<RenderImage>> meshThumbnailImages_;
+		std::vector<uint64_t> meshThumbnailHashes_;
+		std::vector<uint32_t> pendingMeshThumbnails_;
+		std::unique_ptr<class Sampler> thumbnailSampler_;
+		std::unique_ptr<FrameBuffer> thumbnailVisibilityFrameBuffer_;
+		bool thumbnailBankCreated_ = false;
 		Delegates delegates_;
 		std::unique_ptr<Rendering::Upscaler::IUpscaler> upscaler_;
 
@@ -378,10 +404,20 @@ namespace Vulkan
 		void CreateRenderImages();
 		// Creates the full screen-space RT set at [bankBase + RT_X]. bankBase 0 == primary view.
 		void CreateRenderTargetBank(uint32_t bankBase);
+		void CreateRenderTargetBank(uint32_t bankBase, VkExtent2D extent);
 		// Multi-viewport demo (GK_MV_DEMO): lazily create the secondary view's RT bank, then render a
 		// second view into it and composite it as a picture-in-picture inset of the swapchain.
 		void EnsureSecondaryViewBank();
 		void DemoRenderSecondView(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void EnsureMaterialThumbnailScene();
+		void RebuildMeshThumbnailScene(const Assets::Model& model);
+		Assets::UniformBufferObject BuildThumbnailUbo(Assets::Scene& scene, VkExtent2D extent) const;
+		bool HasPendingMaterialThumbnail() const { return !pendingMaterialThumbnails_.empty(); }
+		bool HasPendingMeshThumbnail() const { return !pendingMeshThumbnails_.empty(); }
+		bool HasPendingThumbnail() const { return HasPendingMaterialThumbnail() || HasPendingMeshThumbnail(); }
+		void EnsureThumbnailRenderTarget();
+		bool RenderNextMaterialThumbnail(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		bool RenderNextMeshThumbnail(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void CreateStorageImage(uint32_t bindlessIdx, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName);
 		void CreateStorageImage(uint32_t bindlessIdx, VkExtent2D extent, VkFormat format, VkImageTiling tiling,
                                 VkImageUsageFlags usage, const char* debugName);

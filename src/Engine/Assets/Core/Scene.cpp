@@ -151,12 +151,16 @@ namespace Assets
         return GetNodeByInstanceId(nodeId);
     }
 
-    Scene::Scene(Vulkan::CommandPool& commandPool, bool supportRayTracing)
+    Scene::Scene(Vulkan::CommandPool& commandPool, bool supportRayTracing,
+                 const bool allocateAmbientResources, const bool enableCpuAcceleration) :
+        allocateAmbientResources_(allocateAmbientResources),
+        enableCpuAcceleration_(enableCpuAcceleration)
     {
         int flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         const bool allocateAmbientCube =
-            !NextEngine::GetInstance() ||
-            NextEngine::GetInstance()->GetRenderer().RegisteredRendererRequirements().requestAmbientCube;
+            allocateAmbientResources_ &&
+            (!NextEngine::GetInstance() ||
+             NextEngine::GetInstance()->GetRenderer().RegisteredRendererRequirements().requestAmbientCube);
         // Phase 2 right-sizing: allocate Cubes/Voxels for the configured cascade count (default 3)
         // rather than always CUBE_CASCADE_MAX (4). The capacity is fixed for this Scene's lifetime;
         // consumers clamp the effective cascade count to it (a runtime cvar increase only takes
@@ -189,9 +193,13 @@ namespace Assets
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
             Assets::GPU_SCENE_DYNAMIC_SIZE, sceneDynamicBuffer_, sceneDynamicBufferMemory_);
 
-        Vulkan::BufferUtil::CreateDeviceBufferLocal(
-            commandPool, "AmbientArena", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            ambientLayout.totalSize, ambientArenaBuffer_, ambientArenaBufferMemory_);
+        if (allocateAmbientResources_)
+        {
+            Vulkan::BufferUtil::CreateDeviceBufferLocal(
+                commandPool, "AmbientArena", flags,
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                ambientLayout.totalSize, ambientArenaBuffer_, ambientArenaBufferMemory_);
+        }
 
         if (allocateAmbientCube)
         {
@@ -213,17 +221,20 @@ namespace Assets
         // arena is shrunk to one cascade; the table still stores the nominal offsets, but the shaders
         // in NoAmbient paths never dereference them.
         {
-            const VkDeviceAddress arenaBase = ambientArenaBuffer_->GetDeviceAddress();
+            const VkDeviceAddress arenaBase = ambientArenaBuffer_ ? ambientArenaBuffer_->GetDeviceAddress() : 0;
             AmbientResources resources{};
-            resources.Cubes = arenaBase + ambientLayout.cubesOffset;
-            resources.Voxels = arenaBase + ambientLayout.voxelsOffset;
-            resources.Pages = arenaBase + ambientLayout.pagesOffset;
-            resources.CubesPong = arenaBase + ambientLayout.pongOffset;
-            resources.BrickTable = arenaBase + ambientLayout.brickTableOffset;
-            const uint64_t activeListByteOffset =
-                static_cast<uint64_t>(ambientLayout.activeBrickListOffset - ambientLayout.brickTableOffset);
-            resources.PoolParams = (activeListByteOffset << 32u) | poolBricksPerCascade_;
-            resources.Residency = arenaBase + ambientLayout.residencyOffset;
+            if (arenaBase != 0)
+            {
+                resources.Cubes = arenaBase + ambientLayout.cubesOffset;
+                resources.Voxels = arenaBase + ambientLayout.voxelsOffset;
+                resources.Pages = arenaBase + ambientLayout.pagesOffset;
+                resources.CubesPong = arenaBase + ambientLayout.pongOffset;
+                resources.BrickTable = arenaBase + ambientLayout.brickTableOffset;
+                const uint64_t activeListByteOffset =
+                    static_cast<uint64_t>(ambientLayout.activeBrickListOffset - ambientLayout.brickTableOffset);
+                resources.PoolParams = (activeListByteOffset << 32u) | poolBricksPerCascade_;
+                resources.Residency = arenaBase + ambientLayout.residencyOffset;
+            }
             const std::vector<AmbientResources> resourcesData = {resources};
             Vulkan::BufferUtil::CreateDeviceBuffer(commandPool, "AmbientResources", flags, resourcesData,
                                                    ambientResourcesBuffer_, ambientResourcesBufferMemory_);
