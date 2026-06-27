@@ -40,6 +40,10 @@ namespace Assets
 	class GlobalTexturePool final
 	{
 	public:
+		// Capacity of the bindless descriptor arrays (sample/storage). Slots above the registered
+		// texture count are valid targets for explicitly-bound render outputs (see BindSampleTexture).
+		static constexpr uint32_t kMaxBindlessSlots = 65535u;
+
 		enum class EHDRTextureResidency : uint8
 		{
 			LowestMip,

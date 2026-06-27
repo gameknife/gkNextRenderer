@@ -37,6 +37,7 @@ namespace Editor
         bool aiPanel = true;
         bool hotReloadPanel = false;
         bool settingsPanel = false;
+        bool cameraViewPanel = true; // secondary multi-viewport camera preview
         uint32_t pendingExpandTargetId = InvalidId;
         uint32_t pendingCollapseTargetId = InvalidId;
         bool dockResetRequested = false;

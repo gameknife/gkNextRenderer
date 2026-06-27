@@ -393,7 +393,9 @@ bool UserInterface::DecodeBindlessTextureId(ImTextureID textureId, uint32_t& out
 
     const uint64_t textureIndex = rawValue - 1u;
     const auto* texturePool = Assets::GlobalTexturePool::GetInstance();
-    if (texturePool == nullptr || textureIndex >= texturePool->TotalTextures())
+    // Allow registered textures and any explicitly-bound bindless slot (e.g. render-view outputs
+    // bound above the registered range via BindSampleTexture).
+    if (texturePool == nullptr || textureIndex >= Assets::GlobalTexturePool::kMaxBindlessSlots)
     {
         return false;
     }

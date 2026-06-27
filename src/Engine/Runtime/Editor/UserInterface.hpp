@@ -68,6 +68,9 @@ public:
 	void OnDestroySurface();
 
 	ImTextureID RequestImTextureId(uint32_t globalTextureId);
+	// Like RequestImTextureId but for an explicitly-bound bindless sample slot that is NOT a
+	// registered TextureImage (e.g. a render-view offscreen output bound via BindSampleTexture).
+	ImTextureID RequestImTextureIdRaw(uint32_t bindlessSampleSlot) { return EncodeBindlessTextureId(bindlessSampleSlot); }
 	ImTextureID RequestImTextureByName(const std::string& name);
 
 	struct FUiTextureHandle
