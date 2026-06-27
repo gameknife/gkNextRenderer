@@ -657,8 +657,9 @@ namespace Assets
     Assets::GPUScene Scene::BuildGPUScene(const uint32_t imageIndex) const
     {
         Assets::GPUScene gpuScene{};
-        gpuScene.Camera =
-            NextEngine::GetInstance()->GetRenderer().UniformBuffers()[imageIndex].Buffer().GetDeviceAddress();
+        // Active RenderView's camera UBO (primary == per-image uniform buffer; secondary views
+        // supply their own camera so each viewport can use a different camera).
+        gpuScene.Camera = NextEngine::GetInstance()->GetRenderer().ActiveViewCameraAddress(imageIndex);
         gpuScene.SceneDynamicBase = sceneDynamicBuffer_->GetDeviceAddress();
         gpuScene.Offsets = offsetBuffer_->GetDeviceAddress();
         gpuScene.Indices = primAddressBuffer_->GetDeviceAddress();
