@@ -327,6 +327,11 @@ namespace Vulkan
 		uint32_t activeViewBankBase_ = 0;
 		bool multiViewDemo_ = false;
 		bool secondaryBankCreated_ = false;
+		// Per-view visibility framebuffer for the secondary view (bank-1 RT_MINIGBUFFER_DRAW; shares
+		// the primary depth via the shared render pass — safe because views render sequentially).
+		std::unique_ptr<FrameBuffer> secondaryVisibilityFrameBuffer_;
+		// Visibility framebuffer for the view currently being recorded (null => primary/bank-0).
+		FrameBuffer* activeVisibilityFrameBuffer_ = nullptr;
 		Delegates delegates_;
 		std::unique_ptr<Rendering::Upscaler::IUpscaler> upscaler_;
 
@@ -364,6 +369,10 @@ namespace Vulkan
 		// Frame stages
 		void BeforeNextFrame();
 		void PreRender(VkCommandBuffer commandBuffer, const uint32_t imageIndex);
+		// Multi-viewport split: scene-global pre-passes (camera-independent, once per scene) vs
+		// per-view pre-passes (cull/clear/visibility/shadow; run per active RenderView/bank).
+		void PreRenderSceneGlobal(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void PreRenderPerView(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool isPrimaryView);
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void AfterUpdateScene();
@@ -380,7 +389,7 @@ namespace Vulkan
 		void HandleAmbientCubeCacheInvalidation(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void DispatchSkinning(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void DispatchGpuCulling(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-		void DispatchClearPass(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void DispatchClearPass(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool clearSwapchain = true);
 		void DispatchVisibilityPass(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void DispatchSunShadow(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
