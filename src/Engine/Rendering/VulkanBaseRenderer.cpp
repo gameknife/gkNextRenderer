@@ -8,6 +8,7 @@
 #include "Engine/Vulkan/SyncAndTiming.hpp"
 #include "Engine/Vulkan/BufferUtil.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
+#include "Engine/Vulkan/MemoryAndShader.hpp"
 #include "Engine/Vulkan/Instance.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
@@ -1010,6 +1011,8 @@ namespace Vulkan
         // the swapchain images go away (the bank itself is rebuilt on demand next frame).
         secondaryVisibilityFrameBuffer_.reset();
         secondaryCameraUbo_.reset();
+        secondaryOffscreenImage_.reset();
+        secondaryOffscreenSampler_.reset();
         secondaryBankCreated_ = false;
         overlay_.sunShadowPass.reset();
         
@@ -1573,9 +1576,10 @@ namespace Vulkan
                     }
                 }
 
-                // Multi-viewport demo: render a second view into bank 1 and composite it as a
-                // picture-in-picture inset. Swapchain is in GENERAL here (before the present barrier).
-                if (multiViewDemo_)
+                // Multi-viewport: render the secondary camera view into bank 1 -> offscreen sample
+                // slot (for the editor's ImGui panel) and, in the env demo, a swapchain PiP inset.
+                // Swapchain is in GENERAL here (before the present barrier).
+                if (multiViewDemo_ || secondaryViewEnabled_)
                 {
                     DemoRenderSecondView(commandBuffer, imageIndex);
                 }
@@ -1646,6 +1650,21 @@ namespace Vulkan
             frame_.swapChain->RenderExtent(),
             GetStorageImage(bank + Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(),
             overlay_.visibilityPipeline->RenderPass()));
+
+        // Offscreen sampled copy of the secondary view's composed output, bound into the sample
+        // array for ImGui display. Created once; bind the descriptor once (image is stable).
+        secondaryOffscreenImage_.reset(new RenderImage(
+            Device(), frame_.swapChain->RenderExtent(), VK_FORMAT_R16G16B16A16_SFLOAT,
+            VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            false, "Secondary View Offscreen"));
+        Vulkan::SamplerConfig samplerConfig{};
+        samplerConfig.AddressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        samplerConfig.AddressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        samplerConfig.AnisotropyEnable = false;
+        secondaryOffscreenSampler_.reset(new Vulkan::Sampler(*ctx_.device, samplerConfig));
+        ctx_.globalTexturePool->BindSampleTexture(kSecondaryViewSampleSlot,
+            secondaryOffscreenImage_->GetImageView(), *secondaryOffscreenSampler_);
+
         secondaryBankCreated_ = true;
     }
 
@@ -1683,37 +1702,62 @@ namespace Vulkan
             SetActiveViewBankBase(0);
         }
 
-        // Picture-in-picture: blit bank-1 RT_DENOISED into the bottom-right quarter of the swapchain.
         const RenderImage* src = GetStorageImage(bank + Assets::Bindless::RT_DENOISED);
         if (!src)
         {
             return;
         }
 
-        src->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                           VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-        // Order the primary swapchain blit before this PiP blit (both transfer writes, GENERAL layout).
-        ImageMemoryBarrier::FullInsert(commandBuffer, frame_.swapChain->Images()[imageIndex],
-            VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-
-        const int32_t sw = static_cast<int32_t>(frame_.swapChain->Extent().width);
-        const int32_t sh = static_cast<int32_t>(frame_.swapChain->Extent().height);
         const int32_t rw = static_cast<int32_t>(frame_.swapChain->RenderExtent().width);
         const int32_t rh = static_cast<int32_t>(frame_.swapChain->RenderExtent().height);
 
-        VkImageBlit region{};
-        region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        region.srcOffsets[0] = {0, 0, 0};
-        region.srcOffsets[1] = {rw, rh, 1};
-        region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        region.dstOffsets[0] = {sw / 2, sh / 2, 0};
-        region.dstOffsets[1] = {sw, sh, 1};
+        // bank-1 composed output -> transfer source.
+        src->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                           VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
-        vkCmdBlitImage(commandBuffer,
-                       src->GetImage().Handle(), VK_IMAGE_LAYOUT_GENERAL,
-                       frame_.swapChain->Images()[imageIndex], VK_IMAGE_LAYOUT_GENERAL,
-                       1, &region, VK_FILTER_LINEAR);
+        // 1) Copy into the offscreen sampled image so the editor can ImGui::Image it.
+        if (secondaryOffscreenImage_)
+        {
+            secondaryOffscreenImage_->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT,
+                VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            VkImageCopy copyRegion{};
+            copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            copyRegion.extent = {static_cast<uint32_t>(rw), static_cast<uint32_t>(rh), 1};
+            vkCmdCopyImage(commandBuffer,
+                src->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                secondaryOffscreenImage_->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                1, &copyRegion);
+            secondaryOffscreenImage_->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        }
+
+        // 2) Env demo: also composite as a picture-in-picture in the swapchain's bottom-right quarter
+        //    (so `gnb shot` can verify without the editor UI).
+        if (multiViewDemo_)
+        {
+            const int32_t sw = static_cast<int32_t>(frame_.swapChain->Extent().width);
+            const int32_t sh = static_cast<int32_t>(frame_.swapChain->Extent().height);
+            ImageMemoryBarrier::FullInsert(commandBuffer, frame_.swapChain->Images()[imageIndex],
+                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+            VkImageBlit region{};
+            region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            region.srcOffsets[0] = {0, 0, 0};
+            region.srcOffsets[1] = {rw, rh, 1};
+            region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            region.dstOffsets[0] = {sw / 2, sh / 2, 0};
+            region.dstOffsets[1] = {sw, sh, 1};
+            vkCmdBlitImage(commandBuffer,
+                           src->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                           frame_.swapChain->Images()[imageIndex], VK_IMAGE_LAYOUT_GENERAL,
+                           1, &region, VK_FILTER_LINEAR);
+        }
+
+        // Restore bank-1 denoised to GENERAL for next frame's barrier initialization.
+        src->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
     }
 
     void VulkanBaseRenderer::PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
