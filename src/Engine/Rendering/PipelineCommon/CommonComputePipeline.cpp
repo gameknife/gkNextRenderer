@@ -208,7 +208,7 @@ namespace Vulkan::PipelineCommon
 
         pipeline_ = GraphicsPipelineBuilder(device)
             .SetShaders(vertShader, fragShader)
-            .SetFixedViewport({0, 0}, swapChain.RenderExtent())
+            .SetDynamicViewportAndScissor()
             .SetDepth(true, true, VK_COMPARE_OP_LESS)
             .Build(pipelineLayout_->Handle(), renderPass_->Handle(), "create graphics pipeline");
     }

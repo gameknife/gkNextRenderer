@@ -3,8 +3,12 @@
 #include "EditorDragDrop.hpp"
 
 #include "Engine/Assets/Core/Scene.hpp"
+#include "Engine/Assets/Data/Material.hpp"
+#include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/GPU/TextureImage.hpp"
 #include "EditorActionDispatcher.hpp"
+#include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Modules/DevTools/ProfessionalUI.hpp"
@@ -18,6 +22,7 @@
 #include <filesystem>
 #include <fmt/format.h>
 #include <functional>
+#include <limits>
 #include <spdlog/spdlog.h>
 #include <unordered_map>
 #include <string_view>
@@ -592,11 +597,136 @@ namespace Editor
             return IM_COL32(64, 64, 64, 220);
         }
 
+        uint64_t HashMaterialPreview(const Assets::FMaterial& material)
+        {
+            uint64_t hash = 1469598103934665603ull;
+            auto mixBytes = [&](const void* data, size_t size)
+            {
+                const auto* bytes = static_cast<const uint8_t*>(data);
+                for (size_t i = 0; i < size; ++i)
+                {
+                    hash ^= bytes[i];
+                    hash *= 1099511628211ull;
+                }
+            };
+
+            const Assets::Material& gpu = material.gpuMaterial_;
+            mixBytes(&gpu.Diffuse, sizeof(gpu.Diffuse));
+            mixBytes(&gpu.DiffuseTextureId, sizeof(gpu.DiffuseTextureId));
+            mixBytes(&gpu.MRATextureId, sizeof(gpu.MRATextureId));
+            mixBytes(&gpu.NormalTextureId, sizeof(gpu.NormalTextureId));
+            mixBytes(&gpu.EmissiveTextureId, sizeof(gpu.EmissiveTextureId));
+            mixBytes(&gpu.Fuzziness, sizeof(gpu.Fuzziness));
+            mixBytes(&gpu.RefractionIndex, sizeof(gpu.RefractionIndex));
+            mixBytes(&gpu.MaterialModel, sizeof(gpu.MaterialModel));
+            mixBytes(&gpu.Metalness, sizeof(gpu.Metalness));
+            return hash;
+        }
+
+        ImTextureID RequestMaterialPreviewTexture(EditorContext& ctx, uint32_t materialIndex, const Assets::FMaterial& material)
+        {
+            const uint64_t materialHash = HashMaterialPreview(material);
+            const uint32_t sampleSlot = ctx.engine.GetRenderer().RequestMaterialThumbnail(materialIndex, materialHash);
+            return sampleSlot == std::numeric_limits<uint32_t>::max()
+                ? 0
+                : ctx.ui.RequestImTextureIdRaw(sampleSlot);
+        }
+
+        uint64_t HashMeshPreview(const Assets::Model& model)
+        {
+            uint64_t hash = 1469598103934665603ull;
+            auto mixBytes = [&](const void* data, size_t size)
+            {
+                const auto* bytes = static_cast<const uint8_t*>(data);
+                for (size_t i = 0; i < size; ++i)
+                {
+                    hash ^= bytes[i];
+                    hash *= 1099511628211ull;
+                }
+            };
+
+            const std::string& name = model.Name();
+            mixBytes(name.data(), name.size());
+            const uint32_t vertexCount = model.NumberOfVertices();
+            const uint32_t indexCount = model.NumberOfIndices();
+            const uint32_t sectionCount = model.SectionCount();
+            const glm::vec3 aabbMin = model.GetLocalAABBMin();
+            const glm::vec3 aabbMax = model.GetLocalAABBMax();
+            mixBytes(&vertexCount, sizeof(vertexCount));
+            mixBytes(&indexCount, sizeof(indexCount));
+            mixBytes(&sectionCount, sizeof(sectionCount));
+            mixBytes(&aabbMin, sizeof(aabbMin));
+            mixBytes(&aabbMax, sizeof(aabbMax));
+
+            const auto& vertices = model.CPUVertices();
+            const auto& indices = model.CPUIndices();
+            if (!vertices.empty())
+            {
+                const size_t sampleIndices[] = {0u, vertices.size() / 2u, vertices.size() - 1u};
+                for (const size_t sampleIndex : sampleIndices)
+                {
+                    mixBytes(&vertices[sampleIndex], sizeof(vertices[sampleIndex]));
+                }
+            }
+            if (!indices.empty())
+            {
+                const size_t sampleIndices[] = {0u, indices.size() / 2u, indices.size() - 1u};
+                for (const size_t sampleIndex : sampleIndices)
+                {
+                    mixBytes(&indices[sampleIndex], sizeof(indices[sampleIndex]));
+                }
+            }
+            return hash;
+        }
+
+        ImTextureID RequestMeshPreviewTexture(EditorContext& ctx, uint32_t modelIndex, const Assets::Model& model)
+        {
+            const uint64_t meshHash = HashMeshPreview(model);
+            const uint32_t sampleSlot = ctx.engine.GetRenderer().RequestMeshThumbnail(modelIndex, meshHash);
+            return sampleSlot == std::numeric_limits<uint32_t>::max()
+                ? 0
+                : ctx.ui.RequestImTextureIdRaw(sampleSlot);
+        }
+
+        std::string NormalizeSceneComparePath(std::string_view path)
+        {
+            if (path.empty())
+            {
+                return {};
+            }
+
+            std::filesystem::path scenePath{std::string(path)};
+            if (scenePath.is_relative())
+            {
+                scenePath = Utilities::FileHelper::GetPlatformFilePath(std::string(path).c_str());
+            }
+
+            std::error_code error;
+            std::filesystem::path normalized = std::filesystem::weakly_canonical(scenePath, error);
+            if (error)
+            {
+                normalized = std::filesystem::absolute(scenePath, error);
+                if (error)
+                {
+                    normalized = scenePath.lexically_normal();
+                }
+            }
+
+            std::string result = normalized.generic_string();
+            std::transform(result.begin(), result.end(), result.begin(),
+                           [](unsigned char c)
+                           {
+                               return static_cast<char>(std::tolower(c));
+                           });
+            return result;
+        }
+
         void DrawGeneralContentBrowser(EditorContext& ctx, EditorUiState& ui, uint32_t& selectionId, bool iconOrTex,
                                        uint32_t globalId, const std::string& name, const char* icon, ImU32 color,
                                        const ContentBrowserCallbacks& callbacks,
                                        const char* sourceBadge = nullptr,
-                                       ImU32 sourceBadgeColor = IM_COL32(0, 0, 0, 0))
+                                       ImU32 sourceBadgeColor = IM_COL32(0, 0, 0, 0),
+                                       ImTextureID thumbnailTextureId = 0)
         {
             ImGui::BeginGroup();
             if (ui.bigIcon)
@@ -615,8 +745,8 @@ namespace Editor
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover));
             ImGui::PushID(static_cast<int>(globalId));
             
-            ImTextureID textureId = ctx.ui.RequestImTextureId(globalId);
-            if (iconOrTex || textureId == 0)
+            ImTextureID textureId = thumbnailTextureId != 0 ? thumbnailTextureId : ctx.ui.RequestImTextureId(globalId);
+            if ((iconOrTex && thumbnailTextureId == 0) || textureId == 0)
             {
                 ImGui::Button(icon, ImVec2(GContentBrowserIconSize, GContentBrowserIconSize));
             }
@@ -722,9 +852,13 @@ namespace Editor
             }
 
             uint32_t dummySelection = InvalidId;
+            const ImTextureID previewTexture = RequestMeshPreviewTexture(ctx, i, model);
             DrawGeneralContentBrowser(ctx, ui, dummySelection, true, i, name, ICON_FA_BOXES_PACKING,
                                       IM_COL32(132, 182, 255, 255),
-                                      ContentBrowserCallbacks{});
+                                      ContentBrowserCallbacks{},
+                                      nullptr,
+                                      IM_COL32(0, 0, 0, 0),
+                                      previewTexture);
             grid.Next();
             ++itemCount;
         }
@@ -744,6 +878,7 @@ namespace Editor
                 continue;
             }
 
+            const ImTextureID previewTexture = RequestMaterialPreviewTexture(ctx, i, mat);
             DrawGeneralContentBrowser(ctx, ui, ui.selectedMaterialId, true, i, mat.name_, ICON_FA_BOWLING_BALL,
                                       IM_COL32(132, 255, 132, 255),
                                       ContentBrowserCallbacks{
@@ -764,7 +899,10 @@ namespace Editor
                                                                         sizeof(payload));
                                               ImGui::TextUnformatted(mat.name_.c_str());
                                           },
-                                      });
+                                      },
+                                      nullptr,
+                                      IM_COL32(0, 0, 0, 0),
+                                      previewTexture);
 
             grid.Next();
             ++itemCount;
@@ -889,6 +1027,7 @@ namespace Editor
                     ImGui::BeginChild("Content Items", ImVec2(0.0f, 0.0f));
 
                     auto& entries = GetCachedDirectoryEntries(rootPath, currentPath, directoryCache);
+                    const std::string currentSceneComparePath = NormalizeSceneComparePath(ui.currentScenePath);
                     ContentGridLayout grid = BeginContentGrid();
                     for (auto& entry : entries)
                     {
@@ -911,6 +1050,26 @@ namespace Editor
                         }
 
                         const uint32_t stableId = Fnv1a32(assetPath);
+                        ImTextureID thumbnailTextureId = 0;
+                        if (visual.kind == EContentAssetKind::Scene && !currentSceneComparePath.empty() &&
+                            NormalizeSceneComparePath(assetPath) == currentSceneComparePath)
+                        {
+                            auto& renderer = ctx.engine.GetRenderer();
+                            renderer.RequestSecondaryViewThisFrame();
+                            if (renderer.IsSecondaryViewReady())
+                            {
+                                thumbnailTextureId = ctx.ui.RequestImTextureIdRaw(renderer.SecondaryViewSampleSlot());
+                            }
+                        }
+                        else if (visual.kind == EContentAssetKind::Texture)
+                        {
+                            const NextUI::UserInterface::FUiTextureHandle texture = ctx.ui.RequestUiTexture(assetPath);
+                            if (texture.valid)
+                            {
+                                thumbnailTextureId = texture.textureId;
+                            }
+                        }
+
                         DrawGeneralContentBrowser(
                             ctx, ui, ui.selectedContentItemId, true, stableId, name, visual.icon, visual.color,
                             ContentBrowserCallbacks{
@@ -959,7 +1118,8 @@ namespace Editor
                                 },
                             },
                             GetContentSourceBadge(entry.source),
-                            GetContentSourceBadgeColor(entry.source));
+                            GetContentSourceBadgeColor(entry.source),
+                            thumbnailTextureId);
 
                         grid.Next();
                         ++itemCount;

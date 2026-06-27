@@ -299,10 +299,11 @@ namespace Vulkan
 
         // Clears the active view's screen-space scratch RTs (bank-aware via the stamped header).
         overlay_.bufferClearPipeline->BindPipeline(commandBuffer, &imageIndex);
+        const VkExtent2D activeExtent = ActiveViewRenderExtent();
         vkCmdDispatch(
             commandBuffer,
-            Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().width, 8),
-            Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().height, 8), 1);
+            Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+            Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
 
         // Only the primary view owns the swapchain image; secondary views must not clear it.
         if (!clearSwapchain)
@@ -343,7 +344,7 @@ namespace Vulkan
         renderPassInfo.renderPass = activeVisibilityPipeline.RenderPass().Handle();
         renderPassInfo.framebuffer = visibilityFrameBuffer.Handle();
         renderPassInfo.renderArea.offset = {0, 0};
-        renderPassInfo.renderArea.extent = SwapChain().RenderExtent();
+        renderPassInfo.renderArea.extent = ActiveViewRenderExtent();
         renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
         renderPassInfo.pClearValues = clearValues.data();
 
@@ -352,6 +353,16 @@ namespace Vulkan
             const auto& scene = GetScene();
 
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, activeVisibilityPipeline.Handle());
+            const VkViewport viewport{
+                0.0f,
+                0.0f,
+                static_cast<float>(renderPassInfo.renderArea.extent.width),
+                static_cast<float>(renderPassInfo.renderArea.extent.height),
+                0.0f,
+                1.0f};
+            const VkRect2D scissor{{0, 0}, renderPassInfo.renderArea.extent};
+            vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+            vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
             const Assets::GPUScene& gpuScene = scene.FetchGPUScene(imageIndex);
             activeVisibilityPipeline.PipelineLayout().BindDescriptorSets(
                 commandBuffer, 0, VK_PIPELINE_BIND_POINT_GRAPHICS);
