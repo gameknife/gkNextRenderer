@@ -293,15 +293,22 @@ namespace Vulkan
                              0, nullptr);
     }
 
-    void VulkanBaseRenderer::DispatchClearPass(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+    void VulkanBaseRenderer::DispatchClearPass(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool clearSwapchain)
     {
         SCOPED_GPU_TIMER("clear pass");
 
+        // Clears the active view's screen-space scratch RTs (bank-aware via the stamped header).
         overlay_.bufferClearPipeline->BindPipeline(commandBuffer, &imageIndex);
         vkCmdDispatch(
             commandBuffer,
             Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().width, 8),
             Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().height, 8), 1);
+
+        // Only the primary view owns the swapchain image; secondary views must not clear it.
+        if (!clearSwapchain)
+        {
+            return;
+        }
 
         VkClearColorValue clearColor = {{0.0f, 0.0f, 0.0f, 1.0f}};
         VkImageSubresourceRange imageRange = {};
@@ -331,8 +338,10 @@ namespace Vulkan
         VkRenderPassBeginInfo renderPassInfo = {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         auto& activeVisibilityPipeline = *overlay_.visibilityPipeline;
+        FrameBuffer& visibilityFrameBuffer =
+            activeVisibilityFrameBuffer_ ? *activeVisibilityFrameBuffer_ : *overlay_.visibilityFrameBuffer;
         renderPassInfo.renderPass = activeVisibilityPipeline.RenderPass().Handle();
-        renderPassInfo.framebuffer = overlay_.visibilityFrameBuffer->Handle();
+        renderPassInfo.framebuffer = visibilityFrameBuffer.Handle();
         renderPassInfo.renderArea.offset = {0, 0};
         renderPassInfo.renderArea.extent = SwapChain().RenderExtent();
         renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());

@@ -253,7 +253,8 @@ namespace Vulkan
 
         // Multi-viewport demo: render a second view into its own RT bank and composite it as a
         // picture-in-picture inset of the swapchain. Off by default; opt in with GK_MV_DEMO=1.
-        multiViewDemo_ = std::getenv("GK_MV_DEMO") != nullptr;
+        const char* mvDemoEnv = std::getenv("GK_MV_DEMO");
+        multiViewDemo_ = mvDemoEnv != nullptr && mvDemoEnv[0] == '1';
     }
 
     VulkanBaseRenderer::~VulkanBaseRenderer()
@@ -1005,6 +1006,10 @@ namespace Vulkan
 
         overlay_.visibilityPipeline.reset();
         overlay_.visibilityFrameBuffer.reset();
+        // Secondary view resources reference bank-1 images / the shared render pass; drop them before
+        // the swapchain images go away (the bank itself is rebuilt on demand next frame).
+        secondaryVisibilityFrameBuffer_.reset();
+        secondaryBankCreated_ = false;
         overlay_.sunShadowPass.reset();
         
         screenshot_.image.reset();
@@ -1097,16 +1102,31 @@ namespace Vulkan
 
     void VulkanBaseRenderer::PreRender(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
+        PreRenderSceneGlobal(commandBuffer, imageIndex);
+        PreRenderPerView(commandBuffer, imageIndex, /*isPrimaryView*/ true);
+    }
+
+    // Camera-independent, runs once per scene per frame (shared across all views).
+    void VulkanBaseRenderer::PreRenderSceneGlobal(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+    {
         UpdateAccelerationStructuresTop(commandBuffer);
         UpdateSkinningBuffers();
         InitializeBarriers(commandBuffer);
         HandleAmbientCubeCacheInvalidation(commandBuffer, imageIndex);
         DispatchSkinning(commandBuffer, imageIndex);
+        UpdateAccelerationStructuresBottom(commandBuffer);
+    }
+
+    // Camera-dependent pre-passes; runs per active RenderView into its RT bank (set via
+    // SetActiveViewBankBase + activeVisibilityFrameBuffer_ before calling). Only the primary view
+    // owns the swapchain, so its clear pass also clears the swapchain image.
+    void VulkanBaseRenderer::PreRenderPerView(VkCommandBuffer commandBuffer, const uint32_t imageIndex,
+                                              const bool isPrimaryView)
+    {
         DispatchGpuCulling(commandBuffer, imageIndex);
-        DispatchClearPass(commandBuffer, imageIndex);
+        DispatchClearPass(commandBuffer, imageIndex, /*clearSwapchain*/ isPrimaryView);
         DispatchVisibilityPass(commandBuffer, imageIndex);
         DispatchSunShadow(commandBuffer, imageIndex);
-        UpdateAccelerationStructuresBottom(commandBuffer);
     }
 
     void VulkanBaseRenderer::DrawFrame()
@@ -1577,7 +1597,14 @@ namespace Vulkan
         {
             return;
         }
-        CreateRenderTargetBank(Assets::Bindless::kViewRtBankStride);
+        const uint32_t bank = Assets::Bindless::kViewRtBankStride;
+        CreateRenderTargetBank(bank);
+        // Per-view visibility framebuffer: bank-1 RT_MINIGBUFFER_DRAW as color; depth comes from the
+        // shared render pass (primary depth) — safe because views render sequentially.
+        secondaryVisibilityFrameBuffer_.reset(new FrameBuffer(
+            frame_.swapChain->RenderExtent(),
+            GetStorageImage(bank + Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(),
+            overlay_.visibilityPipeline->RenderPass()));
         secondaryBankCreated_ = true;
     }
 
@@ -1593,12 +1620,17 @@ namespace Vulkan
         const uint32_t bank = Assets::Bindless::kViewRtBankStride;
 
         // Render the second view into its own RT bank (same scene/camera for now; SHARC and history
-        // are shared, which is benign for a static converged proof). The logic renderer resolves all
-        // screen-space RTs through GPUScene.custom_data_0 == this bank base.
+        // are shared, which is benign for a static converged proof). The per-view pre-passes
+        // (cull/clear/visibility/shadow) populate this bank's visibility buffer so the deferred
+        // primary-hit reconstruction finds geometry; then the logic renderer shades it. All
+        // screen-space RTs resolve through the active bank base (GPUScene.custom_data_0).
         {
             SCOPED_GPU_TIMER("mv-demo view");
             SetActiveViewBankBase(bank);
+            activeVisibilityFrameBuffer_ = secondaryVisibilityFrameBuffer_.get();
+            PreRenderPerView(commandBuffer, imageIndex, /*isPrimaryView*/ false);
             it->second->Render(commandBuffer, imageIndex);
+            activeVisibilityFrameBuffer_ = nullptr;
             SetActiveViewBankBase(0);
         }
 
