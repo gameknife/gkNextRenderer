@@ -111,6 +111,15 @@ namespace Vulkan
 		void CreateSwapChain();
 		void DeleteSwapChain();
 
+		// Multi-viewport: enable a secondary camera view that renders offscreen into a bindless
+		// sample slot each frame (shown via ImGui::Image in the editor). Off by default.
+		void SetSecondaryViewEnabled(bool enabled) { secondaryViewEnabled_ = enabled; }
+		bool IsSecondaryViewEnabled() const { return secondaryViewEnabled_; }
+		// Bindless sample-texture slot holding the latest secondary view (valid after a frame with the
+		// secondary view enabled). Display via UserInterface::RequestImTextureId.
+		static constexpr uint32_t kSecondaryViewSampleSlot = 65000;
+		uint32_t SecondaryViewSampleSlot() const { return kSecondaryViewSampleSlot; }
+
 		// Multi-viewport (RenderView). Currently exposes the single primary view (bank 0).
 		RenderViewManager& RenderViews() { return *renderViews_; }
 		const RenderViewManager& RenderViews() const { return *renderViews_; }
@@ -334,6 +343,11 @@ namespace Vulkan
 		bool secondaryBankCreated_ = false;
 		VkDeviceAddress activeViewCameraAddress_ = 0;
 		std::unique_ptr<Assets::UniformBuffer> secondaryCameraUbo_;
+		bool secondaryViewEnabled_ = false;
+		// Offscreen sampled copy of the secondary view's composed output (bank-1 RT_DENOISED), bound
+		// into the sample-texture array at kSecondaryViewSampleSlot for ImGui display.
+		std::unique_ptr<RenderImage> secondaryOffscreenImage_;
+		std::unique_ptr<class Sampler> secondaryOffscreenSampler_;
 		// Per-view visibility framebuffer for the secondary view (bank-1 RT_MINIGBUFFER_DRAW; shares
 		// the primary depth via the shared render pass — safe because views render sequentially).
 		std::unique_ptr<FrameBuffer> secondaryVisibilityFrameBuffer_;

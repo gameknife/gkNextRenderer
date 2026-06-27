@@ -208,6 +208,22 @@ namespace Assets
         descriptorSets.UpdateDescriptors(0, descriptorWrites);
     }
 
+    void GlobalTexturePool::BindSampleTexture(uint32_t textureIdx, const Vulkan::ImageView& view,
+                                              const Vulkan::Sampler& sampler)
+    {
+        auto& descriptorSets = descriptorSetManager_->DescriptorSets();
+        const VkDescriptorImageInfo imageInfo{
+            sampler.Handle(),
+            view.Handle(),
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        };
+        std::vector<VkWriteDescriptorSet> descriptorWrites =
+        {
+            descriptorSets.Bind(0, 0, imageInfo, textureIdx, 1),
+        };
+        descriptorSets.UpdateDescriptors(0, descriptorWrites);
+    }
+
     void GlobalTexturePool::BindStorageTexture(uint32_t textureIdx, const Vulkan::ImageView& textureImage)
     {
         auto& descriptorSets = descriptorSetManager_->DescriptorSets();
