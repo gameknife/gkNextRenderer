@@ -124,6 +124,11 @@ namespace Vulkan
 		uint32_t ActiveViewBankBase() const { return activeViewBankBase_; }
 		void SetActiveViewBankBase(uint32_t bankBase) { activeViewBankBase_ = bankBase; }
 
+		// Camera UBO device address of the view currently being recorded -> GPUScene.Camera.
+		// 0 == primary view (uses the per-image uniform buffer).
+		VkDeviceAddress ActiveViewCameraAddress(uint32_t imageIndex) const;
+		void SetActiveViewCameraAddress(VkDeviceAddress address) { activeViewCameraAddress_ = address; }
+
 		// Renderer registry
 		void RegisterLogicRenderer(ERendererType type);
 		void SwitchLogicRenderer(ERendererType type);
@@ -327,6 +332,8 @@ namespace Vulkan
 		uint32_t activeViewBankBase_ = 0;
 		bool multiViewDemo_ = false;
 		bool secondaryBankCreated_ = false;
+		VkDeviceAddress activeViewCameraAddress_ = 0;
+		std::unique_ptr<Assets::UniformBuffer> secondaryCameraUbo_;
 		// Per-view visibility framebuffer for the secondary view (bank-1 RT_MINIGBUFFER_DRAW; shares
 		// the primary depth via the shared render pass — safe because views render sequentially).
 		std::unique_ptr<FrameBuffer> secondaryVisibilityFrameBuffer_;

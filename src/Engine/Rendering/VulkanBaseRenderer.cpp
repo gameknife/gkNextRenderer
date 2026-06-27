@@ -1009,6 +1009,7 @@ namespace Vulkan
         // Secondary view resources reference bank-1 images / the shared render pass; drop them before
         // the swapchain images go away (the bank itself is rebuilt on demand next frame).
         secondaryVisibilityFrameBuffer_.reset();
+        secondaryCameraUbo_.reset();
         secondaryBankCreated_ = false;
         overlay_.sunShadowPass.reset();
         
@@ -1591,6 +1592,42 @@ namespace Vulkan
         }
     }
 
+    VkDeviceAddress VulkanBaseRenderer::ActiveViewCameraAddress(const uint32_t imageIndex) const
+    {
+        if (activeViewCameraAddress_ != 0)
+        {
+            return activeViewCameraAddress_;
+        }
+        return frame_.uniformBuffers[imageIndex].Buffer().GetDeviceAddress();
+    }
+
+    namespace
+    {
+        // Build a second camera by orbiting the primary eye around its look-at point about world-Y.
+        // Keeps the same projection; only the view-derived matrices change. PrevVP == VP (the
+        // secondary camera is static, so temporal accumulation reprojects in place, no ghosting).
+        Assets::UniformBufferObject MakeOrbitedCameraUbo(const Assets::UniformBufferObject& base,
+                                                         float yawDegrees, float pivotDistance)
+        {
+            const glm::mat4 c2w = base.ModelViewInverse;
+            const glm::vec3 eye = glm::vec3(c2w[3]);
+            const glm::vec3 forward = -glm::normalize(glm::vec3(c2w[2]));
+            const glm::vec3 pivot = eye + forward * pivotDistance;
+            const glm::mat4 rot = glm::rotate(glm::mat4(1.0f), glm::radians(yawDegrees), glm::vec3(0, 1, 0));
+            const glm::vec3 newEye = pivot + glm::vec3(rot * glm::vec4(eye - pivot, 1.0f));
+            const glm::mat4 view = glm::lookAt(newEye, pivot, glm::vec3(0, 1, 0));
+
+            Assets::UniformBufferObject ubo = base;
+            ubo.ModelView = view;
+            ubo.ModelViewInverse = glm::inverse(view);
+            ubo.ViewProjection = base.Projection * view;
+            ubo.ViewProjectionUnJit = base.ProjectionUnJit * view;
+            ubo.PrevViewProjection = ubo.ViewProjection;
+            ubo.PrevViewProjectionUnJit = ubo.ViewProjectionUnJit;
+            return ubo;
+        }
+    }
+
     void VulkanBaseRenderer::EnsureSecondaryViewBank()
     {
         if (secondaryBankCreated_)
@@ -1599,6 +1636,10 @@ namespace Vulkan
         }
         const uint32_t bank = Assets::Bindless::kViewRtBankStride;
         CreateRenderTargetBank(bank);
+        if (!secondaryCameraUbo_)
+        {
+            secondaryCameraUbo_ = std::make_unique<Assets::UniformBuffer>(*ctx_.device);
+        }
         // Per-view visibility framebuffer: bank-1 RT_MINIGBUFFER_DRAW as color; depth comes from the
         // shared render pass (primary depth) — safe because views render sequentially.
         secondaryVisibilityFrameBuffer_.reset(new FrameBuffer(
@@ -1626,11 +1667,19 @@ namespace Vulkan
         // screen-space RTs resolve through the active bank base (GPUScene.custom_data_0).
         {
             SCOPED_GPU_TIMER("mv-demo view");
+            // Second camera: orbit the primary eye 35 deg about its look-at point so the PiP shows a
+            // genuinely different view of the same scene.
+            const Assets::UniformBufferObject cameraB =
+                MakeOrbitedCameraUbo(frame_.lastUBO, 35.0f, 30.0f);
+            secondaryCameraUbo_->SetValue(cameraB);
+
             SetActiveViewBankBase(bank);
+            SetActiveViewCameraAddress(secondaryCameraUbo_->Buffer().GetDeviceAddress());
             activeVisibilityFrameBuffer_ = secondaryVisibilityFrameBuffer_.get();
             PreRenderPerView(commandBuffer, imageIndex, /*isPrimaryView*/ false);
             it->second->Render(commandBuffer, imageIndex);
             activeVisibilityFrameBuffer_ = nullptr;
+            SetActiveViewCameraAddress(0);
             SetActiveViewBankBase(0);
         }
 
