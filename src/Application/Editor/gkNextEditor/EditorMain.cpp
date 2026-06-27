@@ -158,6 +158,14 @@ void EditorGameInstance::OnInit()
                             });
 
     GetEngine().GetShowFlags().ShowEdge = true;
+
+    // Open the scene passed on the command line (--load-scene) so the editor can start directly on a
+    // scene (and supports automated --agent-validation screenshots). Without it the editor is empty.
+    if (GOption != nullptr && !GOption->SceneName.empty())
+    {
+        GetEngine().RequestLoadScene({.filename = GOption->SceneName});
+        GetEditorInterface().GetEditorUiState().currentScenePath = GOption->SceneName;
+    }
 }
 
 void EditorGameInstance::OnTick(double deltaSeconds)

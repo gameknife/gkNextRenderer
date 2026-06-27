@@ -119,6 +119,8 @@ namespace Vulkan
 		// secondary view enabled). Display via UserInterface::RequestImTextureId.
 		static constexpr uint32_t kSecondaryViewSampleSlot = 65000;
 		uint32_t SecondaryViewSampleSlot() const { return kSecondaryViewSampleSlot; }
+		// True once the offscreen image exists + its sample slot is bound (safe to ImGui::Image).
+		bool IsSecondaryViewReady() const { return secondaryOffscreenImage_ != nullptr; }
 
 		// Multi-viewport (RenderView). Currently exposes the single primary view (bank 0).
 		RenderViewManager& RenderViews() { return *renderViews_; }

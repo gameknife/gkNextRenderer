@@ -287,6 +287,8 @@ void EditorInterface::Render()
         Editor::DrawCommandHistoryPanel(ctx, uiState_);
     if (uiState_.hotReloadPanel)
         Editor::DrawHotReloadPanel(ctx, uiState_);
+    if (uiState_.cameraViewPanel)
+        Editor::DrawCameraViewPanel(ctx, uiState_);
     // Pump the AI agent main-thread queue every frame, regardless of panel
     // visibility, so in-flight agent tool calls never stall (and the user-confirm
     // UI can appear) when the panel is hidden, collapsed, or on an inactive tab.
