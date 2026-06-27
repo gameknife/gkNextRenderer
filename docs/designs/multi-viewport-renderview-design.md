@@ -1,15 +1,17 @@
 ---
 title: "多视口渲染（RenderView：单窗口分区 + 离屏到纹理 + 多相机/缩略图）设计与开发计划"
 category: design
-status: 草案
+status: 实现中
 owner: engine
 created: 2026-06-26
-last_updated: 2026-06-26
+last_updated: 2026-06-27
 ---
 
 # 多视口渲染（RenderView）设计与开发计划
 
-> 状态：**📝 草案 / ⚪ 待实现**。本文是交付给后续 agent 接手实现的设计 + 分阶段开发计划，描述目标架构、数据结构、与现有 GPU Scene 根描述 + Bindless 体系的集成方式、风险与验证手段。**实现前请先通读 §2 现状分析与 §4 核心机制**，再按 §7 路线图分阶段落地。
+> 状态：**🚧 实现中**。Phase 0 / 1 / 2 / 3 已落地，Phase 4 主体（编辑器多相机面板）完成，剩内容浏览器缩略图。**接手 agent 必读 [§0 实现进度与交接](#0-实现进度与交接接手-agent-必读)** —— 那里有当前已实现的内容、踩过的坑（含几个非常隐蔽的）、以及下一步怎么接。本文其余部分（§1–§10）是原始设计，仍有效，但实现细节以 §0 和实际代码为准。
+>
+> 本文是设计 + 分阶段开发计划，描述目标架构、数据结构、与现有 GPU Scene 根描述 + Bindless 体系的集成方式、风险与验证手段。**实现前请先通读 §2 现状分析与 §4 核心机制**，再按 §7 路线图分阶段落地。
 >
 > **已与 owner 对齐的关键范围决策**：
 > 1. **呈现方式**：以 **(a) 单窗口内分区 / 分屏** 与 **(b) 离屏渲染到纹理（offscreen → bindless sampled texture → `ImGui::Image`）** 为主。**独立 OS 窗口（多 swapchain）本期不做**，列入 §8 未来工作。
@@ -18,6 +20,60 @@ last_updated: 2026-06-26
 > 4. **首个落地接入点**：**gkNextEditor 编辑器**（多相机面板 + 内容浏览器缩略图）。
 >
 > **命名提示（避免歧义）**：仓库已有 `src/Application/Editor/Common/MultiViewportBackend.*`，那是 **ImGui 平台多视口（把 docking 面板拖出成多个 OS 窗口）**，与本文的"**场景 / 渲染多视口**"是两回事。本设计的核心对象统一命名为 **`RenderView`**，系统为 **`RenderViewManager`**，**不要复用 `MultiViewport*` 名字**，以免混淆。
+
+---
+
+## 0. 实现进度与交接（接手 agent 必读）
+
+> 本节是真实实现状态 + 踩坑记录，**优先级高于下面的原始设计**。所有改动已 commit 到 `dev` 分支，提交区间 `bfa0f9c2` → `f162cf99`（约 16 个 commit）。
+
+### 0.1 当前进度（对照 §7 路线图）
+
+| Phase | 状态 | 关键 commit | 说明 |
+| --- | --- | --- | --- |
+| Phase 0 抽取 RenderView | ✅ | `bfa0f9c2` | `RenderView`/`RenderViewManager` 对象 + `FViewRenderState`（per-view 时域状态）成型，主视口零回归。**注意**：per-view 的 RT/depth/相机 UBO 尚未*全部*收进 `RenderView` 对象（主视口仍用 `frame_`/`bindless_`，第二视口资源挂在 `VulkanBaseRenderer` 成员上）。这是有意的渐进式收口，不影响功能；真正"视口即对象"的彻底封装可后续做。 |
+| Phase 1 Bindless RT bank 贯通 | ✅ | `d632ec7e` `f69ee192` `abc35445` `c7db89b7` | `GPUScene.custom_data_0` = view bank base；shader 侧 `Bindless::ViewRT` + `GetViewStorageTexture`，C++ 侧 `GetViewStorageImage`，全量 sweep；并用**统一 push-constant header**解决 custom-pipeline 拿不到 custom_data_0 的问题（见 0.3）。base 0 像素零回归。 |
+| Phase 2 离屏渲到纹理 | ✅ | `ffdb1db7` | swapchain 子矩形 PiP（`GK_MV_DEMO`）+ 离屏 sampled image → `BindSampleTexture` → `kSecondaryViewSampleSlot=65000` → ImGui。 |
+| Phase 3 每视口时域历史 + per-view 编排 | ✅(核心) | `9cd800f0` `9c0d3c8d` | `PreRender` 拆 `PreRenderSceneGlobal`(每 scene 一次) + `PreRenderPerView`(每视口跑 cull/clear/visibility/shadow)；per-view 独立 RT bank = 独立时域历史；**不同相机**（`ActiveViewCameraAddress` + `MakeOrbitedCameraUbo`）。**未做**：§6 屏障范围收敛到活跃 bank（`InitializeBarriers` 仍遍历整表）；SHARC/shadow 目前所有视口共享。 |
+| Phase 4 gkNextEditor 接入 | 🟡 主体完成 | `f162cf99` | **多相机面板 ✅**（`Panels/CameraViewPanel.cpp`，实时显示第二相机）。**未做**：内容浏览器缩略图（transient view 渲资产/小 scene 缩略图缓存）。 |
+| Phase 5 多 scene 同屏 | ⚪ 未开始 | | |
+| Phase 6 独立 OS 窗口 | ⚪ 不做（本期） | | |
+
+### 0.2 已实现的关键 API / 代码位置
+
+- **bank 解析**：`Assets::Bindless::ViewRT(base, slot)` + `kViewRtBankStride=256`（`assets/shaders/common/BindlessTexture.slang`）；`GPUScene.custom_data_0` = active view bank base，由 `Scene::BuildGPUScene` 注入（`Scene.cpp`）。
+- **shader 取 RT**：屏幕空间槽用 `Bindless.GetViewStorageTexture<T>(RT_X)`（GPUScene 管线）；**custom-push-constant 管线**用 `pushConsts._ViewHdr_custom_data_0` 作 base（见 0.3）。全局槽（RT_SWAPCHAIN/REMOTE/TEMP）保持 absolute。
+- **C++ 取 RT image**：`VulkanBaseRenderer::GetViewStorageImage(slot)` = `GetStorageImage(activeViewBankBase_ + slot)`。
+- **active view 状态**：`SetActiveViewBankBase / ActiveViewBankBase`、`SetActiveViewCameraAddress / ActiveViewCameraAddress`、`activeVisibilityFrameBuffer_`（per-view visibility framebuffer 指针）。
+- **第二视口入口**：`VulkanBaseRenderer::DemoRenderSecondView`（在 `Render()` 末尾、present barrier 前调用）——目前是 demo/单一第二视口的实现，**Phase 5 要泛化成 `RenderViewManager::CreateView` + 视口列表循环**。
+- **离屏输出**：`secondaryOffscreenImage_`(SAMPLED|TRANSFER_DST) + `secondaryOffscreenSampler_`，`GlobalTexturePool::BindSampleTexture(idx, view, sampler)`，slot=`kSecondaryViewSampleSlot`。runtime 开关 `SetSecondaryViewEnabled` / `IsSecondaryViewReady`。
+- **编辑器面板**：`src/Application/Editor/gkNextEditor/Panels/CameraViewPanel.cpp`，用 `ctx.ui.RequestImTextureIdRaw(slot)` 显示。
+
+### 0.3 踩过的坑（务必读，省下大量时间）
+
+1. **custom-push-constant 管线读不到 `gpuScene.custom_data_0`**（最隐蔽、卡最久）。`ZeroBindCustomPushConstantPipeline`（reproject/atrous/upscale/bufferclear/visualdebugger）push 的是自定义结构体，**不 push GPUScene**；Slang 把 shader 里的 `gpuScene` 和 `pushConsts` 两个 `[[vk::push_constant]]` **顺序排布、不在 offset 0 重叠**，所以这些 shader 读 `gpuScene.custom_data_0` 永远是 0（primary base 0 时碰巧正确）。**解法（owner 设计）**：把 GPUScene 的 4-uint header(`SwapChainIndex`+`custom_data_0/1/2`)挪到结构体**最前**（C++/Slang 三份定义都改，size 仍 128），`ZeroBindCustomPushConstantPipeline::BindPipeline` 自己 **stamp** 这 16B header(custom_data_0=ActiveViewBankBase) 到 offset 0、caller params 放 offset 16；custom shader 的 `PushConsts` 前面补 16B header 并从 `pushConsts._ViewHdr_custom_data_0` 取 base。详见 `c7db89b7`。
+2. **第二视口全黑 = visibility/minigbuffer pass 没为它跑**。`PreRender` 原来只为主视口做 visibility，第二视口 bank1 的 minigbuffer 是空的 → deferred 主命中重建(`FVisibilityBufferRayCaster`，PathTracing 和 SwModernNoAmbient 都用)全 miss → atrous/compose 塌成黑。解法=`PreRenderPerView` 为每视口跑 visibility + 给第二视口独立 visibility framebuffer（color=bank1 `RT_MINIGBUFFER_DRAW`，depth 经共享 render pass 复用主视口 depth——顺序渲染所以安全）。详见 `9cd800f0`。
+3. **dynamic-slot（push-const/UBO 里的槽号值）也要 +base**。atrous 的 In/Out slot、reproject 的 Prev*、`Camera.Denoise*SourceSlot`、TemporalResolve 的 history slot 都是 C++ 算出的*绝对*屏幕空间槽；shader 里要 `ViewRT(base, slotValue)` 包一层（GPUScene 管线用 `gpuScene.custom_data_0`，custom 管线用 `pushConsts._ViewHdr_custom_data_0`），CopyToHistory 这种纯 C++ copy 在 C++ 端 +base。
+4. **ImGui 显示离屏纹理**：`RequestImTextureId(slot)` 会因 slot 没有对应的注册 `TextureImage` 而返回 0（面板空白）；要用新加的 `RequestImTextureIdRaw(slot)`，并且 `DecodeBindlessTextureId` 的上限从 `TotalTextures()` 放宽到 `GlobalTexturePool::kMaxBindlessSlots`(65535)（显式 BindSampleTexture 的 render-view slot 在注册纹理范围之外）。
+5. **ImGui 面板被拆成独立 OS 窗口截不到**：编辑器开了 ImGui multi-viewport，浮动窗口会变成单独 platform window（`editor.ini` 里是 `ViewportPos`/`ViewportId` 而非 `Pos`）。面板里 `ImGui::SetNextWindowViewport(GetMainViewport()->ID)` 钉回主窗口。
+6. **编辑器 ImGui 状态文件是 `editor.ini` 不是 `imgui.ini`**（`out/build/<preset>/`）。调面板默认尺寸/位置时若 stuck，删 `editor.ini` 让 `FirstUseEver` 生效。
+7. **HDR swapchain 下离屏面板偏暗**：`RT_DENOISED` 存的是 swapchain 编码值（HDR10 是 PQ），ImGui 当线性采样→偏暗。`--forcesdr` 下完美。要彻底修需为离屏单独做 SDR tonemap，目前可接受。
+8. **GPUScene 三份定义**（`BasicTypes.slang`：C++ `#ifdef __cplusplus`、Slang 非 Apple packed `uint64_t2`、Slang Apple）必须同序，改 header 顺序时三份都要改，且 `static_assert(sizeof(GPUScene)==128)` 不能破。
+9. **集成测试既有非确定后台线程崩溃**（`EngineTestFixture`，每次命中不同 test）——是既有 flaky，非多视口回归。验证回归用 `gnb shot` 像素对比，别被单测崩溃误导。
+
+### 0.4 验证手段
+
+- 默认渲染零回归：`gnb shot --scene assets/models/playground.glb`（默认是 PathTracing+SHARC）。
+- 第二视口 PiP（无需编辑器）：`GK_MV_DEMO=1 gkNextRenderer --load-scene <X> --agent-validation`，右下角出 orbit 第二相机。
+- 编辑器面板：`gnb shot --target gkNextEditor --scene <X> --ui`，左上 Camera View 面板出第二相机（HDR 偏暗，加 `--forcesdr` 看真彩）。
+
+### 0.5 建议的下一步（按优先级）
+
+1. **Phase 4 收尾：内容浏览器缩略图**。对资产/小 scene 用 `EViewSchedule::kTransient` 思路：建临时 bank + 离屏图，渲 N 帧（光栅 1 帧、PT 多帧）→ copy 到 sample slot 或落盘 `.jpg` 缓存 → `ContentBrowserPanel` 显示。复用 0.2 的离屏路径。
+2. **泛化为多视口列表**：把 `DemoRenderSecondView` 的"单一第二视口"重构成 `RenderViewManager` 持有 `std::vector<RenderView>`，每个 view 自带 bank/camera UBO/visibility framebuffer/离屏图；`FBankAllocator` 已就绪（上限 8 banks）。编辑器面板支持新建/删除多个相机视口。
+3. **Phase 5 多 scene**：`RenderView` 挂独立 `scene`，`PreRenderSceneGlobal` 按 scene 去重。
+4. **性能**：§6 屏障收敛到活跃 bank；profiler 每 view 计时；`kOnDemand` 静止不渲。
+5. **SHARC/shadow per-view**（若要不同相机的精确 GI/阴影）：目前共享主视口的，第二相机下略不精确但可用。
 
 ---
 
@@ -343,42 +399,42 @@ GPUScene 侧无需新增字段（复用 `custom_data_0`=bankBase、`custom_data_
 
 > 每阶段都给出**验证手段**。引擎层改动按 AGENTS.md 默认只构建受影响目标：`./gnb build gkNextRenderer gkNextUnitTests`，渲染回归用 `gnb shot` / `gkNextVisualTest`。
 
-### Phase 0 — 抽取 RenderView，主视口零回归（纯重构，无新功能）
+### Phase 0 — 抽取 RenderView，主视口零回归（纯重构，无新功能）  ✅ 已完成（见 §0）
 - 把 `VulkanBaseRenderer` 中 per-view 的资源（一套 RT、depth、相机 UBO）与时域状态（`renderState_` → `FViewRenderState`）抽进 `RenderView`，主窗口实例化为 **PrimaryView，bankBase=0**。
 - `GetUniformBufferObject` 改签名吃 `RenderView&` + `FViewRenderState&`；`ViewportRect` 改取 view 的 offset/extent。
 - `RenderViewManager` 先只管一个 PrimaryView，`RecordFrame` 等价于现在的 `PreRender/Render/PostRender`。
 - **验证**：`gnb shot --scene assets/models/playground.glb` 与现有基线**像素级一致**；`gkNextVisualTest` 全场景 baseline diff 无差异；`gkNextUnitTests` 通过。
 
-### Phase 1 — Bindless RT bank 基址贯通（仍单视口，base 恒为 0）
+### Phase 1 — Bindless RT bank 基址贯通（仍单视口，base 恒为 0）  ✅ 已完成（见 §0）
 - `GPUScene.custom_data_0` 语义定为"view RT bank base"；`BasicTypes.slang` / `BindlessTexture.slang` 加 `ViewRT(base, rtSlot)` helper。
 - 产出**逐 RT slot：私有 vs 共享**清单（§4.2），据此把屏幕空间 RT 的 `GetStorageTexture(RT_X)` 读写改为 `ViewRT(custom_data_0, RT_X)`；全局 slot（swapchain/remote/shadow）保持绝对。
 - `ViewRenderTargets` 支持在任意 bankBase 段创建并注册 bindless slot；PrimaryView 仍用 base 0。
 - **验证**：base 恒 0，画面应与 Phase 0 完全一致（`gnb shot` 基线对齐）。这一步是"机械改 shader 但不改行为"的安全网。
 
-### Phase 2 — 离屏 RenderView 渲到纹理（首个可见新功能）
+### Phase 2 — 离屏 RenderView 渲到纹理（首个可见新功能）  ✅ 已完成（见 §0）
 - 实现 `EViewOutputKind::OffscreenTexture`：compose 写离屏 color image → 绑进 `SampleTextureArray[slot]`。
 - 增加最小 API：`RenderViewManager::CreateView/DestroyView`，bank 分配器。
 - 加一个**调试入口**（CVar 或编辑器临时面板）：对当前 scene 建第二个相机的离屏 view，`ImGui::Image` 显示。
 - **验证**：编辑器里能看到第二相机的实时小窗；`gnb shot --target gkNextEditor --ui` 截图包含该面板。
 
-### Phase 3 — 每视口完整时域历史 + per-view 编排
+### Phase 3 — 每视口完整时域历史 + per-view 编排  ✅ 核心完成（屏障收敛/SHARC per-view 待办，见 §0）
 - 落地 §4.4 编排（scene-global pass 去重一次、per-view pass 各一次）与 §4.3 per-view 时域状态（独立 TAA / 累积 / CSM 缓存 / progressive）。
 - 收敛 `InitializeBarriers` 屏障范围到活跃 bank。
 - **验证**：主视口 + 第二视口各自相机运动时 TAA / 累积稳定、互不污染；切相机触发 `resetHistory` 不串味；profiler 显示两视口独立耗时。
 
-### Phase 4 — gkNextEditor 接入（首个落地接入点）
+### Phase 4 — gkNextEditor 接入（首个落地接入点）  🟡 多相机面板完成；缩略图待办（见 §0）
 - **多相机面板**：编辑器可新建/删除"相机视口"（持久 view），dock 成面板，支持选相机、选管线、选分辨率倍率。
 - **内容浏览器缩略图**：对资产 / 小 scene 用 `kTransient` view 离屏渲缩略图，缓存为 sample slot 纹理；可选"渲染到收敛后拷回 `.jpg` 缓存到磁盘"。
 - 复用 `UserInterface::RequestImTextureId` 显示；复用 `CaptureScreenShot` 回拷落盘。
 - **验证**：编辑器多相机面板可用；内容浏览器图标为真实渲染缩略图；`gnb shot --target gkNextEditor --ui` 回归。
 
-### Phase 5 — 多 scene 同屏 + 小预览 scene（架构兑现）
+### Phase 5 — 多 scene 同屏 + 小预览 scene（架构兑现）  ⚪ 未开始
 - `RenderView` 支持挂独立 scene；`BuildViewGPUScene` 用各自 `scene->FetchGPUScene()`；编排里 scene-global pass 按 scene 去重。
 - 小预览 scene（材质球 / prefab）独立加载、独立小 TLAS。
 - view 池上限 / `kMaxConcurrentBanks` 保护与 LRU 回收。
 - **验证**：同屏渲两个不同 scene 的 view 各自正确；并发缩略图压力下显存不超预算。
 
-### Phase 6 —（可选 / 非本期）独立 OS 窗口、并行录制、multiview
+### Phase 6 —（可选 / 非本期）独立 OS 窗口、并行录制、multiview  ⚪ 不做
 - 多 swapchain / 多 surface、跨 view 并行 command buffer、`VK_KHR_multiview`。仅在 owner 提出多显示器 / 撕下窗口需求时启动。见 §8。
 
 ---
