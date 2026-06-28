@@ -3,27 +3,17 @@
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 
-#include "Engine/Options.hpp"
-
 namespace Vulkan::PipelineCommon
 {
     void TemporalResolve::SetupHistory(
         VulkanBaseRenderer& baseRenderer,
         std::initializer_list<FTemporalHistorySpec> historySpecs)
     {
+        (void)baseRenderer;
         for (const auto& spec : historySpecs)
         {
             const auto index = static_cast<size_t>(spec.channel);
-            const VkFormat historyFormat = GOption->HighPrecisionProgressiveHistory
-                ? VK_FORMAT_R32G32B32A32_SFLOAT
-                : VK_FORMAT_R16G16B16A16_SFLOAT;
-            historyIds_[index] = GOption->ReferenceMode
-                ? baseRenderer.GetTemporalStorageImage(
-                    historyFormat,
-                    VK_IMAGE_TILING_OPTIMAL,
-                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                    spec.referenceDebugName)
-                : spec.fallbackBindlessId;
+            historyIds_[index] = spec.fallbackBindlessId;
         }
     }
 

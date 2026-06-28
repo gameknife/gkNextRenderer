@@ -25,7 +25,6 @@ namespace Vulkan::PipelineCommon
     {
         ETemporalChannel channel;
         uint32_t fallbackBindlessId;
-        const char* referenceDebugName;
     };
 
     struct FTemporalCopy

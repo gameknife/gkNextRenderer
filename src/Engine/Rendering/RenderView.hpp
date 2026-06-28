@@ -11,9 +11,9 @@
 // windows; this is scene/render multi-viewport. Names here are deliberately RenderView* to
 // avoid confusion — do not reuse the MultiViewport* names.
 //
-// Phase 0/1 foundation: this header defines the per-view temporal state, the RT bank slot
-// allocator and the view output/schedule descriptors. Wiring RenderView into the frame loop
-// (and giving each view its own RT bank / camera UBO) lands in later phases.
+// This header defines the per-view temporal/runtime state, the RT bank slot allocator and the
+// view output/schedule descriptors. Render resources still live in VulkanBaseRenderer, while
+// RenderView carries the per-view handles needed to record a frame.
 
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Core/Model.hpp"
@@ -23,10 +23,14 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
+#include <utility>
 #include <vector>
 
 namespace Vulkan
 {
+    class FrameBuffer;
+
     // How a view's composed result is delivered.
     enum class EViewOutputKind
     {
@@ -130,42 +134,73 @@ namespace Vulkan
     };
 
     // One independent view of a scene. Owns the per-view temporal history and the identity
-    // (RT bank base, render extent/offset, output kind, schedule). Resource ownership (the
-    // private RT bank / depth / camera UBO) and the frame hooks land in later phases; for now
-    // the primary view's resources still live in VulkanBaseRenderer's frame_/bindless_.
+    // (RT bank base, render extent/offset, output kind, schedule). Vulkan resources are still
+    // owned by VulkanBaseRenderer, but their per-view handles are tracked here.
     class RenderView
     {
     public:
-        RenderView(uint32_t bankBase, const FViewDesc& desc)
-            : bankBase_(bankBase), desc_(desc)
+        RenderView(uint32_t bankBase, const FViewDesc& desc, std::string debugName)
+            : bankBase_(bankBase), desc_(desc), debugName_(std::move(debugName))
         {
         }
 
         uint32_t              RtBankBase() const { return bankBase_; }
+        const char*           DebugName() const { return debugName_.c_str(); }
         const FViewDesc&      Desc() const { return desc_; }
         VkExtent2D            RenderExtent() const { return desc_.renderExtent; }
         VkOffset2D            RenderOffset() const { return renderOffset_; }
+        VkExtent2D            AllocatedExtent() const { return allocatedExtent_; }
         EViewOutputKind       OutputKind() const { return desc_.outputKind; }
         EViewSchedule         Schedule() const { return desc_.schedule; }
         bool                  IsPrimary() const { return bankBase_ == FBankAllocator::PrimaryBankBase(); }
+        VkDeviceAddress       CameraAddress() const { return cameraAddress_; }
+        FrameBuffer*          VisibilityFramebuffer() const { return visibilityFramebuffer_; }
+        Assets::Scene*        SceneOverride() const { return sceneOverride_; }
+        bool                  CopyObjectIdHistory() const { return copyObjectIdHistory_; }
+        bool                  PrevDepthValid() const { return prevDepthValid_; }
 
         FViewRenderState&       State() { return state_; }
         const FViewRenderState& State() const { return state_; }
 
-        void SetRenderExtent(VkExtent2D extent) { desc_.renderExtent = extent; }
+        void SetDebugName(std::string debugName) { debugName_ = std::move(debugName); }
+        void SetRenderExtent(VkExtent2D extent)
+        {
+            if (desc_.renderExtent.width != extent.width || desc_.renderExtent.height != extent.height)
+            {
+                desc_.renderExtent = extent;
+                InvalidateTemporalHistory();
+            }
+        }
         void SetRenderOffset(VkOffset2D offset) { renderOffset_ = offset; }
         void SetSubrect(VkRect2D rect) { desc_.subrect = rect; }
+        void SetAllocatedExtent(VkExtent2D extent) { allocatedExtent_ = extent; }
+        void SetCameraAddress(VkDeviceAddress address) { cameraAddress_ = address; }
+        void SetVisibilityFramebuffer(FrameBuffer* framebuffer) { visibilityFramebuffer_ = framebuffer; }
+        void SetSceneOverride(Assets::Scene* scene) { sceneOverride_ = scene; }
+        void SetCopyObjectIdHistory(bool copyHistory) { copyObjectIdHistory_ = copyHistory; }
+        void SetPrevDepthValid(bool valid) { prevDepthValid_ = valid; }
+        void InvalidateTemporalHistory()
+        {
+            state_.resetHistory = true;
+            prevDepthValid_ = false;
+        }
 
     private:
         uint32_t         bankBase_ = 0;
         FViewDesc        desc_{};
+        std::string      debugName_;
         VkOffset2D       renderOffset_{};
+        VkExtent2D       allocatedExtent_{};
+        VkDeviceAddress  cameraAddress_ = 0;
+        FrameBuffer*     visibilityFramebuffer_ = nullptr;
+        Assets::Scene*   sceneOverride_ = nullptr;
+        bool             copyObjectIdHistory_ = true;
+        bool             prevDepthValid_ = false;
         FViewRenderState state_{};
     };
 
-    // Drives the list of RenderViews for one VulkanBaseRenderer. Currently owns a single
-    // primary view (bank 0); CreateView/DestroyView for secondary/offscreen views land in
-    // Phase 2.
+    // Drives the list of RenderViews for one VulkanBaseRenderer. Bank 0 is the primary view;
+    // additional views use fixed-stride banks from FBankAllocator.
     class RenderViewManager
     {
     public:
@@ -174,16 +209,38 @@ namespace Vulkan
             FViewDesc desc{};
             desc.outputKind = EViewOutputKind::SwapchainSubrect;
             desc.schedule   = EViewSchedule::Persistent;
-            primary_ = std::make_unique<RenderView>(FBankAllocator::PrimaryBankBase(), desc);
+            primary_ = std::make_unique<RenderView>(FBankAllocator::PrimaryBankBase(), desc, "primary view");
         }
 
         RenderView&       Primary() { return *primary_; }
         const RenderView& Primary() const { return *primary_; }
         FBankAllocator&   Banks() { return banks_; }
+        const std::vector<std::unique_ptr<RenderView>>& AdditionalViews() const { return additional_; }
+
+        RenderView* CreateView(const FViewDesc& desc, std::string debugName)
+        {
+            const uint32_t bankBase = banks_.Acquire();
+            if (bankBase == FBankAllocator::kInvalidBase)
+            {
+                return nullptr;
+            }
+
+            additional_.push_back(std::make_unique<RenderView>(bankBase, desc, std::move(debugName)));
+            return additional_.back().get();
+        }
+
+        void DestroyAdditionalViews()
+        {
+            for (const auto& view : additional_)
+            {
+                banks_.Release(view->RtBankBase());
+            }
+            additional_.clear();
+        }
 
     private:
         FBankAllocator                          banks_;
         std::unique_ptr<RenderView>             primary_;
-        std::vector<std::unique_ptr<RenderView>> secondary_;
+        std::vector<std::unique_ptr<RenderView>> additional_;
     };
 }

@@ -44,9 +44,9 @@ void SoftwareTracingRenderer::CreateSwapChain(const VkExtent2D& extent)
 	composePipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Process.DenoiseJBF.comp.slang.spv", GetScene()));
 
 	temporalResolve_.SetupHistory(baseRender_, {
-		{PipelineCommon::ETemporalChannel::Diffuse, Assets::Bindless::RT_SINGLE_PREV_DIFFUSE, "prevDiffuseTmp"},
-		{PipelineCommon::ETemporalChannel::Specular, Assets::Bindless::RT_SINGLE_PREV_SPECULAR, "prevSpecularTmp"},
-		{PipelineCommon::ETemporalChannel::Albedo, Assets::Bindless::RT_SINGLE_PREV_ALBEDO, "prevAlbedoTmp"},
+		{PipelineCommon::ETemporalChannel::Diffuse, Assets::Bindless::RT_SINGLE_PREV_DIFFUSE},
+		{PipelineCommon::ETemporalChannel::Specular, Assets::Bindless::RT_SINGLE_PREV_SPECULAR},
+		{PipelineCommon::ETemporalChannel::Albedo, Assets::Bindless::RT_SINGLE_PREV_ALBEDO},
 	});
 }
 
