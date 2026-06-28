@@ -23,6 +23,8 @@
 #include "Application/Common/DemoScenes.hpp"
 #include "Application/Editor/Common/MultiViewportBackend.hpp"
 
+#include <cfloat>
+
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
                                                          NextEngine* engine)
 {
@@ -152,12 +154,17 @@ void EditorGameInstance::OnInit()
 
                                 if (found)
                                 {
-                                    modelViewController_.Focus(center, radius);
+                                    ControllerForViewport(ActiveViewportFromUi()).Focus(center, radius);
                                 }
                                 return found;
                             });
 
     GetEngine().GetShowFlags().ShowEdge = true;
+    modelViewController_.Reset(GetEngine().GetScene().GetRenderCamera());
+    for (auto& cameraViewController : cameraViewControllers_)
+    {
+        cameraViewController.Reset(GetEngine().GetScene().GetRenderCamera());
+    }
 
     // Open the scene passed on the command line (--load-scene) so the editor can start directly on a
     // scene (and supports automated --agent-validation screenshots). Without it the editor is empty.
@@ -170,11 +177,22 @@ void EditorGameInstance::OnInit()
 
 void EditorGameInstance::OnTick(double deltaSeconds)
 {
-    const bool moving = modelViewController_.UpdateCamera(1.0f, deltaSeconds);
+    bool moving = modelViewController_.UpdateCamera(1.0f, deltaSeconds);
+    for (auto& cameraViewController : cameraViewControllers_)
+    {
+        moving |= cameraViewController.UpdateCamera(1.0f, deltaSeconds);
+    }
     GetEngine().SetProgressiveRendering(!moving, false);
 }
 
-void EditorGameInstance::OnSceneLoaded() { modelViewController_.Reset(GetEngine().GetScene().GetRenderCamera()); }
+void EditorGameInstance::OnSceneLoaded()
+{
+    modelViewController_.Reset(GetEngine().GetScene().GetRenderCamera());
+    for (auto& cameraViewController : cameraViewControllers_)
+    {
+        cameraViewController.Reset(GetEngine().GetScene().GetRenderCamera());
+    }
+}
 
 void EditorGameInstance::OnPreConfigUI() { editorUserInterface_->Config(); }
 
@@ -189,7 +207,7 @@ void EditorGameInstance::OnInitUI() { editorUserInterface_->Init(); }
 bool EditorGameInstance::OnKey(SDL_Event& event)
 {
     // WASDQE camera movement (only active when right mouse is pressed)
-    modelViewController_.OnKey(event);
+    ControllerForViewport(ActiveViewportFromUi()).OnKey(event);
 
     if (event.key.type == SDL_EVENT_KEY_DOWN)
     {
@@ -255,7 +273,7 @@ bool EditorGameInstance::OnKey(SDL_Event& event)
                 float radius;
                 if (GetEngine().GetScene().GetSelectedNodeBounds(focusCenter, radius))
                 {
-                    modelViewController_.Focus(focusCenter, radius);
+                    ControllerForViewport(ActiveViewportFromUi()).Focus(focusCenter, radius);
                 }
             }
             break;
@@ -268,47 +286,46 @@ bool EditorGameInstance::OnKey(SDL_Event& event)
 
 bool EditorGameInstance::OnCursorPosition(double xpos, double ypos)
 {
-    // Update Controller Context
-    bool alt = (SDL_GetModState() & SDL_KMOD_ALT) != 0;
-    modelViewController_.SetAltPressed(alt);
+    const auto hoverTarget = ResolveViewportUnderMouse();
+    const bool rightMousePressed = (GetEngine().GetMouseButtons() & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
+    const std::optional<EViewportInputTarget> target =
+        rightMousePressed && capturedInputViewport_.has_value() ? capturedInputViewport_ : hoverTarget;
+    if (!target.has_value())
+    {
+        GetEngine().GetScene().ClearHoveredId();
+        return true;
+    }
 
-    glm::vec3 center;
-    float radius;
-    if (GetEngine().GetScene().GetSelectedNodeBounds(center, radius))
-    {
-        modelViewController_.SetOrbitTarget(center);
-    }
-    else
-    {
-        modelViewController_.SetOrbitTarget(std::nullopt);
-    }
+    Runtime::Camera::ModelViewController& controller = ControllerForViewport(*target);
+
+    // Update Controller Context
+    UpdateControllerContext(controller);
 
     if (!gizmoController_.IsInteracting())
     {
-        modelViewController_.OnCursorPosition(xpos, ypos);
+        controller.OnCursorPosition(xpos, ypos);
     }
 
-    const uint32_t mouseButtons = GetEngine().GetMouseButtons();
-    const bool rightMousePressed = (mouseButtons & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
     if (settings_.hoverHighlight && !gizmoController_.IsInteracting() && !rightMousePressed)
     {
-        auto mousePos = GetEngine().GetMousePos();
-        glm::vec3 org;
-        glm::vec3 dir;
-        Runtime::EngineHelper::GetScreenToWorldRay(mousePos, org, dir);
-        GetEngine().RayCastGPU(org, dir,
-                               [this](Assets::RayCastResult result)
-                               {
-                                   if (result.Hitted)
-                                   {
-                                       GetEngine().GetScene().SetHoveredId(result.InstanceId);
-                                   }
-                                   else
-                                   {
-                                       GetEngine().GetScene().ClearHoveredId();
-                                   }
-                                   return true;
-                               });
+        const ImGuiIO& io = ImGui::GetIO();
+        const glm::vec2 mousePos = CameraViewIndex(*target).has_value() &&
+                io.MousePos.x > -FLT_MAX * 0.5f && io.MousePos.y > -FLT_MAX * 0.5f
+            ? glm::vec2(io.MousePos.x, io.MousePos.y)
+            : glm::vec2(xpos, ypos);
+        RayCastFromViewport(*target, mousePos,
+                            [this](Assets::RayCastResult result)
+                            {
+                                if (result.Hitted)
+                                {
+                                    GetEngine().GetScene().SetHoveredId(result.InstanceId);
+                                }
+                                else
+                                {
+                                    GetEngine().GetScene().ClearHoveredId();
+                                }
+                                return true;
+                            });
     }
     else if (!settings_.hoverHighlight)
     {
@@ -320,65 +337,311 @@ bool EditorGameInstance::OnCursorPosition(double xpos, double ypos)
 
 bool EditorGameInstance::OnMouseButton(SDL_Event& event)
 {
+    const auto targetUnderMouse = ResolveViewportUnderMouse();
+    if (event.button.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
+    {
+        if (!targetUnderMouse.has_value())
+        {
+            return true;
+        }
+
+        SetActiveInputViewport(*targetUnderMouse);
+        capturedInputViewport_ = *targetUnderMouse;
+    }
+
+    const std::optional<EViewportInputTarget> eventTarget =
+        event.button.type == SDL_EVENT_MOUSE_BUTTON_DOWN
+            ? targetUnderMouse
+            : (capturedInputViewport_.has_value() ? capturedInputViewport_ : targetUnderMouse);
+    if (!eventTarget.has_value())
+    {
+        return true;
+    }
+
+    Runtime::Camera::ModelViewController& controller = ControllerForViewport(*eventTarget);
+    UpdateControllerContext(controller);
+
+    const bool releaseEvent = event.button.type == SDL_EVENT_MOUSE_BUTTON_UP;
     if (!gizmoController_.IsInteracting())
     {
-        modelViewController_.OnMouseButton(event);
+        controller.OnMouseButton(event);
     }
     else
     {
+        if (releaseEvent)
+        {
+            capturedInputViewport_.reset();
+        }
         return true;
     }
     if (event.button.button == SDL_BUTTON_LEFT && event.button.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
     {
         const bool toggleSelection = (SDL_GetModState() & (SDL_KMOD_CTRL | SDL_KMOD_GUI)) != 0;
-        auto mousePos = GetEngine().GetMousePos();
-        glm::vec3 org;
-        glm::vec3 dir;
-        Runtime::EngineHelper::GetScreenToWorldRay(mousePos, org, dir);
-        GetEngine().RayCastGPU(org, dir,
-                               [this, toggleSelection](Assets::RayCastResult result)
-                               {
-                                   if (result.Hitted)
-                                   {
-                                       if (GetEngine().GetScene().IsLocked(result.InstanceId))
-                                       {
-                                           return true;
-                                       }
-                                       GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
-                                       Runtime::EngineHelper::DrawAuxPoint(result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2,
-                                                                      30);
-                                       if (toggleSelection)
-                                       {
-                                           GetEngine().GetScene().ToggleSelection(result.InstanceId);
-                                       }
-                                       else
-                                       {
-                                           GetEngine().GetScene().SetSelectedId(result.InstanceId);
-                                       }
-                                   }
-                                   else if (!toggleSelection)
-                                   {
-                                       GetEngine().GetScene().ClearSelection();
-                                   }
+        const ImGuiIO& io = ImGui::GetIO();
+        const glm::vec2 mousePos = CameraViewIndex(*eventTarget).has_value() &&
+                io.MousePos.x > -FLT_MAX * 0.5f && io.MousePos.y > -FLT_MAX * 0.5f
+            ? glm::vec2(io.MousePos.x, io.MousePos.y)
+            : glm::vec2(event.button.x, event.button.y);
+        RayCastFromViewport(*eventTarget, mousePos,
+                            [this, toggleSelection](Assets::RayCastResult result)
+                            {
+                                if (result.Hitted)
+                                {
+                                    if (GetEngine().GetScene().IsLocked(result.InstanceId))
+                                    {
+                                        return true;
+                                    }
+                                    GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
+                                    Runtime::EngineHelper::DrawAuxPoint(result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2,
+                                                                   30);
+                                    if (toggleSelection)
+                                    {
+                                        GetEngine().GetScene().ToggleSelection(result.InstanceId);
+                                    }
+                                    else
+                                    {
+                                        GetEngine().GetScene().SetSelectedId(result.InstanceId);
+                                    }
+                                }
+                                else if (!toggleSelection)
+                                {
+                                    GetEngine().GetScene().ClearSelection();
+                                }
 
-                                   return true;
-                               });
+                                return true;
+                            });
         return true;
+    }
+    if (releaseEvent)
+    {
+        capturedInputViewport_.reset();
     }
     return true;
 }
 
 bool EditorGameInstance::OnScroll(double xoffset, double yoffset)
 {
+    const auto target = ResolveViewportUnderMouse();
+    if (!target.has_value())
+    {
+        return true;
+    }
+
+    SetActiveInputViewport(*target);
     if (!gizmoController_.IsInteracting())
     {
-        modelViewController_.OnScroll(xoffset, yoffset);
+        ControllerForViewport(activeInputViewport_).OnScroll(xoffset, yoffset);
     }
     return true;
+}
+
+Runtime::Camera::ModelViewController& EditorGameInstance::ControllerForViewport(EViewportInputTarget target)
+{
+    if (const std::optional<size_t> cameraViewIndex = CameraViewIndex(target))
+    {
+        return cameraViewControllers_[*cameraViewIndex];
+    }
+    return modelViewController_;
+}
+
+const Runtime::Camera::ModelViewController& EditorGameInstance::ControllerForViewport(EViewportInputTarget target) const
+{
+    if (const std::optional<size_t> cameraViewIndex = CameraViewIndex(target))
+    {
+        return cameraViewControllers_[*cameraViewIndex];
+    }
+    return modelViewController_;
+}
+
+std::optional<size_t> EditorGameInstance::CameraViewIndex(EViewportInputTarget target)
+{
+    switch (target)
+    {
+    case EViewportInputTarget::CameraView0:
+        return 0;
+    case EViewportInputTarget::CameraView1:
+        return 1;
+    case EViewportInputTarget::CameraView2:
+        return 2;
+    default:
+        return std::nullopt;
+    }
+}
+
+EditorGameInstance::EViewportInputTarget EditorGameInstance::CameraViewTarget(size_t viewIndex)
+{
+    switch (viewIndex)
+    {
+    case 0:
+        return EViewportInputTarget::CameraView0;
+    case 1:
+        return EViewportInputTarget::CameraView1;
+    default:
+        return EViewportInputTarget::CameraView2;
+    }
+}
+
+bool EditorGameInstance::IsMouseInRect(const glm::vec2& mousePos, const glm::vec2& rectPos,
+                                       const glm::vec2& rectSize) const
+{
+    return rectSize.x > 1.0f && rectSize.y > 1.0f &&
+        mousePos.x >= rectPos.x && mousePos.y >= rectPos.y &&
+        mousePos.x < rectPos.x + rectSize.x && mousePos.y < rectPos.y + rectSize.y;
+}
+
+std::optional<EditorGameInstance::EViewportInputTarget> EditorGameInstance::ResolveViewportUnderMouse() const
+{
+    const auto& ui = GetEditorInterface().GetEditorUiState();
+    glm::vec2 mousePos = glm::vec2(GetEngine().GetMousePos());
+    const ImGuiIO& io = ImGui::GetIO();
+    if (io.MousePos.x > -FLT_MAX * 0.5f && io.MousePos.y > -FLT_MAX * 0.5f)
+    {
+        mousePos = glm::vec2(io.MousePos.x, io.MousePos.y);
+    }
+
+    for (size_t i = 0; i < Editor::kMaxCameraViewports; ++i)
+    {
+        const auto& cameraView = ui.cameraViews[i];
+        if (cameraView.open &&
+            IsMouseInRect(mousePos,
+                          glm::vec2(cameraView.contentPos.x, cameraView.contentPos.y),
+                          glm::vec2(cameraView.contentSize.x, cameraView.contentSize.y)))
+        {
+            return CameraViewTarget(i);
+        }
+    }
+
+    if (io.WantCaptureMouse)
+    {
+        return std::nullopt;
+    }
+
+    if (IsMouseInRect(mousePos,
+                      glm::vec2(ui.viewportContentPos.x, ui.viewportContentPos.y),
+                      glm::vec2(ui.viewportContentSize.x, ui.viewportContentSize.y)))
+    {
+        return EViewportInputTarget::Scene;
+    }
+
+    return std::nullopt;
+}
+
+EditorGameInstance::EViewportInputTarget EditorGameInstance::ActiveViewportFromUi() const
+{
+    const auto& ui = GetEditorInterface().GetEditorUiState();
+    switch (ui.activeViewport)
+    {
+    case Editor::EEditorViewportId::CameraView0:
+        return EViewportInputTarget::CameraView0;
+    case Editor::EEditorViewportId::CameraView1:
+        return EViewportInputTarget::CameraView1;
+    case Editor::EEditorViewportId::CameraView2:
+        return EViewportInputTarget::CameraView2;
+    default:
+        return EViewportInputTarget::Scene;
+    }
+}
+
+void EditorGameInstance::SetActiveInputViewport(EViewportInputTarget target)
+{
+    activeInputViewport_ = target;
+    auto& ui = GetEditorInterface().GetEditorUiState();
+    switch (target)
+    {
+    case EViewportInputTarget::CameraView0:
+        ui.activeViewport = Editor::EEditorViewportId::CameraView0;
+        break;
+    case EViewportInputTarget::CameraView1:
+        ui.activeViewport = Editor::EEditorViewportId::CameraView1;
+        break;
+    case EViewportInputTarget::CameraView2:
+        ui.activeViewport = Editor::EEditorViewportId::CameraView2;
+        break;
+    default:
+        ui.activeViewport = Editor::EEditorViewportId::Scene;
+        break;
+    }
+}
+
+void EditorGameInstance::UpdateControllerContext(Runtime::Camera::ModelViewController& controller)
+{
+    controller.SetAltPressed((SDL_GetModState() & SDL_KMOD_ALT) != 0);
+
+    glm::vec3 center;
+    float radius;
+    if (GetEngine().GetScene().GetSelectedNodeBounds(center, radius))
+    {
+        controller.SetOrbitTarget(center);
+    }
+    else
+    {
+        controller.SetOrbitTarget(std::nullopt);
+    }
+}
+
+Assets::Camera EditorGameInstance::BuildSceneViewportCamera() const
+{
+    Assets::Camera camera = GetEngine().GetScene().GetRenderCamera();
+    camera.ModelView = modelViewController_.ModelView();
+    camera.FieldOfView = modelViewController_.FieldOfView();
+    return camera;
+}
+
+Assets::Camera EditorGameInstance::BuildCameraViewCamera(size_t viewIndex) const
+{
+    viewIndex = std::min(viewIndex, cameraViewControllers_.size() - 1);
+    Assets::Camera camera = GetEngine().GetScene().GetRenderCamera();
+    camera.ModelView = cameraViewControllers_[viewIndex].ModelView();
+    camera.FieldOfView = cameraViewControllers_[viewIndex].FieldOfView();
+    return camera;
+}
+
+void EditorGameInstance::SyncCameraViewRendererCamera(size_t viewIndex, const glm::vec2& viewportSize)
+{
+    if (viewportSize.x <= 1.0f || viewportSize.y <= 1.0f)
+    {
+        return;
+    }
+
+    viewIndex = std::min(viewIndex, cameraViewControllers_.size() - 1);
+    GetEngine().GetRenderer().SetSecondaryViewCameraOverride(
+        static_cast<uint32_t>(viewIndex), BuildCameraViewCamera(viewIndex));
+}
+
+void EditorGameInstance::RayCastFromViewport(EViewportInputTarget target, const glm::vec2& mousePos,
+                                             std::function<bool(Assets::RayCastResult)> callback)
+{
+    glm::vec3 org;
+    glm::vec3 dir;
+    if (const std::optional<size_t> cameraViewIndex = CameraViewIndex(target))
+    {
+        const auto& ui = GetEditorInterface().GetEditorUiState();
+        const auto& cameraView = ui.cameraViews[*cameraViewIndex];
+        Runtime::EngineHelper::GetScreenToWorldRayWithCamera(
+            BuildCameraViewCamera(*cameraViewIndex),
+            mousePos,
+            glm::vec2(cameraView.contentPos.x, cameraView.contentPos.y),
+            glm::vec2(cameraView.contentSize.x, cameraView.contentSize.y),
+            org,
+            dir);
+    }
+    else
+    {
+        Runtime::EngineHelper::GetScreenToWorldRay(mousePos, org, dir);
+    }
+
+    GetEngine().RayCastGPU(org, dir, std::move(callback));
 }
 
 void EditorGameInstance::DrawGizmo(const glm::vec2& viewportPos, const glm::vec2& viewportSize)
 {
     gizmoController_.Draw(GetEngine(), viewportPos, viewportSize, settings_.gizmoSnap,
                           settings_.gizmoSnapTranslate, settings_.gizmoDefaultMode);
+}
+
+void EditorGameInstance::DrawGizmo(const glm::vec2& viewportPos, const glm::vec2& viewportSize,
+                                   const Assets::UniformBufferObject* viewUbo, ImGuiWindow* alternativeWindow)
+{
+    gizmoController_.Draw(GetEngine(), viewportPos, viewportSize, settings_.gizmoSnap,
+                          settings_.gizmoSnapTranslate, settings_.gizmoDefaultMode, viewUbo, alternativeWindow);
 }

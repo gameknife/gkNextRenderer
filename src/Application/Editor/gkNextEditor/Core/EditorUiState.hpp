@@ -5,6 +5,7 @@
 
 #include <imgui.h>
 
+#include <array>
 #include <cstdint>
 #include <limits>
 #include <mutex>
@@ -19,6 +20,24 @@ namespace Editor
     inline uint32_t ActiveColor = IM_COL32(64, 128, 255, 255);
     constexpr uint32_t InvalidId = std::numeric_limits<uint32_t>::max();
     constexpr size_t kRecentScenesCap = 10;
+    constexpr size_t kMaxCameraViewports = 3;
+
+    enum class EEditorViewportId
+    {
+        Scene,
+        CameraView0,
+        CameraView1,
+        CameraView2
+    };
+
+    struct EditorCameraViewState
+    {
+        bool open = false;
+        ImVec2 contentPos{0.0f, 0.0f};
+        ImVec2 contentSize{0.0f, 0.0f};
+        bool hovered = false;
+        bool focused = false;
+    };
 
     struct EditorUiState
     {
@@ -37,7 +56,7 @@ namespace Editor
         bool aiPanel = true;
         bool hotReloadPanel = false;
         bool settingsPanel = false;
-        bool cameraViewPanel = true; // secondary multi-viewport camera preview
+        bool cameraViewPanel = true; // legacy alias for cameraViews[0].open
         uint32_t pendingExpandTargetId = InvalidId;
         uint32_t pendingCollapseTargetId = InvalidId;
         bool dockResetRequested = false;
@@ -63,6 +82,10 @@ namespace Editor
         ImVec2 viewportContentPos{0.0f, 0.0f};
         ImVec2 viewportContentSize{0.0f, 0.0f};
         bool viewportOnMainViewport = true;
+        bool viewportHovered = false;
+        bool viewportFocused = true;
+        std::array<EditorCameraViewState, kMaxCameraViewports> cameraViews{};
+        EEditorViewportId activeViewport = EEditorViewportId::Scene;
 
         // Material editor
         bool ed_material = false;
@@ -81,6 +104,11 @@ namespace Editor
 
         // Fonts
         ImFont* bigIcon = nullptr;
+
+        EditorUiState()
+        {
+            cameraViews[0].open = true;
+        }
         
     };
 } // namespace Editor

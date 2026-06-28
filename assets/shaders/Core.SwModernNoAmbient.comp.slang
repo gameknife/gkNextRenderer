@@ -141,7 +141,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
             float3 ambient = float3(0);
             if (Camera.HasSky)
             {
-                float3 irr = Common.SampleIBLDiffuse(Camera.SkyIdx, N, Camera.SkyRotation).rgb * Camera.SkyIntensity;
+                float3 irr = Common.SampleIBL(Camera.SkyIdx, N, Camera.SkyRotation, material.Fuzziness).rgb * Camera.SkyIntensity;
                 ambient = albedo * irr;
             }
 

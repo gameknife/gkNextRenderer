@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Runtime/Command/TransformNodesCommand.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
 
@@ -9,6 +10,7 @@
 #include <vector>
 
 struct ImGuiIO;
+struct ImGuiWindow;
 
 namespace NextUI
 {
@@ -17,7 +19,8 @@ class GizmoController
 {
 public:
     void Draw(NextEngine& engine, const glm::vec2& viewportPos, const glm::vec2& viewportSize,
-              bool snapEnabled = false, float translateSnap = 1.0f, int defaultOperation = 0);
+              bool snapEnabled = false, float translateSnap = 1.0f, int defaultOperation = 0,
+              const Assets::UniformBufferObject* viewUbo = nullptr, ImGuiWindow* alternativeWindow = nullptr);
     bool IsUsing() const { return isUsing_; }
     bool IsInteracting() const { return isUsing_ || isOver_; }
     bool IsShowing() const { return isShowing_; }
