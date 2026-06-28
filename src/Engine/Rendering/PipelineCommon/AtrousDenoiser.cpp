@@ -52,6 +52,7 @@ namespace Vulkan::PipelineCommon
         VkCommandBuffer commandBuffer,
         const Runtime::Config::UserSettings& settings) const
     {
+        (void)swapChain;
         const int diffuseIterations = settings.Denoiser ? std::clamp(settings.DenoiseAtrousIterations, 0, 6) : 0;
         const int specularIterations = settings.Denoiser ? std::clamp(settings.DenoiseAtrousSpecularIterations, 0, 6) : 0;
         const int maxIterations = std::max(diffuseIterations, specularIterations);
@@ -62,8 +63,9 @@ namespace Vulkan::PipelineCommon
 
         const std::array<uint32_t, 2> diffusePingPong{Assets::Bindless::RT_ATROUS_PING, Assets::Bindless::RT_ATROUS_PONG};
         const std::array<uint32_t, 2> specularPingPong{Assets::Bindless::RT_ATROUS_SPEC_PING, Assets::Bindless::RT_ATROUS_SPEC_PONG};
-        const uint32_t dispatchX = Utilities::Math::GetSafeDispatchCount(swapChain.RenderExtent().width, 8);
-        const uint32_t dispatchY = Utilities::Math::GetSafeDispatchCount(swapChain.RenderExtent().height, 8);
+        const VkExtent2D activeExtent = baseRenderer.ActiveViewRenderExtent();
+        const uint32_t dispatchX = Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8);
+        const uint32_t dispatchY = Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8);
 
         auto getSourceSlot = [](int iteration, uint32_t accumSlot, const std::array<uint32_t, 2>& pingPong)
         {
@@ -99,11 +101,11 @@ namespace Vulkan::PipelineCommon
 
             if (filterDiffuse)
             {
-                baseRenderer.GetStorageImage(push.diffuseOutSlot)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+                baseRenderer.GetViewStorageImage(push.diffuseOutSlot)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
             }
             if (filterSpecular)
             {
-                baseRenderer.GetStorageImage(push.specularOutSlot)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+                baseRenderer.GetViewStorageImage(push.specularOutSlot)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
             }
         }
     }

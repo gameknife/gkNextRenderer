@@ -116,6 +116,8 @@ namespace Vulkan
 		void SetSecondaryViewEnabled(bool enabled) { secondaryViewEnabled_ = enabled; }
 		bool IsSecondaryViewEnabled() const { return secondaryViewEnabled_; }
 		void RequestSecondaryViewThisFrame() { secondaryViewRequested_ = true; }
+		void SetSecondaryViewRenderExtent(VkExtent2D extent);
+		VkExtent2D SecondaryViewRenderExtent() const { return secondaryViewRenderExtent_; }
 		// Bindless sample-texture slot holding the latest secondary view (valid after a frame with the
 		// secondary view enabled). Display via UserInterface::RequestImTextureId.
 		static constexpr uint32_t kSecondaryViewSampleSlot = 65000;
@@ -358,6 +360,8 @@ namespace Vulkan
 		std::unique_ptr<Assets::UniformBuffer> secondaryCameraUbo_;
 		bool secondaryViewEnabled_ = false;
 		bool secondaryViewRequested_ = false;
+		VkExtent2D secondaryViewRenderExtent_{0, 0};
+		VkExtent2D secondaryBankExtent_{0, 0};
 		// Offscreen sampled copy of the secondary view's composed output (bank-1 RT_DENOISED), bound
 		// into the sample-texture array at kSecondaryViewSampleSlot for ImGui display.
 		std::unique_ptr<RenderImage> secondaryOffscreenImage_;

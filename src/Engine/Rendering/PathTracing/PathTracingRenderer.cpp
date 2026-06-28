@@ -315,6 +315,8 @@ namespace Vulkan::PathTracing
         const Runtime::Config::UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
         const bool offlineProgressiveRender = IsOfflineProgressiveRenderActive();
         const bool sharcEnabled = IsEffectiveSharcEnabled();
+        const bool isPrimaryView = baseRender_.ActiveViewBankBase() == 0;
+        const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
 
         // Execute ray tracing shaders.
         {
@@ -330,8 +332,8 @@ namespace Vulkan::PathTracing
                     SCOPED_GPU_TIMER("sharc update pass");
                     sharcUpdatePipeline_->BindPipeline(commandBuffer, sharcGpuScene);
                     vkCmdDispatch(commandBuffer,
-                                  Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
-                                  Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+                                  Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+                                  Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
                 }
 
                 InsertSharcBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
@@ -353,16 +355,16 @@ namespace Vulkan::PathTracing
                     SCOPED_GPU_TIMER("sharc query pass");
                     sharcQueryPipeline_->BindPipeline(commandBuffer, sharcGpuScene);
                     vkCmdDispatch(commandBuffer,
-                                  Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
-                                  Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+                                  Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+                                  Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
                 }
             }
             else
             {
                 SCOPED_GPU_TIMER("rt pass");
                 rayTracingPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
-                vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
-                              Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+                vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+                              Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
             }
 
             baseRender_.GetViewStorageImage(Assets::Bindless::RT_SINGLE_DIFFUSE)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
@@ -377,10 +379,10 @@ namespace Vulkan::PathTracing
         {
             SCOPED_GPU_TIMER("reproject pass");
             FReprojectPushConstants pushConst{};
-            pushConst.ProgressiveRender = NextEngine::GetInstance()->IsProgressiveRendering();
-            pushConst.TemporalFrames = offlineProgressiveRender
+            pushConst.ProgressiveRender = isPrimaryView && NextEngine::GetInstance()->IsProgressiveRendering();
+            pushConst.TemporalFrames = isPrimaryView && offlineProgressiveRender
                 ? NextEngine::GetInstance()->GetProgressiveRenderTargetFrames()
-                : uint32_t(settings.TemporalFrames);
+                : (isPrimaryView ? uint32_t(settings.TemporalFrames) : 1u);
             pushConst.PrevDiffuseBindlessIdx = temporalResolve_.History(PipelineCommon::ETemporalChannel::Diffuse);
             pushConst.PrevSpecularBindlessIdx = temporalResolve_.History(PipelineCommon::ETemporalChannel::Specular);
             pushConst.PrevAlbedoBindlessIdx = temporalResolve_.History(PipelineCommon::ETemporalChannel::Albedo);
@@ -389,7 +391,7 @@ namespace Vulkan::PathTracing
             pushConst.ClampGammaLo = settings.ReprojectClampGammaLo;
             pushConst.ClampFloor = settings.ReprojectClampFloor;
             accumulatePipeline_->BindPipeline(commandBuffer, &pushConst);
-            vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+            vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8), Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
 
             baseRender_.GetViewStorageImage(Assets::Bindless::RT_ACCUMLATE_DIFFUSE)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL );
             baseRender_.GetViewStorageImage(Assets::Bindless::RT_ACCUMLATE_SPECULAR)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
@@ -412,7 +414,7 @@ namespace Vulkan::PathTracing
         {
             SCOPED_GPU_TIMER("compose pass");
             composePipelineNonDenoiser_->BindPipeline(commandBuffer, GetScene(), imageIndex);
-            vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+            vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8), Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
         }
         
         {

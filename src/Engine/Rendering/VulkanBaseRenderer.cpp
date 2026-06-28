@@ -465,6 +465,13 @@ namespace Vulkan
         return frame_.swapChain->RenderExtent();
     }
 
+    void VulkanBaseRenderer::SetSecondaryViewRenderExtent(VkExtent2D extent)
+    {
+        extent.width = std::max(1u, extent.width);
+        extent.height = std::max(1u, extent.height);
+        secondaryViewRenderExtent_ = extent;
+    }
+
     void VulkanBaseRenderer::SetPhysicalDeviceImpl(
         VkPhysicalDevice physicalDevice,
         std::vector<const char*>& requiredExtensions,
@@ -843,6 +850,7 @@ namespace Vulkan
         CreateRenderTargetBank(0);
         // A secondary view bank was destroyed with the swapchain; recreate it on demand next frame.
         secondaryBankCreated_ = false;
+        secondaryBankExtent_ = {0, 0};
         thumbnailBankCreated_ = false;
         thumbnailVisibilityFrameBuffer_.reset();
 
@@ -1050,6 +1058,7 @@ namespace Vulkan
         secondaryOffscreenImage_.reset();
         secondaryOffscreenSampler_.reset();
         secondaryBankCreated_ = false;
+        secondaryBankExtent_ = {0, 0};
         thumbnailVisibilityFrameBuffer_.reset();
         thumbnailBankCreated_ = false;
         overlay_.sunShadowPass.reset();
@@ -1652,9 +1661,12 @@ namespace Vulkan
     namespace
     {
         // Build a second camera by orbiting the primary eye around its look-at point about world-Y.
-        // Keeps the same projection; only the view-derived matrices change. PrevVP == VP (the
-        // secondary camera is static, so temporal accumulation reprojects in place, no ghosting).
+        // The secondary view has its own render extent, so rebuild projection/aspect, viewport and
+        // temporal fields instead of inheriting them from the primary view UBO.
         Assets::UniformBufferObject MakeOrbitedCameraUbo(const Assets::UniformBufferObject& base,
+                                                         const Assets::Camera& camera,
+                                                         const Assets::EnvironmentSetting& env,
+                                                         VkExtent2D extent,
                                                          float yawDegrees, float pivotDistance)
         {
             const glm::mat4 c2w = base.ModelViewInverse;
@@ -1668,10 +1680,34 @@ namespace Vulkan
             Assets::UniformBufferObject ubo = base;
             ubo.ModelView = view;
             ubo.ModelViewInverse = glm::inverse(view);
-            ubo.ViewProjection = base.Projection * view;
-            ubo.ViewProjectionUnJit = base.ProjectionUnJit * view;
+            const float aspect = static_cast<float>(std::max(1u, extent.width)) /
+                static_cast<float>(std::max(1u, extent.height));
+            ubo.Projection =
+                glm::perspective(glm::radians(camera.FieldOfView), aspect, camera.NearPlane, camera.FarPlane);
+            ubo.Projection[1][1] *= -1.0f;
+            ubo.ProjectionUnJit = ubo.Projection;
+            ubo.ProjectionInverse = glm::inverse(ubo.Projection);
+            ubo.ProjectionInverseUnJit = ubo.ProjectionInverse;
+            ubo.ViewProjection = ubo.Projection * view;
+            ubo.ViewProjectionUnJit = ubo.ProjectionUnJit * view;
             ubo.PrevViewProjection = ubo.ViewProjection;
             ubo.PrevViewProjectionUnJit = ubo.ViewProjectionUnJit;
+            ubo.Jitter = glm::vec4(0.0f);
+            ubo.ViewportRect = glm::vec4(
+                0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height));
+
+            const auto cascades = env.ComputeSunCascades(
+                ubo.ViewProjectionUnJit, camera.NearPlane, camera.FarPlane, 400.0f);
+            for (uint32_t i = 0; i < Assets::Scene::kSunShadowCascadeCount; ++i)
+            {
+                ubo.SunCascadeViewProjection[i] = cascades.viewProjection[i];
+            }
+            ubo.CascadeSplits = cascades.splits;
+
+            ubo.TemporalFrames = 1;
+            ubo.TotalFrames = std::max(1u, base.TotalFrames);
+            ubo.TAA = false;
+            ubo.ProgressiveRender = false;
             return ubo;
         }
     }
@@ -1739,12 +1775,24 @@ namespace Vulkan
 
     void VulkanBaseRenderer::EnsureSecondaryViewBank()
     {
-        if (secondaryBankCreated_)
+        VkExtent2D extent = secondaryViewRenderExtent_;
+        if (extent.width == 0 || extent.height == 0)
+        {
+            extent = frame_.swapChain->RenderExtent();
+        }
+        extent.width = std::max(1u, extent.width);
+        extent.height = std::max(1u, extent.height);
+
+        if (secondaryBankCreated_ &&
+            secondaryBankExtent_.width == extent.width &&
+            secondaryBankExtent_.height == extent.height)
         {
             return;
         }
         const uint32_t bank = Assets::Bindless::kViewRtBankStride;
-        CreateRenderTargetBank(bank);
+        secondaryVisibilityFrameBuffer_.reset();
+        secondaryOffscreenImage_.reset();
+        CreateRenderTargetBank(bank, extent);
         if (!secondaryCameraUbo_)
         {
             secondaryCameraUbo_ = std::make_unique<Assets::UniformBuffer>(*ctx_.device);
@@ -1752,24 +1800,28 @@ namespace Vulkan
         // Per-view visibility framebuffer: bank-1 RT_MINIGBUFFER_DRAW as color; depth comes from the
         // shared render pass (primary depth) — safe because views render sequentially.
         secondaryVisibilityFrameBuffer_.reset(new FrameBuffer(
-            frame_.swapChain->RenderExtent(),
+            extent,
             GetStorageImage(bank + Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(),
             overlay_.visibilityPipeline->RenderPass()));
 
         // Offscreen sampled copy of the secondary view's composed output, bound into the sample
         // array for ImGui display. Created once; bind the descriptor once (image is stable).
         secondaryOffscreenImage_.reset(new RenderImage(
-            Device(), frame_.swapChain->RenderExtent(), VK_FORMAT_R16G16B16A16_SFLOAT,
+            Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT,
             VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             false, "Secondary View Offscreen"));
-        Vulkan::SamplerConfig samplerConfig{};
-        samplerConfig.AddressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-        samplerConfig.AddressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-        samplerConfig.AnisotropyEnable = false;
-        secondaryOffscreenSampler_.reset(new Vulkan::Sampler(*ctx_.device, samplerConfig));
+        if (!secondaryOffscreenSampler_)
+        {
+            Vulkan::SamplerConfig samplerConfig{};
+            samplerConfig.AddressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            samplerConfig.AddressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            samplerConfig.AnisotropyEnable = false;
+            secondaryOffscreenSampler_.reset(new Vulkan::Sampler(*ctx_.device, samplerConfig));
+        }
         ctx_.globalTexturePool->BindSampleTexture(kSecondaryViewSampleSlot,
             secondaryOffscreenImage_->GetImageView(), *secondaryOffscreenSampler_);
 
+        secondaryBankExtent_ = extent;
         secondaryBankCreated_ = true;
     }
 
@@ -2254,6 +2306,9 @@ namespace Vulkan
 
         EnsureSecondaryViewBank();
         const uint32_t bank = Assets::Bindless::kViewRtBankStride;
+        const VkExtent2D secondaryExtent = secondaryBankExtent_.width > 0 && secondaryBankExtent_.height > 0
+            ? secondaryBankExtent_
+            : frame_.swapChain->RenderExtent();
 
         // Render the second view into its own RT bank (same scene/camera for now; SHARC and history
         // are shared, which is benign for a static converged proof). The per-view pre-passes
@@ -2265,16 +2320,20 @@ namespace Vulkan
             // Second camera: orbit the primary eye 35 deg about its look-at point so the PiP shows a
             // genuinely different view of the same scene.
             const Assets::UniformBufferObject cameraB =
-                MakeOrbitedCameraUbo(frame_.lastUBO, 35.0f, 30.0f);
+                MakeOrbitedCameraUbo(frame_.lastUBO, GetScene().GetRenderCamera(),
+                                     GetScene().GetEnvSettings(), secondaryExtent, 35.0f, 30.0f);
             secondaryCameraUbo_->SetValue(cameraB);
 
             SetActiveViewBankBase(bank);
+            SetActiveViewRenderExtent(secondaryExtent);
             SetActiveViewCameraAddress(secondaryCameraUbo_->Buffer().GetDeviceAddress());
             activeVisibilityFrameBuffer_ = secondaryVisibilityFrameBuffer_.get();
             PreRenderPerView(commandBuffer, imageIndex, /*isPrimaryView*/ false);
             it->second->Render(commandBuffer, imageIndex);
+            CopyObjectIdHistory(commandBuffer);
             activeVisibilityFrameBuffer_ = nullptr;
             SetActiveViewCameraAddress(0);
+            SetActiveViewRenderExtent({0, 0});
             SetActiveViewBankBase(0);
         }
 
@@ -2284,8 +2343,8 @@ namespace Vulkan
             return;
         }
 
-        const int32_t rw = static_cast<int32_t>(frame_.swapChain->RenderExtent().width);
-        const int32_t rh = static_cast<int32_t>(frame_.swapChain->RenderExtent().height);
+        const int32_t rw = static_cast<int32_t>(secondaryExtent.width);
+        const int32_t rh = static_cast<int32_t>(secondaryExtent.height);
 
         // bank-1 composed output -> transfer source.
         src->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
