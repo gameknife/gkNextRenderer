@@ -258,7 +258,7 @@ namespace Vulkan
         // Optional validation path: render the secondary RenderView and composite it as a
         // picture-in-picture inset. Off by default; opt in with GK_MV_DEMO=1.
         const char* mvDemoEnv = std::getenv("GK_MV_DEMO");
-        multiViewDemo_ = true;//mvDemoEnv != nullptr && mvDemoEnv[0] == '1';
+        multiViewDemo_ = mvDemoEnv != nullptr && mvDemoEnv[0] == '1';
     }
 
     VulkanBaseRenderer::~VulkanBaseRenderer()
@@ -1326,6 +1326,25 @@ namespace Vulkan
         view.SetCameraAddress(cameraUbo.Buffer().GetDeviceAddress());
     }
 
+    void VulkanBaseRenderer::FinalizeTemporalUbo(RenderView& view, Assets::UniformBufferObject& ubo)
+    {
+        FViewRenderState& state = view.State();
+        const bool hasPrevious = state.previousUniformBuffer.TotalFrames != 0;
+        if (!hasPrevious || state.resetHistory)
+        {
+            ubo.PrevViewProjection = ubo.ViewProjection;
+            ubo.PrevViewProjectionUnJit = ubo.ViewProjectionUnJit;
+            view.TemporalResolve().InvalidateHistory();
+        }
+        else
+        {
+            ubo.PrevViewProjection = state.previousUniformBuffer.ViewProjection;
+            ubo.PrevViewProjectionUnJit = state.previousUniformBuffer.ViewProjectionUnJit;
+        }
+        state.previousUniformBuffer = ubo;
+        state.resetHistory = false;
+    }
+
     // Camera-dependent pre-passes; runs per active RenderView into its RT bank (set via
     // SetActiveViewBankBase + activeVisibilityFrameBuffer_ before calling). Only the primary view
     // owns the swapchain, so its clear pass also clears the swapchain image.
@@ -2041,8 +2060,7 @@ namespace Vulkan
         ubo.TemporalFrames = 1;
         ubo.TAA = false;
         ubo.ProgressiveRender = false;
-        ubo.PrevViewProjection = ubo.ViewProjection;
-        ubo.PrevViewProjectionUnJit = ubo.ViewProjectionUnJit;
+        FinalizeTemporalUbo(view, ubo);
 
         SetRenderViewUbo(view, imageIndex, ubo);
         view.SetVisibilityFramebuffer(resources.visibilityFrameBuffer.get());
@@ -2661,7 +2679,9 @@ namespace Vulkan
         const Assets::UniformBufferObject cameraB =
             MakeOrbitedCameraUbo(frame_.lastUBO, GetScene().GetRenderCamera(),
                                  GetScene().GetEnvSettings(), secondaryExtent, 35.0f, 30.0f);
-        SetRenderViewUbo(secondaryView, imageIndex, cameraB);
+        Assets::UniformBufferObject secondaryUbo = cameraB;
+        FinalizeTemporalUbo(secondaryView, secondaryUbo);
+        SetRenderViewUbo(secondaryView, imageIndex, secondaryUbo);
         secondaryView.SetVisibilityFramebuffer(secondaryVisibilityFrameBuffer_.get());
         secondaryView.SetSceneOverride(nullptr);
         secondaryView.SetCopyObjectIdHistory(true);
