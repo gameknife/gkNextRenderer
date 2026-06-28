@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Engine/Rendering/PipelineCommon/TemporalResolve.hpp"
 
 #include <memory>
 
@@ -38,8 +37,5 @@ namespace Vulkan::SoftwareModernNoAmbient
         std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> accumulatePipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindPipeline> composePipeline_;
 
-        PipelineCommon::TemporalResolve temporalResolve_;
-        int lastRenderedFrame_{-1};
-        bool historyValid_{false};
     };
 }

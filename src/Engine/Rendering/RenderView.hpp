@@ -18,10 +18,14 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
+#include "Engine/Rendering/PipelineCommon/AtrousDenoiser.hpp"
+#include "Engine/Rendering/PipelineCommon/TemporalResolve.hpp"
 
 #include <vulkan/vulkan.h>
 
 #include <cstdint>
+#include <functional>
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <utility>
@@ -29,7 +33,10 @@
 
 namespace Vulkan
 {
+    class Device;
     class FrameBuffer;
+    class LogicRendererBase;
+    class SwapChain;
 
     // How a view's composed result is delivered.
     enum class EViewOutputKind
@@ -158,9 +165,21 @@ namespace Vulkan
         Assets::Scene*        SceneOverride() const { return sceneOverride_; }
         bool                  CopyObjectIdHistory() const { return copyObjectIdHistory_; }
         bool                  PrevDepthValid() const { return prevDepthValid_; }
+        Assets::UniformBuffer* CameraUbo(uint32_t imageIndex = 0)
+        {
+            if (cameraUboRing_.empty())
+            {
+                return nullptr;
+            }
+            return &cameraUboRing_[std::min<uint32_t>(imageIndex, static_cast<uint32_t>(cameraUboRing_.size() - 1))];
+        }
 
         FViewRenderState&       State() { return state_; }
         const FViewRenderState& State() const { return state_; }
+        PipelineCommon::AtrousDenoiser& AtrousDenoiser() { return atrousDenoiser_; }
+        const PipelineCommon::AtrousDenoiser& AtrousDenoiser() const { return atrousDenoiser_; }
+        PipelineCommon::TemporalResolve& TemporalResolve() { return temporalResolve_; }
+        const PipelineCommon::TemporalResolve& TemporalResolve() const { return temporalResolve_; }
 
         void SetDebugName(std::string debugName) { debugName_ = std::move(debugName); }
         void SetRenderExtent(VkExtent2D extent)
@@ -179,10 +198,36 @@ namespace Vulkan
         void SetSceneOverride(Assets::Scene* scene) { sceneOverride_ = scene; }
         void SetCopyObjectIdHistory(bool copyHistory) { copyObjectIdHistory_ = copyHistory; }
         void SetPrevDepthValid(bool valid) { prevDepthValid_ = valid; }
+        Assets::UniformBuffer& EnsureCameraUbo(const Device& device, uint32_t imageIndex, uint32_t imageCount)
+        {
+            imageCount = std::max(1u, imageCount);
+            while (cameraUboRing_.size() < imageCount)
+            {
+                cameraUboRing_.emplace_back(device);
+            }
+            return cameraUboRing_[std::min<uint32_t>(imageIndex, static_cast<uint32_t>(cameraUboRing_.size() - 1))];
+        }
+        void ResetCameraUbo()
+        {
+            cameraUboRing_.clear();
+            cameraAddress_ = 0;
+        }
         void InvalidateTemporalHistory()
         {
             state_.resetHistory = true;
             prevDepthValid_ = false;
+            temporalResolve_.InvalidateHistory();
+        }
+        void CreateSwapChain(const SwapChain& swapChain)
+        {
+            atrousDenoiser_.CreateSwapChain(swapChain);
+            temporalResolve_.SetupDefaultHistory();
+            temporalResolve_.InvalidateHistory();
+        }
+        void DeleteSwapChain()
+        {
+            atrousDenoiser_.DeleteSwapChain();
+            temporalResolve_.InvalidateHistory();
         }
 
     private:
@@ -197,6 +242,19 @@ namespace Vulkan
         bool             copyObjectIdHistory_ = true;
         bool             prevDepthValid_ = false;
         FViewRenderState state_{};
+        std::vector<Assets::UniformBuffer> cameraUboRing_;
+        PipelineCommon::AtrousDenoiser atrousDenoiser_;
+        PipelineCommon::TemporalResolve temporalResolve_;
+    };
+
+    using FRenderViewPostCallback = std::function<void(RenderView&)>;
+
+    struct FRenderViewScheduleItem
+    {
+        RenderView* view = nullptr;
+        LogicRendererBase* logicRenderer = nullptr;
+        bool clearSwapchain = false;
+        FRenderViewPostCallback postRender;
     };
 
     // Drives the list of RenderViews for one VulkanBaseRenderer. Bank 0 is the primary view;
@@ -216,6 +274,7 @@ namespace Vulkan
         const RenderView& Primary() const { return *primary_; }
         FBankAllocator&   Banks() { return banks_; }
         const std::vector<std::unique_ptr<RenderView>>& AdditionalViews() const { return additional_; }
+        const std::vector<FRenderViewScheduleItem>& ScheduledViews() const { return schedule_; }
 
         RenderView* CreateView(const FViewDesc& desc, std::string debugName)
         {
@@ -227,6 +286,23 @@ namespace Vulkan
 
             additional_.push_back(std::make_unique<RenderView>(bankBase, desc, std::move(debugName)));
             return additional_.back().get();
+        }
+
+        void ScheduleView(RenderView& view,
+                          LogicRendererBase& logicRenderer,
+                          bool clearSwapchain,
+                          FRenderViewPostCallback postRender = {})
+        {
+            schedule_.push_back(FRenderViewScheduleItem{
+                &view,
+                &logicRenderer,
+                clearSwapchain,
+                std::move(postRender)});
+        }
+
+        void ClearSchedule()
+        {
+            schedule_.clear();
         }
 
         void DestroyAdditionalViews()
@@ -242,5 +318,6 @@ namespace Vulkan
         FBankAllocator                          banks_;
         std::unique_ptr<RenderView>             primary_;
         std::vector<std::unique_ptr<RenderView>> additional_;
+        std::vector<FRenderViewScheduleItem>     schedule_;
     };
 }

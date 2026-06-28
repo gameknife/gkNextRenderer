@@ -5,21 +5,33 @@
 
 namespace Vulkan::PipelineCommon
 {
-    void TemporalResolve::SetupHistory(
-        VulkanBaseRenderer& baseRenderer,
-        std::initializer_list<FTemporalHistorySpec> historySpecs)
+    void TemporalResolve::SetupDefaultHistory()
     {
-        (void)baseRenderer;
-        for (const auto& spec : historySpecs)
-        {
-            const auto index = static_cast<size_t>(spec.channel);
-            historyIds_[index] = spec.fallbackBindlessId;
-        }
+        historyIds_[static_cast<size_t>(ETemporalChannel::Diffuse)] = Assets::Bindless::RT_SINGLE_PREV_DIFFUSE;
+        historyIds_[static_cast<size_t>(ETemporalChannel::Specular)] = Assets::Bindless::RT_SINGLE_PREV_SPECULAR;
+        historyIds_[static_cast<size_t>(ETemporalChannel::Albedo)] = Assets::Bindless::RT_SINGLE_PREV_ALBEDO;
     }
 
     uint32_t TemporalResolve::History(ETemporalChannel channel) const
     {
         return historyIds_[static_cast<size_t>(channel)];
+    }
+
+    bool TemporalResolve::IsHistoryValidForFrame(const int currentFrame) const
+    {
+        return historyValid_ && currentFrame == lastRenderedFrame_ + 1;
+    }
+
+    void TemporalResolve::MarkHistoryValid(const int currentFrame)
+    {
+        historyValid_ = true;
+        lastRenderedFrame_ = currentFrame;
+    }
+
+    void TemporalResolve::InvalidateHistory()
+    {
+        historyValid_ = false;
+        lastRenderedFrame_ = -1;
     }
 
     void TemporalResolve::CopyToHistory(

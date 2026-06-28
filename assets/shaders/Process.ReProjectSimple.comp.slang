@@ -11,7 +11,6 @@ struct PushConsts
     uint _ViewHdr_custom_data_2;
 
     uint TemporalFrames;
-    uint PrevDiffuseBindlessIdx;
     uint HistoryValid;
     uint TAAEnabled;
 };
@@ -171,7 +170,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     let SourceDiffuse = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_SINGLE_DIFFUSE));
-    let PrevDiffuse = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, int(pushConsts.PrevDiffuseBindlessIdx)));
+    let PrevDiffuse = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_SINGLE_PREV_DIFFUSE));
     let AccumulateDiffuse = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_ACCUMLATE_DIFFUSE));
     let ObjectId0 = Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_OBJEDCTID_0));
     let ObjectId1 = Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_OBJEDCTID_1));

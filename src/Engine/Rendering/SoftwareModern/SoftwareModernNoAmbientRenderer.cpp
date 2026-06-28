@@ -31,16 +31,9 @@ namespace Vulkan::SoftwareModernNoAmbient
         gtaoComposePipeline_.reset(new PipelineCommon::ZeroBindPipeline(
             SwapChain(), "assets/shaders/Process.GTAOCompose.comp.slang.spv", GetScene()));
         accumulatePipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(
-            SwapChain(), "assets/shaders/Process.ReProjectSimple.comp.slang.spv", 16));
+            SwapChain(), "assets/shaders/Process.ReProjectSimple.comp.slang.spv", 12));
         composePipeline_.reset(new PipelineCommon::ZeroBindPipeline(
             SwapChain(), "assets/shaders/Process.ComposeSimple.comp.slang.spv", GetScene()));
-
-        temporalResolve_.SetupHistory(baseRender_, {
-            {PipelineCommon::ETemporalChannel::Diffuse, Assets::Bindless::RT_SINGLE_PREV_DIFFUSE},
-        });
-
-        historyValid_ = false;
-        lastRenderedFrame_ = -1;
     }
 
     void SoftwareModernNoAmbientRenderer::DeleteSwapChain()
@@ -50,16 +43,15 @@ namespace Vulkan::SoftwareModernNoAmbient
         gtaoComposePipeline_.reset();
         accumulatePipeline_.reset();
         composePipeline_.reset();
-        historyValid_ = false;
-        lastRenderedFrame_ = -1;
     }
 
     void SoftwareModernNoAmbientRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         baseRender_.InitializeBarriers(commandBuffer);
         const int currentFrame = FrameCount();
-        const bool isPrimaryView = baseRender_.ActiveViewBankBase() == 0;
-        const bool canUseHistory = isPrimaryView && historyValid_ && currentFrame == lastRenderedFrame_ + 1;
+        const bool allowTemporal = baseRender_.ActiveRenderView().Schedule() != EViewSchedule::Transient;
+        auto& temporalResolve = baseRender_.ActiveRenderView().TemporalResolve();
+        const bool canUseHistory = allowTemporal && temporalResolve.IsHistoryValidForFrame(currentFrame);
 
         {
             SCOPED_GPU_TIMER("shadingpass");
@@ -121,10 +113,9 @@ namespace Vulkan::SoftwareModernNoAmbient
             SCOPED_GPU_TIMER("reproject pass");
             const auto& settings = NextEngine::GetInstance()->GetUserSettings();
             const bool dlssSuperResolutionActive = settings.DLSS && baseRender_.SupportDLSS();
-            const uint32_t taaEnabled = isPrimaryView && settings.TAA && !dlssSuperResolutionActive ? 1u : 0u;
-            const std::array<uint32_t, 4> pushConst {
-                isPrimaryView ? uint32_t(settings.TemporalFrames) : 1u,
-                temporalResolve_.History(PipelineCommon::ETemporalChannel::Diffuse),
+            const uint32_t taaEnabled = allowTemporal && settings.TAA && !dlssSuperResolutionActive ? 1u : 0u;
+            const std::array<uint32_t, 3> pushConst {
+                allowTemporal ? uint32_t(settings.TemporalFrames) : 1u,
                 canUseHistory ? 1u : 0u,
                 taaEnabled
             };
@@ -150,15 +141,14 @@ namespace Vulkan::SoftwareModernNoAmbient
 
         {
             SCOPED_GPU_TIMER("copy pass");
-            temporalResolve_.CopyToHistory(baseRender_, commandBuffer, {
+            temporalResolve.CopyToHistory(baseRender_, commandBuffer, {
                 {Assets::Bindless::RT_ACCUMLATE_DIFFUSE, PipelineCommon::ETemporalChannel::Diffuse},
             });
         }
 
-        if (isPrimaryView)
+        if (allowTemporal)
         {
-            historyValid_ = true;
-            lastRenderedFrame_ = currentFrame;
+            temporalResolve.MarkHistoryValid(currentFrame);
         }
     }
 }

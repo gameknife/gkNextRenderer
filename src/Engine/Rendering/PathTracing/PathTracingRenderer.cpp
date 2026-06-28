@@ -25,9 +25,6 @@ namespace Vulkan::PathTracing
         {
             uint32_t ProgressiveRender;
             uint32_t TemporalFrames;
-            uint32_t PrevDiffuseBindlessIdx;
-            uint32_t PrevSpecularBindlessIdx;
-            uint32_t PrevAlbedoBindlessIdx;
             uint32_t FastReproject;
             float ClampGammaHi;
             float ClampGammaLo;
@@ -79,14 +76,7 @@ namespace Vulkan::PathTracing
     {
         rayTracingPipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline( SwapChain(), "assets/shaders/Core.PathTracing.comp.slang.spv", GetScene()));
         accumulatePipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.ReProject.comp.slang.spv", sizeof(FReprojectPushConstants)));
-        atrousDenoiser_.CreateSwapChain(SwapChain());
         composePipelineNonDenoiser_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Process.DenoiseJBF.comp.slang.spv", GetScene()));
-
-        temporalResolve_.SetupHistory(baseRender_, {
-            {PipelineCommon::ETemporalChannel::Diffuse, Assets::Bindless::RT_SINGLE_PREV_DIFFUSE},
-            {PipelineCommon::ETemporalChannel::Specular, Assets::Bindless::RT_SINGLE_PREV_SPECULAR},
-            {PipelineCommon::ETemporalChannel::Albedo, Assets::Bindless::RT_SINGLE_PREV_ALBEDO},
-        });
     }
 
     void PathTracingRenderer::DeleteSwapChain()
@@ -96,7 +86,6 @@ namespace Vulkan::PathTracing
         sharcResolvePipeline_.reset();
         sharcQueryPipeline_.reset();
         accumulatePipeline_.reset();
-        atrousDenoiser_.DeleteSwapChain();
         composePipelineNonDenoiser_.reset();
     }
 
@@ -316,6 +305,7 @@ namespace Vulkan::PathTracing
         const bool offlineProgressiveRender = IsOfflineProgressiveRenderActive();
         const bool sharcEnabled = IsEffectiveSharcEnabled();
         const bool isPrimaryView = baseRender_.ActiveViewBankBase() == 0;
+        const bool allowTemporal = baseRender_.ActiveRenderView().Schedule() != EViewSchedule::Transient;
         const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
 
         // Execute ray tracing shaders.
@@ -382,10 +372,7 @@ namespace Vulkan::PathTracing
             pushConst.ProgressiveRender = isPrimaryView && NextEngine::GetInstance()->IsProgressiveRendering();
             pushConst.TemporalFrames = isPrimaryView && offlineProgressiveRender
                 ? NextEngine::GetInstance()->GetProgressiveRenderTargetFrames()
-                : (isPrimaryView ? uint32_t(settings.TemporalFrames) : 1u);
-            pushConst.PrevDiffuseBindlessIdx = temporalResolve_.History(PipelineCommon::ETemporalChannel::Diffuse);
-            pushConst.PrevSpecularBindlessIdx = temporalResolve_.History(PipelineCommon::ETemporalChannel::Specular);
-            pushConst.PrevAlbedoBindlessIdx = temporalResolve_.History(PipelineCommon::ETemporalChannel::Albedo);
+                : (allowTemporal ? uint32_t(settings.TemporalFrames) : 1u);
             pushConst.FastReproject = 0;
             pushConst.ClampGammaHi = settings.ReprojectClampGammaHi;
             pushConst.ClampGammaLo = settings.ReprojectClampGammaLo;
@@ -407,7 +394,7 @@ namespace Vulkan::PathTracing
             if (!offlineProgressiveRender)
             {
                 SCOPED_GPU_TIMER("atrous pass");
-                atrousDenoiser_.Run(baseRender_, SwapChain(), commandBuffer, settings);
+                baseRender_.ActiveRenderView().AtrousDenoiser().Run(baseRender_, SwapChain(), commandBuffer, settings);
             }
         }
 
@@ -419,7 +406,7 @@ namespace Vulkan::PathTracing
         
         {
             SCOPED_GPU_TIMER("copy pass");
-            temporalResolve_.CopyToHistory(baseRender_, commandBuffer, {
+            baseRender_.ActiveRenderView().TemporalResolve().CopyToHistory(baseRender_, commandBuffer, {
                 {Assets::Bindless::RT_ACCUMLATE_DIFFUSE, PipelineCommon::ETemporalChannel::Diffuse},
                 {Assets::Bindless::RT_ACCUMLATE_SPECULAR, PipelineCommon::ETemporalChannel::Specular},
                 {Assets::Bindless::RT_ACCUMLATE_ALBEDO, PipelineCommon::ETemporalChannel::Albedo},
