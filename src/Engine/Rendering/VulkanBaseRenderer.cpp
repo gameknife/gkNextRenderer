@@ -851,6 +851,7 @@ namespace Vulkan
         // A secondary view bank was destroyed with the swapchain; recreate it on demand next frame.
         secondaryBankCreated_ = false;
         secondaryBankExtent_ = {0, 0};
+        secondaryViewPrevDepthValid_ = false;
         thumbnailBankCreated_ = false;
         thumbnailVisibilityFrameBuffer_.reset();
 
@@ -1059,6 +1060,7 @@ namespace Vulkan
         secondaryOffscreenSampler_.reset();
         secondaryBankCreated_ = false;
         secondaryBankExtent_ = {0, 0};
+        secondaryViewPrevDepthValid_ = false;
         thumbnailVisibilityFrameBuffer_.reset();
         thumbnailBankCreated_ = false;
         overlay_.sunShadowPass.reset();
@@ -1822,6 +1824,7 @@ namespace Vulkan
             secondaryOffscreenImage_->GetImageView(), *secondaryOffscreenSampler_);
 
         secondaryBankExtent_ = extent;
+        secondaryViewPrevDepthValid_ = false;
         secondaryBankCreated_ = true;
     }
 
@@ -2328,6 +2331,14 @@ namespace Vulkan
             SetActiveViewRenderExtent(secondaryExtent);
             SetActiveViewCameraAddress(secondaryCameraUbo_->Buffer().GetDeviceAddress());
             activeVisibilityFrameBuffer_ = secondaryVisibilityFrameBuffer_.get();
+            if (!secondaryViewPrevDepthValid_)
+            {
+                DispatchClearPass(commandBuffer, imageIndex, /*clearSwapchain*/ false);
+                GetViewStorageImage(Assets::Bindless::RT_PREV_DEPTHBUFFER)->InsertBarrier(
+                    commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                    VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+                secondaryViewPrevDepthValid_ = true;
+            }
             PreRenderPerView(commandBuffer, imageIndex, /*isPrimaryView*/ false);
             it->second->Render(commandBuffer, imageIndex);
             CopyObjectIdHistory(commandBuffer);

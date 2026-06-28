@@ -211,7 +211,6 @@ namespace Vulkan
         };
 
         Assets::GPUScene gpuScene = scene.FetchGPUScene(imageIndex);
-        gpuScene.custom_data_0 = 0;
         gpuScene.custom_data_1 = indirectDrawBatchCount;
         gpuScene.custom_data_2 = scene.GetMaxSceneTriangles();
 

@@ -362,6 +362,7 @@ namespace Vulkan
 		bool secondaryViewRequested_ = false;
 		VkExtent2D secondaryViewRenderExtent_{0, 0};
 		VkExtent2D secondaryBankExtent_{0, 0};
+		bool secondaryViewPrevDepthValid_ = false;
 		// Offscreen sampled copy of the secondary view's composed output (bank-1 RT_DENOISED), bound
 		// into the sample-texture array at kSecondaryViewSampleSlot for ImGui display.
 		std::unique_ptr<RenderImage> secondaryOffscreenImage_;
