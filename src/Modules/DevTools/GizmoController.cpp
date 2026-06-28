@@ -247,8 +247,11 @@ void GizmoController::DrawToolbar()
 }
 
 void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, const glm::vec2& viewportSize,
-                           bool snapEnabled, float translateSnap, int defaultOperation)
+                           bool snapEnabled, float translateSnap, int defaultOperation,
+                           const Assets::UniformBufferObject* viewUbo, ImGuiWindow* alternativeWindow)
 {
+    ImGuizmo::SetAlternativeWindow(alternativeWindow);
+
     Assets::Scene& scene = engine.GetScene();
     std::vector<uint32_t> selectedIds = BuildSelectionList(scene);
     if (selectedIds.empty())
@@ -296,7 +299,7 @@ void GizmoController::Draw(NextEngine& engine, const glm::vec2& viewportPos, con
     ImGui::SetNextWindowBgAlpha(0.5f);
     DrawToolbar();
 
-    const auto& ubo = engine.GetLastUniformBufferObject();
+    const auto& ubo = viewUbo != nullptr ? *viewUbo : engine.GetLastUniformBufferObject();
     const glm::mat4& view = ubo.ModelView;
     glm::mat4 projection = ubo.Projection;
     projection[1][1] *= -1.0f;

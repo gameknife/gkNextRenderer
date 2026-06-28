@@ -5,6 +5,7 @@
 
 class NextEngine;
 class EditorActionDispatcher;
+class EditorGameInstance;
 
 namespace NextUI
 {
@@ -25,4 +26,5 @@ struct EditorContext final
     EditorActionDispatcher& actions;
     Editor::EditorSettings& settings;
     NextUI::GizmoController* gizmoController = nullptr;
+    EditorGameInstance* editor = nullptr;
 };

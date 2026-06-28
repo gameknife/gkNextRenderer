@@ -340,6 +340,12 @@ namespace Editor
                 ImGui::MenuItem("Material Browser", nullptr, &ui.materialBrowser);
                 ImGui::MenuItem("Texture Browser", nullptr, &ui.textureBrowser);
                 ImGui::MenuItem("Mesh Browser", nullptr, &ui.meshBrowser);
+                ImGui::Separator();
+                ImGui::MenuItem("Camera View 1", nullptr, &ui.cameraViews[0].open);
+                ImGui::MenuItem("Camera View 2", nullptr, &ui.cameraViews[1].open);
+                ImGui::MenuItem("Camera View 3", nullptr, &ui.cameraViews[2].open);
+                ui.cameraViewPanel = ui.cameraViews[0].open;
+                ImGui::Separator();
                 ImGui::MenuItem("AI Assistant", nullptr, &ui.aiPanel);
                 ImGui::MenuItem("Command History", nullptr, &ui.commandHistoryPanel);
                 ImGui::MenuItem("Hot Reload", nullptr, &ui.hotReloadPanel);

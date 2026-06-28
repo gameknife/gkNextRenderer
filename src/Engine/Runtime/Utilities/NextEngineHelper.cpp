@@ -139,6 +139,36 @@ namespace Runtime::EngineHelper
         dir = raydir;
     }
 
+    void GetScreenToWorldRayWithCamera(const Assets::Camera& camera, glm::vec2 locationSS, glm::vec2 viewportPos,
+                                       glm::vec2 viewportSize, glm::vec3& org, glm::vec3& dir)
+    {
+        if (viewportSize.x <= 1.0f || viewportSize.y <= 1.0f)
+        {
+            org = {};
+            dir = {};
+            return;
+        }
+
+        const glm::vec2 pixel = locationSS - viewportPos;
+        const glm::vec2 uv = pixel / viewportSize * glm::vec2(2.0f, 2.0f) - glm::vec2(1.0f, 1.0f);
+        glm::mat4 projection = glm::perspective(
+            glm::radians(camera.FieldOfView),
+            viewportSize.x / viewportSize.y,
+            std::max(0.05f, camera.NearPlane),
+            camera.FarPlane);
+        projection[1][1] *= -1.0f;
+
+        const glm::mat4 modelViewInverse = glm::inverse(camera.ModelView);
+        const glm::mat4 projectionInverse = glm::inverse(projection);
+        const glm::vec4 origin = modelViewInverse * glm::vec4(0, 0, 0, 1);
+        const glm::vec4 target = projectionInverse * glm::vec4(uv.x, uv.y, 1, 1);
+        const glm::vec3 raydir = modelViewInverse *
+            glm::vec4(normalize(glm::vec3(target) - glm::vec3(0.0f, 0.0f, 0.0f)), 0.0f);
+
+        org = glm::vec3(origin);
+        dir = raydir;
+    }
+
     void DrawAuxLine(glm::vec3 from, glm::vec3 to, glm::vec4 color, float size)
     {
         NextEngine* engine = NextEngine::GetInstance();

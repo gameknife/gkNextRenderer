@@ -276,8 +276,14 @@ void NextEngine::OnTouchMove(double xpos, double ypos) { OnCursorPosition(xpos, 
 
 void NextEngine::OnCursorPosition(const double xpos, const double ypos)
 {
-    if (!renderer_->HasSwapChain() || userInterface_->WantsToCaptureKeyboard() ||
-        userInterface_->WantsToCaptureMouse() || (uiOverlay_ && (uiOverlay_->WantsToCaptureKeyboard() || uiOverlay_->WantsToCaptureMouse())))
+    if (!renderer_->HasSwapChain() ||
+        (uiOverlay_ && (uiOverlay_->WantsToCaptureKeyboard() || uiOverlay_->WantsToCaptureMouse())))
+    {
+        return;
+    }
+
+    const bool wantsMouseThroughUi = gameInstance_->WantsMouseInputWhenUiCaptures();
+    if ((userInterface_->WantsToCaptureKeyboard() || userInterface_->WantsToCaptureMouse()) && !wantsMouseThroughUi)
     {
         return;
     }
@@ -290,7 +296,12 @@ void NextEngine::OnCursorPosition(const double xpos, const double ypos)
 
 void NextEngine::OnMouseButton(SDL_Event& event)
 {
-    if (!renderer_->HasSwapChain() || userInterface_->WantsToCaptureMouse() || (uiOverlay_ && uiOverlay_->WantsToCaptureMouse()))
+    if (!renderer_->HasSwapChain() || (uiOverlay_ && uiOverlay_->WantsToCaptureMouse()))
+    {
+        return;
+    }
+
+    if (userInterface_->WantsToCaptureMouse() && !gameInstance_->WantsMouseInputWhenUiCaptures())
     {
         return;
     }
@@ -303,7 +314,12 @@ void NextEngine::OnMouseButton(SDL_Event& event)
 
 void NextEngine::OnScroll(const double xoffset, const double yoffset)
 {
-    if (!renderer_->HasSwapChain() || userInterface_->WantsToCaptureMouse() || (uiOverlay_ && uiOverlay_->WantsToCaptureMouse()))
+    if (!renderer_->HasSwapChain() || (uiOverlay_ && uiOverlay_->WantsToCaptureMouse()))
+    {
+        return;
+    }
+
+    if (userInterface_->WantsToCaptureMouse() && !gameInstance_->WantsMouseInputWhenUiCaptures())
     {
         return;
     }

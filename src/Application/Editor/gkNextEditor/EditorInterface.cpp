@@ -72,6 +72,7 @@ void EditorInterface::Config()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad; // Enable Gamepad Controls
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // Enable Docking
     io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+    io.ConfigWindowsMoveFromTitleBarOnly = true;
 }
 
 void EditorInterface::Init()
@@ -262,7 +263,7 @@ void EditorInterface::Render()
     }
 
     EditorContext ctx{editor_->GetEngine(), editor_->GetEngine().GetScene(), *ui, editor_->Actions(),
-                      editor_->GetEditorSettings(), &editor_->GetGizmoController()};
+                      editor_->GetEditorSettings(), &editor_->GetGizmoController(), editor_};
     void* previousUserData = ImGui::GetIO().UserData;
     ImGui::GetIO().UserData = &ctx;
 
@@ -287,8 +288,7 @@ void EditorInterface::Render()
         Editor::DrawCommandHistoryPanel(ctx, uiState_);
     if (uiState_.hotReloadPanel)
         Editor::DrawHotReloadPanel(ctx, uiState_);
-    if (uiState_.cameraViewPanel)
-        Editor::DrawCameraViewPanel(ctx, uiState_);
+    Editor::DrawCameraViewPanel(ctx, uiState_);
     // Pump the AI agent main-thread queue every frame, regardless of panel
     // visibility, so in-flight agent tool calls never stall (and the user-confirm
     // UI can appear) when the panel is hidden, collapsed, or on an inactive tab.
@@ -318,10 +318,32 @@ void EditorInterface::Render()
     if (uiState_.ed_material)
         Editor::DrawMaterialEditorPanel(ctx, uiState_);
 
+    bool activeCameraViewOpen = true;
+    switch (uiState_.activeViewport)
+    {
+    case Editor::EEditorViewportId::CameraView0:
+        activeCameraViewOpen = uiState_.cameraViews[0].open;
+        break;
+    case Editor::EEditorViewportId::CameraView1:
+        activeCameraViewOpen = uiState_.cameraViews[1].open;
+        break;
+    case Editor::EEditorViewportId::CameraView2:
+        activeCameraViewOpen = uiState_.cameraViews[2].open;
+        break;
+    default:
+        break;
+    }
+    if (!activeCameraViewOpen)
+    {
+        uiState_.activeViewport = Editor::EEditorViewportId::Scene;
+    }
+
     // The renderer output rect is the dockspace central node.
     uiState_.viewportOnMainViewport = true;
     uiState_.viewportContentPos = ImVec2(0.0f, 0.0f);
     uiState_.viewportContentSize = ImVec2(0.0f, 0.0f);
+    uiState_.viewportHovered = false;
+    uiState_.viewportFocused = uiState_.activeViewport == Editor::EEditorViewportId::Scene;
 
     if (ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id))
     {
@@ -341,7 +363,36 @@ void EditorInterface::Render()
                 Utilities::Math::floorToInt(node->Pos.y - mainViewport->Pos.y),
                 Utilities::Math::ceilToInt(node->Size.x), Utilities::Math::ceilToInt(node->Size.y));
 
-            editor_->DrawGizmo(glm::vec2(node->Pos.x, node->Pos.y), glm::vec2(node->Size.x, node->Size.y));
+            const ImGuiIO& io = ImGui::GetIO();
+            const ImVec2 mousePos = io.MousePos;
+            const bool mouseInSceneViewport =
+                mousePos.x >= node->Pos.x && mousePos.y >= node->Pos.y &&
+                mousePos.x < node->Pos.x + node->Size.x && mousePos.y < node->Pos.y + node->Size.y;
+            bool mouseInCameraView = false;
+            for (const auto& cameraView : uiState_.cameraViews)
+            {
+                mouseInCameraView = mouseInCameraView ||
+                    (cameraView.open &&
+                     mousePos.x >= cameraView.contentPos.x && mousePos.y >= cameraView.contentPos.y &&
+                     mousePos.x < cameraView.contentPos.x + cameraView.contentSize.x &&
+                     mousePos.y < cameraView.contentPos.y + cameraView.contentSize.y);
+            }
+            uiState_.viewportHovered = mouseInSceneViewport;
+            const bool sceneViewportClicked = mouseInSceneViewport && !mouseInCameraView && !io.WantCaptureMouse &&
+                (ImGui::IsMouseClicked(ImGuiMouseButton_Left) ||
+                 ImGui::IsMouseClicked(ImGuiMouseButton_Right) ||
+                 ImGui::IsMouseClicked(ImGuiMouseButton_Middle));
+            if (sceneViewportClicked)
+            {
+                ImGui::SetWindowFocus(nullptr);
+                uiState_.activeViewport = Editor::EEditorViewportId::Scene;
+            }
+            uiState_.viewportFocused = uiState_.activeViewport == Editor::EEditorViewportId::Scene;
+
+            if (uiState_.activeViewport == Editor::EEditorViewportId::Scene)
+            {
+                editor_->DrawGizmo(glm::vec2(node->Pos.x, node->Pos.y), glm::vec2(node->Size.x, node->Size.y));
+            }
         }
     }
     

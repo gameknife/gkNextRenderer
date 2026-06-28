@@ -1055,10 +1055,12 @@ namespace Editor
                             NormalizeSceneComparePath(assetPath) == currentSceneComparePath)
                         {
                             auto& renderer = ctx.engine.GetRenderer();
-                            renderer.RequestSecondaryViewThisFrame();
-                            if (renderer.IsSecondaryViewReady())
+                            constexpr uint32_t previewViewIndex = Vulkan::VulkanBaseRenderer::kScenePreviewSecondaryViewIndex;
+                            renderer.RequestSecondaryViewThisFrame(previewViewIndex);
+                            if (renderer.IsSecondaryViewReady(previewViewIndex))
                             {
-                                thumbnailTextureId = ctx.ui.RequestImTextureIdRaw(renderer.SecondaryViewSampleSlot());
+                                thumbnailTextureId =
+                                    ctx.ui.RequestImTextureIdRaw(renderer.SecondaryViewSampleSlot(previewViewIndex));
                             }
                         }
                         else if (visual.kind == EContentAssetKind::Texture)

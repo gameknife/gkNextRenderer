@@ -17,6 +17,8 @@
 #include <cassert>
 #include <functional>
 #include <map>
+#include <optional>
+#include <array>
 
 namespace Rendering::Upscaler
 {
@@ -113,19 +115,38 @@ namespace Vulkan
 		void CreateSwapChain();
 		void DeleteSwapChain();
 
-		// Multi-viewport: enable a secondary camera view that renders offscreen into a bindless
-		// sample slot each frame (shown via ImGui::Image in the editor). Off by default.
-		void SetSecondaryViewEnabled(bool enabled) { secondaryViewEnabled_ = enabled; }
-		bool IsSecondaryViewEnabled() const { return secondaryViewEnabled_; }
-		void RequestSecondaryViewThisFrame() { secondaryViewRequested_ = true; }
-		void SetSecondaryViewRenderExtent(VkExtent2D extent);
-		VkExtent2D SecondaryViewRenderExtent() const { return secondaryRequestedExtent_; }
+		// Multi-viewport: up to three editor camera views plus one legacy scene-preview slot.
+		// Each view renders offscreen into a bindless sample slot for ImGui display.
+		static constexpr uint32_t kMaxCameraSecondaryViews = 3;
+		static constexpr uint32_t kScenePreviewSecondaryViewIndex = kMaxCameraSecondaryViews;
+		static constexpr uint32_t kMaxSecondaryViews = kMaxCameraSecondaryViews + 1;
+		void SetSecondaryViewEnabled(uint32_t viewIndex, bool enabled);
+		bool IsSecondaryViewEnabled(uint32_t viewIndex) const;
+		void RequestSecondaryViewThisFrame(uint32_t viewIndex);
+		void SetSecondaryViewRenderExtent(uint32_t viewIndex, VkExtent2D extent);
+		VkExtent2D SecondaryViewRenderExtent(uint32_t viewIndex) const;
+		void SetSecondaryViewCameraOverride(uint32_t viewIndex, const Assets::Camera& camera);
+		void ClearSecondaryViewCameraOverride(uint32_t viewIndex);
+		bool HasSecondaryViewCameraOverride(uint32_t viewIndex) const;
+		const Assets::UniformBufferObject* SecondaryViewLastUniformBufferObject(uint32_t viewIndex) const;
+		void SetSecondaryViewEnabled(bool enabled) { SetSecondaryViewEnabled(0, enabled); }
+		bool IsSecondaryViewEnabled() const { return IsSecondaryViewEnabled(0); }
+		void RequestSecondaryViewThisFrame() { RequestSecondaryViewThisFrame(0); }
+		void SetSecondaryViewRenderExtent(VkExtent2D extent) { SetSecondaryViewRenderExtent(0, extent); }
+		VkExtent2D SecondaryViewRenderExtent() const { return SecondaryViewRenderExtent(0); }
+		void SetSecondaryViewCameraOverride(const Assets::Camera& camera) { SetSecondaryViewCameraOverride(0, camera); }
+		void ClearSecondaryViewCameraOverride() { ClearSecondaryViewCameraOverride(0); }
+		bool HasSecondaryViewCameraOverride() const { return HasSecondaryViewCameraOverride(0); }
+		const Assets::UniformBufferObject* SecondaryViewLastUniformBufferObject() const { return SecondaryViewLastUniformBufferObject(0); }
 		// Bindless sample-texture slot holding the latest secondary view (valid after a frame with the
 		// secondary view enabled). Display via UserInterface::RequestImTextureId.
 		static constexpr uint32_t kSecondaryViewSampleSlot = 65000;
-		uint32_t SecondaryViewSampleSlot() const { return kSecondaryViewSampleSlot; }
+		static constexpr uint32_t kSecondaryViewSampleSlotBase = kSecondaryViewSampleSlot;
+		uint32_t SecondaryViewSampleSlot(uint32_t viewIndex) const { return kSecondaryViewSampleSlotBase + std::min(viewIndex, kMaxSecondaryViews - 1); }
+		uint32_t SecondaryViewSampleSlot() const { return SecondaryViewSampleSlot(0); }
 		// True once the offscreen image exists + its sample slot is bound (safe to ImGui::Image).
-		bool IsSecondaryViewReady() const { return secondaryOffscreenImage_ != nullptr; }
+		bool IsSecondaryViewReady(uint32_t viewIndex) const;
+		bool IsSecondaryViewReady() const { return IsSecondaryViewReady(0); }
 		static constexpr uint32_t kMaterialThumbnailSampleSlotBase = 64000;
 		static constexpr uint32_t kMaterialThumbnailMaxSlots = 512;
 		uint32_t RequestMaterialThumbnail(uint32_t materialIndex, uint64_t materialHash);
@@ -202,6 +223,8 @@ namespace Vulkan
 		std::vector<RayTracing::TopLevelAccelerationStructure>& TLAS();
 
 	private:
+		static constexpr VkExtent2D kThumbnailExtent{128, 128};
+
 		// Internal resource groups
 		struct DeviceCaps
 		{
@@ -334,6 +357,17 @@ namespace Vulkan
 			std::unique_ptr<FrameBuffer> visibilityFrameBuffer;
 			VkExtent2D allocatedExtent{0, 0};
 		};
+		struct SecondaryRenderViewResources
+		{
+			RenderView* view = nullptr;
+			bool enabled = false;
+			bool requested = false;
+			VkExtent2D requestedExtent{0, 0};
+			std::optional<Assets::Camera> cameraOverride{};
+			std::unique_ptr<RenderImage> offscreenImage;
+			std::unique_ptr<class Sampler> offscreenSampler;
+			std::unique_ptr<FrameBuffer> visibilityFrameBuffer;
+		};
 
 		struct ScreenshotResources
 		{
@@ -361,7 +395,7 @@ namespace Vulkan
 		LogicRendererRegistry logicRenderers_;
 		std::unique_ptr<RenderViewManager> renderViews_ = std::make_unique<RenderViewManager>();
 		std::map<ERendererType, ReferenceRenderViewResources> referenceViews_;
-		RenderView* secondaryRenderView_ = nullptr;
+		std::array<SecondaryRenderViewResources, kMaxSecondaryViews> secondaryViews_{};
 		RenderView* thumbnailRenderView_ = nullptr;
 		Assets::Scene* activeSceneOverride_ = nullptr;
 		RenderView* activeRenderView_ = nullptr;
@@ -369,16 +403,6 @@ namespace Vulkan
 		VkExtent2D activeViewRenderExtent_{0, 0};
 		bool multiViewDemo_ = false;
 		VkDeviceAddress activeViewCameraAddress_ = 0;
-		bool secondaryViewEnabled_ = false;
-		bool secondaryViewRequested_ = false;
-		VkExtent2D secondaryRequestedExtent_{0, 0};
-		// Offscreen sampled copy of the secondary view's composed output, bound
-		// into the sample-texture array at kSecondaryViewSampleSlot for ImGui display.
-		std::unique_ptr<RenderImage> secondaryOffscreenImage_;
-		std::unique_ptr<class Sampler> secondaryOffscreenSampler_;
-		// Per-view visibility framebuffer for the secondary view (shares
-		// the primary depth via the shared render pass — safe because views render sequentially).
-		std::unique_ptr<FrameBuffer> secondaryVisibilityFrameBuffer_;
 		// Visibility framebuffer for the view currently being recorded (null => primary/bank-0).
 		FrameBuffer* activeVisibilityFrameBuffer_ = nullptr;
 		std::unique_ptr<Assets::Scene> materialThumbnailScene_;
@@ -418,7 +442,7 @@ namespace Vulkan
 		void CreateRenderTargetBank(uint32_t bankBase, VkExtent2D extent);
 		// Lazily create persistent reference/secondary views and transient thumbnail views.
 		RenderView& EnsureReferenceView(ERendererType type, uint32_t imageIndex);
-		RenderView& EnsureSecondaryRenderView();
+		RenderView& EnsureSecondaryRenderView(uint32_t viewIndex);
 		void ScheduleRenderView(RenderView& view,
 		                        LogicRendererBase& logicRenderer,
 		                        bool clearSwapchain,
@@ -429,7 +453,8 @@ namespace Vulkan
 		void ScheduleAuxiliaryViews(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void ComposeViewToSwapchainSubrect(VkCommandBuffer commandBuffer, uint32_t imageIndex, RenderView& view);
 		void ResolvePrimaryViewToSwapchain(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-		void CopySecondaryViewOutput(VkCommandBuffer commandBuffer, uint32_t imageIndex, RenderView& view);
+		void CopySecondaryViewOutput(VkCommandBuffer commandBuffer, uint32_t imageIndex, RenderView& view,
+		                             uint32_t viewIndex);
 		void CopyThumbnailViewOutput(VkCommandBuffer commandBuffer, RenderView& view, RenderImage& dst);
 		void EnsureMaterialThumbnailScene();
 		void RebuildMeshThumbnailScene(const Assets::Model& model);
