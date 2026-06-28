@@ -36,11 +36,12 @@ namespace Vulkan::PipelineCommon
     class TemporalResolve final
     {
     public:
-        void SetupHistory(
-            VulkanBaseRenderer& baseRenderer,
-            std::initializer_list<FTemporalHistorySpec> historySpecs);
+        void SetupDefaultHistory();
 
         uint32_t History(ETemporalChannel channel) const;
+        bool IsHistoryValidForFrame(int currentFrame) const;
+        void MarkHistoryValid(int currentFrame);
+        void InvalidateHistory();
 
         void CopyToHistory(
             VulkanBaseRenderer& baseRenderer,
@@ -49,5 +50,7 @@ namespace Vulkan::PipelineCommon
 
     private:
         std::array<uint32_t, static_cast<size_t>(ETemporalChannel::Count)> historyIds_{};
+        int lastRenderedFrame_ = -1;
+        bool historyValid_ = false;
     };
 }

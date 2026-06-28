@@ -138,6 +138,8 @@ namespace Vulkan
 		const RenderViewManager& RenderViews() const { return *renderViews_; }
 		RenderView& PrimaryView() { return renderViews_->Primary(); }
 		const RenderView& PrimaryView() const { return renderViews_->Primary(); }
+		RenderView& ActiveRenderView() { return activeRenderView_ != nullptr ? *activeRenderView_ : PrimaryView(); }
+		const RenderView& ActiveRenderView() const { return activeRenderView_ != nullptr ? *activeRenderView_ : PrimaryView(); }
 		FViewRenderState& PrimaryViewState() { return renderViews_->Primary().State(); }
 		const FViewRenderState& PrimaryViewState() const { return renderViews_->Primary().State(); }
 
@@ -330,7 +332,6 @@ namespace Vulkan
 		{
 			RenderView* view = nullptr;
 			std::unique_ptr<FrameBuffer> visibilityFrameBuffer;
-			std::unique_ptr<Assets::UniformBuffer> cameraUbo;
 			VkExtent2D allocatedExtent{0, 0};
 		};
 
@@ -363,11 +364,11 @@ namespace Vulkan
 		RenderView* secondaryRenderView_ = nullptr;
 		RenderView* thumbnailRenderView_ = nullptr;
 		Assets::Scene* activeSceneOverride_ = nullptr;
+		RenderView* activeRenderView_ = nullptr;
 		uint32_t activeViewBankBase_ = 0;
 		VkExtent2D activeViewRenderExtent_{0, 0};
 		bool multiViewDemo_ = false;
 		VkDeviceAddress activeViewCameraAddress_ = 0;
-		std::unique_ptr<Assets::UniformBuffer> secondaryCameraUbo_;
 		bool secondaryViewEnabled_ = false;
 		bool secondaryViewRequested_ = false;
 		VkExtent2D secondaryRequestedExtent_{0, 0};
@@ -381,13 +382,11 @@ namespace Vulkan
 		// Visibility framebuffer for the view currently being recorded (null => primary/bank-0).
 		FrameBuffer* activeVisibilityFrameBuffer_ = nullptr;
 		std::unique_ptr<Assets::Scene> materialThumbnailScene_;
-		std::unique_ptr<Assets::UniformBuffer> materialThumbnailCameraUbo_;
 		std::vector<std::unique_ptr<RenderImage>> materialThumbnailImages_;
 		std::vector<uint64_t> materialThumbnailHashes_;
 		std::vector<uint32_t> pendingMaterialThumbnails_;
 		bool materialThumbnailSceneReady_ = false;
 		std::unique_ptr<Assets::Scene> meshThumbnailScene_;
-		std::unique_ptr<Assets::UniformBuffer> meshThumbnailCameraUbo_;
 		std::vector<std::unique_ptr<RenderImage>> meshThumbnailImages_;
 		std::vector<uint64_t> meshThumbnailHashes_;
 		std::vector<uint32_t> pendingMeshThumbnails_;
@@ -418,9 +417,19 @@ namespace Vulkan
 		void CreateRenderTargetBank(uint32_t bankBase);
 		void CreateRenderTargetBank(uint32_t bankBase, VkExtent2D extent);
 		// Lazily create persistent reference/secondary views and transient thumbnail views.
-		RenderView& EnsureReferenceView(ERendererType type);
+		RenderView& EnsureReferenceView(ERendererType type, uint32_t imageIndex);
 		RenderView& EnsureSecondaryRenderView();
-		void RenderAuxiliaryViews(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void ScheduleRenderView(RenderView& view,
+		                        LogicRendererBase& logicRenderer,
+		                        bool clearSwapchain,
+		                        FRenderViewPostCallback postRender = {});
+		bool DispatchScheduledRenderViews(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void SetRenderViewUbo(RenderView& view, uint32_t imageIndex, const Assets::UniformBufferObject& ubo);
+		void ScheduleAuxiliaryViews(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void ComposeViewToSwapchainSubrect(VkCommandBuffer commandBuffer, uint32_t imageIndex, RenderView& view);
+		void ResolvePrimaryViewToSwapchain(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		void CopySecondaryViewOutput(VkCommandBuffer commandBuffer, uint32_t imageIndex, RenderView& view);
+		void CopyThumbnailViewOutput(VkCommandBuffer commandBuffer, RenderView& view, RenderImage& dst);
 		void EnsureMaterialThumbnailScene();
 		void RebuildMeshThumbnailScene(const Assets::Model& model);
 		Assets::UniformBufferObject BuildThumbnailUbo(Assets::Scene& scene, VkExtent2D extent) const;
@@ -428,8 +437,8 @@ namespace Vulkan
 		bool HasPendingMeshThumbnail() const { return !pendingMeshThumbnails_.empty(); }
 		bool HasPendingThumbnail() const { return HasPendingMaterialThumbnail() || HasPendingMeshThumbnail(); }
 		void EnsureThumbnailRenderTarget();
-		bool RenderNextMaterialThumbnail(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-		bool RenderNextMeshThumbnail(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		bool ScheduleNextMaterialThumbnail(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		bool ScheduleNextMeshThumbnail(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void CreateStorageImage(uint32_t bindlessIdx, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName);
 		void CreateStorageImage(uint32_t bindlessIdx, VkExtent2D extent, VkFormat format, VkImageTiling tiling,
                                 VkImageUsageFlags usage, const char* debugName);

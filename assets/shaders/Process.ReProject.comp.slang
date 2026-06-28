@@ -13,10 +13,6 @@ struct PushConsts
     bool ProgressiveRender;
     int TemporalFrames;
 
-    uint PrevDiffuseBindlessIdx;
-    uint PrevSpecularBindlessIdx;
-    uint PrevAlbedoBindlessIdx;
-
     bool FastReproject;
 
     // History-clamp tuning (Phase A black-dot fix). gammaHi/gammaLo are the *tight* (low-confidence)
@@ -204,11 +200,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
     let SourceSpecular = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_SINGLE_SPECULAR));
     let SourceAlbedo = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_ALBEDO));
 
-    // Prev-history slot values are absolute screen-space slots; resolve into the active view's bank.
     let vb = pushConsts._ViewHdr_custom_data_0;
-    let PrevDiffuse = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(vb, int(pushConsts.PrevDiffuseBindlessIdx)));
-    let PrevSpecular = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(vb, int(pushConsts.PrevSpecularBindlessIdx)));
-    let PrevAlbedo = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(vb, int(pushConsts.PrevAlbedoBindlessIdx)));
+    let PrevDiffuse = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(vb, Bindless.RT_SINGLE_PREV_DIFFUSE));
+    let PrevSpecular = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(vb, Bindless.RT_SINGLE_PREV_SPECULAR));
+    let PrevAlbedo = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(vb, Bindless.RT_SINGLE_PREV_ALBEDO));
 
     let AccumlateDiffuse = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_ACCUMLATE_DIFFUSE));
     let AccumlateSpecular = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_ACCUMLATE_SPECULAR));
