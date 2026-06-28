@@ -425,6 +425,7 @@ namespace Vulkan
 		                        FRenderViewPostCallback postRender = {});
 		bool DispatchScheduledRenderViews(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void SetRenderViewUbo(RenderView& view, uint32_t imageIndex, const Assets::UniformBufferObject& ubo);
+		void FinalizeTemporalUbo(RenderView& view, Assets::UniformBufferObject& ubo);
 		void ScheduleAuxiliaryViews(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void ComposeViewToSwapchainSubrect(VkCommandBuffer commandBuffer, uint32_t imageIndex, RenderView& view);
 		void ResolvePrimaryViewToSwapchain(VkCommandBuffer commandBuffer, uint32_t imageIndex);
