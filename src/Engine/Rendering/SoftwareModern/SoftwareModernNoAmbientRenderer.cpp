@@ -36,8 +36,7 @@ namespace Vulkan::SoftwareModernNoAmbient
             SwapChain(), "assets/shaders/Process.ComposeSimple.comp.slang.spv", GetScene()));
 
         temporalResolve_.SetupHistory(baseRender_, {
-            {PipelineCommon::ETemporalChannel::Diffuse, Assets::Bindless::RT_SINGLE_PREV_DIFFUSE,
-             "noAmbientPrevDiffuseTmp"},
+            {PipelineCommon::ETemporalChannel::Diffuse, Assets::Bindless::RT_SINGLE_PREV_DIFFUSE},
         });
 
         historyValid_ = false;

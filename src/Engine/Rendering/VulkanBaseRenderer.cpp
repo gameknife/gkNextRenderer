@@ -255,8 +255,8 @@ namespace Vulkan
         caps_.supportRayTracing = false;
         upscaler_ = Rendering::Upscaler::CreateStreamlineUpscaler();
 
-        // Multi-viewport demo: render a second view into its own RT bank and composite it as a
-        // picture-in-picture inset of the swapchain. Off by default; opt in with GK_MV_DEMO=1.
+        // Optional validation path: render the secondary RenderView and composite it as a
+        // picture-in-picture inset. Off by default; opt in with GK_MV_DEMO=1.
         const char* mvDemoEnv = std::getenv("GK_MV_DEMO");
         multiViewDemo_ = mvDemoEnv != nullptr && mvDemoEnv[0] == '1';
     }
@@ -424,6 +424,24 @@ namespace Vulkan
     void VulkanBaseRenderer::SetScene(std::shared_ptr<Assets::Scene> scene)
     {
         scene_ = scene;
+        PrimaryView().InvalidateTemporalHistory();
+        if (secondaryRenderView_ != nullptr)
+        {
+            secondaryRenderView_->InvalidateTemporalHistory();
+        }
+        if (thumbnailRenderView_ != nullptr)
+        {
+            thumbnailRenderView_->InvalidateTemporalHistory();
+            thumbnailRenderView_->SetSceneOverride(nullptr);
+        }
+        for (auto& referenceView : referenceViews_)
+        {
+            if (referenceView.second.view != nullptr)
+            {
+                referenceView.second.view->InvalidateTemporalHistory();
+                referenceView.second.view->SetSceneOverride(nullptr);
+            }
+        }
         materialThumbnailScene_.reset();
         materialThumbnailCameraUbo_.reset();
         materialThumbnailImages_.clear();
@@ -436,7 +454,6 @@ namespace Vulkan
         meshThumbnailHashes_.clear();
         pendingMeshThumbnails_.clear();
         thumbnailVisibilityFrameBuffer_.reset();
-        thumbnailBankCreated_ = false;
         RequestClearAmbientCubeCache();
         resetUpscalerHistory_ = true;
     }
@@ -469,7 +486,11 @@ namespace Vulkan
     {
         extent.width = std::max(1u, extent.width);
         extent.height = std::max(1u, extent.height);
-        secondaryViewRenderExtent_ = extent;
+        secondaryRequestedExtent_ = extent;
+        if (secondaryRenderView_ != nullptr)
+        {
+            secondaryRenderView_->SetRenderExtent(extent);
+        }
     }
 
     void VulkanBaseRenderer::SetPhysicalDeviceImpl(
@@ -765,18 +786,6 @@ namespace Vulkan
         return bindless_.images[bindlessIdx].get();
     }
 
-    uint32_t VulkanBaseRenderer::GetTemporalStorageImage(VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
-        const char* debugName)
-    {
-        uint32_t targetIdx = Assets::Bindless::RT_TEMP_USAGE0 + bindless_.tempCreated;
-        auto& target = bindless_.images[targetIdx];
-        assert(!target);
-        CreateStorageImage(targetIdx, format, tiling, usage, debugName);
-        bindless_.tempCreated++;
-
-        return targetIdx;
-    }
-
 #define CREATE_STORAGE_IMAGE(idx, fmt, tiling, usage) CreateStorageImage(bankBase + Assets::Bindless::idx, extent, fmt, tiling, usage, #idx)
 
     void VulkanBaseRenderer::CreateRenderTargetBank(uint32_t bankBase)
@@ -848,11 +857,36 @@ namespace Vulkan
 
         // Primary view RT bank (bank 0 == legacy absolute layout).
         CreateRenderTargetBank(0);
-        // A secondary view bank was destroyed with the swapchain; recreate it on demand next frame.
-        secondaryBankCreated_ = false;
-        secondaryBankExtent_ = {0, 0};
-        secondaryViewPrevDepthValid_ = false;
-        thumbnailBankCreated_ = false;
+        // Non-primary view resources were destroyed with the swapchain; recreate on demand.
+        if (secondaryRenderView_ != nullptr)
+        {
+            secondaryRenderView_->SetAllocatedExtent({0, 0});
+            secondaryRenderView_->SetVisibilityFramebuffer(nullptr);
+            secondaryRenderView_->SetCameraAddress(0);
+            secondaryRenderView_->SetPrevDepthValid(false);
+        }
+        if (thumbnailRenderView_ != nullptr)
+        {
+            thumbnailRenderView_->SetAllocatedExtent({0, 0});
+            thumbnailRenderView_->SetVisibilityFramebuffer(nullptr);
+            thumbnailRenderView_->SetCameraAddress(0);
+            thumbnailRenderView_->SetSceneOverride(nullptr);
+            thumbnailRenderView_->SetPrevDepthValid(false);
+        }
+        for (auto& referenceView : referenceViews_)
+        {
+            auto& resources = referenceView.second;
+            resources.visibilityFrameBuffer.reset();
+            resources.cameraUbo.reset();
+            resources.allocatedExtent = {0, 0};
+            if (resources.view != nullptr)
+            {
+                resources.view->SetAllocatedExtent({0, 0});
+                resources.view->SetVisibilityFramebuffer(nullptr);
+                resources.view->SetCameraAddress(0);
+                resources.view->SetPrevDepthValid(false);
+            }
+        }
         thumbnailVisibilityFrameBuffer_.reset();
 
         for (uint32_t i = 0; i != frame_.swapChain->Images().size(); i++)
@@ -1048,21 +1082,44 @@ namespace Vulkan
         {
             storageImage.reset();
         }
-        bindless_.tempCreated = 0;
-
         overlay_.visibilityPipeline.reset();
         overlay_.visibilityFrameBuffer.reset();
-        // Secondary view resources reference bank-1 images / the shared render pass; drop them before
-        // the swapchain images go away (the bank itself is rebuilt on demand next frame).
+        // Auxiliary view resources reference view-bank images / the shared render pass; drop them
+        // before the swapchain images go away.
         secondaryVisibilityFrameBuffer_.reset();
         secondaryCameraUbo_.reset();
         secondaryOffscreenImage_.reset();
         secondaryOffscreenSampler_.reset();
-        secondaryBankCreated_ = false;
-        secondaryBankExtent_ = {0, 0};
-        secondaryViewPrevDepthValid_ = false;
+        if (secondaryRenderView_ != nullptr)
+        {
+            secondaryRenderView_->SetAllocatedExtent({0, 0});
+            secondaryRenderView_->SetVisibilityFramebuffer(nullptr);
+            secondaryRenderView_->SetCameraAddress(0);
+            secondaryRenderView_->SetPrevDepthValid(false);
+        }
         thumbnailVisibilityFrameBuffer_.reset();
-        thumbnailBankCreated_ = false;
+        if (thumbnailRenderView_ != nullptr)
+        {
+            thumbnailRenderView_->SetAllocatedExtent({0, 0});
+            thumbnailRenderView_->SetVisibilityFramebuffer(nullptr);
+            thumbnailRenderView_->SetCameraAddress(0);
+            thumbnailRenderView_->SetSceneOverride(nullptr);
+            thumbnailRenderView_->SetPrevDepthValid(false);
+        }
+        for (auto& referenceView : referenceViews_)
+        {
+            auto& resources = referenceView.second;
+            resources.visibilityFrameBuffer.reset();
+            resources.cameraUbo.reset();
+            resources.allocatedExtent = {0, 0};
+            if (resources.view != nullptr)
+            {
+                resources.view->SetAllocatedExtent({0, 0});
+                resources.view->SetVisibilityFramebuffer(nullptr);
+                resources.view->SetCameraAddress(0);
+                resources.view->SetPrevDepthValid(false);
+            }
+        }
         overlay_.sunShadowPass.reset();
         
         screenshot_.image.reset();
@@ -1153,14 +1210,8 @@ namespace Vulkan
         });
     }
 
-    void VulkanBaseRenderer::PreRender(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
-    {
-        PreRenderSceneGlobal(commandBuffer, imageIndex);
-        PreRenderPerView(commandBuffer, imageIndex, /*isPrimaryView*/ true);
-    }
-
     // Camera-independent, runs once per scene per frame (shared across all views).
-    void VulkanBaseRenderer::PreRenderSceneGlobal(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+    void VulkanBaseRenderer::BeginSceneFrame(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
         UpdateAccelerationStructuresTop(commandBuffer);
         UpdateSkinningBuffers();
@@ -1168,6 +1219,54 @@ namespace Vulkan
         HandleAmbientCubeCacheInvalidation(commandBuffer, imageIndex);
         DispatchSkinning(commandBuffer, imageIndex);
         UpdateAccelerationStructuresBottom(commandBuffer);
+    }
+
+    void VulkanBaseRenderer::RenderViewToBank(
+        VkCommandBuffer commandBuffer,
+        const uint32_t imageIndex,
+        RenderView& view,
+        const bool clearSwapchain,
+        LogicRendererBase& logicRenderer)
+    {
+        SCOPED_GPU_TIMER(view.DebugName());
+
+        const uint32_t previousBankBase = activeViewBankBase_;
+        const VkExtent2D previousRenderExtent = activeViewRenderExtent_;
+        const VkDeviceAddress previousCameraAddress = activeViewCameraAddress_;
+        FrameBuffer* const previousVisibilityFrameBuffer = activeVisibilityFrameBuffer_;
+        Assets::Scene* const previousSceneOverride = activeSceneOverride_;
+
+        activeSceneOverride_ = view.SceneOverride();
+        SetActiveViewBankBase(view.RtBankBase());
+        SetActiveViewRenderExtent(view.RenderExtent());
+        SetActiveViewCameraAddress(view.CameraAddress());
+        activeVisibilityFrameBuffer_ = view.VisibilityFramebuffer();
+
+        const bool initializePrevDepthBeforeCull = !view.IsPrimary() && !view.PrevDepthValid();
+        if (initializePrevDepthBeforeCull)
+        {
+            DispatchClearPass(commandBuffer, imageIndex, /*clearSwapchain*/ false);
+            GetViewStorageImage(Assets::Bindless::RT_PREV_DEPTHBUFFER)->InsertBarrier(
+                commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+        }
+
+        PreRenderPerView(commandBuffer, imageIndex, clearSwapchain);
+        logicRenderer.Render(commandBuffer, imageIndex);
+        if (view.CopyObjectIdHistory())
+        {
+            CopyObjectIdHistory(commandBuffer);
+        }
+        if (initializePrevDepthBeforeCull)
+        {
+            view.SetPrevDepthValid(true);
+        }
+
+        activeSceneOverride_ = previousSceneOverride;
+        activeVisibilityFrameBuffer_ = previousVisibilityFrameBuffer;
+        SetActiveViewCameraAddress(previousCameraAddress);
+        SetActiveViewRenderExtent(previousRenderExtent);
+        SetActiveViewBankBase(previousBankBase);
     }
 
     // Camera-dependent pre-passes; runs per active RenderView into its RT bank (set via
@@ -1294,7 +1393,7 @@ namespace Vulkan
 
                 {
                     SCOPED_GPU_TIMER("[pre-render]");
-                    PreRender(commandBuffer, frame_.currentImageIndex);
+                    BeginSceneFrame(commandBuffer, frame_.currentImageIndex);
                     skin_.updateRequests.clear();
                 }
 
@@ -1514,49 +1613,84 @@ namespace Vulkan
 
     void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
+        const auto preparePrimaryView = [this](const char* debugName) -> RenderView&
+        {
+            RenderView& primary = PrimaryView();
+            primary.SetDebugName(debugName);
+            primary.SetRenderExtent(frame_.swapChain->RenderExtent());
+            primary.SetRenderOffset(frame_.swapChain->RenderOffset());
+            primary.SetSubrect(VkRect2D{frame_.swapChain->OutputOffset(), frame_.swapChain->OutputExtent()});
+            primary.SetCameraAddress(0);
+            primary.SetVisibilityFramebuffer(nullptr);
+            primary.SetSceneOverride(nullptr);
+            primary.SetCopyObjectIdHistory(true);
+            return primary;
+        };
+
         if (GOption->ReferenceMode)
         {
-            // 后面渲染器会很多，这里只渲染加入reference的，并从rtDenoised Resolve到FrameBuffer
-            // 然后就跳过后面的resolve流程了
-            for (auto& logicRenderer : logicRenderers_.renderers)
-            {
-                const auto& rendererDescriptor = GetRendererDescriptor(logicRenderer.first);
+            static constexpr std::array<ERendererType, 4> kReferenceRendererTypes{
+                ERT_SoftwareModern,
+                ERT_SoftwareTracing,
+                ERT_SoftwareModernNoAmbient,
+                ERT_PathTracing,
+            };
 
+            bool clearSwapchainForReference = true;
+            bool renderedAnyReferenceView = false;
+            for (const ERendererType rendererType : kReferenceRendererTypes)
+            {
+                const auto logicRenderer = logicRenderers_.renderers.find(rendererType);
+                if (logicRenderer == logicRenderers_.renderers.end())
                 {
-                    SCOPED_GPU_TIMER(rendererDescriptor.name);
-                    logicRenderer.second->Render(commandBuffer, imageIndex);
+                    continue;
                 }
+
+                RenderView& referenceView = EnsureReferenceView(rendererType);
+                RenderViewToBank(
+                    commandBuffer, imageIndex, referenceView, clearSwapchainForReference, *logicRenderer->second);
+                clearSwapchainForReference = false;
+                renderedAnyReferenceView = true;
 
                 {
                     SCOPED_GPU_TIMER("resolve pass");
                     SwapChain().InsertBarrierToWrite(commandBuffer, imageIndex);
-                
+
+                    const uint32_t previousBankBase = activeViewBankBase_;
+                    SetActiveViewBankBase(referenceView.RtBankBase());
                     GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                                               VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-                
+
+                    const VkRect2D subrect = referenceView.Desc().subrect;
                     const std::array<uint32_t, 5> pushConst{
                         imageIndex,
-                        rendererDescriptor.referenceColumn * SwapChain().Extent().width / 2,
-                        rendererDescriptor.referenceRow * SwapChain().Extent().height / 2,
-                        SwapChain().RenderExtent().width,
-                        SwapChain().RenderExtent().height};
-                
+                        static_cast<uint32_t>(std::max(0, subrect.offset.x)),
+                        static_cast<uint32_t>(std::max(0, subrect.offset.y)),
+                        subrect.extent.width,
+                        subrect.extent.height};
+
                     overlay_.simpleComposePipeline->BindPipeline(commandBuffer, pushConst.data());
-                  
+
                     vkCmdDispatch(
                         commandBuffer,
-                        Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
-                        Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
-                    SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
+                        Utilities::Math::GetSafeDispatchCount(subrect.extent.width, 8),
+                        Utilities::Math::GetSafeDispatchCount(subrect.extent.height, 8), 1);
+                    SetActiveViewBankBase(previousBankBase);
                 }
+            }
+
+            if (renderedAnyReferenceView)
+            {
+                SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
             }
         }
         else
         {
-            if (logicRenderers_.renderers.find(logicRenderers_.current) != logicRenderers_.renderers.end())
+            const auto renderer = logicRenderers_.renderers.find(logicRenderers_.current);
+            if (renderer != logicRenderers_.renderers.end())
             {
-                SCOPED_GPU_TIMER("logic renderer");
-                logicRenderers_.renderers[logicRenderers_.current]->Render(commandBuffer, imageIndex);
+                RenderView& primary = preparePrimaryView("primary view");
+                RenderViewToBank(commandBuffer, imageIndex, primary, /*clearSwapchain*/ true, *renderer->second);
             }
 
             if (overlay_.gaussianSplatPass)
@@ -1635,7 +1769,7 @@ namespace Vulkan
                 // Swapchain is in GENERAL here (before the present barrier).
                 if (multiViewDemo_ || secondaryViewEnabled_ || secondaryViewRequested_ || HasPendingThumbnail())
                 {
-                    DemoRenderSecondView(commandBuffer, imageIndex);
+                    RenderAuxiliaryViews(commandBuffer, imageIndex);
                 }
                 secondaryViewRequested_ = false;
 
@@ -1775,9 +1909,76 @@ namespace Vulkan
         return std::numeric_limits<uint32_t>::max();
     }
 
-    void VulkanBaseRenderer::EnsureSecondaryViewBank()
+    RenderView& VulkanBaseRenderer::EnsureReferenceView(const ERendererType type)
     {
-        VkExtent2D extent = secondaryViewRenderExtent_;
+        const RendererDescriptor& descriptor = GetRendererDescriptor(type);
+        VkExtent2D extent{
+            std::max(1u, frame_.swapChain->RenderExtent().width / 2u),
+            std::max(1u, frame_.swapChain->RenderExtent().height / 2u)};
+        VkOffset2D offset{
+            static_cast<int32_t>(descriptor.referenceColumn * extent.width),
+            static_cast<int32_t>(descriptor.referenceRow * extent.height)};
+
+        auto& resources = referenceViews_[type];
+        if (resources.view == nullptr)
+        {
+            FViewDesc viewDesc{};
+            viewDesc.renderExtent = extent;
+            viewDesc.outputKind = EViewOutputKind::SwapchainSubrect;
+            viewDesc.schedule = EViewSchedule::Persistent;
+            viewDesc.subrect = VkRect2D{offset, extent};
+            resources.view = renderViews_->CreateView(viewDesc, descriptor.name);
+            if (resources.view == nullptr)
+            {
+                Throw(std::runtime_error("failed to allocate reference RenderView bank"));
+            }
+        }
+
+        RenderView& view = *resources.view;
+        view.SetDebugName(descriptor.name);
+        view.SetRenderExtent(extent);
+        view.SetRenderOffset({0, 0});
+        view.SetSubrect(VkRect2D{offset, extent});
+        view.SetSceneOverride(nullptr);
+        view.SetCopyObjectIdHistory(true);
+
+        if (resources.allocatedExtent.width != extent.width ||
+            resources.allocatedExtent.height != extent.height)
+        {
+            resources.visibilityFrameBuffer.reset();
+            CreateRenderTargetBank(view.RtBankBase(), extent);
+            resources.visibilityFrameBuffer.reset(new FrameBuffer(
+                extent,
+                GetStorageImage(view.RtBankBase() + Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(),
+                overlay_.visibilityPipeline->RenderPass()));
+            resources.allocatedExtent = extent;
+            view.SetAllocatedExtent(extent);
+            view.SetPrevDepthValid(false);
+        }
+
+        if (!resources.cameraUbo)
+        {
+            resources.cameraUbo = std::make_unique<Assets::UniformBuffer>(*ctx_.device);
+        }
+
+        Assets::UniformBufferObject ubo = frame_.lastUBO;
+        ubo.ViewportRect = glm::vec4(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height));
+        ubo.Jitter = glm::vec4(0.0f);
+        ubo.TemporalFrames = 1;
+        ubo.TAA = false;
+        ubo.ProgressiveRender = false;
+        ubo.PrevViewProjection = ubo.ViewProjection;
+        ubo.PrevViewProjectionUnJit = ubo.ViewProjectionUnJit;
+        resources.cameraUbo->SetValue(ubo);
+
+        view.SetCameraAddress(resources.cameraUbo->Buffer().GetDeviceAddress());
+        view.SetVisibilityFramebuffer(resources.visibilityFrameBuffer.get());
+        return view;
+    }
+
+    RenderView& VulkanBaseRenderer::EnsureSecondaryRenderView()
+    {
+        VkExtent2D extent = secondaryRequestedExtent_;
         if (extent.width == 0 || extent.height == 0)
         {
             extent = frame_.swapChain->RenderExtent();
@@ -1785,13 +1986,31 @@ namespace Vulkan
         extent.width = std::max(1u, extent.width);
         extent.height = std::max(1u, extent.height);
 
-        if (secondaryBankCreated_ &&
-            secondaryBankExtent_.width == extent.width &&
-            secondaryBankExtent_.height == extent.height)
+        if (secondaryRenderView_ == nullptr)
         {
-            return;
+            FViewDesc viewDesc{};
+            viewDesc.renderExtent = extent;
+            viewDesc.outputKind = EViewOutputKind::OffscreenTexture;
+            viewDesc.schedule = EViewSchedule::Persistent;
+            secondaryRenderView_ = renderViews_->CreateView(viewDesc, "secondary view");
+            if (secondaryRenderView_ == nullptr)
+            {
+                Throw(std::runtime_error("failed to allocate secondary RenderView bank"));
+            }
         }
-        const uint32_t bank = Assets::Bindless::kViewRtBankStride;
+        secondaryRenderView_->SetDebugName("secondary view");
+        secondaryRenderView_->SetRenderExtent(extent);
+        secondaryRenderView_->SetCopyObjectIdHistory(true);
+
+        if (secondaryRenderView_->AllocatedExtent().width == extent.width &&
+            secondaryRenderView_->AllocatedExtent().height == extent.height &&
+            secondaryRenderView_->VisibilityFramebuffer() != nullptr &&
+            secondaryOffscreenImage_ != nullptr)
+        {
+            return *secondaryRenderView_;
+        }
+
+        const uint32_t bank = secondaryRenderView_->RtBankBase();
         secondaryVisibilityFrameBuffer_.reset();
         secondaryOffscreenImage_.reset();
         CreateRenderTargetBank(bank, extent);
@@ -1799,12 +2018,13 @@ namespace Vulkan
         {
             secondaryCameraUbo_ = std::make_unique<Assets::UniformBuffer>(*ctx_.device);
         }
-        // Per-view visibility framebuffer: bank-1 RT_MINIGBUFFER_DRAW as color; depth comes from the
+        // Per-view visibility framebuffer: this view's RT_MINIGBUFFER_DRAW as color; depth comes from the
         // shared render pass (primary depth) — safe because views render sequentially.
         secondaryVisibilityFrameBuffer_.reset(new FrameBuffer(
             extent,
             GetStorageImage(bank + Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(),
             overlay_.visibilityPipeline->RenderPass()));
+        secondaryRenderView_->SetVisibilityFramebuffer(secondaryVisibilityFrameBuffer_.get());
 
         // Offscreen sampled copy of the secondary view's composed output, bound into the sample
         // array for ImGui display. Created once; bind the descriptor once (image is stable).
@@ -1823,9 +2043,9 @@ namespace Vulkan
         ctx_.globalTexturePool->BindSampleTexture(kSecondaryViewSampleSlot,
             secondaryOffscreenImage_->GetImageView(), *secondaryOffscreenSampler_);
 
-        secondaryBankExtent_ = extent;
-        secondaryViewPrevDepthValid_ = false;
-        secondaryBankCreated_ = true;
+        secondaryRenderView_->SetAllocatedExtent(extent);
+        secondaryRenderView_->SetPrevDepthValid(false);
+        return *secondaryRenderView_;
     }
 
     void VulkanBaseRenderer::EnsureMaterialThumbnailScene()
@@ -1888,16 +2108,36 @@ namespace Vulkan
     void VulkanBaseRenderer::EnsureThumbnailRenderTarget()
     {
         static constexpr VkExtent2D kThumbnailExtent{256, 256};
-        static constexpr uint32_t kThumbnailBank = 2u * Assets::Bindless::kViewRtBankStride;
 
-        if (!thumbnailBankCreated_)
+        if (thumbnailRenderView_ == nullptr)
         {
-            CreateRenderTargetBank(kThumbnailBank, kThumbnailExtent);
+            FViewDesc viewDesc{};
+            viewDesc.renderExtent = kThumbnailExtent;
+            viewDesc.outputKind = EViewOutputKind::OffscreenTexture;
+            viewDesc.schedule = EViewSchedule::Transient;
+            thumbnailRenderView_ = renderViews_->CreateView(viewDesc, "thumbnail view");
+            if (thumbnailRenderView_ == nullptr)
+            {
+                Throw(std::runtime_error("failed to allocate thumbnail RenderView bank"));
+            }
+            thumbnailRenderView_->SetCopyObjectIdHistory(false);
+        }
+        thumbnailRenderView_->SetRenderExtent(kThumbnailExtent);
+        thumbnailRenderView_->SetCopyObjectIdHistory(false);
+
+        if (thumbnailRenderView_->AllocatedExtent().width != kThumbnailExtent.width ||
+            thumbnailRenderView_->AllocatedExtent().height != kThumbnailExtent.height ||
+            thumbnailRenderView_->VisibilityFramebuffer() == nullptr)
+        {
+            const uint32_t thumbnailBank = thumbnailRenderView_->RtBankBase();
+            CreateRenderTargetBank(thumbnailBank, kThumbnailExtent);
             thumbnailVisibilityFrameBuffer_.reset(new FrameBuffer(
                 kThumbnailExtent,
-                GetStorageImage(kThumbnailBank + Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(),
+                GetStorageImage(thumbnailBank + Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(),
                 overlay_.visibilityPipeline->RenderPass()));
-            thumbnailBankCreated_ = true;
+            thumbnailRenderView_->SetVisibilityFramebuffer(thumbnailVisibilityFrameBuffer_.get());
+            thumbnailRenderView_->SetAllocatedExtent(kThumbnailExtent);
+            thumbnailRenderView_->SetPrevDepthValid(false);
         }
         if (!thumbnailSampler_)
         {
@@ -2054,7 +2294,6 @@ namespace Vulkan
     bool VulkanBaseRenderer::RenderNextMaterialThumbnail(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
         static constexpr VkExtent2D kThumbnailExtent{256, 256};
-        static constexpr uint32_t kThumbnailBank = 2u * Assets::Bindless::kViewRtBankStride;
 
         if (pendingMaterialThumbnails_.empty())
         {
@@ -2085,8 +2324,9 @@ namespace Vulkan
         }
 
         EnsureThumbnailRenderTarget();
+        assert(thumbnailRenderView_ != nullptr);
 
-        const uint32_t bank = kThumbnailBank;
+        const uint32_t bank = thumbnailRenderView_->RtBankBase();
         const uint32_t sampleSlot = kMaterialThumbnailSampleSlotBase + materialIndex;
 
         if (materialThumbnailImages_.size() <= materialIndex)
@@ -2114,7 +2354,6 @@ namespace Vulkan
             return false;
         }
 
-        activeSceneOverride_ = materialThumbnailScene_.get();
         materialThumbnailScene_->UpdateAllMaterials();
         materialThumbnailScene_->UpdateNodes();
         if (!materialThumbnailCameraUbo_)
@@ -2124,20 +2363,15 @@ namespace Vulkan
         const Assets::UniformBufferObject previewCamera = BuildThumbnailUbo(*materialThumbnailScene_, kThumbnailExtent);
         materialThumbnailCameraUbo_->SetValue(previewCamera);
 
-        {
-            SCOPED_GPU_TIMER("material thumbnail view");
-            SetActiveViewBankBase(bank);
-            SetActiveViewRenderExtent(kThumbnailExtent);
-            SetActiveViewCameraAddress(materialThumbnailCameraUbo_->Buffer().GetDeviceAddress());
-            activeVisibilityFrameBuffer_ = thumbnailVisibilityFrameBuffer_.get();
-            PreRenderPerView(commandBuffer, imageIndex, /*isPrimaryView*/ false);
-            (rendererIt != logicRenderers_.renderers.end() ? rendererIt : fallbackIt)->second->Render(commandBuffer, imageIndex);
-            activeVisibilityFrameBuffer_ = nullptr;
-            SetActiveViewCameraAddress(0);
-            SetActiveViewRenderExtent({0, 0});
-            SetActiveViewBankBase(0);
-        }
-        activeSceneOverride_ = nullptr;
+        thumbnailRenderView_->SetDebugName("material thumbnail view");
+        thumbnailRenderView_->SetRenderExtent(kThumbnailExtent);
+        thumbnailRenderView_->SetCameraAddress(materialThumbnailCameraUbo_->Buffer().GetDeviceAddress());
+        thumbnailRenderView_->SetVisibilityFramebuffer(thumbnailVisibilityFrameBuffer_.get());
+        thumbnailRenderView_->SetSceneOverride(materialThumbnailScene_.get());
+        thumbnailRenderView_->SetPrevDepthValid(false);
+        RenderViewToBank(commandBuffer, imageIndex, *thumbnailRenderView_, /*clearSwapchain*/ false,
+                         *(rendererIt != logicRenderers_.renderers.end() ? rendererIt : fallbackIt)->second);
+        thumbnailRenderView_->SetSceneOverride(nullptr);
 
         const RenderImage* src = GetStorageImage(bank + Assets::Bindless::RT_DENOISED);
         RenderImage* dst = materialThumbnailImages_[materialIndex].get();
@@ -2174,7 +2408,6 @@ namespace Vulkan
     bool VulkanBaseRenderer::RenderNextMeshThumbnail(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
         static constexpr VkExtent2D kThumbnailExtent{256, 256};
-        static constexpr uint32_t kThumbnailBank = 2u * Assets::Bindless::kViewRtBankStride;
 
         if (pendingMeshThumbnails_.empty())
         {
@@ -2202,13 +2435,14 @@ namespace Vulkan
         }
 
         EnsureThumbnailRenderTarget();
+        assert(thumbnailRenderView_ != nullptr);
         RebuildMeshThumbnailScene(model);
         if (!meshThumbnailScene_)
         {
             return false;
         }
 
-        const uint32_t bank = kThumbnailBank;
+        const uint32_t bank = thumbnailRenderView_->RtBankBase();
         const uint32_t sampleSlot = kMeshThumbnailSampleSlotBase + modelIndex;
 
         if (meshThumbnailImages_.size() <= modelIndex)
@@ -2233,7 +2467,6 @@ namespace Vulkan
             return false;
         }
 
-        activeSceneOverride_ = meshThumbnailScene_.get();
         meshThumbnailScene_->UpdateAllMaterials();
         meshThumbnailScene_->UpdateNodes();
         if (!meshThumbnailCameraUbo_)
@@ -2243,20 +2476,15 @@ namespace Vulkan
         const Assets::UniformBufferObject previewCamera = BuildThumbnailUbo(*meshThumbnailScene_, kThumbnailExtent);
         meshThumbnailCameraUbo_->SetValue(previewCamera);
 
-        {
-            SCOPED_GPU_TIMER("mesh thumbnail view");
-            SetActiveViewBankBase(bank);
-            SetActiveViewRenderExtent(kThumbnailExtent);
-            SetActiveViewCameraAddress(meshThumbnailCameraUbo_->Buffer().GetDeviceAddress());
-            activeVisibilityFrameBuffer_ = thumbnailVisibilityFrameBuffer_.get();
-            PreRenderPerView(commandBuffer, imageIndex, /*isPrimaryView*/ false);
-            (rendererIt != logicRenderers_.renderers.end() ? rendererIt : fallbackIt)->second->Render(commandBuffer, imageIndex);
-            activeVisibilityFrameBuffer_ = nullptr;
-            SetActiveViewCameraAddress(0);
-            SetActiveViewRenderExtent({0, 0});
-            SetActiveViewBankBase(0);
-        }
-        activeSceneOverride_ = nullptr;
+        thumbnailRenderView_->SetDebugName("mesh thumbnail view");
+        thumbnailRenderView_->SetRenderExtent(kThumbnailExtent);
+        thumbnailRenderView_->SetCameraAddress(meshThumbnailCameraUbo_->Buffer().GetDeviceAddress());
+        thumbnailRenderView_->SetVisibilityFramebuffer(thumbnailVisibilityFrameBuffer_.get());
+        thumbnailRenderView_->SetSceneOverride(meshThumbnailScene_.get());
+        thumbnailRenderView_->SetPrevDepthValid(false);
+        RenderViewToBank(commandBuffer, imageIndex, *thumbnailRenderView_, /*clearSwapchain*/ false,
+                         *(rendererIt != logicRenderers_.renderers.end() ? rendererIt : fallbackIt)->second);
+        thumbnailRenderView_->SetSceneOverride(nullptr);
 
         const RenderImage* src = GetStorageImage(bank + Assets::Bindless::RT_DENOISED);
         RenderImage* dst = meshThumbnailImages_[modelIndex].get();
@@ -2290,7 +2518,7 @@ namespace Vulkan
         return true;
     }
 
-    void VulkanBaseRenderer::DemoRenderSecondView(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+    void VulkanBaseRenderer::RenderAuxiliaryViews(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
         if (RenderNextMaterialThumbnail(commandBuffer, imageIndex))
         {
@@ -2307,11 +2535,9 @@ namespace Vulkan
             return;
         }
 
-        EnsureSecondaryViewBank();
-        const uint32_t bank = Assets::Bindless::kViewRtBankStride;
-        const VkExtent2D secondaryExtent = secondaryBankExtent_.width > 0 && secondaryBankExtent_.height > 0
-            ? secondaryBankExtent_
-            : frame_.swapChain->RenderExtent();
+        RenderView& secondaryView = EnsureSecondaryRenderView();
+        const uint32_t bank = secondaryView.RtBankBase();
+        const VkExtent2D secondaryExtent = secondaryView.RenderExtent();
 
         // Render the second view into its own RT bank (same scene/camera for now; SHARC and history
         // are shared, which is benign for a static converged proof). The per-view pre-passes
@@ -2319,7 +2545,6 @@ namespace Vulkan
         // primary-hit reconstruction finds geometry; then the logic renderer shades it. All
         // screen-space RTs resolve through the active bank base (GPUScene.custom_data_0).
         {
-            SCOPED_GPU_TIMER("mv-demo view");
             // Second camera: orbit the primary eye 35 deg about its look-at point so the PiP shows a
             // genuinely different view of the same scene.
             const Assets::UniformBufferObject cameraB =
@@ -2327,25 +2552,11 @@ namespace Vulkan
                                      GetScene().GetEnvSettings(), secondaryExtent, 35.0f, 30.0f);
             secondaryCameraUbo_->SetValue(cameraB);
 
-            SetActiveViewBankBase(bank);
-            SetActiveViewRenderExtent(secondaryExtent);
-            SetActiveViewCameraAddress(secondaryCameraUbo_->Buffer().GetDeviceAddress());
-            activeVisibilityFrameBuffer_ = secondaryVisibilityFrameBuffer_.get();
-            if (!secondaryViewPrevDepthValid_)
-            {
-                DispatchClearPass(commandBuffer, imageIndex, /*clearSwapchain*/ false);
-                GetViewStorageImage(Assets::Bindless::RT_PREV_DEPTHBUFFER)->InsertBarrier(
-                    commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                    VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-                secondaryViewPrevDepthValid_ = true;
-            }
-            PreRenderPerView(commandBuffer, imageIndex, /*isPrimaryView*/ false);
-            it->second->Render(commandBuffer, imageIndex);
-            CopyObjectIdHistory(commandBuffer);
-            activeVisibilityFrameBuffer_ = nullptr;
-            SetActiveViewCameraAddress(0);
-            SetActiveViewRenderExtent({0, 0});
-            SetActiveViewBankBase(0);
+            secondaryView.SetCameraAddress(secondaryCameraUbo_->Buffer().GetDeviceAddress());
+            secondaryView.SetVisibilityFramebuffer(secondaryVisibilityFrameBuffer_.get());
+            secondaryView.SetSceneOverride(nullptr);
+            secondaryView.SetCopyObjectIdHistory(true);
+            RenderViewToBank(commandBuffer, imageIndex, secondaryView, /*clearSwapchain*/ false, *it->second);
         }
 
         const RenderImage* src = GetStorageImage(bank + Assets::Bindless::RT_DENOISED);
@@ -2357,7 +2568,7 @@ namespace Vulkan
         const int32_t rw = static_cast<int32_t>(secondaryExtent.width);
         const int32_t rh = static_cast<int32_t>(secondaryExtent.height);
 
-        // bank-1 composed output -> transfer source.
+        // Secondary view composed output -> transfer source.
         src->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
                            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
@@ -2401,7 +2612,7 @@ namespace Vulkan
                            1, &region, VK_FILTER_LINEAR);
         }
 
-        // Restore bank-1 denoised to GENERAL for next frame's barrier initialization.
+        // Restore denoised output to GENERAL for next frame's barrier initialization.
         src->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
                            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
     }
@@ -2428,7 +2639,6 @@ namespace Vulkan
         }
 
         DispatchVisualDebugger(commandBuffer, imageIndex);
-        CopyObjectIdHistory(commandBuffer);
     }
 
     void VulkanBaseRenderer::UpdateUniformBuffer(const uint32_t imageIndex)

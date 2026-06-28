@@ -30,6 +30,8 @@ namespace Vulkan::GaussianSplat
 
 namespace Vulkan
 {
+	class LogicRendererBase;
+
 	enum ERendererType
 	{
 		ERT_PathTracing,
@@ -117,7 +119,7 @@ namespace Vulkan
 		bool IsSecondaryViewEnabled() const { return secondaryViewEnabled_; }
 		void RequestSecondaryViewThisFrame() { secondaryViewRequested_ = true; }
 		void SetSecondaryViewRenderExtent(VkExtent2D extent);
-		VkExtent2D SecondaryViewRenderExtent() const { return secondaryViewRenderExtent_; }
+		VkExtent2D SecondaryViewRenderExtent() const { return secondaryRequestedExtent_; }
 		// Bindless sample-texture slot holding the latest secondary view (valid after a frame with the
 		// secondary view enabled). Display via UserInterface::RequestImTextureId.
 		static constexpr uint32_t kSecondaryViewSampleSlot = 65000;
@@ -131,7 +133,7 @@ namespace Vulkan
 		static constexpr uint32_t kMeshThumbnailMaxSlots = 512;
 		uint32_t RequestMeshThumbnail(uint32_t modelIndex, uint64_t modelHash);
 
-		// Multi-viewport (RenderView). Currently exposes the single primary view (bank 0).
+		// Multi-viewport (RenderView): primary plus persistent/offscreen/transient views.
 		RenderViewManager& RenderViews() { return *renderViews_; }
 		const RenderViewManager& RenderViews() const { return *renderViews_; }
 		RenderView& PrimaryView() { return renderViews_->Primary(); }
@@ -193,7 +195,6 @@ namespace Vulkan
 		// of the shader-side Bindless::GetViewStorageTexture; resolves slot through the active
 		// view's bank base. Primary view (base 0) == GetStorageImage (legacy absolute).
 		const RenderImage* GetViewStorageImage(uint32_t slot) const { return GetStorageImage(activeViewBankBase_ + slot); }
-		uint32_t GetTemporalStorageImage(VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName);
 		void InitializeBarriers(VkCommandBuffer commandBuffer);
 		void RequestSkinUpdate(uint32_t modelId) { skin_.updateRequests.push_back(modelId); }
 		std::vector<RayTracing::TopLevelAccelerationStructure>& TLAS();
@@ -300,7 +301,6 @@ namespace Vulkan
 		struct BindlessStorageImages
 		{
 			std::vector<std::unique_ptr<RenderImage> > images;
-			uint32_t tempCreated = 0;
 		};
 
 		struct OverlayPipelines
@@ -324,6 +324,14 @@ namespace Vulkan
 		{
 			std::map< ERendererType, std::unique_ptr<class LogicRendererBase> > renderers;
 			ERendererType current = ERT_SoftwareModern;
+		};
+
+		struct ReferenceRenderViewResources
+		{
+			RenderView* view = nullptr;
+			std::unique_ptr<FrameBuffer> visibilityFrameBuffer;
+			std::unique_ptr<Assets::UniformBuffer> cameraUbo;
+			VkExtent2D allocatedExtent{0, 0};
 		};
 
 		struct ScreenshotResources
@@ -351,23 +359,23 @@ namespace Vulkan
 		OverlayPipelines overlay_;
 		LogicRendererRegistry logicRenderers_;
 		std::unique_ptr<RenderViewManager> renderViews_ = std::make_unique<RenderViewManager>();
+		std::map<ERendererType, ReferenceRenderViewResources> referenceViews_;
+		RenderView* secondaryRenderView_ = nullptr;
+		RenderView* thumbnailRenderView_ = nullptr;
 		Assets::Scene* activeSceneOverride_ = nullptr;
 		uint32_t activeViewBankBase_ = 0;
 		VkExtent2D activeViewRenderExtent_{0, 0};
 		bool multiViewDemo_ = false;
-		bool secondaryBankCreated_ = false;
 		VkDeviceAddress activeViewCameraAddress_ = 0;
 		std::unique_ptr<Assets::UniformBuffer> secondaryCameraUbo_;
 		bool secondaryViewEnabled_ = false;
 		bool secondaryViewRequested_ = false;
-		VkExtent2D secondaryViewRenderExtent_{0, 0};
-		VkExtent2D secondaryBankExtent_{0, 0};
-		bool secondaryViewPrevDepthValid_ = false;
-		// Offscreen sampled copy of the secondary view's composed output (bank-1 RT_DENOISED), bound
+		VkExtent2D secondaryRequestedExtent_{0, 0};
+		// Offscreen sampled copy of the secondary view's composed output, bound
 		// into the sample-texture array at kSecondaryViewSampleSlot for ImGui display.
 		std::unique_ptr<RenderImage> secondaryOffscreenImage_;
 		std::unique_ptr<class Sampler> secondaryOffscreenSampler_;
-		// Per-view visibility framebuffer for the secondary view (bank-1 RT_MINIGBUFFER_DRAW; shares
+		// Per-view visibility framebuffer for the secondary view (shares
 		// the primary depth via the shared render pass — safe because views render sequentially).
 		std::unique_ptr<FrameBuffer> secondaryVisibilityFrameBuffer_;
 		// Visibility framebuffer for the view currently being recorded (null => primary/bank-0).
@@ -385,7 +393,6 @@ namespace Vulkan
 		std::vector<uint32_t> pendingMeshThumbnails_;
 		std::unique_ptr<class Sampler> thumbnailSampler_;
 		std::unique_ptr<FrameBuffer> thumbnailVisibilityFrameBuffer_;
-		bool thumbnailBankCreated_ = false;
 		Delegates delegates_;
 		std::unique_ptr<Rendering::Upscaler::IUpscaler> upscaler_;
 
@@ -410,10 +417,10 @@ namespace Vulkan
 		// Creates the full screen-space RT set at [bankBase + RT_X]. bankBase 0 == primary view.
 		void CreateRenderTargetBank(uint32_t bankBase);
 		void CreateRenderTargetBank(uint32_t bankBase, VkExtent2D extent);
-		// Multi-viewport demo (GK_MV_DEMO): lazily create the secondary view's RT bank, then render a
-		// second view into it and composite it as a picture-in-picture inset of the swapchain.
-		void EnsureSecondaryViewBank();
-		void DemoRenderSecondView(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		// Lazily create persistent reference/secondary views and transient thumbnail views.
+		RenderView& EnsureReferenceView(ERendererType type);
+		RenderView& EnsureSecondaryRenderView();
+		void RenderAuxiliaryViews(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void EnsureMaterialThumbnailScene();
 		void RebuildMeshThumbnailScene(const Assets::Model& model);
 		Assets::UniformBufferObject BuildThumbnailUbo(Assets::Scene& scene, VkExtent2D extent) const;
@@ -432,10 +439,11 @@ namespace Vulkan
 
 		// Frame stages
 		void BeforeNextFrame();
-		void PreRender(VkCommandBuffer commandBuffer, const uint32_t imageIndex);
-		// Multi-viewport split: scene-global pre-passes (camera-independent, once per scene) vs
-		// per-view pre-passes (cull/clear/visibility/shadow; run per active RenderView/bank).
-		void PreRenderSceneGlobal(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		// Scene-global pre-passes: camera-independent work that runs once per scene frame.
+		void BeginSceneFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+		// Per-view render: camera/bank-dependent pre-passes, logic renderer, and view-local post.
+		void RenderViewToBank(VkCommandBuffer commandBuffer, uint32_t imageIndex,
+                              RenderView& view, bool clearSwapchain, LogicRendererBase& logicRenderer);
 		void PreRenderPerView(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool isPrimaryView);
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex);

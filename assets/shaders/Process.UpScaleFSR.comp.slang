@@ -288,24 +288,24 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    int2 isize = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx);
     int2 ssize = Bindless.GetStorageTextureDimensions<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_DENOISED));
+    int2 osize = int2(pushConsts.output_w, pushConsts.output_h);
 
     float4 outColor = float4(0, 0, 0, 1);
 
-    if (isize.x != ssize.x || isize.y != ssize.y)
+    if (osize.x != ssize.x || osize.y != ssize.y)
     {
         const float2 uv = float2(ipos) / float2(pushConsts.output_w, pushConsts.output_h);
         outColor = doUpscale(
             Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_DENOISED)),
             uv,
             float2(ssize),
-            float2(isize)
+            float2(osize)
         );
     }
     else
     {
-        const int2 iposOffset = int2(ipos * float2(isize) / float2(pushConsts.output_w, pushConsts.output_h));
+        const int2 iposOffset = int2(ipos * float2(ssize) / float2(pushConsts.output_w, pushConsts.output_h));
         outColor = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_DENOISED))[iposOffset];
     }
 
