@@ -59,7 +59,8 @@ namespace Vulkan::SoftwareModernNoAmbient
     {
         baseRender_.InitializeBarriers(commandBuffer);
         const int currentFrame = FrameCount();
-        const bool canUseHistory = historyValid_ && currentFrame == lastRenderedFrame_ + 1;
+        const bool isPrimaryView = baseRender_.ActiveViewBankBase() == 0;
+        const bool canUseHistory = isPrimaryView && historyValid_ && currentFrame == lastRenderedFrame_ + 1;
 
         {
             SCOPED_GPU_TIMER("shadingpass");
@@ -121,9 +122,9 @@ namespace Vulkan::SoftwareModernNoAmbient
             SCOPED_GPU_TIMER("reproject pass");
             const auto& settings = NextEngine::GetInstance()->GetUserSettings();
             const bool dlssSuperResolutionActive = settings.DLSS && baseRender_.SupportDLSS();
-            const uint32_t taaEnabled = settings.TAA && !dlssSuperResolutionActive ? 1u : 0u;
+            const uint32_t taaEnabled = isPrimaryView && settings.TAA && !dlssSuperResolutionActive ? 1u : 0u;
             const std::array<uint32_t, 4> pushConst {
-                uint32_t(settings.TemporalFrames),
+                isPrimaryView ? uint32_t(settings.TemporalFrames) : 1u,
                 temporalResolve_.History(PipelineCommon::ETemporalChannel::Diffuse),
                 canUseHistory ? 1u : 0u,
                 taaEnabled
@@ -155,7 +156,10 @@ namespace Vulkan::SoftwareModernNoAmbient
             });
         }
 
-        historyValid_ = true;
-        lastRenderedFrame_ = currentFrame;
+        if (isPrimaryView)
+        {
+            historyValid_ = true;
+            lastRenderedFrame_ = currentFrame;
+        }
     }
 }

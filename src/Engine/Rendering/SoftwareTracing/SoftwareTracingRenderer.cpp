@@ -61,13 +61,15 @@ void SoftwareTracingRenderer::DeleteSwapChain()
 void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
 	baseRender_.InitializeBarriers(commandBuffer);
+	const bool isPrimaryView = baseRender_.ActiveViewBankBase() == 0;
+	const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
 	{
 		SCOPED_GPU_TIMER("shadingpass");
 		// cs shading pass
 		deferredShadingPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
 		vkCmdDispatch(commandBuffer,
-			Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
-			Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+			Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+			Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
 
 		baseRender_.GetViewStorageImage(Assets::Bindless::RT_SINGLE_DIFFUSE)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	}
@@ -76,8 +78,8 @@ void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t ima
 		SCOPED_GPU_TIMER("reproject pass");
 		const auto& settings = NextEngine::GetInstance()->GetUserSettings();
 		FReprojectPushConstants pushConst{};
-		pushConst.ProgressiveRender = NextEngine::GetInstance()->IsProgressiveRendering();
-		pushConst.TemporalFrames = uint32_t(settings.TemporalFrames);
+		pushConst.ProgressiveRender = isPrimaryView && NextEngine::GetInstance()->IsProgressiveRendering();
+		pushConst.TemporalFrames = isPrimaryView ? uint32_t(settings.TemporalFrames) : 1u;
 		pushConst.PrevDiffuseBindlessIdx = temporalResolve_.History(PipelineCommon::ETemporalChannel::Diffuse);
 		pushConst.PrevSpecularBindlessIdx = temporalResolve_.History(PipelineCommon::ETemporalChannel::Specular);
 		pushConst.PrevAlbedoBindlessIdx = temporalResolve_.History(PipelineCommon::ETemporalChannel::Albedo);
@@ -86,7 +88,7 @@ void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t ima
 		pushConst.ClampGammaLo = settings.ReprojectClampGammaLo;
 		pushConst.ClampFloor = settings.ReprojectClampFloor;
 		accumulatePipeline_->BindPipeline(commandBuffer, &pushConst);
-		vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+		vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8), Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
 
 		baseRender_.GetViewStorageImage(Assets::Bindless::RT_ACCUMLATE_DIFFUSE)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 		baseRender_.GetViewStorageImage(Assets::Bindless::RT_ACCUMLATE_SPECULAR)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
@@ -101,8 +103,8 @@ void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t ima
 
 		composePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
 		vkCmdDispatch(commandBuffer,
-			Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
-			Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+			Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+			Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
 	}
 	
 	{
