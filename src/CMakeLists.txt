@@ -55,6 +55,15 @@ set(UNIT_TEST_SOURCES
 	Application/Game/MagicaLego/MagicaLegoScriptParser.cpp
 	Application/Game/MagicaLego/MagicaLegoPlacementRules.cpp
 	Tests/Test_FlappyRng.cpp
+	Tests/Test_NextRAFixed.cpp
+	Application/Game/NextRA/Net/LoopbackTransport.cpp
+	Application/Game/NextRA/Net/Order.cpp
+	Application/Game/NextRA/Net/OrderManager.cpp
+	Application/Game/NextRA/Net/Replay.cpp
+	Application/Game/NextRA/Sim/PathfindGrid.cpp
+	Application/Game/NextRA/Sim/SimWorld.cpp
+	Application/Game/NextRA/Sim/SyncHash.cpp
+	Application/Game/NextRA/Sim/Systems/OrderApplySystem.cpp
 	Application/Game/Brotato3D/Brotato3DPcgGenerator.cpp
 	Tests/Test_AIChatProtocol.cpp
 	Tests/Test_LlamaPidFile.cpp
@@ -186,6 +195,12 @@ add_executable(Brotato3D
 )
 target_include_directories(Brotato3D PRIVATE Application/Game/Brotato3D)
 target_compile_definitions(Brotato3D PRIVATE DEV_MODE=1)
+add_executable(NextRA
+	${src_files_nextra}
+	${DESKTOP_MAIN_SOURCES}
+)
+target_include_directories(NextRA PRIVATE Application/Game/NextRA)
+target_compile_definitions(NextRA PRIVATE DEV_MODE=1)
 add_executable(FlappyCpp
 	${src_files_flappycpp}
 	${DESKTOP_MAIN_SOURCES}
@@ -349,6 +364,7 @@ gkNextStillBenchmark
 	MagicaLego
 	KongLie3D
 	Brotato3D
+	NextRA
 	FlappyCpp
 	BrickPlayer
 	CharacterDemo
@@ -685,6 +701,7 @@ endif()
 # Test Target
 if ( NOT ANDROID AND NOT IOS )
 target_link_libraries(gkNextUnitTests PRIVATE NextGameplay gkNextEngine Catch2::Catch2WithMain gk_project_options)
+target_include_directories(gkNextUnitTests PRIVATE Application/Game/NextRA)
 set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
 endif()
 

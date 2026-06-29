@@ -130,6 +130,12 @@ file(GLOB_RECURSE src_files_brotato3d
     "Application/Game/Brotato3D/*.hpp"
 )
 
+file(GLOB_RECURSE src_files_nextra
+    "Application/Game/NextRA/*.cpp"
+    "Application/Game/NextRA/*.hpp"
+    "Application/Game/NextRA/*.h"
+)
+
 file(GLOB_RECURSE src_files_flappycpp
     "Application/Game/Flappy/FlappyCommon.hpp"
     "Application/Game/Flappy/FlappyConfig.cpp"
