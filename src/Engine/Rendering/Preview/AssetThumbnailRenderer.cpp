@@ -113,16 +113,15 @@ namespace Vulkan
         meshThumbnailImages_.clear();
         meshThumbnailHashes_.clear();
         pendingMeshThumbnails_.clear();
-        thumbnailVisibilityFrameBuffer_.reset();
+        thumbnailTarget_.ResetSwapChainResources(/*releaseSampledOutput*/ false);
     }
 
     void AssetThumbnailRenderer::OnSwapChainResourcesInvalidated()
     {
-        thumbnailVisibilityFrameBuffer_.reset();
+        thumbnailTarget_.ResetSwapChainResources(/*releaseSampledOutput*/ false);
         if (thumbnailRenderView_ != nullptr)
         {
             thumbnailRenderView_->SetSceneOverride(nullptr);
-            thumbnailRenderView_->ResetSwapChainResources();
         }
     }
 
@@ -221,14 +220,14 @@ namespace Vulkan
             thumbnailRenderView_->VisibilityFramebuffer() == nullptr)
         {
             RenderViewResourceFactory resources(renderer_);
-            thumbnailVisibilityFrameBuffer_ = resources.RebuildVisibilityFramebuffer(
+            thumbnailTarget_.visibilityFramebuffer = resources.RebuildVisibilityFramebuffer(
                 *thumbnailRenderView_,
                 kThumbnailExtent);
         }
-        if (!thumbnailSampler_)
+        if (!thumbnailTarget_.offscreenSampler)
         {
             RenderViewResourceFactory resources(renderer_);
-            thumbnailSampler_ = resources.CreateClampSampler();
+            thumbnailTarget_.offscreenSampler = resources.CreateClampSampler();
         }
     }
 
@@ -376,7 +375,10 @@ namespace Vulkan
             materialThumbnailImages_[materialIndex] = resources.CreateSampledColorImage(
                 kThumbnailExtent,
                 debugName.c_str());
-            resources.BindSampledColorImage(sampleSlot, *materialThumbnailImages_[materialIndex], *thumbnailSampler_);
+            resources.BindSampledColorImage(
+                sampleSlot,
+                *materialThumbnailImages_[materialIndex],
+                *thumbnailTarget_.offscreenSampler);
         }
 
         materialThumbnailScene_->Materials()[0] = mainScene->Materials()[materialIndex];
@@ -405,7 +407,7 @@ namespace Vulkan
         thumbnailRenderView_->SetDebugName("material thumbnail view");
         thumbnailRenderView_->SetRenderExtent(kThumbnailExtent);
         renderer_.SetRenderViewUbo(*thumbnailRenderView_, imageIndex, previewCamera);
-        thumbnailRenderView_->SetVisibilityFramebuffer(thumbnailVisibilityFrameBuffer_.get());
+        thumbnailRenderView_->SetVisibilityFramebuffer(thumbnailTarget_.visibilityFramebuffer.get());
         thumbnailRenderView_->SetSceneOverride(materialThumbnailScene_.get());
         thumbnailRenderView_->SetPrevDepthValid(false);
         renderer_.ScheduleRenderView(
@@ -474,7 +476,10 @@ namespace Vulkan
             meshThumbnailImages_[modelIndex] = resources.CreateSampledColorImage(
                 kThumbnailExtent,
                 debugName.c_str());
-            resources.BindSampledColorImage(sampleSlot, *meshThumbnailImages_[modelIndex], *thumbnailSampler_);
+            resources.BindSampledColorImage(
+                sampleSlot,
+                *meshThumbnailImages_[modelIndex],
+                *thumbnailTarget_.offscreenSampler);
         }
 
         const auto rendererIt = renderer_.logicRenderers_.renderers.find(ERT_SoftwareModernNoAmbient);
@@ -500,7 +505,7 @@ namespace Vulkan
         thumbnailRenderView_->SetDebugName("mesh thumbnail view");
         thumbnailRenderView_->SetRenderExtent(kThumbnailExtent);
         renderer_.SetRenderViewUbo(*thumbnailRenderView_, imageIndex, previewCamera);
-        thumbnailRenderView_->SetVisibilityFramebuffer(thumbnailVisibilityFrameBuffer_.get());
+        thumbnailRenderView_->SetVisibilityFramebuffer(thumbnailTarget_.visibilityFramebuffer.get());
         thumbnailRenderView_->SetSceneOverride(meshThumbnailScene_.get());
         thumbnailRenderView_->SetPrevDepthValid(false);
         renderer_.ScheduleRenderView(

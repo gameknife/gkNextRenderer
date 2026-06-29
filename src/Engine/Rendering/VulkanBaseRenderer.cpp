@@ -844,6 +844,7 @@ namespace Vulkan
 
         // Primary view RT bank (bank 0 == legacy absolute layout).
         CreateRenderTargetBank(0);
+        renderViews_->ResetSwapChainResources();
         // Non-primary view resources were destroyed with the swapchain; recreate on demand.
         if (previewServices_)
         {
@@ -947,11 +948,7 @@ namespace Vulkan
 
         // 公用RenderImages
         CreateRenderImages();
-        PrimaryView().CreateSwapChain(SwapChain());
-        for (const auto& view : renderViews_->AdditionalViews())
-        {
-            view->CreateSwapChain(SwapChain());
-        }
+        renderViews_->CreateSwapChain(SwapChain());
 
         overlay_.wireframePipeline.reset(new class PipelineCommon::GraphicsPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), true));
         overlay_.wireframeFrameBuffers.clear();
@@ -1039,11 +1036,7 @@ namespace Vulkan
         {
             logicRenderer.second->DeleteSwapChain();
         }
-        PrimaryView().DeleteSwapChain();
-        for (const auto& view : renderViews_->AdditionalViews())
-        {
-            view->DeleteSwapChain();
-        }
+        renderViews_->DeleteSwapChain();
 
         if (delegates_.deleteSwapChain)
         {
@@ -1058,6 +1051,7 @@ namespace Vulkan
         }
         overlay_.visibilityPipeline.reset();
         overlay_.visibilityFrameBuffer.reset();
+        renderViews_->ResetSwapChainResources();
         // Auxiliary view resources reference view-bank images / the shared render pass; drop them
         // before the swapchain images go away.
         if (previewServices_)
@@ -1753,11 +1747,9 @@ namespace Vulkan
 
             // Swapchain is in GENERAL here (before the present barrier). Auxiliary views render
             // through the same RenderViewManager schedule, then copy/compose their outputs.
-            const bool hasSecondaryViewWork = previewServices_ && previewServices_->HasOffscreenWork(multiViewDemo_);
-            const bool hasThumbnailWork = previewServices_ && previewServices_->HasPendingThumbnail();
-            if (multiViewDemo_ || hasSecondaryViewWork || hasThumbnailWork)
+            if (previewServices_ && previewServices_->HasWork(multiViewDemo_))
             {
-                ScheduleAuxiliaryViews(commandBuffer, imageIndex);
+                previewServices_->ScheduleViews(commandBuffer, imageIndex, multiViewDemo_);
                 DispatchScheduledRenderViews(commandBuffer, imageIndex);
             }
             if (previewServices_)
@@ -1783,19 +1775,6 @@ namespace Vulkan
             return activeViewCameraAddress_;
         }
         return frame_.uniformBuffers[imageIndex].Buffer().GetDeviceAddress();
-    }
-
-    void VulkanBaseRenderer::ScheduleAuxiliaryViews(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
-    {
-        if (previewServices_ && previewServices_->ScheduleNextThumbnail(commandBuffer, imageIndex))
-        {
-            return;
-        }
-
-        if (previewServices_)
-        {
-            previewServices_->ScheduleOffscreenViews(commandBuffer, imageIndex);
-        }
     }
 
     void VulkanBaseRenderer::PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)

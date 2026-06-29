@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
+#include "Engine/Rendering/RenderViewResources.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include <vulkan/vulkan.h>
@@ -66,7 +67,6 @@ namespace Vulkan
         std::vector<std::unique_ptr<RenderImage>> meshThumbnailImages_;
         std::vector<uint64_t> meshThumbnailHashes_;
         std::vector<uint32_t> pendingMeshThumbnails_;
-        std::unique_ptr<Sampler> thumbnailSampler_;
-        std::unique_ptr<FrameBuffer> thumbnailVisibilityFrameBuffer_;
+        FRenderViewTargetResources thumbnailTarget_;
     };
 }

@@ -7,6 +7,7 @@
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Options.hpp"
+#include "Engine/Rendering/ViewCameraUboBuilder.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
@@ -58,8 +59,6 @@ namespace
 
 Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent)
 {
-    Assets::UniformBufferObject ubo = {};
-
     // Per-view temporal history now lives in the primary RenderView (bank 0). Multi-viewport will
     // pass the specific view's state here; the primary view is byte-identical to the old global state.
     Vulkan::FViewRenderState& viewState = renderer_->PrimaryViewState();
@@ -67,31 +66,21 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     // a copy, simple struct
     Assets::Camera renderCam = scene_->GetRenderCamera();
     gameInstance_->OverrideRenderCamera(renderCam);
-    ubo.ModelView = renderCam.ModelView;
-
-    scene_->OverrideModelView(ubo.ModelView);
-    ubo.Projection =
-        glm::perspective(glm::radians(renderCam.FieldOfView), extent.width / static_cast<float>(extent.height),
-                         renderCam.NearPlane, renderCam.FarPlane);
+    scene_->OverrideModelView(renderCam.ModelView);
+    Assets::UniformBufferObject ubo = Vulkan::BuildViewCameraUbo({
+        .scene = *scene_,
+        .camera = renderCam,
+        .extent = extent,
+        .cascadeDistance = 400.0f,
+        .totalFrames = frameState_.totalFrames,
+        .fillSunCascades = false,
+        .fillSceneLighting = false,
+    });
 
     ubo.FastGather = config_.userSettings.FastGather;
     ubo.SuperResolution = GOption->ReferenceMode ? 2 : config_.userSettings.SuperResolution;
-    ubo.Projection[1][1] *= -1;
 
     glm::mat4x4 projectionUnJit = ubo.Projection;
-    // handle android vulkan pre rotation
-#if ANDROID
-    glm::mat4 pre_rotate_mat = glm::mat4(1.0f);
-    glm::vec3 rotation_axis = glm::vec3(0.0f, 0.0f, 1.0f);
-    pre_rotate_mat = glm::rotate(pre_rotate_mat, glm::radians(90.0f), rotation_axis);
-
-    ubo.Projection = glm::perspective(glm::radians(renderCam.FieldOfView),
-                                      extent.height / static_cast<float>(extent.width), 0.1f, 10000.0f);
-    ubo.Projection[1][1] *= -1;
-    ubo.Projection = pre_rotate_mat * ubo.Projection;
-
-    projectionUnJit = ubo.Projection;
-#endif
 
     if (config_.userSettings.TAA || config_.userSettings.DLSS)
     {

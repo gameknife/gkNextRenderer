@@ -12,6 +12,12 @@ namespace Vulkan
     class RenderPreviewServices final
     {
     public:
+        struct FSchedulePolicy
+        {
+            uint32_t maxTransientPreviewsPerFrame = 1;
+            bool deferOffscreenViewsWhenTransientPreviewScheduled = true;
+        };
+
         explicit RenderPreviewServices(VulkanBaseRenderer& renderer);
         ~RenderPreviewServices();
 
@@ -23,13 +29,12 @@ namespace Vulkan
         void BeforeNextFrame();
         void OnMainSceneChanged();
         void OnSwapChainResourcesInvalidated(bool releaseOffscreenSampledOutputs);
-        bool HasPendingThumbnail() const;
-        bool HasOffscreenWork(bool includeDebugOverlay) const;
-        bool ScheduleNextThumbnail(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-        void ScheduleOffscreenViews(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+        bool HasWork(bool includeDebugOverlay) const;
+        void ScheduleViews(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool includeDebugOverlay);
         void ClearOffscreenFrameRequests();
 
     private:
+        FSchedulePolicy schedulePolicy_{};
         std::unique_ptr<AssetThumbnailRenderer> assetThumbnails_;
         std::unique_ptr<OffscreenRenderViewController> offscreenViews_;
     };

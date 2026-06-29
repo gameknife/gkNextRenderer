@@ -20,6 +20,7 @@ namespace Vulkan
         const Assets::UniformBufferObject* baseUbo = nullptr;
         float cascadeDistance = 400.0f;
         uint32_t totalFrames = 1;
+        bool fillSunCascades = true;
         bool fillSceneLighting = true;
         bool thumbnailDefaults = false;
     };

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Engine/Rendering/RenderViewResources.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 
 #include <map>
@@ -25,7 +26,7 @@ namespace Vulkan
         struct FViewResources
         {
             RenderView* view = nullptr;
-            std::unique_ptr<FrameBuffer> visibilityFrameBuffer;
+            FRenderViewTargetResources target;
         };
 
         RenderView& EnsureView(ERendererType type, uint32_t imageIndex);

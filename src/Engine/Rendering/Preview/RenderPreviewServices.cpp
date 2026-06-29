@@ -28,23 +28,31 @@ namespace Vulkan
         assetThumbnails_->OnSwapChainResourcesInvalidated();
     }
 
-    bool RenderPreviewServices::HasPendingThumbnail() const
+    bool RenderPreviewServices::HasWork(const bool includeDebugOverlay) const
     {
-        return assetThumbnails_->HasPendingThumbnail();
+        return assetThumbnails_->HasPendingThumbnail() || offscreenViews_->HasWork(includeDebugOverlay);
     }
 
-    bool RenderPreviewServices::HasOffscreenWork(const bool includeDebugOverlay) const
+    void RenderPreviewServices::ScheduleViews(
+        VkCommandBuffer commandBuffer,
+        const uint32_t imageIndex,
+        const bool includeDebugOverlay)
     {
-        return offscreenViews_->HasWork(includeDebugOverlay);
-    }
-
-    bool RenderPreviewServices::ScheduleNextThumbnail(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
-    {
-        return assetThumbnails_->ScheduleNextThumbnail(commandBuffer, imageIndex);
-    }
-
-    void RenderPreviewServices::ScheduleOffscreenViews(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
-    {
+        uint32_t scheduledTransientPreviews = 0;
+        if (schedulePolicy_.maxTransientPreviewsPerFrame > 0 &&
+            assetThumbnails_->ScheduleNextThumbnail(commandBuffer, imageIndex))
+        {
+            ++scheduledTransientPreviews;
+        }
+        if (scheduledTransientPreviews > 0 &&
+            schedulePolicy_.deferOffscreenViewsWhenTransientPreviewScheduled)
+        {
+            return;
+        }
+        if (!includeDebugOverlay && !offscreenViews_->HasWork(false))
+        {
+            return;
+        }
         offscreenViews_->ScheduleViews(commandBuffer, imageIndex);
     }
 
