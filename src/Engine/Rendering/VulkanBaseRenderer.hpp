@@ -18,6 +18,7 @@
 #include <functional>
 #include <map>
 #include <array>
+#include <set>
 
 namespace Rendering::Upscaler
 {
@@ -326,7 +327,9 @@ namespace Vulkan
 
 		struct LogicRendererRegistry
 		{
+			std::vector<ERendererType> registeredTypes;
 			std::map< ERendererType, std::unique_ptr<class LogicRendererBase> > renderers;
+			std::set<ERendererType> swapChainCreatedTypes;
 			ERendererType current = ERT_SoftwareModern;
 		};
 
@@ -384,6 +387,9 @@ namespace Vulkan
 			VkPhysicalDeviceFeatures& deviceFeatures,
 			void* nextDeviceFeatures);
 		void OnDeviceSet();
+		LogicRendererBase* EnsureLogicRenderer(ERendererType type);
+		bool IsLogicRendererRegistered(ERendererType type) const;
+		void EnsureLogicRendererSwapChain(ERendererType type, LogicRendererBase& logicRenderer);
 		void CreateRenderImages();
 		// Creates the full screen-space RT set at [bankBase + RT_X]. bankBase 0 == primary view.
 		void CreateRenderTargetBank(uint32_t bankBase);

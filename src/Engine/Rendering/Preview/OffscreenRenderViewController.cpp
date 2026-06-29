@@ -262,8 +262,8 @@ namespace Vulkan
 
     void OffscreenRenderViewController::ScheduleViews(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
-        const auto it = renderer_.logicRenderers_.renderers.find(renderer_.logicRenderers_.current);
-        if (it == renderer_.logicRenderers_.renderers.end())
+        LogicRendererBase* logicRenderer = renderer_.EnsureLogicRenderer(renderer_.logicRenderers_.current);
+        if (logicRenderer == nullptr)
         {
             return;
         }
@@ -296,7 +296,7 @@ namespace Vulkan
 
             renderer_.ScheduleRenderView(
                 secondaryView,
-                *it->second,
+                *logicRenderer,
                 /*clearSwapchain*/ false,
                 [this, commandBuffer, viewIndex](RenderView& view)
                 {

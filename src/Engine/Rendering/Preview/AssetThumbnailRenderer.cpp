@@ -384,10 +384,12 @@ namespace Vulkan
         materialThumbnailScene_->Materials()[0] = mainScene->Materials()[materialIndex];
         materialThumbnailScene_->Materials()[0].name_ = "__material_thumbnail_preview";
 
-        const auto rendererIt = renderer_.logicRenderers_.renderers.find(ERT_SoftwareModernNoAmbient);
-        const auto fallbackIt = renderer_.logicRenderers_.renderers.find(renderer_.logicRenderers_.current);
-        if (rendererIt == renderer_.logicRenderers_.renderers.end() &&
-            fallbackIt == renderer_.logicRenderers_.renderers.end())
+        LogicRendererBase* logicRenderer = renderer_.EnsureLogicRenderer(ERT_SoftwareModernNoAmbient);
+        if (logicRenderer == nullptr)
+        {
+            logicRenderer = renderer_.EnsureLogicRenderer(renderer_.logicRenderers_.current);
+        }
+        if (logicRenderer == nullptr)
         {
             return false;
         }
@@ -412,7 +414,7 @@ namespace Vulkan
         thumbnailRenderView_->SetPrevDepthValid(false);
         renderer_.ScheduleRenderView(
             *thumbnailRenderView_,
-            *(rendererIt != renderer_.logicRenderers_.renderers.end() ? rendererIt : fallbackIt)->second,
+            *logicRenderer,
             /*clearSwapchain*/ false,
             [this, commandBuffer, materialIndex](RenderView& view)
             {
@@ -482,10 +484,12 @@ namespace Vulkan
                 *thumbnailTarget_.offscreenSampler);
         }
 
-        const auto rendererIt = renderer_.logicRenderers_.renderers.find(ERT_SoftwareModernNoAmbient);
-        const auto fallbackIt = renderer_.logicRenderers_.renderers.find(renderer_.logicRenderers_.current);
-        if (rendererIt == renderer_.logicRenderers_.renderers.end() &&
-            fallbackIt == renderer_.logicRenderers_.renderers.end())
+        LogicRendererBase* logicRenderer = renderer_.EnsureLogicRenderer(ERT_SoftwareModernNoAmbient);
+        if (logicRenderer == nullptr)
+        {
+            logicRenderer = renderer_.EnsureLogicRenderer(renderer_.logicRenderers_.current);
+        }
+        if (logicRenderer == nullptr)
         {
             return false;
         }
@@ -510,7 +514,7 @@ namespace Vulkan
         thumbnailRenderView_->SetPrevDepthValid(false);
         renderer_.ScheduleRenderView(
             *thumbnailRenderView_,
-            *(rendererIt != renderer_.logicRenderers_.renderers.end() ? rendererIt : fallbackIt)->second,
+            *logicRenderer,
             /*clearSwapchain*/ false,
             [this, commandBuffer, modelIndex](RenderView& view)
             {

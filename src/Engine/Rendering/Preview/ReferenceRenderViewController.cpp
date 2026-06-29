@@ -109,8 +109,8 @@ namespace Vulkan
         bool renderedAny = false;
         for (const ERendererType rendererType : kReferenceRendererTypes)
         {
-            const auto logicRenderer = renderer_.logicRenderers_.renderers.find(rendererType);
-            if (logicRenderer == renderer_.logicRenderers_.renderers.end())
+            LogicRendererBase* logicRenderer = renderer_.EnsureLogicRenderer(rendererType);
+            if (logicRenderer == nullptr)
             {
                 continue;
             }
@@ -118,7 +118,7 @@ namespace Vulkan
             RenderView& referenceView = EnsureView(rendererType, imageIndex);
             renderer_.ScheduleRenderView(
                 referenceView,
-                *logicRenderer->second,
+                *logicRenderer,
                 clearSwapchain,
                 [this, commandBuffer, imageIndex](RenderView& view)
                 {

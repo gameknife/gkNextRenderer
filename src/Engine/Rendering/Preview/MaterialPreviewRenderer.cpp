@@ -293,10 +293,12 @@ namespace Vulkan
             materialDirty_ = false;
         }
 
-        const auto rendererIt = renderer_.logicRenderers_.renderers.find(ERT_SoftwareModernNoAmbient);
-        const auto fallbackIt = renderer_.logicRenderers_.renderers.find(renderer_.logicRenderers_.current);
-        if (rendererIt == renderer_.logicRenderers_.renderers.end() &&
-            fallbackIt == renderer_.logicRenderers_.renderers.end())
+        LogicRendererBase* logicRenderer = renderer_.EnsureLogicRenderer(ERT_SoftwareModernNoAmbient);
+        if (logicRenderer == nullptr)
+        {
+            logicRenderer = renderer_.EnsureLogicRenderer(renderer_.logicRenderers_.current);
+        }
+        if (logicRenderer == nullptr)
         {
             return false;
         }
@@ -317,7 +319,7 @@ namespace Vulkan
         previewView_->SetPrevDepthValid(false);
         renderer_.ScheduleRenderView(
             *previewView_,
-            *(rendererIt != renderer_.logicRenderers_.renderers.end() ? rendererIt : fallbackIt)->second,
+            *logicRenderer,
             /*clearSwapchain*/ false,
             [this, commandBuffer](RenderView& view)
             {
