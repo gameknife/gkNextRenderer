@@ -4,6 +4,7 @@
 #include <fmt/printf.h>
 
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Utilities/ImGui.hpp"
 
 ImVec2 utils::GetLocalCursor()
 {
@@ -306,9 +307,7 @@ void utils::ShowAboutWindow(bool *childAbout)
     std::string fmtver = fmt::sprintf("%d", FMT_VERSION);
 
     ImGui::OpenPopup("About");
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    if (ImGui::BeginPopupModal("About", NULL, ImGuiWindowFlags_AlwaysAutoResize))
+    if (Utilities::UI::BeginAnchoredPopupModal("About", NULL, ImGuiWindowFlags_AlwaysAutoResize))
         {
             TextCentered("gkNextRenderer");
             ImGui::Separator();
