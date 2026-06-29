@@ -212,7 +212,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.ShowHeatmap = config_.showFlags.ShowVisualDebug;
     ubo.HeatmapScale = config_.userSettings.HeatmapScale;
     ubo.DebugDraw_Lighting = config_.showFlags.DebugDraw_Lighting;
-    ubo.DebugDraw_ShadowCascadeCoverage = config_.showFlags.DebugDraw_ShadowCascadeCoverage;
+    ubo.DebugDrawPadding0 = 0;
     ubo.TemporalFrames = progressiveRender_.enabled ? FProgressiveRenderState::TargetFrames
                                                     : config_.userSettings.TemporalFrames;
     ubo.HDR = renderer_->SwapChain().IsHDR();

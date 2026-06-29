@@ -192,7 +192,7 @@ GTAO 所需「深度 + 法线 + 相机矩阵」三要素齐备：法线现成；
 
 - 计算 `ambient`（天光 irradiance × albedo）后，**单独写入 `RT_AMBIENT`**（新 target），并将 `RT_SINGLE_DIFFUSE` 改为只写 `direct`（外加 emissive / DiffuseLight 等非天光项）。
 - emissive 自发光（`MaterialDiffuseLight`，line 129-132）与 sky miss（line 59-69）不参与遮蔽，照常进 `RT_SINGLE_DIFFUSE`，对应像素 `RT_AMBIENT` 写 0。
-- 调试覆盖（`DebugDraw_ShadowCascadeCoverage`，line 114-119）路径保持原样（直接走 `RT_SINGLE_DIFFUSE`，`RT_AMBIENT` 置 0）。
+- Sun cascade 覆盖调试入口已移除；后续阴影 cascade 可视化改走独立调试视图，不再混入该着色路径。
 
 GTAO pass 末尾合并：`RT_SINGLE_DIFFUSE[p] += RT_AMBIENT[p] * ao`。
 
