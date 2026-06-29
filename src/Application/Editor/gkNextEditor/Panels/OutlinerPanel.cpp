@@ -9,6 +9,7 @@
 #include "Engine/Runtime/Command/DeleteNodesCommand.hpp"
 #include "Engine/Runtime/Command/RenameNodeCommand.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Utilities/ImGui.hpp"
 #include "Modules/DevTools/ProfessionalUI.hpp"
 
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
@@ -808,7 +809,7 @@ namespace Editor
                 openRenamePopup = false;
             }
 
-            if (ImGui::BeginPopupModal("Rename Node", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+            if (Utilities::UI::BeginAnchoredPopupModal("Rename Node", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
             {
                 Assets::Node* targetNode = ctx.scene.GetNodeByInstanceId(renameTargetId);
                 if (targetNode == nullptr)

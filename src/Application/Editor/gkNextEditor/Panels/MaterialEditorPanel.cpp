@@ -8,6 +8,7 @@
 #include "Engine/Runtime/Command/ICommand.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Utilities/ImGui.hpp"
 
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
@@ -23,6 +24,7 @@ namespace Editor
         float gPreviewYaw = 0.0f;
         float gPreviewPitch = 0.0f;
         float gPreviewDistance = 4.0f;
+        constexpr float kPropertyLabelColumnWidth = 160.0f;
 
         struct FTrackedEdit
         {
@@ -219,6 +221,32 @@ namespace Editor
             }
         }
 
+        bool BeginPropertyGrid(const char* id)
+        {
+            if (!ImGui::BeginTable(id,
+                                   2,
+                                   ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_Resizable |
+                                       ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_PadOuterX,
+                                   ImVec2(0.0f, 0.0f)))
+            {
+                return false;
+            }
+
+            ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, kPropertyLabelColumnWidth);
+            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+            return true;
+        }
+
+        void BeginPropertyRow(const char* label)
+        {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted(label);
+            ImGui::TableSetColumnIndex(1);
+            ImGui::SetNextItemWidth(std::max(1.0f, ImGui::GetContentRegionAvail().x));
+        }
+
         bool DrawFloatField(EditorContext& ctx,
                             uint32_t materialId,
                             const char* label,
@@ -229,10 +257,7 @@ namespace Editor
         {
             Assets::FMaterial before = ctx.scene.Materials()[materialId];
             ImGui::PushID(key);
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted(label);
-            ImGui::SameLine(180.0f);
-            ImGui::SetNextItemWidth(-FLT_MIN);
+            BeginPropertyRow(label);
             const bool changed = ImGui::SliderFloat("##value", &value, minValue, maxValue, "%.3f");
             TrackItemEdit(ctx, materialId, key, before);
             if (changed)
@@ -248,10 +273,7 @@ namespace Editor
                             glm::vec3& value,
                             ImGuiColorEditFlags flags = 0)
         {
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted(label);
-            ImGui::SameLine(180.0f);
-            ImGui::SetNextItemWidth(-FLT_MIN);
+            BeginPropertyRow(label);
             const bool changed = ImGui::ColorEdit3("##color", &value.x, flags);
             if (changed)
             {
@@ -281,10 +303,7 @@ namespace Editor
             }
 
             int current = textureId;
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted("Slot");
-            ImGui::SameLine(180.0f);
-            ImGui::SetNextItemWidth(120.0f);
+            BeginPropertyRow("Slot");
             if (ImGui::InputInt("##slot", &current))
             {
                 textureId = current < 0 ? -1 : current;
@@ -328,10 +347,7 @@ namespace Editor
                 }
 
                 const std::string comboPreview = textureId >= 0 ? fmt::format("Texture {}", textureId) : "None";
-                ImGui::AlignTextToFramePadding();
-                ImGui::TextUnformatted("Assign");
-                ImGui::SameLine(180.0f);
-                ImGui::SetNextItemWidth(-FLT_MIN);
+                BeginPropertyRow("Assign");
                 if (ImGui::BeginCombo("##assign", comboPreview.c_str()))
                 {
                     if (ImGui::Selectable("None", textureId < 0))
@@ -449,18 +465,21 @@ namespace Editor
                 ImGui::EndChild();
             }
 
-            ImGui::SetNextItemWidth(size);
-            if (ImGui::SliderAngle("Orbit", &gPreviewYaw, -180.0f, 180.0f))
+            ImGui::TextUnformatted("Orbit");
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (ImGui::SliderAngle("##orbit", &gPreviewYaw, -180.0f, 180.0f))
             {
                 preview.SetCameraOrbit(gPreviewYaw, gPreviewPitch, gPreviewDistance);
             }
-            ImGui::SetNextItemWidth(size);
-            if (ImGui::SliderAngle("Tilt", &gPreviewPitch, -55.0f, 55.0f))
+            ImGui::TextUnformatted("Tilt");
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (ImGui::SliderAngle("##tilt", &gPreviewPitch, -55.0f, 55.0f))
             {
                 preview.SetCameraOrbit(gPreviewYaw, gPreviewPitch, gPreviewDistance);
             }
-            ImGui::SetNextItemWidth(size);
-            if (ImGui::SliderFloat("Zoom", &gPreviewDistance, 2.0f, 7.0f, "%.2f"))
+            ImGui::TextUnformatted("Zoom");
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (ImGui::SliderFloat("##zoom", &gPreviewDistance, 2.0f, 7.0f, "%.2f"))
             {
                 preview.SetCameraOrbit(gPreviewYaw, gPreviewPitch, gPreviewDistance);
             }
@@ -515,7 +534,8 @@ namespace Editor
                 ImGui::EndMenu();
             }
 
-            if (ImGui::BeginPopupModal("DeleteMaterialConfirm", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+            if (Utilities::UI::BeginAnchoredPopupModal(
+                    "DeleteMaterialConfirm", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
             {
                 ImGui::TextUnformatted("Delete this material and remap references to the default material?");
                 if (ImGui::Button("Delete", ImVec2(120.0f, 0.0f)))
@@ -540,121 +560,127 @@ namespace Editor
             char nameBuffer[256]{};
             std::snprintf(nameBuffer, sizeof(nameBuffer), "%s", fMaterial.name_.c_str());
             Assets::FMaterial beforeName = fMaterial;
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted("Name");
-            ImGui::SameLine(180.0f);
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            const bool nameChanged = ImGui::InputText("##name", nameBuffer, sizeof(nameBuffer));
-            if (nameChanged)
+            if (ImGui::CollapsingHeader("PBR Properties", ImGuiTreeNodeFlags_DefaultOpen))
             {
-                if (fMaterial.name_ != nameBuffer)
+                if (BeginPropertyGrid("MaterialPbrPropertyGrid"))
                 {
-                    fMaterial.name_ = nameBuffer;
-                }
-            }
-            TrackItemEdit(ctx, materialId, "name", beforeName);
-
-            int model = static_cast<int>(material.MaterialModel);
-            Assets::FMaterial beforeModel = fMaterial;
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted("Material Model");
-            ImGui::SameLine(180.0f);
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            if (ImGui::BeginCombo("##materialModel", MaterialModelName(material.MaterialModel)))
-            {
-                for (int i = 0; i <= 5; ++i)
-                {
-                    const auto candidate = static_cast<Assets::Material::Enum>(i);
-                    if (ImGui::Selectable(MaterialModelName(candidate), model == i))
+                    BeginPropertyRow("Name");
+                    const bool nameChanged = ImGui::InputText("##name", nameBuffer, sizeof(nameBuffer));
+                    if (nameChanged)
                     {
-                        material.MaterialModel = candidate;
-                        if (candidate == Assets::Material::Enum::Dielectric &&
-                            material.RefractionIndex2 <= 0.0001f)
+                        if (fMaterial.name_ != nameBuffer)
                         {
-                            material.RefractionIndex2 = material.RefractionIndex;
+                            fMaterial.name_ = nameBuffer;
                         }
-                        MarkMaterialEdited(ctx);
-                        CommitMaterialEdit(ctx, materialId, beforeModel, fMaterial, "material model");
                     }
+                    TrackItemEdit(ctx, materialId, "name", beforeName);
+
+                    int model = static_cast<int>(material.MaterialModel);
+                    Assets::FMaterial beforeModel = fMaterial;
+                    BeginPropertyRow("Material Model");
+                    if (ImGui::BeginCombo("##materialModel", MaterialModelName(material.MaterialModel)))
+                    {
+                        for (int i = 0; i <= 5; ++i)
+                        {
+                            const auto candidate = static_cast<Assets::Material::Enum>(i);
+                            if (ImGui::Selectable(MaterialModelName(candidate), model == i))
+                            {
+                                material.MaterialModel = candidate;
+                                if (candidate == Assets::Material::Enum::Dielectric &&
+                                    material.RefractionIndex2 <= 0.0001f)
+                                {
+                                    material.RefractionIndex2 = material.RefractionIndex;
+                                }
+                                MarkMaterialEdited(ctx);
+                                CommitMaterialEdit(ctx, materialId, beforeModel, fMaterial, "material model");
+                            }
+                        }
+                        ImGui::EndCombo();
+                    }
+
+                    if (IsEmissive(material))
+                    {
+                        Assets::FMaterial beforeEmissiveColor = fMaterial;
+                        glm::vec3 emissiveColor = DecodeEmissiveColor(glm::vec3(material.Diffuse));
+                        float emissiveStrength = DecodeEmissiveStrength(glm::vec3(material.Diffuse));
+                        if (DrawColorField(ctx, "Emissive Color", emissiveColor, ImGuiColorEditFlags_Float))
+                        {
+                            material.Diffuse =
+                                glm::vec4(emissiveColor * std::max(emissiveStrength, 0.0f), material.Diffuse.a);
+                            MarkMaterialEdited(ctx);
+                        }
+                        TrackItemEdit(ctx, materialId, "emissive color", beforeEmissiveColor);
+
+                        Assets::FMaterial beforeEmissiveStrength = fMaterial;
+                        BeginPropertyRow("Emissive Strength");
+                        const bool strengthChanged = ImGui::DragFloat(
+                            "##emissiveStrength",
+                            &emissiveStrength,
+                            0.05f,
+                            0.0f,
+                            10000.0f,
+                            "%.3f");
+                        if (strengthChanged)
+                        {
+                            material.Diffuse =
+                                glm::vec4(emissiveColor * std::max(emissiveStrength, 0.0f), material.Diffuse.a);
+                            MarkMaterialEdited(ctx);
+                        }
+                        TrackItemEdit(ctx, materialId, "emissive strength", beforeEmissiveStrength);
+                    }
+                    else
+                    {
+                        Assets::FMaterial beforeAlbedo = fMaterial;
+                        glm::vec3 albedo = glm::vec3(material.Diffuse);
+                        if (DrawColorField(ctx, "Albedo", albedo))
+                        {
+                            material.Diffuse = glm::vec4(albedo, material.Diffuse.a);
+                            MarkMaterialEdited(ctx);
+                        }
+                        TrackItemEdit(ctx, materialId, "albedo", beforeAlbedo);
+                        DrawFloatField(ctx, materialId, "Opacity", material.Diffuse.a, 0.0f, 1.0f, "opacity");
+                    }
+
+                    if (material.MaterialModel == Assets::Material::Enum::Mixture ||
+                        material.MaterialModel == Assets::Material::Enum::Metallic)
+                    {
+                        DrawFloatField(ctx, materialId, "Metalness", material.Metalness, 0.0f, 1.0f, "metalness");
+                    }
+
+                    if (material.MaterialModel != Assets::Material::Enum::Dielectric &&
+                        material.MaterialModel != Assets::Material::Enum::DiffuseLight)
+                    {
+                        DrawFloatField(ctx, materialId, "Roughness", material.Fuzziness, 0.0f, 1.0f, "roughness");
+                    }
+
+                    if (material.MaterialModel == Assets::Material::Enum::Dielectric ||
+                        material.MaterialModel == Assets::Material::Enum::Mixture)
+                    {
+                        DrawFloatField(ctx, materialId, "IOR", material.RefractionIndex, 1.0f, 2.5f, "ior");
+                    }
+                    if (material.MaterialModel == Assets::Material::Enum::Dielectric)
+                    {
+                        DrawFloatField(
+                            ctx, materialId, "IOR (back)", material.RefractionIndex2, 1.0f, 2.5f, "ior2");
+                    }
+
+                    DrawFloatField(ctx, materialId, "Normal Scale", material.NormalTextureScale, 0.0f, 2.0f,
+                                   "normal scale");
+                    ImGui::EndTable();
                 }
-                ImGui::EndCombo();
             }
-
-            if (IsEmissive(material))
-            {
-                Assets::FMaterial beforeEmissiveColor = fMaterial;
-                glm::vec3 emissiveColor = DecodeEmissiveColor(glm::vec3(material.Diffuse));
-                float emissiveStrength = DecodeEmissiveStrength(glm::vec3(material.Diffuse));
-                if (DrawColorField(ctx, "Emissive Color", emissiveColor, ImGuiColorEditFlags_Float))
-                {
-                    material.Diffuse = glm::vec4(emissiveColor * std::max(emissiveStrength, 0.0f), material.Diffuse.a);
-                    MarkMaterialEdited(ctx);
-                }
-                TrackItemEdit(ctx, materialId, "emissive color", beforeEmissiveColor);
-
-                Assets::FMaterial beforeEmissiveStrength = fMaterial;
-                ImGui::AlignTextToFramePadding();
-                ImGui::TextUnformatted("Emissive Strength");
-                ImGui::SameLine(180.0f);
-                ImGui::SetNextItemWidth(-FLT_MIN);
-                const bool strengthChanged = ImGui::DragFloat(
-                    "##emissiveStrength",
-                    &emissiveStrength,
-                    0.05f,
-                    0.0f,
-                    10000.0f,
-                    "%.3f");
-                if (strengthChanged)
-                {
-                    material.Diffuse = glm::vec4(emissiveColor * std::max(emissiveStrength, 0.0f), material.Diffuse.a);
-                    MarkMaterialEdited(ctx);
-                }
-                TrackItemEdit(ctx, materialId, "emissive strength", beforeEmissiveStrength);
-            }
-            else
-            {
-                Assets::FMaterial beforeAlbedo = fMaterial;
-                glm::vec3 albedo = glm::vec3(material.Diffuse);
-                if (DrawColorField(ctx, "Albedo", albedo))
-                {
-                    material.Diffuse = glm::vec4(albedo, material.Diffuse.a);
-                    MarkMaterialEdited(ctx);
-                }
-                TrackItemEdit(ctx, materialId, "albedo", beforeAlbedo);
-                DrawFloatField(ctx, materialId, "Opacity", material.Diffuse.a, 0.0f, 1.0f, "opacity");
-            }
-
-            if (material.MaterialModel == Assets::Material::Enum::Mixture ||
-                material.MaterialModel == Assets::Material::Enum::Metallic)
-            {
-                DrawFloatField(ctx, materialId, "Metalness", material.Metalness, 0.0f, 1.0f, "metalness");
-            }
-
-            if (material.MaterialModel != Assets::Material::Enum::Dielectric &&
-                material.MaterialModel != Assets::Material::Enum::DiffuseLight)
-            {
-                DrawFloatField(ctx, materialId, "Roughness", material.Fuzziness, 0.0f, 1.0f, "roughness");
-            }
-
-            if (material.MaterialModel == Assets::Material::Enum::Dielectric ||
-                material.MaterialModel == Assets::Material::Enum::Mixture)
-            {
-                DrawFloatField(ctx, materialId, "IOR", material.RefractionIndex, 1.0f, 2.5f, "ior");
-            }
-            if (material.MaterialModel == Assets::Material::Enum::Dielectric)
-            {
-                DrawFloatField(ctx, materialId, "IOR (back)", material.RefractionIndex2, 1.0f, 2.5f, "ior2");
-            }
-
-            DrawFloatField(ctx, materialId, "Normal Scale", material.NormalTextureScale, 0.0f, 2.0f, "normal scale");
 
             if (ImGui::CollapsingHeader("Textures", ImGuiTreeNodeFlags_DefaultOpen))
             {
-                DrawTextureSlot(ctx, materialId, "Albedo", material.DiffuseTextureId, "albedo texture");
-                DrawTextureSlot(ctx, materialId, "MRA (R=AO, G=Roughness, B=Metalness)", material.MRATextureId,
-                                "mra texture");
-                DrawTextureSlot(ctx, materialId, "Normal", material.NormalTextureId, "normal texture");
-                DrawTextureSlot(ctx, materialId, "Emissive", material.EmissiveTextureId, "emissive texture");
+                if (BeginPropertyGrid("MaterialTexturePropertyGrid"))
+                {
+                    DrawTextureSlot(ctx, materialId, "Albedo", material.DiffuseTextureId, "albedo texture");
+                    DrawTextureSlot(ctx, materialId, "MRA (R=AO, G=Roughness, B=Metalness)", material.MRATextureId,
+                                    "mra texture");
+                    DrawTextureSlot(ctx, materialId, "Normal", material.NormalTextureId, "normal texture");
+                    DrawTextureSlot(ctx, materialId, "Emissive", material.EmissiveTextureId, "emissive texture");
+                    ImGui::EndTable();
+                }
             }
         }
     } // namespace
@@ -712,7 +738,8 @@ namespace Editor
         }
 
         Assets::FMaterial& selected = ctx.scene.Materials()[materialId];
-        constexpr float previewColumnWidth = 340.0f;
+        const float availableWidth = ImGui::GetContentRegionAvail().x;
+        const float previewColumnWidth = std::clamp(availableWidth * 0.34f, 260.0f, 340.0f);
         if (ImGui::BeginTable("MaterialEditorLayout", 2,
                               ImGuiTableFlags_Resizable | ImGuiTableFlags_NoSavedSettings))
         {

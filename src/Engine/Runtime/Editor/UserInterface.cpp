@@ -921,13 +921,11 @@ void UserInterface::DrawIndicator(uint32_t frameCount)
 {
     frameCount /= 60;
     ImGui::OpenPopup("Loading");
-    // Always center this window when appearing
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(200, 40));
-
-    if (ImGui::BeginPopupModal("Loading", NULL,
-                               ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize))
+    if (Utilities::UI::BeginAnchoredPopupModal(
+            "Loading",
+            NULL,
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoResize,
+            Utilities::UI::FModalPopupOptions{.RequestedSize = ImVec2(200, 40)}))
     {
         ImGui::Text("Loading%s",
                     frameCount % 4 == 0       ? ""

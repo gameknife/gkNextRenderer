@@ -29,6 +29,7 @@
 #include "Modules/DevTools/UiDevPanels.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Engine/Utilities/FileHelper.hpp"
+#include "Engine/Utilities/ImGui.hpp"
 #include "Engine/Utilities/Localization.hpp"
 #include "Engine/Utilities/Math.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
@@ -408,12 +409,11 @@ void EditorInterface::Render()
 void EditorInterface::DrawIndicator(uint32_t frameCount)
 {
     ImGui::OpenPopup("Loading");
-    // Always center this window when appearing
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(100, 40));
-
-    if (ImGui::BeginPopupModal("Loading", NULL, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar))
+    if (Utilities::UI::BeginAnchoredPopupModal(
+            "Loading",
+            NULL,
+            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar,
+            Utilities::UI::FModalPopupOptions{.RequestedSize = ImVec2(100, 40)}))
     {
         ImGui::Text("Loading%s   ",
                     frameCount % 4 == 0       ? ""
