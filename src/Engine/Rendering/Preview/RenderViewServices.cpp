@@ -5,6 +5,7 @@ namespace Vulkan
 {
     RenderViewServices::RenderViewServices(VulkanBaseRenderer& renderer)
         : assetThumbnails_(std::make_unique<AssetThumbnailRenderer>(renderer))
+        , materialPreview_(std::make_unique<MaterialPreviewRenderer>(renderer))
         , offscreenViews_(std::make_unique<OffscreenRenderViewController>(renderer))
     {
     }
@@ -14,23 +15,26 @@ namespace Vulkan
     void RenderViewServices::BeforeNextFrame()
     {
         assetThumbnails_->BeforeNextFrame();
+        materialPreview_->BeforeNextFrame();
     }
 
     void RenderViewServices::OnMainSceneChanged()
     {
+        materialPreview_->OnMainSceneChanged();
         offscreenViews_->OnMainSceneChanged();
         assetThumbnails_->OnMainSceneChanged();
     }
 
     void RenderViewServices::OnSwapChainResourcesInvalidated(const bool releaseOffscreenSampledOutputs)
     {
+        materialPreview_->OnSwapChainResourcesInvalidated();
         offscreenViews_->OnSwapChainResourcesInvalidated(releaseOffscreenSampledOutputs);
         assetThumbnails_->OnSwapChainResourcesInvalidated();
     }
 
     bool RenderViewServices::HasWork() const
     {
-        return assetThumbnails_->HasPendingThumbnail() || offscreenViews_->HasWork();
+        return assetThumbnails_->HasPendingThumbnail() || materialPreview_->HasWork() || offscreenViews_->HasWork();
     }
 
     void RenderViewServices::ScheduleViews(
@@ -43,6 +47,7 @@ namespace Vulkan
         {
             ++scheduledTransientPreviews;
         }
+        materialPreview_->ScheduleView(commandBuffer, imageIndex);
         if (scheduledTransientPreviews > 0 &&
             schedulePolicy_.deferOffscreenViewsWhenTransientPreviewScheduled)
         {

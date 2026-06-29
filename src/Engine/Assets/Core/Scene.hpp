@@ -144,6 +144,7 @@ namespace Assets
 
         void Tick(float DeltaSeconds);
         void UpdateAllMaterials();
+        void MarkMaterialsDirty() { materialDirty_ = true; }
         bool UpdateNodes();
         void UpdateHDRSH();
         bool UpdateNodesGpuDriven();
@@ -153,6 +154,8 @@ namespace Assets
         const Model* GetModel(uint32_t id) const;
         const FMaterial* GetMaterial(uint32_t id) const;
         const uint32_t AddMaterial(const FMaterial& material);
+        uint32_t DuplicateMaterial(uint32_t id);
+        bool RemoveMaterial(uint32_t id, uint32_t* outSelectedMaterialId = nullptr);
 
         void MarkDirty();
         void MarkTransformDirty();

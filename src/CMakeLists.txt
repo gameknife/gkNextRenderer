@@ -294,9 +294,6 @@ add_subdirectory(ThirdParty/ozz)
 target_link_libraries(ozz PRIVATE gk_project_options)
 endif()
 
-add_subdirectory(ThirdParty/ImNodeFlow)
-target_link_libraries(ImNodeFlow PRIVATE gk_project_options)
-
 if( GK_WITH_NEXT_QUICKJS AND NOT ANDROID)
 add_subdirectory(ThirdParty/quickjs-ng)
 target_link_libraries(quickjs PRIVATE gk_project_options)
@@ -588,7 +585,6 @@ foreach(target IN LISTS AllTargets)
 	endif()
 
 	if ( ${target} STREQUAL gkNextEditor )
-	target_link_libraries(gkNextEditor PRIVATE ImNodeFlow)
 	# third-party warning fix
 	if (MSVC)
 
@@ -690,13 +686,6 @@ endif()
 if ( NOT ANDROID AND NOT IOS )
 target_link_libraries(gkNextUnitTests PRIVATE NextGameplay gkNextEngine Catch2::Catch2WithMain gk_project_options)
 set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
-endif()
-
-
-
-set_target_properties(ImNodeFlow PROPERTIES FOLDER "ThirdParty")
-if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-	target_compile_options(ImNodeFlow PRIVATE -include cstdint)
 endif()
 
 if ( TARGET quickjs )
