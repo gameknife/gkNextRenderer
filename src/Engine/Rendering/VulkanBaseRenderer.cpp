@@ -357,6 +357,20 @@ namespace Vulkan
             rt_ = std::make_unique<RayTracingResources>();
         }
 
+        ERendererType resolvedRendererType = logicRenderers_.current;
+        if (!caps_.supportRayTracing && GetRendererRequirements(resolvedRendererType).requestRayTracing)
+        {
+            resolvedRendererType = ERT_SoftwareTracing;
+        }
+        if (!caps_.fullAmbientCubeBudget && GetRendererRequirements(resolvedRendererType).requestAmbientCube)
+        {
+            resolvedRendererType = ERT_SoftwareModernNoAmbient;
+        }
+        if (resolvedRendererType != logicRenderers_.current)
+        {
+            SwitchLogicRenderer(resolvedRendererType);
+        }
+
         // Subgroup support gates the wave fast-path of the soft-mesh GPU cull compute
         // pass (Task.SoftMeshShaderGpuCullCompactWave). We need arithmetic + ballot +
         // basic ops available in the COMPUTE stage; otherwise fall back to the LDS variant.
@@ -1000,10 +1014,9 @@ namespace Vulkan
             }
         }
 
-        // 逻辑Renderer
-        for (auto& logicRenderer : logicRenderers_.renderers)
+        if (LogicRendererBase* logicRenderer = EnsureLogicRenderer(logicRenderers_.current))
         {
-            logicRenderer.second->CreateSwapChain(frame_.swapChain->RenderExtent());
+            EnsureLogicRendererSwapChain(logicRenderers_.current, *logicRenderer);
         }
 
         // Delegate
@@ -1024,6 +1037,7 @@ namespace Vulkan
         {
             logicRenderer.second->DeleteSwapChain();
         }
+        logicRenderers_.swapChainCreatedTypes.clear();
         renderViews_->DeleteSwapChain();
 
         if (delegates_.deleteSwapChain)
@@ -1555,8 +1569,55 @@ namespace Vulkan
 
     void VulkanBaseRenderer::RegisterLogicRenderer(ERendererType type)
     {
-        logicRenderers_.renderers[type] = GetRendererDescriptor(type).factory(*this);
+        if (!IsLogicRendererRegistered(type))
+        {
+            logicRenderers_.registeredTypes.push_back(type);
+        }
         logicRenderers_.current = type;
+    }
+
+    bool VulkanBaseRenderer::IsLogicRendererRegistered(ERendererType type) const
+    {
+        return std::find(logicRenderers_.registeredTypes.begin(), logicRenderers_.registeredTypes.end(), type) !=
+               logicRenderers_.registeredTypes.end();
+    }
+
+    LogicRendererBase* VulkanBaseRenderer::EnsureLogicRenderer(ERendererType type)
+    {
+        if (!IsLogicRendererRegistered(type))
+        {
+            return nullptr;
+        }
+
+        auto renderer = logicRenderers_.renderers.find(type);
+        if (renderer != logicRenderers_.renderers.end())
+        {
+            return renderer->second.get();
+        }
+
+        auto logicRenderer = GetRendererDescriptor(type).factory(*this);
+        LogicRendererBase* result = logicRenderer.get();
+        logicRenderers_.renderers[type] = std::move(logicRenderer);
+        if (ctx_.device)
+        {
+            result->OnDeviceSet();
+        }
+        if (frame_.swapChain)
+        {
+            EnsureLogicRendererSwapChain(type, *result);
+        }
+        return result;
+    }
+
+    void VulkanBaseRenderer::EnsureLogicRendererSwapChain(ERendererType type, LogicRendererBase& logicRenderer)
+    {
+        if (!frame_.swapChain || logicRenderers_.swapChainCreatedTypes.contains(type))
+        {
+            return;
+        }
+
+        logicRenderer.CreateSwapChain(frame_.swapChain->RenderExtent());
+        logicRenderers_.swapChainCreatedTypes.insert(type);
     }
 
     FRendererRequirements VulkanBaseRenderer::CurrentRendererRequirements() const
@@ -1573,16 +1634,24 @@ namespace Vulkan
     FRendererRequirements VulkanBaseRenderer::RegisteredRendererRequirements() const
     {
         FRendererRequirements requirements;
-        for (const auto& logicRenderer : logicRenderers_.renderers)
+        for (const ERendererType type : logicRenderers_.registeredTypes)
         {
-            requirements.Merge(logicRenderer.second->Requirements());
+            requirements.Merge(GetRendererRequirements(type));
         }
         return requirements;
     }
 
     void VulkanBaseRenderer::SwitchLogicRenderer(ERendererType type)
     {
+        LogicRendererBase* logicRenderer = EnsureLogicRenderer(type);
+        if (logicRenderer == nullptr)
+        {
+            SPDLOG_WARN("Skipping switch to unregistered logic renderer {}", GetRendererName(type));
+            return;
+        }
+
         logicRenderers_.current = type;
+        EnsureLogicRendererSwapChain(type, *logicRenderer);
     }
 
     void VulkanBaseRenderer::ComposeViewToSwapchainSubrect(
@@ -1716,11 +1785,11 @@ namespace Vulkan
         }
         else
         {
-            const auto renderer = logicRenderers_.renderers.find(logicRenderers_.current);
-            if (renderer != logicRenderers_.renderers.end())
+            if (LogicRendererBase* renderer = EnsureLogicRenderer(logicRenderers_.current))
             {
                 RenderView& primary = preparePrimaryView("primary view");
-                ScheduleRenderView(primary, *renderer->second, /*clearSwapchain*/ true);
+                EnsureLogicRendererSwapChain(logicRenderers_.current, *renderer);
+                ScheduleRenderView(primary, *renderer, /*clearSwapchain*/ true);
                 DispatchScheduledRenderViews(commandBuffer, imageIndex);
             }
 
