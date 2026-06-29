@@ -7,7 +7,7 @@
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/GPU/TextureImage.hpp"
 #include "EditorActionDispatcher.hpp"
-#include "Engine/Rendering/Preview/RenderPreviewServices.hpp"
+#include "Engine/Rendering/Preview/RenderViewServices.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
@@ -17,7 +17,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <cstdio>
 #include <filesystem>
 #include <fmt/format.h>
@@ -627,7 +626,7 @@ namespace Editor
         {
             const uint64_t materialHash = HashMaterialPreview(material);
             const uint32_t sampleSlot =
-                ctx.engine.GetRenderer().Preview().AssetThumbnails().RequestMaterialThumbnail(
+                ctx.engine.GetRenderer().ViewServices().AssetThumbnails().RequestMaterialThumbnail(
                     materialIndex, materialHash);
             return sampleSlot == std::numeric_limits<uint32_t>::max()
                 ? 0
@@ -685,43 +684,10 @@ namespace Editor
         {
             const uint64_t meshHash = HashMeshPreview(model);
             const uint32_t sampleSlot =
-                ctx.engine.GetRenderer().Preview().AssetThumbnails().RequestMeshThumbnail(modelIndex, meshHash);
+                ctx.engine.GetRenderer().ViewServices().AssetThumbnails().RequestMeshThumbnail(modelIndex, meshHash);
             return sampleSlot == std::numeric_limits<uint32_t>::max()
                 ? 0
                 : ctx.ui.RequestImTextureIdRaw(sampleSlot);
-        }
-
-        std::string NormalizeSceneComparePath(std::string_view path)
-        {
-            if (path.empty())
-            {
-                return {};
-            }
-
-            std::filesystem::path scenePath{std::string(path)};
-            if (scenePath.is_relative())
-            {
-                scenePath = Utilities::FileHelper::GetPlatformFilePath(std::string(path).c_str());
-            }
-
-            std::error_code error;
-            std::filesystem::path normalized = std::filesystem::weakly_canonical(scenePath, error);
-            if (error)
-            {
-                normalized = std::filesystem::absolute(scenePath, error);
-                if (error)
-                {
-                    normalized = scenePath.lexically_normal();
-                }
-            }
-
-            std::string result = normalized.generic_string();
-            std::transform(result.begin(), result.end(), result.begin(),
-                           [](unsigned char c)
-                           {
-                               return static_cast<char>(std::tolower(c));
-                           });
-            return result;
         }
 
         void DrawGeneralContentBrowser(EditorContext& ctx, EditorUiState& ui, uint32_t& selectionId, bool iconOrTex,
@@ -1030,7 +996,6 @@ namespace Editor
                     ImGui::BeginChild("Content Items", ImVec2(0.0f, 0.0f));
 
                     auto& entries = GetCachedDirectoryEntries(rootPath, currentPath, directoryCache);
-                    const std::string currentSceneComparePath = NormalizeSceneComparePath(ui.currentScenePath);
                     ContentGridLayout grid = BeginContentGrid();
                     for (auto& entry : entries)
                     {
@@ -1054,18 +1019,7 @@ namespace Editor
 
                         const uint32_t stableId = Fnv1a32(assetPath);
                         ImTextureID thumbnailTextureId = 0;
-                        if (visual.kind == EContentAssetKind::Scene && !currentSceneComparePath.empty() &&
-                            NormalizeSceneComparePath(assetPath) == currentSceneComparePath)
-                        {
-                            auto& offscreenViews = ctx.engine.GetRenderer().Preview().OffscreenViews();
-                            offscreenViews.RequestScenePreviewThisFrame();
-                            if (offscreenViews.IsScenePreviewReady())
-                            {
-                                thumbnailTextureId =
-                                    ctx.ui.RequestImTextureIdRaw(offscreenViews.ScenePreviewSampleSlot());
-                            }
-                        }
-                        else if (visual.kind == EContentAssetKind::Texture)
+                        if (visual.kind == EContentAssetKind::Texture)
                         {
                             const NextUI::UserInterface::FUiTextureHandle texture = ctx.ui.RequestUiTexture(assetPath);
                             if (texture.valid)

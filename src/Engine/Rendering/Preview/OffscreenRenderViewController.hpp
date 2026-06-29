@@ -24,8 +24,7 @@ namespace Vulkan
     {
     public:
         static constexpr uint32_t kMaxCameraSecondaryViews = 3;
-        static constexpr uint32_t kScenePreviewSecondaryViewIndex = kMaxCameraSecondaryViews;
-        static constexpr uint32_t kMaxSecondaryViews = kMaxCameraSecondaryViews + 1;
+        static constexpr uint32_t kMaxSecondaryViews = kMaxCameraSecondaryViews;
         static constexpr uint32_t kSecondaryViewSampleSlotBase = 65000;
 
         explicit OffscreenRenderViewController(VulkanBaseRenderer& renderer);
@@ -42,10 +41,7 @@ namespace Vulkan
         const Assets::UniformBufferObject* LastUniformBufferObject(uint32_t viewIndex) const;
         uint32_t SampleSlot(uint32_t viewIndex) const;
         bool IsReady(uint32_t viewIndex) const;
-        void RequestScenePreviewThisFrame();
-        uint32_t ScenePreviewSampleSlot() const;
-        bool IsScenePreviewReady() const;
-        bool HasWork(bool includeDebugOverlay) const;
+        bool HasWork() const;
         void ScheduleViews(VkCommandBuffer commandBuffer, uint32_t imageIndex);
         void ClearFrameRequests();
         void OnMainSceneChanged();
@@ -63,7 +59,7 @@ namespace Vulkan
         };
 
         RenderView& EnsureView(uint32_t viewIndex);
-        void CopyViewOutput(VkCommandBuffer commandBuffer, uint32_t imageIndex, RenderView& view, uint32_t viewIndex);
+        void CopyViewOutput(VkCommandBuffer commandBuffer, RenderView& view, uint32_t viewIndex);
 
         VulkanBaseRenderer& renderer_;
         std::array<FViewResources, kMaxSecondaryViews> views_{};

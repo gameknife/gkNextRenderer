@@ -144,21 +144,4 @@ namespace Vulkan
 
         return ubo;
     }
-
-    Assets::Camera BuildOrbitedCamera(
-        const Assets::UniformBufferObject& baseUbo,
-        const Assets::Camera& camera,
-        const float yawDegrees,
-        const float pivotDistance)
-    {
-        Assets::Camera orbitedCamera = camera;
-        const glm::mat4 c2w = baseUbo.ModelViewInverse;
-        const glm::vec3 eye = glm::vec3(c2w[3]);
-        const glm::vec3 forward = -glm::normalize(glm::vec3(c2w[2]));
-        const glm::vec3 pivot = eye + forward * pivotDistance;
-        const glm::mat4 rot = glm::rotate(glm::mat4(1.0f), glm::radians(yawDegrees), glm::vec3(0, 1, 0));
-        const glm::vec3 newEye = pivot + glm::vec3(rot * glm::vec4(eye - pivot, 1.0f));
-        orbitedCamera.ModelView = glm::lookAt(newEye, pivot, glm::vec3(0, 1, 0));
-        return orbitedCamera;
-    }
 }

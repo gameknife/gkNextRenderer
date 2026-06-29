@@ -9,7 +9,7 @@ namespace Vulkan
 {
     class VulkanBaseRenderer;
 
-    class RenderPreviewServices final
+    class RenderViewServices final
     {
     public:
         struct FSchedulePolicy
@@ -18,8 +18,8 @@ namespace Vulkan
             bool deferOffscreenViewsWhenTransientPreviewScheduled = true;
         };
 
-        explicit RenderPreviewServices(VulkanBaseRenderer& renderer);
-        ~RenderPreviewServices();
+        explicit RenderViewServices(VulkanBaseRenderer& renderer);
+        ~RenderViewServices();
 
         AssetThumbnailRenderer& AssetThumbnails() { return *assetThumbnails_; }
         const AssetThumbnailRenderer& AssetThumbnails() const { return *assetThumbnails_; }
@@ -29,8 +29,8 @@ namespace Vulkan
         void BeforeNextFrame();
         void OnMainSceneChanged();
         void OnSwapChainResourcesInvalidated(bool releaseOffscreenSampledOutputs);
-        bool HasWork(bool includeDebugOverlay) const;
-        void ScheduleViews(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool includeDebugOverlay);
+        bool HasWork() const;
+        void ScheduleViews(VkCommandBuffer commandBuffer, uint32_t imageIndex);
         void ClearOffscreenFrameRequests();
 
     private:

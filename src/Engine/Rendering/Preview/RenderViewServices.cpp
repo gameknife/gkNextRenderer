@@ -1,42 +1,41 @@
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Rendering/Preview/RenderPreviewServices.hpp"
+#include "Engine/Rendering/Preview/RenderViewServices.hpp"
 
 namespace Vulkan
 {
-    RenderPreviewServices::RenderPreviewServices(VulkanBaseRenderer& renderer)
+    RenderViewServices::RenderViewServices(VulkanBaseRenderer& renderer)
         : assetThumbnails_(std::make_unique<AssetThumbnailRenderer>(renderer))
         , offscreenViews_(std::make_unique<OffscreenRenderViewController>(renderer))
     {
     }
 
-    RenderPreviewServices::~RenderPreviewServices() = default;
+    RenderViewServices::~RenderViewServices() = default;
 
-    void RenderPreviewServices::BeforeNextFrame()
+    void RenderViewServices::BeforeNextFrame()
     {
         assetThumbnails_->BeforeNextFrame();
     }
 
-    void RenderPreviewServices::OnMainSceneChanged()
+    void RenderViewServices::OnMainSceneChanged()
     {
         offscreenViews_->OnMainSceneChanged();
         assetThumbnails_->OnMainSceneChanged();
     }
 
-    void RenderPreviewServices::OnSwapChainResourcesInvalidated(const bool releaseOffscreenSampledOutputs)
+    void RenderViewServices::OnSwapChainResourcesInvalidated(const bool releaseOffscreenSampledOutputs)
     {
         offscreenViews_->OnSwapChainResourcesInvalidated(releaseOffscreenSampledOutputs);
         assetThumbnails_->OnSwapChainResourcesInvalidated();
     }
 
-    bool RenderPreviewServices::HasWork(const bool includeDebugOverlay) const
+    bool RenderViewServices::HasWork() const
     {
-        return assetThumbnails_->HasPendingThumbnail() || offscreenViews_->HasWork(includeDebugOverlay);
+        return assetThumbnails_->HasPendingThumbnail() || offscreenViews_->HasWork();
     }
 
-    void RenderPreviewServices::ScheduleViews(
+    void RenderViewServices::ScheduleViews(
         VkCommandBuffer commandBuffer,
-        const uint32_t imageIndex,
-        const bool includeDebugOverlay)
+        const uint32_t imageIndex)
     {
         uint32_t scheduledTransientPreviews = 0;
         if (schedulePolicy_.maxTransientPreviewsPerFrame > 0 &&
@@ -49,14 +48,14 @@ namespace Vulkan
         {
             return;
         }
-        if (!includeDebugOverlay && !offscreenViews_->HasWork(false))
+        if (!offscreenViews_->HasWork())
         {
             return;
         }
         offscreenViews_->ScheduleViews(commandBuffer, imageIndex);
     }
 
-    void RenderPreviewServices::ClearOffscreenFrameRequests()
+    void RenderViewServices::ClearOffscreenFrameRequests()
     {
         offscreenViews_->ClearFrameRequests();
     }
