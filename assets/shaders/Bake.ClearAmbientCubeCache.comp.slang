@@ -5,14 +5,11 @@ import Common;
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     uint idx = DTid.x;
-    // custom_data_0 = cube-pool element count, custom_data_1 = dense voxel count,
-    // custom_data_2 = residency entry count.
+    // custom_data_0 = cube-pool element count, custom_data_2 = residency entry count.
     uint cubeTotal = Bindless.GetGpuscene().custom_data_0;
-    uint voxelTotal = Bindless.GetGpuscene().custom_data_1;
     uint residencyTotal = Bindless.GetGpuscene().custom_data_2;
 
     AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
-    VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
     AmbientBrickResidency* Residency = Bindless.GetGpuscene().AmbientResidency;
 
     if (idx < cubeTotal)
@@ -27,11 +24,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
         Cubes[idx].SkyEmissiveDirect = 0;
         Cubes[idx].skyVisibility_pznzpyny = 0;
         Cubes[idx].skyVisibility_pxnxs0s1 = 0;
-    }
-
-    if (idx < voxelTotal)
-    {
-        Voxels[idx].age = 0;
     }
 
     if (idx < residencyTotal)

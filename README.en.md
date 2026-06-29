@@ -125,7 +125,7 @@ On Windows, if the [Superluminal](https://superluminal.eu/) Performance API is i
 - **SHARC world radiance cache / RGB9E5 indirect light**
 - **AmbientCube GI: sparse VRAM + hit-driven residency**
 - **Denoising: ReLAX-style variance-guided / à-trous / JBF**
-- **Temporal Reprojection / Sky Occlusion (GTAO + voxel sky-visibility)**
+- **Temporal Reprojection / Sky Occlusion (GTAO)**
 - **Upscaler: FSR / NVIDIA Streamline DLSS SR / RR / Frame Generation on Windows**
 - **Gaussian Splatting (SOG v2 + hardware billboards)**
 

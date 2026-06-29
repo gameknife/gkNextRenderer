@@ -37,7 +37,7 @@ public static const int GPU_SCENE_DYNAMIC_SIZE =
 public static const int GPU_SCENE_AMBIENT_PER_CASCADE_COUNT = 192 * 192 * 48;
 public static const int GPU_SCENE_AMBIENT_CASCADE_MAX = 4;
 public static const int GPU_SCENE_AMBIENT_CUBE_SIZE = 40;
-public static const int GPU_SCENE_VOXEL_DATA_SIZE = 16;
+public static const int GPU_SCENE_VOXEL_DATA_SIZE = 8;
 public static const int GPU_SCENE_PAGE_INDEX_SIZE = 16;
 public static const int GPU_SCENE_AMBIENT_SEED_SIZE = 16;
 public static const int GPU_SCENE_ACGI_PAGE_COUNT = 64;
@@ -176,17 +176,14 @@ public struct ALIGN_16 UniformBufferObject
     public uint GTAOPadding1;
     public uint GTAOPadding2;
 
-    // SwModernNoAmbient voxel sky-visibility (large-scale / off-screen occlusion, orthogonal to GTAO).
-    // Sampled in the shading pass (written to RT_AMBIENT.a) and combined with GTAO in GTAOCompose.
-    public bool SkyVisEnable;
-    public float SkyVisStrength;     // 0 = no darkening, 1 = full baked occlusion
-    public float SkyVisMaxDistance;  // soft-trace max distance (meters); large-scale range
-    public uint SkyVisRayCount;      // hemisphere rays per voxel for the bake
-
-    public uint SkyVisCombineMode;   // 0 = multiply, 1 = min(ao, skyVis), 2 = near-bright
-    public uint SkyVisBlurRadius;    // bilateral blur radius (pixels) applied to skyVis in compose; 0 = off
-    public float SkyVisJitterRadius; // random normal-hemisphere sample jitter radius in voxel units; 0 = off
-    public uint SkyVisPadding2;
+    public uint GTAOPadding3;
+    public uint GTAOPadding4;
+    public uint GTAOPadding5;
+    public uint GTAOPadding6;
+    public uint GTAOPadding7;
+    public uint GTAOPadding8;
+    public uint GTAOPadding9;
+    public uint GTAOPadding10;
 };
 
 public struct ALIGN_16 NodeProxy
@@ -243,17 +240,12 @@ public struct ALIGN_8 AmbientCube
     public uint skyVisibility_pxnxs0s1;
 };
 
-// 16 bytes per voxel
-// simplfy scene reprent, matId like Minecraft blockId, skyVisibility and sunVisibility represent a simple gi
-// skyVisibility could use to occlution the skylight
-// sunVisibility could use to occlution the sun, instead of realtime shadowmap, and could use to render volume effects
-// airMatId could use to represent cloud/smoke etc.
-public struct ALIGN_16 VoxelData
+// 8 bytes per voxel. matId stays a full uint; distanceToSolid stores 8 packed 4-bit channels:
+// x=min distance, y=inside, z/w=+Z/-Z, upper nibbles=+X/-X/+Y/-Y.
+public struct ALIGN_8 VoxelData
 {
     public uint matId; // 0 is void, that is clean default value
-    public uint age;
-    public uint distanceToSolid_gg_z01;
-    public uint distanceToSolid_x01_y01; // 0.0 - 1.0, 1.0 is full visibility, 0.0 is no visibility
+    public uint distanceToSolid; // 0.0 - 1.0 quantized to 4 bits per channel
 };
 
 // PageIndexer is align with world, 16x16 meter per page

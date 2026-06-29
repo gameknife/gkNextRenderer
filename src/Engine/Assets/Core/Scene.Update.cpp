@@ -209,8 +209,7 @@ namespace Assets
         if (enableCpuAcceleration_ && NextEngine::GetInstance()->GetTotalFrames() % 30 == 0)
         {
             auto& renderer = NextEngine::GetInstance()->GetRenderer();
-            // Voxelize whenever any renderer needs the voxel SDF (ambient-cube paths or the
-            // SwModernNoAmbient voxel sky-visibility path), decoupled from ambient-cube baking.
+            // Voxelize whenever any renderer needs the voxel SDF, decoupled from ambient-cube baking.
             const bool shouldUpdateVoxel =
                 renderer.CurrentRendererRequirements().NeedsVoxelGeometry() && !renderer.ShouldSkipAmbientCubeUpdates();
 

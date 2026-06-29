@@ -968,13 +968,6 @@ namespace Vulkan
                 rt_->directLightGenPipeline.reset(new PipelineCommon::ZeroBindWithTLASPipeline(SwapChain(), "assets/shaders/Bake.HwAmbientCube.comp.slang.spv", GetScene()));
             }
         }
-        // Voxel sky-visibility bake only needs the voxel SDF (not the cube pool), so it is created
-        // for any renderer that requests voxel geometry (e.g. SwModernNoAmbient without ambient cubes).
-        if (RegisteredRendererRequirements().NeedsVoxelGeometry())
-        {
-            ambient_.voxelSkyVisBake.reset(new PipelineCommon::ZeroBindPipeline(
-                *frame_.swapChain, "assets/shaders/Bake.VoxelSkyVisibility.comp.slang.spv", GetScene()));
-        }
         // Pick the subgroup (wave) fast-path of the GPU cull when the device supports it; otherwise the LDS variant.
         const char* gpuCullSpv = caps_.supportSubgroupCull
             ? "assets/shaders/Task.SoftMeshShaderGpuCullCompactWave.comp.slang.spv"
@@ -1068,7 +1061,6 @@ namespace Vulkan
         overlay_.bufferClearPipeline.reset();
         frame_.inFlightFenceSubmitSerials.clear();
         ambient_.softBake.reset();
-        ambient_.voxelSkyVisBake.reset();
         ambient_.clearCache.reset();
         if (rt_)
         {
@@ -1783,14 +1775,6 @@ namespace Vulkan
                 const bool useHardware = caps_.supportRayTracing && !GOption->ForceSoftGen;
                 BakeAmbientCubeCascade(commandBuffer, imageIndex, useHardware);
             }
-        }
-
-        // Voxel sky-visibility bake runs for voxel-only paths (SwModernNoAmbient): no cube pool, just
-        // the voxel SDF. Gated separately so it does not depend on requestAmbientCube.
-        if (CurrentRendererRequirements().requestVoxelGeometry &&
-            !CurrentRendererRequirements().requestAmbientCube && !ShouldSkipAmbientCubeUpdates())
-        {
-            BakeVoxelSkyVisibility(commandBuffer, imageIndex);
         }
 
         DispatchVisualDebugger(commandBuffer, imageIndex);
