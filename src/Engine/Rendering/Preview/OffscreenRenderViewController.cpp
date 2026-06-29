@@ -121,7 +121,7 @@ namespace Vulkan
 
     bool OffscreenRenderViewController::IsReady(const uint32_t viewIndex) const
     {
-        return viewIndex < kMaxSecondaryViews && views_[viewIndex].offscreenImage != nullptr;
+        return viewIndex < kMaxSecondaryViews && views_[viewIndex].target.offscreenImage != nullptr;
     }
 
     void OffscreenRenderViewController::RequestScenePreviewThisFrame()
@@ -178,16 +178,7 @@ namespace Vulkan
     {
         for (auto& view : views_)
         {
-            view.visibilityFrameBuffer.reset();
-            if (releaseSampledOutputs)
-            {
-                view.offscreenImage.reset();
-                view.offscreenSampler.reset();
-            }
-            if (view.view != nullptr)
-            {
-                view.view->ResetSwapChainResources();
-            }
+            view.target.ResetSwapChainResources(releaseSampledOutputs);
         }
     }
 
@@ -224,26 +215,27 @@ namespace Vulkan
         if (resources.view->AllocatedExtent().width == extent.width &&
             resources.view->AllocatedExtent().height == extent.height &&
             resources.view->VisibilityFramebuffer() != nullptr &&
-            resources.offscreenImage != nullptr)
+            resources.target.offscreenImage != nullptr)
         {
             return *resources.view;
         }
 
-        resources.visibilityFrameBuffer.reset();
-        resources.offscreenImage.reset();
+        resources.target.visibilityFramebuffer.reset();
+        resources.target.offscreenImage.reset();
         RenderViewResourceFactory resourceFactory(renderer_);
-        resources.visibilityFrameBuffer = resourceFactory.RebuildVisibilityFramebuffer(*resources.view, extent);
+        resources.target.visibilityFramebuffer = resourceFactory.RebuildVisibilityFramebuffer(*resources.view, extent);
 
         const std::string offscreenDebugName = fmt::format("Secondary View {} Offscreen", viewIndex);
-        resources.offscreenImage = resourceFactory.CreateSampledColorImage(extent, offscreenDebugName.c_str());
-        if (!resources.offscreenSampler)
+        resources.target.offscreenImage = resourceFactory.CreateSampledColorImage(extent, offscreenDebugName.c_str());
+        if (!resources.target.offscreenSampler)
         {
-            resources.offscreenSampler = resourceFactory.CreateClampSampler();
+            resources.target.offscreenSampler = resourceFactory.CreateClampSampler();
         }
+        resources.target.outputSampleSlot = SampleSlot(viewIndex);
         resourceFactory.BindSampledColorImage(
-            SampleSlot(viewIndex),
-            *resources.offscreenImage,
-            *resources.offscreenSampler);
+            resources.target.outputSampleSlot,
+            *resources.target.offscreenImage,
+            *resources.target.offscreenSampler);
 
         return *resources.view;
     }
@@ -269,9 +261,9 @@ namespace Vulkan
         src->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
                            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
-        if (resources.offscreenImage)
+        if (resources.target.offscreenImage)
         {
-            resources.offscreenImage->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT,
+            resources.target.offscreenImage->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT,
                 VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
             VkImageCopy copyRegion{};
             copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
@@ -279,9 +271,9 @@ namespace Vulkan
             copyRegion.extent = {static_cast<uint32_t>(rw), static_cast<uint32_t>(rh), 1};
             vkCmdCopyImage(commandBuffer,
                 src->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                resources.offscreenImage->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                resources.target.offscreenImage->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 1, &copyRegion);
-            resources.offscreenImage->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_WRITE_BIT,
+            resources.target.offscreenImage->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_WRITE_BIT,
                 VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         }
@@ -346,7 +338,7 @@ namespace Vulkan
             });
             renderer_.FinalizeTemporalUbo(secondaryView, secondaryUbo);
             renderer_.SetRenderViewUbo(secondaryView, imageIndex, secondaryUbo);
-            secondaryView.SetVisibilityFramebuffer(resources.visibilityFrameBuffer.get());
+            secondaryView.SetVisibilityFramebuffer(resources.target.visibilityFramebuffer.get());
             secondaryView.SetSceneOverride(nullptr);
             secondaryView.SetCopyObjectIdHistory(true);
 

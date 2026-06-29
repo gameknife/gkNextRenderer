@@ -21,6 +21,18 @@ namespace Vulkan
                 glm::perspective(glm::radians(camera.FieldOfView), aspect, camera.NearPlane, camera.FarPlane);
             ubo.Projection[1][1] *= -1.0f;
             ubo.ProjectionUnJit = ubo.Projection;
+#if ANDROID
+            glm::mat4 preRotate = glm::mat4(1.0f);
+            preRotate = glm::rotate(preRotate, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+            ubo.Projection = glm::perspective(
+                glm::radians(camera.FieldOfView),
+                static_cast<float>(std::max(1u, extent.height)) / static_cast<float>(std::max(1u, extent.width)),
+                0.1f,
+                10000.0f);
+            ubo.Projection[1][1] *= -1.0f;
+            ubo.Projection = preRotate * ubo.Projection;
+            ubo.ProjectionUnJit = ubo.Projection;
+#endif
             ubo.ProjectionInverse = glm::inverse(ubo.Projection);
             ubo.ProjectionInverseUnJit = ubo.ProjectionInverse;
             ubo.ViewProjection = ubo.Projection * camera.ModelView;
@@ -110,7 +122,10 @@ namespace Vulkan
             : Assets::UniformBufferObject{};
 
         FillCameraMatrices(ubo, request.camera, request.extent);
-        FillSunCascades(ubo, request.scene.GetEnvSettings(), request.camera, request.cascadeDistance);
+        if (request.fillSunCascades)
+        {
+            FillSunCascades(ubo, request.scene.GetEnvSettings(), request.camera, request.cascadeDistance);
+        }
         if (request.fillSceneLighting)
         {
             FillSceneLighting(ubo, request.scene);

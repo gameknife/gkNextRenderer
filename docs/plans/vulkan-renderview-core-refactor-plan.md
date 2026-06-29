@@ -1,13 +1,15 @@
 ---
 title: "RenderView 核心层清理与 VulkanBaseRenderer 去特化重构计划"
 category: plan
-status: draft
+status: completed
 owner: engine
 created: 2026-06-29
 last_updated: 2026-06-29
 ---
 
 # RenderView 核心层清理与 VulkanBaseRenderer 去特化重构计划
+
+> 执行状态：已完成。`VulkanBaseRenderer` 的 preview/secondary/thumbnail public API 已移除，preview 业务迁入 `RenderPreviewServices` 及其 controller，active view state 已由 RAII scope 管理，view target resource 创建与生命周期已集中化，primary/secondary/thumbnail 的相机矩阵构造均走 `ViewCameraUboBuilder`。
 
 > 面向后续接手 agent。本文不是重新设计多视口功能，而是在现有多视口、多 scene、thumbnail 已基本可用的基础上，把近期为了快速交付塞进 `VulkanBaseRenderer` 的特殊用途代码迁出，让核心渲染器重新回到清晰的职责边界。
 >
@@ -609,17 +611,17 @@ editor 当前直接调用 base API。先 wrapper，再迁调用点，最后删 w
 
 ## 8. 完成后的检查清单
 
-- [ ] `VulkanBaseRenderer.hpp` 不再暴露 thumbnail 或 editor secondary view API。
-- [ ] `VulkanBaseRenderer` 成员里不再有 material/mesh thumbnail cache、pending queue、preview scene。
-- [ ] fixed sample slot range 集中在 preview/thumbnail service，不散落在 base。
-- [ ] editor camera view 通过 editor controller 或 generic offscreen view handle 工作。
-- [ ] content browser material/mesh thumbnail 通过 `AssetThumbnailRenderer` 工作。
-- [ ] `RenderViewManager` 是 view lifecycle/schedule 的唯一入口。
-- [ ] active view state 通过 RAII scope 设置/恢复。
-- [ ] primary view bank 0 行为不变。
-- [ ] `gnb shot --scene assets/models/playground.glb` 通过肉眼检查。
-- [ ] `gnb shot --target gkNextEditor --scene assets/models/playground.glb --ui` 通过肉眼检查。
-- [ ] targeted build 通过。
+- [x] `VulkanBaseRenderer.hpp` 不再暴露 thumbnail 或 editor secondary view API。
+- [x] `VulkanBaseRenderer` 成员里不再有 material/mesh thumbnail cache、pending queue、preview scene。
+- [x] fixed sample slot range 集中在 preview/thumbnail service，不散落在 base。
+- [x] editor camera view 通过 editor controller 或 generic offscreen view handle 工作。
+- [x] content browser material/mesh thumbnail 通过 `AssetThumbnailRenderer` 工作。
+- [x] `RenderViewManager` 是 view lifecycle/schedule 的唯一入口。
+- [x] active view state 通过 RAII scope 设置/恢复。
+- [x] primary view bank 0 行为不变。
+- [x] `gnb shot --scene assets/models/playground.glb` 通过肉眼检查。
+- [x] `gnb shot --target gkNextEditor --scene assets/models/playground.glb --ui` 通过肉眼检查。
+- [x] targeted build 通过。
 
 ---
 

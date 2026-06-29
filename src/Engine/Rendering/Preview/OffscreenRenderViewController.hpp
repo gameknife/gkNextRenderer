@@ -2,6 +2,7 @@
 
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
+#include "Engine/Rendering/RenderViewResources.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include <vulkan/vulkan.h>
@@ -58,9 +59,7 @@ namespace Vulkan
             bool requested = false;
             VkExtent2D requestedExtent{0, 0};
             std::optional<Assets::Camera> cameraOverride{};
-            std::unique_ptr<RenderImage> offscreenImage;
-            std::unique_ptr<Sampler> offscreenSampler;
-            std::unique_ptr<FrameBuffer> visibilityFrameBuffer;
+            FRenderViewTargetResources target;
         };
 
         RenderView& EnsureView(uint32_t viewIndex);

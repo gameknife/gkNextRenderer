@@ -318,6 +318,33 @@ namespace Vulkan
             schedule_.clear();
         }
 
+        void CreateSwapChain(const SwapChain& swapChain)
+        {
+            primary_->CreateSwapChain(swapChain);
+            for (const auto& view : additional_)
+            {
+                view->CreateSwapChain(swapChain);
+            }
+        }
+
+        void DeleteSwapChain()
+        {
+            primary_->DeleteSwapChain();
+            for (const auto& view : additional_)
+            {
+                view->DeleteSwapChain();
+            }
+        }
+
+        void ResetSwapChainResources()
+        {
+            primary_->ResetSwapChainResources();
+            for (const auto& view : additional_)
+            {
+                view->ResetSwapChainResources();
+            }
+        }
+
         void DestroyAdditionalViews()
         {
             for (const auto& view : additional_)

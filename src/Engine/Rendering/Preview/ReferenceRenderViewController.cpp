@@ -33,10 +33,10 @@ namespace Vulkan
         for (auto& view : views_)
         {
             auto& resources = view.second;
-            resources.visibilityFrameBuffer.reset();
+            resources.target.ResetSwapChainResources(/*releaseSampledOutput*/ false);
             if (resources.view != nullptr)
             {
-                resources.view->ResetSwapChainResources();
+                resources.view->SetSceneOverride(nullptr);
             }
         }
     }
@@ -78,9 +78,9 @@ namespace Vulkan
         if (view.AllocatedExtent().width != extent.width ||
             view.AllocatedExtent().height != extent.height)
         {
-            resources.visibilityFrameBuffer.reset();
+            resources.target.visibilityFramebuffer.reset();
             RenderViewResourceFactory resourceFactory(renderer_);
-            resources.visibilityFrameBuffer = resourceFactory.RebuildVisibilityFramebuffer(view, extent);
+            resources.target.visibilityFramebuffer = resourceFactory.RebuildVisibilityFramebuffer(view, extent);
         }
 
         Assets::UniformBufferObject ubo = renderer_.frame_.lastUBO;
@@ -92,7 +92,7 @@ namespace Vulkan
         renderer_.FinalizeTemporalUbo(view, ubo);
 
         renderer_.SetRenderViewUbo(view, imageIndex, ubo);
-        view.SetVisibilityFramebuffer(resources.visibilityFrameBuffer.get());
+        view.SetVisibilityFramebuffer(resources.target.visibilityFramebuffer.get());
         return view;
     }
 
