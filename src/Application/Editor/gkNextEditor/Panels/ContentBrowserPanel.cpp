@@ -7,7 +7,7 @@
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/GPU/TextureImage.hpp"
 #include "EditorActionDispatcher.hpp"
-#include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Rendering/Preview/RenderPreviewServices.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
@@ -626,7 +626,9 @@ namespace Editor
         ImTextureID RequestMaterialPreviewTexture(EditorContext& ctx, uint32_t materialIndex, const Assets::FMaterial& material)
         {
             const uint64_t materialHash = HashMaterialPreview(material);
-            const uint32_t sampleSlot = ctx.engine.GetRenderer().RequestMaterialThumbnail(materialIndex, materialHash);
+            const uint32_t sampleSlot =
+                ctx.engine.GetRenderer().Preview().AssetThumbnails().RequestMaterialThumbnail(
+                    materialIndex, materialHash);
             return sampleSlot == std::numeric_limits<uint32_t>::max()
                 ? 0
                 : ctx.ui.RequestImTextureIdRaw(sampleSlot);
@@ -682,7 +684,8 @@ namespace Editor
         ImTextureID RequestMeshPreviewTexture(EditorContext& ctx, uint32_t modelIndex, const Assets::Model& model)
         {
             const uint64_t meshHash = HashMeshPreview(model);
-            const uint32_t sampleSlot = ctx.engine.GetRenderer().RequestMeshThumbnail(modelIndex, meshHash);
+            const uint32_t sampleSlot =
+                ctx.engine.GetRenderer().Preview().AssetThumbnails().RequestMeshThumbnail(modelIndex, meshHash);
             return sampleSlot == std::numeric_limits<uint32_t>::max()
                 ? 0
                 : ctx.ui.RequestImTextureIdRaw(sampleSlot);
@@ -1054,13 +1057,12 @@ namespace Editor
                         if (visual.kind == EContentAssetKind::Scene && !currentSceneComparePath.empty() &&
                             NormalizeSceneComparePath(assetPath) == currentSceneComparePath)
                         {
-                            auto& renderer = ctx.engine.GetRenderer();
-                            constexpr uint32_t previewViewIndex = Vulkan::VulkanBaseRenderer::kScenePreviewSecondaryViewIndex;
-                            renderer.RequestSecondaryViewThisFrame(previewViewIndex);
-                            if (renderer.IsSecondaryViewReady(previewViewIndex))
+                            auto& offscreenViews = ctx.engine.GetRenderer().Preview().OffscreenViews();
+                            offscreenViews.RequestScenePreviewThisFrame();
+                            if (offscreenViews.IsScenePreviewReady())
                             {
                                 thumbnailTextureId =
-                                    ctx.ui.RequestImTextureIdRaw(renderer.SecondaryViewSampleSlot(previewViewIndex));
+                                    ctx.ui.RequestImTextureIdRaw(offscreenViews.ScenePreviewSampleSlot());
                             }
                         }
                         else if (visual.kind == EContentAssetKind::Texture)
