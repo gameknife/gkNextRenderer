@@ -893,6 +893,82 @@ namespace Assets
         return uint32_t(materials_.size() - 1);
     }
 
+    uint32_t Scene::DuplicateMaterial(uint32_t id)
+    {
+        if (id >= materials_.size())
+        {
+            return static_cast<uint32_t>(-1);
+        }
+
+        FMaterial material = materials_[id];
+        material.name_ += "_copy";
+        return AddMaterial(material);
+    }
+
+    bool Scene::RemoveMaterial(uint32_t id, uint32_t* outSelectedMaterialId)
+    {
+        if (id >= materials_.size())
+        {
+            return false;
+        }
+
+        if (materials_.size() == 1)
+        {
+            materials_[0].gpuMaterial_ = Material::Lambertian(glm::vec3(0.75f));
+            materials_[0].name_ = "DefaultMaterial";
+            materialDirty_ = true;
+            MarkDirty();
+            if (outSelectedMaterialId != nullptr)
+            {
+                *outSelectedMaterialId = 0;
+            }
+            return true;
+        }
+
+        const uint32_t replacement = id == 0 ? 1u : 0u;
+        for (const auto& node : nodes_)
+        {
+            if (!node)
+            {
+                continue;
+            }
+            auto* render = node->GetComponentPtr<Runtime::RenderComponent>();
+            if (render == nullptr)
+            {
+                continue;
+            }
+
+            auto materialRefs = render->GetMaterials();
+            bool changed = false;
+            for (uint32_t& materialRef : materialRefs)
+            {
+                if (materialRef == id)
+                {
+                    materialRef = replacement;
+                    changed = true;
+                }
+                if (materialRef > id)
+                {
+                    --materialRef;
+                    changed = true;
+                }
+            }
+            if (changed)
+            {
+                render->SetMaterials(materialRefs);
+            }
+        }
+
+        materials_.erase(materials_.begin() + static_cast<std::ptrdiff_t>(id));
+        materialDirty_ = true;
+        MarkDirty();
+        if (outSelectedMaterialId != nullptr)
+        {
+            *outSelectedMaterialId = std::min<uint32_t>(id, static_cast<uint32_t>(materials_.size() - 1));
+        }
+        return true;
+    }
+
     void Scene::MarkDirty()
     {
         sceneDirty_ = true;

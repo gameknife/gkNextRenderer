@@ -1,16 +1,16 @@
 ---
 title: "gkNextEditor MaterialEditor 扩展设计与开发计划"
 category: plan
-status: 待实现
+status: 实施中
 owner: editor
 created: 2026-06-25
-last_updated: 2026-06-25
+last_updated: 2026-06-29
 ---
 
 # gkNextEditor MaterialEditor 扩展设计与开发计划
 
-> 状态：⚪ 待实现（设计已定，交由后续 AGENT 分阶段实现）
-> 范围：`src/Application/Editor/gkNextEditor/{Panels,Nodes}`、`src/Engine/Assets/Data/Material.hpp`、`src/Engine/Assets/Core/Scene*`、`assets/shaders/common/BasicTypes.slang`、`src/Engine/Assets/{Savers,Loaders}`
+> 状态：🟡 实施中（新版参数式材质编辑器已作为当前方向）
+> 范围：`src/Application/Editor/gkNextEditor/Panels`、`src/Engine/Assets/Data/Material.hpp`、`src/Engine/Assets/Core/Scene*`、`assets/shaders/common/BasicTypes.slang`、`src/Engine/Assets/{Savers,Loaders}`、`src/Engine/Rendering/Preview`
 > 目标读者：接手实现的 AI coding agent / 工程师
 > 前置阅读：[gkNextEditor 设置面板开发计划](gknexteditor-settings-panel-plan.md)（数据驱动 UI 与 CommandHistory 复用思路一致）
 
@@ -18,7 +18,7 @@ last_updated: 2026-06-25
 
 ## 1. 背景与目标
 
-gkNextEditor 内已经有一个**基于节点（ImNodeFlow）的材质编辑器** `Material Editor` 窗口，基础框架和"打开 → 改几个值 → Apply"的最简流程已经跑通。但它目前更像是"披着节点皮的属性面板"：节点是固定生成的、字段只暴露了一小部分、改动要手动点 Apply、纹理只能看不能改、一次只能编辑一个材质，也没有预览。
+gkNextEditor 的 `Material Editor` 已明确转向**参数式材质编辑器**。材质系统当前只需要高质量参数调节、纹理槽管理、撤销与实时预览；节点图不再是需求，也不应继续作为编辑器依赖或后续演进方向。
 
 本计划的目标是把它扩展成一个**功能齐全、好用**的材质编辑器，能够全功能、方便地编辑场景里的各种材质：
 
@@ -27,7 +27,7 @@ gkNextEditor 内已经有一个**基于节点（ImNodeFlow）的材质编辑器*
 3. **资产管理完整** —— 新建 / 复制 / 重命名 / 删除材质，纹理槽可指派 / 替换 / 清除。
 4. **可撤销** —— 所有编辑接入 `CommandHistory`（与 PropertiesPanel 一致）。
 5. **持久化一致** —— 编辑结果通过现有 glTF/GLB 往返正确保存与读回。
-6. **节点图可演进** —— 先把"参数完整 + 易用"做扎实，再把节点图从"扁平参数"演进为真正可组合的程序化材质图（分阶段，后期）。
+6. **去节点化** —— 移除材质编辑器中的 node graph 与 ImNodeFlow 依赖，避免用节点图承载本质上是结构化参数表的编辑工作。
 
 ### 1.1 已拍板决策（Locked Decisions, 2026-06-25）
 
@@ -35,8 +35,8 @@ gkNextEditor 内已经有一个**基于节点（ImNodeFlow）的材质编辑器*
 
 | # | 决策项 | 结论 | 影响章节 |
 | --- | --- | --- | --- |
-| D1 | 节点图定位 | **参数视图优先**；程序化 shader graph（§4.6 Step2 / 原 Phase 5）**暂不考虑**，本计划不含该工作。 | §4.6、§5 |
-| D2 | 材质预览球 | **暂不做预览渲染**；但 UI 上**预留预览窗体位置**（占位区块 + "Preview (TBD)" 提示），便于后续补。 | §4.4、§5 Phase 2/4 |
+| D1 | 节点图定位 | **彻底去掉 node graph**；材质编辑器只保留参数式编辑、纹理槽、资产管理与实时预览。不引入程序化 shader graph。 | §4.6、§5 |
+| D2 | 材质预览球 | **实现实时预览渲染**；基于现有独立 `Scene` + 离屏 `RenderView`/独立视口能力，在材质编辑器中显示实时更新的材质球。 | §4.4、§5 Phase 2/4 |
 | D3 | 自发光强度存储 | **沿用现有 `Diffuse.rgb` 反解约定**，不改数据结构/落盘格式；编辑器 color×strength 合成写入 `Diffuse.rgb`。 | §4.1、§4.8 |
 | D4 | 删除被引用材质 | **允许删除并把引用重映射到默认/兜底材质**（非禁止删除）。 | §4.5 |
 
@@ -84,39 +84,36 @@ CPU 侧 `Assets::Material`（`src/Engine/Assets/Data/Material.hpp:8`），`align
   - Loader `FSceneLoader.cpp:592-675`：上述逆向 + 一组启发式（金属度/粗糙度阈值、是否纯自发光）来推断 `MaterialModel`。
   - **结论**：数据模型的"全部能力"已经在 saver/loader 里出现过，编辑器只是没把它们全暴露出来。这张映射表是 §4.1 的事实依据。
 
-### 2.3 当前节点编辑器结构
+### 2.3 当前编辑器结构
 
-文件：`src/Application/Editor/gkNextEditor/Panels/MaterialEditorPanel.cpp`、`Nodes/Node{Material,SetFloat,SetInt}.{hpp,cpp}`。
+文件：`src/Application/Editor/gkNextEditor/Panels/MaterialEditorPanel.cpp`。
 
-- 全局单例图：`gNodeFlow`（`ImFlow::ImNodeFlow`）、`gMatNode`（汇聚节点弱引用）（`MaterialEditorPanel.cpp:17`）。
-- `OpenMaterialEditor`（`:40`）：**每次 reset 整张图**，按 `selected_material` 当前值固定摆放：`NodeSetFloat(IOR)`、`NodeSetInt(ShadingMode)`、`NodeSetColor(Albedo)`、`NodeSetFloat(Roughness)`、`NodeSetFloat(Metalness)`，连到汇聚 `NodeMaterial`；仅当对应贴图 id≠-1 时，额外摆一个**只读** `NodeSetTexture`（Albedo/Normal/MRA）。
-- `ApplyMaterial`（`:21`）：点 "Apply Material" 按钮才从 `gMatNode` 的 in-pin 读回 Albedo/Roughness/Metalness/IOR 写入材质，然后 `UpdateAllMaterials()`。
-- 入口：PropertiesPanel 的 Edit 按钮（`PropertiesPanel.cpp:393-400`）与 ContentBrowser 材质双击（`ContentBrowserPanel.cpp:753-755`），均设 `ui.selected_material` + `ui.ed_material=true` 并调 `OpenMaterialEditor`。
-- 渲染挂载：`EditorInterface.cpp:316` 根据 `ui.ed_material` 调 `DrawMaterialEditorPanel`。
+- `OpenMaterialEditor` 只负责同步当前材质选择并聚焦 `Material Editor` 窗口，不再创建或 reset 节点图。
+- `DrawMaterialEditorPanel` 直接绘制材质预览、工具条、参数表和纹理槽；控件编辑即时写回 `FMaterial` 并通过 `Scene::MarkMaterialsDirty()` 触发 GPU 侧合批同步。
+- 入口：PropertiesPanel 的 Edit 按钮与 ContentBrowser 材质双击，均设 `ui.selected_material` + `ui.ed_material=true` 并调 `OpenMaterialEditor`。
+- 渲染挂载：`EditorInterface.cpp` 根据 `ui.ed_material` 调 `DrawMaterialEditorPanel`。
 
-ImNodeFlow 能力（`src/ThirdParty/ImNodeFlow/include/ImNodeFlow.h`）：`placeNodeAt<T>/addNode<T>`、`addIN/addOUT`+`behaviour` lambda、`getInVal`、`ConnectionFilter::SameType`、`getNodes()/getLinks()`、`on_selected_node()`、`rightClickPopUpContent/droppedLinkPopUpContent`。**没有内建序列化**（需自建）。
+ImNodeFlow 已不再是材质编辑器依赖。`src/Application/Editor/gkNextEditor/Nodes/Node{Material,SetFloat,SetInt}.*` 这类仅服务旧材质节点图的文件应删除；`src/CMakeLists.txt` 中不再 `add_subdirectory(ThirdParty/ImNodeFlow)` 或把 `ImNodeFlow` 链接进 `gkNextEditor`；`src/ThirdParty/ImNodeFlow` 目录也已物理移除。
 
 ### 2.4 能力缺口清单（Gap Analysis）
 
 | 缺口 | 现状 | 影响 |
 | --- | --- | --- |
 | 字段不全 | 只编辑 Albedo/Roughness/Metalness/IOR | ShadingMode、Emissive、Opacity(alpha)、IOR2、NormalScale、Emissive 贴图、AO 全部改不了 |
-| ShadingMode 不回写 | 节点存在但 `ApplyMaterial` 没读它 | 改了着色模型不生效 |
-| Emissive 不回写 | `NodeMaterial` 有 Emissive in-pin，但从未连线/回写 | 自发光强度无法编辑 |
-| 纹理只读 | `NodeSetTexture` 只 `ImGui::Image` 显示 | 不能指派/替换/清除贴图，不能新建贴图槽 |
-| 非实时 | 必须手点 Apply | 编辑体验差，调参低效 |
-| 单材质 | `gNodeFlow` 全局单例、每次 reset | 不能并排比较/批量编辑 |
+| ShadingMode 不完整 | 旧流程没有统一字段写回 | 改了着色模型不生效 |
+| Emissive 不完整 | 旧流程未提供 color × strength 编辑 | 自发光强度无法编辑 |
+| 纹理只读 | 旧流程只显示贴图缩略图 | 不能指派/替换/清除贴图 |
+| 非实时 | 旧流程必须手点 Apply | 编辑体验差，调参低效 |
+| 参数标签缺失 | 控件 label 被隐藏或被可用宽度吞掉 | 只看得到数值滑块，难以判断字段含义 |
 | 无撤销 | 直接写 `gpuMaterial_` | 与 PropertiesPanel 的 `CommandHistory` 体验不一致，误操作不可回退 |
-| 无预览 | `NodeMaterial::draw` 只 `Text` 打印数值 | 看不到材质球，调参靠盲猜 |
+| 无预览 | 旧窗口只显示参数 | 看不到材质球，调参靠盲猜 |
 | 无资产管理 | 没有新建/复制/重命名/删除 | 只能编辑已存在材质 |
-| 右键菜单占位 | "Add Node" 只加一个名叫 "Test" 的浮点节点 | 节点目录形同虚设 |
-| 图不可序列化 | 每次按材质值重建 | 程序化节点图（如有）无法保存 |
 
 ---
 
 ## 3. 设计原则
 
-1. **材质数据是唯一真相（Material-as-source-of-truth）**。节点图是"材质字段的可视化视图"，编辑结果始终落到 `FMaterial`；不做图序列化。程序化节点图按 D1 本计划不做，故不存在"图即真相"的场景。
+1. **材质数据是唯一真相（Material-as-source-of-truth）**。编辑器是 `FMaterial` 的参数视图，编辑结果始终落到 `FMaterial`；不做节点图、不做图序列化，也不把程序化 shader graph 纳入本计划。
 2. **复用既有设施**：`CommandHistory`（撤销）、`GlobalTexturePool`（纹理）、glTF saver/loader（持久化）、PropertiesPanel 的 `NextUI::Theme` 控件风格。不要另起炉灶。
 3. **数据驱动**：字段 → 控件 的映射尽量集中成一张表（C++ 静态描述或 manifest），新增字段时少改 UI 代码，与设置面板计划的思路保持一致。
 4. **条件可见**：按 `MaterialModel` 显示相关字段（如 Dielectric 才显示 IOR2/透射，DiffuseLight 才显示 Emissive 强度），减少噪音。
@@ -156,22 +153,26 @@ ImNodeFlow 能力（`src/ThirdParty/ImNodeFlow/include/ImNodeFlow.h`）：`place
 
 ### 4.3 纹理槽编辑
 
-把只读的 `NodeSetTexture` 升级为可交互"贴图槽"组件（节点内 + 属性视图两处复用）：
+把只读贴图显示升级为可交互"贴图槽"组件：
 
 - 缩略图：`ctx.ui.RequestImTextureId(textureId)`（`UserInterface.cpp:444`）渲染 128² 预览，沿用现有逻辑。
 - 指派：
   - 从 Texture Browser 拖拽（已有 `EEditorDragPayloadType`，参考 Material 拖拽 `ContentBrowserPanel.cpp` 的 payload 模式）。
   - 弹出纹理选择器：遍历 `GlobalTexturePool::GetInstance()->TotalTextureMap()`（name→`GlobalIdx_`，`Texture.hpp`）做下拉/网格选择。
-  - 从磁盘导入：`GlobalTexturePool::RequestNewTextureFileAsync(filename, hdr, srgb)`（`Texture.hpp:62`），注意 **sRGB 标记**（Albedo/Emissive=sRGB，MRA/Normal=linear）。
+- 从磁盘导入：当前可使用 `GlobalTexturePool::LoadTexture(filename, srgb)` 或补齐 `RequestNewTextureFileAsync` 的实现后再走异步路径；注意 **sRGB 标记**（Albedo/Emissive=sRGB，MRA/Normal=linear）。
 - 清除：设回 -1。
 - MRA 通道提示：在槽位旁标注 "R=AO · G=Roughness · B=Metalness"，避免误用。
 
 ### 4.4 实时预览与即时应用
 
-- **即时应用**：去掉"必须手点 Apply"。控件 `IsItemDeactivatedAfterEdit()` 触发一次写回 + 置 `materialDirty_`（走 `Scene` 的合批路径，而非每帧 `UpdateAllMaterials`），由 `UpdateNodes()` 在帧末统一上传，避免拖动 slider 时每帧重打包整张材质表。保留一个手动 "Apply" 仅作兜底。
-- **材质预览球（按 D2：本期不做渲染，仅预留窗体位置）**：`NodeMaterial::draw` 当前只打印数值（`NodeMaterial.cpp:35-38`）。本期**不实现**离屏/CPU 预览渲染；只在材质编辑器布局里**预留一块固定尺寸的预览区**（如 128² 占位框 + "Preview (TBD)" 文案），保证后续补预览时不需要重排 UI。
-  - 预留实现：在 `NodeMaterial::draw` 顶部或编辑器面板顶部画一个固定尺寸 `ImGui::Dummy/BeginChild` 占位框，边框 + 居中提示文字即可。
-  - 后续（不排期）补全方向参考：方案 A 离屏渲染真实材质球（复用 `gnb shot` 离屏路径 + 固定 HDRI）、方案 B CPU 解析近似（N·L+Fresnel+roughness）。**本计划不实现这两者**，仅作存档。
+- **即时应用**：去掉"必须手点 Apply"。控件 `IsItemDeactivatedAfterEdit()` 触发一次写回 + 置 `materialDirty_`（走 `Scene` 的合批路径，而非每帧 `UpdateAllMaterials`），由 `UpdateNodes()` 在帧末统一上传，避免拖动 slider 时每帧重打包整张材质表。
+- **材质实时预览球（按 D2：本期实现）**：现在引擎已有独立 `Scene`、离屏 `RenderView` 和独立视口输出到 sampled texture 的能力，因此本计划在材质编辑器内实现真正的实时预览。
+  - 预览资源：新增一个 editor/preview 层的 `MaterialPreviewRenderer`（命名可调整），复用 `RenderViewServices`、`RenderViewManager`、`RenderViewResourceFactory` 和 `BuildViewCameraUbo` 的现有路径；不要把材质编辑器业务塞回 `VulkanBaseRenderer`。
+  - 预览场景：维护一个独立小 `Assets::Scene`，只包含材质球模型（球体为主，可选平面/背景）、固定相机和稳定灯光/环境。可复用 `AssetThumbnailRenderer::EnsureMaterialThumbnailScene()` 的思路，但实时预览需要持久 view 和稳定 sample slot，不走一次性 thumbnail hash/cache 队列。
+  - 数据同步：每次选中材质变化或字段写回时，把主场景 `FMaterial` 拷贝到预览场景 `Materials()[0]`，调用预览场景的 `UpdateAllMaterials()`/`UpdateNodes()` 并让 preview view `InvalidateTemporalHistory()`；避免重建预览 scene 和几何。
+  - 调度：材质编辑器窗口可见时启用 preview view，窗口隐藏时禁用；预览区域尺寸变化时更新 render extent。默认使用 `ERT_SoftwareModernNoAmbient` 这类轻量稳定管线，缺失时回退当前 renderer。
+  - UI：在材质编辑器顶部或右侧绘制固定最小尺寸的预览窗（建议 192²–256²，随 panel 宽度可放大），用 `ctx.ui.RequestImTextureIdRaw(sampleSlot)` + `ImGui::Image/AddImage` 显示。加载首帧前显示 "Initializing preview..."，不要再使用 "Preview (TBD)"。
+  - 交互：Phase 2 至少支持实时材质更新；预览球 orbit/zoom、背景切换、曝光等作为 Phase 4 打磨项，不阻塞首版实时预览。
 
 ### 4.5 材质资产管理
 
@@ -181,18 +182,14 @@ ImNodeFlow 能力（`src/ThirdParty/ImNodeFlow/include/ImNodeFlow.h`）：`place
 - **复制**：深拷贝 `FMaterial`，名字加 `_copy`。
 - **重命名**：编辑 `name_`（saver 用它写 `gltfMat.name`）。
 - **删除（按 D4：删除并重映射到默认材质）**：删除前扫描所有 `RenderComponent` 的材质引用（`RenderComponent::GetMaterials()`，参考 `PropertiesPanel.cpp:367`），把指向被删材质的引用**重映射到默认/兜底材质**（若场景无默认材质则先 `AddMaterial` 一个 Lambertian 兜底）；同时修正"删除后索引位移"——删除会使后续材质索引整体前移，必须同步更新所有 `RenderComponent` 中大于被删索引的引用（减 1）。建议在 `Scene` 侧实现 `RemoveMaterial(id)` 统一处理重映射 + 索引修正 + 置 `materialDirty_`，避免 UI 层手抖。删除前可弹确认提示并列出受影响物体（可选）。
-- 右键菜单（`MaterialEditorPanel.cpp:123` 的 `rightClickPopUpContent`）：把占位的 "Add Node / Test" 替换成真实的节点目录（见 4.6）。
 
-### 4.6 节点图增强（分两步走）
+### 4.6 去节点图与参数 UI 整理
 
-**Step 1（Phase 1-3，实用优先）**：节点图作为材质字段的结构化视图。
-- 汇聚 `NodeMaterial` 扩成完整 in-pin 集合（补 Opacity、EmissiveStrength、IOR2、NormalScale、Emissive/MRA/Normal/Albedo 贴图全槽）。
-- 输入节点类型补齐：`NodeSetColor`（已存在）、`NodeSetFloat`（已存在）、`NodeSetInt`（已存在）、新增 `NodeSetTexture`（可编辑版）、`NodeEnumShadingMode`（带名字的下拉，替代裸 int）。
-- 右键节点目录：按"Inputs / Textures / Material"分类列出可添加节点。
-
-**Step 2（程序化材质图，按 D1：本计划不含，暂不考虑）**：演进为真正可组合的材质图。
-- 方向存档：运算节点（`Multiply`/`Add`/`Mix`/`Fresnel`/`UV`/`TexSample`/`Noise`）、图序列化（自定义 JSON）、图 bake 成 `Material` 字段或编译成 shader 变体。
-- **本计划不实现，也不排期**；若未来要做，须单开设计文档重新立项与确认。
+- 删除材质编辑器对 `ImNodeFlow`、`ImFlow::*`、`NodeMaterial`、`NodeSetFloat`、`NodeSetInt`、`NodeSetTexture` 的所有引用。
+- 从 `src/CMakeLists.txt` 移除 `ThirdParty/ImNodeFlow` 子目录构建与 `gkNextEditor` 链接依赖，并删除 `src/ThirdParty/ImNodeFlow` 目录。
+- 删除仅服务旧材质节点图的 `src/Application/Editor/gkNextEditor/Nodes/Node{Material,SetFloat,SetInt}.{hpp,cpp}`。
+- 参数行采用显式 label + 隐藏 ImGui ID（例如先 `TextUnformatted("Roughness")`，控件使用 `"##roughness"`），保证字段名始终显示，控件宽度变化不会吞掉 label。
+- 用固定 label 列宽或两列表格组织参数；紧凑窗口下优先保留 label 可读性，再收缩输入控件。
 
 ### 4.7 撤销集成
 
@@ -214,30 +211,29 @@ ImNodeFlow 能力（`src/ThirdParty/ImNodeFlow/include/ImNodeFlow.h`）：`place
 ### Phase 1 — 属性完整化 + 统一写回（地基）
 - 目标：6 大着色模型 + 全部有效字段都能改且生效；修掉 ShadingMode/Emissive 不回写。
 - 工作：
-  - 扩 `NodeMaterial` in-pin 至完整集合（`NodeMaterial.cpp:12`）。
-  - 重写 `ApplyMaterial`（`MaterialEditorPanel.cpp:21`）覆盖所有字段，含 `MaterialModel`、`Diffuse.a`、`RefractionIndex2`、`NormalTextureScale`、Emissive。
-  - 建立 §4.1 字段描述表，做条件可见（§4.2）。
+  - 在 `MaterialEditorPanel.cpp` 内直接绘制参数表，覆盖所有字段，含 `MaterialModel`、`Diffuse.a`、`RefractionIndex2`、`NormalTextureScale`、Emissive。
+  - 参数控件使用显式字段名 label + 隐藏 ImGui ID，避免只显示数值滑块。
+  - 建立 §4.1 字段描述表或等价的集中渲染逻辑，做条件可见（§4.2）。
 - 交付物：能完整编辑一个材质所有标量/颜色字段并即时生效。
 - 验收：逐字段改值 → 视口变化正确；`gnb shot` 截图对比金属/玻璃/自发光三种模型。
 
-### Phase 2 — 即时应用 + 撤销 + 预览位预留
-- 工作：即时写回走 `materialDirty_` 合批（§4.4）；接入 `CommandHistory`（§4.7）；**预留预览窗体位置**（占位框 + "Preview (TBD)"，按 D2，不做渲染）。
-- 交付物：拖 slider 实时见效、Ctrl+Z 可回退、UI 上有预览占位区。
-- 验收：性能（拖动不卡）、撤销/重做正确、预览占位区布局稳定。
+### Phase 2 — 即时应用 + 撤销 + 实时预览
+- 工作：即时写回走 `materialDirty_` 合批（§4.4）；接入 `CommandHistory`（§4.7）；实现独立 preview scene + 离屏 `RenderView` 的材质实时预览球（§4.4）。
+- 交付物：拖 slider 主视口与预览球实时见效、Ctrl+Z 可回退、材质编辑器内显示真实渲染的预览球。
+- 验收：性能（拖动不卡）、撤销/重做正确、预览窗口 resize 稳定；切换材质后预览不串材质、不复用错误历史；关闭材质编辑器后 preview view 停止调度。
 
 ### Phase 3 — 纹理槽编辑 + 资产管理
-- 工作：可编辑贴图槽（指派/替换/清除/导入，sRGB 正确，§4.3）；新建/复制/重命名/删除材质（§4.5）；删除按 D4 走 `Scene::RemoveMaterial` 重映射到默认材质 + 索引修正；右键节点目录（§4.6 Step1）。
+- 工作：可编辑贴图槽（指派/替换/清除/导入，sRGB 正确，§4.3）；新建/复制/重命名/删除材质（§4.5）；删除按 D4 走 `Scene::RemoveMaterial` 重映射到默认材质 + 索引修正；完成旧节点图/ImNodeFlow 依赖清理（§4.6）。
 - 交付物：完整的材质 CRUD + 贴图管理。
 - 验收：贴图增删改在视口生效；删除被引用材质后引用正确重映射到默认材质、其余引用索引不错位；新建材质可被物体引用。
 
 ### Phase 4 — 体验打磨
-- 工作：多材质编辑（去全局单例，按 materialId 维护图实例）；预设库（金属/塑料/玻璃/自发光快速套用）；属性视图与节点视图风格统一。
+- 工作：预设库（金属/塑料/玻璃/自发光快速套用）；参数分组与控件风格统一；补预览球 orbit/zoom、背景/灯光/曝光切换等体验项。
 - 交付物：可并排编辑/比较材质。
-- 验收：切换/并排多材质不串味；预设套用正确。
-- 注：真实预览渲染（原方案 A/B）按 D2 **不在本期范围**；预览占位区已在 Phase 2 预留。
+- 验收：切换/并排多材质不串味；预设套用正确；预览交互不影响主编辑器相机/主视口输入。
 
 ### Phase 5 —（不做）程序化材质节点图
-- 按 D1，本计划**不含**程序化 shader graph（运算节点 + 图序列化 + bake/编译）。如未来要做须单开设计文档重新立项。
+- 按 D1，本计划**不含**程序化 shader graph（运算节点 + 图序列化 + bake/编译），也不保留 ImNodeFlow 作为材质编辑器未来扩展点。如未来要做须单开设计文档重新立项。
 
 ---
 
@@ -245,13 +241,13 @@ ImNodeFlow 能力（`src/ThirdParty/ImNodeFlow/include/ImNodeFlow.h`）：`place
 
 | 文件 | 改动 |
 | --- | --- |
-| `src/Application/Editor/gkNextEditor/Panels/MaterialEditorPanel.cpp` | 重写 Apply/Open，统一写回、即时应用、右键目录、多材质 |
-| `src/Application/Editor/gkNextEditor/Nodes/NodeMaterial.{hpp,cpp}` | 扩 in-pin、画预览球 |
-| `src/Application/Editor/gkNextEditor/Nodes/NodeSetInt.{hpp,cpp}` | `NodeSetTexture` 升级为可编辑 + 新增 ShadingMode 枚举节点 |
-| `src/Application/Editor/gkNextEditor/Nodes/NodeSetFloat.{hpp,cpp}` | 可能补 slider/range 变体 |
+| `src/Application/Editor/gkNextEditor/Panels/MaterialEditorPanel.cpp` | 参数式材质 UI、统一写回、即时应用、CRUD、纹理槽、实时预览 |
+| `src/Engine/Rendering/Preview/{RenderViewServices,AssetThumbnailRenderer}.*` / 新 `MaterialPreviewRenderer.*` | 复用独立 scene + offscreen RenderView 能力实现实时材质预览；不要把业务逻辑塞回 `VulkanBaseRenderer` |
+| `src/Application/Editor/gkNextEditor/Nodes/Node{Material,SetInt,SetFloat}.{hpp,cpp}` | 删除旧材质节点图实现 |
+| `src/CMakeLists.txt` / `src/ThirdParty/ImNodeFlow` | 移除 `ThirdParty/ImNodeFlow` 构建与 `gkNextEditor` 链接依赖，并删除第三方目录 |
 | `src/Application/Editor/gkNextEditor/Panels/ContentBrowserPanel.cpp` | Material Browser 增 CRUD 入口（`:734`、`:806`） |
 | `src/Application/Editor/gkNextEditor/Panels/PropertiesPanel.cpp` | 编辑入口/引用展示（`:363-410`） |
-| `src/Application/Editor/gkNextEditor/Core/EditorUiState.hpp` | 可能从单 `selected_material*` 扩为多材质会话状态 |
+| `src/Application/Editor/gkNextEditor/Core/EditorUiState.hpp` | 记录材质选择与材质预览窗口/交互状态 |
 | `src/Engine/Assets/Data/Material.hpp` + `assets/shaders/common/BasicTypes.slang` | 按 D3 本期**不改**（不启用 `Reserverd`）；列此仅为提醒：若未来要动则必须成对改 |
 | `src/Engine/Assets/{Savers/FSceneSaver,Loaders/FSceneLoader}.cpp` | 按 D3 本期**不改落盘格式**；仅在往返测试中作为验证对象 |
 | `src/Engine/Assets/Core/Scene*.{cpp,hpp}` | 新增 `RemoveMaterial(id)`（含 D4 重映射+索引修正）/`DuplicateMaterial`/`UpdateMaterial(id)` 接口 |
@@ -261,8 +257,9 @@ ImNodeFlow 能力（`src/ThirdParty/ImNodeFlow/include/ImNodeFlow.h`）：`place
 ## 7. 验收与测试
 
 - **单元测试**（`gkNextUnitTests`，Catch2）：材质 CRUD 接口、字段写回、glTF 往返（编辑→存→读→字段相等，重点 emissive strength 缩放、IOR/IOR2、alpha→BLEND）。
-- **视觉验证**：`gnb shot --target gkNextEditor --ui` 截图核对面板；`gnb shot --scene <带各类材质的场景>` 核对金属/玻璃/自发光/PBR 渲染正确。
+- **视觉验证**：`gnb shot --target gkNextEditor --ui` 截图核对面板与材质预览球；`gnb shot --scene <带各类材质的场景>` 核对金属/玻璃/自发光/PBR 渲染正确。
 - **性能**：拖动 slider 时确认走合批上传（不每帧全表 `UpdateAllMaterials`）。
+- **预览验证**：切换材质、拖动颜色/roughness/metalness/opacity/emissive、撤销/重做时，预览球与主视口同步；关闭材质编辑器后不再调度 preview view；resize 时 sample slot 与 ImGui 纹理不失效。
 - **高风险项用子 agent 复核**：`Material.hpp`/`BasicTypes.slang` 对齐与字段顺序的同步改动，建议独立 review。
 
 ---
@@ -272,9 +269,9 @@ ImNodeFlow 能力（`src/ThirdParty/ImNodeFlow/include/ImNodeFlow.h`）：`place
 1. **结构体对齐同步**：`Material.hpp` 与 `BasicTypes.slang` 必须严格同序同对齐。按 D3 本期**不动结构体**，风险较低；除非未来启用 `Reserverd2/3`，届时尤其小心 16 字节对齐。
 2. **Emissive strength**：按 D3 沿用 `Diffuse.rgb` 反解约定，不改落盘格式；风险点仅在编辑器 color×strength 合成与 saver 反解（×50/÷50）保持一致，需往返单测兜底。
 3. **删除材质的引用一致性（D4 重点风险）**：`RenderComponent` 用**索引**引用材质，删除后必须同时做两件事——(a) 指向被删材质的引用重映射到默认材质；(b) 所有大于被删索引的引用整体 −1 修正。建议集中在 `Scene::RemoveMaterial(id)` 内完成，UI 层不要各自实现。必须有覆盖"删除中间某个材质后其余物体仍指向正确材质"的单测。
-4. **多材质会话**：去全局 `gNodeFlow` 单例（`MaterialEditorPanel.cpp:17`）会触及窗口/焦点逻辑，放 Phase 4。
+4. **第三方目录清理**：材质编辑器不再构建、链接、引用 ImNodeFlow，且 `src/ThirdParty/ImNodeFlow` 已物理删除。未来如重新引入节点图能力，必须单开设计文档重新立项。
 5. **Isotropic 模型**：体积散射参数当前无专属字段，编辑器可先按 Lambertian 类似处理，专属参数待引擎侧明确语义后再补。
-6. **预览**：按 D2 本期不做预览渲染，仅预留窗体位；无相关渲染风险。后续补预览时再评估离屏管线接入成本。
+6. **预览 RenderView 生命周期**：实时预览依赖独立 `Scene` + offscreen `RenderView`。风险点是 sample slot 生命周期、swapchain resize 后资源重建、窗口关闭后仍调度、以及材质切换时历史帧串味。预览服务必须集中管理 enable/disable、extent、sample slot 和 `InvalidateTemporalHistory()`，并复用现有 `RenderViewServices`/thumbnail 资源路径。
 
 ---
 

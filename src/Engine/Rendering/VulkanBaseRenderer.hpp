@@ -34,6 +34,7 @@ namespace Vulkan
 	class AssetThumbnailRenderer;
 	class FActiveRenderViewScope;
 	class LogicRendererBase;
+	class MaterialPreviewRenderer;
 	class OffscreenRenderViewController;
 	class ReferenceRenderViewController;
 	class RenderViewResourceFactory;
@@ -202,6 +203,7 @@ namespace Vulkan
 	private:
 		friend class AssetThumbnailRenderer;
 		friend class FActiveRenderViewScope;
+		friend class MaterialPreviewRenderer;
 		friend class OffscreenRenderViewController;
 		friend class ReferenceRenderViewController;
 		friend class RenderViewResourceFactory;

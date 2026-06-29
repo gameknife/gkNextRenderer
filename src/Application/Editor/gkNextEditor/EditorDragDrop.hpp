@@ -12,6 +12,7 @@ namespace Editor
     {
         Scene = 0,
         Material,
+        Texture,
     };
 
     struct EditorDragDropPayload
@@ -19,5 +20,6 @@ namespace Editor
         EEditorDragPayloadType type = EEditorDragPayloadType::Scene;
         char path[512]{};
         uint32_t materialId = 0;
+        uint32_t textureId = 0;
     };
 } // namespace Editor

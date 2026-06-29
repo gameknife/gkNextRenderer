@@ -893,7 +893,18 @@ namespace Editor
 
             DrawGeneralContentBrowser(ctx, ui, ui.selectedTextureId, false, textureGroup.second.GlobalIdx_,
                                       textureGroup.first, ICON_FA_LINK_SLASH, IM_COL32(255, 72, 72, 255),
-                                      ContentBrowserCallbacks{});
+                                      ContentBrowserCallbacks{
+                                          .onDragSource =
+                                              [&]()
+                                          {
+                                              EditorDragDropPayload payload{};
+                                              payload.type = EEditorDragPayloadType::Texture;
+                                              payload.textureId = textureGroup.second.GlobalIdx_;
+                                              ImGui::SetDragDropPayload(kEditorDragDropPayload, &payload,
+                                                                        sizeof(payload));
+                                              ImGui::TextUnformatted(textureGroup.first.c_str());
+                                          },
+                                      });
             grid.Next();
             ++itemCount;
         }
@@ -1069,6 +1080,14 @@ namespace Editor
                                     {
                                         EditorDragDropPayload payload{};
                                         payload.type = EEditorDragPayloadType::Scene;
+                                        std::snprintf(payload.path, sizeof(payload.path), "%s", assetPath.c_str());
+                                        ImGui::SetDragDropPayload(kEditorDragDropPayload, &payload, sizeof(payload));
+                                        ImGui::TextUnformatted(name.c_str());
+                                    }
+                                    else if (visual.kind == EContentAssetKind::Texture)
+                                    {
+                                        EditorDragDropPayload payload{};
+                                        payload.type = EEditorDragPayloadType::Texture;
                                         std::snprintf(payload.path, sizeof(payload.path), "%s", assetPath.c_str());
                                         ImGui::SetDragDropPayload(kEditorDragDropPayload, &payload, sizeof(payload));
                                         ImGui::TextUnformatted(name.c_str());
