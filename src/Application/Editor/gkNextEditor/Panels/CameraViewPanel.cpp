@@ -2,16 +2,15 @@
 
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Rendering/Preview/RenderPreviewServices.hpp"
 #include "EditorMain.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
 
 // Multi-viewport "Camera View" panel: shows a second camera's live render of the current scene,
-// produced by the engine's secondary RenderView (offscreen -> bindless sample slot, see
-// VulkanBaseRenderer::SetSecondaryViewEnabled / SecondaryViewSampleSlot). The secondary view is
-// enabled only while this panel is open, so it costs nothing when hidden.
+// produced by the engine's offscreen RenderView. The view is enabled only while this panel is open,
+// so it costs nothing when hidden.
 namespace Editor
 {
     namespace
@@ -31,7 +30,8 @@ namespace Editor
 
         void DrawCameraViewPanel(EditorContext& ctx, EditorUiState& uiState, size_t viewIndex)
         {
-            Vulkan::VulkanBaseRenderer& renderer = ctx.engine.GetRenderer();
+            Vulkan::OffscreenRenderViewController& offscreenViews =
+                ctx.engine.GetRenderer().Preview().OffscreenViews();
             EditorCameraViewState& cameraView = uiState.cameraViews[viewIndex];
             cameraView.hovered = false;
             cameraView.focused = false;
@@ -49,10 +49,10 @@ namespace Editor
             const bool visible = ImGui::Begin(title.c_str(), &open);
             ImGuiWindow* cameraViewWindow = ImGui::GetCurrentWindow();
 
-            renderer.SetSecondaryViewEnabled(static_cast<uint32_t>(viewIndex), open);
+            offscreenViews.SetEnabled(static_cast<uint32_t>(viewIndex), open);
             if (!open)
             {
-                renderer.ClearSecondaryViewCameraOverride(static_cast<uint32_t>(viewIndex));
+                offscreenViews.ClearCameraOverride(static_cast<uint32_t>(viewIndex));
                 cameraView.contentPos = ImVec2(0.0f, 0.0f);
                 cameraView.contentSize = ImVec2(0.0f, 0.0f);
                 if (uiState.activeViewport == CameraViewId(viewIndex))
@@ -70,7 +70,7 @@ namespace Editor
                     cameraView.contentPos = imagePos;
                     cameraView.contentSize = avail;
 
-                    renderer.SetSecondaryViewRenderExtent(
+                    offscreenViews.SetRenderExtent(
                         static_cast<uint32_t>(viewIndex),
                         {static_cast<uint32_t>(avail.x), static_cast<uint32_t>(avail.y)});
                     if (ctx.editor != nullptr)
@@ -79,10 +79,10 @@ namespace Editor
                     }
                 }
 
-                if (renderer.IsSecondaryViewReady(static_cast<uint32_t>(viewIndex)))
+                if (offscreenViews.IsReady(static_cast<uint32_t>(viewIndex)))
                 {
                     const ImTextureID tex =
-                        ctx.ui.RequestImTextureIdRaw(renderer.SecondaryViewSampleSlot(static_cast<uint32_t>(viewIndex)));
+                        ctx.ui.RequestImTextureIdRaw(offscreenViews.SampleSlot(static_cast<uint32_t>(viewIndex)));
                     if (avail.x > 1.0f && avail.y > 1.0f)
                     {
                         const ImVec2 imageMin = ImGui::GetCursorScreenPos();
@@ -108,7 +108,7 @@ namespace Editor
                             ctx.editor->DrawGizmo(
                                 glm::vec2(cameraView.contentPos.x, cameraView.contentPos.y),
                                 glm::vec2(cameraView.contentSize.x, cameraView.contentSize.y),
-                                renderer.SecondaryViewLastUniformBufferObject(static_cast<uint32_t>(viewIndex)),
+                                offscreenViews.LastUniformBufferObject(static_cast<uint32_t>(viewIndex)),
                                 cameraViewWindow);
                         }
                     }
@@ -153,8 +153,9 @@ namespace Editor
                 cameraView.focused = false;
                 cameraView.contentPos = ImVec2(0.0f, 0.0f);
                 cameraView.contentSize = ImVec2(0.0f, 0.0f);
-                ctx.engine.GetRenderer().SetSecondaryViewEnabled(static_cast<uint32_t>(viewIndex), false);
-                ctx.engine.GetRenderer().ClearSecondaryViewCameraOverride(static_cast<uint32_t>(viewIndex));
+                auto& offscreenViews = ctx.engine.GetRenderer().Preview().OffscreenViews();
+                offscreenViews.SetEnabled(static_cast<uint32_t>(viewIndex), false);
+                offscreenViews.ClearCameraOverride(static_cast<uint32_t>(viewIndex));
                 if (uiState.activeViewport == CameraViewId(viewIndex))
                 {
                     uiState.activeViewport = EEditorViewportId::Scene;

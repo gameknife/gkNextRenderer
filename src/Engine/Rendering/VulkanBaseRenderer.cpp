@@ -31,6 +31,9 @@
 #include "Engine/Rendering/SoftwareModern/SoftwareModernNoAmbientRenderer.hpp"
 #include "Engine/Rendering/SoftwareTracing/SoftwareTracingRenderer.hpp"
 #include "Engine/Rendering/PathTracing/PathTracingRenderer.hpp"
+#include "Engine/Rendering/Preview/ReferenceRenderViewController.hpp"
+#include "Engine/Rendering/Preview/RenderPreviewServices.hpp"
+#include "Engine/Rendering/RenderViewContext.hpp"
 #include "Engine/Rendering/VoxelTracing/VoxelTracingRenderer.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
@@ -240,6 +243,16 @@ namespace Vulkan
         return GetRendererDescriptor(type).name;
     }
 
+    FReferenceViewLayout GetReferenceViewLayout(const ERendererType type)
+    {
+        const RendererDescriptor& descriptor = GetRendererDescriptor(type);
+        return {
+            .debugName = descriptor.name,
+            .column = descriptor.referenceColumn,
+            .row = descriptor.referenceRow,
+        };
+    }
+
     VulkanBaseRenderer::VulkanBaseRenderer(Vulkan::Window* window, const VkPresentModeKHR presentMode,
                                            const bool enableValidationLayers,
                                            Instance* instance) :
@@ -256,6 +269,8 @@ namespace Vulkan
 
         caps_.supportRayTracing = false;
         upscaler_ = Rendering::Upscaler::CreateStreamlineUpscaler();
+        previewServices_ = std::make_unique<RenderPreviewServices>(*this);
+        referenceViewController_ = std::make_unique<ReferenceRenderViewController>(*this);
 
         // Optional validation path: render the secondary RenderView and composite it as a
         // picture-in-picture inset. Off by default; opt in with GK_MV_DEMO=1.
@@ -268,6 +283,8 @@ namespace Vulkan
         VulkanBaseRenderer::DeleteSwapChain();
         DeleteAccelerationStructures();
         rt_.reset();
+        referenceViewController_.reset();
+        previewServices_.reset();
         ctx_.gpuTimer.reset();
         ctx_.globalTexturePool.reset();
         ctx_.commandPool.reset();
@@ -427,36 +444,14 @@ namespace Vulkan
     {
         scene_ = scene;
         PrimaryView().InvalidateTemporalHistory();
-        for (auto& secondaryView : secondaryViews_)
+        if (previewServices_)
         {
-            if (secondaryView.view != nullptr)
-            {
-                secondaryView.view->InvalidateTemporalHistory();
-            }
+            previewServices_->OnMainSceneChanged();
         }
-        if (thumbnailRenderView_ != nullptr)
+        if (referenceViewController_)
         {
-            thumbnailRenderView_->InvalidateTemporalHistory();
-            thumbnailRenderView_->SetSceneOverride(nullptr);
+            referenceViewController_->OnMainSceneChanged();
         }
-        for (auto& referenceView : referenceViews_)
-        {
-            if (referenceView.second.view != nullptr)
-            {
-                referenceView.second.view->InvalidateTemporalHistory();
-                referenceView.second.view->SetSceneOverride(nullptr);
-            }
-        }
-        materialThumbnailScene_.reset();
-        materialThumbnailImages_.clear();
-        materialThumbnailHashes_.clear();
-        pendingMaterialThumbnails_.clear();
-        materialThumbnailSceneReady_ = false;
-        meshThumbnailScene_.reset();
-        meshThumbnailImages_.clear();
-        meshThumbnailHashes_.clear();
-        pendingMeshThumbnails_.clear();
-        thumbnailVisibilityFrameBuffer_.reset();
         RequestClearAmbientCubeCache();
         resetUpscalerHistory_ = true;
     }
@@ -483,103 +478,6 @@ namespace Vulkan
             return activeViewRenderExtent_;
         }
         return frame_.swapChain->RenderExtent();
-    }
-
-    void VulkanBaseRenderer::SetSecondaryViewEnabled(uint32_t viewIndex, bool enabled)
-    {
-        if (viewIndex >= kMaxSecondaryViews)
-        {
-            return;
-        }
-        secondaryViews_[viewIndex].enabled = enabled;
-    }
-
-    bool VulkanBaseRenderer::IsSecondaryViewEnabled(uint32_t viewIndex) const
-    {
-        return viewIndex < kMaxSecondaryViews && secondaryViews_[viewIndex].enabled;
-    }
-
-    void VulkanBaseRenderer::RequestSecondaryViewThisFrame(uint32_t viewIndex)
-    {
-        if (viewIndex >= kMaxSecondaryViews)
-        {
-            return;
-        }
-        secondaryViews_[viewIndex].requested = true;
-    }
-
-    void VulkanBaseRenderer::SetSecondaryViewRenderExtent(uint32_t viewIndex, VkExtent2D extent)
-    {
-        if (viewIndex >= kMaxSecondaryViews)
-        {
-            return;
-        }
-
-        extent.width = std::max(1u, extent.width);
-        extent.height = std::max(1u, extent.height);
-        auto& resources = secondaryViews_[viewIndex];
-        resources.requestedExtent = extent;
-        if (resources.view != nullptr)
-        {
-            resources.view->SetRenderExtent(extent);
-        }
-    }
-
-    VkExtent2D VulkanBaseRenderer::SecondaryViewRenderExtent(uint32_t viewIndex) const
-    {
-        if (viewIndex >= kMaxSecondaryViews)
-        {
-            return {};
-        }
-        return secondaryViews_[viewIndex].requestedExtent;
-    }
-
-    void VulkanBaseRenderer::SetSecondaryViewCameraOverride(uint32_t viewIndex, const Assets::Camera& camera)
-    {
-        if (viewIndex >= kMaxSecondaryViews)
-        {
-            return;
-        }
-
-        auto& resources = secondaryViews_[viewIndex];
-        const bool changed = !resources.cameraOverride.has_value() ||
-            std::memcmp(&resources.cameraOverride->ModelView, &camera.ModelView, sizeof(glm::mat4)) != 0 ||
-            resources.cameraOverride->FieldOfView != camera.FieldOfView ||
-            resources.cameraOverride->NearPlane != camera.NearPlane ||
-            resources.cameraOverride->FarPlane != camera.FarPlane;
-        if (changed && resources.view != nullptr)
-        {
-            resources.view->InvalidateTemporalHistory();
-        }
-        resources.cameraOverride = camera;
-    }
-
-    void VulkanBaseRenderer::ClearSecondaryViewCameraOverride(uint32_t viewIndex)
-    {
-        if (viewIndex >= kMaxSecondaryViews)
-        {
-            return;
-        }
-        secondaryViews_[viewIndex].cameraOverride.reset();
-    }
-
-    bool VulkanBaseRenderer::HasSecondaryViewCameraOverride(uint32_t viewIndex) const
-    {
-        return viewIndex < kMaxSecondaryViews && secondaryViews_[viewIndex].cameraOverride.has_value();
-    }
-
-    const Assets::UniformBufferObject* VulkanBaseRenderer::SecondaryViewLastUniformBufferObject(uint32_t viewIndex) const
-    {
-        if (viewIndex >= kMaxSecondaryViews || secondaryViews_[viewIndex].view == nullptr)
-        {
-            return nullptr;
-        }
-        return &secondaryViews_[viewIndex].view->State().previousUniformBuffer;
-    }
-
-    bool VulkanBaseRenderer::IsSecondaryViewReady(uint32_t viewIndex) const
-    {
-        return viewIndex < kMaxSecondaryViews && secondaryViews_[viewIndex].offscreenImage != nullptr;
     }
 
     void VulkanBaseRenderer::SetPhysicalDeviceImpl(
@@ -947,42 +845,14 @@ namespace Vulkan
         // Primary view RT bank (bank 0 == legacy absolute layout).
         CreateRenderTargetBank(0);
         // Non-primary view resources were destroyed with the swapchain; recreate on demand.
-        for (auto& secondaryView : secondaryViews_)
+        if (previewServices_)
         {
-            if (secondaryView.view != nullptr)
-            {
-                secondaryView.view->SetAllocatedExtent({0, 0});
-                secondaryView.view->SetVisibilityFramebuffer(nullptr);
-                secondaryView.view->SetCameraAddress(0);
-                secondaryView.view->SetPrevDepthValid(false);
-                secondaryView.view->ResetCameraUbo();
-            }
+            previewServices_->OnSwapChainResourcesInvalidated(/*releaseOffscreenSampledOutputs*/ false);
         }
-        if (thumbnailRenderView_ != nullptr)
+        if (referenceViewController_)
         {
-            thumbnailRenderView_->SetAllocatedExtent({0, 0});
-            thumbnailRenderView_->SetVisibilityFramebuffer(nullptr);
-            thumbnailRenderView_->SetCameraAddress(0);
-            thumbnailRenderView_->SetSceneOverride(nullptr);
-            thumbnailRenderView_->SetPrevDepthValid(false);
-            thumbnailRenderView_->ResetCameraUbo();
+            referenceViewController_->OnSwapChainResourcesInvalidated();
         }
-        for (auto& referenceView : referenceViews_)
-        {
-            auto& resources = referenceView.second;
-            resources.visibilityFrameBuffer.reset();
-            resources.allocatedExtent = {0, 0};
-            if (resources.view != nullptr)
-            {
-                resources.view->SetAllocatedExtent({0, 0});
-                resources.view->SetVisibilityFramebuffer(nullptr);
-                resources.view->SetCameraAddress(0);
-                resources.view->SetPrevDepthValid(false);
-                resources.view->ResetCameraUbo();
-            }
-        }
-        thumbnailVisibilityFrameBuffer_.reset();
-
         for (uint32_t i = 0; i != frame_.swapChain->Images().size(); i++)
         {
             ctx_.globalTexturePool->BindStorageTexture( Assets::Bindless::RT_SWAPCHAIN0 + i, *frame_.swapChain->ImageViews()[i] );
@@ -1190,43 +1060,13 @@ namespace Vulkan
         overlay_.visibilityFrameBuffer.reset();
         // Auxiliary view resources reference view-bank images / the shared render pass; drop them
         // before the swapchain images go away.
-        for (auto& secondaryView : secondaryViews_)
+        if (previewServices_)
         {
-            secondaryView.visibilityFrameBuffer.reset();
-            secondaryView.offscreenImage.reset();
-            secondaryView.offscreenSampler.reset();
-            if (secondaryView.view != nullptr)
-            {
-                secondaryView.view->SetAllocatedExtent({0, 0});
-                secondaryView.view->SetVisibilityFramebuffer(nullptr);
-                secondaryView.view->SetCameraAddress(0);
-                secondaryView.view->SetPrevDepthValid(false);
-                secondaryView.view->ResetCameraUbo();
-            }
+            previewServices_->OnSwapChainResourcesInvalidated(/*releaseOffscreenSampledOutputs*/ true);
         }
-        thumbnailVisibilityFrameBuffer_.reset();
-        if (thumbnailRenderView_ != nullptr)
+        if (referenceViewController_)
         {
-            thumbnailRenderView_->SetAllocatedExtent({0, 0});
-            thumbnailRenderView_->SetVisibilityFramebuffer(nullptr);
-            thumbnailRenderView_->SetCameraAddress(0);
-            thumbnailRenderView_->SetSceneOverride(nullptr);
-            thumbnailRenderView_->SetPrevDepthValid(false);
-            thumbnailRenderView_->ResetCameraUbo();
-        }
-        for (auto& referenceView : referenceViews_)
-        {
-            auto& resources = referenceView.second;
-            resources.visibilityFrameBuffer.reset();
-            resources.allocatedExtent = {0, 0};
-            if (resources.view != nullptr)
-            {
-                resources.view->SetAllocatedExtent({0, 0});
-                resources.view->SetVisibilityFramebuffer(nullptr);
-                resources.view->SetCameraAddress(0);
-                resources.view->SetPrevDepthValid(false);
-                resources.view->ResetCameraUbo();
-            }
+            referenceViewController_->OnSwapChainResourcesInvalidated();
         }
         overlay_.sunShadowPass.reset();
         
@@ -1338,20 +1178,7 @@ namespace Vulkan
     {
         SCOPED_GPU_TIMER(view.DebugName());
 
-        const uint32_t previousBankBase = activeViewBankBase_;
-        const VkExtent2D previousRenderExtent = activeViewRenderExtent_;
-        const VkDeviceAddress previousCameraAddress = activeViewCameraAddress_;
-        FrameBuffer* const previousVisibilityFrameBuffer = activeVisibilityFrameBuffer_;
-        Assets::Scene* const previousSceneOverride = activeSceneOverride_;
-        RenderView* const previousRenderView = activeRenderView_;
-
-        activeSceneOverride_ = view.SceneOverride();
-        activeRenderView_ = &view;
-        SetActiveViewBankBase(view.RtBankBase());
-        SetActiveViewRenderExtent(view.RenderExtent());
-        SetActiveViewCameraAddress(view.CameraAddress());
-        activeVisibilityFrameBuffer_ = view.VisibilityFramebuffer();
-
+        FActiveRenderViewScope activeViewScope(*this, view);
         const bool initializePrevDepthBeforeCull = !view.IsPrimary() && !view.PrevDepthValid();
         if (initializePrevDepthBeforeCull)
         {
@@ -1371,13 +1198,6 @@ namespace Vulkan
         {
             view.SetPrevDepthValid(true);
         }
-
-        activeSceneOverride_ = previousSceneOverride;
-        activeRenderView_ = previousRenderView;
-        activeVisibilityFrameBuffer_ = previousVisibilityFrameBuffer;
-        SetActiveViewCameraAddress(previousCameraAddress);
-        SetActiveViewRenderExtent(previousRenderExtent);
-        SetActiveViewBankBase(previousBankBase);
     }
 
     void VulkanBaseRenderer::ScheduleRenderView(
@@ -1731,9 +1551,9 @@ namespace Vulkan
             logicRenderer.second->BeforeNextFrame();
         }
 
-        if (HasPendingMaterialThumbnail())
+        if (previewServices_)
         {
-            EnsureMaterialThumbnailScene();
+            previewServices_->BeforeNextFrame();
         }
 
         if (delegates_.beforeNextTick)
@@ -1905,36 +1725,8 @@ namespace Vulkan
         renderViews_->ClearSchedule();
         if (GOption->ReferenceMode)
         {
-            static constexpr std::array<ERendererType, 4> kReferenceRendererTypes{
-                ERT_SoftwareModern,
-                ERT_SoftwareTracing,
-                ERT_SoftwareModernNoAmbient,
-                ERT_PathTracing,
-            };
-
-            bool clearSwapchainForReference = true;
-            bool renderedAnyReferenceView = false;
-            for (const ERendererType rendererType : kReferenceRendererTypes)
-            {
-                const auto logicRenderer = logicRenderers_.renderers.find(rendererType);
-                if (logicRenderer == logicRenderers_.renderers.end())
-                {
-                    continue;
-                }
-
-                RenderView& referenceView = EnsureReferenceView(rendererType, imageIndex);
-                ScheduleRenderView(
-                    referenceView,
-                    *logicRenderer->second,
-                    clearSwapchainForReference,
-                    [this, commandBuffer, imageIndex](RenderView& view)
-                    {
-                        ComposeViewToSwapchainSubrect(commandBuffer, imageIndex, view);
-                    });
-                clearSwapchainForReference = false;
-                renderedAnyReferenceView = true;
-            }
-
+            const bool renderedAnyReferenceView =
+                referenceViewController_ && referenceViewController_->ScheduleViews(commandBuffer, imageIndex);
             DispatchScheduledRenderViews(commandBuffer, imageIndex);
             if (renderedAnyReferenceView)
             {
@@ -1961,20 +1753,16 @@ namespace Vulkan
 
             // Swapchain is in GENERAL here (before the present barrier). Auxiliary views render
             // through the same RenderViewManager schedule, then copy/compose their outputs.
-            const bool hasSecondaryViewWork = std::any_of(
-                secondaryViews_.begin(), secondaryViews_.end(),
-                [](const SecondaryRenderViewResources& view)
-                {
-                    return view.enabled || view.requested;
-                });
-            if (multiViewDemo_ || hasSecondaryViewWork || HasPendingThumbnail())
+            const bool hasSecondaryViewWork = previewServices_ && previewServices_->HasOffscreenWork(multiViewDemo_);
+            const bool hasThumbnailWork = previewServices_ && previewServices_->HasPendingThumbnail();
+            if (multiViewDemo_ || hasSecondaryViewWork || hasThumbnailWork)
             {
                 ScheduleAuxiliaryViews(commandBuffer, imageIndex);
                 DispatchScheduledRenderViews(commandBuffer, imageIndex);
             }
-            for (auto& secondaryView : secondaryViews_)
+            if (previewServices_)
             {
-                secondaryView.requested = false;
+                previewServices_->ClearOffscreenFrameRequests();
             }
 
             if (NextEngine::GetInstance()->GetShowFlags().ShowWireframe)
@@ -1997,821 +1785,16 @@ namespace Vulkan
         return frame_.uniformBuffers[imageIndex].Buffer().GetDeviceAddress();
     }
 
-    namespace
-    {
-        Assets::UniformBufferObject MakeCameraUbo(const Assets::UniformBufferObject& base,
-                                                  const Assets::Camera& camera,
-                                                  const Assets::EnvironmentSetting& env,
-                                                  VkExtent2D extent)
-        {
-            Assets::UniformBufferObject ubo = base;
-            ubo.ModelView = camera.ModelView;
-            ubo.ModelViewInverse = glm::inverse(camera.ModelView);
-            const float aspect = static_cast<float>(std::max(1u, extent.width)) /
-                static_cast<float>(std::max(1u, extent.height));
-            ubo.Projection =
-                glm::perspective(glm::radians(camera.FieldOfView), aspect, camera.NearPlane, camera.FarPlane);
-            ubo.Projection[1][1] *= -1.0f;
-            ubo.ProjectionUnJit = ubo.Projection;
-            ubo.ProjectionInverse = glm::inverse(ubo.Projection);
-            ubo.ProjectionInverseUnJit = ubo.ProjectionInverse;
-            ubo.ViewProjection = ubo.Projection * camera.ModelView;
-            ubo.ViewProjectionUnJit = ubo.ProjectionUnJit * camera.ModelView;
-            ubo.PrevViewProjection = ubo.ViewProjection;
-            ubo.PrevViewProjectionUnJit = ubo.ViewProjectionUnJit;
-            ubo.Jitter = glm::vec4(0.0f);
-            ubo.ViewportRect = glm::vec4(
-                0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height));
-
-            const auto cascades = env.ComputeSunCascades(
-                ubo.ViewProjectionUnJit, camera.NearPlane, camera.FarPlane, 400.0f);
-            for (uint32_t i = 0; i < Assets::Scene::kSunShadowCascadeCount; ++i)
-            {
-                ubo.SunCascadeViewProjection[i] = cascades.viewProjection[i];
-            }
-            ubo.CascadeSplits = cascades.splits;
-
-            ubo.TemporalFrames = 1;
-            ubo.TotalFrames = std::max(1u, base.TotalFrames);
-            ubo.TAA = false;
-            ubo.ProgressiveRender = false;
-            return ubo;
-        }
-
-        // Build a second camera by orbiting the primary eye around its look-at point about world-Y.
-        Assets::UniformBufferObject MakeOrbitedCameraUbo(const Assets::UniformBufferObject& base,
-                                                         const Assets::Camera& camera,
-                                                         const Assets::EnvironmentSetting& env,
-                                                         VkExtent2D extent,
-                                                         float yawDegrees, float pivotDistance)
-        {
-            Assets::Camera orbitedCamera = camera;
-            const glm::mat4 c2w = base.ModelViewInverse;
-            const glm::vec3 eye = glm::vec3(c2w[3]);
-            const glm::vec3 forward = -glm::normalize(glm::vec3(c2w[2]));
-            const glm::vec3 pivot = eye + forward * pivotDistance;
-            const glm::mat4 rot = glm::rotate(glm::mat4(1.0f), glm::radians(yawDegrees), glm::vec3(0, 1, 0));
-            const glm::vec3 newEye = pivot + glm::vec3(rot * glm::vec4(eye - pivot, 1.0f));
-            orbitedCamera.ModelView = glm::lookAt(newEye, pivot, glm::vec3(0, 1, 0));
-            return MakeCameraUbo(base, orbitedCamera, env, extent);
-        }
-    }
-
-    uint32_t VulkanBaseRenderer::RequestMaterialThumbnail(const uint32_t materialIndex, const uint64_t materialHash)
-    {
-        if (materialIndex >= kMaterialThumbnailMaxSlots)
-        {
-            return std::numeric_limits<uint32_t>::max();
-        }
-
-        if (materialThumbnailHashes_.size() <= materialIndex)
-        {
-            materialThumbnailHashes_.resize(static_cast<size_t>(materialIndex) + 1, 0);
-        }
-        if (materialThumbnailImages_.size() <= materialIndex)
-        {
-            materialThumbnailImages_.resize(static_cast<size_t>(materialIndex) + 1);
-        }
-
-        if (materialThumbnailImages_[materialIndex] != nullptr &&
-            materialThumbnailHashes_[materialIndex] == materialHash)
-        {
-            return kMaterialThumbnailSampleSlotBase + materialIndex;
-        }
-
-        materialThumbnailHashes_[materialIndex] = materialHash;
-        if (std::find(pendingMaterialThumbnails_.begin(), pendingMaterialThumbnails_.end(), materialIndex) ==
-            pendingMaterialThumbnails_.end())
-        {
-            pendingMaterialThumbnails_.push_back(materialIndex);
-        }
-        return std::numeric_limits<uint32_t>::max();
-    }
-
-    uint32_t VulkanBaseRenderer::RequestMeshThumbnail(const uint32_t modelIndex, const uint64_t modelHash)
-    {
-        if (modelIndex >= kMeshThumbnailMaxSlots)
-        {
-            return std::numeric_limits<uint32_t>::max();
-        }
-
-        if (meshThumbnailHashes_.size() <= modelIndex)
-        {
-            meshThumbnailHashes_.resize(static_cast<size_t>(modelIndex) + 1, 0);
-        }
-        if (meshThumbnailImages_.size() <= modelIndex)
-        {
-            meshThumbnailImages_.resize(static_cast<size_t>(modelIndex) + 1);
-        }
-
-        if (meshThumbnailImages_[modelIndex] != nullptr && meshThumbnailHashes_[modelIndex] == modelHash)
-        {
-            return kMeshThumbnailSampleSlotBase + modelIndex;
-        }
-
-        meshThumbnailHashes_[modelIndex] = modelHash;
-        if (std::find(pendingMeshThumbnails_.begin(), pendingMeshThumbnails_.end(), modelIndex) ==
-            pendingMeshThumbnails_.end())
-        {
-            pendingMeshThumbnails_.push_back(modelIndex);
-        }
-        return std::numeric_limits<uint32_t>::max();
-    }
-
-    RenderView& VulkanBaseRenderer::EnsureReferenceView(const ERendererType type, const uint32_t imageIndex)
-    {
-        const RendererDescriptor& descriptor = GetRendererDescriptor(type);
-        VkExtent2D extent{
-            std::max(1u, frame_.swapChain->RenderExtent().width / 2u),
-            std::max(1u, frame_.swapChain->RenderExtent().height / 2u)};
-        VkOffset2D offset{
-            static_cast<int32_t>(descriptor.referenceColumn * extent.width),
-            static_cast<int32_t>(descriptor.referenceRow * extent.height)};
-
-        auto& resources = referenceViews_[type];
-        if (resources.view == nullptr)
-        {
-            FViewDesc viewDesc{};
-            viewDesc.renderExtent = extent;
-            viewDesc.outputKind = EViewOutputKind::SwapchainSubrect;
-            viewDesc.schedule = EViewSchedule::Persistent;
-            viewDesc.subrect = VkRect2D{offset, extent};
-            resources.view = renderViews_->CreateView(viewDesc, descriptor.name);
-            if (resources.view == nullptr)
-            {
-                Throw(std::runtime_error("failed to allocate reference RenderView bank"));
-            }
-            resources.view->CreateSwapChain(SwapChain());
-        }
-
-        RenderView& view = *resources.view;
-        view.SetDebugName(descriptor.name);
-        view.SetRenderExtent(extent);
-        view.SetRenderOffset({0, 0});
-        view.SetSubrect(VkRect2D{offset, extent});
-        view.SetSceneOverride(nullptr);
-        view.SetCopyObjectIdHistory(true);
-
-        if (resources.allocatedExtent.width != extent.width ||
-            resources.allocatedExtent.height != extent.height)
-        {
-            resources.visibilityFrameBuffer.reset();
-            CreateRenderTargetBank(view.RtBankBase(), extent);
-            resources.visibilityFrameBuffer.reset(new FrameBuffer(
-                extent,
-                GetStorageImage(view.RtBankBase() + Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(),
-                overlay_.visibilityPipeline->RenderPass()));
-            resources.allocatedExtent = extent;
-            view.SetAllocatedExtent(extent);
-            view.SetPrevDepthValid(false);
-        }
-
-        Assets::UniformBufferObject ubo = frame_.lastUBO;
-        ubo.ViewportRect = glm::vec4(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height));
-        ubo.Jitter = glm::vec4(0.0f);
-        ubo.TemporalFrames = 1;
-        ubo.TAA = false;
-        ubo.ProgressiveRender = false;
-        FinalizeTemporalUbo(view, ubo);
-
-        SetRenderViewUbo(view, imageIndex, ubo);
-        view.SetVisibilityFramebuffer(resources.visibilityFrameBuffer.get());
-        return view;
-    }
-
-    RenderView& VulkanBaseRenderer::EnsureSecondaryRenderView(uint32_t viewIndex)
-    {
-        viewIndex = std::min(viewIndex, kMaxSecondaryViews - 1);
-        auto& resources = secondaryViews_[viewIndex];
-
-        VkExtent2D extent = resources.requestedExtent;
-        if (extent.width == 0 || extent.height == 0)
-        {
-            extent = frame_.swapChain->RenderExtent();
-        }
-        extent.width = std::max(1u, extent.width);
-        extent.height = std::max(1u, extent.height);
-
-        if (resources.view == nullptr)
-        {
-            FViewDesc viewDesc{};
-            viewDesc.renderExtent = extent;
-            viewDesc.outputKind = EViewOutputKind::OffscreenTexture;
-            viewDesc.schedule = EViewSchedule::Persistent;
-            resources.view = renderViews_->CreateView(viewDesc, fmt::format("secondary view {}", viewIndex));
-            if (resources.view == nullptr)
-            {
-                Throw(std::runtime_error("failed to allocate secondary RenderView bank"));
-            }
-            resources.view->CreateSwapChain(SwapChain());
-        }
-        resources.view->SetDebugName(fmt::format("secondary view {}", viewIndex));
-        resources.view->SetRenderExtent(extent);
-        resources.view->SetCopyObjectIdHistory(true);
-
-        if (resources.view->AllocatedExtent().width == extent.width &&
-            resources.view->AllocatedExtent().height == extent.height &&
-            resources.view->VisibilityFramebuffer() != nullptr &&
-            resources.offscreenImage != nullptr)
-        {
-            return *resources.view;
-        }
-
-        const uint32_t bank = resources.view->RtBankBase();
-        resources.visibilityFrameBuffer.reset();
-        resources.offscreenImage.reset();
-        CreateRenderTargetBank(bank, extent);
-        // Per-view visibility framebuffer: this view's RT_MINIGBUFFER_DRAW as color; depth comes from the
-        // shared render pass (primary depth) — safe because views render sequentially.
-        resources.visibilityFrameBuffer.reset(new FrameBuffer(
-            extent,
-            GetStorageImage(bank + Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(),
-            overlay_.visibilityPipeline->RenderPass()));
-        resources.view->SetVisibilityFramebuffer(resources.visibilityFrameBuffer.get());
-
-        // Offscreen sampled copy of the secondary view's composed output, bound into the sample
-        // array for ImGui display. Created once; bind the descriptor once (image is stable).
-        const std::string offscreenDebugName = fmt::format("Secondary View {} Offscreen", viewIndex);
-        resources.offscreenImage.reset(new RenderImage(
-            Device(), extent, VK_FORMAT_R16G16B16A16_SFLOAT,
-            VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-            false, offscreenDebugName.c_str()));
-        if (!resources.offscreenSampler)
-        {
-            Vulkan::SamplerConfig samplerConfig{};
-            samplerConfig.AddressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            samplerConfig.AddressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            samplerConfig.AnisotropyEnable = false;
-            resources.offscreenSampler.reset(new Vulkan::Sampler(*ctx_.device, samplerConfig));
-        }
-        ctx_.globalTexturePool->BindSampleTexture(SecondaryViewSampleSlot(viewIndex),
-            resources.offscreenImage->GetImageView(), *resources.offscreenSampler);
-
-        resources.view->SetAllocatedExtent(extent);
-        resources.view->SetPrevDepthValid(false);
-        return *resources.view;
-    }
-
-    void VulkanBaseRenderer::EnsureMaterialThumbnailScene()
-    {
-        if (materialThumbnailSceneReady_)
-        {
-            return;
-        }
-
-        materialThumbnailScene_ = std::make_unique<Assets::Scene>(
-            CommandPool(), false, /*allocateAmbientResources*/ false, /*enableCpuAcceleration*/ false);
-
-        std::vector<std::shared_ptr<Assets::Node>> nodes;
-        std::vector<Assets::Model> models;
-        std::vector<Assets::FMaterial> materials;
-        std::vector<Assets::LightObject> lights;
-        std::vector<Assets::AnimationTrack> tracks;
-        std::vector<Assets::Skeleton> skeletons;
-
-        models.push_back(Assets::FProcModel::CreateSphere(glm::vec3(0.0f), 1.0f));
-        Assets::FMaterial previewMaterial;
-        previewMaterial.gpuMaterial_ = Assets::Material::Lambertian(glm::vec3(0.75f));
-        previewMaterial.name_ = "__material_thumbnail_preview";
-        materials.push_back(previewMaterial);
-        nodes.push_back(Assets::SceneBuilder::CreateRenderNode(
-            "__MaterialThumbnailSphere",
-            glm::vec3(0.0f),
-            glm::vec3(1.0f),
-            1u,
-            0u,
-            0u,
-            true));
-
-        materialThumbnailScene_->Reload(nodes, models, materials, lights, tracks);
-        materialThumbnailScene_->PostLoad(skeletons);
-        materialThumbnailScene_->RebuildMeshBuffer(CommandPool(), false);
-
-        Assets::EnvironmentSetting env;
-        env.Reset();
-        env.HasSky = true;
-        env.HasSun = false;
-        env.SunIntensity = 1000.0f;
-        env.SunRotation = 0.35f;
-        env.SkyIntensity = 300.0f;
-        materialThumbnailScene_->SetEnvSettings(env);
-
-        Assets::Camera camera{};
-        camera.name = "Material Thumbnail";
-        camera.FieldOfView = 38.0f;
-        camera.Aperture = 0.0f;
-        camera.FocalDistance = 3.0f;
-        camera.NearPlane = 0.01f;
-        camera.FarPlane = 20.0f;
-        camera.ModelView = glm::lookAt(glm::vec3(0.0f, 0.0f, 4.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        materialThumbnailScene_->SetRenderCamera(camera);
-        materialThumbnailScene_->UpdateNodes();
-        materialThumbnailSceneReady_ = true;
-    }
-
-    void VulkanBaseRenderer::EnsureThumbnailRenderTarget()
-    {
-        if (thumbnailRenderView_ == nullptr)
-        {
-            FViewDesc viewDesc{};
-            viewDesc.renderExtent = kThumbnailExtent;
-            viewDesc.outputKind = EViewOutputKind::OffscreenTexture;
-            viewDesc.schedule = EViewSchedule::Transient;
-            thumbnailRenderView_ = renderViews_->CreateView(viewDesc, "thumbnail view");
-            if (thumbnailRenderView_ == nullptr)
-            {
-                Throw(std::runtime_error("failed to allocate thumbnail RenderView bank"));
-            }
-            thumbnailRenderView_->CreateSwapChain(SwapChain());
-            thumbnailRenderView_->SetCopyObjectIdHistory(false);
-        }
-        thumbnailRenderView_->SetRenderExtent(kThumbnailExtent);
-        thumbnailRenderView_->SetCopyObjectIdHistory(false);
-
-        if (thumbnailRenderView_->AllocatedExtent().width != kThumbnailExtent.width ||
-            thumbnailRenderView_->AllocatedExtent().height != kThumbnailExtent.height ||
-            thumbnailRenderView_->VisibilityFramebuffer() == nullptr)
-        {
-            const uint32_t thumbnailBank = thumbnailRenderView_->RtBankBase();
-            CreateRenderTargetBank(thumbnailBank, kThumbnailExtent);
-            thumbnailVisibilityFrameBuffer_.reset(new FrameBuffer(
-                kThumbnailExtent,
-                GetStorageImage(thumbnailBank + Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(),
-                overlay_.visibilityPipeline->RenderPass()));
-            thumbnailRenderView_->SetVisibilityFramebuffer(thumbnailVisibilityFrameBuffer_.get());
-            thumbnailRenderView_->SetAllocatedExtent(kThumbnailExtent);
-            thumbnailRenderView_->SetPrevDepthValid(false);
-        }
-        if (!thumbnailSampler_)
-        {
-            Vulkan::SamplerConfig samplerConfig{};
-            samplerConfig.AddressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            samplerConfig.AddressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            samplerConfig.AnisotropyEnable = false;
-            thumbnailSampler_.reset(new Vulkan::Sampler(*ctx_.device, samplerConfig));
-        }
-    }
-
-    void VulkanBaseRenderer::RebuildMeshThumbnailScene(const Assets::Model& model)
-    {
-        meshThumbnailScene_ = std::make_unique<Assets::Scene>(
-            CommandPool(), false, /*allocateAmbientResources*/ false, /*enableCpuAcceleration*/ false);
-
-        const glm::vec3 aabbMin = model.GetLocalAABBMin();
-        const glm::vec3 aabbMax = model.GetLocalAABBMax();
-        const glm::vec3 center = (aabbMin + aabbMax) * 0.5f;
-        const glm::vec3 extent = glm::max(aabbMax - aabbMin, glm::vec3(0.001f));
-        const float radius = std::max(glm::length(extent) * 0.5f, 0.05f);
-
-        std::vector<std::shared_ptr<Assets::Node>> nodes;
-        std::vector<Assets::Model> models;
-        std::vector<Assets::FMaterial> materials;
-        std::vector<Assets::LightObject> lights;
-        std::vector<Assets::AnimationTrack> tracks;
-        std::vector<Assets::Skeleton> skeletons;
-
-        models.push_back(model);
-        Assets::FMaterial previewMaterial;
-        previewMaterial.gpuMaterial_ = Assets::Material::Lambertian(glm::vec3(0.72f, 0.74f, 0.78f));
-        previewMaterial.name_ = "__mesh_thumbnail_default";
-        materials.push_back(previewMaterial);
-        nodes.push_back(Assets::SceneBuilder::CreateRenderNode(
-            "__MeshThumbnailModel",
-            -center,
-            glm::vec3(1.0f),
-            1u,
-            0u,
-            0u,
-            true));
-
-        meshThumbnailScene_->Reload(nodes, models, materials, lights, tracks);
-        meshThumbnailScene_->PostLoad(skeletons);
-        meshThumbnailScene_->RebuildMeshBuffer(CommandPool(), false);
-
-        Assets::EnvironmentSetting env;
-        env.Reset();
-        env.HasSky = true;
-        env.HasSun = false;
-        env.SunIntensity = 500.0f;
-        env.SunRotation = 0.35f;
-        env.SkyIntensity = 300.0f;
-        meshThumbnailScene_->SetEnvSettings(env);
-
-        Assets::Camera camera{};
-        camera.name = "Mesh Thumbnail";
-        camera.FieldOfView = 38.0f;
-        camera.Aperture = 0.0f;
-        const float halfFov = glm::radians(camera.FieldOfView) * 0.5f;
-        const float distance = std::max(radius / std::max(std::sin(halfFov), 0.01f) * 1.18f, 0.15f);
-        const glm::vec3 viewDir = glm::normalize(glm::vec3(0.72f, 0.42f, 0.86f));
-        const glm::vec3 eye = viewDir * distance;
-        camera.FocalDistance = distance;
-        camera.NearPlane = std::max(0.001f, distance - radius * 2.5f);
-        camera.FarPlane = std::max(camera.NearPlane + 1.0f, distance + radius * 3.5f);
-        camera.ModelView = glm::lookAt(eye, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        meshThumbnailScene_->SetRenderCamera(camera);
-        meshThumbnailScene_->UpdateNodes();
-    }
-
-    Assets::UniformBufferObject VulkanBaseRenderer::BuildThumbnailUbo(Assets::Scene& scene, const VkExtent2D extent) const
-    {
-        Assets::UniformBufferObject ubo{};
-
-        const Assets::Camera camera = scene.GetRenderCamera();
-        const float aspect = static_cast<float>(std::max(1u, extent.width)) /
-            static_cast<float>(std::max(1u, extent.height));
-        ubo.ModelView = camera.ModelView;
-        ubo.Projection = glm::perspective(glm::radians(camera.FieldOfView), aspect, camera.NearPlane, camera.FarPlane);
-        ubo.Projection[1][1] *= -1.0f;
-        ubo.ProjectionUnJit = ubo.Projection;
-        ubo.ModelViewInverse = glm::inverse(ubo.ModelView);
-        ubo.ProjectionInverse = glm::inverse(ubo.Projection);
-        ubo.ProjectionInverseUnJit = ubo.ProjectionInverse;
-        ubo.ViewProjection = ubo.Projection * ubo.ModelView;
-        ubo.ViewProjectionUnJit = ubo.ProjectionUnJit * ubo.ModelView;
-        ubo.PrevViewProjection = ubo.ViewProjection;
-        ubo.PrevViewProjectionUnJit = ubo.ViewProjectionUnJit;
-        ubo.Jitter = glm::vec4(0.0f);
-        ubo.ViewportRect = glm::vec4(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height));
-
-        const Assets::EnvironmentSetting& env = scene.GetEnvSettings();
-        const bool hasSun = env.HasSun && env.SunIntensity > 0.0f;
-        ubo.SunDirection = glm::vec4(env.SunDirection(), 0.0f);
-        ubo.SunColor = hasSun ? glm::vec4(1.0f, 1.0f, 1.0f, 0.0f) * env.SunIntensity : glm::vec4(0.0f);
-        ubo.HasSun = hasSun;
-        ubo.SkyRotation = env.SkyRotation;
-        ubo.SkyIntensity = env.SkyIntensity;
-        ubo.SkyIdx = static_cast<uint32_t>(std::max(env.SkyIdx, 0));
-        ubo.HasSky = env.HasSky;
-        ubo.LightCount = scene.GetLightCount();
-
-        const auto cascades = env.ComputeSunCascades(
-            ubo.ViewProjectionUnJit, camera.NearPlane, camera.FarPlane, 20.0f);
-        for (uint32_t i = 0; i < Assets::Scene::kSunShadowCascadeCount; ++i)
-        {
-            ubo.SunCascadeViewProjection[i] = cascades.viewProjection[i];
-        }
-        ubo.CascadeSplits = cascades.splits;
-
-        ubo.Aperture = camera.Aperture;
-        ubo.FocusDistance = camera.FocalDistance;
-        ubo.FastGather = false;
-        ubo.SuperResolution = 0;
-        ubo.MaxNumberOfBounces = 1;
-        ubo.NumberOfSamples = 64;
-        ubo.NumberOfBounces = 2;
-        ubo.TemporalFrames = 1;
-        ubo.TotalFrames = static_cast<uint32_t>(std::max(frame_.frameCount, 1));
-        ubo.TAA = false;
-        ubo.ProgressiveRender = false;
-        ubo.HDR = false;
-        ubo.HDROutputMode = 0;
-        ubo.PaperWhiteNit = 200.0f;
-        ubo.SceneEpsilonScale = 1.0f;
-        ubo.HeatmapScale = 1.0f;
-        ubo.ShowHeatmap = false;
-        ubo.DebugDraw_Lighting = false;
-        ubo.DebugDraw_ShadowCascadeCoverage = false;
-
-        ubo.DenoiseDiffuseSourceSlot = static_cast<uint32_t>(Assets::Bindless::RT_ACCUMLATE_DIFFUSE);
-        ubo.DenoiseSpecularSourceSlot = static_cast<uint32_t>(Assets::Bindless::RT_ACCUMLATE_SPECULAR);
-        ubo.GTAORadius = 1.0f;
-        ubo.GTAOStrength = 0.0f;
-        ubo.GTAOThickness = 0.1f;
-        ubo.GTAODebugMode = 0;
-        ubo.GTAOEnable = false;
-        ubo.GTAOQuality = 0;
-        ubo.SkyVisEnable = false;
-        ubo.SkyVisStrength = 0.0f;
-        ubo.SkyVisMaxDistance = 1.0f;
-        ubo.SkyVisRayCount = 1;
-        ubo.SkyVisCombineMode = 0;
-        ubo.SkyVisBlurRadius = 0;
-        ubo.SkyVisJitterRadius = 0.0f;
-        return ubo;
-    }
-
-    void VulkanBaseRenderer::CopyThumbnailViewOutput(
-        VkCommandBuffer commandBuffer,
-        RenderView& view,
-        RenderImage& dst)
-    {
-        const RenderImage* src = GetStorageImage(view.RtBankBase() + Assets::Bindless::RT_DENOISED);
-        if (!src)
-        {
-            return;
-        }
-
-        const VkExtent2D extent = view.RenderExtent();
-        src->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                           VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-        dst.InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-                          VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-        VkImageBlit region{};
-        region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        region.srcOffsets[0] = {0, 0, 0};
-        region.srcOffsets[1] = {static_cast<int32_t>(extent.width), static_cast<int32_t>(extent.height), 1};
-        region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        region.dstOffsets[0] = {0, 0, 0};
-        region.dstOffsets[1] = {static_cast<int32_t>(extent.width), static_cast<int32_t>(extent.height), 1};
-        vkCmdBlitImage(commandBuffer,
-                       src->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                       dst.GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                       1, &region, VK_FILTER_LINEAR);
-
-        dst.InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-        src->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
-    }
-
-    bool VulkanBaseRenderer::ScheduleNextMaterialThumbnail(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
-    {
-        if (pendingMaterialThumbnails_.empty())
-        {
-            return false;
-        }
-
-        auto mainScene = scene_.lock();
-        if (!mainScene)
-        {
-            pendingMaterialThumbnails_.clear();
-            return false;
-        }
-
-        const uint32_t materialIndex = pendingMaterialThumbnails_.front();
-        pendingMaterialThumbnails_.erase(pendingMaterialThumbnails_.begin());
-        if (materialIndex >= mainScene->Materials().size() || materialIndex >= kMaterialThumbnailMaxSlots)
-        {
-            return false;
-        }
-
-        if (!materialThumbnailSceneReady_)
-        {
-            return false;
-        }
-        if (!materialThumbnailScene_ || materialThumbnailScene_->Materials().empty())
-        {
-            return false;
-        }
-
-        EnsureThumbnailRenderTarget();
-        assert(thumbnailRenderView_ != nullptr);
-
-        const uint32_t sampleSlot = kMaterialThumbnailSampleSlotBase + materialIndex;
-
-        if (materialThumbnailImages_.size() <= materialIndex)
-        {
-            materialThumbnailImages_.resize(static_cast<size_t>(materialIndex) + 1);
-        }
-        if (!materialThumbnailImages_[materialIndex])
-        {
-            const std::string debugName = fmt::format("Material Thumbnail {}", materialIndex);
-            materialThumbnailImages_[materialIndex].reset(new RenderImage(
-                Device(), kThumbnailExtent, VK_FORMAT_R16G16B16A16_SFLOAT,
-                VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                false, debugName.c_str()));
-            ctx_.globalTexturePool->BindSampleTexture(
-                sampleSlot, materialThumbnailImages_[materialIndex]->GetImageView(), *thumbnailSampler_);
-        }
-
-        materialThumbnailScene_->Materials()[0] = mainScene->Materials()[materialIndex];
-        materialThumbnailScene_->Materials()[0].name_ = "__material_thumbnail_preview";
-
-        const auto rendererIt = logicRenderers_.renderers.find(ERT_SoftwareModernNoAmbient);
-        const auto fallbackIt = logicRenderers_.renderers.find(logicRenderers_.current);
-        if (rendererIt == logicRenderers_.renderers.end() && fallbackIt == logicRenderers_.renderers.end())
-        {
-            return false;
-        }
-
-        materialThumbnailScene_->UpdateAllMaterials();
-        materialThumbnailScene_->UpdateNodes();
-        const Assets::UniformBufferObject previewCamera = BuildThumbnailUbo(*materialThumbnailScene_, kThumbnailExtent);
-
-        thumbnailRenderView_->SetDebugName("material thumbnail view");
-        thumbnailRenderView_->SetRenderExtent(kThumbnailExtent);
-        SetRenderViewUbo(*thumbnailRenderView_, imageIndex, previewCamera);
-        thumbnailRenderView_->SetVisibilityFramebuffer(thumbnailVisibilityFrameBuffer_.get());
-        thumbnailRenderView_->SetSceneOverride(materialThumbnailScene_.get());
-        thumbnailRenderView_->SetPrevDepthValid(false);
-        ScheduleRenderView(
-            *thumbnailRenderView_,
-            *(rendererIt != logicRenderers_.renderers.end() ? rendererIt : fallbackIt)->second,
-            /*clearSwapchain*/ false,
-            [this, commandBuffer, materialIndex](RenderView& view)
-            {
-                if (materialIndex < materialThumbnailImages_.size() && materialThumbnailImages_[materialIndex])
-                {
-                    CopyThumbnailViewOutput(commandBuffer, view, *materialThumbnailImages_[materialIndex]);
-                }
-                view.SetSceneOverride(nullptr);
-            });
-
-        return true;
-    }
-
-    bool VulkanBaseRenderer::ScheduleNextMeshThumbnail(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
-    {
-        if (pendingMeshThumbnails_.empty())
-        {
-            return false;
-        }
-
-        auto mainScene = scene_.lock();
-        if (!mainScene)
-        {
-            pendingMeshThumbnails_.clear();
-            return false;
-        }
-
-        const uint32_t modelIndex = pendingMeshThumbnails_.front();
-        pendingMeshThumbnails_.erase(pendingMeshThumbnails_.begin());
-        if (modelIndex >= mainScene->Models().size() || modelIndex >= kMeshThumbnailMaxSlots)
-        {
-            return false;
-        }
-
-        const Assets::Model& model = mainScene->Models()[modelIndex];
-        if (model.NumberOfVertices() == 0)
-        {
-            return false;
-        }
-
-        EnsureThumbnailRenderTarget();
-        assert(thumbnailRenderView_ != nullptr);
-        RebuildMeshThumbnailScene(model);
-        if (!meshThumbnailScene_)
-        {
-            return false;
-        }
-
-        const uint32_t sampleSlot = kMeshThumbnailSampleSlotBase + modelIndex;
-
-        if (meshThumbnailImages_.size() <= modelIndex)
-        {
-            meshThumbnailImages_.resize(static_cast<size_t>(modelIndex) + 1);
-        }
-        if (!meshThumbnailImages_[modelIndex])
-        {
-            const std::string debugName = fmt::format("Mesh Thumbnail {}", modelIndex);
-            meshThumbnailImages_[modelIndex].reset(new RenderImage(
-                Device(), kThumbnailExtent, VK_FORMAT_R16G16B16A16_SFLOAT,
-                VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                false, debugName.c_str()));
-            ctx_.globalTexturePool->BindSampleTexture(
-                sampleSlot, meshThumbnailImages_[modelIndex]->GetImageView(), *thumbnailSampler_);
-        }
-
-        const auto rendererIt = logicRenderers_.renderers.find(ERT_SoftwareModernNoAmbient);
-        const auto fallbackIt = logicRenderers_.renderers.find(logicRenderers_.current);
-        if (rendererIt == logicRenderers_.renderers.end() && fallbackIt == logicRenderers_.renderers.end())
-        {
-            return false;
-        }
-
-        meshThumbnailScene_->UpdateAllMaterials();
-        meshThumbnailScene_->UpdateNodes();
-        const Assets::UniformBufferObject previewCamera = BuildThumbnailUbo(*meshThumbnailScene_, kThumbnailExtent);
-
-        thumbnailRenderView_->SetDebugName("mesh thumbnail view");
-        thumbnailRenderView_->SetRenderExtent(kThumbnailExtent);
-        SetRenderViewUbo(*thumbnailRenderView_, imageIndex, previewCamera);
-        thumbnailRenderView_->SetVisibilityFramebuffer(thumbnailVisibilityFrameBuffer_.get());
-        thumbnailRenderView_->SetSceneOverride(meshThumbnailScene_.get());
-        thumbnailRenderView_->SetPrevDepthValid(false);
-        ScheduleRenderView(
-            *thumbnailRenderView_,
-            *(rendererIt != logicRenderers_.renderers.end() ? rendererIt : fallbackIt)->second,
-            /*clearSwapchain*/ false,
-            [this, commandBuffer, modelIndex](RenderView& view)
-            {
-                if (modelIndex < meshThumbnailImages_.size() && meshThumbnailImages_[modelIndex])
-                {
-                    CopyThumbnailViewOutput(commandBuffer, view, *meshThumbnailImages_[modelIndex]);
-                }
-                view.SetSceneOverride(nullptr);
-            });
-
-        return true;
-    }
-
-    void VulkanBaseRenderer::CopySecondaryViewOutput(
-        VkCommandBuffer commandBuffer,
-        const uint32_t imageIndex,
-        RenderView& view,
-        uint32_t viewIndex)
-    {
-        viewIndex = std::min(viewIndex, kMaxSecondaryViews - 1);
-        auto& resources = secondaryViews_[viewIndex];
-        const RenderImage* src = GetStorageImage(view.RtBankBase() + Assets::Bindless::RT_DENOISED);
-        if (!src)
-        {
-            return;
-        }
-
-        const VkExtent2D secondaryExtent = view.RenderExtent();
-        const int32_t rw = static_cast<int32_t>(secondaryExtent.width);
-        const int32_t rh = static_cast<int32_t>(secondaryExtent.height);
-
-        // Secondary view composed output -> transfer source.
-        src->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                           VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-
-        // 1) Copy into the offscreen sampled image so the editor can ImGui::Image it.
-        if (resources.offscreenImage)
-        {
-            resources.offscreenImage->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT,
-                VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-            VkImageCopy copyRegion{};
-            copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-            copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-            copyRegion.extent = {static_cast<uint32_t>(rw), static_cast<uint32_t>(rh), 1};
-            vkCmdCopyImage(commandBuffer,
-                src->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                resources.offscreenImage->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                1, &copyRegion);
-            resources.offscreenImage->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_WRITE_BIT,
-                VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-        }
-
-        // 2) Env demo: also composite as a picture-in-picture in the swapchain's bottom-right quarter
-        //    (so `gnb shot` can verify without the editor UI).
-        if (multiViewDemo_)
-        {
-            const int32_t sw = static_cast<int32_t>(frame_.swapChain->Extent().width);
-            const int32_t sh = static_cast<int32_t>(frame_.swapChain->Extent().height);
-            ImageMemoryBarrier::FullInsert(commandBuffer, frame_.swapChain->Images()[imageIndex],
-                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-            VkImageBlit region{};
-            region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-            region.srcOffsets[0] = {0, 0, 0};
-            region.srcOffsets[1] = {rw, rh, 1};
-            region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-            region.dstOffsets[0] = {sw / 2, sh / 2, 0};
-            region.dstOffsets[1] = {sw, sh, 1};
-            vkCmdBlitImage(commandBuffer,
-                           src->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                           frame_.swapChain->Images()[imageIndex], VK_IMAGE_LAYOUT_GENERAL,
-                           1, &region, VK_FILTER_LINEAR);
-        }
-
-        // Restore denoised output to GENERAL for next frame's barrier initialization.
-        src->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
-    }
-
     void VulkanBaseRenderer::ScheduleAuxiliaryViews(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
-        if (ScheduleNextMaterialThumbnail(commandBuffer, imageIndex))
-        {
-            return;
-        }
-        if (ScheduleNextMeshThumbnail(commandBuffer, imageIndex))
+        if (previewServices_ && previewServices_->ScheduleNextThumbnail(commandBuffer, imageIndex))
         {
             return;
         }
 
-        const auto it = logicRenderers_.renderers.find(logicRenderers_.current);
-        if (it == logicRenderers_.renderers.end())
+        if (previewServices_)
         {
-            return;
-        }
-
-        for (uint32_t viewIndex = 0; viewIndex < kMaxSecondaryViews; ++viewIndex)
-        {
-            auto& resources = secondaryViews_[viewIndex];
-            if (!multiViewDemo_ && !resources.enabled && !resources.requested)
-            {
-                continue;
-            }
-
-            RenderView& secondaryView = EnsureSecondaryRenderView(viewIndex);
-            const VkExtent2D secondaryExtent = secondaryView.RenderExtent();
-
-            Assets::UniformBufferObject secondaryUbo = resources.cameraOverride.has_value()
-                ? MakeCameraUbo(frame_.lastUBO, *resources.cameraOverride,
-                                GetScene().GetEnvSettings(), secondaryExtent)
-                : MakeOrbitedCameraUbo(frame_.lastUBO, GetScene().GetRenderCamera(),
-                                       GetScene().GetEnvSettings(), secondaryExtent,
-                                       35.0f + static_cast<float>(viewIndex) * 35.0f, 30.0f);
-            FinalizeTemporalUbo(secondaryView, secondaryUbo);
-            SetRenderViewUbo(secondaryView, imageIndex, secondaryUbo);
-            secondaryView.SetVisibilityFramebuffer(resources.visibilityFrameBuffer.get());
-            secondaryView.SetSceneOverride(nullptr);
-            secondaryView.SetCopyObjectIdHistory(true);
-
-            ScheduleRenderView(
-                secondaryView,
-                *it->second,
-                /*clearSwapchain*/ false,
-                [this, commandBuffer, imageIndex, viewIndex](RenderView& view)
-                {
-                    CopySecondaryViewOutput(commandBuffer, imageIndex, view, viewIndex);
-                });
+            previewServices_->ScheduleOffscreenViews(commandBuffer, imageIndex);
         }
     }
 

@@ -195,6 +195,12 @@ namespace Vulkan
         void SetAllocatedExtent(VkExtent2D extent) { allocatedExtent_ = extent; }
         void SetCameraAddress(VkDeviceAddress address) { cameraAddress_ = address; }
         void SetVisibilityFramebuffer(FrameBuffer* framebuffer) { visibilityFramebuffer_ = framebuffer; }
+        void SetAllocatedVisibilityFramebuffer(FrameBuffer* framebuffer, VkExtent2D extent)
+        {
+            visibilityFramebuffer_ = framebuffer;
+            allocatedExtent_ = extent;
+            prevDepthValid_ = false;
+        }
         void SetSceneOverride(Assets::Scene* scene) { sceneOverride_ = scene; }
         void SetCopyObjectIdHistory(bool copyHistory) { copyObjectIdHistory_ = copyHistory; }
         void SetPrevDepthValid(bool valid) { prevDepthValid_ = valid; }
@@ -211,6 +217,13 @@ namespace Vulkan
         {
             cameraUboRing_.clear();
             cameraAddress_ = 0;
+        }
+        void ResetSwapChainResources()
+        {
+            allocatedExtent_ = {0, 0};
+            visibilityFramebuffer_ = nullptr;
+            prevDepthValid_ = false;
+            ResetCameraUbo();
         }
         void InvalidateTemporalHistory()
         {
