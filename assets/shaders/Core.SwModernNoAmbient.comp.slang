@@ -2,36 +2,52 @@ import Common;
 import Bindless;
 #include "common/PreProcessor.slang"
 
-float3 GetSunCascadeCoverageDebugColor(uint cascadeIndex)
+float3 FresnelSchlick(float cosTheta, float3 f0)
 {
-    if (cascadeIndex == 0u) return float3(1.00f, 0.28f, 0.24f);
-    if (cascadeIndex == 1u) return float3(0.20f, 0.82f, 0.42f);
-    if (cascadeIndex == 2u) return float3(0.24f, 0.56f, 1.00f);
-    return float3(1.00f, 0.82f, 0.18f);
+    float f = 1.0f - saturate(cosTheta);
+    float f2 = f * f;
+    return f0 + (1.0f - f0) * (f2 * f2 * f);
 }
 
-float3 ResolveSunCascadeCoverageDebugColor(UniformBufferObject Camera, float3 worldPos, float viewDist)
+float3 FresnelSchlickRoughness(float cosTheta, float3 f0, float roughness)
 {
-    if (!Camera.HasSun)
-    {
-        return float3(0.0f, 0.0f, 0.0f);
-    }
+    float f = 1.0f - saturate(cosTheta);
+    float f2 = f * f;
+    return f0 + (max(float3(1.0f - roughness), f0) - f0) * (f2 * f2 * f);
+}
 
-    uint cascadeIndex = Common.SelectSunCascade(viewDist, Camera.CascadeSplits);
-    float4 lightPos = mul(Camera.SunCascadeViewProjection[cascadeIndex], float4(worldPos, 1.0f));
-    if (abs(lightPos.w) < 1e-5f)
-    {
-        return float3(1.0f, 0.0f, 1.0f);
-    }
+float DistributionGGX(float NoH, float roughness)
+{
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float denom = NoH * NoH * (a2 - 1.0f) + 1.0f;
+    return a2 / max(M_PI * denom * denom, 1e-5f);
+}
 
-    float3 projCoords = lightPos.xyz / lightPos.w;
-    float2 uv = projCoords.xy * 0.5f + 0.5f;
-    bool inside = all(uv >= float2(0.0f, 0.0f)) &&
-                  all(uv <= float2(1.0f, 1.0f)) &&
-                  projCoords.z >= 0.0f &&
-                  projCoords.z <= 1.0f;
+float GeometrySchlickGGX(float NoV, float roughness)
+{
+    float r = roughness + 1.0f;
+    float k = (r * r) * 0.125f;
+    return NoV / max(NoV * (1.0f - k) + k, 1e-5f);
+}
 
-    return inside ? GetSunCascadeCoverageDebugColor(cascadeIndex) : float3(1.0f, 0.0f, 1.0f);
+float GeometrySmith(float NoV, float NoL, float roughness)
+{
+    return GeometrySchlickGGX(NoV, roughness) * GeometrySchlickGGX(NoL, roughness);
+}
+
+float3 DielectricF0(float refractionIndex)
+{
+    float f = (refractionIndex - 1.0f) / max(refractionIndex + 1.0f, 1e-5f);
+    return float3(f * f);
+}
+
+float3 MaterialF0(Material material, float3 albedo, float metalness)
+{
+    float3 dielectricF0 = material.MaterialModel == MaterialDielectric
+        ? DielectricF0(max(material.RefractionIndex, 1.0f))
+        : float3(0.04f);
+    return lerp(dielectricF0, albedo, metalness);
 }
 
 [shader("compute")]
@@ -56,12 +72,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
     uint2 vBuffer = uint2((packedValue >> 17) & 0x7FFF, packedValue & 0x1FFFF);
     if (vBuffer.x == 0)
     {
-        float4 skyColor = Camera.DebugDraw_ShadowCascadeCoverage
-            ? float4(0, 0, 0, 1)
-            : (Camera.HasSky
-                ? Common.SampleIBL(Camera.SkyIdx, primaryRayDir, Camera.SkyRotation, 0) * Camera.SkyIntensity
-                : float4(0, 0, 0, 1));
+        float4 skyColor = Camera.HasSky
+            ? Common.SampleIBL(Camera.SkyIdx, primaryRayDir, Camera.SkyRotation, 0) * Camera.SkyIntensity
+            : float4(0, 0, 0, 1);
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, skyColor);
+        Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR).Store(pixel, float4(0));
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT).Store(pixel, float4(0));
         Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(pixel, 0);
         Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(pixel, 1000);
@@ -94,6 +109,12 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float3 n0 = mul(hitNode.worldTS, float4(v0.Normal, 0)).xyz;
     float3 n1 = mul(hitNode.worldTS, float4(v1.Normal, 0)).xyz;
     float3 n2 = mul(hitNode.worldTS, float4(v2.Normal, 0)).xyz;
+    float3 ln0 = v0.Normal;
+    float3 ln1 = v1.Normal;
+    float3 ln2 = v2.Normal;
+    float4 lt0 = v0.Tangent;
+    float4 lt1 = v1.Tangent;
+    float4 lt2 = v2.Tangent;
 
     float3 edge0 = p1 - p0;
     float3 edge1 = p2 - p0;
@@ -108,43 +129,58 @@ void main(uint3 DTid : SV_DispatchThreadID)
     hitVertex.Position = p0 * baryX + p1 * baryY + p2 * baryZ;
     hitVertex.Normal = normalize(n0 * baryX + n1 * baryY + n2 * baryZ);
     hitVertex.TexCoord = v0.TexCoord * baryX + v1.TexCoord * baryY + v2.TexCoord * baryZ;
+    hitVertex.LocalNormal = normalize(ln0 * baryX + ln1 * baryY + ln2 * baryZ);
+    float4 localTangent = lt0 * baryX + lt1 * baryY + lt2 * baryZ;
+    hitVertex.LocalTangent = float4(normalize(localTangent.xyz), localTangent.w < 0.5f ? -1.0f : 1.0f);
     hitVertex.MaterialIndex = FetchMaterialId(hitNode, v0.MaterialIndex);
 
     float4 color;
+    float4 specularColor = float4(0);
     float4 ambientColor = float4(0);
     float4 primaryAlbedo = float4(1, 1, 1, 1);
-    if (Camera.DebugDraw_ShadowCascadeCoverage)
-    {
-        float viewDist = -mul(Camera.ModelView, float4(hitVertex.Position, 1.0f)).z;
-        float3 debugColor = ResolveSunCascadeCoverageDebugColor(Camera, hitVertex.Position, viewDist);
-        color = float4(debugColor, 1.0f);
-    }
-    else
+
     {
         Material material = Bindless.GetGpuscene().GetMaterial(hitVertex.MaterialIndex);
-        primaryAlbedo = material.Diffuse;
-        if (material.DiffuseTextureId >= 0)
-        {
-            primaryAlbedo *= Bindless.GetSampleTexture(material.DiffuseTextureId).SampleLevel(hitVertex.TexCoord, 0);
-        }
+        float4 gbuffer;
+        Common.FetchGBuffer(hitVertex, material, hitNode, primaryRayDir, primaryAlbedo, gbuffer);
 
         if (material.MaterialModel == MaterialDiffuseLight)
         {
-            color = min(material.Diffuse, float4(1000, 1000, 1000, 1));
+            color = min(primaryAlbedo, float4(1000, 1000, 1000, 1));
         }
         else
         {
-            float3 N = normalize(hitVertex.Normal);
+            float3 N = normalize(gbuffer.xyz);
+            float3 V = normalize(origin.xyz - hitVertex.Position);
+            float3 R = reflect(-V, N);
+            float roughness = clamp(gbuffer.a, 0.04f, 1.0f);
+            float metalness = saturate(material.Metalness);
+            if (material.MRATextureId >= 0)
+            {
+                float4 mra = Bindless.GetSampleTexture(material.MRATextureId).SampleLevel(hitVertex.TexCoord, 0);
+                metalness = saturate(metalness * mra.b);
+            }
+            if (material.MaterialModel == MaterialMetallic)
+            {
+                metalness = 1.0f;
+            }
+            if (material.MaterialModel == MaterialDielectric)
+            {
+                metalness = 0.0f;
+            }
+
             float3 albedo = Camera.DebugDraw_Lighting ? float3(1.0f, 1.0f, 1.0f) : primaryAlbedo.rgb;
+            float3 f0 = MaterialF0(material, albedo, metalness);
+            float NoV = max(dot(N, V), 0.001f);
+            float3 kS = FresnelSchlickRoughness(NoV, f0, roughness);
+            float3 kD = (1.0f - kS) * (1.0f - metalness);
+            if (material.MaterialModel == MaterialDielectric)
+            {
+                kD = float3(0.0f);
+            }
 
             // 天光：HDR radiance SH 经 Lambert cosine kernel 卷积后的 diffuse radiance。
             float3 ambient = float3(0);
-            if (Camera.HasSky)
-            {
-                float3 irr = Common.SampleIBL(Camera.SkyIdx, N, Camera.SkyRotation, material.Fuzziness).rgb * Camera.SkyIntensity;
-                ambient = albedo * irr;
-            }
-
             // Large-scale / off-screen sky occlusion from the baked voxel sky-visibility field.
             // Stored in the alpha channel (worldPos already available here, saving a reprojection in
             // GTAOCompose); degrades to 1.0 when voxel data is missing. Strength fades it toward 1.
@@ -168,16 +204,39 @@ void main(uint3 DTid : SV_DispatchThreadID)
                 }
                 skyVis = SampleVoxelSkyVisibility(svPos, N);
             }
+            float skyVisEff = saturate(1.0f - (1.0f - skyVis) * max(Camera.SkyVisStrength, 0.0f));
+
+            if (Camera.HasSky)
+            {
+                float3 irr = Common.SampleIBLDiffuse(Camera.SkyIdx, N, Camera.SkyRotation).rgb * Camera.SkyIntensity;
+                ambient = kD * albedo * irr;
+
+                float3 skySpecular = Common.SampleIBL(Camera.SkyIdx, R, Camera.SkyRotation, roughness).rgb *
+                    Camera.SkyIntensity;
+                specularColor.rgb += skySpecular * kS * skyVisEff;
+            }
             ambientColor = float4(ambient, skyVis);
 
             // 太阳：Lambert + CSM 阴影
             float3 direct = float3(0);
             if (Camera.HasSun)
             {
-                float NoL = max(dot(Camera.SunDirection.xyz, N), 0.0f);
+                float3 L = normalize(Camera.SunDirection.xyz);
+                float NoL = max(dot(L, N), 0.0f);
                 float viewDist = -mul(Camera.ModelView, float4(hitVertex.Position, 1.0f)).z;
                 float shadow = Common.SampleSunShadowCSM(hitVertex.Position, N, viewDist);
-                direct = albedo * Camera.SunColor.rgb * (NoL * shadow * M_1_PI);
+                float3 sunRadiance = Camera.SunColor.rgb * (NoL * shadow);
+
+                float3 H = normalize(V + L);
+                float NoH = max(dot(N, H), 0.0f);
+                float VoH = max(dot(V, H), 0.0f);
+                float D = DistributionGGX(NoH, roughness);
+                float G = GeometrySmith(NoV, NoL, roughness);
+                float3 F = FresnelSchlick(VoH, f0);
+                float3 specularBrdf = (D * G * F) / max(4.0f * NoV * NoL, 1e-5f);
+
+                direct = kD * albedo * sunRadiance * M_1_PI;
+                specularColor.rgb += specularBrdf * sunRadiance;
             }
 
             // GTAO is applied only to the sky term in Process.GTAOCompose. Direct sun
@@ -194,6 +253,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     const bool locked = (hitNode.reserved2 & 2u) != 0;
     const bool danger = (hitNode.reserved2 & 4u) != 0;
     Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, color);
+    Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR).Store(pixel, specularColor);
     Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT).Store(pixel, ambientColor);
     Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(pixel, Common.EncodeObjectId(hitNode.instanceId, selected, hovered, locked, danger));
     Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(pixel, ndcDepth);

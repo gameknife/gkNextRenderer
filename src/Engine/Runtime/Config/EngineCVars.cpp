@@ -227,8 +227,6 @@ namespace NextCVar
 
         GK_CVAR_BOOL("show.debugLighting", showFlags, DebugDraw_Lighting, false, ECVarFlags::None,
                      "Debug draw lighting");
-        GK_CVAR_BOOL("show.shadowCascadeCoverage", showFlags, DebugDraw_ShadowCascadeCoverage, false, ECVarFlags::None,
-                     "Debug draw sun shadow cascade coverage");
         GK_CVAR_BOOL("show.debugBoundingBox", showFlags, DebugDraw_BoundingBox, false, ECVarFlags::None,
                      "Debug draw bounding box");
         GK_CVAR_BOOL("debug.physics.overlay", showFlags, DebugPhysicsOverlay, false, ECVarFlags::None,

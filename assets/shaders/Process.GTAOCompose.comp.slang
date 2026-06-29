@@ -109,6 +109,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     const float4 directOrEmissive = Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE)[pixel];
+    const float4 specular = Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR)[pixel];
     const float4 ambient = Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT)[pixel];
     const float depth = Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER)[pixel];
     const float3 worldNormal = Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL)[pixel].xyz;
@@ -162,7 +163,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     const float strength = max(camera.GTAOStrength, 0.0f);
     const float skyOcclusion = pow(saturate(combinedVis), strength);
 
-    float4 output = float4(directOrEmissive.rgb + ambient.rgb * skyOcclusion, 1.0f);
+    float4 output = float4(directOrEmissive.rgb + ambient.rgb * skyOcclusion + specular.rgb, 1.0f);
     if (camera.GTAODebugMode == 1u)
     {
         // ComposeSimple applies the regular scene tonemap after this pass. Convert the

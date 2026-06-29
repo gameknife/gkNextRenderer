@@ -96,7 +96,7 @@ namespace Vulkan
             ubo.HeatmapScale = 1.0f;
             ubo.ShowHeatmap = false;
             ubo.DebugDraw_Lighting = false;
-            ubo.DebugDraw_ShadowCascadeCoverage = false;
+            ubo.DebugDrawPadding0 = 0;
             ubo.DenoiseDiffuseSourceSlot = static_cast<uint32_t>(Assets::Bindless::RT_ACCUMLATE_DIFFUSE);
             ubo.DenoiseSpecularSourceSlot = static_cast<uint32_t>(Assets::Bindless::RT_ACCUMLATE_SPECULAR);
             ubo.GTAORadius = 1.0f;

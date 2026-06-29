@@ -68,6 +68,7 @@ namespace Vulkan::SoftwareModernNoAmbient
                     VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
             };
             transition(Assets::Bindless::RT_SINGLE_DIFFUSE);
+            transition(Assets::Bindless::RT_SINGLE_SPECULAR);
             transition(Assets::Bindless::RT_OBJEDCTID_0);
             transition(Assets::Bindless::RT_PREV_DEPTHBUFFER);
             transition(Assets::Bindless::RT_MOTIONVECTOR);

@@ -145,7 +145,7 @@ public struct ALIGN_16 UniformBufferObject
     public bool FastGather;
 
     public bool DebugDraw_Lighting;
-    public bool DebugDraw_ShadowCascadeCoverage;
+    public uint DebugDrawPadding0;
     public uint SuperResolution;
     public float SceneEpsilonScale;
 
