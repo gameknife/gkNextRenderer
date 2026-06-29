@@ -8,7 +8,7 @@
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.h"
-#include "Engine/Rendering/Preview/RenderPreviewServices.hpp"
+#include "Engine/Rendering/Preview/RenderViewServices.hpp"
 
 #include "EditorActionDispatcher.hpp"
 #include "EditorContext.hpp"
@@ -605,7 +605,7 @@ void EditorGameInstance::SyncCameraViewRendererCamera(size_t viewIndex, const gl
     }
 
     viewIndex = std::min(viewIndex, cameraViewControllers_.size() - 1);
-    GetEngine().GetRenderer().Preview().OffscreenViews().SetCameraOverride(
+    GetEngine().GetRenderer().ViewServices().OffscreenViews().SetCameraOverride(
         static_cast<uint32_t>(viewIndex), BuildCameraViewCamera(viewIndex));
 }
 

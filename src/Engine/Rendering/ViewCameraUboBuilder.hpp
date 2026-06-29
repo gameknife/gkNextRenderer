@@ -26,10 +26,4 @@ namespace Vulkan
     };
 
     Assets::UniformBufferObject BuildViewCameraUbo(const FViewCameraUboRequest& request);
-
-    Assets::Camera BuildOrbitedCamera(
-        const Assets::UniformBufferObject& baseUbo,
-        const Assets::Camera& camera,
-        float yawDegrees,
-        float pivotDistance);
 }

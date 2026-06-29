@@ -6,7 +6,6 @@
 #include "Engine/Rendering/RenderViewResourceFactory.hpp"
 #include "Engine/Rendering/ViewCameraUboBuilder.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
@@ -124,34 +123,14 @@ namespace Vulkan
         return viewIndex < kMaxSecondaryViews && views_[viewIndex].target.offscreenImage != nullptr;
     }
 
-    void OffscreenRenderViewController::RequestScenePreviewThisFrame()
+    bool OffscreenRenderViewController::HasWork() const
     {
-        RequestThisFrame(kScenePreviewSecondaryViewIndex);
-    }
-
-    uint32_t OffscreenRenderViewController::ScenePreviewSampleSlot() const
-    {
-        return SampleSlot(kScenePreviewSecondaryViewIndex);
-    }
-
-    bool OffscreenRenderViewController::IsScenePreviewReady() const
-    {
-        return IsReady(kScenePreviewSecondaryViewIndex);
-    }
-
-    bool OffscreenRenderViewController::HasWork(const bool includeDebugOverlay) const
-    {
-        if (includeDebugOverlay)
-        {
-            return true;
-        }
-
         return std::any_of(
             views_.begin(),
             views_.end(),
             [](const FViewResources& view)
             {
-                return view.enabled || view.requested;
+                return (view.enabled || view.requested) && view.cameraOverride.has_value();
             });
     }
 
@@ -242,7 +221,6 @@ namespace Vulkan
 
     void OffscreenRenderViewController::CopyViewOutput(
         VkCommandBuffer commandBuffer,
-        const uint32_t imageIndex,
         RenderView& view,
         uint32_t viewIndex)
     {
@@ -278,26 +256,6 @@ namespace Vulkan
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         }
 
-        if (renderer_.multiViewDemo_)
-        {
-            const int32_t sw = static_cast<int32_t>(renderer_.frame_.swapChain->Extent().width);
-            const int32_t sh = static_cast<int32_t>(renderer_.frame_.swapChain->Extent().height);
-            ImageMemoryBarrier::FullInsert(commandBuffer, renderer_.frame_.swapChain->Images()[imageIndex],
-                VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-            VkImageBlit region{};
-            region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-            region.srcOffsets[0] = {0, 0, 0};
-            region.srcOffsets[1] = {rw, rh, 1};
-            region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-            region.dstOffsets[0] = {sw / 2, sh / 2, 0};
-            region.dstOffsets[1] = {sw, sh, 1};
-            vkCmdBlitImage(commandBuffer,
-                           src->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                           renderer_.frame_.swapChain->Images()[imageIndex], VK_IMAGE_LAYOUT_GENERAL,
-                           1, &region, VK_FILTER_LINEAR);
-        }
-
         src->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
                            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
     }
@@ -313,20 +271,14 @@ namespace Vulkan
         for (uint32_t viewIndex = 0; viewIndex < kMaxSecondaryViews; ++viewIndex)
         {
             auto& resources = views_[viewIndex];
-            if (!renderer_.multiViewDemo_ && !resources.enabled && !resources.requested)
+            if ((!resources.enabled && !resources.requested) || !resources.cameraOverride.has_value())
             {
                 continue;
             }
 
             RenderView& secondaryView = EnsureView(viewIndex);
             const VkExtent2D secondaryExtent = secondaryView.RenderExtent();
-            Assets::Camera viewCamera = resources.cameraOverride.has_value()
-                ? *resources.cameraOverride
-                : BuildOrbitedCamera(
-                    renderer_.frame_.lastUBO,
-                    renderer_.GetScene().GetRenderCamera(),
-                    35.0f + static_cast<float>(viewIndex) * 35.0f,
-                    30.0f);
+            const Assets::Camera& viewCamera = *resources.cameraOverride;
 
             Assets::UniformBufferObject secondaryUbo = BuildViewCameraUbo({
                 .scene = renderer_.GetScene(),
@@ -346,9 +298,9 @@ namespace Vulkan
                 secondaryView,
                 *it->second,
                 /*clearSwapchain*/ false,
-                [this, commandBuffer, imageIndex, viewIndex](RenderView& view)
+                [this, commandBuffer, viewIndex](RenderView& view)
                 {
-                    CopyViewOutput(commandBuffer, imageIndex, view, viewIndex);
+                    CopyViewOutput(commandBuffer, view, viewIndex);
                 });
         }
     }

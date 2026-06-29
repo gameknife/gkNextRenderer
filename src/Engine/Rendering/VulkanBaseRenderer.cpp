@@ -32,7 +32,7 @@
 #include "Engine/Rendering/SoftwareTracing/SoftwareTracingRenderer.hpp"
 #include "Engine/Rendering/PathTracing/PathTracingRenderer.hpp"
 #include "Engine/Rendering/Preview/ReferenceRenderViewController.hpp"
-#include "Engine/Rendering/Preview/RenderPreviewServices.hpp"
+#include "Engine/Rendering/Preview/RenderViewServices.hpp"
 #include "Engine/Rendering/RenderViewContext.hpp"
 #include "Engine/Rendering/VoxelTracing/VoxelTracingRenderer.hpp"
 #include "Engine/Runtime/Engine.hpp"
@@ -269,13 +269,8 @@ namespace Vulkan
 
         caps_.supportRayTracing = false;
         upscaler_ = Rendering::Upscaler::CreateStreamlineUpscaler();
-        previewServices_ = std::make_unique<RenderPreviewServices>(*this);
+        renderViewServices_ = std::make_unique<RenderViewServices>(*this);
         referenceViewController_ = std::make_unique<ReferenceRenderViewController>(*this);
-
-        // Optional validation path: render the secondary RenderView and composite it as a
-        // picture-in-picture inset. Off by default; opt in with GK_MV_DEMO=1.
-        const char* mvDemoEnv = std::getenv("GK_MV_DEMO");
-        multiViewDemo_ = mvDemoEnv != nullptr && mvDemoEnv[0] == '1';
     }
 
     VulkanBaseRenderer::~VulkanBaseRenderer()
@@ -284,7 +279,7 @@ namespace Vulkan
         DeleteAccelerationStructures();
         rt_.reset();
         referenceViewController_.reset();
-        previewServices_.reset();
+        renderViewServices_.reset();
         ctx_.gpuTimer.reset();
         ctx_.globalTexturePool.reset();
         ctx_.commandPool.reset();
@@ -444,9 +439,9 @@ namespace Vulkan
     {
         scene_ = scene;
         PrimaryView().InvalidateTemporalHistory();
-        if (previewServices_)
+        if (renderViewServices_)
         {
-            previewServices_->OnMainSceneChanged();
+            renderViewServices_->OnMainSceneChanged();
         }
         if (referenceViewController_)
         {
@@ -846,9 +841,9 @@ namespace Vulkan
         CreateRenderTargetBank(0);
         renderViews_->ResetSwapChainResources();
         // Non-primary view resources were destroyed with the swapchain; recreate on demand.
-        if (previewServices_)
+        if (renderViewServices_)
         {
-            previewServices_->OnSwapChainResourcesInvalidated(/*releaseOffscreenSampledOutputs*/ false);
+            renderViewServices_->OnSwapChainResourcesInvalidated(/*releaseOffscreenSampledOutputs*/ false);
         }
         if (referenceViewController_)
         {
@@ -1054,9 +1049,9 @@ namespace Vulkan
         renderViews_->ResetSwapChainResources();
         // Auxiliary view resources reference view-bank images / the shared render pass; drop them
         // before the swapchain images go away.
-        if (previewServices_)
+        if (renderViewServices_)
         {
-            previewServices_->OnSwapChainResourcesInvalidated(/*releaseOffscreenSampledOutputs*/ true);
+            renderViewServices_->OnSwapChainResourcesInvalidated(/*releaseOffscreenSampledOutputs*/ true);
         }
         if (referenceViewController_)
         {
@@ -1545,9 +1540,9 @@ namespace Vulkan
             logicRenderer.second->BeforeNextFrame();
         }
 
-        if (previewServices_)
+        if (renderViewServices_)
         {
-            previewServices_->BeforeNextFrame();
+            renderViewServices_->BeforeNextFrame();
         }
 
         if (delegates_.beforeNextTick)
@@ -1747,14 +1742,14 @@ namespace Vulkan
 
             // Swapchain is in GENERAL here (before the present barrier). Auxiliary views render
             // through the same RenderViewManager schedule, then copy/compose their outputs.
-            if (previewServices_ && previewServices_->HasWork(multiViewDemo_))
+            if (renderViewServices_ && renderViewServices_->HasWork())
             {
-                previewServices_->ScheduleViews(commandBuffer, imageIndex, multiViewDemo_);
+                renderViewServices_->ScheduleViews(commandBuffer, imageIndex);
                 DispatchScheduledRenderViews(commandBuffer, imageIndex);
             }
-            if (previewServices_)
+            if (renderViewServices_)
             {
-                previewServices_->ClearOffscreenFrameRequests();
+                renderViewServices_->ClearOffscreenFrameRequests();
             }
 
             if (NextEngine::GetInstance()->GetShowFlags().ShowWireframe)

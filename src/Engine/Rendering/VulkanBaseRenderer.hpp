@@ -37,7 +37,7 @@ namespace Vulkan
 	class OffscreenRenderViewController;
 	class ReferenceRenderViewController;
 	class RenderViewResourceFactory;
-	class RenderPreviewServices;
+	class RenderViewServices;
 
 	enum ERendererType
 	{
@@ -132,8 +132,8 @@ namespace Vulkan
 		// Multi-viewport (RenderView): primary plus persistent/offscreen/transient views.
 		RenderViewManager& RenderViews() { return *renderViews_; }
 		const RenderViewManager& RenderViews() const { return *renderViews_; }
-		RenderPreviewServices& Preview() { return *previewServices_; }
-		const RenderPreviewServices& Preview() const { return *previewServices_; }
+		RenderViewServices& ViewServices() { return *renderViewServices_; }
+		const RenderViewServices& ViewServices() const { return *renderViewServices_; }
 		RenderView& PrimaryView() { return renderViews_->Primary(); }
 		const RenderView& PrimaryView() const { return renderViews_->Primary(); }
 		RenderView& ActiveRenderView() { return activeRenderView_ != nullptr ? *activeRenderView_ : PrimaryView(); }
@@ -357,13 +357,12 @@ namespace Vulkan
 		OverlayPipelines overlay_;
 		LogicRendererRegistry logicRenderers_;
 		std::unique_ptr<RenderViewManager> renderViews_ = std::make_unique<RenderViewManager>();
-		std::unique_ptr<RenderPreviewServices> previewServices_;
+		std::unique_ptr<RenderViewServices> renderViewServices_;
 		std::unique_ptr<ReferenceRenderViewController> referenceViewController_;
 		Assets::Scene* activeSceneOverride_ = nullptr;
 		RenderView* activeRenderView_ = nullptr;
 		uint32_t activeViewBankBase_ = 0;
 		VkExtent2D activeViewRenderExtent_{0, 0};
-		bool multiViewDemo_ = false;
 		VkDeviceAddress activeViewCameraAddress_ = 0;
 		// Visibility framebuffer for the view currently being recorded (null => primary/bank-0).
 		FrameBuffer* activeVisibilityFrameBuffer_ = nullptr;

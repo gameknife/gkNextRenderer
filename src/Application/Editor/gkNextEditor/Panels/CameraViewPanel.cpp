@@ -2,7 +2,7 @@
 
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Engine/Rendering/Preview/RenderPreviewServices.hpp"
+#include "Engine/Rendering/Preview/RenderViewServices.hpp"
 #include "EditorMain.h"
 
 #include <imgui.h>
@@ -31,7 +31,7 @@ namespace Editor
         void DrawCameraViewPanel(EditorContext& ctx, EditorUiState& uiState, size_t viewIndex)
         {
             Vulkan::OffscreenRenderViewController& offscreenViews =
-                ctx.engine.GetRenderer().Preview().OffscreenViews();
+                ctx.engine.GetRenderer().ViewServices().OffscreenViews();
             EditorCameraViewState& cameraView = uiState.cameraViews[viewIndex];
             cameraView.hovered = false;
             cameraView.focused = false;
@@ -153,7 +153,7 @@ namespace Editor
                 cameraView.focused = false;
                 cameraView.contentPos = ImVec2(0.0f, 0.0f);
                 cameraView.contentSize = ImVec2(0.0f, 0.0f);
-                auto& offscreenViews = ctx.engine.GetRenderer().Preview().OffscreenViews();
+                auto& offscreenViews = ctx.engine.GetRenderer().ViewServices().OffscreenViews();
                 offscreenViews.SetEnabled(static_cast<uint32_t>(viewIndex), false);
                 offscreenViews.ClearCameraOverride(static_cast<uint32_t>(viewIndex));
                 if (uiState.activeViewport == CameraViewId(viewIndex))
