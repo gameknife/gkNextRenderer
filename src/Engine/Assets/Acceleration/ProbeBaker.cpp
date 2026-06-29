@@ -17,14 +17,14 @@ namespace Assets::CPU
 
 namespace
 {
-    uint8_t GetPackedByteX(uint32_t packedValue)
+    uint8_t GetPackedNibbleX(uint32_t packedValue)
     {
-        return static_cast<uint8_t>(packedValue & 0xFFu);
+        return static_cast<uint8_t>(packedValue & 0xFu);
     }
 
-    uint32_t SetPackedByteX(uint32_t packedValue, uint8_t value)
+    uint32_t SetPackedNibbleX(uint32_t packedValue, uint8_t value)
     {
-        return (packedValue & 0xFFFFFF00u) | value;
+        return (packedValue & 0xFFFFFFF0u) | (value & 0xFu);
     }
 
     uint32_t GetVoxelAddress(int x, int y, int z)
@@ -118,12 +118,16 @@ namespace
 
 using namespace Assets;
 
-uint PackBytes(glm::u32vec4 values)
+uint PackNibbles(glm::u32vec4 low, glm::u32vec4 high)
 {
-    return (values.x & 0xFF) |
-           ((values.y & 0xFF) << 8) |
-           ((values.z & 0xFF) << 16) |
-           ((values.w & 0xFF) << 24);
+    return (low.x & 0xFu) |
+           ((low.y & 0xFu) << 4) |
+           ((low.z & 0xFu) << 8) |
+           ((low.w & 0xFu) << 12) |
+           ((high.x & 0xFu) << 16) |
+           ((high.y & 0xFu) << 20) |
+           ((high.z & 0xFu) << 24) |
+           ((high.w & 0xFu) << 28);
 }
 
 #define FLOAT2 vec2
@@ -173,7 +177,6 @@ bool InsideGeometry(FLOAT3& origin, FLOAT3 rayDir, VoxelData& outCube, float& di
 void VoxelizeCube(VoxelData& cube, FLOAT3 origin, float cubeUnit)
 {
     // just write matid and solid status
-    cube.age = 0;
     cube.matId = 0;
 
     float distPY = 255.0f;
@@ -215,9 +218,15 @@ void VoxelizeCube(VoxelData& cube, FLOAT3 origin, float cubeUnit)
 
     float inside = distPY * distNY * distPX * distNX * distPZ * distNZ;
 
-    cube.distanceToSolid_gg_z01 =
-        PackBytes(glm::u32vec4(minDist / cubeUnit, uint(inside * 255.0f), uint(distPZ * 255.0f), uint(distNZ * 255.0f)));
-    cube.distanceToSolid_x01_y01 = PackBytes(glm::u32vec4(uint(distPX * 255.0f), uint(distNX * 255.0f), uint(distPY * 255.0f), uint(distNY * 255.0f)));
+    cube.distanceToSolid = PackNibbles(
+        glm::u32vec4(std::min<uint32_t>(static_cast<uint32_t>(minDist / cubeUnit), 15u),
+                     static_cast<uint>(inside * 15.0f),
+                     static_cast<uint>(distPZ * 15.0f),
+                     static_cast<uint>(distNZ * 15.0f)),
+        glm::u32vec4(static_cast<uint>(distPX * 15.0f),
+                     static_cast<uint>(distNX * 15.0f),
+                     static_cast<uint>(distPY * 15.0f),
+                     static_cast<uint>(distNY * 15.0f)));
 }
 
 #undef float2
@@ -268,10 +277,10 @@ void FCPUProbeBaker::RebuildDistanceField()
 
     for (size_t voxelIndex = 0; voxelIndex < voxels.size(); ++voxelIndex)
     {
-        const float clampedDistance = glm::clamp(distanceField[voxelIndex], 0.0f, 255.0f);
+        const float clampedDistance = glm::clamp(distanceField[voxelIndex], 0.0f, 15.0f);
         const uint8_t packedDistance = static_cast<uint8_t>(glm::floor(clampedDistance));
-        voxels[voxelIndex].distanceToSolid_gg_z01 =
-            SetPackedByteX(voxels[voxelIndex].distanceToSolid_gg_z01, packedDistance);
+        voxels[voxelIndex].distanceToSolid =
+            SetPackedNibbleX(voxels[voxelIndex].distanceToSolid, packedDistance);
     }
 }
 
@@ -285,14 +294,14 @@ void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
     {
         case ECubeProcType::ECPT_Clear:
             voxel = {};
-            voxel.distanceToSolid_gg_z01 = SetPackedByteX(voxel.distanceToSolid_gg_z01, kMaxDistanceFieldSeed);
+            voxel.distanceToSolid = SetPackedNibbleX(voxel.distanceToSolid, kMaxDistanceFieldSeed);
             distanceToSolidSeeds[addressIdx] = kMaxDistanceFieldSeed;
             break;
         case ECubeProcType::ECPT_Fence:
             break;
         case ECubeProcType::ECPT_Voxelize:
             VoxelizeCube(voxel, probePos, UNIT_SIZE);
-            distanceToSolidSeeds[addressIdx] = GetPackedByteX(voxel.distanceToSolid_gg_z01);
+            distanceToSolidSeeds[addressIdx] = GetPackedNibbleX(voxel.distanceToSolid);
             break;
     }
 }
@@ -308,7 +317,7 @@ void FCPUProbeBaker::ClearAmbientCubes()
     {
         VoxelData& voxel = voxels[voxelIndex];
         voxel = {};
-        voxel.distanceToSolid_gg_z01 = SetPackedByteX(voxel.distanceToSolid_gg_z01, kMaxDistanceFieldSeed);
+        voxel.distanceToSolid = SetPackedNibbleX(voxel.distanceToSolid, kMaxDistanceFieldSeed);
         distanceToSolidSeeds[voxelIndex] = kMaxDistanceFieldSeed;
     }
 }

@@ -9,9 +9,9 @@ namespace Assets::CPU
 {
     constexpr uint32_t kCascadeVoxelCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
     // Dilate the solid-brick set by this many bricks when classifying active cube bricks, so the
-    // near-surface shell the bake writes (distanceToSolid < ~16 voxels = 2 bricks) is fully covered.
+    // near-surface shell the bake writes is fully covered.
     constexpr int kAmbientBrickDilationRadius = 3;
-    constexpr uint8_t kMaxDistanceFieldSeed = 255;
+    constexpr uint8_t kMaxDistanceFieldSeed = 15;
 
     // Shared tinybvh TLAS state, owned by CpuBvh.cpp. The pointer members are
     // rebound by FCPUAccelerationStructure::UpdateBVH after each rebuild.

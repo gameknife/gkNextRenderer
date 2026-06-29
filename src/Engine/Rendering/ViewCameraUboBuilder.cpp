@@ -105,13 +105,14 @@ namespace Vulkan
             ubo.GTAODebugMode = 0;
             ubo.GTAOEnable = false;
             ubo.GTAOQuality = 0;
-            ubo.SkyVisEnable = false;
-            ubo.SkyVisStrength = 0.0f;
-            ubo.SkyVisMaxDistance = 1.0f;
-            ubo.SkyVisRayCount = 1;
-            ubo.SkyVisCombineMode = 0;
-            ubo.SkyVisBlurRadius = 0;
-            ubo.SkyVisJitterRadius = 0.0f;
+            ubo.GTAOPadding3 = 0;
+            ubo.GTAOPadding4 = 0;
+            ubo.GTAOPadding5 = 0;
+            ubo.GTAOPadding6 = 0;
+            ubo.GTAOPadding7 = 0;
+            ubo.GTAOPadding8 = 0;
+            ubo.GTAOPadding9 = 0;
+            ubo.GTAOPadding10 = 0;
         }
     }
 

@@ -63,18 +63,9 @@ struct UserSettings final
     bool GTAOEnable = true;
     int GTAOQuality = 1;
     float GTAORadius = 1.0f;
-    float GTAOStrength = 1.5f; // master sky-occlusion strength (scales combined GTAO + skyVis)
+    float GTAOStrength = 1.5f; // master sky-occlusion strength
     float GTAOThickness = 0.5f;
     int GTAODebugMode = 0;
-
-    // SwModernNoAmbient voxel sky-visibility (large-scale / off-screen sky occlusion baked to voxels).
-    bool SkyVisEnable = true;
-    float SkyVisStrength = 1.0f;
-    float SkyVisMaxDistance = 32.0f;
-    int SkyVisRayCount = 16;
-    int SkyVisCombineMode = 0; // 0=mul 1=min 2=near-bright (GTAO owns corners, skyVis the large scale)
-    int SkyVisBlurRadius = 2;  // bilateral blur radius (pixels) for skyVis in compose; 0=off
-    float SkyVisJitterRadius = 2.0f; // hemisphere sample jitter radius in voxel units; 0=off
 
 	// ReProject history clamp (Phase A black-dot fix; see Process.ReProject.comp.slang).
 	float ReprojectClampGammaHi = 2.5f;    // tight (low-confidence) upper YCoCg luma box half-width in sigmas

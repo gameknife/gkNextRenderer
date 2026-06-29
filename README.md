@@ -125,7 +125,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 - **SHARC 世界辐射缓存 / 间接光 RGB9E5**
 - **AmbientCube GI：稀疏显存 + 命中驱动残留**
 - **降噪：ReLAX 风格方差引导 / à-trous / JBF**
-- **Temporal Reprojection / Sky Occlusion（GTAO + 体素 sky-visibility）**
+- **Temporal Reprojection / Sky Occlusion（GTAO）**
 - **Upscaler：FSR / Windows 上的 NVIDIA Streamline DLSS SR / RR / Frame Generation**
 - **Gaussian Splatting（SOG v2 + 硬件 billboard）**
 

@@ -239,16 +239,13 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
         float inside = distPY * distNY * distPX * distNX * distPZ * distNZ;
 
-        // store the dist, the dist is abs meters, can store 4 unit_size max
-        Voxels[voxelIdx].distanceToSolid_gg_z01 = PackBytes(uint4(uint(minDist / cubeUnit), uint(inside * 255.0f), uint(distPZ * 255.0f), uint(distNZ * 255.0f)));
-        Voxels[voxelIdx].distanceToSolid_x01_y01 = PackBytes(uint4(uint(distPX * 255.0f), uint(distNX * 255.0f), uint(distPY * 255.0f), uint(distNY * 255.0f)));
+        Voxels[voxelIdx].distanceToSolid = PackNibbles(
+            uint4(min(uint(minDist / cubeUnit), 15u), uint(inside * 15.0f), uint(distPZ * 15.0f), uint(distNZ * 15.0f)),
+            uint4(uint(distPX * 15.0f), uint(distNX * 15.0f), uint(distPY * 15.0f), uint(distNY * 15.0f)));
 
         if (minDist < 8 && cubeIdx >= 0) // 只处理表面，增值算法的时候可以具体的把他做好
         {
-            // Only touch the low 24 bits; the high byte holds the voxel sky-visibility baked by the
-            // NoAmbient path and must not be polluted by the cube baker's counter (design §5.5).
-            uint iterate = GetVoxelAgeCounter(Voxels[voxelIdx]);
-            SetVoxelAgeCounter(Voxels[voxelIdx], iterate + 1);
+            uint iterate = Bindless.GetGpuscene().Camera[0].TotalFrames;
 
             uint bakeCascadeIndex = Bindless.GetGpuscene().custom_data_1;
             float currWeight = 1.0f / 16.0f;
@@ -294,12 +291,10 @@ public struct FGpuProbeGenerator : IProbeGenerator
         AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
         VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
 
-        uint4 upacked = UnpackBytes(Voxels[voxelIdx].distanceToSolid_gg_z01);
-        if (upacked.x < 16 && cubeIdx >= 0) // 只处理表面，增值算法的时候可以具体的把他做好
+        uint4 upacked = UnpackNibblesLow(Voxels[voxelIdx].distanceToSolid);
+        if (upacked.x < 15 && cubeIdx >= 0) // 只处理表面，增值算法的时候可以具体的把他做好
         {
-            // Counter lives in the low 24 bits; preserve the sky-visibility high byte (design §5.5).
-            uint iterate = GetVoxelAgeCounter(Voxels[voxelIdx]);
-            SetVoxelAgeCounter(Voxels[voxelIdx], iterate + 1);
+            uint iterate = Bindless.GetGpuscene().Camera[0].TotalFrames;
 
             uint bakeCascadeIndex = Bindless.GetGpuscene().custom_data_1;
             float currWeight = 1.0f / 16.0f;

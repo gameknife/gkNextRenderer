@@ -83,25 +83,11 @@ namespace NextCVar
         GK_CVAR_FLOAT("r.gtao.radius", settings, GTAORadius, 1.0f, ECVarFlags::Archive,
                       "GTAO world-space sampling radius");
         GK_CVAR_FLOAT("r.gtao.strength", settings, GTAOStrength, 1.0f, ECVarFlags::Archive,
-                      "Master sky-occlusion strength: scales the combined GTAO + voxel skyVis darkening (1=natural, lower=lighter)");
+                      "Master sky-occlusion strength: scales GTAO sky darkening (1=natural, lower=lighter)");
         GK_CVAR_FLOAT("r.gtao.thickness", settings, GTAOThickness, 0.5f, ECVarFlags::Archive,
                       "GTAO depth-discontinuity thickness heuristic in world units");
         GK_CVAR_INT("r.gtao.debugMode", settings, GTAODebugMode, 0, ECVarFlags::Archive,
-                    "GTAO debug mode (0=off,1=occlusion,2=unoccluded sky lighting,3=voxel skyVis,4=ao*skyVis)");
-        GK_CVAR_BOOL("r.skyvis.enable", settings, SkyVisEnable, true, ECVarFlags::Archive,
-                     "Enable voxel sky-visibility (large-scale/off-screen sky occlusion) for SoftwareModernNoAmbient");
-        GK_CVAR_INT("r.skyvis.rayCount", settings, SkyVisRayCount, 16, ECVarFlags::Archive,
-                    "Voxel sky-visibility hemisphere ray count per voxel (bake quality, e.g. 16/32)");
-        GK_CVAR_FLOAT("r.skyvis.maxDistance", settings, SkyVisMaxDistance, 32.0f, ECVarFlags::Archive,
-                      "Voxel sky-visibility soft-trace max distance in meters (large-scale range)");
-        GK_CVAR_FLOAT("r.skyvis.strength", settings, SkyVisStrength, 1.0f, ECVarFlags::Archive,
-                      "Voxel sky-visibility occlusion strength (0=off, 1=full baked occlusion)");
-        GK_CVAR_INT("r.skyvis.combineMode", settings, SkyVisCombineMode, 0, ECVarFlags::Archive,
-                    "Voxel sky-visibility combine with GTAO (0=mul,1=min,2=near-bright: GTAO owns corners)");
-        GK_CVAR_INT("r.skyvis.blur", settings, SkyVisBlurRadius, 2, ECVarFlags::Archive,
-                    "Voxel sky-visibility bilateral blur radius in pixels in compose (0=off, smooths voxel-scale edges/noise)");
-        GK_CVAR_FLOAT("r.skyvis.jitterRadius", settings, SkyVisJitterRadius, 2.0f, ECVarFlags::Archive,
-                      "Voxel sky-visibility random hemisphere sample jitter radius in voxel units (0=off)");
+                    "GTAO debug mode (0=off,1=occlusion,2=unoccluded sky lighting)");
         GK_CVAR_FLOAT("r.reproject.clampGammaHi", settings, ReprojectClampGammaHi, 2.5f, ECVarFlags::Archive,
                       "ReProject history clamp: tight upper YCoCg-luma box half-width in sigmas (lower = less ghosting)");
         GK_CVAR_FLOAT("r.reproject.clampGammaLo", settings, ReprojectClampGammaLo, 5.0f, ECVarFlags::Archive,

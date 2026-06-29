@@ -181,30 +181,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
             // 天光：HDR radiance SH 经 Lambert cosine kernel 卷积后的 diffuse radiance。
             float3 ambient = float3(0);
-            // Large-scale / off-screen sky occlusion from the baked voxel sky-visibility field.
-            // Stored in the alpha channel (worldPos already available here, saving a reprojection in
-            // GTAOCompose); degrades to 1.0 when voxel data is missing. Strength fades it toward 1.
-            float skyVis = 1.0f;
-            if (Camera.SkyVisEnable)
-            {
-                // Push the sample point off the surface along the normal by ~one voxel so the 8-tap
-                // footprint lands on valid air voxels (at the exact surface floor(nearpos) lands on the
-                // skipped solid voxel, which shifts/blocks the result). The sampler's smooth visibility
-                // and normal-side weights then suppress probes that leak through thin walls.
-                // Store the RAW visibility; occlusion strength is applied once in GTAOCompose so a
-                // single master knob scales both GTAO and sky-visibility darkening.
-                float svUnit = GetAmbientCubeUnitAtPosition(hitVertex.Position);
-                float3 svPos = hitVertex.Position + N * svUnit * 1.0f;
-                float svJitterRadius = max(Camera.SkyVisJitterRadius, 0.0f) * svUnit;
-                if (svJitterRadius > 0.0f)
-                {
-                    uint4 svRandomSeed = InitRandomSeed(uint(pixel.x), uint(pixel.y), Camera.TotalFrames);
-                    float3 hemiJitter = AlignWithNormal(RandomInHemiSphere1(svRandomSeed), N);
-                    svPos += hemiJitter * (pow(RandomFloat(svRandomSeed), 1.0f / 3.0f) * svJitterRadius);
-                }
-                skyVis = SampleVoxelSkyVisibility(svPos, N);
-            }
-            float skyVisEff = saturate(1.0f - (1.0f - skyVis) * max(Camera.SkyVisStrength, 0.0f));
 
             if (Camera.HasSky)
             {
@@ -213,9 +189,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
                 float3 skySpecular = Common.SampleIBL(Camera.SkyIdx, R, Camera.SkyRotation, roughness).rgb *
                     Camera.SkyIntensity;
-                specularColor.rgb += skySpecular * kS * skyVisEff;
+                specularColor.rgb += skySpecular * kS;
             }
-            ambientColor = float4(ambient, skyVis);
+            ambientColor = float4(ambient, 1.0f);
 
             // 太阳：Lambert + CSM 阴影
             float3 direct = float3(0);

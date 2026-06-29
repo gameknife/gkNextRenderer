@@ -59,43 +59,6 @@ float UpsampleAO(UniformBufferObject camera, int2 pixel, uint2 fullSize, float c
     return weightedAO / weightSum;
 }
 
-// Joint-bilateral blur of the per-pixel voxel sky-visibility (stored in RT_AMBIENT.a). Smooths
-// voxel-scale steps / bake noise and the solid-as-zero contact patch edges, while depth+normal
-// weights stop it bleeding across geometry edges (so contact occlusion stays put, just softened).
-float BlurSkyVisibility(UniformBufferObject camera, int2 pixel, uint2 size, float centerDepth,
-                        float3 centerNormal, int radius)
-{
-    const float centerViewZ = ReconstructViewPosition(camera, pixel, size, centerDepth).z;
-    const int2 maxPixel = int2(size) - int2(1, 1);
-    float weightedVis = 0.0f;
-    float weightSum = 0.0f;
-
-    for (int y = -radius; y <= radius; ++y)
-    {
-        for (int x = -radius; x <= radius; ++x)
-        {
-            const int2 samplePixel = clamp(pixel + int2(x, y), int2(0, 0), maxPixel);
-            const float sampleDepth = Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER)[samplePixel];
-            const float3 sampleNormal = Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL)[samplePixel].xyz;
-            if (!IsSurfaceDepth(sampleDepth) || dot(sampleNormal, sampleNormal) < 0.25f)
-            {
-                continue;
-            }
-
-            const float3 sampleViewPos = ReconstructViewPosition(camera, samplePixel, size, sampleDepth);
-            const float normalWeight = pow(saturate(dot(centerNormal, normalize(sampleNormal))), 16.0f);
-            const float depthScale = max(0.05f, abs(centerViewZ) * 0.05f);
-            const float depthWeight = exp2(-abs(sampleViewPos.z - centerViewZ) / depthScale);
-            const float weight = normalWeight * depthWeight;
-            weightedVis += Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT)[samplePixel].a * weight;
-            weightSum += weight;
-        }
-    }
-
-    return weightSum > 1e-5f ? weightedVis / weightSum
-                             : Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT)[pixel].a;
-}
-
 [shader("compute")]
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
@@ -120,48 +83,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
         ao = UpsampleAO(camera, pixel, fullSize, depth, normalize(worldNormal));
     }
 
-    // Voxel sky-visibility lives in the ambient alpha channel (written by the shading pass; 1.0 when
-    // disabled or unbaked). GTAO covers near-field contact occlusion, skyVis covers large-scale /
-    // off-screen occlusion; combine per cvar so both only darken the sky term. An optional bilateral
-    // blur smooths voxel-scale steps / bake noise without bleeding across geometry edges.
-    float skyVis = 1.0f;
-    if (camera.SkyVisEnable && surface)
-    {
-        skyVis = (camera.SkyVisBlurRadius > 0u)
-            ? BlurSkyVisibility(camera, pixel, fullSize, depth, normalize(worldNormal),
-                                int(camera.SkyVisBlurRadius))
-            : ambient.a;
-    }
-    // Optional skyVis-only trim (SkyVisStrength) before combining, so the user can bias the voxel
-    // term relative to GTAO. Applied as a darkening scale on the sky-vis occlusion amount.
-    const float skyVisEff = saturate(1.0f - (1.0f - skyVis) * max(camera.SkyVisStrength, 0.0f));
-
-    // Combine the two RAW visibilities (GTAO near-field + voxel large-scale), then apply ONE master
-    // occlusion strength (GTAOStrength) to the combined darkening. This unifies the control: a single
-    // knob scales both terms, and dialing it down lightens the whole occlusion uniformly.
-    float combinedVis;
-    if (camera.SkyVisCombineMode == 1u)
-    {
-        combinedVis = min(ao, skyVisEff);               // avoid double darkening at contacts
-    }
-    else if (camera.SkyVisCombineMode == 0u)
-    {
-        combinedVis = ao * skyVisEff;                   // independent occlusions multiply
-    }
-    else
-    {
-        // near-bright (default): where ao is low (tight corners/contacts) skyVis fades out and GTAO's
-        // fine gradient takes over; where ao is high (open) the coarse voxel skyVis applies its
-        // large-scale darkening. Stops a coarse skyVis voxel from slamming a corner to flat black and
-        // masking GTAO's detail transition.
-        combinedVis = ao * lerp(1.0f, skyVisEff, ao);
-    }
-
     // Gamma-style master strength: monotone and never hard-clips to pure black (unlike a linear
     // 1 - strength*(1-vis), which zeroes everything below 1-1/strength). This keeps GTAO's gradient
     // visible in deep corners as a soft falloff instead of a dead-black patch.
     const float strength = max(camera.GTAOStrength, 0.0f);
-    const float skyOcclusion = pow(saturate(combinedVis), strength);
+    const float skyOcclusion = pow(saturate(ao), strength);
 
     float4 output = float4(directOrEmissive.rgb + ambient.rgb * skyOcclusion + specular.rgb, 1.0f);
     if (camera.GTAODebugMode == 1u)
@@ -175,16 +101,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
     else if (camera.GTAODebugMode == 2u)
     {
         output = float4(ambient.rgb, 1.0f);
-    }
-    else if (camera.GTAODebugMode == 3u)
-    {
-        const float debugExposure = 40000.0f / max(camera.PaperWhiteNit, 1.0f);
-        output = surface ? float4(float3(skyVis) * debugExposure, 1.0f) : float4(0, 0, 0, 1);
-    }
-    else if (camera.GTAODebugMode == 4u)
-    {
-        const float debugExposure = 40000.0f / max(camera.PaperWhiteNit, 1.0f);
-        output = surface ? float4(float3(skyOcclusion) * debugExposure, 1.0f) : float4(0, 0, 0, 1);
     }
 
     Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, output);
