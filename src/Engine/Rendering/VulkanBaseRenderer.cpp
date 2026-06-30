@@ -280,6 +280,10 @@ namespace Vulkan
         rt_.reset();
         referenceViewController_.reset();
         renderViewServices_.reset();
+        logicRenderers_.renderers.clear();
+        logicRenderers_.swapChainCreatedTypes.clear();
+        renderViews_.reset();
+        upscaler_.reset();
         ctx_.gpuTimer.reset();
         ctx_.globalTexturePool.reset();
         ctx_.commandPool.reset();
@@ -421,6 +425,8 @@ namespace Vulkan
         {
             ctx_.device->WaitIdle();
         }
+        DeleteSwapChain();
+        DeleteAccelerationStructures();
         if (upscaler_)
         {
             upscaler_->Shutdown();
@@ -1028,6 +1034,11 @@ namespace Vulkan
 
     void VulkanBaseRenderer::DeleteSwapChain()
     {
+        if (!frame_.swapChain)
+        {
+            return;
+        }
+
         if (upscaler_)
         {
             upscaler_->OnSwapChainDestroyed();

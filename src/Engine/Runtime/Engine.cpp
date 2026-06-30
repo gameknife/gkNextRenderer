@@ -937,7 +937,7 @@ void NextEngine::End()
     if (!GOption->FastExit)
     {
         Tasks::TaskCoordinator::GetInstance()->CancelAllParralledTasks();
-        Tasks::TaskCoordinator::GetInstance()->WaitForAllParralledTask();
+        Tasks::TaskCoordinator::GetInstance()->WaitForAllTasks();
         Tasks::TaskCoordinator::DestroyInstance();
     }
 
