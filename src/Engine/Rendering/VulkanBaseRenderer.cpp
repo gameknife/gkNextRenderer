@@ -1086,6 +1086,109 @@ namespace Vulkan
         }
     }
 
+    void VulkanBaseRenderer::RefreshSceneSwapChainResources()
+    {
+        if (!frame_.swapChain)
+        {
+            return;
+        }
+
+        spdlog::stopwatch profileTimer;
+        auto logProfile = [&profileTimer](const char* label)
+        {
+            if (ShouldLogStartupProfile())
+            {
+                SPDLOG_INFO("[StartupProfile]   Vulkan::RefreshSceneResources {:<26} {}", label, profileTimer.elapsed_ms());
+            }
+        };
+
+        for (auto& logicRenderer : logicRenderers_.renderers)
+        {
+            logicRenderer.second->DeleteSwapChain();
+        }
+        logicRenderers_.swapChainCreatedTypes.clear();
+
+        overlay_.gaussianSplatPass.reset();
+        overlay_.visibilityPipeline.reset();
+        overlay_.visibilityFrameBuffer.reset();
+        overlay_.sunShadowPass.reset();
+        overlay_.wireframeFrameBuffers.clear();
+        overlay_.wireframePipeline.reset();
+        overlay_.bufferClearPipeline.reset();
+        ambient_.softBake.reset();
+        ambient_.clearCache.reset();
+        if (rt_)
+        {
+            rt_->directLightGenPipeline.reset();
+        }
+        overlay_.gpuCullCompactPipeline.reset();
+        overlay_.softMeshShaderFinalizePipeline.reset();
+        overlay_.softMeshShaderExpandPipeline.reset();
+        overlay_.shadowGpuCullCompactPipeline.reset();
+        skin_.pipeline.reset();
+        skin_.vertexBuffer.reset();
+        skin_.vertexMemory.reset();
+        skin_.jointBuffer.reset();
+        skin_.jointMemory.reset();
+        overlay_.simpleComposePipeline.reset();
+        overlay_.visualDebuggerPipeline.reset();
+        logProfile("old resources released");
+
+        overlay_.wireframePipeline.reset(new class PipelineCommon::GraphicsPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), true));
+        overlay_.wireframeFrameBuffers.reserve(frame_.swapChain->ImageViews().size());
+        for (const auto& imageView : frame_.swapChain->ImageViews())
+        {
+            overlay_.wireframeFrameBuffers.emplace_back(frame_.swapChain->Extent(), *imageView, overlay_.wireframePipeline->RenderPass());
+        }
+
+        overlay_.simpleComposePipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.UpScaleFSR.comp.slang.spv", 20));
+        overlay_.bufferClearPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*frame_.swapChain, "assets/shaders/Util.BufferClear.comp.slang.spv", 4));
+        if (RegisteredRendererRequirements().requestAmbientCube)
+        {
+            ambient_.softBake.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.SwAmbientCube.comp.slang.spv", GetScene()));
+            ambient_.clearCache.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.ClearAmbientCubeCache.comp.slang.spv", GetScene()));
+
+            if (caps_.supportRayTracing)
+            {
+                rt_->directLightGenPipeline.reset(new PipelineCommon::ZeroBindWithTLASPipeline(SwapChain(), "assets/shaders/Bake.HwAmbientCube.comp.slang.spv", GetScene()));
+            }
+        }
+
+        const char* gpuCullSpv = caps_.supportSubgroupCull
+            ? "assets/shaders/Task.SoftMeshShaderGpuCullCompactWave.comp.slang.spv"
+            : "assets/shaders/Task.SoftMeshShaderGpuCullCompact.comp.slang.spv";
+        const char* shadowGpuCullSpv = caps_.supportSubgroupCull
+            ? "assets/shaders/Task.SoftMeshShaderShadowGpuCullCompactWave.comp.slang.spv"
+            : "assets/shaders/Task.SoftMeshShaderShadowGpuCullCompact.comp.slang.spv";
+        overlay_.gpuCullCompactPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, gpuCullSpv, GetScene()));
+        overlay_.softMeshShaderFinalizePipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.SoftMeshShaderFinalize.comp.slang.spv", GetScene()));
+        overlay_.softMeshShaderExpandPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.SoftMeshShaderExpand.comp.slang.spv", GetScene()));
+        overlay_.shadowGpuCullCompactPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, shadowGpuCullSpv, GetScene()));
+        skin_.pipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.Skinning.comp.slang.spv", GetScene()));
+        overlay_.visualDebuggerPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*frame_.swapChain, "assets/shaders/Util.VisualDebugger.comp.slang.spv", 20));
+
+        overlay_.gaussianSplatPass = std::make_unique<GaussianSplat::GaussianSplatPass>(*this);
+        overlay_.gaussianSplatPass->CreateResources();
+
+        overlay_.visibilityPipeline.reset(new PipelineCommon::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
+        overlay_.visibilityFrameBuffer.reset(new FrameBuffer(frame_.swapChain->RenderExtent(), GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(), overlay_.visibilityPipeline->RenderPass()));
+
+        overlay_.sunShadowPass.reset(new Shadow::ShadowMapPass(*ctx_.device));
+        overlay_.sunShadowPass->CreateResources(GetScene());
+
+        auto* texPool = Assets::GlobalTexturePool::GetInstance();
+        for (uint32_t i = 0; i < Assets::Scene::kSunShadowCascadeCount; ++i)
+        {
+            texPool->BindShadowMap(i, GetScene().SunShadowImageView(i), GetScene().SunShadowSampler());
+        }
+
+        if (LogicRendererBase* logicRenderer = EnsureLogicRenderer(logicRenderers_.current))
+        {
+            EnsureLogicRendererSwapChain(logicRenderers_.current, *logicRenderer);
+        }
+        logProfile("resources recreated");
+    }
+
     void VulkanBaseRenderer::DeleteSwapChain()
     {
         if (!frame_.swapChain)
