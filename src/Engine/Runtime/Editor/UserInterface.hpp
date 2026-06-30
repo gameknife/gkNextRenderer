@@ -10,6 +10,7 @@
 #include "Engine/Vulkan/RenderingPipeline.hpp"
 #include <deque>
 #include <glm/vec4.hpp>
+#include <set>
 
 namespace NextUI
 {
@@ -66,6 +67,7 @@ public:
 	void OnCreateSurface(const Vulkan::SwapChain& swapChain, 
 		const Vulkan::DepthBuffer& depthBuffer);
 	void OnDestroySurface();
+	void ReloadShaders(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles);
 
 	ImTextureID RequestImTextureId(uint32_t globalTextureId);
 	// Like RequestImTextureId but for an explicitly-bound bindless sample slot that is NOT a

@@ -1,4 +1,4 @@
-import Bindless;
+import Shader.Bindless;
 
 struct PushConsts
 {

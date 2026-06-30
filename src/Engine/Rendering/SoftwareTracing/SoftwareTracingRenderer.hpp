@@ -24,6 +24,7 @@ namespace Vulkan::SoftwareTracing
 		void CreateSwapChain(const VkExtent2D& extent) override;
 		void DeleteSwapChain() override;
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
+		void ReloadShaders(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles) override;
 		FRendererRequirements Requirements() const override { return GetRendererRequirements(ERT_SoftwareTracing); }
 
 	private:

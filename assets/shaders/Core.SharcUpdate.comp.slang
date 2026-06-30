@@ -1,5 +1,5 @@
-import Common;
-import Bindless;
+import Shader.Bindless;
+import Shader.PathTracing;
 
 [shader("compute")]
 [numthreads(8, 8, 1)]

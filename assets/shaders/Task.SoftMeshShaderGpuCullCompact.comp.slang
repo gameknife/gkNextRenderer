@@ -1,7 +1,8 @@
-import Common;
-import Bindless;
+import Shader.Bindless;
+import Shader.Types;
+import Shader.GpuScene;
 
-import SoftMeshShaderCull; // IsAABBInFrustum / IsOccludedVolume
+import Shader.SoftMeshShaderCull; // IsAABBInFrustum / IsOccludedVolume
 
 // ---------------------------------------------------------------------------
 // Block-level aggregation (see docs/plans/softmeshshader-gpucull-atomic-contention-plan.md)

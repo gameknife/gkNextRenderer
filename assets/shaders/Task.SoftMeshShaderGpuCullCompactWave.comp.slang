@@ -1,7 +1,8 @@
-import Common;
-import Bindless;
+import Shader.Bindless;
+import Shader.Types;
+import Shader.GpuScene;
 
-import SoftMeshShaderCull; // IsAABBInFrustum / IsOccludedVolume
+import Shader.SoftMeshShaderCull; // IsAABBInFrustum / IsOccludedVolume
 
 // ---------------------------------------------------------------------------
 // Subgroup (wave) fast path of the soft-mesh GPU cull (plan Phase 3).

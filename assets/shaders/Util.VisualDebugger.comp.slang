@@ -1,5 +1,4 @@
-import Bindless;
-import Common;
+import Shader.Bindless;
 struct PushConsts
 {
     // Unified push-constant header (offset 0..15): aliases gpuScene's header so

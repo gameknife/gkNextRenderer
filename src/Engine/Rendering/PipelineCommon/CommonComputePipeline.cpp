@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <filesystem>
 
 namespace Vulkan::PipelineCommon
 {
@@ -37,6 +38,39 @@ namespace Vulkan::PipelineCommon
 			return pipeline;
 		}
 
+		std::string ShaderFilename(const std::string& shaderFile)
+		{
+			return std::filesystem::path(shaderFile).filename().string();
+		}
+
+		bool ShouldReloadShaderFile(const std::string& shaderFile, const std::set<std::string>& changedShaderFiles)
+		{
+			return changedShaderFiles.find(ShaderFilename(shaderFile)) != changedShaderFiles.end();
+		}
+
+		bool MarkChangedShaderFile(
+			const std::string& shaderFile,
+			const std::set<std::string>& changedShaderFiles,
+			std::set<std::string>& handledShaderFiles)
+		{
+			const std::string filename = ShaderFilename(shaderFile);
+			if (changedShaderFiles.find(filename) == changedShaderFiles.end())
+			{
+				return false;
+			}
+			handledShaderFiles.insert(filename);
+			return true;
+		}
+
+		bool ShouldReloadShaderPair(
+			const char* vertexShaderFile,
+			const char* fragmentShaderFile,
+			const std::set<std::string>& changedShaderFiles)
+		{
+			return ShouldReloadShaderFile(vertexShaderFile, changedShaderFiles) ||
+			       ShouldReloadShaderFile(fragmentShaderFile, changedShaderFiles);
+		}
+
 		// Shared bind + push-constant sequence of every zero-bind compute pipeline
 		void BindComputeWithPush(VkCommandBuffer commandBuffer, VkPipeline pipeline,
 			const class PipelineLayout& layout, uint32_t pushSize, const void* pushData)
@@ -50,7 +84,7 @@ namespace Vulkan::PipelineCommon
 	ZeroBindWithTLASPipeline::ZeroBindWithTLASPipeline(
 	const SwapChain& swapChain,
 	const char* shaderfile,
-	const Assets::Scene& scene):PipelineBase(swapChain)
+	const Assets::Scene& scene):PipelineBase(swapChain), shaderFile_(shaderfile)
 	{
 		// Create descriptor pool/sets.
 		const auto& device = swapChain.Device();
@@ -94,6 +128,29 @@ namespace Vulkan::PipelineCommon
 		pipeline_ = CreateComputePipeline(device, shaderfile, pipelineLayout_->Handle());
 	}
 
+	void ZeroBindWithTLASPipeline::RecreatePipeline()
+	{
+		if (pipeline_ != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(swapChain_.Device().Handle(), pipeline_, nullptr);
+			pipeline_ = VK_NULL_HANDLE;
+		}
+		pipeline_ = CreateComputePipeline(swapChain_.Device(), shaderFile_.c_str(), pipelineLayout_->Handle());
+	}
+
+	bool ZeroBindWithTLASPipeline::ReloadIfShaderChanged(
+		const std::set<std::string>& changedShaderFiles,
+		std::set<std::string>& handledShaderFiles)
+	{
+		if (!ShouldReloadShaderFile(shaderFile_, changedShaderFiles))
+		{
+			return false;
+		}
+		RecreatePipeline();
+		handledShaderFiles.insert(ShaderFilename(shaderFile_));
+		return true;
+	}
+
 	void ZeroBindWithTLASPipeline::BindPipeline(VkCommandBuffer commandBuffer, const Assets::Scene& scene,
 		uint32_t imageIndex)
 	{
@@ -109,7 +166,7 @@ namespace Vulkan::PipelineCommon
 	ZeroBindPipeline::ZeroBindPipeline(
 	const SwapChain& swapChain,
 	const char* shaderfile,
-	const Assets::Scene& scene):PipelineBase(swapChain)
+	const Assets::Scene& scene):PipelineBase(swapChain), shaderFile_(shaderfile)
 	{
 		// Create descriptor pool/sets.
 		const auto& device = swapChain.Device();
@@ -127,6 +184,29 @@ namespace Vulkan::PipelineCommon
 		pipeline_ = CreateComputePipeline(device, shaderfile, pipelineLayout_->Handle());
 	}
 
+	void ZeroBindPipeline::RecreatePipeline()
+	{
+		if (pipeline_ != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(swapChain_.Device().Handle(), pipeline_, nullptr);
+			pipeline_ = VK_NULL_HANDLE;
+		}
+		pipeline_ = CreateComputePipeline(swapChain_.Device(), shaderFile_.c_str(), pipelineLayout_->Handle());
+	}
+
+	bool ZeroBindPipeline::ReloadIfShaderChanged(
+		const std::set<std::string>& changedShaderFiles,
+		std::set<std::string>& handledShaderFiles)
+	{
+		if (!ShouldReloadShaderFile(shaderFile_, changedShaderFiles))
+		{
+			return false;
+		}
+		RecreatePipeline();
+		handledShaderFiles.insert(ShaderFilename(shaderFile_));
+		return true;
+	}
+
 	void ZeroBindPipeline::BindPipeline(VkCommandBuffer commandBuffer, const Assets::Scene& scene, uint32_t imageIndex)
 	{
 		BindComputeWithPush(commandBuffer, Handle(), PipelineLayout(), sizeof(Assets::GPUScene),
@@ -139,7 +219,7 @@ namespace Vulkan::PipelineCommon
 	}
 
 	ZeroBindCustomPushConstantPipeline::ZeroBindCustomPushConstantPipeline(const SwapChain& swapChain,
-	const char* shaderfile, uint32_t pushConstantSize):PipelineBase(swapChain),pushConstantSize_(pushConstantSize)
+	const char* shaderfile, uint32_t pushConstantSize):PipelineBase(swapChain), shaderFile_(shaderfile), pushConstantSize_(pushConstantSize)
 	{
 		// Create descriptor pool/sets.
 		const auto& device = swapChain.Device();
@@ -160,6 +240,29 @@ namespace Vulkan::PipelineCommon
 
 		pipelineLayout_.reset(new class PipelineLayout(device, managers, 1, &pushConstantRange, 1));
 		pipeline_ = CreateComputePipeline(device, shaderfile, pipelineLayout_->Handle());
+	}
+
+	void ZeroBindCustomPushConstantPipeline::RecreatePipeline()
+	{
+		if (pipeline_ != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(swapChain_.Device().Handle(), pipeline_, nullptr);
+			pipeline_ = VK_NULL_HANDLE;
+		}
+		pipeline_ = CreateComputePipeline(swapChain_.Device(), shaderFile_.c_str(), pipelineLayout_->Handle());
+	}
+
+	bool ZeroBindCustomPushConstantPipeline::ReloadIfShaderChanged(
+		const std::set<std::string>& changedShaderFiles,
+		std::set<std::string>& handledShaderFiles)
+	{
+		if (!ShouldReloadShaderFile(shaderFile_, changedShaderFiles))
+		{
+			return false;
+		}
+		RecreatePipeline();
+		handledShaderFiles.insert(ShaderFilename(shaderFile_));
+		return true;
 	}
 
 	void ZeroBindCustomPushConstantPipeline::BindPipeline(VkCommandBuffer commandBuffer, const void* data)
@@ -213,6 +316,40 @@ namespace Vulkan::PipelineCommon
             .Build(pipelineLayout_->Handle(), renderPass_->Handle(), "create graphics pipeline");
     }
 
+	void VisibilityPipeline::RecreatePipeline()
+	{
+		if (pipeline_)
+		{
+			vkDestroyPipeline(swapChain_.Device().Handle(), pipeline_, nullptr);
+			pipeline_ = VK_NULL_HANDLE;
+		}
+
+		const auto& device = swapChain_.Device();
+		const ShaderModule vertShader(device, "assets/shaders/Rast.VisibilityPassSoftMeshShader.vert.slang.spv");
+		const ShaderModule fragShader(device, "assets/shaders/Rast.VisibilityPass.frag.slang.spv");
+		pipeline_ = GraphicsPipelineBuilder(device)
+			.SetShaders(vertShader, fragShader)
+			.SetDynamicViewportAndScissor()
+			.SetDepth(true, true, VK_COMPARE_OP_LESS)
+			.Build(pipelineLayout_->Handle(), renderPass_->Handle(), "recreate visibility graphics pipeline");
+	}
+
+	bool VisibilityPipeline::ReloadIfShaderChanged(
+		const std::set<std::string>& changedShaderFiles,
+		std::set<std::string>& handledShaderFiles)
+	{
+		constexpr const char* vertexShader = "assets/shaders/Rast.VisibilityPassSoftMeshShader.vert.slang.spv";
+		constexpr const char* fragmentShader = "assets/shaders/Rast.VisibilityPass.frag.slang.spv";
+		if (!ShouldReloadShaderPair(vertexShader, fragmentShader, changedShaderFiles))
+		{
+			return false;
+		}
+		RecreatePipeline();
+		MarkChangedShaderFile(vertexShader, changedShaderFiles, handledShaderFiles);
+		MarkChangedShaderFile(fragmentShader, changedShaderFiles, handledShaderFiles);
+		return true;
+	}
+
     VisibilityPipeline::~VisibilityPipeline()
     {
         renderPass_.reset();
@@ -224,7 +361,8 @@ namespace Vulkan::PipelineCommon
 	const std::vector<Assets::UniformBuffer>& uniformBuffers,
 	const Assets::Scene& scene,
 	const bool isWireFrame) :
-	PipelineBase(swapChain)
+	PipelineBase(swapChain),
+	isWireFrame_(isWireFrame)
 	{
         (void)uniformBuffers;
         (void)scene;
@@ -261,6 +399,49 @@ namespace Vulkan::PipelineCommon
 			.SetDepth(true, false, VK_COMPARE_OP_LESS_OR_EQUAL)
 			.SetAlphaBlend(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO)
 			.Build(pipelineLayout_->Handle(), renderPass_->Handle(), "create graphics pipeline");
+	}
+
+	void GraphicsPipeline::RecreatePipeline()
+	{
+		if (pipeline_)
+		{
+			vkDestroyPipeline(swapChain_.Device().Handle(), pipeline_, nullptr);
+			pipeline_ = VK_NULL_HANDLE;
+		}
+
+		const auto& device = swapChain_.Device();
+		const VkOffset2D viewportOffset = isWireFrame_ ? swapChain_.OutputOffset() : swapChain_.RenderOffset();
+		const VkExtent2D viewportExtent = isWireFrame_ ? swapChain_.OutputExtent() : swapChain_.RenderExtent();
+
+		VkPhysicalDeviceFeatures physicalDeviceFeatures = {};
+		vkGetPhysicalDeviceFeatures(device.PhysicalDevice(), &physicalDeviceFeatures);
+
+		const ShaderModule vertShader(device, "assets/shaders/Rast.WireframeSoftMeshShader.vert.slang.spv");
+		const ShaderModule fragShader(device, "assets/shaders/Rast.Wireframe.frag.slang.spv");
+
+		pipeline_ = GraphicsPipelineBuilder(device)
+			.SetShaders(vertShader, fragShader)
+			.SetFixedViewport(viewportOffset, viewportExtent)
+			.SetPolygonMode(isWireFrame_ && physicalDeviceFeatures.fillModeNonSolid ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL)
+			.SetDepth(true, false, VK_COMPARE_OP_LESS_OR_EQUAL)
+			.SetAlphaBlend(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO)
+			.Build(pipelineLayout_->Handle(), renderPass_->Handle(), "recreate wireframe graphics pipeline");
+	}
+
+	bool GraphicsPipeline::ReloadIfShaderChanged(
+		const std::set<std::string>& changedShaderFiles,
+		std::set<std::string>& handledShaderFiles)
+	{
+		constexpr const char* vertexShader = "assets/shaders/Rast.WireframeSoftMeshShader.vert.slang.spv";
+		constexpr const char* fragmentShader = "assets/shaders/Rast.Wireframe.frag.slang.spv";
+		if (!ShouldReloadShaderPair(vertexShader, fragmentShader, changedShaderFiles))
+		{
+			return false;
+		}
+		RecreatePipeline();
+		MarkChangedShaderFile(vertexShader, changedShaderFiles, handledShaderFiles);
+		MarkChangedShaderFile(fragmentShader, changedShaderFiles, handledShaderFiles);
+		return true;
 	}
 
 	GraphicsPipeline::~GraphicsPipeline()

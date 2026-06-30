@@ -1,5 +1,5 @@
-import Common;
-import Bindless;
+import Shader.Bindless;
+import Shader.PathTracing;
 #include "common/ShaderClock.slang"
 
 [shader("compute")]

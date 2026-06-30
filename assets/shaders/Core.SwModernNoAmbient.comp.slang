@@ -1,5 +1,5 @@
-import Common;
-import Bindless;
+import Shader.Bindless;
+import Shader.PathTracing;
 #include "common/PreProcessor.slang"
 
 float3 FresnelSchlick(float cosTheta, float3 f0)

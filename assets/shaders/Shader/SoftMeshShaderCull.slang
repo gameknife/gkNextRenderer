@@ -2,8 +2,9 @@
 // Imported by both the LDS and the subgroup (wave) variants of
 // Task.SoftMeshShaderGpuCullCompact / Task.SoftMeshShaderShadowGpuCullCompact.
 module SoftMeshShaderCull;
-import Bindless;
-import Common;
+import Shader.Bindless;
+import Shader.Types;
+import Shader.GpuScene;
 
 public bool IsOccludedVolume(float3 min, float3 max, float4x4 wvp)
 {

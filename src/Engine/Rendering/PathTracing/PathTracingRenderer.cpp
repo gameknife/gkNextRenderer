@@ -89,6 +89,36 @@ namespace Vulkan::PathTracing
         composePipelineNonDenoiser_.reset();
     }
 
+    void PathTracingRenderer::ReloadShaders(
+        const std::set<std::string>& changedShaderFiles,
+        std::set<std::string>& handledShaderFiles)
+    {
+        if (rayTracingPipeline_)
+        {
+            rayTracingPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+        }
+        if (sharcUpdatePipeline_)
+        {
+            sharcUpdatePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+        }
+        if (sharcResolvePipeline_)
+        {
+            sharcResolvePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+        }
+        if (sharcQueryPipeline_)
+        {
+            sharcQueryPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+        }
+        if (accumulatePipeline_)
+        {
+            accumulatePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+        }
+        if (composePipelineNonDenoiser_)
+        {
+            composePipelineNonDenoiser_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+        }
+    }
+
     void PathTracingRenderer::EnsureSharcPipelines()
     {
         if (!sharcUpdatePipeline_)

@@ -1,5 +1,6 @@
-import Common;
-import Bindless;
+import Shader.Bindless;
+import Shader.Types;
+import Shader.GpuScene;
 
 static const float kPi = 3.14159265359f;
 

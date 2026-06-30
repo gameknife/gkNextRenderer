@@ -51,6 +51,24 @@ void SoftwareModernRenderer::DeleteSwapChain()
 	composePipeline_.reset();
 }
 
+void SoftwareModernRenderer::ReloadShaders(
+	const std::set<std::string>& changedShaderFiles,
+	std::set<std::string>& handledShaderFiles)
+{
+	if (deferredShadingPipeline_)
+	{
+		deferredShadingPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+	}
+	if (accumulatePipeline_)
+	{
+		accumulatePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+	}
+	if (composePipeline_)
+	{
+		composePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+	}
+}
+
 void SoftwareModernRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
 	baseRender_.InitializeBarriers(commandBuffer);

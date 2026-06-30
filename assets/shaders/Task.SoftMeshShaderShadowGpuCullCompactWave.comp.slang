@@ -1,7 +1,8 @@
-import Common;
-import Bindless;
+import Shader.Bindless;
+import Shader.Types;
+import Shader.GpuScene;
 
-import SoftMeshShaderCull; // IsAABBInFrustum
+import Shader.SoftMeshShaderCull; // IsAABBInFrustum
 
 // ---------------------------------------------------------------------------
 // Subgroup (wave) fast path of the soft-mesh shadow GPU cull (plan Phase 3).

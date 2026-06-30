@@ -41,6 +41,7 @@ namespace Vulkan
         static std::vector<std::filesystem::path> CollectFiles(const std::filesystem::path& root,
                                                                const std::set<std::string>& extensions);
         static bool IsSourceShader(const std::filesystem::path& path);
+        static bool IsRuntimeShaderEntry(const std::filesystem::path& path);
         static bool TryGetLatestTimestamp(const std::vector<std::filesystem::path>& files,
                                           std::filesystem::file_time_type& outTimestamp);
 

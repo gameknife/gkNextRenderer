@@ -1,4 +1,3 @@
-implementing Common;
 #include "PreProcessor.slang"
 
 public static const int SHADOWMAP_SIZE = 4096;

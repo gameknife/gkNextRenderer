@@ -1,4 +1,3 @@
-implementing Common;
 #include "PreProcessor.slang"
 
 // Tonemapping curves split out of ConstFunc.slang.

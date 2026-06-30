@@ -1,7 +1,7 @@
 // Remote play color conversion: swapchain (storage read) -> Y plane (R8_UNORM) + UV plane
 // (R8G8_UNORM). The encoder source NV12 image is populated with vkCmdCopyImage on the graphics
 // queue, so the full conversion path stays on GPU and avoids CPU readback.
-import Bindless;
+import Shader.Bindless;
 
 struct PushConsts
 {

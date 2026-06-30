@@ -1,5 +1,6 @@
-import Common;
-import Bindless;
+import Shader.Bindless;
+import Shader.Types;
+import Shader.GpuScene;
 
 [shader("compute")]
 [numthreads(1, 1, 1)]
