@@ -28,11 +28,8 @@
 #include <cstdlib>
 #include <limits>
 
-#if WITH_QUICKJS
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
-#endif
 
-#if WITH_QUICKJS
 namespace NextQuickJSBindings
 {
     int ToQuickJSArity(entt::meta_func::size_type arity)
@@ -853,4 +850,3 @@ namespace NextQuickJSBindings
         JS_FreeValue(ctx, proto);
     }
 }
-#endif

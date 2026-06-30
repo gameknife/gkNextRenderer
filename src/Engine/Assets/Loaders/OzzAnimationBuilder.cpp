@@ -1,6 +1,5 @@
 #include "Engine/Assets/Loaders/OzzAnimationBuilder.h"
 
-#if WITH_OZZ
 #include "Engine/Assets/Data/Skeleton.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 
@@ -205,4 +204,3 @@ namespace Assets
         return builder(raw);
     }
 }
-#endif

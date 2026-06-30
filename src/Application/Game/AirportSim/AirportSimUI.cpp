@@ -3,6 +3,7 @@
 #include "AgentSystem.h"
 #include "AirportMap.h"
 #include "AirportSimConfig.hpp"
+#include "AirportSimFormat.hpp"
 #include "DecisionScheduler.h"
 #include "FlightBoard.h"
 #include "QueueSystem.h"
@@ -176,14 +177,6 @@ namespace AirportSim
             followAgentId = activeIds[static_cast<size_t>((currentIndex + direction + count) % count)];
         }
 
-        std::string FormatLatency(double elapsedMs)
-        {
-            if (elapsedMs < 1000.0)
-            {
-                return fmt::format("{:.0f} ms", elapsedMs);
-            }
-            return fmt::format("{:.2f} s", elapsedMs / 1000.0);
-        }
     }
 
     void AirportSimUI::Draw(const glm::mat4& viewProjection, double gameMinutes, TimeSystem& time,

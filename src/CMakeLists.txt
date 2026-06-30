@@ -81,12 +81,32 @@ set(UNIT_TEST_SOURCES
 
 list(APPEND UNIT_TEST_SOURCES Tests/Test_PhysicsComponent.cpp)
 
-# Desktop entry point + dev-only glTF robustness runner (lives in src/Tests).
+# Desktop entry point shared by desktop applications.
 set(DESKTOP_MAIN_SOURCES
 	DesktopMain.cpp
-	Tests/GltfTestRunner.cpp
-	Tests/GltfTestRunner.hpp
 )
+
+option(ENABLE_UNITY_BUILD "Enable unity builds for engine/modules/app targets" ON)
+option(GK_FAST_DEV_LINK "Prefer faster MSVC executable links for development builds" ON)
+
+function(gk_enable_unity_build target batch_size)
+	if ( ENABLE_UNITY_BUILD AND NOT ANDROID )
+		set_target_properties(${target} PROPERTIES
+			UNITY_BUILD ON
+			UNITY_BUILD_BATCH_SIZE ${batch_size}
+		)
+	endif()
+endfunction()
+
+function(gk_enable_fast_dev_link target)
+	if ( MSVC AND GK_FAST_DEV_LINK )
+		target_link_options(${target} PRIVATE
+			/INCREMENTAL
+			/OPT:NOREF
+			/OPT:NOICF
+		)
+	endif()
+endfunction()
 
 
 # libray and app
@@ -165,15 +185,13 @@ add_executable(RmlUiDemo
 	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(RmlUiDemo PRIVATE Application/Render/RmlUiDemo)
-if ( GK_WITH_NEXT_QUICKJS )
-	add_executable(gkNextEditor
-		${src_files_editorcommon}
-		${src_files_editor}
-		${src_files_appcommon}
-		${DESKTOP_MAIN_SOURCES}
-	)
-	target_include_directories(gkNextEditor PRIVATE Application/Editor/gkNextEditor)
-endif()
+add_executable(gkNextEditor
+	${src_files_editorcommon}
+	${src_files_editor}
+	${src_files_appcommon}
+	${DESKTOP_MAIN_SOURCES}
+)
+target_include_directories(gkNextEditor PRIVATE Application/Editor/gkNextEditor)
 add_executable(ScadStudio
 	${src_files_scadstudio}
 	${DESKTOP_MAIN_SOURCES}
@@ -206,13 +224,11 @@ add_executable(FlappyCpp
 	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(FlappyCpp PRIVATE Application/Game/Flappy)
-if ( GK_WITH_NEXT_QUICKJS )
-	add_executable(FlappyJs
-		${src_files_flappyjs}
-		${DESKTOP_MAIN_SOURCES}
-	)
-	target_include_directories(FlappyJs PRIVATE Application/Game/Flappy)
-endif()
+add_executable(FlappyJs
+	${src_files_flappyjs}
+	${DESKTOP_MAIN_SOURCES}
+)
+target_include_directories(FlappyJs PRIVATE Application/Game/Flappy)
 add_executable(BrickPlayer
 	${src_files_brickplayer}
 	${DESKTOP_MAIN_SOURCES}
@@ -250,6 +266,7 @@ if ( NOT ANDROID )
 foreach(gk_module IN LISTS GK_MODULE_NAMES)
 	if ( src_files_module_${gk_module} )
 		add_library(${gk_module} STATIC ${src_files_module_${gk_module}})
+		gk_enable_unity_build(${gk_module} 8)
 		list(APPEND GK_MODULE_TARGETS ${gk_module})
 	endif()
 endforeach()
@@ -277,7 +294,11 @@ if ( TARGET ScadLoader )
 	# vcpkg include root). FScadText.cpp also includes <mapbox/earcut.hpp>.
 	find_package(Freetype QUIET)
 	if ( Freetype_FOUND AND NOT GK_DISABLE_SCAD_TEXT )
-		target_link_libraries(ScadLoader PRIVATE Freetype::Freetype)
+		if ( TARGET freetype )
+			target_link_libraries(ScadLoader PRIVATE freetype)
+		else()
+			target_link_libraries(ScadLoader PRIVATE Freetype::Freetype)
+		endif()
 		target_compile_definitions(ScadLoader PRIVATE GK_WITH_FREETYPE=1)
 		message(STATUS "FreeType found: SCAD text() enabled")
 	else()
@@ -304,14 +325,10 @@ if (UNIX AND NOT APPLE AND NOT ANDROID)
 	set(extra_libs -lstdc++fs ${Backtrace_LIBRARIES})
 endif()
 
-if ( WITH_OZZ )
 add_subdirectory(ThirdParty/ozz)
-target_link_libraries(ozz PRIVATE gk_project_options)
-endif()
 
-if( GK_WITH_NEXT_QUICKJS AND NOT ANDROID)
+if(NOT ANDROID)
 add_subdirectory(ThirdParty/quickjs-ng)
-target_link_libraries(quickjs PRIVATE gk_project_options)
 endif()
 
 option(GK_WITH_REMOTE "Enable WebRTC remote play support" ON)
@@ -380,15 +397,42 @@ foreach(gk_quickjs_program gkNextEditor FlappyJs)
 endforeach()
 endif()
 
-# Unity Build option (default ON, can be disabled with -DENABLE_UNITY_BUILD=OFF)
-option(ENABLE_UNITY_BUILD "Enable unity builds for engine target" ON)
 file(TO_CMAKE_PATH "${Vulkan_SLANGC}" GK_SLANGC_EXECUTABLE_PATH)
+
+function(gk_link_engine_feature_dependencies target)
+	if( WITH_SUPERLUMINAL )
+		target_compile_definitions(${target} PUBLIC WITH_SUPERLUMINAL=1)
+		target_include_directories(${target} SYSTEM PUBLIC ${SuperluminalAPI_INCLUDE_DIRS})
+		target_link_libraries(${target} PRIVATE SuperluminalAPI)
+		if ( MSVC )
+			target_link_options(${target} PRIVATE /ignore:4099)
+		endif()
+	else()
+		target_compile_definitions(${target} PUBLIC WITH_SUPERLUMINAL=0)
+	endif()
+
+	target_include_directories(${target} PUBLIC $<TARGET_PROPERTY:Jolt::Jolt,INTERFACE_INCLUDE_DIRECTORIES>)
+	target_link_libraries(${target} PRIVATE Jolt::Jolt )
+
+	target_link_libraries(${target} PRIVATE ozz )
+
+	target_link_libraries(${target} PRIVATE KTX::ktx )
+
+	if ( WITH_AVIF )
+		target_compile_definitions(${target} PUBLIC WITH_AVIF=1 AVIF_CODEC_AOM=SYSTEM)
+		target_include_directories(${target} PUBLIC $<TARGET_PROPERTY:avif,INTERFACE_INCLUDE_DIRECTORIES>)
+		target_link_libraries(${target} PRIVATE avif)
+	endif()
+endfunction()
 
 # common setup
 foreach(target IN LISTS AllTargets)
 	# common dependencies
 	add_dependencies(${target} Assets)
-	target_link_libraries(${target} PRIVATE gk_project_options)
+	set(gk_target_is_engine_runtime OFF)
+	if ( "${target}" STREQUAL "gkNextEngine" OR (ANDROID AND "${target}" STREQUAL "gkNextRenderer") )
+		set(gk_target_is_engine_runtime ON)
+	endif()
 
 	set_target_properties(${target} PROPERTIES DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 
@@ -471,7 +515,7 @@ foreach(target IN LISTS AllTargets)
 		list(REMOVE_ITEM _ifaces Vulkan::Vulkan)
 		set_target_properties(imgui::imgui PROPERTIES INTERFACE_LINK_LIBRARIES "${_ifaces}")
 		target_link_directories(${target} PRIVATE ${STREAMLINE_LIB_DIR})
-		target_link_libraries(${target} PRIVATE sl.interposer)
+		target_link_libraries(${target} PRIVATE "${STREAMLINE_LIB_DIR}/sl.interposer.lib")
 		else()
 		target_link_libraries(${target} PRIVATE ${Vulkan_LIBRARIES})
 		endif()
@@ -486,8 +530,11 @@ foreach(target IN LISTS AllTargets)
 			target_include_directories(${target} PRIVATE ${STREAMLINE_INCLUDE_DIR})
 			target_link_directories(${target} PRIVATE ${STREAMLINE_LIB_DIR})
 		endif()
+
+		gk_link_engine_feature_dependencies(${target})
 	elseif ( ${target} STREQUAL NextGameplay )
 		set_target_properties(${target} PROPERTIES FOLDER "Gameplay")
+		gk_enable_unity_build(${target} 8)
 		target_link_libraries(${target} PRIVATE gkNextEngine)
 	elseif ( ${target} IN_LIST GK_MODULE_TARGETS )
 		set_target_properties(${target} PROPERTIES FOLDER "Modules")
@@ -496,14 +543,15 @@ foreach(target IN LISTS AllTargets)
 		set_target_properties(${target} PROPERTIES FOLDER "Programs")
 		if ( NOT ANDROID )
 		target_link_libraries(${target} PRIVATE gkNextEngine)
+		get_target_property(_target_type ${target} TYPE)
+		if ( _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager AND NOT ${target} STREQUAL gkNextUnitTests )
+			gk_enable_unity_build(${target} 8)
+			gk_enable_fast_dev_link(${target})
+		endif()
 		# DesktopMain registers the DevTools debug UI provider for every program.
 		if ( TARGET DevTools )
 		target_link_libraries(${target} PRIVATE DevTools)
 		endif()
-		endif()
-		if ( WITH_STREAMLINE ) 
-		target_link_directories(${target} PRIVATE ${STREAMLINE_LIB_DIR})
-		target_link_libraries(${target} PRIVATE sl.interposer)
 		endif()
 	endif()
 
@@ -517,43 +565,13 @@ foreach(target IN LISTS AllTargets)
 		-Wl,--hash-style=gnu
 		)
 		target_link_libraries(${target} PRIVATE android SDL3::SDL3 spdlog::spdlog xxHash::xxhash meshoptimizer::meshoptimizer fmt::fmt CURL::libcurl glm::glm imgui::imgui draco::draco WebP::webp RmlUi::RmlUi ${Vulkan_LIBRARIES} ${extra_libs})
-	endif()
-
-	if ( WITH_AVIF )
-		target_compile_definitions(${target} PUBLIC WITH_AVIF=1)
-		target_compile_definitions(${target} PUBLIC AVIF_CODEC_AOM=SYSTEM)
-		target_link_libraries(${target} PRIVATE avif)
-	endif()
-
-	if( WITH_SUPERLUMINAL )
-		target_compile_definitions(${target} PUBLIC WITH_SUPERLUMINAL=1)
-		target_include_directories(${target} SYSTEM PRIVATE ${SuperluminalAPI_INCLUDE_DIRS})
-		target_link_libraries(${target} PRIVATE SuperluminalAPI)
-	else()
-		target_compile_definitions(${target} PUBLIC WITH_SUPERLUMINAL=0)
-	endif()
-
-	if ( WITH_PHYSIC )
-		target_compile_definitions(${target} PUBLIC WITH_PHYSIC=1)
-		target_link_libraries(${target} PRIVATE Jolt::Jolt )
-	endif()
-
-	if ( WITH_AUDIO )
-		target_compile_definitions(${target} PUBLIC WITH_AUDIO=1)
+		if ( gk_target_is_engine_runtime )
+			gk_link_engine_feature_dependencies(${target})
+		endif()
 	endif()
 
 	if (APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 13)
 		target_compile_definitions(${target} PRIVATE JSON_HAS_FILESYSTEM=0 JSON_HAS_EXPERIMENTAL_FILESYSTEM=0)
-	endif()
-
-	if ( WITH_OZZ )
-		target_compile_definitions(${target} PUBLIC WITH_OZZ=1)
-		target_link_libraries(${target} PRIVATE ozz )
-	endif()
-
-	if ( WITH_KTX2 )
-		target_compile_definitions(${target} PUBLIC WITH_KTX2=1)
-		target_link_libraries(${target} PRIVATE KTX::ktx )
 	endif()
 	
 	
@@ -602,6 +620,11 @@ foreach(target IN LISTS AllTargets)
 
 	if ( ${target} STREQUAL gkNextEditor )
 	# third-party warning fix
+	set_source_files_properties(
+		Application/Editor/gkNextEditor/AI/EditorAIService.cpp
+		Application/Editor/gkNextEditor/AI/EditorScriptExecutor.cpp
+		PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
+	)
 	if (MSVC)
 
 	else()
@@ -622,7 +645,7 @@ target_link_libraries(AirportSim PRIVATE NextGameplay)
 endif()
 
 if ( TARGET NextQuickJS )
-	target_compile_definitions(NextQuickJS PUBLIC WITH_QUICKJS=1 PRIVATE GK_NEXT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+	target_compile_definitions(NextQuickJS PRIVATE GK_NEXT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 	target_link_libraries(NextQuickJS PRIVATE quickjs SDL3::SDL3 imgui::imgui)
 	foreach(t FlappyJs gkNextEditor)
 		if ( TARGET ${t} )
@@ -646,6 +669,7 @@ if ( TARGET ScadLoader )
 		endif()
 	endforeach()
 endif()
+
 if ( TARGET SplatLoader )
 	foreach(t gkNextRenderer gkNextVisualTest gkNextUnitTests)
 		if ( TARGET ${t} )
@@ -700,7 +724,7 @@ endif()
 
 # Test Target
 if ( NOT ANDROID AND NOT IOS )
-target_link_libraries(gkNextUnitTests PRIVATE NextGameplay gkNextEngine Catch2::Catch2WithMain gk_project_options)
+target_link_libraries(gkNextUnitTests PRIVATE NextGameplay gkNextEngine Catch2::Catch2WithMain)
 target_include_directories(gkNextUnitTests PRIVATE Application/Game/NextRA)
 set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
 endif()
@@ -709,9 +733,7 @@ if ( TARGET quickjs )
 set_target_properties(quickjs PROPERTIES FOLDER "ThirdParty")
 endif()
 
-if ( WITH_OZZ )
 set_target_properties(ozz PROPERTIES FOLDER "ThirdParty")
-endif()
 set_target_properties(Assets PROPERTIES FOLDER "Engine")
 if ( NOT ANDROID )
 set_target_properties(gkNextEngine PROPERTIES FOLDER "Engine")

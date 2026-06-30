@@ -2,6 +2,8 @@
 
 #include "EmployeeSystem.h"
 #include "OfficeMap.h"
+#include "StudioSimLabels.hpp"
+#include "StudioSimProjectMetrics.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -21,80 +23,7 @@ namespace StudioSim
         constexpr double kLlmTimeoutSeconds = 15.0;
         constexpr size_t kShortMemoryLimit = 4;
         constexpr size_t kLogLimit = 60;
-        constexpr double kBubbleDurationMinutes = 25.0;
-
-        const char* ProjectStageLabelZh(EProjectStage stage)
-        {
-            switch (stage)
-            {
-            case EProjectStage::Planning:   return "企划";
-            case EProjectStage::Production: return "生产";
-            case EProjectStage::Polish:     return "打磨";
-            case EProjectStage::Done:       return "完成";
-            default:                        return "?";
-            }
-        }
-
-        const char* GameGenreLabelZh(EGameGenre genre)
-        {
-            switch (genre)
-            {
-            case EGameGenre::RPG:        return "RPG";
-            case EGameGenre::Action:     return "动作";
-            case EGameGenre::Simulation: return "模拟经营";
-            case EGameGenre::Puzzle:     return "解谜";
-            case EGameGenre::Shooter:    return "射击";
-            case EGameGenre::Adventure:  return "冒险";
-            default:                     return "未知";
-            }
-        }
-
-        const char* GameThemeLabelZh(EGameTheme theme)
-        {
-            switch (theme)
-            {
-            case EGameTheme::Fantasy: return "奇幻";
-            case EGameTheme::SciFi:   return "科幻";
-            case EGameTheme::Sports:  return "体育";
-            case EGameTheme::Romance: return "恋爱";
-            case EGameTheme::Horror:  return "恐怖";
-            case EGameTheme::Daily:   return "日常";
-            default:                  return "未知";
-            }
-        }
-
-        struct FMeterSnapshot
-        {
-            const char* key = "";
-            const char* label = "";
-            float value = 0.0f;
-            float target = 0.0f;
-        };
-
-        float MeterCompletion(const FMeterSnapshot& meter)
-        {
-            return meter.target > 0.0f ? std::clamp(meter.value / meter.target, 0.0f, 1.0f) : 1.0f;
-        }
-
-        FMeterSnapshot WeakestMeter(const FProjectState& project)
-        {
-            FMeterSnapshot meters[] = {
-                {"tech", "技术", project.meters.tech, project.targetMeters.tech},
-                {"design", "玩法", project.meters.design, project.targetMeters.design},
-                {"art", "美术", project.meters.art, project.targetMeters.art},
-                {"polish", "品质", project.meters.polish, project.targetMeters.polish},
-            };
-
-            FMeterSnapshot weakest = meters[0];
-            for (const auto& meter : meters)
-            {
-                if (MeterCompletion(meter) < MeterCompletion(weakest))
-                {
-                    weakest = meter;
-                }
-            }
-            return weakest;
-        }
+        constexpr double kDecisionBubbleDurationMinutes = 25.0;
 
         std::string BuildHighlightsText(const FGameProject& gameProject)
         {
@@ -131,7 +60,7 @@ namespace StudioSim
                 "项目：《{}》。类型：{}，题材：{}，契合度 {:.0f}%。工期：第 {}/{} 天。\n"
                 "体验要点：{}。\n"
                 "说话和行动要贴合这个项目，不要只泛泛而谈进度。\n",
-                gameProject.name, GameGenreLabelZh(gameProject.genre), GameThemeLabelZh(gameProject.theme),
+                gameProject.name, GameGenreLabelZh(gameProject.genre, ELabelTextStyle::Prompt), GameThemeLabelZh(gameProject.theme, ELabelTextStyle::Prompt),
                 gameProject.comboFit * 100.0f, projectDay, plannedDays, BuildHighlightsText(gameProject));
         }
 
@@ -525,7 +454,7 @@ namespace StudioSim
         if (ShouldShowDialogue(emp, result, gameMinutes, hadIncoming))
         {
             emp.bubbleText = result.dialogue;
-            emp.bubbleClearAt = gameMinutes + kBubbleDurationMinutes;
+            emp.bubbleClearAt = gameMinutes + kDecisionBubbleDurationMinutes;
         }
         else if (emp.bubbleClearAt <= gameMinutes)
         {

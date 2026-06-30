@@ -1,4 +1,5 @@
 #include "StudioSimUI.h"
+#include "StudioSimLabels.hpp"
 
 #include <fmt/format.h>
 #include <imgui.h>
@@ -128,46 +129,6 @@ namespace StudioSim
             outScreen = ImVec2(viewportPosition.x + (ndc.x * 0.5f + 0.5f) * viewportSize.x,
                                viewportPosition.y + (-ndc.y * 0.5f + 0.5f) * viewportSize.y);
             return true;
-        }
-
-        const char* ProjectStageLabelZh(EProjectStage stage)
-        {
-            switch (stage)
-            {
-            case EProjectStage::Planning: return "企划";
-            case EProjectStage::Production: return "生产";
-            case EProjectStage::Polish: return "打磨";
-            case EProjectStage::Done: return "完成";
-            default: return "?";
-            }
-        }
-
-        const char* GameGenreLabelZh(EGameGenre genre)
-        {
-            switch (genre)
-            {
-            case EGameGenre::RPG: return "RPG";
-            case EGameGenre::Action: return "动作";
-            case EGameGenre::Simulation: return "模拟";
-            case EGameGenre::Puzzle: return "解谜";
-            case EGameGenre::Shooter: return "射击";
-            case EGameGenre::Adventure: return "冒险";
-            default: return "未知";
-            }
-        }
-
-        const char* GameThemeLabelZh(EGameTheme theme)
-        {
-            switch (theme)
-            {
-            case EGameTheme::Fantasy: return "奇幻";
-            case EGameTheme::SciFi: return "科幻";
-            case EGameTheme::Sports: return "运动";
-            case EGameTheme::Romance: return "恋爱";
-            case EGameTheme::Horror: return "恐怖";
-            case EGameTheme::Daily: return "日常";
-            default: return "未知";
-            }
         }
 
         const char* ProjectSizeTierLabelZh(EProjectSizeTier tier)

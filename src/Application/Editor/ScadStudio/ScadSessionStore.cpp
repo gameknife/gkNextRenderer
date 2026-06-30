@@ -1,4 +1,5 @@
 #include "ScadSessionStore.hpp"
+#include "ScadStudioUtils.hpp"
 
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -61,13 +62,6 @@ namespace ScadStudio
             turn.targetFilePath = j.value("targetFilePath", "");
             turn.isError = j.value("isError", false);
             return turn;
-        }
-
-        int64_t NowUnixSeconds()
-        {
-            return std::chrono::duration_cast<std::chrono::seconds>(
-                       std::chrono::system_clock::now().time_since_epoch())
-                .count();
         }
 
         int64_t FileTimeUnixSeconds(const std::filesystem::path& path)

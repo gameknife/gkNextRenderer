@@ -3,6 +3,7 @@
 #include "AgentSystem.h"
 #include "AirportMap.h"
 #include "AirportSimConfig.hpp"
+#include "AirportSimFormat.hpp"
 #include "JourneySystem.h"
 
 #include <algorithm>
@@ -51,15 +52,6 @@ namespace AirportSim
             return Config::kDecisionCooldownMinutes;
         }
         constexpr size_t kLogLimit = 60;
-
-        std::string FormatLatency(double elapsedMs)
-        {
-            if (elapsedMs < 1000.0)
-            {
-                return fmt::format("{:.0f} ms", elapsedMs);
-            }
-            return fmt::format("{:.2f} s", elapsedMs / 1000.0);
-        }
 
         // ---- 预制台词库（fallback，§5.3）----
         const char* kGreetLines[] = {"嗨，今天人真多", "又见面啦", "辛苦辛苦", "吃了吗您", "今天天气不错"};

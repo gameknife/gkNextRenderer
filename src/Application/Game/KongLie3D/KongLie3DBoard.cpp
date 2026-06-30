@@ -5,7 +5,7 @@
 
 namespace
 {
-    constexpr int BoardCols = 7;
+    constexpr int BoardGridCols = 7;
     constexpr int BoardRows = 8;
     constexpr float CellHalfSize = 0.475f;
     constexpr float CellHeight = 0.05f;
@@ -83,7 +83,7 @@ namespace KongLie3D
 
         for (int row = 0; row < BoardRows; ++row)
         {
-            for (int col = 0; col < BoardCols; ++col)
+            for (int col = 0; col < BoardGridCols; ++col)
             {
                 uint32_t materialId = ((row + col) % 2 == 0)
                                           ? (row <= 3 ? enemyLightCellMaterialId : playerLightCellMaterialId)

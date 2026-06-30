@@ -1,7 +1,6 @@
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Tests/GltfTestRunner.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.h"
 #include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
 #include "Modules/NextRemote/NextRemoteModule.hpp"
@@ -18,10 +17,10 @@
 #include <SDL3/SDL_main.h>
 
 #include <cstdlib>
+#include <spdlog/spdlog.h>
 
 std::unique_ptr<NextEngine> GApplication;
 std::unique_ptr<Runtime::Config::Options> GOptionPtr;
-std::unique_ptr<Runtime::Scene::GltfTestRunner> GTestRunner;
 
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
@@ -106,8 +105,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
     if (GOption->TestGltfRobustness)
     {
-        GTestRunner = std::make_unique<Runtime::Scene::GltfTestRunner>(GApplication.get());
-        GApplication->AddTickedTask([](double dt){ return GTestRunner->Update(dt); });
+        SPDLOG_WARN("--test-gltf is not linked into desktop applications; run a dedicated robustness runner instead.");
     }
 
     GApplication->Start();
@@ -130,7 +128,6 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
 #endif
     }
 
-    GTestRunner.reset();
     GApplication.reset();
     GOptionPtr.reset();
 }

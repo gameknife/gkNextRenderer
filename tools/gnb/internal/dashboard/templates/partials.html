@@ -3085,3 +3085,205 @@
   {{end}}
 </div>
 {{end}}
+
+{{define "tab_graph"}}
+<div class="target-graph-tab" data-target-graph data-preset="{{.GraphVM.Preset}}">
+  <style>
+    .target-graph-tab {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr) 320px;
+      height: calc(100vh - 132px);
+      min-height: 620px;
+      border-top: 1px solid var(--border);
+      background: var(--bg);
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .graph-sidebar, .graph-inspector {
+      min-width: 0;
+      border-right: 1px solid var(--border);
+      background: var(--bg-soft);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .graph-inspector { border-right: 0; border-left: 1px solid var(--border); }
+    .graph-panel-head {
+      padding: 14px;
+      border-bottom: 1px solid var(--border);
+      display: grid;
+      gap: 10px;
+    }
+    .graph-panel-title { font-size: 13px; font-weight: 700; letter-spacing: 0; }
+    .graph-muted { color: var(--fg-mute); font-size: 12px; line-height: 1.45; }
+    .graph-search {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--fg);
+      border-radius: 6px;
+      padding: 9px 10px;
+      font: inherit;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    .graph-target-list {
+      overflow: auto;
+      padding: 8px;
+    }
+    .graph-target-button {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: var(--fg);
+      text-align: left;
+      display: grid;
+      grid-template-columns: 10px minmax(0, 1fr) auto;
+      gap: 9px;
+      align-items: center;
+      padding: 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      font: inherit;
+    }
+    .graph-target-button:hover { background: var(--hover); }
+    .graph-target-button.active { background: var(--accent-soft); color: var(--accent); }
+    .graph-kind-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--fg-mute); }
+    .graph-kind-dot.exe { background: #16a34a; }
+    .graph-kind-dot.lib { background: #2563eb; }
+    .graph-kind-dot.iface { background: #9333ea; }
+    .graph-kind-dot.unknown { background: #d97706; }
+    .graph-target-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .graph-target-degree { color: var(--fg-mute); font-size: 11px; }
+    .graph-main {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      background: var(--bg);
+    }
+    .graph-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-soft);
+    }
+    .graph-toolbar .spacer { flex: 1; }
+    .graph-canvas {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      background:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 28px 28px;
+      background-color: var(--bg);
+      cursor: grab;
+    }
+    .graph-canvas.dragging { cursor: grabbing; }
+    .graph-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .graph-edge { stroke: color-mix(in srgb, var(--fg-mute) 55%, transparent); stroke-width: 1.4; fill: none; }
+    .graph-edge.private { stroke-dasharray: 2 4; }
+    .graph-edge.interface { stroke-dasharray: 7 5; }
+    .graph-edge.dim { opacity: 0.15; }
+    .graph-node rect {
+      fill: var(--bg-soft);
+      stroke: var(--border-strong);
+      stroke-width: 1;
+      rx: 6;
+    }
+    .graph-node text { fill: var(--fg); font-size: 12px; pointer-events: none; user-select: none; }
+    .graph-node .kind { fill: var(--fg-mute); font-size: 10px; }
+    .graph-node.selected rect { stroke: var(--accent); stroke-width: 2; }
+    .graph-node.related rect { stroke: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+    .graph-node.dim { opacity: 0.28; }
+    .graph-empty {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: var(--fg-mute);
+      pointer-events: none;
+    }
+    .graph-inspector-body { overflow: auto; padding: 14px; }
+    .graph-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+    .graph-stat { border: 1px solid var(--border); border-radius: 6px; padding: 9px; background: var(--bg); }
+    .graph-stat b { display: block; font-size: 18px; }
+    .graph-section + .graph-section { margin-top: 18px; }
+    .graph-section h3 { font-size: 12px; margin: 0 0 8px; color: var(--fg-mute); text-transform: uppercase; letter-spacing: .04em; }
+    .graph-link-list { display: grid; gap: 6px; }
+    .graph-link-list button {
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--fg);
+      border-radius: 6px;
+      padding: 7px 8px;
+      text-align: left;
+      cursor: pointer;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font: inherit;
+    }
+    .graph-link-list button:hover { border-color: var(--accent); }
+    @media (max-width: 1100px) {
+      .target-graph-tab { grid-template-columns: 240px minmax(0, 1fr); }
+      .graph-inspector { display: none; }
+    }
+  </style>
+  <aside class="graph-sidebar">
+    <div class="graph-panel-head">
+      <div>
+        <div class="graph-panel-title">Target Graph</div>
+        <div class="graph-muted">Preset: {{.GraphVM.Preset}}</div>
+      </div>
+      <input class="graph-search" type="search" placeholder="Filter targets" data-graph-search>
+    </div>
+    <div class="graph-target-list" data-graph-target-list></div>
+  </aside>
+  <section class="graph-main">
+    <div class="graph-toolbar">
+      <button class="btn" type="button" data-graph-refresh>Refresh</button>
+      <button class="btn secondary" type="button" data-graph-fit>Fit</button>
+      <button class="btn secondary" type="button" data-graph-depth="1">1-hop</button>
+      <button class="btn secondary" type="button" data-graph-depth="2">2-hop</button>
+      <button class="btn secondary" type="button" data-graph-depth="99">All</button>
+      <span class="spacer"></span>
+      <span class="graph-muted" data-graph-status>Loading graph...</span>
+    </div>
+    <div class="graph-canvas" data-graph-canvas>
+      <svg class="graph-svg" data-graph-svg role="img" aria-label="Target dependency graph"></svg>
+      <div class="graph-empty" data-graph-empty>Loading graph...</div>
+    </div>
+  </section>
+  <aside class="graph-inspector">
+    <div class="graph-panel-head">
+      <div class="graph-panel-title" data-graph-selected-title>No target selected</div>
+      <div class="graph-muted" data-graph-selected-kind>Select a node or target.</div>
+    </div>
+    <div class="graph-inspector-body">
+      <div class="graph-stat-grid">
+        <div class="graph-stat"><b data-graph-dep-count>0</b><span class="graph-muted">Dependencies</span></div>
+        <div class="graph-stat"><b data-graph-user-count>0</b><span class="graph-muted">Dependers</span></div>
+      </div>
+      <div class="graph-section">
+        <h3>Direct Dependencies</h3>
+        <div class="graph-link-list" data-graph-deps></div>
+      </div>
+      <div class="graph-section">
+        <h3>Direct Dependers</h3>
+        <div class="graph-link-list" data-graph-users></div>
+      </div>
+    </div>
+  </aside>
+</div>
+{{end}}

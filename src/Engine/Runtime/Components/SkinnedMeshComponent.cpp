@@ -15,7 +15,6 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <cstring>
 
-#if WITH_OZZ
 #include "ozz/animation/runtime/animation.h"
 #include "ozz/animation/runtime/blending_job.h"
 #include "ozz/animation/runtime/local_to_model_job.h"
@@ -27,7 +26,6 @@
 #include "ozz/base/maths/soa_transform.h"
 #include "ozz/base/memory/unique_ptr.h"
 #include "ozz/base/platform.h"
-#endif
 
 #include "Engine/Runtime/Components/SkinnedMeshComponent.Internal.hpp"
 namespace Runtime
@@ -76,7 +74,6 @@ namespace Runtime
         blendSourceState_.Playing = false;
         blendSourceState_.CurrentTime = 0.0f;
 
-#if WITH_OZZ
         ozz_->skeleton = Assets::BuildOzzSkeleton(skeleton_);
         if (ozz_->skeleton)
         {
@@ -109,7 +106,6 @@ namespace Runtime
         {
             SPDLOG_ERROR("SkinnedMeshComponent: BuildOzzSkeleton failed for skeleton '{}'", skeleton_.Name);
         }
-#endif
     }
 
     SkinnedMeshComponent::~SkinnedMeshComponent() = default;
@@ -185,7 +181,6 @@ namespace Runtime
 
         AdvanceAnimationState(currentState_, deltaTime);
 
-#if WITH_OZZ
         const bool sampledCurrent = SampleOzz(currentState_, 0);
         float currentWeight = 1.0f;
 
@@ -205,7 +200,6 @@ namespace Runtime
         {
             FinalizePose(currentWeight);
         }
-#endif
 
     }
 
@@ -253,7 +247,6 @@ namespace Runtime
         }
     }
 
-#if WITH_OZZ
     bool SkinnedMeshComponent::SampleOzz(const AnimationState& state, int contextSlot)
     {
         if (!ozz_ || !ozz_->skeleton)
@@ -387,7 +380,6 @@ namespace Runtime
             jointMatrices_[assetI] = global * skeleton_.Joints[assetI].InverseBindMatrix;
         }
     }
-#endif
 
     void SkinnedMeshComponent::AdvanceAnimationState(AnimationState& state, float deltaTime) const
     {

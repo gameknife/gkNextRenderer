@@ -7,8 +7,6 @@
 #include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
 
-#if WITH_QUICKJS
-
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
 
 #include <SDL3/SDL.h>
@@ -135,5 +133,3 @@ namespace NextQuickJSBindings
                                    std::filesystem::file_time_type& outLatestSource);
     void UpdateTypeScriptDefinitions(const std::filesystem::path& tsconfigPath);
 }
-
-#endif

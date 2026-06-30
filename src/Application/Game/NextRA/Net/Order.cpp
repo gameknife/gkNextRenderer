@@ -1,49 +1,26 @@
 #include "Net/Order.h"
-
-#include <cstring>
+#include "Net/BinaryCodec.h"
 
 namespace NextRA::Net
 {
-    namespace
-    {
-        template <typename T>
-        void Write(std::vector<uint8_t>& out, T value)
-        {
-            const auto* bytes = reinterpret_cast<const uint8_t*>(&value);
-            out.insert(out.end(), bytes, bytes + sizeof(T));
-        }
-
-        template <typename T>
-        bool Read(std::span<const uint8_t> bytes, size_t& cursor, T& out)
-        {
-            if (cursor + sizeof(T) > bytes.size())
-            {
-                return false;
-            }
-            std::memcpy(&out, bytes.data() + cursor, sizeof(T));
-            cursor += sizeof(T);
-            return true;
-        }
-    }
-
     std::vector<uint8_t> SerializeOrder(const FOrder& order)
     {
         std::vector<uint8_t> out;
         out.reserve(32 + order.actorIds.size() * sizeof(Sim::FActorId));
 
-        Write<uint8_t>(out, static_cast<uint8_t>(order.type));
-        Write<uint8_t>(out, order.playerId);
-        Write<uint32_t>(out, order.issueTick);
-        Write<uint32_t>(out, static_cast<uint32_t>(order.actorIds.size()));
+        WriteBinary<uint8_t>(out, static_cast<uint8_t>(order.type));
+        WriteBinary<uint8_t>(out, order.playerId);
+        WriteBinary<uint32_t>(out, order.issueTick);
+        WriteBinary<uint32_t>(out, static_cast<uint32_t>(order.actorIds.size()));
         for (Sim::FActorId actor : order.actorIds)
         {
-            Write<Sim::FActorId>(out, actor);
+            WriteBinary<Sim::FActorId>(out, actor);
         }
-        Write<int64_t>(out, order.targetPos.x.raw);
-        Write<int64_t>(out, order.targetPos.y.raw);
-        Write<int64_t>(out, order.targetPos.z.raw);
-        Write<Sim::FActorId>(out, order.targetActor);
-        Write<uint16_t>(out, order.produceTypeId);
+        WriteBinary<int64_t>(out, order.targetPos.x.raw);
+        WriteBinary<int64_t>(out, order.targetPos.y.raw);
+        WriteBinary<int64_t>(out, order.targetPos.z.raw);
+        WriteBinary<Sim::FActorId>(out, order.targetActor);
+        WriteBinary<uint16_t>(out, order.produceTypeId);
         return out;
     }
 
@@ -55,8 +32,8 @@ namespace NextRA::Net
         uint32_t issueTick = 0;
         uint32_t actorCount = 0;
 
-        if (!Read(bytes, cursor, type) || !Read(bytes, cursor, playerId) ||
-            !Read(bytes, cursor, issueTick) || !Read(bytes, cursor, actorCount))
+        if (!ReadBinary(bytes, cursor, type) || !ReadBinary(bytes, cursor, playerId) ||
+            !ReadBinary(bytes, cursor, issueTick) || !ReadBinary(bytes, cursor, actorCount))
         {
             return std::nullopt;
         }
@@ -72,7 +49,7 @@ namespace NextRA::Net
         order.actorIds.resize(actorCount);
         for (Sim::FActorId& actor : order.actorIds)
         {
-            if (!Read(bytes, cursor, actor))
+            if (!ReadBinary(bytes, cursor, actor))
             {
                 return std::nullopt;
             }
@@ -81,8 +58,8 @@ namespace NextRA::Net
         int64_t x = 0;
         int64_t y = 0;
         int64_t z = 0;
-        if (!Read(bytes, cursor, x) || !Read(bytes, cursor, y) || !Read(bytes, cursor, z) ||
-            !Read(bytes, cursor, order.targetActor) || !Read(bytes, cursor, order.produceTypeId))
+        if (!ReadBinary(bytes, cursor, x) || !ReadBinary(bytes, cursor, y) || !ReadBinary(bytes, cursor, z) ||
+            !ReadBinary(bytes, cursor, order.targetActor) || !ReadBinary(bytes, cursor, order.produceTypeId))
         {
             return std::nullopt;
         }
