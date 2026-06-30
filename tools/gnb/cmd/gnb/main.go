@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -98,6 +99,7 @@ func main() {
 	root.AddCommand(newTestCommand(ctx))
 	root.AddCommand(newVisualCommand(ctx))
 	root.AddCommand(newShotCommand(ctx))
+	root.AddCommand(newValidateCommand(ctx))
 	root.AddCommand(newTuiCommand(ctx))
 	root.AddCommand(newEditorCommand(ctx))
 	root.AddCommand(newAndroidCommand(ctx))
@@ -519,6 +521,114 @@ func shotRunArgs(frames int, includeUI bool, trailingArgs []string) []string {
 		runArgs = append(runArgs, "--agent-validation-ui")
 	}
 	return append(runArgs, trailingArgs...)
+}
+
+type validateScriptHints struct {
+	Name     string `json:"name"`
+	Target   string `json:"target"`
+	Scene    string `json:"scene"`
+	Viewport struct {
+		Width  int `json:"width"`
+		Height int `json:"height"`
+	} `json:"viewport"`
+}
+
+func newValidateCommand(ctx appContext) *cobra.Command {
+	var script string
+	var target string
+	var scene string
+	var report string
+	var width int
+	var height int
+	var visible bool
+	cmd := &cobra.Command{
+		Use:   "validate --script <path> [--target <name>] [--scene <path>]",
+		Short: "Run an agent input validation script and write a JSON report",
+		Args:  cobra.ArbitraryArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if script == "" {
+				return fmt.Errorf("--script is required")
+			}
+			scriptPath := script
+			if !filepath.IsAbs(scriptPath) {
+				scriptPath = filepath.Join(ctx.repoRoot, scriptPath)
+			}
+			scriptPath, _ = filepath.Abs(scriptPath)
+
+			hints := loadValidateScriptHints(scriptPath)
+			if target == "" {
+				target = hints.Target
+			}
+			if target == "" {
+				target = "gkNextRenderer"
+			}
+			if scene == "" {
+				scene = hints.Scene
+			}
+			if width == 0 {
+				width = hints.Viewport.Width
+			}
+			if height == 0 {
+				height = hints.Viewport.Height
+			}
+
+			runArgs := validateRunArgs(scriptPath, report, width, height, visible, args)
+			opts := runner.Options{Target: target, Preset: ctx.preset, Args: runArgs}
+			if scene != "" {
+				opts.Scenes = append(opts.Scenes, scene)
+			}
+			err := runner.Run(ctx.repoRoot, opts)
+
+			reportPath := report
+			if reportPath == "" {
+				reportName := hints.Name
+				if reportName == "" {
+					reportName = strings.TrimSuffix(filepath.Base(scriptPath), filepath.Ext(scriptPath))
+				}
+				reportPath = filepath.Join(filepath.Dir(platform.BinDir(ctx.repoRoot, ctx.preset)),
+					"agent_reports", reportName+".json")
+			} else if !filepath.IsAbs(reportPath) {
+				reportPath = filepath.Join(filepath.Dir(platform.BinDir(ctx.repoRoot, ctx.preset)), reportPath)
+			}
+			console.Info("agent report: " + reportPath)
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&script, "script", "", "agent script JSON path")
+	cmd.Flags().StringVar(&target, "target", "", "target executable to run (default: script target or gkNextRenderer)")
+	cmd.Flags().StringVar(&scene, "scene", "", "scene to load (overrides script scene)")
+	cmd.Flags().StringVar(&report, "report", "", "report JSON output path")
+	cmd.Flags().IntVar(&width, "width", 0, "window width (overrides script viewport.width)")
+	cmd.Flags().IntVar(&height, "height", 0, "window height (overrides script viewport.height)")
+	cmd.Flags().BoolVar(&visible, "visible", false, "show the desktop window while replaying the agent script")
+	return cmd
+}
+
+func validateRunArgs(scriptPath string, report string, width int, height int, visible bool, trailingArgs []string) []string {
+	runArgs := []string{"--agent-script=" + scriptPath}
+	if report != "" {
+		runArgs = append(runArgs, "--agent-report="+report)
+	}
+	if visible {
+		runArgs = append(runArgs, "--agent-visible-window")
+	}
+	if width > 0 {
+		runArgs = append(runArgs, fmt.Sprintf("--width=%d", width))
+	}
+	if height > 0 {
+		runArgs = append(runArgs, fmt.Sprintf("--height=%d", height))
+	}
+	return append(runArgs, trailingArgs...)
+}
+
+func loadValidateScriptHints(scriptPath string) validateScriptHints {
+	var hints validateScriptHints
+	data, err := os.ReadFile(scriptPath)
+	if err != nil {
+		return hints
+	}
+	_ = json.Unmarshal(data, &hints)
+	return hints
 }
 
 func newTuiCommand(ctx appContext) *cobra.Command {

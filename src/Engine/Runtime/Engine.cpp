@@ -4,6 +4,7 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
+#include "Engine/Runtime/AgentDriver/AgentDriver.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/RemoteProtocol.hpp"
 #include "Engine/Runtime/RenderFrameConsumer.hpp"
@@ -360,7 +361,7 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
 
     status_ = NextRenderer::EApplicationStatus::Starting;
 
-    agentValidation_.active = options.AgentValidation;
+    agentValidation_.active = options.AgentValidation && options.AgentScript.empty();
     agentValidation_.includeUi = options.AgentValidationUI;
     agentValidation_.waitFrames = options.AgentValidationFrames;
     agentValidation_.outputPath = options.AgentValidationOutput;
@@ -422,7 +423,8 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     windowConfig.Fullscreen = config_.userSettings.BorderlessFullscreen;
     // Hide the window for agent validation captures and for any caller that asked for it (e.g. the
     // unit-test engine fixture). The capture+auto-exit state machine stays gated on AgentValidation.
-    windowConfig.HiddenWindow = options.AgentValidation || options.HiddenWindow || options.Tui;
+    windowConfig.HiddenWindow =
+        (options.AgentValidation && !options.AgentVisibleWindow) || options.HiddenWindow || options.Tui;
     window_.reset(new Vulkan::Window(windowConfig));
     SetBorderlessFullscreen(config_.userSettings.BorderlessFullscreen);
     services_.localization = std::make_unique<NextLocalization>();
@@ -588,6 +590,10 @@ void NextEngine::Start()
     }
 
     gameInstance_->OnInit();
+    if (!options_->AgentScript.empty())
+    {
+        agentDriver_ = std::make_unique<Runtime::Agent::FAgentDriver>(*this);
+    }
 
     SPDLOG_INFO("---- Next Engine Started in {}", stopwatch.elapsed_ms());
 }
@@ -902,6 +908,10 @@ bool NextEngine::Tick(bool forcingDelta)
         {
             TickAgentValidation();
         }
+        if (agentDriver_)
+        {
+            agentDriver_->Tick(frameState_.deltaSeconds);
+        }
 
         if (!renderFrameConsumers_.empty())
         {
@@ -922,6 +932,8 @@ bool NextEngine::Tick(bool forcingDelta)
 
 void NextEngine::End()
 {
+    agentDriver_.reset();
+
     if (!GOption->FastExit)
     {
         Tasks::TaskCoordinator::GetInstance()->CancelAllParralledTasks();
@@ -980,6 +992,12 @@ void NextEngine::RequestClose()
     {
         window_->Close();
     }
+}
+
+void NextEngine::RequestExit(int exitCode)
+{
+    requestedExitCode_ = exitCode;
+    RequestClose();
 }
 
 void NextEngine::RequestMinimize() { window_->Minimize(); }
@@ -1319,6 +1337,11 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
         SCOPED_CPU_TIMER("graphics debug ui");
         debugUiProvider_->DrawGraphicsPanel(*this, config_.showFlags.DebugGraphicsPanel,
                                             gameInstance_->GetGraphicsDebugPanelTopOffset());
+    }
+    if (!suppressAllUi && agentDriver_)
+    {
+        SCOPED_CPU_TIMER("agent overlay");
+        agentDriver_->DrawStatusOverlay();
     }
     {
         SCOPED_CPU_TIMER("imgui submit");

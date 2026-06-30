@@ -7,6 +7,11 @@
 #include "Engine/Runtime/Editor/MultiViewportBackend.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
 
+namespace Runtime::Agent
+{
+    class FAgentQueryRegistry;
+}
+
 class NextGameInstanceBase
 {
 public:
@@ -26,6 +31,7 @@ public:
     virtual std::unique_ptr<NextUI::IMultiViewportBackend> CreateMultiViewportBackend() { return nullptr; }
     virtual void OnRayHitResponse(Assets::RayCastResult& result) {}
     virtual void ConfigureCVars(NextCVar::FCVarSystem& cvars) {}
+    virtual void RegisterAgentQueries(Runtime::Agent::FAgentQueryRegistry& reg) { (void)reg; }
     virtual float GetGraphicsDebugPanelTopOffset() const { return 0.0f; }
     virtual void DrawAdditionalPhysicsDebugOverlay(const Assets::Camera& camera) const {}
 

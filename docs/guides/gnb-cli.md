@@ -124,6 +124,23 @@ Windows 使用 WebView2 runtime；release 和 shim 构建会内嵌它的 bootstr
 ./gnb.sh visual
 ```
 
+Agent 单截图验证：
+
+```bash
+./gnb.sh shot --scene assets/models/playground.glb
+./gnb.sh shot --target ScadStudio --scene assets/scad/beer_cup.scad --frames 60
+```
+
+Agent 输入驱动验证（隐藏窗口、脚本回放、断言、JSON report）：
+
+```bash
+./gnb.sh validate --script assets/agentscripts/smoke.agentscript.json
+./gnb.sh validate --script assets/agentscripts/smoke.agentscript.json --target gkNextRenderer --scene assets/models/playground.glb
+./gnb.sh validate --script assets/agentscripts/smoke.agentscript.json --visible
+```
+
+`validate` 会从脚本读取默认 `target`、`scene` 和 `viewport`，命令行参数优先。默认隐藏窗口；需要人工观察自动回放时传 `--visible`。报告默认写到 `out/build/<preset>/agent_reports/<script-name>.json`；断言失败会透传非零退出码。
+
 ## 移动端
 
 Android：
