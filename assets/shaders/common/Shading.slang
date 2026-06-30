@@ -345,6 +345,37 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
 {
     public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float outRayLength, inout float2 outPixelOffset)
     {
+        let Camera = Bindless.GetGpuscene().Camera[0];
+        GPUVertex* vertices = Bindless.GetGpuscene().Vertices;
+        NodeProxy* nodes = Bindless.GetGpuscene().Nodes;
+        ModelData* models = Bindless.GetGpuscene().Offsets;
+        uint* indices = Bindless.GetGpuscene().Indices;
+
+        const uint packedValue = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[ipos];
+        const uint2 vBuffer = uint2((packedValue >> 17) & 0x7FFF, packedValue & 0x1FFFF);
+        const float2 uv = (float2(ipos) / float2(isize)) * 2.0f - 1.0f;
+        const float4 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
+        const float4 target = mul(Camera.ProjectionInverse, float4(uv.x, uv.y, 1, 1));
+        const float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
+        const float3 rayDir = normalize(dir.xyz);
+
+        outRayDir = rayDir;
+        outPixelOffset = float2(0, 0);
+        if (vBuffer.x == 0)
+        {
+            return false;
+        }
+
+        outVertex = Common.get_material_data(vBuffer, origin.xyz, rayDir, nodes, models, vertices, indices);
+        outNode = nodes[vBuffer.x - 1];
+        outVertex.MaterialIndex = FetchMaterialId(outNode, outVertex.MaterialIndex);
+        outRayLength = length(outVertex.Position - origin.xyz);
+        return true;
+    }
+
+#if 0
+    public bool TracePrimaryRayDofLegacy(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float outRayLength, inout float2 outPixelOffset)
+    {
         
         UniformBufferObject Camera = *Bindless.GetGpuscene().Camera;
         GPUVertex* Vertices = Bindless.GetGpuscene().Vertices;
@@ -500,6 +531,7 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
         
         return true;
     }
+#endif
 }
 public struct FVoxelRayCaster : IPrimaryRayCaster
 {
