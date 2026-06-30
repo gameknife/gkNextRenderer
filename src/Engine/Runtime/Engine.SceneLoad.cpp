@@ -29,11 +29,17 @@
 
 #include <SDL3/SDL.h>
 #include <algorithm>
+#include <chrono>
 #include <fmt/format.h>
 #include <spdlog/stopwatch.h>
 
 namespace
 {
+    bool ShouldLogStartupProfile()
+    {
+        return GOption != nullptr && GOption->AgentValidation;
+    }
+
     struct SceneTaskContext
     {
         bool success;
@@ -98,21 +104,36 @@ void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<vo
         },
         [this, ctx, sceneFileName, onGpuLoad](Tasks::ResTask& task) mutable
         {
+            spdlog::stopwatch profileTimer;
+            auto logProfile = [&profileTimer](const char* label)
+            {
+                if (ShouldLogStartupProfile())
+                {
+                    SPDLOG_INFO("[StartupProfile]   SceneLoad main {:<36} {}", label, profileTimer.elapsed_ms());
+                }
+            };
+
             SceneTaskContext taskContext{};
             task.GetContext(taskContext);
+            logProfile("task context fetched");
             if (taskContext.success)
             {
                 SPDLOG_INFO("{}", taskContext.outputInfo.data());
 
                 renderer_->Device().WaitIdle();
+                logProfile("device idle before reload");
                 renderer_->DeleteSwapChain();
+                logProfile("old swapchain deleted");
 
                 // Execute the specific GPU load logic
                 onGpuLoad(ctx);
+                logProfile("scene gpu load callback");
 
                 frameState_.totalFrames = 0;
                 renderer_->OnPostLoadScene();
+                logProfile("renderer post-load scene");
                 renderer_->CreateSwapChain();
+                logProfile("new swapchain created");
             }
             else
             {
@@ -138,8 +159,19 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
         [this, request](SceneLoadContext& ctx)
         {
             const auto timer = std::chrono::high_resolution_clock::now();
+            spdlog::stopwatch profileTimer;
+            auto logProfile = [&profileTimer](const char* label)
+            {
+                if (ShouldLogStartupProfile())
+                {
+                    SPDLOG_INFO("[StartupProfile]   SceneLoad gpu {:<37} {}", label, profileTimer.elapsed_ms());
+                }
+            };
+
             renderer_->OnPreLoadScene();
+            logProfile("renderer pre-load scene");
             gameInstance_->BeforeSceneRebuild(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
+            logProfile("game before rebuild");
 
             if (!request.append)
             {
@@ -147,17 +179,22 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
                 scene_->SetEnvSettings(*ctx.cameraState);
                 gameInstance_->OnSceneUnloaded();
                 services_.physics->OnSceneStarted();
+                logProfile("scene services reset");
 
                 scene_->Reload(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
                 scene_->SetGaussianSplats(std::move(*ctx.splats));
                 scene_->PostLoad(*ctx.skeletons);
+                logProfile("scene cpu structures rebuilt");
                 scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->SupportsRayTracing());
+                logProfile("mesh gpu buffers rebuilt");
                 renderer_->SetScene(scene_);
+                logProfile("renderer scene set");
 
                 config_.userSettings.CameraIdx = 0;
                 assert(!scene_->GetEnvSettings().cameras.empty());
                 scene_->SetRenderCamera(scene_->GetEnvSettings().cameras[0]);
                 gameInstance_->OnSceneLoaded();
+                logProfile("game scene loaded");
             }
             else
             {
@@ -170,7 +207,9 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
                     rootNode->SetTranslation(request.hitPosition);
                 }
                 scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->SupportsRayTracing());
+                logProfile("append mesh gpu buffers rebuilt");
                 renderer_->SetScene(scene_);
+                logProfile("append renderer scene set");
             }
 
             const float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(

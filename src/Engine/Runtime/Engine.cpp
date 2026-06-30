@@ -28,6 +28,7 @@
 #include "Engine/Vulkan/ShaderHotReloader.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <fmt/chrono.h>
@@ -35,6 +36,7 @@
 #include <initializer_list>
 #include <optional>
 #include <system_error>
+#include <vector>
 
 #include "Engine/Runtime/Subsystems/NextAudio.h"
 #include "Engine/Options.hpp"
@@ -43,6 +45,61 @@
 #include "Engine/Utilities/Localization.hpp"
 
 #define _USE_MATH_DEFINES
+
+namespace
+{
+    class FStartupProfile
+    {
+    public:
+        explicit FStartupProfile(bool enabled)
+            : enabled_(enabled)
+        {
+        }
+
+        void Mark(std::string label)
+        {
+            if (!enabled_)
+            {
+                return;
+            }
+
+            const auto now = std::chrono::steady_clock::now();
+            marks_.push_back({std::move(label), now});
+        }
+
+        void Log(const char* name) const
+        {
+            if (!enabled_ || marks_.size() < 2)
+            {
+                return;
+            }
+
+            SPDLOG_INFO("[StartupProfile] {}:", name);
+            const auto start = marks_.front().time;
+            for (size_t i = 1; i < marks_.size(); ++i)
+            {
+                const double deltaMs = std::chrono::duration<double, std::milli>(
+                                           marks_[i].time - marks_[i - 1].time)
+                                           .count();
+                const double totalMs = std::chrono::duration<double, std::milli>(
+                                           marks_[i].time - start)
+                                           .count();
+                SPDLOG_INFO("[StartupProfile]   {:>7.2f}ms (+{:>7.2f}ms) {}",
+                            totalMs, deltaMs, marks_[i].label);
+            }
+        }
+
+    private:
+        struct FMark
+        {
+            std::string label;
+            std::chrono::steady_clock::time_point time;
+        };
+
+        bool enabled_{};
+        std::vector<FMark> marks_{};
+    };
+}
 #include <math.h>
 
 #include <entt/meta/factory.hpp>
@@ -353,11 +410,14 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
 
     SPDLOG_INFO("---- Next Engine Initializing...");
     spdlog::stopwatch stopwatch;
+    FStartupProfile startupProfile(options.AgentValidation || !options.AgentScript.empty());
+    startupProfile.Mark("begin");
 
     instance_ = this;
     
     // Initialize reflection system first
     Reflection::RegisterAllReflection();
+    startupProfile.Mark("reflection registered");
 
     status_ = NextRenderer::EApplicationStatus::Starting;
 
@@ -367,6 +427,7 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     agentValidation_.outputPath = options.AgentValidationOutput;
 
     services_.packageFileSystem.reset(new Utilities::Package::FPackageFileSystem(Utilities::Package::EPM_OsFile));
+    startupProfile.Mark("package fs created");
 
     // Optional pak: assets moved out of the repo to reduce its size. Mounted automatically when present
     // so LoadFile can fall back to it for files missing on disk (see FileHelper::LoadFile).
@@ -378,6 +439,7 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
             services_.packageFileSystem->MountPak(optionalPakPath);
         }
     }
+    startupProfile.Mark("optional pak mounted");
 
 
 #if WITH_STREAMLINE
@@ -395,6 +457,7 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     }
 #endif
     Vulkan::Window::InitGLFW();
+    startupProfile.Mark("window backend initialized");
     // Create Window
     Vulkan::WindowConfig windowConfig{"gkNextRenderer " + NextRenderer::GetBuildVersion(),
                                       options.Width,
@@ -406,12 +469,14 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
                                       userdata,
                                       options.ForceSDR};
     gameInstance_ = CreateGameInstance(windowConfig, options, this);
+    startupProfile.Mark("game instance created");
     config_.userSettings = CreateUserSettings(options);
     services_.cvarSystem = std::make_unique<NextCVar::FCVarSystem>();
     NextCVar::RegisterEngineCVars(*services_.cvarSystem, config_.userSettings, config_.showFlags, this);
     services_.cvarSystem->LoadDefaultFile("assets/configs/cvar_default.json");
     gameInstance_->ConfigureCVars(*services_.cvarSystem);
     services_.cvarSystem->LoadUserFiles();
+    startupProfile.Mark("cvars loaded");
     for (const std::string& overrideCommand : options_->CVarOverrides)
     {
         const auto result = services_.cvarSystem->ExecuteCommand(overrideCommand);
@@ -426,9 +491,12 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     windowConfig.HiddenWindow =
         (options.AgentValidation && !options.AgentVisibleWindow) || options.HiddenWindow || options.Tui;
     window_.reset(new Vulkan::Window(windowConfig));
+    startupProfile.Mark("window created");
     SetBorderlessFullscreen(config_.userSettings.BorderlessFullscreen);
     services_.localization = std::make_unique<NextLocalization>();
     services_.localization->LoadFromTxt(fmt::format("assets/locale/{}.txt", options_->locale), options_->locale);
+    startupProfile.Mark("localization loaded");
+    startupProfile.Log("Engine::Init");
 
     SPDLOG_INFO("---- Next Engine Initialized in {}", stopwatch.elapsed_ms());
 }
@@ -508,6 +576,8 @@ void NextEngine::Start()
 
     SPDLOG_INFO("---- Next Engine Starting...");
     spdlog::stopwatch stopwatch;
+    FStartupProfile startupProfile(options_->AgentValidation || !options_->AgentScript.empty());
+    startupProfile.Mark("begin");
 
     // Initialize Renderer
     bool shouldEnableValidation = GOption->Validation;
@@ -520,6 +590,7 @@ void NextEngine::Start()
     renderer_.reset(NextRenderer::CreateRenderer(static_cast<uint32_t>(config_.userSettings.RendererType), window_.get(),
                                                  presentMode,
                                                  shouldEnableValidation));
+    startupProfile.Mark("renderer object created");
     config_.userSettings.RendererType = static_cast<int32_t>(renderer_->CurrentLogicRendererType());
 
     auto& rendererDelegates = renderer_->GetDelegates();
@@ -534,6 +605,7 @@ void NextEngine::Start()
     { OnRendererPostRender(commandBuffer, imageIndex); };
 
     renderer_->Start();
+    startupProfile.Mark("renderer started");
     for (auto it = renderFrameConsumers_.begin(); it != renderFrameConsumers_.end();)
     {
         if ((*it)->Start())
@@ -545,6 +617,7 @@ void NextEngine::Start()
         SPDLOG_WARN("Render frame consumer '{}' failed to start; disabling it", (*it)->Name());
         it = renderFrameConsumers_.erase(it);
     }
+    startupProfile.Mark("render frame consumers started");
 
     // Assets layer hooks (GlobalTexturePool must not depend on Runtime).
     if (auto* texturePool = Assets::GlobalTexturePool::GetInstance())
@@ -565,6 +638,7 @@ void NextEngine::Start()
         renderer_->SwitchLogicRenderer(resolvedRendererType);
         config_.userSettings.RendererType = static_cast<int32_t>(resolvedRendererType);
     }
+    startupProfile.Mark("renderer type resolved");
 
 #if GK_ENABLE_HOT_RELOAD
     if (options_->ShaderHotReload)
@@ -573,12 +647,15 @@ void NextEngine::Start()
         services_.shaderHotReloader->Initialize(*renderer_);
     }
 #endif
+    startupProfile.Mark("shader hot reload initialized");
 
     services_.physics.reset(new NextPhysics());
     services_.physics->Start();
+    startupProfile.Mark("physics started");
 
     services_.audio = std::make_unique<NextAudio>();
     services_.audio->Start();
+    startupProfile.Mark("audio started");
 
     if (scriptRuntimeFactory_)
     {
@@ -588,12 +665,16 @@ void NextEngine::Start()
     {
         scriptRuntime_->Initialize();
     }
+    startupProfile.Mark("script runtime initialized");
 
     gameInstance_->OnInit();
+    startupProfile.Mark("game instance initialized");
     if (!options_->AgentScript.empty())
     {
         agentDriver_ = std::make_unique<Runtime::Agent::FAgentDriver>(*this);
     }
+    startupProfile.Mark("agent driver initialized");
+    startupProfile.Log("Engine::Start");
 
     SPDLOG_INFO("---- Next Engine Started in {}", stopwatch.elapsed_ms());
 }

@@ -44,12 +44,18 @@
 
 #include <cstring>
 #include <limits>
+#include <spdlog/stopwatch.h>
 #include <utility>
 #include <vector>
 
 namespace
 {
     constexpr const char* kPortabilitySubsetExtensionName = "VK_KHR_portability_subset";
+
+    bool ShouldLogStartupProfile()
+    {
+        return GOption != nullptr && GOption->AgentValidation;
+    }
 
     void PrintVulkanSdkInformation()
     {
@@ -315,6 +321,15 @@ namespace Vulkan
 
     void VulkanBaseRenderer::SetPhysicalDevice(VkPhysicalDevice physicalDevice)
     {
+        spdlog::stopwatch profileTimer;
+        auto logProfile = [&profileTimer](const char* label)
+        {
+            if (ShouldLogStartupProfile())
+            {
+                SPDLOG_INFO("[StartupProfile]   Vulkan::SetPhysicalDevice {:<34} {}", label, profileTimer.elapsed_ms());
+            }
+        };
+
         if (ctx_.device)
         {
             Throw(std::logic_error("physical device has already been set"));
@@ -394,28 +409,51 @@ namespace Vulkan
             SPDLOG_INFO("Soft-mesh GPU cull: subgroup size {}, wave fast-path {}",
                         subgroupProps.subgroupSize, caps_.supportSubgroupCull ? "enabled" : "disabled (LDS fallback)");
         }
+        logProfile("caps queried");
 
         SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nullptr);
+        logProfile("logical device created");
 
         ctx_.globalTexturePool.reset(new Assets::GlobalTexturePool(*ctx_.device, *ctx_.commandPool2, *ctx_.commandPool));
+        logProfile("global texture pool created");
 
         OnDeviceSet();
+        logProfile("device callbacks complete");
         CreateSwapChain();
+        logProfile("initial swapchain created");
         // Keep hidden windows hidden (agent validation captures, unit-test engine fixture):
         // showing here would override SDL_WINDOW_HIDDEN and pop a window that steals focus.
         if (!ctx_.window->Config().HiddenWindow)
         {
             ctx_.window->Show();
         }
+        logProfile("window shown");
     }
 
     void VulkanBaseRenderer::Start()
     {
+        spdlog::stopwatch profileTimer;
         // setup vulkan
         PrintVulkanSdkInformation();
+        if (ShouldLogStartupProfile())
+        {
+            SPDLOG_INFO("[StartupProfile]   Vulkan::Start sdk info                    {}", profileTimer.elapsed_ms());
+        }
         PrintVulkanDevices(ctx_.instance->PhysicalDevices());
+        if (ShouldLogStartupProfile())
+        {
+            SPDLOG_INFO("[StartupProfile]   Vulkan::Start devices enumerated          {}", profileTimer.elapsed_ms());
+        }
         SelectPhysicalDevice(GOption->GpuIdx);
+        if (ShouldLogStartupProfile())
+        {
+            SPDLOG_INFO("[StartupProfile]   Vulkan::Start physical device selected    {}", profileTimer.elapsed_ms());
+        }
         PrintVulkanSwapChainInformation(*this);
+        if (ShouldLogStartupProfile())
+        {
+            SPDLOG_INFO("[StartupProfile]   Vulkan::Start swapchain info              {}", profileTimer.elapsed_ms());
+        }
         frame_.currentFrame = 0;
     }
 
@@ -895,11 +933,21 @@ namespace Vulkan
 
     void VulkanBaseRenderer::CreateSwapChain()
     {
+        spdlog::stopwatch profileTimer;
+        auto logProfile = [&profileTimer](const char* label)
+        {
+            if (ShouldLogStartupProfile())
+            {
+                SPDLOG_INFO("[StartupProfile]   Vulkan::CreateSwapChain {:<32} {}", label, profileTimer.elapsed_ms());
+            }
+        };
+
         // 窗口等待
         while (ctx_.window->IsMinimized())
         {
             ctx_.window->WaitForEvents();
         }
+        logProfile("window ready");
 
         // SwapChain
         const auto& settings = NextEngine::GetInstance()->GetUserSettings();
@@ -908,6 +956,7 @@ namespace Vulkan
                 ? VK_PRESENT_MODE_IMMEDIATE_KHR
                 : presentMode_;
         frame_.swapChain.reset(new class SwapChain(*ctx_.device, requestedPresentMode, forceSDR_));
+        logProfile("swapchain object created");
         VkExtent2D renderExtent = frame_.swapChain->Extent();
         if (!GOption->ReferenceMode)
         {
@@ -941,6 +990,7 @@ namespace Vulkan
 
         // depthBuffer
         frame_.depthBuffer.reset(new class DepthBuffer(*ctx_.commandPool, frame_.swapChain->Extent()));
+        logProfile("depth buffer created");
 
         // 同步对象
         for (size_t i = 0; i != frame_.swapChain->ImageViews().size(); ++i)
@@ -954,6 +1004,7 @@ namespace Vulkan
 
         // commandbuffer
         frame_.commandBuffers.reset(new CommandBuffers(*ctx_.commandPool, static_cast<uint32_t>(frame_.swapChain->ImageViews().size())));
+        logProfile("sync and command buffers");
 
         frame_.currentFence = nullptr;
         frame_.currentFenceSerial = 0;
@@ -963,9 +1014,12 @@ namespace Vulkan
 
         // 公用RenderImages
         CreateRenderImages();
+        logProfile("render images created");
         renderViews_->CreateSwapChain(SwapChain());
+        logProfile("render views created");
 
         overlay_.wireframePipeline.reset(new class PipelineCommon::GraphicsPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), true));
+        logProfile("wireframe pipeline created");
         overlay_.wireframeFrameBuffers.clear();
         overlay_.wireframeFrameBuffers.reserve(frame_.swapChain->ImageViews().size());
         for (const auto& imageView : frame_.swapChain->ImageViews())
@@ -1525,6 +1579,12 @@ namespace Vulkan
                 }
 
                 result = StreamlineWrapper::QueuePresentKHR(ctx_.device->PresentQueue(), &presentInfo);
+                static bool firstPresentLogged = false;
+                if (!firstPresentLogged && ShouldLogStartupProfile())
+                {
+                    firstPresentLogged = true;
+                    SPDLOG_INFO("[StartupProfile] first QueuePresentKHR returned at renderer frame {}", frame_.frameCount);
+                }
 
                 if (upscaler_ && frame_.streamlineFrameToken)
                 {

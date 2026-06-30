@@ -8,7 +8,6 @@
 #if GK_WITH_TUI
 #include "Modules/NextTui/NextTuiModule.hpp"
 #endif
-#include "Modules/NextRmlUi/NextRmlUiModule.hpp"
 
 #if WIN32
 #include "ThirdParty/renderdoc/renderdoc_app.h"
@@ -94,7 +93,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     Runtime::IDebugUiProvider& debugUiProvider = DevTools::DefaultDebugUiProvider();
     GApplication.reset( new NextEngine(*GOption) );
     GApplication->SetDebugUiProvider(&debugUiProvider);
-    Modules::NextRmlUi::Install(*GApplication);
     if (GOption->RemoteMode)
     {
         GApplication->AddRenderFrameConsumer(Modules::NextRemote::CreateRemoteServer(*GOption));
