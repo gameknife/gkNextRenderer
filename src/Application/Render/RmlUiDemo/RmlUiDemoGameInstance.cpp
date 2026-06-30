@@ -237,6 +237,7 @@ namespace RmlUiDemo
     {
         ConfigureWindow(config, options, "RmlUi HTML/CSS Demo", 1360, 860, true);
         options.PresentMode = 0;
+        Modules::NextRmlUi::Install(*engine);
 
         modules_ = {
             {"landing", "Landing", "Classic product landing page"},
