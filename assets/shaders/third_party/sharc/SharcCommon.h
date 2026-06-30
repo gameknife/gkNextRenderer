@@ -730,6 +730,8 @@ void SharcSetRadianceDirectionWeight(inout SharcState sharcState, float radiance
 
 bool SharcGetCachedRadiance(in SharcParameters sharcParameters, in SharcHitData sharcHitData, out float3 radiance, bool skipResponsiveLighting)
 {
+    radiance = float3(0.0f, 0.0f, 0.0f);
+
     HashGridKey hashGridKey;
     HashGridIndex hashGridIndex = HashGridFindEntry(sharcParameters.hashGridData, sharcHitData.positionWorld, sharcHitData.normalWorld, sharcParameters.hashGridParameters, hashGridKey);
     if (hashGridIndex == HASH_GRID_INVALID_CACHE_INDEX)
