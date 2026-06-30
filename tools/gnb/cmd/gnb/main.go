@@ -21,6 +21,7 @@ import (
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/paks"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/runner"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/targetgraph"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/vcpkg"
 	"github.com/spf13/cobra"
 )
@@ -94,6 +95,7 @@ func main() {
 	root.AddCommand(newSetupCommand(ctx))
 	root.AddCommand(newDepsCommand(ctx))
 	root.AddCommand(newBuildCommand(ctx))
+	root.AddCommand(newGraphCommand(ctx))
 	root.AddCommand(newRunCommand(ctx))
 	root.AddCommand(newRemoteCommand(ctx))
 	root.AddCommand(newTestCommand(ctx))
@@ -341,6 +343,44 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.LTO, "lto", false, "configure with -DENABLE_LTO=ON")
 	cmd.Flags().BoolVar(&opts.PrintCmd, "print-cmd", false, "print cmake commands without executing")
 	cmd.Flags().BoolVar(&skipSetup, "skip-setup", false, "do not auto-bootstrap vcpkg/external dependencies")
+	return cmd
+}
+
+func newGraphCommand(ctx appContext) *cobra.Command {
+	opts := targetgraph.Options{}
+	all := false
+	cmd := &cobra.Command{
+		Use:   "graph [target]",
+		Short: "Export a CMake target dependency graph",
+		Long: "Export CMake's target dependency graph as SVG/PNG/PDF/DOT.\n\n" +
+			"Examples:\n" +
+			"  gnb graph gkNextEditor\n" +
+			"  gnb graph gkNextRenderer --format dot\n" +
+			"  gnb graph gkNextEngine --dependers\n" +
+			"  gnb graph --all --format svg",
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if all && len(args) == 1 {
+				return fmt.Errorf("--all cannot be combined with a target")
+			}
+			if len(args) == 1 {
+				opts.Target = args[0]
+			}
+			opts.RepoRoot = ctx.repoRoot
+			opts.Preset = ctx.preset
+			cmakePath, err := vcpkg.EnsureBundledCMake(ctx.repoRoot, ctx.cfg)
+			if err != nil {
+				return err
+			}
+			opts.CMakePath = cmakePath
+			return targetgraph.Run(opts)
+		},
+	}
+	cmd.Flags().StringVar(&opts.Format, "format", "svg", "output format: svg, png, pdf, or dot")
+	cmd.Flags().StringVarP(&opts.Output, "out", "o", "", "output file path")
+	cmd.Flags().BoolVar(&opts.Dependers, "dependers", false, "show targets that depend on the target instead of its dependencies")
+	cmd.Flags().BoolVar(&opts.PrintCmd, "print-cmd", false, "print commands without executing")
+	cmd.Flags().BoolVar(&all, "all", false, "export the full target graph; this is the default when no target is given")
 	return cmd
 }
 

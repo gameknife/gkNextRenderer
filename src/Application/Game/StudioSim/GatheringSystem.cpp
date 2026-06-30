@@ -3,6 +3,8 @@
 #include "EmployeeSystem.h"
 #include "OfficeMap.h"
 #include "ProductionSystem.h"
+#include "StudioSimLabels.hpp"
+#include "StudioSimProjectMetrics.hpp"
 
 #include <algorithm>
 
@@ -20,65 +22,11 @@ namespace StudioSim
         constexpr double kMeetingDurationMinutes = 35.0;
         constexpr double kPantryDurationMinutes = 20.0;
         constexpr double kLineIntervalSeconds = 3.0;
-        constexpr double kBubbleDurationMinutes = 20.0;
+        constexpr double kGatheringBubbleDurationMinutes = 20.0;
 
         const char* GatheringKindName(EGatheringKind kind)
         {
             return kind == EGatheringKind::Meeting ? "Meeting" : "Pantry";
-        }
-
-        const char* MeterLabelZh(const std::string& meter)
-        {
-            if (meter == "tech") return "技术";
-            if (meter == "design") return "玩法";
-            if (meter == "art") return "美术";
-            if (meter == "polish") return "品质";
-            return "短板";
-        }
-
-        const char* GameThemeLabelZh(EGameTheme theme)
-        {
-            switch (theme)
-            {
-            case EGameTheme::Fantasy: return "奇幻";
-            case EGameTheme::SciFi:   return "科幻";
-            case EGameTheme::Sports:  return "体育";
-            case EGameTheme::Romance: return "恋爱";
-            case EGameTheme::Horror:  return "恐怖";
-            case EGameTheme::Daily:   return "日常";
-            default:                  return "题材";
-            }
-        }
-
-        struct FMeterSnapshot
-        {
-            std::string key;
-            float value = 0.0f;
-            float target = 0.0f;
-        };
-
-        float Completion(const FMeterSnapshot& meter)
-        {
-            return meter.target > 0.0f ? std::clamp(meter.value / meter.target, 0.0f, 1.0f) : 1.0f;
-        }
-
-        FMeterSnapshot WeakestMeter(const FProjectState& project)
-        {
-            FMeterSnapshot meters[] = {
-                {"tech", project.meters.tech, project.targetMeters.tech},
-                {"design", project.meters.design, project.targetMeters.design},
-                {"art", project.meters.art, project.targetMeters.art},
-                {"polish", project.meters.polish, project.targetMeters.polish},
-            };
-            FMeterSnapshot weakest = meters[0];
-            for (const auto& meter : meters)
-            {
-                if (Completion(meter) < Completion(weakest))
-                {
-                    weakest = meter;
-                }
-            }
-            return weakest;
         }
 
         std::string FirstHighlightText(const FGameProject& gameProject)
@@ -88,32 +36,6 @@ namespace StudioSim
                 return "核心卖点";
             }
             return gameProject.highlights.front().text;
-        }
-
-        const char* StageLabelZh(EProjectStage stage)
-        {
-            switch (stage)
-            {
-            case EProjectStage::Planning:   return "企划";
-            case EProjectStage::Production: return "生产";
-            case EProjectStage::Polish:     return "打磨";
-            case EProjectStage::Done:       return "完成";
-            default:                        return "?";
-            }
-        }
-
-        const char* GameGenreLabelZh(EGameGenre genre)
-        {
-            switch (genre)
-            {
-            case EGameGenre::RPG:        return "RPG";
-            case EGameGenre::Action:     return "动作";
-            case EGameGenre::Simulation: return "模拟经营";
-            case EGameGenre::Puzzle:     return "解谜";
-            case EGameGenre::Shooter:    return "射击";
-            case EGameGenre::Adventure:  return "冒险";
-            default:                     return "未知";
-            }
         }
 
         std::string AllHighlightsText(const FGameProject& gameProject)
@@ -169,7 +91,7 @@ namespace StudioSim
                     "生成 4-5 句轻松的多人闲聊：每句由一名参与者发言、不超过16字，可以吐槽/打气/聊这款游戏的题材或手感，"
                     "别谈正式分工或具体数字。只输出JSON，不要解释：\n"
                     "{{\"lines\":[{{\"speaker\":\"姓名\",\"line\":\"...\"}}]}}",
-                    projectName, GameGenreLabelZh(gameProject.genre), GameThemeLabelZh(gameProject.theme),
+                    projectName, GameGenreLabelZh(gameProject.genre, ELabelTextStyle::Prompt), GameThemeLabelZh(gameProject.theme, ELabelTextStyle::Prompt),
                     gathering.topic, participants);
             }
 
@@ -187,9 +109,9 @@ namespace StudioSim
                 "{{\"lines\":[{{\"speaker\":\"姓名\",\"line\":\"≤16字\"}}],"
                 "\"decision\":{{\"summary\":\"≤20字\",\"focus_meter\":\"tech|design|art|polish\","
                 "\"reassign\":[{{\"who\":\"姓名\",\"task\":\"≤12字\"}}]}}}}",
-                projectName, GameGenreLabelZh(gameProject.genre), GameThemeLabelZh(gameProject.theme),
-                AllHighlightsText(gameProject), projectDay, plannedDays, StageLabelZh(project.stage),
-                project.overallProgress * 100.0f, MeterLabelZh(weakest.key), weakest.value, weakest.target,
+                projectName, GameGenreLabelZh(gameProject.genre, ELabelTextStyle::Prompt), GameThemeLabelZh(gameProject.theme, ELabelTextStyle::Prompt),
+                AllHighlightsText(gameProject), projectDay, plannedDays, ProjectStageLabelZh(project.stage),
+                project.overallProgress * 100.0f, weakest.label, weakest.value, weakest.target,
                 project.bugCount, gathering.topic, participants);
         }
 
@@ -307,7 +229,7 @@ namespace StudioSim
                 if (emp.role == ERole::ProducerPM)
                 {
                     lines.push_back({emp.displayName,
-                                     fmt::format("《{}》先补{}", projectName, MeterLabelZh(focusMeter))});
+                                     fmt::format("《{}》先补{}", projectName, ProjectMeterLabelZh(focusMeter))});
                 }
                 else if (emp.role == ERole::Engineer)
                 {
@@ -320,7 +242,7 @@ namespace StudioSim
                 else if (emp.role == ERole::Artist)
                 {
                     lines.push_back({emp.displayName,
-                                     fmt::format("{}美术量先收敛", GameThemeLabelZh(gameProject.theme))});
+                                     fmt::format("{}美术量先收敛", GameThemeLabelZh(gameProject.theme, ELabelTextStyle::Prompt))});
                 }
                 else if (emp.role == ERole::Designer)
                 {
@@ -377,10 +299,10 @@ namespace StudioSim
         else if (!HasKind(gatherings_, EGatheringKind::Meeting) && world.gameClockMinutes >= 13.0 * 60.0)
         {
             const FMeterSnapshot weakest = WeakestMeter(project);
-            if (Completion(weakest) < 0.4f)
+            if (MeterCompletion(weakest) < 0.4f)
             {
                 StartGathering(EGatheringKind::Meeting,
-                               fmt::format("《{}》{}进度落后，临时碰头", projectName, MeterLabelZh(weakest.key)),
+                               fmt::format("《{}》{}进度落后，临时碰头", projectName, weakest.label),
                                world.gameClockMinutes, employees, office, gameProject, ai);
             }
         }
@@ -390,7 +312,7 @@ namespace StudioSim
             ((hour >= 12.0 && hour < 12.4) || (hour >= 15.5 && hour < 15.9)))
         {
             StartGathering(EGatheringKind::Pantry,
-                           fmt::format("茶水间聊《{}》{}", projectName, GameThemeLabelZh(gameProject.theme)),
+                           fmt::format("茶水间聊《{}》{}", projectName, GameThemeLabelZh(gameProject.theme, ELabelTextStyle::Prompt)),
                            world.gameClockMinutes, employees, office, gameProject, ai);
         }
     }
@@ -452,7 +374,7 @@ namespace StudioSim
         {
             gathering.decision.summary =
                 fmt::format("为《{}》集中补{}", gameProject.name.empty() ? std::string("项目") : gameProject.name,
-                            MeterLabelZh(weakest.key));
+                            weakest.label);
             gathering.decision.focusMeter = weakest.key;
             gathering.decision.valid = true;
         }
@@ -560,7 +482,7 @@ namespace StudioSim
                     if (idx < employees.size() && employees[idx].displayName == line.speaker)
                     {
                         employees[idx].bubbleText = line.text;
-                        employees[idx].bubbleClearAt = world.gameClockMinutes + kBubbleDurationMinutes;
+                        employees[idx].bubbleClearAt = world.gameClockMinutes + kGatheringBubbleDurationMinutes;
                         employees[idx].mood = gathering.kind == EGatheringKind::Pantry ? EMood::Calm : EMood::Focused;
                         break;
                     }
@@ -660,7 +582,8 @@ namespace StudioSim
             {
                 if (idx < employees.size())
                 {
-                    employees[idx].todayTask = fmt::format("集中补{}", MeterLabelZh(gathering.decision.focusMeter));
+                    employees[idx].todayTask =
+                        fmt::format("集中补{}", ProjectMeterLabelZh(gathering.decision.focusMeter));
                     PushMemory(employees[idx], gameMinutes, fmt::format("会议采纳：{}", gathering.decision.summary));
                 }
             }

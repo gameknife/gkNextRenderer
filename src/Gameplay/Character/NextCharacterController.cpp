@@ -1,7 +1,6 @@
 #include "Gameplay/Character/NextCharacterController.h"
 #include "Engine/Runtime/Subsystems/NextPhysics.h"
 
-#if WITH_PHYSIC
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
@@ -25,18 +24,12 @@ struct FNextCharacterControllerContext
     CharacterVirtual::ExtendedUpdateSettings updateSettings;
 };
 
-#else
-
-struct FNextCharacterControllerContext {};
-
-#endif
 
 NextCharacterController::NextCharacterController() = default;
 NextCharacterController::~NextCharacterController() = default;
 
 void NextCharacterController::Create(NextPhysics* physics, const FCharacterControllerSettings& settings)
 {
-#if WITH_PHYSIC
     physics_ = physics;
     settings_ = settings;
     velocity_ = glm::vec3(0.0f);
@@ -76,23 +69,16 @@ void NextCharacterController::Create(NextPhysics* physics, const FCharacterContr
     // Configure extended update settings for stairs/slopes
     context_->updateSettings.mStickToFloorStepDown = Vec3(0, -settings.maxStepHeight, 0);
     context_->updateSettings.mWalkStairsStepUp = Vec3(0, settings.maxStepHeight, 0);
-#else
-    (void)physics;
-    (void)settings;
-#endif
 }
 
 void NextCharacterController::Destroy()
 {
-#if WITH_PHYSIC
     context_.reset();
     physics_ = nullptr;
-#endif
 }
 
 void NextCharacterController::Update(const glm::vec3& inputDirection, float speed, bool jump, float deltaSeconds)
 {
-#if WITH_PHYSIC
     if (!context_ || !context_->character)
     {
         return;
@@ -149,17 +135,10 @@ void NextCharacterController::Update(const glm::vec3& inputDirection, float spee
         {},
         {},
         *tempAlloc);
-#else
-    (void)inputDirection;
-    (void)speed;
-    (void)jump;
-    (void)deltaSeconds;
-#endif
 }
 
 glm::vec3 NextCharacterController::GetPosition() const
 {
-#if WITH_PHYSIC
     if (context_ && context_->character)
     {
         RVec3 pos = context_->character->GetPosition();
@@ -167,7 +146,6 @@ glm::vec3 NextCharacterController::GetPosition() const
                          static_cast<float>(pos.GetY()),
                          static_cast<float>(pos.GetZ()));
     }
-#endif
     return glm::vec3(0.0f);
 }
 
@@ -178,7 +156,6 @@ glm::vec3 NextCharacterController::GetLinearVelocity() const
 
 ECharacterGroundState NextCharacterController::GetGroundState() const
 {
-#if WITH_PHYSIC
     if (context_ && context_->character)
     {
         switch (context_->character->GetGroundState())
@@ -193,7 +170,6 @@ ECharacterGroundState NextCharacterController::GetGroundState() const
             return ECharacterGroundState::InAir;
         }
     }
-#endif
     return ECharacterGroundState::InAir;
 }
 
@@ -204,9 +180,5 @@ bool NextCharacterController::IsOnGround() const
 
 bool NextCharacterController::IsValid() const
 {
-#if WITH_PHYSIC
     return context_ && context_->character;
-#else
-    return false;
-#endif
 }

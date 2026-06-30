@@ -9,7 +9,6 @@
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#if WITH_OZZ
 #include "ozz/animation/runtime/animation.h"
 #include "ozz/animation/runtime/blending_job.h"
 #include "ozz/animation/runtime/local_to_model_job.h"
@@ -21,11 +20,9 @@
 #include "ozz/base/maths/soa_transform.h"
 #include "ozz/base/memory/unique_ptr.h"
 #include "ozz/base/platform.h"
-#endif
 
 namespace Runtime
 {
-#if WITH_OZZ
     struct SkinnedMeshOzzState
     {
         ozz::unique_ptr<ozz::animation::Skeleton> skeleton;
@@ -43,8 +40,5 @@ namespace Runtime
         // -1 means no matching joint by name (should not happen in practice).
         std::vector<int> ozzToAsset;
     };
-#else
-    struct SkinnedMeshOzzState {};
-#endif
 }
 

@@ -1,7 +1,6 @@
 #pragma once
 #include "Engine/Common/CoreMinimal.hpp"
 
-#if WITH_OZZ
 #include "ozz/base/memory/unique_ptr.h"
 
 namespace ozz
@@ -34,4 +33,3 @@ namespace Assets
         const ozz::animation::Skeleton& ozzSkeleton,
         const std::vector<AnimationTrack>& allTracks);
 }
-#endif

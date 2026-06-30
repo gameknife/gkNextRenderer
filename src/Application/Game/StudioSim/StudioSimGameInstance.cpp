@@ -21,6 +21,7 @@
 
 #include "Modules/ScadLoader/ScadModule.hpp"
 #include "Modules/NextAI/NextAIModule.hpp"
+#include "StudioSimLabels.hpp"
 
 namespace
 {
@@ -38,34 +39,6 @@ namespace
     // 已扣除午休/走动/开会等非产出时间。项目目标 = 此值 × 工期天数，
     // 使项目大致需要约 plannedDays 天完成，而不是开工当天就把仪表打满（修复"晨会后猛加"）。
     constexpr float kTeamDailyMeterOutput = 760.0f;
-
-    const char* GameGenreLabelZh(StudioSim::EGameGenre genre)
-    {
-        switch (genre)
-        {
-        case StudioSim::EGameGenre::RPG:        return "RPG";
-        case StudioSim::EGameGenre::Action:     return "动作";
-        case StudioSim::EGameGenre::Simulation: return "模拟";
-        case StudioSim::EGameGenre::Puzzle:     return "解谜";
-        case StudioSim::EGameGenre::Shooter:    return "射击";
-        case StudioSim::EGameGenre::Adventure:  return "冒险";
-        default:                                return "未知";
-        }
-    }
-
-    const char* GameThemeLabelZh(StudioSim::EGameTheme theme)
-    {
-        switch (theme)
-        {
-        case StudioSim::EGameTheme::Fantasy: return "奇幻";
-        case StudioSim::EGameTheme::SciFi:   return "科幻";
-        case StudioSim::EGameTheme::Sports:  return "运动";
-        case StudioSim::EGameTheme::Romance: return "恋爱";
-        case StudioSim::EGameTheme::Horror:  return "恐怖";
-        case StudioSim::EGameTheme::Daily:   return "日常";
-        default:                             return "未知";
-        }
-    }
 
     StudioSim::FProjectMeters GenreWeights(StudioSim::EGameGenre genre)
     {
@@ -379,7 +352,7 @@ namespace
             return {
                 fmt::format("{}做得很扎实", highlight),
                 "完成度接近神作",
-                fmt::format("{}题材吃得很透", GameThemeLabelZh(project.theme)),
+                fmt::format("{}题材吃得很透", StudioSim::GameThemeLabelZh(project.theme)),
                 "团队节奏漂亮"};
         }
         if (project.reviewScore >= 24)

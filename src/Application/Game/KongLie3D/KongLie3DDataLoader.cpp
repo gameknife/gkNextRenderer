@@ -10,7 +10,7 @@ using json = nlohmann::json;
 
 namespace
 {
-    [[noreturn]] void LogAndThrow(const std::string& message)
+    [[noreturn]] void DataLoaderLogAndThrow(const std::string& message)
     {
         SPDLOG_ERROR("[KongLie3D] {}", message);
         Throw(std::runtime_error(message));
@@ -42,17 +42,17 @@ namespace
 
         if (!pieceJson.contains("skills") || !pieceJson.at("skills").is_object())
         {
-            LogAndThrow(fmt::format("{} is missing required object 'skills'", context));
+            DataLoaderLogAndThrow(fmt::format("{} is missing required object 'skills'", context));
         }
 
         const json& skillsJson = pieceJson.at("skills");
         if (!skillsJson.contains("w") || !skillsJson.at("w").is_object())
         {
-            LogAndThrow(fmt::format("{} is missing required object 'skills.w'", context));
+            DataLoaderLogAndThrow(fmt::format("{} is missing required object 'skills.w'", context));
         }
         if (!skillsJson.contains("ultimate") || !skillsJson.at("ultimate").is_object())
         {
-            LogAndThrow(fmt::format("{} is missing required object 'skills.ultimate'", context));
+            DataLoaderLogAndThrow(fmt::format("{} is missing required object 'skills.ultimate'", context));
         }
 
         def.skillWName = NextJson::GetRequired<std::string>(skillsJson.at("w"), "name", fmt::format("{} skills.w", context));
@@ -96,7 +96,7 @@ namespace
         synergy.name = NextJson::GetRequired<std::string>(synergyJson, "name", context);
         if (!synergyJson.contains("tiers") || !synergyJson.at("tiers").is_array())
         {
-            LogAndThrow(fmt::format("{} is missing required array 'tiers'", context));
+            DataLoaderLogAndThrow(fmt::format("{} is missing required array 'tiers'", context));
         }
 
         for (size_t tierIndex = 0; tierIndex < synergyJson.at("tiers").size(); ++tierIndex)
@@ -116,11 +116,11 @@ namespace
         level.enemyDmgMult = NextJson::GetRequired<float>(levelJson, "enemyDmgMult", context);
         if (!levelJson.contains("enemy") || !levelJson.at("enemy").is_array())
         {
-            LogAndThrow(fmt::format("{} is missing required array 'enemy'", context));
+            DataLoaderLogAndThrow(fmt::format("{} is missing required array 'enemy'", context));
         }
         if (!levelJson.contains("bench") || !levelJson.at("bench").is_array())
         {
-            LogAndThrow(fmt::format("{} is missing required array 'bench'", context));
+            DataLoaderLogAndThrow(fmt::format("{} is missing required array 'bench'", context));
         }
 
         for (size_t enemyIndex = 0; enemyIndex < levelJson.at("enemy").size(); ++enemyIndex)
@@ -134,7 +134,7 @@ namespace
             const json& benchEntry = levelJson.at("bench").at(benchIndex);
             if (!benchEntry.is_string())
             {
-                LogAndThrow(fmt::format("{} bench[{}] must be a string piece id", context, benchIndex));
+                DataLoaderLogAndThrow(fmt::format("{} bench[{}] must be a string piece id", context, benchIndex));
             }
             level.bench.push_back(benchEntry.get<std::string>());
         }
@@ -164,7 +164,7 @@ namespace KongLie3D
         const json document = NextJson::LoadFile(path);
         if (!document.contains("pieces") || !document.at("pieces").is_object())
         {
-            LogAndThrow(fmt::format("pieces file '{}' is missing required object 'pieces'", path));
+            DataLoaderLogAndThrow(fmt::format("pieces file '{}' is missing required object 'pieces'", path));
         }
 
         std::map<std::string, FPieceDef> pieces;
@@ -182,11 +182,11 @@ namespace KongLie3D
 
         if (!document.contains("player") || !document.at("player").is_array())
         {
-            LogAndThrow(fmt::format("placement file '{}' is missing required array 'player'", path));
+            DataLoaderLogAndThrow(fmt::format("placement file '{}' is missing required array 'player'", path));
         }
         if (!document.contains("levels") || !document.at("levels").is_array())
         {
-            LogAndThrow(fmt::format("placement file '{}' is missing required array 'levels'", path));
+            DataLoaderLogAndThrow(fmt::format("placement file '{}' is missing required array 'levels'", path));
         }
 
         for (size_t index = 0; index < document.at("player").size(); ++index)
@@ -208,7 +208,7 @@ namespace KongLie3D
         const json document = NextJson::LoadFile(path);
         if (!document.contains("synergies") || !document.at("synergies").is_array())
         {
-            LogAndThrow(fmt::format("synergies file '{}' is missing required array 'synergies'", path));
+            DataLoaderLogAndThrow(fmt::format("synergies file '{}' is missing required array 'synergies'", path));
         }
 
         std::vector<FSynergyDef> synergies;
@@ -225,7 +225,7 @@ namespace KongLie3D
         const json document = NextJson::LoadFile(path);
         if (!document.contains("relics") || !document.at("relics").is_array())
         {
-            LogAndThrow(fmt::format("relics file '{}' is missing required array 'relics'", path));
+            DataLoaderLogAndThrow(fmt::format("relics file '{}' is missing required array 'relics'", path));
         }
 
         std::vector<FRelicDef> relics;

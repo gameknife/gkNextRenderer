@@ -1,6 +1,5 @@
 #pragma once
 
-#if WITH_QUICKJS
 #include "Engine/Runtime/Reflection/PropertyTypes.h"
 #include <entt/meta/meta.hpp>
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
@@ -52,4 +51,3 @@ namespace Reflection
         static entt::meta_any JSToEnum(JSContext* ctx, JSValue value, entt::meta_type type);
     };
 }
-#endif // WITH_QUICKJS

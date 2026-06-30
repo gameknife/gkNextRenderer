@@ -68,7 +68,7 @@ set(GK_MODULE_NAMES LDrawLoader ScadLoader SplatLoader NextAI NextRemote NextRml
 if(GK_WITH_TUI AND NOT (ANDROID OR IOS))
     list(APPEND GK_MODULE_NAMES NextTui)
 endif()
-if(GK_WITH_NEXT_QUICKJS AND NOT ANDROID)
+if(NOT ANDROID)
     list(APPEND GK_MODULE_NAMES NextQuickJS)
 endif()
 foreach(gk_module IN LISTS GK_MODULE_NAMES)

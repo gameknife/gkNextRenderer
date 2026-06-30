@@ -2,6 +2,7 @@
 
 #include "Engine/Runtime/Engine.hpp"
 #include "Modules/NextAI/AIService.hpp"
+#include "ScadStudioUtils.hpp"
 
 #include <spdlog/spdlog.h>
 
@@ -15,25 +16,6 @@ namespace ScadStudio
 {
     namespace
     {
-        std::string TrimCopy(std::string text)
-        {
-            const size_t b = text.find_first_not_of(" \t\r\n");
-            if (b == std::string::npos)
-            {
-                return "";
-            }
-            const size_t e = text.find_last_not_of(" \t\r\n");
-            return text.substr(b, e - b + 1);
-        }
-
-        std::string ToLower(std::string text)
-        {
-            std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) {
-                return static_cast<char>(std::tolower(c));
-            });
-            return text;
-        }
-
         std::string SanitiseProjectPath(std::string path)
         {
             path = TrimCopy(std::move(path));

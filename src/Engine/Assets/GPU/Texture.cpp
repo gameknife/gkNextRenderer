@@ -17,9 +17,7 @@
 #include <system_error>
 #include <webp/decode.h>
 
-#if WITH_KTX2
 #include <ktx.h>
-#endif
 
 #define M_NEXT_PI 3.14159265358979323846f
 
@@ -408,10 +406,8 @@ namespace Assets
                 uint32_t miplevel = 1;
                 VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
                 bool textureCreated = false;
-#if WITH_KTX2
                 ktxTexture2* kTexture = nullptr;
                 ktx_error_code_e result;
-#endif
                 bool useWebPFree = false;
 
                 auto createHdrPlaceholderTexture = [&]()
@@ -435,7 +431,6 @@ namespace Assets
                 // load from ktx inside glb
                 if (mime.find("image/ktx") != std::string::npos)
                 {
-#if WITH_KTX2
                     auto loadKtxFromMemory = [&]() -> bool {
                         result = ktxTexture2_CreateFromMemory(copyedData, bytelength, KTX_TEXTURE_CREATE_CHECK_GLTF_BASISU_BIT, &kTexture);
                         if (KTX_SUCCESS != result) return false;
@@ -459,7 +454,6 @@ namespace Assets
                     {
                         SPDLOG_ERROR("load texture {} failed.", texname);
                     }
-#endif
                 }
                 else if (mime.find("image/webp") != std::string::npos)
                 {
@@ -503,7 +497,6 @@ namespace Assets
                     }
                     else if (!hdr)
                     {
-#if WITH_KTX2
                         // ldr texture, try cache fist
                         // hash the texname
                         std::string cacheFileName = Utilities::CookHelper::GetCookedFileName(fmt::format("{:016x}", hasher(texname)), "texktx");
@@ -559,7 +552,6 @@ namespace Assets
                         width = kTexture->baseWidth;
                         height = kTexture->baseHeight;
                         miplevel = 1;
-#endif
                     }
                 }
 
@@ -595,9 +587,7 @@ namespace Assets
                     else stbi_image_free(stbdata);
                 }
                 
-#if WITH_KTX2
                 if (kTexture) ktxTexture_Destroy(ktxTexture(kTexture));
-#endif
                 
                 // transfer
                 taskContext.textureId = newTextureIdx;

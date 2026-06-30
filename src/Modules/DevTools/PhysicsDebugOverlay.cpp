@@ -179,7 +179,6 @@ namespace
 
 void Runtime::DrawPhysicsDebugOverlay(const Assets::Scene& scene, const Assets::Camera& camera)
 {
-#if WITH_PHYSIC
     auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
     if (!physics)
     {
@@ -269,8 +268,4 @@ void Runtime::DrawPhysicsDebugOverlay(const Assets::Scene& scene, const Assets::
     }
 
     DrawPhysicsDebugLegend(stats);
-#else
-    (void)scene;
-    (void)camera;
-#endif
 }

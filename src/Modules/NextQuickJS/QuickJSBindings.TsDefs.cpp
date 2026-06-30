@@ -28,11 +28,8 @@
 #include <cstdlib>
 #include <limits>
 
-#if WITH_QUICKJS
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
-#endif
 
-#if WITH_QUICKJS
 namespace NextQuickJSBindings
 {
     bool HasExtension(const std::filesystem::path& path, std::initializer_list<const char*> extensions)
@@ -424,4 +421,3 @@ namespace NextQuickJSBindings
         writer << ApplyLineEnding(content, lineEnding);
     }
 }
-#endif

@@ -32,17 +32,17 @@ namespace
     constexpr const char* PlacementConfigPath = "assets/configs/konglie/placement.json";
     constexpr const char* RelicsConfigPath = "assets/configs/konglie/relics.json";
     constexpr const char* SynergiesConfigPath = "assets/configs/konglie/synergies.json";
-    constexpr int BoardCols = 7;
+    constexpr int GameInstanceBoardCols = 7;
     constexpr int PlayerBoardRowMin = 4;
     constexpr int PlayerBoardRowMax = 7;
-    constexpr int BenchRow = 8;
+    constexpr int GameInstanceBenchRow = 8;
     constexpr int BenchSlots = 3;
-    constexpr float BenchWorldZ = 8.5f;
+    constexpr float GameInstanceBenchWorldZ = 8.5f;
     constexpr float DragLiftHeight = 0.4f;
     const glm::vec3 HiddenKnockoutProxyPosition(0.0f, -20.0f, 0.0f);
-    constexpr float BattleStartBannerDurationMs = 800.0f;
+    constexpr float GameInstanceBattleStartBannerDurationMs = 800.0f;
 
-    [[noreturn]] void LogAndThrow(const std::string& message)
+    [[noreturn]] void GameInstanceLogAndThrow(const std::string& message)
     {
         SPDLOG_ERROR("[KongLie3D] {}", message);
         Throw(std::runtime_error(message));
@@ -69,7 +69,7 @@ namespace
         }
         else
         {
-            LogAndThrow(fmt::format("Unsupported piece role '{}'", pieceDef.role));
+            GameInstanceLogAndThrow(fmt::format("Unsupported piece role '{}'", pieceDef.role));
         }
 
         if (pieceDef.isHero)
@@ -81,12 +81,12 @@ namespace
 
     bool IsBoardCell(int col, int row)
     {
-        return col >= 0 && col < BoardCols && row >= PlayerBoardRowMin && row <= PlayerBoardRowMax;
+        return col >= 0 && col < GameInstanceBoardCols && row >= PlayerBoardRowMin && row <= PlayerBoardRowMax;
     }
 
     bool IsBenchCell(int col, int row)
     {
-        return row == BenchRow && col >= 0 && col < BenchSlots;
+        return row == GameInstanceBenchRow && col >= 0 && col < BenchSlots;
     }
 
     bool IsPlayerDeployCell(int col, int row)
@@ -96,7 +96,7 @@ namespace
 
     float GetWorldZForLogicalRow(int row)
     {
-        return row == BenchRow ? BenchWorldZ : static_cast<float>(row);
+        return row == GameInstanceBenchRow ? GameInstanceBenchWorldZ : static_cast<float>(row);
     }
 
     glm::vec3 GetDeploymentWorldPosition(const KongLie3D::FPieceRuntime& piece)
@@ -287,7 +287,7 @@ void KongLie3DGameInstance::OnInit()
     placement_ = KongLie3D::LoadPlacement(PlacementConfigPath);
     if (placement_.levels.empty())
     {
-        LogAndThrow("Placement config must define at least one level");
+        GameInstanceLogAndThrow("Placement config must define at least one level");
     }
     battleSystem_.SetRelics(KongLie3D::LoadRelics(RelicsConfigPath));
     battleSystem_.SetSynergies(KongLie3D::LoadSynergies(SynergiesConfigPath));
@@ -385,7 +385,7 @@ void KongLie3DGameInstance::OnTick(double deltaSeconds)
     if (battleStartBannerElapsedMs_ >= 0.0f)
     {
         battleStartBannerElapsedMs_ += deltaMs;
-        if (battleStartBannerElapsedMs_ > BattleStartBannerDurationMs)
+        if (battleStartBannerElapsedMs_ > GameInstanceBattleStartBannerDurationMs)
         {
             battleStartBannerElapsedMs_ = -1.0f;
         }
@@ -737,7 +737,7 @@ void KongLie3DGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Asset
         const auto pieceIt = pieceDefs_.find(pieceId);
         if (pieceIt == pieceDefs_.end())
         {
-            LogAndThrow(fmt::format("Placement references unknown piece '{}'", pieceId));
+            GameInstanceLogAndThrow(fmt::format("Placement references unknown piece '{}'", pieceId));
         }
 
         const KongLie3D::FPieceDef& pieceDef = pieceIt->second;
@@ -929,7 +929,7 @@ std::vector<glm::ivec2> KongLie3DGameInstance::GetValidDragCells() const
 
     for (int row = PlayerBoardRowMin; row <= PlayerBoardRowMax; ++row)
     {
-        for (int col = 0; col < BoardCols; ++col)
+        for (int col = 0; col < GameInstanceBoardCols; ++col)
         {
             if (CanDropDraggedPieceAt(col, row))
             {
@@ -940,9 +940,9 @@ std::vector<glm::ivec2> KongLie3DGameInstance::GetValidDragCells() const
 
     for (int col = 0; col < BenchSlots; ++col)
     {
-        if (CanDropDraggedPieceAt(col, BenchRow))
+        if (CanDropDraggedPieceAt(col, GameInstanceBenchRow))
         {
-            cells.emplace_back(col, BenchRow);
+            cells.emplace_back(col, GameInstanceBenchRow);
         }
     }
 
@@ -1121,7 +1121,7 @@ bool KongLie3DGameInstance::CanDropDraggedPieceAt(int col, int row) const
         }
     }
 
-    const bool targetOnBench = row == BenchRow;
+    const bool targetOnBench = row == GameInstanceBenchRow;
     if (dragStartOnBench_ && !targetOnBench)
     {
         return CountDeployedPlayerPieces() < CountDeployedEnemyPieces();
@@ -1230,7 +1230,7 @@ void KongLie3DGameInstance::FinishDraggingPiece()
     {
         draggingPiece_->col = hoveredCell.x;
         draggingPiece_->row = hoveredCell.y;
-        draggingPiece_->onBench = hoveredCell.y == BenchRow;
+        draggingPiece_->onBench = hoveredCell.y == GameInstanceBenchRow;
         spdlog::info("[KongLie3D] Drag place: {} -> ({}, {}, {})", draggingPiece_->pieceId, draggingPiece_->col,
                      draggingPiece_->row, draggingPiece_->onBench ? "bench" : "board");
         UpdatePieceDeploymentTransform(*draggingPiece_);

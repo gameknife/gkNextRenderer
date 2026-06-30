@@ -28,11 +28,8 @@
 #include <cstdlib>
 #include <limits>
 
-#if WITH_QUICKJS
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
-#endif
 
-#if WITH_QUICKJS
 namespace NextQuickJSBindings
 {
     std::optional<SDL_Keycode> KeyNameToCode(std::string name)
@@ -494,4 +491,3 @@ namespace NextQuickJSBindings
     }
     
 }
-#endif

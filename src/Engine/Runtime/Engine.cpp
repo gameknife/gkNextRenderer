@@ -854,13 +854,11 @@ bool NextEngine::Tick(bool forcingDelta)
             scene_->Tick(static_cast<float>(frameState_.deltaSeconds));
         }
 
-#if WITH_PHYSIC
         if (config_.userSettings.TickPhysics && services_.physics)
         {
             SCOPED_CPU_TIMER("physics");
             services_.physics->Tick(frameState_.deltaSeconds);
         }
-#endif
 
         if (scriptRuntime_)
         {

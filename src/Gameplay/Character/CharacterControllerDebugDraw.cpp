@@ -80,7 +80,6 @@ namespace
 void NextGameplay::DrawCharacterControllerDebugOverlay(const NextCharacterController& controller,
                                                         const Assets::Camera& camera)
 {
-#if WITH_PHYSIC
     if (!controller.IsValid())
     {
         return;
@@ -162,8 +161,4 @@ void NextGameplay::DrawCharacterControllerDebugOverlay(const NextCharacterContro
     {
         drawList->AddCircle(center, 3.5f, color, 12, lineThickness);
     }
-#else
-    (void)controller;
-    (void)camera;
-#endif
 }

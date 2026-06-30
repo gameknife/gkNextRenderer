@@ -13,8 +13,8 @@ namespace
     constexpr float BattleDurationSeconds = 30.0f;
     constexpr float OvertimeBannerDurationMs = 2000.0f;
     constexpr double StatsRefreshIntervalSeconds = 0.6;
-    constexpr int BenchRow = 8;
-    constexpr float BenchWorldZ = 8.5f;
+    constexpr int UiBenchRow = 8;
+    constexpr float UiBenchWorldZ = 8.5f;
     constexpr float LeftColumnX = KongLie3D::ScaleUi(8.0f);
     constexpr float LeftColumnY = KongLie3D::ScaleUi(60.0f);
     constexpr float LeftColumnWidth = KongLie3D::ScaleUi(248.0f);
@@ -25,7 +25,7 @@ namespace
     constexpr float BottomHeroCardGap = KongLie3D::ScaleUi(8.0f);
     constexpr float BottomHeroCardHeight = KongLie3D::ScaleUi(196.0f);
     constexpr float BottomHeroCardWidthMax = KongLie3D::ScaleUi(208.0f);
-    constexpr float BattleStartBannerDurationMs = 800.0f;
+    constexpr float UiBattleStartBannerDurationMs = 800.0f;
     constexpr float ResultModalFadeDurationMs = 200.0f;
 
     struct FStatsRow
@@ -289,7 +289,7 @@ namespace
 
     float GetCellWorldZ(int row)
     {
-        return row == BenchRow ? BenchWorldZ : static_cast<float>(row);
+        return row == UiBenchRow ? UiBenchWorldZ : static_cast<float>(row);
     }
 
     bool ProjectWorldCircleRadius(const KongLie3DGameInstance& gameInstance,
@@ -1828,7 +1828,7 @@ namespace
     void DrawBattleStartBanner(const KongLie3DGameInstance& gameInstance)
     {
         const float elapsedMs = gameInstance.GetBattleStartBannerElapsedMs();
-        if (elapsedMs < 0.0f || elapsedMs > BattleStartBannerDurationMs)
+        if (elapsedMs < 0.0f || elapsedMs > UiBattleStartBannerDurationMs)
         {
             return;
         }
@@ -1847,7 +1847,7 @@ namespace
         }
         else if (elapsedMs > 450.0f)
         {
-            alpha = std::clamp((BattleStartBannerDurationMs - elapsedMs) / 350.0f, 0.0f, 1.0f);
+            alpha = std::clamp((UiBattleStartBannerDurationMs - elapsedMs) / 350.0f, 0.0f, 1.0f);
         }
 
         const char* text = KongLie3D::U8Text(u8"开战！");

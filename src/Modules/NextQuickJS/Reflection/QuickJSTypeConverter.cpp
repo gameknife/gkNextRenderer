@@ -1,6 +1,5 @@
 #include "Modules/NextQuickJS/Reflection/QuickJSTypeConverter.hpp"
 
-#if WITH_QUICKJS
 #include "Engine/Runtime/Reflection/PropertyAccessor.h"
 #include "Engine/Runtime/Reflection/ReflectionMacros.h"
 #include <entt/meta/resolve.hpp>
@@ -399,4 +398,3 @@ namespace Reflection
         return {};
     }
 }
-#endif // WITH_QUICKJS

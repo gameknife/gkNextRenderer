@@ -1,6 +1,5 @@
 #pragma once
 
-#if WITH_QUICKJS
 #include "Engine/Runtime/Reflection/PropertyAccessor.h"
 #include "Modules/NextQuickJS/Reflection/QuickJSTypeConverter.hpp"
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
@@ -220,4 +219,3 @@ namespace Reflection
         }
     };
 }
-#endif // WITH_QUICKJS

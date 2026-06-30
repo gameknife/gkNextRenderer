@@ -24,6 +24,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /todo/cleanup", s.handleTodoCleanup)
 	mux.HandleFunc("POST /docs/save", s.handleDocsSave)
 	mux.HandleFunc("GET /docs/source", s.handleDocsSource)
+	mux.HandleFunc("GET /graph/data", s.handleGraphData)
 	mux.HandleFunc("GET /task/{id}", s.handleTaskDetail)
 	mux.HandleFunc("POST /task/add", s.handleTaskAdd)
 	mux.HandleFunc("POST /task/{id}/done", s.handleTaskDone)
@@ -94,7 +95,7 @@ type indexVM struct {
 	Preset     string
 	OS         string
 	RecentSize int
-	ActiveTab  string // "todo" | "docs" | "build" | "remote" | "test" | "git" | "chat" | "loc" | "settings"
+	ActiveTab  string // "todo" | "docs" | "build" | "remote" | "test" | "git" | "chat" | "loc" | "graph" | "settings"
 	BuildVM    buildRunVM
 	RemoteVM   remoteVM
 	TestVM     testVM
@@ -102,6 +103,7 @@ type indexVM struct {
 	ChatVM     chatVM
 	LocVM      locVM
 	DocsVM     docsVM
+	GraphVM    graphVM
 }
 
 type locVM struct {
@@ -595,6 +597,10 @@ func (s *Server) handleTab(w http.ResponseWriter, r *http.Request) {
 		vm := s.buildHeader("loc")
 		vm.LocVM = s.buildLocVM(r.URL.Query().Get("thirdparty") == "1")
 		s.render(w, "tab_loc", vm)
+	case "graph":
+		vm := s.buildHeader("graph")
+		vm.GraphVM = s.buildGraphVM()
+		s.render(w, "tab_graph", vm)
 	case "settings":
 		vm := s.buildHeader("settings")
 		s.render(w, "tab_settings", vm)

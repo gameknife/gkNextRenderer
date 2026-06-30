@@ -500,11 +500,9 @@ namespace Assets
                     mobility == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
 
                 bool validShape = false;
-#if WITH_PHYSIC
                 if (cachedMeshShapes_[render->GetModelId()].GetPtr() &&
                     cachedMeshShapes_[render->GetModelId()]->mIndexedTriangles.size() > 0)
                     validShape = true;
-#endif
 
                 if (validShape)
                 {

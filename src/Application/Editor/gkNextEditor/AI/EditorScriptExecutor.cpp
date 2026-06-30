@@ -24,9 +24,7 @@
 #include <spdlog/spdlog.h>
 #include <sstream>
 
-#if WITH_QUICKJS
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
-#endif
 
 namespace Editor
 {
@@ -909,7 +907,6 @@ namespace Editor
 
     // ========== Editor.* JS bindings ==========
 
-#if WITH_QUICKJS
     namespace
     {
         Assets::Scene* GetScene()
@@ -1484,11 +1481,5 @@ namespace Editor
         JS_SetPropertyStr(ctx, global, "Editor", editor);
         JS_FreeValue(ctx, global);
     }
-#else
-    void FEditorScriptExecutor::RegisterEditorBindings(void* jsContext)
-    {
-        (void)jsContext;
-    }
-#endif
 
 } // namespace Editor
