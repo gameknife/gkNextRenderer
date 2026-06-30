@@ -9,6 +9,7 @@
 #include "Engine/Rendering/ViewCameraUboBuilder.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.h"
+#include "Engine/Utilities/Exception.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"

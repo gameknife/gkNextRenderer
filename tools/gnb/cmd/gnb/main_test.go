@@ -131,6 +131,37 @@ func TestShotRunArgsKeepsDefaultCaptureClean(t *testing.T) {
 	}
 }
 
+func TestValidateRunArgsIncludesScriptAndViewport(t *testing.T) {
+	got := validateRunArgs(`P:\repo\assets\agentscripts\smoke.agentscript.json`, "agent_reports/custom.json", 1280, 720, true, []string{"--locale=zhCN"})
+	want := []string{
+		`--agent-script=P:\repo\assets\agentscripts\smoke.agentscript.json`,
+		"--agent-report=agent_reports/custom.json",
+		"--agent-visible-window",
+		"--width=1280",
+		"--height=720",
+		"--locale=zhCN",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("validateRunArgs() = %#v, want %#v", got, want)
+	}
+}
+
+func TestLoadValidateScriptHints(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "smoke.agentscript.json")
+	body := `{"name":"smoke","target":"ScadStudio","scene":"assets/scad/beer_cup.scad","viewport":{"width":1024,"height":768},"steps":[]}`
+	if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+		t.Fatal(err)
+	}
+	hints := loadValidateScriptHints(path)
+	if hints.Name != "smoke" || hints.Target != "ScadStudio" || hints.Scene != "assets/scad/beer_cup.scad" {
+		t.Fatalf("hints = %+v", hints)
+	}
+	if hints.Viewport.Width != 1024 || hints.Viewport.Height != 768 {
+		t.Fatalf("viewport = %+v", hints.Viewport)
+	}
+}
+
 func TestRemoteRunArgsIncludesRemoteFlags(t *testing.T) {
 	got := remoteRunArgs(remoteCmdOptions{
 		Bind:          "0.0.0.0",

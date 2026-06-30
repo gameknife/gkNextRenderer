@@ -109,6 +109,24 @@ gnb shot --target AirportSim --ui  # 截图包含 ImGui，适合验证 HUD / 面
 - **改了某个场景/材质/光照/着色，只想看一眼对不对** → `gnb shot --scene <X>`（最轻、最快）。
 - **做渲染回归、需要和 baseline 对比 / 一次性扫多个场景** → 跑全量 `gkNextVisualTest`（生成 report + baseline diff + manifest，较重）。
 
+### Agent Interactive Validation（输入驱动 + 断言）
+
+需要把应用驱动到交互状态并自动判断 pass/fail 时，用声明式脚本：
+
+```bash
+gnb validate --script assets/agentscripts/smoke.agentscript.json
+gnb validate --script assets/agentscripts/smoke.agentscript.json --target gkNextRenderer --scene assets/models/playground.glb
+gnb validate --script assets/agentscripts/smoke.agentscript.json --visible  # 显示窗口，便于人工观察回放
+```
+
+机制：
+- `gnb validate` 会读取脚本里的 `target` / `scene` / `viewport` 作为默认值，命令行参数可覆盖。
+- 引擎参数是 `--agent-script=<abs-path>`；它隐含 `--agent-validation` 的隐藏窗口、Immediate present、禁用 Streamline 等确定性语义，但由脚本决定截图和退出。需要显示窗口时传 `gnb validate --visible`（底层为 `--agent-visible-window`）。
+- Agent 脚本鼠标移动只推送合成 `SDL_EVENT_MOUSE_MOTION`，不会 `SDL_WarpMouseInWindow` 移动系统光标；按键/鼠标按钮也只走 SDL 事件队列。
+- 支持步骤：`key` / `text` / `mouse-move` / `mouse-button` / `click` / `drag` / `scroll` / `wait-frames` / `wait-ms` / `wait-until` / `cvar` / `exec` / `assert` / `screenshot` / `log` / `quit`。
+- 内建查询：`engine.totalFrames`、`engine.frameRate`、`engine.time`、`engine.status`、`scene.nodeCount`、`scene.selectedId`、`scene.selectedCount`、`cvar.<name>`；游戏可通过 `RegisterAgentQueries` 暴露 `game.<name>`。
+- 结束会写 JSON report 到 `out/build/<preset>/agent_reports/<script-name>.json`；任一断言失败时进程返回非零退出码，CI 可直接判定失败。
+
 ## Linting
 
 **Static Analysis:**

@@ -33,6 +33,11 @@ namespace NextRenderer
                                                const VkPresentModeKHR presentMode, const bool enableValidationLayers);
 } // namespace NextRenderer
 
+namespace Runtime::Agent
+{
+    class FAgentDriver;
+}
+
 typedef std::function<bool(double DeltaSeconds)> TickedTask;
 typedef std::function<bool()> DelayedTask;
 
@@ -99,6 +104,8 @@ public:
     VulkanGpuTimer* GpuTimer() const { return renderer_ ? renderer_->GpuTimer() : nullptr; }
     Assets::Scene& GetScene() { return *scene_; }
     Vulkan::Window& GetWindow() const { return *window_; }
+    NextGameInstanceBase* GetGameInstance() { return gameInstance_.get(); }
+    const NextGameInstanceBase* GetGameInstance() const { return gameInstance_.get(); }
 
     // Configuration state
     Runtime::Config::UserSettings& GetUserSettings() { return config_.userSettings; }
@@ -131,6 +138,8 @@ public:
     uint32_t GetMouseButtons() const { return inputState_.mouseButtons; }
     glm::ivec2 GetMonitorSize() const;
     void RequestClose();
+    void RequestExit(int exitCode);
+    int GetRequestedExitCode() const { return requestedExitCode_; }
     void RequestMinimize();
     bool IsMaximized();
     void ToggleMaximize();
@@ -141,6 +150,7 @@ public:
                                      float rightReservedWidth);
 
     // Input forwarding
+    void InjectRelativeMouse(float dx, float dy);
     void OnTouch(bool down, double xpos, double ypos);
     void OnTouchMove(double xpos, double ypos);
 
@@ -361,6 +371,8 @@ private:
     FProgressiveRenderState progressiveRender_{};
     FScreenShotState screenShot_{};
     FAgentValidationState agentValidation_{};
+    std::unique_ptr<Runtime::Agent::FAgentDriver> agentDriver_;
+    int requestedExitCode_ = 0;
     FTaskQueues taskQueues_{};
     NextRenderer::EApplicationStatus status_{};
 

@@ -39,8 +39,11 @@ Options::Options(const int argc, const char* argv[])
 		("fastexit", "Enable fast exit by skipping task wait.", cxxopts::value<bool>(FastExit)->default_value("true"))
 		("agent-validation", "Enable agent validation: render to a stable frame, capture one screenshot to a fixed path, then auto-exit. Window does not steal focus.", cxxopts::value<bool>(AgentValidation)->default_value("false")->implicit_value("true"))
 		("agent-validation-ui", "Include ImGui UI in the agent validation screenshot.", cxxopts::value<bool>(AgentValidationUI)->default_value("false")->implicit_value("true"))
+		("agent-visible-window", "Keep the desktop window visible while running agent validation or an agent script.", cxxopts::value<bool>(AgentVisibleWindow)->default_value("false")->implicit_value("true"))
 		("agent-validation-frames", "Frames to render before the agent validation screenshot.", cxxopts::value<uint32_t>(AgentValidationFrames)->default_value("90"))
 		("agent-validation-out", "Output path (without extension) for the agent validation screenshot.", cxxopts::value<std::string>(AgentValidationOutput)->default_value("screenshots/agent_validation"))
+		("agent-script", "Run an agent input validation script (.agentscript.json). Implies hidden agent validation mode.", cxxopts::value<std::string>(AgentScript)->default_value(""))
+		("agent-report", "Output JSON report path for --agent-script.", cxxopts::value<std::string>(AgentReport)->default_value(""))
 		("hidden-window", "Create the window hidden (no focus steal / no popup). Implied by --agent-validation; useful for unit tests.", cxxopts::value<bool>(HiddenWindow)->default_value("false")->implicit_value("true"))
 		("tui", "Render the hidden swapchain into the current terminal using truecolor block characters.", cxxopts::value<bool>(Tui)->default_value("false")->implicit_value("true"))
 		("tui-fps", "Maximum terminal refresh rate for --tui.", cxxopts::value<uint32_t>(TuiFps)->default_value("30"))
@@ -73,6 +76,14 @@ Options::Options(const int argc, const char* argv[])
 	try
 	{
 		auto result = options.parse(argc, argv);
+		if (!AgentScript.empty())
+		{
+			AgentValidation = true;
+			if (!AgentVisibleWindow)
+			{
+				HiddenWindow = true;
+			}
+		}
 		DisableStreamline = DisableStreamline || disableStreamlineForApplication || AgentValidation;
 
 		if (result.count("help"))

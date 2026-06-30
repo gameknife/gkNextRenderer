@@ -274,6 +274,12 @@ void NextEngine::OnTouch(bool down, double xpos, double ypos)
 
 void NextEngine::OnTouchMove(double xpos, double ypos) { OnCursorPosition(xpos, ypos); }
 
+void NextEngine::InjectRelativeMouse(float dx, float dy)
+{
+    inputState_.mousePos += glm::dvec2(dx, dy);
+    OnCursorPosition(inputState_.mousePos.x, inputState_.mousePos.y);
+}
+
 void NextEngine::OnCursorPosition(const double xpos, const double ypos)
 {
     if (!renderer_->HasSwapChain() ||

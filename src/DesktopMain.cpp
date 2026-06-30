@@ -119,15 +119,16 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
 void SDL_AppQuit(void *appstate, SDL_AppResult result)
 {
+    const int exitCode = GApplication ? GApplication->GetRequestedExitCode() : 0;
     // Shutdown
     GApplication->End();
     
     if (GOption->FastExit)
     {
 #if __APPLE__
-        std::exit(0);
+        std::exit(exitCode);
 #else
-        std::quick_exit(0);
+        std::quick_exit(exitCode);
 #endif
     }
 

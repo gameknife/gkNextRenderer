@@ -1,21 +1,47 @@
 ---
 title: "Agent 自动验证（输入驱动 + 断言）系统 — 设计与开发计划"
 category: design
-status: 待实现
+status: 阶段性实现
 owner: engine
 created: 2026-06-09
-last_updated: 2026-06-09
+last_updated: 2026-06-30
 ---
 
 # Agent 自动验证（输入驱动 + 断言）系统 — 设计与开发计划
 
-> 状态：设计完成，待实现（设计稿，供后续 agent 接手开发）。
+> 状态：阶段性实现。M1-M3 主路径已落地并通过 Windows targeted build + 可见回放验证；M4 实时命令通道与 M5 业务脚本迁移尚未开始。
 > 目标：在现有 `--agent-validation`（渲染到稳定帧 → 截一张图 → 自动退出）基础上，增加一套**可向运行中进程下达指令、模拟键盘 / 鼠标操作并断言运行时状态**的自动验证系统。让 agent 不必"临时改代码把启动状态硬切到要验证的位置"，而是用**外部脚本 / 实时命令**驱动程序走到任意交互状态后验证。
 > 交互模型（已与用户确认）：**声明式验证脚本回放为主**（确定性、可回归、CI 友好）+ **实时命令通道为辅**（loopback socket，交互式探索与读回结果）。
 > 验证深度（已与用户确认）：**输入模拟 + 截图 + 状态查询 / 断言**——验证可自动判定 pass/fail（非零退出码），适合无人值守与 CI。
 > 非目标（v1）：录制真人操作回放、跨进程多窗口编排、网络远端验证（那是 WebRTC RemotePlay 的范畴，见第 1.3 节）、模糊 / 随机 fuzz 测试、像素级 golden 全量比对（沿用 `gkNextVisualTest`）。
 > 日期：2026-06-08
 > 关联代码：`src/DesktopMain.cpp`、`src/Engine/Runtime/Engine.{hpp,cpp}`、`src/Engine/Runtime/GameInstance.hpp`、`src/Engine/Runtime/Config/CVarSystem.{hpp,cpp}`、`src/Engine/Vulkan/WindowSurface.cpp`、`src/Engine/Options.{hpp,cpp}`、`tools/gnb/cmd/gnb/main.go`、`tools/gnb/internal/runner/runner.go`、`docs/designs/webrtc-remoteplay-design.md`。
+
+## 2026-06-30 实施快照
+
+已落地：
+
+- `src/Engine/Runtime/Input/SyntheticInput.{hpp,cpp}`：合成键盘、文本、鼠标移动、鼠标按钮、滚轮事件；鼠标移动只推送合成 SDL 事件，不移动系统光标。
+- `src/Engine/Runtime/AgentDriver/AgentDriver.{hpp,cpp}` 与 `AgentQueryRegistry.{hpp,cpp}`：脚本回放、等待、截图、断言、report、退出码。
+- `--agent-script`、`--agent-report`、`--agent-visible-window`，以及 `gnb validate --script ... [--visible]`。
+- 脚本步骤：`key` / `text` / `mouse-move` / `mouse-button` / `click` / `drag` / `scroll` / `wait-frames` / `wait-ms` / `wait-until` / `cvar` / `exec` / `assert` / `screenshot` / `log` / `quit`。
+- 查询入口：`engine.*`、`scene.*`、`cvar.*`、`game.*`，其中 `game.*` 通过 `GameInstance::RegisterAgentQueries` 扩展。
+- Agent 可视化 HUD：左上角轻量状态浮层，鼠标点击/拖拽圆点与轨迹，键盘输入居中 toast。
+- 示例脚本：`assets/agentscripts/smoke.agentscript.json`、`assets/agentscripts/camera-tour.agentscript.json`。后者用于可见窗口下约 10 秒相机自动化回放。
+
+已验证：
+
+```bash
+./gnb.bat build gkNextRenderer gkNextUnitTests
+./gnb.bat validate --script assets/agentscripts/camera-tour.agentscript.json --visible -- --agent-validation-ui
+```
+
+仍待补强：
+
+- `gkNextUnitTests "[Unit][AgentInput]"` 专用输入注入单测尚未添加。
+- `pixel.*` 查询、断言失败自动截图 + 查询快照尚未完整实现。
+- `agent.*` 控制台命令族和实时 `ControlChannel` / `gnb drive` 尚未实现。
+- StudioSim 等具体业务流程脚本迁移尚未开始。
 
 ---
 
@@ -507,29 +533,44 @@ void RegisterAgentQueries(AgentQueryRegistry& reg) override {
 > 每个里程碑独立可验证、可合并。构建按 AGENTS.md "Targeted builds"：动 Engine 层 → `./gnb build gkNextRenderer gkNextUnitTests`。
 
 ### M1 — 输入注入底座 `SyntheticInput` + 引擎入口
+
+**状态：阶段完成，测试补强待做。** `SyntheticInput` 与 `NextEngine::InjectRelativeMouse` 已落地；当前绝对鼠标移动按用户要求不再 `SDL_WarpMouseInWindow` 移动系统光标，只推送合成 SDL 鼠标事件。缺口是专用 `gkNextUnitTests "[Unit][AgentInput]"` 尚未补上。
+
 - 任务：新建 `Runtime/Input/SyntheticInput.{hpp,cpp}`（键/文本/鼠标/滚轮/相对）；`NextEngine::InjectRelativeMouse`；最小 `--agent-control` 不做也行，先用单测驱动。
 - 改动：`SyntheticInput.*`、`Engine.{hpp,cpp}`、`CMakeLists`。
 - 验收：新增 `gkNextUnitTests` 用例——构造合成 `KEY_DOWN("W")` / `MOUSE_BUTTON` push 后，用一个测试用 `GameInstance` 在 `OnKey/OnMouseButton` 里捕获，断言收到正确 key/button/坐标；`InjectRelativeMouse` 能驱动 `OnCursorPosition`。（`EngineTestFixture` 已支持隐藏窗口真实渲染。）
 - 命令：`./gnb build gkNextRenderer gkNextUnitTests` → `gkNextUnitTests "[Unit][AgentInput]"`。
 
 ### M2 — ScriptPlayer + 基础步骤 + `gnb validate`
+
+**状态：完成。** `AgentDriver`、基础脚本步骤、`--agent-script`、`gnb validate`、隐藏/可见窗口切换、截图与自动退出已落地；`camera-tour` 可见回放已通过。
+
 - 任务：`AgentDriver` + `ScriptPlayer`；解析 JSON；落地 `key/text/mouse-move/click/drag/scroll/wait-frames/wait-ms/screenshot/quit`；`--agent-script` 接管 `TickAgentValidation`；`gnb validate`。
 - 改动：`AgentDriver/*`、`Options.*`、`Engine.cpp`(Tick 接管)、`main.go`(validate)、`runner` 退出码透传。
 - 验收：写一条 `playground` 脚本（移动相机几下 + 截图 + quit），`gnb validate --script X` 跑通、自动退出、截图落盘、退出码 0；故意写错步骤 → 非零退出。
 - 命令：`gnb build gkNextRenderer` → `gnb validate --script assets/agentscripts/smoke.agentscript.json`。
 
 ### M3 — 查询 + 断言 + report + 退出码
+
+**状态：主路径完成，增强项待做。** `AgentQueryRegistry`、`engine.*` / `scene.*` / `cvar.*` / `game.*` 查询、`assert` / `wait-until`、report JSON 与退出码已落地。`pixel.*` 查询、失败自动截图与完整查询快照仍待实现；`agent.*` 命令族尚未并入 `FCVarSystem`。
+
 - 任务：`AgentQueryRegistry`；`cvar./engine./scene./pixel.` 内建查询；`GameInstance::RegisterAgentQueries`；`wait-until`/`assert`/`cvar`/`exec`/`log`；失败截图 + report JSON + 退出码语义（§7.3）。
 - 改动：`AgentDriver/*`、`GameInstance.hpp`、`CVarSystem`(agent.* 命令)、Engine 查询暴露。
 - 验收：脚本含 `assert engine.totalFrames ge 1`（pass）与一条故意 fail；report 正确标 pass/fail、退出码非零、失败截图存在。
 - 命令：同上 + 检查 `agent_reports/*.json`。
 
 ### M4 — 实时命令通道 + `gnb drive`
+
+**状态：未开始。** 下一步如需交互式探索，应从 `ControlChannel`、主线程任务队列、`.port` 文件和 `gnb drive` REPL 开始实现。
+
 - 任务：`ControlChannel`（loopback TCP，行 JSON，§8）；主线程任务队列回填；`.port` 文件；`gnb drive` REPL。
 - 改动：`AgentDriver/ControlChannel.*`、`Options.*`、`main.go`(drive)。
 - 验收：`gnb drive --scene playground` 后在 REPL 发 `agent.query engine.frameRate`、`agent.shot` 能即时拿到值/路径；多命令顺序正确、无崩溃；端口仅本机可连。
 
 ### M5 — 迁移 StudioSim + 文档
+
+**状态：未开始。** 当前只完成通用机制与示例脚本，尚未迁移 StudioSim 的验证流程，也未收敛其 `AgentValidation` 业务硬分支。
+
 - 任务：用脚本复现 StudioSim 一天流程，**删除/收敛 `if(GOption->AgentValidation)` 硬分支**（保留必要的"无 LLM/加速"开关，由 `--agent-script` 语义统一驱动）；实现其 `RegisterAgentQueries`；写 2~3 条代表脚本（晨会、生产、结算）。
 - 改动：`StudioSimGameInstance.{hpp,cpp}`、`assets/agentscripts/*`、`AGENTS.md`、`docs/guides/gnb-cli.md`。
 - 验收：三条脚本在 `gnb validate` 全绿；StudioSim 代码里 `AgentValidation` 硬分支显著减少；其他游戏不受影响（抽样 `gnb shot` 各 program 仍 OK）。

@@ -3,6 +3,8 @@
 
 #include "Engine/Rendering/RenderViewResourceFactory.hpp"
 #include "Engine/Rendering/RenderView.hpp"
+#include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Utilities/Exception.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
