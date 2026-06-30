@@ -4,6 +4,7 @@
 
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <spdlog/stopwatch.h>
@@ -336,18 +337,57 @@ namespace Vulkan
             return;
         }
 
-        const bool forceRebuildAll = forceRebuildAll_;
-        forceRebuildAll_ = false;
-
         elapsedSeconds_ += deltaSeconds;
-        if (!forceRebuildAll && elapsedSeconds_ < pollIntervalSeconds_)
+        if (!forceRebuildAll_ && elapsedSeconds_ < pollIntervalSeconds_)
         {
             return;
         }
-        elapsedSeconds_ = 0.0;
 
-        const std::vector<FShaderCompileRequest> requests = GatherCompileRequests(forceRebuildAll);
-        if (requests.empty())
+        if (gatherTaskInFlight_)
+        {
+            return;
+        }
+
+        const bool forceRebuildAll = forceRebuildAll_;
+        forceRebuildAll_ = false;
+        elapsedSeconds_ = 0.0;
+        StartGatherCompileRequests(forceRebuildAll);
+#endif
+    }
+
+    void ShaderHotReloader::StartGatherCompileRequests(bool forceAll)
+    {
+        struct FGatherTaskContext
+        {
+            FGatherCompileResult result;
+        };
+
+        gatherTaskInFlight_ = true;
+
+        auto context = std::make_shared<FGatherTaskContext>();
+        const std::filesystem::path sourceRoot = sourceRoot_;
+        const std::filesystem::path outputRoot = outputRoot_;
+        const std::filesystem::file_time_type lastFailedSourceTimestamp = lastFailedSourceTimestamp_;
+
+        Tasks::TaskCoordinator::GetInstance()->AddTask(
+            [context, sourceRoot, outputRoot, forceAll, lastFailedSourceTimestamp](Tasks::ResTask& task)
+            {
+                (void)task;
+                context->result = GatherCompileRequests(sourceRoot, outputRoot, forceAll, lastFailedSourceTimestamp);
+            },
+            [this, context](Tasks::ResTask& task)
+            {
+                (void)task;
+                FinishGatherCompileRequests(std::move(context->result));
+            },
+            0);
+    }
+
+    void ShaderHotReloader::FinishGatherCompileRequests(FGatherCompileResult result)
+    {
+        gatherTaskInFlight_ = false;
+
+        if (!enabled_ || !initialized_ || renderer_ == nullptr || result.requests.empty())
         {
             return;
         }
@@ -355,7 +395,7 @@ namespace Vulkan
         spdlog::stopwatch stopwatch;
         bool allSucceeded = true;
         std::vector<std::filesystem::path> rebuiltShaders;
-        for (const FShaderCompileRequest& request : requests)
+        for (const FShaderCompileRequest& request : result.requests)
         {
             const bool succeeded = CompileShader(request);
             allSucceeded = succeeded && allSucceeded;
@@ -367,10 +407,7 @@ namespace Vulkan
 
         if (!allSucceeded)
         {
-            std::filesystem::file_time_type latestSource{};
-            const auto shaderFiles = CollectFiles(sourceRoot_, {".slang", ".h"});
-            TryGetLatestTimestamp(shaderFiles, latestSource);
-            lastFailedSourceTimestamp_ = latestSource;
+            lastFailedSourceTimestamp_ = result.latestSourceTimestamp;
             SPDLOG_WARN("[HotReload] Shader rebuild failed; keeping existing pipelines.");
             return;
         }
@@ -379,8 +416,7 @@ namespace Vulkan
         {
             renderer_->ReloadShaders(rebuiltShaders);
         }
-        SPDLOG_INFO("[HotReload] Shader rebuilt: {} file(s) in {}", requests.size(), stopwatch.elapsed_ms());
-#endif
+        SPDLOG_INFO("[HotReload] Shader rebuilt: {} file(s) in {}", result.requests.size(), stopwatch.elapsed_ms());
     }
 
     void ShaderHotReloader::SetPollInterval(double seconds)
@@ -554,21 +590,26 @@ namespace Vulkan
         return found;
     }
 
-    std::vector<ShaderHotReloader::FShaderCompileRequest> ShaderHotReloader::GatherCompileRequests(bool forceAll) const
+    ShaderHotReloader::FGatherCompileResult ShaderHotReloader::GatherCompileRequests(
+        const std::filesystem::path& sourceRoot,
+        const std::filesystem::path& outputRoot,
+        bool forceAll,
+        std::filesystem::file_time_type lastFailedSourceTimestamp)
     {
         namespace fs = std::filesystem;
 
-        const std::vector<fs::path> shaderFiles = CollectFiles(sourceRoot_, {".slang"});
-        const std::vector<fs::path> allSourceFiles = CollectFiles(sourceRoot_, {".slang", ".h"});
+        FGatherCompileResult result;
 
-        fs::file_time_type latestSourceTimestamp{};
-        TryGetLatestTimestamp(allSourceFiles, latestSourceTimestamp);
-        if (!forceAll && latestSourceTimestamp != fs::file_time_type{} && latestSourceTimestamp == lastFailedSourceTimestamp_)
+        const std::vector<fs::path> shaderFiles = CollectFiles(sourceRoot, {".slang"});
+        const std::vector<fs::path> allSourceFiles = CollectFiles(sourceRoot, {".slang", ".h"});
+
+        TryGetLatestTimestamp(allSourceFiles, result.latestSourceTimestamp);
+        if (!forceAll && result.latestSourceTimestamp != fs::file_time_type{} &&
+            result.latestSourceTimestamp == lastFailedSourceTimestamp)
         {
-            return {};
+            return result;
         }
 
-        std::vector<FShaderCompileRequest> requests;
         std::error_code ec;
         for (const fs::path& sourcePath : shaderFiles)
         {
@@ -577,7 +618,7 @@ namespace Vulkan
                 continue;
             }
 
-            const fs::path outputPath = outputRoot_ / (sourcePath.filename().string() + ".spv");
+            const fs::path outputPath = outputRoot / (sourcePath.filename().string() + ".spv");
             const fs::file_time_type sourceTimestamp = fs::last_write_time(sourcePath, ec);
             if (ec)
             {
@@ -596,7 +637,7 @@ namespace Vulkan
                 else
                 {
                     const std::vector<fs::path> dependencies =
-                        ResolveShaderDependencies(sourceRoot_, sourcePath, outputPath);
+                        ResolveShaderDependencies(sourceRoot, sourcePath, outputPath);
                     for (const fs::path& dependency : dependencies)
                     {
                         const fs::file_time_type dependencyTimestamp = fs::last_write_time(dependency, ec);
@@ -617,11 +658,11 @@ namespace Vulkan
 
             if (shouldCompile)
             {
-                requests.push_back({sourcePath, outputPath});
+                result.requests.push_back({sourcePath, outputPath});
             }
         }
 
-        return requests;
+        return result;
     }
 
     bool ShaderHotReloader::CompileShader(const FShaderCompileRequest& request) const
