@@ -357,11 +357,27 @@ namespace Vulkan
 
         const VkDeviceSize perCascadeCount =
             static_cast<VkDeviceSize>(Assets::CUBE_SIZE_XY) * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
+        uint32_t cascadeCount = Assets::CUBE_CASCADE_MAX;
+        float poolBrickRatio = 1.0f;
+        if (NextEngine::GetInstance())
+        {
+            const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+            cascadeCount = Assets::SanitizeAmbientCubeCascadeCount(settings.AmbientCubeCascadeCount);
+            poolBrickRatio = settings.AmbientCubePoolBrickRatio;
+        }
+        const float clampedPoolBrickRatio = std::clamp(poolBrickRatio, 0.0f, 1.0f);
+        const auto poolBricksPerCascade = static_cast<VkDeviceSize>(std::max(
+            1.0f, std::ceil(static_cast<float>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE) * clampedPoolBrickRatio)));
+        const VkDeviceSize poolCubesPerCascade =
+            poolBricksPerCascade * static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME);
+
         const VkDeviceSize fullAmbientCubeAllocationSize =
-            static_cast<VkDeviceSize>(Assets::CUBE_CASCADE_MAX) * perCascadeCount *
-                (sizeof(Assets::VoxelData) + sizeof(Assets::AmbientCube)) +
+            static_cast<VkDeviceSize>(cascadeCount) *
+                (perCascadeCount * sizeof(Assets::VoxelData) + poolCubesPerCascade * sizeof(Assets::AmbientCube)) +
             static_cast<VkDeviceSize>(Assets::ACGI_PAGE_COUNT) * Assets::ACGI_PAGE_COUNT * sizeof(Assets::PageIndex) +
-            perCascadeCount * (sizeof(Assets::AmbientCube) + sizeof(glm::u32vec4));
+            poolCubesPerCascade * sizeof(Assets::AmbientCube) +
+            perCascadeCount * sizeof(glm::u32vec4) +
+            perCascadeCount * sizeof(glm::u32vec4);
         caps_.fullAmbientCubeBudget = largestDeviceLocalHeapSize >= fullAmbientCubeAllocationSize;
         if (!caps_.fullAmbientCubeBudget)
         {

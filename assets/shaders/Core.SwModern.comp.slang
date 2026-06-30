@@ -8,6 +8,13 @@ void main(uint3 DTid : SV_DispatchThreadID)
 {
     START_SHADERCLOCK()
 
+    const uint2 size = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
+    if (DTid.x >= size.x || DTid.y >= size.y)
+    {
+        END_SHADERCLOCK(DTid.xy)
+        return;
+    }
+
     FVisibilityBufferRayCaster rayCaster;
     FAmbientCubeRayTracerIndirect tracer;
     FShadowMapDirectIlluminator dIlluminator;
