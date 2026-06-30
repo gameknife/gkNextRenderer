@@ -120,10 +120,18 @@ void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<vo
             {
                 SPDLOG_INFO("{}", taskContext.outputInfo.data());
 
+                const bool canRefreshExistingSwapChain = renderer_->HasSwapChain();
                 renderer_->Device().WaitIdle();
                 logProfile("device idle before reload");
-                renderer_->DeleteSwapChain();
-                logProfile("old swapchain deleted");
+                if (!canRefreshExistingSwapChain)
+                {
+                    renderer_->DeleteSwapChain();
+                    logProfile("old swapchain deleted");
+                }
+                else
+                {
+                    logProfile("old swapchain kept");
+                }
 
                 // Execute the specific GPU load logic
                 onGpuLoad(ctx);
@@ -132,8 +140,16 @@ void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<vo
                 frameState_.totalFrames = 0;
                 renderer_->OnPostLoadScene();
                 logProfile("renderer post-load scene");
-                renderer_->CreateSwapChain();
-                logProfile("new swapchain created");
+                if (canRefreshExistingSwapChain)
+                {
+                    renderer_->RefreshSceneSwapChainResources();
+                    logProfile("scene swapchain resources refreshed");
+                }
+                else
+                {
+                    renderer_->CreateSwapChain();
+                    logProfile("new swapchain created");
+                }
             }
             else
             {
