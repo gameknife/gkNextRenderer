@@ -1,5 +1,3 @@
-implementing Common;
-
 public bool SharcIsAvailable()
 {
     return Bindless.GetGpuscene().Sharc != (SharcResources*)0;

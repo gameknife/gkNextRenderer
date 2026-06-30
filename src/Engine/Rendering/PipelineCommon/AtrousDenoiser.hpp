@@ -1,6 +1,8 @@
 #pragma once
 
 #include <memory>
+#include <set>
+#include <string>
 
 #include <vulkan/vulkan.h>
 
@@ -30,6 +32,7 @@ namespace Vulkan::PipelineCommon
 
         void CreateSwapChain(const SwapChain& swapChain);
         void DeleteSwapChain();
+        void ReloadShaders(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles);
 
         // Runs the fused diffuse/specular a-trous passes when the denoiser is enabled and
         // either iteration count is positive. A no-op otherwise.

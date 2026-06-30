@@ -1,8 +1,5 @@
 // General Bindless Texture
 
-#ifndef __cplusplus
-implementing Bindless;
-#endif
 namespace Bindless
 {
     public static const int RT_ACCUMLATE_DIFFUSE = 0;

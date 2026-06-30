@@ -8,10 +8,267 @@
 
 #include <spdlog/stopwatch.h>
 
+#include <algorithm>
+#include <cctype>
+#include <fstream>
+#include <regex>
+
 namespace Vulkan
 {
     namespace
     {
+        bool IsDebugOrTestShaderEntry(const std::string& filename)
+        {
+            return filename == "Remote.BgraToYuv.comp.slang" ||
+                   filename == "Util.SharcCompileTest.comp.slang";
+        }
+
+        std::filesystem::path NormalizeAbsolutePath(const std::filesystem::path& path)
+        {
+            namespace fs = std::filesystem;
+
+            std::error_code ec;
+            const fs::path absolutePath = path.is_absolute() ? path : fs::absolute(path, ec);
+            return (ec ? path : absolutePath).lexically_normal();
+        }
+
+        std::filesystem::path GetDepfilePath(const std::filesystem::path& outputPath)
+        {
+            std::filesystem::path depfilePath = outputPath;
+            depfilePath += ".d";
+            return depfilePath;
+        }
+
+        std::string ReadTextFile(const std::filesystem::path& path)
+        {
+            std::ifstream input(path, std::ios::binary);
+            if (!input.is_open())
+            {
+                return {};
+            }
+
+            return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+        }
+
+        size_t FindUnescapedColon(const std::string& text)
+        {
+            for (size_t index = 0; index < text.size(); ++index)
+            {
+                if (text[index] != ':')
+                {
+                    continue;
+                }
+
+                size_t slashCount = 0;
+                for (size_t cursor = index; cursor > 0 && text[cursor - 1] == '\\'; --cursor)
+                {
+                    ++slashCount;
+                }
+                if ((slashCount % 2) == 0)
+                {
+                    return index;
+                }
+            }
+            return std::string::npos;
+        }
+
+        std::vector<std::filesystem::path> ParseDepfileDependencies(const std::filesystem::path& depfilePath)
+        {
+            namespace fs = std::filesystem;
+
+            std::string contents = ReadTextFile(depfilePath);
+            if (contents.empty())
+            {
+                return {};
+            }
+
+            std::string flattened;
+            flattened.reserve(contents.size());
+            for (size_t index = 0; index < contents.size(); ++index)
+            {
+                if (contents[index] == '\\' && index + 1 < contents.size())
+                {
+                    if (contents[index + 1] == '\n')
+                    {
+                        ++index;
+                        continue;
+                    }
+                    if (contents[index + 1] == '\r' && index + 2 < contents.size() && contents[index + 2] == '\n')
+                    {
+                        index += 2;
+                        continue;
+                    }
+                }
+                flattened.push_back(contents[index]);
+            }
+
+            const size_t depsStart = FindUnescapedColon(flattened);
+            if (depsStart == std::string::npos)
+            {
+                return {};
+            }
+
+            std::vector<fs::path> dependencies;
+            std::string token;
+            for (size_t index = depsStart + 1; index <= flattened.size(); ++index)
+            {
+                const char ch = index < flattened.size() ? flattened[index] : ' ';
+                if (std::isspace(static_cast<unsigned char>(ch)))
+                {
+                    if (!token.empty())
+                    {
+                        fs::path dependency(token);
+                        if (!dependency.empty())
+                        {
+                            dependencies.push_back(NormalizeAbsolutePath(dependency));
+                        }
+                        token.clear();
+                    }
+                    continue;
+                }
+
+                if (ch == '\\' && index + 1 < flattened.size())
+                {
+                    const char next = flattened[index + 1];
+                    if (next == ':' || next == ' ' || next == '#' || next == '\\')
+                    {
+                        token.push_back(next);
+                        ++index;
+                        continue;
+                    }
+                }
+
+                token.push_back(ch);
+            }
+
+            return dependencies;
+        }
+
+        std::filesystem::path ResolveImportPath(const std::filesystem::path& sourceRoot, const std::string& moduleName)
+        {
+            namespace fs = std::filesystem;
+
+            std::vector<fs::path> candidates;
+            candidates.emplace_back(sourceRoot / (moduleName + ".slang"));
+
+            std::string modulePath = moduleName;
+            std::replace(modulePath.begin(), modulePath.end(), '.', '/');
+            candidates.emplace_back(sourceRoot / (modulePath + ".slang"));
+
+            std::error_code ec;
+            for (const fs::path& candidate : candidates)
+            {
+                if (fs::exists(candidate, ec) && fs::is_regular_file(candidate, ec))
+                {
+                    return NormalizeAbsolutePath(candidate);
+                }
+                ec.clear();
+            }
+
+            return {};
+        }
+
+        std::filesystem::path ResolveIncludePath(const std::filesystem::path& sourceRoot,
+                                                 const std::filesystem::path& includingFile,
+                                                 const std::string& includeName)
+        {
+            namespace fs = std::filesystem;
+
+            std::vector<fs::path> candidates;
+            candidates.emplace_back(includingFile.parent_path() / includeName);
+            candidates.emplace_back(sourceRoot / includeName);
+
+            std::error_code ec;
+            for (const fs::path& candidate : candidates)
+            {
+                if (fs::exists(candidate, ec) && fs::is_regular_file(candidate, ec))
+                {
+                    return NormalizeAbsolutePath(candidate);
+                }
+                ec.clear();
+            }
+
+            return {};
+        }
+
+        void ParseShaderDependenciesRecursive(const std::filesystem::path& sourceRoot,
+                                              const std::filesystem::path& sourcePath,
+                                              std::set<std::filesystem::path>& dependencies)
+        {
+            namespace fs = std::filesystem;
+
+            const fs::path normalizedSource = NormalizeAbsolutePath(sourcePath);
+            if (dependencies.find(normalizedSource) != dependencies.end())
+            {
+                return;
+            }
+            dependencies.insert(normalizedSource);
+
+            const std::string contents = ReadTextFile(normalizedSource);
+            if (contents.empty())
+            {
+                return;
+            }
+
+            const std::regex dependencyPattern(
+                R"regex(^\s*(?:import\s+([A-Za-z_][A-Za-z0-9_\.]*)\s*;|(?:__include|#include)\s+"([^"]+)"))regex");
+
+            size_t lineStart = 0;
+            while (lineStart <= contents.size())
+            {
+                const size_t lineEnd = contents.find('\n', lineStart);
+                const std::string line = contents.substr(
+                    lineStart,
+                    lineEnd == std::string::npos ? std::string::npos : lineEnd - lineStart);
+
+                std::smatch match;
+                if (std::regex_search(line, match, dependencyPattern))
+                {
+                    fs::path dependencyPath;
+                    if (match[1].matched)
+                    {
+                        dependencyPath = ResolveImportPath(sourceRoot, match[1].str());
+                    }
+                    else if (match[2].matched)
+                    {
+                        dependencyPath = ResolveIncludePath(sourceRoot, normalizedSource, match[2].str());
+                    }
+
+                    if (!dependencyPath.empty())
+                    {
+                        ParseShaderDependenciesRecursive(sourceRoot, dependencyPath, dependencies);
+                    }
+                }
+
+                if (lineEnd == std::string::npos)
+                {
+                    break;
+                }
+                lineStart = lineEnd + 1;
+            }
+        }
+
+        std::vector<std::filesystem::path> ResolveShaderDependencies(
+            const std::filesystem::path& sourceRoot,
+            const std::filesystem::path& sourcePath,
+            const std::filesystem::path& outputPath)
+        {
+            namespace fs = std::filesystem;
+
+            std::vector<fs::path> dependencies = ParseDepfileDependencies(GetDepfilePath(outputPath));
+            if (!dependencies.empty())
+            {
+                dependencies.push_back(NormalizeAbsolutePath(sourcePath));
+                std::sort(dependencies.begin(), dependencies.end());
+                dependencies.erase(std::unique(dependencies.begin(), dependencies.end()), dependencies.end());
+                return dependencies;
+            }
+
+            std::set<fs::path> parsedDependencies;
+            ParseShaderDependenciesRecursive(sourceRoot, sourcePath, parsedDependencies);
+            return {parsedDependencies.begin(), parsedDependencies.end()};
+        }
+
         std::filesystem::path FindProjectRoot()
         {
             namespace fs = std::filesystem;
@@ -97,9 +354,15 @@ namespace Vulkan
 
         spdlog::stopwatch stopwatch;
         bool allSucceeded = true;
+        std::vector<std::filesystem::path> rebuiltShaders;
         for (const FShaderCompileRequest& request : requests)
         {
-            allSucceeded = CompileShader(request) && allSucceeded;
+            const bool succeeded = CompileShader(request);
+            allSucceeded = succeeded && allSucceeded;
+            if (succeeded)
+            {
+                rebuiltShaders.push_back(request.outputPath);
+            }
         }
 
         if (!allSucceeded)
@@ -114,7 +377,7 @@ namespace Vulkan
 
         if (renderer_->HasSwapChain())
         {
-            renderer_->ReloadShaders();
+            renderer_->ReloadShaders(rebuiltShaders);
         }
         SPDLOG_INFO("[HotReload] Shader rebuilt: {} file(s) in {}", requests.size(), stopwatch.elapsed_ms());
 #endif
@@ -265,6 +528,11 @@ namespace Vulkan
                filename.ends_with(".frag.slang");
     }
 
+    bool ShaderHotReloader::IsRuntimeShaderEntry(const std::filesystem::path& path)
+    {
+        return IsSourceShader(path) && !IsDebugOrTestShaderEntry(path.filename().string());
+    }
+
     bool ShaderHotReloader::TryGetLatestTimestamp(const std::vector<std::filesystem::path>& files,
                                                   std::filesystem::file_time_type& outTimestamp)
     {
@@ -291,33 +559,20 @@ namespace Vulkan
         namespace fs = std::filesystem;
 
         const std::vector<fs::path> shaderFiles = CollectFiles(sourceRoot_, {".slang"});
-        std::vector<fs::path> commonFiles = CollectFiles(sourceRoot_ / "common", {".slang", ".h"});
-        const std::vector<fs::path> thirdPartyFiles = CollectFiles(sourceRoot_ / "third_party", {".slang", ".h"});
-        commonFiles.insert(commonFiles.end(), thirdPartyFiles.begin(), thirdPartyFiles.end());
-        const fs::path commonModule = sourceRoot_ / "Common.slang";
-        std::error_code moduleEc;
-        if (fs::exists(commonModule, moduleEc) && fs::is_regular_file(commonModule, moduleEc))
-        {
-            commonFiles.push_back(commonModule);
-        }
+        const std::vector<fs::path> allSourceFiles = CollectFiles(sourceRoot_, {".slang", ".h"});
 
         fs::file_time_type latestSourceTimestamp{};
-        std::vector<fs::path> allSourceFiles = shaderFiles;
-        allSourceFiles.insert(allSourceFiles.end(), commonFiles.begin(), commonFiles.end());
         TryGetLatestTimestamp(allSourceFiles, latestSourceTimestamp);
         if (!forceAll && latestSourceTimestamp != fs::file_time_type{} && latestSourceTimestamp == lastFailedSourceTimestamp_)
         {
             return {};
         }
 
-        fs::file_time_type latestCommonTimestamp{};
-        const bool hasCommonTimestamp = TryGetLatestTimestamp(commonFiles, latestCommonTimestamp);
-
         std::vector<FShaderCompileRequest> requests;
         std::error_code ec;
         for (const fs::path& sourcePath : shaderFiles)
         {
-            if (!IsSourceShader(sourcePath))
+            if (!IsRuntimeShaderEntry(sourcePath))
             {
                 continue;
             }
@@ -334,8 +589,29 @@ namespace Vulkan
             if (!shouldCompile && fs::exists(outputPath, ec))
             {
                 const fs::file_time_type outputTimestamp = fs::last_write_time(outputPath, ec);
-                shouldCompile = ec || sourceTimestamp > outputTimestamp ||
-                                (hasCommonTimestamp && latestCommonTimestamp > outputTimestamp);
+                if (ec || sourceTimestamp > outputTimestamp)
+                {
+                    shouldCompile = true;
+                }
+                else
+                {
+                    const std::vector<fs::path> dependencies =
+                        ResolveShaderDependencies(sourceRoot_, sourcePath, outputPath);
+                    for (const fs::path& dependency : dependencies)
+                    {
+                        const fs::file_time_type dependencyTimestamp = fs::last_write_time(dependency, ec);
+                        if (!ec && dependencyTimestamp > outputTimestamp)
+                        {
+                            shouldCompile = true;
+                            break;
+                        }
+                        ec.clear();
+                    }
+                }
+            }
+            else if (!shouldCompile)
+            {
+                shouldCompile = true;
             }
             ec.clear();
 
@@ -394,10 +670,13 @@ namespace Vulkan
             platformDefines += " -DGK_ENABLE_OFFICIAL_SHARC";
         }
 
-        const std::string command = fmt::format("{} {} -o {} -entry main -target spirv{}",
+        const fs::path depfilePath = GetDepfilePath(request.outputPath);
+        const std::string command = fmt::format("{} {} -o {} -entry main -target spirv -I {} -depfile {}{}",
                                                 QuotePath(slangExecutable_),
                                                 QuotePath(request.sourcePath),
                                                 QuotePath(request.outputPath),
+                                                QuotePath(sourceRoot_),
+                                                QuotePath(depfilePath),
                                                 platformDefines);
         SPDLOG_INFO("[HotReload] Compiling shader {}", request.sourcePath.filename().string());
         const int result = NextRenderer::OSProcess(command.c_str());

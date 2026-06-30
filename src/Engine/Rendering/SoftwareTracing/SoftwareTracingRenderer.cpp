@@ -47,6 +47,24 @@ void SoftwareTracingRenderer::DeleteSwapChain()
 	composePipeline_.reset();
 }
 
+void SoftwareTracingRenderer::ReloadShaders(
+	const std::set<std::string>& changedShaderFiles,
+	std::set<std::string>& handledShaderFiles)
+{
+	if (deferredShadingPipeline_)
+	{
+		deferredShadingPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+	}
+	if (accumulatePipeline_)
+	{
+		accumulatePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+	}
+	if (composePipeline_)
+	{
+		composePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+	}
+}
+
 void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
 	baseRender_.InitializeBarriers(commandBuffer);

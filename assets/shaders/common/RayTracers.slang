@@ -1,4 +1,3 @@
-implementing Common;
 #include "PreProcessor.slang"
 
 // IRayTracer implementations split out of Shading.slang.

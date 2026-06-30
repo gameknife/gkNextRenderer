@@ -4,8 +4,7 @@
 // inputs (normal/depth/object id) are shared, specular can run fewer iterations than diffuse,
 // and the first-iteration variance seed is a cheaper shared 3x3 estimate.
 
-import Common;
-import Bindless;
+import Shader.Bindless;
 
 struct PushConsts
 {

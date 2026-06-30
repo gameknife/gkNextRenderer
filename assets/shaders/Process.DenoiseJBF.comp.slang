@@ -1,5 +1,7 @@
-import Common;
-import Bindless;
+import Shader.Bindless;
+import Shader.Types;
+import Shader.GpuScene;
+import Shader.Tonemap;
 
 // Final compose pass. Spatial denoising is done upstream by the variance-guided a-trous
 // wavelet (PipelineCommon::AtrousDenoiser); this pass only composes the (already filtered or

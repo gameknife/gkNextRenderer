@@ -1,5 +1,4 @@
-import Bindless;
-import Common;
+import Shader.Bindless;
 
 struct PushConsts
 {

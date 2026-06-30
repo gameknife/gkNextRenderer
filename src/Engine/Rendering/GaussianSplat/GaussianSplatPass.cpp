@@ -14,6 +14,8 @@
 #include "Engine/Vulkan/MemoryAndShader.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 
+#include <filesystem>
+
 namespace Vulkan::GaussianSplat
 {
     namespace
@@ -58,6 +60,25 @@ namespace Vulkan::GaussianSplat
             glm::vec4 parameters{1.0f, 1.0f, 0.0f, 0.0f}; // opacity, visible, reserved, reserved
         };
         static_assert(sizeof(FSplatModelState) == 80);
+
+        std::string ShaderFilename(const std::string& shaderFile)
+        {
+            return std::filesystem::path(shaderFile).filename().string();
+        }
+
+        bool MarkChangedShaderFile(
+            const std::string& shaderFile,
+            const std::set<std::string>& changedShaderFiles,
+            std::set<std::string>& handledShaderFiles)
+        {
+            const std::string filename = ShaderFilename(shaderFile);
+            if (changedShaderFiles.find(filename) == changedShaderFiles.end())
+            {
+                return false;
+            }
+            handledShaderFiles.insert(filename);
+            return true;
+        }
     }
 
     GaussianSplatPass::GaussianSplatPass(VulkanBaseRenderer& renderer) : renderer_(renderer)
@@ -210,14 +231,7 @@ namespace Vulkan::GaussianSplat
         pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
         pushRange.size = sizeof(FSplatPushConstants);
         pipelineLayout_ = std::make_unique<PipelineLayout>(device, &pushRange, 1);
-        const ShaderModule vertexShader(device, "assets/shaders/Splat.Billboard.vert.slang.spv");
-        const ShaderModule fragmentShader(device, "assets/shaders/Splat.Billboard.frag.slang.spv");
-        pipeline_ = GraphicsPipelineBuilder(device)
-            .SetShaders(vertexShader, fragmentShader)
-            .SetFixedViewport({0, 0}, extent)
-            .SetDepth(true, false, VK_COMPARE_OP_LESS_OR_EQUAL)
-            .SetAlphaBlend(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA)
-            .Build(pipelineLayout_->Handle(), renderPass_, "create Gaussian splat graphics pipeline");
+        RecreateGraphicsPipeline();
 
         SPDLOG_INFO("uploaded {} Gaussian splats in {} models ({} SH palette entries)",
                     combinedSplats.size(), modelCount_, combinedPalette.size());
@@ -261,6 +275,64 @@ namespace Vulkan::GaussianSplat
         frameBuffer_ = VK_NULL_HANDLE;
         if (renderPass_) vkDestroyRenderPass(device.Handle(), renderPass_, nullptr);
         renderPass_ = VK_NULL_HANDLE;
+    }
+
+    void GaussianSplatPass::RecreateGraphicsPipeline()
+    {
+        if (!renderPass_ || !pipelineLayout_)
+        {
+            return;
+        }
+
+        const Device& device = renderer_.Device();
+        if (pipeline_)
+        {
+            vkDestroyPipeline(device.Handle(), pipeline_, nullptr);
+            pipeline_ = VK_NULL_HANDLE;
+        }
+
+        const VkExtent2D extent = renderer_.SwapChain().RenderExtent();
+        const ShaderModule vertexShader(device, "assets/shaders/Splat.Billboard.vert.slang.spv");
+        const ShaderModule fragmentShader(device, "assets/shaders/Splat.Billboard.frag.slang.spv");
+        pipeline_ = GraphicsPipelineBuilder(device)
+            .SetShaders(vertexShader, fragmentShader)
+            .SetFixedViewport({0, 0}, extent)
+            .SetDepth(true, false, VK_COMPARE_OP_LESS_OR_EQUAL)
+            .SetAlphaBlend(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA)
+            .Build(pipelineLayout_->Handle(), renderPass_, "recreate Gaussian splat graphics pipeline");
+    }
+
+    void GaussianSplatPass::ReloadShaders(
+        const std::set<std::string>& changedShaderFiles,
+        std::set<std::string>& handledShaderFiles)
+    {
+        if (histogramPipeline_)
+        {
+            histogramPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+        }
+        if (prefixPipeline_)
+        {
+            prefixPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+        }
+        if (scatterPipeline_)
+        {
+            scatterPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+        }
+        if (composePipeline_)
+        {
+            composePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+        }
+
+        constexpr const char* vertexShader = "assets/shaders/Splat.Billboard.vert.slang.spv";
+        constexpr const char* fragmentShader = "assets/shaders/Splat.Billboard.frag.slang.spv";
+        const bool reloadVertex = changedShaderFiles.find(ShaderFilename(vertexShader)) != changedShaderFiles.end();
+        const bool reloadFragment = changedShaderFiles.find(ShaderFilename(fragmentShader)) != changedShaderFiles.end();
+        if (reloadVertex || reloadFragment)
+        {
+            RecreateGraphicsPipeline();
+            MarkChangedShaderFile(vertexShader, changedShaderFiles, handledShaderFiles);
+            MarkChangedShaderFile(fragmentShader, changedShaderFiles, handledShaderFiles);
+        }
     }
 
     void GaussianSplatPass::UpdateModelStates(uint32_t imageIndex)

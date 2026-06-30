@@ -1,5 +1,5 @@
-import Common;
-import Bindless;
+import Shader.Bindless;
+import Shader.PathTracing;
 #include "common/ShaderClock.slang"
 
 void OutputColor(int2 ipos, float3 Total)

@@ -1,4 +1,3 @@
-implementing Common;
 #include "PreProcessor.slang"
 
 // Probe baker for ambient cubes.

@@ -4,7 +4,6 @@
 #else
 #define ALIGN_16
 #define ALIGN_8
-implementing Common;
 #endif
 
 public static const int MAX_NODES = 65535; // 256;
