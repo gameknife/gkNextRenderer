@@ -1485,7 +1485,7 @@ namespace Vulkan
 
         PreRenderPerView(commandBuffer, imageIndex, clearSwapchain);
         logicRenderer.Render(commandBuffer, imageIndex);
-        if (view.CopyObjectIdHistory())
+        if (view.CopyObjectIdHistory() && logicRenderer.RequiresObjectIdHistory())
         {
             CopyObjectIdHistory(commandBuffer);
         }
