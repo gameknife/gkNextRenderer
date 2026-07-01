@@ -1686,12 +1686,14 @@ namespace Vulkan
                 SCOPED_GPU_TIMER("[gpu]");
 
                 {
+                    SCOPED_CPU_TIMER("begin scene");
                     SCOPED_GPU_TIMER("[pre-render]");
                     BeginSceneFrame(commandBuffer, frame_.currentImageIndex);
                     skin_.updateRequests.clear();
                 }
 
                 {
+                    SCOPED_CPU_TIMER("render");
                     SCOPED_GPU_TIMER("[render]");
                     Render(commandBuffer, frame_.currentImageIndex);
                 }
@@ -1792,20 +1794,6 @@ namespace Vulkan
                     }
                 }
             }
-            
-            if (delegates_.afterSubmit)
-            {
-                SCOPED_CPU_TIMER("after submit");
-                delegates_.afterSubmit();
-            }
-
-            {
-                SCOPED_CPU_TIMER("update nodes");
-                if (GetScene().UpdateNodes())
-                {
-                    AfterUpdateScene();
-                }
-            }
 
             {
                 SCOPED_CPU_TIMER("present");
@@ -1848,6 +1836,20 @@ namespace Vulkan
                 if (result != VK_SUCCESS)
                 {
                     Throw(std::runtime_error(std::string("failed to present next image (") + ToString(result) + ")"));
+                }
+            }
+            
+            if (delegates_.afterSubmit)
+            {
+                SCOPED_CPU_TIMER("after submit");
+                delegates_.afterSubmit();
+            }
+
+            {
+                SCOPED_CPU_TIMER("update nodes");
+                if (GetScene().UpdateNodes())
+                {
+                    AfterUpdateScene();
                 }
             }
 
