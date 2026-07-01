@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <cmath>
 #include <entt/meta/factory.hpp>
+#include <limits>
 
 namespace Assets
 {
@@ -309,6 +310,7 @@ namespace Assets
                 nodeProxys.clear();
                 indirectDrawBatchCount_ = 0;
 
+                uint64_t expandedTriangleCapacity = 0;
                 uint32_t currentJointOffset = 0;
                 for (auto& node : nodes_)
                 {
@@ -326,6 +328,7 @@ namespace Assets
                         auto model = GetModel(render->GetModelId());
                         if (model)
                         {
+                            const uint32_t modelId = render->GetModelId();
                             uint32_t nodeJointOffset = 0;
                             const uint32_t instanceId = node->GetInstanceId();
                             const uint32_t outlineFlags = render->GetOutlineFlags();
@@ -346,9 +349,11 @@ namespace Assets
 
                             for (uint32_t section = 0; section < model->SectionCount(); ++section)
                             {
+                                expandedTriangleCapacity += offsets_[modelId * 10 + section].indexCount / 3u;
+
                                 NodeProxy proxy = node->GetNodeProxy();
                                 proxy.combinedPrevTS = combined;
-                                proxy.modelId = render->GetModelId() * 10 + section;
+                                proxy.modelId = modelId * 10 + section;
                                 proxy.nort = section == 0 ? 0 : 1;
                                 proxy.reserved1 = selectedBit;
                                 proxy.reserved2 = stateBits;
@@ -359,6 +364,13 @@ namespace Assets
                         }
                     }
                 }
+
+                if (expandedTriangleCapacity > std::numeric_limits<uint32_t>::max())
+                {
+                    throw std::overflow_error("GPU-driven scene triangle capacity exceeds uint32_t");
+                }
+                requiredGpuDrivenTriangleCapacity_ =
+                    std::max<uint32_t>(1u, static_cast<uint32_t>(expandedTriangleCapacity));
             }
 
             if (!nodeProxys.empty())
