@@ -179,6 +179,8 @@ public:
     std::vector<TimerStat> FetchAllTimes(int maxStack);
     void CalculateCpuStats();
     std::vector<TimerStat> FetchAllCpuTimes(int maxStack);
+    static bool TryCalculateElapsedMilliseconds(uint64_t startTimestamp, uint64_t endTimestamp, float timestampPeriod,
+                                                uint32_t timestampValidBits, float& outMilliseconds);
 
 private:
     std::string BuildGpuStableKey(const std::string& name);
@@ -218,6 +220,7 @@ public:
     const Vulkan::Device& device_;
     uint32_t queryIdx = 0;
     float timeStampPeriod_ = 1;
+    uint32_t timestampValidBits_ = 64;
     bool started_ = false;
     bool cpuFrameStarted_ = false;
     bool valid_ = false;
