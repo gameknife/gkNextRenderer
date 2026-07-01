@@ -8,7 +8,6 @@ namespace Vulkan
 {
     namespace PipelineCommon
     {
-        class ZeroBindCustomPushConstantPipeline;
         class ZeroBindPipeline;
     }
 }
@@ -16,7 +15,7 @@ namespace Vulkan
 namespace Vulkan::SoftwareModernNoAmbient
 {
     // 不走 AmbientCube 的轻量 deferred renderer：
-    //   visibility -> shading -> temporal accumulation -> compose
+    //   visibility -> shading -> gtao -> compose
     class SoftwareModernNoAmbientRenderer final : public Vulkan::LogicRendererBase
     {
     public:
@@ -34,8 +33,6 @@ namespace Vulkan::SoftwareModernNoAmbient
     private:
         std::unique_ptr<PipelineCommon::ZeroBindPipeline> shadingPipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindPipeline> gtaoPipeline_;
-        std::unique_ptr<PipelineCommon::ZeroBindPipeline> gtaoComposePipeline_;
-        std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> accumulatePipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindPipeline> composePipeline_;
 
     };

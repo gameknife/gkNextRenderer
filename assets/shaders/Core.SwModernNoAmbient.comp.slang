@@ -76,13 +76,11 @@ void main(uint3 DTid : SV_DispatchThreadID)
             ? Common.SampleIBL(Camera.SkyIdx, primaryRayDir, Camera.SkyRotation, 0) * Camera.SkyIntensity
             : float4(0, 0, 0, 1);
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, skyColor);
-        Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR).Store(pixel, float4(0));
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT).Store(pixel, float4(0));
         Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(pixel, 0);
         Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(pixel, 1000);
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_MOTIONVECTOR).Store(pixel, float4(0));
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL).Store(pixel, float4(0));
-        Bindless.GetViewStorageTexture<uint>(Bindless.RT_MOTIONMOMENT).Store(pixel, Camera.TemporalFrames);
         return;
     }
 
@@ -215,8 +213,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
                 specularColor.rgb += specularBrdf * sunRadiance;
             }
 
-            // GTAO is applied only to the sky term in Process.GTAOCompose. Direct sun
-            // (already CSM-shadowed) and emissive lighting remain untouched.
+            // GTAO is applied only to the sky term in Process.GTAOCompose. Direct sun,
+            // specular, and emissive lighting remain untouched.
             color = float4(direct, 1.0f);
         }
     }
@@ -228,8 +226,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
     const bool hovered = (hitNode.reserved2 & 1u) != 0;
     const bool locked = (hitNode.reserved2 & 2u) != 0;
     const bool danger = (hitNode.reserved2 & 4u) != 0;
-    Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, color);
-    Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR).Store(pixel, specularColor);
+    Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(
+        pixel, float4(color.rgb + specularColor.rgb, color.a));
     Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT).Store(pixel, ambientColor);
     Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(pixel, Common.EncodeObjectId(hitNode.instanceId, selected, hovered, locked, danger));
     Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(pixel, ndcDepth);
