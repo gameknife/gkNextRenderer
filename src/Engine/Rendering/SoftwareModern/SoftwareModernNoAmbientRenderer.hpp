@@ -29,6 +29,7 @@ namespace Vulkan::SoftwareModernNoAmbient
         void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
         void ReloadShaders(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles) override;
         FRendererRequirements Requirements() const override { return GetRendererRequirements(ERT_SoftwareModernNoAmbient); }
+        bool RequiresObjectIdHistory() const override { return false; }
 
     private:
         std::unique_ptr<PipelineCommon::ZeroBindPipeline> shadingPipeline_;

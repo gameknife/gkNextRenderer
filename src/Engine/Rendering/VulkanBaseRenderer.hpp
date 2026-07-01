@@ -469,6 +469,7 @@ namespace Vulkan
 		virtual void BeforeNextFrame() {};
 		virtual void ReloadShaders(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles) {};
 		virtual FRendererRequirements Requirements() const { return {}; }
+		virtual bool RequiresObjectIdHistory() const { return true; }
 		
 		VulkanBaseRenderer& baseRender_;
 		template<typename T>
