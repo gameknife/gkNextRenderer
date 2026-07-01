@@ -391,6 +391,7 @@ void UserInterface::OnCreateSurface(const Vulkan::SwapChain& swapChain, const Vu
 
 void UserInterface::OnDestroySurface()
 {
+    hasPreparedDrawData_ = false;
     DestroyUiPipeline();
     renderPass_.reset();
     uiFrameBuffers_.clear();
@@ -898,15 +899,8 @@ void UserInterface::Render(const Statistics& statistics, VulkanGpuTimer* gpuTime
     }
 }
 
-void UserInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx,
-                               bool suppressAllUi)
+void UserInterface::PrepareDrawData()
 {
-    if (suppressAllUi)
-    {
-        ImGui::EndFrame();
-        return;
-    }
-
     if (GetEngine().GetEngineStatus() == NextRenderer::EApplicationStatus::Loading)
         DrawIndicator(GetEngine().GetTotalFrames());
 
@@ -918,6 +912,16 @@ void UserInterface::PostRender(VkCommandBuffer commandBuffer, const Vulkan::Swap
     auxDrawRequest_.clear();
 
     ImGui::Render();
+    hasPreparedDrawData_ = ImGui::GetDrawData() != nullptr;
+}
+
+void UserInterface::RenderPreparedDrawData(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain,
+                                           uint32_t imageIdx, bool suppressAllUi)
+{
+    if (suppressAllUi || !hasPreparedDrawData_)
+    {
+        return;
+    }
 
     VkRenderPassBeginInfo renderPassInfo = {};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;

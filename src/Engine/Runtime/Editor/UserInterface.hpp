@@ -55,8 +55,9 @@ public:
 	void PreRender();
 	void Render(const Statistics& statistics, VulkanGpuTimer* gpuTimer, Assets::Scene* scene,
 	            bool suppressStatisticsOverlay = false);
-	void PostRender(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx,
-	                bool suppressAllUi = false);
+	void PrepareDrawData();
+	void RenderPreparedDrawData(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx,
+	                            bool suppressAllUi = false);
 	void HandleEvent(const SDL_Event* event);
 
 	bool WantsToCaptureKeyboard() const;
@@ -119,6 +120,7 @@ private:
 	std::unordered_map<std::string, ImVec2> uiTexturePixelSizeCache_;
 	uint32_t fontTextureIndex_ = UINT32_MAX;
 	std::vector< std::function<void ()> > auxDrawRequest_;
+	bool hasPreparedDrawData_ = false;
 	NextEngine* engine_;
 };
 
