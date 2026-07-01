@@ -11,11 +11,14 @@
 using json = nlohmann::json;
 
 #define _USE_MATH_DEFINES
+#include <algorithm>
 #include <filesystem>
 #include <math.h>
+#include <utility>
 
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/ScreenShot.hpp"
+#include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Vulkan/Device.hpp"
 
@@ -25,13 +28,76 @@ using json = nlohmann::json;
 #include "avif/avif.h"
 #endif
 
-BenchMarker::BenchMarker()
+namespace
 {
-    std::time_t now = std::time(nullptr);
-    std::string reportFilename = fmt::format("report_{:%d-%m-%Y-%H-%M-%S}.csv", *std::localtime(&now));
+    constexpr double kBytesToMiB = 1.0 / (1024.0 * 1024.0);
+
+    std::string MakeDefaultReportFilename()
+    {
+        std::time_t now = std::time(nullptr);
+        return fmt::format("report_{:%d-%m-%Y-%H-%M-%S}.csv", *std::localtime(&now));
+    }
+
+    double DeviceLocalVramMiB(const Vulkan::MemoryStatsSnapshot& memoryStats)
+    {
+        const VkDeviceSize bytes = memoryStats.deviceLocalUsageBytes != 0
+                                       ? memoryStats.deviceLocalUsageBytes
+                                       : memoryStats.deviceLocalAllocationBytes;
+        return static_cast<double>(bytes) * kBytesToMiB;
+    }
+
+    std::string GetPhysicalDeviceDriverName(VkPhysicalDevice physicalDevice)
+    {
+        if (physicalDevice == VK_NULL_HANDLE)
+        {
+            return {};
+        }
+
+        VkPhysicalDeviceDriverProperties driverProperties{};
+        driverProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
+
+        VkPhysicalDeviceProperties2 deviceProperties{};
+        deviceProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        deviceProperties.pNext = &driverProperties;
+        vkGetPhysicalDeviceProperties2(physicalDevice, &deviceProperties);
+
+        return driverProperties.driverName[0] != '\0' ? std::string(driverProperties.driverName) : std::string{};
+    }
+
+    std::string DriverVersionToString(const VkPhysicalDeviceProperties& properties)
+    {
+        return to_string(Vulkan::Version(properties.driverVersion, properties.vendorID));
+    }
+
+    std::string GetPhysicalDeviceDriverInfo(VkPhysicalDevice physicalDevice, const VkPhysicalDeviceProperties& properties)
+    {
+        const std::string driverName = GetPhysicalDeviceDriverName(physicalDevice);
+        const std::string driverVersion = DriverVersionToString(properties);
+        return driverName.empty() ? driverVersion : fmt::format("{} {}", driverName, driverVersion);
+    }
+
+    double SafeAverage(double total, uint32_t count)
+    {
+        return count > 0 ? total / static_cast<double>(count) : 0.0;
+    }
+}
+
+BenchMarker::BenchMarker() : BenchMarker(FBenchmarkSettings{})
+{
+}
+
+BenchMarker::BenchMarker(FBenchmarkSettings settings) : settings_(std::move(settings))
+{
+    const std::string reportFilename = settings_.outputPath.empty() ? MakeDefaultReportFilename() : settings_.outputPath;
+    const std::filesystem::path reportPath(reportFilename);
+    if (reportPath.has_parent_path())
+    {
+        std::filesystem::create_directories(reportPath.parent_path());
+    }
 
     benchmarkCsvReportFile.open(reportFilename);
-    benchmarkCsvReportFile << fmt::format("#,scene,FPS\n");
+    benchmarkCsvReportFile << fmt::format(
+        "#,scene,renderer,gpu,driver,resolution,frame_time_ms,gpu_time_ms,fps,vram_mib,draw_calls_actual,draw_calls_total,tris_actual,tris_total,frames,duration_s,dlss,fsr,denoiser,super_resolution\n");
 }
 
 BenchMarker::~BenchMarker() { benchmarkCsvReportFile.close(); }
@@ -40,7 +106,18 @@ void BenchMarker::OnSceneStart(double nowInSeconds)
 {
     periodTotalFrames_ = 0;
     benchmarkTotalFrames_ = 0;
+    gpuSampleCount_ = 0;
+    gpuDrivenSampleCount_ = 0;
+    frameTimeTotalMilliseconds_ = 0.0;
+    gpuTimeTotalMilliseconds_ = 0.0;
+    drawCallsActualTotal_ = 0.0;
+    drawCallsTotal_ = 0.0;
+    trisActualTotal_ = 0.0;
+    trisTotal_ = 0.0;
     sceneInitialTime_ = nowInSeconds;
+    measurementInitialTime_ = 0.0;
+    previousMeasurementTime_ = 0.0;
+    measurementStarted_ = false;
 }
 
 bool BenchMarker::OnTick(double nowInSeconds, Vulkan::VulkanBaseRenderer* renderer)
@@ -68,44 +145,115 @@ bool BenchMarker::OnTick(double nowInSeconds, Vulkan::VulkanBaseRenderer* render
         }
 
         periodTotalFrames_++;
-        benchmarkTotalFrames_++;
     }
 
-    // If in benchmark mode, bail out from the scene if we've reached the time or sample limit.
+    const double sceneElapsedSeconds = time_ - sceneInitialTime_;
+    if (sceneElapsedSeconds < settings_.warmupSeconds)
     {
-        const bool timeLimitReached = periodTotalFrames_ != 0 && time_ - sceneInitialTime_ > 10.0;
-        if (timeLimitReached)
+        return false;
+    }
+
+    if (!measurementStarted_)
+    {
+        measurementStarted_ = true;
+        measurementInitialTime_ = time_;
+        previousMeasurementTime_ = time_;
+        periodInitialTime_ = time_;
+        periodTotalFrames_ = 0;
+        benchmarkTotalFrames_ = 0;
+        return false;
+    }
+
+    const double frameSeconds = std::max(0.0, time_ - previousMeasurementTime_);
+    previousMeasurementTime_ = time_;
+    frameTimeTotalMilliseconds_ += frameSeconds * 1000.0;
+    benchmarkTotalFrames_++;
+
+    if (renderer != nullptr && renderer->GpuTimer() != nullptr)
+    {
+        const float gpuMilliseconds = renderer->GpuTimer()->GetGpuTime("[gpu]");
+        if (gpuMilliseconds > 0.0f)
         {
-            return true;
+            gpuTimeTotalMilliseconds_ += gpuMilliseconds;
+            gpuSampleCount_++;
         }
     }
-    return false;
+    if (renderer != nullptr)
+    {
+        const Assets::GPUDrivenStat& stat = renderer->GetScene().GetGpuDrivenStat();
+        const uint32_t drawCallsActual = stat.ProcessedCount > stat.CulledCount
+                                             ? stat.ProcessedCount - stat.CulledCount
+                                             : 0u;
+        const uint32_t trisActual = stat.TriangleCount > stat.CulledTriangleCount
+                                        ? stat.TriangleCount - stat.CulledTriangleCount
+                                        : 0u;
+        drawCallsActualTotal_ += static_cast<double>(drawCallsActual);
+        drawCallsTotal_ += static_cast<double>(stat.ProcessedCount);
+        trisActualTotal_ += static_cast<double>(trisActual);
+        trisTotal_ += static_cast<double>(stat.TriangleCount);
+        gpuDrivenSampleCount_++;
+    }
+
+    return time_ - measurementInitialTime_ >= settings_.durationSeconds;
 }
 
 void BenchMarker::OnReport(Vulkan::VulkanBaseRenderer* renderer, const std::string& sceneName)
 {
-    const double totalTime = time_ - sceneInitialTime_;
-
-    double fps = benchmarkTotalFrames_ / totalTime;
-    // SPDLOG_INFO("totalTime {:%H:%M:%S} fps {:.3f}", std::chrono::seconds(static_cast<long long>(totalTime)), fps);
-    Report(renderer, static_cast<int>(floor(fps)),
-           std::filesystem::path(sceneName).filename().replace_extension().string(), false, GOption->SaveFile);
+    Report(renderer, std::filesystem::path(sceneName).filename().replace_extension().string(), false, GOption->SaveFile);
 }
 
-inline const std::string VersionToString(const uint32_t version)
-{
-    return fmt::format("{}.{}.{}", VK_VERSION_MAJOR(version), VK_VERSION_MINOR(version), VK_VERSION_PATCH(version));
-}
-
-void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, int fps, const std::string& sceneName, bool uploadScreen,
+void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, const std::string& sceneName, bool uploadScreen,
                          bool saveScreen)
 {
+    const double totalTime = std::max(0.000001, time_ - measurementInitialTime_);
+    const double fps = static_cast<double>(benchmarkTotalFrames_) / totalTime;
+    const double frameTimeMilliseconds = benchmarkTotalFrames_ > 0
+                                             ? frameTimeTotalMilliseconds_ / static_cast<double>(benchmarkTotalFrames_)
+                                             : 0.0;
+    const double gpuTimeMilliseconds = gpuSampleCount_ > 0
+                                           ? gpuTimeTotalMilliseconds_ / static_cast<double>(gpuSampleCount_)
+                                           : 0.0;
+    const double drawCallsActual = SafeAverage(drawCallsActualTotal_, gpuDrivenSampleCount_);
+    const double drawCallsTotal = SafeAverage(drawCallsTotal_, gpuDrivenSampleCount_);
+    const double trisActual = SafeAverage(trisActualTotal_, gpuDrivenSampleCount_);
+    const double trisTotal = SafeAverage(trisTotal_, gpuDrivenSampleCount_);
+    const Runtime::Config::UserSettings& userSettings = NextEngine::GetInstance()->GetUserSettings();
+    const Vulkan::MemoryStatsSnapshot memoryStats = renderer->Device().CaptureMemoryStats(false);
+    const double vramMiB = DeviceLocalVramMiB(memoryStats);
+    const std::string resolution = fmt::format("{}x{}", GOption->Width, GOption->Height);
+    const std::string rendererName = Vulkan::GetRendererName(renderer->CurrentLogicRendererType());
+
     // report file
-    benchmarkCsvReportFile << fmt::format("{},{},{}\n", benchUnit_++, sceneName, fps);
-    benchmarkCsvReportFile.flush();
-    // screenshot
     VkPhysicalDeviceProperties deviceProp1{};
     vkGetPhysicalDeviceProperties(renderer->Device().PhysicalDevice(), &deviceProp1);
+    const std::string driverInfo = GetPhysicalDeviceDriverInfo(renderer->Device().PhysicalDevice(), deviceProp1);
+
+    benchmarkCsvReportFile << fmt::format("{},{},{},{},{},{},{:.3f},{:.3f},{:.2f},{:.1f},{:.2f},{:.2f},{:.2f},{:.2f},{},{:.3f},{},{},{},{}\n",
+                                          benchUnit_++,
+                                          sceneName,
+                                          rendererName,
+                                          deviceProp1.deviceName,
+                                          driverInfo,
+                                          resolution,
+                                          frameTimeMilliseconds,
+                                          gpuTimeMilliseconds,
+                                          fps,
+                                          vramMiB,
+                                          drawCallsActual,
+                                          drawCallsTotal,
+                                          trisActual,
+                                          trisTotal,
+                                          benchmarkTotalFrames_,
+                                          totalTime,
+                                          userSettings.DLSS ? 1 : 0,
+                                          userSettings.FSR ? 1 : 0,
+                                          userSettings.Denoiser ? 1 : 0,
+                                          userSettings.SuperResolution);
+    benchmarkCsvReportFile.flush();
+
+    SPDLOG_INFO("[Benchmark] scene={} renderer={} gpu={} driver={} frame={:.3f}ms gpu={:.3f}ms fps={:.2f} vram={:.1f}MiB draw={:.2f}/{:.2f} tris={:.2f}/{:.2f}",
+                sceneName, rendererName, deviceProp1.deviceName, driverInfo, frameTimeMilliseconds,
+                gpuTimeMilliseconds, fps, vramMiB, drawCallsActual, drawCallsTotal, trisActual, trisTotal);
 
     std::string imgEncoded{};
     if (uploadScreen || saveScreen)
@@ -119,8 +267,15 @@ void BenchMarker::Report(Vulkan::VulkanBaseRenderer* renderer, int fps, const st
         json myJson = json{{"renderer", renderer->StaticClass()},
                            {"scene", sceneName},
                            {"gpu", std::string(deviceProp1.deviceName)},
-                           {"driver", VersionToString(deviceProp1.driverVersion)},
+                           {"driver", driverInfo},
                            {"fps", fps},
+                           {"frame_time_ms", frameTimeMilliseconds},
+                           {"gpu_time_ms", gpuTimeMilliseconds},
+                           {"vram_mib", vramMiB},
+                           {"draw_calls_actual", drawCallsActual},
+                           {"draw_calls_total", drawCallsTotal},
+                           {"tris_actual", trisActual},
+                           {"tris_total", trisTotal},
                            {"version", NextRenderer::GetBuildVersion()},
                            {"screenshot", imgEncoded}};
         std::string jsonStr = myJson.dump();

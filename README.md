@@ -62,13 +62,19 @@ gkNextEngine 是一个基于现代 C++20 与 Vulkan 的跨平台 3D 游戏引擎
 
 | 场景 | 分辨率 | 渲染管线 | GPU | 帧时间 (ms) | FPS | 显存 |
 |------|--------|----------|-----|------------|-----|------|
-| playground | 1920×1080 | PathTracing (1spp + temporal) | _待测_ | _待测_ | _待测_ | _待测_ |
-| living room | 1920×1080 | PathTracing (1spp + temporal) | _待测_ | _待测_ | _待测_ | _待测_ |
-| lego (LDraw) | 1920×1080 | SoftwareModern | _待测_ | _待测_ | _待测_ | _待测_ |
-| luxball | 1920×1080 | SoftwareTracing | _待测_ | _待测_ | _待测_ | _待测_ |
-| brickplayer | 1920×1080 | Hybrid | _待测_ | _待测_ | _待测_ | _待测_ |
+| playground | 1920×1080 | PathTracing (4spp + temporal) | _待测_ | _待测_ | _待测_ | _待测_ |
+| living room | 1920×1080 | PathTracing (4spp + temporal) | _待测_ | _待测_ | _待测_ | _待测_ |
+| lego (LDraw) | 1920×1080 | SoftwareModernNoAmbient | _待测_ | _待测_ | _待测_ | _待测_ |
+| luxball | 1920×1080 | SoftwareModernNoAmbient | _待测_ | _待测_ | _待测_ | _待测_ |
+| brickplayer | 1920×1080 | SoftwareModernNoAmbient | _待测_ | _待测_ | _待测_ | _待测_ |
 
-> 以上数据可由 `gkNextBenchmark`（静态 / 动态场景基准）与 `gkNextVisualTest` 在统一硬件上复现。
+> 以上数据可用 `gkNextMotionBenchmark` 在统一硬件 / 驱动下复现；可选模型先执行 `./gnb paks fetch`。启动时只传一个编排 JSON：
+>
+> ```bash
+> ./gnb run gkNextMotionBenchmark --benchmark-config assets/configs/motion_benchmark.example.json
+> ```
+>
+> CSV 会输出 `frame_time_ms`、`gpu_time_ms`、`fps`、`vram_mib`、GPU / driver、实际 renderer、分辨率，以及 GPU cull 后的 `draw_calls_actual / draw_calls_total`、`tris_actual / tris_total`，可直接填入上表。
 
 ### 内置 Profiler
 

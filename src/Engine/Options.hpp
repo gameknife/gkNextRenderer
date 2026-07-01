@@ -67,6 +67,8 @@ public:
 	std::vector<std::string> CVarOverrides{};
 	std::string locale{};
 
+	// Benchmark options used by gkNextMotionBenchmark.
+	std::string BenchmarkConfig{};
 
 	
 	// Scene options.

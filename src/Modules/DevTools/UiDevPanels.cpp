@@ -60,6 +60,18 @@ namespace
 
         return driverProperties.driverName[0] != '\0' ? std::string(driverProperties.driverName) : std::string{};
     }
+
+    std::string DriverVersionToString(const VkPhysicalDeviceProperties& properties)
+    {
+        return to_string(Vulkan::Version(properties.driverVersion, properties.vendorID));
+    }
+
+    std::string GetPhysicalDeviceDriverInfo(VkPhysicalDevice physicalDevice, const VkPhysicalDeviceProperties& properties)
+    {
+        const std::string driverName = GetPhysicalDeviceDriverName(physicalDevice);
+        const std::string driverVersion = DriverVersionToString(properties);
+        return driverName.empty() ? driverVersion : fmt::format("{} {}", driverName, driverVersion);
+    }
 }
 
 FUiDevPanels& FUiDevPanels::Get()
@@ -631,7 +643,7 @@ void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, VulkanGpuTi
     {
         const Vulkan::Device& device = NextEngine::GetInstance()->GetRenderer().Device();
         const VkPhysicalDeviceProperties deviceProperties = device.DeviceProperties();
-        const std::string driverName = GetPhysicalDeviceDriverName(device.PhysicalDevice());
+        const std::string driverName = GetPhysicalDeviceDriverInfo(device.PhysicalDevice(), deviceProperties);
 
         const ImVec4 fpsColor = statistics.FrameRate > 55.0f ? colGood
             : (statistics.FrameRate > 30.0f ? colWarn : colBad);
