@@ -1666,7 +1666,13 @@ namespace Vulkan
 
             // Runtime node creation can increase the expanded primitive count. Resize only after
             // the previous queue submission has completed so no in-flight work retains old addresses.
-            GetScene().EnsureGpuDrivenBufferCapacity(*ctx_.commandPool);
+            {
+                SCOPED_CPU_TIMER("prepare gpudriven");
+                if (GetScene().EnsureGpuDrivenBufferCapacity(*ctx_.commandPool))
+                {
+                    AfterUpdateScene();
+                }
+            }
 
             {
                 SCOPED_CPU_TIMER("update uniform");

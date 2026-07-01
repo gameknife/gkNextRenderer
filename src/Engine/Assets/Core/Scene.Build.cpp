@@ -25,46 +25,17 @@
 #include <algorithm>
 #include <cmath>
 #include <entt/meta/factory.hpp>
+#include <limits>
 
 namespace Assets
 {
-    uint32_t Scene::ComputeRequiredGpuDrivenTriangleCapacity() const
+    bool Scene::EnsureGpuDrivenBufferCapacity(Vulkan::CommandPool& commandPool)
     {
-        uint64_t expandedTriangleCapacity = 0;
-        for (const auto& node : nodes_)
-        {
-            const auto* render = node->GetComponentPtr<Runtime::RenderComponent>();
-            if (!render || !render->IsDrawable())
-            {
-                continue;
-            }
-
-            const uint32_t modelId = render->GetModelId();
-            const Model* model = GetModel(modelId);
-            if (!model)
-            {
-                continue;
-            }
-
-            for (uint32_t section = 0; section < model->SectionCount(); ++section)
-            {
-                expandedTriangleCapacity += offsets_[modelId * 10 + section].indexCount / 3u;
-            }
-        }
-
-        if (expandedTriangleCapacity > std::numeric_limits<uint32_t>::max())
-        {
-            throw std::overflow_error("GPU-driven scene triangle capacity exceeds uint32_t");
-        }
-        return std::max<uint32_t>(1u, static_cast<uint32_t>(expandedTriangleCapacity));
-    }
-
-    void Scene::EnsureGpuDrivenBufferCapacity(Vulkan::CommandPool& commandPool)
-    {
-        const uint32_t requiredCapacity = ComputeRequiredGpuDrivenTriangleCapacity();
+        const bool updatedNodeProxys = UpdateNodesGpuDriven();
+        const uint32_t requiredCapacity = requiredGpuDrivenTriangleCapacity_;
         if (requiredCapacity <= maxSceneTriangles_)
         {
-            return;
+            return updatedNodeProxys;
         }
 
         const uint64_t doubledCapacity = static_cast<uint64_t>(maxSceneTriangles_) * 2u;
@@ -99,6 +70,7 @@ namespace Assets
             commandPool, "SoftMeshShaderResources", flags, resources,
             softMeshShaderResourcesBuffer_, softMeshShaderResourcesBufferMemory_);
         SPDLOG_INFO("GPU-driven triangle capacity grown to {}", maxSceneTriangles_);
+        return updatedNodeProxys;
     }
 
     void Scene::Reload(std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models,
@@ -510,7 +482,9 @@ namespace Assets
         // The GPU-driven primitive buffers contain expanded triangles per instance, not just
         // the unique model geometry stored in the index buffer. Sizing them from indicesCount_
         // silently dropped later instances when several nodes shared a model.
-        maxSceneTriangles_ = ComputeRequiredGpuDrivenTriangleCapacity();
+        sceneDirty_ = true;
+        UpdateNodesGpuDriven();
+        maxSceneTriangles_ = requiredGpuDrivenTriangleCapacity_;
 
         const VkBufferUsageFlags softMeshShaderFlags =
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;

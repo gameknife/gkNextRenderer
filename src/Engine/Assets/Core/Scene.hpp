@@ -72,7 +72,7 @@ namespace Assets
                                      std::vector<LightObject>& lights, std::vector<AnimationTrack>& tracks,
                                      const std::vector<Skeleton>& skeletons);
         void RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing);
-        void EnsureGpuDrivenBufferCapacity(Vulkan::CommandPool& commandPool);
+        bool EnsureGpuDrivenBufferCapacity(Vulkan::CommandPool& commandPool);
         void CleanUp();
         // void RebuildBVH();
 
@@ -331,6 +331,7 @@ namespace Assets
         uint32_t verticeCount_{};
         uint32_t indirectDrawBatchCount_{};
         uint32_t maxSceneTriangles_{1};
+        uint32_t requiredGpuDrivenTriangleCapacity_{1};
 
         mutable SceneSelectionState selectionState_;
         mutable uint32_t hoveredId_ = SceneSelectionState::invalidNodeId;
@@ -363,7 +364,6 @@ namespace Assets
         VkDeviceAddress skinnedVerticesAddr_ = 0;
         VkDeviceAddress jointMatricesAddr_ = 0;
 
-        uint32_t ComputeRequiredGpuDrivenTriangleCapacity() const;
         Assets::GPUScene BuildGPUScene(uint32_t imageIndex) const;
     };
 } // namespace Assets
