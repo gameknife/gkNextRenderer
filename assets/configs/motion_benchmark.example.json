@@ -1,0 +1,30 @@
+{
+  "output": "motion_benchmark_report.csv",
+  "resolution": {
+    "width": 1280,
+    "height": 720
+  },
+  "warmupSeconds": 3.0,
+  "durationSeconds": 3.0,
+  "cvars": {
+    "r.samples": 4,
+    "r.temporalFrames": 16,
+    "r.denoiser": false,
+    "r.dlss": false,
+    "r.fsr": false,
+    "r.superResolution": 4,
+    "r.gtao.enable": false,
+    "sys.tickAnimation": false
+  },
+  "scenes": [
+    "assets/models/pbr.glb",
+    "assets/models/playground.glb",
+    "assets/models/livingroom.glb",
+    "assets/models/castle.glb",
+    "assets/models/complex.glb"
+  ],
+  "renderers": [
+    "PathTracing",
+    "SoftwareModernNoAmbient"
+  ]
+}
