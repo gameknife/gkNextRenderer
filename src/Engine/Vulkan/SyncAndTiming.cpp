@@ -2,6 +2,7 @@
 #include "Engine/Vulkan/Device.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 #if WITH_SUPERLUMINAL
 #include "Superluminal/PerformanceAPI.h"
@@ -154,7 +155,15 @@ VulkanGpuTimer::VulkanGpuTimer(const Vulkan::Device& device, uint32_t totalCount
     time_stamps.resize(totalCount);
     timeStampPeriod_ = prop.limits.timestampPeriod;
 
-    if (timeStampPeriod_ == 0)
+    const auto queueFamilies = Vulkan::GetEnumerateVector(device_.PhysicalDevice(), vkGetPhysicalDeviceQueueFamilyProperties);
+    if (device_.GraphicsFamilyIndex() >= queueFamilies.size())
+    {
+        valid_ = false;
+        return;
+    }
+
+    timestampValidBits_ = std::min(queueFamilies[device_.GraphicsFamilyIndex()].timestampValidBits, 64u);
+    if (timeStampPeriod_ == 0 || timestampValidBits_ == 0)
     {
         valid_ = false;
         return;
@@ -238,15 +247,25 @@ void VulkanGpuTimer::FrameEnd(VkCommandBuffer commandBuffer)
     {
         return;
     }
-    vkGetQueryPoolResults(
+    const VkResult result = vkGetQueryPoolResults(
         device_.Handle(),
         query_pool_timestamps,
         0,
         queryIdx,
-        time_stamps.size() * sizeof(uint64_t),
+        static_cast<size_t>(queryIdx) * sizeof(uint64_t),
         time_stamps.data(),
         sizeof(uint64_t),
         VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+    if (result != VK_SUCCESS)
+    {
+        static bool queryWarningLogged = false;
+        if (!queryWarningLogged)
+        {
+            queryWarningLogged = true;
+            SPDLOG_WARN("GPU timer query result unavailable: {}", static_cast<int>(result));
+        }
+        return;
+    }
 
     for (auto& record : gpuTimerRecords_)
     {
@@ -254,8 +273,15 @@ void VulkanGpuTimer::FrameEnd(VkCommandBuffer commandBuffer)
         {
             continue;
         }
-        record.elapsedMilliseconds =
-            (time_stamps[record.endQuery] - time_stamps[record.startQuery]) * timeStampPeriod_ * 1e-6f;
+        float elapsedMilliseconds = 0.0f;
+        if (TryCalculateElapsedMilliseconds(time_stamps[record.startQuery],
+                                            time_stamps[record.endQuery],
+                                            timeStampPeriod_,
+                                            timestampValidBits_,
+                                            elapsedMilliseconds))
+        {
+            record.elapsedMilliseconds = elapsedMilliseconds;
+        }
     }
 #if WITH_SUPERLUMINAL
     SubmitGpuTimerReplayFrame();
@@ -423,6 +449,45 @@ std::vector<VulkanGpuTimer::TimerStat> VulkanGpuTimer::FetchAllCpuTimes(int maxS
         }
     }
     return result;
+}
+
+bool VulkanGpuTimer::TryCalculateElapsedMilliseconds(uint64_t startTimestamp, uint64_t endTimestamp,
+                                                     float timestampPeriod, uint32_t timestampValidBits,
+                                                     float& outMilliseconds)
+{
+    outMilliseconds = 0.0f;
+    if (timestampPeriod <= 0.0f || timestampValidBits == 0)
+    {
+        return false;
+    }
+
+    const uint32_t validBits = std::min(timestampValidBits, 64u);
+    const uint64_t mask = validBits == 64 ? std::numeric_limits<uint64_t>::max() : ((uint64_t{1} << validBits) - 1);
+    startTimestamp &= mask;
+    endTimestamp &= mask;
+
+    uint64_t elapsedTicks = 0;
+    if (endTimestamp >= startTimestamp)
+    {
+        elapsedTicks = endTimestamp - startTimestamp;
+    }
+    else if (validBits < 64)
+    {
+        elapsedTicks = (mask - startTimestamp) + endTimestamp + 1;
+    }
+    else
+    {
+        return false;
+    }
+
+    const double milliseconds = static_cast<double>(elapsedTicks) * static_cast<double>(timestampPeriod) * 1e-6;
+    if (!std::isfinite(milliseconds) || milliseconds > static_cast<double>(std::numeric_limits<float>::max()))
+    {
+        return false;
+    }
+
+    outMilliseconds = static_cast<float>(milliseconds);
+    return true;
 }
 
 std::string VulkanGpuTimer::BuildGpuStableKey(const std::string& name)
