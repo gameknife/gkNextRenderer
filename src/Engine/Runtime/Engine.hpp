@@ -252,6 +252,7 @@ private:
     void OnRendererCreateSwapChain();
     void OnRendererDeleteSwapChain();
     void OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+    void OnRendererAfterSubmit();
     void OnRendererBeforeNextFrame();
 
     // Scene helpers

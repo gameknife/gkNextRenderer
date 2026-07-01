@@ -1716,19 +1716,11 @@ namespace Vulkan
 
                 if (delegates_.postRender)
                 {
-                    SCOPED_GPU_TIMER("imgui");
+                    SCOPED_GPU_TIMER("ui");
                     delegates_.postRender(commandBuffer, frame_.currentImageIndex);
                 }
             }
             frame_.commandBuffers->End(frame_.currentFrame);
-
-            {
-                SCOPED_CPU_TIMER("update nodes");
-                if (GetScene().UpdateNodes())
-                {
-                    AfterUpdateScene();
-                }
-            }
 
             VkSubmitInfo submitInfo = {};
             submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1792,6 +1784,20 @@ namespace Vulkan
                         upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::RenderSubmitEnd,
                                              frame_.streamlineFrameToken);
                     }
+                }
+            }
+            
+            if (delegates_.afterSubmit)
+            {
+                SCOPED_CPU_TIMER("after submit");
+                delegates_.afterSubmit();
+            }
+
+            {
+                SCOPED_CPU_TIMER("update nodes");
+                if (GetScene().UpdateNodes())
+                {
+                    AfterUpdateScene();
                 }
             }
 

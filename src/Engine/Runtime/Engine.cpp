@@ -603,6 +603,7 @@ void NextEngine::Start()
     { return GetUniformBufferObject(offset, extend); };
     rendererDelegates.postRender = [this](VkCommandBuffer commandBuffer, uint32_t imageIndex) -> void
     { OnRendererPostRender(commandBuffer, imageIndex); };
+    rendererDelegates.afterSubmit = [this]() -> void { OnRendererAfterSubmit(); };
 
     renderer_->Start();
     startupProfile.Mark("renderer started");
@@ -1327,7 +1328,34 @@ void NextEngine::OnRendererDeleteSwapChain()
 
 void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
-    SCOPED_CPU_TIMER("ui");
+    SCOPED_CPU_TIMER("post render");
+    const bool suppressAllUi = screenShot_.hasPending && !screenShot_.pending.includeUi &&
+        (!gameInstance_ || !gameInstance_->ShouldRenderUiDuringScreenshot());
+
+    if (userInterface_)
+    {
+        SCOPED_CPU_TIMER("imgui record");
+        userInterface_->RenderPreparedDrawData(commandBuffer, renderer_->SwapChain(), imageIndex, suppressAllUi);
+    }
+
+    if (!renderFrameConsumers_.empty())
+    {
+        SCOPED_CPU_TIMER("frame consumers");
+        for (const auto& consumer : renderFrameConsumers_)
+        {
+            consumer->RecordFrame(commandBuffer, imageIndex, *renderer_);
+        }
+    }
+}
+
+void NextEngine::OnRendererAfterSubmit()
+{
+    if (!userInterface_)
+    {
+        return;
+    }
+
+    SCOPED_CPU_TIMER("ui prepare");
     static double lastTimestamp = 0.0;
     double now = GetWindow().GetTime();
 
@@ -1374,14 +1402,11 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
         SCOPED_CPU_TIMER("game ui");
         uiHandled = gameInstance_->OnRenderUI();
     }
-    const bool suppressAllUi = screenShot_.hasPending && !screenShot_.pending.includeUi &&
-        (!gameInstance_ || !gameInstance_->ShouldRenderUiDuringScreenshot());
-    if (!suppressAllUi && uiOverlay_)
+    if (uiOverlay_)
     {
         SCOPED_CPU_TIMER("overlay render");
         uiOverlay_->RenderFrame();
     }
-    if (!suppressAllUi)
     {
         if (config_.showFlags.DebugPhysicsOverlay)
         {
@@ -1406,34 +1431,25 @@ void NextEngine::OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t im
                                                  gameInstance_->GetGraphicsDebugPanelTopOffset());
         }
     }
-    if (!uiHandled && !suppressAllUi)
+    if (!uiHandled)
     {
         SCOPED_CPU_TIMER("overlay ui");
         userInterface_->Render(stats, renderer_->GpuTimer(), scene_.get(), config_.showFlags.DebugProfileOverlay);
     }
-    if (!suppressAllUi && debugUiProvider_)
+    if (debugUiProvider_)
     {
         SCOPED_CPU_TIMER("graphics debug ui");
         debugUiProvider_->DrawGraphicsPanel(*this, config_.showFlags.DebugGraphicsPanel,
                                             gameInstance_->GetGraphicsDebugPanelTopOffset());
     }
-    if (!suppressAllUi && agentDriver_)
+    if (agentDriver_)
     {
         SCOPED_CPU_TIMER("agent overlay");
         agentDriver_->DrawStatusOverlay();
     }
     {
-        SCOPED_CPU_TIMER("imgui submit");
-        userInterface_->PostRender(commandBuffer, renderer_->SwapChain(), imageIndex, suppressAllUi);
-    }
-
-    if (!renderFrameConsumers_.empty())
-    {
-        SCOPED_CPU_TIMER("frame consumers");
-        for (const auto& consumer : renderFrameConsumers_)
-        {
-            consumer->RecordFrame(commandBuffer, imageIndex, *renderer_);
-        }
+        SCOPED_CPU_TIMER("imgui prepare draw data");
+        userInterface_->PrepareDrawData();
     }
 }
 

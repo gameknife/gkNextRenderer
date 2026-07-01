@@ -188,6 +188,7 @@ namespace Vulkan
 			std::function<void()> beforeNextTick;
 			std::function<Assets::UniformBufferObject(VkOffset2D, VkExtent2D)> getUniformBufferObject;
 			std::function<void(VkCommandBuffer, uint32_t)> postRender;
+			std::function<void()> afterSubmit;
 		};
 		Delegates& GetDelegates() { return delegates_; }
 		const Delegates& GetDelegates() const { return delegates_; }
