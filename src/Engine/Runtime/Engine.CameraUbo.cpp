@@ -81,8 +81,10 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.SuperResolution = GOption->ReferenceMode ? 2 : config_.userSettings.SuperResolution;
 
     glm::mat4x4 projectionUnJit = ubo.Projection;
+    const bool noAmbientRenderer = renderer_->CurrentLogicRendererType() == Vulkan::ERT_SoftwareModernNoAmbient;
+    const bool enableTaa = config_.userSettings.TAA && !noAmbientRenderer;
 
-    if (config_.userSettings.TAA || config_.userSettings.DLSS)
+    if (enableTaa || config_.userSettings.DLSS)
     {
         const VkExtent2D renderExtent = renderer_->SwapChain().RenderExtent();
         const uint32_t jitterFrames = config_.userSettings.DLSS
@@ -190,7 +192,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.TotalFrames = frameState_.totalFrames;
     ubo.NumberOfSamples = config_.userSettings.NumberOfSamples;
     ubo.NumberOfBounces = config_.userSettings.NumberOfBounces;
-    ubo.TAA = config_.userSettings.TAA;
+    ubo.TAA = enableTaa;
     ubo.SunDirection = sunDirection;
     ubo.SunColor = glm::vec4(1, 1, 1, 0) * scene_->GetEnvSettings().SunIntensity;
     ubo.SkyIntensity = scene_->GetEnvSettings().SkyIntensity;
@@ -213,8 +215,9 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.HeatmapScale = config_.userSettings.HeatmapScale;
     ubo.DebugDraw_Lighting = config_.showFlags.DebugDraw_Lighting;
     ubo.DebugDrawPadding0 = 0;
-    ubo.TemporalFrames = progressiveRender_.enabled ? FProgressiveRenderState::TargetFrames
-                                                    : config_.userSettings.TemporalFrames;
+    ubo.TemporalFrames = noAmbientRenderer
+        ? 1u
+        : (progressiveRender_.enabled ? FProgressiveRenderState::TargetFrames : config_.userSettings.TemporalFrames);
     ubo.HDR = renderer_->SwapChain().IsHDR();
     ubo.HDROutputMode = renderer_->SwapChain().HDROutputMode();
 

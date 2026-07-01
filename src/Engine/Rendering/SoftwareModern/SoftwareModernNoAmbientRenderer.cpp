@@ -7,8 +7,6 @@
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 
-#include <array>
-
 namespace Vulkan::SoftwareModernNoAmbient
 {
     SoftwareModernNoAmbientRenderer::SoftwareModernNoAmbientRenderer(Vulkan::VulkanBaseRenderer& baseRender) :
@@ -28,20 +26,14 @@ namespace Vulkan::SoftwareModernNoAmbient
             SwapChain(), "assets/shaders/Core.SwModernNoAmbient.comp.slang.spv", GetScene()));
         gtaoPipeline_.reset(new PipelineCommon::ZeroBindPipeline(
             SwapChain(), "assets/shaders/Core.GTAO.comp.slang.spv", GetScene()));
-        gtaoComposePipeline_.reset(new PipelineCommon::ZeroBindPipeline(
-            SwapChain(), "assets/shaders/Process.GTAOCompose.comp.slang.spv", GetScene()));
-        accumulatePipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(
-            SwapChain(), "assets/shaders/Process.ReProjectSimple.comp.slang.spv", 12));
         composePipeline_.reset(new PipelineCommon::ZeroBindPipeline(
-            SwapChain(), "assets/shaders/Process.ComposeSimple.comp.slang.spv", GetScene()));
+            SwapChain(), "assets/shaders/Process.GTAOCompose.comp.slang.spv", GetScene()));
     }
 
     void SoftwareModernNoAmbientRenderer::DeleteSwapChain()
     {
         shadingPipeline_.reset();
         gtaoPipeline_.reset();
-        gtaoComposePipeline_.reset();
-        accumulatePipeline_.reset();
         composePipeline_.reset();
     }
 
@@ -57,14 +49,6 @@ namespace Vulkan::SoftwareModernNoAmbient
         {
             gtaoPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
         }
-        if (gtaoComposePipeline_)
-        {
-            gtaoComposePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-        if (accumulatePipeline_)
-        {
-            accumulatePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
         if (composePipeline_)
         {
             composePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
@@ -74,14 +58,10 @@ namespace Vulkan::SoftwareModernNoAmbient
     void SoftwareModernNoAmbientRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         baseRender_.InitializeBarriers(commandBuffer);
-        const int currentFrame = FrameCount();
-        const bool allowTemporal = baseRender_.ActiveRenderView().Schedule() != EViewSchedule::Transient;
-        auto& temporalResolve = baseRender_.ActiveRenderView().TemporalResolve();
-        const bool canUseHistory = allowTemporal && temporalResolve.IsHistoryValidForFrame(currentFrame);
+        const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
 
         {
             SCOPED_GPU_TIMER("shadingpass");
-            const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
             shadingPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
             vkCmdDispatch(commandBuffer,
                           Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
@@ -94,11 +74,9 @@ namespace Vulkan::SoftwareModernNoAmbient
                     VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
             };
             transition(Assets::Bindless::RT_SINGLE_DIFFUSE);
-            transition(Assets::Bindless::RT_SINGLE_SPECULAR);
             transition(Assets::Bindless::RT_OBJEDCTID_0);
             transition(Assets::Bindless::RT_PREV_DEPTHBUFFER);
             transition(Assets::Bindless::RT_MOTIONVECTOR);
-            transition(Assets::Bindless::RT_MOTIONMOMENT);
             transition(Assets::Bindless::RT_NORMAL);
             transition(Assets::Bindless::RT_AMBIENT);
         }
@@ -124,58 +102,12 @@ namespace Vulkan::SoftwareModernNoAmbient
             }
 
             {
-                SCOPED_GPU_TIMER("gtao compose pass");
-                const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
-                gtaoComposePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+                SCOPED_GPU_TIMER("simplecompose pass");
+                composePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
                 vkCmdDispatch(commandBuffer,
                               Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
                               Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
-                baseRender_.GetViewStorageImage(Assets::Bindless::RT_SINGLE_DIFFUSE)->InsertBarrier(
-                    commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                    VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
             }
-        }
-
-        {
-            SCOPED_GPU_TIMER("reproject pass");
-            const auto& settings = NextEngine::GetInstance()->GetUserSettings();
-            const bool dlssSuperResolutionActive = settings.DLSS && baseRender_.SupportDLSS();
-            const uint32_t taaEnabled = allowTemporal && settings.TAA && !dlssSuperResolutionActive ? 1u : 0u;
-            const std::array<uint32_t, 3> pushConst {
-                allowTemporal ? uint32_t(settings.TemporalFrames) : 1u,
-                canUseHistory ? 1u : 0u,
-                taaEnabled
-            };
-            const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
-            accumulatePipeline_->BindPipeline(commandBuffer, pushConst.data());
-            vkCmdDispatch(commandBuffer,
-                          Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
-                          Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
-
-            baseRender_.GetViewStorageImage(Assets::Bindless::RT_ACCUMLATE_DIFFUSE)->InsertBarrier(
-                commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-        }
-
-        {
-            SCOPED_GPU_TIMER("compose pass");
-            const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
-            composePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
-            vkCmdDispatch(commandBuffer,
-                          Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
-                          Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
-        }
-
-        {
-            SCOPED_GPU_TIMER("copy pass");
-            temporalResolve.CopyToHistory(baseRender_, commandBuffer, {
-                {Assets::Bindless::RT_ACCUMLATE_DIFFUSE, PipelineCommon::ETemporalChannel::Diffuse},
-            });
-        }
-
-        if (allowTemporal)
-        {
-            temporalResolve.MarkHistoryValid(currentFrame);
         }
     }
 }

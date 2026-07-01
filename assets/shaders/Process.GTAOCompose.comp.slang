@@ -1,10 +1,60 @@
 import Shader.Bindless;
 import Shader.Types;
 import Shader.GpuScene;
+import Shader.Tonemap;
+
+static const uint OBJECT_ID_FLAG_VALID = 0x80000000u;
+static const uint OBJECT_ID_FLAG_SELECTED = 0x40000000u;
+static const uint OBJECT_ID_FLAG_HOVERED = 0x20000000u;
+static const uint OBJECT_ID_FLAG_LOCKED = 0x10000000u;
+static const uint OBJECT_ID_FLAG_DANGER = 0x08000000u;
+static const float DIAGONAL_EDGE_WEIGHT = 0.70710678;
 
 bool IsSurfaceDepth(float depth)
 {
     return depth >= 0.0f && depth <= 1.0f;
+}
+
+bool HasObjectFlag(uint objectId, uint flag)
+{
+    return ((objectId & OBJECT_ID_FLAG_VALID) != 0) && ((objectId & flag) != 0);
+}
+
+uint SafeLoadObjectId(RWTexture2D<uint> objectImage, int2 ipos, int2 imageMax)
+{
+    return objectImage[clamp(ipos, int2(0, 0), imageMax)];
+}
+
+float ComputeEdgeStrengthTwoSided(RWTexture2D<uint> objectImage, int2 ipos, int2 imageMax, uint flag)
+{
+    bool centerFlagged = HasObjectFlag(SafeLoadObjectId(objectImage, ipos, imageMax), flag);
+
+    float edgeSum = 0.0;
+    float weightSum = 0.0;
+
+    bool x0 = HasObjectFlag(SafeLoadObjectId(objectImage, ipos + int2(1, 0), imageMax), flag);
+    bool x1 = HasObjectFlag(SafeLoadObjectId(objectImage, ipos + int2(-1, 0), imageMax), flag);
+    bool y0 = HasObjectFlag(SafeLoadObjectId(objectImage, ipos + int2(0, 1), imageMax), flag);
+    bool y1 = HasObjectFlag(SafeLoadObjectId(objectImage, ipos + int2(0, -1), imageMax), flag);
+    bool d0 = HasObjectFlag(SafeLoadObjectId(objectImage, ipos + int2(1, 1), imageMax), flag);
+    bool d1 = HasObjectFlag(SafeLoadObjectId(objectImage, ipos + int2(-1, -1), imageMax), flag);
+    bool d2 = HasObjectFlag(SafeLoadObjectId(objectImage, ipos + int2(-1, 1), imageMax), flag);
+    bool d3 = HasObjectFlag(SafeLoadObjectId(objectImage, ipos + int2(1, -1), imageMax), flag);
+
+    edgeSum += (x0 != centerFlagged) ? 1.0 : 0.0;
+    edgeSum += (x1 != centerFlagged) ? 1.0 : 0.0;
+    edgeSum += (y0 != centerFlagged) ? 1.0 : 0.0;
+    edgeSum += (y1 != centerFlagged) ? 1.0 : 0.0;
+    weightSum += 4.0;
+
+    edgeSum += ((d0 != centerFlagged) ? 1.0 : 0.0) * DIAGONAL_EDGE_WEIGHT;
+    edgeSum += ((d1 != centerFlagged) ? 1.0 : 0.0) * DIAGONAL_EDGE_WEIGHT;
+    edgeSum += ((d2 != centerFlagged) ? 1.0 : 0.0) * DIAGONAL_EDGE_WEIGHT;
+    edgeSum += ((d3 != centerFlagged) ? 1.0 : 0.0) * DIAGONAL_EDGE_WEIGHT;
+    weightSum += DIAGONAL_EDGE_WEIGHT * 4.0;
+
+    float rawEdge = edgeSum / max(1e-5, weightSum);
+    return smoothstep(0.1, 0.4, rawEdge);
 }
 
 float3 ReconstructViewPosition(UniformBufferObject camera, int2 pixel, uint2 size, float depth)
@@ -65,15 +115,18 @@ float UpsampleAO(UniformBufferObject camera, int2 pixel, uint2 fullSize, float c
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     const UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
-    const uint2 fullSize = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
+    let OutImage = Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED);
+    let ObjectIdImage = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
+
+    const uint2 fullSize = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_DENOISED);
     const int2 pixel = int2(DTid.xy);
     if (DTid.x >= fullSize.x || DTid.y >= fullSize.y)
     {
         return;
     }
 
-    const float4 directOrEmissive = Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE)[pixel];
-    const float4 specular = Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR)[pixel];
+    const int2 imageMax = int2(fullSize) - int2(1, 1);
+    const float4 directSpecularOrEmissive = Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE)[pixel];
     const float4 ambient = Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT)[pixel];
     const float depth = Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER)[pixel];
     const float3 worldNormal = Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL)[pixel].xyz;
@@ -90,19 +143,45 @@ void main(uint3 DTid : SV_DispatchThreadID)
     const float strength = max(camera.GTAOStrength, 0.0f);
     const float skyOcclusion = pow(saturate(ao), strength);
 
-    float4 output = float4(directOrEmissive.rgb + ambient.rgb * skyOcclusion + specular.rgb, 1.0f);
+    float3 total = directSpecularOrEmissive.rgb + ambient.rgb * skyOcclusion;
     if (camera.GTAODebugMode == 1u)
     {
-        // ComposeSimple applies the regular scene tonemap after this pass. Convert the
-        // normalized diagnostic value to its linear scene-referred range first.
         const float debugExposure = 40000.0f / max(camera.PaperWhiteNit, 1.0f);
-        output = surface ? float4(ao * debugExposure, ao * debugExposure, ao * debugExposure, 1.0f)
-                         : float4(0, 0, 0, 1);
+        total = surface ? float3(ao * debugExposure) : float3(0, 0, 0);
     }
     else if (camera.GTAODebugMode == 2u)
     {
-        output = float4(ambient.rgb, 1.0f);
+        total = ambient.rgb;
     }
 
-    Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, output);
+    const float dangerEdge = ComputeEdgeStrengthTwoSided(ObjectIdImage, pixel, imageMax, OBJECT_ID_FLAG_DANGER);
+    const float lockedEdge = ComputeEdgeStrengthTwoSided(ObjectIdImage, pixel, imageMax, OBJECT_ID_FLAG_LOCKED);
+    const float selectedEdge = ComputeEdgeStrengthTwoSided(ObjectIdImage, pixel, imageMax, OBJECT_ID_FLAG_SELECTED);
+    const float hoveredEdge = ComputeEdgeStrengthTwoSided(ObjectIdImage, pixel, imageMax, OBJECT_ID_FLAG_HOVERED);
+
+    if (dangerEdge > 0)
+    {
+        total = lerp(total, float3(255, 45, 35), saturate(dangerEdge * 0.90));
+    }
+    else if (lockedEdge > 0)
+    {
+        total = lerp(total, float3(35, 145, 255), saturate(lockedEdge * 0.75));
+    }
+    else if (selectedEdge > 0)
+    {
+        total = lerp(total, float3(150, 100, 0), saturate(selectedEdge * 0.80));
+    }
+    else if (hoveredEdge > 0)
+    {
+        total = lerp(total, float3(80, 220, 120), saturate(hoveredEdge * 0.75));
+    }
+
+    if (camera.HDR)
+    {
+        OutImage[pixel] = float4(EncodeHdrOutput(total, camera.PaperWhiteNit, camera.HDROutputMode), 1.0);
+    }
+    else
+    {
+        OutImage[pixel] = float4(GT_Tonemapping(total * camera.PaperWhiteNit / 40000.0), 1.0);
+    }
 }
