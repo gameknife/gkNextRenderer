@@ -32,6 +32,7 @@ public:
     bool OnGamepadInput(int16_t leftStickX, int16_t leftStickY,
                     int16_t rightStickX, int16_t rightStickY,
                     int16_t leftTrigger, int16_t rightTrigger) override;
+    bool OnRemoteViewAction(const FRemoteViewActionContext& context, std::string_view action) override;
     void ConfigureCVars(NextCVar::FCVarSystem& cvars) override;
 
     void CreateSphereAndPush();
@@ -49,6 +50,17 @@ public:
     };
 
 private:
+    struct FLaunchView
+    {
+        glm::vec3 position{0.0f};
+        glm::vec3 forward{0.0f, 0.0f, -1.0f};
+        glm::vec3 right{1.0f, 0.0f, 0.0f};
+        glm::vec3 up{0.0f, 1.0f, 0.0f};
+        std::string debugName{"tempBox"};
+    };
+
+    void CreateBoxAndPushFromView(const FLaunchView& view);
+
     void DrawSettings();
     void DrawTitleBar();
     void DrawBottomStatusBar();

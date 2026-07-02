@@ -139,6 +139,7 @@ void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<vo
 
                 frameState_.totalFrames = 0;
                 renderer_->OnPostLoadScene();
+                OnRendererPostLoadScene();
                 logProfile("renderer post-load scene");
                 if (canRefreshExistingSwapChain)
                 {

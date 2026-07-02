@@ -27,7 +27,7 @@ namespace Runtime::Remote
     public:
         FRemoteSession(RemoteServer::FConfig config, std::string id,
                        std::weak_ptr<rtc::WebSocket> signalingSocket, FVideoPipeline* videoPipeline,
-                       uint32_t h264ProfileMask);
+                       uint32_t h264ProfileMask, RemoteServer* owner);
         ~FRemoteSession();
 
         bool Start();
@@ -49,6 +49,7 @@ namespace Runtime::Remote
         uint32_t h264ProfileMask_ = h264ProfileBaselineBit;
         std::weak_ptr<rtc::WebSocket> signalingSocket_;
         FVideoPipeline* videoPipeline_ = nullptr;
+        RemoteServer* owner_ = nullptr;
         FInputRouter inputRouter_;
         std::atomic_bool trackOpen_ = false;
         std::atomic<uint64_t> sinkId_ = 0;

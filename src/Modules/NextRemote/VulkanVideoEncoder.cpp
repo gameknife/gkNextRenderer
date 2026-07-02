@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <mutex>
 
 #include <spdlog/spdlog.h>
 
@@ -25,6 +26,8 @@ namespace Runtime::Remote
 
     namespace
     {
+        std::mutex GVideoEncodeQueueMutex;
+
         constexpr VkFormat videoInputFormat = VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
         constexpr int32_t defaultConstantQp = 28;
 
@@ -1212,6 +1215,7 @@ namespace Runtime::Remote
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submitInfo.commandBufferCount = 1;
         submitInfo.pCommandBuffers = &commandBuffer;
+        std::lock_guard lock(GVideoEncodeQueueMutex);
         if (vkQueueSubmit(device_.VideoEncodeQueue(), 1, &submitInfo, encodeFence_) != VK_SUCCESS)
         {
             return false;

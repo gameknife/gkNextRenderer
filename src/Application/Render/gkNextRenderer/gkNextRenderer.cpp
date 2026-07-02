@@ -793,6 +793,24 @@ bool NextRendererGameInstance::OnGamepadInput(int16_t leftStickX, int16_t leftSt
 	return modelViewController_.OnGamepadInput(leftStickX, leftStickY, rightStickX, rightStickY, leftTrigger, rightTrigger);
 }
 
+bool NextRendererGameInstance::OnRemoteViewAction(const FRemoteViewActionContext& context, std::string_view action)
+{
+    if (action != "space")
+    {
+        return false;
+    }
+
+    const std::string shortSession = context.sessionId.substr(0, std::min<size_t>(context.sessionId.size(), 8));
+    CreateBoxAndPushFromView(FLaunchView{
+        .position = context.position,
+        .forward = context.forward,
+        .right = context.right,
+        .up = context.up,
+        .debugName = fmt::format("remoteBox-{}", shortSession.empty() ? "client" : shortSession),
+    });
+    return true;
+}
+
 void NextRendererGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     //std::string error;
@@ -825,15 +843,39 @@ void NextRendererGameInstance::CreateSphereAndPush()
 
 void NextRendererGameInstance::CreateBoxAndPush()
 {
-    glm::vec3 forward = modelViewController_.GetForward();
-    glm::vec3 center = modelViewController_.GetPosition() + forward * 0.1f + modelViewController_.GetRight() * 0.5f + modelViewController_.GetUp() * -0.5f;
-    glm::vec3 farTarget = modelViewController_.GetPosition() + forward * 1000.0f + modelViewController_.GetUp() * 200.f;
-    glm::vec3 shotDir = normalize((farTarget - center));
+    CreateBoxAndPushFromView(FLaunchView{
+        .position = modelViewController_.GetPosition(),
+        .forward = modelViewController_.GetForward(),
+        .right = modelViewController_.GetRight(),
+        .up = modelViewController_.GetUp(),
+        .debugName = "tempBox",
+    });
+}
+
+void NextRendererGameInstance::CreateBoxAndPushFromView(const FLaunchView& view)
+{
+    if (matIds_.empty())
+    {
+        SPDLOG_WARN("gkNextRenderer: ignored box launch before dynamic materials are ready");
+        return;
+    }
+    if (boxModelId_ >= GetEngine().GetScene().Models().size())
+    {
+        SPDLOG_WARN("gkNextRenderer: ignored box launch before dynamic box model is ready");
+        return;
+    }
+
+    glm::vec3 forward = glm::normalize(view.forward);
+    glm::vec3 right = glm::normalize(view.right);
+    glm::vec3 up = glm::normalize(view.up);
+    glm::vec3 center = view.position + forward * 0.1f + right * 0.5f + up * -0.5f;
+    glm::vec3 farTarget = view.position + forward * 1000.0f + up * 200.f;
+    glm::vec3 shotDir = glm::normalize((farTarget - center));
     uint32_t instanceId = uint32_t(GetEngine().GetScene().Nodes().size());
 
     uint32_t newMatId = matIds_[std::rand() % matIds_.size()];
     std::shared_ptr<Assets::Node> newNode =
-        Assets::SceneBuilder::CreateRenderNode("tempBox", center, glm::vec3(1), instanceId, boxModelId_, newMatId);
+        Assets::SceneBuilder::CreateRenderNode(view.debugName, center, glm::vec3(1), instanceId, boxModelId_, newMatId);
     
     auto phys = std::make_shared<Runtime::PhysicsComponent>();
     phys->SetMobility(Runtime::ENodeMobility::Dynamic);

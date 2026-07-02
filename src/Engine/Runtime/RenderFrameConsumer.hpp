@@ -22,5 +22,6 @@ namespace Runtime
         virtual void RecordFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex,
                                  Vulkan::VulkanBaseRenderer& renderer) = 0;
         virtual void OnRendererDeleteSwapChain() = 0;
+        virtual void OnRendererPostLoadScene() {}
     };
 }

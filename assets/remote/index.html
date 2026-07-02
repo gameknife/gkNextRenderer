@@ -255,6 +255,7 @@
       <span class="pill" id="pill-pc"><span class="dot"></span><b>Peer</b> <span id="pcState">new</span></span>
       <span class="pill" id="pill-in"><span class="dot"></span><b>Input</b> <span id="inputState">waiting</span></span>
       <span class="pill" id="pill-stream"><span class="dot"></span><b>Stream</b> <span id="streamState">waiting</span></span>
+      <span class="pill" id="pill-view"><b>View</b> <span id="viewState">client</span></span>
       <span class="pill" id="pill-encoder"><b>Encoder</b> <span id="encoderState">vulkan</span></span>
       <span class="pill" id="pill-rtt"><b>RTT</b> <span id="rttState">-</span></span>
       <span class="pill" id="pill-bitrate"><b>Bitrate</b> <span id="bitrateState">4000 kbps</span></span>
@@ -307,6 +308,7 @@ const wsState = document.querySelector("#wsState");
 const pcState = document.querySelector("#pcState");
 const inputState = document.querySelector("#inputState");
 const streamState = document.querySelector("#streamState");
+const viewState = document.querySelector("#viewState");
 const encoderState = document.querySelector("#encoderState");
 const rttState = document.querySelector("#rttState");
 const bitrateState = document.querySelector("#bitrateState");
@@ -933,6 +935,14 @@ async function connect() {
       ? ` (${config.requestedEncoder})`
       : "";
     encoderState.textContent = `${active}${requested}`;
+  }
+  if (viewState) {
+    const mode = config.mode || "legacy";
+    const maxClients = config.maxClients ? `/${config.maxClients}` : "";
+    viewState.textContent = `${mode} ${clientId.slice(0, 8)}${maxClients}`;
+    document.title = mode === "multiview"
+      ? `gkNext Cloud Play ${clientId.slice(0, 8)}`
+      : "gkNext Remote Play";
   }
   setBitrateUi(config.activeBitrateKbps || config.bitrateKbps || 4000);
   const remoteBaseURL = remoteBase ? new URL(remoteBase) : null;

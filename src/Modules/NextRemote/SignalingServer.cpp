@@ -15,9 +15,11 @@
 
 namespace Runtime::Remote
 {
-    FSignalingServer::FSignalingServer(RemoteServer::FConfig config, FVideoPipeline* videoPipeline)
+    FSignalingServer::FSignalingServer(RemoteServer::FConfig config, FVideoPipeline* videoPipeline,
+                                       RemoteServer* owner)
         : config_(std::move(config))
         , videoPipeline_(videoPipeline)
+        , owner_(owner)
     {
     }
 
@@ -68,7 +70,37 @@ namespace Runtime::Remote
         if (type == "request")
         {
             const uint32_t h264ProfileMask = message.value("h264ProfileMask", h264ProfileBaselineBit);
-            auto session = std::make_shared<FRemoteSession>(config_, id, ws, videoPipeline_, h264ProfileMask);
+            {
+                std::lock_guard lock(sessionsMutex_);
+                sessions_.erase(id);
+            }
+            if (config_.multiView && owner_ && !owner_->TryRegisterCloudSession(id))
+            {
+                nlohmann::json error;
+                error["type"] = "error";
+                error["id"] = id;
+                error["message"] = "server full";
+                ws->send(error.dump());
+                return;
+            }
+
+            FVideoPipeline* sessionPipeline =
+                config_.multiView && owner_ ? owner_->VideoPipelineForSession(id) : videoPipeline_;
+            if (!sessionPipeline)
+            {
+                nlohmann::json error;
+                error["type"] = "error";
+                error["id"] = id;
+                error["message"] = "video stream unavailable";
+                ws->send(error.dump());
+                if (config_.multiView && owner_)
+                {
+                    owner_->UnregisterCloudSession(id);
+                }
+                return;
+            }
+
+            auto session = std::make_shared<FRemoteSession>(config_, id, ws, sessionPipeline, h264ProfileMask, owner_);
             {
                 std::lock_guard lock(sessionsMutex_);
                 sessions_[id] = session;
@@ -77,6 +109,10 @@ namespace Runtime::Remote
             {
                 std::lock_guard lock(sessionsMutex_);
                 sessions_.erase(id);
+                if (config_.multiView && owner_)
+                {
+                    owner_->UnregisterCloudSession(id);
+                }
             }
             return;
         }
@@ -143,9 +179,10 @@ namespace Runtime::Remote
             videoPipeline_ ? std::string(videoPipeline_->ActiveEncoderName()) : std::string("vulkan");
         const uint32_t activeBitrateKbps = videoPipeline_ ? videoPipeline_->BitrateKbps() : config_.bitrateKbps;
         return fmt::format(
-            R"({{"signalingPort":{},"bindAddress":"{}","fps":{},"bitrateKbps":{},"width":{},"height":{},"requestedEncoder":"{}","activeEncoder":"{}","activeBitrateKbps":{}}})",
+            R"({{"signalingPort":{},"bindAddress":"{}","fps":{},"bitrateKbps":{},"width":{},"height":{},"mode":"{}","maxClients":{},"requestedEncoder":"{}","activeEncoder":"{}","activeBitrateKbps":{}}})",
             config_.signalingPort, PublicHostForClient(), config_.fps, config_.bitrateKbps, config_.width,
-            config_.height, requestedEncoder, activeEncoder, activeBitrateKbps);
+            config_.height, config_.multiView ? "multiview" : "legacy", config_.maxClients, requestedEncoder,
+            activeEncoder, activeBitrateKbps);
     }
 
     bool FSignalingServer::Start()

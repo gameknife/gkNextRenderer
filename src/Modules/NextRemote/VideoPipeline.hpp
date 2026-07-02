@@ -54,6 +54,15 @@ namespace Runtime::Remote
     public:
         using FPacketSink = std::function<void(const FEncodedPacket&)>;
 
+        struct FStats
+        {
+            uint32_t sinkCount = 0;
+            uint64_t droppedFrames = 0;
+            uint32_t bitrateKbps = 0;
+            uint32_t targetFps = 0;
+            std::string_view activeEncoder;
+        };
+
         explicit FVideoPipeline(RemoteServer::FConfig config);
         ~FVideoPipeline();
 
@@ -63,6 +72,9 @@ namespace Runtime::Remote
 
         // Render thread only: called while the frame command buffer is being recorded.
         void RecordFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex, Vulkan::VulkanBaseRenderer& renderer);
+        void RecordFrameFromStorage(VkCommandBuffer commandBuffer, uint32_t imageIndex,
+                                    Vulkan::VulkanBaseRenderer& renderer, uint32_t sourceBindlessIndex,
+                                    VkExtent2D sourceExtent);
 
         // Render thread, just before the renderer destroys the swapchain the convert pipeline
         // was created against.
@@ -73,11 +85,14 @@ namespace Runtime::Remote
         void RemoveSink(uint64_t sinkId);
         void RequestKeyframe();
         void SetBitrate(uint32_t bitrateKbps);
+        void SetTargetFps(uint32_t fps);
         void RegisterClientH264Profiles(std::string sessionId, uint32_t profileMask);
         void UnregisterClientH264Profiles(const std::string& sessionId);
         uint32_t BitrateKbps() const { return desiredBitrateKbps_.load(std::memory_order_relaxed); }
+        uint32_t TargetFps() const { return targetFps_.load(std::memory_order_relaxed); }
         std::string_view ActiveEncoderName() const { return activeEncoderName_; }
         std::string_view RequestedEncoderName() const { return requestedEncoderName_; }
+        FStats Stats() const;
         std::string OfferH264FmtpLine() const;
 
     private:
@@ -114,6 +129,9 @@ namespace Runtime::Remote
         bool EnsureSlotResources(FSlot& slot, Vulkan::VulkanBaseRenderer& renderer, size_t slotIndex);
         bool EnsureGpuSlotResources(FSlot& slot, Vulkan::VulkanBaseRenderer& renderer, size_t slotIndex);
         bool CreateGpuEncodeImage(FSlot& slot, const Vulkan::Device& device, size_t slotIndex);
+        void RecordFrameFromSource(VkCommandBuffer commandBuffer, uint32_t imageIndex,
+                                   Vulkan::VulkanBaseRenderer& renderer, uint32_t sourceBindlessIndex,
+                                   VkExtent2D sourceExtent, VkImage swapChainImageForLegacyRestore);
         void DestroySlotResources(FSlot& slot);
         void DestroyGpuSlotResources(FSlot& slot);
         void HarvestCompletedSlots(uint64_t currentFrameId);
@@ -143,7 +161,7 @@ namespace Runtime::Remote
 
         std::chrono::steady_clock::time_point startedAt_;
         std::chrono::steady_clock::time_point nextFrameTime_;
-        uint64_t droppedFrames_ = 0;
+        std::atomic<uint64_t> droppedFrames_{0};
         bool warnedHdr_ = false;
 
         // Encoder worker
@@ -153,6 +171,7 @@ namespace Runtime::Remote
         std::jthread encodeThread_;
         std::atomic_bool keyframeRequested_ = true;
         std::atomic<uint32_t> desiredBitrateKbps_{4000};
+        std::atomic<uint32_t> targetFps_{30};
         std::atomic_bool recreateEncoderRequested_ = false;
 
         // Owned by the encoder thread after Start().

@@ -54,12 +54,14 @@ Options::Options(const int argc, const char* argv[])
 		("disable-streamline", "Disable NVIDIA Streamline/DLSS integration for this process.", cxxopts::value<bool>(DisableStreamline)->default_value("false")->implicit_value("true"))
 		("remote", "Enable WebRTC Remote Play host mode. Implies --hidden-window and --forcesdr unless --remote-show-window is set.", cxxopts::value<bool>(RemoteMode)->default_value("false")->implicit_value("true"))
 		("remote-show-window", "Keep the desktop window visible while --remote is active.", cxxopts::value<bool>(RemoteShowWindow)->default_value("false")->implicit_value("true"))
+		("remote-multiview", "Enable Cloud Play multi-client multi-view mode. Each browser owns an independent remote camera/input context.", cxxopts::value<bool>(RemoteMultiView)->default_value("false")->implicit_value("true"))
 		("remote-bind", "Remote Play bind address.", cxxopts::value<std::string>(RemoteBind)->default_value("0.0.0.0"))
 		("remote-http-port", "Remote Play HTTP client port.", cxxopts::value<uint32_t>(RemoteHttpPort)->default_value("8088"))
 		("remote-port", "Remote Play signaling WebSocket port.", cxxopts::value<uint32_t>(RemotePort)->default_value("8089"))
 		("remote-bitrate", "Remote Play starting video bitrate in kbps. 0 = auto.", cxxopts::value<uint32_t>(RemoteBitrateKbps)->default_value("0"))
 		("remote-fps", "Remote Play target stream frame rate.", cxxopts::value<uint32_t>(RemoteFps)->default_value("30"))
 		("remote-res", "Remote Play encode resolution, e.g. 1280x720. Empty means source resolution.", cxxopts::value<std::string>(remoteResolution)->default_value(""))
+		("remote-max-clients", "Maximum simultaneous Remote Play clients in --remote-multiview mode.", cxxopts::value<uint32_t>(RemoteMaxClients)->default_value("2"))
 		("remote-encoder", "Remote Play video encoder: auto or vulkan.", cxxopts::value<std::string>(RemoteEncoder)->default_value("auto"))
 		("keep-cpu-mesh-data", "Keep CPU mesh data for editor mode.", cxxopts::value<bool>(KeepCPUMeshData)->default_value("false"))
 		("update-baseline", "Update visual test baseline images from the current run.", cxxopts::value<bool>(UpdateVisualTestBaseline)->default_value("false")->implicit_value("true"))
@@ -140,6 +142,14 @@ Options::Options(const int argc, const char* argv[])
 			{
 				Throw(std::out_of_range("Invalid --remote-encoder. Expected auto or vulkan."));
 			}
+			if (RemoteMaxClients == 0)
+			{
+				Throw(std::out_of_range("Remote Play --remote-max-clients must be at least 1."));
+			}
+		}
+		else if (RemoteMultiView)
+		{
+			Throw(std::out_of_range("--remote-multiview requires --remote."));
 		}
 
 		if (Tui)

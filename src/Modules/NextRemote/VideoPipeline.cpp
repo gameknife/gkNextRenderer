@@ -79,20 +79,10 @@ namespace Runtime::Remote
             throw std::runtime_error("failed to find matching Vulkan memory type for remote encode image");
         }
 
-        uint32_t RemoteYBindlessIndex(size_t slotIndex)
-        {
-            return Assets::Bindless::RT_REMOTE_ENCODE0_Y + static_cast<uint32_t>(slotIndex) * 2u;
-        }
-
-        uint32_t RemoteUvBindlessIndex(size_t slotIndex)
-        {
-            return RemoteYBindlessIndex(slotIndex) + 1u;
-        }
-
         // Must match PushConsts in assets/shaders/Remote.BgraToNv12.comp.slang.
         struct FGpuConvertPushConsts
         {
-            uint32_t swapChainIndex;
+            uint32_t srcIndex;
             uint32_t outYIndex;
             uint32_t outUvIndex;
             uint32_t dstWidth;
@@ -110,6 +100,7 @@ namespace Runtime::Remote
         , requestedEncoder_(config_.encoderBackend)
         , requestedEncoderName_(ToString(config_.encoderBackend))
         , desiredBitrateKbps_(std::max(1u, config_.bitrateKbps))
+        , targetFps_(std::max(1u, config_.fps))
     {
     }
 
@@ -232,6 +223,22 @@ namespace Runtime::Remote
         desiredBitrateKbps_.store(clamped, std::memory_order_relaxed);
     }
 
+    void FVideoPipeline::SetTargetFps(uint32_t fps)
+    {
+        targetFps_.store(std::max(1u, fps), std::memory_order_relaxed);
+    }
+
+    FVideoPipeline::FStats FVideoPipeline::Stats() const
+    {
+        FStats stats;
+        stats.sinkCount = sinkCount_.load(std::memory_order_relaxed);
+        stats.droppedFrames = droppedFrames_.load(std::memory_order_relaxed);
+        stats.bitrateKbps = desiredBitrateKbps_.load(std::memory_order_relaxed);
+        stats.targetFps = targetFps_.load(std::memory_order_relaxed);
+        stats.activeEncoder = activeEncoderName_;
+        return stats;
+    }
+
     void FVideoPipeline::RegisterClientH264Profiles(std::string sessionId, uint32_t profileMask)
     {
         std::lock_guard lock(profileMutex_);
@@ -346,6 +353,52 @@ namespace Runtime::Remote
     void FVideoPipeline::RecordFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex,
                                      Vulkan::VulkanBaseRenderer& renderer)
     {
+        const Vulkan::SwapChain& swapChain = renderer.SwapChain();
+        if (swapChain.IsHDR())
+        {
+            if (!warnedHdr_)
+            {
+                warnedHdr_ = true;
+                SPDLOG_WARN("RemotePlay: HDR swapchain is not supported by the video pipeline; no video frames");
+            }
+            return;
+        }
+
+        const VkImage swapImage = swapChain.Images()[imageIndex];
+        const VkExtent2D srcExtent = swapChain.Extent();
+        if (srcExtent.width == 0 || srcExtent.height == 0)
+        {
+            return;
+        }
+
+        RecordFrameFromSource(commandBuffer, imageIndex, renderer, Assets::Bindless::RT_SWAPCHAIN0 + imageIndex,
+                              srcExtent, swapImage);
+    }
+
+    void FVideoPipeline::RecordFrameFromStorage(VkCommandBuffer commandBuffer, uint32_t imageIndex,
+                                                Vulkan::VulkanBaseRenderer& renderer,
+                                                const uint32_t sourceBindlessIndex,
+                                                const VkExtent2D sourceExtent)
+    {
+        if (const Vulkan::RenderImage* sourceImage = renderer.GetStorageImage(sourceBindlessIndex))
+        {
+            sourceImage->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                                       VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+        }
+        RecordFrameFromSource(commandBuffer, imageIndex, renderer, sourceBindlessIndex, sourceExtent, VK_NULL_HANDLE);
+        if (const Vulkan::RenderImage* sourceImage = renderer.GetStorageImage(sourceBindlessIndex))
+        {
+            sourceImage->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                                       VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+        }
+    }
+
+    void FVideoPipeline::RecordFrameFromSource(VkCommandBuffer commandBuffer, uint32_t imageIndex,
+                                               Vulkan::VulkanBaseRenderer& renderer,
+                                               const uint32_t sourceBindlessIndex,
+                                               const VkExtent2D sourceExtent,
+                                               const VkImage swapChainImageForLegacyRestore)
+    {
         if (!initialized_ || !encoder_)
         {
             return;
@@ -388,18 +441,7 @@ namespace Runtime::Remote
             return;
         }
 
-        const Vulkan::SwapChain& swapChain = renderer.SwapChain();
-        if (swapChain.IsHDR())
-        {
-            if (!warnedHdr_)
-            {
-                warnedHdr_ = true;
-                SPDLOG_WARN("RemotePlay: HDR swapchain is not supported by the video pipeline; no video frames");
-            }
-            return;
-        }
-
-        const auto interval = FrameInterval(config_.fps);
+        const auto interval = FrameInterval(targetFps_.load(std::memory_order_relaxed));
         const auto advanceThrottle = [&]()
         {
             nextFrameTime_ += interval;
@@ -425,10 +467,10 @@ namespace Runtime::Remote
             // Drop this frame instead of back-pressuring the renderer; keep the throttle advancing
             // so each missed capture slot counts once.
             advanceThrottle();
-            ++droppedFrames_;
-            if ((droppedFrames_ & (droppedFrames_ - 1)) == 0)
+            const uint64_t droppedFrames = droppedFrames_.fetch_add(1, std::memory_order_relaxed) + 1;
+            if ((droppedFrames & (droppedFrames - 1)) == 0)
             {
-                SPDLOG_WARN("RemotePlay: encoder backlog, dropped {} capture frames so far", droppedFrames_);
+                SPDLOG_WARN("RemotePlay: encoder backlog, dropped {} capture frames so far", droppedFrames);
             }
             return;
         }
@@ -438,20 +480,22 @@ namespace Runtime::Remote
             return;
         }
 
-        const VkImage swapImage = swapChain.Images()[imageIndex];
-        const VkExtent2D srcExtent = swapChain.Extent();
-        if (srcExtent.width == 0 || srcExtent.height == 0)
+        if (sourceExtent.width == 0 || sourceExtent.height == 0)
         {
             return;
         }
 
-        Vulkan::ImageMemoryBarrier::FullInsert(commandBuffer, swapImage, 0, VK_ACCESS_SHADER_READ_BIT,
-                                               VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
+        if (swapChainImageForLegacyRestore != VK_NULL_HANDLE)
+        {
+            Vulkan::ImageMemoryBarrier::FullInsert(commandBuffer, swapChainImageForLegacyRestore, 0,
+                                                   VK_ACCESS_SHADER_READ_BIT,
+                                                   VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_GENERAL);
+        }
 
         if (!gpuConvertPipeline_)
         {
             gpuConvertPipeline_ = std::make_unique<Vulkan::PipelineCommon::ZeroBindCustomPushConstantPipeline>(
-                swapChain, "assets/shaders/Remote.BgraToNv12.comp.slang.spv",
+                renderer.SwapChain(), "assets/shaders/Remote.BgraToNv12.comp.slang.spv",
                 static_cast<uint32_t>(sizeof(FGpuConvertPushConsts)));
         }
 
@@ -463,13 +507,13 @@ namespace Runtime::Remote
         freeSlot->uvPlaneLayout = VK_IMAGE_LAYOUT_GENERAL;
 
         FGpuConvertPushConsts pushConsts{};
-        pushConsts.swapChainIndex = imageIndex;
+        pushConsts.srcIndex = sourceBindlessIndex;
         pushConsts.outYIndex = freeSlot->yBindlessIndex;
         pushConsts.outUvIndex = freeSlot->uvBindlessIndex;
         pushConsts.dstWidth = dstWidth_;
         pushConsts.dstHeight = dstHeight_;
-        pushConsts.srcWidth = srcExtent.width;
-        pushConsts.srcHeight = srcExtent.height;
+        pushConsts.srcWidth = sourceExtent.width;
+        pushConsts.srcHeight = sourceExtent.height;
         gpuConvertPipeline_->BindPipeline(commandBuffer, &pushConsts);
         vkCmdDispatch(commandBuffer, (dstWidth_ + 7) / 8, (dstHeight_ + 7) / 8, 1);
 
@@ -524,8 +568,12 @@ namespace Runtime::Remote
                            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
         freeSlot->encodeImage.layout = VK_IMAGE_LAYOUT_GENERAL;
 
-        Vulkan::ImageMemoryBarrier::FullInsert(commandBuffer, swapImage, VK_ACCESS_SHADER_READ_BIT, 0,
-                                               VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        if (swapChainImageForLegacyRestore != VK_NULL_HANDLE)
+        {
+            Vulkan::ImageMemoryBarrier::FullInsert(commandBuffer, swapChainImageForLegacyRestore,
+                                                   VK_ACCESS_SHADER_READ_BIT, 0,
+                                                   VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        }
         // Buffer visibility to the host is guaranteed by the frame fence + HOST_COHERENT memory.
 
         freeSlot->frameId = currentFrameId;
@@ -648,8 +696,8 @@ namespace Runtime::Remote
                 fmt::format("RemoteEncodeUV{}", slotIndex).c_str());
             slot.yPlaneLayout = VK_IMAGE_LAYOUT_UNDEFINED;
             slot.uvPlaneLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            slot.yBindlessIndex = RemoteYBindlessIndex(slotIndex);
-            slot.uvBindlessIndex = RemoteUvBindlessIndex(slotIndex);
+            slot.yBindlessIndex = config_.encodeBindlessBase + static_cast<uint32_t>(slotIndex) * 2u;
+            slot.uvBindlessIndex = slot.yBindlessIndex + 1u;
             texturePool->BindStorageTexture(slot.yBindlessIndex, slot.yPlane->GetImageView());
             texturePool->BindStorageTexture(slot.uvBindlessIndex, slot.uvPlane->GetImageView());
             return CreateGpuEncodeImage(slot, renderer.Device(), slotIndex);
