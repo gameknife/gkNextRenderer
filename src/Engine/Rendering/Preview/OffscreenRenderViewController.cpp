@@ -299,9 +299,13 @@ namespace Vulkan
                 secondaryView,
                 *logicRenderer,
                 /*clearSwapchain*/ false,
-                [this, commandBuffer, viewIndex](RenderView& view)
+                [this, commandBuffer, imageIndex, viewIndex](RenderView& view)
                 {
                     CopyViewOutput(commandBuffer, view, viewIndex);
+                    if (viewRenderedCallback_)
+                    {
+                        viewRenderedCallback_(viewIndex, commandBuffer, imageIndex, view);
+                    }
                 });
         }
     }

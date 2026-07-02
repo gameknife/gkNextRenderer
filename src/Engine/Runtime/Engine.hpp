@@ -251,6 +251,7 @@ private:
     void OnRendererDeviceSet();
     void OnRendererCreateSwapChain();
     void OnRendererDeleteSwapChain();
+    void OnRendererPostLoadScene();
     void OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex);
     void OnRendererAfterSubmit();
     void OnRendererBeforeNextFrame();

@@ -5,7 +5,12 @@ import Shader.Bindless;
 
 struct PushConsts
 {
-    uint swapChainIndex;
+    uint _ViewHdr_SwapChainIndex;
+    uint _ViewHdr_custom_data_0;
+    uint _ViewHdr_custom_data_1;
+    uint _ViewHdr_custom_data_2;
+
+    uint srcIndex;
     uint outYIndex;
     uint outUvIndex;
     uint dstWidth;
@@ -65,7 +70,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     RWTexture2D<float4> src =
-        Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.swapChainIndex);
+        Bindless.GetStorageTexture<float4>(pushConsts.srcIndex);
     RWTexture2D<float> outY = Bindless.GetStorageTexture<float>(pushConsts.outYIndex);
     RWTexture2D<float2> outUv = Bindless.GetStorageTexture<float2>(pushConsts.outUvIndex);
 

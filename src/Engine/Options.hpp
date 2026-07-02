@@ -50,6 +50,7 @@ public:
 	bool DisableStreamline{};
 	bool RemoteMode{};
 	bool RemoteShowWindow{};
+	bool RemoteMultiView{};
 	std::string RemoteBind{"0.0.0.0"};
 	uint32_t RemoteHttpPort{8088};
 	uint32_t RemotePort{8089};
@@ -57,6 +58,7 @@ public:
 	uint32_t RemoteFps{30};
 	uint32_t RemoteWidth{};
 	uint32_t RemoteHeight{};
+	uint32_t RemoteMaxClients{2};
 	std::string RemoteEncoder{"auto"};
 	bool KeepCPUMeshData{};  // 保留CPU网格数据（编辑器模式需要）
 	bool HighPrecisionProgressiveHistory{}; // progressive accumulation/history 使用高精度缓冲

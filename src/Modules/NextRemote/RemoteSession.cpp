@@ -30,13 +30,14 @@ namespace Runtime::Remote
 
     FRemoteSession::FRemoteSession(RemoteServer::FConfig config, std::string id,
                                    std::weak_ptr<rtc::WebSocket> signalingSocket, FVideoPipeline* videoPipeline,
-                                   uint32_t h264ProfileMask)
+                                   uint32_t h264ProfileMask, RemoteServer* owner)
         : config_(config)
         , id_(std::move(id))
         , h264ProfileMask_((h264ProfileMask & h264ProfileAllBits) != 0 ? (h264ProfileMask & h264ProfileAllBits)
                                                                         : h264ProfileBaselineBit)
         , signalingSocket_(std::move(signalingSocket))
         , videoPipeline_(videoPipeline)
+        , owner_(owner)
     {
     }
 
@@ -194,12 +195,26 @@ namespace Runtime::Remote
                         }
                         else
                         {
-                            self->inputRouter_.HandleBinaryMessage(bytes);
+                            if (self->config_.multiView && self->owner_)
+                            {
+                                self->owner_->EnqueueCloudInputBinary(self->id_, bytes);
+                            }
+                            else
+                            {
+                                self->inputRouter_.HandleBinaryMessage(bytes);
+                            }
                         }
                     }
                     else
                     {
-                        self->inputRouter_.HandleTextMessage(std::get<std::string>(data));
+                        if (self->config_.multiView && self->owner_)
+                        {
+                            self->owner_->EnqueueCloudInputText(self->id_, std::get<std::string>(data));
+                        }
+                        else
+                        {
+                            self->inputRouter_.HandleTextMessage(std::get<std::string>(data));
+                        }
                     }
                 }
             });
@@ -248,6 +263,10 @@ namespace Runtime::Remote
         }
 #endif
         inputRouter_.Stop();
+        if (config_.multiView && owner_)
+        {
+            owner_->UnregisterCloudSession(id_);
+        }
     }
 
     bool FRemoteSession::ApplyAnswer(const std::string& sdp)

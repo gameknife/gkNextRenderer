@@ -19,11 +19,12 @@ namespace Runtime::Remote
 {
     class FRemoteSession;
     class FVideoPipeline;
+    class RemoteServer;
 
     class FSignalingServer final
     {
     public:
-        FSignalingServer(RemoteServer::FConfig config, FVideoPipeline* videoPipeline);
+        FSignalingServer(RemoteServer::FConfig config, FVideoPipeline* videoPipeline, RemoteServer* owner);
         ~FSignalingServer();
 
         bool Start();
@@ -38,6 +39,7 @@ namespace Runtime::Remote
 
         RemoteServer::FConfig config_;
         FVideoPipeline* videoPipeline_ = nullptr;
+        RemoteServer* owner_ = nullptr;
         bool running_ = false;
 
 #if GK_WITH_REMOTE

@@ -1294,6 +1294,7 @@ void NextEngine::OnRendererDeviceSet()
     scene_.reset(new Assets::Scene(renderer_->CommandPool(), renderer_->SupportsRayTracing()));
     renderer_->SetScene(scene_);
     renderer_->OnPostLoadScene();
+    OnRendererPostLoadScene();
 
     status_ = NextRenderer::EApplicationStatus::Running;
 }
@@ -1323,6 +1324,14 @@ void NextEngine::OnRendererDeleteSwapChain()
     for (const auto& consumer : renderFrameConsumers_)
     {
         consumer->OnRendererDeleteSwapChain();
+    }
+}
+
+void NextEngine::OnRendererPostLoadScene()
+{
+    for (const auto& consumer : renderFrameConsumers_)
+    {
+        consumer->OnRendererPostLoadScene();
     }
 }
 

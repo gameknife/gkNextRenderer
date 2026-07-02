@@ -9,6 +9,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 
@@ -23,6 +24,9 @@ namespace Vulkan
     class OffscreenRenderViewController final
     {
     public:
+        using FViewRenderedCallback =
+            std::function<void(uint32_t viewIndex, VkCommandBuffer commandBuffer, uint32_t imageIndex, RenderView& view)>;
+
         static constexpr uint32_t kMaxCameraSecondaryViews = 3;
         static constexpr uint32_t kMaxSecondaryViews = kMaxCameraSecondaryViews;
         static constexpr uint32_t kSecondaryViewSampleSlotBase = 65000;
@@ -46,6 +50,7 @@ namespace Vulkan
         void ClearFrameRequests();
         void OnMainSceneChanged();
         void OnSwapChainResourcesInvalidated(bool releaseSampledOutputs);
+        void SetViewRenderedCallback(FViewRenderedCallback callback) { viewRenderedCallback_ = std::move(callback); }
 
     private:
         struct FViewResources
@@ -63,5 +68,6 @@ namespace Vulkan
 
         VulkanBaseRenderer& renderer_;
         std::array<FViewResources, kMaxSecondaryViews> views_{};
+        FViewRenderedCallback viewRenderedCallback_{};
     };
 }

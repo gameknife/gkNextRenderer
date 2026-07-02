@@ -76,6 +76,8 @@ namespace Modules::NextRemote
         remoteConfig.fps = options.RemoteFps;
         remoteConfig.width = remoteWidth;
         remoteConfig.height = remoteHeight;
+        remoteConfig.multiView = options.RemoteMultiView;
+        remoteConfig.maxClients = options.RemoteMaxClients;
         remoteConfig.bitrateKbps = options.RemoteBitrateKbps != 0
                                        ? options.RemoteBitrateKbps
                                        : EstimateRemoteBitrateKbps(remoteConfig.width, remoteConfig.height,

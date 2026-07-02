@@ -5,6 +5,7 @@
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
 #include "Engine/Runtime/Editor/MultiViewportBackend.hpp"
+#include "Engine/Utilities/Glm.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
 
 namespace Runtime::Agent
@@ -15,6 +16,15 @@ namespace Runtime::Agent
 class NextGameInstanceBase
 {
 public:
+    struct FRemoteViewActionContext
+    {
+        std::string sessionId;
+        glm::vec3 position{0.0f};
+        glm::vec3 forward{0.0f, 0.0f, -1.0f};
+        glm::vec3 right{1.0f, 0.0f, 0.0f};
+        glm::vec3 up{0.0f, 1.0f, 0.0f};
+    };
+
     NextGameInstanceBase(Vulkan::WindowConfig&, Runtime::Config::Options&, NextEngine* engine) : engine_(engine) {}
     virtual ~NextGameInstanceBase() = default;
 
@@ -60,6 +70,12 @@ public:
     virtual bool OnGamepadInput(int16_t leftStickX, int16_t leftStickY, int16_t rightStickX, int16_t rightStickY,
                                 int16_t leftTrigger, int16_t rightTrigger)
     {
+        return false;
+    }
+    virtual bool OnRemoteViewAction(const FRemoteViewActionContext& context, std::string_view action)
+    {
+        (void)context;
+        (void)action;
         return false;
     }
 
