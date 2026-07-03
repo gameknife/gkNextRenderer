@@ -126,7 +126,7 @@ namespace Editor
         bool aiPanel = true;
         bool hotReloadPanel = false;
         bool settingsPanel = false;
-        bool cameraViewPanel = true; // legacy alias for cameraViews[0].open
+        bool cameraViewPanel = false; // legacy alias for cameraViews[0].open
         uint32_t pendingExpandTargetId = InvalidId;
         uint32_t pendingCollapseTargetId = InvalidId;
         bool dockResetRequested = false;
@@ -184,10 +184,7 @@ namespace Editor
         // Fonts
         ImFont* bigIcon = nullptr;
 
-        EditorUiState()
-        {
-            cameraViews[0].open = true;
-        }
+        EditorUiState() = default;
         
     };
 } // namespace Editor
