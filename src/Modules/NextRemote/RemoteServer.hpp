@@ -3,7 +3,9 @@
 #include "Engine/Runtime/RenderFrameConsumer.hpp"
 #include "Engine/Runtime/Camera/ModelViewController.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
+#include "Engine/Runtime/Editor/MultiViewportBackend.hpp"
 #include "Modules/NextRemote/CloudInputRouter.hpp"
+#include "Modules/NextRemote/RemoteImGuiSession.hpp"
 #include "Modules/NextRemote/VideoEncoder.hpp"
 
 #include <vulkan/vulkan.h>
@@ -19,6 +21,9 @@
 
 namespace Vulkan
 {
+    class FrameBuffer;
+    class RenderImage;
+    class RenderPass;
     class RenderView;
     class VulkanBaseRenderer;
 }
@@ -80,12 +85,29 @@ namespace Runtime::Remote
             uint32_t lastButtonMask = 0;
             std::chrono::steady_clock::time_point lastInputTime{};
             uint32_t targetFps = 0;
+            std::shared_ptr<FRemoteImGuiSession> uiSession;
+            std::unique_ptr<Vulkan::RenderImage> compositeImage;
+            std::unique_ptr<Vulkan::FrameBuffer> compositeFramebuffer;
+            std::unique_ptr<Vulkan::RenderPass> compositeRenderPass;
+            std::vector<NextUI::UiRenderBuffer> uiRenderBuffers;
+            VkPipeline compositeUiPipeline = VK_NULL_HANDLE;
+            VkExtent2D compositeExtent{0, 0};
+            VkImageLayout compositeLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            uint32_t compositeBindlessSlot = 0;
         };
 
         void TickCloudViews();
         void InitializeClientView(FRemoteClientView& clientView);
         void ApplyClientTargetFps(FRemoteClientView& clientView, std::chrono::steady_clock::time_point now);
         Assets::Camera BuildClientCamera(const FRemoteClientView& clientView) const;
+        void ReleaseClientViewResources(FRemoteClientView& clientView);
+        bool EnsureClientCompositeTarget(FRemoteClientView& clientView, Vulkan::VulkanBaseRenderer& renderer,
+                                         VkExtent2D extent);
+        void CopyViewToComposite(FRemoteClientView& clientView, VkCommandBuffer commandBuffer,
+                                 Vulkan::VulkanBaseRenderer& renderer, Vulkan::RenderView& view);
+        void RenderClientUiToComposite(FRemoteClientView& clientView, VkCommandBuffer commandBuffer,
+                                       uint32_t imageIndex, Vulkan::VulkanBaseRenderer& renderer,
+                                       const Assets::Camera& camera);
         void RecordCloudViewFrame(uint32_t viewIndex, VkCommandBuffer commandBuffer, uint32_t imageIndex,
                                   Vulkan::RenderView& view);
         NextGameInstanceBase::FRemoteViewActionContext BuildActionContext(const std::string& sessionId,
@@ -102,6 +124,7 @@ namespace Runtime::Remote
         std::mutex cloudViewsMutex_;
         std::unordered_map<std::string, FRemoteClientView> cloudViews_;
         std::vector<uint32_t> pendingDisabledViewIndices_;
+        std::vector<std::string> pendingRemovedSessionIds_;
         std::chrono::steady_clock::time_point nextStatsLogTime_{};
     };
 }

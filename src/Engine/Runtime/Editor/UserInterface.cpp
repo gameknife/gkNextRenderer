@@ -228,6 +228,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     ImGui::CreateContext();
 
     auto& io = ImGui::GetIO();
+    fontAtlas_ = io.Fonts;
     imguiIniPath_ = Utilities::FileHelper::GetPlatformFilePath("imgui.ini");
     io.IniFilename = imguiIniPath_.c_str();
     io.WantCaptureMouse = false;
@@ -265,14 +266,16 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
     //     : GOption->locale == "zhCN"                     ? io.Fonts->GetGlyphRangesChineseFull()
     //                                                     : io.Fonts->GetGlyphRangesDefault();
 
-    if (!NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
+    defaultFont_ = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
             .filePath = "assets/fonts/Roboto-Regular.ttf",
             .pixelSize = fontSize * scaleFactor,
             .includeChineseFull = false,
-        }))
+        });
+    if (defaultFont_ == nullptr)
     {
         Throw(std::runtime_error("failed to load basic ImGui Text font"));
     }
+    io.FontDefault = defaultFont_;
 
     static const ImWchar iconRange[] = {
         ICON_MIN_FA,
@@ -345,9 +348,7 @@ void UserInterface::InitializeRendererBackend()
         Throw(std::runtime_error("imgui renderer backend already initialized"));
     }
 
-    io.BackendRendererUserData = this;
-    io.BackendRendererName = "gk_imgui_renderer";
-    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
+    AttachRendererBackendToCurrentContext();
 
     if (multiViewportBackend_)
     {
@@ -628,6 +629,32 @@ void UserInterface::RenderViewportDrawData(ImDrawData* drawData, VkCommandBuffer
                                            uint32_t hdrOutputMode, VkPipeline pipeline)
 {
     RenderDrawData(drawData, commandBuffer, renderBuffer, framebufferExtent, hdrOutputMode, pipeline);
+}
+
+ImFontAtlas* UserInterface::GetFontAtlas() const
+{
+    return fontAtlas_;
+}
+
+ImFont* UserInterface::GetDefaultFont() const
+{
+    return defaultFont_;
+}
+
+void UserInterface::AttachRendererBackendToCurrentContext() const
+{
+    auto& io = ImGui::GetIO();
+    io.BackendRendererUserData = const_cast<UserInterface*>(this);
+    io.BackendRendererName = "gk_imgui_renderer";
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
+    if (io.FontDefault == nullptr)
+    {
+        io.FontDefault = defaultFont_;
+    }
+    if (fontTextureIndex_ != UINT32_MAX)
+    {
+        io.Fonts->TexID = EncodeBindlessTextureId(fontTextureIndex_);
+    }
 }
 
 void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, UiRenderBuffer& renderBuffer,

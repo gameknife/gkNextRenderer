@@ -510,65 +510,125 @@ void NextRendererGameInstance::OnPreConfigUI()
 
 bool NextRendererGameInstance::OnRenderUI()
 {
-	if (isTakingScreenshot_)
-	{
-		return true;
-	}
+    FGameUiFrameContext context;
+    const auto& swapChain = GetEngine().GetRenderer().SwapChain();
+    context.surfaceKind = FGameUiFrameContext::ESurfaceKind::MainWindow;
+    context.framebufferExtent = swapChain.OutputExtent();
+    context.viewCamera = &GetEngine().GetScene().GetRenderCamera();
+    context.allowWindowCommands = true;
+    return DrawRendererUi(context, mainUiState_);
+}
 
-	UpdateUiScaledMetrics();
-
-    auto& userSettings = GetEngine().GetUserSettings();
-    if (workMode_ != lastWorkMode_)
+bool NextRendererGameInstance::OnRenderUI(const FGameUiFrameContext& context)
+{
+    if (context.surfaceKind == FGameUiFrameContext::ESurfaceKind::RemoteView)
     {
-        switch (workMode_)
+        return DrawRendererUi(context, GetRemoteUiState(context.sessionId));
+    }
+    return OnRenderUI();
+}
+
+void NextRendererGameInstance::OnRemoteUiSessionClosed(std::string_view sessionId)
+{
+    remoteUiStates_.erase(std::string(sessionId));
+}
+
+NextRendererGameInstance::FRendererUiState& NextRendererGameInstance::GetRemoteUiState(std::string_view sessionId)
+{
+    return remoteUiStates_[std::string(sessionId)];
+}
+
+void NextRendererGameInstance::EnsureUiFonts(FRendererUiState& uiState, const bool allowLoad)
+{
+    if (!allowLoad)
+    {
+        uiState.bigFont = mainUiState_.bigFont;
+        uiState.titleBarFont = mainUiState_.titleBarFont;
+        return;
+    }
+
+    if (uiState.bigFont == nullptr)
+    {
+        uiState.bigFont = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
+            .filePath = "assets/fonts/Roboto-BoldCondensed.ttf",
+            .pixelSize = 24.0f,
+            .includeChineseFull = false,
+            .extraGlyphsUtf8 = "gkNextRenderer",
+        });
+    }
+
+    if (uiState.titleBarFont == nullptr)
+    {
+        uiState.titleBarFont = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
+            .filePath = "assets/fonts/Roboto-BoldCondensed.ttf",
+            .pixelSize = 18.0f,
+            .includeChineseFull = false,
+            .extraGlyphsUtf8 = "gkNextRenderer",
+        });
+    }
+}
+
+bool NextRendererGameInstance::DrawRendererUi(const FGameUiFrameContext& context, FRendererUiState& uiState)
+{
+    if (isTakingScreenshot_ && context.surfaceKind == FGameUiFrameContext::ESurfaceKind::MainWindow)
+    {
+        return true;
+    }
+
+    EnsureUiFonts(uiState, context.surfaceKind == FGameUiFrameContext::ESurfaceKind::MainWindow);
+    UpdateUiScaledMetrics();
+
+    if (uiState.workMode != uiState.lastWorkMode)
+    {
+        switch (uiState.workMode)
         {
         case EWorkMode::Renderer:
-            userSettings.ShowSettings = true;
-            userSettings.ShowOverlay = false;
-            memoryStatisticsPanelOpen_ = false;
+            uiState.showSettings = true;
+            uiState.showOverlay = false;
+            uiState.memoryStatisticsPanelOpen = false;
             break;
         case EWorkMode::Profiler:
-            userSettings.ShowSettings = false;
-            userSettings.ShowOverlay = true;
-            memoryStatisticsPanelOpen_ = true;
+            uiState.showSettings = false;
+            uiState.showOverlay = true;
+            uiState.memoryStatisticsPanelOpen = true;
             break;
         case EWorkMode::Settings:
-            userSettings.ShowSettings = true;
-            userSettings.ShowOverlay = false;
-            memoryStatisticsPanelOpen_ = false;
+            uiState.showSettings = true;
+            uiState.showOverlay = false;
+            uiState.memoryStatisticsPanelOpen = false;
             break;
         default:
-            userSettings.ShowSettings = false;
-            userSettings.ShowOverlay = false;
-            memoryStatisticsPanelOpen_ = false;
+            uiState.showSettings = false;
+            uiState.showOverlay = false;
+            uiState.memoryStatisticsPanelOpen = false;
             break;
         }
-        lastWorkMode_ = workMode_;
+        uiState.lastWorkMode = uiState.workMode;
     }
-    else if (workMode_ == EWorkMode::Profiler && !userSettings.ShowOverlay)
+    else if (uiState.workMode == EWorkMode::Profiler && !uiState.showOverlay)
     {
-        workMode_ = EWorkMode::Renderer;
-        lastWorkMode_ = workMode_;
-        userSettings.ShowSettings = true;
-        userSettings.ShowOverlay = false;
-        memoryStatisticsPanelOpen_ = false;
+        uiState.workMode = EWorkMode::Renderer;
+        uiState.lastWorkMode = uiState.workMode;
+        uiState.showSettings = true;
+        uiState.showOverlay = false;
+        uiState.memoryStatisticsPanelOpen = false;
     }
 
-	DrawTitleBar();
-    DrawModeRail();
-    DrawSettings();
-    DrawViewportTopBar();
-    DrawViewportBottomBar();
-    DrawBottomStatusBar();
-    DrawMemoryStatisticsPanel();
+	DrawTitleBar(context, uiState);
+    DrawModeRail(uiState);
+    DrawSettings(uiState);
+    DrawViewportTopBar(context, uiState);
+    DrawViewportBottomBar(context);
+    DrawBottomStatusBar(uiState);
+    DrawMemoryStatisticsPanel(uiState);
 
-	if (ImGui::GetCurrentContext() != nullptr)
+	if (context.surfaceKind == FGameUiFrameContext::ESurfaceKind::MainWindow && ImGui::GetCurrentContext() != nullptr)
 	{
 		auto& swapChain = GetEngine().GetRenderer().SwapChain();
 		const auto offset = swapChain.OutputOffset();
 		const auto extent = swapChain.OutputExtent();
 		const ImVec2 viewportOrigin = ImGui::GetMainViewport()->Pos;
-		gizmoController_.Draw(GetEngine(),
+		uiState.gizmoController.Draw(GetEngine(),
 			glm::vec2(viewportOrigin.x + static_cast<float>(offset.x), viewportOrigin.y + static_cast<float>(offset.y)),
 			glm::vec2(static_cast<float>(extent.width), static_cast<float>(extent.height)));
 	}
@@ -610,26 +670,7 @@ bool NextRendererGameInstance::OnRenderUI()
 void NextRendererGameInstance::OnInitUI()
 {
     NextGameInstanceBase::OnInitUI();
-
-	if (bigFont_ == nullptr)
-	{
-		bigFont_ = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
-			.filePath = "assets/fonts/Roboto-BoldCondensed.ttf",
-			.pixelSize = 24.0f,
-			.includeChineseFull = false,
-			.extraGlyphsUtf8 = "gkNextRenderer",
-		});
-	}
-
-    if (titleBarFont_ == nullptr)
-    {
-        titleBarFont_ = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
-            .filePath = "assets/fonts/Roboto-BoldCondensed.ttf",
-            .pixelSize = 18.0f,
-            .includeChineseFull = false,
-            .extraGlyphsUtf8 = "gkNextRenderer",
-        });
-    }
+    EnsureUiFonts(mainUiState_, true);
 }
 
 void NextRendererGameInstance::RequestScreenshot(bool openFolder, const std::string& tag)
@@ -732,7 +773,7 @@ bool NextRendererGameInstance::OnCursorPosition(double xpos, double ypos)
         modelViewController_.SetOrbitTarget(std::nullopt);
     }
 
-    if (!gizmoController_.IsInteracting())
+    if (!mainUiState_.gizmoController.IsInteracting())
     {
         modelViewController_.OnCursorPosition(xpos, ypos);
     }
@@ -741,7 +782,7 @@ bool NextRendererGameInstance::OnCursorPosition(double xpos, double ypos)
 
 bool NextRendererGameInstance::OnMouseButton(SDL_Event& event)
 {
-    if (!gizmoController_.IsInteracting())
+    if (!mainUiState_.gizmoController.IsInteracting())
     {
         modelViewController_.OnMouseButton(event);
     }
@@ -780,7 +821,7 @@ bool NextRendererGameInstance::OnMouseButton(SDL_Event& event)
 
 bool NextRendererGameInstance::OnScroll(double xoffset, double yoffset)
 {
-	if (!gizmoController_.IsInteracting())
+	if (!mainUiState_.gizmoController.IsInteracting())
 	{
 		modelViewController_.OnScroll(xoffset, yoffset);
 	}
@@ -889,11 +930,11 @@ void NextRendererGameInstance::CreateBoxAndPushFromView(const FLaunchView& view)
     GetEngine().GetPhysicsEngine()->AddForceToBody(id, shotDir * 100000.f);
 }
 
-void NextRendererGameInstance::DrawSettings()
+void NextRendererGameInstance::DrawSettings(FRendererUiState& uiState)
 {
     Runtime::Config::UserSettings& userSetting = GetEngine().GetUserSettings();
 
-    if (!userSetting.ShowSettings)
+    if (!uiState.showSettings)
     {
         return;
     }
@@ -906,7 +947,7 @@ void NextRendererGameInstance::DrawSettings()
                            viewport->Size.y - TitlebarSize - 50.0f - panelMargin);
 
     if (!NextUI::Theme::BeginFloatingPanel("##RendererSettingsPanel", ICON_FA_SLIDERS,
-                                              "Renderer Settings", &userSetting.ShowSettings,
+                                              "Renderer Settings", &uiState.showSettings,
                                               panelPos, panelSize))
     {
         return;
@@ -1276,7 +1317,7 @@ void NextRendererGameInstance::DrawSettings()
     NextUI::Theme::EndFloatingPanel();
 }
 
-void NextRendererGameInstance::DrawModeRail()
+void NextRendererGameInstance::DrawModeRail(FRendererUiState& uiState)
 {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     const ImVec2 railPos = viewport->Pos + ImVec2(0.0f, TitlebarSize);
@@ -1319,10 +1360,10 @@ void NextRendererGameInstance::DrawModeRail()
 
         for (const auto& entry : topEntries)
         {
-            const bool active = (entry.mode == workMode_);
+            const bool active = (entry.mode == uiState.workMode);
             if (NextUI::Theme::ModeRailButton(entry.icon, entry.tooltip, active, ModeRailButtonSize))
             {
-                workMode_ = entry.mode;
+                uiState.workMode = entry.mode;
             }
         }
 
@@ -1333,10 +1374,10 @@ void NextRendererGameInstance::DrawModeRail()
         {
             ImGui::Dummy(ImVec2(0.0f, spaceUntilBottom));
         }
-        const bool settingsActive = (workMode_ == EWorkMode::Settings);
+        const bool settingsActive = (uiState.workMode == EWorkMode::Settings);
         if (NextUI::Theme::ModeRailButton(ICON_FA_GEAR, "Settings", settingsActive, gearSize))
         {
-            workMode_ = EWorkMode::Settings;
+            uiState.workMode = EWorkMode::Settings;
         }
     }
     ImGui::End();
@@ -1344,14 +1385,14 @@ void NextRendererGameInstance::DrawModeRail()
     ImGui::PopStyleVar(3);
 }
 
-void NextRendererGameInstance::DrawViewportTopBar()
+void NextRendererGameInstance::DrawViewportTopBar(const FGameUiFrameContext& context, const FRendererUiState& uiState)
 {
     Runtime::Config::UserSettings& userSetting = GetEngine().GetUserSettings();
     ImGuiViewport* viewport = ImGui::GetMainViewport();
 
     const float panelMargin = 10.0f;
     const float leftEdge = viewport->Pos.x + ModeRailWidth +
-        (userSetting.ShowSettings ? (360.0f + panelMargin * 2.0f) : panelMargin);
+        (uiState.showSettings ? (360.0f + panelMargin * 2.0f) : panelMargin);
     const float topEdge = viewport->Pos.y + TitlebarSize + 10.0f;
 
     // Left badge: "Path Tracing | Live"
@@ -1418,13 +1459,14 @@ void NextRendererGameInstance::DrawViewportTopBar()
     }
 }
 
-void NextRendererGameInstance::DrawViewportBottomBar()
+void NextRendererGameInstance::DrawViewportBottomBar(const FGameUiFrameContext& context)
 {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     constexpr float bottomStatusBar = 30.0f;
 
-    const auto& swapChain = GetEngine().GetRenderer().SwapChain();
-    const auto extent = swapChain.OutputExtent();
+    const auto extent = context.framebufferExtent.width > 0 && context.framebufferExtent.height > 0
+        ? context.framebufferExtent
+        : GetEngine().GetRenderer().SwapChain().OutputExtent();
     const std::string frameText = fmt::format("Frame {}", GetEngine().GetTotalFrames());
     const std::string sampleText = fmt::format("Samples {} spp", GetEngine().GetUserSettings().NumberOfSamples);
     const std::string resolutionText = fmt::format("{} x {}", extent.width, extent.height);
@@ -1458,7 +1500,7 @@ void NextRendererGameInstance::DrawViewportBottomBar()
     NextUI::Theme::EndOverlayPanel();
 }
 
-void NextRendererGameInstance::DrawTitleBar()
+void NextRendererGameInstance::DrawTitleBar(const FGameUiFrameContext& context, FRendererUiState& uiState)
 {
     NextUI::Theme::FAppTitleBarConfig config{};
     config.BrandWindowId = "RendererBrand";
@@ -1467,7 +1509,7 @@ void NextRendererGameInstance::DrawTitleBar()
     config.AppName = "gkNextRenderer";
     config.Height = TitlebarSize;
     config.RightContentWidth = TitlebarRightInfoWidth;
-    config.TitleFont = titleBarFont_;
+    config.TitleFont = uiState.titleBarFont;
     config.IsMaximized = GetEngine().IsMaximized();
     config.DrawMenuBar = [&]() -> float
     {
@@ -1501,7 +1543,7 @@ void NextRendererGameInstance::DrawTitleBar()
             UpdateMenuRight();
             auto& showFlags = GetEngine().GetShowFlags();
             Utilities::UI::DrawShowFlagsCommon(showFlags);
-            ImGui::MenuItem("Profiler Overlay", nullptr, &GetEngine().GetUserSettings().ShowOverlay);
+            ImGui::MenuItem("Profiler Overlay", nullptr, &uiState.showOverlay);
             ImGui::EndMenu();
         }
         else
@@ -1542,8 +1584,8 @@ void NextRendererGameInstance::DrawTitleBar()
         if (ImGui::BeginMenu("Settings"))
         {
             UpdateMenuRight();
-            ImGui::MenuItem("Render Settings", nullptr, &GetEngine().GetUserSettings().ShowSettings);
-            ImGui::MenuItem("Stats Overlay", nullptr, &GetEngine().GetUserSettings().ShowOverlay);
+            ImGui::MenuItem("Render Settings", nullptr, &uiState.showSettings);
+            ImGui::MenuItem("Stats Overlay", nullptr, &uiState.showOverlay);
             ImGui::EndMenu();
         }
         else
@@ -1565,26 +1607,29 @@ void NextRendererGameInstance::DrawTitleBar()
 
         return menuRight;
     };
-    config.OnMinimize = [&]() { GetEngine().RequestMinimize(); };
-    config.OnToggleMaximize = [&]() { GetEngine().ToggleMaximize(); };
-    config.OnClose = [&]() { GetEngine().RequestClose(); };
+    config.OnMinimize = context.allowWindowCommands ? std::function<void()>([&]() { GetEngine().RequestMinimize(); })
+                                                     : std::function<void()>();
+    config.OnToggleMaximize = context.allowWindowCommands ? std::function<void()>([&]() { GetEngine().ToggleMaximize(); })
+                                                          : std::function<void()>();
+    config.OnClose = context.allowWindowCommands ? std::function<void()>([&]() { GetEngine().RequestClose(); })
+                                                 : std::function<void()>();
     NextUI::Theme::DrawAppTitleBar(GetEngine(), config);
 }
 
-void NextRendererGameInstance::DrawBottomStatusBar()
+void NextRendererGameInstance::DrawBottomStatusBar(FRendererUiState& uiState)
 {
     NextUI::Theme::DrawStandardBottomBar(GetEngine(), "RendererStatusBar", 30.0f,
                                          [&]()
                                          {
-                                             memoryStatisticsPanelOpen_ = !memoryStatisticsPanelOpen_;
+                                             uiState.memoryStatisticsPanelOpen = !uiState.memoryStatisticsPanelOpen;
                                          },
-                                         memoryStatisticsPanelOpen_);
+                                         uiState.memoryStatisticsPanelOpen);
 }
 
-void NextRendererGameInstance::DrawMemoryStatisticsPanel()
+void NextRendererGameInstance::DrawMemoryStatisticsPanel(FRendererUiState& uiState)
 {
-    const bool profilerMode = workMode_ == EWorkMode::Profiler;
-    if (!profilerMode && !memoryStatisticsPanelOpen_)
+    const bool profilerMode = uiState.workMode == EWorkMode::Profiler;
+    if (!profilerMode && !uiState.memoryStatisticsPanelOpen)
     {
         return;
     }
@@ -1629,10 +1674,10 @@ void NextRendererGameInstance::DrawMemoryStatisticsPanel()
     {
         if (!keepOpen)
         {
-            memoryStatisticsPanelOpen_ = false;
+            uiState.memoryStatisticsPanelOpen = false;
             if (profilerMode)
             {
-                workMode_ = EWorkMode::Renderer;
+                uiState.workMode = EWorkMode::Renderer;
             }
         }
         return;
@@ -1746,10 +1791,10 @@ void NextRendererGameInstance::DrawMemoryStatisticsPanel()
 
     if (!keepOpen)
     {
-        memoryStatisticsPanelOpen_ = false;
+        uiState.memoryStatisticsPanelOpen = false;
         if (profilerMode)
         {
-            workMode_ = EWorkMode::Renderer;
+            uiState.workMode = EWorkMode::Renderer;
         }
     }
 }

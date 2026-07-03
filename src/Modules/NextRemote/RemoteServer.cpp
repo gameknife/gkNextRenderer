@@ -1,6 +1,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/RemoteProtocol.hpp"
 #include "Engine/Rendering/Preview/RenderViewServices.hpp"
@@ -8,6 +9,9 @@
 
 #include "Modules/NextRemote/SignalingServer.hpp"
 #include "Modules/NextRemote/VideoPipeline.hpp"
+
+#include "Engine/Vulkan/GpuResources.hpp"
+#include "Engine/Vulkan/RenderingPipeline.hpp"
 
 #include <spdlog/spdlog.h>
 #include <SDL3/SDL_gamepad.h>
@@ -21,6 +25,8 @@ namespace Runtime::Remote
     {
         constexpr auto remoteStatsLogInterval = std::chrono::seconds(10);
         constexpr auto remoteIdleFpsDelay = std::chrono::seconds(5);
+        constexpr VkFormat remoteCompositeFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+        constexpr uint32_t remoteCompositeBindlessBase = 64500u;
 
         uint32_t IdleTargetFps(const uint32_t activeFps)
         {
@@ -207,6 +213,7 @@ namespace Runtime::Remote
             std::lock_guard lock(cloudViewsMutex_);
             for (auto& [_, clientView] : cloudViews_)
             {
+                ReleaseClientViewResources(clientView);
                 clientView.initialized = false;
                 clientView.lastButtonMask = 0;
             }
@@ -222,6 +229,7 @@ namespace Runtime::Remote
             std::lock_guard lock(cloudViewsMutex_);
             for (auto& [_, clientView] : cloudViews_)
             {
+                ReleaseClientViewResources(clientView);
                 clientView.initialized = false;
                 clientView.lastButtonMask = 0;
                 clientView.lastInputTime = std::chrono::steady_clock::now();
@@ -310,7 +318,7 @@ namespace Runtime::Remote
             if (it != cloudViews_.end())
             {
                 pendingDisabledViewIndices_.push_back(it->second.viewIndex);
-                cloudViews_.erase(it);
+                pendingRemovedSessionIds_.push_back(sessionId);
                 SPDLOG_INFO("RemotePlay: session {} unregistered cloud view", sessionId);
             }
         }
@@ -344,9 +352,11 @@ namespace Runtime::Remote
 
         {
             std::vector<uint32_t> disabledViewIndices;
+            std::vector<std::string> removedSessionIds;
             {
                 std::lock_guard lock(cloudViewsMutex_);
                 disabledViewIndices.swap(pendingDisabledViewIndices_);
+                removedSessionIds.swap(pendingRemovedSessionIds_);
             }
             for (const uint32_t viewIndex : disabledViewIndices)
             {
@@ -354,6 +364,24 @@ namespace Runtime::Remote
                 offscreenViews.SetEnabled(viewIndex, false);
                 offscreenViews.ClearCameraOverride(viewIndex);
                 SPDLOG_INFO("RemotePlay: disabled cloud RenderView slot {}", viewIndex);
+            }
+            if (!removedSessionIds.empty())
+            {
+                std::lock_guard lock(cloudViewsMutex_);
+                for (const std::string& sessionId : removedSessionIds)
+                {
+                    auto it = cloudViews_.find(sessionId);
+                    if (it == cloudViews_.end())
+                    {
+                        continue;
+                    }
+                    ReleaseClientViewResources(it->second);
+                    if (engine->GetGameInstance())
+                    {
+                        engine->GetGameInstance()->OnRemoteUiSessionClosed(sessionId);
+                    }
+                    cloudViews_.erase(it);
+                }
             }
         }
 
@@ -389,6 +417,13 @@ namespace Runtime::Remote
             {
                 clientView.lastInputTime = now;
             }
+            if (!clientView.uiSession)
+            {
+                clientView.uiSession = std::make_shared<FRemoteImGuiSession>(*engine, sessionId);
+            }
+            clientView.uiSession->HandleInputEvents(events, VkExtent2D{config_.width, config_.height});
+            const bool uiCapturesKeyboard = clientView.uiSession->WantsCaptureKeyboard();
+            const bool uiCapturesMouse = clientView.uiSession->WantsCaptureMouse();
 
             for (const FCloudInputEvent& event : events)
             {
@@ -396,6 +431,10 @@ namespace Runtime::Remote
                 {
                 case FCloudInputEvent::EType::Key:
                     {
+                        if (uiCapturesKeyboard)
+                        {
+                            break;
+                        }
                         const SDL_Keymod mod = static_cast<SDL_Keymod>(event.mod);
                         const auto scancode = static_cast<SDL_Scancode>(event.scancode);
                         const SDL_Keycode key = SDL_GetKeyFromScancode(scancode, mod, true);
@@ -413,6 +452,10 @@ namespace Runtime::Remote
                     {
                         const bool relative =
                             event.mode == static_cast<uint8_t>(ERemoteMouseMoveMode::Relative);
+                        if (uiCapturesMouse && !relative)
+                        {
+                            break;
+                        }
                         const double x = relative ? static_cast<double>(event.x)
                                                   : static_cast<double>(event.x) * static_cast<double>(config_.width);
                         const double y = relative ? static_cast<double>(event.y)
@@ -421,6 +464,10 @@ namespace Runtime::Remote
                         break;
                     }
                 case FCloudInputEvent::EType::MouseButton:
+                    if (uiCapturesMouse)
+                    {
+                        break;
+                    }
                     clientView.controller.ApplyMouseButton(event.button, event.down,
                                                            static_cast<double>(event.x) *
                                                                static_cast<double>(config_.width),
@@ -428,6 +475,10 @@ namespace Runtime::Remote
                                                                static_cast<double>(config_.height));
                     break;
                 case FCloudInputEvent::EType::Wheel:
+                    if (uiCapturesMouse)
+                    {
+                        break;
+                    }
                     clientView.controller.ApplyWheel(event.x, event.y);
                     break;
                 case FCloudInputEvent::EType::Gamepad:
@@ -442,6 +493,8 @@ namespace Runtime::Remote
                         }
                     }
                     clientView.lastButtonMask = event.buttonMask;
+                    break;
+                case FCloudInputEvent::EType::TextUtf8:
                     break;
                 }
             }
@@ -514,6 +567,184 @@ namespace Runtime::Remote
         return camera;
     }
 
+    void RemoteServer::ReleaseClientViewResources(FRemoteClientView& clientView)
+    {
+        if (NextEngine* engine = NextEngine::GetInstance())
+        {
+            if (NextUI::UserInterface* userInterface = engine->GetUserInterface())
+            {
+                userInterface->DestroyViewportPipeline(clientView.compositeUiPipeline);
+            }
+        }
+        clientView.compositeUiPipeline = VK_NULL_HANDLE;
+        clientView.uiRenderBuffers.clear();
+        clientView.compositeFramebuffer.reset();
+        clientView.compositeRenderPass.reset();
+        clientView.compositeImage.reset();
+        clientView.compositeExtent = {};
+        clientView.compositeLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        clientView.compositeBindlessSlot = 0;
+    }
+
+    bool RemoteServer::EnsureClientCompositeTarget(FRemoteClientView& clientView,
+                                                   Vulkan::VulkanBaseRenderer& renderer,
+                                                   VkExtent2D extent)
+    {
+        extent.width = std::max(1u, extent.width);
+        extent.height = std::max(1u, extent.height);
+        if (clientView.compositeImage &&
+            clientView.compositeExtent.width == extent.width &&
+            clientView.compositeExtent.height == extent.height &&
+            clientView.compositeUiPipeline != VK_NULL_HANDLE)
+        {
+            return true;
+        }
+
+        ReleaseClientViewResources(clientView);
+        clientView.compositeExtent = extent;
+        clientView.compositeBindlessSlot = remoteCompositeBindlessBase + clientView.viewIndex;
+        clientView.compositeImage = std::make_unique<Vulkan::RenderImage>(
+            renderer.Device(),
+            extent,
+            remoteCompositeFormat,
+            VK_IMAGE_TILING_OPTIMAL,
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            false,
+            fmt::format("Remote Composite View {}", clientView.viewIndex).c_str());
+
+        if (Assets::GlobalTexturePool* texturePool = Assets::GlobalTexturePool::GetInstance())
+        {
+            texturePool->BindStorageTexture(clientView.compositeBindlessSlot,
+                                            clientView.compositeImage->GetImageView());
+            texturePool->BindSampleTexture(clientView.compositeBindlessSlot,
+                                           clientView.compositeImage->GetImageView(),
+                                           clientView.compositeImage->Sampler());
+        }
+
+        clientView.compositeRenderPass = std::make_unique<Vulkan::RenderPass>(
+            renderer.SwapChain(),
+            remoteCompositeFormat,
+            renderer.DepthBuffer(),
+            VK_ATTACHMENT_LOAD_OP_LOAD,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        clientView.compositeRenderPass->SetDebugName(fmt::format("Remote Composite UI RenderPass {}", clientView.viewIndex));
+        clientView.compositeFramebuffer = std::make_unique<Vulkan::FrameBuffer>(
+            extent,
+            clientView.compositeImage->GetImageView(),
+            *clientView.compositeRenderPass,
+            false);
+
+        if (NextEngine* engine = NextEngine::GetInstance())
+        {
+            if (NextUI::UserInterface* userInterface = engine->GetUserInterface())
+            {
+                clientView.compositeUiPipeline =
+                    userInterface->CreateViewportPipeline(clientView.compositeRenderPass->Handle());
+            }
+        }
+        clientView.uiRenderBuffers.resize(renderer.SwapChain().Images().size());
+        clientView.compositeLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        return clientView.compositeUiPipeline != VK_NULL_HANDLE;
+    }
+
+    void RemoteServer::CopyViewToComposite(FRemoteClientView& clientView,
+                                           VkCommandBuffer commandBuffer,
+                                           Vulkan::VulkanBaseRenderer& renderer,
+                                           Vulkan::RenderView& view)
+    {
+        const Vulkan::RenderImage* src = renderer.GetStorageImage(view.RtBankBase() + Assets::Bindless::RT_DENOISED);
+        if (!src || !clientView.compositeImage)
+        {
+            return;
+        }
+
+        const VkExtent2D extent = view.RenderExtent();
+        src->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                           VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        const VkAccessFlags oldAccess =
+            clientView.compositeLayout == VK_IMAGE_LAYOUT_UNDEFINED ? 0u : VK_ACCESS_SHADER_READ_BIT;
+        clientView.compositeImage->InsertBarrier(commandBuffer, oldAccess, VK_ACCESS_TRANSFER_WRITE_BIT,
+                                                 clientView.compositeLayout,
+                                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        clientView.compositeLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+        VkImageCopy copyRegion{};
+        copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        copyRegion.extent = {extent.width, extent.height, 1};
+        vkCmdCopyImage(commandBuffer,
+                       src->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                       clientView.compositeImage->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                       1, &copyRegion);
+
+        clientView.compositeImage->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_WRITE_BIT,
+                                                 VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+                                                     VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        clientView.compositeLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        src->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+    }
+
+    void RemoteServer::RenderClientUiToComposite(FRemoteClientView& clientView,
+                                                 VkCommandBuffer commandBuffer,
+                                                 uint32_t imageIndex,
+                                                 Vulkan::VulkanBaseRenderer& renderer,
+                                                 const Assets::Camera& camera)
+    {
+        if (!clientView.uiSession || !clientView.compositeImage || !clientView.compositeFramebuffer ||
+            clientView.compositeUiPipeline == VK_NULL_HANDLE || clientView.uiRenderBuffers.empty())
+        {
+            return;
+        }
+
+        ImDrawData* drawData = clientView.uiSession->BuildDrawData(clientView.compositeExtent, camera);
+        if (drawData == nullptr || drawData->CmdListsCount <= 0)
+        {
+            clientView.compositeImage->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                                     VK_ACCESS_SHADER_READ_BIT,
+                                                     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                                     VK_IMAGE_LAYOUT_GENERAL);
+            clientView.compositeLayout = VK_IMAGE_LAYOUT_GENERAL;
+            return;
+        }
+
+        VkRenderPassBeginInfo renderPassInfo{};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassInfo.renderPass = clientView.compositeRenderPass->Handle();
+        renderPassInfo.framebuffer = clientView.compositeFramebuffer->Handle();
+        renderPassInfo.renderArea.offset = {0, 0};
+        renderPassInfo.renderArea.extent = clientView.compositeExtent;
+        renderPassInfo.clearValueCount = 0;
+        renderPassInfo.pClearValues = nullptr;
+
+        vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+        if (NextEngine* engine = NextEngine::GetInstance())
+        {
+            if (NextUI::UserInterface* userInterface = engine->GetUserInterface())
+            {
+                const uint32_t bufferIndex = imageIndex % static_cast<uint32_t>(clientView.uiRenderBuffers.size());
+                userInterface->RenderViewportDrawData(drawData,
+                                                      commandBuffer,
+                                                      clientView.uiRenderBuffers[bufferIndex],
+                                                      clientView.compositeExtent,
+                                                      renderer.SwapChain().HDROutputMode(),
+                                                      clientView.compositeUiPipeline);
+            }
+        }
+        vkCmdEndRenderPass(commandBuffer);
+        clientView.compositeLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+        clientView.compositeImage->InsertBarrier(commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                                 VK_ACCESS_SHADER_READ_BIT,
+                                                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                                 VK_IMAGE_LAYOUT_GENERAL);
+        clientView.compositeLayout = VK_IMAGE_LAYOUT_GENERAL;
+    }
+
     void RemoteServer::RecordCloudViewFrame(const uint32_t viewIndex, VkCommandBuffer commandBuffer,
                                             const uint32_t imageIndex, Vulkan::RenderView& view)
     {
@@ -521,12 +752,50 @@ namespace Runtime::Remote
         {
             return;
         }
-        cloudVideoPipelines_[viewIndex]->RecordFrameFromStorage(
-            commandBuffer,
-            imageIndex,
-            NextEngine::GetInstance()->GetRenderer(),
-            view.RtBankBase() + Assets::Bindless::RT_DENOISED,
-            view.RenderExtent());
+
+        NextEngine* engine = NextEngine::GetInstance();
+        if (!engine)
+        {
+            return;
+        }
+
+        Assets::Camera camera;
+        FRemoteClientView* clientView = nullptr;
+        {
+            std::lock_guard lock(cloudViewsMutex_);
+            for (auto& [_, candidate] : cloudViews_)
+            {
+                if (candidate.viewIndex == viewIndex)
+                {
+                    clientView = &candidate;
+                    camera = BuildClientCamera(candidate);
+                    break;
+                }
+            }
+            if (clientView == nullptr)
+            {
+                return;
+            }
+            if (!EnsureClientCompositeTarget(*clientView, engine->GetRenderer(), view.RenderExtent()))
+            {
+                return;
+            }
+            CopyViewToComposite(*clientView, commandBuffer, engine->GetRenderer(), view);
+            RenderClientUiToComposite(*clientView, commandBuffer, imageIndex, engine->GetRenderer(), camera);
+            if (clientView->compositeImage)
+            {
+                cloudVideoPipelines_[viewIndex]->RecordFrameFromStorageImage(
+                    commandBuffer,
+                    imageIndex,
+                    engine->GetRenderer(),
+                    *clientView->compositeImage,
+                    clientView->compositeBindlessSlot,
+                    clientView->compositeExtent,
+                    VK_ACCESS_SHADER_READ_BIT,
+                    VK_ACCESS_SHADER_READ_BIT);
+            }
+            return;
+        }
     }
 
     NextGameInstanceBase::FRemoteViewActionContext RemoteServer::BuildActionContext(

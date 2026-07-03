@@ -42,10 +42,11 @@ namespace Runtime::Remote
                 std::chrono::duration<double>(1.0 / static_cast<double>(std::max(1u, fps))));
         }
 
-        void InsertImageBarrier(VkCommandBuffer commandBuffer, VkImage image, VkAccessFlags srcAccessMask,
-                                VkAccessFlags dstAccessMask, VkImageLayout oldLayout, VkImageLayout newLayout,
-                                VkImageAspectFlags aspectMask, VkPipelineStageFlags srcStageMask,
-                                VkPipelineStageFlags dstStageMask)
+        void InsertVideoPipelineImageBarrier(VkCommandBuffer commandBuffer, VkImage image, VkAccessFlags srcAccessMask,
+                                             VkAccessFlags dstAccessMask, VkImageLayout oldLayout,
+                                             VkImageLayout newLayout, VkImageAspectFlags aspectMask,
+                                             VkPipelineStageFlags srcStageMask,
+                                             VkPipelineStageFlags dstStageMask)
         {
             VkImageMemoryBarrier barrier{};
             barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -382,15 +383,30 @@ namespace Runtime::Remote
     {
         if (const Vulkan::RenderImage* sourceImage = renderer.GetStorageImage(sourceBindlessIndex))
         {
-            sourceImage->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                                       VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+            RecordFrameFromStorageImage(commandBuffer,
+                                        imageIndex,
+                                        renderer,
+                                        *sourceImage,
+                                        sourceBindlessIndex,
+                                        sourceExtent,
+                                        VK_ACCESS_SHADER_WRITE_BIT,
+                                        VK_ACCESS_SHADER_WRITE_BIT);
         }
+    }
+
+    void FVideoPipeline::RecordFrameFromStorageImage(VkCommandBuffer commandBuffer, uint32_t imageIndex,
+                                                     Vulkan::VulkanBaseRenderer& renderer,
+                                                     const Vulkan::RenderImage& sourceImage,
+                                                     const uint32_t sourceBindlessIndex,
+                                                     const VkExtent2D sourceExtent,
+                                                     const VkAccessFlags sourceAccessBefore,
+                                                     const VkAccessFlags sourceAccessAfter)
+    {
+        sourceImage.InsertBarrier(commandBuffer, sourceAccessBefore, VK_ACCESS_SHADER_READ_BIT,
+                                  VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
         RecordFrameFromSource(commandBuffer, imageIndex, renderer, sourceBindlessIndex, sourceExtent, VK_NULL_HANDLE);
-        if (const Vulkan::RenderImage* sourceImage = renderer.GetStorageImage(sourceBindlessIndex))
-        {
-            sourceImage->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-                                       VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-        }
+        sourceImage.InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, sourceAccessAfter,
+                                  VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
     }
 
     void FVideoPipeline::RecordFrameFromSource(VkCommandBuffer commandBuffer, uint32_t imageIndex,
@@ -531,10 +547,11 @@ namespace Runtime::Remote
             freeSlot->encodeImage.layout == VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR
                 ? VK_PIPELINE_STAGE_ALL_COMMANDS_BIT
                 : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-        InsertImageBarrier(commandBuffer, freeSlot->encodeImage.image, encodeSrcAccess, VK_ACCESS_TRANSFER_WRITE_BIT,
-                           freeSlot->encodeImage.layout, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                           VK_IMAGE_ASPECT_PLANE_0_BIT | VK_IMAGE_ASPECT_PLANE_1_BIT, encodeSrcStage,
-                           VK_PIPELINE_STAGE_TRANSFER_BIT);
+        InsertVideoPipelineImageBarrier(commandBuffer, freeSlot->encodeImage.image, encodeSrcAccess,
+                                        VK_ACCESS_TRANSFER_WRITE_BIT, freeSlot->encodeImage.layout,
+                                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                        VK_IMAGE_ASPECT_PLANE_0_BIT | VK_IMAGE_ASPECT_PLANE_1_BIT, encodeSrcStage,
+                                        VK_PIPELINE_STAGE_TRANSFER_BIT);
         freeSlot->encodeImage.layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
         VkImageCopy lumaCopy{};
@@ -562,10 +579,10 @@ namespace Runtime::Remote
         freeSlot->yPlaneLayout = VK_IMAGE_LAYOUT_GENERAL;
         freeSlot->uvPlaneLayout = VK_IMAGE_LAYOUT_GENERAL;
 
-        InsertImageBarrier(commandBuffer, freeSlot->encodeImage.image, VK_ACCESS_TRANSFER_WRITE_BIT, 0,
-                           freeSlot->encodeImage.layout, VK_IMAGE_LAYOUT_GENERAL,
-                           VK_IMAGE_ASPECT_PLANE_0_BIT | VK_IMAGE_ASPECT_PLANE_1_BIT,
-                           VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+        InsertVideoPipelineImageBarrier(commandBuffer, freeSlot->encodeImage.image, VK_ACCESS_TRANSFER_WRITE_BIT, 0,
+                                        freeSlot->encodeImage.layout, VK_IMAGE_LAYOUT_GENERAL,
+                                        VK_IMAGE_ASPECT_PLANE_0_BIT | VK_IMAGE_ASPECT_PLANE_1_BIT,
+                                        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
         freeSlot->encodeImage.layout = VK_IMAGE_LAYOUT_GENERAL;
 
         if (swapChainImageForLegacyRestore != VK_NULL_HANDLE)

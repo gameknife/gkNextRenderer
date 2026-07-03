@@ -19,6 +19,7 @@ namespace Runtime::Remote
             MouseButton,
             Wheel,
             Gamepad,
+            TextUtf8,
         };
 
         EType type = EType::Key;
@@ -32,6 +33,7 @@ namespace Runtime::Remote
         float y = 0.0f;
         std::array<int16_t, 6> axes{};
         uint32_t buttonMask = 0;
+        std::string text;
     };
 
     class FCloudInputRouter final

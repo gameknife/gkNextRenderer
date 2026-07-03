@@ -75,6 +75,13 @@ namespace Runtime::Remote
         void RecordFrameFromStorage(VkCommandBuffer commandBuffer, uint32_t imageIndex,
                                     Vulkan::VulkanBaseRenderer& renderer, uint32_t sourceBindlessIndex,
                                     VkExtent2D sourceExtent);
+        void RecordFrameFromStorageImage(VkCommandBuffer commandBuffer, uint32_t imageIndex,
+                                         Vulkan::VulkanBaseRenderer& renderer,
+                                         const Vulkan::RenderImage& sourceImage,
+                                         uint32_t sourceBindlessIndex,
+                                         VkExtent2D sourceExtent,
+                                         VkAccessFlags sourceAccessBefore,
+                                         VkAccessFlags sourceAccessAfter);
 
         // Render thread, just before the renderer destroys the swapchain the convert pipeline
         // was created against.

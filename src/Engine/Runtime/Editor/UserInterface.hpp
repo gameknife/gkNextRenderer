@@ -91,6 +91,9 @@ public:
 	void DestroyViewportPipeline(VkPipeline pipeline) const;
 	void RenderViewportDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, UiRenderBuffer& renderBuffer,
 	                            VkExtent2D framebufferExtent, uint32_t hdrOutputMode, VkPipeline pipeline);
+	ImFontAtlas* GetFontAtlas() const;
+	ImFont* GetDefaultFont() const;
+	void AttachRendererBackendToCurrentContext() const;
 
 private:
 	NextEngine& GetEngine() {return *engine_;}
@@ -118,6 +121,8 @@ private:
 	std::unique_ptr<IMultiViewportBackend> multiViewportBackend_;
 	std::unordered_set<std::string> uiTextureLoadRequests_;
 	std::unordered_map<std::string, ImVec2> uiTexturePixelSizeCache_;
+	ImFontAtlas* fontAtlas_ = nullptr;
+	ImFont* defaultFont_ = nullptr;
 	uint32_t fontTextureIndex_ = UINT32_MAX;
 	std::vector< std::function<void ()> > auxDrawRequest_;
 	bool hasPreparedDrawData_ = false;

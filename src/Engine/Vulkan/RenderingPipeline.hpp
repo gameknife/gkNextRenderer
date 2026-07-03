@@ -23,6 +23,9 @@ namespace Vulkan
 
 		RenderPass(const SwapChain& swapChain, const class DepthBuffer& depthBuffer, VkAttachmentLoadOp colorBufferLoadOp);
 		RenderPass(const SwapChain& swapChain, const DepthBuffer& depthBuffer, VkAttachmentLoadOp colorBufferLoadOp, VkAttachmentLoadOp depthBufferLoadOp);
+		RenderPass(const SwapChain& swapChain, VkFormat format, const DepthBuffer& depthBuffer,
+		           VkAttachmentLoadOp colorBufferLoadOp, VkImageLayout colorInitialLayout,
+		           VkImageLayout colorFinalLayout);
 		RenderPass(const SwapChain& swapChain, VkFormat format, const DepthBuffer& depthBuffer, VkAttachmentLoadOp colorBufferLoadOp, VkAttachmentLoadOp depthBufferLoadOp);
 		RenderPass(const SwapChain& swapChain, VkFormat format,  VkFormat format1,  VkFormat format2, const DepthBuffer& depthBuffer, VkAttachmentLoadOp colorBufferLoadOp, VkAttachmentLoadOp depthBufferLoadOp);
 		~RenderPass();
@@ -42,6 +45,8 @@ namespace Vulkan
 			VkAttachmentLoadOp depthLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 			VkAttachmentStoreOp depthStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 			VkAccessFlags dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			VkImageLayout colorInitialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			VkImageLayout colorFinalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 		};
 		void Init(const FRenderPassSpec& spec);
 

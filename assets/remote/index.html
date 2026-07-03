@@ -482,6 +482,7 @@ const InputType = {
   gamepad: 5,
   requestKeyframe: 6,
   setBitrate: 7,
+  textUtf8: 8,
 };
 const MoveMode = {
   relative: 0,
@@ -711,6 +712,19 @@ function packKey(event, down) {
   return buffer;
 }
 
+function packText(text) {
+  const bytes = new TextEncoder().encode(text);
+  if (!bytes.length || bytes.length > 65535) {
+    return null;
+  }
+  const buffer = new ArrayBuffer(3 + bytes.length);
+  const view = new DataView(buffer);
+  view.setUint8(0, InputType.textUtf8);
+  view.setUint16(1, bytes.length, true);
+  new Uint8Array(buffer, 3).set(bytes);
+  return buffer;
+}
+
 function packMouseMove(mode, x, y) {
   const buffer = new ArrayBuffer(10);
   const view = new DataView(buffer);
@@ -836,6 +850,12 @@ document.addEventListener("keydown", event => {
   if (buffer) {
     event.preventDefault();
     sendInput(buffer);
+  }
+  if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key && event.key.length === 1) {
+    const textBuffer = packText(event.key);
+    if (textBuffer) {
+      sendInput(textBuffer);
+    }
   }
 });
 document.addEventListener("keyup", event => {
