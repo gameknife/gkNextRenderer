@@ -29,5 +29,6 @@ namespace Assets
         uint32_t nodeInstanceId = std::numeric_limits<uint32_t>::max();
         uint32_t shBands = 0;
         bool antialias = false;
+        bool shBasisFlipXY = false;
     };
 }

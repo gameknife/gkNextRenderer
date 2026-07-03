@@ -121,11 +121,15 @@ namespace NextCVar
         GK_CVAR_FLOAT("r.heatmapScale", settings, HeatmapScale, 1.0f, ECVarFlags::Archive,
                       "Profiler heatmap scale");
         GK_CVAR_UINT("r.splat.bucketCount", settings, SplatBucketCount, 4096, ECVarFlags::Archive,
-                     "Gaussian splat depth-sort bucket count (clamped to 16-4096)");
+                     "Minimum Gaussian splat depth-sort bucket count; renderer raises it up to 16K for large scenes");
         GK_CVAR_UINT("r.splat.maxCount", settings, SplatMaxCount, 0, ECVarFlags::Archive,
                      "Maximum Gaussian splats processed per frame (0=all)");
         GK_CVAR_FLOAT("r.splat.sigma", settings, SplatSigma, 3.0f, ECVarFlags::Archive,
                       "Gaussian billboard radius in standard deviations (clamped to 1-4)");
+        GK_CVAR_BOOL("r.splat.forceAA", settings, SplatForceAA, true, ECVarFlags::Archive,
+                     "Force Gaussian splat antialias opacity compensation");
+        GK_CVAR_FLOAT("r.splat.aaStrength", settings, SplatAAStrength, 0.5f, ECVarFlags::Archive,
+                      "Gaussian splat antialias opacity compensation strength (0=off, 1=full)");
         GK_CVAR_FLOAT("r.paperWhiteNit", settings, PaperWhiteNit, 600.0f, ECVarFlags::Archive,
                       "Paper white nit");
         GK_CVAR_BOOL("ui.showSettings", settings, ShowSettings, true, ECVarFlags::Archive,

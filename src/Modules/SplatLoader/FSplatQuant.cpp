@@ -18,11 +18,11 @@ namespace Assets::Sog
         }
 
         const uint32_t omitted = tag - 252;
-        const float inverseSqrt2 = glm::inversesqrt(2.0f);
+        const float sqrt2 = std::sqrt(2.0f);
         const std::array<float, 3> packed{
-            (static_cast<float>(a) / 255.0f * 2.0f - 1.0f) * inverseSqrt2,
-            (static_cast<float>(b) / 255.0f * 2.0f - 1.0f) * inverseSqrt2,
-            (static_cast<float>(c) / 255.0f * 2.0f - 1.0f) * inverseSqrt2,
+            (static_cast<float>(a) / 255.0f - 0.5f) * sqrt2,
+            (static_cast<float>(b) / 255.0f - 0.5f) * sqrt2,
+            (static_cast<float>(c) / 255.0f - 0.5f) * sqrt2,
         };
         std::array<float, 4> components{}; // w, x, y, z
         uint32_t source = 0;

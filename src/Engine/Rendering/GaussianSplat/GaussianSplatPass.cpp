@@ -20,7 +20,7 @@ namespace Vulkan::GaussianSplat
 {
     namespace
     {
-        constexpr uint32_t maxSplatBucketCount = 4096;
+        constexpr uint32_t maxSplatBucketCount = 16u * 1024u;
         constexpr uint32_t splatSortGroupSize = 256;
 
         struct alignas(16) FSplatPushConstants
@@ -51,13 +51,23 @@ namespace Vulkan::GaussianSplat
             uint32_t width;
             uint32_t height;
             uint32_t bucketCount;
+            float nearPlane;
+            float farPlane;
+            uint32_t reserved0;
+            uint32_t reserved1;
         };
-        static_assert(sizeof(FSplatSortPushConstants) == 80);
+        static_assert(sizeof(FSplatSortPushConstants) == 96);
+
+        struct FSplatComposePushConstants
+        {
+            VkDeviceAddress camera;
+        };
+        static_assert(sizeof(FSplatComposePushConstants) == 8);
 
         struct alignas(16) FSplatModelState
         {
             glm::mat4 world{1.0f};
-            glm::vec4 parameters{1.0f, 1.0f, 0.0f, 0.0f}; // opacity, visible, reserved, reserved
+            glm::vec4 parameters{1.0f, 1.0f, 0.0f, 0.0f}; // opacity, visible, antialias, SH basis flip XY
         };
         static_assert(sizeof(FSplatModelState) == 80);
 
@@ -78,6 +88,14 @@ namespace Vulkan::GaussianSplat
             }
             handledShaderFiles.insert(filename);
             return true;
+        }
+
+        uint32_t AutoBucketCount(uint32_t splatCount)
+        {
+            if (splatCount == 0) return 4096;
+            const float targetBits = std::log2(std::max(1.0f, static_cast<float>(splatCount) / 96.0f));
+            const int bits = std::clamp(static_cast<int>(std::round(targetBits)), 12, 14);
+            return 1u << bits;
         }
     }
 
@@ -167,7 +185,7 @@ namespace Vulkan::GaussianSplat
             static_cast<uint32_t>(sizeof(FSplatSortPushConstants)));
         composePipeline_ = std::make_unique<PipelineCommon::ZeroBindCustomPushConstantPipeline>(
             renderer_.SwapChain(), "assets/shaders/Splat.Compose.comp.slang.spv",
-            static_cast<uint32_t>(sizeof(uint32_t)));
+            static_cast<uint32_t>(sizeof(FSplatComposePushConstants)));
 
         const Device& device = renderer_.Device();
         VkAttachmentDescription attachments[2]{};
@@ -339,6 +357,7 @@ namespace Vulkan::GaussianSplat
     {
         std::vector<FSplatModelState> states(modelCount_);
         const auto& models = renderer_.GetScene().GaussianSplats();
+        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
         for (uint32_t modelIndex = 0; modelIndex < modelCount_; ++modelIndex)
         {
             const auto node = renderer_.GetScene().GetNodeSharedByInstanceId(models[modelIndex].nodeInstanceId);
@@ -349,6 +368,10 @@ namespace Vulkan::GaussianSplat
             }
 
             states[modelIndex].world = node->WorldTransform();
+            states[modelIndex].parameters.z = (models[modelIndex].antialias || settings.SplatForceAA)
+                ? std::clamp(settings.SplatAAStrength, 0.0f, 1.0f)
+                : 0.0f;
+            states[modelIndex].parameters.w = models[modelIndex].shBasisFlipXY ? 1.0f : 0.0f;
             if (const auto* component = node->GetComponentPtr<Runtime::GaussianSplatComponent>())
             {
                 states[modelIndex].parameters.x = component->GetOpacityScale();
@@ -363,7 +386,8 @@ namespace Vulkan::GaussianSplat
         const auto& settings = NextEngine::GetInstance()->GetUserSettings();
         const uint32_t activeSplatCount =
             settings.SplatMaxCount == 0 ? splatCount_ : std::min(splatCount_, settings.SplatMaxCount);
-        const uint32_t bucketCount = std::clamp(settings.SplatBucketCount, 16u, maxSplatBucketCount);
+        const uint32_t bucketCount = std::clamp(
+            std::max(settings.SplatBucketCount, AutoBucketCount(activeSplatCount)), 16u, maxSplatBucketCount);
 
         VkMemoryBarrier previousFrameBarrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
         previousFrameBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT |
@@ -375,7 +399,8 @@ namespace Vulkan::GaussianSplat
                              VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                              0, 1, &previousFrameBarrier, 0, nullptr, 0, nullptr);
 
-        vkCmdFillBuffer(commandBuffer, bucketCountBuffer_->Handle(), 0, VK_WHOLE_SIZE, 0);
+        const VkDeviceSize bucketBufferSize = bucketCount * sizeof(uint32_t);
+        vkCmdFillBuffer(commandBuffer, bucketCountBuffer_->Handle(), 0, bucketBufferSize, 0);
         vkCmdFillBuffer(commandBuffer, drawIndirectBuffer_->Handle(), 0, VK_WHOLE_SIZE, 0);
 
         std::array<VkBufferMemoryBarrier, 2> clearBarriers{};
@@ -390,18 +415,21 @@ namespace Vulkan::GaussianSplat
             barrier.size = VK_WHOLE_SIZE;
         }
         clearBarriers[0].buffer = bucketCountBuffer_->Handle();
+        clearBarriers[0].size = bucketBufferSize;
         clearBarriers[1].buffer = drawIndirectBuffer_->Handle();
         vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                              0, 0, nullptr, static_cast<uint32_t>(clearBarriers.size()), clearBarriers.data(),
                              0, nullptr);
 
         const VkExtent2D extent = renderer_.SwapChain().RenderExtent();
+        const auto camera = NextEngine::GetInstance()->GetScene().GetRenderCamera();
         const FSplatSortPushConstants push{
             renderer_.UniformBuffers()[imageIndex].Buffer().GetDeviceAddress(), splatBuffer_->GetDeviceAddress(),
             modelStateBuffers_[imageIndex]->GetDeviceAddress(), sortedIndexBuffer_->GetDeviceAddress(),
             bucketCountBuffer_->GetDeviceAddress(),
             bucketOffsetBuffer_->GetDeviceAddress(), bucketCursorBuffer_->GetDeviceAddress(),
-            drawIndirectBuffer_->GetDeviceAddress(), activeSplatCount, extent.width, extent.height, bucketCount};
+            drawIndirectBuffer_->GetDeviceAddress(), activeSplatCount, extent.width, extent.height, bucketCount,
+            std::max(camera.NearPlane, 1e-4f), std::max(camera.FarPlane, camera.NearPlane + 1e-3f), 0u, 0u};
 
         histogramPipeline_->BindPipeline(commandBuffer, &push);
         vkCmdDispatch(commandBuffer, (activeSplatCount + splatSortGroupSize - 1) / splatSortGroupSize, 1, 1);
@@ -413,7 +441,7 @@ namespace Vulkan::GaussianSplat
         histogramBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         histogramBarrier.buffer = bucketCountBuffer_->Handle();
         histogramBarrier.offset = 0;
-        histogramBarrier.size = VK_WHOLE_SIZE;
+        histogramBarrier.size = bucketBufferSize;
         vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                              VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 1, &histogramBarrier, 0, nullptr);
 
@@ -433,7 +461,7 @@ namespace Vulkan::GaussianSplat
             barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             barrier.buffer = prefixBuffers[index];
             barrier.offset = 0;
-            barrier.size = VK_WHOLE_SIZE;
+            barrier.size = index < 2 ? bucketBufferSize : VK_WHOLE_SIZE;
         }
         vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                              VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr,
@@ -509,7 +537,8 @@ namespace Vulkan::GaussianSplat
             VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
             VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 
-        const uint32_t composePush = 0;
+        const FSplatComposePushConstants composePush{
+            renderer_.UniformBuffers()[imageIndex].Buffer().GetDeviceAddress()};
         composePipeline_->BindPipeline(commandBuffer, &composePush);
         vkCmdDispatch(commandBuffer, (extent.width + 7) / 8, (extent.height + 7) / 8, 1);
 
