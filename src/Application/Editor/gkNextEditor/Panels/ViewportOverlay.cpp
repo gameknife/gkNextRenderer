@@ -174,11 +174,7 @@ namespace Editor
 
         NextUI::Theme::BeginOverlayPanel(toolbarConfig);
 
-        static int projectionMode = 0;
-        static int displayMode = 0;
-        static int cameraIndex = 0;
-        static float angleSnap = 10.0f;
-        static float distanceSnap = 0.25f;
+        auto& overlayState = ui.viewportOverlay;
         Runtime::Config::UserSettings& userSettings = ctx.engine.GetUserSettings();
         auto& renderer = ctx.engine.GetRenderer();
         const auto supportedRenderers = BuildSupportedRendererList(ctx.engine);
@@ -215,11 +211,11 @@ namespace Editor
         ImGui::SameLine();
 
         ImGui::SetNextItemWidth(126.0f);
-        ImGui::Combo("##ViewportProjection", &projectionMode, "Perspective\0Orthographic\0\0");
+        ImGui::Combo("##ViewportProjection", &overlayState.projectionMode, "Perspective\0Orthographic\0\0");
         NextUI::Theme::DrawTooltip("Camera Projection");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(110.0f);
-        ImGui::Combo("##ViewportDisplayMode", &displayMode, "Lit\0Lighting\0Wireframe\0\0");
+        ImGui::Combo("##ViewportDisplayMode", &overlayState.displayMode, "Lit\0Lighting\0Wireframe\0\0");
         NextUI::Theme::DrawTooltip("Display Mode");
         ImGui::SameLine();
         if (NextUI::Theme::ToolbarButton(ICON_FA_EYE " Show", "Show Flags", false, ImVec2(72.0f, 26.0f)))
@@ -228,15 +224,15 @@ namespace Editor
         }
         ImGui::SameLine();
         ImGui::SetNextItemWidth(80.0f);
-        ImGui::DragFloat("##AngleSnap", &angleSnap, 1.0f, 1.0f, 90.0f, "%.0f deg");
+        ImGui::DragFloat("##AngleSnap", &overlayState.angleSnap, 1.0f, 1.0f, 90.0f, "%.0f deg");
         NextUI::Theme::DrawTooltip("Angle Snap");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(80.0f);
-        ImGui::DragFloat("##DistanceSnap", &distanceSnap, 0.01f, 0.01f, 10.0f, "%.2f");
+        ImGui::DragFloat("##DistanceSnap", &overlayState.distanceSnap, 0.01f, 0.01f, 10.0f, "%.2f");
         NextUI::Theme::DrawTooltip("Distance Snap");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(100.0f);
-        ImGui::Combo("##ViewportCamera", &cameraIndex, "Camera 0\0Editor Cam\0\0");
+        ImGui::Combo("##ViewportCamera", &overlayState.cameraIndex, "Camera 0\0Editor Cam\0\0");
         NextUI::Theme::DrawTooltip("Active Camera");
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 12));

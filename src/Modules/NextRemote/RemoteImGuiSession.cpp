@@ -17,6 +17,33 @@ namespace Runtime::Remote
 {
     namespace
     {
+        struct FRemoteImGuiConfig
+        {
+            ImGuiConfigFlags configFlags = ImGuiConfigFlags_NavEnableKeyboard;
+            bool moveWindowsFromTitleBarOnly = false;
+        };
+
+        FRemoteImGuiConfig CaptureRemoteImGuiConfig()
+        {
+            FRemoteImGuiConfig config;
+            if (ImGui::GetCurrentContext() == nullptr)
+            {
+                return config;
+            }
+
+            const ImGuiIO& sourceIo = ImGui::GetIO();
+            constexpr ImGuiConfigFlags supportedRemoteFlags =
+                ImGuiConfigFlags_NavEnableKeyboard |
+                ImGuiConfigFlags_NavEnableGamepad |
+                ImGuiConfigFlags_DockingEnable |
+                ImGuiConfigFlags_IsSRGB |
+                ImGuiConfigFlags_IsTouchScreen;
+            config.configFlags = sourceIo.ConfigFlags & supportedRemoteFlags;
+            config.configFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+            config.moveWindowsFromTitleBarOnly = sourceIo.ConfigWindowsMoveFromTitleBarOnly;
+            return config;
+        }
+
         void AddModifierEvents(ImGuiIO& io, const SDL_Keymod mod)
         {
             io.AddKeyEvent(ImGuiMod_Ctrl, (mod & SDL_KMOD_CTRL) != 0);
@@ -71,8 +98,9 @@ namespace Runtime::Remote
             Throw(std::runtime_error("remote imgui session requires an initialized UserInterface"));
         }
 
+        const FRemoteImGuiConfig config = CaptureRemoteImGuiConfig();
         context_ = ImGui::CreateContext(userInterface->GetFontAtlas());
-        ConfigureContext();
+        ConfigureContext(config.configFlags, config.moveWindowsFromTitleBarOnly);
     }
 
     FRemoteImGuiSession::~FRemoteImGuiSession()
@@ -97,13 +125,16 @@ namespace Runtime::Remote
         ImGui::DestroyContext(destroyContext);
     }
 
-    void FRemoteImGuiSession::ConfigureContext()
+    void FRemoteImGuiSession::ConfigureContext(const ImGuiConfigFlags configFlags,
+                                               const bool moveWindowsFromTitleBarOnly)
     {
         FContextScope scope(context_);
         ImGuiIO& io = ImGui::GetIO();
         io.IniFilename = nullptr;
         io.LogFilename = nullptr;
-        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        io.ConfigFlags |= configFlags;
+        io.ConfigFlags &= ~ImGuiConfigFlags_ViewportsEnable;
+        io.ConfigWindowsMoveFromTitleBarOnly = moveWindowsFromTitleBarOnly;
         io.BackendPlatformName = "gk_remote_headless";
         if (NextUI::UserInterface* userInterface = engine_.GetUserInterface())
         {

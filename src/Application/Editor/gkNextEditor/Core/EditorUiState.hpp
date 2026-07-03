@@ -1,19 +1,17 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Runtime/Command/CommandHistory.hpp"
 
 #include <imgui.h>
 
 #include <array>
 #include <cstdint>
+#include <filesystem>
 #include <limits>
 #include <mutex>
-
-namespace Assets
-{
-    struct FMaterial;
-}
+#include <optional>
 
 namespace Editor
 {
@@ -41,6 +39,78 @@ namespace Editor
 
     struct EditorUiState
     {
+        struct ToolbarState
+        {
+            int projectIndex = 0;
+            int backendIndex = 0;
+            int platformIndex = 0;
+            int buildConfigIndex = 0;
+        };
+
+        struct OutlinerState
+        {
+            uint32_t renameTargetId = InvalidId;
+            std::string renameBuffer;
+            bool openRenamePopup = false;
+            bool focusRenameInput = false;
+            bool prevAutoScrollEnabled = true;
+            uint32_t lastSelectionId = InvalidId;
+            uint32_t pendingScrollTargetId = InvalidId;
+            bool suppressNextSelectionAutoScroll = false;
+            ImGuiTextFilter nodeFilter;
+        };
+
+        struct PropertiesState
+        {
+            uint32_t editingNodeId = InvalidId;
+            std::string editingName;
+            ImGuiTextFilter propertyFilter;
+        };
+
+        struct ContentBrowserState
+        {
+            bool initialized = false;
+            std::filesystem::path currentPath;
+            int currentSection = 0;
+            ImGuiTextFilter contentFilter;
+            ImGuiTextFilter materialFilter;
+            ImGuiTextFilter textureFilter;
+            ImGuiTextFilter meshFilter;
+        };
+
+        struct ViewportOverlayState
+        {
+            int projectionMode = 0;
+            int displayMode = 0;
+            int cameraIndex = 0;
+            float angleSnap = 10.0f;
+            float distanceSnap = 0.25f;
+        };
+
+        struct SettingsPanelState
+        {
+            int selectedCategory = 0;
+            bool showAdvanced = false;
+            bool showAllCVars = false;
+            char search[128]{};
+        };
+
+        struct MaterialEditorState
+        {
+            struct TrackedEdit
+            {
+                uint32_t materialId = InvalidId;
+                std::string key;
+                Assets::FMaterial before;
+            };
+
+            bool shouldFocusEditor = true;
+            float previewYaw = 0.0f;
+            float previewPitch = 0.0f;
+            float previewDistance = 4.0f;
+            std::optional<TrackedEdit> trackedEdit;
+        };
+
         bool state = true;
 
         // Panels
@@ -90,6 +160,15 @@ namespace Editor
         // Material editor
         bool ed_material = false;
         Assets::FMaterial* selected_material = nullptr;
+        MaterialEditorState materialEditor;
+
+        // Per-surface UI state
+        ToolbarState toolbar;
+        OutlinerState outliner;
+        PropertiesState propertiesState;
+        ContentBrowserState contentBrowserState;
+        ViewportOverlayState viewportOverlay;
+        SettingsPanelState settings;
 
         // Tools/children
         bool child_style = false;

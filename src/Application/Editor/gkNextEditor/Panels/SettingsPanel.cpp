@@ -257,10 +257,7 @@ namespace Editor
     void DrawSettingsPanel(EditorContext& ctx, EditorUiState& ui)
     {
         static FSettingsLayout layout;
-        static int selectedCategory = 0;
-        static bool showAdvanced = false;
-        static bool showAllCVars = false;
-        static char search[128]{};
+        auto& panelState = ui.settings;
 
         auto& cvars = ctx.engine.GetCVarSystem();
         if (!layout.loaded)
@@ -271,7 +268,8 @@ namespace Editor
         {
             return;
         }
-        selectedCategory = std::clamp(selectedCategory, 0, static_cast<int>(layout.categories.size()) - 1);
+        panelState.selectedCategory =
+            std::clamp(panelState.selectedCategory, 0, static_cast<int>(layout.categories.size()) - 1);
 
         ImGui::SetNextWindowSize(ImVec2(920.0f, 650.0f), ImGuiCond_FirstUseEver);
         if (!ImGui::Begin("Settings / Preferences", &ui.settingsPanel))
@@ -281,32 +279,35 @@ namespace Editor
         }
 
         ImGui::SetNextItemWidth(320.0f);
-        ImGui::InputTextWithHint("##SettingsSearch", "Search settings or CVar names", search, sizeof(search));
+        ImGui::InputTextWithHint("##SettingsSearch",
+                                  "Search settings or CVar names",
+                                  panelState.search,
+                                  sizeof(panelState.search));
         ImGui::SameLine();
-        ImGui::Checkbox("Advanced", &showAdvanced);
+        ImGui::Checkbox("Advanced", &panelState.showAdvanced);
         ImGui::SameLine();
         if (ImGui::Button("All CVars"))
         {
-            showAllCVars = true;
+            panelState.showAllCVars = true;
         }
 
         const float footerHeight = ImGui::GetFrameHeightWithSpacing() + 10.0f;
         ImGui::BeginChild("##SettingsCategories", ImVec2(190.0f, -footerHeight), true);
         for (int i = 0; i < static_cast<int>(layout.categories.size()); ++i)
         {
-            if (ImGui::Selectable(layout.categories[i].label.c_str(), selectedCategory == i))
+            if (ImGui::Selectable(layout.categories[i].label.c_str(), panelState.selectedCategory == i))
             {
-                selectedCategory = i;
+                panelState.selectedCategory = i;
             }
         }
         ImGui::EndChild();
         ImGui::SameLine();
 
         ImGui::BeginChild("##SettingsContent", ImVec2(0.0f, -footerHeight), true);
-        const FSettingsCategory& category = layout.categories[selectedCategory];
+        const FSettingsCategory& category = layout.categories[panelState.selectedCategory];
         for (const FSettingsGroup& group : category.groups)
         {
-            if (group.advanced && !showAdvanced)
+            if (group.advanced && !panelState.showAdvanced)
             {
                 continue;
             }
@@ -316,13 +317,13 @@ namespace Editor
             }
             for (const FSettingsItem& item : group.items)
             {
-                if (item.advanced && !showAdvanced)
+                if (item.advanced && !panelState.showAdvanced)
                 {
                     continue;
                 }
-                if (search[0] != '\0' &&
-                    !ContainsCaseInsensitive(item.label, search) &&
-                    !ContainsCaseInsensitive(item.cvar, search))
+                if (panelState.search[0] != '\0' &&
+                    !ContainsCaseInsensitive(item.label, panelState.search) &&
+                    !ContainsCaseInsensitive(item.cvar, panelState.search))
                 {
                     continue;
                 }
@@ -354,9 +355,9 @@ namespace Editor
         ImGui::TextDisabled("Changes apply immediately");
         ImGui::End();
 
-        if (showAllCVars)
+        if (panelState.showAllCVars)
         {
-            DevTools::DrawCVarEditorPanel(ctx.engine, showAllCVars);
+            DevTools::DrawCVarEditorPanel(ctx.engine, panelState.showAllCVars);
         }
     }
 }
