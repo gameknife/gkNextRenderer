@@ -106,6 +106,7 @@ VertexOutput main(uint vertexIndex : SV_VertexID, uint instanceIndex : SV_Instan
     const float3 worldPosition = mul(model.world, float4(splat.positionOpacity.xyz, 1.0)).xyz;
     const float4 viewPosition = mul(camera[0].ModelView, float4(worldPosition, 1.0));
     float4 clip = mul(camera[0].Projection, viewPosition);
+    clip.z = clamp(clip.z, 0.0, abs(clip.w));
 
     float3 right = float3(camera[0].ModelView[0][0], camera[0].ModelView[0][1], camera[0].ModelView[0][2]);
     float3 up = float3(camera[0].ModelView[1][0], camera[0].ModelView[1][1], camera[0].ModelView[1][2]);
@@ -123,19 +124,46 @@ VertexOutput main(uint vertexIndex : SV_VertexID, uint instanceIndex : SV_Instan
     const float3 jacobianX = float3(focalX / depth, 0.0, focalX * viewPosition.x / (depth * depth));
     const float3 jacobianY = float3(0.0, focalY / depth, focalY * viewPosition.y / (depth * depth));
     const float3x3 viewCovariance = float3x3(c00, c01, c02, c01, c11, c12, c02, c12, c22);
-    const float a = max(dot(jacobianX, mul(viewCovariance, jacobianX)) + 0.3, 0.3);
-    const float b = dot(jacobianX, mul(viewCovariance, jacobianY));
-    const float d = max(dot(jacobianY, mul(viewCovariance, jacobianY)) + 0.3, 0.3);
+    const float covXX = dot(jacobianX, mul(viewCovariance, jacobianX));
+    const float covXY = dot(jacobianX, mul(viewCovariance, jacobianY));
+    const float covYY = dot(jacobianY, mul(viewCovariance, jacobianY));
+    const float detOriginal = covXX * covYY - covXY * covXY;
+    const float detBlur = (covXX + 0.3) * (covYY + 0.3) - covXY * covXY;
+    const float aaFactor = lerp(1.0, sqrt(max(detOriginal / max(detBlur, 1e-8), 0.0)),
+                                saturate(model.parameters.z));
+    const float a = max(covXX + 0.3, 0.3);
+    const float b = covXY;
+    const float d = max(covYY + 0.3, 0.3);
     const float mid = 0.5 * (a + d);
     const float delta = sqrt(max(0.0, 0.25 * (a - d) * (a - d) + b * b));
     const float lambda0 = max(mid + delta, 0.3);
-    const float lambda1 = max(mid - delta, 0.3);
+    const float lambda1 = max(mid - delta, 0.1);
+    const float radiusScale = push.sigma / 3.0;
+    const float viewportMin = min(1024.0, min((float)push.width, (float)push.height));
+    const float radius0 = 2.0 * min(sqrt(2.0 * lambda0), viewportMin) * radiusScale;
+    const float radius1 = 2.0 * min(sqrt(2.0 * lambda1), viewportMin) * radiusScale;
+    if (max(radius0, radius1) < 2.0)
+    {
+        clip = float4(2.0, 2.0, 2.0, 1.0);
+    }
+    const float maxRadius = max(radius0, radius1);
+    const float2 clipRadius = maxRadius * float2(2.0 / push.width, 2.0 / push.height) * clip.w;
+    if (any((abs(clip.xy) - clipRadius) > clip.w))
+    {
+        clip = float4(2.0, 2.0, 2.0, 1.0);
+    }
     float2 axis0 = abs(b) > 1e-6 ? normalize(float2(b, lambda0 - a)) :
                    (a >= d ? float2(1.0, 0.0) : float2(0.0, 1.0));
+    const float alpha = splat.positionOpacity.w * model.parameters.x * aaFactor;
+    const float alphaClip = 1.0 / 255.0;
+    if (alpha <= alphaClip)
+    {
+        clip = float4(2.0, 2.0, 2.0, 1.0);
+    }
+    const float clipCorner = min(1.0, 0.5 * sqrt(max(0.0, log(alpha / alphaClip))));
     const float2 axis1 = float2(-axis0.y, axis0.x);
-    const float2 local = corners[vertexIndex];
-    const float2 pixelOffset = push.sigma *
-        (axis0 * sqrt(lambda0) * local.x + axis1 * sqrt(lambda1) * local.y);
+    const float2 local = corners[vertexIndex] * clipCorner;
+    const float2 pixelOffset = axis0 * radius0 * local.x + axis1 * radius1 * local.y;
     clip.xy += pixelOffset * float2(2.0 / push.width, 2.0 / push.height) * clip.w;
     if (viewPosition.z >= -1e-4 || clip.w <= 0.0)
     {
@@ -143,9 +171,14 @@ VertexOutput main(uint vertexIndex : SV_VertexID, uint instanceIndex : SV_Instan
     }
 
     const float3 eye = mul(camera[0].ModelViewInverse, float4(0.0, 0.0, 0.0, 1.0)).xyz;
+    const float3 worldDirection = normalize(worldPosition - eye);
+    float3 shDirection = normalize(mul(transpose((float3x3)model.world), worldDirection));
+    if (model.parameters.w > 0.5)
+    {
+        shDirection.xy = -shDirection.xy;
+    }
     output.position = clip;
-    output.local = local * (push.sigma / 3.0);
-    output.colorOpacity = float4(EvaluateColor(splat, normalize(worldPosition - eye)),
-                                 splat.positionOpacity.w * model.parameters.x);
+    output.local = local;
+    output.colorOpacity = float4(EvaluateColor(splat, shDirection), alpha);
     return output;
 }

@@ -1,5 +1,6 @@
 struct PushConstants
 {
+    uint4 header;
     uint64_t cameraAddress;
     uint64_t splatAddress;
     uint64_t modelStateAddress;

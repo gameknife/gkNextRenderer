@@ -164,6 +164,14 @@ namespace Assets
         {
             return object.at("files").at(index).get<std::string>();
         }
+
+        glm::mat3 SogToEngineBasis()
+        {
+            glm::mat3 basis(1.0f);
+            basis[0][0] = -1.0f;
+            basis[1][1] = -1.0f;
+            return basis;
+        }
     }
 
     bool FSogLoader::Load(const std::string& filename, EnvironmentSetting& camera,
@@ -183,6 +191,7 @@ namespace Assets
             FGaussianSplatData data;
             data.name = path.stem().string();
             data.antialias = meta.value("antialias", false);
+            data.shBasisFlipXY = true;
             const size_t count = meta.at("count").get<size_t>();
             if (count == 0 || count > std::numeric_limits<uint32_t>::max())
                 throw std::runtime_error("invalid SOG splat count");
@@ -221,6 +230,7 @@ namespace Assets
             data.splats.resize(count);
             data.aabbMin = glm::vec3(std::numeric_limits<float>::max());
             data.aabbMax = glm::vec3(std::numeric_limits<float>::lowest());
+            const glm::mat3 sogToEngine = SogToEngineBasis();
             for (size_t i = 0; i < count; ++i)
             {
                 const size_t pixel = i * 4;
@@ -238,7 +248,9 @@ namespace Assets
                 const glm::vec3 logScale(scaleCodebook[scales.rgba[pixel]],
                                          scaleCodebook[scales.rgba[pixel + 1]],
                                          scaleCodebook[scales.rgba[pixel + 2]]);
-                const glm::mat3 covariance = Sog::BuildCovariance(rotation, logScale);
+                position = sogToEngine * position;
+                const glm::mat3 sogCovariance = Sog::BuildCovariance(rotation, logScale);
+                const glm::mat3 covariance = sogToEngine * sogCovariance * glm::transpose(sogToEngine);
 
                 auto& splat = data.splats[i];
                 splat.positionOpacity = glm::vec4(position, sh0.rgba[pixel + 3] / 255.0f);

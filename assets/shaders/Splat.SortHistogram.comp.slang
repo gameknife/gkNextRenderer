@@ -17,6 +17,7 @@ struct SplatModelState
 
 struct PushConstants
 {
+    uint4 header;
     uint64_t cameraAddress;
     uint64_t splatAddress;
     uint64_t modelStateAddress;
@@ -29,6 +30,10 @@ struct PushConstants
     uint width;
     uint height;
     uint bucketCount;
+    float nearPlane;
+    float farPlane;
+    uint reserved0;
+    uint reserved1;
 };
 
 [[vk::push_constant]] PushConstants push;
@@ -48,7 +53,7 @@ bool GetVisibleBucket(uint index, out uint bucket)
     if (viewPosition.z >= -1e-4 || clip.w <= 0.0) return false;
     const float2 ndc = clip.xy / clip.w;
     if (any(abs(ndc) > float2(1.2))) return false;
-    const float depth = saturate(clip.z / clip.w);
+    const float depth = saturate((-viewPosition.z - push.nearPlane) / max(push.farPlane - push.nearPlane, 1e-4));
     bucket = min((uint)(depth * push.bucketCount), push.bucketCount - 1);
     return true;
 }

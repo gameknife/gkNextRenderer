@@ -49,6 +49,8 @@ struct UserSettings final
     uint32_t SplatBucketCount = 4096;
     uint32_t SplatMaxCount = 0;
     float SplatSigma = 3.0f;
+    bool SplatForceAA = true;
+    float SplatAAStrength = 0.5f;
 
 	// Denoise (variance-guided a-trous wavelet; see PipelineCommon::AtrousDenoiser)
 	bool Denoiser;
