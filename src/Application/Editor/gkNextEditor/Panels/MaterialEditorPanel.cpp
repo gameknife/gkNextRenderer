@@ -20,20 +20,7 @@ namespace Editor
 {
     namespace
     {
-        bool gShouldFocusEditor = true;
-        float gPreviewYaw = 0.0f;
-        float gPreviewPitch = 0.0f;
-        float gPreviewDistance = 4.0f;
         constexpr float kPropertyLabelColumnWidth = 160.0f;
-
-        struct FTrackedEdit
-        {
-            uint32_t materialId = InvalidId;
-            std::string key;
-            Assets::FMaterial before;
-        };
-
-        std::optional<FTrackedEdit> gTrackedEdit;
 
         bool SameMaterialPayload(const Assets::FMaterial& a, const Assets::FMaterial& b)
         {
@@ -202,22 +189,26 @@ namespace Editor
         }
 
         void TrackItemEdit(EditorContext& ctx,
+                           EditorUiState& ui,
                            uint32_t materialId,
                            const char* key,
                            const Assets::FMaterial& fallbackBefore)
         {
             if (ImGui::IsItemActivated())
             {
-                gTrackedEdit = FTrackedEdit{materialId, key, fallbackBefore};
+                ui.materialEditor.trackedEdit =
+                    EditorUiState::MaterialEditorState::TrackedEdit{materialId, key, fallbackBefore};
             }
             if (ImGui::IsItemDeactivatedAfterEdit())
             {
                 const Assets::FMaterial before =
-                    (gTrackedEdit && gTrackedEdit->materialId == materialId && gTrackedEdit->key == key)
-                    ? gTrackedEdit->before
+                    (ui.materialEditor.trackedEdit &&
+                     ui.materialEditor.trackedEdit->materialId == materialId &&
+                     ui.materialEditor.trackedEdit->key == key)
+                    ? ui.materialEditor.trackedEdit->before
                     : fallbackBefore;
                 CommitMaterialEdit(ctx, materialId, before, ctx.scene.Materials()[materialId], key);
-                gTrackedEdit.reset();
+                ui.materialEditor.trackedEdit.reset();
             }
         }
 
@@ -248,6 +239,7 @@ namespace Editor
         }
 
         bool DrawFloatField(EditorContext& ctx,
+                            EditorUiState& ui,
                             uint32_t materialId,
                             const char* label,
                             float& value,
@@ -259,7 +251,7 @@ namespace Editor
             ImGui::PushID(key);
             BeginPropertyRow(label);
             const bool changed = ImGui::SliderFloat("##value", &value, minValue, maxValue, "%.3f");
-            TrackItemEdit(ctx, materialId, key, before);
+            TrackItemEdit(ctx, ui, materialId, key, before);
             if (changed)
             {
                 MarkMaterialEdited(ctx);
@@ -283,6 +275,7 @@ namespace Editor
         }
 
         void DrawTextureSlot(EditorContext& ctx,
+                             EditorUiState& ui,
                              uint32_t materialId,
                              const char* label,
                              int32_t& textureId,
@@ -309,7 +302,7 @@ namespace Editor
                 textureId = current < 0 ? -1 : current;
                 MarkMaterialEdited(ctx);
             }
-            TrackItemEdit(ctx, materialId, key, before);
+            TrackItemEdit(ctx, ui, materialId, key, before);
 
             ImGui::SameLine();
             if (ImGui::Button("Clear"))
@@ -439,12 +432,14 @@ namespace Editor
             OpenMaterialEditor(ctx, ui);
         }
 
-        void DrawPreview(EditorContext& ctx, const Assets::FMaterial& material)
+        void DrawPreview(EditorContext& ctx, EditorUiState& ui, const Assets::FMaterial& material)
         {
             Vulkan::MaterialPreviewRenderer& preview = ctx.engine.GetRenderer().ViewServices().MaterialPreview();
             preview.SetEnabled(true);
             preview.SetPreviewMaterial(material);
-            preview.SetCameraOrbit(gPreviewYaw, gPreviewPitch, gPreviewDistance);
+            preview.SetCameraOrbit(ui.materialEditor.previewYaw,
+                                   ui.materialEditor.previewPitch,
+                                   ui.materialEditor.previewDistance);
 
             const float width = ImGui::GetContentRegionAvail().x;
             const float size = std::clamp(width, 192.0f, 320.0f);
@@ -467,21 +462,27 @@ namespace Editor
 
             ImGui::TextUnformatted("Orbit");
             ImGui::SetNextItemWidth(-FLT_MIN);
-            if (ImGui::SliderAngle("##orbit", &gPreviewYaw, -180.0f, 180.0f))
+            if (ImGui::SliderAngle("##orbit", &ui.materialEditor.previewYaw, -180.0f, 180.0f))
             {
-                preview.SetCameraOrbit(gPreviewYaw, gPreviewPitch, gPreviewDistance);
+                preview.SetCameraOrbit(ui.materialEditor.previewYaw,
+                                       ui.materialEditor.previewPitch,
+                                       ui.materialEditor.previewDistance);
             }
             ImGui::TextUnformatted("Tilt");
             ImGui::SetNextItemWidth(-FLT_MIN);
-            if (ImGui::SliderAngle("##tilt", &gPreviewPitch, -55.0f, 55.0f))
+            if (ImGui::SliderAngle("##tilt", &ui.materialEditor.previewPitch, -55.0f, 55.0f))
             {
-                preview.SetCameraOrbit(gPreviewYaw, gPreviewPitch, gPreviewDistance);
+                preview.SetCameraOrbit(ui.materialEditor.previewYaw,
+                                       ui.materialEditor.previewPitch,
+                                       ui.materialEditor.previewDistance);
             }
             ImGui::TextUnformatted("Zoom");
             ImGui::SetNextItemWidth(-FLT_MIN);
-            if (ImGui::SliderFloat("##zoom", &gPreviewDistance, 2.0f, 7.0f, "%.2f"))
+            if (ImGui::SliderFloat("##zoom", &ui.materialEditor.previewDistance, 2.0f, 7.0f, "%.2f"))
             {
-                preview.SetCameraOrbit(gPreviewYaw, gPreviewPitch, gPreviewDistance);
+                preview.SetCameraOrbit(ui.materialEditor.previewYaw,
+                                       ui.materialEditor.previewPitch,
+                                       ui.materialEditor.previewDistance);
             }
         }
 
@@ -573,7 +574,7 @@ namespace Editor
                             fMaterial.name_ = nameBuffer;
                         }
                     }
-                    TrackItemEdit(ctx, materialId, "name", beforeName);
+                    TrackItemEdit(ctx, ui, materialId, "name", beforeName);
 
                     int model = static_cast<int>(material.MaterialModel);
                     Assets::FMaterial beforeModel = fMaterial;
@@ -609,7 +610,7 @@ namespace Editor
                                 glm::vec4(emissiveColor * std::max(emissiveStrength, 0.0f), material.Diffuse.a);
                             MarkMaterialEdited(ctx);
                         }
-                        TrackItemEdit(ctx, materialId, "emissive color", beforeEmissiveColor);
+                        TrackItemEdit(ctx, ui, materialId, "emissive color", beforeEmissiveColor);
 
                         Assets::FMaterial beforeEmissiveStrength = fMaterial;
                         BeginPropertyRow("Emissive Strength");
@@ -626,7 +627,7 @@ namespace Editor
                                 glm::vec4(emissiveColor * std::max(emissiveStrength, 0.0f), material.Diffuse.a);
                             MarkMaterialEdited(ctx);
                         }
-                        TrackItemEdit(ctx, materialId, "emissive strength", beforeEmissiveStrength);
+                        TrackItemEdit(ctx, ui, materialId, "emissive strength", beforeEmissiveStrength);
                     }
                     else
                     {
@@ -637,34 +638,34 @@ namespace Editor
                             material.Diffuse = glm::vec4(albedo, material.Diffuse.a);
                             MarkMaterialEdited(ctx);
                         }
-                        TrackItemEdit(ctx, materialId, "albedo", beforeAlbedo);
-                        DrawFloatField(ctx, materialId, "Opacity", material.Diffuse.a, 0.0f, 1.0f, "opacity");
+                        TrackItemEdit(ctx, ui, materialId, "albedo", beforeAlbedo);
+                        DrawFloatField(ctx, ui, materialId, "Opacity", material.Diffuse.a, 0.0f, 1.0f, "opacity");
                     }
 
                     if (material.MaterialModel == Assets::Material::Enum::Mixture ||
                         material.MaterialModel == Assets::Material::Enum::Metallic)
                     {
-                        DrawFloatField(ctx, materialId, "Metalness", material.Metalness, 0.0f, 1.0f, "metalness");
+                        DrawFloatField(ctx, ui, materialId, "Metalness", material.Metalness, 0.0f, 1.0f, "metalness");
                     }
 
                     if (material.MaterialModel != Assets::Material::Enum::Dielectric &&
                         material.MaterialModel != Assets::Material::Enum::DiffuseLight)
                     {
-                        DrawFloatField(ctx, materialId, "Roughness", material.Fuzziness, 0.0f, 1.0f, "roughness");
+                        DrawFloatField(ctx, ui, materialId, "Roughness", material.Fuzziness, 0.0f, 1.0f, "roughness");
                     }
 
                     if (material.MaterialModel == Assets::Material::Enum::Dielectric ||
                         material.MaterialModel == Assets::Material::Enum::Mixture)
                     {
-                        DrawFloatField(ctx, materialId, "IOR", material.RefractionIndex, 1.0f, 2.5f, "ior");
+                        DrawFloatField(ctx, ui, materialId, "IOR", material.RefractionIndex, 1.0f, 2.5f, "ior");
                     }
                     if (material.MaterialModel == Assets::Material::Enum::Dielectric)
                     {
                         DrawFloatField(
-                            ctx, materialId, "IOR (back)", material.RefractionIndex2, 1.0f, 2.5f, "ior2");
+                            ctx, ui, materialId, "IOR (back)", material.RefractionIndex2, 1.0f, 2.5f, "ior2");
                     }
 
-                    DrawFloatField(ctx, materialId, "Normal Scale", material.NormalTextureScale, 0.0f, 2.0f,
+                    DrawFloatField(ctx, ui, materialId, "Normal Scale", material.NormalTextureScale, 0.0f, 2.0f,
                                    "normal scale");
                     ImGui::EndTable();
                 }
@@ -674,11 +675,11 @@ namespace Editor
             {
                 if (BeginPropertyGrid("MaterialTexturePropertyGrid"))
                 {
-                    DrawTextureSlot(ctx, materialId, "Albedo", material.DiffuseTextureId, "albedo texture");
-                    DrawTextureSlot(ctx, materialId, "MRA (R=AO, G=Roughness, B=Metalness)", material.MRATextureId,
+                    DrawTextureSlot(ctx, ui, materialId, "Albedo", material.DiffuseTextureId, "albedo texture");
+                    DrawTextureSlot(ctx, ui, materialId, "MRA (R=AO, G=Roughness, B=Metalness)", material.MRATextureId,
                                     "mra texture");
-                    DrawTextureSlot(ctx, materialId, "Normal", material.NormalTextureId, "normal texture");
-                    DrawTextureSlot(ctx, materialId, "Emissive", material.EmissiveTextureId, "emissive texture");
+                    DrawTextureSlot(ctx, ui, materialId, "Normal", material.NormalTextureId, "normal texture");
+                    DrawTextureSlot(ctx, ui, materialId, "Emissive", material.EmissiveTextureId, "emissive texture");
                     ImGui::EndTable();
                 }
             }
@@ -688,12 +689,12 @@ namespace Editor
     void OpenMaterialEditor(EditorContext& ctx, EditorUiState& ui)
     {
         FindSelectedMaterialId(ctx, ui);
-        gShouldFocusEditor = true;
+        ui.materialEditor.shouldFocusEditor = true;
     }
 
     void DrawMaterialEditorPanel(EditorContext& ctx, EditorUiState& ui)
     {
-        if (gShouldFocusEditor)
+        if (ui.materialEditor.shouldFocusEditor)
         {
             ImGui::SetNextWindowSize(ImVec2(1280, 800), ImGuiCond_FirstUseEver);
             ImGui::SetWindowFocus("Material Editor");
@@ -701,7 +702,7 @@ namespace Editor
             windowClass.ClassId = ImGui::GetID("Material Editor");
             windowClass.ViewportFlagsOverrideSet = ImGuiViewportFlags_TopMost | ImGuiViewportFlags_NoAutoMerge;
             ImGui::SetNextWindowClass(&windowClass);
-            gShouldFocusEditor = false;
+            ui.materialEditor.shouldFocusEditor = false;
         }
 
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 16));
@@ -748,7 +749,7 @@ namespace Editor
             ImGui::TableNextRow();
 
             ImGui::TableSetColumnIndex(0);
-            DrawPreview(ctx, selected);
+            DrawPreview(ctx, ui, selected);
 
             ImGui::TableSetColumnIndex(1);
             ImGui::Text("Material #%u", materialId);

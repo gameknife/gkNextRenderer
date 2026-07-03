@@ -103,7 +103,24 @@ namespace
     constexpr float kToolbarIconHeight = 30.0f;
 } // namespace
 
-ImGuiID EditorInterface::DockSpaceUI()
+Editor::EditorUiState& EditorInterface::GetRemoteUiState(std::string_view sessionId)
+{
+    auto [it, inserted] = remoteUiStates_.try_emplace(std::string(sessionId));
+    if (inserted)
+    {
+        it->second.bigIcon = uiState_.bigIcon;
+        it->second.recentScenes = uiState_.recentScenes;
+        it->second.currentScenePath = uiState_.currentScenePath;
+    }
+    return it->second;
+}
+
+void EditorInterface::OnRemoteUiSessionClosed(std::string_view sessionId)
+{
+    remoteUiStates_.erase(std::string(sessionId));
+}
+
+ImGuiID EditorInterface::DockSpaceUI(Editor::EditorUiState& uiState)
 {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     const float topOffset = kToolbarSize + Editor::kTitleBarHeight;
@@ -122,10 +139,10 @@ ImGuiID EditorInterface::DockSpaceUI()
     ImGui::Begin("Master DockSpace", NULL, windowFlags);
     ImGuiID dockMain = ImGui::GetID("MyDockspace");
 
-    if (firstRun_ || uiState_.dockResetRequested)
+    if (firstRun_ || ImGui::DockBuilderGetNode(dockMain) == nullptr || uiState.dockResetRequested)
     {
         RebuildDefaultDockLayout(dockMain);
-        uiState_.dockResetRequested = false;
+        uiState.dockResetRequested = false;
     }
 
     ImGui::DockSpace(dockMain, ImVec2(0, 0),
@@ -162,7 +179,7 @@ void EditorInterface::RebuildDefaultDockLayout(ImGuiID id)
     ImGui::DockBuilderFinish(id);
 }
 
-void EditorInterface::ToolbarUI(EditorContext& ctx)
+void EditorInterface::ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiState)
 {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + Editor::kTitleBarHeight));
@@ -190,18 +207,14 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 0.0f));
     ImGui::SetCursorPosY((kToolbarSize - kToolbarIconHeight) * 0.5f);
 
-    static int projectIndex = 0;
-    static int backendIndex = 0;
-    static int platformIndex = 0;
-    static int buildConfigIndex = 0;
-
     ImGui::SetNextItemWidth(138.0f);
-    ImGui::Combo("##ProjectSelector", &projectIndex, ICON_FA_CUBE " RayQuery\0" ICON_FA_CUBE " Playground\0\0");
+    ImGui::Combo("##ProjectSelector", &uiState.toolbar.projectIndex,
+                 ICON_FA_CUBE " RayQuery\0" ICON_FA_CUBE " Playground\0\0");
     NextUI::Theme::DrawTooltip("Project");
     ImGui::SameLine();
 
     ImGui::SetNextItemWidth(108.0f);
-    ImGui::Combo("##BackendSelector", &backendIndex, "Vulkan\0Metal\0DirectX 12\0\0");
+    ImGui::Combo("##BackendSelector", &uiState.toolbar.backendIndex, "Vulkan\0Metal\0DirectX 12\0\0");
     NextUI::Theme::DrawTooltip("Backend");
     ImGui::SameLine(0.0f, 12.0f);
     
@@ -219,11 +232,11 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
     ImGui::SameLine(0.0f, 12.0f);
 
     ImGui::SetNextItemWidth(116.0f);
-    ImGui::Combo("##PlatformSelector", &platformIndex, ICON_FA_DESKTOP " Desktop\0Android\0iOS\0\0");
+    ImGui::Combo("##PlatformSelector", &uiState.toolbar.platformIndex, ICON_FA_DESKTOP " Desktop\0Android\0iOS\0\0");
     NextUI::Theme::DrawTooltip("Target Platform");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(134.0f);
-    ImGui::Combo("##BuildConfigSelector", &buildConfigIndex, "Development\0Debug\0Shipping\0\0");
+    ImGui::Combo("##BuildConfigSelector", &uiState.toolbar.buildConfigIndex, "Development\0Debug\0Shipping\0\0");
     NextUI::Theme::DrawTooltip("Build Configuration");
 
     const float rightStart = viewport->Size.x - 104.0f;
@@ -231,10 +244,10 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
     {
         ImGui::SameLine(rightStart);
     }
-    if (NextUI::Theme::ToolbarButton(ICON_FA_GEAR, "Editor Settings", uiState_.settingsPanel,
+    if (NextUI::Theme::ToolbarButton(ICON_FA_GEAR, "Editor Settings", uiState.settingsPanel,
                                      ImVec2(kToolbarIconWidth, kToolbarIconHeight)))
     {
-        uiState_.settingsPanel = !uiState_.settingsPanel;
+        uiState.settingsPanel = !uiState.settingsPanel;
     }
     ImGui::SameLine(0.0f, 8.0f);
 
@@ -257,6 +270,22 @@ void EditorInterface::ToolbarUI(EditorContext& ctx)
 
 void EditorInterface::Render()
 {
+    Render(uiState_);
+}
+
+void EditorInterface::Render(const NextGameInstanceBase::FGameUiFrameContext& context)
+{
+    if (context.surfaceKind == NextGameInstanceBase::FGameUiFrameContext::ESurfaceKind::RemoteView)
+    {
+        Render(GetRemoteUiState(context.sessionId));
+        return;
+    }
+
+    Render(uiState_);
+}
+
+void EditorInterface::Render(Editor::EditorUiState& uiState)
+{
     NextUI::UserInterface* ui = editor_->GetEngine().GetUserInterface();
     if (ui == nullptr)
     {
@@ -268,96 +297,96 @@ void EditorInterface::Render()
     void* previousUserData = ImGui::GetIO().UserData;
     ImGui::GetIO().UserData = &ctx;
 
-    uiState_.selected_obj_id = ctx.scene.GetSelectedId();
+    uiState.selected_obj_id = ctx.scene.GetSelectedId();
     
     // Global keyboard shortcuts are handled by NextEngine.
 
-    ImGuiID id = DockSpaceUI();
-    ToolbarUI(ctx);
+    ImGuiID id = DockSpaceUI(uiState);
+    ToolbarUI(ctx, uiState);
 
-    Editor::DrawTitleBarOverlay(ctx, uiState_);
+    Editor::DrawTitleBarOverlay(ctx, uiState);
 
-    if (uiState_.sidebar)
-        Editor::DrawOutlinerPanel(ctx, uiState_);
-    if (uiState_.properties)
-        Editor::DrawPropertiesPanel(ctx, uiState_);
-    if (uiState_.contentBrowser || uiState_.materialBrowser || uiState_.textureBrowser || uiState_.meshBrowser)
-        Editor::DrawContentBrowserPanel(ctx, uiState_);
-    if (uiState_.logPanel)
-        Editor::DrawConsoleLogPanel(ctx, uiState_);
-    if (uiState_.commandHistoryPanel)
-        Editor::DrawCommandHistoryPanel(ctx, uiState_);
-    if (uiState_.hotReloadPanel)
-        Editor::DrawHotReloadPanel(ctx, uiState_);
-    Editor::DrawCameraViewPanel(ctx, uiState_);
+    if (uiState.sidebar)
+        Editor::DrawOutlinerPanel(ctx, uiState);
+    if (uiState.properties)
+        Editor::DrawPropertiesPanel(ctx, uiState);
+    if (uiState.contentBrowser || uiState.materialBrowser || uiState.textureBrowser || uiState.meshBrowser)
+        Editor::DrawContentBrowserPanel(ctx, uiState);
+    if (uiState.logPanel)
+        Editor::DrawConsoleLogPanel(ctx, uiState);
+    if (uiState.commandHistoryPanel)
+        Editor::DrawCommandHistoryPanel(ctx, uiState);
+    if (uiState.hotReloadPanel)
+        Editor::DrawHotReloadPanel(ctx, uiState);
+    Editor::DrawCameraViewPanel(ctx, uiState);
     // Pump the AI agent main-thread queue every frame, regardless of panel
     // visibility, so in-flight agent tool calls never stall (and the user-confirm
     // UI can appear) when the panel is hidden, collapsed, or on an inactive tab.
     Editor::TickAIAgentMainThread(ctx);
-    if (uiState_.aiPanel)
-        Editor::DrawAIPanel(ctx, uiState_);
+    if (uiState.aiPanel)
+        Editor::DrawAIPanel(ctx, uiState);
 
     DevTools::FUiDevPanels::Get().RenderConsoleOverlay();
 
-    if (uiState_.child_style)
-        utils::ShowStyleEditorWindow(&uiState_.child_style);
-    if (uiState_.child_demo)
-        ImGui::ShowDemoWindow(&uiState_.child_demo);
-    if (uiState_.child_metrics)
-        ImGui::ShowMetricsWindow(&uiState_.child_metrics);
-    if (uiState_.child_debug_log)
-        ImGui::ShowDebugLogWindow(&uiState_.child_debug_log);
-    if (uiState_.child_stack)
-        ImGui::ShowIDStackToolWindow(&uiState_.child_stack);
-    if (uiState_.child_color)
-        utils::ShowColorExportWindow(&uiState_.child_color);
-    if (uiState_.child_resources)
-        utils::ShowResourcesWindow(&uiState_.child_resources);
-    if (uiState_.child_about)
-        utils::ShowAboutWindow(&uiState_.child_about);
+    if (uiState.child_style)
+        utils::ShowStyleEditorWindow(&uiState.child_style);
+    if (uiState.child_demo)
+        ImGui::ShowDemoWindow(&uiState.child_demo);
+    if (uiState.child_metrics)
+        ImGui::ShowMetricsWindow(&uiState.child_metrics);
+    if (uiState.child_debug_log)
+        ImGui::ShowDebugLogWindow(&uiState.child_debug_log);
+    if (uiState.child_stack)
+        ImGui::ShowIDStackToolWindow(&uiState.child_stack);
+    if (uiState.child_color)
+        utils::ShowColorExportWindow(&uiState.child_color);
+    if (uiState.child_resources)
+        utils::ShowResourcesWindow(&uiState.child_resources);
+    if (uiState.child_about)
+        utils::ShowAboutWindow(&uiState.child_about);
 
-    if (uiState_.ed_material)
-        Editor::DrawMaterialEditorPanel(ctx, uiState_);
+    if (uiState.ed_material)
+        Editor::DrawMaterialEditorPanel(ctx, uiState);
 
     bool activeCameraViewOpen = true;
-    switch (uiState_.activeViewport)
+    switch (uiState.activeViewport)
     {
     case Editor::EEditorViewportId::CameraView0:
-        activeCameraViewOpen = uiState_.cameraViews[0].open;
+        activeCameraViewOpen = uiState.cameraViews[0].open;
         break;
     case Editor::EEditorViewportId::CameraView1:
-        activeCameraViewOpen = uiState_.cameraViews[1].open;
+        activeCameraViewOpen = uiState.cameraViews[1].open;
         break;
     case Editor::EEditorViewportId::CameraView2:
-        activeCameraViewOpen = uiState_.cameraViews[2].open;
+        activeCameraViewOpen = uiState.cameraViews[2].open;
         break;
     default:
         break;
     }
     if (!activeCameraViewOpen)
     {
-        uiState_.activeViewport = Editor::EEditorViewportId::Scene;
+        uiState.activeViewport = Editor::EEditorViewportId::Scene;
     }
 
     // The renderer output rect is the dockspace central node.
-    uiState_.viewportOnMainViewport = true;
-    uiState_.viewportContentPos = ImVec2(0.0f, 0.0f);
-    uiState_.viewportContentSize = ImVec2(0.0f, 0.0f);
-    uiState_.viewportHovered = false;
-    uiState_.viewportFocused = uiState_.activeViewport == Editor::EEditorViewportId::Scene;
+    uiState.viewportOnMainViewport = true;
+    uiState.viewportContentPos = ImVec2(0.0f, 0.0f);
+    uiState.viewportContentSize = ImVec2(0.0f, 0.0f);
+    uiState.viewportHovered = false;
+    uiState.viewportFocused = uiState.activeViewport == Editor::EEditorViewportId::Scene;
 
     if (ImGuiDockNode* node = ImGui::DockBuilderGetCentralNode(id))
     {
-        uiState_.viewportContentPos = node->Pos;
-        uiState_.viewportContentSize = node->Size;
+        uiState.viewportContentPos = node->Pos;
+        uiState.viewportContentSize = node->Size;
 
         ImGuiViewport* mainViewport = ImGui::GetMainViewport();
         if (node->HostWindow && node->HostWindow->Viewport && node->HostWindow->Viewport != mainViewport)
         {
-            uiState_.viewportOnMainViewport = false;
+            uiState.viewportOnMainViewport = false;
         }
 
-        if (uiState_.viewportOnMainViewport && node->Size.x >= 1.0f && node->Size.y >= 1.0f)
+        if (uiState.viewportOnMainViewport && node->Size.x >= 1.0f && node->Size.y >= 1.0f)
         {
             editor_->GetEngine().GetRenderer().SwapChain().UpdateOutputViewport(
                 Utilities::Math::floorToInt(node->Pos.x - mainViewport->Pos.x),
@@ -370,7 +399,7 @@ void EditorInterface::Render()
                 mousePos.x >= node->Pos.x && mousePos.y >= node->Pos.y &&
                 mousePos.x < node->Pos.x + node->Size.x && mousePos.y < node->Pos.y + node->Size.y;
             bool mouseInCameraView = false;
-            for (const auto& cameraView : uiState_.cameraViews)
+            for (const auto& cameraView : uiState.cameraViews)
             {
                 mouseInCameraView = mouseInCameraView ||
                     (cameraView.open &&
@@ -378,7 +407,7 @@ void EditorInterface::Render()
                      mousePos.x < cameraView.contentPos.x + cameraView.contentSize.x &&
                      mousePos.y < cameraView.contentPos.y + cameraView.contentSize.y);
             }
-            uiState_.viewportHovered = mouseInSceneViewport;
+            uiState.viewportHovered = mouseInSceneViewport;
             const bool sceneViewportClicked = mouseInSceneViewport && !mouseInCameraView && !io.WantCaptureMouse &&
                 (ImGui::IsMouseClicked(ImGuiMouseButton_Left) ||
                  ImGui::IsMouseClicked(ImGuiMouseButton_Right) ||
@@ -386,21 +415,21 @@ void EditorInterface::Render()
             if (sceneViewportClicked)
             {
                 ImGui::SetWindowFocus(nullptr);
-                uiState_.activeViewport = Editor::EEditorViewportId::Scene;
+                uiState.activeViewport = Editor::EEditorViewportId::Scene;
             }
-            uiState_.viewportFocused = uiState_.activeViewport == Editor::EEditorViewportId::Scene;
+            uiState.viewportFocused = uiState.activeViewport == Editor::EEditorViewportId::Scene;
 
-            if (uiState_.activeViewport == Editor::EEditorViewportId::Scene)
+            if (uiState.activeViewport == Editor::EEditorViewportId::Scene)
             {
                 editor_->DrawGizmo(glm::vec2(node->Pos.x, node->Pos.y), glm::vec2(node->Size.x, node->Size.y));
             }
         }
     }
     
-    if (uiState_.viewport)
-        Editor::DrawViewportOverlay(ctx, uiState_);
-    if (uiState_.settingsPanel)
-        Editor::DrawSettingsPanel(ctx, uiState_);
+    if (uiState.viewport)
+        Editor::DrawViewportOverlay(ctx, uiState);
+    if (uiState.settingsPanel)
+        Editor::DrawSettingsPanel(ctx, uiState);
 
     firstRun_ = false;
     ImGui::GetIO().UserData = previousUserData;

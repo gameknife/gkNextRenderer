@@ -218,12 +218,10 @@ namespace Editor
 
             auto render = selectedObj->GetComponent<Runtime::RenderComponent>();
             auto physics = selectedObj->GetComponent<Runtime::PhysicsComponent>();
-            static uint32_t editingNodeId = InvalidId;
-            static std::string editingName;
-            if (editingNodeId != selectedObj->GetInstanceId())
+            if (ui.propertiesState.editingNodeId != selectedObj->GetInstanceId())
             {
-                editingNodeId = selectedObj->GetInstanceId();
-                editingName = selectedObj->GetName();
+                ui.propertiesState.editingNodeId = selectedObj->GetInstanceId();
+                ui.propertiesState.editingName = selectedObj->GetName();
             }
 
             NextUI::Theme::BeginInsetPanel("##InspectorSummary", ImVec2(0.0f, 98.0f), true, 0,
@@ -283,18 +281,20 @@ namespace Editor
             ImGui::SameLine();
             ImGui::SetNextItemWidth(-FLT_MIN);
             const bool nameSubmitted =
-                ImGui::InputText("##NodeRenameInput", &editingName, ImGuiInputTextFlags_EnterReturnsTrue);
+                ImGui::InputText("##NodeRenameInput",
+                                  &ui.propertiesState.editingName,
+                                  ImGuiInputTextFlags_EnterReturnsTrue);
             const bool nameEditFinished = nameSubmitted || ImGui::IsItemDeactivatedAfterEdit();
             if (nameEditFinished)
             {
-                if (editingName.empty())
+                if (ui.propertiesState.editingName.empty())
                 {
-                    editingName = selectedObj->GetName();
+                    ui.propertiesState.editingName = selectedObj->GetName();
                 }
-                else if (editingName != selectedObj->GetName())
+                else if (ui.propertiesState.editingName != selectedObj->GetName())
                 {
                     ctx.engine.GetCommandHistory().Execute(std::make_unique<Runtime::Command::RenameNodeCommand>(
-                        ctx.scene, selectedObj->GetInstanceId(), editingName));
+                        ctx.scene, selectedObj->GetInstanceId(), ui.propertiesState.editingName));
                 }
             }
 
@@ -411,8 +411,7 @@ namespace Editor
 
             if (NextUI::Theme::BeginSection(ICON_FA_PUZZLE_PIECE, "Components", true))
             {
-                static ImGuiTextFilter propertyFilter;
-                propertyFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##PropertiesSearch");
+                ui.propertiesState.propertyFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##PropertiesSearch");
                 NextUI::Theme::DrawThinSeparator();
                 const auto& components = selectedObj->GetComponents();
                 for (const auto& component : components)
@@ -421,7 +420,7 @@ namespace Editor
                         continue;
 
                     // Skip component if all its properties are filtered out
-                    if (propertyFilter.IsActive())
+                    if (ui.propertiesState.propertyFilter.IsActive())
                     {
                         auto metaType = component->GetMetaType();
                         auto props = Reflection::PropertyAccessor::GetProperties(metaType);
@@ -431,7 +430,7 @@ namespace Editor
                             const char* displayName = prop.meta.displayName.empty()
                                 ? prop.name.c_str()
                                 : prop.meta.displayName.c_str();
-                            if (propertyFilter.PassFilter(displayName))
+                            if (ui.propertiesState.propertyFilter.PassFilter(displayName))
                             {
                                 anyVisible = true;
                                 break;
@@ -446,7 +445,8 @@ namespace Editor
                     {
                         ImGui::Indent();
                         if (PropertyWidgets::DrawComponentProperties(component.get(), &ctx.engine.GetCommandHistory(),
-                                                                     PropertyWidgets::WidgetConfig(), &propertyFilter))
+                                                                     PropertyWidgets::WidgetConfig(),
+                                                                     &ui.propertiesState.propertyFilter))
                         {
                             ctx.scene.MarkDirty();
                         }

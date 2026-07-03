@@ -203,7 +203,18 @@ bool EditorGameInstance::OnRenderUI()
     return true;
 }
 
+bool EditorGameInstance::OnRenderUI(const FGameUiFrameContext& context)
+{
+    editorUserInterface_->Render(context);
+    return true;
+}
+
 void EditorGameInstance::OnInitUI() { editorUserInterface_->Init(); }
+
+void EditorGameInstance::OnRemoteUiSessionClosed(std::string_view sessionId)
+{
+    editorUserInterface_->OnRemoteUiSessionClosed(sessionId);
+}
 
 bool EditorGameInstance::OnKey(SDL_Event& event)
 {

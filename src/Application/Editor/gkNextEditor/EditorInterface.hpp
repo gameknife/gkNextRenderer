@@ -3,9 +3,11 @@
 
 #include "Core/EditorUiState.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Runtime/GameInstance.hpp"
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 struct EditorContext;
 
@@ -20,18 +22,23 @@ public:
     void Config();
     void Init();
     void Render();
+    void Render(const NextGameInstanceBase::FGameUiFrameContext& context);
+    void OnRemoteUiSessionClosed(std::string_view sessionId);
 
     Editor::EditorUiState& GetEditorUiState() { return uiState_; }
     const Editor::EditorUiState& GetEditorUiState() const { return uiState_; }
 
 private:
-    ImGuiID DockSpaceUI();
+    Editor::EditorUiState& GetRemoteUiState(std::string_view sessionId);
+    void Render(Editor::EditorUiState& uiState);
+    ImGuiID DockSpaceUI(Editor::EditorUiState& uiState);
     void RebuildDefaultDockLayout(ImGuiID id);
-    void ToolbarUI(EditorContext& ctx);
+    void ToolbarUI(EditorContext& ctx, Editor::EditorUiState& uiState);
     void DrawIndicator(uint32_t frameCount);
 
     EditorGameInstance* editor_;
     Editor::EditorUiState uiState_{};
+    std::unordered_map<std::string, Editor::EditorUiState> remoteUiStates_;
     std::string imguiIniPath_;
 
     bool firstRun_ = true;

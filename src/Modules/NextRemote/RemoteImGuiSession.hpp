@@ -43,7 +43,7 @@ namespace Runtime::Remote
             ImGuiContext* previousContext_ = nullptr;
         };
 
-        void ConfigureContext();
+        void ConfigureContext(ImGuiConfigFlags configFlags, bool moveWindowsFromTitleBarOnly);
         void AddKeyEvent(const FCloudInputEvent& event);
         void AddMouseMoveEvent(const FCloudInputEvent& event, VkExtent2D extent);
         void AddMouseButtonEvent(const FCloudInputEvent& event, VkExtent2D extent);

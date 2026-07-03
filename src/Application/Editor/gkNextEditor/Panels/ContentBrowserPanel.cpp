@@ -947,25 +947,28 @@ namespace Editor
         {
             static const std::filesystem::path rootPath =
                 std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets"));
-            static std::filesystem::path currentPath = rootPath;
             static DirectoryCache directoryCache;
             static DirectoryVisibilityCache visibilityCache;
-            static ImGuiTextFilter contentFilter;
-            static ImGuiTextFilter materialFilter;
-            static ImGuiTextFilter textureFilter;
-            static ImGuiTextFilter meshFilter;
-            static EBrowserSection currentSection = EBrowserSection::Content;
+            auto& browserState = ui.contentBrowserState;
+            if (!browserState.initialized)
+            {
+                browserState.currentPath = rootPath;
+                browserState.initialized = true;
+            }
+            browserState.currentSection = std::clamp(browserState.currentSection, 0, 3);
+            EBrowserSection currentSection = static_cast<EBrowserSection>(browserState.currentSection);
             int itemCount = 0;
             int selectedCount = ui.selectedContentItemId != InvalidId ? 1 : 0;
 
             DrawBrowserSectionSidebar(currentSection);
+            browserState.currentSection = static_cast<int>(currentSection);
             ImGui::SameLine();
 
             ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.28f));
             ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.82f));
             //ImGui::BeginChild("ContentBrowserSectionFrame", ImVec2(0.0f, 0.0f), true);
             {
-                DrawContentBrowserSidebar(ui, rootPath, currentPath, directoryCache, visibilityCache);
+                DrawContentBrowserSidebar(ui, rootPath, browserState.currentPath, directoryCache, visibilityCache);
                 ImGui::SameLine();
                 ImGui::BeginChild("ContentRightFrame", ImVec2(0.0f, 0.0f), 0, ImGuiWindowFlags_NoBackground);
                 if (currentSection == EBrowserSection::Content)
@@ -995,10 +998,10 @@ namespace Editor
                         SPDLOG_INFO("Content Browser save all placeholder");
                     }
                     ImGui::SameLine();
-                    DrawContentBrowserNavigation(rootPath, currentPath, directoryCache, visibilityCache);
+                    DrawContentBrowserNavigation(rootPath, browserState.currentPath, directoryCache, visibilityCache);
                     ImGui::SameLine();
                     ImGui::SetNextItemWidth(190.0f);
-                    contentFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##ContentBrowserFilter", 190.0f);
+                    browserState.contentFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##ContentBrowserFilter", 190.0f);
                     ImGui::SameLine();
                     ImGui::SetNextItemWidth(104.0f);
                     ImGui::SliderFloat("Thumbnail", &GContentBrowserIconSize, 52.0f, 108.0f, "%.0f");
@@ -1006,7 +1009,7 @@ namespace Editor
                     NextUI::Theme::DrawThinSeparator(0.70f);
                     ImGui::BeginChild("Content Items", ImVec2(0.0f, 0.0f));
 
-                    auto& entries = GetCachedDirectoryEntries(rootPath, currentPath, directoryCache);
+                    auto& entries = GetCachedDirectoryEntries(rootPath, browserState.currentPath, directoryCache);
                     ContentGridLayout grid = BeginContentGrid();
                     for (auto& entry : entries)
                     {
@@ -1023,7 +1026,8 @@ namespace Editor
                         {
                             continue;
                         }
-                        if (contentFilter.IsActive() && !contentFilter.PassFilter(name.c_str()))
+                        if (browserState.contentFilter.IsActive() &&
+                            !browserState.contentFilter.PassFilter(name.c_str()))
                         {
                             continue;
                         }
@@ -1047,7 +1051,7 @@ namespace Editor
                                 {
                                     if (visual.kind == EContentAssetKind::Directory)
                                     {
-                                        currentPath = entry.browserPath;
+                                        browserState.currentPath = entry.browserPath;
                                     }
                                     else if (visual.kind == EContentAssetKind::Scene)
                                     {
@@ -1110,10 +1114,10 @@ namespace Editor
                 else if (currentSection == EBrowserSection::Material)
                 {
                     ImGui::SetNextItemWidth(220.0f);
-                    materialFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##MaterialBrowserFilter", 220.0f);
+                    browserState.materialFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##MaterialBrowserFilter", 220.0f);
                     NextUI::Theme::DrawThinSeparator(0.70f);
                     ImGui::BeginChild("Material Items", ImVec2(0.0f, -24.0f), true);
-                    itemCount = DrawMaterialBrowserContents(ctx, ui, &materialFilter);
+                    itemCount = DrawMaterialBrowserContents(ctx, ui, &browserState.materialFilter);
                     ImGui::EndChild();
                     selectedCount = ui.selectedMaterialId != InvalidId ? 1 : 0;
                     ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
@@ -1121,10 +1125,10 @@ namespace Editor
                 else if (currentSection == EBrowserSection::Texture)
                 {
                     ImGui::SetNextItemWidth(220.0f);
-                    textureFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##TextureBrowserFilter", 220.0f);
+                    browserState.textureFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##TextureBrowserFilter", 220.0f);
                     NextUI::Theme::DrawThinSeparator(0.70f);
                     ImGui::BeginChild("Texture Items", ImVec2(0.0f, -24.0f), true);
-                    itemCount = DrawTextureBrowserContents(ctx, ui, &textureFilter);
+                    itemCount = DrawTextureBrowserContents(ctx, ui, &browserState.textureFilter);
                     ImGui::EndChild();
                     selectedCount = ui.selectedTextureId != InvalidId ? 1 : 0;
                     ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
@@ -1132,10 +1136,10 @@ namespace Editor
                 else if (currentSection == EBrowserSection::Mesh)
                 {
                     ImGui::SetNextItemWidth(220.0f);
-                    meshFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##MeshBrowserFilter", 220.0f);
+                    browserState.meshFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##MeshBrowserFilter", 220.0f);
                     NextUI::Theme::DrawThinSeparator(0.70f);
                     ImGui::BeginChild("Mesh Items", ImVec2(0.0f, -24.0f), true);
-                    itemCount = DrawMeshBrowserContents(ctx, ui, &meshFilter);
+                    itemCount = DrawMeshBrowserContents(ctx, ui, &browserState.meshFilter);
                     ImGui::EndChild();
                     ImGui::Text("%d items", itemCount);
                 }

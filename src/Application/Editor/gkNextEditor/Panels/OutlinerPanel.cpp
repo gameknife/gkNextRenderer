@@ -593,15 +593,7 @@ namespace Editor
 
     void DrawOutlinerPanel(EditorContext& ctx, EditorUiState& ui)
     {
-        static uint32_t renameTargetId = InvalidId;
-        static std::string renameBuffer;
-        static bool openRenamePopup = false;
-        static bool focusRenameInput = false;
-        static bool prevAutoScrollEnabled = true;
-        static uint32_t lastSelectionId = InvalidId;
-        static uint32_t pendingScrollTargetId = InvalidId;
-        static bool suppressNextSelectionAutoScroll = false;
-        static ImGuiTextFilter nodeFilter;
+        auto& state = ui.outliner;
         uint32_t hoveredIdCandidate = InvalidId;
 
         ImGui::Begin("Outliner", nullptr);
@@ -621,29 +613,29 @@ namespace Editor
             ImGui::SameLine();
             NextUI::Theme::IconButton(ICON_FA_LAYER_GROUP, "Create Group (placeholder)", false,
                                          ImVec2(28.0f, 24.0f));
-            nodeFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##OutlinerFilter");
+            state.nodeFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##OutlinerFilter");
             NextUI::Theme::DrawThinSeparator();
 
             const uint32_t currentSelectionId = ctx.scene.GetSelectedId();
             if (ctx.settings.outlinerAutoScroll)
             {
-                const bool toggledOn = !prevAutoScrollEnabled;
-                const bool selectionChanged = currentSelectionId != lastSelectionId;
+                const bool toggledOn = !state.prevAutoScrollEnabled;
+                const bool selectionChanged = currentSelectionId != state.lastSelectionId;
                 if (currentSelectionId != InvalidId && (toggledOn || selectionChanged))
                 {
-                    if (!selectionChanged || !suppressNextSelectionAutoScroll)
+                    if (!selectionChanged || !state.suppressNextSelectionAutoScroll)
                     {
-                        pendingScrollTargetId = currentSelectionId;
+                        state.pendingScrollTargetId = currentSelectionId;
                     }
                 }
             }
             else
             {
-                pendingScrollTargetId = InvalidId;
+                state.pendingScrollTargetId = InvalidId;
             }
-            suppressNextSelectionAutoScroll = false;
-            prevAutoScrollEnabled = ctx.settings.outlinerAutoScroll;
-            lastSelectionId = currentSelectionId;
+            state.suppressNextSelectionAutoScroll = false;
+            state.prevAutoScrollEnabled = ctx.settings.outlinerAutoScroll;
+            state.lastSelectionId = currentSelectionId;
 
             ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.42f));
             ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.82f));
@@ -657,7 +649,7 @@ namespace Editor
                                         20.0f);
                 ImGui::TableSetupColumn("NodeName", ImGuiTableColumnFlags_WidthStretch);
                 auto& allnodes = ctx.scene.Nodes();
-                const bool filterActive = nodeFilter.IsActive();
+                const bool filterActive = state.nodeFilter.IsActive();
                 uint32_t limit = 1000;
                 for (auto& node : allnodes)
                 {
@@ -666,9 +658,16 @@ namespace Editor
                         continue;
                     }
 
-                    DrawNode(ctx, ui, *node, renameTargetId, renameBuffer, openRenamePopup, focusRenameInput,
-                             hoveredIdCandidate, ctx.settings.outlinerAutoScroll, pendingScrollTargetId,
-                             suppressNextSelectionAutoScroll, nodeFilter);
+                    DrawNode(ctx, ui, *node,
+                             state.renameTargetId,
+                             state.renameBuffer,
+                             state.openRenamePopup,
+                             state.focusRenameInput,
+                             hoveredIdCandidate,
+                             ctx.settings.outlinerAutoScroll,
+                             state.pendingScrollTargetId,
+                             state.suppressNextSelectionAutoScroll,
+                             state.nodeFilter);
 
                     if (!filterActive && limit-- <= 0)
                     {
@@ -700,10 +699,10 @@ namespace Editor
                     Assets::Node* selectedNode = ctx.scene.GetNodeByInstanceId(ctx.scene.GetSelectedId());
                     if (selectedNode != nullptr)
                     {
-                        renameTargetId = selectedNode->GetInstanceId();
-                        renameBuffer = selectedNode->GetName();
-                        openRenamePopup = true;
-                        focusRenameInput = true;
+                        state.renameTargetId = selectedNode->GetInstanceId();
+                        state.renameBuffer = selectedNode->GetName();
+                        state.openRenamePopup = true;
+                        state.focusRenameInput = true;
                     }
                 }
 
@@ -733,7 +732,7 @@ namespace Editor
                         for (auto& node : ctx.scene.Nodes())
                         {
                             if (node->GetParent() != nullptr) continue;
-                            CollectOutlinerVisibleIds(ctx.scene, *node, nodeFilter, false, visibleIds);
+                            CollectOutlinerVisibleIds(ctx.scene, *node, state.nodeFilter, false, visibleIds);
                         }
 
                         if (!visibleIds.empty())
@@ -767,7 +766,7 @@ namespace Editor
                                 newIndex < static_cast<int>(visibleIds.size()))
                             {
                                 ctx.scene.SetSelectedId(visibleIds[newIndex]);
-                                pendingScrollTargetId = visibleIds[newIndex];
+                                state.pendingScrollTargetId = visibleIds[newIndex];
                             }
                         }
                     }
@@ -796,27 +795,27 @@ namespace Editor
                         for (auto& node : ctx.scene.Nodes())
                         {
                             if (node->GetParent() != nullptr) continue;
-                            CollectOutlinerVisibleIds(ctx.scene, *node, nodeFilter, true, visibleIds);
+                            CollectOutlinerVisibleIds(ctx.scene, *node, state.nodeFilter, true, visibleIds);
                         }
                         ctx.scene.SetSelection(visibleIds);
                     }
                 }
             }
 
-            if (openRenamePopup)
+            if (state.openRenamePopup)
             {
                 ImGui::OpenPopup("Rename Node");
-                openRenamePopup = false;
+                state.openRenamePopup = false;
             }
 
             if (Utilities::UI::BeginAnchoredPopupModal("Rename Node", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
             {
-                Assets::Node* targetNode = ctx.scene.GetNodeByInstanceId(renameTargetId);
+                Assets::Node* targetNode = ctx.scene.GetNodeByInstanceId(state.renameTargetId);
                 if (targetNode == nullptr)
                 {
-                    renameTargetId = InvalidId;
-                    renameBuffer.clear();
-                    focusRenameInput = false;
+                    state.renameTargetId = InvalidId;
+                    state.renameBuffer.clear();
+                    state.focusRenameInput = false;
                     ImGui::CloseCurrentPopup();
                 }
                 else
@@ -826,14 +825,14 @@ namespace Editor
                     ImGui::TextUnformatted(targetNode->GetName().c_str());
                     ImGui::Separator();
 
-                    if (focusRenameInput)
+                    if (state.focusRenameInput)
                     {
                         ImGui::SetKeyboardFocusHere();
-                        focusRenameInput = false;
+                        state.focusRenameInput = false;
                     }
 
                     const bool submitWithEnter =
-                        ImGui::InputText("##RenameNodeInput", &renameBuffer, ImGuiInputTextFlags_EnterReturnsTrue);
+                        ImGui::InputText("##RenameNodeInput", &state.renameBuffer, ImGuiInputTextFlags_EnterReturnsTrue);
 
                     bool shouldSubmit = submitWithEnter;
                     ImGui::SameLine();
@@ -843,22 +842,22 @@ namespace Editor
 
                     if (shouldSubmit)
                     {
-                        if (!renameBuffer.empty() && renameBuffer != targetNode->GetName())
+                        if (!state.renameBuffer.empty() && state.renameBuffer != targetNode->GetName())
                         {
                             ctx.engine.GetCommandHistory().Execute(std::make_unique<Runtime::Command::RenameNodeCommand>(
-                                ctx.scene, targetNode->GetInstanceId(), renameBuffer));
+                                ctx.scene, targetNode->GetInstanceId(), state.renameBuffer));
                         }
 
-                        renameTargetId = InvalidId;
-                        renameBuffer.clear();
-                        focusRenameInput = false;
+                        state.renameTargetId = InvalidId;
+                        state.renameBuffer.clear();
+                        state.focusRenameInput = false;
                         ImGui::CloseCurrentPopup();
                     }
                     else if (shouldCancel)
                     {
-                        renameTargetId = InvalidId;
-                        renameBuffer.clear();
-                        focusRenameInput = false;
+                        state.renameTargetId = InvalidId;
+                        state.renameBuffer.clear();
+                        state.focusRenameInput = false;
                         ImGui::CloseCurrentPopup();
                     }
                 }
