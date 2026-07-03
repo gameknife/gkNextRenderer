@@ -59,8 +59,8 @@ namespace Modules::NextRemote
         uint32_t remoteHeight = options.RemoteHeight != 0 ? options.RemoteHeight : options.Height;
         if (options.RemoteWidth == 0 && options.RemoteHeight == 0 && remoteWidth > 0 && remoteHeight > 0)
         {
-            constexpr uint32_t maxDefaultRemoteWidth = 1280;
-            constexpr uint32_t maxDefaultRemoteHeight = 720;
+            constexpr uint32_t maxDefaultRemoteWidth = 1920;
+            constexpr uint32_t maxDefaultRemoteHeight = 1080;
             const double scale = std::min(
                 1.0, std::min(static_cast<double>(maxDefaultRemoteWidth) / static_cast<double>(remoteWidth),
                               static_cast<double>(maxDefaultRemoteHeight) / static_cast<double>(remoteHeight)));

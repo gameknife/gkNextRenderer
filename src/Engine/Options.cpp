@@ -59,7 +59,7 @@ Options::Options(const int argc, const char* argv[])
 		("remote-http-port", "Remote Play HTTP client port.", cxxopts::value<uint32_t>(RemoteHttpPort)->default_value("8088"))
 		("remote-port", "Remote Play signaling WebSocket port.", cxxopts::value<uint32_t>(RemotePort)->default_value("8089"))
 		("remote-bitrate", "Remote Play starting video bitrate in kbps. 0 = auto.", cxxopts::value<uint32_t>(RemoteBitrateKbps)->default_value("0"))
-		("remote-fps", "Remote Play target stream frame rate.", cxxopts::value<uint32_t>(RemoteFps)->default_value("30"))
+		("remote-fps", "Remote Play target stream frame rate.", cxxopts::value<uint32_t>(RemoteFps)->default_value("60"))
 		("remote-res", "Remote Play encode resolution, e.g. 1280x720. Empty means source resolution.", cxxopts::value<std::string>(remoteResolution)->default_value(""))
 		("remote-max-clients", "Maximum simultaneous Remote Play clients in --remote-multiview mode.", cxxopts::value<uint32_t>(RemoteMaxClients)->default_value("2"))
 		("remote-encoder", "Remote Play video encoder: auto or vulkan.", cxxopts::value<std::string>(RemoteEncoder)->default_value("auto"))
@@ -132,7 +132,7 @@ Options::Options(const int argc, const char* argv[])
 			}
 			if (RemoteFps == 0)
 			{
-				RemoteFps = 30;
+				RemoteFps = 60;
 			}
 			if (RemoteHttpPort > 65535 || RemotePort > 65535)
 			{
