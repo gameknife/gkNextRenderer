@@ -38,6 +38,17 @@ RenderPass::RenderPass(
 }
 
 RenderPass::RenderPass(const Vulkan::SwapChain& swapChain, VkFormat format, const Vulkan::DepthBuffer& depthBuffer,
+                       VkAttachmentLoadOp colorBufferLoadOp, VkImageLayout colorInitialLayout,
+                       VkImageLayout colorFinalLayout) : swapChain_(swapChain), depthBuffer_(depthBuffer)
+{
+    Init({.colorFormats = {format},
+          .colorLoadOp = colorBufferLoadOp,
+          .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+          .colorInitialLayout = colorInitialLayout,
+          .colorFinalLayout = colorFinalLayout});
+}
+
+RenderPass::RenderPass(const Vulkan::SwapChain& swapChain, VkFormat format, const Vulkan::DepthBuffer& depthBuffer,
                        VkAttachmentLoadOp colorBufferLoadOp, VkAttachmentLoadOp depthBufferLoadOp) : swapChain_(swapChain), depthBuffer_(depthBuffer)
 {
     Init({.colorFormats = {format},
@@ -74,8 +85,10 @@ void RenderPass::Init(const FRenderPassSpec& spec)
         colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        colorAttachment.initialLayout = spec.colorLoadOp == VK_ATTACHMENT_LOAD_OP_CLEAR ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        colorAttachment.initialLayout = spec.colorInitialLayout != VK_IMAGE_LAYOUT_UNDEFINED
+            ? spec.colorInitialLayout
+            : (spec.colorLoadOp == VK_ATTACHMENT_LOAD_OP_CLEAR ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        colorAttachment.finalLayout = spec.colorFinalLayout;
 
         colorAttachmentRefs.push_back({static_cast<uint32_t>(attachments.size()), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
         attachments.push_back(colorAttachment);

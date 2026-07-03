@@ -54,6 +54,7 @@
 | [NoAmbientDeferred TAA 抖动 + 过曝 —— 问题定位与修复计划（方案 A：实现真 TAA）](plans/noambient-deferred-taa-fix.md) | ✅ 已完成 | 2026-06-13 |
 | [QuickJS 模块化迁移计划](plans/quickjs-module-migration.md) | ✅ 已完成 | 2026-06-12 |
 | [ReProject 历史钳制黑点问题 — 根因分析与改进方案](plans/reproject-history-clamp-blackdot-fix.md) | 🚧 Phase A 已实现 | 2026-06-20 |
+| [Remote MultiView 独立 ImGui 界面开发计划](plans/remote-multiview-imgui-isolation-plan.md) | 📝 草案 | 2026-07-03 |
 | [Shader 编译迭代提速重构方案](plans/shader-compile-iteration-refactor-plan.md) | 📝 草案 | 2026-06-30 |
 | [SHARC Spatially Hashed Radiance Cache — 可行性评估与开发计划](plans/sharc-integration-plan.md) | ⚪ 待实现 | 2026-06-07 |
 | [StudioSim —— 游戏项目化迭代计划（向《游戏发展国》再进一步）](plans/studiosim-gameproject-iteration-plan.md) | 🔵 进行中 | 2026-06-08 |

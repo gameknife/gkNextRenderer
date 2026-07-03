@@ -16,6 +16,21 @@ namespace Runtime::Agent
 class NextGameInstanceBase
 {
 public:
+    struct FGameUiFrameContext
+    {
+        enum class ESurfaceKind : uint8_t
+        {
+            MainWindow,
+            RemoteView,
+        };
+
+        ESurfaceKind surfaceKind = ESurfaceKind::MainWindow;
+        std::string_view sessionId{};
+        VkExtent2D framebufferExtent{};
+        const Assets::Camera* viewCamera = nullptr;
+        bool allowWindowCommands = true;
+    };
+
     struct FRemoteViewActionContext
     {
         std::string sessionId;
@@ -35,9 +50,15 @@ public:
     virtual void OnTick(double deltaSeconds) = 0;
     virtual void OnDestroy() = 0;
     virtual bool OnRenderUI() = 0;
+    virtual bool OnRenderUI(const FGameUiFrameContext& context)
+    {
+        (void)context;
+        return OnRenderUI();
+    }
     virtual bool ShouldRenderUiDuringScreenshot() const { return false; }
     virtual void OnPreConfigUI() {}
     virtual void OnInitUI() {}
+    virtual void OnRemoteUiSessionClosed(std::string_view sessionId) { (void)sessionId; }
     virtual std::unique_ptr<NextUI::IMultiViewportBackend> CreateMultiViewportBackend() { return nullptr; }
     virtual void OnRayHitResponse(Assets::RayCastResult& result) {}
     virtual void ConfigureCVars(NextCVar::FCVarSystem& cvars) {}

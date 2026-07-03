@@ -102,6 +102,18 @@ namespace Runtime::Remote
                 Enqueue(sessionId, event);
             }
             break;
+        case ERemoteInputMessage::TextUtf8:
+            {
+                uint16_t byteLength = 0;
+                if (!ReadCloudInputValue(data, size, offset, byteLength) || offset + byteLength > size)
+                {
+                    return;
+                }
+                event.type = FCloudInputEvent::EType::TextUtf8;
+                event.text.assign(reinterpret_cast<const char*>(data + offset), byteLength);
+                Enqueue(sessionId, std::move(event));
+                break;
+            }
         default:
             break;
         }
@@ -112,7 +124,19 @@ namespace Runtime::Remote
         try
         {
             const nlohmann::json json = nlohmann::json::parse(message);
-            if (json.value("type", "") != "key")
+            const std::string type = json.value("type", "");
+            if (type == "text")
+            {
+                FCloudInputEvent event{};
+                event.type = FCloudInputEvent::EType::TextUtf8;
+                event.text = json.value("text", "");
+                if (!event.text.empty())
+                {
+                    Enqueue(sessionId, std::move(event));
+                }
+                return;
+            }
+            if (type != "key")
             {
                 return;
             }
