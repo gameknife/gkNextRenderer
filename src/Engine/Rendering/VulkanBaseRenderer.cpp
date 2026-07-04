@@ -2364,8 +2364,10 @@ namespace Vulkan
                             rt_->blas.size());
                 continue;
             }
+            const bool includeInGpuAs =
+                (node.visible & Runtime::RenderParticipation::gpuAs) != 0u && !node.nort;
             instances.push_back(RayTracing::TopLevelAccelerationStructure::CreateInstance(
-                rt_->blas[blasIndex], glm::transpose(node.worldTS), node.instanceId, node.visible && !node.nort));
+                rt_->blas[blasIndex], glm::transpose(node.worldTS), node.instanceId, includeInGpuAs));
         }
 
         int instanceCount = static_cast<int>(instances.size());

@@ -52,7 +52,8 @@ void main(uint3 DTid : SV_DispatchThreadID, uint3 Lid : SV_GroupThreadID)
         // needed by the removed temporal depth test and caused one-frame edge pops.
         float4x4 mvp = mul(scene.Camera[0].PrevViewProjectionUnJit, node.worldTS);
 
-        bool shouldDraw = (node.visible > 0) && IsAABBInFrustum(model.localAabbMin.xyz, model.localAabbMax.xyz, mvp);
+        bool shouldDraw = ((node.visible & RENDER_PARTICIPATION_MAIN_VISIBILITY) != 0u) &&
+            IsAABBInFrustum(model.localAabbMin.xyz, model.localAabbMax.xyz, mvp);
         // IsOccludedVolume is expensive (6^3 samples) so it is only evaluated for drawn nodes, as before.
         bool occluded = shouldDraw && IsOccludedVolume(model.localAabbMin.xyz, model.localAabbMax.xyz, mvp);
         emit = shouldDraw && !occluded && triangleCount > 0;

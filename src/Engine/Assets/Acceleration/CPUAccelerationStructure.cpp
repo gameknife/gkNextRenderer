@@ -8,6 +8,7 @@
 #include "Engine/Assets/GPU/TextureImage.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
+#include "Engine/Runtime/Components/GaussianSplatComponent.h"
 
 #include <atomic>
 #include <chrono>
@@ -204,7 +205,11 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
         const uint32_t modelId = render->GetModelId();
         if (modelId == -1) continue;
         if (!render->GetVisible()) continue;
-        if (!render->GetRayCastVisible()) continue;
+        const uint32_t participation = render->GetRenderParticipationMask();
+        if ((participation & (Runtime::RenderParticipation::giBake | Runtime::RenderParticipation::gpuAs)) == 0u)
+        {
+            continue;
+        }
 
         node->RecalcTransform(true);
         const glm::mat4 nodeWorldTransform = node->WorldTransform();
@@ -219,7 +224,19 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
         tmpbvhInstanceList.push_back(instance);
         FCPUTLASInstanceInfo info;
         info.matIdxs.fill(0);
-        info.nodeId = node->GetInstanceId();
+        const bool isSplatProxy = node->GetTag() == "__splat_proxy";
+        info.nodeId = isSplatProxy ? scene.ResolveEditableNodeId(node->GetInstanceId()) : node->GetInstanceId();
+        info.rayCastVisible = render->GetRayCastVisible();
+        if (isSplatProxy)
+        {
+            if (const auto sourceNode = scene.GetNodeSharedByInstanceId(info.nodeId))
+            {
+                if (const auto* splat = sourceNode->GetComponentPtr<Runtime::GaussianSplatComponent>())
+                {
+                    info.rayCastVisible = splat->GetVisible() && splat->GetRayCastVisible();
+                }
+            }
+        }
         info.worldBoundsMin = worldBounds.min;
         info.worldBoundsMax = worldBounds.max;
         if (const auto physics = node->GetComponent<Runtime::PhysicsComponent>())
@@ -315,15 +332,33 @@ RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDi
 
     if (GetCpuBvhState().bvh.blasCount > 0)
     {
-        tinybvh::Ray ray(tinybvh::bvhvec3(rayOrigin.x, rayOrigin.y, rayOrigin.z), tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z), 2000.0f);
-        GetCpuBvhState().bvh.Intersect(ray);
-
-        if (ray.hit.t < 2000.f)
+        constexpr float maxDistance = 2000.0f;
+        constexpr float skipEpsilon = 1e-3f;
+        float accumulatedT = 0.0f;
+        glm::vec3 currentOrigin = rayOrigin;
+        for (uint32_t iteration = 0; iteration < 16 && accumulatedT < maxDistance; ++iteration)
         {
-            vec3 hitPos = rayOrigin + rayDir * ray.hit.t;
+            const float remainingDistance = maxDistance - accumulatedT;
+            tinybvh::Ray ray(tinybvh::bvhvec3(currentOrigin.x, currentOrigin.y, currentOrigin.z),
+                             tinybvh::bvhvec3(rayDir.x, rayDir.y, rayDir.z), remainingDistance);
+            GetCpuBvhState().bvh.Intersect(ray);
+            if (ray.hit.t >= remainingDistance)
+            {
+                break;
+            }
+
             uint32_t primIdx = ray.hit.prim;
             tinybvh::BLASInstance& instance = (*GetCpuBvhState().instanceList)[ray.hit.inst];
             FCPUTLASInstanceInfo& instContext = (*GetCpuBvhState().tlasContexts)[ray.hit.inst];
+            const float globalT = accumulatedT + ray.hit.t;
+            vec3 hitPos = rayOrigin + rayDir * globalT;
+            if (!instContext.rayCastVisible)
+            {
+                accumulatedT = globalT + skipEpsilon;
+                currentOrigin = rayOrigin + rayDir * accumulatedT;
+                continue;
+            }
+
             FCPUBLASContext& context = (*GetCpuBvhState().blasContexts)[instance.blasIdx];
             mat4* worldTS = (mat4*)instance.transform;
             vec4 normalWS = vec4( context.extinfos[primIdx].normal, 0.0f) * *worldTS;
@@ -333,8 +368,10 @@ RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDi
             result.HitPoint = vec4(hitPos, 0);
             result.Normal = normalWS;
             result.Hitted = true;
-            result.T = ray.hit.t;
+            result.T = globalT;
             result.InstanceId = instContext.nodeId;
+            result.MaterialId = FetchMaterialId(context.extinfos[primIdx].matIdx, ray.hit.inst);
+            break;
         }
     }
 

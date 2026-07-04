@@ -44,7 +44,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
         // Frustum culling must use the current camera (see LDS variant note).
         float4x4 mvp = mul(scene.Camera[0].PrevViewProjectionUnJit, node.worldTS);
 
-        shouldDraw = (node.visible > 0) && IsAABBInFrustum(model.localAabbMin.xyz, model.localAabbMax.xyz, mvp);
+        shouldDraw = ((node.visible & RENDER_PARTICIPATION_MAIN_VISIBILITY) != 0u) &&
+            IsAABBInFrustum(model.localAabbMin.xyz, model.localAabbMax.xyz, mvp);
         occluded = shouldDraw && IsOccludedVolume(model.localAabbMin.xyz, model.localAabbMax.xyz, mvp);
         emit = shouldDraw && !occluded && triangleCount > 0;
     }

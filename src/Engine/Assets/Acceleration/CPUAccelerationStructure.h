@@ -54,6 +54,7 @@ struct FCPUTLASInstanceInfo
     glm::vec3 worldBoundsMin{0.0f};
     glm::vec3 worldBoundsMax{0.0f};
     bool navRelevant = false;
+    bool rayCastVisible = true;
 };
 
 struct FCPUBLASContext

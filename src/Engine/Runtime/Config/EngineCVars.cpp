@@ -130,6 +130,30 @@ namespace NextCVar
                      "Force Gaussian splat antialias opacity compensation");
         GK_CVAR_FLOAT("r.splat.aaStrength", settings, SplatAAStrength, 0.5f, ECVarFlags::Archive,
                       "Gaussian splat antialias opacity compensation strength (0=off, 1=full)");
+        GK_CVAR_BOOL("r.splat.proxy.enable", settings, SplatProxyEnable, true, ECVarFlags::Archive,
+                     "Generate hidden proxy meshes for Gaussian splat scene integration");
+        GK_CVAR_UINT("r.splat.proxy.gridMax", settings, SplatProxyGridMax, 64, ECVarFlags::Archive,
+                     "Maximum voxel resolution on the longest axis for Gaussian splat proxy meshes");
+        GK_CVAR_UINT("r.splat.proxy.brickSize", settings, SplatProxyBrickSize, 8, ECVarFlags::Archive,
+                     "Reserved brick size for Gaussian splat proxy generation");
+        GK_CVAR_FLOAT("r.splat.proxy.sigma", settings, SplatProxySigma, 2.5f, ECVarFlags::Archive,
+                      "Gaussian influence radius in standard deviations for proxy density generation");
+        GK_CVAR_FLOAT("r.splat.proxy.isoThreshold", settings, SplatProxyIsoThreshold, 0.35f, ECVarFlags::Archive,
+                      "Default alpha iso threshold for Gaussian splat proxy mesh extraction");
+        GK_CVAR_FLOAT("r.splat.proxy.simplifyRatio", settings, SplatProxySimplifyRatio, 0.0f, ECVarFlags::Archive,
+                      "Reserved simplification ratio for Gaussian splat proxy meshes");
+        GK_CVAR_BOOL("r.splat.shadow.enable", settings, SplatShadowEnable, true, ECVarFlags::Archive,
+                     "Allow Gaussian splat proxy meshes to cast CSM shadows");
+        GK_CVAR_BOOL("r.splat.rayOcclusion.enable", settings, SplatRayOcclusionEnable, true, ECVarFlags::Archive,
+                     "Allow Gaussian splat proxy meshes to participate in GPU ray occlusion");
+        GK_CVAR_BOOL("r.splat.proxy.debugVisible", settings, SplatProxyDebugVisible, false, ECVarFlags::Archive,
+                     "Draw Gaussian splat proxy meshes in the main visibility pass for debugging");
+        GK_CVAR_BOOL("r.splat.receiveLighting", settings, SplatReceiveLighting, true, ECVarFlags::Archive,
+                     "Allow Gaussian splat shading to receive scene lighting");
+        GK_CVAR_FLOAT("r.splat.lightingStrength", settings, SplatLightingStrength, 0.35f, ECVarFlags::Archive,
+                      "Global Gaussian splat scene-lighting blend strength");
+        GK_CVAR_INT("r.splat.proxy.debug", settings, SplatProxyDebug, 0, ECVarFlags::None,
+                    "Gaussian splat proxy debug mode (0=off,1=density,2=mesh,3=GPUAS)");
         GK_CVAR_FLOAT("r.paperWhiteNit", settings, PaperWhiteNit, 600.0f, ECVarFlags::Archive,
                       "Paper white nit");
         GK_CVAR_BOOL("ui.showSettings", settings, ShowSettings, true, ECVarFlags::Archive,

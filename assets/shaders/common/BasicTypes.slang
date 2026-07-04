@@ -14,6 +14,11 @@ public static const int HDR_OUTPUT_MODE_SDR = 0;
 public static const int HDR_OUTPUT_MODE_HDR10_ST2084 = 1;
 public static const int HDR_OUTPUT_MODE_EXTENDED_SRGB_LINEAR = 2;
 
+public static const uint RENDER_PARTICIPATION_MAIN_VISIBILITY = 1u << 0;
+public static const uint RENDER_PARTICIPATION_SHADOW_CASTER = 1u << 1;
+public static const uint RENDER_PARTICIPATION_GPU_AS = 1u << 2;
+public static const uint RENDER_PARTICIPATION_GI_BAKE = 1u << 3;
+
 public static const int GPU_SCENE_NODE_PROXY_SIZE = 224;
 public static const int GPU_SCENE_MATERIAL_SIZE = 64;
 public static const int GPU_SCENE_GPU_DRIVEN_STAT_SIZE = 32;

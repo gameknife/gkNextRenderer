@@ -57,6 +57,7 @@
 | [Remote MultiView 独立 ImGui 界面开发计划](plans/remote-multiview-imgui-isolation-plan.md) | 📝 草案 | 2026-07-03 |
 | [Shader 编译迭代提速重构方案](plans/shader-compile-iteration-refactor-plan.md) | 📝 草案 | 2026-06-30 |
 | [SHARC Spatially Hashed Radiance Cache — 可行性评估与开发计划](plans/sharc-integration-plan.md) | ⚪ 待实现 | 2026-06-07 |
+| [SOG 高斯溅射与普通场景深度融合开发计划](plans/sog-scene-integration-plan.md) | 📝 草案 | 2026-07-04 |
 | [StudioSim —— 游戏项目化迭代计划（向《游戏发展国》再进一步）](plans/studiosim-gameproject-iteration-plan.md) | 🔵 进行中 | 2026-06-08 |
 | [StudioSim —— LLM 驱动的游戏工作室办公室模拟（MVP 开发计划）](plans/studiosim-mvp-plan.md) | ✅ 已完成 | 2026-06-07 |
 | [StudioSim —— 产出与进度系统改进方案（打磨前结构性调整）](plans/studiosim-production-model-refinement.md) | ✅ 已完成 | 2026-06-08 |

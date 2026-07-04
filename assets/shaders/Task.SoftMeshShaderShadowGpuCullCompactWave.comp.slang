@@ -37,7 +37,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         node = scene.Nodes[DTid.x];
         model = scene.Offsets[node.modelId];
         triangleCount = model.indexCount / 3;
-        isCandidate = node.visible > 0;
+        isCandidate = (node.visible & RENDER_PARTICIPATION_SHADOW_CASTER) != 0u;
     }
 
     for (uint cascadeIdx = 0; cascadeIdx < 4; ++cascadeIdx)

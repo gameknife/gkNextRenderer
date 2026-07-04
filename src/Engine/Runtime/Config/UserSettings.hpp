@@ -51,6 +51,18 @@ struct UserSettings final
     float SplatSigma = 3.0f;
     bool SplatForceAA = true;
     float SplatAAStrength = 0.5f;
+    bool SplatProxyEnable = true;
+    uint32_t SplatProxyGridMax = 64;
+    uint32_t SplatProxyBrickSize = 8;
+    float SplatProxySigma = 2.5f;
+    float SplatProxyIsoThreshold = 0.35f;
+    float SplatProxySimplifyRatio = 0.0f;
+    bool SplatShadowEnable = true;
+    bool SplatRayOcclusionEnable = true;
+    bool SplatProxyDebugVisible = false;
+    bool SplatReceiveLighting = true;
+    float SplatLightingStrength = 0.35f;
+    int SplatProxyDebug = 0;
 
 	// Denoise (variance-guided a-trous wavelet; see PipelineCommon::AtrousDenoiser)
 	bool Denoiser;

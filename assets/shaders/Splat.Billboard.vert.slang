@@ -1,3 +1,4 @@
+import Shader.Bindless;
 import Shader.Types;
 
 struct GaussianSplat
@@ -13,15 +14,17 @@ struct SplatModelState
 {
     float4x4 world;
     float4 parameters;
+    float4 lightingParameters;
 };
 
 struct PushConstants
 {
-    uint64_t cameraAddress;
+    GPUScene gpuScene;
     uint64_t splatAddress;
     uint64_t paletteAddress;
     uint64_t sortedIndexAddress;
     uint64_t modelStateAddress;
+    uint64_t lightingGridAddress;
     uint count;
     uint width;
     uint height;
@@ -29,6 +32,20 @@ struct PushConstants
 };
 
 [[vk::push_constant]] PushConstants push;
+
+namespace Bindless
+{
+    public GPUScene GetGpuscene()
+    {
+        return push.gpuScene;
+    }
+}
+
+#include "common/ConstFunc.slang"
+
+static const int SPLAT_CUBE_SIZE_XY = 192;
+static const int SPLAT_CUBE_SIZE_Z = 48;
+static const uint SPLAT_CUBE_CASCADE_MAX = 4;
 
 struct VertexOutput
 {
@@ -89,6 +106,239 @@ float3 EvaluateColor(GaussianSplat splat, float3 direction)
     return max(color + 0.5, 0.0);
 }
 
+uint SelectSunCascade(float viewDist, float4 splits)
+{
+    if (viewDist < splits.x) return 0;
+    if (viewDist < splits.y) return 1;
+    if (viewDist < splits.z) return 2;
+    return 3;
+}
+
+float SampleSplatSunShadowCSM(UniformBufferObject camera, float3 worldPos, float3 normal, float viewDist)
+{
+    const uint cascade = SelectSunCascade(viewDist, camera.CascadeSplits);
+    const float4 lightPos = mul(camera.SunCascadeViewProjection[cascade], float4(worldPos, 1.0));
+    const float3 projCoords = lightPos.xyz / lightPos.w;
+    const float2 uv = projCoords.xy * 0.5 + 0.5;
+    if (any(uv < float2(0.0)) || any(uv > float2(1.0)) || projCoords.z < 0.0 || projCoords.z > 1.0)
+    {
+        return 1.0;
+    }
+
+    const float noL = max(dot(normalize(normal), camera.SunDirection.xyz), 0.0);
+    const float bias = max(0.0008 * (1.0 - noL), 0.0001);
+    Sampler2D shadowMap = Bindless.GetShadowMap(int(cascade));
+    uint2 texSize;
+    shadowMap.GetDimensions(texSize.x, texSize.y);
+    const float2 texelSize = 1.0 / float2(texSize);
+
+    float shadow = 0.0;
+    [unroll]
+    for (int dy = -1; dy <= 1; ++dy)
+    {
+        [unroll]
+        for (int dx = -1; dx <= 1; ++dx)
+        {
+            const float2 offset = float2(dx, dy) * texelSize;
+            const float closestDepth = shadowMap.SampleLevel(uv + offset, 0).r;
+            shadow += (projCoords.z - bias) > closestDepth ? 0.0 : 1.0;
+        }
+    }
+    return shadow * (1.0 / 9.0);
+}
+
+uint GetSplatAmbientCubeCascadeCount()
+{
+    uint count = uint(max(Bindless.GetGpuscene().Camera[0].AmbientCubeCascadeParams.x, 1.0));
+    return min(count, SPLAT_CUBE_CASCADE_MAX);
+}
+
+float GetSplatAmbientCubeUnitAtCascade(uint cascadeIndex)
+{
+    const UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
+    const float baseUnit = max(camera.AmbientCubeUnit, 0.0001);
+    const float ratio = max(camera.AmbientCubeCascadeParams.y, 1.0);
+    return baseUnit * pow(ratio, float(cascadeIndex));
+}
+
+float3 GetSplatAmbientCubeOffsetBias()
+{
+    const UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
+    const float3 baseOffset = float3(-SPLAT_CUBE_SIZE_XY / 2.0, -1.375, -SPLAT_CUBE_SIZE_XY / 2.0) *
+                              max(camera.AmbientCubeUnit, 0.0001);
+    return camera.AmbientCubeOffset - baseOffset;
+}
+
+float3 GetSplatAmbientCubeOffsetAtCascade(uint cascadeIndex)
+{
+    const float unit = GetSplatAmbientCubeUnitAtCascade(cascadeIndex);
+    return float3(-SPLAT_CUBE_SIZE_XY / 2.0, -1.375, -SPLAT_CUBE_SIZE_XY / 2.0) * unit +
+           GetSplatAmbientCubeOffsetBias();
+}
+
+uint SplatAmbientBrickSlot(uint cascadeIndex, int3 probePos)
+{
+    if (probePos.x < 0 || probePos.y < 0 || probePos.z < 0 ||
+        probePos.x >= SPLAT_CUBE_SIZE_XY || probePos.y >= SPLAT_CUBE_SIZE_Z || probePos.z >= SPLAT_CUBE_SIZE_XY)
+    {
+        return GPU_SCENE_AMBIENT_BRICK_INVALID;
+    }
+    const uint bx = uint(probePos.x / GPU_SCENE_AMBIENT_BRICK_EDGE);
+    const uint by = uint(probePos.y / GPU_SCENE_AMBIENT_BRICK_EDGE);
+    const uint bz = uint(probePos.z / GPU_SCENE_AMBIENT_BRICK_EDGE);
+    const uint brickLinear = by * uint(GPU_SCENE_AMBIENT_BRICKS_X * GPU_SCENE_AMBIENT_BRICKS_Z) +
+                             bz * uint(GPU_SCENE_AMBIENT_BRICKS_X) + bx;
+    return Bindless.GetGpuscene().AmbientBrickTable[
+        cascadeIndex * uint(GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE) + brickLinear];
+}
+
+uint SplatAmbientBrickLocalOffset(int3 probePos)
+{
+    const uint lx = uint(probePos.x & int(GPU_SCENE_AMBIENT_BRICK_EDGE - 1));
+    const uint ly = uint(probePos.y & int(GPU_SCENE_AMBIENT_BRICK_EDGE - 1));
+    const uint lz = uint(probePos.z & int(GPU_SCENE_AMBIENT_BRICK_EDGE - 1));
+    return ly * uint(GPU_SCENE_AMBIENT_BRICK_EDGE * GPU_SCENE_AMBIENT_BRICK_EDGE) +
+           lz * uint(GPU_SCENE_AMBIENT_BRICK_EDGE) + lx;
+}
+
+int SplatAmbientCubePoolIndex(uint cascadeIndex, int3 probePos)
+{
+    const uint slot = SplatAmbientBrickSlot(cascadeIndex, probePos);
+    if (slot == GPU_SCENE_AMBIENT_BRICK_INVALID)
+    {
+        return -1;
+    }
+    const uint poolBricks = Bindless.GetGpuscene().AmbientPoolBricksPerCascade;
+    return int((cascadeIndex * poolBricks + slot) * uint(GPU_SCENE_AMBIENT_BRICK_VOLUME) +
+               SplatAmbientBrickLocalOffset(probePos));
+}
+
+AmbientCube SplatZeroAmbientCube()
+{
+    AmbientCube cube;
+    cube.PosZ = 0;
+    cube.NegZ = 0;
+    cube.PosY = 0;
+    cube.NegY = 0;
+    cube.PosX = 0;
+    cube.NegX = 0;
+    cube.SunDirect = 0;
+    cube.SkyEmissiveDirect = 0;
+    cube.skyVisibility_pznzpyny = 0;
+    cube.skyVisibility_pxnxs0s1 = 0;
+    return cube;
+}
+
+bool SplatTryFetchCubePool(int3 probePos, uint cascadeIndex, out AmbientCube cube)
+{
+    const int idx = SplatAmbientCubePoolIndex(cascadeIndex, probePos);
+    if (idx < 0)
+    {
+        cube = SplatZeroAmbientCube();
+        return false;
+    }
+    cube = Bindless.GetGpuscene().Cubes[idx];
+    return true;
+}
+
+float SplatAmbientCubeSkyVisibility(AmbientCube cube, float3 normal)
+{
+    const float wx = max(normal.x, 0.0);
+    const float wnx = max(-normal.x, 0.0);
+    const float wy = max(normal.y, 0.0);
+    const float wny = max(-normal.y, 0.0);
+    const float wz = max(normal.z, 0.0);
+    const float wnz = max(-normal.z, 0.0);
+    const float sum = wx + wnx + wy + wny + wz + wnz;
+
+    const uint4 unpacked0 = UnpackBytes(cube.skyVisibility_pznzpyny);
+    const uint4 unpacked1 = UnpackBytes(cube.skyVisibility_pxnxs0s1);
+    float skyvis = 0.0;
+    skyvis += float(unpacked0.x) * wz;
+    skyvis += float(unpacked0.y) * wnz;
+    skyvis += float(unpacked0.z) * wy;
+    skyvis += float(unpacked0.w) * wny;
+    skyvis += float(unpacked1.x) * wx;
+    skyvis += float(unpacked1.y) * wnx;
+    skyvis *= (sum > 0.0) ? (1.0 / sum) : 1.0;
+    return skyvis / 255.0;
+}
+
+float SampleSplatUpSkyVisibility(float3 worldPos)
+{
+    const float3 upNormal = float3(0.0, 1.0, 0.0);
+    const uint cascadeCount = GetSplatAmbientCubeCascadeCount();
+    for (uint cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex)
+    {
+        const float cubeUnit = GetSplatAmbientCubeUnitAtCascade(cascadeIndex);
+        const float3 cubeOffset = GetSplatAmbientCubeOffsetAtCascade(cascadeIndex);
+        const float3 nearPos = (worldPos - cubeOffset) / cubeUnit;
+        if (nearPos.x < 0.0 || nearPos.y < 0.0 || nearPos.z < 0.0 ||
+            nearPos.x > SPLAT_CUBE_SIZE_XY - 2 || nearPos.y > SPLAT_CUBE_SIZE_Z - 2 ||
+            nearPos.z > SPLAT_CUBE_SIZE_XY - 2)
+        {
+            continue;
+        }
+
+        const int3 baseIdx = int3(floor(nearPos));
+        const float3 fracPos = frac(nearPos);
+        float totalWeight = 0.0;
+        float skyVisibility = 0.0;
+        for (int i = 0; i < 8; ++i)
+        {
+            const int3 offset = int3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
+            const int3 probePos = baseIdx + offset;
+            AmbientCube cube;
+            if (!SplatTryFetchCubePool(probePos, cascadeIndex, cube))
+            {
+                continue;
+            }
+
+            const float wx = offset.x == 0 ? (1.0 - fracPos.x) : fracPos.x;
+            const float wy = offset.y == 0 ? (1.0 - fracPos.y) : fracPos.y;
+            const float wz = offset.z == 0 ? (1.0 - fracPos.z) : fracPos.z;
+            const float weight = wx * wy * wz;
+            skyVisibility += SplatAmbientCubeSkyVisibility(cube, upNormal) * weight;
+            totalWeight += weight;
+        }
+        if (totalWeight > 0.0)
+        {
+            return saturate(skyVisibility / totalWeight);
+        }
+    }
+    return 1.0;
+}
+
+float3 ApplySceneLighting(GaussianSplat splat, SplatModelState model, UniformBufferObject camera,
+                          float3 baseColor, float3 worldPosition, float3 eye, float viewDist)
+{
+    const float strength = saturate(model.lightingParameters.y);
+    if (model.lightingParameters.x < 0.5 || strength <= 0.0)
+    {
+        return baseColor;
+    }
+
+    float3 worldUp = normalize(mul((float3x3)model.world, float3(0.0, 1.0, 0.0)));
+    if (length(worldUp) < 0.5)
+    {
+        worldUp = float3(0.0, 1.0, 0.0);
+    }
+
+    float shadowMask = 1.0;
+    if (camera.HasSun)
+    {
+        shadowMask = SampleSplatSunShadowCSM(camera, worldPosition + worldUp * 0.015, worldUp, viewDist);
+    }
+
+    const float upwardSkyVisibility = SampleSplatUpSkyVisibility(worldPosition);
+    const float skyMask = lerp(0.05, 1.0, pow(upwardSkyVisibility + 0.5, 2.0));
+    const float sunShadowMask = lerp(0.05, 1.0, shadowMask);
+    const float lightingMask = saturate(skyMask * sunShadowMask);
+    const bool hasSh = splat.metadata.y > 0u || any(abs(splat.sh0.xyz) > float3(1e-5));
+    const float3 litColor = hasSh ? baseColor * lightingMask : float3(lightingMask);
+    return lerp(baseColor, litColor, strength);
+}
+
 [shader("vertex")]
 VertexOutput main(uint vertexIndex : SV_VertexID, uint instanceIndex : SV_InstanceID)
 {
@@ -102,7 +352,7 @@ VertexOutput main(uint vertexIndex : SV_VertexID, uint instanceIndex : SV_Instan
     const GaussianSplat splat = splats[sortedIndices[instanceIndex]];
     SplatModelState* modelStates = (SplatModelState*)push.modelStateAddress;
     const SplatModelState model = modelStates[splat.metadata.w];
-    UniformBufferObject* camera = (UniformBufferObject*)push.cameraAddress;
+    UniformBufferObject* camera = push.gpuScene.Camera;
     const float3 worldPosition = mul(model.world, float4(splat.positionOpacity.xyz, 1.0)).xyz;
     const float4 viewPosition = mul(camera[0].ModelView, float4(worldPosition, 1.0));
     float4 clip = mul(camera[0].Projection, viewPosition);
@@ -177,8 +427,10 @@ VertexOutput main(uint vertexIndex : SV_VertexID, uint instanceIndex : SV_Instan
     {
         shDirection.xy = -shDirection.xy;
     }
+    const float3 baseColor = EvaluateColor(splat, shDirection);
+    const float3 litColor = ApplySceneLighting(splat, model, camera[0], baseColor, worldPosition, eye, depth);
     output.position = clip;
     output.local = local;
-    output.colorOpacity = float4(EvaluateColor(splat, shDirection), alpha);
+    output.colorOpacity = float4(litColor, alpha);
     return output;
 }
