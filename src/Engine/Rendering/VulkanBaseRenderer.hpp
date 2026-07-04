@@ -129,6 +129,7 @@ namespace Vulkan
 		Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const;
 		void OnPreLoadScene();
 		void OnPostLoadScene();
+		void OnHdrShUpdated();
 		void RefreshSceneSwapChainResources();
 		void CreateSwapChain();
 		void DeleteSwapChain();

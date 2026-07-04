@@ -40,6 +40,7 @@ namespace Vulkan
 
         void BeforeNextFrame();
         void OnMainSceneChanged();
+        void OnHdrShUpdated();
         void OnSwapChainResourcesInvalidated();
         bool HasPendingThumbnail() const;
         bool ScheduleNextThumbnail(VkCommandBuffer commandBuffer, uint32_t imageIndex);

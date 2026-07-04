@@ -40,6 +40,7 @@ namespace Vulkan
 
         void BeforeNextFrame();
         void OnMainSceneChanged();
+        void OnHdrShUpdated();
         void OnSwapChainResourcesInvalidated();
         bool ScheduleView(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 

@@ -31,6 +31,7 @@ namespace Vulkan
 
         void BeforeNextFrame();
         void OnMainSceneChanged();
+        void OnHdrShUpdated();
         void OnSwapChainResourcesInvalidated(bool releaseOffscreenSampledOutputs);
         bool HasWork() const;
         void ScheduleViews(VkCommandBuffer commandBuffer, uint32_t imageIndex);

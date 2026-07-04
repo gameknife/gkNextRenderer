@@ -25,6 +25,12 @@ namespace Vulkan
         assetThumbnails_->OnMainSceneChanged();
     }
 
+    void RenderViewServices::OnHdrShUpdated()
+    {
+        materialPreview_->OnHdrShUpdated();
+        assetThumbnails_->OnHdrShUpdated();
+    }
+
     void RenderViewServices::OnSwapChainResourcesInvalidated(const bool releaseOffscreenSampledOutputs)
     {
         materialPreview_->OnSwapChainResourcesInvalidated();
