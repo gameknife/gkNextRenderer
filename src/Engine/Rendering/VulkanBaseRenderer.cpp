@@ -1672,6 +1672,7 @@ namespace Vulkan
                 {
                     AfterUpdateScene();
                 }
+                
             }
 
             {
@@ -1843,14 +1844,6 @@ namespace Vulkan
             {
                 SCOPED_CPU_TIMER("after submit");
                 delegates_.afterSubmit();
-            }
-
-            {
-                SCOPED_CPU_TIMER("update nodes");
-                if (GetScene().UpdateNodes())
-                {
-                    AfterUpdateScene();
-                }
             }
 
             frame_.currentFrame = (frame_.currentFrame + 1) % frame_.inFlightFences.size();
