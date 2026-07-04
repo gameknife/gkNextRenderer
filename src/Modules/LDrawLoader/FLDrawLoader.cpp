@@ -1,7 +1,6 @@
 #include "Modules/LDrawLoader/FLDrawLoader.h"
 #include "Modules/LDrawLoader/FLDrawGeometry.h"
 #include "Modules/LDrawLoader/FLDrawParser.h"
-#include "Engine/Assets/Loaders/FProcModel.h"
 #include "Engine/Assets/Loaders/FSceneLoader.h"
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/Core/Node.h"
@@ -12,7 +11,6 @@
 #include <sstream>
 #include <algorithm>
 #include <cctype>
-#include <cfloat>
 #include <cmath>
 #include <functional>
 #include <unordered_set>
@@ -41,13 +39,6 @@ namespace Assets
             bool isHierarchicalSubmodel = false;
             std::vector<LDrawNodePlacement> children;
             int32_t buildStep = 0;
-        };
-
-        struct SceneBounds
-        {
-            glm::vec3 min = glm::vec3(FLT_MAX);
-            glm::vec3 max = glm::vec3(-FLT_MAX);
-            bool valid = false;
         };
 
         glm::vec3 LightenTowardsWhite(const glm::vec3& color, float colorRetention)
@@ -305,124 +296,6 @@ namespace Assets
                     return CreateDielectricMaterial(color.diffuse, color.alpha, 0.05f, 1.585f);
                 return CreateMixtureMaterial(color.diffuse, 0.025f, 0.0f, 1.45f);
             }
-        }
-
-        SceneBounds CalculateSceneBounds(
-            const std::vector<std::shared_ptr<Node>>& nodes,
-            const std::vector<Model>& models)
-        {
-            SceneBounds bounds;
-
-            for (const auto& node : nodes)
-            {
-                auto render = node->GetComponent<Runtime::RenderComponent>();
-                if (!render || !render->IsDrawable())
-                    continue;
-
-                uint32_t modelIdx = render->GetModelId();
-                if (modelIdx >= models.size())
-                    continue;
-
-                const auto& model = models[modelIdx];
-                glm::vec3 aabbMin = model.GetLocalAABBMin();
-                glm::vec3 aabbMax = model.GetLocalAABBMax();
-
-                glm::vec3 corners[8] = {
-                    {aabbMin.x, aabbMin.y, aabbMin.z},
-                    {aabbMax.x, aabbMin.y, aabbMin.z},
-                    {aabbMin.x, aabbMax.y, aabbMin.z},
-                    {aabbMax.x, aabbMax.y, aabbMin.z},
-                    {aabbMin.x, aabbMin.y, aabbMax.z},
-                    {aabbMax.x, aabbMin.y, aabbMax.z},
-                    {aabbMin.x, aabbMax.y, aabbMax.z},
-                    {aabbMax.x, aabbMax.y, aabbMax.z}
-                };
-
-                const glm::mat4& worldTransform = node->WorldTransform();
-                for (const glm::vec3& corner : corners)
-                {
-                    glm::vec3 worldPos = glm::vec3(worldTransform * glm::vec4(corner, 1.0f));
-                    bounds.min = glm::min(bounds.min, worldPos);
-                    bounds.max = glm::max(bounds.max, worldPos);
-                    bounds.valid = true;
-                }
-            }
-
-            return bounds;
-        }
-
-        void EnsureSceneAboveGround(
-            const SceneBounds& sceneBounds,
-            std::vector<std::shared_ptr<Node>>& nodes)
-        {
-            if (!sceneBounds.valid || sceneBounds.min.y >= 0.0f)
-                return;
-
-            const glm::vec3 offset(0.0f, -sceneBounds.min.y, 0.0f);
-            for (auto& node : nodes)
-            {
-                if (!node->GetParent())
-                {
-                    node->SetTranslation(node->Translation() + offset);
-                    node->RecalcTransform(true);
-                }
-            }
-
-            SPDLOG_INFO("LDraw: shifted scene up by {:.4f} to keep all parts above Y=0", -sceneBounds.min.y);
-        }
-
-        bool AppendLDrawFloor(
-            const SceneBounds& sceneBounds,
-            std::vector<std::shared_ptr<Node>>& nodes,
-            std::vector<Model>& models,
-            std::vector<FMaterial>& materials)
-        {
-            if (!sceneBounds.valid)
-                return false;
-
-            const glm::vec3 extent = glm::max(sceneBounds.max - sceneBounds.min, glm::vec3(0.001f));
-            const glm::vec3 center = (sceneBounds.min + sceneBounds.max) * 0.5f;
-            const float longestExtent = std::max(extent.x, std::max(extent.y, extent.z));
-            const float halfSizeX = glm::max(extent.x * 1.5f, 2.0f);
-            const float halfSizeZ = glm::max(extent.z * 1.5f, 2.0f);
-            const float thickness = glm::max(longestExtent * 0.1f, 0.5f);
-            const float floorTop = sceneBounds.min.y;
-
-            const glm::vec3 floorMin(
-                center.x - halfSizeX,
-                floorTop - thickness,
-                center.z - halfSizeZ);
-            const glm::vec3 floorMax(
-                center.x + halfSizeX,
-                floorTop,
-                center.z + halfSizeZ);
-
-            const uint32_t floorModelIdx = static_cast<uint32_t>(models.size());
-            models.push_back(FProcModel::CreateBox(floorMin, floorMax));
-
-            Material floorMaterial = CreateMixtureMaterial(glm::vec3(0.97f, 0.97f, 0.97f), 0.2f, 0.0f, 1.45f);
-            const uint32_t floorMaterialIdx = static_cast<uint32_t>(materials.size());
-            materials.push_back({floorMaterial, "LDraw Floor"});
-
-            std::array<uint32_t, 16> floorMaterials = {0};
-            floorMaterials[0] = floorMaterialIdx;
-
-            auto floorNode = Node::CreateNode(
-                "ldraw_floor",
-                glm::vec3(0.0f),
-                glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
-                glm::vec3(1.0f),
-                static_cast<uint32_t>(nodes.size()));
-
-            auto renderComp = std::make_shared<Runtime::RenderComponent>();
-            renderComp->SetModelId(floorModelIdx);
-            renderComp->SetVisible(true);
-            renderComp->SetRayCastVisible(false);
-            renderComp->SetMaterials(floorMaterials);
-            floorNode->AddComponent(renderComp);
-
-            nodes.push_back(floorNode);
-            return true;
         }
 
         PartModelInfo ResolvePartModel(
@@ -854,12 +727,7 @@ namespace Assets
         cameraInit.SunIntensity = 500.0f;
         cameraInit.SkyIntensity = 100.0f;
 
-        // Shift scene so all parts are above Y=0, then place floor at new ground level
-        SceneBounds sceneBounds = CalculateSceneBounds(nodes, models);
-        EnsureSceneAboveGround(sceneBounds, nodes);
-
         Camera defaultCam = FSceneLoader::AutoFocusCamera(cameraInit, nodes, models);
-        AppendLDrawFloor(CalculateSceneBounds(nodes, models), nodes, models, materials);
 
         SPDLOG_INFO("LDraw: created {} models, {} materials, {} nodes",
                      models.size() - initialModelCount,

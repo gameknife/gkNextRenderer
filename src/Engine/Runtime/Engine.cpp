@@ -1278,9 +1278,9 @@ void NextEngine::OnRendererDeviceSet()
     Assets::GlobalTexturePool::LoadHDRTexture("assets/textures/shanghai_bund_1k.hdr");
 
     scene_.reset(new Assets::Scene(renderer_->CommandPool(), renderer_->SupportsRayTracing()));
-    renderer_->SetScene(scene_);
-    renderer_->OnPostLoadScene();
-    OnRendererPostLoadScene();
+    CommitSceneToRenderer({.rebuildMeshBuffer = false,
+                           .resetFrameCounter = false,
+                           .refreshSwapChainResources = false});
 
     status_ = NextRenderer::EApplicationStatus::Running;
 }
