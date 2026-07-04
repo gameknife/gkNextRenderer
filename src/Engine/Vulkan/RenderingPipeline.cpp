@@ -48,6 +48,25 @@ RenderPass::RenderPass(const Vulkan::SwapChain& swapChain, VkFormat format, cons
           .colorFinalLayout = colorFinalLayout});
 }
 
+RenderPass::RenderPass(
+    const Vulkan::SwapChain& swapChain,
+    VkFormat format,
+    const Vulkan::DepthBuffer& depthBuffer,
+    VkAttachmentLoadOp colorBufferLoadOp,
+    VkAttachmentLoadOp depthBufferLoadOp,
+    VkImageLayout colorInitialLayout,
+    VkImageLayout colorFinalLayout) : swapChain_(swapChain), depthBuffer_(depthBuffer)
+{
+    Init({.colorFormats = {format},
+          .hasDepth = true,
+          .colorLoadOp = colorBufferLoadOp,
+          .depthLoadOp = depthBufferLoadOp,
+          .depthStoreOp = VK_ATTACHMENT_STORE_OP_STORE,
+          .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+          .colorInitialLayout = colorInitialLayout,
+          .colorFinalLayout = colorFinalLayout});
+}
+
 RenderPass::RenderPass(const Vulkan::SwapChain& swapChain, VkFormat format, const Vulkan::DepthBuffer& depthBuffer,
                        VkAttachmentLoadOp colorBufferLoadOp, VkAttachmentLoadOp depthBufferLoadOp) : swapChain_(swapChain), depthBuffer_(depthBuffer)
 {
