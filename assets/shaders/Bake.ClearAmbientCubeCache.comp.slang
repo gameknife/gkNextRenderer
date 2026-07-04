@@ -1,6 +1,23 @@
 import Shader.Bindless;
-import Shader.Types;
-import Shader.GpuScene;
+import Shader.PathTracing;
+
+float4 AmbientCubeClearSky()
+{
+    UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
+    if (!camera.HasSky)
+    {
+        return float4(0.0f);
+    }
+
+    float4 sky = float4(0.0f);
+    sky += Common.SampleIBLRough(camera.SkyIdx, float3(0.0f, 0.0f, 1.0f), camera.SkyRotation);
+    sky += Common.SampleIBLRough(camera.SkyIdx, float3(0.0f, 0.0f, -1.0f), camera.SkyRotation);
+    sky += Common.SampleIBLRough(camera.SkyIdx, float3(0.0f, 1.0f, 0.0f), camera.SkyRotation);
+    sky += Common.SampleIBLRough(camera.SkyIdx, float3(0.0f, -1.0f, 0.0f), camera.SkyRotation);
+    sky += Common.SampleIBLRough(camera.SkyIdx, float3(1.0f, 0.0f, 0.0f), camera.SkyRotation);
+    sky += Common.SampleIBLRough(camera.SkyIdx, float3(-1.0f, 0.0f, 0.0f), camera.SkyRotation);
+    return sky * (camera.SkyIntensity / 6.0f);
+}
 
 [shader("compute")]
 [numthreads(64, 1, 1)]
@@ -13,6 +30,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
     AmbientBrickResidency* Residency = Bindless.GetGpuscene().AmbientResidency;
+    float4 clearSky = AmbientCubeClearSky();
 
     if (idx < cubeTotal)
     {
@@ -23,9 +41,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
         Cubes[idx].PosX = 0;
         Cubes[idx].NegX = 0;
         Cubes[idx].SunDirect = 0;
-        Cubes[idx].SkyEmissiveDirect = 0;
-        Cubes[idx].skyVisibility_pznzpyny = 0;
-        Cubes[idx].skyVisibility_pxnxs0s1 = 0;
+        Cubes[idx].SkyEmissiveDirect = packRGB9E5(clearSky.rgb);
+        Cubes[idx].skyVisibility_pznzpyny = PackBytes(uint4(255u, 255u, 255u, 255u));
+        Cubes[idx].skyVisibility_pxnxs0s1 = PackBytes(uint4(255u, 255u, 0u, 0u));
     }
 
     if (idx < residencyTotal)
