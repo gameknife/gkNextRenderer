@@ -908,7 +908,7 @@ namespace Assets
 
         if (enableCpuAcceleration_ && ambientArenaBufferMemory_ &&
             (!NextEngine::GetInstance() ||
-             NextEngine::GetInstance()->GetRenderer().CurrentRendererRequirements().requestAmbientCube))
+             NextEngine::GetInstance()->GetRenderer().ActiveRendererRequirements().requestAmbientCube))
         {
             cpuAccelerationStructure_.AsyncProcessFull(*this, ambientArenaBufferMemory_.get(), false);
         }

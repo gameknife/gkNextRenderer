@@ -598,7 +598,7 @@ bool FCPUAccelerationStructure::Tick(Scene& scene, Vulkan::DeviceMemory* gpuMemo
         }
     }
     else if (!cpuBrickTable.brickTable.empty() &&
-             engine->GetRenderer().CurrentRendererRequirements().requestAmbientCube)
+             engine->GetRenderer().ActiveRendererRequirements().requestAmbientCube)
     {
         rebuildBrickResidency();
     }

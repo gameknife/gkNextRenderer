@@ -212,7 +212,7 @@ namespace Assets
             auto& renderer = NextEngine::GetInstance()->GetRenderer();
             // Voxelize whenever any renderer needs the voxel SDF, decoupled from ambient-cube baking.
             const bool shouldUpdateVoxel =
-                renderer.CurrentRendererRequirements().NeedsVoxelGeometry() && !renderer.ShouldSkipAmbientCubeUpdates();
+                renderer.ActiveRendererRequirements().NeedsVoxelGeometry() && !renderer.ShouldSkipAmbientCubeUpdates();
 
             if (shouldUpdateVoxel && ambientArenaBufferMemory_)
             {
