@@ -371,6 +371,7 @@ namespace Assets
             proxyNode->SetParent(sourceNode);
             CacheEnvironmentComponentFromNode(proxyNode.get());
             nodes_.push_back(proxyNode);
+            RegisterNodeIndex(proxyNode);
 
             splat.proxyModelId = proxyModelId;
             splat.proxyNodeInstanceId = proxyNodeId;
@@ -431,6 +432,7 @@ namespace Assets
                        std::vector<AnimationTrack>& tracks)
     {
         nodes_ = std::move(nodes);
+        RebuildNodeIndex();
         RefreshEnvironmentComponentCache();
         models_ = std::move(models);
         gaussianSplats_.clear();
@@ -538,12 +540,14 @@ namespace Assets
             if (node->GetComponentPtr<Runtime::EnvironmentComponent>() == nullptr)
             {
                 nodes_.push_back(node);
+                RegisterNodeIndex(node);
             }
         }
 
         // Add root node to scene
         CacheEnvironmentComponentFromNode(rootNode.get());
         nodes_.push_back(rootNode);
+        RegisterNodeIndex(rootNode);
 
         // Mark dirty
         MarkDirty();

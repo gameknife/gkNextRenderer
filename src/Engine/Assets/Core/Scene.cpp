@@ -133,6 +133,48 @@ namespace Assets
             .func<&Assets::Scene::GetNodeById>("GetNodeById");
     }
 
+    void Scene::RebuildNodeIndex() const
+    {
+        nodeByInstanceId_.clear();
+        nodeByInstanceId_.reserve(nodes_.size());
+        nextInstanceId_ = 0;
+
+        for (const auto& node : nodes_)
+        {
+            RegisterNodeIndex(node);
+        }
+
+        indexedNodeCount_ = nodes_.size();
+        nodeIndexDirty_ = false;
+    }
+
+    void Scene::RegisterNodeIndex(const std::shared_ptr<Node>& node) const
+    {
+        if (!node)
+        {
+            return;
+        }
+
+        const uint32_t instanceId = node->GetInstanceId();
+        nodeByInstanceId_[instanceId] = node;
+        if (instanceId != SceneSelectionState::invalidNodeId)
+        {
+            nextInstanceId_ = std::max(nextInstanceId_, instanceId + 1u);
+        }
+        indexedNodeCount_ = nodes_.size();
+    }
+
+    void Scene::UnregisterNodeIndex(uint32_t id) const
+    {
+        if (nodeIndexDirty_)
+        {
+            return;
+        }
+
+        nodeByInstanceId_.erase(id);
+        indexedNodeCount_ = nodes_.size();
+    }
+
     int32_t Scene::FindNodeIdWithComponent(const std::string& componentType) const
     {
         for (const auto& node : nodes_)
@@ -204,6 +246,7 @@ namespace Assets
         auto environment = std::make_shared<Runtime::EnvironmentComponent>();
         node->AddComponent(environment);
         nodes_.push_back(node);
+        RegisterNodeIndex(node);
         environmentComponent_ = environment.get();
         return *environment;
     }
@@ -554,6 +597,7 @@ namespace Assets
     {
         CacheEnvironmentComponentFromNode(node.get());
         nodes_.push_back(node);
+        RegisterNodeIndex(node);
         EnsureNodePhysicsBody(node.get());
     }
 
@@ -643,6 +687,7 @@ namespace Assets
                 }
                 lockedIds_.erase(id);
                 node->ClearParent();
+                UnregisterNodeIndex(id);
                 nodes_.erase(it);
                 if (node->GetComponentPtr<Runtime::EnvironmentComponent>() == environmentComponent_)
                 {
@@ -656,24 +701,22 @@ namespace Assets
 
     std::shared_ptr<Node> Scene::GetNodeSharedByInstanceId(uint32_t id) const
     {
-        for (const auto& node : nodes_)
+        if (nodeIndexDirty_ || indexedNodeCount_ != nodes_.size())
         {
-            if (node->GetInstanceId() == id)
-            {
-                return node;
-            }
+            RebuildNodeIndex();
         }
-        return nullptr;
+
+        const auto it = nodeByInstanceId_.find(id);
+        return it != nodeByInstanceId_.end() ? it->second : nullptr;
     }
 
     uint32_t Scene::GenerateInstanceId() const
     {
-        uint32_t maxId = 0;
-        for (const auto& node : nodes_)
+        if (nodeIndexDirty_ || indexedNodeCount_ != nodes_.size())
         {
-            maxId = std::max(maxId, node->GetInstanceId());
+            RebuildNodeIndex();
         }
-        return nodes_.empty() ? 0 : maxId + 1;
+        return nextInstanceId_;
     }
 
     namespace
@@ -723,6 +766,7 @@ namespace Assets
         {
             selectionState_.Remove(removeId);
             lockedIds_.erase(removeId);
+            UnregisterNodeIndex(removeId);
             if (hoveredId_ == removeId)
             {
                 hoveredId_ = SceneSelectionState::invalidNodeId;
@@ -760,6 +804,7 @@ namespace Assets
         {
             const size_t index = std::min(it->index, nodes_.size());
             nodes_.insert(nodes_.begin() + index, it->node);
+            RegisterNodeIndex(it->node);
             CacheEnvironmentComponentFromNode(it->node.get());
         }
 
@@ -843,14 +888,8 @@ namespace Assets
 
     Node* Scene::GetNodeByInstanceId(uint32_t id)
     {
-        for (auto& node : nodes_)
-        {
-            if (node->GetInstanceId() == id)
-            {
-                return node.get();
-            }
-        }
-        return nullptr;
+        const auto node = GetNodeSharedByInstanceId(id);
+        return node ? node.get() : nullptr;
     }
 
     bool Scene::GetNodeBounds(uint32_t nodeId, glm::vec3& center, float& radius) const
@@ -860,16 +899,7 @@ namespace Assets
             return false;
         }
 
-        const Node* foundNode = nullptr;
-        for (const auto& node : nodes_)
-        {
-            if (node->GetInstanceId() == nodeId)
-            {
-                foundNode = node.get();
-                break;
-            }
-        }
-
+        const auto foundNode = GetNodeSharedByInstanceId(nodeId);
         if (!foundNode)
             return false;
 

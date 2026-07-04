@@ -51,11 +51,16 @@ bool FCPUBrickTable::UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint3
     uint32_t totalActive = 0;
     uint32_t totalOverflow = 0;
     std::vector<uint8_t> active(BPC, 0);
+    std::vector<uint8_t> occupied(BPC, 0);
     std::vector<uint8_t> requested(BPC, 0);
+    std::vector<uint32_t> oldOwner(poolBricksPerCascade, kInvalid);
+    std::vector<uint32_t> newOwner(poolBricksPerCascade, kInvalid);
+    std::vector<uint8_t> usedSlots(poolBricksPerCascade, 0u);
     for (uint32_t c = 0; c < cascadesToProcess; ++c)
     {
         const FCPUProbeBaker& baker = bakers[c];
         std::fill(active.begin(), active.end(), uint8_t(0));
+        std::fill(occupied.begin(), occupied.end(), uint8_t(0));
 
         const uint32_t voxelCount = static_cast<uint32_t>(baker.voxels.size());
         for (uint32_t v = 0; v < voxelCount; ++v)
@@ -70,20 +75,37 @@ bool FCPUBrickTable::UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint3
             const int sbx = static_cast<int>(x) / EDGE;
             const int sby = static_cast<int>(y) / EDGE;
             const int sbz = static_cast<int>(z) / EDGE;
-            for (int dy = -dilationRadius; dy <= dilationRadius; ++dy)
+            occupied[static_cast<uint32_t>(sby) * (BX * BZ) + static_cast<uint32_t>(sbz) * BX +
+                     static_cast<uint32_t>(sbx)] = 1;
+        }
+
+        for (uint32_t b = 0; b < BPC; ++b)
+        {
+            if (!occupied[b])
             {
-                const int nby = sby + dy;
-                if (nby < 0 || nby >= BY) continue;
-                for (int dz = -dilationRadius; dz <= dilationRadius; ++dz)
+                continue;
+            }
+
+            const int sby = static_cast<int>(b / (BX * BZ));
+            const int sbz = static_cast<int>((b - static_cast<uint32_t>(sby) * (BX * BZ)) / BX);
+            const int sbx = static_cast<int>(b - static_cast<uint32_t>(sby) * (BX * BZ) -
+                                             static_cast<uint32_t>(sbz) * BX);
+            const int yMin = std::max(0, sby - dilationRadius);
+            const int yMax = std::min(BY - 1, sby + dilationRadius);
+            const int zMin = std::max(0, sbz - dilationRadius);
+            const int zMax = std::min(BZ - 1, sbz + dilationRadius);
+            const int xMin = std::max(0, sbx - dilationRadius);
+            const int xMax = std::min(BX - 1, sbx + dilationRadius);
+
+            for (int y = yMin; y <= yMax; ++y)
+            {
+                const uint32_t yzBase = static_cast<uint32_t>(y) * (BX * BZ);
+                for (int z = zMin; z <= zMax; ++z)
                 {
-                    const int nbz = sbz + dz;
-                    if (nbz < 0 || nbz >= BZ) continue;
-                    for (int dx = -dilationRadius; dx <= dilationRadius; ++dx)
+                    const uint32_t rowBase = yzBase + static_cast<uint32_t>(z) * BX;
+                    for (int x = xMin; x <= xMax; ++x)
                     {
-                        const int nbx = sbx + dx;
-                        if (nbx < 0 || nbx >= BX) continue;
-                        active[static_cast<uint32_t>(nby) * (BX * BZ) + static_cast<uint32_t>(nbz) * BX +
-                               static_cast<uint32_t>(nbx)] = 1;
+                        active[rowBase + static_cast<uint32_t>(x)] = 1;
                     }
                 }
             }
@@ -129,9 +151,9 @@ bool FCPUBrickTable::UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint3
         candidateBricksPerCascade[c] = candidateCount;
         recentlyHitBricksPerCascade[c] = recentlyHitCount;
 
-        std::vector<uint32_t> oldOwner(poolBricksPerCascade, kInvalid);
-        std::vector<uint32_t> newOwner(poolBricksPerCascade, kInvalid);
-        std::vector<uint8_t> usedSlots(poolBricksPerCascade, 0u);
+        std::fill(oldOwner.begin(), oldOwner.end(), kInvalid);
+        std::fill(newOwner.begin(), newOwner.end(), kInvalid);
+        std::fill(usedSlots.begin(), usedSlots.end(), uint8_t(0));
         if (oldBrickTable.size() == brickTable.size())
         {
             for (uint32_t b = 0; b < BPC; ++b)
