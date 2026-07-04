@@ -895,7 +895,7 @@ namespace Vulkan
         CREATE_STORAGE_IMAGE(RT_ALBEDO, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
         CREATE_STORAGE_IMAGE(RT_NORMAL, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
         CREATE_STORAGE_IMAGE(RT_SHADER_TIMER, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT );
-        CREATE_STORAGE_IMAGE(RT_DENOISED, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
+        CREATE_STORAGE_IMAGE(RT_DENOISED, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT );
         CREATE_STORAGE_IMAGE(RT_PREV_DEPTHBUFFER, VK_FORMAT_R32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
         CREATE_STORAGE_IMAGE(RT_ACCUMLATE_SPECULAR, progressiveHistoryFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT );
         CREATE_STORAGE_IMAGE(RT_SINGLE_SPECULAR, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
@@ -1062,9 +1062,12 @@ namespace Vulkan
         logProfile("wireframe pipeline created");
         overlay_.wireframeFrameBuffers.clear();
         overlay_.wireframeFrameBuffers.reserve(frame_.swapChain->ImageViews().size());
-        for (const auto& imageView : frame_.swapChain->ImageViews())
+        for (size_t i = 0; i < frame_.swapChain->ImageViews().size(); ++i)
         {
-            overlay_.wireframeFrameBuffers.emplace_back(frame_.swapChain->Extent(), *imageView, overlay_.wireframePipeline->RenderPass());
+            overlay_.wireframeFrameBuffers.emplace_back(
+                frame_.swapChain->RenderExtent(),
+                GetViewStorageImage(Assets::Bindless::RT_DENOISED)->GetImageView(),
+                overlay_.wireframePipeline->RenderPass());
         }
 
         // 公用Pipeline
@@ -1177,9 +1180,12 @@ namespace Vulkan
 
         overlay_.wireframePipeline.reset(new class PipelineCommon::GraphicsPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), true));
         overlay_.wireframeFrameBuffers.reserve(frame_.swapChain->ImageViews().size());
-        for (const auto& imageView : frame_.swapChain->ImageViews())
+        for (size_t i = 0; i < frame_.swapChain->ImageViews().size(); ++i)
         {
-            overlay_.wireframeFrameBuffers.emplace_back(frame_.swapChain->Extent(), *imageView, overlay_.wireframePipeline->RenderPass());
+            overlay_.wireframeFrameBuffers.emplace_back(
+                frame_.swapChain->RenderExtent(),
+                GetViewStorageImage(Assets::Bindless::RT_DENOISED)->GetImageView(),
+                overlay_.wireframePipeline->RenderPass());
         }
 
         overlay_.simpleComposePipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.UpScaleFSR.comp.slang.spv", 20));
@@ -1992,7 +1998,8 @@ namespace Vulkan
         const uint32_t previousBankBase = activeViewBankBase_;
         SetActiveViewBankBase(view.RtBankBase());
         GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
-            commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+            commandBuffer, VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            VK_ACCESS_SHADER_READ_BIT,
             VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 
         const VkRect2D subrect = view.Desc().subrect;
@@ -2020,7 +2027,8 @@ namespace Vulkan
 
         SwapChain().InsertBarrierToWrite(commandBuffer, imageIndex);
         GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
-            commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+            commandBuffer, VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            VK_ACCESS_SHADER_READ_BIT,
             VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 
         bool resolvedByUpscaler = false;
@@ -2126,6 +2134,11 @@ namespace Vulkan
                 overlay_.gaussianSplatPass->Execute(commandBuffer, imageIndex);
             }
 
+            if (NextEngine::GetInstance()->GetShowFlags().ShowWireframe)
+            {
+                DrawWireframeOverlay(commandBuffer, imageIndex);
+            }
+
             ResolvePrimaryViewToSwapchain(commandBuffer, imageIndex);
 
             // Swapchain is in GENERAL here (before the present barrier). Auxiliary views render
@@ -2140,14 +2153,7 @@ namespace Vulkan
                 renderViewServices_->ClearOffscreenFrameRequests();
             }
 
-            if (NextEngine::GetInstance()->GetShowFlags().ShowWireframe)
-            {
-                DrawWireframeOverlay(commandBuffer, imageIndex);
-            }
-            else
-            {
-                SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
-            }
+            SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
         }
     }
 

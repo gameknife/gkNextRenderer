@@ -369,8 +369,8 @@ namespace Vulkan::PipelineCommon
 
 		const auto& device = swapChain.Device();
 
-		const VkOffset2D viewportOffset = isWireFrame ? swapChain.OutputOffset() : swapChain.RenderOffset();
-		const VkExtent2D viewportExtent = isWireFrame ? swapChain.OutputExtent() : swapChain.RenderExtent();
+		const VkOffset2D viewportOffset = swapChain.RenderOffset();
+		const VkExtent2D viewportExtent = swapChain.RenderExtent();
 
 		VkPhysicalDeviceFeatures physicalDeviceFeatures = {};
 		vkGetPhysicalDeviceFeatures(device.PhysicalDevice(), &physicalDeviceFeatures);
@@ -386,7 +386,16 @@ namespace Vulkan::PipelineCommon
 
 		// Create pipeline layout and render pass.
 		pipelineLayout_.reset(new class PipelineLayout(device, managers, 1, &pushConstantRange, 1));
-		renderPass_.reset(new class RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_LOAD));
+		const VkFormat colorFormat = isWireFrame ? VK_FORMAT_R16G16B16A16_SFLOAT : swapChain.Format();
+		const VkImageLayout colorInitialLayout = isWireFrame
+			? VK_IMAGE_LAYOUT_GENERAL
+			: VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		const VkImageLayout colorFinalLayout = isWireFrame
+			? VK_IMAGE_LAYOUT_GENERAL
+			: VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		renderPass_.reset(new class RenderPass(
+			swapChain, colorFormat, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_LOAD,
+			colorInitialLayout, colorFinalLayout));
 		renderPass_->SetDebugName("Wireframe Render Pass");
 
 		const ShaderModule vertShader(device, "assets/shaders/Rast.WireframeSoftMeshShader.vert.slang.spv");
@@ -410,8 +419,8 @@ namespace Vulkan::PipelineCommon
 		}
 
 		const auto& device = swapChain_.Device();
-		const VkOffset2D viewportOffset = isWireFrame_ ? swapChain_.OutputOffset() : swapChain_.RenderOffset();
-		const VkExtent2D viewportExtent = isWireFrame_ ? swapChain_.OutputExtent() : swapChain_.RenderExtent();
+		const VkOffset2D viewportOffset = swapChain_.RenderOffset();
+		const VkExtent2D viewportExtent = swapChain_.RenderExtent();
 
 		VkPhysicalDeviceFeatures physicalDeviceFeatures = {};
 		vkGetPhysicalDeviceFeatures(device.PhysicalDevice(), &physicalDeviceFeatures);

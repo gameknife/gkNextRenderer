@@ -591,16 +591,17 @@ namespace Vulkan
     {
         if (!overlay_.wireframePipeline || imageIndex >= overlay_.wireframeFrameBuffers.size())
         {
-            SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
             return;
         }
 
         SCOPED_GPU_TIMER("wireframe");
 
-        ImageMemoryBarrier::FullInsert(
-            commandBuffer, SwapChain().Images()[imageIndex],
-            VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT, 0,
-            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
+            commandBuffer,
+            VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT,
+            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_LAYOUT_GENERAL);
 
         VkRenderPassBeginInfo renderPassInfo = {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -608,7 +609,7 @@ namespace Vulkan
         renderPassInfo.renderPass = activeWireframePipeline.RenderPass().Handle();
         renderPassInfo.framebuffer = overlay_.wireframeFrameBuffers[imageIndex].Handle();
         renderPassInfo.renderArea.offset = {0, 0};
-        renderPassInfo.renderArea.extent = SwapChain().Extent();
+        renderPassInfo.renderArea.extent = SwapChain().RenderExtent();
         renderPassInfo.clearValueCount = 0;
         renderPassInfo.pClearValues = nullptr;
 
