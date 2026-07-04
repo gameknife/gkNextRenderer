@@ -331,14 +331,18 @@ namespace Assets
                             const uint32_t modelId = render->GetModelId();
                             uint32_t nodeJointOffset = 0;
                             const uint32_t instanceId = node->GetInstanceId();
-                            const uint32_t editableInstanceId = ResolveEditableNodeId(instanceId);
+                            const uint32_t editableInstanceId = node->IsSceneReferenceInternal()
+                                ? node->GetSceneReferenceOwnerProxyId()
+                                : instanceId;
                             const uint32_t outlineFlags = render->GetOutlineFlags();
                             const uint32_t selectedBit =
-                                (IsSelected(editableInstanceId) || (outlineFlags & Runtime::RenderOutlineFlags::selected) != 0u) ? 1u : 0u;
+                                (selectionState_.IsSelected(editableInstanceId) ||
+                                 (outlineFlags & Runtime::RenderOutlineFlags::selected) != 0u) ? 1u : 0u;
                             const uint32_t hoveredBit =
                                 (hoveredId_ == editableInstanceId || (outlineFlags & Runtime::RenderOutlineFlags::hovered) != 0u) ? 1u : 0u;
                             const uint32_t lockedBit =
-                                (IsLocked(editableInstanceId) || (outlineFlags & Runtime::RenderOutlineFlags::locked) != 0u) ? 1u : 0u;
+                                (lockedIds_.find(editableInstanceId) != lockedIds_.end() ||
+                                 (outlineFlags & Runtime::RenderOutlineFlags::locked) != 0u) ? 1u : 0u;
                             const uint32_t dangerBit =
                                 ((outlineFlags & Runtime::RenderOutlineFlags::danger) != 0u) ? 1u : 0u;
                             const uint32_t stateBits = hoveredBit | (lockedBit << 1u) | (dangerBit << 2u);

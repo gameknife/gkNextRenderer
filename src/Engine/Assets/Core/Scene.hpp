@@ -349,6 +349,10 @@ namespace Assets
         mutable SceneSelectionState selectionState_;
         mutable uint32_t hoveredId_ = SceneSelectionState::invalidNodeId;
         mutable std::unordered_set<uint32_t> lockedIds_;
+        mutable std::unordered_map<uint32_t, std::shared_ptr<Node>> nodeByInstanceId_;
+        mutable bool nodeIndexDirty_ = true;
+        mutable size_t indexedNodeCount_ = 0;
+        mutable uint32_t nextInstanceId_ = 0;
 
         bool sceneDirtyForCpuAS_ = false;
         bool sceneDirty_ = true;
@@ -377,6 +381,11 @@ namespace Assets
         VkDeviceAddress jointMatricesAddr_ = 0;
 
         Runtime::EnvironmentComponent* environmentComponent_ = nullptr;
+
+        void MarkNodeIndexDirty() const { nodeIndexDirty_ = true; }
+        void RebuildNodeIndex() const;
+        void RegisterNodeIndex(const std::shared_ptr<Node>& node) const;
+        void UnregisterNodeIndex(uint32_t id) const;
 
         void RefreshEnvironmentComponentCache();
         void CacheEnvironmentComponentFromNode(Node* node);
