@@ -213,6 +213,11 @@ void EditorGameInstance::OnTick(double deltaSeconds)
     {
         moving |= cameraViewController.UpdateCamera(1.0f, deltaSeconds);
     }
+    if (GOption != nullptr && GOption->RemoteMode && GOption->RemoteMultiView)
+    {
+        GetEngine().SetProgressiveRendering(false, false);
+        return;
+    }
     GetEngine().SetProgressiveRendering(!moving, false);
 }
 

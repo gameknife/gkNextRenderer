@@ -74,6 +74,7 @@ public:
 	// Like RequestImTextureId but for an explicitly-bound bindless sample slot that is NOT a
 	// registered TextureImage (e.g. a render-view offscreen output bound via BindSampleTexture).
 	ImTextureID RequestImTextureIdRaw(uint32_t bindlessSampleSlot) { return EncodeBindlessTextureId(bindlessSampleSlot); }
+	ImTextureID RequestImTextureIdRawOutput(uint32_t bindlessSampleSlot);
 	ImTextureID RequestImTextureByName(const std::string& name);
 
 	struct FUiTextureHandle
@@ -107,8 +108,8 @@ private:
 	void InitializeFontTexture(Vulkan::CommandPool& commandPool);
 	void RenderDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, UiRenderBuffer& renderBuffers,
 	                    VkExtent2D framebufferExtent, uint32_t hdrOutputMode, VkPipeline pipeline);
-	static ImTextureID EncodeBindlessTextureId(uint32_t textureIndex);
-	static bool DecodeBindlessTextureId(ImTextureID textureId, uint32_t& outTextureIndex);
+	static ImTextureID EncodeBindlessTextureId(uint32_t textureIndex, uint32_t textureFlags = 0);
+	static bool DecodeBindlessTextureId(ImTextureID textureId, uint32_t& outTextureIndex, uint32_t& outTextureFlags);
 
 	std::unique_ptr<Vulkan::RenderPass> renderPass_;
 	std::string imguiIniPath_;

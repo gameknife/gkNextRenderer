@@ -18,6 +18,7 @@ struct VertexInput
     [[vk::location(2)]] float4 color : COLOR0;
     [[vk::location(3)]] float4 clipRect : TEXCOORD1;
     [[vk::location(4)]] uint textureIndex : TEXCOORD2;
+    [[vk::location(5)]] uint textureFlags : TEXCOORD3;
 };
 
 struct VertexOutput
@@ -27,6 +28,7 @@ struct VertexOutput
     [[vk::location(1)]] float4 color : COLOR0;
     [[vk::location(2)]] nointerpolation float4 clipRect : TEXCOORD1;
     [[vk::location(3)]] nointerpolation uint textureIndex : TEXCOORD2;
+    [[vk::location(4)]] nointerpolation uint textureFlags : TEXCOORD3;
 };
 
 [shader("vertex")]
@@ -43,5 +45,6 @@ VertexOutput main(VertexInput input)
     output.color = input.color;
     output.clipRect = input.clipRect;
     output.textureIndex = input.textureIndex;
+    output.textureFlags = input.textureFlags;
     return output;
 }

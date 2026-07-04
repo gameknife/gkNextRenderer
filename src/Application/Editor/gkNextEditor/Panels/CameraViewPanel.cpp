@@ -82,7 +82,7 @@ namespace Editor
                 if (offscreenViews.IsReady(static_cast<uint32_t>(viewIndex)))
                 {
                     const ImTextureID tex =
-                        ctx.ui.RequestImTextureIdRaw(offscreenViews.SampleSlot(static_cast<uint32_t>(viewIndex)));
+                        ctx.ui.RequestImTextureIdRawOutput(offscreenViews.SampleSlot(static_cast<uint32_t>(viewIndex)));
                     if (avail.x > 1.0f && avail.y > 1.0f)
                     {
                         const ImVec2 imageMin = ImGui::GetCursorScreenPos();
