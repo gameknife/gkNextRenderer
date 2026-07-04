@@ -248,6 +248,16 @@ private:
         std::shared_ptr<Assets::EnvironmentSetting> cameraState;
     };
 
+    struct SceneRendererSyncOptions
+    {
+        bool rebuildMeshBuffer = true;
+        bool setRendererScene = true;
+        bool resetFrameCounter = true;
+        bool postLoadRenderer = true;
+        bool refreshSwapChainResources = true;
+        bool createSwapChainIfMissing = true;
+    };
+
     // Renderer callbacks
     Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent);
     void OnRendererDeviceSet();
@@ -262,6 +272,9 @@ private:
     const Assets::Scene& GetScene() const { return *scene_; }
     void LaunchLoadSceneTask(std::string sceneFileName, std::function<void(SceneLoadContext&)> onGpuLoad);
     void LoadScene(const FSceneLoadRequest& request);
+    void PrepareRendererForSceneMutation(const std::function<void(const char*)>& logProfile = {});
+    void CommitSceneToRenderer(const SceneRendererSyncOptions& options = {},
+                               const std::function<void(const char*)>& logProfile = {});
 
     // Input helpers
     void OnKey(SDL_Event& event);

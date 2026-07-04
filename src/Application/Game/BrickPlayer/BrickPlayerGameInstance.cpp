@@ -461,8 +461,6 @@ void BrickPlayerGameInstance::OnSceneLoaded()
         for (auto& node : scene.Nodes())
         {
             uint32_t instanceId = node->GetInstanceId();
-            if (node->GetName() == "ldraw_floor")
-                continue;
             auto stepIt = nodeStepMap_.find(instanceId);
             if (stepIt == nodeStepMap_.end())
                 continue;
@@ -2076,9 +2074,6 @@ void BrickPlayerGameInstance::BuildFreeBuildInventory()
 
     for (auto& node : scene.Nodes())
     {
-        if (node->GetName() == "ldraw_floor")
-            continue;
-
         uint32_t instanceId = node->GetInstanceId();
 
         // Only include inventory bricks (step > 0), skip baseplates (step 0)
@@ -2180,7 +2175,7 @@ int BrickPlayerGameInstance::CountAvailableBricks()
     for (const auto& [id, info] : disassembledNodes_)
     {
         auto* node = GetEngine().GetScene().GetNodeByInstanceId(id);
-        if (node && node->GetName() != "ldraw_floor")
+        if (node)
             count++;
     }
     return count;
@@ -2195,9 +2190,7 @@ void BrickPlayerGameInstance::CreateFloorPhysicsBody()
     if (!physics)
         return;
 
-    // Prefer the auto-generated LDraw floor top surface; otherwise fall back to scene bounds.
     float minY = FLT_MAX;
-    float floorTopY = FLT_MAX;
     auto& nodes = GetEngine().GetScene().Nodes();
     auto& models = GetEngine().GetScene().Models();
 
@@ -2214,18 +2207,12 @@ void BrickPlayerGameInstance::CreateFloorPhysicsBody()
         const auto& model = models[modelIdx];
         const WorldBounds bounds =
             TransformLocalBounds(node->WorldTransform(), model.GetLocalAABBMin(), model.GetLocalAABBMax());
-        if (node->GetName() == "ldraw_floor")
-        {
-            floorTopY = bounds.max.y;
-            continue;
-        }
-
         minY = std::min(minY, bounds.min.y);
     }
 
-    if (floorTopY < FLT_MAX || minY < FLT_MAX)
+    if (minY < FLT_MAX)
     {
-        floorSurfaceY_ = floorTopY < FLT_MAX ? floorTopY : minY;
+        floorSurfaceY_ = minY;
         floorPlaneY_ = floorSurfaceY_;
         hasFloorPlane_ = true;
         physics->CreatePlaneBody(

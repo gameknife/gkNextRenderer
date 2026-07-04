@@ -27,7 +27,7 @@ namespace Assets
         // Default 1.0: the sample treats "1 unit ~= 1 meter".
         float scadToWorldScale = 1.0f;
 
-        // Append a neutral display floor under the model (like the LDraw loader).
+        // Append a neutral display floor under the model.
         bool addFloor = false;
 
         // Max module/function call recursion depth (guards runaway recursion).

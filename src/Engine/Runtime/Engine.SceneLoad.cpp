@@ -63,6 +63,72 @@ void NextEngine::RequestLoadScene(FSceneLoadRequest request)
         });
 }
 
+void NextEngine::PrepareRendererForSceneMutation(const std::function<void(const char*)>& logProfile)
+{
+    renderer_->OnPreLoadScene();
+    if (logProfile)
+    {
+        logProfile("renderer pre-load scene");
+    }
+}
+
+void NextEngine::CommitSceneToRenderer(const SceneRendererSyncOptions& options,
+                                       const std::function<void(const char*)>& logProfile)
+{
+    if (options.rebuildMeshBuffer)
+    {
+        scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->SupportsRayTracing());
+        if (logProfile)
+        {
+            logProfile("mesh gpu buffers rebuilt");
+        }
+    }
+
+    if (options.setRendererScene)
+    {
+        renderer_->SetScene(scene_);
+        if (logProfile)
+        {
+            logProfile("renderer scene set");
+        }
+    }
+
+    if (options.resetFrameCounter)
+    {
+        frameState_.totalFrames = 0;
+    }
+
+    if (options.postLoadRenderer)
+    {
+        renderer_->OnPostLoadScene();
+        OnRendererPostLoadScene();
+        if (logProfile)
+        {
+            logProfile("renderer post-load scene");
+        }
+    }
+
+    if (options.refreshSwapChainResources)
+    {
+        if (renderer_->HasSwapChain())
+        {
+            renderer_->RefreshSceneSwapChainResources();
+            if (logProfile)
+            {
+                logProfile("scene swapchain resources refreshed");
+            }
+        }
+        else if (options.createSwapChainIfMissing)
+        {
+            renderer_->CreateSwapChain();
+            if (logProfile)
+            {
+                logProfile("new swapchain created");
+            }
+        }
+    }
+}
+
 void NextEngine::RequestSceneGpuRefresh()
 {
     AddTickedTask(
@@ -74,14 +140,8 @@ void NextEngine::RequestSceneGpuRefresh()
             }
 
             renderer_->Device().WaitIdle();
-            scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->SupportsRayTracing());
-            renderer_->SetScene(scene_);
-            renderer_->OnPostLoadScene();
-            OnRendererPostLoadScene();
-            if (renderer_->HasSwapChain())
-            {
-                renderer_->RefreshSceneSwapChainResources();
-            }
+            PrepareRendererForSceneMutation();
+            CommitSceneToRenderer({.createSwapChainIfMissing = false});
             return true;
         });
 }
@@ -101,26 +161,13 @@ void NextEngine::RequestAddSceneReference(std::string assetPath, glm::vec3 trans
             const bool canRefreshExistingSwapChain = renderer_->HasSwapChain();
 
             renderer_->Device().WaitIdle();
-            renderer_->OnPreLoadScene();
+            PrepareRendererForSceneMutation();
 
             auto proxy = Runtime::Scene::SceneList::AddSceneReferenceToScene(*scene_, assetPath, translation);
             if (proxy)
             {
                 scene_->SetSelectedId(proxy->GetInstanceId());
-                scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->SupportsRayTracing());
-                renderer_->SetScene(scene_);
-
-                frameState_.totalFrames = 0;
-                renderer_->OnPostLoadScene();
-                OnRendererPostLoadScene();
-                if (canRefreshExistingSwapChain)
-                {
-                    renderer_->RefreshSceneSwapChainResources();
-                }
-                else
-                {
-                    renderer_->CreateSwapChain();
-                }
+                CommitSceneToRenderer({.createSwapChainIfMissing = !canRefreshExistingSwapChain});
 
                 const float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
                                           std::chrono::high_resolution_clock::now() - timer)
@@ -208,20 +255,10 @@ void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<vo
                 onGpuLoad(ctx);
                 logProfile("scene gpu load callback");
 
-                frameState_.totalFrames = 0;
-                renderer_->OnPostLoadScene();
-                OnRendererPostLoadScene();
-                logProfile("renderer post-load scene");
-                if (canRefreshExistingSwapChain)
-                {
-                    renderer_->RefreshSceneSwapChainResources();
-                    logProfile("scene swapchain resources refreshed");
-                }
-                else
-                {
-                    renderer_->CreateSwapChain();
-                    logProfile("new swapchain created");
-                }
+                CommitSceneToRenderer({.rebuildMeshBuffer = false,
+                                       .setRendererScene = false,
+                                       .createSwapChainIfMissing = !canRefreshExistingSwapChain},
+                                      logProfile);
             }
             else
             {
@@ -256,8 +293,7 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
                 }
             };
 
-            renderer_->OnPreLoadScene();
-            logProfile("renderer pre-load scene");
+            PrepareRendererForSceneMutation(logProfile);
             gameInstance_->BeforeSceneRebuild(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
             logProfile("game before rebuild");
 
@@ -273,10 +309,10 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
                 scene_->SetGaussianSplats(std::move(*ctx.splats));
                 scene_->PostLoad(*ctx.skeletons);
                 logProfile("scene cpu structures rebuilt");
-                scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->SupportsRayTracing());
-                logProfile("mesh gpu buffers rebuilt");
-                renderer_->SetScene(scene_);
-                logProfile("renderer scene set");
+                CommitSceneToRenderer({.resetFrameCounter = false,
+                                       .postLoadRenderer = false,
+                                       .refreshSwapChainResources = false},
+                                      logProfile);
 
                 config_.userSettings.CameraIdx = 0;
                 assert(!scene_->GetEnvSettings().cameras.empty());
@@ -294,10 +330,10 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
                 {
                     rootNode->SetTranslation(request.hitPosition);
                 }
-                scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->SupportsRayTracing());
-                logProfile("append mesh gpu buffers rebuilt");
-                renderer_->SetScene(scene_);
-                logProfile("append renderer scene set");
+                CommitSceneToRenderer({.resetFrameCounter = false,
+                                       .postLoadRenderer = false,
+                                       .refreshSwapChainResources = false},
+                                      logProfile);
             }
 
             const float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(

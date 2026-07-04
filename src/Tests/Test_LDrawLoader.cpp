@@ -86,18 +86,11 @@ TEST_CASE("LDraw loader preserves MPD submodel hierarchy as nodes", "[Unit][LDra
         skeletons,
         options));
 
-    std::vector<std::shared_ptr<Assets::Node>> sceneNodes;
-    for (const auto& node : nodes)
-    {
-        if (node->GetName() != "ldraw_floor")
-            sceneNodes.push_back(node);
-    }
-
-    REQUIRE(sceneNodes.size() == 2);
+    REQUIRE(nodes.size() == 2);
 
     std::shared_ptr<Assets::Node> parentNode;
     std::shared_ptr<Assets::Node> childNode;
-    for (const auto& node : sceneNodes)
+    for (const auto& node : nodes)
     {
         if (node->GetParent() == nullptr)
             parentNode = node;
@@ -158,18 +151,9 @@ TEST_CASE("LDraw loader applies configurable LDU scale to geometry and placement
         skeletons,
         options));
 
-    std::shared_ptr<Assets::Node> partNode;
-    for (const auto& node : nodes)
-    {
-        if (node->GetName() != "ldraw_floor")
-        {
-            partNode = node;
-            break;
-        }
-    }
-
-    REQUIRE(partNode);
-    CheckVec3Near(partNode->Translation(), glm::vec3(-1.0f, 0.4f, 3.0f));
+    REQUIRE(nodes.size() == 1);
+    std::shared_ptr<Assets::Node> partNode = nodes[0];
+    CheckVec3Near(partNode->Translation(), glm::vec3(-1.0f, -2.0f, 3.0f));
 
     auto renderComp = partNode->GetComponent<Runtime::RenderComponent>();
     REQUIRE(renderComp);
