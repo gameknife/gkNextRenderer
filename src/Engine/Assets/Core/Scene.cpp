@@ -476,7 +476,8 @@ namespace Assets
         {
             auto render = node->GetComponent<Runtime::RenderComponent>();
             // bind the mesh shape to the node
-            if (render && render->GetModelId() < cachedMeshShapes_.size() && cachedMeshShapes_[render->GetModelId()])
+            if (render && render->GetRayCastVisible() &&
+                render->GetModelId() < cachedMeshShapes_.size() && cachedMeshShapes_[render->GetModelId()])
             {
                 auto phys = node->GetComponent<Runtime::PhysicsComponent>();
                 Node::ENodeMobility mobility = phys ? phys->GetMobility() : Node::ENodeMobility::Static;
@@ -862,42 +863,20 @@ namespace Assets
 
     void Scene::RayCastGaussianSplats(glm::vec3 rayOrigin, glm::vec3 rayDir, RayCastResult& result) const
     {
-        constexpr float directionEpsilon = 1e-7f;
+        (void)rayOrigin;
+        (void)rayDir;
+        if (!result.Hitted)
+        {
+            return;
+        }
+
         for (const auto& splat : gaussianSplats_)
         {
-            const auto node = GetNodeSharedByInstanceId(splat.nodeInstanceId);
-            const auto* component = node ? node->GetComponentPtr<Runtime::GaussianSplatComponent>() : nullptr;
-            if (component && (!component->GetVisible() || !component->GetRayCastVisible())) continue;
-
-            glm::vec3 boundsMin;
-            glm::vec3 boundsMax;
-            if (!GetGaussianSplatWorldBounds(splat.nodeInstanceId, boundsMin, boundsMax)) continue;
-
-            float nearT = 0.0f;
-            float farT = std::numeric_limits<float>::max();
-            bool hit = true;
-            for (uint32_t axis = 0; axis < 3; ++axis)
+            if (splat.proxyNodeInstanceId == result.InstanceId)
             {
-                if (std::abs(rayDir[axis]) < directionEpsilon)
-                {
-                    if (rayOrigin[axis] < boundsMin[axis] || rayOrigin[axis] > boundsMax[axis]) hit = false;
-                    continue;
-                }
-                float axisNear = (boundsMin[axis] - rayOrigin[axis]) / rayDir[axis];
-                float axisFar = (boundsMax[axis] - rayOrigin[axis]) / rayDir[axis];
-                if (axisNear > axisFar) std::swap(axisNear, axisFar);
-                nearT = std::max(nearT, axisNear);
-                farT = std::min(farT, axisFar);
-                if (nearT > farT) hit = false;
+                result.InstanceId = splat.nodeInstanceId;
+                return;
             }
-            if (!hit || farT < 0.0f || (result.Hitted && nearT >= result.T)) continue;
-
-            result.Hitted = 1;
-            result.T = nearT;
-            result.InstanceId = splat.nodeInstanceId;
-            result.MaterialId = 0;
-            result.HitPoint = glm::vec4(rayOrigin + rayDir * nearT, 1.0f);
-            result.Normal = glm::vec4(0.0f);
         }
     }
 

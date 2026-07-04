@@ -13,6 +13,7 @@ struct SplatModelState
 {
     float4x4 world;
     float4 parameters;
+    float4 lightingParameters;
 };
 
 struct PushConstants

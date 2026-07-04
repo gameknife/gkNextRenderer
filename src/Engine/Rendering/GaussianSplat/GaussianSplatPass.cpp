@@ -25,17 +25,18 @@ namespace Vulkan::GaussianSplat
 
         struct alignas(16) FSplatPushConstants
         {
-            VkDeviceAddress camera;
+            Assets::GPUScene gpuScene;
             VkDeviceAddress splats;
             VkDeviceAddress palette;
             VkDeviceAddress sortedIndices;
             VkDeviceAddress modelStates;
+            VkDeviceAddress lightingGrid;
             uint32_t count;
             uint32_t width;
             uint32_t height;
             float sigma;
         };
-        static_assert(sizeof(FSplatPushConstants) == 64);
+        static_assert(sizeof(FSplatPushConstants) == 192);
 
         struct FSplatSortPushConstants
         {
@@ -68,8 +69,9 @@ namespace Vulkan::GaussianSplat
         {
             glm::mat4 world{1.0f};
             glm::vec4 parameters{1.0f, 1.0f, 0.0f, 0.0f}; // opacity, visible, antialias, SH basis flip XY
+            glm::vec4 lightingParameters{0.0f}; // receive, strength, reserved, reserved
         };
-        static_assert(sizeof(FSplatModelState) == 80);
+        static_assert(sizeof(FSplatModelState) == 96);
 
         std::string ShaderFilename(const std::string& shaderFile)
         {
@@ -246,9 +248,12 @@ namespace Vulkan::GaussianSplat
               "create Gaussian splat framebuffer");
 
         VkPushConstantRange pushRange{};
-        pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
         pushRange.size = sizeof(FSplatPushConstants);
-        pipelineLayout_ = std::make_unique<PipelineLayout>(device, &pushRange, 1);
+        std::vector<DescriptorSetManager*> managers = {
+            &Assets::GlobalTexturePool::GetInstance()->GetDescriptorManager(),
+        };
+        pipelineLayout_ = std::make_unique<PipelineLayout>(device, managers, 1, &pushRange, 1);
         RecreateGraphicsPipeline();
 
         SPDLOG_INFO("uploaded {} Gaussian splats in {} models ({} SH palette entries)",
@@ -376,6 +381,12 @@ namespace Vulkan::GaussianSplat
             {
                 states[modelIndex].parameters.x = component->GetOpacityScale();
                 states[modelIndex].parameters.y = component->GetVisible() ? 1.0f : 0.0f;
+                const bool receiveLighting = settings.SplatReceiveLighting && component->GetReceiveLighting();
+                const float globalStrength = std::clamp(settings.SplatLightingStrength / 0.35f, 0.0f, 4.0f);
+                const float strength = receiveLighting
+                    ? std::clamp(component->GetLightingStrength() * globalStrength, 0.0f, 1.0f)
+                    : 0.0f;
+                states[modelIndex].lightingParameters = glm::vec4(receiveLighting ? 1.0f : 0.0f, strength, 0.0f, 0.0f);
             }
         }
         std::memcpy(mappedModelStates_[imageIndex], states.data(), states.size() * sizeof(FSplatModelState));
@@ -517,11 +528,14 @@ namespace Vulkan::GaussianSplat
         beginInfo.pClearValues = &clearValue;
         vkCmdBeginRenderPass(commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
+        pipelineLayout_->BindDescriptorSets(commandBuffer, 0, VK_PIPELINE_BIND_POINT_GRAPHICS);
         const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        const Assets::GPUScene& gpuScene = renderer_.GetScene().FetchGPUScene(imageIndex);
         const FSplatPushConstants push{
-            renderer_.UniformBuffers()[imageIndex].Buffer().GetDeviceAddress(),
+            gpuScene,
             splatBuffer_->GetDeviceAddress(), paletteBuffer_->GetDeviceAddress(),
-            sortedIndexBuffer_->GetDeviceAddress(), modelStateBuffers_[imageIndex]->GetDeviceAddress(), splatCount_,
+            sortedIndexBuffer_->GetDeviceAddress(), modelStateBuffers_[imageIndex]->GetDeviceAddress(),
+            0u, splatCount_,
             extent.width, extent.height, std::clamp(settings.SplatSigma, 1.0f, 4.0f)};
         vkCmdPushConstants(commandBuffer, pipelineLayout_->Handle(), VK_SHADER_STAGE_VERTEX_BIT,
                            0, sizeof(push), &push);

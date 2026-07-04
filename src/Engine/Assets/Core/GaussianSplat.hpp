@@ -27,6 +27,9 @@ namespace Assets
         glm::vec3 aabbMin{0.0f};
         glm::vec3 aabbMax{0.0f};
         uint32_t nodeInstanceId = std::numeric_limits<uint32_t>::max();
+        uint32_t proxyModelId = std::numeric_limits<uint32_t>::max();
+        uint32_t proxyNodeInstanceId = std::numeric_limits<uint32_t>::max();
+        glm::uvec3 proxyGridDim{0u};
         uint32_t shBands = 0;
         bool antialias = false;
         bool shBasisFlipXY = false;
