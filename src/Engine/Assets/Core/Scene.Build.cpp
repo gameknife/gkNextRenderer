@@ -15,6 +15,7 @@
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Components/EnvironmentComponent.h"
 #include "Engine/Runtime/Components/GaussianSplatComponent.h"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 #include "Engine/Runtime/Config/UserSettings.hpp"
@@ -368,6 +369,7 @@ namespace Assets
             proxyNode->SetLayer("__internal");
             proxyNode->SetSceneReferenceOwnerProxyId(sourceNode->GetInstanceId());
             proxyNode->SetParent(sourceNode);
+            CacheEnvironmentComponentFromNode(proxyNode.get());
             nodes_.push_back(proxyNode);
 
             splat.proxyModelId = proxyModelId;
@@ -429,6 +431,7 @@ namespace Assets
                        std::vector<AnimationTrack>& tracks)
     {
         nodes_ = std::move(nodes);
+        RefreshEnvironmentComponentCache();
         models_ = std::move(models);
         gaussianSplats_.clear();
         materials_ = std::move(materials);
@@ -474,6 +477,15 @@ namespace Assets
         // Update IDs for all new nodes (assuming nodes is a flat list of all new nodes)
         for (auto& node : nodes)
         {
+            if (auto* environment = node->GetComponentPtr<Runtime::EnvironmentComponent>())
+            {
+                if (environmentComponent_ == nullptr)
+                {
+                    environmentComponent_ = environment;
+                }
+                continue;
+            }
+
             node->SetInstanceId(currentMaxId++);
 
             // Update RenderComponent
@@ -521,9 +533,16 @@ namespace Assets
         tracks_.insert(tracks_.end(), tracks.begin(), tracks.end());
 
         // Add new nodes to scene nodes
-        nodes_.insert(nodes_.end(), nodes.begin(), nodes.end());
+        for (auto& node : nodes)
+        {
+            if (node->GetComponentPtr<Runtime::EnvironmentComponent>() == nullptr)
+            {
+                nodes_.push_back(node);
+            }
+        }
 
         // Add root node to scene
+        CacheEnvironmentComponentFromNode(rootNode.get());
         nodes_.push_back(rootNode);
 
         // Mark dirty

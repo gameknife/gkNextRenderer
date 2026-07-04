@@ -299,13 +299,12 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
 
             if (!request.append)
             {
-                scene_->GetEnvSettings().Reset();
-                scene_->SetEnvSettings(*ctx.cameraState);
                 gameInstance_->OnSceneUnloaded();
                 services_.physics->OnSceneStarted();
                 logProfile("scene services reset");
 
                 scene_->Reload(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
+                scene_->SetEnvSettings(*ctx.cameraState);
                 scene_->SetGaussianSplats(std::move(*ctx.splats));
                 scene_->PostLoad(*ctx.skeletons);
                 logProfile("scene cpu structures rebuilt");

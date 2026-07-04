@@ -26,6 +26,7 @@
 
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/Core/Node.h"
+#include "Engine/Runtime/Components/EnvironmentComponent.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/SceneReferenceComponent.h"
 #include "Engine/Utilities/FileHelper.hpp"
@@ -121,6 +122,80 @@ namespace Assets
         }
         return {};
     }
+
+    bool ReadBoolExtra(const tinygltf::Value& extras, const char* key, bool fallback)
+    {
+        if (!extras.Has(key))
+        {
+            return fallback;
+        }
+        const tinygltf::Value& value = extras.Get(key);
+        if (value.IsBool())
+        {
+            return value.Get<bool>();
+        }
+        if (value.IsNumber())
+        {
+            return value.GetNumberAsInt() != 0;
+        }
+        return fallback;
+    }
+
+    void ReadEnvironmentExtras(const tinygltf::Value& extras, Assets::EnvironmentSetting& environment)
+    {
+        if (extras.Has("SkyIdx") && extras.Get("SkyIdx").IsNumber())
+        {
+            environment.HasSky = true;
+            environment.SkyIdx = extras.Get("SkyIdx").GetNumberAsInt();
+        }
+        if (extras.Has("SkyIntensity") && extras.Get("SkyIntensity").IsNumber())
+        {
+            environment.HasSky = true;
+            environment.SkyIntensity = static_cast<float>(extras.Get("SkyIntensity").GetNumberAsDouble());
+        }
+        if (extras.Has("SkyRotation") && extras.Get("SkyRotation").IsNumber())
+        {
+            environment.HasSky = true;
+            environment.SkyRotation = static_cast<float>(extras.Get("SkyRotation").GetNumberAsDouble());
+        }
+        if (extras.Has("SunIntensity") && extras.Get("SunIntensity").IsNumber())
+        {
+            environment.HasSun = true;
+            environment.SunIntensity = static_cast<float>(extras.Get("SunIntensity").GetNumberAsDouble());
+        }
+        if (extras.Has("SunRotation") && extras.Get("SunRotation").IsNumber())
+        {
+            environment.SunRotation = static_cast<float>(extras.Get("SunRotation").GetNumberAsDouble());
+        }
+        if (extras.Has("CamSpeed") && extras.Get("CamSpeed").IsNumber())
+        {
+            environment.ControlSpeed = static_cast<float>(extras.Get("CamSpeed").GetNumberAsDouble());
+        }
+        if (extras.Has("ControlSpeed") && extras.Get("ControlSpeed").IsNumber())
+        {
+            environment.ControlSpeed = static_cast<float>(extras.Get("ControlSpeed").GetNumberAsDouble());
+        }
+        if (extras.Has("WithSun"))
+        {
+            environment.HasSun = ReadBoolExtra(extras, "WithSun", environment.HasSun);
+        }
+        if (extras.Has("HasSun"))
+        {
+            environment.HasSun = ReadBoolExtra(extras, "HasSun", environment.HasSun);
+        }
+        if (extras.Has("NoSky"))
+        {
+            environment.HasSky = false;
+        }
+        if (extras.Has("HasSky"))
+        {
+            environment.HasSky = ReadBoolExtra(extras, "HasSky", environment.HasSky);
+        }
+        if (extras.Has("GammaCorrection"))
+        {
+            environment.GammaCorrection = ReadBoolExtra(extras, "GammaCorrection", environment.GammaCorrection);
+        }
+    }
     
     void ParseGltfNode(std::vector<std::shared_ptr<Assets::Node>>& outNodes, std::map<int, std::shared_ptr<Node> >& nodeMap, Assets::EnvironmentSetting& outCamera, std::vector<Assets::LightObject>& outLights,
         tinygltf::Model& model, int nodeIdx, int modelIdx, int materialOffset)
@@ -188,6 +263,12 @@ namespace Assets
         {
             sceneNode->SetLayer(node.extras.Get("layer").Get<std::string>());
         }
+        if (node.extras.Has("gkEnvironment") && node.extras.Get("gkEnvironment").IsObject())
+        {
+            auto environment = std::make_shared<Runtime::EnvironmentComponent>();
+            ReadEnvironmentExtras(node.extras.Get("gkEnvironment"), *environment);
+            sceneNode->AddComponent(environment);
+        }
 
         if (isSceneReference)
         {
@@ -219,7 +300,7 @@ namespace Assets
             }
             renderComp->SetMaterials(materialIdx);
 
-            auto readBoolExtra = [&node](const char* key, bool fallback)
+            auto readNodeBoolExtra = [&node](const char* key, bool fallback)
             {
                 if (!node.extras.Has(key))
                 {
@@ -237,9 +318,9 @@ namespace Assets
                 return fallback;
             };
 
-            renderComp->SetVisible(readBoolExtra("visible", renderComp->GetVisible()));
-            renderComp->SetCastShadows(readBoolExtra("castShadows", renderComp->GetCastShadows()));
-            renderComp->SetReceiveGI(readBoolExtra("receiveGI", renderComp->GetReceiveGI()));
+            renderComp->SetVisible(readNodeBoolExtra("visible", renderComp->GetVisible()));
+            renderComp->SetCastShadows(readNodeBoolExtra("castShadows", renderComp->GetCastShadows()));
+            renderComp->SetReceiveGI(readNodeBoolExtra("receiveGI", renderComp->GetReceiveGI()));
             if (node.extras.Has("layerMask") && node.extras.Get("layerMask").IsNumber())
             {
                 renderComp->SetLayerMask(static_cast<uint32_t>(node.extras.Get("layerMask").GetNumberAsDouble()));
@@ -872,42 +953,7 @@ namespace Assets
 
 
         auto& root = model.scenes[0];
-        if(root.extras.Has("SkyIdx"))
-        {
-            cameraInit.HasSky = true;
-            cameraInit.SkyIdx = root.extras.Get("SkyIdx").GetNumberAsInt();
-        }
-        if(root.extras.Has("SkyIntensity"))
-        {
-            cameraInit.HasSky = true;
-            cameraInit.SkyIntensity = root.extras.Get("SkyIntensity").GetNumberAsDouble();
-        }
-        if(root.extras.Has("SkyRotation"))
-        {
-            cameraInit.HasSky = true;
-            cameraInit.SkyRotation = root.extras.Get("SkyRotation").GetNumberAsDouble();
-        }
-        if(root.extras.Has("SunIntensity"))
-        {
-            cameraInit.HasSun = true;
-            cameraInit.SunIntensity = root.extras.Get("SunIntensity").GetNumberAsDouble();
-        }
-        if(root.extras.Has("CamSpeed"))
-        {
-            cameraInit.ControlSpeed = static_cast<float>(root.extras.Get("CamSpeed").GetNumberAsDouble());
-        }
-        if(root.extras.Has("WithSun"))
-        {
-            cameraInit.HasSun = root.extras.Get("WithSun").GetNumberAsInt() != 0;
-        }
-        if(root.extras.Has("SunRotation"))
-        {
-            cameraInit.SunRotation = static_cast<float>(root.extras.Get("SunRotation").GetNumberAsDouble());
-        }
-        if(root.extras.Has("NoSky"))
-        {
-            cameraInit.HasSky = false;
-        }
+        ReadEnvironmentExtras(root.extras, cameraInit);
 
         // gltf scenes contain the rootnodes
         //std::shared_ptr<Node> sceneNode = Node::CreateNode("Root", glm::vec3(0,0,0), glm::quat(1,0,0,0), glm::vec3(10,10,10), -1, nodes.size(), false);

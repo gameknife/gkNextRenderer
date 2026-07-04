@@ -6,6 +6,7 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/Data/Skeleton.hpp"
+#include "Engine/Runtime/Components/EnvironmentComponent.h"
 #include "Engine/Runtime/Components/SceneReferenceComponent.h"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
@@ -84,6 +85,22 @@ namespace
         return Runtime::Scene::SceneList::LoadScene(path, camera, nodes, models, materials, lights,
                                                     tracks, skeletons, &splats);
     }
+
+    Runtime::EnvironmentComponent* FindEnvironmentComponent(
+        const std::vector<std::shared_ptr<Assets::Node>>& nodes)
+    {
+        for (const auto& node : nodes)
+        {
+            if (node)
+            {
+                if (auto* environment = node->GetComponentPtr<Runtime::EnvironmentComponent>())
+                {
+                    return environment;
+                }
+            }
+        }
+        return nullptr;
+    }
 }
 
 TEST_CASE("Scene references load object schema as proxy plus internal nodes", "[Unit][SceneReference]")
@@ -96,7 +113,8 @@ TEST_CASE("Scene references load object schema as proxy plus internal nodes", "[
 
     std::vector<std::shared_ptr<Assets::Node>> nodes;
     REQUIRE(LoadSceneForTest(hostPath, nodes));
-    REQUIRE(nodes.size() == 2);
+    REQUIRE(nodes.size() == 3);
+    REQUIRE(FindEnvironmentComponent(nodes) != nullptr);
 
     auto reference = nodes[0]->GetComponent<Runtime::SceneReferenceComponent>();
     REQUIRE(reference != nullptr);
@@ -118,7 +136,8 @@ TEST_CASE("Scene references load string schema", "[Unit][SceneReference]")
 
     std::vector<std::shared_ptr<Assets::Node>> nodes;
     REQUIRE(LoadSceneForTest(hostPath, nodes));
-    REQUIRE(nodes.size() == 2);
+    REQUIRE(nodes.size() == 3);
+    REQUIRE(FindEnvironmentComponent(nodes) != nullptr);
 
     auto reference = nodes[0]->GetComponent<Runtime::SceneReferenceComponent>();
     REQUIRE(reference != nullptr);
@@ -133,7 +152,8 @@ TEST_CASE("Scene references detect direct self cycle", "[Unit][SceneReference]")
 
     std::vector<std::shared_ptr<Assets::Node>> nodes;
     REQUIRE(LoadSceneForTest(hostPath, nodes));
-    REQUIRE(nodes.size() == 1);
+    REQUIRE(nodes.size() == 2);
+    REQUIRE(FindEnvironmentComponent(nodes) != nullptr);
 
     auto reference = nodes[0]->GetComponent<Runtime::SceneReferenceComponent>();
     REQUIRE(reference != nullptr);

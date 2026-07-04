@@ -8,6 +8,7 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
+#include "Engine/Runtime/Components/EnvironmentComponent.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/SceneReferenceComponent.h"
 
@@ -337,6 +338,8 @@ namespace
         return EnsureFallbackMaterial(ctx);
     }
 
+    tinygltf::Value SerializeEnvironmentExtras(const EnvironmentSetting& env);
+
     struct FSectionGeometry
     {
         std::vector<Vertex> Vertices;
@@ -595,6 +598,10 @@ namespace
             tinygltf::Value::Object extras;
             extras["tag"] = tinygltf::Value(node->GetTag());
             extras["layer"] = tinygltf::Value(node->GetLayer());
+            if (auto environment = node->GetComponent<Runtime::EnvironmentComponent>())
+            {
+                extras["gkEnvironment"] = SerializeEnvironmentExtras(*environment);
+            }
             if (sceneReference)
             {
                 extras["gkSceneReference"] = tinygltf::Value(tinygltf::Value::Object{
@@ -650,6 +657,10 @@ namespace
         extras["SkyRotation"] = tinygltf::Value(static_cast<double>(env.SkyRotation));
         extras["SunIntensity"] = tinygltf::Value(static_cast<double>(env.SunIntensity));
         extras["SunRotation"] = tinygltf::Value(static_cast<double>(env.SunRotation));
+        extras["HasSky"] = tinygltf::Value(env.HasSky);
+        extras["HasSun"] = tinygltf::Value(env.HasSun);
+        extras["ControlSpeed"] = tinygltf::Value(static_cast<double>(env.ControlSpeed));
+        extras["GammaCorrection"] = tinygltf::Value(env.GammaCorrection);
         extras["WithSun"] = tinygltf::Value(env.HasSun ? 1 : 0);
         extras["CamSpeed"] = tinygltf::Value(static_cast<double>(env.ControlSpeed));
         if (!env.HasSky)
@@ -663,7 +674,6 @@ namespace
     {
         tinygltf::Scene gltfScene;
         gltfScene.name = "Scene";
-        gltfScene.extras = SerializeEnvironmentExtras(scene.GetEnvironmentStrings());
         for (const auto& node : scene.Nodes())
         {
             if (node->GetParent() == nullptr)
