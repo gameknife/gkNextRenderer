@@ -16,6 +16,7 @@ enum class EEditorAction
 
     IO_LoadScene,
     IO_LoadSceneAdd,
+    IO_AddSceneReference,
     IO_LoadHDRI,
 
     Camera_FocusSelected,

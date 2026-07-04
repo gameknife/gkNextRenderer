@@ -63,6 +63,77 @@ void NextEngine::RequestLoadScene(FSceneLoadRequest request)
         });
 }
 
+void NextEngine::RequestSceneGpuRefresh()
+{
+    AddTickedTask(
+        [this](double /*deltaSeconds*/) -> bool
+        {
+            if (status_ != NextRenderer::EApplicationStatus::Running)
+            {
+                return false;
+            }
+
+            renderer_->Device().WaitIdle();
+            scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->SupportsRayTracing());
+            renderer_->SetScene(scene_);
+            renderer_->OnPostLoadScene();
+            OnRendererPostLoadScene();
+            if (renderer_->HasSwapChain())
+            {
+                renderer_->RefreshSceneSwapChainResources();
+            }
+            return true;
+        });
+}
+
+void NextEngine::RequestAddSceneReference(std::string assetPath, glm::vec3 translation)
+{
+    AddTickedTask(
+        [this, assetPath = std::move(assetPath), translation](double /*deltaSeconds*/) -> bool
+        {
+            if (status_ != NextRenderer::EApplicationStatus::Running)
+            {
+                return false;
+            }
+
+            status_ = NextRenderer::EApplicationStatus::Loading;
+            const auto timer = std::chrono::high_resolution_clock::now();
+            const bool canRefreshExistingSwapChain = renderer_->HasSwapChain();
+
+            renderer_->Device().WaitIdle();
+            renderer_->OnPreLoadScene();
+
+            auto proxy = Runtime::Scene::SceneList::AddSceneReferenceToScene(*scene_, assetPath, translation);
+            if (proxy)
+            {
+                scene_->SetSelectedId(proxy->GetInstanceId());
+                scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->SupportsRayTracing());
+                renderer_->SetScene(scene_);
+
+                frameState_.totalFrames = 0;
+                renderer_->OnPostLoadScene();
+                OnRendererPostLoadScene();
+                if (canRefreshExistingSwapChain)
+                {
+                    renderer_->RefreshSceneSwapChainResources();
+                }
+                else
+                {
+                    renderer_->CreateSwapChain();
+                }
+
+                const float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
+                                          std::chrono::high_resolution_clock::now() - timer)
+                                          .count();
+                SPDLOG_INFO("added scene reference [{}] to gpu in {:.2f}ms",
+                            std::filesystem::path(assetPath).filename().string(), elapsed * 1000.f);
+            }
+
+            status_ = NextRenderer::EApplicationStatus::Running;
+            return true;
+        });
+}
+
 void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<void(SceneLoadContext&)> onGpuLoad)
 {
     // wait all task finish

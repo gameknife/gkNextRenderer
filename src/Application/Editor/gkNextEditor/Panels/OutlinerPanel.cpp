@@ -6,6 +6,7 @@
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Components/SceneReferenceComponent.h"
 #include "Engine/Runtime/Command/DeleteNodesCommand.hpp"
 #include "Engine/Runtime/Command/RenameNodeCommand.hpp"
 #include "Engine/Runtime/Engine.hpp"
@@ -23,6 +24,10 @@ namespace Editor
     {
         bool ContainsNodeInSubtree(const Assets::Node& node, uint32_t targetId)
         {
+            if (node.IsSceneReferenceInternal())
+            {
+                return false;
+            }
             if (targetId == InvalidId)
             {
                 return false;
@@ -35,6 +40,10 @@ namespace Editor
 
             for (const auto& child : node.Children())
             {
+                if (child->IsSceneReferenceInternal())
+                {
+                    continue;
+                }
                 if (ContainsNodeInSubtree(*child, targetId))
                 {
                     return true;
@@ -45,13 +54,28 @@ namespace Editor
 
         bool PassesNodeFilter(const Assets::Node& node, const ImGuiTextFilter& filter)
         {
+            if (node.IsSceneReferenceInternal())
+            {
+                return false;
+            }
             if (filter.PassFilter(node.GetName().c_str()))
             {
                 return true;
             }
+            if (auto sceneReference = node.GetComponent<Runtime::SceneReferenceComponent>())
+            {
+                if (filter.PassFilter(sceneReference->GetAssetPath().c_str()))
+                {
+                    return true;
+                }
+            }
 
             for (const auto& child : node.Children())
             {
+                if (child->IsSceneReferenceInternal())
+                {
+                    continue;
+                }
                 if (PassesNodeFilter(*child, filter))
                 {
                     return true;
@@ -113,19 +137,40 @@ namespace Editor
         bool SetSubtreeVisibility(Assets::Node& root, bool visible)
         {
             bool changed = false;
+            if (auto render = root.GetComponent<Runtime::RenderComponent>())
+            {
+                if (render->GetVisible() != visible)
+                {
+                    render->SetVisible(visible);
+                    changed = true;
+                }
+            }
+            for (const auto& child : root.Children())
+            {
+                changed = SetSubtreeVisibility(*child, visible) || changed;
+            }
+            return changed;
+        }
+
+        bool IsSubtreeVisible(const Assets::Node& root)
+        {
+            bool hasDrawable = false;
+            bool allVisible = true;
+            if (auto render = root.GetComponent<Runtime::RenderComponent>())
+            {
+                hasDrawable = true;
+                allVisible = allVisible && render->GetVisible();
+            }
             for (const auto& child : root.Children())
             {
                 if (auto render = child->GetComponent<Runtime::RenderComponent>())
                 {
-                    if (render->GetVisible() != visible)
-                    {
-                        render->SetVisible(visible);
-                        changed = true;
-                    }
+                    hasDrawable = true;
+                    allVisible = allVisible && render->GetVisible();
                 }
-                changed = SetSubtreeVisibility(*child, visible) || changed;
+                allVisible = IsSubtreeVisible(*child) && allVisible;
             }
-            return changed;
+            return !hasDrawable || allVisible;
         }
 
         struct FLayerStats
@@ -164,6 +209,10 @@ namespace Editor
             layers["Default"].Name = "Default";
             for (const auto& node : scene.Nodes())
             {
+                if (node->IsSceneReferenceInternal())
+                {
+                    continue;
+                }
                 const std::string layerName = NormalizedLayerName(*node);
                 FLayerStats& stats = layers[layerName];
                 stats.Name = layerName;
@@ -198,6 +247,10 @@ namespace Editor
             bool changed = false;
             for (const auto& node : scene.Nodes())
             {
+                if (node->IsSceneReferenceInternal())
+                {
+                    continue;
+                }
                 if (NormalizedLayerName(*node) != layerName)
                 {
                     continue;
@@ -221,6 +274,10 @@ namespace Editor
         {
             for (const auto& node : scene.Nodes())
             {
+                if (node->IsSceneReferenceInternal())
+                {
+                    continue;
+                }
                 if (NormalizedLayerName(*node) == layerName)
                 {
                     scene.SetLocked(node->GetInstanceId(), locked);
@@ -233,6 +290,10 @@ namespace Editor
             std::vector<uint32_t> ids;
             for (const auto& node : scene.Nodes())
             {
+                if (node->IsSceneReferenceInternal())
+                {
+                    continue;
+                }
                 if (NormalizedLayerName(*node) != layerName)
                 {
                     continue;
@@ -248,6 +309,10 @@ namespace Editor
         void CollectOutlinerVisibleIds(Assets::Scene& scene, Assets::Node& node, const ImGuiTextFilter& filter,
                                        bool includeLocked, std::vector<uint32_t>& visibleIds)
         {
+            if (node.IsSceneReferenceInternal())
+            {
+                return;
+            }
             const bool filterActive = filter.IsActive();
             if (filterActive)
             {
@@ -265,6 +330,10 @@ namespace Editor
             }
             for (const auto& child : node.Children())
             {
+                if (child->IsSceneReferenceInternal())
+                {
+                    continue;
+                }
                 CollectOutlinerVisibleIds(scene, *child, filter, includeLocked, visibleIds);
             }
         }
@@ -291,11 +360,12 @@ namespace Editor
             const bool locked = ctx.scene.IsLocked(node.GetInstanceId());
             ImGui::PushID(static_cast<int>(node.GetInstanceId()));
 
+            auto sceneReference = node.GetComponent<Runtime::SceneReferenceComponent>();
             auto render = node.GetComponent<Runtime::RenderComponent>();
             const int modelId = render ? render->GetModelId() : -1;
-            const bool visible = render == nullptr || render->GetVisible();
+            const bool visible = sceneReference ? IsSubtreeVisible(node) : (render == nullptr || render->GetVisible());
 
-            if (render != nullptr)
+            if (render != nullptr || sceneReference)
             {
                 if (!visible)
                 {
@@ -304,8 +374,18 @@ namespace Editor
                 ImGui::TextUnformatted(visible ? ICON_FA_EYE : ICON_FA_EYE_SLASH);
                 if (ImGui::IsItemClicked(ImGuiMouseButton_Left))
                 {
-                    render->SetVisible(!visible);
-                    ctx.scene.MarkDirty();
+                    if (sceneReference)
+                    {
+                        if (SetSubtreeVisibility(node, !visible))
+                        {
+                            ctx.scene.MarkDirty();
+                        }
+                    }
+                    else
+                    {
+                        render->SetVisible(!visible);
+                        ctx.scene.MarkDirty();
+                    }
                 }
                 if (ImGui::IsItemHovered())
                 {
@@ -344,7 +424,7 @@ namespace Editor
                 ImGuiTreeNodeFlags_OpenOnArrow |      // Only expand on arrow click
                 ImGuiTreeNodeFlags_SpanAvailWidth |   // Make the whole row clickable
                 (selected ? ImGuiTreeNodeFlags_Selected : 0) |
-                (node.Children().empty() ? ImGuiTreeNodeFlags_Leaf : 0);
+                ((node.Children().empty() || sceneReference) ? ImGuiTreeNodeFlags_Leaf : 0);
 
             const bool shouldOpenForTarget =
                 autoScrollEnabled && pendingScrollTargetId != InvalidId &&
@@ -353,22 +433,22 @@ namespace Editor
             {
                 ImGui::SetNextItemOpen(true, ImGuiCond_Always);
             }
-            if (filterActive && !node.Children().empty())
+            if (filterActive && !node.Children().empty() && !sceneReference)
             {
                 ImGui::SetNextItemOpen(true, ImGuiCond_Always);
             }
-            if (!node.Children().empty() && node.GetInstanceId() == ui.pendingExpandTargetId)
+            if (!node.Children().empty() && !sceneReference && node.GetInstanceId() == ui.pendingExpandTargetId)
             {
                 ImGui::SetNextItemOpen(true, ImGuiCond_Always);
                 ui.pendingExpandTargetId = InvalidId;
             }
-            if (!node.Children().empty() && node.GetInstanceId() == ui.pendingCollapseTargetId)
+            if (!node.Children().empty() && !sceneReference && node.GetInstanceId() == ui.pendingCollapseTargetId)
             {
                 ImGui::SetNextItemOpen(false, ImGuiCond_Always);
                 ui.pendingCollapseTargetId = InvalidId;
             }
 
-            const std::string label = (modelId == -1 ? ICON_FA_CIRCLE_NOTCH : ICON_FA_CUBE) +
+            const std::string label = (sceneReference ? ICON_FA_LINK : (modelId == -1 ? ICON_FA_CIRCLE_NOTCH : ICON_FA_CUBE)) +
                 std::string(" ") + node.GetName();
             const ImU32 textColor = !visible ? ImGui::GetColorU32(ImGuiCol_TextDisabled)
                                              : selected ? ActiveColor : ImGui::GetColorU32(ImGuiCol_Text);
@@ -472,11 +552,18 @@ namespace Editor
 
             if (opened)
             {
-                for (auto& child : node.Children())
+                if (!sceneReference)
                 {
-                    DrawNode(ctx, ui, *child, renameTargetId, renameBuffer, openRenamePopup, focusRenameInput,
-                             hoveredIdCandidate, autoScrollEnabled, pendingScrollTargetId,
-                             suppressNextSelectionAutoScroll, filter);
+                    for (auto& child : node.Children())
+                    {
+                        if (child->IsSceneReferenceInternal())
+                        {
+                            continue;
+                        }
+                        DrawNode(ctx, ui, *child, renameTargetId, renameBuffer, openRenamePopup, focusRenameInput,
+                                 hoveredIdCandidate, autoScrollEnabled, pendingScrollTargetId,
+                                 suppressNextSelectionAutoScroll, filter);
+                    }
                 }
                 ImGui::TreePop();
             }
@@ -653,6 +740,10 @@ namespace Editor
                 uint32_t limit = 1000;
                 for (auto& node : allnodes)
                 {
+                    if (node->IsSceneReferenceInternal())
+                    {
+                        continue;
+                    }
                     if (node->GetParent() != nullptr)
                     {
                         continue;
@@ -731,6 +822,7 @@ namespace Editor
                         std::vector<uint32_t> visibleIds;
                         for (auto& node : ctx.scene.Nodes())
                         {
+                            if (node->IsSceneReferenceInternal()) continue;
                             if (node->GetParent() != nullptr) continue;
                             CollectOutlinerVisibleIds(ctx.scene, *node, state.nodeFilter, false, visibleIds);
                         }
@@ -794,6 +886,7 @@ namespace Editor
                         std::vector<uint32_t> visibleIds;
                         for (auto& node : ctx.scene.Nodes())
                         {
+                            if (node->IsSceneReferenceInternal()) continue;
                             if (node->GetParent() != nullptr) continue;
                             CollectOutlinerVisibleIds(ctx.scene, *node, state.nodeFilter, true, visibleIds);
                         }

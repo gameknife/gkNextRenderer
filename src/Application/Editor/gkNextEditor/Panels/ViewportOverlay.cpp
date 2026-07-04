@@ -6,6 +6,7 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "EditorActionDispatcher.hpp"
 #include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Modules/DevTools/ProfessionalUI.hpp"
 #include "Modules/DevTools/GizmoController.hpp"
 #include "Engine/Runtime/Engine.hpp"
@@ -14,7 +15,9 @@
 #include "Engine/Utilities/ImGui.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <fmt/format.h>
+#include <filesystem>
 #include <string>
 
 namespace Editor
@@ -47,6 +50,18 @@ namespace Editor
             }
 
             return supportedTypes;
+        }
+
+        bool CanAuthorSceneReferences(const std::string& currentScenePath)
+        {
+            if (currentScenePath.empty())
+            {
+                return false;
+            }
+            std::string ext = std::filesystem::path(currentScenePath).extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            return ext == ".gltf" || ext == ".glb";
         }
     }
 
@@ -100,24 +115,28 @@ namespace Editor
                             }
                             else
                             {
-                                glm::dvec2 mousePos = ctx.engine.GetMousePos();
-                                glm::vec3 origin;
-                                glm::vec3 dir;
-                                Runtime::EngineHelper::GetScreenToWorldRay(glm::vec2(mousePos.x, mousePos.y), origin, dir);
+                                if (CanAuthorSceneReferences(ui.currentScenePath))
+                                {
+                                    glm::dvec2 mousePos = ctx.engine.GetMousePos();
+                                    glm::vec3 origin;
+                                    glm::vec3 dir;
+                                    Runtime::EngineHelper::GetScreenToWorldRay(glm::vec2(mousePos.x, mousePos.y),
+                                                                               origin, dir);
 
-                                NextEngine* engine = &ctx.engine;
-                                engine->RayCastGPU(origin, dir,
-                                                   [engine, path](Assets::RayCastResult result) mutable
-                                                   {
-                                                        NextEngine::FSceneLoadRequest request{.filename = path, .append = true};
-                                                        if (result.Hitted)
-                                                        {
-                                                            request.placeOnHit = true;
-                                                            request.hitPosition = result.HitPoint;
-                                                        }
-                                                        engine->RequestLoadScene(std::move(request));
-                                                        return true;
-                                                    });
+                                    NextEngine* engine = &ctx.engine;
+                                    engine->RayCastGPU(origin, dir,
+                                                       [engine, path](Assets::RayCastResult result) mutable
+                                                       {
+                                                           const glm::vec3 translation =
+                                                               result.Hitted ? result.HitPoint : glm::vec3(0.0f);
+                                                           engine->RequestAddSceneReference(path, translation);
+                                                           return true;
+                                                       });
+                                }
+                                else
+                                {
+                                    SPDLOG_WARN("Scene references can only be authored in glTF/GLB host scenes");
+                                }
                             }
                         }
                         else if (data->type == EEditorDragPayloadType::Material)

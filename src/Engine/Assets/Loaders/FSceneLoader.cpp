@@ -27,6 +27,7 @@
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Components/SceneReferenceComponent.h"
 #include "Engine/Utilities/FileHelper.hpp"
 
 namespace Assets
@@ -101,6 +102,25 @@ namespace Assets
         .m_setTSpace			= NULL,
     #endif
     };
+
+    std::string ReadSceneReferenceAssetPath(const tinygltf::Node& node)
+    {
+        if (!node.extras.Has("gkSceneReference"))
+        {
+            return {};
+        }
+
+        const tinygltf::Value& value = node.extras.Get("gkSceneReference");
+        if (value.IsString())
+        {
+            return value.Get<std::string>();
+        }
+        if (value.IsObject() && value.Has("asset") && value.Get("asset").IsString())
+        {
+            return value.Get("asset").Get<std::string>();
+        }
+        return {};
+    }
     
     void ParseGltfNode(std::vector<std::shared_ptr<Assets::Node>>& outNodes, std::map<int, std::shared_ptr<Node> >& nodeMap, Assets::EnvironmentSetting& outCamera, std::vector<Assets::LightObject>& outLights,
         tinygltf::Model& model, int nodeIdx, int modelIdx, int materialOffset)
@@ -134,12 +154,14 @@ namespace Assets
                                            static_cast<float>(node.rotation[2]));
         }
 
+        const std::string sceneReferenceAssetPath = ReadSceneReferenceAssetPath(node);
+        const bool isSceneReference = !sceneReferenceAssetPath.empty();
         uint32_t meshId = -1;
-        if(node.mesh != -1)
+        if(!isSceneReference && node.mesh != -1)
         {
             meshId = node.mesh + modelIdx;
         }
-        else
+        else if (!isSceneReference)
         {
             if(node.camera >= 0)
             {
@@ -165,6 +187,21 @@ namespace Assets
         if (node.extras.Has("layer") && node.extras.Get("layer").IsString())
         {
             sceneNode->SetLayer(node.extras.Get("layer").Get<std::string>());
+        }
+
+        if (isSceneReference)
+        {
+            auto sceneReference = std::make_shared<Runtime::SceneReferenceComponent>();
+            sceneReference->SetAssetPath(sceneReferenceAssetPath);
+            sceneNode->AddComponent(sceneReference);
+            outNodes.push_back(sceneNode);
+            nodeMap[nodeIdx] = sceneNode;
+
+            if (node.mesh != -1 || node.camera >= 0 || node.skin != -1 || !node.children.empty())
+            {
+                SPDLOG_WARN("Scene reference node '{}' ignores local mesh/camera/skin/children", node.name);
+            }
+            return;
         }
 
         if (meshId != -1)

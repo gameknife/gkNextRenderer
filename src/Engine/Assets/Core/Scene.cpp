@@ -14,6 +14,7 @@
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/GaussianSplatComponent.h"
+#include "Engine/Runtime/Components/SceneReferenceComponent.h"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.h"
@@ -644,6 +645,12 @@ namespace Assets
         nodes_.erase(std::remove_if(nodes_.begin(), nodes_.end(), [&removeIds](const std::shared_ptr<Node>& node)
                                     { return removeIds.find(node->GetInstanceId()) != removeIds.end(); }),
                      nodes_.end());
+        gaussianSplats_.erase(std::remove_if(gaussianSplats_.begin(), gaussianSplats_.end(),
+                                             [&removeIds](const FGaussianSplatData& splat)
+                                             {
+                                                 return removeIds.find(splat.nodeInstanceId) != removeIds.end();
+                                             }),
+                               gaussianSplats_.end());
 
         return removedEntries;
     }
@@ -766,6 +773,34 @@ namespace Assets
 
         if (!foundNode)
             return false;
+
+        if (foundNode->GetComponent<Runtime::SceneReferenceComponent>())
+        {
+            glm::vec3 minBounds(FLT_MAX, FLT_MAX, FLT_MAX);
+            glm::vec3 maxBounds(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+            bool foundChildBounds = false;
+            for (const auto& child : foundNode->Children())
+            {
+                glm::vec3 childCenter;
+                float childRadius = 0.0f;
+                if (!GetNodeBounds(child->GetInstanceId(), childCenter, childRadius))
+                {
+                    continue;
+                }
+
+                const glm::vec3 extent(childRadius);
+                minBounds = glm::min(minBounds, childCenter - extent);
+                maxBounds = glm::max(maxBounds, childCenter + extent);
+                foundChildBounds = true;
+            }
+
+            if (foundChildBounds)
+            {
+                center = (minBounds + maxBounds) * 0.5f;
+                radius = glm::length(maxBounds - minBounds) * 0.5f;
+                return true;
+            }
+        }
 
         glm::vec3 splatBoundsMin;
         glm::vec3 splatBoundsMax;
