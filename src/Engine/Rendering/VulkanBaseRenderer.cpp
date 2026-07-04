@@ -265,6 +265,17 @@ namespace Vulkan
         return GetRendererDescriptor(type).name;
     }
 
+    const std::array<ERendererType, 4>& GetReferenceRendererTypes()
+    {
+        static constexpr std::array<ERendererType, 4> kReferenceRendererTypes{
+            ERT_SoftwareModern,
+            ERT_SoftwareTracing,
+            ERT_SoftwareModernNoAmbient,
+            ERT_PathTracing,
+        };
+        return kReferenceRendererTypes;
+    }
+
     FReferenceViewLayout GetReferenceViewLayout(const ERendererType type)
     {
         const RendererDescriptor& descriptor = GetRendererDescriptor(type);
@@ -1964,6 +1975,22 @@ namespace Vulkan
         return GetRendererRequirements(logicRenderers_.current);
     }
 
+    FRendererRequirements VulkanBaseRenderer::ActiveRendererRequirements() const
+    {
+        FRendererRequirements requirements = CurrentRendererRequirements();
+        if (GOption->ReferenceMode)
+        {
+            for (const ERendererType type : GetReferenceRendererTypes())
+            {
+                if (IsLogicRendererRegistered(type))
+                {
+                    requirements.Merge(GetRendererRequirements(type));
+                }
+            }
+        }
+        return requirements;
+    }
+
     FRendererRequirements VulkanBaseRenderer::RegisteredRendererRequirements() const
     {
         FRendererRequirements requirements;
@@ -2170,7 +2197,7 @@ namespace Vulkan
     {
         const auto& settings = NextEngine::GetInstance()->GetUserSettings();
 
-        if (CurrentRendererRequirements().requestAmbientCube && !ShouldSkipAmbientCubeUpdates())
+        if (ActiveRendererRequirements().requestAmbientCube && !ShouldSkipAmbientCubeUpdates())
         {
             if (settings.BakeSpeedLevel != 2)
             {

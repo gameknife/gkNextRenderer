@@ -72,6 +72,7 @@ namespace Vulkan
 
 	FRendererRequirements GetRendererRequirements(ERendererType type);
 	const char* GetRendererName(ERendererType type);
+	const std::array<ERendererType, 4>& GetReferenceRendererTypes();
 
 	struct FReferenceViewLayout
 	{
@@ -163,6 +164,7 @@ namespace Vulkan
 		void SwitchLogicRenderer(ERendererType type);
 		ERendererType CurrentLogicRendererType() const { return logicRenderers_.current; }
 		FRendererRequirements CurrentRendererRequirements() const;
+		FRendererRequirements ActiveRendererRequirements() const;
 		FRendererRequirements RegisteredRendererRequirements() const;
 		bool ShouldSkipAmbientCubeUpdates() const;
 

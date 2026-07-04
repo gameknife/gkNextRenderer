@@ -100,16 +100,9 @@ namespace Vulkan
 
     bool ReferenceRenderViewController::ScheduleViews(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
-        static constexpr std::array<ERendererType, 4> kReferenceRendererTypes{
-            ERT_SoftwareModern,
-            ERT_SoftwareTracing,
-            ERT_SoftwareModernNoAmbient,
-            ERT_PathTracing,
-        };
-
         bool clearSwapchain = true;
         bool renderedAny = false;
-        for (const ERendererType rendererType : kReferenceRendererTypes)
+        for (const ERendererType rendererType : GetReferenceRendererTypes())
         {
             LogicRendererBase* logicRenderer = renderer_.EnsureLogicRenderer(rendererType);
             if (logicRenderer == nullptr)

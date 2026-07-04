@@ -28,7 +28,7 @@ namespace Vulkan
 {
     void VulkanBaseRenderer::HandleAmbientCubeCacheInvalidation(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
-        if (!CurrentRendererRequirements().requestAmbientCube || ShouldSkipAmbientCubeUpdates())
+        if (!ActiveRendererRequirements().requestAmbientCube || ShouldSkipAmbientCubeUpdates())
         {
             return;
         }
@@ -42,6 +42,11 @@ namespace Vulkan
 
     bool VulkanBaseRenderer::ShouldSkipAmbientCubeUpdates() const
     {
+        if (GOption->ReferenceMode)
+        {
+            return false;
+        }
+
         return CurrentLogicRendererType() == ERendererType::ERT_PathTracing &&
             NextEngine::GetInstance()->IsEffectiveSharcEnabled();
     }
