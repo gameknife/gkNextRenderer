@@ -13,6 +13,7 @@
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Components/EnvironmentComponent.h"
 #include "Engine/Runtime/Components/GaussianSplatComponent.h"
 #include "Engine/Runtime/Components/SceneReferenceComponent.h"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
@@ -40,6 +41,12 @@ namespace Assets
                 static_cast<float>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE) * clampedRatio));
             return std::clamp(requestedBricks, 1u,
                               static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE));
+        }
+
+        const Assets::EnvironmentSetting& DefaultEnvironmentSettings()
+        {
+            static const Assets::EnvironmentSetting defaultSettings;
+            return defaultSettings;
         }
 
         // Byte layout of the ambient arena for a given allocated cascade capacity. Cubes and Voxels
@@ -150,6 +157,90 @@ namespace Assets
     Node* Scene::GetNodeById(uint32_t nodeId)
     {
         return GetNodeByInstanceId(nodeId);
+    }
+
+    void Scene::RefreshEnvironmentComponentCache()
+    {
+        environmentComponent_ = nullptr;
+        for (const auto& node : nodes_)
+        {
+            CacheEnvironmentComponentFromNode(node.get());
+            if (environmentComponent_ != nullptr)
+            {
+                return;
+            }
+        }
+    }
+
+    void Scene::CacheEnvironmentComponentFromNode(Node* node)
+    {
+        if (environmentComponent_ != nullptr || node == nullptr || node->IsSceneReferenceInternal())
+        {
+            return;
+        }
+
+        environmentComponent_ = node->GetComponentPtr<Runtime::EnvironmentComponent>();
+    }
+
+    Runtime::EnvironmentComponent* Scene::GetEnvironmentComponent()
+    {
+        return environmentComponent_;
+    }
+
+    const Runtime::EnvironmentComponent* Scene::GetEnvironmentComponent() const
+    {
+        return environmentComponent_;
+    }
+
+    EnvironmentSetting& Scene::GetEnvSettings()
+    {
+        if (auto* environment = GetEnvironmentComponent())
+        {
+            return *environment;
+        }
+
+        auto node = Node::CreateNode("Environment", glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+                                     glm::vec3(1.0f), GenerateInstanceId());
+        auto environment = std::make_shared<Runtime::EnvironmentComponent>();
+        node->AddComponent(environment);
+        nodes_.push_back(node);
+        environmentComponent_ = environment.get();
+        return *environment;
+    }
+
+    const EnvironmentSetting& Scene::GetEnvSettings() const
+    {
+        if (auto* environment = GetEnvironmentComponent())
+        {
+            return *environment;
+        }
+        return DefaultEnvironmentSettings();
+    }
+
+    void Scene::SetEnvSettings(const EnvironmentSetting& envSettings)
+    {
+        auto& environment = GetEnvSettings();
+        environment = envSettings;
+    }
+
+    const glm::vec3 Scene::GetSunDir() const
+    {
+        return GetEnvSettings().SunDirection();
+    }
+
+    const bool Scene::HasSun() const
+    {
+        return GetEnvSettings().HasSun;
+    }
+
+    const std::vector<Assets::Camera>& Scene::GetCameras() const
+    {
+        return GetEnvSettings().cameras;
+    }
+
+    const Assets::EnvironmentSetting& Scene::GetEnvironmentStrings() const
+    {
+        return GetEnvSettings();
     }
 
     Scene::Scene(Vulkan::CommandPool& commandPool, bool supportRayTracing,
@@ -461,6 +552,7 @@ namespace Assets
 
     void Scene::AddNode(std::shared_ptr<Node> node)
     {
+        CacheEnvironmentComponentFromNode(node.get());
         nodes_.push_back(node);
         EnsureNodePhysicsBody(node.get());
     }
@@ -552,6 +644,10 @@ namespace Assets
                 lockedIds_.erase(id);
                 node->ClearParent();
                 nodes_.erase(it);
+                if (node->GetComponentPtr<Runtime::EnvironmentComponent>() == environmentComponent_)
+                {
+                    RefreshEnvironmentComponentCache();
+                }
                 return node;
             }
         }
@@ -646,6 +742,7 @@ namespace Assets
         nodes_.erase(std::remove_if(nodes_.begin(), nodes_.end(), [&removeIds](const std::shared_ptr<Node>& node)
                                     { return removeIds.find(node->GetInstanceId()) != removeIds.end(); }),
                      nodes_.end());
+        RefreshEnvironmentComponentCache();
         gaussianSplats_.erase(std::remove_if(gaussianSplats_.begin(), gaussianSplats_.end(),
                                              [&removeIds](const FGaussianSplatData& splat)
                                              {
@@ -663,6 +760,7 @@ namespace Assets
         {
             const size_t index = std::min(it->index, nodes_.size());
             nodes_.insert(nodes_.begin() + index, it->node);
+            CacheEnvironmentComponentFromNode(it->node.get());
         }
 
         if (parent && root)

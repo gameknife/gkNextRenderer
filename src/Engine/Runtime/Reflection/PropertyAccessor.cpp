@@ -5,6 +5,7 @@
 #include <array>
 #include <vector>
 #include <entt/core/hashed_string.hpp>
+#include <spdlog/spdlog.h>
 
 namespace Reflection
 {

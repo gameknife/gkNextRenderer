@@ -12,6 +12,11 @@
 #include "Engine/Assets/Core/SceneSelectionState.hpp"
 #include "Engine/Assets/Data/Skeleton.hpp"
 
+namespace Runtime
+{
+    class EnvironmentComponent;
+}
+
 namespace Assets
 {
     class Scene final
@@ -106,8 +111,8 @@ namespace Assets
         uint32_t SoftMeshShaderDrawSlotForShadowCascade(uint32_t cascade) const;
         const Vulkan::Buffer& ReorderBuffer() const { return *reorderBuffer_; }
         const Vulkan::Buffer& PrimAddressBuffer() const { return *primAddressBuffer_; }
-        const glm::vec3 GetSunDir() const { return envSettings_.SunDirection(); }
-        const bool HasSun() const { return envSettings_.HasSun; }
+        const glm::vec3 GetSunDir() const;
+        const bool HasSun() const;
 
         const uint32_t GetLightCount() const { return lightCount_; }
         const uint32_t GetIndicesCount() const { return indicesCount_; }
@@ -168,11 +173,14 @@ namespace Assets
 
         void OverrideModelView(glm::mat4& OutMatrix);
 
-        const std::vector<Assets::Camera>& GetCameras() const { return envSettings_.cameras; }
-        const Assets::EnvironmentSetting& GetEnvironmentStrings() const { return envSettings_; }
+        const std::vector<Assets::Camera>& GetCameras() const;
+        const Assets::EnvironmentSetting& GetEnvironmentStrings() const;
 
-        Assets::EnvironmentSetting& GetEnvSettings() { return envSettings_; }
-        void SetEnvSettings(const Assets::EnvironmentSetting& envSettings) { envSettings_ = envSettings; }
+        Assets::EnvironmentSetting& GetEnvSettings();
+        const Assets::EnvironmentSetting& GetEnvSettings() const;
+        void SetEnvSettings(const Assets::EnvironmentSetting& envSettings);
+        Runtime::EnvironmentComponent* GetEnvironmentComponent();
+        const Runtime::EnvironmentComponent* GetEnvironmentComponent() const;
 
         Camera& GetRenderCamera() { return renderCamera_; }
         void SetRenderCamera(const Camera& camera) { renderCamera_ = camera; }
@@ -351,7 +359,6 @@ namespace Assets
         glm::mat4 overrideModelView;
         bool requestOverrideModelView = false;
 
-        Assets::EnvironmentSetting envSettings_;
         Camera renderCamera_;
 
         Assets::CPU::FCPUAccelerationStructure cpuAccelerationStructure_;
@@ -368,6 +375,11 @@ namespace Assets
 
         VkDeviceAddress skinnedVerticesAddr_ = 0;
         VkDeviceAddress jointMatricesAddr_ = 0;
+
+        Runtime::EnvironmentComponent* environmentComponent_ = nullptr;
+
+        void RefreshEnvironmentComponentCache();
+        void CacheEnvironmentComponentFromNode(Node* node);
 
         Assets::GPUScene BuildGPUScene(uint32_t imageIndex) const;
     };

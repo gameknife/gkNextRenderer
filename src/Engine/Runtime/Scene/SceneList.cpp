@@ -6,6 +6,7 @@
 #include "Engine/Assets/Core/GaussianSplat.hpp"
 #include "Engine/Assets/Loaders/FSceneLoader.h"
 #include "Engine/Assets/Loaders/LoaderRegistry.hpp"
+#include "Engine/Runtime/Components/EnvironmentComponent.h"
 #include "Engine/Runtime/Components/GaussianSplatComponent.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/SceneReferenceComponent.h"
@@ -99,6 +100,46 @@ namespace
             maxId = std::max(maxId, node->GetInstanceId());
         }
         return nodes.empty() ? 0 : maxId + 1;
+    }
+
+    Runtime::EnvironmentComponent* FindEnvironmentComponent(
+        const std::vector<std::shared_ptr<Assets::Node>>& nodes,
+        bool includeSceneReferenceInternal = false)
+    {
+        for (const auto& node : nodes)
+        {
+            if (!node || (!includeSceneReferenceInternal && node->IsSceneReferenceInternal()))
+            {
+                continue;
+            }
+            if (auto* environment = node->GetComponentPtr<Runtime::EnvironmentComponent>())
+            {
+                return environment;
+            }
+        }
+        return nullptr;
+    }
+
+    void EnsureEnvironmentComponentNode(Assets::EnvironmentSetting& environment,
+                                        std::vector<std::shared_ptr<Assets::Node>>& nodes)
+    {
+        if (auto* component = FindEnvironmentComponent(nodes))
+        {
+            if (component->cameras.empty())
+            {
+                component->cameras = environment.cameras;
+            }
+            environment = component->GetSettings();
+            return;
+        }
+
+        auto node = Assets::Node::CreateNode("Environment", glm::vec3(0.0f),
+                                             glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+                                             glm::vec3(1.0f), GenerateInstanceIdFromNodes(nodes));
+        auto component = std::make_shared<Runtime::EnvironmentComponent>();
+        component->SetSettings(environment);
+        node->AddComponent(component);
+        nodes.push_back(node);
     }
 
     struct FSceneReferenceLoadContext
@@ -564,6 +605,7 @@ bool LoadSceneWithReferences(std::string filename, Assets::EnvironmentSetting& c
                                 ? CanonicalCycleKey(normalizedRoot)
                                 : CanonicalCycleKey(filename));
     ResolveSceneReferences(camera, nodes, models, materials, lights, tracks, skeletons, splats, context);
+    EnsureEnvironmentComponentNode(camera, nodes);
     return true;
 }
 } // namespace
