@@ -18,28 +18,25 @@ struct PushConstants
     float nearPlane;
     float farPlane;
     uint groupCount;
-    uint groupSize;
+    uint scanStride;
 };
 
 [[vk::push_constant]] PushConstants push;
 
 [shader("compute")]
-[numthreads(1, 1, 1)]
+[numthreads(256, 1, 1)]
 void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
-    uint* bucketCounts = (uint*)push.bucketCountAddress;
-    uint* bucketOffsets = (uint*)push.bucketOffsetAddress;
-    uint offset = 0;
-    for (uint reverseBucket = 0; reverseBucket < push.bucketCount; ++reverseBucket)
-    {
-        const uint bucket = push.bucketCount - 1 - reverseBucket;
-        bucketOffsets[bucket] = offset;
-        offset += bucketCounts[bucket];
-    }
+    const uint bucket = dispatchThreadId.x;
+    if (bucket >= push.bucketCount) return;
 
-    uint* draw = (uint*)push.drawIndirectAddress;
-    draw[0] = 6;
-    draw[1] = offset;
-    draw[2] = 0;
-    draw[3] = 0;
+    uint* groupBucketCounts = (uint*)push.groupBucketCountAddress;
+    uint* groupBucketOffsets = (uint*)push.groupBucketOffsetAddress;
+    uint running = 0;
+    for (uint group = 0; group < push.groupCount; ++group)
+    {
+        const uint index = group * push.bucketCount + bucket;
+        running += groupBucketCounts[index];
+        groupBucketOffsets[index] = running;
+    }
 }

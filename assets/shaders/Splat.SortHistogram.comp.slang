@@ -25,7 +25,10 @@ struct PushConstants
     uint64_t sortedIndexAddress;
     uint64_t bucketCountAddress;
     uint64_t bucketOffsetAddress;
+    // Reused as the per-splat bucket cache address; no cursor buffer is needed by the stable path.
     uint64_t bucketCursorAddress;
+    uint64_t groupBucketCountAddress;
+    uint64_t groupBucketOffsetAddress;
     uint64_t drawIndirectAddress;
     uint count;
     uint width;
@@ -33,8 +36,8 @@ struct PushConstants
     uint bucketCount;
     float nearPlane;
     float farPlane;
-    uint reserved0;
-    uint reserved1;
+    uint groupCount;
+    uint groupSize;
 };
 
 [[vk::push_constant]] PushConstants push;
@@ -50,7 +53,7 @@ bool GetVisibleBucket(uint index, out uint bucket)
     if (model.parameters.y < 0.5 || model.parameters.x <= 0.0) return false;
     const float3 worldPosition = mul(model.world, float4(splat.positionOpacity.xyz, 1.0)).xyz;
     const float4 viewPosition = mul(camera[0].ModelView, float4(worldPosition, 1.0));
-    const float4 clip = mul(camera[0].Projection, viewPosition);
+    const float4 clip = mul(camera[0].ProjectionUnJit, viewPosition);
     if (viewPosition.z >= -1e-4 || clip.w <= 0.0) return false;
     const float2 ndc = clip.xy / clip.w;
     if (any(abs(ndc) > float2(1.2))) return false;
@@ -67,6 +70,11 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     if (index >= push.count) return;
     uint bucket;
     if (!GetVisibleBucket(index, bucket)) return;
+    uint* splatBuckets = (uint*)push.bucketCursorAddress;
+    splatBuckets[index] = bucket;
     uint* bucketCounts = (uint*)push.bucketCountAddress;
     InterlockedAdd(bucketCounts[bucket], 1);
+    const uint group = min(index / max(push.groupSize, 1), push.groupCount - 1);
+    uint* groupBucketCounts = (uint*)push.groupBucketCountAddress;
+    InterlockedAdd(groupBucketCounts[group * push.bucketCount + bucket], 1);
 }

@@ -48,6 +48,7 @@ struct UserSettings final
 	uint32_t TemporalFrames;
     uint32_t SplatBucketCount = 4096;
     uint32_t SplatMaxCount = 0;
+    bool SplatSortCache = true;
     float SplatSigma = 3.0f;
     bool SplatForceAA = true;
     float SplatAAStrength = 0.5f;

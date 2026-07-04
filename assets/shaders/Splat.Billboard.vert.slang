@@ -355,7 +355,7 @@ VertexOutput main(uint vertexIndex : SV_VertexID, uint instanceIndex : SV_Instan
     UniformBufferObject* camera = push.gpuScene.Camera;
     const float3 worldPosition = mul(model.world, float4(splat.positionOpacity.xyz, 1.0)).xyz;
     const float4 viewPosition = mul(camera[0].ModelView, float4(worldPosition, 1.0));
-    float4 clip = mul(camera[0].Projection, viewPosition);
+    float4 clip = mul(camera[0].ProjectionUnJit, viewPosition);
     clip.z = clamp(clip.z, 0.0, abs(clip.w));
 
     float3 right = float3(camera[0].ModelView[0][0], camera[0].ModelView[0][1], camera[0].ModelView[0][2]);
@@ -369,8 +369,8 @@ VertexOutput main(uint vertexIndex : SV_VertexID, uint instanceIndex : SV_Instan
     const float c22 = dot(forward, CovarianceMul(splat, model, forward));
 
     const float depth = max(-viewPosition.z, 1e-4);
-    const float focalX = 0.5 * push.width * camera[0].Projection[0][0];
-    const float focalY = 0.5 * push.height * abs(camera[0].Projection[1][1]);
+    const float focalX = 0.5 * push.width * camera[0].ProjectionUnJit[0][0];
+    const float focalY = 0.5 * push.height * abs(camera[0].ProjectionUnJit[1][1]);
     const float3 jacobianX = float3(focalX / depth, 0.0, focalX * viewPosition.x / (depth * depth));
     const float3 jacobianY = float3(0.0, focalY / depth, focalY * viewPosition.y / (depth * depth));
     const float3x3 viewCovariance = float3x3(c00, c01, c02, c01, c11, c12, c02, c12, c22);
