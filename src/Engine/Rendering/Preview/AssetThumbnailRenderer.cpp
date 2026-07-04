@@ -117,6 +117,41 @@ namespace Vulkan
         thumbnailTarget_.ResetSwapChainResources(/*releaseSampledOutput*/ false);
     }
 
+    void AssetThumbnailRenderer::OnHdrShUpdated()
+    {
+        if (materialThumbnailScene_ != nullptr)
+        {
+            materialThumbnailScene_->UpdateHDRSH();
+        }
+        if (meshThumbnailScene_ != nullptr)
+        {
+            meshThumbnailScene_->UpdateHDRSH();
+        }
+
+        auto enqueueExisting = [](const std::vector<std::unique_ptr<RenderImage>>& images,
+                                  std::vector<uint32_t>& pending)
+        {
+            for (uint32_t index = 0; index < images.size(); ++index)
+            {
+                if (images[index] == nullptr)
+                {
+                    continue;
+                }
+                if (std::find(pending.begin(), pending.end(), index) == pending.end())
+                {
+                    pending.push_back(index);
+                }
+            }
+        };
+
+        enqueueExisting(materialThumbnailImages_, pendingMaterialThumbnails_);
+        enqueueExisting(meshThumbnailImages_, pendingMeshThumbnails_);
+        if (thumbnailRenderView_ != nullptr)
+        {
+            thumbnailRenderView_->InvalidateTemporalHistory();
+        }
+    }
+
     void AssetThumbnailRenderer::OnSwapChainResourcesInvalidated()
     {
         thumbnailTarget_.ResetSwapChainResources(/*releaseSampledOutput*/ false);
@@ -178,8 +213,8 @@ namespace Vulkan
         Assets::EnvironmentSetting env;
         env.Reset();
         env.HasSky = true;
-        env.HasSun = false;
-        env.SunIntensity = 1000.0f;
+        env.HasSun = true;
+        env.SunIntensity = 500.0f;
         env.SunRotation = 0.35f;
         env.SkyIntensity = 300.0f;
         materialThumbnailScene_->SetEnvSettings(env);
@@ -271,7 +306,7 @@ namespace Vulkan
         Assets::EnvironmentSetting env;
         env.Reset();
         env.HasSky = true;
-        env.HasSun = false;
+        env.HasSun = true;
         env.SunIntensity = 500.0f;
         env.SunRotation = 0.35f;
         env.SkyIntensity = 300.0f;
@@ -397,6 +432,7 @@ namespace Vulkan
 
         materialThumbnailScene_->UpdateAllMaterials();
         materialThumbnailScene_->UpdateNodes();
+        materialThumbnailScene_->UpdateHDRSH();
         const Assets::UniformBufferObject previewCamera = BuildViewCameraUbo({
             .scene = *materialThumbnailScene_,
             .camera = materialThumbnailScene_->GetRenderCamera(),
@@ -497,6 +533,7 @@ namespace Vulkan
 
         meshThumbnailScene_->UpdateAllMaterials();
         meshThumbnailScene_->UpdateNodes();
+        meshThumbnailScene_->UpdateHDRSH();
         const Assets::UniformBufferObject previewCamera = BuildViewCameraUbo({
             .scene = *meshThumbnailScene_,
             .camera = meshThumbnailScene_->GetRenderCamera(),

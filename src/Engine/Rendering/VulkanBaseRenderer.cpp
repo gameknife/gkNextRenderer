@@ -541,6 +541,14 @@ namespace Vulkan
         resetUpscalerHistory_ = true;
     }
 
+    void VulkanBaseRenderer::OnHdrShUpdated()
+    {
+        if (renderViewServices_)
+        {
+            renderViewServices_->OnHdrShUpdated();
+        }
+    }
+
     Rendering::Upscaler::FFrameGenerationState VulkanBaseRenderer::GetFrameGenerationState() const
     {
         return upscaler_ ? upscaler_->FrameGenerationState() : Rendering::Upscaler::FFrameGenerationState{};
@@ -1124,6 +1132,7 @@ namespace Vulkan
         {
             return;
         }
+        renderViews_->ClearSchedule();
 
         spdlog::stopwatch profileTimer;
         auto logProfile = [&profileTimer](const char* label)
@@ -1227,6 +1236,7 @@ namespace Vulkan
         {
             return;
         }
+        renderViews_->ClearSchedule();
 
         if (upscaler_)
         {
@@ -1905,6 +1915,10 @@ namespace Vulkan
         auto renderer = logicRenderers_.renderers.find(type);
         if (renderer != logicRenderers_.renderers.end())
         {
+            if (ctx_.device && frame_.swapChain)
+            {
+                EnsureLogicRendererSwapChain(type, *renderer->second);
+            }
             return renderer->second.get();
         }
 
@@ -2314,6 +2328,10 @@ namespace Vulkan
 
     void VulkanBaseRenderer::OnPreLoadScene()
     {
+        if (renderViews_)
+        {
+            renderViews_->ClearSchedule();
+        }
         if (caps_.supportRayTracing)
         {
             DeleteAccelerationStructures();

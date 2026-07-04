@@ -119,6 +119,18 @@ namespace Vulkan
         }
     }
 
+    void MaterialPreviewRenderer::OnHdrShUpdated()
+    {
+        if (previewScene_ != nullptr)
+        {
+            previewScene_->UpdateHDRSH();
+        }
+        if (previewView_ != nullptr)
+        {
+            previewView_->InvalidateTemporalHistory();
+        }
+    }
+
     void MaterialPreviewRenderer::OnSwapChainResourcesInvalidated()
     {
         target_.ResetSwapChainResources(/*releaseSampledOutput*/ false);
@@ -304,6 +316,7 @@ namespace Vulkan
             return false;
         }
 
+        previewScene_->UpdateHDRSH();
         const Assets::UniformBufferObject previewCamera = BuildViewCameraUbo({
             .scene = *previewScene_,
             .camera = previewScene_->GetRenderCamera(),
