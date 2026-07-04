@@ -124,7 +124,9 @@ namespace NextCVar
                      "Minimum Gaussian splat depth-sort bucket count; renderer raises it up to 16K for large scenes");
         GK_CVAR_UINT("r.splat.maxCount", settings, SplatMaxCount, 0, ECVarFlags::Archive,
                      "Maximum Gaussian splats processed per frame (0=all)");
-        GK_CVAR_FLOAT("r.splat.sigma", settings, SplatSigma, 3.0f, ECVarFlags::Archive,
+        GK_CVAR_BOOL("r.splat.sortCache", settings, SplatSortCache, true, ECVarFlags::Archive,
+                     "Reuse Gaussian splat sort output while camera and sort-relevant model state are unchanged");
+        GK_CVAR_FLOAT("r.splat.sigma", settings, SplatSigma, 2.5f, ECVarFlags::Archive,
                       "Gaussian billboard radius in standard deviations (clamped to 1-4)");
         GK_CVAR_BOOL("r.splat.forceAA", settings, SplatForceAA, true, ECVarFlags::Archive,
                      "Force Gaussian splat antialias opacity compensation");

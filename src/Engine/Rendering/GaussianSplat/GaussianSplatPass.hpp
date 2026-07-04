@@ -51,15 +51,25 @@ namespace Vulkan::GaussianSplat
         std::unique_ptr<DeviceMemory> bucketCountMemory_;
         std::unique_ptr<Buffer> bucketOffsetBuffer_;
         std::unique_ptr<DeviceMemory> bucketOffsetMemory_;
-        std::unique_ptr<Buffer> bucketCursorBuffer_;
-        std::unique_ptr<DeviceMemory> bucketCursorMemory_;
+        std::unique_ptr<Buffer> splatBucketBuffer_;
+        std::unique_ptr<DeviceMemory> splatBucketMemory_;
+        std::unique_ptr<Buffer> groupBucketCountBuffer_;
+        std::unique_ptr<DeviceMemory> groupBucketCountMemory_;
+        std::unique_ptr<Buffer> groupBucketOffsetBuffer_;
+        std::unique_ptr<DeviceMemory> groupBucketOffsetMemory_;
         std::unique_ptr<Buffer> drawIndirectBuffer_;
         std::unique_ptr<DeviceMemory> drawIndirectMemory_;
         std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> histogramPipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> prefixPipeline_;
+        std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> groupScanPipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> scatterPipeline_;
         std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> composePipeline_;
         uint32_t splatCount_ = 0;
         uint32_t modelCount_ = 0;
+        uint32_t sortBucketCapacity_ = 0;
+        uint32_t sortGroupCountCapacity_ = 0;
+        uint64_t currentSortModelStateHash_ = 0;
+        uint64_t lastSortCacheKey_ = 0;
+        bool sortCacheValid_ = false;
     };
 }
