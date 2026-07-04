@@ -78,12 +78,7 @@ namespace Vulkan
         }
 
         auto& resources = views_[viewIndex];
-        const bool changed = !resources.cameraOverride.has_value() ||
-            std::memcmp(&resources.cameraOverride->ModelView, &camera.ModelView, sizeof(glm::mat4)) != 0 ||
-            resources.cameraOverride->FieldOfView != camera.FieldOfView ||
-            resources.cameraOverride->NearPlane != camera.NearPlane ||
-            resources.cameraOverride->FarPlane != camera.FarPlane;
-        if (changed && resources.view != nullptr)
+        if (!resources.cameraOverride.has_value() && resources.view != nullptr)
         {
             resources.view->InvalidateTemporalHistory();
         }
@@ -95,6 +90,10 @@ namespace Vulkan
         if (viewIndex >= kMaxSecondaryViews)
         {
             return;
+        }
+        if (views_[viewIndex].view != nullptr && views_[viewIndex].cameraOverride.has_value())
+        {
+            views_[viewIndex].view->InvalidateTemporalHistory();
         }
         views_[viewIndex].cameraOverride.reset();
     }

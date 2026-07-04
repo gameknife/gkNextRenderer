@@ -90,6 +90,7 @@ namespace
     constexpr const char* kUiFragmentShaderPath = "assets/shaders/UI.ImGui.frag.slang.spv";
     constexpr const char* kUiFontAtlasTextureName = "__imgui_font_atlas__";
     constexpr float kUiHdrReferenceWhiteNit = 203.0f;
+    constexpr uint32_t kUiTextureFlagRawOutput = 1u << 0u;
 
     struct UiPushConstants
     {
@@ -108,6 +109,7 @@ namespace
         ImU32 color = 0;
         float clipRect[4]{};
         uint32_t textureIndex = 0;
+        uint32_t textureFlags = 0;
     };
 
     struct UiRendererRenderState
@@ -181,7 +183,7 @@ VkPipeline CreateUiGraphicsPipeline(const Vulkan::Device& device, VkPipelineLayo
     vertexBinding.stride = sizeof(UiBatchedVertex);
     vertexBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-    std::array<VkVertexInputAttributeDescription, 5> vertexAttributes{};
+    std::array<VkVertexInputAttributeDescription, 6> vertexAttributes{};
     vertexAttributes[0].location = 0;
     vertexAttributes[0].binding = 0;
     vertexAttributes[0].format = VK_FORMAT_R32G32_SFLOAT;
@@ -202,6 +204,10 @@ VkPipeline CreateUiGraphicsPipeline(const Vulkan::Device& device, VkPipelineLayo
     vertexAttributes[4].binding = 0;
     vertexAttributes[4].format = VK_FORMAT_R32_UINT;
     vertexAttributes[4].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, textureIndex));
+    vertexAttributes[5].location = 5;
+    vertexAttributes[5].binding = 0;
+    vertexAttributes[5].format = VK_FORMAT_R32_UINT;
+    vertexAttributes[5].offset = static_cast<uint32_t>(offsetof(UiBatchedVertex, textureFlags));
 
     return Vulkan::GraphicsPipelineBuilder(device)
         .SetShaders(vertShader, fragShader)
@@ -399,20 +405,22 @@ void UserInterface::OnDestroySurface()
     uiRenderBuffers_.clear();
 }
 
-ImTextureID UserInterface::EncodeBindlessTextureId(uint32_t textureIndex)
+ImTextureID UserInterface::EncodeBindlessTextureId(uint32_t textureIndex, uint32_t textureFlags)
 {
-    return (ImTextureID)(static_cast<intptr_t>(textureIndex + 1u));
+    const uint64_t encoded = (static_cast<uint64_t>(textureFlags) << 32u) | static_cast<uint64_t>(textureIndex + 1u);
+    return (ImTextureID)(static_cast<intptr_t>(encoded));
 }
 
-bool UserInterface::DecodeBindlessTextureId(ImTextureID textureId, uint32_t& outTextureIndex)
+bool UserInterface::DecodeBindlessTextureId(ImTextureID textureId, uint32_t& outTextureIndex, uint32_t& outTextureFlags)
 {
     const uint64_t rawValue = static_cast<uint64_t>((intptr_t)textureId);
-    if (rawValue == 0)
+    const uint64_t encodedIndex = rawValue & 0xFFFFFFFFull;
+    if (encodedIndex == 0)
     {
         return false;
     }
 
-    const uint64_t textureIndex = rawValue - 1u;
+    const uint64_t textureIndex = encodedIndex - 1u;
     const auto* texturePool = Assets::GlobalTexturePool::GetInstance();
     // Allow registered textures and any explicitly-bound bindless slot (e.g. render-view outputs
     // bound above the registered range via BindSampleTexture).
@@ -422,6 +430,7 @@ bool UserInterface::DecodeBindlessTextureId(ImTextureID textureId, uint32_t& out
     }
 
     outTextureIndex = static_cast<uint32_t>(textureIndex);
+    outTextureFlags = static_cast<uint32_t>(rawValue >> 32u);
     return true;
 }
 
@@ -472,6 +481,11 @@ ImTextureID UserInterface::RequestImTextureId(uint32_t globalTextureId)
     }
 
     return EncodeBindlessTextureId(globalTextureId);
+}
+
+ImTextureID UserInterface::RequestImTextureIdRawOutput(uint32_t bindlessSampleSlot)
+{
+    return EncodeBindlessTextureId(bindlessSampleSlot, kUiTextureFlagRawOutput);
 }
 
 ImTextureID UserInterface::RequestImTextureByName(const std::string& name)
@@ -752,7 +766,8 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
             }
 
             uint32_t textureIndex = fontTextureIndex_;
-            if (!DecodeBindlessTextureId(drawCmd->GetTexID(), textureIndex))
+            uint32_t textureFlags = 0;
+            if (!DecodeBindlessTextureId(drawCmd->GetTexID(), textureIndex, textureFlags))
             {
                 continue;
             }
@@ -813,6 +828,7 @@ void UserInterface::RenderDrawData(ImDrawData* drawData, VkCommandBuffer command
                 batchedVertex.clipRect[2] = clipMaxX;
                 batchedVertex.clipRect[3] = clipMaxY;
                 batchedVertex.textureIndex = textureIndex;
+                batchedVertex.textureFlags = textureFlags;
             }
         }
     }
