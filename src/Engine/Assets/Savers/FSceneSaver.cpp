@@ -9,6 +9,7 @@
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Components/SceneReferenceComponent.h"
 
 #include <numeric>
 
@@ -150,6 +151,10 @@ namespace
     {
         for (const auto& node : scene.Nodes())
         {
+            if (node->IsSceneReferenceInternal())
+            {
+                continue;
+            }
             auto renderComp = node->GetComponent<Runtime::RenderComponent>();
             if (!renderComp || !renderComp->IsDrawable())
             {
@@ -461,6 +466,11 @@ namespace
         const auto& models = scene.Models();
         for (uint32_t modelIdx = 0; modelIdx < models.size(); ++modelIdx)
         {
+            if (!ctx.ModelRenderComponents.contains(modelIdx))
+            {
+                continue;
+            }
+
             const Model& assetModel = models[modelIdx];
             if (assetModel.CPUVertices().empty())
             {
@@ -547,6 +557,12 @@ namespace
         for (size_t nodeIdx = 0; nodeIdx < nodes.size(); ++nodeIdx)
         {
             const auto& node = nodes[nodeIdx];
+            if (node->IsSceneReferenceInternal())
+            {
+                continue;
+            }
+
+            auto sceneReference = node->GetComponent<Runtime::SceneReferenceComponent>();
             tinygltf::Node gltfNode;
             gltfNode.name = node->GetName();
 
@@ -557,24 +573,36 @@ namespace
             gltfNode.rotation = {rotation.x, rotation.y, rotation.z, rotation.w};
             gltfNode.scale = {scale.x, scale.y, scale.z};
 
-            if (auto cameraIt = ctx.CameraNodeNameToIndex.find(node->GetName()); cameraIt != ctx.CameraNodeNameToIndex.end())
+            if (!sceneReference)
             {
-                gltfNode.camera = cameraIt->second;
-            }
-
-            auto renderComp = node->GetComponent<Runtime::RenderComponent>();
-            if (renderComp && renderComp->IsDrawable())
-            {
-                if (auto meshIt = ctx.MeshIndexMap.find(renderComp->GetModelId()); meshIt != ctx.MeshIndexMap.end())
+                if (auto cameraIt = ctx.CameraNodeNameToIndex.find(node->GetName());
+                    cameraIt != ctx.CameraNodeNameToIndex.end())
                 {
-                    gltfNode.mesh = meshIt->second;
+                    gltfNode.camera = cameraIt->second;
+                }
+
+                auto renderComp = node->GetComponent<Runtime::RenderComponent>();
+                if (renderComp && renderComp->IsDrawable())
+                {
+                    if (auto meshIt = ctx.MeshIndexMap.find(renderComp->GetModelId()); meshIt != ctx.MeshIndexMap.end())
+                    {
+                        gltfNode.mesh = meshIt->second;
+                    }
                 }
             }
+            auto renderComp = sceneReference ? nullptr : node->GetComponent<Runtime::RenderComponent>();
 
             tinygltf::Value::Object extras;
             extras["tag"] = tinygltf::Value(node->GetTag());
             extras["layer"] = tinygltf::Value(node->GetLayer());
-            if (renderComp)
+            if (sceneReference)
+            {
+                extras["gkSceneReference"] = tinygltf::Value(tinygltf::Value::Object{
+                    {"version", tinygltf::Value(1)},
+                    {"asset", tinygltf::Value(sceneReference->GetAssetPath())},
+                });
+            }
+            else if (renderComp)
             {
                 extras["visible"] = tinygltf::Value(renderComp->GetVisible());
                 extras["castShadows"] = tinygltf::Value(renderComp->GetCastShadows());
@@ -584,16 +612,31 @@ namespace
             gltfNode.extras = tinygltf::Value(extras);
 
             ctx.Gltf.nodes.push_back(gltfNode);
-            ctx.NodeIndexMap[node.get()] = static_cast<int>(nodeIdx);
+            ctx.NodeIndexMap[node.get()] = static_cast<int>(ctx.Gltf.nodes.size() - 1);
         }
 
         for (size_t nodeIdx = 0; nodeIdx < nodes.size(); ++nodeIdx)
         {
-            for (const auto& child : nodes[nodeIdx]->Children())
+            const auto& node = nodes[nodeIdx];
+            if (node->IsSceneReferenceInternal())
+            {
+                continue;
+            }
+            auto parentIt = ctx.NodeIndexMap.find(node.get());
+            if (parentIt == ctx.NodeIndexMap.end())
+            {
+                continue;
+            }
+            if (node->GetComponent<Runtime::SceneReferenceComponent>())
+            {
+                continue;
+            }
+
+            for (const auto& child : node->Children())
             {
                 if (auto found = ctx.NodeIndexMap.find(child.get()); found != ctx.NodeIndexMap.end())
                 {
-                    ctx.Gltf.nodes[nodeIdx].children.push_back(found->second);
+                    ctx.Gltf.nodes[parentIt->second].children.push_back(found->second);
                 }
             }
         }
@@ -621,11 +664,14 @@ namespace
         tinygltf::Scene gltfScene;
         gltfScene.name = "Scene";
         gltfScene.extras = SerializeEnvironmentExtras(scene.GetEnvironmentStrings());
-        for (size_t nodeIdx = 0; nodeIdx < scene.Nodes().size(); ++nodeIdx)
+        for (const auto& node : scene.Nodes())
         {
-            if (scene.Nodes()[nodeIdx]->GetParent() == nullptr)
+            if (node->GetParent() == nullptr)
             {
-                gltfScene.nodes.push_back(static_cast<int>(nodeIdx));
+                if (auto found = ctx.NodeIndexMap.find(node.get()); found != ctx.NodeIndexMap.end())
+                {
+                    gltfScene.nodes.push_back(found->second);
+                }
             }
         }
         ctx.Gltf.scenes.push_back(gltfScene);

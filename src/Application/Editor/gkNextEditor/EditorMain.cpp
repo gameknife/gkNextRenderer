@@ -16,21 +16,26 @@
 #include "Core/SceneSavePolicy.hpp"
 #include "Engine/Runtime/Command/DeleteNodesCommand.hpp"
 #include "Engine/Runtime/Command/DuplicateNodesCommand.hpp"
+#include "Engine/Runtime/Scene/SceneList.hpp"
 
 #include <spdlog/spdlog.h>
 #include "Modules/LDrawLoader/LDrawModule.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
+#include "Modules/SplatLoader/SplatModule.hpp"
 #include "Modules/NextQuickJS/NextQuickJSModule.hpp"
 #include "Application/Common/DemoScenes.hpp"
 #include "Application/Editor/Common/MultiViewportBackend.hpp"
 
+#include <algorithm>
 #include <cfloat>
+#include <cctype>
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
                                                          NextEngine* engine)
 {
     Modules::LDraw::Register();
     Modules::Scad::Register();
+    Modules::Splat::Register();
     AppCommon::RegisterDemoScenes();
     return std::make_unique<EditorGameInstance>(config, options, engine);
 }
@@ -120,6 +125,31 @@ void EditorGameInstance::OnInit()
                                 const std::string scenePath(args);
                                 ctx.engine.RequestLoadScene({.filename = scenePath, .append = true});
                                 PushRecentScene(GetEditorInterface().GetEditorUiState(), scenePath);
+                                return true;
+                            });
+    actions_.RegisterAction(EEditorAction::IO_AddSceneReference,
+                            [this](EditorContext& ctx, std::string_view args) -> bool
+                            {
+                                const std::string currentScenePath =
+                                    GetEditorInterface().GetEditorUiState().currentScenePath;
+                                if (!currentScenePath.empty())
+                                {
+                                    const std::string ext = std::filesystem::path(currentScenePath).extension().string();
+                                    const std::string lowerExt = [&ext]()
+                                    {
+                                        std::string result = ext;
+                                        std::transform(result.begin(), result.end(), result.begin(),
+                                                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                                        return result;
+                                    }();
+                                    if (lowerExt != ".gltf" && lowerExt != ".glb")
+                                    {
+                                        SPDLOG_WARN("Scene references can only be authored in glTF/GLB host scenes");
+                                        return false;
+                                    }
+                                }
+
+                                ctx.engine.RequestAddSceneReference(std::string(args), glm::vec3(0.0f));
                                 return true;
                             });
     actions_.RegisterAction(EEditorAction::IO_LoadHDRI,

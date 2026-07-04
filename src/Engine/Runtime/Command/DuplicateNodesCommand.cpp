@@ -4,7 +4,10 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Components/SceneReferenceComponent.h"
 #include "Engine/Runtime/Command/SelectionCommandUtils.hpp"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.h"
 
 #include <algorithm>
@@ -84,6 +87,7 @@ bool DuplicateNodesCommand::Execute()
     }
 
     newInstanceIds_.clear();
+    bool duplicatedReference = false;
     if (duplicateEntries_.empty())
     {
         duplicateEntries_.reserve(uniqueSourceIds_.size());
@@ -95,20 +99,42 @@ bool DuplicateNodesCommand::Execute()
                 continue;
             }
 
-            const uint32_t newId = scene_->GenerateInstanceId();
-            auto clone = CloneNode(*sourceNode, newId);
-
             std::shared_ptr<Assets::Node> parent;
             if (Assets::Node* sourceParent = sourceNode->GetParent())
             {
                 parent = scene_->GetNodeSharedByInstanceId(sourceParent->GetInstanceId());
+            }
+
+            std::shared_ptr<Assets::Node> clone;
+            if (auto sceneReference = sourceNode->GetComponent<Runtime::SceneReferenceComponent>())
+            {
+                clone = Runtime::Scene::SceneList::AddSceneReferenceToScene(
+                    *scene_, sceneReference->GetAssetPath(), sourceNode->Translation());
+                if (!clone)
+                {
+                    continue;
+                }
+                duplicatedReference = true;
+                clone->SetName(sourceNode->GetName() + "_copy");
+                clone->SetRotation(sourceNode->Rotation());
+                clone->SetScale(sourceNode->Scale());
+                clone->RecalcTransform();
                 if (parent)
                 {
                     clone->SetParent(parent);
                 }
             }
+            else
+            {
+                clone = CloneNode(*sourceNode, scene_->GenerateInstanceId());
+                if (parent)
+                {
+                    clone->SetParent(parent);
+                }
+                scene_->AddNode(clone);
+            }
 
-            scene_->AddNode(clone);
+            const uint32_t newId = clone->GetInstanceId();
             duplicateEntries_.push_back(FDuplicateEntry{sourceId, newId, parent, clone});
             newInstanceIds_.push_back(newId);
         }
@@ -123,12 +149,35 @@ bool DuplicateNodesCommand::Execute()
                 continue;
             }
 
-            if (entry.parent)
+            if (auto sceneReference = entry.newNode->GetComponent<Runtime::SceneReferenceComponent>())
             {
-                entry.newNode->SetParent(entry.parent);
+                auto recreated = Runtime::Scene::SceneList::AddSceneReferenceToScene(
+                    *scene_, sceneReference->GetAssetPath(), entry.newNode->Translation());
+                if (!recreated)
+                {
+                    continue;
+                }
+                duplicatedReference = true;
+                recreated->SetName(entry.newNode->GetName());
+                recreated->SetRotation(entry.newNode->Rotation());
+                recreated->SetScale(entry.newNode->Scale());
+                recreated->RecalcTransform();
+                if (entry.parent)
+                {
+                    recreated->SetParent(entry.parent);
+                }
+                entry.newInstanceId = recreated->GetInstanceId();
+                entry.newNode = recreated;
             }
+            else
+            {
+                if (entry.parent)
+                {
+                    entry.newNode->SetParent(entry.parent);
+                }
 
-            scene_->AddNode(entry.newNode);
+                scene_->AddNode(entry.newNode);
+            }
             newInstanceIds_.push_back(entry.newInstanceId);
         }
     }
@@ -140,6 +189,13 @@ bool DuplicateNodesCommand::Execute()
 
     scene_->SetSelection(newInstanceIds_);
     scene_->MarkDirty();
+    if (duplicatedReference)
+    {
+        if (NextEngine* engine = NextEngine::GetInstance())
+        {
+            engine->RequestSceneGpuRefresh();
+        }
+    }
     return true;
 }
 
@@ -150,13 +206,26 @@ bool DuplicateNodesCommand::Undo()
         return false;
     }
 
+    bool removedReference = false;
     for (auto it = duplicateEntries_.rbegin(); it != duplicateEntries_.rend(); ++it)
     {
-        scene_->RemoveNodeByInstanceId(it->newInstanceId);
+        if (it->newNode && it->newNode->GetComponent<Runtime::SceneReferenceComponent>())
+        {
+            removedReference = true;
+        }
+        std::shared_ptr<Assets::Node> parent;
+        scene_->RemoveNodeHierarchy(it->newInstanceId, parent);
     }
 
     RestoreSelection();
     scene_->MarkDirty();
+    if (removedReference)
+    {
+        if (NextEngine* engine = NextEngine::GetInstance())
+        {
+            engine->RequestSceneGpuRefresh();
+        }
+    }
     return true;
 }
 

@@ -160,6 +160,8 @@ public:
 
     // Scene and command operations
     void RequestLoadScene(FSceneLoadRequest request);
+    void RequestAddSceneReference(std::string assetPath, glm::vec3 translation);
+    void RequestSceneGpuRefresh();
     Runtime::Command::CommandHistory& GetCommandHistory() { return commandHistory_; }
     const Runtime::Command::CommandHistory& GetCommandHistory() const { return commandHistory_; }
 

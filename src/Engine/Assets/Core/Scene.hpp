@@ -80,7 +80,9 @@ namespace Assets
         std::vector<std::shared_ptr<Node>>& Nodes() { return nodes_; }
         const std::vector<std::shared_ptr<Node>>& Nodes() const { return nodes_; }
         const std::vector<Model>& Models() const { return models_; }
+        std::vector<Model>& MutableModels() { return models_; }
         const std::vector<FGaussianSplatData>& GaussianSplats() const { return gaussianSplats_; }
+        std::vector<FGaussianSplatData>& MutableGaussianSplats() { return gaussianSplats_; }
         bool HasGaussianSplats() const { return !gaussianSplats_.empty(); }
         void SetGaussianSplats(std::vector<FGaussianSplatData>&& splats) { gaussianSplats_ = std::move(splats); }
         std::vector<FMaterial>& Materials() { return materials_; }
@@ -131,6 +133,7 @@ namespace Assets
         void RemoveFromSelection(uint32_t id) const;
         void ToggleSelection(uint32_t id) const;
         bool IsSelected(uint32_t id) const;
+        uint32_t ResolveEditableNodeId(uint32_t id) const;
         uint32_t GetHoveredId() const { return hoveredId_; }
         void SetHoveredId(uint32_t id) const;
         void ClearHoveredId() const;

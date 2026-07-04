@@ -1,13 +1,18 @@
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
+#include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/Core/GaussianSplat.hpp"
 #include "Engine/Assets/Loaders/FSceneLoader.h"
 #include "Engine/Assets/Loaders/LoaderRegistry.hpp"
+#include "Engine/Runtime/Components/GaussianSplatComponent.h"
+#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Components/SceneReferenceComponent.h"
 
 #include <algorithm>
 #include <cctype>
+#include <unordered_map>
 
 
 using namespace glm;
@@ -36,6 +41,72 @@ namespace
         return std::find(kBuiltinSceneExtensions.begin(), kBuiltinSceneExtensions.end(), extension)
             != kBuiltinSceneExtensions.end();
     }
+
+    bool IsReferenceLeafOrHostExtension(const std::filesystem::path& path)
+    {
+        const std::string filename = ToLowerCopy(path.filename().string());
+        if (filename == "meta.json")
+        {
+            return true;
+        }
+
+        const std::string ext = ToLowerCopy(path.extension().string());
+        return ext == ".gltf" || ext == ".glb" || ext == ".scad" || ext == ".sog" ||
+            ext == ".ldr" || ext == ".mpd";
+    }
+
+    std::string CanonicalCycleKey(std::string path)
+    {
+        std::replace(path.begin(), path.end(), '\\', '/');
+        path = Utilities::FileHelper::NormalizePathString(path);
+#if WIN32
+        path = ToLowerCopy(path);
+#endif
+        return path;
+    }
+
+    bool NormalizeReferenceAssetPath(const std::string& input, std::string& outPath, std::string& outError)
+    {
+        std::string normalizedInput = input;
+        std::replace(normalizedInput.begin(), normalizedInput.end(), '\\', '/');
+
+        const std::filesystem::path rawPath(normalizedInput);
+        if (rawPath.is_absolute())
+        {
+            outError = "Scene references must use relative assets/ paths";
+            return false;
+        }
+
+        outPath = Utilities::FileHelper::NormalizePathString(normalizedInput);
+        if (outPath.empty() || outPath.find("..") != std::string::npos)
+        {
+            outError = "Scene reference path cannot be empty or contain '..'";
+            return false;
+        }
+        if (outPath.rfind("assets/", 0) != 0)
+        {
+            outError = "Scene reference path must start with assets/";
+            return false;
+        }
+        return true;
+    }
+
+    uint32_t GenerateInstanceIdFromNodes(const std::vector<std::shared_ptr<Assets::Node>>& nodes)
+    {
+        uint32_t maxId = 0;
+        for (const auto& node : nodes)
+        {
+            maxId = std::max(maxId, node->GetInstanceId());
+        }
+        return nodes.empty() ? 0 : maxId + 1;
+    }
+
+    struct FSceneReferenceLoadContext
+    {
+        std::vector<std::string> stack;
+        uint32_t depth = 0;
+        uint32_t maxDepth = 16;
+    };
 
     // Scene list grouping: procedural first, then glTF, then registered
     // formats in their registration order.
@@ -224,11 +295,14 @@ int32_t SceneList::AddExternalScene(std::string absPath)
     return static_cast<int32_t>(AllScenes.size() - 1);
 }
 
-bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& camera, std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Assets::Model>& models,
-                          std::vector<Assets::FMaterial>& materials,
-                          std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks,
-                          std::vector<Assets::Skeleton>& skeletons,
-                          std::vector<Assets::FGaussianSplatData>* splats)
+namespace
+{
+bool LoadSceneRaw(std::string filename, Assets::EnvironmentSetting& camera,
+                  std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Assets::Model>& models,
+                  std::vector<Assets::FMaterial>& materials,
+                  std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks,
+                  std::vector<Assets::Skeleton>& skeletons,
+                  std::vector<Assets::FGaussianSplatData>* splats)
 {
     std::filesystem::path filepath = filename;
     std::string ext = ToLowerCopy(filepath.extension().string());
@@ -270,6 +344,281 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
 
     SPDLOG_ERROR("No scene loader registered for extension '{}': {}", ext, filename);
     return false;
+}
+
+void ResolveSceneReferences(Assets::EnvironmentSetting& camera, std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                            std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials,
+                            std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks,
+                            std::vector<Assets::Skeleton>& skeletons,
+                            std::vector<Assets::FGaussianSplatData>* splats,
+                            FSceneReferenceLoadContext& context);
+
+bool ResolveSceneReferenceProxy(const std::shared_ptr<Assets::Node>& proxy, Assets::EnvironmentSetting& camera,
+                                std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                                std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials,
+                                std::vector<Assets::LightObject>& lights,
+                                std::vector<Assets::AnimationTrack>& tracks,
+                                std::vector<Assets::Skeleton>& skeletons,
+                                std::vector<Assets::FGaussianSplatData>* splats,
+                                FSceneReferenceLoadContext& context)
+{
+    auto sceneReference = proxy->GetComponent<Runtime::SceneReferenceComponent>();
+    if (!sceneReference)
+    {
+        return false;
+    }
+
+    auto fail = [&sceneReference](Runtime::ESceneReferenceStatus status, const std::string& error)
+    {
+        sceneReference->SetStatus(status);
+        sceneReference->SetError(error);
+        sceneReference->SetLoadedNodeCount(0);
+        SPDLOG_WARN("Scene reference failed: {}", error);
+        return false;
+    };
+
+    std::string assetPath;
+    std::string error;
+    if (!NormalizeReferenceAssetPath(sceneReference->GetAssetPath(), assetPath, error))
+    {
+        return fail(Runtime::ESceneReferenceStatus::Unsupported, error);
+    }
+
+    const std::filesystem::path assetFsPath(assetPath);
+    if (!IsReferenceLeafOrHostExtension(assetFsPath))
+    {
+        return fail(Runtime::ESceneReferenceStatus::Unsupported,
+                    fmt::format("Unsupported scene reference extension: {}", assetFsPath.extension().string()));
+    }
+
+    const std::string cycleKey = CanonicalCycleKey(assetPath);
+    if (std::find(context.stack.begin(), context.stack.end(), cycleKey) != context.stack.end())
+    {
+        return fail(Runtime::ESceneReferenceStatus::CycleDetected,
+                    fmt::format("Scene reference cycle detected at {}", assetPath));
+    }
+    if (context.depth >= context.maxDepth)
+    {
+        return fail(Runtime::ESceneReferenceStatus::Failed,
+                    fmt::format("Scene reference nesting exceeds {}", context.maxDepth));
+    }
+
+    Assets::EnvironmentSetting localCamera;
+    std::vector<std::shared_ptr<Assets::Node>> localNodes;
+    std::vector<Assets::Model> localModels;
+    std::vector<Assets::FMaterial> localMaterials;
+    std::vector<Assets::LightObject> localLights;
+    std::vector<Assets::AnimationTrack> localTracks;
+    std::vector<Assets::Skeleton> localSkeletons;
+    std::vector<Assets::FGaussianSplatData> localSplats;
+
+    FSceneReferenceLoadContext childContext = context;
+    childContext.stack.push_back(cycleKey);
+    childContext.depth++;
+
+    if (!LoadSceneRaw(assetPath, localCamera, localNodes, localModels, localMaterials, localLights,
+                      localTracks, localSkeletons, &localSplats))
+    {
+        const auto status = Utilities::FileHelper::IsAssetAvailable(assetPath)
+            ? Runtime::ESceneReferenceStatus::Failed
+            : Runtime::ESceneReferenceStatus::Missing;
+        return fail(status, fmt::format("Failed to load referenced scene: {}", assetPath));
+    }
+
+    const std::string ext = ToLowerCopy(assetFsPath.extension().string());
+    if (ext == ".gltf" || ext == ".glb")
+    {
+        ResolveSceneReferences(localCamera, localNodes, localModels, localMaterials, localLights,
+                               localTracks, localSkeletons, &localSplats, childContext);
+    }
+
+    if (!localLights.empty() || !localTracks.empty() || !localSkeletons.empty())
+    {
+        SPDLOG_WARN("Scene reference '{}' currently ignores local lights/animations/skinning", assetPath);
+    }
+
+    const uint32_t modelOffset = static_cast<uint32_t>(models.size());
+    const uint32_t materialOffset = static_cast<uint32_t>(materials.size());
+    const uint32_t splatOffset = splats ? static_cast<uint32_t>(splats->size()) : 0u;
+    uint32_t nextInstanceId = GenerateInstanceIdFromNodes(nodes);
+    std::unordered_map<uint32_t, uint32_t> nodeIdRemap;
+    nodeIdRemap.reserve(localNodes.size());
+
+    for (const auto& localNode : localNodes)
+    {
+        const uint32_t oldId = localNode->GetInstanceId();
+        const uint32_t newId = nextInstanceId++;
+        nodeIdRemap[oldId] = newId;
+        localNode->SetInstanceId(newId);
+        localNode->SetSceneReferenceOwnerProxyId(proxy->GetInstanceId());
+        localNode->SetName(fmt::format("__ref_{}__/{}", proxy->GetInstanceId(), localNode->GetName()));
+
+        if (auto render = localNode->GetComponent<Runtime::RenderComponent>())
+        {
+            if (render->IsDrawable())
+            {
+                render->SetModelId(render->GetModelId() + modelOffset);
+            }
+            auto mats = render->GetMaterials();
+            for (uint32_t& materialId : mats)
+            {
+                materialId += materialOffset;
+            }
+            render->SetMaterials(mats);
+            render->SetSkinIndex(-1);
+        }
+
+        if (auto splat = localNode->GetComponent<Runtime::GaussianSplatComponent>())
+        {
+            splat->SetSplatModelId(splat->GetSplatModelId() + splatOffset);
+        }
+    }
+
+    for (auto& localSplat : localSplats)
+    {
+        if (auto found = nodeIdRemap.find(localSplat.nodeInstanceId); found != nodeIdRemap.end())
+        {
+            localSplat.nodeInstanceId = found->second;
+        }
+    }
+
+    for (const auto& localNode : localNodes)
+    {
+        if (localNode->GetParent() == nullptr)
+        {
+            localNode->SetParent(proxy);
+        }
+    }
+
+    models.reserve(models.size() + localModels.size());
+    for (auto& model : localModels)
+    {
+        models.emplace_back(std::move(model));
+    }
+    materials.reserve(materials.size() + localMaterials.size());
+    for (auto& material : localMaterials)
+    {
+        materials.emplace_back(std::move(material));
+    }
+    if (splats != nullptr)
+    {
+        splats->reserve(splats->size() + localSplats.size());
+        for (auto& splat : localSplats)
+        {
+            splats->emplace_back(std::move(splat));
+        }
+    }
+    nodes.reserve(nodes.size() + localNodes.size());
+    for (auto& node : localNodes)
+    {
+        nodes.emplace_back(std::move(node));
+    }
+
+    sceneReference->SetResolvedPath(assetPath);
+    sceneReference->SetStatus(Runtime::ESceneReferenceStatus::Loaded);
+    sceneReference->SetError({});
+    sceneReference->SetLoadedNodeCount(static_cast<uint32_t>(nodeIdRemap.size()));
+    return true;
+}
+
+void ResolveSceneReferences(Assets::EnvironmentSetting& camera, std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                            std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials,
+                            std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks,
+                            std::vector<Assets::Skeleton>& skeletons,
+                            std::vector<Assets::FGaussianSplatData>* splats,
+                            FSceneReferenceLoadContext& context)
+{
+    const size_t originalNodeCount = nodes.size();
+    for (size_t i = 0; i < originalNodeCount; ++i)
+    {
+        const auto& node = nodes[i];
+        if (!node || node->IsSceneReferenceInternal())
+        {
+            continue;
+        }
+        if (node->GetComponent<Runtime::SceneReferenceComponent>())
+        {
+            ResolveSceneReferenceProxy(node, camera, nodes, models, materials, lights, tracks, skeletons, splats, context);
+        }
+    }
+}
+
+bool LoadSceneWithReferences(std::string filename, Assets::EnvironmentSetting& camera,
+                             std::vector<std::shared_ptr<Assets::Node>>& nodes,
+                             std::vector<Assets::Model>& models,
+                             std::vector<Assets::FMaterial>& materials,
+                             std::vector<Assets::LightObject>& lights,
+                             std::vector<Assets::AnimationTrack>& tracks,
+                             std::vector<Assets::Skeleton>& skeletons,
+                             std::vector<Assets::FGaussianSplatData>* splats)
+{
+    if (!LoadSceneRaw(filename, camera, nodes, models, materials, lights, tracks, skeletons, splats))
+    {
+        return false;
+    }
+
+    FSceneReferenceLoadContext context;
+    std::string normalizedRoot;
+    std::string ignoredError;
+    context.stack.push_back(NormalizeReferenceAssetPath(filename, normalizedRoot, ignoredError)
+                                ? CanonicalCycleKey(normalizedRoot)
+                                : CanonicalCycleKey(filename));
+    ResolveSceneReferences(camera, nodes, models, materials, lights, tracks, skeletons, splats, context);
+    return true;
+}
+} // namespace
+
+bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& camera,
+                          std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Assets::Model>& models,
+                          std::vector<Assets::FMaterial>& materials,
+                          std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks,
+                          std::vector<Assets::Skeleton>& skeletons,
+                          std::vector<Assets::FGaussianSplatData>* splats)
+{
+    return LoadSceneWithReferences(std::move(filename), camera, nodes, models, materials, lights, tracks, skeletons, splats);
+}
+
+std::shared_ptr<Assets::Node> SceneList::AddSceneReferenceToScene(
+    Assets::Scene& scene, const std::string& assetPath, const glm::vec3& translation)
+{
+    std::string normalizedPath;
+    std::string error;
+    if (!NormalizeReferenceAssetPath(assetPath, normalizedPath, error))
+    {
+        SPDLOG_WARN("Cannot add scene reference '{}': {}", assetPath, error);
+        return nullptr;
+    }
+
+    const std::filesystem::path path(normalizedPath);
+    if (!IsReferenceLeafOrHostExtension(path))
+    {
+        SPDLOG_WARN("Cannot add scene reference '{}': unsupported extension", assetPath);
+        return nullptr;
+    }
+
+    std::string name = path.stem().string();
+    if (name.empty())
+    {
+        name = "Scene Reference";
+    }
+
+    auto proxy = Assets::Node::CreateNode(name, translation, glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+                                          glm::vec3(1.0f), scene.GenerateInstanceId());
+    auto sceneReference = std::make_shared<Runtime::SceneReferenceComponent>();
+    sceneReference->SetAssetPath(normalizedPath);
+    proxy->AddComponent(sceneReference);
+    scene.AddNode(proxy);
+
+    Assets::EnvironmentSetting ignoredCamera;
+    std::vector<Assets::LightObject> ignoredLights;
+    std::vector<Assets::AnimationTrack> ignoredTracks;
+    std::vector<Assets::Skeleton> ignoredSkeletons;
+    FSceneReferenceLoadContext context;
+    ResolveSceneReferenceProxy(proxy, ignoredCamera, scene.Nodes(), scene.MutableModels(), scene.Materials(),
+                               ignoredLights, ignoredTracks, ignoredSkeletons,
+                               &scene.MutableGaussianSplats(), context);
+    scene.MarkDirty();
+    return proxy;
 }
 
 }

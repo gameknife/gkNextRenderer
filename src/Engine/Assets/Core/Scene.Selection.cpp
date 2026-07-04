@@ -10,7 +10,8 @@ namespace Assets
 
         bool IsValidSelectionId(const Scene& scene, uint32_t id)
         {
-            return id != SceneSelectionState::invalidNodeId && scene.GetNodeSharedByInstanceId(id) != nullptr;
+            const uint32_t resolvedId = scene.ResolveEditableNodeId(id);
+            return resolvedId != SceneSelectionState::invalidNodeId && scene.GetNodeSharedByInstanceId(resolvedId) != nullptr;
         }
 
         const std::vector<uint32_t>& ResolveEffectiveSelection(const Scene& scene, std::vector<uint32_t>& fallback)
@@ -32,7 +33,7 @@ namespace Assets
 
     void Scene::SetSelectedId(uint32_t id) const
     {
-        selectionState_.SetSingle(id);
+        selectionState_.SetSingle(ResolveEditableNodeId(id));
         const_cast<Scene*>(this)->MarkSelectionDirty();
     }
 
@@ -43,12 +44,16 @@ namespace Assets
 
         for (uint32_t id : ids)
         {
-            if (!IsValidSelectionId(*this, id))
+            const uint32_t resolvedId = ResolveEditableNodeId(id);
+            if (!IsValidSelectionId(*this, resolvedId))
             {
                 continue;
             }
 
-            validIds.push_back(id);
+            if (std::find(validIds.begin(), validIds.end(), resolvedId) == validIds.end())
+            {
+                validIds.push_back(resolvedId);
+            }
         }
 
         selectionState_.SetMany(validIds);
@@ -63,45 +68,63 @@ namespace Assets
 
     void Scene::AddToSelection(uint32_t id) const
     {
-        if (!IsValidSelectionId(*this, id))
+        const uint32_t resolvedId = ResolveEditableNodeId(id);
+        if (!IsValidSelectionId(*this, resolvedId))
         {
             return;
         }
 
-        selectionState_.Add(id);
+        selectionState_.Add(resolvedId);
         const_cast<Scene*>(this)->MarkSelectionDirty();
     }
 
     void Scene::RemoveFromSelection(uint32_t id) const
     {
-        selectionState_.Remove(id);
+        selectionState_.Remove(ResolveEditableNodeId(id));
         const_cast<Scene*>(this)->MarkSelectionDirty();
     }
 
     void Scene::ToggleSelection(uint32_t id) const
     {
-        if (!IsValidSelectionId(*this, id))
+        const uint32_t resolvedId = ResolveEditableNodeId(id);
+        if (!IsValidSelectionId(*this, resolvedId))
         {
             return;
         }
 
-        if (selectionState_.IsSelected(id))
+        if (selectionState_.IsSelected(resolvedId))
         {
-            RemoveFromSelection(id);
+            RemoveFromSelection(resolvedId);
             return;
         }
 
-        AddToSelection(id);
+        AddToSelection(resolvedId);
     }
 
     bool Scene::IsSelected(uint32_t id) const
     {
-        return selectionState_.IsSelected(id);
+        return selectionState_.IsSelected(ResolveEditableNodeId(id));
+    }
+
+    uint32_t Scene::ResolveEditableNodeId(uint32_t id) const
+    {
+        if (id == SceneSelectionState::invalidNodeId)
+        {
+            return id;
+        }
+
+        const auto node = GetNodeSharedByInstanceId(id);
+        if (node && node->IsSceneReferenceInternal())
+        {
+            return node->GetSceneReferenceOwnerProxyId();
+        }
+        return id;
     }
 
     void Scene::SetHoveredId(uint32_t id) const
     {
-        if (!IsValidSelectionId(*this, id))
+        const uint32_t resolvedId = ResolveEditableNodeId(id);
+        if (!IsValidSelectionId(*this, resolvedId))
         {
             if (hoveredId_ != SceneSelectionState::invalidNodeId)
             {
@@ -110,9 +133,9 @@ namespace Assets
             }
             return;
         }
-        if (hoveredId_ != id)
+        if (hoveredId_ != resolvedId)
         {
-            hoveredId_ = id;
+            hoveredId_ = resolvedId;
             const_cast<Scene*>(this)->MarkSelectionDirty();
         }
     }
@@ -128,38 +151,40 @@ namespace Assets
 
     bool Scene::IsLocked(uint32_t id) const
     {
-        return lockedIds_.find(id) != lockedIds_.end();
+        return lockedIds_.find(ResolveEditableNodeId(id)) != lockedIds_.end();
     }
 
     void Scene::SetLocked(uint32_t id, bool locked) const
     {
-        if (!IsValidSelectionId(*this, id))
+        const uint32_t resolvedId = ResolveEditableNodeId(id);
+        if (!IsValidSelectionId(*this, resolvedId))
         {
             return;
         }
 
         if (locked)
         {
-            lockedIds_.insert(id);
+            lockedIds_.insert(resolvedId);
             return;
         }
 
-        lockedIds_.erase(id);
+        lockedIds_.erase(resolvedId);
     }
 
     void Scene::ToggleLocked(uint32_t id) const
     {
-        if (!IsValidSelectionId(*this, id))
+        const uint32_t resolvedId = ResolveEditableNodeId(id);
+        if (!IsValidSelectionId(*this, resolvedId))
         {
             return;
         }
 
-        if (IsLocked(id))
+        if (IsLocked(resolvedId))
         {
-            lockedIds_.erase(id);
+            lockedIds_.erase(resolvedId);
             return;
         }
-        lockedIds_.insert(id);
+        lockedIds_.insert(resolvedId);
     }
 
     bool Scene::GetSelectedNodeBounds(glm::vec3& center, float& radius) const

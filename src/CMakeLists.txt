@@ -39,6 +39,7 @@ set(UNIT_TEST_SOURCES
 	Tests/Test_LDrawConnectivity.cpp
 	Tests/Test_CVarSystem.cpp
 	Tests/Test_SceneList.cpp
+	Tests/Test_SceneReference.cpp
 	Tests/Test_ScadLoader.cpp
 	Tests/Test_SimKit.cpp
 	Tests/Test_ScadRig.cpp
@@ -671,7 +672,7 @@ if ( TARGET ScadLoader )
 endif()
 
 if ( TARGET SplatLoader )
-	foreach(t gkNextRenderer gkNextVisualTest gkNextUnitTests)
+	foreach(t gkNextRenderer gkNextVisualTest gkNextEditor gkNextUnitTests)
 		if ( TARGET ${t} )
 			target_link_libraries(${t} PRIVATE SplatLoader)
 		endif()

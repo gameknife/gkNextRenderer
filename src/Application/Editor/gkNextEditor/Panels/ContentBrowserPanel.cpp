@@ -1071,7 +1071,11 @@ namespace Editor
                                         {
                                             ctx.actions.Dispatch(ctx, EEditorAction::IO_LoadScene, assetPath);
                                         }
-                                        if (ImGui::MenuItem("Add To Scene"))
+                                        if (ImGui::MenuItem("Add As Reference"))
+                                        {
+                                            ctx.actions.Dispatch(ctx, EEditorAction::IO_AddSceneReference, assetPath);
+                                        }
+                                        if (ImGui::MenuItem("Merge Into Scene"))
                                         {
                                             ctx.actions.Dispatch(ctx, EEditorAction::IO_LoadSceneAdd, assetPath);
                                         }
