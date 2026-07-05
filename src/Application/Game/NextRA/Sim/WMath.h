@@ -162,7 +162,7 @@ namespace NextRA::Sim
         return lhs.x == rhs.x && lhs.z == rhs.z;
     }
 
-    inline FFixed CellDistance(int32_t cells)
+    inline constexpr FFixed CellDistance(int32_t cells)
     {
         return FFixed::FromInt(cells * cellSubUnits);
     }
