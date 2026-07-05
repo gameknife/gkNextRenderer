@@ -2,16 +2,9 @@ name: iOS CI
 
 on:
   pull_request:
-    branches: [main, dev, 'releases/**']
+    branches: [main]
   push:
-    branches: [main, 'releases/**']
-    paths:
-      - '.github/workflows/**'
-      - 'src/**'
-      - 'assets/shaders/**'
-      - 'tools/gnb/**'
-      - 'gnb.*'
-      - '**/CMakeLists.txt'
+    branches: [main]
 
 jobs:
   build:
@@ -21,10 +14,6 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23.x'
-      - name: Install Vulkan dependencies
-        run: |
-          brew install molten-vk
-          brew install glslang
       - name: Cache key
         id: gnb
         run: echo "key=$(./gnb.sh info --bincache-key)" >> "$GITHUB_OUTPUT"
@@ -35,10 +24,10 @@ jobs:
             .vcpkg
             .vcpkg_bincache
           key: ${{ steps.gnb.outputs.key }}-ios
-      - run: ./gnb.sh setup --vcpkg-only
+      - run: ./gnb.sh setup --skip-paks
       - run: ./gnb.sh ios --skip-codesign
       - uses: actions/cache/save@v4
-        if: github.event_name != 'pull_request'
+        if: steps.cache-vcpkg-restore.outputs.cache-hit != 'true'
         with:
           path: |
             .vcpkg

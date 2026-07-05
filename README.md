@@ -5,10 +5,10 @@
 [English](README.en.md) | [简体中文](README.md)
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/gameknife/gkNextEngine)
-![Windows CI](https://github.com/gameknife/gkNextEngine/actions/workflows/windows_self.yml/badge.svg)
-![Linux CI](https://github.com/gameknife/gkNextEngine/actions/workflows/linux_self.yml/badge.svg)
-![macOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/macos_self.yml/badge.svg)
-![Android CI](https://github.com/gameknife/gkNextEngine/actions/workflows/android_self.yml/badge.svg)
+![Windows CI](https://github.com/gameknife/gkNextEngine/actions/workflows/windows.yml/badge.svg)
+![Linux CI](https://github.com/gameknife/gkNextEngine/actions/workflows/linux.yml/badge.svg)
+![macOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/macos.yml/badge.svg)
+![Android CI](https://github.com/gameknife/gkNextEngine/actions/workflows/android.yml/badge.svg)
 ![iOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/ios.yml/badge.svg)
 
 ![Play ground](docs/gallery/4_playground.avif)

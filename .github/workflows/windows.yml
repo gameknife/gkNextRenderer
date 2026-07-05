@@ -2,32 +2,18 @@ name: Windows CI
 
 on:
   pull_request:
-    branches: [main, dev, 'releases/**']
+    branches: [main]
   push:
-    branches: [main, 'releases/**']
-    paths:
-      - '.github/workflows/**'
-      - 'src/**'
-      - 'assets/shaders/**'
-      - 'tools/gnb/**'
-      - 'gnb.*'
-      - '**/CMakeLists.txt'
+    branches: [main]
 
 jobs:
   build:
     runs-on: windows-latest
-    env:
-      SDK_VERSION: 1.4.313.2
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23.x'
-      - name: Download Vulkan SDK
-        run: Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/${env:SDK_VERSION}/windows/vulkan_sdk.exe?Human=true" -OutFile vulkan_sdk.exe -v
-      - name: Install Vulkan SDK
-        run: .\vulkan_sdk.exe --accept-licenses --default-answer --confirm-command install
-        shell: cmd
       - name: Cache key
         id: gnb
         run: echo "key=$(.\gnb.bat info --bincache-key)" >> $env:GITHUB_OUTPUT
@@ -40,17 +26,13 @@ jobs:
           key: ${{ steps.gnb.outputs.key }}
       - uses: microsoft/setup-msbuild@v2
       - name: Setup dependencies
-        run: |
-          set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
-          .\gnb.bat setup
+        run: .\gnb.bat setup
         shell: cmd
       - name: Build
-        run: |
-          set VULKAN_SDK=C:\VulkanSDK\%SDK_VERSION%
-          .\gnb.bat build
+        run: .\gnb.bat build
         shell: cmd
       - uses: actions/cache/save@v4
-        if: github.event_name != 'pull_request'
+        if: steps.cache-vcpkg-restore.outputs.cache-hit != 'true'
         with:
           path: |
             .vcpkg
