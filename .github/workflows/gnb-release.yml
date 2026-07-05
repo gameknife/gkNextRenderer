@@ -35,11 +35,8 @@ jobs:
             runner: ubuntu-24.04
             asset: gnb-linux-amd64
           - platform: macos-arm64
-            runner: macos-14
+            runner: macos-latest
             asset: gnb-macos-arm64
-          - platform: macos-amd64
-            runner: macos-13
-            asset: gnb-macos-amd64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -83,7 +80,7 @@ jobs:
         shell: pwsh
         run: >-
           ./scripts/publish-gnb.ps1
-          -Platforms windows-amd64,linux-amd64,macos-arm64,macos-amd64
+          -Platforms windows-amd64,linux-amd64,macos-arm64
           -PublishOnly
           -Version '${{ github.sha }}'
           -Repo '${{ github.repository }}'
