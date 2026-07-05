@@ -822,7 +822,6 @@ bool NextEngine::Tick(bool forcingDelta)
 
         // Hot change renderer
         {
-            SCOPED_CPU_TIMER("renderer switch");
             auto requestedRendererType =
                 ResolveRendererType(static_cast<Vulkan::ERendererType>(config_.userSettings.RendererType),
                                     renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget());
@@ -830,7 +829,6 @@ bool NextEngine::Tick(bool forcingDelta)
             {
                 config_.userSettings.RendererType = static_cast<int32_t>(requestedRendererType);
             }
-
             if (renderer_->CurrentLogicRendererType() != requestedRendererType)
             {
                 renderer_->SwitchLogicRenderer(requestedRendererType);
@@ -839,7 +837,6 @@ bool NextEngine::Tick(bool forcingDelta)
 
         // delta time calc
         {
-            SCOPED_CPU_TIMER("delta");
             const auto prevTime = frameState_.time;
             frameState_.time = GetWindow().GetTime();
             frameState_.deltaSeconds = frameState_.time - prevTime;
@@ -880,8 +877,6 @@ bool NextEngine::Tick(bool forcingDelta)
 
         {
             SCOPED_CPU_TIMER("ticked tasks");
-
-            // Remove completed ticked tasks.
             for (auto it = taskQueues_.ticked.begin(); it != taskQueues_.ticked.end();)
             {
                 if ((*it)(frameState_.deltaSeconds))
@@ -897,8 +892,6 @@ bool NextEngine::Tick(bool forcingDelta)
 
         {
             SCOPED_CPU_TIMER("delayed tasks");
-
-            // Run due delayed tasks and remove completed ones.
             for (auto it = taskQueues_.delayed.begin(); it != taskQueues_.delayed.end();)
             {
                 if (frameState_.time > it->triggerTime)
@@ -924,14 +917,13 @@ bool NextEngine::Tick(bool forcingDelta)
         }
 
         {
-            PERFORMANCEAPI_INSTRUMENT_COLOR("Engine::TickRenderer", PERFORMANCEAPI_MAKE_COLOR(255, 200, 200));
+            SCOPED_CPU_TIMER("draw frame");
             renderer_->DrawFrame();
         }
         frameState_.totalFrames = renderer_->FrameCount();
 
         if (screenShot_.hasPending)
         {
-            SCOPED_CPU_TIMER("screenshot");
             renderer_->Device().WaitIdle();
             Runtime::ScreenShot::SaveSwapChainToFile(renderer_.get(),
                                            screenShot_.pending.filename,
@@ -962,7 +954,6 @@ bool NextEngine::Tick(bool forcingDelta)
         // High quality capture: count down accumulated frames after DrawFrame
         if (screenShot_.captureFramesRemaining > 0)
         {
-            SCOPED_CPU_TIMER("hq capture");
             screenShot_.captureFramesRemaining--;
             if (screenShot_.captureFramesRemaining == 0)
             {
@@ -984,7 +975,6 @@ bool NextEngine::Tick(bool forcingDelta)
 
         // sample gamepad stats
         {
-            SCOPED_CPU_TIMER("gamepad");
             TickGamepadInput();
         }
 
@@ -999,7 +989,6 @@ bool NextEngine::Tick(bool forcingDelta)
 
         if (!renderFrameConsumers_.empty())
         {
-            SCOPED_CPU_TIMER("frame consumers tick");
             for (const auto& consumer : renderFrameConsumers_)
             {
                 consumer->Tick();

@@ -1604,279 +1604,287 @@ namespace Vulkan
             requestRecreateSwapChain_ = false;
             return;
         }
+        
+        const auto noTimeout = std::numeric_limits<uint64_t>::max();
+        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        const bool frameGenerationEnabled =
+            caps_.supportDLSSG &&
+            settings.DLSSG &&
+            NextEngine::GetInstance()->GetEngineStatus() != NextRenderer::EApplicationStatus::Loading;
+
+        frame_.streamlineFrameToken = upscaler_
+            ? upscaler_->BeginFrame(static_cast<uint32_t>(frame_.frameCount),
+                                    frameGenerationEnabled,
+                                    settings.DLSSGFrameLimitFps)
+            : Rendering::Upscaler::FFrameToken{};
+        if (upscaler_ && frame_.streamlineFrameToken)
+        {
+            upscaler_->ReflexSleep(frame_.streamlineFrameToken);
+            if (frame_.frameCount > 0 && frame_.frameCount % 60 == 0)
+            {
+                upscaler_->UpdateFrameGenerationState();
+            }
+            upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::SimulationStart,
+                                 frame_.streamlineFrameToken);
+        }
 
         {
-            SCOPED_CPU_TIMER("draw-frame");
-            const auto noTimeout = std::numeric_limits<uint64_t>::max();
-            const auto& settings = NextEngine::GetInstance()->GetUserSettings();
-            const bool frameGenerationEnabled =
-                caps_.supportDLSSG &&
-                settings.DLSSG &&
-                NextEngine::GetInstance()->GetEngineStatus() != NextRenderer::EApplicationStatus::Loading;
+            SCOPED_CPU_TIMER("prepare");
+            BeforeNextFrame();
+        }
+        if (upscaler_ && frame_.streamlineFrameToken)
+        {
+            upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::SimulationEnd,
+                                 frame_.streamlineFrameToken);
+        }
 
-            frame_.streamlineFrameToken = upscaler_
-                ? upscaler_->BeginFrame(static_cast<uint32_t>(frame_.frameCount),
-                                        frameGenerationEnabled,
-                                        settings.DLSSGFrameLimitFps)
-                : Rendering::Upscaler::FFrameToken{};
-            if (upscaler_ && frame_.streamlineFrameToken)
+        {
+            SCOPED_CPU_TIMER("hwquery");
+            ctx_.gpuTimer->FrameEnd((*frame_.commandBuffers)[frame_.currentImageIndex]);
+        }
+
+        // next frame synchronization objects
+        const auto imageAvailableSemaphore = frame_.imageAvailableSemaphores[frame_.currentFrame].Handle();
+        const auto renderFinishedSemaphore = frame_.renderFinishedSemaphores[frame_.currentFrame].Handle();
+
+        auto result = VkResult(VK_SUCCESS);
+        {
+            SCOPED_CPU_TIMER("acquire-frame");
+            result = StreamlineWrapper::AcquireNextImageKHR(ctx_.device->Handle(), frame_.swapChain->Handle(), noTimeout,
+                                                            imageAvailableSemaphore, nullptr, &frame_.currentImageIndex);
+        }
+        
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+        {
+            RecreateSwapChain();
+            return;
+        }
+
+        if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+        {
+            Throw(std::runtime_error(std::string("failed to acquire next image (") + ToString(result) + ")"));
+        }
+
+        // Wait before CPU-side uniform/stat writes and command-buffer reuse.
+        auto* const previousSubmitFence = frame_.currentFence;
+        auto* const frameSlotFence = &frame_.inFlightFences[frame_.currentFrame];
+        if (previousSubmitFence)
+        {
+            SCOPED_CPU_TIMER("fence");
+            previousSubmitFence->Wait(noTimeout);
+            frame_.completedSubmitSerial = std::max(frame_.completedSubmitSerial, frame_.currentFenceSerial);
+        }
+        if (frameSlotFence != previousSubmitFence)
+        {
+            SCOPED_CPU_TIMER("frame-slot-fence");
+            frameSlotFence->Wait(noTimeout);
+            if (frame_.currentFrame < frame_.inFlightFenceSubmitSerials.size())
             {
-                upscaler_->ReflexSleep(frame_.streamlineFrameToken);
-                if (frame_.frameCount > 0 && frame_.frameCount % 60 == 0)
+                frame_.completedSubmitSerial = std::max(
+                    frame_.completedSubmitSerial, frame_.inFlightFenceSubmitSerials[frame_.currentFrame]);
+            }
+        }
+        frame_.currentFence = frameSlotFence;
+        frame_.recordingSubmitSerial = frame_.nextSubmitSerial;
+        frame_.queuedSignalSemaphores.clear();
+        frame_.queuedSignalValues.clear();
+
+        // CPU-side node sync must run after the previous frame's GPU work has
+        // completed so the stats readback reflects finished primitives. Runtime
+        // node creation can grow the expanded primitive count, so capacity is
+        // re-checked against the freshly computed requirement right after.
+        bool needAfterUpdateScene = false;
+        {
+            SCOPED_CPU_TIMER("update nodes");
+            needAfterUpdateScene = GetScene().UpdateNodes();
+        }
+        {
+            SCOPED_CPU_TIMER("prepare gpudriven");
+            if (GetScene().EnsureGpuDrivenBufferCapacity(*ctx_.commandPool))
+            {
+                needAfterUpdateScene = true;
+            }
+        }
+        if (needAfterUpdateScene)
+        {
+            AfterUpdateScene();
+        }
+
+        {
+            SCOPED_CPU_TIMER("update uniform");
+            UpdateUniformBuffer(frame_.currentImageIndex);
+        }
+
+        const auto commandBuffer = frame_.commandBuffers->Begin(frame_.currentFrame);
+        ctx_.gpuTimer->Reset(commandBuffer);
+
+        {
+            SCOPED_GPU_TIMER("[gpu]");
+
+            {
+                SCOPED_CPU_TIMER("begin scene");
+                SCOPED_GPU_TIMER("[pre-render]");
+                BeginSceneFrame(commandBuffer, frame_.currentImageIndex);
+                skin_.updateRequests.clear();
+            }
+
+            {
+                SCOPED_CPU_TIMER("render");
+                SCOPED_GPU_TIMER("[render]");
+                Render(commandBuffer, frame_.currentImageIndex);
+            }
+
+            {
+                SCOPED_GPU_TIMER("[post-render]");
+                PostRender(commandBuffer, frame_.currentImageIndex);
+            }
+
+            if (upscaler_ && frameGenerationEnabled)
+            {
+                SCOPED_GPU_TIMER("dlssg-tag");
+                CaptureFrameGenerationHudless(commandBuffer, frame_.currentImageIndex);
+                auto inputs = BuildUpscalerFrameInputs(
+                    commandBuffer,
+                    frame_.currentImageIndex,
+                    VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+                if (frame_.currentImageIndex < frameGeneration_.hudlessImages.size())
                 {
-                    upscaler_->UpdateFrameGenerationState();
+                    inputs.hudlessColor = MakeRenderImageResource(
+                        frameGeneration_.hudlessImages[frame_.currentImageIndex].get(),
+                        VK_IMAGE_LAYOUT_GENERAL,
+                        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
                 }
-                upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::SimulationStart,
-                                     frame_.streamlineFrameToken);
+                inputs.enableDLSSG = true;
+                upscaler_->TagFrameGeneration(inputs);
             }
 
+            if (delegates_.postRender)
             {
-                SCOPED_CPU_TIMER("prepare");
-                BeforeNextFrame();
+                SCOPED_GPU_TIMER("ui");
+                delegates_.postRender(commandBuffer, frame_.currentImageIndex);
             }
+        }
+        frame_.commandBuffers->End(frame_.currentFrame);
+
+        VkSubmitInfo submitInfo = {};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+        VkCommandBuffer commandBuffers[]{commandBuffer};
+        VkSemaphore waitSemaphores[] = {imageAvailableSemaphore};
+        VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        {
+            SCOPED_CPU_TIMER("submit");
+            frame_.currentFence = &(frame_.inFlightFences[frame_.currentFrame]);
+            {
+                if (upscaler_ && frame_.streamlineFrameToken)
+                {
+                    upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::RenderSubmitStart,
+                                         frame_.streamlineFrameToken);
+                }
+
+                submitInfo.waitSemaphoreCount = 1;
+                submitInfo.pWaitSemaphores = waitSemaphores;
+                submitInfo.pWaitDstStageMask = waitStages;
+                submitInfo.commandBufferCount = 1;
+                submitInfo.pCommandBuffers = commandBuffers;
+
+                std::vector<VkSemaphore> signalSemaphores;
+                signalSemaphores.reserve(1 + frame_.queuedSignalSemaphores.size());
+                signalSemaphores.push_back(renderFinishedSemaphore);
+                signalSemaphores.insert(signalSemaphores.end(), frame_.queuedSignalSemaphores.begin(),
+                                        frame_.queuedSignalSemaphores.end());
+
+                submitInfo.signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
+                submitInfo.pSignalSemaphores = signalSemaphores.data();
+
+                std::vector<uint64_t> signalSemaphoreValues;
+                VkTimelineSemaphoreSubmitInfo timelineSubmitInfo = {};
+                if (!frame_.queuedSignalValues.empty())
+                {
+                    signalSemaphoreValues.reserve(signalSemaphores.size());
+                    signalSemaphoreValues.push_back(0);
+                    signalSemaphoreValues.insert(signalSemaphoreValues.end(), frame_.queuedSignalValues.begin(),
+                                                 frame_.queuedSignalValues.end());
+                    timelineSubmitInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+                    timelineSubmitInfo.signalSemaphoreValueCount =
+                        static_cast<uint32_t>(signalSemaphoreValues.size());
+                    timelineSubmitInfo.pSignalSemaphoreValues = signalSemaphoreValues.data();
+                    submitInfo.pNext = &timelineSubmitInfo;
+                }
+
+                frame_.currentFence->Reset();
+
+                Check(vkQueueSubmit(ctx_.device->GraphicsQueue(), 1, &submitInfo, frame_.currentFence->Handle()),
+                      "submit draw command buffer");
+                frame_.currentFenceSerial = frame_.recordingSubmitSerial;
+                if (frame_.currentFrame < frame_.inFlightFenceSubmitSerials.size())
+                {
+                    frame_.inFlightFenceSubmitSerials[frame_.currentFrame] = frame_.recordingSubmitSerial;
+                }
+                frame_.nextSubmitSerial = frame_.recordingSubmitSerial + 1;
+
+                if (upscaler_ && frame_.streamlineFrameToken)
+                {
+                    upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::RenderSubmitEnd,
+                                         frame_.streamlineFrameToken);
+                }
+            }
+        }
+
+        {
+            SCOPED_CPU_TIMER("present");
+            VkSwapchainKHR swapChains[] = {frame_.swapChain->Handle()};
+            VkPresentInfoKHR presentInfo = {};
+            presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+            presentInfo.waitSemaphoreCount = 1;
+            presentInfo.pWaitSemaphores = &renderFinishedSemaphore;
+            presentInfo.swapchainCount = 1;
+            presentInfo.pSwapchains = swapChains;
+            presentInfo.pImageIndices = &frame_.currentImageIndex;
+            presentInfo.pResults = nullptr; // Optional
+
             if (upscaler_ && frame_.streamlineFrameToken)
             {
-                upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::SimulationEnd,
+                upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::PresentStart,
                                      frame_.streamlineFrameToken);
             }
 
+            result = StreamlineWrapper::QueuePresentKHR(ctx_.device->PresentQueue(), &presentInfo);
+            static bool firstPresentLogged = false;
+            if (!firstPresentLogged && ShouldLogStartupProfile())
             {
-                SCOPED_CPU_TIMER("hwquery");
-                ctx_.gpuTimer->FrameEnd((*frame_.commandBuffers)[frame_.currentImageIndex]);
+                firstPresentLogged = true;
+                SPDLOG_INFO("[StartupProfile] first QueuePresentKHR returned at renderer frame {}", frame_.frameCount);
             }
 
-            // next frame synchronization objects
-            const auto imageAvailableSemaphore = frame_.imageAvailableSemaphores[frame_.currentFrame].Handle();
-            const auto renderFinishedSemaphore = frame_.renderFinishedSemaphores[frame_.currentFrame].Handle();
-
-            auto result = VkResult(VK_SUCCESS);
+            if (upscaler_ && frame_.streamlineFrameToken)
             {
-                SCOPED_CPU_TIMER("acquire-frame");
-                result = StreamlineWrapper::AcquireNextImageKHR(ctx_.device->Handle(), frame_.swapChain->Handle(), noTimeout,
-                                                                imageAvailableSemaphore, nullptr, &frame_.currentImageIndex);
+                upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::PresentEnd,
+                                     frame_.streamlineFrameToken);
             }
-            
+
             if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
             {
                 RecreateSwapChain();
                 return;
             }
 
-            if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+            if (result != VK_SUCCESS)
             {
-                Throw(std::runtime_error(std::string("failed to acquire next image (") + ToString(result) + ")"));
+                Throw(std::runtime_error(std::string("failed to present next image (") + ToString(result) + ")"));
             }
-
-            // Wait before CPU-side uniform/stat writes and command-buffer reuse.
-            auto* const previousSubmitFence = frame_.currentFence;
-            auto* const frameSlotFence = &frame_.inFlightFences[frame_.currentFrame];
-            if (previousSubmitFence)
-            {
-                SCOPED_CPU_TIMER("fence");
-                previousSubmitFence->Wait(noTimeout);
-                frame_.completedSubmitSerial = std::max(frame_.completedSubmitSerial, frame_.currentFenceSerial);
-            }
-            if (frameSlotFence != previousSubmitFence)
-            {
-                SCOPED_CPU_TIMER("frame-slot-fence");
-                frameSlotFence->Wait(noTimeout);
-                if (frame_.currentFrame < frame_.inFlightFenceSubmitSerials.size())
-                {
-                    frame_.completedSubmitSerial = std::max(
-                        frame_.completedSubmitSerial, frame_.inFlightFenceSubmitSerials[frame_.currentFrame]);
-                }
-            }
-            frame_.currentFence = frameSlotFence;
-            frame_.recordingSubmitSerial = frame_.nextSubmitSerial;
-            frame_.queuedSignalSemaphores.clear();
-            frame_.queuedSignalValues.clear();
-
-            // Runtime node creation can increase the expanded primitive count. Resize only after
-            // the previous queue submission has completed so no in-flight work retains old addresses.
-            {
-                SCOPED_CPU_TIMER("prepare gpudriven");
-                if (GetScene().EnsureGpuDrivenBufferCapacity(*ctx_.commandPool))
-                {
-                    AfterUpdateScene();
-                }
-                
-            }
-
-            {
-                SCOPED_CPU_TIMER("update uniform");
-                UpdateUniformBuffer(frame_.currentImageIndex);
-            }
-
-            const auto commandBuffer = frame_.commandBuffers->Begin(frame_.currentFrame);
-            ctx_.gpuTimer->Reset(commandBuffer);
-
-            {
-                SCOPED_GPU_TIMER("[gpu]");
-
-                {
-                    SCOPED_CPU_TIMER("begin scene");
-                    SCOPED_GPU_TIMER("[pre-render]");
-                    BeginSceneFrame(commandBuffer, frame_.currentImageIndex);
-                    skin_.updateRequests.clear();
-                }
-
-                {
-                    SCOPED_CPU_TIMER("render");
-                    SCOPED_GPU_TIMER("[render]");
-                    Render(commandBuffer, frame_.currentImageIndex);
-                }
-
-                {
-                    SCOPED_GPU_TIMER("[post-render]");
-                    PostRender(commandBuffer, frame_.currentImageIndex);
-                }
-
-                if (upscaler_ && frameGenerationEnabled)
-                {
-                    SCOPED_GPU_TIMER("dlssg-tag");
-                    CaptureFrameGenerationHudless(commandBuffer, frame_.currentImageIndex);
-                    auto inputs = BuildUpscalerFrameInputs(
-                        commandBuffer,
-                        frame_.currentImageIndex,
-                        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-                    if (frame_.currentImageIndex < frameGeneration_.hudlessImages.size())
-                    {
-                        inputs.hudlessColor = MakeRenderImageResource(
-                            frameGeneration_.hudlessImages[frame_.currentImageIndex].get(),
-                            VK_IMAGE_LAYOUT_GENERAL,
-                            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-                    }
-                    inputs.enableDLSSG = true;
-                    upscaler_->TagFrameGeneration(inputs);
-                }
-
-                if (delegates_.postRender)
-                {
-                    SCOPED_GPU_TIMER("ui");
-                    delegates_.postRender(commandBuffer, frame_.currentImageIndex);
-                }
-            }
-            frame_.commandBuffers->End(frame_.currentFrame);
-
-            VkSubmitInfo submitInfo = {};
-            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-            VkCommandBuffer commandBuffers[]{commandBuffer};
-            VkSemaphore waitSemaphores[] = {imageAvailableSemaphore};
-            VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-            {
-                SCOPED_CPU_TIMER("submit");
-                frame_.currentFence = &(frame_.inFlightFences[frame_.currentFrame]);
-                {
-                    if (upscaler_ && frame_.streamlineFrameToken)
-                    {
-                        upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::RenderSubmitStart,
-                                             frame_.streamlineFrameToken);
-                    }
-
-                    submitInfo.waitSemaphoreCount = 1;
-                    submitInfo.pWaitSemaphores = waitSemaphores;
-                    submitInfo.pWaitDstStageMask = waitStages;
-                    submitInfo.commandBufferCount = 1;
-                    submitInfo.pCommandBuffers = commandBuffers;
-
-                    std::vector<VkSemaphore> signalSemaphores;
-                    signalSemaphores.reserve(1 + frame_.queuedSignalSemaphores.size());
-                    signalSemaphores.push_back(renderFinishedSemaphore);
-                    signalSemaphores.insert(signalSemaphores.end(), frame_.queuedSignalSemaphores.begin(),
-                                            frame_.queuedSignalSemaphores.end());
-
-                    submitInfo.signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
-                    submitInfo.pSignalSemaphores = signalSemaphores.data();
-
-                    std::vector<uint64_t> signalSemaphoreValues;
-                    VkTimelineSemaphoreSubmitInfo timelineSubmitInfo = {};
-                    if (!frame_.queuedSignalValues.empty())
-                    {
-                        signalSemaphoreValues.reserve(signalSemaphores.size());
-                        signalSemaphoreValues.push_back(0);
-                        signalSemaphoreValues.insert(signalSemaphoreValues.end(), frame_.queuedSignalValues.begin(),
-                                                     frame_.queuedSignalValues.end());
-                        timelineSubmitInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
-                        timelineSubmitInfo.signalSemaphoreValueCount =
-                            static_cast<uint32_t>(signalSemaphoreValues.size());
-                        timelineSubmitInfo.pSignalSemaphoreValues = signalSemaphoreValues.data();
-                        submitInfo.pNext = &timelineSubmitInfo;
-                    }
-
-                    frame_.currentFence->Reset();
-
-                    Check(vkQueueSubmit(ctx_.device->GraphicsQueue(), 1, &submitInfo, frame_.currentFence->Handle()),
-                          "submit draw command buffer");
-                    frame_.currentFenceSerial = frame_.recordingSubmitSerial;
-                    if (frame_.currentFrame < frame_.inFlightFenceSubmitSerials.size())
-                    {
-                        frame_.inFlightFenceSubmitSerials[frame_.currentFrame] = frame_.recordingSubmitSerial;
-                    }
-                    frame_.nextSubmitSerial = frame_.recordingSubmitSerial + 1;
-
-                    if (upscaler_ && frame_.streamlineFrameToken)
-                    {
-                        upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::RenderSubmitEnd,
-                                             frame_.streamlineFrameToken);
-                    }
-                }
-            }
-
-            {
-                SCOPED_CPU_TIMER("present");
-                VkSwapchainKHR swapChains[] = {frame_.swapChain->Handle()};
-                VkPresentInfoKHR presentInfo = {};
-                presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-                presentInfo.waitSemaphoreCount = 1;
-                presentInfo.pWaitSemaphores = &renderFinishedSemaphore;
-                presentInfo.swapchainCount = 1;
-                presentInfo.pSwapchains = swapChains;
-                presentInfo.pImageIndices = &frame_.currentImageIndex;
-                presentInfo.pResults = nullptr; // Optional
-
-                if (upscaler_ && frame_.streamlineFrameToken)
-                {
-                    upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::PresentStart,
-                                         frame_.streamlineFrameToken);
-                }
-
-                result = StreamlineWrapper::QueuePresentKHR(ctx_.device->PresentQueue(), &presentInfo);
-                static bool firstPresentLogged = false;
-                if (!firstPresentLogged && ShouldLogStartupProfile())
-                {
-                    firstPresentLogged = true;
-                    SPDLOG_INFO("[StartupProfile] first QueuePresentKHR returned at renderer frame {}", frame_.frameCount);
-                }
-
-                if (upscaler_ && frame_.streamlineFrameToken)
-                {
-                    upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::PresentEnd,
-                                         frame_.streamlineFrameToken);
-                }
-
-                if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
-                {
-                    RecreateSwapChain();
-                    return;
-                }
-
-                if (result != VK_SUCCESS)
-                {
-                    Throw(std::runtime_error(std::string("failed to present next image (") + ToString(result) + ")"));
-                }
-            }
-            
-            if (delegates_.afterSubmit)
-            {
-                SCOPED_CPU_TIMER("after submit");
-                delegates_.afterSubmit();
-            }
-
-            frame_.currentFrame = (frame_.currentFrame + 1) % frame_.inFlightFences.size();
-            resetUpscalerHistory_ = false;
-            frame_.frameCount++;
         }
+        
+        if (delegates_.afterSubmit)
+        {
+            SCOPED_CPU_TIMER("after submit");
+            delegates_.afterSubmit();
+        }
+
+        frame_.currentFrame = (frame_.currentFrame + 1) % frame_.inFlightFences.size();
+        resetUpscalerHistory_ = false;
+        frame_.frameCount++;
+    
     }
 
     void VulkanBaseRenderer::BeforeNextFrame()

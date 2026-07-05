@@ -114,8 +114,13 @@ namespace NextUI::Theme
     void LabelOver(const char* label);
 
     // Inline sparkline. width<=0 fills available width.
+    // When scaleMin/scaleMax are left at FLT_MAX the range auto-fits the dataset.
+    // Set baselineAtZero=true (in auto-fit mode) to pin scaleMin=0 so timing-style
+    // data (frame time, pass ms) doesn't visually amplify small noise — the line
+    // wiggles far less than the default min..max fit.
     void Sparkline(const float* values, int count, ImVec2 size, ImVec4 color,
-                   float scaleMin = FLT_MAX, float scaleMax = FLT_MAX);
+                   float scaleMin = FLT_MAX, float scaleMax = FLT_MAX,
+                   bool baselineAtZero = false);
 
     void DrawPanelHeader(const char* icon, const char* title, const char* subtitle = nullptr);
     void DrawLabelValue(const char* label, const char* value, ImVec4 valueColor = Color(EColor::Text));
