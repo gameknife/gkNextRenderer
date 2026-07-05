@@ -25,7 +25,8 @@ namespace Runtime::Tui
             uint32_t MaxRows = 0;
         };
 
-        explicit TerminalBlitter(FOptions options = {});
+        TerminalBlitter() : TerminalBlitter(FOptions{}) {}
+        explicit TerminalBlitter(FOptions options);
 
         void Reset();
         std::string EncodeFrame(const std::vector<FRgb8>& sourcePixels,

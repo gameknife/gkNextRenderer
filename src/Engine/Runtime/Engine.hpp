@@ -273,7 +273,7 @@ private:
     void LaunchLoadSceneTask(std::string sceneFileName, std::function<void(SceneLoadContext&)> onGpuLoad);
     void LoadScene(const FSceneLoadRequest& request);
     void PrepareRendererForSceneMutation(const std::function<void(const char*)>& logProfile = {});
-    void CommitSceneToRenderer(const SceneRendererSyncOptions& options = {},
+    void CommitSceneToRenderer(const SceneRendererSyncOptions& options,
                                const std::function<void(const char*)>& logProfile = {});
 
     // Input helpers
