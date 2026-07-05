@@ -10,14 +10,14 @@ jobs:
   build:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.23.x'
       - name: Cache key
         id: gnb
         run: echo "key=$(./gnb.sh info --bincache-key)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@v6
         id: cache-vcpkg-restore
         with:
           path: |
@@ -26,7 +26,7 @@ jobs:
           key: ${{ steps.gnb.outputs.key }}-ios
       - run: ./gnb.sh setup --skip-paks
       - run: ./gnb.sh ios --skip-codesign
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@v6
         if: steps.cache-vcpkg-restore.outputs.cache-hit != 'true'
         with:
           path: |
