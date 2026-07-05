@@ -145,7 +145,7 @@ namespace Runtime::Remote
         FVideoEncoderConfig BuildEncoderConfig() const;
         int32_t ActiveH264ProfileIdcLocked() const;
         void RecomputeNegotiatedProfileLocked();
-        void EncodeLoop(const std::stop_token& stopToken);
+        void EncodeLoop();
         void Broadcast(const FEncodedPacket& packet);
 
         RemoteServer::FConfig config_;
@@ -173,9 +173,10 @@ namespace Runtime::Remote
 
         // Encoder worker
         std::mutex encodeQueueMutex_;
-        std::condition_variable_any encodeCv_;
+        std::condition_variable encodeCv_;
         std::deque<size_t> encodeQueue_;
-        std::jthread encodeThread_;
+        std::thread encodeThread_;
+        std::atomic_bool encodeStopRequested_ = false;
         std::atomic_bool keyframeRequested_ = true;
         std::atomic<uint32_t> desiredBitrateKbps_{4000};
         std::atomic<uint32_t> targetFps_{30};
