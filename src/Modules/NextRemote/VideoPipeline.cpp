@@ -155,16 +155,21 @@ namespace Runtime::Remote
         }
         startedAt_ = std::chrono::steady_clock::now();
         nextFrameTime_ = startedAt_;
-        encodeThread_ = std::jthread([this](const std::stop_token& stopToken) { EncodeLoop(stopToken); });
+        encodeStopRequested_.store(false);
+        encodeThread_ = std::thread([this]() { EncodeLoop(); });
     }
 
     void FVideoPipeline::Stop()
     {
         if (encodeThread_.joinable())
         {
-            encodeThread_.request_stop();
+            encodeStopRequested_.store(true);
             encodeCv_.notify_all();
             encodeThread_.join();
+        }
+        {
+            std::lock_guard lock(encodeQueueMutex_);
+            encodeQueue_.clear();
         }
         if (encoder_)
         {
@@ -757,16 +762,20 @@ namespace Runtime::Remote
         slot.encodeImage = {};
     }
 
-    void FVideoPipeline::EncodeLoop(const std::stop_token& stopToken)
+    void FVideoPipeline::EncodeLoop()
     {
         uint64_t sentFrames = 0;
         uint32_t appliedBitrateKbps = desiredBitrateKbps_.load(std::memory_order_relaxed);
-        while (!stopToken.stop_requested())
+        while (!encodeStopRequested_.load())
         {
             size_t slotIndex = 0;
             {
                 std::unique_lock lock(encodeQueueMutex_);
-                if (!encodeCv_.wait(lock, stopToken, [this]() { return !encodeQueue_.empty(); }))
+                encodeCv_.wait(lock, [this]()
+                {
+                    return encodeStopRequested_.load() || !encodeQueue_.empty();
+                });
+                if (encodeStopRequested_.load())
                 {
                     break;
                 }
