@@ -311,7 +311,7 @@ Some larger binary assets are not committed to the repo. Fetch them as needed:
 |------|------|------|------|
 | `ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer loses its LDraw parts library |
 | `optional` | `optional.pak` | `assets/paks/` | Main renderer / Editor / CharacterDemo / MagicaLego lose their scene assets |
-| `sfx` | six mp3/wav files | `assets/sfx/` | MagicaLego / BrickPlayer go silent |
+| `magicalego` | `magicalego.pak` (BGM / placement SFX) | `assets/paks/` | MagicaLego / BrickPlayer go silent |
 | `ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows MagicaLego video capture disabled |
 
 ```bash
@@ -320,7 +320,7 @@ Some larger binary assets are not committed to the repo. Fetch them as needed:
 
 # Or fetch specific groups
 ./gnb.sh paks fetch optional ldraw
-./gnb.sh paks fetch ffmpeg sfx
+./gnb.sh paks fetch ffmpeg magicalego
 
 # Windows
 ./gnb.bat paks fetch
