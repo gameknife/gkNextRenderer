@@ -3,11 +3,9 @@
 #include "StudioSimTypes.h"
 
 #include "Engine/Assets/AssetsFwd.hpp"
-#include "Engine/NextGameplay/AI/NavGrid.h"
-#include "Engine/NextGameplay/AI/PathFollower.h"
+#include "Gameplay/Sim/CharacterPool.h"
 
 #include <glm/glm.hpp>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -27,7 +25,7 @@ namespace StudioSim
     };
 
     // 一个员工的运行态（M2：卡片 + 可视节点 + 寻路）。后续里程碑会扩 mood/action/task。
-    struct FEmployee
+    struct FEmployee : NextGameplay::Sim::FSimCharacter
     {
         std::string id;
         std::string displayName;
@@ -36,22 +34,25 @@ namespace StudioSim
         std::string homeDeskPoi;
         std::string personality;   // M4：喂进 LLM prompt
         std::string todayTask;     // M5：今日目标分解出的个人重点
+        FProjectMeters myContribution; // 当日个人产出累计（R1：确定性产出状态机）
+        std::vector<std::string> shortMemory; // 最近几条经历摘要，喂回 LLM 决策 prompt
 
-        std::shared_ptr<Assets::Node> node;
-        glm::vec3   position{0.0f};
-        float       yaw = 0.0f;
         std::string targetPoi;
-        NextGameplay::FPathFollower follower;
 
         // M4：LLM 决策态。overrideTargetPoi 非空且未过期 → 覆盖脚本日程。
         std::string overrideTargetPoi;
         double      overrideUntilMinutes = 0.0;
         std::string bubbleText;    // 头顶气泡（LLM 对话）
+        double      bubbleClearAt = 0.0;
         std::string pendingFrom;   // M7：谁刚对我说了话
         std::string pendingText;   // M7：对方说的内容
         EMood       mood = EMood::Calm;
         bool        decisionPending = false;
+        bool        eventReactionPending = false;
+        int         gatheringId = -1;
         double      nextDecisionAt = 0.0;
+        double      nextChatterAt = 0.0;
+        double      nextWorkOutputAt = 0.0;
     };
 
     // 生成员工几何体、从场景 BVH 建 NavGrid、用 PathFollower 驱动移动。
@@ -70,19 +71,14 @@ namespace StudioSim
         const std::vector<FEmployee>& Employees() const { return employees_; }
         std::vector<FEmployee>& EmployeesMutable() { return employees_; }
         size_t Count() const { return employees_.size(); }
-        bool NavReady() const { return navReady_; }
+        bool NavReady() const { return characterPool_.NavReady(); }
 
     private:
-        void BuildNavGrid(Assets::Scene& scene);
         void RepathTo(FEmployee& emp, const FPointOfInterest& poi);
         void LoadCards();
 
         std::vector<FEmployeeCardDef> cards_;
-        std::vector<uint32_t> employeeModelIds_;
-        std::vector<uint32_t> employeeMatIds_;
-        NextGameplay::FNavGrid navGrid_;
+        NextGameplay::Sim::FCharacterPool characterPool_;
         std::vector<FEmployee> employees_;
-        bool assetsInjected_ = false;
-        bool navReady_ = false;
     };
 }

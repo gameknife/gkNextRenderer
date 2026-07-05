@@ -1,7 +1,6 @@
 #include "Engine/Runtime/Command/CommandHistory.hpp"
 #include "Engine/Runtime/Command/CommandHistory.hpp"
 
-#include <spdlog/spdlog.h>
 
 namespace Runtime::Command
 {

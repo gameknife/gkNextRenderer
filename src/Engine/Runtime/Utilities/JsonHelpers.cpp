@@ -4,7 +4,6 @@
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <fstream>
-#include <spdlog/spdlog.h>
 
 namespace
 {

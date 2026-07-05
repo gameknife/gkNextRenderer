@@ -5,14 +5,7 @@ class NextEngine;
 class NextGameInstanceBase;
 class NextLocalization;
 class NextPhysics;
-class QuickJSEngine;
 class VulkanGpuTimer;
-
-namespace NextAI
-{
-    class FAIService;
-    class VoiceInputService;
-}
 
 namespace NextCVar
 {
@@ -21,9 +14,17 @@ namespace NextCVar
 
 namespace NextUI
 {
-    class RmlUiSystem;
+    class IMultiViewportBackend;
     class UserInterface;
     struct Statistics;
+}
+
+namespace Runtime
+{
+    class IDebugUiProvider;
+    class IRenderFrameConsumer;
+    class IScriptRuntime;
+    class IUiOverlay;
 }
 
 namespace Runtime::Config

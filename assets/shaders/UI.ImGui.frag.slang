@@ -1,11 +1,11 @@
-import Bindless;
+import Shader.Bindless;
 
 struct PushConsts
 {
     float2 scale;
     float2 translate;
     float4 rotation;
-    uint hdrOutput;
+    uint hdrOutputMode;
     float hdrReferenceWhiteNit;
     float2 padding;
 };
@@ -20,12 +20,15 @@ struct FragmentInput
     [[vk::location(1)]] float4 color : COLOR0;
     [[vk::location(2)]] nointerpolation float4 clipRect : TEXCOORD1;
     [[vk::location(3)]] nointerpolation uint textureIndex : TEXCOORD2;
+    [[vk::location(4)]] nointerpolation uint textureFlags : TEXCOORD3;
 };
 
 struct FragmentOutput
 {
     [[vk::location(0)]] float4 color : SV_Target0;
 };
+
+static const uint UI_TEXTURE_FLAG_RAW_OUTPUT = 1u << 0u;
 
 float3 SrgbToLinear(float3 color)
 {
@@ -70,11 +73,21 @@ FragmentOutput main(FragmentInput input)
     }
 
     float4 sdrColor = Bindless.GetSampleTexture(input.textureIndex).SampleLevel(input.uv, 0.0) * input.color;
-    if (pushConsts.hdrOutput != 0)
+    if ((input.textureFlags & UI_TEXTURE_FLAG_RAW_OUTPUT) != 0u)
+    {
+        output.color = sdrColor;
+        return output;
+    }
+
+    if (pushConsts.hdrOutputMode == 1)
     {
         float3 linear709 = SrgbToLinear(saturate(sdrColor.rgb));
         float3 linear2020 = Bt709ToBt2020(linear709);
         output.color = float4(LinearToST2084UE(linear2020 * pushConsts.hdrReferenceWhiteNit), sdrColor.a);
+    }
+    else if (pushConsts.hdrOutputMode == 2)
+    {
+        output.color = float4(SrgbToLinear(saturate(sdrColor.rgb)), sdrColor.a);
     }
     else
     {

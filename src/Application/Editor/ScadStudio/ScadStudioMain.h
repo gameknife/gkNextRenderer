@@ -26,7 +26,7 @@ public:
     void OnPreConfigUI() override;
     void OnInitUI() override;
     void OnSceneLoaded() override;
-    void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) override;
+    void ConfigureCVars(NextCVar::FCVarSystem& cvars) override;
 
     // Orbit/zoom/pan the model in the central viewport.
     bool OverrideRenderCamera(Assets::Camera& outRenderCamera) const override;

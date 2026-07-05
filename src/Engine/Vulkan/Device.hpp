@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Allocator.hpp"
+#include "Engine/Vulkan/Allocator.hpp"
 #include <memory>
 #include <vector>
 
-#include "DebugUtilities.hpp"
+#include "Engine/Vulkan/DebugUtilities.hpp"
 
 namespace Vulkan
 {
@@ -35,11 +35,14 @@ namespace Vulkan
 		uint32_t ComputeFamilyIndex() const { return computeFamilyIndex_; }
 		uint32_t PresentFamilyIndex() const { return presentFamilyIndex_; }
 		int32_t TransferFamilyIndex() const { return transferFamilyIndex_; }
-		
+		uint32_t VideoEncodeFamilyIndex() const { return videoEncodeFamilyIndex_; } // UINT32_MAX if absent
+
 		VkQueue GraphicsQueue() const { return graphicsQueue_; }
 		VkQueue ComputeQueue() const { return computeQueue_; }
 		VkQueue PresentQueue() const { return presentQueue_; }
 		VkQueue TransferQueue() const { return transferQueue_; }
+		VkQueue VideoEncodeQueue() const { return videoEncodeQueue_; } // VK_NULL_HANDLE if absent
+		VkQueue QueueForFamilyIndex(uint32_t queueFamilyIndex) const;
 
 		VkPhysicalDeviceProperties DeviceProperties() const { return deviceProp_; }
 		MemoryStatsSnapshot CaptureMemoryStats(bool includeDetails = false) const;
@@ -64,11 +67,13 @@ namespace Vulkan
 		uint32_t computeFamilyIndex_{};
 		uint32_t presentFamilyIndex_{};
 		uint32_t transferFamilyIndex_{};
+		uint32_t videoEncodeFamilyIndex_ = UINT32_MAX;
 
 		VkQueue graphicsQueue_{};
 		VkQueue computeQueue_{};
 		VkQueue presentQueue_{};
 		VkQueue transferQueue_{};
+		VkQueue videoEncodeQueue_{};
 				
 		std::unique_ptr<DeviceProcedures> deviceProcedures_;
 		std::unique_ptr<MemoryAllocator> memoryAllocator_;

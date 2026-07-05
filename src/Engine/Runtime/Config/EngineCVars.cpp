@@ -54,46 +54,108 @@ namespace NextCVar
     {
         GK_CVAR_UINT("r.temporalFrames", settings, TemporalFrames, 16, ECVarFlags::Archive,
                      "Temporal accumulation frames");
-        GK_CVAR_INT("r.samples", settings, NumberOfSamples, 8, ECVarFlags::Archive,
+        GK_CVAR_INT("r.samples", settings, NumberOfSamples, 4, ECVarFlags::Archive,
                     "Samples per pixel");
-        GK_CVAR_UINT("r.bounces", settings, NumberOfBounces, 5, ECVarFlags::Archive,
+        GK_CVAR_UINT("r.bounces", settings, NumberOfBounces, 8, ECVarFlags::Archive,
                      "Ray bounce count");
         GK_CVAR_INT("r.rendererType", settings, RendererType, 0, ECVarFlags::Archive,
-                    "Renderer type (0=PathTracing,1=SoftTracing,2=PureAmbient,3=VoxelTracing)");
+                    "Renderer type (0=PathTracing,1=SoftwareTracing,2=SoftwareModern,3=VoxelTracing,4=SoftwareModernNoAmbient)");
         GK_CVAR_UINT("r.maxBounces", settings, MaxNumberOfBounces, 10, ECVarFlags::Archive,
                      "Maximum ray bounce count");
         GK_CVAR_BOOL("r.denoiser", settings, Denoiser, false, ECVarFlags::Archive,
-                     "Enable denoiser");
-        GK_CVAR_FLOAT("r.denoiseSigma", settings, DenoiseSigma, 0.5f, ECVarFlags::Archive,
-                      "Denoise sigma");
-        GK_CVAR_FLOAT("r.denoiseSigmaLum", settings, DenoiseSigmaLum, 10.0f, ECVarFlags::Archive,
-                      "Denoise sigma (luminance)");
-        GK_CVAR_FLOAT("r.denoiseSigmaNormal", settings, DenoiseSigmaNormal, 0.1f, ECVarFlags::Archive,
-                      "Denoise sigma (normal)");
-        GK_CVAR_INT("r.denoiseSize", settings, DenoiseSize, 5, ECVarFlags::Archive,
-                    "Denoise kernel size");
+                     "Enable the variance-guided a-trous denoiser");
+        GK_CVAR_INT("r.denoiseAtrousIterations", settings, DenoiseAtrousIterations, 3, ECVarFlags::Archive,
+                    "Diffuse a-trous wavelet iterations: quality/perf knob (higher = smoother, slower; 1-6)");
+        GK_CVAR_INT("r.denoiseAtrousSpecularIterations", settings, DenoiseAtrousSpecularIterations, 3, ECVarFlags::Archive,
+                    "Specular a-trous wavelet iterations (lower is faster and preserves glossy detail; 0-6)");
+        GK_CVAR_FLOAT("r.denoiseAtrousSigmaLuma", settings, DenoiseAtrousSigmaLuma, 4.0f, ECVarFlags::Archive,
+                      "A-trous luminance edge-stop sigma (lower = sharper detail, more residual noise)");
+        GK_CVAR_FLOAT("r.denoiseAtrousNormalPower", settings, DenoiseAtrousNormalPower, 64.0f, ECVarFlags::Archive,
+                      "A-trous normal edge-stop exponent");
+        GK_CVAR_FLOAT("r.denoiseSigmaDepth", settings, DenoiseSigmaDepth, 2.0f, ECVarFlags::Archive,
+                      "A-trous planar depth tolerance (multiples of local depth slope)");
+        GK_CVAR_FLOAT("r.denoiseSpecFootprint", settings, DenoiseSpecFootprint, 32.0f, ECVarFlags::Archive,
+                      "Specular a-trous filter radius in pixels per unit roughness");
+        GK_CVAR_BOOL("r.gtao.enable", settings, GTAOEnable, true, ECVarFlags::Archive,
+                     "Enable half-resolution GTAO for SoftwareModernNoAmbient sky lighting");
+        GK_CVAR_INT("r.gtao.quality", settings, GTAOQuality, 1, ECVarFlags::Archive,
+                    "GTAO sampling quality (0=low 16 taps,1=medium 36 taps,2=high 64 taps,3=ultra 120 taps)");
+        GK_CVAR_FLOAT("r.gtao.radius", settings, GTAORadius, 1.0f, ECVarFlags::Archive,
+                      "GTAO world-space sampling radius");
+        GK_CVAR_FLOAT("r.gtao.strength", settings, GTAOStrength, 5.0f, ECVarFlags::Archive,
+                      "Master sky-occlusion strength: scales GTAO sky darkening (1=natural, lower=lighter)");
+        GK_CVAR_FLOAT("r.gtao.thickness", settings, GTAOThickness, 0.5f, ECVarFlags::Archive,
+                      "GTAO depth-discontinuity thickness heuristic in world units");
+        GK_CVAR_INT("r.gtao.debugMode", settings, GTAODebugMode, 0, ECVarFlags::Archive,
+                    "GTAO debug mode (0=off,1=occlusion,2=unoccluded sky lighting)");
+        GK_CVAR_FLOAT("r.reproject.clampGammaHi", settings, ReprojectClampGammaHi, 2.5f, ECVarFlags::Archive,
+                      "ReProject history clamp: tight upper YCoCg-luma box half-width in sigmas (lower = less ghosting)");
+        GK_CVAR_FLOAT("r.reproject.clampGammaLo", settings, ReprojectClampGammaLo, 5.0f, ECVarFlags::Archive,
+                      "ReProject history clamp: tight lower box half-width in sigmas (kept looser than upper to avoid black dots)");
+        GK_CVAR_FLOAT("r.reproject.clampFloor", settings, ReprojectClampFloor, 0.5f, ECVarFlags::Archive,
+                      "ReProject history clamp: relative luma floor as a fraction of the filtered mean (guards against black dots)");
         GK_CVAR_UINT_CB("r.superResolution", settings, SuperResolution, 0, ECVarFlags::Archive,
                         "Super resolution mode (0-4)", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.dlss", settings, DLSS, false, ECVarFlags::Archive,
                         "Enable NVIDIA DLSS", std::bind(RequestSwapChainIfPossible, engine));
+        GK_CVAR_BOOL_CB("r.fsr", settings, FSR, false, ECVarFlags::Archive,
+                        "Enable FSR1 spatial upscaling", std::bind(RequestSwapChainIfPossible, engine));
         GK_CVAR_BOOL_CB("r.dlssrr", settings, DLSSRR, false, ECVarFlags::Archive,
                         "Enable NVIDIA DLSS Ray Reconstruction", std::bind(RequestSwapChainIfPossible, engine));
+        GK_CVAR_BOOL_CB("r.dlssg", settings, DLSSG, false, ECVarFlags::Archive,
+                        "Enable NVIDIA DLSS Frame Generation", std::bind(RequestSwapChainIfPossible, engine));
+        GK_CVAR_UINT_CB("r.dlssg.multiplier", settings, DLSSGFrameMultiplier, 2, ECVarFlags::Archive,
+                        "DLSS Frame Generation multiplier (2-4)", std::bind(RequestSwapChainIfPossible, engine));
+        GK_CVAR_UINT("r.dlssg.frameLimitFps", settings, DLSSGFrameLimitFps, 0, ECVarFlags::Archive,
+                     "Reflex base frame-rate limit while DLSS Frame Generation is enabled (0=unlimited)");
+        GK_CVAR_UINT("r.dlss.jitterFrames", settings, DLSSJitterFrames, 16, ECVarFlags::Archive,
+                     "DLSS projection jitter sequence length (clamped to 1-256)");
+        GK_CVAR_BOOL("r.dlss.jitterInvertY", settings, DLSSJitterInvertY, false, ECVarFlags::Archive,
+                     "Invert DLSS/TAA projection jitter Y for Streamline sign validation");
         GK_CVAR_BOOL("r.taa", settings, TAA, true, ECVarFlags::Archive,
                      "Enable temporal anti-aliasing");
-        GK_CVAR_BOOL("r.adaptiveSample", settings, AdaptiveSample, false, ECVarFlags::Archive,
-                     "Enable adaptive sampling");
-        GK_CVAR_FLOAT("r.adaptiveVariance", settings, AdaptiveVariance, 6.0f, ECVarFlags::Archive,
-                      "Adaptive sampling variance");
-        GK_CVAR_INT("r.adaptiveSteps", settings, AdaptiveSteps, 4, ECVarFlags::Archive,
-                    "Adaptive sampling steps");
         GK_CVAR_BOOL("r.fastGather", settings, FastGather, false, ECVarFlags::Archive,
                      "Enable fast gather");
         GK_CVAR_INT("r.bakeSpeedLevel", settings, BakeSpeedLevel, 1, ECVarFlags::Archive,
                     "Bake speed level (0=realtime,1=normal,2=low)");
         GK_CVAR_FLOAT("r.heatmapScale", settings, HeatmapScale, 1.0f, ECVarFlags::Archive,
                       "Profiler heatmap scale");
-        GK_CVAR_BOOL("r.checkerboard", settings, UseCheckerBoardRendering, false, ECVarFlags::Archive,
-                     "Enable checkerboard rendering");
+        GK_CVAR_UINT("r.splat.bucketCount", settings, SplatBucketCount, 4096, ECVarFlags::Archive,
+                     "Minimum Gaussian splat depth-sort bucket count; renderer raises it up to 16K for large scenes");
+        GK_CVAR_UINT("r.splat.maxCount", settings, SplatMaxCount, 0, ECVarFlags::Archive,
+                     "Maximum Gaussian splats processed per frame (0=all)");
+        GK_CVAR_BOOL("r.splat.sortCache", settings, SplatSortCache, true, ECVarFlags::Archive,
+                     "Reuse Gaussian splat sort output while camera and sort-relevant model state are unchanged");
+        GK_CVAR_FLOAT("r.splat.sigma", settings, SplatSigma, 2.5f, ECVarFlags::Archive,
+                      "Gaussian billboard radius in standard deviations (clamped to 1-4)");
+        GK_CVAR_BOOL("r.splat.forceAA", settings, SplatForceAA, true, ECVarFlags::Archive,
+                     "Force Gaussian splat antialias opacity compensation");
+        GK_CVAR_FLOAT("r.splat.aaStrength", settings, SplatAAStrength, 0.5f, ECVarFlags::Archive,
+                      "Gaussian splat antialias opacity compensation strength (0=off, 1=full)");
+        GK_CVAR_BOOL("r.splat.proxy.enable", settings, SplatProxyEnable, true, ECVarFlags::Archive,
+                     "Generate hidden proxy meshes for Gaussian splat scene integration");
+        GK_CVAR_UINT("r.splat.proxy.gridMax", settings, SplatProxyGridMax, 64, ECVarFlags::Archive,
+                     "Maximum voxel resolution on the longest axis for Gaussian splat proxy meshes");
+        GK_CVAR_UINT("r.splat.proxy.brickSize", settings, SplatProxyBrickSize, 8, ECVarFlags::Archive,
+                     "Reserved brick size for Gaussian splat proxy generation");
+        GK_CVAR_FLOAT("r.splat.proxy.sigma", settings, SplatProxySigma, 2.5f, ECVarFlags::Archive,
+                      "Gaussian influence radius in standard deviations for proxy density generation");
+        GK_CVAR_FLOAT("r.splat.proxy.isoThreshold", settings, SplatProxyIsoThreshold, 0.35f, ECVarFlags::Archive,
+                      "Default alpha iso threshold for Gaussian splat proxy mesh extraction");
+        GK_CVAR_FLOAT("r.splat.proxy.simplifyRatio", settings, SplatProxySimplifyRatio, 0.0f, ECVarFlags::Archive,
+                      "Reserved simplification ratio for Gaussian splat proxy meshes");
+        GK_CVAR_BOOL("r.splat.shadow.enable", settings, SplatShadowEnable, true, ECVarFlags::Archive,
+                     "Allow Gaussian splat proxy meshes to cast CSM shadows");
+        GK_CVAR_BOOL("r.splat.rayOcclusion.enable", settings, SplatRayOcclusionEnable, true, ECVarFlags::Archive,
+                     "Allow Gaussian splat proxy meshes to participate in GPU ray occlusion");
+        GK_CVAR_BOOL("r.splat.proxy.debugVisible", settings, SplatProxyDebugVisible, false, ECVarFlags::Archive,
+                     "Draw Gaussian splat proxy meshes in the main visibility pass for debugging");
+        GK_CVAR_BOOL("r.splat.receiveLighting", settings, SplatReceiveLighting, true, ECVarFlags::Archive,
+                     "Allow Gaussian splat shading to receive scene lighting");
+        GK_CVAR_FLOAT("r.splat.lightingStrength", settings, SplatLightingStrength, 0.35f, ECVarFlags::Archive,
+                      "Global Gaussian splat scene-lighting blend strength");
+        GK_CVAR_INT("r.splat.proxy.debug", settings, SplatProxyDebug, 0, ECVarFlags::None,
+                    "Gaussian splat proxy debug mode (0=off,1=density,2=mesh,3=GPUAS)");
         GK_CVAR_FLOAT("r.paperWhiteNit", settings, PaperWhiteNit, 600.0f, ECVarFlags::Archive,
                       "Paper white nit");
         GK_CVAR_BOOL("ui.showSettings", settings, ShowSettings, true, ECVarFlags::Archive,
@@ -125,27 +187,49 @@ namespace NextCVar
                     "Ambient cube cascade count");
         GK_CVAR_FLOAT("sys.ambientCubeCascadeRatio", settings, AmbientCubeCascadeRatio, 2.0f, ECVarFlags::Archive,
                       "Ambient cube cascade ratio between levels");
-        GK_CVAR_FLOAT("sys.ambientCubePoolBrickRatio", settings, AmbientCubePoolBrickRatio, 0.66f,
+        GK_CVAR_FLOAT("sys.ambientCubePoolBrickRatio", settings, AmbientCubePoolBrickRatio, 0.5f,
                       ECVarFlags::Archive,
                       "Ambient cube sparse pool capacity as a ratio of full bricks per cascade");
-        GK_CVAR_BOOL("sys.ambientCubeGpuSdf", settings, UseGpuAmbientCubeSdf, false, ECVarFlags::Archive,
-                     "Use GPU jump-flood distance field rebuild for ambient cube voxels");
+        cvars.RegisterBool("r.ambientCube.hitDrivenResidency", false, &settings.AmbientCubeHitDrivenResidency,
+                           ECVarFlags::Archive, "Enable hit-driven ambient cube brick residency");
+        cvars.RegisterBool("r.ambientCube.bounceHitAffectsResidency", false,
+                           &settings.AmbientCubeBounceHitAffectsResidency, ECVarFlags::Archive,
+                           "Allow ambient cube bake bounce hits to keep bricks resident");
+        cvars.RegisterUInt("r.ambientCube.evictFrames", 180, &settings.AmbientCubeEvictFrames,
+                           ECVarFlags::Archive, "Frames without a residency-driving hit before eviction", nullptr, 30, 3600);
+        cvars.RegisterUInt("r.ambientCube.graceFrames", 30, &settings.AmbientCubeGraceFrames,
+                           ECVarFlags::Archive, "Initial candidate residency grace period", nullptr, 1, 600);
+        cvars.RegisterFloat("r.ambientCube.hitMarkTileRatio", 0.25f, &settings.AmbientCubeHitMarkTileRatio,
+                            ECVarFlags::Archive, "Sparse query hit marking ratio", nullptr, 0.01, 1.0);
+        cvars.RegisterInt("r.ambientCube.residencyDebug", 0, &settings.AmbientCubeResidencyDebug,
+                          ECVarFlags::None, "Ambient residency debug (0=off,1=hit age,2=resident state)",
+                          nullptr, 0, 2);
         GK_CVAR_BOOL("sys.hdrTextureStreaming", settings, StreamHDRTextures, true, ECVarFlags::Archive,
                      "Keep inactive HDR environment textures at their lowest mip and promote the active sky on demand");
-        GK_CVAR_BOOL("r.sharc.enable", settings, SharcEnable, false, ECVarFlags::Archive,
+        GK_CVAR_BOOL("r.sharc.enable", settings, SharcEnable, true, ECVarFlags::Archive,
                      "Enable experimental SHARC path tracing radiance cache");
         GK_CVAR_UINT("r.sharc.entriesPow2", settings, SharcEntriesPow2, 21, ECVarFlags::Archive,
                      "SHARC cache entry count as log2");
         GK_CVAR_FLOAT("r.sharc.updateSampleRatio", settings, SharcUpdateSampleRatio, 0.25f, ECVarFlags::Archive,
                       "Fraction of pixels used by SHARC update pass");
         GK_CVAR_INT("r.sharc.debugMode", settings, SharcDebugMode, 0, ECVarFlags::Archive,
-                    "SHARC debug mode (0=off,1=cache hit,2=cache miss)");
+                    "SHARC debug mode (0=off,1=cache hit,2=cache miss,3=occupancy,4=radiance mosaic,5=stale/sample/frame heatmap)");
         GK_CVAR_UINT("r.sharc.queryMinBounce", settings, SharcQueryMinBounce, 1, ECVarFlags::Archive,
                      "Minimum bounce index for SHARC query");
         GK_CVAR_FLOAT("r.sharc.queryRoughnessMin", settings, SharcQueryRoughnessMin, 0.35f, ECVarFlags::Archive,
                       "Minimum material roughness for SHARC query");
-        GK_CVAR_FLOAT("r.sharc.voxelSize", settings, SharcVoxelSize, 0.75f, ECVarFlags::Archive,
-                      "World-space SHARC hash voxel size");
+        GK_CVAR_FLOAT("r.sharc.sceneScale", settings, SharcSceneScale, 100.0f, ECVarFlags::Archive,
+                      "Official SHARC hash grid world-space scene scale; higher values produce smaller voxels");
+        GK_CVAR_FLOAT("r.sharc.levelBias", settings, SharcLevelBias, 0.0f, ECVarFlags::Archive,
+                      "Official SHARC hash grid LOD bias");
+        GK_CVAR_FLOAT("r.sharc.radianceScale", settings, SharcRadianceScale, 1000.0f, ECVarFlags::Archive,
+                      "Official SHARC integer accumulation radiance scale");
+        GK_CVAR_UINT("r.sharc.accumulatedFrameMax", settings, SharcAccumulatedFrameMax, 64, ECVarFlags::Archive,
+                     "Official SHARC maximum temporal accumulation frames");
+        GK_CVAR_UINT("r.sharc.responsiveFrameMax", settings, SharcResponsiveFrameMax, 8, ECVarFlags::Archive,
+                     "Official SHARC responsive temporal accumulation frames");
+        GK_CVAR_UINT("r.sharc.staleFrameMax", settings, SharcStaleFrameMax, 180, ECVarFlags::Archive,
+                     "Official SHARC stale frame eviction threshold");
 
         if (engine != nullptr)
         {
@@ -159,14 +243,14 @@ namespace NextCVar
 
         GK_CVAR_BOOL("show.debugLighting", showFlags, DebugDraw_Lighting, false, ECVarFlags::None,
                      "Debug draw lighting");
-        GK_CVAR_BOOL("show.shadowCascadeCoverage", showFlags, DebugDraw_ShadowCascadeCoverage, false, ECVarFlags::None,
-                     "Debug draw sun shadow cascade coverage");
         GK_CVAR_BOOL("show.debugBoundingBox", showFlags, DebugDraw_BoundingBox, false, ECVarFlags::None,
                      "Debug draw bounding box");
         GK_CVAR_BOOL("debug.physics.overlay", showFlags, DebugPhysicsOverlay, false, ECVarFlags::None,
                      "Show physics debug overlay");
         GK_CVAR_BOOL("debug.graphics.panel", showFlags, DebugGraphicsPanel, false, ECVarFlags::None,
                      "Show graphics debug panel");
+        GK_CVAR_BOOL("debug.cvar.panel", showFlags, DebugCVarPanel, false, ECVarFlags::None,
+                     "Show the developer CVar editor");
         GK_CVAR_BOOL("debug.profile.overlay", showFlags, DebugProfileOverlay, false, ECVarFlags::None,
                      "Show CPU profile debug overlay");
         GK_CVAR_BOOL("show.debugPhysicsBodies", showFlags, DebugDraw_PhysicsBodies, false, ECVarFlags::None,
@@ -181,6 +265,8 @@ namespace NextCVar
                      "Show grid");
         GK_CVAR_BOOL("show.wireframe", showFlags, ShowWireframe, false, ECVarFlags::None,
                      "Show wireframe");
+        GK_CVAR_BOOL("show.gaussianSplats", showFlags, ShowGaussianSplats, true, ECVarFlags::None,
+                     "Show Gaussian splat models");
     }
 
 }

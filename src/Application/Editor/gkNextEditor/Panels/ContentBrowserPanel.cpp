@@ -3,21 +3,25 @@
 #include "EditorDragDrop.hpp"
 
 #include "Engine/Assets/Core/Scene.hpp"
+#include "Engine/Assets/Data/Material.hpp"
+#include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/GPU/TextureImage.hpp"
 #include "EditorActionDispatcher.hpp"
+#include "Engine/Rendering/Preview/RenderViewServices.hpp"
+#include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Engine/Runtime/Editor/ProfessionalUI.hpp"
+#include "Modules/DevTools/ProfessionalUI.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <cstdio>
 #include <filesystem>
 #include <fmt/format.h>
 #include <functional>
+#include <limits>
 #include <spdlog/spdlog.h>
 #include <unordered_map>
 #include <string_view>
@@ -28,7 +32,7 @@ namespace Editor
     namespace
     {
         float GContentBrowserIconSize = 82.0f;
-        constexpr float kIconPadding = 10.0f;
+        constexpr float kCardAspect = 1.65f;
 
         struct ContentBrowserCallbacks
         {
@@ -56,6 +60,22 @@ namespace Editor
             EContentAssetKind kind = EContentAssetKind::Directory;
         };
 
+        enum class EContentAssetSource
+        {
+            Filesystem,
+            Pak,
+            Mixed,
+        };
+
+        struct BrowserEntry
+        {
+            std::filesystem::path browserPath;
+            std::string assetPath;
+            std::string name;
+            bool isDirectory = false;
+            EContentAssetSource source = EContentAssetSource::Filesystem;
+        };
+
         struct ContentGridLayout
         {
             int itemsPerRow = 1;
@@ -79,8 +99,17 @@ namespace Editor
             }
         };
 
-        using DirectoryEntries = std::vector<std::filesystem::directory_entry>;
+        using DirectoryEntries = std::vector<BrowserEntry>;
         using DirectoryCache = std::unordered_map<std::filesystem::path, DirectoryEntries, FilesystemPathHash>;
+        using DirectoryVisibilityCache = std::unordered_map<std::filesystem::path, bool, FilesystemPathHash>;
+
+        enum class EBrowserSection
+        {
+            Content,
+            Material,
+            Texture,
+            Mesh,
+        };
 
         ContentGridLayout BeginContentGrid()
         {
@@ -140,27 +169,61 @@ namespace Editor
             return kUnsupported;
         }
 
-        ContentAssetVisual ResolveAssetVisual(const std::filesystem::directory_entry& entry)
+        ContentAssetVisual ResolveAssetVisual(const BrowserEntry& entry)
         {
             static const ContentAssetVisual kDirectory{};
-            static const ContentAssetVisual kUnsupported{ICON_FA_FOLDER, IM_COL32(0, 172, 255, 255),
-                                                         EContentAssetKind::Unsupported};
 
-            if (entry.is_directory())
+            if (entry.isDirectory)
             {
                 return kDirectory;
             }
 
-            if (!entry.is_regular_file())
-            {
-                return kUnsupported;
-            }
-
-            const std::string ext = entry.path().extension().string();
+            const std::string ext = std::filesystem::path(entry.assetPath).extension().string();
             return ResolveAssetVisualForExtension(ext);
         }
 
-        DirectoryEntries& GetCachedDirectoryEntries(const std::filesystem::path& path, DirectoryCache& directoryCache)
+        std::string GetAssetPathForBrowserDirectory(const std::filesystem::path& rootPath,
+                                                    const std::filesystem::path& path)
+        {
+            const std::filesystem::path rel = path.lexically_relative(rootPath);
+            if (rel.empty() || rel == ".")
+            {
+                return "assets";
+            }
+
+            return Utilities::FileHelper::NormalizePathString(std::filesystem::path("assets") / rel);
+        }
+
+        std::string GetAssetPathForFilesystemEntry(const std::filesystem::path& rootPath,
+                                                   const std::filesystem::path& path)
+        {
+            const std::filesystem::path rel = path.lexically_relative(rootPath);
+            return Utilities::FileHelper::NormalizePathString(std::filesystem::path("assets") / rel);
+        }
+
+        void MergeBrowserEntry(DirectoryEntries& entries, BrowserEntry entry)
+        {
+            auto it = std::find_if(entries.begin(), entries.end(),
+                                   [&](const BrowserEntry& existing)
+                                   {
+                                       return existing.assetPath == entry.assetPath &&
+                                           existing.isDirectory == entry.isDirectory;
+                                   });
+            if (it == entries.end())
+            {
+                entries.push_back(std::move(entry));
+                return;
+            }
+
+            if (it->source != entry.source)
+            {
+                it->source = EContentAssetSource::Mixed;
+            }
+        }
+
+        DirectoryEntries& GetCachedDirectoryEntries(const std::filesystem::path& rootPath,
+                                                    const std::filesystem::path& path,
+                                                    DirectoryCache& directoryCache)
         {
             auto it = directoryCache.find(path);
             if (it != directoryCache.end())
@@ -169,35 +232,115 @@ namespace Editor
             }
 
             DirectoryEntries entries;
-            std::error_code error;
-            std::filesystem::directory_iterator dirIt(path, error);
-            if (error)
+
+            std::error_code existsError;
+            if (std::filesystem::exists(path, existsError) && std::filesystem::is_directory(path, existsError))
             {
-                SPDLOG_WARN("Failed to read content browser directory '{}': {}", path.string(), error.message());
-                auto [insertedIt, _] = directoryCache.emplace(path, std::move(entries));
-                return insertedIt->second;
+                std::error_code error;
+                std::filesystem::directory_iterator dirIt(path, error);
+                if (error)
+                {
+                    SPDLOG_WARN("Failed to read content browser directory '{}': {}", path.string(), error.message());
+                }
+                else
+                {
+                    for (const auto& entry : dirIt)
+                    {
+                        BrowserEntry browserEntry;
+                        browserEntry.browserPath = entry.path();
+                        browserEntry.assetPath = GetAssetPathForFilesystemEntry(rootPath, entry.path());
+                        browserEntry.name = entry.path().filename().string();
+                        browserEntry.isDirectory = entry.is_directory();
+                        browserEntry.source = EContentAssetSource::Filesystem;
+                        MergeBrowserEntry(entries, std::move(browserEntry));
+                    }
+                }
             }
 
-            for (const auto& entry : dirIt)
+            const std::string assetDirectoryPath = GetAssetPathForBrowserDirectory(rootPath, path);
+            if (auto* pakSystem = Utilities::Package::FPackageFileSystem::TryGetInstance())
             {
-                entries.push_back(entry);
+                const std::string prefix = assetDirectoryPath + "/";
+                for (const auto& mountedEntry : pakSystem->ListMountedEntries(prefix))
+                {
+                    if (mountedEntry.size() <= prefix.size())
+                    {
+                        continue;
+                    }
+
+                    const std::string_view remainder(mountedEntry.c_str() + prefix.size(),
+                                                     mountedEntry.size() - prefix.size());
+                    const size_t slashPos = remainder.find('/');
+
+                    BrowserEntry browserEntry;
+                    if (slashPos == std::string_view::npos)
+                    {
+                        browserEntry.name = std::string(remainder);
+                        browserEntry.assetPath = mountedEntry;
+                        browserEntry.isDirectory = false;
+                    }
+                    else
+                    {
+                        browserEntry.name = std::string(remainder.substr(0, slashPos));
+                        browserEntry.assetPath =
+                            Utilities::FileHelper::NormalizePathString(std::filesystem::path(assetDirectoryPath) /
+                                                                       browserEntry.name);
+                        browserEntry.isDirectory = true;
+                    }
+
+                    browserEntry.browserPath = path / browserEntry.name;
+                    browserEntry.source = EContentAssetSource::Pak;
+                    MergeBrowserEntry(entries, std::move(browserEntry));
+                }
             }
 
             std::sort(entries.begin(), entries.end(),
-                      [](const std::filesystem::directory_entry& lhs,
-                         const std::filesystem::directory_entry& rhs)
+                      [](const BrowserEntry& lhs, const BrowserEntry& rhs)
                       {
-                          const bool lhsDir = lhs.is_directory();
-                          const bool rhsDir = rhs.is_directory();
-                          if (lhsDir != rhsDir)
+                          if (lhs.isDirectory != rhs.isDirectory)
                           {
-                              return lhsDir;
+                              return lhs.isDirectory;
                           }
-                          return lhs.path().filename().string() < rhs.path().filename().string();
+                          return lhs.name < rhs.name;
                       });
 
             auto [insertedIt, _] = directoryCache.emplace(path, std::move(entries));
             return insertedIt->second;
+        }
+
+        bool DirectoryHasVisibleContent(const std::filesystem::path& rootPath, const std::filesystem::path& path,
+                                        DirectoryCache& directoryCache,
+                                        DirectoryVisibilityCache& visibilityCache)
+        {
+            auto it = visibilityCache.find(path);
+            if (it != visibilityCache.end())
+            {
+                return it->second;
+            }
+
+            auto& entries = GetCachedDirectoryEntries(rootPath, path, directoryCache);
+            bool hasVisibleContent = false;
+            for (const auto& entry : entries)
+            {
+                if (entry.isDirectory)
+                {
+                    if (DirectoryHasVisibleContent(rootPath, entry.browserPath, directoryCache, visibilityCache))
+                    {
+                        hasVisibleContent = true;
+                        break;
+                    }
+                    continue;
+                }
+
+                if (ResolveAssetVisual(entry).kind != EContentAssetKind::Unsupported)
+                {
+                    hasVisibleContent = true;
+                    break;
+                }
+            }
+
+            visibilityCache.emplace(path, hasVisibleContent);
+            return hasVisibleContent;
         }
 
         bool IsSameOrParentPath(const std::filesystem::path& parent, const std::filesystem::path& child)
@@ -218,16 +361,19 @@ namespace Editor
         }
 
         void DrawDirectoryTreeNode(
+            const std::filesystem::path& rootPath,
             const std::filesystem::path& directoryPath,
             std::filesystem::path& currentPath,
             DirectoryCache& directoryCache,
+            DirectoryVisibilityCache& visibilityCache,
             bool isRoot)
         {
-            auto& entries = GetCachedDirectoryEntries(directoryPath, directoryCache);
+            auto& entries = GetCachedDirectoryEntries(rootPath, directoryPath, directoryCache);
             bool hasDirectoryChildren = false;
             for (const auto& entry : entries)
             {
-                if (entry.is_directory())
+                if (entry.isDirectory &&
+                    DirectoryHasVisibleContent(rootPath, entry.browserPath, directoryCache, visibilityCache))
                 {
                     hasDirectoryChildren = true;
                     break;
@@ -266,11 +412,13 @@ namespace Editor
             {
                 for (const auto& entry : entries)
                 {
-                    if (!entry.is_directory())
+                    if (!entry.isDirectory ||
+                        !DirectoryHasVisibleContent(rootPath, entry.browserPath, directoryCache, visibilityCache))
                     {
                         continue;
                     }
-                    DrawDirectoryTreeNode(entry.path(), currentPath, directoryCache, false);
+                    DrawDirectoryTreeNode(rootPath, entry.browserPath, currentPath, directoryCache, visibilityCache,
+                                          false);
                 }
                 ImGui::TreePop();
             }
@@ -293,12 +441,13 @@ namespace Editor
 
         void DrawContentBrowserSidebar(EditorUiState& ui, const std::filesystem::path& rootPath,
                                        std::filesystem::path& currentPath,
-                                       DirectoryCache& directoryCache)
+                                       DirectoryCache& directoryCache,
+                                       DirectoryVisibilityCache& visibilityCache)
         {
             (void)ui;
             ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.48f));
             ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.82f));
-            ImGui::BeginChild("ContentBrowserSidebar", ImVec2(170.0f, 0.0f), true);
+            ImGui::BeginChild("ContentBrowserSidebar", ImVec2(200.0f, 0.0f), true);
             ImGui::TextDisabled("Favorites");
             DrawQuickAccessDirectory(ICON_FA_STAR " Assets", rootPath, currentPath);
             DrawQuickAccessDirectory(ICON_FA_FOLDER " Models", rootPath / "models", currentPath);
@@ -306,14 +455,14 @@ namespace Editor
             DrawQuickAccessDirectory(ICON_FA_FOLDER " Textures", rootPath / "textures", currentPath);
             NextUI::Theme::DrawThinSeparator(0.70f);
             ImGui::TextDisabled("Project");
-            DrawDirectoryTreeNode(rootPath, currentPath, directoryCache, true);
+            DrawDirectoryTreeNode(rootPath, rootPath, currentPath, directoryCache, visibilityCache, true);
             ImGui::EndChild();
             ImGui::PopStyleColor(2);
         }
 
-        void DrawContentBrowserNavigation(EditorUiState& ui, const std::filesystem::path& rootPath,
-                                          std::filesystem::path& currentPath,
-                                          DirectoryCache& directoryCache)
+        void DrawContentBrowserNavigation(const std::filesystem::path& rootPath, std::filesystem::path& currentPath,
+                                          DirectoryCache& directoryCache,
+                                          DirectoryVisibilityCache& visibilityCache)
         {
             const std::string rootStr = rootPath.string();
             const std::string curStr = currentPath.string();
@@ -322,10 +471,6 @@ namespace Editor
                 currentPath = rootPath;
             }
 
-            if (ui.fontIcon)
-            {
-                ImGui::PushFont(ui.fontIcon);
-            }
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 4));
 
             if (ImGui::Button(ICON_FA_HOUSE))
@@ -340,7 +485,8 @@ namespace Editor
             ImGui::SameLine();
             if (ImGui::Button(ICON_FA_ROTATE))
             {
-                directoryCache.erase(currentPath);
+                directoryCache.clear();
+                visibilityCache.clear();
             }
             if (ImGui::IsItemHovered())
             {
@@ -374,10 +520,39 @@ namespace Editor
             }
 
             ImGui::PopStyleVar();
-            if (ui.fontIcon)
+        }
+
+        void DrawBrowserSectionSidebar(EBrowserSection& section)
+        {
+            struct FSectionEntry
             {
-                ImGui::PopFont();
+                EBrowserSection section;
+                const char* label;
+            };
+
+            static const std::array<FSectionEntry, 4> entries{{
+                {EBrowserSection::Content, ICON_FA_FOLDER_TREE},
+                {EBrowserSection::Material, ICON_FA_CIRCLE_HALF_STROKE},
+                {EBrowserSection::Texture, ICON_FA_IMAGE},
+                {EBrowserSection::Mesh, ICON_FA_BOXES_PACKING},
+            }};
+
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.48f));
+            ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.82f));
+            ImGui::BeginChild("ContentBrowserModeSidebar", ImVec2(40.0f, 0.0f), true);
+
+            for (const auto& entry : entries)
+            {
+                const bool selected = section == entry.section;
+                const float rowWidth = ImGui::GetContentRegionAvail().x;
+                if (ImGui::Selectable(entry.label, selected, ImGuiSelectableFlags_SpanAvailWidth,
+                                      ImVec2(rowWidth, 20.0f)))
+                {
+                    section = entry.section;
+                }
             }
+            ImGui::EndChild();
+            ImGui::PopStyleColor(2);
         }
 
         uint32_t Fnv1a32(std::string_view s)
@@ -391,21 +566,156 @@ namespace Editor
             return hash;
         }
 
+        const char* GetContentSourceBadge(EContentAssetSource source)
+        {
+            switch (source)
+            {
+            case EContentAssetSource::Filesystem:
+                return "FS";
+            case EContentAssetSource::Pak:
+                return "PAK";
+            case EContentAssetSource::Mixed:
+                return "MIX";
+            }
+
+            return "";
+        }
+
+        ImU32 GetContentSourceBadgeColor(EContentAssetSource source)
+        {
+            switch (source)
+            {
+            case EContentAssetSource::Filesystem:
+                return IM_COL32(49, 124, 255, 220);
+            case EContentAssetSource::Pak:
+                return IM_COL32(255, 145, 0, 220);
+            case EContentAssetSource::Mixed:
+                return IM_COL32(90, 190, 90, 220);
+            }
+
+            return IM_COL32(64, 64, 64, 220);
+        }
+
+        uint64_t HashMaterialPreview(const Assets::FMaterial& material)
+        {
+            uint64_t hash = 1469598103934665603ull;
+            auto mixBytes = [&](const void* data, size_t size)
+            {
+                const auto* bytes = static_cast<const uint8_t*>(data);
+                for (size_t i = 0; i < size; ++i)
+                {
+                    hash ^= bytes[i];
+                    hash *= 1099511628211ull;
+                }
+            };
+
+            const Assets::Material& gpu = material.gpuMaterial_;
+            mixBytes(&gpu.Diffuse, sizeof(gpu.Diffuse));
+            mixBytes(&gpu.DiffuseTextureId, sizeof(gpu.DiffuseTextureId));
+            mixBytes(&gpu.MRATextureId, sizeof(gpu.MRATextureId));
+            mixBytes(&gpu.NormalTextureId, sizeof(gpu.NormalTextureId));
+            mixBytes(&gpu.EmissiveTextureId, sizeof(gpu.EmissiveTextureId));
+            mixBytes(&gpu.Fuzziness, sizeof(gpu.Fuzziness));
+            mixBytes(&gpu.RefractionIndex, sizeof(gpu.RefractionIndex));
+            mixBytes(&gpu.MaterialModel, sizeof(gpu.MaterialModel));
+            mixBytes(&gpu.Metalness, sizeof(gpu.Metalness));
+            return hash;
+        }
+
+        ImTextureID RequestMaterialPreviewTexture(EditorContext& ctx, uint32_t materialIndex, const Assets::FMaterial& material)
+        {
+            const uint64_t materialHash = HashMaterialPreview(material);
+            const uint32_t sampleSlot =
+                ctx.engine.GetRenderer().ViewServices().AssetThumbnails().RequestMaterialThumbnail(
+                    materialIndex, materialHash);
+            return sampleSlot == std::numeric_limits<uint32_t>::max()
+                ? 0
+                : ctx.ui.RequestImTextureIdRaw(sampleSlot);
+        }
+
+        uint64_t HashMeshPreview(const Assets::Model& model)
+        {
+            uint64_t hash = 1469598103934665603ull;
+            auto mixBytes = [&](const void* data, size_t size)
+            {
+                const auto* bytes = static_cast<const uint8_t*>(data);
+                for (size_t i = 0; i < size; ++i)
+                {
+                    hash ^= bytes[i];
+                    hash *= 1099511628211ull;
+                }
+            };
+
+            const std::string& name = model.Name();
+            mixBytes(name.data(), name.size());
+            const uint32_t vertexCount = model.NumberOfVertices();
+            const uint32_t indexCount = model.NumberOfIndices();
+            const uint32_t sectionCount = model.SectionCount();
+            const glm::vec3 aabbMin = model.GetLocalAABBMin();
+            const glm::vec3 aabbMax = model.GetLocalAABBMax();
+            mixBytes(&vertexCount, sizeof(vertexCount));
+            mixBytes(&indexCount, sizeof(indexCount));
+            mixBytes(&sectionCount, sizeof(sectionCount));
+            mixBytes(&aabbMin, sizeof(aabbMin));
+            mixBytes(&aabbMax, sizeof(aabbMax));
+
+            const auto& vertices = model.CPUVertices();
+            const auto& indices = model.CPUIndices();
+            if (!vertices.empty())
+            {
+                const size_t sampleIndices[] = {0u, vertices.size() / 2u, vertices.size() - 1u};
+                for (const size_t sampleIndex : sampleIndices)
+                {
+                    mixBytes(&vertices[sampleIndex], sizeof(vertices[sampleIndex]));
+                }
+            }
+            if (!indices.empty())
+            {
+                const size_t sampleIndices[] = {0u, indices.size() / 2u, indices.size() - 1u};
+                for (const size_t sampleIndex : sampleIndices)
+                {
+                    mixBytes(&indices[sampleIndex], sizeof(indices[sampleIndex]));
+                }
+            }
+            return hash;
+        }
+
+        ImTextureID RequestMeshPreviewTexture(EditorContext& ctx, uint32_t modelIndex, const Assets::Model& model)
+        {
+            const uint64_t meshHash = HashMeshPreview(model);
+            const uint32_t sampleSlot =
+                ctx.engine.GetRenderer().ViewServices().AssetThumbnails().RequestMeshThumbnail(modelIndex, meshHash);
+            return sampleSlot == std::numeric_limits<uint32_t>::max()
+                ? 0
+                : ctx.ui.RequestImTextureIdRaw(sampleSlot);
+        }
+
         void DrawGeneralContentBrowser(EditorContext& ctx, EditorUiState& ui, uint32_t& selectionId, bool iconOrTex,
                                        uint32_t globalId, const std::string& name, const char* icon, ImU32 color,
-                                       const ContentBrowserCallbacks& callbacks)
+                                       const ContentBrowserCallbacks& callbacks,
+                                       const char* sourceBadge = nullptr,
+                                       ImU32 sourceBadgeColor = IM_COL32(0, 0, 0, 0),
+                                       ImTextureID thumbnailTextureId = 0)
         {
             ImGui::BeginGroup();
             if (ui.bigIcon)
             {
                 ImGui::PushFont(ui.bigIcon);
             }
+            
+            const ImVec2 cardMin = ImGui::GetCursorPos() + ImGui::GetWindowPos() - ImVec2(0, ImGui::GetScrollY());
+            const ImVec2 cardMid = cardMin + ImVec2(0, GContentBrowserIconSize);
+            const ImVec2 cardMax = cardMin + ImVec2(GContentBrowserIconSize, GContentBrowserIconSize * kCardAspect);
+            
+            ImGui::GetWindowDrawList()->AddRectFilled(
+            cardMin, cardMax,NextUI::Theme::ColorU32(NextUI::Theme::EColor::Background, 0.84f), 6);
+            
             ImGui::PushStyleColor(ImGuiCol_Button, NextUI::Theme::Color(NextUI::Theme::EColor::Background));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, NextUI::Theme::Color(NextUI::Theme::EColor::SurfaceHover));
             ImGui::PushID(static_cast<int>(globalId));
-
-            ImTextureID textureId = ctx.ui.RequestImTextureId(globalId);
-            if (iconOrTex || textureId == 0)
+            
+            ImTextureID textureId = thumbnailTextureId != 0 ? thumbnailTextureId : ctx.ui.RequestImTextureId(globalId);
+            if ((iconOrTex && thumbnailTextureId == 0) || textureId == 0)
             {
                 ImGui::Button(icon, ImVec2(GContentBrowserIconSize, GContentBrowserIconSize));
             }
@@ -442,36 +752,47 @@ namespace Editor
                     selectionId = globalId;
                 }
             }
-
-            auto cursorPos = ImGui::GetCursorPos() + ImGui::GetWindowPos() - ImVec2(0, 4 + ImGui::GetScrollY());
+            
             const bool selected = selectionId == globalId;
-            const ImVec2 cardMin = cursorPos - ImVec2(6.0f, GContentBrowserIconSize + 6.0f);
-            const ImVec2 cardMax = cardMin + ImVec2(GContentBrowserIconSize + 12.0f, GContentBrowserIconSize + 54.0f);
-            ImGui::GetWindowDrawList()->AddRectFilled(
-                cardMin, cardMax,
-                selected ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Accent, 0.14f)
-                         : NextUI::Theme::ColorU32(NextUI::Theme::EColor::Background, 0.84f),
-                8.0f);
+            
             ImGui::GetWindowDrawList()->AddRect(
                 cardMin, cardMax,
                 selected ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::AccentHover, 0.92f)
                          : NextUI::Theme::ColorU32(NextUI::Theme::EColor::Border, 0.84f),
-                8.0f, 0, selected ? 1.4f : 1.0f);
+                6, 0, selected ? 1.4f : 1.0f);
             ImGui::GetWindowDrawList()->AddRectFilled(
-                cursorPos, cursorPos + ImVec2(GContentBrowserIconSize, GContentBrowserIconSize / 5.0f * 3.0f),
+                cardMid, cardMax,
                 selected ? NextUI::Theme::ColorU32(NextUI::Theme::EColor::Accent, 0.72f)
                          : NextUI::Theme::ColorU32(NextUI::Theme::EColor::SurfaceElevated),
                 6);
-            ImGui::GetWindowDrawList()->AddLine(cursorPos, cursorPos + ImVec2(GContentBrowserIconSize, 0), color, 2);
+            ImGui::GetWindowDrawList()->AddLine(cardMid, cardMid + ImVec2(GContentBrowserIconSize, 0), color, 2);
 
+            float cursorPosY = ImGui::GetCursorPosY();
             ImGui::PushItemWidth(GContentBrowserIconSize);
             ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + GContentBrowserIconSize);
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 5);
             ImGui::Text("%s", name.c_str());
             ImGui::PopTextWrapPos();
             ImGui::PopItemWidth();
+            
+            ImGui::SetCursorPosY(cursorPosY);
 
-            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + kIconPadding);
+            ImGui::Dummy(ImVec2(0.0f, GContentBrowserIconSize * (kCardAspect - 1.0f)));
+            
+            // draw badge at top layer
+            if (sourceBadge != nullptr && sourceBadge[0] != '\0')
+            {
+                ImFont* badgeFont = ImGui::GetFont();
+                const float badgeFontSize = ImGui::GetFontSize() * 0.75f;
+                const ImVec2 badgePadding(10.0f, 2.0f);
+                const ImVec2 badgeTextSize = badgeFont->CalcTextSizeA(badgeFontSize, FLT_MAX, 0.0f, sourceBadge);
+                const ImVec2 badgeMin(cardMax.x - badgeTextSize.x - badgePadding.x * 2.0f - 3.0f, cardMin.y + 3.0f);
+                const ImVec2 badgeMax(cardMax.x - 3.0f, badgeMin.y + badgeTextSize.y + badgePadding.y * 2.0f);
+                ImGui::GetWindowDrawList()->AddRectFilled(badgeMin, badgeMax, sourceBadgeColor, badgeTextSize.y * 0.5f);
+                ImGui::GetWindowDrawList()->AddText(badgeFont, badgeFontSize, badgeMin + badgePadding,
+                                                    IM_COL32(255, 255, 255, 255), sourceBadge);
+            }
+            
             ImGui::EndGroup();
 
             if (callbacks.onContextMenu)
@@ -500,9 +821,13 @@ namespace Editor
             }
 
             uint32_t dummySelection = InvalidId;
+            const ImTextureID previewTexture = RequestMeshPreviewTexture(ctx, i, model);
             DrawGeneralContentBrowser(ctx, ui, dummySelection, true, i, name, ICON_FA_BOXES_PACKING,
                                       IM_COL32(132, 182, 255, 255),
-                                      ContentBrowserCallbacks{});
+                                      ContentBrowserCallbacks{},
+                                      nullptr,
+                                      IM_COL32(0, 0, 0, 0),
+                                      previewTexture);
             grid.Next();
             ++itemCount;
         }
@@ -522,6 +847,7 @@ namespace Editor
                 continue;
             }
 
+            const ImTextureID previewTexture = RequestMaterialPreviewTexture(ctx, i, mat);
             DrawGeneralContentBrowser(ctx, ui, ui.selectedMaterialId, true, i, mat.name_, ICON_FA_BOWLING_BALL,
                                       IM_COL32(132, 255, 132, 255),
                                       ContentBrowserCallbacks{
@@ -542,7 +868,10 @@ namespace Editor
                                                                         sizeof(payload));
                                               ImGui::TextUnformatted(mat.name_.c_str());
                                           },
-                                      });
+                                      },
+                                      nullptr,
+                                      IM_COL32(0, 0, 0, 0),
+                                      previewTexture);
 
             grid.Next();
             ++itemCount;
@@ -564,7 +893,18 @@ namespace Editor
 
             DrawGeneralContentBrowser(ctx, ui, ui.selectedTextureId, false, textureGroup.second.GlobalIdx_,
                                       textureGroup.first, ICON_FA_LINK_SLASH, IM_COL32(255, 72, 72, 255),
-                                      ContentBrowserCallbacks{});
+                                      ContentBrowserCallbacks{
+                                          .onDragSource =
+                                              [&]()
+                                          {
+                                              EditorDragDropPayload payload{};
+                                              payload.type = EEditorDragPayloadType::Texture;
+                                              payload.textureId = textureGroup.second.GlobalIdx_;
+                                              ImGui::SetDragDropPayload(kEditorDragDropPayload, &payload,
+                                                                        sizeof(payload));
+                                              ImGui::TextUnformatted(textureGroup.first.c_str());
+                                          },
+                                      });
             grid.Next();
             ++itemCount;
         }
@@ -605,24 +945,34 @@ namespace Editor
     {
         ImGui::Begin("Content Browser", nullptr);
         {
-            NextUI::Theme::DrawPanelHeader(ICON_FA_FOLDER_TREE, "Assets", "Project content browser");
             static const std::filesystem::path rootPath =
                 std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets"));
-            static std::filesystem::path currentPath = rootPath;
             static DirectoryCache directoryCache;
-            static ImGuiTextFilter contentFilter;
+            static DirectoryVisibilityCache visibilityCache;
+            auto& browserState = ui.contentBrowserState;
+            if (!browserState.initialized)
+            {
+                browserState.currentPath = rootPath;
+                browserState.initialized = true;
+            }
+            browserState.currentSection = std::clamp(browserState.currentSection, 0, 3);
+            EBrowserSection currentSection = static_cast<EBrowserSection>(browserState.currentSection);
             int itemCount = 0;
             int selectedCount = ui.selectedContentItemId != InvalidId ? 1 : 0;
 
-            if (ImGui::BeginTabBar("ContentBrowserTabs"))
-            {
-                if (ImGui::BeginTabItem("Content Browser"))
-                {
-                    DrawContentBrowserSidebar(ui, rootPath, currentPath, directoryCache);
-                    ImGui::SameLine();
+            DrawBrowserSectionSidebar(currentSection);
+            browserState.currentSection = static_cast<int>(currentSection);
+            ImGui::SameLine();
 
-                    ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.28f));
-                    ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.82f));
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, NextUI::Theme::Color(NextUI::Theme::EColor::Background, 0.28f));
+            ImGui::PushStyleColor(ImGuiCol_Border, NextUI::Theme::Color(NextUI::Theme::EColor::Border, 0.82f));
+            //ImGui::BeginChild("ContentBrowserSectionFrame", ImVec2(0.0f, 0.0f), true);
+            {
+                DrawContentBrowserSidebar(ui, rootPath, browserState.currentPath, directoryCache, visibilityCache);
+                ImGui::SameLine();
+                ImGui::BeginChild("ContentRightFrame", ImVec2(0.0f, 0.0f), 0, ImGuiWindowFlags_NoBackground);
+                if (currentSection == EBrowserSection::Content)
+                {
                     ImGui::BeginChild("ContentBrowserMain", ImVec2(0.0f, -24.0f), true);
 
                     if (ImGui::Button(ICON_FA_PLUS " Add"))
@@ -648,36 +998,51 @@ namespace Editor
                         SPDLOG_INFO("Content Browser save all placeholder");
                     }
                     ImGui::SameLine();
-                    DrawContentBrowserNavigation(ui, rootPath, currentPath, directoryCache);
-
-                    NextUI::Theme::DrawThinSeparator();
-                    ImGui::SetNextItemWidth(200.0f);
-                    contentFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##ContentBrowserFilter", 200.0f);
+                    DrawContentBrowserNavigation(rootPath, browserState.currentPath, directoryCache, visibilityCache);
                     ImGui::SameLine();
-                    ImGui::SetNextItemWidth(118.0f);
+                    ImGui::SetNextItemWidth(190.0f);
+                    browserState.contentFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##ContentBrowserFilter", 190.0f);
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(104.0f);
                     ImGui::SliderFloat("Thumbnail", &GContentBrowserIconSize, 52.0f, 108.0f, "%.0f");
 
                     NextUI::Theme::DrawThinSeparator(0.70f);
                     ImGui::BeginChild("Content Items", ImVec2(0.0f, 0.0f));
 
-                    auto& entries = GetCachedDirectoryEntries(currentPath, directoryCache);
+                    auto& entries = GetCachedDirectoryEntries(rootPath, browserState.currentPath, directoryCache);
                     ContentGridLayout grid = BeginContentGrid();
                     for (auto& entry : entries)
                     {
-                        const std::string abspath = absolute(entry.path()).string();
-                        const std::string name = entry.path().filename().string();
+                        const std::string assetPath = entry.assetPath;
+                        const std::string name = entry.name;
 
                         const ContentAssetVisual visual = ResolveAssetVisual(entry);
                         if (visual.kind == EContentAssetKind::Unsupported)
                         {
                             continue;
                         }
-                        if (contentFilter.IsActive() && !contentFilter.PassFilter(name.c_str()))
+                        if (visual.kind == EContentAssetKind::Directory &&
+                            !DirectoryHasVisibleContent(rootPath, entry.browserPath, directoryCache, visibilityCache))
+                        {
+                            continue;
+                        }
+                        if (browserState.contentFilter.IsActive() &&
+                            !browserState.contentFilter.PassFilter(name.c_str()))
                         {
                             continue;
                         }
 
-                        const uint32_t stableId = Fnv1a32(abspath);
+                        const uint32_t stableId = Fnv1a32(assetPath);
+                        ImTextureID thumbnailTextureId = 0;
+                        if (visual.kind == EContentAssetKind::Texture)
+                        {
+                            const NextUI::UserInterface::FUiTextureHandle texture = ctx.ui.RequestUiTexture(assetPath);
+                            if (texture.valid)
+                            {
+                                thumbnailTextureId = texture.textureId;
+                            }
+                        }
+
                         DrawGeneralContentBrowser(
                             ctx, ui, ui.selectedContentItemId, true, stableId, name, visual.icon, visual.color,
                             ContentBrowserCallbacks{
@@ -686,15 +1051,15 @@ namespace Editor
                                 {
                                     if (visual.kind == EContentAssetKind::Directory)
                                     {
-                                        currentPath = entry.path();
+                                        browserState.currentPath = entry.browserPath;
                                     }
                                     else if (visual.kind == EContentAssetKind::Scene)
                                     {
-                                        ctx.actions.Dispatch(ctx, EEditorAction::IO_LoadScene, abspath);
+                                        ctx.actions.Dispatch(ctx, EEditorAction::IO_LoadScene, assetPath);
                                     }
                                     else if (visual.kind == EContentAssetKind::Hdri)
                                     {
-                                        ctx.actions.Dispatch(ctx, EEditorAction::IO_LoadHDRI, abspath);
+                                        ctx.actions.Dispatch(ctx, EEditorAction::IO_LoadHDRI, assetPath);
                                     }
                                 },
                                 .onContextMenu =
@@ -704,11 +1069,15 @@ namespace Editor
                                     {
                                         if (ImGui::MenuItem("Open Scene"))
                                         {
-                                            ctx.actions.Dispatch(ctx, EEditorAction::IO_LoadScene, abspath);
+                                            ctx.actions.Dispatch(ctx, EEditorAction::IO_LoadScene, assetPath);
                                         }
-                                        if (ImGui::MenuItem("Add To Scene"))
+                                        if (ImGui::MenuItem("Add As Reference"))
                                         {
-                                            ctx.actions.Dispatch(ctx, EEditorAction::IO_LoadSceneAdd, abspath);
+                                            ctx.actions.Dispatch(ctx, EEditorAction::IO_AddSceneReference, assetPath);
+                                        }
+                                        if (ImGui::MenuItem("Merge Into Scene"))
+                                        {
+                                            ctx.actions.Dispatch(ctx, EEditorAction::IO_LoadSceneAdd, assetPath);
                                         }
                                     }
                                 },
@@ -719,50 +1088,69 @@ namespace Editor
                                     {
                                         EditorDragDropPayload payload{};
                                         payload.type = EEditorDragPayloadType::Scene;
-                                        std::snprintf(payload.path, sizeof(payload.path), "%s", abspath.c_str());
+                                        std::snprintf(payload.path, sizeof(payload.path), "%s", assetPath.c_str());
+                                        ImGui::SetDragDropPayload(kEditorDragDropPayload, &payload, sizeof(payload));
+                                        ImGui::TextUnformatted(name.c_str());
+                                    }
+                                    else if (visual.kind == EContentAssetKind::Texture)
+                                    {
+                                        EditorDragDropPayload payload{};
+                                        payload.type = EEditorDragPayloadType::Texture;
+                                        std::snprintf(payload.path, sizeof(payload.path), "%s", assetPath.c_str());
                                         ImGui::SetDragDropPayload(kEditorDragDropPayload, &payload, sizeof(payload));
                                         ImGui::TextUnformatted(name.c_str());
                                     }
                                 },
-                            });
+                            },
+                            GetContentSourceBadge(entry.source),
+                            GetContentSourceBadgeColor(entry.source),
+                            thumbnailTextureId);
 
                         grid.Next();
                         ++itemCount;
                     }
-
                     ImGui::EndChild();
+                    
                     ImGui::EndChild();
-                    ImGui::PopStyleColor(2);
                     selectedCount = ui.selectedContentItemId != InvalidId ? 1 : 0;
-                    ImGui::EndTabItem();
+                    ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
                 }
-                if (ImGui::BeginTabItem("Material Browser"))
+                else if (currentSection == EBrowserSection::Material)
                 {
-                    ImGui::BeginChild("Material Items", ImVec2(0.0f, -24.0f));
-                    itemCount = DrawMaterialBrowserContents(ctx, ui, &contentFilter);
+                    ImGui::SetNextItemWidth(220.0f);
+                    browserState.materialFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##MaterialBrowserFilter", 220.0f);
+                    NextUI::Theme::DrawThinSeparator(0.70f);
+                    ImGui::BeginChild("Material Items", ImVec2(0.0f, -24.0f), true);
+                    itemCount = DrawMaterialBrowserContents(ctx, ui, &browserState.materialFilter);
+                    ImGui::EndChild();
                     selectedCount = ui.selectedMaterialId != InvalidId ? 1 : 0;
-                    ImGui::EndChild();
-                    ImGui::EndTabItem();
+                    ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
                 }
-                if (ImGui::BeginTabItem("Texture Browser"))
+                else if (currentSection == EBrowserSection::Texture)
                 {
-                    ImGui::BeginChild("Texture Items", ImVec2(0.0f, -24.0f));
-                    itemCount = DrawTextureBrowserContents(ctx, ui, &contentFilter);
+                    ImGui::SetNextItemWidth(220.0f);
+                    browserState.textureFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##TextureBrowserFilter", 220.0f);
+                    NextUI::Theme::DrawThinSeparator(0.70f);
+                    ImGui::BeginChild("Texture Items", ImVec2(0.0f, -24.0f), true);
+                    itemCount = DrawTextureBrowserContents(ctx, ui, &browserState.textureFilter);
+                    ImGui::EndChild();
                     selectedCount = ui.selectedTextureId != InvalidId ? 1 : 0;
-                    ImGui::EndChild();
-                    ImGui::EndTabItem();
+                    ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
                 }
-                if (ImGui::BeginTabItem("Mesh Browser"))
+                else if (currentSection == EBrowserSection::Mesh)
                 {
-                    ImGui::BeginChild("Mesh Items", ImVec2(0.0f, -24.0f));
-                    itemCount = DrawMeshBrowserContents(ctx, ui, &contentFilter);
-                    selectedCount = 0;
+                    ImGui::SetNextItemWidth(220.0f);
+                    browserState.meshFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##MeshBrowserFilter", 220.0f);
+                    NextUI::Theme::DrawThinSeparator(0.70f);
+                    ImGui::BeginChild("Mesh Items", ImVec2(0.0f, -24.0f), true);
+                    itemCount = DrawMeshBrowserContents(ctx, ui, &browserState.meshFilter);
                     ImGui::EndChild();
-                    ImGui::EndTabItem();
+                    ImGui::Text("%d items", itemCount);
                 }
-                ImGui::EndTabBar();
+                ImGui::EndChild();
             }
-            ImGui::Text("%d items (%d selected)", itemCount, selectedCount);
+            //ImGui::EndChild();
+            ImGui::PopStyleColor(2);
         }
         ImGui::End();
     }

@@ -1,0 +1,1014 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>gkNext Remote Play</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: #05070a;
+      color: #e8edf2;
+    }
+    html, body {
+      margin: 0;
+      height: 100%;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* Top status bar — compact, single row, low visual weight. */
+    .topbar {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: #0d1117;
+      border-bottom: 1px solid #1f2630;
+      font-size: 12px;
+    }
+    .topbar h1 {
+      margin: 0 12px 0 0;
+      font-size: 13px;
+      font-weight: 650;
+      white-space: nowrap;
+      color: #c9d1d9;
+    }
+    .pills {
+      display: flex;
+      gap: 6px;
+      flex: 1 1 auto;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: #161b22;
+      border: 1px solid #21262d;
+      white-space: nowrap;
+      color: #9aa7b6;
+    }
+    .pill b {
+      font-weight: 500;
+      color: #e8edf2;
+    }
+    .pill .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #6e7681;
+    }
+    .pill.ok .dot { background: #3fb950; }
+    .pill.warn .dot { background: #d29922; }
+    .pill.err .dot { background: #f85149; }
+    .spacer { flex: 1 1 auto; }
+    .topbar button {
+      flex: 0 0 auto;
+      padding: 3px 10px;
+      font-size: 12px;
+      color: #c9d1d9;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .topbar button:hover { background: #2d333b; }
+    .topbar button.active { background: #1f6feb; border-color: #388bfd; color: #fff; }
+    .toolbar {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+    }
+    .toolbar input[type="range"] {
+      width: 120px;
+      accent-color: #58a6ff;
+    }
+    .toolbar .mini {
+      width: 64px;
+      padding: 3px 6px;
+      font-size: 12px;
+      color: #c9d1d9;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 5px;
+    }
+
+    /* Stage holds the video; fills remaining viewport, so the window can be
+       resized freely and the stream scales with it. */
+    .stage {
+      flex: 1 1 auto;
+      position: relative;
+      min-height: 0;
+      display: grid;
+      place-items: center;
+      background: #000;
+      overflow: hidden;
+    }
+    /* Fit mode (default): the video fills the stage, letterboxed via object-fit.
+       Without width/height:100% the element stays at its intrinsic decoded
+       resolution and never grows with the window. */
+    video {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      object-fit: contain;
+      cursor: default;
+    }
+    /* 100% (1:1 decoded-pixel) mode: show the stream at native size, center it,
+       and let the stage scroll if it overflows. */
+    .stage.actual {
+      overflow: auto;
+      place-items: start center;
+    }
+    .stage.actual video {
+      width: auto;
+      height: auto;
+      margin: auto;
+    }
+    .stats-panel {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: min(360px, calc(100vw - 24px));
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: rgba(13, 17, 23, 0.88);
+      border: 1px solid rgba(48, 54, 61, 0.92);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      font-size: 12px;
+      color: #c9d1d9;
+      z-index: 2;
+    }
+    .stats-panel.hidden {
+      display: none;
+    }
+    .stats-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .stats-head strong {
+      font-size: 12px;
+      font-weight: 650;
+      color: #f0f6fc;
+    }
+    .stats-head span {
+      color: #8b949e;
+      font-size: 11px;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .stat {
+      min-width: 0;
+      padding: 8px 9px;
+      border-radius: 6px;
+      background: rgba(22, 27, 34, 0.92);
+      border: 1px solid rgba(48, 54, 61, 0.92);
+    }
+    .stat span {
+      display: block;
+      margin-bottom: 4px;
+      color: #8b949e;
+      font-size: 11px;
+    }
+    .stat b {
+      display: block;
+      color: #f0f6fc;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+
+    /* Collapsible log panel — docked at the bottom, hidden by default. */
+    .logwrap {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      border-top: 1px solid #1f2630;
+      background: #0d1117;
+    }
+    .logwrap.collapsed .loghead .chev { transform: rotate(-90deg); }
+    .logwrap.collapsed #log { display: none; }
+    .loghead {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 12px;
+      color: #9aa7b6;
+    }
+    .loghead:hover { color: #c9d1d9; }
+    .chev {
+      transition: transform .12s;
+      font-size: 10px;
+    }
+    .logwrap:not(.collapsed) .chev { transform: rotate(0deg); }
+    .logcount {
+      margin-left: auto;
+      padding: 1px 7px;
+      border-radius: 8px;
+      background: #161b22;
+      font-size: 11px;
+    }
+    #log {
+      flex: 0 0 auto;
+      height: 120px;
+      overflow: auto;
+      padding: 8px 12px;
+      color: #c9d1d9;
+      white-space: pre-wrap;
+      font: 12px ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+
+    /* Fullscreen: hide chrome, let the video own the screen. */
+    :fullscreen .topbar,
+    :fullscreen .logwrap { display: none; }
+    :fullscreen .stage { background: #000; }
+    :fullscreen body,
+    :fullscreen html { height: 100%; }
+    :fullscreen video { cursor: default; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>gkNext Remote Play</h1>
+    <div class="pills">
+      <span class="pill" id="pill-http"><span class="dot"></span><b>HTTP</b> <span id="httpState">connected</span></span>
+      <span class="pill" id="pill-ws"><span class="dot"></span><b>WS</b> <span id="wsState">connecting</span></span>
+      <span class="pill" id="pill-pc"><span class="dot"></span><b>Peer</b> <span id="pcState">new</span></span>
+      <span class="pill" id="pill-in"><span class="dot"></span><b>Input</b> <span id="inputState">waiting</span></span>
+      <span class="pill" id="pill-stream"><span class="dot"></span><b>Stream</b> <span id="streamState">waiting</span></span>
+      <span class="pill" id="pill-view"><b>View</b> <span id="viewState">client</span></span>
+      <span class="pill" id="pill-encoder"><b>Encoder</b> <span id="encoderState">vulkan</span></span>
+      <span class="pill" id="pill-rtt"><b>RTT</b> <span id="rttState">-</span></span>
+      <span class="pill" id="pill-bitrate"><b>Bitrate</b> <span id="bitrateState">4000 kbps</span></span>
+      <span class="pill" id="pill-bytes"><b>↓</b> <span id="bytesState">0 B</span></span>
+    </div>
+    <span class="spacer"></span>
+    <div class="toolbar">
+      <input id="bitrateSlider" type="range" min="1000" max="20000" step="250" value="4000" title="码率 (kbps)">
+      <input id="bitrateInput" class="mini" type="number" min="1000" max="20000" step="250" value="4000" title="码率 (kbps)">
+      <button id="btnKeyframe" title="请求关键帧 (IDR)">IDR</button>
+    </div>
+    <button id="btnStats" class="active" title="显示 / 隐藏实时统计">Stats</button>
+    <button id="btnActual" title="100% 原始像素大小 (1:1)">100%</button>
+    <button id="btnFullscreen" title="全屏 (F)">⤢ 全屏</button>
+  </div>
+
+  <div class="stage" id="stage">
+    <video id="video" autoplay playsinline muted></video>
+    <div class="stats-panel" id="statsPanel">
+      <div class="stats-head">
+        <strong>实时统计</strong>
+        <span id="statsUpdated">未采样</span>
+      </div>
+      <div class="stats-grid">
+        <div class="stat"><span>视频分辨率</span><b id="statVideo">-</b></div>
+        <div class="stat"><span>解码 / 丢帧</span><b id="statDecode">-</b></div>
+        <div class="stat"><span>接收码率</span><b id="statRxBitrate">-</b></div>
+        <div class="stat"><span>累计接收</span><b id="statRxBytes">-</b></div>
+        <div class="stat"><span>抖动</span><b id="statJitter">-</b></div>
+        <div class="stat"><span>丢包</span><b id="statLoss">-</b></div>
+        <div class="stat"><span>链路候选</span><b id="statCandidate">-</b></div>
+        <div class="stat"><span>可用带宽</span><b id="statAvailBitrate">-</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="logwrap collapsed" id="logwrap">
+    <div class="loghead" id="loghead">
+      <span class="chev">▼</span>
+      <span>调试日志</span>
+      <span class="logcount" id="logcount">0</span>
+    </div>
+    <div id="log"></div>
+  </div>
+
+<script>
+const logEl = document.querySelector("#log");
+const logcountEl = document.querySelector("#logcount");
+const wsState = document.querySelector("#wsState");
+const pcState = document.querySelector("#pcState");
+const inputState = document.querySelector("#inputState");
+const streamState = document.querySelector("#streamState");
+const viewState = document.querySelector("#viewState");
+const encoderState = document.querySelector("#encoderState");
+const rttState = document.querySelector("#rttState");
+const bitrateState = document.querySelector("#bitrateState");
+const bytesState = document.querySelector("#bytesState");
+const pillWs = document.querySelector("#pill-ws");
+const pillPc = document.querySelector("#pill-pc");
+const pillIn = document.querySelector("#pill-in");
+const pillStream = document.querySelector("#pill-stream");
+const bitrateSlider = document.querySelector("#bitrateSlider");
+const bitrateInput = document.querySelector("#bitrateInput");
+const btnKeyframe = document.querySelector("#btnKeyframe");
+const btnStats = document.querySelector("#btnStats");
+const videoEl = document.querySelector("#video");
+const stageEl = document.querySelector("#stage");
+const statsPanel = document.querySelector("#statsPanel");
+const statsUpdated = document.querySelector("#statsUpdated");
+const statVideo = document.querySelector("#statVideo");
+const statDecode = document.querySelector("#statDecode");
+const statRxBitrate = document.querySelector("#statRxBitrate");
+const statRxBytes = document.querySelector("#statRxBytes");
+const statJitter = document.querySelector("#statJitter");
+const statLoss = document.querySelector("#statLoss");
+const statCandidate = document.querySelector("#statCandidate");
+const statAvailBitrate = document.querySelector("#statAvailBitrate");
+const clientId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+const remoteBase = new URLSearchParams(location.search).get("remoteBase") || "";
+let ws = null;
+let pc = null;
+let inputChannel = null;
+let logLines = 0;
+let statsPollPending = false;
+const statsCache = {
+  lastBytes: 0,
+  lastFramesDecoded: 0,
+  lastTimestampMs: 0,
+};
+
+function postToParent(type, payload = {}) {
+  try {
+    if (!window.parent || window.parent === window) {
+      return;
+    }
+    window.parent.postMessage({
+      source: "gkNextRemote",
+      type,
+      ...payload,
+    }, "*");
+  } catch (_) {
+  }
+}
+
+function resolveRemoteURL(path) {
+  if (!remoteBase) {
+    return path;
+  }
+  return new URL(path, remoteBase).toString();
+}
+
+function setPill(pill, ok) {
+  pill.classList.remove("ok", "warn", "err");
+  if (ok === true) pill.classList.add("ok");
+  else if (ok === "warn") pill.classList.add("warn");
+  else if (ok === false) pill.classList.add("err");
+}
+
+function formatBytes(n) {
+  if (!n) return "0 B";
+  if (n < 1024) return n + " B";
+  if (n < 1048576) return (n / 1024).toFixed(1) + " KB";
+  return (n / 1048576).toFixed(2) + " MB";
+}
+
+function formatBitrate(bitsPerSecond) {
+  if (!bitsPerSecond || bitsPerSecond < 0) return "-";
+  if (bitsPerSecond < 1000000) return `${(bitsPerSecond / 1000).toFixed(0)} kbps`;
+  return `${(bitsPerSecond / 1000000).toFixed(2)} Mbps`;
+}
+
+function formatMillis(value) {
+  if (!Number.isFinite(value)) return "-";
+  return `${Math.round(value)} ms`;
+}
+
+function formatLoss(packetsLost, packetsReceived) {
+  if (!Number.isFinite(packetsLost)) return "-";
+  const total = Math.max(0, packetsLost) + Math.max(0, packetsReceived || 0);
+  if (total <= 0) return `${packetsLost}`;
+  return `${packetsLost} (${((Math.max(0, packetsLost) / total) * 100).toFixed(1)}%)`;
+}
+
+function candidateLabel(report) {
+  if (!report) return "-";
+  const type = report.candidateType || "?";
+  const protocol = report.protocol || "?";
+  return `${type}/${protocol}`;
+}
+
+function updateStatsPanel(stats) {
+  const reports = new Map();
+  stats.forEach(report => reports.set(report.id, report));
+
+  let inboundVideo = null;
+  let pair = null;
+  reports.forEach(report => {
+    if (report.type === "inbound-rtp" && (report.kind === "video" || report.mediaType === "video")) {
+      inboundVideo = report;
+    }
+    if (report.type === "candidate-pair" && report.nominated && report.state === "succeeded") {
+      pair = report;
+    }
+  });
+
+  if (inboundVideo) {
+    const bytesReceived = Number(inboundVideo.bytesReceived || 0);
+    const framesDecoded = Number(inboundVideo.framesDecoded || 0);
+    const framesDropped = Number(inboundVideo.framesDropped || 0);
+    const width = Number(inboundVideo.frameWidth || videoEl.videoWidth || 0);
+    const height = Number(inboundVideo.frameHeight || videoEl.videoHeight || 0);
+    const packetsLost = Number(inboundVideo.packetsLost || 0);
+    const packetsReceived = Number(inboundVideo.packetsReceived || 0);
+    const jitterMs = Number(inboundVideo.jitter || 0) * 1000;
+    const timestampMs = Number(inboundVideo.timestamp || 0);
+    let bitrate = 0;
+    let fps = Number(inboundVideo.framesPerSecond || 0);
+
+    if (statsCache.lastTimestampMs > 0 && timestampMs > statsCache.lastTimestampMs) {
+      const dtSeconds = (timestampMs - statsCache.lastTimestampMs) / 1000;
+      if (dtSeconds > 0) {
+        bitrate = ((bytesReceived - statsCache.lastBytes) * 8) / dtSeconds;
+        if (!fps) {
+          fps = (framesDecoded - statsCache.lastFramesDecoded) / dtSeconds;
+        }
+      }
+    }
+
+    statsCache.lastBytes = bytesReceived;
+    statsCache.lastFramesDecoded = framesDecoded;
+    statsCache.lastTimestampMs = timestampMs;
+
+    streamState.textContent = `${framesDecoded} frames`;
+    setPill(pillStream, true);
+    bytesState.textContent = formatBytes(bytesReceived);
+    statVideo.textContent = width > 0 && height > 0 ? `${width}x${height}` : "-";
+    statDecode.textContent = `${fps > 0 ? fps.toFixed(1) : "-"} fps / drop ${framesDropped}`;
+    statRxBitrate.textContent = formatBitrate(bitrate);
+    statRxBytes.textContent = formatBytes(bytesReceived);
+    statJitter.textContent = formatMillis(jitterMs);
+    statLoss.textContent = formatLoss(packetsLost, packetsReceived);
+  }
+
+  if (pair) {
+    const rttMs = Number(pair.currentRoundTripTime || 0) * 1000;
+    const availableIncoming = Number(pair.availableIncomingBitrate || 0);
+    const local = reports.get(pair.localCandidateId);
+    const remote = reports.get(pair.remoteCandidateId);
+    const remoteAddress = remote ? (remote.address || remote.ip || "") : "";
+
+    rttState.textContent = formatMillis(rttMs);
+    statCandidate.textContent = `${candidateLabel(local)} -> ${candidateLabel(remote)}${remoteAddress ? ` ${remoteAddress}` : ""}`;
+    statAvailBitrate.textContent = formatBitrate(availableIncoming);
+  }
+
+  statsUpdated.textContent = new Date().toLocaleTimeString();
+}
+
+const InputType = {
+  key: 1,
+  mouseMove: 2,
+  mouseButton: 3,
+  wheel: 4,
+  gamepad: 5,
+  requestKeyframe: 6,
+  setBitrate: 7,
+  textUtf8: 8,
+};
+const MoveMode = {
+  relative: 0,
+  absolute: 1,
+};
+const scancodes = new Map(Object.entries({
+  KeyA: 4, KeyB: 5, KeyC: 6, KeyD: 7, KeyE: 8, KeyF: 9, KeyG: 10, KeyH: 11, KeyI: 12, KeyJ: 13,
+  KeyK: 14, KeyL: 15, KeyM: 16, KeyN: 17, KeyO: 18, KeyP: 19, KeyQ: 20, KeyR: 21, KeyS: 22,
+  KeyT: 23, KeyU: 24, KeyV: 25, KeyW: 26, KeyX: 27, KeyY: 28, KeyZ: 29,
+  Digit1: 30, Digit2: 31, Digit3: 32, Digit4: 33, Digit5: 34, Digit6: 35, Digit7: 36, Digit8: 37,
+  Digit9: 38, Digit0: 39, Enter: 40, Escape: 41, Backspace: 42, Tab: 43, Space: 44, Minus: 45,
+  Equal: 46, BracketLeft: 47, BracketRight: 48, Backslash: 49, Semicolon: 51, Quote: 52, Backquote: 53,
+  Comma: 54, Period: 55, Slash: 56, CapsLock: 57, F1: 58, F2: 59, F3: 60, F4: 61, F5: 62,
+  F6: 63, F7: 64, F8: 65, F9: 66, F10: 67, F11: 68, F12: 69, PrintScreen: 70, ScrollLock: 71,
+  Pause: 72, Insert: 73, Home: 74, PageUp: 75, Delete: 76, End: 77, PageDown: 78, ArrowRight: 79,
+  ArrowLeft: 80, ArrowDown: 81, ArrowUp: 82, NumLock: 83, NumpadDivide: 84, NumpadMultiply: 85,
+  NumpadSubtract: 86, NumpadAdd: 87, NumpadEnter: 88, Numpad1: 89, Numpad2: 90, Numpad3: 91,
+  Numpad4: 92, Numpad5: 93, Numpad6: 94, Numpad7: 95, Numpad8: 96, Numpad9: 97, Numpad0: 98,
+  NumpadDecimal: 99, ControlLeft: 224, ShiftLeft: 225, AltLeft: 226, MetaLeft: 227, ControlRight: 228,
+  ShiftRight: 229, AltRight: 230, MetaRight: 231,
+}));
+
+function log(line) {
+  const stamp = new Date().toLocaleTimeString();
+  logEl.textContent += `[${stamp}] ${line}\n`;
+  logEl.scrollTop = logEl.scrollHeight;
+  logLines += 1;
+  logcountEl.textContent = String(logLines);
+}
+
+function detectH264ProfileMask() {
+  const Receiver = window.RTCRtpReceiver;
+  if (!Receiver || typeof Receiver.getCapabilities !== "function") {
+    return 1;
+  }
+  const capabilities = Receiver.getCapabilities("video");
+  if (!capabilities || !Array.isArray(capabilities.codecs)) {
+    return 1;
+  }
+
+  let mask = 0;
+  for (const codec of capabilities.codecs) {
+    if (!codec || codec.mimeType !== "video/H264") {
+      continue;
+    }
+    const fmtp = String(codec.sdpFmtpLine || "");
+    const match = fmtp.match(/profile-level-id=([0-9a-fA-F]{6})/);
+    if (!match) {
+      mask |= 1;
+      continue;
+    }
+    const profileByte = parseInt(match[1].slice(0, 2), 16);
+    if (profileByte === 0x4d) mask |= 2;
+    else if (profileByte === 0x64) mask |= 4;
+    else mask |= 1;
+  }
+  return mask || 1;
+}
+
+function waitForIceGatheringComplete(peer) {
+  if (peer.iceGatheringState === "complete") {
+    return Promise.resolve();
+  }
+  return new Promise(resolve => {
+    const onState = () => {
+      if (peer.iceGatheringState === "complete") {
+        peer.removeEventListener("icegatheringstatechange", onState);
+        resolve();
+      }
+    };
+    peer.addEventListener("icegatheringstatechange", onState);
+  });
+}
+
+function ensurePeerConnection() {
+  if (pc) {
+    return pc;
+  }
+  pc = new RTCPeerConnection({ bundlePolicy: "max-bundle" });
+  pc.onconnectionstatechange = () => {
+    pcState.textContent = pc.connectionState;
+    setPill(pillPc, pc.connectionState === "connected" ? true
+              : pc.connectionState === "disconnected" || pc.connectionState === "failed" ? false : "warn");
+    log(`peer ${pc.connectionState}`);
+    postToParent("status", { text: `Peer: ${pc.connectionState}` });
+  };
+  pc.oniceconnectionstatechange = () => {
+    pcState.textContent = `${pc.connectionState}/${pc.iceConnectionState}`;
+  };
+  pc.ontrack = event => {
+    videoEl.srcObject = event.streams[0] || new MediaStream([event.track]);
+    streamState.textContent = `${event.track.kind} ${event.track.readyState}`;
+    setPill(pillStream, event.track.readyState === "live");
+    log(`track ${event.track.kind}`);
+    postToParent("status", { text: `Stream: ${event.track.kind} ${event.track.readyState}` });
+  };
+  pc.ondatachannel = event => {
+    if (event.channel.label !== "input") {
+      return;
+    }
+    inputChannel = event.channel;
+    inputChannel.binaryType = "arraybuffer";
+    inputChannel.onopen = () => {
+      inputState.textContent = "open";
+      setPill(pillIn, true);
+      log("input channel open");
+      sendInput(Uint8Array.from([InputType.requestKeyframe]).buffer);
+      applyBitrate(bitrateInput.value);
+      postToParent("status", { text: "Input channel: open" });
+    };
+    inputChannel.onclose = () => {
+      inputState.textContent = "closed";
+      setPill(pillIn, false);
+      log("input channel closed");
+      postToParent("status", { text: "Input channel: closed" });
+    };
+  };
+  setInterval(async () => {
+    if (!pc) {
+      return;
+    }
+    if (statsPollPending) {
+      return;
+    }
+    statsPollPending = true;
+    try {
+      const stats = await pc.getStats();
+      updateStatsPanel(stats);
+    } catch (error) {
+      log(`stats ${error.message || String(error)}`);
+    } finally {
+      statsPollPending = false;
+    }
+  }, 1000);
+  return pc;
+}
+
+function sendInput(buffer) {
+  if (!inputChannel || inputChannel.readyState !== "open") {
+    return;
+  }
+  inputChannel.send(buffer);
+}
+
+function clampBitrate(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 4000;
+  return Math.max(1000, Math.min(20000, Math.round(numeric / 250) * 250));
+}
+
+function setBitrateUi(value) {
+  const clamped = clampBitrate(value);
+  bitrateSlider.value = String(clamped);
+  bitrateInput.value = String(clamped);
+  bitrateState.textContent = `${clamped} kbps`;
+  return clamped;
+}
+
+function packBitrate(kbps) {
+  const clamped = clampBitrate(kbps);
+  const buffer = new ArrayBuffer(5);
+  const view = new DataView(buffer);
+  view.setUint8(0, InputType.setBitrate);
+  view.setUint32(1, clamped, true);
+  return buffer;
+}
+
+function applyBitrate(kbps) {
+  const clamped = setBitrateUi(kbps);
+  sendInput(packBitrate(clamped));
+}
+
+const KMOD = {
+  LSHIFT: 0x0001,
+  RSHIFT: 0x0002,
+  LCTRL: 0x0040,
+  RCTRL: 0x0080,
+  LALT: 0x0100,
+  RALT: 0x0200,
+  LGUI: 0x0400,
+  RGUI: 0x0800,
+};
+let activeMods = 0;
+
+function modifierMaskForCode(code) {
+  switch (code) {
+    case "ShiftLeft": return KMOD.LSHIFT;
+    case "ShiftRight": return KMOD.RSHIFT;
+    case "ControlLeft": return KMOD.LCTRL;
+    case "ControlRight": return KMOD.RCTRL;
+    case "AltLeft": return KMOD.LALT;
+    case "AltRight": return KMOD.RALT;
+    case "MetaLeft": return KMOD.LGUI;
+    case "MetaRight": return KMOD.RGUI;
+    default: return 0;
+  }
+}
+
+function updateModifierState(event, down) {
+  const mask = modifierMaskForCode(event.code);
+  if (!mask) {
+    return;
+  }
+  if (down) {
+    activeMods |= mask;
+  } else {
+    activeMods &= ~mask;
+  }
+}
+
+function currentMod() {
+  return activeMods;
+}
+
+function packKey(event, down) {
+  const scancode = scancodes.get(event.code);
+  if (!scancode) {
+    return null;
+  }
+  const buffer = new ArrayBuffer(7);
+  const view = new DataView(buffer);
+  view.setUint8(0, InputType.key);
+  view.setUint8(1, down ? 1 : 0);
+  view.setUint8(2, event.repeat ? 1 : 0);
+  view.setUint16(3, scancode, true);
+  view.setUint16(5, currentMod(), true);
+  return buffer;
+}
+
+function packText(text) {
+  const bytes = new TextEncoder().encode(text);
+  if (!bytes.length || bytes.length > 65535) {
+    return null;
+  }
+  const buffer = new ArrayBuffer(3 + bytes.length);
+  const view = new DataView(buffer);
+  view.setUint8(0, InputType.textUtf8);
+  view.setUint16(1, bytes.length, true);
+  new Uint8Array(buffer, 3).set(bytes);
+  return buffer;
+}
+
+function packMouseMove(mode, x, y) {
+  const buffer = new ArrayBuffer(10);
+  const view = new DataView(buffer);
+  view.setUint8(0, InputType.mouseMove);
+  view.setUint8(1, mode);
+  view.setFloat32(2, x, true);
+  view.setFloat32(6, y, true);
+  return buffer;
+}
+
+// Map a pointer position inside the video element (CSS px, relative to its top-left)
+// into the server's normalized coordinate space [0,1]. The server scales this back by
+// the real window framebuffer size, so the mapping stays correct regardless of the
+// encode resolution vs window resolution ratio.
+function scaleToVideo(clientX, clientY) {
+  const rect = videoEl.getBoundingClientRect();
+  // object-fit: contain → compute the letterboxed video rect inside the element.
+  const vw = videoEl.videoWidth || rect.width;
+  const vh = videoEl.videoHeight || rect.height;
+  const elementRatio = rect.width / rect.height;
+  const videoRatio = vw / vh;
+  let dispX = rect.left;
+  let dispY = rect.top;
+  let dispW = rect.width;
+  let dispH = rect.height;
+  if (videoRatio > elementRatio) {
+    dispH = rect.width / videoRatio;
+    dispY = rect.top + (rect.height - dispH) / 2;
+  } else if (videoRatio < elementRatio) {
+    dispW = rect.height * videoRatio;
+    dispX = rect.left + (rect.width - dispW) / 2;
+  }
+  const nx = Math.max(0, Math.min(1, (clientX - dispX) / dispW));
+  const ny = Math.max(0, Math.min(1, (clientY - dispY) / dispH));
+  return { x: nx, y: ny };
+}
+
+function packMouseButton(event, down) {
+  const button = event.button === 1 ? 2 : event.button === 2 ? 3 : 1;
+  const p = scaleToVideo(event.clientX, event.clientY);
+  const buffer = new ArrayBuffer(11);
+  const view = new DataView(buffer);
+  view.setUint8(0, InputType.mouseButton);
+  view.setUint8(1, down ? 1 : 0);
+  view.setUint8(2, button);
+  view.setFloat32(3, p.x, true);
+  view.setFloat32(7, p.y, true);
+  return buffer;
+}
+
+function packWheel(event) {
+  const buffer = new ArrayBuffer(9);
+  const view = new DataView(buffer);
+  view.setUint8(0, InputType.wheel);
+  view.setFloat32(1, -event.deltaX / 120, true);
+  view.setFloat32(5, -event.deltaY / 120, true);
+  return buffer;
+}
+
+function scaleAxis(value) {
+  const clamped = Math.max(-1, Math.min(1, Number.isFinite(value) ? value : 0));
+  return Math.round(clamped * 32767);
+}
+
+function pollGamepad() {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  const pad = Array.from(pads).find(Boolean);
+  if (pad && inputChannel && inputChannel.readyState === "open") {
+    const buffer = new ArrayBuffer(17);
+    const view = new DataView(buffer);
+    view.setUint8(0, InputType.gamepad);
+    view.setInt16(1, scaleAxis(pad.axes[0] || 0), true);
+    view.setInt16(3, scaleAxis(pad.axes[1] || 0), true);
+    view.setInt16(5, scaleAxis(pad.axes[2] || 0), true);
+    view.setInt16(7, scaleAxis(pad.axes[3] || 0), true);
+    view.setInt16(9, scaleAxis((pad.buttons[6]?.value || 0) * 2 - 1), true);
+    view.setInt16(11, scaleAxis((pad.buttons[7]?.value || 0) * 2 - 1), true);
+    const browserToSdl = [0, 1, 2, 3, 9, 10, 7, 8, 4, 6, 11, 12, 13, 14, 15, 5];
+    let buttons = 0;
+    for (let i = 0; i < browserToSdl.length; ++i) {
+      if (pad.buttons[i]?.pressed) {
+        buttons |= 1 << browserToSdl[i];
+      }
+    }
+    view.setUint32(13, buttons, true);
+    sendInput(buffer);
+  }
+  requestAnimationFrame(pollGamepad);
+}
+
+// F11 is reserved by the browser; use F to toggle the Fullscreen API on the stage.
+function toggleFullscreen() {
+  if (document.fullscreenElement) {
+    document.exitFullscreen?.();
+  } else {
+    stageEl.requestFullscreen?.();
+  }
+}
+document.querySelector("#btnFullscreen").addEventListener("click", toggleFullscreen);
+
+function toggleStats() {
+  const hidden = statsPanel.classList.toggle("hidden");
+  btnStats.classList.toggle("active", !hidden);
+}
+btnStats.addEventListener("click", toggleStats);
+
+// Toggle between fit (fill stage, letterboxed) and 100% (1:1 decoded pixels).
+let actualMode = false;
+function toggleActual() {
+  actualMode = !actualMode;
+  stageEl.classList.toggle("actual", actualMode);
+  document.querySelector("#btnActual").classList.toggle("active", actualMode);
+}
+document.querySelector("#btnActual").addEventListener("click", toggleActual);
+btnKeyframe.addEventListener("click", () => sendInput(Uint8Array.from([InputType.requestKeyframe]).buffer));
+bitrateSlider.addEventListener("input", () => setBitrateUi(bitrateSlider.value));
+bitrateSlider.addEventListener("change", () => applyBitrate(bitrateSlider.value));
+bitrateInput.addEventListener("change", () => applyBitrate(bitrateInput.value));
+
+document.addEventListener("keydown", event => {
+  updateModifierState(event, true);
+  const buffer = packKey(event, true);
+  if (buffer) {
+    event.preventDefault();
+    sendInput(buffer);
+  }
+  if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key && event.key.length === 1) {
+    const textBuffer = packText(event.key);
+    if (textBuffer) {
+      sendInput(textBuffer);
+    }
+  }
+});
+document.addEventListener("keyup", event => {
+  updateModifierState(event, false);
+  const buffer = packKey(event, false);
+  if (buffer) {
+    event.preventDefault();
+    sendInput(buffer);
+  }
+});
+window.addEventListener("blur", () => {
+  activeMods = 0;
+});
+// Absolute mode by default: keeps the OS cursor visible in the browser and lets
+// the server place the cursor at the reported window coordinate, which is what
+// UI / ImGui interaction needs. Hold the right mouse button to enter relative
+// (pointer-lock) mode for FPS-style camera look; releasing it exits lock.
+let inPointerLock = false;
+document.addEventListener("pointerlockchange", () => {
+  inPointerLock = document.pointerLockElement === videoEl;
+  inputState.textContent = inPointerLock ? "pointer-lock" : "open";
+  setPill(pillIn, inPointerLock);
+});
+videoEl.addEventListener("mousemove", event => {
+  if (inPointerLock) {
+    sendInput(packMouseMove(MoveMode.relative, event.movementX, event.movementY));
+  } else {
+    const p = scaleToVideo(event.clientX, event.clientY);
+    sendInput(packMouseMove(MoveMode.absolute, p.x, p.y));
+  }
+});
+videoEl.addEventListener("mousedown", event => {
+  event.preventDefault();
+  if (event.button === 2) {
+    // Right button: arm relative mode for camera look and still forward the
+    // button state so engine/editor camera controllers can latch RMB-held mode.
+    sendInput(packMouseButton(event, true));
+    if (!inPointerLock) {
+      videoEl.requestPointerLock?.();
+    }
+    return;
+  }
+  sendInput(packMouseButton(event, true));
+});
+videoEl.addEventListener("mouseup", event => {
+  event.preventDefault();
+  if (event.button === 2) {
+    sendInput(packMouseButton(event, false));
+    if (inPointerLock) {
+      document.exitPointerLock?.();
+    }
+    return;
+  }
+  sendInput(packMouseButton(event, false));
+});
+// This page is a dedicated remote surface, so suppress browser secondary-click
+// behavior globally. Relying only on videoEl/contextmenu is insufficient because
+// the menu may fire on document after pointer-lock transitions.
+window.addEventListener("contextmenu", event => event.preventDefault());
+window.addEventListener("auxclick", event => event.preventDefault());
+window.addEventListener("dragstart", event => event.preventDefault());
+// Swallow native click/dblclick on the video so the browser never toggles
+// play/pause or fullscreen on pointer interaction — input is fully remote-driven.
+videoEl.addEventListener("click", event => event.preventDefault());
+videoEl.addEventListener("dblclick", event => event.preventDefault());
+videoEl.addEventListener("wheel", event => {
+  event.preventDefault();
+  sendInput(packWheel(event));
+}, { passive: false });
+
+// Collapsible log panel.
+document.querySelector("#loghead").addEventListener("click", () => {
+  document.querySelector("#logwrap").classList.toggle("collapsed");
+});
+
+async function handleOffer(message) {
+  const peer = ensurePeerConnection();
+  await peer.setRemoteDescription({ type: "offer", sdp: message.sdp });
+  const answer = await peer.createAnswer();
+  await peer.setLocalDescription(answer);
+  await waitForIceGatheringComplete(peer);
+  ws.send(JSON.stringify({ type: "answer", id: clientId, sdp: peer.localDescription.sdp }));
+  log("answer sent");
+}
+
+async function connect() {
+  const config = await fetch(resolveRemoteURL("/config")).then(r => {
+    if (!r.ok) {
+      throw new Error(`config http ${r.status}`);
+    }
+    return r.json();
+  });
+  log(`config ${JSON.stringify(config)}`);
+  if (encoderState) {
+    const active = config.activeEncoder || "vulkan";
+    const requested = config.requestedEncoder && config.requestedEncoder !== active
+      ? ` (${config.requestedEncoder})`
+      : "";
+    encoderState.textContent = `${active}${requested}`;
+  }
+  if (viewState) {
+    const mode = config.mode || "legacy";
+    const maxClients = config.maxClients ? `/${config.maxClients}` : "";
+    viewState.textContent = `${mode} ${clientId.slice(0, 8)}${maxClients}`;
+    document.title = mode === "multiview"
+      ? `gkNext Cloud Play ${clientId.slice(0, 8)}`
+      : "gkNext Remote Play";
+  }
+  setBitrateUi(config.activeBitrateKbps || config.bitrateKbps || 4000);
+  const remoteBaseURL = remoteBase ? new URL(remoteBase) : null;
+  const host = config.bindAddress || remoteBaseURL?.hostname || location.hostname || "127.0.0.1";
+  ws = new WebSocket(`ws://${host}:${config.signalingPort}`);
+  ws.onopen = () => {
+    wsState.textContent = "open";
+    setPill(pillWs, true);
+    log("websocket open");
+    postToParent("status", { text: "WebSocket: open" });
+    ws.send(JSON.stringify({ type: "request", id: clientId, h264ProfileMask: detectH264ProfileMask() }));
+  };
+  ws.onclose = () => {
+    wsState.textContent = "closed";
+    setPill(pillWs, false);
+    log("websocket closed");
+    postToParent("status", { text: "WebSocket: closed" });
+  };
+  ws.onerror = () => {
+    wsState.textContent = "error";
+    setPill(pillWs, false);
+    log("websocket error");
+    postToParent("status", { text: "WebSocket: error" });
+  };
+  ws.onmessage = async event => {
+    log(`server ${event.data}`);
+    const message = JSON.parse(event.data);
+    if (message.type === "offer") {
+      await handleOffer(message);
+    } else if (message.type === "candidate" && pc) {
+      await pc.addIceCandidate({ candidate: message.candidate, sdpMid: message.mid });
+    } else if (message.type === "error") {
+      streamState.textContent = message.message || "error";
+      setPill(pillStream, false);
+    }
+  };
+}
+
+postToParent("loaded", { text: "Remote client loaded" });
+connect().catch(error => {
+  wsState.textContent = "error";
+  setPill(pillWs, false);
+  log(error.message || String(error));
+  postToParent("status", { text: error.message || String(error) });
+});
+requestAnimationFrame(pollGamepad);
+</script>
+</body>
+</html>

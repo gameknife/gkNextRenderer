@@ -1,4 +1,3 @@
-implementing Common;
 #include "PreProcessor.slang"
 
 // IRayTracer implementations split out of Shading.slang.
@@ -55,7 +54,7 @@ public struct FHiVoxelDDARayTracer : IRayTracer
         return stepDistance;
     }
 
-    bool TraceOcclusionDDA(float3 rayOrigin, float3 rayDir, float maxDistance)
+    public bool TraceOcclusionDDA(float3 rayOrigin, float3 rayDir, float maxDistance)
     {
         VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
         uint cascadeCount = GetAmbientCubeCascadeCount();
@@ -352,7 +351,7 @@ public struct FAmbientCubeRayTracer : IRayTracer
         float4 probeData = interpolateAmbientCubes<FullAmbientCubeSampler>(rayOrigin, rayDir);
         inoutRayColor.rgb = probeData.rgb;
         outHitDist = 100.0f; // Fake hit distance for ambient
-        return probeData.a < 0.6;
+        return probeData.a < 0.;
     }
 }
 
@@ -372,10 +371,10 @@ public struct FAmbientCubeRayTracerIndirect : IRayTracer
 
     public bool TraceRay(float3 rayOrigin, float3 rayDir, float maxDistance, inout Vertex outVertex, inout NodeProxy outNode, inout float4 inoutRayColor, out float outHitDist)
     {
-        float4 probeData = interpolateAmbientCubes<FullAmbientCubeWNSunSampler>(rayOrigin, rayDir);
+        float4 probeData = interpolateAmbientCubes<FullAmbientCubeSampler>(rayOrigin, rayDir);
         inoutRayColor.rgb = probeData.rgb;
         outHitDist = 100.0f;
-        return probeData.a < 0.6;
+        return probeData.a < 0.5;
     }
 }
 public struct FHardwareRayTracer : IRayTracer

@@ -2,21 +2,15 @@
 #include "Engine/Common/CoreMinimal.hpp" // GK_NON_COPIABLE
 #include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
+#include "Engine/Runtime/Editor/MultiViewportBackend.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
-#include <functional>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
-#include <vector>
-#include <array>
 #include <deque>
-#include <memory>
-#include <string>
-#include <unordered_map>
-#include <unordered_set>
-#include <cstdint>
 #include <glm/vec4.hpp>
+#include <set>
 
 namespace NextUI
 {
@@ -54,14 +48,16 @@ public:
 		const Vulkan::DepthBuffer& depthBuffer,
 		Runtime::Config::UserSettings& userSettings,
 		std::function<void()> funcPreConfig,
-		std::function<void()> funcInit);
+		std::function<void()> funcInit,
+		std::unique_ptr<IMultiViewportBackend> multiViewportBackend);
 	~UserInterface();
 
 	void PreRender();
 	void Render(const Statistics& statistics, VulkanGpuTimer* gpuTimer, Assets::Scene* scene,
 	            bool suppressStatisticsOverlay = false);
-	void PostRender(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx,
-	                bool suppressAllUi = false);
+	void PrepareDrawData();
+	void RenderPreparedDrawData(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx,
+	                            bool suppressAllUi = false);
 	void HandleEvent(const SDL_Event* event);
 
 	bool WantsToCaptureKeyboard() const;
@@ -72,8 +68,13 @@ public:
 	void OnCreateSurface(const Vulkan::SwapChain& swapChain, 
 		const Vulkan::DepthBuffer& depthBuffer);
 	void OnDestroySurface();
+	void ReloadShaders(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles);
 
 	ImTextureID RequestImTextureId(uint32_t globalTextureId);
+	// Like RequestImTextureId but for an explicitly-bound bindless sample slot that is NOT a
+	// registered TextureImage (e.g. a render-view offscreen output bound via BindSampleTexture).
+	ImTextureID RequestImTextureIdRaw(uint32_t bindlessSampleSlot) { return EncodeBindlessTextureId(bindlessSampleSlot); }
+	ImTextureID RequestImTextureIdRawOutput(uint32_t bindlessSampleSlot);
 	ImTextureID RequestImTextureByName(const std::string& name);
 
 	struct FUiTextureHandle
@@ -84,139 +85,48 @@ public:
 	};
 	FUiTextureHandle RequestUiTexture(const std::string& path, bool srgb = true);
 	
-	static void SetStyle();
-
 	void DrawPoint(float x, float y, float size, glm::vec4 color);
 	void DrawLine(float fromx, float fromy,float tox, float toy, float size, glm::vec4 color);
-	void SubmitConsoleCommand(const std::string& command);
-	bool DrawConsoleCommandInput(const char* label, const char* hint, float width = 0.0f, bool closeConsoleOnSubmit = false,
-		bool showMatchPopup = false, const char* matchPopupId = nullptr, bool refreshMatches = true);
-	void DrawConsoleLogOutput(const char* childId, const ImVec2& size = ImVec2(0.0f, 0.0f), bool bordered = true);
-	void ToggleConsole();
-	bool IsConsoleOpen() const { return showConsole_; }
-	void RenderConsoleOverlay();
+
+	VkPipeline CreateViewportPipeline(VkRenderPass renderPass) const;
+	void DestroyViewportPipeline(VkPipeline pipeline) const;
+	void RenderViewportDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, UiRenderBuffer& renderBuffer,
+	                            VkExtent2D framebufferExtent, uint32_t hdrOutputMode, VkPipeline pipeline);
+	ImFontAtlas* GetFontAtlas() const;
+	ImFont* GetDefaultFont() const;
+	void AttachRendererBackendToCurrentContext() const;
 
 private:
-	struct UiDrawSegment
-	{
-		uint32_t vertexOffset = 0;
-		uint32_t vertexCount = 0;
-	};
-
-	struct UiDrawOp
-	{
-		enum class EType : uint8_t
-		{
-			Draw,
-			Callback,
-		};
-
-		EType type = EType::Draw;
-		UiDrawSegment segment{};
-		const ImDrawList* drawList = nullptr;
-		const ImDrawCmd* drawCmd = nullptr;
-	};
-
-	struct FUiRenderBuffers;
-
 	NextEngine& GetEngine() {return *engine_;}
-	
-	void DrawOverlay(const Statistics& statistics, VulkanGpuTimer* gpuTimer);
+
 	void DrawIndicator(uint32_t frameCount);
-	void DrawConsoleWindow();
-	void RefreshConsoleMatches(size_t matchLimit);
-	void DrawConsoleMatchPopup(float width, const char* popupId);
 	void InitializeRendererBackend();
 	void ShutdownRendererBackend();
 	void BeginRendererBackendFrame();
 	void CreateUiPipeline(const Vulkan::SwapChain& swapChain);
 	void DestroyUiPipeline();
 	void InitializeFontTexture(Vulkan::CommandPool& commandPool);
-	VkPipeline GetOrCreatePlatformViewportPipeline(VkRenderPass renderPass);
-	void CreatePlatformViewportWindow(ImGuiViewport* viewport);
-	void DestroyPlatformViewportWindow(ImGuiViewport* viewport);
-	void ResizePlatformViewportWindow(ImGuiViewport* viewport, ImVec2 size);
-	void RenderPlatformViewportWindow(ImGuiViewport* viewport);
-	void SwapPlatformViewportBuffers(ImGuiViewport* viewport);
-	static UserInterface* GetRendererBackendOwner();
-	static void CreatePlatformViewportWindowCallback(ImGuiViewport* viewport);
-	static void DestroyPlatformViewportWindowCallback(ImGuiViewport* viewport);
-	static void ResizePlatformViewportWindowCallback(ImGuiViewport* viewport, ImVec2 size);
-	static void RenderPlatformViewportWindowCallback(ImGuiViewport* viewport, void* renderArg);
-	static void SwapPlatformViewportBuffersCallback(ImGuiViewport* viewport, void* renderArg);
-	void PrunePlatformViewportRenderBuffers();
-	void RenderDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, FUiRenderBuffers& renderBuffers,
-	                    VkExtent2D framebufferExtent, bool hdrOutput, VkPipeline pipeline);
-	static ImTextureID EncodeBindlessTextureId(uint32_t textureIndex);
-	static bool DecodeBindlessTextureId(ImTextureID textureId, uint32_t& outTextureIndex);
-	static int ConsoleInputTextCallback(ImGuiInputTextCallbackData* data);
-	int HandleConsoleInputTextCallback(ImGuiInputTextCallbackData* data);
-	void DrawConsoleLogOutputInternal(const char* childId, const ImVec2& size, bool bordered);
-
-	struct TimingSample
-	{
-		double sampleTime = 0.0;
-		float milliseconds = 0.0f;
-	};
-
-	struct TimingHistory
-	{
-		std::deque<TimingSample> samples;
-		std::string displayName;
-		double lastSeenTime = 0.0;
-		float average = 0.0f;
-		float minimum = 0.0f;
-		float maximum = 0.0f;
-		int depth = 0;
-		uint32_t displayOrder = 0;
-	};
+	void RenderDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, UiRenderBuffer& renderBuffers,
+	                    VkExtent2D framebufferExtent, uint32_t hdrOutputMode, VkPipeline pipeline);
+	static ImTextureID EncodeBindlessTextureId(uint32_t textureIndex, uint32_t textureFlags = 0);
+	static bool DecodeBindlessTextureId(ImTextureID textureId, uint32_t& outTextureIndex, uint32_t& outTextureFlags);
 
 	std::unique_ptr<Vulkan::RenderPass> renderPass_;
 	std::string imguiIniPath_;
 	std::vector< Vulkan::FrameBuffer > uiFrameBuffers_;
-	struct FUiRenderBuffers
-	{
-		std::unique_ptr<Vulkan::Buffer> vertexBuffer;
-		std::unique_ptr<Vulkan::DeviceMemory> vertexBufferMemory;
-		VkDeviceSize vertexBufferSize = 0;
-		std::vector<UiDrawOp> drawOps;
-	};
-	std::vector<FUiRenderBuffers> uiRenderBuffers_;
+	std::vector<UiRenderBuffer> uiRenderBuffers_;
 	VkPipelineLayout uiPipelineLayout_ = VK_NULL_HANDLE;
 	VkPipeline uiPipeline_ = VK_NULL_HANDLE;
-	VkPipeline uiPlatformViewportPipeline_ = VK_NULL_HANDLE;
-	VkRenderPass uiPlatformViewportRenderPass_ = VK_NULL_HANDLE;
 	Runtime::Config::UserSettings& userSettings_;	
 	
-	std::unordered_map<ImGuiID, std::vector<FUiRenderBuffers>> platformUiRenderBuffers_;
+	std::unique_ptr<IMultiViewportBackend> multiViewportBackend_;
 	std::unordered_set<std::string> uiTextureLoadRequests_;
 	std::unordered_map<std::string, ImVec2> uiTexturePixelSizeCache_;
+	ImFontAtlas* fontAtlas_ = nullptr;
+	ImFont* defaultFont_ = nullptr;
 	uint32_t fontTextureIndex_ = UINT32_MAX;
 	std::vector< std::function<void ()> > auxDrawRequest_;
-	std::vector<std::string> consoleHistory_;
-	std::vector<std::string> consoleMatches_;
-	std::string consoleInput_;
-	std::string consoleLastInput_;
-	std::string consoleCompletionBase_;
-	int consoleHistoryIndex_ = -1;
-	int consoleMatchIndex_ = 0;
-	bool consoleSkipEditReset_ = false;
-	bool showConsole_ = false;
-	bool consoleScrollToBottom_ = false;
-	bool requestConsoleFocus_ = false;
-	bool suppressConsoleToggleTextInput_ = false;
-	uint64_t consoleLogRevision_ = 0;
-	std::unordered_map<std::string, TimingHistory> gpuTimeHistory_;
-	std::unordered_map<std::string, TimingHistory> cpuTimeHistory_;
-
-	static constexpr int kOverlaySparklineSampleCount = 64;
-	static constexpr int kOverlaySparklineSampleStride = 2;
-	std::array<float, kOverlaySparklineSampleCount> frameRateSamples_{};
-	std::array<float, kOverlaySparklineSampleCount> frameTimeSamples_{};
-	int overlaySampleCursor_ = 0;
-	int overlaySampleFilled_ = 0;
-	int overlaySampleStrideCounter_ = 0;
-
+	bool hasPreparedDrawData_ = false;
 	NextEngine* engine_;
 };
 

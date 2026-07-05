@@ -1,132 +1,135 @@
-import Common;
-import Bindless;
+import Shader.Bindless;
+import Shader.Types;
+import Shader.GpuScene;
 
-bool IsAABBInFrustum(float3 min, float3 max, float4x4 wvp)
-{
-    float3 corners[8];
-    corners[0] = float3(min.x, min.y, min.z);
-    corners[1] = float3(max.x, min.y, min.z);
-    corners[2] = float3(min.x, max.y, min.z);
-    corners[3] = float3(max.x, max.y, min.z);
-    corners[4] = float3(min.x, min.y, max.z);
-    corners[5] = float3(max.x, min.y, max.z);
-    corners[6] = float3(min.x, max.y, max.z);
-    corners[7] = float3(max.x, max.y, max.z);
+import Shader.SoftMeshShaderCull; // IsAABBInFrustum (IsOccludedVolume unused here)
 
-    bool outside = true;
+// ---------------------------------------------------------------------------
+// Block-level aggregation, per cascade (see plan: softmeshshader-gpucull-atomic-contention).
+//
+// The original code had every surviving thread spin on a per-cascade CAS and fire
+// up to 4 stats atomics per candidate. The shadow loop iterates all 4 cascades, so
+// the contention is even denser than the main pass. Here each active cascade does a
+// single LDS exclusive prefix scan in lane 0 + a handful of InterlockedAdd reserves.
+// activeCascadeMask is uniform across the workgroup so the cascade loop never
+// diverges and every barrier is reached by all 64 lanes.
+// ---------------------------------------------------------------------------
+static const uint GROUP_SIZE = 64;
 
-    outside = true;
-    for (int i = 0; i < 8; i++)
-    {
-        float4 clipPos = mul(wvp, float4(corners[i], 1.0));
-        if (clipPos.x >= -clipPos.w) { outside = false; break; }
-    }
-    if (outside) return false;
-
-    outside = true;
-    for (int i = 0; i < 8; i++)
-    {
-        float4 clipPos = mul(wvp, float4(corners[i], 1.0));
-        if (clipPos.x <= clipPos.w) { outside = false; break; }
-    }
-    if (outside) return false;
-
-    outside = true;
-    for (int i = 0; i < 8; i++)
-    {
-        float4 clipPos = mul(wvp, float4(corners[i], 1.0));
-        if (clipPos.y >= -clipPos.w) { outside = false; break; }
-    }
-    if (outside) return false;
-
-    outside = true;
-    for (int i = 0; i < 8; i++)
-    {
-        float4 clipPos = mul(wvp, float4(corners[i], 1.0));
-        if (clipPos.y <= clipPos.w) { outside = false; break; }
-    }
-    if (outside) return false;
-
-    outside = true;
-    for (int i = 0; i < 8; i++)
-    {
-        float4 clipPos = mul(wvp, float4(corners[i], 1.0));
-        if (clipPos.z >= -clipPos.w) { outside = false; break; }
-    }
-    if (outside) return false;
-
-    outside = true;
-    for (int i = 0; i < 8; i++)
-    {
-        float4 clipPos = mul(wvp, float4(corners[i], 1.0));
-        if (clipPos.z <= clipPos.w) { outside = false; break; }
-    }
-    if (outside) return false;
-
-    return true;
-}
+groupshared uint g_tri[GROUP_SIZE];   // per-lane emitted triangle count, rewritten in place to an exclusive prefix
+groupshared uint g_item[GROUP_SIZE];  // per-lane emit flag (0/1), rewritten in place to an exclusive item index
+groupshared uint g_blockTriBase;
+groupshared uint g_blockItemBase;
+groupshared uint g_proc[GROUP_SIZE];    // stats: candidate flag
+groupshared uint g_procTri[GROUP_SIZE]; // stats: candidate triangle count
+groupshared uint g_cull[GROUP_SIZE];    // stats: candidate && !shouldDraw (includes frustum cull)
+groupshared uint g_cullTri[GROUP_SIZE]; // stats: candidate && !shouldDraw triangle count
 
 [shader("compute")]
 [numthreads(64, 1, 1)]
-void main(uint3 DTid : SV_DispatchThreadID)
+void main(uint3 DTid : SV_DispatchThreadID, uint3 Lid : SV_GroupThreadID)
 {
     let scene = Bindless.GetGpuscene();
-    uint indirectDrawCount = scene.custom_data_1;
-    if (DTid.x >= indirectDrawCount)
-    {
-        return;
-    }
+    uint lid = Lid.x;
 
     SoftMeshShaderResources softMeshShader = scene.SoftMeshShader[0];
     SoftMeshShaderVisibleItem* visibleItems = (SoftMeshShaderVisibleItem*)softMeshShader.VisibleItems;
     uint* counters = (uint*)softMeshShader.Counters;
 
-    NodeProxy node = scene.Nodes[DTid.x];
-    ModelData model = scene.Offsets[node.modelId];
-    uint triangleCount = model.indexCount / 3;
-    bool isCandidate = node.visible > 0;
     uint activeCascadeMask = scene.custom_data_0;
     uint maxSceneTriangles = scene.custom_data_2;
+
+    // node-invariant data, computed once (predicate, no early-return before the cascade barriers)
+    bool inRange = (DTid.x < scene.custom_data_1) && (DTid.x < MAX_NODES);
+    NodeProxy node;
+    ModelData model;
+    uint triangleCount = 0;
+    bool isCandidate = false;
+    if (inRange)
+    {
+        node = scene.Nodes[DTid.x];
+        model = scene.Offsets[node.modelId];
+        triangleCount = model.indexCount / 3;
+        isCandidate = (node.visible & RENDER_PARTICIPATION_SHADOW_CASTER) != 0u;
+    }
 
     for (uint cascadeIdx = 0; cascadeIdx < 4; ++cascadeIdx)
     {
         if ((activeCascadeMask & (1u << cascadeIdx)) == 0u)
         {
-            continue;
+            continue; // uniform branch: all 64 lanes skip together
         }
 
-        float4x4 lightMvp = mul(scene.Camera[0].SunCascadeViewProjection[cascadeIdx], node.worldTS);
-        bool shouldDraw = isCandidate && IsAABBInFrustum(model.localAabbMin.xyz, model.localAabbMax.xyz, lightMvp);
+        // Sync before overwriting LDS so the previous cascade's emit reads are done.
+        GroupMemoryBarrierWithGroupSync();
 
-        if (isCandidate)
+        bool shouldDraw = false;
+        bool emit = false;
+        if (inRange)
         {
-            InterlockedAdd(scene.ShadowGPUDrivenStats[cascadeIdx].ProcessedCount, 1);
-            InterlockedAdd(scene.ShadowGPUDrivenStats[cascadeIdx].TriangleCount, triangleCount);
-
-            if (!shouldDraw)
-            {
-                InterlockedAdd(scene.ShadowGPUDrivenStats[cascadeIdx].CulledCount, 1);
-                InterlockedAdd(scene.ShadowGPUDrivenStats[cascadeIdx].CulledTriangleCount, triangleCount);
-            }
+            float4x4 lightMvp = mul(scene.Camera[0].SunCascadeViewProjection[cascadeIdx], node.worldTS);
+            shouldDraw = isCandidate && IsAABBInFrustum(model.localAabbMin.xyz, model.localAabbMax.xyz, lightMvp);
+            emit = shouldDraw && triangleCount > 0;
         }
 
-        if (!shouldDraw || triangleCount == 0)
-        {
-            continue;
-        }
+        // Stats口径与现状逐字对齐：candidate 计 Processed/Triangle；candidate && !shouldDraw 计 Culled（含 frustum 剔除）。
+        bool culled = isCandidate && !shouldDraw;
+        g_proc[lid]    = isCandidate ? 1u : 0u;
+        g_procTri[lid] = isCandidate ? triangleCount : 0u;
+        g_cull[lid]    = culled ? 1u : 0u;
+        g_cullTri[lid] = culled ? triangleCount : 0u;
+        g_tri[lid]  = emit ? triangleCount : 0u;
+        g_item[lid] = emit ? 1u : 0u;
+        GroupMemoryBarrierWithGroupSync();
 
         uint slot = cascadeIdx + 1;
         uint counterBase = slot * 2;
-        uint primBase;
-        InterlockedAdd(counters[counterBase], triangleCount, primBase);
-        uint itemIdx;
-        InterlockedAdd(counters[counterBase + 1], 1, itemIdx);
+        if (lid == 0)
+        {
+            uint accTri = 0, accItem = 0;
+            for (uint i = 0; i < GROUP_SIZE; ++i)
+            {
+                uint t = g_tri[i];
+                uint e = g_item[i];
+                g_tri[i]  = accTri;
+                g_item[i] = accItem;
+                accTri  += t;
+                accItem += e;
+            }
+            uint triBase = 0, itemBase = 0;
+            if (accTri  > 0) InterlockedAdd(counters[counterBase],     accTri,  triBase);
+            if (accItem > 0) InterlockedAdd(counters[counterBase + 1], accItem, itemBase);
+            g_blockTriBase  = triBase;
+            g_blockItemBase = itemBase;
 
-        SoftMeshShaderVisibleItem item;
-        item.primBase = cascadeIdx * maxSceneTriangles + primBase;
-        item.instanceIdx = DTid.x + 1;
-        item.modelOffsetIdx = node.modelId;
-        item.triCount = triangleCount;
-        visibleItems[slot * MAX_NODES + itemIdx] = item;
+            uint sP = 0, sPT = 0, sC = 0, sCT = 0;
+            for (uint i = 0; i < GROUP_SIZE; ++i)
+            {
+                sP  += g_proc[i];
+                sPT += g_procTri[i];
+                sC  += g_cull[i];
+                sCT += g_cullTri[i];
+            }
+            if (sP  > 0) InterlockedAdd(scene.ShadowGPUDrivenStats[cascadeIdx].ProcessedCount,      sP);
+            if (sPT > 0) InterlockedAdd(scene.ShadowGPUDrivenStats[cascadeIdx].TriangleCount,       sPT);
+            if (sC  > 0) InterlockedAdd(scene.ShadowGPUDrivenStats[cascadeIdx].CulledCount,         sC);
+            if (sCT > 0) InterlockedAdd(scene.ShadowGPUDrivenStats[cascadeIdx].CulledTriangleCount, sCT);
+        }
+        GroupMemoryBarrierWithGroupSync();
+
+        if (emit)
+        {
+            uint primBase = g_blockTriBase  + g_tri[lid];
+            uint itemIdx  = g_blockItemBase + g_item[lid];
+            if (primBase + triangleCount <= maxSceneTriangles && itemIdx < uint(MAX_NODES))
+            {
+                SoftMeshShaderVisibleItem item;
+                item.primBase = cascadeIdx * maxSceneTriangles + primBase;
+                item.instanceIdx = DTid.x + 1;
+                item.modelOffsetIdx = node.modelId;
+                item.triCount = triangleCount;
+                visibleItems[slot * MAX_NODES + itemIdx] = item;
+            }
+        }
     }
 }

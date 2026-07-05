@@ -1,5 +1,5 @@
-import Common;
-import Bindless;
+import Shader.Bindless;
+import Shader.PathTracing;
 #include "common/ShaderClock.slang"
 
 [shader("compute")]
@@ -20,6 +20,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.FuzzyTracing = false;
     renderer.ForceExitAfterFirst = false;
     renderer.EnableSoftTracingAdaptiveOffset = true;
+    renderer.SecondaryDirectMode = 0;
     renderer.Init(DTid.xy);
 
     if( !renderer.PrimaryHit(rayCaster) )
@@ -28,6 +29,15 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    renderer.Render(tracer, dIlluminator, 1);
+    float4 residencyDebugColor;
+    if (TryAmbientResidencyDebug(renderer.GetPrimaryVertex().Position, residencyDebugColor))
+    {
+        renderer.WriteDebugColor(residencyDebugColor);
+        END_SHADERCLOCK(DTid.xy)
+        return;
+    }
+
+    FNullRadianceCache cache;
+    renderer.Render(tracer, dIlluminator, cache, 1);
     END_SHADERCLOCK(DTid.xy)
 }

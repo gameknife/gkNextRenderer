@@ -1,21 +1,21 @@
 #pragma once
 #include <glm/vec2.hpp>
-#include <array>
-#include <memory>
-#include <string>
-#include <vector>
-#include <unordered_set>
 #include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysicsTypes.h"
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include "Engine/Assets/Acceleration/CPUAccelerationStructure.h"
 #include "Engine/Assets/Core/Model.hpp"
+#include "Engine/Assets/Core/GaussianSplat.hpp"
 #include "Engine/Assets/Core/SceneSelectionState.hpp"
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
-#include "Engine/Runtime/Subsystems/NextPhysicsTypes.h"
 #include "Engine/Assets/Data/Skeleton.hpp"
+
+namespace Runtime
+{
+    class EnvironmentComponent;
+}
 
 namespace Assets
 {
@@ -63,7 +63,8 @@ namespace Assets
         Scene& operator=(const Scene&) = delete;
         Scene& operator=(Scene&&) = delete;
 
-        Scene(Vulkan::CommandPool& commandPool, bool supportRayTracing);
+        Scene(Vulkan::CommandPool& commandPool, bool supportRayTracing,
+              bool allocateAmbientResources = true, bool enableCpuAcceleration = true);
         ~Scene();
 
         void PostLoad(const std::vector<Skeleton>& skeletons);
@@ -76,6 +77,7 @@ namespace Assets
                                      std::vector<LightObject>& lights, std::vector<AnimationTrack>& tracks,
                                      const std::vector<Skeleton>& skeletons);
         void RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing);
+        bool EnsureGpuDrivenBufferCapacity(Vulkan::CommandPool& commandPool);
         void CleanUp();
         // void RebuildBVH();
 
@@ -83,6 +85,11 @@ namespace Assets
         std::vector<std::shared_ptr<Node>>& Nodes() { return nodes_; }
         const std::vector<std::shared_ptr<Node>>& Nodes() const { return nodes_; }
         const std::vector<Model>& Models() const { return models_; }
+        std::vector<Model>& MutableModels() { return models_; }
+        const std::vector<FGaussianSplatData>& GaussianSplats() const { return gaussianSplats_; }
+        std::vector<FGaussianSplatData>& MutableGaussianSplats() { return gaussianSplats_; }
+        bool HasGaussianSplats() const { return !gaussianSplats_.empty(); }
+        void SetGaussianSplats(std::vector<FGaussianSplatData>&& splats) { gaussianSplats_ = std::move(splats); }
         std::vector<FMaterial>& Materials() { return materials_; }
         const std::vector<FMaterial>& Materials() const { return materials_; }
         const std::vector<ModelData>& Offsets() const { return offsets_; }
@@ -104,8 +111,8 @@ namespace Assets
         uint32_t SoftMeshShaderDrawSlotForShadowCascade(uint32_t cascade) const;
         const Vulkan::Buffer& ReorderBuffer() const { return *reorderBuffer_; }
         const Vulkan::Buffer& PrimAddressBuffer() const { return *primAddressBuffer_; }
-        const glm::vec3 GetSunDir() const { return envSettings_.SunDirection(); }
-        const bool HasSun() const { return envSettings_.HasSun; }
+        const glm::vec3 GetSunDir() const;
+        const bool HasSun() const;
 
         const uint32_t GetLightCount() const { return lightCount_; }
         const uint32_t GetIndicesCount() const { return indicesCount_; }
@@ -131,6 +138,7 @@ namespace Assets
         void RemoveFromSelection(uint32_t id) const;
         void ToggleSelection(uint32_t id) const;
         bool IsSelected(uint32_t id) const;
+        uint32_t ResolveEditableNodeId(uint32_t id) const;
         uint32_t GetHoveredId() const { return hoveredId_; }
         void SetHoveredId(uint32_t id) const;
         void ClearHoveredId() const;
@@ -139,9 +147,12 @@ namespace Assets
         void ToggleLocked(uint32_t id) const;
         bool GetSelectedNodeBounds(glm::vec3& center, float& radius) const;
         bool GetNodeBounds(uint32_t nodeId, glm::vec3& center, float& radius) const;
+        bool GetGaussianSplatWorldBounds(uint32_t nodeId, glm::vec3& boundsMin, glm::vec3& boundsMax) const;
+        void RayCastGaussianSplats(glm::vec3 rayOrigin, glm::vec3 rayDir, RayCastResult& result) const;
 
         void Tick(float DeltaSeconds);
         void UpdateAllMaterials();
+        void MarkMaterialsDirty() { materialDirty_ = true; }
         bool UpdateNodes();
         void UpdateHDRSH();
         bool UpdateNodesGpuDriven();
@@ -151,6 +162,8 @@ namespace Assets
         const Model* GetModel(uint32_t id) const;
         const FMaterial* GetMaterial(uint32_t id) const;
         const uint32_t AddMaterial(const FMaterial& material);
+        uint32_t DuplicateMaterial(uint32_t id);
+        bool RemoveMaterial(uint32_t id, uint32_t* outSelectedMaterialId = nullptr);
 
         void MarkDirty();
         void MarkTransformDirty();
@@ -160,11 +173,14 @@ namespace Assets
 
         void OverrideModelView(glm::mat4& OutMatrix);
 
-        const std::vector<Assets::Camera>& GetCameras() const { return envSettings_.cameras; }
-        const Assets::EnvironmentSetting& GetEnvironmentStrings() const { return envSettings_; }
+        const std::vector<Assets::Camera>& GetCameras() const;
+        const Assets::EnvironmentSetting& GetEnvironmentStrings() const;
 
-        Assets::EnvironmentSetting& GetEnvSettings() { return envSettings_; }
-        void SetEnvSettings(const Assets::EnvironmentSetting& envSettings) { envSettings_ = envSettings; }
+        Assets::EnvironmentSetting& GetEnvSettings();
+        const Assets::EnvironmentSetting& GetEnvSettings() const;
+        void SetEnvSettings(const Assets::EnvironmentSetting& envSettings);
+        Runtime::EnvironmentComponent* GetEnvironmentComponent();
+        const Runtime::EnvironmentComponent* GetEnvironmentComponent() const;
 
         Camera& GetRenderCamera() { return renderCamera_; }
         void SetRenderCamera(const Camera& camera) { renderCamera_ = camera; }
@@ -172,6 +188,8 @@ namespace Assets
         void PlayAllTracks();
 
         void MarkEnvDirty();
+
+        void EnsureGaussianSplatProxyMeshes();
 
         void AddNode(std::shared_ptr<Node> node);
         void EnsureNodePhysicsBody(Node* node);
@@ -194,8 +212,6 @@ namespace Assets
 
         Vulkan::Buffer& AmbientCubeBuffer() const { return *ambientArenaBuffer_; }
         Vulkan::Buffer& AmbientCubePongBuffer() const { return *ambientArenaBuffer_; }
-        Vulkan::Buffer& AmbientCubeSdfScratchBuffer() const { return *ambientArenaBuffer_; }
-        Vulkan::Buffer& AmbientSdfSeedABuffer() const { return *ambientArenaBuffer_; }
         Vulkan::Buffer& FarAmbientCubeBuffer() const { return *ambientArenaBuffer_; }
         Vulkan::Buffer& PageIndexBuffer() const { return *ambientArenaBuffer_; }
         // Runtime byte offsets into the arena, sized to the actual allocated cascade capacity (Phase 2)
@@ -204,8 +220,6 @@ namespace Assets
         size_t AmbientVoxelsByteOffset() const { return ambientVoxelsOffset_; }
         size_t AmbientPagesByteOffset() const { return ambientPagesOffset_; }
         size_t AmbientCubesPongByteOffset() const { return ambientPongOffset_; }
-        size_t AmbientSdfScratchByteOffset() const { return ambientScratchOffset_; }
-        size_t AmbientSdfSeedAByteOffset() const { return ambientSdfSeedAOffset_; }
         // Allocated cascade capacity for this Scene. The effective cascade count used by the bake,
         // the CPU baker and the UBO is clamped to this so a runtime cascade-count change never reads
         // or writes outside the arena allocation.
@@ -214,6 +228,7 @@ namespace Assets
         // number of cube bricks allocated per cascade (the sparse pool cap).
         size_t AmbientBrickTableByteOffset() const { return ambientBrickTableOffset_; }
         size_t AmbientActiveBrickListByteOffset() const { return ambientActiveBrickListOffset_; }
+        size_t AmbientResidencyByteOffset() const { return ambientResidencyOffset_; }
         uint32_t AmbientPoolBricksPerCascade() const { return poolBricksPerCascade_; }
         uint32_t AmbientActiveBrickCount(uint32_t cascade) const;
         void SetAmbientActiveBrickCounts(const std::vector<uint32_t>& counts);
@@ -234,14 +249,6 @@ namespace Assets
         Assets::CPU::FCPUAccelerationStructure& GetCPUAccelerationStructure() { return cpuAccelerationStructure_; }
         glm::vec3 GetSceneAABBMin() const { return sceneAABBMin_; }
         glm::vec3 GetSceneAABBMax() const { return sceneAABBMax_; }
-        void RequestGpuDistanceFieldRebuild() { gpuSdfDirty_ = true; }
-        bool ConsumeGpuDistanceFieldRebuild()
-        {
-            const bool rebuild = gpuSdfDirty_;
-            gpuSdfDirty_ = false;
-            return rebuild;
-        }
-
         // Scene saving功能
         bool Save(const std::string& filename) const;
         bool SaveAsGLB(const std::string& filename) const;
@@ -251,6 +258,7 @@ namespace Assets
         std::vector<FMaterial> materials_;
         std::vector<Material> gpuMaterials_;
         std::vector<Model> models_;
+        std::vector<FGaussianSplatData> gaussianSplats_;
         std::vector<std::shared_ptr<Node>> nodes_;
         std::vector<LightObject> lights_;
         std::vector<AnimationTrack> tracks_;
@@ -312,10 +320,9 @@ namespace Assets
         size_t ambientVoxelsOffset_ = 0;
         size_t ambientPagesOffset_ = 0;
         size_t ambientPongOffset_ = 0;
-        size_t ambientScratchOffset_ = 0;
-        size_t ambientSdfSeedAOffset_ = 0;
         size_t ambientBrickTableOffset_ = 0;
         size_t ambientActiveBrickListOffset_ = 0;
+        size_t ambientResidencyOffset_ = 0;
         uint32_t poolBricksPerCascade_ = 0;
         std::array<uint32_t, CUBE_CASCADE_MAX> activeBrickCounts_{};
 
@@ -337,25 +344,30 @@ namespace Assets
         uint32_t verticeCount_{};
         uint32_t indirectDrawBatchCount_{};
         uint32_t maxSceneTriangles_{1};
+        uint32_t requiredGpuDrivenTriangleCapacity_{1};
 
         mutable SceneSelectionState selectionState_;
         mutable uint32_t hoveredId_ = SceneSelectionState::invalidNodeId;
         mutable std::unordered_set<uint32_t> lockedIds_;
+        mutable std::unordered_map<uint32_t, std::shared_ptr<Node>> nodeByInstanceId_;
+        mutable bool nodeIndexDirty_ = true;
+        mutable size_t indexedNodeCount_ = 0;
+        mutable uint32_t nextInstanceId_ = 0;
 
         bool sceneDirtyForCpuAS_ = false;
         bool sceneDirty_ = true;
         bool materialDirty_ = true;
-        bool gpuSdfDirty_ = false;
 
         std::vector<NodeProxy> nodeProxys;
 
         glm::mat4 overrideModelView;
         bool requestOverrideModelView = false;
 
-        Assets::EnvironmentSetting envSettings_;
         Camera renderCamera_;
 
         Assets::CPU::FCPUAccelerationStructure cpuAccelerationStructure_;
+        bool allocateAmbientResources_ = true;
+        bool enableCpuAcceleration_ = true;
 
         Assets::GPUDrivenStat gpuDrivenStat_;
         std::array<Assets::GPUDrivenStat, kSunShadowCascadeCount> shadowGpuDrivenStats_{};
@@ -367,6 +379,16 @@ namespace Assets
 
         VkDeviceAddress skinnedVerticesAddr_ = 0;
         VkDeviceAddress jointMatricesAddr_ = 0;
+
+        Runtime::EnvironmentComponent* environmentComponent_ = nullptr;
+
+        void MarkNodeIndexDirty() const { nodeIndexDirty_ = true; }
+        void RebuildNodeIndex() const;
+        void RegisterNodeIndex(const std::shared_ptr<Node>& node) const;
+        void UnregisterNodeIndex(uint32_t id) const;
+
+        void RefreshEnvironmentComponentCache();
+        void CacheEnvironmentComponentFromNode(Node* node);
 
         Assets::GPUScene BuildGPUScene(uint32_t imageIndex) const;
     };

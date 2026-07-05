@@ -134,13 +134,75 @@ func Ensure(repoRoot string, cfg config.Config, refresh bool) error {
 		}
 	}
 
-	if _, err := os.Stat(Exe(repoRoot, cfg)); os.IsNotExist(err) {
-		if runtime.GOOS == "windows" {
-			return run(root, "cmd", "/c", "bootstrap-vcpkg.bat", "-disableMetrics")
-		}
-		return run(root, "./bootstrap-vcpkg.sh", "-disableMetrics")
+	needsBootstrap, err := NeedsBootstrap(repoRoot, cfg)
+	if err != nil {
+		return err
+	}
+	if needsBootstrap {
+		return Bootstrap(repoRoot, cfg)
 	}
 	return nil
+}
+
+func NeedsBootstrap(repoRoot string, cfg config.Config) (bool, error) {
+	exe := Exe(repoRoot, cfg)
+	if _, err := os.Stat(exe); err != nil {
+		if os.IsNotExist(err) {
+			return true, nil
+		}
+		return false, err
+	}
+
+	root := Root(repoRoot, cfg)
+	expectedTag, err := toolReleaseTag(root)
+	if err != nil {
+		return false, err
+	}
+	if expectedTag == "" {
+		return false, nil
+	}
+
+	output, err := runCapture(root, exe, "version", "--disable-metrics")
+	if err != nil {
+		console.Warn("vcpkg version check failed; re-running bootstrap: %s", err)
+		return true, nil
+	}
+	if !strings.Contains(output, expectedTag) {
+		console.Info("vcpkg tool is %q but checkout expects %q; re-running bootstrap",
+			strings.TrimSpace(firstLine(output)), expectedTag)
+		return true, nil
+	}
+	return false, nil
+}
+
+func Bootstrap(repoRoot string, cfg config.Config) error {
+	root := Root(repoRoot, cfg)
+	if runtime.GOOS == "windows" {
+		return run(root, "cmd", "/c", "bootstrap-vcpkg.bat", "-disableMetrics")
+	}
+	return run(root, "./bootstrap-vcpkg.sh", "-disableMetrics")
+}
+
+func toolReleaseTag(root string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(root, "scripts", "vcpkg-tool-metadata.txt"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		key, value, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if ok && key == "VCPKG_TOOL_RELEASE_TAG" {
+			return strings.TrimSpace(value), nil
+		}
+	}
+	return "", nil
+}
+
+func firstLine(s string) string {
+	line, _, _ := strings.Cut(s, "\n")
+	return line
 }
 
 func run(dir string, name string, args ...string) error {

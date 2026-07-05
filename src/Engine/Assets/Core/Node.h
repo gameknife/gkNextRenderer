@@ -7,8 +7,7 @@
 
 #include "glm/ext.hpp"
 
-#include <vector>
-#include <memory>
+#include <limits>
 #include <type_traits>
 
 namespace Runtime { class SkinnedMeshComponent; }
@@ -41,6 +40,15 @@ namespace Assets
         
         const std::string& GetName() const {return name_; }
         void SetName(std::string name);
+        const std::string& GetTag() const { return tag_; }
+        void SetTag(std::string tag) { tag_ = std::move(tag); }
+        const std::string& GetLayer() const { return layer_; }
+        void SetLayer(std::string layer) { layer_ = std::move(layer); }
+
+        bool IsSceneReferenceInternal() const { return sceneReferenceOwnerProxyId_ != invalidNodeId; }
+        uint32_t GetSceneReferenceOwnerProxyId() const { return sceneReferenceOwnerProxyId_; }
+        void SetSceneReferenceOwnerProxyId(uint32_t id) { sceneReferenceOwnerProxyId_ = id; }
+        void ClearSceneReferenceOwner() { sceneReferenceOwnerProxyId_ = invalidNodeId; }
 
         Component* GetComponentByTypeName(const std::string& componentType) const;
 
@@ -160,6 +168,8 @@ namespace Assets
         }
 
         std::string name_;
+        std::string tag_ = "Untagged";
+        std::string layer_ = "Default";
 
         mutable glm::vec3 translation_;
         mutable glm::quat rotation_;
@@ -177,5 +187,7 @@ namespace Assets
         std::vector<std::shared_ptr<Component>> components_;
         uint64_t componentTypeMask_ = 0;
         Runtime::PhysicsComponent* physicsComponent_ = nullptr;
+        static constexpr uint32_t invalidNodeId = std::numeric_limits<uint32_t>::max();
+        uint32_t sceneReferenceOwnerProxyId_ = invalidNodeId;
     };
 }

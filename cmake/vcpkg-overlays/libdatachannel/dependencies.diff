@@ -1,0 +1,41 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 8a61757..b35e4b1 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -236,3 +236,3 @@ find_package(Threads REQUIRED)
+ if(USE_SYSTEM_PLOG)
+-	find_package(plog REQUIRED)
++	find_package(plog CONFIG REQUIRED)
+ else()
+@@ -247,3 +247,4 @@ endif()
+ if(USE_SYSTEM_USRSCTP)
+-	find_package(Usrsctp REQUIRED)
++	find_package(unofficial-usrsctp CONFIG REQUIRED)
++	add_library(Usrsctp::Usrsctp ALIAS unofficial::usrsctp::usrsctp)
+ else()
+@@ -333,3 +334,3 @@ else()
+     if(USE_SYSTEM_SRTP)
+-		find_package(libSRTP REQUIRED)
++		find_package(libSRTP CONFIG REQUIRED)
+         if(NOT TARGET libSRTP::srtp2)
+diff --git a/cmake/LibDataChannelConfig.cmake.in b/cmake/LibDataChannelConfig.cmake.in
+index cb2b884..d0b77ca 100644
+--- a/cmake/LibDataChannelConfig.cmake.in
++++ b/cmake/LibDataChannelConfig.cmake.in
+@@ -1,3 +1,15 @@
+ @PACKAGE_INIT@
+-
++if(NOT "@BUILD_SHARED_LIBS@")
++    include(CMakeFindDependencyMacro)
++    set(THREADS_PREFER_PTHREAD_FLAG ON)
++    find_dependency(Threads)
++    find_dependency(plog CONFIG)
++    find_dependency(unofficial-usrsctp CONFIG)
++    if(NOT "@NO_MEDIA@")
++        find_dependency(libSRTP CONFIG)
++    endif()
++    find_dependency(OpenSSL)
++    find_dependency(LibJuice)
++endif()
++
+ include("${CMAKE_CURRENT_LIST_DIR}/LibDataChannelTargets.cmake")

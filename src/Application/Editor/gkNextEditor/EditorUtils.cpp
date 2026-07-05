@@ -4,11 +4,7 @@
 #include <fmt/printf.h>
 
 #include "Engine/Runtime/Engine.hpp"
-#include "ImNodeFlow.h"
-
-#include "Nodes/NodeSetInt.hpp"
-#include "Nodes/NodeSetFloat.hpp"
-#include "Nodes/NodeMaterial.hpp"
+#include "Engine/Utilities/ImGui.hpp"
 
 ImVec2 utils::GetLocalCursor()
 {
@@ -239,8 +235,6 @@ void utils::ShowResourcesWindow(bool *childResources)
             ImGui::Bullet(); if(ImGui::SmallButton("dfranx/ImFileDialog")) {HyperlinkHelper::OpenUrl("https://github.com/dfranx/ImFileDialog");}
             ImGui::Bullet(); if(ImGui::SmallButton("Toggle Button")) {HyperlinkHelper::OpenUrl("https://github.com/ocornut/imgui/issues/1537#issuecomment-355569554");}
             ImGui::Bullet(); if(ImGui::SmallButton("Knob")) {HyperlinkHelper::OpenUrl("https://github.com/ocornut/imgui/issues/942#issuecomment-268369298");}
-            ImGui::Bullet(); if(ImGui::SmallButton("Nelarius/imnodes")) {HyperlinkHelper::OpenUrl("https://github.com/Nelarius/imnodes");}
-            ImGui::Bullet(); if(ImGui::SmallButton("thedmd/imgui-node-editor")) {HyperlinkHelper::OpenUrl("https://github.com/thedmd/imgui-node-editor");}
             ImGui::Bullet(); if(ImGui::SmallButton("aiekick/ImGuiFontStudio")) {HyperlinkHelper::OpenUrl("https://github.com/aiekick/ImGuiFontStudio");}
             ImGui::Bullet(); if(ImGui::SmallButton("Add extra keys #2625")) {HyperlinkHelper::OpenUrl("https://github.com/ocornut/imgui/pull/2625");}
         }
@@ -287,8 +281,6 @@ void utils::ShowResourcesWindow(bool *childResources)
             ImGui::Bullet(); if(ImGui::SmallButton("dfranx/ImFileDialog")) {ImGui::LogToClipboard(); ImGui::LogText("https://github.com/dfranx/ImFileDialog"); ImGui::LogFinish();}
             ImGui::Bullet(); if(ImGui::SmallButton("Toggle Button")) {ImGui::LogToClipboard(); ImGui::LogText("https://github.com/ocornut/imgui/issues/1537#issuecomment-355569554"); ImGui::LogFinish();}
             ImGui::Bullet(); if(ImGui::SmallButton("Knob")) {ImGui::LogToClipboard(); ImGui::LogText("https://github.com/ocornut/imgui/issues/942#issuecomment-268369298"); ImGui::LogFinish();}
-            ImGui::Bullet(); if(ImGui::SmallButton("Nelarius/imnodes")) {ImGui::LogToClipboard(); ImGui::LogText("https://github.com/Nelarius/imnodes"); ImGui::LogFinish();}
-            ImGui::Bullet(); if(ImGui::SmallButton("thedmd/imgui-node-editor")) {ImGui::LogToClipboard(); ImGui::LogText("https://github.com/thedmd/imgui-node-editor"); ImGui::LogFinish();}
             ImGui::Bullet(); if(ImGui::SmallButton("aiekick/ImGuiFontStudio")) {ImGui::LogToClipboard(); ImGui::LogText("https://github.com/aiekick/ImGuiFontStudio"); ImGui::LogFinish();}
             ImGui::Bullet(); if(ImGui::SmallButton("Add extra keys #2625")) {ImGui::LogToClipboard(); ImGui::LogText("https://github.com/ocornut/imgui/pull/2625"); ImGui::LogFinish();}
         }
@@ -315,9 +307,7 @@ void utils::ShowAboutWindow(bool *childAbout)
     std::string fmtver = fmt::sprintf("%d", FMT_VERSION);
 
     ImGui::OpenPopup("About");
-    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    if (ImGui::BeginPopupModal("About", NULL, ImGuiWindowFlags_AlwaysAutoResize))
+    if (Utilities::UI::BeginAnchoredPopupModal("About", NULL, ImGuiWindowFlags_AlwaysAutoResize))
         {
             TextCentered("gkNextRenderer");
             ImGui::Separator();

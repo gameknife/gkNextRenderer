@@ -1,0 +1,58 @@
+{
+  "name": "camera-tour",
+  "target": "gkNextRenderer",
+  "scene": "assets/models/playground.glb",
+  "defaults": {
+    "waitFrames": 2,
+    "stepTimeoutMs": 12000
+  },
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 8000 },
+    { "type": "wait-frames", "n": 45 },
+
+    { "type": "mouse-move", "to": { "norm": [0.52, 0.50] }, "comment": "Place cursor in the viewport." },
+    { "type": "mouse-button", "button": "right", "action": "down", "at": { "norm": [0.52, 0.50] }, "comment": "Hold right mouse for free camera controls." },
+    { "type": "wait-ms", "ms": 500 },
+
+    { "type": "key", "code": "W", "action": "down" },
+    { "type": "mouse-move", "relative": true, "to": [180, -35], "comment": "Look right while moving forward." },
+    { "type": "wait-ms", "ms": 1500 },
+    { "type": "key", "code": "W", "action": "up" },
+
+    { "type": "key", "code": "D", "action": "down" },
+    { "type": "mouse-move", "relative": true, "to": [-120, 45], "comment": "Strafe right and tilt back toward the play area." },
+    { "type": "wait-ms", "ms": 1400 },
+    { "type": "key", "code": "D", "action": "up" },
+
+    { "type": "key", "code": "Q", "action": "down" },
+    { "type": "wait-ms", "ms": 1100 },
+    { "type": "key", "code": "Q", "action": "up" },
+
+    { "type": "key", "code": "A", "action": "down" },
+    { "type": "mouse-move", "relative": true, "to": [-220, 20], "comment": "Pan left while strafing back across the scene." },
+    { "type": "wait-ms", "ms": 1500 },
+    { "type": "key", "code": "A", "action": "up" },
+
+    { "type": "key", "code": "S", "action": "down" },
+    { "type": "mouse-move", "relative": true, "to": [80, 85], "comment": "Back away and look down at the playground." },
+    { "type": "wait-ms", "ms": 1400 },
+    { "type": "key", "code": "S", "action": "up" },
+
+    { "type": "key", "code": "E", "action": "down" },
+    { "type": "wait-ms", "ms": 900 },
+    { "type": "key", "code": "E", "action": "up" },
+
+    { "type": "mouse-move", "relative": true, "to": [140, -60], "comment": "Final look adjustment." },
+    { "type": "wait-ms", "ms": 1200 },
+    { "type": "mouse-button", "button": "right", "action": "up" },
+    { "type": "wait-ms", "ms": 900 },
+
+    { "type": "assert", "query": "engine.totalFrames", "op": "ge", "value": 1 },
+    { "type": "screenshot", "out": "screenshots/agent_camera_tour" },
+    { "type": "quit" }
+  ]
+}

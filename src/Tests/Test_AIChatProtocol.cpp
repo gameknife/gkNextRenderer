@@ -1,7 +1,8 @@
 #include <catch2/catch_all.hpp>
 #include <nlohmann/json.hpp>
 
-#include "Engine/Runtime/Subsystems/AI/AIChat.hpp"
+#include "Modules/NextAI/AI/AIChat.hpp"
+#include "Modules/NextAI/AIService.hpp"
 
 using json = nlohmann::json;
 using namespace NextAI;
@@ -18,6 +19,19 @@ namespace
         s.params.push_back({"y", EToolParamType::Number, "y offset", false});
         return s;
     }
+}
+
+TEST_CASE("FAIResponse carries request elapsed time", "[Unit][AI][Response]")
+{
+    const FAIResponse success = FAIResponse::Success("done", 125.5);
+    REQUIRE(success.success);
+    REQUIRE(success.text == "done");
+    REQUIRE(success.elapsedMs == Catch::Approx(125.5));
+
+    const FAIResponse failure = FAIResponse::Failure("timeout", 2048.0);
+    REQUIRE_FALSE(failure.success);
+    REQUIRE(failure.message == "timeout");
+    REQUIRE(failure.elapsedMs == Catch::Approx(2048.0));
 }
 
 TEST_CASE("BuildOpenAIChatRequestBody emits messages, model and tools", "[Unit][AI][Protocol]")

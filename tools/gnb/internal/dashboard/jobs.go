@@ -18,9 +18,10 @@ import (
 type JobKind string
 
 const (
-	JobBuild JobKind = "build"
-	JobRun   JobKind = "run"
-	JobTest  JobKind = "test"
+	JobBuild  JobKind = "build"
+	JobRun    JobKind = "run"
+	JobRemote JobKind = "remote"
+	JobTest   JobKind = "test"
 )
 
 // JobStatus tracks the lifecycle of a Job.
@@ -71,6 +72,7 @@ type JobSnapshot struct {
 	Kind       JobKind
 	Target     string
 	Command    string
+	StreamBase string
 	Status     JobStatus
 	StartedAt  time.Time
 	FinishedAt time.Time

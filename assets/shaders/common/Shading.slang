@@ -1,16 +1,4 @@
-implementing Common;
 #include "PreProcessor.slang"
-
-static const float2 haltonSeq[8] = {
-    float2(0.5, 0.3333),
-    float2(0.25, 0.6667),
-    float2(0.75, 0.1111),
-    float2(0.125, 0.4444),
-    float2(0.625, 0.7778),
-    float2(0.375, 0.2222),
-    float2(0.875, 0.5556),
-    float2(0.0625, 0.8889)
-};
 
 static const float PT_MAX_TRACE_DISTANCE = 1000.f;
 static const float FAST_MAX_TRACE_DISTANCE = 20.f;
@@ -83,7 +71,7 @@ namespace Common
         float4 prevFrameHPos = mul(mul(Camera.PrevViewProjectionUnJit, node.combinedPrevTS), float4(v.Position, 1));
         float2 prevfpos = prevFrameHPos.xy / prevFrameHPos.w * 0.5;
 
-        let MotionMoment = Bindless.GetStorageTexture<uint>(Bindless.RT_MOTIONMOMENT);
+        let MotionMoment = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MOTIONMOMENT);
         
 
         float4 prevPos = mul(node.combinedPrevTS, float4(v.Position, 1));
@@ -139,18 +127,21 @@ namespace Common
         }
     }
 
-    public float3 EvaluateSH(float SHCoefficients[3][9], float3 normal, float rotate)
+    float3 EvaluateSHWithBandWeights(
+        float SHCoefficients[3][9],
+        float3 direction,
+        float rotate,
+        float3 bandWeights)
     {
         // Apply rotation around Y-axis (0 to 2 maps to 0 to 360 degrees)
         float angle = rotate * 3.14159265358979323846f;
         float cosAngle = cos(angle);
         float sinAngle = sin(angle);
 
-        // Rotate the normal vector around Y-axis
-        float3 rotatedNormal = float3(
-            normal.x * cosAngle + normal.z * sinAngle,
-            normal.y,
-            -normal.x * sinAngle + normal.z * cosAngle);
+        float3 rotatedDirection = float3(
+            direction.x * cosAngle + direction.z * sinAngle,
+            direction.y,
+            -direction.x * sinAngle + direction.z * cosAngle);
 
         // SH basis function evaluation
         static const float SH_C0 = 0.282095f;
@@ -161,31 +152,51 @@ namespace Common
 
         float basis[9];
         basis[0] = SH_C0;
-        basis[1] = -SH_C1 * rotatedNormal.y;
-        basis[2] = SH_C1 * rotatedNormal.z;
-        basis[3] = -SH_C1 * rotatedNormal.x;
-        basis[4] = SH_C2 * rotatedNormal.x * rotatedNormal.y;
-        basis[5] = -SH_C2 * rotatedNormal.y * rotatedNormal.z;
-        basis[6] = SH_C3 * (3.f * rotatedNormal.y * rotatedNormal.y - 1.0f);
-        basis[7] = -SH_C2 * rotatedNormal.x * rotatedNormal.z;
-        basis[8] = SH_C4 * (rotatedNormal.x * rotatedNormal.x - rotatedNormal.z * rotatedNormal.z);
+        basis[1] = -SH_C1 * rotatedDirection.y;
+        basis[2] = SH_C1 * rotatedDirection.z;
+        basis[3] = -SH_C1 * rotatedDirection.x;
+        basis[4] = SH_C2 * rotatedDirection.x * rotatedDirection.y;
+        basis[5] = -SH_C2 * rotatedDirection.y * rotatedDirection.z;
+        basis[6] = SH_C3 * (3.f * rotatedDirection.y * rotatedDirection.y - 1.0f);
+        basis[7] = -SH_C2 * rotatedDirection.x * rotatedDirection.z;
+        basis[8] = SH_C4 * (rotatedDirection.x * rotatedDirection.x - rotatedDirection.z * rotatedDirection.z);
 
         float3 color = float3(0.0, 0.0, 0.0);
         for (int i = 0; i < 9; ++i)
         {
-            color.r += SHCoefficients[0][i] * basis[i];
-            color.g += SHCoefficients[1][i] * basis[i];
-            color.b += SHCoefficients[2][i] * basis[i];
+            float bandWeight = i == 0 ? bandWeights.x : (i <= 3 ? bandWeights.y : bandWeights.z);
+            color.r += SHCoefficients[0][i] * basis[i] * bandWeight;
+            color.g += SHCoefficients[1][i] * basis[i] * bandWeight;
+            color.b += SHCoefficients[2][i] * basis[i] * bandWeight;
         }
 
         return color;
     };
 
+    public float3 EvaluateSH(float SHCoefficients[3][9], float3 direction, float rotate)
+    {
+        return EvaluateSHWithBandWeights(SHCoefficients, direction, rotate, float3(1.0f));
+    }
+
+    public float3 EvaluateDiffuseSH(float SHCoefficients[3][9], float3 normal, float rotate)
+    {
+        // Lambert cosine convolution divided by pi, yielding reflected radiance
+        // for a unit-albedo diffuse surface.
+        return EvaluateSHWithBandWeights(SHCoefficients, normal, rotate, float3(1.0f, 2.0f / 3.0f, 0.25f));
+    }
+
     public float4 SampleIBLRough(uint skyIdx, float3 direction, float rotate)
     {
-        float3 rayColor = EvaluateSH(Bindless.GetGpuscene().HDRSHs[skyIdx].coefficients, direction, 1.0 - rotate);
+        float3 rayColor = EvaluateSH(Bindless.GetGpuscene().HDRSHs[skyIdx].coefficients, direction, rotate);
         return float4(rayColor * 1.0f, 1.0);
     };
+
+    public float4 SampleIBLDiffuse(uint skyIdx, float3 normal, float rotate)
+    {
+        float3 irradiance = EvaluateDiffuseSH(
+            Bindless.GetGpuscene().HDRSHs[skyIdx].coefficients, normalize(normal), rotate);
+        return float4(max(irradiance, float3(0.0f)), 1.0f);
+    }
 
     public float4 SampleIBL(uint skyIdx, float3 direction, float rotate, float roughness)
     {
@@ -219,10 +230,10 @@ namespace Common
             if (any(currentUV < float2(0.0)) || any(currentUV > float2(1.0)))
                 continue;
 
-            int2 size = Bindless.GetStorageTextureDimensions<uint>(Bindless.RT_MINIGBUFFER);
+            int2 size = Bindless.GetViewStorageTextureDimensions<uint>(Bindless.RT_MINIGBUFFER);
 
             int2 sampleCoord = int2(currentUV * float2(size));
-            uint packedValue = Bindless.GetStorageTexture<uint>(Bindless.RT_MINIGBUFFER).Load(sampleCoord).r;
+            uint packedValue = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MINIGBUFFER).Load(sampleCoord).r;
             uint2 vBufferSample = uint2((packedValue >> 17) & 0x7FFF, packedValue & 0x1FFFF);
             if (vBufferSample.r == 0)
                 continue;
@@ -284,8 +295,7 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
         float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
         if (Camera.TAA)
         {
-            // here should offset a non-random offset and consider in motion vector
-            uvOffset = (haltonSeq[Camera.TotalFrames % 8] - float2(0.5, 0.5)) / isize;
+            uvOffset = Camera.Jitter.xy * 2.0 / float2(isize);
         }
         uv += uvOffset;
         float2 offset = Camera.Aperture / 2 * RandomInUnitDisk(RandomSeed);
@@ -334,6 +344,37 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
 {
     public bool TracePrimaryRay(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float outRayLength, inout float2 outPixelOffset)
     {
+        let Camera = Bindless.GetGpuscene().Camera[0];
+        GPUVertex* vertices = Bindless.GetGpuscene().Vertices;
+        NodeProxy* nodes = Bindless.GetGpuscene().Nodes;
+        ModelData* models = Bindless.GetGpuscene().Offsets;
+        uint* indices = Bindless.GetGpuscene().Indices;
+
+        const uint packedValue = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[ipos];
+        const uint2 vBuffer = uint2((packedValue >> 17) & 0x7FFF, packedValue & 0x1FFFF);
+        const float2 uv = (float2(ipos) / float2(isize)) * 2.0f - 1.0f;
+        const float4 origin = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
+        const float4 target = mul(Camera.ProjectionInverse, float4(uv.x, uv.y, 1, 1));
+        const float4 dir = mul(Camera.ModelViewInverse, float4(normalize(target.xyz), 0));
+        const float3 rayDir = normalize(dir.xyz);
+
+        outRayDir = rayDir;
+        outPixelOffset = float2(0, 0);
+        if (vBuffer.x == 0)
+        {
+            return false;
+        }
+
+        outVertex = Common.get_material_data(vBuffer, origin.xyz, rayDir, nodes, models, vertices, indices);
+        outNode = nodes[vBuffer.x - 1];
+        outVertex.MaterialIndex = FetchMaterialId(outNode, outVertex.MaterialIndex);
+        outRayLength = length(outVertex.Position - origin.xyz);
+        return true;
+    }
+
+#if 0
+    public bool TracePrimaryRayDofLegacy(int2 ipos, int2 isize, inout uint4 RandomSeed, inout Vertex outVertex, inout NodeProxy outNode, inout float3 outRayDir, inout float outRayLength, inout float2 outPixelOffset)
+    {
         
         UniformBufferObject Camera = *Bindless.GetGpuscene().Camera;
         GPUVertex* Vertices = Bindless.GetGpuscene().Vertices;
@@ -342,7 +383,7 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
         uint* PrimAddress = Bindless.GetGpuscene().Indices;
 
         // 第一步：先追踪一次顶点，计算距离
-        uint packedValue = Bindless.GetStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[ipos];
+        uint packedValue = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[ipos];
         uint2 vBuffer = uint2((packedValue >> 17) & 0x7FFF, packedValue & 0x1FFFF); 
         float2 uv = (float2(ipos) / float2(isize)) * 2.0 - 1.0;
         
@@ -408,7 +449,7 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
         // 确保偏移后的位置在屏幕范围内
         offsetPos = clamp(offsetPos, int2(0, 0), isize - int2(1, 1));
 
-        uint offsetedPackValue = Bindless.GetStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[offsetPos];
+        uint offsetedPackValue = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[offsetPos];
         uint2 finalVBuffer = uint2((offsetedPackValue >> 17) & 0x7FFF, offsetedPackValue & 0x1FFFF); 
 
         float2 finalUV = (float2(offsetPos) / float2(isize)) * 2.0 - 1.0;
@@ -489,6 +530,7 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
         
         return true;
     }
+#endif
 }
 public struct FVoxelRayCaster : IPrimaryRayCaster
 {

@@ -1,8 +1,5 @@
 // General Bindless Texture
 
-#ifndef __cplusplus
-implementing Bindless;
-#endif
 namespace Bindless
 {
     public static const int RT_ACCUMLATE_DIFFUSE = 0;
@@ -29,6 +26,17 @@ namespace Bindless
     public static const int RT_SPECULAR_HITDIST = 16;
     public static const int RT_SPECULAR_ALBEDO = 17;
 
+    // Variance-guided a-trous wavelet ping-pong (Phase 2). RGBA16F: rgb = filtered color, a = variance.
+    public static const int RT_ATROUS_PING = 18;
+    public static const int RT_ATROUS_PONG = 19;
+    public static const int RT_ATROUS_OUT = 24;
+    public static const int RT_ATROUS_SPEC_OUT = 25;
+    public static const int RT_SPLAT_ACCUM = 26;
+    public static const int RT_ATROUS_SPEC_PING = 27;
+    public static const int RT_ATROUS_SPEC_PONG = 28;
+    public static const int RT_AMBIENT = 29;
+    public static const int RT_GTAO = 30;
+
     public static const int RT_SINGLE_PREV_DIFFUSE = 20;
     public static const int RT_SINGLE_PREV_SPECULAR = 21;
     public static const int RT_SINGLE_PREV_ALBEDO = 22;
@@ -36,12 +44,30 @@ namespace Bindless
     public static const int RT_MINIGBUFFER_DRAW = 23;
 
     public static const int RT_TEMP_USAGE0 = 50;
+    public static const int RT_REMOTE_ENCODE0_Y = 60;
+    public static const int RT_REMOTE_ENCODE0_UV = 61;
+    public static const int RT_REMOTE_ENCODE1_Y = 62;
+    public static const int RT_REMOTE_ENCODE1_UV = 63;
+    public static const int RT_REMOTE_ENCODE2_Y = 64;
+    public static const int RT_REMOTE_ENCODE2_UV = 65;
+    public static const int RT_REMOTE_ENCODE3_Y = 66;
+    public static const int RT_REMOTE_ENCODE3_UV = 67;
     
     public static const int RT_SWAPCHAIN0 = 100;
     public static const int RT_SWAPCHAIN1 = 101;
     public static const int RT_SWAPCHAIN2 = 102;
 
     public static const int RT_COUNT = 128;
+
+    // --- Multi-viewport (RenderView) RT bank layout ---
+    // Each RenderView owns a contiguous "bank" of screen-space RT slots so it can keep an
+    // independent temporal history. Bank k occupies [k*kViewRtBankStride, k*kViewRtBankStride + RT_X].
+    // Bank 0 == the legacy global layout above (primary view), so existing absolute slots are
+    // unchanged and the primary view is bit-for-bit identical. The active view's bank base travels
+    // in GPUScene.custom_data_0; resolve a logical screen-space RT slot through ViewRT(base, RT_X).
+    // Stride is sized to clear the screen-space range (0..~30) plus headroom while staying below the
+    // global/shared slots (RT_TEMP_USAGE0=50, RT_REMOTE_*=60.., RT_SWAPCHAIN*=100..).
+    public static const int kViewRtBankStride = 256;
 
     // Sun CSM cascade slots in ShadowMapArray (bindless binding 2).
     public static const int SM_SUN_CASCADE_0 = 0;
@@ -73,6 +99,15 @@ namespace Bindless
         uint2 dim;
         StorageTextureArray[NonUniformResourceIndex(index)].as<RWTexture2D<T>>().GetDimensions(dim.x, dim.y);
         return dim;
+    }
+
+    // Resolve a logical screen-space RT slot into the active RenderView's bank.
+    // viewBase comes from GPUScene.custom_data_0 (0 for the primary view => absolute slot, no change).
+    // Global / world-space / output slots (swapchain, remote encode, temp) must NOT be remapped:
+    // pass those as absolute slots directly, not through ViewRT().
+    public int ViewRT(uint viewBase, int rtSlot)
+    {
+        return int(viewBase) + rtSlot;
     }
 
     public Sampler2D GetShadowMap(int index)

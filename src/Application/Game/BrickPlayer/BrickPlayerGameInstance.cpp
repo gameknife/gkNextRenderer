@@ -2,7 +2,7 @@
 #include "BrickPlayerGameInstance.hpp"
 #include "BrickPlayerSnapLogic.hpp"
 #include "BrickPlayerUserInterface.hpp"
-#include "Engine/Assets/Loaders/FLDrawLoader.h"
+#include "Modules/LDrawLoader/FLDrawLoader.h"
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
@@ -16,6 +16,7 @@
 #include <SDL3/SDL_dialog.h>
 #include <spdlog/spdlog.h>
 #include <glm/ext/scalar_constants.hpp>
+#include "Modules/LDrawLoader/LDrawModule.hpp"
 
 namespace
 {
@@ -34,7 +35,6 @@ namespace
 
     PhysicsBodyRef GetPhysicsBody([[maybe_unused]] Assets::Node* node)
     {
-#if WITH_PHYSIC
         if (!node)
             return {};
         auto comp = node->GetComponent<Runtime::PhysicsComponent>();
@@ -47,9 +47,6 @@ namespace
         if (!body)
             return {};
         return {comp.get(), body};
-#else
-        return {};
-#endif
     }
 
     struct PlaySpeedPreset
@@ -183,6 +180,7 @@ namespace
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
 {
+    Modules::LDraw::Register();
     return std::make_unique<BrickPlayerGameInstance>(config, options, engine);
 }
 
@@ -210,7 +208,6 @@ BrickPlayerGameInstance::PhysicsBodyResult BrickPlayerGameInstance::CreateDynami
 
     // Remove existing physics body if any
     auto existingPhys = node->GetComponent<Runtime::PhysicsComponent>();
-#if WITH_PHYSIC
     auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
     if (existingPhys && physics)
     {
@@ -229,7 +226,6 @@ BrickPlayerGameInstance::PhysicsBodyResult BrickPlayerGameInstance::CreateDynami
         node->AddComponent(phys);
         result.created = true;
     }
-#endif
 
     return result;
 }
@@ -247,7 +243,7 @@ BrickPlayerGameInstance::BrickPlayerGameInstance(Vulkan::WindowConfig& config, R
     userInterface_ = std::make_unique<BrickPlayerUserInterface>(this);
 }
 
-void BrickPlayerGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
+void BrickPlayerGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
     cvars.SetDefaultFromString("r.samples", "16", &error);
@@ -465,8 +461,6 @@ void BrickPlayerGameInstance::OnSceneLoaded()
         for (auto& node : scene.Nodes())
         {
             uint32_t instanceId = node->GetInstanceId();
-            if (node->GetName() == "ldraw_floor")
-                continue;
             auto stepIt = nodeStepMap_.find(instanceId);
             if (stepIt == nodeStepMap_.end())
                 continue;
@@ -490,11 +484,9 @@ void BrickPlayerGameInstance::OnSceneLoaded()
             auto bodyResult = CreateDynamicPhysicsBody(node.get(), worldScale, worldRotation);
             if (!bodyResult.created)
                 continue;
-#if WITH_PHYSIC
             auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
             if (physComp)
                 WakeLoosePartBody(NextEngine::GetInstance()->GetPhysicsEngine(), physComp->GetPhysicsBody(), instanceId);
-#endif
 
             disassembledNodes_[instanceId] = {bodyResult.halfExtent};
         }
@@ -845,7 +837,6 @@ bool BrickPlayerGameInstance::UpdateHitStateFromRaycast(const Assets::RayCastRes
 
 bool BrickPlayerGameInstance::StartDraggingHoveredPart()
 {
-#if WITH_PHYSIC
     if (hoveredDisassembled_.instanceId == UINT32_MAX)
         return false;
 
@@ -894,14 +885,10 @@ bool BrickPlayerGameInstance::StartDraggingHoveredPart()
     GetEngine().GetScene().ClearSelection();
     GetEngine().GetScene().SetHoveredId(draggedInstanceId_);
     return true;
-#else
-    return false;
-#endif
 }
 
 void BrickPlayerGameInstance::StopDraggingPart()
 {
-#if WITH_PHYSIC
     if (!isDraggingPart_)
     {
         return;
@@ -941,7 +928,6 @@ void BrickPlayerGameInstance::StopDraggingPart()
         hoveredDisassembled_.instanceId = UINT32_MAX;
         GetEngine().GetScene().ClearHoveredId();
     }
-#endif
 
     hoveredAssembly_.instanceId = UINT32_MAX;
     ResetDragState();
@@ -949,7 +935,6 @@ void BrickPlayerGameInstance::StopDraggingPart()
 
 void BrickPlayerGameInstance::SwitchDragPlaneWhileDragging()
 {
-#if WITH_PHYSIC
     if (!isDraggingPart_ || draggedInstanceId_ == UINT32_MAX)
         return;
 
@@ -981,12 +966,10 @@ void BrickPlayerGameInstance::SwitchDragPlaneWhileDragging()
     {
         dragBodyOffset_ = body->position - planeHit;
     }
-#endif
 }
 
 void BrickPlayerGameInstance::RotateDraggedPart90()
 {
-#if WITH_PHYSIC
     if (!isDraggingPart_ || draggedInstanceId_ == UINT32_MAX)
         return;
 
@@ -1006,12 +989,10 @@ void BrickPlayerGameInstance::RotateDraggedPart90()
 
     // Clear snap state so it re-evaluates with the new rotation
     activeSnapCandidate_ = {};
-#endif
 }
 
 void BrickPlayerGameInstance::UpdateDraggedPart()
 {
-#if WITH_PHYSIC
     if (!isDraggingPart_ || draggedInstanceId_ == UINT32_MAX)
     {
         return;
@@ -1146,7 +1127,6 @@ void BrickPlayerGameInstance::UpdateDraggedPart()
     GetEngine().GetScene().ClearSelection();
     selectedInstanceId_ = UINT32_MAX;
     GetEngine().GetScene().MarkDirty();
-#endif
 }
 
 bool BrickPlayerGameInstance::TryBuildSnapCandidate(Assets::Node* node,
@@ -2035,7 +2015,6 @@ void BrickPlayerGameInstance::DisassembleSelected()
     if (!bodyResult.created)
         return;
 
-#if WITH_PHYSIC
     // Apply force along the hit surface normal so the part pops outward
     auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
     auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
@@ -2052,7 +2031,6 @@ void BrickPlayerGameInstance::DisassembleSelected()
             : glm::vec3(0.0f, 1.0f, 0.0f);
         physics->AddForceToBody(bodyId, forceDir * impulseMagnitude);
     }
-#endif
 
     disassembledNodes_[selectedInstanceId_] = {bodyResult.halfExtent};
     hoveredDisassembled_.instanceId = UINT32_MAX;
@@ -2096,9 +2074,6 @@ void BrickPlayerGameInstance::BuildFreeBuildInventory()
 
     for (auto& node : scene.Nodes())
     {
-        if (node->GetName() == "ldraw_floor")
-            continue;
-
         uint32_t instanceId = node->GetInstanceId();
 
         // Only include inventory bricks (step > 0), skip baseplates (step 0)
@@ -2162,11 +2137,9 @@ void BrickPlayerGameInstance::SpawnRandomBricks(int count)
         auto bodyResult = CreateDynamicPhysicsBody(clone.get(), glm::vec3(1.0f), glm::quat(1, 0, 0, 0));
         if (bodyResult.created)
         {
-#if WITH_PHYSIC
             auto physComp = clone->GetComponent<Runtime::PhysicsComponent>();
             if (physComp)
                 WakeLoosePartBody(NextEngine::GetInstance()->GetPhysicsEngine(), physComp->GetPhysicsBody(), newId);
-#endif
             disassembledNodes_[newId] = {bodyResult.halfExtent};
         }
 
@@ -2202,7 +2175,7 @@ int BrickPlayerGameInstance::CountAvailableBricks()
     for (const auto& [id, info] : disassembledNodes_)
     {
         auto* node = GetEngine().GetScene().GetNodeByInstanceId(id);
-        if (node && node->GetName() != "ldraw_floor")
+        if (node)
             count++;
     }
     return count;
@@ -2210,7 +2183,6 @@ int BrickPlayerGameInstance::CountAvailableBricks()
 
 void BrickPlayerGameInstance::CreateFloorPhysicsBody()
 {
-#if WITH_PHYSIC
     auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
     hasFloorPlane_ = false;
     floorPlaneY_ = 0.0f;
@@ -2218,9 +2190,7 @@ void BrickPlayerGameInstance::CreateFloorPhysicsBody()
     if (!physics)
         return;
 
-    // Prefer the auto-generated LDraw floor top surface; otherwise fall back to scene bounds.
     float minY = FLT_MAX;
-    float floorTopY = FLT_MAX;
     auto& nodes = GetEngine().GetScene().Nodes();
     auto& models = GetEngine().GetScene().Models();
 
@@ -2237,18 +2207,12 @@ void BrickPlayerGameInstance::CreateFloorPhysicsBody()
         const auto& model = models[modelIdx];
         const WorldBounds bounds =
             TransformLocalBounds(node->WorldTransform(), model.GetLocalAABBMin(), model.GetLocalAABBMax());
-        if (node->GetName() == "ldraw_floor")
-        {
-            floorTopY = bounds.max.y;
-            continue;
-        }
-
         minY = std::min(minY, bounds.min.y);
     }
 
-    if (floorTopY < FLT_MAX || minY < FLT_MAX)
+    if (minY < FLT_MAX)
     {
-        floorSurfaceY_ = floorTopY < FLT_MAX ? floorTopY : minY;
+        floorSurfaceY_ = minY;
         floorPlaneY_ = floorSurfaceY_;
         hasFloorPlane_ = true;
         physics->CreatePlaneBody(
@@ -2256,7 +2220,6 @@ void BrickPlayerGameInstance::CreateFloorPhysicsBody()
             glm::vec3(0.0f, 1.0f, 0.0f),
             NextMotionType::Static);
     }
-#endif
 }
 
 // File dialog

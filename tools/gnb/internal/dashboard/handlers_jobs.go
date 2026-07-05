@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/remoteplay"
 )
 
 func (s *Server) handleJobStart(w http.ResponseWriter, r *http.Request) {
@@ -34,6 +35,24 @@ func (s *Server) handleJobStart(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+	case JobRemote:
+		var err error
+		extraArgs := strings.Fields(r.FormValue("extraArgs"))
+		spec, err = s.remoteJobSpec(target, remoteplay.Options{
+			Bind:          strings.TrimSpace(r.FormValue("bind")),
+			Resolution:    strings.TrimSpace(r.FormValue("resolution")),
+			Encoder:       strings.TrimSpace(r.FormValue("encoder")),
+			HttpPort:      parseUint32OrDefault(r.FormValue("httpPort"), 8088),
+			SignalingPort: parseUint32OrDefault(r.FormValue("signalingPort"), 8089),
+			BitrateKbps:   parseUint32OrDefault(r.FormValue("bitrateKbps"), 0),
+			Fps:           parseUint32OrDefault(r.FormValue("fps"), 30),
+			ShowWindow:    r.FormValue("showWindow") == "1",
+			Scene:         strings.TrimSpace(r.FormValue("scene")),
+		}, extraArgs)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	case JobTest:
 		var err error
 		spec, err = s.testJobSpec(target)
@@ -50,7 +69,7 @@ func (s *Server) handleJobStart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.render(w, "log_panel", job.snapshot())
+	s.render(w, "log_panel", s.jobSnapshot(job))
 }
 
 func (s *Server) handleJobCancel(w http.ResponseWriter, r *http.Request) {
@@ -64,13 +83,49 @@ func (s *Server) handleJobCancel(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "job not found", http.StatusNotFound)
 		return
 	}
-	s.render(w, "log_panel", job.snapshot())
+	s.render(w, "log_panel", s.jobSnapshot(job))
+}
+
+func (s *Server) jobSnapshot(job *Job) JobSnapshot {
+	snap := job.snapshot()
+	snap.StreamBase = s.streamBaseURL
+	return snap
+}
+
+func (s *Server) handleJobStreamOptions(w http.ResponseWriter, r *http.Request) {
+	if !setStreamCORSHeaders(w, r) {
+		http.Error(w, "origin not allowed", http.StatusForbidden)
+		return
+	}
+	w.Header().Set("Access-Control-Allow-Methods", http.MethodGet)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func setStreamCORSHeaders(w http.ResponseWriter, r *http.Request) bool {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return true
+	}
+	requestOrigin := "http://" + r.Host
+	if origin != requestOrigin &&
+		origin != "wails://wails" &&
+		!strings.HasPrefix(origin, "http://wails.localhost") {
+		return false
+	}
+	w.Header().Set("Access-Control-Allow-Origin", origin)
+	w.Header().Set("Vary", "Origin")
+	w.Header().Set("Access-Control-Allow-Private-Network", "true")
+	return true
 }
 
 // handleJobStream serves Server-Sent Events for one job. The initial buffered
 // output is replayed before the live channel takes over. The connection ends
 // when the job terminates or the client disconnects.
 func (s *Server) handleJobStream(w http.ResponseWriter, r *http.Request) {
+	if !setStreamCORSHeaders(w, r) {
+		http.Error(w, "origin not allowed", http.StatusForbidden)
+		return
+	}
 	id := r.PathValue("id")
 	job, ok := s.jobs.Get(id)
 	if !ok {
@@ -228,6 +283,38 @@ func (s *Server) runJobSpec(target string, extraArgs []string) (JobSpec, error) 
 	}, nil
 }
 
+func (s *Server) remoteJobSpec(target string, opts remoteplay.Options, extraArgs []string) (JobSpec, error) {
+	if target == "" {
+		return JobSpec{}, fmt.Errorf("请选择要远程启动的 target")
+	}
+	if strings.TrimSpace(opts.Bind) == "" {
+		opts.Bind = "0.0.0.0"
+	}
+	if strings.TrimSpace(opts.Encoder) == "" {
+		opts.Encoder = "auto"
+	}
+	if opts.HttpPort == 0 {
+		opts.HttpPort = 8088
+	}
+	if opts.SignalingPort == 0 {
+		opts.SignalingPort = 8089
+	}
+	if opts.Fps == 0 {
+		opts.Fps = 30
+	}
+	binDir := platform.BinDir(s.opts.RepoRoot, s.opts.Preset)
+	exe := platform.ExecutablePath(binDir, target)
+	return JobSpec{
+		Kind:       JobRemote,
+		Target:     target,
+		Name:       exe,
+		Args:       remoteplay.RunArgs(opts, extraArgs),
+		WorkDir:    filepath.Dir(exe),
+		Env:        []string{"FORCE_COLOR=1"},
+		AfterStart: runActivationHook,
+	}, nil
+}
+
 func (s *Server) testJobSpec(name string) (JobSpec, error) {
 	binDir := platform.BinDir(s.opts.RepoRoot, s.opts.Preset)
 	exe := platform.ExecutablePath(binDir, "gkNextUnitTests")
@@ -246,4 +333,16 @@ func (s *Server) testJobSpec(name string) (JobSpec, error) {
 		WorkDir: filepath.Dir(exe),
 		Env:     []string{"FORCE_COLOR=1"},
 	}, nil
+}
+
+func parseUint32OrDefault(raw string, fallback uint32) uint32 {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.ParseUint(raw, 10, 32)
+	if err != nil {
+		return fallback
+	}
+	return uint32(value)
 }

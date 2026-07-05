@@ -1,4 +1,3 @@
-implementing Common;
 #include "PreProcessor.slang"
 
 // Probe baker for ambient cubes.
@@ -8,27 +7,101 @@ implementing Common;
 // always bakes direct+indirect: the indirect bounce samples neighbour cubes via
 // interpolateAmbientCubesStable, so there is no separate propagation pass.
 
+uint AmbientBakeHash(uint value)
+{
+    value ^= value >> 16u;
+    value *= 0x7feb352du;
+    value ^= value >> 15u;
+    value *= 0x846ca68bu;
+    value ^= value >> 16u;
+    return value;
+}
+
+float AmbientBakeHash01(uint value)
+{
+    return float(AmbientBakeHash(value) & 0x00FFFFFFu) / 16777216.0f;
+}
+
+float AmbientBakeRadicalInverseVdc(uint bits)
+{
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return float(bits) * 2.3283064365386963e-10f;
+}
+
+float2 AmbientBakeHammersley2D(uint index, uint sampleCount)
+{
+    return float2((float(index) + 0.5f) / float(sampleCount), AmbientBakeRadicalInverseVdc(index));
+}
+
+float3 AmbientBakeUniformHemisphere(float2 u)
+{
+    float z = saturate(u.x);
+    float phi = M_TWO_PI * u.y;
+    float r = sqrt(max(0.0f, 1.0f - z * z));
+    return float3(r * cos(phi), r * sin(phi), z);
+}
+
+uint AmbientBakeFaceId(float3 basis)
+{
+    if (abs(basis.y) > 0.5f)
+    {
+        return basis.y > 0.0f ? 0u : 1u;
+    }
+    if (abs(basis.x) > 0.5f)
+    {
+        return basis.x > 0.0f ? 2u : 3u;
+    }
+    return basis.z > 0.0f ? 4u : 5u;
+}
+
+float2 AmbientBakeSample2D(uint sampleIndex, uint sampleCount, uint scramble)
+{
+    float2 u = AmbientBakeHammersley2D(sampleIndex, sampleCount);
+    float2 shift = float2(AmbientBakeHash01(scramble), AmbientBakeHash01(scramble ^ 0x9e3779b9u));
+    return frac(u + shift);
+}
+
+float AmbientCubeAccumulationWeight(uint sampleCount)
+{
+    return 1.0f / float(min(sampleCount, 254u) + 1u);
+}
+
+void AdvanceAmbientCubeSampleCount(inout uint4 skyvis_pxnxs0s1, uint sampleCount)
+{
+    skyvis_pxnxs0s1.z = min(sampleCount + 1u, 255u);
+}
+
 public struct FGpuProbeGenerator : IProbeGenerator
 {
-    bool FaceTask(IRayTracer tracer, float3 origin, float3 basis, uint iterate, uint bakeCascadeIndex, inout uint DirectLight, inout uint IndirectLight, inout uint SkyVisOut, inout uint SunVisOut)
+    bool FaceTask(IRayTracer tracer, float3 origin, float3 basis, uint iterate, uint bakeCascadeIndex,
+                  inout uint IndirectLight, out float4 outSunDirect, out float4 outSkyEmissiveDirect,
+                  out float outSkyVisibility, float currWeight)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
         float cubeUnit = GetAmbientCubeUnit();
 
         origin = origin + basis * cubeUnit * 0.25f;
         // 输出结果
-        float4 directColor = float4(0.0);
+        float4 sunDirect = float4(0.0);
+        float4 skyEmissiveDirect = float4(0.0);
         float4 bounceColor = float4(0.0);
 
         float skyVisibility = 0.0;
 
-        // 抖动
-        const float2 offset = grid3x3[iterate % 9] * 0.25f;
+        uint scramble = AmbientBakeHash(asuint(origin.x) ^ (asuint(origin.y) * 0x9e3779b9u) ^
+                                        (asuint(origin.z) * 0x85ebca6bu));
+        scramble ^= AmbientBakeHash(AmbientBakeFaceId(basis) + bakeCascadeIndex * 17u);
+        scramble ^= AmbientBakeHash(iterate * 131u + Camera.TotalFrames * 8191u);
 
         // 这个采样还是有点过重，可以考虑用probe间的光能传递来完成，而非直接tracing
         for (uint i = 0; i < FACE_TRACING; i++)
         {
-            float3 hemiVec = normalize(float3(grid4x4[i] + offset, 1.0));
+            float2 sampleUv = AmbientBakeSample2D(i, FACE_TRACING, scramble);
+            float3 hemiVec = AmbientBakeUniformHemisphere(sampleUv);
             float3 rayDir = AlignWithNormal(hemiVec, basis);
 
             Vertex hitVertex;
@@ -47,22 +120,24 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
                 if (hitMaterial.MaterialModel == MaterialDiffuseLight)
                 {
-                    directColor += outAlbedo;
+                    skyEmissiveDirect += outAlbedo;
                 }
                 else
                 {
-                    bounceColor += outAlbedo * interpolateAmbientCubesStable<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, bakeCascadeIndex) * 1.25f; // magic bounce twice
+                    MarkAmbientBrickHitAtWorld(hitVertex.Position, true);
+                    bounceColor += outAlbedo * interpolateAmbientCubesStable<DIAmbientCubeSampler>(hitVertex.Position, hitVertex.Normal, bakeCascadeIndex) * 2.0f; // magic bounce twice
                 }
             }
             else
             {
-                directColor += Common.SampleIBLRough(Camera.SkyIdx, rayDir, Camera.SkyRotation) * (Camera.HasSky ? Camera.SkyIntensity : 0.0f);
+                skyEmissiveDirect += Common.SampleIBLRough(Camera.SkyIdx, rayDir, Camera.SkyRotation) * (Camera.HasSky ? Camera.SkyIntensity : 0.0f);
                 skyVisibility += 1.0f;
             }
         }
 
-        directColor = directColor / float(FACE_TRACING);
+        skyEmissiveDirect = skyEmissiveDirect / float(FACE_TRACING);
         bounceColor = bounceColor / float(FACE_TRACING);
+        skyVisibility = skyVisibility / float(FACE_TRACING);
 
         // // 太阳光
         if (Camera.HasSun)
@@ -70,16 +145,13 @@ public struct FGpuProbeGenerator : IProbeGenerator
             float3 sunDir = Camera.SunDirection.xyz;
             float sunAtten = tracer.TraceOcclusion(origin, sunDir) ? 0.0f : 1.0f;
             float ndotl = clamp(dot(basis, sunDir), 0.0f, 1.0f);
-            SunVisOut = sunAtten > 0.0f ? 1 : 0;
-            directColor += Camera.SunColor * sunAtten * ndotl * (Camera.HasSun ? 1.0f : 0.0f) * 0.25f;
+            sunDirect += Camera.SunColor * sunAtten * ndotl * (Camera.HasSun ? 1.0f : 0.0f) * 0.25f;
         }
 
-        // 累积，gpu直接只保留4帧
-        float accumulatedFrames = min(float(iterate) + 1.0f, kTraceHistoryLength);
-        float currWeight = 1.0f / accumulatedFrames;
-        SkyVisOut = uint(lerp(float(SkyVisOut), 255.0 * skyVisibility / float(FACE_TRACING), currWeight));
-        DirectLight = LerpPackedColorAlt(DirectLight, directColor, currWeight);
         IndirectLight = LerpPackedColorAlt(IndirectLight, bounceColor, currWeight);
+        outSunDirect = sunDirect;
+        outSkyEmissiveDirect = skyEmissiveDirect;
+        outSkyVisibility = skyVisibility;
         return false;
     }
 
@@ -173,29 +245,51 @@ public struct FGpuProbeGenerator : IProbeGenerator
 
         float inside = distPY * distNY * distPX * distNX * distPZ * distNZ;
 
-        // store the dist, the dist is abs meters, can store 4 unit_size max
-        Voxels[voxelIdx].distanceToSolid_gg_z01 = PackBytes(uint4(uint(minDist / cubeUnit), uint(inside * 255.0f), uint(distPZ * 255.0f), uint(distNZ * 255.0f)));
-        Voxels[voxelIdx].distanceToSolid_x01_y01 = PackBytes(uint4(uint(distPX * 255.0f), uint(distNX * 255.0f), uint(distPY * 255.0f), uint(distNY * 255.0f)));
+        Voxels[voxelIdx].distanceToSolid = PackNibbles(
+            uint4(min(uint(minDist / cubeUnit), 15u), uint(inside * 15.0f), uint(distPZ * 15.0f), uint(distNZ * 15.0f)),
+            uint4(uint(distPX * 15.0f), uint(distNX * 15.0f), uint(distPY * 15.0f), uint(distNY * 15.0f)));
 
         if (minDist < 8 && cubeIdx >= 0) // 只处理表面，增值算法的时候可以具体的把他做好
         {
-            uint iterate = Voxels[voxelIdx].age;
-            Voxels[voxelIdx].age = Voxels[voxelIdx].age + 1;
-
-            uint4 skyvis_pznzpynyx = UnpackBytes(Cubes[cubeIdx].skyVisibility_pznzpyny);
-            uint4 skyvis_pxnxs0s1 = UnpackBytes(Cubes[cubeIdx].skyVisibility_pxnxs0s1);
-
-            uint sunvis = 0;
+            uint iterate = Bindless.GetGpuscene().Camera[0].TotalFrames;
 
             uint bakeCascadeIndex = Bindless.GetGpuscene().custom_data_1;
-            FaceTask(tracer, origin, float3(0, 1, 0), iterate, bakeCascadeIndex, Cubes[cubeIdx].PosY_D, Cubes[cubeIdx].PosY, skyvis_pznzpynyx.z, skyvis_pxnxs0s1.z);
-            FaceTask(tracer, origin, float3(0, -1, 0), iterate, bakeCascadeIndex, Cubes[cubeIdx].NegY_D, Cubes[cubeIdx].NegY, skyvis_pznzpynyx.w, sunvis);
-            FaceTask(tracer, origin, float3(1, 0, 0), iterate, bakeCascadeIndex, Cubes[cubeIdx].PosX_D, Cubes[cubeIdx].PosX, skyvis_pxnxs0s1.x, sunvis);
-            FaceTask(tracer, origin, float3(-1, 0, 0), iterate, bakeCascadeIndex, Cubes[cubeIdx].NegX_D, Cubes[cubeIdx].NegX, skyvis_pxnxs0s1.y, sunvis);
-            FaceTask(tracer, origin, float3(0, 0, 1), iterate, bakeCascadeIndex, Cubes[cubeIdx].PosZ_D, Cubes[cubeIdx].PosZ, skyvis_pznzpynyx.x, sunvis);
-            FaceTask(tracer, origin, float3(0, 0, -1), iterate, bakeCascadeIndex, Cubes[cubeIdx].NegZ_D, Cubes[cubeIdx].NegZ, skyvis_pznzpynyx.y, sunvis);
+            uint4 skyvis_pznzpyny = UnpackBytes(Cubes[cubeIdx].skyVisibility_pznzpyny);
+            uint4 skyvis_pxnxs0s1 = UnpackBytes(Cubes[cubeIdx].skyVisibility_pxnxs0s1);
+            uint sampleCount = skyvis_pxnxs0s1.z;
+            float currWeight = AmbientCubeAccumulationWeight(sampleCount);
+            float4 faceSun;
+            float4 faceSkyEmissive;
+            float faceSkyVis;
+            float4 sunDirect = float4(0.0f);
+            float4 skyEmissiveDirect = float4(0.0f);
 
-            Cubes[cubeIdx].skyVisibility_pznzpyny = PackBytes(skyvis_pznzpynyx);
+            FaceTask(tracer, origin, float3(0, 1, 0), iterate, bakeCascadeIndex, Cubes[cubeIdx].PosY, faceSun, faceSkyEmissive, faceSkyVis, currWeight);
+            sunDirect += faceSun; skyEmissiveDirect += faceSkyEmissive;
+            skyvis_pznzpyny.z = uint(lerp(float(skyvis_pznzpyny.z), 255.0f * faceSkyVis, currWeight));
+            FaceTask(tracer, origin, float3(0, -1, 0), iterate, bakeCascadeIndex, Cubes[cubeIdx].NegY, faceSun, faceSkyEmissive, faceSkyVis, currWeight);
+            sunDirect += faceSun; skyEmissiveDirect += faceSkyEmissive;
+            skyvis_pznzpyny.w = uint(lerp(float(skyvis_pznzpyny.w), 255.0f * faceSkyVis, currWeight));
+            FaceTask(tracer, origin, float3(1, 0, 0), iterate, bakeCascadeIndex, Cubes[cubeIdx].PosX, faceSun, faceSkyEmissive, faceSkyVis, currWeight);
+            sunDirect += faceSun; skyEmissiveDirect += faceSkyEmissive;
+            skyvis_pxnxs0s1.x = uint(lerp(float(skyvis_pxnxs0s1.x), 255.0f * faceSkyVis, currWeight));
+            FaceTask(tracer, origin, float3(-1, 0, 0), iterate, bakeCascadeIndex, Cubes[cubeIdx].NegX, faceSun, faceSkyEmissive, faceSkyVis, currWeight);
+            sunDirect += faceSun; skyEmissiveDirect += faceSkyEmissive;
+            skyvis_pxnxs0s1.y = uint(lerp(float(skyvis_pxnxs0s1.y), 255.0f * faceSkyVis, currWeight));
+            FaceTask(tracer, origin, float3(0, 0, 1), iterate, bakeCascadeIndex, Cubes[cubeIdx].PosZ, faceSun, faceSkyEmissive, faceSkyVis, currWeight);
+            sunDirect += faceSun; skyEmissiveDirect += faceSkyEmissive;
+            skyvis_pznzpyny.x = uint(lerp(float(skyvis_pznzpyny.x), 255.0f * faceSkyVis, currWeight));
+            FaceTask(tracer, origin, float3(0, 0, -1), iterate, bakeCascadeIndex, Cubes[cubeIdx].NegZ, faceSun, faceSkyEmissive, faceSkyVis, currWeight);
+            sunDirect += faceSun; skyEmissiveDirect += faceSkyEmissive;
+            skyvis_pznzpyny.y = uint(lerp(float(skyvis_pznzpyny.y), 255.0f * faceSkyVis, currWeight));
+
+            sunDirect *= 1.0f / 6.0f;
+            skyEmissiveDirect *= 1.0f / 6.0f;
+            Cubes[cubeIdx].SunDirect = LerpPackedColorAlt(Cubes[cubeIdx].SunDirect, sunDirect, currWeight);
+            Cubes[cubeIdx].SkyEmissiveDirect =
+                LerpPackedColorAlt(Cubes[cubeIdx].SkyEmissiveDirect, skyEmissiveDirect, currWeight);
+            AdvanceAmbientCubeSampleCount(skyvis_pxnxs0s1, sampleCount);
+            Cubes[cubeIdx].skyVisibility_pznzpyny = PackBytes(skyvis_pznzpyny);
             Cubes[cubeIdx].skyVisibility_pxnxs0s1 = PackBytes(skyvis_pxnxs0s1);
         }
     }
@@ -205,26 +299,48 @@ public struct FGpuProbeGenerator : IProbeGenerator
         AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
         VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
 
-        uint4 upacked = UnpackBytes(Voxels[voxelIdx].distanceToSolid_gg_z01);
-        if (upacked.x < 16 && cubeIdx >= 0) // 只处理表面，增值算法的时候可以具体的把他做好
+        uint4 upacked = UnpackNibblesLow(Voxels[voxelIdx].distanceToSolid);
+        if (upacked.x < 15 && cubeIdx >= 0) // 只处理表面，增值算法的时候可以具体的把他做好
         {
-            uint iterate = Voxels[voxelIdx].age;
-            Voxels[voxelIdx].age = Voxels[voxelIdx].age + 1;
-
-            uint4 skyvis_pznzpynyx = UnpackBytes(Cubes[cubeIdx].skyVisibility_pznzpyny);
-            uint4 skyvis_pxnxs0s1 = UnpackBytes(Cubes[cubeIdx].skyVisibility_pxnxs0s1);
-
-            uint sunvis = 0;
+            uint iterate = Bindless.GetGpuscene().Camera[0].TotalFrames;
 
             uint bakeCascadeIndex = Bindless.GetGpuscene().custom_data_1;
-            FaceTask(tracer, origin, float3(0, 1, 0), iterate, bakeCascadeIndex, Cubes[cubeIdx].PosY_D, Cubes[cubeIdx].PosY, skyvis_pznzpynyx.z, skyvis_pxnxs0s1.z);
-            FaceTask(tracer, origin, float3(0, -1, 0), iterate, bakeCascadeIndex, Cubes[cubeIdx].NegY_D, Cubes[cubeIdx].NegY, skyvis_pznzpynyx.w, sunvis);
-            FaceTask(tracer, origin, float3(1, 0, 0), iterate, bakeCascadeIndex, Cubes[cubeIdx].PosX_D, Cubes[cubeIdx].PosX, skyvis_pxnxs0s1.x, sunvis);
-            FaceTask(tracer, origin, float3(-1, 0, 0), iterate, bakeCascadeIndex, Cubes[cubeIdx].NegX_D, Cubes[cubeIdx].NegX, skyvis_pxnxs0s1.y, sunvis);
-            FaceTask(tracer, origin, float3(0, 0, 1), iterate, bakeCascadeIndex, Cubes[cubeIdx].PosZ_D, Cubes[cubeIdx].PosZ, skyvis_pznzpynyx.x, sunvis);
-            FaceTask(tracer, origin, float3(0, 0, -1), iterate, bakeCascadeIndex, Cubes[cubeIdx].NegZ_D, Cubes[cubeIdx].NegZ, skyvis_pznzpynyx.y, sunvis);
+            uint4 skyvis_pznzpyny = UnpackBytes(Cubes[cubeIdx].skyVisibility_pznzpyny);
+            uint4 skyvis_pxnxs0s1 = UnpackBytes(Cubes[cubeIdx].skyVisibility_pxnxs0s1);
+            uint sampleCount = skyvis_pxnxs0s1.z;
+            float currWeight = AmbientCubeAccumulationWeight(sampleCount);
+            float4 faceSun;
+            float4 faceSkyEmissive;
+            float faceSkyVis;
+            float4 sunDirect = float4(0.0f);
+            float4 skyEmissiveDirect = float4(0.0f);
 
-            Cubes[cubeIdx].skyVisibility_pznzpyny = PackBytes(skyvis_pznzpynyx);
+            FaceTask(tracer, origin, float3(0, 1, 0), iterate, bakeCascadeIndex, Cubes[cubeIdx].PosY, faceSun, faceSkyEmissive, faceSkyVis, currWeight);
+            sunDirect += faceSun; skyEmissiveDirect += faceSkyEmissive;
+            skyvis_pznzpyny.z = uint(lerp(float(skyvis_pznzpyny.z), 255.0f * faceSkyVis, currWeight));
+            FaceTask(tracer, origin, float3(0, -1, 0), iterate, bakeCascadeIndex, Cubes[cubeIdx].NegY, faceSun, faceSkyEmissive, faceSkyVis, currWeight);
+            sunDirect += faceSun; skyEmissiveDirect += faceSkyEmissive;
+            skyvis_pznzpyny.w = uint(lerp(float(skyvis_pznzpyny.w), 255.0f * faceSkyVis, currWeight));
+            FaceTask(tracer, origin, float3(1, 0, 0), iterate, bakeCascadeIndex, Cubes[cubeIdx].PosX, faceSun, faceSkyEmissive, faceSkyVis, currWeight);
+            sunDirect += faceSun; skyEmissiveDirect += faceSkyEmissive;
+            skyvis_pxnxs0s1.x = uint(lerp(float(skyvis_pxnxs0s1.x), 255.0f * faceSkyVis, currWeight));
+            FaceTask(tracer, origin, float3(-1, 0, 0), iterate, bakeCascadeIndex, Cubes[cubeIdx].NegX, faceSun, faceSkyEmissive, faceSkyVis, currWeight);
+            sunDirect += faceSun; skyEmissiveDirect += faceSkyEmissive;
+            skyvis_pxnxs0s1.y = uint(lerp(float(skyvis_pxnxs0s1.y), 255.0f * faceSkyVis, currWeight));
+            FaceTask(tracer, origin, float3(0, 0, 1), iterate, bakeCascadeIndex, Cubes[cubeIdx].PosZ, faceSun, faceSkyEmissive, faceSkyVis, currWeight);
+            sunDirect += faceSun; skyEmissiveDirect += faceSkyEmissive;
+            skyvis_pznzpyny.x = uint(lerp(float(skyvis_pznzpyny.x), 255.0f * faceSkyVis, currWeight));
+            FaceTask(tracer, origin, float3(0, 0, -1), iterate, bakeCascadeIndex, Cubes[cubeIdx].NegZ, faceSun, faceSkyEmissive, faceSkyVis, currWeight);
+            sunDirect += faceSun; skyEmissiveDirect += faceSkyEmissive;
+            skyvis_pznzpyny.y = uint(lerp(float(skyvis_pznzpyny.y), 255.0f * faceSkyVis, currWeight));
+
+            sunDirect *= 1.0f / 6.0f;
+            skyEmissiveDirect *= 1.0f / 6.0f;
+            Cubes[cubeIdx].SunDirect = LerpPackedColorAlt(Cubes[cubeIdx].SunDirect, sunDirect, currWeight);
+            Cubes[cubeIdx].SkyEmissiveDirect =
+                LerpPackedColorAlt(Cubes[cubeIdx].SkyEmissiveDirect, skyEmissiveDirect, currWeight);
+            AdvanceAmbientCubeSampleCount(skyvis_pxnxs0s1, sampleCount);
+            Cubes[cubeIdx].skyVisibility_pznzpyny = PackBytes(skyvis_pznzpyny);
             Cubes[cubeIdx].skyVisibility_pxnxs0s1 = PackBytes(skyvis_pxnxs0s1);
         }
     }

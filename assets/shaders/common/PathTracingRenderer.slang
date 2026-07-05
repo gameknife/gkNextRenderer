@@ -1,4 +1,3 @@
-implementing Common;
 #include "PreProcessor.slang"
 
 // Direct illumination strategies + path-tracing renderer split out of Shading.slang.
@@ -157,58 +156,38 @@ public struct FPathTracingRenderer{
     public bool ForceExitAfterFirst = false;
     public bool EnableSoftTracingAdaptiveOffset = false;
     public bool UseAmbientCubeTerminal = true;
-    public bool EnableSharcUpdate = false;
-    public bool EnableSharcQuery = false;
-    public uint SharcDebugMode = 0;
-    public float SharcUpdateSampleRatio = 1.0f;
-    public float SharcQueryRoughnessMin = 0.35f;
-    public uint SharcQueryMinBounce = 1u;
+    public bool WriteOutputs = true;
+    // Secondary (post-first-bounce) direct lighting strategy, decoupled from any cache:
+    //   0 = PlainSunNEE          : naive PT 50% random sun next-event estimation
+    //   1 = DirectTerminateIfLit : terminate the path once it sees direct light (cache provides indirect)
+    //   2 = None                 : no secondary direct lighting (direct already fed to the cache)
+    public uint SecondaryDirectMode = 0;
 
-    public float GetMaterialRoughness(Vertex vertex)
+    [mutating]
+    public float3 EvaluateDirectLighting(IDirectIlluminator directIllum, Vertex vertex)
     {
-        Material mat = Bindless.GetGpuscene().GetMaterial(vertex.MaterialIndex);
-        float roughness = mat.Fuzziness;
-        if (mat.MRATextureId >= 0)
-        {
-            float4 mra = Bindless.GetSampleTexture(mat.MRATextureId).SampleLevel(vertex.TexCoord, 0);
-            roughness = roughness * mra.g;
-        }
-        return roughness;
+        float4 directIllumColor = float4(0, 0, 0, 0);
+        directIllum.DirectIlluminate(RandomSeed_, vertex.Position, vertex.Normal, directIllumColor);
+        return max(directIllumColor.rgb, float3(0, 0, 0));
     }
 
-    public bool CanUseSharcAtBounce(Vertex vertex, bool hitReflect, bool hitMetal, uint bounce)
+    // Radiance applied when a path is forced to terminate on a surface.
+    // Returns the terminal radiance; the caller multiplies it into RayColor and,
+    // when ambient-cube terminal is active, feeds it to the cache as a miss.
+    float4 ApplyTerminalRadiance(Vertex vertex)
     {
-        if (!EnableSharcQuery || bounce < SharcQueryMinBounce || hitReflect || hitMetal)
-        {
-            return false;
-        }
-
-        Material mat = Bindless.GetGpuscene().GetMaterial(vertex.MaterialIndex);
-        if (mat.MaterialModel == MaterialDielectric || mat.MaterialModel == MaterialDiffuseLight)
-        {
-            return false;
-        }
-
-        return GetMaterialRoughness(vertex) >= SharcQueryRoughnessMin;
-    }
-
-    public void ApplyTerminalRadiance(Vertex vertex, inout float4 rayColor)
-    {
-        float4 terminalRadiance = float4(0, 0, 0, 1);
         if (UseAmbientCubeTerminal)
         {
-            terminalRadiance = interpolateAmbientCubes<FullAmbientCubeSampler>(vertex.Position, vertex.Normal);
-            if (EnableSharcUpdate)
-            {
-                SharcAccumulate(vertex.Position, vertex.Normal, terminalRadiance.rgb);
-            }
+            return interpolateAmbientCubes<FullAmbientCubeSampler>(vertex.Position, vertex.Normal);
         }
-        rayColor *= terminalRadiance;
+        return float4(0, 0, 0, 1);
     }
 
-    bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, inout bool hitReflect, inout bool hitMetal, out float outHitDist)
+    bool GetRayColor(IRayTracer tracer, inout Vertex inVertex, inout float3 rayDir, inout float4 rayColor, inout uint4 RandomSeed, inout bool hitReflect, inout bool hitMetal, out float outHitDist, out bool outHitMiss, out float3 outTerminalRadiance)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
+        outHitMiss = false;
+        outTerminalRadiance = float3(0, 0, 0);
 
         Material mat = Bindless.GetGpuscene().GetMaterial(inVertex.MaterialIndex);
         const float startPosOffset = mat.MaterialModel == MaterialDielectric ? 0.0f : 1.0f;
@@ -295,10 +274,7 @@ public struct FPathTracingRenderer{
             }
             if (hitMat.MaterialModel == MaterialDiffuseLight)
             {
-                if (EnableSharcUpdate)
-                {
-                    SharcAccumulate(cachePosition, cacheNormal, outAlbedo.rgb);
-                }
+                outTerminalRadiance = outAlbedo.rgb;
                 return true;
             }
             return false;
@@ -313,11 +289,9 @@ public struct FPathTracingRenderer{
             // else
             {
                 float4 skyColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, trace_dir, Camera.SkyRotation, 0) * Camera.SkyIntensity : float4(0.0, 0.0, 0.0, 0.0);
-                if (EnableSharcUpdate)
-                {
-                    SharcAccumulate(inVertex.Position, inVertex.Normal, skyColor.rgb);
-                }
                 rayColor *= skyColor;
+                outHitMiss = true;
+                outTerminalRadiance = skyColor.rgb;
             }
             outHitDist = PT_MAX_TRACE_DISTANCE;
             return true;
@@ -325,11 +299,11 @@ public struct FPathTracingRenderer{
     }
 
     [mutating]
-    public void Render(IRayTracer tracer, IDirectIlluminator directIllum, int sampleMultiplier)
+    public void Render<TCache : IRadianceCache>(IRayTracer tracer, IDirectIlluminator directIllum, inout TCache cache, int sampleMultiplier)
     {
         UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
 
-        if (EnableSharcUpdate && RandomFloat(RandomSeed_) > SharcUpdateSampleRatio)
+        if (!cache.ShouldShadePixel(pixel_, Camera))
         {
             return;
         }
@@ -343,18 +317,23 @@ public struct FPathTracingRenderer{
         if (mat.MaterialModel == MaterialDiffuseLight)
         {
             FinalColor = min(mat.Diffuse, float4(1000, 1000, 1000, 1));
-            OutSingleDiffuse.Store(pixel_, FinalColor);
-            OutSingleSpecular.Store(pixel_, FinalReflection);
-            OutDiffuseHitDist.Store(pixel_, primaryRayLength_);
-            OutSpecularHitDist.Store(pixel_, primaryRayLength_);
+            if (WriteOutputs)
+            {
+                OutSingleDiffuse.Store(pixel_, FinalColor);
+                OutSingleSpecular.Store(pixel_, FinalReflection);
+                OutDiffuseHitDist.Store(pixel_, primaryRayLength_);
+                OutSpecularHitDist.Store(pixel_, primaryRayLength_);
+            }
             return;
         }
 
         const int sample = max(1, Camera.NumberOfSamples / SampleDownscale * sampleMultiplier);
+        const bool wantsDirect = cache.WantsDirectLighting();
 
         for (int i = 0; i < sample; i++)
         {
             float4 RayColor = float4(1, 1, 1, 1);
+            cache.BeginPath();
 
             float4 eye = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
             float3 ray_dir = normalize(hitPrimaryVertex_.Position - eye.xyz);
@@ -364,61 +343,94 @@ public struct FPathTracingRenderer{
 
             uint maxBounces = mat.MaterialModel == MaterialDielectric ? Camera.MaxNumberOfBounces : Camera.NumberOfBounces;
 
+            // Accumulation flags / hit distance come from the first bounce only.
             bool hitReflect = false;
             bool hitMetal = false;
             float hitDist = 0;
-            bool exitFirst = GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed_, hitReflect, hitMetal, hitDist);
-            if (!exitFirst && CanUseSharcAtBounce(vertexStart, hitReflect, hitMetal, 1u))
+
+            // Record the primary vertex as the path start.
+            float3 startDirect = wantsDirect ? EvaluateDirectLighting(directIllum, vertexStart) : float3(0, 0, 0);
+            bool pathContinue = cache.OnSurfaceHit(vertexStart.Position, vertexStart.Normal, startDirect, RandomSeed_);
+
+            for (uint b = 0; b < maxBounces && pathContinue; ++b)
             {
-                float4 cachedRadiance = float4(0, 0, 0, 0);
-                if (SharcQuery(vertexStart.Position, vertexStart.Normal, cachedRadiance))
+                bool bHitReflect = false;
+                bool bHitMetal = false;
+                float bHitDist = 0;
+                bool bHitMiss = false;
+                float3 bTerminalRadiance = float3(0, 0, 0);
+                float3 rayColorBefore = RayColor.rgb;
+                bool segmentExit = GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed_, bHitReflect, bHitMetal, bHitDist, bHitMiss, bTerminalRadiance);
+
+                if (b == 0)
                 {
-                    RayColor *= SharcDebugMode == 1u ? float4(0, 1, 0, 1) : cachedRadiance;
-                    exitFirst = true;
+                    hitReflect = bHitReflect;
+                    hitMetal = bHitMetal;
+                    hitDist = bHitDist;
                 }
-                else if (SharcDebugMode == 2u)
+
+                if (segmentExit)
                 {
-                    RayColor *= float4(1, 0, 0, 1);
-                    exitFirst = true;
-                }
-            }
-            if (!exitFirst)
-            {
-                if(ForceExitAfterFirst || (ExitAfterFirst && mat.MaterialModel != MaterialDielectric) )
-                {
-                    if(!FuzzyTracing)
+                    if (bHitMiss)
                     {
-                        ApplyTerminalRadiance(vertexStart, RayColor);
+                        cache.OnMiss(bTerminalRadiance);
                     }
+                    else if (any(bTerminalRadiance > float3(0, 0, 0)))
+                    {
+                        // Emissive terminator: record it as a hit with emissive radiance.
+                        cache.OnSurfaceHit(vertexStart.Position, vertexStart.Normal, bTerminalRadiance, RandomSeed_);
+                    }
+                    break;
+                }
+
+                cache.OnSegmentThroughput(rayColorBefore, RayColor.rgb);
+                float3 segmentDirect = wantsDirect ? EvaluateDirectLighting(directIllum, vertexStart) : float3(0, 0, 0);
+                pathContinue = cache.OnSurfaceHit(vertexStart.Position, vertexStart.Normal, segmentDirect, RandomSeed_);
+                if (!pathContinue)
+                {
+                    break;
+                }
+
+                float4 cachedRadiance = float4(0, 0, 0, 0);
+                if (cache.TryQueryRadiance(vertexStart, bHitReflect, bHitMetal, b + 1u, bHitDist, cachedRadiance))
+                {
+                    RayColor *= cachedRadiance;
+                    break;
+                }
+
+                if (b == 0)
+                {
+                    // First-bounce tail: optionally terminate immediately after the first hit.
+                    if (ForceExitAfterFirst || (ExitAfterFirst && mat.MaterialModel != MaterialDielectric))
+                    {
+                        if (!FuzzyTracing)
+                        {
+                            float4 terminalRadiance = ApplyTerminalRadiance(vertexStart);
+                            RayColor *= terminalRadiance;
+                            if (UseAmbientCubeTerminal)
+                            {
+                                cache.OnMiss(terminalRadiance.rgb);
+                            }
+                        }
+                        break;
+                    }
+                    // Otherwise fall through to the next bounce (no secondary direct, no RR at bounce 0).
                 }
                 else
                 {
-                    for (uint b = 1; b < maxBounces; ++b)
+                    // Secondary (post-first-bounce) direct lighting strategy.
+                    if (!bHitReflect)
                     {
-                        bool hitReflectDontCare = false;
-                        bool hitMetalDontCare = false;
-                        float hitDistDontCare = 0;
-                        if (GetRayColor(tracer, vertexStart, direction, RayColor, RandomSeed_, hitReflectDontCare, hitMetalDontCare, hitDistDontCare))
+                        if (SecondaryDirectMode == 1u)
                         {
-                            break;
-                        }
-
-                        if (CanUseSharcAtBounce(vertexStart, hitReflectDontCare, hitMetalDontCare, b + 1u))
-                        {
-                            float4 cachedRadiance = float4(0, 0, 0, 0);
-                            if (SharcQuery(vertexStart.Position, vertexStart.Normal, cachedRadiance))
+                            float3 directRadiance = EvaluateDirectLighting(directIllum, vertexStart);
+                            if (any(directRadiance > float3(0, 0, 0)))
                             {
-                                RayColor *= SharcDebugMode == 1u ? float4(0, 1000, 0, 1) : cachedRadiance;
-                                break;
-                            }
-                            else if (SharcDebugMode == 2u)
-                            {
-                                RayColor *= float4(1000, 0, 0, 1);
+                                RayColor *= float4(directRadiance, 1);
                                 break;
                             }
                         }
-
-                        if (!hitReflectDontCare && Camera.HasSun && (RandomFloat(RandomSeed_) < 0.5f))
+                        else if (SecondaryDirectMode == 0u && Camera.HasSun && (RandomFloat(RandomSeed_) < 0.5f))
                         {
                             const float3 lightVector = Camera.SunDirection.xyz;
                             const float3 lightVectorCone = AlignWithNormal(RandomInCone(RandomSeed_, cos(0.25f / 180.f * M_PI)), lightVector);
@@ -429,31 +441,32 @@ public struct FPathTracingRenderer{
                             }
                             if (!tracer.TraceOcclusion(vertexStart.Position + vertexStart.Normal * shadowTraceOffset, lightVectorCone))
                             {
-                                if (EnableSharcUpdate)
-                                {
-                                    SharcAccumulate(vertexStart.Position, vertexStart.Normal, Camera.SunColor.rgb);
-                                }
                                 RayColor *= Camera.SunColor;
                                 break;
                             }
                         }
+                    }
 
-                        // 提前退出
-                        const bool earlyExit = b > 0 && (mat.MaterialModel != MaterialDielectric) && (RandomFloat(RandomSeed_) < ExitProbability);
+                    // 提前退出
+                    const bool earlyExit = (mat.MaterialModel != MaterialDielectric) && (RandomFloat(RandomSeed_) < ExitProbability);
 
-                        // 终结路径
-                        if (b == maxBounces - 1 || earlyExit)
+                    // 终结路径
+                    if (b == maxBounces - 1 || earlyExit)
+                    {
+                        if (mat.MaterialModel == MaterialDielectric)
                         {
-                            if (mat.MaterialModel == MaterialDielectric)
-                            {
-                                RayColor *= float4(0, 0, 0, 1);
-                            }
-                            else
-                            {
-                                ApplyTerminalRadiance(vertexStart, RayColor);
-                            }
-                            break;
+                            RayColor *= float4(0, 0, 0, 1);
                         }
+                        else
+                        {
+                            float4 terminalRadiance = ApplyTerminalRadiance(vertexStart);
+                            RayColor *= terminalRadiance;
+                            if (UseAmbientCubeTerminal)
+                            {
+                                cache.OnMiss(terminalRadiance.rgb);
+                            }
+                        }
+                        break;
                     }
                 }
             }
@@ -485,10 +498,13 @@ public struct FPathTracingRenderer{
         directIllum.DirectIlluminate(RandomSeed_, hitPrimaryVertex_.Position, hitPrimaryVertex_.Normal, directColor);
         FinalColor += directColor;
 
-        OutSingleDiffuse.Store(pixel_, FinalColor);
-        OutSingleSpecular.Store(pixel_, FinalReflection);
-        OutDiffuseHitDist.Store(pixel_, FinalDiffuseHitDist + primaryRayLength_);
-        OutSpecularHitDist.Store(pixel_, FinalSpecularHitDist + primaryRayLength_);
+        if (WriteOutputs)
+        {
+            OutSingleDiffuse.Store(pixel_, FinalColor);
+            OutSingleSpecular.Store(pixel_, FinalReflection);
+            OutDiffuseHitDist.Store(pixel_, FinalDiffuseHitDist + primaryRayLength_);
+            OutSpecularHitDist.Store(pixel_, FinalSpecularHitDist + primaryRayLength_);
+        }
     }
 
     [mutating]
@@ -500,14 +516,17 @@ public struct FPathTracingRenderer{
         {
             float4 skyColor = Camera.HasSky ? Common.SampleIBL(Camera.SkyIdx, primaryRayDir_, Camera.SkyRotation, 0) * Camera.SkyIntensity : float4(0, 0, 0, 0);
 
-            OutSingleDiffuse.Store(pixel_, skyColor);
-            OutMotionVector.Store(pixel_, float4(0, 0, 0, 0));
-            OutAlbedo.Store(pixel_, float4(1, 1, 1, 1));
-            OutNormal.Store(pixel_, float4(0, 1, 0, 1));
-            OutObjectID.Store(pixel_, 0);
-            OutDiffuseHitDist.Store(pixel_, 1000);
-            OutSpecularHitDist.Store(pixel_, 1000);
-            OutSpecularAlbedo.Store(pixel_, float4(0, 0, 0, 0));
+            if (WriteOutputs)
+            {
+                OutSingleDiffuse.Store(pixel_, skyColor);
+                OutMotionVector.Store(pixel_, float4(0, 0, 0, 0));
+                OutAlbedo.Store(pixel_, float4(1, 1, 1, 1));
+                OutNormal.Store(pixel_, float4(0, 1, 0, 1));
+                OutObjectID.Store(pixel_, 0);
+                OutDiffuseHitDist.Store(pixel_, 1000);
+                OutSpecularHitDist.Store(pixel_, 1000);
+                OutSpecularAlbedo.Store(pixel_, float4(0, 0, 0, 0));
+            }
 
             return false;
         }
@@ -519,18 +538,24 @@ public struct FPathTracingRenderer{
         Material material = Bindless.GetGpuscene().GetMaterial(hitPrimaryVertex_.MaterialIndex);
         Common.FetchGBuffer(hitPrimaryVertex_, material, hitPrimaryNode_, primaryRayDir_, primaryAlbedo_, gbuffer);
 
-        OutAlbedo.Store(pixel_, primaryAlbedo_);
-        OutNormal.Store(pixel_, gbuffer);
-        const bool selected = hitPrimaryNode_.reserved1 != 0;
-        const bool hovered = (hitPrimaryNode_.reserved2 & 1u) != 0;
-        const bool locked = (hitPrimaryNode_.reserved2 & 2u) != 0;
-        const bool danger = (hitPrimaryNode_.reserved2 & 4u) != 0;
-        OutObjectID.Store(pixel_, Common.EncodeObjectId(hitPrimaryNode_.instanceId, selected, hovered, locked, danger));
-        OutMotionVector.Store(pixel_, float4(motion * size_, 0, 0));
-        OutPrevDepth.Store(pixel_, ndcDepth);
+        if (WriteOutputs)
+        {
+            OutAlbedo.Store(pixel_, primaryAlbedo_);
+            OutNormal.Store(pixel_, gbuffer);
+            const bool selected = hitPrimaryNode_.reserved1 != 0;
+            const bool hovered = (hitPrimaryNode_.reserved2 & 1u) != 0;
+            const bool locked = (hitPrimaryNode_.reserved2 & 2u) != 0;
+            const bool danger = (hitPrimaryNode_.reserved2 & 4u) != 0;
+            OutObjectID.Store(pixel_, Common.EncodeObjectId(hitPrimaryNode_.instanceId, selected, hovered, locked, danger));
+            OutMotionVector.Store(pixel_, float4(motion * size_, 0, 0));
+            OutPrevDepth.Store(pixel_, ndcDepth);
+        }
 
         float4 specAlbedo = material.MaterialModel == MaterialMetallic ? primaryAlbedo_ : float4(1, 1, 1, 1);
-        OutSpecularAlbedo.Store(pixel_, specAlbedo);
+        if (WriteOutputs)
+        {
+            OutSpecularAlbedo.Store(pixel_, specAlbedo);
+        }
 
         if (material.MaterialModel != MaterialDielectric)
         {
@@ -538,6 +563,37 @@ public struct FPathTracingRenderer{
         }
 
         return true;
+    }
+
+    public uint2 GetSize() { return size_; }
+    public Vertex GetPrimaryVertex() { return hitPrimaryVertex_; }
+
+    // Generic debug-color G-buffer write (used by entry-shader debug views).
+    public void WriteDebugColor(float4 color)
+    {
+        OutSingleDiffuse.Store(pixel_, color);
+        OutSingleSpecular.Store(pixel_, float4(0, 0, 0, 0));
+        OutAlbedo.Store(pixel_, float4(1, 1, 1, 1));
+        OutNormal.Store(pixel_, float4(0, 1, 0, 1));
+        OutObjectID.Store(pixel_, 0);
+        OutMotionVector.Store(pixel_, float4(0, 0, 0, 0));
+        OutPrevDepth.Store(pixel_, 1.0f);
+        OutDiffuseHitDist.Store(pixel_, 1000.0f);
+        OutSpecularHitDist.Store(pixel_, 1000.0f);
+        OutSpecularAlbedo.Store(pixel_, float4(0, 0, 0, 0));
+    }
+
+    // Debug view: cached radiance modulated by primary albedo. The cache query
+    // is performed by the entry shader and its result passed in here so the
+    // renderer stays free of any cache-specific symbols.
+    public void WriteDebugCachedRadiance(float4 cachedRadiance, bool hit)
+    {
+        float4 outColor = float4(0, 0, 0, 1);
+        if (hit)
+        {
+            outColor = float4(max(cachedRadiance.rgb * primaryAlbedo_.rgb, float3(0, 0, 0)), 1);
+        }
+        WriteDebugColor(outColor);
     }
 
     [mutating]
@@ -551,7 +607,7 @@ public struct FPathTracingRenderer{
     public __init()
     {
         pixel_ = int2(0, 0);
-        size_ = Bindless.GetStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
+        size_ = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
 
         RandomSeed_ = uint4(0, 0, 0, 0);
         hitPrimaryVertex_ = {};
@@ -561,16 +617,16 @@ public struct FPathTracingRenderer{
         primaryPixelOffset_ = float2(0, 0);
         primaryAlbedo_ = float4(0, 0, 0, 0);
 
-        OutAlbedo = Bindless.GetStorageTexture<float4>(Bindless.RT_ALBEDO);
-        OutNormal = Bindless.GetStorageTexture<float4>(Bindless.RT_NORMAL);
-        OutObjectID = Bindless.GetStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
-        OutMotionVector = Bindless.GetStorageTexture<float4>(Bindless.RT_MOTIONVECTOR);
-        OutPrevDepth = Bindless.GetStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER);
-        OutSingleDiffuse = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE);
-        OutSingleSpecular = Bindless.GetStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR);
-        OutDiffuseHitDist = Bindless.GetStorageTexture<float>(Bindless.RT_DIFFUSE_HITDIST);
-        OutSpecularHitDist = Bindless.GetStorageTexture<float>(Bindless.RT_SPECULAR_HITDIST);
-        OutSpecularAlbedo = Bindless.GetStorageTexture<float4>(Bindless.RT_SPECULAR_ALBEDO);
+        OutAlbedo = Bindless.GetViewStorageTexture<float4>(Bindless.RT_ALBEDO);
+        OutNormal = Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL);
+        OutObjectID = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
+        OutMotionVector = Bindless.GetViewStorageTexture<float4>(Bindless.RT_MOTIONVECTOR);
+        OutPrevDepth = Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER);
+        OutSingleDiffuse = Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE);
+        OutSingleSpecular = Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_SPECULAR);
+        OutDiffuseHitDist = Bindless.GetViewStorageTexture<float>(Bindless.RT_DIFFUSE_HITDIST);
+        OutSpecularHitDist = Bindless.GetViewStorageTexture<float>(Bindless.RT_SPECULAR_HITDIST);
+        OutSpecularAlbedo = Bindless.GetViewStorageTexture<float4>(Bindless.RT_SPECULAR_ALBEDO);
     }
 
     int2 pixel_;

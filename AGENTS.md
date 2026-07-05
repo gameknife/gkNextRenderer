@@ -56,10 +56,11 @@ gkNextRenderer is a cross-platform 3D game engine built with modern C++20 and Vu
 - Specific target: `./gnb run gkNextEditor`
 - Editor shortcut: `./gnb editor`
 - Visual test shortcut: `./gnb visual`
+- TUI terminal mode: `./gnb tui --scene assets/models/playground.glb`
 - Android: `./gnb android`
 - Optional assets: `./gnb paks fetch` / `./gnb paks list`
 - Source-line stats: `./gnb loc` (CLI) — also browsable in `./gnb dashboard`
-- Local web dashboard: `./gnb dashboard` (todo / build / run / test / git / chat / LOC tabs)
+- Native dashboard: `./gnb dashboard` (Wails window; todo / build / run / test / git / chat / LOC tabs)
 
 Desktop binaries can be launched from any working directory; no `cd out/build/<preset>/bin` is required.
 
@@ -95,16 +96,36 @@ Tests no longer require the current working directory to be `bin`; launch them v
 # 渲染一个场景到稳定帧 → 截一张图 → 自动退出。完成后会打印截图绝对路径。
 gnb shot --scene assets/models/playground.glb
 gnb shot --target ScadStudio --scene assets/scad/beer_cup.scad --frames 60
+gnb shot --target AirportSim --ui  # 截图包含 ImGui，适合验证 HUD / 面板
 ```
 
 机制（引擎层统一实现，所有 target 行为一致）：
 - 底层是 `--agent-validation` flag：渲染到 `--agent-validation-frames`（默认 90）后，截图到**固定路径** `out/build/<preset>/screenshots/agent_validation.jpg`（覆盖式，无时间戳），随后**自动退出**。
+- 默认截图隐藏 ImGui；传 `gnb shot --ui` 时会追加 `--agent-validation-ui`，让截图包含当帧 UI。
 - 窗口用 `SDL_WINDOW_HIDDEN` 创建：**不弹窗、不抢焦点**，不会打断你的 dev loop；present 自动切 immediate mode，渲染不受 vsync 限制，wall-clock 很快（几秒一张图）。
 - AGENT 读那张 `agent_validation.jpg` 即可肉眼判断。需要换帧数用 `--frames`，换输出路径用 `--agent-validation-out <path-without-ext>`。
 
 **何时用哪条路径：**
 - **改了某个场景/材质/光照/着色，只想看一眼对不对** → `gnb shot --scene <X>`（最轻、最快）。
 - **做渲染回归、需要和 baseline 对比 / 一次性扫多个场景** → 跑全量 `gkNextVisualTest`（生成 report + baseline diff + manifest，较重）。
+
+### Agent Interactive Validation（输入驱动 + 断言）
+
+需要把应用驱动到交互状态并自动判断 pass/fail 时，用声明式脚本：
+
+```bash
+gnb validate --script assets/agentscripts/smoke.agentscript.json
+gnb validate --script assets/agentscripts/smoke.agentscript.json --target gkNextRenderer --scene assets/models/playground.glb
+gnb validate --script assets/agentscripts/smoke.agentscript.json --visible  # 显示窗口，便于人工观察回放
+```
+
+机制：
+- `gnb validate` 会读取脚本里的 `target` / `scene` / `viewport` 作为默认值，命令行参数可覆盖。
+- 引擎参数是 `--agent-script=<abs-path>`；它隐含 `--agent-validation` 的隐藏窗口、Immediate present、禁用 Streamline 等确定性语义，但由脚本决定截图和退出。需要显示窗口时传 `gnb validate --visible`（底层为 `--agent-visible-window`）。
+- Agent 脚本鼠标移动只推送合成 `SDL_EVENT_MOUSE_MOTION`，不会 `SDL_WarpMouseInWindow` 移动系统光标；按键/鼠标按钮也只走 SDL 事件队列。
+- 支持步骤：`key` / `text` / `mouse-move` / `mouse-button` / `click` / `drag` / `scroll` / `wait-frames` / `wait-ms` / `wait-until` / `cvar` / `exec` / `assert` / `screenshot` / `log` / `quit`。
+- 内建查询：`engine.totalFrames`、`engine.frameRate`、`engine.time`、`engine.status`、`scene.nodeCount`、`scene.selectedId`、`scene.selectedCount`、`cvar.<name>`；游戏可通过 `RegisterAgentQueries` 暴露 `game.<name>`。
+- 结束会写 JSON report 到 `out/build/<preset>/agent_reports/<script-name>.json`；任一断言失败时进程返回非零退出码，CI 可直接判定失败。
 
 ## Linting
 
@@ -235,6 +256,7 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
   - `HotReload.md` - Shader/script hot reload mechanics
   - `LDrawLoader.md` - LDraw model loading (used by MagicaLego/BrickPlayer)
   - `SCADLoader.md` - OpenSCAD (.scad) DSL loading (parser/evaluator/CSG via Manifold/text via FreeType)
+  - `ScadRig.md` - ScadRig rigid-body character rigs (bone_ modules + anim_* clips, FRigAnimator runtime)
   - `PrefabSceneWorkflow.md` - KayKit procedural scene prefab workflow
   - `MagicaLego.md` - MagicaLego subproject notes
   - `Brotato3D.md` - Brotato3D code structure (god-class + per-system split, runtime data model, object pools)
@@ -244,7 +266,7 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 
 ## gnb Dashboard
 
-`gnb dashboard` 启动本地 HTTP UI（默认 127.0.0.1:某端口，自动开浏览器），htmx 驱动的 SPA。提供 tabs：
+`gnb dashboard` 默认启动 Wails 原生窗口；普通 htmx 请求由 Wails AssetServer 直接处理，Build/Run/Test 和 Chat 的流式响应走随机 loopback 端口。`--browser` 可显式使用系统浏览器，`--no-open` 只启动 server。提供 tabs：
 - **TODO**：可视化 `.spec/TODO.md` 的工作流操作（增删改、move、spec 创建、标 done/blocked）
 - **Build / Run / Test**：触发 cmake build、运行 target、Catch2 测试，SSE 实时流日志
 - **Git**：分支管理、stash、commits、本地改动 stage/unstage、LLM 生成 commit message
@@ -289,25 +311,20 @@ commit-msg prompt 内容包含：模式（staged / working tree）、文件清�
 
 执行规则：
 
-1. 用户触发"启动交互式工作流"时，读取 `.spec/TODO.md`
-2. 在"下一步"段找第一个 `[ ]` 任务
-3. 若 `.spec/specs/<id>.md` 存在，先读它再执行
-4. 执行任务
-5. 完成后：
+1. 用户触发"启动交互式工作流"时，先读取 `.spec/TODO.md` 了解当前里程碑、任务列表和"最近完成"数量
+2. 主循环通过 `gnb todo next --wait --timeout 590s --json` 获取任务：
+   - 若"下一步"段已有 `[ ]` 任务，命令会立即返回第一个任务
+   - 若当前没有任务，命令会等待 `.spec/TODO.md` 修改；590 秒内出现任务就立即返回
+   - 若等待 590 秒仍没有任务，命令返回 `found: false` 并退出；AGENT 必须立即再次调用同一命令继续等待，不要自己 sleep、不要输出总结、不要结束 turn
+3. 若命令返回 `milestone_status: "done"`，退出工作流
+4. 若命令返回 `found: true`：若 `.spec/specs/<id>.md` 存在，先读它再执行
+5. 执行任务
+6. 完成后：
    - 在 TODO.md 把该任务的 `[ ]` 改为 `[x]`
    - 行末追加 ` → journal/<id>.md (YYYY-MM-DD)`
    - 写 `.spec/journal/<id>.md`（frontmatter + 做了什么 + 改动文件 + 风险/遗留）
-   - 进入**活跃模式**：重置等待计数器为 0，后续 10 次等待每次只等 60 秒
-6. 回到 2，继续下一个 `[ ]` 任务
-7. "下一步"段没有 `[ ]` 任务时（**这不是结束条件，必须继续轮询**）：
-   - 比较 TODO.md mtime 与 `.spec/journal/` 目录中最新文件的 mtime
-   - TODO 较新 → 用户可能加了任务，回到 2 重扫
-   - 否则按当前模式执行 sleep command 等待，等待期间不要思考，这时 TODO.md 可能更新：
-     - **活跃模式**（等待计数器 < 10）：sleep 60 秒，计数器 +1，**sleep 返回后立即回到步骤 2，不要输出总结/结束 turn**
-     - **低功耗模式**（等待计数器 ≥ 10）：sleep 600 秒，**sleep 返回后立即回到步骤 2，不要输出总结/结束 turn**
-   - 任一任务完成（步骤 5）会重置回活跃模式
-   - **禁止行为**：在此步骤输出"无任务可做"、"工作流完成"、"等待用户指示"之类的话并结束 session。唯一允许的输出是简短状态行（如"无任务，活跃等待 60s"），然后必须紧接 sleep 工具调用
-8. **唯一退出条件**：里程碑状态被改为 `done` → 退出工作流。除此之外（包括"下一步"段为空、所有任务已完成但里程碑未 done），都必须按步骤 7 继续轮询
+7. 回到步骤 2，继续下一个 `[ ]` 任务
+8. **唯一退出条件**：里程碑状态被改为 `done`。除此之外（包括"下一步"段为空、所有任务已完成但里程碑未 done、命令 590 秒无任务返回），都必须继续调用步骤 2 的命令轮询
 
 特殊情况：
 - 任务歧义无法判断时：写 `.spec/blockers/<id>.md`，任务状态改 `[!]`，**跳过该任务继续做下一个**，不要瞎猜
@@ -316,6 +333,8 @@ commit-msg prompt 内容包含：模式（staged / working tree）、文件清�
 
 边界：
 - AGENT **可改**：TODO.md 中任务的状态字符、行末 journal 链接；`journal/`、`blockers/` 下的文件
-- AGENT **不可改**：TODO.md 中任务标题/ID/优先级/类型/所属段落；`specs/` 下的文件；`ARCHIVE.md`；"待规划"段任何任务
+- AGENT **不可改**：TODO.md 中任务标题/ID/优先级/类型/所属段落；`specs/` 下的文件；`ARCHIVE.md`；"待规划"段任何
+
+任务
 - 不要建立自动化任务（hooks、scheduled tasks 等）
 - 不要调用其他 agent 处理任务

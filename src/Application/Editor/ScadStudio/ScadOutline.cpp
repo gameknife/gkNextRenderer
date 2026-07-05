@@ -1,8 +1,8 @@
 #include "ScadOutline.hpp"
 
-#include "Engine/Assets/Loaders/FScadLexer.h"
-#include "Engine/Assets/Loaders/FScadParser.h"
-#include "Engine/Assets/Loaders/FScadTypes.h"
+#include "Modules/ScadLoader/FScadLexer.h"
+#include "Modules/ScadLoader/FScadParser.h"
+#include "Modules/ScadLoader/FScadTypes.h"
 
 #include <cctype>
 

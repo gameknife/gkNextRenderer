@@ -2,15 +2,21 @@
 
 #include "Engine/Runtime/GameInstance.hpp"
 #include "DecisionScheduler.h"
+#include "DayClock.h"
 #include "EmployeeSystem.h"
 #include "EventSystem.h"
+#include "GatheringSystem.h"
 #include "GoalSystem.h"
 #include "OfficeMap.h"
+#include "PerceptionSystem.h"
+#include "ProductionSystem.h"
+#include "StudioSimUI.h"
 
 #include <cstdint>
-#include <mutex>
 #include <string>
 #include <vector>
+
+#include <glm/glm.hpp>
 
 // StudioSim —— LLM 驱动的游戏工作室办公室模拟（见 docs/StudioSim-MVP-Plan.md）。
 // M0：脚手架 + 空场景。 M1：OfficeMap 语义锚点。 M2：员工实体 + NavGrid 移动。
@@ -33,38 +39,46 @@ public:
 
     bool OverrideRenderCamera(Assets::Camera& outRenderCamera) const override;
     bool OnKey(SDL_Event& event) override;
+    bool OnMouseButton(SDL_Event& event) override;
+    bool OnScroll(double xoffset, double yoffset) override;
 
 private:
-    void DrawWorldOverlay() const;
+    void ResetProjectPitchSelection();
+    void StartProjectPitch(StudioSim::EGameGenre genre, StudioSim::EGameTheme theme,
+                           StudioSim::EProjectSizeTier sizeTier);
+    void SyncGameProjectProduction();
+    void FinalizeProjectSettlement();
     void StartNextDay();
-    void StartMeeting(const std::string& topic, double durationMinutes);
-    void TickMeeting(double deltaSeconds);
     void RaiseEventAndMaybeStartMeeting(const std::string& eventId);
-
-    struct FMeetingRuntime
-    {
-        bool active = false;
-        std::string topic;
-        double endGameMinutes = 0.0;
-        double elapsedRealSeconds = 0.0;
-        double nextLineRealSeconds = 0.0;
-        size_t nextLineIndex = 0;
-        std::vector<StudioSim::FMeetingLine> lines;
-    };
+    bool HasActiveGameProject() const;
+    bool IsAwaitingPlayerDecision() const;
+    bool IsPlayerDecisionFlowActive() const;
+    glm::vec3 DesiredCameraTarget() const;
+    glm::vec3 DesiredCameraEye() const;
+    glm::mat4 ViewMatrix() const;
+    void UpdateCamera(double deltaSeconds);
+    int PickEmployeeAtScreen(const glm::vec2& screenPosition) const;
 
     StudioSim::OfficeMap officeMap_;
+    StudioSim::DayClock dayClock_;
     StudioSim::EmployeeSystem employeeSystem_;
     StudioSim::DecisionScheduler scheduler_;
     StudioSim::GoalSystem goalSystem_;
     StudioSim::EventSystem eventSystem_;
+    StudioSim::PerceptionSystem perceptionSystem_;
+    StudioSim::GatheringSystem gatheringSystem_;
+    StudioSim::ProductionSystem productionSystem_;
+    StudioSim::StudioSimUI ui_;
+    StudioSim::FGameProject gameProject_;
+    StudioSim::FCompanyState companyState_;
     StudioSim::FWorldState worldState_;
     bool sceneReady_ = false;
-    bool showOverlay_ = true;
     size_t sceneNodeCount_ = 0;
-    char customGoalBuf_[128] = "";
     bool goalMeetingStarted_ = false;
-    FMeetingRuntime meeting_;
-    std::mutex meetingMutex_;
-    std::vector<StudioSim::FMeetingLine> pendingMeetingLines_;
-    uint64_t meetingGeneration_ = 0;
+    int followEmployeeIndex_ = -1;
+    float cameraZoom_ = 1.0f;
+    glm::vec2 cameraPan_{0.0f};
+    glm::vec3 cameraEye_{0.0f};
+    glm::vec3 cameraTarget_{0.0f};
+    bool cameraInitialized_ = false;
 };

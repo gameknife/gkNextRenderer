@@ -1,5 +1,4 @@
-#include "Exception.hpp"
-#include <spdlog/spdlog.h>
+#include "Engine/Utilities/Exception.hpp"
 #if !ANDROID && !IOS
 #include <cpptrace/cpptrace.hpp>
 #endif

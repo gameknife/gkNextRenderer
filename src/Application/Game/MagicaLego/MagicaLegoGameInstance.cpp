@@ -137,7 +137,7 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Run
     cursor_ = std::make_unique<MagicaLego::FCursor>();
 }
 
-void MagicaLegoGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
+void MagicaLegoGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
     cvars.SetDefaultFromString("r.samples", "16", &error);

@@ -1,13 +1,10 @@
 #pragma once
-#include <functional>
 #include <mutex>
 #include <condition_variable>
 #include <queue>
 #include <thread>
 #include <atomic>
 #include "Engine/Common/CoreMinimal.hpp"
-#include <cstring>
-#include <unordered_set>
 
 namespace Tasks::Detail
 {
@@ -268,25 +265,7 @@ public:
 class TaskCoordinator
 {
 public:
-    TaskCoordinator()
-    {
-        for (int i = 0; i < 4; i++)
-        {
-            threads_.push_back(std::make_unique<TaskThread>("TaskCoordinator Worker " + std::to_string(i)));
-        }
-
-        // Get the number of CPU cores (use half of available cores for low-priority threads)
-        unsigned int numCores = std::thread::hardware_concurrency();
-        unsigned int lowThreadCount = std::max(1u, numCores / 1);
-
-        // Create low-priority threads based on CPU cores
-        for (unsigned int i = 0; i < lowThreadCount; i++)
-        {
-            lowThreads_.push_back(std::make_unique<TaskThread>("TaskCoordinator Parallel " + std::to_string(i)));
-        }
-
-        //SPDLOG_INFO("low parallel thread count: {}", lowThreadCount);
-    }
+    TaskCoordinator();
 
     ~TaskCoordinator();
    
@@ -316,48 +295,9 @@ public:
     void WaitForAllParralledTask();
     void WaitForAllTasks();
     
-    bool IsAllParralledTaskComplete()
-    {
-        for ( auto& thread : lowThreads_ )
-        {
-            if( !thread->IsIdle() )
-            {
-                return false;
-            }
-        }
-        return true;
-    }
+    bool IsAllParralledTaskComplete();
 
-    bool IsAllTaskComplete()
-    {
-        if (mainthreadTaskQueue_.size() > 0)
-        {
-            return false;
-        }
-
-        for (auto& thread : threads_)
-        {
-            if (!thread->IsIdle() || thread->taskQueue_.size() > 0)
-            {
-                return false;
-            }
-        }
-
-        if (completeTaskQueue_.size() > 0 || parralledTaskQueue_.size() > 0)
-        {
-            return false;
-        }
-
-        for (auto& thread : lowThreads_)
-        {
-            if (!thread->IsIdle() || thread->taskQueue_.size() > 0)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
+    bool IsAllTaskComplete();
 
     void CancelAllParralledTasks()
     {

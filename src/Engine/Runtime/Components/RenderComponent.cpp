@@ -1,4 +1,4 @@
-#include "RenderComponent.h"
+#include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Reflection/PropertyMeta.h"
 #include <entt/meta/factory.hpp>
 
@@ -14,11 +14,15 @@ namespace Runtime
             // Visible property - editable (use string literal for name)
             .data<&RenderComponent::SetVisible, &RenderComponent::GetVisible>("Visible")
                 .custom<PropertyMeta>(PropertyPresets::Editable("Visible", "Rendering", "Whether the object is visible"))
+            .data<&RenderComponent::SetMainVisible, &RenderComponent::GetMainVisible>("MainVisible")
+                .custom<PropertyMeta>(PropertyPresets::Editable("Main Visible", "Rendering", "Whether the object is drawn in the main visibility pass"))
             // RayCastVisible property - editable  
             .data<&RenderComponent::SetRayCastVisible, &RenderComponent::GetRayCastVisible>("RayCastVisible")
                 .custom<PropertyMeta>(PropertyPresets::Editable("Raycast Visible", "Rendering", "Whether the object is visible to raycasts"))
             .data<&RenderComponent::SetRayCastVisible, &RenderComponent::GetRayCastVisible>("RaycastVisible")
                 .custom<PropertyMeta>(PropertyPresets::Editable("Raycast Visible", "Rendering", "Whether the object is visible to raycasts"))
+            .data<&RenderComponent::SetRayTraceVisible, &RenderComponent::GetRayTraceVisible>("RayTraceVisible")
+                .custom<PropertyMeta>(PropertyPresets::Editable("Ray Trace Visible", "Rendering", "Whether the object participates in GPU ray tracing acceleration structures"))
             .data<&RenderComponent::SetCastShadows, &RenderComponent::GetCastShadows>("CastShadows")
                 .custom<PropertyMeta>(PropertyPresets::Editable("Cast Shadows", "Rendering", "Whether the object casts shadows"))
             .data<&RenderComponent::SetReceiveGI, &RenderComponent::GetReceiveGI>("ReceiveGI")

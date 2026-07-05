@@ -1,5 +1,6 @@
-import Common;
-import Bindless;
+import Shader.Bindless;
+import Shader.Types;
+import Shader.GpuScene;
 
 [shader("compute")]
 [numthreads(1, 1, 1)]
@@ -15,6 +16,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     uint totalTri = counters[slot * 2];
     uint itemCount = counters[slot * 2 + 1];
+    uint triangleCapacity = scene.custom_data_2;
+    totalTri = min(totalTri, triangleCapacity);
+    itemCount = min(itemCount, uint(MAX_NODES));
 
     drawArgs[slot].vertexCount = totalTri * 3;
     drawArgs[slot].instanceCount = 1;

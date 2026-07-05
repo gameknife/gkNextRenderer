@@ -27,6 +27,62 @@ namespace
     constexpr float CameraClampHalfViewX = 12.0f;
     constexpr float CameraClampHalfViewZ = 8.0f;
 
+    void AppendJsonStrings(const nlohmann::json& value, std::string& text)
+    {
+        if (value.is_string())
+        {
+            text += value.get_ref<const std::string&>();
+        }
+        else if (value.is_array())
+        {
+            for (const auto& element : value)
+            {
+                AppendJsonStrings(element, text);
+            }
+        }
+        else if (value.is_object())
+        {
+            for (const auto& [key, element] : value.items())
+            {
+                (void)key;
+                AppendJsonStrings(element, text);
+            }
+        }
+    }
+
+    std::string CollectUiFontGlyphs()
+    {
+        constexpr std::array<const char*, 9> configPaths = {
+            I18nConfigPath,
+            ArenasConfigPath,
+            CharactersConfigPath,
+            EnemiesConfigPath,
+            ItemsConfigPath,
+            ShopItemsConfigPath,
+            UpgradesConfigPath,
+            WavesConfigPath,
+            WeaponsConfigPath,
+        };
+
+        std::string glyphs =
+            "本波结束后的战利品，请择其一选择后立即生效治疗暴伤材料不足槽位已满";
+        for (const char* configPath : configPaths)
+        {
+            std::vector<uint8_t> data;
+            if (!Utilities::Package::FPackageFileSystem::GetInstance().LoadFile(configPath, data))
+            {
+                continue;
+            }
+
+            const nlohmann::json json = nlohmann::json::parse(data.begin(), data.end(), nullptr, false);
+            if (!json.is_discarded())
+            {
+                AppendJsonStrings(json, glyphs);
+            }
+        }
+        return glyphs;
+    }
+
     std::filesystem::path GetBestRecordPath()
     {
         return NextPlatform::UserPaths::EnsureUserFile("Brotato3D", "best.json");
@@ -111,24 +167,22 @@ void Brotato3DGameInstance::OnInitUI()
         const std::string fallbackChineseFont = "assets/fonts/DroidSansFallback.ttf";
         const std::string fallbackLatinFont = "assets/fonts/Roboto-BoldCondensed.ttf";
         const std::string placeholderBigFont = Brotato3D::PlaceholderAssets::Font("Anybody-Medium.ttf");
+        const std::string uiGlyphs = CollectUiFontGlyphs();
 
         std::string displayFont = fallbackLatinFont;
-        bool displayIncludesChinese = false;
         if (Utilities::FileHelper::IsAssetAvailable(placeholderUiFont))
         {
             displayFont = placeholderUiFont;
-            displayIncludesChinese = true;
         }
         else if (Utilities::FileHelper::IsAssetAvailable(fallbackChineseFont))
         {
             displayFont = fallbackChineseFont;
-            displayIncludesChinese = true;
         }
 
         ImFont* uiFont = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
             .filePath = displayFont,
             .pixelSize = 16.0f,
-            .includeChineseFull = displayIncludesChinese,
+            .extraGlyphsUtf8 = uiGlyphs.c_str(),
             .setAsDefault = true,
         });
 
@@ -137,8 +191,19 @@ void Brotato3DGameInstance::OnInitUI()
         bigFont_ = NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
             .filePath = bigFontPath,
             .pixelSize = 32.0f,
-            .includeChineseFull = false,
+            .extraGlyphsUtf8 = uiGlyphs.c_str(),
         });
+        if (bigFont_ && hasPlaceholderBigFont)
+        {
+            ImFontConfig mergeConfig;
+            mergeConfig.MergeMode = true;
+            NextUI::FontLoader::Load(NextUI::FontLoader::FFontRequest{
+                .filePath = displayFont,
+                .pixelSize = 32.0f,
+                .extraGlyphsUtf8 = uiGlyphs.c_str(),
+                .fontConfig = &mergeConfig,
+            });
+        }
         if (!bigFont_)
         {
             bigFont_ = uiFont;
@@ -479,4 +544,3 @@ bool Brotato3DGameInstance::OnRenderUI()
     }
     return false;
 }
-

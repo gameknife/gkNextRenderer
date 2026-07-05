@@ -1,4 +1,3 @@
-implementing Common;
 #include "PreProcessor.slang"
 
 float pow5(float x) { return x*x*x*x*x; }
@@ -155,6 +154,58 @@ public float4 unpackRGB10A2(uint packed)
     float b = float((packed >> 20) & 0x3FF) / 1023.0f;
 
     return float4(r, g, b, 0.0) * MAX_ILLUMINANCE;
+}
+
+// ---------- RGB9E5 (GL_RGB9_E5) shared-exponent HDR pack/unpack ----------
+// 3x9-bit mantissa + shared 5-bit exponent (bias 15). No alpha. Range [0, ~65408],
+// far beyond MAX_ILLUMINANCE=512 with better dark-tone precision than RGB10A2.
+// Reference: OpenGL EXT_texture_shared_exponent spec.
+#define RGB9E5_MANTISSA_BITS 9
+#define RGB9E5_EXP_BIAS 15
+#define RGB9E5_MANTISSA_VALUES 512        // 1 << 9
+#define RGB9E5_MAX_VALUE 65408.0f         // ((2^9-1)/2^9) * 2^(31-15)
+
+// floor(log2(x)) for x > 0 via IEEE-754 exponent field; returns -127 for x == 0.
+int FloorLog2Pos(float x)
+{
+    return int((asuint(x) >> 23) & 0xFFu) - 127;
+}
+
+public uint packRGB9E5(float3 color)
+{
+    float rc = clamp(color.r, 0.0f, RGB9E5_MAX_VALUE);
+    float gc = clamp(color.g, 0.0f, RGB9E5_MAX_VALUE);
+    float bc = clamp(color.b, 0.0f, RGB9E5_MAX_VALUE);
+    float maxc = max(rc, max(gc, bc));
+
+    // Preliminary shared exponent (biased, clamped to [0, 31]).
+    int expShared = max(-RGB9E5_EXP_BIAS - 1, FloorLog2Pos(maxc)) + 1 + RGB9E5_EXP_BIAS;
+    float denom = exp2(float(expShared - RGB9E5_EXP_BIAS - RGB9E5_MANTISSA_BITS));
+
+    // Rounding the max mantissa may overflow into the next exponent.
+    int maxm = int(floor(maxc / denom + 0.5f));
+    if (maxm == RGB9E5_MANTISSA_VALUES)
+    {
+        denom *= 2.0f;
+        expShared += 1;
+    }
+
+    uint rm = uint(floor(rc / denom + 0.5f));
+    uint gm = uint(floor(gc / denom + 0.5f));
+    uint bm = uint(floor(bc / denom + 0.5f));
+
+    return (uint(expShared) << 27) | (bm << 18) | (gm << 9) | rm;
+}
+
+public float3 unpackRGB9E5(uint packed)
+{
+    int expShared = int(packed >> 27);
+    float scale = exp2(float(expShared - RGB9E5_EXP_BIAS - RGB9E5_MANTISSA_BITS));
+    return float3(
+        float(packed & 0x1FFu),
+        float((packed >> 9) & 0x1FFu),
+        float((packed >> 18) & 0x1FFu)
+    ) * scale;
 }
 
 void pcg4d(inout uint4 v)

@@ -3,8 +3,35 @@ package cmakerun
 import (
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 )
+
+func TestMakeBuildArgs(t *testing.T) {
+	t.Run("multiple targets", func(t *testing.T) {
+		got := makeBuildArgs("windows", BuildOptions{
+			Targets: []string{"gkNextRenderer", "gkNextUnitTests"},
+			Jobs:    8,
+		})
+		want := []string{
+			"--build", "--preset", "windows",
+			"--target", "gkNextRenderer", "gkNextUnitTests",
+			"--parallel", "8",
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("makeBuildArgs() = %#v, want %#v", got, want)
+		}
+	})
+
+	t.Run("default target", func(t *testing.T) {
+		got := makeBuildArgs("linux", BuildOptions{})
+		want := []string{"--build", "--preset", "linux", "--parallel"}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("makeBuildArgs() = %#v, want %#v", got, want)
+		}
+	})
+}
 
 func TestRequiresMakeProgramRefresh(t *testing.T) {
 	t.Run("missing want does not force refresh", func(t *testing.T) {
@@ -49,6 +76,25 @@ func TestRequiresMakeProgramRefresh(t *testing.T) {
 			t.Fatalf("expected matching CMAKE_MAKE_PROGRAM to keep cache")
 		}
 	})
+}
+
+func TestBuildTraversalProject(t *testing.T) {
+	got := buildTraversalProject([]string{`C:\build\src\A&B.vcxproj`})
+	if !strings.Contains(got, `Include="C:\build\src\A&amp;B.vcxproj"`) {
+		t.Fatalf("project path was not XML-escaped: %s", got)
+	}
+	if !strings.Contains(got, `BuildInParallel="true"`) {
+		t.Fatalf("expected traversal project to build in parallel: %s", got)
+	}
+}
+
+func TestMSBuildParallelArg(t *testing.T) {
+	if got := msbuildParallelArg(0); got != "/m" {
+		t.Fatalf("msbuildParallelArg(0) = %q, want /m", got)
+	}
+	if got := msbuildParallelArg(12); got != "/m:12" {
+		t.Fatalf("msbuildParallelArg(12) = %q, want /m:12", got)
+	}
 }
 
 func writeCacheFile(t *testing.T, contents string) string {

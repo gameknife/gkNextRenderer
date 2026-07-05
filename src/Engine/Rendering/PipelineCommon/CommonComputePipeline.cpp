@@ -1,25 +1,90 @@
-#include "CommonComputePipeline.hpp"
+#include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 
 #include "Engine/Runtime/Engine.hpp"
 
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/DescriptorSystem.hpp"
 #include "Engine/Vulkan/Device.hpp"
+#include "Engine/Vulkan/GraphicsPipelineBuilder.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
-#include "Engine/Vulkan/RenderingPipeline.hpp"
 
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Assets/Data/Vertex.hpp"
 
+#include <algorithm>
+#include <cstring>
+#include <filesystem>
+
 namespace Vulkan::PipelineCommon
 {
+	namespace
+	{
+		// Shared tail of every zero-bind compute pipeline constructor
+		VkPipeline CreateComputePipeline(const Device& device, const char* shaderfile, VkPipelineLayout layout)
+		{
+			const ShaderModule computeShader(device, shaderfile);
+
+			VkComputePipelineCreateInfo pipelineCreateInfo = {};
+			pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+			pipelineCreateInfo.stage = computeShader.CreateShaderStage(VK_SHADER_STAGE_COMPUTE_BIT);
+			pipelineCreateInfo.layout = layout;
+
+			VkPipeline pipeline = VK_NULL_HANDLE;
+			Check(vkCreateComputePipelines(device.Handle(), VK_NULL_HANDLE, 1,
+				&pipelineCreateInfo, NULL, &pipeline), shaderfile);
+			return pipeline;
+		}
+
+		std::string ShaderFilename(const std::string& shaderFile)
+		{
+			return std::filesystem::path(shaderFile).filename().string();
+		}
+
+		bool ShouldReloadShaderFile(const std::string& shaderFile, const std::set<std::string>& changedShaderFiles)
+		{
+			return changedShaderFiles.find(ShaderFilename(shaderFile)) != changedShaderFiles.end();
+		}
+
+		bool MarkChangedShaderFile(
+			const std::string& shaderFile,
+			const std::set<std::string>& changedShaderFiles,
+			std::set<std::string>& handledShaderFiles)
+		{
+			const std::string filename = ShaderFilename(shaderFile);
+			if (changedShaderFiles.find(filename) == changedShaderFiles.end())
+			{
+				return false;
+			}
+			handledShaderFiles.insert(filename);
+			return true;
+		}
+
+		bool ShouldReloadShaderPair(
+			const char* vertexShaderFile,
+			const char* fragmentShaderFile,
+			const std::set<std::string>& changedShaderFiles)
+		{
+			return ShouldReloadShaderFile(vertexShaderFile, changedShaderFiles) ||
+			       ShouldReloadShaderFile(fragmentShaderFile, changedShaderFiles);
+		}
+
+		// Shared bind + push-constant sequence of every zero-bind compute pipeline
+		void BindComputeWithPush(VkCommandBuffer commandBuffer, VkPipeline pipeline,
+			const class PipelineLayout& layout, uint32_t pushSize, const void* pushData)
+		{
+			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+			layout.BindDescriptorSets(commandBuffer, 0);
+			vkCmdPushConstants(commandBuffer, layout.Handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, pushSize, pushData);
+		}
+	}
+
 	ZeroBindWithTLASPipeline::ZeroBindWithTLASPipeline(
 	const SwapChain& swapChain,
 	const char* shaderfile,
-	const Assets::Scene& scene):PipelineBase(swapChain)
+	const Assets::Scene& scene):PipelineBase(swapChain), shaderFile_(shaderfile)
 	{
 		// Create descriptor pool/sets.
 		const auto& device = swapChain.Device();
@@ -51,7 +116,7 @@ namespace Vulkan::PipelineCommon
 		};
 		descriptorSets.UpdateDescriptors(0, descriptorWrites);
 #endif
-		
+
 		std::vector<DescriptorSetManager*> managers = {
 			&Assets::GlobalTexturePool::GetInstance()->GetDescriptorManager(),
 #if ANDROID
@@ -60,39 +125,48 @@ namespace Vulkan::PipelineCommon
 		};
 
 		pipelineLayout_.reset(new class PipelineLayout(device, managers, 1, &pushConstantRange, 1));
-		
-		const ShaderModule denoiseShader(device, shaderfile);
-        
-		VkComputePipelineCreateInfo pipelineCreateInfo = {};
-		pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-		pipelineCreateInfo.stage = denoiseShader.CreateShaderStage(VK_SHADER_STAGE_COMPUTE_BIT);
-		pipelineCreateInfo.layout = pipelineLayout_->Handle();
+		pipeline_ = CreateComputePipeline(device, shaderfile, pipelineLayout_->Handle());
+	}
 
-		Check(vkCreateComputePipelines(device.Handle(), VK_NULL_HANDLE,1,
-			&pipelineCreateInfo,NULL, &pipeline_),shaderfile);
+	void ZeroBindWithTLASPipeline::RecreatePipeline()
+	{
+		if (pipeline_ != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(swapChain_.Device().Handle(), pipeline_, nullptr);
+			pipeline_ = VK_NULL_HANDLE;
+		}
+		pipeline_ = CreateComputePipeline(swapChain_.Device(), shaderFile_.c_str(), pipelineLayout_->Handle());
+	}
+
+	bool ZeroBindWithTLASPipeline::ReloadIfShaderChanged(
+		const std::set<std::string>& changedShaderFiles,
+		std::set<std::string>& handledShaderFiles)
+	{
+		if (!ShouldReloadShaderFile(shaderFile_, changedShaderFiles))
+		{
+			return false;
+		}
+		RecreatePipeline();
+		handledShaderFiles.insert(ShaderFilename(shaderFile_));
+		return true;
 	}
 
 	void ZeroBindWithTLASPipeline::BindPipeline(VkCommandBuffer commandBuffer, const Assets::Scene& scene,
 		uint32_t imageIndex)
 	{
-		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, Handle());
-		PipelineLayout().BindDescriptorSets(commandBuffer, 0);
-		vkCmdPushConstants(commandBuffer, PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-						   0, sizeof(Assets::GPUScene), &(scene.FetchGPUScene(imageIndex)));
+		BindComputeWithPush(commandBuffer, Handle(), PipelineLayout(), sizeof(Assets::GPUScene),
+		                    &(scene.FetchGPUScene(imageIndex)));
 	}
 
 	void ZeroBindWithTLASPipeline::BindPipeline(VkCommandBuffer commandBuffer, const Assets::GPUScene& gpuScene)
 	{
-		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, Handle());
-		PipelineLayout().BindDescriptorSets(commandBuffer, 0);
-		vkCmdPushConstants(commandBuffer, PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-						   0, sizeof(Assets::GPUScene), &gpuScene);
+		BindComputeWithPush(commandBuffer, Handle(), PipelineLayout(), sizeof(Assets::GPUScene), &gpuScene);
 	}
-    
+
 	ZeroBindPipeline::ZeroBindPipeline(
 	const SwapChain& swapChain,
 	const char* shaderfile,
-	const Assets::Scene& scene):PipelineBase(swapChain)
+	const Assets::Scene& scene):PipelineBase(swapChain), shaderFile_(shaderfile)
 	{
 		// Create descriptor pool/sets.
 		const auto& device = swapChain.Device();
@@ -107,69 +181,108 @@ namespace Vulkan::PipelineCommon
 		};
 
 		pipelineLayout_.reset(new class PipelineLayout(device, managers, 1, &pushConstantRange, 1));
-		
-		const ShaderModule denoiseShader(device, shaderfile);
-        
-		VkComputePipelineCreateInfo pipelineCreateInfo = {};
-		pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-		pipelineCreateInfo.stage = denoiseShader.CreateShaderStage(VK_SHADER_STAGE_COMPUTE_BIT);
-		pipelineCreateInfo.layout = pipelineLayout_->Handle();
+		pipeline_ = CreateComputePipeline(device, shaderfile, pipelineLayout_->Handle());
+	}
 
-		Check(vkCreateComputePipelines(device.Handle(), VK_NULL_HANDLE,1,
-			&pipelineCreateInfo,NULL, &pipeline_),shaderfile);
+	void ZeroBindPipeline::RecreatePipeline()
+	{
+		if (pipeline_ != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(swapChain_.Device().Handle(), pipeline_, nullptr);
+			pipeline_ = VK_NULL_HANDLE;
+		}
+		pipeline_ = CreateComputePipeline(swapChain_.Device(), shaderFile_.c_str(), pipelineLayout_->Handle());
+	}
+
+	bool ZeroBindPipeline::ReloadIfShaderChanged(
+		const std::set<std::string>& changedShaderFiles,
+		std::set<std::string>& handledShaderFiles)
+	{
+		if (!ShouldReloadShaderFile(shaderFile_, changedShaderFiles))
+		{
+			return false;
+		}
+		RecreatePipeline();
+		handledShaderFiles.insert(ShaderFilename(shaderFile_));
+		return true;
 	}
 
 	void ZeroBindPipeline::BindPipeline(VkCommandBuffer commandBuffer, const Assets::Scene& scene, uint32_t imageIndex)
 	{
-		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, Handle());
-		PipelineLayout().BindDescriptorSets(commandBuffer, 0);
-		vkCmdPushConstants(commandBuffer, PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-						   0, sizeof(Assets::GPUScene), &(scene.FetchGPUScene(imageIndex)));
+		BindComputeWithPush(commandBuffer, Handle(), PipelineLayout(), sizeof(Assets::GPUScene),
+		                    &(scene.FetchGPUScene(imageIndex)));
 	}
 
 	void ZeroBindPipeline::BindPipeline(VkCommandBuffer commandBuffer, const Assets::GPUScene& gpuScene)
 	{
-		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, Handle());
-		PipelineLayout().BindDescriptorSets(commandBuffer, 0);
-		vkCmdPushConstants(commandBuffer, PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,
-						   0, sizeof(Assets::GPUScene), &gpuScene);
+		BindComputeWithPush(commandBuffer, Handle(), PipelineLayout(), sizeof(Assets::GPUScene), &gpuScene);
 	}
-	
+
 	ZeroBindCustomPushConstantPipeline::ZeroBindCustomPushConstantPipeline(const SwapChain& swapChain,
-	const char* shaderfile, uint32_t pushConstantSize):PipelineBase(swapChain),pushConstantSize_(pushConstantSize)
+	const char* shaderfile, uint32_t pushConstantSize):PipelineBase(swapChain), shaderFile_(shaderfile), pushConstantSize_(pushConstantSize)
 	{
 		// Create descriptor pool/sets.
 		const auto& device = swapChain.Device();
-        
+
+		// Custom passes share the GPUScene push-constant block: the first 16 bytes are the unified
+		// header (SwapChainIndex + custom_data_0/1/2) that aliases gpuScene's header, so
+		// gpuScene.custom_data_0 (the active view RT bank base) is valid even though this pipeline
+		// pushes a custom struct. The caller's params live right after the header (offset 16). Using
+		// the full GPUScene size keeps the range identical to the gpuScene block the shader declares.
 		VkPushConstantRange pushConstantRange{};
 		pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 		pushConstantRange.offset = 0;
-		pushConstantRange.size = pushConstantSize_;
+		pushConstantRange.size = sizeof(Assets::GPUScene);
 
 		std::vector<DescriptorSetManager*> managers = {
 			&Assets::GlobalTexturePool::GetInstance()->GetDescriptorManager()
 		};
 
 		pipelineLayout_.reset(new class PipelineLayout(device, managers, 1, &pushConstantRange, 1));
-		
-		const ShaderModule denoiseShader(device, shaderfile);
-        
-		VkComputePipelineCreateInfo pipelineCreateInfo = {};
-		pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-		pipelineCreateInfo.stage = denoiseShader.CreateShaderStage(VK_SHADER_STAGE_COMPUTE_BIT);
-		pipelineCreateInfo.layout = pipelineLayout_->Handle();
-
-		Check(vkCreateComputePipelines(device.Handle(), VK_NULL_HANDLE,1,
-			&pipelineCreateInfo,NULL, &pipeline_),shaderfile);
+		pipeline_ = CreateComputePipeline(device, shaderfile, pipelineLayout_->Handle());
 	}
-	
+
+	void ZeroBindCustomPushConstantPipeline::RecreatePipeline()
+	{
+		if (pipeline_ != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(swapChain_.Device().Handle(), pipeline_, nullptr);
+			pipeline_ = VK_NULL_HANDLE;
+		}
+		pipeline_ = CreateComputePipeline(swapChain_.Device(), shaderFile_.c_str(), pipelineLayout_->Handle());
+	}
+
+	bool ZeroBindCustomPushConstantPipeline::ReloadIfShaderChanged(
+		const std::set<std::string>& changedShaderFiles,
+		std::set<std::string>& handledShaderFiles)
+	{
+		if (!ShouldReloadShaderFile(shaderFile_, changedShaderFiles))
+		{
+			return false;
+		}
+		RecreatePipeline();
+		handledShaderFiles.insert(ShaderFilename(shaderFile_));
+		return true;
+	}
+
 	void ZeroBindCustomPushConstantPipeline::BindPipeline(VkCommandBuffer commandBuffer, const void* data)
 	{
-		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, Handle());
-		PipelineLayout().BindDescriptorSets(commandBuffer, 0);
-		vkCmdPushConstants(commandBuffer, PipelineLayout().Handle(), VK_SHADER_STAGE_COMPUTE_BIT,0, pushConstantSize_, data);
+		// Stamp the unified header (offset 0..15), then the caller's params (offset 16..).
+		static constexpr uint32_t kHeaderSize = 16;
+		alignas(16) uint8_t buffer[sizeof(Assets::GPUScene)] = {};
+		uint32_t* header = reinterpret_cast<uint32_t*>(buffer);
+		header[0] = 0; // SwapChainIndex (unused by custom passes)
+		header[1] = NextEngine::GetInstance()->GetRenderer().ActiveViewBankBase(); // custom_data_0
+		header[2] = 0;
+		header[3] = 0;
+		const uint32_t copySize = std::min<uint32_t>(pushConstantSize_, sizeof(buffer) - kHeaderSize);
+		if (data != nullptr && copySize > 0)
+		{
+			std::memcpy(buffer + kHeaderSize, data, copySize);
+		}
+		BindComputeWithPush(commandBuffer, Handle(), PipelineLayout(), sizeof(buffer), buffer);
 	}
-	
+
     VisibilityPipeline::VisibilityPipeline(
         const SwapChain& swapChain,
         const DepthBuffer& depthBuffer,
@@ -178,95 +291,7 @@ namespace Vulkan::PipelineCommon
         PipelineBase(swapChain)
     {
         const auto& device = swapChain.Device();
-        //const auto bindingDescription = Assets::GPUVertex::GetBindingDescription();
-        //const auto attributeDescriptions = Assets::GPUVertex::GetFastAttributeDescriptions();
 
-        VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
-        vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertexInputInfo.vertexBindingDescriptionCount = 0;
-        //vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-        //vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-        //vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
-
-        VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
-        inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-        VkViewport viewport = {};
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width = static_cast<float>(swapChain.RenderExtent().width);
-        viewport.height = static_cast<float>(swapChain.RenderExtent().height);
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-
-        VkRect2D scissor = {};
-        scissor.offset = {0, 0};
-        scissor.extent = swapChain.RenderExtent();
-
-        VkPipelineViewportStateCreateInfo viewportState = {};
-        viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-        viewportState.viewportCount = 1;
-        viewportState.pViewports = &viewport;
-        viewportState.scissorCount = 1;
-        viewportState.pScissors = &scissor;
-
-        VkPipelineRasterizationStateCreateInfo rasterizer = {};
-        rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-        rasterizer.depthClampEnable = VK_FALSE;
-        rasterizer.rasterizerDiscardEnable = VK_FALSE;
-        rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-        rasterizer.lineWidth = 1.0f;
-        rasterizer.cullMode = VK_CULL_MODE_NONE;
-        rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-        rasterizer.depthBiasEnable = VK_FALSE;
-        rasterizer.depthBiasConstantFactor = 0.0f; // Optional
-        rasterizer.depthBiasClamp = 0.0f; // Optional
-        rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
-
-        VkPipelineMultisampleStateCreateInfo multisampling = {};
-        multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-        multisampling.sampleShadingEnable = VK_FALSE;
-        multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-        multisampling.minSampleShading = 1.0f; // Optional
-        multisampling.pSampleMask = nullptr; // Optional
-        multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
-        multisampling.alphaToOneEnable = VK_FALSE; // Optional
-
-        VkPipelineDepthStencilStateCreateInfo depthStencil = {};
-        depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-        depthStencil.depthTestEnable = VK_TRUE;
-        depthStencil.depthWriteEnable = VK_TRUE;
-        depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
-        depthStencil.depthBoundsTestEnable = VK_FALSE;
-        depthStencil.minDepthBounds = 0.0f; // Optional
-        depthStencil.maxDepthBounds = 1.0f; // Optional
-        depthStencil.stencilTestEnable = VK_FALSE;
-        depthStencil.front = {}; // Optional
-        depthStencil.back = {}; // Optional
-
-        VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
-        colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-        colorBlendAttachment.blendEnable = VK_FALSE;
-        colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-        colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-        colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
-        colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-        colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-        colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
-
-        VkPipelineColorBlendStateCreateInfo colorBlending = {};
-        colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-        colorBlending.logicOpEnable = VK_FALSE;
-        colorBlending.logicOp = VK_LOGIC_OP_COPY; // Optional
-        colorBlending.attachmentCount = 1;
-        colorBlending.pAttachments = &colorBlendAttachment;
-        colorBlending.blendConstants[0] = 0.0f; // Optional
-        colorBlending.blendConstants[1] = 0.0f; // Optional
-        colorBlending.blendConstants[2] = 0.0f; // Optional
-        colorBlending.blendConstants[3] = 0.0f; // Optional
-    	
 		std::vector<DescriptorSetManager*> managers = {
 			&Assets::GlobalTexturePool::GetInstance()->GetDescriptorManager(),
 		};
@@ -280,38 +305,50 @@ namespace Vulkan::PipelineCommon
         pipelineLayout_.reset(new class PipelineLayout(device, managers, 1, &pushConstantRange, 1));
         renderPass_.reset(new class RenderPass(swapChain, VK_FORMAT_R32_UINT, depthBuffer, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR));
         renderPass_->SetDebugName("Visibility Render Pass");
-        // Load shaders.
+
         const ShaderModule vertShader(device, "assets/shaders/Rast.VisibilityPassSoftMeshShader.vert.slang.spv");
         const ShaderModule fragShader(device, "assets/shaders/Rast.VisibilityPass.frag.slang.spv");
 
-        VkPipelineShaderStageCreateInfo shaderStages[] =
-        {
-            vertShader.CreateShaderStage(VK_SHADER_STAGE_VERTEX_BIT),
-            fragShader.CreateShaderStage(VK_SHADER_STAGE_FRAGMENT_BIT)
-        };
-
-        // Create graphic pipeline
-        VkGraphicsPipelineCreateInfo pipelineInfo = {};
-        pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipelineInfo.stageCount = 2;
-        pipelineInfo.pStages = shaderStages;
-        pipelineInfo.pVertexInputState = &vertexInputInfo;
-        pipelineInfo.pInputAssemblyState = &inputAssembly;
-        pipelineInfo.pViewportState = &viewportState;
-        pipelineInfo.pRasterizationState = &rasterizer;
-        pipelineInfo.pMultisampleState = &multisampling;
-        pipelineInfo.pDepthStencilState = &depthStencil;
-        pipelineInfo.pColorBlendState = &colorBlending;
-        pipelineInfo.pDynamicState = nullptr; // Optional
-        pipelineInfo.basePipelineHandle = nullptr; // Optional
-        pipelineInfo.basePipelineIndex = -1; // Optional
-        pipelineInfo.layout = pipelineLayout_->Handle();
-        pipelineInfo.renderPass = renderPass_->Handle();
-        pipelineInfo.subpass = 0;
-
-        Check(vkCreateGraphicsPipelines(device.Handle(), nullptr, 1, &pipelineInfo, nullptr, &pipeline_),
-              "create graphics pipeline");
+        pipeline_ = GraphicsPipelineBuilder(device)
+            .SetShaders(vertShader, fragShader)
+            .SetDynamicViewportAndScissor()
+            .SetDepth(true, true, VK_COMPARE_OP_LESS)
+            .Build(pipelineLayout_->Handle(), renderPass_->Handle(), "create graphics pipeline");
     }
+
+	void VisibilityPipeline::RecreatePipeline()
+	{
+		if (pipeline_)
+		{
+			vkDestroyPipeline(swapChain_.Device().Handle(), pipeline_, nullptr);
+			pipeline_ = VK_NULL_HANDLE;
+		}
+
+		const auto& device = swapChain_.Device();
+		const ShaderModule vertShader(device, "assets/shaders/Rast.VisibilityPassSoftMeshShader.vert.slang.spv");
+		const ShaderModule fragShader(device, "assets/shaders/Rast.VisibilityPass.frag.slang.spv");
+		pipeline_ = GraphicsPipelineBuilder(device)
+			.SetShaders(vertShader, fragShader)
+			.SetDynamicViewportAndScissor()
+			.SetDepth(true, true, VK_COMPARE_OP_LESS)
+			.Build(pipelineLayout_->Handle(), renderPass_->Handle(), "recreate visibility graphics pipeline");
+	}
+
+	bool VisibilityPipeline::ReloadIfShaderChanged(
+		const std::set<std::string>& changedShaderFiles,
+		std::set<std::string>& handledShaderFiles)
+	{
+		constexpr const char* vertexShader = "assets/shaders/Rast.VisibilityPassSoftMeshShader.vert.slang.spv";
+		constexpr const char* fragmentShader = "assets/shaders/Rast.VisibilityPass.frag.slang.spv";
+		if (!ShouldReloadShaderPair(vertexShader, fragmentShader, changedShaderFiles))
+		{
+			return false;
+		}
+		RecreatePipeline();
+		MarkChangedShaderFile(vertexShader, changedShaderFiles, handledShaderFiles);
+		MarkChangedShaderFile(fragmentShader, changedShaderFiles, handledShaderFiles);
+		return true;
+	}
 
     VisibilityPipeline::~VisibilityPipeline()
     {
@@ -319,109 +356,24 @@ namespace Vulkan::PipelineCommon
     }
 
     GraphicsPipeline::GraphicsPipeline(
-	const SwapChain& swapChain, 
+	const SwapChain& swapChain,
 	const DepthBuffer& depthBuffer,
 	const std::vector<Assets::UniformBuffer>& uniformBuffers,
 	const Assets::Scene& scene,
 	const bool isWireFrame) :
-	PipelineBase(swapChain)
+	PipelineBase(swapChain),
+	isWireFrame_(isWireFrame)
 	{
         (void)uniformBuffers;
         (void)scene;
 
 		const auto& device = swapChain.Device();
 
-		VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
-		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-		vertexInputInfo.vertexBindingDescriptionCount = 0;
-		vertexInputInfo.pVertexBindingDescriptions = nullptr;
-		vertexInputInfo.vertexAttributeDescriptionCount = 0;
-		vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+		const VkOffset2D viewportOffset = swapChain.RenderOffset();
+		const VkExtent2D viewportExtent = swapChain.RenderExtent();
 
-		VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
-		inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-		inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-		inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-		const VkOffset2D viewportOffset = isWireFrame ? swapChain.OutputOffset() : swapChain.RenderOffset();
-		const VkExtent2D viewportExtent = isWireFrame ? swapChain.OutputExtent() : swapChain.RenderExtent();
-
-		VkViewport viewport = {};
-		viewport.x = static_cast<float>(viewportOffset.x);
-		viewport.y = static_cast<float>(viewportOffset.y);
-		viewport.width = static_cast<float>(viewportExtent.width);
-		viewport.height = static_cast<float>(viewportExtent.height);
-		viewport.minDepth = 0.0f;
-		viewport.maxDepth = 1.0f;
-
-		VkRect2D scissor = {};
-		scissor.offset = viewportOffset;
-		scissor.extent = viewportExtent;
-
-		VkPipelineViewportStateCreateInfo viewportState = {};
-		viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-		viewportState.viewportCount = 1;
-		viewportState.pViewports = &viewport;
-		viewportState.scissorCount = 1;
-		viewportState.pScissors = &scissor;
-
-		VkPipelineRasterizationStateCreateInfo rasterizer = {};
-		rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-		rasterizer.depthClampEnable = VK_FALSE;
-		rasterizer.rasterizerDiscardEnable = VK_FALSE;
 		VkPhysicalDeviceFeatures physicalDeviceFeatures = {};
 		vkGetPhysicalDeviceFeatures(device.PhysicalDevice(), &physicalDeviceFeatures);
-		rasterizer.polygonMode =
-            isWireFrame && physicalDeviceFeatures.fillModeNonSolid ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
-		rasterizer.lineWidth = 1.0f;
-		rasterizer.cullMode = VK_CULL_MODE_NONE;
-		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-		rasterizer.depthBiasEnable = VK_FALSE;
-		rasterizer.depthBiasConstantFactor = 0.0f; // Optional
-		rasterizer.depthBiasClamp = 0.0f; // Optional
-		rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
-
-		VkPipelineMultisampleStateCreateInfo multisampling = {};
-		multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-		multisampling.sampleShadingEnable = VK_FALSE;
-		multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-		multisampling.minSampleShading = 1.0f; // Optional
-		multisampling.pSampleMask = nullptr; // Optional
-		multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
-		multisampling.alphaToOneEnable = VK_FALSE; // Optional
-
-		VkPipelineDepthStencilStateCreateInfo depthStencil = {};
-		depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-		depthStencil.depthTestEnable = VK_TRUE;
-		depthStencil.depthWriteEnable = VK_FALSE;
-		depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-		depthStencil.depthBoundsTestEnable = VK_FALSE;
-		depthStencil.minDepthBounds = 0.0f; // Optional
-		depthStencil.maxDepthBounds = 1.0f; // Optional
-		depthStencil.stencilTestEnable = VK_FALSE;
-		depthStencil.front = {}; // Optional
-		depthStencil.back = {}; // Optional
-
-		VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
-		colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-		colorBlendAttachment.blendEnable = VK_TRUE;
-		colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA; // Optional
-		colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA; // Optional
-		colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
-		colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-		colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-		colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
-
-		VkPipelineColorBlendStateCreateInfo colorBlending = {};
-		colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-		colorBlending.logicOpEnable = VK_FALSE;
-		colorBlending.logicOp = VK_LOGIC_OP_COPY; // Optional
-		colorBlending.attachmentCount = 1;
-		colorBlending.pAttachments = &colorBlendAttachment;
-		colorBlending.blendConstants[0] = 0.0f; // Optional
-		colorBlending.blendConstants[1] = 0.0f; // Optional
-		colorBlending.blendConstants[2] = 0.0f; // Optional
-		colorBlending.blendConstants[3] = 0.0f; // Optional
 
 		std::vector<DescriptorSetManager*> managers = {
 			&Assets::GlobalTexturePool::GetInstance()->GetDescriptorManager(),
@@ -431,43 +383,74 @@ namespace Vulkan::PipelineCommon
 		pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 		pushConstantRange.offset = 0;
 		pushConstantRange.size = sizeof(Assets::GPUScene);
-		
+
 		// Create pipeline layout and render pass.
 		pipelineLayout_.reset(new class PipelineLayout(device, managers, 1, &pushConstantRange, 1));
-		renderPass_.reset(new class RenderPass(swapChain, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_LOAD));
+		const VkFormat colorFormat = isWireFrame ? VK_FORMAT_R16G16B16A16_SFLOAT : swapChain.Format();
+		const VkImageLayout colorInitialLayout = isWireFrame
+			? VK_IMAGE_LAYOUT_GENERAL
+			: VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		const VkImageLayout colorFinalLayout = isWireFrame
+			? VK_IMAGE_LAYOUT_GENERAL
+			: VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		renderPass_.reset(new class RenderPass(
+			swapChain, colorFormat, depthBuffer, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_LOAD,
+			colorInitialLayout, colorFinalLayout));
 		renderPass_->SetDebugName("Wireframe Render Pass");
 
-		// Load shaders.
 		const ShaderModule vertShader(device, "assets/shaders/Rast.WireframeSoftMeshShader.vert.slang.spv");
 		const ShaderModule fragShader(device, "assets/shaders/Rast.Wireframe.frag.slang.spv");
 
-		VkPipelineShaderStageCreateInfo shaderStages[] =
+		pipeline_ = GraphicsPipelineBuilder(device)
+			.SetShaders(vertShader, fragShader)
+			.SetFixedViewport(viewportOffset, viewportExtent)
+			.SetPolygonMode(isWireFrame && physicalDeviceFeatures.fillModeNonSolid ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL)
+			.SetDepth(true, false, VK_COMPARE_OP_LESS_OR_EQUAL)
+			.SetAlphaBlend(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO)
+			.Build(pipelineLayout_->Handle(), renderPass_->Handle(), "create graphics pipeline");
+	}
+
+	void GraphicsPipeline::RecreatePipeline()
+	{
+		if (pipeline_)
 		{
-			vertShader.CreateShaderStage(VK_SHADER_STAGE_VERTEX_BIT),
-			fragShader.CreateShaderStage(VK_SHADER_STAGE_FRAGMENT_BIT)
-		};
+			vkDestroyPipeline(swapChain_.Device().Handle(), pipeline_, nullptr);
+			pipeline_ = VK_NULL_HANDLE;
+		}
 
-		// Create graphic pipeline
-		VkGraphicsPipelineCreateInfo pipelineInfo = {};
-		pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-		pipelineInfo.stageCount = 2;
-		pipelineInfo.pStages = shaderStages;
-		pipelineInfo.pVertexInputState = &vertexInputInfo;
-		pipelineInfo.pInputAssemblyState = &inputAssembly;
-		pipelineInfo.pViewportState = &viewportState;
-		pipelineInfo.pRasterizationState = &rasterizer;
-		pipelineInfo.pMultisampleState = &multisampling;
-		pipelineInfo.pDepthStencilState = &depthStencil;
-		pipelineInfo.pColorBlendState = &colorBlending;
-		pipelineInfo.pDynamicState = nullptr; // Optional
-		pipelineInfo.basePipelineHandle = nullptr; // Optional
-		pipelineInfo.basePipelineIndex = -1; // Optional
-		pipelineInfo.layout = pipelineLayout_->Handle();
-		pipelineInfo.renderPass = renderPass_->Handle();
-		pipelineInfo.subpass = 0;
+		const auto& device = swapChain_.Device();
+		const VkOffset2D viewportOffset = swapChain_.RenderOffset();
+		const VkExtent2D viewportExtent = swapChain_.RenderExtent();
 
-		Check(vkCreateGraphicsPipelines(device.Handle(), nullptr, 1, &pipelineInfo, nullptr, &pipeline_),
-			"create graphics pipeline");
+		VkPhysicalDeviceFeatures physicalDeviceFeatures = {};
+		vkGetPhysicalDeviceFeatures(device.PhysicalDevice(), &physicalDeviceFeatures);
+
+		const ShaderModule vertShader(device, "assets/shaders/Rast.WireframeSoftMeshShader.vert.slang.spv");
+		const ShaderModule fragShader(device, "assets/shaders/Rast.Wireframe.frag.slang.spv");
+
+		pipeline_ = GraphicsPipelineBuilder(device)
+			.SetShaders(vertShader, fragShader)
+			.SetFixedViewport(viewportOffset, viewportExtent)
+			.SetPolygonMode(isWireFrame_ && physicalDeviceFeatures.fillModeNonSolid ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL)
+			.SetDepth(true, false, VK_COMPARE_OP_LESS_OR_EQUAL)
+			.SetAlphaBlend(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO)
+			.Build(pipelineLayout_->Handle(), renderPass_->Handle(), "recreate wireframe graphics pipeline");
+	}
+
+	bool GraphicsPipeline::ReloadIfShaderChanged(
+		const std::set<std::string>& changedShaderFiles,
+		std::set<std::string>& handledShaderFiles)
+	{
+		constexpr const char* vertexShader = "assets/shaders/Rast.WireframeSoftMeshShader.vert.slang.spv";
+		constexpr const char* fragmentShader = "assets/shaders/Rast.Wireframe.frag.slang.spv";
+		if (!ShouldReloadShaderPair(vertexShader, fragmentShader, changedShaderFiles))
+		{
+			return false;
+		}
+		RecreatePipeline();
+		MarkChangedShaderFile(vertexShader, changedShaderFiles, handledShaderFiles);
+		MarkChangedShaderFile(fragmentShader, changedShaderFiles, handledShaderFiles);
+		return true;
 	}
 
 	GraphicsPipeline::~GraphicsPipeline()

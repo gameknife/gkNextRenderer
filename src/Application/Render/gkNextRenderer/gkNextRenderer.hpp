@@ -1,7 +1,7 @@
 #pragma once
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
-#include "Engine/Runtime/Editor/GizmoController.hpp"
+#include "Modules/DevTools/GizmoController.hpp"
 #include "Engine/Runtime/Camera/ModelViewController.hpp"
 
 class NextRendererGameInstance : public NextGameInstanceBase
@@ -21,7 +21,9 @@ public:
 
     void OnPreConfigUI() override;
     bool OnRenderUI() override;
+    bool OnRenderUI(const FGameUiFrameContext& context) override;
     void OnInitUI() override;
+    void OnRemoteUiSessionClosed(std::string_view sessionId) override;
 
     bool OverrideRenderCamera(Assets::Camera& OutRenderCamera) const override;
     float GetGraphicsDebugPanelTopOffset() const override;
@@ -32,7 +34,8 @@ public:
     bool OnGamepadInput(int16_t leftStickX, int16_t leftStickY,
                     int16_t rightStickX, int16_t rightStickY,
                     int16_t leftTrigger, int16_t rightTrigger) override;
-    void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) override;
+    bool OnRemoteViewAction(const FRemoteViewActionContext& context, std::string_view action) override;
+    void ConfigureCVars(NextCVar::FCVarSystem& cvars) override;
 
     void CreateSphereAndPush();
     void CreateBoxAndPush();
@@ -49,27 +52,50 @@ public:
     };
 
 private:
-    void DrawSettings();
-    void DrawTitleBar();
-    void DrawBottomStatusBar();
-    void DrawModeRail();
-    void DrawMemoryStatisticsPanel();
-    void DrawViewportTopBar();
-    void DrawViewportBottomBar();
+    struct FRendererUiState
+    {
+        NextUI::GizmoController gizmoController;
+        EWorkMode workMode = EWorkMode::Renderer;
+        EWorkMode lastWorkMode = EWorkMode::Count;
+        struct ImFont* bigFont {};
+        struct ImFont* titleBarFont {};
+        bool showSettings = true;
+        bool showOverlay = false;
+        bool memoryStatisticsPanelOpen = false;
+    };
+
+    struct FLaunchView
+    {
+        glm::vec3 position{0.0f};
+        glm::vec3 forward{0.0f, 0.0f, -1.0f};
+        glm::vec3 right{1.0f, 0.0f, 0.0f};
+        glm::vec3 up{0.0f, 1.0f, 0.0f};
+        std::string debugName{"tempBox"};
+    };
+
+    void CreateBoxAndPushFromView(const FLaunchView& view);
+
+    bool DrawRendererUi(const FGameUiFrameContext& context, FRendererUiState& uiState);
+    FRendererUiState& GetRemoteUiState(std::string_view sessionId);
+    void EnsureUiFonts(FRendererUiState& uiState, bool allowLoad);
+    void DrawSettings(FRendererUiState& uiState);
+    void DrawTitleBar(const FGameUiFrameContext& context, FRendererUiState& uiState);
+    void DrawBottomStatusBar(FRendererUiState& uiState);
+    void DrawModeRail(FRendererUiState& uiState);
+    void DrawMemoryStatisticsPanel(FRendererUiState& uiState);
+    void DrawViewportTopBar(const FGameUiFrameContext& context, const FRendererUiState& uiState);
+    void DrawViewportBottomBar(const FGameUiFrameContext& context);
     void RequestScreenshot(bool openFolder, const std::string& tag);
     Runtime::Camera::ModelViewController modelViewController_;
-    NextUI::GizmoController gizmoController_;
 
-    EWorkMode workMode_ = EWorkMode::Renderer;
+    FRendererUiState mainUiState_;
+    std::unordered_map<std::string, FRendererUiState> remoteUiStates_;
 
     uint32_t modelId_;
     uint32_t boxModelId_;
     std::vector<uint32_t> matIds_;
-    struct ImFont* bigFont_ {};
-    struct ImFont* titleBarFont_ {};
 
     bool isTakingScreenshot_ = false;
     bool playbackPaused_ = false;
     bool stepRequested_ = false;
-    bool memoryStatisticsPanelOpen_ = false;
 };

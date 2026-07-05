@@ -3,12 +3,12 @@
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Data/Material.hpp"
-#include "Engine/Assets/Loaders/FScadCsg.h"
-#include "Engine/Assets/Loaders/FScadEvaluator.h"
-#include "Engine/Assets/Loaders/FScadLexer.h"
-#include "Engine/Assets/Loaders/FScadLoader.h"
-#include "Engine/Assets/Loaders/FScadParser.h"
-#include "Engine/Assets/Loaders/FScadText.h"
+#include "Modules/ScadLoader/FScadCsg.h"
+#include "Modules/ScadLoader/FScadEvaluator.h"
+#include "Modules/ScadLoader/FScadLexer.h"
+#include "Modules/ScadLoader/FScadLoader.h"
+#include "Modules/ScadLoader/FScadParser.h"
+#include "Modules/ScadLoader/FScadText.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Utilities/FileHelper.hpp"
 
@@ -848,4 +848,116 @@ TEST_CASE("Scad loader: loads the bundled ancient_city sample when present", "[U
     const float cameraDistance = glm::distance(eye, center);
     CHECK(camera.FarPlane > cameraDistance + radius);
     CHECK(camera.NearPlane < cameraDistance - radius);
+}
+
+namespace
+{
+    SceneEvalResult EvalSceneProgram(const std::string& src)
+    {
+        std::vector<Token> tokens;
+        std::string err;
+        REQUIRE(ScadLexer::Tokenize(src, tokens, err));
+
+        Scope scope;
+        REQUIRE(ScadParser::Parse(tokens, scope, err));
+
+        std::unordered_map<std::string, StmtPtr> modules;
+        std::unordered_map<std::string, StmtPtr> functions;
+        Scope top;
+        for (const StmtPtr& s : scope)
+        {
+            if (s->kind == StmtKind::ModuleDef) modules[s->name] = s;
+            else if (s->kind == StmtKind::FunctionDef) functions[s->name] = s;
+            else top.push_back(s);
+        }
+
+        Assets::ScadLoadOptions options;
+        SceneEvalResult result;
+        std::string evalErr;
+        ScadEvaluator::EvaluateScene(top, modules, functions, options, result, evalErr);
+        return result;
+    }
+}
+
+TEST_CASE("Scad scene eval exports top-level variables", "[Unit][Scad]")
+{
+    const SceneEvalResult result = EvalSceneProgram(
+        "answer = 42;\n"
+        "name = \"agent\";\n"
+        "rolecolor = [1, 0, 1];\n"
+        "cube(1);\n");
+
+    REQUIRE(result.topLevelVariables.count("answer") == 1);
+    const Value& answer = result.topLevelVariables.at("answer");
+    CHECK(answer.IsNumber());
+    CHECK(answer.num == Catch::Approx(42.0));
+
+    REQUIRE(result.topLevelVariables.count("name") == 1);
+    CHECK(result.topLevelVariables.at("name").str == "agent");
+
+    REQUIRE(result.topLevelVariables.count("rolecolor") == 1);
+    glm::dvec3 color(0.0);
+    REQUIRE(result.topLevelVariables.at("rolecolor").AsVec3(color));
+    CHECK(color.x == Catch::Approx(1.0));
+    CHECK(color.y == Catch::Approx(0.0));
+    CHECK(color.z == Catch::Approx(1.0));
+}
+
+TEST_CASE("Scad scene eval exports nested lists and generated keys", "[Unit][Scad]")
+{
+    const SceneEvalResult result = EvalSceneProgram(
+        "anim_walk = [\n"
+        "    [\"bone_leg_l\", \"rot\", [[0, [35, 0, 0]], [0.4, [-35, 0, 0]]]],\n"
+        "    [\"loop\", false],\n"
+        "];\n"
+        "anim_idle = [\n"
+        "    [\"bone_torso\", \"rot\", [for (t = [0 : 0.5 : 1]) [t, [2 * sin(180 * t), 0, 0]]]],\n"
+        "];\n"
+        "cube(1);\n");
+
+    REQUIRE(result.topLevelVariables.count("anim_walk") == 1);
+    const Value& walk = result.topLevelVariables.at("anim_walk");
+    REQUIRE(walk.IsVec());
+    REQUIRE(walk.vec.size() == 2);
+
+    const Value& channelRow = walk.vec[0];
+    REQUIRE(channelRow.IsVec());
+    REQUIRE(channelRow.vec.size() == 3);
+    CHECK(channelRow.vec[0].str == "bone_leg_l");
+    CHECK(channelRow.vec[1].str == "rot");
+    const Value& keys = channelRow.vec[2];
+    REQUIRE(keys.IsVec());
+    REQUIRE(keys.vec.size() == 2);
+    CHECK(keys.vec[1].vec[0].num == Catch::Approx(0.4));
+    glm::dvec3 rot(0.0);
+    REQUIRE(keys.vec[1].vec[1].AsVec3(rot));
+    CHECK(rot.x == Catch::Approx(-35.0));
+
+    const Value& loopRow = walk.vec[1];
+    REQUIRE(loopRow.IsVec());
+    CHECK(loopRow.vec[0].str == "loop");
+    CHECK(loopRow.vec[1].type == Value::Type::Bool);
+    CHECK_FALSE(loopRow.vec[1].boolean);
+
+    // List-comprehension generated keys: t = 0, 0.5, 1.0
+    REQUIRE(result.topLevelVariables.count("anim_idle") == 1);
+    const Value& idleKeys = result.topLevelVariables.at("anim_idle").vec[0].vec[2];
+    REQUIRE(idleKeys.IsVec());
+    REQUIRE(idleKeys.vec.size() == 3);
+    CHECK(idleKeys.vec[1].vec[0].num == Catch::Approx(0.5));
+    glm::dvec3 idleRot(0.0);
+    REQUIRE(idleKeys.vec[1].vec[1].AsVec3(idleRot));
+    CHECK(idleRot.x == Catch::Approx(2.0 * std::sin(0.5 * kPi)).margin(1e-6));
+}
+
+TEST_CASE("Scad scene eval top-level snapshot ignores module-local bindings", "[Unit][Scad]")
+{
+    const SceneEvalResult result = EvalSceneProgram(
+        "anim_walk = 1;\n"
+        "module body() { anim_walk = 99; local_only = 5; cube(1); }\n"
+        "body();\n");
+
+    REQUIRE(result.topLevelVariables.count("anim_walk") == 1);
+    CHECK(result.topLevelVariables.at("anim_walk").num == Catch::Approx(1.0));
+    CHECK(result.topLevelVariables.count("local_only") == 0);
 }

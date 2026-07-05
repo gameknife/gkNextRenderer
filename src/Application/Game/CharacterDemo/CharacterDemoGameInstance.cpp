@@ -10,9 +10,10 @@
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Loaders/FProcModel.h"
 #include "Engine/Assets/Loaders/FSceneLoader.h"
-#include "Engine/NextGameplay/Gameplay/GameplayMath.hpp"
-#include "Engine/NextGameplay/Reflection/GameplayReflectionRegistry.h"
-#include "Engine/NextGameplay/Utilities/SceneNodeUtils.hpp"
+#include "Gameplay/Gameplay/GameplayMath.hpp"
+#include "Gameplay/Character/CharacterControllerDebugDraw.hpp"
+#include "Gameplay/Reflection/GameplayReflectionRegistry.h"
+#include "Gameplay/Utilities/SceneNodeUtils.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
@@ -23,13 +24,15 @@
 #include "Engine/Runtime/Scene/NodeUtils.h"
 #include "Engine/Runtime/Scene/SceneBuilder.h"
 #include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Engine/Runtime/Utilities/PhysicsDebugOverlay.hpp"
+#include "Modules/DevTools/PhysicsDebugOverlay.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
+#include "CharacterPlaygroundScene.hpp"
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options,
                                                          NextEngine* engine)
 {
+    RegisterCharacterPlaygroundScene();
     return std::make_unique<CharacterDemoGameInstance>(config, options, engine);
 }
 
@@ -59,15 +62,13 @@ void CharacterDemoGameInstance::OnInit()
 {
     NextGameplay::RegisterGameplayReflection();
 
-    // CharacterDemo depends on optional assets (KayKit playground pieces + skinned character mesh).
-    // Bail out with a helpful prompt instead of crashing later in CharacterPlayground / SkinnedMesh setup.
-    constexpr const char* kKayKitProbe = "assets/models/KayKit_Platformer_Pack/Assets/gltf/neutral/cone.gltf";
+    // CharacterDemo depends on an optional asset (skinned character mesh).
+    // Bail out with a helpful prompt instead of crashing later in SkinnedMesh setup.
     constexpr const char* kCharacterProbe = "assets/models/characters/Mannequin_Medium.glb";
-    if (!Utilities::FileHelper::IsAssetAvailable(kKayKitProbe) ||
-        !Utilities::FileHelper::IsAssetAvailable(kCharacterProbe))
+    if (!Utilities::FileHelper::IsAssetAvailable(kCharacterProbe))
     {
         const char* message =
-            "CharacterDemo needs the optional asset pack (KayKit pieces + character mesh).\n\n"
+            "CharacterDemo needs the optional asset pack (character mesh).\n\n"
             "Run one of the following from the repo root, then relaunch:\n"
             "  scripts/fetch-paks.sh --optional      (Linux / macOS / Git Bash)\n"
             "  scripts\\fetch-paks.bat --optional    (Windows)";
@@ -149,7 +150,7 @@ void CharacterDemoGameInstance::OnDestroy()
     aiBot_.character.controller.Destroy();
 }
 
-void CharacterDemoGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
+void CharacterDemoGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
     cvars.SetDefaultFromString("r.temporalFrames", "8", &error);
@@ -228,7 +229,6 @@ void CharacterDemoGameInstance::OnSceneLoaded()
     playerSetup.controlSource = NextGameplay::ECharacterControlSource::Player;
     playerSetup.movementMode = movementMode_;
     playerSetup.firstPersonMode = firstPersonMode_;
-    playerSetup.footIKEnabled = footIKEnabled_;
     playerSetup.eyeHeight = config_.Player.EyeHeight;
     playerSetup.facingYaw = characterYaw_;
     playerSetup.walkStrafePlaySpeed = config_.Animation.WalkStrafePlaySpeed;
@@ -341,8 +341,6 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Text("Move Mode: %s", NextGameplay::GetCharacterMovementModeName(movementMode_));
     ImGui::Text("Graphics Debug: %s", GetEngine().GetShowFlags().DebugGraphicsPanel ? "On" : "Off");
     ImGui::Text("Physics Debug: %s", GetEngine().GetShowFlags().DebugPhysicsOverlay ? "On" : "Off");
-    ImGui::Text("Foot IK: %s", footIKEnabled_ ? "On" : "Off");
-    ImGui::Text("Foot IK Debug: %s", showFootIKDebug_ ? "On" : "Off");
     ImGui::Text("AI Debug Menu: %s", showAIDebugMenu_ ? "On" : "Off");
     ImGui::Text("AI BT Overlay: %s", showBehaviorTreeDebug_ ? "On" : "Off");
     ImGui::Text("NavGrid Overlay: %s", showNavGridDebug_ ? "On" : "Off");
@@ -377,7 +375,7 @@ bool CharacterDemoGameInstance::OnRenderUI()
     ImGui::Text("WASD - Move | Shift - Run");
     ImGui::Text("Space - Jump | Mouse - Look");
     ImGui::Text("V - Toggle FPS/TPS | Tab - Move Mode");
-    ImGui::Text("LMB - Shoot | F1 - Physics | F2 - Graphics | F7 - Foot IK | Q - Next Renderer");
+    ImGui::Text("LMB - Shoot | F1 - Physics | F2 - Graphics | Q - Next Renderer");
     ImGui::Text("1-8 - View Modes | F8 - AI Debug Menu | F9 - IK Debug");
     ImGui::Text("ESC - Release Mouse");
 
@@ -416,10 +414,10 @@ bool CharacterDemoGameInstance::OnRenderUI()
 
 void CharacterDemoGameInstance::DrawAdditionalPhysicsDebugOverlay(const Assets::Camera& camera) const
 {
-    Runtime::DrawCharacterControllerDebugOverlay(playerCharacter_.controller, camera);
+    NextGameplay::DrawCharacterControllerDebugOverlay(playerCharacter_.controller, camera);
     if (aiBot_.character.controller.IsValid())
     {
-        Runtime::DrawCharacterControllerDebugOverlay(aiBot_.character.controller, camera);
+        NextGameplay::DrawCharacterControllerDebugOverlay(aiBot_.character.controller, camera);
     }
 }
 
@@ -549,12 +547,6 @@ bool CharacterDemoGameInstance::OnKey(SDL_Event& event)
             }
         }
         return false;
-    case SDLK_F9:
-        if (pressed)
-        {
-            showFootIKDebug_ = !showFootIKDebug_;
-        }
-        return true;
     case SDLK_ESCAPE:
         if (pressed)
         {
@@ -562,42 +554,6 @@ bool CharacterDemoGameInstance::OnKey(SDL_Event& event)
             resetMouse_ = true;
             SDL_SetWindowRelativeMouseMode(GetEngine().GetWindow().Handle(), mouseCaptured_);
         }
-        return true;
-    default:
-        return false;
-    }
-}
-
-bool CharacterDemoGameInstance::SupportsAppDebugShortcut(SDL_Keycode key) const
-{
-    switch (key)
-    {
-    case SDLK_F7:
-        return true;
-    default:
-        return false;
-    }
-}
-
-bool CharacterDemoGameInstance::IsAppDebugShortcutActive(SDL_Keycode key) const
-{
-    switch (key)
-    {
-    case SDLK_F7:
-        return footIKEnabled_;
-    default:
-        return false;
-    }
-}
-
-bool CharacterDemoGameInstance::SetAppDebugShortcutActive(SDL_Keycode key, bool active)
-{
-    switch (key)
-    {
-    case SDLK_F7:
-        footIKEnabled_ = active;
-        playerCharacter_.SetFootIKEnabled(footIKEnabled_);
-        aiBot_.character.SetFootIKEnabled(footIKEnabled_);
         return true;
     default:
         return false;
@@ -842,7 +798,6 @@ void CharacterDemoGameInstance::InitAIBot()
     aiSetup.appendRootName = characterAppendRootName_ + "_1";
     aiSetup.controlSource = NextGameplay::ECharacterControlSource::AI;
     aiSetup.movementMode = ECharacterMovementMode::MoveAligned;
-    aiSetup.footIKEnabled = footIKEnabled_;
     aiSetup.eyeHeight = config_.AI.EyeHeight;
     aiSetup.walkStrafePlaySpeed = config_.Animation.WalkStrafePlaySpeed;
     aiSetup.runBackwardPlaySpeed = config_.Animation.RunBackwardPlaySpeed;
@@ -973,19 +928,6 @@ void CharacterDemoGameInstance::TryInitAIBotCharacterModel()
 
     aiBot_.character.AttachSkinnedModel(GetEngine().GetPhysicsEngine());
 
-    Runtime::SkinnedMeshComponent::FootPlacementIKSettings footPlacementSettings;
-    footPlacementSettings.Enabled = footIKEnabled_;
-    footPlacementSettings.Weight = aiBot_.character.controller.IsOnGround() ? 1.0f : 0.0f;
-    footPlacementSettings.TraceUpDistance = 0.45f;
-    footPlacementSettings.TraceDownDistance = 0.90f;
-    footPlacementSettings.FootHeight = 0.025f;
-    footPlacementSettings.MaxFootLift = 0.28f;
-    footPlacementSettings.MaxFootDrop = 0.35f;
-    footPlacementSettings.PelvisWeight = 0.75f;
-    footPlacementSettings.PelvisMaxOffset = 0.22f;
-    footPlacementSettings.DebugDraw = showFootIKDebug_;
-    aiBot_.character.ConfigureFootPlacementIK(footPlacementSettings);
-
     if (aiBot_.character.animation && !aiBot_.character.animation->GetIdleAnimationName().empty())
     {
         aiBot_.character.PlayAnimation(aiBot_.character.animation->GetIdleAnimationName(), true);
@@ -1032,7 +974,7 @@ void CharacterDemoGameInstance::UpdateAIBotAnimationState(float deltaSeconds)
         break;
     }
 
-    aiBot_.character.UpdateAnimation(input, footIKEnabled_, showFootIKDebug_);
+    aiBot_.character.UpdateAnimation(input);
 }
 
 void CharacterDemoGameInstance::TryInitCharacterModel()
@@ -1094,19 +1036,6 @@ void CharacterDemoGameInstance::TryInitCharacterModel()
     // Apply current first-person visibility and start idle animation
     SetFirstPersonMode(firstPersonMode_);
 
-    Runtime::SkinnedMeshComponent::FootPlacementIKSettings footPlacementSettings;
-    footPlacementSettings.Enabled = footIKEnabled_;
-    footPlacementSettings.Weight = playerCharacter_.controller.IsOnGround() ? 1.0f : 0.0f;
-    footPlacementSettings.TraceUpDistance = 0.45f;
-    footPlacementSettings.TraceDownDistance = 0.90f;
-    footPlacementSettings.FootHeight = 0.025f;
-    footPlacementSettings.MaxFootLift = 0.28f;
-    footPlacementSettings.MaxFootDrop = 0.35f;
-    footPlacementSettings.PelvisWeight = 0.75f;
-    footPlacementSettings.PelvisMaxOffset = 0.22f;
-    footPlacementSettings.DebugDraw = showFootIKDebug_;
-    playerCharacter_.ConfigureFootPlacementIK(footPlacementSettings);
-
     if (playerCharacter_.animation && !playerCharacter_.animation->GetIdleAnimationName().empty())
     {
         PlayCharacterAnimation(playerCharacter_.animation->GetIdleAnimationName(), true);
@@ -1138,7 +1067,7 @@ void CharacterDemoGameInstance::UpdateAnimationState(float deltaSeconds)
             ? NextGameplay::ECharacterAnimationPolicy::PlayerMoveAligned
             : NextGameplay::ECharacterAnimationPolicy::PlayerCameraRelative;
 
-    playerCharacter_.UpdateAnimation(input, footIKEnabled_, showFootIKDebug_);
+    playerCharacter_.UpdateAnimation(input);
 }
 
 void CharacterDemoGameInstance::ResetCharacterState()

@@ -70,10 +70,6 @@
     "cpp-base64",
     "catch2",
     "entt",
-    {
-      "name": "whisper-cpp",
-      "platform": "!(android | ios)"
-    },
     "libwebp",
     {
       "name": "vulkan-loader",
@@ -88,7 +84,19 @@
       "name": "vulkan-loader",
       "platform": "windows"
     },
-    "vulkan-memory-allocator"
+    "vulkan-memory-allocator",
+    {
+      "name": "libdatachannel",
+      "features": [
+        "ws",
+        "srtp"
+      ],
+      "platform": "!(android | ios | osx)"
+    },
+    {
+      "name": "cpp-httplib",
+      "platform": "!(android | ios | osx)"
+    }
   ],
   "features": {
     "avif": {

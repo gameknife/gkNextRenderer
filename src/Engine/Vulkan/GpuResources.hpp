@@ -1,7 +1,7 @@
 #pragma once
 
-#include "DebugUtilities.hpp"
-#include "MemoryAndShader.hpp"
+#include "Engine/Vulkan/DebugUtilities.hpp"
+#include "Engine/Vulkan/MemoryAndShader.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 #include <memory>
 

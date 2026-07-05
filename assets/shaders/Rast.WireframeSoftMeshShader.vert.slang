@@ -1,4 +1,6 @@
-import Common;
+import Shader.Bindless;
+import Shader.Types;
+import Shader.GpuScene;
 
 struct VertexOutput
 {

@@ -1,7 +1,7 @@
-#include "GpuResources.hpp"
-#include "Device.hpp"
-#include "CommandExecution.hpp"
-#include "DebugUtilities.hpp"
+#include "Engine/Vulkan/GpuResources.hpp"
+#include "Engine/Vulkan/Device.hpp"
+#include "Engine/Vulkan/CommandExecution.hpp"
+#include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Vulkan/RayTracing/DeviceProcedures.hpp"
 

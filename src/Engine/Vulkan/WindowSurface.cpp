@@ -1,12 +1,12 @@
-#include "WindowSurface.hpp"
-#include "Instance.hpp"
+#include "Engine/Vulkan/WindowSurface.hpp"
+#include "Engine/Vulkan/Instance.hpp"
+#include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Utilities/StbImage.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include <algorithm>
-#include <spdlog/spdlog.h>
 
 namespace Vulkan
 {
@@ -109,7 +109,11 @@ Window::Window(const WindowConfig& config) :
     {
         const SDL_DisplayID displayId = SDL_GetPrimaryDisplay();
         SDL_Rect bounds;
-        if (SDL_GetDisplayBounds(displayId, &bounds))
+        if (!SDL_GetDisplayUsableBounds(displayId, &bounds))
+        {
+            SDL_GetDisplayBounds(displayId, &bounds);
+        }
+        if (bounds.w > 0 && bounds.h > 0)
         {
             const uint32_t maxW = static_cast<uint32_t>(bounds.w);
             const uint32_t maxH = static_cast<uint32_t>(bounds.h);
@@ -233,6 +237,26 @@ void Window::Show() const
     SDL_ShowWindow(window_);
 }
 
+bool Window::SetSize(uint32_t width, uint32_t height) const
+{
+    if (width == 0 || height == 0)
+    {
+        return false;
+    }
+
+    if (!SDL_SetWindowSize(window_, static_cast<int>(width), static_cast<int>(height)))
+    {
+        SPDLOG_WARN("Failed to resize SDL window to {}x{}: {}", width, height, SDL_GetError());
+        return false;
+    }
+
+    if (!SDL_SyncWindow(window_))
+    {
+        SPDLOG_WARN("Window size synchronization timed out after resize: {}", SDL_GetError());
+    }
+    return true;
+}
+
 void Window::Minimize()
 {
     SDL_MinimizeWindow(window_);
@@ -306,8 +330,18 @@ void Window::InitGLFW()
     {
         Throw(std::runtime_error("failed to init SDL."));
     }
-    if (!SDL_Vulkan_LoadLibrary(nullptr))
+    const char* vulkanLoaderPath = StreamlineWrapper::PreferredVulkanLoaderPath();
+    if (!SDL_Vulkan_LoadLibrary(vulkanLoaderPath))
     {
+        if (vulkanLoaderPath != nullptr)
+        {
+            SPDLOG_WARN("Failed to load Streamline Vulkan interposer through SDL: {}; falling back to default Vulkan loader",
+                        SDL_GetError());
+            if (SDL_Vulkan_LoadLibrary(nullptr))
+            {
+                return;
+            }
+        }
         Throw(std::runtime_error("failed to init SDL Vulkan."));
     }
 }
@@ -325,14 +359,31 @@ void Window::TerminateGLFW()
 Surface::Surface(const class Instance& instance) :
     instance_(instance)
 {
+#if WIN32
+    VkWin32SurfaceCreateInfoKHR createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+    createInfo.hinstance = GetModuleHandleW(nullptr);
+    createInfo.hwnd = static_cast<HWND>(SDL_GetPointerProperty(
+        SDL_GetWindowProperties(instance.Window().Handle()),
+        SDL_PROP_WINDOW_WIN32_HWND_POINTER,
+        nullptr));
+    if (createInfo.hwnd == nullptr)
+    {
+        Throw(std::runtime_error("failed to obtain Win32 window handle from SDL."));
+    }
+    Check(StreamlineWrapper::CreateWin32SurfaceKHR(
+              instance.Handle(), &createInfo, nullptr, &surface_),
+          "create Win32 window surface");
+#else
     SDL_Vulkan_CreateSurface(instance.Window().Handle(), instance.Handle(), nullptr, &surface_);
+#endif
 }
 
 Surface::~Surface()
 {
     if (surface_ != nullptr)
     {
-        vkDestroySurfaceKHR(instance_.Handle(), surface_, nullptr);
+        StreamlineWrapper::DestroySurfaceKHR(instance_.Handle(), surface_, nullptr);
         surface_ = nullptr;
     }
 }

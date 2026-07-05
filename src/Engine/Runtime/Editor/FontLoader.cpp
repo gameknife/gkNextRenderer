@@ -4,7 +4,6 @@
 
 #include <filesystem>
 #include <fmt/format.h>
-#include <spdlog/spdlog.h>
 #include <cstring>
 #include <unordered_map>
 #include <vector>

@@ -2,6 +2,7 @@
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.h"
+#include <SDL3/SDL_mouse.h>
 
 namespace Runtime::Camera
 {
@@ -224,6 +225,11 @@ void ModelViewController::Orbit(float deltaX, float deltaY)
         return;
     }
 
+    if (deltaX == 0.0f && deltaY == 0.0f)
+    {
+        return;
+    }
+
     glm::vec3 target = orbitTarget_.value();
 
     // Yaw around world Y, Pitch around camera right
@@ -239,6 +245,7 @@ void ModelViewController::Orbit(float deltaX, float deltaY)
     orientation_ = orientation_ * glm::transpose(rotation);
 
     UpdateVectors();
+    movedByEvent_ = true;
 }
 
 bool ModelViewController::OnTouch(bool down, double xpos, double ypos)
@@ -249,6 +256,82 @@ bool ModelViewController::OnTouch(bool down, double xpos, double ypos)
     mousePosY_ = ypos;
 
     return true;
+}
+
+void ModelViewController::SetKeyHeld(SDL_Keycode key, bool held)
+{
+    if (!mouseRightPressed_)
+    {
+        keyboardInput_.Reset();
+        return;
+    }
+
+    if (focusAnimation_.IsActive())
+    {
+        focusAnimation_.Cancel();
+    }
+
+    const float value = held ? 1.0f : 0.0f;
+    switch (key)
+    {
+    case SDLK_W:
+        keyboardInput_.forward = value;
+        break;
+    case SDLK_S:
+        keyboardInput_.forward = held ? -1.0f : 0.0f;
+        break;
+    case SDLK_D:
+        keyboardInput_.right = value;
+        break;
+    case SDLK_A:
+        keyboardInput_.right = held ? -1.0f : 0.0f;
+        break;
+    case SDLK_Q:
+        keyboardInput_.up = value;
+        break;
+    case SDLK_E:
+        keyboardInput_.up = held ? -1.0f : 0.0f;
+        break;
+    default:
+        break;
+    }
+}
+
+void ModelViewController::ApplyMouseMove(double x, double y, bool relative)
+{
+    if (relative)
+    {
+        x += mousePosX_;
+        y += mousePosY_;
+    }
+    OnCursorPosition(x, y);
+}
+
+void ModelViewController::ApplyMouseButton(uint8_t button, bool down, double x, double y)
+{
+    if (button == SDL_BUTTON_LEFT)
+    {
+        mouseLeftPressed_ = down;
+    }
+    if (button == SDL_BUTTON_RIGHT)
+    {
+        mouseRightPressed_ = down;
+        if (mouseRightPressed_)
+        {
+            resetMousePos_ = true;
+            mousePosX_ = x;
+            mousePosY_ = y;
+        }
+        else
+        {
+            keyboardInput_.Reset();
+        }
+    }
+}
+
+void ModelViewController::ApplyWheel(double xoffset, double yoffset)
+{
+    OnScroll(xoffset, yoffset);
 }
 
 void ModelViewController::OnScroll(double xoffset, double yoffset)

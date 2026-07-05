@@ -1,9 +1,9 @@
 #pragma once
 
-#include "GpuResources.hpp"
-#include "CommandExecution.hpp"
-#include "Device.hpp"
-#include "MemoryAndShader.hpp"
+#include "Engine/Vulkan/GpuResources.hpp"
+#include "Engine/Vulkan/CommandExecution.hpp"
+#include "Engine/Vulkan/Device.hpp"
+#include "Engine/Vulkan/MemoryAndShader.hpp"
 #include <cstring>
 #include <memory>
 #include <string>
@@ -31,14 +31,6 @@ namespace Vulkan
 			std::unique_ptr<Buffer>& buffer,
 			std::unique_ptr<DeviceMemory>& memory);
 		
-		static void CreateDeviceBufferViolate(
-			CommandPool& commandPool,
-			const char* const name,
-			const VkBufferUsageFlags usage, 
-			const size_t size,
-			std::unique_ptr<Buffer>& buffer,
-			std::unique_ptr<DeviceMemory>& memory);
-
 		static void CreateDeviceBufferLocal(
 			CommandPool& commandPool,
 			const char* const name,
@@ -47,7 +39,43 @@ namespace Vulkan
 			const size_t size,
 			std::unique_ptr<Buffer>& buffer,
 			std::unique_ptr<DeviceMemory>& memory);
+
+	private:
+		static void CreateRaw(
+			CommandPool& commandPool,
+			const char* name,
+			VkBufferUsageFlags usage,
+			VkMemoryPropertyFlags memProp,
+			size_t size,
+			std::unique_ptr<Buffer>& buffer,
+			std::unique_ptr<DeviceMemory>& memory);
 	};
+
+	inline void BufferUtil::CreateRaw(
+		CommandPool& commandPool,
+		const char* const name,
+		const VkBufferUsageFlags usage,
+		const VkMemoryPropertyFlags memProp,
+		const size_t size,
+		std::unique_ptr<Buffer>& buffer,
+		std::unique_ptr<DeviceMemory>& memory)
+	{
+		const auto& device = commandPool.Device();
+		const VkMemoryAllocateFlags allocateFlags = usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+			? VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT
+			: 0;
+
+		buffer.reset(new Buffer(
+			device, size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | usage));
+		memory.reset(new DeviceMemory(buffer->AllocateMemory(
+			memProp,
+			{
+				.AllocateFlags = allocateFlags
+			})));
+
+		device.DebugUtils().SetObjectName(buffer->Handle(), (name + std::string(" Buffer")).c_str());
+		memory->SetName((name + std::string(" Memory")).c_str());
+	}
 
 	template <class T>
 	void BufferUtil::CopyFromStagingBuffer(CommandPool& commandPool, Buffer& dstBuffer, const std::vector<T>& content)
@@ -106,22 +134,9 @@ namespace Vulkan
 		std::unique_ptr<Buffer>& buffer,
 		std::unique_ptr<DeviceMemory>& memory)
 	{
-		const auto& device = commandPool.Device();
-		const auto& debugUtils = device.DebugUtils();
 		const auto contentSize = sizeof(T) * (content.size() == 0 ? 1 : content.size()); // judge if contentSize == 0
-		const VkMemoryAllocateFlags allocateFlags = usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-			? VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT
-			: 0;
-		
-		buffer.reset(new Buffer(device, contentSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | usage));
-		memory.reset(new DeviceMemory(buffer->AllocateMemory(
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			{
-				.AllocateFlags = allocateFlags
-			})));
-
-		debugUtils.SetObjectName(buffer->Handle(), (name + std::string(" Buffer")).c_str());
-		memory->SetName((name + std::string(" Memory")).c_str());
+		CreateRaw(
+			commandPool, name, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, contentSize, buffer, memory);
 
 		if(content.size() > 0)
 		{
@@ -129,32 +144,6 @@ namespace Vulkan
 		}
 	}
 	
-	inline void BufferUtil::CreateDeviceBufferViolate(
-	CommandPool& commandPool,
-	const char* const name,
-	const VkBufferUsageFlags usage, 
-	const size_t size,
-	std::unique_ptr<Buffer>& buffer,
-	std::unique_ptr<DeviceMemory>& memory)
-	{
-		const auto& device = commandPool.Device();
-		const auto& debugUtils = device.DebugUtils();
-		const auto contentSize = size; // judge if contentSize == 0
-		const VkMemoryAllocateFlags allocateFlags = usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-			? VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT
-			: 0;
-		
-		buffer.reset(new Buffer(device, contentSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | usage));
-		memory.reset(new DeviceMemory(buffer->AllocateMemory(
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			{
-				.AllocateFlags = allocateFlags
-			})));
-
-		debugUtils.SetObjectName(buffer->Handle(), (name + std::string(" Buffer")).c_str());
-		memory->SetName((name + std::string(" Memory")).c_str());
-	}
-
 	inline void BufferUtil::CreateDeviceBufferLocal(
 	CommandPool& commandPool,
 	const char* const name,
@@ -164,22 +153,7 @@ namespace Vulkan
 	std::unique_ptr<Buffer>& buffer,
 	std::unique_ptr<DeviceMemory>& memory)
 	{
-		const auto& device = commandPool.Device();
-		const auto& debugUtils = device.DebugUtils();
-		const auto contentSize = size; // judge if contentSize == 0
-		const VkMemoryAllocateFlags allocateFlags = usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-			? VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT
-			: 0;
-		
-		buffer.reset(new Buffer(device, contentSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | usage));
-		memory.reset(new DeviceMemory(buffer->AllocateMemory(
-			memProp,
-			{
-				.AllocateFlags = allocateFlags
-			})));
-
-		debugUtils.SetObjectName(buffer->Handle(), (name + std::string(" Buffer")).c_str());
-		memory->SetName((name + std::string(" Memory")).c_str());
+		CreateRaw(commandPool, name, usage, memProp, size, buffer, memory);
 	}
 
 	

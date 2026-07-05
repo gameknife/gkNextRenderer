@@ -1,5 +1,5 @@
-import Common;
-import Bindless;
+import Shader.Bindless;
+import Shader.PathTracing;
 #include "common/ShaderClock.slang"
 
 [shader("compute")]
@@ -7,6 +7,13 @@ import Bindless;
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     START_SHADERCLOCK()
+
+    const uint2 size = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
+    if (DTid.x >= size.x || DTid.y >= size.y)
+    {
+        END_SHADERCLOCK(DTid.xy)
+        return;
+    }
 
     FVisibilityBufferRayCaster rayCaster;
     FAmbientCubeRayTracerIndirect tracer;
@@ -19,6 +26,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.SampleDownscale = 2;
     renderer.FuzzyTracing = true;
     renderer.ForceExitAfterFirst = true;
+    renderer.SecondaryDirectMode = 0;
     renderer.Init(DTid.xy);
 
     if( !renderer.PrimaryHit(rayCaster) )
@@ -27,6 +35,15 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    renderer.Render(tracer, dIlluminator, 1);
+    float4 residencyDebugColor;
+    if (TryAmbientResidencyDebug(renderer.GetPrimaryVertex().Position, residencyDebugColor))
+    {
+        renderer.WriteDebugColor(residencyDebugColor);
+        END_SHADERCLOCK(DTid.xy)
+        return;
+    }
+
+    FNullRadianceCache cache;
+    renderer.Render(tracer, dIlluminator, cache, 1);
     END_SHADERCLOCK(DTid.xy)
 }

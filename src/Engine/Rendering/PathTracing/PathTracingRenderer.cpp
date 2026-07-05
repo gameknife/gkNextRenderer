@@ -1,4 +1,4 @@
-#include "PathTracingRenderer.hpp"
+#include "Engine/Rendering/PathTracing/PathTracingRenderer.hpp"
 #include "Engine/Vulkan/BufferUtil.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
@@ -12,18 +12,34 @@
 #include <cstring>
 #include <numeric>
 
-#include <spdlog/spdlog.h>
 
 #include "Engine/Runtime/Engine.hpp"
 
-namespace Vulkan::RayTracing
+namespace Vulkan::PathTracing
 {
     namespace
     {
+        // Mirrors PushConsts in Process.ReProject.comp.slang (bool/uint/int are 4 bytes each in Slang
+        // push constants). The trailing 3 floats are the Phase A history-clamp tuning knobs.
+        struct FReprojectPushConstants
+        {
+            uint32_t ProgressiveRender;
+            uint32_t TemporalFrames;
+            uint32_t FastReproject;
+            float ClampGammaHi;
+            float ClampGammaLo;
+            float ClampFloor;
+        };
+
         constexpr uint32_t kSharcResolveThreadCount = 64;
         constexpr uint32_t kSharcMinEntriesPow2 = 10;
         constexpr uint32_t kSharcMaxEntriesPow2 = 22;
-        constexpr uint32_t kSharcStaleFrameCount = 180;
+        constexpr uint32_t kSharcProbePadding = 16;
+
+        static_assert(sizeof(Assets::SharcHashEntry) == 8);
+        static_assert(sizeof(Assets::SharcAccumulationEntry) == 16);
+        static_assert(sizeof(Assets::SharcResolvedEntry) == 16);
+        static_assert(sizeof(Assets::SharcRuntimeParameters) == 64);
 
         void CreateSharcBuffer(
             Vulkan::CommandPool& commandPool,
@@ -59,21 +75,8 @@ namespace Vulkan::RayTracing
     void PathTracingRenderer::CreateSwapChain(const VkExtent2D& extent)
     {
         rayTracingPipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline( SwapChain(), "assets/shaders/Core.PathTracing.comp.slang.spv", GetScene()));
-        accumulatePipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.ReProject.comp.slang.spv", 24));
+        accumulatePipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.ReProject.comp.slang.spv", sizeof(FReprojectPushConstants)));
         composePipelineNonDenoiser_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Process.DenoiseJBF.comp.slang.spv", GetScene()));
-
-        if (GOption->ReferenceMode)
-        {
-            prevSingleDiffuseId_ = baseRender_.GetTemporalStorageImage(VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, "prevDiffuseTmp");
-            prevSingleSpecularId_ = baseRender_.GetTemporalStorageImage(VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, "prevSpecularTmp");
-            prevSingleAlbedoId_ = baseRender_.GetTemporalStorageImage(VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, "prevAlbedoTmp");
-        }
-        else
-        {
-            prevSingleDiffuseId_ = Assets::Bindless::RT_SINGLE_PREV_DIFFUSE;
-            prevSingleSpecularId_ = Assets::Bindless::RT_SINGLE_PREV_SPECULAR;
-            prevSingleAlbedoId_ = Assets::Bindless::RT_SINGLE_PREV_ALBEDO;
-        }
     }
 
     void PathTracingRenderer::DeleteSwapChain()
@@ -84,6 +87,36 @@ namespace Vulkan::RayTracing
         sharcQueryPipeline_.reset();
         accumulatePipeline_.reset();
         composePipelineNonDenoiser_.reset();
+    }
+
+    void PathTracingRenderer::ReloadShaders(
+        const std::set<std::string>& changedShaderFiles,
+        std::set<std::string>& handledShaderFiles)
+    {
+        if (rayTracingPipeline_)
+        {
+            rayTracingPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+        }
+        if (sharcUpdatePipeline_)
+        {
+            sharcUpdatePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+        }
+        if (sharcResolvePipeline_)
+        {
+            sharcResolvePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+        }
+        if (sharcQueryPipeline_)
+        {
+            sharcQueryPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+        }
+        if (accumulatePipeline_)
+        {
+            accumulatePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+        }
+        if (composePipelineNonDenoiser_)
+        {
+            composePipelineNonDenoiser_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+        }
     }
 
     void PathTracingRenderer::EnsureSharcPipelines()
@@ -105,6 +138,16 @@ namespace Vulkan::RayTracing
         }
     }
 
+    bool PathTracingRenderer::IsOfflineProgressiveRenderActive() const
+    {
+        return NextEngine::GetInstance()->IsOfflineProgressivePathTracing();
+    }
+
+    bool PathTracingRenderer::IsEffectiveSharcEnabled() const
+    {
+        return NextEngine::GetInstance()->IsEffectiveSharcEnabled();
+    }
+
     void PathTracingRenderer::EnsureSharcResources()
     {
         const auto& settings = NextEngine::GetInstance()->GetUserSettings();
@@ -118,25 +161,26 @@ namespace Vulkan::RayTracing
         sharc_ = {};
         sharc_.entriesPow2 = entriesPow2;
         sharc_.entryCount = entryCount;
+        const uint32_t allocationEntryCount = entryCount + kSharcProbePadding;
 
         CreateSharcBuffer(CommandPool(), "SharcHashEntries",
-                          sizeof(Assets::SharcHashEntry) * entryCount,
+                          sizeof(Assets::SharcHashEntry) * allocationEntryCount,
                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                           sharc_.hashEntries);
         CreateSharcBuffer(CommandPool(), "SharcLockBuffer",
-                          sizeof(uint32_t) * entryCount,
+                          sizeof(uint32_t) * allocationEntryCount,
                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                           sharc_.lockBuffer);
         CreateSharcBuffer(CommandPool(), "SharcAccumulation",
-                          sizeof(Assets::SharcAccumulationEntry) * entryCount,
+                          sizeof(Assets::SharcAccumulationEntry) * allocationEntryCount,
                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                           sharc_.accumulation);
         CreateSharcBuffer(CommandPool(), "SharcResolved",
-                          sizeof(Assets::SharcResolvedEntry) * entryCount,
+                          sizeof(Assets::SharcResolvedEntry) * allocationEntryCount,
                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                           sharc_.resolved);
         CreateSharcBuffer(CommandPool(), "SharcParameters",
-                          sizeof(Assets::SharcParameters),
+                          sizeof(Assets::SharcRuntimeParameters),
                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                           sharc_.parameters);
         CreateSharcBuffer(CommandPool(), "SharcResources",
@@ -164,17 +208,55 @@ namespace Vulkan::RayTracing
     void PathTracingRenderer::UpdateSharcParameters()
     {
         const auto& settings = NextEngine::GetInstance()->GetUserSettings();
-        Assets::SharcParameters parameters{};
+        const uint32_t frameIndex = static_cast<uint32_t>(std::max(FrameCount(), 0));
+        const auto& currentUbo = NextEngine::GetInstance()->GetLastUniformBufferObject();
+        const glm::vec4 currentCameraPosition(currentUbo.ModelViewInverse[3][0],
+                                              currentUbo.ModelViewInverse[3][1],
+                                              currentUbo.ModelViewInverse[3][2],
+                                              1.0f);
+        const bool frameCounterReset = sharc_.lastFrameIndex != ~0u && frameIndex < sharc_.lastFrameIndex;
+        const bool lightingChanged = sharc_.hasLastLightingState &&
+            (currentUbo.HasSun != sharc_.lastHasSun ||
+             currentUbo.HasSky != sharc_.lastHasSky ||
+             currentUbo.SkyIdx != sharc_.lastSkyIdx ||
+             currentUbo.SunDirection != sharc_.lastSunDirection ||
+             currentUbo.SunColor != sharc_.lastSunColor ||
+             currentUbo.SkyIntensity != sharc_.lastSkyIntensity ||
+             currentUbo.SkyRotation != sharc_.lastSkyRotation);
+        if (frameCounterReset || lightingChanged)
+        {
+            sharc_.pendingClear = true;
+            sharc_.hasLastCameraPosition = false;
+        }
+
+        Assets::SharcRuntimeParameters parameters{};
         parameters.EntryCount = sharc_.entryCount;
-        parameters.EntryMask = sharc_.entryCount - 1u;
-        parameters.FrameIndex = static_cast<uint32_t>(std::max(FrameCount(), 0));
+        parameters.FrameIndex = frameIndex;
         parameters.DebugMode = static_cast<uint32_t>(std::max(settings.SharcDebugMode, 0));
-        parameters.VoxelSize = std::max(settings.SharcVoxelSize, 0.001f);
+        parameters.SceneScale = std::max(settings.SharcSceneScale, 0.001f);
+        parameters.LevelBias = settings.SharcLevelBias;
+        parameters.RadianceScale = std::max(settings.SharcRadianceScale, 1.0f);
         parameters.UpdateSampleRatio = std::clamp(settings.SharcUpdateSampleRatio, 0.0f, 1.0f);
         parameters.QueryRoughnessMin = std::clamp(settings.SharcQueryRoughnessMin, 0.0f, 1.0f);
         parameters.QueryMinBounce = settings.SharcQueryMinBounce;
-        parameters.StaleFrameCount = kSharcStaleFrameCount;
+        parameters.AccumulatedFrameMax = std::clamp(settings.SharcAccumulatedFrameMax, 1u, 1024u);
+        parameters.ResponsiveFrameMax = std::clamp(settings.SharcResponsiveFrameMax, 1u, 1024u);
+        parameters.StaleFrameMax = std::clamp(settings.SharcStaleFrameMax, 8u, 1024u);
+        parameters.CameraPositionPrev =
+            sharc_.hasLastCameraPosition ? sharc_.lastCameraPosition : currentCameraPosition;
         WriteHostVisibleBuffer(sharc_.parameters, &parameters, sizeof(parameters));
+
+        sharc_.lastFrameIndex = frameIndex;
+        sharc_.lastCameraPosition = currentCameraPosition;
+        sharc_.hasLastCameraPosition = true;
+        sharc_.lastSunDirection = currentUbo.SunDirection;
+        sharc_.lastSunColor = currentUbo.SunColor;
+        sharc_.lastSkyIdx = currentUbo.SkyIdx;
+        sharc_.lastSkyIntensity = currentUbo.SkyIntensity;
+        sharc_.lastSkyRotation = currentUbo.SkyRotation;
+        sharc_.lastHasSun = currentUbo.HasSun;
+        sharc_.lastHasSky = currentUbo.HasSky;
+        sharc_.hasLastLightingState = true;
     }
 
     void PathTracingRenderer::ClearSharcResources(VkCommandBuffer commandBuffer)
@@ -249,11 +331,16 @@ namespace Vulkan::RayTracing
     {
         // Acquire destination images for rendering.
         baseRender_.InitializeBarriers(commandBuffer);
+        const Runtime::Config::UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
+        const bool offlineProgressiveRender = IsOfflineProgressiveRenderActive();
+        const bool sharcEnabled = IsEffectiveSharcEnabled();
+        const bool isPrimaryView = baseRender_.ActiveViewBankBase() == 0;
+        const bool allowTemporal = baseRender_.ActiveRenderView().Schedule() != EViewSchedule::Transient;
+        const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
 
         // Execute ray tracing shaders.
         {
-            const auto& settings = NextEngine::GetInstance()->GetUserSettings();
-            if (settings.SharcEnable)
+            if (sharcEnabled)
             {
                 EnsureSharcPipelines();
                 EnsureSharcResources();
@@ -265,8 +352,8 @@ namespace Vulkan::RayTracing
                     SCOPED_GPU_TIMER("sharc update pass");
                     sharcUpdatePipeline_->BindPipeline(commandBuffer, sharcGpuScene);
                     vkCmdDispatch(commandBuffer,
-                                  Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
-                                  Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+                                  Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+                                  Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
                 }
 
                 InsertSharcBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
@@ -288,68 +375,72 @@ namespace Vulkan::RayTracing
                     SCOPED_GPU_TIMER("sharc query pass");
                     sharcQueryPipeline_->BindPipeline(commandBuffer, sharcGpuScene);
                     vkCmdDispatch(commandBuffer,
-                                  Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
-                                  Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+                                  Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+                                  Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
                 }
             }
             else
             {
                 SCOPED_GPU_TIMER("rt pass");
                 rayTracingPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
-                vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8),
-                              Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+                vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
+                              Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
             }
 
-            baseRender_.GetStorageImage(Assets::Bindless::RT_SINGLE_DIFFUSE)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-            baseRender_.GetStorageImage(Assets::Bindless::RT_SINGLE_SPECULAR)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-            baseRender_.GetStorageImage(Assets::Bindless::RT_ALBEDO)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-            baseRender_.GetStorageImage(Assets::Bindless::RT_NORMAL)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-            baseRender_.GetStorageImage(Assets::Bindless::RT_OBJEDCTID_0)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-            baseRender_.GetStorageImage(Assets::Bindless::RT_MOTIONVECTOR)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+            baseRender_.GetViewStorageImage(Assets::Bindless::RT_SINGLE_DIFFUSE)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+            baseRender_.GetViewStorageImage(Assets::Bindless::RT_SINGLE_SPECULAR)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+            baseRender_.GetViewStorageImage(Assets::Bindless::RT_ALBEDO)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+            baseRender_.GetViewStorageImage(Assets::Bindless::RT_NORMAL)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+            baseRender_.GetViewStorageImage(Assets::Bindless::RT_OBJEDCTID_0)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+            baseRender_.GetViewStorageImage(Assets::Bindless::RT_MOTIONVECTOR)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
         }
         
          // accumulate with reproject
         {
             SCOPED_GPU_TIMER("reproject pass");
-            std::array<uint32_t, 6> pushConst { NextEngine::GetInstance()->IsProgressiveRendering(), uint32_t(NextEngine::GetInstance()->GetUserSettings().TemporalFrames),
-                prevSingleDiffuseId_, prevSingleSpecularId_, prevSingleAlbedoId_, 0 };
-            accumulatePipeline_->BindPipeline(commandBuffer, pushConst.data());
-            vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+            FReprojectPushConstants pushConst{};
+            pushConst.ProgressiveRender = isPrimaryView && NextEngine::GetInstance()->IsProgressiveRendering();
+            pushConst.TemporalFrames = isPrimaryView && offlineProgressiveRender
+                ? NextEngine::GetInstance()->GetProgressiveRenderTargetFrames()
+                : (allowTemporal ? uint32_t(settings.TemporalFrames) : 1u);
+            pushConst.FastReproject = 0;
+            pushConst.ClampGammaHi = settings.ReprojectClampGammaHi;
+            pushConst.ClampGammaLo = settings.ReprojectClampGammaLo;
+            pushConst.ClampFloor = settings.ReprojectClampFloor;
+            accumulatePipeline_->BindPipeline(commandBuffer, &pushConst);
+            vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8), Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
 
-            baseRender_.GetStorageImage(Assets::Bindless::RT_ACCUMLATE_DIFFUSE)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL );
-            baseRender_.GetStorageImage(Assets::Bindless::RT_ACCUMLATE_SPECULAR)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-            baseRender_.GetStorageImage(Assets::Bindless::RT_ACCUMLATE_ALBEDO)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+            baseRender_.GetViewStorageImage(Assets::Bindless::RT_ACCUMLATE_DIFFUSE)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL );
+            baseRender_.GetViewStorageImage(Assets::Bindless::RT_ACCUMLATE_SPECULAR)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+            baseRender_.GetViewStorageImage(Assets::Bindless::RT_ACCUMLATE_ALBEDO)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+        }
+
+        // Variance-guided a-trous wavelet on the temporally-accumulated lighting (Phase 2 + 4).
+        // The accumulation buffers are left untouched (they remain this frame's history); filtering
+        // ping-pongs through shared scratch buffers and lands in a per-channel output, which compose
+        // reads via Camera.Denoise*SourceSlot. The diffuse and specular passes run sequentially and
+        // share the ping/pong scratch. When disabled, compose falls back to the accumulation buffers.
+        {
+            if (!offlineProgressiveRender)
+            {
+                SCOPED_GPU_TIMER("atrous pass");
+                baseRender_.ActiveRenderView().AtrousDenoiser().Run(baseRender_, SwapChain(), commandBuffer, settings);
+            }
         }
 
         {
             SCOPED_GPU_TIMER("compose pass");
             composePipelineNonDenoiser_->BindPipeline(commandBuffer, GetScene(), imageIndex);
-            vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().width, 8), Utilities::Math::GetSafeDispatchCount(SwapChain().RenderExtent().height, 8), 1);
+            vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8), Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
         }
         
         {
             SCOPED_GPU_TIMER("copy pass");
-            baseRender_.GetStorageImage(Assets::Bindless::RT_ACCUMLATE_DIFFUSE)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-            baseRender_.GetStorageImage(prevSingleDiffuseId_)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-        
-            VkImageCopy copyRegion;
-            copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-            copyRegion.srcOffset = {0, 0, 0};
-            copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-            copyRegion.dstOffset = {0, 0, 0};
-            copyRegion.extent = {baseRender_.GetStorageImage(prevSingleDiffuseId_)->GetImage().Extent().width, baseRender_.GetStorageImage(prevSingleDiffuseId_)->GetImage().Extent().height, 1};
-        
-            vkCmdCopyImage(commandBuffer, baseRender_.GetStorageImage(Assets::Bindless::RT_ACCUMLATE_DIFFUSE)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, baseRender_.GetStorageImage(prevSingleDiffuseId_)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
-
-            baseRender_.GetStorageImage(Assets::Bindless::RT_ACCUMLATE_SPECULAR)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-            baseRender_.GetStorageImage(prevSingleSpecularId_)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-                    
-            vkCmdCopyImage(commandBuffer, baseRender_.GetStorageImage(Assets::Bindless::RT_ACCUMLATE_SPECULAR)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, baseRender_.GetStorageImage(prevSingleSpecularId_)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
-
-            baseRender_.GetStorageImage(Assets::Bindless::RT_ACCUMLATE_ALBEDO)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-            baseRender_.GetStorageImage(prevSingleAlbedoId_)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-            vkCmdCopyImage(commandBuffer, baseRender_.GetStorageImage(Assets::Bindless::RT_ACCUMLATE_ALBEDO)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, baseRender_.GetStorageImage(prevSingleAlbedoId_)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+            baseRender_.ActiveRenderView().TemporalResolve().CopyToHistory(baseRender_, commandBuffer, {
+                {Assets::Bindless::RT_ACCUMLATE_DIFFUSE, PipelineCommon::ETemporalChannel::Diffuse},
+                {Assets::Bindless::RT_ACCUMLATE_SPECULAR, PipelineCommon::ETemporalChannel::Specular},
+                {Assets::Bindless::RT_ACCUMLATE_ALBEDO, PipelineCommon::ETemporalChannel::Albedo},
+            });
         }
     }
 }

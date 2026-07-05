@@ -10,9 +10,12 @@ on:
       - 'tools/gnb/**/*.html'
       - 'tools/gnb/go.mod'
       - 'tools/gnb/go.sum'
+      - 'gnb.bat'
+      - 'gnb.sh'
       - 'scripts/gnb-init.sh'
       - 'scripts/gnb-init.ps1'
       - 'scripts/publish-gnb.ps1'
+      - '.github/workflows/gnb-release.yml'
   workflow_dispatch:
 
 concurrency:
@@ -20,17 +23,65 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-amd64
+            runner: windows-latest
+            asset: gnb-windows-amd64.exe
+          - platform: linux-amd64
+            runner: ubuntu-24.04
+            asset: gnb-linux-amd64
+          - platform: macos-arm64
+            runner: macos-latest
+            asset: gnb-macos-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.23.x'
+      - name: Install Wails Linux dependencies
+        if: matrix.platform == 'linux-amd64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - name: Build native gnb binary
+        shell: pwsh
+        run: >-
+          ./scripts/publish-gnb.ps1
+          -Platforms '${{ matrix.platform }}'
+          -BuildOnly
+          -SkipLocalCache
+          -Version '${{ github.sha }}'
+      - uses: actions/upload-artifact@v7
+        with:
+          name: gnb-${{ matrix.platform }}
+          path: out/dist/gnb/${{ matrix.asset }}
+          if-no-files-found: error
+
   publish:
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
-          go-version: '1.23.x'
+          pattern: gnb-*
+          path: out/dist/gnb
+          merge-multiple: true
       - name: Publish gnb to paks-latest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
-        run: ./scripts/publish-gnb.ps1 -Repo '${{ github.repository }}' -Tag 'paks-latest' -Version '${{ github.sha }}' -SkipLocalCache
+        run: >-
+          ./scripts/publish-gnb.ps1
+          -Platforms windows-amd64,linux-amd64,macos-arm64
+          -PublishOnly
+          -Version '${{ github.sha }}'
+          -Repo '${{ github.repository }}'
+          -Tag 'paks-latest'

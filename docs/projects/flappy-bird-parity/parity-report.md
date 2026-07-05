@@ -1,3 +1,12 @@
+---
+title: "Flappy Bird Parity Report"
+category: project
+status: 现行
+owner: docs
+created: 2026-05-06
+last_updated: 2026-05-06
+---
+
 # Flappy Bird Parity Report
 
 Status: **PASS**

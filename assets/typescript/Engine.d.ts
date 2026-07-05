@@ -8,7 +8,6 @@ export class NextEngine {
     GetTime(): number;
     GetDeltaSeconds(): number;
     GetSmoothDeltaSeconds(): number;
-    RegisterJSCallback(arg0: any): void;
 }
 export class Node {
     readonly InstanceId: number;
@@ -48,6 +47,13 @@ export class RenderComponent {
     readonly SkinIndex: number;
     Visible: boolean;
     ToggleRayCastVisible(): boolean;
+    ToggleVisible(): boolean;
+}
+export class GaussianSplatComponent {
+    readonly SplatModelId: number;
+    Visible: boolean;
+    RayCastVisible: boolean;
+    OpacityScale: number;
     ToggleVisible(): boolean;
 }
 export class PhysicsComponent {
@@ -141,6 +147,7 @@ export interface LifecycleHooks {
 }
 export interface CameraOverride { position: Vec3; target: Vec3; up: Vec3; fov: number; }
 export function RegisterLifecycleHooks(hooks: LifecycleHooks): void;
+export function RegisterTickCallback(callback: (deltaSeconds: number) => void): void;
 export function LoadJson(path: string): any;
 export function RequestLoadScene(filename: string): void;
 export function RequestClose(): void;

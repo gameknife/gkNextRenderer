@@ -1,11 +1,11 @@
 #pragma once
 
-#include "DebugUtilities.hpp"
+#include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 #include <map>
 #include <memory>
 #include <vector>
-#include <glm/ext/scalar_common.hpp>
+#include <algorithm>
 
 namespace Vulkan
 {
@@ -85,7 +85,7 @@ namespace Vulkan
         VkDescriptorSet Handle(uint32_t index) const
         {
             // always return available
-            index = glm::min(index, static_cast<uint32_t>(descriptorSets_.size() - 1));
+            index = std::min(index, static_cast<uint32_t>(descriptorSets_.size() - 1));
             return descriptorSets_[index];
         }
 

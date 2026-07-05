@@ -1,7 +1,8 @@
-#include "Instance.hpp"
-#include "DebugUtilities.hpp"
-#include "DebugUtilities.hpp"
-#include "WindowSurface.hpp"
+#include "Engine/Vulkan/Instance.hpp"
+#include "Engine/Vulkan/DebugUtilities.hpp"
+#include "Engine/Vulkan/DebugUtilities.hpp"
+#include "Engine/Vulkan/WindowSurface.hpp"
+#include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include <algorithm>
 #include <cstring>
@@ -57,6 +58,7 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
 #if WITH_STREAMLINE
     AppendUniqueExtension(extensions, VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME);
     AppendUniqueExtension(extensions, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+    StreamlineWrapper::AppendRequiredInstanceExtensions(extensions);
 #endif
     
 #if !ANDROID
@@ -99,7 +101,7 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
 	createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
 	createInfo.ppEnabledLayerNames = validationLayers.data();
     
-	Check(vkCreateInstance(&createInfo, nullptr, &instance_),
+	Check(StreamlineWrapper::CreateInstance(&createInfo, nullptr, &instance_),
 		"create instance");
 
 	GetVulkanPhysicalDevices();
@@ -111,7 +113,7 @@ Instance::~Instance()
 {
 	if (instance_ != nullptr)
 	{
-		vkDestroyInstance(instance_, nullptr);
+		StreamlineWrapper::DestroyInstance(instance_, nullptr);
 		instance_ = nullptr;
 	}
 }
@@ -128,7 +130,7 @@ void Instance::GetVulkanLayers()
 
 void Instance::GetVulkanPhysicalDevices()
 {
-	GetEnumerateVector(instance_, vkEnumeratePhysicalDevices, physicalDevices_);
+	GetEnumerateVector(instance_, StreamlineWrapper::EnumeratePhysicalDevices, physicalDevices_);
 
 	if (physicalDevices_.empty())
 	{

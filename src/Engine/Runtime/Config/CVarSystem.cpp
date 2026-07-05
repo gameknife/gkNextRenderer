@@ -14,9 +14,13 @@ using json = nlohmann::json;
 
 namespace NextCVar
 {
-    bool FCVarSystem::RegisterInt(const std::string& name, int32_t defaultValue, int32_t* target,
-                                  ECVarFlags flags, std::string description,
-                                  std::function<void()> onChanged)
+    template <typename StoredT, typename T>
+    bool FCVarSystem::RegisterTyped(const std::string& name, T defaultValue, T* target,
+                                    ECVarFlags flags, std::string description,
+                                    std::function<void()> onChanged,
+                                    std::optional<double> minValue,
+                                    std::optional<double> maxValue,
+                                    bool isUnsigned)
     {
         if (cvars_.contains(name))
         {
@@ -26,10 +30,20 @@ namespace NextCVar
         FCVarEntry entry{};
         entry.name = name;
         entry.description = std::move(description);
-        entry.type = ECVarType::Int;
+        if constexpr (std::is_same_v<StoredT, int64_t>)
+            entry.type = ECVarType::Int;
+        else if constexpr (std::is_same_v<StoredT, double>)
+            entry.type = ECVarType::Float;
+        else if constexpr (std::is_same_v<StoredT, bool>)
+            entry.type = ECVarType::Bool;
+        else
+            entry.type = ECVarType::String;
         entry.flags = flags;
-        entry.defaultValue = static_cast<int64_t>(defaultValue);
-        entry.value = static_cast<int64_t>(defaultValue);
+        entry.defaultValue = static_cast<StoredT>(defaultValue);
+        entry.value = static_cast<StoredT>(defaultValue);
+        entry.minValue = minValue;
+        entry.maxValue = maxValue;
+        entry.isUnsigned = isUnsigned;
         entry.onChanged = std::move(onChanged);
 
         if (target)
@@ -40,118 +54,54 @@ namespace NextCVar
 
         cvars_.emplace(name, std::move(entry));
         return true;
+    }
+
+    bool FCVarSystem::RegisterInt(const std::string& name, int32_t defaultValue, int32_t* target,
+                                  ECVarFlags flags, std::string description,
+                                  std::function<void()> onChanged,
+                                  std::optional<int64_t> minValue,
+                                  std::optional<int64_t> maxValue)
+    {
+        return RegisterTyped<int64_t>(name, defaultValue, target, flags, std::move(description), std::move(onChanged),
+                                      minValue ? std::optional<double>(static_cast<double>(*minValue)) : std::nullopt,
+                                      maxValue ? std::optional<double>(static_cast<double>(*maxValue)) : std::nullopt);
     }
 
     bool FCVarSystem::RegisterUInt(const std::string& name, uint32_t defaultValue, uint32_t* target,
                                    ECVarFlags flags, std::string description,
-                                   std::function<void()> onChanged)
+                                   std::function<void()> onChanged,
+                                   std::optional<uint64_t> minValue,
+                                   std::optional<uint64_t> maxValue)
     {
-        if (cvars_.contains(name))
-        {
-            return false;
-        }
-
-        FCVarEntry entry{};
-        entry.name = name;
-        entry.description = std::move(description);
-        entry.type = ECVarType::Int;
-        entry.flags = flags;
-        entry.defaultValue = static_cast<int64_t>(defaultValue);
-        entry.value = static_cast<int64_t>(defaultValue);
-        entry.onChanged = std::move(onChanged);
-
-        if (target)
-        {
-            entry.boundTarget = target;
-            *target = defaultValue;
-        }
-
-        cvars_.emplace(name, std::move(entry));
-        return true;
+        return RegisterTyped<int64_t>(name, defaultValue, target, flags, std::move(description), std::move(onChanged),
+                                      minValue ? std::optional<double>(static_cast<double>(*minValue)) : 0.0,
+                                      maxValue ? std::optional<double>(static_cast<double>(*maxValue)) : std::nullopt,
+                                      true);
     }
 
     bool FCVarSystem::RegisterFloat(const std::string& name, float defaultValue, float* target,
                                     ECVarFlags flags, std::string description,
-                                    std::function<void()> onChanged)
+                                    std::function<void()> onChanged,
+                                    std::optional<double> minValue,
+                                    std::optional<double> maxValue)
     {
-        if (cvars_.contains(name))
-        {
-            return false;
-        }
-
-        FCVarEntry entry{};
-        entry.name = name;
-        entry.description = std::move(description);
-        entry.type = ECVarType::Float;
-        entry.flags = flags;
-        entry.defaultValue = static_cast<double>(defaultValue);
-        entry.value = static_cast<double>(defaultValue);
-        entry.onChanged = std::move(onChanged);
-
-        if (target)
-        {
-            entry.boundTarget = target;
-            *target = defaultValue;
-        }
-
-        cvars_.emplace(name, std::move(entry));
-        return true;
+        return RegisterTyped<double>(name, defaultValue, target, flags, std::move(description), std::move(onChanged),
+                                     minValue, maxValue);
     }
 
     bool FCVarSystem::RegisterBool(const std::string& name, bool defaultValue, bool* target,
                                    ECVarFlags flags, std::string description,
                                    std::function<void()> onChanged)
     {
-        if (cvars_.contains(name))
-        {
-            return false;
-        }
-
-        FCVarEntry entry{};
-        entry.name = name;
-        entry.description = std::move(description);
-        entry.type = ECVarType::Bool;
-        entry.flags = flags;
-        entry.defaultValue = defaultValue;
-        entry.value = defaultValue;
-        entry.onChanged = std::move(onChanged);
-
-        if (target)
-        {
-            entry.boundTarget = target;
-            *target = defaultValue;
-        }
-
-        cvars_.emplace(name, std::move(entry));
-        return true;
+        return RegisterTyped<bool>(name, defaultValue, target, flags, std::move(description), std::move(onChanged));
     }
 
     bool FCVarSystem::RegisterString(const std::string& name, std::string defaultValue, std::string* target,
                                      ECVarFlags flags, std::string description,
                                      std::function<void()> onChanged)
     {
-        if (cvars_.contains(name))
-        {
-            return false;
-        }
-
-        FCVarEntry entry{};
-        entry.name = name;
-        entry.description = std::move(description);
-        entry.type = ECVarType::String;
-        entry.flags = flags;
-        entry.defaultValue = defaultValue;
-        entry.value = defaultValue;
-        entry.onChanged = std::move(onChanged);
-
-        if (target)
-        {
-            entry.boundTarget = target;
-            *target = defaultValue;
-        }
-
-        cvars_.emplace(name, std::move(entry));
-        return true;
+        return RegisterTyped<std::string>(name, std::move(defaultValue), target, flags, std::move(description),
+                                          std::move(onChanged));
     }
 
     bool FCVarSystem::LoadDefaultFile(const std::string& path)
@@ -236,11 +186,67 @@ namespace NextCVar
             return false;
         }
 
+        return SaveEntries(outputPath, [](const std::string&) { return true; });
+    }
+
+    void FCVarSystem::RegisterUserFileChannel(std::string prefix, std::string path)
+    {
+        if (prefix.empty() || path.empty())
+        {
+            return;
+        }
+
+        auto it = std::find_if(userFileChannels_.begin(), userFileChannels_.end(),
+                               [&](const auto& channel) { return channel.first == prefix; });
+        if (it != userFileChannels_.end())
+        {
+            it->second = std::move(path);
+            return;
+        }
+        userFileChannels_.emplace_back(std::move(prefix), std::move(path));
+        std::sort(userFileChannels_.begin(), userFileChannels_.end(),
+                  [](const auto& lhs, const auto& rhs) { return lhs.first.size() > rhs.first.size(); });
+    }
+
+    bool FCVarSystem::LoadUserFiles()
+    {
+        const std::string sharedPath = userConfigPath_;
+        bool loadedAny = LoadUserFile(sharedPath);
+        for (const auto& [prefix, path] : userFileChannels_)
+        {
+            (void)prefix;
+            loadedAny = LoadUserFile(path) || loadedAny;
+        }
+        userConfigPath_ = sharedPath;
+        return loadedAny;
+    }
+
+    bool FCVarSystem::SaveUserFiles() const
+    {
+        bool success = SaveEntries(userConfigPath_,
+                                   [this](const std::string& name)
+                                   {
+                                       return ChannelPathForName(name) == userConfigPath_;
+                                   });
+        for (const auto& [prefix, path] : userFileChannels_)
+        {
+            success = SaveEntries(path,
+                                  [this, &path](const std::string& name)
+                                  {
+                                      return ChannelPathForName(name) == path;
+                                  }) && success;
+        }
+        return success;
+    }
+
+    bool FCVarSystem::SaveEntries(const std::string& outputPath,
+                                  const std::function<bool(const std::string&)>& includeName) const
+    {
         json j = json::object();
 
         for (const auto& [name, entry] : cvars_)
         {
-            if (!HasFlag(entry.flags, ECVarFlags::Archive))
+            if (!includeName(name) || !HasFlag(entry.flags, ECVarFlags::Archive) || IsDefaultValue(entry))
             {
                 continue;
             }
@@ -248,49 +254,25 @@ namespace NextCVar
             FCVarValue currentValue = GetEntryValue(entry);
             if (entry.type == ECVarType::Float)
             {
-                double current = std::get<double>(currentValue);
-                double def = std::get<double>(entry.defaultValue);
-                if (std::fabs(current - def) < 0.0001)
-                {
-                    continue;
-                }
-                j[name] = current;
+                j[name] = std::get<double>(currentValue);
                 continue;
             }
 
             if (entry.type == ECVarType::Int)
             {
-                int64_t current = std::get<int64_t>(currentValue);
-                int64_t def = std::get<int64_t>(entry.defaultValue);
-                if (current == def)
-                {
-                    continue;
-                }
-                j[name] = current;
+                j[name] = std::get<int64_t>(currentValue);
                 continue;
             }
 
             if (entry.type == ECVarType::Bool)
             {
-                bool current = std::get<bool>(currentValue);
-                bool def = std::get<bool>(entry.defaultValue);
-                if (current == def)
-                {
-                    continue;
-                }
-                j[name] = current;
+                j[name] = std::get<bool>(currentValue);
                 continue;
             }
 
             if (entry.type == ECVarType::String)
             {
-                const std::string current = std::get<std::string>(currentValue);
-                const std::string def = std::get<std::string>(entry.defaultValue);
-                if (current == def)
-                {
-                    continue;
-                }
-                j[name] = current;
+                j[name] = std::get<std::string>(currentValue);
                 continue;
             }
         }
@@ -306,6 +288,18 @@ namespace NextCVar
 
         file << j.dump(2);
         return true;
+    }
+
+    std::string FCVarSystem::ChannelPathForName(const std::string& name) const
+    {
+        for (const auto& [prefix, path] : userFileChannels_)
+        {
+            if (name.rfind(prefix, 0) == 0)
+            {
+                return path;
+            }
+        }
+        return userConfigPath_;
     }
 
     FConsoleResult FCVarSystem::ExecuteCommand(const std::string& line)
@@ -428,6 +422,11 @@ namespace NextCVar
             return toggleBoolCVar(tokens[1]);
         }
 
+        if (tokens[0] == "cvar.editor")
+        {
+            return toggleBoolCVar("debug.cvar.panel");
+        }
+
         const std::string toggleSuffix = ".toggle";
         if (tokens.size() == 1 &&
             tokens[0].size() > toggleSuffix.size() &&
@@ -439,11 +438,11 @@ namespace NextCVar
 
         if (tokens[0] == "cvar.save")
         {
-            if (SaveUserFile(userConfigPath_))
+            if (SaveUserFiles())
             {
-                return FConsoleResult::Success("Saved cvar_user.json");
+                return FConsoleResult::Success("Saved user cvar files");
             }
-            return FConsoleResult::Failure("Failed to save cvar_user.json");
+            return FConsoleResult::Failure("Failed to save user cvar files");
         }
 
         std::string name;
@@ -552,6 +551,34 @@ namespace NextCVar
 
         std::string error;
         return SetEntryValue(it->second, it->second.defaultValue, ECVarSetBy::DefaultFile, &error);
+    }
+
+    bool FCVarSystem::TryGetInfo(const std::string& name, FCVarInfo& outInfo) const
+    {
+        const auto it = cvars_.find(name);
+        if (it == cvars_.end())
+        {
+            return false;
+        }
+        outInfo = MakeInfo(it->second);
+        return true;
+    }
+
+    void FCVarSystem::ForEach(const std::function<void(const FCVarInfo&)>& fn) const
+    {
+        std::vector<const FCVarEntry*> entries;
+        entries.reserve(cvars_.size());
+        for (const auto& [name, entry] : cvars_)
+        {
+            (void)name;
+            entries.push_back(&entry);
+        }
+        std::sort(entries.begin(), entries.end(),
+                  [](const FCVarEntry* lhs, const FCVarEntry* rhs) { return lhs->name < rhs->name; });
+        for (const FCVarEntry* entry : entries)
+        {
+            fn(MakeInfo(*entry));
+        }
     }
 
     std::vector<std::string> FCVarSystem::Match(const std::string& query,
@@ -679,6 +706,44 @@ namespace NextCVar
             return false;
         }
 
+        FCVarValue normalizedValue = value;
+        if (entry.type == ECVarType::Int)
+        {
+            int64_t val = std::get<int64_t>(normalizedValue);
+            if (entry.isUnsigned)
+            {
+                val = std::max<int64_t>(0, val);
+            }
+            if (entry.minValue)
+            {
+                val = std::max(val, static_cast<int64_t>(*entry.minValue));
+            }
+            if (entry.maxValue)
+            {
+                val = std::min(val, static_cast<int64_t>(*entry.maxValue));
+            }
+            normalizedValue = val;
+        }
+        else if (entry.type == ECVarType::Float)
+        {
+            double val = std::get<double>(normalizedValue);
+            if (entry.minValue)
+            {
+                val = std::max(val, *entry.minValue);
+            }
+            if (entry.maxValue)
+            {
+                val = std::min(val, *entry.maxValue);
+            }
+            normalizedValue = static_cast<double>(static_cast<float>(val));
+        }
+
+        const FCVarValue previousValue = GetEntryValue(entry);
+        if (previousValue == normalizedValue)
+        {
+            return true;
+        }
+
         entry.setBy = setBy;
 
         if (std::holds_alternative<int32_t*>(entry.boundTarget))
@@ -688,7 +753,7 @@ namespace NextCVar
             {
                 return false;
             }
-            int64_t val = std::get<int64_t>(value);
+            int64_t val = std::get<int64_t>(normalizedValue);
             *target = static_cast<int32_t>(val);
         }
         else if (std::holds_alternative<uint32_t*>(entry.boundTarget))
@@ -698,7 +763,7 @@ namespace NextCVar
             {
                 return false;
             }
-            int64_t val = std::get<int64_t>(value);
+            int64_t val = std::get<int64_t>(normalizedValue);
             if (val < 0)
             {
                 val = 0;
@@ -712,7 +777,7 @@ namespace NextCVar
             {
                 return false;
             }
-            double val = std::get<double>(value);
+            double val = std::get<double>(normalizedValue);
             *target = static_cast<float>(val);
         }
         else if (std::holds_alternative<bool*>(entry.boundTarget))
@@ -722,7 +787,7 @@ namespace NextCVar
             {
                 return false;
             }
-            *target = std::get<bool>(value);
+            *target = std::get<bool>(normalizedValue);
         }
         else if (std::holds_alternative<std::string*>(entry.boundTarget))
         {
@@ -731,11 +796,11 @@ namespace NextCVar
             {
                 return false;
             }
-            *target = std::get<std::string>(value);
+            *target = std::get<std::string>(normalizedValue);
         }
         else
         {
-            entry.value = value;
+            entry.value = normalizedValue;
         }
 
         if (entry.onChanged)
@@ -769,6 +834,33 @@ namespace NextCVar
             return *std::get<std::string*>(entry.boundTarget);
         }
         return entry.value;
+    }
+
+    FCVarInfo FCVarSystem::MakeInfo(const FCVarEntry& entry) const
+    {
+        return {
+            .name = entry.name,
+            .description = entry.description,
+            .type = entry.type,
+            .flags = entry.flags,
+            .isDefault = IsDefaultValue(entry),
+            .isUnsigned = entry.isUnsigned,
+            .minValue = entry.minValue,
+            .maxValue = entry.maxValue,
+        };
+    }
+
+    bool FCVarSystem::IsDefaultValue(const FCVarEntry& entry) const
+    {
+        const FCVarValue currentValue = GetEntryValue(entry);
+        if (entry.type == ECVarType::Float)
+        {
+            const double current = std::get<double>(currentValue);
+            const double def = std::get<double>(entry.defaultValue);
+            const double scale = std::max({1.0, std::fabs(current), std::fabs(def)});
+            return std::fabs(current - def) <= 0.0001 * scale;
+        }
+        return currentValue == entry.defaultValue;
     }
 
     std::string FCVarSystem::ToString(const FCVarValue& value, ECVarType type) const

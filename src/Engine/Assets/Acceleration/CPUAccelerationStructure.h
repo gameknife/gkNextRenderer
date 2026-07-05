@@ -6,7 +6,6 @@
 #include "Engine/Vulkan/VulkanFwd.hpp"
 #include <glm/glm.hpp>
 #include "ThirdParty/tinybvh/tiny_bvh.h"
-#include <functional>
 #include <queue>
 
 #include "Engine/Assets/Data/Material.hpp"
@@ -55,6 +54,7 @@ struct FCPUTLASInstanceInfo
     glm::vec3 worldBoundsMin{0.0f};
     glm::vec3 worldBoundsMax{0.0f};
     bool navRelevant = false;
+    bool rayCastVisible = true;
 };
 
 struct FCPUBLASContext
@@ -104,10 +104,17 @@ struct FCPUBrickTable
     std::vector<uint32_t> brickTable;
     std::vector<uint32_t> activeBrickList;
     std::vector<uint32_t> activeBricksPerCascade;
+    std::vector<uint32_t> candidateBricksPerCascade;
+    std::vector<uint32_t> recentlyHitBricksPerCascade;
+    std::vector<uint32_t> candidateFirstSeenFrames;
+    std::vector<uint32_t> slotsToClear;
     uint32_t activeBricksLastBuild = 0;
 
-    void UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint32_t cascadeCapacity,
-                    uint32_t poolBricksPerCascade, int dilationRadius);
+    bool UpdateData(const std::vector<FCPUProbeBaker>& bakers, uint32_t cascadeCapacity,
+                    uint32_t poolBricksPerCascade, int dilationRadius,
+                    const std::vector<Assets::AmbientBrickResidency>* residency,
+                    uint32_t currentFrame, bool hitDriven, bool bounceHitAffectsResidency,
+                    uint32_t graceFrames, uint32_t evictFrames);
     void UploadGPU(Vulkan::DeviceMemory& deviceMemory, size_t tableByteOffset, size_t activeListByteOffset);
 };
 
@@ -131,7 +138,6 @@ public:
     bool ConsumeNavRelevantDirtyBounds(glm::vec3& outWorldMin, glm::vec3& outWorldMax);
     void ClearNavRelevantDirtyBounds();
 
-    void GenShadowMap(Assets::Scene& scene);
     
     void ClearAllTasks();
 

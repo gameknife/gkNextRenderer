@@ -1,10 +1,18 @@
-implementing Common;
 #include "PreProcessor.slang"
 
 // Tonemapping curves split out of ConstFunc.slang.
 // Provides: LinearToST2084UE (HDR PQ), CODTonemapping, GT_Tonemapping,
 // ACES_Tonemapping, Uncharted2_Tonemapping. These are pure functions that
 // operate on linear-light HDR input and return display-mapped output.
+
+public float3 LinearSrgbToBt2020(float3 color)
+{
+    color = max(color, float3(0.0, 0.0, 0.0));
+    return float3(
+        dot(color, float3(0.6274039, 0.3292830, 0.0433131)),
+        dot(color, float3(0.0690973, 0.9195404, 0.0113623)),
+        dot(color, float3(0.0163914, 0.0880133, 0.8955953)));
+}
 
 public float3 LinearToST2084UE(float3 lin)
 {
@@ -15,7 +23,7 @@ public float3 LinearToST2084UE(float3 lin)
     const float c3 = 18.6875; // = 2392. / 4096. * 32;
     const float C = 10000.;
 
-    float3 L = lin/C;
+    float3 L = max(lin, float3(0.0, 0.0, 0.0)) / C;
     float3 Lm = pow(L, float3(m1, m1, m1));
     float3 N1 = (c1 + c2 * Lm);
     float3 N2 = (1.0 + c3 * Lm);
@@ -23,6 +31,27 @@ public float3 LinearToST2084UE(float3 lin)
     float3 P = pow(N, float3(m2, m2, m2));
 
     return P;
+}
+
+public float3 LinearSrgbToHdr10(float3 linearSrgbNits)
+{
+    return LinearToST2084UE(LinearSrgbToBt2020(linearSrgbNits));
+}
+
+public float3 SceneColorToLinearSrgbNits(float3 color, float paperWhiteNit)
+{
+    float3 mapped = GT_Tonemapping(color / 2000.0) * 2000.0;
+    return mapped * paperWhiteNit / 230.0;
+}
+
+public float3 EncodeHdrOutput(float3 color, float paperWhiteNit, uint outputMode)
+{
+    float3 linearSrgbNits = SceneColorToLinearSrgbNits(color, paperWhiteNit);
+    if (outputMode == HDR_OUTPUT_MODE_EXTENDED_SRGB_LINEAR)
+    {
+        return linearSrgbNits / 203.0;
+    }
+    return LinearSrgbToHdr10(linearSrgbNits);
 }
 
 public float3 CODTonemapping(float3 color)

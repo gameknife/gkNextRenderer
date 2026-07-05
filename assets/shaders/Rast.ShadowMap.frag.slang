@@ -1,4 +1,4 @@
-import Common;
+import Shader.Types;
 
 struct FragmentInput
 {

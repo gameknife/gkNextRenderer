@@ -1,0 +1,324 @@
+// FCPUProbeBaker: ambient cube voxelization, chamfer distance field and GPU
+// upload for the software GI probe cascades.
+// Split from CPUAccelerationStructure.cpp; same namespace, separate TU.
+#include "Engine/Assets/Acceleration/CPUAccelerationStructure.h"
+#include "Engine/Assets/Acceleration/CPUAccelerationStructure.Internal.hpp"
+#include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
+#include "Engine/Vulkan/MemoryAndShader.hpp"
+#include "Engine/Assets/Core/Node.h"
+#include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Components/PhysicsComponent.h"
+#include "Engine/Assets/GPU/TextureImage.hpp"
+#include "Engine/Runtime/Engine.hpp"
+#include "Engine/Assets/Core/Scene.hpp"
+
+namespace Assets::CPU
+{
+
+namespace
+{
+    uint8_t GetPackedNibbleX(uint32_t packedValue)
+    {
+        return static_cast<uint8_t>(packedValue & 0xFu);
+    }
+
+    uint32_t SetPackedNibbleX(uint32_t packedValue, uint8_t value)
+    {
+        return (packedValue & 0xFFFFFFF0u) | (value & 0xFu);
+    }
+
+    uint32_t GetVoxelAddress(int x, int y, int z)
+    {
+        return static_cast<uint32_t>(y * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY + z * Assets::CUBE_SIZE_XY + x);
+    }
+
+    struct FChamferNeighbor
+    {
+        int dx;
+        int dy;
+        int dz;
+        float weight;
+    };
+
+    constexpr std::array<FChamferNeighbor, 13> kForwardChamferNeighbors = {
+        FChamferNeighbor{-1, -1, -1, 1.73205081f},
+        FChamferNeighbor{0, -1, -1, 1.41421356f},
+        FChamferNeighbor{1, -1, -1, 1.73205081f},
+        FChamferNeighbor{-1, -1, 0, 1.41421356f},
+        FChamferNeighbor{0, -1, 0, 1.0f},
+        FChamferNeighbor{1, -1, 0, 1.41421356f},
+        FChamferNeighbor{-1, -1, 1, 1.73205081f},
+        FChamferNeighbor{0, -1, 1, 1.41421356f},
+        FChamferNeighbor{1, -1, 1, 1.73205081f},
+        FChamferNeighbor{-1, 0, -1, 1.41421356f},
+        FChamferNeighbor{0, 0, -1, 1.0f},
+        FChamferNeighbor{1, 0, -1, 1.41421356f},
+        FChamferNeighbor{-1, 0, 0, 1.0f},
+    };
+
+    constexpr std::array<FChamferNeighbor, 13> kBackwardChamferNeighbors = {
+        FChamferNeighbor{1, 0, 0, 1.0f},
+        FChamferNeighbor{-1, 0, 1, 1.41421356f},
+        FChamferNeighbor{0, 0, 1, 1.0f},
+        FChamferNeighbor{1, 0, 1, 1.41421356f},
+        FChamferNeighbor{-1, 1, -1, 1.73205081f},
+        FChamferNeighbor{0, 1, -1, 1.41421356f},
+        FChamferNeighbor{1, 1, -1, 1.73205081f},
+        FChamferNeighbor{-1, 1, 0, 1.41421356f},
+        FChamferNeighbor{0, 1, 0, 1.0f},
+        FChamferNeighbor{1, 1, 0, 1.41421356f},
+        FChamferNeighbor{-1, 1, 1, 1.73205081f},
+        FChamferNeighbor{0, 1, 1, 1.41421356f},
+        FChamferNeighbor{1, 1, 1, 1.73205081f},
+    };
+
+    void ApplyChamferPass(std::vector<float>& distanceField, const std::array<FChamferNeighbor, 13>& neighbors, bool reverseSweep)
+    {
+        const int xStart = reverseSweep ? Assets::CUBE_SIZE_XY - 1 : 0;
+        const int xEnd = reverseSweep ? -1 : Assets::CUBE_SIZE_XY;
+        const int xStep = reverseSweep ? -1 : 1;
+        const int yStart = reverseSweep ? Assets::CUBE_SIZE_Z - 1 : 0;
+        const int yEnd = reverseSweep ? -1 : Assets::CUBE_SIZE_Z;
+        const int yStep = reverseSweep ? -1 : 1;
+        const int zStart = reverseSweep ? Assets::CUBE_SIZE_XY - 1 : 0;
+        const int zEnd = reverseSweep ? -1 : Assets::CUBE_SIZE_XY;
+        const int zStep = reverseSweep ? -1 : 1;
+
+        for (int y = yStart; y != yEnd; y += yStep)
+        {
+            for (int z = zStart; z != zEnd; z += zStep)
+            {
+                for (int x = xStart; x != xEnd; x += xStep)
+                {
+                    const uint32_t voxelIndex = GetVoxelAddress(x, y, z);
+                    float bestDistance = distanceField[voxelIndex];
+
+                    for (const FChamferNeighbor& neighbor : neighbors)
+                    {
+                        const int nx = x + neighbor.dx;
+                        const int ny = y + neighbor.dy;
+                        const int nz = z + neighbor.dz;
+                        if (nx < 0 || nx >= Assets::CUBE_SIZE_XY ||
+                            ny < 0 || ny >= Assets::CUBE_SIZE_Z ||
+                            nz < 0 || nz >= Assets::CUBE_SIZE_XY)
+                        {
+                            continue;
+                        }
+
+                        const uint32_t neighborIndex = GetVoxelAddress(nx, ny, nz);
+                        bestDistance = std::min(bestDistance, distanceField[neighborIndex] + neighbor.weight);
+                    }
+
+                    distanceField[voxelIndex] = bestDistance;
+                }
+            }
+        }
+    }
+}
+
+using namespace Assets;
+
+uint PackNibbles(glm::u32vec4 low, glm::u32vec4 high)
+{
+    return (low.x & 0xFu) |
+           ((low.y & 0xFu) << 4) |
+           ((low.z & 0xFu) << 8) |
+           ((low.w & 0xFu) << 12) |
+           ((high.x & 0xFu) << 16) |
+           ((high.y & 0xFu) << 20) |
+           ((high.z & 0xFu) << 24) |
+           ((high.w & 0xFu) << 28);
+}
+
+#define FLOAT2 vec2
+#define FLOAT3 vec3
+#define FLOAT4 vec4
+
+float DetectDistance(FLOAT3 origin, FLOAT3 rayDir, float cubeUnit)
+{
+    vec3 outNormal;
+    float outRayDist;
+    uint tempMaterialId;
+    uint tempInstanceId;
+    if (TraceRay(origin, rayDir, cubeUnit * 64.0f, outNormal, tempMaterialId, outRayDist, tempInstanceId))
+    {
+        return outRayDist;
+    }
+    return 255;
+}
+
+bool InsideGeometry(FLOAT3& origin, FLOAT3 rayDir, VoxelData& outCube, float& distance, float cubeUnit)
+{
+    // 求交测试
+    vec3 outNormal;
+    float outRayDist;
+    uint tempMaterialId;
+    uint tempInstanceId;
+
+    if (TraceRay(origin, rayDir, cubeUnit * 64.0f, outNormal, tempMaterialId, outRayDist, tempInstanceId))
+    {
+        distance = outRayDist;
+        if (distance <= cubeUnit)
+        {
+            FMaterial hitMaterial = FetchMaterial(tempMaterialId);
+            outCube.matId = tempMaterialId;
+
+            // 命中反面，识别为固体，并将lightprobe推出体外
+            if (dot(outNormal, rayDir) > 0.0 || ((hitMaterial.gpuMaterial_.MaterialModel == Material::Enum::DiffuseLight)))// && OutRayDist < 0.02f))
+            {
+                distance = 0;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void VoxelizeCube(VoxelData& cube, FLOAT3 origin, float cubeUnit)
+{
+    // just write matid and solid status
+    cube.matId = 0;
+
+    float distPY = 255.0f;
+    float distNY = 255.0f;
+    float distPX = 255.0f;
+    float distNX = 255.0f;
+    float distPZ = 255.0f;
+    float distNZ = 255.0f;
+
+    // 现在是向轴向上发射了6根光线，记录下距离，并用于后续采样判断
+    InsideGeometry(origin, FLOAT3(0, 1, 0), cube, distPY, cubeUnit);
+    InsideGeometry(origin, FLOAT3(0, -1, 0), cube, distNY, cubeUnit);
+    InsideGeometry(origin, FLOAT3(1, 0, 0), cube, distPX, cubeUnit);
+    InsideGeometry(origin, FLOAT3(-1, 0, 0), cube, distNX, cubeUnit);
+    InsideGeometry(origin, FLOAT3(0, 0, 1), cube, distPZ, cubeUnit);
+    InsideGeometry(origin, FLOAT3(0, 0, -1), cube, distNZ, cubeUnit);
+
+    // get the min dist of each direction
+    float minDist = std::min({distPY, distNY, distPX, distNX, distPZ, distNZ});
+    if (minDist > 254.0f)
+    {
+        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(1, 1, 1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, 1, 1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, -1, 1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, 1, 1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(1, 1, -1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, 1, -1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, -1, -1), cubeUnit)});
+        minDist = std::min({minDist, DetectDistance(origin, FLOAT3(-1, 1, -1), cubeUnit)});
+    }
+
+    // 现在，相当于每一个体素，都有了一个距离场，通过判断这个，可以快速跳过？
+    distPY = glm::fclamp(distPY / cubeUnit, 0.0f, 1.0f);
+    distNY = glm::fclamp(distNY / cubeUnit, 0.0f, 1.0f);
+    distPX = glm::fclamp(distPX / cubeUnit, 0.0f, 1.0f);
+    distNX = glm::fclamp(distNX / cubeUnit, 0.0f, 1.0f);
+    distPZ = glm::fclamp(distPZ / cubeUnit, 0.0f, 1.0f);
+    distNZ = glm::fclamp(distNZ / cubeUnit, 0.0f, 1.0f);
+
+    float inside = distPY * distNY * distPX * distNX * distPZ * distNZ;
+
+    cube.distanceToSolid = PackNibbles(
+        glm::u32vec4(std::min<uint32_t>(static_cast<uint32_t>(minDist / cubeUnit), 15u),
+                     static_cast<uint>(inside * 15.0f),
+                     static_cast<uint>(distPZ * 15.0f),
+                     static_cast<uint>(distNZ * 15.0f)),
+        glm::u32vec4(static_cast<uint>(distPX * 15.0f),
+                     static_cast<uint>(distNX * 15.0f),
+                     static_cast<uint>(distPY * 15.0f),
+                     static_cast<uint>(distNY * 15.0f)));
+}
+
+#undef float2
+#undef float3
+#undef float4
+
+void FCPUProbeBaker::Init(uint32_t cascadeIdx, float unitSize, vec3 offset)
+{
+    cascadeIndex = cascadeIdx;
+    UNIT_SIZE = unitSize;
+    CUBE_OFFSET = offset;
+    voxels.resize(kCascadeVoxelCount);
+    distanceToSolidSeeds.resize(kCascadeVoxelCount, kMaxDistanceFieldSeed);
+}
+
+void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& voxelGpuMemory, uint32_t elementOffset)
+{
+    UploadGPU(voxelGpuMemory, 0, elementOffset);
+}
+
+void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& voxelGpuMemory, size_t byteBaseOffset, uint32_t elementOffset)
+{
+    const size_t byteOffset = byteBaseOffset + static_cast<size_t>(elementOffset) * sizeof(VoxelData);
+    VoxelData* data = reinterpret_cast<VoxelData*>(voxelGpuMemory.Map(byteOffset, sizeof(VoxelData) * voxels.size()));
+    std::memcpy(data, voxels.data(), voxels.size() * sizeof(VoxelData));
+    voxelGpuMemory.Unmap();
+}
+
+void FCPUProbeBaker::RebuildDistanceField()
+{
+    if (voxels.empty() || distanceToSolidSeeds.size() != voxels.size())
+    {
+        return;
+    }
+
+    std::vector<float> distanceField(voxels.size(), 0.0f);
+    for (size_t voxelIndex = 0; voxelIndex < voxels.size(); ++voxelIndex)
+    {
+        distanceField[voxelIndex] = static_cast<float>(distanceToSolidSeeds[voxelIndex]);
+    }
+
+    constexpr int kChamferPassCount = 2;
+    for (int passIndex = 0; passIndex < kChamferPassCount; ++passIndex)
+    {
+        ApplyChamferPass(distanceField, kForwardChamferNeighbors, false);
+        ApplyChamferPass(distanceField, kBackwardChamferNeighbors, true);
+    }
+
+    for (size_t voxelIndex = 0; voxelIndex < voxels.size(); ++voxelIndex)
+    {
+        const float clampedDistance = glm::clamp(distanceField[voxelIndex], 0.0f, 15.0f);
+        const uint8_t packedDistance = static_cast<uint8_t>(glm::floor(clampedDistance));
+        voxels[voxelIndex].distanceToSolid =
+            SetPackedNibbleX(voxels[voxelIndex].distanceToSolid, packedDistance);
+    }
+}
+
+void FCPUProbeBaker::ProcessCube(int x, int y, int z, ECubeProcType procType)
+{
+    vec3 probePos = vec3(x, y, z) * UNIT_SIZE + CUBE_OFFSET;
+    uint32_t addressIdx = GetVoxelAddress(x, y, z);
+    VoxelData& voxel = voxels[addressIdx];
+        
+    switch (procType)
+    {
+        case ECubeProcType::ECPT_Clear:
+            voxel = {};
+            voxel.distanceToSolid = SetPackedNibbleX(voxel.distanceToSolid, kMaxDistanceFieldSeed);
+            distanceToSolidSeeds[addressIdx] = kMaxDistanceFieldSeed;
+            break;
+        case ECubeProcType::ECPT_Fence:
+            break;
+        case ECubeProcType::ECPT_Voxelize:
+            VoxelizeCube(voxel, probePos, UNIT_SIZE);
+            distanceToSolidSeeds[addressIdx] = GetPackedNibbleX(voxel.distanceToSolid);
+            break;
+    }
+}
+
+void FCPUProbeBaker::UploadGPU(Vulkan::DeviceMemory& voxelGpuMemory)
+{
+    UploadGPU(voxelGpuMemory, 0);
+}
+
+void FCPUProbeBaker::ClearAmbientCubes()
+{
+    for (size_t voxelIndex = 0; voxelIndex < voxels.size(); ++voxelIndex)
+    {
+        VoxelData& voxel = voxels[voxelIndex];
+        voxel = {};
+        voxel.distanceToSolid = SetPackedNibbleX(voxel.distanceToSolid, kMaxDistanceFieldSeed);
+        distanceToSolidSeeds[voxelIndex] = kMaxDistanceFieldSeed;
+    }
+}
+}

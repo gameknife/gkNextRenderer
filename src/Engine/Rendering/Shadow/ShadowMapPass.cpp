@@ -1,4 +1,4 @@
-#include "ShadowMapPass.hpp"
+#include "Engine/Rendering/Shadow/ShadowMapPass.hpp"
 
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Data/Vertex.hpp"
@@ -6,13 +6,35 @@
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/DescriptorSystem.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
+#include "Engine/Vulkan/GraphicsPipelineBuilder.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
+
+#include <filesystem>
 
 namespace Vulkan::Shadow
 {
     namespace
     {
         constexpr VkFormat kShadowFormat = VK_FORMAT_D32_SFLOAT;
+
+        std::string ShaderFilename(const std::string& shaderFile)
+        {
+            return std::filesystem::path(shaderFile).filename().string();
+        }
+
+        bool MarkChangedShaderFile(
+            const std::string& shaderFile,
+            const std::set<std::string>& changedShaderFiles,
+            std::set<std::string>& handledShaderFiles)
+        {
+            const std::string filename = ShaderFilename(shaderFile);
+            if (changedShaderFiles.find(filename) == changedShaderFiles.end())
+            {
+                return false;
+            }
+            handledShaderFiles.insert(filename);
+            return true;
+        }
     }
 
     ShadowMapPass::ShadowMapPass(const Vulkan::Device& device) : device_(device)
@@ -94,84 +116,16 @@ namespace Vulkan::Shadow
         {
             const VkExtent2D extent{Assets::Scene::kSunShadowResolution, Assets::Scene::kSunShadowResolution};
 
-            VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-            vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-
-            VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-            inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-            inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-
-            VkViewport viewport{};
-            viewport.x = 0.0f;
-            viewport.y = 0.0f;
-            viewport.width = static_cast<float>(extent.width);
-            viewport.height = static_cast<float>(extent.height);
-            viewport.minDepth = 0.0f;
-            viewport.maxDepth = 1.0f;
-
-            VkRect2D scissor{};
-            scissor.offset = {0, 0};
-            scissor.extent = extent;
-
-            VkPipelineViewportStateCreateInfo viewportState{};
-            viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-            viewportState.viewportCount = 1;
-            viewportState.pViewports = &viewport;
-            viewportState.scissorCount = 1;
-            viewportState.pScissors = &scissor;
-
-            VkPipelineRasterizationStateCreateInfo rasterizer{};
-            rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-            rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-            rasterizer.lineWidth = 1.0f;
-            rasterizer.cullMode = VK_CULL_MODE_NONE;
-            rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-            rasterizer.depthBiasEnable = VK_TRUE;
-            rasterizer.depthBiasConstantFactor = 1.25f;
-            rasterizer.depthBiasSlopeFactor = 1.75f;
-
-            VkPipelineMultisampleStateCreateInfo multisampling{};
-            multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-            multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-            multisampling.minSampleShading = 1.0f;
-
-            VkPipelineDepthStencilStateCreateInfo depthStencil{};
-            depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-            depthStencil.depthTestEnable = VK_TRUE;
-            depthStencil.depthWriteEnable = VK_TRUE;
-            depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
-            depthStencil.minDepthBounds = 0.0f;
-            depthStencil.maxDepthBounds = 1.0f;
-
-            VkPipelineColorBlendStateCreateInfo colorBlending{};
-            colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-            colorBlending.attachmentCount = 0;
-            colorBlending.pAttachments = nullptr;
-
             const ShaderModule fragShader(device_, "assets/shaders/Rast.ShadowMap.frag.slang.spv");
             const ShaderModule vertShader(device_, "assets/shaders/Rast.ShadowMapSoftMeshShader.vert.slang.spv");
-            VkPipelineShaderStageCreateInfo stages[] = {
-                vertShader.CreateShaderStage(VK_SHADER_STAGE_VERTEX_BIT),
-                fragShader.CreateShaderStage(VK_SHADER_STAGE_FRAGMENT_BIT),
-            };
 
-            VkGraphicsPipelineCreateInfo pipelineInfo{};
-            pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-            pipelineInfo.stageCount = 2;
-            pipelineInfo.pStages = stages;
-            pipelineInfo.pVertexInputState = &vertexInputInfo;
-            pipelineInfo.pInputAssemblyState = &inputAssembly;
-            pipelineInfo.pViewportState = &viewportState;
-            pipelineInfo.pRasterizationState = &rasterizer;
-            pipelineInfo.pMultisampleState = &multisampling;
-            pipelineInfo.pDepthStencilState = &depthStencil;
-            pipelineInfo.pColorBlendState = &colorBlending;
-            pipelineInfo.layout = pipelineLayout_->Handle();
-            pipelineInfo.renderPass = renderPass_;
-            pipelineInfo.subpass = 0;
-
-            Check(vkCreateGraphicsPipelines(device_.Handle(), nullptr, 1, &pipelineInfo, nullptr, &pipeline_),
-                  "create shadow graphics pipeline");
+            pipeline_ = GraphicsPipelineBuilder(device_)
+                .SetShaders(vertShader, fragShader)
+                .SetFixedViewport({0, 0}, extent)
+                .SetDepth(true, true, VK_COMPARE_OP_LESS)
+                .SetDepthBias(1.25f, 1.75f)
+                .SetColorAttachmentCount(0)
+                .Build(pipelineLayout_->Handle(), renderPass_, "create shadow graphics pipeline");
         }
 
         // 4 个 framebuffer
@@ -189,6 +143,45 @@ namespace Vulkan::Shadow
             Check(vkCreateFramebuffer(device_.Handle(), &fbInfo, nullptr, &frameBuffers_[i]),
                 "create shadow framebuffer");
         }
+    }
+
+    void ShadowMapPass::RecreatePipeline()
+    {
+        if (pipeline_)
+        {
+            vkDestroyPipeline(device_.Handle(), pipeline_, nullptr);
+            pipeline_ = VK_NULL_HANDLE;
+        }
+
+        const VkExtent2D extent{Assets::Scene::kSunShadowResolution, Assets::Scene::kSunShadowResolution};
+        const ShaderModule fragShader(device_, "assets/shaders/Rast.ShadowMap.frag.slang.spv");
+        const ShaderModule vertShader(device_, "assets/shaders/Rast.ShadowMapSoftMeshShader.vert.slang.spv");
+
+        pipeline_ = GraphicsPipelineBuilder(device_)
+            .SetShaders(vertShader, fragShader)
+            .SetFixedViewport({0, 0}, extent)
+            .SetDepth(true, true, VK_COMPARE_OP_LESS)
+            .SetDepthBias(1.25f, 1.75f)
+            .SetColorAttachmentCount(0)
+            .Build(pipelineLayout_->Handle(), renderPass_, "recreate shadow graphics pipeline");
+    }
+
+    void ShadowMapPass::ReloadShaders(
+        const std::set<std::string>& changedShaderFiles,
+        std::set<std::string>& handledShaderFiles)
+    {
+        constexpr const char* vertexShader = "assets/shaders/Rast.ShadowMapSoftMeshShader.vert.slang.spv";
+        constexpr const char* fragmentShader = "assets/shaders/Rast.ShadowMap.frag.slang.spv";
+        const bool reloadVertex = changedShaderFiles.find(ShaderFilename(vertexShader)) != changedShaderFiles.end();
+        const bool reloadFragment = changedShaderFiles.find(ShaderFilename(fragmentShader)) != changedShaderFiles.end();
+        if (!reloadVertex && !reloadFragment)
+        {
+            return;
+        }
+
+        RecreatePipeline();
+        MarkChangedShaderFile(vertexShader, changedShaderFiles, handledShaderFiles);
+        MarkChangedShaderFile(fragmentShader, changedShaderFiles, handledShaderFiles);
     }
 
     void ShadowMapPass::DestroyResources()

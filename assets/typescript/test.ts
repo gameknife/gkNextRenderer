@@ -36,7 +36,7 @@ function tryRunTest(): boolean {
     return true;
 }
 
-NE.Global.GetEngine().RegisterJSCallback((_delta: number) => {
+NE.RegisterTickCallback((_delta: number) => {
     if (hasRun) {
         return;
     }

@@ -7,9 +7,10 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Reflection/PropertyAccessor.h"
 #include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Engine/Runtime/Subsystems/AI/AgentLoop.hpp"
-#include "Engine/Runtime/Subsystems/AI/Tools/RepoTools.hpp"
-#include "Engine/Runtime/Subsystems/QuickJSEngine.hpp"
+#include "Modules/NextAI/AI/AgentLoop.hpp"
+#include "Modules/NextAI/AI/Tools/RepoTools.hpp"
+#include "Modules/NextQuickJS/NextQuickJSModule.hpp"
+#include "Modules/NextQuickJS/QuickJSEngine.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <algorithm>
@@ -20,6 +21,7 @@
 #include <set>
 #include <spdlog/spdlog.h>
 #include <thread>
+#include "Modules/NextAI/NextAIModule.hpp"
 
 namespace Editor
 {
@@ -28,7 +30,7 @@ namespace Editor
         , executor_(engine)
     {
         // Register Editor.* JS bindings into QuickJS
-        auto* qjs = engine_.GetQuickJSEngine();
+        auto* qjs = Modules::NextQuickJS::Get(engine_);
         if (qjs)
         {
             qjs->SetEditorBindingsCallback([this](void* ctx) { executor_.RegisterEditorBindings(ctx); });
@@ -152,7 +154,7 @@ namespace Editor
 
     bool FEditorAIService::IsAIConfigured() const
     {
-        auto* ai = engine_.GetAIService();
+        auto* ai = NextAI::GetAIService(engine_);
         return ai && ai->IsConfigured();
     }
 
@@ -608,7 +610,7 @@ Editor.log(message)
 
     void FEditorAIService::GenerateAsync(const std::string& userPrompt, const EditorContext& ctx)
     {
-        auto* ai = engine_.GetAIService();
+        auto* ai = NextAI::GetAIService(engine_);
         if (!ai || !ai->IsConfigured())
         {
             status_ = EEditorAIStatus::Error;
@@ -647,7 +649,7 @@ Editor.log(message)
         fullPrompt += "Assistant:";
 
         std::thread([this, fullPrompt]() {
-            auto* ai = engine_.GetAIService();
+            auto* ai = NextAI::GetAIService(engine_);
             auto response = ai->GenerateText(fullPrompt);
 
             {
@@ -693,7 +695,7 @@ Editor.log(message)
         }
 
         std::thread([this, seed = std::move(seed), opts]() mutable {
-            auto* ai = engine_.GetAIService();
+            auto* ai = NextAI::GetAIService(engine_);
             NextAI::FChatProviderFn provider =
                 [ai](const NextAI::FChatRequest& req) { return ai->Chat(req); };
 

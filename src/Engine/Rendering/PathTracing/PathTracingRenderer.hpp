@@ -4,9 +4,8 @@
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
-namespace Vulkan::RayTracing
+namespace Vulkan::PathTracing
 {
-	class PathTracingPipeline;
 
 	class PathTracingRenderer final : public Vulkan::LogicRendererBase
 	{
@@ -22,6 +21,7 @@ namespace Vulkan::RayTracing
 		void CreateSwapChain(const VkExtent2D& extent) override;
 		void DeleteSwapChain() override;
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
+		void ReloadShaders(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles) override;
 		FRendererRequirements Requirements() const override { return GetRendererRequirements(ERT_PathTracing); }
 
 		struct FSharcBuffer
@@ -41,6 +41,17 @@ namespace Vulkan::RayTracing
 			FSharcBuffer resources;
 			uint32_t entriesPow2 = 0;
 			uint32_t entryCount = 0;
+			uint32_t lastFrameIndex = ~0u;
+			glm::vec4 lastCameraPosition = glm::vec4(0.0f);
+			bool hasLastCameraPosition = false;
+			glm::vec4 lastSunDirection = glm::vec4(0.0f);
+			glm::vec4 lastSunColor = glm::vec4(0.0f);
+			uint32_t lastSkyIdx = 0;
+			float lastSkyIntensity = 0.0f;
+			float lastSkyRotation = 0.0f;
+			uint32_t lastHasSun = 0;
+			uint32_t lastHasSky = 0;
+			bool hasLastLightingState = false;
 			bool pendingClear = false;
 		};
 
@@ -54,9 +65,6 @@ namespace Vulkan::RayTracing
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> composePipelineNonDenoiser_;
 		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> accumulatePipeline_;
 
-		uint32_t prevSingleDiffuseId_{};
-		uint32_t prevSingleSpecularId_{};
-		uint32_t prevSingleAlbedoId_{};
 		FSharcState sharc_;
 
 		void EnsureSharcPipelines();
@@ -65,6 +73,8 @@ namespace Vulkan::RayTracing
 		void ClearSharcResources(VkCommandBuffer commandBuffer);
 		void InsertSharcBarrier(VkCommandBuffer commandBuffer, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask) const;
 		Assets::GPUScene BuildSharcGPUScene(uint32_t imageIndex);
+        bool IsOfflineProgressiveRenderActive() const;
+        bool IsEffectiveSharcEnabled() const;
 	};
 
 }

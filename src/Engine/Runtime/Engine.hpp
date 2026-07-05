@@ -6,9 +6,11 @@
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Options.hpp"
+#include "Engine/Rendering/RenderView.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Command/CommandHistory.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Engine/Runtime/ScriptRuntime.hpp"
 #include "Engine/Runtime/Config/ShowFlags.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
@@ -30,6 +32,11 @@ namespace NextRenderer
     Vulkan::VulkanBaseRenderer* CreateRenderer(uint32_t rendererType, Vulkan::Window* window,
                                                const VkPresentModeKHR presentMode, const bool enableValidationLayers);
 } // namespace NextRenderer
+
+namespace Runtime::Agent
+{
+    class FAgentDriver;
+}
 
 typedef std::function<bool(double DeltaSeconds)> TickedTask;
 typedef std::function<bool()> DelayedTask;
@@ -64,6 +71,7 @@ public:
         int height = 0;
         uint32_t accumulateFrames = 0;
         bool sync = false;
+        bool includeUi = false;
     };
 
     struct FHotReloadStatus
@@ -96,6 +104,8 @@ public:
     VulkanGpuTimer* GpuTimer() const { return renderer_ ? renderer_->GpuTimer() : nullptr; }
     Assets::Scene& GetScene() { return *scene_; }
     Vulkan::Window& GetWindow() const { return *window_; }
+    NextGameInstanceBase* GetGameInstance() { return gameInstance_.get(); }
+    const NextGameInstanceBase* GetGameInstance() const { return gameInstance_.get(); }
 
     // Configuration state
     Runtime::Config::UserSettings& GetUserSettings() { return config_.userSettings; }
@@ -105,18 +115,13 @@ public:
 
     // Runtime services
     NextUI::UserInterface* GetUserInterface() { return userInterface_.get(); }
-    NextUI::RmlUiSystem* GetRmlUi() { return rmlUi_.get(); }
+    Runtime::IUiOverlay* GetUiOverlay() { return uiOverlay_.get(); }
     NextAudio* GetAudio() { return services_.audio.get(); }
     const NextAudio* GetAudio() const { return services_.audio.get(); }
     NextLocalization* GetLocalization() { return services_.localization.get(); }
     const NextLocalization* GetLocalization() const { return services_.localization.get(); }
-    NextAI::FAIService* GetAIService() { return services_.aiService.get(); }
-    const NextAI::FAIService* GetAIService() const { return services_.aiService.get(); }
-    NextAI::VoiceInputService* GetVoiceInputService() { return services_.voiceInputService.get(); }
-    const NextAI::VoiceInputService* GetVoiceInputService() const { return services_.voiceInputService.get(); }
     NextCVar::FCVarSystem& GetCVarSystem() { return *services_.cvarSystem; }
     const NextCVar::FCVarSystem& GetCVarSystem() const { return *services_.cvarSystem; }
-    QuickJSEngine* GetQuickJSEngine() { return services_.quickJSEngine.get(); }
     NextPhysics* GetPhysicsEngine() { return services_.physics.get(); }
     Utilities::Package::FPackageFileSystem& GetPakSystem() { return *services_.packageFileSystem; }
 
@@ -130,8 +135,11 @@ public:
 
     // Window and pointer state
     glm::dvec2 GetMousePos();
+    uint32_t GetMouseButtons() const { return inputState_.mouseButtons; }
     glm::ivec2 GetMonitorSize() const;
     void RequestClose();
+    void RequestExit(int exitCode);
+    int GetRequestedExitCode() const { return requestedExitCode_; }
     void RequestMinimize();
     bool IsMaximized();
     void ToggleMaximize();
@@ -142,6 +150,7 @@ public:
                                      float rightReservedWidth);
 
     // Input forwarding
+    void InjectRelativeMouse(float dx, float dy);
     void OnTouch(bool down, double xpos, double ypos);
     void OnTouchMove(double xpos, double ypos);
 
@@ -151,6 +160,8 @@ public:
 
     // Scene and command operations
     void RequestLoadScene(FSceneLoadRequest request);
+    void RequestAddSceneReference(std::string assetPath, glm::vec3 translation);
+    void RequestSceneGpuRefresh();
     Runtime::Command::CommandHistory& GetCommandHistory() { return commandHistory_; }
     const Runtime::Command::CommandHistory& GetCommandHistory() const { return commandHistory_; }
 
@@ -159,8 +170,23 @@ public:
                     std::function<bool(Assets::RayCastResult rayResult)> callback);
     void SetProgressiveRendering(bool enable, bool directly);
     bool IsProgressiveRendering() const { return progressiveRender_.enabled; }
-    Assets::UniformBufferObject& GetLastUniformBufferObject() { return renderState_.previousUniformBuffer; }
-    uint32_t GetSunShadowCascadeUpdateMask() const { return renderState_.sunShadowCascadeUpdateMask; }
+    bool IsOfflineProgressivePathTracing() const
+    {
+        return progressiveRender_.enabled && renderer_ != nullptr &&
+            renderer_->CurrentLogicRendererType() == Vulkan::ERT_PathTracing;
+    }
+    bool IsEffectiveDenoiserEnabled() const
+    {
+        return config_.userSettings.Denoiser && !IsOfflineProgressivePathTracing();
+    }
+    bool IsEffectiveSharcEnabled() const
+    {
+        return config_.userSettings.SharcEnable && !IsOfflineProgressivePathTracing();
+    }
+    uint32_t GetProgressiveRenderAccumulatedFrames() const { return progressiveRender_.accumulatedFrames; }
+    uint32_t GetProgressiveRenderTargetFrames() const { return FProgressiveRenderState::TargetFrames; }
+    Assets::UniformBufferObject& GetLastUniformBufferObject() { return renderer_->PrimaryViewState().previousUniformBuffer; }
+    uint32_t GetSunShadowCascadeUpdateMask() const { return renderer_->PrimaryViewState().sunShadowCascadeUpdateMask; }
     VkDeviceAddress TryGetGPUAccelerationStructureAddress() const;
     VkAccelerationStructureKHR TryGetGPUAccelerationStructureHandle() const;
 
@@ -168,10 +194,45 @@ public:
     FHotReloadStatus GetHotReloadStatus() const;
     void RequestShaderHotReload();
 
-    // Main-thread tasks and scripting callbacks
-    void RegisterJSCallback(std::function<void(double)> callback);
+    // Main-thread tasks
     void AddTickedTask(TickedTask task) { taskQueues_.ticked.push_back(task); }
     void AddTimerTask(double delay, DelayedTask task);
+
+    // Developer debug UI hook (implementation lives in Modules/DevTools,
+    // registered by the application entry point; nullptr disables overlays)
+    void SetDebugUiProvider(Runtime::IDebugUiProvider* provider) { debugUiProvider_ = provider; }
+    Runtime::IDebugUiProvider* GetDebugUiProvider() const { return debugUiProvider_; }
+
+    // Optional frame consumers (remote play, terminal presenter, recording, etc.)
+    // are assembled by the application entry before Start().
+    void AddRenderFrameConsumer(std::unique_ptr<Runtime::IRenderFrameConsumer> consumer);
+
+    void SetScriptRuntimeFactory(Runtime::ScriptRuntimeFactory factory)
+    {
+        scriptRuntimeFactory_ = std::move(factory);
+    }
+    Runtime::IScriptRuntime* GetScriptRuntime() { return scriptRuntime_.get(); }
+    const Runtime::IScriptRuntime* GetScriptRuntime() const { return scriptRuntime_.get(); }
+
+    // Optional UI overlay (implementation in Modules/NextRmlUi); the factory is
+    // installed by the application entry and instantiated with the renderer.
+    void SetUiOverlayFactory(std::function<std::unique_ptr<Runtime::IUiOverlay>(NextEngine&)> factory)
+    {
+        uiOverlayFactory_ = std::move(factory);
+    }
+
+    // Type-erased service slots for optional modules (e.g. Modules/NextAI).
+    // Modules attach their engine-scoped singletons here so the core stays
+    // free of module types; lifetime ends with the engine.
+    void SetExternalService(const std::string& key, std::shared_ptr<void> service)
+    {
+        services_.externalServices[key] = std::move(service);
+    }
+    std::shared_ptr<void> GetExternalService(const std::string& key) const
+    {
+        auto it = services_.externalServices.find(key);
+        return it != services_.externalServices.end() ? it->second : nullptr;
+    }
 
 private:
     // Scene loading payload
@@ -183,7 +244,18 @@ private:
         std::shared_ptr<std::vector<Assets::LightObject>> lights;
         std::shared_ptr<std::vector<Assets::AnimationTrack>> tracks;
         std::shared_ptr<std::vector<Assets::Skeleton>> skeletons;
+        std::shared_ptr<std::vector<Assets::FGaussianSplatData>> splats;
         std::shared_ptr<Assets::EnvironmentSetting> cameraState;
+    };
+
+    struct SceneRendererSyncOptions
+    {
+        bool rebuildMeshBuffer = true;
+        bool setRendererScene = true;
+        bool resetFrameCounter = true;
+        bool postLoadRenderer = true;
+        bool refreshSwapChainResources = true;
+        bool createSwapChainIfMissing = true;
     };
 
     // Renderer callbacks
@@ -191,13 +263,18 @@ private:
     void OnRendererDeviceSet();
     void OnRendererCreateSwapChain();
     void OnRendererDeleteSwapChain();
+    void OnRendererPostLoadScene();
     void OnRendererPostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+    void OnRendererAfterSubmit();
     void OnRendererBeforeNextFrame();
 
     // Scene helpers
     const Assets::Scene& GetScene() const { return *scene_; }
     void LaunchLoadSceneTask(std::string sceneFileName, std::function<void(SceneLoadContext&)> onGpuLoad);
     void LoadScene(const FSceneLoadRequest& request);
+    void PrepareRendererForSceneMutation(const std::function<void(const char*)>& logProfile = {});
+    void CommitSceneToRenderer(const SceneRendererSyncOptions& options,
+                               const std::function<void(const char*)>& logProfile = {});
 
     // Input helpers
     void OnKey(SDL_Event& event);
@@ -220,17 +297,6 @@ private:
         mutable Runtime::Config::ShowFlags showFlags{};
     };
 
-    // Renderer-derived transient state
-    struct FRenderState
-    {
-        mutable Assets::UniformBufferObject previousUniformBuffer{};
-        mutable Assets::CascadeShadowSetup cachedSunCascades{};
-        mutable bool cachedSunCascadesValid = false;
-        mutable uint32_t sunShadowCascadeUpdateMask = 0;
-        mutable uint32_t sunShadowInitializedMask = 0;
-        mutable uint32_t sunShadowDirtyMask = Assets::Scene::kSunShadowCascadeMask;
-    };
-
     // Per-frame timing and statistics
     struct FFrameState
     {
@@ -242,11 +308,22 @@ private:
         double lastFrameTime = 0.0;
     };
 
+    // Event-driven pointer state. Remote input injects SDL events but does not
+    // necessarily update SDL_GetMouseState(), so gameplay/editor picking must
+    // read the coordinates we last observed on the engine event path.
+    struct FInputState
+    {
+        glm::dvec2 mousePos{0.0, 0.0};
+        uint32_t mouseButtons = 0;
+    };
+
     // Progressive rendering warmup state
     struct FProgressiveRenderState
     {
+        static constexpr uint32_t TargetFrames = 1024;
         bool enabled = false;
         uint32_t warmupFramesRemaining = 0;
+        uint32_t accumulatedFrames = 0;
     };
 
     // Deferred and accumulated screenshot state
@@ -269,6 +346,7 @@ private:
     {
         bool active = false;
         bool captured = false;
+        bool includeUi = false;
         uint32_t waitFrames = 90;
         uint32_t postCaptureFrames = 0;
         std::string outputPath = "screenshots/agent_validation";
@@ -288,14 +366,12 @@ private:
         ~FRuntimeServices();
 
         std::unique_ptr<NextLocalization> localization;
-        std::unique_ptr<NextAI::FAIService> aiService;
-        std::unique_ptr<NextAI::VoiceInputService> voiceInputService;
         std::unique_ptr<NextCVar::FCVarSystem> cvarSystem;
         std::unique_ptr<NextAudio> audio;
         std::unique_ptr<NextPhysics> physics;
         std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem;
-        std::unique_ptr<QuickJSEngine> quickJSEngine;
         std::unique_ptr<Vulkan::ShaderHotReloader> shaderHotReloader;
+        std::unordered_map<std::string, std::shared_ptr<void>> externalServices;
     };
 
     // Core ownership
@@ -307,18 +383,25 @@ private:
 
     // Engine state
     FConfigState config_{};
-    FRenderState renderState_{};
     FFrameState frameState_{};
+    FInputState inputState_{};
     FProgressiveRenderState progressiveRender_{};
     FScreenShotState screenShot_{};
     FAgentValidationState agentValidation_{};
+    std::unique_ptr<Runtime::Agent::FAgentDriver> agentDriver_;
+    int requestedExitCode_ = 0;
     FTaskQueues taskQueues_{};
     NextRenderer::EApplicationStatus status_{};
 
     // Runtime services and UI
     std::unique_ptr<NextUI::UserInterface> userInterface_;
-    std::unique_ptr<NextUI::RmlUiSystem> rmlUi_;
+    std::unique_ptr<Runtime::IUiOverlay> uiOverlay_;
+    std::function<std::unique_ptr<Runtime::IUiOverlay>(NextEngine&)> uiOverlayFactory_;
+    std::vector<std::unique_ptr<Runtime::IRenderFrameConsumer>> renderFrameConsumers_{};
+    Runtime::ScriptRuntimeFactory scriptRuntimeFactory_;
+    std::unique_ptr<Runtime::IScriptRuntime> scriptRuntime_;
     FRuntimeServices services_{};
+    Runtime::IDebugUiProvider* debugUiProvider_ = nullptr;
 
     // Editor and tooling state
     Runtime::Command::CommandHistory commandHistory_{};

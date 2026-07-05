@@ -12,15 +12,19 @@ import (
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/llm"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/loc"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/remoteplay"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/spec"
 )
 
 func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleIndex)
+	mux.HandleFunc("GET /remote/client", s.handleRemoteClient)
 	mux.HandleFunc("GET /todo-panel", s.handleTodoPanel)
 	mux.HandleFunc("POST /todo/cleanup", s.handleTodoCleanup)
 	mux.HandleFunc("POST /docs/save", s.handleDocsSave)
+	mux.HandleFunc("GET /docs/source", s.handleDocsSource)
+	mux.HandleFunc("GET /graph/data", s.handleGraphData)
 	mux.HandleFunc("GET /task/{id}", s.handleTaskDetail)
 	mux.HandleFunc("POST /task/add", s.handleTaskAdd)
 	mux.HandleFunc("POST /task/{id}/done", s.handleTaskDone)
@@ -35,6 +39,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /tab/{kind}", s.handleTab)
 	mux.HandleFunc("POST /jobs/{kind}", s.handleJobStart)
 	mux.HandleFunc("POST /jobs/{id}/cancel", s.handleJobCancel)
+	mux.HandleFunc("OPTIONS /jobs/{id}/stream", s.handleJobStreamOptions)
 	mux.HandleFunc("GET /jobs/{id}/stream", s.handleJobStream)
 	mux.HandleFunc("POST /git/switch", s.handleGitSwitch)
 	mux.HandleFunc("POST /git/switch-remote", s.handleGitSwitchRemote)
@@ -52,11 +57,14 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /git/commit-message", s.handleGitCommitMessage)
 	mux.HandleFunc("POST /git/commit", s.handleGitCommitCreate)
 	mux.HandleFunc("POST /chat/send", s.handleChatSend)
+	mux.HandleFunc("OPTIONS /chat/send-stream", s.handleChatSendStreamOptions)
 	mux.HandleFunc("POST /chat/send-stream", s.handleChatSendStream)
 	mux.HandleFunc("GET /chat/session", s.handleChatSession)
 	mux.HandleFunc("POST /chat/new", s.handleChatNew)
 	mux.HandleFunc("POST /chat/archive", s.handleChatArchive)
 	mux.HandleFunc("POST /chat/clear", s.handleChatClear)
+	mux.HandleFunc("POST /chat/serve", s.handleChatServe)
+	mux.HandleFunc("POST /chat/stop", s.handleChatStop)
 	return logRequests(mux)
 }
 
@@ -78,6 +86,7 @@ type sectionVM struct {
 
 type indexVM struct {
 	RepoRoot   string
+	StreamBase string
 	Milestone  string
 	Status     string
 	Sections   []sectionVM
@@ -86,14 +95,15 @@ type indexVM struct {
 	Preset     string
 	OS         string
 	RecentSize int
-	ActiveTab  string // "todo" | "docs" | "build" | "run" | "test" | "git" | "chat" | "loc"
-	BuildVM    buildVM
-	RunVM      runVM
+	ActiveTab  string // "todo" | "docs" | "build" | "remote" | "test" | "git" | "chat" | "loc" | "graph" | "settings"
+	BuildVM    buildRunVM
+	RemoteVM   remoteVM
 	TestVM     testVM
 	GitVM      gitVM
 	ChatVM     chatVM
 	LocVM      locVM
 	DocsVM     docsVM
+	GraphVM    graphVM
 }
 
 type locVM struct {
@@ -101,6 +111,32 @@ type locVM struct {
 	IncludeThirdParty bool
 	Error             string
 	MaxCategoryLines  int
+	Contributions     contributionGraphVM
+}
+
+type contributionDayVM struct {
+	Date   string
+	Label  string
+	Count  int
+	Level  int
+	Future bool
+}
+
+type contributionWeekVM struct {
+	Days []contributionDayVM
+}
+
+type contributionMonthVM struct {
+	Label  string
+	Column int
+}
+
+type contributionGraphVM struct {
+	Weeks  []contributionWeekVM
+	Months []contributionMonthVM
+	Total  int
+	Max    int
+	Error  string
 }
 
 type gitVM struct {
@@ -114,16 +150,27 @@ type gitVM struct {
 	Flash          string // success / info message after an action
 }
 
-type buildVM struct {
-	Targets []string
+type buildRunVM struct {
+	Targets []targetVM
 	Latest  JobSnapshot
 	HasJob  bool
 }
 
-type runVM struct {
-	Targets []string
-	Latest  JobSnapshot
-	HasJob  bool
+type remoteVM struct {
+	Targets        []targetVM
+	Latest         JobSnapshot
+	HasJob         bool
+	LocalHosts     []string
+	URLPreview     []string
+	DefaultTarget  string
+	DefaultBind    string
+	DefaultScene   string
+	DefaultRes     string
+	DefaultEncoder string
+	HTTPPort       uint32
+	SignalingPort  uint32
+	BitrateKbps    uint32
+	Fps            uint32
 }
 
 type testVM struct {
@@ -143,6 +190,7 @@ type chatVM struct {
 	Messages      []llm.ChatMessage
 	Context       chatContextVM
 	Error         string
+	Flash         string
 	ServerRunning bool
 	RunningModel  string
 	Endpoint      string
@@ -209,13 +257,14 @@ func (s *Server) buildIndex() (indexVM, error) {
 		return indexVM{}, err
 	}
 	vm := indexVM{
-		RepoRoot:  s.opts.RepoRoot,
-		Milestone: doc.Milestone,
-		Status:    doc.MilestoneStatus,
-		Version:   s.opts.Version,
-		Preset:    s.opts.Preset,
-		OS:        runtime.GOOS + "/" + runtime.GOARCH,
-		ActiveTab: "todo",
+		RepoRoot:   s.opts.RepoRoot,
+		StreamBase: s.streamBaseURL,
+		Milestone:  doc.Milestone,
+		Status:     doc.MilestoneStatus,
+		Version:    s.opts.Version,
+		Preset:     s.opts.Preset,
+		OS:         runtime.GOOS + "/" + runtime.GOARCH,
+		ActiveTab:  "todo",
 	}
 	for _, kind := range []spec.SectionKind{spec.SectionNext, spec.SectionBacklog, spec.SectionRecent} {
 		tasks := doc.SectionTasks(kind)
@@ -238,33 +287,36 @@ func (s *Server) buildIndex() (indexVM, error) {
 // re-parsing TODO.md when not needed.
 func (s *Server) buildHeader(activeTab string) indexVM {
 	return indexVM{
-		RepoRoot:  s.opts.RepoRoot,
-		Version:   s.opts.Version,
-		Preset:    s.opts.Preset,
-		OS:        runtime.GOOS + "/" + runtime.GOARCH,
-		ActiveTab: activeTab,
+		RepoRoot:   s.opts.RepoRoot,
+		StreamBase: s.streamBaseURL,
+		Version:    s.opts.Version,
+		Preset:     s.opts.Preset,
+		OS:         runtime.GOOS + "/" + runtime.GOARCH,
+		ActiveTab:  activeTab,
 	}
 }
 
-func (s *Server) buildBuildVM() buildVM {
-	vm := buildVM{Targets: append([]string(nil), s.opts.Config.Targets.All...)}
-	if snap, ok := s.jobs.LatestSnapshot(JobBuild); ok {
-		vm.Latest = snap
-		vm.HasJob = true
+func (s *Server) buildBuildRunVM() buildRunVM {
+	vm := buildRunVM{
+		Targets: discoverTargets(s.opts.RepoRoot, s.opts.Preset, s.opts.Config.Targets.All),
 	}
-	return vm
-}
-
-func (s *Server) buildRunVM() runVM {
-	vm := runVM{}
-	for _, t := range s.opts.Config.Targets.All {
-		if t == "gkNextUnitTests" {
-			continue // tests live in the Test tab
+	build, hasBuild := s.jobs.LatestSnapshot(JobBuild)
+	run, hasRun := s.jobs.LatestSnapshot(JobRun)
+	build.StreamBase = s.streamBaseURL
+	run.StreamBase = s.streamBaseURL
+	switch {
+	case hasBuild && hasRun:
+		if run.StartedAt.After(build.StartedAt) {
+			vm.Latest = run
+		} else {
+			vm.Latest = build
 		}
-		vm.Targets = append(vm.Targets, t)
-	}
-	if snap, ok := s.jobs.LatestSnapshot(JobRun); ok {
-		vm.Latest = snap
+		vm.HasJob = true
+	case hasBuild:
+		vm.Latest = build
+		vm.HasJob = true
+	case hasRun:
+		vm.Latest = run
 		vm.HasJob = true
 	}
 	return vm
@@ -282,6 +334,43 @@ func (s *Server) buildTestVM() testVM {
 		vm.BinExists = true
 	}
 	if snap, ok := s.jobs.LatestSnapshot(JobTest); ok {
+		snap.StreamBase = s.streamBaseURL
+		vm.Latest = snap
+		vm.HasJob = true
+	}
+	return vm
+}
+
+func (s *Server) buildRemoteVM() remoteVM {
+	targets := discoverTargets(s.opts.RepoRoot, s.opts.Preset, s.opts.Config.Targets.All)
+	runnable := make([]targetVM, 0, len(targets))
+	defaultTarget := "gkNextRenderer"
+	hasDefaultTarget := false
+	for _, target := range targets {
+		if !target.Runnable || target.Name == "Packager" {
+			continue
+		}
+		if target.Name == defaultTarget {
+			hasDefaultTarget = true
+		}
+		runnable = append(runnable, target)
+	}
+	if !hasDefaultTarget && len(runnable) > 0 {
+		defaultTarget = runnable[0].Name
+	}
+	vm := remoteVM{
+		Targets:        runnable,
+		LocalHosts:     remoteplay.LocalIPv4Hosts(),
+		DefaultTarget:  defaultTarget,
+		DefaultBind:    "0.0.0.0",
+		DefaultEncoder: "auto",
+		HTTPPort:       8088,
+		SignalingPort:  8089,
+		Fps:            30,
+	}
+	vm.URLPreview = remoteplay.BuildAccessURLs(vm.DefaultBind, vm.HTTPPort, vm.LocalHosts)
+	if snap, ok := s.jobs.LatestSnapshot(JobRemote); ok {
+		snap.StreamBase = s.streamBaseURL
 		vm.Latest = snap
 		vm.HasJob = true
 	}
@@ -304,7 +393,88 @@ func (s *Server) buildLocVM(includeThirdParty bool) locVM {
 			vm.MaxCategoryLines = c.Lines
 		}
 	}
+	today := time.Now()
+	chartStart := contributionChartStart(today)
+	counts, err := gitops.DailyCommitCounts(s.opts.RepoRoot, chartStart)
+	if err != nil {
+		vm.Contributions.Error = err.Error()
+	} else {
+		vm.Contributions = buildContributionGraph(counts, today)
+	}
 	return vm
+}
+
+func contributionChartStart(today time.Time) time.Time {
+	today = dateOnly(today)
+	currentWeekStart := today.AddDate(0, 0, -int(today.Weekday()))
+	return currentWeekStart.AddDate(0, 0, -52*7)
+}
+
+func buildContributionGraph(counts map[string]int, today time.Time) contributionGraphVM {
+	today = dateOnly(today)
+	start := contributionChartStart(today)
+	vm := contributionGraphVM{
+		Weeks: make([]contributionWeekVM, 53),
+	}
+	for offset := 0; offset < 53*7; offset++ {
+		date := start.AddDate(0, 0, offset)
+		if date.After(today) {
+			break
+		}
+		if count := counts[date.Format("2006-01-02")]; count > vm.Max {
+			vm.Max = count
+		}
+	}
+
+	lastMonth := time.Month(0)
+	for week := 0; week < 53; week++ {
+		weekStart := start.AddDate(0, 0, week*7)
+		if weekStart.Month() != lastMonth {
+			vm.Months = append(vm.Months, contributionMonthVM{
+				Label:  weekStart.Format("Jan"),
+				Column: week + 1,
+			})
+			lastMonth = weekStart.Month()
+		}
+		days := make([]contributionDayVM, 0, 7)
+		for day := 0; day < 7; day++ {
+			date := weekStart.AddDate(0, 0, day)
+			future := date.After(today)
+			count := 0
+			if !future {
+				count = counts[date.Format("2006-01-02")]
+				vm.Total += count
+			}
+			days = append(days, contributionDayVM{
+				Date:   date.Format("2006-01-02"),
+				Label:  date.Format("Jan 2, 2006"),
+				Count:  count,
+				Level:  contributionLevel(count, vm.Max),
+				Future: future,
+			})
+		}
+		vm.Weeks[week] = contributionWeekVM{Days: days}
+	}
+	return vm
+}
+
+func contributionLevel(count, maxCount int) int {
+	if count <= 0 || maxCount <= 0 {
+		return 0
+	}
+	level := (count*4 + maxCount - 1) / maxCount
+	if level < 1 {
+		return 1
+	}
+	if level > 4 {
+		return 4
+	}
+	return level
+}
+
+func dateOnly(value time.Time) time.Time {
+	year, month, day := value.Date()
+	return time.Date(year, month, day, 0, 0, 0, 0, value.Location())
 }
 
 func sectionName(s spec.SectionKind) string {
@@ -397,16 +567,20 @@ func (s *Server) handleTab(w http.ResponseWriter, r *http.Request) {
 		s.render(w, "tab_todo", vm)
 	case "build":
 		vm := s.buildHeader("build")
-		vm.BuildVM = s.buildBuildVM()
+		vm.BuildVM = s.buildBuildRunVM()
 		s.render(w, "tab_build", vm)
+	case "remote":
+		vm := s.buildHeader("remote")
+		vm.RemoteVM = s.buildRemoteVM()
+		s.render(w, "tab_remote", vm)
 	case "docs":
 		vm := s.buildHeader("docs")
 		vm.DocsVM = s.buildDocsVM(r.URL.Query().Get("file"), r.URL.Query().Get("edit") == "1", "", "")
 		s.render(w, "tab_docs", vm)
 	case "run":
-		vm := s.buildHeader("run")
-		vm.RunVM = s.buildRunVM()
-		s.render(w, "tab_run", vm)
+		vm := s.buildHeader("build")
+		vm.BuildVM = s.buildBuildRunVM()
+		s.render(w, "tab_build", vm)
 	case "test":
 		vm := s.buildHeader("test")
 		vm.TestVM = s.buildTestVM()
@@ -417,12 +591,19 @@ func (s *Server) handleTab(w http.ResponseWriter, r *http.Request) {
 		s.render(w, "tab_git", vm)
 	case "chat":
 		vm := s.buildHeader("chat")
-		vm.ChatVM = s.buildChatVM("", "")
+		vm.ChatVM = s.buildChatVM("", "", "", "")
 		s.render(w, "tab_chat", vm)
 	case "loc":
 		vm := s.buildHeader("loc")
 		vm.LocVM = s.buildLocVM(r.URL.Query().Get("thirdparty") == "1")
 		s.render(w, "tab_loc", vm)
+	case "graph":
+		vm := s.buildHeader("graph")
+		vm.GraphVM = s.buildGraphVM()
+		s.render(w, "tab_graph", vm)
+	case "settings":
+		vm := s.buildHeader("settings")
+		s.render(w, "tab_settings", vm)
 	default:
 		http.Error(w, "unknown tab "+kind, http.StatusNotFound)
 	}

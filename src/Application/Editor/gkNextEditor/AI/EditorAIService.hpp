@@ -2,10 +2,10 @@
 
 #include "Engine/Common/CoreMinimal.hpp"
 #include "AI/EditorScriptExecutor.hpp"
-#include "Engine/Runtime/Subsystems/AIService.hpp"
-#include "Engine/Runtime/Subsystems/AI/IAITool.hpp"
-#include "Engine/Runtime/Subsystems/AI/MainThreadDispatcher.hpp"
-#include "Engine/Runtime/Subsystems/AI/ToolRegistry.hpp"
+#include "Modules/NextAI/AIService.hpp"
+#include "Modules/NextAI/AI/IAITool.hpp"
+#include "Modules/NextAI/AI/MainThreadDispatcher.hpp"
+#include "Modules/NextAI/AI/ToolRegistry.hpp"
 
 #include <atomic>
 #include <cstdint>

@@ -1,14 +1,16 @@
-#include "Device.hpp"
-#include "DebugUtilities.hpp"
-#include "Instance.hpp"
-#include "WindowSurface.hpp"
+#include "Engine/Vulkan/Device.hpp"
+#include "Engine/Vulkan/DebugUtilities.hpp"
+#include "Engine/Vulkan/Instance.hpp"
+#include "Engine/Vulkan/WindowSurface.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Vulkan/RayTracing/DeviceProcedures.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
+#include "Engine/Vulkan/VulkanVideoCaps.hpp"
 #include <algorithm>
+#include <cstring>
 #include <set>
 #include <fmt/format.h>
-#include <spdlog/spdlog.h>
 
 namespace Vulkan {
 
@@ -111,14 +113,33 @@ Device::Device(
 	presentFamilyIndex_ = static_cast<uint32_t>(presentFamily - queueFamilies.begin());
 	transferFamilyIndex_ = static_cast<uint32_t>(transferFamily - queueFamilies.begin());
 
+	// Video encode queue, only when the encode extensions were requested (RemoteMode probe).
+	const bool videoEncodeRequested = std::any_of(requiredExtensions.begin(), requiredExtensions.end(),
+		[](const char* extension)
+		{
+			return std::strcmp(extension, VK_KHR_VIDEO_ENCODE_H264_EXTENSION_NAME) == 0;
+		});
+	if (videoEncodeRequested)
+	{
+		videoEncodeFamilyIndex_ = FVulkanVideoCaps::FindEncodeH264QueueFamily(physicalDevice);
+		if (videoEncodeFamilyIndex_ == UINT32_MAX)
+		{
+			SPDLOG_WARN("Video encode extensions requested but no H.264 encode queue family was found");
+		}
+	}
+
 	// Queues can be the same
-	const std::set<uint32_t> uniqueQueueFamilies =
+	std::set<uint32_t> uniqueQueueFamilies =
 	{
 		graphicsFamilyIndex_,
 		//computeFamilyIndex_,
 		presentFamilyIndex_,
 		transferFamilyIndex_
 	};
+	if (videoEncodeFamilyIndex_ != UINT32_MAX)
+	{
+		uniqueQueueFamilies.insert(videoEncodeFamilyIndex_);
+	}
 
 	// Create queues
 	std::vector<float> queuePriority = {1.0f};
@@ -147,7 +168,7 @@ Device::Device(
 	createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
 	createInfo.ppEnabledExtensionNames = requiredExtensions.data();
 
-	Check(vkCreateDevice(physicalDevice, &createInfo, nullptr, &device_),
+	Check(StreamlineWrapper::CreateDevice(physicalDevice, &createInfo, nullptr, &device_),
 		"create logical device");
 
 	debugUtils_.SetDevice(device_);
@@ -156,6 +177,10 @@ Device::Device(
 	vkGetDeviceQueue(device_, computeFamilyIndex_, 0, &computeQueue_);
 	vkGetDeviceQueue(device_, presentFamilyIndex_, 0, &presentQueue_);
 	vkGetDeviceQueue(device_, transferFamilyIndex_, 0, &transferQueue_);
+	if (videoEncodeFamilyIndex_ != UINT32_MAX)
+	{
+		vkGetDeviceQueue(device_, videoEncodeFamilyIndex_, 0, &videoEncodeQueue_);
+	}
 
     vkGetPhysicalDeviceProperties(PhysicalDevice(), &deviceProp_);
 	
@@ -169,7 +194,7 @@ Device::~Device()
 	{
 		memoryAllocator_.reset();
 		deviceProcedures_.reset();
-		vkDestroyDevice(device_, nullptr);
+		StreamlineWrapper::DestroyDevice(device_, nullptr);
 		device_ = nullptr;
 	}
 }
@@ -181,8 +206,33 @@ MemoryStatsSnapshot Device::CaptureMemoryStats(bool includeDetails) const
 
 void Device::WaitIdle() const
 {
-	Check(vkDeviceWaitIdle(device_),
+	Check(StreamlineWrapper::DeviceWaitIdle(device_),
 		"wait for device idle");
+}
+
+VkQueue Device::QueueForFamilyIndex(uint32_t queueFamilyIndex) const
+{
+	if (queueFamilyIndex == graphicsFamilyIndex_)
+	{
+		return graphicsQueue_;
+	}
+	if (queueFamilyIndex == computeFamilyIndex_)
+	{
+		return computeQueue_;
+	}
+	if (queueFamilyIndex == presentFamilyIndex_)
+	{
+		return presentQueue_;
+	}
+	if (queueFamilyIndex == static_cast<uint32_t>(transferFamilyIndex_))
+	{
+		return transferQueue_;
+	}
+	if (queueFamilyIndex == videoEncodeFamilyIndex_)
+	{
+		return videoEncodeQueue_;
+	}
+	Throw(std::runtime_error(fmt::format("queue family {} is not available on this device", queueFamilyIndex)));
 }
 
 void Device::CheckRequiredExtensions(VkPhysicalDevice physicalDevice, const std::vector<const char*>& requiredExtensions) const

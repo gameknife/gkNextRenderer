@@ -17,6 +17,10 @@
 #include <filesystem>
 #include <cmath>
 #include <unordered_set>
+#include "Modules/LDrawLoader/LDrawModule.hpp"
+#include "Modules/ScadLoader/ScadModule.hpp"
+#include "Modules/SplatLoader/SplatModule.hpp"
+#include "Application/Common/DemoScenes.hpp"
 
 using json = nlohmann::json;
 
@@ -83,6 +87,10 @@ namespace
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
 {
+    Modules::LDraw::Register();
+    Modules::Scad::Register();
+    Modules::Splat::Register();
+    AppCommon::RegisterDemoScenes();
     return std::make_unique<VisualTestGameInstance>(config, options, engine);
 }
 
@@ -98,7 +106,7 @@ VisualTestGameInstance::VisualTestGameInstance(Vulkan::WindowConfig& config, Run
     updateBaseline_ = options.UpdateVisualTestBaseline;
 }
 
-void VisualTestGameInstance::ApplyDefaultCVars(NextCVar::FCVarSystem& cvars)
+void VisualTestGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)
 {
     std::string error;
     cvars.SetDefaultFromString("r.samples", "1", &error);
@@ -842,16 +850,7 @@ void VisualTestGameInstance::GenerateHtmlReport()
 
 std::string VisualTestGameInstance::GetRendererName()
 {
-    auto rendererType = GetEngine().GetRenderer().CurrentLogicRendererType();
-    switch (rendererType)
-    {
-    case Vulkan::ERT_PathTracing:    return "PathTracing";
-    case Vulkan::ERT_ModernDeferred: return "SoftTracing";
-    case Vulkan::ERT_LegacyDeferred: return "SoftModern";
-    case Vulkan::ERT_LegacyDeferredNoAmbient: return "SoftModernNoAmbient";
-    case Vulkan::ERT_VoxelTracing:   return "VoxelTracing";
-    default:                         return "Unknown";
-    }
+    return Vulkan::GetRendererName(GetEngine().GetRenderer().CurrentLogicRendererType());
 }
 
 std::string VisualTestGameInstance::GetSceneName(const std::string& path) const

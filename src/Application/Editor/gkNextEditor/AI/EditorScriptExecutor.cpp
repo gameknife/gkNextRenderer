@@ -13,7 +13,8 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Reflection/PropertyAccessor.h"
 #include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Engine/Runtime/Subsystems/QuickJSEngine.hpp"
+#include "Modules/NextQuickJS/NextQuickJSModule.hpp"
+#include "Modules/NextQuickJS/QuickJSEngine.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <glm/gtc/quaternion.hpp>
@@ -23,9 +24,7 @@
 #include <spdlog/spdlog.h>
 #include <sstream>
 
-#if WITH_QUICKJS
 #include <ThirdParty/quickjs-ng/quickjspp.hpp>
-#endif
 
 namespace Editor
 {
@@ -885,7 +884,7 @@ namespace Editor
         auto& history = engine_.GetCommandHistory();
         history.BeginGroup("AI JavaScript");
 
-        auto* qjs = engine_.GetQuickJSEngine();
+        auto* qjs = Modules::NextQuickJS::Get(engine_);
         if (!qjs)
         {
             LogError("QuickJS engine not available");
@@ -908,7 +907,6 @@ namespace Editor
 
     // ========== Editor.* JS bindings ==========
 
-#if WITH_QUICKJS
     namespace
     {
         Assets::Scene* GetScene()
@@ -1483,11 +1481,5 @@ namespace Editor
         JS_SetPropertyStr(ctx, global, "Editor", editor);
         JS_FreeValue(ctx, global);
     }
-#else
-    void FEditorScriptExecutor::RegisterEditorBindings(void* jsContext)
-    {
-        (void)jsContext;
-    }
-#endif
 
 } // namespace Editor

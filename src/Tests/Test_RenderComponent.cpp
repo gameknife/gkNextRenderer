@@ -27,4 +27,18 @@ TEST_CASE("RenderComponent Usage", "[Unit][RenderComponent]") {
         CHECK(retrieved->GetRayCastVisible() == false);
         CHECK(retrieved->GetMaterials()[0] == 7);
     }
+
+    SECTION("Render participation mask") {
+        Runtime::RenderComponent renderComp;
+        CHECK(renderComp.GetRenderParticipationMask() == Runtime::RenderParticipation::defaultMask);
+
+        renderComp.SetMainVisible(false);
+        CHECK((renderComp.GetRenderParticipationMask() & Runtime::RenderParticipation::mainVisibility) == 0u);
+        CHECK((renderComp.GetRenderParticipationMask() & Runtime::RenderParticipation::shadowCaster) != 0u);
+        CHECK((renderComp.GetRenderParticipationMask() & Runtime::RenderParticipation::gpuAs) != 0u);
+        CHECK((renderComp.GetRenderParticipationMask() & Runtime::RenderParticipation::giBake) != 0u);
+
+        renderComp.SetVisible(false);
+        CHECK(renderComp.GetRenderParticipationMask() == Runtime::RenderParticipation::none);
+    }
 }

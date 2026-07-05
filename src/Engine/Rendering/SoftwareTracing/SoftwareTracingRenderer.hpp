@@ -8,10 +8,9 @@
 
 namespace Vulkan::PipelineCommon
 {
-	class AccumulatePipeline;
 }
 
-namespace Vulkan::ModernDeferred
+namespace Vulkan::SoftwareTracing
 {
 	class SoftwareTracingRenderer final : public Vulkan::LogicRendererBase
 	{
@@ -25,16 +24,14 @@ namespace Vulkan::ModernDeferred
 		void CreateSwapChain(const VkExtent2D& extent) override;
 		void DeleteSwapChain() override;
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
-		FRendererRequirements Requirements() const override { return GetRendererRequirements(ERT_ModernDeferred); }
+		void ReloadShaders(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles) override;
+		FRendererRequirements Requirements() const override { return GetRendererRequirements(ERT_SoftwareTracing); }
 
 	private:
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> deferredShadingPipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> accumulatePipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> composePipeline_;
 
-		uint32_t prevSingleDiffuseId_{};
-		uint32_t prevSingleSpecularId_{};
-		uint32_t prevSingleAlbedoId_{};
 	};
 
 }

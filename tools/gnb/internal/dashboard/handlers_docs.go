@@ -7,9 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
+
+const maxDocsSourceBytes = 2 << 20
 
 type docFileVM struct {
 	RelPath   string
@@ -19,14 +22,38 @@ type docFileVM struct {
 	Active    bool
 }
 
+type docFolderVM struct {
+	Dir    string
+	Files  []docFileVM
+	Active bool
+}
+
 type docsVM struct {
 	Files      []docFileVM
+	Folders    []docFolderVM
 	Selected   docFileVM
 	HasDoc     bool
 	Editing    bool
 	Error      string
 	Content    string
 	EditorBody string
+}
+
+type docsSourceLineVM struct {
+	Number int
+	Text   string
+	Focus  bool
+}
+
+type docsSourceVM struct {
+	RelPath   string
+	Name      string
+	Content   string
+	Language  string
+	Line      int
+	LineCount int
+	Lines     []docsSourceLineVM
+	Error     string
 }
 
 func (s *Server) buildDocsVM(selectedRel string, editing bool, errText string, draftBody string) docsVM {
@@ -79,6 +106,8 @@ func (s *Server) buildDocsVM(selectedRel string, editing bool, errText string, d
 			return vm
 		}
 	}
+
+	vm.Folders = groupDocsFiles(vm.Files)
 
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
@@ -135,6 +164,185 @@ func (s *Server) handleDocsSave(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "tab_docs", vm)
 }
 
+func (s *Server) handleDocsSource(w http.ResponseWriter, r *http.Request) {
+	vm := buildDocsSourceVM(s.opts.RepoRoot, r.URL.Query().Get("path"), r.URL.Query().Get("line"))
+	s.render(w, "docs_source_panel", vm)
+}
+
+func buildDocsSourceVM(repoRoot string, rel string, lineText string) docsSourceVM {
+	vm := docsSourceVM{}
+	normalizedRel, fullPath, err := resolveRepoDocumentPath(repoRoot, rel)
+	if err != nil {
+		vm.Error = err.Error()
+		return vm
+	}
+	vm.RelPath = normalizedRel
+	vm.Name = filepath.Base(fullPath)
+
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		vm.Error = err.Error()
+		return vm
+	}
+	if !info.Mode().IsRegular() {
+		vm.Error = fmt.Sprintf("不是普通文件：%s", normalizedRel)
+		return vm
+	}
+	if info.Size() > maxDocsSourceBytes {
+		vm.Error = fmt.Sprintf("文件过大，无法预览：%s", normalizedRel)
+		return vm
+	}
+
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		vm.Error = err.Error()
+		return vm
+	}
+	if isProbablyBinary(data) {
+		vm.Error = fmt.Sprintf("二进制文件无法预览：%s", normalizedRel)
+		return vm
+	}
+
+	content := strings.ReplaceAll(string(data), "\r\n", "\n")
+	content = strings.TrimSuffix(content, "\n")
+	vm.Content = content
+	vm.Language = docsSourceLanguage(normalizedRel)
+	lines := strings.Split(content, "\n")
+	if len(lines) == 1 && lines[0] == "" {
+		lines = nil
+	}
+	vm.LineCount = len(lines)
+	vm.Line = parseDocsSourceLine(lineText, vm.LineCount)
+	vm.Lines = make([]docsSourceLineVM, 0, len(lines))
+	for i, text := range lines {
+		number := i + 1
+		vm.Lines = append(vm.Lines, docsSourceLineVM{
+			Number: number,
+			Text:   text,
+			Focus:  number == vm.Line,
+		})
+	}
+	return vm
+}
+
+func docsSourceLanguage(rel string) string {
+	name := strings.ToLower(filepath.Base(rel))
+	switch name {
+	case "cmakelists.txt":
+		return "cmake"
+	case "dockerfile":
+		return "dockerfile"
+	case "makefile":
+		return "makefile"
+	}
+
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".c":
+		return "c"
+	case ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".slang", ".hlsl":
+		return "cpp"
+	case ".cmake":
+		return "cmake"
+	case ".vert", ".frag", ".geom", ".tesc", ".tese", ".glsl":
+		return "glsl"
+	case ".scad":
+		return "openscad"
+	case ".go":
+		return "go"
+	case ".js", ".mjs", ".cjs":
+		return "javascript"
+	case ".ts", ".mts", ".cts":
+		return "typescript"
+	case ".json":
+		return "json"
+	case ".html", ".htm", ".xml", ".svg":
+		return "xml"
+	case ".css":
+		return "css"
+	case ".sh", ".bash", ".zsh":
+		return "bash"
+	case ".ps1", ".psm1", ".psd1":
+		return "powershell"
+	case ".bat", ".cmd":
+		return "dos"
+	case ".py":
+		return "python"
+	case ".rs":
+		return "rust"
+	case ".java":
+		return "java"
+	case ".kt", ".kts":
+		return "kotlin"
+	case ".swift":
+		return "swift"
+	case ".lua":
+		return "lua"
+	case ".sql":
+		return "sql"
+	case ".yaml", ".yml":
+		return "yaml"
+	case ".toml", ".ini":
+		return "ini"
+	case ".md":
+		return "markdown"
+	case ".diff", ".patch":
+		return "diff"
+	case ".proto":
+		return "protobuf"
+	case ".graphql", ".gql":
+		return "graphql"
+	}
+	return ""
+}
+
+func parseDocsSourceLine(raw string, lineCount int) int {
+	line, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || line < 1 || lineCount < 1 {
+		return 0
+	}
+	if line > lineCount {
+		return lineCount
+	}
+	return line
+}
+
+func resolveRepoDocumentPath(repoRoot string, rel string) (string, string, error) {
+	rel = strings.TrimSpace(strings.TrimPrefix(rel, "/"))
+	if rel == "" {
+		return "", "", fmt.Errorf("缺少文件路径")
+	}
+	full, ok := safeRepoPath(repoRoot, rel)
+	if !ok {
+		return "", "", fmt.Errorf("非法文件路径：%s", rel)
+	}
+
+	rootAbs, err := filepath.Abs(repoRoot)
+	if err != nil {
+		return "", "", err
+	}
+	fullAbs, err := filepath.Abs(full)
+	if err != nil {
+		return "", "", err
+	}
+	rootReal, err := filepath.EvalSymlinks(rootAbs)
+	if err != nil {
+		return "", "", err
+	}
+	fullReal, err := filepath.EvalSymlinks(fullAbs)
+	if err != nil {
+		return "", "", err
+	}
+	if fullReal != rootReal && !strings.HasPrefix(fullReal, rootReal+string(os.PathSeparator)) {
+		return "", "", fmt.Errorf("文件路径超出仓库目录")
+	}
+
+	normalizedRel, err := filepath.Rel(rootAbs, fullAbs)
+	if err != nil {
+		return "", "", err
+	}
+	return filepath.ToSlash(normalizedRel), fullAbs, nil
+}
+
 func listDocsMarkdownFiles(repoRoot string) ([]docFileVM, error) {
 	docsRoot := filepath.Join(repoRoot, "docs")
 	info, err := os.Stat(docsRoot)
@@ -180,9 +388,32 @@ func listDocsMarkdownFiles(repoRoot string) ([]docFileVM, error) {
 	}
 
 	sort.Slice(files, func(i, j int) bool {
+		leftDir := strings.ToLower(files[i].Dir)
+		rightDir := strings.ToLower(files[j].Dir)
+		if leftDir != rightDir {
+			return leftDir < rightDir
+		}
+		leftName := strings.ToLower(files[i].Name)
+		rightName := strings.ToLower(files[j].Name)
+		if leftName != rightName {
+			return leftName < rightName
+		}
 		return files[i].RelPath < files[j].RelPath
 	})
 	return files, nil
+}
+
+func groupDocsFiles(files []docFileVM) []docFolderVM {
+	folders := make([]docFolderVM, 0)
+	for _, file := range files {
+		if len(folders) == 0 || folders[len(folders)-1].Dir != file.Dir {
+			folders = append(folders, docFolderVM{Dir: file.Dir})
+		}
+		folder := &folders[len(folders)-1]
+		folder.Files = append(folder.Files, file)
+		folder.Active = folder.Active || file.Active
+	}
+	return folders
 }
 
 func resolveDocMarkdownPath(repoRoot string, rel string) (string, string, error) {

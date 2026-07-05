@@ -1,4 +1,6 @@
 #pragma once
+#include <algorithm>
+#include <cmath>
 #include <imgui.h>
 #include <string>
 #include <fmt/format.h>
@@ -9,6 +11,77 @@ namespace Utilities
 {
     namespace UI
     {
+        struct FModalPopupOptions
+        {
+            ImVec2 RequestedSize = ImVec2(0.0f, 0.0f);
+            ImGuiCond SizeCond = ImGuiCond_Appearing;
+            ImGuiCond PosCond = ImGuiCond_Appearing;
+            bool CenterInAnchorViewport = true;
+            bool ClampToAnchorViewport = true;
+            float ViewportMargin = 16.0f;
+        };
+
+        inline bool BeginAnchoredPopupModal(const char* name,
+                                            bool* pOpen = nullptr,
+                                            ImGuiWindowFlags flags = 0,
+                                            const FModalPopupOptions& options = {})
+        {
+            ImGuiViewport* anchorViewport = ImGui::GetWindowViewport();
+            if (anchorViewport == nullptr)
+            {
+                anchorViewport = ImGui::GetMainViewport();
+            }
+
+            const ImVec2 workPos = anchorViewport->WorkPos;
+            const ImVec2 workSize = anchorViewport->WorkSize;
+            const ImVec2 maxSize = ImVec2(
+                std::max(1.0f, workSize.x - options.ViewportMargin * 2.0f),
+                std::max(1.0f, workSize.y - options.ViewportMargin * 2.0f));
+
+            ImGui::SetNextWindowViewport(anchorViewport->ID);
+            if (options.CenterInAnchorViewport)
+            {
+                const ImVec2 center = ImVec2(workPos.x + workSize.x * 0.5f, workPos.y + workSize.y * 0.5f);
+                ImGui::SetNextWindowPos(center, options.PosCond, ImVec2(0.5f, 0.5f));
+            }
+
+            if (options.ClampToAnchorViewport)
+            {
+                ImGui::SetNextWindowSizeConstraints(ImVec2(1.0f, 1.0f), maxSize);
+            }
+
+            if (options.RequestedSize.x > 0.0f || options.RequestedSize.y > 0.0f)
+            {
+                const ImVec2 requestedSize = ImVec2(
+                    options.RequestedSize.x > 0.0f ? std::min(options.RequestedSize.x, maxSize.x) : 0.0f,
+                    options.RequestedSize.y > 0.0f ? std::min(options.RequestedSize.y, maxSize.y) : 0.0f);
+                ImGui::SetNextWindowSize(requestedSize, options.SizeCond);
+            }
+
+            const bool open = ImGui::BeginPopupModal(name, pOpen, flags);
+            if (!open || !options.ClampToAnchorViewport)
+            {
+                return open;
+            }
+
+            const ImVec2 minPos = ImVec2(workPos.x + options.ViewportMargin, workPos.y + options.ViewportMargin);
+            const ImVec2 windowSize = ImGui::GetWindowSize();
+            const ImVec2 maxPos = ImVec2(
+                std::max(minPos.x, workPos.x + workSize.x - windowSize.x - options.ViewportMargin),
+                std::max(minPos.y, workPos.y + workSize.y - windowSize.y - options.ViewportMargin));
+            const ImVec2 currentPos = ImGui::GetWindowPos();
+            const ImVec2 clampedPos = ImVec2(
+                std::clamp(currentPos.x, minPos.x, maxPos.x),
+                std::clamp(currentPos.y, minPos.y, maxPos.y));
+
+            if (std::fabs(clampedPos.x - currentPos.x) > 0.5f || std::fabs(clampedPos.y - currentPos.y) > 0.5f)
+            {
+                ImGui::SetWindowPos(clampedPos);
+            }
+
+            return open;
+        }
+
         inline void DrawShowFlagItem(const char* name, bool& flag) {
             if (ImGui::MenuItem(fmt::format("{} {}", flag ? ICON_FA_SQUARE_CHECK : ICON_FA_SQUARE, name).c_str(), NULL, false)) {
                 flag = !flag;
@@ -19,7 +92,6 @@ namespace Utilities
             DrawShowFlagItem("Grid", showFlags.ShowGrid);
             ImGui::Separator();
             DrawShowFlagItem("Lighting", showFlags.DebugDraw_Lighting);
-            DrawShowFlagItem("Shadow Cascade Coverage", showFlags.DebugDraw_ShadowCascadeCoverage);
             DrawShowFlagItem("Bounding Box", showFlags.DebugDraw_BoundingBox);
             DrawShowFlagItem("Physics Bodies", showFlags.DebugDraw_PhysicsBodies);
             DrawShowFlagItem("Visual Debug", showFlags.ShowVisualDebug);

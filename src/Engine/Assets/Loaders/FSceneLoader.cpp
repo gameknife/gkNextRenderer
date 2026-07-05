@@ -3,7 +3,6 @@
 #include <cfloat>
 
 #include "ThirdParty/mikktspace/mikktspace.h"
-#include <spdlog/spdlog.h>
 
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -27,7 +26,9 @@
 
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/Core/Node.h"
+#include "Engine/Runtime/Components/EnvironmentComponent.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Components/SceneReferenceComponent.h"
 #include "Engine/Utilities/FileHelper.hpp"
 
 namespace Assets
@@ -102,6 +103,99 @@ namespace Assets
         .m_setTSpace			= NULL,
     #endif
     };
+
+    std::string ReadSceneReferenceAssetPath(const tinygltf::Node& node)
+    {
+        if (!node.extras.Has("gkSceneReference"))
+        {
+            return {};
+        }
+
+        const tinygltf::Value& value = node.extras.Get("gkSceneReference");
+        if (value.IsString())
+        {
+            return value.Get<std::string>();
+        }
+        if (value.IsObject() && value.Has("asset") && value.Get("asset").IsString())
+        {
+            return value.Get("asset").Get<std::string>();
+        }
+        return {};
+    }
+
+    bool ReadBoolExtra(const tinygltf::Value& extras, const char* key, bool fallback)
+    {
+        if (!extras.Has(key))
+        {
+            return fallback;
+        }
+        const tinygltf::Value& value = extras.Get(key);
+        if (value.IsBool())
+        {
+            return value.Get<bool>();
+        }
+        if (value.IsNumber())
+        {
+            return value.GetNumberAsInt() != 0;
+        }
+        return fallback;
+    }
+
+    void ReadEnvironmentExtras(const tinygltf::Value& extras, Assets::EnvironmentSetting& environment)
+    {
+        if (extras.Has("SkyIdx") && extras.Get("SkyIdx").IsNumber())
+        {
+            environment.HasSky = true;
+            environment.SkyIdx = extras.Get("SkyIdx").GetNumberAsInt();
+        }
+        if (extras.Has("SkyIntensity") && extras.Get("SkyIntensity").IsNumber())
+        {
+            environment.HasSky = true;
+            environment.SkyIntensity = static_cast<float>(extras.Get("SkyIntensity").GetNumberAsDouble());
+        }
+        if (extras.Has("SkyRotation") && extras.Get("SkyRotation").IsNumber())
+        {
+            environment.HasSky = true;
+            environment.SkyRotation = static_cast<float>(extras.Get("SkyRotation").GetNumberAsDouble());
+        }
+        if (extras.Has("SunIntensity") && extras.Get("SunIntensity").IsNumber())
+        {
+            environment.HasSun = true;
+            environment.SunIntensity = static_cast<float>(extras.Get("SunIntensity").GetNumberAsDouble());
+        }
+        if (extras.Has("SunRotation") && extras.Get("SunRotation").IsNumber())
+        {
+            environment.SunRotation = static_cast<float>(extras.Get("SunRotation").GetNumberAsDouble());
+        }
+        if (extras.Has("CamSpeed") && extras.Get("CamSpeed").IsNumber())
+        {
+            environment.ControlSpeed = static_cast<float>(extras.Get("CamSpeed").GetNumberAsDouble());
+        }
+        if (extras.Has("ControlSpeed") && extras.Get("ControlSpeed").IsNumber())
+        {
+            environment.ControlSpeed = static_cast<float>(extras.Get("ControlSpeed").GetNumberAsDouble());
+        }
+        if (extras.Has("WithSun"))
+        {
+            environment.HasSun = ReadBoolExtra(extras, "WithSun", environment.HasSun);
+        }
+        if (extras.Has("HasSun"))
+        {
+            environment.HasSun = ReadBoolExtra(extras, "HasSun", environment.HasSun);
+        }
+        if (extras.Has("NoSky"))
+        {
+            environment.HasSky = false;
+        }
+        if (extras.Has("HasSky"))
+        {
+            environment.HasSky = ReadBoolExtra(extras, "HasSky", environment.HasSky);
+        }
+        if (extras.Has("GammaCorrection"))
+        {
+            environment.GammaCorrection = ReadBoolExtra(extras, "GammaCorrection", environment.GammaCorrection);
+        }
+    }
     
     void ParseGltfNode(std::vector<std::shared_ptr<Assets::Node>>& outNodes, std::map<int, std::shared_ptr<Node> >& nodeMap, Assets::EnvironmentSetting& outCamera, std::vector<Assets::LightObject>& outLights,
         tinygltf::Model& model, int nodeIdx, int modelIdx, int materialOffset)
@@ -135,12 +229,14 @@ namespace Assets
                                            static_cast<float>(node.rotation[2]));
         }
 
+        const std::string sceneReferenceAssetPath = ReadSceneReferenceAssetPath(node);
+        const bool isSceneReference = !sceneReferenceAssetPath.empty();
         uint32_t meshId = -1;
-        if(node.mesh != -1)
+        if(!isSceneReference && node.mesh != -1)
         {
             meshId = node.mesh + modelIdx;
         }
-        else
+        else if (!isSceneReference)
         {
             if(node.camera >= 0)
             {
@@ -159,6 +255,36 @@ namespace Assets
 
         uint32_t primaryMatIdx = 0;
         std::shared_ptr<Node> sceneNode = Node::CreateNode(node.name, translation, rotation, scale, uint32_t(outNodes.size()));
+        if (node.extras.Has("tag") && node.extras.Get("tag").IsString())
+        {
+            sceneNode->SetTag(node.extras.Get("tag").Get<std::string>());
+        }
+        if (node.extras.Has("layer") && node.extras.Get("layer").IsString())
+        {
+            sceneNode->SetLayer(node.extras.Get("layer").Get<std::string>());
+        }
+        if (node.extras.Has("gkEnvironment") && node.extras.Get("gkEnvironment").IsObject())
+        {
+            auto environment = std::make_shared<Runtime::EnvironmentComponent>();
+            ReadEnvironmentExtras(node.extras.Get("gkEnvironment"), *environment);
+            sceneNode->AddComponent(environment);
+        }
+
+        if (isSceneReference)
+        {
+            auto sceneReference = std::make_shared<Runtime::SceneReferenceComponent>();
+            sceneReference->SetAssetPath(sceneReferenceAssetPath);
+            sceneNode->AddComponent(sceneReference);
+            outNodes.push_back(sceneNode);
+            nodeMap[nodeIdx] = sceneNode;
+
+            if (node.mesh != -1 || node.camera >= 0 || node.skin != -1 || !node.children.empty())
+            {
+                SPDLOG_WARN("Scene reference node '{}' ignores local mesh/camera/skin/children", node.name);
+            }
+            return;
+        }
+
         if (meshId != -1)
         {
             auto renderComp = std::make_shared<Runtime::RenderComponent>();
@@ -173,6 +299,33 @@ namespace Assets
                 primaryMatIdx = primitive.material + materialOffset;
             }
             renderComp->SetMaterials(materialIdx);
+
+            auto readNodeBoolExtra = [&node](const char* key, bool fallback)
+            {
+                if (!node.extras.Has(key))
+                {
+                    return fallback;
+                }
+                const tinygltf::Value& value = node.extras.Get(key);
+                if (value.IsBool())
+                {
+                    return value.Get<bool>();
+                }
+                if (value.IsNumber())
+                {
+                    return value.GetNumberAsInt() != 0;
+                }
+                return fallback;
+            };
+
+            renderComp->SetVisible(readNodeBoolExtra("visible", renderComp->GetVisible()));
+            renderComp->SetCastShadows(readNodeBoolExtra("castShadows", renderComp->GetCastShadows()));
+            renderComp->SetReceiveGI(readNodeBoolExtra("receiveGI", renderComp->GetReceiveGI()));
+            if (node.extras.Has("layerMask") && node.extras.Get("layerMask").IsNumber())
+            {
+                renderComp->SetLayerMask(static_cast<uint32_t>(node.extras.Get("layerMask").GetNumberAsDouble()));
+            }
+
             sceneNode->AddComponent(renderComp);
         }
 
@@ -422,10 +575,11 @@ namespace Assets
                 }
                 else
                 {
+                    const tinygltf::BufferView& imageView = model.bufferViews[image.bufferView];
                     uint32_t texIdx = GlobalTexturePool::LoadTexture(
                         currSceneName + texname, model.images[imageIdx].mimeType,
-                        model.buffers[0].data.data() + model.bufferViews[image.bufferView].byteOffset,
-                        model.bufferViews[image.bufferView].byteLength, srgb);
+                        model.buffers[imageView.buffer].data.data() + imageView.byteOffset,
+                        imageView.byteLength, srgb);
                     textureIdMap[imageIdx] = texIdx;
                 }
             }
@@ -799,42 +953,7 @@ namespace Assets
 
 
         auto& root = model.scenes[0];
-        if(root.extras.Has("SkyIdx"))
-        {
-            cameraInit.HasSky = true;
-            cameraInit.SkyIdx = root.extras.Get("SkyIdx").GetNumberAsInt();
-        }
-        if(root.extras.Has("SkyIntensity"))
-        {
-            cameraInit.HasSky = true;
-            cameraInit.SkyIntensity = root.extras.Get("SkyIntensity").GetNumberAsDouble();
-        }
-        if(root.extras.Has("SkyRotation"))
-        {
-            cameraInit.HasSky = true;
-            cameraInit.SkyRotation = root.extras.Get("SkyRotation").GetNumberAsDouble();
-        }
-        if(root.extras.Has("SunIntensity"))
-        {
-            cameraInit.HasSun = true;
-            cameraInit.SunIntensity = root.extras.Get("SunIntensity").GetNumberAsDouble();
-        }
-        if(root.extras.Has("CamSpeed"))
-        {
-            cameraInit.ControlSpeed = static_cast<float>(root.extras.Get("CamSpeed").GetNumberAsDouble());
-        }
-        if(root.extras.Has("WithSun"))
-        {
-            cameraInit.HasSun = root.extras.Get("WithSun").GetNumberAsInt() != 0;
-        }
-        if(root.extras.Has("SunRotation"))
-        {
-            cameraInit.SunRotation = static_cast<float>(root.extras.Get("SunRotation").GetNumberAsDouble());
-        }
-        if(root.extras.Has("NoSky"))
-        {
-            cameraInit.HasSky = false;
-        }
+        ReadEnvironmentExtras(root.extras, cameraInit);
 
         // gltf scenes contain the rootnodes
         //std::shared_ptr<Node> sceneNode = Node::CreateNode("Root", glm::vec3(0,0,0), glm::quat(1,0,0,0), glm::vec3(10,10,10), -1, nodes.size(), false);

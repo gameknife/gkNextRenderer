@@ -1,19 +1,68 @@
-#include "SwapChain.hpp"
-#include "Device.hpp"
-#include "DebugUtilities.hpp"
-#include "GpuResources.hpp"
-#include "Instance.hpp"
-#include "WindowSurface.hpp"
+#include "Engine/Vulkan/SwapChain.hpp"
+#include "Engine/Vulkan/Device.hpp"
+#include "Engine/Vulkan/DebugUtilities.hpp"
+#include "Engine/Vulkan/GpuResources.hpp"
+#include "Engine/Vulkan/Instance.hpp"
+#include "Engine/Vulkan/WindowSurface.hpp"
+#include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include <algorithm>
 #include <limits>
-#include <spdlog/spdlog.h>
 
-#include "DebugUtilities.hpp"
+#include "Engine/Vulkan/DebugUtilities.hpp"
 
 float GAndroidMagicScale = 1.0f;
 
 namespace Vulkan {
+
+namespace
+{
+    const char* FormatName(VkFormat format)
+    {
+        switch (format)
+        {
+        case VK_FORMAT_B8G8R8A8_UNORM: return "B8G8R8A8_UNORM";
+        case VK_FORMAT_B8G8R8A8_SRGB: return "B8G8R8A8_SRGB";
+        case VK_FORMAT_R8G8B8A8_UNORM: return "R8G8B8A8_UNORM";
+        case VK_FORMAT_R16G16B16A16_SFLOAT: return "R16G16B16A16_SFLOAT";
+        case VK_FORMAT_A2B10G10R10_UNORM_PACK32: return "A2B10G10R10_UNORM_PACK32";
+        case VK_FORMAT_A2R10G10B10_UNORM_PACK32: return "A2R10G10B10_UNORM_PACK32";
+        default: return "unknown";
+        }
+    }
+
+    const char* ColorSpaceName(VkColorSpaceKHR colorSpace)
+    {
+        switch (colorSpace)
+        {
+        case VK_COLOR_SPACE_SRGB_NONLINEAR_KHR: return "SRGB_NONLINEAR";
+        case VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT: return "DISPLAY_P3_NONLINEAR";
+        case VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT: return "EXTENDED_SRGB_LINEAR";
+        case VK_COLOR_SPACE_EXTENDED_SRGB_NONLINEAR_EXT: return "EXTENDED_SRGB_NONLINEAR";
+        case VK_COLOR_SPACE_HDR10_ST2084_EXT: return "HDR10_ST2084";
+        case VK_COLOR_SPACE_HDR10_HLG_EXT: return "HDR10_HLG";
+        case VK_COLOR_SPACE_DISPLAY_P3_LINEAR_EXT: return "DISPLAY_P3_LINEAR";
+        default: return "unknown";
+        }
+    }
+
+    bool IsExtendedSrgbLinearSurfaceFormat(const VkSurfaceFormatKHR& format)
+    {
+        return format.format == VK_FORMAT_R16G16B16A16_SFLOAT &&
+               format.colorSpace == VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT;
+    }
+
+    bool IsHdr10SurfaceFormat(const VkSurfaceFormatKHR& format)
+    {
+        if (format.colorSpace != VK_COLOR_SPACE_HDR10_ST2084_EXT)
+        {
+            return false;
+        }
+
+        return format.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 ||
+               format.format == VK_FORMAT_A2R10G10B10_UNORM_PACK32;
+    }
+}
 
 SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentMode, bool forceSDR) :
 	physicalDevice_(device.PhysicalDevice()),
@@ -82,17 +131,23 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
 		createInfo.pQueueFamilyIndices = nullptr; // Optional
 	}
 
-	Check(vkCreateSwapchainKHR(device.Handle(), &createInfo, nullptr, &swapChain_),
+	Check(StreamlineWrapper::CreateSwapchainKHR(device.Handle(), &createInfo, nullptr, &swapChain_),
 		"create swap chain!");
 
 	minImageCount_ = std::max(2u, details.Capabilities.minImageCount);
 	presentMode_ = actualPresentMode;
 	format_ = surfaceFormat.format;
+	colorSpace_ = surfaceFormat.colorSpace;
 	extent_ = extent;
 	renderExtent_ = extent_;
 	renderOffset_ = {0,0};
+
+    SPDLOG_INFO("Swap Chain format: {} ({}) colorSpace: {} ({}) outputMode: {}",
+                FormatName(format_), static_cast<int>(format_),
+                ColorSpaceName(colorSpace_), static_cast<int>(colorSpace_),
+                static_cast<int>(outputMode_));
 	
-	images_ = GetEnumerateVector(device_.Handle(), swapChain_, vkGetSwapchainImagesKHR);
+	images_ = GetEnumerateVector(device_.Handle(), swapChain_, StreamlineWrapper::GetSwapchainImagesKHR);
 	imageViews_.reserve(images_.size());
 
 	for (const auto image : images_)
@@ -115,7 +170,7 @@ SwapChain::~SwapChain()
 
 	if (swapChain_ != nullptr)
 	{
-		vkDestroySwapchainKHR(device_.Handle(), swapChain_, nullptr);
+		StreamlineWrapper::DestroySwapchainKHR(device_.Handle(), swapChain_, nullptr);
 		swapChain_ = nullptr;
 	}
 }
@@ -149,17 +204,28 @@ VkSurfaceFormatKHR SwapChain::ChooseSwapSurfaceFormat(const std::vector<VkSurfac
 	{
 		return { VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
 	}
-	hdr_ = false;
+	outputMode_ = ESwapChainOutputMode::SDR;
 	
 	// hdr first
 	if(!forceSDR)
 	{
+#if _APPLE_
 		for (const auto& format : formats)
 		{
-		
-			if (format.colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT)// && format.format > VK_FORMAT_A8B8G8R8_SRGB_PACK32)
+
+			if (IsExtendedSrgbLinearSurfaceFormat(format))
 			{
-				hdr_ = true;
+				outputMode_ = ESwapChainOutputMode::ExtendedSrgbLinear;
+				return format;
+			}
+		}
+#endif
+
+		for (const auto& format : formats)
+		{
+			if (IsHdr10SurfaceFormat(format))
+			{
+				outputMode_ = ESwapChainOutputMode::HDR10_ST2084;
 				return format;
 			}
 		}

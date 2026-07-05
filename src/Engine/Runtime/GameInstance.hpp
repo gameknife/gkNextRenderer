@@ -4,11 +4,42 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
+#include "Engine/Runtime/Editor/MultiViewportBackend.hpp"
+#include "Engine/Utilities/Glm.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
+
+namespace Runtime::Agent
+{
+    class FAgentQueryRegistry;
+}
 
 class NextGameInstanceBase
 {
 public:
+    struct FGameUiFrameContext
+    {
+        enum class ESurfaceKind : uint8_t
+        {
+            MainWindow,
+            RemoteView,
+        };
+
+        ESurfaceKind surfaceKind = ESurfaceKind::MainWindow;
+        std::string_view sessionId{};
+        VkExtent2D framebufferExtent{};
+        const Assets::Camera* viewCamera = nullptr;
+        bool allowWindowCommands = true;
+    };
+
+    struct FRemoteViewActionContext
+    {
+        std::string sessionId;
+        glm::vec3 position{0.0f};
+        glm::vec3 forward{0.0f, 0.0f, -1.0f};
+        glm::vec3 right{1.0f, 0.0f, 0.0f};
+        glm::vec3 up{0.0f, 1.0f, 0.0f};
+    };
+
     NextGameInstanceBase(Vulkan::WindowConfig&, Runtime::Config::Options&, NextEngine* engine) : engine_(engine) {}
     virtual ~NextGameInstanceBase() = default;
 
@@ -19,11 +50,19 @@ public:
     virtual void OnTick(double deltaSeconds) = 0;
     virtual void OnDestroy() = 0;
     virtual bool OnRenderUI() = 0;
+    virtual bool OnRenderUI(const FGameUiFrameContext& context)
+    {
+        (void)context;
+        return OnRenderUI();
+    }
     virtual bool ShouldRenderUiDuringScreenshot() const { return false; }
     virtual void OnPreConfigUI() {}
     virtual void OnInitUI() {}
+    virtual void OnRemoteUiSessionClosed(std::string_view sessionId) { (void)sessionId; }
+    virtual std::unique_ptr<NextUI::IMultiViewportBackend> CreateMultiViewportBackend() { return nullptr; }
     virtual void OnRayHitResponse(Assets::RayCastResult& result) {}
-    virtual void ApplyDefaultCVars(NextCVar::FCVarSystem& cvars) {}
+    virtual void ConfigureCVars(NextCVar::FCVarSystem& cvars) {}
+    virtual void RegisterAgentQueries(Runtime::Agent::FAgentQueryRegistry& reg) { (void)reg; }
     virtual float GetGraphicsDebugPanelTopOffset() const { return 0.0f; }
     virtual void DrawAdditionalPhysicsDebugOverlay(const Assets::Camera& camera) const {}
 
@@ -44,6 +83,7 @@ public:
     virtual bool SupportsAppDebugShortcut(SDL_Keycode key) const { return false; }
     virtual bool IsAppDebugShortcutActive(SDL_Keycode key) const { return false; }
     virtual bool SetAppDebugShortcutActive(SDL_Keycode key, bool active) { return false; }
+    virtual bool WantsMouseInputWhenUiCaptures() const { return false; }
     virtual bool OnKey(SDL_Event& event) { return false; }
     virtual bool OnCursorPosition(double xpos, double ypos) { return false; }
     virtual bool OnMouseButton(SDL_Event& event) { return false; }
@@ -51,6 +91,12 @@ public:
     virtual bool OnGamepadInput(int16_t leftStickX, int16_t leftStickY, int16_t rightStickX, int16_t rightStickY,
                                 int16_t leftTrigger, int16_t rightTrigger)
     {
+        return false;
+    }
+    virtual bool OnRemoteViewAction(const FRemoteViewActionContext& context, std::string_view action)
+    {
+        (void)context;
+        (void)action;
         return false;
     }
 

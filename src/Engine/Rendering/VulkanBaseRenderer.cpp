@@ -1,272 +1,63 @@
-#include "VulkanBaseRenderer.hpp"
+#include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
-#include "Engine/Vulkan/CommandExecution.hpp"
 #include "Engine/Vulkan/CommandExecution.hpp"
 #include "Engine/Vulkan/RayTracing/DeviceProcedures.hpp"
 #include "Engine/Vulkan/RayTracing/RayTracingProperties.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
-#include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/SyncAndTiming.hpp"
 #include "Engine/Vulkan/BufferUtil.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
+#include "Engine/Vulkan/MemoryAndShader.hpp"
 #include "Engine/Vulkan/Instance.hpp"
-#include "Engine/Vulkan/RenderingPipeline.hpp"
-#include "Engine/Vulkan/RenderingPipeline.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
-#include "Engine/Vulkan/DebugUtilities.hpp"
-#include "Engine/Vulkan/DebugUtilities.hpp"
-#include "Engine/Vulkan/GpuResources.hpp"
-#include "Engine/Vulkan/CommandExecution.hpp"
-#include "Engine/Vulkan/DebugUtilities.hpp"
-#include "Engine/Vulkan/DebugUtilities.hpp"
 
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/Core/Node.h"
+#include "Engine/Assets/Loaders/FProcModel.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
+#include "Engine/Runtime/Scene/SceneBuilder.h"
 
 #include "Engine/Utilities/Exception.hpp"
-#include <array>
-#include <chrono>
-#include <cstring>
+#include "Engine/Utilities/Math.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 
 #include "Engine/Options.hpp"
-#include "SoftwareModern/SoftwareModernRenderer.hpp"
-#include "SoftwareModern/SwModernNoAmbientRenderer.hpp"
-#include "SoftwareTracing/SoftwareTracingRenderer.hpp"
-#include "PathTracing/PathTracingRenderer.hpp"
+#include "Engine/Rendering/SoftwareModern/SoftwareModernRenderer.hpp"
+#include "Engine/Rendering/SoftwareModern/SoftwareModernNoAmbientRenderer.hpp"
+#include "Engine/Rendering/SoftwareTracing/SoftwareTracingRenderer.hpp"
+#include "Engine/Rendering/PathTracing/PathTracingRenderer.hpp"
+#include "Engine/Rendering/Preview/ReferenceRenderViewController.hpp"
+#include "Engine/Rendering/Preview/RenderViewServices.hpp"
+#include "Engine/Rendering/RenderViewContext.hpp"
+#include "Engine/Rendering/VoxelTracing/VoxelTracingRenderer.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Rendering/Shadow/ShadowMapPass.hpp"
-#include <spdlog/spdlog.h>
+#include "Engine/Rendering/GaussianSplat/GaussianSplatPass.hpp"
+#include "Engine/Rendering/Upscaler/IUpscaler.hpp"
+#include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
+
+#include <algorithm>
+#include <cstring>
+#include <limits>
+#include <spdlog/stopwatch.h>
 #include <utility>
-
-#if WITH_STREAMLINE && WIN32
-#include <dxgi1_6.h>
-#endif
-
-#if WITH_STREAMLINE
-#include <sl.h>
-#include <sl_consts.h>
-#include <sl_dlss.h>
-#include <sl_dlss_d.h>
-#include <sl_helpers_vk.h>
-#endif
-
-#if WITH_STREAMLINE
-static sl::Resource toSlResource(const Vulkan::Image& image, VkDeviceMemory memory, VkImageView view, VkImageLayout layout)
-{
-    sl::Resource res(sl::ResourceType::eTex2d, (void*)image.Handle(), (void*)memory, (void*)view, (uint32_t)layout);
-    res.width = image.Extent().width;
-    res.height = image.Extent().height;
-    res.nativeFormat = (uint32_t)image.Format();
-    res.mipLevels = 1;
-    res.arrayLayers = 1;
-    return res;
-}
-
-static sl::float4x4 toSlMatrix(const glm::mat4& m)
-{
-    sl::float4x4 res;
-    res.row[0] = sl::float4(m[0][0], m[1][0], m[2][0], m[3][0]);
-    res.row[1] = sl::float4(m[0][1], m[1][1], m[2][1], m[3][1]);
-    res.row[2] = sl::float4(m[0][2], m[1][2], m[2][2], m[3][2]);
-    res.row[3] = sl::float4(m[0][3], m[1][3], m[2][3], m[3][3]);
-    return res;
-}
-
-static bool HasNvidiaAdapter()
-{
-#if WIN32
-    HMODULE dxgiModule = LoadLibraryW(L"dxgi.dll");
-    if (!dxgiModule)
-    {
-        return false;
-    }
-
-    using CreateDXGIFactory1Fn = HRESULT(WINAPI*)(REFIID, void**);
-    auto createFactory = reinterpret_cast<CreateDXGIFactory1Fn>(
-        GetProcAddress(dxgiModule, "CreateDXGIFactory1"));
-    if (!createFactory)
-    {
-        FreeLibrary(dxgiModule);
-        return false;
-    }
-
-    IDXGIFactory1* factory = nullptr;
-    if (FAILED(createFactory(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&factory))))
-    {
-        FreeLibrary(dxgiModule);
-        return false;
-    }
-
-    bool hasNvidiaAdapter = false;
-    for (UINT adapterIndex = 0;; ++adapterIndex)
-    {
-        IDXGIAdapter1* adapter = nullptr;
-        const HRESULT result = factory->EnumAdapters1(adapterIndex, &adapter);
-        if (result == DXGI_ERROR_NOT_FOUND)
-        {
-            break;
-        }
-        if (FAILED(result))
-        {
-            continue;
-        }
-
-        DXGI_ADAPTER_DESC1 desc{};
-        if (SUCCEEDED(adapter->GetDesc1(&desc)) && desc.VendorId == 0x10DE)
-        {
-            hasNvidiaAdapter = true;
-        }
-        adapter->Release();
-
-        if (hasNvidiaAdapter)
-        {
-            break;
-        }
-    }
-
-    factory->Release();
-    FreeLibrary(dxgiModule);
-    return hasNvidiaAdapter;
-#else
-    return false;
-#endif
-}
-#endif
-
-namespace StreamlineWrapper
-{
-    bool GStreamLineInit = false;
-    bool GStreamLineInitAttempted = false;
-    bool GStreamLineEnabled = false;
-    bool GStreamLineVulkanInfoSet = false;
-
-    bool ShouldInitialize()
-    {
-#if WITH_STREAMLINE
-        return HasNvidiaAdapter();
-#else
-        return false;
-#endif
-    }
-
-    void Initialize()
-    {
-#if WITH_STREAMLINE
-        if (GStreamLineInitAttempted)
-        {
-            return;
-        }
-        GStreamLineInitAttempted = true;
-
-        sl::Preferences pref{};
-        //pref.showConsole = true; // for debugging, set to false in production
-        //pref.logLevel = sl::LogLevel::eVerbose;
-        pref.pathsToPlugins = {}; // change this if Streamline plugins are not located next to the executable
-        pref.numPathsToPlugins = 0; // change this if Streamline plugins are not located next to the executable
-        pref.pathToLogsAndData = {}; // change this to enable logging to a file
-        //pref.logMessageCallback = myLogMessageCallback; // highly recommended to track warning/error messages in your callback
-        pref.applicationId = 12345678; // Provided by NVDA, required if using NGX components (DLSS 2/3)
-        pref.engine = sl::EngineType::eCustom; // If using UE or Unity
-        pref.engineVersion = "1.0.0"; // Optional version
-        pref.projectId = "36cf6361-1044-4603-9ef3-066606660666"; // Optional project id (GUID format)
-        pref.flags |= sl::PreferenceFlags::eUseFrameBasedResourceTagging;
-
-        sl::Feature features[] = { sl::kFeatureDLSS, sl::kFeatureDLSS_RR };
-        pref.featuresToLoad = features;
-        pref.numFeaturesToLoad = sizeof(features) / sizeof(sl::Feature);
-        //pref.renderAPI = sl::RenderAPI::eVulkan;
-
-        sl::Result res;
-        if (SL_FAILED(res, slInit(pref)))
-        {
-            SPDLOG_ERROR("Streamline slInit failed: {}", (int)res);
-            return;
-        }
-
-        GStreamLineInit = true;
-        GStreamLineEnabled = true;
-#endif
-    }
-
-   void LazyInit(VkDevice device, VkInstance instance, VkPhysicalDevice physicalDevice, uint32_t computeQueueIdx, uint32_t computeQueueFamily, uint32_t graphicsQueueIdx, uint32_t graphicsQueueFamily, bool& outSupportDLSS, bool& outSupportDLSSRR)
-   {
-#if WITH_STREAMLINE
-       Initialize();
-       if (!GStreamLineInit)
-       {
-           outSupportDLSS = false;
-           outSupportDLSSRR = false;
-           return;
-       }
-
-       if (GStreamLineVulkanInfoSet)
-       {
-           return;
-       }
-       GStreamLineVulkanInfoSet = true;
-
-       sl::Result res;
-       sl::VulkanInfo slVulkanInfo{};
-       slVulkanInfo.device = device;
-       slVulkanInfo.instance = instance;
-       slVulkanInfo.physicalDevice = physicalDevice;
-       slVulkanInfo.computeQueueIndex = computeQueueIdx;
-       slVulkanInfo.computeQueueFamily = computeQueueFamily;
-       slVulkanInfo.graphicsQueueIndex = graphicsQueueIdx;
-       slVulkanInfo.graphicsQueueFamily = graphicsQueueFamily;
-       
-       if(SL_FAILED(res, slSetVulkanInfo(slVulkanInfo)))
-        {
-            SPDLOG_ERROR("Streamline slSetVulkanInfo failed: {}", (int)res);
-        }
-       else
-       {
-            SPDLOG_INFO("Streamline Initialized Successfully.");
-            
-            sl::AdapterInfo adapterInfo{};
-            adapterInfo.vkPhysicalDevice = physicalDevice;
-            
-            sl::Result checkRes = slIsFeatureSupported(sl::kFeatureDLSS, adapterInfo);
-            outSupportDLSS = (checkRes == sl::Result::eOk);
-            
-            checkRes = slIsFeatureSupported(sl::kFeatureDLSS_RR, adapterInfo);
-            outSupportDLSSRR = (checkRes == sl::Result::eOk);
-            
-            SPDLOG_INFO("DLSS Support: {}, RR Support: {}", outSupportDLSS, outSupportDLSSRR);
-       }
-#else
-       outSupportDLSS = false;
-       outSupportDLSSRR = false;
-#endif
-   }
-
-
-    void Shutdown()
-   {
-#if WITH_STREAMLINE
-       if (GStreamLineEnabled)
-       {
-           sl::Result res;
-           if(SL_FAILED(res, slShutdown()))
-           {
-               SPDLOG_ERROR("Streamline slShutdown failed: {}", (int)res);
-           }
-       }
-#endif
-   }
-}
+#include <vector>
 
 namespace
 {
     constexpr const char* kPortabilitySubsetExtensionName = "VK_KHR_portability_subset";
+
+    bool ShouldLogStartupProfile()
+    {
+        return GOption != nullptr && GOption->AgentValidation;
+    }
 
     void PrintVulkanSdkInformation()
     {
@@ -334,7 +125,10 @@ namespace
     {
         if (HasDeviceExtension(physicalDevice, extensionName))
         {
-            requiredExtensions.push_back(extensionName);
+            if (std::find(requiredExtensions.begin(), requiredExtensions.end(), extensionName) == requiredExtensions.end())
+            {
+                requiredExtensions.push_back(extensionName);
+            }
             return true;
         }
 
@@ -342,26 +136,154 @@ namespace
         return false;
     }
 
+    Rendering::Upscaler::FImageResource MakeRenderImageResource(
+        const Vulkan::RenderImage* image,
+        VkImageLayout layout,
+        VkImageUsageFlags usage)
+    {
+        if (image == nullptr)
+        {
+            return {};
+        }
+
+        const auto& vkImage = image->GetImage();
+        return {
+            vkImage.Handle(),
+            image->GetImageMemory().Handle(),
+            image->GetImageView().Handle(),
+            vkImage.Extent(),
+            vkImage.Format(),
+            layout,
+            usage};
+    }
+
+    Rendering::Upscaler::FImageResource MakeDepthResource(
+        const Vulkan::DepthBuffer& depthBuffer,
+        VkExtent2D extent,
+        VkImageLayout layout)
+    {
+        return {
+            depthBuffer.GetImage().Handle(),
+            depthBuffer.GetImageMemory().Handle(),
+            depthBuffer.ImageView().Handle(),
+            extent,
+            depthBuffer.Format(),
+            layout,
+            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT};
+    }
+
+    Rendering::Upscaler::FImageResource MakeSwapchainResource(
+        const Vulkan::SwapChain& swapChain,
+        uint32_t imageIndex,
+        VkExtent2D extent,
+        VkImageLayout layout)
+    {
+        if (imageIndex >= swapChain.Images().size() || imageIndex >= swapChain.ImageViews().size())
+        {
+            return {};
+        }
+
+        return {
+            swapChain.Images()[imageIndex],
+            VK_NULL_HANDLE,
+            swapChain.ImageViews()[imageIndex]->Handle(),
+            extent,
+            swapChain.Format(),
+            layout,
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT};
+    }
+
+    std::string JoinShaderNames(const std::set<std::string>& names)
+    {
+        std::string result;
+        for (const std::string& name : names)
+        {
+            if (!result.empty())
+            {
+                result += ", ";
+            }
+            result += name;
+        }
+        return result;
+    }
+
 }
 
 namespace Vulkan
 {
+    namespace
+    {
+        using RendererFactory = std::unique_ptr<LogicRendererBase> (*)(VulkanBaseRenderer&);
+
+        struct RendererDescriptor
+        {
+            ERendererType type;
+            const char* name;
+            FRendererRequirements requirements;
+            uint32_t referenceColumn;
+            uint32_t referenceRow;
+            RendererFactory factory;
+        };
+
+        template <typename T>
+        std::unique_ptr<LogicRendererBase> CreateLogicRenderer(VulkanBaseRenderer& baseRenderer)
+        {
+            return std::make_unique<T>(baseRenderer);
+        }
+
+        const std::array RendererDescriptors{
+            RendererDescriptor{ERT_PathTracing, "PathTracing", {true, true}, 1, 1,
+                               &CreateLogicRenderer<PathTracing::PathTracingRenderer>},
+            RendererDescriptor{ERT_SoftwareTracing, "SoftwareTracing", {true, false}, 1, 0,
+                               &CreateLogicRenderer<SoftwareTracing::SoftwareTracingRenderer>},
+            RendererDescriptor{ERT_SoftwareModern, "SoftwareModern", {true, false}, 0, 0,
+                               &CreateLogicRenderer<SoftwareModern::SoftwareModernRenderer>},
+            RendererDescriptor{ERT_VoxelTracing, "VoxelTracing", {true, false}, 0, 1,
+                               &CreateLogicRenderer<VoxelTracing::VoxelTracingRenderer>},
+            RendererDescriptor{ERT_SoftwareModernNoAmbient, "SoftwareModernNoAmbient", {false, false, true}, 0, 1,
+                               &CreateLogicRenderer<SoftwareModernNoAmbient::SoftwareModernNoAmbientRenderer>},
+        };
+
+        const RendererDescriptor& GetRendererDescriptor(ERendererType type)
+        {
+            const auto descriptor = std::find_if(
+                RendererDescriptors.begin(), RendererDescriptors.end(),
+                [type](const RendererDescriptor& candidate) { return candidate.type == type; });
+            assert(descriptor != RendererDescriptors.end());
+            return descriptor != RendererDescriptors.end() ? *descriptor : RendererDescriptors.front();
+        }
+    }
+
     FRendererRequirements GetRendererRequirements(ERendererType type)
     {
-        switch (type)
-        {
-        case ERT_PathTracing:
-            return {.requestAmbientCube = true, .requestRayTracing = true};
-        case ERT_ModernDeferred:
-        case ERT_LegacyDeferred:
-        case ERT_VoxelTracing:
-            return {.requestAmbientCube = true};
-        case ERT_LegacyDeferredNoAmbient:
-            return {};
-        default:
-            assert(false);
-            return {};
-        }
+        return GetRendererDescriptor(type).requirements;
+    }
+
+    const char* GetRendererName(ERendererType type)
+    {
+        return GetRendererDescriptor(type).name;
+    }
+
+    const std::array<ERendererType, 4>& GetReferenceRendererTypes()
+    {
+        static constexpr std::array<ERendererType, 4> kReferenceRendererTypes{
+            ERT_SoftwareModern,
+            ERT_SoftwareTracing,
+            ERT_SoftwareModernNoAmbient,
+            ERT_PathTracing,
+        };
+        return kReferenceRendererTypes;
+    }
+
+    FReferenceViewLayout GetReferenceViewLayout(const ERendererType type)
+    {
+        const RendererDescriptor& descriptor = GetRendererDescriptor(type);
+        return {
+            .debugName = descriptor.name,
+            .column = descriptor.referenceColumn,
+            .row = descriptor.referenceRow,
+        };
     }
 
     VulkanBaseRenderer::VulkanBaseRenderer(Vulkan::Window* window, const VkPresentModeKHR presentMode,
@@ -379,6 +301,9 @@ namespace Vulkan
         forceSDR_ = GOption->ForceSDR;
 
         caps_.supportRayTracing = false;
+        upscaler_ = Rendering::Upscaler::CreateStreamlineUpscaler();
+        renderViewServices_ = std::make_unique<RenderViewServices>(*this);
+        referenceViewController_ = std::make_unique<ReferenceRenderViewController>(*this);
     }
 
     VulkanBaseRenderer::~VulkanBaseRenderer()
@@ -386,6 +311,12 @@ namespace Vulkan
         VulkanBaseRenderer::DeleteSwapChain();
         DeleteAccelerationStructures();
         rt_.reset();
+        referenceViewController_.reset();
+        renderViewServices_.reset();
+        logicRenderers_.renderers.clear();
+        logicRenderers_.swapChainCreatedTypes.clear();
+        renderViews_.reset();
+        upscaler_.reset();
         ctx_.gpuTimer.reset();
         ctx_.globalTexturePool.reset();
         ctx_.commandPool.reset();
@@ -417,6 +348,15 @@ namespace Vulkan
 
     void VulkanBaseRenderer::SetPhysicalDevice(VkPhysicalDevice physicalDevice)
     {
+        spdlog::stopwatch profileTimer;
+        auto logProfile = [&profileTimer](const char* label)
+        {
+            if (ShouldLogStartupProfile())
+            {
+                SPDLOG_INFO("[StartupProfile]   Vulkan::SetPhysicalDevice {:<34} {}", label, profileTimer.elapsed_ms());
+            }
+        };
+
         if (ctx_.device)
         {
             Throw(std::logic_error("physical device has already been set"));
@@ -444,11 +384,27 @@ namespace Vulkan
 
         const VkDeviceSize perCascadeCount =
             static_cast<VkDeviceSize>(Assets::CUBE_SIZE_XY) * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
+        uint32_t cascadeCount = Assets::CUBE_CASCADE_MAX;
+        float poolBrickRatio = 1.0f;
+        if (NextEngine::GetInstance())
+        {
+            const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+            cascadeCount = Assets::SanitizeAmbientCubeCascadeCount(settings.AmbientCubeCascadeCount);
+            poolBrickRatio = settings.AmbientCubePoolBrickRatio;
+        }
+        const float clampedPoolBrickRatio = std::clamp(poolBrickRatio, 0.0f, 1.0f);
+        const auto poolBricksPerCascade = static_cast<VkDeviceSize>(std::max(
+            1.0f, std::ceil(static_cast<float>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE) * clampedPoolBrickRatio)));
+        const VkDeviceSize poolCubesPerCascade =
+            poolBricksPerCascade * static_cast<VkDeviceSize>(Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME);
+
         const VkDeviceSize fullAmbientCubeAllocationSize =
-            static_cast<VkDeviceSize>(Assets::CUBE_CASCADE_MAX) * perCascadeCount *
-                (sizeof(Assets::VoxelData) + sizeof(Assets::AmbientCube)) +
+            static_cast<VkDeviceSize>(cascadeCount) *
+                (perCascadeCount * sizeof(Assets::VoxelData) + poolCubesPerCascade * sizeof(Assets::AmbientCube)) +
             static_cast<VkDeviceSize>(Assets::ACGI_PAGE_COUNT) * Assets::ACGI_PAGE_COUNT * sizeof(Assets::PageIndex) +
-            perCascadeCount * (sizeof(Assets::AmbientCube) + sizeof(glm::u32vec4));
+            poolCubesPerCascade * sizeof(Assets::AmbientCube) +
+            perCascadeCount * sizeof(glm::u32vec4) +
+            perCascadeCount * sizeof(glm::u32vec4);
         caps_.fullAmbientCubeBudget = largestDeviceLocalHeapSize >= fullAmbientCubeAllocationSize;
         if (!caps_.fullAmbientCubeBudget)
         {
@@ -463,50 +419,150 @@ namespace Vulkan
             rt_ = std::make_unique<RayTracingResources>();
         }
 
+        ERendererType resolvedRendererType = logicRenderers_.current;
+        if (!caps_.supportRayTracing && GetRendererRequirements(resolvedRendererType).requestRayTracing)
+        {
+            resolvedRendererType = ERT_SoftwareTracing;
+        }
+        if (!caps_.fullAmbientCubeBudget && GetRendererRequirements(resolvedRendererType).requestAmbientCube)
+        {
+            resolvedRendererType = ERT_SoftwareModernNoAmbient;
+        }
+        if (resolvedRendererType != logicRenderers_.current)
+        {
+            SwitchLogicRenderer(resolvedRendererType);
+        }
+
+        // Subgroup support gates the wave fast-path of the soft-mesh GPU cull compute
+        // pass (Task.SoftMeshShaderGpuCullCompactWave). We need arithmetic + ballot +
+        // basic ops available in the COMPUTE stage; otherwise fall back to the LDS variant.
+        {
+            VkPhysicalDeviceSubgroupProperties subgroupProps = {};
+            subgroupProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
+            VkPhysicalDeviceProperties2 props2 = {};
+            props2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+            props2.pNext = &subgroupProps;
+            vkGetPhysicalDeviceProperties2(physicalDevice, &props2);
+
+            const VkSubgroupFeatureFlags requiredOps =
+                VK_SUBGROUP_FEATURE_BASIC_BIT | VK_SUBGROUP_FEATURE_ARITHMETIC_BIT | VK_SUBGROUP_FEATURE_BALLOT_BIT;
+            caps_.supportSubgroupCull =
+                ((subgroupProps.supportedOperations & requiredOps) == requiredOps) &&
+                ((subgroupProps.supportedStages & VK_SHADER_STAGE_COMPUTE_BIT) != 0);
+            SPDLOG_INFO("Soft-mesh GPU cull: subgroup size {}, wave fast-path {}",
+                        subgroupProps.subgroupSize, caps_.supportSubgroupCull ? "enabled" : "disabled (LDS fallback)");
+        }
+        logProfile("caps queried");
+
         SetPhysicalDeviceImpl(physicalDevice, requiredExtensions, deviceFeatures, nullptr);
+        logProfile("logical device created");
 
         ctx_.globalTexturePool.reset(new Assets::GlobalTexturePool(*ctx_.device, *ctx_.commandPool2, *ctx_.commandPool));
+        logProfile("global texture pool created");
 
         OnDeviceSet();
+        logProfile("device callbacks complete");
         CreateSwapChain();
+        logProfile("initial swapchain created");
         // Keep hidden windows hidden (agent validation captures, unit-test engine fixture):
         // showing here would override SDL_WINDOW_HIDDEN and pop a window that steals focus.
         if (!ctx_.window->Config().HiddenWindow)
         {
             ctx_.window->Show();
         }
+        logProfile("window shown");
     }
 
     void VulkanBaseRenderer::Start()
     {
+        spdlog::stopwatch profileTimer;
         // setup vulkan
         PrintVulkanSdkInformation();
+        if (ShouldLogStartupProfile())
+        {
+            SPDLOG_INFO("[StartupProfile]   Vulkan::Start sdk info                    {}", profileTimer.elapsed_ms());
+        }
         PrintVulkanDevices(ctx_.instance->PhysicalDevices());
+        if (ShouldLogStartupProfile())
+        {
+            SPDLOG_INFO("[StartupProfile]   Vulkan::Start devices enumerated          {}", profileTimer.elapsed_ms());
+        }
         SelectPhysicalDevice(GOption->GpuIdx);
+        if (ShouldLogStartupProfile())
+        {
+            SPDLOG_INFO("[StartupProfile]   Vulkan::Start physical device selected    {}", profileTimer.elapsed_ms());
+        }
         PrintVulkanSwapChainInformation(*this);
+        if (ShouldLogStartupProfile())
+        {
+            SPDLOG_INFO("[StartupProfile]   Vulkan::Start swapchain info              {}", profileTimer.elapsed_ms());
+        }
         frame_.currentFrame = 0;
-
-        caps_.supportDLSS = caps_.streamlineExtsEnabled;
-        caps_.supportDLSSRR = caps_.streamlineExtsEnabled;
     }
 
     void VulkanBaseRenderer::End()
     {
+        if (ctx_.device)
+        {
+            ctx_.device->WaitIdle();
+        }
+        DeleteSwapChain();
+        DeleteAccelerationStructures();
+        if (upscaler_)
+        {
+            upscaler_->Shutdown();
+        }
         StreamlineWrapper::Shutdown();
-        ctx_.device->WaitIdle();
         ctx_.gpuTimer.reset();
         ctx_.globalTexturePool.reset();
     }
 
+    void VulkanBaseRenderer::QueueSubmitSignalSemaphore(VkSemaphore semaphore, uint64_t value)
+    {
+        if (semaphore == VK_NULL_HANDLE)
+        {
+            return;
+        }
+        frame_.queuedSignalSemaphores.push_back(semaphore);
+        frame_.queuedSignalValues.push_back(value);
+    }
+
     Assets::Scene& VulkanBaseRenderer::GetScene()
     {
+        if (activeSceneOverride_ != nullptr)
+        {
+            return *activeSceneOverride_;
+        }
         return *scene_.lock();
     }
 
     void VulkanBaseRenderer::SetScene(std::shared_ptr<Assets::Scene> scene)
     {
         scene_ = scene;
+        PrimaryView().InvalidateTemporalHistory();
+        if (renderViewServices_)
+        {
+            renderViewServices_->OnMainSceneChanged();
+        }
+        if (referenceViewController_)
+        {
+            referenceViewController_->OnMainSceneChanged();
+        }
         RequestClearAmbientCubeCache();
+        resetUpscalerHistory_ = true;
+    }
+
+    void VulkanBaseRenderer::OnHdrShUpdated()
+    {
+        if (renderViewServices_)
+        {
+            renderViewServices_->OnHdrShUpdated();
+        }
+    }
+
+    Rendering::Upscaler::FFrameGenerationState VulkanBaseRenderer::GetFrameGenerationState() const
+    {
+        return upscaler_ ? upscaler_->FrameGenerationState() : Rendering::Upscaler::FFrameGenerationState{};
     }
 
     Assets::UniformBufferObject VulkanBaseRenderer::GetUniformBufferObject(
@@ -517,6 +573,15 @@ namespace Vulkan
             return delegates_.getUniformBufferObject(offset, extent);
         }
         return {};
+    }
+
+    VkExtent2D VulkanBaseRenderer::ActiveViewRenderExtent() const
+    {
+        if (activeViewRenderExtent_.width > 0 && activeViewRenderExtent_.height > 0)
+        {
+            return activeViewRenderExtent_;
+        }
+        return frame_.swapChain->RenderExtent();
     }
 
     void VulkanBaseRenderer::SetPhysicalDeviceImpl(
@@ -544,6 +609,50 @@ namespace Vulkan
             rayQueryFeatures.pNext = &accelerationStructureFeatures;
             rayQueryFeatures.rayQuery = true;
             nextDeviceFeatures = &rayQueryFeatures;
+        }
+
+        // Vulkan Video H.264 encode (remote play hardware path). Probe before device creation;
+        // the feature struct must outlive ctx_.device.reset().
+        VkPhysicalDeviceSynchronization2FeaturesKHR synchronization2Features = {};
+        if (GOption->RemoteMode)
+        {
+            videoCaps_ = FVulkanVideoCaps::Probe(ctx_.instance->Handle(), physicalDevice);
+            videoCaps_.LogSummary();
+            if (videoCaps_.Usable())
+            {
+                requiredExtensions.insert(requiredExtensions.end(),
+                    {
+                        VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
+                        VK_KHR_VIDEO_QUEUE_EXTENSION_NAME,
+                        VK_KHR_VIDEO_ENCODE_QUEUE_EXTENSION_NAME,
+                        VK_KHR_VIDEO_ENCODE_H264_EXTENSION_NAME,
+                    });
+                if (videoCaps_.maintenance1Present)
+                {
+                    requiredExtensions.push_back(VK_KHR_VIDEO_MAINTENANCE_1_EXTENSION_NAME);
+                }
+                synchronization2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
+                synchronization2Features.pNext = nextDeviceFeatures;
+                synchronization2Features.synchronization2 = true;
+                nextDeviceFeatures = &synchronization2Features;
+            }
+            else
+            {
+                SPDLOG_WARN("RemotePlay: Vulkan Video H.264 encode is not usable on this device; remote mode will "
+                            "be unavailable");
+            }
+        }
+
+        // Remote play uses timeline semaphores to decouple GPU frame completion from the main
+        // thread and, later, to bridge graphics -> video encode queue submissions.
+        VkPhysicalDeviceTimelineSemaphoreFeatures timelineSemaphoreFeatures = {};
+        const bool requestTimelineSemaphores = GOption->RemoteMode;
+        if (requestTimelineSemaphores)
+        {
+            timelineSemaphoreFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
+            timelineSemaphoreFeatures.timelineSemaphore = true;
+            timelineSemaphoreFeatures.pNext = nextDeviceFeatures;
+            nextDeviceFeatures = &timelineSemaphoreFeatures;
         }
 
         VkPhysicalDeviceFeatures supportedFeatures = {};
@@ -665,21 +774,32 @@ namespace Vulkan
         storage16BitFeatures.storagePushConstant16 = supportedStorage16BitFeatures.storagePushConstant16;
 
 #if WITH_STREAMLINE
-        VkPhysicalDeviceVulkan12Features deviceVulkan12Features = {};
-        deviceVulkan12Features.timelineSemaphore = true;
-        deviceVulkan12Features.pNext = &shaderDrawParametersFeatures;
-        const bool hasStreamlineExtensions =
+        VkPhysicalDeviceTimelineSemaphoreFeatures streamlineTimelineSemaphoreFeatures = {};
+        streamlineTimelineSemaphoreFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
+        streamlineTimelineSemaphoreFeatures.timelineSemaphore = true;
+        streamlineTimelineSemaphoreFeatures.pNext = &shaderDrawParametersFeatures;
+        const auto streamlineCaps = StreamlineWrapper::AppendRequiredDeviceExtensions(physicalDevice, requiredExtensions);
+        const bool hasLegacyStreamlineExtensions =
             AddDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
                                           VK_NVX_BINARY_IMPORT_EXTENSION_NAME, "Streamline binary import") &&
             AddDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
-                                          VK_NVX_IMAGE_VIEW_HANDLE_EXTENSION_NAME, "Streamline image view handles") &&
-            AddDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
-                                          VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, "Streamline buffer device address") &&
-            AddDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
-                                          VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, "Streamline EXT buffer device address");
+                                          VK_NVX_IMAGE_VIEW_HANDLE_EXTENSION_NAME, "Streamline image view handles");
+        AddDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
+                                      VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, "Streamline buffer device address");
+        if (HasDeviceExtension(physicalDevice, VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME))
+        {
+            enableDeviceExtensionIfAvailable(VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+        }
+        const bool hasStreamlineExtensions =
+            streamlineCaps.streamlineInitialized &&
+            streamlineCaps.requestedDeviceExtensionsAvailable &&
+            hasLegacyStreamlineExtensions;
         if (hasStreamlineExtensions)
         {
-            storage16BitFeatures.pNext = &deviceVulkan12Features;
+            if (!requestTimelineSemaphores)
+            {
+                storage16BitFeatures.pNext = &streamlineTimelineSemaphoreFeatures;
+            }
             caps_.streamlineExtsEnabled = true;
         }
         else
@@ -697,6 +817,29 @@ namespace Vulkan
 
     void VulkanBaseRenderer::OnDeviceSet()
     {
+        if (upscaler_)
+        {
+            Rendering::Upscaler::FDeviceInfo deviceInfo{};
+            deviceInfo.device = ctx_.device->Handle();
+            deviceInfo.instance = ctx_.instance->Handle();
+            deviceInfo.physicalDevice = ctx_.device->PhysicalDevice();
+            deviceInfo.computeQueueIndex = 0;
+            deviceInfo.computeQueueFamily = ctx_.device->ComputeFamilyIndex();
+            deviceInfo.graphicsQueueIndex = 0;
+            deviceInfo.graphicsQueueFamily = ctx_.device->GraphicsFamilyIndex();
+            deviceInfo.opticalFlowQueueIndex = 0;
+            deviceInfo.opticalFlowQueueFamily = UINT32_MAX;
+            deviceInfo.useNativeOpticalFlowMode = false;
+
+            auto featureCaps = StreamlineWrapper::CachedCaps();
+            upscaler_->OnDeviceCreated(deviceInfo, featureCaps);
+            caps_.supportDLSS = caps_.streamlineExtsEnabled && featureCaps.supportDLSS;
+            caps_.supportDLSSRR = caps_.streamlineExtsEnabled && featureCaps.supportDLSSRR;
+            caps_.supportDLSSG = caps_.streamlineExtsEnabled && featureCaps.supportDLSSG;
+            caps_.supportReflex = featureCaps.supportReflex;
+            caps_.supportPCL = featureCaps.supportPCL;
+        }
+
         if (caps_.supportRayTracing)
         {
             rt_->properties.reset(new RayTracing::RayTracingProperties(Device()));
@@ -715,8 +858,14 @@ namespace Vulkan
 
     void VulkanBaseRenderer::CreateStorageImage(uint32_t bindlessIdx, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName)
     {
-        bindless_.images[bindlessIdx].reset(new RenderImage(Device(), frame_.swapChain->RenderExtent(), format, tiling, usage, false, debugName));
-        if (!(usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT))
+        CreateStorageImage(bindlessIdx, frame_.swapChain->RenderExtent(), format, tiling, usage, debugName);
+    }
+
+    void VulkanBaseRenderer::CreateStorageImage(uint32_t bindlessIdx, VkExtent2D extent, VkFormat format,
+        VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName)
+    {
+        bindless_.images[bindlessIdx].reset(new RenderImage(Device(), extent, format, tiling, usage, false, debugName));
+        if (usage & VK_IMAGE_USAGE_STORAGE_BIT)
         {
             ctx_.globalTexturePool->BindStorageTexture(bindlessIdx, bindless_.images[bindlessIdx]->GetImageView());
         }
@@ -728,20 +877,63 @@ namespace Vulkan
         return bindless_.images[bindlessIdx].get();
     }
 
-    uint32_t VulkanBaseRenderer::GetTemporalStorageImage(VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
-        const char* debugName)
-    {
-        uint32_t targetIdx = Assets::Bindless::RT_TEMP_USAGE0 + bindless_.tempCreated;
-        auto& target = bindless_.images[targetIdx];
-        assert(!target);
-        CreateStorageImage(targetIdx, format, tiling, usage, debugName);
-        bindless_.tempCreated++;
+#define CREATE_STORAGE_IMAGE(idx, fmt, tiling, usage) CreateStorageImage(bankBase + Assets::Bindless::idx, extent, fmt, tiling, usage, #idx)
 
-        return targetIdx;
+    void VulkanBaseRenderer::CreateRenderTargetBank(uint32_t bankBase)
+    {
+        CreateRenderTargetBank(bankBase, frame_.swapChain->RenderExtent());
     }
 
-#define CREATE_STORAGE_IMAGE(idx, fmt, tiling, usage) CreateStorageImage(Assets::Bindless::idx, fmt, tiling, usage, #idx)
-    
+    void VulkanBaseRenderer::CreateRenderTargetBank(uint32_t bankBase, const VkExtent2D extent)
+    {
+        // Ensure the bindless image vector reaches into this bank's slot range.
+        if (bindless_.images.size() < bankBase + Assets::Bindless::RT_COUNT)
+        {
+            bindless_.images.resize(bankBase + Assets::Bindless::RT_COUNT);
+        }
+
+        const VkFormat progressiveHistoryFormat = GOption->HighPrecisionProgressiveHistory
+            ? VK_FORMAT_R32G32B32A32_SFLOAT
+            : VK_FORMAT_R16G16B16A16_SFLOAT;
+
+        CREATE_STORAGE_IMAGE(RT_ACCUMLATE_DIFFUSE, progressiveHistoryFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT );
+        CREATE_STORAGE_IMAGE(RT_SINGLE_DIFFUSE, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
+        CREATE_STORAGE_IMAGE(RT_MINIGBUFFER, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
+        CREATE_STORAGE_IMAGE(RT_MINIGBUFFER_DRAW, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT );
+        CREATE_STORAGE_IMAGE(RT_OBJEDCTID_0, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT );
+        CREATE_STORAGE_IMAGE(RT_OBJEDCTID_1, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
+        CREATE_STORAGE_IMAGE(RT_MOTIONVECTOR, VK_FORMAT_R32G32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
+        CREATE_STORAGE_IMAGE(RT_ALBEDO, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
+        CREATE_STORAGE_IMAGE(RT_NORMAL, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
+        CREATE_STORAGE_IMAGE(RT_SHADER_TIMER, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT );
+        CREATE_STORAGE_IMAGE(RT_DENOISED, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT );
+        CREATE_STORAGE_IMAGE(RT_PREV_DEPTHBUFFER, VK_FORMAT_R32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
+        CREATE_STORAGE_IMAGE(RT_ACCUMLATE_SPECULAR, progressiveHistoryFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT );
+        CREATE_STORAGE_IMAGE(RT_SINGLE_SPECULAR, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
+        CREATE_STORAGE_IMAGE(RT_ACCUMLATE_ALBEDO, progressiveHistoryFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT );
+        CREATE_STORAGE_IMAGE(RT_SINGLE_PREV_DIFFUSE, progressiveHistoryFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
+        CREATE_STORAGE_IMAGE(RT_SINGLE_PREV_SPECULAR, progressiveHistoryFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
+        CREATE_STORAGE_IMAGE(RT_SINGLE_PREV_ALBEDO, progressiveHistoryFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
+        CREATE_STORAGE_IMAGE(RT_MOTIONMOMENT, VK_FORMAT_R16_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
+        CREATE_STORAGE_IMAGE(RT_DIFFUSE_HITDIST, VK_FORMAT_R16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
+        CREATE_STORAGE_IMAGE(RT_SPECULAR_HITDIST, VK_FORMAT_R16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
+        CREATE_STORAGE_IMAGE(RT_SPECULAR_ALBEDO, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
+        CREATE_STORAGE_IMAGE(RT_ATROUS_PING, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
+        CREATE_STORAGE_IMAGE(RT_ATROUS_PONG, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
+        CREATE_STORAGE_IMAGE(RT_ATROUS_OUT, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
+        CREATE_STORAGE_IMAGE(RT_ATROUS_SPEC_OUT, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
+        CREATE_STORAGE_IMAGE(RT_ATROUS_SPEC_PING, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
+        CREATE_STORAGE_IMAGE(RT_ATROUS_SPEC_PONG, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
+        CREATE_STORAGE_IMAGE(RT_SPLAT_ACCUM, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+        CREATE_STORAGE_IMAGE(RT_AMBIENT, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
+        const VkExtent2D gtaoExtent{
+            (extent.width + 1u) / 2u,
+            (extent.height + 1u) / 2u};
+        CreateStorageImage(bankBase + Assets::Bindless::RT_GTAO, gtaoExtent, VK_FORMAT_R16_SFLOAT,
+                           VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, "RT_GTAO");
+    }
+#undef CREATE_STORAGE_IMAGE
+
     void VulkanBaseRenderer::CreateRenderImages()
     {
         screenshot_.image.reset(new Image(*ctx_.device, frame_.swapChain->Extent(), 1, frame_.swapChain->Format(),
@@ -753,67 +945,103 @@ namespace Vulkan
         screenshot_.imageMemory->SetName("Screenshot Memory");
 
         bindless_.images.resize(Assets::Bindless::RT_COUNT);
-        
-        CREATE_STORAGE_IMAGE(RT_ACCUMLATE_DIFFUSE, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT );
-        CREATE_STORAGE_IMAGE(RT_SINGLE_DIFFUSE, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
-        CREATE_STORAGE_IMAGE(RT_MINIGBUFFER, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
-        CREATE_STORAGE_IMAGE(RT_MINIGBUFFER_DRAW, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT );
-        CREATE_STORAGE_IMAGE(RT_OBJEDCTID_0, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT );
-        CREATE_STORAGE_IMAGE(RT_OBJEDCTID_1, VK_FORMAT_R32_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
-        CREATE_STORAGE_IMAGE(RT_MOTIONVECTOR, VK_FORMAT_R32G32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
-        CREATE_STORAGE_IMAGE(RT_ALBEDO, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
-        CREATE_STORAGE_IMAGE(RT_NORMAL, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
-        CREATE_STORAGE_IMAGE(RT_SHADER_TIMER, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_STORAGE_BIT );
-        CREATE_STORAGE_IMAGE(RT_DENOISED, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
-        CREATE_STORAGE_IMAGE(RT_PREV_DEPTHBUFFER, VK_FORMAT_R32_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
-        CREATE_STORAGE_IMAGE(RT_ACCUMLATE_SPECULAR, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT );
-        CREATE_STORAGE_IMAGE(RT_SINGLE_SPECULAR, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT );
-        CREATE_STORAGE_IMAGE(RT_ACCUMLATE_ALBEDO, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT );
-        CREATE_STORAGE_IMAGE(RT_SINGLE_PREV_DIFFUSE, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
-        CREATE_STORAGE_IMAGE(RT_SINGLE_PREV_SPECULAR, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
-        CREATE_STORAGE_IMAGE(RT_SINGLE_PREV_ALBEDO, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT );
-        CREATE_STORAGE_IMAGE(RT_MOTIONMOMENT, VK_FORMAT_R16_UINT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
-        CREATE_STORAGE_IMAGE(RT_DIFFUSE_HITDIST, VK_FORMAT_R16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
-        CREATE_STORAGE_IMAGE(RT_SPECULAR_HITDIST, VK_FORMAT_R16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
-        CREATE_STORAGE_IMAGE(RT_SPECULAR_ALBEDO, VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT);
 
+        // Primary view RT bank (bank 0 == legacy absolute layout).
+        CreateRenderTargetBank(0);
+        renderViews_->ResetSwapChainResources();
+        // Non-primary view resources were destroyed with the swapchain; recreate on demand.
+        if (renderViewServices_)
+        {
+            renderViewServices_->OnSwapChainResourcesInvalidated(/*releaseOffscreenSampledOutputs*/ false);
+        }
+        if (referenceViewController_)
+        {
+            referenceViewController_->OnSwapChainResourcesInvalidated();
+        }
         for (uint32_t i = 0; i != frame_.swapChain->Images().size(); i++)
         {
             ctx_.globalTexturePool->BindStorageTexture( Assets::Bindless::RT_SWAPCHAIN0 + i, *frame_.swapChain->ImageViews()[i] );
         }
 
+        frameGeneration_.hudlessImages.clear();
+        if (caps_.supportDLSSG)
+        {
+            frameGeneration_.hudlessImages.reserve(frame_.swapChain->Images().size());
+            for (size_t i = 0; i < frame_.swapChain->Images().size(); ++i)
+            {
+                const std::string debugName = fmt::format("DLSS-G HUD-less {}", i);
+                frameGeneration_.hudlessImages.emplace_back(std::make_unique<RenderImage>(
+                    Device(),
+                    frame_.swapChain->OutputExtent(),
+                    frame_.swapChain->Format(),
+                    VK_IMAGE_TILING_OPTIMAL,
+                    VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                    false,
+                    debugName.c_str()));
+            }
+        }
     }
 
     void VulkanBaseRenderer::CreateSwapChain()
     {
+        spdlog::stopwatch profileTimer;
+        auto logProfile = [&profileTimer](const char* label)
+        {
+            if (ShouldLogStartupProfile())
+            {
+                SPDLOG_INFO("[StartupProfile]   Vulkan::CreateSwapChain {:<32} {}", label, profileTimer.elapsed_ms());
+            }
+        };
+
         // 窗口等待
         while (ctx_.window->IsMinimized())
         {
             ctx_.window->WaitForEvents();
         }
+        logProfile("window ready");
 
-        // SwapChaine
-        float scale = 1.0f;
-        auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        // SwapChain
+        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        const VkPresentModeKHR requestedPresentMode =
+            caps_.supportDLSSG && settings.DLSSG
+                ? VK_PRESENT_MODE_IMMEDIATE_KHR
+                : presentMode_;
+        frame_.swapChain.reset(new class SwapChain(*ctx_.device, requestedPresentMode, forceSDR_));
+        logProfile("swapchain object created");
+        VkExtent2D renderExtent = frame_.swapChain->Extent();
         if (!GOption->ReferenceMode)
         {
-            switch(settings.SuperResolution)
+            const bool dlssEnabled = caps_.supportDLSS && settings.DLSS && upscaler_;
+            if (dlssEnabled && upscaler_)
             {
-                case 0: scale = 1.5f; break; // Quality
-                case 1: scale = 1.7f; break; // Balanced
-                case 2: scale = 2.0f; break; // Performance
-                case 3: scale = 3.0f; break; // UltraPerformance
-                case 4: scale = 1.0f; break; // Native
-                default: scale = 1.5f; break;
+                const auto optimal = upscaler_->GetOptimalRenderSettings(
+                    settings.SuperResolution,
+                    frame_.swapChain->Extent(),
+                    dlssEnabled);
+                renderExtent = optimal.renderExtent;
+            }
+            else
+            {
+                const auto& modeInfo = Rendering::Upscaler::GetUpscaleModeInfo(settings.SuperResolution);
+                renderExtent = Rendering::Upscaler::ScaleExtent(frame_.swapChain->Extent(), modeInfo.fallbackScale);
             }
         }
-        
-        frame_.swapChain.reset(new class SwapChain(*ctx_.device, presentMode_, forceSDR_));
-        frame_.swapChain->UpdateRenderViewport(0, 0, (uint32_t)(frame_.swapChain->Extent().width / scale), (uint32_t)(frame_.swapChain->Extent().height / scale));
+
+        frame_.swapChain->UpdateRenderViewport(0, 0, renderExtent.width, renderExtent.height);
         frame_.swapChain->UpdateOutputViewport( 0, 0, frame_.swapChain->Extent().width, frame_.swapChain->Extent().height);
+
+        // Primary RenderView mirrors the swapchain's render rect (full-window, bank 0).
+        {
+            RenderView& primary = renderViews_->Primary();
+            primary.SetRenderExtent(frame_.swapChain->RenderExtent());
+            primary.SetRenderOffset(frame_.swapChain->RenderOffset());
+            primary.SetSubrect(VkRect2D{frame_.swapChain->OutputOffset(),
+                                        frame_.swapChain->OutputExtent()});
+        }
 
         // depthBuffer
         frame_.depthBuffer.reset(new class DepthBuffer(*ctx_.commandPool, frame_.swapChain->Extent()));
+        logProfile("depth buffer created");
 
         // 同步对象
         for (size_t i = 0; i != frame_.swapChain->ImageViews().size(); ++i)
@@ -821,23 +1049,36 @@ namespace Vulkan
             frame_.imageAvailableSemaphores.emplace_back(*ctx_.device);
             frame_.renderFinishedSemaphores.emplace_back(*ctx_.device);
             frame_.inFlightFences.emplace_back(*ctx_.device, true);
+            frame_.inFlightFenceSubmitSerials.emplace_back(0);
             frame_.uniformBuffers.emplace_back(*ctx_.device);
         }
 
         // commandbuffer
         frame_.commandBuffers.reset(new CommandBuffers(*ctx_.commandPool, static_cast<uint32_t>(frame_.swapChain->ImageViews().size())));
+        logProfile("sync and command buffers");
 
         frame_.currentFence = nullptr;
+        frame_.currentFenceSerial = 0;
+        frame_.recordingSubmitSerial = 0;
+        frame_.queuedSignalSemaphores.clear();
+        frame_.queuedSignalValues.clear();
 
         // 公用RenderImages
         CreateRenderImages();
+        logProfile("render images created");
+        renderViews_->CreateSwapChain(SwapChain());
+        logProfile("render views created");
 
         overlay_.wireframePipeline.reset(new class PipelineCommon::GraphicsPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), true));
+        logProfile("wireframe pipeline created");
         overlay_.wireframeFrameBuffers.clear();
         overlay_.wireframeFrameBuffers.reserve(frame_.swapChain->ImageViews().size());
-        for (const auto& imageView : frame_.swapChain->ImageViews())
+        for (size_t i = 0; i < frame_.swapChain->ImageViews().size(); ++i)
         {
-            overlay_.wireframeFrameBuffers.emplace_back(frame_.swapChain->Extent(), *imageView, overlay_.wireframePipeline->RenderPass());
+            overlay_.wireframeFrameBuffers.emplace_back(
+                frame_.swapChain->RenderExtent(),
+                GetViewStorageImage(Assets::Bindless::RT_DENOISED)->GetImageView(),
+                overlay_.wireframePipeline->RenderPass());
         }
 
         // 公用Pipeline
@@ -849,24 +1090,31 @@ namespace Vulkan
         {
             ambient_.softBake.reset( new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.SwAmbientCube.comp.slang.spv", GetScene()));
             ambient_.clearCache.reset( new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.ClearAmbientCubeCache.comp.slang.spv", GetScene()));
-            ambient_.distanceFieldInit.reset( new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.DistanceFieldInit.comp.slang.spv", GetScene()));
-            ambient_.distanceFieldJump.reset( new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.DistanceFieldJump.comp.slang.spv", GetScene()));
-            ambient_.distanceFieldResolve.reset( new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.DistanceFieldResolve.comp.slang.spv", GetScene()));
 
             if (caps_.supportRayTracing)
             {
                 rt_->directLightGenPipeline.reset(new PipelineCommon::ZeroBindWithTLASPipeline(SwapChain(), "assets/shaders/Bake.HwAmbientCube.comp.slang.spv", GetScene()));
             }
         }
-        overlay_.gpuCullCompactPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.SoftMeshShaderGpuCullCompact.comp.slang.spv", GetScene()));
+        // Pick the subgroup (wave) fast-path of the GPU cull when the device supports it; otherwise the LDS variant.
+        const char* gpuCullSpv = caps_.supportSubgroupCull
+            ? "assets/shaders/Task.SoftMeshShaderGpuCullCompactWave.comp.slang.spv"
+            : "assets/shaders/Task.SoftMeshShaderGpuCullCompact.comp.slang.spv";
+        const char* shadowGpuCullSpv = caps_.supportSubgroupCull
+            ? "assets/shaders/Task.SoftMeshShaderShadowGpuCullCompactWave.comp.slang.spv"
+            : "assets/shaders/Task.SoftMeshShaderShadowGpuCullCompact.comp.slang.spv";
+        overlay_.gpuCullCompactPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, gpuCullSpv, GetScene()));
         overlay_.softMeshShaderFinalizePipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.SoftMeshShaderFinalize.comp.slang.spv", GetScene()));
         overlay_.softMeshShaderExpandPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.SoftMeshShaderExpand.comp.slang.spv", GetScene()));
-        overlay_.shadowGpuCullCompactPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.SoftMeshShaderShadowGpuCullCompact.comp.slang.spv", GetScene()));
+        overlay_.shadowGpuCullCompactPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, shadowGpuCullSpv, GetScene()));
         skin_.pipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.Skinning.comp.slang.spv", GetScene()));
         overlay_.visualDebuggerPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*frame_.swapChain, "assets/shaders/Util.VisualDebugger.comp.slang.spv", 20));
 
+        overlay_.gaussianSplatPass = std::make_unique<GaussianSplat::GaussianSplatPass>(*this);
+        overlay_.gaussianSplatPass->CreateResources();
+
         overlay_.visibilityPipeline.reset(new PipelineCommon::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
-        overlay_.visibilityFrameBuffer.reset(new FrameBuffer(frame_.swapChain->RenderExtent(), GetStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(), overlay_.visibilityPipeline->RenderPass()));
+        overlay_.visibilityFrameBuffer.reset(new FrameBuffer(frame_.swapChain->RenderExtent(), GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(), overlay_.visibilityPipeline->RenderPass()));
 
         // 太阳方向光 CSM 阴影 pass + 注册 4 个 cascade 到 Bindless
         {
@@ -880,10 +1128,9 @@ namespace Vulkan
             }
         }
 
-        // 逻辑Renderer
-        for (auto& logicRenderer : logicRenderers_.renderers)
+        if (LogicRendererBase* logicRenderer = EnsureLogicRenderer(logicRenderers_.current))
         {
-            logicRenderer.second->CreateSwapChain(frame_.swapChain->RenderExtent());
+            EnsureLogicRendererSwapChain(logicRenderers_.current, *logicRenderer);
         }
 
         // Delegate
@@ -893,39 +1140,169 @@ namespace Vulkan
         }
     }
 
-    void VulkanBaseRenderer::DeleteSwapChain()
+    void VulkanBaseRenderer::RefreshSceneSwapChainResources()
     {
+        if (!frame_.swapChain)
+        {
+            return;
+        }
+        renderViews_->ClearSchedule();
+
+        spdlog::stopwatch profileTimer;
+        auto logProfile = [&profileTimer](const char* label)
+        {
+            if (ShouldLogStartupProfile())
+            {
+                SPDLOG_INFO("[StartupProfile]   Vulkan::RefreshSceneResources {:<26} {}", label, profileTimer.elapsed_ms());
+            }
+        };
+
         for (auto& logicRenderer : logicRenderers_.renderers)
         {
             logicRenderer.second->DeleteSwapChain();
         }
+        logicRenderers_.swapChainCreatedTypes.clear();
+
+        overlay_.gaussianSplatPass.reset();
+        overlay_.visibilityPipeline.reset();
+        overlay_.visibilityFrameBuffer.reset();
+        overlay_.sunShadowPass.reset();
+        overlay_.wireframeFrameBuffers.clear();
+        overlay_.wireframePipeline.reset();
+        overlay_.bufferClearPipeline.reset();
+        ambient_.softBake.reset();
+        ambient_.clearCache.reset();
+        if (rt_)
+        {
+            rt_->directLightGenPipeline.reset();
+        }
+        overlay_.gpuCullCompactPipeline.reset();
+        overlay_.softMeshShaderFinalizePipeline.reset();
+        overlay_.softMeshShaderExpandPipeline.reset();
+        overlay_.shadowGpuCullCompactPipeline.reset();
+        skin_.pipeline.reset();
+        skin_.vertexBuffer.reset();
+        skin_.vertexMemory.reset();
+        skin_.jointBuffer.reset();
+        skin_.jointMemory.reset();
+        overlay_.simpleComposePipeline.reset();
+        overlay_.visualDebuggerPipeline.reset();
+        logProfile("old resources released");
+
+        overlay_.wireframePipeline.reset(new class PipelineCommon::GraphicsPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene(), true));
+        overlay_.wireframeFrameBuffers.reserve(frame_.swapChain->ImageViews().size());
+        for (size_t i = 0; i < frame_.swapChain->ImageViews().size(); ++i)
+        {
+            overlay_.wireframeFrameBuffers.emplace_back(
+                frame_.swapChain->RenderExtent(),
+                GetViewStorageImage(Assets::Bindless::RT_DENOISED)->GetImageView(),
+                overlay_.wireframePipeline->RenderPass());
+        }
+
+        overlay_.simpleComposePipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.UpScaleFSR.comp.slang.spv", 20));
+        overlay_.bufferClearPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*frame_.swapChain, "assets/shaders/Util.BufferClear.comp.slang.spv", 4));
+        if (RegisteredRendererRequirements().requestAmbientCube)
+        {
+            ambient_.softBake.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.SwAmbientCube.comp.slang.spv", GetScene()));
+            ambient_.clearCache.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Bake.ClearAmbientCubeCache.comp.slang.spv", GetScene()));
+
+            if (caps_.supportRayTracing)
+            {
+                rt_->directLightGenPipeline.reset(new PipelineCommon::ZeroBindWithTLASPipeline(SwapChain(), "assets/shaders/Bake.HwAmbientCube.comp.slang.spv", GetScene()));
+            }
+        }
+
+        const char* gpuCullSpv = caps_.supportSubgroupCull
+            ? "assets/shaders/Task.SoftMeshShaderGpuCullCompactWave.comp.slang.spv"
+            : "assets/shaders/Task.SoftMeshShaderGpuCullCompact.comp.slang.spv";
+        const char* shadowGpuCullSpv = caps_.supportSubgroupCull
+            ? "assets/shaders/Task.SoftMeshShaderShadowGpuCullCompactWave.comp.slang.spv"
+            : "assets/shaders/Task.SoftMeshShaderShadowGpuCullCompact.comp.slang.spv";
+        overlay_.gpuCullCompactPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, gpuCullSpv, GetScene()));
+        overlay_.softMeshShaderFinalizePipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.SoftMeshShaderFinalize.comp.slang.spv", GetScene()));
+        overlay_.softMeshShaderExpandPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.SoftMeshShaderExpand.comp.slang.spv", GetScene()));
+        overlay_.shadowGpuCullCompactPipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, shadowGpuCullSpv, GetScene()));
+        skin_.pipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.Skinning.comp.slang.spv", GetScene()));
+        overlay_.visualDebuggerPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*frame_.swapChain, "assets/shaders/Util.VisualDebugger.comp.slang.spv", 20));
+
+        overlay_.gaussianSplatPass = std::make_unique<GaussianSplat::GaussianSplatPass>(*this);
+        overlay_.gaussianSplatPass->CreateResources();
+
+        overlay_.visibilityPipeline.reset(new PipelineCommon::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
+        overlay_.visibilityFrameBuffer.reset(new FrameBuffer(frame_.swapChain->RenderExtent(), GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(), overlay_.visibilityPipeline->RenderPass()));
+
+        overlay_.sunShadowPass.reset(new Shadow::ShadowMapPass(*ctx_.device));
+        overlay_.sunShadowPass->CreateResources(GetScene());
+
+        auto* texPool = Assets::GlobalTexturePool::GetInstance();
+        for (uint32_t i = 0; i < Assets::Scene::kSunShadowCascadeCount; ++i)
+        {
+            texPool->BindShadowMap(i, GetScene().SunShadowImageView(i), GetScene().SunShadowSampler());
+        }
+
+        if (LogicRendererBase* logicRenderer = EnsureLogicRenderer(logicRenderers_.current))
+        {
+            EnsureLogicRendererSwapChain(logicRenderers_.current, *logicRenderer);
+        }
+        logProfile("resources recreated");
+    }
+
+    void VulkanBaseRenderer::DeleteSwapChain()
+    {
+        if (!frame_.swapChain)
+        {
+            return;
+        }
+        renderViews_->ClearSchedule();
+
+        if (upscaler_)
+        {
+            upscaler_->OnSwapChainDestroyed();
+        }
+
+        for (auto& logicRenderer : logicRenderers_.renderers)
+        {
+            logicRenderer.second->DeleteSwapChain();
+        }
+        logicRenderers_.swapChainCreatedTypes.clear();
+        renderViews_->DeleteSwapChain();
 
         if (delegates_.deleteSwapChain)
         {
             delegates_.deleteSwapChain();
         }
 
+        overlay_.gaussianSplatPass.reset();
+
         for ( auto& storageImage : bindless_.images )
         {
             storageImage.reset();
         }
-        bindless_.tempCreated = 0;
-
         overlay_.visibilityPipeline.reset();
         overlay_.visibilityFrameBuffer.reset();
+        renderViews_->ResetSwapChainResources();
+        // Auxiliary view resources reference view-bank images / the shared render pass; drop them
+        // before the swapchain images go away.
+        if (renderViewServices_)
+        {
+            renderViewServices_->OnSwapChainResourcesInvalidated(/*releaseOffscreenSampledOutputs*/ true);
+        }
+        if (referenceViewController_)
+        {
+            referenceViewController_->OnSwapChainResourcesInvalidated();
+        }
         overlay_.sunShadowPass.reset();
         
         screenshot_.image.reset();
         screenshot_.imageMemory.reset();
+        frameGeneration_.hudlessImages.clear();
         frame_.commandBuffers.reset();
         overlay_.wireframeFrameBuffers.clear();
         overlay_.wireframePipeline.reset();
         overlay_.bufferClearPipeline.reset();
+        frame_.inFlightFenceSubmitSerials.clear();
         ambient_.softBake.reset();
         ambient_.clearCache.reset();
-        ambient_.distanceFieldInit.reset();
-        ambient_.distanceFieldJump.reset();
-        ambient_.distanceFieldResolve.reset();
         if (rt_)
         {
             rt_->directLightGenPipeline.reset();
@@ -947,6 +1324,8 @@ namespace Vulkan
         frame_.inFlightFences.clear();
         frame_.renderFinishedSemaphores.clear();
         frame_.imageAvailableSemaphores.clear();
+        frame_.queuedSignalSemaphores.clear();
+        frame_.queuedSignalValues.clear();
         frame_.depthBuffer.reset();
         frame_.swapChain.reset();
 
@@ -955,14 +1334,119 @@ namespace Vulkan
 
     void VulkanBaseRenderer::RecreateSwapChain()
     {
+        if (upscaler_)
+        {
+            upscaler_->OnSwapChainDestroyed();
+        }
         ctx_.device->WaitIdle();
         DeleteSwapChain();
         CreateSwapChain();
+        resetUpscalerHistory_ = true;
     }
 
     void VulkanBaseRenderer::ReloadShaders()
     {
         RecreateSwapChain();
+    }
+
+    void VulkanBaseRenderer::ReloadShaders(const std::vector<std::filesystem::path>& changedShaderFiles)
+    {
+        if (changedShaderFiles.empty())
+        {
+            RecreateSwapChain();
+            return;
+        }
+
+        std::set<std::string> changedShaderFilenames;
+        for (const std::filesystem::path& shaderFile : changedShaderFiles)
+        {
+            const std::string filename = shaderFile.filename().string();
+            if (!filename.empty())
+            {
+                changedShaderFilenames.insert(filename);
+            }
+        }
+
+        if (changedShaderFilenames.empty())
+        {
+            RecreateSwapChain();
+            return;
+        }
+
+        ctx_.device->WaitIdle();
+
+        std::set<std::string> handledShaderFiles;
+        auto reloadPipeline = [&](auto& pipeline)
+        {
+            if (pipeline)
+            {
+                pipeline->ReloadIfShaderChanged(changedShaderFilenames, handledShaderFiles);
+            }
+        };
+
+        reloadPipeline(overlay_.bufferClearPipeline);
+        reloadPipeline(overlay_.simpleComposePipeline);
+        reloadPipeline(overlay_.visualDebuggerPipeline);
+        reloadPipeline(overlay_.wireframePipeline);
+        reloadPipeline(overlay_.visibilityPipeline);
+        reloadPipeline(overlay_.gpuCullCompactPipeline);
+        reloadPipeline(overlay_.softMeshShaderFinalizePipeline);
+        reloadPipeline(overlay_.softMeshShaderExpandPipeline);
+        reloadPipeline(overlay_.shadowGpuCullCompactPipeline);
+        reloadPipeline(skin_.pipeline);
+        reloadPipeline(ambient_.softBake);
+        reloadPipeline(ambient_.clearCache);
+        if (rt_)
+        {
+            reloadPipeline(rt_->directLightGenPipeline);
+        }
+        if (overlay_.gaussianSplatPass)
+        {
+            overlay_.gaussianSplatPass->ReloadShaders(changedShaderFilenames, handledShaderFiles);
+        }
+        if (overlay_.sunShadowPass)
+        {
+            overlay_.sunShadowPass->ReloadShaders(changedShaderFilenames, handledShaderFiles);
+        }
+
+        for (auto& [type, logicRenderer] : logicRenderers_.renderers)
+        {
+            if (logicRenderer && logicRenderers_.swapChainCreatedTypes.find(type) != logicRenderers_.swapChainCreatedTypes.end())
+            {
+                logicRenderer->ReloadShaders(changedShaderFilenames, handledShaderFiles);
+            }
+        }
+
+        renderViews_->Primary().AtrousDenoiser().ReloadShaders(changedShaderFilenames, handledShaderFiles);
+        for (const std::unique_ptr<RenderView>& view : renderViews_->AdditionalViews())
+        {
+            if (view)
+            {
+                view->AtrousDenoiser().ReloadShaders(changedShaderFilenames, handledShaderFiles);
+            }
+        }
+        if (NextEngine* engine = NextEngine::GetInstance())
+        {
+            if (NextUI::UserInterface* ui = engine->GetUserInterface())
+            {
+                ui->ReloadShaders(changedShaderFilenames, handledShaderFiles);
+            }
+        }
+
+        std::set<std::string> unhandledShaderFiles;
+        std::set_difference(changedShaderFilenames.begin(), changedShaderFilenames.end(),
+                            handledShaderFiles.begin(), handledShaderFiles.end(),
+                            std::inserter(unhandledShaderFiles, unhandledShaderFiles.begin()));
+        if (!unhandledShaderFiles.empty())
+        {
+            SPDLOG_INFO("[HotReload] Falling back to swapchain recreation for shader(s): {}",
+                        JoinShaderNames(unhandledShaderFiles));
+            RecreateSwapChain();
+            return;
+        }
+
+        SPDLOG_INFO("[HotReload] Reloaded compute pipeline(s): {}", JoinShaderNames(handledShaderFiles));
+        resetUpscalerHistory_ = true;
     }
 
     void VulkanBaseRenderer::CaptureScreenShot()
@@ -996,609 +1480,120 @@ namespace Vulkan
         });
     }
 
-    void VulkanBaseRenderer::UpdateSkinningBuffers()
-    {
-        auto& scene = GetScene();
-        uint32_t vertCount = scene.GetVerticeCount();
-        if (vertCount == 0) return;
-
-        int flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-        int rtxFlags = caps_.supportRayTracing ? VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR : 0;
-
-        size_t requiredVertexSize = vertCount * sizeof(Assets::GPUVertex);
-        if (!skin_.vertexBuffer || skin_.vertexBufferSize < requiredVertexSize)
-        {
-            Vulkan::BufferUtil::CreateDeviceBufferLocal(*ctx_.commandPool, "SkinnedVertices", flags | rtxFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, requiredVertexSize, skin_.vertexBuffer, skin_.vertexMemory);
-            skin_.vertexBufferSize = (uint32_t)requiredVertexSize;
-        }
-
-        uint32_t totalJoints = 0;
-        for (auto& node : scene.Nodes())
-        {
-            if (auto* skinnedMesh = node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
-            {
-                totalJoints += (uint32_t)skinnedMesh->GetJointMatrices().size();
-            }
-        }
-
-        if (totalJoints > 0)
-        {
-            size_t requiredJointSize = totalJoints * sizeof(glm::mat4);
-            if (!skin_.jointBuffer || skin_.jointBufferSize < requiredJointSize)
-            {
-                Vulkan::BufferUtil::CreateDeviceBufferLocal(*ctx_.commandPool, "JointMatrices", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, requiredJointSize, skin_.jointBuffer, skin_.jointMemory);
-                skin_.jointBufferSize = (uint32_t)requiredJointSize;
-            }
-
-            // Map and upload
-            glm::mat4* data = (glm::mat4*)skin_.jointMemory->Map(0, requiredJointSize);
-            uint32_t offset = 0;
-            for (auto& node : scene.Nodes())
-            {
-                if (auto* skinnedMesh = node->GetComponentPtr<Runtime::SkinnedMeshComponent>())
-                {
-                    const auto& matrices = skinnedMesh->GetJointMatrices();
-                    std::memcpy(data + offset, matrices.data(), matrices.size() * sizeof(glm::mat4));
-                    offset += (uint32_t)matrices.size();
-                }
-            }
-            skin_.jointMemory->Unmap();
-        }
-    }
-
-    void VulkanBaseRenderer::PreRender(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+    // Camera-independent, runs once per scene per frame (shared across all views).
+    void VulkanBaseRenderer::BeginSceneFrame(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
         UpdateAccelerationStructuresTop(commandBuffer);
         UpdateSkinningBuffers();
         InitializeBarriers(commandBuffer);
         HandleAmbientCubeCacheInvalidation(commandBuffer, imageIndex);
         DispatchSkinning(commandBuffer, imageIndex);
-        DispatchGpuCulling(commandBuffer, imageIndex);
-        DispatchClearPass(commandBuffer, imageIndex);
-        DispatchVisibilityPass(commandBuffer, imageIndex);
-        DispatchSunShadow(commandBuffer, imageIndex);
         UpdateAccelerationStructuresBottom(commandBuffer);
     }
 
-    void VulkanBaseRenderer::UpdateAccelerationStructuresTop(VkCommandBuffer commandBuffer)
+    void VulkanBaseRenderer::RenderViewToBank(
+        VkCommandBuffer commandBuffer,
+        const uint32_t imageIndex,
+        RenderView& view,
+        const bool clearSwapchain,
+        LogicRendererBase& logicRenderer)
     {
-        if (!caps_.supportRayTracing)
+        SCOPED_GPU_TIMER(view.DebugName());
+
+        FActiveRenderViewScope activeViewScope(*this, view);
+        const bool initializePrevDepthBeforeCull = !view.IsPrimary() && !view.PrevDepthValid();
+        if (initializePrevDepthBeforeCull)
         {
-            return;
+            DispatchClearPass(commandBuffer, imageIndex, /*clearSwapchain*/ false);
+            GetViewStorageImage(Assets::Bindless::RT_PREV_DEPTHBUFFER)->InsertBarrier(
+                commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
         }
-        if (!(GOption->ReferenceMode || CurrentRendererRequirements().requestRayTracing ||
-              (CurrentRendererRequirements().requestAmbientCube && !GOption->ForceSoftGen)))
+
+        PreRenderPerView(commandBuffer, imageIndex, clearSwapchain);
+        logicRenderer.Render(commandBuffer, imageIndex);
+        if (view.CopyObjectIdHistory() && logicRenderer.RequiresObjectIdHistory())
         {
-            return;
+            CopyObjectIdHistory(commandBuffer);
         }
-        SCOPED_GPU_TIMER("TLAS Update");
-        if (rt_->tlasUpdateRequest > 0)
+        if (initializePrevDepthBeforeCull)
         {
-            rt_->tlas[0].Update(commandBuffer, rt_->tlasUpdateRequest);
-            rt_->tlasUpdateRequest = 0;
+            view.SetPrevDepthValid(true);
         }
     }
 
-    void VulkanBaseRenderer::UpdateAccelerationStructuresBottom(VkCommandBuffer commandBuffer)
+    void VulkanBaseRenderer::ScheduleRenderView(
+        RenderView& view,
+        LogicRendererBase& logicRenderer,
+        const bool clearSwapchain,
+        FRenderViewPostCallback postRender)
     {
-        if (!caps_.supportRayTracing || !rt_->blasScratch)
+        renderViews_->ScheduleView(view, logicRenderer, clearSwapchain, std::move(postRender));
+    }
+
+    bool VulkanBaseRenderer::DispatchScheduledRenderViews(
+        VkCommandBuffer commandBuffer,
+        const uint32_t imageIndex)
+    {
+        bool renderedAny = false;
+        for (const FRenderViewScheduleItem& item : renderViews_->ScheduledViews())
         {
-            return;
-        }
-        SCOPED_GPU_TIMER("BLAS Update");
-        VkDeviceSize scratchOffset = 0;
-        for (size_t i = 0; i < skin_.updateRequests.size(); i++)
-        {
-            int32_t modelId = skin_.updateRequests[i];
-            if (modelId != -1)
+            if (item.view == nullptr || item.logicRenderer == nullptr)
             {
-                rt_->blas[modelId].Update(commandBuffer, *rt_->blasScratch, scratchOffset);
-                scratchOffset += rt_->blas[modelId].BuildSizes().buildScratchSize;
+                continue;
+            }
+
+            RenderViewToBank(commandBuffer, imageIndex, *item.view, item.clearSwapchain, *item.logicRenderer);
+            renderedAny = true;
+            if (item.postRender)
+            {
+                item.postRender(*item.view);
             }
         }
-        RayTracing::AccelerationStructure::InsertMemoryBarrier(commandBuffer);
+        renderViews_->ClearSchedule();
+        return renderedAny;
     }
 
-    void VulkanBaseRenderer::HandleAmbientCubeCacheInvalidation(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+    void VulkanBaseRenderer::SetRenderViewUbo(
+        RenderView& view,
+        const uint32_t imageIndex,
+        const Assets::UniformBufferObject& ubo)
     {
-        if (!CurrentRendererRequirements().requestAmbientCube || ShouldSkipAmbientCubeUpdates())
-        {
-            return;
-        }
-
-        if (ambient_.requestClearCache)
-        {
-            ClearAmbientCubeCache(commandBuffer, imageIndex);
-            ambient_.requestClearCache = false;
-        }
+        Assets::UniformBuffer& cameraUbo = view.EnsureCameraUbo(
+            Device(), imageIndex, static_cast<uint32_t>(frame_.uniformBuffers.size()));
+        cameraUbo.SetValue(ubo);
+        view.SetCameraAddress(cameraUbo.Buffer().GetDeviceAddress());
     }
 
-    void VulkanBaseRenderer::DispatchSkinning(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+    void VulkanBaseRenderer::FinalizeTemporalUbo(RenderView& view, Assets::UniformBufferObject& ubo)
     {
-        SCOPED_GPU_TIMER("skinning pass");
-        auto& scene = GetScene();
-
-        if (skin_.vertexBuffer)
+        FViewRenderState& state = view.State();
+        const bool hasPrevious = state.previousUniformBuffer.TotalFrames != 0;
+        if (!hasPrevious || state.resetHistory)
         {
-            scene.SetSkinningBuffers(skin_.vertexBuffer->GetDeviceAddress(),
-                                     skin_.jointBuffer ? skin_.jointBuffer->GetDeviceAddress() : 0);
+            ubo.PrevViewProjection = ubo.ViewProjection;
+            ubo.PrevViewProjectionUnJit = ubo.ViewProjectionUnJit;
+            view.TemporalResolve().InvalidateHistory();
         }
         else
         {
-            scene.SetSkinningBuffers(0, 0);
+            ubo.PrevViewProjection = state.previousUniformBuffer.ViewProjection;
+            ubo.PrevViewProjectionUnJit = state.previousUniformBuffer.ViewProjectionUnJit;
         }
-
-        skin_.pipeline->BindPipeline(commandBuffer, scene, imageIndex);
-
-        Assets::GPUScene gpuScene = scene.FetchGPUScene(imageIndex);
-        if (!skin_.vertexBuffer)
-        {
-            return;
-        }
-
-        for (size_t i = 0; i < skin_.updateRequests.size(); i++)
-        {
-            uint32_t modelId = skin_.updateRequests[i];
-            if (modelId == static_cast<uint32_t>(-1))
-            {
-                continue;
-            }
-            const auto* model = scene.GetModel(modelId);
-            if (!model)
-            {
-                continue;
-            }
-
-            uint32_t proxyIdx = std::numeric_limits<uint32_t>::max();
-            const uint32_t skinnedProxyModelId = modelId * 10;
-            const auto& nodeProxys = scene.GetNodeProxys();
-            for (uint32_t nodeIdx = 0; nodeIdx < nodeProxys.size(); ++nodeIdx)
-            {
-                if (nodeProxys[nodeIdx].modelId == skinnedProxyModelId)
-                {
-                    proxyIdx = nodeIdx;
-                    break;
-                }
-            }
-            if (proxyIdx == std::numeric_limits<uint32_t>::max())
-            {
-                continue;
-            }
-
-            uint32_t vertexOffset = scene.Offsets()[modelId * 10].vertexOffset;
-            uint32_t vertexCount = model->NumberOfVertices();
-
-            gpuScene.custom_data_0 = proxyIdx;
-            gpuScene.custom_data_1 = vertexOffset;
-            gpuScene.custom_data_2 = vertexCount;
-
-            vkCmdPushConstants(commandBuffer, skin_.pipeline->PipelineLayout().Handle(),
-                               VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
-            uint32_t groupCount = (vertexCount + 63) / 64;
-            vkCmdDispatch(commandBuffer, groupCount, 1, 1);
-        }
-
-        // Skinned vertex buffer barrier: compute write -> shader/RT read.
-        VkBufferMemoryBarrier skinnedBufferBarrier = {};
-        skinnedBufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        skinnedBufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        skinnedBufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        VkPipelineStageFlags skinnedDstStages =
-            VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-        if (caps_.supportRayTracing)
-        {
-            skinnedBufferBarrier.dstAccessMask |= VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
-            skinnedDstStages |= VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
-        }
-        skinnedBufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        skinnedBufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        skinnedBufferBarrier.buffer = skin_.vertexBuffer->Handle();
-        skinnedBufferBarrier.offset = 0;
-        skinnedBufferBarrier.size = VK_WHOLE_SIZE;
-
-        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             skinnedDstStages, 0, 0, nullptr, 1, &skinnedBufferBarrier, 0, nullptr);
+        state.previousUniformBuffer = ubo;
+        state.resetHistory = false;
     }
 
-    void VulkanBaseRenderer::DispatchGpuCulling(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+    // Camera-dependent pre-passes; runs per active RenderView into its RT bank (set via
+    // SetActiveViewBankBase + activeVisibilityFrameBuffer_ before calling). Only the primary view
+    // owns the swapchain, so its clear pass also clears the swapchain image.
+    void VulkanBaseRenderer::PreRenderPerView(VkCommandBuffer commandBuffer, const uint32_t imageIndex,
+                                              const bool isPrimaryView)
     {
-        SCOPED_GPU_TIMER("gpu cull");
-
-        const uint32_t indirectDrawBatchCount = GetScene().GetIndirectDrawBatchCount();
-        if (indirectDrawBatchCount == 0)
-        {
-            return;
-        }
-
-        VkBufferMemoryBarrier nodeMatrixBarrier = {};
-        nodeMatrixBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        nodeMatrixBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-        nodeMatrixBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        nodeMatrixBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        nodeMatrixBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        nodeMatrixBarrier.buffer = GetScene().NodeMatrixBuffer().Handle();
-        nodeMatrixBarrier.offset = 0;
-        nodeMatrixBarrier.size = VK_WHOLE_SIZE;
-        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             0, 0, nullptr, 1, &nodeMatrixBarrier, 0, nullptr);
-
-        auto& scene = GetScene();
-        vkCmdFillBuffer(commandBuffer, scene.SoftMeshShaderCounterBuffer().Handle(), 0, VK_WHOLE_SIZE, 0);
-
-        VkBufferMemoryBarrier counterClearBarrier = {};
-        counterClearBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        counterClearBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        counterClearBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-        counterClearBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        counterClearBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        counterClearBarrier.buffer = scene.SoftMeshShaderCounterBuffer().Handle();
-        counterClearBarrier.offset = 0;
-        counterClearBarrier.size = VK_WHOLE_SIZE;
-        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr,
-                             1, &counterClearBarrier, 0, nullptr);
-
-        auto bindCompute = [&](const PipelineCommon::ZeroBindPipeline& pipeline)
-        {
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.Handle());
-            pipeline.PipelineLayout().BindDescriptorSets(commandBuffer, 0);
-        };
-
-        Assets::GPUScene gpuScene = scene.FetchGPUScene(imageIndex);
-        gpuScene.custom_data_0 = 0;
-        gpuScene.custom_data_1 = indirectDrawBatchCount;
-        gpuScene.custom_data_2 = scene.GetMaxSceneTriangles();
-
-        bindCompute(*overlay_.gpuCullCompactPipeline);
-        vkCmdPushConstants(commandBuffer, overlay_.gpuCullCompactPipeline->PipelineLayout().Handle(),
-                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
-        uint32_t groupCount = (indirectDrawBatchCount + 63) / 64;
-        vkCmdDispatch(commandBuffer, groupCount, 1, 1);
-
-        std::array<VkBufferMemoryBarrier, 2> compactBarriers{};
-        compactBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        compactBarriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        compactBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        compactBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        compactBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        compactBarriers[0].buffer = scene.SoftMeshShaderCounterBuffer().Handle();
-        compactBarriers[0].offset = 0;
-        compactBarriers[0].size = VK_WHOLE_SIZE;
-        compactBarriers[1] = compactBarriers[0];
-        compactBarriers[1].buffer = scene.SoftMeshShaderVisibleItemBuffer().Handle();
-        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr,
-                             static_cast<uint32_t>(compactBarriers.size()), compactBarriers.data(),
-                             0, nullptr);
-
-        bindCompute(*overlay_.softMeshShaderFinalizePipeline);
-        gpuScene.custom_data_0 = 0;
-        vkCmdPushConstants(commandBuffer, overlay_.softMeshShaderFinalizePipeline->PipelineLayout().Handle(),
-                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
-        vkCmdDispatch(commandBuffer, 1, 1, 1);
-
-        std::array<VkBufferMemoryBarrier, 2> expandInputBarriers{};
-        expandInputBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        expandInputBarriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        expandInputBarriers[0].dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
-        expandInputBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        expandInputBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        expandInputBarriers[0].buffer = scene.SoftMeshShaderDispatchArgBuffer().Handle();
-        expandInputBarriers[0].offset = 0;
-        expandInputBarriers[0].size = sizeof(VkDispatchIndirectCommand);
-        expandInputBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        expandInputBarriers[1].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        expandInputBarriers[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        expandInputBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        expandInputBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        expandInputBarriers[1].buffer = scene.SoftMeshShaderVisibleItemBuffer().Handle();
-        expandInputBarriers[1].offset = 0;
-        expandInputBarriers[1].size = sizeof(Assets::SoftMeshShaderVisibleItem) * Assets::Scene::kMaxIndirectDrawCount;
-        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             0, 0, nullptr, static_cast<uint32_t>(expandInputBarriers.size()),
-                             expandInputBarriers.data(), 0, nullptr);
-
-        bindCompute(*overlay_.softMeshShaderExpandPipeline);
-        vkCmdPushConstants(commandBuffer, overlay_.softMeshShaderExpandPipeline->PipelineLayout().Handle(),
-                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
-        vkCmdDispatchIndirect(commandBuffer, scene.SoftMeshShaderDispatchArgBuffer().Handle(), 0);
-
-        std::array<VkBufferMemoryBarrier, 2> drawBarriers{};
-        drawBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        drawBarriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        drawBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        drawBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        drawBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        drawBarriers[0].buffer = scene.SoftMeshShaderPrimBuffer().Handle();
-        drawBarriers[0].offset = 0;
-        drawBarriers[0].size = VK_WHOLE_SIZE;
-        drawBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        drawBarriers[1].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        drawBarriers[1].dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
-        drawBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        drawBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        drawBarriers[1].buffer = scene.SoftMeshShaderDrawArgBuffer().Handle();
-        drawBarriers[1].offset = 0;
-        drawBarriers[1].size = sizeof(VkDrawIndirectCommand);
-        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
-                             0, 0, nullptr, static_cast<uint32_t>(drawBarriers.size()), drawBarriers.data(),
-                             0, nullptr);
-    }
-
-    void VulkanBaseRenderer::DispatchClearPass(VkCommandBuffer commandBuffer, uint32_t imageIndex)
-    {
-        SCOPED_GPU_TIMER("clear pass");
-
-        overlay_.bufferClearPipeline->BindPipeline(commandBuffer, &imageIndex);
-        vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 8, 1);
-
-        VkClearColorValue clearColor = {{0.0f, 0.0f, 0.0f, 1.0f}};
-        VkImageSubresourceRange imageRange = {};
-        imageRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        imageRange.baseMipLevel = 0;
-        imageRange.levelCount = 1;
-        imageRange.baseArrayLayer = 0;
-        imageRange.layerCount = 1;
-
-        ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex],
-            0, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-        vkCmdClearColorImage(commandBuffer, SwapChain().Images()[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                             &clearColor, 1, &imageRange);
-        ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex],
-            VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
-    }
-
-    void VulkanBaseRenderer::DispatchVisibilityPass(VkCommandBuffer commandBuffer, uint32_t imageIndex)
-    {
-        SCOPED_GPU_TIMER("visibility pass");
-
-        std::array<VkClearValue, 2> clearValues = {};
-        clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
-        clearValues[1].depthStencil = {1.0f, 0};
-
-        VkRenderPassBeginInfo renderPassInfo = {};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        auto& activeVisibilityPipeline = *overlay_.visibilityPipeline;
-        renderPassInfo.renderPass = activeVisibilityPipeline.RenderPass().Handle();
-        renderPassInfo.framebuffer = overlay_.visibilityFrameBuffer->Handle();
-        renderPassInfo.renderArea.offset = {0, 0};
-        renderPassInfo.renderArea.extent = SwapChain().RenderExtent();
-        renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-        renderPassInfo.pClearValues = clearValues.data();
-
-        vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-        {
-            const auto& scene = GetScene();
-
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, activeVisibilityPipeline.Handle());
-            const Assets::GPUScene& gpuScene = scene.FetchGPUScene(imageIndex);
-            activeVisibilityPipeline.PipelineLayout().BindDescriptorSets(
-                commandBuffer, 0, VK_PIPELINE_BIND_POINT_GRAPHICS);
-            vkCmdPushConstants(commandBuffer, activeVisibilityPipeline.PipelineLayout().Handle(),
-                               VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                               0, sizeof(Assets::GPUScene), &gpuScene);
-            if (scene.GetIndirectDrawBatchCount() > 0)
-            {
-                vkCmdDrawIndirect(commandBuffer, scene.SoftMeshShaderDrawArgBuffer().Handle(), 0,
-                                  1, sizeof(VkDrawIndirectCommand));
-            }
-        }
-        vkCmdEndRenderPass(commandBuffer);
-
-        // Copy the depth/id render target into the storage-image variant for later passes.
-        VkImageCopy copyRegion;
-        copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        copyRegion.srcOffset = {0, 0, 0};
-        copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        copyRegion.dstOffset = {0, 0, 0};
-        copyRegion.extent = {GetStorageImage(Assets::Bindless::RT_MINIGBUFFER)->GetImage().Extent().width,
-                             GetStorageImage(Assets::Bindless::RT_MINIGBUFFER)->GetImage().Extent().height, 1};
-
-        GetStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW)->InsertBarrier(commandBuffer,
-            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-        GetStorageImage(Assets::Bindless::RT_MINIGBUFFER)->InsertBarrier(commandBuffer,
-            0, VK_ACCESS_TRANSFER_WRITE_BIT,
-            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-        vkCmdCopyImage(commandBuffer,
-            GetStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            GetStorageImage(Assets::Bindless::RT_MINIGBUFFER)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1, &copyRegion);
-
-        GetStorageImage(Assets::Bindless::RT_MINIGBUFFER)->InsertBarrier(commandBuffer,
-            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
-    }
-
-    void VulkanBaseRenderer::DispatchSunShadow(VkCommandBuffer commandBuffer, uint32_t imageIndex)
-    {
-        if (!overlay_.sunShadowPass || !GetScene().GetEnvSettings().HasSun)
-        {
-            return;
-        }
-
-        SCOPED_GPU_TIMER("shadow pass");
-        auto& scene = GetScene();
-        const uint32_t indirectDrawBatchCount = scene.GetIndirectDrawBatchCount();
-        const uint32_t groupCount = (indirectDrawBatchCount + 63) / 64;
-        const uint32_t activeCascadeMask = NextEngine::GetInstance()->GetSunShadowCascadeUpdateMask();
-        Assets::GPUScene shadowGpuScene = scene.FetchGPUScene(imageIndex);
-
-        if (activeCascadeMask != 0)
-        {
-            vkCmdFillBuffer(commandBuffer, scene.NodeMatrixBuffer().Handle(),
-                            Assets::GPU_SCENE_DYNAMIC_SHADOW_GPU_DRIVEN_STATS_OFFSET,
-                            sizeof(Assets::GPUDrivenStat) * Assets::Scene::kSunShadowCascadeCount, 0);
-
-            VkBufferMemoryBarrier statsClearBarrier = {};
-            statsClearBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            statsClearBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            statsClearBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-            statsClearBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            statsClearBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            statsClearBarrier.buffer = scene.NodeMatrixBuffer().Handle();
-            statsClearBarrier.offset = Assets::GPU_SCENE_DYNAMIC_SHADOW_GPU_DRIVEN_STATS_OFFSET;
-            statsClearBarrier.size = sizeof(Assets::GPUDrivenStat) * Assets::Scene::kSunShadowCascadeCount;
-            vkCmdPipelineBarrier(commandBuffer,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                0, 0, nullptr, 1, &statsClearBarrier, 0, nullptr);
-        }
-
-        if (activeCascadeMask != 0)
-        {
-            vkCmdFillBuffer(commandBuffer, scene.SoftMeshShaderCounterBuffer().Handle(), 0, VK_WHOLE_SIZE, 0);
-            vkCmdFillBuffer(commandBuffer, scene.SoftMeshShaderDrawArgBuffer().Handle(), sizeof(VkDrawIndirectCommand),
-                            sizeof(VkDrawIndirectCommand) * Assets::Scene::kSunShadowCascadeCount, 0);
-
-            std::array<VkBufferMemoryBarrier, 2> clearBarriers{};
-            clearBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            clearBarriers[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            clearBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-            clearBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            clearBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            clearBarriers[0].buffer = scene.SoftMeshShaderCounterBuffer().Handle();
-            clearBarriers[0].offset = 0;
-            clearBarriers[0].size = VK_WHOLE_SIZE;
-            clearBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            clearBarriers[1].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            clearBarriers[1].dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-            clearBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            clearBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            clearBarriers[1].buffer = scene.SoftMeshShaderDrawArgBuffer().Handle();
-            clearBarriers[1].offset = sizeof(VkDrawIndirectCommand);
-            clearBarriers[1].size = sizeof(VkDrawIndirectCommand) * Assets::Scene::kSunShadowCascadeCount;
-            vkCmdPipelineBarrier(commandBuffer,
-                VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
-                0, 0, nullptr, static_cast<uint32_t>(clearBarriers.size()), clearBarriers.data(), 0, nullptr);
-        }
-
-        if (groupCount > 0 && activeCascadeMask != 0)
-        {
-            auto bindCompute = [&](const PipelineCommon::ZeroBindPipeline& pipeline)
-            {
-                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.Handle());
-                pipeline.PipelineLayout().BindDescriptorSets(commandBuffer, 0);
-            };
-
-            shadowGpuScene.custom_data_0 = activeCascadeMask;
-            shadowGpuScene.custom_data_1 = indirectDrawBatchCount;
-            shadowGpuScene.custom_data_2 = scene.GetMaxSceneTriangles();
-
-            bindCompute(*overlay_.shadowGpuCullCompactPipeline);
-            vkCmdPushConstants(commandBuffer, overlay_.shadowGpuCullCompactPipeline->PipelineLayout().Handle(),
-                               VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &shadowGpuScene);
-            vkCmdDispatch(commandBuffer, groupCount, 1, 1);
-
-            std::array<VkBufferMemoryBarrier, 2> compactBarriers{};
-            compactBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            compactBarriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            compactBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            compactBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            compactBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            compactBarriers[0].buffer = scene.SoftMeshShaderCounterBuffer().Handle();
-            compactBarriers[0].offset = 0;
-            compactBarriers[0].size = VK_WHOLE_SIZE;
-            compactBarriers[1] = compactBarriers[0];
-            compactBarriers[1].buffer = scene.SoftMeshShaderVisibleItemBuffer().Handle();
-            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr,
-                                 static_cast<uint32_t>(compactBarriers.size()), compactBarriers.data(),
-                                 0, nullptr);
-
-            bindCompute(*overlay_.softMeshShaderFinalizePipeline);
-            for (uint32_t cascade = 0; cascade < Assets::Scene::kSunShadowCascadeCount; ++cascade)
-            {
-                if ((activeCascadeMask & (1u << cascade)) == 0u)
-                {
-                    continue;
-                }
-
-                shadowGpuScene.custom_data_0 = scene.SoftMeshShaderDrawSlotForShadowCascade(cascade);
-                vkCmdPushConstants(commandBuffer, overlay_.softMeshShaderFinalizePipeline->PipelineLayout().Handle(),
-                                   VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &shadowGpuScene);
-                vkCmdDispatch(commandBuffer, 1, 1, 1);
-            }
-
-            std::array<VkBufferMemoryBarrier, 2> expandInputBarriers{};
-            expandInputBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            expandInputBarriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            expandInputBarriers[0].dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
-            expandInputBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            expandInputBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            expandInputBarriers[0].buffer = scene.SoftMeshShaderDispatchArgBuffer().Handle();
-            expandInputBarriers[0].offset = sizeof(VkDispatchIndirectCommand);
-            expandInputBarriers[0].size = sizeof(VkDispatchIndirectCommand) * Assets::Scene::kSunShadowCascadeCount;
-            expandInputBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            expandInputBarriers[1].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            expandInputBarriers[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            expandInputBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            expandInputBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            expandInputBarriers[1].buffer = scene.SoftMeshShaderVisibleItemBuffer().Handle();
-            expandInputBarriers[1].offset = sizeof(Assets::SoftMeshShaderVisibleItem) * Assets::Scene::kMaxIndirectDrawCount;
-            expandInputBarriers[1].size =
-                sizeof(Assets::SoftMeshShaderVisibleItem) * Assets::Scene::kMaxIndirectDrawCount *
-                Assets::Scene::kSunShadowCascadeCount;
-            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                 VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                 0, 0, nullptr, static_cast<uint32_t>(expandInputBarriers.size()),
-                                 expandInputBarriers.data(), 0, nullptr);
-
-            bindCompute(*overlay_.softMeshShaderExpandPipeline);
-            for (uint32_t cascade = 0; cascade < Assets::Scene::kSunShadowCascadeCount; ++cascade)
-            {
-                if ((activeCascadeMask & (1u << cascade)) == 0u)
-                {
-                    continue;
-                }
-
-                const uint32_t slot = scene.SoftMeshShaderDrawSlotForShadowCascade(cascade);
-                shadowGpuScene.custom_data_0 = slot;
-                vkCmdPushConstants(commandBuffer, overlay_.softMeshShaderExpandPipeline->PipelineLayout().Handle(),
-                                   VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &shadowGpuScene);
-                vkCmdDispatchIndirect(commandBuffer, scene.SoftMeshShaderDispatchArgBuffer().Handle(),
-                                      sizeof(VkDispatchIndirectCommand) * slot);
-            }
-
-            std::array<VkBufferMemoryBarrier, 2> drawBarriers{};
-            drawBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            drawBarriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            drawBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            drawBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            drawBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            drawBarriers[0].buffer = scene.SoftMeshShaderShadowPrimBuffer().Handle();
-            drawBarriers[0].offset = 0;
-            drawBarriers[0].size = VK_WHOLE_SIZE;
-            drawBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            drawBarriers[1].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            drawBarriers[1].dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
-            drawBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            drawBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            drawBarriers[1].buffer = scene.SoftMeshShaderDrawArgBuffer().Handle();
-            drawBarriers[1].offset = sizeof(VkDrawIndirectCommand);
-            drawBarriers[1].size = sizeof(VkDrawIndirectCommand) * Assets::Scene::kSunShadowCascadeCount;
-            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                 VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
-                                 0, 0, nullptr, static_cast<uint32_t>(drawBarriers.size()), drawBarriers.data(),
-                                 0, nullptr);
-        }
-
-        for (uint32_t cascade = 0; cascade < Assets::Scene::kSunShadowCascadeCount; ++cascade)
-        {
-            if ((activeCascadeMask & (1u << cascade)) == 0u)
-            {
-                continue;
-            }
-
-            overlay_.sunShadowPass->DrawCascade(
-                commandBuffer, scene, shadowGpuScene, cascade);
-        }
+        DispatchGpuCulling(commandBuffer, imageIndex);
+        DispatchClearPass(commandBuffer, imageIndex, /*clearSwapchain*/ isPrimaryView);
+        DispatchVisibilityPass(commandBuffer, imageIndex);
+        DispatchSunShadow(commandBuffer, imageIndex);
     }
 
     void VulkanBaseRenderer::DrawFrame()
@@ -1613,10 +1608,36 @@ namespace Vulkan
         {
             SCOPED_CPU_TIMER("draw-frame");
             const auto noTimeout = std::numeric_limits<uint64_t>::max();
+            const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+            const bool frameGenerationEnabled =
+                caps_.supportDLSSG &&
+                settings.DLSSG &&
+                NextEngine::GetInstance()->GetEngineStatus() != NextRenderer::EApplicationStatus::Loading;
+
+            frame_.streamlineFrameToken = upscaler_
+                ? upscaler_->BeginFrame(static_cast<uint32_t>(frame_.frameCount),
+                                        frameGenerationEnabled,
+                                        settings.DLSSGFrameLimitFps)
+                : Rendering::Upscaler::FFrameToken{};
+            if (upscaler_ && frame_.streamlineFrameToken)
+            {
+                upscaler_->ReflexSleep(frame_.streamlineFrameToken);
+                if (frame_.frameCount > 0 && frame_.frameCount % 60 == 0)
+                {
+                    upscaler_->UpdateFrameGenerationState();
+                }
+                upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::SimulationStart,
+                                     frame_.streamlineFrameToken);
+            }
 
             {
                 SCOPED_CPU_TIMER("prepare");
                 BeforeNextFrame();
+            }
+            if (upscaler_ && frame_.streamlineFrameToken)
+            {
+                upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::SimulationEnd,
+                                     frame_.streamlineFrameToken);
             }
 
             {
@@ -1631,8 +1652,8 @@ namespace Vulkan
             auto result = VkResult(VK_SUCCESS);
             {
                 SCOPED_CPU_TIMER("acquire-frame");
-                result = vkAcquireNextImageKHR(ctx_.device->Handle(), frame_.swapChain->Handle(), noTimeout,
-                                                imageAvailableSemaphore, nullptr, &frame_.currentImageIndex);
+                result = StreamlineWrapper::AcquireNextImageKHR(ctx_.device->Handle(), frame_.swapChain->Handle(), noTimeout,
+                                                                imageAvailableSemaphore, nullptr, &frame_.currentImageIndex);
             }
             
             if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
@@ -1653,13 +1674,33 @@ namespace Vulkan
             {
                 SCOPED_CPU_TIMER("fence");
                 previousSubmitFence->Wait(noTimeout);
+                frame_.completedSubmitSerial = std::max(frame_.completedSubmitSerial, frame_.currentFenceSerial);
             }
             if (frameSlotFence != previousSubmitFence)
             {
                 SCOPED_CPU_TIMER("frame-slot-fence");
                 frameSlotFence->Wait(noTimeout);
+                if (frame_.currentFrame < frame_.inFlightFenceSubmitSerials.size())
+                {
+                    frame_.completedSubmitSerial = std::max(
+                        frame_.completedSubmitSerial, frame_.inFlightFenceSubmitSerials[frame_.currentFrame]);
+                }
             }
             frame_.currentFence = frameSlotFence;
+            frame_.recordingSubmitSerial = frame_.nextSubmitSerial;
+            frame_.queuedSignalSemaphores.clear();
+            frame_.queuedSignalValues.clear();
+
+            // Runtime node creation can increase the expanded primitive count. Resize only after
+            // the previous queue submission has completed so no in-flight work retains old addresses.
+            {
+                SCOPED_CPU_TIMER("prepare gpudriven");
+                if (GetScene().EnsureGpuDrivenBufferCapacity(*ctx_.commandPool))
+                {
+                    AfterUpdateScene();
+                }
+                
+            }
 
             {
                 SCOPED_CPU_TIMER("update uniform");
@@ -1673,12 +1714,14 @@ namespace Vulkan
                 SCOPED_GPU_TIMER("[gpu]");
 
                 {
+                    SCOPED_CPU_TIMER("begin scene");
                     SCOPED_GPU_TIMER("[pre-render]");
-                    PreRender(commandBuffer, frame_.currentImageIndex);
+                    BeginSceneFrame(commandBuffer, frame_.currentImageIndex);
                     skin_.updateRequests.clear();
                 }
 
                 {
+                    SCOPED_CPU_TIMER("render");
                     SCOPED_GPU_TIMER("[render]");
                     Render(commandBuffer, frame_.currentImageIndex);
                 }
@@ -1688,21 +1731,32 @@ namespace Vulkan
                     PostRender(commandBuffer, frame_.currentImageIndex);
                 }
 
+                if (upscaler_ && frameGenerationEnabled)
+                {
+                    SCOPED_GPU_TIMER("dlssg-tag");
+                    CaptureFrameGenerationHudless(commandBuffer, frame_.currentImageIndex);
+                    auto inputs = BuildUpscalerFrameInputs(
+                        commandBuffer,
+                        frame_.currentImageIndex,
+                        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+                    if (frame_.currentImageIndex < frameGeneration_.hudlessImages.size())
+                    {
+                        inputs.hudlessColor = MakeRenderImageResource(
+                            frameGeneration_.hudlessImages[frame_.currentImageIndex].get(),
+                            VK_IMAGE_LAYOUT_GENERAL,
+                            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+                    }
+                    inputs.enableDLSSG = true;
+                    upscaler_->TagFrameGeneration(inputs);
+                }
+
                 if (delegates_.postRender)
                 {
-                    SCOPED_GPU_TIMER("imgui");
+                    SCOPED_GPU_TIMER("ui");
                     delegates_.postRender(commandBuffer, frame_.currentImageIndex);
                 }
             }
             frame_.commandBuffers->End(frame_.currentFrame);
-
-            {
-                SCOPED_CPU_TIMER("update nodes");
-                if (GetScene().UpdateNodes())
-                {
-                    AfterUpdateScene();
-                }
-            }
 
             VkSubmitInfo submitInfo = {};
             submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1710,23 +1764,62 @@ namespace Vulkan
             VkCommandBuffer commandBuffers[]{commandBuffer};
             VkSemaphore waitSemaphores[] = {imageAvailableSemaphore};
             VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-            VkSemaphore signalSemaphores[] = {renderFinishedSemaphore};
             {
                 SCOPED_CPU_TIMER("submit");
                 frame_.currentFence = &(frame_.inFlightFences[frame_.currentFrame]);
                 {
+                    if (upscaler_ && frame_.streamlineFrameToken)
+                    {
+                        upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::RenderSubmitStart,
+                                             frame_.streamlineFrameToken);
+                    }
+
                     submitInfo.waitSemaphoreCount = 1;
                     submitInfo.pWaitSemaphores = waitSemaphores;
                     submitInfo.pWaitDstStageMask = waitStages;
                     submitInfo.commandBufferCount = 1;
                     submitInfo.pCommandBuffers = commandBuffers;
-                    submitInfo.signalSemaphoreCount = 1;
-                    submitInfo.pSignalSemaphores = signalSemaphores;
+
+                    std::vector<VkSemaphore> signalSemaphores;
+                    signalSemaphores.reserve(1 + frame_.queuedSignalSemaphores.size());
+                    signalSemaphores.push_back(renderFinishedSemaphore);
+                    signalSemaphores.insert(signalSemaphores.end(), frame_.queuedSignalSemaphores.begin(),
+                                            frame_.queuedSignalSemaphores.end());
+
+                    submitInfo.signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
+                    submitInfo.pSignalSemaphores = signalSemaphores.data();
+
+                    std::vector<uint64_t> signalSemaphoreValues;
+                    VkTimelineSemaphoreSubmitInfo timelineSubmitInfo = {};
+                    if (!frame_.queuedSignalValues.empty())
+                    {
+                        signalSemaphoreValues.reserve(signalSemaphores.size());
+                        signalSemaphoreValues.push_back(0);
+                        signalSemaphoreValues.insert(signalSemaphoreValues.end(), frame_.queuedSignalValues.begin(),
+                                                     frame_.queuedSignalValues.end());
+                        timelineSubmitInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+                        timelineSubmitInfo.signalSemaphoreValueCount =
+                            static_cast<uint32_t>(signalSemaphoreValues.size());
+                        timelineSubmitInfo.pSignalSemaphoreValues = signalSemaphoreValues.data();
+                        submitInfo.pNext = &timelineSubmitInfo;
+                    }
 
                     frame_.currentFence->Reset();
 
                     Check(vkQueueSubmit(ctx_.device->GraphicsQueue(), 1, &submitInfo, frame_.currentFence->Handle()),
                           "submit draw command buffer");
+                    frame_.currentFenceSerial = frame_.recordingSubmitSerial;
+                    if (frame_.currentFrame < frame_.inFlightFenceSubmitSerials.size())
+                    {
+                        frame_.inFlightFenceSubmitSerials[frame_.currentFrame] = frame_.recordingSubmitSerial;
+                    }
+                    frame_.nextSubmitSerial = frame_.recordingSubmitSerial + 1;
+
+                    if (upscaler_ && frame_.streamlineFrameToken)
+                    {
+                        upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::RenderSubmitEnd,
+                                             frame_.streamlineFrameToken);
+                    }
                 }
             }
 
@@ -1736,13 +1829,31 @@ namespace Vulkan
                 VkPresentInfoKHR presentInfo = {};
                 presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
                 presentInfo.waitSemaphoreCount = 1;
-                presentInfo.pWaitSemaphores = signalSemaphores;
+                presentInfo.pWaitSemaphores = &renderFinishedSemaphore;
                 presentInfo.swapchainCount = 1;
                 presentInfo.pSwapchains = swapChains;
                 presentInfo.pImageIndices = &frame_.currentImageIndex;
                 presentInfo.pResults = nullptr; // Optional
 
-                result = vkQueuePresentKHR(ctx_.device->PresentQueue(), &presentInfo);
+                if (upscaler_ && frame_.streamlineFrameToken)
+                {
+                    upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::PresentStart,
+                                         frame_.streamlineFrameToken);
+                }
+
+                result = StreamlineWrapper::QueuePresentKHR(ctx_.device->PresentQueue(), &presentInfo);
+                static bool firstPresentLogged = false;
+                if (!firstPresentLogged && ShouldLogStartupProfile())
+                {
+                    firstPresentLogged = true;
+                    SPDLOG_INFO("[StartupProfile] first QueuePresentKHR returned at renderer frame {}", frame_.frameCount);
+                }
+
+                if (upscaler_ && frame_.streamlineFrameToken)
+                {
+                    upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::PresentEnd,
+                                         frame_.streamlineFrameToken);
+                }
 
                 if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
                 {
@@ -1755,8 +1866,15 @@ namespace Vulkan
                     Throw(std::runtime_error(std::string("failed to present next image (") + ToString(result) + ")"));
                 }
             }
+            
+            if (delegates_.afterSubmit)
+            {
+                SCOPED_CPU_TIMER("after submit");
+                delegates_.afterSubmit();
+            }
 
             frame_.currentFrame = (frame_.currentFrame + 1) % frame_.inFlightFences.size();
+            resetUpscalerHistory_ = false;
             frame_.frameCount++;
         }
     }
@@ -1766,6 +1884,11 @@ namespace Vulkan
         for (auto& logicRenderer : logicRenderers_.renderers)
         {
             logicRenderer.second->BeforeNextFrame();
+        }
+
+        if (renderViewServices_)
+        {
+            renderViewServices_->BeforeNextFrame();
         }
 
         if (delegates_.beforeNextTick)
@@ -1783,218 +1906,62 @@ namespace Vulkan
         }
     }
 
-    void VulkanBaseRenderer::UpdateStreamline(VkCommandBuffer commandBuffer, uint32_t imageIndex)
-    {
-#if WITH_STREAMLINE
-        if (!caps_.supportDLSS) return;
-        
-        StreamlineWrapper::LazyInit(ctx_.device->Handle(), ctx_.instance->Handle(), ctx_.device->PhysicalDevice(), 0, ctx_.device->ComputeFamilyIndex(), 0, ctx_.device->GraphicsFamilyIndex(), caps_.supportDLSS, caps_.supportDLSSRR);
-
-        auto& settings = NextEngine::GetInstance()->GetUserSettings();
-        
-        sl::ViewportHandle viewport(0);
-        sl::FrameToken* frameToken;
-        uint32_t uintFrameCount = (uint32_t)frame_.frameCount;
-        if (SL_FAILED(res0, slGetNewFrameToken(frameToken, &uintFrameCount)))
-        {
-            SPDLOG_ERROR("slGetNewFrameToken failed: {}", (int)res0);
-            return;
-        }
-
-        bool useDLSSRR = SupportDLSSRR() && settings.DLSSRR;
-        
-        // 1. DLSS Runtime::Config::Options
-        if (useDLSSRR)
-        {
-            sl::DLSSDOptions dlssOptions;
-            switch (settings.SuperResolution)
-            {
-                case 0: dlssOptions.mode = sl::DLSSMode::eMaxQuality; break;
-                case 1: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
-                case 2: dlssOptions.mode = sl::DLSSMode::eMaxPerformance; break;
-                case 3: dlssOptions.mode = sl::DLSSMode::eUltraPerformance; break;
-                case 4: dlssOptions.mode = sl::DLSSMode::eDLAA; break;
-                default: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
-            }
-            dlssOptions.dlaaPreset = sl::DLSSDPreset::ePresetE;
-            dlssOptions.qualityPreset = sl::DLSSDPreset::ePresetE;
-            dlssOptions.balancedPreset = sl::DLSSDPreset::ePresetE;
-            dlssOptions.performancePreset = sl::DLSSDPreset::ePresetE;
-            dlssOptions.ultraPerformancePreset = sl::DLSSDPreset::ePresetE;
-            dlssOptions.outputWidth = SwapChain().Extent().width;
-            dlssOptions.outputHeight = SwapChain().Extent().height;
-            dlssOptions.colorBuffersHDR = sl::Boolean::eTrue;
-            dlssOptions.normalRoughnessMode = sl::DLSSDNormalRoughnessMode::ePacked;
-        
-            if (SL_FAILED(res1, slDLSSDSetOptions(viewport, dlssOptions)))
-            {
-                SPDLOG_ERROR("slDLSSDSetOptions failed: {}", (int)res1);
-            }
-        }
-        else
-        {
-            sl::DLSSOptions dlssOptions;
-            switch (settings.SuperResolution)
-            {
-                case 0: dlssOptions.mode = sl::DLSSMode::eMaxQuality; break;
-                case 1: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
-                case 2: dlssOptions.mode = sl::DLSSMode::eMaxPerformance; break;
-                case 3: dlssOptions.mode = sl::DLSSMode::eUltraPerformance; break;
-                case 4: dlssOptions.mode = sl::DLSSMode::eDLAA; break;
-                default: dlssOptions.mode = sl::DLSSMode::eBalanced; break;
-            }
-            dlssOptions.outputWidth = SwapChain().Extent().width;
-            dlssOptions.outputHeight = SwapChain().Extent().height;
-            dlssOptions.colorBuffersHDR = sl::Boolean::eTrue;
-            
-            if (SL_FAILED(res1, slDLSSSetOptions(viewport, dlssOptions)))
-            {
-                SPDLOG_ERROR("slDLSSSetOptions failed: {}", (int)res1);
-            }
-        }
-
-        // 2. Constants
-        sl::Constants constants{};
-        constants.cameraViewToClip = toSlMatrix(frame_.lastUBO.ProjectionUnJit);
-        constants.clipToCameraView = toSlMatrix(frame_.lastUBO.ProjectionInverseUnJit);
-        constants.clipToPrevClip = toSlMatrix(frame_.lastUBO.PrevViewProjectionUnJit * frame_.lastUBO.ModelViewInverse * frame_.lastUBO.ProjectionInverseUnJit);
-        constants.prevClipToClip = toSlMatrix(frame_.lastUBO.ProjectionUnJit * frame_.lastUBO.ModelView * frame_.lastUBO.PrevViewProjectionUnJit);
-        
-        constants.jitterOffset = sl::float2(frame_.lastUBO.Jitter.x, frame_.lastUBO.Jitter.y);
-        constants.mvecScale = {1.0f / (float)SwapChain().RenderExtent().width,1.0f / (float)SwapChain().RenderExtent().height}; 
-        
-        constants.cameraPos = sl::float3(frame_.lastUBO.ModelViewInverse[3][0], frame_.lastUBO.ModelViewInverse[3][1], frame_.lastUBO.ModelViewInverse[3][2]);
-        constants.cameraFwd = sl::float3(-frame_.lastUBO.ModelViewInverse[2][0], -frame_.lastUBO.ModelViewInverse[2][1], -frame_.lastUBO.ModelViewInverse[2][2]);
-        constants.cameraUp = sl::float3(frame_.lastUBO.ModelViewInverse[1][0], frame_.lastUBO.ModelViewInverse[1][1], frame_.lastUBO.ModelViewInverse[1][2]);
-        constants.cameraRight = sl::float3(frame_.lastUBO.ModelViewInverse[0][0], frame_.lastUBO.ModelViewInverse[0][1], frame_.lastUBO.ModelViewInverse[0][2]);
-        
-        auto& camera = GetScene().GetRenderCamera();
-        constants.cameraNear = camera.NearPlane;
-        constants.cameraFar = camera.FarPlane;
-        constants.cameraFOV = glm::radians(camera.FieldOfView); 
-        constants.cameraAspectRatio = (float)SwapChain().Extent().width / (float)SwapChain().Extent().height;
-        
-        constants.depthInverted = sl::Boolean::eFalse;
-        constants.cameraMotionIncluded = sl::Boolean::eTrue;
-        constants.motionVectors3D = sl::Boolean::eFalse;
-        constants.reset = frame_.frameCount < 2 ? sl::Boolean::eTrue : sl::Boolean::eFalse;
-        constants.cameraPinholeOffset = sl::float2(0.0f, 0.0f);
-        
-        if (SL_FAILED(res2, slSetConstants(constants, *frameToken, viewport)))
-        {
-            SPDLOG_ERROR("slSetConstants failed: {}", (int)res2);
-        }
-
-        // 3. Tags
-        // Depth
-        auto slDepth = toSlResource(frame_.depthBuffer->GetImage(), frame_.depthBuffer->GetImageMemory().Handle(), frame_.depthBuffer->ImageView().Handle(), VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-        slDepth.width = SwapChain().RenderExtent().width;
-        slDepth.height = SwapChain().RenderExtent().height;
-        sl::ResourceTag tagDepth(&slDepth, sl::kBufferTypeDepth, sl::eOnlyValidNow);
-        slSetTagForFrame(*frameToken, viewport, &tagDepth, 1, commandBuffer);
-
-        // Motion Vectors
-        auto& resMV = bindless_.images[Assets::Bindless::RT_MOTIONVECTOR];
-        auto slMV = toSlResource(resMV->GetImage(), resMV->GetImageMemory().Handle(), resMV->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
-        sl::ResourceTag tagMV(&slMV, sl::kBufferTypeMotionVectors, sl::eOnlyValidNow);
-        slSetTagForFrame(*frameToken, viewport, &tagMV, 1, commandBuffer);
-
-        // Scaling Input (Color)
-        auto& resInput = bindless_.images[Assets::Bindless::RT_DENOISED];
-        auto slInput = toSlResource(resInput->GetImage(), resInput->GetImageMemory().Handle(), resInput->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
-        sl::ResourceTag tagInput(&slInput, sl::kBufferTypeScalingInputColor, sl::eOnlyValidNow);
-        slSetTagForFrame(*frameToken, viewport, &tagInput, 1, commandBuffer);
-
-        // Scaling Output
-        sl::Resource slOutput(sl::ResourceType::eTex2d, (void*)frame_.swapChain->Images()[imageIndex], nullptr, (void*)frame_.swapChain->ImageViews()[imageIndex]->Handle(), (uint32_t)VK_IMAGE_LAYOUT_GENERAL);
-        slOutput.width = SwapChain().Extent().width;
-        slOutput.height = SwapChain().Extent().height;
-        slOutput.nativeFormat = (uint32_t)frame_.swapChain->Format();
-        sl::ResourceTag tagOutput(&slOutput, sl::kBufferTypeScalingOutputColor, sl::eOnlyValidNow);
-        slSetTagForFrame(*frameToken, viewport, &tagOutput, 1, commandBuffer);
-        
-        if (useDLSSRR)
-        {
-            // Albedo
-            auto& resAlbedo = bindless_.images[Assets::Bindless::RT_ALBEDO];
-            auto slAlbedo = toSlResource(resAlbedo->GetImage(), resAlbedo->GetImageMemory().Handle(), resAlbedo->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
-            sl::ResourceTag tagAlbedo(&slAlbedo, sl::kBufferTypeAlbedo, sl::eOnlyValidNow);
-            slSetTagForFrame(*frameToken, viewport, &tagAlbedo, 1, commandBuffer);
-
-            // Specular Albedo
-            auto& resSpecAlbedo = bindless_.images[Assets::Bindless::RT_SPECULAR_ALBEDO];
-            auto slSpecAlbedo = toSlResource(resSpecAlbedo->GetImage(), resSpecAlbedo->GetImageMemory().Handle(), resSpecAlbedo->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
-            sl::ResourceTag tagSpecAlbedo(&slSpecAlbedo, sl::kBufferTypeSpecularAlbedo, sl::eOnlyValidNow);
-            slSetTagForFrame(*frameToken, viewport, &tagSpecAlbedo, 1, commandBuffer);
-
-            // Normals
-            auto& resNormal = bindless_.images[Assets::Bindless::RT_NORMAL];
-            auto slNormal = toSlResource(resNormal->GetImage(), resNormal->GetImageMemory().Handle(), resNormal->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
-            sl::ResourceTag tagNormal(&slNormal, sl::kBufferTypeNormalRoughness, sl::eOnlyValidNow);
-            slSetTagForFrame(*frameToken, viewport, &tagNormal, 1, commandBuffer);
-            
-            // auto& resMV = bindless_.images[Assets::Bindless::RT_MOTIONVECTOR];
-            // auto slMV = toSlResource(resMV->GetImage(), resMV->GetImageMemory().Handle(), resMV->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
-            // sl::ResourceTag tagMV(&slMV, sl::kBufferTypeSpecularMotionVectors, sl::eOnlyValidNow);
-            // slSetTagForFrame(*frameToken, viewport, &tagMV, 1, commandBuffer);
-
-            // Diffuse Noisy
-            // auto& resDiffNoisy = bindless_.images[Assets::Bindless::RT_ACCUMLATE_DIFFUSE];
-            // auto slDiffNoisy = toSlResource(resDiffNoisy->GetImage(), resDiffNoisy->GetImageMemory().Handle(), resDiffNoisy->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
-            // sl::ResourceTag tagDiffNoisy(&slDiffNoisy, sl::kBufferTypeDiffuseHitNoisy, sl::eOnlyValidNow);
-            // slSetTagForFrame(*frameToken, viewport, &tagDiffNoisy, 1, commandBuffer);
-            //
-            // // Specular Noisy
-            // auto& resSpecNoisy = bindless_.images[Assets::Bindless::RT_ACCUMLATE_SPECULAR];
-            // auto slSpecNoisy = toSlResource(resSpecNoisy->GetImage(), resSpecNoisy->GetImageMemory().Handle(), resSpecNoisy->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
-            // sl::ResourceTag tagSpecNoisy(&slSpecNoisy, sl::kBufferTypeSpecularHitNoisy, sl::eOnlyValidNow);
-            // slSetTagForFrame(*frameToken, viewport, &tagSpecNoisy, 1, commandBuffer);
-
-            // Diffuse Hit Dist
-            auto& resDiffHitDist = bindless_.images[Assets::Bindless::RT_DIFFUSE_HITDIST];
-            auto slDiffHitDist = toSlResource(resDiffHitDist->GetImage(), resDiffHitDist->GetImageMemory().Handle(), resDiffHitDist->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
-            sl::ResourceTag tagDiffHitDist(&slDiffHitDist, sl::kBufferTypeDiffuseHitDistance, sl::eOnlyValidNow);
-            slSetTagForFrame(*frameToken, viewport, &tagDiffHitDist, 1, commandBuffer);
-            //
-            // // Specular Hit Dist
-            // auto& resSpecHitDist = bindless_.images[Assets::Bindless::RT_SPECULAR_HITDIST];
-            // auto slSpecHitDist = toSlResource(resSpecHitDist->GetImage(), resSpecHitDist->GetImageMemory().Handle(), resSpecHitDist->GetImageView().Handle(), VK_IMAGE_LAYOUT_GENERAL);
-            // sl::ResourceTag tagSpecHitDist(&slSpecHitDist, sl::kBufferTypeSpecularHitDistance, sl::eOnlyValidNow);
-            // slSetTagForFrame(*frameToken, viewport, &tagSpecHitDist, 1, commandBuffer);
-        }
-
-        // 4. Evaluate
-        const sl::BaseStructure* inputs[] = { &viewport };
-        if (SL_FAILED(res3, slEvaluateFeature(useDLSSRR ? sl::kFeatureDLSS_RR : sl::kFeatureDLSS, *frameToken, inputs, 1, commandBuffer)))
-        {
-            SPDLOG_ERROR("slEvaluateFeature DLSS failed: {}", (int)res3);
-        }
-#endif
-    }
 
     void VulkanBaseRenderer::RegisterLogicRenderer(ERendererType type)
     {
-        switch (type)
+        if (!IsLogicRendererRegistered(type))
         {
-        case ERendererType::ERT_PathTracing:
-            logicRenderers_.renderers[type] = std::make_unique<RayTracing::PathTracingRenderer>(*this);
-            break;
-        case ERendererType::ERT_ModernDeferred:
-            logicRenderers_.renderers[type] = std::make_unique<ModernDeferred::SoftwareTracingRenderer>(*this);
-            break;
-        case ERendererType::ERT_LegacyDeferred:
-            logicRenderers_.renderers[type] = std::make_unique<LegacyDeferred::SoftwareModernRenderer>(*this);
-            break;
-        case ERendererType::ERT_LegacyDeferredNoAmbient:
-            logicRenderers_.renderers[type] = std::make_unique<NoAmbientDeferred::Renderer>(*this);
-            break;
-        case ERendererType::ERT_VoxelTracing:
-            logicRenderers_.renderers[type] = std::make_unique<VoxelTracing::VoxelTracingRenderer>(*this);
-            break;
-        default:
-            assert(false);
+            logicRenderers_.registeredTypes.push_back(type);
         }
         logicRenderers_.current = type;
+    }
+
+    bool VulkanBaseRenderer::IsLogicRendererRegistered(ERendererType type) const
+    {
+        return std::find(logicRenderers_.registeredTypes.begin(), logicRenderers_.registeredTypes.end(), type) !=
+               logicRenderers_.registeredTypes.end();
+    }
+
+    LogicRendererBase* VulkanBaseRenderer::EnsureLogicRenderer(ERendererType type)
+    {
+        if (!IsLogicRendererRegistered(type))
+        {
+            return nullptr;
+        }
+
+        auto renderer = logicRenderers_.renderers.find(type);
+        if (renderer != logicRenderers_.renderers.end())
+        {
+            if (ctx_.device && frame_.swapChain)
+            {
+                EnsureLogicRendererSwapChain(type, *renderer->second);
+            }
+            return renderer->second.get();
+        }
+
+        auto logicRenderer = GetRendererDescriptor(type).factory(*this);
+        LogicRendererBase* result = logicRenderer.get();
+        logicRenderers_.renderers[type] = std::move(logicRenderer);
+        if (ctx_.device)
+        {
+            result->OnDeviceSet();
+        }
+        if (frame_.swapChain)
+        {
+            EnsureLogicRendererSwapChain(type, *result);
+        }
+        return result;
+    }
+
+    void VulkanBaseRenderer::EnsureLogicRendererSwapChain(ERendererType type, LogicRendererBase& logicRenderer)
+    {
+        if (!frame_.swapChain || logicRenderers_.swapChainCreatedTypes.contains(type))
+        {
+            return;
+        }
+
+        logicRenderer.CreateSwapChain(frame_.swapChain->RenderExtent());
+        logicRenderers_.swapChainCreatedTypes.insert(type);
     }
 
     FRendererRequirements VulkanBaseRenderer::CurrentRendererRequirements() const
@@ -2008,375 +1975,230 @@ namespace Vulkan
         return GetRendererRequirements(logicRenderers_.current);
     }
 
-    FRendererRequirements VulkanBaseRenderer::RegisteredRendererRequirements() const
+    FRendererRequirements VulkanBaseRenderer::ActiveRendererRequirements() const
     {
-        FRendererRequirements requirements;
-        for (const auto& logicRenderer : logicRenderers_.renderers)
+        FRendererRequirements requirements = CurrentRendererRequirements();
+        if (GOption->ReferenceMode)
         {
-            requirements.Merge(logicRenderer.second->Requirements());
+            for (const ERendererType type : GetReferenceRendererTypes())
+            {
+                if (IsLogicRendererRegistered(type))
+                {
+                    requirements.Merge(GetRendererRequirements(type));
+                }
+            }
         }
         return requirements;
     }
 
-    bool VulkanBaseRenderer::ShouldSkipAmbientCubeUpdates() const
+    FRendererRequirements VulkanBaseRenderer::RegisteredRendererRequirements() const
     {
-        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
-        return CurrentLogicRendererType() == ERendererType::ERT_PathTracing && settings.SharcEnable;
+        FRendererRequirements requirements;
+        for (const ERendererType type : logicRenderers_.registeredTypes)
+        {
+            requirements.Merge(GetRendererRequirements(type));
+        }
+        return requirements;
     }
 
     void VulkanBaseRenderer::SwitchLogicRenderer(ERendererType type)
     {
-        logicRenderers_.current = type;
-    }
-
-    void VulkanBaseRenderer::DrawWireframeOverlay(VkCommandBuffer commandBuffer, uint32_t imageIndex)
-    {
-        if (!overlay_.wireframePipeline || imageIndex >= overlay_.wireframeFrameBuffers.size())
+        LogicRendererBase* logicRenderer = EnsureLogicRenderer(type);
+        if (logicRenderer == nullptr)
         {
-            SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
+            SPDLOG_WARN("Skipping switch to unregistered logic renderer {}", GetRendererName(type));
             return;
         }
 
-        SCOPED_GPU_TIMER("wireframe");
+        logicRenderers_.current = type;
+        EnsureLogicRendererSwapChain(type, *logicRenderer);
+    }
 
-        ImageMemoryBarrier::FullInsert(
-            commandBuffer, SwapChain().Images()[imageIndex],
-            VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT, 0,
-            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+    void VulkanBaseRenderer::ComposeViewToSwapchainSubrect(
+        VkCommandBuffer commandBuffer,
+        const uint32_t imageIndex,
+        RenderView& view)
+    {
+        SCOPED_GPU_TIMER("resolve pass");
+        SwapChain().InsertBarrierToWrite(commandBuffer, imageIndex);
 
-        VkRenderPassBeginInfo renderPassInfo = {};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        auto& activeWireframePipeline = *overlay_.wireframePipeline;
-        renderPassInfo.renderPass = activeWireframePipeline.RenderPass().Handle();
-        renderPassInfo.framebuffer = overlay_.wireframeFrameBuffers[imageIndex].Handle();
-        renderPassInfo.renderArea.offset = {0, 0};
-        renderPassInfo.renderArea.extent = SwapChain().Extent();
-        renderPassInfo.clearValueCount = 0;
-        renderPassInfo.pClearValues = nullptr;
+        const uint32_t previousBankBase = activeViewBankBase_;
+        SetActiveViewBankBase(view.RtBankBase());
+        GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
+            commandBuffer, VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            VK_ACCESS_SHADER_READ_BIT,
+            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 
-        vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+        const VkRect2D subrect = view.Desc().subrect;
+        const std::array<uint32_t, 5> pushConst{
+            imageIndex,
+            static_cast<uint32_t>(std::max(0, subrect.offset.x)),
+            static_cast<uint32_t>(std::max(0, subrect.offset.y)),
+            subrect.extent.width,
+            subrect.extent.height};
+
+        overlay_.simpleComposePipeline->BindPipeline(commandBuffer, pushConst.data());
+
+        vkCmdDispatch(
+            commandBuffer,
+            Utilities::Math::GetSafeDispatchCount(subrect.extent.width, 8),
+            Utilities::Math::GetSafeDispatchCount(subrect.extent.height, 8), 1);
+        SetActiveViewBankBase(previousBankBase);
+    }
+
+    void VulkanBaseRenderer::ResolvePrimaryViewToSwapchain(
+        VkCommandBuffer commandBuffer,
+        const uint32_t imageIndex)
+    {
+        SCOPED_GPU_TIMER("resolve pass");
+
+        SwapChain().InsertBarrierToWrite(commandBuffer, imageIndex);
+        GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
+            commandBuffer, VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            VK_ACCESS_SHADER_READ_BIT,
+            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+
+        bool resolvedByUpscaler = false;
+        if (upscaler_ && SupportDLSS() && NextEngine::GetInstance()->GetUserSettings().DLSS)
         {
-            const auto& scene = GetScene();
-            const Assets::GPUScene& gpuScene = scene.FetchGPUScene(imageIndex);
-
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, activeWireframePipeline.Handle());
-            activeWireframePipeline.PipelineLayout().BindDescriptorSets(
-                commandBuffer, 0, VK_PIPELINE_BIND_POINT_GRAPHICS);
-            vkCmdPushConstants(commandBuffer, activeWireframePipeline.PipelineLayout().Handle(),
-                               VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
-            if (scene.GetIndirectDrawBatchCount() > 0)
-            {
-                vkCmdDrawIndirect(commandBuffer, scene.SoftMeshShaderDrawArgBuffer().Handle(), 0,
-                                  1, sizeof(VkDrawIndirectCommand));
-            }
+            resolvedByUpscaler = upscaler_->Evaluate(
+                BuildUpscalerFrameInputs(commandBuffer, imageIndex, VK_IMAGE_LAYOUT_GENERAL));
         }
-        vkCmdEndRenderPass(commandBuffer);
+        if (resolvedByUpscaler)
+        {
+            return;
+        }
+
+        const bool fsrEnabled = NextEngine::GetInstance()->GetUserSettings().FSR;
+        if (fsrEnabled)
+        {
+            const std::array<uint32_t, 5> pushConst = {
+                imageIndex,
+                uint32_t(SwapChain().OutputOffset().x),
+                uint32_t(SwapChain().OutputOffset().y),
+                uint32_t(SwapChain().OutputExtent().width),
+                uint32_t(SwapChain().OutputExtent().height)
+            };
+            overlay_.simpleComposePipeline->BindPipeline(commandBuffer, pushConst.data());
+
+            vkCmdDispatch(
+                commandBuffer,
+                Utilities::Math::GetSafeDispatchCount(SwapChain().OutputExtent().width, 8),
+                Utilities::Math::GetSafeDispatchCount(SwapChain().OutputExtent().height, 8), 1);
+        }
+        else
+        {
+            VkImageBlit blitRegion = {};
+            blitRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            blitRegion.srcOffsets[0] = {0, 0, 0};
+            blitRegion.srcOffsets[1] = {
+                static_cast<int32_t>(SwapChain().RenderExtent().width),
+                static_cast<int32_t>(SwapChain().RenderExtent().height),
+                1
+            };
+            blitRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            blitRegion.dstOffsets[0] = {
+                static_cast<int32_t>(SwapChain().OutputOffset().x),
+                static_cast<int32_t>(SwapChain().OutputOffset().y),
+                0
+            };
+            blitRegion.dstOffsets[1] = {
+                static_cast<int32_t>(SwapChain().OutputOffset().x + SwapChain().OutputExtent().width),
+                static_cast<int32_t>(SwapChain().OutputOffset().y + SwapChain().OutputExtent().height),
+                1
+            };
+
+            vkCmdBlitImage(commandBuffer,
+                           GetViewStorageImage(Assets::Bindless::RT_DENOISED)->GetImage().Handle(),
+                           VK_IMAGE_LAYOUT_GENERAL,
+                           SwapChain().Images()[imageIndex],
+                           VK_IMAGE_LAYOUT_GENERAL,
+                           1,
+                           &blitRegion,
+                           VK_FILTER_LINEAR);
+        }
     }
 
     void VulkanBaseRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
+        const auto preparePrimaryView = [this](const char* debugName) -> RenderView&
+        {
+            RenderView& primary = PrimaryView();
+            primary.SetDebugName(debugName);
+            primary.SetRenderExtent(frame_.swapChain->RenderExtent());
+            primary.SetRenderOffset(frame_.swapChain->RenderOffset());
+            primary.SetSubrect(VkRect2D{frame_.swapChain->OutputOffset(), frame_.swapChain->OutputExtent()});
+            primary.SetVisibilityFramebuffer(nullptr);
+            primary.SetSceneOverride(nullptr);
+            primary.SetCopyObjectIdHistory(true);
+            return primary;
+        };
+
+        renderViews_->ClearSchedule();
         if (GOption->ReferenceMode)
         {
-            // 后面渲染器会很多，这里只渲染加入reference的，并从rtDenoised Resolve到FrameBuffer
-            // 然后就跳过后面的resolve流程了
-            for (auto& logicRenderer : logicRenderers_.renderers)
+            const bool renderedAnyReferenceView =
+                referenceViewController_ && referenceViewController_->ScheduleViews(commandBuffer, imageIndex);
+            DispatchScheduledRenderViews(commandBuffer, imageIndex);
+            if (renderedAnyReferenceView)
             {
-                const char* rendererName = "";
-                switch (logicRenderer.first)
-                {
-                case ERendererType::ERT_PathTracing:
-                    rendererName = "PathTracing";
-                    break;
-                case ERendererType::ERT_ModernDeferred:
-                    rendererName = "SoftTracing";
-                    break;
-                case ERendererType::ERT_LegacyDeferred:
-                    rendererName = "SoftModern";
-                    break;
-                case ERendererType::ERT_LegacyDeferredNoAmbient:
-                    rendererName = "SoftModernNoAmbient";
-                    break;
-                case ERendererType::ERT_VoxelTracing:
-                    rendererName = "VoxelTracing";
-                    break;
-                default:
-                    rendererName = "UnknownRenderer";
-                    break;
-                }
-
-                {
-                    SCOPED_GPU_TIMER(rendererName);
-                    logicRenderer.second->Render(commandBuffer, imageIndex);
-                }
-
-                {
-                    SCOPED_GPU_TIMER("resolve pass");
-                    SwapChain().InsertBarrierToWrite(commandBuffer, imageIndex);
-                
-                    GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                                              VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-                
-                    std::array<uint32_t, 5> pushConst;
-                    
-                    switch (logicRenderer.first)
-                    {
-                    case ERendererType::ERT_PathTracing:
-                        pushConst = { imageIndex,SwapChain().Extent().width / 2, SwapChain().Extent().height / 2, SwapChain().RenderExtent().width, SwapChain().RenderExtent().height};
-                        break;
-                    case ERendererType::ERT_ModernDeferred:
-                        pushConst = { imageIndex,SwapChain().Extent().width / 2, 0, SwapChain().RenderExtent().width, SwapChain().RenderExtent().height};
-                        break;
-                    case ERendererType::ERT_LegacyDeferred:
-                        pushConst = { imageIndex,0, 0, SwapChain().RenderExtent().width, SwapChain().RenderExtent().height};
-                        break;
-                    default:
-                        pushConst = { imageIndex,0,SwapChain().Extent().height / 2, SwapChain().RenderExtent().width, SwapChain().RenderExtent().height};
-                        break;
-                    }
-                
-                    overlay_.simpleComposePipeline->BindPipeline(commandBuffer, pushConst.data());
-                  
-                    vkCmdDispatch(commandBuffer, SwapChain().RenderExtent().width / 8,
-                                  SwapChain().RenderExtent().height / 8, 1);
-                    SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
-                }
+                SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
             }
         }
         else
         {
-            if (logicRenderers_.renderers.find(logicRenderers_.current) != logicRenderers_.renderers.end())
+            if (LogicRendererBase* renderer = EnsureLogicRenderer(logicRenderers_.current))
             {
-                SCOPED_GPU_TIMER("logic renderer");
-                logicRenderers_.renderers[logicRenderers_.current]->Render(commandBuffer, imageIndex);
+                RenderView& primary = preparePrimaryView("primary view");
+                EnsureLogicRendererSwapChain(logicRenderers_.current, *renderer);
+                ScheduleRenderView(primary, *renderer, /*clearSwapchain*/ true);
+                DispatchScheduledRenderViews(commandBuffer, imageIndex);
             }
 
+            if (overlay_.gaussianSplatPass)
             {
-                SCOPED_GPU_TIMER("resolve pass");
-
-                //SwapChain().InsertBarrierToWrite(commandBuffer, imageIndex);
-                GetStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                                          VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-
-#if WITH_STREAMLINE
-                if (SupportDLSS() && NextEngine::GetInstance()->GetUserSettings().DLSS)
-                {
-                    UpdateStreamline(commandBuffer, imageIndex);
-                }
-                else
-#endif
-                {
-#if false
-                std::array<uint32_t, 5> pushConst = { imageIndex, uint32_t(SwapChain().OutputOffset().x), uint32_t(SwapChain().OutputOffset().y), uint32_t(SwapChain().OutputExtent().width), uint32_t(SwapChain().OutputExtent().height) };
-                overlay_.simpleComposePipeline->BindPipeline(commandBuffer, pushConst.data());
-
-                vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 8, 1);
-#else
-                VkImageBlit blitRegion = {};
-                blitRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-                blitRegion.srcOffsets[0] = {0, 0, 0};
-                blitRegion.srcOffsets[1] = {static_cast<int32_t>(SwapChain().RenderExtent().width), static_cast<int32_t>(SwapChain().RenderExtent().height), 1};
-                blitRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-                blitRegion.dstOffsets[0] = {static_cast<int32_t>(SwapChain().OutputOffset().x), static_cast<int32_t>(SwapChain().OutputOffset().y), 0};
-                blitRegion.dstOffsets[1] = {static_cast<int32_t>(SwapChain().OutputOffset().x + SwapChain().OutputExtent().width),
-                                           static_cast<int32_t>(SwapChain().OutputOffset().y + SwapChain().OutputExtent().height), 1};
-
-                vkCmdBlitImage(commandBuffer,
-                               GetStorageImage(Assets::Bindless::RT_DENOISED)->GetImage().Handle(), VK_IMAGE_LAYOUT_GENERAL,
-                               SwapChain().Images()[imageIndex], VK_IMAGE_LAYOUT_GENERAL,
-                               1, &blitRegion,
-                               VK_FILTER_LINEAR);
-#endif
-                }
-
-                if (NextEngine::GetInstance()->GetShowFlags().ShowWireframe)
-                {
-                    DrawWireframeOverlay(commandBuffer, imageIndex);
-                }
-                else
-                {
-                    SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
-                }
+                SCOPED_GPU_TIMER("Gaussian splats");
+                overlay_.gaussianSplatPass->Execute(commandBuffer, imageIndex);
             }
+
+            if (NextEngine::GetInstance()->GetShowFlags().ShowWireframe)
+            {
+                DrawWireframeOverlay(commandBuffer, imageIndex);
+            }
+
+            ResolvePrimaryViewToSwapchain(commandBuffer, imageIndex);
+
+            // Swapchain is in GENERAL here (before the present barrier). Auxiliary views render
+            // through the same RenderViewManager schedule, then copy/compose their outputs.
+            if (renderViewServices_ && renderViewServices_->HasWork())
+            {
+                renderViewServices_->ScheduleViews(commandBuffer, imageIndex);
+                DispatchScheduledRenderViews(commandBuffer, imageIndex);
+            }
+            if (renderViewServices_)
+            {
+                renderViewServices_->ClearOffscreenFrameRequests();
+            }
+
+            SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
         }
     }
 
-    void VulkanBaseRenderer::ClearAmbientCubeCache(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+    VkDeviceAddress VulkanBaseRenderer::ActiveViewCameraAddress(const uint32_t imageIndex) const
     {
-        SCOPED_GPU_TIMER("clear-ambient-cube-cache");
-
-        constexpr uint32_t cubesPerGroup = 64;
-        constexpr uint32_t perCascadeCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
-        // Clear only the allocated cascades (Phase 2 right-sizing). The sparse cube pool (Phase 3b) is
-        // smaller than the dense voxel array, so cubes and voxel ages are cleared over separate counts.
-        const uint32_t clearCascadeCount = std::min(
-            Assets::SanitizeAmbientCubeCascadeCount(NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount),
-            GetScene().AmbientCubeCascadeCapacity());
-        const uint32_t poolCubesPerCascade =
-            GetScene().AmbientPoolBricksPerCascade() * static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME);
-        const uint32_t cubePoolTotal = clearCascadeCount * poolCubesPerCascade;
-        const uint32_t voxelDenseTotal = clearCascadeCount * perCascadeCount;
-        const uint32_t groupCount = (std::max(cubePoolTotal, voxelDenseTotal) + cubesPerGroup - 1) / cubesPerGroup;
-
-        ambient_.clearCache->BindPipeline(commandBuffer, GetScene(), imageIndex);
-
-        Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
-        gpuScene.custom_data_0 = cubePoolTotal;
-        gpuScene.custom_data_1 = voxelDenseTotal;
-        gpuScene.custom_data_2 = 0;
-
-        vkCmdPushConstants(commandBuffer, ambient_.clearCache->PipelineLayout().Handle(),
-                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
-        vkCmdDispatch(commandBuffer, groupCount, 1, 1);
-
-        VkBufferMemoryBarrier barriers[2]{};
-        barriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        barriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        barriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-        barriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barriers[0].buffer = GetScene().AmbientCubeBuffer().Handle();
-        barriers[0].offset = GetScene().AmbientCubesByteOffset();
-        barriers[0].size = static_cast<VkDeviceSize>(cubePoolTotal) * sizeof(Assets::AmbientCube);
-
-        barriers[1] = barriers[0];
-        barriers[1].buffer = GetScene().FarAmbientCubeBuffer().Handle();
-        barriers[1].offset = GetScene().AmbientVoxelsByteOffset();
-        barriers[1].size = static_cast<VkDeviceSize>(voxelDenseTotal) * sizeof(Assets::VoxelData);
-
-        vkCmdPipelineBarrier(commandBuffer,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            0, 0, nullptr, 2, barriers, 0, nullptr);
-    }
-
-    void VulkanBaseRenderer::BakeAmbientCubeCascade(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool useHardware)
-    {
-        Vulkan::PipelineBase* pipeline = useHardware ? static_cast<Vulkan::PipelineBase*>(rt_->directLightGenPipeline.get())
-                                                     : static_cast<Vulkan::PipelineBase*>(ambient_.softBake.get());
-        if (!pipeline)
+        if (activeViewCameraAddress_ != 0)
         {
-            return;
+            return activeViewCameraAddress_;
         }
-
-        const int cubesPerGroup = 64;
-        const uint32_t cascadeCount = std::min(
-            Assets::SanitizeAmbientCubeCascadeCount(NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount),
-            GetScene().AmbientCubeCascadeCapacity());
-        const uint32_t safeCascadeCount = std::max(1u, cascadeCount);
-        const uint32_t cascadeIndex = static_cast<uint32_t>(frame_.frameCount % safeCascadeCount);
-        const uint32_t activeBrickCount = GetScene().AmbientActiveBrickCount(cascadeIndex);
-        if (activeBrickCount == 0u)
-        {
-            return;
-        }
-        const int activeProbeCount =
-            static_cast<int>(activeBrickCount * static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME));
-        const int group = (activeProbeCount + cubesPerGroup - 1) / cubesPerGroup;
-
-        int temporalFrames = 120;
-        switch (NextEngine::GetInstance()->GetUserSettings().BakeSpeedLevel)
-        {
-        case 0: temporalFrames = 30; break;
-        case 1: temporalFrames = 120; break;
-        case 2: temporalFrames = 300; break;
-        default: temporalFrames = 120; break;
-        }
-
-        SCOPED_GPU_TIMER(useHardware ? "hw-lightbake" : "sw-lightbake");
-
-        const int frame = static_cast<int>((frame_.frameCount / safeCascadeCount) % temporalFrames);
-        const int groupPerFrame = std::max(1, (group + temporalFrames - 1) / temporalFrames);
-        const int offset = frame * groupPerFrame;
-        if (offset >= group)
-        {
-            return;
-        }
-
-        const int dispatchGroupCount = std::min(groupPerFrame, group - offset);
-        const int offsetInActiveProbes = offset * cubesPerGroup;
-        VkBuffer cubeBuffer = GetScene().AmbientCubeBuffer().Handle();
-        VkBuffer pongBuffer = GetScene().AmbientCubePongBuffer().Handle();
-        // The cube pool is laid out per cascade with poolCubesPerCascade cubes; the ping-pong copy and
-        // its barriers operate on that pool stride, not the dense per-cascade probe count.
-        const VkDeviceSize poolCubesPerCascade =
-            static_cast<VkDeviceSize>(GetScene().AmbientPoolBricksPerCascade()) * Assets::GPU_SCENE_AMBIENT_BRICK_VOLUME;
-        const VkDeviceSize cascadeByteOffset =
-            GetScene().AmbientCubesByteOffset() +
-            static_cast<VkDeviceSize>(cascadeIndex) * poolCubesPerCascade * sizeof(Assets::AmbientCube);
-        const VkDeviceSize pongByteOffset = GetScene().AmbientCubesPongByteOffset();
-        const VkDeviceSize cascadeByteSize = poolCubesPerCascade * sizeof(Assets::AmbientCube);
-
-        // ping (cube) -> pong copy with surrounding barriers
-        VkBufferMemoryBarrier preCopyBarrier{};
-        preCopyBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        preCopyBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        preCopyBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        preCopyBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        preCopyBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        preCopyBarrier.buffer = cubeBuffer;
-        preCopyBarrier.offset = cascadeByteOffset;
-        preCopyBarrier.size = cascadeByteSize;
-        vkCmdPipelineBarrier(commandBuffer,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-            0, 0, nullptr, 1, &preCopyBarrier, 0, nullptr);
-
-        VkBufferCopy copyRegion{};
-        copyRegion.srcOffset = cascadeByteOffset;
-        copyRegion.dstOffset = pongByteOffset;
-        copyRegion.size = cascadeByteSize;
-        vkCmdCopyBuffer(commandBuffer, cubeBuffer, pongBuffer, 1, &copyRegion);
-
-        VkBufferMemoryBarrier postCopyBarriers[2]{};
-        postCopyBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        postCopyBarriers[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        postCopyBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        postCopyBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        postCopyBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        postCopyBarriers[0].buffer = pongBuffer;
-        postCopyBarriers[0].offset = pongByteOffset;
-        postCopyBarriers[0].size = cascadeByteSize;
-        postCopyBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        postCopyBarriers[1].srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        postCopyBarriers[1].dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
-        postCopyBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        postCopyBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        postCopyBarriers[1].buffer = cubeBuffer;
-        postCopyBarriers[1].offset = cascadeByteOffset;
-        postCopyBarriers[1].size = cascadeByteSize;
-        vkCmdPipelineBarrier(commandBuffer,
-            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            0, 0, nullptr, 2, postCopyBarriers, 0, nullptr);
-
-        // Dispatch the chosen bake pipeline. Both share the same GPUScene push constant layout.
-        if (useHardware)
-        {
-            rt_->directLightGenPipeline->BindPipeline(commandBuffer, GetScene(), imageIndex);
-        }
-        else
-        {
-            ambient_.softBake->BindPipeline(commandBuffer, GetScene(), imageIndex);
-        }
-
-        Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
-        gpuScene.custom_data_0 = static_cast<uint32_t>(offsetInActiveProbes);
-        gpuScene.custom_data_1 = cascadeIndex;
-
-        vkCmdPushConstants(commandBuffer, pipeline->PipelineLayout().Handle(),
-                           VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
-        vkCmdDispatch(commandBuffer, dispatchGroupCount, 1, 1);
+        return frame_.uniformBuffers[imageIndex].Buffer().GetDeviceAddress();
     }
 
     void VulkanBaseRenderer::PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         const auto& settings = NextEngine::GetInstance()->GetUserSettings();
 
-        if (CurrentRendererRequirements().requestAmbientCube && !ShouldSkipAmbientCubeUpdates())
+        if (ActiveRendererRequirements().requestAmbientCube && !ShouldSkipAmbientCubeUpdates())
         {
-            if (settings.UseGpuAmbientCubeSdf &&
-                GetScene().ConsumeGpuDistanceFieldRebuild())
-            {
-                RebuildDistanceFieldCascades(commandBuffer, imageIndex);
-            }
-
             if (settings.BakeSpeedLevel != 2)
             {
                 const bool useHardware = caps_.supportRayTracing && !GOption->ForceSoftGen;
@@ -2385,182 +2207,164 @@ namespace Vulkan
         }
 
         DispatchVisualDebugger(commandBuffer, imageIndex);
-        CopyObjectIdHistory(commandBuffer);
     }
 
-    void VulkanBaseRenderer::RebuildDistanceFieldCascades(VkCommandBuffer commandBuffer, uint32_t imageIndex)
-    {
-        SCOPED_GPU_TIMER("gpu-distance-field");
-
-        const int cubesPerGroup = 64;
-        const int perCascadeCount = Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_XY * Assets::CUBE_SIZE_Z;
-        const int group = perCascadeCount / cubesPerGroup;
-        const uint32_t cascadeCount = std::min(
-            Assets::SanitizeAmbientCubeCascadeCount(NextEngine::GetInstance()->GetUserSettings().AmbientCubeCascadeCount),
-            GetScene().AmbientCubeCascadeCapacity());
-
-        VkBuffer voxelBuffer = GetScene().FarAmbientCubeBuffer().Handle();
-        VkBuffer seedBufferA = GetScene().AmbientSdfSeedABuffer().Handle();
-        VkBuffer seedBufferB = GetScene().AmbientCubeSdfScratchBuffer().Handle();
-        const VkDeviceSize cascadeByteSize = static_cast<VkDeviceSize>(perCascadeCount) * sizeof(Assets::VoxelData);
-        const VkDeviceSize seedByteSize = static_cast<VkDeviceSize>(perCascadeCount) * sizeof(glm::u32vec4);
-        const VkDeviceSize seedAByteOffset = GetScene().AmbientSdfSeedAByteOffset();
-        const VkDeviceSize seedBByteOffset = GetScene().AmbientSdfScratchByteOffset();
-
-        for (uint32_t cascadeIndex = 0; cascadeIndex < cascadeCount; ++cascadeIndex)
-        {
-            const uint32_t cascadeBaseOffset = cascadeIndex * static_cast<uint32_t>(perCascadeCount);
-            const VkDeviceSize cascadeByteOffset =
-                GetScene().AmbientVoxelsByteOffset() + static_cast<VkDeviceSize>(cascadeBaseOffset) * sizeof(Assets::VoxelData);
-
-            VkBufferMemoryBarrier preSdfBarrier{};
-            preSdfBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            preSdfBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-            preSdfBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-            preSdfBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            preSdfBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            preSdfBarrier.buffer = voxelBuffer;
-            preSdfBarrier.offset = cascadeByteOffset;
-            preSdfBarrier.size = cascadeByteSize;
-            vkCmdPipelineBarrier(commandBuffer,
-                VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                0, 0, nullptr, 1, &preSdfBarrier, 0, nullptr);
-
-            Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
-            gpuScene.custom_data_0 = cascadeBaseOffset;
-            gpuScene.custom_data_1 = cascadeIndex;
-            gpuScene.custom_data_2 = 0;
-
-            ambient_.distanceFieldInit->BindPipeline(commandBuffer, GetScene(), imageIndex);
-            vkCmdPushConstants(commandBuffer, ambient_.distanceFieldInit->PipelineLayout().Handle(),
-                               VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
-            vkCmdDispatch(commandBuffer, group, 1, 1);
-
-            VkBufferMemoryBarrier initBarrier{};
-            initBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            initBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            initBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-            initBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            initBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            initBarrier.buffer = seedBufferA;
-            initBarrier.offset = seedAByteOffset;
-            initBarrier.size = seedByteSize;
-            vkCmdPipelineBarrier(commandBuffer,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                0, 0, nullptr, 1, &initBarrier, 0, nullptr);
-
-            uint32_t passParity = 0;
-            for (uint32_t step = 128; step >= 1; step >>= 1, ++passParity)
-            {
-                ambient_.distanceFieldJump->BindPipeline(commandBuffer, GetScene(), imageIndex);
-
-                gpuScene.custom_data_1 = passParity;
-                gpuScene.custom_data_2 = step;
-                vkCmdPushConstants(commandBuffer, ambient_.distanceFieldJump->PipelineLayout().Handle(),
-                                   VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
-                vkCmdDispatch(commandBuffer, group, 1, 1);
-
-                VkBufferMemoryBarrier jumpBarriers[2]{};
-                jumpBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-                jumpBarriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-                jumpBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-                jumpBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                jumpBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                jumpBarriers[0].buffer = seedBufferA;
-                jumpBarriers[0].offset = seedAByteOffset;
-                jumpBarriers[0].size = seedByteSize;
-                jumpBarriers[1] = jumpBarriers[0];
-                jumpBarriers[1].buffer = seedBufferB;
-                jumpBarriers[1].offset = seedBByteOffset;
-                vkCmdPipelineBarrier(commandBuffer,
-                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                    0, 0, nullptr, 2, jumpBarriers, 0, nullptr);
-
-                if (step == 1) break;
-            }
-
-            ambient_.distanceFieldResolve->BindPipeline(commandBuffer, GetScene(), imageIndex);
-            gpuScene.custom_data_1 = passParity - 1;
-            gpuScene.custom_data_2 = 0;
-            vkCmdPushConstants(commandBuffer, ambient_.distanceFieldResolve->PipelineLayout().Handle(),
-                               VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
-            vkCmdDispatch(commandBuffer, group, 1, 1);
-
-            VkBufferMemoryBarrier postResolveBarrier{};
-            postResolveBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            postResolveBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            postResolveBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-            postResolveBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            postResolveBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            postResolveBarrier.buffer = voxelBuffer;
-            postResolveBarrier.offset = cascadeByteOffset;
-            postResolveBarrier.size = cascadeByteSize;
-            vkCmdPipelineBarrier(commandBuffer,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                0, 0, nullptr, 1, &postResolveBarrier, 0, nullptr);
-        }
-    }
-
-    void VulkanBaseRenderer::DispatchVisualDebugger(VkCommandBuffer commandBuffer, uint32_t imageIndex)
-    {
-        if (!VisualDebug())
-        {
-            return;
-        }
-
-        SCOPED_GPU_TIMER("visual debugger");
-        SwapChain().InsertBarrierToWrite(commandBuffer, imageIndex);
-
-        std::array<uint32_t, 5> pushConst = {
-            imageIndex,
-            uint32_t(SwapChain().OutputOffset().x), uint32_t(SwapChain().OutputOffset().y),
-            uint32_t(SwapChain().OutputExtent().width), uint32_t(SwapChain().OutputExtent().height)
-        };
-        overlay_.visualDebuggerPipeline->BindPipeline(commandBuffer, pushConst.data());
-        vkCmdDispatch(commandBuffer, SwapChain().Extent().width / 8, SwapChain().Extent().height / 8, 1);
-
-        SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
-    }
-
-    void VulkanBaseRenderer::CopyObjectIdHistory(VkCommandBuffer commandBuffer)
-    {
-        SCOPED_GPU_TIMER("objectid copy");
-        GetStorageImage(Assets::Bindless::RT_OBJEDCTID_0)->InsertBarrier(commandBuffer,
-            VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-        GetStorageImage(Assets::Bindless::RT_OBJEDCTID_1)->InsertBarrier(commandBuffer,
-            VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-        VkImageCopy copyRegion;
-        copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        copyRegion.srcOffset = {0, 0, 0};
-        copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        copyRegion.dstOffset = {0, 0, 0};
-        copyRegion.extent = {
-            GetStorageImage(Assets::Bindless::RT_OBJEDCTID_0)->GetImage().Extent().width,
-            GetStorageImage(Assets::Bindless::RT_OBJEDCTID_0)->GetImage().Extent().height, 1};
-
-        vkCmdCopyImage(commandBuffer,
-            GetStorageImage(Assets::Bindless::RT_OBJEDCTID_0)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            GetStorageImage(Assets::Bindless::RT_OBJEDCTID_1)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1, &copyRegion);
-    }
-    
     void VulkanBaseRenderer::UpdateUniformBuffer(const uint32_t imageIndex)
     {
         frame_.lastUBO = GetUniformBufferObject(frame_.swapChain->RenderOffset(), frame_.swapChain->OutputExtent());
         frame_.uniformBuffers[imageIndex].SetValue(frame_.lastUBO);
+        SetRenderViewUbo(PrimaryView(), imageIndex, frame_.lastUBO);
     }
 
-    std::vector<RayTracing::TopLevelAccelerationStructure>& VulkanBaseRenderer::TLAS()
+    void VulkanBaseRenderer::CaptureFrameGenerationHudless(
+        VkCommandBuffer commandBuffer,
+        const uint32_t imageIndex)
     {
-        static std::vector<RayTracing::TopLevelAccelerationStructure> empty;
-        return rt_ ? rt_->tlas : empty;
+        if (imageIndex >= frameGeneration_.hudlessImages.size())
+        {
+            return;
+        }
+
+        const VkImage swapchainImage = frame_.swapChain->Images()[imageIndex];
+        auto& hudlessImage = *frameGeneration_.hudlessImages[imageIndex];
+
+        ImageMemoryBarrier::FullInsert(
+            commandBuffer,
+            swapchainImage,
+            0,
+            VK_ACCESS_TRANSFER_READ_BIT,
+            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        hudlessImage.InsertBarrier(
+            commandBuffer,
+            0,
+            VK_ACCESS_TRANSFER_WRITE_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+        VkImageCopy copyRegion{};
+        copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        copyRegion.extent = {
+            frame_.swapChain->OutputExtent().width,
+            frame_.swapChain->OutputExtent().height,
+            1};
+        vkCmdCopyImage(
+            commandBuffer,
+            swapchainImage,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            hudlessImage.GetImage().Handle(),
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1,
+            &copyRegion);
+
+        hudlessImage.InsertBarrier(
+            commandBuffer,
+            VK_ACCESS_TRANSFER_WRITE_BIT,
+            VK_ACCESS_SHADER_READ_BIT,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_GENERAL);
+        ImageMemoryBarrier::FullInsert(
+            commandBuffer,
+            swapchainImage,
+            VK_ACCESS_TRANSFER_READ_BIT,
+            0,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+    }
+
+    Rendering::Upscaler::FFrameInputs VulkanBaseRenderer::BuildUpscalerFrameInputs(
+        VkCommandBuffer commandBuffer,
+        uint32_t imageIndex,
+        VkImageLayout swapchainLayout)
+    {
+        Rendering::Upscaler::FFrameInputs inputs{};
+        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        const auto& swapChain = SwapChain();
+
+        inputs.commandBuffer = commandBuffer;
+        inputs.frameToken = frame_.streamlineFrameToken;
+        inputs.frameIndex = static_cast<uint32_t>(frame_.frameCount);
+        inputs.imageIndex = imageIndex;
+        inputs.reset = resetUpscalerHistory_ || frame_.frameCount < 2;
+        inputs.enableDLSS = caps_.supportDLSS && settings.DLSS;
+        inputs.enableDLSSRR = caps_.supportDLSSRR && settings.DLSSRR;
+        inputs.enableDLSSG = caps_.supportDLSSG && settings.DLSSG;
+        inputs.superResolutionMode = settings.SuperResolution;
+        inputs.frameGenerationMultiplier = std::clamp(settings.DLSSGFrameMultiplier, 2u, 4u);
+        inputs.hdrOutput = swapChain.IsHDR();
+        inputs.renderExtent = swapChain.RenderExtent();
+        inputs.outputExtent = swapChain.OutputExtent();
+        inputs.outputOffset = swapChain.OutputOffset();
+        inputs.swapchainFormat = swapChain.Format();
+        inputs.backBufferCount = static_cast<uint32_t>(swapChain.Images().size());
+        inputs.ubo = &frame_.lastUBO;
+
+        auto& camera = GetScene().GetRenderCamera();
+        inputs.camera.nearPlane = camera.NearPlane;
+        inputs.camera.farPlane = camera.FarPlane;
+        inputs.camera.verticalFovRadians = glm::radians(camera.FieldOfView);
+        inputs.camera.aspectRatio =
+            static_cast<float>(std::max(1u, swapChain.Extent().width)) /
+            static_cast<float>(std::max(1u, swapChain.Extent().height));
+
+        inputs.depth = MakeDepthResource(
+            DepthBuffer(),
+            swapChain.RenderExtent(),
+            VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+        inputs.motionVectors = MakeRenderImageResource(
+            GetViewStorageImage(Assets::Bindless::RT_MOTIONVECTOR),
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_USAGE_STORAGE_BIT);
+        inputs.scalingInputColor = MakeRenderImageResource(
+            GetViewStorageImage(Assets::Bindless::RT_DENOISED),
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+        inputs.scalingOutputColor = MakeSwapchainResource(
+            swapChain,
+            imageIndex,
+            swapChain.OutputExtent(),
+            swapchainLayout);
+        inputs.hudlessColor = inputs.scalingOutputColor;
+
+        inputs.albedo = MakeRenderImageResource(
+            GetViewStorageImage(Assets::Bindless::RT_ALBEDO),
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_USAGE_STORAGE_BIT);
+        inputs.specularAlbedo = MakeRenderImageResource(
+            GetViewStorageImage(Assets::Bindless::RT_SPECULAR_ALBEDO),
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_USAGE_STORAGE_BIT);
+        inputs.normalRoughness = MakeRenderImageResource(
+            GetViewStorageImage(Assets::Bindless::RT_NORMAL),
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_USAGE_STORAGE_BIT);
+        inputs.diffuseNoisy = MakeRenderImageResource(
+            GetViewStorageImage(Assets::Bindless::RT_ACCUMLATE_DIFFUSE),
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+        inputs.specularNoisy = MakeRenderImageResource(
+            GetViewStorageImage(Assets::Bindless::RT_ACCUMLATE_SPECULAR),
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+        inputs.diffuseHitDistance = MakeRenderImageResource(
+            GetViewStorageImage(Assets::Bindless::RT_DIFFUSE_HITDIST),
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_USAGE_STORAGE_BIT);
+        inputs.specularHitDistance = MakeRenderImageResource(
+            GetViewStorageImage(Assets::Bindless::RT_SPECULAR_HITDIST),
+            VK_IMAGE_LAYOUT_GENERAL,
+            VK_IMAGE_USAGE_STORAGE_BIT);
+
+        return inputs;
     }
 
     void VulkanBaseRenderer::OnPreLoadScene()
     {
+        if (renderViews_)
+        {
+            renderViews_->ClearSchedule();
+        }
         if (caps_.supportRayTracing)
         {
             DeleteAccelerationStructures();
@@ -2604,8 +2408,10 @@ namespace Vulkan
                             rt_->blas.size());
                 continue;
             }
+            const bool includeInGpuAs =
+                (node.visible & Runtime::RenderParticipation::gpuAs) != 0u && !node.nort;
             instances.push_back(RayTracing::TopLevelAccelerationStructure::CreateInstance(
-                rt_->blas[blasIndex], glm::transpose(node.worldTS), node.instanceId, node.visible && !node.nort));
+                rt_->blas[blasIndex], glm::transpose(node.worldTS), node.instanceId, includeInGpuAs));
         }
 
         int instanceCount = static_cast<int>(instances.size());
@@ -2618,190 +2424,6 @@ namespace Vulkan
         }
 
         rt_->tlasUpdateRequest = instanceCount;
-    }
-
-    namespace
-    {
-        template <class TAccelerationStructure>
-        VkAccelerationStructureBuildSizesInfoKHR GetTotalRequirements(
-            const std::vector<TAccelerationStructure>& accelerationStructures)
-        {
-            VkAccelerationStructureBuildSizesInfoKHR total{};
-            for (const auto& accelerationStructure : accelerationStructures)
-            {
-                total.accelerationStructureSize += accelerationStructure.BuildSizes().accelerationStructureSize;
-                total.buildScratchSize += accelerationStructure.BuildSizes().buildScratchSize;
-                total.updateScratchSize += accelerationStructure.BuildSizes().updateScratchSize;
-            }
-            return total;
-        }
-    }
-
-    void VulkanBaseRenderer::CreateAccelerationStructures()
-    {
-        const auto timer = std::chrono::high_resolution_clock::now();
-
-        SingleTimeCommands::Submit(CommandPool(), [this](VkCommandBuffer commandBuffer)
-        {
-            CreateBottomLevelStructures(commandBuffer);
-            CreateTopLevelStructures(commandBuffer);
-        });
-
-        const auto elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
-            std::chrono::high_resolution_clock::now() - timer).count();
-        SPDLOG_INFO("- built acceleration structures in {:.2f}ms", elapsed * 1000.f);
-    }
-
-    void VulkanBaseRenderer::DeleteAccelerationStructures()
-    {
-        if (rt_)
-        {
-            rt_->tlas.clear();
-            rt_->instancesBuffer.reset();
-            rt_->instancesMemory.reset();
-            rt_->tlasScratch.reset();
-            rt_->tlasScratchMemory.reset();
-            rt_->tlasBuffer.reset();
-            rt_->tlasMemory.reset();
-
-            rt_->blas.clear();
-            rt_->blasScratch.reset();
-            rt_->blasScratchMemory.reset();
-            rt_->blasBuffer.reset();
-            rt_->blasMemory.reset();
-        }
-    }
-
-    void VulkanBaseRenderer::CreateBottomLevelStructures(VkCommandBuffer commandBuffer)
-    {
-        const auto& scene = GetScene();
-        const auto& debugUtils = Device().DebugUtils();
-
-        UpdateSkinningBuffers();
-
-        uint32_t vertexOffset = 0;
-        uint32_t indexOffset = 0;
-        uint32_t aabbOffset = 0;
-
-        if (scene.Models().empty())
-        {
-            RayTracing::BottomLevelGeometry geometries;
-            rt_->blas.emplace_back(Device().GetDeviceProcedures(), *rt_->properties, geometries);
-        }
-
-        for (size_t modelIdx = 0; modelIdx < scene.Models().size(); ++modelIdx)
-        {
-            auto& model = scene.Models()[modelIdx];
-            bool hasSkin = false;
-            for (const auto& node : scene.Nodes())
-            {
-                auto render = node->GetComponent<Runtime::RenderComponent>();
-                if (render && render->GetModelId() == modelIdx && render->GetSkinIndex() != -1)
-                {
-                    hasSkin = true;
-                    break;
-                }
-            }
-
-            const auto vertexCount = static_cast<uint32_t>(model.NumberOfVertices());
-            const auto indexCount = static_cast<uint32_t>(model.NumberOfIndices());
-            RayTracing::BottomLevelGeometry geometries;
-
-            VkDeviceAddress vertexAddr = 0;
-            if (hasSkin && skin_.vertexBuffer)
-            {
-                vertexAddr = skin_.vertexBuffer->GetDeviceAddress();
-            }
-
-            geometries.AddGeometryTriangles(scene, vertexOffset, vertexCount, indexOffset, indexCount, true, vertexAddr);
-            rt_->blas.emplace_back(Device().GetDeviceProcedures(), *rt_->properties, geometries);
-
-            vertexOffset += vertexCount * sizeof(Assets::GPUVertex);
-            indexOffset += indexCount * sizeof(uint32_t);
-            aabbOffset += sizeof(VkAabbPositionsKHR);
-        }
-
-        const auto total = GetTotalRequirements(rt_->blas);
-
-        rt_->blasBuffer.reset(new Buffer(Device(), total.accelerationStructureSize,
-                                       VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
-                                       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
-        rt_->blasMemory.reset(new DeviceMemory(
-            rt_->blasBuffer->AllocateMemory(
-                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                {.AllocateFlags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT})));
-        rt_->blasScratch.reset(new Buffer(Device(), total.buildScratchSize,
-                                              VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
-                                              VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-                                              VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
-        rt_->blasScratchMemory.reset(new DeviceMemory(
-            rt_->blasScratch->AllocateMemory(
-                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                {.AllocateFlags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT})));
-
-        debugUtils.SetObjectName(rt_->blasBuffer->Handle(), "BLAS Buffer");
-        rt_->blasMemory->SetName("BLAS Memory");
-        debugUtils.SetObjectName(rt_->blasScratch->Handle(), "BLAS Scratch Buffer");
-        rt_->blasScratchMemory->SetName("BLAS Scratch Memory");
-
-        VkDeviceSize resultOffset = 0;
-        VkDeviceSize scratchOffset = 0;
-
-        for (size_t i = 0; i != rt_->blas.size(); ++i)
-        {
-            rt_->blas[i].Generate(commandBuffer, *rt_->blasScratch, scratchOffset, *rt_->blasBuffer, resultOffset);
-            resultOffset += rt_->blas[i].BuildSizes().accelerationStructureSize;
-            scratchOffset += rt_->blas[i].BuildSizes().buildScratchSize;
-            debugUtils.SetObjectName(rt_->blas[i].Handle(), ("BLAS #" + std::to_string(i)).c_str());
-        }
-    }
-
-    void VulkanBaseRenderer::CreateTopLevelStructures(VkCommandBuffer commandBuffer)
-    {
-        const auto& debugUtils = Device().DebugUtils();
-        const uint32_t kMaxInstanceCount = 65535;
-
-        rt_->instancesBuffer.reset(new Buffer(Device(), kMaxInstanceCount * sizeof(VkAccelerationStructureInstanceKHR),
-                                          VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
-                                          VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
-        rt_->instancesMemory.reset(new DeviceMemory(
-            rt_->instancesBuffer->AllocateMemory(
-                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                {.AllocateFlags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT, .Passthrough = true})));
-
-        RayTracing::AccelerationStructure::InsertMemoryBarrier(commandBuffer);
-
-        rt_->tlas.emplace_back(Device().GetDeviceProcedures(), *rt_->properties,
-                            rt_->instancesBuffer->GetDeviceAddress(), kMaxInstanceCount);
-
-        const auto total = GetTotalRequirements(rt_->tlas);
-
-        rt_->tlasBuffer.reset(new Buffer(Device(), total.accelerationStructureSize,
-                                    VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
-                                    VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
-        rt_->tlasMemory.reset(new DeviceMemory(
-            rt_->tlasBuffer->AllocateMemory(
-                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                {.AllocateFlags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT, .Passthrough = true})));
-
-        rt_->tlasScratch.reset(new Buffer(Device(), total.buildScratchSize,
-                                           VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
-                                           VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-                                           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
-        rt_->tlasScratchMemory.reset(new DeviceMemory(
-            rt_->tlasScratch->AllocateMemory(
-                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                {.AllocateFlags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT, .Passthrough = true})));
-
-        debugUtils.SetObjectName(rt_->tlasBuffer->Handle(), "TLAS Buffer");
-        rt_->tlasMemory->SetName("TLAS Memory");
-        debugUtils.SetObjectName(rt_->tlasScratch->Handle(), "TLAS Scratch Buffer");
-        rt_->tlasScratchMemory->SetName("TLAS Scratch Memory");
-        debugUtils.SetObjectName(rt_->instancesBuffer->Handle(), "TLAS Instances Buffer");
-        rt_->instancesMemory->SetName("TLAS Instances Memory");
-
-        rt_->tlas[0].Generate(commandBuffer, *rt_->tlasScratch, 0, *rt_->tlasBuffer, 0);
-        debugUtils.SetObjectName(rt_->tlas[0].Handle(), "TLAS");
     }
 
 }

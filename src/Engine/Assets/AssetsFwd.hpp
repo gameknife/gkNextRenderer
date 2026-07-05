@@ -17,6 +17,7 @@ namespace Assets
     struct Camera;
     struct EnvironmentSetting;
     struct FMaterial;
+    struct FGaussianSplatData;
     struct GPUScene;
     struct LightObject;
     struct Material;

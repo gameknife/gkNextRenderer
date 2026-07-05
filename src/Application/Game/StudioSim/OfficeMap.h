@@ -3,6 +3,7 @@
 #include "StudioSimTypes.h"
 
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace Assets
@@ -18,19 +19,21 @@ namespace StudioSim
     {
     public:
         void BuildFromScene(Assets::Scene& scene);
-        void Clear() { points_.clear(); }
+        void Clear();
 
-        const std::vector<FPointOfInterest>& Points() const { return points_; }
-        size_t Count() const { return points_.size(); }
+        const std::vector<FPointOfInterest>& Points() const { return anchors_.Points(); }
+        size_t Count() const { return anchors_.Count(); }
 
         std::vector<const FPointOfInterest*> PointsOfCategory(const std::string& category) const;
         const FPointOfInterest* FindByName(const std::string& name) const;
+        ERole RoleForPoint(const std::string& name) const;
 
         // 把某类点位（roleTag 为空=该类全部，否则按职位标签）标记为可用/不可用（断电/宕机用）。
         void SetWorkable(const std::string& category, const std::string& roleTag, bool workable);
         void ResetWorkable();
 
     private:
-        std::vector<FPointOfInterest> points_;
+        NextGameplay::Sim::FAnchorMap anchors_;
+        std::unordered_map<std::string, ERole> roleTags_;
     };
 }

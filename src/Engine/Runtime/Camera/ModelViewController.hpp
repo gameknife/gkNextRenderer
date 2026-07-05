@@ -3,6 +3,7 @@
 #include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Runtime/Camera/FocusAnimation.hpp"
 #include "Engine/Utilities/Glm.hpp"
+#include <SDL3/SDL_keycode.h>
 #include <optional>
 
 union SDL_Event;
@@ -42,6 +43,11 @@ public:
 	 bool OnMouseButton(SDL_Event& event);
 	 bool OnTouch(bool down, double xpos, double ypos);
 	 void OnScroll(double xoffset, double yoffset);
+
+     void SetKeyHeld(SDL_Keycode key, bool held);
+     void ApplyMouseMove(double x, double y, bool relative);
+     void ApplyMouseButton(uint8_t button, bool down, double x, double y);
+     void ApplyWheel(double xoffset, double yoffset);
 
 	 bool OnGamepadInput(int16_t leftStickX, int16_t leftStickY,
 	                    int16_t rightStickX, int16_t rightStickY,

@@ -1,6 +1,8 @@
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
+#include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
+#include "Modules/NextRemote/NextRemoteModule.hpp"
 
 #include <fmt/format.h>
 #include <filesystem>
@@ -83,7 +85,15 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     NextRenderer::PlatformInit();
         
     // Start the application.
+    // Create the DevTools provider first: its constructor attaches the console
+    // log sink so engine startup logs are captured.
+    Runtime::IDebugUiProvider& debugUiProvider = DevTools::DefaultDebugUiProvider();
     GApplication.reset( new NextEngine(*GOption) );
+    GApplication->SetDebugUiProvider(&debugUiProvider);
+    if (GOption->RemoteMode)
+    {
+        GApplication->AddRenderFrameConsumer(Modules::NextRemote::CreateRemoteServer(*GOption));
+    }
     GApplication->Start();
     
     return SDL_APP_CONTINUE;

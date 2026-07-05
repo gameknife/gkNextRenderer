@@ -1,8 +1,12 @@
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Scene/GltfTestRunner.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.h"
+#include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
+#include "Modules/NextRemote/NextRemoteModule.hpp"
+#if GK_WITH_TUI
+#include "Modules/NextTui/NextTuiModule.hpp"
+#endif
 
 #if WIN32
 #include "ThirdParty/renderdoc/renderdoc_app.h"
@@ -13,10 +17,10 @@
 #include <SDL3/SDL_main.h>
 
 #include <cstdlib>
+#include <spdlog/spdlog.h>
 
 std::unique_ptr<NextEngine> GApplication;
 std::unique_ptr<Runtime::Config::Options> GOptionPtr;
-std::unique_ptr<Runtime::Scene::GltfTestRunner> GTestRunner;
 
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
@@ -47,7 +51,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 #endif
     // Global GOption, can access from everywhere
     GOption = GOptionPtr.get();
-    
+
     if(GOption->RenderDoc)
     {
 #if WIN32
@@ -83,12 +87,25 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     NextRenderer::PlatformInit();
         
     // Start the application.
+    // Create the DevTools provider first: its constructor attaches the console
+    // log sink so engine startup logs are captured.
+    Runtime::IDebugUiProvider& debugUiProvider = DevTools::DefaultDebugUiProvider();
     GApplication.reset( new NextEngine(*GOption) );
+    GApplication->SetDebugUiProvider(&debugUiProvider);
+    if (GOption->RemoteMode)
+    {
+        GApplication->AddRenderFrameConsumer(Modules::NextRemote::CreateRemoteServer(*GOption));
+    }
+#if GK_WITH_TUI
+    if (GOption->Tui)
+    {
+        GApplication->AddRenderFrameConsumer(Modules::NextTui::CreateTuiPresenter(*GApplication, *GOption));
+    }
+#endif
 
     if (GOption->TestGltfRobustness)
     {
-        GTestRunner = std::make_unique<Runtime::Scene::GltfTestRunner>(GApplication.get());
-        GApplication->AddTickedTask([](double dt){ return GTestRunner->Update(dt); });
+        SPDLOG_WARN("--test-gltf is not linked into desktop applications; run a dedicated robustness runner instead.");
     }
 
     GApplication->Start();
@@ -98,19 +115,19 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
 void SDL_AppQuit(void *appstate, SDL_AppResult result)
 {
+    const int exitCode = GApplication ? GApplication->GetRequestedExitCode() : 0;
     // Shutdown
     GApplication->End();
     
     if (GOption->FastExit)
     {
 #if __APPLE__
-        std::exit(0);
+        std::exit(exitCode);
 #else
-        std::quick_exit(0);
+        std::quick_exit(exitCode);
 #endif
     }
 
-    GTestRunner.reset();
     GApplication.reset();
     GOptionPtr.reset();
 }

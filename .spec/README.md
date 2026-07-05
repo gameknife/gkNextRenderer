@@ -106,3 +106,19 @@ blocked_at: 2026-05-14T15:30:00
 - `specs/` 下的文件（用户写的需求）
 - `ARCHIVE.md`（归档由工具或用户操作）
 - "待规划"段任何任务
+
+## AGENT 调度规则
+
+AGENT 不自己实现 TODO 读取、mtime 判断或 sleep 等待；这些逻辑统一交给 `gnb`：
+
+```bash
+gnb todo next --wait --timeout 590s --json
+```
+
+命令语义：
+- 如果"下一步"段已有 `[ ]` 任务，立即返回第一个任务
+- 如果当前没有任务，等待 `.spec/TODO.md` 修改；590 秒内出现任务就立即返回
+- 如果等待 590 秒仍没有任务，返回 `found: false` 并退出；AGENT 必须立即再次调用同一命令继续等待
+- 如果返回 `milestone_status: "done"`，AGENT 退出交互式工作流
+
+取到任务后，AGENT 若发现 `.spec/specs/<id>.md` 存在，先读规格再执行。任务完成后把 TODO 行标为 `[x]`，追加 `→ journal/<id>.md (YYYY-MM-DD)`，并写对应 journal。任务歧义无法判断时，写 `blockers/<id>.md`，把任务标为 `[!]`，然后继续调用命令取下一个任务。

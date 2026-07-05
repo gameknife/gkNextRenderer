@@ -8,7 +8,7 @@
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 #include "Engine/Runtime/Command/RenameNodeCommand.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Editor/ProfessionalUI.hpp"
+#include "Modules/DevTools/ProfessionalUI.hpp"
 #include "Engine/Runtime/Reflection/PropertyAccessor.h"
 
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
@@ -32,7 +32,8 @@ namespace Editor
                 ImVec4(0.22f, 0.78f, 0.34f, 1.0f),
                 ImVec4(0.24f, 0.48f, 0.95f, 1.0f),
             };
-            constexpr const char* axisIds[] = {"X", "Y", "Z"};
+            constexpr const char* axisNames[] = {"X", "Y", "Z"};
+            constexpr const char* axisIds[] = {"##X", "##Y", "##Z"};
 
             ImGui::PushID(label);
             NextUI::Theme::BeginFormRow(label, 0.22f, 70.0f, 70.0f);
@@ -45,7 +46,7 @@ namespace Editor
             for (int axis = 0; axis < 3; ++axis)
             {
                 ImGui::PushStyleColor(ImGuiCol_Text, axisColors[axis]);
-                ImGui::TextUnformatted(axisIds[axis]);
+                ImGui::TextUnformatted(axisNames[axis]);
                 ImGui::PopStyleColor();
                 ImGui::SameLine(0.0f, 4.0f);
                 ImGui::SetNextItemWidth(width);
@@ -65,10 +66,6 @@ namespace Editor
     {
         ImGui::Begin("Properties", nullptr);
         {
-            static ImGuiTextFilter propertyFilter;
-            propertyFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search properties##PropertiesSearch", -FLT_MIN);
-            NextUI::Theme::DrawThinSeparator();
-
             std::vector<uint32_t> selectedIds = ctx.scene.GetSelectedIds();
             if (selectedIds.empty() && ui.selected_obj_id != InvalidId)
             {
@@ -219,21 +216,16 @@ namespace Editor
                 return;
             }
 
-            const std::string inspectorSubtitle = "Instance " + std::to_string(selectedObj->GetInstanceId());
-            NextUI::Theme::DrawPanelHeader(ICON_FA_SLIDERS, "Inspector", inspectorSubtitle.c_str());
-
             auto render = selectedObj->GetComponent<Runtime::RenderComponent>();
             auto physics = selectedObj->GetComponent<Runtime::PhysicsComponent>();
-            static uint32_t editingNodeId = InvalidId;
-            static std::string editingName;
-            if (editingNodeId != selectedObj->GetInstanceId())
+            if (ui.propertiesState.editingNodeId != selectedObj->GetInstanceId())
             {
-                editingNodeId = selectedObj->GetInstanceId();
-                editingName = selectedObj->GetName();
+                ui.propertiesState.editingNodeId = selectedObj->GetInstanceId();
+                ui.propertiesState.editingName = selectedObj->GetName();
             }
 
             NextUI::Theme::BeginInsetPanel("##InspectorSummary", ImVec2(0.0f, 98.0f), true, 0,
-                                              ImVec2(10.0f, 9.0f), 0.26f);
+                                           ImVec2(10.0f, 9.0f), 0.26f);
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 6.0f));
 
             bool enabled = render == nullptr || render->GetVisible();
@@ -252,14 +244,35 @@ namespace Editor
                 ctx.scene.MarkDirty();
             }
 
-            static int tagIndex = 0;
-            static int layerIndex = 0;
+            static constexpr const char* tagItems[] = {"Untagged", "Player", "Environment", "Interactable"};
+            static constexpr const char* layerItems[] = {"Default", "Gameplay", "Props", "Colliders", "Lighting"};
+            auto findItemIndex = [](const char* const* items, int count, const std::string& value)
+            {
+                for (int i = 0; i < count; ++i)
+                {
+                    if (value == items[i])
+                    {
+                        return i;
+                    }
+                }
+                return 0;
+            };
+            int tagIndex = findItemIndex(tagItems, IM_ARRAYSIZE(tagItems), selectedObj->GetTag());
+            int layerIndex = findItemIndex(layerItems, IM_ARRAYSIZE(layerItems), selectedObj->GetLayer());
             ImGui::SetNextItemWidth((ImGui::GetContentRegionAvail().x - 8.0f) * 0.5f);
-            ImGui::Combo("##TagSelector", &tagIndex, "Untagged\0Player\0Environment\0Interactable\0\0");
+            if (ImGui::Combo("##TagSelector", &tagIndex, "Untagged\0Player\0Environment\0Interactable\0\0"))
+            {
+                selectedObj->SetTag(tagItems[tagIndex]);
+                ctx.scene.MarkDirty();
+            }
             NextUI::Theme::DrawTooltip("Tag");
             ImGui::SameLine();
             ImGui::SetNextItemWidth(-FLT_MIN);
-            ImGui::Combo("##LayerSelector", &layerIndex, "Default\0Gameplay\0Props\0Colliders\0Lighting\0\0");
+            if (ImGui::Combo("##LayerSelector", &layerIndex, "Default\0Gameplay\0Props\0Colliders\0Lighting\0\0"))
+            {
+                selectedObj->SetLayer(layerItems[layerIndex]);
+                ctx.scene.MarkDirty();
+            }
             NextUI::Theme::DrawTooltip("Layer");
 
             ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted));
@@ -268,18 +281,20 @@ namespace Editor
             ImGui::SameLine();
             ImGui::SetNextItemWidth(-FLT_MIN);
             const bool nameSubmitted =
-                ImGui::InputText("##NodeRenameInput", &editingName, ImGuiInputTextFlags_EnterReturnsTrue);
+                ImGui::InputText("##NodeRenameInput",
+                                  &ui.propertiesState.editingName,
+                                  ImGuiInputTextFlags_EnterReturnsTrue);
             const bool nameEditFinished = nameSubmitted || ImGui::IsItemDeactivatedAfterEdit();
             if (nameEditFinished)
             {
-                if (editingName.empty())
+                if (ui.propertiesState.editingName.empty())
                 {
-                    editingName = selectedObj->GetName();
+                    ui.propertiesState.editingName = selectedObj->GetName();
                 }
-                else if (editingName != selectedObj->GetName())
+                else if (ui.propertiesState.editingName != selectedObj->GetName())
                 {
                     ctx.engine.GetCommandHistory().Execute(std::make_unique<Runtime::Command::RenameNodeCommand>(
-                        ctx.scene, selectedObj->GetInstanceId(), editingName));
+                        ctx.scene, selectedObj->GetInstanceId(), ui.propertiesState.editingName));
                 }
             }
 
@@ -376,7 +391,7 @@ namespace Editor
                         }
                         ImGui::SameLine();
                         if (NextUI::Theme::IconButton(ICON_FA_PEN_TO_SQUARE, "Edit Material", false,
-                                                         ImVec2(28.0f, 24.0f)) &&
+                                                      ImVec2(28.0f, 24.0f)) &&
                             mat < ctx.scene.Materials().size())
                         {
                             ui.selected_material = &(ctx.scene.Materials()[mat]);
@@ -393,45 +408,51 @@ namespace Editor
                 }
                 NextUI::Theme::EndSection();
             }
-            
+
             if (NextUI::Theme::BeginSection(ICON_FA_PUZZLE_PIECE, "Components", true))
             {
-            const auto& components = selectedObj->GetComponents();
-            for (const auto& component : components)
-            {
-                if (!component) continue;
-
-                // Skip component if all its properties are filtered out
-                if (propertyFilter.IsActive())
+                ui.propertiesState.propertyFilter.Draw(ICON_FA_MAGNIFYING_GLASS " Search##PropertiesSearch");
+                NextUI::Theme::DrawThinSeparator();
+                const auto& components = selectedObj->GetComponents();
+                for (const auto& component : components)
                 {
-                    auto metaType = component->GetMetaType();
-                    auto props = Reflection::PropertyAccessor::GetProperties(metaType);
-                    bool anyVisible = false;
-                    for (const auto& prop : props)
+                    if (!component)
+                        continue;
+
+                    // Skip component if all its properties are filtered out
+                    if (ui.propertiesState.propertyFilter.IsActive())
                     {
-                        const char* displayName = prop.meta.displayName.empty()
-                            ? prop.name.c_str() : prop.meta.displayName.c_str();
-                        if (propertyFilter.PassFilter(displayName))
+                        auto metaType = component->GetMetaType();
+                        auto props = Reflection::PropertyAccessor::GetProperties(metaType);
+                        bool anyVisible = false;
+                        for (const auto& prop : props)
                         {
-                            anyVisible = true;
-                            break;
+                            const char* displayName = prop.meta.displayName.empty()
+                                ? prop.name.c_str()
+                                : prop.meta.displayName.c_str();
+                            if (ui.propertiesState.propertyFilter.PassFilter(displayName))
+                            {
+                                anyVisible = true;
+                                break;
+                            }
                         }
+                        if (!anyVisible)
+                            continue;
                     }
-                    if (!anyVisible) continue;
-                }
 
-                std::string headerName = std::string(component->GetTypeName());
-                if (ImGui::CollapsingHeader(headerName.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
-                {
-                    ImGui::Indent();
-                    if (PropertyWidgets::DrawComponentProperties(component.get(), &ctx.engine.GetCommandHistory(),
-                                                                 PropertyWidgets::WidgetConfig(), &propertyFilter))
+                    std::string headerName = std::string(component->GetTypeName());
+                    if (ImGui::CollapsingHeader(headerName.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
                     {
-                        ctx.scene.MarkDirty();
+                        ImGui::Indent();
+                        if (PropertyWidgets::DrawComponentProperties(component.get(), &ctx.engine.GetCommandHistory(),
+                                                                     PropertyWidgets::WidgetConfig(),
+                                                                     &ui.propertiesState.propertyFilter))
+                        {
+                            ctx.scene.MarkDirty();
+                        }
+                        ImGui::Unindent();
                     }
-                    ImGui::Unindent();
                 }
-            }
                 if (ImGui::Button(ICON_FA_PLUS " Add Component", ImVec2(-FLT_MIN, 0.0f)))
                 {
                     ImGui::OpenPopup("AddComponentPopup");

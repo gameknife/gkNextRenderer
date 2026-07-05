@@ -1,5 +1,5 @@
-import Common;
-import Bindless;
+import Shader.Bindless;
+import Shader.PathTracing;
 #include "common/ShaderClock.slang"
 
 [shader("compute")]
@@ -19,6 +19,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     renderer.SampleDownscale = 1;
     renderer.FuzzyTracing = false;
     renderer.ForceExitAfterFirst = false;
+    renderer.SecondaryDirectMode = 0;
     renderer.Init(DTid.xy);
 
     if( !renderer.PrimaryHit(rayCaster) )
@@ -27,7 +28,16 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    int sampleMultiplier = Bindless.GetStorageTexture<uint>(Bindless.RT_MOTIONMOMENT)[DTid.xy] > 0 ? 4 : 1;
-    renderer.Render(tracer, dIlluminator, sampleMultiplier);
+    float4 residencyDebugColor;
+    if (TryAmbientResidencyDebug(renderer.GetPrimaryVertex().Position, residencyDebugColor))
+    {
+        renderer.WriteDebugColor(residencyDebugColor);
+        END_SHADERCLOCK(DTid.xy)
+        return;
+    }
+
+    FNullRadianceCache cache;
+    int sampleMultiplier = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MOTIONMOMENT)[DTid.xy] > 0 ? 4 : 1;
+    renderer.Render(tracer, dIlluminator, cache, sampleMultiplier);
     END_SHADERCLOCK(DTid.xy)
 }

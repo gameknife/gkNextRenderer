@@ -1,4 +1,4 @@
-#include "DeviceProcedures.hpp"
+#include "Engine/Vulkan/RayTracing/DeviceProcedures.hpp"
 #include "Engine/Vulkan/Device.hpp"
 
 namespace Vulkan
@@ -37,6 +37,17 @@ DeviceProcedures::DeviceProcedures(const class Device& device, bool raytracing, 
 #else
 	vkGetMemoryFdKHR(GetProcedure<PFN_vkGetMemoryFdKHR>(device, "vkGetMemoryFdKHR")),
 #endif
+	vkCreateVideoSessionKHR(GetProcedure<PFN_vkCreateVideoSessionKHR>(device, "vkCreateVideoSessionKHR")),
+	vkDestroyVideoSessionKHR(GetProcedure<PFN_vkDestroyVideoSessionKHR>(device, "vkDestroyVideoSessionKHR")),
+	vkGetVideoSessionMemoryRequirementsKHR(GetProcedure<PFN_vkGetVideoSessionMemoryRequirementsKHR>(device, "vkGetVideoSessionMemoryRequirementsKHR")),
+	vkBindVideoSessionMemoryKHR(GetProcedure<PFN_vkBindVideoSessionMemoryKHR>(device, "vkBindVideoSessionMemoryKHR")),
+	vkCreateVideoSessionParametersKHR(GetProcedure<PFN_vkCreateVideoSessionParametersKHR>(device, "vkCreateVideoSessionParametersKHR")),
+	vkDestroyVideoSessionParametersKHR(GetProcedure<PFN_vkDestroyVideoSessionParametersKHR>(device, "vkDestroyVideoSessionParametersKHR")),
+	vkGetEncodedVideoSessionParametersKHR(GetProcedure<PFN_vkGetEncodedVideoSessionParametersKHR>(device, "vkGetEncodedVideoSessionParametersKHR")),
+	vkCmdBeginVideoCodingKHR(GetProcedure<PFN_vkCmdBeginVideoCodingKHR>(device, "vkCmdBeginVideoCodingKHR")),
+	vkCmdEndVideoCodingKHR(GetProcedure<PFN_vkCmdEndVideoCodingKHR>(device, "vkCmdEndVideoCodingKHR")),
+	vkCmdControlVideoCodingKHR(GetProcedure<PFN_vkCmdControlVideoCodingKHR>(device, "vkCmdControlVideoCodingKHR")),
+	vkCmdEncodeVideoKHR(GetProcedure<PFN_vkCmdEncodeVideoKHR>(device, "vkCmdEncodeVideoKHR")),
 	device_(device)
 {
 }

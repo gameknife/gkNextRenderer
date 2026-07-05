@@ -112,9 +112,13 @@ namespace Assets
     struct AnimationChannel
     {
         std::vector<AnimationKey<T>> Keys;
-        T Sample(float time);
+        T Sample(float time) const;
     };
-    
+
+    template <>
+    glm::quat AnimationChannel<glm::quat>::Sample(float time) const;
+    extern template glm::vec3 AnimationChannel<glm::vec3>::Sample(float time) const;
+
     struct AnimationTrack
     {
         bool Playing() const { return Playing_; }
@@ -168,6 +172,14 @@ namespace Assets
 
         void FreeMemory();
 
+        // Public factory for external mesh loaders (modules) that build models
+        // from raw vertex/index streams without friend access.
+        static Model CreateFromGeometry(const std::string& name, std::vector<Vertex>&& vertices,
+                                        std::vector<uint32_t>&& indices, bool needGenTSpace = true)
+        {
+            return Model(name, std::move(vertices), std::move(indices), needGenTSpace);
+        }
+
     private:
         Model(const std::string& name, std::vector<Vertex>&& vertices, std::vector<uint32_t>&& indices, bool needGenTSpace = true);
 
@@ -191,6 +203,5 @@ namespace Assets
 
         friend class FProcModel;
         friend class FSceneLoader;
-        friend class FLDrawLoader;
     };
 }

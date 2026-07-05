@@ -13,7 +13,7 @@ import (
 )
 
 type BuildOptions struct {
-	Target      string
+	Targets     []string
 	Clean       bool
 	Reconfigure bool
 	Jobs        int
@@ -64,14 +64,25 @@ func BuildWithCMake(repoRoot string, cmakePath string, preset string, opts Build
 		console.Info("configure skipped; use --reconfigure to force")
 	}
 
-	buildArgs := []string{"--build", "--preset", preset}
-	if opts.Target != "" {
-		buildArgs = append(buildArgs, "--target", opts.Target)
+	if handled, err := tryBuildWindowsMultiTarget(repoRoot, buildDir, preset, opts); handled {
+		return err
+	}
+
+	return run(repoRoot, opts.PrintCmd, cmakePath, makeBuildArgs(preset, opts)...)
+}
+
+func makeBuildArgs(preset string, opts BuildOptions) []string {
+	args := []string{"--build", "--preset", preset}
+	if len(opts.Targets) > 0 {
+		args = append(args, "--target")
+		args = append(args, opts.Targets...)
 	}
 	if opts.Jobs > 0 {
-		buildArgs = append(buildArgs, "--parallel", fmt.Sprintf("%d", opts.Jobs))
+		args = append(args, "--parallel", fmt.Sprintf("%d", opts.Jobs))
+	} else {
+		args = append(args, "--parallel")
 	}
-	return run(repoRoot, opts.PrintCmd, cmakePath, buildArgs...)
+	return args
 }
 
 func ListPresets(repoRoot string) error {
@@ -107,6 +118,132 @@ func run(dir string, printOnly bool, name string, args ...string) error {
 		return fmt.Errorf("%s failed: %w", name, err)
 	}
 	return nil
+}
+
+func tryBuildWindowsMultiTarget(repoRoot string, buildDir string, preset string, opts BuildOptions) (bool, error) {
+	if preset != "windows" || len(opts.Targets) <= 1 {
+		return false, nil
+	}
+
+	msbuild, ok := findMSBuild()
+	if !ok {
+		console.Info("MSBuild not found; falling back to cmake --build")
+		return false, nil
+	}
+
+	projects := make([]string, 0, len(opts.Targets))
+	for _, target := range opts.Targets {
+		project, ok := findVSProjectForTarget(buildDir, target)
+		if !ok {
+			console.Info("project for target %s not found; falling back to cmake --build", target)
+			return false, nil
+		}
+		projects = append(projects, project)
+	}
+
+	projectFile := filepath.Join(buildDir, "gnb_multi_target.proj")
+	if !opts.PrintCmd {
+		if err := os.WriteFile(projectFile, []byte(buildTraversalProject(projects)), 0o644); err != nil {
+			return true, err
+		}
+	}
+
+	args := []string{
+		projectFile,
+		msbuildParallelArg(opts.Jobs),
+		"/p:Configuration=RelWithDebInfo",
+		"/p:Platform=x64",
+		"/verbosity:minimal",
+	}
+	return true, run(repoRoot, opts.PrintCmd, msbuild, args...)
+}
+
+func findMSBuild() (string, bool) {
+	if path, err := exec.LookPath("MSBuild.exe"); err == nil {
+		return path, true
+	}
+
+	if programFilesX86 := os.Getenv("ProgramFiles(x86)"); programFilesX86 != "" {
+		vswhere := filepath.Join(programFilesX86, "Microsoft Visual Studio", "Installer", "vswhere.exe")
+		if _, err := os.Stat(vswhere); err == nil {
+			out, err := exec.Command(vswhere, "-latest", "-requires", "Microsoft.Component.MSBuild", "-find", `MSBuild\**\Bin\MSBuild.exe`).Output()
+			if err == nil {
+				for _, line := range strings.Split(string(out), "\n") {
+					path := strings.TrimSpace(line)
+					if path == "" {
+						continue
+					}
+					if _, err := os.Stat(path); err == nil {
+						return path, true
+					}
+				}
+			}
+		}
+	}
+
+	for _, root := range []string{os.Getenv("ProgramFiles"), os.Getenv("ProgramFiles(x86)")} {
+		if root == "" {
+			continue
+		}
+		for _, version := range []string{"18", "17"} {
+			for _, edition := range []string{"Community", "Professional", "Enterprise", "BuildTools"} {
+				path := filepath.Join(root, "Microsoft Visual Studio", version, edition, "MSBuild", "Current", "Bin", "MSBuild.exe")
+				if _, err := os.Stat(path); err == nil {
+					return path, true
+				}
+			}
+		}
+	}
+
+	return "", false
+}
+
+func findVSProjectForTarget(buildDir string, target string) (string, bool) {
+	want := target + ".vcxproj"
+	var found string
+	_ = filepath.WalkDir(buildDir, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || entry.IsDir() || entry.Name() != want {
+			return nil
+		}
+		found = path
+		return filepath.SkipAll
+	})
+	return found, found != ""
+}
+
+func buildTraversalProject(projects []string) string {
+	var b strings.Builder
+	b.WriteString("<Project DefaultTargets=\"Build\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n")
+	b.WriteString("  <ItemGroup>\n")
+	for _, project := range projects {
+		b.WriteString("    <ProjectToBuild Include=\"")
+		b.WriteString(escapeXML(project))
+		b.WriteString("\" />\n")
+	}
+	b.WriteString("  </ItemGroup>\n")
+	b.WriteString("  <Target Name=\"Build\">\n")
+	b.WriteString("    <MSBuild Projects=\"@(ProjectToBuild)\" Targets=\"Build\" BuildInParallel=\"true\" Properties=\"Configuration=RelWithDebInfo;Platform=x64\" />\n")
+	b.WriteString("  </Target>\n")
+	b.WriteString("</Project>\n")
+	return b.String()
+}
+
+func msbuildParallelArg(jobs int) string {
+	if jobs > 0 {
+		return fmt.Sprintf("/m:%d", jobs)
+	}
+	return "/m"
+}
+
+func escapeXML(value string) string {
+	replacer := strings.NewReplacer(
+		"&", "&amp;",
+		"\"", "&quot;",
+		"'", "&apos;",
+		"<", "&lt;",
+		">", "&gt;",
+	)
+	return replacer.Replace(value)
 }
 
 func requiresMakeProgramRefresh(cachePath string, want string) bool {

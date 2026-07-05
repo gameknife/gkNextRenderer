@@ -2,12 +2,13 @@
 
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Engine/Runtime/Editor/ProfessionalUI.hpp"
+#include "Modules/DevTools/ProfessionalUI.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Utilities/Math.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
+#include "ScadStudioUtils.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
 #include <imgui.h>
@@ -33,13 +34,6 @@ namespace ScadStudio
         constexpr size_t kMaxSessionTitleBytes = 28;
         constexpr const char* kDefaultNewSessionPrompt =
             "生成一个现代城市，有住宅区，商业区，工厂区。住宅区和商业区普遍高楼林立，城市中有中央公园。有交通路网，有河流。";
-
-        int64_t NowUnixSeconds()
-        {
-            return std::chrono::duration_cast<std::chrono::seconds>(
-                       std::chrono::system_clock::now().time_since_epoch())
-                .count();
-        }
 
         std::string RelativeTime(int64_t unixSeconds)
         {
@@ -117,25 +111,6 @@ namespace ScadStudio
             std::string language;
             std::string text;
         };
-
-        std::string TrimCopy(std::string text)
-        {
-            const size_t b = text.find_first_not_of(" \t\r\n");
-            if (b == std::string::npos)
-            {
-                return "";
-            }
-            const size_t e = text.find_last_not_of(" \t\r\n");
-            return text.substr(b, e - b + 1);
-        }
-
-        std::string ToLower(std::string text)
-        {
-            std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) {
-                return static_cast<char>(std::tolower(c));
-            });
-            return text;
-        }
 
         bool ProjectEquals(const std::vector<FScadProjectFile>& a, const std::vector<FScadProjectFile>& b)
         {
@@ -515,8 +490,8 @@ namespace ScadStudio
         ImGuiIO& io = ImGui::GetIO();
         // The vcpkg imgui is built with the FreeType feature, so the font atlas must use
         // the FreeType builder (matches gkNextEditor); otherwise atlas build crashes.
-        io.Fonts->FontBuilderIO = ImGuiFreeType::GetBuilderForFreeType();
-        io.Fonts->FontBuilderFlags = ImGuiFreeTypeBuilderFlags_NoHinting;
+        io.Fonts->SetFontLoader(ImGuiFreeType::GetFontLoader());
+        io.Fonts->FontLoaderFlags = ImGuiFreeTypeLoaderFlags_NoHinting;
 
         const std::string fontPath =
             Utilities::FileHelper::GetPlatformFilePath("assets/fonts/DroidSansFallback.ttf");

@@ -29,7 +29,7 @@ namespace StudioSim
     }
 
     void EventSystem::Raise(const std::string& eventId, double gameMinutes, FWorldState& world,
-                            std::vector<FEmployee>& employees, OfficeMap& office)
+                            OfficeMap& office)
     {
         const FEventDef* def = Find(eventId);
         if (def == nullptr)
@@ -53,13 +53,6 @@ namespace StudioSim
         else if (eventId == "build_server_down")
         {
             office.SetWorkable("desk", "engineer", false); // 宕机：工程师工位
-        }
-
-        // 全员清当前 LLM 目标 + 立即重决策（插队），下一轮 prompt 会带上事件。
-        for (auto& emp : employees)
-        {
-            emp.overrideTargetPoi.clear();
-            emp.nextDecisionAt = gameMinutes;
         }
 
         int hh = 0, mm = 0;

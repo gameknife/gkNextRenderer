@@ -35,16 +35,28 @@ namespace Vulkan
             std::filesystem::path outputPath;
         };
 
+        struct FGatherCompileResult
+        {
+            std::vector<FShaderCompileRequest> requests;
+            std::filesystem::file_time_type latestSourceTimestamp{};
+        };
+
         static std::filesystem::path ResolveSourceRoot();
         static std::filesystem::path ResolveOutputRoot();
         static std::filesystem::path ResolveSlangExecutable();
         static std::vector<std::filesystem::path> CollectFiles(const std::filesystem::path& root,
                                                                const std::set<std::string>& extensions);
         static bool IsSourceShader(const std::filesystem::path& path);
+        static bool IsRuntimeShaderEntry(const std::filesystem::path& path);
         static bool TryGetLatestTimestamp(const std::vector<std::filesystem::path>& files,
                                           std::filesystem::file_time_type& outTimestamp);
 
-        std::vector<FShaderCompileRequest> GatherCompileRequests(bool forceAll) const;
+        static FGatherCompileResult GatherCompileRequests(const std::filesystem::path& sourceRoot,
+                                                          const std::filesystem::path& outputRoot,
+                                                          bool forceAll,
+                                                          std::filesystem::file_time_type lastFailedSourceTimestamp);
+        void StartGatherCompileRequests(bool forceAll);
+        void FinishGatherCompileRequests(FGatherCompileResult result);
         bool CompileShader(const FShaderCompileRequest& request) const;
 
         VulkanBaseRenderer* renderer_ = nullptr;
@@ -56,6 +68,7 @@ namespace Vulkan
         bool enabled_ = true;
         bool initialized_ = false;
         bool forceRebuildAll_ = false;
+        bool gatherTaskInFlight_ = false;
         std::filesystem::file_time_type lastFailedSourceTimestamp_{};
     };
 }

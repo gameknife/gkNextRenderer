@@ -1,5 +1,5 @@
-#include "CommandExecution.hpp"
-#include "Device.hpp"
+#include "Engine/Vulkan/CommandExecution.hpp"
+#include "Engine/Vulkan/Device.hpp"
 
 namespace Vulkan
 {
@@ -16,7 +16,8 @@ CommandPool::CommandPool(const class Device& device, const uint32_t queueFamilyI
     poolInfo.queueFamilyIndex = queueFamilyIndex;
     poolInfo.flags = allowReset ? VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT : 0;
 
-    queue_ = queue == 0 ? device.GraphicsQueue() : device.TransferQueue();
+    (void)queue;
+    queue_ = device.QueueForFamilyIndex(queueFamilyIndex);
 
     Check(vkCreateCommandPool(device.Handle(), &poolInfo, nullptr, &commandPool_),
         "create command pool");

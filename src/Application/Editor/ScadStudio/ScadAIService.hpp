@@ -3,8 +3,8 @@
 #include "ScadPromptContext.hpp"
 #include "ScadSession.hpp"
 
-#include "Engine/Runtime/Subsystems/AI/AIChat.hpp"
-#include "Engine/Runtime/Subsystems/AIService.hpp"
+#include "Modules/NextAI/AI/AIChat.hpp"
+#include "Modules/NextAI/AIService.hpp"
 
 #include <atomic>
 #include <mutex>

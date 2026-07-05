@@ -1,10 +1,12 @@
 param(
     [string]$Repo = "gameknife/gkNextEngine",
     [string]$Tag = "paks-latest",
-    [string[]]$Platforms = @("windows-amd64", "linux-amd64", "macos-arm64", "macos-amd64"),
+    [string[]]$Platforms = @(),
     [string]$Go = "",
     [string]$Version = "",
     [switch]$DryRun,
+    [switch]$BuildOnly,
+    [switch]$PublishOnly,
     [switch]$SkipLocalCache
 )
 
@@ -91,6 +93,53 @@ function Get-PlatformSpec
     throw "Unsupported platform: $Platform"
 }
 
+function Get-CurrentPlatform
+{
+    $os = if ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+        [System.Runtime.InteropServices.OSPlatform]::Windows))
+    {
+        "windows"
+    }
+    elseif ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+        [System.Runtime.InteropServices.OSPlatform]::Linux))
+    {
+        "linux"
+    }
+    elseif ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+        [System.Runtime.InteropServices.OSPlatform]::OSX))
+    {
+        "macos"
+    }
+    else
+    {
+        throw "Unsupported host OS."
+    }
+
+    $arch = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant()
+    if ($arch -eq "x64")
+    {
+        $arch = "amd64"
+    }
+    if ($arch -ne "amd64" -and $arch -ne "arm64")
+    {
+        throw "Unsupported host architecture: $arch"
+    }
+    return "$os-$arch"
+}
+
+function Get-BuildTags
+{
+    param([string]$Platform)
+
+    switch -Wildcard ($Platform)
+    {
+        "windows-*" { return "desktop,production,wv2runtime.embed" }
+        "linux-*" { return "desktop,production,webkit2_41" }
+        "macos-*" { return "desktop,production" }
+    }
+    throw "Unsupported platform: $Platform"
+}
+
 function Resolve-Version
 {
     param([string]$RequestedVersion, [string]$RepoRoot)
@@ -173,6 +222,14 @@ if ($Tag -eq "")
 {
     throw "-Tag is required."
 }
+if ($BuildOnly -and $PublishOnly)
+{
+    throw "-BuildOnly and -PublishOnly cannot be used together."
+}
+if ($Platforms.Count -eq 0)
+{
+    $Platforms = @(Get-CurrentPlatform)
+}
 
 if (!(Test-Path (Join-Path $gnbSourceDir "go.mod")))
 {
@@ -180,64 +237,91 @@ if (!(Test-Path (Join-Path $gnbSourceDir "go.mod")))
 }
 
 New-Item -ItemType Directory -Force -Path $distDir | Out-Null
-$goExe = Resolve-Go $Go
 $builtAssets = @()
 
-foreach ($platform in $Platforms)
+if (!$PublishOnly)
 {
-    $spec = Get-PlatformSpec $platform
-    $assetName = $spec.AssetName
-    $assetPath = Join-Path $distDir $assetName
-    $downloadUrl = "https://github.com/$Repo/releases/download/$Tag/$assetName"
-
-    Write-Host "Building $assetName with $goExe"
-    $oldGoos = $env:GOOS
-    $oldGoarch = $env:GOARCH
-    $oldCgo = $env:CGO_ENABLED
-    $pushed = $false
-    try
+    $goExe = Resolve-Go $Go
+    $currentPlatform = Get-CurrentPlatform
+    foreach ($platform in $Platforms)
     {
-        $env:GOOS = $spec.GOOS
-        $env:GOARCH = $spec.GOARCH
-        $env:CGO_ENABLED = "0"
-        Push-Location $gnbSourceDir
-        $pushed = $true
-        & $goExe build -trimpath -ldflags $ldflags -o $assetPath ./cmd/gnb
-        if ($LASTEXITCODE -ne 0)
+        if ($platform -ne $currentPlatform)
         {
-            throw "go build failed with exit code $LASTEXITCODE"
+            throw "Wails binaries must be built natively. Host is $currentPlatform, requested $platform."
+        }
+
+        $spec = Get-PlatformSpec $platform
+        $assetName = $spec.AssetName
+        $assetPath = Join-Path $distDir $assetName
+        $downloadUrl = "https://github.com/$Repo/releases/download/$Tag/$assetName"
+        $buildTags = Get-BuildTags $platform
+
+        Write-Host "Building $assetName with $goExe (tags: $buildTags)"
+        $oldGoos = $env:GOOS
+        $oldGoarch = $env:GOARCH
+        $oldCgo = $env:CGO_ENABLED
+        $pushed = $false
+        try
+        {
+            $env:GOOS = $spec.GOOS
+            $env:GOARCH = $spec.GOARCH
+            $env:CGO_ENABLED = if ($spec.GOOS -eq "windows") { "0" } else { "1" }
+            Push-Location $gnbSourceDir
+            $pushed = $true
+            & $goExe build -tags $buildTags -trimpath -ldflags $ldflags -o $assetPath ./cmd/gnb
+            if ($LASTEXITCODE -ne 0)
+            {
+                throw "go build failed with exit code $LASTEXITCODE"
+            }
+        }
+        finally
+        {
+            if ($pushed)
+            {
+                Pop-Location
+            }
+            $env:GOOS = $oldGoos
+            $env:GOARCH = $oldGoarch
+            $env:CGO_ENABLED = $oldCgo
+        }
+
+        if (!$SkipLocalCache -and $spec.LocalCachePath -ne "")
+        {
+            $localCachePath = $spec.LocalCachePath
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $localCachePath) | Out-Null
+            Copy-Item -Force $assetPath $localCachePath
+            Write-Host "Updated local cache: $localCachePath"
+            if ($spec.LocalVersionPath -ne "")
+            {
+                Set-Content -Path $spec.LocalVersionPath -Value $versionValue
+                Write-Host "Updated local cache version: $($spec.LocalVersionPath)"
+            }
+        }
+
+        $assetInfo = Get-Item $assetPath
+        Write-Host ("Built asset: {0} ({1} bytes)" -f $assetInfo.FullName, $assetInfo.Length)
+        $builtAssets += @{
+            Name = $assetName
+            Path = $assetPath
+            DownloadUrl = $downloadUrl
         }
     }
-    finally
+}
+else
+{
+    foreach ($platform in $Platforms)
     {
-        if ($pushed)
+        $spec = Get-PlatformSpec $platform
+        $assetPath = Join-Path $distDir $spec.AssetName
+        if (!(Test-Path $assetPath))
         {
-            Pop-Location
+            throw "Missing prebuilt asset for -PublishOnly: $assetPath"
         }
-        $env:GOOS = $oldGoos
-        $env:GOARCH = $oldGoarch
-        $env:CGO_ENABLED = $oldCgo
-    }
-
-    if (!$SkipLocalCache -and $spec.LocalCachePath -ne "")
-    {
-        $localCachePath = $spec.LocalCachePath
-        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $localCachePath) | Out-Null
-        Copy-Item -Force $assetPath $localCachePath
-        Write-Host "Updated local cache: $localCachePath"
-        if ($spec.LocalVersionPath -ne "")
-        {
-            Set-Content -Path $spec.LocalVersionPath -Value $versionValue
-            Write-Host "Updated local cache version: $($spec.LocalVersionPath)"
+        $builtAssets += @{
+            Name = $spec.AssetName
+            Path = $assetPath
+            DownloadUrl = "https://github.com/$Repo/releases/download/$Tag/$($spec.AssetName)"
         }
-    }
-
-    $assetInfo = Get-Item $assetPath
-    Write-Host ("Built asset: {0} ({1} bytes)" -f $assetInfo.FullName, $assetInfo.Length)
-    $builtAssets += @{
-        Name = $assetName
-        Path = $assetPath
-        DownloadUrl = $downloadUrl
     }
 }
 
@@ -265,6 +349,15 @@ foreach ($bootstrap in $bootstrapAssets) {
         Path = $dst
         DownloadUrl = "https://github.com/$Repo/releases/download/$Tag/$($bootstrap.Name)"
     }
+}
+
+if ($BuildOnly)
+{
+    foreach ($asset in $builtAssets)
+    {
+        Write-Host "Build only: $($asset.Path)"
+    }
+    exit 0
 }
 
 if ($DryRun)

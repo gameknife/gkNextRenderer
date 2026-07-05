@@ -23,6 +23,10 @@ namespace Assets
                 .custom<PropertyMeta>(PropertyPresets::ReadOnly("Name", "Transform", "Node name"))
             .data<nullptr, &Node::GetInstanceId>("InstanceId")
                 .custom<PropertyMeta>(PropertyPresets::ReadOnly("InstanceId", "Transform", "Node instance id"))
+            .data<&Node::SetTag, &Node::GetTag>("Tag")
+                .custom<PropertyMeta>(PropertyPresets::Editable("Tag", "Metadata", "Node tag"))
+            .data<&Node::SetLayer, &Node::GetLayer>("Layer")
+                .custom<PropertyMeta>(PropertyPresets::Editable("Layer", "Metadata", "Node layer"))
             .data<&Node::SetTranslation, &Node::Translation>("Translation")
                 .custom<PropertyMeta>(PropertyPresets::Editable("Translation", "Transform", "Local translation"))
             .data<&Node::SetRotation, &Node::Rotation>("Rotation")
@@ -213,7 +217,7 @@ namespace Assets
         if (renderComp)
         {
             proxy.modelId = renderComp->GetModelId();
-            proxy.visible = renderComp->GetVisible() ? 1 : 0;
+            proxy.visible = renderComp->GetRenderParticipationMask();
             const auto& mats = renderComp->GetMaterials();
             for ( int i = 0; i < 16; i++ )
             {

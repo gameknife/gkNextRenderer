@@ -22,8 +22,8 @@ namespace
     constexpr float DeathSinkDistance = 0.3f;
     constexpr float BattleLimitMs = 30000.0f;
     constexpr float OvertimeDrawMs = 45000.0f;
-    constexpr int BenchRow = 8;
-    constexpr float BenchWorldZ = 8.5f;
+    constexpr int BattleBenchRow = 8;
+    constexpr float BattleBenchWorldZ = 8.5f;
     constexpr float MinMoveSpeed = 0.01f;
     constexpr float MinAttackSpeed = 0.01f;
     constexpr float HitFlashDurationMs = 80.0f;
@@ -68,7 +68,7 @@ namespace
         return glm::vec3(
             static_cast<float>(piece.col),
             piece.dimensions.y * 0.5f * piece.visualScale,
-            piece.onBench || piece.row == BenchRow ? BenchWorldZ : static_cast<float>(piece.row));
+            piece.onBench || piece.row == BattleBenchRow ? BattleBenchWorldZ : static_cast<float>(piece.row));
     }
 
     float ComputeAttackCooldownMs(float atkSpeed)

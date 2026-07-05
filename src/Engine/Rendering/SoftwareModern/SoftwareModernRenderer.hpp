@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-namespace Vulkan::LegacyDeferred
+namespace Vulkan::SoftwareModern
 {
 	class SoftwareModernRenderer final : public Vulkan::LogicRendererBase
 	{
@@ -21,38 +21,14 @@ namespace Vulkan::LegacyDeferred
 		void CreateSwapChain(const VkExtent2D& extent) override;
 		void DeleteSwapChain() override;
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
-		FRendererRequirements Requirements() const override { return GetRendererRequirements(ERT_LegacyDeferred); }
+		void ReloadShaders(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles) override;
+		FRendererRequirements Requirements() const override { return GetRendererRequirements(ERT_SoftwareModern); }
 
 	private:
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> deferredShadingPipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> composePipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> accumulatePipeline_;
 
-		uint32_t prevSingleDiffuseId_{};
-		uint32_t prevSingleSpecularId_{};
-		uint32_t prevSingleAlbedoId_{};
-	};
-
-}
-
-namespace Vulkan::VoxelTracing
-{
-	class VoxelTracingRenderer final : public Vulkan::LogicRendererBase
-	{
-	public:
-		VULKAN_NON_COPIABLE(VoxelTracingRenderer)
-		
-		VoxelTracingRenderer(Vulkan::VulkanBaseRenderer& baseRender);
-		~VoxelTracingRenderer();
-
-		void CreateSwapChain(const VkExtent2D& extent) override;
-		void DeleteSwapChain() override;
-		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
-		FRendererRequirements Requirements() const override { return GetRendererRequirements(ERT_VoxelTracing); }
-
-	private:
-		// just one computer pass is enough
-		std::unique_ptr<Vulkan::PipelineCommon::ZeroBindPipeline> deferredShadingPipeline_;
 	};
 
 }

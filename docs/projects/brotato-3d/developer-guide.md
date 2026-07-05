@@ -1,5 +1,6 @@
 ---
 title: Brotato3D 开发者指南
+category: project
 status: 现行
 owner: docs
 last_updated: 2026-05-10
@@ -91,7 +92,7 @@ Idle → Active → (waveTimeRemainingSec → 0) → DuskSurge → (玩家进入
 ### 2.2 经验与升级
 
 - 击杀敌人喷出 `materialDrop` 个 Material 碎块；每点造成的伤害都喷一个 XP 碎块。
-- 升级所需 XP：[Brotato3DPlayerSystem.cpp:380](../../../src/Application/Game/Brotato3D/Brotato3DPlayerSystem.cpp)
+- 升级所需 XP：[Brotato3DPlayerSystem.cpp:381](../../../src/Application/Game/Brotato3D/Brotato3DPlayerSystem.cpp)
   ```cpp
   return 20 + level * 10 + level * level * 2;
   ```
@@ -113,7 +114,7 @@ Idle → Active → (waveTimeRemainingSec → 0) → DuskSurge → (玩家进入
 | `critChancePct` `critMultiplier` | 暴击率 / 暴击倍率 | character / 升级卡 |
 | `dashChargeBonus` | Dash 豆数 | `spare_capacitor` |
 
-伤害计算（[Brotato3DProjectileSystem.cpp:376](../../../src/Application/Game/Brotato3D/Brotato3DProjectileSystem.cpp)）：
+伤害计算（[Brotato3DProjectileSystem.cpp:378](../../../src/Application/Game/Brotato3D/Brotato3DProjectileSystem.cpp)）：
 
 ```
 damage = round(weapon.damage * (1 + damagePct) + damageFlat)
@@ -174,7 +175,7 @@ crit   = round(damage * critMultiplier) when rng < (critChancePct + weapon.critC
 
 **让新敌人出场**：在 [waves.json](../../../assets/configs/brotato3d/waves.json) 对应波次的 `spawns` 数组里加 `{"enemyId":"slime","count":N,"intervalMs":M}`。
 
-**视觉**：当前所有敌人都是程序化盒子，模型是按 `size` 自动生成的（[Brotato3DEffectSystem.cpp:241](../../../src/Application/Game/Brotato3D/Brotato3DEffectSystem.cpp)）。颜色取自 `color`，并自动派生 4 个材质：基础 / 暗化 / 命中白闪 / 红色警告 / Boss 二阶段红。**不需要**自己写材质代码。
+**视觉**：当前所有敌人都是程序化盒子，模型是按 `size` 自动生成的（[Brotato3DEffectSystem.cpp:239](../../../src/Application/Game/Brotato3D/Brotato3DEffectSystem.cpp)）。颜色取自 `color`，并自动派生 4 个材质：基础 / 暗化 / 命中白闪 / 红色警告 / Boss 二阶段红。**不需要**自己写材质代码。
 
 **HUD 图标**（可选）：放置 `assets/textures/brotato3d/icons/enemies/<enemyId>.png`。文件不存在不会报错，只是 HUD 不显示。
 
@@ -202,7 +203,7 @@ crit   = round(damage * critMultiplier) when rng < (critChancePct + weapon.critC
 | `knockbackMeters` | 击退距离（米） | Boss 自动 ×0.25，大型怪按尺寸缩减 |
 | `tier` | 武器等级 | 始终是 1，2 级由商店购买重复 1 级武器自动合并产生 |
 
-**Tier 升级公式**（[Brotato3DProjectileSystem.cpp:408](../../../src/Application/Game/Brotato3D/Brotato3DProjectileSystem.cpp)，硬编码）：
+**Tier 升级公式**（[Brotato3DProjectileSystem.cpp:410](../../../src/Application/Game/Brotato3D/Brotato3DProjectileSystem.cpp)，硬编码）：
 - `damage * 1.5`
 - `atkSpeedHz * 1.2`
 - `knockbackMeters * 1.15`
@@ -410,7 +411,7 @@ HUD 中的相机始终俯视玩家头顶，跟随有一个 `CameraFollowSharpnes
 | 让升级更慢 | Brotato3DPlayerSystem.cpp 的 `GetXpToNextLevel()`（公式硬编码） |
 | 调商店 reroll 价格 | Brotato3DShop.hpp `GetRerollCost()`：`2 + waveIndex`（硬编码） |
 | 调武器合并阈值 | [Brotato3DProjectileSystem.cpp:466 TryMergeWeapons](../../../src/Application/Game/Brotato3D/Brotato3DProjectileSystem.cpp)（写死 2 → 1 级合并） |
-| 调 Dash 距离 / 冷却 | [Brotato3DPlayerSystem.cpp:13](../../../src/Application/Game/Brotato3D/Brotato3DPlayerSystem.cpp) 三个 `PlayerDashXxx` 常量 |
+| 调 Dash 距离 / 冷却 | [Brotato3DPlayerSystem.cpp:14](../../../src/Application/Game/Brotato3D/Brotato3DPlayerSystem.cpp) 三个 `PlayerDashXxx` 常量 |
 | 调玩家最多持有 Item 数 | [Brotato3DGameInstance.cpp:393](../../../src/Application/Game/Brotato3D/Brotato3DGameInstance.cpp)、`BuyPassiveItem` 中的 `>= 6` 字面量 |
 | 调武器槽数上限 | [Brotato3DCommon.hpp:22 MaxWeaponSlots](../../../src/Application/Game/Brotato3D/Brotato3DCommon.hpp) |
 | 调撤离车驻留时间 | waves.json 的 `extractionRequiredSec` |

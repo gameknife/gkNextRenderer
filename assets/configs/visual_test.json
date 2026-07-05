@@ -13,7 +13,8 @@
     ".gltf",
     ".ldr",
     ".mpd",
-    ".scad"
+    ".scad",
+    ".sog"
   ],
   "excludeScenes": [],
   "excludeSceneContains": [],
@@ -36,15 +37,21 @@
     {
       "path": "assets/scad/beer_cup.scad",
       "frames": 90
+    },
+    {
+      "path": "assets/sog/Grape.sog",
+      "frames": 120
     }
   ],
   "sceneTimeouts": {
     "PhysicsShowcase.proc": 30.0,
     "assets/scad/acient_city.scad": 30.0,
-    "assets/scad/beer_cup.scad": 30.0
+    "assets/scad/beer_cup.scad": 30.0,
+    "assets/sog/Grape.sog": 30.0
   },
   "notes": {
     "PhysicsShowcase.proc": "Physics motion can have small platform-dependent variance; visual baseline is informational.",
-    "assets/scad/acient_city.scad": "SCAD loader uses Manifold for CSG on desktop; mobile/no-backend builds may still fall back to approximations."
+    "assets/scad/acient_city.scad": "SCAD loader uses Manifold for CSG on desktop; mobile/no-backend builds may still fall back to approximations.",
+    "assets/sog/Grape.sog": "Gaussian splat regression scene; validates SOG decode, GPU sorting, SH shading and accumulation/compose."
   }
 }

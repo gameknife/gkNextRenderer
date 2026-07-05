@@ -1,7 +1,8 @@
 #include "RmlUiDemoGameInstance.hpp"
 
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/UI/RmlUiSystem.hpp"
+#include "Modules/NextRmlUi/RmlUiSystem.hpp"
+#include "Modules/NextRmlUi/NextRmlUiModule.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
@@ -236,6 +237,7 @@ namespace RmlUiDemo
     {
         ConfigureWindow(config, options, "RmlUi HTML/CSS Demo", 1360, 860, true);
         options.PresentMode = 0;
+        Modules::NextRmlUi::Install(*engine);
 
         modules_ = {
             {"landing", "Landing", "Classic product landing page"},
@@ -271,7 +273,7 @@ namespace RmlUiDemo
 
     void RmlUiDemoGameInstance::OnDestroy()
     {
-        if (NextUI::RmlUiSystem* rml = GetEngine().GetRmlUi())
+        if (NextUI::RmlUiSystem* rml = Modules::NextRmlUi::Get(GetEngine()))
         {
             rml->ClearEventListeners();
             rml->SetDocumentVisible(kDocumentId, false);
@@ -344,7 +346,7 @@ namespace RmlUiDemo
 
     void RmlUiDemoGameInstance::RenderDocument()
     {
-        NextUI::RmlUiSystem* rml = GetEngine().GetRmlUi();
+        NextUI::RmlUiSystem* rml = Modules::NextRmlUi::Get(GetEngine());
         if (!rml || !rml->IsAvailable())
         {
             return;
@@ -363,7 +365,7 @@ namespace RmlUiDemo
 
     void RmlUiDemoGameInstance::BindActions()
     {
-        NextUI::RmlUiSystem* rml = GetEngine().GetRmlUi();
+        NextUI::RmlUiSystem* rml = Modules::NextRmlUi::Get(GetEngine());
         if (!rml)
         {
             return;

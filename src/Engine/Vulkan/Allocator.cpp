@@ -1,12 +1,12 @@
-#include "Allocator.hpp"
+#include "Engine/Vulkan/Allocator.hpp"
 
 #define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>
 
-#include "Device.hpp"
-#include "Instance.hpp"
+#include "Engine/Vulkan/Device.hpp"
+#include "Engine/Vulkan/Instance.hpp"
 #include "Engine/Utilities/Exception.hpp"
-#include "WindowSurface.hpp"
+#include "Engine/Vulkan/WindowSurface.hpp"
 
 #include <array>
 #include <charconv>

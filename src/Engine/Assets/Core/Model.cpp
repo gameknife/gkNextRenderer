@@ -132,8 +132,12 @@ namespace Assets
     }
 
     template <typename T>
-    T AnimationChannel<T>::Sample(float time)
+    T AnimationChannel<T>::Sample(float time) const
     {
+        if (Keys.size() == 1)
+        {
+            return Keys[0].Value;
+        }
         for ( int i = 0; i < Keys.size() - 1; i++ )
         {
             auto& key = Keys[i];
@@ -159,8 +163,12 @@ namespace Assets
 
     // 偏特化T == glm::quat
     template <>
-    glm::quat AnimationChannel<glm::quat>::Sample(float time)
+    glm::quat AnimationChannel<glm::quat>::Sample(float time) const
     {
+        if (Keys.size() == 1)
+        {
+            return Keys[0].Value;
+        }
         for ( int i = 0; i < Keys.size() - 1; i++ )
         {
             auto& key = Keys[i];
@@ -183,7 +191,9 @@ namespace Assets
         }
         return {};
     }
-    
+
+    template glm::vec3 AnimationChannel<glm::vec3>::Sample(float time) const;
+
     void AnimationTrack::Sample(float time, glm::vec3& translation, glm::quat& rotation, glm::vec3& scaling)
     {
         if (!TranslationChannel.Keys.empty())

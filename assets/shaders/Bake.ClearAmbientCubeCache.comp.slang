@@ -1,17 +1,36 @@
-import Common;
+import Shader.Bindless;
+import Shader.PathTracing;
+
+float4 AmbientCubeClearSky()
+{
+    UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
+    if (!camera.HasSky)
+    {
+        return float4(0.0f);
+    }
+
+    float4 sky = float4(0.0f);
+    sky += Common.SampleIBLRough(camera.SkyIdx, float3(0.0f, 0.0f, 1.0f), camera.SkyRotation);
+    sky += Common.SampleIBLRough(camera.SkyIdx, float3(0.0f, 0.0f, -1.0f), camera.SkyRotation);
+    sky += Common.SampleIBLRough(camera.SkyIdx, float3(0.0f, 1.0f, 0.0f), camera.SkyRotation);
+    sky += Common.SampleIBLRough(camera.SkyIdx, float3(0.0f, -1.0f, 0.0f), camera.SkyRotation);
+    sky += Common.SampleIBLRough(camera.SkyIdx, float3(1.0f, 0.0f, 0.0f), camera.SkyRotation);
+    sky += Common.SampleIBLRough(camera.SkyIdx, float3(-1.0f, 0.0f, 0.0f), camera.SkyRotation);
+    return sky * (camera.SkyIntensity / 6.0f);
+}
 
 [shader("compute")]
 [numthreads(64, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     uint idx = DTid.x;
-    // custom_data_0 = cube-pool element count, custom_data_1 = dense voxel count. The sparse cube pool
-    // (Phase 3b) is smaller than the dense voxel array, so the two are bounded independently.
+    // custom_data_0 = cube-pool element count, custom_data_2 = residency entry count.
     uint cubeTotal = Bindless.GetGpuscene().custom_data_0;
-    uint voxelTotal = Bindless.GetGpuscene().custom_data_1;
+    uint residencyTotal = Bindless.GetGpuscene().custom_data_2;
 
     AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
-    VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
+    AmbientBrickResidency* Residency = Bindless.GetGpuscene().AmbientResidency;
+    float4 clearSky = AmbientCubeClearSky();
 
     if (idx < cubeTotal)
     {
@@ -21,18 +40,17 @@ void main(uint3 DTid : SV_DispatchThreadID)
         Cubes[idx].NegY = 0;
         Cubes[idx].PosX = 0;
         Cubes[idx].NegX = 0;
-        Cubes[idx].PosZ_D = 0;
-        Cubes[idx].NegZ_D = 0;
-        Cubes[idx].PosY_D = 0;
-        Cubes[idx].NegY_D = 0;
-        Cubes[idx].PosX_D = 0;
-        Cubes[idx].NegX_D = 0;
-        Cubes[idx].skyVisibility_pznzpyny = 0;
-        Cubes[idx].skyVisibility_pxnxs0s1 = 0;
+        Cubes[idx].SunDirect = 0;
+        Cubes[idx].SkyEmissiveDirect = packRGB9E5(clearSky.rgb);
+        Cubes[idx].skyVisibility_pznzpyny = PackBytes(uint4(255u, 255u, 255u, 255u));
+        Cubes[idx].skyVisibility_pxnxs0s1 = PackBytes(uint4(255u, 255u, 0u, 0u));
     }
 
-    if (idx < voxelTotal)
+    if (idx < residencyTotal)
     {
-        Voxels[idx].age = 0;
+        Residency[idx].lastConsumerHitFrame = 0;
+        Residency[idx].lastBounceHitFrame = 0;
+        Residency[idx].consumerHitCount = 0;
+        Residency[idx].bounceHitCount = 0;
     }
 }

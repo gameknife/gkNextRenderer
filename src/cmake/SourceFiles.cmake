@@ -58,12 +58,39 @@ file(GLOB_RECURSE src_files_engine
 
 # --- Gameplay Layer ---
 file(GLOB_RECURSE src_files_nextgameplay
-    "Engine/NextGameplay/*.cpp"
-    "Engine/NextGameplay/*.hpp"
-    "Engine/NextGameplay/*.h"
+    "Gameplay/*.cpp"
+    "Gameplay/*.hpp"
+    "Gameplay/*.h"
+)
+
+# --- Optional Engine Modules (src/Modules/<Name>, one static library each) ---
+set(GK_MODULE_NAMES LDrawLoader ScadLoader SplatLoader NextAI NextRemote NextRmlUi DevTools)
+if(GK_WITH_TUI AND NOT (ANDROID OR IOS))
+    list(APPEND GK_MODULE_NAMES NextTui)
+endif()
+if(NOT ANDROID)
+    list(APPEND GK_MODULE_NAMES NextQuickJS)
+endif()
+foreach(gk_module IN LISTS GK_MODULE_NAMES)
+    file(GLOB_RECURSE src_files_module_${gk_module}
+        "Modules/${gk_module}/*.cpp"
+        "Modules/${gk_module}/*.hpp"
+        "Modules/${gk_module}/*.h"
+    )
+endforeach()
+set(src_files_modules_all "")
+foreach(gk_module IN LISTS GK_MODULE_NAMES)
+    list(APPEND src_files_modules_all ${src_files_module_${gk_module}})
+endforeach()
+
+# --- Application shared code (demo scenes etc.) ---
+file(GLOB_RECURSE src_files_appcommon
+    "Application/Common/*.cpp"
+    "Application/Common/*.hpp"
 )
 
 # --- Editor ---
+file(GLOB_RECURSE src_files_editorcommon "Application/Editor/Common/*")
 file(GLOB_RECURSE src_files_editor "Application/Editor/gkNextEditor/*")
 
 # --- SCAD Studio (conversational SCAD model generator) ---
@@ -103,6 +130,12 @@ file(GLOB_RECURSE src_files_brotato3d
     "Application/Game/Brotato3D/*.hpp"
 )
 
+file(GLOB_RECURSE src_files_nextra
+    "Application/Game/NextRA/*.cpp"
+    "Application/Game/NextRA/*.hpp"
+    "Application/Game/NextRA/*.h"
+)
+
 file(GLOB_RECURSE src_files_flappycpp
     "Application/Game/Flappy/FlappyCommon.hpp"
     "Application/Game/Flappy/FlappyConfig.cpp"
@@ -125,4 +158,10 @@ file(GLOB_RECURSE src_files_studiosim
     "Application/Game/StudioSim/*.cpp"
     "Application/Game/StudioSim/*.hpp"
     "Application/Game/StudioSim/*.h"
+)
+
+file(GLOB_RECURSE src_files_airportsim
+    "Application/Game/AirportSim/*.cpp"
+    "Application/Game/AirportSim/*.hpp"
+    "Application/Game/AirportSim/*.h"
 )

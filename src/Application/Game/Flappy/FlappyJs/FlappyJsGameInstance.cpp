@@ -2,7 +2,8 @@
 #include "FlappyJs/FlappyJsGameInstance.hpp"
 
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Subsystems/QuickJSEngine.hpp"
+#include "Modules/NextQuickJS/NextQuickJSModule.hpp"
+#include "Modules/NextQuickJS/QuickJSEngine.hpp"
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config, Runtime::Config::Options& options, NextEngine* engine)
 {
@@ -13,7 +14,9 @@ FlappyJsGameInstance::FlappyJsGameInstance(Vulkan::WindowConfig& config, Runtime
     NextGameInstanceBase(config, options, engine)
 {
     ConfigureWindow(config, options, "FlappyJs", 1280, 720, true);
-    options.QuickJSEntry = "assets/scripts/flappy/FlappyJs/FlappyJsGameInstance.js";
+    Modules::NextQuickJS::Install(
+        *engine,
+        {.entryScript = "assets/scripts/flappy/FlappyJs/FlappyJsGameInstance.js"});
 }
 
 void FlappyJsGameInstance::OnInit()
@@ -21,7 +24,7 @@ void FlappyJsGameInstance::OnInit()
     GetEngine().GetShowFlags().DebugGraphicsPanel = false;
     GetEngine().GetShowFlags().DebugPhysicsOverlay = false;
     GetEngine().GetUserSettings().ShowOverlay = false;
-    if (QuickJSEngine* qjs = GetEngine().GetQuickJSEngine())
+    if (auto* qjs = Modules::NextQuickJS::Get(GetEngine()))
     {
         qjs->CallLifecycleHook("onInit");
     }
@@ -32,7 +35,7 @@ void FlappyJsGameInstance::OnTick(double) {}
 
 void FlappyJsGameInstance::OnDestroy()
 {
-    if (QuickJSEngine* qjs = GetEngine().GetQuickJSEngine())
+    if (auto* qjs = Modules::NextQuickJS::Get(GetEngine()))
     {
         qjs->CallLifecycleHook("onDestroy");
     }
@@ -40,7 +43,7 @@ void FlappyJsGameInstance::OnDestroy()
 
 bool FlappyJsGameInstance::OnRenderUI()
 {
-    if (QuickJSEngine* qjs = GetEngine().GetQuickJSEngine())
+    if (auto* qjs = Modules::NextQuickJS::Get(GetEngine()))
     {
         qjs->CallLifecycleHook("onRenderUI");
     }
@@ -65,7 +68,7 @@ void FlappyJsGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets
                                               std::vector<Assets::LightObject>& lights,
                                               std::vector<Assets::AnimationTrack>& tracks)
 {
-    if (QuickJSEngine* qjs = GetEngine().GetQuickJSEngine())
+    if (auto* qjs = Modules::NextQuickJS::Get(GetEngine()))
     {
         qjs->CallBeforeSceneRebuild(nodes, models, materials, lights, tracks);
     }
@@ -73,7 +76,7 @@ void FlappyJsGameInstance::BeforeSceneRebuild(std::vector<std::shared_ptr<Assets
 
 void FlappyJsGameInstance::OnSceneLoaded()
 {
-    if (QuickJSEngine* qjs = GetEngine().GetQuickJSEngine())
+    if (auto* qjs = Modules::NextQuickJS::Get(GetEngine()))
     {
         qjs->CallLifecycleHook("onSceneLoaded");
     }
@@ -81,7 +84,7 @@ void FlappyJsGameInstance::OnSceneLoaded()
 
 bool FlappyJsGameInstance::OverrideRenderCamera(Assets::Camera& outRenderCamera) const
 {
-    if (QuickJSEngine* qjs = GetEngine().GetQuickJSEngine())
+    if (const auto* qjs = Modules::NextQuickJS::Get(GetEngine()))
     {
         return qjs->TryGetOverrideCamera(outRenderCamera);
     }

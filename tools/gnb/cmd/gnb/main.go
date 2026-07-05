@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -20,6 +21,7 @@ import (
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/paks"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/runner"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/targetgraph"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/vcpkg"
 	"github.com/spf13/cobra"
 )
@@ -33,7 +35,14 @@ type appContext struct {
 }
 
 func main() {
-	repoRoot, repoErr := config.FindRepoRoot(".")
+	repoRootCandidates := []string{"."}
+	if executable, err := os.Executable(); err == nil {
+		if resolvedExecutable, resolveErr := filepath.EvalSymlinks(executable); resolveErr == nil {
+			executable = resolvedExecutable
+		}
+		repoRootCandidates = append(repoRootCandidates, filepath.Dir(executable))
+	}
+	repoRoot, repoErr := config.FindRepoRootFromCandidates(repoRootCandidates...)
 	var cfg config.Config
 	if repoErr == nil {
 		var err error
@@ -86,10 +95,14 @@ func main() {
 	root.AddCommand(newSetupCommand(ctx))
 	root.AddCommand(newDepsCommand(ctx))
 	root.AddCommand(newBuildCommand(ctx))
+	root.AddCommand(newGraphCommand(ctx))
 	root.AddCommand(newRunCommand(ctx))
+	root.AddCommand(newRemoteCommand(ctx))
 	root.AddCommand(newTestCommand(ctx))
 	root.AddCommand(newVisualCommand(ctx))
 	root.AddCommand(newShotCommand(ctx))
+	root.AddCommand(newValidateCommand(ctx))
+	root.AddCommand(newTuiCommand(ctx))
 	root.AddCommand(newEditorCommand(ctx))
 	root.AddCommand(newAndroidCommand(ctx))
 	root.AddCommand(newIOSCommand(ctx))
@@ -282,13 +295,11 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 	opts := cmakerun.BuildOptions{}
 	skipSetup := false
 	cmd := &cobra.Command{
-		Use:   "build [target]",
+		Use:   "build [targets...]",
 		Short: "Configure and build the native project",
-		Args:  cobra.MaximumNArgs(1),
+		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 1 {
-				opts.Target = args[0]
-			}
+			opts.Targets = append([]string(nil), args...)
 			if !skipSetup {
 				if _, err := os.Stat(vcpkg.Toolchain(ctx.repoRoot, ctx.cfg)); err != nil {
 					console.Info("首次构建：自动执行 setup（如需跳过用 --skip-setup）")
@@ -332,6 +343,44 @@ func newBuildCommand(ctx appContext) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.LTO, "lto", false, "configure with -DENABLE_LTO=ON")
 	cmd.Flags().BoolVar(&opts.PrintCmd, "print-cmd", false, "print cmake commands without executing")
 	cmd.Flags().BoolVar(&skipSetup, "skip-setup", false, "do not auto-bootstrap vcpkg/external dependencies")
+	return cmd
+}
+
+func newGraphCommand(ctx appContext) *cobra.Command {
+	opts := targetgraph.Options{}
+	all := false
+	cmd := &cobra.Command{
+		Use:   "graph [target]",
+		Short: "Export a CMake target dependency graph",
+		Long: "Export CMake's target dependency graph as SVG/PNG/PDF/DOT.\n\n" +
+			"Examples:\n" +
+			"  gnb graph gkNextEditor\n" +
+			"  gnb graph gkNextRenderer --format dot\n" +
+			"  gnb graph gkNextEngine --dependers\n" +
+			"  gnb graph --all --format svg",
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if all && len(args) == 1 {
+				return fmt.Errorf("--all cannot be combined with a target")
+			}
+			if len(args) == 1 {
+				opts.Target = args[0]
+			}
+			opts.RepoRoot = ctx.repoRoot
+			opts.Preset = ctx.preset
+			cmakePath, err := vcpkg.EnsureBundledCMake(ctx.repoRoot, ctx.cfg)
+			if err != nil {
+				return err
+			}
+			opts.CMakePath = cmakePath
+			return targetgraph.Run(opts)
+		},
+	}
+	cmd.Flags().StringVar(&opts.Format, "format", "svg", "output format: svg, png, pdf, or dot")
+	cmd.Flags().StringVarP(&opts.Output, "out", "o", "", "output file path")
+	cmd.Flags().BoolVar(&opts.Dependers, "dependers", false, "show targets that depend on the target instead of its dependencies")
+	cmd.Flags().BoolVar(&opts.PrintCmd, "print-cmd", false, "print commands without executing")
+	cmd.Flags().BoolVar(&all, "all", false, "export the full target graph; this is the default when no target is given")
 	return cmd
 }
 
@@ -469,21 +518,20 @@ func newShotCommand(ctx appContext) *cobra.Command {
 	var scene string
 	var target string
 	var frames int
+	var includeUI bool
 	cmd := &cobra.Command{
-		Use:   "shot [--scene <path>] [--target <name>] [--frames N]",
+		Use:   "shot [--scene <path>] [--target <name>] [--frames N] [--ui]",
 		Short: "Capture one validation screenshot, then auto-exit (no focus-stealing window)",
 		Long: "Render a scene to a stable frame, capture a single screenshot to a fixed path, then exit.\n\n" +
 			"The window is hidden so it never pops to the foreground or steals focus during an agent\n" +
-			"dev loop, and the app exits on its own. The screenshot path is printed when finished.\n\n" +
+			"dev loop, and the app exits on its own. Pass --ui to include ImGui in the capture.\n" +
+			"The screenshot path is printed when finished.\n\n" +
 			"Examples:\n" +
 			"  gnb shot --scene assets/models/playground.glb\n" +
-			"  gnb shot --target ScadStudio --scene assets/scad/beer_cup.scad --frames 60",
+			"  gnb shot --target ScadStudio --scene assets/scad/beer_cup.scad --frames 60\n" +
+			"  gnb shot --target AirportSim --ui",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			runArgs := []string{"--agent-validation"}
-			if frames > 0 {
-				runArgs = append(runArgs, fmt.Sprintf("--agent-validation-frames=%d", frames))
-			}
-			runArgs = append(runArgs, args...)
+			runArgs := shotRunArgs(frames, includeUI, args)
 			opts := runner.Options{Target: target, Preset: ctx.preset, Args: runArgs}
 			if scene != "" {
 				opts.Scenes = append(opts.Scenes, scene)
@@ -500,6 +548,179 @@ func newShotCommand(ctx appContext) *cobra.Command {
 	cmd.Flags().StringVar(&scene, "scene", "", "scene to load (file path or built-in .proc name)")
 	cmd.Flags().StringVar(&target, "target", "gkNextRenderer", "target executable to run")
 	cmd.Flags().IntVar(&frames, "frames", 0, "frames to render before capture (0 = engine default)")
+	cmd.Flags().BoolVar(&includeUI, "ui", false, "include ImGui UI in the screenshot")
+	return cmd
+}
+
+func shotRunArgs(frames int, includeUI bool, trailingArgs []string) []string {
+	runArgs := []string{"--agent-validation"}
+	if frames > 0 {
+		runArgs = append(runArgs, fmt.Sprintf("--agent-validation-frames=%d", frames))
+	}
+	if includeUI {
+		runArgs = append(runArgs, "--agent-validation-ui")
+	}
+	return append(runArgs, trailingArgs...)
+}
+
+type validateScriptHints struct {
+	Name     string `json:"name"`
+	Target   string `json:"target"`
+	Scene    string `json:"scene"`
+	Viewport struct {
+		Width  int `json:"width"`
+		Height int `json:"height"`
+	} `json:"viewport"`
+}
+
+func newValidateCommand(ctx appContext) *cobra.Command {
+	var script string
+	var target string
+	var scene string
+	var report string
+	var width int
+	var height int
+	var visible bool
+	cmd := &cobra.Command{
+		Use:   "validate --script <path> [--target <name>] [--scene <path>]",
+		Short: "Run an agent input validation script and write a JSON report",
+		Args:  cobra.ArbitraryArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if script == "" {
+				return fmt.Errorf("--script is required")
+			}
+			scriptPath := script
+			if !filepath.IsAbs(scriptPath) {
+				scriptPath = filepath.Join(ctx.repoRoot, scriptPath)
+			}
+			scriptPath, _ = filepath.Abs(scriptPath)
+
+			hints := loadValidateScriptHints(scriptPath)
+			if target == "" {
+				target = hints.Target
+			}
+			if target == "" {
+				target = "gkNextRenderer"
+			}
+			if scene == "" {
+				scene = hints.Scene
+			}
+			if width == 0 {
+				width = hints.Viewport.Width
+			}
+			if height == 0 {
+				height = hints.Viewport.Height
+			}
+
+			runArgs := validateRunArgs(scriptPath, report, width, height, visible, args)
+			opts := runner.Options{Target: target, Preset: ctx.preset, Args: runArgs}
+			if scene != "" {
+				opts.Scenes = append(opts.Scenes, scene)
+			}
+			err := runner.Run(ctx.repoRoot, opts)
+
+			reportPath := report
+			if reportPath == "" {
+				reportName := hints.Name
+				if reportName == "" {
+					reportName = strings.TrimSuffix(filepath.Base(scriptPath), filepath.Ext(scriptPath))
+				}
+				reportPath = filepath.Join(filepath.Dir(platform.BinDir(ctx.repoRoot, ctx.preset)),
+					"agent_reports", reportName+".json")
+			} else if !filepath.IsAbs(reportPath) {
+				reportPath = filepath.Join(filepath.Dir(platform.BinDir(ctx.repoRoot, ctx.preset)), reportPath)
+			}
+			console.Info("agent report: " + reportPath)
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&script, "script", "", "agent script JSON path")
+	cmd.Flags().StringVar(&target, "target", "", "target executable to run (default: script target or gkNextRenderer)")
+	cmd.Flags().StringVar(&scene, "scene", "", "scene to load (overrides script scene)")
+	cmd.Flags().StringVar(&report, "report", "", "report JSON output path")
+	cmd.Flags().IntVar(&width, "width", 0, "window width (overrides script viewport.width)")
+	cmd.Flags().IntVar(&height, "height", 0, "window height (overrides script viewport.height)")
+	cmd.Flags().BoolVar(&visible, "visible", false, "show the desktop window while replaying the agent script")
+	return cmd
+}
+
+func validateRunArgs(scriptPath string, report string, width int, height int, visible bool, trailingArgs []string) []string {
+	runArgs := []string{"--agent-script=" + scriptPath}
+	if report != "" {
+		runArgs = append(runArgs, "--agent-report="+report)
+	}
+	if visible {
+		runArgs = append(runArgs, "--agent-visible-window")
+	}
+	if width > 0 {
+		runArgs = append(runArgs, fmt.Sprintf("--width=%d", width))
+	}
+	if height > 0 {
+		runArgs = append(runArgs, fmt.Sprintf("--height=%d", height))
+	}
+	return append(runArgs, trailingArgs...)
+}
+
+func loadValidateScriptHints(scriptPath string) validateScriptHints {
+	var hints validateScriptHints
+	data, err := os.ReadFile(scriptPath)
+	if err != nil {
+		return hints
+	}
+	_ = json.Unmarshal(data, &hints)
+	return hints
+}
+
+func newTuiCommand(ctx appContext) *cobra.Command {
+	var scene string
+	var target string
+	var fps int
+	var maxCols int
+	var maxRows int
+	var ssaa int
+	var noInput bool
+	cmd := &cobra.Command{
+		Use:   "tui [--scene <path>] [--target <name>]",
+		Short: "Run a target in terminal TUI mode (hidden window + truecolor terminal blit)",
+		Long: "Render a target into a hidden swapchain and continuously blit the frames into the\n" +
+			"current terminal using truecolor half-block characters.\n\n" +
+			"Examples:\n" +
+			"  gnb tui --scene assets/models/playground.glb\n" +
+			"  gnb tui --target ScadStudio --scene assets/scad/beer_cup.scad\n" +
+			"  gnb tui --target gkNextRenderer --tui-fps 20",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			runArgs := []string{"--tui"}
+			if fps > 0 {
+				runArgs = append(runArgs, fmt.Sprintf("--tui-fps=%d", fps))
+			}
+			if maxCols > 0 {
+				runArgs = append(runArgs, fmt.Sprintf("--tui-max-cols=%d", maxCols))
+			}
+			if maxRows > 0 {
+				runArgs = append(runArgs, fmt.Sprintf("--tui-max-rows=%d", maxRows))
+			}
+			if ssaa > 0 {
+				runArgs = append(runArgs, fmt.Sprintf("--tui-ssaa=%d", ssaa))
+			}
+			if noInput {
+				runArgs = append(runArgs, "--tui-no-input")
+			}
+			runArgs = append(runArgs, args...)
+
+			opts := runner.Options{Target: target, Preset: ctx.preset, Args: runArgs}
+			if scene != "" {
+				opts.Scenes = append(opts.Scenes, scene)
+			}
+			return runner.Run(ctx.repoRoot, opts)
+		},
+	}
+	cmd.Flags().StringVar(&scene, "scene", "", "scene to load (file path or built-in .proc name)")
+	cmd.Flags().StringVar(&target, "target", "gkNextRenderer", "target executable to run")
+	cmd.Flags().IntVar(&fps, "tui-fps", 0, "terminal refresh cap (0 = engine default)")
+	cmd.Flags().IntVar(&maxCols, "tui-max-cols", 0, "optional terminal column cap")
+	cmd.Flags().IntVar(&maxRows, "tui-max-rows", 0, "optional terminal row cap")
+	cmd.Flags().IntVar(&ssaa, "tui-ssaa", 0, "hidden render supersample factor (0 = engine default)")
+	cmd.Flags().BoolVar(&noInput, "tui-no-input", false, "do not capture stdin in TUI mode")
 	return cmd
 }
 

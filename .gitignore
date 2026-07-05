@@ -25,6 +25,7 @@
 external/
 build/
 build-*/
+/out/
 **/vcpkg_installed/
 
 # Visual Studio 2015/2017 cache/options directory
@@ -405,8 +406,10 @@ tools/brotato3d-pak/output/
 src/ThirdParty/*/bin/
 src/ThirdParty/oidn/
 src/ThirdParty/Streamline/
-# Claude Code files
+# AI assistant local files
 .claude/
+.mimocode/
+.skills/
 lib/
 
 tools/ldraw/source/ldraw/
@@ -417,6 +420,7 @@ assets/paks/ldraw.pak
 assets/models/KayKit_Platformer_Pack/
 
 # Optional binary assets — fetched via scripts/fetch-paks.{sh,ps1,bat}.
+assets/sog/
 assets/sfx/*.mp3
 assets/sfx/*.wav
 

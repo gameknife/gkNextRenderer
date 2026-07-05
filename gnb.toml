@@ -2,7 +2,7 @@
 min_version = "0.1.0"
 
 [vcpkg]
-ref = "2025.12.12"
+ref = "2026.04.27"
 binary_cache = ".vcpkg_bincache"
 root = ".vcpkg"
 
@@ -50,6 +50,19 @@ id      = "gemma-4-E2B-it-Q4_K_M"
 file    = "gemma-4-E2B-it-Q4_K_M.gguf"
 url     = "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_K_M.gguf"
 context = 131072
+
+[[external.llm.models]]
+id      = "gemma-4-12B-it-qat-UD-Q4_K_XL"
+file    = "gemma-4-12B-it-qat-UD-Q4_K_XL.gguf"
+url     = "https://huggingface.co/unsloth/gemma-4-12B-it-qat-GGUF/resolve/main/gemma-4-12B-it-qat-UD-Q4_K_XL.gguf"
+context = 131072
+
+[[external.llm.models]]
+id      = "gemma-4-12B-it-Q4_K_M"
+file    = "gemma-4-12B-it-Q4_K_M.gguf"
+url     = "https://huggingface.co/unsloth/gemma-4-12b-it-GGUF/resolve/main/gemma-4-12b-it-Q4_K_M.gguf"
+context = 131072
+
 
 [external.llm.server]
 host         = "127.0.0.1"

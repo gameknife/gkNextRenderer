@@ -5,12 +5,10 @@
 #include <fstream>
 #include <filesystem>
 
-#include "TestCommon.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
-TEST_CASE_METHOD(EngineTestFixture, "Load glTF Skinning Data", "[Assets][glTF]")
+TEST_CASE("Load glTF Skinning Data", "[Assets][glTF]")
 {
-    
     Utilities::Package::FPackageFileSystem pakSys(Utilities::Package::EPM_OsFile);
     
     std::string filename = "assets/models/rig.glb";
@@ -23,17 +21,11 @@ TEST_CASE_METHOD(EngineTestFixture, "Load glTF Skinning Data", "[Assets][glTF]")
     std::vector<Assets::AnimationTrack> tracks;
     std::vector<Assets::Skeleton> skeletons;
     
-    
-    if (true)
-    {
-        bool result = Assets::FSceneLoader::LoadGLTFScene(filename, camera, nodes, models, materials, lights, tracks, skeletons);
-        
-        if (result && !models.empty())
-        {
-            REQUIRE(models[0].CPUJoints().size() > 0);
-            REQUIRE(models[0].CPUWeights().size() > 0);
-        }
-    }
+    bool result = Assets::FSceneLoader::LoadGLTFScene(filename, camera, nodes, models, materials, lights, tracks, skeletons);
+    REQUIRE(result);
+    REQUIRE(!models.empty());
+    REQUIRE(models[0].CPUJoints().size() > 0);
+    REQUIRE(models[0].CPUWeights().size() > 0);
 }
 
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"

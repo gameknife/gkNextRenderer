@@ -1,6 +1,5 @@
 #include "Engine/Assets/Loaders/OzzAnimationBuilder.h"
 
-#if WITH_OZZ
 #include "Engine/Assets/Data/Skeleton.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 
@@ -14,7 +13,6 @@
 #include "ozz/base/maths/simd_math.h"
 #include "ozz/base/platform.h"
 
-#include <spdlog/spdlog.h>
 #include <algorithm>
 #include <functional>
 #include <unordered_map>
@@ -206,4 +204,3 @@ namespace Assets
         return builder(raw);
     }
 }
-#endif

@@ -45,6 +45,10 @@ type ServerInfo struct {
 	Running   bool
 }
 
+func (i ServerInfo) BaseURL() string {
+	return fmt.Sprintf("http://%s:%d", i.Host, i.Port)
+}
+
 func (s *Server) BaseURL() string {
 	return fmt.Sprintf("http://%s:%d", s.cfg.Server.Host, s.cfg.Server.Port)
 }
@@ -94,6 +98,16 @@ func (s *Server) Status() ServerInfo {
 	}
 	info.Running = s.healthyAt(info.Host, info.Port)
 	return info
+}
+
+// EnsureRunningOrReuse returns any healthy llama-server discovered through
+// the PID file without changing its model or launch settings. If no healthy
+// server exists, it starts the configured active model through EnsureRunning.
+func (s *Server) EnsureRunningOrReuse(ctx context.Context) (ServerInfo, error) {
+	if info := s.Status(); info.Running {
+		return info, nil
+	}
+	return s.EnsureRunning(ctx)
 }
 
 // EnsureRunning starts llama-server if it isn't already responding. Blocks

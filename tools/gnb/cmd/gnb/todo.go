@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/spec"
 	"github.com/spf13/cobra"
@@ -246,72 +248,266 @@ func sectionName(s spec.SectionKind) string {
 // ----- next -------------------------------------------------------------
 
 type nextOutput struct {
-	Found       bool   `json:"found"`
-	ID          int    `json:"id,omitempty"`
-	IDStr       string `json:"id_str,omitempty"`
-	Status      string `json:"status,omitempty"`
-	Priority    string `json:"priority,omitempty"`
-	Type        string `json:"type,omitempty"`
-	Title       string `json:"title,omitempty"`
-	Section     string `json:"section,omitempty"`
-	SpecPath    string `json:"spec_path,omitempty"`
-	SpecExists  bool   `json:"spec_exists,omitempty"`
-	JournalPath string `json:"journal_path,omitempty"`
-	BlockerPath string `json:"blocker_path,omitempty"`
+	Found           bool   `json:"found"`
+	ID              int    `json:"id,omitempty"`
+	IDStr           string `json:"id_str,omitempty"`
+	Status          string `json:"status,omitempty"`
+	Priority        string `json:"priority,omitempty"`
+	Type            string `json:"type,omitempty"`
+	Title           string `json:"title,omitempty"`
+	Section         string `json:"section,omitempty"`
+	SpecPath        string `json:"spec_path,omitempty"`
+	SpecExists      bool   `json:"spec_exists,omitempty"`
+	JournalPath     string `json:"journal_path,omitempty"`
+	BlockerPath     string `json:"blocker_path,omitempty"`
+	Milestone       string `json:"milestone,omitempty"`
+	MilestoneStatus string `json:"milestone_status,omitempty"`
+	TimedOut        bool   `json:"timed_out,omitempty"`
+	WaitedMillis    int64  `json:"waited_ms,omitempty"`
+}
+
+type todoNextOptions struct {
+	asJSON  bool
+	wait    bool
+	timeout time.Duration
+	poll    time.Duration
 }
 
 func newTodoNextCommand(ctx appContext) *cobra.Command {
-	var asJSON bool
+	opts := todoNextOptions{timeout: 590 * time.Second, poll: 2 * time.Second}
 	cmd := &cobra.Command{
 		Use:   "next",
-		Short: "Print the next pending task in 下一步 (intended for AGENT/orchestrator use)",
+		Short: "Print the next pending task in 下一步, optionally waiting for TODO.md updates",
+		Long: "Print the next pending task in 下一步 (intended for AGENT/orchestrator use).\n\n" +
+			"With --wait, the command returns immediately if a task exists. If no task exists,\n" +
+			"it watches TODO.md and returns when a task appears or --timeout elapses.\n" +
+			"Polling remains enabled as a fallback for missed or unsupported file events.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			doc, err := spec.Parse(spec.TODOPath(ctx.repoRoot))
+			out, err := runTodoNext(ctx, opts)
 			if err != nil {
 				return err
 			}
-			var found *spec.Task
-			for i := range doc.Tasks {
-				if doc.Tasks[i].Section == spec.SectionNext && doc.Tasks[i].Status == spec.StatusPending {
-					found = &doc.Tasks[i]
-					break
-				}
-			}
-			if found == nil {
-				if asJSON {
-					return writeJSON(nextOutput{Found: false})
-				}
-				console.Muted("(no pending task in 下一步)")
-				return nil
-			}
-			specPath := spec.SpecPath(ctx.repoRoot, found.ID)
-			_, specExists := os.Stat(specPath)
-			out := nextOutput{
-				Found:      true,
-				ID:         found.ID,
-				IDStr:      found.FormattedID(),
-				Status:     string(found.Status),
-				Priority:   found.Priority,
-				Type:       found.Type,
-				Title:      found.Title,
-				Section:    sectionName(found.Section),
-				SpecPath:   spec.SpecRel(found.ID),
-				SpecExists: specExists == nil,
-			}
-			if asJSON {
+			if opts.asJSON {
 				return writeJSON(out)
 			}
-			fmt.Printf("%s %s  %s%s  %s\n",
-				statusIcon(found.Status), found.FormattedID(),
-				bracketIfSet(found.Priority), bracketIfSet(found.Type), found.Title)
-			if out.SpecExists {
-				fmt.Printf("spec: %s\n", out.SpecPath)
-			}
-			return nil
+			return printNextOutput(out)
 		},
 	}
-	cmd.Flags().BoolVar(&asJSON, "json", false, "emit JSON (orchestrator-friendly)")
+	cmd.Flags().BoolVar(&opts.asJSON, "json", false, "emit JSON (orchestrator-friendly)")
+	cmd.Flags().BoolVar(&opts.wait, "wait", false, "wait for TODO.md changes when no pending task exists")
+	cmd.Flags().DurationVar(&opts.timeout, "timeout", 590*time.Second, "maximum wait time for --wait")
+	cmd.Flags().DurationVar(&opts.poll, "poll", 2*time.Second, "fallback polling interval for --wait")
 	return cmd
+}
+
+func runTodoNext(ctx appContext, opts todoNextOptions) (nextOutput, error) {
+	if opts.poll <= 0 {
+		return nextOutput{}, fmt.Errorf("--poll must be greater than 0")
+	}
+	if opts.timeout < 0 {
+		return nextOutput{}, fmt.Errorf("--timeout must not be negative")
+	}
+
+	out, err := loadNextOutput(ctx)
+	if err != nil || !opts.wait || out.Found || strings.EqualFold(out.MilestoneStatus, "done") {
+		return out, err
+	}
+
+	start := time.Now()
+	todoPath := spec.TODOPath(ctx.repoRoot)
+	watcher := newTodoWatcher(todoPath)
+	if watcher != nil {
+		defer watcher.Close()
+	}
+
+	// Close the race between the initial parse and installing the directory
+	// watcher. Editors commonly save by renaming a temporary file over TODO.md.
+	out, err = loadNextOutput(ctx)
+	if err != nil {
+		return out, err
+	}
+	if out.Found || strings.EqualFold(out.MilestoneStatus, "done") {
+		out.WaitedMillis = time.Since(start).Milliseconds()
+		return out, nil
+	}
+
+	pollTicker := time.NewTicker(opts.poll)
+	defer pollTicker.Stop()
+	timeoutTimer := time.NewTimer(opts.timeout)
+	defer timeoutTimer.Stop()
+
+	var watchEvents <-chan fsnotify.Event
+	var watchErrors <-chan error
+	if watcher != nil {
+		watchEvents = watcher.Events
+		watchErrors = watcher.Errors
+	}
+
+	var debounceTimer *time.Timer
+	var debounce <-chan time.Time
+	defer func() {
+		if debounceTimer != nil {
+			debounceTimer.Stop()
+		}
+	}()
+
+	reload := func() (bool, error) {
+		var reloadErr error
+		out, reloadErr = loadNextOutputWithRetry(ctx)
+		if reloadErr != nil {
+			return false, reloadErr
+		}
+		if out.Found || strings.EqualFold(out.MilestoneStatus, "done") {
+			out.WaitedMillis = time.Since(start).Milliseconds()
+			return true, nil
+		}
+		return false, nil
+	}
+
+	for {
+		select {
+		case <-timeoutTimer.C:
+			out.TimedOut = true
+			out.WaitedMillis = time.Since(start).Milliseconds()
+			return out, nil
+		case event, ok := <-watchEvents:
+			if !ok {
+				watchEvents = nil
+				continue
+			}
+			if !isTodoChange(event, todoPath) {
+				continue
+			}
+			if debounceTimer == nil {
+				debounceTimer = time.NewTimer(25 * time.Millisecond)
+			} else {
+				if !debounceTimer.Stop() {
+					select {
+					case <-debounceTimer.C:
+					default:
+					}
+				}
+				debounceTimer.Reset(25 * time.Millisecond)
+			}
+			debounce = debounceTimer.C
+		case <-debounce:
+			debounce = nil
+			done, reloadErr := reload()
+			if reloadErr != nil {
+				return out, reloadErr
+			}
+			if done {
+				return out, nil
+			}
+		case <-pollTicker.C:
+			done, reloadErr := reload()
+			if reloadErr != nil {
+				return out, reloadErr
+			}
+			if done {
+				return out, nil
+			}
+		case _, ok := <-watchErrors:
+			if !ok {
+				watchErrors = nil
+			}
+			// The ticker remains active as a reliable fallback.
+		}
+	}
+}
+
+func newTodoWatcher(todoPath string) *fsnotify.Watcher {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil
+	}
+	if err := watcher.Add(filepath.Dir(todoPath)); err != nil {
+		watcher.Close()
+		return nil
+	}
+	return watcher
+}
+
+func isTodoChange(event fsnotify.Event, todoPath string) bool {
+	if filepath.Clean(event.Name) != filepath.Clean(todoPath) {
+		return false
+	}
+	const relevantOps = fsnotify.Write | fsnotify.Create | fsnotify.Remove | fsnotify.Rename
+	return event.Op&relevantOps != 0
+}
+
+func loadNextOutputWithRetry(ctx appContext) (nextOutput, error) {
+	const attempts = 5
+	const retryDelay = 20 * time.Millisecond
+
+	var out nextOutput
+	var err error
+	for attempt := 0; attempt < attempts; attempt++ {
+		out, err = loadNextOutput(ctx)
+		if err == nil {
+			return out, nil
+		}
+		if attempt+1 < attempts {
+			time.Sleep(retryDelay)
+		}
+	}
+	return out, err
+}
+
+func loadNextOutput(ctx appContext) (nextOutput, error) {
+	doc, err := spec.Parse(spec.TODOPath(ctx.repoRoot))
+	if err != nil {
+		return nextOutput{}, err
+	}
+	out := nextOutput{
+		Found:           false,
+		Milestone:       doc.Milestone,
+		MilestoneStatus: doc.MilestoneStatus,
+	}
+	for i := range doc.Tasks {
+		if doc.Tasks[i].Section != spec.SectionNext || doc.Tasks[i].Status != spec.StatusPending {
+			continue
+		}
+		found := &doc.Tasks[i]
+		specPath := spec.SpecPath(ctx.repoRoot, found.ID)
+		_, specExists := os.Stat(specPath)
+		out.Found = true
+		out.ID = found.ID
+		out.IDStr = found.FormattedID()
+		out.Status = string(found.Status)
+		out.Priority = found.Priority
+		out.Type = found.Type
+		out.Title = found.Title
+		out.Section = sectionName(found.Section)
+		out.SpecPath = spec.SpecRel(found.ID)
+		out.SpecExists = specExists == nil
+		out.JournalPath = spec.JournalRel(found.ID)
+		out.BlockerPath = spec.BlockerRel(found.ID)
+		break
+	}
+	return out, nil
+}
+
+func printNextOutput(out nextOutput) error {
+	if !out.Found {
+		if strings.EqualFold(out.MilestoneStatus, "done") {
+			console.Muted("(milestone is done)")
+			return nil
+		}
+		if out.TimedOut {
+			console.Muted("(no pending task in 下一步 after waiting)")
+			return nil
+		}
+		console.Muted("(no pending task in 下一步)")
+		return nil
+	}
+	fmt.Printf("%s %s  %s%s  %s\n",
+		statusIcon(spec.Status(out.Status)), out.IDStr,
+		bracketIfSet(out.Priority), bracketIfSet(out.Type), out.Title)
+	if out.SpecExists {
+		fmt.Printf("spec: %s\n", out.SpecPath)
+	}
+	return nil
 }
 
 func writeJSON(v any) error {
@@ -634,9 +830,9 @@ func newTodoDoneCommand(ctx appContext) *cobra.Command {
 
 func newTodoDeleteCommand(ctx appContext) *cobra.Command {
 	var (
-		yes        bool
-		keepSpec   bool
-		alsoFiles  bool
+		yes       bool
+		keepSpec  bool
+		alsoFiles bool
 	)
 	cmd := &cobra.Command{
 		Use:   "delete <id>",

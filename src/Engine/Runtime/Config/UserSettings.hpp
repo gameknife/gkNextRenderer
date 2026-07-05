@@ -19,14 +19,18 @@ struct UserSettings final
 	int32_t NumberOfSamples;
 	uint32_t NumberOfBounces;
 	uint32_t MaxNumberOfBounces;
-	bool AdaptiveSample;
-	float AdaptiveVariance;
-	int AdaptiveSteps;
 	bool TAA {};
 	bool FastGather = false;
+	uint32_t PresentMode = 3;
 	uint32_t SuperResolution = 1;
 	bool DLSS = false;
+    bool FSR = false;
 	bool DLSSRR = false;
+	bool DLSSG = false;
+	uint32_t DLSSGFrameMultiplier = 2;
+	uint32_t DLSSGFrameLimitFps = 0;
+    uint32_t DLSSJitterFrames = 16;
+    bool DLSSJitterInvertY = false;
 	int BakeSpeedLevel = 1; // 0: realtime 1: normal 2: low
 
 	// Camera
@@ -41,15 +45,47 @@ struct UserSettings final
     bool BorderlessFullscreen = false;
 
 	// Performance
-	bool UseCheckerBoardRendering;
 	uint32_t TemporalFrames;
+    uint32_t SplatBucketCount = 4096;
+    uint32_t SplatMaxCount = 0;
+    bool SplatSortCache = true;
+    float SplatSigma = 3.0f;
+    bool SplatForceAA = true;
+    float SplatAAStrength = 0.5f;
+    bool SplatProxyEnable = true;
+    uint32_t SplatProxyGridMax = 64;
+    uint32_t SplatProxyBrickSize = 8;
+    float SplatProxySigma = 2.5f;
+    float SplatProxyIsoThreshold = 0.35f;
+    float SplatProxySimplifyRatio = 0.0f;
+    bool SplatShadowEnable = true;
+    bool SplatRayOcclusionEnable = true;
+    bool SplatProxyDebugVisible = false;
+    bool SplatReceiveLighting = true;
+    float SplatLightingStrength = 0.35f;
+    int SplatProxyDebug = 0;
 
-	// Denoise
+	// Denoise (variance-guided a-trous wavelet; see PipelineCommon::AtrousDenoiser)
 	bool Denoiser;
-	float DenoiseSigma;
-	float DenoiseSigmaLum;
-	float DenoiseSigmaNormal;
-	int DenoiseSize;
+	int DenoiseAtrousIterations;    // diffuse wavelet iterations: quality/perf knob (higher = smoother, slower)
+	int DenoiseAtrousSpecularIterations; // specular wavelet iterations (usually lower than diffuse)
+	float DenoiseAtrousSigmaLuma;   // variance-guided luminance edge-stop (lower = sharper, noisier)
+	float DenoiseAtrousNormalPower; // a-trous normal edge-stop exponent
+	float DenoiseSigmaDepth;        // planar depth tolerance (multiples of local depth slope)
+	float DenoiseSpecFootprint;     // specular filter radius (pixels) per unit roughness
+
+    // SwModernNoAmbient screen-space sky occlusion.
+    bool GTAOEnable = true;
+    int GTAOQuality = 1;
+    float GTAORadius = 1.0f;
+    float GTAOStrength = 1.5f; // master sky-occlusion strength
+    float GTAOThickness = 0.5f;
+    int GTAODebugMode = 0;
+
+	// ReProject history clamp (Phase A black-dot fix; see Process.ReProject.comp.slang).
+	float ReprojectClampGammaHi = 2.5f;    // tight (low-confidence) upper YCoCg luma box half-width in sigmas
+	float ReprojectClampGammaLo = 5.0f;    // tight lower box half-width (kept looser than upper to avoid black dots)
+	float ReprojectClampFloor = 0.5f;      // relative luma floor (history luma >= floor * filtered mean)
 
 	float PaperWhiteNit;
 
@@ -62,16 +98,26 @@ struct UserSettings final
     float AmbientCubeOffsetZ = 0.0f;
     int AmbientCubeCascadeCount = 3;
     float AmbientCubeCascadeRatio = 2.0f;
-    float AmbientCubePoolBrickRatio = 0.66f;
-    bool UseGpuAmbientCubeSdf = false;
+    float AmbientCubePoolBrickRatio = 0.5f;
+    bool AmbientCubeHitDrivenResidency = false;
+    bool AmbientCubeBounceHitAffectsResidency = false;
+    uint32_t AmbientCubeEvictFrames = 180;
+    uint32_t AmbientCubeGraceFrames = 30;
+    float AmbientCubeHitMarkTileRatio = 0.25f;
+    int AmbientCubeResidencyDebug = 0;
     bool StreamHDRTextures = true;
-    bool SharcEnable = false;
+    bool SharcEnable = true;
     uint32_t SharcEntriesPow2 = 21;
     float SharcUpdateSampleRatio = 0.25f;
     int SharcDebugMode = 0;
     uint32_t SharcQueryMinBounce = 1;
     float SharcQueryRoughnessMin = 0.35f;
-    float SharcVoxelSize = 0.75f;
+    float SharcSceneScale = 100.0f;
+    float SharcLevelBias = 0.0f;
+    float SharcRadianceScale = 1000.0f;
+    uint32_t SharcAccumulatedFrameMax = 64;
+    uint32_t SharcResponsiveFrameMax = 8;
+    uint32_t SharcStaleFrameMax = 180;
 };
 
 }

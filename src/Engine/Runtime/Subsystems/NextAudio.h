@@ -2,11 +2,9 @@
 
 #include "Engine/Common/CoreMinimal.hpp"
 
-#if WITH_AUDIO
 struct ma_engine;
 struct ma_sound;
 struct ma_decoder;
-#endif
 
 class NextAudio final
 {
@@ -36,10 +34,8 @@ private:
     std::unordered_set<std::string> missingSounds_;
     std::string currentMusicPath_;
     float musicVolume_ = 1.0f;
-#if WITH_AUDIO
     std::unique_ptr<ma_engine> audioEngine_;
     std::unordered_map<std::string, std::unique_ptr<ma_sound>> soundMaps_;
     std::unordered_map<std::string, std::vector<uint8_t>> soundDataMaps_;
     std::unordered_map<std::string, std::unique_ptr<ma_decoder>> soundDecoderMaps_;
-#endif
 };

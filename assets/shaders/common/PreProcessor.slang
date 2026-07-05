@@ -1,3 +1,6 @@
+#ifndef GK_NEXT_SHADER_PREPROCESSOR_SLANG
+#define GK_NEXT_SHADER_PREPROCESSOR_SLANG
+
 #define to_local(v, t, b, n) (mul(float3x3((t), (b), (n)), (v)))
 #define to_world(v, T, B, N) (mul((v), float3x3((T), (B), (N))))
 
@@ -25,3 +28,5 @@
 #define luminance(rgb) (dot((rgb), float3(0.212671F, 0.715160F, 0.072169F)))
 
 #define saturate(x) (clamp((x), 0.0F, 1.0F))
+
+#endif

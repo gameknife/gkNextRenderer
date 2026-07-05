@@ -3,9 +3,9 @@
 // It walks src/ and aggregates lines per category. The category hierarchy is:
 //
 //	src/Application/<Editor|Game|Render|Util>/<project>/...   -> category=Application, sub=<Editor|Game|Render|Util>, leaf=<project>
-//	src/Engine/<area>/...                                     -> category=Engine,      sub=<area>
+//	src/Engine/<area>/<module>/...                            -> category=Engine,      sub=<area>, leaf=<module>
 //	src/Tests/...                                             -> category=Tests
-//	src/ThirdParty/<lib>/...                                  -> category=ThirdParty,  sub=<lib>   (skipped by default)
+//	src/ThirdParty/<lib>/<module>/...                         -> category=ThirdParty,  sub=<lib>, leaf=<module> (skipped by default)
 //	src/<other-top>/...                                       -> category=<other-top>
 //
 // Default file extensions are C/C++ source and headers. Override with --ext.
@@ -25,9 +25,9 @@ import (
 
 // Options controls the loc walk and rendering.
 type Options struct {
-	Root             string   // repo root
-	Extensions       []string // file suffixes to count (include leading dot)
-	IncludeThirdParty bool    // include src/ThirdParty in the report
+	Root              string   // repo root
+	Extensions        []string // file suffixes to count (include leading dot)
+	IncludeThirdParty bool     // include src/ThirdParty in the report
 }
 
 // DefaultExtensions returns the file extensions counted by default.
@@ -48,21 +48,21 @@ type entry struct {
 
 // Report aggregates the raw per-leaf entries plus convenience rollups.
 type Report struct {
-	leaves      map[leafKey]*entry
-	categories  map[string]*entry
-	subKeys     map[string][]string             // category -> ordered sub names
-	leafKeys    map[string]map[string][]string  // category -> sub -> ordered leaf names
-	subTotals   map[string]map[string]*entry    // category -> sub -> totals
-	total       entry
+	leaves     map[leafKey]*entry
+	categories map[string]*entry
+	subKeys    map[string][]string            // category -> ordered sub names
+	leafKeys   map[string]map[string][]string // category -> sub -> ordered leaf names
+	subTotals  map[string]map[string]*entry   // category -> sub -> totals
+	total      entry
 }
 
 func newReport() *Report {
 	return &Report{
-		leaves:    map[leafKey]*entry{},
+		leaves:     map[leafKey]*entry{},
 		categories: map[string]*entry{},
-		subKeys:   map[string][]string{},
-		leafKeys:  map[string]map[string][]string{},
-		subTotals: map[string]map[string]*entry{},
+		subKeys:    map[string][]string{},
+		leafKeys:   map[string]map[string][]string{},
+		subTotals:  map[string]map[string]*entry{},
 	}
 }
 
@@ -98,6 +98,8 @@ type LeafSummary struct {
 	Files int
 	Lines int
 }
+
+const expandedSubLines = 5000
 
 // Run scans the repository and prints the report to stdout.
 func Run(opts Options) error {
@@ -191,6 +193,10 @@ func reportToSnapshot(report *Report, opts Options) *Snapshot {
 		for _, sub := range subs {
 			s := report.subTotals[name][sub]
 			ss := SubSummary{Name: sub, Files: s.files, Lines: s.lines}
+			if name != "Application" && s.lines <= expandedSubLines {
+				cs.Subs = append(cs.Subs, ss)
+				continue
+			}
 			leaves := append([]string(nil), report.leafKeys[name][sub]...)
 			sort.Slice(leaves, func(i, j int) bool {
 				li := report.leaves[leafKey{category: name, sub: sub, leaf: leaves[i]}]
@@ -230,20 +236,32 @@ func classify(rel string) (leafKey, bool) {
 		if len(parts) < 3 {
 			return leafKey{category: "Engine", sub: "(top-level)"}, true
 		}
-		return leafKey{category: "Engine", sub: parts[1]}, true
+		key := leafKey{category: "Engine", sub: parts[1]}
+		if len(parts) >= 4 {
+			key.leaf = parts[2]
+		}
+		return key, true
 	case "Tests":
 		return leafKey{category: "Tests"}, true
 	case "ThirdParty":
 		if len(parts) < 3 {
 			return leafKey{category: "ThirdParty", sub: "(top-level)"}, true
 		}
-		return leafKey{category: "ThirdParty", sub: parts[1]}, true
+		key := leafKey{category: "ThirdParty", sub: parts[1]}
+		if len(parts) >= 4 {
+			key.leaf = parts[2]
+		}
+		return key, true
 	default:
 		// Unknown top-level dir under src/ — still bucket so nothing is silently dropped.
 		if len(parts) < 3 {
 			return leafKey{category: top}, true
 		}
-		return leafKey{category: top, sub: parts[1]}, true
+		key := leafKey{category: top, sub: parts[1]}
+		if len(parts) >= 4 {
+			key.leaf = parts[2]
+		}
+		return key, true
 	}
 }
 

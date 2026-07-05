@@ -1,4 +1,3 @@
-implementing Common;
 #include "PreProcessor.slang"
 
 public static const int SHADOWMAP_SIZE = 4096;
@@ -76,6 +75,36 @@ public uint GetCascadeBaseOffset(uint cascadeIndex)
     return cascadeIndex * uint(CUBE_SIZE_XY * CUBE_SIZE_XY * CUBE_SIZE_Z);
 }
 
+public uint PackNibbles(uint4 low, uint4 high)
+{
+    return (low.x & 0xFu) |
+           ((low.y & 0xFu) << 4) |
+           ((low.z & 0xFu) << 8) |
+           ((low.w & 0xFu) << 12) |
+           ((high.x & 0xFu) << 16) |
+           ((high.y & 0xFu) << 20) |
+           ((high.z & 0xFu) << 24) |
+           ((high.w & 0xFu) << 28);
+}
+
+public uint4 UnpackNibblesLow(uint packed)
+{
+    return uint4(
+        packed & 0xFu,
+        (packed >> 4) & 0xFu,
+        (packed >> 8) & 0xFu,
+        (packed >> 12) & 0xFu);
+}
+
+public uint4 UnpackNibblesHigh(uint packed)
+{
+    return uint4(
+        (packed >> 16) & 0xFu,
+        (packed >> 20) & 0xFu,
+        (packed >> 24) & 0xFu,
+        (packed >> 28) & 0xFu);
+}
+
 public static const float3 cubeVectors[6] = {
     float3(0, 1, 0),
     float3(0, -1, 0),
@@ -117,12 +146,14 @@ const static float2 grid5x5[25] = {
 
 uint PackColor(float4 source)
 {
-    return packRGB10A2(source);
+    // Cube color faces carry no alpha; RGB9E5 gives wider HDR range + better
+    // dark-tone precision at the same 32 bits (see ConstFunc.slang packRGB9E5).
+    return packRGB9E5(source.rgb);
 }
 
 float4 UnpackColor(uint packed)
 {
-    return unpackRGB10A2(packed);
+    return float4(unpackRGB9E5(packed), 0.0f);
 }
 
 uint LerpPackedColor(uint c0, uint c1, float t)
@@ -168,101 +199,49 @@ float4 sampleAmbientCubeHL2_ID(AmbientCube cube, float3 normal)
     return color;
 }
 
-float4 sampleAmbientCubeHL2_DI(AmbientCube cube, float3 normal)
+float AmbientCubeSkyVisibility(AmbientCube cube, float3 normal)
 {
-    float4 color = float4(0.0, 0.0, 0.0, 0.0);
-    float sum = 0.0;
-
-    float wx = max(normal.x, 0.0f);
-    float wnx = max(-normal.x, 0.0f);
-    float wy = max(normal.y, 0.0f);
-    float wny = max(-normal.y, 0.0f);
-    float wz = max(normal.z, 0.0f);
-    float wnz = max(-normal.z, 0.0f);
-
-    sum = wx + wnx + wy + wny + wz + wnz;
-
-    color += wx * UnpackColor(cube.PosX_D);
-    color += wnx * UnpackColor(cube.NegX_D);
-    color += wy * UnpackColor(cube.PosY_D);
-    color += wny * UnpackColor(cube.NegY_D);
-    color += wz * UnpackColor(cube.PosZ_D);
-    color += wnz * UnpackColor(cube.NegZ_D);
-
-    color *= (sum > 0.0) ? (1.0 / sum) : 1.0;
-    return color;
-}
-
-float4 sampleAmbientCubeHL2_LightCache(AmbientCube cube, float3 normal)
-{
-    float4 color = float4(0.0, 0.0, 0.0, 0.0);
-    float sum = 0.0;
-
-    float wx = max(normal.x, 0.0f);
-    float wnx = max(-normal.x, 0.0f);
-    float wy = max(normal.y, 0.0f);
-    float wny = max(-normal.y, 0.0f);
-    float wz = max(normal.z, 0.0f);
-    float wnz = max(-normal.z, 0.0f);
-
-    sum = wx + wnx + wy + wny + wz + wnz;
-
-    color += wx * UnpackColor(cube.PosX_D);
-    color += wnx * UnpackColor(cube.NegX_D);
-    color += wy * UnpackColor(cube.PosY_D);
-    color += wny * UnpackColor(cube.NegY_D);
-    color += wz * UnpackColor(cube.PosZ_D);
-    color += wnz * UnpackColor(cube.NegZ_D);
-
-    color *= (sum > 0.0) ? (1.0 / sum) : 1.0;
-    return color;
-}
-
-
-float4 sampleAmbientCubeHL2_Full(AmbientCube cube, float3 normal, float sunIntensity)
-{
-    float4 color = float4(0.0, 0.0, 0.0, 0.0);
-    float skyvis = 0.0;
-    float sunvis = 0.0;
-    float sum = 0.0;
-
     float wx = max(normal.x, 0.0);
     float wnx = max(-normal.x, 0.0);
     float wy = max(normal.y, 0.0);
     float wny = max(-normal.y, 0.0);
     float wz = max(normal.z, 0.0);
     float wnz = max(-normal.z, 0.0);
+    float sum = wx + wnx + wy + wny + wz + wnz;
 
-    sum = wx + wnx + wy + wny + wz + wnz;
+    uint4 unpacked0 = UnpackBytes(cube.skyVisibility_pznzpyny);
+    uint4 unpacked1 = UnpackBytes(cube.skyVisibility_pxnxs0s1);
 
-    uint4 unpacked_skyvis0 = UnpackBytes(cube.skyVisibility_pznzpyny);
-    uint4 unpacked_skyvis1 = UnpackBytes(cube.skyVisibility_pxnxs0s1);
-
-    skyvis += unpacked_skyvis0.x * wz;
-    skyvis += unpacked_skyvis0.y * wnz;
-    skyvis += unpacked_skyvis0.z * wy;
-    skyvis += unpacked_skyvis0.w * wny;
-    skyvis += unpacked_skyvis1.x * wx;
-    skyvis += unpacked_skyvis1.y * wnx;
-
-    color += wx * UnpackColor(cube.PosX_D) * sunIntensity;
-    color += wnx * UnpackColor(cube.NegX_D) * sunIntensity;
-    color += wy * UnpackColor(cube.PosY_D) * sunIntensity;
-    color += wny * UnpackColor(cube.NegY_D) * sunIntensity;
-    color += wz * UnpackColor(cube.PosZ_D) * sunIntensity;
-    color += wnz * UnpackColor(cube.NegZ_D) * sunIntensity;
-
-    color += wx * UnpackColor(cube.PosX);
-    color += wnx * UnpackColor(cube.NegX);
-    color += wy * UnpackColor(cube.PosY);
-    color += wny * UnpackColor(cube.NegY);
-    color += wz * UnpackColor(cube.PosZ);
-    color += wnz * UnpackColor(cube.NegZ);
-
-    // Normalize
-    color.xyz *= (sum > 0.0) ? (1.0 / sum) : 1.0;
+    float skyvis = 0.0;
+    skyvis += float(unpacked0.x) * wz;
+    skyvis += float(unpacked0.y) * wnz;
+    skyvis += float(unpacked0.z) * wy;
+    skyvis += float(unpacked0.w) * wny;
+    skyvis += float(unpacked1.x) * wx;
+    skyvis += float(unpacked1.y) * wnx;
     skyvis *= (sum > 0.0) ? (1.0 / sum) : 1.0;
-    color.a = skyvis / 255.0f;
+    return skyvis / 255.0f;
+}
+
+float4 sampleAmbientCubeDirectBounce(AmbientCube cube, float3 normal)
+{
+    float4 color = UnpackColor(cube.SunDirect) + UnpackColor(cube.SkyEmissiveDirect);
+    color.a = AmbientCubeSkyVisibility(cube, normal);
+    return color;
+}
+
+float4 sampleAmbientCubeDirectSurface(AmbientCube cube, float3 normal)
+{
+    float4 color = UnpackColor(cube.SkyEmissiveDirect);
+    color.a = AmbientCubeSkyVisibility(cube, normal);
+    return color;
+}
+
+
+float4 sampleAmbientCubeHL2_Full(AmbientCube cube, float3 normal)
+{
+    float4 color = sampleAmbientCubeHL2_ID(cube, normal) + sampleAmbientCubeDirectSurface(cube, normal);
+    color.a = AmbientCubeSkyVisibility(cube, normal);
     return color;
 }
 
@@ -278,7 +257,7 @@ public struct FullAmbientCubeSampler : IAmbientCubeSampler
 {
     static float4 Sample(AmbientCube cube, float3 normal)
     {
-        return sampleAmbientCubeHL2_Full(cube, normal, 1.0);
+        return sampleAmbientCubeHL2_Full(cube, normal);
     }
 };
 
@@ -286,7 +265,7 @@ public struct FullAmbientCubeWNSunSampler : IAmbientCubeSampler
 {
     static float4 Sample(AmbientCube cube, float3 normal)
     {
-        return sampleAmbientCubeHL2_Full(cube, normal, 0.0);
+        return sampleAmbientCubeHL2_Full(cube, normal);
     }
 };
 
@@ -294,7 +273,7 @@ public struct DIAmbientCubeSampler : IAmbientCubeSampler
 {
     static float4 Sample(AmbientCube cube, float3 normal)
     {
-        return sampleAmbientCubeHL2_DI(cube, normal);
+        return sampleAmbientCubeDirectBounce(cube, normal);
     }
 };
 
@@ -302,7 +281,7 @@ public struct LightCacheAmbientCubeSampler : IAmbientCubeSampler
 {
     static float4 Sample(AmbientCube cube, float3 normal)
     {
-        return sampleAmbientCubeHL2_LightCache(cube, normal);
+        return sampleAmbientCubeDirectSurface(cube, normal);
     }
 };
 
@@ -314,7 +293,7 @@ public struct IDAmbientCubeSampler : IAmbientCubeSampler
     }
 };
 
-static const float kTraceHistoryLength = 16.0f;
+static const float kTraceHistoryLength = 32.0f;
 
 // ---------- Phase 3 sparse brick indirection ----------
 // The cube grid is tiled into 8^3 bricks; the per-cascade brick table maps a brick to a pool slot
@@ -324,7 +303,7 @@ public AmbientCube ZeroAmbientCube()
 {
     AmbientCube c;
     c.PosZ = 0; c.NegZ = 0; c.PosY = 0; c.NegY = 0; c.PosX = 0; c.NegX = 0;
-    c.PosZ_D = 0; c.NegZ_D = 0; c.PosY_D = 0; c.NegY_D = 0; c.PosX_D = 0; c.NegX_D = 0;
+    c.SunDirect = 0; c.SkyEmissiveDirect = 0;
     c.skyVisibility_pznzpyny = 0; c.skyVisibility_pxnxs0s1 = 0;
     return c;
 }
@@ -347,6 +326,117 @@ uint AmbientBrickLocalOffset(int3 probePos)
     int lz = probePos.z % GPU_SCENE_AMBIENT_BRICK_EDGE;
     return uint(ly) * uint(GPU_SCENE_AMBIENT_BRICK_EDGE * GPU_SCENE_AMBIENT_BRICK_EDGE)
          + uint(lz) * uint(GPU_SCENE_AMBIENT_BRICK_EDGE) + uint(lx);
+}
+
+uint AmbientBrickLinear(int3 probePos)
+{
+    uint bx = uint(probePos.x / GPU_SCENE_AMBIENT_BRICK_EDGE);
+    uint by = uint(probePos.y / GPU_SCENE_AMBIENT_BRICK_EDGE);
+    uint bz = uint(probePos.z / GPU_SCENE_AMBIENT_BRICK_EDGE);
+    return by * uint(GPU_SCENE_AMBIENT_BRICKS_X * GPU_SCENE_AMBIENT_BRICKS_Z)
+         + bz * uint(GPU_SCENE_AMBIENT_BRICKS_X) + bx;
+}
+
+uint AmbientResidencyHash(uint value)
+{
+    value ^= value >> 16;
+    value *= 0x7feb352du;
+    value ^= value >> 15;
+    value *= 0x846ca68bu;
+    value ^= value >> 16;
+    return value;
+}
+
+public void MarkAmbientBrickHit(uint cascadeIndex, int3 probePos, bool bounceHit)
+{
+    if (probePos.x < 0 || probePos.y < 0 || probePos.z < 0 ||
+        probePos.x >= CUBE_SIZE_XY || probePos.y >= CUBE_SIZE_Z || probePos.z >= CUBE_SIZE_XY)
+    {
+        return;
+    }
+
+    UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
+    float markRatio = saturate(camera.AmbientCubeCascadeParams.z);
+    if (markRatio <= 0.0f)
+    {
+        return;
+    }
+
+    uint brickLinear = AmbientBrickLinear(probePos);
+    uint hashValue = AmbientResidencyHash(
+        brickLinear + cascadeIndex * uint(GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE) +
+        camera.TotalFrames * 1664525u);
+    if (float(hashValue & 0xFFFFu) / 65535.0f > markRatio)
+    {
+        return;
+    }
+
+    AmbientBrickResidency* residency = Bindless.GetGpuscene().AmbientResidency;
+    uint residencyIndex = cascadeIndex * uint(GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE) + brickLinear;
+    if (bounceHit)
+    {
+        InterlockedMax(residency[residencyIndex].lastBounceHitFrame, camera.TotalFrames);
+        InterlockedAdd(residency[residencyIndex].bounceHitCount, 1);
+    }
+    else
+    {
+        InterlockedMax(residency[residencyIndex].lastConsumerHitFrame, camera.TotalFrames);
+        InterlockedAdd(residency[residencyIndex].consumerHitCount, 1);
+    }
+}
+
+public void MarkAmbientBrickHitAtWorld(float3 worldPos, bool bounceHit)
+{
+    uint cascadeIndex = GetAmbientCubeCascadeAtPosition(worldPos);
+    float cubeUnit = GetAmbientCubeUnitAtCascade(cascadeIndex);
+    float3 cubeOffset = GetAmbientCubeOffsetAtCascade(cascadeIndex);
+    int3 probePos = int3(floor((worldPos - cubeOffset) / cubeUnit));
+    MarkAmbientBrickHit(cascadeIndex, probePos, bounceHit);
+}
+
+public bool TryAmbientResidencyDebug(float3 worldPos, out float4 color)
+{
+    uint debugMode = uint(Bindless.GetGpuscene().Camera[0].AmbientCubeCascadeParams.w);
+    if (debugMode == 0u)
+    {
+        color = float4(0.0f);
+        return false;
+    }
+
+    uint cascadeIndex = GetAmbientCubeCascadeAtPosition(worldPos);
+    float cubeUnit = GetAmbientCubeUnitAtCascade(cascadeIndex);
+    float3 cubeOffset = GetAmbientCubeOffsetAtCascade(cascadeIndex);
+    int3 probePos = int3(floor((worldPos - cubeOffset) / cubeUnit));
+    if (probePos.x < 0 || probePos.y < 0 || probePos.z < 0 ||
+        probePos.x >= CUBE_SIZE_XY || probePos.y >= CUBE_SIZE_Z || probePos.z >= CUBE_SIZE_XY)
+    {
+        color = float4(180.0f, 0.0f, 180.0f, 1.0f);
+        return true;
+    }
+
+    uint brickLinear = AmbientBrickLinear(probePos);
+    uint residencyIndex = cascadeIndex * uint(GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE) + brickLinear;
+    AmbientBrickResidency residency = Bindless.GetGpuscene().AmbientResidency[residencyIndex];
+    if (debugMode == 1u)
+    {
+        uint lastHit = max(residency.lastConsumerHitFrame, residency.lastBounceHitFrame);
+        if (lastHit == 0u)
+        {
+            color = float4(28.0f, 28.0f, 28.0f, 1.0f);
+        }
+        else
+        {
+            float age = saturate(float(Bindless.GetGpuscene().Camera[0].TotalFrames - lastHit) / 180.0f);
+            color = float4(255.0f * age, 255.0f * (1.0f - age), 16.0f, 1.0f);
+        }
+        return true;
+    }
+
+    uint slot = Bindless.GetGpuscene().AmbientBrickTable[residencyIndex];
+    color = slot == GPU_SCENE_AMBIENT_BRICK_INVALID
+        ? float4(255.0f, 18.0f, 18.0f, 1.0f)
+        : float4(18.0f, 90.0f, 255.0f, 1.0f);
+    return true;
 }
 
 // Global cube-pool element index for a cascade-local probe, or -1 if its brick is unallocated.
@@ -402,7 +492,8 @@ public bool DecodeAmbientActiveBrickProbe(uint cascadeIndex,
 
     uint localVoxelIdx = y * CUBE_SIZE_XY * CUBE_SIZE_XY + z * CUBE_SIZE_XY + x;
     voxelIdx = GetCascadeBaseOffset(cascadeIndex) + localVoxelIdx;
-    cubeIdx = int((cascadeIndex * poolBricks + activeBrickIndex) * uint(GPU_SCENE_AMBIENT_BRICK_VOLUME) +
+    uint slot = AmbientBrickSlot(cascadeIndex, probePos);
+    cubeIdx = int((cascadeIndex * poolBricks + slot) * uint(GPU_SCENE_AMBIENT_BRICK_VOLUME) +
                   localProbeOffset);
     return true;
 }
@@ -474,6 +565,12 @@ VoxelData FetchVoxel(int3 probePos, in VoxelData* Cubes, uint baseOffset)
 
 public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, float3 normal)
 {
+    float4 residencyDebugColor;
+    if (TryAmbientResidencyDebug(inPos, residencyDebugColor))
+    {
+        return residencyDebugColor;
+    }
+
     VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
     uint cascadeCount = GetAmbientCubeCascadeCount();
 
@@ -501,6 +598,7 @@ public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, flo
             int3 offset = int3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
 
             int3 probePos = baseIdx + offset;
+            MarkAmbientBrickHit(cascadeIndex, probePos, false);
             AmbientCube cube;
             if (!TryFetchCubePool(probePos, cascadeIndex, cube))
             {
@@ -508,11 +606,11 @@ public float4 interpolateAmbientCubes<T : IAmbientCubeSampler>(float3 inPos, flo
             }
             VoxelData voxel = FetchVoxel(probePos, Voxels, baseOffset);
 
-            uint4 unpacked0 = UnpackBytes(voxel.distanceToSolid_gg_z01);
-            uint4 unpacked1 = UnpackBytes(voxel.distanceToSolid_x01_y01);
+            uint4 unpacked0 = UnpackNibblesLow(voxel.distanceToSolid);
+            uint4 unpacked1 = UnpackNibblesHigh(voxel.distanceToSolid);
 
-            float4 distance00z01 = unpacked0 / 255.0f;
-            float4 distancex01y01 = unpacked1 / 255.0f;
+            float4 distance00z01 = unpacked0 / 15.0f;
+            float4 distancex01y01 = unpacked1 / 15.0f;
 
             if (distance00z01.y < 0.01f)
                 continue;
@@ -592,6 +690,7 @@ public float4 interpolateAmbientCubesStable<T : IAmbientCubeSampler>(float3 inPo
             int3 offset = int3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
 
             int3 probePos = baseIdx + offset;
+            MarkAmbientBrickHit(cascadeIndex, probePos, false);
             AmbientCube cube;
             bool hasCube = (cascadeIndex == stableCascadeIndex)
                 ? TryFetchCubePongPool(probePos, cascadeIndex, cube)
@@ -602,11 +701,11 @@ public float4 interpolateAmbientCubesStable<T : IAmbientCubeSampler>(float3 inPo
             }
             VoxelData voxel = FetchVoxel(probePos, Voxels, baseOffset);
 
-            uint4 unpacked0 = UnpackBytes(voxel.distanceToSolid_gg_z01);
-            uint4 unpacked1 = UnpackBytes(voxel.distanceToSolid_x01_y01);
+            uint4 unpacked0 = UnpackNibblesLow(voxel.distanceToSolid);
+            uint4 unpacked1 = UnpackNibblesHigh(voxel.distanceToSolid);
 
-            float4 distance00z01 = unpacked0 / 255.0f;
-            float4 distancex01y01 = unpacked1 / 255.0f;
+            float4 distance00z01 = unpacked0 / 15.0f;
+            float4 distancex01y01 = unpacked1 / 15.0f;
 
             if (distance00z01.y < 0.01f)
                 continue;
@@ -674,8 +773,8 @@ public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uin
     VoxelData cube = FetchVoxel(baseIdx, Cubes, baseOffset);
     matId = cube.matId;
 
-    uint4 unpack0 =UnpackBytes(cube.distanceToSolid_gg_z01);
-    uint4 unpack1 = UnpackBytes(cube.distanceToSolid_x01_y01);
+    uint4 unpack0 = UnpackNibblesLow(cube.distanceToSolid);
+    uint4 unpack1 = UnpackNibblesHigh(cube.distanceToSolid);
     if (cube.matId > 0)
     {
         if (unpack0.y == 0)
@@ -686,12 +785,12 @@ public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uin
 
         float3 dir = normalize(-rayDir);
 
-        float distPZ = unpack0.z / 255.0f;
-        float distNZ = unpack0.w / 255.0f;
-        float distPX = unpack1.x / 255.0f;
-        float distNX = unpack1.y / 255.0f;
-        float distPY = unpack1.z / 255.0f;
-        float distNY = unpack1.w / 255.0f;
+        float distPZ = unpack0.z / 15.0f;
+        float distNZ = unpack0.w / 15.0f;
+        float distPX = unpack1.x / 15.0f;
+        float distNX = unpack1.y / 15.0f;
+        float distPY = unpack1.z / 15.0f;
+        float distNY = unpack1.w / 15.0f;
 
         float wx_pos = (max(dir.x, 0.0));
         float wx_neg = (max(-dir.x, 0.0));

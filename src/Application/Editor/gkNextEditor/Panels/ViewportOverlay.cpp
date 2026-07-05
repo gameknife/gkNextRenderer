@@ -6,16 +6,18 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "EditorActionDispatcher.hpp"
 #include "Engine/Runtime/Components/RenderComponent.h"
-#include "Engine/Runtime/Editor/ProfessionalUI.hpp"
-#include "Engine/Runtime/Editor/GizmoController.hpp"
+#include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Modules/DevTools/ProfessionalUI.hpp"
+#include "Modules/DevTools/GizmoController.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.h"
-#include "ThirdParty/ImGuizmo/ImGuizmo.h"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Engine/Utilities/ImGui.hpp"
-#include "Engine/Utilities/Math.hpp"
-#include "Engine/Vulkan/SyncAndTiming.hpp"
 
+#include <algorithm>
+#include <cctype>
+#include <fmt/format.h>
+#include <filesystem>
 #include <string>
 
 namespace Editor
@@ -23,6 +25,44 @@ namespace Editor
     namespace
     {
         constexpr float kToolIconWidth = 34.0f;
+
+        std::vector<Vulkan::ERendererType> BuildSupportedRendererList(NextEngine& engine)
+        {
+            std::vector<Vulkan::ERendererType> supportedTypes;
+            const bool hasFullAmbientCubeBudget = engine.GetRenderer().HasFullAmbientCubeBudget();
+            if (hasFullAmbientCubeBudget)
+            {
+                supportedTypes = {
+                    Vulkan::ERT_SoftwareTracing,
+                    Vulkan::ERT_SoftwareModern,
+                    Vulkan::ERT_VoxelTracing,
+                    Vulkan::ERT_SoftwareModernNoAmbient,
+                };
+            }
+            else
+            {
+                supportedTypes = {Vulkan::ERT_SoftwareModernNoAmbient};
+            }
+
+            if (engine.GetRenderer().SupportsRayTracing() && hasFullAmbientCubeBudget)
+            {
+                supportedTypes.emplace_back(Vulkan::ERT_PathTracing);
+            }
+
+            return supportedTypes;
+        }
+
+        bool CanAuthorSceneReferences(const std::string& currentScenePath)
+        {
+            if (currentScenePath.empty())
+            {
+                return false;
+            }
+            std::string ext = std::filesystem::path(currentScenePath).extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            return ext == ".gltf" || ext == ".glb";
+        }
     }
 
     void DrawViewportOverlay(EditorContext& ctx, EditorUiState& ui)
@@ -75,24 +115,28 @@ namespace Editor
                             }
                             else
                             {
-                                glm::dvec2 mousePos = ctx.engine.GetMousePos();
-                                glm::vec3 origin;
-                                glm::vec3 dir;
-                                Runtime::EngineHelper::GetScreenToWorldRay(glm::vec2(mousePos.x, mousePos.y), origin, dir);
+                                if (CanAuthorSceneReferences(ui.currentScenePath))
+                                {
+                                    glm::dvec2 mousePos = ctx.engine.GetMousePos();
+                                    glm::vec3 origin;
+                                    glm::vec3 dir;
+                                    Runtime::EngineHelper::GetScreenToWorldRay(glm::vec2(mousePos.x, mousePos.y),
+                                                                               origin, dir);
 
-                                NextEngine* engine = &ctx.engine;
-                                engine->RayCastGPU(origin, dir,
-                                                   [engine, path](Assets::RayCastResult result) mutable
-                                                   {
-                                                        NextEngine::FSceneLoadRequest request{.filename = path, .append = true};
-                                                        if (result.Hitted)
-                                                        {
-                                                            request.placeOnHit = true;
-                                                            request.hitPosition = result.HitPoint;
-                                                        }
-                                                        engine->RequestLoadScene(std::move(request));
-                                                        return true;
-                                                    });
+                                    NextEngine* engine = &ctx.engine;
+                                    engine->RayCastGPU(origin, dir,
+                                                       [engine, path](Assets::RayCastResult result) mutable
+                                                       {
+                                                           const glm::vec3 translation =
+                                                               result.Hitted ? result.HitPoint : glm::vec3(0.0f);
+                                                           engine->RequestAddSceneReference(path, translation);
+                                                           return true;
+                                                       });
+                                }
+                                else
+                                {
+                                    SPDLOG_WARN("Scene references can only be authored in glTF/GLB host scenes");
+                                }
                             }
                         }
                         else if (data->type == EEditorDragPayloadType::Material)
@@ -138,35 +182,59 @@ namespace Editor
         }
 
         constexpr float padding = 8.0f;
-        constexpr float statPadX = 10.0f;
-        constexpr float statPadY = 8.0f;
-
-        ImGuiWindowFlags windowFlags = 0 | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
-            ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-            ImGuiWindowFlags_NoSavedSettings;
 
         NextUI::Theme::FOverlayPanelConfig toolbarConfig{};
         toolbarConfig.WindowId = "ViewportToolbar";
         toolbarConfig.Position = pos + ImVec2(padding, padding);
         toolbarConfig.Size = ImVec2(std::min(700.0f, size.x - padding * 2.0f), 36.0f);
-        toolbarConfig.Padding = ImVec2(8.0f, 4.0f);
+        toolbarConfig.Padding = ImVec2(0.0f, 4.0f);
         toolbarConfig.ItemSpacing = ImVec2(6.0f, 0.0f);
-        toolbarConfig.BackgroundAlpha = 0.82f;
+        toolbarConfig.BackgroundAlpha = 0.0f;
 
         NextUI::Theme::BeginOverlayPanel(toolbarConfig);
 
-        static int projectionMode = 0;
-        static int displayMode = 0;
-        static int cameraIndex = 0;
-        static float angleSnap = 10.0f;
-        static float distanceSnap = 0.25f;
+        auto& overlayState = ui.viewportOverlay;
+        Runtime::Config::UserSettings& userSettings = ctx.engine.GetUserSettings();
+        auto& renderer = ctx.engine.GetRenderer();
+        const auto supportedRenderers = BuildSupportedRendererList(ctx.engine);
+        Vulkan::ERendererType currentRendererType = renderer.CurrentLogicRendererType();
+        if (std::find(supportedRenderers.begin(), supportedRenderers.end(), currentRendererType) ==
+            supportedRenderers.end())
+        {
+            currentRendererType = supportedRenderers.empty() ? Vulkan::ERT_SoftwareModernNoAmbient
+                                                             : supportedRenderers.front();
+        }
+
+        ImGui::SetNextItemWidth(170.0f);
+        if (ImGui::BeginCombo("##ViewportRenderer", Vulkan::GetRendererName(currentRendererType)))
+        {
+            for (Vulkan::ERendererType rendererType : supportedRenderers)
+            {
+                const bool isSelected = rendererType == currentRendererType;
+                if (ImGui::Selectable(Vulkan::GetRendererName(rendererType), isSelected))
+                {
+                    userSettings.RendererType = static_cast<int32_t>(rendererType);
+                    if (renderer.CurrentLogicRendererType() != rendererType)
+                    {
+                        renderer.SwitchLogicRenderer(rendererType);
+                    }
+                }
+                if (isSelected)
+                {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+        NextUI::Theme::DrawTooltip("Active Renderer");
+        ImGui::SameLine();
 
         ImGui::SetNextItemWidth(126.0f);
-        ImGui::Combo("##ViewportProjection", &projectionMode, "Perspective\0Orthographic\0\0");
+        ImGui::Combo("##ViewportProjection", &overlayState.projectionMode, "Perspective\0Orthographic\0\0");
         NextUI::Theme::DrawTooltip("Camera Projection");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(110.0f);
-        ImGui::Combo("##ViewportDisplayMode", &displayMode, "Lit\0Lighting\0Wireframe\0\0");
+        ImGui::Combo("##ViewportDisplayMode", &overlayState.displayMode, "Lit\0Lighting\0Wireframe\0\0");
         NextUI::Theme::DrawTooltip("Display Mode");
         ImGui::SameLine();
         if (NextUI::Theme::ToolbarButton(ICON_FA_EYE " Show", "Show Flags", false, ImVec2(72.0f, 26.0f)))
@@ -175,15 +243,15 @@ namespace Editor
         }
         ImGui::SameLine();
         ImGui::SetNextItemWidth(80.0f);
-        ImGui::DragFloat("##AngleSnap", &angleSnap, 1.0f, 1.0f, 90.0f, "%.0f deg");
+        ImGui::DragFloat("##AngleSnap", &overlayState.angleSnap, 1.0f, 1.0f, 90.0f, "%.0f deg");
         NextUI::Theme::DrawTooltip("Angle Snap");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(80.0f);
-        ImGui::DragFloat("##DistanceSnap", &distanceSnap, 0.01f, 0.01f, 10.0f, "%.2f");
+        ImGui::DragFloat("##DistanceSnap", &overlayState.distanceSnap, 0.01f, 0.01f, 10.0f, "%.2f");
         NextUI::Theme::DrawTooltip("Distance Snap");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(100.0f);
-        ImGui::Combo("##ViewportCamera", &cameraIndex, "Camera 0\0Editor Cam\0\0");
+        ImGui::Combo("##ViewportCamera", &overlayState.cameraIndex, "Camera 0\0Editor Cam\0\0");
         NextUI::Theme::DrawTooltip("Active Camera");
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 12));
@@ -200,77 +268,82 @@ namespace Editor
 
         NextUI::Theme::EndOverlayPanel();
 
-        const double smoothDelta = ctx.engine.GetSmoothDeltaSeconds();
-        const double frameRate = smoothDelta > 0.0 ? (1.0 / smoothDelta) : 0.0;
-        const float gpuMs = ctx.engine.GpuTimer() ? ctx.engine.GpuTimer()->GetGpuTime("[gpu time]") : 0.0f;
-        const auto& gpuDrivenStat = ctx.scene.GetGpuDrivenStat();
-        const uint32_t drawCalls = gpuDrivenStat.ProcessedCount > gpuDrivenStat.CulledCount
-            ? gpuDrivenStat.ProcessedCount - gpuDrivenStat.CulledCount
-            : 0;
-        const uint32_t triangles = gpuDrivenStat.TriangleCount > gpuDrivenStat.CulledTriangleCount
-            ? gpuDrivenStat.TriangleCount - gpuDrivenStat.CulledTriangleCount
-            : 0;
+        const float toolH = kToolIconWidth;
 
-        const float statW = 192.0f;
-        const float statH = ImGui::GetTextLineHeightWithSpacing() * 6.0f + statPadY * 2.0f;
-        NextUI::Theme::FOverlayPanelConfig statConfig{};
-        statConfig.WindowId = "ViewportStat";
-        statConfig.Position = pos + ImVec2(padding, padding + 40.0f);
-        statConfig.Size = ImVec2(statW, statH);
-        statConfig.Padding = ImVec2(statPadX, statPadY);
-        statConfig.ItemSpacing = ImVec2(4.0f, 1.0f);
-        statConfig.BackgroundAlpha = 0.78f;
+        const uint32_t progressiveAccumulatedFrames = ctx.engine.GetProgressiveRenderAccumulatedFrames();
+        const uint32_t progressiveTargetFrames = ctx.engine.GetProgressiveRenderTargetFrames();
+        const int progressiveDigits = static_cast<int>(std::max(
+            std::to_string(progressiveAccumulatedFrames).size(),
+            std::to_string(progressiveTargetFrames).size()));
+        const std::string progressiveFramesText =
+            fmt::format("{:>{}}/{:>{}}",
+                        progressiveAccumulatedFrames, progressiveDigits,
+                        progressiveTargetFrames, progressiveDigits);
+        const std::string progressiveTemplateText =
+            fmt::format("{0:0>{1}}/{0:0>{1}}", 0, progressiveDigits);
+        const float progressiveValueWidth = ImGui::CalcTextSize(progressiveTemplateText.c_str()).x;
+        const float progressiveLabelWidth = ImGui::CalcTextSize("Render:").x;
+        const float progressivePanelWidth = progressiveLabelWidth + progressiveValueWidth + 30.0f;
 
-        NextUI::Theme::BeginOverlayPanel(statConfig);
-        ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::Text));
-        ImGui::Text("FPS %.0f (%.2f ms)", frameRate, smoothDelta * 1000.0);
-        ImGui::PopStyleColor();
-        ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted));
-        ImGui::Text("GPU %.2f ms", gpuMs);
-        ImGui::Text("Frame %u", ctx.engine.GetTotalFrames());
-        ImGui::Text("Draw Calls %s", Utilities::metricFormatter(static_cast<double>(drawCalls), "").c_str());
-        ImGui::Text("Triangles %s", Utilities::metricFormatter(static_cast<double>(triangles), "").c_str());
-        ImGui::Text("Res %.0fx%.0f", size.x, size.y);
+        NextUI::Theme::FOverlayPanelConfig progressiveConfig{};
+        progressiveConfig.WindowId = "ViewportProgressiveStatus";
+        progressiveConfig.Position = pos + ImVec2(
+            std::max(padding, size.x - progressivePanelWidth - padding),
+            padding + toolH + 8.0f);
+        progressiveConfig.Size = ImVec2(progressivePanelWidth, 28.0f);
+        progressiveConfig.Padding = ImVec2(10.0f, 4.0f);
+        progressiveConfig.ItemSpacing = ImVec2(8.0f, 0.0f);
+        progressiveConfig.BackgroundAlpha = 0.0f;
+
+        NextUI::Theme::BeginOverlayPanel(progressiveConfig);
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Render:");
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(
+            ctx.engine.IsProgressiveRendering() ? NextUI::Theme::EColor::Text : NextUI::Theme::EColor::TextMuted));
+        ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - progressiveValueWidth - ImGui::GetStyle().WindowPadding.x);
+        ImGui::TextUnformatted(progressiveFramesText.c_str());
         ImGui::PopStyleColor();
         NextUI::Theme::EndOverlayPanel();
 
-        // Gizmo status overlay (operation + space)
-        if (ctx.gizmoController && ctx.gizmoController->IsShowing())
+        if (renderer.CurrentRendererRequirements().requestAmbientCube)
         {
-            auto GetOperationName = [](int op) -> const char*
+            uint32_t activeAmbientBricks = 0u;
+            const uint32_t ambientCascadeCapacity = ctx.scene.AmbientCubeCascadeCapacity();
+            for (uint32_t cascadeIndex = 0; cascadeIndex < ambientCascadeCapacity; ++cascadeIndex)
             {
-                switch (op)
-                {
-                case ImGuizmo::TRANSLATE: return "Translate";
-                case ImGuizmo::ROTATE:    return "Rotate";
-                case ImGuizmo::SCALE:     return "Scale";
-                default:                  return "?";
-                }
-            };
-            constexpr const char* kSpaceNames[] = { "Local", "World" };
+                activeAmbientBricks += ctx.scene.AmbientActiveBrickCount(cascadeIndex);
+            }
+            const uint32_t totalAmbientBricks =
+                ambientCascadeCapacity * static_cast<uint32_t>(Assets::GPU_SCENE_AMBIENT_BRICKS_PER_CASCADE);
+            const std::string ambientBrickText =
+                fmt::format("{}/{}", activeAmbientBricks, totalAmbientBricks);
+            const float ambientBrickValueWidth = ImGui::CalcTextSize(ambientBrickText.c_str()).x;
+            const float ambientBrickLabelWidth = ImGui::CalcTextSize("AC Bricks:").x;
+            const float ambientBrickPanelWidth =
+                ambientBrickLabelWidth + ambientBrickValueWidth + 30.0f;
 
-            int op = ctx.gizmoController->Operation();
-            int mode = ctx.gizmoController->Mode();
-            std::string gizmoText = std::string(GetOperationName(op)) + " \302\267 " +
-                                    kSpaceNames[mode == ImGuizmo::LOCAL ? 0 : 1];
+            NextUI::Theme::FOverlayPanelConfig ambientBrickConfig{};
+            ambientBrickConfig.WindowId = "ViewportAmbientBrickStatus";
+            ambientBrickConfig.Position = pos + ImVec2(
+                std::max(padding, size.x - ambientBrickPanelWidth - padding),
+                padding + toolH + 44.0f);
+            ambientBrickConfig.Size = ImVec2(ambientBrickPanelWidth, 28.0f);
+            ambientBrickConfig.Padding = ImVec2(10.0f, 4.0f);
+            ambientBrickConfig.ItemSpacing = ImVec2(8.0f, 0.0f);
+            ambientBrickConfig.BackgroundAlpha = 0.0f;
 
-            ImVec2 gizmoSize(ImGui::CalcTextSize(gizmoText.c_str()).x + statPadX * 2.0f, statH);
-            const float gizmoY = pos.y + padding + 44.0f + statH + 4.0f;
-
-            NextUI::Theme::FOverlayPanelConfig gizmoConfig{};
-            gizmoConfig.WindowId = "GizmoStatus";
-            gizmoConfig.Position = ImVec2(pos.x + padding, gizmoY);
-            gizmoConfig.Size = gizmoSize;
-            gizmoConfig.Padding = ImVec2(statPadX, statPadY);
-            gizmoConfig.BackgroundAlpha = 0.74f;
-
-            NextUI::Theme::BeginOverlayPanel(gizmoConfig);
-            ImGui::PushStyleColor(ImGuiCol_Text, NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted));
-            ImGui::TextUnformatted(gizmoText.c_str());
-            ImGui::PopStyleColor();
+            NextUI::Theme::BeginOverlayPanel(ambientBrickConfig);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted("AC Bricks:");
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(
+                ImGui::GetWindowContentRegionMax().x - ambientBrickValueWidth - ImGui::GetStyle().WindowPadding.x);
+            ImGui::TextUnformatted(ambientBrickText.c_str());
+            NextUI::Theme::DrawTooltip("AmbientCube resident bricks / total bricks across allocated cascades");
             NextUI::Theme::EndOverlayPanel();
         }
-
+        
         const ImVec2 axisOrigin = pos + ImVec2(26.0f, size.y - 42.0f);
         ImDrawList* foreground = ImGui::GetForegroundDrawList(viewport);
         foreground->AddCircleFilled(axisOrigin, 4.0f, NextUI::Theme::ColorU32(NextUI::Theme::EColor::TextMuted));
@@ -287,7 +360,6 @@ namespace Editor
         foreground->AddText(axisOrigin + ImVec2(-34.0f, 18.0f), NextUI::Theme::ColorU32(NextUI::Theme::EColor::Blue),
                             "Z");
 
-        const float toolH = kToolIconWidth;
         float toolW = kToolIconWidth + 16.0f;
         toolW = std::max(60.0f, std::min(toolW, size.x - padding * 2.0f));
 
@@ -297,7 +369,7 @@ namespace Editor
         toolConfig.Size = ImVec2(toolW, toolH);
         toolConfig.Padding = ImVec2(3.0f, 3.0f);
         toolConfig.ItemSpacing = ImVec2(0.0f, 0.0f);
-        toolConfig.BackgroundAlpha = 0.78f;
+        toolConfig.BackgroundAlpha = 0.0f;
 
         NextUI::Theme::BeginOverlayPanel(toolConfig);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);

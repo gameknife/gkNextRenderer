@@ -6,6 +6,16 @@
 
 namespace Runtime
 {
+    namespace RenderParticipation
+    {
+        inline constexpr uint32_t none = 0u;
+        inline constexpr uint32_t mainVisibility = 1u << 0u;
+        inline constexpr uint32_t shadowCaster = 1u << 1u;
+        inline constexpr uint32_t gpuAs = 1u << 2u;
+        inline constexpr uint32_t giBake = 1u << 3u;
+        inline constexpr uint32_t defaultMask = mainVisibility | shadowCaster | gpuAs | giBake;
+    }
+
     namespace RenderOutlineFlags
     {
         inline constexpr uint32_t none = 0u;
@@ -31,8 +41,14 @@ namespace Runtime
         void SetVisible(bool visible) { visible_ = visible; }
         bool GetVisible() const { return visible_; }
 
+        void SetMainVisible(bool visible) { mainVisible_ = visible; }
+        bool GetMainVisible() const { return mainVisible_; }
+
         void SetRayCastVisible(bool visible) { rayCastVisible_ = visible; }
         bool GetRayCastVisible() const { return rayCastVisible_; }
+
+        void SetRayTraceVisible(bool visible) { rayTraceVisible_ = visible; }
+        bool GetRayTraceVisible() const { return rayTraceVisible_; }
 
         void SetCastShadows(bool castShadows) { castShadows_ = castShadows; }
         bool GetCastShadows() const { return castShadows_; }
@@ -64,6 +80,21 @@ namespace Runtime
         
         bool IsDrawable() const { return modelId_ != static_cast<uint32_t>(-1); }
 
+        uint32_t GetRenderParticipationMask() const
+        {
+            if (!visible_)
+            {
+                return RenderParticipation::none;
+            }
+
+            uint32_t mask = RenderParticipation::none;
+            if (mainVisible_) mask |= RenderParticipation::mainVisibility;
+            if (castShadows_) mask |= RenderParticipation::shadowCaster;
+            if (rayTraceVisible_) mask |= RenderParticipation::gpuAs;
+            if (receiveGI_) mask |= RenderParticipation::giBake;
+            return mask;
+        }
+
         void SetSkinIndex(int32_t skinIndex) { skinIndex_ = skinIndex; }
         int32_t GetSkinIndex() const { return skinIndex_; }
 
@@ -71,7 +102,9 @@ namespace Runtime
         uint32_t modelId_ = -1;
         std::array<uint32_t, 16> materialIdx_ = {0}; // Initialize with defaults
         bool visible_ = true;
+        bool mainVisible_ = true;
         bool rayCastVisible_ = true;
+        bool rayTraceVisible_ = true;
         bool castShadows_ = true;
         bool receiveGI_ = true;
         bool lightmapUV_ = false;

@@ -4,12 +4,20 @@
 #else
 #define ALIGN_16
 #define ALIGN_8
-implementing Common;
 #endif
 
 public static const int MAX_NODES = 65535; // 256;
 public static const int MAX_MATERIALS = 16384;
 public static const int MAX_HDR_SH = 100;
+
+public static const int HDR_OUTPUT_MODE_SDR = 0;
+public static const int HDR_OUTPUT_MODE_HDR10_ST2084 = 1;
+public static const int HDR_OUTPUT_MODE_EXTENDED_SRGB_LINEAR = 2;
+
+public static const uint RENDER_PARTICIPATION_MAIN_VISIBILITY = 1u << 0;
+public static const uint RENDER_PARTICIPATION_SHADOW_CASTER = 1u << 1;
+public static const uint RENDER_PARTICIPATION_GPU_AS = 1u << 2;
+public static const uint RENDER_PARTICIPATION_GI_BAKE = 1u << 3;
 
 public static const int GPU_SCENE_NODE_PROXY_SIZE = 224;
 public static const int GPU_SCENE_MATERIAL_SIZE = 64;
@@ -32,8 +40,8 @@ public static const int GPU_SCENE_DYNAMIC_SIZE =
 
 public static const int GPU_SCENE_AMBIENT_PER_CASCADE_COUNT = 192 * 192 * 48;
 public static const int GPU_SCENE_AMBIENT_CASCADE_MAX = 4;
-public static const int GPU_SCENE_AMBIENT_CUBE_SIZE = 56;
-public static const int GPU_SCENE_VOXEL_DATA_SIZE = 16;
+public static const int GPU_SCENE_AMBIENT_CUBE_SIZE = 40;
+public static const int GPU_SCENE_VOXEL_DATA_SIZE = 8;
 public static const int GPU_SCENE_PAGE_INDEX_SIZE = 16;
 public static const int GPU_SCENE_AMBIENT_SEED_SIZE = 16;
 public static const int GPU_SCENE_ACGI_PAGE_COUNT = 64;
@@ -48,17 +56,9 @@ public static const int GPU_SCENE_AMBIENT_PAGES_OFFSET =
 public static const int GPU_SCENE_AMBIENT_CUBES_PONG_OFFSET =
     GPU_SCENE_AMBIENT_PAGES_OFFSET +
     GPU_SCENE_PAGE_INDEX_SIZE * GPU_SCENE_ACGI_PAGE_COUNT * GPU_SCENE_ACGI_PAGE_COUNT;
-public static const int GPU_SCENE_AMBIENT_SDF_SCRATCH_OFFSET =
+public static const int GPU_SCENE_AMBIENT_SIZE =
     GPU_SCENE_AMBIENT_CUBES_PONG_OFFSET +
     GPU_SCENE_AMBIENT_CUBE_SIZE * GPU_SCENE_AMBIENT_PER_CASCADE_COUNT;
-// Dedicated SDF jump-flood SeedA scratch (one dense cascade of uint4). Previously aliased onto
-// CubesPong; decoupled (Phase 3) so CubesPong can become a brick pool without breaking the SDF pass.
-public static const int GPU_SCENE_AMBIENT_SDF_SEEDA_OFFSET =
-    GPU_SCENE_AMBIENT_SDF_SCRATCH_OFFSET +
-    GPU_SCENE_AMBIENT_SEED_SIZE * GPU_SCENE_AMBIENT_PER_CASCADE_COUNT;
-public static const int GPU_SCENE_AMBIENT_SIZE =
-    GPU_SCENE_AMBIENT_SDF_SEEDA_OFFSET +
-    GPU_SCENE_AMBIENT_SEED_SIZE * GPU_SCENE_AMBIENT_PER_CASCADE_COUNT;
 
 // Phase 3 sparse brick storage. The cube grid (192x192x48 per cascade) is tiled into 8^3 bricks;
 // only bricks near surfaces are allocated in the cube pool, indexed via a per-cascade brick table.
@@ -118,7 +118,6 @@ public struct ALIGN_16 UniformBufferObject
     public float4 ViewportRect;
     public float4 SunDirection;
     public float4 SunColor;
-    public float4 BackGroundColor;    //not used
 
     public float4x4 SunCascadeViewProjection[4];
     public float4 CascadeSplits;      // view-space positive distance at the far edge of each cascade
@@ -127,53 +126,68 @@ public struct ALIGN_16 UniformBufferObject
     public float FocusDistance;
     public float SkyRotation;
     public float HeatmapScale;
- 
+
     public float PaperWhiteNit;
     public float SkyIntensity;
     public uint SkyIdx;
     public uint TotalFrames;
- 
+
     public uint MaxNumberOfBounces;
     public uint NumberOfSamples;
     public uint NumberOfBounces;
-    public uint RandomSeed;
- 
     public uint LightCount;
+
     public bool HasSky;
     public bool ShowHeatmap;
-    public bool UseCheckerBoard;    //not used
- 
     public uint TemporalFrames;
     public bool HasSun;
+
     public bool HDR;
-    public bool AdaptiveSample;
- 
-    public float AdaptiveVariance;
-    public uint AdaptiveSteps;
+    public uint HDROutputMode;
     public bool TAA;
-    public uint SelectedId;
- 
-    public bool ShowEdge;
     public bool ProgressiveRender;
-    public float BFSigma;
-    public float BFSigmaLum;
- 
-    public float BFSigmaNormal;
-    public uint BFSize;
     public bool FastGather;
-    public bool ReservedBool1;
 
     public bool DebugDraw_Lighting;
-    public bool DebugDraw_ShadowCascadeCoverage;
+    public uint DebugDrawPadding0;
     public uint SuperResolution;
     public float SceneEpsilonScale;
+
     public float AmbientCubeUnit;
     public float AmbientCubeOffsetPadding0;
     public float AmbientCubeOffsetPadding1;
     public float AmbientCubeOffsetPadding2;
+
     public float3 AmbientCubeOffset;
     public float AmbientCubeOffsetPadding3;
+
     public float4 AmbientCubeCascadeParams;
+
+    // Denoiser: bindless slots holding the final diffuse / specular the compose pass should read
+    // (a-trous outputs when enabled, else the temporal accumulation buffers).
+    public uint DenoiseDiffuseSourceSlot;
+    public uint DenoiseSpecularSourceSlot;
+
+    // SwModernNoAmbient GTAO. Kept in the camera UBO so both GTAO compute stages can
+    // use the regular GPUScene push constant without introducing another pipeline ABI.
+    public float GTAORadius;
+    public float GTAOStrength;
+    public float GTAOThickness;
+    public uint GTAODebugMode;
+
+    public bool GTAOEnable;
+    public uint GTAOQuality;
+    public uint GTAOPadding1;
+    public uint GTAOPadding2;
+
+    public uint GTAOPadding3;
+    public uint GTAOPadding4;
+    public uint GTAOPadding5;
+    public uint GTAOPadding6;
+    public uint GTAOPadding7;
+    public uint GTAOPadding8;
+    public uint GTAOPadding9;
+    public uint GTAOPadding10;
 };
 
 public struct ALIGN_16 NodeProxy
@@ -182,9 +196,12 @@ public struct ALIGN_16 NodeProxy
     public uint modelId;
     public uint skinId;
     public uint jointMatrixOffset;
+
     public float4x4 worldTS;
     public float4x4 combinedPrevTS;
+
     public uint matId[16];
+    
     public uint visible;
     public uint nort;
     public uint reserved1;
@@ -207,7 +224,7 @@ public struct ALIGN_16 ModelData
     public uint reserved2;
 };
 
-// size = 14 x 4 bytes, 56 bytes
+// size = 10 x 4 bytes, 40 bytes
 // if use BC1 to compress color, can reduce to 4 bytes per cube, 1 / 8 size
 // and we can use the active / inactive to adjust lerp value between probe
 public struct ALIGN_8 AmbientCube
@@ -221,30 +238,18 @@ public struct ALIGN_8 AmbientCube
     public uint PosX;
     public uint NegX;
  
-    public uint PosZ_D;
-    public uint NegZ_D;
-
-    public uint PosY_D;
-    public uint NegY_D;
-
-    public uint PosX_D;
-    public uint NegX_D;
-
+    public uint SunDirect;
+    public uint SkyEmissiveDirect;
     public uint skyVisibility_pznzpyny;
     public uint skyVisibility_pxnxs0s1;
 };
 
-// 16 bytes per voxel
-// simplfy scene reprent, matId like Minecraft blockId, skyVisibility and sunVisibility represent a simple gi
-// skyVisibility could use to occlution the skylight
-// sunVisibility could use to occlution the sun, instead of realtime shadowmap, and could use to render volume effects
-// airMatId could use to represent cloud/smoke etc.
-public struct ALIGN_16 VoxelData
+// 8 bytes per voxel. matId stays a full uint; distanceToSolid stores 8 packed 4-bit channels:
+// x=min distance, y=inside, z/w=+Z/-Z, upper nibbles=+X/-X/+Y/-Y.
+public struct ALIGN_8 VoxelData
 {
     public uint matId; // 0 is void, that is clean default value
-    public uint age;
-    public uint distanceToSolid_gg_z01;
-    public uint distanceToSolid_x01_y01; // 0.0 - 1.0, 1.0 is full visibility, 0.0 is no visibility
+    public uint distanceToSolid; // 0.0 - 1.0 quantized to 4 bits per channel
 };
 
 // PageIndexer is align with world, 16x16 meter per page
@@ -258,62 +263,68 @@ public struct ALIGN_16 PageIndex
     public uint probeDataIdx;
 };
 
+public struct ALIGN_16 AmbientBrickResidency
+{
+    public uint lastConsumerHitFrame;
+    public uint lastBounceHitFrame;
+    public uint consumerHitCount;
+    public uint bounceHitCount;
+};
+
 // Ambient GI resource table. GPUScene is capped at 128B (push constant), so instead of inlining
 // every ambient region address it carries a single AmbientBase pointer to this table. Region
 // addresses are filled CPU-side (Scene.cpp) from the arena base, which decouples the GPU-visible
 // layout from the compile-time GPU_SCENE_AMBIENT_*_OFFSET constants and lets each region be sized
-// or relocated independently (right-size cascades, sparse brick pool). 8 x uint64 = 64 bytes.
+// or relocated independently (right-size cascades, sparse brick pool).
 public struct ALIGN_16 AmbientResources
 {
     public uint64_t Cubes;       // brick pool base (Phase 3) / dense cube array (pre-3a)
     public uint64_t Voxels;      // dense voxel array (kept dense; Phase 4 may sparsify)
     public uint64_t Pages;
     public uint64_t CubesPong;   // ping-pong copy of the baking cascade's cubes (brick-organized in Phase 3)
-    public uint64_t SdfScratch;  // SDF jump-flood SeedB (one dense cascade of uint4)
-    public uint64_t SdfSeedA;    // SDF jump-flood SeedA (one dense cascade of uint4; decoupled from CubesPong)
     public uint64_t BrickTable;  // Phase 3: per-cascade brick -> pool slot table (uint per brick)
     public uint64_t PoolParams;  // Phase 3: low32 = pool bricks/cascade, high32 = active-list byte offset from BrickTable
+    public uint64_t Residency;   // per-cascade AmbientBrickResidency array
+    public uint64_t Reserved0;
+    public uint64_t Reserved1;
+    public uint64_t Reserved2;
 };
 
-public struct ALIGN_16 SharcHashEntry
+public struct ALIGN_8 SharcHashEntry
 {
-    public uint Key;
-    public uint PackedNormal;
-    public uint LastFrame;
-    public uint Reserved;
+    public uint64_t Key;
 };
 
 public struct ALIGN_16 SharcAccumulationEntry
 {
-    public uint RadianceR;
-    public uint RadianceG;
-    public uint RadianceB;
-    public uint SampleCount;
+    public uint DataX;
+    public uint DataY;
+    public uint DataZ;
+    public uint DataW;
 };
 
 public struct ALIGN_16 SharcResolvedEntry
 {
-    public float4 Radiance;
-    public uint PackedNormal;
-    public uint LastFrame;
-    public uint SampleCount;
-    public uint Reserved;
+    public uint64_t RadianceData;
+    public uint SampleData;
+    public uint SampleDataExt;
 };
 
-public struct ALIGN_16 SharcParameters
+public struct ALIGN_16 SharcRuntimeParameters
 {
     public uint EntryCount;
-    public uint EntryMask;
     public uint FrameIndex;
     public uint DebugMode;
-    public float VoxelSize;
+    public uint QueryMinBounce;
+    public float SceneScale;
+    public float LevelBias;
+    public float RadianceScale;
     public float UpdateSampleRatio;
     public float QueryRoughnessMin;
-    public uint QueryMinBounce;
-    public uint StaleFrameCount;
-    public uint Reserved0;
-    public uint Reserved1;
-    public uint Reserved2;
+    public uint AccumulatedFrameMax;
+    public uint ResponsiveFrameMax;
+    public uint StaleFrameMax;
+    public float4 CameraPositionPrev;
 };
 
 public struct ALIGN_16 SharcResources
@@ -431,6 +442,14 @@ public struct ALIGN_16 GPUVertex
 // 14 addresses + 4 uint params; aligned size is 128 bytes for Vulkan push_constant.
 public struct ALIGN_16 GPUScene
 {
+    // Unified push-constant header: kept FIRST so it aliases the header of every custom push
+    // constant (see ZeroBindCustomPushConstantPipeline). custom_data_0 == active RenderView RT
+    // bank base, readable via gpuScene.custom_data_0 in *all* passes regardless of which pipeline.
+    uint32_t SwapChainIndex;
+    uint32_t custom_data_0;
+    uint32_t custom_data_1;
+    uint32_t custom_data_2;
+
     uint64_t Camera;
     uint64_t SceneDynamicBase;
     uint64_t Reorders;
@@ -446,11 +465,6 @@ public struct ALIGN_16 GPUScene
     uint64_t SkinnedVertices;
     uint64_t JointMatrices;
     uint64_t SoftMeshShaderResourcesAddress;
-
-    uint32_t SwapChainIndex;
-    uint32_t custom_data_0;
-    uint32_t custom_data_1;
-    uint32_t custom_data_2;
 };
 
 #else
@@ -458,6 +472,12 @@ public struct ALIGN_16 GPUScene
 #ifdef PLATFORM_APPLE
 public struct ALIGN_8 GPUScene
 {
+    // Unified push-constant header (FIRST; aliases every custom push constant's header).
+    public uint SwapChainIndex;
+    public uint custom_data_0;
+    public uint custom_data_1;
+    public uint custom_data_2;
+
     /* Scene Info */
     public UniformBufferObject *Camera;
     public uint64_t SceneDynamicBase;
@@ -503,14 +523,6 @@ public struct ALIGN_8 GPUScene
     {
         get { return (AmbientCube*)((AmbientResources*)AmbientBase)[0].CubesPong; }
     }
-    public property uint4* AmbientSdfScratch
-    {
-        get { return (uint4*)((AmbientResources*)AmbientBase)[0].SdfScratch; }
-    }
-    public property uint4* AmbientSdfSeedA
-    {
-        get { return (uint4*)((AmbientResources*)AmbientBase)[0].SdfSeedA; }
-    }
     public property uint* AmbientBrickTable
     {
         get { return (uint*)((AmbientResources*)AmbientBase)[0].BrickTable; }
@@ -526,6 +538,10 @@ public struct ALIGN_8 GPUScene
     public property uint AmbientPoolBricksPerCascade
     {
         get { return uint(((AmbientResources*)AmbientBase)[0].PoolParams & 0xFFFFFFFF); }
+    }
+    public property AmbientBrickResidency* AmbientResidency
+    {
+        get { return (AmbientBrickResidency*)((AmbientResources*)AmbientBase)[0].Residency; }
     }
     public property SphericalHarmonics* HDRSHs
     {
@@ -556,15 +572,16 @@ public struct ALIGN_8 GPUScene
     public RaytracingAccelerationStructure GetTLAS() {
 		return RaytracingAccelerationStructure(TLAS);
 	}
-
-    public uint SwapChainIndex;
-    public uint custom_data_0;
-    public uint custom_data_1;
-    public uint custom_data_2;
 };
 #else
 public struct ALIGN_8 GPUScene
 {
+    // Unified push-constant header (FIRST; aliases every custom push constant's header).
+    public uint32_t SwapChainIndex;
+    public uint32_t custom_data_0;
+    public uint32_t custom_data_1;
+    public uint32_t custom_data_2;
+
     /* Scene Info */
     uint64_t2 Camera_SceneDynamicBase_Address;
     public property UniformBufferObject* Camera
@@ -639,14 +656,6 @@ public struct ALIGN_8 GPUScene
     {
         get { return (AmbientCube*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].CubesPong; }
     }
-    public property uint4* AmbientSdfScratch
-    {
-        get { return (uint4*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].SdfScratch; }
-    }
-    public property uint4* AmbientSdfSeedA
-    {
-        get { return (uint4*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].SdfSeedA; }
-    }
     public property uint* AmbientBrickTable
     {
         get { return (uint*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].BrickTable; }
@@ -662,6 +671,10 @@ public struct ALIGN_8 GPUScene
     public property uint AmbientPoolBricksPerCascade
     {
         get { return uint(((AmbientResources*)Reserved_AmbientBase_Address.y)[0].PoolParams & 0xFFFFFFFF); }
+    }
+    public property AmbientBrickResidency* AmbientResidency
+    {
+        get { return (AmbientBrickResidency*)((AmbientResources*)Reserved_AmbientBase_Address.y)[0].Residency; }
     }
 
     uint64_t2 TLAS_SkinWeights_Address;
@@ -711,11 +724,6 @@ public struct ALIGN_8 GPUScene
         return RaytracingAccelerationStructure(TLAS_SkinWeights_Address.x);
 #endif
 	}
-
-    public uint32_t SwapChainIndex;
-    public uint32_t custom_data_0;
-    public uint32_t custom_data_1;
-    public uint32_t custom_data_2;
 };
 #ifdef PLATFORM_ANDROID
 [[vk::binding(0, 1)]] RaytracingAccelerationStructure BindedTLAS;

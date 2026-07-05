@@ -1,5 +1,5 @@
-import Common;
-import Bindless;
+import Shader.Bindless;
+import Shader.PathTracing;
 
 [shader("compute")]
 [numthreads(8, 8, 1)]
@@ -10,16 +10,16 @@ void main(uint3 DTid : SV_DispatchThreadID)
     FHardwareDirectIlluminator dIlluminator;
 
     FPathTracingRenderer renderer;
-    SharcParameters params = SharcGetParameters();
-    renderer.ExitProbability = 0.5f;
+    SharcRuntimeParameters params = SharcGetRuntimeParameters();
+    renderer.ExitProbability = 0.05f;
     renderer.ExitAfterFirst = false;
     renderer.HitNormalOffset = 0.001f * Bindless.GetGpuscene().Camera->SceneEpsilonScale;
     renderer.SampleDownscale = 2;
     renderer.FuzzyTracing = false;
     renderer.ForceExitAfterFirst = false;
     renderer.UseAmbientCubeTerminal = false;
-    renderer.EnableSharcUpdate = true;
-    renderer.SharcUpdateSampleRatio = params.UpdateSampleRatio;
+    renderer.WriteOutputs = false;
+    renderer.SecondaryDirectMode = 2;
     renderer.Init(DTid.xy);
 
     if (!renderer.PrimaryHit(rayCaster))
@@ -27,5 +27,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
-    renderer.Render(tracer, dIlluminator, 1);
+    FSharcUpdateCache cache;
+    cache.UpdateSampleRatio = params.UpdateSampleRatio;
+    renderer.Render(tracer, dIlluminator, cache, 1);
 }
