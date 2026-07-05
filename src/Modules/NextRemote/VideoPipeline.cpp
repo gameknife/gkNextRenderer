@@ -155,7 +155,7 @@ namespace Runtime::Remote
         }
         startedAt_ = std::chrono::steady_clock::now();
         nextFrameTime_ = startedAt_;
-        encodeStopRequested_.store(false, std::memory_order_release);
+        encodeStopRequested_.store(false);
         encodeThread_ = std::thread([this]() { EncodeLoop(); });
     }
 
@@ -163,7 +163,7 @@ namespace Runtime::Remote
     {
         if (encodeThread_.joinable())
         {
-            encodeStopRequested_.store(true, std::memory_order_release);
+            encodeStopRequested_.store(true);
             encodeCv_.notify_all();
             encodeThread_.join();
         }
@@ -766,16 +766,16 @@ namespace Runtime::Remote
     {
         uint64_t sentFrames = 0;
         uint32_t appliedBitrateKbps = desiredBitrateKbps_.load(std::memory_order_relaxed);
-        while (!encodeStopRequested_.load(std::memory_order_acquire))
+        while (!encodeStopRequested_.load())
         {
             size_t slotIndex = 0;
             {
                 std::unique_lock lock(encodeQueueMutex_);
                 encodeCv_.wait(lock, [this]()
                 {
-                    return encodeStopRequested_.load(std::memory_order_acquire) || !encodeQueue_.empty();
+                    return encodeStopRequested_.load() || !encodeQueue_.empty();
                 });
-                if (encodeStopRequested_.load(std::memory_order_acquire))
+                if (encodeStopRequested_.load())
                 {
                     break;
                 }
