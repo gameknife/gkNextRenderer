@@ -727,7 +727,7 @@ namespace Assets
         cameraInit.SunIntensity = 500.0f;
         cameraInit.SkyIntensity = 100.0f;
 
-        Camera defaultCam = FSceneLoader::AutoFocusCamera(cameraInit, nodes, models);
+        Camera defaultCam = FSceneLoader::AutoFocusCamera(cameraInit, nodes, models, true);
 
         SPDLOG_INFO("LDraw: created {} models, {} materials, {} nodes",
                      models.size() - initialModelCount,

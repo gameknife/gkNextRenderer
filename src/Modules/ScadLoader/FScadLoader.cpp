@@ -348,7 +348,7 @@ namespace Assets
         cameraInit.SunIntensity = 500.0f;
         cameraInit.SkyIntensity = 80.0f;
 
-        Camera defaultCam = FSceneLoader::AutoFocusCamera(cameraInit, nodes, models);
+        Camera defaultCam = FSceneLoader::AutoFocusCamera(cameraInit, nodes, models, true);
         if (cameraInit.cameras.empty())
         {
             cameraInit.cameras.push_back(defaultCam);
