@@ -969,7 +969,7 @@ namespace NextUI::Theme
     }
 
     void Sparkline(const float* values, int count, ImVec2 size, ImVec4 color,
-                   float scaleMin, float scaleMax)
+                   float scaleMin, float scaleMax, bool baselineAtZero)
     {
         if (values == nullptr || count <= 1)
         {
@@ -988,12 +988,18 @@ namespace NextUI::Theme
 
         if (scaleMin == FLT_MAX || scaleMax == FLT_MAX)
         {
-            float lo = values[0];
+            // Auto-fit mode. For timing-style data (always >= 0) pin the baseline
+            // at 0 and only fit the top — fitting both ends amplifies noise because
+            // the min keeps jittering frame to frame.
+            float lo = baselineAtZero ? 0.0f : values[0];
             float hi = values[0];
             for (int i = 1; i < count; ++i)
             {
-                lo = std::min(lo, values[i]);
                 hi = std::max(hi, values[i]);
+                if (!baselineAtZero)
+                {
+                    lo = std::min(lo, values[i]);
+                }
             }
             scaleMin = lo;
             scaleMax = hi;
