@@ -65,6 +65,7 @@ namespace Assets::scad
     struct SceneMeshBucket
     {
         glm::vec4 color = glm::vec4(0.78f, 0.78f, 0.78f, 1.0f);
+        std::string materialName;
         std::vector<glm::dvec3> tris; // triangle soup (3N), local to the owning scene node
     };
 
