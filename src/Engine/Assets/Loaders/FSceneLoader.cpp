@@ -1169,7 +1169,7 @@ namespace Assets
         return true;
     }
 
-    Camera FSceneLoader::AutoFocusCamera(Assets::EnvironmentSetting& cameraInit, std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Model>& models)
+    Camera FSceneLoader::AutoFocusCamera(Assets::EnvironmentSetting& cameraInit, std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Model>& models, bool obliqueView)
     {
         //auto center camera by scene bounds
         glm::vec3 boundsMin(FLT_MAX), boundsMax(-FLT_MAX);
@@ -1226,12 +1226,16 @@ namespace Assets
         newCamera.FieldOfView = 40;
         const float halfFov = glm::radians(newCamera.FieldOfView) * 0.5f;
         const float viewDistance = sphereRadius / glm::max(std::sin(halfFov), 0.01f) * 1.15f;
-        newCamera.ModelView = lookAt(vec3(boundsCenter.x, boundsCenter.y, boundsCenter.z + viewDistance), boundsCenter, vec3(0, 1, 0));
+        const float cameraDistance = obliqueView ? viewDistance * 0.75f : viewDistance;
+        const glm::vec3 viewDirection =
+            obliqueView ? glm::normalize(glm::vec3(1.0f, 0.45f, 1.0f)) : glm::vec3(0.0f, 0.0f, 1.0f);
+        const glm::vec3 eye = boundsCenter + viewDirection * cameraDistance;
+        newCamera.ModelView = lookAt(eye, boundsCenter, vec3(0, 1, 0));
         newCamera.Aperture = 0.0f;
-        newCamera.FocalDistance = viewDistance;
+        newCamera.FocalDistance = cameraDistance;
         newCamera.name = "AutoCamera";
         newCamera.NearPlane = sphereRadius < 25.0f ? 0.01f : glm::max(0.05f, sphereRadius * 0.001f);
-        newCamera.FarPlane = glm::max(viewDistance + sphereRadius * 1.5f, newCamera.NearPlane * 10.0f);
+        newCamera.FarPlane = glm::max(cameraDistance + sphereRadius * 1.5f, newCamera.NearPlane * 10.0f);
         cameraInit.ControlSpeed = glm::max(cameraInit.ControlSpeed, sphereRadius * 0.04f);
 
         return newCamera;

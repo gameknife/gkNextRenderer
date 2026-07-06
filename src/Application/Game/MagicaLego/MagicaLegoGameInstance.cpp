@@ -20,6 +20,9 @@
 #include <glm/gtc/quaternion.hpp>
 #include <spdlog/spdlog.h>
 
+#include <filesystem>
+#include <system_error>
+
 const glm::i16vec3 invalidPos(0, -10, 0);
 constexpr uint32_t InvalidOwnerHash = std::numeric_limits<uint32_t>::max();
 
@@ -132,6 +135,14 @@ MagicaLegoGameInstance::MagicaLegoGameInstance(Vulkan::WindowConfig& config, Run
     // mounted at startup and which still provides legobricks.glb when lego.pak hasn't been built.
     GetEngine().GetPakSystem().MountPak(Utilities::FileHelper::GetPlatformFilePath("assets/paks/lego.pak"));
     GetEngine().GetPakSystem().MountPak(Utilities::FileHelper::GetPlatformFilePath("assets/paks/thumbs.pak"));
+    {
+        const std::string magicalegoPakPath = Utilities::FileHelper::GetPlatformFilePath("assets/paks/magicalego.pak");
+        std::error_code ec;
+        if (std::filesystem::exists(magicalegoPakPath, ec))
+        {
+            GetEngine().GetPakSystem().MountPak(magicalegoPakPath);
+        }
+    }
 
     // Initialize cursor
     cursor_ = std::make_unique<MagicaLego::FCursor>();

@@ -108,7 +108,13 @@ func selectedGroups(cfg config.Config, groups []string) map[string]bool {
 	}
 	selected := map[string]bool{}
 	for _, group := range groups {
-		selected[strings.ToLower(group)] = true
+		group = strings.ToLower(group)
+		selected[group] = true
+		// Backward compatibility: the old MagicaLego audio group was published as
+		// separate sfx files. It now lives in assets/paks/magicalego.pak.
+		if group == "sfx" {
+			selected["magicalego"] = true
+		}
 	}
 	return selected
 }

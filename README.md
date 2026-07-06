@@ -317,7 +317,7 @@ Android 主机侧仍需要提供 JDK / SDK / NDK；项目内的 vcpkg 依赖与�
 |------|------|------|------|
 | `ldraw` | `ldraw.pak` | `assets/paks/` | BrickPlayer 缺 LDraw 零件库 |
 | `optional` | `optional.pak` | `assets/paks/` | 主渲染器 / Editor / CharacterDemo / MagicaLego 缺场景资源 |
-| `sfx` | 6 个 mp3/wav | `assets/sfx/` | MagicaLego / BrickPlayer 静音 |
+| `magicalego` | `magicalego.pak`（BGM / 放置音效） | `assets/paks/` | MagicaLego / BrickPlayer 静音 |
 | `ffmpeg` | `ffmpeg.exe` | `src/ThirdParty/ffmpeg/bin/` | Windows 下 MagicaLego 视频录制不可用 |
 
 ```bash
@@ -326,7 +326,7 @@ Android 主机侧仍需要提供 JDK / SDK / NDK；项目内的 vcpkg 依赖与�
 
 # 或只拉指定资源
 ./gnb.sh paks fetch optional ldraw
-./gnb.sh paks fetch ffmpeg sfx
+./gnb.sh paks fetch ffmpeg magicalego
 
 # Windows
 ./gnb.bat paks fetch

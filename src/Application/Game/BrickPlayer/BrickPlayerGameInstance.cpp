@@ -12,10 +12,13 @@
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Scene/NodeUtils.h"
 #include "Engine/Runtime/Scene/SceneBuilder.h"
+#include "Engine/Utilities/FileHelper.hpp"
 
 #include <SDL3/SDL_dialog.h>
 #include <spdlog/spdlog.h>
 #include <glm/ext/scalar_constants.hpp>
+#include <filesystem>
+#include <system_error>
 #include "Modules/LDrawLoader/LDrawModule.hpp"
 
 namespace
@@ -241,6 +244,13 @@ BrickPlayerGameInstance::BrickPlayerGameInstance(Vulkan::WindowConfig& config, R
     options.ForceSDR = true;
 
     userInterface_ = std::make_unique<BrickPlayerUserInterface>(this);
+
+    const std::string magicalegoPakPath = Utilities::FileHelper::GetPlatformFilePath("assets/paks/magicalego.pak");
+    std::error_code ec;
+    if (std::filesystem::exists(magicalegoPakPath, ec))
+    {
+        GetEngine().GetPakSystem().MountPak(magicalegoPakPath);
+    }
 }
 
 void BrickPlayerGameInstance::ConfigureCVars(NextCVar::FCVarSystem& cvars)

@@ -90,34 +90,9 @@ name = "brotato3d.pak"
 dest = "assets/paks/brotato3d.pak"
 
 [[paks.assets]]
-id = "sfx"
-name = "bgm.mp3"
-dest = "assets/sfx/bgm.mp3"
-
-[[paks.assets]]
-id = "sfx"
-name = "bgm2.mp3"
-dest = "assets/sfx/bgm2.mp3"
-
-[[paks.assets]]
-id = "sfx"
-name = "put.mp3"
-dest = "assets/sfx/put.mp3"
-
-[[paks.assets]]
-id = "sfx"
-name = "put1.wav"
-dest = "assets/sfx/put1.wav"
-
-[[paks.assets]]
-id = "sfx"
-name = "put2.wav"
-dest = "assets/sfx/put2.wav"
-
-[[paks.assets]]
-id = "sfx"
-name = "put3.wav"
-dest = "assets/sfx/put3.wav"
+id = "magicalego"
+name = "magicalego.pak"
+dest = "assets/paks/magicalego.pak"
 
 [[paks.assets]]
 id = "ffmpeg"

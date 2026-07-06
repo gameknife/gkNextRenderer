@@ -305,11 +305,13 @@ namespace Assets
             const float radius = std::max(glm::length(data.aabbMax - data.aabbMin) * 0.5f, 0.5f);
             Camera defaultCamera;
             defaultCamera.name = "SOG Camera";
-            defaultCamera.ModelView = glm::lookAt(center + glm::vec3(0.0f, 0.0f, radius * 2.4f), center,
-                                                   glm::vec3(0.0f, 1.0f, 0.0f));
+            const glm::vec3 viewDirection = glm::normalize(glm::vec3(1.0f, 0.45f, 1.0f));
+            const float cameraDistance = radius * 2.4f * 0.75f;
+            defaultCamera.ModelView = glm::lookAt(center + viewDirection * cameraDistance, center,
+                                                  glm::vec3(0.0f, 1.0f, 0.0f));
             defaultCamera.FieldOfView = 45.0f;
             defaultCamera.Aperture = 0.0f;
-            defaultCamera.FocalDistance = radius * 2.4f;
+            defaultCamera.FocalDistance = cameraDistance;
             defaultCamera.NearPlane = std::max(0.01f, radius * 0.01f);
             defaultCamera.FarPlane = radius * 20.0f;
             camera.cameras.push_back(defaultCamera);

@@ -385,11 +385,10 @@ namespace Assets
 
     bool Scene::EnsureGpuDrivenBufferCapacity(Vulkan::CommandPool& commandPool)
     {
-        const bool updatedNodeProxys = UpdateNodesGpuDriven();
         const uint32_t requiredCapacity = requiredGpuDrivenTriangleCapacity_;
         if (requiredCapacity <= maxSceneTriangles_)
         {
-            return updatedNodeProxys;
+            return false;
         }
 
         const uint64_t doubledCapacity = static_cast<uint64_t>(maxSceneTriangles_) * 2u;
@@ -424,7 +423,7 @@ namespace Assets
             commandPool, "SoftMeshShaderResources", flags, resources,
             softMeshShaderResourcesBuffer_, softMeshShaderResourcesBufferMemory_);
         SPDLOG_INFO("GPU-driven triangle capacity grown to {}", maxSceneTriangles_);
-        return updatedNodeProxys;
+        return true;
     }
 
     void Scene::Reload(std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models,

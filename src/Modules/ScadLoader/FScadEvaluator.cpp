@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <memory>
 
@@ -69,6 +70,7 @@ namespace Assets::scad
         {
             glm::dvec4 color = glm::dvec4(0.78, 0.78, 0.78, 1.0);
             bool hasColor = false;
+            std::string materialName;
             std::string groupName;
             uint64_t groupInstanceId = 0;
             TriSoup soup;
@@ -230,6 +232,7 @@ namespace Assets::scad
                 uint64_t instanceId = 0;
             };
             std::vector<GroupFrame> moduleCallStack_;
+            std::vector<std::string> materialNameStack_;
             std::string topLevelFallbackLabel_;
             uint64_t topLevelFallbackInstanceId_ = 0;
             uint64_t nextGroupInstanceId_ = 1;
@@ -395,6 +398,10 @@ namespace Assets::scad
                     const glm::vec4 c = cs.hasColor ? glm::vec4(cs.color) : glm::vec4(0.78f, 0.78f, 0.78f, 1.0f);
                     SceneMeshBucket& bucket = owner->meshes[QuantizeColor(c)];
                     bucket.color = c;
+                    if (bucket.materialName.empty() && !cs.materialName.empty())
+                    {
+                        bucket.materialName = cs.materialName;
+                    }
                     bucket.tris.insert(bucket.tris.end(), cs.soup.begin(), cs.soup.end());
                     AddTriangleCount(cs.soup.size() / 3);
                 }
@@ -566,7 +573,10 @@ namespace Assets::scad
                     glm::dvec4 c = color;
                     if (ResolveColor(inst, c))
                     {
-                        return EvalScope(inst.children, xform, c, true);
+                        materialNameStack_.push_back(ResolveColorName(inst));
+                        GeomList result = EvalScope(inst.children, xform, c, true);
+                        materialNameStack_.pop_back();
+                        return result;
                     }
                     return EvalScope(inst.children, xform, color, hasColor);
                 }
@@ -680,6 +690,7 @@ namespace Assets::scad
                 std::vector<TriSoup> negatives;
                 glm::dvec4 posColor = color;
                 bool posHas = hasColor;
+                std::string posMaterialName;
                 std::string posGroupName = CurrentGroupLabel();
                 uint64_t posGroupInstanceId = CurrentGroupInstanceId();
                 bool gotColor = false;
@@ -702,6 +713,7 @@ namespace Assets::scad
                             {
                                 posColor = cs.color;
                                 posHas = cs.hasColor;
+                                posMaterialName = cs.materialName;
                                 posGroupName = cs.groupName.empty() ? posGroupName : cs.groupName;
                                 posGroupInstanceId = cs.groupInstanceId == 0 ? posGroupInstanceId : cs.groupInstanceId;
                                 gotColor = true;
@@ -731,6 +743,7 @@ namespace Assets::scad
                 ColoredSoup result;
                 result.color = posColor;
                 result.hasColor = posHas;
+                result.materialName = posMaterialName;
                 result.groupName = posGroupName;
                 result.groupInstanceId = posGroupInstanceId;
                 result.soup = std::move(r);
@@ -747,6 +760,7 @@ namespace Assets::scad
                 std::vector<TriSoup> operands;
                 glm::dvec4 firstColor = color;
                 bool firstHas = hasColor;
+                std::string firstMaterialName;
                 std::string firstGroupName = CurrentGroupLabel();
                 uint64_t firstGroupInstanceId = CurrentGroupInstanceId();
                 bool gotColor = false;
@@ -767,6 +781,7 @@ namespace Assets::scad
                         {
                             firstColor = cs.color;
                             firstHas = cs.hasColor;
+                            firstMaterialName = cs.materialName;
                             firstGroupName = cs.groupName.empty() ? firstGroupName : cs.groupName;
                             firstGroupInstanceId = cs.groupInstanceId == 0 ? firstGroupInstanceId : cs.groupInstanceId;
                             gotColor = true;
@@ -788,6 +803,7 @@ namespace Assets::scad
                 ColoredSoup result;
                 result.color = firstColor;
                 result.hasColor = firstHas;
+                result.materialName = firstMaterialName;
                 result.groupName = firstGroupName;
                 result.groupInstanceId = firstGroupInstanceId;
                 result.soup = std::move(r);
@@ -802,6 +818,7 @@ namespace Assets::scad
                 std::vector<TriSoup> parts;
                 glm::dvec4 firstColor = color;
                 bool firstHas = hasColor;
+                std::string firstMaterialName;
                 std::string firstGroupName = CurrentGroupLabel();
                 uint64_t firstGroupInstanceId = CurrentGroupInstanceId();
                 bool gotColor = false;
@@ -811,6 +828,7 @@ namespace Assets::scad
                     {
                         firstColor = cs.color;
                         firstHas = cs.hasColor;
+                        firstMaterialName = cs.materialName;
                         firstGroupName = cs.groupName.empty() ? firstGroupName : cs.groupName;
                         firstGroupInstanceId = cs.groupInstanceId == 0 ? firstGroupInstanceId : cs.groupInstanceId;
                         gotColor = true;
@@ -828,6 +846,7 @@ namespace Assets::scad
                 ColoredSoup result;
                 result.color = firstColor;
                 result.hasColor = firstHas;
+                result.materialName = firstMaterialName;
                 result.groupName = firstGroupName;
                 result.groupInstanceId = firstGroupInstanceId;
                 result.soup = std::move(r);
@@ -837,56 +856,35 @@ namespace Assets::scad
 
             GeomList EvalFor(const Stmt& inst, const glm::dmat4& xform, const glm::dvec4& color, bool hasColor)
             {
-                struct Binding
-                {
-                    std::string name;
-                    std::vector<Value> values;
-                };
-                std::vector<Binding> bindings;
-                for (const CallArg& a : inst.args)
-                {
-                    if (a.name.empty()) continue;
-                    Binding b;
-                    b.name = a.name;
-                    const Value v = EvalExpr(a.value);
-                    if (v.type == Value::Type::Range)
-                    {
-                        EnumerateRange(v, b.values);
-                    }
-                    else if (v.type == Value::Type::Vec)
-                    {
-                        b.values = v.vec;
-                    }
-                    else
-                    {
-                        b.values.push_back(v);
-                    }
-                    bindings.push_back(std::move(b));
-                }
                 GeomList out;
-                if (bindings.empty()) return out;
 
-                std::vector<size_t> idx(bindings.size(), 0);
-                while (true)
+                std::function<void(size_t)> evalBinding = [&](size_t argIndex)
                 {
-                    ctx_.Push();
-                    for (size_t i = 0; i < bindings.size(); ++i)
+                    while (argIndex < inst.args.size() && inst.args[argIndex].name.empty())
                     {
-                        ctx_.Set(bindings[i].name, bindings[i].values.empty() ? Value() : bindings[i].values[idx[i]]);
+                        ++argIndex;
                     }
-                    AppendMove(out, EvalScope(inst.children, xform, color, hasColor));
-                    ctx_.Pop();
+                    if (argIndex >= inst.args.size())
+                    {
+                        AppendMove(out, EvalScope(inst.children, xform, color, hasColor));
+                        return;
+                    }
 
-                    int dim = static_cast<int>(bindings.size()) - 1;
-                    while (dim >= 0)
+                    const CallArg& binding = inst.args[argIndex];
+                    std::vector<Value> values;
+                    BindingValues(EvalExpr(binding.value), values);
+                    if (values.empty()) return;
+
+                    for (const Value& value : values)
                     {
-                        if (bindings[dim].values.empty()) { --dim; continue; }
-                        if (++idx[dim] < bindings[dim].values.size()) break;
-                        idx[dim] = 0;
-                        --dim;
+                        ctx_.Push();
+                        ctx_.Set(binding.name, value);
+                        evalBinding(argIndex + 1);
+                        ctx_.Pop();
                     }
-                    if (dim < 0) break;
-                }
+                };
+
+                evalBinding(0);
                 return out;
             }
 
@@ -1037,6 +1035,10 @@ namespace Assets::scad
                 ColoredSoup cs;
                 cs.color = color;
                 cs.hasColor = hasColor;
+                if (hasColor && !materialNameStack_.empty())
+                {
+                    cs.materialName = materialNameStack_.back();
+                }
                 cs.groupName = CurrentGroupLabel();
                 cs.groupInstanceId = CurrentGroupInstanceId();
                 cs.soup.reserve(objSpace.size());
@@ -1485,6 +1487,55 @@ namespace Assets::scad
                 return true;
             }
 
+            const ExprPtr& ColorArgExpr(const Stmt& inst) const
+            {
+                static const ExprPtr empty;
+                int positional = 0;
+                for (const CallArg& a : inst.args)
+                {
+                    if (a.name == "c")
+                    {
+                        return a.value;
+                    }
+                    if (a.name.empty())
+                    {
+                        if (positional == 0)
+                        {
+                            return a.value;
+                        }
+                        ++positional;
+                    }
+                }
+                return empty;
+            }
+
+            std::string MaterialNameFromExpr(const ExprPtr& expr) const
+            {
+                if (!expr)
+                {
+                    return "";
+                }
+
+                switch (expr->kind)
+                {
+                case ExprKind::Ident:
+                case ExprKind::Str:
+                    return expr->str;
+                case ExprKind::Call:
+                    return expr->str;
+                case ExprKind::Index:
+                case ExprKind::Member:
+                    return expr->list.empty() ? std::string() : MaterialNameFromExpr(expr->list[0]);
+                default:
+                    return "";
+                }
+            }
+
+            std::string ResolveColorName(const Stmt& inst) const
+            {
+                return MaterialNameFromExpr(ColorArgExpr(inst));
+            }
+
             static glm::dvec4 NamedColor(const std::string& nameIn)
             {
                 std::string n;
@@ -1593,34 +1644,35 @@ namespace Assets::scad
                 {
                 case ExprKind::CompFor:
                 {
-                    struct B { std::string name; std::vector<Value> vals; };
-                    std::vector<B> bs;
-                    for (const CallArg& a : e->args)
+                    if (e->list.empty()) return;
+
+                    std::function<void(size_t)> appendBinding = [&](size_t argIndex)
                     {
-                        if (a.name.empty()) continue;
-                        B b;
-                        b.name = a.name;
-                        BindingValues(EvalExpr(a.value), b.vals);
-                        if (b.vals.empty()) return; // empty range -> no iterations
-                        bs.push_back(std::move(b));
-                    }
-                    if (bs.empty() || e->list.empty()) return;
-                    std::vector<size_t> idx(bs.size(), 0);
-                    while (true)
-                    {
-                        ctx_.Push();
-                        for (size_t i = 0; i < bs.size(); ++i) ctx_.Set(bs[i].name, bs[i].vals[idx[i]]);
-                        AppendElement(e->list[0], out);
-                        ctx_.Pop();
-                        int dim = static_cast<int>(bs.size()) - 1;
-                        while (dim >= 0)
+                        while (argIndex < e->args.size() && e->args[argIndex].name.empty())
                         {
-                            if (++idx[dim] < bs[dim].vals.size()) break;
-                            idx[dim] = 0;
-                            --dim;
+                            ++argIndex;
                         }
-                        if (dim < 0) break;
-                    }
+                        if (argIndex >= e->args.size())
+                        {
+                            AppendElement(e->list[0], out);
+                            return;
+                        }
+
+                        const CallArg& binding = e->args[argIndex];
+                        std::vector<Value> values;
+                        BindingValues(EvalExpr(binding.value), values);
+                        if (values.empty()) return;
+
+                        for (const Value& value : values)
+                        {
+                            ctx_.Push();
+                            ctx_.Set(binding.name, value);
+                            appendBinding(argIndex + 1);
+                            ctx_.Pop();
+                        }
+                    };
+
+                    appendBinding(0);
                     return;
                 }
                 case ExprKind::CompLet:

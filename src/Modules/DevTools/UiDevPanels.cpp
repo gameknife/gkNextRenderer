@@ -633,13 +633,6 @@ void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, VulkanGpuTi
     const ImVec4 colWarn = NextUI::Theme::Color(NextUI::Theme::EColor::Warning);
     const ImVec4 colBad = NextUI::Theme::Color(NextUI::Theme::EColor::Danger);
 
-    auto LabelVal = [&](const char* label, const char* fmt, auto... args)
-    {
-        ImGui::TextColored(colLabel, "%s", label);
-        ImGui::SameLine(132.0f);
-        ImGui::TextColored(colVal, fmt, args...);
-    };
-
     {
         const Vulkan::Device& device = NextEngine::GetInstance()->GetRenderer().Device();
         const VkPhysicalDeviceProperties deviceProperties = device.DeviceProperties();
@@ -651,29 +644,25 @@ void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, VulkanGpuTi
         const std::string ftText = fmt::format("{:.2f}  ms", statistics.FrameTime);
 
         BeginCard("##ProfilerDeviceCard", 180.0f);
-        if (ImGui::BeginTable("##ProfilerDeviceHeader", 2, ImGuiTableFlags_SizingStretchProp))
+        if (ImGui::BeginTable("##ProfilerDeviceHeader", 2, ImGuiTableFlags_SizingStretchSame))
         {
             ImGui::TableNextColumn();
             ImGui::TextColored(colHeader, "Device");
+            ImGui::TextColored(colVal, "%s", deviceProperties.deviceName);
+            if (!driverName.empty())
+            {
+                ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted, 0.72f), "%s", driverName.c_str());
+            }
+            
             ImGui::TableNextColumn();
-            ImGui::TextColored(colLabel, "Resolution");
-            ImGui::SameLine(0.0f, 8.0f);
+            ImGui::TextColored(colHeader, "Resolution");
             ImGui::TextColored(colVal, "%ux%u", statistics.FramebufferSize.width,
                                statistics.FramebufferSize.height);
+            ImGui::TextColored(NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted, 0.72f), "%ux%u", statistics.RenderSize.width,
+                              statistics.RenderSize.height);
             ImGui::EndTable();
         }
-        ImGui::TextColored(colVal, "%s", deviceProperties.deviceName);
-        if (!driverName.empty())
-        {
-            const float driverFontSize = ImGui::GetFontSize() * 0.84f;
-            const ImVec4 driverColor = NextUI::Theme::Color(NextUI::Theme::EColor::TextMuted, 0.72f);
-            const ImVec2 driverPos = ImGui::GetCursorScreenPos();
-            ImFont* font = ImGui::GetFont();
-            const ImVec2 driverSize = font->CalcTextSizeA(driverFontSize, FLT_MAX, 0.0f, driverName.c_str());
-            ImGui::GetWindowDrawList()->AddText(font, driverFontSize, driverPos,
-                                                ImGui::GetColorU32(driverColor), driverName.c_str());
-            ImGui::Dummy(ImVec2(driverSize.x, driverSize.y + 2.0f));
-        }
+       
 
         ImGui::Dummy(ImVec2(0.0f, 8.0f));
         if (ImGui::BeginTable("##ProfilerSparklineTable", 2, ImGuiTableFlags_SizingStretchSame))
@@ -686,14 +675,15 @@ void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, VulkanGpuTi
             ImGui::TextColored(colHeader, "Frame Rate");
             ImGui::TextColored(fpsColor, "%s", fpsText.c_str());
             NextUI::Theme::Sparkline(orderedFps.data(), orderedCount,
-                                     ImVec2(ImGui::GetContentRegionAvail().x, 26.0f), colGood);
+                                     ImVec2(ImGui::GetContentRegionAvail().x, 26.0f), colGood, FLT_MAX, FLT_MAX, true);
 
             ImGui::TableSetColumnIndex(1);
             ImGui::TextColored(colHeader, "Frame Time");
             ImGui::TextColored(colVal, "%s", ftText.c_str());
             NextUI::Theme::Sparkline(orderedFt.data(), orderedCount,
                                      ImVec2(ImGui::GetContentRegionAvail().x, 26.0f),
-                                     NextUI::Theme::Color(NextUI::Theme::EColor::Blue));
+                                     NextUI::Theme::Color(NextUI::Theme::EColor::Blue),
+                                     FLT_MAX, FLT_MAX, true);
             ImGui::EndTable();
         }
         EndCard();
@@ -718,74 +708,69 @@ void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, VulkanGpuTi
                            Utilities::metricFormatter(static_cast<double>(totalCount), ""));
     };
 
-    BeginCard("##ProfilerSceneStatsCard", 308.0f);
-    ImGui::TextColored(colHeader, "Scene Stats");
-    ImGui::Dummy(ImVec2(0.0f, 4.0f));
-    std::vector<std::pair<std::string, std::string>> sceneStats = {
-        {"Nodes", Utilities::metricFormatter(static_cast<double>(statistics.NodeCount), "")},
-        {"Instances", Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), "")},
-        {"Textures", std::to_string(statistics.TextureCount)},
-        {"Draws", FormatVisibleOverTotal(instanceCount, gpuDrivenStat.ProcessedCount)},
-        {"Triangles", FormatVisibleOverTotal(triangleCount, gpuDrivenStat.TriangleCount)},
-        {"Tasks", fmt::format("{} / {} / {}", mainTasks, lowTasks, completeTasks)},
+    // Compact stat pair: "Label Value" inline, muted label + bright value.
+    auto CompactStat = [&](const char* label, const std::string& value)
+    {
+        ImGui::TextColored(colLabel, "%s", label);
+        ImGui::SameLine(0.0f, 4.0f);
+        ImGui::TextColored(colVal, "%s", value.c_str());
     };
-    if ((sceneStats.size() & 1u) != 0u)
+
+    BeginCard("##ProfilerSceneStatsCard", 132.0f);
+    ImGui::TextColored(colHeader, "Scene");
+    ImGui::Dummy(ImVec2(0.0f, 2.0f));
+    if (ImGui::BeginTable("##SceneStatsCompactTable", 2, ImGuiTableFlags_SizingStretchProp))
     {
-        sceneStats.emplace_back("", "");
-    }
-    if (ImGui::BeginTable("##SceneStatsTable", 2, ImGuiTableFlags_SizingStretchSame))
-    {
-        ImGui::TableSetupColumn("Left", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Right", ImGuiTableColumnFlags_WidthStretch);
-        auto DrawSceneStat = [&](const std::pair<std::string, std::string>& stat)
-        {
-            if (!stat.first.empty())
-            {
-                ImGui::TextColored(colLabel, "%s", stat.first.c_str());
-                ImGui::TextColored(colVal, "%s", stat.second.c_str());
-            }
-        };
-        for (size_t statIndex = 0; statIndex < sceneStats.size(); statIndex += 2)
-        {
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            DrawSceneStat(sceneStats[statIndex]);
-            ImGui::TableSetColumnIndex(1);
-            DrawSceneStat(sceneStats[statIndex + 1]);
-        }
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        CompactStat("Nodes", Utilities::metricFormatter(static_cast<double>(statistics.NodeCount), ""));
+        ImGui::TableSetColumnIndex(1);
+        CompactStat("Instances",
+                    Utilities::metricFormatter(static_cast<double>(statistics.InstanceCount), ""));
+
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        CompactStat("Draws", FormatVisibleOverTotal(instanceCount, gpuDrivenStat.ProcessedCount));
+        ImGui::TableSetColumnIndex(1);
+        CompactStat("Triangles", FormatVisibleOverTotal(triangleCount, gpuDrivenStat.TriangleCount));
+
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        CompactStat("Textures", std::to_string(statistics.TextureCount));
+        ImGui::TableSetColumnIndex(1);
+        CompactStat("Tasks", fmt::format("{} / {} / {}", mainTasks, lowTasks, completeTasks));
         ImGui::EndTable();
     }
 
-    ImGui::Dummy(ImVec2(0.0f, 8.0f));
+    ImGui::Dummy(ImVec2(0.0f, 6.0f));
     ImGui::TextColored(colHeader, "Shadow Cascades");
-    if (ImGui::BeginTable("##SceneShadowCascadeStatsTable", 3,
-                          ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
-                              ImGuiTableFlags_SizingFixedFit))
+    ImGui::Dummy(ImVec2(0.0f, 2.0f));
+    if (ImGui::BeginTable("##ShadowCascadeCompactTable", 2, ImGuiTableFlags_SizingStretchProp))
     {
-        ImGui::TableSetupColumn("Cascade", ImGuiTableColumnFlags_WidthFixed, 56.0f);
-        ImGui::TableSetupColumn("Draws", ImGuiTableColumnFlags_WidthFixed, 92.0f);
-        ImGui::TableSetupColumn("Tri", ImGuiTableColumnFlags_WidthFixed, 92.0f);
-        ImGui::TableHeadersRow();
-
-        for (uint32_t cascade = 0; cascade < Assets::Scene::kSunShadowCascadeCount; ++cascade)
+        for (uint32_t row = 0; row < Assets::Scene::kSunShadowCascadeCount; row += 2)
         {
-            const auto& stat = shadowGpuDrivenStats[cascade];
-            const uint32_t shadowDrawCount = stat.ProcessedCount > stat.CulledCount
-                ? stat.ProcessedCount - stat.CulledCount
-                : 0;
-            const uint32_t shadowTriangleCount = stat.TriangleCount > stat.CulledTriangleCount
-                ? stat.TriangleCount - stat.CulledTriangleCount
-                : 0;
-
             ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::TextColored(colLabel, "C%u", cascade);
-            ImGui::TableSetColumnIndex(1);
-            ImGui::TextColored(colVal, "%s",
-                               FormatVisibleOverTotal(shadowDrawCount, stat.ProcessedCount).c_str());
-            ImGui::TableSetColumnIndex(2);
-            ImGui::TextColored(colVal, "%s",
-                               FormatVisibleOverTotal(shadowTriangleCount, stat.TriangleCount).c_str());
+            for (uint32_t col = 0; col < 2; ++col)
+            {
+                const uint32_t cascade = row + col;
+                if (cascade >= Assets::Scene::kSunShadowCascadeCount)
+                {
+                    break;
+                }
+                ImGui::TableSetColumnIndex(col);
+                const auto& stat = shadowGpuDrivenStats[cascade];
+                const uint32_t shadowDrawCount = stat.ProcessedCount > stat.CulledCount
+                    ? stat.ProcessedCount - stat.CulledCount
+                    : 0;
+                const uint32_t shadowTriangleCount = stat.TriangleCount > stat.CulledTriangleCount
+                    ? stat.TriangleCount - stat.CulledTriangleCount
+                    : 0;
+                CompactStat(
+                    fmt::format("C{}", cascade).c_str(),
+                    fmt::format("{} · {}",
+                                FormatVisibleOverTotal(shadowDrawCount, stat.ProcessedCount),
+                                Utilities::metricFormatter(static_cast<double>(shadowTriangleCount), "")));
+            }
         }
         ImGui::EndTable();
     }
@@ -908,7 +893,7 @@ void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, VulkanGpuTi
             }
         }
 
-        ImGui::TextColored(colHeader, "%s (avg %.2fms / %.1fs)", label, totalTime, timingHistoryWindowSeconds);
+        //ImGui::TextColored(colHeader, "%s (avg %.2fms / %.1fs)", label, totalTime, timingHistoryWindowSeconds);
 
         auto TimingBarColor = [&](float milliseconds)
         {
@@ -962,19 +947,28 @@ void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, VulkanGpuTi
         }
     };
 
-    const float timingCardHeight = std::max(180.0f, ImGui::GetContentRegionAvail().y - 42.0f);
+    const float timingCardHeight = std::max(220.0f, ImGui::GetContentRegionAvail().y - 42.0f);
     BeginCard("##ProfilerTimingCard", timingCardHeight, ImGuiWindowFlags_HorizontalScrollbar);
     if (gpuTimer)
     {
         const auto gpuTimingRows = BuildTimingRows(gpuTimer->FetchAllTimes(4), gpuTimeHistory_);
-        DrawTimingSection("Pass Timing", "##GpuTimeTable", gpuTimingRows);
-
         const auto cpuTimingRows = BuildTimingRows(gpuTimer->FetchAllCpuTimes(5), cpuTimeHistory_);
-        if (!cpuTimingRows.empty())
+
+        // Build both timing data sets up front so tab switching is free of
+        // the 2s history window hitch on first switch.
+        if (ImGui::BeginTabBar("##ProfilerTimingTabs", ImGuiTabBarFlags_FittingPolicyScroll))
         {
-            ImGui::Dummy(ImVec2(0.0f, 6.0f));
-            NextUI::Theme::DrawThinSeparator(0.55f);
-            DrawTimingSection("CPU Time", "##CpuTimeTable", cpuTimingRows);
+            if (ImGui::BeginTabItem("GPU"))
+            {
+                DrawTimingSection("GPU Time", "##GpuTimeTable", gpuTimingRows);
+                ImGui::EndTabItem();
+            }
+            if (!cpuTimingRows.empty() && ImGui::BeginTabItem("CPU"))
+            {
+                DrawTimingSection("CPU Time", "##CpuTimeTable", cpuTimingRows);
+                ImGui::EndTabItem();
+            }
+            ImGui::EndTabBar();
         }
     }
     else

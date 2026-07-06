@@ -150,6 +150,15 @@ TEST_CASE("Scad evaluator resolves user modules, functions and for-loops", "[Uni
     CHECK(TotalTriangles(result) == 48);
 }
 
+TEST_CASE("Scad evaluator resolves dependent for bindings", "[Unit][Scad]")
+{
+    const EvalResult result = EvalProgram(
+        "for (i = [0:1], j = [0:i]) translate([i, j, 0]) cube([1,1,1]);\n");
+
+    CHECK(result.warningCount == 0);
+    CHECK(TotalTriangles(result) == 36); // (i=0,j=0) + (i=1,j=0..1)
+}
+
 TEST_CASE("Scad evaluator resolves local module and function definitions", "[Unit][Scad]")
 {
     const EvalResult result = EvalProgram(
@@ -442,6 +451,39 @@ TEST_CASE("Scad loader: keeps repeated leaf-module instances as separate nodes",
     CHECK(nodes[1]->GetParent() == nullptr);
 }
 
+TEST_CASE("Scad loader: reuses identical module meshes and materials", "[Unit][Scad]")
+{
+    ScopedDir dir;
+    const std::filesystem::path mainPath = dir.Write("main.scad",
+              "PANEL_BLUE = [0.2,0.4,0.8];\n"
+              "module panel() { color(PANEL_BLUE) cube([1,1,1]); }\n"
+              "translate([0,0,0]) panel();\n"
+              "translate([2,0,0]) panel();\n");
+
+    Assets::EnvironmentSetting environment;
+    std::vector<std::shared_ptr<Assets::Node>> nodes;
+    std::vector<Assets::Model> models;
+    std::vector<Assets::FMaterial> materials;
+    std::vector<Assets::LightObject> lights;
+    std::vector<Assets::AnimationTrack> tracks;
+    std::vector<Assets::Skeleton> skeletons;
+
+    REQUIRE(Assets::FScadLoader::LoadScadScene(
+        mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
+
+    REQUIRE(nodes.size() == 2);
+    REQUIRE(models.size() == 1);
+    REQUIRE(materials.size() == 1);
+
+    auto firstRender = nodes[0]->GetComponent<Runtime::RenderComponent>();
+    auto secondRender = nodes[1]->GetComponent<Runtime::RenderComponent>();
+    REQUIRE(firstRender);
+    REQUIRE(secondRender);
+    CHECK(firstRender->GetModelId() == secondRender->GetModelId());
+    CHECK(firstRender->GetMaterials()[0] == secondRender->GetMaterials()[0]);
+    CHECK(materials[0].name_ == "PANEL_BLUE");
+}
+
 TEST_CASE("Scad loader: merges direct mesh buckets under one module node", "[Unit][Scad]")
 {
     ScopedDir dir;
@@ -651,6 +693,11 @@ TEST_CASE("Scad list comprehension drives a for-loop", "[Unit][Scad]")
     const EvalResult eached = EvalProgram(
         "for (x = [each [0, 5], for (i = [1:2]) i]) translate([x,0,0]) cube([1,1,1]);\n");
     CHECK(TotalTriangles(eached) == 48); // 0,5,1,2 -> 4 cubes
+
+    const EvalResult dependent = EvalProgram(
+        "for (x = [for (i = [1:2], j = [0:i]) i + j]) translate([x,0,0]) cube([1,1,1]);\n");
+    CHECK(dependent.warningCount == 0);
+    CHECK(TotalTriangles(dependent) == 60); // i=1 has 2 j values, i=2 has 3
 }
 
 TEST_CASE("Scad echo / assert / str are accepted", "[Unit][Scad]")

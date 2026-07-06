@@ -1,0 +1,13 @@
+# MagicaLego pak manifest. Relative to project root.
+# Lines starting with '#' and blank lines are ignored.
+# Paths ending with '/' are treated as directory entries and packed recursively
+# (excluding .DS_Store). Otherwise the line must be a single file.
+# Update this list whenever you want to add/remove MagicaLego packaged assets,
+# then re-run build-magicalego-pak.sh.
+
+assets/sfx/bgm.mp3
+assets/sfx/bgm2.mp3
+assets/sfx/put.mp3
+assets/sfx/put1.wav
+assets/sfx/put2.wav
+assets/sfx/put3.wav
