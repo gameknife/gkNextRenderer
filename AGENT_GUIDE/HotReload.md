@@ -11,7 +11,7 @@
 | 链路 | 入口 | 触发 | 当前行为 |
 |---|---|---|---|
 | TypeScript -> QuickJS | `Modules/NextQuickJS/QuickJSEngine::TickHotReload()` | 安装模块且启用配置后 0.5 s 轮询 | 失败保留旧脚本 |
-| Slang -> SPIR-V -> Vulkan pipeline | `Vulkan::ShaderHotReloader` | 0.5 s 默认轮询或 Editor 手动触发 | 编译变更 `.slang`，`common` 变更触发全量重编，成功后 `VulkanBaseRenderer::ReloadShaders()` |
+| Slang -> SPIR-V -> Vulkan pipeline | `Modules::LiveCoding::ShaderHotReloader` | 安装 `LiveCoding` 模块后 0.5 s 默认轮询或 Editor 手动触发 | 编译变更 `.slang`，`common` 变更触发全量重编，成功后 `VulkanBaseRenderer::ReloadShaders()` |
 | Editor/CVar | `Hot Reload` 面板 + CVar console | 手动 | 可开关 shader reload，调整轮询间隔，手动触发 shader rebuild |
 
 移动端（Android/iOS）不启用 shader hot reload 路径。未链接并安装 `NextQuickJS` 的 program 也不启用 TypeScript 热重载。
@@ -47,8 +47,9 @@ r.shader.hot_reload_interval
 
 实现文件：
 
-- `src/Engine/Vulkan/ShaderHotReloader.hpp`
-- `src/Engine/Vulkan/ShaderHotReloader.cpp`
+- `src/Modules/LiveCoding/ShaderHotReloader.hpp`
+- `src/Modules/LiveCoding/ShaderHotReloader.cpp`
+- `src/Modules/LiveCoding/LiveCodingModule.cpp`
 - `src/Engine/Rendering/VulkanBaseRenderer::ReloadShaders()`
 
 当前设计：
@@ -56,6 +57,7 @@ r.shader.hot_reload_interval
 - source root 优先使用 `GK_NEXT_SOURCE_DIR/assets/shaders`。
 - output root 使用运行时 assets 路径：`out/build/<preset>/assets/shaders`。
 - bundled `slangc` 由 CMake 复制到 `out/build/<preset>/tools/slang`。
+- app 入口先调用 `Modules::LiveCoding::Install(engine)`，由模块向 core 注入 factory。
 - watcher 扫描 `assets/shaders/**/*.slang`。
 - 普通 shader 比对应 `.spv` 新时重编。
 - `assets/shaders/common` 下文件更新时，触发所有 source shader 重编。

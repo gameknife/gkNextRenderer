@@ -2,6 +2,7 @@
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
+#include "Modules/LiveCoding/LiveCodingModule.hpp"
 #include "Modules/NextRemote/NextRemoteModule.hpp"
 
 #include <fmt/format.h>
@@ -90,6 +91,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     Runtime::IDebugUiProvider& debugUiProvider = DevTools::DefaultDebugUiProvider();
     GApplication.reset( new NextEngine(*GOption) );
     GApplication->SetDebugUiProvider(&debugUiProvider);
+    Modules::LiveCoding::Install(*GApplication);
     if (GOption->RemoteMode)
     {
         GApplication->AddRenderFrameConsumer(Modules::NextRemote::CreateRemoteServer(*GOption));

@@ -1,32 +1,22 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
+#include "Engine/Runtime/ShaderHotReload.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
-namespace Vulkan
+namespace Modules::LiveCoding
 {
-    class ShaderHotReloader final
+    class ShaderHotReloader final : public Runtime::IShaderHotReloader
     {
     public:
-        struct FStatus
-        {
-            bool enabled = false;
-            bool initialized = false;
-            std::filesystem::path sourceRoot;
-            std::filesystem::path outputRoot;
-            std::filesystem::path slangExecutable;
-            double pollIntervalSeconds = 0.5;
-        };
+        explicit ShaderHotReloader(Vulkan::VulkanBaseRenderer& renderer);
 
-        ShaderHotReloader() = default;
-
-        void Initialize(VulkanBaseRenderer& renderer);
-        void Tick(double deltaSeconds);
-        void SetEnabled(bool enabled) { enabled_ = enabled; }
-        bool IsEnabled() const { return enabled_; }
-        void SetPollInterval(double seconds);
-        void RequestRebuildAll() { forceRebuildAll_ = true; }
-        FStatus GetStatus() const;
+        void Tick(double deltaSeconds) override;
+        void SetEnabled(bool enabled) override { enabled_ = enabled; }
+        bool IsEnabled() const override { return enabled_; }
+        void SetPollInterval(double seconds) override;
+        void RequestRebuildAll() override { forceRebuildAll_ = true; }
+        Runtime::FShaderHotReloadStatus GetStatus() const override;
 
     private:
         struct FShaderCompileRequest
@@ -40,6 +30,8 @@ namespace Vulkan
             std::vector<FShaderCompileRequest> requests;
             std::filesystem::file_time_type latestSourceTimestamp{};
         };
+
+        void Initialize(Vulkan::VulkanBaseRenderer& renderer);
 
         static std::filesystem::path ResolveSourceRoot();
         static std::filesystem::path ResolveOutputRoot();
@@ -59,7 +51,7 @@ namespace Vulkan
         void FinishGatherCompileRequests(FGatherCompileResult result);
         bool CompileShader(const FShaderCompileRequest& request) const;
 
-        VulkanBaseRenderer* renderer_ = nullptr;
+        Vulkan::VulkanBaseRenderer* renderer_ = nullptr;
         std::filesystem::path sourceRoot_;
         std::filesystem::path outputRoot_;
         std::filesystem::path slangExecutable_;

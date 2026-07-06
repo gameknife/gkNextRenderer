@@ -1,6 +1,6 @@
 #include "Engine/Common/CoreMinimal.hpp"
 
-#include "Engine/Vulkan/ShaderHotReloader.hpp"
+#include "Modules/LiveCoding/ShaderHotReloader.hpp"
 
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.h"
@@ -14,7 +14,7 @@
 #include <fstream>
 #include <regex>
 
-namespace Vulkan
+namespace Modules::LiveCoding
 {
     namespace
     {
@@ -298,7 +298,12 @@ namespace Vulkan
         }
     }
 
-    void ShaderHotReloader::Initialize(VulkanBaseRenderer& renderer)
+    ShaderHotReloader::ShaderHotReloader(Vulkan::VulkanBaseRenderer& renderer)
+    {
+        Initialize(renderer);
+    }
+
+    void ShaderHotReloader::Initialize(Vulkan::VulkanBaseRenderer& renderer)
     {
 #if ANDROID || IOS
         (void)renderer;
@@ -424,15 +429,15 @@ namespace Vulkan
         pollIntervalSeconds_ = std::max(0.1, seconds);
     }
 
-    ShaderHotReloader::FStatus ShaderHotReloader::GetStatus() const
+    Runtime::FShaderHotReloadStatus ShaderHotReloader::GetStatus() const
     {
         return {
-            .enabled = enabled_,
-            .initialized = initialized_,
-            .sourceRoot = sourceRoot_,
-            .outputRoot = outputRoot_,
-            .slangExecutable = slangExecutable_,
-            .pollIntervalSeconds = pollIntervalSeconds_,
+            .shaderHotReloadEnabled = enabled_,
+            .shaderInitialized = initialized_,
+            .shaderPollIntervalSeconds = pollIntervalSeconds_,
+            .shaderSourceRoot = sourceRoot_,
+            .shaderOutputRoot = outputRoot_,
+            .shaderCompiler = slangExecutable_,
         };
     }
 

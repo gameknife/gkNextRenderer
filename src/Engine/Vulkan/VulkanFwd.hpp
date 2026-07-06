@@ -19,7 +19,6 @@ namespace Vulkan
     class RenderImage;
     class RenderPass;
     class Sampler;
-    class ShaderHotReloader;
     class SwapChain;
     class VulkanBaseRenderer;
     class Window;

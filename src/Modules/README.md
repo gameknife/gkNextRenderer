@@ -17,8 +17,12 @@ Android 平台模块源直接并入单一 SHARED target。
 | NextRemote | `Modules/NextRemote/` |
 | NextRmlUi | `Modules/NextRmlUi/RmlUiSystem` |
 | DevTools | 控制台 UI、调试 overlay、ProfessionalUI、Gizmo 等 |
+| LiveCoding | shader hot reload watcher / `slangc` 增量编译 |
 | NextQuickJS | 可选 QuickJS runtime、TypeScript 热重载、反射与脚本绑定 |
 
 `NextQuickJS` 由应用通过 `Modules::NextQuickJS::Install()` 显式安装。目前
 `FlappyJs`、`StudioSim` 和 `gkNextEditor` 链接该模块；普通 renderer 与其他 program
 不会创建 JavaScript runtime，也不会执行默认测试脚本。
+
+`LiveCoding` 也通过 `Modules::LiveCoding::Install()` 显式安装；核心层只保留
+`IShaderHotReloader` 抽象与 factory，不再直接持有具体 `slangc` watcher 实现。

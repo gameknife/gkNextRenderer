@@ -11,6 +11,7 @@
 #include "Engine/Runtime/Command/CommandHistory.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Runtime/ScriptRuntime.hpp"
+#include "Engine/Runtime/ShaderHotReload.hpp"
 #include "Engine/Runtime/Config/ShowFlags.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
@@ -74,15 +75,7 @@ public:
         bool includeUi = false;
     };
 
-    struct FHotReloadStatus
-    {
-        bool shaderHotReloadEnabled = false;
-        bool shaderInitialized = false;
-        double shaderPollIntervalSeconds = 0.5;
-        std::filesystem::path shaderSourceRoot;
-        std::filesystem::path shaderOutputRoot;
-        std::filesystem::path shaderCompiler;
-    };
+    using FHotReloadStatus = Runtime::FShaderHotReloadStatus;
 
     // Construction and global access
     static void RegisterReflection();
@@ -213,6 +206,12 @@ public:
     }
     Runtime::IScriptRuntime* GetScriptRuntime() { return scriptRuntime_.get(); }
     const Runtime::IScriptRuntime* GetScriptRuntime() const { return scriptRuntime_.get(); }
+
+    // Optional shader hot reload implementation (installed by Modules/LiveCoding).
+    void SetShaderHotReloaderFactory(Runtime::ShaderHotReloaderFactory factory)
+    {
+        shaderHotReloaderFactory_ = std::move(factory);
+    }
 
     // Optional UI overlay (implementation in Modules/NextRmlUi); the factory is
     // installed by the application entry and instantiated with the renderer.
@@ -370,7 +369,7 @@ private:
         std::unique_ptr<NextAudio> audio;
         std::unique_ptr<NextPhysics> physics;
         std::unique_ptr<Utilities::Package::FPackageFileSystem> packageFileSystem;
-        std::unique_ptr<Vulkan::ShaderHotReloader> shaderHotReloader;
+        std::unique_ptr<Runtime::IShaderHotReloader> shaderHotReloader;
         std::unordered_map<std::string, std::shared_ptr<void>> externalServices;
     };
 
@@ -399,6 +398,7 @@ private:
     std::function<std::unique_ptr<Runtime::IUiOverlay>(NextEngine&)> uiOverlayFactory_;
     std::vector<std::unique_ptr<Runtime::IRenderFrameConsumer>> renderFrameConsumers_{};
     Runtime::ScriptRuntimeFactory scriptRuntimeFactory_;
+    Runtime::ShaderHotReloaderFactory shaderHotReloaderFactory_;
     std::unique_ptr<Runtime::IScriptRuntime> scriptRuntime_;
     FRuntimeServices services_{};
     Runtime::IDebugUiProvider* debugUiProvider_ = nullptr;

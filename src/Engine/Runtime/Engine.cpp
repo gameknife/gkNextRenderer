@@ -25,7 +25,6 @@
 #include "Engine/Vulkan/SyncAndTiming.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
-#include "Engine/Vulkan/ShaderHotReloader.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -527,12 +526,12 @@ NextEngine::FHotReloadStatus NextEngine::GetHotReloadStatus() const
     if (services_.shaderHotReloader)
     {
         const auto shaderStatus = services_.shaderHotReloader->GetStatus();
-        status.shaderHotReloadEnabled = shaderStatus.enabled;
-        status.shaderInitialized = shaderStatus.initialized;
-        status.shaderPollIntervalSeconds = shaderStatus.pollIntervalSeconds;
-        status.shaderSourceRoot = shaderStatus.sourceRoot;
-        status.shaderOutputRoot = shaderStatus.outputRoot;
-        status.shaderCompiler = shaderStatus.slangExecutable;
+        status.shaderHotReloadEnabled = shaderStatus.shaderHotReloadEnabled;
+        status.shaderInitialized = shaderStatus.shaderInitialized;
+        status.shaderPollIntervalSeconds = shaderStatus.shaderPollIntervalSeconds;
+        status.shaderSourceRoot = shaderStatus.shaderSourceRoot;
+        status.shaderOutputRoot = shaderStatus.shaderOutputRoot;
+        status.shaderCompiler = shaderStatus.shaderCompiler;
     }
 #endif
 
@@ -646,10 +645,9 @@ void NextEngine::Start()
     startupProfile.Mark("renderer type resolved");
 
 #if GK_ENABLE_HOT_RELOAD
-    if (options_->ShaderHotReload)
+    if (options_->ShaderHotReload && shaderHotReloaderFactory_)
     {
-        services_.shaderHotReloader = std::make_unique<Vulkan::ShaderHotReloader>();
-        services_.shaderHotReloader->Initialize(*renderer_);
+        services_.shaderHotReloader = shaderHotReloaderFactory_(*this);
     }
 #endif
     startupProfile.Mark("shader hot reload initialized");
