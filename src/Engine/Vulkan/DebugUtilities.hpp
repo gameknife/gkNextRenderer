@@ -184,33 +184,6 @@ namespace Vulkan
 	}
 
 	// ============================================================================
-	// ImageMemoryBarrier
-	// ============================================================================
-
-	class ImageMemoryBarrier final
-	{
-	public:
-
-		static void Insert(
-			VkCommandBuffer commandBuffer,
-			VkImage image,
-			VkImageSubresourceRange subresourceRange,
-			VkAccessFlags srcAccessMask,
-			VkAccessFlags dstAccessMask,
-			VkImageLayout oldLayout,
-			VkImageLayout newLayout);
-
-		// Full-image color barrier (single mip / single layer)
-		static void FullInsert(
-			VkCommandBuffer commandBuffer,
-			VkImage image,
-			VkAccessFlags srcAccessMask,
-			VkAccessFlags dstAccessMask,
-			VkImageLayout oldLayout,
-			VkImageLayout newLayout);
-	};
-
-	// ============================================================================
 	// DebugUtils
 	// ============================================================================
 

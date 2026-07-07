@@ -12,6 +12,7 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Rendering/Upscaler/UpscalerTypes.hpp"
 #include "Engine/Rendering/RenderView.hpp"
+#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
 #include <vector>
 #include <memory>
 #include <cassert>
@@ -116,7 +117,7 @@ namespace Vulkan
 		const class Window& Window() const { return *ctx_.window; }
 		const class DepthBuffer& DepthBuffer() const { return *frame_.depthBuffer; }
 		const std::vector<Assets::UniformBuffer>& UniformBuffers() const { return frame_.uniformBuffers; }
-		class VulkanGpuTimer* GpuTimer() const {return ctx_.gpuTimer.get();}
+		Runtime::FrameProfiler* Profiler() const { return ctx_.frameProfiler.get(); }
 		bool HasSwapChain() const { return frame_.swapChain.operator bool(); }
 		int FrameCount() const {return frame_.frameCount;}
 		uint64_t RecordingSubmitSerial() const { return frame_.recordingSubmitSerial; }
@@ -282,7 +283,7 @@ namespace Vulkan
 			std::unique_ptr<class Device> device;
 			std::unique_ptr<class CommandPool> commandPool;
 			std::unique_ptr<class CommandPool> commandPool2;
-			std::unique_ptr<class VulkanGpuTimer> gpuTimer;
+			std::unique_ptr<Runtime::FrameProfiler> frameProfiler;
 			std::unique_ptr<Assets::GlobalTexturePool> globalTexturePool;
 		};
 
@@ -485,7 +486,7 @@ namespace Vulkan
 		class CommandPool& CommandPool() { return baseRender_.CommandPool(); }
 		const class DepthBuffer& DepthBuffer() const { return baseRender_.DepthBuffer(); }
 		const std::vector<Assets::UniformBuffer>& UniformBuffers() const { return baseRender_.UniformBuffers(); }
-		class VulkanGpuTimer* GpuTimer() const {return baseRender_.GpuTimer();}
+		Runtime::FrameProfiler* Profiler() const { return baseRender_.Profiler(); }
 		
 		const Assets::Scene& GetScene() {return baseRender_.GetScene();}
 

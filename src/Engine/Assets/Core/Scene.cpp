@@ -20,7 +20,7 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.h"
 #include "Engine/Vulkan/CommandExecution.hpp"
-#include "Engine/Vulkan/SyncAndTiming.hpp"
+#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
 #include "Engine/Utilities/Exception.hpp"
 
 #include <algorithm>

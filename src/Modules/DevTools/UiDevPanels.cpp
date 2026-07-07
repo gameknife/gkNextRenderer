@@ -547,7 +547,7 @@ void FUiDevPanels::RenderConsoleOverlay()
     DrawConsoleWindow();
 }
 
-void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, VulkanGpuTimer* gpuTimer)
+void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, Runtime::FrameProfiler* profiler)
 {
     if (!Engine().GetUserSettings().ShowOverlay)
     {
@@ -791,7 +791,7 @@ void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, VulkanGpuTi
     constexpr double timingStaleSeconds = 3.0;
     const double now = ImGui::GetTime();
 
-    auto BuildTimingRows = [&](const std::vector<VulkanGpuTimer::TimerStat>& times,
+    auto BuildTimingRows = [&](const std::vector<Runtime::ProfileTimerStat>& times,
                                std::unordered_map<std::string, TimingHistory>& historyMap)
     {
         uint32_t currentDisplayOrder = 0;
@@ -949,10 +949,10 @@ void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, VulkanGpuTi
 
     const float timingCardHeight = std::max(220.0f, ImGui::GetContentRegionAvail().y - 42.0f);
     BeginCard("##ProfilerTimingCard", timingCardHeight, ImGuiWindowFlags_HorizontalScrollbar);
-    if (gpuTimer)
+    if (profiler)
     {
-        const auto gpuTimingRows = BuildTimingRows(gpuTimer->FetchAllTimes(4), gpuTimeHistory_);
-        const auto cpuTimingRows = BuildTimingRows(gpuTimer->FetchAllCpuTimes(5), cpuTimeHistory_);
+        const auto gpuTimingRows = BuildTimingRows(profiler->FetchGpuTimes(4), gpuTimeHistory_);
+        const auto cpuTimingRows = BuildTimingRows(profiler->FetchCpuTimes(5), cpuTimeHistory_);
 
         // Build both timing data sets up front so tab switching is free of
         // the 2s history window hitch on first switch.

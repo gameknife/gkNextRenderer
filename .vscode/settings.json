@@ -1,5 +1,6 @@
 {
     "VSCodeCounter.exclude": [
+        "**/.spec",
         "**/.gitignore",
         "**/.vcpkg",
         "**/out",
@@ -8,7 +9,7 @@
         "**/node_modules/**",
         "**/src/ThirdParty/**",
         "**/android/**",
-        "**/assets/shaders/glsl_legacy/**",
+        "**/assets/**",
         "**/.github/**",
         "**/src/Application/**"
     ],

@@ -15,7 +15,7 @@
 #include "Engine/Runtime/Subsystems/NextPhysics.h"
 #include "Engine/Utilities/Math.hpp"
 #include "Engine/Vulkan/Allocator.hpp"
-#include "Engine/Vulkan/SyncAndTiming.hpp"
+#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
 
 namespace
 {
@@ -112,14 +112,14 @@ namespace
         ImGui::EndTable();
     }
 
-    void DrawCpuTimers(VulkanGpuTimer* gpuTimer)
+    void DrawCpuTimers(Runtime::FrameProfiler* profiler)
     {
-        if (gpuTimer == nullptr)
+        if (profiler == nullptr)
         {
             return;
         }
 
-        const std::vector<VulkanGpuTimer::TimerStat> timers = gpuTimer->FetchAllCpuTimes(3);
+        const std::vector<Runtime::ProfileTimerStat> timers = profiler->FetchCpuTimes(3);
         if (timers.empty())
         {
             ImGui::TextColored(ImVec4(0.72f, 0.76f, 0.82f, 1.0f), "No CPU timer samples yet");
@@ -175,7 +175,7 @@ namespace
     }
 }
 
-void Runtime::DrawProfileDebugOverlay(NextEngine& engine, const NextUI::Statistics& statistics, VulkanGpuTimer* gpuTimer,
+void Runtime::DrawProfileDebugOverlay(NextEngine& engine, const NextUI::Statistics& statistics, Runtime::FrameProfiler* profiler,
                                       float topOffset)
 {
     Assets::Scene& scene = engine.GetScene();
@@ -272,7 +272,7 @@ void Runtime::DrawProfileDebugOverlay(NextEngine& engine, const NextUI::Statisti
         }
 
         DrawSectionHeader("CPU Timers");
-        DrawCpuTimers(gpuTimer);
+        DrawCpuTimers(profiler);
 
         ImGui::PopStyleVar();
     }

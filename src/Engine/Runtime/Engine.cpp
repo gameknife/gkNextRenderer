@@ -22,7 +22,7 @@
 #include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/Instance.hpp"
-#include "Engine/Vulkan/SyncAndTiming.hpp"
+#include "Engine/Runtime/Profiling/FrameProfiler.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
 
@@ -807,9 +807,9 @@ bool NextEngine::Tick(bool forcingDelta)
 {
     PERFORMANCEAPI_INSTRUMENT_FUNCTION();
 
-    if (GpuTimer())
+    if (Profiler())
     {
-        GpuTimer()->CpuFrameBegin();
+        Profiler()->BeginCpuFrame();
     }
 
     {
@@ -994,9 +994,9 @@ bool NextEngine::Tick(bool forcingDelta)
         }
     }
 
-    if (GpuTimer())
+    if (Profiler())
     {
-        GpuTimer()->CpuFrameEnd();
+        Profiler()->EndCpuFrame();
     }
     return false;
 }
@@ -1413,14 +1413,14 @@ void NextEngine::OnRendererAfterSubmit()
         if (debugUiProvider_ && config_.showFlags.DebugProfileOverlay)
         {
             SCOPED_CPU_TIMER("profile debug ui");
-            debugUiProvider_->DrawProfileOverlay(*this, stats, renderer_->GpuTimer(),
+            debugUiProvider_->DrawProfileOverlay(*this, stats, renderer_->Profiler(),
                                                  gameInstance_->GetGraphicsDebugPanelTopOffset());
         }
     }
     if (!uiHandled)
     {
         SCOPED_CPU_TIMER("overlay ui");
-        userInterface_->Render(stats, renderer_->GpuTimer(), scene_.get(), config_.showFlags.DebugProfileOverlay);
+        userInterface_->Render(stats, renderer_->Profiler(), scene_.get(), config_.showFlags.DebugProfileOverlay);
     }
     if (debugUiProvider_)
     {

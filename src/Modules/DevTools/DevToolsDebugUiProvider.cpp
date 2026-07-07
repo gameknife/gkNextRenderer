@@ -28,12 +28,12 @@ namespace DevTools
             }
 
             void DrawUiPanels(NextEngine& engine, const NextUI::Statistics& statistics,
-                              VulkanGpuTimer* gpuTimer, bool suppressStatsOverlay) override
+                              Runtime::FrameProfiler* profiler, bool suppressStatsOverlay) override
             {
                 FUiDevPanels& panels = FUiDevPanels::Get();
                 if (!suppressStatsOverlay)
                 {
-                    panels.DrawOverlay(statistics, gpuTimer);
+                    panels.DrawOverlay(statistics, profiler);
                 }
                 panels.RenderConsoleOverlay();
             }
@@ -59,9 +59,9 @@ namespace DevTools
             }
 
             void DrawProfileOverlay(NextEngine& engine, const NextUI::Statistics& statistics,
-                                    VulkanGpuTimer* gpuTimer, float topOffset) override
+                                    Runtime::FrameProfiler* profiler, float topOffset) override
             {
-                Runtime::DrawProfileDebugOverlay(engine, statistics, gpuTimer, topOffset);
+                Runtime::DrawProfileDebugOverlay(engine, statistics, profiler, topOffset);
             }
 
             bool HandleRendererShortcut(SDL_Keycode key, bool pressed, bool panelVisible, NextEngine& engine) override

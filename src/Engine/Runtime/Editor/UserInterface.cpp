@@ -933,12 +933,12 @@ void UserInterface::PreRender()
     ImGui::NewFrame();
 }
 
-void UserInterface::Render(const Statistics& statistics, VulkanGpuTimer* gpuTimer, Assets::Scene* scene,
+void UserInterface::Render(const Statistics& statistics, Runtime::FrameProfiler* profiler, Assets::Scene* scene,
                            bool suppressStatisticsOverlay)
 {
     if (Runtime::IDebugUiProvider* provider = GetEngine().GetDebugUiProvider())
     {
-        provider->DrawUiPanels(GetEngine(), statistics, gpuTimer, suppressStatisticsOverlay);
+        provider->DrawUiPanels(GetEngine(), statistics, profiler, suppressStatisticsOverlay);
     }
 }
 

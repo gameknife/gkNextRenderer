@@ -94,7 +94,7 @@ public:
 
     // Core runtime objects
     Vulkan::VulkanBaseRenderer& GetRenderer() { return *renderer_; }
-    VulkanGpuTimer* GpuTimer() const { return renderer_ ? renderer_->GpuTimer() : nullptr; }
+    Runtime::FrameProfiler* Profiler() const { return renderer_ ? renderer_->Profiler() : nullptr; }
     Assets::Scene& GetScene() { return *scene_; }
     Vulkan::Window& GetWindow() const { return *window_; }
     NextGameInstanceBase* GetGameInstance() { return gameInstance_.get(); }

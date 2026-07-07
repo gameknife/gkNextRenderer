@@ -1,4 +1,5 @@
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Vulkan/GpuQueryTimer.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/CommandExecution.hpp"
 #include "Engine/Vulkan/RayTracing/DeviceProcedures.hpp"
@@ -317,7 +318,7 @@ namespace Vulkan
         logicRenderers_.swapChainCreatedTypes.clear();
         renderViews_.reset();
         upscaler_.reset();
-        ctx_.gpuTimer.reset();
+        ctx_.frameProfiler.reset();
         ctx_.globalTexturePool.reset();
         ctx_.commandPool.reset();
         ctx_.commandPool2.reset();
@@ -513,7 +514,7 @@ namespace Vulkan
             upscaler_->Shutdown();
         }
         StreamlineWrapper::Shutdown();
-        ctx_.gpuTimer.reset();
+        ctx_.frameProfiler.reset();
         ctx_.globalTexturePool.reset();
     }
 
@@ -812,7 +813,8 @@ namespace Vulkan
                                        &storage16BitFeatures));
         ctx_.commandPool.reset(new class CommandPool(*ctx_.device, ctx_.device->GraphicsFamilyIndex(), 0, true));
         ctx_.commandPool2.reset(new class CommandPool(*ctx_.device, ctx_.device->TransferFamilyIndex(), 1, true));
-        ctx_.gpuTimer.reset(new VulkanGpuTimer(*ctx_.device, 200, ctx_.device->DeviceProperties()));
+        ctx_.frameProfiler = std::make_unique<Runtime::FrameProfiler>(
+            std::make_unique<Vulkan::GpuQueryTimer>(*ctx_.device, 200, ctx_.device->DeviceProperties()));
     }
 
     void VulkanBaseRenderer::OnDeviceSet()
@@ -1640,7 +1642,7 @@ namespace Vulkan
 
         {
             SCOPED_CPU_TIMER("hwquery");
-            ctx_.gpuTimer->FrameEnd((*frame_.commandBuffers)[frame_.currentImageIndex]);
+            ctx_.frameProfiler->EndGpuFrame((*frame_.commandBuffers)[frame_.currentImageIndex]);
         }
 
         // next frame synchronization objects
@@ -1716,7 +1718,7 @@ namespace Vulkan
         }
 
         const auto commandBuffer = frame_.commandBuffers->Begin(frame_.currentFrame);
-        ctx_.gpuTimer->Reset(commandBuffer);
+        ctx_.frameProfiler->BeginGpuFrame(commandBuffer);
 
         {
             SCOPED_GPU_TIMER("[gpu]");

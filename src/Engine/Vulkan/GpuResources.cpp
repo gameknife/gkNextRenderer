@@ -4,6 +4,7 @@
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Vulkan/RayTracing/DeviceProcedures.hpp"
+#include "Engine/Vulkan/SyncAndTiming.hpp"
 
 #include <array>
 

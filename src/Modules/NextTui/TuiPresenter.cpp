@@ -9,6 +9,7 @@
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
+#include "Engine/Vulkan/SyncAndTiming.hpp"
 #include "Modules/NextTui/NextTuiModule.hpp"
 
 #include <SDL3/SDL_events.h>

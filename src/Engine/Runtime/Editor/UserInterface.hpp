@@ -53,7 +53,7 @@ public:
 	~UserInterface();
 
 	void PreRender();
-	void Render(const Statistics& statistics, VulkanGpuTimer* gpuTimer, Assets::Scene* scene,
+	void Render(const Statistics& statistics, Runtime::FrameProfiler* profiler, Assets::Scene* scene,
 	            bool suppressStatisticsOverlay = false);
 	void PrepareDrawData();
 	void RenderPreparedDrawData(VkCommandBuffer commandBuffer, const Vulkan::SwapChain& swapChain, uint32_t imageIdx,

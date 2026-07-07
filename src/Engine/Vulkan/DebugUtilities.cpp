@@ -8,7 +8,8 @@
 #	include <dxgi1_2.h>
 #endif
 
-namespace Vulkan {
+namespace Vulkan
+{
 
 // ============================================================================
 // Core Vulkan Utilities
@@ -18,7 +19,7 @@ void Check(const VkResult result, const char* const operation)
 {
 	if (result != VK_SUCCESS)
 	{
-		Throw(std::runtime_error(std::string("failed to ") + operation + " (" + ToString(result) + ")"));
+		Throw(std::runtime_error(fmt::format("failed to {} ({})", operation, ToString(result))));
 	}
 }
 
@@ -26,48 +27,26 @@ const char* ToString(const VkResult result)
 {
 	switch (result)
 	{
-#define STR(r) case VK_ ##r: return #r
-		STR(SUCCESS);
-		STR(NOT_READY);
-		STR(TIMEOUT);
-		STR(EVENT_SET);
-		STR(EVENT_RESET);
-		STR(INCOMPLETE);
-		STR(ERROR_OUT_OF_HOST_MEMORY);
-		STR(ERROR_OUT_OF_DEVICE_MEMORY);
-		STR(ERROR_INITIALIZATION_FAILED);
-		STR(ERROR_DEVICE_LOST);
-		STR(ERROR_MEMORY_MAP_FAILED);
-		STR(ERROR_LAYER_NOT_PRESENT);
-		STR(ERROR_EXTENSION_NOT_PRESENT);
-		STR(ERROR_FEATURE_NOT_PRESENT);
-		STR(ERROR_INCOMPATIBLE_DRIVER);
-		STR(ERROR_TOO_MANY_OBJECTS);
-		STR(ERROR_FORMAT_NOT_SUPPORTED);
-		STR(ERROR_FRAGMENTED_POOL);
-		STR(ERROR_UNKNOWN);
-		STR(ERROR_OUT_OF_POOL_MEMORY);
-		STR(ERROR_INVALID_EXTERNAL_HANDLE);
-		STR(ERROR_FRAGMENTATION);
-		STR(ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS);
-		STR(ERROR_SURFACE_LOST_KHR);
-		STR(ERROR_NATIVE_WINDOW_IN_USE_KHR);
-		STR(SUBOPTIMAL_KHR);
-		STR(ERROR_OUT_OF_DATE_KHR);
-		STR(ERROR_INCOMPATIBLE_DISPLAY_KHR);
-		STR(ERROR_VALIDATION_FAILED_EXT);
-		STR(ERROR_INVALID_SHADER_NV);
-		STR(ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT);
-		STR(ERROR_NOT_PERMITTED_EXT);
-		STR(ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT);
-		STR(THREAD_IDLE_KHR);
-		STR(THREAD_DONE_KHR);
-		STR(OPERATION_DEFERRED_KHR);
-		STR(OPERATION_NOT_DEFERRED_KHR);
-		STR(PIPELINE_COMPILE_REQUIRED_EXT);
-#undef STR
-	default:
-		return "UNKNOWN_ERROR";
+		case VK_SUCCESS: return "SUCCESS";
+		case VK_NOT_READY: return "NOT_READY";
+		case VK_TIMEOUT: return "TIMEOUT";
+		case VK_SUBOPTIMAL_KHR: return "SUBOPTIMAL_KHR";
+		case VK_ERROR_OUT_OF_DATE_KHR: return "ERROR_OUT_OF_DATE_KHR";
+		case VK_ERROR_OUT_OF_HOST_MEMORY: return "ERROR_OUT_OF_HOST_MEMORY";
+		case VK_ERROR_OUT_OF_DEVICE_MEMORY: return "ERROR_OUT_OF_DEVICE_MEMORY";
+		case VK_ERROR_DEVICE_LOST: return "ERROR_DEVICE_LOST";
+		case VK_ERROR_LAYER_NOT_PRESENT: return "ERROR_LAYER_NOT_PRESENT";
+		case VK_ERROR_EXTENSION_NOT_PRESENT: return "ERROR_EXTENSION_NOT_PRESENT";
+		case VK_ERROR_FORMAT_NOT_SUPPORTED: return "ERROR_FORMAT_NOT_SUPPORTED";
+		case VK_ERROR_SURFACE_LOST_KHR: return "ERROR_SURFACE_LOST_KHR";
+		case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR: return "ERROR_NATIVE_WINDOW_IN_USE_KHR";
+		case VK_ERROR_VALIDATION_FAILED_EXT: return "ERROR_VALIDATION_FAILED_EXT";
+		default:
+		{
+			static thread_local char buf[32];
+			std::snprintf(buf, sizeof(buf), "VkResult(%d)", static_cast<int>(result));
+			return buf;
+		}
 	}
 }
 
@@ -79,18 +58,12 @@ const char* Strings::DeviceType(const VkPhysicalDeviceType deviceType)
 {
 	switch (deviceType)
 	{
-	case VK_PHYSICAL_DEVICE_TYPE_OTHER:
-		return "Other";
-	case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
-		return "Integrated GPU";
-	case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
-		return "Discrete GPU";
-	case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
-		return "Virtual GPU";
-	case VK_PHYSICAL_DEVICE_TYPE_CPU:
-		return "CPU";
-	default:
-		return "UnknownDeviceType";
+		case VK_PHYSICAL_DEVICE_TYPE_OTHER: return "Other";
+		case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return "Integrated GPU";
+		case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: return "Discrete GPU";
+		case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: return "Virtual GPU";
+		case VK_PHYSICAL_DEVICE_TYPE_CPU: return "CPU";
+		default: return "UnknownDeviceType";
 	}
 }
 
@@ -98,179 +71,106 @@ const char* Strings::VendorId(const uint32_t vendorId)
 {
 	switch (vendorId)
 	{
-	case 0x1002:
-		return "AMD";
-	case 0x1010:
-		return "ImgTec";
-	case 0x10DE:
-		return "NVIDIA";
-	case 0x13B5:
-		return "ARM";
-	case 0x5143:
-		return "Qualcomm";
-	case 0x8086:
-		return "INTEL";
-	default:
-		return "UnknownVendor";
+		case 0x1002: return "AMD";
+		case 0x1010: return "ImgTec";
+		case 0x10DE: return "NVIDIA";
+		case 0x13B5: return "ARM";
+		case 0x5143: return "Qualcomm";
+		case 0x8086: return "INTEL";
+		default: return "UnknownVendor";
 	}
 }
 
 // ============================================================================
-// DebugUtils
-// ============================================================================
-
-DebugUtils::DebugUtils(VkInstance instance)
-	: vkSetDebugUtilsObjectNameEXT_(reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT")))
-	, vkCmdBeginDebugUtilsLabelEXT_(reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkCmdBeginDebugUtilsLabelEXT")))
-	, vkCmdEndDebugUtilsLabelEXT_(reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkCmdEndDebugUtilsLabelEXT")))
-{
-#if !ANDROID
-	if (vkSetDebugUtilsObjectNameEXT_ == nullptr)
-	{
-		Throw(std::runtime_error("failed to get address of 'vkSetDebugUtilsObjectNameEXT'"));
-	}
-	if (vkCmdBeginDebugUtilsLabelEXT_ == nullptr)
-	{
-		Throw(std::runtime_error("failed to get address of 'vkCmdBeginDebugUtilsLabelEXT'"));
-	}
-	if (vkCmdEndDebugUtilsLabelEXT_ == nullptr)
-	{
-		Throw(std::runtime_error("failed to get address of 'vkCmdEndDebugUtilsLabelEXT'"));
-	}
-#endif
-}
-
-// ============================================================================
-// DebugUtilsMessenger
+// DebugUtilsMessenger (anonymous helpers)
 // ============================================================================
 
 namespace
 {
 
-	const char* ObjectTypeToString(const VkObjectType objectType)
+const char* ObjectTypeToString(const VkObjectType objectType)
+{
+	switch (objectType)
 	{
-		switch (objectType)
-		{
-#define STR(e) case VK_OBJECT_TYPE_ ## e: return # e
-		STR(UNKNOWN);
-		STR(INSTANCE);
-		STR(PHYSICAL_DEVICE);
-		STR(DEVICE);
-		STR(QUEUE);
-		STR(SEMAPHORE);
-		STR(COMMAND_BUFFER);
-		STR(FENCE);
-		STR(DEVICE_MEMORY);
-		STR(BUFFER);
-		STR(IMAGE);
-		STR(EVENT);
-		STR(QUERY_POOL);
-		STR(BUFFER_VIEW);
-		STR(IMAGE_VIEW);
-		STR(SHADER_MODULE);
-		STR(PIPELINE_CACHE);
-		STR(PIPELINE_LAYOUT);
-		STR(RENDER_PASS);
-		STR(PIPELINE);
-		STR(DESCRIPTOR_SET_LAYOUT);
-		STR(SAMPLER);
-		STR(DESCRIPTOR_POOL);
-		STR(DESCRIPTOR_SET);
-		STR(FRAMEBUFFER);
-		STR(COMMAND_POOL);
-		STR(SAMPLER_YCBCR_CONVERSION);
-		STR(DESCRIPTOR_UPDATE_TEMPLATE);
-		STR(SURFACE_KHR);
-		STR(SWAPCHAIN_KHR);
-		STR(DISPLAY_KHR);
-		STR(DISPLAY_MODE_KHR);
-		STR(DEBUG_REPORT_CALLBACK_EXT);
-		STR(DEBUG_UTILS_MESSENGER_EXT);
-		STR(ACCELERATION_STRUCTURE_KHR);
-		STR(VALIDATION_CACHE_EXT);
-		STR(PERFORMANCE_CONFIGURATION_INTEL);
-		STR(DEFERRED_OPERATION_KHR);
-		STR(INDIRECT_COMMANDS_LAYOUT_NV);
-#undef STR
+		case VK_OBJECT_TYPE_INSTANCE: return "Instance";
+		case VK_OBJECT_TYPE_PHYSICAL_DEVICE: return "PhysicalDevice";
+		case VK_OBJECT_TYPE_DEVICE: return "Device";
+		case VK_OBJECT_TYPE_QUEUE: return "Queue";
+		case VK_OBJECT_TYPE_SEMAPHORE: return "Semaphore";
+		case VK_OBJECT_TYPE_COMMAND_BUFFER: return "CommandBuffer";
+		case VK_OBJECT_TYPE_COMMAND_POOL: return "CommandPool";
+		case VK_OBJECT_TYPE_FENCE: return "Fence";
+		case VK_OBJECT_TYPE_DEVICE_MEMORY: return "DeviceMemory";
+		case VK_OBJECT_TYPE_BUFFER: return "Buffer";
+		case VK_OBJECT_TYPE_IMAGE: return "Image";
+		case VK_OBJECT_TYPE_IMAGE_VIEW: return "ImageView";
+		case VK_OBJECT_TYPE_SHADER_MODULE: return "ShaderModule";
+		case VK_OBJECT_TYPE_PIPELINE_LAYOUT: return "PipelineLayout";
+		case VK_OBJECT_TYPE_RENDER_PASS: return "RenderPass";
+		case VK_OBJECT_TYPE_PIPELINE: return "Pipeline";
+		case VK_OBJECT_TYPE_DESCRIPTOR_SET: return "DescriptorSet";
+		case VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT: return "DescriptorSetLayout";
+		case VK_OBJECT_TYPE_SAMPLER: return "Sampler";
+		case VK_OBJECT_TYPE_FRAMEBUFFER: return "Framebuffer";
+		case VK_OBJECT_TYPE_SURFACE_KHR: return "SurfaceKHR";
+		case VK_OBJECT_TYPE_SWAPCHAIN_KHR: return "SwapchainKHR";
+		case VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR: return "AccelerationStructureKHR";
+		case VK_OBJECT_TYPE_DEBUG_UTILS_MESSENGER_EXT: return "DebugUtilsMessengerEXT";
 		default: return "unknown";
+	}
+}
+
+const char* SeverityTag(const VkDebugUtilsMessageSeverityFlagBitsEXT severity)
+{
+	switch (severity)
+	{
+		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT: return "VERBOSE";
+		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT: return "INFO";
+		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT: return "WARNING";
+		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT: return "ERROR";
+		default: return "UNKNOWN";
+	}
+}
+
+const char* MessageTypeTag(const VkDebugUtilsMessageTypeFlagsEXT messageType)
+{
+	switch (messageType)
+	{
+		case VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT: return "GENERAL";
+		case VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT: return "VALIDATION";
+		case VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT: return "PERFORMANCE";
+		default: return "UNKNOWN";
+	}
+}
+
+VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
+	const VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+	const VkDebugUtilsMessageTypeFlagsEXT messageType,
+	const VkDebugUtilsMessengerCallbackDataEXT* const pCallbackData,
+	void* const pUserData)
+{
+	(void)pUserData;
+
+	// Build the full message once. Attach object list only when severity is higher than INFO.
+	std::string message = fmt::format("[Vulkan][{}][{}] {}",
+		SeverityTag(messageSeverity), MessageTypeTag(messageType), pCallbackData->pMessage);
+
+	if (pCallbackData->objectCount > 0 && messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
+	{
+		message += fmt::format("\n\n  Objects ({}):", pCallbackData->objectCount);
+		for (uint32_t i = 0; i < pCallbackData->objectCount; ++i)
+		{
+			const auto& object = pCallbackData->pObjects[i];
+			message += fmt::format("\n  - Object: Type: {}, Handle: {:p}, Name: '{}'",
+				ObjectTypeToString(object.objectType),
+				reinterpret_cast<const void*>(object.objectHandle),
+				object.pObjectName ? object.pObjectName : "");
 		}
 	}
 
-	VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
-		const VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-		const VkDebugUtilsMessageTypeFlagsEXT messageType,
-		const VkDebugUtilsMessengerCallbackDataEXT* const pCallbackData,
-		void* const pUserData)
+	// Route the complete message by severity.
+	switch (messageSeverity)
 	{
-		(void)pUserData;
-
-		// Build complete message in one go
-		std::string message;
-
-		// Add severity prefix
-		switch (messageSeverity)
-		{
-		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-			message += "VERBOSE: ";
-			break;
-		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-			message += "INFO: ";
-			break;
-		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-			message += "WARNING: ";
-			break;
-		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-			message += "ERROR: ";
-			break;
-		default:
-			message += "UNKNOWN: ";
-		}
-
-		// Add message type
-		switch (messageType)
-		{
-		case VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT:
-			message += "GENERAL: ";
-			break;
-		case VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT:
-			message += "VALIDATION: ";
-			break;
-		case VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT:
-			message += "PERFORMANCE: ";
-			break;
-		default:
-			message += "UNKNOWN: ";
-		}
-
-		// Add main message
-		message += pCallbackData->pMessage;
-
-		// Add object information if present and severity is high enough
-		if (pCallbackData->objectCount > 0 && messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
-		{
-			message += "\n\n  Objects (";
-			message += std::to_string(pCallbackData->objectCount);
-			message += "):";
-
-			for (uint32_t i = 0; i != pCallbackData->objectCount; ++i)
-			{
-				const auto object = pCallbackData->pObjects[i];
-				message += "\n  - Object: Type: ";
-				message += ObjectTypeToString(object.objectType);
-				message += ", Handle: ";
-				// Convert handle to hex string for better readability
-				char handleStr[20];
-				snprintf(handleStr, sizeof(handleStr), "%p", reinterpret_cast<void*>(object.objectHandle));
-				message += handleStr;
-				message += ", Name: '";
-				message += (object.pObjectName ? object.pObjectName : "");
-				message += "'";
-			}
-		}
-
-		// Log the complete message based on severity
-		switch (messageSeverity)
-		{
 		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
 			SPDLOG_TRACE("{}", message);
 			break;
@@ -285,32 +185,78 @@ namespace
 			break;
 		default:
 			SPDLOG_WARN("{}", message);
-		}
-
-
-		return VK_FALSE;
 	}
 
-	VkResult CreateDebugUtilsMessengerExt(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pCallback)
-	{
-		const auto func = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
-		return func != nullptr
-			? func(instance, pCreateInfo, pAllocator, pCallback)
-			: VK_ERROR_EXTENSION_NOT_PRESENT;
-	}
+	return VK_FALSE;
+}
 
-	void DestroyDebugUtilsMessengerExt(VkInstance instance, VkDebugUtilsMessengerEXT callback, const VkAllocationCallbacks* pAllocator)
+VkResult CreateDebugUtilsMessengerExt(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
+	const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pCallback)
+{
+	const auto func = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
+	return func != nullptr ? func(instance, pCreateInfo, pAllocator, pCallback) : VK_ERROR_EXTENSION_NOT_PRESENT;
+}
+
+void DestroyDebugUtilsMessengerExt(VkInstance instance, VkDebugUtilsMessengerEXT callback, const VkAllocationCallbacks* pAllocator)
+{
+	if (const auto func = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT")))
 	{
-		const auto func = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));
-		if (func != nullptr) {
-			func(instance, callback, pAllocator);
-		}
+		func(instance, callback, pAllocator);
 	}
 }
 
-DebugUtilsMessenger::DebugUtilsMessenger(const Instance& instance, VkDebugUtilsMessageSeverityFlagBitsEXT threshold) :
-	instance_(instance),
-	threshold_(threshold)
+} // namespace
+
+// ============================================================================
+// DebugUtils
+// ============================================================================
+
+DebugUtils::DebugUtils(VkInstance instance)
+	: vkSetDebugUtilsObjectNameEXT_(reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT")))
+	, vkCmdBeginDebugUtilsLabelEXT_(reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkCmdBeginDebugUtilsLabelEXT")))
+	, vkCmdEndDebugUtilsLabelEXT_(reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(vkGetInstanceProcAddr(instance, "vkCmdEndDebugUtilsLabelEXT")))
+{
+#if !ANDROID
+	if (vkSetDebugUtilsObjectNameEXT_ == nullptr || vkCmdBeginDebugUtilsLabelEXT_ == nullptr || vkCmdEndDebugUtilsLabelEXT_ == nullptr)
+	{
+		Throw(std::runtime_error("failed to load VK_EXT_debug_utils entry points"));
+	}
+#endif
+}
+
+void DebugUtils::BeginMarker(VkCommandBuffer commandBuffer, const char* name) const
+{
+#if !ANDROID
+	VkDebugUtilsLabelEXT label
+	{
+		.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+		.pNext = nullptr,
+		.pLabelName = name,
+		.color = {0.0f, 0.0f, 0.0f, 0.0f}
+	};
+	vkCmdBeginDebugUtilsLabelEXT_(commandBuffer, &label);
+#else
+	(void)commandBuffer;
+	(void)name;
+#endif
+}
+
+void DebugUtils::EndMarker(VkCommandBuffer commandBuffer) const
+{
+#if !ANDROID
+	vkCmdEndDebugUtilsLabelEXT_(commandBuffer);
+#else
+	(void)commandBuffer;
+#endif
+}
+
+// ============================================================================
+// DebugUtilsMessenger
+// ============================================================================
+
+DebugUtilsMessenger::DebugUtilsMessenger(const Instance& instance, VkDebugUtilsMessageSeverityFlagBitsEXT threshold)
+	: instance_(instance)
+	, threshold_(threshold)
 {
 	if (instance.ValidationLayers().empty())
 	{
@@ -318,28 +264,36 @@ DebugUtilsMessenger::DebugUtilsMessenger(const Instance& instance, VkDebugUtilsM
 	}
 
 	VkDebugUtilsMessageSeverityFlagsEXT severity = 0;
-
 	switch (threshold)
 	{
-	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-		severity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
-	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-		severity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
-	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-		severity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
-	case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-		severity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-		break;
-	default:
-		Throw(std::invalid_argument("invalid threshold"));
+		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
+			severity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
+			[[fallthrough]];
+		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
+			severity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
+			[[fallthrough]];
+		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+			severity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+			[[fallthrough]];
+		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+			severity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+			break;
+		default:
+			Throw(std::invalid_argument("invalid threshold"));
 	}
 
-	VkDebugUtilsMessengerCreateInfoEXT createInfo = {};
-	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-	createInfo.messageSeverity = severity;
-	createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-	createInfo.pfnUserCallback = VulkanDebugCallback;
-	createInfo.pUserData = nullptr;
+	VkDebugUtilsMessengerCreateInfoEXT createInfo
+	{
+		.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+		.pNext = nullptr,
+		.flags = 0,
+		.messageSeverity = severity,
+		.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
+			| VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
+			| VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+		.pfnUserCallback = VulkanDebugCallback,
+		.pUserData = nullptr
+	};
 
 	Check(CreateDebugUtilsMessengerExt(instance_.Handle(), &createInfo, nullptr, &messenger_),
 		"set up Vulkan debug callback");
@@ -354,65 +308,4 @@ DebugUtilsMessenger::~DebugUtilsMessenger()
 	}
 }
 
-	void ImageMemoryBarrier::Insert(
-		const VkCommandBuffer commandBuffer,
-		const VkImage image,
-		const VkImageSubresourceRange subresourceRange,
-		const VkAccessFlags srcAccessMask,
-		const VkAccessFlags dstAccessMask,
-		const VkImageLayout oldLayout,
-		const VkImageLayout newLayout)
-	{
-		VkImageMemoryBarrier barrier;
-		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		barrier.pNext = nullptr;
-		barrier.srcAccessMask = srcAccessMask;
-		barrier.dstAccessMask = dstAccessMask;
-		barrier.oldLayout = oldLayout;
-		barrier.newLayout = newLayout;
-		barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		barrier.image = image;
-		barrier.subresourceRange = subresourceRange;
-
-		vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-			VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, 1,
-			&barrier);
-	}
-
-	void ImageMemoryBarrier::FullInsert(
-		const VkCommandBuffer commandBuffer,
-		const VkImage image,
-		const VkAccessFlags srcAccessMask,
-		const VkAccessFlags dstAccessMask,
-		const VkImageLayout oldLayout,
-		const VkImageLayout newLayout)
-	{
-		VkImageSubresourceRange subresourceRange = {};
-		subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		subresourceRange.baseMipLevel = 0;
-		subresourceRange.levelCount = 1;
-		subresourceRange.baseArrayLayer = 0;
-		subresourceRange.layerCount = 1;
-		Insert(commandBuffer, image, subresourceRange, srcAccessMask, dstAccessMask, oldLayout, newLayout);
-	}
-
-	void DebugUtils::BeginMarker(VkCommandBuffer commandBuffer, const char* name) const
-	{
-#if !ANDROID
-		VkDebugUtilsLabelEXT label = {};
-		label.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
-		label.pLabelName = name;
-
-		vkCmdBeginDebugUtilsLabelEXT_(commandBuffer, &label);
-#endif
-	}
-
-	void DebugUtils::EndMarker(VkCommandBuffer commandBuffer) const
-	{
-#if !ANDROID
-		vkCmdEndDebugUtilsLabelEXT_(commandBuffer);
-#endif
-	}
-
-}
+} // namespace Vulkan

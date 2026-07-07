@@ -169,9 +169,9 @@ bool BenchMarker::OnTick(double nowInSeconds, Vulkan::VulkanBaseRenderer* render
     frameTimeTotalMilliseconds_ += frameSeconds * 1000.0;
     benchmarkTotalFrames_++;
 
-    if (renderer != nullptr && renderer->GpuTimer() != nullptr)
+    if (renderer != nullptr && renderer->Profiler() != nullptr)
     {
-        const float gpuMilliseconds = renderer->GpuTimer()->GetGpuTime("[gpu]");
+        const float gpuMilliseconds = renderer->Profiler()->GetGpuTime("[gpu]");
         if (gpuMilliseconds > 0.0f)
         {
             gpuTimeTotalMilliseconds_ += gpuMilliseconds;

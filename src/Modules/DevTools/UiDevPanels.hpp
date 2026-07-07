@@ -11,7 +11,6 @@
 #include <vector>
 
 class NextEngine;
-class VulkanGpuTimer;
 union SDL_Event;
 
 namespace NextUI
@@ -40,7 +39,7 @@ namespace DevTools
         void RenderConsoleOverlay();
 
         // Statistics overlay
-        void DrawOverlay(const NextUI::Statistics& statistics, VulkanGpuTimer* gpuTimer);
+        void DrawOverlay(const NextUI::Statistics& statistics, Runtime::FrameProfiler* profiler);
 
         // Grave-key console toggle; returns true when the event was consumed.
         bool HandleEvent(const SDL_Event& event);

@@ -3,6 +3,7 @@
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/Instance.hpp"
+#include "Engine/Vulkan/SyncAndTiming.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
 #include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
 #include "Engine/Utilities/Exception.hpp"
