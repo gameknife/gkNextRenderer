@@ -2625,8 +2625,25 @@
         folder.hidden = visibleCount === 0;
         if (query && visibleCount > 0) folder.open = true;
       });
-    };
+    }
     input.addEventListener('input', applyFilter);
+  }
+  function initLocTables(root) {
+    (root || document).querySelectorAll('[data-loc-table]').forEach(table => {
+      table.querySelectorAll('[data-loc-folder-toggle]:not([data-loc-ready])').forEach(button => {
+        button.dataset.locReady = '1';
+        button.addEventListener('click', () => {
+          const parent = button.dataset.locFolderToggle || '';
+          const expanded = button.getAttribute('aria-expanded') === 'true';
+          table.querySelectorAll('[data-loc-file-row]').forEach(row => {
+            if ((row.dataset.locParent || '') === parent) {
+              row.hidden = expanded;
+            }
+          });
+          button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+        });
+      });
+    });
   }
   const displaySettingDefaults = {
     uiFontSize: 14.5,
@@ -3042,6 +3059,7 @@
     restoreGitSelection(root);
     initDocsFolders(root);
     initDocsSearch(root);
+    initLocTables(root);
     initDisplaySettings(root);
     initDocsSourcePanel(root);
     initTargetGraph(root);
@@ -3052,6 +3070,7 @@
     renderMarkdown(document);
     initDocsFolders(document);
     initDocsSearch(document);
+    initLocTables(document);
     initDisplaySettings(document);
     initDocsSourcePanel(document);
     initTargetGraph(document);

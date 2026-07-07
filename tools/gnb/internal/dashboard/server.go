@@ -340,6 +340,13 @@ func templateFuncs() template.FuncMap {
 			}
 			return fmt.Sprintf("%.1f", float64(lines)*100.0/float64(total))
 		},
+		"locIndent": func(depth int, isFile bool) int {
+			indent := 14 + depth*18
+			if isFile {
+				indent += 4
+			}
+			return indent
+		},
 		"intCommas": func(n int) string {
 			s := fmt.Sprintf("%d", n)
 			if n < 1000 {

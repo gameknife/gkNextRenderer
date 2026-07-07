@@ -44,6 +44,28 @@ func TestReportSnapshotExpandsOnlyLargeNonApplicationSubs(t *testing.T) {
 	}
 }
 
+func TestReportSnapshotIncludesTreeToFileLevel(t *testing.T) {
+	report := newReport()
+	report.add(leafKey{category: "Engine", sub: "Runtime", leaf: "Scripting"}, 42)
+	report.addPath("Engine/Runtime/Scripting/ScriptContext.cpp", 42)
+
+	snapshot := reportToSnapshot(report, Options{})
+
+	if snapshot.MaxFolderDepth != 3 {
+		t.Fatalf("MaxFolderDepth = %d, want 3", snapshot.MaxFolderDepth)
+	}
+	engine := findTreeChild(t, snapshot.Tree, "Engine")
+	runtime := findTreeChild(t, engine, "Runtime")
+	scripting := findTreeChild(t, runtime, "Scripting")
+	file := findTreeChild(t, scripting, "ScriptContext.cpp")
+	if !file.IsFile {
+		t.Fatalf("expected file node, got %+v", file)
+	}
+	if file.Lines != 42 || file.Files != 1 {
+		t.Fatalf("unexpected file totals: %+v", file)
+	}
+}
+
 func findCategory(t *testing.T, snapshot *Snapshot, name string) CategorySummary {
 	t.Helper()
 	for _, category := range snapshot.Categories {
@@ -64,4 +86,15 @@ func findSub(t *testing.T, category CategorySummary, name string) SubSummary {
 	}
 	t.Fatalf("sub %q not found in category %q", name, category.Name)
 	return SubSummary{}
+}
+
+func findTreeChild(t *testing.T, node *TreeNodeSummary, name string) *TreeNodeSummary {
+	t.Helper()
+	for _, child := range node.Children {
+		if child.Name == name {
+			return child
+		}
+	}
+	t.Fatalf("tree child %q not found under %q", name, node.Name)
+	return nil
 }

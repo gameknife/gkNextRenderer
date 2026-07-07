@@ -53,6 +53,7 @@ type Report struct {
 	subKeys    map[string][]string            // category -> ordered sub names
 	leafKeys   map[string]map[string][]string // category -> sub -> ordered leaf names
 	subTotals  map[string]map[string]*entry   // category -> sub -> totals
+	tree       *treeNode
 	total      entry
 }
 
@@ -63,6 +64,7 @@ func newReport() *Report {
 		subKeys:    map[string][]string{},
 		leafKeys:   map[string]map[string][]string{},
 		subTotals:  map[string]map[string]*entry{},
+		tree:       newTreeNode("", "", false),
 	}
 }
 
@@ -74,6 +76,8 @@ type Snapshot struct {
 	TotalLines         int
 	Categories         []CategorySummary
 	IncludedThirdParty bool
+	Tree               *TreeNodeSummary
+	MaxFolderDepth     int
 }
 
 // CategorySummary aggregates a top-level src/ category.
@@ -99,7 +103,36 @@ type LeafSummary struct {
 	Lines int
 }
 
+// TreeNodeSummary is the full src-relative hierarchy used by the dashboard.
+type TreeNodeSummary struct {
+	Name     string
+	Path     string
+	Files    int
+	Lines    int
+	Depth    int
+	IsFile   bool
+	Children []*TreeNodeSummary
+}
+
 const expandedSubLines = 5000
+
+type treeNode struct {
+	name     string
+	path     string
+	isFile   bool
+	files    int
+	lines    int
+	children map[string]*treeNode
+}
+
+func newTreeNode(name string, path string, isFile bool) *treeNode {
+	return &treeNode{
+		name:     name,
+		path:     path,
+		isFile:   isFile,
+		children: map[string]*treeNode{},
+	}
+}
 
 // Run scans the repository and prints the report to stdout.
 func Run(opts Options) error {
@@ -162,6 +195,7 @@ func scan(opts Options) (*Report, error) {
 			return err
 		}
 		report.add(key, lines)
+		report.addPath(filepath.ToSlash(rel), lines)
 		return nil
 	})
 	if walkErr != nil {
@@ -176,6 +210,8 @@ func reportToSnapshot(report *Report, opts Options) *Snapshot {
 		TotalLines:         report.total.lines,
 		IncludedThirdParty: opts.IncludeThirdParty,
 	}
+	snap.Tree = buildTreeSummary(report.tree, 0)
+	snap.MaxFolderDepth = maxFolderDepth(snap.Tree)
 	names := make([]string, 0, len(report.categories))
 	for name := range report.categories {
 		names = append(names, name)
@@ -306,6 +342,82 @@ func (r *Report) add(key leafKey, lines int) {
 
 	r.total.files++
 	r.total.lines += lines
+}
+
+func (r *Report) addPath(rel string, lines int) {
+	parts := strings.Split(rel, "/")
+	if len(parts) == 0 {
+		return
+	}
+	node := r.tree
+	node.files++
+	node.lines += lines
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		path := strings.Join(parts[:i+1], "/")
+		child, ok := node.children[part]
+		if !ok {
+			child = newTreeNode(part, path, i == len(parts)-1)
+			node.children[part] = child
+		}
+		child.files++
+		child.lines += lines
+		node = child
+	}
+}
+
+func buildTreeSummary(node *treeNode, depth int) *TreeNodeSummary {
+	if node == nil {
+		return nil
+	}
+	summary := &TreeNodeSummary{
+		Name:   node.name,
+		Path:   node.path,
+		Files:  node.files,
+		Lines:  node.lines,
+		Depth:  depth,
+		IsFile: node.isFile,
+	}
+	if len(node.children) == 0 {
+		return summary
+	}
+	names := make([]string, 0, len(node.children))
+	for name := range node.children {
+		names = append(names, name)
+	}
+	sort.Slice(names, func(i, j int) bool {
+		left := node.children[names[i]]
+		right := node.children[names[j]]
+		if left.isFile != right.isFile {
+			return !left.isFile
+		}
+		if left.lines != right.lines {
+			return left.lines > right.lines
+		}
+		return left.name < right.name
+	})
+	for _, name := range names {
+		summary.Children = append(summary.Children, buildTreeSummary(node.children[name], depth+1))
+	}
+	return summary
+}
+
+func maxFolderDepth(node *TreeNodeSummary) int {
+	if node == nil {
+		return 0
+	}
+	maxDepth := 0
+	if !node.IsFile && node.Depth > 0 {
+		maxDepth = node.Depth
+	}
+	for _, child := range node.Children {
+		if childDepth := maxFolderDepth(child); childDepth > maxDepth {
+			maxDepth = childDepth
+		}
+	}
+	return maxDepth
 }
 
 func render(report *Report, opts Options) {

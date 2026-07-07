@@ -112,6 +112,26 @@ type locVM struct {
 	Error             string
 	MaxCategoryLines  int
 	Contributions     contributionGraphVM
+	DepthOptions      []locDepthOption
+	SelectedDepth     string
+	TableRows         []locTableRowVM
+}
+
+type locDepthOption struct {
+	Value    string
+	Label    string
+	Selected bool
+}
+
+type locTableRowVM struct {
+	Name           string
+	Path           string
+	ParentPath     string
+	Files          int
+	Lines          int
+	Depth          int
+	IsFile         bool
+	FileChildCount int
 }
 
 type contributionDayVM struct {
@@ -377,7 +397,7 @@ func (s *Server) buildRemoteVM() remoteVM {
 	return vm
 }
 
-func (s *Server) buildLocVM(includeThirdParty bool) locVM {
+func (s *Server) buildLocVM(includeThirdParty bool, selectedDepth string) locVM {
 	snap, err := loc.Scan(loc.Options{
 		Root:              s.opts.RepoRoot,
 		IncludeThirdParty: includeThirdParty,
@@ -393,6 +413,10 @@ func (s *Server) buildLocVM(includeThirdParty bool) locVM {
 			vm.MaxCategoryLines = c.Lines
 		}
 	}
+	maxDepth := locMaxSelectableDepth(snap)
+	vm.SelectedDepth = normalizeLocDepth(selectedDepth, maxDepth)
+	vm.DepthOptions = buildLocDepthOptions(maxDepth, vm.SelectedDepth)
+	vm.TableRows = buildLocTableRows(snap, vm.SelectedDepth)
 	today := time.Now()
 	chartStart := contributionChartStart(today)
 	counts, err := gitops.DailyCommitCounts(s.opts.RepoRoot, chartStart)
@@ -402,6 +426,144 @@ func (s *Server) buildLocVM(includeThirdParty bool) locVM {
 		vm.Contributions = buildContributionGraph(counts, today)
 	}
 	return vm
+}
+
+func locMaxSelectableDepth(snap *loc.Snapshot) int {
+	if snap == nil {
+		return 1
+	}
+	maxDepth := snap.MaxFolderDepth + 1
+	if maxDepth < 1 {
+		maxDepth = 1
+	}
+	return maxDepth
+}
+
+func normalizeLocDepth(value string, maxDepth int) string {
+	if maxDepth < 1 {
+		maxDepth = 1
+	}
+	if value == "file" {
+		return "file"
+	}
+	defaultDepth := 3
+	if maxDepth < defaultDepth {
+		defaultDepth = maxDepth
+	}
+	if value == "" {
+		return strconv.Itoa(defaultDepth)
+	}
+	depth, err := strconv.Atoi(value)
+	if err != nil {
+		return strconv.Itoa(defaultDepth)
+	}
+	if depth < 1 {
+		depth = 1
+	}
+	if depth > maxDepth {
+		depth = maxDepth
+	}
+	return strconv.Itoa(depth)
+}
+
+func buildLocDepthOptions(maxDepth int, selected string) []locDepthOption {
+	if maxDepth < 1 {
+		maxDepth = 1
+	}
+	options := make([]locDepthOption, 0, maxDepth+1)
+	for depth := 1; depth <= maxDepth; depth++ {
+		options = append(options, locDepthOption{
+			Value:    strconv.Itoa(depth),
+			Label:    fmt.Sprintf("展开 %d 层", depth),
+			Selected: selected == strconv.Itoa(depth),
+		})
+	}
+	options = append(options, locDepthOption{
+		Value:    "file",
+		Label:    "文件级",
+		Selected: selected == "file",
+	})
+	return options
+}
+
+func buildLocTableRows(snap *loc.Snapshot, selectedDepth string) []locTableRowVM {
+	if snap == nil || snap.Tree == nil {
+		return nil
+	}
+	rows := []locTableRowVM{}
+	fileLevel := selectedDepth == "file"
+	depthLimit := snap.MaxFolderDepth
+	if !fileLevel {
+		depthLimit, _ = strconv.Atoi(selectedDepth)
+		if depthLimit < 1 {
+			depthLimit = 1
+		}
+	}
+	for _, category := range snap.Tree.Children {
+		appendLocTableRows(&rows, category, depthLimit, fileLevel)
+	}
+	annotateLocFileChildren(rows)
+	return rows
+}
+
+func appendLocTableRows(rows *[]locTableRowVM, node *loc.TreeNodeSummary, depthLimit int, fileLevel bool) {
+	if node == nil {
+		return
+	}
+	if node.IsFile {
+		if !fileLevel && node.Depth > depthLimit {
+			return
+		}
+		*rows = append(*rows, locTableRowVM{
+			Name:       node.Name,
+			Path:       node.Path,
+			ParentPath: locParentPath(node.Path),
+			Files:      node.Files,
+			Lines:      node.Lines,
+			Depth:      max(0, node.Depth-1),
+			IsFile:     true,
+		})
+		return
+	}
+	*rows = append(*rows, locTableRowVM{
+		Name:   node.Name,
+		Path:   node.Path,
+		Files:  node.Files,
+		Lines:  node.Lines,
+		Depth:  max(0, node.Depth-1),
+		IsFile: node.IsFile,
+	})
+	if !fileLevel && node.Depth >= depthLimit {
+		return
+	}
+	for _, child := range node.Children {
+		appendLocTableRows(rows, child, depthLimit, fileLevel)
+	}
+}
+
+func annotateLocFileChildren(rows []locTableRowVM) {
+	rowByPath := make(map[string]*locTableRowVM, len(rows))
+	for i := range rows {
+		if rows[i].Path != "" {
+			rowByPath[rows[i].Path] = &rows[i]
+		}
+	}
+	for i := range rows {
+		if !rows[i].IsFile || rows[i].ParentPath == "" {
+			continue
+		}
+		if parent := rowByPath[rows[i].ParentPath]; parent != nil {
+			parent.FileChildCount++
+		}
+	}
+}
+
+func locParentPath(path string) string {
+	idx := strings.LastIndex(path, "/")
+	if idx < 0 {
+		return ""
+	}
+	return path[:idx]
 }
 
 func contributionChartStart(today time.Time) time.Time {
@@ -595,7 +757,7 @@ func (s *Server) handleTab(w http.ResponseWriter, r *http.Request) {
 		s.render(w, "tab_chat", vm)
 	case "loc":
 		vm := s.buildHeader("loc")
-		vm.LocVM = s.buildLocVM(r.URL.Query().Get("thirdparty") == "1")
+		vm.LocVM = s.buildLocVM(r.URL.Query().Get("thirdparty") != "", r.URL.Query().Get("depth"))
 		s.render(w, "tab_loc", vm)
 	case "graph":
 		vm := s.buildHeader("graph")

@@ -1,6 +1,11 @@
 package dashboard
 
 import (
+	"html/template"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -79,4 +84,115 @@ func TestContributionLevel(t *testing.T) {
 			t.Fatalf("contributionLevel(%d, %d) = %d, want %d", test.count, test.max, got, test.want)
 		}
 	}
+}
+
+func TestBuildLocVMProvidesDepthOptionsAndFileRows(t *testing.T) {
+	s := setupLocRepo(t)
+
+	vm := s.buildLocVM(false, "file")
+
+	if vm.SelectedDepth != "file" {
+		t.Fatalf("SelectedDepth = %q, want file", vm.SelectedDepth)
+	}
+	if len(vm.DepthOptions) != 5 {
+		t.Fatalf("len(DepthOptions) = %d, want 5", len(vm.DepthOptions))
+	}
+	if vm.DepthOptions[len(vm.DepthOptions)-1].Value != "file" || !vm.DepthOptions[len(vm.DepthOptions)-1].Selected {
+		t.Fatalf("unexpected file depth option: %+v", vm.DepthOptions[len(vm.DepthOptions)-1])
+	}
+	if !containsLocRow(vm.TableRows, "Engine/Runtime/Scripting/ScriptContext.cpp", true) {
+		t.Fatalf("file-level rows missing ScriptContext.cpp: %+v", vm.TableRows)
+	}
+	if files := fileChildCountForPath(vm.TableRows, "Engine/Runtime/Scripting"); files != 1 {
+		t.Fatalf("Scripting file child count = %d, want 1", files)
+	}
+}
+
+func TestBuildLocVMNumericDepthIncludesFilesAtThatLevel(t *testing.T) {
+	s := setupLocRepo(t)
+
+	vm := s.buildLocVM(false, "4")
+
+	if !containsLocRow(vm.TableRows, "Engine/Runtime/Scripting/ScriptContext.cpp", true) {
+		t.Fatalf("depth=4 should include ScriptContext.cpp: %+v", vm.TableRows)
+	}
+	if !containsLocRow(vm.TableRows, "Engine/Runtime/Reflection/Meta.cpp", true) {
+		t.Fatalf("depth=4 should include Meta.cpp: %+v", vm.TableRows)
+	}
+}
+
+func TestHandleTabLocRendersDepthSelectorAndFileLevel(t *testing.T) {
+	s := setupLocRepo(t)
+	req := httptest.NewRequest("GET", "/tab/loc?depth=file&thirdparty=1", nil)
+	req.SetPathValue("kind", "loc")
+	rec := httptest.NewRecorder()
+
+	s.handleTab(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("status = %d (%s), want 200", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`name="depth"`,
+		`<option value="file" selected>文件级</option>`,
+		`name="thirdparty" value="1" checked`,
+		`data-loc-folder-toggle="Engine/Runtime/Scripting"`,
+		`title="Engine/Runtime/Scripting/ScriptContext.cpp"`,
+		`data-loc-parent="Engine/Runtime/Scripting" hidden`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("loc response missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func setupLocRepo(t *testing.T) *Server {
+	t.Helper()
+	dir := t.TempDir()
+	for path, body := range map[string]string{
+		"src/Engine/Runtime/Scripting/ScriptContext.cpp": "int a = 1;\nint b = 2;\n",
+		"src/Engine/Runtime/Reflection/Meta.cpp":         "int c = 3;\n",
+		"src/Application/Game/Flappy/main.cpp":           "int game = 1;\n",
+		"src/ThirdParty/lib/foo.cpp":                     "int third = 1;\n",
+		".spec/TODO.md":                                  "# TODO\n\n## Milestone: 测试  <!-- status: active -->\n\n### 下一步\n\n(暂无)\n\n### 待规划\n\n(暂无)\n\n### 最近完成\n\n(暂无)\n",
+	} {
+		full := filepath.Join(dir, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tpl, err := template.New("dashboard").
+		Funcs(templateFuncs()).
+		ParseFS(templateFS, "templates/*.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &Server{
+		opts:  Options{RepoRoot: dir},
+		tpl:   tpl,
+		jobs:  NewJobManager(),
+		chats: NewChatStore(),
+	}
+}
+
+func containsLocRow(rows []locTableRowVM, path string, isFile bool) bool {
+	for _, row := range rows {
+		if row.Path == path && row.IsFile == isFile {
+			return true
+		}
+	}
+	return false
+}
+
+func fileChildCountForPath(rows []locTableRowVM, path string) int {
+	for _, row := range rows {
+		if row.Path == path {
+			return row.FileChildCount
+		}
+	}
+	return 0
 }
