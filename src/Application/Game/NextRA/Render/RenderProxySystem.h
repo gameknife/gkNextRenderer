@@ -12,10 +12,18 @@ namespace NextRA
     {
     public:
         void Clear();
-        void BindNode(uint32_t renderNodeId, std::shared_ptr<Assets::Node> node);
+        void BindNode(uint32_t renderNodeId,
+                      std::shared_ptr<Assets::Node> node,
+                      std::shared_ptr<Assets::Node> turretNode = nullptr);
         void Sync(const Sim::FSimWorld& world, float alpha);
 
     private:
-        std::unordered_map<uint32_t, std::weak_ptr<Assets::Node>> nodesByRenderId_;
+        struct FRenderNodes
+        {
+            std::weak_ptr<Assets::Node> body;
+            std::weak_ptr<Assets::Node> turret;
+        };
+
+        std::unordered_map<uint32_t, FRenderNodes> nodesByRenderId_;
     };
 }

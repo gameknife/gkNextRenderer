@@ -57,18 +57,7 @@ namespace
 
     const char* UnitTypeName(uint16_t typeId)
     {
-        switch (typeId)
-        {
-        case NextRA::infantryTypeId:
-            return "Infantry";
-        case NextRA::tankTypeId:
-            return "Tank";
-        case NextRA::barracksTypeId:
-            return "Barracks";
-        case NextRA::baseTypeId:
-            return "Base";
-        }
-        return "Actor";
+        return NextRA::UnitDef(typeId).name;
     }
 }
 
@@ -180,6 +169,11 @@ bool NextRAGameInstance::OnRenderUI()
                 IssueProduceCommand(NextRA::infantryTypeId);
             }
             ImGui::SameLine();
+            if (ImGui::Button("Rocketeer"))
+            {
+                IssueProduceCommand(NextRA::rocketeerTypeId);
+            }
+            ImGui::SameLine();
             if (ImGui::Button("Tank"))
             {
                 IssueProduceCommand(NextRA::tankTypeId);
@@ -233,16 +227,34 @@ void NextRAGameInstance::BeforeSceneRebuild(
     const uint32_t groundModelId = static_cast<uint32_t>(models.size() - 1);
     models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.45f, 0.0f, -0.45f), glm::vec3(0.45f, 0.65f, 0.45f)));
     infantryModelId_ = static_cast<uint32_t>(models.size() - 1);
-    models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.65f, 0.0f, -0.85f), glm::vec3(0.65f, 0.62f, 0.85f)));
-    tankModelId_ = static_cast<uint32_t>(models.size() - 1);
+    models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.38f, 0.0f, -0.38f), glm::vec3(0.38f, 0.78f, 0.38f)));
+    rocketeerModelId_ = static_cast<uint32_t>(models.size() - 1);
+    models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.65f, 0.0f, -0.85f), glm::vec3(0.65f, 0.45f, 0.85f)));
+    tankBodyModelId_ = static_cast<uint32_t>(models.size() - 1);
+    models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.36f, -0.10f, -0.36f), glm::vec3(0.36f, 0.16f, 0.36f)));
+    tankTurretModelId_ = static_cast<uint32_t>(models.size() - 1);
+    models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.07f, -0.06f, -0.05f), glm::vec3(0.07f, 0.06f, 0.82f)));
+    tankBarrelModelId_ = static_cast<uint32_t>(models.size() - 1);
     models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.8f, 0.0f, -0.8f), glm::vec3(0.8f, 1.0f, 0.8f)));
     barracksModelId_ = static_cast<uint32_t>(models.size() - 1);
     models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-1.05f, 0.0f, -1.05f), glm::vec3(1.05f, 1.25f, 1.05f)));
     baseModelId_ = static_cast<uint32_t>(models.size() - 1);
+    models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.52f, 0.0f, -0.52f), glm::vec3(0.52f, 0.42f, 0.52f)));
+    turretBaseModelId_ = static_cast<uint32_t>(models.size() - 1);
+    models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.34f, -0.09f, -0.34f), glm::vec3(0.34f, 0.15f, 0.34f)));
+    turretHeadModelId_ = static_cast<uint32_t>(models.size() - 1);
+    models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.06f, -0.05f, -0.04f), glm::vec3(0.06f, 0.05f, 0.95f)));
+    turretBarrelModelId_ = static_cast<uint32_t>(models.size() - 1);
+    models.push_back(Assets::FProcModel::CreateBox(glm::vec3(-0.55f, 0.0f, -0.16f), glm::vec3(0.55f, 0.72f, 0.16f)));
+    wallModelId_ = static_cast<uint32_t>(models.size() - 1);
 
     const uint32_t groundMatId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.23f, 0.30f, 0.23f));
     playerMatId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.18f, 0.42f, 0.92f));
     enemyMatId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.92f, 0.28f, 0.18f));
+    playerRocketMatId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.18f, 0.70f, 0.82f));
+    enemyRocketMatId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.92f, 0.55f, 0.18f));
+    metalMatId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.16f, 0.18f, 0.19f));
+    wallMatId_ = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.42f, 0.45f, 0.46f));
     const uint32_t neutralMatId = Assets::SceneBuilder::AddLambertianMaterial(materials, glm::vec3(0.65f, 0.68f, 0.72f));
 
     nodes.push_back(Assets::SceneBuilder::CreateRenderNode(
@@ -250,43 +262,21 @@ void NextRAGameInstance::BeforeSceneRebuild(
 
     actorNodes_.clear();
     renderProxy_.Clear();
-    uint32_t actorVisualIndex = 0;
+    uint32_t nextSceneNodeId = 9100;
     for (NextRA::Sim::FActorId actor : simWorld_.Actors())
     {
         const NextRA::Sim::FSimTransform* transform = simWorld_.TryGetTransform(actor);
         const NextRA::Sim::FOwner* owner = simWorld_.TryGetOwner(actor);
-        if (!transform || !owner)
+        const NextRA::Sim::FUnitType* unitType = simWorld_.TryGetUnitType(actor);
+        if (!transform || !owner || !unitType)
         {
             continue;
         }
 
-        const uint32_t materialId = owner->playerId == 0 ? playerMatId_ : enemyMatId_;
-        const NextRA::Sim::FUnitType* unitType = simWorld_.TryGetUnitType(actor);
-        uint32_t modelId = infantryModelId_;
-        if (unitType && unitType->typeId == NextRA::tankTypeId)
-        {
-            modelId = tankModelId_;
-        }
-        else if (unitType && unitType->typeId == NextRA::barracksTypeId)
-        {
-            modelId = barracksModelId_;
-        }
-        else if (unitType && unitType->typeId == NextRA::baseTypeId)
-        {
-            modelId = baseModelId_;
-        }
-        const uint32_t renderNodeId = 9100 + actorVisualIndex;
-        auto node = Assets::SceneBuilder::CreateRenderNode(
-            fmt::format("NextRA_Actor_{}", actor),
-            ToRenderVec3(transform->pos),
-            glm::vec3(1.0f),
-            renderNodeId,
-            modelId,
-            materialId,
-            true);
-        simWorld_.SetRenderLink(actor, renderNodeId);
-        nodes.push_back(node);
-        ++actorVisualIndex;
+        const uint32_t renderNodeId = nextSceneNodeId++;
+        uint32_t turretNodeId = 0;
+        CreateActorRenderNode(actor, *transform, *owner, *unitType, renderNodeId, &nodes, nextSceneNodeId, turretNodeId);
+        simWorld_.SetRenderLink(actor, renderNodeId, turretNodeId);
     }
 
     nodes.push_back(Assets::SceneBuilder::CreateRenderNode(
@@ -408,6 +398,7 @@ void NextRAGameInstance::ResetSim()
     simWorld_ = NextRA::Sim::FSimWorld{};
     pathGrid_ = NextRA::Sim::FPathfindGrid{48, 48, NextRA::Sim::CPos{-24, -24}};
     pathGrid_.SetBlocked(NextRA::Sim::CPos{0, 0}, true);
+    simWorld_.SetPathGrid(&pathGrid_);
     orderManager_.Clear();
     orderManager_.SetLockstepConfig(1, static_cast<uint32_t>(orderLatencyTicks_));
     selectedActors_.clear();
@@ -446,11 +437,44 @@ void NextRAGameInstance::ResetSim()
         false);
     simWorld_.SpawnMobile(
         0,
+        NextRA::rocketeerTypeId,
+        NextRA::Sim::WPos::FromCells(-5, 1),
+        NextRA::Sim::WPos::FromCells(-5, 1),
+        NextRA::UnitSpeedPerTick(NextRA::rocketeerTypeId),
+        false);
+    simWorld_.SpawnMobile(
+        0,
+        NextRA::tankTypeId,
+        NextRA::Sim::WPos::FromCells(-4, 3),
+        NextRA::Sim::WPos::FromCells(-4, 3),
+        NextRA::UnitSpeedPerTick(NextRA::tankTypeId),
+        false);
+    simWorld_.SpawnMobile(
+        0,
         NextRA::infantryTypeId,
         NextRA::Sim::WPos::FromCells(-4, 1),
         NextRA::Sim::WPos::FromCells(-4, 1),
         NextRA::UnitSpeedPerTick(NextRA::infantryTypeId),
         false);
+    simWorld_.SpawnBuilding(
+        0,
+        NextRA::turretTypeId,
+        NextRA::Sim::WPos::FromCells(-4, -5),
+        NextRA::UnitMaxHp(NextRA::turretTypeId),
+        false,
+        false,
+        NextRA::Sim::WPos::FromCells(-4, -5));
+    for (int32_t z = -6; z <= -4; ++z)
+    {
+        simWorld_.SpawnBuilding(
+            0,
+            NextRA::wallTypeId,
+            NextRA::Sim::WPos::FromCells(-2, z),
+            NextRA::UnitMaxHp(NextRA::wallTypeId),
+            false,
+            false,
+            NextRA::Sim::WPos::FromCells(-2, z));
+    }
     simWorld_.SpawnBuilding(
         1,
         NextRA::baseTypeId,
@@ -474,6 +498,32 @@ void NextRAGameInstance::ResetSim()
         NextRA::Sim::WPos::FromCells(4, 1),
         NextRA::UnitSpeedPerTick(NextRA::tankTypeId),
         false);
+    simWorld_.SpawnMobile(
+        1,
+        NextRA::rocketeerTypeId,
+        NextRA::Sim::WPos::FromCells(5, -1),
+        NextRA::Sim::WPos::FromCells(5, -1),
+        NextRA::UnitSpeedPerTick(NextRA::rocketeerTypeId),
+        false);
+    simWorld_.SpawnBuilding(
+        1,
+        NextRA::turretTypeId,
+        NextRA::Sim::WPos::FromCells(4, 5),
+        NextRA::UnitMaxHp(NextRA::turretTypeId),
+        false,
+        false,
+        NextRA::Sim::WPos::FromCells(4, 5));
+    for (int32_t z = 4; z <= 6; ++z)
+    {
+        simWorld_.SpawnBuilding(
+            1,
+            NextRA::wallTypeId,
+            NextRA::Sim::WPos::FromCells(2, z),
+            NextRA::UnitMaxHp(NextRA::wallTypeId),
+            false,
+            false,
+            NextRA::Sim::WPos::FromCells(2, z));
+    }
 
 }
 
@@ -527,9 +577,121 @@ void NextRAGameInstance::RebindRenderNodes()
             continue;
         }
 
-        renderProxy_.BindNode(renderLink->renderNodeId, node);
+        std::shared_ptr<Assets::Node> turretNode;
+        if (renderLink->turretNodeId != 0)
+        {
+            turretNode = GetEngine().GetScene().GetNodeSharedByInstanceId(renderLink->turretNodeId);
+        }
+        renderProxy_.BindNode(renderLink->renderNodeId, node, turretNode);
         actorNodes_.push_back(node);
     }
+}
+
+std::shared_ptr<Assets::Node> NextRAGameInstance::CreateActorRenderNode(
+    NextRA::Sim::FActorId actor,
+    const NextRA::Sim::FSimTransform& transform,
+    const NextRA::Sim::FOwner& owner,
+    const NextRA::Sim::FUnitType& unitType,
+    uint32_t renderNodeId,
+    std::vector<std::shared_ptr<Assets::Node>>* sceneNodes,
+    uint32_t& nextSceneNodeId,
+    uint32_t& outTurretNodeId)
+{
+    outTurretNodeId = 0;
+
+    auto allocateNodeId = [&]() -> uint32_t {
+        if (sceneNodes)
+        {
+            return nextSceneNodeId++;
+        }
+        return GetEngine().GetScene().GenerateInstanceId();
+    };
+    auto addNode = [&](const std::shared_ptr<Assets::Node>& node) {
+        if (sceneNodes)
+        {
+            sceneNodes->push_back(node);
+        }
+        else
+        {
+            GetEngine().GetScene().AddNode(node);
+        }
+    };
+
+    const bool playerOwned = owner.playerId == 0;
+    const uint32_t ownerMatId = playerOwned ? playerMatId_ : enemyMatId_;
+    const uint32_t rocketMatId = playerOwned ? playerRocketMatId_ : enemyRocketMatId_;
+    uint32_t modelId = infantryModelId_;
+    uint32_t materialId = ownerMatId;
+    if (unitType.typeId == NextRA::rocketeerTypeId)
+    {
+        modelId = rocketeerModelId_;
+        materialId = rocketMatId;
+    }
+    else if (unitType.typeId == NextRA::tankTypeId)
+    {
+        modelId = tankBodyModelId_;
+    }
+    else if (unitType.typeId == NextRA::barracksTypeId)
+    {
+        modelId = barracksModelId_;
+    }
+    else if (unitType.typeId == NextRA::baseTypeId)
+    {
+        modelId = baseModelId_;
+    }
+    else if (unitType.typeId == NextRA::turretTypeId)
+    {
+        modelId = turretBaseModelId_;
+    }
+    else if (unitType.typeId == NextRA::wallTypeId)
+    {
+        modelId = wallModelId_;
+        materialId = wallMatId_;
+    }
+
+    auto root = Assets::SceneBuilder::CreateRenderNode(
+        fmt::format("NextRA_Actor_{}", actor),
+        ToRenderVec3(transform.pos),
+        glm::vec3(1.0f),
+        renderNodeId,
+        modelId,
+        materialId,
+        true);
+    addNode(root);
+
+    auto addChild = [&](const char* suffix,
+                        uint32_t childModelId,
+                        uint32_t childMaterialId,
+                        const glm::vec3& localPos,
+                        const std::shared_ptr<Assets::Node>& parent) -> std::shared_ptr<Assets::Node> {
+        const uint32_t childNodeId = allocateNodeId();
+        auto child = Assets::SceneBuilder::CreateRenderNode(
+            fmt::format("NextRA_Actor_{}_{}", actor, suffix),
+            localPos,
+            glm::vec3(1.0f),
+            childNodeId,
+            childModelId,
+            childMaterialId,
+            true);
+        child->SetParent(parent);
+        addNode(child);
+        return child;
+    };
+
+    if (unitType.typeId == NextRA::tankTypeId)
+    {
+        auto turret = addChild("Turret", tankTurretModelId_, ownerMatId, glm::vec3(0.0f, 0.55f, 0.0f), root);
+        outTurretNodeId = turret->GetInstanceId();
+        addChild("Barrel", tankBarrelModelId_, metalMatId_, glm::vec3(0.0f, 0.08f, 0.16f), turret);
+    }
+    else if (unitType.typeId == NextRA::turretTypeId)
+    {
+        auto turret = addChild("Turret", turretHeadModelId_, ownerMatId, glm::vec3(0.0f, 0.54f, 0.0f), root);
+        outTurretNodeId = turret->GetInstanceId();
+        addChild("Barrel", turretBarrelModelId_, metalMatId_, glm::vec3(0.0f, 0.07f, 0.10f), turret);
+    }
+
+    return root;
 }
 
 void NextRAGameInstance::CreateRenderNodeForActor(NextRA::Sim::FActorId actor)
@@ -547,33 +709,18 @@ void NextRAGameInstance::CreateRenderNodeForActor(NextRA::Sim::FActorId actor)
         return;
     }
 
-    uint32_t modelId = infantryModelId_;
-    if (unitType->typeId == NextRA::tankTypeId)
-    {
-        modelId = tankModelId_;
-    }
-    else if (unitType->typeId == NextRA::barracksTypeId)
-    {
-        modelId = barracksModelId_;
-    }
-    else if (unitType->typeId == NextRA::baseTypeId)
-    {
-        modelId = baseModelId_;
-    }
-
-    const uint32_t materialId = owner->playerId == 0 ? playerMatId_ : enemyMatId_;
     const uint32_t renderNodeId = GetEngine().GetScene().GenerateInstanceId();
-    std::shared_ptr<Assets::Node> node = Assets::SceneBuilder::CreateRenderNode(
-        fmt::format("NextRA_Actor_{}", actor),
-        ToRenderVec3(transform->pos),
-        glm::vec3(1.0f),
-        renderNodeId,
-        modelId,
-        materialId,
-        true);
-    simWorld_.SetRenderLink(actor, renderNodeId);
-    GetEngine().GetScene().AddNode(node);
-    renderProxy_.BindNode(renderNodeId, node);
+    uint32_t nextSceneNodeId = 0;
+    uint32_t turretNodeId = 0;
+    std::shared_ptr<Assets::Node> node =
+        CreateActorRenderNode(actor, *transform, *owner, *unitType, renderNodeId, nullptr, nextSceneNodeId, turretNodeId);
+    simWorld_.SetRenderLink(actor, renderNodeId, turretNodeId);
+    std::shared_ptr<Assets::Node> turretNode;
+    if (turretNodeId != 0)
+    {
+        turretNode = GetEngine().GetScene().GetNodeSharedByInstanceId(turretNodeId);
+    }
+    renderProxy_.BindNode(renderNodeId, node, turretNode);
     actorNodes_.push_back(std::move(node));
 }
 
@@ -814,7 +961,9 @@ void NextRAGameInstance::SubmitAIOrders()
             order.playerId = 1;
             order.issueTick = nextTick_;
             order.actorIds = {actor};
-            order.produceTypeId = NextRA::infantryTypeId;
+            const uint32_t wave = (nextTick_ / 120) % 3;
+            order.produceTypeId =
+                wave == 0 ? NextRA::infantryTypeId : (wave == 1 ? NextRA::rocketeerTypeId : NextRA::tankTypeId);
             SubmitAIOrderWithInjection(std::move(order));
             break;
         }

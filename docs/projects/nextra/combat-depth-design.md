@@ -1,7 +1,7 @@
 ---
 title: "NextRA —— 战斗深度扩展（朝向/炮塔/克制/碰撞/防御）架构设计"
 category: design
-status: 草案
+status: 已实现
 owner: engine
 created: 2026-06-29
 last_updated: 2026-06-29
@@ -10,7 +10,7 @@ supersedes_iteration: mvp
 
 # NextRA —— 战斗深度扩展（架构设计）
 
-> 状态：**📝 草案 / ⚠️ 待实现**。本文是交付给后续 AI agent / 开发者接手实现的**架构设计**，配套开发计划见 [`combat-depth-plan.md`](combat-depth-plan.md)。
+> 状态：**✅ 已实现**。本文是交付给后续 AI agent / 开发者接手实现的**架构设计**，配套开发计划见 [`combat-depth-plan.md`](combat-depth-plan.md)。
 >
 > **前置必读**（MVP 已落地的地基，本设计建立在其之上，**不重复**这些内容）：
 > - [`docs/designs/nextra-rts-mvp-design.md`](../designs/nextra-rts-mvp-design.md) §4.2 不变量、§5 确定性仿真层、§10 风险表 —— 全部继续生效，本轮**一个字不改地继承**。

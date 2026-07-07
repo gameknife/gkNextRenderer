@@ -1,7 +1,7 @@
 ---
 title: "NextRA —— 战斗深度扩展（朝向/炮塔/克制/碰撞/防御）开发计划"
 category: plan
-status: 草案
+status: 已实现
 owner: engine
 created: 2026-06-29
 last_updated: 2026-06-29
@@ -10,7 +10,7 @@ supersedes_iteration: mvp
 
 # NextRA —— 战斗深度扩展（开发计划）
 
-> 状态：**📝 草案 / ⚠️ 待实现**。本文是交付给后续 AI agent / 开发者的**分阶段开发计划**，与架构设计配套：**先读 [`combat-depth-design.md`](combat-depth-design.md)**（目标架构 + 约束 + 风险），本文只讲**落地顺序、每阶段任务 / 交付物 / 验收 / 验证命令**。
+> 状态：**✅ 已实现**。本文是交付给后续 AI agent / 开发者的**分阶段开发计划**，与架构设计配套：**先读 [`combat-depth-design.md`](combat-depth-design.md)**（目标架构 + 约束 + 风险），本文只讲**落地顺序、每阶段任务 / 交付物 / 验收 / 验证命令**。
 >
 > **代号**：`NextRA`（沿用）。**前置必读**：[`combat-depth-design.md`](combat-depth-design.md)（本轮设计）、[`docs/designs/nextra-rts-mvp-design.md`](../designs/nextra-rts-mvp-design.md) §4.2/§10（继承的不变量与红线）、[`AGENTS.md`](../../AGENTS.md)（构建/测试纪律）、[`docs/projects/nextra/README.md`](../projects/nextra/README.md)（当前可玩状态）。
 >
@@ -50,11 +50,11 @@ supersedes_iteration: mvp
 **目标**：把 `NextRAConfig.hpp` 从分散 `constexpr` 函数重构为 `FUnitDef[]` 表，并引入装甲/武器枚举与伤害系数表，为后续 C1–C5（加朝向字段、加炮塔、加兵种、加占位）扫清"加一处改五处"的障碍。**零行为变更**。
 
 任务：
-- [ ] 定义 `EArmorType` / `EWeaponType` 枚举（`NextRAConfig.hpp`，design §3.1）。
-- [ ] 定义 `kDamageMultiplier[weapon][armor]` 二维 `constexpr` 表（design §3.1）。
-- [ ] 定义 `FUnitDef` 结构 + `kUnitDefs[]` 表 + `UnitDef(typeId)` 查表函数（design §6.2）：先填现有 4 个（infantry/tank/barracks/base），新字段（`armor`/`weapon`/`bodyTurnSpeed`/`hasTurret`/`turretTurnSpeed`/`footprint`/`acquireRange`）先给默认值，本轮后续里程碑再赋真值。
-- [ ] 把 `SimWorld::SpawnMobile`（[`SimWorld.cpp:20-48`](../../src/Application/Game/NextRA/Sim/SimWorld.cpp)）里硬编码的 `acquireRange=CellDistance(5)` / `cooldownTicks=12`（[`SimWorld.cpp:34`](../../src/Application/Game/NextRA/Sim/SimWorld.cpp)）改为读 `UnitDef(typeId)`，修复 MVP 的兵种无关 bug。
-- [ ] 把 `NextRAGameInstance`、`SimWorld`、`RenderProxySystem` 里所有按 typeId if-else 取属性的调用点改为 `UnitDef(typeId).*`，确保步兵/坦克数值逐项不变。
+- [x] 定义 `EArmorType` / `EWeaponType` 枚举（`NextRAConfig.hpp`，design §3.1）。
+- [x] 定义 `kDamageMultiplier[weapon][armor]` 二维 `constexpr` 表（design §3.1）。
+- [x] 定义 `FUnitDef` 结构 + `kUnitDefs[]` 表 + `UnitDef(typeId)` 查表函数（design §6.2）：先填现有 4 个（infantry/tank/barracks/base），新字段（`armor`/`weapon`/`bodyTurnSpeed`/`hasTurret`/`turretTurnSpeed`/`footprint`/`acquireRange`）先给默认值，本轮后续里程碑再赋真值。
+- [x] 把 `SimWorld::SpawnMobile`（[`SimWorld.cpp:20-48`](../../src/Application/Game/NextRA/Sim/SimWorld.cpp)）里硬编码的 `acquireRange=CellDistance(5)` / `cooldownTicks=12`（[`SimWorld.cpp:34`](../../src/Application/Game/NextRA/Sim/SimWorld.cpp)）改为读 `UnitDef(typeId)`，修复 MVP 的兵种无关 bug。
+- [x] 把 `NextRAGameInstance`、`SimWorld`、`RenderProxySystem` 里所有按 typeId if-else 取属性的调用点改为 `UnitDef(typeId).*`，确保步兵/坦克数值逐项不变。
 
 **交付物**：表化的 `NextRAConfig.hpp` + 改为查表的 SimWorld/GameInstance。
 
@@ -73,16 +73,16 @@ supersedes_iteration: mvp
 **目标**：让单位会转向、坦克炮管会追踪目标。车身朝移动方向、炮塔朝目标，二者独立，帧插值平滑。打通"定点朝向 sim → 父子 node 渲染"全链路。
 
 任务：
-- [ ] `Sim/WMath.h` 新增定点 `Atan2FromVec2(FFixed x, FFixed z) → WAngle`（整数多项式 + 象限映射，禁 `std::atan2`，design §2.2）。
-- [ ] `Sim/WMath.h` 新增 `TurnToward(WAngle curr, WAngle target, WAngle maxStep) → WAngle`（环形最短角差 + 限步，design §2.2）。
-- [ ] `SimComponents.h` 新增 `FTurret { facing; prevFacing; turnSpeed; targetActor }` 组件（design §2.2）。
-- [ ] `SimWorld::MovementSystem`（[`SimWorld.cpp:469-539`](../../src/Application/Game/NextRA/Sim/SimWorld.cpp)）：每 tick 开头 `prevFacing = facing`（与现有 `prevPos = pos` 同行）；位移非零时 `facing = TurnToward(facing, Atan2FromVec2(dir.x, dir.z), bodyTurnSpeed)`。
-- [ ] `SimWorld` 新增炮塔转向逻辑：有 `FTurret` 且有 target 时 `prevFacing = facing; facing = TurnToward(facing, Atan2ToTarget, turret.turnSpeed)`（可入 CombatSystem 或新增 TurretSystem，顺序固定）。
-- [ ] `SimWorld::SpawnMobile` / `SpawnBuilding`：坦克 + 炮塔建筑挂 `FTurret`（读 `UnitDef.hasTurret`）。
-- [ ] `SyncHash.cpp`（[`SyncHash.cpp:32-91`](../../src/Application/Game/NextRA/Sim/SyncHash.cpp)）：覆盖 `facing` + `FTurret.facing`（确定顺序）。
-- [ ] `Render/RenderProxySystem::Sync`（[`RenderProxySystem.cpp:26-58`](../../src/Application/Game/NextRA/Render/RenderProxySystem.cpp)）：`SetTranslation` 后追加 `SetRotation(slerp(angleAxis(prevYaw), angleAxis(currYaw), alpha))`；炮塔子节点按 `FTurret` 独立 SetRotation（design §2.3）。
-- [ ] `NextRAGameInstance`：坦克几何改为车身 box（root）+ 炮塔 box（SetParent）+ 炮管细长 box（SetParent 炮塔），照搬 Brotato3D（[`Brotato3DEffectSystem.cpp:232-289`](../../src/Application/Game/Brotato3D/Brotato3DEffectSystem.cpp)）；步兵单 box + SetRotation。
-- [ ] `Test_NextRAFixed.cpp`：`Atan2FromVec2` 往返误差、`TurnToward` 边界（0/4096 跨越、目标即当前、maxStep=0）单测。
+- [x] `Sim/WMath.h` 新增定点 `Atan2FromVec2(FFixed x, FFixed z) → WAngle`（整数多项式 + 象限映射，禁 `std::atan2`，design §2.2）。
+- [x] `Sim/WMath.h` 新增 `TurnToward(WAngle curr, WAngle target, WAngle maxStep) → WAngle`（环形最短角差 + 限步，design §2.2）。
+- [x] `SimComponents.h` 新增 `FTurret { facing; prevFacing; turnSpeed; targetActor }` 组件（design §2.2）。
+- [x] `SimWorld::MovementSystem`（[`SimWorld.cpp:469-539`](../../src/Application/Game/NextRA/Sim/SimWorld.cpp)）：每 tick 开头 `prevFacing = facing`（与现有 `prevPos = pos` 同行）；位移非零时 `facing = TurnToward(facing, Atan2FromVec2(dir.x, dir.z), bodyTurnSpeed)`。
+- [x] `SimWorld` 新增炮塔转向逻辑：有 `FTurret` 且有 target 时 `prevFacing = facing; facing = TurnToward(facing, Atan2ToTarget, turret.turnSpeed)`（可入 CombatSystem 或新增 TurretSystem，顺序固定）。
+- [x] `SimWorld::SpawnMobile` / `SpawnBuilding`：坦克 + 炮塔建筑挂 `FTurret`（读 `UnitDef.hasTurret`）。
+- [x] `SyncHash.cpp`（[`SyncHash.cpp:32-91`](../../src/Application/Game/NextRA/Sim/SyncHash.cpp)）：覆盖 `facing` + `FTurret.facing`（确定顺序）。
+- [x] `Render/RenderProxySystem::Sync`（[`RenderProxySystem.cpp:26-58`](../../src/Application/Game/NextRA/Render/RenderProxySystem.cpp)）：`SetTranslation` 后追加 `SetRotation(slerp(angleAxis(prevYaw), angleAxis(currYaw), alpha))`；炮塔子节点按 `FTurret` 独立 SetRotation（design §2.3）。
+- [x] `NextRAGameInstance`：坦克几何改为车身 box（root）+ 炮塔 box（SetParent）+ 炮管细长 box（SetParent 炮塔），照搬 Brotato3D（[`Brotato3DEffectSystem.cpp:232-289`](../../src/Application/Game/Brotato3D/Brotato3DEffectSystem.cpp)）；步兵单 box + SetRotation。
+- [x] `Test_NextRAFixed.cpp`：`Atan2FromVec2` 往返误差、`TurnToward` 边界（0/4096 跨越、目标即当前、maxStep=0）单测。
 
 **验收**：
 1. `./gnb build NextRA gkNextUnitTests` 通过。
@@ -101,10 +101,10 @@ supersedes_iteration: mvp
 **目标**：用装甲/武器类型表实现 rock-paper-scissors，并新增 1 种兵种（反坦克兵）验证"加兵种不再改 CombatSystem"。
 
 任务：
-- [ ] `NextRAConfig.hpp`：infantry → `Flesh+Bullet`、tank → `Heavy+Shell`、rocketeer（新增 typeId 5）→ `Flesh+Rocket`；建筑 → `Building`（受击 armor）。
-- [ ] `SimWorld::CombatSystem`（[`SimWorld.cpp:432`](../../src/Application/Game/NextRA/Sim/SimWorld.cpp)）：`targetHealth->hp -= attack->damage` 改为 `-= attack->damage * kDamageMultiplier[weapon][armor] / 100`（design §3.2）。
-- [ ] `NextRAGameInstance`：rocketeer 几何（小 box + 不同颜色，标识反坦克武器）、生产按钮（兵营可造火箭兵）、AI 默认也造一点以观察克制。
-- [ ] `Test_NextRAFixed.cpp`：伤害系数表查表单测（weapon×armor 全组合取值正确、整数百分比无溢出）。
+- [x] `NextRAConfig.hpp`：infantry → `Flesh+Bullet`、tank → `Heavy+Shell`、rocketeer（新增 typeId 5）→ `Flesh+Rocket`；建筑 → `Building`（受击 armor）。
+- [x] `SimWorld::CombatSystem`（[`SimWorld.cpp:432`](../../src/Application/Game/NextRA/Sim/SimWorld.cpp)）：`targetHealth->hp -= attack->damage` 改为 `-= attack->damage * kDamageMultiplier[weapon][armor] / 100`（design §3.2）。
+- [x] `NextRAGameInstance`：rocketeer 几何（小 box + 不同颜色，标识反坦克武器）、生产按钮（兵营可造火箭兵）、AI 默认也造一点以观察克制。
+- [x] `Test_NextRAFixed.cpp`：伤害系数表查表单测（weapon×armor 全组合取值正确、整数百分比无溢出）。
 
 **验收**：
 1. `./gnb build NextRA gkNextUnitTests` 通过。
@@ -121,12 +121,12 @@ supersedes_iteration: mvp
 **目标**：单位不再穿透建筑、不再互相叠成一点。建立整数占位哈希。
 
 任务：
-- [ ] `Sim/OccupancyGrid.{h,cpp}`：`Add/IsOccupied/ActorsAt`，整数 CPos→actor 哈希（design §4.2）。
-- [ ] `SimWorld`：`MovementSystem` 前每 tick 重建 `FOccupancyGrid`（遍历 actors，按 `UnitDef.footprint` 写入对应 cells）。
-- [ ] 建筑/炮塔/围墙 footprint（`UnitDef.footprint`）通过 `FPathfindGrid.SetBlocked`（[`PathfindGrid.cpp:39`](../../src/Application/Game/NextRA/Sim/PathfindGrid.cpp)）写入静态阻挡——建筑出生即占位，单位寻路绕开。
-- [ ] 移动单位目标格避让：推进前查 `IsOccupied(目标cell)`，占用则停（保留 goal，下 tick 重试）或触发重算路径。
-- [ ] `OccupancyGrid.cpp` 加入 `gkNextUnitTests` 源集（[`CMakeLists.txt:58-66`](../../src/CMakeLists.txt) NextRA 测试源段）。
-- [ ] `Test_NextRAFixed.cpp`：占位哈希同输入同输出、目标格避让行为单测。
+- [x] `Sim/OccupancyGrid.{h,cpp}`：`Add/IsOccupied/ActorsAt`，整数 CPos→actor 哈希（design §4.2）。
+- [x] `SimWorld`：`MovementSystem` 前每 tick 重建 `FOccupancyGrid`（遍历 actors，按 `UnitDef.footprint` 写入对应 cells）。
+- [x] 建筑/炮塔/围墙 footprint（`UnitDef.footprint`）通过 `FPathfindGrid.SetBlocked`（[`PathfindGrid.cpp:39`](../../src/Application/Game/NextRA/Sim/PathfindGrid.cpp)）写入静态阻挡——建筑出生即占位，单位寻路绕开。
+- [x] 移动单位目标格避让：推进前查 `IsOccupied(目标cell)`，占用则停（保留 goal，下 tick 重试）或触发重算路径。
+- [x] `OccupancyGrid.cpp` 加入 `gkNextUnitTests` 源集（[`CMakeLists.txt:58-66`](../../src/CMakeLists.txt) NextRA 测试源段）。
+- [x] `Test_NextRAFixed.cpp`：占位哈希同输入同输出、目标格避让行为单测。
 
 **验收**：
 1. `./gnb build NextRA gkNextUnitTests` 通过。
@@ -143,12 +143,12 @@ supersedes_iteration: mvp
 **目标**：单位群自然排成阵型、不挤成一团。**这是本轮确定性最高风险点**——排斥位移若不确定会跨端 desync。
 
 任务：
-- [ ] `SimWorld` 新增 `SeparationSystem`（design §4.3）：移动系统后执行。
-- [ ] 处理顺序**严格按 actorId 升序**（与现有系统遍历约定一致，[`SimWorld.cpp:334`](../../src/Application/Game/NextRA/Sim/SimWorld.cpp)）。
-- [ ] 排斥方向用**整数 cell 差符号 + 固定主轴优先规则**（先 x 后 z，0 向量按固定约定），**禁 float 归一化**（design §7 R-NEW3）。
-- [ ] 排斥位移量 = 定点常量；位移结果进 SyncHash（位置已覆盖，确认 `SeparationSystem` 在 hash 前执行且顺序确定）。
-- [ ] `SimWorld::Step`（[`SimWorld.cpp:73-84`](../../src/Application/Game/NextRA/Sim/SimWorld.cpp)）：把 `SeparationSystem` 插入固定位置（建议 MovementSystem 之后、第二遍 Targeting 之前），**写入文档固定此顺序**。
-- [ ] `Test_NextRAFixed.cpp`：软推离同输入同输出单测（两单位重叠 → 沿固定轴分开）。
+- [x] `SimWorld` 新增 `SeparationSystem`（design §4.3）：移动系统后执行。
+- [x] 处理顺序**严格按 actorId 升序**（与现有系统遍历约定一致，[`SimWorld.cpp:334`](../../src/Application/Game/NextRA/Sim/SimWorld.cpp)）。
+- [x] 排斥方向用**整数 cell 差符号 + 固定主轴优先规则**（先 x 后 z，0 向量按固定约定），**禁 float 归一化**（design §7 R-NEW3）。
+- [x] 排斥位移量 = 定点常量；位移结果进 SyncHash（位置已覆盖，确认 `SeparationSystem` 在 hash 前执行且顺序确定）。
+- [x] `SimWorld::Step`（[`SimWorld.cpp:73-84`](../../src/Application/Game/NextRA/Sim/SimWorld.cpp)）：把 `SeparationSystem` 插入固定位置（建议 MovementSystem 之后、第二遍 Targeting 之前），**写入文档固定此顺序**。
+- [x] `Test_NextRAFixed.cpp`：软推离同输入同输出单测（两单位重叠 → 沿固定轴分开）。
 
 **验收**：
 1. `./gnb build NextRA gkNextUnitTests` 通过。
@@ -167,11 +167,11 @@ supersedes_iteration: mvp
 **目标**：补齐防御维度——炮塔自动开火 + 炮管旋转，围墙静态阻挡，被摧毁释放占位。
 
 任务：
-- [ ] `NextRAConfig.hpp`：turret（typeId 6，`FAttack`+`FTurret`+`Building` armor+footprint）+ wall（typeId 7，高血量 +footprint，无攻击）定义。
-- [ ] `SimWorld::SpawnBuilding`（[`SimWorld.cpp:50-71`](../../src/Application/Game/NextRA/Sim/SimWorld.cpp)）：炮塔挂 `FAttack` + `FTurret`（自动进 Targeting/Combat/Turret 系统）；建筑出生时 footprint 写 `FPathfindGrid.SetBlocked`。
-- [ ] `SimWorld::DeathSystem`（[`SimWorld.cpp:437-467`](../../src/Application/Game/NextRA/Sim/SimWorld.cpp)）：销毁 entity 前释放其 footprint cells（`SetBlocked(cell, false)`）；需让 DeathSystem 能访问 grid（design §5.3：把 grid 引用传入 SimWorld 或 GameInstance 侧处理，择一）。
-- [ ] `NextRAGameInstance`：炮塔几何（基座 box + 炮塔 box SetParent + 炮管 box，朝向随 `FTurret.facing` 旋转，复用 C1 的朝向渲染）；围墙几何（薄长 box）；炮塔/围墙预置（开局放几个，或兵营可造）。
-- [ ] `gnb shot` 验证：炮塔在范围内自动开火、炮管追踪敌方单位；围墙挡住单位寻路；摧毁围墙后单位恢复通行。
+- [x] `NextRAConfig.hpp`：turret（typeId 6，`FAttack`+`FTurret`+`Building` armor+footprint）+ wall（typeId 7，高血量 +footprint，无攻击）定义。
+- [x] `SimWorld::SpawnBuilding`（[`SimWorld.cpp:50-71`](../../src/Application/Game/NextRA/Sim/SimWorld.cpp)）：炮塔挂 `FAttack` + `FTurret`（自动进 Targeting/Combat/Turret 系统）；建筑出生时 footprint 写 `FPathfindGrid.SetBlocked`。
+- [x] `SimWorld::DeathSystem`（[`SimWorld.cpp:437-467`](../../src/Application/Game/NextRA/Sim/SimWorld.cpp)）：销毁 entity 前释放其 footprint cells（`SetBlocked(cell, false)`）；需让 DeathSystem 能访问 grid（design §5.3：把 grid 引用传入 SimWorld 或 GameInstance 侧处理，择一）。
+- [x] `NextRAGameInstance`：炮塔几何（基座 box + 炮塔 box SetParent + 炮管 box，朝向随 `FTurret.facing` 旋转，复用 C1 的朝向渲染）；围墙几何（薄长 box）；炮塔/围墙预置（开局放几个，或兵营可造）。
+- [x] `gnb shot` 验证：炮塔在范围内自动开火、炮管追踪敌方单位；围墙挡住单位寻路；摧毁围墙后单位恢复通行。
 
 **验收**：
 1. `./gnb build NextRA gkNextUnitTests` 通过。

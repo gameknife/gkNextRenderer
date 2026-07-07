@@ -61,6 +61,7 @@ set(UNIT_TEST_SOURCES
 	Application/Game/NextRA/Net/Order.cpp
 	Application/Game/NextRA/Net/OrderManager.cpp
 	Application/Game/NextRA/Net/Replay.cpp
+	Application/Game/NextRA/Sim/OccupancyGrid.cpp
 	Application/Game/NextRA/Sim/PathfindGrid.cpp
 	Application/Game/NextRA/Sim/SimWorld.cpp
 	Application/Game/NextRA/Sim/SyncHash.cpp
