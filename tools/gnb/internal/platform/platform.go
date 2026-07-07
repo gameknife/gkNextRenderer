@@ -114,6 +114,24 @@ func EnsureLinuxDesktopPackages() error {
 }
 
 func ensureLinuxAptPackages() error {
+	// System packages required on Debian/Ubuntu.
+	//
+	// Grouping:
+	//   - build toolchain: vcpkg bootstrap + cmake/ninja
+	//   - X11/Wayland dev headers: required at vcpkg *compile time* for the sdl3
+	//     (X11/Wayland backends) and vulkan-loader (xcb/xlib/wayland) ports.
+	//     The engine itself only links SDL3 and never touches Xlib/Wayland
+	//     directly; these dev packages exist so vcpkg can build SDL3 against
+	//     the system display stack.
+	//
+	// Notably NOT included (vs. historical list):
+	//   - xorg-dev: replaced by the minimal sdl3 X11 subset (libx11/libxft/libxext)
+	//     recommended by the upstream vcpkg sdl3 portfile, avoiding the xserver
+	//     / xutils churn the metapackage drags in.
+	//   - autoconf / autoconf-archive / automake / libtool: every Linux port in
+	//     vcpkg.json is cmake-based; no autoreconf-style port remains.
+	//   - libsystemd-dev: no reference anywhere in src/, cmake/, or gnb; the
+	//     vcpkg dbus port pulls its own deps.
 	packages := []string{
 		"build-essential",
 		"cmake",
@@ -129,12 +147,9 @@ func ensureLinuxAptPackages() error {
 		"libxrandr-dev",
 		"wayland-protocols",
 		"libxkbcommon-dev",
-		"xorg-dev",
-		"autoconf",
-		"autoconf-archive",
-		"automake",
-		"libtool",
-		"libsystemd-dev",
+		"libx11-dev",
+		"libxft-dev",
+		"libxext-dev",
 	}
 	missing := make([]string, 0)
 	for _, pkg := range packages {
@@ -153,6 +168,8 @@ func ensureLinuxAptPackages() error {
 }
 
 func ensureLinuxPacmanPackages() error {
+	// See ensureLinuxAptPackages for the rationale on what is/isn't included.
+	// base-devel already covers autotools on Arch.
 	packages := []string{
 		"base-devel",
 		"cmake",
@@ -165,7 +182,12 @@ func ensureLinuxPacmanPackages() error {
 		"libxrandr",
 		"wayland-protocols",
 		"libxkbcommon",
-		"systemd-libs",
+		"libx11",
+		"libxft",
+		"libxext",
+		"libxi",
+		"libxinerama",
+		"libxcursor",
 	}
 	missing := make([]string, 0)
 	for _, pkg := range packages {
