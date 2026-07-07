@@ -222,7 +222,7 @@ Aside from host-side requirements such as Visual Studio, the rest of the project
 ```
 
 - On apt / pacman hosts, `gnb setup` and the first Linux `gnb build` automatically install the required desktop build packages before vcpkg bootstrap
-- If automatic installation is unavailable, install them manually: `sudo apt install build-essential cmake ninja-build curl zip unzip tar pkg-config libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev libx11-dev libxft-dev libxext-dev`
+- If automatic installation is unavailable, install them manually: `sudo apt install build-essential cmake ninja-build curl zip unzip tar pkg-config libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev`
 - Non apt/pacman distributions still stop with an explicit missing desktop dependency hint
 
 </details>

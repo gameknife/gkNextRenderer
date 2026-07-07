@@ -228,7 +228,7 @@ Windows 上若安装了 [Superluminal](https://superluminal.eu/) Performance API
 ```
 
 - 在 apt / pacman 环境下，`gnb setup` 与 Linux 首轮 `gnb build` 会在 vcpkg bootstrap 前自动安装桌面构建所需系统包
-- 如果自动安装不可用，再手动补齐：`sudo apt install build-essential cmake ninja-build curl zip unzip tar pkg-config libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev libx11-dev libxft-dev libxext-dev`
+- 如果自动安装不可用，再手动补齐：`sudo apt install build-essential cmake ninja-build curl zip unzip tar pkg-config libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev wayland-protocols libxkbcommon-dev xorg-dev`
 - 非 apt/pacman 发行版仍会给出缺失桌面依赖提示
 
 </details>

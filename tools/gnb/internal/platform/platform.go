@@ -122,12 +122,12 @@ func ensureLinuxAptPackages() error {
 	//     (X11/Wayland backends) and vulkan-loader (xcb/xlib/wayland) ports.
 	//     The engine itself only links SDL3 and never touches Xlib/Wayland
 	//     directly; these dev packages exist so vcpkg can build SDL3 against
-	//     the system display stack.
+	//     the system display stack. xorg-dev is the metapackage that covers the
+	//     full X11 dev header set SDL3's X11 backend pulls in at configure time;
+	//     the discrete libx11/libxft/libxext subset listed by the upstream sdl3
+	//     portfile is NOT sufficient in practice.
 	//
 	// Notably NOT included (vs. historical list):
-	//   - xorg-dev: replaced by the minimal sdl3 X11 subset (libx11/libxft/libxext)
-	//     recommended by the upstream vcpkg sdl3 portfile, avoiding the xserver
-	//     / xutils churn the metapackage drags in.
 	//   - autoconf / autoconf-archive / automake / libtool: every Linux port in
 	//     vcpkg.json is cmake-based; no autoreconf-style port remains.
 	//   - libsystemd-dev: no reference anywhere in src/, cmake/, or gnb; the
@@ -147,9 +147,7 @@ func ensureLinuxAptPackages() error {
 		"libxrandr-dev",
 		"wayland-protocols",
 		"libxkbcommon-dev",
-		"libx11-dev",
-		"libxft-dev",
-		"libxext-dev",
+		"xorg-dev",
 	}
 	missing := make([]string, 0)
 	for _, pkg := range packages {
@@ -169,7 +167,8 @@ func ensureLinuxAptPackages() error {
 
 func ensureLinuxPacmanPackages() error {
 	// See ensureLinuxAptPackages for the rationale on what is/isn't included.
-	// base-devel already covers autotools on Arch.
+	// base-devel already covers autotools on Arch; libxrandr pulls the rest of
+	// the X11 dev headers transitively.
 	packages := []string{
 		"base-devel",
 		"cmake",
@@ -182,12 +181,6 @@ func ensureLinuxPacmanPackages() error {
 		"libxrandr",
 		"wayland-protocols",
 		"libxkbcommon",
-		"libx11",
-		"libxft",
-		"libxext",
-		"libxi",
-		"libxinerama",
-		"libxcursor",
 	}
 	missing := make([]string, 0)
 	for _, pkg := range packages {
