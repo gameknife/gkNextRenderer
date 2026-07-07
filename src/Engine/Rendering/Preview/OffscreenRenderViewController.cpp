@@ -3,10 +3,8 @@
 
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
-#include "Engine/Rendering/RenderViewResourceFactory.hpp"
 #include "Engine/Rendering/ViewCameraUboBuilder.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Engine/Utilities/Exception.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
@@ -151,6 +149,14 @@ namespace Vulkan
                 view.view->InvalidateTemporalHistory();
             }
         }
+        for (auto& [rendererType, view] : referenceViews_)
+        {
+            if (view.view != nullptr)
+            {
+                view.view->InvalidateTemporalHistory();
+                view.view->SetSceneOverride(nullptr);
+            }
+        }
     }
 
     void OffscreenRenderViewController::OnSwapChainResourcesInvalidated(const bool releaseSampledOutputs)
@@ -158,6 +164,14 @@ namespace Vulkan
         for (auto& view : views_)
         {
             view.target.ResetSwapChainResources(releaseSampledOutputs);
+        }
+        for (auto& [rendererType, view] : referenceViews_)
+        {
+            view.target.ResetSwapChainResources(/*releaseSampledOutput*/ false);
+            if (view.view != nullptr)
+            {
+                view.view->SetSceneOverride(nullptr);
+            }
         }
     }
 
@@ -174,49 +188,69 @@ namespace Vulkan
         extent.width = std::max(1u, extent.width);
         extent.height = std::max(1u, extent.height);
 
-        if (resources.view == nullptr)
-        {
-            FViewDesc viewDesc{};
-            viewDesc.renderExtent = extent;
-            viewDesc.outputKind = EViewOutputKind::OffscreenTexture;
-            viewDesc.schedule = EViewSchedule::Persistent;
-            resources.view = renderer_.renderViews_->CreateView(viewDesc, fmt::format("secondary view {}", viewIndex));
-            if (resources.view == nullptr)
-            {
-                Throw(std::runtime_error("failed to allocate secondary RenderView bank"));
-            }
-            resources.view->CreateSwapChain(renderer_.SwapChain());
-        }
-        resources.view->SetDebugName(fmt::format("secondary view {}", viewIndex));
-        resources.view->SetRenderExtent(extent);
-        resources.view->SetCopyObjectIdHistory(true);
-
-        if (resources.view->AllocatedExtent().width == extent.width &&
-            resources.view->AllocatedExtent().height == extent.height &&
-            resources.view->VisibilityFramebuffer() != nullptr &&
-            resources.target.offscreenImage != nullptr)
-        {
-            return *resources.view;
-        }
-
-        resources.target.visibilityFramebuffer.reset();
-        resources.target.offscreenImage.reset();
         RenderViewResourceFactory resourceFactory(renderer_);
-        resources.target.visibilityFramebuffer = resourceFactory.RebuildVisibilityFramebuffer(*resources.view, extent);
-
+        FViewDesc viewDesc{};
+        viewDesc.renderExtent = extent;
+        viewDesc.outputKind = EViewOutputKind::OffscreenTexture;
+        viewDesc.schedule = EViewSchedule::Persistent;
+        RenderView& view = resourceFactory.EnsureView(
+            resources.view,
+            viewDesc,
+            fmt::format("secondary view {}", viewIndex),
+            true);
         const std::string offscreenDebugName = fmt::format("Secondary View {} Offscreen", viewIndex);
-        resources.target.offscreenImage = resourceFactory.CreateSampledColorImage(extent, offscreenDebugName.c_str());
-        if (!resources.target.offscreenSampler)
-        {
-            resources.target.offscreenSampler = resourceFactory.CreateClampSampler();
-        }
-        resources.target.outputSampleSlot = SampleSlot(viewIndex);
-        resourceFactory.BindSampledColorImage(
-            resources.target.outputSampleSlot,
-            *resources.target.offscreenImage,
-            *resources.target.offscreenSampler);
+        resourceFactory.EnsureSampledOffscreenTarget(
+            view,
+            resources.target,
+            extent,
+            SampleSlot(viewIndex),
+            offscreenDebugName.c_str());
 
-        return *resources.view;
+        return view;
+    }
+
+    RenderView& OffscreenRenderViewController::EnsureReferenceView(
+        const int rendererType,
+        const uint32_t imageIndex)
+    {
+        const auto type = static_cast<ERendererType>(rendererType);
+        const FReferenceViewLayout layout = GetReferenceViewLayout(type);
+        VkExtent2D extent{
+            std::max(1u, renderer_.frame_.swapChain->RenderExtent().width / 2u),
+            std::max(1u, renderer_.frame_.swapChain->RenderExtent().height / 2u)};
+        VkOffset2D offset{
+            static_cast<int32_t>(layout.column * extent.width),
+            static_cast<int32_t>(layout.row * extent.height)};
+
+        auto& resources = referenceViews_[rendererType];
+        FViewDesc viewDesc{};
+        viewDesc.renderExtent = extent;
+        viewDesc.outputKind = EViewOutputKind::SwapchainSubrect;
+        viewDesc.schedule = EViewSchedule::Persistent;
+        viewDesc.subrect = VkRect2D{offset, extent};
+        RenderViewResourceFactory resourceFactory(renderer_);
+        RenderView& view = resourceFactory.EnsureView(resources.view, viewDesc, layout.debugName, true);
+        view.SetRenderOffset({0, 0});
+        view.SetSceneOverride(nullptr);
+
+        if (view.AllocatedExtent().width != extent.width ||
+            view.AllocatedExtent().height != extent.height)
+        {
+            resources.target.visibilityFramebuffer.reset();
+            resources.target.visibilityFramebuffer = resourceFactory.RebuildVisibilityFramebuffer(view, extent);
+        }
+
+        Assets::UniformBufferObject ubo = renderer_.frame_.lastUBO;
+        ubo.ViewportRect = glm::vec4(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height));
+        ubo.Jitter = glm::vec4(0.0f);
+        ubo.TemporalFrames = 1;
+        ubo.TAA = false;
+        ubo.ProgressiveRender = false;
+        renderer_.FinalizeTemporalUbo(view, ubo);
+
+        renderer_.SetRenderViewUbo(view, imageIndex, ubo);
+        view.SetVisibilityFramebuffer(resources.target.visibilityFramebuffer.get());
+        return view;
     }
 
     void OffscreenRenderViewController::CopyViewOutput(
@@ -226,38 +260,14 @@ namespace Vulkan
     {
         viewIndex = std::min(viewIndex, kMaxSecondaryViews - 1);
         auto& resources = views_[viewIndex];
-        const RenderImage* src = renderer_.GetStorageImage(view.RtBankBase() + Assets::Bindless::RT_DENOISED);
-        if (!src)
-        {
-            return;
-        }
-
-        const VkExtent2D secondaryExtent = view.RenderExtent();
-        const int32_t rw = static_cast<int32_t>(secondaryExtent.width);
-        const int32_t rh = static_cast<int32_t>(secondaryExtent.height);
-
-        src->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                           VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-
         if (resources.target.offscreenImage)
         {
-            resources.target.offscreenImage->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT,
-                VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-            VkImageCopy copyRegion{};
-            copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-            copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-            copyRegion.extent = {static_cast<uint32_t>(rw), static_cast<uint32_t>(rh), 1};
-            vkCmdCopyImage(commandBuffer,
-                src->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                resources.target.offscreenImage->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                1, &copyRegion);
-            resources.target.offscreenImage->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_WRITE_BIT,
-                VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            RenderViewResourceFactory(renderer_).CopyDenoisedOutputToImage(
+                commandBuffer,
+                view,
+                *resources.target.offscreenImage,
+                VK_FILTER_NEAREST);
         }
-
-        src->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
     }
 
     void OffscreenRenderViewController::ScheduleViews(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
@@ -307,5 +317,35 @@ namespace Vulkan
                     }
                 });
         }
+    }
+
+    bool OffscreenRenderViewController::ScheduleReferenceViews(
+        VkCommandBuffer commandBuffer,
+        const uint32_t imageIndex)
+    {
+        bool clearSwapchain = true;
+        bool renderedAny = false;
+        for (const ERendererType rendererType : GetReferenceRendererTypes())
+        {
+            LogicRendererBase* logicRenderer = renderer_.EnsureLogicRenderer(rendererType);
+            if (logicRenderer == nullptr)
+            {
+                continue;
+            }
+
+            RenderView& referenceView = EnsureReferenceView(static_cast<int>(rendererType), imageIndex);
+            renderer_.ScheduleRenderView(
+                referenceView,
+                *logicRenderer,
+                clearSwapchain,
+                [this, commandBuffer, imageIndex](RenderView& view)
+                {
+                    renderer_.ComposeViewToSwapchainSubrect(commandBuffer, imageIndex, view);
+                });
+            clearSwapchain = false;
+            renderedAny = true;
+        }
+
+        return renderedAny;
     }
 }

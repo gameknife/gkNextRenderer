@@ -271,9 +271,8 @@ private:
     const Assets::Scene& GetScene() const { return *scene_; }
     void LaunchLoadSceneTask(std::string sceneFileName, std::function<void(SceneLoadContext&)> onGpuLoad);
     void LoadScene(const FSceneLoadRequest& request);
-    void PrepareRendererForSceneMutation(const std::function<void(const char*)>& logProfile = {});
-    void CommitSceneToRenderer(const SceneRendererSyncOptions& options,
-                               const std::function<void(const char*)>& logProfile = {});
+    void PrepareRendererForSceneMutation();
+    void CommitSceneToRenderer(const SceneRendererSyncOptions& options);
 
     // Input helpers
     void OnKey(SDL_Event& event);

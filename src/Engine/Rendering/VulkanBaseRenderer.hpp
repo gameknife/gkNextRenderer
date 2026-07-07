@@ -37,9 +37,7 @@ namespace Vulkan
 	class AssetThumbnailRenderer;
 	class FActiveRenderViewScope;
 	class LogicRendererBase;
-	class MaterialPreviewRenderer;
 	class OffscreenRenderViewController;
-	class ReferenceRenderViewController;
 	class RenderViewResourceFactory;
 	class RenderViewServices;
 
@@ -211,9 +209,7 @@ namespace Vulkan
 	private:
 		friend class AssetThumbnailRenderer;
 		friend class FActiveRenderViewScope;
-		friend class MaterialPreviewRenderer;
 		friend class OffscreenRenderViewController;
-		friend class ReferenceRenderViewController;
 		friend class RenderViewResourceFactory;
 
 		// Internal resource groups
@@ -367,7 +363,6 @@ namespace Vulkan
 		LogicRendererRegistry logicRenderers_;
 		std::unique_ptr<RenderViewManager> renderViews_ = std::make_unique<RenderViewManager>();
 		std::unique_ptr<RenderViewServices> renderViewServices_;
-		std::unique_ptr<ReferenceRenderViewController> referenceViewController_;
 		Assets::Scene* activeSceneOverride_ = nullptr;
 		RenderView* activeRenderView_ = nullptr;
 		uint32_t activeViewBankBase_ = 0;

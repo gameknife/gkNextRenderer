@@ -31,15 +31,9 @@
 #include <algorithm>
 #include <chrono>
 #include <fmt/format.h>
-#include <spdlog/stopwatch.h>
 
 namespace
 {
-    bool ShouldLogStartupProfile()
-    {
-        return GOption != nullptr && GOption->AgentValidation;
-    }
-
     struct SceneTaskContext
     {
         bool success;
@@ -63,34 +57,21 @@ void NextEngine::RequestLoadScene(FSceneLoadRequest request)
         });
 }
 
-void NextEngine::PrepareRendererForSceneMutation(const std::function<void(const char*)>& logProfile)
+void NextEngine::PrepareRendererForSceneMutation()
 {
     renderer_->OnPreLoadScene();
-    if (logProfile)
-    {
-        logProfile("renderer pre-load scene");
-    }
 }
 
-void NextEngine::CommitSceneToRenderer(const SceneRendererSyncOptions& options,
-                                       const std::function<void(const char*)>& logProfile)
+void NextEngine::CommitSceneToRenderer(const SceneRendererSyncOptions& options)
 {
     if (options.rebuildMeshBuffer)
     {
         scene_->RebuildMeshBuffer(renderer_->CommandPool(), renderer_->SupportsRayTracing());
-        if (logProfile)
-        {
-            logProfile("mesh gpu buffers rebuilt");
-        }
     }
 
     if (options.setRendererScene)
     {
         renderer_->SetScene(scene_);
-        if (logProfile)
-        {
-            logProfile("renderer scene set");
-        }
     }
 
     if (options.resetFrameCounter)
@@ -102,10 +83,6 @@ void NextEngine::CommitSceneToRenderer(const SceneRendererSyncOptions& options,
     {
         renderer_->OnPostLoadScene();
         OnRendererPostLoadScene();
-        if (logProfile)
-        {
-            logProfile("renderer post-load scene");
-        }
     }
 
     if (options.refreshSwapChainResources)
@@ -113,18 +90,10 @@ void NextEngine::CommitSceneToRenderer(const SceneRendererSyncOptions& options,
         if (renderer_->HasSwapChain())
         {
             renderer_->RefreshSceneSwapChainResources();
-            if (logProfile)
-            {
-                logProfile("scene swapchain resources refreshed");
-            }
         }
         else if (options.createSwapChainIfMissing)
         {
             renderer_->CreateSwapChain();
-            if (logProfile)
-            {
-                logProfile("new swapchain created");
-            }
         }
     }
 }
@@ -222,43 +191,25 @@ void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<vo
         },
         [this, ctx, sceneFileName, onGpuLoad](Tasks::ResTask& task) mutable
         {
-            spdlog::stopwatch profileTimer;
-            auto logProfile = [&profileTimer](const char* label)
-            {
-                if (ShouldLogStartupProfile())
-                {
-                    SPDLOG_INFO("[StartupProfile]   SceneLoad main {:<36} {}", label, profileTimer.elapsed_ms());
-                }
-            };
-
             SceneTaskContext taskContext{};
             task.GetContext(taskContext);
-            logProfile("task context fetched");
             if (taskContext.success)
             {
                 SPDLOG_INFO("{}", taskContext.outputInfo.data());
 
                 const bool canRefreshExistingSwapChain = renderer_->HasSwapChain();
                 renderer_->Device().WaitIdle();
-                logProfile("device idle before reload");
                 if (!canRefreshExistingSwapChain)
                 {
                     renderer_->DeleteSwapChain();
-                    logProfile("old swapchain deleted");
-                }
-                else
-                {
-                    logProfile("old swapchain kept");
                 }
 
                 // Execute the specific GPU load logic
                 onGpuLoad(ctx);
-                logProfile("scene gpu load callback");
 
                 CommitSceneToRenderer({.rebuildMeshBuffer = false,
                                        .setRendererScene = false,
-                                       .createSwapChainIfMissing = !canRefreshExistingSwapChain},
-                                      logProfile);
+                                       .createSwapChainIfMissing = !canRefreshExistingSwapChain});
             }
             else
             {
@@ -284,40 +235,27 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
         [this, request](SceneLoadContext& ctx)
         {
             const auto timer = std::chrono::high_resolution_clock::now();
-            spdlog::stopwatch profileTimer;
-            auto logProfile = [&profileTimer](const char* label)
-            {
-                if (ShouldLogStartupProfile())
-                {
-                    SPDLOG_INFO("[StartupProfile]   SceneLoad gpu {:<37} {}", label, profileTimer.elapsed_ms());
-                }
-            };
 
-            PrepareRendererForSceneMutation(logProfile);
+            PrepareRendererForSceneMutation();
             gameInstance_->BeforeSceneRebuild(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
-            logProfile("game before rebuild");
 
             if (!request.append)
             {
                 gameInstance_->OnSceneUnloaded();
                 services_.physics->OnSceneStarted();
-                logProfile("scene services reset");
 
                 scene_->Reload(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
                 scene_->SetEnvSettings(*ctx.cameraState);
                 scene_->SetGaussianSplats(std::move(*ctx.splats));
                 scene_->PostLoad(*ctx.skeletons);
-                logProfile("scene cpu structures rebuilt");
                 CommitSceneToRenderer({.resetFrameCounter = false,
                                        .postLoadRenderer = false,
-                                       .refreshSwapChainResources = false},
-                                      logProfile);
+                                       .refreshSwapChainResources = false});
 
                 config_.userSettings.CameraIdx = 0;
                 assert(!scene_->GetEnvSettings().cameras.empty());
                 scene_->SetRenderCamera(scene_->GetEnvSettings().cameras[0]);
                 gameInstance_->OnSceneLoaded();
-                logProfile("game scene loaded");
             }
             else
             {
@@ -331,8 +269,7 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
                 }
                 CommitSceneToRenderer({.resetFrameCounter = false,
                                        .postLoadRenderer = false,
-                                       .refreshSwapChainResources = false},
-                                      logProfile);
+                                       .refreshSwapChainResources = false});
             }
 
             const float elapsed = std::chrono::duration<float, std::chrono::seconds::period>(

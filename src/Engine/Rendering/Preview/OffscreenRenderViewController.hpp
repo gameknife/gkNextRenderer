@@ -2,7 +2,7 @@
 
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
-#include "Engine/Rendering/RenderViewResources.hpp"
+#include "Engine/Rendering/RenderView.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include <vulkan/vulkan.h>
@@ -10,6 +10,7 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
 
@@ -47,6 +48,7 @@ namespace Vulkan
         bool IsReady(uint32_t viewIndex) const;
         bool HasWork() const;
         void ScheduleViews(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+        bool ScheduleReferenceViews(VkCommandBuffer commandBuffer, uint32_t imageIndex);
         void ClearFrameRequests();
         void OnMainSceneChanged();
         void OnSwapChainResourcesInvalidated(bool releaseSampledOutputs);
@@ -64,10 +66,12 @@ namespace Vulkan
         };
 
         RenderView& EnsureView(uint32_t viewIndex);
+        RenderView& EnsureReferenceView(int rendererType, uint32_t imageIndex);
         void CopyViewOutput(VkCommandBuffer commandBuffer, RenderView& view, uint32_t viewIndex);
 
         VulkanBaseRenderer& renderer_;
         std::array<FViewResources, kMaxSecondaryViews> views_{};
+        std::map<int, FViewResources> referenceViews_;
         FViewRenderedCallback viewRenderedCallback_{};
     };
 }

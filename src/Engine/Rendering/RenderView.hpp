@@ -26,6 +26,7 @@
 #include <cstdint>
 #include <functional>
 #include <algorithm>
+#include <limits>
 #include <memory>
 #include <string>
 #include <utility>
@@ -36,7 +37,10 @@ namespace Vulkan
     class Device;
     class FrameBuffer;
     class LogicRendererBase;
+    class RenderImage;
+    class Sampler;
     class SwapChain;
+    class VulkanBaseRenderer;
 
     // How a view's composed result is delivered.
     enum class EViewOutputKind
@@ -359,5 +363,72 @@ namespace Vulkan
         std::unique_ptr<RenderView>             primary_;
         std::vector<std::unique_ptr<RenderView>> additional_;
         std::vector<FRenderViewScheduleItem>     schedule_;
+    };
+
+    struct FRenderViewTargetResources
+    {
+        FRenderViewTargetResources() = default;
+        ~FRenderViewTargetResources();
+
+        FRenderViewTargetResources(const FRenderViewTargetResources&) = delete;
+        FRenderViewTargetResources& operator=(const FRenderViewTargetResources&) = delete;
+        FRenderViewTargetResources(FRenderViewTargetResources&&) noexcept;
+        FRenderViewTargetResources& operator=(FRenderViewTargetResources&&) noexcept;
+
+        void ResetSwapChainResources(bool releaseSampledOutput);
+
+        std::unique_ptr<FrameBuffer> visibilityFramebuffer;
+        std::unique_ptr<RenderImage> offscreenImage;
+        std::unique_ptr<Sampler> offscreenSampler;
+        uint32_t outputSampleSlot = std::numeric_limits<uint32_t>::max();
+    };
+
+    class RenderViewResourceFactory final
+    {
+    public:
+        explicit RenderViewResourceFactory(VulkanBaseRenderer& renderer);
+
+        RenderView& EnsureView(
+            RenderView*& view,
+            const FViewDesc& desc,
+            std::string debugName,
+            bool copyObjectIdHistory);
+        std::unique_ptr<FrameBuffer> RebuildVisibilityFramebuffer(RenderView& view, VkExtent2D extent);
+        std::unique_ptr<RenderImage> CreateSampledColorImage(VkExtent2D extent, const char* debugName);
+        std::unique_ptr<Sampler> CreateClampSampler();
+        void BindSampledColorImage(uint32_t sampleSlot, RenderImage& image, Sampler& sampler);
+        void EnsureSampledOffscreenTarget(
+            RenderView& view,
+            FRenderViewTargetResources& target,
+            VkExtent2D extent,
+            uint32_t sampleSlot,
+            const char* debugName);
+        bool CopyDenoisedOutputToImage(
+            VkCommandBuffer commandBuffer,
+            RenderView& view,
+            RenderImage& dst,
+            VkFilter filter = VK_FILTER_LINEAR);
+
+    private:
+        VulkanBaseRenderer& renderer_;
+    };
+
+    class FActiveRenderViewScope final
+    {
+    public:
+        FActiveRenderViewScope(VulkanBaseRenderer& renderer, RenderView& view);
+        ~FActiveRenderViewScope();
+
+        FActiveRenderViewScope(const FActiveRenderViewScope&) = delete;
+        FActiveRenderViewScope& operator=(const FActiveRenderViewScope&) = delete;
+
+    private:
+        VulkanBaseRenderer& renderer_;
+        uint32_t previousBankBase_ = 0;
+        VkExtent2D previousRenderExtent_{0, 0};
+        VkDeviceAddress previousCameraAddress_ = 0;
+        FrameBuffer* previousVisibilityFrameBuffer_ = nullptr;
+        Assets::Scene* previousSceneOverride_ = nullptr;
+        RenderView* previousRenderView_ = nullptr;
     };
 }

@@ -6,15 +6,15 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/Loaders/FProcModel.h"
-#include "Engine/Rendering/RenderViewResourceFactory.hpp"
 #include "Engine/Rendering/ViewCameraUboBuilder.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.h"
-#include "Engine/Utilities/Exception.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
 
+#include <cmath>
+#include <cstring>
 #include <limits>
 
 namespace Vulkan
@@ -22,76 +22,145 @@ namespace Vulkan
     AssetThumbnailRenderer::AssetThumbnailRenderer(VulkanBaseRenderer& renderer)
         : renderer_(renderer)
     {
+        ThumbnailCache(EThumbnailKind::Material).sampleSlotBase = kMaterialThumbnailSampleSlotBase;
+        ThumbnailCache(EThumbnailKind::Material).maxSlots = kMaterialThumbnailMaxSlots;
+        ThumbnailCache(EThumbnailKind::Mesh).sampleSlotBase = kMeshThumbnailSampleSlotBase;
+        ThumbnailCache(EThumbnailKind::Mesh).maxSlots = kMeshThumbnailMaxSlots;
+        materialPreview_.gpuMaterial_ = Assets::Material::Lambertian(glm::vec3(0.75f));
+        materialPreview_.name_ = "__material_preview";
     }
 
     AssetThumbnailRenderer::~AssetThumbnailRenderer() = default;
+
+    AssetThumbnailRenderer::FThumbnailCache& AssetThumbnailRenderer::ThumbnailCache(const EThumbnailKind kind)
+    {
+        return thumbnailCaches_[ThumbnailKindIndex(kind)];
+    }
+
+    const AssetThumbnailRenderer::FThumbnailCache& AssetThumbnailRenderer::ThumbnailCache(
+        const EThumbnailKind kind) const
+    {
+        return thumbnailCaches_[ThumbnailKindIndex(kind)];
+    }
 
     uint32_t AssetThumbnailRenderer::RequestMaterialThumbnail(
         const uint32_t materialIndex,
         const uint64_t materialHash)
     {
-        if (materialIndex >= kMaterialThumbnailMaxSlots)
-        {
-            return std::numeric_limits<uint32_t>::max();
-        }
-
-        if (materialThumbnailHashes_.size() <= materialIndex)
-        {
-            materialThumbnailHashes_.resize(static_cast<size_t>(materialIndex) + 1, 0);
-        }
-        if (materialThumbnailImages_.size() <= materialIndex)
-        {
-            materialThumbnailImages_.resize(static_cast<size_t>(materialIndex) + 1);
-        }
-
-        if (materialThumbnailImages_[materialIndex] != nullptr &&
-            materialThumbnailHashes_[materialIndex] == materialHash)
-        {
-            return kMaterialThumbnailSampleSlotBase + materialIndex;
-        }
-
-        materialThumbnailHashes_[materialIndex] = materialHash;
-        if (std::find(pendingMaterialThumbnails_.begin(), pendingMaterialThumbnails_.end(), materialIndex) ==
-            pendingMaterialThumbnails_.end())
-        {
-            pendingMaterialThumbnails_.push_back(materialIndex);
-        }
-        return std::numeric_limits<uint32_t>::max();
+        return RequestThumbnail(EThumbnailKind::Material, materialIndex, materialHash);
     }
 
     uint32_t AssetThumbnailRenderer::RequestMeshThumbnail(const uint32_t modelIndex, const uint64_t modelHash)
     {
-        if (modelIndex >= kMeshThumbnailMaxSlots)
+        return RequestThumbnail(EThumbnailKind::Mesh, modelIndex, modelHash);
+    }
+
+    uint32_t AssetThumbnailRenderer::RequestThumbnail(
+        const EThumbnailKind kind,
+        const uint32_t assetIndex,
+        const uint64_t assetHash)
+    {
+        FThumbnailCache& cache = ThumbnailCache(kind);
+        if (assetIndex >= cache.maxSlots)
         {
             return std::numeric_limits<uint32_t>::max();
         }
 
-        if (meshThumbnailHashes_.size() <= modelIndex)
+        if (cache.hashes.size() <= assetIndex)
         {
-            meshThumbnailHashes_.resize(static_cast<size_t>(modelIndex) + 1, 0);
+            cache.hashes.resize(static_cast<size_t>(assetIndex) + 1, 0);
         }
-        if (meshThumbnailImages_.size() <= modelIndex)
+        if (cache.images.size() <= assetIndex)
         {
-            meshThumbnailImages_.resize(static_cast<size_t>(modelIndex) + 1);
-        }
-
-        if (meshThumbnailImages_[modelIndex] != nullptr && meshThumbnailHashes_[modelIndex] == modelHash)
-        {
-            return kMeshThumbnailSampleSlotBase + modelIndex;
+            cache.images.resize(static_cast<size_t>(assetIndex) + 1);
         }
 
-        meshThumbnailHashes_[modelIndex] = modelHash;
-        if (std::find(pendingMeshThumbnails_.begin(), pendingMeshThumbnails_.end(), modelIndex) ==
-            pendingMeshThumbnails_.end())
+        if (cache.images[assetIndex] != nullptr && cache.hashes[assetIndex] == assetHash)
         {
-            pendingMeshThumbnails_.push_back(modelIndex);
+            return cache.sampleSlotBase + assetIndex;
+        }
+
+        cache.hashes[assetIndex] = assetHash;
+        if (std::find(cache.pending.begin(), cache.pending.end(), assetIndex) == cache.pending.end())
+        {
+            cache.pending.push_back(assetIndex);
         }
         return std::numeric_limits<uint32_t>::max();
     }
 
+    void AssetThumbnailRenderer::SetEnabled(const bool enabled)
+    {
+        materialPreviewEnabled_ = enabled;
+        if (!materialPreviewEnabled_ && materialPreviewView_ != nullptr)
+        {
+            materialPreviewView_->SetSceneOverride(nullptr);
+        }
+    }
+
+    void AssetThumbnailRenderer::SetRenderExtent(VkExtent2D extent)
+    {
+        extent.width = std::max(1u, extent.width);
+        extent.height = std::max(1u, extent.height);
+        if (materialPreviewExtent_.width == extent.width && materialPreviewExtent_.height == extent.height)
+        {
+            return;
+        }
+
+        materialPreviewExtent_ = extent;
+        if (materialPreviewView_ != nullptr)
+        {
+            materialPreviewView_->SetRenderExtent(materialPreviewExtent_);
+            materialPreviewView_->InvalidateTemporalHistory();
+        }
+    }
+
+    void AssetThumbnailRenderer::SetPreviewMaterial(const Assets::FMaterial& material)
+    {
+        if (materialPreview_.name_ == "__material_preview" &&
+            std::memcmp(&materialPreview_.gpuMaterial_, &material.gpuMaterial_, sizeof(Assets::Material)) == 0)
+        {
+            return;
+        }
+        materialPreview_ = material;
+        materialPreview_.name_ = "__material_preview";
+        materialPreviewDirty_ = true;
+        if (materialPreviewView_ != nullptr)
+        {
+            materialPreviewView_->InvalidateTemporalHistory();
+        }
+    }
+
+    void AssetThumbnailRenderer::SetCameraOrbit(float yawRadians, float pitchRadians, float distance)
+    {
+        pitchRadians = std::clamp(pitchRadians, -1.2f, 1.2f);
+        distance = std::clamp(distance, 1.8f, 8.0f);
+        if (std::abs(materialPreviewYaw_ - yawRadians) < 0.0001f &&
+            std::abs(materialPreviewPitch_ - pitchRadians) < 0.0001f &&
+            std::abs(materialPreviewDistance_ - distance) < 0.0001f)
+        {
+            return;
+        }
+
+        materialPreviewYaw_ = yawRadians;
+        materialPreviewPitch_ = pitchRadians;
+        materialPreviewDistance_ = distance;
+        if (materialPreviewScene_)
+        {
+            materialPreviewScene_->SetRenderCamera(BuildMaterialPreviewCamera());
+        }
+        if (materialPreviewView_ != nullptr)
+        {
+            materialPreviewView_->InvalidateTemporalHistory();
+        }
+    }
+
     void AssetThumbnailRenderer::BeforeNextFrame()
     {
-        if (HasPendingMaterialThumbnail())
+        if (materialPreviewEnabled_)
+        {
+            EnsureMaterialPreviewScene();
+        }
+        if (HasPendingThumbnail(EThumbnailKind::Material))
         {
             EnsureMaterialThumbnailScene();
         }
@@ -104,85 +173,110 @@ namespace Vulkan
             thumbnailRenderView_->InvalidateTemporalHistory();
             thumbnailRenderView_->SetSceneOverride(nullptr);
         }
+        if (materialPreviewView_ != nullptr)
+        {
+            materialPreviewView_->InvalidateTemporalHistory();
+            materialPreviewView_->SetSceneOverride(nullptr);
+        }
 
-        materialThumbnailScene_.reset();
-        materialThumbnailImages_.clear();
-        materialThumbnailHashes_.clear();
-        pendingMaterialThumbnails_.clear();
-        materialThumbnailSceneReady_ = false;
-        meshThumbnailScene_.reset();
-        meshThumbnailImages_.clear();
-        meshThumbnailHashes_.clear();
-        pendingMeshThumbnails_.clear();
+        thumbnailScene_.reset();
+        thumbnailSceneReady_ = false;
+        materialPreviewScene_.reset();
+        materialPreviewSceneReady_ = false;
+        materialPreviewDirty_ = true;
+        ClearThumbnailCaches();
         thumbnailTarget_.ResetSwapChainResources(/*releaseSampledOutput*/ false);
     }
 
     void AssetThumbnailRenderer::OnHdrShUpdated()
     {
-        if (materialThumbnailScene_ != nullptr)
+        if (thumbnailScene_ != nullptr)
         {
-            materialThumbnailScene_->UpdateHDRSH();
+            thumbnailScene_->UpdateHDRSH();
         }
-        if (meshThumbnailScene_ != nullptr)
+        if (materialPreviewScene_ != nullptr)
         {
-            meshThumbnailScene_->UpdateHDRSH();
+            materialPreviewScene_->UpdateHDRSH();
         }
 
-        auto enqueueExisting = [](const std::vector<std::unique_ptr<RenderImage>>& images,
-                                  std::vector<uint32_t>& pending)
-        {
-            for (uint32_t index = 0; index < images.size(); ++index)
-            {
-                if (images[index] == nullptr)
-                {
-                    continue;
-                }
-                if (std::find(pending.begin(), pending.end(), index) == pending.end())
-                {
-                    pending.push_back(index);
-                }
-            }
-        };
-
-        enqueueExisting(materialThumbnailImages_, pendingMaterialThumbnails_);
-        enqueueExisting(meshThumbnailImages_, pendingMeshThumbnails_);
+        EnqueueExistingThumbnailImages(ThumbnailCache(EThumbnailKind::Material));
+        EnqueueExistingThumbnailImages(ThumbnailCache(EThumbnailKind::Mesh));
         if (thumbnailRenderView_ != nullptr)
         {
             thumbnailRenderView_->InvalidateTemporalHistory();
+        }
+        if (materialPreviewView_ != nullptr)
+        {
+            materialPreviewView_->InvalidateTemporalHistory();
         }
     }
 
     void AssetThumbnailRenderer::OnSwapChainResourcesInvalidated()
     {
         thumbnailTarget_.ResetSwapChainResources(/*releaseSampledOutput*/ false);
+        materialPreviewTarget_.ResetSwapChainResources(/*releaseSampledOutput*/ false);
         if (thumbnailRenderView_ != nullptr)
         {
             thumbnailRenderView_->SetSceneOverride(nullptr);
+        }
+        if (materialPreviewView_ != nullptr)
+        {
+            materialPreviewView_->SetSceneOverride(nullptr);
         }
     }
 
     bool AssetThumbnailRenderer::ScheduleNextThumbnail(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
-        if (ScheduleNextMaterialThumbnail(commandBuffer, imageIndex))
+        if (ScheduleNextThumbnail(EThumbnailKind::Material, commandBuffer, imageIndex))
         {
             return true;
         }
-        return ScheduleNextMeshThumbnail(commandBuffer, imageIndex);
+        return ScheduleNextThumbnail(EThumbnailKind::Mesh, commandBuffer, imageIndex);
     }
 
     bool AssetThumbnailRenderer::HasPendingThumbnail() const
     {
-        return HasPendingMaterialThumbnail() || HasPendingMeshThumbnail();
+        return HasPendingThumbnail(EThumbnailKind::Material) || HasPendingThumbnail(EThumbnailKind::Mesh);
     }
 
-    void AssetThumbnailRenderer::EnsureMaterialThumbnailScene()
+    void AssetThumbnailRenderer::ClearThumbnailCaches()
     {
-        if (materialThumbnailSceneReady_)
+        for (FThumbnailCache& cache : thumbnailCaches_)
         {
-            return;
+            cache.images.clear();
+            cache.hashes.clear();
+            cache.pending.clear();
         }
+    }
 
-        materialThumbnailScene_ = std::make_unique<Assets::Scene>(
+    void AssetThumbnailRenderer::EnqueueExistingThumbnailImages(FThumbnailCache& cache)
+    {
+        for (uint32_t index = 0; index < cache.images.size(); ++index)
+        {
+            if (cache.images[index] == nullptr)
+            {
+                continue;
+            }
+            if (std::find(cache.pending.begin(), cache.pending.end(), index) == cache.pending.end())
+            {
+                cache.pending.push_back(index);
+            }
+        }
+    }
+
+    bool AssetThumbnailRenderer::HasPendingThumbnail(const EThumbnailKind kind) const
+    {
+        return !ThumbnailCache(kind).pending.empty();
+    }
+
+    std::unique_ptr<Assets::Scene> AssetThumbnailRenderer::CreateMaterialSphereScene(
+        Assets::FMaterial material,
+        const char* nodeName,
+        const char* cameraName,
+        const bool sunEnabled,
+        const Assets::Camera& camera)
+    {
+        auto scene = std::make_unique<Assets::Scene>(
             renderer_.CommandPool(), false, /*allocateAmbientResources*/ false, /*enableCpuAcceleration*/ false);
 
         std::vector<std::shared_ptr<Assets::Node>> nodes;
@@ -193,12 +287,9 @@ namespace Vulkan
         std::vector<Assets::Skeleton> skeletons;
 
         models.push_back(Assets::FProcModel::CreateSphere(glm::vec3(0.0f), 1.0f));
-        Assets::FMaterial previewMaterial;
-        previewMaterial.gpuMaterial_ = Assets::Material::Lambertian(glm::vec3(0.75f));
-        previewMaterial.name_ = "__material_thumbnail_preview";
-        materials.push_back(previewMaterial);
+        materials.push_back(std::move(material));
         nodes.push_back(Assets::SceneBuilder::CreateRenderNode(
-            "__MaterialThumbnailSphere",
+            nodeName,
             glm::vec3(0.0f),
             glm::vec3(1.0f),
             1u,
@@ -206,18 +297,53 @@ namespace Vulkan
             0u,
             true));
 
-        materialThumbnailScene_->Reload(nodes, models, materials, lights, tracks);
-        materialThumbnailScene_->PostLoad(skeletons);
-        materialThumbnailScene_->RebuildMeshBuffer(renderer_.CommandPool(), false);
+        scene->Reload(nodes, models, materials, lights, tracks);
+        scene->PostLoad(skeletons);
+        scene->RebuildMeshBuffer(renderer_.CommandPool(), false);
 
         Assets::EnvironmentSetting env;
         env.Reset();
         env.HasSky = true;
-        env.HasSun = true;
-        env.SunIntensity = 500.0f;
+        env.HasSun = sunEnabled;
+        env.SunIntensity = sunEnabled ? 500.0f : 1000.0f;
         env.SunRotation = 0.35f;
         env.SkyIntensity = 300.0f;
-        materialThumbnailScene_->SetEnvSettings(env);
+        scene->SetEnvSettings(env);
+
+        Assets::Camera sceneCamera = camera;
+        sceneCamera.name = cameraName;
+        scene->SetRenderCamera(sceneCamera);
+        scene->UpdateNodes();
+        return scene;
+    }
+
+    Assets::Camera AssetThumbnailRenderer::BuildMaterialPreviewCamera() const
+    {
+        Assets::Camera camera{};
+        camera.name = "Material Preview";
+        camera.FieldOfView = 38.0f;
+        camera.Aperture = 0.0f;
+        camera.FocalDistance = materialPreviewDistance_;
+        camera.NearPlane = 0.01f;
+        camera.FarPlane = 20.0f;
+        const glm::vec3 eye(
+            std::sin(materialPreviewYaw_) * std::cos(materialPreviewPitch_) * materialPreviewDistance_,
+            std::sin(materialPreviewPitch_) * materialPreviewDistance_,
+            std::cos(materialPreviewYaw_) * std::cos(materialPreviewPitch_) * materialPreviewDistance_);
+        camera.ModelView = glm::lookAt(eye, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        return camera;
+    }
+
+    void AssetThumbnailRenderer::EnsureMaterialThumbnailScene()
+    {
+        if (thumbnailSceneReady_ && thumbnailSceneKind_ == EThumbnailKind::Material)
+        {
+            return;
+        }
+
+        Assets::FMaterial previewMaterial;
+        previewMaterial.gpuMaterial_ = Assets::Material::Lambertian(glm::vec3(0.75f));
+        previewMaterial.name_ = "__material_thumbnail_preview";
 
         Assets::Camera camera{};
         camera.name = "Material Thumbnail";
@@ -227,49 +353,77 @@ namespace Vulkan
         camera.NearPlane = 0.01f;
         camera.FarPlane = 20.0f;
         camera.ModelView = glm::lookAt(glm::vec3(0.0f, 0.0f, 4.0f), glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        materialThumbnailScene_->SetRenderCamera(camera);
-        materialThumbnailScene_->UpdateNodes();
-        materialThumbnailSceneReady_ = true;
+
+        thumbnailScene_ = CreateMaterialSphereScene(
+            std::move(previewMaterial),
+            "__MaterialThumbnailSphere",
+            "Material Thumbnail",
+            true,
+            camera);
+        thumbnailSceneKind_ = EThumbnailKind::Material;
+        thumbnailSceneReady_ = true;
+    }
+
+    void AssetThumbnailRenderer::EnsureMaterialPreviewScene()
+    {
+        if (materialPreviewSceneReady_)
+        {
+            return;
+        }
+
+        materialPreviewScene_ = CreateMaterialSphereScene(
+            materialPreview_,
+            "__MaterialPreviewSphere",
+            "Material Preview",
+            false,
+            BuildMaterialPreviewCamera());
+        materialPreviewSceneReady_ = true;
+        materialPreviewDirty_ = true;
     }
 
     void AssetThumbnailRenderer::EnsureThumbnailRenderTarget()
     {
-        if (thumbnailRenderView_ == nullptr)
-        {
-            FViewDesc viewDesc{};
-            viewDesc.renderExtent = kThumbnailExtent;
-            viewDesc.outputKind = EViewOutputKind::OffscreenTexture;
-            viewDesc.schedule = EViewSchedule::Transient;
-            thumbnailRenderView_ = renderer_.renderViews_->CreateView(viewDesc, "thumbnail view");
-            if (thumbnailRenderView_ == nullptr)
-            {
-                Throw(std::runtime_error("failed to allocate thumbnail RenderView bank"));
-            }
-            thumbnailRenderView_->CreateSwapChain(renderer_.SwapChain());
-            thumbnailRenderView_->SetCopyObjectIdHistory(false);
-        }
-        thumbnailRenderView_->SetRenderExtent(kThumbnailExtent);
-        thumbnailRenderView_->SetCopyObjectIdHistory(false);
+        FViewDesc viewDesc{};
+        viewDesc.renderExtent = kThumbnailExtent;
+        viewDesc.outputKind = EViewOutputKind::OffscreenTexture;
+        viewDesc.schedule = EViewSchedule::Transient;
 
+        RenderViewResourceFactory resources(renderer_);
+        RenderView& view = resources.EnsureView(thumbnailRenderView_, viewDesc, "thumbnail view", false);
         if (thumbnailRenderView_->AllocatedExtent().width != kThumbnailExtent.width ||
             thumbnailRenderView_->AllocatedExtent().height != kThumbnailExtent.height ||
             thumbnailRenderView_->VisibilityFramebuffer() == nullptr)
         {
-            RenderViewResourceFactory resources(renderer_);
-            thumbnailTarget_.visibilityFramebuffer = resources.RebuildVisibilityFramebuffer(
-                *thumbnailRenderView_,
-                kThumbnailExtent);
+            thumbnailTarget_.visibilityFramebuffer = resources.RebuildVisibilityFramebuffer(view, kThumbnailExtent);
         }
         if (!thumbnailTarget_.offscreenSampler)
         {
-            RenderViewResourceFactory resources(renderer_);
             thumbnailTarget_.offscreenSampler = resources.CreateClampSampler();
         }
     }
 
+    void AssetThumbnailRenderer::EnsureMaterialPreviewRenderTarget()
+    {
+        EnsureMaterialPreviewScene();
+
+        FViewDesc viewDesc{};
+        viewDesc.renderExtent = materialPreviewExtent_;
+        viewDesc.outputKind = EViewOutputKind::OffscreenTexture;
+        viewDesc.schedule = EViewSchedule::Persistent;
+
+        RenderViewResourceFactory resources(renderer_);
+        RenderView& view = resources.EnsureView(materialPreviewView_, viewDesc, "material preview view", false);
+        resources.EnsureSampledOffscreenTarget(
+            view,
+            materialPreviewTarget_,
+            materialPreviewExtent_,
+            SampleSlot(),
+            "Material Preview Offscreen");
+    }
+
     void AssetThumbnailRenderer::RebuildMeshThumbnailScene(const Assets::Model& model)
     {
-        meshThumbnailScene_ = std::make_unique<Assets::Scene>(
+        thumbnailScene_ = std::make_unique<Assets::Scene>(
             renderer_.CommandPool(), false, /*allocateAmbientResources*/ false, /*enableCpuAcceleration*/ false);
 
         const glm::vec3 aabbMin = model.GetLocalAABBMin();
@@ -299,9 +453,9 @@ namespace Vulkan
             0u,
             true));
 
-        meshThumbnailScene_->Reload(nodes, models, materials, lights, tracks);
-        meshThumbnailScene_->PostLoad(skeletons);
-        meshThumbnailScene_->RebuildMeshBuffer(renderer_.CommandPool(), false);
+        thumbnailScene_->Reload(nodes, models, materials, lights, tracks);
+        thumbnailScene_->PostLoad(skeletons);
+        thumbnailScene_->RebuildMeshBuffer(renderer_.CommandPool(), false);
 
         Assets::EnvironmentSetting env;
         env.Reset();
@@ -310,7 +464,7 @@ namespace Vulkan
         env.SunIntensity = 500.0f;
         env.SunRotation = 0.35f;
         env.SkyIntensity = 300.0f;
-        meshThumbnailScene_->SetEnvSettings(env);
+        thumbnailScene_->SetEnvSettings(env);
 
         Assets::Camera camera{};
         camera.name = "Mesh Thumbnail";
@@ -324,8 +478,10 @@ namespace Vulkan
         camera.NearPlane = std::max(0.001f, distance - radius * 2.5f);
         camera.FarPlane = std::max(camera.NearPlane + 1.0f, distance + radius * 3.5f);
         camera.ModelView = glm::lookAt(eye, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        meshThumbnailScene_->SetRenderCamera(camera);
-        meshThumbnailScene_->UpdateNodes();
+        thumbnailScene_->SetRenderCamera(camera);
+        thumbnailScene_->UpdateNodes();
+        thumbnailSceneKind_ = EThumbnailKind::Mesh;
+        thumbnailSceneReady_ = true;
     }
 
     void AssetThumbnailRenderer::CopyThumbnailViewOutput(
@@ -333,92 +489,69 @@ namespace Vulkan
         RenderView& view,
         RenderImage& dst)
     {
-        const RenderImage* src = renderer_.GetStorageImage(view.RtBankBase() + Assets::Bindless::RT_DENOISED);
-        if (!src)
+        RenderViewResourceFactory(renderer_).CopyDenoisedOutputToImage(commandBuffer, view, dst);
+    }
+
+    void AssetThumbnailRenderer::CopyMaterialPreviewOutput(VkCommandBuffer commandBuffer, RenderView& view)
+    {
+        if (materialPreviewTarget_.offscreenImage == nullptr)
         {
             return;
         }
-
-        const VkExtent2D extent = view.RenderExtent();
-        src->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                           VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-        dst.InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-                          VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-        VkImageBlit region{};
-        region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        region.srcOffsets[0] = {0, 0, 0};
-        region.srcOffsets[1] = {static_cast<int32_t>(extent.width), static_cast<int32_t>(extent.height), 1};
-        region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        region.dstOffsets[0] = {0, 0, 0};
-        region.dstOffsets[1] = {static_cast<int32_t>(extent.width), static_cast<int32_t>(extent.height), 1};
-        vkCmdBlitImage(commandBuffer,
-                       src->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                       dst.GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                       1, &region, VK_FILTER_LINEAR);
-
-        dst.InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-        src->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+        RenderViewResourceFactory(renderer_).CopyDenoisedOutputToImage(
+            commandBuffer,
+            view,
+            *materialPreviewTarget_.offscreenImage);
     }
 
-    bool AssetThumbnailRenderer::ScheduleNextMaterialThumbnail(
-        VkCommandBuffer commandBuffer,
-        const uint32_t imageIndex)
+    RenderImage& AssetThumbnailRenderer::EnsureThumbnailImage(
+        FThumbnailCache& cache,
+        const uint32_t assetIndex,
+        const char* debugName)
     {
-        if (pendingMaterialThumbnails_.empty())
+        if (cache.images.size() <= assetIndex)
         {
-            return false;
+            cache.images.resize(static_cast<size_t>(assetIndex) + 1);
         }
-
-        auto mainScene = renderer_.scene_.lock();
-        if (!mainScene)
+        if (!cache.images[assetIndex])
         {
-            pendingMaterialThumbnails_.clear();
-            return false;
-        }
-
-        const uint32_t materialIndex = pendingMaterialThumbnails_.front();
-        pendingMaterialThumbnails_.erase(pendingMaterialThumbnails_.begin());
-        if (materialIndex >= mainScene->Materials().size() || materialIndex >= kMaterialThumbnailMaxSlots)
-        {
-            return false;
-        }
-
-        if (!materialThumbnailSceneReady_)
-        {
-            return false;
-        }
-        if (!materialThumbnailScene_ || materialThumbnailScene_->Materials().empty())
-        {
-            return false;
-        }
-
-        EnsureThumbnailRenderTarget();
-        assert(thumbnailRenderView_ != nullptr);
-
-        const uint32_t sampleSlot = kMaterialThumbnailSampleSlotBase + materialIndex;
-
-        if (materialThumbnailImages_.size() <= materialIndex)
-        {
-            materialThumbnailImages_.resize(static_cast<size_t>(materialIndex) + 1);
-        }
-        if (!materialThumbnailImages_[materialIndex])
-        {
-            const std::string debugName = fmt::format("Material Thumbnail {}", materialIndex);
             RenderViewResourceFactory resources(renderer_);
-            materialThumbnailImages_[materialIndex] = resources.CreateSampledColorImage(
-                kThumbnailExtent,
-                debugName.c_str());
+            cache.images[assetIndex] = resources.CreateSampledColorImage(kThumbnailExtent, debugName);
             resources.BindSampledColorImage(
-                sampleSlot,
-                *materialThumbnailImages_[materialIndex],
+                cache.sampleSlotBase + assetIndex,
+                *cache.images[assetIndex],
                 *thumbnailTarget_.offscreenSampler);
         }
+        return *cache.images[assetIndex];
+    }
 
-        materialThumbnailScene_->Materials()[0] = mainScene->Materials()[materialIndex];
-        materialThumbnailScene_->Materials()[0].name_ = "__material_thumbnail_preview";
+    bool AssetThumbnailRenderer::ScheduleMaterialPreview(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+    {
+        if (!materialPreviewEnabled_)
+        {
+            return false;
+        }
+
+        EnsureMaterialPreviewRenderTarget();
+        if (!materialPreviewScene_ || !materialPreviewView_)
+        {
+            return false;
+        }
+
+        if (materialPreviewDirty_)
+        {
+            if (materialPreviewScene_->Materials().empty())
+            {
+                materialPreviewScene_->Materials().push_back(materialPreview_);
+            }
+            else
+            {
+                materialPreviewScene_->Materials()[0] = materialPreview_;
+            }
+            materialPreviewScene_->UpdateAllMaterials();
+            materialPreviewScene_->UpdateNodes();
+            materialPreviewDirty_ = false;
+        }
 
         LogicRendererBase* logicRenderer = renderer_.EnsureLogicRenderer(ERT_SoftwareModernNoAmbient);
         if (logicRenderer == nullptr)
@@ -430,46 +563,41 @@ namespace Vulkan
             return false;
         }
 
-        materialThumbnailScene_->UpdateAllMaterials();
-        materialThumbnailScene_->UpdateNodes();
-        materialThumbnailScene_->UpdateHDRSH();
+        materialPreviewScene_->UpdateHDRSH();
         const Assets::UniformBufferObject previewCamera = BuildViewCameraUbo({
-            .scene = *materialThumbnailScene_,
-            .camera = materialThumbnailScene_->GetRenderCamera(),
-            .extent = kThumbnailExtent,
+            .scene = *materialPreviewScene_,
+            .camera = materialPreviewScene_->GetRenderCamera(),
+            .extent = materialPreviewExtent_,
             .cascadeDistance = 20.0f,
             .totalFrames = static_cast<uint32_t>(std::max(renderer_.frame_.frameCount, 1)),
             .fillSceneLighting = true,
             .thumbnailDefaults = true,
         });
 
-        thumbnailRenderView_->SetDebugName("material thumbnail view");
-        thumbnailRenderView_->SetRenderExtent(kThumbnailExtent);
-        renderer_.SetRenderViewUbo(*thumbnailRenderView_, imageIndex, previewCamera);
-        thumbnailRenderView_->SetVisibilityFramebuffer(thumbnailTarget_.visibilityFramebuffer.get());
-        thumbnailRenderView_->SetSceneOverride(materialThumbnailScene_.get());
-        thumbnailRenderView_->SetPrevDepthValid(false);
+        renderer_.SetRenderViewUbo(*materialPreviewView_, imageIndex, previewCamera);
+        materialPreviewView_->SetVisibilityFramebuffer(materialPreviewTarget_.visibilityFramebuffer.get());
+        materialPreviewView_->SetSceneOverride(materialPreviewScene_.get());
+        materialPreviewView_->SetPrevDepthValid(false);
         renderer_.ScheduleRenderView(
-            *thumbnailRenderView_,
+            *materialPreviewView_,
             *logicRenderer,
             /*clearSwapchain*/ false,
-            [this, commandBuffer, materialIndex](RenderView& view)
+            [this, commandBuffer](RenderView& view)
             {
-                if (materialIndex < materialThumbnailImages_.size() && materialThumbnailImages_[materialIndex])
-                {
-                    CopyThumbnailViewOutput(commandBuffer, view, *materialThumbnailImages_[materialIndex]);
-                }
+                CopyMaterialPreviewOutput(commandBuffer, view);
                 view.SetSceneOverride(nullptr);
             });
 
         return true;
     }
 
-    bool AssetThumbnailRenderer::ScheduleNextMeshThumbnail(
+    bool AssetThumbnailRenderer::ScheduleNextThumbnail(
+        const EThumbnailKind kind,
         VkCommandBuffer commandBuffer,
         const uint32_t imageIndex)
     {
-        if (pendingMeshThumbnails_.empty())
+        FThumbnailCache& cache = ThumbnailCache(kind);
+        if (cache.pending.empty())
         {
             return false;
         }
@@ -477,49 +605,62 @@ namespace Vulkan
         auto mainScene = renderer_.scene_.lock();
         if (!mainScene)
         {
-            pendingMeshThumbnails_.clear();
+            cache.pending.clear();
             return false;
         }
 
-        const uint32_t modelIndex = pendingMeshThumbnails_.front();
-        pendingMeshThumbnails_.erase(pendingMeshThumbnails_.begin());
-        if (modelIndex >= mainScene->Models().size() || modelIndex >= kMeshThumbnailMaxSlots)
+        const uint32_t assetIndex = cache.pending.front();
+        cache.pending.erase(cache.pending.begin());
+        if (assetIndex >= cache.maxSlots)
         {
             return false;
         }
 
-        const Assets::Model& model = mainScene->Models()[modelIndex];
-        if (model.NumberOfVertices() == 0)
+        const char* viewDebugName = "thumbnail view";
+        std::string imageDebugName;
+        if (kind == EThumbnailKind::Material)
         {
-            return false;
+            if (assetIndex >= mainScene->Materials().size())
+            {
+                return false;
+            }
+
+            EnsureMaterialThumbnailScene();
+            if (thumbnailScene_ == nullptr || thumbnailScene_->Materials().empty())
+            {
+                return false;
+            }
+
+            thumbnailScene_->Materials()[0] = mainScene->Materials()[assetIndex];
+            thumbnailScene_->Materials()[0].name_ = "__material_thumbnail_preview";
+            viewDebugName = "material thumbnail view";
+            imageDebugName = fmt::format("Material Thumbnail {}", assetIndex);
+        }
+        else
+        {
+            if (assetIndex >= mainScene->Models().size())
+            {
+                return false;
+            }
+
+            const Assets::Model& model = mainScene->Models()[assetIndex];
+            if (model.NumberOfVertices() == 0)
+            {
+                return false;
+            }
+
+            RebuildMeshThumbnailScene(model);
+            if (thumbnailScene_ == nullptr)
+            {
+                return false;
+            }
+            viewDebugName = "mesh thumbnail view";
+            imageDebugName = fmt::format("Mesh Thumbnail {}", assetIndex);
         }
 
         EnsureThumbnailRenderTarget();
         assert(thumbnailRenderView_ != nullptr);
-        RebuildMeshThumbnailScene(model);
-        if (!meshThumbnailScene_)
-        {
-            return false;
-        }
-
-        const uint32_t sampleSlot = kMeshThumbnailSampleSlotBase + modelIndex;
-
-        if (meshThumbnailImages_.size() <= modelIndex)
-        {
-            meshThumbnailImages_.resize(static_cast<size_t>(modelIndex) + 1);
-        }
-        if (!meshThumbnailImages_[modelIndex])
-        {
-            const std::string debugName = fmt::format("Mesh Thumbnail {}", modelIndex);
-            RenderViewResourceFactory resources(renderer_);
-            meshThumbnailImages_[modelIndex] = resources.CreateSampledColorImage(
-                kThumbnailExtent,
-                debugName.c_str());
-            resources.BindSampledColorImage(
-                sampleSlot,
-                *meshThumbnailImages_[modelIndex],
-                *thumbnailTarget_.offscreenSampler);
-        }
+        EnsureThumbnailImage(cache, assetIndex, imageDebugName.c_str());
 
         LogicRendererBase* logicRenderer = renderer_.EnsureLogicRenderer(ERT_SoftwareModernNoAmbient);
         if (logicRenderer == nullptr)
@@ -531,12 +672,12 @@ namespace Vulkan
             return false;
         }
 
-        meshThumbnailScene_->UpdateAllMaterials();
-        meshThumbnailScene_->UpdateNodes();
-        meshThumbnailScene_->UpdateHDRSH();
+        thumbnailScene_->UpdateAllMaterials();
+        thumbnailScene_->UpdateNodes();
+        thumbnailScene_->UpdateHDRSH();
         const Assets::UniformBufferObject previewCamera = BuildViewCameraUbo({
-            .scene = *meshThumbnailScene_,
-            .camera = meshThumbnailScene_->GetRenderCamera(),
+            .scene = *thumbnailScene_,
+            .camera = thumbnailScene_->GetRenderCamera(),
             .extent = kThumbnailExtent,
             .cascadeDistance = 20.0f,
             .totalFrames = static_cast<uint32_t>(std::max(renderer_.frame_.frameCount, 1)),
@@ -544,21 +685,22 @@ namespace Vulkan
             .thumbnailDefaults = true,
         });
 
-        thumbnailRenderView_->SetDebugName("mesh thumbnail view");
+        thumbnailRenderView_->SetDebugName(viewDebugName);
         thumbnailRenderView_->SetRenderExtent(kThumbnailExtent);
         renderer_.SetRenderViewUbo(*thumbnailRenderView_, imageIndex, previewCamera);
         thumbnailRenderView_->SetVisibilityFramebuffer(thumbnailTarget_.visibilityFramebuffer.get());
-        thumbnailRenderView_->SetSceneOverride(meshThumbnailScene_.get());
+        thumbnailRenderView_->SetSceneOverride(thumbnailScene_.get());
         thumbnailRenderView_->SetPrevDepthValid(false);
         renderer_.ScheduleRenderView(
             *thumbnailRenderView_,
             *logicRenderer,
             /*clearSwapchain*/ false,
-            [this, commandBuffer, modelIndex](RenderView& view)
+            [this, commandBuffer, kind, assetIndex](RenderView& view)
             {
-                if (modelIndex < meshThumbnailImages_.size() && meshThumbnailImages_[modelIndex])
+                FThumbnailCache& cache = ThumbnailCache(kind);
+                if (assetIndex < cache.images.size() && cache.images[assetIndex])
                 {
-                    CopyThumbnailViewOutput(commandBuffer, view, *meshThumbnailImages_[modelIndex]);
+                    CopyThumbnailViewOutput(commandBuffer, view, *cache.images[assetIndex]);
                 }
                 view.SetSceneOverride(nullptr);
             });

@@ -434,7 +434,7 @@ namespace Editor
 
         void DrawPreview(EditorContext& ctx, EditorUiState& ui, const Assets::FMaterial& material)
         {
-            Vulkan::MaterialPreviewRenderer& preview = ctx.engine.GetRenderer().ViewServices().MaterialPreview();
+            Vulkan::AssetThumbnailRenderer& preview = ctx.engine.GetRenderer().ViewServices().MaterialPreview();
             preview.SetEnabled(true);
             preview.SetPreviewMaterial(material);
             preview.SetCameraOrbit(ui.materialEditor.previewYaw,
@@ -710,7 +710,7 @@ namespace Editor
                                           ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse);
         ImGui::PopStyleVar();
 
-        Vulkan::MaterialPreviewRenderer& preview = ctx.engine.GetRenderer().ViewServices().MaterialPreview();
+        Vulkan::AssetThumbnailRenderer& preview = ctx.engine.GetRenderer().ViewServices().MaterialPreview();
         if (!ui.ed_material || !visible)
         {
             preview.SetEnabled(false);

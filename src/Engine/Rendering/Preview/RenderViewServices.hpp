@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Engine/Rendering/Preview/AssetThumbnailRenderer.hpp"
-#include "Engine/Rendering/Preview/MaterialPreviewRenderer.hpp"
 #include "Engine/Rendering/Preview/OffscreenRenderViewController.hpp"
 
 #include <memory>
@@ -24,8 +23,8 @@ namespace Vulkan
 
         AssetThumbnailRenderer& AssetThumbnails() { return *assetThumbnails_; }
         const AssetThumbnailRenderer& AssetThumbnails() const { return *assetThumbnails_; }
-        MaterialPreviewRenderer& MaterialPreview() { return *materialPreview_; }
-        const MaterialPreviewRenderer& MaterialPreview() const { return *materialPreview_; }
+        AssetThumbnailRenderer& MaterialPreview() { return *assetThumbnails_; }
+        const AssetThumbnailRenderer& MaterialPreview() const { return *assetThumbnails_; }
         OffscreenRenderViewController& OffscreenViews() { return *offscreenViews_; }
         const OffscreenRenderViewController& OffscreenViews() const { return *offscreenViews_; }
 
@@ -40,7 +39,6 @@ namespace Vulkan
     private:
         FSchedulePolicy schedulePolicy_{};
         std::unique_ptr<AssetThumbnailRenderer> assetThumbnails_;
-        std::unique_ptr<MaterialPreviewRenderer> materialPreview_;
         std::unique_ptr<OffscreenRenderViewController> offscreenViews_;
     };
 }
