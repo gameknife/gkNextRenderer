@@ -134,7 +134,7 @@ function Get-BuildTags
     switch -Wildcard ($Platform)
     {
         "windows-*" { return "desktop,production,wv2runtime.embed" }
-        "linux-*" { return "desktop,production,webkit2_41" }
+        "linux-*" { return "production" }
         "macos-*" { return "desktop,production" }
     }
     throw "Unsupported platform: $Platform"
@@ -247,7 +247,7 @@ if (!$PublishOnly)
     {
         if ($platform -ne $currentPlatform)
         {
-            throw "Wails binaries must be built natively. Host is $currentPlatform, requested $platform."
+            throw "gnb binaries must be built natively. Host is $currentPlatform, requested $platform."
         }
 
         $spec = Get-PlatformSpec $platform
@@ -265,7 +265,9 @@ if (!$PublishOnly)
         {
             $env:GOOS = $spec.GOOS
             $env:GOARCH = $spec.GOARCH
-            $env:CGO_ENABLED = if ($spec.GOOS -eq "windows") { "0" } else { "1" }
+            # macOS needs CGO for link_darwin.go (-framework UniformTypeIdentifiers);
+            # Windows (WebView2) and Linux (no wails) build CGO-free.
+            $env:CGO_ENABLED = if ($spec.GOOS -eq "darwin") { "1" } else { "0" }
             Push-Location $gnbSourceDir
             $pushed = $true
             & $goExe build -tags $buildTags -trimpath -ldflags $ldflags -o $assetPath ./cmd/gnb

@@ -266,7 +266,7 @@ tools/gnb/                   # Project CLI (Go) — see "gnb" section below
 
 ## gnb Dashboard
 
-`gnb dashboard` 默认启动 Wails 原生窗口；普通 htmx 请求由 Wails AssetServer 直接处理，Build/Run/Test 和 Chat 的流式响应走随机 loopback 端口。`--browser` 可显式使用系统浏览器，`--no-open` 只启动 server。提供 tabs：
+`gnb dashboard` 默认启动 Wails 原生窗口（Windows/macOS）；普通 htmx 请求由 Wails AssetServer 直接处理，Build/Run/Test 和 Chat 的流式响应走随机 loopback 端口。`--browser` 可显式使用系统浏览器，`--no-open` 只启动 server。**Linux 不构建 Wails 桌面窗口**（无 libgtk/webkit 依赖，CGO 关闭）：`gnb`/`gnb dashboard` 直接回退到系统浏览器模式，`gnb dashboard --no-open` 为纯 CLI 模式（用 `curl 127.0.0.1:7777` 交互）。提供 tabs：
 - **TODO**：可视化 `.spec/TODO.md` 的工作流操作（增删改、move、spec 创建、标 done/blocked）
 - **Build / Run / Test**：触发 cmake build、运行 target、Catch2 测试，SSE 实时流日志
 - **Git**：分支管理、stash、commits、本地改动 stage/unstage、LLM 生成 commit message
