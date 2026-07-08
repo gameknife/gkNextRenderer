@@ -319,7 +319,7 @@ namespace Vulkan
 			std::unique_ptr<Shadow::ShadowMapPass> sunShadowPass;
 			std::unique_ptr<GaussianSplat::GaussianSplatPass> gaussianSplatPass;
 			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> bufferClearPipeline;
-			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> simpleComposePipeline;
+			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> fsrComposePipeline;
 			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> visualDebuggerPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> gpuCullCompactPipeline;
             std::unique_ptr<PipelineCommon::ZeroBindPipeline> softMeshShaderFinalizePipeline;

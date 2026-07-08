@@ -165,47 +165,52 @@ namespace Vulkan
             return;
         }
 
-        SCOPED_GPU_TIMER("gpu cull");
-        BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                    GetScene().NodeMatrixBuffer().Handle(), VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
-
         auto& scene = GetScene();
-        vkCmdFillBuffer(commandBuffer, scene.SoftMeshShaderCounterBuffer().Handle(), 0, VK_WHOLE_SIZE, 0);
-
-        BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                    scene.SoftMeshShaderCounterBuffer().Handle(), VK_ACCESS_TRANSFER_WRITE_BIT,
-                                    VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
-
         Assets::GPUScene gpuScene = scene.FetchGPUScene(imageIndex);
         const uint32_t maxSceneTriangles = scene.GetMaxSceneTriangles();
+        
+        {
+            SCOPED_GPU_TIMER("MShader cull");
+            BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                            GetScene().NodeMatrixBuffer().Handle(), VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
+            
+            vkCmdFillBuffer(commandBuffer, scene.SoftMeshShaderCounterBuffer().Handle(), 0, VK_WHOLE_SIZE, 0);
 
-        overlay_.gpuCullCompactPipeline->BindPipeline(
-            commandBuffer, gpuScene, gpuScene.custom_data_0, indirectDrawBatchCount, maxSceneTriangles);
-        uint32_t groupCount = (indirectDrawBatchCount + 63) / 64;
-        vkCmdDispatch(commandBuffer, groupCount, 1, 1);
+            BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                        scene.SoftMeshShaderCounterBuffer().Handle(), VK_ACCESS_TRANSFER_WRITE_BIT,
+                                        VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+            
+            overlay_.gpuCullCompactPipeline->BindPipeline(
+                commandBuffer, gpuScene, gpuScene.custom_data_0, indirectDrawBatchCount, maxSceneTriangles);
+            uint32_t groupCount = (indirectDrawBatchCount + 63) / 64;
+            vkCmdDispatch(commandBuffer, groupCount, 1, 1);
 
-        BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, {
-            BufferMemoryBarrier::Make(scene.SoftMeshShaderCounterBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT),
-            BufferMemoryBarrier::Make(scene.SoftMeshShaderVisibleItemBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT),
-        });
+            BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, {
+                BufferMemoryBarrier::Make(scene.SoftMeshShaderCounterBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT),
+                BufferMemoryBarrier::Make(scene.SoftMeshShaderVisibleItemBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT),
+            });
+        }
+        
+        {
+            SCOPED_GPU_TIMER("MShader finalize");
+            overlay_.softMeshShaderFinalizePipeline->BindPipeline(
+    commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
+            vkCmdDispatch(commandBuffer, 1, 1, 1);
 
-        overlay_.softMeshShaderFinalizePipeline->BindPipeline(
-            commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
-        vkCmdDispatch(commandBuffer, 1, 1, 1);
+            BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, {
+                BufferMemoryBarrier::Make(scene.SoftMeshShaderDispatchArgBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT, 0, sizeof(VkDispatchIndirectCommand)),
+                BufferMemoryBarrier::Make(scene.SoftMeshShaderVisibleItemBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, 0, sizeof(Assets::SoftMeshShaderVisibleItem) * Assets::Scene::kMaxIndirectDrawCount),
+            });
+            
+            overlay_.softMeshShaderExpandPipeline->BindPipeline(
+commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
+            vkCmdDispatchIndirect(commandBuffer, scene.SoftMeshShaderDispatchArgBuffer().Handle(), 0);
 
-        BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, {
-            BufferMemoryBarrier::Make(scene.SoftMeshShaderDispatchArgBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT, 0, sizeof(VkDispatchIndirectCommand)),
-            BufferMemoryBarrier::Make(scene.SoftMeshShaderVisibleItemBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, 0, sizeof(Assets::SoftMeshShaderVisibleItem) * Assets::Scene::kMaxIndirectDrawCount),
-        });
-
-        overlay_.softMeshShaderExpandPipeline->BindPipeline(
-            commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
-        vkCmdDispatchIndirect(commandBuffer, scene.SoftMeshShaderDispatchArgBuffer().Handle(), 0);
-
-        BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, {
-            BufferMemoryBarrier::Make(scene.SoftMeshShaderPrimBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT),
-            BufferMemoryBarrier::Make(scene.SoftMeshShaderDrawArgBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT, 0, sizeof(VkDrawIndirectCommand)),
-        });
+            BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, {
+                BufferMemoryBarrier::Make(scene.SoftMeshShaderPrimBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT),
+                BufferMemoryBarrier::Make(scene.SoftMeshShaderDrawArgBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT, 0, sizeof(VkDrawIndirectCommand)),
+            });
+        }
     }
 
     void VulkanBaseRenderer::DispatchClearPass(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool clearSwapchain)

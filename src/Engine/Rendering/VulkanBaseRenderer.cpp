@@ -949,7 +949,7 @@ namespace Vulkan
         }
 
         // 公用Pipeline
-        overlay_.simpleComposePipeline.reset( new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.UpScaleFSR.comp.slang.spv", 20));
+        overlay_.fsrComposePipeline.reset( new PipelineCommon::ZeroBindCustomPushConstantPipeline(SwapChain(), "assets/shaders/Process.UpScaleFSR.comp.slang.spv", 20));
         overlay_.bufferClearPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*frame_.swapChain, "assets/shaders/Util.BufferClear.comp.slang.spv", 4));
         // Shared swap-chain resources must cover every registered renderer because
         // switching logic renderers does not recreate the swap chain.
@@ -1117,7 +1117,7 @@ namespace Vulkan
         skin_.vertexMemory.reset();
         skin_.jointBuffer.reset();
         skin_.jointMemory.reset();
-        overlay_.simpleComposePipeline.reset();
+        overlay_.fsrComposePipeline.reset();
         overlay_.visualDebuggerPipeline.reset();
 
         CreateSceneSwapChainResources();
@@ -1190,7 +1190,7 @@ namespace Vulkan
         skin_.jointBuffer.reset();
         skin_.jointMemory.reset();
 
-        overlay_.simpleComposePipeline.reset();
+        overlay_.fsrComposePipeline.reset();
         overlay_.visualDebuggerPipeline.reset();
         frame_.uniformBuffers.clear();
         frame_.inFlightFences.clear();
@@ -1257,7 +1257,7 @@ namespace Vulkan
         };
 
         reloadPipeline(overlay_.bufferClearPipeline);
-        reloadPipeline(overlay_.simpleComposePipeline);
+        reloadPipeline(overlay_.fsrComposePipeline);
         reloadPipeline(overlay_.visualDebuggerPipeline);
         reloadPipeline(overlay_.wireframePipeline);
         reloadPipeline(overlay_.visibilityPipeline);
@@ -1893,39 +1893,55 @@ namespace Vulkan
         const uint32_t imageIndex,
         RenderView& view)
     {
-        SCOPED_GPU_TIMER("resolve pass");
+        SCOPED_GPU_TIMER("blit");
         SwapChain().InsertBarrierToWrite(commandBuffer, imageIndex);
 
-        const uint32_t previousBankBase = activeViewBankBase_;
-        SetActiveViewBankBase(view.RtBankBase());
-        GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
+        const RenderImage* denoisedImage = GetStorageImage(view.RtBankBase() + Assets::Bindless::RT_DENOISED);
+        if (denoisedImage == nullptr)
+        {
+            return;
+        }
+
+        denoisedImage->InsertBarrier(
             commandBuffer, VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            VK_ACCESS_SHADER_READ_BIT,
+            VK_ACCESS_TRANSFER_READ_BIT,
             VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 
         const VkRect2D subrect = view.Desc().subrect;
-        const std::array<uint32_t, 5> pushConst{
-            imageIndex,
-            static_cast<uint32_t>(std::max(0, subrect.offset.x)),
-            static_cast<uint32_t>(std::max(0, subrect.offset.y)),
-            subrect.extent.width,
-            subrect.extent.height};
+        VkImageBlit blitRegion = {};
+        blitRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        blitRegion.srcOffsets[0] = {0, 0, 0};
+        blitRegion.srcOffsets[1] = {
+            static_cast<int32_t>(view.RenderExtent().width),
+            static_cast<int32_t>(view.RenderExtent().height),
+            1
+        };
+        blitRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        blitRegion.dstOffsets[0] = {
+            subrect.offset.x,
+            subrect.offset.y,
+            0
+        };
+        blitRegion.dstOffsets[1] = {
+            subrect.offset.x + static_cast<int32_t>(subrect.extent.width),
+            subrect.offset.y + static_cast<int32_t>(subrect.extent.height),
+            1
+        };
 
-        overlay_.simpleComposePipeline->BindPipeline(commandBuffer, pushConst.data());
-
-        vkCmdDispatch(
-            commandBuffer,
-            Utilities::Math::GetSafeDispatchCount(subrect.extent.width, 8),
-            Utilities::Math::GetSafeDispatchCount(subrect.extent.height, 8), 1);
-        SetActiveViewBankBase(previousBankBase);
+        vkCmdBlitImage(commandBuffer,
+                       denoisedImage->GetImage().Handle(),
+                       VK_IMAGE_LAYOUT_GENERAL,
+                       SwapChain().Images()[imageIndex],
+                       VK_IMAGE_LAYOUT_GENERAL,
+                       1,
+                       &blitRegion,
+                       VK_FILTER_LINEAR);
     }
 
     void VulkanBaseRenderer::ResolvePrimaryViewToSwapchain(
         VkCommandBuffer commandBuffer,
         const uint32_t imageIndex)
     {
-        SCOPED_GPU_TIMER("resolve pass");
-
         SwapChain().InsertBarrierToWrite(commandBuffer, imageIndex);
         GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
             commandBuffer, VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
@@ -1935,6 +1951,7 @@ namespace Vulkan
         bool resolvedByUpscaler = false;
         if (upscaler_ && SupportDLSS() && NextEngine::GetInstance()->GetUserSettings().DLSS)
         {
+            SCOPED_GPU_TIMER("DLSS resolve");
             resolvedByUpscaler = upscaler_->Evaluate(
                 BuildUpscalerFrameInputs(commandBuffer, imageIndex, VK_IMAGE_LAYOUT_GENERAL));
         }
@@ -1946,6 +1963,8 @@ namespace Vulkan
         const bool fsrEnabled = NextEngine::GetInstance()->GetUserSettings().FSR;
         if (fsrEnabled)
         {
+            SCOPED_GPU_TIMER("FSR resolve");
+
             const std::array<uint32_t, 5> pushConst = {
                 imageIndex,
                 uint32_t(SwapChain().OutputOffset().x),
@@ -1953,7 +1972,7 @@ namespace Vulkan
                 uint32_t(SwapChain().OutputExtent().width),
                 uint32_t(SwapChain().OutputExtent().height)
             };
-            overlay_.simpleComposePipeline->BindPipeline(commandBuffer, pushConst.data());
+            overlay_.fsrComposePipeline->BindPipeline(commandBuffer, pushConst.data());
 
             vkCmdDispatch(
                 commandBuffer,
@@ -1962,6 +1981,8 @@ namespace Vulkan
         }
         else
         {
+            SCOPED_GPU_TIMER("blit");
+            
             VkImageBlit blitRegion = {};
             blitRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
             blitRegion.srcOffsets[0] = {0, 0, 0};
@@ -2031,7 +2052,6 @@ namespace Vulkan
 
             if (overlay_.gaussianSplatPass)
             {
-                SCOPED_GPU_TIMER("Gaussian splats");
                 overlay_.gaussianSplatPass->Execute(commandBuffer, imageIndex);
             }
 
