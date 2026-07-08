@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Runtime/AgentDriver/AgentQueryRegistry.hpp"
+#include "Engine/Runtime/Interface/AgentDriver.hpp"
 #include "Engine/Runtime/Input/SyntheticInput.hpp"
 #include <nlohmann/json.hpp>
 
@@ -9,16 +9,16 @@ class NextEngine;
 
 namespace Runtime::Agent
 {
-    class FAgentDriver final
+    class FAgentDriver final : public IAgentDriver
     {
     public:
         explicit FAgentDriver(NextEngine& engine);
         ~FAgentDriver();
 
-        bool IsLoaded() const { return loaded_; }
-        void Tick(double deltaSeconds);
-        void DrawStatusOverlay() const;
-        int ExitCode() const { return exitCode_; }
+        bool IsLoaded() const override { return loaded_; }
+        void Tick(double deltaSeconds) override;
+        void DrawStatusOverlay() const override;
+        int ExitCode() const override { return exitCode_; }
 
     private:
         enum class EWaitKind

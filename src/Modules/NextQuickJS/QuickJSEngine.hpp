@@ -4,7 +4,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
-#include "Engine/Runtime/ScriptRuntime.hpp"
+#include "Engine/Runtime/Interface/ScriptRuntime.hpp"
 #include "Modules/NextQuickJS/NextQuickJSModule.hpp"
 
 #include <SDL3/SDL.h>

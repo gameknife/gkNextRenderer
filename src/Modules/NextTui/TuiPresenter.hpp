@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Engine/Runtime/RenderFrameConsumer.hpp"
+#include "Engine/Runtime/Interface/RenderFrameConsumer.hpp"
 #include "Modules/NextTui/TerminalBlitter.hpp"
 #include "Modules/NextTui/TerminalIO.hpp"
 

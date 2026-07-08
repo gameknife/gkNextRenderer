@@ -9,6 +9,8 @@
 #include <variant>
 #include <vector>
 
+class NextEngine;
+
 namespace Runtime::Agent
 {
     using FAgentQueryValue = std::variant<bool, int64_t, double, std::string>;
@@ -27,4 +29,17 @@ namespace Runtime::Agent
     };
 
     std::string ToString(const FAgentQueryValue& value);
+
+    class IAgentDriver
+    {
+    public:
+        virtual ~IAgentDriver() = default;
+
+        virtual bool IsLoaded() const = 0;
+        virtual void Tick(double deltaSeconds) = 0;
+        virtual void DrawStatusOverlay() const = 0;
+        virtual int ExitCode() const = 0;
+    };
+
+    using AgentDriverFactory = std::function<std::unique_ptr<IAgentDriver>(NextEngine&)>;
 }

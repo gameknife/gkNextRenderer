@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Runtime/DebugUiProvider.hpp"
+#include "Engine/Runtime/Interface/DebugUiProvider.hpp"
 
 namespace DevTools
 {

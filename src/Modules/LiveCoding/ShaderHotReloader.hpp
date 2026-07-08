@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Runtime/ShaderHotReload.hpp"
+#include "Engine/Runtime/Interface/ShaderHotReload.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
 namespace Modules::LiveCoding

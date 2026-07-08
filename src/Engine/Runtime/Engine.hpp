@@ -9,9 +9,10 @@
 #include "Engine/Rendering/RenderView.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Command/CommandHistory.hpp"
+#include "Engine/Runtime/Interface/AgentDriver.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Engine/Runtime/ScriptRuntime.hpp"
-#include "Engine/Runtime/ShaderHotReload.hpp"
+#include "Engine/Runtime/Interface/ScriptRuntime.hpp"
+#include "Engine/Runtime/Interface/ShaderHotReload.hpp"
 #include "Engine/Runtime/Config/ShowFlags.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
@@ -33,11 +34,6 @@ namespace NextRenderer
     Vulkan::VulkanBaseRenderer* CreateRenderer(uint32_t rendererType, Vulkan::Window* window,
                                                const VkPresentModeKHR presentMode, const bool enableValidationLayers);
 } // namespace NextRenderer
-
-namespace Runtime::Agent
-{
-    class FAgentDriver;
-}
 
 typedef std::function<bool(double DeltaSeconds)> TickedTask;
 typedef std::function<bool()> DelayedTask;
@@ -213,6 +209,12 @@ public:
         shaderHotReloaderFactory_ = std::move(factory);
     }
 
+    // Optional agent script driver implementation (installed by Modules/AgentDriver).
+    void SetAgentDriverFactory(Runtime::Agent::AgentDriverFactory factory)
+    {
+        agentDriverFactory_ = std::move(factory);
+    }
+
     // Optional UI overlay (implementation in Modules/NextRmlUi); the factory is
     // installed by the application entry and instantiated with the renderer.
     void SetUiOverlayFactory(std::function<std::unique_ptr<Runtime::IUiOverlay>(NextEngine&)> factory)
@@ -386,7 +388,7 @@ private:
     FProgressiveRenderState progressiveRender_{};
     FScreenShotState screenShot_{};
     FAgentValidationState agentValidation_{};
-    std::unique_ptr<Runtime::Agent::FAgentDriver> agentDriver_;
+    std::unique_ptr<Runtime::Agent::IAgentDriver> agentDriver_;
     int requestedExitCode_ = 0;
     FTaskQueues taskQueues_{};
     NextRenderer::EApplicationStatus status_{};
@@ -398,6 +400,7 @@ private:
     std::vector<std::unique_ptr<Runtime::IRenderFrameConsumer>> renderFrameConsumers_{};
     Runtime::ScriptRuntimeFactory scriptRuntimeFactory_;
     Runtime::ShaderHotReloaderFactory shaderHotReloaderFactory_;
+    Runtime::Agent::AgentDriverFactory agentDriverFactory_;
     std::unique_ptr<Runtime::IScriptRuntime> scriptRuntime_;
     FRuntimeServices services_{};
     Runtime::IDebugUiProvider* debugUiProvider_ = nullptr;

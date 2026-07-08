@@ -2,7 +2,7 @@
 #include "Engine/Runtime/Editor/UserInterface.Internal.hpp"
 
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/DebugUiProvider.hpp"
+#include "Engine/Runtime/Interface/DebugUiProvider.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/Editor/FontLoader.h"

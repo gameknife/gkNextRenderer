@@ -4,10 +4,9 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
-#include "Engine/Runtime/AgentDriver/AgentDriver.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/RemoteProtocol.hpp"
-#include "Engine/Runtime/RenderFrameConsumer.hpp"
+#include "Engine/Runtime/Interface/RenderFrameConsumer.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Config/EngineCVars.hpp"
 #include "Engine/Runtime/Subsystems/NextLocalization.h"
@@ -15,11 +14,10 @@
 #include "Engine/Runtime/Command/DuplicateNodesCommand.hpp"
 #include "Engine/Runtime/ScreenShot.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Engine/Runtime/UiOverlay.hpp"
+#include "Engine/Runtime/Interface/UiOverlay.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Engine/Runtime/DebugUiProvider.hpp"
-#include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
+#include "Engine/Runtime/Interface/DebugUiProvider.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/Instance.hpp"
 #include "Engine/Runtime/Profiling/FrameProfiler.hpp"
@@ -30,6 +28,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <fmt/chrono.h>
 #include <fmt/format.h>
 #include <initializer_list>
@@ -59,6 +58,8 @@
 
 // spdlog logging
 #include <spdlog/stopwatch.h>
+
+#include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
 
 #if ANDROID
 #include <spdlog/sinks/android_sink.h>
@@ -187,14 +188,7 @@ namespace NextRenderer
         {
             validationLayers.push_back("VK_LAYER_KHRONOS_validation");
         }
-#if WITH_STREAMLINE
-        if ((GOption == nullptr || !GOption->DisableStreamline) &&
-            !StreamlineWrapper::IsInitialized() &&
-            StreamlineWrapper::ShouldInitialize())
-        {
-            StreamlineWrapper::Initialize();
-        }
-#endif
+
         Vulkan::Instance* instance = new Vulkan::Instance(*window, validationLayers, VK_API_VERSION_1_2);
 
         const auto& physicalDevices = instance->PhysicalDevices();
@@ -251,84 +245,10 @@ namespace
 
 Runtime::Config::UserSettings CreateUserSettings(const Runtime::Config::Options& options)
 {
-    (void)options;
     Runtime::Scene::SceneList::ScanScenes();
 
     Runtime::Config::UserSettings userSettings{};
-
-    userSettings.RendererType = 0;
-    userSettings.SceneIndex = 0;
-    userSettings.CameraIdx = 0;
-
-    userSettings.NumberOfSamples = 4;
-    userSettings.NumberOfBounces = 8;
-    userSettings.MaxNumberOfBounces = 10;
-
-    userSettings.TAA = true;
-
-    userSettings.ShowSettings = true;
-    userSettings.ShowOverlay = true;
     userSettings.BorderlessFullscreen = options.Fullscreen;
-
-    userSettings.HeatmapScale = 1.0f;
-
-    userSettings.TemporalFrames = 16;
-
-    userSettings.Denoiser = false;
-    userSettings.DenoiseAtrousIterations = 5;
-    userSettings.DenoiseAtrousSpecularIterations = 3;
-    userSettings.DenoiseAtrousSigmaLuma = 4.0f;
-    userSettings.DenoiseAtrousNormalPower = 64.0f;
-    userSettings.DenoiseSigmaDepth = 2.0f;
-    userSettings.DenoiseSpecFootprint = 32.0f;
-    userSettings.GTAOEnable = true;
-    userSettings.GTAOQuality = 1;
-    userSettings.GTAORadius = 1.0f;
-    userSettings.GTAOStrength = 5.0f;
-    userSettings.GTAOThickness = 0.5f;
-    userSettings.GTAODebugMode = 0;
-
-    userSettings.PaperWhiteNit = 600.f;
-    
-    userSettings.SuperResolution = 0;
-    userSettings.DLSS = false;
-    userSettings.FSR = false;
-    userSettings.DLSSRR = false;
-    userSettings.DLSSG = false;
-    userSettings.DLSSJitterFrames = 16;
-    userSettings.DLSSJitterInvertY = false;
-    userSettings.DLSSGFrameMultiplier = 2;
-
-    userSettings.BakeSpeedLevel = 1;
-
-    userSettings.TickPhysics = true;
-    userSettings.TickAnimation = true;
-    userSettings.SceneEpsilonScale = 1.0f;
-    userSettings.AmbientCubeUnit = Assets::CUBE_UNIT;
-    userSettings.AmbientCubeOffsetX = 0.0f;
-    userSettings.AmbientCubeOffsetY = 0.0f;
-    userSettings.AmbientCubeOffsetZ = 0.0f;
-    userSettings.AmbientCubeCascadeCount = 3;
-    userSettings.AmbientCubeCascadeRatio = 2.0f;
-    userSettings.AmbientCubePoolBrickRatio = 0.5f;
-    userSettings.AmbientCubeHitDrivenResidency = false;
-    userSettings.AmbientCubeBounceHitAffectsResidency = false;
-    userSettings.AmbientCubeEvictFrames = 180;
-    userSettings.AmbientCubeGraceFrames = 30;
-    userSettings.AmbientCubeHitMarkTileRatio = 0.25f;
-    userSettings.AmbientCubeResidencyDebug = 0;
-    userSettings.SharcEnable = false;
-    userSettings.SharcEntriesPow2 = 21;
-    userSettings.SharcUpdateSampleRatio = 0.25f;
-    userSettings.SharcDebugMode = 0;
-    userSettings.SharcQueryMinBounce = 1;
-    userSettings.SharcQueryRoughnessMin = 0.35f;
-    userSettings.SharcSceneScale = 100.0f;
-    userSettings.SharcLevelBias = 0.0f;
-    userSettings.SharcRadianceScale = 1000.0f;
-    userSettings.SharcAccumulatedFrameMax = 64;
-    userSettings.SharcResponsiveFrameMax = 8;
-    userSettings.SharcStaleFrameMax = 180;
 
     return userSettings;
 }
@@ -598,7 +518,15 @@ void NextEngine::Start()
     gameInstance_->OnInit();
     if (!options_->AgentScript.empty())
     {
-        agentDriver_ = std::make_unique<Runtime::Agent::FAgentDriver>(*this);
+        if (agentDriverFactory_)
+        {
+            agentDriver_ = agentDriverFactory_(*this);
+        }
+        else
+        {
+            SPDLOG_ERROR("[AgentDriver] --agent-script was specified, but no agent driver module is installed");
+            RequestExit(3);
+        }
     }
 
     SPDLOG_INFO("---- Next Engine Started in {}", stopwatch.elapsed_ms());

@@ -1,6 +1,6 @@
 #include "Modules/NextRemote/RemoteImGuiSession.hpp"
 
-#include "Engine/Runtime/DebugUiProvider.hpp"
+#include "Engine/Runtime/Interface/DebugUiProvider.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/RemoteProtocol.hpp"
