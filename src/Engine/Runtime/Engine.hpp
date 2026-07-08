@@ -17,8 +17,6 @@
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
-#include "Engine/Vulkan/RenderingPipeline.hpp"
-#include "Engine/Vulkan/VulkanFwd.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
 
 namespace NextRenderer
@@ -154,9 +152,11 @@ public:
     Runtime::Command::CommandHistory& GetCommandHistory() { return commandHistory_; }
     const Runtime::Command::CommandHistory& GetCommandHistory() const { return commandHistory_; }
 
-    // Rendering helpers
-    void RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir,
+    // RayCast
+    void RayCast(glm::vec3 rayOrigin, glm::vec3 rayDir,
                     std::function<bool(Assets::RayCastResult rayResult)> callback);
+    
+    // Rendering helpers
     void SetProgressiveRendering(bool enable, bool directly);
     bool IsProgressiveRendering() const { return progressiveRender_.enabled; }
     bool IsOfflineProgressivePathTracing() const
@@ -186,49 +186,42 @@ public:
     // Main-thread tasks
     void AddTickedTask(TickedTask task) { taskQueues_.ticked.push_back(task); }
     void AddTimerTask(double delay, DelayedTask task);
-
-    // Developer debug UI hook (implementation lives in Modules/DevTools,
-    // registered by the application entry point; nullptr disables overlays)
+    
+    // Optional Modules
+    
     void SetDebugUiProvider(Runtime::IDebugUiProvider* provider) { debugUiProvider_ = provider; }
     Runtime::IDebugUiProvider* GetDebugUiProvider() const { return debugUiProvider_; }
-
-    // Optional frame consumers (remote play, terminal presenter, recording, etc.)
-    // are assembled by the application entry before Start().
+    
     void AddRenderFrameConsumer(std::unique_ptr<Runtime::IRenderFrameConsumer> consumer);
 
+    
     void SetScriptRuntimeFactory(Runtime::ScriptRuntimeFactory factory)
     {
         scriptRuntimeFactory_ = std::move(factory);
     }
     Runtime::IScriptRuntime* GetScriptRuntime() { return scriptRuntime_.get(); }
     const Runtime::IScriptRuntime* GetScriptRuntime() const { return scriptRuntime_.get(); }
-
-    // Optional shader hot reload implementation (installed by Modules/LiveCoding).
+    
     void SetShaderHotReloaderFactory(Runtime::ShaderHotReloaderFactory factory)
     {
         shaderHotReloaderFactory_ = std::move(factory);
     }
-
-    // Optional agent script driver implementation (installed by Modules/AgentDriver).
+    
     void SetAgentDriverFactory(Runtime::Agent::AgentDriverFactory factory)
     {
         agentDriverFactory_ = std::move(factory);
     }
-
-    // Optional UI overlay (implementation in Modules/NextRmlUi); the factory is
-    // installed by the application entry and instantiated with the renderer.
+    
     void SetUiOverlayFactory(std::function<std::unique_ptr<Runtime::IUiOverlay>(NextEngine&)> factory)
     {
         uiOverlayFactory_ = std::move(factory);
     }
-
-    // Type-erased service slots for optional modules (e.g. Modules/NextAI).
-    // Modules attach their engine-scoped singletons here so the core stays
-    // free of module types; lifetime ends with the engine.
+    
     void SetExternalService(const std::string& key, std::shared_ptr<void> service)
     {
         services_.externalServices[key] = std::move(service);
     }
+    
     std::shared_ptr<void> GetExternalService(const std::string& key) const
     {
         auto it = services_.externalServices.find(key);

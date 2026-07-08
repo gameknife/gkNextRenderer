@@ -672,7 +672,7 @@ bool KongLie3DGameInstance::OnMouseButton(SDL_Event& event)
         Runtime::EngineHelper::GetScreenToWorldRay(glm::vec2(mousePos_), rayOrigin, rayDir);
 
         bool handled = false;
-        GetEngine().RayCastGPU(rayOrigin, rayDir, [this, &handled](Assets::RayCastResult result)
+        GetEngine().RayCast(rayOrigin, rayDir, [this, &handled](Assets::RayCastResult result)
         {
             if (!result.Hitted)
             {
@@ -1279,7 +1279,7 @@ void KongLie3DGameInstance::UpdateHoveredPieceTooltip(double deltaSeconds)
     Runtime::EngineHelper::GetScreenToWorldRay(glm::vec2(mousePos_), rayOrigin, rayDir);
 
     std::string hoveredPieceId;
-    GetEngine().RayCastGPU(rayOrigin, rayDir, [this, &hoveredPieceId](Assets::RayCastResult result)
+    GetEngine().RayCast(rayOrigin, rayDir, [this, &hoveredPieceId](Assets::RayCastResult result)
     {
         if (!result.Hitted)
         {

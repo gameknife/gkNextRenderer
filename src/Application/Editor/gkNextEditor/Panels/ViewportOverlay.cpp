@@ -124,7 +124,7 @@ namespace Editor
                                                                                origin, dir);
 
                                     NextEngine* engine = &ctx.engine;
-                                    engine->RayCastGPU(origin, dir,
+                                    engine->RayCast(origin, dir,
                                                        [engine, path](Assets::RayCastResult result) mutable
                                                        {
                                                            const glm::vec3 translation =
@@ -148,7 +148,7 @@ namespace Editor
                             Runtime::EngineHelper::GetScreenToWorldRay(glm::vec2(mousePos.x, mousePos.y), origin, dir);
 
                             Assets::Scene* scene = &ctx.scene;
-                            ctx.engine.RayCastGPU(origin, dir,
+                            ctx.engine.RayCast(origin, dir,
                                                   [scene, materialId](Assets::RayCastResult result)
                                                   {
                                                       if (result.Hitted)

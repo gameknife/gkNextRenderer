@@ -1236,7 +1236,7 @@ void MagicaLegoGameInstance::CPURaycast()
     glm::vec3 dir;
     Runtime::EngineHelper::GetScreenToWorldRay(mousePos_, rayOrigin, dir);
     isTracingObject_ = false;
-    GetEngine().RayCastGPU(rayOrigin, dir, [this](Assets::RayCastResult result)
+    GetEngine().RayCast(rayOrigin, dir, [this](Assets::RayCastResult result)
         {
             if (result.Hitted)
             {
@@ -1382,7 +1382,7 @@ void MagicaLegoGameInstance::PerformLeftClickCheck()
     Runtime::EngineHelper::GetScreenToWorldRay(mousePos_, rayOrigin, dir);
 
     bool hitObject = false;
-    GetEngine().RayCastGPU(rayOrigin, dir, [&hitObject](Assets::RayCastResult result) -> bool
+    GetEngine().RayCast(rayOrigin, dir, [&hitObject](Assets::RayCastResult result) -> bool
     {
         if (result.Hitted)
         {
@@ -1413,7 +1413,7 @@ void MagicaLegoGameInstance::UpdateFocusToScreenCenter()
     Runtime::EngineHelper::GetScreenToWorldRay(screenCenter, rayOrigin, centerDir);
 
     glm::vec3 newFocus = glm::vec3(0, 0, 0);
-    GetEngine().RayCastGPU(rayOrigin, centerDir, [&newFocus](Assets::RayCastResult result) -> bool
+    GetEngine().RayCast(rayOrigin, centerDir, [&newFocus](Assets::RayCastResult result) -> bool
     {
         if (result.Hitted)
         {

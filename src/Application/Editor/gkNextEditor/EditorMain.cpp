@@ -677,7 +677,7 @@ void EditorGameInstance::RayCastFromViewport(EViewportInputTarget target, const 
         Runtime::EngineHelper::GetScreenToWorldRay(mousePos, org, dir);
     }
 
-    GetEngine().RayCastGPU(org, dir, std::move(callback));
+    GetEngine().RayCast(org, dir, std::move(callback));
 }
 
 void EditorGameInstance::DrawGizmo(const glm::vec2& viewportPos, const glm::vec2& viewportSize)

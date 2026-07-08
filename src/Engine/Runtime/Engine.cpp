@@ -287,11 +287,8 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
     agentValidation_.includeUi = options.AgentValidationUI;
     agentValidation_.waitFrames = options.AgentValidationFrames;
     agentValidation_.outputPath = options.AgentValidationOutput;
-
+    
     services_.packageFileSystem.reset(new Utilities::Package::FPackageFileSystem(Utilities::Package::EPM_OsFile));
-
-    // Optional pak: assets moved out of the repo to reduce its size. Mounted automatically when present
-    // so LoadFile can fall back to it for files missing on disk (see FileHelper::LoadFile).
     {
         const std::string optionalPakPath = Utilities::FileHelper::GetPlatformFilePath("assets/paks/optional.pak");
         std::error_code ec;
@@ -300,7 +297,6 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
             services_.packageFileSystem->MountPak(optionalPakPath);
         }
     }
-
 
 #if WITH_STREAMLINE
     if (options.DisableStreamline)
@@ -316,24 +312,25 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
         SPDLOG_INFO("Streamline DLSS plugins disabled because no NVIDIA adapter is present");
     }
 #endif
-    Vulkan::Window::InitGLFW();
-    // Create Window
-    Vulkan::WindowConfig windowConfig{"gkNextRenderer " + NextRenderer::GetBuildVersion(),
-                                      options.Width,
-                                      options.Height,
-                                      options.Fullscreen,
-                                      options.Fullscreen,
-                                      !options.Fullscreen,
-                                      options.SaveFile,
-                                      userdata,
-                                      options.ForceSDR};
+    
+    Vulkan::Window::InitSDL();
+    
+    Vulkan::WindowConfig windowConfig{"gkNextEngine " + NextRenderer::GetBuildVersion(),
+                                      options.Width,options.Height,
+                                      false, options.Fullscreen,!options.Fullscreen,
+                                      options.SaveFile,userdata,options.ForceSDR};
+    
     gameInstance_ = CreateGameInstance(windowConfig, options, this);
+    
     config_.userSettings = CreateUserSettings(options);
+    
+    // cvars
     services_.cvarSystem = std::make_unique<NextCVar::FCVarSystem>();
     NextCVar::RegisterEngineCVars(*services_.cvarSystem, config_.userSettings, config_.showFlags, this);
     services_.cvarSystem->LoadDefaultFile("assets/configs/cvar_default.json");
     gameInstance_->ConfigureCVars(*services_.cvarSystem);
     services_.cvarSystem->LoadUserFiles();
+    
     for (const std::string& overrideCommand : options_->CVarOverrides)
     {
         const auto result = services_.cvarSystem->ExecuteCommand(overrideCommand);
@@ -342,13 +339,17 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
             SPDLOG_WARN("Startup CVar override failed '{}': {}", overrideCommand, result.message);
         }
     }
+    
+    // window config tweaks
     windowConfig.Fullscreen = config_.userSettings.BorderlessFullscreen;
-    // Hide the window for agent validation captures and for any caller that asked for it (e.g. the
-    // unit-test engine fixture). The capture+auto-exit state machine stays gated on AgentValidation.
     windowConfig.HiddenWindow =
         (options.AgentValidation && !options.AgentVisibleWindow) || options.HiddenWindow || options.Tui;
+    
+    // create windows
     window_.reset(new Vulkan::Window(windowConfig));
     SetBorderlessFullscreen(config_.userSettings.BorderlessFullscreen);
+    
+    // localization
     services_.localization = std::make_unique<NextLocalization>();
     services_.localization->LoadFromTxt(fmt::format("assets/locale/{}.txt", options_->locale), options_->locale);
 
@@ -432,16 +433,12 @@ void NextEngine::Start()
     spdlog::stopwatch stopwatch;
 
     // Initialize Renderer
-    bool shouldEnableValidation = GOption->Validation;
-    
-    const bool useFastAgentPresent = options_->AgentValidation || options_->Tui;
-    const VkPresentModeKHR presentMode = useFastAgentPresent
-                                             ? VK_PRESENT_MODE_IMMEDIATE_KHR
+    const VkPresentModeKHR presentMode = options_->AgentValidation || options_->Tui ? VK_PRESENT_MODE_IMMEDIATE_KHR
                                              : static_cast<VkPresentModeKHR>(options_->PresentMode);
     config_.userSettings.PresentMode = static_cast<uint32_t>(presentMode);
     renderer_.reset(NextRenderer::CreateRenderer(static_cast<uint32_t>(config_.userSettings.RendererType), window_.get(),
-                                                 presentMode,
-                                                 shouldEnableValidation));
+                                                 presentMode, GOption->Validation));
+    
     config_.userSettings.RendererType = static_cast<int32_t>(renderer_->CurrentLogicRendererType());
 
     auto& rendererDelegates = renderer_->GetDelegates();
@@ -449,14 +446,12 @@ void NextEngine::Start()
     rendererDelegates.createSwapChain = [this]() -> void { OnRendererCreateSwapChain(); };
     rendererDelegates.deleteSwapChain = [this]() -> void { OnRendererDeleteSwapChain(); };
     rendererDelegates.beforeNextTick = [this]() -> void { OnRendererBeforeNextFrame(); };
-    rendererDelegates.getUniformBufferObject = [this](VkOffset2D offset,
-                                                      VkExtent2D extend) -> Assets::UniformBufferObject
-    { return GetUniformBufferObject(offset, extend); };
-    rendererDelegates.postRender = [this](VkCommandBuffer commandBuffer, uint32_t imageIndex) -> void
-    { OnRendererPostRender(commandBuffer, imageIndex); };
-    rendererDelegates.afterSubmit = [this]() -> void { OnRendererAfterSubmit(); };
+    rendererDelegates.getUniformBufferObject = [this](VkOffset2D offset, VkExtent2D extend) -> Assets::UniformBufferObject { return GetUniformBufferObject(offset, extend); };
+    rendererDelegates.postRender = [this](VkCommandBuffer commandBuffer, uint32_t imageIndex) -> void { OnRendererPostRender(commandBuffer, imageIndex); };
+    rendererDelegates.afterSubmit = [this]() -> void  { OnRendererAfterSubmit(); };
 
     renderer_->Start();
+    
     for (auto it = renderFrameConsumers_.begin(); it != renderFrameConsumers_.end();)
     {
         if ((*it)->Start())
@@ -464,8 +459,6 @@ void NextEngine::Start()
             ++it;
             continue;
         }
-
-        SPDLOG_WARN("Render frame consumer '{}' failed to start; disabling it", (*it)->Name());
         it = renderFrameConsumers_.erase(it);
     }
 
@@ -485,6 +478,8 @@ void NextEngine::Start()
             }
         });
     }
+    
+    
     auto resolvedRendererType = ResolveRendererType(
         renderer_->CurrentLogicRendererType(), renderer_->SupportsRayTracing(), renderer_->HasFullAmbientCubeBudget());
     if (resolvedRendererType != renderer_->CurrentLogicRendererType())
@@ -493,19 +488,23 @@ void NextEngine::Start()
         config_.userSettings.RendererType = static_cast<int32_t>(resolvedRendererType);
     }
 
+    // shader hot-reload
 #if GK_ENABLE_HOT_RELOAD
     if (options_->ShaderHotReload && shaderHotReloaderFactory_)
     {
         services_.shaderHotReloader = shaderHotReloaderFactory_(*this);
     }
 #endif
-
+    
+    // physics
     services_.physics.reset(new NextPhysics());
     services_.physics->Start();
 
+    // audio
     services_.audio = std::make_unique<NextAudio>();
     services_.audio->Start();
 
+    // script
     if (scriptRuntimeFactory_)
     {
         scriptRuntime_ = scriptRuntimeFactory_(*this);
@@ -515,7 +514,10 @@ void NextEngine::Start()
         scriptRuntime_->Initialize();
     }
 
+    // gameinstance init
     gameInstance_->OnInit();
+    
+    // agent driver
     if (!options_->AgentScript.empty())
     {
         if (agentDriverFactory_)
@@ -1041,7 +1043,7 @@ glm::ivec2 NextEngine::GetMonitorSize() const
     return size;
 }
 
-void NextEngine::RayCastGPU(glm::vec3 rayOrigin, glm::vec3 rayDir,
+void NextEngine::RayCast(glm::vec3 rayOrigin, glm::vec3 rayDir,
                             std::function<bool(Assets::RayCastResult rayResult)> callback)
 {
     // CPU Raycast in scene

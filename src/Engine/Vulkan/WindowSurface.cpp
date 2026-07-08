@@ -317,7 +317,7 @@ void Window::ConfigureCustomTitleBarDrag(bool enabled, int titleBarHeight, int l
     customTitleBarDrag_.rightReservedWidth = std::max(0, rightReservedWidth);
 }
 
-void Window::InitGLFW()
+void Window::InitSDL()
 {
 #if WIN32
     if (!SDL_SetHintWithPriority("SDL_WINDOWS_DPI_AWARENESS", "unaware", SDL_HINT_OVERRIDE))

@@ -76,7 +76,7 @@ public:
     void ConfigureCustomTitleBarDrag(bool enabled, int titleBarHeight, int leftReservedWidth, int rightReservedWidth);
 
     // Static methods
-    static void InitGLFW();
+    static void InitSDL();
     static void TerminateGLFW();
 
 private:

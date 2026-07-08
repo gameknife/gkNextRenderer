@@ -777,7 +777,7 @@ void BrickPlayerGameInstance::PerformRaycast()
     glm::vec3 rayDir;
     Runtime::EngineHelper::GetScreenToWorldRay(mousePos_, rayOrigin, rayDir);
     bool handled = false;
-    GetEngine().RayCastGPU(rayOrigin, rayDir, [this, &handled](Assets::RayCastResult result)
+    GetEngine().RayCast(rayOrigin, rayDir, [this, &handled](Assets::RayCastResult result)
     {
         handled = this->UpdateHitStateFromRaycast(result);
         return true;

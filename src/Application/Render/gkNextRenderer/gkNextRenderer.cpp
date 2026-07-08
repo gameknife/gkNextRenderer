@@ -797,7 +797,7 @@ bool NextRendererGameInstance::OnMouseButton(SDL_Event& event)
 		glm::vec3 org;
 		glm::vec3 dir;
         Runtime::EngineHelper::GetScreenToWorldRay(mousePos, org, dir);
-		GetEngine().RayCastGPU( org, dir, [this](Assets::RayCastResult result)
+		GetEngine().RayCast( org, dir, [this](Assets::RayCastResult result)
 		{
 			if (result.Hitted)
 			{
