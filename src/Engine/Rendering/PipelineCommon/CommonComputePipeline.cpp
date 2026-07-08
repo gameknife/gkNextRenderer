@@ -213,9 +213,25 @@ namespace Vulkan::PipelineCommon
 		                    &(scene.FetchGPUScene(imageIndex)));
 	}
 
+	void ZeroBindPipeline::BindPipeline(VkCommandBuffer commandBuffer, const Assets::Scene& scene, uint32_t imageIndex,
+	                                    uint32_t customData0, uint32_t customData1, uint32_t customData2)
+	{
+		BindPipeline(commandBuffer, scene.FetchGPUScene(imageIndex), customData0, customData1, customData2);
+	}
+
 	void ZeroBindPipeline::BindPipeline(VkCommandBuffer commandBuffer, const Assets::GPUScene& gpuScene)
 	{
 		BindComputeWithPush(commandBuffer, Handle(), PipelineLayout(), sizeof(Assets::GPUScene), &gpuScene);
+	}
+
+	void ZeroBindPipeline::BindPipeline(VkCommandBuffer commandBuffer, const Assets::GPUScene& gpuScene,
+	                                    uint32_t customData0, uint32_t customData1, uint32_t customData2)
+	{
+		Assets::GPUScene customGpuScene = gpuScene;
+		customGpuScene.custom_data_0 = customData0;
+		customGpuScene.custom_data_1 = customData1;
+		customGpuScene.custom_data_2 = customData2;
+		BindPipeline(commandBuffer, customGpuScene);
 	}
 
 	ZeroBindCustomPushConstantPipeline::ZeroBindCustomPushConstantPipeline(const SwapChain& swapChain,

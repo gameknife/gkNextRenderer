@@ -224,10 +224,7 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
 
     ubo.PaperWhiteNit = config_.userSettings.PaperWhiteNit;
     ubo.LightCount = scene_->GetLightCount();
-
-    // Denoiser routing: when the variance-guided a-trous path is active (denoiser on with a
-    // positive iteration count) the compose pass reads the a-trous output; otherwise it reads
-    // the temporal accumulation buffers directly (no spatial filtering).
+    
     const bool denoiserOn = IsEffectiveDenoiserEnabled();
     const int diffuseAtrousIterations = denoiserOn ? std::clamp(config_.userSettings.DenoiseAtrousIterations, 0, 6) : 0;
     const int specularAtrousIterations = denoiserOn ? std::clamp(config_.userSettings.DenoiseAtrousSpecularIterations, 0, 6) : 0;
@@ -243,14 +240,6 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     ubo.GTAODebugMode = static_cast<uint32_t>(std::clamp(config_.userSettings.GTAODebugMode, 0, 2));
     ubo.GTAOEnable = config_.userSettings.GTAOEnable;
     ubo.GTAOQuality = static_cast<uint32_t>(std::clamp(config_.userSettings.GTAOQuality, 0, 3));
-    ubo.GTAOPadding3 = 0;
-    ubo.GTAOPadding4 = 0;
-    ubo.GTAOPadding5 = 0;
-    ubo.GTAOPadding6 = 0;
-    ubo.GTAOPadding7 = 0;
-    ubo.GTAOPadding8 = 0;
-    ubo.GTAOPadding9 = 0;
-    ubo.GTAOPadding10 = 0;
 
     ubo.ProgressiveRender = progressiveRender_.enabled;
     ubo.SceneEpsilonScale = config_.userSettings.SceneEpsilonScale;

@@ -1,11 +1,9 @@
 #include "Engine/Rendering/SoftwareModern/SoftwareModernNoAmbientRenderer.hpp"
-
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Utilities/Math.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
-#include "Engine/Vulkan/SwapChain.hpp"
 
 namespace Vulkan::SoftwareModernNoAmbient
 {
@@ -41,18 +39,9 @@ namespace Vulkan::SoftwareModernNoAmbient
         const std::set<std::string>& changedShaderFiles,
         std::set<std::string>& handledShaderFiles)
     {
-        if (shadingPipeline_)
-        {
-            shadingPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-        if (gtaoPipeline_)
-        {
-            gtaoPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
-        if (composePipeline_)
-        {
-            composePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-        }
+        if (shadingPipeline_) shadingPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+        if (gtaoPipeline_) gtaoPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+        if (composePipeline_) composePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
     }
 
     void SoftwareModernNoAmbientRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
@@ -82,7 +71,6 @@ namespace Vulkan::SoftwareModernNoAmbient
         }
 
         {
-            
             const auto& settings = NextEngine::GetInstance()->GetUserSettings();
             if (settings.GTAOEnable)
             {
@@ -95,7 +83,6 @@ namespace Vulkan::SoftwareModernNoAmbient
                 vkCmdDispatch(commandBuffer,
                               Utilities::Math::GetSafeDispatchCount((extent.width + 1u) / 2u, 8),
                               Utilities::Math::GetSafeDispatchCount((extent.height + 1u) / 2u, 8), 1);
-
                 baseRender_.GetViewStorageImage(Assets::Bindless::RT_GTAO)->InsertBarrier(
                     commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                     VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);

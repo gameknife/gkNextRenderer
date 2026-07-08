@@ -1,8 +1,6 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Rendering/ViewCameraUboBuilder.hpp"
-
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Assets/GPU/Texture.hpp"
 
 namespace Vulkan
 {
@@ -105,14 +103,6 @@ namespace Vulkan
             ubo.GTAODebugMode = 0;
             ubo.GTAOEnable = false;
             ubo.GTAOQuality = 0;
-            ubo.GTAOPadding3 = 0;
-            ubo.GTAOPadding4 = 0;
-            ubo.GTAOPadding5 = 0;
-            ubo.GTAOPadding6 = 0;
-            ubo.GTAOPadding7 = 0;
-            ubo.GTAOPadding8 = 0;
-            ubo.GTAOPadding9 = 0;
-            ubo.GTAOPadding10 = 0;
         }
     }
 

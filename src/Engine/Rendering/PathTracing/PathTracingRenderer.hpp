@@ -10,10 +10,7 @@ namespace Vulkan::PathTracing
 	class PathTracingRenderer final : public Vulkan::LogicRendererBase
 	{
 	public:
-
 		VULKAN_NON_COPIABLE(PathTracingRenderer);
-	
-	public:
 
 		PathTracingRenderer(Vulkan::VulkanBaseRenderer& baseRender): LogicRendererBase(baseRender) {}
 		virtual ~PathTracingRenderer();

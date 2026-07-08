@@ -394,6 +394,7 @@ namespace Vulkan
 		bool IsLogicRendererRegistered(ERendererType type) const;
 		void EnsureLogicRendererSwapChain(ERendererType type, LogicRendererBase& logicRenderer);
 		void CreateRenderImages();
+		void CreateSceneSwapChainResources();
 		// Creates the full screen-space RT set at [bankBase + RT_X]. bankBase 0 == primary view.
 		void CreateRenderTargetBank(uint32_t bankBase);
 		void CreateRenderTargetBank(uint32_t bankBase, VkExtent2D extent);

@@ -13,6 +13,7 @@
 #include "Engine/Vulkan/GraphicsPipelineBuilder.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
+#include "Engine/Vulkan/SyncAndTiming.hpp"
 
 #include <filesystem>
 
@@ -510,27 +511,12 @@ namespace Vulkan::GaussianSplat
         vkCmdFillBuffer(commandBuffer, groupBucketCountBuffer_->Handle(), 0, groupBucketBufferSize, 0);
         vkCmdFillBuffer(commandBuffer, drawIndirectBuffer_->Handle(), 0, VK_WHOLE_SIZE, 0);
 
-        std::array<VkBufferMemoryBarrier, 4> clearBarriers{};
-        for (auto& barrier : clearBarriers)
-        {
-            barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            barrier.offset = 0;
-            barrier.size = VK_WHOLE_SIZE;
-        }
-        clearBarriers[0].buffer = bucketCountBuffer_->Handle();
-        clearBarriers[0].size = bucketBufferSize;
-        clearBarriers[1].buffer = splatBucketBuffer_->Handle();
-        clearBarriers[1].size = splatBucketBufferSize;
-        clearBarriers[2].buffer = groupBucketCountBuffer_->Handle();
-        clearBarriers[2].size = groupBucketBufferSize;
-        clearBarriers[3].buffer = drawIndirectBuffer_->Handle();
-        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             0, 0, nullptr, static_cast<uint32_t>(clearBarriers.size()), clearBarriers.data(),
-                             0, nullptr);
+        BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, {
+            BufferMemoryBarrier::Make(bucketCountBuffer_->Handle(), VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT, 0, bucketBufferSize),
+            BufferMemoryBarrier::Make(splatBucketBuffer_->Handle(), VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT, 0, splatBucketBufferSize),
+            BufferMemoryBarrier::Make(groupBucketCountBuffer_->Handle(), VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT, 0, groupBucketBufferSize),
+            BufferMemoryBarrier::Make(drawIndirectBuffer_->Handle(), VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT),
+        });
 
         FSplatSortPushConstants push{
             renderer_.UniformBuffers()[imageIndex].Buffer().GetDeviceAddress(), splatBuffer_->GetDeviceAddress(),
@@ -544,25 +530,11 @@ namespace Vulkan::GaussianSplat
         histogramPipeline_->BindPipeline(commandBuffer, &push);
         vkCmdDispatch(commandBuffer, (activeSplatCount + splatSortGroupSize - 1) / splatSortGroupSize, 1, 1);
 
-        std::array<VkBufferMemoryBarrier, 3> histogramBarriers{};
-        for (auto& barrier : histogramBarriers)
-        {
-            barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            barrier.offset = 0;
-        }
-        histogramBarriers[0].buffer = bucketCountBuffer_->Handle();
-        histogramBarriers[0].size = bucketBufferSize;
-        histogramBarriers[1].buffer = splatBucketBuffer_->Handle();
-        histogramBarriers[1].size = splatBucketBufferSize;
-        histogramBarriers[2].buffer = groupBucketCountBuffer_->Handle();
-        histogramBarriers[2].size = groupBucketBufferSize;
-        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr,
-                             static_cast<uint32_t>(histogramBarriers.size()), histogramBarriers.data(), 0, nullptr);
+        BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, {
+            BufferMemoryBarrier::Make(bucketCountBuffer_->Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, 0, bucketBufferSize),
+            BufferMemoryBarrier::Make(splatBucketBuffer_->Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, 0, splatBucketBufferSize),
+            BufferMemoryBarrier::Make(groupBucketCountBuffer_->Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, 0, groupBucketBufferSize),
+        });
 
         FSplatSortPushConstants prefixPush = push;
         prefixPush.groupSize = 0u;
@@ -572,16 +544,8 @@ namespace Vulkan::GaussianSplat
         groupScanPipeline_->BindPipeline(commandBuffer, &push);
         vkCmdDispatch(commandBuffer, (bucketCount + splatSortGroupSize - 1) / splatSortGroupSize, 1, 1);
 
-        VkBufferMemoryBarrier scanBarrier{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
-        scanBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        scanBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        scanBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        scanBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        scanBarrier.buffer = groupBucketOffsetBuffer_->Handle();
-        scanBarrier.offset = 0;
-        scanBarrier.size = groupBucketBufferSize;
-        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 1, &scanBarrier, 0, nullptr);
+        BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                    groupBucketOffsetBuffer_->Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, 0, groupBucketBufferSize);
 
         VkMemoryBarrier prefixBarrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
         prefixBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
@@ -592,22 +556,10 @@ namespace Vulkan::GaussianSplat
         scatterPipeline_->BindPipeline(commandBuffer, &push);
         vkCmdDispatch(commandBuffer, (activeSplatCount + splatSortGroupSize - 1) / splatSortGroupSize, 1, 1);
 
-        std::array<VkBufferMemoryBarrier, 2> drawBarriers{};
-        drawBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        drawBarriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        drawBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        drawBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        drawBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        drawBarriers[0].buffer = sortedIndexBuffer_->Handle();
-        drawBarriers[0].offset = 0;
-        drawBarriers[0].size = VK_WHOLE_SIZE;
-        drawBarriers[1] = drawBarriers[0];
-        drawBarriers[1].dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
-        drawBarriers[1].buffer = drawIndirectBuffer_->Handle();
-        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
-                             0, 0, nullptr, static_cast<uint32_t>(drawBarriers.size()), drawBarriers.data(),
-                             0, nullptr);
+        BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, {
+            BufferMemoryBarrier::Make(sortedIndexBuffer_->Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT),
+            BufferMemoryBarrier::Make(drawIndirectBuffer_->Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_INDIRECT_COMMAND_READ_BIT),
+        });
         lastSortCacheKey_ = sortCacheKey;
         sortCacheValid_ = true;
     }
@@ -618,17 +570,9 @@ namespace Vulkan::GaussianSplat
         const VkExtent2D extent = renderer_.SwapChain().RenderExtent();
         UpdateModelStates(imageIndex);
 
-        VkBufferMemoryBarrier modelStateBarrier{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
-        modelStateBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-        modelStateBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        modelStateBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        modelStateBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        modelStateBarrier.buffer = modelStateBuffers_[imageIndex]->Handle();
-        modelStateBarrier.offset = 0;
-        modelStateBarrier.size = VK_WHOLE_SIZE;
-        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_HOST_BIT,
-                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
-                             0, 0, nullptr, 1, &modelStateBarrier, 0, nullptr);
+        BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_HOST_BIT,
+                                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+                                    modelStateBuffers_[imageIndex]->Handle(), VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
 
         DispatchGpuSort(commandBuffer, imageIndex);
 

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
-
 #include <memory>
 
 namespace Vulkan
@@ -14,8 +13,6 @@ namespace Vulkan
 
 namespace Vulkan::SoftwareModernNoAmbient
 {
-    // 不走 AmbientCube 的轻量 deferred renderer：
-    //   visibility -> shading -> gtao -> compose
     class SoftwareModernNoAmbientRenderer final : public Vulkan::LogicRendererBase
     {
     public:

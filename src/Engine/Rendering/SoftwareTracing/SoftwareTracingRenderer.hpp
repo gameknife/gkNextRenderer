@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Engine/Assets/AssetsFwd.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
@@ -15,7 +14,6 @@ namespace Vulkan::SoftwareTracing
 	class SoftwareTracingRenderer final : public Vulkan::LogicRendererBase
 	{
 	public:
-
 		VULKAN_NON_COPIABLE(SoftwareTracingRenderer)
 		
 		SoftwareTracingRenderer(Vulkan::VulkanBaseRenderer& baseRender);

@@ -35,7 +35,11 @@ namespace Vulkan::PipelineCommon
 		ZeroBindPipeline(const SwapChain& swapChain, const char* shaderfile, const Assets::Scene& scene);
 
 		void BindPipeline(VkCommandBuffer commandBuffer, const Assets::Scene& scene, uint32_t imageIndex);
+		void BindPipeline(VkCommandBuffer commandBuffer, const Assets::Scene& scene, uint32_t imageIndex,
+		                  uint32_t customData0, uint32_t customData1, uint32_t customData2);
 		void BindPipeline(VkCommandBuffer commandBuffer, const Assets::GPUScene& gpuScene);
+		void BindPipeline(VkCommandBuffer commandBuffer, const Assets::GPUScene& gpuScene,
+		                  uint32_t customData0, uint32_t customData1, uint32_t customData2);
 		bool ReloadIfShaderChanged(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles);
 
 	private:

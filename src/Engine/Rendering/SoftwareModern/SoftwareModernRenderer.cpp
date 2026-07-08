@@ -2,8 +2,6 @@
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Utilities/Math.hpp"
-#include "Engine/Vulkan/SwapChain.hpp"
-#include "Engine/Vulkan/WindowSurface.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 
 #include <utility>
@@ -78,14 +76,11 @@ void SoftwareModernRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	
 	{
 		SCOPED_GPU_TIMER("shadingpass");
-		
-		// cs shading pass
 		deferredShadingPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
 		vkCmdDispatch(commandBuffer,
 			Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
 			Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
-
-		// copy to swap-buffer
+	    
 		const auto transitionShadingOutput = [this, commandBuffer](uint32_t bindlessId)
 		{
 			baseRender_.GetViewStorageImage(bindlessId)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
@@ -104,7 +99,6 @@ void SoftwareModernRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 		baseRender_.GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
 			VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	}
-
 	{
 		SCOPED_GPU_TIMER("reproject pass");
 		const auto& settings = NextEngine::GetInstance()->GetUserSettings();
@@ -129,13 +123,11 @@ void SoftwareModernRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imag
 	}
 	{
 		SCOPED_GPU_TIMER("compose pass");
-
 		composePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
 		vkCmdDispatch(commandBuffer,
 			Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
 			Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
 	}
-	
 	{
         SCOPED_GPU_TIMER("copy pass");
         baseRender_.ActiveRenderView().TemporalResolve().CopyToHistory(baseRender_, commandBuffer, {

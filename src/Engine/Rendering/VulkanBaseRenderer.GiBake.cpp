@@ -22,6 +22,7 @@
 #include "Engine/Vulkan/RayTracing/RayTracingProperties.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
+#include "Engine/Vulkan/SyncAndTiming.hpp"
 #include "Engine/Runtime/Profiling/FrameProfiler.hpp"
 
 namespace Vulkan
@@ -80,24 +81,12 @@ namespace Vulkan
                            VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
         vkCmdDispatch(commandBuffer, groupCount, 1, 1);
 
-        VkBufferMemoryBarrier barriers[2]{};
-        barriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        barriers[0].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        barriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-        barriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barriers[0].buffer = GetScene().AmbientCubeBuffer().Handle();
-        barriers[0].offset = GetScene().AmbientCubesByteOffset();
-        barriers[0].size = static_cast<VkDeviceSize>(cubePoolTotal) * sizeof(Assets::AmbientCube);
-
-        barriers[1] = barriers[0];
-        barriers[1].buffer = GetScene().AmbientCubeBuffer().Handle();
-        barriers[1].offset = GetScene().AmbientResidencyByteOffset();
-        barriers[1].size = static_cast<VkDeviceSize>(residencyTotal) * sizeof(Assets::AmbientBrickResidency);
-
-        vkCmdPipelineBarrier(commandBuffer,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            0, 0, nullptr, 2, barriers, 0, nullptr);
+        BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, {
+            BufferMemoryBarrier::Make(GetScene().AmbientCubeBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                                      GetScene().AmbientCubesByteOffset(), static_cast<VkDeviceSize>(cubePoolTotal) * sizeof(Assets::AmbientCube)),
+            BufferMemoryBarrier::Make(GetScene().AmbientCubeBuffer().Handle(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                                      GetScene().AmbientResidencyByteOffset(), static_cast<VkDeviceSize>(residencyTotal) * sizeof(Assets::AmbientBrickResidency)),
+        });
     }
 
     void VulkanBaseRenderer::BakeAmbientCubeCascade(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool useHardware)
@@ -158,18 +147,8 @@ namespace Vulkan
         const VkDeviceSize cascadeByteSize = poolCubesPerCascade * sizeof(Assets::AmbientCube);
 
         // ping (cube) -> pong copy with surrounding barriers
-        VkBufferMemoryBarrier preCopyBarrier{};
-        preCopyBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        preCopyBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-        preCopyBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        preCopyBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        preCopyBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        preCopyBarrier.buffer = cubeBuffer;
-        preCopyBarrier.offset = cascadeByteOffset;
-        preCopyBarrier.size = cascadeByteSize;
-        vkCmdPipelineBarrier(commandBuffer,
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-            0, 0, nullptr, 1, &preCopyBarrier, 0, nullptr);
+        BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                    cubeBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT, cascadeByteOffset, cascadeByteSize);
 
         VkBufferCopy copyRegion{};
         copyRegion.srcOffset = cascadeByteOffset;
@@ -177,26 +156,10 @@ namespace Vulkan
         copyRegion.size = cascadeByteSize;
         vkCmdCopyBuffer(commandBuffer, cubeBuffer, pongBuffer, 1, &copyRegion);
 
-        VkBufferMemoryBarrier postCopyBarriers[2]{};
-        postCopyBarriers[0].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        postCopyBarriers[0].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        postCopyBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        postCopyBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        postCopyBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        postCopyBarriers[0].buffer = pongBuffer;
-        postCopyBarriers[0].offset = pongByteOffset;
-        postCopyBarriers[0].size = cascadeByteSize;
-        postCopyBarriers[1].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        postCopyBarriers[1].srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        postCopyBarriers[1].dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
-        postCopyBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        postCopyBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        postCopyBarriers[1].buffer = cubeBuffer;
-        postCopyBarriers[1].offset = cascadeByteOffset;
-        postCopyBarriers[1].size = cascadeByteSize;
-        vkCmdPipelineBarrier(commandBuffer,
-            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-            0, 0, nullptr, 2, postCopyBarriers, 0, nullptr);
+        BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, {
+            BufferMemoryBarrier::Make(pongBuffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, pongByteOffset, cascadeByteSize),
+            BufferMemoryBarrier::Make(cubeBuffer, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT, cascadeByteOffset, cascadeByteSize),
+        });
 
         // Dispatch the chosen bake pipeline. Both share the same GPUScene push constant layout.
         if (useHardware)

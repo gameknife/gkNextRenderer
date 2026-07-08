@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Engine/Assets/AssetsFwd.hpp"
-#include "Engine/Vulkan/RenderingPipeline.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 

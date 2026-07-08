@@ -163,31 +163,15 @@ public struct ALIGN_16 UniformBufferObject
 
     public float4 AmbientCubeCascadeParams;
 
-    // Denoiser: bindless slots holding the final diffuse / specular the compose pass should read
-    // (a-trous outputs when enabled, else the temporal accumulation buffers).
     public uint DenoiseDiffuseSourceSlot;
     public uint DenoiseSpecularSourceSlot;
-
-    // SwModernNoAmbient GTAO. Kept in the camera UBO so both GTAO compute stages can
-    // use the regular GPUScene push constant without introducing another pipeline ABI.
     public float GTAORadius;
     public float GTAOStrength;
+
     public float GTAOThickness;
     public uint GTAODebugMode;
-
     public bool GTAOEnable;
     public uint GTAOQuality;
-    public uint GTAOPadding1;
-    public uint GTAOPadding2;
-
-    public uint GTAOPadding3;
-    public uint GTAOPadding4;
-    public uint GTAOPadding5;
-    public uint GTAOPadding6;
-    public uint GTAOPadding7;
-    public uint GTAOPadding8;
-    public uint GTAOPadding9;
-    public uint GTAOPadding10;
 };
 
 public struct ALIGN_16 NodeProxy

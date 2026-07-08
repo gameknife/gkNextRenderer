@@ -2,6 +2,9 @@
 
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/Device.hpp"
+#include <array>
+#include <cstddef>
+#include <initializer_list>
 
 namespace Vulkan
 {
@@ -65,6 +68,32 @@ namespace Vulkan
     private:
         const class Device& device_;
         VULKAN_HANDLE(VkSemaphore, semaphore_)
+    };
+
+    // Buffer memory barrier helpers for command stream synchronization.
+    class BufferMemoryBarrier final
+    {
+    public:
+        static VkBufferMemoryBarrier Make(VkBuffer buffer, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE);
+        static void Insert(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, const VkBufferMemoryBarrier& barrier);
+        static void Insert(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, VkBuffer buffer, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE);
+        static void Insert(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, uint32_t barrierCount, const VkBufferMemoryBarrier* barriers);
+        static void Insert(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, std::initializer_list<VkBufferMemoryBarrier> barriers)
+        {
+            Insert(commandBuffer, srcStageMask, dstStageMask, static_cast<uint32_t>(barriers.size()), barriers.begin());
+        }
+
+        template <std::size_t N>
+        static void Insert(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, const std::array<VkBufferMemoryBarrier, N>& barriers)
+        {
+            Insert(commandBuffer, srcStageMask, dstStageMask, static_cast<uint32_t>(barriers.size()), barriers.data());
+        }
+
+        template <std::size_t N>
+        static void Insert(VkCommandBuffer commandBuffer, VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, const VkBufferMemoryBarrier (&barriers)[N])
+        {
+            Insert(commandBuffer, srcStageMask, dstStageMask, static_cast<uint32_t>(N), barriers);
+        }
     };
 
     // Image layout/memory barrier helpers for command stream synchronization.

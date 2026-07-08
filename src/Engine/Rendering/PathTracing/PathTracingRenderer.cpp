@@ -1,19 +1,12 @@
 #include "Engine/Rendering/PathTracing/PathTracingRenderer.hpp"
+#include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Vulkan/BufferUtil.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
-#include "Engine/Vulkan/CommandExecution.hpp"
-#include "Engine/Vulkan/SwapChain.hpp"
+#include "Engine/Vulkan/SyncAndTiming.hpp"
 #include "Engine/Utilities/Math.hpp"
-#include "Engine/Vulkan/GpuResources.hpp"
-#include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
-
-#include <chrono>
-#include <cstring>
-#include <numeric>
-
-
 #include "Engine/Runtime/Engine.hpp"
+#include <numeric>
 
 namespace Vulkan::PathTracing
 {
@@ -286,38 +279,15 @@ namespace Vulkan::PathTracing
             return;
         }
 
-        std::array<VkBufferMemoryBarrier, 4> barriers{};
-        const std::array<const FSharcBuffer*, 4> buffers{
-            &sharc_.hashEntries,
-            &sharc_.lockBuffer,
-            &sharc_.accumulation,
-            &sharc_.resolved,
-        };
-        for (size_t i = 0; i < barriers.size(); ++i)
-        {
-            barriers[i].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-            barriers[i].srcAccessMask = srcAccessMask;
-            barriers[i].dstAccessMask = dstAccessMask;
-            barriers[i].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            barriers[i].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            barriers[i].buffer = buffers[i]->buffer->Handle();
-            barriers[i].offset = 0;
-            barriers[i].size = VK_WHOLE_SIZE;
-        }
-
         const VkPipelineStageFlags srcStage =
             (srcAccessMask & VK_ACCESS_TRANSFER_WRITE_BIT) != 0 ? VK_PIPELINE_STAGE_TRANSFER_BIT :
                                                                   VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-        vkCmdPipelineBarrier(commandBuffer,
-                             srcStage,
-                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             0,
-                             0,
-                             nullptr,
-                             static_cast<uint32_t>(barriers.size()),
-                             barriers.data(),
-                             0,
-                             nullptr);
+        BufferMemoryBarrier::Insert(commandBuffer, srcStage, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, {
+            BufferMemoryBarrier::Make(sharc_.hashEntries.buffer->Handle(), srcAccessMask, dstAccessMask),
+            BufferMemoryBarrier::Make(sharc_.lockBuffer.buffer->Handle(), srcAccessMask, dstAccessMask),
+            BufferMemoryBarrier::Make(sharc_.accumulation.buffer->Handle(), srcAccessMask, dstAccessMask),
+            BufferMemoryBarrier::Make(sharc_.resolved.buffer->Handle(), srcAccessMask, dstAccessMask),
+        });
     }
 
     Assets::GPUScene PathTracingRenderer::BuildSharcGPUScene(uint32_t imageIndex)

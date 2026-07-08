@@ -1,10 +1,7 @@
 #include "Engine/Rendering/SoftwareTracing/SoftwareTracingRenderer.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Runtime/Engine.hpp"
-
-#include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
-
 #include "Engine/Utilities/Math.hpp"
 
 namespace Vulkan::SoftwareTracing {
@@ -51,18 +48,9 @@ void SoftwareTracingRenderer::ReloadShaders(
 	const std::set<std::string>& changedShaderFiles,
 	std::set<std::string>& handledShaderFiles)
 {
-	if (deferredShadingPipeline_)
-	{
-		deferredShadingPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-	}
-	if (accumulatePipeline_)
-	{
-		accumulatePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-	}
-	if (composePipeline_)
-	{
-		composePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-	}
+	if (deferredShadingPipeline_) deferredShadingPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+	if (accumulatePipeline_) accumulatePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+	if (composePipeline_) composePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
 }
 
 void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
@@ -78,10 +66,8 @@ void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t ima
 		vkCmdDispatch(commandBuffer,
 			Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
 			Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
-
 		baseRender_.GetViewStorageImage(Assets::Bindless::RT_SINGLE_DIFFUSE)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	}
-
 	{
 		SCOPED_GPU_TIMER("reproject pass");
 		const auto& settings = NextEngine::GetInstance()->GetUserSettings();
@@ -112,7 +98,6 @@ void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t ima
 			Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
 			Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
 	}
-	
 	{
         SCOPED_GPU_TIMER("copy pass");
         baseRender_.ActiveRenderView().TemporalResolve().CopyToHistory(baseRender_, commandBuffer, {

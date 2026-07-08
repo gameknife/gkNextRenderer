@@ -117,6 +117,60 @@ namespace Vulkan
         Check(vkWaitSemaphores(device_.Handle(), &waitInfo, timeout), "wait timeline semaphore");
     }
 
+    VkBufferMemoryBarrier BufferMemoryBarrier::Make(
+        VkBuffer buffer,
+        VkAccessFlags srcAccessMask,
+        VkAccessFlags dstAccessMask,
+        VkDeviceSize offset,
+        VkDeviceSize size)
+    {
+        VkBufferMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        barrier.srcAccessMask = srcAccessMask;
+        barrier.dstAccessMask = dstAccessMask;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.buffer = buffer;
+        barrier.offset = offset;
+        barrier.size = size;
+        return barrier;
+    }
+
+    void BufferMemoryBarrier::Insert(
+        VkCommandBuffer commandBuffer,
+        VkPipelineStageFlags srcStageMask,
+        VkPipelineStageFlags dstStageMask,
+        const VkBufferMemoryBarrier& barrier)
+    {
+        Insert(commandBuffer, srcStageMask, dstStageMask, 1, &barrier);
+    }
+
+    void BufferMemoryBarrier::Insert(
+        VkCommandBuffer commandBuffer,
+        VkPipelineStageFlags srcStageMask,
+        VkPipelineStageFlags dstStageMask,
+        VkBuffer buffer,
+        VkAccessFlags srcAccessMask,
+        VkAccessFlags dstAccessMask,
+        VkDeviceSize offset,
+        VkDeviceSize size)
+    {
+        const VkBufferMemoryBarrier barrier = Make(buffer, srcAccessMask, dstAccessMask, offset, size);
+        Insert(commandBuffer, srcStageMask, dstStageMask, barrier);
+    }
+
+    void BufferMemoryBarrier::Insert(
+        VkCommandBuffer commandBuffer,
+        VkPipelineStageFlags srcStageMask,
+        VkPipelineStageFlags dstStageMask,
+        uint32_t barrierCount,
+        const VkBufferMemoryBarrier* barriers)
+    {
+        vkCmdPipelineBarrier(commandBuffer,
+            srcStageMask, dstStageMask, 0,
+            0, nullptr, barrierCount, barriers, 0, nullptr);
+    }
+
     void ImageMemoryBarrier::Insert(
         VkCommandBuffer commandBuffer,
         VkImage image,
