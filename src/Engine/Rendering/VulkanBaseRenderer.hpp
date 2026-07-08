@@ -32,6 +32,11 @@ namespace Vulkan::GaussianSplat
     class GaussianSplatPass;
 }
 
+namespace Vulkan::AuxDraw
+{
+    class AuxDrawPass;
+}
+
 namespace Vulkan
 {
 	class AssetThumbnailRenderer;
@@ -318,6 +323,7 @@ namespace Vulkan
 			std::unique_ptr<PipelineCommon::VisibilityPipeline> visibilityPipeline;
 			std::unique_ptr<Shadow::ShadowMapPass> sunShadowPass;
 			std::unique_ptr<GaussianSplat::GaussianSplatPass> gaussianSplatPass;
+			std::unique_ptr<AuxDraw::AuxDrawPass> auxDrawPass;
 			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> bufferClearPipeline;
 			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> fsrComposePipeline;
 			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> visualDebuggerPipeline;

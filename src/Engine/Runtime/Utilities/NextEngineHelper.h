@@ -15,7 +15,8 @@ namespace Runtime::EngineHelper
     void GetScreenToWorldRay(glm::vec2 locationSS, glm::vec3& origin, glm::vec3& dir);
     void GetScreenToWorldRayWithCamera(const Assets::Camera& camera, glm::vec2 locationSS, glm::vec2 viewportPos,
                                        glm::vec2 viewportSize, glm::vec3& origin, glm::vec3& dir);
-    void DrawAuxLine(glm::vec3 from, glm::vec3 to, glm::vec4 color, float size = 1);
-    void DrawAuxBox(glm::vec3 min, glm::vec3 max, glm::vec4 color, float size = 1);
-    void DrawAuxPoint(glm::vec3 location, glm::vec4 color, float size = 1, int32_t durationInTick = 0);
+    void DrawAuxLine(glm::vec3 from, glm::vec3 to, glm::vec4 color, float size = 1, bool depthTest = true);
+    void DrawAuxBox(glm::vec3 min, glm::vec3 max, glm::vec4 color, float size = 1, bool depthTest = true);
+    void DrawAuxPoint(glm::vec3 location, glm::vec4 color, float size = 1, int32_t durationInTick = 0,
+                      bool depthTest = true);
 }

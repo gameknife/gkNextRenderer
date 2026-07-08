@@ -4,39 +4,13 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
+#include "Engine/Rendering/AuxDraw/AuxDrawSystem.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 
 #include <imgui.h>
 
 namespace
 {
-    std::vector<int32_t> AuxCounter;
-
-    glm::vec3 ProjectWorldToScreenInternal(glm::vec3 locationWS)
-    {
-        NextEngine* engine = NextEngine::GetInstance();
-        if (!engine)
-        {
-            return {};
-        }
-
-        auto vkoffset = engine->GetRenderer().SwapChain().OutputOffset();
-        auto vkextent = engine->GetRenderer().SwapChain().OutputExtent();
-
-        const auto& prevUBO = engine->GetLastUniformBufferObject();
-        glm::vec4 transformed = prevUBO.ViewProjection * glm::vec4(locationWS, 1.0f);
-        transformed = transformed / transformed.w;
-        transformed.x += 1.0f;
-        transformed.x *= vkextent.width / 2;
-        transformed.y += 1.0f;
-        transformed.y *= vkextent.height / 2;
-
-        transformed.x += vkoffset.x;
-        transformed.y += vkoffset.y;
-
-        return transformed;
-    }
-
     bool TryNdcToImGuiPos(const glm::vec3& ndc, ImVec2& outImGuiPos, bool invertY)
     {
         if (ndc.z < -1.0f || ndc.z > 1.0f || ndc.x < -1.2f || ndc.x > 1.2f || ndc.y < -1.2f || ndc.y > 1.2f)
@@ -169,68 +143,18 @@ namespace Runtime::EngineHelper
         dir = raydir;
     }
 
-    void DrawAuxLine(glm::vec3 from, glm::vec3 to, glm::vec4 color, float size)
+    void DrawAuxLine(glm::vec3 from, glm::vec3 to, glm::vec4 color, float size, bool depthTest)
     {
-        NextEngine* engine = NextEngine::GetInstance();
-        if (!engine)
-        {
-            return;
-        }
-        auto transformedFrom = ProjectWorldToScreenInternal(from);
-        auto transformedTo = ProjectWorldToScreenInternal(to);
-
-        if (transformedFrom.z < 1 && transformedTo.z < 1)
-        {
-            engine->GetUserInterface()->DrawLine(transformedFrom.x, transformedFrom.y, transformedTo.x, transformedTo.y, size, color);
-        }
+        Rendering::AuxDraw::GetAuxDrawSystem().AddLine(from, to, color, size, depthTest);
     }
 
-    void DrawAuxBox(glm::vec3 min, glm::vec3 max, glm::vec4 color, float size)
+    void DrawAuxBox(glm::vec3 min, glm::vec3 max, glm::vec4 color, float size, bool depthTest)
     {
-        DrawAuxLine(glm::vec3(min.x, min.y, min.z), glm::vec3(max.x, min.y, min.z), color, size);
-        DrawAuxLine(glm::vec3(max.x, min.y, min.z), glm::vec3(max.x, max.y, min.z), color, size);
-        DrawAuxLine(glm::vec3(max.x, max.y, min.z), glm::vec3(min.x, max.y, min.z), color, size);
-        DrawAuxLine(glm::vec3(min.x, max.y, min.z), glm::vec3(min.x, min.y, min.z), color, size);
-
-        DrawAuxLine(glm::vec3(min.x, min.y, max.z), glm::vec3(max.x, min.y, max.z), color, size);
-        DrawAuxLine(glm::vec3(max.x, min.y, max.z), glm::vec3(max.x, max.y, max.z), color, size);
-        DrawAuxLine(glm::vec3(max.x, max.y, max.z), glm::vec3(min.x, max.y, max.z), color, size);
-        DrawAuxLine(glm::vec3(min.x, max.y, max.z), glm::vec3(min.x, min.y, max.z), color, size);
-
-        DrawAuxLine(glm::vec3(min.x, min.y, min.z), glm::vec3(min.x, min.y, max.z), color, size);
-        DrawAuxLine(glm::vec3(max.x, min.y, min.z), glm::vec3(max.x, min.y, max.z), color, size);
-        DrawAuxLine(glm::vec3(max.x, max.y, min.z), glm::vec3(max.x, max.y, max.z), color, size);
-        DrawAuxLine(glm::vec3(min.x, max.y, min.z), glm::vec3(min.x, max.y, max.z), color, size);
+        Rendering::AuxDraw::GetAuxDrawSystem().AddBox(min, max, color, size, depthTest);
     }
 
-    void DrawAuxPoint(glm::vec3 location, glm::vec4 color, float size, int32_t durationInTick)
+    void DrawAuxPoint(glm::vec3 location, glm::vec4 color, float size, int32_t durationInTick, bool depthTest)
     {
-        NextEngine* engine = NextEngine::GetInstance();
-        if (!engine)
-        {
-            return;
-        }
-        if (durationInTick > 0)
-        {
-            AuxCounter.push_back(durationInTick);
-            int32_t id = static_cast<int32_t>(AuxCounter.size()) - 1;
-            engine->AddTickedTask([location, color, size, id](double deltaSeconds)->bool
-            {
-                auto transformed = ProjectWorldToScreenInternal(location);
-                if (transformed.z < 1)
-                {
-                    NextEngine::GetInstance()->GetUserInterface()->DrawPoint(transformed.x, transformed.y, size, color);
-                }
-                return (AuxCounter[id] -= 1) <= 0;
-            });
-        }
-        else
-        {
-            auto transformed = ProjectWorldToScreenInternal(location);
-            if (transformed.z < 1)
-            {
-                engine->GetUserInterface()->DrawPoint(transformed.x, transformed.y, size, color);
-            }
-        }
+        Rendering::AuxDraw::GetAuxDrawSystem().AddPoint(location, color, size, durationInTick, depthTest);
     }
 }

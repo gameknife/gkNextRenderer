@@ -1,8 +1,5 @@
 #include "Modules/DevTools/PhysicsDebugOverlay.hpp"
 
-#include <cmath>
-#include <optional>
-
 #include <imgui.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -13,70 +10,10 @@
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.h"
+#include "Engine/Runtime/Utilities/NextEngineHelper.h"
 
 namespace
 {
-    ImU32 ToImU32(const glm::vec4& color)
-    {
-        const auto clampByte = [](float value) -> int
-        {
-            return static_cast<int>(std::round(glm::clamp(value, 0.0f, 1.0f) * 255.0f));
-        };
-
-        return IM_COL32(clampByte(color.r), clampByte(color.g), clampByte(color.b), clampByte(color.a));
-    }
-
-    struct FOverlayProjector
-    {
-        ImVec2 viewportSize;
-        ImVec2 viewportPos;
-        glm::mat4 viewProjection;
-
-        bool Project(const glm::vec3& worldPos, ImVec2& screenPos) const
-        {
-            const glm::vec4 clip = viewProjection * glm::vec4(worldPos, 1.0f);
-            if (clip.w <= 0.0f)
-            {
-                return false;
-            }
-
-            const glm::vec3 ndc = glm::vec3(clip) / clip.w;
-            screenPos.x = viewportPos.x + (ndc.x * 0.5f + 0.5f) * viewportSize.x;
-            screenPos.y = viewportPos.y + (-ndc.y * 0.5f + 0.5f) * viewportSize.y;
-            return true;
-        }
-    };
-
-    std::optional<FOverlayProjector> BuildOverlayProjector(const Assets::Camera& camera)
-    {
-        ImVec2 viewportSize = ImGui::GetMainViewport()->Size;
-        ImVec2 viewportPos = ImGui::GetMainViewport()->Pos;
-        if (viewportSize.x <= 1.0f || viewportSize.y <= 1.0f)
-        {
-            return std::nullopt;
-        }
-
-        const float aspect = viewportSize.x / viewportSize.y;
-        const float fov = camera.FieldOfView > 1.0f ? camera.FieldOfView : 60.0f;
-        const glm::mat4 projection = glm::perspective(glm::radians(fov), aspect, 0.05f, 2000.0f);
-        return FOverlayProjector{
-            viewportSize,
-            viewportPos,
-            projection * camera.ModelView,
-        };
-    }
-
-    void DrawProjectedLine(ImDrawList* drawList, const FOverlayProjector& projector, const glm::vec3& a,
-                           const glm::vec3& b, ImU32 color, float thickness)
-    {
-        ImVec2 sa;
-        ImVec2 sb;
-        if (projector.Project(a, sa) && projector.Project(b, sb))
-        {
-            drawList->AddLine(sa, sb, color, thickness);
-        }
-    }
-
     struct FPhysicsLegendEntry
     {
         const char* label;
@@ -177,7 +114,7 @@ namespace
     }
 }
 
-void Runtime::DrawPhysicsDebugOverlay(const Assets::Scene& scene, const Assets::Camera& camera)
+void Runtime::DrawPhysicsDebugOverlay(const Assets::Scene& scene, const Assets::Camera&)
 {
     auto* physics = NextEngine::GetInstance()->GetPhysicsEngine();
     if (!physics)
@@ -185,20 +122,14 @@ void Runtime::DrawPhysicsDebugOverlay(const Assets::Scene& scene, const Assets::
         return;
     }
 
-    const std::optional<FOverlayProjector> projector = BuildOverlayProjector(camera);
-    if (!projector.has_value())
-    {
-        return;
-    }
-
-    auto* drawList = ImGui::GetForegroundDrawList();
     FPhysicsDebugStats stats;
 
     static constexpr int kEdges[12][2] = {
-        {0, 1}, {1, 3}, {3, 2}, {2, 0},
+        {0, 1}, {1, 3}, {3, 2}, {2, 0}, 
         {4, 5}, {5, 7}, {7, 6}, {6, 4},
         {0, 4}, {1, 5}, {2, 6}, {3, 7},
     };
+    static constexpr bool physicsDebugDepthTest = true;
 
     for (const auto& node : scene.Nodes())
     {
@@ -254,17 +185,13 @@ void Runtime::DrawPhysicsDebugOverlay(const Assets::Scene& scene, const Assets::
         corners[6] = glm::vec3(worldTransform * glm::vec4(localMin.x, localMax.y, localMax.z, 1.0f));
         corners[7] = glm::vec3(worldTransform * glm::vec4(localMax.x, localMax.y, localMax.z, 1.0f));
 
-        const ImU32 color = ToImU32(physics->GetBodyDebugColor(physComp->GetPhysicsBody()));
+        const glm::vec4 color = physics->GetBodyDebugColor(physComp->GetPhysicsBody());
         for (const auto& edge : kEdges)
         {
-            DrawProjectedLine(drawList, *projector, corners[edge[0]], corners[edge[1]], color, 1.5f);
+            EngineHelper::DrawAuxLine(corners[edge[0]], corners[edge[1]], color, 1, physicsDebugDepthTest);
         }
 
-        ImVec2 center;
-        if (projector->Project(body->position, center))
-        {
-            drawList->AddCircle(center, 3.5f, color, 10, 1.5f);
-        }
+        EngineHelper::DrawAuxPoint(body->position, color, 2, 0, false);
     }
 
     DrawPhysicsDebugLegend(stats);
