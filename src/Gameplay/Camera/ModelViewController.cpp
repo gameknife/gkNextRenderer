@@ -1,4 +1,4 @@
-#include "Engine/Runtime/Camera/ModelViewController.hpp"
+#include "Gameplay/Camera/ModelViewController.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.h"

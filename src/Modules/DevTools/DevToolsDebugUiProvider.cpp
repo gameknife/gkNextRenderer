@@ -7,6 +7,8 @@
 #include "Modules/DevTools/ConsoleLogBuffer.hpp"
 #include "Modules/DevTools/UiDevPanels.hpp"
 #include "Modules/DevTools/CVarEditorPanel.hpp"
+#include "Modules/DevTools/AuxDrawPass.hpp"
+#include "Engine/Rendering/ExternalPassRegistry.hpp"
 
 namespace DevTools
 {
@@ -80,6 +82,15 @@ namespace DevTools
     Runtime::IDebugUiProvider& DefaultDebugUiProvider()
     {
         static FDebugUiProvider provider;
+        static bool auxDrawRegistered = false;
+        if (!auxDrawRegistered)
+        {
+            // GPU aux drawing (debug lines/points) renders as an external overlay pass.
+            Vulkan::RegisterExternalPassFactory(
+                [](Vulkan::VulkanBaseRenderer& renderer) -> std::unique_ptr<Vulkan::IExternalRenderPass>
+                { return std::make_unique<Vulkan::AuxDraw::AuxDrawPass>(renderer); });
+            auxDrawRegistered = true;
+        }
         return provider;
     }
 }

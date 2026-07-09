@@ -1,4 +1,4 @@
-#include "Engine/Runtime/Camera/FocusAnimation.hpp"
+#include "Gameplay/Camera/FocusAnimation.hpp"
 
 namespace Runtime::Camera
 {

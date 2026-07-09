@@ -722,6 +722,12 @@ if ( TARGET RenderViews )
 	endif()
 	target_link_libraries(gkNextEditor PRIVATE RenderViews)
 endif()
+# ModelViewController lives in NextGameplay; link it where the orbit/fly camera is used.
+foreach(t gkNextRenderer gkNextEditor ScadStudio gkNextMotionBenchmark NextRemote)
+	if ( TARGET ${t} AND TARGET NextGameplay )
+		target_link_libraries(${t} PRIVATE NextGameplay)
+	endif()
+endforeach()
 if ( TARGET SceneExport )
 	# glTF/GLB scene export; only applications with save functionality link it.
 	target_link_libraries(gkNextEditor PRIVATE SceneExport)

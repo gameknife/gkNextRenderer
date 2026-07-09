@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Engine/Runtime/Camera/ModelViewController.hpp"
+#include "Gameplay/Camera/ModelViewController.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 
 #include <memory>

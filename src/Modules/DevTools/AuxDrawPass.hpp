@@ -2,6 +2,7 @@
 
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Rendering/AuxDraw/AuxDrawSystem.hpp"
+#include "Engine/Rendering/ExternalPassRegistry.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include <memory>
@@ -23,16 +24,17 @@ namespace Vulkan::PipelineCommon
 
 namespace Vulkan::AuxDraw
 {
-    class AuxDrawPass final
+    class AuxDrawPass final : public IExternalRenderPass
     {
     public:
         explicit AuxDrawPass(VulkanBaseRenderer& renderer);
-        ~AuxDrawPass();
+        ~AuxDrawPass() override;
 
-        void CreateResources();
+        void CreateResources() override;
         void ReleaseResources();
-        void ReloadShaders(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles);
-        void Execute(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+        void ReloadShaders(const std::set<std::string>& changedShaderFiles,
+                           std::set<std::string>& handledShaderFiles) override;
+        void Execute(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 
     private:
         struct FrameBuffer

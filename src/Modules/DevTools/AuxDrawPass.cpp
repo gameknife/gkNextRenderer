@@ -1,6 +1,6 @@
 #include "Engine/Common/CoreMinimal.hpp"
 
-#include "Engine/Rendering/AuxDraw/AuxDrawPass.hpp"
+#include "Modules/DevTools/AuxDrawPass.hpp"
 
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"

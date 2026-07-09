@@ -10,6 +10,7 @@
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Rendering/Upscaler/UpscalerTypes.hpp"
+#include "Engine/Rendering/ExternalPassRegistry.hpp"
 #include "Engine/Rendering/RenderView.hpp"
 #include "Engine/Runtime/Profiling/FrameProfiler.hpp"
 #include <vector>
@@ -29,11 +30,6 @@ namespace Rendering::Upscaler
 namespace Vulkan::GaussianSplat
 {
     class GaussianSplatPass;
-}
-
-namespace Vulkan::AuxDraw
-{
-    class AuxDrawPass;
 }
 
 namespace Vulkan
@@ -328,7 +324,7 @@ namespace Vulkan
 			std::unique_ptr<PipelineCommon::VisibilityPipeline> visibilityPipeline;
 			std::unique_ptr<Shadow::ShadowMapPass> sunShadowPass;
 			std::unique_ptr<GaussianSplat::GaussianSplatPass> gaussianSplatPass;
-			std::unique_ptr<AuxDraw::AuxDrawPass> auxDrawPass;
+			std::vector<std::unique_ptr<IExternalRenderPass>> externalPasses;
 			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> bufferClearPipeline;
 			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> fsrComposePipeline;
 			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> visualDebuggerPipeline;

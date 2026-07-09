@@ -1,7 +1,7 @@
 #pragma once
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
-#include "Engine/Runtime/Camera/ModelViewController.hpp"
+#include "Gameplay/Camera/ModelViewController.hpp"
 #include "Common/BenchMark.hpp"
 
 #include <map>

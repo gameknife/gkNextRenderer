@@ -34,7 +34,7 @@
 #include "Engine/Rendering/SoftwareModern/SoftwareModernNoAmbientRenderer.hpp"
 #include "Engine/Rendering/SoftwareTracing/SoftwareTracingRenderer.hpp"
 #include "Engine/Rendering/PathTracing/PathTracingRenderer.hpp"
-#include "Engine/Rendering/AuxDraw/AuxDrawPass.hpp"
+#include "Engine/Rendering/ExternalPassRegistry.hpp"
 #include "Engine/Rendering/Preview/RenderViewServices.hpp"
 #include "Engine/Rendering/RenderView.hpp"
 #include "Engine/Rendering/VoxelTracing/VoxelTracingRenderer.hpp"
@@ -925,8 +925,11 @@ namespace Vulkan
 
         overlay_.gaussianSplatPass = std::make_unique<GaussianSplat::GaussianSplatPass>(*this);
         overlay_.gaussianSplatPass->CreateResources();
-        overlay_.auxDrawPass = std::make_unique<AuxDraw::AuxDrawPass>(*this);
-        overlay_.auxDrawPass->CreateResources();
+        for (const FExternalPassFactory& factory : ExternalPassFactories())
+        {
+            overlay_.externalPasses.push_back(factory(*this));
+            overlay_.externalPasses.back()->CreateResources();
+        }
 
         overlay_.visibilityPipeline.reset(new PipelineCommon::VisibilityPipeline(SwapChain(), DepthBuffer(), UniformBuffers(), GetScene()));
         overlay_.visibilityFrameBuffer.reset(new FrameBuffer(frame_.swapChain->RenderExtent(), GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImageView(), overlay_.visibilityPipeline->RenderPass()));
@@ -1044,7 +1047,7 @@ namespace Vulkan
         logicRenderers_.swapChainCreatedTypes.clear();
 
         overlay_.gaussianSplatPass.reset();
-        overlay_.auxDrawPass.reset();
+        overlay_.externalPasses.clear();
         overlay_.visibilityPipeline.reset();
         overlay_.visibilityFrameBuffer.reset();
         overlay_.sunShadowPass.reset();
@@ -1098,7 +1101,7 @@ namespace Vulkan
         }
 
         overlay_.gaussianSplatPass.reset();
-        overlay_.auxDrawPass.reset();
+        overlay_.externalPasses.clear();
 
         for ( auto& storageImage : bindless_.images )
         {
@@ -1226,9 +1229,9 @@ namespace Vulkan
         {
             overlay_.gaussianSplatPass->ReloadShaders(changedShaderFilenames, handledShaderFiles);
         }
-        if (overlay_.auxDrawPass)
+        for (const auto& externalPass : overlay_.externalPasses)
         {
-            overlay_.auxDrawPass->ReloadShaders(changedShaderFilenames, handledShaderFiles);
+            externalPass->ReloadShaders(changedShaderFilenames, handledShaderFiles);
         }
         if (overlay_.sunShadowPass)
         {
@@ -2014,10 +2017,10 @@ namespace Vulkan
                 DrawWireframeOverlay(commandBuffer, imageIndex);
             }
 
-            if (overlay_.auxDrawPass)
+            for (const auto& externalPass : overlay_.externalPasses)
             {
-                SCOPED_GPU_TIMER("aux draw");
-                overlay_.auxDrawPass->Execute(commandBuffer, imageIndex);
+                SCOPED_GPU_TIMER("external pass");
+                externalPass->Execute(commandBuffer, imageIndex);
             }
 
             ResolvePrimaryViewToSwapchain(commandBuffer, imageIndex);

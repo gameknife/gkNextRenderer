@@ -2,7 +2,7 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Modules/DevTools/GizmoController.hpp"
-#include "Engine/Runtime/Camera/ModelViewController.hpp"
+#include "Gameplay/Camera/ModelViewController.hpp"
 
 class NextRendererGameInstance : public NextGameInstanceBase
 {

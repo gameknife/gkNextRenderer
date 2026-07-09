@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Engine/Runtime/Interface/RenderFrameConsumer.hpp"
-#include "Engine/Runtime/Camera/ModelViewController.hpp"
+#include "Gameplay/Camera/ModelViewController.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Editor/MultiViewportBackend.hpp"
 #include "Modules/NextRemote/CloudInputRouter.hpp"

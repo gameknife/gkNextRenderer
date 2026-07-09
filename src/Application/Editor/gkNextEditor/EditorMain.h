@@ -4,7 +4,7 @@
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Modules/DevTools/GizmoController.hpp"
-#include "Engine/Runtime/Camera/ModelViewController.hpp"
+#include "Gameplay/Camera/ModelViewController.hpp"
 #include "Core/EditorSettings.hpp"
 #include "Core/EditorUiState.hpp"
 

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Engine/Assets/AssetsFwd.hpp"
-#include "Engine/Runtime/Camera/FocusAnimation.hpp"
+#include "Gameplay/Camera/FocusAnimation.hpp"
 #include "Engine/Utilities/Glm.hpp"
 #include <SDL3/SDL_keycode.h>
 #include <optional>
