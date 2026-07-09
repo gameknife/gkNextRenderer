@@ -1,70 +1,104 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Rendering/Preview/RenderViewServices.hpp"
 
+#include <algorithm>
+
 namespace Vulkan
 {
-    RenderViewServices::RenderViewServices(VulkanBaseRenderer& renderer)
-        : assetThumbnails_(std::make_unique<AssetThumbnailRenderer>(renderer))
-        , offscreenViews_(std::make_unique<OffscreenRenderViewController>(renderer))
+    IRenderViewProvider* RenderViewServices::RegisterProvider(
+        const std::string_view name,
+        const int priority,
+        std::unique_ptr<IRenderViewProvider> provider)
     {
+        IRenderViewProvider* raw = provider.get();
+        providers_.push_back({std::string(name), priority, std::move(provider)});
+        std::stable_sort(providers_.begin(), providers_.end(),
+                         [](const FEntry& a, const FEntry& b) { return a.priority < b.priority; });
+        return raw;
     }
 
-    RenderViewServices::~RenderViewServices() = default;
+    IRenderViewProvider* RenderViewServices::FindProvider(const std::string_view name) const
+    {
+        for (const FEntry& entry : providers_)
+        {
+            if (entry.name == name)
+            {
+                return entry.provider.get();
+            }
+        }
+        return nullptr;
+    }
 
     void RenderViewServices::BeforeNextFrame()
     {
-        assetThumbnails_->BeforeNextFrame();
+        for (const FEntry& entry : providers_)
+        {
+            entry.provider->BeforeNextFrame();
+        }
     }
 
     void RenderViewServices::OnMainSceneChanged()
     {
-        offscreenViews_->OnMainSceneChanged();
-        assetThumbnails_->OnMainSceneChanged();
+        for (const FEntry& entry : providers_)
+        {
+            entry.provider->OnMainSceneChanged();
+        }
     }
 
     void RenderViewServices::OnHdrShUpdated()
     {
-        assetThumbnails_->OnHdrShUpdated();
+        for (const FEntry& entry : providers_)
+        {
+            entry.provider->OnHdrShUpdated();
+        }
     }
 
     void RenderViewServices::OnSwapChainResourcesInvalidated(const bool releaseOffscreenSampledOutputs)
     {
-        offscreenViews_->OnSwapChainResourcesInvalidated(releaseOffscreenSampledOutputs);
-        assetThumbnails_->OnSwapChainResourcesInvalidated();
+        for (const FEntry& entry : providers_)
+        {
+            entry.provider->OnSwapChainResourcesInvalidated(releaseOffscreenSampledOutputs);
+        }
     }
 
     bool RenderViewServices::HasWork() const
     {
-        return assetThumbnails_->HasPendingThumbnail() ||
-               assetThumbnails_->HasMaterialPreviewWork() ||
-               offscreenViews_->HasWork();
+        for (const FEntry& entry : providers_)
+        {
+            if (entry.provider->HasWork())
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
-    void RenderViewServices::ScheduleViews(
-        VkCommandBuffer commandBuffer,
-        const uint32_t imageIndex)
+    void RenderViewServices::ScheduleViews(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
-        uint32_t scheduledTransientPreviews = 0;
-        if (schedulePolicy_.maxTransientPreviewsPerFrame > 0 &&
-            assetThumbnails_->ScheduleNextThumbnail(commandBuffer, imageIndex))
+        for (const FEntry& entry : providers_)
         {
-            ++scheduledTransientPreviews;
+            if (entry.provider->ScheduleViews(commandBuffer, imageIndex))
+            {
+                return;
+            }
         }
-        assetThumbnails_->ScheduleMaterialPreview(commandBuffer, imageIndex);
-        if (scheduledTransientPreviews > 0 &&
-            schedulePolicy_.deferOffscreenViewsWhenTransientPreviewScheduled)
+    }
+
+    bool RenderViewServices::ScheduleReferenceViews(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+    {
+        bool renderedAny = false;
+        for (const FEntry& entry : providers_)
         {
-            return;
+            renderedAny = entry.provider->ScheduleReferenceViews(commandBuffer, imageIndex) || renderedAny;
         }
-        if (!offscreenViews_->HasWork())
-        {
-            return;
-        }
-        offscreenViews_->ScheduleViews(commandBuffer, imageIndex);
+        return renderedAny;
     }
 
     void RenderViewServices::ClearOffscreenFrameRequests()
     {
-        offscreenViews_->ClearFrameRequests();
+        for (const FEntry& entry : providers_)
+        {
+            entry.provider->ClearFrameRequests();
+        }
     }
 }

@@ -39,10 +39,8 @@ namespace Vulkan::AuxDraw
 
 namespace Vulkan
 {
-	class AssetThumbnailRenderer;
 	class FActiveRenderViewScope;
 	class LogicRendererBase;
-	class OffscreenRenderViewController;
 	class RenderViewResourceFactory;
 	class RenderViewServices;
 
@@ -125,11 +123,13 @@ namespace Vulkan
 		int FrameCount() const {return frame_.frameCount;}
 		uint64_t RecordingSubmitSerial() const { return frame_.recordingSubmitSerial; }
 		uint64_t CompletedSubmitSerial() const { return frame_.completedSubmitSerial; }
+		const Assets::UniformBufferObject& LastUniformBufferObject() const { return frame_.lastUBO; }
 		DeviceMemory* GetScreenShotMemory() const {return screenshot_.imageMemory.get();}
 		const Image* GetScreenShotImage() const { return screenshot_.image.get(); }
 
 		// Scene
 		Assets::Scene& GetScene();
+		std::shared_ptr<Assets::Scene> GetSceneShared() const { return scene_.lock(); }
 		void SetScene(std::shared_ptr<Assets::Scene> scene);
 		Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const;
 		void OnPreLoadScene();
@@ -211,10 +211,18 @@ namespace Vulkan
 		void RequestSkinUpdate(uint32_t modelId) { skin_.updateRequests.push_back(modelId); }
 		std::vector<RayTracing::TopLevelAccelerationStructure>& TLAS();
 
+		// Narrow scheduling API for render-view providers (thumbnails, offscreen views).
+		LogicRendererBase* EnsureLogicRenderer(ERendererType type);
+		void ScheduleRenderView(RenderView& view,
+		                        LogicRendererBase& logicRenderer,
+		                        bool clearSwapchain,
+		                        FRenderViewPostCallback postRender = {});
+		void SetRenderViewUbo(RenderView& view, uint32_t imageIndex, const Assets::UniformBufferObject& ubo);
+		void FinalizeTemporalUbo(RenderView& view, Assets::UniformBufferObject& ubo);
+		void ComposeViewToSwapchainSubrect(VkCommandBuffer commandBuffer, uint32_t imageIndex, RenderView& view);
+
 	private:
-		friend class AssetThumbnailRenderer;
 		friend class FActiveRenderViewScope;
-		friend class OffscreenRenderViewController;
 		friend class RenderViewResourceFactory;
 
 		// Internal resource groups
@@ -396,7 +404,6 @@ namespace Vulkan
 			VkPhysicalDeviceFeatures& deviceFeatures,
 			void* nextDeviceFeatures);
 		void OnDeviceSet();
-		LogicRendererBase* EnsureLogicRenderer(ERendererType type);
 		bool IsLogicRendererRegistered(ERendererType type) const;
 		void EnsureLogicRendererSwapChain(ERendererType type, LogicRendererBase& logicRenderer);
 		void CreateRenderImages();
@@ -404,14 +411,7 @@ namespace Vulkan
 		// Creates the full screen-space RT set at [bankBase + RT_X]. bankBase 0 == primary view.
 		void CreateRenderTargetBank(uint32_t bankBase);
 		void CreateRenderTargetBank(uint32_t bankBase, VkExtent2D extent);
-		void ScheduleRenderView(RenderView& view,
-		                        LogicRendererBase& logicRenderer,
-		                        bool clearSwapchain,
-		                        FRenderViewPostCallback postRender = {});
 		bool DispatchScheduledRenderViews(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-		void SetRenderViewUbo(RenderView& view, uint32_t imageIndex, const Assets::UniformBufferObject& ubo);
-		void FinalizeTemporalUbo(RenderView& view, Assets::UniformBufferObject& ubo);
-		void ComposeViewToSwapchainSubrect(VkCommandBuffer commandBuffer, uint32_t imageIndex, RenderView& view);
 		void ResolvePrimaryViewToSwapchain(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void CreateStorageImage(uint32_t bindlessIdx, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, const char* debugName);
 		void CreateStorageImage(uint32_t bindlessIdx, VkExtent2D extent, VkFormat format, VkImageTiling tiling,

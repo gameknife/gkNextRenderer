@@ -2042,7 +2042,7 @@ namespace Vulkan
         if (GOption->ReferenceMode)
         {
             const bool renderedAnyReferenceView = renderViewServices_ &&
-                renderViewServices_->OffscreenViews().ScheduleReferenceViews(commandBuffer, imageIndex);
+                renderViewServices_->ScheduleReferenceViews(commandBuffer, imageIndex);
             DispatchScheduledRenderViews(commandBuffer, imageIndex);
             if (renderedAnyReferenceView)
             {

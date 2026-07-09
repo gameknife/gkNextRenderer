@@ -1,5 +1,5 @@
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Rendering/Preview/AssetThumbnailRenderer.hpp"
+#include "Application/Editor/Common/Preview/AssetThumbnailRenderer.hpp"
 
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Core/Node.h"
@@ -211,7 +211,7 @@ namespace Vulkan
         }
     }
 
-    void AssetThumbnailRenderer::OnSwapChainResourcesInvalidated()
+    void AssetThumbnailRenderer::OnSwapChainResourcesInvalidated(bool /*releaseSampledOutputs*/)
     {
         thumbnailTarget_.ResetSwapChainResources(/*releaseSampledOutput*/ false);
         materialPreviewTarget_.ResetSwapChainResources(/*releaseSampledOutput*/ false);
@@ -556,7 +556,7 @@ namespace Vulkan
         LogicRendererBase* logicRenderer = renderer_.EnsureLogicRenderer(ERT_SoftwareModernNoAmbient);
         if (logicRenderer == nullptr)
         {
-            logicRenderer = renderer_.EnsureLogicRenderer(renderer_.logicRenderers_.current);
+            logicRenderer = renderer_.EnsureLogicRenderer(renderer_.CurrentLogicRendererType());
         }
         if (logicRenderer == nullptr)
         {
@@ -569,7 +569,7 @@ namespace Vulkan
             .camera = materialPreviewScene_->GetRenderCamera(),
             .extent = materialPreviewExtent_,
             .cascadeDistance = 20.0f,
-            .totalFrames = static_cast<uint32_t>(std::max(renderer_.frame_.frameCount, 1)),
+            .totalFrames = static_cast<uint32_t>(std::max(renderer_.FrameCount(), 1)),
             .fillSceneLighting = true,
             .thumbnailDefaults = true,
         });
@@ -602,7 +602,7 @@ namespace Vulkan
             return false;
         }
 
-        auto mainScene = renderer_.scene_.lock();
+        auto mainScene = renderer_.GetSceneShared();
         if (!mainScene)
         {
             cache.pending.clear();
@@ -665,7 +665,7 @@ namespace Vulkan
         LogicRendererBase* logicRenderer = renderer_.EnsureLogicRenderer(ERT_SoftwareModernNoAmbient);
         if (logicRenderer == nullptr)
         {
-            logicRenderer = renderer_.EnsureLogicRenderer(renderer_.logicRenderers_.current);
+            logicRenderer = renderer_.EnsureLogicRenderer(renderer_.CurrentLogicRendererType());
         }
         if (logicRenderer == nullptr)
         {
@@ -680,7 +680,7 @@ namespace Vulkan
             .camera = thumbnailScene_->GetRenderCamera(),
             .extent = kThumbnailExtent,
             .cascadeDistance = 20.0f,
-            .totalFrames = static_cast<uint32_t>(std::max(renderer_.frame_.frameCount, 1)),
+            .totalFrames = static_cast<uint32_t>(std::max(renderer_.FrameCount(), 1)),
             .fillSceneLighting = true,
             .thumbnailDefaults = true,
         });
@@ -706,5 +706,29 @@ namespace Vulkan
             });
 
         return true;
+    }
+}
+
+namespace Vulkan
+{
+    bool AssetThumbnailRenderer::ScheduleViews(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+    {
+        const bool scheduledTransient = ScheduleNextThumbnail(commandBuffer, imageIndex);
+        ScheduleMaterialPreview(commandBuffer, imageIndex);
+        return scheduledTransient;
+    }
+}
+
+namespace EditorPreview
+{
+    Vulkan::AssetThumbnailRenderer& AssetThumbnails(Vulkan::VulkanBaseRenderer& renderer)
+    {
+        Vulkan::RenderViewServices& services = renderer.ViewServices();
+        if (Vulkan::IRenderViewProvider* provider = services.FindProvider("EditorAssetThumbnails"))
+        {
+            return static_cast<Vulkan::AssetThumbnailRenderer&>(*provider);
+        }
+        return static_cast<Vulkan::AssetThumbnailRenderer&>(*services.RegisterProvider(
+            "EditorAssetThumbnails", 0, std::make_unique<Vulkan::AssetThumbnailRenderer>(renderer)));
     }
 }

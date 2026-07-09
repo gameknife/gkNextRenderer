@@ -4,7 +4,7 @@
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/RemoteProtocol.hpp"
-#include "Engine/Rendering/Preview/RenderViewServices.hpp"
+#include "Modules/RenderViews/OffscreenRenderViewController.hpp"
 #include "Modules/NextRemote/RemoteServer.hpp"
 
 #include "Modules/NextRemote/SignalingServer.hpp"
@@ -88,7 +88,7 @@ namespace Runtime::Remote
                 return false;
             }
             config_.maxClients = static_cast<uint32_t>(cloudVideoPipelines_.size());
-            engine->GetRenderer().ViewServices().OffscreenViews().SetViewRenderedCallback(
+            RenderViews::OffscreenViews(engine->GetRenderer()).SetViewRenderedCallback(
                 [this](uint32_t viewIndex, VkCommandBuffer commandBuffer, uint32_t imageIndex, Vulkan::RenderView& view)
                 {
                     RecordCloudViewFrame(viewIndex, commandBuffer, imageIndex, view);
@@ -159,7 +159,7 @@ namespace Runtime::Remote
         {
             if (NextEngine* engine = NextEngine::GetInstance())
             {
-                engine->GetRenderer().ViewServices().OffscreenViews().SetViewRenderedCallback({});
+                RenderViews::OffscreenViews(engine->GetRenderer()).SetViewRenderedCallback({});
             }
         }
         for (auto& stream : cloudVideoPipelines_)
@@ -360,7 +360,7 @@ namespace Runtime::Remote
             }
             for (const uint32_t viewIndex : disabledViewIndices)
             {
-                auto& offscreenViews = engine->GetRenderer().ViewServices().OffscreenViews();
+                auto& offscreenViews = RenderViews::OffscreenViews(engine->GetRenderer());
                 offscreenViews.SetEnabled(viewIndex, false);
                 offscreenViews.ClearCameraOverride(viewIndex);
                 SPDLOG_INFO("RemotePlay: disabled cloud RenderView slot {}", viewIndex);
@@ -506,7 +506,7 @@ namespace Runtime::Remote
             }
             ApplyClientTargetFps(clientView, now);
             {
-                auto& offscreenViews = engine->GetRenderer().ViewServices().OffscreenViews();
+                auto& offscreenViews = RenderViews::OffscreenViews(engine->GetRenderer());
                 offscreenViews.SetEnabled(clientView.viewIndex, true);
                 offscreenViews.SetRenderExtent(clientView.viewIndex, VkExtent2D{config_.width, config_.height});
                 offscreenViews.SetCameraOverride(clientView.viewIndex, BuildClientCamera(clientView));

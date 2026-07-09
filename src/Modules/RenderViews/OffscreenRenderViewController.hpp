@@ -3,6 +3,7 @@
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Rendering/RenderView.hpp"
+#include "Engine/Rendering/Preview/RenderViewServices.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include <vulkan/vulkan.h>
@@ -22,7 +23,7 @@ namespace Vulkan
     class Sampler;
     class VulkanBaseRenderer;
 
-    class OffscreenRenderViewController final
+    class OffscreenRenderViewController final : public IRenderViewProvider
     {
     public:
         using FViewRenderedCallback =
@@ -46,12 +47,12 @@ namespace Vulkan
         const Assets::UniformBufferObject* LastUniformBufferObject(uint32_t viewIndex) const;
         uint32_t SampleSlot(uint32_t viewIndex) const;
         bool IsReady(uint32_t viewIndex) const;
-        bool HasWork() const;
-        void ScheduleViews(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-        bool ScheduleReferenceViews(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-        void ClearFrameRequests();
-        void OnMainSceneChanged();
-        void OnSwapChainResourcesInvalidated(bool releaseSampledOutputs);
+        bool HasWork() const override;
+        bool ScheduleViews(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
+        bool ScheduleReferenceViews(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
+        void ClearFrameRequests() override;
+        void OnMainSceneChanged() override;
+        void OnSwapChainResourcesInvalidated(bool releaseSampledOutputs) override;
         void SetViewRenderedCallback(FViewRenderedCallback callback) { viewRenderedCallback_ = std::move(callback); }
 
     private:
@@ -74,4 +75,11 @@ namespace Vulkan
         std::map<int, FViewResources> referenceViews_;
         FViewRenderedCallback viewRenderedCallback_{};
     };
+}
+
+namespace RenderViews
+{
+    // Get-or-create the shared offscreen-view provider on this renderer
+    // (used by the editor camera view panel and NextRemote streaming).
+    Vulkan::OffscreenRenderViewController& OffscreenViews(Vulkan::VulkanBaseRenderer& renderer);
 }

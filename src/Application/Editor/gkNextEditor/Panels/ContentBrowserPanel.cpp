@@ -7,7 +7,7 @@
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Assets/GPU/TextureImage.hpp"
 #include "EditorActionDispatcher.hpp"
-#include "Engine/Rendering/Preview/RenderViewServices.hpp"
+#include "Application/Editor/Common/Preview/AssetThumbnailRenderer.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
@@ -626,7 +626,7 @@ namespace Editor
         {
             const uint64_t materialHash = HashMaterialPreview(material);
             const uint32_t sampleSlot =
-                ctx.engine.GetRenderer().ViewServices().AssetThumbnails().RequestMaterialThumbnail(
+                EditorPreview::AssetThumbnails(ctx.engine.GetRenderer()).RequestMaterialThumbnail(
                     materialIndex, materialHash);
             return sampleSlot == std::numeric_limits<uint32_t>::max()
                 ? 0
@@ -684,7 +684,7 @@ namespace Editor
         {
             const uint64_t meshHash = HashMeshPreview(model);
             const uint32_t sampleSlot =
-                ctx.engine.GetRenderer().ViewServices().AssetThumbnails().RequestMeshThumbnail(modelIndex, meshHash);
+                EditorPreview::AssetThumbnails(ctx.engine.GetRenderer()).RequestMeshThumbnail(modelIndex, meshHash);
             return sampleSlot == std::numeric_limits<uint32_t>::max()
                 ? 0
                 : ctx.ui.RequestImTextureIdRaw(sampleSlot);

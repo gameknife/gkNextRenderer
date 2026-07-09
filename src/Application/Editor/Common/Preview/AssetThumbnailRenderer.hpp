@@ -3,6 +3,7 @@
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Rendering/RenderView.hpp"
+#include "Engine/Rendering/Preview/RenderViewServices.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include <vulkan/vulkan.h>
@@ -27,7 +28,7 @@ namespace Vulkan
     class Sampler;
     class VulkanBaseRenderer;
 
-    class AssetThumbnailRenderer final
+    class AssetThumbnailRenderer final : public IRenderViewProvider
     {
     public:
         static constexpr uint32_t kMaterialThumbnailSampleSlotBase = 64000;
@@ -42,10 +43,12 @@ namespace Vulkan
         uint32_t RequestMaterialThumbnail(uint32_t materialIndex, uint64_t materialHash);
         uint32_t RequestMeshThumbnail(uint32_t modelIndex, uint64_t modelHash);
 
-        void BeforeNextFrame();
-        void OnMainSceneChanged();
-        void OnHdrShUpdated();
-        void OnSwapChainResourcesInvalidated();
+        void BeforeNextFrame() override;
+        void OnMainSceneChanged() override;
+        void OnHdrShUpdated() override;
+        void OnSwapChainResourcesInvalidated(bool releaseSampledOutputs) override;
+        bool HasWork() const override { return HasPendingThumbnail() || HasMaterialPreviewWork(); }
+        bool ScheduleViews(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
         bool HasPendingThumbnail() const;
         bool ScheduleNextThumbnail(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
@@ -127,4 +130,10 @@ namespace Vulkan
         float materialPreviewDistance_ = 4.0f;
         Assets::FMaterial materialPreview_{};
     };
+}
+
+namespace EditorPreview
+{
+    // Get-or-create the editor's thumbnail/material-preview provider on this renderer.
+    Vulkan::AssetThumbnailRenderer& AssetThumbnails(Vulkan::VulkanBaseRenderer& renderer);
 }

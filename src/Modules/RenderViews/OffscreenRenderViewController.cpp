@@ -1,5 +1,5 @@
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Rendering/Preview/OffscreenRenderViewController.hpp"
+#include "Modules/RenderViews/OffscreenRenderViewController.hpp"
 
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
@@ -183,7 +183,7 @@ namespace Vulkan
         VkExtent2D extent = resources.requestedExtent;
         if (extent.width == 0 || extent.height == 0)
         {
-            extent = renderer_.frame_.swapChain->RenderExtent();
+            extent = renderer_.SwapChain().RenderExtent();
         }
         extent.width = std::max(1u, extent.width);
         extent.height = std::max(1u, extent.height);
@@ -216,8 +216,8 @@ namespace Vulkan
         const auto type = static_cast<ERendererType>(rendererType);
         const FReferenceViewLayout layout = GetReferenceViewLayout(type);
         VkExtent2D extent{
-            std::max(1u, renderer_.frame_.swapChain->RenderExtent().width / 2u),
-            std::max(1u, renderer_.frame_.swapChain->RenderExtent().height / 2u)};
+            std::max(1u, renderer_.SwapChain().RenderExtent().width / 2u),
+            std::max(1u, renderer_.SwapChain().RenderExtent().height / 2u)};
         VkOffset2D offset{
             static_cast<int32_t>(layout.column * extent.width),
             static_cast<int32_t>(layout.row * extent.height)};
@@ -240,7 +240,7 @@ namespace Vulkan
             resources.target.visibilityFramebuffer = resourceFactory.RebuildVisibilityFramebuffer(view, extent);
         }
 
-        Assets::UniformBufferObject ubo = renderer_.frame_.lastUBO;
+        Assets::UniformBufferObject ubo = renderer_.LastUniformBufferObject();
         ubo.ViewportRect = glm::vec4(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height));
         ubo.Jitter = glm::vec4(0.0f);
         ubo.TemporalFrames = 1;
@@ -270,12 +270,17 @@ namespace Vulkan
         }
     }
 
-    void OffscreenRenderViewController::ScheduleViews(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
+    bool OffscreenRenderViewController::ScheduleViews(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
-        LogicRendererBase* logicRenderer = renderer_.EnsureLogicRenderer(renderer_.logicRenderers_.current);
+        if (!HasWork())
+        {
+            return false;
+        }
+
+        LogicRendererBase* logicRenderer = renderer_.EnsureLogicRenderer(renderer_.CurrentLogicRendererType());
         if (logicRenderer == nullptr)
         {
-            return;
+            return false;
         }
 
         for (uint32_t viewIndex = 0; viewIndex < kMaxSecondaryViews; ++viewIndex)
@@ -294,7 +299,7 @@ namespace Vulkan
                 .scene = renderer_.GetScene(),
                 .camera = viewCamera,
                 .extent = secondaryExtent,
-                .baseUbo = &renderer_.frame_.lastUBO,
+                .baseUbo = &renderer_.LastUniformBufferObject(),
                 .cascadeDistance = 400.0f,
                 .fillSceneLighting = false,
             });
@@ -317,6 +322,7 @@ namespace Vulkan
                     }
                 });
         }
+        return false;
     }
 
     bool OffscreenRenderViewController::ScheduleReferenceViews(
@@ -347,5 +353,19 @@ namespace Vulkan
         }
 
         return renderedAny;
+    }
+}
+
+namespace RenderViews
+{
+    Vulkan::OffscreenRenderViewController& OffscreenViews(Vulkan::VulkanBaseRenderer& renderer)
+    {
+        Vulkan::RenderViewServices& services = renderer.ViewServices();
+        if (Vulkan::IRenderViewProvider* provider = services.FindProvider("OffscreenViews"))
+        {
+            return static_cast<Vulkan::OffscreenRenderViewController&>(*provider);
+        }
+        return static_cast<Vulkan::OffscreenRenderViewController&>(*services.RegisterProvider(
+            "OffscreenViews", 10, std::make_unique<Vulkan::OffscreenRenderViewController>(renderer)));
     }
 }

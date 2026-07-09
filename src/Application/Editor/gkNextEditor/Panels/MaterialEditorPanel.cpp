@@ -4,7 +4,7 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
-#include "Engine/Rendering/Preview/RenderViewServices.hpp"
+#include "Application/Editor/Common/Preview/AssetThumbnailRenderer.hpp"
 #include "Engine/Runtime/Command/ICommand.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
@@ -434,7 +434,7 @@ namespace Editor
 
         void DrawPreview(EditorContext& ctx, EditorUiState& ui, const Assets::FMaterial& material)
         {
-            Vulkan::AssetThumbnailRenderer& preview = ctx.engine.GetRenderer().ViewServices().MaterialPreview();
+            Vulkan::AssetThumbnailRenderer& preview = EditorPreview::AssetThumbnails(ctx.engine.GetRenderer());
             preview.SetEnabled(true);
             preview.SetPreviewMaterial(material);
             preview.SetCameraOrbit(ui.materialEditor.previewYaw,
@@ -710,7 +710,7 @@ namespace Editor
                                           ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse);
         ImGui::PopStyleVar();
 
-        Vulkan::AssetThumbnailRenderer& preview = ctx.engine.GetRenderer().ViewServices().MaterialPreview();
+        Vulkan::AssetThumbnailRenderer& preview = EditorPreview::AssetThumbnails(ctx.engine.GetRenderer());
         if (!ui.ed_material || !visible)
         {
             preview.SetEnabled(false);
