@@ -31,6 +31,4 @@ namespace Rendering::Upscaler
 
         virtual FFrameGenerationState FrameGenerationState() const = 0;
     };
-
-    std::unique_ptr<IUpscaler> CreateStreamlineUpscaler();
 }

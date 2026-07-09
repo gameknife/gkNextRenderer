@@ -1,3 +1,4 @@
+#include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
@@ -5,7 +6,7 @@
 #include "Engine/Vulkan/Instance.hpp"
 #include "Engine/Vulkan/SyncAndTiming.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
-#include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
+#include "Engine/Vulkan/VulkanInterposer.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include <algorithm>
 #include <limits>
@@ -132,7 +133,7 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
 		createInfo.pQueueFamilyIndices = nullptr; // Optional
 	}
 
-	Check(StreamlineWrapper::CreateSwapchainKHR(device.Handle(), &createInfo, nullptr, &swapChain_),
+	Check(Interposer().CreateSwapchainKHR(device.Handle(), &createInfo, nullptr, &swapChain_),
 		"create swap chain!");
 
 	minImageCount_ = std::max(2u, details.Capabilities.minImageCount);
@@ -148,7 +149,9 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
                 ColorSpaceName(colorSpace_), static_cast<int>(colorSpace_),
                 static_cast<int>(outputMode_));
 	
-	images_ = GetEnumerateVector(device_.Handle(), swapChain_, StreamlineWrapper::GetSwapchainImagesKHR);
+	images_ = GetEnumerateVector(device_.Handle(), swapChain_,
+		+[](VkDevice device, VkSwapchainKHR swapchain, uint32_t* count, VkImage* images)
+		{ return Interposer().GetSwapchainImagesKHR(device, swapchain, count, images); });
 	imageViews_.reserve(images_.size());
 
 	for (const auto image : images_)
@@ -171,7 +174,7 @@ SwapChain::~SwapChain()
 
 	if (swapChain_ != nullptr)
 	{
-		StreamlineWrapper::DestroySwapchainKHR(device_.Handle(), swapChain_, nullptr);
+		Interposer().DestroySwapchainKHR(device_.Handle(), swapChain_, nullptr);
 		swapChain_ = nullptr;
 	}
 }

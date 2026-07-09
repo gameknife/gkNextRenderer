@@ -1,6 +1,6 @@
 #include "Engine/Vulkan/WindowSurface.hpp"
 #include "Engine/Vulkan/Instance.hpp"
-#include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
+#include "Engine/Vulkan/VulkanInterposer.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Utilities/StbImage.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
@@ -330,7 +330,7 @@ void Window::InitSDL()
     {
         Throw(std::runtime_error("failed to init SDL."));
     }
-    const char* vulkanLoaderPath = StreamlineWrapper::PreferredVulkanLoaderPath();
+    const char* vulkanLoaderPath = Vulkan::Interposer().PreferredVulkanLoaderPath();
     if (!SDL_Vulkan_LoadLibrary(vulkanLoaderPath))
     {
         if (vulkanLoaderPath != nullptr)
@@ -371,7 +371,7 @@ Surface::Surface(const class Instance& instance) :
     {
         Throw(std::runtime_error("failed to obtain Win32 window handle from SDL."));
     }
-    Check(StreamlineWrapper::CreateWin32SurfaceKHR(
+    Check(Vulkan::Interposer().CreateWin32SurfaceKHR(
               instance.Handle(), &createInfo, nullptr, &surface_),
           "create Win32 window surface");
 #else
@@ -383,7 +383,7 @@ Surface::~Surface()
 {
     if (surface_ != nullptr)
     {
-        StreamlineWrapper::DestroySurfaceKHR(instance_.Handle(), surface_, nullptr);
+        Vulkan::Interposer().DestroySurfaceKHR(instance_.Handle(), surface_, nullptr);
         surface_ = nullptr;
     }
 }

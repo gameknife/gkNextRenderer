@@ -5,7 +5,7 @@
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Vulkan/RayTracing/DeviceProcedures.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
+#include "Engine/Vulkan/VulkanInterposer.hpp"
 #include "Engine/Vulkan/DeviceCreationAugmenter.hpp"
 #include <algorithm>
 #include <cstring>
@@ -160,7 +160,7 @@ Device::Device(
 	createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
 	createInfo.ppEnabledExtensionNames = requiredExtensions.data();
 
-	Check(StreamlineWrapper::CreateDevice(physicalDevice, &createInfo, nullptr, &device_),
+	Check(Interposer().CreateDevice(physicalDevice, &createInfo, nullptr, &device_),
 		"create logical device");
 
 	debugUtils_.SetDevice(device_);
@@ -186,7 +186,7 @@ Device::~Device()
 	{
 		memoryAllocator_.reset();
 		deviceProcedures_.reset();
-		StreamlineWrapper::DestroyDevice(device_, nullptr);
+		Interposer().DestroyDevice(device_, nullptr);
 		device_ = nullptr;
 	}
 }
@@ -198,7 +198,7 @@ MemoryStatsSnapshot Device::CaptureMemoryStats(bool includeDetails) const
 
 void Device::WaitIdle() const
 {
-	Check(StreamlineWrapper::DeviceWaitIdle(device_),
+	Check(Interposer().DeviceWaitIdle(device_),
 		"wait for device idle");
 }
 

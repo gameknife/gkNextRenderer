@@ -57,7 +57,6 @@
 // spdlog logging
 #include <spdlog/stopwatch.h>
 
-#include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
 
 #if ANDROID
 #include <spdlog/sinks/android_sink.h>
@@ -296,21 +295,6 @@ NextEngine::NextEngine(Runtime::Config::Options& options, void* userdata)
         }
     }
 
-#if WITH_STREAMLINE
-    if (options.DisableStreamline)
-    {
-        SPDLOG_INFO("Streamline DLSS plugins disabled for this application");
-    }
-    else if (StreamlineWrapper::ShouldInitialize())
-    {
-        StreamlineWrapper::Initialize();
-    }
-    else
-    {
-        SPDLOG_INFO("Streamline DLSS plugins disabled because no NVIDIA adapter is present");
-    }
-#endif
-    
     Vulkan::Window::InitSDL();
     
     Vulkan::WindowConfig windowConfig{"gkNextEngine " + NextRenderer::GetBuildVersion(),

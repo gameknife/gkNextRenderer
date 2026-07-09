@@ -233,7 +233,6 @@ namespace Vulkan
 			bool supportReflex           = false;
 			bool supportPCL              = false;
 			bool supportDenoiser         = false;
-			bool streamlineExtsEnabled   = false;
 			bool fullAmbientCubeBudget   = true;
 			bool supportSubgroupCull     = false;
 		};

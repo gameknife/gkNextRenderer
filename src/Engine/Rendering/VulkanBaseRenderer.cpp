@@ -6,6 +6,7 @@
 #include "Engine/Vulkan/RayTracing/RayTracingProperties.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/DeviceCreationAugmenter.hpp"
+#include "Engine/Vulkan/VulkanInterposer.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/SyncAndTiming.hpp"
 #include "Engine/Vulkan/BufferUtil.hpp"
@@ -43,7 +44,7 @@
 #include "Engine/Rendering/Shadow/ShadowMapPass.hpp"
 #include "Engine/Rendering/GaussianSplat/GaussianSplatPass.hpp"
 #include "Engine/Rendering/Upscaler/IUpscaler.hpp"
-#include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
+#include "Engine/Rendering/Upscaler/UpscalerRegistry.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -297,7 +298,7 @@ namespace Vulkan
         forceSDR_ = GOption->ForceSDR;
 
         caps_.supportRayTracing = false;
-        upscaler_ = Rendering::Upscaler::CreateStreamlineUpscaler();
+        upscaler_ = Rendering::Upscaler::CreateRegisteredUpscaler();
         renderViewServices_ = std::make_unique<RenderViewServices>(*this);
     }
 
@@ -474,7 +475,6 @@ namespace Vulkan
         {
             upscaler_->Shutdown();
         }
-        StreamlineWrapper::Shutdown();
         ctx_.frameProfiler.reset();
         ctx_.globalTexturePool.reset();
     }
@@ -569,14 +569,6 @@ namespace Vulkan
             nextDeviceFeatures = &rayQueryFeatures;
         }
 
-        // Module-requested device extensions / features (e.g. NextRemote video encode).
-        // Augmenters own any feature structs they chain in.
-        for (IDeviceCreationAugmenter* augmenter : DeviceCreationAugmenters())
-        {
-            nextDeviceFeatures = augmenter->OnPhysicalDeviceSelected(
-                ctx_.instance->Handle(), physicalDevice, requiredExtensions, nextDeviceFeatures);
-        }
-
         // Remote play uses timeline semaphores to decouple GPU frame completion from the main
         // thread and, later, to bridge graphics -> video encode queue submissions.
         VkPhysicalDeviceTimelineSemaphoreFeatures timelineSemaphoreFeatures = {};
@@ -587,6 +579,15 @@ namespace Vulkan
             timelineSemaphoreFeatures.timelineSemaphore = true;
             timelineSemaphoreFeatures.pNext = nextDeviceFeatures;
             nextDeviceFeatures = &timelineSemaphoreFeatures;
+        }
+
+        // Module-requested device extensions / features (NextRemote video encode,
+        // NextStreamline DLSS, ...). Augmenters own any feature structs they chain in
+        // and can inspect the chain built so far to avoid duplicate entries.
+        for (IDeviceCreationAugmenter* augmenter : DeviceCreationAugmenters())
+        {
+            nextDeviceFeatures = augmenter->OnPhysicalDeviceSelected(
+                ctx_.instance->Handle(), physicalDevice, requiredExtensions, nextDeviceFeatures);
         }
 
         VkPhysicalDeviceFeatures supportedFeatures = {};
@@ -707,41 +708,6 @@ namespace Vulkan
         storage16BitFeatures.storageBuffer16BitAccess = supportedStorage16BitFeatures.storageBuffer16BitAccess;
         storage16BitFeatures.storagePushConstant16 = supportedStorage16BitFeatures.storagePushConstant16;
 
-#if WITH_STREAMLINE
-        VkPhysicalDeviceTimelineSemaphoreFeatures streamlineTimelineSemaphoreFeatures = {};
-        streamlineTimelineSemaphoreFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
-        streamlineTimelineSemaphoreFeatures.timelineSemaphore = true;
-        streamlineTimelineSemaphoreFeatures.pNext = &shaderDrawParametersFeatures;
-        const auto streamlineCaps = StreamlineWrapper::AppendRequiredDeviceExtensions(physicalDevice, requiredExtensions);
-        const bool hasLegacyStreamlineExtensions =
-            AddDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
-                                          VK_NVX_BINARY_IMPORT_EXTENSION_NAME, "Streamline binary import") &&
-            AddDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
-                                          VK_NVX_IMAGE_VIEW_HANDLE_EXTENSION_NAME, "Streamline image view handles");
-        AddDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
-                                      VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, "Streamline buffer device address");
-        if (HasDeviceExtension(physicalDevice, VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME))
-        {
-            enableDeviceExtensionIfAvailable(VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
-        }
-        const bool hasStreamlineExtensions =
-            streamlineCaps.streamlineInitialized &&
-            streamlineCaps.requestedDeviceExtensionsAvailable &&
-            hasLegacyStreamlineExtensions;
-        if (hasStreamlineExtensions)
-        {
-            if (!requestTimelineSemaphores)
-            {
-                storage16BitFeatures.pNext = &streamlineTimelineSemaphoreFeatures;
-            }
-            caps_.streamlineExtsEnabled = true;
-        }
-        else
-        {
-            caps_.streamlineExtsEnabled = false;
-        }
-#endif
-
         ctx_.device.reset(new class Device(physicalDevice, *ctx_.surface, requiredExtensions, deviceFeatures,
                                        &storage16BitFeatures));
         ctx_.commandPool.reset(new class CommandPool(*ctx_.device, ctx_.device->GraphicsFamilyIndex(), 0, true));
@@ -766,11 +732,13 @@ namespace Vulkan
             deviceInfo.opticalFlowQueueFamily = UINT32_MAX;
             deviceInfo.useNativeOpticalFlowMode = false;
 
-            auto featureCaps = StreamlineWrapper::CachedCaps();
+            // The upscaler module fills in its device caps (already masked by whether
+            // its required device extensions got enabled during device creation).
+            Rendering::Upscaler::FFeatureCaps featureCaps{};
             upscaler_->OnDeviceCreated(deviceInfo, featureCaps);
-            caps_.supportDLSS = caps_.streamlineExtsEnabled && featureCaps.supportDLSS;
-            caps_.supportDLSSRR = caps_.streamlineExtsEnabled && featureCaps.supportDLSSRR;
-            caps_.supportDLSSG = caps_.streamlineExtsEnabled && featureCaps.supportDLSSG;
+            caps_.supportDLSS = featureCaps.supportDLSS;
+            caps_.supportDLSSRR = featureCaps.supportDLSSRR;
+            caps_.supportDLSSG = featureCaps.supportDLSSG;
             caps_.supportReflex = featureCaps.supportReflex;
             caps_.supportPCL = featureCaps.supportPCL;
         }
@@ -1508,7 +1476,7 @@ namespace Vulkan
         auto result = VkResult(VK_SUCCESS);
         {
             SCOPED_CPU_TIMER("acquire-frame");
-            result = StreamlineWrapper::AcquireNextImageKHR(ctx_.device->Handle(), frame_.swapChain->Handle(), noTimeout,
+            result = Interposer().AcquireNextImageKHR(ctx_.device->Handle(), frame_.swapChain->Handle(), noTimeout,
                                                             imageAvailableSemaphore, nullptr, &frame_.currentImageIndex);
         }
         
@@ -1707,7 +1675,7 @@ namespace Vulkan
                                      frame_.streamlineFrameToken);
             }
 
-            result = StreamlineWrapper::QueuePresentKHR(ctx_.device->PresentQueue(), &presentInfo);
+            result = Interposer().QueuePresentKHR(ctx_.device->PresentQueue(), &presentInfo);
 
             if (upscaler_ && frame_.streamlineFrameToken)
             {

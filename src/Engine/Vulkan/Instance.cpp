@@ -2,7 +2,7 @@
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
-#include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
+#include "Engine/Vulkan/VulkanInterposer.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include <algorithm>
 #include <cstring>
@@ -55,11 +55,7 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
 	// Check the validation layers and add them to the list of required extensions.
 	CheckVulkanValidationLayerSupport(validationLayers);
 
-#if WITH_STREAMLINE
-    AppendUniqueExtension(extensions, VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME);
-    AppendUniqueExtension(extensions, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
-    StreamlineWrapper::AppendRequiredInstanceExtensions(extensions);
-#endif
+    Interposer().AppendRequiredInstanceExtensions(extensions);
     
 #if !ANDROID
 	AppendUniqueExtension(extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
@@ -101,7 +97,7 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
 	createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
 	createInfo.ppEnabledLayerNames = validationLayers.data();
     
-	Check(StreamlineWrapper::CreateInstance(&createInfo, nullptr, &instance_),
+	Check(Interposer().CreateInstance(&createInfo, nullptr, &instance_),
 		"create instance");
 
 	GetVulkanPhysicalDevices();
@@ -113,7 +109,7 @@ Instance::~Instance()
 {
 	if (instance_ != nullptr)
 	{
-		StreamlineWrapper::DestroyInstance(instance_, nullptr);
+		Interposer().DestroyInstance(instance_, nullptr);
 		instance_ = nullptr;
 	}
 }
@@ -130,7 +126,10 @@ void Instance::GetVulkanLayers()
 
 void Instance::GetVulkanPhysicalDevices()
 {
-	GetEnumerateVector(instance_, StreamlineWrapper::EnumeratePhysicalDevices, physicalDevices_);
+	GetEnumerateVector(instance_,
+		+[](VkInstance instance, uint32_t* count, VkPhysicalDevice* devices)
+		{ return Interposer().EnumeratePhysicalDevices(instance, count, devices); },
+		physicalDevices_);
 
 	if (physicalDevices_.empty())
 	{

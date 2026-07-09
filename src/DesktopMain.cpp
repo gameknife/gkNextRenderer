@@ -6,6 +6,7 @@
 #include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
 #include "Modules/LiveCoding/LiveCodingModule.hpp"
 #include "Modules/NextRemote/NextRemoteModule.hpp"
+#include "Modules/NextStreamline/NextStreamlineModule.hpp"
 #if GK_WITH_TUI
 #include "Modules/NextTui/NextTuiModule.hpp"
 #endif
@@ -92,6 +93,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     // Create the DevTools provider first: its constructor attaches the console
     // log sink so engine startup logs are captured.
     Runtime::IDebugUiProvider& debugUiProvider = DevTools::DefaultDebugUiProvider();
+    // Streamline must hook the Vulkan interposer before the engine creates the instance.
+    Modules::NextStreamline::Install(*GOption);
     GApplication.reset( new NextEngine(*GOption) );
     GApplication->SetDebugUiProvider(&debugUiProvider);
     Modules::LiveCoding::Install(*GApplication);

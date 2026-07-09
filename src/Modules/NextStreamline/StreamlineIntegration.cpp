@@ -1,9 +1,11 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Rendering/Upscaler/IUpscaler.hpp"
-#include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
+#include "Modules/NextStreamline/StreamlineIntegration.hpp"
 #include "Engine/Rendering/Upscaler/UpscalerTypes.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
+#include "Engine/Vulkan/DeviceCreationAugmenter.hpp"
+#include "Engine/Vulkan/VulkanInterposer.hpp"
 
 #include <algorithm>
 #include <array>
@@ -994,6 +996,10 @@ namespace
         return context;
     }
 
+    // Set during device creation by the augmenter; masks DLSS caps when the
+    // required device extensions could not be enabled.
+    bool GStreamlineDeviceExtsEnabled = false;
+
     class FStreamlineUpscaler final : public Rendering::Upscaler::IUpscaler
     {
     public:
@@ -1003,6 +1009,12 @@ namespace
         {
             StreamlineContext().SetVulkanInfo(deviceInfo);
             caps = StreamlineContext().Caps();
+            if (!GStreamlineDeviceExtsEnabled)
+            {
+                caps.supportDLSS = false;
+                caps.supportDLSSRR = false;
+                caps.supportDLSSG = false;
+            }
 
             if (caps.supportPCL)
             {
@@ -1077,6 +1089,9 @@ namespace
                 slFreeResources(sl::kFeatureDLSS, viewport);
                 lastDLSSActive_ = false;
             }
+
+            // Process-wide SL teardown; the engine no longer knows about Streamline.
+            StreamlineContext().Shutdown();
         }
 
         Rendering::Upscaler::FOptimalRenderSettings GetOptimalRenderSettings(
@@ -1607,11 +1622,191 @@ namespace
         sl::ReflexMode lastReflexMode_ = sl::ReflexMode::eOff;
         uint32_t lastFrameLimitUs_ = 0;
     };
+
+    bool AddStreamlineDeviceExtensionIfAvailable(VkPhysicalDevice physicalDevice,
+                                                 std::vector<const char*>& requiredExtensions,
+                                                 const char* extensionName,
+                                                 const char* featureName)
+    {
+        if (StreamlineHasDeviceExtension(physicalDevice, extensionName))
+        {
+            AppendUnique(requiredExtensions, extensionName);
+            return true;
+        }
+        SPDLOG_WARN("{} disabled because device extension {} is unavailable", featureName, extensionName);
+        return false;
+    }
+
+    bool ChainContainsSType(const void* featureChain, const VkStructureType sType)
+    {
+        for (const auto* node = static_cast<const VkBaseInStructure*>(featureChain); node != nullptr;
+             node = node->pNext)
+        {
+            if (node->sType == sType)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Requests SL device extensions/features during logical device creation.
+    class FStreamlineDeviceAugmenter final : public Vulkan::IDeviceCreationAugmenter
+    {
+    public:
+        void* OnPhysicalDeviceSelected(VkInstance /*instance*/,
+                                       VkPhysicalDevice physicalDevice,
+                                       std::vector<const char*>& requiredExtensions,
+                                       void* featureChain) override
+        {
+            const auto streamlineCaps =
+                StreamlineWrapper::AppendRequiredDeviceExtensions(physicalDevice, requiredExtensions);
+            const bool hasLegacyStreamlineExtensions =
+                AddStreamlineDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
+                                                        VK_NVX_BINARY_IMPORT_EXTENSION_NAME,
+                                                        "Streamline binary import") &&
+                AddStreamlineDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
+                                                        VK_NVX_IMAGE_VIEW_HANDLE_EXTENSION_NAME,
+                                                        "Streamline image view handles");
+            AddStreamlineDeviceExtensionIfAvailable(physicalDevice, requiredExtensions,
+                                                    VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
+                                                    "Streamline buffer device address");
+            if (StreamlineHasDeviceExtension(physicalDevice, VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME))
+            {
+                AppendUnique(requiredExtensions, VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+            }
+
+            GStreamlineDeviceExtsEnabled = streamlineCaps.streamlineInitialized &&
+                                           streamlineCaps.requestedDeviceExtensionsAvailable &&
+                                           hasLegacyStreamlineExtensions;
+            if (GStreamlineDeviceExtsEnabled &&
+                !ChainContainsSType(featureChain, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES))
+            {
+                timelineSemaphoreFeatures_ = {};
+                timelineSemaphoreFeatures_.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
+                timelineSemaphoreFeatures_.timelineSemaphore = true;
+                timelineSemaphoreFeatures_.pNext = featureChain;
+                return &timelineSemaphoreFeatures_;
+            }
+            return featureChain;
+        }
+
+    private:
+        VkPhysicalDeviceTimelineSemaphoreFeatures timelineSemaphoreFeatures_{};
+    };
+
+    // Routes the engine's Vulkan interposer seam to the SL proxies.
+    class FStreamlineInterposer final : public Vulkan::IVulkanInterposer
+    {
+    public:
+        const char* PreferredVulkanLoaderPath() override
+        {
+            return StreamlineWrapper::PreferredVulkanLoaderPath();
+        }
+
+        void AppendRequiredInstanceExtensions(std::vector<const char*>& extensions) override
+        {
+            AppendUnique(extensions, VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME);
+            AppendUnique(extensions, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+            StreamlineWrapper::AppendRequiredInstanceExtensions(extensions);
+        }
+
+        VkResult CreateInstance(const VkInstanceCreateInfo* createInfo, const VkAllocationCallbacks* allocator,
+                                VkInstance* instance) override
+        {
+            return StreamlineWrapper::CreateInstance(createInfo, allocator, instance);
+        }
+
+        void DestroyInstance(VkInstance instance, const VkAllocationCallbacks* allocator) override
+        {
+            StreamlineWrapper::DestroyInstance(instance, allocator);
+        }
+
+        VkResult EnumeratePhysicalDevices(VkInstance instance, uint32_t* count,
+                                          VkPhysicalDevice* physicalDevices) override
+        {
+            return StreamlineWrapper::EnumeratePhysicalDevices(instance, count, physicalDevices);
+        }
+
+#if WIN32
+        VkResult CreateWin32SurfaceKHR(VkInstance instance, const VkWin32SurfaceCreateInfoKHR* createInfo,
+                                       const VkAllocationCallbacks* allocator, VkSurfaceKHR* surface) override
+        {
+            return StreamlineWrapper::CreateWin32SurfaceKHR(instance, createInfo, allocator, surface);
+        }
+#endif
+
+        void DestroySurfaceKHR(VkInstance instance, VkSurfaceKHR surface,
+                               const VkAllocationCallbacks* allocator) override
+        {
+            StreamlineWrapper::DestroySurfaceKHR(instance, surface, allocator);
+        }
+
+        VkResult CreateDevice(VkPhysicalDevice physicalDevice, const VkDeviceCreateInfo* createInfo,
+                              const VkAllocationCallbacks* allocator, VkDevice* device) override
+        {
+            return StreamlineWrapper::CreateDevice(physicalDevice, createInfo, allocator, device);
+        }
+
+        void DestroyDevice(VkDevice device, const VkAllocationCallbacks* allocator) override
+        {
+            StreamlineWrapper::DestroyDevice(device, allocator);
+        }
+
+        VkResult DeviceWaitIdle(VkDevice device) override
+        {
+            return StreamlineWrapper::DeviceWaitIdle(device);
+        }
+
+        VkResult CreateSwapchainKHR(VkDevice device, const VkSwapchainCreateInfoKHR* createInfo,
+                                    const VkAllocationCallbacks* allocator, VkSwapchainKHR* swapchain) override
+        {
+            return StreamlineWrapper::CreateSwapchainKHR(device, createInfo, allocator, swapchain);
+        }
+
+        void DestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain,
+                                 const VkAllocationCallbacks* allocator) override
+        {
+            StreamlineWrapper::DestroySwapchainKHR(device, swapchain, allocator);
+        }
+
+        VkResult GetSwapchainImagesKHR(VkDevice device, VkSwapchainKHR swapchain, uint32_t* count,
+                                       VkImage* images) override
+        {
+            return StreamlineWrapper::GetSwapchainImagesKHR(device, swapchain, count, images);
+        }
+
+        VkResult AcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapchain, uint64_t timeout,
+                                     VkSemaphore semaphore, VkFence fence, uint32_t* imageIndex) override
+        {
+            return StreamlineWrapper::AcquireNextImageKHR(device, swapchain, timeout, semaphore, fence,
+                                                          imageIndex);
+        }
+
+        VkResult QueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* presentInfo) override
+        {
+            return StreamlineWrapper::QueuePresentKHR(queue, presentInfo);
+        }
+    };
 #endif
 }
 
 namespace StreamlineWrapper
 {
+#if WITH_STREAMLINE && WIN32
+    Vulkan::IVulkanInterposer& InterposerInstance()
+    {
+        static FStreamlineInterposer interposer;
+        return interposer;
+    }
+
+    Vulkan::IDeviceCreationAugmenter& DeviceAugmenterInstance()
+    {
+        static FStreamlineDeviceAugmenter augmenter;
+        return augmenter;
+    }
+#endif
+
     bool ShouldInitialize()
     {
 #if WITH_STREAMLINE && WIN32

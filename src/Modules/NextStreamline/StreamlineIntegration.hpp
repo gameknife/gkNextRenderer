@@ -5,10 +5,26 @@
 
 #include <vulkan/vulkan.h>
 
+namespace Rendering::Upscaler
+{
+    class IUpscaler;
+}
+
+namespace Vulkan
+{
+    class IDeviceCreationAugmenter;
+    class IVulkanInterposer;
+}
+
 // NVIDIA Streamline process-wide integration. SL SDK symbols stay in the cpp so
 // non-Windows platforms can include this header without the SDK.
 namespace StreamlineWrapper
 {
+#if WITH_STREAMLINE && WIN32
+    Vulkan::IVulkanInterposer& InterposerInstance();
+    Vulkan::IDeviceCreationAugmenter& DeviceAugmenterInstance();
+#endif
+
     bool ShouldInitialize();
     void Initialize();
     void Shutdown();
@@ -62,4 +78,10 @@ namespace StreamlineWrapper
         uint32_t* imageIndex);
     VkResult QueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* presentInfo);
     VkResult DeviceWaitIdle(VkDevice device);
+}
+
+namespace Rendering::Upscaler
+{
+    // nullptr when Streamline was not initialized.
+    std::unique_ptr<IUpscaler> CreateStreamlineUpscaler();
 }
