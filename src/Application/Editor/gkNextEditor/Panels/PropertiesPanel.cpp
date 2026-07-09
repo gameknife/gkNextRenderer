@@ -6,7 +6,7 @@
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
-#include "Engine/Runtime/Command/RenameNodeCommand.hpp"
+#include "Modules/DevTools/Command/RenameNodeCommand.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Modules/DevTools/ProfessionalUI.hpp"
 #include "Engine/Runtime/Reflection/PropertyAccessor.h"

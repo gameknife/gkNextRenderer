@@ -1,11 +1,11 @@
-#include "Engine/Runtime/Command/DuplicateNodesCommand.hpp"
+#include "Modules/DevTools/Command/DuplicateNodesCommand.hpp"
 
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/SceneReferenceComponent.h"
-#include "Engine/Runtime/Command/SelectionCommandUtils.hpp"
+#include "Modules/DevTools/Command/SelectionCommandUtils.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Runtime/Scene/SceneBuilder.h"

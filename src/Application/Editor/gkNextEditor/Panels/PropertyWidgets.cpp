@@ -1,5 +1,5 @@
 #include "PropertyWidgets.h"
-#include "Engine/Runtime/Command/PropertyCommand.hpp"
+#include "Modules/DevTools/Command/PropertyCommand.hpp"
 #include "Engine/Runtime/Reflection/ReflectionMacros.h"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 

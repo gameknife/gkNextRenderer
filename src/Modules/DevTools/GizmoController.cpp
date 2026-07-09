@@ -4,9 +4,9 @@
 
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Runtime/Command/DuplicateNodesCommand.hpp"
+#include "Modules/DevTools/Command/DuplicateNodesCommand.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Command/TransformNodesCommand.hpp"
+#include "Modules/DevTools/Command/TransformNodesCommand.hpp"
 #include "ThirdParty/ImGuizmo/ImGuizmo.h"
 
 #include <algorithm>

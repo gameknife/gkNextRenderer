@@ -2,7 +2,7 @@
 
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/AssetsFwd.hpp"
-#include "Engine/Runtime/Command/TransformNodesCommand.hpp"
+#include "Modules/DevTools/Command/TransformNodesCommand.hpp"
 #include "Engine/Runtime/RuntimeFwd.hpp"
 
 #include <glm/glm.hpp>

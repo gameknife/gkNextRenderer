@@ -1,4 +1,4 @@
-#include "Engine/Runtime/Command/RenameNodeCommand.hpp"
+#include "Modules/DevTools/Command/RenameNodeCommand.hpp"
 
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Core/Scene.hpp"

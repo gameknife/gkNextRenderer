@@ -14,8 +14,6 @@
 #include "Engine/Runtime/Interface/UiOverlay.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Config/UserSettings.hpp"
-#include "Engine/Runtime/Command/DeleteNodesCommand.hpp"
-#include "Engine/Runtime/Command/DuplicateNodesCommand.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Runtime/Subsystems/NextAudio.h"
@@ -94,81 +92,16 @@ void NextEngine::OnKey(SDL_Event& event)
         if (hasCtrlOrCmd)
         {
             const bool hasShift = (modifiers & SDL_KMOD_SHIFT) != 0;
-            std::vector<uint32_t> selectedIds;
-            const auto& currentSelection = GetScene().GetSelectedIds();
-            selectedIds.reserve(currentSelection.size() + 1);
-            for (uint32_t id : currentSelection)
-            {
-                selectedIds.push_back(id);
-            }
-            if (selectedIds.empty())
-            {
-                const uint32_t selectedId = GetScene().GetSelectedId();
-                if (selectedId != static_cast<uint32_t>(-1))
-                {
-                    selectedIds.push_back(selectedId);
-                }
-            }
-
             if (event.key.key == SDLK_Z)
             {
-                if (hasShift)
+                if (hasShift ? commandHistory_.Redo() : commandHistory_.Undo())
                 {
-                    if (commandHistory_.Redo())
-                    {
-                        return;
-                    }
-                }
-                else
-                {
-                    if (commandHistory_.Undo())
-                    {
-                        return;
-                    }
+                    return;
                 }
             }
             else if (event.key.key == SDLK_Y)
             {
                 if (commandHistory_.Redo())
-                {
-                    return;
-                }
-            }
-            else if (event.key.key == SDLK_D)
-            {
-                if (!selectedIds.empty())
-                {
-                    auto command = std::make_unique<Runtime::Command::DuplicateNodesCommand>(GetScene(), selectedIds);
-                    if (commandHistory_.Execute(std::move(command)))
-                    {
-                        return;
-                    }
-                }
-            }
-        }
-
-        if (event.key.key == SDLK_DELETE || event.key.key == SDLK_BACKSPACE)
-        {
-            std::vector<uint32_t> selectedIds;
-            const auto& currentSelection = GetScene().GetSelectedIds();
-            selectedIds.reserve(currentSelection.size() + 1);
-            for (uint32_t id : currentSelection)
-            {
-                selectedIds.push_back(id);
-            }
-            if (selectedIds.empty())
-            {
-                const uint32_t selectedId = GetScene().GetSelectedId();
-                if (selectedId != static_cast<uint32_t>(-1))
-                {
-                    selectedIds.push_back(selectedId);
-                }
-            }
-
-            if (!selectedIds.empty())
-            {
-                auto command = std::make_unique<Runtime::Command::DeleteNodesCommand>(GetScene(), selectedIds);
-                if (commandHistory_.Execute(std::move(command)))
                 {
                     return;
                 }

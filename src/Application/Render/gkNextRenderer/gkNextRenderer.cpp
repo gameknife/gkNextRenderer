@@ -19,6 +19,8 @@
 #include "Engine/Runtime/Scene/SceneBuilder.h"
 #include "Engine/Runtime/Utilities/NextEngineHelper.h"
 #include "Modules/DevTools/GraphicsDebugPanel.hpp"
+#include "Modules/DevTools/Command/DeleteNodesCommand.hpp"
+#include "Modules/DevTools/Command/DuplicateNodesCommand.hpp"
 #include "Engine/Utilities/Localization.hpp"
 #include "Engine/Utilities/ImGui.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.h"
@@ -38,6 +40,20 @@ extern float GAndroidMagicScale;
 
 namespace
 {
+std::vector<uint32_t> SelectedNodeIds(Assets::Scene& scene)
+{
+    std::vector<uint32_t> ids = scene.GetSelectedIds();
+    if (ids.empty())
+    {
+        const uint32_t selectedId = scene.GetSelectedId();
+        if (selectedId != static_cast<uint32_t>(-1))
+        {
+            ids.push_back(selectedId);
+        }
+    }
+    return ids;
+}
+
 enum class ESceneListGroup : uint8_t
 {
     Procedural = 0,
@@ -740,6 +756,24 @@ bool NextRendererGameInstance::OnKey(SDL_Event& event)
             break;
 		case SDLK_SPACE: CreateBoxAndPush(); return true;
 			break;
+        case SDLK_DELETE:
+        case SDLK_BACKSPACE:
+        {
+            std::vector<uint32_t> ids = SelectedNodeIds(GetEngine().GetScene());
+            if (ids.empty()) break;
+            auto cmd = std::make_unique<Runtime::Command::DeleteNodesCommand>(GetEngine().GetScene(), std::move(ids));
+            GetEngine().GetCommandHistory().Execute(std::move(cmd));
+            return true;
+        }
+        case SDLK_D:
+        {
+            if (!(event.key.mod & (SDL_KMOD_CTRL | SDL_KMOD_GUI))) break;
+            std::vector<uint32_t> ids = SelectedNodeIds(GetEngine().GetScene());
+            if (ids.empty()) break;
+            auto cmd = std::make_unique<Runtime::Command::DuplicateNodesCommand>(GetEngine().GetScene(), std::move(ids));
+            GetEngine().GetCommandHistory().Execute(std::move(cmd));
+            return true;
+        }
 		default: break;
 		}
 	}

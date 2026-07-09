@@ -14,8 +14,8 @@
 #include "EditorContext.hpp"
 #include "Core/RecentScenes.hpp"
 #include "Core/SceneSavePolicy.hpp"
-#include "Engine/Runtime/Command/DeleteNodesCommand.hpp"
-#include "Engine/Runtime/Command/DuplicateNodesCommand.hpp"
+#include "Modules/DevTools/Command/DeleteNodesCommand.hpp"
+#include "Modules/DevTools/Command/DuplicateNodesCommand.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 
 #include <spdlog/spdlog.h>
