@@ -625,29 +625,7 @@ NextBodyID NextPhysics::CreateSphereBody(glm::vec3 position, float radius, NextM
 
 NextBodyID NextPhysics::CreateBoxBody(glm::vec3 position, glm::vec3 extent, NextMotionType motionType)
 {
-	BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
-	BodyID bodyId(-1);
-
-	Vec3 halfExtent(extent.x * 0.5f, extent.y * 0.5f, extent.z * 0.5f);
-	float convexRadius = ComputeBoxConvexRadius(halfExtent);
-
-	// Create the settings for the body itself. Note that here you can also set other properties like the restitution / friction.
-	BodyCreationSettings floorSettings(new BoxShape(halfExtent, convexRadius), RVec3(position.x, position.y, position.z), Quat::sIdentity(), motionType, NextLayers::MOVING);
-	//floorSettings.mRestitution = 0.05f;
-	if (motionType == EMotionType::Dynamic)
-	{
-		ConfigureDynamicBoxSettings(floorSettings);
-	}
-	else
-	{
-		floorSettings.mFriction = 0.5f;
-	}
-	// Create the actual rigid body
-	bodyId = bodyInterface.CreateAndAddBody(floorSettings, EActivation::Activate);
-	WakeDynamicBody(bodyInterface, bodyId);
-
-	FNextPhysicsBody body { position, glm::quat(1,0,0,0), glm::vec3(0.0f, 0.0f, 0.0f), ENextBodyShape::Box, bodyId, motionType };
-	return AddBodyInternal(body, true);
+	return CreateBoxBody(position, glm::quat(1, 0, 0, 0), extent, motionType);
 }
 
 NextBodyID NextPhysics::CreateBoxBody(glm::vec3 position, glm::quat rotation, glm::vec3 extent, NextMotionType motionType)
