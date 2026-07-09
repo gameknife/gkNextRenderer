@@ -10,7 +10,6 @@
 #include "Engine/Vulkan/RenderingPipeline.hpp"
 #include <deque>
 #include <glm/vec4.hpp>
-#include <set>
 
 namespace NextUI
 {

@@ -4,7 +4,6 @@
 
 #include <glm/glm.hpp>
 #include <mutex>
-#include <vector>
 
 namespace Rendering::AuxDraw
 {

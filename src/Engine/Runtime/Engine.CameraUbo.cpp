@@ -13,7 +13,6 @@
 #include "Engine/Runtime/Config/UserSettings.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 
-#include <array>
 #include <cstdlib>
 
 namespace

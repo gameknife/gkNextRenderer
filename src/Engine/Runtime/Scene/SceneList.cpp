@@ -13,7 +13,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <unordered_map>
 
 
 using namespace glm;

@@ -27,7 +27,6 @@
 
 #include <SDL3/SDL.h>
 #include <algorithm>
-#include <chrono>
 #include <fmt/format.h>
 
 namespace

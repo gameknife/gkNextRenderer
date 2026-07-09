@@ -15,7 +15,6 @@
 #include "Engine/Vulkan/SwapChain.hpp"
 #include "Engine/Vulkan/SyncAndTiming.hpp"
 
-#include <filesystem>
 
 namespace Vulkan::GaussianSplat
 {

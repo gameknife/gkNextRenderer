@@ -6,8 +6,6 @@
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Options.hpp"
 
-#include <unordered_map>
-#include <vector>
 
 namespace Vulkan
 {

@@ -47,10 +47,8 @@
 #include "Engine/Rendering/Upscaler/UpscalerRegistry.hpp"
 
 #include <algorithm>
-#include <cstring>
 #include <limits>
 #include <utility>
-#include <vector>
 
 namespace
 {
