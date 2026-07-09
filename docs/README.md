@@ -49,6 +49,7 @@
 | [Git 历史资产瘦身方案](plans/repository-history-asset-slimming-plan.md) | 📝 草案 | 2026-07-07 |
 | [src/Engine 核心层精炼 Round 2：god class 拆解 + include 卫生](plans/engine-core-refactor-round2.md) | 📝 草案 | 2026-06-11 |
 | [src/Engine 核心层精炼 Round 3：模块归位 + SkinnedMesh 瘦身](plans/engine-core-refactor-round3.md) | 📝 草案 | 2026-06-14 |
+| [src/Engine 核心层精炼 Round 4：重回 30k —— 模块外移 + 写法压缩](plans/engine-core-refactor-round4.md) | 📝 草案 | 2026-07-09 |
 | [src/Engine 核心层精简重构：分析与执行计划](plans/engine-core-refactor.md) | ✅ 已完成 | 2026-06-10 |
 | [Engine 层精简重构计划](plans/engine-refactor-plan.md) | 📝 草案 | 2026-06-08 |
 | [NextRA —— OpenRA 风格帧同步 RTS 原型（MVP 开发计划）](plans/nextra-rts-mvp-plan.md) | 📝 草案 | 2026-06-26 |
