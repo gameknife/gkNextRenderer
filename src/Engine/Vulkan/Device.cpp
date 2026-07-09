@@ -6,7 +6,7 @@
 #include "Engine/Vulkan/RayTracing/DeviceProcedures.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Rendering/Upscaler/StreamlineIntegration.hpp"
-#include "Engine/Vulkan/VulkanVideoCaps.hpp"
+#include "Engine/Vulkan/DeviceCreationAugmenter.hpp"
 #include <algorithm>
 #include <cstring>
 #include <set>
@@ -113,21 +113,6 @@ Device::Device(
 	presentFamilyIndex_ = static_cast<uint32_t>(presentFamily - queueFamilies.begin());
 	transferFamilyIndex_ = static_cast<uint32_t>(transferFamily - queueFamilies.begin());
 
-	// Video encode queue, only when the encode extensions were requested (RemoteMode probe).
-	const bool videoEncodeRequested = std::any_of(requiredExtensions.begin(), requiredExtensions.end(),
-		[](const char* extension)
-		{
-			return std::strcmp(extension, VK_KHR_VIDEO_ENCODE_H264_EXTENSION_NAME) == 0;
-		});
-	if (videoEncodeRequested)
-	{
-		videoEncodeFamilyIndex_ = FVulkanVideoCaps::FindEncodeH264QueueFamily(physicalDevice);
-		if (videoEncodeFamilyIndex_ == UINT32_MAX)
-		{
-			SPDLOG_WARN("Video encode extensions requested but no H.264 encode queue family was found");
-		}
-	}
-
 	// Queues can be the same
 	std::set<uint32_t> uniqueQueueFamilies =
 	{
@@ -136,9 +121,16 @@ Device::Device(
 		presentFamilyIndex_,
 		transferFamilyIndex_
 	};
-	if (videoEncodeFamilyIndex_ != UINT32_MAX)
+
+	// Extra queue families requested by modules (e.g. NextRemote video encode).
+	for (IDeviceCreationAugmenter* augmenter : DeviceCreationAugmenters())
 	{
-		uniqueQueueFamilies.insert(videoEncodeFamilyIndex_);
+		const uint32_t extraFamily = augmenter->AdditionalQueueFamily(physicalDevice);
+		if (extraFamily != UINT32_MAX)
+		{
+			uniqueQueueFamilies.insert(extraFamily);
+			extraQueues_[extraFamily] = VK_NULL_HANDLE;
+		}
 	}
 
 	// Create queues
@@ -177,9 +169,9 @@ Device::Device(
 	vkGetDeviceQueue(device_, computeFamilyIndex_, 0, &computeQueue_);
 	vkGetDeviceQueue(device_, presentFamilyIndex_, 0, &presentQueue_);
 	vkGetDeviceQueue(device_, transferFamilyIndex_, 0, &transferQueue_);
-	if (videoEncodeFamilyIndex_ != UINT32_MAX)
+	for (auto& [familyIndex, queue] : extraQueues_)
 	{
-		vkGetDeviceQueue(device_, videoEncodeFamilyIndex_, 0, &videoEncodeQueue_);
+		vkGetDeviceQueue(device_, familyIndex, 0, &queue);
 	}
 
     vkGetPhysicalDeviceProperties(PhysicalDevice(), &deviceProp_);
@@ -228,9 +220,9 @@ VkQueue Device::QueueForFamilyIndex(uint32_t queueFamilyIndex) const
 	{
 		return transferQueue_;
 	}
-	if (queueFamilyIndex == videoEncodeFamilyIndex_)
+	if (const auto extraQueue = extraQueues_.find(queueFamilyIndex); extraQueue != extraQueues_.end())
 	{
-		return videoEncodeQueue_;
+		return extraQueue->second;
 	}
 	Throw(std::runtime_error(fmt::format("queue family {} is not available on this device", queueFamilyIndex)));
 }

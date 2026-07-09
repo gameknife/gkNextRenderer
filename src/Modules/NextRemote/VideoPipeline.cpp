@@ -1,6 +1,8 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Modules/NextRemote/VideoPipeline.hpp"
 
+#include "Modules/NextRemote/VideoEncodeDeviceAugmenter.hpp"
+
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
@@ -118,7 +120,7 @@ namespace Runtime::Remote
         }
 
         device_ = &renderer.Device();
-        vulkanCaps_ = renderer.VideoCaps();
+        vulkanCaps_ = Modules::NextRemote::ProbedVideoCaps();
         {
             std::lock_guard lock(profileMutex_);
             RecomputeNegotiatedProfileLocked();
@@ -640,7 +642,7 @@ namespace Runtime::Remote
         imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_VIDEO_ENCODE_SRC_BIT_KHR;
         imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-        const uint32_t videoEncodeFamilyIndex = device.VideoEncodeFamilyIndex();
+        const uint32_t videoEncodeFamilyIndex = Modules::NextRemote::ProbedVideoCaps().encodeQueueFamily;
         std::array<uint32_t, 2> queueFamilies{device.GraphicsFamilyIndex(), videoEncodeFamilyIndex};
         if (videoEncodeFamilyIndex != UINT32_MAX && videoEncodeFamilyIndex != device.GraphicsFamilyIndex())
         {

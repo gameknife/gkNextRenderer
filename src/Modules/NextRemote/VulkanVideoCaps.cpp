@@ -1,5 +1,5 @@
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Vulkan/VulkanVideoCaps.hpp"
+#include "Modules/NextRemote/VulkanVideoCaps.hpp"
 #include "Modules/NextRemote/VideoEncoder.hpp"
 
 

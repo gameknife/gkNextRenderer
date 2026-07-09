@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Engine/Assets/AssetsFwd.hpp"
-#include "Engine/Vulkan/VulkanVideoCaps.hpp"
 #include "Engine/Vulkan/RenderingPipeline.hpp"
 #include "Engine/Vulkan/SyncAndTiming.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
@@ -183,7 +182,6 @@ namespace Vulkan
 		bool HasFullAmbientCubeBudget() const { return caps_.fullAmbientCubeBudget; }
 		void SetDenoiserEnabled(bool enabled) { caps_.supportDenoiser = enabled; }
 		void SetVisualDebugEnabled(bool enabled) { visualDebug_ = enabled; }
-		const FVulkanVideoCaps& VideoCaps() const { return videoCaps_; }
 		void QueueSubmitSignalSemaphore(VkSemaphore semaphore, uint64_t value = 0);
 
 		// Engine callbacks
@@ -364,7 +362,6 @@ namespace Vulkan
 		};
 
 		DeviceCaps caps_;
-		FVulkanVideoCaps videoCaps_;
 		DeviceContext ctx_;
 		FrameResources frame_;
 		SkinnedMeshResources skin_;

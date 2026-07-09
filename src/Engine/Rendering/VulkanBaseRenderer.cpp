@@ -5,6 +5,7 @@
 #include "Engine/Vulkan/RayTracing/DeviceProcedures.hpp"
 #include "Engine/Vulkan/RayTracing/RayTracingProperties.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
+#include "Engine/Vulkan/DeviceCreationAugmenter.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/SyncAndTiming.hpp"
 #include "Engine/Vulkan/BufferUtil.hpp"
@@ -568,36 +569,12 @@ namespace Vulkan
             nextDeviceFeatures = &rayQueryFeatures;
         }
 
-        // Vulkan Video H.264 encode (remote play hardware path). Probe before device creation;
-        // the feature struct must outlive ctx_.device.reset().
-        VkPhysicalDeviceSynchronization2FeaturesKHR synchronization2Features = {};
-        if (GOption->RemoteMode)
+        // Module-requested device extensions / features (e.g. NextRemote video encode).
+        // Augmenters own any feature structs they chain in.
+        for (IDeviceCreationAugmenter* augmenter : DeviceCreationAugmenters())
         {
-            videoCaps_ = FVulkanVideoCaps::Probe(ctx_.instance->Handle(), physicalDevice);
-            videoCaps_.LogSummary();
-            if (videoCaps_.Usable())
-            {
-                requiredExtensions.insert(requiredExtensions.end(),
-                    {
-                        VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
-                        VK_KHR_VIDEO_QUEUE_EXTENSION_NAME,
-                        VK_KHR_VIDEO_ENCODE_QUEUE_EXTENSION_NAME,
-                        VK_KHR_VIDEO_ENCODE_H264_EXTENSION_NAME,
-                    });
-                if (videoCaps_.maintenance1Present)
-                {
-                    requiredExtensions.push_back(VK_KHR_VIDEO_MAINTENANCE_1_EXTENSION_NAME);
-                }
-                synchronization2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
-                synchronization2Features.pNext = nextDeviceFeatures;
-                synchronization2Features.synchronization2 = true;
-                nextDeviceFeatures = &synchronization2Features;
-            }
-            else
-            {
-                SPDLOG_WARN("RemotePlay: Vulkan Video H.264 encode is not usable on this device; remote mode will "
-                            "be unavailable");
-            }
+            nextDeviceFeatures = augmenter->OnPhysicalDeviceSelected(
+                ctx_.instance->Handle(), physicalDevice, requiredExtensions, nextDeviceFeatures);
         }
 
         // Remote play uses timeline semaphores to decouple GPU frame completion from the main
