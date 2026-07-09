@@ -17,6 +17,7 @@
 #include "Modules/DevTools/ProfessionalUI.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Modules/DevTools/UiDevPanels.hpp"
+#include "Modules/SceneExport/FSceneSaver.h"
 
 namespace Editor
 {
@@ -52,7 +53,7 @@ namespace Editor
             }
 
             const std::string savePath = ResolveSceneFilesystemPath(filename).string();
-            const bool success = ctx.scene.Save(savePath);
+            const bool success = SceneExport::SaveScene(ctx.scene, savePath);
             if (success)
             {
                 ui.currentScenePath = filename;

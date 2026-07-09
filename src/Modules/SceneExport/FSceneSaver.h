@@ -151,3 +151,9 @@ namespace Assets
     };
 
 }
+
+namespace SceneExport
+{
+    // Saves the scene as .glb or .gltf based on the file extension.
+    bool SaveScene(const Assets::Scene& scene, const std::string& path);
+}

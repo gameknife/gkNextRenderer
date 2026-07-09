@@ -6,7 +6,6 @@
 #include <tiny_gltf.h>
 #include "Engine/Assets/GPU/TextureImage.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Assets/Savers/FSceneSaver.h"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.h"

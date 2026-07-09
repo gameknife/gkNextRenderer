@@ -4,7 +4,6 @@
 #include <tiny_gltf.h>
 #include "Engine/Assets/GPU/TextureImage.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Assets/Savers/FSceneSaver.h"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysics.h"
@@ -1143,25 +1142,4 @@ namespace Assets
         jointMatricesAddr_ = jointMatrices;
     }
 
-    bool Scene::Save(const std::string& filename) const
-    {
-        // 根据文件扩展名选择保存格式
-        if (filename.ends_with(".glb") || filename.ends_with(".GLB"))
-        {
-            return SaveAsGLB(filename);
-        }
-        else if (filename.ends_with(".gltf") || filename.ends_with(".GLTF"))
-        {
-            return SaveAsGLTF(filename);
-        }
-        else
-        {
-            SPDLOG_ERROR("Unsupported file extension. Use .glb or .gltf");
-            return false;
-        }
-    }
-
-    bool Scene::SaveAsGLB(const std::string& filename) const { return FSceneSaver::SaveGLBScene(filename, *this); }
-
-    bool Scene::SaveAsGLTF(const std::string& filename) const { return FSceneSaver::SaveGLTFScene(filename, *this); }
 } // namespace Assets

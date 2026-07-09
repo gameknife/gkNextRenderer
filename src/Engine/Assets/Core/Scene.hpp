@@ -249,10 +249,6 @@ namespace Assets
         Assets::CPU::FCPUAccelerationStructure& GetCPUAccelerationStructure() { return cpuAccelerationStructure_; }
         glm::vec3 GetSceneAABBMin() const { return sceneAABBMin_; }
         glm::vec3 GetSceneAABBMax() const { return sceneAABBMax_; }
-        // Scene saving功能
-        bool Save(const std::string& filename) const;
-        bool SaveAsGLB(const std::string& filename) const;
-        bool SaveAsGLTF(const std::string& filename) const;
 
     private:
         std::vector<FMaterial> materials_;

@@ -1,5 +1,5 @@
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Assets/Savers/FSceneSaver.h"
+#include "Modules/SceneExport/FSceneSaver.h"
 
 #include <tiny_gltf.h>
 
@@ -838,4 +838,21 @@ int FSceneSaver::CreateAccessor(tinygltf::Model& model, int bufferViewIdx, int c
 {
     return Assets::CreateAccessor(model, bufferViewIdx, componentType, count, type, min, max);
 }
+}
+
+namespace SceneExport
+{
+    bool SaveScene(const Assets::Scene& scene, const std::string& path)
+    {
+        if (path.ends_with(".glb") || path.ends_with(".GLB"))
+        {
+            return Assets::FSceneSaver::SaveGLBScene(path, scene);
+        }
+        if (path.ends_with(".gltf") || path.ends_with(".GLTF"))
+        {
+            return Assets::FSceneSaver::SaveGLTFScene(path, scene);
+        }
+        SPDLOG_ERROR("Unsupported file extension. Use .glb or .gltf");
+        return false;
+    }
 }

@@ -9,6 +9,7 @@
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Utilities/NextEngineHelper.h"
 #include "Modules/RenderViews/OffscreenRenderViewController.hpp"
+#include "Modules/SceneExport/FSceneSaver.h"
 
 #include "EditorActionDispatcher.hpp"
 #include "EditorContext.hpp"
@@ -298,7 +299,7 @@ bool EditorGameInstance::OnKey(SDL_Event& event)
             if (Editor::CanOverwriteCurrentScene(ui.currentScenePath))
             {
                 const std::string savePath = Editor::ResolveSceneFilesystemPath(ui.currentScenePath).string();
-                if (GetEngine().GetScene().Save(savePath))
+                if (SceneExport::SaveScene(GetEngine().GetScene(), savePath))
                 {
                     SPDLOG_INFO("Scene saved: {}", savePath);
                 }
