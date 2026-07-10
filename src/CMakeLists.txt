@@ -255,6 +255,11 @@ add_executable(AirportSim
 	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(AirportSim PRIVATE Application/Game/AirportSim)
+add_executable(CitySolSim
+	${src_files_citysolsim}
+	${DESKTOP_MAIN_SOURCES}
+)
+target_include_directories(CitySolSim PRIVATE Application/Game/CitySolSim)
 add_executable(Packager
 	Application/Util/Packager/PackagerMain.cpp
 )
@@ -394,6 +399,7 @@ gkNextStillBenchmark
 	CharacterDemo
 	StudioSim
 	AirportSim
+	CitySolSim
 	gkNextUnitTests
 	${GK_MODULE_TARGETS}
 )
@@ -678,6 +684,9 @@ endif()
 if ( TARGET AirportSim )
 target_link_libraries(AirportSim PRIVATE NextGameplay)
 endif()
+if ( TARGET CitySolSim )
+target_link_libraries(CitySolSim PRIVATE NextGameplay)
+endif()
 if ( TARGET NextQuickJS )
 	target_compile_definitions(NextQuickJS PRIVATE GK_NEXT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 	target_link_libraries(NextQuickJS PRIVATE quickjs SDL3::SDL3 imgui::imgui)
@@ -697,7 +706,7 @@ if ( TARGET LDrawLoader )
 	endforeach()
 endif()
 if ( TARGET ScadLoader )
-	foreach(t NextGameplay gkNextRenderer gkNextVisualTest gkNextStillBenchmark gkNextMotionBenchmark gkNextEditor ScadStudio StudioSim AirportSim gkNextUnitTests)
+	foreach(t NextGameplay gkNextRenderer gkNextVisualTest gkNextStillBenchmark gkNextMotionBenchmark gkNextEditor ScadStudio StudioSim AirportSim CitySolSim gkNextUnitTests)
 		if ( TARGET ${t} )
 			target_link_libraries(${t} PRIVATE ScadLoader)
 		endif()

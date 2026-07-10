@@ -114,6 +114,7 @@ all = [
   "FlappyJs",
   "BrickPlayer",
   "CharacterDemo",
+  "CitySolSim",
   "Packager",
   "gkNextUnitTests"
 ]

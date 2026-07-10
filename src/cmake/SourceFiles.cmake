@@ -170,3 +170,9 @@ file(GLOB_RECURSE src_files_airportsim
     "Application/Game/AirportSim/*.hpp"
     "Application/Game/AirportSim/*.h"
 )
+
+file(GLOB_RECURSE src_files_citysolsim
+    "Application/Game/CitySolSim/*.cpp"
+    "Application/Game/CitySolSim/*.hpp"
+    "Application/Game/CitySolSim/*.h"
+)
