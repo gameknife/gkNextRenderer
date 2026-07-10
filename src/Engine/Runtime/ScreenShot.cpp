@@ -89,6 +89,32 @@ namespace Runtime::ScreenShot
                 &layout);
             return layout;
         }
+
+        // Copies the captured swapchain rect into a tightly packed buffer, invoking
+        // convert(srcPixel, dstPixel) per pixel; dst advances by dstPixelBytes.
+        template <typename ConvertFn>
+        void ConvertScreenshotRect(Vulkan::VulkanBaseRenderer* renderer, const VkSubresourceLayout& imageLayout,
+                                   const VkExtent2D extent, const int inX, const int inY,
+                                   const uint32_t srcPixelBytes, const uint32_t dstPixelBytes, void* dst,
+                                   ConvertFn&& convert)
+        {
+            Vulkan::DeviceMemory* vkMemory = renderer->GetScreenShotMemory();
+            uint8_t* mappedData = static_cast<uint8_t*>(vkMemory->Map(0, VK_WHOLE_SIZE));
+            const uint8_t* imageData = mappedData + imageLayout.offset;
+            const uint32_t srcRowBytes = static_cast<uint32_t>(imageLayout.rowPitch);
+
+            uint8_t* dstBytes = static_cast<uint8_t*>(dst);
+            for (uint32_t y = 0; y < extent.height; y++)
+            {
+                const uint8_t* srcRow = imageData + (inY + y) * srcRowBytes + inX * srcPixelBytes;
+                for (uint32_t x = 0; x < extent.width; x++)
+                {
+                    convert(srcRow + x * srcPixelBytes, dstBytes);
+                    dstBytes += dstPixelBytes;
+                }
+            }
+            vkMemory->Unmap();
+        }
     }
 
     void SaveSwapChainToFileFast(Vulkan::VulkanBaseRenderer* renderer, const std::string& filePathWithoutExtension, int inX, int inY, int inWidth, int inHeight)
@@ -198,7 +224,6 @@ namespace Runtime::ScreenShot
         uint32_t dataBytes = 0;
         uint32_t rowBytes = 0;
         const VkSubresourceLayout imageLayout = GetScreenShotImageLayout(renderer);
-        const uint32_t srcRowBytes = static_cast<uint32_t>(imageLayout.rowPitch);
         const bool hdr10Screenshot = swapChain.OutputMode() == Vulkan::ESwapChainOutputMode::HDR10_ST2084;
         const bool extendedLinearScreenshot =
             swapChain.OutputMode() == Vulkan::ESwapChainOutputMode::ExtendedSrgbLinear;
@@ -206,127 +231,49 @@ namespace Runtime::ScreenShot
         constexpr uint32_t kCompCnt = 3;
         if(hdr10Screenshot)
         {
-            dataBytes = extent.width * extent.height * 3 * 2;
-            rowBytes = extent.width * 3 * sizeof(uint16_t);
+            // A2B10G10R10 -> packed RGB 10-bit-in-uint16.
+            dataBytes = extent.width * extent.height * kCompCnt * sizeof(uint16_t);
+            rowBytes = extent.width * kCompCnt * sizeof(uint16_t);
             data = malloc(dataBytes);
-            
-            uint16_t* dataview = (uint16_t*)data;
-            {
-                Vulkan::DeviceMemory* vkMemory = renderer->GetScreenShotMemory();
-                uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, VK_WHOLE_SIZE);
-                uint8_t* imageData = mappedData + imageLayout.offset;
-
-                uint32_t srcYDelta = srcRowBytes;
-                uint32_t srcXDelta = 4;
-            
-                uint32_t yDelta = extent.width * kCompCnt;
-                uint32_t xDelta = kCompCnt;
-                uint32_t yy = 0;
-                uint32_t xx = 0;
-                uint32_t srcY = inY * srcYDelta;
-                uint32_t srcX = inX * srcXDelta;
-      
-                for (uint32_t y = 0; y < extent.height; y++)
+            ConvertScreenshotRect(renderer, imageLayout, extent, inX, inY, 4, kCompCnt * sizeof(uint16_t), data,
+                [](const uint8_t* src, uint8_t* dst)
                 {
-                    xx = 0;
-                    srcX = inX * srcXDelta;
-                    for (uint32_t x = 0; x < extent.width; x++)
-                    {
-                        uint32_t* pInPixel = (uint32_t*)&imageData[srcY + srcX];
-                        uint32_t uInPixel = *pInPixel;
-                        dataview[yy + xx + 2] = (uInPixel & (0b1111111111 << 20)) >> 20;
-                        dataview[yy + xx + 1] = (uInPixel & (0b1111111111 << 10)) >> 10;
-                        dataview[yy + xx + 0] = (uInPixel & (0b1111111111 << 0)) >> 0;
-                        
-                        srcX += srcXDelta;
-                        xx += xDelta;
-                    }
-                    srcY += srcYDelta;
-                    yy += yDelta;
-                }
-                vkMemory->Unmap();
-            }
+                    const uint32_t uInPixel = *reinterpret_cast<const uint32_t*>(src);
+                    uint16_t* outPixel = reinterpret_cast<uint16_t*>(dst);
+                    outPixel[2] = (uInPixel & (0b1111111111 << 20)) >> 20;
+                    outPixel[1] = (uInPixel & (0b1111111111 << 10)) >> 10;
+                    outPixel[0] = (uInPixel & (0b1111111111 << 0)) >> 0;
+                });
         }
         else if (extendedLinearScreenshot)
         {
+            // RGBA16F linear -> sRGB bytes.
             dataBytes = extent.width * extent.height * kCompCnt;
             rowBytes = extent.width * kCompCnt * sizeof(uint8_t);
             data = malloc(dataBytes);
-
-            uint8_t* dataview = static_cast<uint8_t*>(data);
-            {
-                Vulkan::DeviceMemory* vkMemory = renderer->GetScreenShotMemory();
-                uint8_t* mappedData = static_cast<uint8_t*>(vkMemory->Map(0, VK_WHOLE_SIZE));
-                uint8_t* imageData = mappedData + imageLayout.offset;
-
-                const uint32_t yDelta = extent.width * kCompCnt;
-                const uint32_t xDelta = kCompCnt;
-                const uint32_t srcYDelta = srcRowBytes;
-                const uint32_t srcXDelta = 8;
-
-                uint32_t yy = 0;
-                uint32_t srcY = inY * srcYDelta;
-                for (uint32_t y = 0; y < extent.height; y++)
+            ConvertScreenshotRect(renderer, imageLayout, extent, inX, inY, 8, kCompCnt, data,
+                [](const uint8_t* src, uint8_t* dst)
                 {
-                    uint32_t xx = 0;
-                    uint32_t srcX = inX * srcXDelta;
-                    for (uint32_t x = 0; x < extent.width; x++)
-                    {
-                        uint16_t* pInPixel = reinterpret_cast<uint16_t*>(&imageData[srcY + srcX]);
-                        dataview[yy + xx] = LinearToSrgbByte(HalfToFloat(pInPixel[0]));
-                        dataview[yy + xx + 1] = LinearToSrgbByte(HalfToFloat(pInPixel[1]));
-                        dataview[yy + xx + 2] = LinearToSrgbByte(HalfToFloat(pInPixel[2]));
-
-                        srcX += srcXDelta;
-                        xx += xDelta;
-                    }
-                    srcY += srcYDelta;
-                    yy += yDelta;
-                }
-                vkMemory->Unmap();
-            }
+                    const uint16_t* inPixel = reinterpret_cast<const uint16_t*>(src);
+                    dst[0] = LinearToSrgbByte(HalfToFloat(inPixel[0]));
+                    dst[1] = LinearToSrgbByte(HalfToFloat(inPixel[1]));
+                    dst[2] = LinearToSrgbByte(HalfToFloat(inPixel[2]));
+                });
         }
         else
         {
+            // B8G8R8A8 -> RGB bytes.
             dataBytes = extent.width * extent.height * kCompCnt;
-            rowBytes = extent.width * 3 * sizeof(uint8_t);
+            rowBytes = extent.width * kCompCnt * sizeof(uint8_t);
             data = malloc(dataBytes);
-            
-            uint8_t* dataview = (uint8_t*)data;
-            {
-                Vulkan::DeviceMemory* vkMemory = renderer->GetScreenShotMemory();
-                uint8_t* mappedData = (uint8_t*)vkMemory->Map(0, VK_WHOLE_SIZE);
-                uint8_t* imageData = mappedData + imageLayout.offset;
-                uint32_t yDelta = extent.width * kCompCnt;
-                uint32_t xDelta = kCompCnt;
-                uint32_t srcYDelta = srcRowBytes;
-                uint32_t srcXDelta = 4;
-            
-                uint32_t yy = 0;
-                uint32_t xx = 0;
-                uint32_t srcY = inY * srcYDelta;
-                uint32_t srcX = inX * srcXDelta;
-            
-                for (uint32_t y = 0; y < extent.height; y++)
+            ConvertScreenshotRect(renderer, imageLayout, extent, inX, inY, 4, kCompCnt, data,
+                [](const uint8_t* src, uint8_t* dst)
                 {
-                    xx = 0;
-                    srcX = inX * srcXDelta;
-                    for (uint32_t x = 0; x < extent.width; x++)
-                    {
-                        uint32_t* pInPixel = (uint32_t*)&imageData[srcY + srcX];
-                        uint32_t uInPixel = *pInPixel;
-                        dataview[yy + xx] = (uInPixel & (0b11111111 << 16)) >> 16;
-                        dataview[yy + xx + 1] = (uInPixel & (0b11111111 << 8)) >> 8;
-                        dataview[yy + xx + 2] = (uInPixel & (0b11111111 << 0)) >> 0;
-
-                        srcX += srcXDelta;
-                        xx += xDelta;
-                    }
-                    srcY += srcYDelta;
-                    yy += yDelta;
-                }
-                vkMemory->Unmap();
-            }
+                    const uint32_t uInPixel = *reinterpret_cast<const uint32_t*>(src);
+                    dst[0] = (uInPixel & (0b11111111 << 16)) >> 16;
+                    dst[1] = (uInPixel & (0b11111111 << 8)) >> 8;
+                    dst[2] = (uInPixel & (0b11111111 << 0)) >> 0;
+                });
         }
         
 #if WITH_AVIF
