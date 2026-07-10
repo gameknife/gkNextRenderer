@@ -649,12 +649,11 @@ namespace Assets
             {
                 if (model.NumberOfIndices() < 65535 * 3 && model.NumberOfIndices() > 0)
                 {
-                    cachedMeshShapes_.push_back(
-                        NextRefConst<NextMeshShapeSettings>(physicsEngine->CreateMeshShape(model)));
+                    cachedMeshShapes_.push_back(physicsEngine->CreateMeshShape(model));
                 }
                 else
                 {
-                    cachedMeshShapes_.push_back(NextRefConst<NextMeshShapeSettings>(nullptr));
+                    cachedMeshShapes_.push_back(nullptr);
                 }
             }
 
@@ -676,12 +675,7 @@ namespace Assets
                         NextObjectLayer layer =
                             mobility == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
 
-                        bool validShape = false;
-                        if (cachedMeshShapes_[render->GetModelId()].GetPtr() &&
-                            cachedMeshShapes_[render->GetModelId()]->mIndexedTriangles.size() > 0)
-                            validShape = true;
-
-                        if (validShape)
+                        if (cachedMeshShapes_[render->GetModelId()])
                         {
                             glm::vec3 worldScale = node->WorldScale();
                             if (glm::length(worldScale) > 0.01f && glm::abs(worldScale.x) > 0.001 &&

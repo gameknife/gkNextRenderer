@@ -1,4 +1,4 @@
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
+#include "Modules/NextPhysics/JoltPhysicsBackend.hpp"
 
 // The Jolt headers don't include Jolt.h. Always include Jolt.h before including any other Jolt header.
 // You can use Jolt.h in your precompiled header to speed up compilation.
@@ -19,6 +19,9 @@
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyActivationListener.h>
 #include <Jolt/Physics/Collision/Shape/ScaledShape.h>
+#include <Jolt/Physics/Character/CharacterVirtual.h>
+#include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 
 // STL includes
 #include <iostream>
@@ -39,9 +42,50 @@ using namespace JPH;
 
 // If you want your code to compile using single or double precision write 0.0_r to get a Real value that compiles to double or float depending if JPH_DOUBLE_PRECISION is set or not.
 using namespace JPH::literals;
+using Modules::Physics::FJoltPhysicsBackend;
 
 namespace
 {
+	BodyID ToJoltBodyID(NextBodyID bodyId)
+	{
+		return BodyID(bodyId.Value());
+	}
+
+	NextBodyID FromJoltBodyID(const BodyID& bodyId)
+	{
+		return NextBodyID(bodyId.GetIndexAndSequenceNumber());
+	}
+
+	EMotionType ToJoltMotionType(NextMotionType motionType)
+	{
+		switch (motionType)
+		{
+		case NextMotionType::Static: return EMotionType::Static;
+		case NextMotionType::Kinematic: return EMotionType::Kinematic;
+		case NextMotionType::Dynamic: return EMotionType::Dynamic;
+		}
+		return EMotionType::Static;
+	}
+
+	NextMotionType FromJoltMotionType(EMotionType motionType)
+	{
+		switch (motionType)
+		{
+		case EMotionType::Static: return NextMotionType::Static;
+		case EMotionType::Kinematic: return NextMotionType::Kinematic;
+		case EMotionType::Dynamic: return NextMotionType::Dynamic;
+		}
+		return NextMotionType::Static;
+	}
+
+	class FJoltMeshShape final : public NextMeshShape
+	{
+	public:
+		explicit FJoltMeshShape(MeshShapeSettings* settings) : settings_(settings) {}
+
+		RefConst<MeshShapeSettings> settings_;
+	};
+
 	constexpr float kSleepVelocityThreshold = 0.01f;
 	constexpr float kTimeBeforeSleep = 1.25f;
 	constexpr float kDynamicBoxFriction = 0.22f;
@@ -143,11 +187,11 @@ namespace
 
 		switch (motionType)
 		{
-		case EMotionType::Static:
+		case NextMotionType::Static:
 			return glm::vec4(0.35f, 0.65f, 1.0f, 1.0f);
-		case EMotionType::Kinematic:
+		case NextMotionType::Kinematic:
 			return glm::vec4(0.2f, 0.95f, 0.95f, 1.0f);
-		case EMotionType::Dynamic:
+		case NextMotionType::Dynamic:
 			return isActive
 				? glm::vec4(0.25f, 1.0f, 0.35f, 1.0f)
 				: glm::vec4(1.0f, 0.75f, 0.2f, 1.0f);
@@ -410,58 +454,17 @@ struct FNextPhysicsContext
 	MyContactListener contactListener;
 };
 
-// Accessor functions for NextCharacterController to reach Jolt internals
-JPH::PhysicsSystem* GetJoltPhysicsSystem(NextPhysics* physics);
-JPH::TempAllocator* GetJoltTempAllocator(NextPhysics* physics);
-
-// These are defined after FNextPhysicsContext so the type is complete.
-
-static FNextPhysicsContext* GetPhysicsContext(NextPhysics* physics)
-{
-    // Access via the public interface: NextPhysics stores context_ as unique_ptr.
-    // We use a small trick: NextCharacterController.cpp declares these as extern.
-    // We implement them here where FNextPhysicsContext is fully defined.
-    return nullptr; // placeholder, real impl below
-}
-
-
-// Real accessor implementations using a friend-like pattern:
-// NextPhysics exposes its context_ pointer through these free functions.
-// We store a static map from NextPhysics* -> FNextPhysicsContext* set during Start().
-#include <unordered_map>
-static std::unordered_map<NextPhysics*, FNextPhysicsContext*> sPhysicsContextMap;
-
-JPH::PhysicsSystem* GetJoltPhysicsSystem(NextPhysics* physics)
-{
-    auto it = sPhysicsContextMap.find(physics);
-    if (it != sPhysicsContextMap.end() && it->second)
-    {
-        return &it->second->physicsSystem;
-    }
-    return nullptr;
-}
-
-JPH::TempAllocator* GetJoltTempAllocator(NextPhysics* physics)
-{
-    auto it = sPhysicsContextMap.find(physics);
-    if (it != sPhysicsContextMap.end() && it->second)
-    {
-        return &it->second->tempAllocator;
-    }
-    return nullptr;
-}
-
-NextPhysics::NextPhysics()
+FJoltPhysicsBackend::FJoltPhysicsBackend()
 {
     
 }
 
-NextPhysics::~NextPhysics()
+FJoltPhysicsBackend::~FJoltPhysicsBackend()
 {
     
 }
 
-void NextPhysics::Start()
+void FJoltPhysicsBackend::Start()
 {
 	// Register allocation hook. In this example we'll just let Jolt use malloc / free but you can override these if you want (see Memory.h).
 	// This needs to be done before any other Jolt function is called.
@@ -481,7 +484,6 @@ void NextPhysics::Start()
 	RegisterTypes();
 
 	context_.reset(new FNextPhysicsContext());
-	sPhysicsContextMap[this] = context_.get();
 
 	//context_->physics_system.SetGravity(Vec3(0,-9.8f,0));
 	// The main way to interact with the bodies in the physics system is through the body interface. There is a locking and a non-locking
@@ -500,15 +502,15 @@ void NextPhysics::Start()
 	// Instead insert all new objects in batches instead of 1 at a time to keep the broad phase efficient.
 }
 
-void NextPhysics::Tick(double deltaSeconds)
+void FJoltPhysicsBackend::Tick(double deltaSeconds)
 {
     if (paused_)
     {
         return;
     }
 
-	TimeElapsed += deltaSeconds;
-	const float timeOffset = static_cast<float>( TimeElapsed - TimeSimulated );
+	timeElapsed_ += deltaSeconds;
+	const float timeOffset = static_cast<float>(timeElapsed_ - timeSimulated_);
 	const float cDeltaTime = 1.0f / 60.0f;
 
 	float shouldTick = timeOffset / cDeltaTime;
@@ -521,18 +523,19 @@ void NextPhysics::Tick(double deltaSeconds)
 	// If you take larger steps than 1 / 60th of a second you need to do multiple collision steps in order to keep the simulation stable. Do 1 collision step per 1 / 60th of a second (round up).
 	const int cCollisionSteps = glm::min(4, glm::max(1, static_cast<int>(glm::floor(timeOffset / cDeltaTime))));
 
-	TimeSimulated += cDeltaTime * cCollisionSteps;
+	timeSimulated_ += cDeltaTime * cCollisionSteps;
 
 	// Update bodies
 	BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
 	
 	for (auto& body : bodies_)
 	{
-		if (body.second.motionType == EMotionType::Dynamic)
+		if (body.second.motionType == NextMotionType::Dynamic)
 		{
-			RVec3 pos = bodyInterface.GetPosition(body.first);
-			RVec3 vel = bodyInterface.GetLinearVelocity(body.first);
-		    Quat rot = bodyInterface.GetRotation(body.first);
+			const BodyID bodyId = ToJoltBodyID(body.first);
+			RVec3 pos = bodyInterface.GetPosition(bodyId);
+			RVec3 vel = bodyInterface.GetLinearVelocity(bodyId);
+		    Quat rot = bodyInterface.GetRotation(bodyId);
 			body.second.position = glm::vec3(pos.GetX(), pos.GetY(), pos.GetZ());
 		    body.second.rotation = glm::quat(rot.GetW(), rot.GetX(), rot.GetY(), rot.GetZ());
 			body.second.velocity = glm::vec3(vel.GetX(), vel.GetY(), vel.GetZ());
@@ -548,12 +551,12 @@ void NextPhysics::Tick(double deltaSeconds)
 	context_->physicsSystem.Update(cDeltaTime, cCollisionSteps, &context_->tempAllocator, &context_->jobSystem);
 }
 
-void NextPhysics::SetPaused(bool paused)
+void FJoltPhysicsBackend::SetPaused(bool paused)
 {
     paused_ = paused;
 }
 
-FNextPhysicsBodyStats NextPhysics::GetBodyStats() const
+FNextPhysicsBodyStats FJoltPhysicsBackend::GetBodyStats() const
 {
     FNextPhysicsBodyStats stats{};
     stats.total = bodies_.size();
@@ -581,7 +584,7 @@ FNextPhysicsBodyStats NextPhysics::GetBodyStats() const
     return stats;
 }
 
-void NextPhysics::Stop()
+void FJoltPhysicsBackend::Stop()
 {
 	OnSceneDestroyed();
 	
@@ -592,24 +595,24 @@ void NextPhysics::Stop()
 	delete Factory::sInstance;
 	Factory::sInstance = nullptr;
 
-	sPhysicsContextMap.erase(this);
 	context_.reset();
 }
 
-NextBodyID NextPhysics::AddBodyInternal(FNextPhysicsBody& body, bool optimizeBroadPhase)
+NextBodyID FJoltPhysicsBackend::AddBodyInternal(FNextPhysicsBody& body, bool optimizeBroadPhase)
 {
 	bodies_[body.bodyID] = body;
 	if (optimizeBroadPhase) context_->physicsSystem.OptimizeBroadPhase();
 	return body.bodyID;
 }
 
-NextBodyID NextPhysics::CreateSphereBody(glm::vec3 position, float radius, NextMotionType motionType)
+NextBodyID FJoltPhysicsBackend::CreateSphereBody(glm::vec3 position, float radius, NextMotionType motionType)
 {
 	BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
 
 	// Now create a dynamic body to bounce on the floor
 	// Note that this uses the shorthand version of creating and adding a body to the world
-	BodyCreationSettings sphereSettings(new SphereShape(radius), RVec3(position.x, position.y, position.z), Quat::sIdentity(), motionType, NextLayers::MOVING);
+	BodyCreationSettings sphereSettings(new SphereShape(radius), RVec3(position.x, position.y, position.z),
+	                                    Quat::sIdentity(), ToJoltMotionType(motionType), NextLayers::MOVING);
 	sphereSettings.mFriction = 0.5f;
 	sphereSettings.mInertiaMultiplier = 2.0f;
 	//sphere_settings.mRestitution = 0.05f;
@@ -619,16 +622,18 @@ NextBodyID NextPhysics::CreateSphereBody(glm::vec3 position, float radius, NextM
 	// Now you can interact with the dynamic body, in this case we're going to give it a velocity.
 	// (note that if we had used CreateBody then we could have set the velocity straight on the body before adding it to the physics system)
 	//body_interface.SetLinearVelocity(body_id, Vec3(0.0f, -5.0f, 0.0f));
-	FNextPhysicsBody body { position, glm::quat(1,0,0,0), glm::vec3(0.0f, 0.0f, 0.0f), ENextBodyShape::Box, bodyId, motionType };
+	FNextPhysicsBody body { position, glm::quat(1,0,0,0), glm::vec3(0.0f), ENextBodyShape::Box,
+	                        FromJoltBodyID(bodyId), motionType };
 	return AddBodyInternal(body, true);
 }
 
-NextBodyID NextPhysics::CreateBoxBody(glm::vec3 position, glm::vec3 extent, NextMotionType motionType)
+NextBodyID FJoltPhysicsBackend::CreateBoxBody(glm::vec3 position, glm::vec3 extent, NextMotionType motionType)
 {
 	return CreateBoxBody(position, glm::quat(1, 0, 0, 0), extent, motionType);
 }
 
-NextBodyID NextPhysics::CreateBoxBody(glm::vec3 position, glm::quat rotation, glm::vec3 extent, NextMotionType motionType)
+NextBodyID FJoltPhysicsBackend::CreateBoxBody(glm::vec3 position, glm::quat rotation, glm::vec3 extent,
+                                             NextMotionType motionType)
 {
 	BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
 	BodyID bodyId(-1);
@@ -637,8 +642,9 @@ NextBodyID NextPhysics::CreateBoxBody(glm::vec3 position, glm::quat rotation, gl
 	float convexRadius = ComputeBoxConvexRadius(halfExtent);
 
 	Quat joltRot(rotation.x, rotation.y, rotation.z, rotation.w);
-	BodyCreationSettings settings(new BoxShape(halfExtent, convexRadius), RVec3(position.x, position.y, position.z), joltRot, motionType, NextLayers::MOVING);
-	if (motionType == EMotionType::Dynamic)
+	BodyCreationSettings settings(new BoxShape(halfExtent, convexRadius), RVec3(position.x, position.y, position.z),
+	                              joltRot, ToJoltMotionType(motionType), NextLayers::MOVING);
+	if (motionType == NextMotionType::Dynamic)
 	{
 		ConfigureDynamicBoxSettings(settings);
 	}
@@ -649,14 +655,23 @@ NextBodyID NextPhysics::CreateBoxBody(glm::vec3 position, glm::quat rotation, gl
 	bodyId = bodyInterface.CreateAndAddBody(settings, EActivation::Activate);
 	WakeDynamicBody(bodyInterface, bodyId);
 
-	FNextPhysicsBody body { position, rotation, glm::vec3(0.0f, 0.0f, 0.0f), ENextBodyShape::Box, bodyId, motionType };
+	FNextPhysicsBody body { position, rotation, glm::vec3(0.0f), ENextBodyShape::Box,
+	                        FromJoltBodyID(bodyId), motionType };
 	return AddBodyInternal(body, true);
 }
 
-NextBodyID NextPhysics::CreateMeshBody(NextRefConst<NextMeshShapeSettings> meshShapeSettings, glm::vec3 position, glm::quat rotation, glm::vec3 scale, NextMotionType motionType, NextObjectLayer layer)
+NextBodyID FJoltPhysicsBackend::CreateMeshBody(const NextMeshShapeHandle& meshShape, glm::vec3 position,
+                                              glm::quat rotation, glm::vec3 scale,
+                                              NextMotionType motionType, NextObjectLayer layer)
 {
 	BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
 	BodyID bodyId(-1);
+	const auto joltMeshShape = std::dynamic_pointer_cast<const FJoltMeshShape>(meshShape);
+	if (!joltMeshShape || !joltMeshShape->settings_)
+	{
+		return {};
+	}
+	const RefConst<MeshShapeSettings>& meshShapeSettings = joltMeshShape->settings_;
 	
 	const float epsilon = 0.001f;
 	bool isUniformScale = (glm::abs(scale.x - 1.0f) < epsilon && 
@@ -665,9 +680,9 @@ NextBodyID NextPhysics::CreateMeshBody(NextRefConst<NextMeshShapeSettings> meshS
 
 	BodyCreationSettings bodyCreation = isUniformScale ? BodyCreationSettings(meshShapeSettings,
 	Vec3(position.x, position.y, position.z),Quat(rotation.x, rotation.y, rotation.z, rotation.w),
-	motionType, layer): BodyCreationSettings(new ScaledShapeSettings(meshShapeSettings, Vec3(scale.x, scale.y, scale.z)),
+	ToJoltMotionType(motionType), layer): BodyCreationSettings(new ScaledShapeSettings(meshShapeSettings, Vec3(scale.x, scale.y, scale.z)),
 		Vec3(position.x, position.y, position.z), Quat(rotation.x, rotation.y, rotation.z, rotation.w),
-		motionType, layer);
+		ToJoltMotionType(motionType), layer);
 
 	//bodyCreation.mRestitution = 0.05f;
 	bodyCreation.mFriction = 0.5f;
@@ -676,11 +691,12 @@ NextBodyID NextPhysics::CreateMeshBody(NextRefConst<NextMeshShapeSettings> meshS
 	
 	bodyId = bodyInterface.CreateAndAddBody(bodyCreation, EActivation::Activate);
 
-	FNextPhysicsBody body { position, rotation, glm::vec3(0.0f, 0.0f, 0.0f), ENextBodyShape::Mesh, bodyId, motionType };
+	FNextPhysicsBody body { position, rotation, glm::vec3(0.0f), ENextBodyShape::Mesh,
+	                        FromJoltBodyID(bodyId), motionType };
 	return AddBodyInternal(body, false);
 }
 
-NextBodyID NextPhysics::CreatePlaneBody(glm::vec3 position, glm::vec3 normal, NextMotionType motionType)
+NextBodyID FJoltPhysicsBackend::CreatePlaneBody(glm::vec3 position, glm::vec3 normal, NextMotionType motionType)
 {
 	BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
 	BodyID bodyId(-1);
@@ -702,11 +718,12 @@ NextBodyID NextPhysics::CreatePlaneBody(glm::vec3 position, glm::vec3 normal, Ne
 	// Create the actual rigid body
 	bodyId = bodyInterface.CreateAndAddBody(floorSettings, EActivation::DontActivate);
 
-	FNextPhysicsBody body { position, glm::quat(1,0,0,0),glm::vec3(0.0f, 0.0f, 0.0f), ENextBodyShape::Box, bodyId, EMotionType::Static };
+	FNextPhysicsBody body { position, glm::quat(1,0,0,0), glm::vec3(0.0f), ENextBodyShape::Box,
+	                        FromJoltBodyID(bodyId), NextMotionType::Static };
 	return AddBodyInternal(body, true);
 }
 
-NextMeshShapeSettings* NextPhysics::CreateMeshShape(Assets::Model& model)
+NextMeshShapeHandle FJoltPhysicsBackend::CreateMeshShape(Assets::Model& model)
 {
 	VertexList inVertices;
 	IndexedTriangleList inTriangles;
@@ -723,20 +740,26 @@ NextMeshShapeSettings* NextPhysics::CreateMeshShape(Assets::Model& model)
 	PhysicsMaterialList materials;
 	materials.push_back(new PhysicsMaterialSimple("Material " + ConvertToString(0), Color::sGetDistinctColor(0)));
 	
-	return new MeshShapeSettings(inVertices, inTriangles, materials);
+	if (inTriangles.empty())
+	{
+		return nullptr;
+	}
+	return std::make_shared<FJoltMeshShape>(new MeshShapeSettings(inVertices, inTriangles, materials));
 }
 
-void NextPhysics::AddForceToBody(NextBodyID bodyID, const glm::vec3& force)
+void FJoltPhysicsBackend::AddForceToBody(NextBodyID bodyID, const glm::vec3& force)
 {
 	BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
 
-	bodyInterface.AddForce(bodyID, Vec3(force.x, force.y, force.z), EActivation::Activate); // Activate the body if it is sleeping
+	bodyInterface.AddForce(ToJoltBodyID(bodyID), Vec3(force.x, force.y, force.z), EActivation::Activate);
 }
 
-void NextPhysics::MoveKinematicBody(NextBodyID bodyID, const glm::vec3& position, const glm::quat& rotation, float deltaSeconds)
+void FJoltPhysicsBackend::MoveKinematicBody(NextBodyID bodyID, const glm::vec3& position,
+                                           const glm::quat& rotation, float deltaSeconds)
 {
 	BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
-	bodyInterface.MoveKinematic(bodyID, RVec3(position.x, position.y, position.z), Quat(rotation.x, rotation.y, rotation.z, rotation.w), deltaSeconds);
+	bodyInterface.MoveKinematic(ToJoltBodyID(bodyID), RVec3(position.x, position.y, position.z),
+	                           Quat(rotation.x, rotation.y, rotation.z, rotation.w), deltaSeconds);
 	if (bodies_.contains(bodyID))
 	{
 		bodies_[bodyID].position = position;
@@ -744,7 +767,8 @@ void NextPhysics::MoveKinematicBody(NextBodyID bodyID, const glm::vec3& position
 	}
 }
 
-void NextPhysics::SetBodyTransform(NextBodyID bodyID, const glm::vec3& position, const glm::quat& rotation, bool resetVelocity)
+void FJoltPhysicsBackend::SetBodyTransform(NextBodyID bodyID, const glm::vec3& position,
+                                          const glm::quat& rotation, bool resetVelocity)
 {
     if (bodyID.IsInvalid())
     {
@@ -752,17 +776,18 @@ void NextPhysics::SetBodyTransform(NextBodyID bodyID, const glm::vec3& position,
     }
 
 	BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
+    const BodyID joltBodyId = ToJoltBodyID(bodyID);
     bodyInterface.SetPositionAndRotationWhenChanged(
-        bodyID,
+        joltBodyId,
         RVec3(position.x, position.y, position.z),
         Quat(rotation.x, rotation.y, rotation.z, rotation.w),
         EActivation::Activate);
 
-    if (resetVelocity && bodyInterface.GetMotionType(bodyID) != EMotionType::Static)
+    if (resetVelocity && bodyInterface.GetMotionType(joltBodyId) != EMotionType::Static)
     {
-        bodyInterface.SetLinearAndAngularVelocity(bodyID, Vec3::sZero(), Vec3::sZero());
+        bodyInterface.SetLinearAndAngularVelocity(joltBodyId, Vec3::sZero(), Vec3::sZero());
     }
-	WakeDynamicBody(bodyInterface, bodyID);
+	WakeDynamicBody(bodyInterface, joltBodyId);
 
     if (bodies_.contains(bodyID))
     {
@@ -775,7 +800,8 @@ void NextPhysics::SetBodyTransform(NextBodyID bodyID, const glm::vec3& position,
     }
 }
 
-void NextPhysics::SetBodyVelocity(NextBodyID bodyID, const glm::vec3& linearVelocity, const glm::vec3& angularVelocity)
+void FJoltPhysicsBackend::SetBodyVelocity(NextBodyID bodyID, const glm::vec3& linearVelocity,
+                                         const glm::vec3& angularVelocity)
 {
     if (bodyID.IsInvalid())
     {
@@ -783,16 +809,17 @@ void NextPhysics::SetBodyVelocity(NextBodyID bodyID, const glm::vec3& linearVelo
     }
 
     BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
-    if (bodyInterface.GetMotionType(bodyID) == EMotionType::Static)
+    const BodyID joltBodyId = ToJoltBodyID(bodyID);
+    if (bodyInterface.GetMotionType(joltBodyId) == EMotionType::Static)
     {
         return;
     }
 
     bodyInterface.SetLinearAndAngularVelocity(
-        bodyID,
+        joltBodyId,
         Vec3(linearVelocity.x, linearVelocity.y, linearVelocity.z),
         Vec3(angularVelocity.x, angularVelocity.y, angularVelocity.z));
-	WakeDynamicBody(bodyInterface, bodyID);
+	WakeDynamicBody(bodyInterface, joltBodyId);
 
     if (bodies_.contains(bodyID))
     {
@@ -800,7 +827,7 @@ void NextPhysics::SetBodyVelocity(NextBodyID bodyID, const glm::vec3& linearVelo
     }
 }
 
-FNextPhysicsBody* NextPhysics::GetBody(NextBodyID bodyID)
+FNextPhysicsBody* FJoltPhysicsBackend::GetBody(NextBodyID bodyID)
 {
 	if ( bodies_.contains(bodyID) )
 	{
@@ -809,7 +836,7 @@ FNextPhysicsBody* NextPhysics::GetBody(NextBodyID bodyID)
 	return nullptr;
 }
 
-FNextPhysicsDebugState NextPhysics::GetBodyDebugState(NextBodyID bodyID) const
+FNextPhysicsDebugState FJoltPhysicsBackend::GetBodyDebugState(NextBodyID bodyID) const
 {
 	FNextPhysicsDebugState state;
 	if (!context_ || bodyID.IsInvalid())
@@ -818,53 +845,55 @@ FNextPhysicsDebugState NextPhysics::GetBodyDebugState(NextBodyID bodyID) const
 	}
 
 	BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
-	if (!bodyInterface.IsAdded(bodyID))
+	const BodyID joltBodyId = ToJoltBodyID(bodyID);
+	if (!bodyInterface.IsAdded(joltBodyId))
 	{
 		return state;
 	}
 
-	state.motionType = bodyInterface.GetMotionType(bodyID);
-	state.objectLayer = bodyInterface.GetObjectLayer(bodyID);
-	state.isActive = bodyInterface.IsActive(bodyID);
+	state.motionType = FromJoltMotionType(bodyInterface.GetMotionType(joltBodyId));
+	state.objectLayer = bodyInterface.GetObjectLayer(joltBodyId);
+	state.isActive = bodyInterface.IsActive(joltBodyId);
 	state.isValid = true;
 	return state;
 }
 
-glm::vec4 NextPhysics::GetBodyDebugColor(NextBodyID bodyID) const
+glm::vec4 FJoltPhysicsBackend::GetBodyDebugColor(NextBodyID bodyID) const
 {
 	const FNextPhysicsDebugState state = GetBodyDebugState(bodyID);
 	return SelectDebugBodyColor(state.motionType, state.objectLayer, state.isActive, state.isValid);
 }
 
-void NextPhysics::RemoveBody(NextBodyID bodyID)
+void FJoltPhysicsBackend::RemoveBody(NextBodyID bodyID)
 {
     BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
-    bodyInterface.RemoveBody(bodyID);
+    bodyInterface.RemoveBody(ToJoltBodyID(bodyID));
     bodies_.erase(bodyID);
 }
 
-void NextPhysics::SetBodyActive(NextBodyID bodyID, bool active)
+void FJoltPhysicsBackend::SetBodyActive(NextBodyID bodyID, bool active)
 {
     if (bodyID.IsInvalid()) return;
 
     BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
-    bool isAdded = bodyInterface.IsAdded(bodyID);
+    const BodyID joltBodyId = ToJoltBodyID(bodyID);
+    bool isAdded = bodyInterface.IsAdded(joltBodyId);
 
     if (active && isAdded)
     {
         // Dynamic and kinematic bodies both belong in the moving broadphase.
         // Kinematic bodies in NON_MOVING can be moved, but they won't reliably push sleeping dynamic bodies.
-        EMotionType mt = bodyInterface.GetMotionType(bodyID);
+        EMotionType mt = bodyInterface.GetMotionType(joltBodyId);
         ObjectLayer targetLayer = (mt == EMotionType::Static) ? NextLayers::NON_MOVING : NextLayers::MOVING;
-        bodyInterface.SetObjectLayer(bodyID, targetLayer);
+        bodyInterface.SetObjectLayer(joltBodyId, targetLayer);
     }
     else if (!active && isAdded)
     {
-        bodyInterface.SetObjectLayer(bodyID, NextLayers::HIDDEN);
+        bodyInterface.SetObjectLayer(joltBodyId, NextLayers::HIDDEN);
     }
 }
 
-void NextPhysics::DrawDebugBodies() const
+void FJoltPhysicsBackend::DrawDebugBodies() const
 {
 	if (!context_)
 	{
@@ -881,12 +910,13 @@ void NextPhysics::DrawDebugBodies() const
 			continue;
 		}
 
-		if (!bodyInterface.IsAdded(bodyId))
+		const BodyID joltBodyId = ToJoltBodyID(bodyId);
+		if (!bodyInterface.IsAdded(joltBodyId))
 		{
 			continue;
 		}
 
-		const TransformedShape transformedShape = bodyInterface.GetTransformedShape(bodyId);
+		const TransformedShape transformedShape = bodyInterface.GetTransformedShape(joltBodyId);
 		const AABox worldBounds = transformedShape.GetWorldSpaceBounds();
 		if (!worldBounds.IsValid() || transformedShape.mShape == nullptr)
 		{
@@ -906,22 +936,145 @@ void NextPhysics::DrawDebugBodies() const
 	}
 }
 
-void NextPhysics::OnSceneStarted()
+void FJoltPhysicsBackend::OnSceneStarted()
 {
-	TimeElapsed = 0;
-	TimeSimulated = 0;
+	timeElapsed_ = 0;
+	timeSimulated_ = 0;
 }
 
-void NextPhysics::OnSceneDestroyed()
+void FJoltPhysicsBackend::OnSceneDestroyed()
 {
+	if (!context_)
+	{
+		return;
+	}
 	BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
 	
 	for (auto& body : bodies_)
 	{
 		if (body.first.IsInvalid()) continue;
-		bodyInterface.RemoveBody(body.first);
-		bodyInterface.DestroyBody(body.first);
+		const BodyID joltBodyId = ToJoltBodyID(body.first);
+		bodyInterface.RemoveBody(joltBodyId);
+		bodyInterface.DestroyBody(joltBodyId);
 	}
 	
 	bodies_.clear();
+}
+
+namespace
+{
+	class FJoltCharacterControllerBackend final : public INextCharacterControllerBackend
+	{
+	public:
+		FJoltCharacterControllerBackend(PhysicsSystem& physicsSystem, TempAllocator& tempAllocator,
+		                                const FCharacterControllerSettings& settings)
+			: physicsSystem_(physicsSystem), tempAllocator_(tempAllocator)
+		{
+			const float cylinderHalfHeight =
+				(settings.height - 2.0f * settings.radius) * 0.5f;
+			RefConst<Shape> capsule = new CapsuleShape(std::max(cylinderHalfHeight, 0.01f), settings.radius);
+			const float shapeOffsetY = settings.height * 0.5f;
+			RefConst<Shape> shape = new RotatedTranslatedShape(
+				Vec3(0, shapeOffsetY, 0), Quat::sIdentity(), capsule);
+
+			CharacterVirtualSettings characterSettings;
+			characterSettings.mShape = shape;
+			characterSettings.mMaxSlopeAngle = DegreesToRadians(settings.maxSlopeAngle);
+			characterSettings.mMaxStrength = settings.maxStrength;
+			characterSettings.mCharacterPadding = settings.padding;
+			characterSettings.mPenetrationRecoverySpeed = 1.0f;
+			characterSettings.mPredictiveContactDistance = 0.1f;
+			characterSettings.mSupportingVolume = Plane(Vec3::sAxisY(), -settings.radius);
+			characterSettings.mMass = settings.mass;
+
+			character_ = new CharacterVirtual(
+				&characterSettings,
+				RVec3(settings.initialPosition.x, settings.initialPosition.y, settings.initialPosition.z),
+				Quat::sIdentity(), 0, &physicsSystem_);
+			updateSettings_.mStickToFloorStepDown = Vec3(0, -settings.maxStepHeight, 0);
+			updateSettings_.mWalkStairsStepUp = Vec3(0, settings.maxStepHeight, 0);
+		}
+
+		void Update(const glm::vec3& inputDirection, float speed, bool jump, float deltaSeconds) override
+		{
+			if (!character_)
+			{
+				return;
+			}
+
+			constexpr float gravity = -15.0f;
+			constexpr float jumpSpeed = 6.0f;
+			const bool onGround = character_->GetGroundState() == CharacterVirtual::EGroundState::OnGround;
+			float verticalVelocity = velocity_.y;
+			if (onGround)
+			{
+				verticalVelocity = jump ? jumpSpeed : 0.0f;
+			}
+			else
+			{
+				verticalVelocity += gravity * deltaSeconds;
+			}
+
+			const Vec3 newVelocity(inputDirection.x * speed, verticalVelocity, inputDirection.z * speed);
+			character_->SetLinearVelocity(newVelocity);
+			velocity_ = glm::vec3(newVelocity.GetX(), newVelocity.GetY(), newVelocity.GetZ());
+
+			const BroadPhaseLayerFilter& broadPhaseFilter =
+				physicsSystem_.GetDefaultBroadPhaseLayerFilter(NextLayers::MOVING);
+			const ObjectLayerFilter& objectLayerFilter =
+				physicsSystem_.GetDefaultLayerFilter(NextLayers::MOVING);
+			character_->ExtendedUpdate(deltaSeconds, Vec3(0, gravity, 0), updateSettings_,
+			                           broadPhaseFilter, objectLayerFilter, {}, {}, tempAllocator_);
+		}
+
+		glm::vec3 GetPosition() const override
+		{
+			if (!character_)
+			{
+				return glm::vec3(0.0f);
+			}
+			const RVec3 position = character_->GetPosition();
+			return glm::vec3(static_cast<float>(position.GetX()),
+			                 static_cast<float>(position.GetY()),
+			                 static_cast<float>(position.GetZ()));
+		}
+
+		glm::vec3 GetLinearVelocity() const override { return velocity_; }
+
+		ECharacterGroundState GetGroundState() const override
+		{
+			if (!character_)
+			{
+				return ECharacterGroundState::InAir;
+			}
+			switch (character_->GetGroundState())
+			{
+			case CharacterVirtual::EGroundState::OnGround: return ECharacterGroundState::OnGround;
+			case CharacterVirtual::EGroundState::OnSteepGround: return ECharacterGroundState::OnSteepGround;
+			case CharacterVirtual::EGroundState::NotSupported: return ECharacterGroundState::NotSupported;
+			case CharacterVirtual::EGroundState::InAir: return ECharacterGroundState::InAir;
+			}
+			return ECharacterGroundState::InAir;
+		}
+
+		bool IsValid() const override { return character_ != nullptr; }
+
+	private:
+		PhysicsSystem& physicsSystem_;
+		TempAllocator& tempAllocator_;
+		Ref<CharacterVirtual> character_;
+		CharacterVirtual::ExtendedUpdateSettings updateSettings_;
+		glm::vec3 velocity_{0.0f};
+	};
+}
+
+std::unique_ptr<INextCharacterControllerBackend> FJoltPhysicsBackend::CreateCharacterController(
+	const FCharacterControllerSettings& settings)
+{
+	if (!context_)
+	{
+		return nullptr;
+	}
+	return std::make_unique<FJoltCharacterControllerBackend>(
+		context_->physicsSystem, context_->tempAllocator, settings);
 }

@@ -4,30 +4,7 @@
 #include <glm/glm.hpp>
 #include <glm/detail/type_quat.hpp>
 
-#include "Engine/Runtime/RuntimeFwd.hpp"
-#include "Engine/Runtime/Subsystems/NextPhysicsTypes.h"
-
-struct FNextCharacterControllerContext;
-
-enum class ECharacterGroundState
-{
-    OnGround,
-    OnSteepGround,
-    NotSupported,
-    InAir
-};
-
-struct FCharacterControllerSettings
-{
-    float height = 1.75f;          // capsule total height (including caps)
-    float radius = 0.3f;           // capsule radius
-    float maxSlopeAngle = 50.0f;   // degrees
-    float maxStepHeight = 0.35f;   // step-up height
-    float mass = 70.0f;
-    float maxStrength = 100.0f;    // push force on dynamic bodies
-    float padding = 0.02f;         // character padding
-    glm::vec3 initialPosition{0.0f, 1.0f, 0.0f};
-};
+#include "Engine/Runtime/Subsystems/NextPhysics.h"
 
 class NextCharacterController final
 {
@@ -58,8 +35,6 @@ public:
     bool IsValid() const;
 
 private:
-    std::unique_ptr<FNextCharacterControllerContext> context_;
-    NextPhysics* physics_ = nullptr;
-    glm::vec3 velocity_{0.0f};
+    std::unique_ptr<INextCharacterControllerBackend> backend_;
     FCharacterControllerSettings settings_{};
 };

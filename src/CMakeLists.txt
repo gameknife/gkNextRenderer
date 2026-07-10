@@ -428,9 +428,6 @@ function(gk_link_engine_feature_dependencies target)
 		target_compile_definitions(${target} PUBLIC WITH_SUPERLUMINAL=0)
 	endif()
 
-	target_include_directories(${target} PUBLIC $<TARGET_PROPERTY:Jolt::Jolt,INTERFACE_INCLUDE_DIRECTORIES>)
-	target_link_libraries(${target} PRIVATE Jolt::Jolt )
-
 	target_link_libraries(${target} PRIVATE ozz )
 
 	target_link_libraries(${target} PRIVATE KTX::ktx )
@@ -581,6 +578,9 @@ foreach(target IN LISTS AllTargets)
 		if ( TARGET NextAudio AND _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager AND NOT ${target} STREQUAL gkNextUnitTests AND NOT "${target}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
 		target_link_libraries(${target} PRIVATE NextAudio)
 		endif()
+		if ( TARGET NextPhysics AND _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager AND NOT ${target} STREQUAL gkNextUnitTests AND NOT "${target}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
+		target_link_libraries(${target} PRIVATE NextPhysics)
+		endif()
 		# DesktopMain installs the agent script driver (gnb shot / gnb validate) for every program.
 		if ( TARGET AgentDriver AND _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager AND NOT ${target} STREQUAL gkNextUnitTests AND NOT "${target}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
 		target_link_libraries(${target} PRIVATE AgentDriver)
@@ -697,6 +697,18 @@ if ( TARGET NextQuickJS )
 	endforeach()
 endif()
 
+if ( TARGET NextPhysics OR ANDROID )
+	find_package(Jolt CONFIG REQUIRED)
+endif()
+if ( TARGET NextPhysics )
+	target_include_directories(NextPhysics PRIVATE $<TARGET_PROPERTY:Jolt::Jolt,INTERFACE_INCLUDE_DIRECTORIES>)
+	target_link_libraries(NextPhysics PRIVATE Jolt::Jolt)
+endif()
+if ( ANDROID )
+	target_include_directories(gkNextRenderer PRIVATE $<TARGET_PROPERTY:Jolt::Jolt,INTERFACE_INCLUDE_DIRECTORIES>)
+	target_link_libraries(gkNextRenderer PRIVATE Jolt::Jolt)
+endif()
+
 # Optional loader modules: linked only by the applications that use them.
 if ( TARGET LDrawLoader )
 	foreach(t gkNextRenderer gkNextVisualTest gkNextStillBenchmark gkNextMotionBenchmark gkNextEditor BrickPlayer gkNextUnitTests)
@@ -784,7 +796,7 @@ endif()
 
 # Test Target
 if ( NOT ANDROID AND NOT IOS )
-target_link_libraries(gkNextUnitTests PRIVATE NextGameplay gkNextEngine Catch2::Catch2WithMain)
+target_link_libraries(gkNextUnitTests PRIVATE NextGameplay NextPhysics gkNextEngine Catch2::Catch2WithMain)
 target_include_directories(gkNextUnitTests PRIVATE Application/Game/NextRA)
 set_target_properties(gkNextUnitTests PROPERTIES FOLDER "Tests")
 endif()

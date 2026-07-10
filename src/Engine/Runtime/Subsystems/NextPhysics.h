@@ -7,8 +7,6 @@
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Runtime/Subsystems/NextPhysicsTypes.h"
 
-struct FNextPhysicsContext;
-
 enum class ENextBodyShape
 {
     Box,
@@ -49,52 +47,81 @@ struct FNextPhysicsBodyStats
     size_t staticBodies = 0;
 };
 
-class NextPhysics final
+enum class ECharacterGroundState
+{
+    OnGround,
+    OnSteepGround,
+    NotSupported,
+    InAir,
+};
+
+struct FCharacterControllerSettings
+{
+    float height = 1.75f;
+    float radius = 0.3f;
+    float maxSlopeAngle = 50.0f;
+    float maxStepHeight = 0.35f;
+    float mass = 70.0f;
+    float maxStrength = 100.0f;
+    float padding = 0.02f;
+    glm::vec3 initialPosition{0.0f, 1.0f, 0.0f};
+};
+
+class INextCharacterControllerBackend
+{
+public:
+    virtual ~INextCharacterControllerBackend() = default;
+    virtual void Update(const glm::vec3& inputDirection, float speed, bool jump, float deltaSeconds) = 0;
+    virtual glm::vec3 GetPosition() const = 0;
+    virtual glm::vec3 GetLinearVelocity() const = 0;
+    virtual ECharacterGroundState GetGroundState() const = 0;
+    virtual bool IsValid() const = 0;
+};
+
+class NextPhysics
 {
 public:
     GK_NON_COPIABLE(NextPhysics)
 
-    NextPhysics();
-    ~NextPhysics();
+    NextPhysics() = default;
+    virtual ~NextPhysics() = default;
 
-    void Start();
-    void Tick(double DeltaSeconds);
-    void Stop();
-    void SetPaused(bool paused);
-    bool IsPaused() const { return paused_; }
+    virtual void Start() = 0;
+    virtual void Tick(double deltaSeconds) = 0;
+    virtual void Stop() = 0;
+    virtual void SetPaused(bool paused) = 0;
+    virtual bool IsPaused() const = 0;
     
-    NextBodyID CreateSphereBody(glm::vec3 position, float radius, NextMotionType motionType);
-    NextBodyID CreateBoxBody(glm::vec3 position, glm::vec3 extent, NextMotionType motionType);
-    NextBodyID CreateBoxBody(glm::vec3 position, glm::quat rotation, glm::vec3 extent, NextMotionType motionType);
-    NextBodyID CreateMeshBody(NextRefConst<NextMeshShapeSettings> meshShapeSettings, glm::vec3 position, glm::quat rotation, glm::vec3 scale, NextMotionType motionType, NextObjectLayer layer);
-    NextBodyID CreatePlaneBody(glm::vec3 position, glm::vec3 normal, NextMotionType motionType);
-    NextMeshShapeSettings* CreateMeshShape(Assets::Model& model);
+    virtual NextBodyID CreateSphereBody(glm::vec3 position, float radius, NextMotionType motionType) = 0;
+    virtual NextBodyID CreateBoxBody(glm::vec3 position, glm::vec3 extent, NextMotionType motionType) = 0;
+    virtual NextBodyID CreateBoxBody(glm::vec3 position, glm::quat rotation, glm::vec3 extent,
+                                     NextMotionType motionType) = 0;
+    virtual NextBodyID CreateMeshBody(const NextMeshShapeHandle& meshShape, glm::vec3 position,
+                                      glm::quat rotation, glm::vec3 scale, NextMotionType motionType,
+                                      NextObjectLayer layer) = 0;
+    virtual NextBodyID CreatePlaneBody(glm::vec3 position, glm::vec3 normal, NextMotionType motionType) = 0;
+    virtual NextMeshShapeHandle CreateMeshShape(Assets::Model& model) = 0;
 
-    void AddForceToBody(NextBodyID bodyID, const glm::vec3& force);
+    virtual void AddForceToBody(NextBodyID bodyID, const glm::vec3& force) = 0;
 
-    void MoveKinematicBody(NextBodyID bodyID, const glm::vec3& position, const glm::quat& rotation, float deltaSeconds);
-    void SetBodyTransform(NextBodyID bodyID, const glm::vec3& position, const glm::quat& rotation, bool resetVelocity);
-    void SetBodyVelocity(NextBodyID bodyID, const glm::vec3& linearVelocity, const glm::vec3& angularVelocity);
+    virtual void MoveKinematicBody(NextBodyID bodyID, const glm::vec3& position,
+                                   const glm::quat& rotation, float deltaSeconds) = 0;
+    virtual void SetBodyTransform(NextBodyID bodyID, const glm::vec3& position,
+                                  const glm::quat& rotation, bool resetVelocity) = 0;
+    virtual void SetBodyVelocity(NextBodyID bodyID, const glm::vec3& linearVelocity,
+                                 const glm::vec3& angularVelocity) = 0;
 
-    FNextPhysicsBody* GetBody(NextBodyID bodyID);
-    FNextPhysicsBodyStats GetBodyStats() const;
-    FNextPhysicsDebugState GetBodyDebugState(NextBodyID bodyID) const;
-    glm::vec4 GetBodyDebugColor(NextBodyID bodyID) const;
-    void RemoveBody(NextBodyID bodyID);
+    virtual FNextPhysicsBody* GetBody(NextBodyID bodyID) = 0;
+    virtual FNextPhysicsBodyStats GetBodyStats() const = 0;
+    virtual FNextPhysicsDebugState GetBodyDebugState(NextBodyID bodyID) const = 0;
+    virtual glm::vec4 GetBodyDebugColor(NextBodyID bodyID) const = 0;
+    virtual void RemoveBody(NextBodyID bodyID) = 0;
 
-    void SetBodyActive(NextBodyID bodyID, bool active);
-    void DrawDebugBodies() const;
+    virtual void SetBodyActive(NextBodyID bodyID, bool active) = 0;
+    virtual void DrawDebugBodies() const = 0;
 
-    void OnSceneStarted();
-    void OnSceneDestroyed();
-private:
-
-    NextBodyID AddBodyInternal(FNextPhysicsBody& body, bool optimizeBroadPhase);
-    
-    std::unique_ptr<FNextPhysicsContext> context_;
-    std::unordered_map<NextBodyID, FNextPhysicsBody> bodies_;
-
-    double TimeElapsed {};
-    double TimeSimulated {};
-    bool paused_ = false;
+    virtual void OnSceneStarted() = 0;
+    virtual void OnSceneDestroyed() = 0;
+    virtual std::unique_ptr<INextCharacterControllerBackend> CreateCharacterController(
+        const FCharacterControllerSettings& settings) = 0;
 };

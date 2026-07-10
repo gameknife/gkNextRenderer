@@ -6,6 +6,8 @@
 #include "Gameplay/Character/CharacterActor.h"
 #include "Gameplay/Components/AIAgentComponent.h"
 
+#include <random>
+
 class CharacterDemoAIController
 {
 public:

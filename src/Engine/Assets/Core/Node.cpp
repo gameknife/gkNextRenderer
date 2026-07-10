@@ -1,4 +1,5 @@
 #include "Engine/Assets/Core/Node.h"
+#include "Engine/Runtime/Subsystems/NextPhysics.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
@@ -141,7 +142,8 @@ namespace Assets
         auto* physComp = physicsComponent_;
         if (physComp && physComp->GetMobility() == ENodeMobility::Dynamic)
         {
-            auto body = NextEngine::GetInstance()->GetPhysicsEngine()->GetBody(physComp->GetPhysicsBody());
+            NextPhysics* physics = NextEngine::GetInstance()->GetPhysicsEngine();
+            auto body = physics ? physics->GetBody(physComp->GetPhysicsBody()) : nullptr;
             if (body != nullptr)
             {
                 // Physics body position is the center of mass in world space.

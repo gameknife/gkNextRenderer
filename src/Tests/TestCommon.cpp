@@ -1,6 +1,7 @@
 #include "TestCommon.hpp"
 
 #include "Modules/GltfLoader/GltfModule.hpp"
+#include "Modules/NextPhysics/NextPhysicsModule.hpp"
 
 #include <thread>
 #include <vector>
@@ -35,6 +36,7 @@ EngineTestFixture::EngineTestFixture()
     GOption = options_.get();
 
     engine_ = std::make_unique<NextEngine>(*GOption);
+    Modules::Physics::Install(*engine_);
     engine_->Start();
     
     // Warm up a bit to ensure resources are initialized

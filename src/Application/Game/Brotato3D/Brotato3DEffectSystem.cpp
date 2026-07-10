@@ -7,6 +7,7 @@
 #include "Brotato3DPcgGenerator.hpp"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysics.h"
 #include "Engine/Runtime/Scene/SceneBuilder.h"
 
 using namespace Brotato3DUtil;

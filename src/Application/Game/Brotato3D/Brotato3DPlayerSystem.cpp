@@ -3,6 +3,7 @@
 
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysics.h"
 #include <spdlog/spdlog.h>
 
 #include "Brotato3DAudio.hpp"

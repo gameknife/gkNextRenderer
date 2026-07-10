@@ -6,8 +6,6 @@
 
 #include <array>
 
-struct FNextPhysicsBody;
-
 namespace Assets
 {
     struct Camera final

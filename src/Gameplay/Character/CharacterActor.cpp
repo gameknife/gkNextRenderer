@@ -4,6 +4,7 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Gameplay/Utilities/SceneNodeUtils.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
+#include "Engine/Runtime/Subsystems/NextPhysics.h"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 #include "Engine/Runtime/Scene/SceneBuilder.h"
 

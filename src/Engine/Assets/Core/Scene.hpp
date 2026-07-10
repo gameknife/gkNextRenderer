@@ -371,7 +371,7 @@ namespace Assets
 
         glm::vec3 sceneAABBMin_{FLT_MAX, FLT_MAX, FLT_MAX};
         glm::vec3 sceneAABBMax_{-FLT_MAX, -FLT_MAX, -FLT_MAX};
-        std::vector<NextRefConst<NextMeshShapeSettings>> cachedMeshShapes_;
+        std::vector<NextMeshShapeHandle> cachedMeshShapes_;
 
         VkDeviceAddress skinnedVerticesAddr_ = 0;
         VkDeviceAddress jointMatricesAddr_ = 0;

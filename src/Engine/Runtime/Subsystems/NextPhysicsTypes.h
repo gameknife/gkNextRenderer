@@ -1,19 +1,45 @@
 #pragma once
 
-#include <Jolt/Jolt.h>
-#include <Jolt/Core/Reference.h>
-#include <Jolt/Physics/Body/BodyID.h>
-#include <Jolt/Physics/Body/MotionType.h>
-#include <Jolt/Physics/Collision/ObjectLayer.h>
-#include <Jolt/Physics/Collision/Shape/MeshShape.h>
+#include <compare>
+#include <cstdint>
+#include <functional>
+#include <memory>
 
-using NextBodyID = JPH::BodyID;
-using NextMotionType = JPH::EMotionType;
-using NextObjectLayer = JPH::ObjectLayer;
-using NextMeshShapeSettings = JPH::MeshShapeSettings;
+class NextBodyID final
+{
+public:
+    static constexpr uint32_t invalidValue = 0xffffffffu;
+    static constexpr uint32_t maxBodyIndex = 0x7fffffu;
 
-template <typename T>
-using NextRefConst = JPH::RefConst<T>;
+    constexpr NextBodyID() = default;
+    explicit constexpr NextBodyID(uint32_t value) : value_(value) {}
+
+    constexpr bool IsInvalid() const { return value_ == invalidValue; }
+    constexpr uint32_t GetIndex() const { return value_ & maxBodyIndex; }
+    constexpr uint32_t Value() const { return value_; }
+
+    auto operator<=>(const NextBodyID&) const = default;
+
+private:
+    uint32_t value_ = invalidValue;
+};
+
+enum class NextMotionType : uint8_t
+{
+    Static,
+    Kinematic,
+    Dynamic,
+};
+
+using NextObjectLayer = uint16_t;
+
+class NextMeshShape
+{
+public:
+    virtual ~NextMeshShape() = default;
+};
+
+using NextMeshShapeHandle = std::shared_ptr<const NextMeshShape>;
 
 
 namespace NextLayers {
@@ -22,3 +48,12 @@ namespace NextLayers {
     static constexpr NextObjectLayer HIDDEN = 2;
     static constexpr NextObjectLayer NUM_LAYERS = 3;
 }
+
+template <>
+struct std::hash<NextBodyID>
+{
+    size_t operator()(const NextBodyID& bodyId) const noexcept
+    {
+        return std::hash<uint32_t>{}(bodyId.Value());
+    }
+};

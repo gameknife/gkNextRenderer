@@ -5,6 +5,7 @@
 #include "Modules/GltfLoader/GltfModule.hpp"
 #include "Modules/LiveCoding/LiveCodingModule.hpp"
 #include "Modules/NextAudio/NextAudioModule.hpp"
+#include "Modules/NextPhysics/NextPhysicsModule.hpp"
 #include "Modules/NextRemote/NextRemoteModule.hpp"
 
 #include <fmt/format.h>
@@ -94,6 +95,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     GApplication.reset( new NextEngine(*GOption) );
     GApplication->SetDebugUiProvider(&debugUiProvider);
     Modules::Audio::Install(*GApplication);
+    Modules::Physics::Install(*GApplication);
     Modules::LiveCoding::Install(*GApplication);
     Modules::Gltf::Register();
     if (GOption->RemoteMode)

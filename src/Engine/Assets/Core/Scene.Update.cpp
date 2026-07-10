@@ -112,8 +112,11 @@ namespace Assets
                                 NextBodyID bodyID = phys->GetPhysicsBody();
                                 if (!bodyID.IsInvalid())
                                 {
-                                    NextEngine::GetInstance()->GetPhysicsEngine()->MoveKinematicBody(
-                                        bodyID, n->WorldTranslation(), n->WorldRotation(), 0.01f);
+                                    if (NextPhysics* physics = NextEngine::GetInstance()->GetPhysicsEngine())
+                                    {
+                                        physics->MoveKinematicBody(
+                                            bodyID, n->WorldTranslation(), n->WorldRotation(), 0.01f);
+                                    }
                                 }
                             }
 

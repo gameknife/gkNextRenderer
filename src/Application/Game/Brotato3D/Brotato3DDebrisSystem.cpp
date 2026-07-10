@@ -6,6 +6,7 @@
 #include "Brotato3DAudio.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
+#include "Engine/Runtime/Subsystems/NextPhysics.h"
 #include "Engine/Runtime/Scene/SceneBuilder.h"
 
 #include <spdlog/spdlog.h>

@@ -7,6 +7,7 @@
 #include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
 #include "Modules/LiveCoding/LiveCodingModule.hpp"
 #include "Modules/NextAudio/NextAudioModule.hpp"
+#include "Modules/NextPhysics/NextPhysicsModule.hpp"
 #include "Modules/NextRemote/NextRemoteModule.hpp"
 #include "Modules/NextStreamline/NextStreamlineModule.hpp"
 #if GK_WITH_TUI
@@ -100,6 +101,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     GApplication.reset( new NextEngine(*GOption) );
     GApplication->SetDebugUiProvider(&debugUiProvider);
     Modules::Audio::Install(*GApplication);
+    Modules::Physics::Install(*GApplication);
     Modules::LiveCoding::Install(*GApplication);
     Modules::AgentDriver::Install(*GApplication);
     Modules::Gltf::Register();

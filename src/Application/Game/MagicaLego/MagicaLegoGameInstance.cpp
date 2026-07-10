@@ -6,6 +6,7 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysics.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Utilities/FileHelper.hpp"

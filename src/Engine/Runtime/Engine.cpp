@@ -475,9 +475,15 @@ void NextEngine::Start()
     }
 #endif
     
-    // physics
-    services_.physics.reset(new NextPhysics());
-    services_.physics->Start();
+    // Optional physics module.
+    if (physicsFactory_)
+    {
+        services_.physics = physicsFactory_();
+        if (services_.physics)
+        {
+            services_.physics->Start();
+        }
+    }
 
     // Optional audio module.
     if (audioFactory_)

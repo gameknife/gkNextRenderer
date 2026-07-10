@@ -221,6 +221,11 @@ public:
     {
         audioFactory_ = std::move(factory);
     }
+
+    void SetPhysicsFactory(std::function<std::unique_ptr<NextPhysics>()> factory)
+    {
+        physicsFactory_ = std::move(factory);
+    }
     
     void SetExternalService(const std::string& key, std::shared_ptr<void> service)
     {
@@ -400,6 +405,7 @@ private:
     Runtime::ShaderHotReloaderFactory shaderHotReloaderFactory_;
     Runtime::Agent::AgentDriverFactory agentDriverFactory_;
     std::function<std::unique_ptr<NextAudio>()> audioFactory_;
+    std::function<std::unique_ptr<NextPhysics>()> physicsFactory_;
     std::unique_ptr<Runtime::IScriptRuntime> scriptRuntime_;
     FRuntimeServices services_{};
     Runtime::IDebugUiProvider* debugUiProvider_ = nullptr;

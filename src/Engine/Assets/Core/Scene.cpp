@@ -635,12 +635,7 @@ namespace Assets
                 NextObjectLayer layer =
                     mobility == Node::ENodeMobility::Static ? NextLayers::NON_MOVING : NextLayers::MOVING;
 
-                bool validShape = false;
-                if (cachedMeshShapes_[render->GetModelId()].GetPtr() &&
-                    cachedMeshShapes_[render->GetModelId()]->mIndexedTriangles.size() > 0)
-                    validShape = true;
-
-                if (validShape)
+                if (cachedMeshShapes_[render->GetModelId()])
                 {
                     NextBodyID id = physicsEngine->CreateMeshBody(cachedMeshShapes_[render->GetModelId()],
                                                                   node->WorldTranslation(), node->WorldRotation(),

@@ -12,6 +12,7 @@
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysics.h"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Editor/FontLoader.h"
 #include "Modules/DevTools/ProfessionalUI.hpp"

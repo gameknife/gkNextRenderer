@@ -222,7 +222,10 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
     if (!request.append)
     {
         scene_->CleanUp();
-        services_.physics->OnSceneDestroyed();
+        if (services_.physics)
+        {
+            services_.physics->OnSceneDestroyed();
+        }
         Assets::GlobalTexturePool::GetInstance()->FreeTransientTextures();
     }
 
@@ -238,7 +241,10 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
             if (!request.append)
             {
                 gameInstance_->OnSceneUnloaded();
-                services_.physics->OnSceneStarted();
+                if (services_.physics)
+                {
+                    services_.physics->OnSceneStarted();
+                }
 
                 scene_->Reload(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
                 scene_->SetEnvSettings(*ctx.cameraState);

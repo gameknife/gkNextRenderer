@@ -1,7 +1,7 @@
 #pragma once
 #include "Engine/Assets/Core/Component.h"
 #include "Engine/Runtime/Reflection/ReflectionMacros.h"
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
+#include "Engine/Runtime/Subsystems/NextPhysicsTypes.h"
 #include <glm/glm.hpp>
 #include <string>
 

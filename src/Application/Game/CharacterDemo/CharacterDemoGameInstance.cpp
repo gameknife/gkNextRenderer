@@ -19,6 +19,7 @@
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 #include "Engine/Runtime/Engine.hpp"
+#include "Engine/Runtime/Subsystems/NextPhysics.h"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.h"
 #include "Engine/Runtime/Scene/NodeUtils.h"

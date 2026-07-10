@@ -1,7 +1,6 @@
 #pragma once
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
-#include "Engine/Runtime/Subsystems/NextPhysics.h"
 #include "Engine/Assets/Core/Component.h"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 
