@@ -495,8 +495,8 @@ foreach(target IN LISTS AllTargets)
 		set_source_files_properties(${src_files_thirdparty} PROPERTIES UNITY_GROUP "thirdparty")
 
 		# Exclude files with STB implementation from Unity Build to avoid redefinition conflicts
-		set_source_files_properties(Engine/Assets/Loaders/FSceneLoader.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-		set_source_files_properties(Engine/Assets/Savers/FSceneSaver.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+		set_source_files_properties(Modules/GltfLoader/FSceneLoader.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+		set_source_files_properties(Modules/SceneExport/FSceneSaver.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 		set_source_files_properties(Engine/Vulkan/Allocator.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 		set_source_files_properties(Engine/Utilities/StbImage.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
 		set_source_files_properties(Engine/Assets/Acceleration/CpuBvh.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
@@ -569,6 +569,10 @@ foreach(target IN LISTS AllTargets)
 		# DesktopMain installs the Streamline/DLSS module for every program (no-op off Windows).
 		if ( TARGET NextStreamline AND _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager AND NOT ${target} STREQUAL gkNextUnitTests )
 		target_link_libraries(${target} PRIVATE NextStreamline)
+		endif()
+		# DesktopMain / EngineTestFixture register the glTF scene loader for every program.
+		if ( TARGET GltfLoader AND _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager )
+		target_link_libraries(${target} PRIVATE GltfLoader)
 		endif()
 		endif()
 	endif()

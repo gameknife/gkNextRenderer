@@ -1,6 +1,6 @@
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
-#include "Engine/Assets/Loaders/FSceneLoader.h"
+#include "Engine/Assets/Loaders/LoaderUtils.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>
@@ -243,7 +243,7 @@ namespace Assets
             std::string cacheFileName = Utilities::CookHelper::GetCookedFileName(fmt::format("{:016x}", combinedHash), "tangent");
             if (!std::filesystem::exists(cacheFileName))
             {
-                Assets::FSceneLoader::GenerateMikkTSpace(this);
+                Assets::GenerateMikkTSpace(this);
                 SaveTangentCache(cacheFileName);
             }
             else

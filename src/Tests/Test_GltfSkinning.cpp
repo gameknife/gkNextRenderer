@@ -1,5 +1,5 @@
 #include <catch2/catch_all.hpp>
-#include "Engine/Assets/Loaders/FSceneLoader.h"
+#include "Modules/GltfLoader/FSceneLoader.h"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Data/Material.hpp"
 #include <fstream>

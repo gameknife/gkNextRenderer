@@ -9,7 +9,7 @@
 
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Loaders/FProcModel.h"
-#include "Engine/Assets/Loaders/FSceneLoader.h"
+#include "Modules/GltfLoader/FSceneLoader.h"
 #include "Gameplay/Gameplay/GameplayMath.hpp"
 #include "Gameplay/Character/CharacterControllerDebugDraw.hpp"
 #include "Gameplay/Reflection/GameplayReflectionRegistry.h"

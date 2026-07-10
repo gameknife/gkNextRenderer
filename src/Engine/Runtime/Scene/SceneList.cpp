@@ -4,7 +4,6 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/Core/GaussianSplat.hpp"
-#include "Engine/Assets/Loaders/FSceneLoader.h"
 #include "Engine/Assets/Loaders/LoaderRegistry.hpp"
 #include "Engine/Runtime/Components/EnvironmentComponent.h"
 #include "Engine/Runtime/Components/GaussianSplatComponent.h"
@@ -347,10 +346,6 @@ bool LoadSceneRaw(std::string filename, Assets::EnvironmentSetting& camera,
     std::filesystem::path filepath = filename;
     std::string ext = ToLowerCopy(filepath.extension().string());
     materials.push_back({Material::Lambertian(vec3(0.73f, 0.73f, 0.73f)), "root_default"});
-    if (IsBuiltinSceneExtension(ext))
-    {
-        return Assets::FSceneLoader::LoadGLTFScene(filename, camera, nodes, models, materials, lights, tracks, skeletons);
-    }
     if (ext == ".proc")
     {
         if (filename == "Empty.proc")

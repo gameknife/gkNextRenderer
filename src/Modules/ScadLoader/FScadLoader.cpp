@@ -5,7 +5,7 @@
 #include "Engine/Assets/Loaders/FProcModel.h"
 #include "Modules/ScadLoader/FScadEvaluator.h"
 #include "Modules/ScadLoader/FScadShared.h"
-#include "Engine/Assets/Loaders/FSceneLoader.h"
+#include "Engine/Assets/Loaders/LoaderUtils.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
 
 #include <algorithm>
@@ -348,7 +348,7 @@ namespace Assets
         cameraInit.SunIntensity = 500.0f;
         cameraInit.SkyIntensity = 80.0f;
 
-        Camera defaultCam = FSceneLoader::AutoFocusCamera(cameraInit, nodes, models, true);
+        Camera defaultCam = AutoFocusCamera(cameraInit, nodes, models, true);
         if (cameraInit.cameras.empty())
         {
             cameraInit.cameras.push_back(defaultCam);

@@ -1,7 +1,7 @@
 #include "Modules/LDrawLoader/FLDrawLoader.h"
 #include "Modules/LDrawLoader/FLDrawGeometry.h"
 #include "Modules/LDrawLoader/FLDrawParser.h"
-#include "Engine/Assets/Loaders/FSceneLoader.h"
+#include "Engine/Assets/Loaders/LoaderUtils.h"
 #include "Engine/Assets/Data/Material.hpp"
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
@@ -727,7 +727,7 @@ namespace Assets
         cameraInit.SunIntensity = 500.0f;
         cameraInit.SkyIntensity = 100.0f;
 
-        Camera defaultCam = FSceneLoader::AutoFocusCamera(cameraInit, nodes, models, true);
+        Camera defaultCam = AutoFocusCamera(cameraInit, nodes, models, true);
 
         SPDLOG_INFO("LDraw: created {} models, {} materials, {} nodes",
                      models.size() - initialModelCount,

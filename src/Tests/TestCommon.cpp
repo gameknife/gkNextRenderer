@@ -1,5 +1,7 @@
 #include "TestCommon.hpp"
 
+#include "Modules/GltfLoader/GltfModule.hpp"
+
 #include <thread>
 #include <vector>
 
@@ -12,6 +14,9 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 
 EngineTestFixture::EngineTestFixture()
 {
+    // Scene formats are module-provided; tests need glTF for their fixtures.
+    Modules::Gltf::Register();
+
     // Mock arguments
     // Using a minimal resolution to speed up tests, renderer=0 (usually path tracer or default)
     const char* argv[] = {

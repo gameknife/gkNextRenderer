@@ -3,6 +3,7 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.h"
 #include "Modules/AgentDriver/AgentDriverModule.hpp"
+#include "Modules/GltfLoader/GltfModule.hpp"
 #include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
 #include "Modules/LiveCoding/LiveCodingModule.hpp"
 #include "Modules/NextRemote/NextRemoteModule.hpp"
@@ -99,6 +100,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     GApplication->SetDebugUiProvider(&debugUiProvider);
     Modules::LiveCoding::Install(*GApplication);
     Modules::AgentDriver::Install(*GApplication);
+    Modules::Gltf::Register();
     if (GOption->RemoteMode)
     {
         GApplication->AddRenderFrameConsumer(Modules::NextRemote::CreateRemoteServer(*GOption));

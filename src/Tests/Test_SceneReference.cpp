@@ -9,6 +9,7 @@
 #include "Engine/Runtime/Components/EnvironmentComponent.h"
 #include "Engine/Runtime/Components/SceneReferenceComponent.h"
 #include "Engine/Runtime/Scene/SceneList.hpp"
+#include "Modules/GltfLoader/GltfModule.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <fmt/format.h>
@@ -75,6 +76,7 @@ namespace
 
     bool LoadSceneForTest(const std::string& path, std::vector<std::shared_ptr<Assets::Node>>& nodes)
     {
+        Modules::Gltf::Register();
         Assets::EnvironmentSetting camera;
         std::vector<Assets::Model> models;
         std::vector<Assets::FMaterial> materials;

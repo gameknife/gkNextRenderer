@@ -3,7 +3,6 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include <glm/detail/type_half.hpp>
 #include <meshoptimizer.h>
-#include <tiny_gltf.h>
 #include "Engine/Assets/GPU/TextureImage.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/Core/Model.hpp"
