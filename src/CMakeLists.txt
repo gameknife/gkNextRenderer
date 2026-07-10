@@ -162,6 +162,10 @@ add_executable(gkNextRenderer
 	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(gkNextRenderer PRIVATE Application/Render/gkNextRenderer)
+add_executable(gkNextMinimalRenderer
+	${src_files_gkminimalrenderer}
+)
+target_include_directories(gkNextMinimalRenderer PRIVATE Application/Render/gkNextMinimalRenderer)
 add_executable(gkNextStillBenchmark
 	${src_files_benchmarkcommon}
 	${src_files_gkstillbenchmark}
@@ -374,6 +378,7 @@ set(AllTargets
 gkNextEngine
 NextGameplay
 gkNextRenderer
+	gkNextMinimalRenderer
 gkNextStillBenchmark
 	gkNextMotionBenchmark
 	gkNextVisualTest
@@ -398,6 +403,10 @@ foreach(gk_quickjs_program gkNextEditor FlappyJs)
 	endif()
 endforeach()
 endif()
+
+# These applications deliberately exercise the public core API without the
+# shared DesktopMain assembly or any optional module libraries.
+set(GK_CORE_ONLY_APPLICATION_TARGETS gkNextMinimalRenderer)
 
 file(TO_CMAKE_PATH "${Vulkan_SLANGC}" GK_SLANGC_EXECUTABLE_PATH)
 
@@ -555,23 +564,27 @@ foreach(target IN LISTS AllTargets)
 			gk_enable_unity_build(${target} 8)
 			gk_enable_fast_dev_link(${target})
 		endif()
-		# DesktopMain registers the DevTools debug UI provider for every program.
-		if ( TARGET DevTools )
+		# DesktopMain registers these services for regular programs. Core-only
+		# applications have a private entry point and must not inherit modules.
+		if ( TARGET DevTools AND NOT "${target}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
 		target_link_libraries(${target} PRIVATE DevTools)
 		endif()
-		if ( TARGET LiveCoding AND _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager AND NOT ${target} STREQUAL gkNextUnitTests )
+		if ( TARGET LiveCoding AND _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager AND NOT ${target} STREQUAL gkNextUnitTests AND NOT "${target}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
 		target_link_libraries(${target} PRIVATE LiveCoding)
 		endif()
+		if ( TARGET NextAudio AND _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager AND NOT ${target} STREQUAL gkNextUnitTests AND NOT "${target}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
+		target_link_libraries(${target} PRIVATE NextAudio)
+		endif()
 		# DesktopMain installs the agent script driver (gnb shot / gnb validate) for every program.
-		if ( TARGET AgentDriver AND _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager AND NOT ${target} STREQUAL gkNextUnitTests )
+		if ( TARGET AgentDriver AND _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager AND NOT ${target} STREQUAL gkNextUnitTests AND NOT "${target}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
 		target_link_libraries(${target} PRIVATE AgentDriver)
 		endif()
 		# DesktopMain installs the Streamline/DLSS module for every program (no-op off Windows).
-		if ( TARGET NextStreamline AND _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager AND NOT ${target} STREQUAL gkNextUnitTests )
+		if ( TARGET NextStreamline AND _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager AND NOT ${target} STREQUAL gkNextUnitTests AND NOT "${target}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
 		target_link_libraries(${target} PRIVATE NextStreamline)
 		endif()
 		# DesktopMain / EngineTestFixture register the glTF scene loader for every program.
-		if ( TARGET GltfLoader AND _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager )
+		if ( TARGET GltfLoader AND _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager AND NOT "${target}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
 		target_link_libraries(${target} PRIVATE GltfLoader)
 		endif()
 		endif()
@@ -665,7 +678,6 @@ endif()
 if ( TARGET AirportSim )
 target_link_libraries(AirportSim PRIVATE NextGameplay)
 endif()
-
 if ( TARGET NextQuickJS )
 	target_compile_definitions(NextQuickJS PRIVATE GK_NEXT_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 	target_link_libraries(NextQuickJS PRIVATE quickjs SDL3::SDL3 imgui::imgui)
@@ -711,7 +723,7 @@ if ( TARGET NextRmlUi )
 	target_link_libraries(NextRmlUi PRIVATE RmlUi::RmlUi)
 	# DesktopMain installs the RmlUi overlay factory for every program.
 	foreach(t IN LISTS AllTargets)
-		if ( NOT ${t} STREQUAL gkNextEngine AND TARGET ${t} )
+		if ( NOT ${t} STREQUAL gkNextEngine AND TARGET ${t} AND NOT "${t}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
 			get_target_property(_ttype ${t} TYPE)
 			if ( _ttype STREQUAL "EXECUTABLE" )
 				target_link_libraries(${t} PRIVATE NextRmlUi)
@@ -742,7 +754,7 @@ if ( TARGET NextRemote )
 	endif()
 	# DesktopMain assembles the remote frame streamer for every program.
 	foreach(t IN LISTS AllTargets)
-		if ( NOT ${t} STREQUAL gkNextEngine AND NOT ${t} STREQUAL NextRemote AND TARGET ${t} )
+		if ( NOT ${t} STREQUAL gkNextEngine AND NOT ${t} STREQUAL NextRemote AND TARGET ${t} AND NOT "${t}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
 			get_target_property(_ttype ${t} TYPE)
 			if ( _ttype STREQUAL "EXECUTABLE" )
 				target_link_libraries(${t} PRIVATE NextRemote)
@@ -752,7 +764,7 @@ if ( TARGET NextRemote )
 endif()
 if ( TARGET NextTui )
 	foreach(t IN LISTS AllTargets)
-		if ( NOT ${t} STREQUAL gkNextEngine AND NOT ${t} STREQUAL NextTui AND TARGET ${t} )
+		if ( NOT ${t} STREQUAL gkNextEngine AND NOT ${t} STREQUAL NextTui AND TARGET ${t} AND NOT "${t}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
 			get_target_property(_ttype ${t} TYPE)
 			if ( _ttype STREQUAL "EXECUTABLE" )
 				target_link_libraries(${t} PRIVATE NextTui)

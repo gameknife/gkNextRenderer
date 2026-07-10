@@ -479,9 +479,15 @@ void NextEngine::Start()
     services_.physics.reset(new NextPhysics());
     services_.physics->Start();
 
-    // audio
-    services_.audio = std::make_unique<NextAudio>();
-    services_.audio->Start();
+    // Optional audio module.
+    if (audioFactory_)
+    {
+        services_.audio = audioFactory_();
+        if (services_.audio)
+        {
+            services_.audio->Start();
+        }
+    }
 
     // script
     if (scriptRuntimeFactory_)

@@ -4,6 +4,7 @@
 #include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
 #include "Modules/GltfLoader/GltfModule.hpp"
 #include "Modules/LiveCoding/LiveCodingModule.hpp"
+#include "Modules/NextAudio/NextAudioModule.hpp"
 #include "Modules/NextRemote/NextRemoteModule.hpp"
 
 #include <fmt/format.h>
@@ -92,6 +93,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     Runtime::IDebugUiProvider& debugUiProvider = DevTools::DefaultDebugUiProvider();
     GApplication.reset( new NextEngine(*GOption) );
     GApplication->SetDebugUiProvider(&debugUiProvider);
+    Modules::Audio::Install(*GApplication);
     Modules::LiveCoding::Install(*GApplication);
     Modules::Gltf::Register();
     if (GOption->RemoteMode)

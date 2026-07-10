@@ -2,40 +2,28 @@
 
 #include "Engine/Common/CoreMinimal.hpp"
 
-struct ma_engine;
-struct ma_sound;
-struct ma_decoder;
-
-class NextAudio final
+// Core-facing audio service contract. The concrete backend lives in the
+// optional Modules/NextAudio library and is installed by the application.
+class NextAudio
 {
 public:
     GK_NON_COPIABLE(NextAudio)
 
-    NextAudio();
-    ~NextAudio();
+    NextAudio() = default;
+    virtual ~NextAudio() = default;
 
-    void Start();
-    void Stop();
+    virtual void Start() = 0;
+    virtual void Stop() = 0;
 
-    void PlaySound(const std::string& soundName, bool loop = false, float volume = 1.0f);
-    void PauseSound(const std::string& soundName, bool pause);
-    bool IsSoundPlaying(const std::string& soundName);
-    void PlaySfx(const std::string& path, float volume = 1.0f, uint64_t minIntervalMs = 50);
-    void PlaySfxVariant(std::initializer_list<std::string_view> candidates, float volume = 1.0f, uint64_t minIntervalMs = 50);
-    void PlayMusic(const std::string& path, float volume = 1.0f);
-    void StopMusic();
-    void SetMusicVolume(float volume);
-    const std::string& GetCurrentMusicPath() const { return currentMusicPath_; }
-
-private:
-    bool IsSoundAssetAvailable(const std::string& path);
-
-    std::unordered_map<std::string, uint64_t> lastPlayMsBySound_;
-    std::unordered_set<std::string> missingSounds_;
-    std::string currentMusicPath_;
-    float musicVolume_ = 1.0f;
-    std::unique_ptr<ma_engine> audioEngine_;
-    std::unordered_map<std::string, std::unique_ptr<ma_sound>> soundMaps_;
-    std::unordered_map<std::string, std::vector<uint8_t>> soundDataMaps_;
-    std::unordered_map<std::string, std::unique_ptr<ma_decoder>> soundDecoderMaps_;
+    virtual void PlaySound(const std::string& soundName, bool loop = false, float volume = 1.0f) = 0;
+    virtual void PauseSound(const std::string& soundName, bool pause) = 0;
+    virtual bool IsSoundPlaying(const std::string& soundName) = 0;
+    virtual void PlaySfx(const std::string& path, float volume = 1.0f, uint64_t minIntervalMs = 50) = 0;
+    virtual void PlaySfxVariant(std::initializer_list<std::string_view> candidates,
+                                float volume = 1.0f,
+                                uint64_t minIntervalMs = 50) = 0;
+    virtual void PlayMusic(const std::string& path, float volume = 1.0f) = 0;
+    virtual void StopMusic() = 0;
+    virtual void SetMusicVolume(float volume) = 0;
+    virtual const std::string& GetCurrentMusicPath() const = 0;
 };

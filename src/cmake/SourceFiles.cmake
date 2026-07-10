@@ -64,7 +64,7 @@ file(GLOB_RECURSE src_files_nextgameplay
 )
 
 # --- Optional Engine Modules (src/Modules/<Name>, one static library each) ---
-set(GK_MODULE_NAMES GltfLoader LDrawLoader ScadLoader SplatLoader NextAI NextRemote NextRmlUi DevTools LiveCoding RenderViews AgentDriver NextStreamline SceneExport)
+set(GK_MODULE_NAMES GltfLoader LDrawLoader ScadLoader SplatLoader NextAI NextAudio NextRemote NextRmlUi DevTools LiveCoding RenderViews AgentDriver NextStreamline SceneExport)
 if(GK_WITH_TUI AND NOT (ANDROID OR IOS))
     list(APPEND GK_MODULE_NAMES NextTui)
 endif()
@@ -108,6 +108,11 @@ file(GLOB_RECURSE src_files_brickplayer
 )
 
 file(GLOB_RECURSE src_files_gkrenderer "Application/Render/gkNextRenderer/*")
+
+# Intentionally core-only renderer used to validate the Engine -> Module ->
+# Application boundary. It has its own entry point and does not use
+# DESKTOP_MAIN_SOURCES, which installs optional modules.
+file(GLOB_RECURSE src_files_gkminimalrenderer "Application/Render/gkNextMinimalRenderer/*")
 
 file(GLOB_RECURSE src_files_benchmarkcommon "Application/Render/gkNextBenchmark/Common/*")
 

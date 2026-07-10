@@ -216,6 +216,11 @@ public:
     {
         uiOverlayFactory_ = std::move(factory);
     }
+
+    void SetAudioFactory(std::function<std::unique_ptr<NextAudio>()> factory)
+    {
+        audioFactory_ = std::move(factory);
+    }
     
     void SetExternalService(const std::string& key, std::shared_ptr<void> service)
     {
@@ -394,6 +399,7 @@ private:
     Runtime::ScriptRuntimeFactory scriptRuntimeFactory_;
     Runtime::ShaderHotReloaderFactory shaderHotReloaderFactory_;
     Runtime::Agent::AgentDriverFactory agentDriverFactory_;
+    std::function<std::unique_ptr<NextAudio>()> audioFactory_;
     std::unique_ptr<Runtime::IScriptRuntime> scriptRuntime_;
     FRuntimeServices services_{};
     Runtime::IDebugUiProvider* debugUiProvider_ = nullptr;
