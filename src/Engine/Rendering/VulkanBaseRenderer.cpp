@@ -42,7 +42,6 @@
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Rendering/Shadow/ShadowMapPass.hpp"
-#include "Engine/Rendering/GaussianSplat/GaussianSplatPass.hpp"
 #include "Engine/Rendering/Upscaler/IUpscaler.hpp"
 #include "Engine/Rendering/Upscaler/UpscalerRegistry.hpp"
 
@@ -921,8 +920,6 @@ namespace Vulkan
         skin_.pipeline.reset(new PipelineCommon::ZeroBindPipeline(*frame_.swapChain, "assets/shaders/Task.Skinning.comp.slang.spv", GetScene()));
         overlay_.visualDebuggerPipeline.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(*frame_.swapChain, "assets/shaders/Util.VisualDebugger.comp.slang.spv", 20));
 
-        overlay_.gaussianSplatPass = std::make_unique<GaussianSplat::GaussianSplatPass>(*this);
-        overlay_.gaussianSplatPass->CreateResources();
         for (const FExternalPassFactory& factory : ExternalPassFactories())
         {
             overlay_.externalPasses.push_back(factory(*this));
@@ -1044,7 +1041,6 @@ namespace Vulkan
         }
         logicRenderers_.swapChainCreatedTypes.clear();
 
-        overlay_.gaussianSplatPass.reset();
         overlay_.externalPasses.clear();
         overlay_.visibilityPipeline.reset();
         overlay_.visibilityFrameBuffer.reset();
@@ -1098,7 +1094,6 @@ namespace Vulkan
             delegates_.deleteSwapChain();
         }
 
-        overlay_.gaussianSplatPass.reset();
         overlay_.externalPasses.clear();
 
         for ( auto& storageImage : bindless_.images )
@@ -1222,10 +1217,6 @@ namespace Vulkan
         if (rt_)
         {
             reloadPipeline(rt_->directLightGenPipeline);
-        }
-        if (overlay_.gaussianSplatPass)
-        {
-            overlay_.gaussianSplatPass->ReloadShaders(changedShaderFilenames, handledShaderFiles);
         }
         for (const auto& externalPass : overlay_.externalPasses)
         {
@@ -2005,20 +1996,16 @@ namespace Vulkan
                 DispatchScheduledRenderViews(commandBuffer, imageIndex);
             }
 
-            if (overlay_.gaussianSplatPass)
+            // Module overlay passes (gaussian splats, then debug overlays like aux draw).
+            for (const auto& externalPass : overlay_.externalPasses)
             {
-                overlay_.gaussianSplatPass->Execute(commandBuffer, imageIndex);
+                SCOPED_GPU_TIMER("external pass");
+                externalPass->Execute(commandBuffer, imageIndex);
             }
 
             if (NextEngine::GetInstance()->GetShowFlags().ShowWireframe)
             {
                 DrawWireframeOverlay(commandBuffer, imageIndex);
-            }
-
-            for (const auto& externalPass : overlay_.externalPasses)
-            {
-                SCOPED_GPU_TIMER("external pass");
-                externalPass->Execute(commandBuffer, imageIndex);
             }
 
             ResolvePrimaryViewToSwapchain(commandBuffer, imageIndex);

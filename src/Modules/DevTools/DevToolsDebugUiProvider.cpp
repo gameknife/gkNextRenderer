@@ -87,6 +87,7 @@ namespace DevTools
         {
             // GPU aux drawing (debug lines/points) renders as an external overlay pass.
             Vulkan::RegisterExternalPassFactory(
+                /*priority*/ 20,
                 [](Vulkan::VulkanBaseRenderer& renderer) -> std::unique_ptr<Vulkan::IExternalRenderPass>
                 { return std::make_unique<Vulkan::AuxDraw::AuxDrawPass>(renderer); });
             auxDrawRegistered = true;

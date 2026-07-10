@@ -27,11 +27,6 @@ namespace Rendering::Upscaler
 	class IUpscaler;
 }
 
-namespace Vulkan::GaussianSplat
-{
-    class GaussianSplatPass;
-}
-
 namespace Vulkan
 {
 	class FActiveRenderViewScope;
@@ -323,7 +318,6 @@ namespace Vulkan
 			std::unique_ptr<PipelineCommon::GraphicsPipeline> wireframePipeline;
 			std::unique_ptr<PipelineCommon::VisibilityPipeline> visibilityPipeline;
 			std::unique_ptr<Shadow::ShadowMapPass> sunShadowPass;
-			std::unique_ptr<GaussianSplat::GaussianSplatPass> gaussianSplatPass;
 			std::vector<std::unique_ptr<IExternalRenderPass>> externalPasses;
 			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> bufferClearPipeline;
 			std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> fsrComposePipeline;

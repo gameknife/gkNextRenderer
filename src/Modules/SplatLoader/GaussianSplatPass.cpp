@@ -1,5 +1,5 @@
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Rendering/GaussianSplat/GaussianSplatPass.hpp"
+#include "Modules/SplatLoader/GaussianSplatPass.hpp"
 
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Core/Node.h"

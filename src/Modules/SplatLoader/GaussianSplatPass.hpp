@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Assets/Core/GaussianSplat.hpp"
+#include "Engine/Rendering/ExternalPassRegistry.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
@@ -15,18 +16,19 @@ namespace Vulkan::PipelineCommon
 
 namespace Vulkan::GaussianSplat
 {
-    class GaussianSplatPass final
+    class GaussianSplatPass final : public IExternalRenderPass
     {
     public:
         VULKAN_NON_COPIABLE(GaussianSplatPass)
 
         explicit GaussianSplatPass(VulkanBaseRenderer& renderer);
-        ~GaussianSplatPass();
+        ~GaussianSplatPass() override;
 
-        void CreateResources();
+        void CreateResources() override;
         void DestroyResources();
-        void ReloadShaders(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles);
-        void Execute(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+        void ReloadShaders(const std::set<std::string>& changedShaderFiles,
+                           std::set<std::string>& handledShaderFiles) override;
+        void Execute(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 
     private:
         void UpdateModelStates(uint32_t imageIndex);
