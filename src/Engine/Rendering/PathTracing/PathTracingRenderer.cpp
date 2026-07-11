@@ -279,16 +279,6 @@ namespace Vulkan::PathTracing
     void PathTracingRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
         baseRender_.ActiveRenderView().TemporalResolve().PrepareHistoryForRead(baseRender_, commandBuffer);
-        baseRender_.ImportActiveViewImagesGeneral({
-            Assets::Bindless::RT_SINGLE_DIFFUSE, Assets::Bindless::RT_SINGLE_SPECULAR,
-            Assets::Bindless::RT_ALBEDO, Assets::Bindless::RT_NORMAL,
-            Assets::Bindless::RT_OBJEDCTID_0, Assets::Bindless::RT_OBJEDCTID_1,
-            Assets::Bindless::RT_PREV_DEPTHBUFFER, Assets::Bindless::RT_MOTIONVECTOR,
-            Assets::Bindless::RT_DIFFUSE_HITDIST, Assets::Bindless::RT_SPECULAR_HITDIST,
-            Assets::Bindless::RT_SPECULAR_ALBEDO, Assets::Bindless::RT_ACCUMLATE_DIFFUSE,
-            Assets::Bindless::RT_ACCUMLATE_SPECULAR, Assets::Bindless::RT_ACCUMLATE_ALBEDO,
-            Assets::Bindless::RT_MOTIONMOMENT, Assets::Bindless::RT_DENOISED,
-        }, "scene image initialization");
         const Runtime::Config::UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
         const bool offlineProgressiveRender = IsOfflineProgressiveRenderActive();
         const bool sharcEnabled = IsEffectiveSharcEnabled();

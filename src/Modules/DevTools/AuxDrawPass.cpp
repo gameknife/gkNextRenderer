@@ -313,12 +313,10 @@ namespace Vulkan::AuxDraw
         {
             return;
         }
-        outputImage->InsertBarrier(
-            commandBuffer,
-            VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            VK_IMAGE_LAYOUT_GENERAL,
-            VK_IMAGE_LAYOUT_GENERAL);
+        renderer_.TransitionActiveViewImages(commandBuffer, {
+            {Assets::Bindless::RT_DENOISED, PipelineCommon::ERenderStage::ColorAttachment,
+             PipelineCommon::EResourceAccess::ColorRead | PipelineCommon::EResourceAccess::ColorWrite},
+        }, "aux draw output");
 
         VkRenderPassBeginInfo renderPassInfo{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
         renderPassInfo.renderPass = renderPass_;
@@ -350,11 +348,5 @@ namespace Vulkan::AuxDraw
             vkCmdEndRenderPass(commandBuffer);
         }
 
-        outputImage->InsertBarrier(
-            commandBuffer,
-            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT,
-            VK_IMAGE_LAYOUT_GENERAL,
-            VK_IMAGE_LAYOUT_GENERAL);
     }
 }

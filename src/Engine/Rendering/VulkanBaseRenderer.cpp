@@ -1074,18 +1074,22 @@ namespace Vulkan
         // depthBuffer
         frame_.depthBuffer.reset(new class DepthBuffer(*ctx_.commandPool, frame_.swapChain->Extent()));
 
-        // 同步对象
-        for (size_t i = 0; i != frame_.swapChain->ImageViews().size(); ++i)
+        // Deliberately serialized frame model. Per-frame acquire/fence/command resources use one
+        // slot; present semaphores and UBOs remain indexed by acquired swapchain image.
+        for (uint32_t frameSlot = 0; frameSlot < kFramesInFlight; ++frameSlot)
         {
             frame_.imageAvailableSemaphores.emplace_back(*ctx_.device);
-            frame_.renderFinishedSemaphores.emplace_back(*ctx_.device);
             frame_.inFlightFences.emplace_back(*ctx_.device, true);
             frame_.inFlightFenceSubmitSerials.emplace_back(0);
+        }
+        for (size_t i = 0; i != frame_.swapChain->ImageViews().size(); ++i)
+        {
+            frame_.renderFinishedSemaphores.emplace_back(*ctx_.device);
             frame_.uniformBuffers.emplace_back(*ctx_.device);
         }
 
         // commandbuffer
-        frame_.commandBuffers.reset(new CommandBuffers(*ctx_.commandPool, static_cast<uint32_t>(frame_.swapChain->ImageViews().size())));
+        frame_.commandBuffers.reset(new CommandBuffers(*ctx_.commandPool, kFramesInFlight));
 
         frame_.recordingSubmitSerial = 0;
         frame_.queuedSignalSemaphores.clear();
@@ -1355,7 +1359,6 @@ namespace Vulkan
     void VulkanBaseRenderer::BeginSceneFrame(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
         UpdateSkinningBuffers();
-        InitializeBarriers(commandBuffer);
         DispatchSkinning(commandBuffer, imageIndex);
         UpdateAccelerationStructuresBottom(commandBuffer);
         UpdateAccelerationStructuresTop(commandBuffer);
@@ -1379,9 +1382,6 @@ namespace Vulkan
         if (initializePrevDepthBeforeCull)
         {
             DispatchClearPass(commandBuffer, imageIndex, /*clearSwapchain*/ false);
-            GetViewStorageImage(Assets::Bindless::RT_PREV_DEPTHBUFFER)->InsertBarrier(
-                commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
         }
 
         PreRenderPerView(commandBuffer, imageIndex, clearSwapchain, contract);
@@ -1532,7 +1532,7 @@ namespace Vulkan
 
         {
             SCOPED_CPU_TIMER("hwquery");
-            ctx_.frameProfiler->EndGpuFrame((*frame_.commandBuffers)[frame_.currentImageIndex]);
+            ctx_.frameProfiler->EndGpuFrame((*frame_.commandBuffers)[frame_.currentFrame]);
         }
 
         // next frame synchronization objects
@@ -1542,6 +1542,28 @@ namespace Vulkan
             Throw(std::runtime_error("frame slot is outside swapchain synchronization storage"));
         }
         const auto imageAvailableSemaphore = frame_.imageAvailableSemaphores[frame_.currentFrame].Handle();
+
+        // The frame-slot fence must be complete before reusing its acquire semaphore. Waiting
+        // after vkAcquireNextImageKHR is too late: the semaphore can still have a pending wait.
+        auto* const previousSubmitFence = frame_.currentFence;
+        auto* const frameSlotFence = &frame_.inFlightFences[frame_.currentFrame];
+        if (previousSubmitFence)
+        {
+            SCOPED_CPU_TIMER("fence");
+            previousSubmitFence->Wait(noTimeout);
+            frame_.completedSubmitSerial = std::max(frame_.completedSubmitSerial, frame_.currentFenceSerial);
+        }
+        if (frameSlotFence != previousSubmitFence)
+        {
+            SCOPED_CPU_TIMER("frame-slot-fence");
+            frameSlotFence->Wait(noTimeout);
+            if (frame_.currentFrame < frame_.inFlightFenceSubmitSerials.size())
+            {
+                frame_.completedSubmitSerial = std::max(
+                    frame_.completedSubmitSerial, frame_.inFlightFenceSubmitSerials[frame_.currentFrame]);
+            }
+        }
+        frame_.currentFence = frameSlotFence;
 
         auto result = VkResult(VK_SUCCESS);
         {
@@ -1571,26 +1593,6 @@ namespace Vulkan
         const auto renderFinishedSemaphore =
             frame_.renderFinishedSemaphores[frame_.currentImageIndex].Handle();
 
-        // Wait before CPU-side uniform/stat writes and command-buffer reuse.
-        auto* const previousSubmitFence = frame_.currentFence;
-        auto* const frameSlotFence = &frame_.inFlightFences[frame_.currentFrame];
-        if (previousSubmitFence)
-        {
-            SCOPED_CPU_TIMER("fence");
-            previousSubmitFence->Wait(noTimeout);
-            frame_.completedSubmitSerial = std::max(frame_.completedSubmitSerial, frame_.currentFenceSerial);
-        }
-        if (frameSlotFence != previousSubmitFence)
-        {
-            SCOPED_CPU_TIMER("frame-slot-fence");
-            frameSlotFence->Wait(noTimeout);
-            if (frame_.currentFrame < frame_.inFlightFenceSubmitSerials.size())
-            {
-                frame_.completedSubmitSerial = std::max(
-                    frame_.completedSubmitSerial, frame_.inFlightFenceSubmitSerials[frame_.currentFrame]);
-            }
-        }
-        frame_.currentFence = frameSlotFence;
         frame_.recordingSubmitSerial = frame_.nextSubmitSerial;
         frame_.queuedSignalSemaphores.clear();
         frame_.queuedSignalValues.clear();
@@ -1854,29 +1856,6 @@ namespace Vulkan
         }
     }
 
-    void VulkanBaseRenderer::InitializeBarriers(VkCommandBuffer commandBuffer)
-    {
-        SCOPED_GPU_TIMER("barriers");
-        for (uint32_t index = 0; index < bindless_.images.size(); ++index)
-        {
-            const uint32_t localSlot = index % Assets::Bindless::kViewRtBankStride;
-            const bool temporalHistory =
-                localSlot == Assets::Bindless::RT_SINGLE_PREV_DIFFUSE ||
-                localSlot == Assets::Bindless::RT_SINGLE_PREV_SPECULAR ||
-                localSlot == Assets::Bindless::RT_SINGLE_PREV_ALBEDO;
-            const bool visibilityResource =
-                localSlot == Assets::Bindless::RT_MINIGBUFFER ||
-                localSlot == Assets::Bindless::RT_MINIGBUFFER_DRAW;
-            auto& storageImage = bindless_.images[index];
-            if (storageImage && !temporalHistory && !visibilityResource)
-            {
-                storageImage->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT,
-                                            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-            }
-        }
-    }
-
-
     void VulkanBaseRenderer::RegisterLogicRenderer(ERendererType type)
     {
         if (!IsLogicRendererRegistered(type))
@@ -2017,10 +1996,10 @@ namespace Vulkan
             return;
         }
 
-        denoisedImage->InsertBarrier(
-            commandBuffer, VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            VK_ACCESS_TRANSFER_READ_BIT,
-            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+        TransitionViewImages(commandBuffer, view, {
+            {Assets::Bindless::RT_DENOISED, PipelineCommon::ERenderStage::Transfer,
+             PipelineCommon::EResourceAccess::TransferRead},
+        }, "compose view subrect source");
 
         const VkRect2D subrect = view.Desc().subrect;
         VkImageBlit blitRegion = {};
@@ -2057,13 +2036,16 @@ namespace Vulkan
         VkCommandBuffer commandBuffer,
         const uint32_t imageIndex)
     {
-        GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
-            commandBuffer, VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT,
-            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+        const FRendererContract& contract = GetRendererContract(logicRenderers_.current);
+        TransitionActiveViewImages(commandBuffer, {
+            {Assets::Bindless::RT_DENOISED,
+             PipelineCommon::ERenderStage::Compute | PipelineCommon::ERenderStage::Transfer,
+             PipelineCommon::EResourceAccess::ShaderRead | PipelineCommon::EResourceAccess::TransferRead},
+        }, "resolve primary view source");
 
         bool resolvedByUpscaler = false;
-        if (upscaler_ && SupportDLSS() && NextEngine::GetInstance()->GetUserSettings().DLSS)
+        if (HasAny(contract.post, EPostProcess::DLSS) && upscaler_ && SupportDLSS() &&
+            NextEngine::GetInstance()->GetUserSettings().DLSS)
         {
             SCOPED_GPU_TIMER("DLSS resolve");
             TransitionSwapchainImage(
@@ -2080,7 +2062,8 @@ namespace Vulkan
             return;
         }
 
-        const bool fsrRequested = NextEngine::GetInstance()->GetUserSettings().FSR;
+        const bool fsrRequested = HasAny(contract.post, EPostProcess::SpatialUpscale) &&
+                                  NextEngine::GetInstance()->GetUserSettings().FSR;
         const bool fsrEnabled = fsrRequested && SwapChain().SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT);
         if (fsrRequested && !fsrEnabled)
         {
@@ -2289,36 +2272,22 @@ namespace Vulkan
         swapchainStateTracker_.Import({static_cast<uint64_t>(imageIndex) + 1u}, state);
     }
 
-    void VulkanBaseRenderer::ImportActiveViewImagesGeneral(
-        const std::initializer_list<uint32_t> bindlessIds,
-        const std::string_view passName)
-    {
-        auto& tracker = ActiveRenderView().ResourceStates();
-        const uint32_t viewBase = ActiveViewBankBase();
-        for (const uint32_t bindlessId : bindlessIds)
-        {
-            const uint32_t absoluteId = viewBase + bindlessId;
-            if (GetStorageImage(absoluteId) == nullptr)
-            {
-                Throw(std::runtime_error(fmt::format("missing view image {} for {}", absoluteId, passName)));
-            }
-            tracker.Import({static_cast<uint64_t>(absoluteId) + 1u}, {
-                .initialized = true,
-                .layout = VK_IMAGE_LAYOUT_GENERAL,
-                .stages = PipelineCommon::ERenderStage::Compute,
-                .access = PipelineCommon::EResourceAccess::ShaderWrite,
-                .lastPass = std::string(passName),
-            });
-        }
-    }
-
     void VulkanBaseRenderer::TransitionActiveViewImages(
         VkCommandBuffer commandBuffer,
         const std::initializer_list<FViewImageUse> uses,
         const std::string_view passName)
     {
-        auto& tracker = ActiveRenderView().ResourceStates();
-        const uint32_t viewBase = ActiveViewBankBase();
+        TransitionViewImages(commandBuffer, ActiveRenderView(), uses, passName);
+    }
+
+    void VulkanBaseRenderer::TransitionViewImages(
+        VkCommandBuffer commandBuffer,
+        RenderView& view,
+        const std::initializer_list<FViewImageUse> uses,
+        const std::string_view passName)
+    {
+        auto& tracker = view.ResourceStates();
+        const uint32_t viewBase = view.RtBankBase();
         std::vector<VkImageMemoryBarrier> barriers;
         barriers.reserve(uses.size());
         VkPipelineStageFlags srcStages = 0;

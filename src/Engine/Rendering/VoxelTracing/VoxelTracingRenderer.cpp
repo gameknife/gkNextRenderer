@@ -41,7 +41,6 @@ namespace Vulkan::VoxelTracing
 
     void VoxelTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
-        baseRender_.ImportActiveViewImagesGeneral({Assets::Bindless::RT_DENOISED}, "scene image initialization");
         const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
 
         {

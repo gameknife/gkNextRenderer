@@ -163,6 +163,7 @@ namespace Vulkan
 	class VulkanBaseRenderer
 	{
 	public:
+		static constexpr uint32_t kFramesInFlight = 1;
 		VULKAN_NON_COPIABLE(VulkanBaseRenderer)
 
 		VulkanBaseRenderer(Vulkan::Window* window, VkPresentModeKHR presentMode, bool enableValidationLayers, Instance* instance);
@@ -281,17 +282,17 @@ namespace Vulkan
 		                              const PipelineCommon::FImageUse& use, std::string_view passName);
 		void ImportSwapchainImageState(uint32_t imageIndex, const PipelineCommon::FImageState& state);
 		PipelineCommon::FResourceStateTracker& AuxiliaryImageStates() { return auxiliaryImageStateTracker_; }
-		void ImportActiveViewImagesGeneral(std::initializer_list<uint32_t> bindlessIds,
-		                                   std::string_view passName);
 		void TransitionActiveViewImages(VkCommandBuffer commandBuffer,
 		                                std::initializer_list<FViewImageUse> uses,
 		                                std::string_view passName);
+		void TransitionViewImages(VkCommandBuffer commandBuffer, RenderView& view,
+		                          std::initializer_list<FViewImageUse> uses,
+		                          std::string_view passName);
 		const RenderImage* GetStorageImage(uint32_t bindlessIdx) const;
 		// Screen-space RT image of the view currently being recorded (its bank). C++ counterpart
 		// of the shader-side Bindless::GetViewStorageTexture; resolves slot through the active
 		// view's bank base. Primary view (base 0) == GetStorageImage (legacy absolute).
 		const RenderImage* GetViewStorageImage(uint32_t slot) const { return GetStorageImage(activeViewBankBase_ + slot); }
-		void InitializeBarriers(VkCommandBuffer commandBuffer);
 		void RequestSkinUpdate(uint32_t modelId);
 		std::vector<RayTracing::TopLevelAccelerationStructure>& TLAS();
 

@@ -73,11 +73,6 @@ namespace Vulkan::PipelineCommon
 
         const std::array<uint32_t, 2> diffusePingPong{Assets::Bindless::RT_ATROUS_PING, Assets::Bindless::RT_ATROUS_PONG};
         const std::array<uint32_t, 2> specularPingPong{Assets::Bindless::RT_ATROUS_SPEC_PING, Assets::Bindless::RT_ATROUS_SPEC_PONG};
-        baseRenderer.ImportActiveViewImagesGeneral({
-            Assets::Bindless::RT_ATROUS_PING, Assets::Bindless::RT_ATROUS_PONG,
-            Assets::Bindless::RT_ATROUS_SPEC_PING, Assets::Bindless::RT_ATROUS_SPEC_PONG,
-            Assets::Bindless::RT_ATROUS_OUT, Assets::Bindless::RT_ATROUS_SPEC_OUT,
-        }, "atrous image initialization");
         const VkExtent2D activeExtent = baseRenderer.ActiveViewRenderExtent();
         const uint32_t dispatchX = Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8);
         const uint32_t dispatchY = Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8);

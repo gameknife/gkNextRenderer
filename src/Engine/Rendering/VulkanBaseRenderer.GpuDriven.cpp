@@ -183,6 +183,10 @@ namespace Vulkan
 
     void VulkanBaseRenderer::DispatchGpuCulling(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
+        TransitionActiveViewImages(commandBuffer, {
+            {Assets::Bindless::RT_PREV_DEPTHBUFFER, PipelineCommon::ERenderStage::Compute,
+             PipelineCommon::EResourceAccess::ShaderRead},
+        }, "gpu culling depth input");
         const uint32_t indirectDrawBatchCount = GetScene().GetIndirectDrawBatchCount();
         if (indirectDrawBatchCount == 0)
         {
@@ -240,6 +244,15 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
     void VulkanBaseRenderer::DispatchClearPass(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool clearSwapchain)
     {
         SCOPED_GPU_TIMER("clear pass");
+
+        TransitionActiveViewImages(commandBuffer, {
+            {Assets::Bindless::RT_SINGLE_DIFFUSE, PipelineCommon::ERenderStage::Compute,
+             PipelineCommon::EResourceAccess::ShaderWrite, VK_IMAGE_LAYOUT_GENERAL, true},
+            {Assets::Bindless::RT_SINGLE_SPECULAR, PipelineCommon::ERenderStage::Compute,
+             PipelineCommon::EResourceAccess::ShaderWrite, VK_IMAGE_LAYOUT_GENERAL, true},
+            {Assets::Bindless::RT_PREV_DEPTHBUFFER, PipelineCommon::ERenderStage::Compute,
+             PipelineCommon::EResourceAccess::ShaderWrite, VK_IMAGE_LAYOUT_GENERAL, true},
+        }, "clear view buffers");
 
         // Clears the active view's screen-space scratch RTs (bank-aware via the stamped header).
         overlay_.bufferClearPipeline->BindPipeline(commandBuffer, &imageIndex);
@@ -512,12 +525,10 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
 
         SCOPED_GPU_TIMER("wireframe");
 
-        GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
-            commandBuffer,
-            VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT,
-            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            VK_IMAGE_LAYOUT_GENERAL,
-            VK_IMAGE_LAYOUT_GENERAL);
+        TransitionActiveViewImages(commandBuffer, {
+            {Assets::Bindless::RT_DENOISED, PipelineCommon::ERenderStage::ColorAttachment,
+             PipelineCommon::EResourceAccess::ColorRead | PipelineCommon::EResourceAccess::ColorWrite},
+        }, "wireframe overlay");
 
         VkRenderPassBeginInfo renderPassInfo = {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;

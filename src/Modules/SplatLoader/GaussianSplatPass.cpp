@@ -609,6 +609,10 @@ namespace Vulkan::GaussianSplat
 
         {
             SCOPED_GPU_TIMER("GS Draw");
+            renderer_.TransitionActiveViewImages(commandBuffer, {
+                {Assets::Bindless::RT_SPLAT_ACCUM, PipelineCommon::ERenderStage::ColorAttachment,
+                 PipelineCommon::EResourceAccess::ColorWrite, VK_IMAGE_LAYOUT_GENERAL, true},
+            }, "gaussian splat accumulation");
             
             VkRenderPassBeginInfo beginInfo{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
             beginInfo.renderPass = renderPass_;
@@ -636,24 +640,18 @@ namespace Vulkan::GaussianSplat
        
         {
             SCOPED_GPU_TIMER("GS Compose");
-            renderer_.GetViewStorageImage(Assets::Bindless::RT_SPLAT_ACCUM)->InsertBarrier(
-                commandBuffer, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                VK_ACCESS_SHADER_READ_BIT,
-                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-            renderer_.GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
-                commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
-                VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+            renderer_.TransitionActiveViewImages(commandBuffer, {
+                {Assets::Bindless::RT_SPLAT_ACCUM, PipelineCommon::ERenderStage::Compute,
+                 PipelineCommon::EResourceAccess::ShaderRead},
+                {Assets::Bindless::RT_DENOISED, PipelineCommon::ERenderStage::Compute,
+                 PipelineCommon::EResourceAccess::ShaderRead | PipelineCommon::EResourceAccess::ShaderWrite},
+            }, "gaussian splat compose");
 
             const FSplatComposePushConstants composePush{
                 renderer_.UniformBuffers()[imageIndex].Buffer().GetDeviceAddress()};
             composePipeline_->BindPipeline(commandBuffer, &composePush);
             vkCmdDispatch(commandBuffer, (extent.width + 7) / 8, (extent.height + 7) / 8, 1);
 
-            renderer_.GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
-                commandBuffer, VK_ACCESS_SHADER_WRITE_BIT,
-                VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT,
-                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
         }
     }
 }

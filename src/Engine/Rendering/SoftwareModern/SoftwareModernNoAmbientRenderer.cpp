@@ -46,12 +46,6 @@ namespace Vulkan::SoftwareModernNoAmbient
 
     void SoftwareModernNoAmbientRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
-        baseRender_.ImportActiveViewImagesGeneral({
-            Assets::Bindless::RT_SINGLE_DIFFUSE, Assets::Bindless::RT_AMBIENT,
-            Assets::Bindless::RT_OBJEDCTID_0, Assets::Bindless::RT_PREV_DEPTHBUFFER,
-            Assets::Bindless::RT_MOTIONVECTOR, Assets::Bindless::RT_NORMAL,
-            Assets::Bindless::RT_GTAO, Assets::Bindless::RT_DENOISED,
-        }, "scene image initialization");
         const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
 
         {
