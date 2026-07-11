@@ -58,7 +58,7 @@ namespace Vulkan
     private:
         struct FViewResources
         {
-            RenderView* view = nullptr;
+            FRenderViewHandle view;
             bool enabled = false;
             bool requested = false;
             VkExtent2D requestedExtent{0, 0};
@@ -68,6 +68,7 @@ namespace Vulkan
 
         RenderView& EnsureView(uint32_t viewIndex);
         RenderView& EnsureReferenceView(int rendererType, uint32_t imageIndex);
+        RenderView* Resolve(const FViewResources& resources) const;
         void CopyViewOutput(VkCommandBuffer commandBuffer, RenderView& view, uint32_t viewIndex);
         void ReleaseReferenceViews();
         void ReleaseSecondaryViews();

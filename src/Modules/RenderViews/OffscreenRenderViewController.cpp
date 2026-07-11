@@ -65,9 +65,9 @@ namespace Vulkan
         extent.height = std::max(1u, extent.height);
         auto& resources = views_[viewIndex];
         resources.requestedExtent = extent;
-        if (resources.view != nullptr)
+        if (RenderView* view = Resolve(resources))
         {
-            resources.view->SetRenderExtent(extent);
+            view->SetRenderExtent(extent);
         }
     }
 
@@ -88,9 +88,9 @@ namespace Vulkan
         }
 
         auto& resources = views_[viewIndex];
-        if (!resources.cameraOverride.has_value() && resources.view != nullptr)
+        if (!resources.cameraOverride.has_value())
         {
-            resources.view->InvalidateTemporalHistory();
+            if (RenderView* view = Resolve(resources)) view->InvalidateTemporalHistory();
         }
         resources.cameraOverride = camera;
     }
@@ -101,9 +101,9 @@ namespace Vulkan
         {
             return;
         }
-        if (views_[viewIndex].view != nullptr && views_[viewIndex].cameraOverride.has_value())
+        if (views_[viewIndex].cameraOverride.has_value())
         {
-            views_[viewIndex].view->InvalidateTemporalHistory();
+            if (RenderView* view = Resolve(views_[viewIndex])) view->InvalidateTemporalHistory();
         }
         views_[viewIndex].cameraOverride.reset();
     }
@@ -116,11 +116,12 @@ namespace Vulkan
     const Assets::UniformBufferObject* OffscreenRenderViewController::LastUniformBufferObject(
         const uint32_t viewIndex) const
     {
-        if (viewIndex >= kMaxSecondaryViews || views_[viewIndex].view == nullptr)
+        if (viewIndex >= kMaxSecondaryViews)
         {
             return nullptr;
         }
-        return &views_[viewIndex].view->State().previousUniformBuffer;
+        const RenderView* view = Resolve(views_[viewIndex]);
+        return view ? &view->State().previousUniformBuffer : nullptr;
     }
 
     uint32_t OffscreenRenderViewController::SampleSlot(const uint32_t viewIndex) const
@@ -156,17 +157,17 @@ namespace Vulkan
     {
         for (auto& view : views_)
         {
-            if (view.view != nullptr)
+            if (RenderView* resolved = Resolve(view))
             {
-                view.view->InvalidateTemporalHistory();
+                resolved->InvalidateTemporalHistory();
             }
         }
         for (auto& [rendererType, view] : referenceViews_)
         {
-            if (view.view != nullptr)
+            if (RenderView* resolved = Resolve(view))
             {
-                view.view->InvalidateTemporalHistory();
-                view.view->SetSceneOverride(nullptr);
+                resolved->InvalidateTemporalHistory();
+                resolved->SetSceneOverride(nullptr);
             }
         }
     }
@@ -180,9 +181,9 @@ namespace Vulkan
         for (auto& [rendererType, view] : referenceViews_)
         {
             view.target.ResetSwapChainResources(/*releaseSampledOutput*/ false);
-            if (view.view != nullptr)
+            if (RenderView* resolved = Resolve(view))
             {
-                view.view->SetSceneOverride(nullptr);
+                resolved->SetSceneOverride(nullptr);
             }
         }
     }
@@ -219,6 +220,11 @@ namespace Vulkan
             offscreenDebugName.c_str());
 
         return view;
+    }
+
+    RenderView* OffscreenRenderViewController::Resolve(const FViewResources& resources) const
+    {
+        return renderer_.RenderViews().Resolve(resources.view);
     }
 
     RenderView& OffscreenRenderViewController::EnsureReferenceView(

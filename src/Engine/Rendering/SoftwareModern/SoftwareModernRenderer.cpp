@@ -2,7 +2,6 @@
 #include "Engine/Rendering/SoftwareModern/SoftwareModernRenderer.hpp"
 
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
-#include "Engine/Runtime/Engine.hpp"
 #include "Engine/Utilities/Math.hpp"
 
 namespace Vulkan::SoftwareModern
@@ -59,9 +58,10 @@ namespace Vulkan::SoftwareModern
                           Utilities::Math::GetSafeDispatchCount(extent.height, 8), 1);
         }
 
-        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        const auto& frameSettings = baseRender_.FrameSettings();
+        const auto& settings = frameSettings.userSettings;
         temporalPostChain_.Run(baseRender_, SwapChain(), commandBuffer, imageIndex, settings, {
-            .progressiveRender = baseRender_.ActiveViewBankBase() == 0 && NextEngine::GetInstance()->IsProgressiveRendering(),
+            .progressiveRender = baseRender_.ActiveViewBankBase() == 0 && frameSettings.progressiveRendering,
             .fastReproject = true,
             .runAtrous = true,
             .temporalFrames = baseRender_.ActiveRenderView().Schedule() != EViewSchedule::Transient

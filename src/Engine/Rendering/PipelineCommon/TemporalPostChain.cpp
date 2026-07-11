@@ -82,7 +82,7 @@ namespace Vulkan::PipelineCommon
             push.ClampGammaHi = settings.ReprojectClampGammaHi;
             push.ClampGammaLo = settings.ReprojectClampGammaLo;
             push.ClampFloor = settings.ReprojectClampFloor;
-            accumulatePipeline_->BindPipeline(commandBuffer, &push);
+            accumulatePipeline_->BindPipeline(commandBuffer, &push, baseRenderer.ActiveViewBankBase());
             vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(extent.width, 8),
                           Utilities::Math::GetSafeDispatchCount(extent.height, 8), 1);
         }

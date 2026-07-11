@@ -1,7 +1,6 @@
 #include "Engine/Rendering/SoftwareModern/SoftwareModernNoAmbientRenderer.hpp"
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
-#include "Engine/Runtime/Engine.hpp"
 #include "Engine/Utilities/Math.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 
@@ -66,7 +65,7 @@ namespace Vulkan::SoftwareModernNoAmbient
         }
 
         {
-            const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+            const auto& settings = baseRender_.FrameSettings().userSettings;
             if (settings.GTAOEnable)
             {
                 SCOPED_GPU_TIMER("gtao pass");

@@ -5,7 +5,6 @@
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/SyncAndTiming.hpp"
 #include "Engine/Utilities/Math.hpp"
-#include "Engine/Runtime/Engine.hpp"
 #include <numeric>
 
 namespace Vulkan::PathTracing
@@ -55,7 +54,8 @@ namespace Vulkan::PathTracing
 
     void PathTracingRenderer::CreateSwapChain(const VkExtent2D& extent)
     {
-        rayTracingPipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline( SwapChain(), "assets/shaders/Core.PathTracing.comp.slang.spv", GetScene()));
+        rayTracingPipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline(
+            SwapChain(), "assets/shaders/Core.PathTracing.comp.slang.spv", GetScene(), baseRender_.ActiveTLASHandle()));
         temporalPostChain_.CreateSwapChain(SwapChain(), GetScene());
     }
 
@@ -96,7 +96,7 @@ namespace Vulkan::PathTracing
         if (!sharcUpdatePipeline_)
         {
             sharcUpdatePipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline(
-                SwapChain(), "assets/shaders/Core.SharcUpdate.comp.slang.spv", GetScene()));
+                SwapChain(), "assets/shaders/Core.SharcUpdate.comp.slang.spv", GetScene(), baseRender_.ActiveTLASHandle()));
         }
         if (!sharcResolvePipeline_)
         {
@@ -106,18 +106,18 @@ namespace Vulkan::PathTracing
         if (!sharcQueryPipeline_)
         {
             sharcQueryPipeline_.reset(new PipelineCommon::ZeroBindWithTLASPipeline(
-                SwapChain(), "assets/shaders/Core.SharcQuery.comp.slang.spv", GetScene()));
+                SwapChain(), "assets/shaders/Core.SharcQuery.comp.slang.spv", GetScene(), baseRender_.ActiveTLASHandle()));
         }
     }
 
     bool PathTracingRenderer::IsOfflineProgressiveRenderActive() const
     {
-        return NextEngine::GetInstance()->IsOfflineProgressivePathTracing();
+        return baseRender_.FrameSettings().offlineProgressivePathTracing;
     }
 
     bool PathTracingRenderer::IsEffectiveSharcEnabled() const
     {
-        return NextEngine::GetInstance()->IsEffectiveSharcEnabled();
+        return baseRender_.FrameSettings().effectiveSharc;
     }
 
     void PathTracingRenderer::EnsureSharcResources()
@@ -130,7 +130,7 @@ namespace Vulkan::PathTracing
             sharc_.ownerScene = activeScene;
             sharc_.ownerSceneGeneration = sceneGeneration;
         }
-        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        const auto& settings = baseRender_.FrameSettings().userSettings;
         const uint32_t entriesPow2 = std::clamp(settings.SharcEntriesPow2, kSharcMinEntriesPow2, kSharcMaxEntriesPow2);
         const uint32_t entryCount = 1u << entriesPow2;
         if (sharc_.entryCount == entryCount && sharc_.resources.buffer)
@@ -191,9 +191,9 @@ namespace Vulkan::PathTracing
 
     void PathTracingRenderer::UpdateSharcParameters()
     {
-        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        const auto& settings = baseRender_.FrameSettings().userSettings;
         const uint32_t frameIndex = static_cast<uint32_t>(std::max(FrameCount(), 0));
-        const auto& currentUbo = NextEngine::GetInstance()->GetLastUniformBufferObject();
+        const auto& currentUbo = baseRender_.ActiveRenderView().State().previousUniformBuffer;
         const glm::vec4 currentCameraPosition(currentUbo.ModelViewInverse[3][0],
                                               currentUbo.ModelViewInverse[3][1],
                                               currentUbo.ModelViewInverse[3][2],
@@ -291,7 +291,8 @@ namespace Vulkan::PathTracing
     void PathTracingRenderer::Render(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
         baseRender_.ActiveRenderView().TemporalResolve().PrepareHistoryForRead(baseRender_, commandBuffer);
-        const Runtime::Config::UserSettings& settings = NextEngine::GetInstance()->GetUserSettings();
+        const FFrameRenderSettings& frameSettings = baseRender_.FrameSettings();
+        const Runtime::Config::UserSettings& settings = frameSettings.userSettings;
         const bool offlineProgressiveRender = IsOfflineProgressiveRenderActive();
         const bool sharcEnabled = IsEffectiveSharcEnabled();
         const bool isPrimaryView = baseRender_.ActiveViewBankBase() == 0;
@@ -363,11 +364,11 @@ namespace Vulkan::PathTracing
         }
         
         temporalPostChain_.Run(baseRender_, SwapChain(), commandBuffer, imageIndex, settings, {
-            .progressiveRender = isPrimaryView && NextEngine::GetInstance()->IsProgressiveRendering(),
+            .progressiveRender = isPrimaryView && frameSettings.progressiveRendering,
             .fastReproject = false,
             .runAtrous = !offlineProgressiveRender,
             .temporalFrames = isPrimaryView && offlineProgressiveRender
-                ? NextEngine::GetInstance()->GetProgressiveRenderTargetFrames()
+                ? frameSettings.progressiveTargetFrames
                 : (allowTemporal ? uint32_t(settings.TemporalFrames) : 1u),
         });
     }

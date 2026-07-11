@@ -126,7 +126,7 @@ namespace Vulkan::PipelineCommon
                 }, "atrous specular iteration");
             }
 
-            pipeline_->BindPipeline(commandBuffer, &push);
+            pipeline_->BindPipeline(commandBuffer, &push, baseRenderer.ActiveViewBankBase());
             vkCmdDispatch(commandBuffer, dispatchX, dispatchY, 1);
         }
     }

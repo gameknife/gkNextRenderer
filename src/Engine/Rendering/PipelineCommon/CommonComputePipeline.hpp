@@ -17,7 +17,8 @@ namespace Vulkan::PipelineCommon
 	{
 	public:
 		VULKAN_NON_COPIABLE(ZeroBindWithTLASPipeline)
-		ZeroBindWithTLASPipeline(const SwapChain& swapChain, const char* shaderfile, const Assets::Scene& scene);
+		ZeroBindWithTLASPipeline(const SwapChain& swapChain, const char* shaderfile, const Assets::Scene& scene,
+		                         VkAccelerationStructureKHR accelerationStructureHandle);
 
 		void BindPipeline(VkCommandBuffer commandBuffer, const Assets::Scene& scene, uint32_t imageIndex);
 		void BindPipeline(VkCommandBuffer commandBuffer, const Assets::GPUScene& gpuScene);
@@ -52,7 +53,11 @@ namespace Vulkan::PipelineCommon
 	public:
 		VULKAN_NON_COPIABLE(ZeroBindCustomPushConstantPipeline)
 		ZeroBindCustomPushConstantPipeline(const SwapChain& swapChain, const char* shaderfile, uint32_t pushConstantSize);
-		void BindPipeline(VkCommandBuffer commandBuffer, const void* data);
+		void BindPipeline(VkCommandBuffer commandBuffer, const void* data)
+		{
+			BindPipeline(commandBuffer, data, 0);
+		}
+		void BindPipeline(VkCommandBuffer commandBuffer, const void* data, uint32_t viewBankBase);
 		bool ReloadIfShaderChanged(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles);
 
 	private:

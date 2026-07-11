@@ -14,6 +14,7 @@
 #include "Engine/Rendering/RenderView.hpp"
 #include "Engine/Rendering/PipelineCommon/ResourceStateTracker.hpp"
 #include "Engine/Runtime/Profiling/FrameProfiler.hpp"
+#include "Engine/Runtime/Config/UserSettings.hpp"
 #include <vector>
 #include <memory>
 #include <cassert>
@@ -30,6 +31,14 @@ namespace Rendering::Upscaler
 
 namespace Vulkan
 {
+	struct FFrameRenderSettings
+	{
+		Runtime::Config::UserSettings userSettings{};
+		bool progressiveRendering = false;
+		bool offlineProgressivePathTracing = false;
+		bool effectiveSharc = false;
+		uint32_t progressiveTargetFrames = 1;
+	};
 	class FActiveRenderViewScope;
 	class FrameSubmission;
 	class RayTracingSceneBackend;
@@ -202,16 +211,17 @@ namespace Vulkan
 		Runtime::FrameProfiler* Profiler() const { return ctx_.frameProfiler.get(); }
 		bool HasSwapChain() const { return frame_.swapChain.operator bool(); }
 		int FrameCount() const {return frame_.frameCount;}
-		uint64_t SceneGeneration() const { return sceneGeneration_; }
+		uint64_t SceneGeneration() const { return sceneState_.generation; }
 		uint64_t RecordingSubmitSerial() const { return frame_.recordingSubmitSerial; }
 		uint64_t CompletedSubmitSerial() const { return frame_.completedSubmitSerial; }
 		const Assets::UniformBufferObject& LastUniformBufferObject() const { return frame_.lastUBO; }
+		const FFrameRenderSettings& FrameSettings() const { return frameSettings_; }
 		DeviceMemory* GetScreenShotMemory() const {return screenshot_.imageMemory.get();}
 		const Image* GetScreenShotImage() const { return screenshot_.image.get(); }
 
 		// Scene
 		Assets::Scene& GetScene();
-		std::shared_ptr<Assets::Scene> GetSceneShared() const { return scene_.lock(); }
+		std::shared_ptr<Assets::Scene> GetSceneShared() const { return sceneState_.scene.lock(); }
 		void SetScene(std::shared_ptr<Assets::Scene> scene);
 		Assets::UniformBufferObject GetUniformBufferObject(const VkOffset2D offset, const VkExtent2D extent) const;
 		void OnPreLoadScene();
@@ -302,6 +312,7 @@ namespace Vulkan
 		const RenderImage* GetViewStorageImage(uint32_t slot) const { return GetStorageImage(ActiveViewBankBase() + slot); }
 		void RequestSkinUpdate(uint32_t modelId);
 		std::vector<RayTracing::TopLevelAccelerationStructure>& TLAS();
+		VkAccelerationStructureKHR ActiveTLASHandle() const;
 
 		// Narrow scheduling API for render-view providers (thumbnails, offscreen views).
 		LogicRendererBase* EnsureLogicRenderer(ERendererType type);
@@ -438,6 +449,21 @@ namespace Vulkan
 			std::vector<FrameBuffer> wireframeFrameBuffers;
 		};
 
+		struct ShadowCameraFamilyCache
+		{
+			bool valid = false;
+			const Assets::Scene* scene = nullptr;
+			uint64_t sceneGeneration = 0;
+			uint64_t renderedFrame = std::numeric_limits<uint64_t>::max();
+			Assets::CascadeShadowSetup cascades{};
+		};
+
+		struct FSceneRenderState
+		{
+			std::weak_ptr<Assets::Scene> scene;
+			uint64_t generation = 0;
+		};
+
 		struct LogicRendererRegistry
 		{
 			std::vector<ERendererType> registeredTypes;
@@ -477,6 +503,7 @@ namespace Vulkan
 		FrameGenerationResources frameGeneration_;
 		AmbientCubePipelines ambient_;
 		OverlayPipelines overlay_;
+		ShadowCameraFamilyCache shadowCameraFamilyCache_;
 		LogicRendererRegistry logicRenderers_;
 		std::unique_ptr<RenderViewManager> renderViews_ = std::make_unique<RenderViewManager>();
 		std::unique_ptr<RenderViewServices> renderViewServices_;
@@ -484,8 +511,8 @@ namespace Vulkan
 		Delegates delegates_;
 		std::unique_ptr<Rendering::Upscaler::IUpscaler> upscaler_;
 
-		std::weak_ptr<Assets::Scene> scene_;
-		uint64_t sceneGeneration_ = 0;
+		FSceneRenderState sceneState_;
+		FFrameRenderSettings frameSettings_;
 		VkPresentModeKHR presentMode_;
 		bool checkerboxRendering_{};
 		bool forceSDR_{};

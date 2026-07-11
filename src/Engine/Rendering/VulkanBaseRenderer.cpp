@@ -536,7 +536,7 @@ namespace Vulkan
         {
             return *activeViewContext_.sceneOverride;
         }
-        auto scene = scene_.lock();
+        auto scene = sceneState_.scene.lock();
         if (!scene)
         {
             SPDLOG_CRITICAL("VulkanBaseRenderer attempted to access an expired scene (frame {}, renderer {})",
@@ -548,8 +548,8 @@ namespace Vulkan
 
     void VulkanBaseRenderer::SetScene(std::shared_ptr<Assets::Scene> scene)
     {
-        scene_ = scene;
-        ++sceneGeneration_;
+        sceneState_.scene = scene;
+        ++sceneState_.generation;
         renderViews_->InvalidateAllTemporalHistory(EHistoryInvalidationReason::SceneChanged);
         if (renderViewServices_)
         {
@@ -981,7 +981,8 @@ namespace Vulkan
 
             if (caps_.supportRayTracing)
             {
-                rt_->directLightGenPipeline.reset(new PipelineCommon::ZeroBindWithTLASPipeline(SwapChain(), "assets/shaders/Bake.HwAmbientCube.comp.slang.spv", GetScene()));
+                rt_->directLightGenPipeline.reset(new PipelineCommon::ZeroBindWithTLASPipeline(
+                    SwapChain(), "assets/shaders/Bake.HwAmbientCube.comp.slang.spv", GetScene(), ActiveTLASHandle()));
             }
         }
         // Pick the subgroup (wave) fast-path of the GPU cull when the device supports it; otherwise the LDS variant.
@@ -1034,7 +1035,13 @@ namespace Vulkan
         }
 
         // SwapChain
-        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        auto* engine = NextEngine::GetInstance();
+        frameSettings_.userSettings = engine->GetUserSettings();
+        frameSettings_.progressiveRendering = engine->IsProgressiveRendering();
+        frameSettings_.offlineProgressivePathTracing = engine->IsOfflineProgressivePathTracing();
+        frameSettings_.effectiveSharc = engine->IsEffectiveSharcEnabled();
+        frameSettings_.progressiveTargetFrames = engine->GetProgressiveRenderTargetFrames();
+        const auto& settings = frameSettings_.userSettings;
         const VkPresentModeKHR requestedPresentMode =
             caps_.supportDLSSG && settings.DLSSG
                 ? VK_PRESENT_MODE_IMMEDIATE_KHR
@@ -1165,6 +1172,7 @@ namespace Vulkan
         visibilityStateTracker_.Reset();
         swapchainStateTracker_.Reset();
         auxiliaryImageStateTracker_.Reset();
+        shadowCameraFamilyCache_ = {};
 
         if (upscaler_)
         {
@@ -1492,11 +1500,17 @@ namespace Vulkan
         }
         
         const auto noTimeout = std::numeric_limits<uint64_t>::max();
-        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        auto* engine = NextEngine::GetInstance();
+        frameSettings_.userSettings = engine->GetUserSettings();
+        frameSettings_.progressiveRendering = engine->IsProgressiveRendering();
+        frameSettings_.offlineProgressivePathTracing = engine->IsOfflineProgressivePathTracing();
+        frameSettings_.effectiveSharc = engine->IsEffectiveSharcEnabled();
+        frameSettings_.progressiveTargetFrames = engine->GetProgressiveRenderTargetFrames();
+        const auto& settings = frameSettings_.userSettings;
         const bool frameGenerationEnabled =
             caps_.supportDLSSG &&
             settings.DLSSG &&
-            NextEngine::GetInstance()->GetEngineStatus() != NextRenderer::EApplicationStatus::Loading;
+            engine->GetEngineStatus() != NextRenderer::EApplicationStatus::Loading;
 
         frame_.streamlineFrameToken = upscaler_
             ? upscaler_->BeginFrame(static_cast<uint32_t>(frame_.frameCount),
@@ -1976,7 +1990,7 @@ namespace Vulkan
                 uint32_t(SwapChain().OutputExtent().width),
                 uint32_t(SwapChain().OutputExtent().height)
             };
-            overlay_.fsrComposePipeline->BindPipeline(commandBuffer, pushConst.data());
+            overlay_.fsrComposePipeline->BindPipeline(commandBuffer, pushConst.data(), ActiveViewBankBase());
 
             vkCmdDispatch(
                 commandBuffer,

@@ -72,6 +72,15 @@ namespace Vulkan
         return rt_ ? rt_->tlas : empty;
     }
 
+    VkAccelerationStructureKHR VulkanBaseRenderer::ActiveTLASHandle() const
+    {
+        if (!rt_ || rt_->tlas.empty())
+        {
+            return VK_NULL_HANDLE;
+        }
+        return rt_->tlas.front().Handle();
+    }
+
     namespace
     {
         template <class TAccelerationStructure>

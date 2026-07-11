@@ -1,6 +1,5 @@
 #include "Engine/Rendering/SoftwareTracing/SoftwareTracingRenderer.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
-#include "Engine/Runtime/Engine.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Utilities/Math.hpp"
 
@@ -63,9 +62,10 @@ void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t ima
 			Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
 			Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
 	}
-	const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+	const auto& frameSettings = baseRender_.FrameSettings();
+	const auto& settings = frameSettings.userSettings;
 	temporalPostChain_.Run(baseRender_, SwapChain(), commandBuffer, imageIndex, settings, {
-		.progressiveRender = isPrimaryView && NextEngine::GetInstance()->IsProgressiveRendering(),
+		.progressiveRender = isPrimaryView && frameSettings.progressiveRendering,
 		.fastReproject = true,
 		.runAtrous = true,
 		.temporalFrames = allowTemporal ? uint32_t(settings.TemporalFrames) : 1u,

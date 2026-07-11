@@ -110,10 +110,12 @@ namespace Vulkan
         void CopyThumbnailViewOutput(VkCommandBuffer commandBuffer, RenderView& view, RenderImage& dst);
         void CopyMaterialPreviewOutput(VkCommandBuffer commandBuffer, RenderView& view);
         bool ScheduleNextThumbnail(EThumbnailKind kind, VkCommandBuffer commandBuffer, uint32_t imageIndex);
+        RenderView* ThumbnailView() const;
+        RenderView* MaterialPreviewView() const;
 
         VulkanBaseRenderer& renderer_;
-        RenderView* thumbnailRenderView_ = nullptr;
-        RenderView* materialPreviewView_ = nullptr;
+        FRenderViewHandle thumbnailRenderView_;
+        FRenderViewHandle materialPreviewView_;
         std::unique_ptr<Assets::Scene> thumbnailScene_;
         std::unique_ptr<Assets::Scene> materialPreviewScene_;
         std::array<FThumbnailCache, kThumbnailKindCount> thumbnailCaches_{};

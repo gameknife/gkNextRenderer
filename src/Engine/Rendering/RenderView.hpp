@@ -480,6 +480,12 @@ namespace Vulkan
             std::string debugName,
             bool copyObjectIdHistory);
         bool DestroyView(RenderView*& view);
+        RenderView& EnsureView(
+            FRenderViewHandle& handle,
+            const FViewDesc& desc,
+            std::string debugName,
+            bool copyObjectIdHistory);
+        bool DestroyView(FRenderViewHandle& handle);
         std::unique_ptr<FrameBuffer> RebuildVisibilityFramebuffer(RenderView& view, VkExtent2D extent);
         std::unique_ptr<RenderImage> CreateSampledColorImage(VkExtent2D extent, const char* debugName);
         std::unique_ptr<Sampler> CreateClampSampler();

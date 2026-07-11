@@ -548,6 +548,10 @@ Engine 层改动按仓库规则只构建受影响目标：
 - 显式 `kFramesInFlight = 1`，fence-before-acquire，per-image present semaphore owner；
 - joint upload → skinning → BLAS → TLAS 顺序、skin request 去重、实际 update scratch 预算与动态 TLAS capacity；
 - external pass insertion/scope/input/output contract，以及不兼容 renderer 的明确拒绝；
+- 显式 `FFrameRenderSettings` / `FSceneRenderState`，LogicRenderer、temporal 与 SHARC 不再散读 Runtime 单例；TLAS、view bank 与 active-view UBO 由 context 注入；
+- CSM 使用 scene identity + scene generation + camera-family key；当前 shadow pool 采用容量 1 的有界顺序复用策略，不同 family/scene 在消费前完整刷新；
+- offscreen、reference、thumbnail 与 material preview 的长期所有权全部改为 generation-safe handle，仅在使用点短暂 resolve；
+- scene-global soft-mesh scratch 与共享 depth attachment 补齐跨 view 依赖，消除 reference 四视图的 WAW hazard 与几何缺失；
 - 资源状态观测指标：300 帧基线为 19,500 uses、15,004 barriers、1,500 discards，barrier rate 76.9%。
 
 最终 Windows/NVIDIA 验证证据：
@@ -556,6 +560,7 @@ Engine 层改动按仓库规则只构建受影响目标：
 - Catch2：200 test cases、49,690 assertions 全部通过；
 - synchronization validation：renderer `0→1→2→3→4→0` 在 1280×720、1279×719、1001×777 均为 0 error；
 - SHARC、GTAO、FSR、reference、Editor/offscreen、screenshot 路径均为 0 validation error；
+- 严格复核 Editor reference 时曾动态捕获 soft-mesh counter/depth 的 WAW hazard；补齐整组 scratch/depth 跨 view barrier 后，同一路径 synchronization validation 为 0 error，四宫格截图无几何缺失；
 - `playground.glb` 310 帧 agent screenshot 通过肉眼检查。
 
 当前机器没有 AMD/Intel GPU、Linux/Android/macOS 运行环境，因此这些平台未做实机 validation。状态层仍输出 Vulkan 1.2 legacy barrier，不依赖 sync2；无 RT、无 STORAGE surface 与无 reference provider 均保留 contract 驱动的降级/拒绝路径。跨平台实机验证属于后续发布矩阵，不再阻塞本计划的代码关闭。

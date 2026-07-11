@@ -113,6 +113,47 @@ namespace Vulkan
         return destroyed;
     }
 
+    RenderView& RenderViewResourceFactory::EnsureView(
+        FRenderViewHandle& handle,
+        const FViewDesc& desc,
+        std::string debugName,
+        const bool copyObjectIdHistory)
+    {
+        RenderView* view = renderer_.renderViews_->Resolve(handle);
+        if (view == nullptr)
+        {
+            view = renderer_.renderViews_->CreateView(desc, debugName);
+            if (view == nullptr)
+            {
+                Throw(std::runtime_error("failed to allocate RenderView bank"));
+            }
+            view->CreateSwapChain(renderer_.SwapChain());
+            handle = view->Handle();
+        }
+
+        view->SetDebugName(std::move(debugName));
+        view->SetRenderExtent(desc.renderExtent);
+        view->SetSubrect(desc.subrect);
+        view->SetCopyObjectIdHistory(copyObjectIdHistory);
+        return *view;
+    }
+
+    bool RenderViewResourceFactory::DestroyView(FRenderViewHandle& handle)
+    {
+        RenderView* view = renderer_.renderViews_->Resolve(handle);
+        if (view == nullptr)
+        {
+            handle = {};
+            return false;
+        }
+        const bool destroyed = renderer_.renderViews_->DestroyView(*view);
+        if (destroyed)
+        {
+            handle = {};
+        }
+        return destroyed;
+    }
+
     std::unique_ptr<FrameBuffer> RenderViewResourceFactory::RebuildVisibilityFramebuffer(
         RenderView& view,
         const VkExtent2D extent)

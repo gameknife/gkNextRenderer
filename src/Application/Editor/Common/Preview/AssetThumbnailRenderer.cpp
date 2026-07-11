@@ -19,6 +19,16 @@
 
 namespace Vulkan
 {
+    RenderView* AssetThumbnailRenderer::ThumbnailView() const
+    {
+        return renderer_.RenderViews().Resolve(thumbnailRenderView_);
+    }
+
+    RenderView* AssetThumbnailRenderer::MaterialPreviewView() const
+    {
+        return renderer_.RenderViews().Resolve(materialPreviewView_);
+    }
+
     AssetThumbnailRenderer::AssetThumbnailRenderer(VulkanBaseRenderer& renderer)
         : renderer_(renderer)
     {
@@ -96,9 +106,9 @@ namespace Vulkan
     void AssetThumbnailRenderer::SetEnabled(const bool enabled)
     {
         materialPreviewEnabled_ = enabled;
-        if (!materialPreviewEnabled_ && materialPreviewView_ != nullptr)
+        if (!materialPreviewEnabled_)
         {
-            materialPreviewView_->SetSceneOverride(nullptr);
+            if (RenderView* view = MaterialPreviewView()) view->SetSceneOverride(nullptr);
         }
     }
 
@@ -112,10 +122,10 @@ namespace Vulkan
         }
 
         materialPreviewExtent_ = extent;
-        if (materialPreviewView_ != nullptr)
+        if (RenderView* view = MaterialPreviewView())
         {
-            materialPreviewView_->SetRenderExtent(materialPreviewExtent_);
-            materialPreviewView_->InvalidateTemporalHistory();
+            view->SetRenderExtent(materialPreviewExtent_);
+            view->InvalidateTemporalHistory();
         }
     }
 
@@ -129,9 +139,9 @@ namespace Vulkan
         materialPreview_ = material;
         materialPreview_.name_ = "__material_preview";
         materialPreviewDirty_ = true;
-        if (materialPreviewView_ != nullptr)
+        if (RenderView* view = MaterialPreviewView())
         {
-            materialPreviewView_->InvalidateTemporalHistory();
+            view->InvalidateTemporalHistory();
         }
     }
 
@@ -153,9 +163,9 @@ namespace Vulkan
         {
             materialPreviewScene_->SetRenderCamera(BuildMaterialPreviewCamera());
         }
-        if (materialPreviewView_ != nullptr)
+        if (RenderView* view = MaterialPreviewView())
         {
-            materialPreviewView_->InvalidateTemporalHistory();
+            view->InvalidateTemporalHistory();
         }
     }
 
@@ -178,15 +188,15 @@ namespace Vulkan
 
     void AssetThumbnailRenderer::OnMainSceneChanged()
     {
-        if (thumbnailRenderView_ != nullptr)
+        if (RenderView* view = ThumbnailView())
         {
-            thumbnailRenderView_->InvalidateTemporalHistory();
-            thumbnailRenderView_->SetSceneOverride(nullptr);
+            view->InvalidateTemporalHistory();
+            view->SetSceneOverride(nullptr);
         }
-        if (materialPreviewView_ != nullptr)
+        if (RenderView* view = MaterialPreviewView())
         {
-            materialPreviewView_->InvalidateTemporalHistory();
-            materialPreviewView_->SetSceneOverride(nullptr);
+            view->InvalidateTemporalHistory();
+            view->SetSceneOverride(nullptr);
         }
 
         thumbnailScene_.reset();
@@ -211,13 +221,13 @@ namespace Vulkan
 
         EnqueueExistingThumbnailImages(ThumbnailCache(EThumbnailKind::Material));
         EnqueueExistingThumbnailImages(ThumbnailCache(EThumbnailKind::Mesh));
-        if (thumbnailRenderView_ != nullptr)
+        if (RenderView* view = ThumbnailView())
         {
-            thumbnailRenderView_->InvalidateTemporalHistory();
+            view->InvalidateTemporalHistory();
         }
-        if (materialPreviewView_ != nullptr)
+        if (RenderView* view = MaterialPreviewView())
         {
-            materialPreviewView_->InvalidateTemporalHistory();
+            view->InvalidateTemporalHistory();
         }
     }
 
@@ -225,13 +235,13 @@ namespace Vulkan
     {
         thumbnailTarget_.ResetSwapChainResources(/*releaseSampledOutput*/ false);
         materialPreviewTarget_.ResetSwapChainResources(/*releaseSampledOutput*/ false);
-        if (thumbnailRenderView_ != nullptr)
+        if (RenderView* view = ThumbnailView())
         {
-            thumbnailRenderView_->SetSceneOverride(nullptr);
+            view->SetSceneOverride(nullptr);
         }
-        if (materialPreviewView_ != nullptr)
+        if (RenderView* view = MaterialPreviewView())
         {
-            materialPreviewView_->SetSceneOverride(nullptr);
+            view->SetSceneOverride(nullptr);
         }
     }
 
@@ -400,9 +410,9 @@ namespace Vulkan
 
         RenderViewResourceFactory resources(renderer_);
         RenderView& view = resources.EnsureView(thumbnailRenderView_, viewDesc, "thumbnail view", false);
-        if (thumbnailRenderView_->AllocatedExtent().width != kThumbnailExtent.width ||
-            thumbnailRenderView_->AllocatedExtent().height != kThumbnailExtent.height ||
-            thumbnailRenderView_->VisibilityFramebuffer() == nullptr)
+        if (view.AllocatedExtent().width != kThumbnailExtent.width ||
+            view.AllocatedExtent().height != kThumbnailExtent.height ||
+            view.VisibilityFramebuffer() == nullptr)
         {
             thumbnailTarget_.visibilityFramebuffer = resources.RebuildVisibilityFramebuffer(view, kThumbnailExtent);
         }
@@ -543,7 +553,8 @@ namespace Vulkan
         }
 
         EnsureMaterialPreviewRenderTarget();
-        if (!materialPreviewScene_ || !materialPreviewView_)
+        RenderView* materialPreviewView = MaterialPreviewView();
+        if (!materialPreviewScene_ || materialPreviewView == nullptr)
         {
             return false;
         }
@@ -584,12 +595,12 @@ namespace Vulkan
             .thumbnailDefaults = true,
         });
 
-        renderer_.SetRenderViewUbo(*materialPreviewView_, imageIndex, previewCamera);
-        materialPreviewView_->SetVisibilityFramebuffer(materialPreviewTarget_.visibilityFramebuffer.get());
-        materialPreviewView_->SetSceneOverride(materialPreviewScene_.get());
-        materialPreviewView_->SetPrevDepthValid(false);
+        renderer_.SetRenderViewUbo(*materialPreviewView, imageIndex, previewCamera);
+        materialPreviewView->SetVisibilityFramebuffer(materialPreviewTarget_.visibilityFramebuffer.get());
+        materialPreviewView->SetSceneOverride(materialPreviewScene_.get());
+        materialPreviewView->SetPrevDepthValid(false);
         renderer_.ScheduleRenderView(
-            *materialPreviewView_,
+            *materialPreviewView,
             *logicRenderer,
             /*clearSwapchain*/ false,
             [this, commandBuffer](RenderView& view)
@@ -669,7 +680,8 @@ namespace Vulkan
         }
 
         EnsureThumbnailRenderTarget();
-        assert(thumbnailRenderView_ != nullptr);
+        RenderView* thumbnailRenderView = ThumbnailView();
+        assert(thumbnailRenderView != nullptr);
         EnsureThumbnailImage(cache, assetIndex, imageDebugName.c_str());
 
         LogicRendererBase* logicRenderer = renderer_.EnsureLogicRenderer(ERT_SoftwareModernNoAmbient);
@@ -695,14 +707,14 @@ namespace Vulkan
             .thumbnailDefaults = true,
         });
 
-        thumbnailRenderView_->SetDebugName(viewDebugName);
-        thumbnailRenderView_->SetRenderExtent(kThumbnailExtent);
-        renderer_.SetRenderViewUbo(*thumbnailRenderView_, imageIndex, previewCamera);
-        thumbnailRenderView_->SetVisibilityFramebuffer(thumbnailTarget_.visibilityFramebuffer.get());
-        thumbnailRenderView_->SetSceneOverride(thumbnailScene_.get());
-        thumbnailRenderView_->SetPrevDepthValid(false);
+        thumbnailRenderView->SetDebugName(viewDebugName);
+        thumbnailRenderView->SetRenderExtent(kThumbnailExtent);
+        renderer_.SetRenderViewUbo(*thumbnailRenderView, imageIndex, previewCamera);
+        thumbnailRenderView->SetVisibilityFramebuffer(thumbnailTarget_.visibilityFramebuffer.get());
+        thumbnailRenderView->SetSceneOverride(thumbnailScene_.get());
+        thumbnailRenderView->SetPrevDepthValid(false);
         renderer_.ScheduleRenderView(
-            *thumbnailRenderView_,
+            *thumbnailRenderView,
             *logicRenderer,
             /*clearSwapchain*/ false,
             [this, commandBuffer, kind, assetIndex](RenderView& view)

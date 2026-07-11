@@ -1,7 +1,5 @@
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 
-#include "Engine/Runtime/Engine.hpp"
-
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/DescriptorSystem.hpp"
 #include "Engine/Vulkan/Device.hpp"
@@ -84,7 +82,8 @@ namespace Vulkan::PipelineCommon
 	ZeroBindWithTLASPipeline::ZeroBindWithTLASPipeline(
 	const SwapChain& swapChain,
 	const char* shaderfile,
-	const Assets::Scene& scene):PipelineBase(swapChain), shaderFile_(shaderfile)
+	const Assets::Scene& scene,
+	VkAccelerationStructureKHR accelerationStructureHandle):PipelineBase(swapChain), shaderFile_(shaderfile)
 	{
 		// Create descriptor pool/sets.
 		const auto& device = swapChain.Device();
@@ -103,7 +102,6 @@ namespace Vulkan::PipelineCommon
 		descriptorSetManager_.reset(new DescriptorSetManager(device, descriptorBindings, 1));
 		auto& descriptorSets = descriptorSetManager_->DescriptorSets();
 
-		const auto accelerationStructureHandle = NextEngine::GetInstance()->TryGetGPUAccelerationStructureHandle();
 		VkWriteDescriptorSetAccelerationStructureKHR structureInfo = {};
 		structureInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
 		structureInfo.pNext = nullptr;
@@ -281,14 +279,15 @@ namespace Vulkan::PipelineCommon
 		return true;
 	}
 
-	void ZeroBindCustomPushConstantPipeline::BindPipeline(VkCommandBuffer commandBuffer, const void* data)
+	void ZeroBindCustomPushConstantPipeline::BindPipeline(
+		VkCommandBuffer commandBuffer, const void* data, uint32_t viewBankBase)
 	{
 		// Stamp the unified header (offset 0..15), then the caller's params (offset 16..).
 		static constexpr uint32_t kHeaderSize = 16;
 		alignas(16) uint8_t buffer[sizeof(Assets::GPUScene)] = {};
 		uint32_t* header = reinterpret_cast<uint32_t*>(buffer);
 		header[0] = 0; // SwapChainIndex (unused by custom passes)
-		header[1] = NextEngine::GetInstance()->GetRenderer().ActiveViewBankBase(); // custom_data_0
+		header[1] = viewBankBase; // custom_data_0
 		header[2] = 0;
 		header[3] = 0;
 		const uint32_t copySize = std::min<uint32_t>(pushConstantSize_, sizeof(buffer) - kHeaderSize);

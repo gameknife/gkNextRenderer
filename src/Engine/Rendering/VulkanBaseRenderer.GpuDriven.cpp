@@ -201,7 +201,43 @@ namespace Vulkan
             SCOPED_GPU_TIMER("MShader cull");
             BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                             GetScene().NodeMatrixBuffer().Handle(), VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
-            
+
+            // Scene-global soft-mesh scratch is reused by every scheduled view. Complete the
+            // previous view's fill/compute/indirect consumers before discarding it here.
+            BufferMemoryBarrier::Insert(
+                commandBuffer,
+                VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+                    VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                scene.SoftMeshShaderCounterBuffer().Handle(),
+                VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT |
+                VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
+                VK_ACCESS_TRANSFER_WRITE_BIT);
+
+            BufferMemoryBarrier::Insert(
+                commandBuffer,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT |
+                    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                {
+                    BufferMemoryBarrier::Make(
+                        scene.SoftMeshShaderVisibleItemBuffer().Handle(),
+                        VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                        VK_ACCESS_SHADER_WRITE_BIT),
+                    BufferMemoryBarrier::Make(
+                        scene.SoftMeshShaderDispatchArgBuffer().Handle(),
+                        VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
+                        VK_ACCESS_SHADER_WRITE_BIT),
+                    BufferMemoryBarrier::Make(
+                        scene.SoftMeshShaderPrimBuffer().Handle(),
+                        VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                        VK_ACCESS_SHADER_WRITE_BIT),
+                    BufferMemoryBarrier::Make(
+                        scene.SoftMeshShaderDrawArgBuffer().Handle(),
+                        VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
+                        VK_ACCESS_SHADER_WRITE_BIT),
+                });
+
             vkCmdFillBuffer(commandBuffer, scene.SoftMeshShaderCounterBuffer().Handle(), 0, VK_WHOLE_SIZE, 0);
 
             BufferMemoryBarrier::Insert(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -255,7 +291,7 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         }, "clear view buffers");
 
         // Clears the active view's screen-space scratch RTs (bank-aware via the stamped header).
-        overlay_.bufferClearPipeline->BindPipeline(commandBuffer, &imageIndex);
+        overlay_.bufferClearPipeline->BindPipeline(commandBuffer, &imageIndex, ActiveViewBankBase());
         const VkExtent2D activeExtent = ActiveViewRenderExtent();
         vkCmdDispatch(
             commandBuffer,
@@ -325,6 +361,17 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         renderPassInfo.renderArea.extent = ActiveViewRenderExtent();
         renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
         renderPassInfo.pClearValues = clearValues.data();
+
+        // The depth attachment is swapchain-local and intentionally reused by sequential views.
+        // Its render pass discards prior contents, but discard does not remove the execution and
+        // memory dependency on the preceding view's depth writes.
+        VkMemoryBarrier depthReuseBarrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+        depthReuseBarrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        depthReuseBarrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        vkCmdPipelineBarrier(commandBuffer,
+                             VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                             VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                             0, 1, &depthReuseBarrier, 0, nullptr, 0, nullptr);
 
         vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
         {
@@ -422,7 +469,24 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         auto& scene = GetScene();
         const uint32_t indirectDrawBatchCount = scene.GetIndirectDrawBatchCount();
         const uint32_t groupCount = (indirectDrawBatchCount + 63) / 64;
-        const uint32_t activeCascadeMask = ActiveRenderView().State().sunShadowCascadeUpdateMask;
+        const FViewRenderState& viewState = ActiveRenderView().State();
+        uint32_t activeCascadeMask = viewState.sunShadowCascadeUpdateMask;
+        const bool sameCameraFamily = shadowCameraFamilyCache_.valid &&
+            shadowCameraFamilyCache_.scene == &scene &&
+            shadowCameraFamilyCache_.sceneGeneration == SceneGeneration() &&
+            std::memcmp(&shadowCameraFamilyCache_.cascades, &viewState.cachedSunCascades,
+                        sizeof(Assets::CascadeShadowSetup)) == 0;
+        if (!sameCameraFamily)
+        {
+            // A shared shadow image set currently contains another camera family's cascades.
+            // Refresh every image so matrices and sampled maps cannot be mixed.
+            activeCascadeMask = Assets::Scene::kSunShadowCascadeMask;
+        }
+        else if (shadowCameraFamilyCache_.renderedFrame == static_cast<uint64_t>(FrameCount()))
+        {
+            // Reference views with the same camera family reuse the set rendered earlier this frame.
+            activeCascadeMask = 0;
+        }
         Assets::GPUScene shadowGpuScene = scene.FetchGPUScene(imageIndex, ActiveViewBankBase());
 
         if (activeCascadeMask != 0)
@@ -514,6 +578,13 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
             overlay_.sunShadowPass->DrawCascade(
                 commandBuffer, scene, shadowGpuScene, cascade);
         }
+        shadowCameraFamilyCache_ = {
+            .valid = true,
+            .scene = &scene,
+            .sceneGeneration = SceneGeneration(),
+            .renderedFrame = static_cast<uint64_t>(FrameCount()),
+            .cascades = viewState.cachedSunCascades,
+        };
     }
 
     void VulkanBaseRenderer::DrawWireframeOverlay(VkCommandBuffer commandBuffer, uint32_t imageIndex)
@@ -589,7 +660,7 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
             uint32_t(SwapChain().OutputOffset().x), uint32_t(SwapChain().OutputOffset().y),
             uint32_t(SwapChain().OutputExtent().width), uint32_t(SwapChain().OutputExtent().height)
         };
-        overlay_.visualDebuggerPipeline->BindPipeline(commandBuffer, pushConst.data());
+        overlay_.visualDebuggerPipeline->BindPipeline(commandBuffer, pushConst.data(), ActiveViewBankBase());
         vkCmdDispatch(
             commandBuffer,
             Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().width, 8),
