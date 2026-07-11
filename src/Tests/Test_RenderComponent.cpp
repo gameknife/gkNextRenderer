@@ -96,6 +96,9 @@ TEST_CASE("Image state tracker preserves and discards contents explicitly", "[Un
     CHECK(tracker.Find(image)->lastPass == "clear");
     CHECK((FResourceStateTracker::ToVkStages(ERenderStage::Fragment) &
            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) != 0);
+    CHECK(tracker.Stats().uses == 4);
+    CHECK(tracker.Stats().barriers == 4);
+    CHECK(tracker.Stats().discards == 1);
 }
 
 TEST_CASE("Renderer contracts describe prepasses outputs and history", "[Unit][Rendering][RendererContract]")

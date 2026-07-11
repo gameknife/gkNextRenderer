@@ -77,6 +77,21 @@ namespace Vulkan::PipelineCommon
         VkImageLayout newLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     };
 
+    struct FResourceStateStats
+    {
+        uint64_t uses = 0;
+        uint64_t barriers = 0;
+        uint64_t discards = 0;
+
+        FResourceStateStats& operator+=(const FResourceStateStats& other)
+        {
+            uses += other.uses;
+            barriers += other.barriers;
+            discards += other.discards;
+            return *this;
+        }
+    };
+
     class FResourceStateTracker final
     {
     public:
@@ -97,14 +112,17 @@ namespace Vulkan::PipelineCommon
             }
 
             FImageState& previous = states_[use.image.value];
+            ++stats_.uses;
             const bool firstUse = !previous.initialized;
             const bool discard = use.discardPreviousContents;
+            if (discard) ++stats_.discards;
             const bool needsBarrier = firstUse || discard || previous.layout != use.layout ||
                                       IsWrite(previous.access) || IsWrite(use.access);
 
             std::optional<FImageBarrier> barrier;
             if (needsBarrier)
             {
+                ++stats_.barriers;
                 barrier = FImageBarrier{
                     .image = use.image,
                     .range = use.range,
@@ -133,6 +151,8 @@ namespace Vulkan::PipelineCommon
             const auto found = states_.find(image.value);
             return found == states_.end() ? nullptr : &found->second;
         }
+
+        const FResourceStateStats& Stats() const { return stats_; }
 
         void Reset() { states_.clear(); }
 
@@ -176,5 +196,6 @@ namespace Vulkan::PipelineCommon
         }
 
         std::unordered_map<uint64_t, FImageState> states_;
+        FResourceStateStats stats_{};
     };
 }

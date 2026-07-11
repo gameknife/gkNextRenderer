@@ -282,8 +282,29 @@ namespace Vulkan
         }
     }
 
+    void OffscreenRenderViewController::ReleaseReferenceViews()
+    {
+        RenderViewResourceFactory factory(renderer_);
+        for (auto& [type, resources] : referenceViews_)
+        {
+            (void)type;
+            factory.DestroyView(resources.view);
+        }
+        referenceViews_.clear();
+    }
+
+    void OffscreenRenderViewController::ReleaseSecondaryViews()
+    {
+        RenderViewResourceFactory factory(renderer_);
+        for (auto& resources : views_)
+        {
+            factory.DestroyView(resources.view);
+        }
+    }
+
     bool OffscreenRenderViewController::ScheduleViews(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
+        ReleaseReferenceViews();
         if (!HasWork())
         {
             return false;
@@ -341,6 +362,7 @@ namespace Vulkan
         VkCommandBuffer commandBuffer,
         const uint32_t imageIndex)
     {
+        ReleaseSecondaryViews();
         bool clearSwapchain = true;
         bool renderedAny = false;
         for (const ERendererType rendererType : GetReferenceRendererTypes())

@@ -69,6 +69,8 @@ namespace Vulkan
         RenderView& EnsureView(uint32_t viewIndex);
         RenderView& EnsureReferenceView(int rendererType, uint32_t imageIndex);
         void CopyViewOutput(VkCommandBuffer commandBuffer, RenderView& view, uint32_t viewIndex);
+        void ReleaseReferenceViews();
+        void ReleaseSecondaryViews();
 
         VulkanBaseRenderer& renderer_;
         std::array<FViewResources, kMaxSecondaryViews> views_{};

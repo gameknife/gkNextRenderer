@@ -31,6 +31,10 @@ namespace Rendering::Upscaler
 namespace Vulkan
 {
 	class FActiveRenderViewScope;
+	class FrameSubmission;
+	class RayTracingSceneBackend;
+	class AmbientCubeBaker;
+	class GpuDrivenPasses;
 	class LogicRendererBase;
 	class RenderViewResourceFactory;
 	class RenderViewServices;
@@ -311,6 +315,10 @@ namespace Vulkan
 
 	private:
 		friend class FActiveRenderViewScope;
+		friend class FrameSubmission;
+		friend class RayTracingSceneBackend;
+		friend class AmbientCubeBaker;
+		friend class GpuDrivenPasses;
 		friend class RenderViewResourceFactory;
 
 		// Internal resource groups
@@ -462,6 +470,9 @@ namespace Vulkan
 		PipelineCommon::FResourceStateTracker swapchainStateTracker_;
 		PipelineCommon::FResourceStateTracker auxiliaryImageStateTracker_;
 		std::unique_ptr<RayTracingResources> rt_;
+		std::unique_ptr<RayTracingSceneBackend> rayTracingSceneBackend_;
+		std::unique_ptr<AmbientCubeBaker> ambientCubeBaker_;
+		std::unique_ptr<GpuDrivenPasses> gpuDrivenPasses_;
 		ScreenshotResources screenshot_;
 		FrameGenerationResources frameGeneration_;
 		AmbientCubePipelines ambient_;

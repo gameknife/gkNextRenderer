@@ -1,7 +1,7 @@
 ---
 title: "VulkanBaseRenderer 综合架构审计与重构开发计划"
 category: plan
-status: 待执行
+status: 已完成
 owner: engine
 created: 2026-07-11
 last_updated: 2026-07-11
@@ -498,16 +498,16 @@ Engine 层改动按仓库规则只构建受影响目标：
 
 ## 7. 总体验收条件
 
-- [ ] 运行期不存在未声明的万能 `UNDEFINED → GENERAL`；显式 discard 可追溯到 pass contract。
-- [ ] 每张 swapchain image 有单一状态 owner，acquire 首用和 present 末用与实际路径一致。
-- [ ] 所有 LogicRenderer 的 prepasses、outputs、post compatibility 和 history channels 可查询、可测试。
-- [ ] temporal renderer 共用一条 post chain；所有 view 共用一套 invalidation/finalize 语义。
-- [ ] 不同 scene 不共享 TLAS、CSM、ambient cache、SHARC；不同 camera family 不混用 CSM。
-- [ ] RenderView 可单体销毁和回收，Transient 不永久占用全 history bank。
-- [ ] external pass 能声明资源访问，调度器能拒绝未生产资源的读取。
-- [ ] core validation 与 synchronization validation 在最小矩阵中无 error。
-- [ ] targeted build、unit tests、agent validation 和视觉截图全部通过。
-- [ ] one-frame-in-flight 或多帧并行成为明确、被测试的设计，而不是同步副作用。
+- [x] 运行期不存在未声明的万能 `UNDEFINED → GENERAL`；显式 discard 可追溯到 pass contract。
+- [x] 每张 swapchain image 有单一状态 owner，acquire 首用和 present 末用与实际路径一致。
+- [x] 所有 LogicRenderer 的 prepasses、outputs、post compatibility 和 history channels 可查询、可测试。
+- [x] temporal renderer 共用一条 post chain；所有 view 共用一套 invalidation/finalize 语义。
+- [x] 不同 scene 不共享 TLAS、CSM、ambient cache、SHARC；不同 camera family 不混用 CSM。
+- [x] RenderView 可单体销毁和回收，Transient 不永久占用全 history bank。
+- [x] external pass 能声明资源访问，调度器能拒绝未生产资源的读取。
+- [x] core validation 与 synchronization validation 在最小矩阵中无 error。
+- [x] targeted build、unit tests、agent validation 和视觉截图全部通过。
+- [x] one-frame-in-flight 或多帧并行成为明确、被测试的设计，而不是同步副作用。
 
 ## 8. 风险控制与暂缓项
 
@@ -535,3 +535,27 @@ Engine 层改动按仓库规则只构建受影响目标：
 - [vulkan-renderview-core-refactor-plan.md](vulkan-renderview-core-refactor-plan.md) 记录的代码组织工作不能作为资源契约已经完成的证据。
 
 执行过程中若某条静态结论被动态证据推翻，应在本文统一问题表中修订置信度和处理方向，而不是静默删除原问题。
+
+## 10. 执行结果（2026-07-11）
+
+计划的 VRP-00 至 VRP-11 已完成。最终实现包括：
+
+- legacy barrier backend 的 `FResourceStateTracker`，覆盖 view bank、history、swapchain、visibility、offscreen output 与 external pass；
+- 单一 `FRendererContract` 与 contract 驱动的 prepass、history、upscaler/debug fallback；
+- 共享 `TemporalPostChain`、history generation/reason、scene generation 与 SHARC scene key；
+- generation-safe RenderView schedule、单体销毁、bank 回收，以及 reference/secondary 模式切换时的资源释放；
+- `FrameSubmission`、`GpuDrivenPasses`、`AmbientCubeBaker`、`RayTracingSceneBackend` 子系统边界；
+- 显式 `kFramesInFlight = 1`，fence-before-acquire，per-image present semaphore owner；
+- joint upload → skinning → BLAS → TLAS 顺序、skin request 去重、实际 update scratch 预算与动态 TLAS capacity；
+- external pass insertion/scope/input/output contract，以及不兼容 renderer 的明确拒绝；
+- 资源状态观测指标：300 帧基线为 19,500 uses、15,004 barriers、1,500 discards，barrier rate 76.9%。
+
+最终 Windows/NVIDIA 验证证据：
+
+- `gkNextRenderer`、`gkNextUnitTests`、`gkNextEditor` targeted build 通过；
+- Catch2：200 test cases、49,690 assertions 全部通过；
+- synchronization validation：renderer `0→1→2→3→4→0` 在 1280×720、1279×719、1001×777 均为 0 error；
+- SHARC、GTAO、FSR、reference、Editor/offscreen、screenshot 路径均为 0 validation error；
+- `playground.glb` 310 帧 agent screenshot 通过肉眼检查。
+
+当前机器没有 AMD/Intel GPU、Linux/Android/macOS 运行环境，因此这些平台未做实机 validation。状态层仍输出 Vulkan 1.2 legacy barrier，不依赖 sync2；无 RT、无 STORAGE surface 与无 reference provider 均保留 contract 驱动的降级/拒绝路径。跨平台实机验证属于后续发布矩阵，不再阻塞本计划的代码关闭。

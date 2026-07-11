@@ -802,11 +802,15 @@ TEST_CASE("Scad loader: include executes a file even if use imported it first", 
     REQUIRE(Assets::FScadLoader::LoadScadScene(
         mainPath.string(), environment, nodes, models, materials, lights, tracks, skeletons));
     REQUIRE(nodes.size() == 2);
-    REQUIRE(models.size() == 2);
+    REQUIRE(models.size() == 1);
     CHECK(nodes[0]->GetName() == "box1");
     CHECK(nodes[1]->GetName() == "box1");
+    const auto firstRender = nodes[0]->GetComponent<Runtime::RenderComponent>();
+    const auto secondRender = nodes[1]->GetComponent<Runtime::RenderComponent>();
+    REQUIRE(firstRender);
+    REQUIRE(secondRender);
+    CHECK(firstRender->GetModelId() == secondRender->GetModelId());
     CHECK(models[0].NumberOfVertices() == 36);
-    CHECK(models[1].NumberOfVertices() == 36);
 }
 
 TEST_CASE("Scad loader: parse errors fail the load", "[Unit][Scad]")

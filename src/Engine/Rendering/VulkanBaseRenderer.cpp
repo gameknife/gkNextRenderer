@@ -1,4 +1,6 @@
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Rendering/FrameSubmission.hpp"
+#include "Engine/Rendering/RenderSubsystems.hpp"
 #include "Engine/Vulkan/GpuQueryTimer.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/CommandExecution.hpp"
@@ -336,6 +338,9 @@ namespace Vulkan
         caps_.supportRayTracing = false;
         upscaler_ = Rendering::Upscaler::CreateRegisteredUpscaler();
         renderViewServices_ = std::make_unique<RenderViewServices>(*this);
+        rayTracingSceneBackend_ = std::make_unique<RayTracingSceneBackend>(*this);
+        ambientCubeBaker_ = std::make_unique<AmbientCubeBaker>(*this);
+        gpuDrivenPasses_ = std::make_unique<GpuDrivenPasses>(*this);
     }
 
     VulkanBaseRenderer::~VulkanBaseRenderer()
@@ -1359,11 +1364,8 @@ namespace Vulkan
     // Camera-independent, runs once per scene per frame (shared across all views).
     void VulkanBaseRenderer::BeginSceneFrame(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
-        UpdateSkinningBuffers();
-        DispatchSkinning(commandBuffer, imageIndex);
-        UpdateAccelerationStructuresBottom(commandBuffer);
-        UpdateAccelerationStructuresTop(commandBuffer);
-        HandleAmbientCubeCacheInvalidation(commandBuffer, imageIndex);
+        rayTracingSceneBackend_->PrepareSceneFrame(commandBuffer, imageIndex);
+        ambientCubeBaker_->PrepareSceneFrame(commandBuffer, imageIndex);
     }
 
     void VulkanBaseRenderer::RenderViewToBank(
@@ -1477,22 +1479,7 @@ namespace Vulkan
     void VulkanBaseRenderer::PreRenderPerView(VkCommandBuffer commandBuffer, const uint32_t imageIndex,
                                               const bool isPrimaryView, const FRendererContract& contract)
     {
-        if (HasAny(contract.prepasses, EViewPrepass::Cull))
-        {
-            DispatchGpuCulling(commandBuffer, imageIndex);
-        }
-        if (HasAny(contract.prepasses, EViewPrepass::Clear))
-        {
-            DispatchClearPass(commandBuffer, imageIndex, /*clearSwapchain*/ isPrimaryView);
-        }
-        if (HasAny(contract.prepasses, EViewPrepass::Visibility))
-        {
-            DispatchVisibilityPass(commandBuffer, imageIndex);
-        }
-        if (HasAny(contract.prepasses, EViewPrepass::CSM))
-        {
-            DispatchSunShadow(commandBuffer, imageIndex);
-        }
+        gpuDrivenPasses_->RenderViewPrepasses(commandBuffer, imageIndex, isPrimaryView, contract);
     }
 
     void VulkanBaseRenderer::DrawFrame()
@@ -1542,63 +1529,13 @@ namespace Vulkan
             ctx_.frameProfiler->EndGpuFrame((*frame_.commandBuffers)[frame_.currentFrame]);
         }
 
-        // next frame synchronization objects
-        if (frame_.currentFrame >= frame_.imageAvailableSemaphores.size() ||
-            frame_.currentFrame >= frame_.inFlightFences.size())
+        VkSemaphore imageAvailableSemaphore = VK_NULL_HANDLE;
+        VkSemaphore renderFinishedSemaphore = VK_NULL_HANDLE;
+        if (!FrameSubmission::WaitAndAcquire(
+                *this, noTimeout, imageAvailableSemaphore, renderFinishedSemaphore))
         {
-            Throw(std::runtime_error("frame slot is outside swapchain synchronization storage"));
-        }
-        const auto imageAvailableSemaphore = frame_.imageAvailableSemaphores[frame_.currentFrame].Handle();
-
-        // The frame-slot fence must be complete before reusing its acquire semaphore. Waiting
-        // after vkAcquireNextImageKHR is too late: the semaphore can still have a pending wait.
-        auto* const previousSubmitFence = frame_.currentFence;
-        auto* const frameSlotFence = &frame_.inFlightFences[frame_.currentFrame];
-        if (previousSubmitFence)
-        {
-            SCOPED_CPU_TIMER("fence");
-            previousSubmitFence->Wait(noTimeout);
-            frame_.completedSubmitSerial = std::max(frame_.completedSubmitSerial, frame_.currentFenceSerial);
-        }
-        if (frameSlotFence != previousSubmitFence)
-        {
-            SCOPED_CPU_TIMER("frame-slot-fence");
-            frameSlotFence->Wait(noTimeout);
-            if (frame_.currentFrame < frame_.inFlightFenceSubmitSerials.size())
-            {
-                frame_.completedSubmitSerial = std::max(
-                    frame_.completedSubmitSerial, frame_.inFlightFenceSubmitSerials[frame_.currentFrame]);
-            }
-        }
-        frame_.currentFence = frameSlotFence;
-
-        auto result = VkResult(VK_SUCCESS);
-        {
-            SCOPED_CPU_TIMER("acquire-frame");
-            result = Interposer().AcquireNextImageKHR(ctx_.device->Handle(), frame_.swapChain->Handle(), noTimeout,
-                                                            imageAvailableSemaphore, nullptr, &frame_.currentImageIndex);
-        }
-        
-        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
-        {
-            RecreateSwapChain();
             return;
         }
-
-        if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
-        {
-            Throw(std::runtime_error(std::string("failed to acquire next image (") + ToString(result) + ")"));
-        }
-
-        if (frame_.currentImageIndex >= frame_.renderFinishedSemaphores.size() ||
-            frame_.currentImageIndex >= frame_.swapChain->Images().size())
-        {
-            Throw(std::runtime_error("acquired image index is outside swapchain image storage"));
-        }
-        // imageAvailable is owned by the CPU frame slot; renderFinished is owned by the
-        // acquired presentable image so it cannot be reused while that image is pending.
-        const auto renderFinishedSemaphore =
-            frame_.renderFinishedSemaphores[frame_.currentImageIndex].Handle();
 
         frame_.recordingSubmitSerial = frame_.nextSubmitSerial;
         frame_.queuedSignalSemaphores.clear();
@@ -1727,110 +1664,37 @@ namespace Vulkan
         }
         frame_.commandBuffers->End(frame_.currentFrame);
 
-        VkSubmitInfo submitInfo = {};
-        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-        VkCommandBuffer commandBuffers[]{commandBuffer};
-        VkSemaphore waitSemaphores[] = {imageAvailableSemaphore};
-        // The swapchain can first be touched by transfer, compute, or color output depending
-        // on the active output path. Until VRP-04 derives the precise earliest use from the
-        // pass schedule, wait conservatively so acquisition always precedes that first use.
-        VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};
+        if (upscaler_ && frame_.streamlineFrameToken)
+        {
+            upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::RenderSubmitStart,
+                                 frame_.streamlineFrameToken);
+        }
         {
             SCOPED_CPU_TIMER("submit");
-            frame_.currentFence = &(frame_.inFlightFences[frame_.currentFrame]);
-            {
-                if (upscaler_ && frame_.streamlineFrameToken)
-                {
-                    upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::RenderSubmitStart,
-                                         frame_.streamlineFrameToken);
-                }
-
-                submitInfo.waitSemaphoreCount = 1;
-                submitInfo.pWaitSemaphores = waitSemaphores;
-                submitInfo.pWaitDstStageMask = waitStages;
-                submitInfo.commandBufferCount = 1;
-                submitInfo.pCommandBuffers = commandBuffers;
-
-                std::vector<VkSemaphore> signalSemaphores;
-                signalSemaphores.reserve(1 + frame_.queuedSignalSemaphores.size());
-                signalSemaphores.push_back(renderFinishedSemaphore);
-                signalSemaphores.insert(signalSemaphores.end(), frame_.queuedSignalSemaphores.begin(),
-                                        frame_.queuedSignalSemaphores.end());
-
-                submitInfo.signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
-                submitInfo.pSignalSemaphores = signalSemaphores.data();
-
-                std::vector<uint64_t> signalSemaphoreValues;
-                VkTimelineSemaphoreSubmitInfo timelineSubmitInfo = {};
-                if (!frame_.queuedSignalValues.empty())
-                {
-                    signalSemaphoreValues.reserve(signalSemaphores.size());
-                    signalSemaphoreValues.push_back(0);
-                    signalSemaphoreValues.insert(signalSemaphoreValues.end(), frame_.queuedSignalValues.begin(),
-                                                 frame_.queuedSignalValues.end());
-                    timelineSubmitInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
-                    timelineSubmitInfo.signalSemaphoreValueCount =
-                        static_cast<uint32_t>(signalSemaphoreValues.size());
-                    timelineSubmitInfo.pSignalSemaphoreValues = signalSemaphoreValues.data();
-                    submitInfo.pNext = &timelineSubmitInfo;
-                }
-
-                frame_.currentFence->Reset();
-
-                Check(vkQueueSubmit(ctx_.device->GraphicsQueue(), 1, &submitInfo, frame_.currentFence->Handle()),
-                      "submit draw command buffer");
-                frame_.currentFenceSerial = frame_.recordingSubmitSerial;
-                if (frame_.currentFrame < frame_.inFlightFenceSubmitSerials.size())
-                {
-                    frame_.inFlightFenceSubmitSerials[frame_.currentFrame] = frame_.recordingSubmitSerial;
-                }
-                frame_.nextSubmitSerial = frame_.recordingSubmitSerial + 1;
-
-                if (upscaler_ && frame_.streamlineFrameToken)
-                {
-                    upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::RenderSubmitEnd,
-                                         frame_.streamlineFrameToken);
-                }
-            }
+            FrameSubmission::Submit(*this, commandBuffer, imageAvailableSemaphore, renderFinishedSemaphore);
+        }
+        if (upscaler_ && frame_.streamlineFrameToken)
+        {
+            upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::RenderSubmitEnd,
+                                 frame_.streamlineFrameToken);
         }
 
+        if (upscaler_ && frame_.streamlineFrameToken)
+        {
+            upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::PresentStart,
+                                 frame_.streamlineFrameToken);
+        }
         {
             SCOPED_CPU_TIMER("present");
-            VkSwapchainKHR swapChains[] = {frame_.swapChain->Handle()};
-            VkPresentInfoKHR presentInfo = {};
-            presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-            presentInfo.waitSemaphoreCount = 1;
-            presentInfo.pWaitSemaphores = &renderFinishedSemaphore;
-            presentInfo.swapchainCount = 1;
-            presentInfo.pSwapchains = swapChains;
-            presentInfo.pImageIndices = &frame_.currentImageIndex;
-            presentInfo.pResults = nullptr; // Optional
-
-            if (upscaler_ && frame_.streamlineFrameToken)
+            if (!FrameSubmission::Present(*this, renderFinishedSemaphore))
             {
-                upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::PresentStart,
-                                     frame_.streamlineFrameToken);
-            }
-
-            result = Interposer().QueuePresentKHR(ctx_.device->PresentQueue(), &presentInfo);
-
-            if (upscaler_ && frame_.streamlineFrameToken)
-            {
-                upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::PresentEnd,
-                                     frame_.streamlineFrameToken);
-            }
-
-            if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
-            {
-                RecreateSwapChain();
                 return;
             }
-
-            if (result != VK_SUCCESS)
-            {
-                Throw(std::runtime_error(std::string("failed to present next image (") + ToString(result) + ")"));
-            }
+        }
+        if (upscaler_ && frame_.streamlineFrameToken)
+        {
+            upscaler_->MarkFrame(Rendering::Upscaler::EFrameMarker::PresentEnd,
+                                 frame_.streamlineFrameToken);
         }
         
         if (delegates_.afterSubmit)
@@ -1842,6 +1706,20 @@ namespace Vulkan
         frame_.currentFrame = (frame_.currentFrame + 1) % frame_.inFlightFences.size();
         resetUpscalerHistory_ = false;
         frame_.frameCount++;
+        if (frame_.frameCount % 300 == 0)
+        {
+            PipelineCommon::FResourceStateStats stats = PrimaryView().ResourceStates().Stats();
+            for (const auto& view : renderViews_->AdditionalViews())
+            {
+                stats += view->ResourceStates().Stats();
+            }
+            stats += swapchainStateTracker_.Stats();
+            stats += visibilityStateTracker_.Stats();
+            stats += auxiliaryImageStateTracker_.Stats();
+            SPDLOG_INFO("[ResourceState] frames={} uses={} barriers={} discards={} barrier-rate={:.1f}%",
+                        frame_.frameCount, stats.uses, stats.barriers, stats.discards,
+                        stats.uses > 0 ? 100.0 * double(stats.barriers) / double(stats.uses) : 0.0);
+        }
     
     }
 
