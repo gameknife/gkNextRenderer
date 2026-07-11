@@ -96,7 +96,7 @@ namespace Assets
         void CleanUp();
         // void RebuildBVH();
 
-        const Assets::GPUScene& FetchGPUScene(const uint32_t imageIndex) const;
+        const Assets::GPUScene& FetchGPUScene(uint32_t imageIndex, uint32_t viewBankBase) const;
         std::vector<std::shared_ptr<Node>>& Nodes() { return nodes_; }
         const std::vector<std::shared_ptr<Node>>& Nodes() const { return nodes_; }
         const std::vector<Model>& Models() const { return models_; }
@@ -393,6 +393,6 @@ namespace Assets
         void RefreshEnvironmentComponentCache();
         void CacheEnvironmentComponentFromNode(Node* node);
 
-        Assets::GPUScene BuildGPUScene(uint32_t imageIndex) const;
+        Assets::GPUScene BuildGPUScene(uint32_t imageIndex, uint32_t viewBankBase) const;
     };
 } // namespace Assets

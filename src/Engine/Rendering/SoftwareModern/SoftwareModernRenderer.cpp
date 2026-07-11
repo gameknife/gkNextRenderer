@@ -64,7 +64,8 @@ namespace Vulkan::SoftwareModern
 
         {
             SCOPED_GPU_TIMER("shadingpass");
-            deferredShadingPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+            deferredShadingPipeline_->BindPipeline(commandBuffer,
+                GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase()));
             vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(extent.width, 8),
                           Utilities::Math::GetSafeDispatchCount(extent.height, 8), 1);
         }

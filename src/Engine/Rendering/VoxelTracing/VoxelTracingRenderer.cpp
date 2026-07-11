@@ -49,7 +49,8 @@ namespace Vulkan::VoxelTracing
             baseRender_.TransitionActiveViewImages(commandBuffer, {
                 {Assets::Bindless::RT_DENOISED, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
             }, "voxel tracing shading");
-            deferredShadingPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+            deferredShadingPipeline_->BindPipeline(commandBuffer,
+                GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase()));
             vkCmdDispatch(
                 commandBuffer,
                 Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),

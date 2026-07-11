@@ -19,6 +19,15 @@
 
 namespace Vulkan::GaussianSplat
 {
+    FExternalPassContract GaussianSplatPass::Contract() const
+    {
+        return {
+            .name = "GaussianSplat",
+            .requiredOutputs = static_cast<uint32_t>(ERenderOutput::Color | ERenderOutput::Depth),
+            .producedOutputs = static_cast<uint32_t>(ERenderOutput::Color),
+        };
+    }
+
     namespace
     {
         struct FSplatModel
@@ -611,7 +620,8 @@ namespace Vulkan::GaussianSplat
             vkCmdBeginRenderPass(commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
             pipelineLayout_->BindDescriptorSets(commandBuffer, 0, VK_PIPELINE_BIND_POINT_GRAPHICS);
-            const Assets::GPUScene& gpuScene = renderer_.GetScene().FetchGPUScene(imageIndex);
+            const Assets::GPUScene& gpuScene = renderer_.GetScene().FetchGPUScene(
+                imageIndex, renderer_.ActiveViewBankBase());
             const FSplatPushConstants push{
                 gpuScene,
                 splatBuffer_->GetDeviceAddress(), paletteBuffer_->GetDeviceAddress(),

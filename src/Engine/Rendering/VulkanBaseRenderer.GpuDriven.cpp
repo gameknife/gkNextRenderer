@@ -28,6 +28,21 @@
 
 namespace Vulkan
 {
+    void VulkanBaseRenderer::RequestSkinUpdate(const uint32_t modelId)
+    {
+        const Assets::Scene& scene = GetScene();
+        if (scene.GetModel(modelId) == nullptr)
+        {
+            SPDLOG_WARN("Ignoring skin update for invalid model {}", modelId);
+            return;
+        }
+        if (std::find(skin_.updateRequests.begin(), skin_.updateRequests.end(), modelId) ==
+            skin_.updateRequests.end())
+        {
+            skin_.updateRequests.push_back(modelId);
+        }
+    }
+
     void VulkanBaseRenderer::UpdateSkinningBuffers()
     {
         auto& scene = GetScene();
@@ -98,7 +113,7 @@ namespace Vulkan
 
         skin_.pipeline->BindPipeline(commandBuffer, scene, imageIndex);
 
-        Assets::GPUScene gpuScene = scene.FetchGPUScene(imageIndex);
+        Assets::GPUScene gpuScene = scene.FetchGPUScene(imageIndex, ActiveViewBankBase());
         if (!skin_.vertexBuffer)
         {
             return;
@@ -175,7 +190,7 @@ namespace Vulkan
         }
 
         auto& scene = GetScene();
-        Assets::GPUScene gpuScene = scene.FetchGPUScene(imageIndex);
+        Assets::GPUScene gpuScene = scene.FetchGPUScene(imageIndex, ActiveViewBankBase());
         const uint32_t maxSceneTriangles = scene.GetMaxSceneTriangles();
         
         {
@@ -313,7 +328,7 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
             const VkRect2D scissor{{0, 0}, renderPassInfo.renderArea.extent};
             vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
             vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-            const Assets::GPUScene& gpuScene = scene.FetchGPUScene(imageIndex);
+            const Assets::GPUScene& gpuScene = scene.FetchGPUScene(imageIndex, ActiveViewBankBase());
             activeVisibilityPipeline.PipelineLayout().BindDescriptorSets(
                 commandBuffer, 0, VK_PIPELINE_BIND_POINT_GRAPHICS);
             vkCmdPushConstants(commandBuffer, activeVisibilityPipeline.PipelineLayout().Handle(),
@@ -395,7 +410,7 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         const uint32_t indirectDrawBatchCount = scene.GetIndirectDrawBatchCount();
         const uint32_t groupCount = (indirectDrawBatchCount + 63) / 64;
         const uint32_t activeCascadeMask = ActiveRenderView().State().sunShadowCascadeUpdateMask;
-        Assets::GPUScene shadowGpuScene = scene.FetchGPUScene(imageIndex);
+        Assets::GPUScene shadowGpuScene = scene.FetchGPUScene(imageIndex, ActiveViewBankBase());
 
         if (activeCascadeMask != 0)
         {
@@ -517,7 +532,7 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
         {
             const auto& scene = GetScene();
-            const Assets::GPUScene& gpuScene = scene.FetchGPUScene(imageIndex);
+            const Assets::GPUScene& gpuScene = scene.FetchGPUScene(imageIndex, ActiveViewBankBase());
 
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, activeWireframePipeline.Handle());
             activeWireframePipeline.PipelineLayout().BindDescriptorSets(

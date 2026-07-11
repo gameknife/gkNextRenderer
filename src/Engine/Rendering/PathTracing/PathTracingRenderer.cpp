@@ -271,7 +271,7 @@ namespace Vulkan::PathTracing
 
     Assets::GPUScene PathTracingRenderer::BuildSharcGPUScene(uint32_t imageIndex)
     {
-        Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
+        Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase());
         gpuScene.ReservedAddress0 = sharc_.resources.buffer ? sharc_.resources.buffer->GetDeviceAddress() : 0;
         return gpuScene;
     }
@@ -353,7 +353,8 @@ namespace Vulkan::PathTracing
             else
             {
                 SCOPED_GPU_TIMER("rt pass");
-                rayTracingPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+                rayTracingPipeline_->BindPipeline(commandBuffer,
+                    GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase()));
                 vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
                               Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
             }

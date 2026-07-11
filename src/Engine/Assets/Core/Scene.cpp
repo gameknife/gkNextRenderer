@@ -800,7 +800,7 @@ namespace Assets
         }
     }
 
-    Assets::GPUScene Scene::BuildGPUScene(const uint32_t imageIndex) const
+    Assets::GPUScene Scene::BuildGPUScene(const uint32_t imageIndex, const uint32_t viewBankBase) const
     {
         Assets::GPUScene gpuScene{};
         // Active RenderView's camera UBO (primary == per-image uniform buffer; secondary views
@@ -825,14 +825,14 @@ namespace Assets
         gpuScene.SwapChainIndex = imageIndex;
         // Active RenderView RT bank base -> shaders resolve screen-space slots via Bindless::ViewRT.
         // Primary view == 0, so the absolute (legacy) layout is unchanged.
-        gpuScene.custom_data_0 = NextEngine::GetInstance()->GetRenderer().ActiveViewBankBase();
+        gpuScene.custom_data_0 = viewBankBase;
 
         return gpuScene;
     }
 
-    const Assets::GPUScene& Scene::FetchGPUScene(const uint32_t imageIndex) const
+    const Assets::GPUScene& Scene::FetchGPUScene(const uint32_t imageIndex, const uint32_t viewBankBase) const
     {
-        gpuScene_ = BuildGPUScene(imageIndex);
+        gpuScene_ = BuildGPUScene(imageIndex, viewBankBase);
 
         return gpuScene_;
     }

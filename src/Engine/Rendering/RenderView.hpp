@@ -161,18 +161,28 @@ namespace Vulkan
         std::vector<bool> used_;
     };
 
+    struct FRenderViewHandle
+    {
+        uint32_t bankBase = FBankAllocator::kInvalidBase;
+        uint32_t generation = 0;
+
+        bool IsValid() const { return bankBase != FBankAllocator::kInvalidBase && generation != 0; }
+        auto operator<=>(const FRenderViewHandle&) const = default;
+    };
+
     // One independent view of a scene. Owns the per-view temporal history and the identity
     // (RT bank base, render extent/offset, output kind, schedule). Vulkan resources are still
     // owned by VulkanBaseRenderer, but their per-view handles are tracked here.
     class RenderView
     {
     public:
-        RenderView(uint32_t bankBase, const FViewDesc& desc, std::string debugName)
-            : bankBase_(bankBase), desc_(desc), debugName_(std::move(debugName))
+        RenderView(uint32_t bankBase, const FViewDesc& desc, std::string debugName, uint32_t generation = 1)
+            : bankBase_(bankBase), generation_(generation), desc_(desc), debugName_(std::move(debugName))
         {
         }
 
         uint32_t              RtBankBase() const { return bankBase_; }
+        FRenderViewHandle     Handle() const { return {bankBase_, generation_}; }
         const char*           DebugName() const { return debugName_.c_str(); }
         const FViewDesc&      Desc() const { return desc_; }
         VkExtent2D            RenderExtent() const { return desc_.renderExtent; }
@@ -271,6 +281,7 @@ namespace Vulkan
 
     private:
         uint32_t         bankBase_ = 0;
+        uint32_t         generation_ = 0;
         FViewDesc        desc_{};
         std::string      debugName_;
         VkOffset2D       renderOffset_{};
@@ -291,7 +302,7 @@ namespace Vulkan
 
     struct FRenderViewScheduleItem
     {
-        RenderView* view = nullptr;
+        FRenderViewHandle view;
         LogicRendererBase* logicRenderer = nullptr;
         bool clearSwapchain = false;
         FRenderViewPostCallback postRender;
@@ -307,7 +318,9 @@ namespace Vulkan
             FViewDesc desc{};
             desc.outputKind = EViewOutputKind::SwapchainSubrect;
             desc.schedule   = EViewSchedule::Persistent;
-            primary_ = std::make_unique<RenderView>(FBankAllocator::PrimaryBankBase(), desc, "primary view");
+            generations_.fill(0);
+            generations_[0] = 1;
+            primary_ = std::make_unique<RenderView>(FBankAllocator::PrimaryBankBase(), desc, "primary view", 1);
         }
 
         RenderView&       Primary() { return *primary_; }
@@ -324,8 +337,38 @@ namespace Vulkan
                 return nullptr;
             }
 
-            additional_.push_back(std::make_unique<RenderView>(bankBase, desc, std::move(debugName)));
+            const uint32_t bankIndex = bankBase / Assets::Bindless::kViewRtBankStride;
+            const uint32_t generation = ++generations_[bankIndex];
+            additional_.push_back(std::make_unique<RenderView>(bankBase, desc, std::move(debugName), generation));
             return additional_.back().get();
+        }
+
+        RenderView* Resolve(const FRenderViewHandle handle) const
+        {
+            if (!handle.IsValid()) return nullptr;
+            if (primary_->Handle() == handle) return primary_.get();
+            const auto found = std::find_if(additional_.begin(), additional_.end(),
+                [handle](const auto& view) { return view->Handle() == handle; });
+            return found == additional_.end() ? nullptr : found->get();
+        }
+
+        bool DestroyView(RenderView& view)
+        {
+            if (view.IsPrimary())
+            {
+                return false;
+            }
+            schedule_.erase(std::remove_if(schedule_.begin(), schedule_.end(),
+                [&view](const FRenderViewScheduleItem& item) { return item.view == view.Handle(); }), schedule_.end());
+            const auto found = std::find_if(additional_.begin(), additional_.end(),
+                [&view](const auto& candidate) { return candidate.get() == &view; });
+            if (found == additional_.end())
+            {
+                return false;
+            }
+            banks_.Release(view.RtBankBase());
+            additional_.erase(found);
+            return true;
         }
 
         void ScheduleView(RenderView& view,
@@ -334,7 +377,7 @@ namespace Vulkan
                           FRenderViewPostCallback postRender = {})
         {
             schedule_.push_back(FRenderViewScheduleItem{
-                &view,
+                view.Handle(),
                 &logicRenderer,
                 clearSwapchain,
                 std::move(postRender)});
@@ -392,6 +435,7 @@ namespace Vulkan
 
     private:
         FBankAllocator                          banks_;
+        std::array<uint32_t, FBankAllocator::kMaxConcurrentBanks> generations_{};
         std::unique_ptr<RenderView>             primary_;
         std::vector<std::unique_ptr<RenderView>> additional_;
         std::vector<FRenderViewScheduleItem>     schedule_;
@@ -425,6 +469,7 @@ namespace Vulkan
             const FViewDesc& desc,
             std::string debugName,
             bool copyObjectIdHistory);
+        bool DestroyView(RenderView*& view);
         std::unique_ptr<FrameBuffer> RebuildVisibilityFramebuffer(RenderView& view, VkExtent2D extent);
         std::unique_ptr<RenderImage> CreateSampledColorImage(VkExtent2D extent, const char* debugName);
         std::unique_ptr<Sampler> CreateClampSampler();

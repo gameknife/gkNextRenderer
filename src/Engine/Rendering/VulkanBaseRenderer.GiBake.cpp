@@ -72,7 +72,7 @@ namespace Vulkan
 
         ambient_.clearCache->BindPipeline(commandBuffer, GetScene(), imageIndex);
 
-        Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
+        Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex, 0);
         gpuScene.custom_data_0 = cubePoolTotal;
         gpuScene.custom_data_1 = 0;
         gpuScene.custom_data_2 = residencyTotal;
@@ -171,7 +171,7 @@ namespace Vulkan
             ambient_.softBake->BindPipeline(commandBuffer, GetScene(), imageIndex);
         }
 
-        Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex);
+        Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex, 0);
         gpuScene.custom_data_0 = static_cast<uint32_t>(offsetInActiveProbes);
         gpuScene.custom_data_1 = cascadeIndex;
 

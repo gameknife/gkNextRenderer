@@ -24,6 +24,8 @@ namespace Vulkan::GaussianSplat
         explicit GaussianSplatPass(VulkanBaseRenderer& renderer);
         ~GaussianSplatPass() override;
 
+        FExternalPassContract Contract() const override;
+
         void CreateResources() override;
         void DestroyResources();
         void ReloadShaders(const std::set<std::string>& changedShaderFiles,

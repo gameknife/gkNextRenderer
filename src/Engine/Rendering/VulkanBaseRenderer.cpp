@@ -1354,12 +1354,12 @@ namespace Vulkan
     // Camera-independent, runs once per scene per frame (shared across all views).
     void VulkanBaseRenderer::BeginSceneFrame(VkCommandBuffer commandBuffer, const uint32_t imageIndex)
     {
-        UpdateAccelerationStructuresTop(commandBuffer);
         UpdateSkinningBuffers();
         InitializeBarriers(commandBuffer);
-        HandleAmbientCubeCacheInvalidation(commandBuffer, imageIndex);
         DispatchSkinning(commandBuffer, imageIndex);
         UpdateAccelerationStructuresBottom(commandBuffer);
+        UpdateAccelerationStructuresTop(commandBuffer);
+        HandleAmbientCubeCacheInvalidation(commandBuffer, imageIndex);
     }
 
     void VulkanBaseRenderer::RenderViewToBank(
@@ -1412,16 +1412,22 @@ namespace Vulkan
         bool renderedAny = false;
         for (const FRenderViewScheduleItem& item : renderViews_->ScheduledViews())
         {
-            if (item.view == nullptr || item.logicRenderer == nullptr)
+            RenderView* view = renderViews_->Resolve(item.view);
+            if (view == nullptr || item.logicRenderer == nullptr)
             {
+                if (view == nullptr)
+                {
+                    SPDLOG_WARN("Skipping stale RenderView schedule item (bank {}, generation {})",
+                                item.view.bankBase, item.view.generation);
+                }
                 continue;
             }
 
-            RenderViewToBank(commandBuffer, imageIndex, *item.view, item.clearSwapchain, *item.logicRenderer);
+            RenderViewToBank(commandBuffer, imageIndex, *view, item.clearSwapchain, *item.logicRenderer);
             renderedAny = true;
             if (item.postRender)
             {
-                item.postRender(*item.view);
+                item.postRender(*view);
             }
         }
         renderViews_->ClearSchedule();
@@ -2208,6 +2214,18 @@ namespace Vulkan
             // Module content passes run before debug overlay passes.
             for (const auto& externalPass : overlay_.externalPasses)
             {
+                const FExternalPassContract passContract = externalPass->Contract();
+                const uint32_t availableOutputs = static_cast<uint32_t>(
+                    GetRendererContract(logicRenderers_.current).outputs);
+                if (passContract.insertionPoint != EExternalPassInsertionPoint::AfterPrimaryView ||
+                    passContract.scope != EExternalPassScope::PrimaryView ||
+                    !AreExternalPassInputsAvailable(passContract, availableOutputs))
+                {
+                    SPDLOG_WARN("Skipping external pass {}: incompatible insertion/scope or missing outputs "
+                                "(required=0x{:x}, available=0x{:x})",
+                                passContract.name, passContract.requiredOutputs, availableOutputs);
+                    continue;
+                }
                 SCOPED_GPU_TIMER("external pass");
                 externalPass->Execute(commandBuffer, imageIndex);
             }
@@ -2579,13 +2597,16 @@ namespace Vulkan
                 rt_->blas[blasIndex], glm::transpose(node.worldTS), node.instanceId, includeInGpuAs));
         }
 
-        constexpr size_t maxTlasInstanceCount = 65535;
-        if (instances.size() > maxTlasInstanceCount)
+        if (instances.size() > rt_->properties->MaxInstanceCount())
         {
-            const size_t droppedCount = instances.size() - maxTlasInstanceCount;
-            SPDLOG_ERROR("TLAS instance capacity exceeded: requested {}, capacity {}, dropping {} instances",
-                         instances.size(), maxTlasInstanceCount, droppedCount);
-            instances.resize(maxTlasInstanceCount);
+            Throw(std::runtime_error(fmt::format("TLAS instance count {} exceeds device limit {}",
+                instances.size(), rt_->properties->MaxInstanceCount())));
+        }
+        if (instances.size() > rt_->tlasInstanceCapacity)
+        {
+            SPDLOG_INFO("Growing TLAS instance capacity from {} for {} instances",
+                        rt_->tlasInstanceCapacity, instances.size());
+            CreateAccelerationStructures();
         }
 
         const int instanceCount = static_cast<int>(instances.size());

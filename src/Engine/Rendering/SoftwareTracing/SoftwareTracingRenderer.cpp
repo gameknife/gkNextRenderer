@@ -68,7 +68,8 @@ void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t ima
 			{Assets::Bindless::RT_SPECULAR_ALBEDO, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
 		}, "software tracing shading");
 		// cs shading pass
-		deferredShadingPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+		deferredShadingPipeline_->BindPipeline(commandBuffer,
+			GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase()));
 		vkCmdDispatch(commandBuffer,
 			Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
 			Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);

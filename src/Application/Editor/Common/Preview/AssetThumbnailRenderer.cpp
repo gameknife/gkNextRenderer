@@ -30,7 +30,12 @@ namespace Vulkan
         materialPreview_.name_ = "__material_preview";
     }
 
-    AssetThumbnailRenderer::~AssetThumbnailRenderer() = default;
+    AssetThumbnailRenderer::~AssetThumbnailRenderer()
+    {
+        RenderViewResourceFactory factory(renderer_);
+        factory.DestroyView(thumbnailRenderView_);
+        factory.DestroyView(materialPreviewView_);
+    }
 
     AssetThumbnailRenderer::FThumbnailCache& AssetThumbnailRenderer::ThumbnailCache(const EThumbnailKind kind)
     {

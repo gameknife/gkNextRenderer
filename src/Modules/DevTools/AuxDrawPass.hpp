@@ -30,6 +30,8 @@ namespace Vulkan::AuxDraw
         explicit AuxDrawPass(VulkanBaseRenderer& renderer);
         ~AuxDrawPass() override;
 
+        FExternalPassContract Contract() const override;
+
         void CreateResources() override;
         void ReleaseResources();
         void ReloadShaders(const std::set<std::string>& changedShaderFiles,

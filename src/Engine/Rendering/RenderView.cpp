@@ -99,6 +99,20 @@ namespace Vulkan
         return *view;
     }
 
+    bool RenderViewResourceFactory::DestroyView(RenderView*& view)
+    {
+        if (view == nullptr)
+        {
+            return false;
+        }
+        const bool destroyed = renderer_.renderViews_->DestroyView(*view);
+        if (destroyed)
+        {
+            view = nullptr;
+        }
+        return destroyed;
+    }
+
     std::unique_ptr<FrameBuffer> RenderViewResourceFactory::RebuildVisibilityFramebuffer(
         RenderView& view,
         const VkExtent2D extent)

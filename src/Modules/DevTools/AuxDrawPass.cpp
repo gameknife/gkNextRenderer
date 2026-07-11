@@ -20,6 +20,15 @@
 
 namespace Vulkan::AuxDraw
 {
+    FExternalPassContract AuxDrawPass::Contract() const
+    {
+        return {
+            .name = "AuxDraw",
+            .requiredOutputs = static_cast<uint32_t>(ERenderOutput::Color | ERenderOutput::Depth),
+            .producedOutputs = static_cast<uint32_t>(ERenderOutput::Color),
+        };
+    }
+
     namespace
     {
         constexpr const char* vertexShaderPath = "assets/shaders/Debug.AuxDraw.vert.slang.spv";

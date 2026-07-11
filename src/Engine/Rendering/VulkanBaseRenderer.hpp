@@ -292,7 +292,7 @@ namespace Vulkan
 		// view's bank base. Primary view (base 0) == GetStorageImage (legacy absolute).
 		const RenderImage* GetViewStorageImage(uint32_t slot) const { return GetStorageImage(activeViewBankBase_ + slot); }
 		void InitializeBarriers(VkCommandBuffer commandBuffer);
-		void RequestSkinUpdate(uint32_t modelId) { skin_.updateRequests.push_back(modelId); }
+		void RequestSkinUpdate(uint32_t modelId);
 		std::vector<RayTracing::TopLevelAccelerationStructure>& TLAS();
 
 		// Narrow scheduling API for render-view providers (thumbnails, offscreen views).
@@ -345,6 +345,7 @@ namespace Vulkan
 			std::unique_ptr<PipelineCommon::ZeroBindWithTLASPipeline> directLightGenPipeline;
 
 			int tlasUpdateRequest = 0;
+			uint32_t tlasInstanceCapacity = 0;
 		};
 
 		struct AmbientCubePipelines

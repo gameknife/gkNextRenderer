@@ -64,7 +64,8 @@ namespace Vulkan::SoftwareModernNoAmbient
                 {Assets::Bindless::RT_MOTIONVECTOR, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
                 {Assets::Bindless::RT_NORMAL, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
             }, "software modern no ambient shading");
-            shadingPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+            shadingPipeline_->BindPipeline(commandBuffer,
+                GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase()));
             vkCmdDispatch(commandBuffer,
                           Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
                           Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
@@ -80,7 +81,8 @@ namespace Vulkan::SoftwareModernNoAmbient
                     {Assets::Bindless::RT_NORMAL, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
                     {Assets::Bindless::RT_GTAO, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
                 }, "gtao");
-                gtaoPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+                gtaoPipeline_->BindPipeline(commandBuffer,
+                    GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase()));
                 const VkExtent2D extent = baseRender_.ActiveViewRenderExtent();
                 vkCmdDispatch(commandBuffer,
                               Utilities::Math::GetSafeDispatchCount((extent.width + 1u) / 2u, 8),
@@ -98,7 +100,8 @@ namespace Vulkan::SoftwareModernNoAmbient
                     {Assets::Bindless::RT_GTAO, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
                     {Assets::Bindless::RT_DENOISED, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
                 }, "gtao compose");
-                composePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
+                composePipeline_->BindPipeline(commandBuffer,
+                    GetScene().FetchGPUScene(imageIndex, baseRender_.ActiveViewBankBase()));
                 vkCmdDispatch(commandBuffer,
                               Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
                               Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);

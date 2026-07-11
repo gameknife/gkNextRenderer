@@ -3,6 +3,7 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Rendering/PipelineCommon/ResourceStateTracker.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Rendering/ExternalPassRegistry.hpp"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include <memory>
 #include <array>
@@ -136,4 +137,41 @@ TEST_CASE("RenderView history invalidation records generation and reason", "[Uni
     CHECK(view.State().historyInvalidationReason == Vulkan::EHistoryInvalidationReason::RendererChanged);
     CHECK(std::string_view(Vulkan::GetHistoryInvalidationReasonName(
               view.State().historyInvalidationReason)) == "renderer-changed");
+}
+
+TEST_CASE("RenderView manager releases banks when views are destroyed", "[Unit][Rendering][RenderView]")
+{
+    Vulkan::RenderViewManager manager;
+    Vulkan::FViewDesc desc{};
+    std::vector<Vulkan::RenderView*> views;
+    for (uint32_t index = 1; index < Vulkan::FBankAllocator::kMaxConcurrentBanks; ++index)
+    {
+        views.push_back(manager.CreateView(desc, "bank test"));
+        REQUIRE(views.back() != nullptr);
+    }
+    CHECK(manager.CreateView(desc, "over capacity") == nullptr);
+
+    const uint32_t releasedBank = views[2]->RtBankBase();
+    const Vulkan::FRenderViewHandle staleHandle = views[2]->Handle();
+    REQUIRE(manager.DestroyView(*views[2]));
+    CHECK(manager.Resolve(staleHandle) == nullptr);
+    Vulkan::RenderView* replacement = manager.CreateView(desc, "replacement");
+    REQUIRE(replacement != nullptr);
+    CHECK(replacement->RtBankBase() == releasedBank);
+    CHECK(replacement->Handle().generation != staleHandle.generation);
+    CHECK(manager.Resolve(replacement->Handle()) == replacement);
+}
+
+TEST_CASE("External pass contracts reject missing renderer outputs", "[Unit][Rendering][ExternalPass]")
+{
+    Vulkan::FExternalPassContract pass{
+        .name = "depth overlay",
+        .requiredOutputs = static_cast<uint32_t>(
+            Vulkan::ERenderOutput::Color | Vulkan::ERenderOutput::Depth),
+    };
+    const uint32_t colorOnly = static_cast<uint32_t>(Vulkan::ERenderOutput::Color);
+    const uint32_t colorDepth = static_cast<uint32_t>(
+        Vulkan::ERenderOutput::Color | Vulkan::ERenderOutput::Depth);
+    CHECK_FALSE(Vulkan::AreExternalPassInputsAvailable(pass, colorOnly));
+    CHECK(Vulkan::AreExternalPassInputsAvailable(pass, colorDepth));
 }

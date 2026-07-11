@@ -103,7 +103,8 @@ namespace Vulkan::PipelineCommon
                 {Assets::Bindless::RT_OBJEDCTID_1, ERenderStage::Compute, EResourceAccess::ShaderRead},
                 {Assets::Bindless::RT_DENOISED, ERenderStage::Compute, EResourceAccess::ShaderWrite},
             }, "temporal compose");
-            composePipeline_->BindPipeline(commandBuffer, baseRenderer.GetScene(), imageIndex);
+            composePipeline_->BindPipeline(commandBuffer,
+                baseRenderer.GetScene().FetchGPUScene(imageIndex, baseRenderer.ActiveViewBankBase()));
             vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(extent.width, 8),
                           Utilities::Math::GetSafeDispatchCount(extent.height, 8), 1);
         }

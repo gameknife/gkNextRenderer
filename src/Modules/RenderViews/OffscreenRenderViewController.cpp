@@ -17,7 +17,19 @@ namespace Vulkan
     {
     }
 
-    OffscreenRenderViewController::~OffscreenRenderViewController() = default;
+    OffscreenRenderViewController::~OffscreenRenderViewController()
+    {
+        RenderViewResourceFactory factory(renderer_);
+        for (auto& resources : views_)
+        {
+            factory.DestroyView(resources.view);
+        }
+        for (auto& [type, resources] : referenceViews_)
+        {
+            (void)type;
+            factory.DestroyView(resources.view);
+        }
+    }
 
     void OffscreenRenderViewController::SetEnabled(uint32_t viewIndex, const bool enabled)
     {
