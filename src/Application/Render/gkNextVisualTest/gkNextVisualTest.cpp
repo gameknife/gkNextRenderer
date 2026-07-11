@@ -19,7 +19,6 @@
 #include <unordered_set>
 #include "Modules/LDrawLoader/LDrawModule.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
-#include "Modules/SplatLoader/SplatModule.hpp"
 #include "Application/Common/DemoScenes.hpp"
 
 using json = nlohmann::json;
@@ -89,7 +88,6 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 {
     Modules::LDraw::Register();
     Modules::Scad::Register();
-    Modules::Splat::Register();
     AppCommon::RegisterDemoScenes();
     return std::make_unique<VisualTestGameInstance>(config, options, engine);
 }

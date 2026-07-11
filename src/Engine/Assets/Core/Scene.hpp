@@ -8,7 +8,6 @@
 
 #include "Engine/Assets/Acceleration/CPUAccelerationStructure.h"
 #include "Engine/Assets/Core/Model.hpp"
-#include "Engine/Assets/Core/GaussianSplat.hpp"
 #include "Engine/Assets/Core/SceneSelectionState.hpp"
 #include "Engine/Assets/Data/Skeleton.hpp"
 
@@ -86,10 +85,6 @@ namespace Assets
         const std::vector<std::shared_ptr<Node>>& Nodes() const { return nodes_; }
         const std::vector<Model>& Models() const { return models_; }
         std::vector<Model>& MutableModels() { return models_; }
-        const std::vector<FGaussianSplatData>& GaussianSplats() const { return gaussianSplats_; }
-        std::vector<FGaussianSplatData>& MutableGaussianSplats() { return gaussianSplats_; }
-        bool HasGaussianSplats() const { return !gaussianSplats_.empty(); }
-        void SetGaussianSplats(std::vector<FGaussianSplatData>&& splats) { gaussianSplats_ = std::move(splats); }
         std::vector<FMaterial>& Materials() { return materials_; }
         const std::vector<FMaterial>& Materials() const { return materials_; }
         const std::vector<ModelData>& Offsets() const { return offsets_; }
@@ -147,8 +142,6 @@ namespace Assets
         void ToggleLocked(uint32_t id) const;
         bool GetSelectedNodeBounds(glm::vec3& center, float& radius) const;
         bool GetNodeBounds(uint32_t nodeId, glm::vec3& center, float& radius) const;
-        bool GetGaussianSplatWorldBounds(uint32_t nodeId, glm::vec3& boundsMin, glm::vec3& boundsMax) const;
-        void RayCastGaussianSplats(glm::vec3 rayOrigin, glm::vec3 rayDir, RayCastResult& result) const;
 
         void Tick(float DeltaSeconds);
         void UpdateAllMaterials();
@@ -189,7 +182,6 @@ namespace Assets
 
         void MarkEnvDirty();
 
-        void EnsureGaussianSplatProxyMeshes();
 
         void AddNode(std::shared_ptr<Node> node);
         void EnsureNodePhysicsBody(Node* node);
@@ -254,7 +246,6 @@ namespace Assets
         std::vector<FMaterial> materials_;
         std::vector<Material> gpuMaterials_;
         std::vector<Model> models_;
-        std::vector<FGaussianSplatData> gaussianSplats_;
         std::vector<std::shared_ptr<Node>> nodes_;
         std::vector<LightObject> lights_;
         std::vector<AnimationTrack> tracks_;

@@ -4,6 +4,7 @@
 
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Runtime/Engine.hpp"
 #include "Engine/Utilities/Math.hpp"
 #include "Engine/Vulkan/BufferUtil.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
@@ -239,7 +240,7 @@ namespace Vulkan::AuxDraw
         }
 
         const VkDeviceSize alignedSize =
-            std::max<VkDeviceSize>(requiredSize, sizeof(Rendering::AuxDraw::FAuxPrimitiveGpu));
+            std::max<VkDeviceSize>(requiredSize, sizeof(DevTools::FAuxPrimitiveGpu));
         Vulkan::BufferUtil::CreateDeviceBufferLocal(
             renderer_.CommandPool(),
             "AuxDraw Primitive",
@@ -258,7 +259,12 @@ namespace Vulkan::AuxDraw
             return;
         }
 
-        Rendering::AuxDraw::GetAuxDrawSystem().ConsumeFramePrimitives(stagingPrimitives_, maxPrimitiveCount);
+        auto* auxDraw = dynamic_cast<DevTools::FAuxDrawSystem*>(NextEngine::GetInstance()->GetDebugDraw());
+        if (!auxDraw)
+        {
+            return;
+        }
+        auxDraw->ConsumeFramePrimitives(stagingPrimitives_, maxPrimitiveCount);
         if (stagingPrimitives_.empty())
         {
             return;
@@ -271,7 +277,7 @@ namespace Vulkan::AuxDraw
         }
 
         const VkDeviceSize uploadSize =
-            static_cast<VkDeviceSize>(stagingPrimitives_.size()) * sizeof(Rendering::AuxDraw::FAuxPrimitiveGpu);
+            static_cast<VkDeviceSize>(stagingPrimitives_.size()) * sizeof(DevTools::FAuxPrimitiveGpu);
         EnsureFrameBufferCapacity(imageIndex, uploadSize);
         if (imageIndex >= frameBuffers_.size() || !frameBuffers_[imageIndex].buffer || !frameBuffers_[imageIndex].memory)
         {

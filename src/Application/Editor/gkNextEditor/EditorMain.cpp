@@ -22,7 +22,6 @@
 #include <spdlog/spdlog.h>
 #include "Modules/LDrawLoader/LDrawModule.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
-#include "Modules/SplatLoader/SplatModule.hpp"
 #include "Modules/NextQuickJS/NextQuickJSModule.hpp"
 #include "Application/Common/DemoScenes.hpp"
 #include "Application/Editor/Common/MultiViewportBackend.hpp"
@@ -36,7 +35,6 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 {
     Modules::LDraw::Register();
     Modules::Scad::Register();
-    Modules::Splat::Register();
     AppCommon::RegisterDemoScenes();
     return std::make_unique<EditorGameInstance>(config, options, engine);
 }

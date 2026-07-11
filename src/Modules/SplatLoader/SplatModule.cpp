@@ -4,9 +4,18 @@
 #include "Modules/SplatLoader/FSogLoader.hpp"
 #include "Modules/SplatLoader/GaussianSplatPass.hpp"
 #include "Modules/SplatLoader/SplatModule.hpp"
+#include "Modules/SplatLoader/SplatSettings.hpp"
+#include "Modules/SplatLoader/GaussianSplatComponent.h"
 
 namespace Modules::Splat
 {
+    void Install(NextEngine& engine)
+    {
+        InstallSettings(engine);
+        Runtime::GaussianSplatComponent::RegisterReflection();
+        Register();
+    }
+
     void Register()
     {
         // Splat rendering runs as an external content pass right after the primary
@@ -27,11 +36,10 @@ namespace Modules::Splat
             [](const std::string& filename, Assets::EnvironmentSetting& camera,
                std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Assets::Model>& models,
                std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights,
-               std::vector<Assets::AnimationTrack>& tracks, std::vector<Assets::Skeleton>& skeletons,
-               std::vector<Assets::FGaussianSplatData>& splats)
+               std::vector<Assets::AnimationTrack>& tracks, std::vector<Assets::Skeleton>& skeletons)
             {
                 return Assets::FSogLoader::Load(
-                    filename, camera, nodes, models, materials, lights, tracks, skeletons, splats);
+                    filename, camera, nodes, models, materials, lights, tracks, skeletons);
             });
     }
 }

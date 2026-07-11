@@ -3,10 +3,8 @@
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/Data/Material.hpp"
-#include "Engine/Assets/Core/GaussianSplat.hpp"
 #include "Engine/Assets/Loaders/LoaderRegistry.hpp"
 #include "Engine/Runtime/Components/EnvironmentComponent.h"
-#include "Engine/Runtime/Components/GaussianSplatComponent.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/SceneReferenceComponent.h"
 
@@ -340,8 +338,7 @@ bool LoadSceneRaw(std::string filename, Assets::EnvironmentSetting& camera,
                   std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Assets::Model>& models,
                   std::vector<Assets::FMaterial>& materials,
                   std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks,
-                  std::vector<Assets::Skeleton>& skeletons,
-                  std::vector<Assets::FGaussianSplatData>* splats)
+                  std::vector<Assets::Skeleton>& skeletons)
 {
     std::filesystem::path filepath = filename;
     std::string ext = ToLowerCopy(filepath.extension().string());
@@ -363,17 +360,13 @@ bool LoadSceneRaw(std::string filename, Assets::EnvironmentSetting& camera,
     }
     if (const Assets::FSceneLoaderFn* load = Assets::FLoaderRegistry::Get().FindSceneLoader(ext))
     {
-        std::vector<Assets::FGaussianSplatData> ignoredSplats;
-        return (*load)(filename, camera, nodes, models, materials, lights, tracks, skeletons,
-                       splats ? *splats : ignoredSplats);
+        return (*load)(filename, camera, nodes, models, materials, lights, tracks, skeletons);
     }
     if (ToLowerCopy(filepath.filename().string()) == "meta.json")
     {
         if (const Assets::FSceneLoaderFn* load = Assets::FLoaderRegistry::Get().FindSceneLoader(".sog"))
         {
-            std::vector<Assets::FGaussianSplatData> ignoredSplats;
-            return (*load)(filename, camera, nodes, models, materials, lights, tracks, skeletons,
-                           splats ? *splats : ignoredSplats);
+            return (*load)(filename, camera, nodes, models, materials, lights, tracks, skeletons);
         }
     }
 
@@ -385,7 +378,6 @@ void ResolveSceneReferences(Assets::EnvironmentSetting& camera, std::vector<std:
                             std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials,
                             std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks,
                             std::vector<Assets::Skeleton>& skeletons,
-                            std::vector<Assets::FGaussianSplatData>* splats,
                             FSceneReferenceLoadContext& context);
 
 bool ResolveSceneReferenceProxy(const std::shared_ptr<Assets::Node>& proxy, Assets::EnvironmentSetting& camera,
@@ -394,7 +386,6 @@ bool ResolveSceneReferenceProxy(const std::shared_ptr<Assets::Node>& proxy, Asse
                                 std::vector<Assets::LightObject>& lights,
                                 std::vector<Assets::AnimationTrack>& tracks,
                                 std::vector<Assets::Skeleton>& skeletons,
-                                std::vector<Assets::FGaussianSplatData>* splats,
                                 FSceneReferenceLoadContext& context)
 {
     auto sceneReference = proxy->GetComponent<Runtime::SceneReferenceComponent>();
@@ -445,14 +436,13 @@ bool ResolveSceneReferenceProxy(const std::shared_ptr<Assets::Node>& proxy, Asse
     std::vector<Assets::LightObject> localLights;
     std::vector<Assets::AnimationTrack> localTracks;
     std::vector<Assets::Skeleton> localSkeletons;
-    std::vector<Assets::FGaussianSplatData> localSplats;
 
     FSceneReferenceLoadContext childContext = context;
     childContext.stack.push_back(cycleKey);
     childContext.depth++;
 
     if (!LoadSceneRaw(assetPath, localCamera, localNodes, localModels, localMaterials, localLights,
-                      localTracks, localSkeletons, &localSplats))
+                      localTracks, localSkeletons))
     {
         const auto status = Utilities::FileHelper::IsAssetAvailable(assetPath)
             ? Runtime::ESceneReferenceStatus::Failed
@@ -464,7 +454,7 @@ bool ResolveSceneReferenceProxy(const std::shared_ptr<Assets::Node>& proxy, Asse
     if (ext == ".gltf" || ext == ".glb")
     {
         ResolveSceneReferences(localCamera, localNodes, localModels, localMaterials, localLights,
-                               localTracks, localSkeletons, &localSplats, childContext);
+                               localTracks, localSkeletons, childContext);
     }
 
     if (!localLights.empty() || !localTracks.empty() || !localSkeletons.empty())
@@ -474,7 +464,6 @@ bool ResolveSceneReferenceProxy(const std::shared_ptr<Assets::Node>& proxy, Asse
 
     const uint32_t modelOffset = static_cast<uint32_t>(models.size());
     const uint32_t materialOffset = static_cast<uint32_t>(materials.size());
-    const uint32_t splatOffset = splats ? static_cast<uint32_t>(splats->size()) : 0u;
     uint32_t nextInstanceId = GenerateInstanceIdFromNodes(nodes);
     std::unordered_map<uint32_t, uint32_t> nodeIdRemap;
     nodeIdRemap.reserve(localNodes.size());
@@ -503,18 +492,6 @@ bool ResolveSceneReferenceProxy(const std::shared_ptr<Assets::Node>& proxy, Asse
             render->SetSkinIndex(-1);
         }
 
-        if (auto splat = localNode->GetComponent<Runtime::GaussianSplatComponent>())
-        {
-            splat->SetSplatModelId(splat->GetSplatModelId() + splatOffset);
-        }
-    }
-
-    for (auto& localSplat : localSplats)
-    {
-        if (auto found = nodeIdRemap.find(localSplat.nodeInstanceId); found != nodeIdRemap.end())
-        {
-            localSplat.nodeInstanceId = found->second;
-        }
     }
 
     for (const auto& localNode : localNodes)
@@ -535,14 +512,6 @@ bool ResolveSceneReferenceProxy(const std::shared_ptr<Assets::Node>& proxy, Asse
     {
         materials.emplace_back(std::move(material));
     }
-    if (splats != nullptr)
-    {
-        splats->reserve(splats->size() + localSplats.size());
-        for (auto& splat : localSplats)
-        {
-            splats->emplace_back(std::move(splat));
-        }
-    }
     nodes.reserve(nodes.size() + localNodes.size());
     for (auto& node : localNodes)
     {
@@ -560,7 +529,6 @@ void ResolveSceneReferences(Assets::EnvironmentSetting& camera, std::vector<std:
                             std::vector<Assets::Model>& models, std::vector<Assets::FMaterial>& materials,
                             std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks,
                             std::vector<Assets::Skeleton>& skeletons,
-                            std::vector<Assets::FGaussianSplatData>* splats,
                             FSceneReferenceLoadContext& context)
 {
     const size_t originalNodeCount = nodes.size();
@@ -573,7 +541,7 @@ void ResolveSceneReferences(Assets::EnvironmentSetting& camera, std::vector<std:
         }
         if (node->GetComponent<Runtime::SceneReferenceComponent>())
         {
-            ResolveSceneReferenceProxy(node, camera, nodes, models, materials, lights, tracks, skeletons, splats, context);
+            ResolveSceneReferenceProxy(node, camera, nodes, models, materials, lights, tracks, skeletons, context);
         }
     }
 }
@@ -584,10 +552,9 @@ bool LoadSceneWithReferences(std::string filename, Assets::EnvironmentSetting& c
                              std::vector<Assets::FMaterial>& materials,
                              std::vector<Assets::LightObject>& lights,
                              std::vector<Assets::AnimationTrack>& tracks,
-                             std::vector<Assets::Skeleton>& skeletons,
-                             std::vector<Assets::FGaussianSplatData>* splats)
+                             std::vector<Assets::Skeleton>& skeletons)
 {
-    if (!LoadSceneRaw(filename, camera, nodes, models, materials, lights, tracks, skeletons, splats))
+    if (!LoadSceneRaw(filename, camera, nodes, models, materials, lights, tracks, skeletons))
     {
         return false;
     }
@@ -598,7 +565,7 @@ bool LoadSceneWithReferences(std::string filename, Assets::EnvironmentSetting& c
     context.stack.push_back(NormalizeReferenceAssetPath(filename, normalizedRoot, ignoredError)
                                 ? CanonicalCycleKey(normalizedRoot)
                                 : CanonicalCycleKey(filename));
-    ResolveSceneReferences(camera, nodes, models, materials, lights, tracks, skeletons, splats, context);
+    ResolveSceneReferences(camera, nodes, models, materials, lights, tracks, skeletons, context);
     EnsureEnvironmentComponentNode(camera, nodes);
     return true;
 }
@@ -608,10 +575,9 @@ bool SceneList::LoadScene(std::string filename, Assets::EnvironmentSetting& came
                           std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Assets::Model>& models,
                           std::vector<Assets::FMaterial>& materials,
                           std::vector<Assets::LightObject>& lights, std::vector<Assets::AnimationTrack>& tracks,
-                          std::vector<Assets::Skeleton>& skeletons,
-                          std::vector<Assets::FGaussianSplatData>* splats)
+                          std::vector<Assets::Skeleton>& skeletons)
 {
-    return LoadSceneWithReferences(std::move(filename), camera, nodes, models, materials, lights, tracks, skeletons, splats);
+    return LoadSceneWithReferences(std::move(filename), camera, nodes, models, materials, lights, tracks, skeletons);
 }
 
 std::shared_ptr<Assets::Node> SceneList::AddSceneReferenceToScene(
@@ -651,8 +617,7 @@ std::shared_ptr<Assets::Node> SceneList::AddSceneReferenceToScene(
     std::vector<Assets::Skeleton> ignoredSkeletons;
     FSceneReferenceLoadContext context;
     ResolveSceneReferenceProxy(proxy, ignoredCamera, scene.Nodes(), scene.MutableModels(), scene.Materials(),
-                               ignoredLights, ignoredTracks, ignoredSkeletons,
-                               &scene.MutableGaussianSplats(), context);
+                               ignoredLights, ignoredTracks, ignoredSkeletons, context);
     scene.MarkDirty();
     return proxy;
 }

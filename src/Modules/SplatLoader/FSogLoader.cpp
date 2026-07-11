@@ -4,7 +4,8 @@
 
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Core/Node.h"
-#include "Engine/Runtime/Components/GaussianSplatComponent.h"
+#include "Modules/SplatLoader/GaussianSplatComponent.h"
+#include "Modules/SplatLoader/SplatProxyBuilder.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 
 #include <nlohmann/json.hpp>
@@ -175,10 +176,9 @@ namespace Assets
     }
 
     bool FSogLoader::Load(const std::string& filename, EnvironmentSetting& camera,
-                          std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>&,
-                          std::vector<FMaterial>&, std::vector<LightObject>&,
-                          std::vector<AnimationTrack>&, std::vector<Skeleton>&,
-                          std::vector<FGaussianSplatData>& splats)
+                          std::vector<std::shared_ptr<Node>>& nodes, std::vector<Model>& models,
+                          std::vector<FMaterial>& materials, std::vector<LightObject>&,
+                          std::vector<AnimationTrack>&, std::vector<Skeleton>&)
     {
         try
         {
@@ -324,16 +324,16 @@ namespace Assets
             {
                 if (node) instanceId = std::max(instanceId, node->GetInstanceId() + 1u);
             }
-            data.nodeInstanceId = instanceId;
             auto splatNode = Node::CreateNode(data.name, glm::vec3(0.0f),
                                               glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f), instanceId);
-            splatNode->AddComponent(std::make_shared<Runtime::GaussianSplatComponent>(
-                static_cast<uint32_t>(splats.size())));
-            nodes.push_back(std::move(splatNode));
+            auto component = std::make_shared<Runtime::GaussianSplatComponent>(
+                std::make_shared<const FGaussianSplatData>(std::move(data)));
+            splatNode->AddComponent(component);
+            nodes.push_back(splatNode);
+            BuildGaussianSplatProxy(splatNode, component, nodes, models, materials);
 
-            SPDLOG_INFO("decoded SOG v2 [{}]: {} splats, SH band {}, node {}", data.name, count, data.shBands,
-                        instanceId);
-            splats.push_back(std::move(data));
+            SPDLOG_INFO("decoded SOG v2 [{}]: {} splats, SH band {}, node {}",
+                        component->GetData()->name, count, component->GetData()->shBands, instanceId);
             return true;
         }
         catch (const std::exception& exception)

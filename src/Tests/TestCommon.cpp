@@ -1,7 +1,9 @@
 #include "TestCommon.hpp"
 
 #include "Modules/GltfLoader/GltfModule.hpp"
+#include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
 #include "Modules/NextPhysics/NextPhysicsModule.hpp"
+#include "Modules/SplatLoader/SplatModule.hpp"
 
 #include <thread>
 #include <vector>
@@ -36,6 +38,8 @@ EngineTestFixture::EngineTestFixture()
     GOption = options_.get();
 
     engine_ = std::make_unique<NextEngine>(*GOption);
+    DevTools::Install(*engine_);
+    Modules::Splat::Install(*engine_);
     Modules::Physics::Install(*engine_);
     engine_->Start();
     

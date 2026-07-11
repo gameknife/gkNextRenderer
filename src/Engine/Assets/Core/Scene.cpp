@@ -12,7 +12,6 @@
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include "Engine/Runtime/Components/EnvironmentComponent.h"
-#include "Engine/Runtime/Components/GaussianSplatComponent.h"
 #include "Engine/Runtime/Components/SceneReferenceComponent.h"
 #include "Engine/Runtime/Components/SkinnedMeshComponent.h"
 #include "Engine/Runtime/Engine.hpp"
@@ -780,12 +779,6 @@ namespace Assets
                                     { return removeIds.find(node->GetInstanceId()) != removeIds.end(); }),
                      nodes_.end());
         RefreshEnvironmentComponentCache();
-        gaussianSplats_.erase(std::remove_if(gaussianSplats_.begin(), gaussianSplats_.end(),
-                                             [&removeIds](const FGaussianSplatData& splat)
-                                             {
-                                                 return removeIds.find(splat.nodeInstanceId) != removeIds.end();
-                                             }),
-                               gaussianSplats_.end());
 
         return removedEntries;
     }
@@ -924,15 +917,6 @@ namespace Assets
             }
         }
 
-        glm::vec3 splatBoundsMin;
-        glm::vec3 splatBoundsMax;
-        if (GetGaussianSplatWorldBounds(nodeId, splatBoundsMin, splatBoundsMax))
-        {
-            center = (splatBoundsMin + splatBoundsMax) * 0.5f;
-            radius = glm::length(splatBoundsMax - splatBoundsMin) * 0.5f;
-            return true;
-        }
-
         center = glm::vec3(foundNode->WorldTransform()[3]);
 
         auto renderComp = foundNode->GetComponent<Runtime::RenderComponent>();
@@ -950,55 +934,31 @@ namespace Assets
             }
         }
 
+        // Non-render container nodes inherit bounds from their renderable children.
+        glm::vec3 childMin(FLT_MAX);
+        glm::vec3 childMax(-FLT_MAX);
+        bool hasChildBounds = false;
+        for (const auto& child : foundNode->Children())
+        {
+            glm::vec3 childCenter;
+            float childRadius = 0.0f;
+            if (GetNodeBounds(child->GetInstanceId(), childCenter, childRadius))
+            {
+                childMin = glm::min(childMin, childCenter - glm::vec3(childRadius));
+                childMax = glm::max(childMax, childCenter + glm::vec3(childRadius));
+                hasChildBounds = true;
+            }
+        }
+        if (hasChildBounds)
+        {
+            center = (childMin + childMax) * 0.5f;
+            radius = glm::length(childMax - childMin) * 0.5f;
+            return true;
+        }
+
         // Fallback for non-render nodes (default small radius)
         radius = 1.0f;
         return true;
-    }
-
-    bool Scene::GetGaussianSplatWorldBounds(uint32_t nodeId, glm::vec3& boundsMin, glm::vec3& boundsMax) const
-    {
-        const auto splat = std::find_if(gaussianSplats_.begin(), gaussianSplats_.end(),
-            [nodeId](const FGaussianSplatData& data) { return data.nodeInstanceId == nodeId; });
-        if (splat == gaussianSplats_.end()) return false;
-
-        const auto node = GetNodeSharedByInstanceId(nodeId);
-        if (!node) return false;
-
-        const glm::vec3& localMin = splat->aabbMin;
-        const glm::vec3& localMax = splat->aabbMax;
-        const glm::mat4& world = node->WorldTransform();
-        boundsMin = glm::vec3(std::numeric_limits<float>::max());
-        boundsMax = glm::vec3(std::numeric_limits<float>::lowest());
-        for (uint32_t corner = 0; corner < 8; ++corner)
-        {
-            const glm::vec3 local(
-                (corner & 1u) ? localMax.x : localMin.x,
-                (corner & 2u) ? localMax.y : localMin.y,
-                (corner & 4u) ? localMax.z : localMin.z);
-            const glm::vec3 transformed = glm::vec3(world * glm::vec4(local, 1.0f));
-            boundsMin = glm::min(boundsMin, transformed);
-            boundsMax = glm::max(boundsMax, transformed);
-        }
-        return true;
-    }
-
-    void Scene::RayCastGaussianSplats(glm::vec3 rayOrigin, glm::vec3 rayDir, RayCastResult& result) const
-    {
-        (void)rayOrigin;
-        (void)rayDir;
-        if (!result.Hitted)
-        {
-            return;
-        }
-
-        for (const auto& splat : gaussianSplats_)
-        {
-            if (splat.proxyNodeInstanceId == result.InstanceId)
-            {
-                result.InstanceId = splat.nodeInstanceId;
-                return;
-            }
-        }
     }
 
     const Model* Scene::GetModel(uint32_t id) const

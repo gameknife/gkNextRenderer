@@ -1039,7 +1039,6 @@ void NextEngine::RayCast(glm::vec3 rayOrigin, glm::vec3 rayDir,
 {
     // CPU Raycast in scene
     Assets::RayCastResult result = scene_->GetCPUAccelerationStructure().RayCastInCPU(rayOrigin, rayDir);
-    scene_->RayCastGaussianSplats(rayOrigin, rayDir, result);
     callback(result);
 }
 

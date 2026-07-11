@@ -96,6 +96,9 @@ file(GLOB_RECURSE src_files_editor "Application/Editor/gkNextEditor/*")
 # --- SCAD Studio (conversational SCAD model generator) ---
 file(GLOB_RECURSE src_files_scadstudio "Application/Editor/ScadStudio/*")
 
+# --- SCAD Library (kit browser + compose bench) ---
+file(GLOB_RECURSE src_files_scadlibrary "Application/Editor/ScadLibrary/*")
+
 # --- Applications ---
 file(GLOB_RECURSE src_files_magicalego
     "Application/Game/MagicaLego/*.cpp"

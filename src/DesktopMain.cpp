@@ -2,15 +2,34 @@
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.h"
+#if GK_MODULE_AGENTDRIVER
 #include "Modules/AgentDriver/AgentDriverModule.hpp"
+#endif
+#if GK_MODULE_GLTFLOADER
 #include "Modules/GltfLoader/GltfModule.hpp"
+#endif
+#if GK_MODULE_DEVTOOLS
 #include "Modules/DevTools/DevToolsDebugUiProvider.hpp"
+#endif
+#if GK_MODULE_LIVECODING
 #include "Modules/LiveCoding/LiveCodingModule.hpp"
+#endif
+#if GK_MODULE_NEXTAUDIO
 #include "Modules/NextAudio/NextAudioModule.hpp"
+#endif
+#if GK_MODULE_NEXTPHYSICS
 #include "Modules/NextPhysics/NextPhysicsModule.hpp"
+#endif
+#if GK_MODULE_NEXTREMOTE
 #include "Modules/NextRemote/NextRemoteModule.hpp"
+#endif
+#if GK_MODULE_NEXTSTREAMLINE
 #include "Modules/NextStreamline/NextStreamlineModule.hpp"
-#if GK_WITH_TUI
+#endif
+#if GK_MODULE_SPLATLOADER
+#include "Modules/SplatLoader/SplatModule.hpp"
+#endif
+#if GK_WITH_TUI && GK_MODULE_NEXTTUI
 #include "Modules/NextTui/NextTuiModule.hpp"
 #endif
 
@@ -95,21 +114,39 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     // Start the application.
     // Create the DevTools provider first: its constructor attaches the console
     // log sink so engine startup logs are captured.
-    Runtime::IDebugUiProvider& debugUiProvider = DevTools::DefaultDebugUiProvider();
     // Streamline must hook the Vulkan interposer before the engine creates the instance.
+#if GK_MODULE_NEXTSTREAMLINE
     Modules::NextStreamline::Install(*GOption);
+#endif
     GApplication.reset( new NextEngine(*GOption) );
-    GApplication->SetDebugUiProvider(&debugUiProvider);
+#if GK_MODULE_DEVTOOLS
+    DevTools::Install(*GApplication);
+#endif
+#if GK_MODULE_NEXTAUDIO
     Modules::Audio::Install(*GApplication);
+#endif
+#if GK_MODULE_NEXTPHYSICS
     Modules::Physics::Install(*GApplication);
+#endif
+#if GK_MODULE_LIVECODING
     Modules::LiveCoding::Install(*GApplication);
+#endif
+#if GK_MODULE_AGENTDRIVER
     Modules::AgentDriver::Install(*GApplication);
+#endif
+#if GK_MODULE_GLTFLOADER
     Modules::Gltf::Register();
+#endif
+#if GK_MODULE_SPLATLOADER
+    Modules::Splat::Install(*GApplication);
+#endif
+#if GK_MODULE_NEXTREMOTE
     if (GOption->RemoteMode)
     {
         GApplication->AddRenderFrameConsumer(Modules::NextRemote::CreateRemoteServer(*GOption));
     }
-#if GK_WITH_TUI
+#endif
+#if GK_WITH_TUI && GK_MODULE_NEXTTUI
     if (GOption->Tui)
     {
         GApplication->AddRenderFrameConsumer(Modules::NextTui::CreateTuiPresenter(*GApplication, *GOption));

@@ -34,7 +34,6 @@
 #include "Engine/Vulkan/Device.hpp"
 #include "Modules/LDrawLoader/LDrawModule.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
-#include "Modules/SplatLoader/SplatModule.hpp"
 #include "Application/Common/DemoScenes.hpp"
 
 extern float GAndroidMagicScale;
@@ -453,7 +452,6 @@ std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& c
 {
     Modules::LDraw::Register();
     Modules::Scad::Register();
-    Modules::Splat::Register();
     AppCommon::RegisterDemoScenes();
     return std::make_unique<NextRendererGameInstance>(config, options, engine);
 }

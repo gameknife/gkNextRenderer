@@ -28,7 +28,7 @@ namespace Vulkan
     using FExternalPassFactory = std::function<std::unique_ptr<IExternalRenderPass>(VulkanBaseRenderer&)>;
 
     // Register before renderer start (module install time). Lower priority executes
-    // first each frame (content passes like gaussian splats before debug overlays).
+    // first each frame (content passes before debug overlays).
     void RegisterExternalPassFactory(int priority, FExternalPassFactory factory);
     const std::vector<FExternalPassFactory>& ExternalPassFactories();
 }

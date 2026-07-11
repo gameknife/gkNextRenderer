@@ -7,7 +7,8 @@
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Components/GaussianSplatComponent.h"
+#include "Modules/SplatLoader/GaussianSplatComponent.h"
+#include "Modules/SplatLoader/SplatSettings.hpp"
 #include "Engine/Vulkan/BufferUtil.hpp"
 #include "Engine/Vulkan/DescriptorSystem.hpp"
 #include "Engine/Vulkan/GraphicsPipelineBuilder.hpp"
@@ -20,6 +21,27 @@ namespace Vulkan::GaussianSplat
 {
     namespace
     {
+        struct FSplatModel
+        {
+            const Assets::Node* node;
+            const Runtime::GaussianSplatComponent* component;
+            const Assets::FGaussianSplatData* data;
+        };
+
+        std::vector<FSplatModel> GatherSplatModels(const Assets::Scene& scene)
+        {
+            std::vector<FSplatModel> result;
+            for (const auto& node : scene.Nodes())
+            {
+                const auto* component = node ? node->GetComponentPtr<Runtime::GaussianSplatComponent>() : nullptr;
+                if (component && component->GetData())
+                {
+                    result.push_back({node.get(), component, component->GetData().get()});
+                }
+            }
+            return result;
+        }
+
         constexpr uint32_t maxSplatBucketCount = 16u * 1024u;
         constexpr uint32_t splatSortGroupSize = 256;
 
@@ -134,19 +156,19 @@ namespace Vulkan::GaussianSplat
     void GaussianSplatPass::CreateResources()
     {
         DestroyResources();
-        const auto& models = renderer_.GetScene().GaussianSplats();
+        const auto models = GatherSplatModels(renderer_.GetScene());
         if (models.empty()) return;
 
         std::vector<Assets::FGaussianSplatGpu> combinedSplats;
         std::vector<glm::vec4> combinedPalette;
         for (const auto& model : models)
         {
-            combinedSplats.reserve(combinedSplats.size() + model.splats.size());
-            combinedPalette.reserve(combinedPalette.size() + model.shPalette.size());
+            combinedSplats.reserve(combinedSplats.size() + model.data->splats.size());
+            combinedPalette.reserve(combinedPalette.size() + model.data->shPalette.size());
         }
         for (uint32_t modelIndex = 0; modelIndex < models.size(); ++modelIndex)
         {
-            const auto& model = models[modelIndex];
+            const auto& model = *models[modelIndex].data;
             const uint32_t paletteBase = static_cast<uint32_t>(combinedPalette.size());
             combinedPalette.insert(combinedPalette.end(), model.shPalette.begin(), model.shPalette.end());
             for (const auto& sourceSplat : model.splats)
@@ -181,9 +203,9 @@ namespace Vulkan::GaussianSplat
         }
 
         splatCount_ = static_cast<uint32_t>(combinedSplats.size());
-        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        const auto settings = Modules::Splat::GetSettings(*NextEngine::GetInstance());
         sortBucketCapacity_ = std::clamp(
-            std::max(settings.SplatBucketCount, AutoBucketCount(splatCount_)), 16u, maxSplatBucketCount);
+            std::max(settings->bucketCount, AutoBucketCount(splatCount_)), 16u, maxSplatBucketCount);
         sortGroupCountCapacity_ = (splatCount_ + splatSortGroupSize - 1) / splatSortGroupSize;
         BufferUtil::CreateDeviceBufferLocal(renderer_.CommandPool(), "GaussianSplatSortedIndices", bufferUsage,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, splatCount_ * sizeof(uint32_t),
@@ -417,28 +439,28 @@ namespace Vulkan::GaussianSplat
     {
         std::vector<FSplatModelState> states(modelCount_);
         uint64_t sortModelStateHash = 14695981039346656037ull;
-        const auto& models = renderer_.GetScene().GaussianSplats();
-        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        const auto models = GatherSplatModels(renderer_.GetScene());
+        const auto settings = Modules::Splat::GetSettings(*NextEngine::GetInstance());
         for (uint32_t modelIndex = 0; modelIndex < modelCount_; ++modelIndex)
         {
-            const auto node = renderer_.GetScene().GetNodeSharedByInstanceId(models[modelIndex].nodeInstanceId);
-            if (!node)
+            if (modelIndex >= models.size() || !models[modelIndex].node)
             {
                 states[modelIndex].parameters.y = 0.0f;
                 continue;
             }
 
-            states[modelIndex].world = node->WorldTransform();
-            states[modelIndex].parameters.z = (models[modelIndex].antialias || settings.SplatForceAA)
-                ? std::clamp(settings.SplatAAStrength, 0.0f, 1.0f)
+            const auto& model = models[modelIndex];
+            states[modelIndex].world = model.node->WorldTransform();
+            states[modelIndex].parameters.z = (model.data->antialias || settings->forceAA)
+                ? std::clamp(settings->aaStrength, 0.0f, 1.0f)
                 : 0.0f;
-            states[modelIndex].parameters.w = models[modelIndex].shBasisFlipXY ? 1.0f : 0.0f;
-            if (const auto* component = node->GetComponentPtr<Runtime::GaussianSplatComponent>())
+            states[modelIndex].parameters.w = model.data->shBasisFlipXY ? 1.0f : 0.0f;
+            if (const auto* component = model.component)
             {
                 states[modelIndex].parameters.x = component->GetOpacityScale();
                 states[modelIndex].parameters.y = component->GetVisible() ? 1.0f : 0.0f;
-                const bool receiveLighting = settings.SplatReceiveLighting && component->GetReceiveLighting();
-                const float globalStrength = std::clamp(settings.SplatLightingStrength / 0.35f, 0.0f, 4.0f);
+                const bool receiveLighting = settings->receiveLighting && component->GetReceiveLighting();
+                const float globalStrength = std::clamp(settings->lightingStrength / 0.35f, 0.0f, 4.0f);
                 const float strength = receiveLighting
                     ? std::clamp(component->GetLightingStrength() * globalStrength, 0.0f, 1.0f)
                     : 0.0f;
@@ -459,11 +481,11 @@ namespace Vulkan::GaussianSplat
     void GaussianSplatPass::DispatchGpuSort(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         SCOPED_GPU_TIMER("GS Sort");
-        const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+        const auto settings = Modules::Splat::GetSettings(*NextEngine::GetInstance());
         const uint32_t activeSplatCount =
-            settings.SplatMaxCount == 0 ? splatCount_ : std::min(splatCount_, settings.SplatMaxCount);
+            settings->maxCount == 0 ? splatCount_ : std::min(splatCount_, settings->maxCount);
         const uint32_t bucketCount = std::clamp(
-            std::max(settings.SplatBucketCount, AutoBucketCount(activeSplatCount)), 16u,
+            std::max(settings->bucketCount, AutoBucketCount(activeSplatCount)), 16u,
             std::max(16u, sortBucketCapacity_));
         const uint32_t groupCount = std::min(
             (activeSplatCount + splatSortGroupSize - 1) / splatSortGroupSize,
@@ -486,7 +508,7 @@ namespace Vulkan::GaussianSplat
         HashValue(sortCacheKey, extent.height);
         HashValue(sortCacheKey, nearPlane);
         HashValue(sortCacheKey, farPlane);
-        if (settings.SplatSortCache && sortCacheValid_ && sortCacheKey == lastSortCacheKey_)
+        if (settings->sortCache && sortCacheValid_ && sortCacheKey == lastSortCacheKey_)
         {
             return;
         }
@@ -565,7 +587,8 @@ namespace Vulkan::GaussianSplat
 
     void GaussianSplatPass::Execute(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
-        if (!pipeline_ || !NextEngine::GetInstance()->GetShowFlags().ShowGaussianSplats) return;
+        const auto settings = Modules::Splat::GetSettings(*NextEngine::GetInstance());
+        if (!pipeline_ || !settings || !settings->visible) return;
         const VkExtent2D extent = renderer_.SwapChain().RenderExtent();
         UpdateModelStates(imageIndex);
 
@@ -588,14 +611,13 @@ namespace Vulkan::GaussianSplat
             vkCmdBeginRenderPass(commandBuffer, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
             vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
             pipelineLayout_->BindDescriptorSets(commandBuffer, 0, VK_PIPELINE_BIND_POINT_GRAPHICS);
-            const auto& settings = NextEngine::GetInstance()->GetUserSettings();
             const Assets::GPUScene& gpuScene = renderer_.GetScene().FetchGPUScene(imageIndex);
             const FSplatPushConstants push{
                 gpuScene,
                 splatBuffer_->GetDeviceAddress(), paletteBuffer_->GetDeviceAddress(),
                 sortedIndexBuffer_->GetDeviceAddress(), modelStateBuffers_[imageIndex]->GetDeviceAddress(),
                 0u, splatCount_,
-                extent.width, extent.height, std::clamp(settings.SplatSigma, 1.0f, 4.0f)};
+                extent.width, extent.height, std::clamp(settings->sigma, 1.0f, 4.0f)};
             vkCmdPushConstants(commandBuffer, pipelineLayout_->Handle(), VK_SHADER_STAGE_VERTEX_BIT,
                                0, sizeof(push), &push);
             vkCmdDrawIndirect(commandBuffer, drawIndirectBuffer_->Handle(), 0, 1, sizeof(VkDrawIndirectCommand));

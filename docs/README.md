@@ -76,6 +76,7 @@
 | [BrickPlayer / LDraw 技术总结（2026-03）](notes/brickplayer-ldraw-technical-summary.md) | 🗄 已归档 | 2026-03-21 |
 | [Steam Deck 首次部署与编译复盘](notes/steamdeck-deployment-notes.md) | 🟢 现行 | 2026-05-29 |
 | [thoughts](notes/thoughts.md) | 🟢 现行 | 2026-04-06 |
+| [VulkanBaseRenderer 架构、LogicRenderer 与渲染正确性审计](notes/vulkan-base-renderer-architecture-audit.md) | 📝 待核对 | 2026-07-11 |
 
 ## 项目文档 · projects/
 

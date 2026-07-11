@@ -401,3 +401,47 @@ TEST_CASE("ScadRig loads the shipped agent_basic character", "[Unit][ScadRig]")
     }
     CHECK(tintableSections >= 3);
 }
+
+TEST_CASE("ScadRig loads the shipped NextRA soldier", "[Unit][ScadRig][NextRA]")
+{
+    FRigAsset asset;
+    std::string err;
+    std::vector<std::string> warnings;
+    REQUIRE(FScadRigLoader::LoadRig("assets/scad/characters/next_ra_soldier.scad",
+                                    ScadRigLoadOptions{}, asset, err, &warnings));
+
+    CHECK(warnings.empty());
+    REQUIRE(asset.bones.size() == 7);
+    CHECK(asset.bones[0].name == "bone_root");
+
+    for (const char* clip : {"idle", "walk", "fire"})
+    {
+        const FRigClip* c = asset.FindClip(clip);
+        REQUIRE(c != nullptr);
+        CHECK_FALSE(c->channels.empty());
+    }
+    CHECK(asset.FindClip("walk")->duration == Catch::Approx(0.8f));
+    CHECK(asset.FindClip("walk")->loop);
+    CHECK_FALSE(asset.FindClip("fire")->loop);
+
+    size_t triangles = 0;
+    int tintableSections = 0;
+    for (const Model& model : asset.partModels)
+    {
+        triangles += model.NumberOfIndices() / 3;
+    }
+    for (const FRigPart& part : asset.parts)
+    {
+        for (bool tintable : part.sectionTintable)
+        {
+            if (tintable) ++tintableSections;
+        }
+    }
+    CHECK(triangles > 0);
+    CHECK(triangles < 600);
+    CHECK(tintableSections >= 4);
+
+    const FRigBone& torso = asset.bones[asset.FindBone("bone_torso")];
+    const FRigBone& head = asset.bones[asset.FindBone("bone_head")];
+    CHECK(torso.bindT.y + head.bindT.y == Catch::Approx(1.44f).margin(0.02f));
+}

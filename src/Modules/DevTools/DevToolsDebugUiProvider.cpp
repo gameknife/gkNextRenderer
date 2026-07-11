@@ -8,10 +8,18 @@
 #include "Modules/DevTools/UiDevPanels.hpp"
 #include "Modules/DevTools/CVarEditorPanel.hpp"
 #include "Modules/DevTools/AuxDrawPass.hpp"
+#include "Modules/DevTools/AuxDrawSystem.hpp"
+#include "Engine/Runtime/Engine.hpp"
 #include "Engine/Rendering/ExternalPassRegistry.hpp"
 
 namespace DevTools
 {
+    void Install(NextEngine& engine)
+    {
+        engine.SetDebugDraw(std::make_shared<FAuxDrawSystem>());
+        engine.SetDebugUiProvider(&DefaultDebugUiProvider());
+    }
+
     namespace
     {
         class FDebugUiProvider final : public Runtime::IDebugUiProvider

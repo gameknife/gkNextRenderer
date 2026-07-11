@@ -4,7 +4,6 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Editor/UserInterface.hpp"
-#include "Engine/Rendering/AuxDraw/AuxDrawSystem.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
 
 #include <imgui.h>
@@ -145,16 +144,25 @@ namespace Runtime::EngineHelper
 
     void DrawAuxLine(glm::vec3 from, glm::vec3 to, glm::vec4 color, float size, bool depthTest)
     {
-        Rendering::AuxDraw::GetAuxDrawSystem().AddLine(from, to, color, size, depthTest);
+        if (NextEngine* engine = NextEngine::GetInstance(); engine && engine->GetDebugDraw())
+        {
+            engine->GetDebugDraw()->AddLine(from, to, color, size, depthTest);
+        }
     }
 
     void DrawAuxBox(glm::vec3 min, glm::vec3 max, glm::vec4 color, float size, bool depthTest)
     {
-        Rendering::AuxDraw::GetAuxDrawSystem().AddBox(min, max, color, size, depthTest);
+        if (NextEngine* engine = NextEngine::GetInstance(); engine && engine->GetDebugDraw())
+        {
+            engine->GetDebugDraw()->AddBox(min, max, color, size, depthTest);
+        }
     }
 
     void DrawAuxPoint(glm::vec3 location, glm::vec4 color, float size, int32_t durationInTick, bool depthTest)
     {
-        Rendering::AuxDraw::GetAuxDrawSystem().AddPoint(location, color, size, durationInTick, depthTest);
+        if (NextEngine* engine = NextEngine::GetInstance(); engine && engine->GetDebugDraw())
+        {
+            engine->GetDebugDraw()->AddPoint(location, color, size, durationInTick, depthTest);
+        }
     }
 }

@@ -26,8 +26,7 @@ public:
                      std::vector<Assets::FMaterial>& materials,
                      std::vector<Assets::LightObject>& lights,
                      std::vector<Assets::AnimationTrack>& tracks,
-                     std::vector<Assets::Skeleton>& skeletons,
-                     std::vector<Assets::FGaussianSplatData>* splats = nullptr);
+                     std::vector<Assets::Skeleton>& skeletons);
     static std::shared_ptr<Assets::Node> AddSceneReferenceToScene(
         Assets::Scene& scene, const std::string& assetPath,
         const glm::vec3& translation = glm::vec3(0.0f));

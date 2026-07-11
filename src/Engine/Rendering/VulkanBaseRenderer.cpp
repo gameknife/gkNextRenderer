@@ -1996,7 +1996,7 @@ namespace Vulkan
                 DispatchScheduledRenderViews(commandBuffer, imageIndex);
             }
 
-            // Module overlay passes (gaussian splats, then debug overlays like aux draw).
+            // Module content passes run before debug overlay passes.
             for (const auto& externalPass : overlay_.externalPasses)
             {
                 SCOPED_GPU_TIMER("external pass");

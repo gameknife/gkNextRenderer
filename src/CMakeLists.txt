@@ -203,6 +203,11 @@ add_executable(ScadStudio
 	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(ScadStudio PRIVATE Application/Editor/ScadStudio)
+add_executable(ScadLibrary
+	${src_files_scadlibrary}
+	${DESKTOP_MAIN_SOURCES}
+)
+target_include_directories(ScadLibrary PRIVATE Application/Editor/ScadLibrary)
 add_executable(MagicaLego
 	${src_files_magicalego}
 	${DESKTOP_MAIN_SOURCES}
@@ -262,6 +267,10 @@ add_executable(CitySolSim
 target_include_directories(CitySolSim PRIVATE Application/Game/CitySolSim)
 add_executable(Packager
 	Application/Util/Packager/PackagerMain.cpp
+)
+add_executable(ScadCatalog
+	Application/Util/ScadCatalog/ScadCatalogMain.cpp
+	Application/Editor/ScadLibrary/KitCatalog.cpp
 )
 
 find_package(Catch2 3 REQUIRED)
@@ -389,7 +398,9 @@ gkNextStillBenchmark
 	gkNextVisualTest
 	RmlUiDemo
 	ScadStudio
+	ScadLibrary
 	Packager
+	ScadCatalog
 	MagicaLego
 	KongLie3D
 	Brotato3D
@@ -413,6 +424,30 @@ endif()
 # These applications deliberately exercise the public core API without the
 # shared DesktopMain assembly or any optional module libraries.
 set(GK_CORE_ONLY_APPLICATION_TARGETS gkNextMinimalRenderer)
+
+# Declare optional runtime capabilities per consumer target. Besides linking the
+# module, this exposes a target-local compile definition to the shared desktop
+# entry point and records the capability list for configure-time diagnostics.
+function(gk_target_runtime_modules target)
+	cmake_parse_arguments(ARG "" "" "MODULES" ${ARGN})
+	if ( NOT TARGET ${target} )
+		return()
+	endif()
+	foreach(module IN LISTS ARG_MODULES)
+		if ( NOT module IN_LIST GK_MODULE_NAMES )
+			message(FATAL_ERROR "Unknown gk runtime module '${module}' for target '${target}'")
+		endif()
+		if ( NOT TARGET ${module} AND NOT ANDROID )
+			message(FATAL_ERROR "Runtime module target '${module}' is unavailable for '${target}'")
+		endif()
+		if ( TARGET ${module} )
+			target_link_libraries(${target} PRIVATE ${module})
+		endif()
+		string(TOUPPER "${module}" module_upper)
+		target_compile_definitions(${target} PRIVATE "GK_MODULE_${module_upper}=1")
+		set_property(TARGET ${target} APPEND PROPERTY GK_RUNTIME_MODULES "${module}")
+	endforeach()
+endfunction()
 
 file(TO_CMAKE_PATH "${Vulkan_SLANGC}" GK_SLANGC_EXECUTABLE_PATH)
 
@@ -567,32 +602,6 @@ foreach(target IN LISTS AllTargets)
 			gk_enable_unity_build(${target} 8)
 			gk_enable_fast_dev_link(${target})
 		endif()
-		# DesktopMain registers these services for regular programs. Core-only
-		# applications have a private entry point and must not inherit modules.
-		if ( TARGET DevTools AND NOT "${target}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
-		target_link_libraries(${target} PRIVATE DevTools)
-		endif()
-		if ( TARGET LiveCoding AND _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager AND NOT ${target} STREQUAL gkNextUnitTests AND NOT "${target}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
-		target_link_libraries(${target} PRIVATE LiveCoding)
-		endif()
-		if ( TARGET NextAudio AND _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager AND NOT ${target} STREQUAL gkNextUnitTests AND NOT "${target}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
-		target_link_libraries(${target} PRIVATE NextAudio)
-		endif()
-		if ( TARGET NextPhysics AND _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager AND NOT ${target} STREQUAL gkNextUnitTests AND NOT "${target}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
-		target_link_libraries(${target} PRIVATE NextPhysics)
-		endif()
-		# DesktopMain installs the agent script driver (gnb shot / gnb validate) for every program.
-		if ( TARGET AgentDriver AND _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager AND NOT ${target} STREQUAL gkNextUnitTests AND NOT "${target}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
-		target_link_libraries(${target} PRIVATE AgentDriver)
-		endif()
-		# DesktopMain installs the Streamline/DLSS module for every program (no-op off Windows).
-		if ( TARGET NextStreamline AND _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager AND NOT ${target} STREQUAL gkNextUnitTests AND NOT "${target}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
-		target_link_libraries(${target} PRIVATE NextStreamline)
-		endif()
-		# DesktopMain / EngineTestFixture register the glTF scene loader for every program.
-		if ( TARGET GltfLoader AND _target_type STREQUAL "EXECUTABLE" AND NOT ${target} STREQUAL Packager AND NOT "${target}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
-		target_link_libraries(${target} PRIVATE GltfLoader)
-		endif()
 		endif()
 	endif()
 
@@ -675,6 +684,21 @@ foreach(target IN LISTS AllTargets)
 
 endforeach()
 
+# Targets using the shared DesktopMain explicitly opt into its runtime services.
+set(GK_DESKTOP_RUNTIME_TARGETS
+	gkNextRenderer gkNextStillBenchmark gkNextMotionBenchmark gkNextVisualTest
+	RmlUiDemo ScadStudio ScadLibrary MagicaLego KongLie3D Brotato3D NextRA FlappyCpp
+	BrickPlayer CharacterDemo StudioSim AirportSim CitySolSim gkNextEditor FlappyJs)
+foreach(t IN LISTS GK_DESKTOP_RUNTIME_TARGETS)
+	gk_target_runtime_modules(${t} MODULES
+		DevTools LiveCoding NextAudio NextPhysics AgentDriver NextStreamline
+		GltfLoader NextRemote NextTui)
+endforeach()
+
+# Tests install selected services through EngineTestFixture/TestCommon rather
+# than DesktopMain, but their capabilities are still declared in one place.
+gk_target_runtime_modules(gkNextUnitTests MODULES DevTools NextPhysics GltfLoader NextTui)
+
 if ( TARGET CharacterDemo )
 target_link_libraries(CharacterDemo PRIVATE NextGameplay)
 endif()
@@ -712,24 +736,18 @@ endif()
 # Optional loader modules: linked only by the applications that use them.
 if ( TARGET LDrawLoader )
 	foreach(t gkNextRenderer gkNextVisualTest gkNextStillBenchmark gkNextMotionBenchmark gkNextEditor BrickPlayer gkNextUnitTests)
-		if ( TARGET ${t} )
-			target_link_libraries(${t} PRIVATE LDrawLoader)
-		endif()
+		gk_target_runtime_modules(${t} MODULES LDrawLoader)
 	endforeach()
 endif()
 if ( TARGET ScadLoader )
-	foreach(t NextGameplay gkNextRenderer gkNextVisualTest gkNextStillBenchmark gkNextMotionBenchmark gkNextEditor ScadStudio StudioSim AirportSim CitySolSim gkNextUnitTests)
-		if ( TARGET ${t} )
-			target_link_libraries(${t} PRIVATE ScadLoader)
-		endif()
+	foreach(t NextGameplay gkNextRenderer gkNextVisualTest gkNextStillBenchmark gkNextMotionBenchmark gkNextEditor ScadStudio ScadLibrary ScadCatalog StudioSim AirportSim CitySolSim gkNextUnitTests)
+		gk_target_runtime_modules(${t} MODULES ScadLoader)
 	endforeach()
 endif()
 
 if ( TARGET SplatLoader )
 	foreach(t gkNextRenderer gkNextVisualTest gkNextEditor gkNextUnitTests)
-		if ( TARGET ${t} )
-			target_link_libraries(${t} PRIVATE SplatLoader)
-		endif()
+		gk_target_runtime_modules(${t} MODULES SplatLoader)
 	endforeach()
 endif()
 if ( TARGET NextAI )
@@ -742,15 +760,7 @@ endif()
 if ( TARGET NextRmlUi )
 	find_package(RmlUi CONFIG REQUIRED)
 	target_link_libraries(NextRmlUi PRIVATE RmlUi::RmlUi)
-	# DesktopMain installs the RmlUi overlay factory for every program.
-	foreach(t IN LISTS AllTargets)
-		if ( NOT ${t} STREQUAL gkNextEngine AND TARGET ${t} AND NOT "${t}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
-			get_target_property(_ttype ${t} TYPE)
-			if ( _ttype STREQUAL "EXECUTABLE" )
-				target_link_libraries(${t} PRIVATE NextRmlUi)
-			endif()
-		endif()
-	endforeach()
+	gk_target_runtime_modules(RmlUiDemo MODULES NextRmlUi)
 endif()
 if ( TARGET RenderViews )
 	# Shared offscreen render-view provider (editor camera views + NextRemote streaming).
@@ -760,7 +770,7 @@ if ( TARGET RenderViews )
 	target_link_libraries(gkNextEditor PRIVATE RenderViews)
 endif()
 # ModelViewController lives in NextGameplay; link it where the orbit/fly camera is used.
-foreach(t gkNextRenderer gkNextEditor ScadStudio gkNextMotionBenchmark NextRemote)
+foreach(t gkNextRenderer gkNextEditor ScadStudio ScadLibrary gkNextMotionBenchmark NextRemote)
 	if ( TARGET ${t} AND TARGET NextGameplay )
 		target_link_libraries(${t} PRIVATE NextGameplay)
 	endif()
@@ -773,25 +783,11 @@ if ( TARGET NextRemote )
 	if (GK_REMOTE_ENABLED)
 		target_link_libraries(NextRemote PRIVATE ${GK_REMOTE_LINK_LIBS})
 	endif()
-	# DesktopMain assembles the remote frame streamer for every program.
-	foreach(t IN LISTS AllTargets)
-		if ( NOT ${t} STREQUAL gkNextEngine AND NOT ${t} STREQUAL NextRemote AND TARGET ${t} AND NOT "${t}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
-			get_target_property(_ttype ${t} TYPE)
-			if ( _ttype STREQUAL "EXECUTABLE" )
-				target_link_libraries(${t} PRIVATE NextRemote)
-			endif()
-		endif()
-	endforeach()
 endif()
-if ( TARGET NextTui )
-	foreach(t IN LISTS AllTargets)
-		if ( NOT ${t} STREQUAL gkNextEngine AND NOT ${t} STREQUAL NextTui AND TARGET ${t} AND NOT "${t}" IN_LIST GK_CORE_ONLY_APPLICATION_TARGETS )
-			get_target_property(_ttype ${t} TYPE)
-			if ( _ttype STREQUAL "EXECUTABLE" )
-				target_link_libraries(${t} PRIVATE NextTui)
-			endif()
-		endif()
-	endforeach()
+
+get_target_property(_minimal_modules gkNextMinimalRenderer GK_RUNTIME_MODULES)
+if (_minimal_modules)
+	message(FATAL_ERROR "gkNextMinimalRenderer must remain core-only, got: ${_minimal_modules}")
 endif()
 
 # Test Target

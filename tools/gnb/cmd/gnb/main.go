@@ -101,6 +101,7 @@ func main() {
 	root.AddCommand(newTestCommand(ctx))
 	root.AddCommand(newVisualCommand(ctx))
 	root.AddCommand(newShotCommand(ctx))
+	root.AddCommand(newScadCommand(ctx))
 	root.AddCommand(newValidateCommand(ctx))
 	root.AddCommand(newTuiCommand(ctx))
 	root.AddCommand(newEditorCommand(ctx))

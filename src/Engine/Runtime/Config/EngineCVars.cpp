@@ -81,24 +81,6 @@ namespace NextCVar
         GK_CVAR_BOOL("r.fastGather", settings, FastGather, false, ECVarFlags::Archive, "Enable fast gather");
         GK_CVAR_INT("r.bakeSpeedLevel", settings, BakeSpeedLevel, 1, ECVarFlags::Archive, "Bake speed level (0=realtime,1=normal,2=low)");
         GK_CVAR_FLOAT("r.heatmapScale", settings, HeatmapScale, 1.0f, ECVarFlags::Archive, "Profiler heatmap scale");
-        GK_CVAR_UINT("r.splat.bucketCount", settings, SplatBucketCount, 4096, ECVarFlags::Archive, "Minimum Gaussian splat depth-sort bucket count; renderer raises it up to 16K for large scenes");
-        GK_CVAR_UINT("r.splat.maxCount", settings, SplatMaxCount, 0, ECVarFlags::Archive, "Maximum Gaussian splats processed per frame (0=all)");
-        GK_CVAR_BOOL("r.splat.sortCache", settings, SplatSortCache, true, ECVarFlags::Archive, "Reuse Gaussian splat sort output while camera and sort-relevant model state are unchanged");
-        GK_CVAR_FLOAT("r.splat.sigma", settings, SplatSigma, 2.5f, ECVarFlags::Archive, "Gaussian billboard radius in standard deviations (clamped to 1-4)");
-        GK_CVAR_BOOL("r.splat.forceAA", settings, SplatForceAA, true, ECVarFlags::Archive, "Force Gaussian splat antialias opacity compensation");
-        GK_CVAR_FLOAT("r.splat.aaStrength", settings, SplatAAStrength, 0.5f, ECVarFlags::Archive, "Gaussian splat antialias opacity compensation strength (0=off, 1=full)");
-        GK_CVAR_BOOL("r.splat.proxy.enable", settings, SplatProxyEnable, true, ECVarFlags::Archive, "Generate hidden proxy meshes for Gaussian splat scene integration");
-        GK_CVAR_UINT("r.splat.proxy.gridMax", settings, SplatProxyGridMax, 64, ECVarFlags::Archive, "Maximum voxel resolution on the longest axis for Gaussian splat proxy meshes");
-        GK_CVAR_UINT("r.splat.proxy.brickSize", settings, SplatProxyBrickSize, 8, ECVarFlags::Archive, "Reserved brick size for Gaussian splat proxy generation");
-        GK_CVAR_FLOAT("r.splat.proxy.sigma", settings, SplatProxySigma, 2.5f, ECVarFlags::Archive, "Gaussian influence radius in standard deviations for proxy density generation");
-        GK_CVAR_FLOAT("r.splat.proxy.isoThreshold", settings, SplatProxyIsoThreshold, 0.35f, ECVarFlags::Archive, "Default alpha iso threshold for Gaussian splat proxy mesh extraction");
-        GK_CVAR_FLOAT("r.splat.proxy.simplifyRatio", settings, SplatProxySimplifyRatio, 0.0f, ECVarFlags::Archive, "Reserved simplification ratio for Gaussian splat proxy meshes");
-        GK_CVAR_BOOL("r.splat.shadow.enable", settings, SplatShadowEnable, true, ECVarFlags::Archive, "Allow Gaussian splat proxy meshes to cast CSM shadows");
-        GK_CVAR_BOOL("r.splat.rayOcclusion.enable", settings, SplatRayOcclusionEnable, true, ECVarFlags::Archive, "Allow Gaussian splat proxy meshes to participate in GPU ray occlusion");
-        GK_CVAR_BOOL("r.splat.proxy.debugVisible", settings, SplatProxyDebugVisible, false, ECVarFlags::Archive, "Draw Gaussian splat proxy meshes in the main visibility pass for debugging");
-        GK_CVAR_BOOL("r.splat.receiveLighting", settings, SplatReceiveLighting, true, ECVarFlags::Archive, "Allow Gaussian splat shading to receive scene lighting");
-        GK_CVAR_FLOAT("r.splat.lightingStrength", settings, SplatLightingStrength, 0.35f, ECVarFlags::Archive, "Global Gaussian splat scene-lighting blend strength");
-        GK_CVAR_INT("r.splat.proxy.debug", settings, SplatProxyDebug, 0, ECVarFlags::None, "Gaussian splat proxy debug mode (0=off,1=density,2=mesh,3=GPUAS)");
         GK_CVAR_FLOAT("r.paperWhiteNit", settings, PaperWhiteNit, 600.0f, ECVarFlags::Archive, "Paper white nit");
         GK_CVAR_BOOL("ui.showSettings", settings, ShowSettings, true, ECVarFlags::Archive, "Show settings panel");
         GK_CVAR_BOOL("ui.showOverlay", settings, ShowOverlay, true, ECVarFlags::Archive, "Show overlay");
@@ -146,7 +128,6 @@ namespace NextCVar
         GK_CVAR_BOOL("show.debugSkeleton", showFlags, ShowDebugSkeleton, false, ECVarFlags::None, "Show debug skeleton");
         GK_CVAR_BOOL("show.grid", showFlags, ShowGrid, true, ECVarFlags::None, "Show grid");
         GK_CVAR_BOOL("show.wireframe", showFlags, ShowWireframe, false, ECVarFlags::None, "Show wireframe");
-        GK_CVAR_BOOL("show.gaussianSplats", showFlags, ShowGaussianSplats, true, ECVarFlags::None, "Show Gaussian splat models");
     }
 
 }

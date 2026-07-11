@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Rendering/AuxDraw/AuxDrawSystem.hpp"
+#include "Modules/DevTools/AuxDrawSystem.hpp"
 #include "Engine/Rendering/ExternalPassRegistry.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
@@ -51,7 +51,7 @@ namespace Vulkan::AuxDraw
 
         VulkanBaseRenderer& renderer_;
         std::vector<FrameBuffer> frameBuffers_;
-        std::vector<Rendering::AuxDraw::FAuxPrimitiveGpu> stagingPrimitives_;
+        std::vector<DevTools::FAuxPrimitiveGpu> stagingPrimitives_;
         std::unique_ptr<Vulkan::PipelineLayout> pipelineLayout_;
         VkRenderPass renderPass_ = VK_NULL_HANDLE;
         VkFramebuffer framebuffer_ = VK_NULL_HANDLE;

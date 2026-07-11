@@ -1,6 +1,5 @@
 #include <catch2/catch_all.hpp>
 
-#include "Engine/Assets/Core/GaussianSplat.hpp"
 #include "Engine/Assets/Core/Model.hpp"
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Core/Scene.hpp"
@@ -83,9 +82,8 @@ namespace
         std::vector<Assets::LightObject> lights;
         std::vector<Assets::AnimationTrack> tracks;
         std::vector<Assets::Skeleton> skeletons;
-        std::vector<Assets::FGaussianSplatData> splats;
         return Runtime::Scene::SceneList::LoadScene(path, camera, nodes, models, materials, lights,
-                                                    tracks, skeletons, &splats);
+                                                    tracks, skeletons);
     }
 
     Runtime::EnvironmentComponent* FindEnvironmentComponent(

@@ -1,5 +1,5 @@
 #include "Engine/Common/CoreMinimal.hpp"
-#include "Engine/Runtime/Components/GaussianSplatComponent.h"
+#include "Modules/SplatLoader/GaussianSplatComponent.h"
 #include "Engine/Runtime/Reflection/PropertyMeta.h"
 
 #include <entt/meta/factory.hpp>
@@ -13,9 +13,6 @@ namespace Runtime
 
         entt::meta_factory<GaussianSplatComponent>()
             .type("GaussianSplatComponent"_hs)
-            .data<nullptr, &GaussianSplatComponent::GetSplatModelId>("SplatModelId")
-                .custom<PropertyMeta>(PropertyPresets::ReadOnly("Splat Model ID", "Gaussian Splat",
-                                                                 "The Gaussian splat resource ID"))
             .data<&GaussianSplatComponent::SetVisible, &GaussianSplatComponent::GetVisible>("Visible")
                 .custom<PropertyMeta>(PropertyPresets::Editable("Visible", "Gaussian Splat",
                                                                  "Whether the splat asset is rendered"))

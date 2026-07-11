@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Engine/Assets/Core/GaussianSplat.hpp"
+#include "Modules/SplatLoader/GaussianSplat.hpp"
 #include "Engine/Rendering/ExternalPassRegistry.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"

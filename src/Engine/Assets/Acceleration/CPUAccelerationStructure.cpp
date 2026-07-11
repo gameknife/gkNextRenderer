@@ -8,7 +8,6 @@
 #include "Engine/Assets/GPU/TextureImage.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Assets/Core/Scene.hpp"
-#include "Engine/Runtime/Components/GaussianSplatComponent.h"
 
 #include <atomic>
 #include <chrono>
@@ -224,19 +223,8 @@ void FCPUAccelerationStructure::UpdateBVH(Scene& scene)
         tmpbvhInstanceList.push_back(instance);
         FCPUTLASInstanceInfo info;
         info.matIdxs.fill(0);
-        const bool isSplatProxy = node->GetTag() == "__splat_proxy";
-        info.nodeId = isSplatProxy ? scene.ResolveEditableNodeId(node->GetInstanceId()) : node->GetInstanceId();
+        info.nodeId = scene.ResolveEditableNodeId(node->GetInstanceId());
         info.rayCastVisible = render->GetRayCastVisible();
-        if (isSplatProxy)
-        {
-            if (const auto sourceNode = scene.GetNodeSharedByInstanceId(info.nodeId))
-            {
-                if (const auto* splat = sourceNode->GetComponentPtr<Runtime::GaussianSplatComponent>())
-                {
-                    info.rayCastVisible = splat->GetVisible() && splat->GetRayCastVisible();
-                }
-            }
-        }
         info.worldBoundsMin = worldBounds.min;
         info.worldBoundsMax = worldBounds.max;
         if (const auto physics = node->GetComponent<Runtime::PhysicsComponent>())

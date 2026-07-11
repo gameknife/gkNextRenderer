@@ -3,7 +3,6 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Assets/Core/Model.hpp"
-#include "Engine/Assets/Core/GaussianSplat.hpp"
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
@@ -161,7 +160,6 @@ void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<vo
     ctx.lights = std::make_shared<std::vector<Assets::LightObject>>();
     ctx.tracks = std::make_shared<std::vector<Assets::AnimationTrack>>();
     ctx.skeletons = std::make_shared<std::vector<Assets::Skeleton>>();
-    ctx.splats = std::make_shared<std::vector<Assets::FGaussianSplatData>>();
     ctx.cameraState = std::make_shared<Assets::EnvironmentSetting>();
 
     // dispatch in thread task and reset in main thread
@@ -172,8 +170,7 @@ void NextEngine::LaunchLoadSceneTask(std::string sceneFileName, std::function<vo
             const auto timer = std::chrono::high_resolution_clock::now();
 
             taskContext.success = Runtime::Scene::SceneList::LoadScene(sceneFileName, *ctx.cameraState, *ctx.nodes, *ctx.models,
-                                                       *ctx.materials, *ctx.lights, *ctx.tracks, *ctx.skeletons,
-                                                       ctx.splats.get());
+                                                       *ctx.materials, *ctx.lights, *ctx.tracks, *ctx.skeletons);
 
             taskContext.elapsed = std::chrono::duration<float, std::chrono::seconds::period>(
                                       std::chrono::high_resolution_clock::now() - timer)
@@ -248,7 +245,6 @@ void NextEngine::LoadScene(const FSceneLoadRequest& request)
 
                 scene_->Reload(*ctx.nodes, *ctx.models, *ctx.materials, *ctx.lights, *ctx.tracks);
                 scene_->SetEnvSettings(*ctx.cameraState);
-                scene_->SetGaussianSplats(std::move(*ctx.splats));
                 scene_->PostLoad(*ctx.skeletons);
                 CommitSceneToRenderer({.resetFrameCounter = false,
                                        .postLoadRenderer = false,

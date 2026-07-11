@@ -10,6 +10,7 @@
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Command/CommandHistory.hpp"
 #include "Engine/Runtime/Interface/AgentDriver.hpp"
+#include "Engine/Runtime/Interface/DebugDraw.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Runtime/Interface/ScriptRuntime.hpp"
 #include "Engine/Runtime/Interface/ShaderHotReload.hpp"
@@ -191,6 +192,8 @@ public:
     
     void SetDebugUiProvider(Runtime::IDebugUiProvider* provider) { debugUiProvider_ = provider; }
     Runtime::IDebugUiProvider* GetDebugUiProvider() const { return debugUiProvider_; }
+    void SetDebugDraw(std::shared_ptr<Runtime::IDebugDraw> debugDraw) { debugDraw_ = std::move(debugDraw); }
+    Runtime::IDebugDraw* GetDebugDraw() const { return debugDraw_.get(); }
     
     void AddRenderFrameConsumer(std::unique_ptr<Runtime::IRenderFrameConsumer> consumer);
 
@@ -248,7 +251,6 @@ private:
         std::shared_ptr<std::vector<Assets::LightObject>> lights;
         std::shared_ptr<std::vector<Assets::AnimationTrack>> tracks;
         std::shared_ptr<std::vector<Assets::Skeleton>> skeletons;
-        std::shared_ptr<std::vector<Assets::FGaussianSplatData>> splats;
         std::shared_ptr<Assets::EnvironmentSetting> cameraState;
     };
 
@@ -409,6 +411,7 @@ private:
     std::unique_ptr<Runtime::IScriptRuntime> scriptRuntime_;
     FRuntimeServices services_{};
     Runtime::IDebugUiProvider* debugUiProvider_ = nullptr;
+    std::shared_ptr<Runtime::IDebugDraw> debugDraw_{};
 
     // Editor and tooling state
     Runtime::Command::CommandHistory commandHistory_{};

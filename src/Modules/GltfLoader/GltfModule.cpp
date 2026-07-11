@@ -12,8 +12,7 @@ namespace Modules::Gltf
             [](const std::string& filename, Assets::EnvironmentSetting& camera,
                std::vector<std::shared_ptr<Assets::Node>>& nodes, std::vector<Assets::Model>& models,
                std::vector<Assets::FMaterial>& materials, std::vector<Assets::LightObject>& lights,
-               std::vector<Assets::AnimationTrack>& tracks, std::vector<Assets::Skeleton>& skeletons,
-               std::vector<Assets::FGaussianSplatData>& /*splats*/)
+               std::vector<Assets::AnimationTrack>& tracks, std::vector<Assets::Skeleton>& skeletons)
             {
                 return Assets::FSceneLoader::LoadGLTFScene(
                     filename, camera, nodes, models, materials, lights, tracks, skeletons);
