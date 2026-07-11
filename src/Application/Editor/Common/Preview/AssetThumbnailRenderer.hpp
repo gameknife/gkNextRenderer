@@ -119,6 +119,7 @@ namespace Vulkan
         std::array<FThumbnailCache, kThumbnailKindCount> thumbnailCaches_{};
         EThumbnailKind thumbnailSceneKind_ = EThumbnailKind::Material;
         bool thumbnailSceneReady_ = false;
+        bool releaseThumbnailView_ = false;
         FRenderViewTargetResources thumbnailTarget_;
         FRenderViewTargetResources materialPreviewTarget_;
         VkExtent2D materialPreviewExtent_{256, 256};

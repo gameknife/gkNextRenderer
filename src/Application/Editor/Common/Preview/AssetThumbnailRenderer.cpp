@@ -161,6 +161,11 @@ namespace Vulkan
 
     void AssetThumbnailRenderer::BeforeNextFrame()
     {
+        if (releaseThumbnailView_)
+        {
+            RenderViewResourceFactory(renderer_).DestroyView(thumbnailRenderView_);
+            releaseThumbnailView_ = false;
+        }
         if (materialPreviewEnabled_)
         {
             EnsureMaterialPreviewScene();
@@ -708,6 +713,7 @@ namespace Vulkan
                     CopyThumbnailViewOutput(commandBuffer, view, *cache.images[assetIndex]);
                 }
                 view.SetSceneOverride(nullptr);
+                releaseThumbnailView_ = true;
             });
 
         return true;
