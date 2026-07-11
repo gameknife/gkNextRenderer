@@ -116,6 +116,7 @@ namespace Vulkan
 		ERenderOutput outputs = ERenderOutput::None;
 		EPostProcess post = EPostProcess::None;
 		EHistoryChannel history = EHistoryChannel::None;
+		bool supportsSceneOverrideWithoutPrepare = false;
 	};
 
 	struct FRendererRequirements
@@ -197,6 +198,7 @@ namespace Vulkan
 		Runtime::FrameProfiler* Profiler() const { return ctx_.frameProfiler.get(); }
 		bool HasSwapChain() const { return frame_.swapChain.operator bool(); }
 		int FrameCount() const {return frame_.frameCount;}
+		uint64_t SceneGeneration() const { return sceneGeneration_; }
 		uint64_t RecordingSubmitSerial() const { return frame_.recordingSubmitSerial; }
 		uint64_t CompletedSubmitSerial() const { return frame_.completedSubmitSerial; }
 		const Assets::UniformBufferObject& LastUniformBufferObject() const { return frame_.lastUBO; }
@@ -222,22 +224,23 @@ namespace Vulkan
 		const RenderViewServices& ViewServices() const { return *renderViewServices_; }
 		RenderView& PrimaryView() { return renderViews_->Primary(); }
 		const RenderView& PrimaryView() const { return renderViews_->Primary(); }
-		RenderView& ActiveRenderView() { return activeRenderView_ != nullptr ? *activeRenderView_ : PrimaryView(); }
-		const RenderView& ActiveRenderView() const { return activeRenderView_ != nullptr ? *activeRenderView_ : PrimaryView(); }
+		RenderView& ActiveRenderView() { return activeViewContext_.view != nullptr ? *activeViewContext_.view : PrimaryView(); }
+		const RenderView& ActiveRenderView() const { return activeViewContext_.view != nullptr ? *activeViewContext_.view : PrimaryView(); }
+		const FViewRenderContext& ActiveViewContext() const { return activeViewContext_; }
 		FViewRenderState& PrimaryViewState() { return renderViews_->Primary().State(); }
 		const FViewRenderState& PrimaryViewState() const { return renderViews_->Primary().State(); }
 
 		// RT bank base of the view currently being recorded; injected into GPUScene.custom_data_0
 		// so shaders resolve screen-space RT slots through Bindless::ViewRT. 0 == primary view.
-		uint32_t ActiveViewBankBase() const { return activeViewBankBase_; }
-		void SetActiveViewBankBase(uint32_t bankBase) { activeViewBankBase_ = bankBase; }
+		uint32_t ActiveViewBankBase() const { return activeViewContext_.bankBase; }
+		void SetActiveViewBankBase(uint32_t bankBase) { activeViewContext_.bankBase = bankBase; }
 
 		// Camera UBO device address of the view currently being recorded -> GPUScene.Camera.
 		// 0 == primary view (uses the per-image uniform buffer).
 		VkDeviceAddress ActiveViewCameraAddress(uint32_t imageIndex) const;
-		void SetActiveViewCameraAddress(VkDeviceAddress address) { activeViewCameraAddress_ = address; }
+		void SetActiveViewCameraAddress(VkDeviceAddress address) { activeViewContext_.cameraAddress = address; }
 		VkExtent2D ActiveViewRenderExtent() const;
-		void SetActiveViewRenderExtent(VkExtent2D extent) { activeViewRenderExtent_ = extent; }
+		void SetActiveViewRenderExtent(VkExtent2D extent) { activeViewContext_.renderExtent = extent; }
 
 		// Renderer registry
 		void RegisterLogicRenderer(ERendererType type);
@@ -292,7 +295,7 @@ namespace Vulkan
 		// Screen-space RT image of the view currently being recorded (its bank). C++ counterpart
 		// of the shader-side Bindless::GetViewStorageTexture; resolves slot through the active
 		// view's bank base. Primary view (base 0) == GetStorageImage (legacy absolute).
-		const RenderImage* GetViewStorageImage(uint32_t slot) const { return GetStorageImage(activeViewBankBase_ + slot); }
+		const RenderImage* GetViewStorageImage(uint32_t slot) const { return GetStorageImage(ActiveViewBankBase() + slot); }
 		void RequestSkinUpdate(uint32_t modelId);
 		std::vector<RayTracing::TopLevelAccelerationStructure>& TLAS();
 
@@ -466,17 +469,12 @@ namespace Vulkan
 		LogicRendererRegistry logicRenderers_;
 		std::unique_ptr<RenderViewManager> renderViews_ = std::make_unique<RenderViewManager>();
 		std::unique_ptr<RenderViewServices> renderViewServices_;
-		Assets::Scene* activeSceneOverride_ = nullptr;
-		RenderView* activeRenderView_ = nullptr;
-		uint32_t activeViewBankBase_ = 0;
-		VkExtent2D activeViewRenderExtent_{0, 0};
-		VkDeviceAddress activeViewCameraAddress_ = 0;
-		// Visibility framebuffer for the view currently being recorded (null => primary/bank-0).
-		FrameBuffer* activeVisibilityFrameBuffer_ = nullptr;
+		FViewRenderContext activeViewContext_{};
 		Delegates delegates_;
 		std::unique_ptr<Rendering::Upscaler::IUpscaler> upscaler_;
 
 		std::weak_ptr<Assets::Scene> scene_;
+		uint64_t sceneGeneration_ = 0;
 		VkPresentModeKHR presentMode_;
 		bool checkerboxRendering_{};
 		bool forceSDR_{};

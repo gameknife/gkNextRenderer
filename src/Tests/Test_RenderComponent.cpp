@@ -121,6 +121,8 @@ TEST_CASE("Renderer contracts describe prepasses outputs and history", "[Unit][R
     CHECK(HasAny(noAmbient.outputs, ERenderOutput::Depth | ERenderOutput::Motion |
                                     ERenderOutput::ObjectId | ERenderOutput::Normal));
     CHECK(noAmbient.history == EHistoryChannel::None);
+    CHECK(noAmbient.supportsSceneOverrideWithoutPrepare);
+    CHECK_FALSE(path.supportsSceneOverrideWithoutPrepare);
 }
 
 TEST_CASE("RenderView history invalidation records generation and reason", "[Unit][Rendering][History]")

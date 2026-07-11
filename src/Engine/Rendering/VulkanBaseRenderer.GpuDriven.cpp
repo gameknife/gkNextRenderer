@@ -317,8 +317,8 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         VkRenderPassBeginInfo renderPassInfo = {};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         auto& activeVisibilityPipeline = *overlay_.visibilityPipeline;
-        FrameBuffer& visibilityFrameBuffer =
-            activeVisibilityFrameBuffer_ ? *activeVisibilityFrameBuffer_ : *overlay_.visibilityFrameBuffer;
+        FrameBuffer& visibilityFrameBuffer = activeViewContext_.visibilityFramebuffer
+            ? *activeViewContext_.visibilityFramebuffer : *overlay_.visibilityFrameBuffer;
         renderPassInfo.renderPass = activeVisibilityPipeline.RenderPass().Handle();
         renderPassInfo.framebuffer = visibilityFrameBuffer.Handle();
         renderPassInfo.renderArea.offset = {0, 0};

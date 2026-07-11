@@ -30,6 +30,8 @@ namespace Vulkan::PathTracing
 
 		struct FSharcState
 		{
+			const Assets::Scene* ownerScene = nullptr;
+			uint64_t ownerSceneGeneration = 0;
 			FSharcBuffer hashEntries;
 			FSharcBuffer lockBuffer;
 			FSharcBuffer accumulation;

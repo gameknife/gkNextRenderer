@@ -256,7 +256,7 @@ namespace Vulkan
                                    EViewPrepass::None,
                                    ERenderOutput::Color,
                                    EPostProcess::SpatialUpscale,
-                                   EHistoryChannel::None}, 0, 1,
+                                   EHistoryChannel::None, false}, 0, 1,
                                &CreateLogicRenderer<VoxelTracing::VoxelTracingRenderer>},
             RendererDescriptor{ERT_SoftwareModernNoAmbient, "SoftwareModernNoAmbient", {
                                    ESceneResource::None,
@@ -264,7 +264,7 @@ namespace Vulkan
                                    ERenderOutput::Color | ERenderOutput::Depth | ERenderOutput::Motion |
                                        ERenderOutput::ObjectId | ERenderOutput::Normal,
                                    EPostProcess::SpatialUpscale | EPostProcess::DebugGBuffer,
-                                   EHistoryChannel::None}, 0, 1,
+                                   EHistoryChannel::None, true}, 0, 1,
                                &CreateLogicRenderer<SoftwareModernNoAmbient::SoftwareModernNoAmbientRenderer>},
         };
 
@@ -527,9 +527,9 @@ namespace Vulkan
 
     Assets::Scene& VulkanBaseRenderer::GetScene()
     {
-        if (activeSceneOverride_ != nullptr)
+        if (activeViewContext_.sceneOverride != nullptr)
         {
-            return *activeSceneOverride_;
+            return *activeViewContext_.sceneOverride;
         }
         auto scene = scene_.lock();
         if (!scene)
@@ -544,6 +544,7 @@ namespace Vulkan
     void VulkanBaseRenderer::SetScene(std::shared_ptr<Assets::Scene> scene)
     {
         scene_ = scene;
+        ++sceneGeneration_;
         renderViews_->InvalidateAllTemporalHistory(EHistoryInvalidationReason::SceneChanged);
         if (renderViewServices_)
         {
@@ -578,9 +579,9 @@ namespace Vulkan
 
     VkExtent2D VulkanBaseRenderer::ActiveViewRenderExtent() const
     {
-        if (activeViewRenderExtent_.width > 0 && activeViewRenderExtent_.height > 0)
+        if (activeViewContext_.renderExtent.width > 0 && activeViewContext_.renderExtent.height > 0)
         {
-            return activeViewRenderExtent_;
+            return activeViewContext_.renderExtent;
         }
         return frame_.swapChain->RenderExtent();
     }
@@ -1377,6 +1378,12 @@ namespace Vulkan
         FActiveRenderViewScope activeViewScope(*this, view);
         const ERendererType rendererType = GetLogicRendererType(logicRenderer);
         const FRendererContract& contract = GetRendererContract(rendererType);
+        if (view.SceneOverride() != nullptr && !contract.supportsSceneOverrideWithoutPrepare)
+        {
+            Throw(std::runtime_error(fmt::format(
+                "renderer {} cannot render SceneOverride without prepared scene-local resources",
+                GetRendererName(rendererType))));
+        }
         const bool initializePrevDepthBeforeCull =
             HasAny(contract.prepasses, EViewPrepass::Cull) && !view.IsPrimary() && !view.PrevDepthValid();
         if (initializePrevDepthBeforeCull)
@@ -1465,7 +1472,7 @@ namespace Vulkan
     }
 
     // Camera-dependent pre-passes; runs per active RenderView into its RT bank (set via
-    // SetActiveViewBankBase + activeVisibilityFrameBuffer_ before calling). Only the primary view
+    // FViewRenderContext before calling). Only the primary view
     // owns the swapchain, so its clear pass also clears the swapchain image.
     void VulkanBaseRenderer::PreRenderPerView(VkCommandBuffer commandBuffer, const uint32_t imageIndex,
                                               const bool isPrimaryView, const FRendererContract& contract)
@@ -2338,9 +2345,9 @@ namespace Vulkan
 
     VkDeviceAddress VulkanBaseRenderer::ActiveViewCameraAddress(const uint32_t imageIndex) const
     {
-        if (activeViewCameraAddress_ != 0)
+        if (activeViewContext_.cameraAddress != 0)
         {
-            return activeViewCameraAddress_;
+            return activeViewContext_.cameraAddress;
         }
         return frame_.uniformBuffers[imageIndex].Buffer().GetDeviceAddress();
     }

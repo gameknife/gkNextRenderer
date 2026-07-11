@@ -122,6 +122,14 @@ namespace Vulkan::PathTracing
 
     void PathTracingRenderer::EnsureSharcResources()
     {
+        const Assets::Scene* activeScene = &GetScene();
+        const uint64_t sceneGeneration = baseRender_.SceneGeneration();
+        if (sharc_.ownerScene != activeScene || sharc_.ownerSceneGeneration != sceneGeneration)
+        {
+            sharc_ = {};
+            sharc_.ownerScene = activeScene;
+            sharc_.ownerSceneGeneration = sceneGeneration;
+        }
         const auto& settings = NextEngine::GetInstance()->GetUserSettings();
         const uint32_t entriesPow2 = std::clamp(settings.SharcEntriesPow2, kSharcMinEntriesPow2, kSharcMaxEntriesPow2);
         const uint32_t entryCount = 1u << entriesPow2;
@@ -130,7 +138,11 @@ namespace Vulkan::PathTracing
             return;
         }
 
+        const Assets::Scene* ownerScene = sharc_.ownerScene;
+        const uint64_t ownerSceneGeneration = sharc_.ownerSceneGeneration;
         sharc_ = {};
+        sharc_.ownerScene = ownerScene;
+        sharc_.ownerSceneGeneration = ownerSceneGeneration;
         sharc_.entriesPow2 = entriesPow2;
         sharc_.entryCount = entryCount;
         const uint32_t allocationEntryCount = entryCount + kSharcProbePadding;

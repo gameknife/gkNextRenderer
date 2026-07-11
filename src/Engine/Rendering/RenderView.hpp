@@ -441,6 +441,16 @@ namespace Vulkan
         std::vector<FRenderViewScheduleItem>     schedule_;
     };
 
+    struct FViewRenderContext
+    {
+        RenderView* view = nullptr;
+        Assets::Scene* sceneOverride = nullptr;
+        uint32_t bankBase = 0;
+        VkExtent2D renderExtent{0, 0};
+        VkDeviceAddress cameraAddress = 0;
+        FrameBuffer* visibilityFramebuffer = nullptr;
+    };
+
     struct FRenderViewTargetResources
     {
         FRenderViewTargetResources() = default;
@@ -501,11 +511,6 @@ namespace Vulkan
 
     private:
         VulkanBaseRenderer& renderer_;
-        uint32_t previousBankBase_ = 0;
-        VkExtent2D previousRenderExtent_{0, 0};
-        VkDeviceAddress previousCameraAddress_ = 0;
-        FrameBuffer* previousVisibilityFrameBuffer_ = nullptr;
-        Assets::Scene* previousSceneOverride_ = nullptr;
-        RenderView* previousRenderView_ = nullptr;
+        FViewRenderContext previousContext_{};
     };
 }
