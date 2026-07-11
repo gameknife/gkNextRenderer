@@ -22,6 +22,9 @@
 #include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
+#include <Jolt/Physics/Vehicle/VehicleConstraint.h>
+#include <Jolt/Physics/Vehicle/WheeledVehicleController.h>
+#include <Jolt/Physics/Vehicle/VehicleCollisionTester.h>
 
 // STL includes
 #include <iostream>
@@ -43,6 +46,13 @@ using namespace JPH;
 // If you want your code to compile using single or double precision write 0.0_r to get a Real value that compiles to double or float depending if JPH_DOUBLE_PRECISION is set or not.
 using namespace JPH::literals;
 using Modules::Physics::FJoltPhysicsBackend;
+
+struct FJoltPhysicsBackend::FVehicleData
+{
+    NextBodyID bodyID;
+    Ref<VehicleConstraint> constraint;
+    std::vector<std::pair<float, float>> frictionScales;
+};
 
 namespace
 {
@@ -934,6 +944,53 @@ void FJoltPhysicsBackend::DrawDebugBodies() const
 		const glm::vec3 center = glm::vec3(worldTransform * glm::vec4(localCenter, 1.0f));
 		Runtime::EngineHelper::DrawAuxPoint(center, color, 2.0f);
 	}
+
+	// VehicleConstraint wheels are ray/cylinder-cast constraints rather than rigid bodies.
+	// Draw their actual solved poses, suspension segments and ground contacts explicitly.
+	constexpr int wheelSegments = 16;
+	for (const auto& [vehicleId, vehicle] : vehicles_)
+	{
+		(void)vehicleId;
+		const VehicleConstraint& constraint = *vehicle->constraint;
+		for (uint wheelIndex = 0; wheelIndex < constraint.GetWheels().size(); ++wheelIndex)
+		{
+			const Wheel* wheel = constraint.GetWheel(wheelIndex);
+			const WheelSettings* settings = wheel->GetSettings();
+			const RMat44 transform = constraint.GetWheelWorldTransform(wheelIndex, Vec3::sAxisZ(), Vec3::sAxisY());
+			const RVec3 centerR = transform.GetTranslation();
+			const glm::vec3 center(static_cast<float>(centerR.GetX()), static_cast<float>(centerR.GetY()),
+			                       static_cast<float>(centerR.GetZ()));
+			const Vec3 axisX = transform.GetAxisX();
+			const Vec3 axisY = transform.GetAxisY();
+			const glm::vec3 right(axisX.GetX(), axisX.GetY(), axisX.GetZ());
+			const glm::vec3 up(axisY.GetX(), axisY.GetY(), axisY.GetZ());
+			const glm::vec4 wheelColor = wheel->HasContact() ? glm::vec4(0.1f, 1.0f, 0.25f, 1.0f)
+			                                                     : glm::vec4(1.0f, 0.2f, 0.15f, 1.0f);
+			for (int segment = 0; segment < wheelSegments; ++segment)
+			{
+				const float a0 = glm::two_pi<float>() * static_cast<float>(segment) / wheelSegments;
+				const float a1 = glm::two_pi<float>() * static_cast<float>(segment + 1) / wheelSegments;
+				const glm::vec3 p0 = center + (right * std::cos(a0) + up * std::sin(a0)) * settings->mRadius;
+				const glm::vec3 p1 = center + (right * std::cos(a1) + up * std::sin(a1)) * settings->mRadius;
+				Runtime::EngineHelper::DrawAuxLine(p0, p1, wheelColor, 2.0f, false);
+			}
+
+			const RMat44 bodyTransform = constraint.GetVehicleBody()->GetWorldTransform();
+			const RVec3 hardPointR = bodyTransform * settings->mPosition;
+			const glm::vec3 hardPoint(static_cast<float>(hardPointR.GetX()), static_cast<float>(hardPointR.GetY()),
+			                          static_cast<float>(hardPointR.GetZ()));
+			Runtime::EngineHelper::DrawAuxLine(hardPoint, center, glm::vec4(1.0f, 0.8f, 0.1f, 1.0f), 2.0f, false);
+			Runtime::EngineHelper::DrawAuxPoint(hardPoint, glm::vec4(1.0f, 0.8f, 0.1f, 1.0f), 3.0f);
+			if (wheel->HasContact())
+			{
+				const RVec3 contactR = wheel->GetContactPosition();
+				const glm::vec3 contact(static_cast<float>(contactR.GetX()), static_cast<float>(contactR.GetY()),
+				                        static_cast<float>(contactR.GetZ()));
+				Runtime::EngineHelper::DrawAuxLine(center, contact, glm::vec4(0.2f, 0.9f, 1.0f, 1.0f), 2.0f, false);
+				Runtime::EngineHelper::DrawAuxPoint(contact, glm::vec4(0.2f, 0.9f, 1.0f, 1.0f), 4.0f);
+			}
+		}
+	}
 }
 
 void FJoltPhysicsBackend::OnSceneStarted()
@@ -949,6 +1006,13 @@ void FJoltPhysicsBackend::OnSceneDestroyed()
 		return;
 	}
 	BodyInterface &bodyInterface = context_->physicsSystem.GetBodyInterface();
+	for (auto& [id, vehicle] : vehicles_)
+	{
+		(void)id;
+		context_->physicsSystem.RemoveStepListener(vehicle->constraint);
+		context_->physicsSystem.RemoveConstraint(vehicle->constraint);
+	}
+	vehicles_.clear();
 	
 	for (auto& body : bodies_)
 	{
@@ -960,6 +1024,136 @@ void FJoltPhysicsBackend::OnSceneDestroyed()
 	
 	bodies_.clear();
 }
+
+NextVehicleID FJoltPhysicsBackend::CreateWheeledVehicle(const FNextVehicleSettings& settings)
+{
+    if (!context_ || settings.wheels.empty()) return invalidNextVehicleId;
+    BodyInterface& bi = context_->physicsSystem.GetBodyInterface();
+    BodyCreationSettings bodySettings(new BoxShape(Vec3(settings.chassisHalfExtent.x, settings.chassisHalfExtent.y,
+                                                        settings.chassisHalfExtent.z)),
+                                      RVec3(settings.initialPosition.x, settings.initialPosition.y, settings.initialPosition.z),
+                                      Quat(settings.initialRotation.x, settings.initialRotation.y,
+                                           settings.initialRotation.z, settings.initialRotation.w),
+                                      EMotionType::Dynamic, NextLayers::MOVING);
+    bodySettings.mOverrideMassProperties = EOverrideMassProperties::CalculateInertia;
+    bodySettings.mMassPropertiesOverride.mMass = settings.mass;
+    bodySettings.mLinearDamping = 0.08f;
+    bodySettings.mAngularDamping = 0.25f;
+    Body* body = bi.CreateBody(bodySettings);
+    if (!body) return invalidNextVehicleId;
+    bi.AddBody(body->GetID(), EActivation::Activate);
+
+    VehicleConstraintSettings vehicleSettings;
+    vehicleSettings.mUp = Vec3::sAxisY();
+    vehicleSettings.mForward = Vec3::sAxisX();
+    vehicleSettings.mMaxPitchRollAngle = DegreesToRadians(85.0f);
+    auto* controller = new WheeledVehicleControllerSettings();
+    controller->mEngine.mMaxTorque = settings.maxEngineTorque;
+    std::vector<int> driven;
+    for (const auto& source : settings.wheels)
+    {
+        WheelSettingsWV* wheel = new WheelSettingsWV();
+        wheel->mPosition = Vec3(source.position.x, source.position.y, source.position.z);
+        wheel->mSuspensionDirection = -Vec3::sAxisY();
+        wheel->mSteeringAxis = Vec3::sAxisY();
+        wheel->mWheelUp = Vec3::sAxisY();
+        wheel->mWheelForward = Vec3::sAxisX();
+        wheel->mRadius = source.radius;
+        wheel->mWidth = source.width;
+        wheel->mSuspensionMinLength = source.suspensionMin;
+        wheel->mSuspensionMaxLength = source.suspensionMax;
+        wheel->mSuspensionSpring = SpringSettings(ESpringMode::FrequencyAndDamping, 2.2f, 0.85f);
+        wheel->mMaxSteerAngle = source.steered ? DegreesToRadians(settings.maxSteerAngleDeg) : 0.0f;
+        wheel->mMaxHandBrakeTorque = source.steered ? 0.0f : 5000.0f;
+        vehicleSettings.mWheels.push_back(Ref<WheelSettings>(wheel));
+        if (source.driven) driven.push_back(static_cast<int>(vehicleSettings.mWheels.size() - 1));
+    }
+    for (size_t i = 0; i + 1 < driven.size(); i += 2)
+    {
+        VehicleDifferentialSettings diff;
+        diff.mLeftWheel = driven[i];
+        diff.mRightWheel = driven[i + 1];
+        diff.mEngineTorqueRatio = 2.0f / static_cast<float>(driven.size());
+        controller->mDifferentials.push_back(diff);
+    }
+    vehicleSettings.mController = controller;
+    Ref<VehicleConstraint> constraint = new VehicleConstraint(*body, vehicleSettings);
+    constraint->SetVehicleCollisionTester(new VehicleCollisionTesterCastCylinder(NextLayers::MOVING));
+    const NextVehicleID id = nextVehicleID_++;
+    auto data = std::make_unique<FVehicleData>();
+    data->bodyID = FromJoltBodyID(body->GetID());
+    data->constraint = constraint;
+    data->frictionScales.resize(settings.wheels.size(), {1.0f, 1.0f});
+    FVehicleData* raw = data.get();
+    constraint->SetCombineFriction([raw](uint index, float& longitudinal, float& lateral, const Body&, const SubShapeID&)
+    {
+        if (index < raw->frictionScales.size())
+        {
+            longitudinal *= raw->frictionScales[index].first;
+            lateral *= raw->frictionScales[index].second;
+        }
+    });
+    context_->physicsSystem.AddConstraint(constraint);
+    context_->physicsSystem.AddStepListener(constraint);
+    FNextPhysicsBody info{settings.initialPosition, settings.initialRotation, {}, ENextBodyShape::Box,
+                          data->bodyID, NextMotionType::Dynamic};
+    bodies_[data->bodyID] = info;
+    vehicles_[id] = std::move(data);
+    return id;
+}
+
+void FJoltPhysicsBackend::RemoveVehicle(NextVehicleID id)
+{
+    auto it = vehicles_.find(id); if (it == vehicles_.end()) return;
+    context_->physicsSystem.RemoveStepListener(it->second->constraint);
+    context_->physicsSystem.RemoveConstraint(it->second->constraint);
+    RemoveBody(it->second->bodyID);
+    vehicles_.erase(it);
+}
+
+void FJoltPhysicsBackend::SetVehicleInput(NextVehicleID id, const FNextVehicleInput& input)
+{
+    auto it = vehicles_.find(id); if (it == vehicles_.end()) return;
+    static_cast<WheeledVehicleController*>(it->second->constraint->GetController())->SetDriverInput(
+        glm::clamp(input.throttle, -1.0f, 1.0f), glm::clamp(input.steer, -1.0f, 1.0f),
+        glm::clamp(input.brake, 0.0f, 1.0f), glm::clamp(input.handbrake, 0.0f, 1.0f));
+    context_->physicsSystem.GetBodyInterface().ActivateBody(ToJoltBodyID(it->second->bodyID));
+}
+
+bool FJoltPhysicsBackend::GetVehicleBodyTransform(NextVehicleID id, glm::vec3& position, glm::quat& rotation)
+{
+    auto it = vehicles_.find(id); if (it == vehicles_.end()) return false;
+    BodyInterface& bi = context_->physicsSystem.GetBodyInterface();
+    RVec3 p = bi.GetPosition(ToJoltBodyID(it->second->bodyID)); Quat q = bi.GetRotation(ToJoltBodyID(it->second->bodyID));
+    position = {p.GetX(), p.GetY(), p.GetZ()}; rotation = glm::quat(q.GetW(), q.GetX(), q.GetY(), q.GetZ()); return true;
+}
+
+bool FJoltPhysicsBackend::GetVehicleWheelLocalTransform(NextVehicleID id, int wheel, glm::vec3& position, glm::quat& rotation)
+{
+    auto it = vehicles_.find(id); if (it == vehicles_.end() || wheel < 0 || static_cast<uint>(wheel) >= it->second->constraint->GetWheels().size()) return false;
+    Mat44 m = it->second->constraint->GetWheelLocalTransform(static_cast<uint>(wheel), Vec3::sAxisZ(), Vec3::sAxisY());
+    Vec3 p = m.GetTranslation(); Quat q = m.GetQuaternion(); position = {p.GetX(), p.GetY(), p.GetZ()};
+    rotation = glm::quat(q.GetW(), q.GetX(), q.GetY(), q.GetZ()); return true;
+}
+
+NextBodyID FJoltPhysicsBackend::GetVehicleWheelContactBody(NextVehicleID id, int wheel)
+{
+    auto it = vehicles_.find(id); if (it == vehicles_.end() || wheel < 0 || static_cast<uint>(wheel) >= it->second->constraint->GetWheels().size()) return {};
+    const Wheel* value = it->second->constraint->GetWheel(static_cast<uint>(wheel));
+    return value->HasContact() ? FromJoltBodyID(value->GetContactBodyID()) : NextBodyID{};
+}
+
+void FJoltPhysicsBackend::SetVehicleWheelFrictionScale(NextVehicleID id, int wheel, float longitudinal, float lateral)
+{
+    auto it = vehicles_.find(id); if (it != vehicles_.end() && wheel >= 0 && static_cast<size_t>(wheel) < it->second->frictionScales.size())
+        it->second->frictionScales[wheel] = {std::max(0.0f, longitudinal), std::max(0.0f, lateral)};
+}
+
+void FJoltPhysicsBackend::SetVehicleBodyTransform(NextVehicleID id, const glm::vec3& p, const glm::quat& q)
+{ auto it = vehicles_.find(id); if (it != vehicles_.end()) SetBodyTransform(it->second->bodyID, p, q, true); }
+
+NextBodyID FJoltPhysicsBackend::GetVehicleBodyID(NextVehicleID id) const
+{ auto it = vehicles_.find(id); return it == vehicles_.end() ? NextBodyID{} : it->second->bodyID; }
 
 namespace
 {

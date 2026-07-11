@@ -46,6 +46,18 @@ namespace Modules::Physics
         void OnSceneDestroyed() override;
         std::unique_ptr<INextCharacterControllerBackend> CreateCharacterController(
             const FCharacterControllerSettings& settings) override;
+        NextVehicleID CreateWheeledVehicle(const FNextVehicleSettings& settings) override;
+        void RemoveVehicle(NextVehicleID vehicleID) override;
+        void SetVehicleInput(NextVehicleID vehicleID, const FNextVehicleInput& input) override;
+        bool GetVehicleBodyTransform(NextVehicleID vehicleID, glm::vec3& position, glm::quat& rotation) override;
+        bool GetVehicleWheelLocalTransform(NextVehicleID vehicleID, int wheel, glm::vec3& position,
+                                           glm::quat& rotation) override;
+        NextBodyID GetVehicleWheelContactBody(NextVehicleID vehicleID, int wheel) override;
+        void SetVehicleWheelFrictionScale(NextVehicleID vehicleID, int wheel, float longitudinal,
+                                          float lateral) override;
+        void SetVehicleBodyTransform(NextVehicleID vehicleID, const glm::vec3& position,
+                                     const glm::quat& rotation) override;
+        NextBodyID GetVehicleBodyID(NextVehicleID vehicleID) const override;
 
     private:
         NextBodyID AddBodyInternal(FNextPhysicsBody& body, bool optimizeBroadPhase);
@@ -55,5 +67,8 @@ namespace Modules::Physics
         double timeElapsed_{};
         double timeSimulated_{};
         bool paused_ = false;
+        struct FVehicleData;
+        std::unordered_map<NextVehicleID, std::unique_ptr<FVehicleData>> vehicles_;
+        NextVehicleID nextVehicleID_ = 1;
     };
 }

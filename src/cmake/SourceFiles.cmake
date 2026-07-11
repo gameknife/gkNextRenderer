@@ -162,6 +162,11 @@ file(GLOB_RECURSE src_files_characterdemo
     "Application/Game/CharacterDemo/*.hpp"
 )
 
+file(GLOB_RECURSE src_files_truckerdemo
+    "Application/Game/TruckerDemo/*.cpp"
+    "Application/Game/TruckerDemo/*.hpp"
+)
+
 file(GLOB_RECURSE src_files_studiosim
     "Application/Game/StudioSim/*.cpp"
     "Application/Game/StudioSim/*.hpp"

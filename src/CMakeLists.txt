@@ -250,6 +250,11 @@ add_executable(CharacterDemo
 	${DESKTOP_MAIN_SOURCES}
 )
 target_include_directories(CharacterDemo PRIVATE Application/Game/CharacterDemo)
+add_executable(TruckerDemo
+	${src_files_truckerdemo}
+	${DESKTOP_MAIN_SOURCES}
+)
+target_include_directories(TruckerDemo PRIVATE Application/Game/TruckerDemo)
 add_executable(StudioSim
 	${src_files_studiosim}
 	${DESKTOP_MAIN_SOURCES}
@@ -408,6 +413,7 @@ gkNextStillBenchmark
 	FlappyCpp
 	BrickPlayer
 	CharacterDemo
+	TruckerDemo
 	StudioSim
 	AirportSim
 	CitySolSim
@@ -688,7 +694,7 @@ endforeach()
 set(GK_DESKTOP_RUNTIME_TARGETS
 	gkNextRenderer gkNextStillBenchmark gkNextMotionBenchmark gkNextVisualTest
 	RmlUiDemo ScadStudio ScadLibrary MagicaLego KongLie3D Brotato3D NextRA FlappyCpp
-	BrickPlayer CharacterDemo StudioSim AirportSim CitySolSim gkNextEditor FlappyJs)
+	BrickPlayer CharacterDemo TruckerDemo StudioSim AirportSim CitySolSim gkNextEditor FlappyJs)
 foreach(t IN LISTS GK_DESKTOP_RUNTIME_TARGETS)
 	gk_target_runtime_modules(${t} MODULES
 		DevTools LiveCoding NextAudio NextPhysics AgentDriver NextStreamline
@@ -740,7 +746,7 @@ if ( TARGET LDrawLoader )
 	endforeach()
 endif()
 if ( TARGET ScadLoader )
-	foreach(t NextGameplay gkNextRenderer gkNextVisualTest gkNextStillBenchmark gkNextMotionBenchmark gkNextEditor ScadStudio ScadLibrary ScadCatalog StudioSim AirportSim CitySolSim gkNextUnitTests)
+	foreach(t NextGameplay gkNextRenderer gkNextVisualTest gkNextStillBenchmark gkNextMotionBenchmark gkNextEditor ScadStudio ScadLibrary ScadCatalog StudioSim AirportSim CitySolSim TruckerDemo gkNextUnitTests)
 		gk_target_runtime_modules(${t} MODULES ScadLoader)
 	endforeach()
 endif()

@@ -9717,7 +9717,7 @@
               "default": "0"
             }
           ],
-          "line": 745,
+          "line": 750,
           "footprint": [
             3.79,
             1.83
@@ -9743,7 +9743,7 @@
               "default": "0"
             }
           ],
-          "line": 715,
+          "line": 741,
           "footprint": [
             6.39,
             2.55
@@ -9756,6 +9756,32 @@
           ],
           "triangles": 972,
           "colors": 39,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_veh_truck_body",
+          "category": "veh",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 715,
+          "footprint": [
+            6.39,
+            2.31
+          ],
+          "height": 2.55,
+          "zMin": 0.05,
+          "center": [
+            0.29,
+            -0.05
+          ],
+          "triangles": 396,
+          "colors": 27,
           "warnings": 0,
           "ok": true
         },

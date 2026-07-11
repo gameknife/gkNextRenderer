@@ -67,6 +67,39 @@ struct FCharacterControllerSettings
     glm::vec3 initialPosition{0.0f, 1.0f, 0.0f};
 };
 
+using NextVehicleID = uint32_t;
+constexpr NextVehicleID invalidNextVehicleId = 0;
+
+struct FNextWheelSettings
+{
+    glm::vec3 position{0.0f};
+    float radius = 0.5f;
+    float width = 0.36f;
+    float suspensionMin = 0.12f;
+    float suspensionMax = 0.42f;
+    bool steered = false;
+    bool driven = false;
+};
+
+struct FNextVehicleSettings
+{
+    glm::vec3 chassisHalfExtent{3.1f, 0.55f, 1.05f};
+    float mass = 3500.0f;
+    float maxEngineTorque = 900.0f;
+    float maxSteerAngleDeg = 32.0f;
+    std::vector<FNextWheelSettings> wheels;
+    glm::vec3 initialPosition{0.0f, 1.2f, 0.0f};
+    glm::quat initialRotation{1.0f, 0.0f, 0.0f, 0.0f};
+};
+
+struct FNextVehicleInput
+{
+    float throttle = 0.0f;
+    float steer = 0.0f;
+    float brake = 0.0f;
+    float handbrake = 0.0f;
+};
+
 class INextCharacterControllerBackend
 {
 public:
@@ -124,4 +157,16 @@ public:
     virtual void OnSceneDestroyed() = 0;
     virtual std::unique_ptr<INextCharacterControllerBackend> CreateCharacterController(
         const FCharacterControllerSettings& settings) = 0;
+    virtual NextVehicleID CreateWheeledVehicle(const FNextVehicleSettings& settings) = 0;
+    virtual void RemoveVehicle(NextVehicleID vehicleID) = 0;
+    virtual void SetVehicleInput(NextVehicleID vehicleID, const FNextVehicleInput& input) = 0;
+    virtual bool GetVehicleBodyTransform(NextVehicleID vehicleID, glm::vec3& position, glm::quat& rotation) = 0;
+    virtual bool GetVehicleWheelLocalTransform(NextVehicleID vehicleID, int wheel, glm::vec3& position,
+                                               glm::quat& rotation) = 0;
+    virtual NextBodyID GetVehicleWheelContactBody(NextVehicleID vehicleID, int wheel) = 0;
+    virtual void SetVehicleWheelFrictionScale(NextVehicleID vehicleID, int wheel, float longitudinal,
+                                              float lateral) = 0;
+    virtual void SetVehicleBodyTransform(NextVehicleID vehicleID, const glm::vec3& position,
+                                         const glm::quat& rotation) = 0;
+    virtual NextBodyID GetVehicleBodyID(NextVehicleID vehicleID) const = 0;
 };

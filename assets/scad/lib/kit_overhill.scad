@@ -712,7 +712,7 @@ module oh_veh_van(seed = 0)
 }
 
 // 平板货卡：平头驾驶室 + 木质货台围栏 + 板条箱/油桶货物 + 双后轴
-module oh_veh_truck(seed = 0)
+module oh_veh_truck_body(seed = 0)
 {
     c = oh_car_c(seed + 17);
     color(oh_METALD()) translate([0.2, 0, 0.72]) oh_boxc([6.2, 1.1, 0.24]);
@@ -730,12 +730,17 @@ module oh_veh_truck(seed = 0)
             translate([-2.7 + i * 1.0, ((j * 2 - 1)) * 1.06, 1.32]) oh_boxc([0.1, 0.08, 0.5]);
     color(oh_WOODD()) for (j = [0, 1])
         translate([-0.7, ((j * 2 - 1)) * 1.06, 1.54]) oh_boxc([4.4, 0.06, 0.1]);
+    color(oh_METALC()) translate([1.2, -0.95, 0.62]) rotate([0, 90, 0])
+        cylinder(h = 0.9, r = 0.26, $fn = 7, center = true);
+}
+
+module oh_veh_truck(seed = 0)
+{
+    oh_veh_truck_body(seed);
     color([0.42, 0.32, 0.2]) translate([-1.6, 0.3, 1.46]) oh_boxc([1.05, 1.05, 0.75]);
     color([0.48, 0.37, 0.23]) translate([-1.6, 0.3, 1.46]) oh_boxc([1.09, 0.16, 0.16]);
     color([0.42, 0.32, 0.2]) translate([-0.4, -0.45, 1.38]) oh_boxc([0.8, 0.8, 0.6]);
     color(oh_drum_c(seed + 3)) translate([0.55, 0.35, 1.09]) cylinder(h = 0.8, r = 0.28, $fn = 8);
-    color(oh_METALC()) translate([1.2, -0.95, 0.62]) rotate([0, 90, 0])
-        cylinder(h = 0.9, r = 0.26, $fn = 7, center = true);
     for (i = [0, 1]) translate([2.5, ((i * 2 - 1)) * 1.0, 0.5]) oh_veh_wheel(0.5, 0.36);
     for (i = [0, 1], k = [0, 1])
         translate([-0.6 - k * 1.15, ((i * 2 - 1)) * 1.0, 0.5]) oh_veh_wheel(0.5, 0.5);

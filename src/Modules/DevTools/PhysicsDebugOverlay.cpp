@@ -124,6 +124,10 @@ void Runtime::DrawPhysicsDebugOverlay(const Assets::Scene& scene, const Assets::
 
     FPhysicsDebugStats stats;
 
+    // Include backend-owned bodies (vehicles, controllers, procedural bodies) that do not
+    // necessarily have a one-to-one scene node / PhysicsComponent representation.
+    physics->DrawDebugBodies();
+
     static constexpr int kEdges[12][2] = {
         {0, 1}, {1, 3}, {3, 2}, {2, 0}, 
         {4, 5}, {5, 7}, {7, 6}, {6, 4},
@@ -138,9 +142,8 @@ void Runtime::DrawPhysicsDebugOverlay(const Assets::Scene& scene, const Assets::
             continue;
         }
 
-        auto renderComp = node->GetComponent<Runtime::RenderComponent>();
         auto physComp = node->GetComponent<Runtime::PhysicsComponent>();
-        if (!renderComp || !physComp || !renderComp->IsDrawable())
+        if (!physComp)
         {
             continue;
         }
@@ -153,6 +156,12 @@ void Runtime::DrawPhysicsDebugOverlay(const Assets::Scene& scene, const Assets::
 
         const FNextPhysicsDebugState debugState = physics->GetBodyDebugState(physComp->GetPhysicsBody());
         stats.Add(ClassifyBodyDebugState(debugState));
+
+        auto renderComp = node->GetComponent<Runtime::RenderComponent>();
+        if (!renderComp || !renderComp->IsDrawable())
+        {
+            continue;
+        }
 
         if (!renderComp->GetVisible() && debugState.objectLayer == NextLayers::HIDDEN)
         {

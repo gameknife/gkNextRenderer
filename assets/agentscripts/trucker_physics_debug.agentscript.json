@@ -1,0 +1,15 @@
+{
+  "name": "trucker_physics_debug",
+  "target": "TruckerDemo",
+  "scene": "assets/scad/overhill_mission.scad",
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 8000 },
+    { "type": "wait-frames", "n": 90 },
+    { "type": "key", "code": "F1", "action": "press" },
+    { "type": "key", "code": "W", "action": "down" },
+    { "type": "wait-frames", "n": 120 },
+    { "type": "key", "code": "W", "action": "up" },
+    { "type": "screenshot", "out": "screenshots/trucker_physics_debug" },
+    { "type": "quit" }
+  ]
+}
