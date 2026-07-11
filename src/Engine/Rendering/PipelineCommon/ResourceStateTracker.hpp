@@ -13,6 +13,7 @@ namespace Vulkan::PipelineCommon
         ColorAttachment = 1u << 2u,
         DepthStencil = 1u << 3u,
         Present = 1u << 4u,
+        Fragment = 1u << 5u,
     };
 
     enum class EResourceAccess : uint32_t
@@ -79,6 +80,15 @@ namespace Vulkan::PipelineCommon
     class FResourceStateTracker final
     {
     public:
+        void Import(FImageHandle image, const FImageState& state)
+        {
+            if (image.value == 0 || !state.initialized || state.layout == VK_IMAGE_LAYOUT_UNDEFINED)
+            {
+                throw std::invalid_argument("imported image state must be initialized and defined");
+            }
+            states_[image.value] = state;
+        }
+
         std::optional<FImageBarrier> Use(const FImageUse& use, std::string_view passName)
         {
             if (use.image.value == 0 || use.layout == VK_IMAGE_LAYOUT_UNDEFINED)
@@ -135,6 +145,7 @@ namespace Vulkan::PipelineCommon
             if (value & static_cast<uint32_t>(ERenderStage::ColorAttachment)) result |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
             if (value & static_cast<uint32_t>(ERenderStage::DepthStencil)) result |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
             if (value & static_cast<uint32_t>(ERenderStage::Present)) result |= VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+            if (value & static_cast<uint32_t>(ERenderStage::Fragment)) result |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
             return result != 0 ? result : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
         }
 

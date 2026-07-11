@@ -248,18 +248,39 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         imageRange.baseArrayLayer = 0;
         imageRange.layerCount = 1;
 
-        ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex],
-            0, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        TransitionSwapchainImage(
+            commandBuffer, imageIndex,
+            {.stages = PipelineCommon::ERenderStage::Transfer,
+             .access = PipelineCommon::EResourceAccess::TransferWrite,
+             .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+             .discardPreviousContents = true},
+            "clear swapchain");
         vkCmdClearColorImage(commandBuffer, SwapChain().Images()[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                              &clearColor, 1, &imageRange);
-        ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[imageIndex],
-            VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+        TransitionSwapchainImage(
+            commandBuffer, imageIndex,
+            {.stages = PipelineCommon::ERenderStage::Transfer,
+             .access = PipelineCommon::EResourceAccess::TransferWrite,
+             .layout = VK_IMAGE_LAYOUT_GENERAL},
+            "clear swapchain steady state");
     }
 
     void VulkanBaseRenderer::DispatchVisibilityPass(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         SCOPED_GPU_TIMER("visibility pass");
+
+        const uint32_t viewBase = ActiveViewBankBase();
+        const uint32_t drawId = viewBase + Assets::Bindless::RT_MINIGBUFFER_DRAW;
+        const uint32_t storageId = viewBase + Assets::Bindless::RT_MINIGBUFFER;
+        const PipelineCommon::FImageHandle drawHandle{static_cast<uint64_t>(drawId) + 1u};
+        const PipelineCommon::FImageHandle storageHandle{static_cast<uint64_t>(storageId) + 1u};
+        const auto emitTrackedBarrier = [commandBuffer](
+            VkImage image, const PipelineCommon::FImageBarrier& barrier)
+        {
+            ImageMemoryBarrier::Insert(commandBuffer, barrier.srcStages, barrier.dstStages,
+                                       image, barrier.range, barrier.srcAccess, barrier.dstAccess,
+                                       barrier.oldLayout, barrier.newLayout);
+        };
 
         std::array<VkClearValue, 2> clearValues = {};
         clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
@@ -306,6 +327,15 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         }
         vkCmdEndRenderPass(commandBuffer);
 
+        // The render pass explicitly clears/discards the attachment and leaves it in PRESENT_SRC.
+        visibilityStateTracker_.Import(drawHandle, {
+            .initialized = true,
+            .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+            .stages = PipelineCommon::ERenderStage::ColorAttachment,
+            .access = PipelineCommon::EResourceAccess::ColorWrite,
+            .lastPass = "visibility render pass",
+        });
+
         // Copy the depth/id render target into the storage-image variant for later passes.
         VkImageCopy copyRegion;
         copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
@@ -315,21 +345,42 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         copyRegion.extent = {GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER)->GetImage().Extent().width,
                              GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER)->GetImage().Extent().height, 1};
 
-        GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW)->InsertBarrier(commandBuffer,
-            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-        GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER)->InsertBarrier(commandBuffer,
-            0, VK_ACCESS_TRANSFER_WRITE_BIT,
-            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        const auto* drawImage = GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW);
+        const auto* storageImage = GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER);
+        if (const auto barrier = visibilityStateTracker_.Use(
+                {.image = drawHandle,
+                 .stages = PipelineCommon::ERenderStage::Transfer,
+                 .access = PipelineCommon::EResourceAccess::TransferRead,
+                 .layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL},
+                "visibility copy source"))
+        {
+            emitTrackedBarrier(drawImage->GetImage().Handle(), *barrier);
+        }
+        if (const auto barrier = visibilityStateTracker_.Use(
+                {.image = storageHandle,
+                 .stages = PipelineCommon::ERenderStage::Transfer,
+                 .access = PipelineCommon::EResourceAccess::TransferWrite,
+                 .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                 .discardPreviousContents = true},
+                "visibility copy destination"))
+        {
+            emitTrackedBarrier(storageImage->GetImage().Handle(), *barrier);
+        }
 
         vkCmdCopyImage(commandBuffer,
-            GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER_DRAW)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            drawImage->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            storageImage->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             1, &copyRegion);
 
-        GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER)->InsertBarrier(commandBuffer,
-            VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+        if (const auto barrier = visibilityStateTracker_.Use(
+                {.image = storageHandle,
+                 .stages = PipelineCommon::ERenderStage::Compute,
+                 .access = PipelineCommon::EResourceAccess::ShaderRead,
+                 .layout = VK_IMAGE_LAYOUT_GENERAL},
+                "visibility compute read"))
+        {
+            emitTrackedBarrier(storageImage->GetImage().Handle(), *barrier);
+        }
     }
 
     void VulkanBaseRenderer::DispatchSunShadow(VkCommandBuffer commandBuffer, uint32_t imageIndex)
@@ -343,7 +394,7 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         auto& scene = GetScene();
         const uint32_t indirectDrawBatchCount = scene.GetIndirectDrawBatchCount();
         const uint32_t groupCount = (indirectDrawBatchCount + 63) / 64;
-        const uint32_t activeCascadeMask = NextEngine::GetInstance()->GetSunShadowCascadeUpdateMask();
+        const uint32_t activeCascadeMask = ActiveRenderView().State().sunShadowCascadeUpdateMask;
         Assets::GPUScene shadowGpuScene = scene.FetchGPUScene(imageIndex);
 
         if (activeCascadeMask != 0)
@@ -500,7 +551,12 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         }
 
         SCOPED_GPU_TIMER("visual debugger");
-        SwapChain().InsertBarrierToWrite(commandBuffer, imageIndex);
+        TransitionSwapchainImage(
+            commandBuffer, imageIndex,
+            {.stages = PipelineCommon::ERenderStage::Compute,
+             .access = PipelineCommon::EResourceAccess::ShaderWrite,
+             .layout = VK_IMAGE_LAYOUT_GENERAL},
+            "visual debugger");
 
         std::array<uint32_t, 5> pushConst = {
             imageIndex,
@@ -513,18 +569,22 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
             Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().width, 8),
             Utilities::Math::GetSafeDispatchCount(SwapChain().Extent().height, 8), 1);
 
-        SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
+        TransitionSwapchainImage(
+            commandBuffer, imageIndex,
+            {.stages = PipelineCommon::ERenderStage::Present,
+             .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR},
+            "visual debugger present");
     }
 
     void VulkanBaseRenderer::CopyObjectIdHistory(VkCommandBuffer commandBuffer)
     {
         SCOPED_GPU_TIMER("objectid copy");
-        GetViewStorageImage(Assets::Bindless::RT_OBJEDCTID_0)->InsertBarrier(commandBuffer,
-            VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-        GetViewStorageImage(Assets::Bindless::RT_OBJEDCTID_1)->InsertBarrier(commandBuffer,
-            VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        TransitionActiveViewImages(commandBuffer, {
+            {Assets::Bindless::RT_OBJEDCTID_0, PipelineCommon::ERenderStage::Transfer,
+             PipelineCommon::EResourceAccess::TransferRead, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL},
+            {Assets::Bindless::RT_OBJEDCTID_1, PipelineCommon::ERenderStage::Transfer,
+             PipelineCommon::EResourceAccess::TransferWrite, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL},
+        }, "object id history copy");
 
         VkImageCopy copyRegion;
         copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
@@ -540,11 +600,11 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
             GetViewStorageImage(Assets::Bindless::RT_OBJEDCTID_1)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             1, &copyRegion);
 
-        GetViewStorageImage(Assets::Bindless::RT_OBJEDCTID_0)->InsertBarrier(commandBuffer,
-            VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
-        GetViewStorageImage(Assets::Bindless::RT_OBJEDCTID_1)->InsertBarrier(commandBuffer,
-            VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+        TransitionActiveViewImages(commandBuffer, {
+            {Assets::Bindless::RT_OBJEDCTID_0, PipelineCommon::ERenderStage::Compute,
+             PipelineCommon::EResourceAccess::ShaderRead | PipelineCommon::EResourceAccess::ShaderWrite},
+            {Assets::Bindless::RT_OBJEDCTID_1, PipelineCommon::ERenderStage::Compute,
+             PipelineCommon::EResourceAccess::ShaderRead | PipelineCommon::EResourceAccess::ShaderWrite},
+        }, "object id history ready");
     }
 }

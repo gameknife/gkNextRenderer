@@ -73,6 +73,11 @@ namespace Vulkan::PipelineCommon
 
         const std::array<uint32_t, 2> diffusePingPong{Assets::Bindless::RT_ATROUS_PING, Assets::Bindless::RT_ATROUS_PONG};
         const std::array<uint32_t, 2> specularPingPong{Assets::Bindless::RT_ATROUS_SPEC_PING, Assets::Bindless::RT_ATROUS_SPEC_PONG};
+        baseRenderer.ImportActiveViewImagesGeneral({
+            Assets::Bindless::RT_ATROUS_PING, Assets::Bindless::RT_ATROUS_PONG,
+            Assets::Bindless::RT_ATROUS_SPEC_PING, Assets::Bindless::RT_ATROUS_SPEC_PONG,
+            Assets::Bindless::RT_ATROUS_OUT, Assets::Bindless::RT_ATROUS_SPEC_OUT,
+        }, "atrous image initialization");
         const VkExtent2D activeExtent = baseRenderer.ActiveViewRenderExtent();
         const uint32_t dispatchX = Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8);
         const uint32_t dispatchY = Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8);
@@ -106,17 +111,28 @@ namespace Vulkan::PipelineCommon
             push.sigmaNormalPower = settings.DenoiseAtrousNormalPower;
             push.specFootprintScale = settings.DenoiseSpecFootprint;
 
-            pipeline_->BindPipeline(commandBuffer, &push);
-            vkCmdDispatch(commandBuffer, dispatchX, dispatchY, 1);
-
+            baseRenderer.TransitionActiveViewImages(commandBuffer, {
+                {Assets::Bindless::RT_NORMAL, ERenderStage::Compute, EResourceAccess::ShaderRead},
+                {Assets::Bindless::RT_PREV_DEPTHBUFFER, ERenderStage::Compute, EResourceAccess::ShaderRead},
+                {Assets::Bindless::RT_OBJEDCTID_0, ERenderStage::Compute, EResourceAccess::ShaderRead},
+            }, "atrous guides");
             if (filterDiffuse)
             {
-                baseRenderer.GetViewStorageImage(push.diffuseOutSlot)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+                baseRenderer.TransitionActiveViewImages(commandBuffer, {
+                    {push.diffuseInSlot, ERenderStage::Compute, EResourceAccess::ShaderRead},
+                    {push.diffuseOutSlot, ERenderStage::Compute, EResourceAccess::ShaderWrite},
+                }, "atrous diffuse iteration");
             }
             if (filterSpecular)
             {
-                baseRenderer.GetViewStorageImage(push.specularOutSlot)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+                baseRenderer.TransitionActiveViewImages(commandBuffer, {
+                    {push.specularInSlot, ERenderStage::Compute, EResourceAccess::ShaderRead},
+                    {push.specularOutSlot, ERenderStage::Compute, EResourceAccess::ShaderWrite},
+                }, "atrous specular iteration");
             }
+
+            pipeline_->BindPipeline(commandBuffer, &push);
+            vkCmdDispatch(commandBuffer, dispatchX, dispatchY, 1);
         }
     }
 }

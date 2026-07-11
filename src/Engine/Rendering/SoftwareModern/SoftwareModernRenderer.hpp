@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Rendering/PipelineCommon/TemporalPostChain.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
 #include <memory>
@@ -20,12 +21,10 @@ namespace Vulkan::SoftwareModern
 		void DeleteSwapChain() override;
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 		void ReloadShaders(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles) override;
-		FRendererRequirements Requirements() const override { return GetRendererRequirements(ERT_SoftwareModern); }
 
 	private:
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> deferredShadingPipeline_;
-		std::unique_ptr<PipelineCommon::ZeroBindPipeline> composePipeline_;
-		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> accumulatePipeline_;
+		PipelineCommon::TemporalPostChain temporalPostChain_;
 
 	};
 

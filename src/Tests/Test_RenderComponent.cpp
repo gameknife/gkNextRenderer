@@ -2,6 +2,7 @@
 #include "Engine/Assets/Core/Node.h"
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Rendering/PipelineCommon/ResourceStateTracker.hpp"
+#include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Components/RenderComponent.h"
 #include <memory>
 #include <array>
@@ -92,4 +93,47 @@ TEST_CASE("Image state tracker preserves and discards contents explicitly", "[Un
     CHECK(discard->srcAccess == 0);
     REQUIRE(tracker.Find(image));
     CHECK(tracker.Find(image)->lastPass == "clear");
+    CHECK((FResourceStateTracker::ToVkStages(ERenderStage::Fragment) &
+           VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT) != 0);
+}
+
+TEST_CASE("Renderer contracts describe prepasses outputs and history", "[Unit][Rendering][RendererContract]")
+{
+    using namespace Vulkan;
+
+    const auto& path = GetRendererContract(ERT_PathTracing);
+    CHECK(HasAny(path.sceneResources, ESceneResource::TLAS));
+    CHECK(HasAny(path.prepasses, EViewPrepass::Visibility));
+    CHECK_FALSE(HasAny(path.prepasses, EViewPrepass::CSM));
+    CHECK(HasAll(path.history, EHistoryChannel::Diffuse | EHistoryChannel::Specular |
+                               EHistoryChannel::Albedo | EHistoryChannel::ObjectId));
+
+    const auto& voxel = GetRendererContract(ERT_VoxelTracing);
+    CHECK(voxel.prepasses == EViewPrepass::None);
+    CHECK(voxel.outputs == ERenderOutput::Color);
+    CHECK(voxel.history == EHistoryChannel::None);
+    CHECK_FALSE(HasAny(voxel.post, EPostProcess::Temporal | EPostProcess::DLSS |
+                                  EPostProcess::DebugGBuffer));
+
+    const auto& noAmbient = GetRendererContract(ERT_SoftwareModernNoAmbient);
+    CHECK(noAmbient.sceneResources == ESceneResource::None);
+    CHECK(HasAny(noAmbient.outputs, ERenderOutput::Depth | ERenderOutput::Motion |
+                                    ERenderOutput::ObjectId | ERenderOutput::Normal));
+    CHECK(noAmbient.history == EHistoryChannel::None);
+}
+
+TEST_CASE("RenderView history invalidation records generation and reason", "[Unit][Rendering][History]")
+{
+    Vulkan::FViewDesc desc{};
+    desc.renderExtent = {640, 360};
+    Vulkan::RenderView view(0, desc, "history test");
+    const uint64_t initialGeneration = view.State().historyGeneration;
+
+    view.InvalidateTemporalHistory(Vulkan::EHistoryInvalidationReason::RendererChanged);
+
+    CHECK(view.State().resetHistory);
+    CHECK(view.State().historyGeneration == initialGeneration + 1);
+    CHECK(view.State().historyInvalidationReason == Vulkan::EHistoryInvalidationReason::RendererChanged);
+    CHECK(std::string_view(Vulkan::GetHistoryInvalidationReasonName(
+              view.State().historyInvalidationReason)) == "renderer-changed");
 }

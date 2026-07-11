@@ -11,6 +11,51 @@
 
 namespace Vulkan
 {
+    const char* GetHistoryInvalidationReasonName(const EHistoryInvalidationReason reason)
+    {
+        switch (reason)
+        {
+        case EHistoryInvalidationReason::Initial: return "initial";
+        case EHistoryInvalidationReason::SceneChanged: return "scene-changed";
+        case EHistoryInvalidationReason::RendererChanged: return "renderer-changed";
+        case EHistoryInvalidationReason::ExtentChanged: return "extent-changed";
+        case EHistoryInvalidationReason::CameraCut: return "camera-cut";
+        case EHistoryInvalidationReason::TemporalConfigChanged: return "temporal-config-changed";
+        case EHistoryInvalidationReason::ViewReused: return "view-reused";
+        case EHistoryInvalidationReason::SwapchainRecreated: return "swapchain-recreated";
+        }
+        return "unknown";
+    }
+    namespace
+    {
+        void EmitTrackedImageBarrier(
+            VkCommandBuffer commandBuffer,
+            PipelineCommon::FResourceStateTracker& tracker,
+            const PipelineCommon::FImageUse& use,
+            const VkImage image,
+            const std::string_view passName)
+        {
+            const auto barrier = tracker.Use(use, passName);
+            if (!barrier)
+            {
+                return;
+            }
+
+            VkImageMemoryBarrier vkBarrier{};
+            vkBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            vkBarrier.srcAccessMask = barrier->srcAccess;
+            vkBarrier.dstAccessMask = barrier->dstAccess;
+            vkBarrier.oldLayout = barrier->oldLayout;
+            vkBarrier.newLayout = barrier->newLayout;
+            vkBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            vkBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            vkBarrier.image = image;
+            vkBarrier.subresourceRange = barrier->range;
+            vkCmdPipelineBarrier(commandBuffer, barrier->srcStages, barrier->dstStages, 0,
+                                 0, nullptr, 0, nullptr, 1, &vkBarrier);
+        }
+    }
+
     FRenderViewTargetResources::~FRenderViewTargetResources() = default;
     FRenderViewTargetResources::FRenderViewTargetResources(FRenderViewTargetResources&&) noexcept = default;
     FRenderViewTargetResources& FRenderViewTargetResources::operator=(FRenderViewTargetResources&&) noexcept = default;
@@ -123,7 +168,7 @@ namespace Vulkan
         }
         target.outputSampleSlot = sampleSlot;
         BindSampledColorImage(target.outputSampleSlot, *target.offscreenImage, *target.offscreenSampler);
-        view.InvalidateTemporalHistory();
+        view.InvalidateTemporalHistory(EHistoryInvalidationReason::ExtentChanged);
     }
 
     bool RenderViewResourceFactory::CopyDenoisedOutputToImage(
@@ -139,10 +184,25 @@ namespace Vulkan
         }
 
         const VkExtent2D extent = view.RenderExtent();
-        src->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                           VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-        dst.InsertBarrier(commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-                          VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        auto& viewStates = view.ResourceStates();
+        auto& outputStates = renderer_.AuxiliaryImageStates();
+        const PipelineCommon::FImageHandle srcHandle{
+            static_cast<uint64_t>(view.RtBankBase() + Assets::Bindless::RT_DENOISED) + 1u};
+        const PipelineCommon::FImageHandle dstHandle{
+            static_cast<uint64_t>(reinterpret_cast<uintptr_t>(dst.GetImage().Handle()))};
+        EmitTrackedImageBarrier(commandBuffer, viewStates, {
+            .image = srcHandle,
+            .stages = PipelineCommon::ERenderStage::Transfer,
+            .access = PipelineCommon::EResourceAccess::TransferRead,
+            .layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        }, src->GetImage().Handle(), "copy view output source");
+        EmitTrackedImageBarrier(commandBuffer, outputStates, {
+            .image = dstHandle,
+            .stages = PipelineCommon::ERenderStage::Transfer,
+            .access = PipelineCommon::EResourceAccess::TransferWrite,
+            .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .discardPreviousContents = true,
+        }, dst.GetImage().Handle(), "copy view output destination");
 
         VkImageBlit region{};
         region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
@@ -156,10 +216,18 @@ namespace Vulkan
                        dst.GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                        1, &region, filter);
 
-        dst.InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-        src->InsertBarrier(commandBuffer, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+        EmitTrackedImageBarrier(commandBuffer, outputStates, {
+            .image = dstHandle,
+            .stages = PipelineCommon::ERenderStage::Fragment,
+            .access = PipelineCommon::EResourceAccess::ShaderRead,
+            .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        }, dst.GetImage().Handle(), "sample view output");
+        EmitTrackedImageBarrier(commandBuffer, viewStates, {
+            .image = srcHandle,
+            .stages = PipelineCommon::ERenderStage::Compute,
+            .access = PipelineCommon::EResourceAccess::ShaderRead | PipelineCommon::EResourceAccess::ShaderWrite,
+            .layout = VK_IMAGE_LAYOUT_GENERAL,
+        }, src->GetImage().Handle(), "restore view output source");
         return true;
     }
 

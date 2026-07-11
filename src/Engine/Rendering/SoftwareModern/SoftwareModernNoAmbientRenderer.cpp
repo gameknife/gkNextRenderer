@@ -46,28 +46,28 @@ namespace Vulkan::SoftwareModernNoAmbient
 
     void SoftwareModernNoAmbientRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
-        baseRender_.InitializeBarriers(commandBuffer);
+        baseRender_.ImportActiveViewImagesGeneral({
+            Assets::Bindless::RT_SINGLE_DIFFUSE, Assets::Bindless::RT_AMBIENT,
+            Assets::Bindless::RT_OBJEDCTID_0, Assets::Bindless::RT_PREV_DEPTHBUFFER,
+            Assets::Bindless::RT_MOTIONVECTOR, Assets::Bindless::RT_NORMAL,
+            Assets::Bindless::RT_GTAO, Assets::Bindless::RT_DENOISED,
+        }, "scene image initialization");
         const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
 
         {
             SCOPED_GPU_TIMER("shadingpass");
+            baseRender_.TransitionActiveViewImages(commandBuffer, {
+                {Assets::Bindless::RT_SINGLE_DIFFUSE, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+                {Assets::Bindless::RT_AMBIENT, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+                {Assets::Bindless::RT_OBJEDCTID_0, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+                {Assets::Bindless::RT_PREV_DEPTHBUFFER, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+                {Assets::Bindless::RT_MOTIONVECTOR, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+                {Assets::Bindless::RT_NORMAL, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+            }, "software modern no ambient shading");
             shadingPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
             vkCmdDispatch(commandBuffer,
                           Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
                           Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
-
-            const auto transition = [this, commandBuffer](uint32_t bindlessId)
-            {
-                baseRender_.GetViewStorageImage(bindlessId)->InsertBarrier(commandBuffer,
-                    VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                    VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-            };
-            transition(Assets::Bindless::RT_SINGLE_DIFFUSE);
-            transition(Assets::Bindless::RT_OBJEDCTID_0);
-            transition(Assets::Bindless::RT_PREV_DEPTHBUFFER);
-            transition(Assets::Bindless::RT_MOTIONVECTOR);
-            transition(Assets::Bindless::RT_NORMAL);
-            transition(Assets::Bindless::RT_AMBIENT);
         }
 
         {
@@ -75,21 +75,29 @@ namespace Vulkan::SoftwareModernNoAmbient
             if (settings.GTAOEnable)
             {
                 SCOPED_GPU_TIMER("gtao pass");
-                baseRender_.GetViewStorageImage(Assets::Bindless::RT_GTAO)->InsertBarrier(
-                    commandBuffer, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-                    VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+                baseRender_.TransitionActiveViewImages(commandBuffer, {
+                    {Assets::Bindless::RT_PREV_DEPTHBUFFER, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
+                    {Assets::Bindless::RT_NORMAL, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
+                    {Assets::Bindless::RT_GTAO, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+                }, "gtao");
                 gtaoPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
                 const VkExtent2D extent = baseRender_.ActiveViewRenderExtent();
                 vkCmdDispatch(commandBuffer,
                               Utilities::Math::GetSafeDispatchCount((extent.width + 1u) / 2u, 8),
                               Utilities::Math::GetSafeDispatchCount((extent.height + 1u) / 2u, 8), 1);
-                baseRender_.GetViewStorageImage(Assets::Bindless::RT_GTAO)->InsertBarrier(
-                    commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                    VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
             }
 
             {
                 SCOPED_GPU_TIMER("simplecompose pass");
+                baseRender_.TransitionActiveViewImages(commandBuffer, {
+                    {Assets::Bindless::RT_SINGLE_DIFFUSE, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
+                    {Assets::Bindless::RT_AMBIENT, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
+                    {Assets::Bindless::RT_OBJEDCTID_0, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
+                    {Assets::Bindless::RT_PREV_DEPTHBUFFER, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
+                    {Assets::Bindless::RT_NORMAL, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
+                    {Assets::Bindless::RT_GTAO, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderRead},
+                    {Assets::Bindless::RT_DENOISED, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+                }, "gtao compose");
                 composePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
                 vkCmdDispatch(commandBuffer,
                               Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),

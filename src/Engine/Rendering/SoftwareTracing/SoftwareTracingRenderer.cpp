@@ -6,19 +6,6 @@
 
 namespace Vulkan::SoftwareTracing {
 
-namespace
-{
-	struct FReprojectPushConstants
-	{
-		uint32_t ProgressiveRender;
-		uint32_t TemporalFrames;
-		uint32_t FastReproject;
-		float ClampGammaHi;
-		float ClampGammaLo;
-		float ClampFloor;
-	};
-}
-
 SoftwareTracingRenderer::SoftwareTracingRenderer(Vulkan::VulkanBaseRenderer& baseRender):LogicRendererBase(baseRender)
 {
 	
@@ -32,16 +19,13 @@ SoftwareTracingRenderer::~SoftwareTracingRenderer()
 void SoftwareTracingRenderer::CreateSwapChain(const VkExtent2D& extent)
 {
 	deferredShadingPipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Core.SwTracing.comp.slang.spv", GetScene()));
-	accumulatePipeline_.reset(new PipelineCommon::ZeroBindCustomPushConstantPipeline(
-		SwapChain(), "assets/shaders/Process.ReProject.comp.slang.spv", sizeof(FReprojectPushConstants)));
-	composePipeline_.reset(new PipelineCommon::ZeroBindPipeline(SwapChain(), "assets/shaders/Process.DenoiseJBF.comp.slang.spv", GetScene()));
+	temporalPostChain_.CreateSwapChain(SwapChain(), GetScene());
 }
 
 void SoftwareTracingRenderer::DeleteSwapChain()
 {
 	deferredShadingPipeline_.reset();
-	accumulatePipeline_.reset();
-	composePipeline_.reset();
+	temporalPostChain_.DeleteSwapChain();
 }
 
 void SoftwareTracingRenderer::ReloadShaders(
@@ -49,62 +33,52 @@ void SoftwareTracingRenderer::ReloadShaders(
 	std::set<std::string>& handledShaderFiles)
 {
 	if (deferredShadingPipeline_) deferredShadingPipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-	if (accumulatePipeline_) accumulatePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
-	if (composePipeline_) composePipeline_->ReloadIfShaderChanged(changedShaderFiles, handledShaderFiles);
+	temporalPostChain_.ReloadShaders(changedShaderFiles, handledShaderFiles);
 }
 
 void SoftwareTracingRenderer::Render(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
-	baseRender_.InitializeBarriers(commandBuffer);
+	baseRender_.ActiveRenderView().TemporalResolve().PrepareHistoryForRead(baseRender_, commandBuffer);
+	baseRender_.ImportActiveViewImagesGeneral({
+		Assets::Bindless::RT_SINGLE_DIFFUSE, Assets::Bindless::RT_SINGLE_SPECULAR,
+		Assets::Bindless::RT_ALBEDO, Assets::Bindless::RT_NORMAL,
+		Assets::Bindless::RT_OBJEDCTID_0, Assets::Bindless::RT_OBJEDCTID_1,
+		Assets::Bindless::RT_PREV_DEPTHBUFFER,
+		Assets::Bindless::RT_MOTIONVECTOR, Assets::Bindless::RT_DIFFUSE_HITDIST,
+		Assets::Bindless::RT_SPECULAR_HITDIST, Assets::Bindless::RT_SPECULAR_ALBEDO,
+		Assets::Bindless::RT_ACCUMLATE_DIFFUSE, Assets::Bindless::RT_ACCUMLATE_SPECULAR,
+		Assets::Bindless::RT_ACCUMLATE_ALBEDO, Assets::Bindless::RT_MOTIONMOMENT,
+		Assets::Bindless::RT_DENOISED,
+	}, "scene image initialization");
 	const bool isPrimaryView = baseRender_.ActiveViewBankBase() == 0;
 	const bool allowTemporal = baseRender_.ActiveRenderView().Schedule() != EViewSchedule::Transient;
 	const VkExtent2D activeExtent = baseRender_.ActiveViewRenderExtent();
 	{
 		SCOPED_GPU_TIMER("shadingpass");
+		baseRender_.TransitionActiveViewImages(commandBuffer, {
+			{Assets::Bindless::RT_SINGLE_DIFFUSE, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+			{Assets::Bindless::RT_SINGLE_SPECULAR, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+			{Assets::Bindless::RT_ALBEDO, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+			{Assets::Bindless::RT_NORMAL, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+			{Assets::Bindless::RT_OBJEDCTID_0, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+			{Assets::Bindless::RT_PREV_DEPTHBUFFER, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+			{Assets::Bindless::RT_MOTIONVECTOR, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+			{Assets::Bindless::RT_DIFFUSE_HITDIST, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+			{Assets::Bindless::RT_SPECULAR_HITDIST, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+			{Assets::Bindless::RT_SPECULAR_ALBEDO, PipelineCommon::ERenderStage::Compute, PipelineCommon::EResourceAccess::ShaderWrite},
+		}, "software tracing shading");
 		// cs shading pass
 		deferredShadingPipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
 		vkCmdDispatch(commandBuffer,
 			Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
 			Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
-		baseRender_.GetViewStorageImage(Assets::Bindless::RT_SINGLE_DIFFUSE)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 	}
-	{
-		SCOPED_GPU_TIMER("reproject pass");
-		const auto& settings = NextEngine::GetInstance()->GetUserSettings();
-		FReprojectPushConstants pushConst{};
-		pushConst.ProgressiveRender = isPrimaryView && NextEngine::GetInstance()->IsProgressiveRendering();
-		pushConst.TemporalFrames = allowTemporal ? uint32_t(settings.TemporalFrames) : 1u;
-		pushConst.FastReproject = 1;
-		pushConst.ClampGammaHi = settings.ReprojectClampGammaHi;
-		pushConst.ClampGammaLo = settings.ReprojectClampGammaLo;
-		pushConst.ClampFloor = settings.ReprojectClampFloor;
-		accumulatePipeline_->BindPipeline(commandBuffer, &pushConst);
-		vkCmdDispatch(commandBuffer, Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8), Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
-
-		baseRender_.GetViewStorageImage(Assets::Bindless::RT_ACCUMLATE_DIFFUSE)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-		baseRender_.GetViewStorageImage(Assets::Bindless::RT_ACCUMLATE_SPECULAR)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-		baseRender_.GetViewStorageImage(Assets::Bindless::RT_ACCUMLATE_ALBEDO)->InsertBarrier(commandBuffer, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-	}
-	{
-		SCOPED_GPU_TIMER("atrous pass");
-		baseRender_.ActiveRenderView().AtrousDenoiser().Run(
-			baseRender_, SwapChain(), commandBuffer, NextEngine::GetInstance()->GetUserSettings());
-	}
-	{
-		SCOPED_GPU_TIMER("compose pass");
-
-		composePipeline_->BindPipeline(commandBuffer, GetScene(), imageIndex);
-		vkCmdDispatch(commandBuffer,
-			Utilities::Math::GetSafeDispatchCount(activeExtent.width, 8),
-			Utilities::Math::GetSafeDispatchCount(activeExtent.height, 8), 1);
-	}
-	{
-        SCOPED_GPU_TIMER("copy pass");
-        baseRender_.ActiveRenderView().TemporalResolve().CopyToHistory(baseRender_, commandBuffer, {
-            {Assets::Bindless::RT_ACCUMLATE_DIFFUSE, PipelineCommon::ETemporalChannel::Diffuse},
-            {Assets::Bindless::RT_ACCUMLATE_SPECULAR, PipelineCommon::ETemporalChannel::Specular},
-            {Assets::Bindless::RT_ACCUMLATE_ALBEDO, PipelineCommon::ETemporalChannel::Albedo},
-        });
-    }
+	const auto& settings = NextEngine::GetInstance()->GetUserSettings();
+	temporalPostChain_.Run(baseRender_, SwapChain(), commandBuffer, imageIndex, settings, {
+		.progressiveRender = isPrimaryView && NextEngine::GetInstance()->IsProgressiveRendering(),
+		.fastReproject = true,
+		.runAtrous = true,
+		.temporalFrames = allowTemporal ? uint32_t(settings.TemporalFrames) : 1u,
+	});
 }
 }

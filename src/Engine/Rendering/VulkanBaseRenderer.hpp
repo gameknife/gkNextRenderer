@@ -12,6 +12,7 @@
 #include "Engine/Rendering/Upscaler/UpscalerTypes.hpp"
 #include "Engine/Rendering/ExternalPassRegistry.hpp"
 #include "Engine/Rendering/RenderView.hpp"
+#include "Engine/Rendering/PipelineCommon/ResourceStateTracker.hpp"
 #include "Engine/Runtime/Profiling/FrameProfiler.hpp"
 #include <vector>
 #include <memory>
@@ -43,6 +44,80 @@ namespace Vulkan
 		ERT_SoftwareModernNoAmbient,
 	};
 
+	enum class ESceneResource : uint32_t
+	{
+		None = 0,
+		Voxel = 1u << 0u,
+		Ambient = 1u << 1u,
+		TLAS = 1u << 2u,
+		SHARC = 1u << 3u,
+	};
+
+	enum class EViewPrepass : uint32_t
+	{
+		None = 0,
+		Cull = 1u << 0u,
+		Clear = 1u << 1u,
+		Visibility = 1u << 2u,
+		CSM = 1u << 3u,
+	};
+
+	enum class ERenderOutput : uint32_t
+	{
+		None = 0,
+		Color = 1u << 0u,
+		Depth = 1u << 1u,
+		Motion = 1u << 2u,
+		ObjectId = 1u << 3u,
+		Normal = 1u << 4u,
+		Albedo = 1u << 5u,
+		Diffuse = 1u << 6u,
+		Specular = 1u << 7u,
+	};
+
+	enum class EPostProcess : uint32_t
+	{
+		None = 0,
+		Temporal = 1u << 0u,
+		SpatialUpscale = 1u << 1u,
+		DLSS = 1u << 2u,
+		FrameGeneration = 1u << 3u,
+		DebugGBuffer = 1u << 4u,
+	};
+
+	enum class EHistoryChannel : uint32_t
+	{
+		None = 0,
+		Diffuse = 1u << 0u,
+		Specular = 1u << 1u,
+		Albedo = 1u << 2u,
+		ObjectId = 1u << 3u,
+	};
+
+#define GK_RENDER_CONTRACT_FLAGS(EnumType) \
+	constexpr EnumType operator|(EnumType lhs, EnumType rhs) \
+	{ return static_cast<EnumType>(static_cast<uint32_t>(lhs) | static_cast<uint32_t>(rhs)); } \
+	constexpr bool HasAny(EnumType value, EnumType flags) \
+	{ return (static_cast<uint32_t>(value) & static_cast<uint32_t>(flags)) != 0; } \
+	constexpr bool HasAll(EnumType value, EnumType flags) \
+	{ return (static_cast<uint32_t>(value) & static_cast<uint32_t>(flags)) == static_cast<uint32_t>(flags); }
+
+	GK_RENDER_CONTRACT_FLAGS(ESceneResource)
+	GK_RENDER_CONTRACT_FLAGS(EViewPrepass)
+	GK_RENDER_CONTRACT_FLAGS(ERenderOutput)
+	GK_RENDER_CONTRACT_FLAGS(EPostProcess)
+	GK_RENDER_CONTRACT_FLAGS(EHistoryChannel)
+#undef GK_RENDER_CONTRACT_FLAGS
+
+	struct FRendererContract
+	{
+		ESceneResource sceneResources = ESceneResource::None;
+		EViewPrepass prepasses = EViewPrepass::None;
+		ERenderOutput outputs = ERenderOutput::None;
+		EPostProcess post = EPostProcess::None;
+		EHistoryChannel history = EHistoryChannel::None;
+	};
+
 	struct FRendererRequirements
 	{
 		bool requestAmbientCube = false;
@@ -62,7 +137,17 @@ namespace Vulkan
 		bool NeedsVoxelGeometry() const { return requestAmbientCube || requestVoxelGeometry; }
 	};
 
+	struct FViewImageUse
+	{
+		uint32_t bindlessId = 0;
+		PipelineCommon::ERenderStage stages = PipelineCommon::ERenderStage::None;
+		PipelineCommon::EResourceAccess access = PipelineCommon::EResourceAccess::None;
+		VkImageLayout layout = VK_IMAGE_LAYOUT_GENERAL;
+		bool discardPreviousContents = false;
+	};
+
 	FRendererRequirements GetRendererRequirements(ERendererType type);
+	const FRendererContract& GetRendererContract(ERendererType type);
 	const char* GetRendererName(ERendererType type);
 	const std::array<ERendererType, 4>& GetReferenceRendererTypes();
 
@@ -192,6 +277,15 @@ namespace Vulkan
 		// Shared render resources used by logic renderers
 		void CaptureScreenShot();
 		void RequestScreenShotCapture() { screenshot_.captureRequested = true; }
+		void TransitionSwapchainImage(VkCommandBuffer commandBuffer, uint32_t imageIndex,
+		                              const PipelineCommon::FImageUse& use, std::string_view passName);
+		void ImportSwapchainImageState(uint32_t imageIndex, const PipelineCommon::FImageState& state);
+		PipelineCommon::FResourceStateTracker& AuxiliaryImageStates() { return auxiliaryImageStateTracker_; }
+		void ImportActiveViewImagesGeneral(std::initializer_list<uint32_t> bindlessIds,
+		                                   std::string_view passName);
+		void TransitionActiveViewImages(VkCommandBuffer commandBuffer,
+		                                std::initializer_list<FViewImageUse> uses,
+		                                std::string_view passName);
 		const RenderImage* GetStorageImage(uint32_t bindlessIdx) const;
 		// Screen-space RT image of the view currently being recorded (its bank). C++ counterpart
 		// of the shader-side Bindless::GetViewStorageTexture; resolves slot through the active
@@ -359,6 +453,9 @@ namespace Vulkan
 		FrameResources frame_;
 		SkinnedMeshResources skin_;
 		BindlessStorageImages bindless_;
+		PipelineCommon::FResourceStateTracker visibilityStateTracker_;
+		PipelineCommon::FResourceStateTracker swapchainStateTracker_;
+		PipelineCommon::FResourceStateTracker auxiliaryImageStateTracker_;
 		std::unique_ptr<RayTracingResources> rt_;
 		ScreenshotResources screenshot_;
 		FrameGenerationResources frameGeneration_;
@@ -395,6 +492,7 @@ namespace Vulkan
 			void* nextDeviceFeatures);
 		void OnDeviceSet();
 		bool IsLogicRendererRegistered(ERendererType type) const;
+		ERendererType GetLogicRendererType(const LogicRendererBase& renderer) const;
 		void EnsureLogicRendererSwapChain(ERendererType type, LogicRendererBase& logicRenderer);
 		void CreateRenderImages();
 		void CreateSceneSwapChainResources();
@@ -417,7 +515,8 @@ namespace Vulkan
 		// Per-view render: camera/bank-dependent pre-passes, logic renderer, and view-local post.
 		void RenderViewToBank(VkCommandBuffer commandBuffer, uint32_t imageIndex,
                               RenderView& view, bool clearSwapchain, LogicRendererBase& logicRenderer);
-		void PreRenderPerView(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool isPrimaryView);
+		void PreRenderPerView(VkCommandBuffer commandBuffer, uint32_t imageIndex, bool isPrimaryView,
+		                      const FRendererContract& contract);
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void PostRender(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 		void AfterUpdateScene();
@@ -464,8 +563,6 @@ namespace Vulkan
 		virtual void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) {};
 		virtual void BeforeNextFrame() {};
 		virtual void ReloadShaders(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles) {};
-		virtual FRendererRequirements Requirements() const { return {}; }
-		virtual bool RequiresObjectIdHistory() const { return true; }
 		
 		VulkanBaseRenderer& baseRender_;
 		template<typename T>

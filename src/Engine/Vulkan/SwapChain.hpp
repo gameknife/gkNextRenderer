@@ -46,9 +46,6 @@ namespace Vulkan
 		void UpdateRenderViewport( int32_t x, int32_t y, uint32_t width, uint32_t height) const;
 		void UpdateOutputViewport( int32_t x, int32_t y, uint32_t width, uint32_t height) const;
 		
-		void InsertBarrierToWrite(VkCommandBuffer commandBuffer, uint32_t imageIndex) const;
-		void InsertBarrierToPresent(VkCommandBuffer commandBuffer, uint32_t imageIndex) const;
-
 	private:
 
 		struct SupportDetails

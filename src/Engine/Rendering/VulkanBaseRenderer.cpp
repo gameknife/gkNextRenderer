@@ -213,7 +213,7 @@ namespace Vulkan
         {
             ERendererType type;
             const char* name;
-            FRendererRequirements requirements;
+            FRendererContract contract;
             uint32_t referenceColumn;
             uint32_t referenceRow;
             RendererFactory factory;
@@ -226,15 +226,45 @@ namespace Vulkan
         }
 
         const std::array RendererDescriptors{
-            RendererDescriptor{ERT_PathTracing, "PathTracing", {true, true}, 1, 1,
+            RendererDescriptor{ERT_PathTracing, "PathTracing", {
+                                   ESceneResource::Voxel | ESceneResource::Ambient | ESceneResource::TLAS | ESceneResource::SHARC,
+                                   EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility,
+                                   ERenderOutput::Color | ERenderOutput::Depth | ERenderOutput::Motion | ERenderOutput::ObjectId |
+                                       ERenderOutput::Normal | ERenderOutput::Albedo | ERenderOutput::Diffuse | ERenderOutput::Specular,
+                                   EPostProcess::Temporal | EPostProcess::SpatialUpscale | EPostProcess::DLSS |
+                                       EPostProcess::FrameGeneration | EPostProcess::DebugGBuffer,
+                                   EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId}, 1, 1,
                                &CreateLogicRenderer<PathTracing::PathTracingRenderer>},
-            RendererDescriptor{ERT_SoftwareTracing, "SoftwareTracing", {true, false}, 1, 0,
+            RendererDescriptor{ERT_SoftwareTracing, "SoftwareTracing", {
+                                   ESceneResource::Voxel | ESceneResource::Ambient,
+                                   EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility | EViewPrepass::CSM,
+                                   ERenderOutput::Color | ERenderOutput::Depth | ERenderOutput::Motion | ERenderOutput::ObjectId |
+                                       ERenderOutput::Normal | ERenderOutput::Albedo | ERenderOutput::Diffuse | ERenderOutput::Specular,
+                                   EPostProcess::Temporal | EPostProcess::SpatialUpscale | EPostProcess::DebugGBuffer,
+                                   EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId}, 1, 0,
                                &CreateLogicRenderer<SoftwareTracing::SoftwareTracingRenderer>},
-            RendererDescriptor{ERT_SoftwareModern, "SoftwareModern", {true, false}, 0, 0,
+            RendererDescriptor{ERT_SoftwareModern, "SoftwareModern", {
+                                   ESceneResource::Voxel | ESceneResource::Ambient,
+                                   EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility | EViewPrepass::CSM,
+                                   ERenderOutput::Color | ERenderOutput::Depth | ERenderOutput::Motion | ERenderOutput::ObjectId |
+                                       ERenderOutput::Normal | ERenderOutput::Albedo | ERenderOutput::Diffuse | ERenderOutput::Specular,
+                                   EPostProcess::Temporal | EPostProcess::SpatialUpscale | EPostProcess::DebugGBuffer,
+                                   EHistoryChannel::Diffuse | EHistoryChannel::Specular | EHistoryChannel::Albedo | EHistoryChannel::ObjectId}, 0, 0,
                                &CreateLogicRenderer<SoftwareModern::SoftwareModernRenderer>},
-            RendererDescriptor{ERT_VoxelTracing, "VoxelTracing", {true, false}, 0, 1,
+            RendererDescriptor{ERT_VoxelTracing, "VoxelTracing", {
+                                   ESceneResource::Voxel | ESceneResource::Ambient,
+                                   EViewPrepass::None,
+                                   ERenderOutput::Color,
+                                   EPostProcess::SpatialUpscale,
+                                   EHistoryChannel::None}, 0, 1,
                                &CreateLogicRenderer<VoxelTracing::VoxelTracingRenderer>},
-            RendererDescriptor{ERT_SoftwareModernNoAmbient, "SoftwareModernNoAmbient", {false, false, true}, 0, 1,
+            RendererDescriptor{ERT_SoftwareModernNoAmbient, "SoftwareModernNoAmbient", {
+                                   ESceneResource::None,
+                                   EViewPrepass::Cull | EViewPrepass::Clear | EViewPrepass::Visibility | EViewPrepass::CSM,
+                                   ERenderOutput::Color | ERenderOutput::Depth | ERenderOutput::Motion |
+                                       ERenderOutput::ObjectId | ERenderOutput::Normal,
+                                   EPostProcess::SpatialUpscale | EPostProcess::DebugGBuffer,
+                                   EHistoryChannel::None}, 0, 1,
                                &CreateLogicRenderer<SoftwareModernNoAmbient::SoftwareModernNoAmbientRenderer>},
         };
 
@@ -250,7 +280,17 @@ namespace Vulkan
 
     FRendererRequirements GetRendererRequirements(ERendererType type)
     {
-        return GetRendererDescriptor(type).requirements;
+        const FRendererContract& contract = GetRendererDescriptor(type).contract;
+        return {
+            .requestAmbientCube = HasAny(contract.sceneResources, ESceneResource::Ambient),
+            .requestRayTracing = HasAny(contract.sceneResources, ESceneResource::TLAS),
+            .requestVoxelGeometry = HasAny(contract.sceneResources, ESceneResource::Voxel),
+        };
+    }
+
+    const FRendererContract& GetRendererContract(const ERendererType type)
+    {
+        return GetRendererDescriptor(type).contract;
     }
 
     const char* GetRendererName(ERendererType type)
@@ -504,7 +544,7 @@ namespace Vulkan
     void VulkanBaseRenderer::SetScene(std::shared_ptr<Assets::Scene> scene)
     {
         scene_ = scene;
-        PrimaryView().InvalidateTemporalHistory();
+        renderViews_->InvalidateAllTemporalHistory(EHistoryInvalidationReason::SceneChanged);
         if (renderViewServices_)
         {
             renderViewServices_->OnMainSceneChanged();
@@ -994,6 +1034,8 @@ namespace Vulkan
                 ? VK_PRESENT_MODE_IMMEDIATE_KHR
                 : presentMode_;
         frame_.swapChain.reset(new class SwapChain(*ctx_.device, requestedPresentMode, forceSDR_));
+        swapchainStateTracker_.Reset();
+        auxiliaryImageStateTracker_.Reset();
         frame_.currentFrame = 0;
         frame_.currentImageIndex = 0;
         frame_.currentFence = nullptr;
@@ -1110,6 +1152,9 @@ namespace Vulkan
             return;
         }
         renderViews_->ClearSchedule();
+        visibilityStateTracker_.Reset();
+        swapchainStateTracker_.Reset();
+        auxiliaryImageStateTracker_.Reset();
 
         if (upscaler_)
         {
@@ -1327,7 +1372,10 @@ namespace Vulkan
         SCOPED_GPU_TIMER(view.DebugName());
 
         FActiveRenderViewScope activeViewScope(*this, view);
-        const bool initializePrevDepthBeforeCull = !view.IsPrimary() && !view.PrevDepthValid();
+        const ERendererType rendererType = GetLogicRendererType(logicRenderer);
+        const FRendererContract& contract = GetRendererContract(rendererType);
+        const bool initializePrevDepthBeforeCull =
+            HasAny(contract.prepasses, EViewPrepass::Cull) && !view.IsPrimary() && !view.PrevDepthValid();
         if (initializePrevDepthBeforeCull)
         {
             DispatchClearPass(commandBuffer, imageIndex, /*clearSwapchain*/ false);
@@ -1336,9 +1384,9 @@ namespace Vulkan
                 VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
         }
 
-        PreRenderPerView(commandBuffer, imageIndex, clearSwapchain);
+        PreRenderPerView(commandBuffer, imageIndex, clearSwapchain, contract);
         logicRenderer.Render(commandBuffer, imageIndex);
-        if (view.CopyObjectIdHistory() && logicRenderer.RequiresObjectIdHistory())
+        if (view.CopyObjectIdHistory() && HasAny(contract.history, EHistoryChannel::ObjectId))
         {
             CopyObjectIdHistory(commandBuffer);
         }
@@ -1414,12 +1462,24 @@ namespace Vulkan
     // SetActiveViewBankBase + activeVisibilityFrameBuffer_ before calling). Only the primary view
     // owns the swapchain, so its clear pass also clears the swapchain image.
     void VulkanBaseRenderer::PreRenderPerView(VkCommandBuffer commandBuffer, const uint32_t imageIndex,
-                                              const bool isPrimaryView)
+                                              const bool isPrimaryView, const FRendererContract& contract)
     {
-        DispatchGpuCulling(commandBuffer, imageIndex);
-        DispatchClearPass(commandBuffer, imageIndex, /*clearSwapchain*/ isPrimaryView);
-        DispatchVisibilityPass(commandBuffer, imageIndex);
-        DispatchSunShadow(commandBuffer, imageIndex);
+        if (HasAny(contract.prepasses, EViewPrepass::Cull))
+        {
+            DispatchGpuCulling(commandBuffer, imageIndex);
+        }
+        if (HasAny(contract.prepasses, EViewPrepass::Clear))
+        {
+            DispatchClearPass(commandBuffer, imageIndex, /*clearSwapchain*/ isPrimaryView);
+        }
+        if (HasAny(contract.prepasses, EViewPrepass::Visibility))
+        {
+            DispatchVisibilityPass(commandBuffer, imageIndex);
+        }
+        if (HasAny(contract.prepasses, EViewPrepass::CSM))
+        {
+            DispatchSunShadow(commandBuffer, imageIndex);
+        }
     }
 
     void VulkanBaseRenderer::DrawFrame()
@@ -1603,18 +1663,26 @@ namespace Vulkan
                 SCOPED_GPU_TIMER("ui");
                 delegates_.postRender(commandBuffer, frame_.currentImageIndex);
             }
+            // The main UI render pass loads from PRESENT_SRC and finishes in PRESENT_SRC.
+            // Frame consumers invoked by the delegate follow the same external contract.
+            ImportSwapchainImageState(frame_.currentImageIndex, {
+                .initialized = true,
+                .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                .stages = PipelineCommon::ERenderStage::Present,
+                .access = PipelineCommon::EResourceAccess::None,
+                .lastPass = "UI and frame consumers",
+            });
 
             if (screenshot_.captureRequested)
             {
                 SCOPED_GPU_TIMER("screenshot");
-                const VkImage swapchainImage = frame_.swapChain->Images()[frame_.currentImageIndex];
                 VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-                ImageMemoryBarrier::Insert(
-                    commandBuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                    VK_PIPELINE_STAGE_TRANSFER_BIT, swapchainImage, range,
-                    VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                    VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+                TransitionSwapchainImage(
+                    commandBuffer, frame_.currentImageIndex,
+                    {.stages = PipelineCommon::ERenderStage::Transfer,
+                     .access = PipelineCommon::EResourceAccess::TransferRead,
+                     .layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL},
+                    "screenshot source");
                 ImageMemoryBarrier::Insert(
                     commandBuffer,
                     screenshot_.initialized ? VK_PIPELINE_STAGE_TRANSFER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -1628,13 +1696,15 @@ namespace Vulkan
                 copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
                 copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
                 copyRegion.extent = {SwapChain().Extent().width, SwapChain().Extent().height, 1};
-                vkCmdCopyImage(commandBuffer, swapchainImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                vkCmdCopyImage(commandBuffer, frame_.swapChain->Images()[frame_.currentImageIndex],
+                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                screenshot_.image->Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                1, &copyRegion);
-                ImageMemoryBarrier::Insert(
-                    commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                    swapchainImage, range, VK_ACCESS_TRANSFER_READ_BIT, 0,
-                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+                TransitionSwapchainImage(
+                    commandBuffer, frame_.currentImageIndex,
+                    {.stages = PipelineCommon::ERenderStage::Present,
+                     .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR},
+                    "screenshot present");
                 screenshot_.captureRequested = false;
                 screenshot_.captureReady = true;
                 screenshot_.initialized = true;
@@ -1781,9 +1851,22 @@ namespace Vulkan
     void VulkanBaseRenderer::InitializeBarriers(VkCommandBuffer commandBuffer)
     {
         SCOPED_GPU_TIMER("barriers");
-        for ( auto& storageImage : bindless_.images )
+        for (uint32_t index = 0; index < bindless_.images.size(); ++index)
         {
-            if ( storageImage ) storageImage->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+            const uint32_t localSlot = index % Assets::Bindless::kViewRtBankStride;
+            const bool temporalHistory =
+                localSlot == Assets::Bindless::RT_SINGLE_PREV_DIFFUSE ||
+                localSlot == Assets::Bindless::RT_SINGLE_PREV_SPECULAR ||
+                localSlot == Assets::Bindless::RT_SINGLE_PREV_ALBEDO;
+            const bool visibilityResource =
+                localSlot == Assets::Bindless::RT_MINIGBUFFER ||
+                localSlot == Assets::Bindless::RT_MINIGBUFFER_DRAW;
+            auto& storageImage = bindless_.images[index];
+            if (storageImage && !temporalHistory && !visibilityResource)
+            {
+                storageImage->InsertBarrier(commandBuffer, 0, VK_ACCESS_SHADER_WRITE_BIT,
+                                            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+            }
         }
     }
 
@@ -1801,6 +1884,17 @@ namespace Vulkan
     {
         return std::find(logicRenderers_.registeredTypes.begin(), logicRenderers_.registeredTypes.end(), type) !=
                logicRenderers_.registeredTypes.end();
+    }
+
+    ERendererType VulkanBaseRenderer::GetLogicRendererType(const LogicRendererBase& renderer) const
+    {
+        const auto found = std::find_if(logicRenderers_.renderers.begin(), logicRenderers_.renderers.end(),
+            [&renderer](const auto& entry) { return entry.second.get() == &renderer; });
+        if (found == logicRenderers_.renderers.end())
+        {
+            Throw(std::runtime_error("logic renderer is not registered"));
+        }
+        return found->first;
     }
 
     LogicRendererBase* VulkanBaseRenderer::EnsureLogicRenderer(ERendererType type)
@@ -1847,12 +1941,6 @@ namespace Vulkan
 
     FRendererRequirements VulkanBaseRenderer::CurrentRendererRequirements() const
     {
-        const auto renderer = logicRenderers_.renderers.find(logicRenderers_.current);
-        if (renderer != logicRenderers_.renderers.end())
-        {
-            return renderer->second->Requirements();
-        }
-
         return GetRendererRequirements(logicRenderers_.current);
     }
 
@@ -1884,6 +1972,7 @@ namespace Vulkan
 
     void VulkanBaseRenderer::SwitchLogicRenderer(ERendererType type)
     {
+        const ERendererType previousType = logicRenderers_.current;
         LogicRendererBase* logicRenderer = EnsureLogicRenderer(type);
         if (logicRenderer == nullptr)
         {
@@ -1893,6 +1982,14 @@ namespace Vulkan
 
         logicRenderers_.current = type;
         EnsureLogicRendererSwapChain(type, *logicRenderer);
+        if (type != previousType)
+        {
+            renderViews_->InvalidateAllTemporalHistory(EHistoryInvalidationReason::RendererChanged);
+            resetUpscalerHistory_ = true;
+            SPDLOG_INFO("Renderer history invalidated: {} -> {}, generation {}",
+                        GetRendererName(previousType), GetRendererName(type),
+                        PrimaryView().State().historyGeneration);
+        }
     }
 
     void VulkanBaseRenderer::ComposeViewToSwapchainSubrect(
@@ -1901,7 +1998,12 @@ namespace Vulkan
         RenderView& view)
     {
         SCOPED_GPU_TIMER("blit");
-        SwapChain().InsertBarrierToWrite(commandBuffer, imageIndex);
+        TransitionSwapchainImage(
+            commandBuffer, imageIndex,
+            {.stages = PipelineCommon::ERenderStage::Transfer,
+             .access = PipelineCommon::EResourceAccess::TransferWrite,
+             .layout = VK_IMAGE_LAYOUT_GENERAL},
+            "compose view subrect");
 
         const RenderImage* denoisedImage = GetStorageImage(view.RtBankBase() + Assets::Bindless::RT_DENOISED);
         if (denoisedImage == nullptr)
@@ -1949,7 +2051,6 @@ namespace Vulkan
         VkCommandBuffer commandBuffer,
         const uint32_t imageIndex)
     {
-        SwapChain().InsertBarrierToWrite(commandBuffer, imageIndex);
         GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
             commandBuffer, VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
             VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT,
@@ -1959,6 +2060,12 @@ namespace Vulkan
         if (upscaler_ && SupportDLSS() && NextEngine::GetInstance()->GetUserSettings().DLSS)
         {
             SCOPED_GPU_TIMER("DLSS resolve");
+            TransitionSwapchainImage(
+                commandBuffer, imageIndex,
+                {.stages = PipelineCommon::ERenderStage::Compute,
+                 .access = PipelineCommon::EResourceAccess::ShaderWrite,
+                 .layout = VK_IMAGE_LAYOUT_GENERAL},
+                "DLSS resolve");
             resolvedByUpscaler = upscaler_->Evaluate(
                 BuildUpscalerFrameInputs(commandBuffer, imageIndex, VK_IMAGE_LAYOUT_GENERAL));
         }
@@ -1981,6 +2088,12 @@ namespace Vulkan
         if (fsrEnabled)
         {
             SCOPED_GPU_TIMER("FSR resolve");
+            TransitionSwapchainImage(
+                commandBuffer, imageIndex,
+                {.stages = PipelineCommon::ERenderStage::Compute,
+                 .access = PipelineCommon::EResourceAccess::ShaderWrite,
+                 .layout = VK_IMAGE_LAYOUT_GENERAL},
+                "FSR resolve");
 
             const std::array<uint32_t, 5> pushConst = {
                 imageIndex,
@@ -1999,6 +2112,12 @@ namespace Vulkan
         else
         {
             SCOPED_GPU_TIMER("blit");
+            TransitionSwapchainImage(
+                commandBuffer, imageIndex,
+                {.stages = PipelineCommon::ERenderStage::Transfer,
+                 .access = PipelineCommon::EResourceAccess::TransferWrite,
+                 .layout = VK_IMAGE_LAYOUT_GENERAL},
+                "primary blit");
             
             VkImageBlit blitRegion = {};
             blitRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
@@ -2054,7 +2173,11 @@ namespace Vulkan
             DispatchScheduledRenderViews(commandBuffer, imageIndex);
             if (renderedAnyReferenceView)
             {
-                SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
+                TransitionSwapchainImage(
+                    commandBuffer, imageIndex,
+                    {.stages = PipelineCommon::ERenderStage::Present,
+                     .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR},
+                    "reference present");
             }
             else
             {
@@ -2065,7 +2188,11 @@ namespace Vulkan
                     warnedMissingReferenceProvider = true;
                 }
                 DispatchClearPass(commandBuffer, imageIndex, /*clearSwapchain*/ true);
-                SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
+                TransitionSwapchainImage(
+                    commandBuffer, imageIndex,
+                    {.stages = PipelineCommon::ERenderStage::Present,
+                     .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR},
+                    "empty reference present");
             }
         }
         else
@@ -2104,7 +2231,121 @@ namespace Vulkan
                 renderViewServices_->ClearOffscreenFrameRequests();
             }
 
-            SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
+            TransitionSwapchainImage(
+                commandBuffer, imageIndex,
+                {.stages = PipelineCommon::ERenderStage::Present,
+                 .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR},
+                "render present");
+        }
+    }
+
+    void VulkanBaseRenderer::TransitionSwapchainImage(
+        VkCommandBuffer commandBuffer,
+        const uint32_t imageIndex,
+        const PipelineCommon::FImageUse& requestedUse,
+        const std::string_view passName)
+    {
+        if (imageIndex >= SwapChain().Images().size())
+        {
+            Throw(std::out_of_range("swapchain state transition image index"));
+        }
+        PipelineCommon::FImageUse use = requestedUse;
+        use.image = {static_cast<uint64_t>(imageIndex) + 1u};
+        if (const auto barrier = swapchainStateTracker_.Use(use, passName))
+        {
+            ImageMemoryBarrier::Insert(commandBuffer, barrier->srcStages, barrier->dstStages,
+                                       SwapChain().Images()[imageIndex], barrier->range,
+                                       barrier->srcAccess, barrier->dstAccess,
+                                       barrier->oldLayout, barrier->newLayout);
+        }
+    }
+
+    void VulkanBaseRenderer::ImportSwapchainImageState(
+        const uint32_t imageIndex,
+        const PipelineCommon::FImageState& state)
+    {
+        if (imageIndex >= SwapChain().Images().size())
+        {
+            Throw(std::out_of_range("swapchain state import image index"));
+        }
+        swapchainStateTracker_.Import({static_cast<uint64_t>(imageIndex) + 1u}, state);
+    }
+
+    void VulkanBaseRenderer::ImportActiveViewImagesGeneral(
+        const std::initializer_list<uint32_t> bindlessIds,
+        const std::string_view passName)
+    {
+        auto& tracker = ActiveRenderView().ResourceStates();
+        const uint32_t viewBase = ActiveViewBankBase();
+        for (const uint32_t bindlessId : bindlessIds)
+        {
+            const uint32_t absoluteId = viewBase + bindlessId;
+            if (GetStorageImage(absoluteId) == nullptr)
+            {
+                Throw(std::runtime_error(fmt::format("missing view image {} for {}", absoluteId, passName)));
+            }
+            tracker.Import({static_cast<uint64_t>(absoluteId) + 1u}, {
+                .initialized = true,
+                .layout = VK_IMAGE_LAYOUT_GENERAL,
+                .stages = PipelineCommon::ERenderStage::Compute,
+                .access = PipelineCommon::EResourceAccess::ShaderWrite,
+                .lastPass = std::string(passName),
+            });
+        }
+    }
+
+    void VulkanBaseRenderer::TransitionActiveViewImages(
+        VkCommandBuffer commandBuffer,
+        const std::initializer_list<FViewImageUse> uses,
+        const std::string_view passName)
+    {
+        auto& tracker = ActiveRenderView().ResourceStates();
+        const uint32_t viewBase = ActiveViewBankBase();
+        std::vector<VkImageMemoryBarrier> barriers;
+        barriers.reserve(uses.size());
+        VkPipelineStageFlags srcStages = 0;
+        VkPipelineStageFlags dstStages = 0;
+
+        for (const FViewImageUse& requested : uses)
+        {
+            const uint32_t absoluteId = viewBase + requested.bindlessId;
+            const RenderImage* image = GetStorageImage(absoluteId);
+            if (image == nullptr)
+            {
+                Throw(std::runtime_error(fmt::format("missing view image {} for {}", absoluteId, passName)));
+            }
+            const auto barrier = tracker.Use({
+                .image = {static_cast<uint64_t>(absoluteId) + 1u},
+                .stages = requested.stages,
+                .access = requested.access,
+                .layout = requested.layout,
+                .discardPreviousContents = requested.discardPreviousContents,
+            }, passName);
+            if (!barrier)
+            {
+                continue;
+            }
+
+            VkImageMemoryBarrier vkBarrier{};
+            vkBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            vkBarrier.srcAccessMask = barrier->srcAccess;
+            vkBarrier.dstAccessMask = barrier->dstAccess;
+            vkBarrier.oldLayout = barrier->oldLayout;
+            vkBarrier.newLayout = barrier->newLayout;
+            vkBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            vkBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            vkBarrier.image = image->GetImage().Handle();
+            vkBarrier.subresourceRange = barrier->range;
+            barriers.push_back(vkBarrier);
+            srcStages |= barrier->srcStages;
+            dstStages |= barrier->dstStages;
+        }
+
+        if (!barriers.empty())
+        {
+            vkCmdPipelineBarrier(commandBuffer, srcStages, dstStages, 0,
+                                 0, nullptr, 0, nullptr,
+                                 static_cast<uint32_t>(barriers.size()), barriers.data());
         }
     }
 

@@ -20,6 +20,7 @@
 #include "Engine/Assets/GPU/UniformBuffer.hpp"
 #include "Engine/Rendering/PipelineCommon/AtrousDenoiser.hpp"
 #include "Engine/Rendering/PipelineCommon/TemporalResolve.hpp"
+#include "Engine/Rendering/PipelineCommon/ResourceStateTracker.hpp"
 
 #include <vulkan/vulkan.h>
 
@@ -57,6 +58,20 @@ namespace Vulkan
         Transient,   // render to convergence (or N frames) then recycle the bank (thumbnails)
     };
 
+    enum class EHistoryInvalidationReason
+    {
+        Initial,
+        SceneChanged,
+        RendererChanged,
+        ExtentChanged,
+        CameraCut,
+        TemporalConfigChanged,
+        ViewReused,
+        SwapchainRecreated,
+    };
+
+    const char* GetHistoryInvalidationReasonName(EHistoryInvalidationReason reason);
+
     // Per-view temporal history. Everything here used to live as a single global instance in
     // NextEngine::FRenderState; with multiple views each needs its own copy so views never share
     // (and thus never pollute) one another's TAA / accumulation / CSM cache.
@@ -80,6 +95,8 @@ namespace Vulkan
 
         // Camera jumped / view resized / scene swapped -> drop temporal history next frame.
         mutable bool resetHistory = true;
+        mutable uint64_t historyGeneration = 1;
+        mutable EHistoryInvalidationReason historyInvalidationReason = EHistoryInvalidationReason::Initial;
     };
 
     // Description used to create a RenderView.
@@ -184,6 +201,7 @@ namespace Vulkan
         const PipelineCommon::AtrousDenoiser& AtrousDenoiser() const { return atrousDenoiser_; }
         PipelineCommon::TemporalResolve& TemporalResolve() { return temporalResolve_; }
         const PipelineCommon::TemporalResolve& TemporalResolve() const { return temporalResolve_; }
+        PipelineCommon::FResourceStateTracker& ResourceStates() { return resourceStates_; }
 
         void SetDebugName(std::string debugName) { debugName_ = std::move(debugName); }
         void SetRenderExtent(VkExtent2D extent)
@@ -191,7 +209,7 @@ namespace Vulkan
             if (desc_.renderExtent.width != extent.width || desc_.renderExtent.height != extent.height)
             {
                 desc_.renderExtent = extent;
-                InvalidateTemporalHistory();
+                InvalidateTemporalHistory(EHistoryInvalidationReason::ExtentChanged);
             }
         }
         void SetRenderOffset(VkOffset2D offset) { renderOffset_ = offset; }
@@ -229,11 +247,15 @@ namespace Vulkan
             prevDepthValid_ = false;
             ResetCameraUbo();
         }
-        void InvalidateTemporalHistory()
+        void InvalidateTemporalHistory(
+            EHistoryInvalidationReason reason = EHistoryInvalidationReason::CameraCut)
         {
             state_.resetHistory = true;
+            ++state_.historyGeneration;
+            state_.historyInvalidationReason = reason;
             prevDepthValid_ = false;
             temporalResolve_.InvalidateHistory();
+            resourceStates_.Reset();
         }
         void CreateSwapChain(const SwapChain& swapChain)
         {
@@ -262,6 +284,7 @@ namespace Vulkan
         std::vector<Assets::UniformBuffer> cameraUboRing_;
         PipelineCommon::AtrousDenoiser atrousDenoiser_;
         PipelineCommon::TemporalResolve temporalResolve_;
+        PipelineCommon::FResourceStateTracker resourceStates_;
     };
 
     using FRenderViewPostCallback = std::function<void(RenderView&)>;
@@ -356,6 +379,15 @@ namespace Vulkan
                 banks_.Release(view->RtBankBase());
             }
             additional_.clear();
+        }
+
+        void InvalidateAllTemporalHistory(EHistoryInvalidationReason reason)
+        {
+            primary_->InvalidateTemporalHistory(reason);
+            for (const auto& view : additional_)
+            {
+                view->InvalidateTemporalHistory(reason);
+            }
         }
 
     private:

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engine/Rendering/PipelineCommon/CommonComputePipeline.hpp"
+#include "Engine/Rendering/PipelineCommon/TemporalPostChain.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Vulkan/VulkanFwd.hpp"
 
@@ -19,7 +20,6 @@ namespace Vulkan::PathTracing
 		void DeleteSwapChain() override;
 		void Render(VkCommandBuffer commandBuffer, uint32_t imageIndex) override;
 		void ReloadShaders(const std::set<std::string>& changedShaderFiles, std::set<std::string>& handledShaderFiles) override;
-		FRendererRequirements Requirements() const override { return GetRendererRequirements(ERT_PathTracing); }
 
 		struct FSharcBuffer
 		{
@@ -59,8 +59,7 @@ namespace Vulkan::PathTracing
 		std::unique_ptr<PipelineCommon::ZeroBindWithTLASPipeline> sharcUpdatePipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindWithTLASPipeline> sharcQueryPipeline_;
 		std::unique_ptr<PipelineCommon::ZeroBindPipeline> sharcResolvePipeline_;
-		std::unique_ptr<PipelineCommon::ZeroBindPipeline> composePipelineNonDenoiser_;
-		std::unique_ptr<PipelineCommon::ZeroBindCustomPushConstantPipeline> accumulatePipeline_;
+		PipelineCommon::TemporalPostChain temporalPostChain_;
 
 		FSharcState sharc_;
 
