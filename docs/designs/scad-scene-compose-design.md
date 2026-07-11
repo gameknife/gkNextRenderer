@@ -144,7 +144,10 @@ B 不做。** 引擎侧实例化/流式属于远期演进（§7），不阻塞�
   板条箱/大垃圾箱/锥桶/长椅/路障）、`veh`（轿车/厢式车/皮卡/烧毁残骸）。
   配色注意：PT 强日光 + tonemap 下 albedo ≈0.5 即近白，深色件基色需压到 0.10–0.30 区间。
   零件总览：`assets/scad/deadly_showcase.scad`；示例场景 spec：`specs/deadly_town.json`
-  （十字路口小镇，73 roots / 1615 nodes / 33580 tri / 0 warning）。
+  （十字路口小镇，73 roots / 1615 nodes / 33580 tri / 0 warning）；游戏级整图 spec：
+  `specs/deadly_roadtrip_map.json`（170×130：南缘公路残骸带 + 主街商业区/教堂广场 +
+  东西住宅 grid（jitter+lay_pick 变体）+ 西南农田 + 环边松林，用满 placements/grids/rows/
+  alongs/scatters 全部规则，126 roots / 4290 nodes / 94464 tri / 0 warning）。
 
 ### 4.2 catalog.json（机器可读零件目录）
 
