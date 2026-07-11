@@ -726,6 +726,7 @@ namespace Assets
         cameraInit.SunRotation = 0.5f;
         cameraInit.SunIntensity = 500.0f;
         cameraInit.SkyIntensity = 100.0f;
+        cameraInit.SkyIdx = 2; // daylight sky (kloppenheim_01_puresky) instead of dusk default
 
         Camera defaultCam = AutoFocusCamera(cameraInit, nodes, models, true);
 

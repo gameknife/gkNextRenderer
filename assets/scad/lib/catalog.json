@@ -8613,6 +8613,1209 @@
           "ok": true
         }
       ]
+    },
+    {
+      "name": "kit_overhill",
+      "file": "kit_overhill.scad",
+      "prefix": "oh_",
+      "scaleClass": "mid",
+      "modules": [
+        {
+          "name": "oh_bldg_cabin",
+          "category": "bldg",
+          "params": "seed = 0, L = 6.5, D = 5",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "L",
+              "default": "6.5"
+            },
+            {
+              "name": "D",
+              "default": "5"
+            }
+          ],
+          "line": 525,
+          "footprint": [
+            7.6,
+            6.5
+          ],
+          "height": 5.02,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.2
+          ],
+          "triangles": 248,
+          "colors": 21,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_bldg_fuel",
+          "category": "bldg",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 616,
+          "footprint": [
+            5.2,
+            3.56
+          ],
+          "height": 3.15,
+          "zMin": 0.0,
+          "center": [
+            0.15,
+            -0.03
+          ],
+          "triangles": 252,
+          "colors": 14,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_bldg_garage",
+          "category": "bldg",
+          "params": "seed = 0, L = 7, D = 6",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "L",
+              "default": "7"
+            },
+            {
+              "name": "D",
+              "default": "6"
+            }
+          ],
+          "line": 593,
+          "footprint": [
+            7.6,
+            6.87
+          ],
+          "height": 3.6,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.3
+          ],
+          "triangles": 324,
+          "colors": 24,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_bldg_tower",
+          "category": "bldg",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 551,
+          "footprint": [
+            3.2,
+            3.2
+          ],
+          "height": 8.0,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 440,
+          "colors": 37,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_ground_grass",
+          "category": "ground",
+          "params": "L = 20, D = 20, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "20"
+            },
+            {
+              "name": "D",
+              "default": "20"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 137,
+          "footprint": [
+            20.0,
+            20.0
+          ],
+          "height": 0.11,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 84,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_ground_mud",
+          "category": "ground",
+          "params": "L = 9, W = 6, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "9"
+            },
+            {
+              "name": "W",
+              "default": "6"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 118,
+          "footprint": [
+            9.0,
+            5.6
+          ],
+          "height": 0.2,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 132,
+          "colors": 11,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_ground_river",
+          "category": "ground",
+          "params": "L = 20, W = 7, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "20"
+            },
+            {
+              "name": "W",
+              "default": "7"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 167,
+          "footprint": [
+            20.0,
+            7.0
+          ],
+          "height": 0.35,
+          "zMin": -0.15,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 1488,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_ground_sand",
+          "category": "ground",
+          "params": "L = 20, D = 20, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "20"
+            },
+            {
+              "name": "D",
+              "default": "20"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 148,
+          "footprint": [
+            20.97,
+            20.0
+          ],
+          "height": 0.21,
+          "zMin": -0.01,
+          "center": [
+            -0.48,
+            0.0
+          ],
+          "triangles": 132,
+          "colors": 11,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_ground_trail",
+          "category": "ground",
+          "params": "L = 24, W = 6, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "24"
+            },
+            {
+              "name": "W",
+              "default": "6"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 74,
+          "footprint": [
+            24.0,
+            6.0
+          ],
+          "height": 0.2,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 264,
+          "colors": 22,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_ground_trail_bend",
+          "category": "ground",
+          "params": "W = 6, seed = 0",
+          "paramList": [
+            {
+              "name": "W",
+              "default": "6"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 99,
+          "footprint": [
+            6.18,
+            6.18
+          ],
+          "height": 0.14,
+          "zMin": 0.0,
+          "center": [
+            -0.09,
+            0.09
+          ],
+          "triangles": 132,
+          "colors": 11,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_boxc",
+          "category": "misc",
+          "params": "s",
+          "paramList": [
+            {
+              "name": "s"
+            }
+          ],
+          "line": 54,
+          "footprint": [
+            1.0,
+            1.0
+          ],
+          "height": 0.5,
+          "zMin": -0.5,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_slab",
+          "category": "misc",
+          "params": "L = 4, D = 4, t = 0.2",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "4"
+            },
+            {
+              "name": "D",
+              "default": "4"
+            },
+            {
+              "name": "t",
+              "default": "0.2"
+            }
+          ],
+          "line": 55,
+          "footprint": [
+            4.0,
+            4.0
+          ],
+          "height": 0.2,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_nature_autumn",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 268,
+          "footprint": [
+            3.15,
+            3.0
+          ],
+          "height": 4.3,
+          "zMin": 0.0,
+          "center": [
+            0.07,
+            0.0
+          ],
+          "triangles": 528,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_nature_bush",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 281,
+          "footprint": [
+            1.45,
+            1.1
+          ],
+          "height": 0.97,
+          "zMin": -0.13,
+          "center": [
+            0.06,
+            0.0
+          ],
+          "triangles": 360,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_nature_cactus",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 319,
+          "footprint": [
+            1.4,
+            0.46
+          ],
+          "height": 2.53,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 600,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_nature_deadtree",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 342,
+          "footprint": [
+            1.2,
+            1.12
+          ],
+          "height": 3.05,
+          "zMin": -0.01,
+          "center": [
+            -0.07,
+            -0.01
+          ],
+          "triangles": 192,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_nature_grass",
+          "category": "nature",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 357,
+          "footprint": [
+            0.48,
+            0.41
+          ],
+          "height": 0.3,
+          "zMin": -0.06,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 36,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_nature_palm",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 292,
+          "footprint": [
+            4.37,
+            4.7
+          ],
+          "height": 3.68,
+          "zMin": 0.0,
+          "center": [
+            0.55,
+            0.21
+          ],
+          "triangles": 576,
+          "colors": 15,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_nature_pine",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 252,
+          "footprint": [
+            3.9,
+            3.9
+          ],
+          "height": 7.5,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 288,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_part_roof",
+          "category": "part",
+          "params": "L = 6, D = 5, h = 1.6, ov = 0.5, rin = 0, c = [0.24, 0.19, 0.15]",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "6"
+            },
+            {
+              "name": "D",
+              "default": "5"
+            },
+            {
+              "name": "h",
+              "default": "1.6"
+            },
+            {
+              "name": "ov",
+              "default": "0.5"
+            },
+            {
+              "name": "rin",
+              "default": "0"
+            },
+            {
+              "name": "c",
+              "default": "[0.24, 0.19, 0.15]"
+            }
+          ],
+          "line": 61,
+          "footprint": [
+            7.0,
+            6.0
+          ],
+          "height": 1.6,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 8,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_prop_barrel",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 477,
+          "footprint": [
+            0.63,
+            0.63
+          ],
+          "height": 0.86,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 144,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_prop_bridge",
+          "category": "prop",
+          "params": "L = 9, W = 5.6, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "9"
+            },
+            {
+              "name": "W",
+              "default": "5.6"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 369,
+          "footprint": [
+            12.44,
+            5.6
+          ],
+          "height": 1.55,
+          "zMin": -0.07,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 360,
+          "colors": 30,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_prop_campfire",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 434,
+          "footprint": [
+            1.43,
+            1.43
+          ],
+          "height": 0.61,
+          "zMin": -0.02,
+          "center": [
+            0.01,
+            0.01
+          ],
+          "triangles": 384,
+          "colors": 12,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_prop_fence_log",
+          "category": "prop",
+          "params": "len = 4",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "4"
+            }
+          ],
+          "line": 463,
+          "footprint": [
+            4.4,
+            0.59
+          ],
+          "height": 1.06,
+          "zMin": -0.02,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 168,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_prop_gate_flags",
+          "category": "prop",
+          "params": "W = 7, seed = 0",
+          "paramList": [
+            {
+              "name": "W",
+              "default": "7"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 507,
+          "footprint": [
+            7.32,
+            0.32
+          ],
+          "height": 3.1,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 336,
+          "colors": 13,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_prop_jerrycan",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 486,
+          "footprint": [
+            0.24,
+            0.36
+          ],
+          "height": 0.53,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 36,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_prop_log_pile",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 397,
+          "footprint": [
+            3.04,
+            2.01
+          ],
+          "height": 1.54,
+          "zMin": -0.0,
+          "center": [
+            0.02,
+            0.12
+          ],
+          "triangles": 600,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_prop_signpost",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 451,
+          "footprint": [
+            2.1,
+            0.27
+          ],
+          "height": 2.3,
+          "zMin": 0.0,
+          "center": [
+            0.05,
+            0.0
+          ],
+          "triangles": 48,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_prop_tent",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 422,
+          "footprint": [
+            2.2,
+            2.86
+          ],
+          "height": 1.47,
+          "zMin": -0.03,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 56,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_prop_tirestack",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 495,
+          "footprint": [
+            1.52,
+            1.08
+          ],
+          "height": 0.84,
+          "zMin": -0.04,
+          "center": [
+            0.31,
+            0.09
+          ],
+          "triangles": 240,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_rock_boulder",
+          "category": "rock",
+          "params": "s = 1.0, seed = 0, red = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "red",
+              "default": "0"
+            }
+          ],
+          "line": 231,
+          "footprint": [
+            0.88,
+            1.09
+          ],
+          "height": 0.63,
+          "zMin": -0.03,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 120,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_rock_cluster",
+          "category": "rock",
+          "params": "s = 1.0, seed = 0, red = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "red",
+              "default": "0"
+            }
+          ],
+          "line": 242,
+          "footprint": [
+            2.41,
+            1.84
+          ],
+          "height": 0.82,
+          "zMin": -0.05,
+          "center": [
+            0.18,
+            0.03
+          ],
+          "triangles": 360,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_terrain_hill",
+          "category": "terrain",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 187,
+          "footprint": [
+            17.93,
+            17.93
+          ],
+          "height": 5.9,
+          "zMin": 0.0,
+          "center": [
+            -0.0,
+            0.0
+          ],
+          "triangles": 180,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_terrain_mesa",
+          "category": "terrain",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 217,
+          "footprint": [
+            15.2,
+            15.2
+          ],
+          "height": 7.4,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 288,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_terrain_peak",
+          "category": "terrain",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 205,
+          "footprint": [
+            12.95,
+            12.95
+          ],
+          "height": 11.2,
+          "zMin": 0.0,
+          "center": [
+            -0.0,
+            0.0
+          ],
+          "triangles": 144,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_veh_offroader",
+          "category": "veh",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 647,
+          "footprint": [
+            4.68,
+            2.35
+          ],
+          "height": 2.25,
+          "zMin": 0.0,
+          "center": [
+            -0.05,
+            0.0
+          ],
+          "triangles": 780,
+          "colors": 35,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_veh_trailer",
+          "category": "veh",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 745,
+          "footprint": [
+            3.79,
+            1.83
+          ],
+          "height": 1.81,
+          "zMin": -0.02,
+          "center": [
+            0.29,
+            0.0
+          ],
+          "triangles": 612,
+          "colors": 18,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_veh_truck",
+          "category": "veh",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 715,
+          "footprint": [
+            6.39,
+            2.55
+          ],
+          "height": 2.55,
+          "zMin": 0.0,
+          "center": [
+            0.29,
+            0.0
+          ],
+          "triangles": 972,
+          "colors": 39,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_veh_van",
+          "category": "veh",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 684,
+          "footprint": [
+            5.03,
+            2.31
+          ],
+          "height": 2.44,
+          "zMin": 0.0,
+          "center": [
+            0.03,
+            0.0
+          ],
+          "triangles": 684,
+          "colors": 30,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oh_veh_wheel",
+          "category": "veh",
+          "params": "r = 0.46, w = 0.34",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "0.46"
+            },
+            {
+              "name": "w",
+              "default": "0.34"
+            }
+          ],
+          "line": 639,
+          "footprint": [
+            0.92,
+            0.39
+          ],
+          "height": 0.46,
+          "zMin": -0.46,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        }
+      ]
     }
   ]
 }
