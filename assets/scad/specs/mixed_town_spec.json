@@ -1,0 +1,17 @@
+{
+  "name": "mixed_town_spec",
+  "kits": ["old_city", "city_hd", "office"],
+  "ground": { "size": [120, 120], "color": [0.5, 0.51, 0.53], "z": 0, "thickness": 0.3 },
+  "placements": [
+    { "module": "oc_bldg_gatehouse", "at": [0, 18] },
+    { "module": "oc_bldg_house", "args": "seed = 3", "at": [-20, -6], "rot": 25 },
+    { "module": "oc_bldg_house", "args": "seed = 7", "at": [-34, 8], "rot": -15 },
+    { "module": "hc_bldg_cafe", "at": [16, -10], "rot": 180 },
+    { "module": "hc_veh_car", "args": "1", "at": [34, -2], "rot": 90 },
+    { "module": "hc_nature_tree", "args": "1.2, 2", "at": [28, -18], "rot": 30 },
+    { "module": "hc_nature_tree", "args": "1.0, 5", "at": [-8, -20] },
+    { "module": "of_furn_sofa", "at": [8, -22], "rot": -45, "scale": 2 },
+    { "module": "oc_prop_paifang", "at": [-24, 20] },
+    { "module": "oc_nature_pine", "args": "1.4", "at": [20, 14], "rot": 120 }
+  ]
+}

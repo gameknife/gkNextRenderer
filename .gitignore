@@ -411,7 +411,7 @@ src/ThirdParty/Streamline/
 .claude/
 .mimocode/
 .skills/
-lib/
+/lib/
 
 tools/ldraw/source/ldraw/
 tools/ldraw/source/ldrawShadow/

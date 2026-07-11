@@ -1,7 +1,7 @@
 ---
 title: "SCAD Scene Compose：基于既有 module 库的大规模场景组合系统"
 category: design
-status: M0/M1 已落地（kit 拆分 + ScadLibrary 应用），M2+ 待做
+status: M0–M3 已落地（kit 拆分 / ScadLibrary / catalog / 布局组合子 / spec+compose），M4 LLM 待做
 owner: engine
 created: 2026-07-11
 last_updated: 2026-07-11
@@ -136,6 +136,16 @@ B 不做。** 引擎侧实例化/流式属于远期演进（§7），不阻塞�
 - 原场景文件保留为「参考总装」：`use` 自家 kit + 玩法锚点 module（`*_NN`，AirportSim/StudioSim
   按节点名查 POI，不可改名）+ 布局常量 + 总装语句。
 
+首个按规范全新创建（非拆分）的 kit（2026-07-11）：
+- `lib/kit_deadly.scad`（dd_，38 modules，scaleClass mid）—— Deadly Days: Roadtrip 风格
+  美式郊区丧尸末日主题，规划用作 Brotato3D 场景元素。分类：`bldg`（木板房/门廊房/工具棚/
+  石教堂/街角店）、`ground`（沥青路段/十字口/人行道/草地块）、`nature`（层叠松/阔叶树/灌木/
+  草簇/玉米田）、`prop`（白栅栏/路灯/电线杆/公路绿牌+倒塌残骸/消防栓/信箱/垃圾桶/油桶/
+  板条箱/大垃圾箱/锥桶/长椅/路障）、`veh`（轿车/厢式车/皮卡/烧毁残骸）。
+  配色注意：PT 强日光 + tonemap 下 albedo ≈0.5 即近白，深色件基色需压到 0.10–0.30 区间。
+  零件总览：`assets/scad/deadly_showcase.scad`；示例场景 spec：`specs/deadly_town.json`
+  （十字路口小镇，73 roots / 1615 nodes / 33580 tri / 0 warning）。
+
 ### 4.2 catalog.json（机器可读零件目录）
 
 组合器与 LLM 的「零件菜单」。由工具自动生成（见 4.3），人工只补 `tags`/`desc`：
@@ -210,49 +220,49 @@ x<65521 时 x² < 2^53 double 精确）。任何线性同余的组合仍是线�
 
 ## 6. L2：Scene Spec 与生成器
 
-### 6.1 Spec 草案（示例：古城 + 海港混合镇）
+### 6.1 Spec v1 schema（已落地，`tools/gnb/internal/scadcompose/`）
 
-```jsonc
-{
-  "name": "port_old_town",
-  "seed": 7,
-  "kits": ["city_hd", "old_city"],          // 校验 scaleClass 兼容性，human 级 kit 进城市网格会告警
-  "world": { "scadToWorldScale": 1.0, "sky": "day" },
-  "ground": { "size": [560, 400], "base": "hc_ground_base", "sea": { "edge": "-y", "width": 60 } },
-  "grid": { "origin": [-252, -95], "cell": [48, 42], "cols": 10, "rows": 5, "roadWidth": 8 },
-  "blockTypes": {                            // 类型 → 街区模块（可加权多选）
-    "res":    ["hc_block_houses"],
-    "market": ["hc_block_market", "hc_block_shops"],
-    "old":    ["oc_block_courtyard"],        // 由 oc_bldg_house/side_hall 组的新街区模块（L1 组装）
-    "park":   ["hc_block_park"]
-  },
-  "layout": [                                // 与 V2_LAYOUT 同构的类型矩阵，字符串引用 blockTypes
-    ["market","market","res","res","park","res","res","old","old","old"],
-    ["res",   "res",   "res","park","res","res","old","old","park","old"]
-    // ... rows 与 grid.rows 一致，或用 "fill"+"override" 稀疏写法
-  ],
-  "landmarks": [                             // 布局矩阵之外的显式放置（占格或悬浮）
-    { "module": "oc_bldg_keep", "at": [96, 120], "rot": 180, "clearCells": [[7,3],[8,3]] }
-  ],
-  "scatter": [
-    { "module": "oc_nature_tree", "region": "greenbelt-north", "n": 60, "seed": 11 }
-  ],
-  "traffic": [ { "preset": "hc_traffic", "roads": "grid" } ]
-}
-```
+严格 JSON（无注释，未知字段报错）。字段：`name`（必填）、`fn`（默认 12）、`seed`、
+`kits`（短名 `"old_city"` 或全名 `"kit_old_city"`）、`ground`（size/color/z/thickness 单块地板）、
+以及任意条数的放置规则（module 调用写成 `"oc_prop_well"` 或 `{"module": "...", "args": "seed = $seed"}`，
+children 多于一个自动包 `lay_pick`）：
 
-### 6.2 生成器：`gnb scad compose --spec <x.json> [-o assets/scad/gen/<name>.scad]`
+| 字段 | 展开为 | 说明 |
+|------|--------|------|
+| `blockTypes` + `blockGrids` | 类型索引矩阵常量 + `<name>_block(t, seed)` 分发 module + `lay_grid` | V2_LAYOUT 模式；layout 矩阵尺寸即网格尺寸 |
+| `placements` | `translate/rotate/scale` + 调用 | 显式地标（at/rot/scale/args） |
+| `grids` | `lay_grid`（可选 `jitter` → `lay_jitter`） | cols/rows/cell/seed/center |
+| `rows` / `rings` | `lay_row` / `lay_ring` | 沿街车位、市场环阵 |
+| `scatters` | `lay_scatter` | region [x0,x1,y0,y1] + n + seed |
+| `alongs` | `lay_along` | 折线 pts + step + offset |
+
+样例：`assets/scad/specs/mixed_town_spec.json`（placements 复刻手摆版）、
+`assets/scad/specs/port_mini.json`（blockGrid 3×2 用 v2 街区生成新迷你城市）。
+
+### 6.2 生成器：`gnb scad compose --spec <x.json> [-o assets/scad/gen/<name>.scad]`（已落地）
 
 薄模板展开，职责严格受限：
 
-1. **校验**（这是 spec 相对手写 scad 的核心价值）：kit 存在、module 在 catalog 中、layout 矩阵
-   尺寸与 grid 一致、blockType 引用闭合、scaleClass 混用告警、landmark 与网格占格冲突检测。
-2. **展开**：输出顶层 .scad —— 头注释（spec 路径 + hash + 生成时间）→ `use <lib/...>` →
-   catalog `env` 常量块 → 矩阵/常量声明 → `lay_grid` + `lay_pick` 等组合子调用。
+1. **校验**（这是 spec 相对手写 scad 的核心价值，全部对着 catalog.json）：kit 存在、module
+   在 catalog 且属于已声明 kit（报错并提示补 kit）、layout 矩阵矩形且 blockType 引用闭合、
+   scaleClass 混用告警（human×city）、catalog 标记 `ok:false` 的 module 无 args 调用时告警。
+2. **展开**：输出顶层 .scad —— 头注释（spec 相对路径 + sha256 前 12 位；**无时间戳**，
+   同 spec 字节级确定，git diff 干净）→ `$fn` → `use <../lib/...>`（kit_layout 仅在用到组合子时）→
+   地面 → 矩阵常量 + 分发 module → 各规则的组合子调用。
 3. **不做**：任何几何/布尔运算、任何随机决策（seed 全部下推给 scad 层）、任何引擎调用。
 
+实现：`tools/gnb/internal/scadcompose/`（spec.go / catalog.go / compose.go + 12 个单测）；
+命令写完源码树后自动镜像到 build assets，`gnb shot --scene assets/scad/gen/<name>.scad` 免重建直接验收。
+
+**等价性验收（2026-07-11）**：`mixed_town_spec.json` compose 产物与手摆导出版逐字一致
+（11 roots / 224 nodes / 6068 triangles / 0 warning）；`port_mini.json` 40 行 spec 生成
+6 类街区 3×2 新城市（1445 nodes / 44388 triangles / 0 warning）。
+
 产物特性：生成的 .scad 是一等资产——可提交、可手改微调（改完与 spec 脱钩，头注释注明）、
-可 `gnb shot --scene assets/scad/gen/port_old_town.scad` 直接验收。
+可 `gnb shot` 直接验收。
+
+**v1 未覆盖（后续按需）**：`roadWidth` 自动路网（当前用 ground 色块或 kit 路模块摆）、
+landmark `clearCells` 占格冲突检测、加权 pick、稀疏 layout（fill+override）、sea/sky 环境。
 
 ### 6.3 与 LLM 的衔接（经 ScadLibrary，不复用 ScadStudio）
 
@@ -300,7 +310,7 @@ Spec 层对此透明：同一份 spec，未来可由 compose 选择输出「单 
 | **M1 跨 kit 验证 + ScadLibrary** | **ScadLibrary** 应用（kit 浏览/预览/组合台/导出，见 §6.5）；跨 kit 混合场景样例 | `gen/mixed_town_test.scad`（oc+hc+of 混摆）0 warning 出图；重名/env 两障碍已消，尺度混用如预期需 scaleClass 管理 | ✅ 2026-07-11 |
 | **M2 catalog** | `ScadCatalog` 工具 + `gnb scad catalog`（签名 + bbox 求值 → catalog.json，含 scaleClass/footprint/paramList） | 293 modules 覆盖（290 ok / 3 必填参数），footprint 抽查正确（oc_bldg_house 10.6×8.1×h5.6）；ScadLibrary 优先读 catalog（日志确认）+ tooltip 尺寸 + 组合台按 footprint 自适应间距 | ✅ 2026-07-11 |
 | **M2.5 layout 组合子** | `lib/kit_layout.scad`（lay_grid/row/ring/scatter/along/pick/jitter，§5） | `layout_demo.scad` 街区级 demo 0 warning 出图；$var 穿透 children 探针验证；PRNG 平方项修复格线伪影 | ✅ 2026-07-11 |
-| **M3 compose** | spec schema + `gnb scad compose` + 校验器 | 用 spec 重建 mixed_town，产物与手摆版结构等价 | 待做 |
+| **M3 compose** | spec v1 schema + `gnb scad compose` + catalog 校验器（`tools/gnb/internal/scadcompose/`，12 单测） | mixed_town spec 产物与手摆版逐字等价（11/224/6068）；port_mini 40 行 spec 生成 3×2 新城市 0 warning；scaleClass/未声明 kit/矩阵不齐 校验全部生效 | ✅ 2026-07-11 |
 | **M4 LLM 场景生成** | ScadLibrary 对话出 spec / gnb chat 集成 | 对话生成一个新主题场景（如「机场旁的老城区」）| 待做 |
 
 ## 9. 风险与开放问题

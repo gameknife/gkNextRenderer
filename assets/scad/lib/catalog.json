@@ -1,0 +1,8618 @@
+{
+  "version": 1,
+  "fn": 12,
+  "kits": [
+    {
+      "name": "kit_airport",
+      "file": "kit_airport.scad",
+      "prefix": "ap_",
+      "scaleClass": "human",
+      "modules": [
+        {
+          "name": "ap_furn_atm",
+          "category": "furn",
+          "params": "",
+          "paramList": [],
+          "line": 453,
+          "footprint": [
+            0.77,
+            0.52
+          ],
+          "height": 1.6,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.04
+          ],
+          "triangles": 72,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_bench_row",
+          "category": "furn",
+          "params": "",
+          "paramList": [],
+          "line": 244,
+          "footprint": [
+            2.32,
+            0.56
+          ],
+          "height": 0.87,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.01
+          ],
+          "triangles": 192,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_book_table",
+          "category": "furn",
+          "params": "",
+          "paramList": [],
+          "line": 886,
+          "footprint": [
+            1.5,
+            0.95
+          ],
+          "height": 1.08,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 120,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_cafe_counter",
+          "category": "furn",
+          "params": "",
+          "paramList": [],
+          "line": 311,
+          "footprint": [
+            3.52,
+            0.7
+          ],
+          "height": 1.68,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 600,
+          "colors": 14,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_cafe_table",
+          "category": "furn",
+          "params": "c = ap_BROWNC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "ap_BROWNC()"
+            }
+          ],
+          "line": 333,
+          "footprint": [
+            1.29,
+            1.44
+          ],
+          "height": 0.87,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 288,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_checkin_desk",
+          "category": "furn",
+          "params": "label = \"1\"",
+          "paramList": [
+            {
+              "name": "label",
+              "default": "\"1\""
+            }
+          ],
+          "line": 159,
+          "footprint": [
+            2.45,
+            1.96
+          ],
+          "height": 2.98,
+          "zMin": 0.0,
+          "center": [
+            -0.24,
+            0.62
+          ],
+          "triangles": 374,
+          "colors": 13,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_checkout",
+          "category": "furn",
+          "params": "",
+          "paramList": [],
+          "line": 396,
+          "footprint": [
+            1.6,
+            0.68
+          ],
+          "height": 1.55,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 132,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_display_case",
+          "category": "furn",
+          "params": "items = true",
+          "paramList": [
+            {
+              "name": "items",
+              "default": "true"
+            }
+          ],
+          "line": 913,
+          "footprint": [
+            1.6,
+            0.7
+          ],
+          "height": 1.53,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 120,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_entrance",
+          "category": "furn",
+          "params": "",
+          "paramList": [],
+          "line": 114,
+          "footprint": [
+            3.2,
+            1.9
+          ],
+          "height": 3.33,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 84,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_food_counter",
+          "category": "furn",
+          "params": "",
+          "paramList": [],
+          "line": 839,
+          "footprint": [
+            5.12,
+            0.81
+          ],
+          "height": 2.7,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.04
+          ],
+          "triangles": 768,
+          "colors": 19,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_freezer_chest",
+          "category": "furn",
+          "params": "",
+          "paramList": [],
+          "line": 928,
+          "footprint": [
+            1.3,
+            0.69
+          ],
+          "height": 0.89,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.01
+          ],
+          "triangles": 84,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_fridge_case",
+          "category": "furn",
+          "params": "c = [0.80, 0.30, 0.28]",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "[0.80, 0.30, 0.28]"
+            }
+          ],
+          "line": 386,
+          "footprint": [
+            1.02,
+            0.63
+          ],
+          "height": 1.9,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 180,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_gate_door",
+          "category": "furn",
+          "params": "label = \"GATE 1\"",
+          "paramList": [
+            {
+              "name": "label",
+              "default": "\"GATE 1\""
+            }
+          ],
+          "line": 220,
+          "footprint": [
+            3.54,
+            2.09
+          ],
+          "height": 3.3,
+          "zMin": 0.0,
+          "center": [
+            0.18,
+            -0.65
+          ],
+          "triangles": 904,
+          "colors": 9,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_gondola",
+          "category": "furn",
+          "params": "",
+          "paramList": [],
+          "line": 372,
+          "footprint": [
+            2.2,
+            0.92
+          ],
+          "height": 1.55,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 600,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_info_desk",
+          "category": "furn",
+          "params": "",
+          "paramList": [],
+          "line": 474,
+          "footprint": [
+            2.54,
+            1.85
+          ],
+          "height": 2.9,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.31
+          ],
+          "triangles": 464,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_kiosk",
+          "category": "furn",
+          "params": "",
+          "paramList": [],
+          "line": 178,
+          "footprint": [
+            0.62,
+            0.52
+          ],
+          "height": 1.24,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.02
+          ],
+          "triangles": 60,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_kitchen_strip",
+          "category": "furn",
+          "params": "len = 5",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "5"
+            }
+          ],
+          "line": 872,
+          "footprint": [
+            5.0,
+            0.77
+          ],
+          "height": 2.33,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.09
+          ],
+          "triangles": 72,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_mag_rack",
+          "category": "furn",
+          "params": "",
+          "paramList": [],
+          "line": 899,
+          "footprint": [
+            1.25,
+            0.32
+          ],
+          "height": 1.6,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 216,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_monitor",
+          "category": "furn",
+          "params": "screen = ap_SCREENC(), w = 0.52",
+          "paramList": [
+            {
+              "name": "screen",
+              "default": "ap_SCREENC()"
+            },
+            {
+              "name": "w",
+              "default": "0.52"
+            }
+          ],
+          "line": 135,
+          "footprint": [
+            0.52,
+            0.18
+          ],
+          "height": 0.56,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 84,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_security_lane",
+          "category": "furn",
+          "params": "",
+          "paramList": [],
+          "line": 188,
+          "footprint": [
+            2.25,
+            3.15
+          ],
+          "height": 2.17,
+          "zMin": 0.0,
+          "center": [
+            0.42,
+            1.53
+          ],
+          "triangles": 312,
+          "colors": 11,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_staff_desk",
+          "category": "furn",
+          "params": "",
+          "paramList": [],
+          "line": 494,
+          "footprint": [
+            1.5,
+            1.46
+          ],
+          "height": 1.29,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.35
+          ],
+          "triangles": 288,
+          "colors": 9,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_task_chair",
+          "category": "furn",
+          "params": "seat = [0.45, 0.47, 0.52]",
+          "paramList": [
+            {
+              "name": "seat",
+              "default": "[0.45, 0.47, 0.52]"
+            }
+          ],
+          "line": 146,
+          "footprint": [
+            0.54,
+            0.57
+          ],
+          "height": 1.0,
+          "zMin": 0.0,
+          "center": [
+            -0.02,
+            0.0
+          ],
+          "triangles": 144,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_vending",
+          "category": "furn",
+          "params": "c = [0.80, 0.30, 0.28]",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "[0.80, 0.30, 0.28]"
+            }
+          ],
+          "line": 463,
+          "footprint": [
+            0.92,
+            0.53
+          ],
+          "height": 1.8,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.02
+          ],
+          "triangles": 192,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_wc_door",
+          "category": "furn",
+          "params": "female = false",
+          "paramList": [
+            {
+              "name": "female",
+              "default": "false"
+            }
+          ],
+          "line": 406,
+          "footprint": [
+            1.72,
+            0.2
+          ],
+          "height": 2.18,
+          "zMin": 0.0,
+          "center": [
+            0.31,
+            -0.01
+          ],
+          "triangles": 204,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_furn_wc_interior",
+          "category": "furn",
+          "params": "",
+          "paramList": [],
+          "line": 425,
+          "footprint": [
+            4.41,
+            1.15
+          ],
+          "height": 1.95,
+          "zMin": 0.0,
+          "center": [
+            2.0,
+            0.57
+          ],
+          "triangles": 216,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_ground_apron",
+          "category": "ground",
+          "params": "",
+          "paramList": [],
+          "line": 59,
+          "footprint": [
+            72.0,
+            58.0
+          ],
+          "height": 0.16,
+          "zMin": 0.13,
+          "center": [
+            6.0,
+            17.0
+          ],
+          "triangles": 288,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_ground_base",
+          "category": "ground",
+          "params": "",
+          "paramList": [],
+          "line": 46,
+          "footprint": [
+            84.0,
+            80.0
+          ],
+          "height": 0.13,
+          "zMin": -0.13,
+          "center": [
+            0.0,
+            7.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_ground_carpet",
+          "category": "ground",
+          "params": "",
+          "paramList": [],
+          "line": 49,
+          "footprint": [
+            60.0,
+            40.0
+          ],
+          "height": 0.15,
+          "zMin": 0.13,
+          "center": [
+            0.0,
+            8.0
+          ],
+          "triangles": 7212,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_ground_landside",
+          "category": "ground",
+          "params": "",
+          "paramList": [],
+          "line": 74,
+          "footprint": [
+            84.0,
+            78.0
+          ],
+          "height": 0.17,
+          "zMin": 0.12,
+          "center": [
+            0.0,
+            8.0
+          ],
+          "triangles": 672,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_part_glass_run",
+          "category": "part",
+          "params": "x0, x1",
+          "paramList": [
+            {
+              "name": "x0"
+            },
+            {
+              "name": "x1"
+            }
+          ],
+          "line": 938,
+          "footprint": [
+            0.02,
+            0.1
+          ],
+          "height": 2.24,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 24,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_part_glass_wall",
+          "category": "part",
+          "params": "len, g0 = -1, g1 = -1",
+          "paramList": [
+            {
+              "name": "len"
+            },
+            {
+              "name": "g0",
+              "default": "-1"
+            },
+            {
+              "name": "g1",
+              "default": "-1"
+            }
+          ],
+          "line": 944,
+          "footprint": [
+            1.0,
+            0.11
+          ],
+          "height": 2.36,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 60,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_ad_totem",
+          "category": "prop",
+          "params": "c = [0.90, 0.55, 0.25]",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "[0.90, 0.55, 0.25]"
+            }
+          ],
+          "line": 792,
+          "footprint": [
+            0.9,
+            0.34
+          ],
+          "height": 2.52,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_barrier_gate",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 768,
+          "footprint": [
+            2.85,
+            0.35
+          ],
+          "height": 1.1,
+          "zMin": 0.0,
+          "center": [
+            1.23,
+            0.0
+          ],
+          "triangles": 36,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_bench_out",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 746,
+          "footprint": [
+            1.55,
+            0.58
+          ],
+          "height": 0.93,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.04
+          ],
+          "triangles": 72,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_big_sign",
+          "category": "prop",
+          "params": "label = \"AIRPORT\"",
+          "paramList": [
+            {
+              "name": "label",
+              "default": "\"AIRPORT\""
+            }
+          ],
+          "line": 128,
+          "footprint": [
+            4.6,
+            0.23
+          ],
+          "height": 0.5,
+          "zMin": -0.5,
+          "center": [
+            0.0,
+            -0.03
+          ],
+          "triangles": 752,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_bins",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 527,
+          "footprint": [
+            0.62,
+            0.28
+          ],
+          "height": 0.36,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_bookshelf_tall",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 822,
+          "footprint": [
+            1.06,
+            0.34
+          ],
+          "height": 2.0,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 312,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_bus_shelter",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 757,
+          "footprint": [
+            3.3,
+            1.3
+          ],
+          "height": 2.61,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.2
+          ],
+          "triangles": 96,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_clock",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 516,
+          "footprint": [
+            0.36,
+            0.06
+          ],
+          "height": 0.18,
+          "zMin": -0.18,
+          "center": [
+            0.0,
+            -0.03
+          ],
+          "triangles": 120,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_cone",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 694,
+          "footprint": [
+            0.26,
+            0.26
+          ],
+          "height": 0.34,
+          "zMin": -0.01,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 60,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_container",
+          "category": "prop",
+          "params": "c = [0.55, 0.58, 0.64]",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "[0.55, 0.58, 0.64]"
+            }
+          ],
+          "line": 687,
+          "footprint": [
+            1.55,
+            1.41
+          ],
+          "height": 1.44,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 36,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_fence",
+          "category": "prop",
+          "params": "len",
+          "paramList": [
+            {
+              "name": "len"
+            }
+          ],
+          "line": 783,
+          "footprint": [
+            1.0,
+            0.08
+          ],
+          "height": 1.2,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 48,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_fids",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 283,
+          "footprint": [
+            2.2,
+            0.15
+          ],
+          "height": 3.07,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.01
+          ],
+          "triangles": 228,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_fountain",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 446,
+          "footprint": [
+            0.36,
+            0.33
+          ],
+          "height": 0.96,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.02
+          ],
+          "triangles": 36,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_hang_sign",
+          "category": "prop",
+          "params": "label = \"ALL GATES\", c = ap_SIGNBLUE(), arrow = true",
+          "paramList": [
+            {
+              "name": "label",
+              "default": "\"ALL GATES\""
+            },
+            {
+              "name": "c",
+              "default": "ap_SIGNBLUE()"
+            },
+            {
+              "name": "arrow",
+              "default": "true"
+            }
+          ],
+          "line": 297,
+          "footprint": [
+            2.8,
+            0.16
+          ],
+          "height": 2.72,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.0
+          ],
+          "triangles": 736,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_hedge",
+          "category": "prop",
+          "params": "len = 2.2",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "2.2"
+            }
+          ],
+          "line": 740,
+          "footprint": [
+            2.2,
+            0.55
+          ],
+          "height": 0.65,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 24,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_lamp_post",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 721,
+          "footprint": [
+            0.28,
+            1.07
+          ],
+          "height": 4.4,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.39
+          ],
+          "triangles": 120,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_light_mast",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 701,
+          "footprint": [
+            1.6,
+            0.44
+          ],
+          "height": 6.4,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 156,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_menu_board",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 354,
+          "footprint": [
+            1.6,
+            0.08
+          ],
+          "height": 0.45,
+          "zMin": -0.45,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 60,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_p_sign",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 775,
+          "footprint": [
+            0.62,
+            0.13
+          ],
+          "height": 2.86,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 192,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_palm",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 533,
+          "footprint": [
+            1.7,
+            1.62
+          ],
+          "height": 1.76,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.02
+          ],
+          "triangles": 336,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_planter",
+          "category": "prop",
+          "params": "len = 1.6",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "1.6"
+            }
+          ],
+          "line": 544,
+          "footprint": [
+            1.6,
+            0.34
+          ],
+          "height": 0.63,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 624,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_queue_line",
+          "category": "prop",
+          "params": "n = 5",
+          "paramList": [
+            {
+              "name": "n",
+              "default": "5"
+            }
+          ],
+          "line": 272,
+          "footprint": [
+            4.68,
+            0.28
+          ],
+          "height": 0.97,
+          "zMin": 0.0,
+          "center": [
+            2.2,
+            0.0
+          ],
+          "triangles": 1128,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_server_rack",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 504,
+          "footprint": [
+            0.7,
+            0.62
+          ],
+          "height": 1.8,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 192,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_shop_portal",
+          "category": "prop",
+          "params": "w = 4.8, label = \"SHOP\", c = [0.20, 0.40, 0.68]",
+          "paramList": [
+            {
+              "name": "w",
+              "default": "4.8"
+            },
+            {
+              "name": "label",
+              "default": "\"SHOP\""
+            },
+            {
+              "name": "c",
+              "default": "[0.20, 0.40, 0.68]"
+            }
+          ],
+          "line": 364,
+          "footprint": [
+            4.96,
+            0.26
+          ],
+          "height": 2.97,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.02
+          ],
+          "triangles": 656,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_stanchion",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 262,
+          "footprint": [
+            0.28,
+            0.28
+          ],
+          "height": 0.97,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 216,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_tree",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 732,
+          "footprint": [
+            1.36,
+            1.24
+          ],
+          "height": 2.3,
+          "zMin": 0.0,
+          "center": [
+            0.02,
+            0.0
+          ],
+          "triangles": 408,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_trolley_row",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 805,
+          "footprint": [
+            0.65,
+            1.5
+          ],
+          "height": 1.0,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.42
+          ],
+          "triangles": 720,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_prop_windsock",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 713,
+          "footprint": [
+            1.05,
+            0.34
+          ],
+          "height": 3.08,
+          "zMin": 0.0,
+          "center": [
+            0.47,
+            0.01
+          ],
+          "triangles": 216,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_veh_airliner",
+          "category": "veh",
+          "params": "body = [0.94, 0.95, 0.96], accent = [0.25, 0.45, 0.75]",
+          "paramList": [
+            {
+              "name": "body",
+              "default": "[0.94, 0.95, 0.96]"
+            },
+            {
+              "name": "accent",
+              "default": "[0.25, 0.45, 0.75]"
+            }
+          ],
+          "line": 555,
+          "footprint": [
+            15.12,
+            10.98
+          ],
+          "height": 5.03,
+          "zMin": 0.0,
+          "center": [
+            -1.01,
+            0.0
+          ],
+          "triangles": 1008,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_veh_baggage_cart",
+          "category": "veh",
+          "params": "c1 = [0.72, 0.40, 0.26], c2 = [0.35, 0.55, 0.75]",
+          "paramList": [
+            {
+              "name": "c1",
+              "default": "[0.72, 0.40, 0.26]"
+            },
+            {
+              "name": "c2",
+              "default": "[0.35, 0.55, 0.75]"
+            }
+          ],
+          "line": 647,
+          "footprint": [
+            1.6,
+            0.98
+          ],
+          "height": 1.45,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 276,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_veh_baggage_tug",
+          "category": "veh",
+          "params": "",
+          "paramList": [],
+          "line": 637,
+          "footprint": [
+            1.7,
+            1.26
+          ],
+          "height": 1.55,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 252,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_veh_bus",
+          "category": "veh",
+          "params": "c = [0.25, 0.45, 0.75]",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "[0.25, 0.45, 0.75]"
+            }
+          ],
+          "line": 616,
+          "footprint": [
+            8.64,
+            2.42
+          ],
+          "height": 3.01,
+          "zMin": 0.0,
+          "center": [
+            0.02,
+            -0.01
+          ],
+          "triangles": 300,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_veh_car",
+          "category": "veh",
+          "params": "c = [0.75, 0.28, 0.24]",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "[0.75, 0.28, 0.24]"
+            }
+          ],
+          "line": 597,
+          "footprint": [
+            4.16,
+            2.06
+          ],
+          "height": 1.51,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 276,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_veh_fuel_truck",
+          "category": "veh",
+          "params": "",
+          "paramList": [],
+          "line": 660,
+          "footprint": [
+            4.43,
+            1.76
+          ],
+          "height": 2.01,
+          "zMin": 0.0,
+          "center": [
+            0.11,
+            0.0
+          ],
+          "triangles": 420,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_veh_stairs_truck",
+          "category": "veh",
+          "params": "",
+          "paramList": [],
+          "line": 672,
+          "footprint": [
+            1.62,
+            3.78
+          ],
+          "height": 2.13,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.19
+          ],
+          "triangles": 336,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_veh_taxi",
+          "category": "veh",
+          "params": "",
+          "paramList": [],
+          "line": 608,
+          "footprint": [
+            4.16,
+            2.06
+          ],
+          "height": 1.65,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 300,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_wall_corner_col",
+          "category": "wall",
+          "params": "",
+          "paramList": [],
+          "line": 105,
+          "footprint": [
+            0.36,
+            0.36
+          ],
+          "height": 1.66,
+          "zMin": -1.66,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_wall_glass_seg",
+          "category": "wall",
+          "params": "len",
+          "paramList": [
+            {
+              "name": "len"
+            }
+          ],
+          "line": 96,
+          "footprint": [
+            1.0,
+            0.3
+          ],
+          "height": 3.33,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 60,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "ap_wall_solid_seg",
+          "category": "wall",
+          "params": "len, c = [0.84, 0.82, 0.88]",
+          "paramList": [
+            {
+              "name": "len"
+            },
+            {
+              "name": "c",
+              "default": "[0.84, 0.82, 0.88]"
+            }
+          ],
+          "line": 108,
+          "footprint": [
+            1.0,
+            0.15
+          ],
+          "height": 2.4,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "kit_city_blocks",
+      "file": "kit_city_blocks.scad",
+      "prefix": "v2_",
+      "scaleClass": "city",
+      "modules": [
+        {
+          "name": "v2_beach_west",
+          "category": "beach",
+          "params": "",
+          "paramList": [],
+          "line": 564,
+          "footprint": [
+            212.5,
+            24.71
+          ],
+          "height": 5.02,
+          "zMin": -0.0,
+          "center": [
+            -225.25,
+            -55.85
+          ],
+          "triangles": 5608,
+          "colors": 286,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_bldg_civic",
+          "category": "bldg",
+          "params": "L = 24, D = 14",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "24"
+            },
+            {
+              "name": "D",
+              "default": "14"
+            }
+          ],
+          "line": 92,
+          "footprint": [
+            24.25,
+            17.33
+          ],
+          "height": 13.4,
+          "zMin": -0.15,
+          "center": [
+            0.0,
+            -1.54
+          ],
+          "triangles": 704,
+          "colors": 34,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_bldg_fire_station",
+          "category": "bldg",
+          "params": "L = 19, D = 12",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "19"
+            },
+            {
+              "name": "D",
+              "default": "12"
+            }
+          ],
+          "line": 49,
+          "footprint": [
+            19.25,
+            12.24
+          ],
+          "height": 14.94,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.12
+          ],
+          "triangles": 1804,
+          "colors": 46,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_bldg_harbor_office",
+          "category": "bldg",
+          "params": "L = 18, D = 11",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "18"
+            },
+            {
+              "name": "D",
+              "default": "11"
+            }
+          ],
+          "line": 116,
+          "footprint": [
+            18.18,
+            11.43
+          ],
+          "height": 12.7,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.13
+          ],
+          "triangles": 1742,
+          "colors": 31,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_bldg_office",
+          "category": "bldg",
+          "params": "L = 17, D = 12, F = 6, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "17"
+            },
+            {
+              "name": "D",
+              "default": "12"
+            },
+            {
+              "name": "F",
+              "default": "6"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 22,
+          "footprint": [
+            17.4,
+            14.6
+          ],
+          "height": 20.06,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -1.1
+          ],
+          "triangles": 2040,
+          "colors": 135,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_bldg_school",
+          "category": "bldg",
+          "params": "L = 27, D = 13",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "27"
+            },
+            {
+              "name": "D",
+              "default": "13"
+            }
+          ],
+          "line": 69,
+          "footprint": [
+            27.15,
+            15.68
+          ],
+          "height": 9.2,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -1.26
+          ],
+          "triangles": 3020,
+          "colors": 61,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_block_apartments",
+          "category": "block",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 180,
+          "footprint": [
+            48.0,
+            42.0
+          ],
+          "height": 18.5,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 8100,
+          "colors": 431,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_block_by_type",
+          "category": "block",
+          "params": "t = 0, seed = 0",
+          "paramList": [
+            {
+              "name": "t",
+              "default": "0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 409,
+          "footprint": [
+            54.0,
+            42.0
+          ],
+          "height": 5.62,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 4344,
+          "colors": 156,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_block_civic",
+          "category": "block",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 361,
+          "footprint": [
+            48.0,
+            42.0
+          ],
+          "height": 13.75,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 2540,
+          "colors": 100,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_block_edge_props",
+          "category": "block",
+          "params": "seed = 0, trees = 2",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "trees",
+              "default": "2"
+            }
+          ],
+          "line": 148,
+          "footprint": [
+            42.43,
+            36.06
+          ],
+          "height": 4.48,
+          "zMin": 0.3,
+          "center": [
+            0.04,
+            0.7
+          ],
+          "triangles": 660,
+          "colors": 9,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_block_gas_food",
+          "category": "block",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 321,
+          "footprint": [
+            48.0,
+            42.0
+          ],
+          "height": 6.22,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 7286,
+          "colors": 197,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_block_hospital",
+          "category": "block",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 279,
+          "footprint": [
+            48.0,
+            42.0
+          ],
+          "height": 13.89,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 6606,
+          "colors": 231,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_block_hotel",
+          "category": "block",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 265,
+          "footprint": [
+            48.0,
+            42.0
+          ],
+          "height": 19.13,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 7146,
+          "colors": 253,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_block_houses",
+          "category": "block",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 159,
+          "footprint": [
+            54.0,
+            42.0
+          ],
+          "height": 5.62,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 4344,
+          "colors": 156,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_block_logistics",
+          "category": "block",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 333,
+          "footprint": [
+            48.0,
+            42.0
+          ],
+          "height": 8.75,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 5708,
+          "colors": 192,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_block_market",
+          "category": "block",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 252,
+          "footprint": [
+            48.0,
+            42.0
+          ],
+          "height": 7.56,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 5958,
+          "colors": 176,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_block_offices",
+          "category": "block",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 216,
+          "footprint": [
+            48.0,
+            42.0
+          ],
+          "height": 21.3,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 8088,
+          "colors": 375,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_block_pad",
+          "category": "block",
+          "params": "seams = true",
+          "paramList": [
+            {
+              "name": "seams",
+              "default": "true"
+            }
+          ],
+          "line": 137,
+          "footprint": [
+            48.0,
+            42.0
+          ],
+          "height": 0.41,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 828,
+          "colors": 39,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_block_park",
+          "category": "block",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 233,
+          "footprint": [
+            48.0,
+            42.0
+          ],
+          "height": 4.78,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 4932,
+          "colors": 103,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_block_police_fire",
+          "category": "block",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 296,
+          "footprint": [
+            48.0,
+            42.0
+          ],
+          "height": 15.24,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 7002,
+          "colors": 207,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_block_school_court",
+          "category": "block",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 311,
+          "footprint": [
+            48.0,
+            42.0
+          ],
+          "height": 9.5,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 5756,
+          "colors": 136,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_block_shops",
+          "category": "block",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 200,
+          "footprint": [
+            48.0,
+            42.0
+          ],
+          "height": 6.65,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 11020,
+          "colors": 243,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_block_transit",
+          "category": "block",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 373,
+          "footprint": [
+            48.0,
+            42.0
+          ],
+          "height": 3.88,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 5964,
+          "colors": 227,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_block_waterfront",
+          "category": "block",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 348,
+          "footprint": [
+            48.0,
+            42.0
+          ],
+          "height": 13.08,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 6460,
+          "colors": 166,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_block_wind_green",
+          "category": "block",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 393,
+          "footprint": [
+            48.0,
+            42.0
+          ],
+          "height": 20.15,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 1944,
+          "colors": 41,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_cargo_port",
+          "category": "cargo",
+          "params": "",
+          "paramList": [],
+          "line": 608,
+          "footprint": [
+            265.04,
+            37.7
+          ],
+          "height": 14.03,
+          "zMin": 0.01,
+          "center": [
+            202.48,
+            -58.85
+          ],
+          "triangles": 13356,
+          "colors": 773,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_ground_all",
+          "category": "ground",
+          "params": "",
+          "paramList": [],
+          "line": 431,
+          "footprint": [
+            704.0,
+            512.0
+          ],
+          "height": 0.42,
+          "zMin": -4.0,
+          "center": [
+            12.0,
+            90.0
+          ],
+          "triangles": 3228,
+          "colors": 269,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_marina",
+          "category": "misc",
+          "params": "",
+          "paramList": [],
+          "line": 591,
+          "footprint": [
+            112.0,
+            42.58
+          ],
+          "height": 6.52,
+          "zMin": -1.48,
+          "center": [
+            18.0,
+            -60.29
+          ],
+          "triangles": 8202,
+          "colors": 162,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_north_greenbelt",
+          "category": "north",
+          "params": "",
+          "paramList": [],
+          "line": 663,
+          "footprint": [
+            646.0,
+            52.87
+          ],
+          "height": 35.9,
+          "zMin": 0.42,
+          "center": [
+            -2.1,
+            306.12
+          ],
+          "triangles": 24492,
+          "colors": 275,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_promena_de",
+          "category": "promena",
+          "params": "",
+          "paramList": [],
+          "line": 551,
+          "footprint": [
+            656.0,
+            5.63
+          ],
+          "height": 6.19,
+          "zMin": 0.13,
+          "center": [
+            1.85,
+            -36.47
+          ],
+          "triangles": 10560,
+          "colors": 364,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_roads_all",
+          "category": "roads",
+          "params": "",
+          "paramList": [],
+          "line": 456,
+          "footprint": [
+            672.0,
+            317.3
+          ],
+          "height": 5.15,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            120.0
+          ],
+          "triangles": 98820,
+          "colors": 4905,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_sea_traffic",
+          "category": "sea",
+          "params": "",
+          "paramList": [],
+          "line": 635,
+          "footprint": [
+            642.96,
+            46.38
+          ],
+          "height": 13.26,
+          "zMin": -1.2,
+          "center": [
+            5.06,
+            -115.04
+          ],
+          "triangles": 3986,
+          "colors": 152,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_traffic_all",
+          "category": "traffic",
+          "params": "",
+          "paramList": [],
+          "line": 543,
+          "footprint": [
+            610.15,
+            306.64
+          ],
+          "height": 3.25,
+          "zMin": 0.15,
+          "center": [
+            -21.75,
+            120.0
+          ],
+          "triangles": 64740,
+          "colors": 2071,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_traffic_x",
+          "category": "traffic",
+          "params": "y = 0, seed = 0, n = 11",
+          "paramList": [
+            {
+              "name": "y",
+              "default": "0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "n",
+              "default": "11"
+            }
+          ],
+          "line": 515,
+          "footprint": [
+            592.43,
+            6.57
+          ],
+          "height": 3.25,
+          "zMin": 0.15,
+          "center": [
+            -22.91,
+            0.04
+          ],
+          "triangles": 5388,
+          "colors": 173,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_traffic_y",
+          "category": "traffic",
+          "params": "x = 0, seed = 0, n = 5",
+          "paramList": [
+            {
+              "name": "x",
+              "default": "0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "n",
+              "default": "5"
+            }
+          ],
+          "line": 529,
+          "footprint": [
+            6.48,
+            231.76
+          ],
+          "height": 2.65,
+          "zMin": 0.15,
+          "center": [
+            -0.08,
+            95.76
+          ],
+          "triangles": 2316,
+          "colors": 73,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_vehicle_pick",
+          "category": "vehicle",
+          "params": "i = 0",
+          "paramList": [
+            {
+              "name": "i",
+              "default": "0"
+            }
+          ],
+          "line": 503,
+          "footprint": [
+            5.87,
+            2.47
+          ],
+          "height": 2.5,
+          "zMin": 0.0,
+          "center": [
+            0.19,
+            -0.09
+          ],
+          "triangles": 432,
+          "colors": 12,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "v2_waterfront_all",
+          "category": "waterfront",
+          "params": "",
+          "paramList": [],
+          "line": 652,
+          "footprint": [
+            666.5,
+            104.58
+          ],
+          "height": 14.03,
+          "zMin": -1.48,
+          "center": [
+            1.75,
+            -85.94
+          ],
+          "triangles": 41712,
+          "colors": 1737,
+          "warnings": 0,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "kit_city_hd",
+      "file": "kit_city_hd.scad",
+      "prefix": "hc_",
+      "scaleClass": "city",
+      "modules": [
+        {
+          "name": "hc_beach_hut",
+          "category": "beach",
+          "params": "c = hc_TEALC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "hc_TEALC()"
+            }
+          ],
+          "line": 1142,
+          "footprint": [
+            3.6,
+            3.0
+          ],
+          "height": 3.2,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 56,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_beach_lifeguard",
+          "category": "beach",
+          "params": "",
+          "paramList": [],
+          "line": 1130,
+          "footprint": [
+            2.98,
+            4.99
+          ],
+          "height": 5.0,
+          "zMin": -0.02,
+          "center": [
+            0.09,
+            -1.0
+          ],
+          "triangles": 164,
+          "colors": 10,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_beach_lounger",
+          "category": "beach",
+          "params": "c = hc_BLUEC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "hc_BLUEC()"
+            }
+          ],
+          "line": 1117,
+          "footprint": [
+            2.12,
+            0.85
+          ],
+          "height": 0.92,
+          "zMin": 0.0,
+          "center": [
+            0.09,
+            0.0
+          ],
+          "triangles": 72,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_beach_towel",
+          "category": "beach",
+          "params": "c = hc_YELLOWC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "hc_YELLOWC()"
+            }
+          ],
+          "line": 1124,
+          "footprint": [
+            1.0,
+            1.9
+          ],
+          "height": 0.06,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 24,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_beach_umbrella",
+          "category": "beach",
+          "params": "c = hc_REDC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "hc_REDC()"
+            }
+          ],
+          "line": 1111,
+          "footprint": [
+            2.7,
+            2.7
+          ],
+          "height": 2.2,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_bldg_apartment",
+          "category": "bldg",
+          "params": "L = 13, D = 11, F = 4, bc = hc_WHITEC(), seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "13"
+            },
+            {
+              "name": "D",
+              "default": "11"
+            },
+            {
+              "name": "F",
+              "default": "4"
+            },
+            {
+              "name": "bc",
+              "default": "hc_WHITEC()"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 696,
+          "footprint": [
+            13.3,
+            12.55
+          ],
+          "height": 14.26,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.63
+          ],
+          "triangles": 1236,
+          "colors": 83,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_bldg_barber",
+          "category": "bldg",
+          "params": "L = 9, D = 8, H = 4.4",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "9"
+            },
+            {
+              "name": "D",
+              "default": "8"
+            },
+            {
+              "name": "H",
+              "default": "4.4"
+            }
+          ],
+          "line": 661,
+          "footprint": [
+            9.2,
+            8.88
+          ],
+          "height": 6.35,
+          "zMin": -0.07,
+          "center": [
+            0.0,
+            -0.44
+          ],
+          "triangles": 2350,
+          "colors": 19,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_bldg_burger",
+          "category": "bldg",
+          "params": "L = 11, D = 9, H = 4.6",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "11"
+            },
+            {
+              "name": "D",
+              "default": "9"
+            },
+            {
+              "name": "H",
+              "default": "4.6"
+            }
+          ],
+          "line": 621,
+          "footprint": [
+            14.18,
+            10.39
+          ],
+          "height": 5.92,
+          "zMin": 0.0,
+          "center": [
+            -1.45,
+            -0.59
+          ],
+          "triangles": 1568,
+          "colors": 34,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_bldg_cafe",
+          "category": "bldg",
+          "params": "L = 10, D = 8, H = 4.2",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "10"
+            },
+            {
+              "name": "D",
+              "default": "8"
+            },
+            {
+              "name": "H",
+              "default": "4.2"
+            }
+          ],
+          "line": 647,
+          "footprint": [
+            10.2,
+            9.29
+          ],
+          "height": 5.12,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.64
+          ],
+          "triangles": 1694,
+          "colors": 31,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_bldg_court",
+          "category": "bldg",
+          "params": "L = 17, W = 10",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "17"
+            },
+            {
+              "name": "W",
+              "default": "10"
+            }
+          ],
+          "line": 795,
+          "footprint": [
+            17.7,
+            10.4
+          ],
+          "height": 3.7,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.15
+          ],
+          "triangles": 1332,
+          "colors": 26,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_bldg_gas",
+          "category": "bldg",
+          "params": "",
+          "paramList": [],
+          "line": 760,
+          "footprint": [
+            21.2,
+            11.35
+          ],
+          "height": 5.65,
+          "zMin": 0.0,
+          "center": [
+            -0.4,
+            0.73
+          ],
+          "triangles": 964,
+          "colors": 31,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_bldg_hospital",
+          "category": "bldg",
+          "params": "L = 26, D = 15",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "26"
+            },
+            {
+              "name": "D",
+              "default": "15"
+            }
+          ],
+          "line": 514,
+          "footprint": [
+            26.2,
+            18.02
+          ],
+          "height": 12.57,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -1.39
+          ],
+          "triangles": 2636,
+          "colors": 93,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_bldg_hotel",
+          "category": "bldg",
+          "params": "L = 16, D = 12, F = 4",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "16"
+            },
+            {
+              "name": "D",
+              "default": "12"
+            },
+            {
+              "name": "F",
+              "default": "4"
+            }
+          ],
+          "line": 570,
+          "footprint": [
+            16.3,
+            14.85
+          ],
+          "height": 15.55,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -1.27
+          ],
+          "triangles": 1516,
+          "colors": 78,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_bldg_house",
+          "category": "bldg",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 723,
+          "footprint": [
+            10.0,
+            9.35
+          ],
+          "height": 5.2,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.67
+          ],
+          "triangles": 344,
+          "colors": 13,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_bldg_market",
+          "category": "bldg",
+          "params": "L = 22, D = 13, H = 6",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "22"
+            },
+            {
+              "name": "D",
+              "default": "13"
+            },
+            {
+              "name": "H",
+              "default": "6"
+            }
+          ],
+          "line": 596,
+          "footprint": [
+            22.0,
+            17.6
+          ],
+          "height": 7.06,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.3
+          ],
+          "triangles": 2022,
+          "colors": 44,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_bldg_police",
+          "category": "bldg",
+          "params": "L = 13, D = 10",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "13"
+            },
+            {
+              "name": "D",
+              "default": "10"
+            }
+          ],
+          "line": 546,
+          "footprint": [
+            13.2,
+            12.2
+          ],
+          "height": 9.73,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -1.0
+          ],
+          "triangles": 1324,
+          "colors": 40,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_bldg_shop_unit",
+          "category": "bldg",
+          "params": "label = \"BAKERY\", c = hc_TEALC(), L = 9, D = 8, H = 4.2",
+          "paramList": [
+            {
+              "name": "label",
+              "default": "\"BAKERY\""
+            },
+            {
+              "name": "c",
+              "default": "hc_TEALC()"
+            },
+            {
+              "name": "L",
+              "default": "9"
+            },
+            {
+              "name": "D",
+              "default": "8"
+            },
+            {
+              "name": "H",
+              "default": "4.2"
+            }
+          ],
+          "line": 683,
+          "footprint": [
+            9.2,
+            9.29
+          ],
+          "height": 5.12,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.64
+          ],
+          "triangles": 896,
+          "colors": 24,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_bldg_warehouse",
+          "category": "bldg",
+          "params": "L = 18, D = 12, H = 6.5",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "18"
+            },
+            {
+              "name": "D",
+              "default": "12"
+            },
+            {
+              "name": "H",
+              "default": "6.5"
+            }
+          ],
+          "line": 744,
+          "footprint": [
+            18.6,
+            15.1
+          ],
+          "height": 8.1,
+          "zMin": -0.07,
+          "center": [
+            0.0,
+            -1.25
+          ],
+          "triangles": 2420,
+          "colors": 32,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_boat_cargo",
+          "category": "boat",
+          "params": "len = 44, hc = [0.62, 0.24, 0.20], seed = 0",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "44"
+            },
+            {
+              "name": "hc",
+              "default": "[0.62, 0.24, 0.20]"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 984,
+          "footprint": [
+            42.8,
+            8.86
+          ],
+          "height": 9.2,
+          "zMin": -0.7,
+          "center": [
+            0.7,
+            0.0
+          ],
+          "triangles": 464,
+          "colors": 32,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_boat_sail",
+          "category": "boat",
+          "params": "hc = [0.24, 0.32, 0.48]",
+          "paramList": [
+            {
+              "name": "hc",
+              "default": "[0.24, 0.32, 0.48]"
+            }
+          ],
+          "line": 969,
+          "footprint": [
+            4.45,
+            1.2
+          ],
+          "height": 5.2,
+          "zMin": 0.0,
+          "center": [
+            0.43,
+            0.0
+          ],
+          "triangles": 108,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_boat_speed",
+          "category": "boat",
+          "params": "c = hc_WHITEC(), wake = true",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "hc_WHITEC()"
+            },
+            {
+              "name": "wake",
+              "default": "true"
+            }
+          ],
+          "line": 951,
+          "footprint": [
+            9.65,
+            1.6
+          ],
+          "height": 1.13,
+          "zMin": 0.0,
+          "center": [
+            -1.67,
+            0.0
+          ],
+          "triangles": 94,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_furn_cafe_table",
+          "category": "furn",
+          "params": "c = hc_REDC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "hc_REDC()"
+            }
+          ],
+          "line": 822,
+          "footprint": [
+            2.1,
+            2.1
+          ],
+          "height": 2.5,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 240,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_ground_base",
+          "category": "ground",
+          "params": "",
+          "paramList": [],
+          "line": 345,
+          "footprint": [
+            176.0,
+            162.0
+          ],
+          "height": 0.13,
+          "zMin": -2.2,
+          "center": [
+            0.0,
+            17.0
+          ],
+          "triangles": 36,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_ground_block_pad",
+          "category": "ground",
+          "params": "W, D, seams = true",
+          "paramList": [
+            {
+              "name": "W"
+            },
+            {
+              "name": "D"
+            },
+            {
+              "name": "seams",
+              "default": "true"
+            }
+          ],
+          "line": 376,
+          "footprint": [
+            1.0,
+            1.0
+          ],
+          "height": 0.3,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_ground_curb_x",
+          "category": "ground",
+          "params": "len",
+          "paramList": [
+            {
+              "name": "len"
+            }
+          ],
+          "line": 387,
+          "footprint": [
+            1.0,
+            0.3
+          ],
+          "height": 0.22,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_ground_curb_y",
+          "category": "ground",
+          "params": "len",
+          "paramList": [
+            {
+              "name": "len"
+            }
+          ],
+          "line": 388,
+          "footprint": [
+            0.3,
+            1.0
+          ],
+          "height": 0.22,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_boxc",
+          "category": "misc",
+          "params": "s",
+          "paramList": [
+            {
+              "name": "s"
+            }
+          ],
+          "line": 107,
+          "footprint": [
+            1.0,
+            1.0
+          ],
+          "height": 0.5,
+          "zMin": -0.5,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_slab",
+          "category": "misc",
+          "params": "L, D, t",
+          "paramList": [
+            {
+              "name": "L"
+            },
+            {
+              "name": "D"
+            },
+            {
+              "name": "t"
+            }
+          ],
+          "line": 108,
+          "footprint": [
+            1.0,
+            1.0
+          ],
+          "height": 0.5,
+          "zMin": -0.5,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_nature_flowerbed",
+          "category": "nature",
+          "params": "L = 3.0, D = 1.4, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "3.0"
+            },
+            {
+              "name": "D",
+              "default": "1.4"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 163,
+          "footprint": [
+            3.0,
+            1.4
+          ],
+          "height": 0.56,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 624,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_nature_hedge",
+          "category": "nature",
+          "params": "len = 4",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "4"
+            }
+          ],
+          "line": 156,
+          "footprint": [
+            4.0,
+            0.8
+          ],
+          "height": 0.84,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 24,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_nature_hill",
+          "category": "nature",
+          "params": "r = 16, h = 9",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "16"
+            },
+            {
+              "name": "h",
+              "default": "9"
+            }
+          ],
+          "line": 1151,
+          "footprint": [
+            32.0,
+            32.0
+          ],
+          "height": 11.25,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_nature_palm",
+          "category": "nature",
+          "params": "s = 1.0, lean = 6",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "lean",
+              "default": "6"
+            }
+          ],
+          "line": 144,
+          "footprint": [
+            4.31,
+            4.01
+          ],
+          "height": 5.27,
+          "zMin": -0.03,
+          "center": [
+            0.43,
+            0.0
+          ],
+          "triangles": 240,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_nature_pine",
+          "category": "nature",
+          "params": "s = 1.0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            }
+          ],
+          "line": 133,
+          "footprint": [
+            2.4,
+            2.4
+          ],
+          "height": 4.0,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 144,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_nature_pot_plant",
+          "category": "nature",
+          "params": "",
+          "paramList": [],
+          "line": 174,
+          "footprint": [
+            0.64,
+            0.64
+          ],
+          "height": 1.05,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 288,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_nature_tree",
+          "category": "nature",
+          "params": "s = 1.0, i = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "i",
+              "default": "0"
+            }
+          ],
+          "line": 112,
+          "footprint": [
+            3.1,
+            2.9
+          ],
+          "height": 3.95,
+          "zMin": 0.0,
+          "center": [
+            0.1,
+            0.0
+          ],
+          "triangles": 408,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_nature_tree_street",
+          "category": "nature",
+          "params": "s = 1.0, i = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "i",
+              "default": "0"
+            }
+          ],
+          "line": 124,
+          "footprint": [
+            2.5,
+            2.5
+          ],
+          "height": 4.15,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 168,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_part_awning",
+          "category": "part",
+          "params": "w = 3.0, c = hc_REDC(), n = 5",
+          "paramList": [
+            {
+              "name": "w",
+              "default": "3.0"
+            },
+            {
+              "name": "c",
+              "default": "hc_REDC()"
+            },
+            {
+              "name": "n",
+              "default": "5"
+            }
+          ],
+          "line": 445,
+          "footprint": [
+            3.0,
+            1.33
+          ],
+          "height": 0.17,
+          "zMin": -0.53,
+          "center": [
+            0.0,
+            -0.62
+          ],
+          "triangles": 72,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_part_door_glass",
+          "category": "part",
+          "params": "w = 2.4, h = 2.5",
+          "paramList": [
+            {
+              "name": "w",
+              "default": "2.4"
+            },
+            {
+              "name": "h",
+              "default": "2.5"
+            }
+          ],
+          "line": 402,
+          "footprint": [
+            2.64,
+            0.24
+          ],
+          "height": 2.62,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 72,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_part_door_roller",
+          "category": "part",
+          "params": "w = 3.4, h = 3.2",
+          "paramList": [
+            {
+              "name": "w",
+              "default": "3.4"
+            },
+            {
+              "name": "h",
+              "default": "3.2"
+            }
+          ],
+          "line": 423,
+          "footprint": [
+            3.9,
+            0.3
+          ],
+          "height": 3.64,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_part_door_solid",
+          "category": "part",
+          "params": "c = [0.46, 0.30, 0.18], w = 1.0, h = 2.2",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "[0.46, 0.30, 0.18]"
+            },
+            {
+              "name": "w",
+              "default": "1.0"
+            },
+            {
+              "name": "h",
+              "default": "2.2"
+            }
+          ],
+          "line": 415,
+          "footprint": [
+            1.28,
+            0.24
+          ],
+          "height": 2.27,
+          "zMin": -0.07,
+          "center": [
+            0.0,
+            -0.04
+          ],
+          "triangles": 144,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_part_entry_canopy",
+          "category": "part",
+          "params": "w = 4.5, d = 2.6, c = hc_REDC()",
+          "paramList": [
+            {
+              "name": "w",
+              "default": "4.5"
+            },
+            {
+              "name": "d",
+              "default": "2.6"
+            },
+            {
+              "name": "c",
+              "default": "hc_REDC()"
+            }
+          ],
+          "line": 505,
+          "footprint": [
+            4.7,
+            2.8
+          ],
+          "height": 3.12,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -1.3
+          ],
+          "triangles": 120,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_part_helipad",
+          "category": "part",
+          "params": "r = 3.4, base = hc_BLUEC()",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "3.4"
+            },
+            {
+              "name": "base",
+              "default": "hc_BLUEC()"
+            }
+          ],
+          "line": 496,
+          "footprint": [
+            6.8,
+            6.8
+          ],
+          "height": 0.18,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 190,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_part_parapet",
+          "category": "part",
+          "params": "L, D, c = hc_WHITEC(), h = 0.55, t = 0.35",
+          "paramList": [
+            {
+              "name": "L"
+            },
+            {
+              "name": "D"
+            },
+            {
+              "name": "c",
+              "default": "hc_WHITEC()"
+            },
+            {
+              "name": "h",
+              "default": "0.55"
+            },
+            {
+              "name": "t",
+              "default": "0.35"
+            }
+          ],
+          "line": 455,
+          "footprint": [
+            1.0,
+            0.7
+          ],
+          "height": 0.55,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 48,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_part_roof_ac",
+          "category": "part",
+          "params": "n = 2",
+          "paramList": [
+            {
+              "name": "n",
+              "default": "2"
+            }
+          ],
+          "line": 465,
+          "footprint": [
+            3.6,
+            1.3
+          ],
+          "height": 0.92,
+          "zMin": 0.0,
+          "center": [
+            1.0,
+            0.0
+          ],
+          "triangles": 240,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_part_roof_misc",
+          "category": "part",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 478,
+          "footprint": [
+            0.76,
+            0.76
+          ],
+          "height": 1.06,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_part_sign_text",
+          "category": "part",
+          "params": "label, size = 0.7, c = hc_WHITEC()",
+          "paramList": [
+            {
+              "name": "label"
+            },
+            {
+              "name": "size",
+              "default": "0.7"
+            },
+            {
+              "name": "c",
+              "default": "hc_WHITEC()"
+            }
+          ],
+          "line": 490,
+          "ok": false
+        },
+        {
+          "name": "hc_part_win_row",
+          "category": "part",
+          "params": "L, n, w = 1.4, h = 1.5",
+          "paramList": [
+            {
+              "name": "L"
+            },
+            {
+              "name": "n"
+            },
+            {
+              "name": "w",
+              "default": "1.4"
+            },
+            {
+              "name": "h",
+              "default": "1.5"
+            }
+          ],
+          "line": 438,
+          "ok": false
+        },
+        {
+          "name": "hc_part_window",
+          "category": "part",
+          "params": "w = 1.4, h = 1.5",
+          "paramList": [
+            {
+              "name": "w",
+              "default": "1.4"
+            },
+            {
+              "name": "h",
+              "default": "1.5"
+            }
+          ],
+          "line": 431,
+          "footprint": [
+            1.4,
+            0.14
+          ],
+          "height": 0.75,
+          "zMin": -0.75,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 24,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_bench",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 224,
+          "footprint": [
+            1.55,
+            0.55
+          ],
+          "height": 0.87,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.03
+          ],
+          "triangles": 48,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_bin",
+          "category": "prop",
+          "params": "c = [0.30, 0.50, 0.40]",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "[0.30, 0.50, 0.40]"
+            }
+          ],
+          "line": 231,
+          "footprint": [
+            0.5,
+            0.5
+          ],
+          "height": 0.78,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_board",
+          "category": "prop",
+          "params": "c = hc_BLUEC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "hc_BLUEC()"
+            }
+          ],
+          "line": 249,
+          "footprint": [
+            0.65,
+            0.11
+          ],
+          "height": 0.93,
+          "zMin": -0.02,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 36,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_bollard_pair",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 1059,
+          "footprint": [
+            3.72,
+            0.52
+          ],
+          "height": 0.81,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 336,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_buoy",
+          "category": "prop",
+          "params": "c = hc_REDC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "hc_REDC()"
+            }
+          ],
+          "line": 1006,
+          "footprint": [
+            0.84,
+            0.84
+          ],
+          "height": 0.99,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 168,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_bus_shelter",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 238,
+          "footprint": [
+            3.3,
+            1.35
+          ],
+          "height": 2.63,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.2
+          ],
+          "triangles": 84,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_container",
+          "category": "prop",
+          "params": "c = hc_REDC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "hc_REDC()"
+            }
+          ],
+          "line": 1024,
+          "footprint": [
+            5.4,
+            2.34
+          ],
+          "height": 2.1,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 120,
+          "colors": 10,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_container_stack",
+          "category": "prop",
+          "params": "seed = 0, n = 2",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "n",
+              "default": "2"
+            }
+          ],
+          "line": 1032,
+          "footprint": [
+            5.55,
+            2.34
+          ],
+          "height": 4.2,
+          "zMin": 0.0,
+          "center": [
+            0.07,
+            0.0
+          ],
+          "triangles": 240,
+          "colors": 20,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_crane",
+          "category": "prop",
+          "params": "c = hc_ORANGEC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "hc_ORANGEC()"
+            }
+          ],
+          "line": 1039,
+          "footprint": [
+            6.2,
+            12.7
+          ],
+          "height": 13.98,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -3.95
+          ],
+          "triangles": 288,
+          "colors": 24,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_crate_pile",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 1070,
+          "footprint": [
+            1.8,
+            1.0
+          ],
+          "height": 0.9,
+          "zMin": 0.0,
+          "center": [
+            0.45,
+            0.05
+          ],
+          "triangles": 24,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_door_mat",
+          "category": "prop",
+          "params": "w = 1.8",
+          "paramList": [
+            {
+              "name": "w",
+              "default": "1.8"
+            }
+          ],
+          "line": 282,
+          "footprint": [
+            1.8,
+            1.0
+          ],
+          "height": 0.03,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 24,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_fence",
+          "category": "prop",
+          "params": "len = 10, h = 3.2",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "10"
+            },
+            {
+              "name": "h",
+              "default": "3.2"
+            }
+          ],
+          "line": 325,
+          "footprint": [
+            10.1,
+            0.1
+          ],
+          "height": 3.2,
+          "zMin": 0.0,
+          "center": [
+            5.0,
+            0.0
+          ],
+          "triangles": 276,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_flag",
+          "category": "prop",
+          "params": "c = hc_BLUEC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "hc_BLUEC()"
+            }
+          ],
+          "line": 337,
+          "footprint": [
+            1.72,
+            0.14
+          ],
+          "height": 6.4,
+          "zMin": 0.0,
+          "center": [
+            0.79,
+            0.0
+          ],
+          "triangles": 60,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_fountain_spiral",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 289,
+          "footprint": [
+            7.2,
+            7.2
+          ],
+          "height": 0.66,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 72,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_fuel_mark",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 1165,
+          "footprint": [
+            4.12,
+            2.12
+          ],
+          "height": 0.02,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 48,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_gull",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 1012,
+          "footprint": [
+            1.83,
+            0.3
+          ],
+          "height": 0.26,
+          "zMin": -0.06,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 36,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_harbor_hut",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 1086,
+          "footprint": [
+            5.32,
+            3.88
+          ],
+          "height": 3.5,
+          "zMin": -0.07,
+          "center": [
+            0.26,
+            -0.04
+          ],
+          "triangles": 810,
+          "colors": 10,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_hydrant",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 204,
+          "footprint": [
+            0.36,
+            0.26
+          ],
+          "height": 0.72,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 228,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_lamp",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 182,
+          "footprint": [
+            0.3,
+            1.28
+          ],
+          "height": 5.0,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.49
+          ],
+          "triangles": 120,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_lifering_post",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 1078,
+          "footprint": [
+            0.64,
+            0.15
+          ],
+          "height": 1.27,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 144,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_load_mark",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 271,
+          "footprint": [
+            2.74,
+            2.34
+          ],
+          "height": 0.02,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 84,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_mailbox",
+          "category": "prop",
+          "params": "c = hc_REDC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "hc_REDC()"
+            }
+          ],
+          "line": 216,
+          "footprint": [
+            0.56,
+            0.42
+          ],
+          "height": 1.28,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 96,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_manhole",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 257,
+          "footprint": [
+            0.84,
+            0.84
+          ],
+          "height": 0.02,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_pier",
+          "category": "prop",
+          "params": "len = 22, w = 4",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "22"
+            },
+            {
+              "name": "w",
+              "default": "4"
+            }
+          ],
+          "line": 1098,
+          "footprint": [
+            4.0,
+            21.95
+          ],
+          "height": 1.15,
+          "zMin": -1.6,
+          "center": [
+            0.0,
+            -11.1
+          ],
+          "triangles": 876,
+          "colors": 19,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_radio_tower",
+          "category": "prop",
+          "params": "h = 14",
+          "paramList": [
+            {
+              "name": "h",
+              "default": "14"
+            }
+          ],
+          "line": 314,
+          "footprint": [
+            2.2,
+            1.1
+          ],
+          "height": 16.4,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 432,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_spawn_stud",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 264,
+          "footprint": [
+            0.9,
+            0.25
+          ],
+          "height": 0.03,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 24,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_traffic_light",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 194,
+          "footprint": [
+            0.26,
+            0.31
+          ],
+          "height": 3.6,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.08
+          ],
+          "triangles": 420,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_wheel_stop",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 1158,
+          "footprint": [
+            1.6,
+            0.94
+          ],
+          "height": 0.14,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.38
+          ],
+          "triangles": 24,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_prop_wind_turbine",
+          "category": "prop",
+          "params": "h = 16, az = 0",
+          "paramList": [
+            {
+              "name": "h",
+              "default": "16"
+            },
+            {
+              "name": "az",
+              "default": "0"
+            }
+          ],
+          "line": 301,
+          "footprint": [
+            9.18,
+            1.56
+          ],
+          "height": 21.2,
+          "zMin": 0.0,
+          "center": [
+            -0.0,
+            -0.23
+          ],
+          "triangles": 180,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_road_crosswalk",
+          "category": "road",
+          "params": "",
+          "paramList": [],
+          "line": 370,
+          "footprint": [
+            4.4,
+            6.6
+          ],
+          "height": 0.16,
+          "zMin": 0.14,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 84,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_road_parking_row",
+          "category": "road",
+          "params": "bays = 4, bw = 2.8, bd = 5.4",
+          "paramList": [
+            {
+              "name": "bays",
+              "default": "4"
+            },
+            {
+              "name": "bw",
+              "default": "2.8"
+            },
+            {
+              "name": "bd",
+              "default": "5.4"
+            }
+          ],
+          "line": 391,
+          "footprint": [
+            11.8,
+            6.0
+          ],
+          "height": 0.06,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 84,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_road_x",
+          "category": "road",
+          "params": "L, dash0 = 0, dash1 = 0",
+          "paramList": [
+            {
+              "name": "L"
+            },
+            {
+              "name": "dash0",
+              "default": "0"
+            },
+            {
+              "name": "dash1",
+              "default": "0"
+            }
+          ],
+          "line": 353,
+          "footprint": [
+            1.0,
+            8.0
+          ],
+          "height": 0.15,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_road_y",
+          "category": "road",
+          "params": "L, dash0 = 0, dash1 = 0",
+          "paramList": [
+            {
+              "name": "L"
+            },
+            {
+              "name": "dash0",
+              "default": "0"
+            },
+            {
+              "name": "dash1",
+              "default": "0"
+            }
+          ],
+          "line": 361,
+          "footprint": [
+            8.0,
+            1.0
+          ],
+          "height": 0.15,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_veh_ambulance",
+          "category": "veh",
+          "params": "",
+          "paramList": [],
+          "line": 870,
+          "footprint": [
+            4.4,
+            2.34
+          ],
+          "height": 2.36,
+          "zMin": 0.0,
+          "center": [
+            0.03,
+            -0.08
+          ],
+          "triangles": 492,
+          "colors": 17,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_veh_bus",
+          "category": "veh",
+          "params": "c = hc_BLUEC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "hc_BLUEC()"
+            }
+          ],
+          "line": 885,
+          "footprint": [
+            7.64,
+            2.48
+          ],
+          "height": 2.33,
+          "zMin": 0.0,
+          "center": [
+            0.01,
+            -0.08
+          ],
+          "triangles": 444,
+          "colors": 13,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_veh_car",
+          "category": "veh",
+          "params": "c = [0.85, 0.26, 0.20]",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "[0.85, 0.26, 0.20]"
+            }
+          ],
+          "line": 843,
+          "footprint": [
+            4.07,
+            2.18
+          ],
+          "height": 1.44,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.07
+          ],
+          "triangles": 480,
+          "colors": 16,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_veh_forklift",
+          "category": "veh",
+          "params": "c = hc_YELLOWC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "hc_YELLOWC()"
+            }
+          ],
+          "line": 915,
+          "footprint": [
+            2.74,
+            1.56
+          ],
+          "height": 1.87,
+          "zMin": 0.0,
+          "center": [
+            0.48,
+            -0.06
+          ],
+          "triangles": 504,
+          "colors": 18,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_veh_helicopter",
+          "category": "veh",
+          "params": "c = hc_REDC(), fly = true",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "hc_REDC()"
+            },
+            {
+              "name": "fly",
+              "default": "true"
+            }
+          ],
+          "line": 928,
+          "footprint": [
+            5.9,
+            4.6
+          ],
+          "height": 2.35,
+          "zMin": 0.12,
+          "center": [
+            -0.45,
+            0.0
+          ],
+          "triangles": 240,
+          "colors": 10,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_veh_police_car",
+          "category": "veh",
+          "params": "",
+          "paramList": [],
+          "line": 861,
+          "footprint": [
+            4.07,
+            2.18
+          ],
+          "height": 1.57,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.07
+          ],
+          "triangles": 516,
+          "colors": 19,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_veh_taxi",
+          "category": "veh",
+          "params": "",
+          "paramList": [],
+          "line": 854,
+          "footprint": [
+            4.07,
+            2.18
+          ],
+          "height": 1.59,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.07
+          ],
+          "triangles": 504,
+          "colors": 18,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_veh_truck_box",
+          "category": "veh",
+          "params": "cab = [0.30, 0.55, 0.80], box = hc_WHITEC()",
+          "paramList": [
+            {
+              "name": "cab",
+              "default": "[0.30, 0.55, 0.80]"
+            },
+            {
+              "name": "box",
+              "default": "hc_WHITEC()"
+            }
+          ],
+          "line": 895,
+          "footprint": [
+            5.87,
+            2.47
+          ],
+          "height": 2.5,
+          "zMin": 0.0,
+          "center": [
+            0.19,
+            -0.09
+          ],
+          "triangles": 432,
+          "colors": 12,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_veh_truck_ct",
+          "category": "veh",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 905,
+          "footprint": [
+            8.64,
+            2.47
+          ],
+          "height": 3.1,
+          "zMin": 0.0,
+          "center": [
+            -0.1,
+            -0.09
+          ],
+          "triangles": 624,
+          "colors": 16,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "hc_veh_wheel",
+          "category": "veh",
+          "params": "r = 0.34, w = 0.24",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "0.34"
+            },
+            {
+              "name": "w",
+              "default": "0.24"
+            }
+          ],
+          "line": 837,
+          "footprint": [
+            0.68,
+            0.38
+          ],
+          "height": 0.34,
+          "zMin": -0.34,
+          "center": [
+            0.0,
+            -0.07
+          ],
+          "triangles": 96,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "kit_deadly",
+      "file": "kit_deadly.scad",
+      "prefix": "dd_",
+      "scaleClass": "mid",
+      "modules": [
+        {
+          "name": "dd_bldg_church",
+          "category": "bldg",
+          "params": "seed = 0, L = 7, D = 12",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "L",
+              "default": "7"
+            },
+            {
+              "name": "D",
+              "default": "12"
+            }
+          ],
+          "line": 198,
+          "footprint": [
+            8.0,
+            15.5
+          ],
+          "height": 9.4,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -1.25
+          ],
+          "triangles": 292,
+          "colors": 25,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_bldg_house",
+          "category": "bldg",
+          "params": "seed = 0, L = 8, D = 6, porch = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "L",
+              "default": "8"
+            },
+            {
+              "name": "D",
+              "default": "6"
+            },
+            {
+              "name": "porch",
+              "default": "0"
+            }
+          ],
+          "line": 143,
+          "footprint": [
+            9.1,
+            7.55
+          ],
+          "height": 4.93,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.23
+          ],
+          "triangles": 236,
+          "colors": 20,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_bldg_house_porch",
+          "category": "bldg",
+          "params": "seed = 1, L = 9, D = 6.5",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "1"
+            },
+            {
+              "name": "L",
+              "default": "9"
+            },
+            {
+              "name": "D",
+              "default": "6.5"
+            }
+          ],
+          "line": 184,
+          "footprint": [
+            10.1,
+            9.85
+          ],
+          "height": 4.93,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -1.13
+          ],
+          "triangles": 440,
+          "colors": 37,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_bldg_shed",
+          "category": "bldg",
+          "params": "seed = 0, L = 3.4, D = 2.8",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "L",
+              "default": "3.4"
+            },
+            {
+              "name": "D",
+              "default": "2.8"
+            }
+          ],
+          "line": 187,
+          "footprint": [
+            3.9,
+            3.39
+          ],
+          "height": 2.42,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 60,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_bldg_shop",
+          "category": "bldg",
+          "params": "seed = 0, L = 8, D = 6",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "L",
+              "default": "8"
+            },
+            {
+              "name": "D",
+              "default": "6"
+            }
+          ],
+          "line": 226,
+          "footprint": [
+            8.2,
+            7.22
+          ],
+          "height": 3.7,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.51
+          ],
+          "triangles": 204,
+          "colors": 17,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_ground_cross",
+          "category": "ground",
+          "params": "W = 7, seed = 0",
+          "paramList": [
+            {
+              "name": "W",
+              "default": "7"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 107,
+          "footprint": [
+            7.0,
+            7.0
+          ],
+          "height": 0.14,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 264,
+          "colors": 22,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_ground_grass",
+          "category": "ground",
+          "params": "L = 20, D = 20, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "20"
+            },
+            {
+              "name": "D",
+              "default": "20"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 129,
+          "footprint": [
+            20.0,
+            20.0
+          ],
+          "height": 0.11,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 84,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_ground_road",
+          "category": "ground",
+          "params": "L = 24, W = 7, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "24"
+            },
+            {
+              "name": "W",
+              "default": "7"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 92,
+          "footprint": [
+            24.0,
+            7.0
+          ],
+          "height": 0.14,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 312,
+          "colors": 26,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_ground_sidewalk",
+          "category": "ground",
+          "params": "L = 8, W = 1.8",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "8"
+            },
+            {
+              "name": "W",
+              "default": "1.8"
+            }
+          ],
+          "line": 120,
+          "footprint": [
+            8.0,
+            1.8
+          ],
+          "height": 0.17,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 60,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_boxc",
+          "category": "misc",
+          "params": "s",
+          "paramList": [
+            {
+              "name": "s"
+            }
+          ],
+          "line": 56,
+          "footprint": [
+            1.0,
+            1.0
+          ],
+          "height": 0.5,
+          "zMin": -0.5,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_slab",
+          "category": "misc",
+          "params": "L = 4, D = 4, t = 0.2",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "4"
+            },
+            {
+              "name": "D",
+              "default": "4"
+            },
+            {
+              "name": "t",
+              "default": "0.2"
+            }
+          ],
+          "line": 57,
+          "footprint": [
+            4.0,
+            4.0
+          ],
+          "height": 0.2,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_nature_bush",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 281,
+          "footprint": [
+            1.47,
+            1.1
+          ],
+          "height": 0.97,
+          "zMin": -0.13,
+          "center": [
+            0.05,
+            0.0
+          ],
+          "triangles": 360,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_nature_crop_patch",
+          "category": "nature",
+          "params": "L = 4.5, D = 3.5, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "4.5"
+            },
+            {
+              "name": "D",
+              "default": "3.5"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 302,
+          "footprint": [
+            4.5,
+            3.5
+          ],
+          "height": 1.38,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 1092,
+          "colors": 21,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_nature_grass",
+          "category": "nature",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 292,
+          "footprint": [
+            0.5,
+            0.5
+          ],
+          "height": 0.32,
+          "zMin": -0.04,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 36,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_nature_pine",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 254,
+          "footprint": [
+            3.1,
+            3.1
+          ],
+          "height": 5.8,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 240,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_nature_tree",
+          "category": "nature",
+          "params": "s = 1.0, seed = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 269,
+          "footprint": [
+            3.1,
+            3.0
+          ],
+          "height": 4.1,
+          "zMin": 0.0,
+          "center": [
+            0.05,
+            0.0
+          ],
+          "triangles": 408,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_part_door",
+          "category": "part",
+          "params": "w = 1.0, h = 2.0, c = [0.33, 0.25, 0.19]",
+          "paramList": [
+            {
+              "name": "w",
+              "default": "1.0"
+            },
+            {
+              "name": "h",
+              "default": "2.0"
+            },
+            {
+              "name": "c",
+              "default": "[0.33, 0.25, 0.19]"
+            }
+          ],
+          "line": 82,
+          "footprint": [
+            1.24,
+            0.2
+          ],
+          "height": 2.0,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.04
+          ],
+          "triangles": 36,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_part_roof",
+          "category": "part",
+          "params": "L = 8, D = 6, h = 1.8, ov = 0.5, rin = 0, c = [0.28, 0.31, 0.36]",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "8"
+            },
+            {
+              "name": "D",
+              "default": "6"
+            },
+            {
+              "name": "h",
+              "default": "1.8"
+            },
+            {
+              "name": "ov",
+              "default": "0.5"
+            },
+            {
+              "name": "rin",
+              "default": "0"
+            },
+            {
+              "name": "c",
+              "default": "[0.28, 0.31, 0.36]"
+            }
+          ],
+          "line": 63,
+          "footprint": [
+            9.0,
+            7.0
+          ],
+          "height": 1.8,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 8,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_part_window",
+          "category": "part",
+          "params": "w = 0.9, h = 1.0",
+          "paramList": [
+            {
+              "name": "w",
+              "default": "0.9"
+            },
+            {
+              "name": "h",
+              "default": "1.0"
+            }
+          ],
+          "line": 74,
+          "footprint": [
+            0.9,
+            0.19
+          ],
+          "height": 0.5,
+          "zMin": -0.5,
+          "center": [
+            0.0,
+            -0.02
+          ],
+          "triangles": 36,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_prop_barrel",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 421,
+          "footprint": [
+            0.63,
+            0.63
+          ],
+          "height": 0.86,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 144,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_prop_barricade",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 474,
+          "footprint": [
+            2.4,
+            0.61
+          ],
+          "height": 0.93,
+          "zMin": -0.01,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_prop_bench",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 466,
+          "footprint": [
+            1.7,
+            0.54
+          ],
+          "height": 0.88,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.02
+          ],
+          "triangles": 84,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_prop_cone",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 458,
+          "footprint": [
+            0.34,
+            0.34
+          ],
+          "height": 0.55,
+          "zMin": -0.01,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 108,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_prop_crate",
+          "category": "prop",
+          "params": "s = 1.0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            }
+          ],
+          "line": 430,
+          "footprint": [
+            0.89,
+            0.89
+          ],
+          "height": 0.8,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 60,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_prop_dumpster",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 445,
+          "footprint": [
+            2.2,
+            1.37
+          ],
+          "height": 1.6,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.02
+          ],
+          "triangles": 72,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_prop_fence",
+          "category": "prop",
+          "params": "len = 4, h = 1.05",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "4"
+            },
+            {
+              "name": "h",
+              "default": "1.05"
+            }
+          ],
+          "line": 321,
+          "footprint": [
+            4.0,
+            0.06
+          ],
+          "height": 1.05,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 120,
+          "colors": 10,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_prop_hydrant",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 389,
+          "footprint": [
+            0.38,
+            0.44
+          ],
+          "height": 0.8,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 360,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_prop_lamp",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 334,
+          "footprint": [
+            0.32,
+            1.25
+          ],
+          "height": 4.6,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.47
+          ],
+          "triangles": 120,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_prop_mailbox",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 402,
+          "footprint": [
+            0.4,
+            0.57
+          ],
+          "height": 1.45,
+          "zMin": 0.0,
+          "center": [
+            0.02,
+            -0.01
+          ],
+          "triangles": 48,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_prop_pole",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 346,
+          "footprint": [
+            0.3,
+            2.0
+          ],
+          "height": 6.8,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 204,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_prop_sign",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 357,
+          "footprint": [
+            3.0,
+            0.2
+          ],
+          "height": 3.4,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.05
+          ],
+          "triangles": 84,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_prop_sign_fallen",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 372,
+          "footprint": [
+            3.8,
+            1.18
+          ],
+          "height": 1.91,
+          "zMin": -1.35,
+          "center": [
+            -0.12,
+            -0.1
+          ],
+          "triangles": 144,
+          "colors": 9,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_prop_trash",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 411,
+          "footprint": [
+            0.64,
+            0.64
+          ],
+          "height": 0.85,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_veh_pickup",
+          "category": "veh",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 522,
+          "footprint": [
+            4.34,
+            2.22
+          ],
+          "height": 1.63,
+          "zMin": 0.0,
+          "center": [
+            0.02,
+            0.0
+          ],
+          "triangles": 492,
+          "colors": 17,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_veh_sedan",
+          "category": "veh",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 496,
+          "footprint": [
+            4.07,
+            2.14
+          ],
+          "height": 1.48,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 492,
+          "colors": 17,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_veh_van",
+          "category": "veh",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 509,
+          "footprint": [
+            4.83,
+            2.22
+          ],
+          "height": 1.95,
+          "zMin": 0.0,
+          "center": [
+            0.07,
+            0.0
+          ],
+          "triangles": 468,
+          "colors": 15,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_veh_wheel",
+          "category": "veh",
+          "params": "r = 0.34, w = 0.26",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "0.34"
+            },
+            {
+              "name": "w",
+              "default": "0.26"
+            }
+          ],
+          "line": 489,
+          "footprint": [
+            0.68,
+            0.3
+          ],
+          "height": 0.34,
+          "zMin": -0.34,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "dd_veh_wreck",
+          "category": "veh",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 536,
+          "footprint": [
+            4.59,
+            2.23
+          ],
+          "height": 1.46,
+          "zMin": -0.06,
+          "center": [
+            0.25,
+            0.02
+          ],
+          "triangles": 444,
+          "colors": 16,
+          "warnings": 0,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "kit_office",
+      "file": "kit_office.scad",
+      "prefix": "of_",
+      "scaleClass": "human",
+      "modules": [
+        {
+          "name": "of_furn_armchair",
+          "category": "furn",
+          "params": "c = of_NAVYC()",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "of_NAVYC()"
+            }
+          ],
+          "line": 141,
+          "footprint": [
+            0.84,
+            0.7
+          ],
+          "height": 0.82,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 108,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_furn_boss_chair",
+          "category": "furn",
+          "params": "",
+          "paramList": [],
+          "line": 124,
+          "footprint": [
+            0.69,
+            0.72
+          ],
+          "height": 1.32,
+          "zMin": 0.01,
+          "center": [
+            -0.03,
+            0.0
+          ],
+          "triangles": 192,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_furn_conf_chair",
+          "category": "furn",
+          "params": "",
+          "paramList": [],
+          "line": 111,
+          "footprint": [
+            0.52,
+            0.45
+          ],
+          "height": 1.03,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.01
+          ],
+          "triangles": 264,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_furn_conf_table",
+          "category": "furn",
+          "params": "",
+          "paramList": [],
+          "line": 264,
+          "footprint": [
+            4.0,
+            1.9
+          ],
+          "height": 0.81,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 364,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_furn_exec_desk",
+          "category": "furn",
+          "params": "",
+          "paramList": [],
+          "line": 232,
+          "footprint": [
+            2.58,
+            2.24
+          ],
+          "height": 1.35,
+          "zMin": 0.0,
+          "center": [
+            0.29,
+            -0.22
+          ],
+          "triangles": 588,
+          "colors": 12,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_furn_monitor",
+          "category": "furn",
+          "params": "screen = of_SCREENC(), w = 0.56",
+          "paramList": [
+            {
+              "name": "screen",
+              "default": "of_SCREENC()"
+            },
+            {
+              "name": "w",
+              "default": "0.56"
+            }
+          ],
+          "line": 88,
+          "footprint": [
+            0.56,
+            0.2
+          ],
+          "height": 0.59,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 84,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_furn_sofa",
+          "category": "furn",
+          "params": "",
+          "paramList": [],
+          "line": 154,
+          "footprint": [
+            1.71,
+            0.72
+          ],
+          "height": 0.83,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 144,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_furn_task_chair",
+          "category": "furn",
+          "params": "seat = of_CHAIRWC()",
+          "paramList": [
+            {
+              "name": "seat",
+              "default": "of_CHAIRWC()"
+            }
+          ],
+          "line": 99,
+          "footprint": [
+            0.58,
+            0.61
+          ],
+          "height": 1.04,
+          "zMin": 0.0,
+          "center": [
+            -0.02,
+            0.0
+          ],
+          "triangles": 144,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_furn_workstation",
+          "category": "furn",
+          "params": "dual = false, laptop = false, tablet = false, sticky = false, screen = of_SCREENC(), mug = [0.40, 0.60, 0.80], plant = false, crot = 0",
+          "paramList": [
+            {
+              "name": "dual",
+              "default": "false"
+            },
+            {
+              "name": "laptop",
+              "default": "false"
+            },
+            {
+              "name": "tablet",
+              "default": "false"
+            },
+            {
+              "name": "sticky",
+              "default": "false"
+            },
+            {
+              "name": "screen",
+              "default": "of_SCREENC()"
+            },
+            {
+              "name": "mug",
+              "default": "[0.40, 0.60, 0.80]"
+            },
+            {
+              "name": "plant",
+              "default": "false"
+            },
+            {
+              "name": "crot",
+              "default": "0"
+            }
+          ],
+          "line": 172,
+          "footprint": [
+            1.7,
+            1.55
+          ],
+          "height": 1.33,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.38
+          ],
+          "triangles": 504,
+          "colors": 13,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_office_floor",
+          "category": "office",
+          "params": "",
+          "paramList": [],
+          "line": 45,
+          "footprint": [
+            24.0,
+            18.0
+          ],
+          "height": 0.15,
+          "zMin": -0.13,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 2892,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_part_glass_run",
+          "category": "part",
+          "params": "x0, x1",
+          "paramList": [
+            {
+              "name": "x0"
+            },
+            {
+              "name": "x1"
+            }
+          ],
+          "line": 69,
+          "footprint": [
+            0.02,
+            0.1
+          ],
+          "height": 2.24,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 24,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_part_glass_wall",
+          "category": "part",
+          "params": "len, g0 = -1, g1 = -1",
+          "paramList": [
+            {
+              "name": "len"
+            },
+            {
+              "name": "g0",
+              "default": "-1"
+            },
+            {
+              "name": "g1",
+              "default": "-1"
+            }
+          ],
+          "line": 78,
+          "footprint": [
+            1.0,
+            0.11
+          ],
+          "height": 2.36,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 60,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_beanbag",
+          "category": "prop",
+          "params": "c",
+          "paramList": [
+            {
+              "name": "c"
+            }
+          ],
+          "line": 544,
+          "footprint": [
+            0.72,
+            0.72
+          ],
+          "height": 0.39,
+          "zMin": -0.01,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 120,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_binder_shelf",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 412,
+          "footprint": [
+            1.4,
+            0.34
+          ],
+          "height": 1.85,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 372,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_bins",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 470,
+          "footprint": [
+            0.62,
+            0.28
+          ],
+          "height": 0.36,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_bookshelf_tall",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 428,
+          "footprint": [
+            1.06,
+            0.34
+          ],
+          "height": 2.0,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 312,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_boxes",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 501,
+          "footprint": [
+            1.19,
+            0.72
+          ],
+          "height": 0.95,
+          "zMin": 0.0,
+          "center": [
+            0.3,
+            0.02
+          ],
+          "triangles": 60,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_certificates",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 327,
+          "footprint": [
+            0.82,
+            0.04
+          ],
+          "height": 0.3,
+          "zMin": -0.14,
+          "center": [
+            0.0,
+            -0.0
+          ],
+          "triangles": 72,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_clock",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 310,
+          "footprint": [
+            0.36,
+            0.06
+          ],
+          "height": 0.18,
+          "zMin": -0.18,
+          "center": [
+            0.0,
+            -0.03
+          ],
+          "triangles": 120,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_coat_stand",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 534,
+          "footprint": [
+            0.34,
+            0.34
+          ],
+          "height": 1.7,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 144,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_credenza",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 443,
+          "footprint": [
+            1.6,
+            0.44
+          ],
+          "height": 1.03,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 252,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_door_double",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 368,
+          "footprint": [
+            2.1,
+            0.17
+          ],
+          "height": 2.15,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.0
+          ],
+          "triangles": 348,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_floor_lamp",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 524,
+          "footprint": [
+            0.4,
+            0.4
+          ],
+          "height": 1.58,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 144,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_foosball",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 546,
+          "footprint": [
+            1.3,
+            1.09
+          ],
+          "height": 0.95,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 1152,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_frame",
+          "category": "prop",
+          "params": "w = 0.45, h = 0.34, art = [0.45, 0.60, 0.70]",
+          "paramList": [
+            {
+              "name": "w",
+              "default": "0.45"
+            },
+            {
+              "name": "h",
+              "default": "0.34"
+            },
+            {
+              "name": "art",
+              "default": "[0.45, 0.60, 0.70]"
+            }
+          ],
+          "line": 321,
+          "footprint": [
+            0.45,
+            0.04
+          ],
+          "height": 0.17,
+          "zMin": -0.17,
+          "center": [
+            0.0,
+            -0.0
+          ],
+          "triangles": 24,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_fridge",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 400,
+          "footprint": [
+            0.68,
+            0.64
+          ],
+          "height": 1.58,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.02
+          ],
+          "triangles": 48,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_locker",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 476,
+          "footprint": [
+            0.78,
+            0.53
+          ],
+          "height": 1.85,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.02
+          ],
+          "triangles": 108,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_mat",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 289,
+          "footprint": [
+            2.7,
+            1.05
+          ],
+          "height": 0.02,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_plant_tall",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 291,
+          "footprint": [
+            0.64,
+            0.52
+          ],
+          "height": 1.24,
+          "zMin": 0.0,
+          "center": [
+            0.02,
+            0.0
+          ],
+          "triangles": 456,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_planter",
+          "category": "prop",
+          "params": "len = 2.4",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "2.4"
+            }
+          ],
+          "line": 301,
+          "footprint": [
+            2.45,
+            0.34
+          ],
+          "height": 0.63,
+          "zMin": 0.0,
+          "center": [
+            0.03,
+            0.0
+          ],
+          "triangles": 984,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_printer_island",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 455,
+          "footprint": [
+            0.92,
+            0.65
+          ],
+          "height": 0.96,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.05
+          ],
+          "triangles": 96,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_projector_screen",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 347,
+          "footprint": [
+            3.1,
+            0.1
+          ],
+          "height": 0.92,
+          "zMin": -0.86,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 36,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_reception",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 564,
+          "footprint": [
+            3.38,
+            2.01
+          ],
+          "height": 1.36,
+          "zMin": 0.0,
+          "center": [
+            -0.27,
+            0.67
+          ],
+          "triangles": 2142,
+          "colors": 12,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_rug",
+          "category": "prop",
+          "params": "w, d, c",
+          "paramList": [
+            {
+              "name": "w"
+            },
+            {
+              "name": "d"
+            },
+            {
+              "name": "c"
+            }
+          ],
+          "line": 288,
+          "footprint": [
+            1.0,
+            1.0
+          ],
+          "height": 0.02,
+          "zMin": -0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_server_rack",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 488,
+          "footprint": [
+            0.72,
+            0.64
+          ],
+          "height": 1.92,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 312,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_shelf_unit",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 510,
+          "footprint": [
+            1.45,
+            0.4
+          ],
+          "height": 1.5,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 132,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_water_cooler",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 387,
+          "footprint": [
+            0.34,
+            0.36
+          ],
+          "height": 1.36,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 252,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_whiteboard",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 337,
+          "footprint": [
+            2.4,
+            0.14
+          ],
+          "height": 0.65,
+          "zMin": -0.68,
+          "center": [
+            0.0,
+            -0.04
+          ],
+          "triangles": 72,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_prop_window_blinds",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 354,
+          "footprint": [
+            1.7,
+            0.1
+          ],
+          "height": 0.7,
+          "zMin": -0.7,
+          "center": [
+            0.0,
+            -0.01
+          ],
+          "triangles": 156,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_wall_knee",
+          "category": "wall",
+          "params": "len",
+          "paramList": [
+            {
+              "name": "len"
+            }
+          ],
+          "line": 62,
+          "footprint": [
+            1.0,
+            0.29
+          ],
+          "height": 0.31,
+          "zMin": -0.25,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 24,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "of_wall_segment",
+          "category": "wall",
+          "params": "len",
+          "paramList": [
+            {
+              "name": "len"
+            }
+          ],
+          "line": 55,
+          "footprint": [
+            1.0,
+            0.33
+          ],
+          "height": 1.3,
+          "zMin": -1.3,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 24,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        }
+      ]
+    },
+    {
+      "name": "kit_old_city",
+      "file": "kit_old_city.scad",
+      "prefix": "oc_",
+      "scaleClass": "mid",
+      "modules": [
+        {
+          "name": "oc_bldg_barracks",
+          "category": "bldg",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 591,
+          "footprint": [
+            20.58,
+            9.7
+          ],
+          "height": 6.47,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 860,
+          "colors": 48,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_bldg_corner_tower",
+          "category": "bldg",
+          "params": "",
+          "paramList": [],
+          "line": 408,
+          "footprint": [
+            16.0,
+            16.0
+          ],
+          "height": 18.55,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 856,
+          "colors": 44,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_bldg_gatehouse",
+          "category": "bldg",
+          "params": "name = \"北门\"",
+          "paramList": [
+            {
+              "name": "name",
+              "default": "\"北门\""
+            }
+          ],
+          "line": 380,
+          "footprint": [
+            22.9,
+            11.2
+          ],
+          "height": 19.57,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 2098,
+          "colors": 93,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_bldg_granary",
+          "category": "bldg",
+          "params": "",
+          "paramList": [],
+          "line": 634,
+          "footprint": [
+            7.0,
+            7.0
+          ],
+          "height": 6.1,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 204,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_bldg_house",
+          "category": "bldg",
+          "params": "seed = 0, L = 9, D = 6.5",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "L",
+              "default": "9"
+            },
+            {
+              "name": "D",
+              "default": "6.5"
+            }
+          ],
+          "line": 541,
+          "footprint": [
+            10.6,
+            8.1
+          ],
+          "height": 5.58,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 272,
+          "colors": 23,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_bldg_inn",
+          "category": "bldg",
+          "params": "",
+          "paramList": [],
+          "line": 564,
+          "footprint": [
+            13.58,
+            11.4
+          ],
+          "height": 9.8,
+          "zMin": 0.0,
+          "center": [
+            -0.24,
+            -0.6
+          ],
+          "triangles": 2776,
+          "colors": 69,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_bldg_inner_gate",
+          "category": "bldg",
+          "params": "",
+          "paramList": [],
+          "line": 490,
+          "footprint": [
+            12.6,
+            5.0
+          ],
+          "height": 8.3,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 764,
+          "colors": 18,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_bldg_keep",
+          "category": "bldg",
+          "params": "",
+          "paramList": [],
+          "line": 506,
+          "footprint": [
+            31.0,
+            28.25
+          ],
+          "height": 15.37,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -3.63
+          ],
+          "triangles": 1448,
+          "colors": 43,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_bldg_shed",
+          "category": "bldg",
+          "params": "L = 6, D = 4",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "6"
+            },
+            {
+              "name": "D",
+              "default": "4"
+            }
+          ],
+          "line": 687,
+          "footprint": [
+            7.0,
+            5.0
+          ],
+          "height": 3.1,
+          "zMin": -0.14,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 188,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_bldg_side_hall",
+          "category": "bldg",
+          "params": "L = 11, D = 6, seed = 0",
+          "paramList": [
+            {
+              "name": "L",
+              "default": "11"
+            },
+            {
+              "name": "D",
+              "default": "6"
+            },
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 529,
+          "footprint": [
+            12.8,
+            7.8
+          ],
+          "height": 6.4,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 332,
+          "colors": 9,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_bldg_stall",
+          "category": "bldg",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 644,
+          "footprint": [
+            4.97,
+            3.8
+          ],
+          "height": 3.01,
+          "zMin": -0.02,
+          "center": [
+            0.23,
+            0.0
+          ],
+          "triangles": 584,
+          "colors": 15,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_bldg_tent",
+          "category": "bldg",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 678,
+          "footprint": [
+            4.1,
+            4.1
+          ],
+          "height": 3.45,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 80,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_bldg_tower_watch",
+          "category": "bldg",
+          "params": "",
+          "paramList": [],
+          "line": 659,
+          "footprint": [
+            5.6,
+            5.6
+          ],
+          "height": 14.29,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 848,
+          "colors": 59,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_bldg_warehouse",
+          "category": "bldg",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 614,
+          "footprint": [
+            16.9,
+            12.55
+          ],
+          "height": 7.6,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.33
+          ],
+          "triangles": 236,
+          "colors": 20,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_farm_plot",
+          "category": "farm",
+          "params": "seed = 0, L = 13, D = 8",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "L",
+              "default": "13"
+            },
+            {
+              "name": "D",
+              "default": "8"
+            }
+          ],
+          "line": 697,
+          "footprint": [
+            13.8,
+            8.8
+          ],
+          "height": 0.55,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 144,
+          "colors": 12,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_ground_base",
+          "category": "ground",
+          "params": "",
+          "paramList": [],
+          "line": 715,
+          "footprint": [
+            352.0,
+            352.0
+          ],
+          "height": 0.5,
+          "zMin": -5.8,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 228,
+          "colors": 19,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_ground_city",
+          "category": "ground",
+          "params": "",
+          "paramList": [],
+          "line": 749,
+          "footprint": [
+            176.0,
+            176.0
+          ],
+          "height": 0.56,
+          "zMin": 0.5,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 264,
+          "colors": 22,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_ground_pond",
+          "category": "ground",
+          "params": "",
+          "paramList": [],
+          "line": 736,
+          "footprint": [
+            58.0,
+            44.0
+          ],
+          "height": 1.84,
+          "zMin": -0.54,
+          "center": [
+            -136.0,
+            -134.0
+          ],
+          "triangles": 804,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_ground_roads_out",
+          "category": "ground",
+          "params": "",
+          "paramList": [],
+          "line": 726,
+          "footprint": [
+            341.0,
+            341.0
+          ],
+          "height": 0.36,
+          "zMin": 0.3,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 144,
+          "colors": 12,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_boxc",
+          "category": "misc",
+          "params": "s",
+          "paramList": [
+            {
+              "name": "s"
+            }
+          ],
+          "line": 55,
+          "footprint": [
+            1.0,
+            1.0
+          ],
+          "height": 0.5,
+          "zMin": -0.5,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_slab",
+          "category": "misc",
+          "params": "L, D, t",
+          "paramList": [
+            {
+              "name": "L"
+            },
+            {
+              "name": "D"
+            },
+            {
+              "name": "t"
+            }
+          ],
+          "line": 56,
+          "footprint": [
+            1.0,
+            1.0
+          ],
+          "height": 0.5,
+          "zMin": -0.5,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_nature_hill",
+          "category": "nature",
+          "params": "r = 20, h = 9",
+          "paramList": [
+            {
+              "name": "r",
+              "default": "20"
+            },
+            {
+              "name": "h",
+              "default": "9"
+            }
+          ],
+          "line": 164,
+          "footprint": [
+            40.0,
+            40.0
+          ],
+          "height": 12.15,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_nature_mount",
+          "category": "nature",
+          "params": "s = 1.0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            }
+          ],
+          "line": 171,
+          "footprint": [
+            35.0,
+            34.0
+          ],
+          "height": 24.5,
+          "zMin": 0.0,
+          "center": [
+            0.5,
+            0.0
+          ],
+          "triangles": 144,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_nature_pine",
+          "category": "nature",
+          "params": "s = 1.0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            }
+          ],
+          "line": 148,
+          "footprint": [
+            2.1,
+            2.1
+          ],
+          "height": 4.6,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 192,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_nature_rock",
+          "category": "nature",
+          "params": "s = 1.0, i = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "i",
+              "default": "0"
+            }
+          ],
+          "line": 157,
+          "footprint": [
+            2.15,
+            1.7
+          ],
+          "height": 0.6,
+          "zMin": -0.6,
+          "center": [
+            0.07,
+            0.0
+          ],
+          "triangles": 240,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_nature_scatter",
+          "category": "nature",
+          "params": "seed = 0, n = 14, x0 = 0, x1 = 10, y0 = 0, y1 = 10",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            },
+            {
+              "name": "n",
+              "default": "14"
+            },
+            {
+              "name": "x0",
+              "default": "0"
+            },
+            {
+              "name": "x1",
+              "default": "10"
+            },
+            {
+              "name": "y0",
+              "default": "0"
+            },
+            {
+              "name": "y1",
+              "default": "10"
+            }
+          ],
+          "line": 179,
+          "footprint": [
+            11.27,
+            10.37
+          ],
+          "height": 5.41,
+          "zMin": -0.24,
+          "center": [
+            4.31,
+            5.0
+          ],
+          "triangles": 4800,
+          "colors": 48,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_nature_tree",
+          "category": "nature",
+          "params": "s = 1.0, i = 0",
+          "paramList": [
+            {
+              "name": "s",
+              "default": "1.0"
+            },
+            {
+              "name": "i",
+              "default": "0"
+            }
+          ],
+          "line": 137,
+          "footprint": [
+            2.45,
+            2.1
+          ],
+          "height": 3.45,
+          "zMin": 0.0,
+          "center": [
+            0.06,
+            0.0
+          ],
+          "triangles": 528,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_part_battlement",
+          "category": "part",
+          "params": "len, t = 0.45, h = 1.7",
+          "paramList": [
+            {
+              "name": "len"
+            },
+            {
+              "name": "t",
+              "default": "0.45"
+            },
+            {
+              "name": "h",
+              "default": "1.7"
+            }
+          ],
+          "line": 105,
+          "footprint": [
+            1.0,
+            0.45
+          ],
+          "height": 0.7,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 12,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_part_gate_tower",
+          "category": "part",
+          "params": "",
+          "paramList": [],
+          "line": 360,
+          "footprint": [
+            17.4,
+            9.9
+          ],
+          "height": 10.45,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 832,
+          "colors": 15,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_part_lattice_win",
+          "category": "part",
+          "params": "w = 1.4, h = 1.1",
+          "paramList": [
+            {
+              "name": "w",
+              "default": "1.4"
+            },
+            {
+              "name": "h",
+              "default": "1.1"
+            }
+          ],
+          "line": 123,
+          "footprint": [
+            1.4,
+            0.13
+          ],
+          "height": 0.55,
+          "zMin": -0.55,
+          "center": [
+            0.0,
+            -0.07
+          ],
+          "triangles": 72,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_part_plaque",
+          "category": "part",
+          "params": "label, n = 2, size = 0.9",
+          "paramList": [
+            {
+              "name": "label"
+            },
+            {
+              "name": "n",
+              "default": "2"
+            },
+            {
+              "name": "size",
+              "default": "0.9"
+            }
+          ],
+          "line": 91,
+          "footprint": [
+            2.88,
+            0.18
+          ],
+          "height": 0.81,
+          "zMin": -0.81,
+          "center": [
+            0.0,
+            0.08
+          ],
+          "triangles": 60,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_part_ridge",
+          "category": "part",
+          "params": "rl, c = [0.20, 0.22, 0.26]",
+          "paramList": [
+            {
+              "name": "rl"
+            },
+            {
+              "name": "c",
+              "default": "[0.20, 0.22, 0.26]"
+            }
+          ],
+          "line": 74,
+          "footprint": [
+            1.0,
+            0.56
+          ],
+          "height": 0.85,
+          "zMin": -0.23,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 36,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_part_roof",
+          "category": "part",
+          "params": "L, D, h, ov = 0.8, rin = 0, c = [0.27, 0.29, 0.33]",
+          "paramList": [
+            {
+              "name": "L"
+            },
+            {
+              "name": "D"
+            },
+            {
+              "name": "h"
+            },
+            {
+              "name": "ov",
+              "default": "0.8"
+            },
+            {
+              "name": "rin",
+              "default": "0"
+            },
+            {
+              "name": "c",
+              "default": "[0.27, 0.29, 0.33]"
+            }
+          ],
+          "line": 63,
+          "footprint": [
+            1.6,
+            1.6
+          ],
+          "height": 0.0,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 8,
+          "colors": 1,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_part_steps",
+          "category": "part",
+          "params": "w = 4, n = 5, rise = 0.3, run = 0.42",
+          "paramList": [
+            {
+              "name": "w",
+              "default": "4"
+            },
+            {
+              "name": "n",
+              "default": "5"
+            },
+            {
+              "name": "rise",
+              "default": "0.3"
+            },
+            {
+              "name": "run",
+              "default": "0.42"
+            }
+          ],
+          "line": 115,
+          "footprint": [
+            4.0,
+            2.1
+          ],
+          "height": 1.5,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -1.05
+          ],
+          "triangles": 60,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_part_text_cn",
+          "category": "part",
+          "params": "label, n = 2, size = 0.8, c = [0.85, 0.70, 0.32]",
+          "paramList": [
+            {
+              "name": "label"
+            },
+            {
+              "name": "n",
+              "default": "2"
+            },
+            {
+              "name": "size",
+              "default": "0.8"
+            },
+            {
+              "name": "c",
+              "default": "[0.85, 0.70, 0.32]"
+            }
+          ],
+          "line": 84,
+          "ok": false
+        },
+        {
+          "name": "oc_prop_cart",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 256,
+          "footprint": [
+            1.8,
+            3.65
+          ],
+          "height": 1.1,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            -0.42
+          ],
+          "triangles": 204,
+          "colors": 6,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_prop_crates",
+          "category": "prop",
+          "params": "seed = 0",
+          "paramList": [
+            {
+              "name": "seed",
+              "default": "0"
+            }
+          ],
+          "line": 246,
+          "footprint": [
+            1.95,
+            1.53
+          ],
+          "height": 0.8,
+          "zMin": -0.0,
+          "center": [
+            0.3,
+            0.36
+          ],
+          "triangles": 144,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_prop_flag",
+          "category": "prop",
+          "params": "c = [0.78, 0.22, 0.17], h = 4.5",
+          "paramList": [
+            {
+              "name": "c",
+              "default": "[0.78, 0.22, 0.17]"
+            },
+            {
+              "name": "h",
+              "default": "4.5"
+            }
+          ],
+          "line": 198,
+          "footprint": [
+            0.18,
+            1.14
+          ],
+          "height": 4.59,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.48
+          ],
+          "triangles": 192,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_prop_hay",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 271,
+          "footprint": [
+            2.3,
+            2.3
+          ],
+          "height": 1.9,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_prop_incense",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 305,
+          "footprint": [
+            1.55,
+            1.55
+          ],
+          "height": 1.72,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 224,
+          "colors": 4,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_prop_jar",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 238,
+          "footprint": [
+            0.84,
+            0.84
+          ],
+          "height": 0.88,
+          "zMin": -0.02,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 216,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_prop_lantern",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 207,
+          "footprint": [
+            0.52,
+            0.52
+          ],
+          "height": 0.05,
+          "zMin": -0.98,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 312,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_prop_marker",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 328,
+          "footprint": [
+            1.7,
+            1.7
+          ],
+          "height": 0.09,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_prop_paifang",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 314,
+          "footprint": [
+            8.6,
+            1.9
+          ],
+          "height": 7.05,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 88,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_prop_rack",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 278,
+          "footprint": [
+            2.5,
+            1.0
+          ],
+          "height": 2.72,
+          "zMin": -0.01,
+          "center": [
+            0.0,
+            0.33
+          ],
+          "triangles": 1128,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_prop_spawn_stone",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 335,
+          "footprint": [
+            2.1,
+            0.2
+          ],
+          "height": 0.12,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 36,
+          "colors": 3,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_prop_stone_lamp",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 217,
+          "footprint": [
+            0.6,
+            0.6
+          ],
+          "height": 2.16,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 60,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_prop_target",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 296,
+          "footprint": [
+            1.24,
+            0.73
+          ],
+          "height": 1.83,
+          "zMin": -0.03,
+          "center": [
+            0.0,
+            0.22
+          ],
+          "triangles": 168,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_prop_well",
+          "category": "prop",
+          "params": "",
+          "paramList": [],
+          "line": 227,
+          "footprint": [
+            3.0,
+            1.9
+          ],
+          "height": 3.35,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 188,
+          "colors": 7,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_wall_bastion",
+          "category": "wall",
+          "params": "flag = 0",
+          "paramList": [
+            {
+              "name": "flag",
+              "default": "0"
+            }
+          ],
+          "line": 439,
+          "footprint": [
+            12.8,
+            10.4
+          ],
+          "height": 13.81,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            3.0
+          ],
+          "triangles": 432,
+          "colors": 24,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_wall_palace_pier",
+          "category": "wall",
+          "params": "",
+          "paramList": [],
+          "line": 483,
+          "footprint": [
+            2.3,
+            2.3
+          ],
+          "height": 5.1,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 20,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_wall_palace_run",
+          "category": "wall",
+          "params": "len",
+          "paramList": [
+            {
+              "name": "len"
+            }
+          ],
+          "line": 476,
+          "footprint": [
+            1.0,
+            1.8
+          ],
+          "height": 4.75,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 20,
+          "colors": 2,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_wall_ramp",
+          "category": "wall",
+          "params": "len = 24, w = 3.0",
+          "paramList": [
+            {
+              "name": "len",
+              "default": "24"
+            },
+            {
+              "name": "w",
+              "default": "3.0"
+            }
+          ],
+          "line": 459,
+          "footprint": [
+            28.38,
+            3.0
+          ],
+          "height": 10.17,
+          "zMin": -0.63,
+          "center": [
+            13.81,
+            0.0
+          ],
+          "triangles": 96,
+          "colors": 8,
+          "warnings": 0,
+          "ok": true
+        },
+        {
+          "name": "oc_wall_run",
+          "category": "wall",
+          "params": "len, g0 = 0, g1 = 0",
+          "paramList": [
+            {
+              "name": "len"
+            },
+            {
+              "name": "g0",
+              "default": "0"
+            },
+            {
+              "name": "g1",
+              "default": "0"
+            }
+          ],
+          "line": 344,
+          "footprint": [
+            1.0,
+            8.4
+          ],
+          "height": 10.12,
+          "zMin": 0.0,
+          "center": [
+            0.0,
+            0.0
+          ],
+          "triangles": 60,
+          "colors": 5,
+          "warnings": 0,
+          "ok": true
+        }
+      ]
+    }
+  ]
+}

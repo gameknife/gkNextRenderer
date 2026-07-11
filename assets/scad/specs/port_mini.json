@@ -1,0 +1,31 @@
+{
+  "name": "port_mini",
+  "seed": 3,
+  "kits": ["city_blocks", "city_hd"],
+  "ground": { "size": [220, 170], "color": [0.45, 0.62, 0.38], "z": 0, "thickness": 0.4 },
+  "blockTypes": {
+    "res":   [ { "module": "v2_block_houses", "args": "seed = $seed" } ],
+    "apt":   [ { "module": "v2_block_apartments", "args": "seed = $seed" } ],
+    "shop":  [ { "module": "v2_block_shops", "args": "seed = $seed" },
+               { "module": "v2_block_market", "args": "seed = $seed" } ],
+    "park":  [ { "module": "v2_block_park", "args": "seed = $seed" } ],
+    "civic": [ { "module": "v2_block_civic", "args": "seed = $seed" } ]
+  },
+  "blockGrids": [
+    { "cell": [56, 50], "seed": 5,
+      "layout": [
+        ["res",  "shop",  "apt"],
+        ["park", "civic", "res"]
+      ] }
+  ],
+  "alongs": [
+    { "pts": [[-100, 60], [100, 60]], "step": 20, "seed": 4, "children": ["hc_prop_lamp"] },
+    { "pts": [[-100, -60], [100, -60]], "step": 20, "seed": 6, "children": ["hc_prop_lamp"] }
+  ],
+  "scatters": [
+    { "region": [-104, 104, -80, -66], "n": 12, "seed": 21,
+      "children": ["hc_nature_tree", "hc_nature_pine"] },
+    { "region": [-104, 104, 66, 80], "n": 12, "seed": 22,
+      "children": ["hc_nature_tree", "hc_nature_pine"] }
+  ]
+}
