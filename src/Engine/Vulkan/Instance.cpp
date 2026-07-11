@@ -32,7 +32,8 @@ namespace
 
 }
 
-Instance::Instance(const class Window& window, const std::vector<const char*>& validationLayers, uint32_t vulkanVersion) :
+Instance::Instance(const class Window& window, const std::vector<const char*>& validationLayers, uint32_t vulkanVersion,
+                   const bool enableSynchronizationValidation) :
 	window_(window),
 	validationLayers_(validationLayers)
 {
@@ -96,6 +97,17 @@ Instance::Instance(const class Window& window, const std::vector<const char*>& v
 	createInfo.ppEnabledExtensionNames = extensions.data();
 	createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
 	createInfo.ppEnabledLayerNames = validationLayers.data();
+
+    VkValidationFeatureEnableEXT validationFeature = VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT;
+    VkValidationFeaturesEXT validationFeatures{};
+    if (enableSynchronizationValidation)
+    {
+        validationFeatures.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+        validationFeatures.enabledValidationFeatureCount = 1;
+        validationFeatures.pEnabledValidationFeatures = &validationFeature;
+        createInfo.pNext = &validationFeatures;
+        SPDLOG_INFO("Vulkan synchronization validation enabled");
+    }
     
 	Check(Interposer().CreateInstance(&createInfo, nullptr, &instance_),
 		"create instance");
@@ -214,6 +226,7 @@ void Instance::CheckVulkanValidationLayerSupport(const std::vector<const char*>&
 
 		if (result == availableLayers.end())
 		{
+			SPDLOG_CRITICAL("Requested Vulkan validation layer '{}' is not installed; validation cannot start", layer);
 			Throw(std::runtime_error("could not find the requested validation layer: '" + std::string(layer) + "'"));
 		}
 	}

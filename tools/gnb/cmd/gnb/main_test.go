@@ -132,11 +132,12 @@ func TestShotRunArgsKeepsDefaultCaptureClean(t *testing.T) {
 }
 
 func TestValidateRunArgsIncludesScriptAndViewport(t *testing.T) {
-	got := validateRunArgs(`P:\repo\assets\agentscripts\smoke.agentscript.json`, "agent_reports/custom.json", 1280, 720, true, []string{"--locale=zhCN"})
+	got := validateRunArgs(`P:\repo\assets\agentscripts\smoke.agentscript.json`, "agent_reports/custom.json", 1280, 720, true, true, []string{"--locale=zhCN"})
 	want := []string{
 		`--agent-script=P:\repo\assets\agentscripts\smoke.agentscript.json`,
 		"--agent-report=agent_reports/custom.json",
 		"--agent-visible-window",
+		"--sync-validation",
 		"--width=1280",
 		"--height=720",
 		"--locale=zhCN",

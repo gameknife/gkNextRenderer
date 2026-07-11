@@ -12,7 +12,8 @@ namespace Vulkan
 
 		VULKAN_NON_COPIABLE(Instance)
 
-		Instance(const Window& window, const std::vector<const char*>& validationLayers, uint32_t vulkanVersion);
+		Instance(const Window& window, const std::vector<const char*>& validationLayers, uint32_t vulkanVersion,
+		         bool enableSynchronizationValidation = false);
 		~Instance();
 
 		const class Window& Window() const { return window_; }

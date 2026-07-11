@@ -336,11 +336,19 @@ namespace Assets
 
                             for (uint32_t section = 0; section < model->SectionCount(); ++section)
                             {
-                                expandedTriangleCapacity += offsets_[modelId * 10 + section].indexCount / 3u;
+                                uint32_t encodedModelSection = 0;
+                                if (!TryEncodeModelSection(modelId, section, encodedModelSection) ||
+                                    encodedModelSection >= offsets_.size())
+                                {
+                                    SPDLOG_ERROR("Skipping model {} section {}: invalid encoded offset (offset count {})",
+                                                 modelId, section, offsets_.size());
+                                    continue;
+                                }
+                                expandedTriangleCapacity += offsets_[encodedModelSection].indexCount / 3u;
 
                                 NodeProxy proxy = node->GetNodeProxy();
                                 proxy.combinedPrevTS = combined;
-                                proxy.modelId = modelId * 10 + section;
+                                proxy.modelId = encodedModelSection;
                                 proxy.nort = section == 0 ? 0 : 1;
                                 proxy.reserved1 = selectedBit;
                                 proxy.reserved2 = stateBits;

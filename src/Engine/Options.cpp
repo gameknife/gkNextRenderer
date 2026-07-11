@@ -36,6 +36,7 @@ Options::Options(const int argc, const char* argv[])
 		
 		("hwquery", "Forcing hardware raytracing not supported.", cxxopts::value<bool>(HardwareQuery)->default_value("true"))
 		("validation", "Force enable validation layers.", cxxopts::value<bool>(Validation)->default_value("false"))
+		("sync-validation", "Enable Vulkan synchronization validation. Implies --validation.", cxxopts::value<bool>(SyncValidation)->default_value("false")->implicit_value("true"))
 		("fastexit", "Enable fast exit by skipping task wait.", cxxopts::value<bool>(FastExit)->default_value("true"))
 		("agent-validation", "Enable agent validation: render to a stable frame, capture one screenshot to a fixed path, then auto-exit. Window does not steal focus.", cxxopts::value<bool>(AgentValidation)->default_value("false")->implicit_value("true"))
 		("agent-validation-ui", "Include ImGui UI in the agent validation screenshot.", cxxopts::value<bool>(AgentValidationUI)->default_value("false")->implicit_value("true"))
@@ -79,6 +80,10 @@ Options::Options(const int argc, const char* argv[])
 	try
 	{
 		auto result = options.parse(argc, argv);
+		if (SyncValidation)
+		{
+			Validation = true;
+		}
 		if (!AgentScript.empty())
 		{
 			AgentValidation = true;

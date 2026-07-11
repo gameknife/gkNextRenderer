@@ -582,6 +582,7 @@ func newValidateCommand(ctx appContext) *cobra.Command {
 	var width int
 	var height int
 	var visible bool
+	var syncValidation bool
 	cmd := &cobra.Command{
 		Use:   "validate --script <path> [--target <name>] [--scene <path>]",
 		Short: "Run an agent input validation script and write a JSON report",
@@ -613,7 +614,7 @@ func newValidateCommand(ctx appContext) *cobra.Command {
 				height = hints.Viewport.Height
 			}
 
-			runArgs := validateRunArgs(scriptPath, report, width, height, visible, args)
+			runArgs := validateRunArgs(scriptPath, report, width, height, visible, syncValidation, args)
 			opts := runner.Options{Target: target, Preset: ctx.preset, Args: runArgs}
 			if scene != "" {
 				opts.Scenes = append(opts.Scenes, scene)
@@ -642,16 +643,20 @@ func newValidateCommand(ctx appContext) *cobra.Command {
 	cmd.Flags().IntVar(&width, "width", 0, "window width (overrides script viewport.width)")
 	cmd.Flags().IntVar(&height, "height", 0, "window height (overrides script viewport.height)")
 	cmd.Flags().BoolVar(&visible, "visible", false, "show the desktop window while replaying the agent script")
+	cmd.Flags().BoolVar(&syncValidation, "sync-validation", false, "enable Vulkan core and synchronization validation")
 	return cmd
 }
 
-func validateRunArgs(scriptPath string, report string, width int, height int, visible bool, trailingArgs []string) []string {
+func validateRunArgs(scriptPath string, report string, width int, height int, visible bool, syncValidation bool, trailingArgs []string) []string {
 	runArgs := []string{"--agent-script=" + scriptPath}
 	if report != "" {
 		runArgs = append(runArgs, "--agent-report="+report)
 	}
 	if visible {
 		runArgs = append(runArgs, "--agent-visible-window")
+	}
+	if syncValidation {
+		runArgs = append(runArgs, "--sync-validation")
 	}
 	if width > 0 {
 		runArgs = append(runArgs, fmt.Sprintf("--width=%d", width))

@@ -19,6 +19,24 @@ namespace Vulkan {
 
 namespace
 {
+    VkCompositeAlphaFlagBitsKHR ChooseCompositeAlpha(VkCompositeAlphaFlagsKHR supported)
+    {
+        constexpr std::array<VkCompositeAlphaFlagBitsKHR, 4> preference = {
+            VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+            VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
+            VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
+            VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
+        };
+        for (const auto candidate : preference)
+        {
+            if ((supported & candidate) != 0)
+            {
+                return candidate;
+            }
+        }
+        throw std::runtime_error("surface reports no supported composite alpha mode");
+    }
+
     const char* FormatName(VkFormat format)
     {
         switch (format)
@@ -111,9 +129,20 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
 	createInfo.imageColorSpace = surfaceFormat.colorSpace;
 	createInfo.imageExtent = extent;
 	createInfo.imageArrayLayers = 1;
-	createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+	constexpr VkImageUsageFlags requiredUsage =
+		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	if ((details.Capabilities.supportedUsageFlags & requiredUsage) != requiredUsage)
+	{
+		throw std::runtime_error(fmt::format(
+			"surface usage 0x{:x} lacks required COLOR_ATTACHMENT/TRANSFER_DST flags 0x{:x}",
+			details.Capabilities.supportedUsageFlags, requiredUsage));
+	}
+	const VkImageUsageFlags optionalUsage =
+		details.Capabilities.supportedUsageFlags &
+		(VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT);
+	createInfo.imageUsage = requiredUsage | optionalUsage;
 	createInfo.preTransform = details.Capabilities.currentTransform;
-	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	createInfo.compositeAlpha = ChooseCompositeAlpha(details.Capabilities.supportedCompositeAlpha);
 	createInfo.presentMode = actualPresentMode;
 	createInfo.clipped = VK_TRUE;
 	createInfo.oldSwapchain = nullptr;
@@ -140,14 +169,24 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
 	presentMode_ = actualPresentMode;
 	format_ = surfaceFormat.format;
 	colorSpace_ = surfaceFormat.colorSpace;
+	imageUsage_ = createInfo.imageUsage;
 	extent_ = extent;
 	renderExtent_ = extent_;
 	renderOffset_ = {0,0};
 
-    SPDLOG_INFO("Swap Chain format: {} ({}) colorSpace: {} ({}) outputMode: {}",
+    SPDLOG_INFO("Swap Chain format: {} ({}) colorSpace: {} ({}) outputMode: {} usage: 0x{:x} compositeAlpha: 0x{:x}",
                 FormatName(format_), static_cast<int>(format_),
                 ColorSpaceName(colorSpace_), static_cast<int>(colorSpace_),
-                static_cast<int>(outputMode_));
+                static_cast<int>(outputMode_), imageUsage_,
+                static_cast<uint32_t>(createInfo.compositeAlpha));
+	if (!SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT))
+	{
+		SPDLOG_WARN("Swapchain STORAGE usage is unavailable; using intermediate render target + blit fallback");
+	}
+	if (!SupportsUsage(VK_IMAGE_USAGE_TRANSFER_SRC_BIT))
+	{
+		SPDLOG_WARN("Swapchain TRANSFER_SRC usage is unavailable; swapchain readback features are disabled");
+	}
 	
 	images_ = GetEnumerateVector(device_.Handle(), swapChain_,
 		+[](VkDevice device, VkSwapchainKHR swapchain, uint32_t* count, VkImage* images)
@@ -354,13 +393,27 @@ uint32_t SwapChain::ChooseImageCount(const VkSurfaceCapabilitiesKHR& capabilitie
 
 void SwapChain::InsertBarrierToWrite(VkCommandBuffer commandBuffer, uint32_t imageIndex) const
 {
-	ImageMemoryBarrier::FullInsert(commandBuffer, Images()[imageIndex], 0,
-	VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,VK_IMAGE_LAYOUT_GENERAL);
+	VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+	ImageMemoryBarrier::Insert(commandBuffer,
+		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+		VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		Images()[imageIndex], range, 0,
+		VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT |
+			VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 }
 void SwapChain::InsertBarrierToPresent(VkCommandBuffer commandBuffer, uint32_t imageIndex) const
 {
-	ImageMemoryBarrier::FullInsert(commandBuffer, Images()[imageIndex],
-	VK_ACCESS_SHADER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+	ImageMemoryBarrier::Insert(commandBuffer,
+		VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+		Images()[imageIndex], range,
+		VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT |
+			VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+		0, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 }
 	
 }

@@ -193,6 +193,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
 {
     int2 ipos = int2(DTid.xy);
     uint2 isize = Bindless.GetStorageTextureDimensions<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_SINGLE_DIFFUSE));
+    if (any(DTid.xy >= isize))
+    {
+        return;
+    }
     int2 imageSize = int2(isize);
     int2 imageMax = imageSize - int2(1, 1);
 

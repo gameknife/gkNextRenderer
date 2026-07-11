@@ -184,8 +184,7 @@ namespace
             extent,
             swapChain.Format(),
             layout,
-            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT};
+            swapChain.ImageUsage()};
     }
 
     std::string JoinShaderNames(const std::set<std::string>& names)
@@ -492,7 +491,14 @@ namespace Vulkan
         {
             return *activeSceneOverride_;
         }
-        return *scene_.lock();
+        auto scene = scene_.lock();
+        if (!scene)
+        {
+            SPDLOG_CRITICAL("VulkanBaseRenderer attempted to access an expired scene (frame {}, renderer {})",
+                            frame_.frameCount, GetRendererName(logicRenderers_.current));
+            Throw(std::runtime_error("renderer scene lifetime expired"));
+        }
+        return *scene;
     }
 
     void VulkanBaseRenderer::SetScene(std::shared_ptr<Assets::Scene> scene)
@@ -552,11 +558,18 @@ namespace Vulkan
         if (caps_.supportRayTracing)
         {
             requiredExtensions.insert(requiredExtensions.end(),
-                {
-                    VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-                    VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-                    VK_KHR_RAY_QUERY_EXTENSION_NAME,
-                });
+                                  {
+                                      VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+                                      VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+                                      VK_KHR_RAY_QUERY_EXTENSION_NAME,
+                                  });
+            // Slang currently emits an unused SPV_KHR_ray_tracing declaration for
+            // RayQuery shaders. Enabling the extension satisfies module validation;
+            // rayTracingPipeline remains disabled and the renderer uses RayQuery only.
+            if (HasDeviceExtension(physicalDevice, VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME))
+            {
+                requiredExtensions.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
+            }
             accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
             accelerationStructureFeatures.pNext = nextDeviceFeatures;
             accelerationStructureFeatures.accelerationStructure = true;
@@ -613,9 +626,13 @@ namespace Vulkan
         supportedStorage16BitFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES;
         supportedStorage16BitFeatures.pNext = &supportedShaderDrawParametersFeatures;
 
+        VkPhysicalDeviceScalarBlockLayoutFeatures supportedScalarBlockLayoutFeatures = {};
+        supportedScalarBlockLayoutFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES;
+        supportedScalarBlockLayoutFeatures.pNext = &supportedStorage16BitFeatures;
+
         VkPhysicalDeviceFeatures2 supportedFeatures2 = {};
         supportedFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-        supportedFeatures2.pNext = &supportedStorage16BitFeatures;
+        supportedFeatures2.pNext = &supportedScalarBlockLayoutFeatures;
         vkGetPhysicalDeviceFeatures2(physicalDevice, &supportedFeatures2);
 
         VkPhysicalDeviceProperties deviceProperties = {};
@@ -705,8 +722,13 @@ namespace Vulkan
         storage16BitFeatures.storageBuffer16BitAccess = supportedStorage16BitFeatures.storageBuffer16BitAccess;
         storage16BitFeatures.storagePushConstant16 = supportedStorage16BitFeatures.storagePushConstant16;
 
+        VkPhysicalDeviceScalarBlockLayoutFeatures scalarBlockLayoutFeatures = {};
+        scalarBlockLayoutFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES;
+        scalarBlockLayoutFeatures.pNext = &storage16BitFeatures;
+        scalarBlockLayoutFeatures.scalarBlockLayout = supportedScalarBlockLayoutFeatures.scalarBlockLayout;
+
         ctx_.device.reset(new class Device(physicalDevice, *ctx_.surface, requiredExtensions, deviceFeatures,
-                                       &storage16BitFeatures));
+                                       &scalarBlockLayoutFeatures));
         ctx_.commandPool.reset(new class CommandPool(*ctx_.device, ctx_.device->GraphicsFamilyIndex(), 0, true));
         ctx_.commandPool2.reset(new class CommandPool(*ctx_.device, ctx_.device->TransferFamilyIndex(), 1, true));
         ctx_.frameProfiler = std::make_unique<Runtime::FrameProfiler>(
@@ -856,7 +878,17 @@ namespace Vulkan
         }
         for (uint32_t i = 0; i != frame_.swapChain->Images().size(); i++)
         {
-            ctx_.globalTexturePool->BindStorageTexture( Assets::Bindless::RT_SWAPCHAIN0 + i, *frame_.swapChain->ImageViews()[i] );
+            if (frame_.swapChain->SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT))
+            {
+                ctx_.globalTexturePool->BindStorageTexture(
+                    Assets::Bindless::RT_SWAPCHAIN0 + i, *frame_.swapChain->ImageViews()[i]);
+            }
+            else
+            {
+                ctx_.globalTexturePool->BindStorageTexture(
+                    Assets::Bindless::RT_SWAPCHAIN0 + i,
+                    GetViewStorageImage(Assets::Bindless::RT_DENOISED)->GetImageView());
+            }
         }
 
         frameGeneration_.hudlessImages.clear();
@@ -962,6 +994,10 @@ namespace Vulkan
                 ? VK_PRESENT_MODE_IMMEDIATE_KHR
                 : presentMode_;
         frame_.swapChain.reset(new class SwapChain(*ctx_.device, requestedPresentMode, forceSDR_));
+        frame_.currentFrame = 0;
+        frame_.currentImageIndex = 0;
+        frame_.currentFence = nullptr;
+        frame_.currentFenceSerial = 0;
         VkExtent2D renderExtent = frame_.swapChain->Extent();
         if (!GOption->ReferenceMode)
         {
@@ -1009,8 +1045,6 @@ namespace Vulkan
         // commandbuffer
         frame_.commandBuffers.reset(new CommandBuffers(*ctx_.commandPool, static_cast<uint32_t>(frame_.swapChain->ImageViews().size())));
 
-        frame_.currentFence = nullptr;
-        frame_.currentFenceSerial = 0;
         frame_.recordingSubmitSerial = 0;
         frame_.queuedSignalSemaphores.clear();
         frame_.queuedSignalValues.clear();
@@ -1152,10 +1186,6 @@ namespace Vulkan
 
     void VulkanBaseRenderer::RecreateSwapChain()
     {
-        if (upscaler_)
-        {
-            upscaler_->OnSwapChainDestroyed();
-        }
         ctx_.device->WaitIdle();
         DeleteSwapChain();
         CreateSwapChain();
@@ -1269,33 +1299,11 @@ namespace Vulkan
 
     void VulkanBaseRenderer::CaptureScreenShot()
     {
-        SingleTimeCommands::Submit(CommandPool(), [&](VkCommandBuffer commandBuffer)
+        if (!screenshot_.captureReady)
         {
-            SCOPED_GPU_TIMER("screenshot");
-            const auto& image = frame_.swapChain->Images()[frame_.currentImageIndex];
-
-            ImageMemoryBarrier::FullInsert(commandBuffer, image, 0, VK_ACCESS_TRANSFER_READ_BIT,
-                                           VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-            ImageMemoryBarrier::FullInsert(commandBuffer, screenshot_.image->Handle(), 0, VK_ACCESS_TRANSFER_WRITE_BIT,
-                                           VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-            // Copy output image into swap-chain image.
-            VkImageCopy copyRegion;
-            copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-            copyRegion.srcOffset = {0, 0, 0};
-            copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-            copyRegion.dstOffset = {0, 0, 0};
-            copyRegion.extent = {SwapChain().Extent().width, SwapChain().Extent().height, 1};
-
-            vkCmdCopyImage(commandBuffer,
-                           image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                           screenshot_.image->Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                           1, &copyRegion);
-
-            ImageMemoryBarrier::FullInsert(commandBuffer, SwapChain().Images()[frame_.currentImageIndex],
-                                           VK_ACCESS_TRANSFER_READ_BIT, 0, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                                           VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-        });
+            Throw(std::runtime_error("screenshot capture was not recorded before present"));
+        }
+        screenshot_.captureReady = false;
     }
 
     // Camera-independent, runs once per scene per frame (shared across all views).
@@ -1462,8 +1470,12 @@ namespace Vulkan
         }
 
         // next frame synchronization objects
+        if (frame_.currentFrame >= frame_.imageAvailableSemaphores.size() ||
+            frame_.currentFrame >= frame_.inFlightFences.size())
+        {
+            Throw(std::runtime_error("frame slot is outside swapchain synchronization storage"));
+        }
         const auto imageAvailableSemaphore = frame_.imageAvailableSemaphores[frame_.currentFrame].Handle();
-        const auto renderFinishedSemaphore = frame_.renderFinishedSemaphores[frame_.currentFrame].Handle();
 
         auto result = VkResult(VK_SUCCESS);
         {
@@ -1482,6 +1494,16 @@ namespace Vulkan
         {
             Throw(std::runtime_error(std::string("failed to acquire next image (") + ToString(result) + ")"));
         }
+
+        if (frame_.currentImageIndex >= frame_.renderFinishedSemaphores.size() ||
+            frame_.currentImageIndex >= frame_.swapChain->Images().size())
+        {
+            Throw(std::runtime_error("acquired image index is outside swapchain image storage"));
+        }
+        // imageAvailable is owned by the CPU frame slot; renderFinished is owned by the
+        // acquired presentable image so it cannot be reused while that image is pending.
+        const auto renderFinishedSemaphore =
+            frame_.renderFinishedSemaphores[frame_.currentImageIndex].Handle();
 
         // Wait before CPU-side uniform/stat writes and command-buffer reuse.
         auto* const previousSubmitFence = frame_.currentFence;
@@ -1581,6 +1603,42 @@ namespace Vulkan
                 SCOPED_GPU_TIMER("ui");
                 delegates_.postRender(commandBuffer, frame_.currentImageIndex);
             }
+
+            if (screenshot_.captureRequested)
+            {
+                SCOPED_GPU_TIMER("screenshot");
+                const VkImage swapchainImage = frame_.swapChain->Images()[frame_.currentImageIndex];
+                VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+                ImageMemoryBarrier::Insert(
+                    commandBuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT, swapchainImage, range,
+                    VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                    VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+                ImageMemoryBarrier::Insert(
+                    commandBuffer,
+                    screenshot_.initialized ? VK_PIPELINE_STAGE_TRANSFER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT, screenshot_.image->Handle(), range,
+                    screenshot_.initialized ? VK_ACCESS_TRANSFER_WRITE_BIT : 0,
+                    VK_ACCESS_TRANSFER_WRITE_BIT,
+                    screenshot_.initialized ? VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+                VkImageCopy copyRegion{};
+                copyRegion.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                copyRegion.extent = {SwapChain().Extent().width, SwapChain().Extent().height, 1};
+                vkCmdCopyImage(commandBuffer, swapchainImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                               screenshot_.image->Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                               1, &copyRegion);
+                ImageMemoryBarrier::Insert(
+                    commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                    swapchainImage, range, VK_ACCESS_TRANSFER_READ_BIT, 0,
+                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+                screenshot_.captureRequested = false;
+                screenshot_.captureReady = true;
+                screenshot_.initialized = true;
+            }
         }
         frame_.commandBuffers->End(frame_.currentFrame);
 
@@ -1589,7 +1647,10 @@ namespace Vulkan
 
         VkCommandBuffer commandBuffers[]{commandBuffer};
         VkSemaphore waitSemaphores[] = {imageAvailableSemaphore};
-        VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        // The swapchain can first be touched by transfer, compute, or color output depending
+        // on the active output path. Until VRP-04 derives the precise earliest use from the
+        // pass schedule, wait conservatively so acquisition always precedes that first use.
+        VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};
         {
             SCOPED_CPU_TIMER("submit");
             frame_.currentFence = &(frame_.inFlightFences[frame_.currentFrame]);
@@ -1891,7 +1952,7 @@ namespace Vulkan
         SwapChain().InsertBarrierToWrite(commandBuffer, imageIndex);
         GetViewStorageImage(Assets::Bindless::RT_DENOISED)->InsertBarrier(
             commandBuffer, VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            VK_ACCESS_SHADER_READ_BIT,
+            VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT,
             VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 
         bool resolvedByUpscaler = false;
@@ -1906,7 +1967,17 @@ namespace Vulkan
             return;
         }
 
-        const bool fsrEnabled = NextEngine::GetInstance()->GetUserSettings().FSR;
+        const bool fsrRequested = NextEngine::GetInstance()->GetUserSettings().FSR;
+        const bool fsrEnabled = fsrRequested && SwapChain().SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT);
+        if (fsrRequested && !fsrEnabled)
+        {
+            static bool warnedMissingStorage = false;
+            if (!warnedMissingStorage)
+            {
+                SPDLOG_WARN("FSR compose requires swapchain STORAGE usage; falling back to blit");
+                warnedMissingStorage = true;
+            }
+        }
         if (fsrEnabled)
         {
             SCOPED_GPU_TIMER("FSR resolve");
@@ -1983,6 +2054,17 @@ namespace Vulkan
             DispatchScheduledRenderViews(commandBuffer, imageIndex);
             if (renderedAnyReferenceView)
             {
+                SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
+            }
+            else
+            {
+                static bool warnedMissingReferenceProvider = false;
+                if (!warnedMissingReferenceProvider)
+                {
+                    SPDLOG_WARN("Reference mode has no available view provider; presenting a cleared frame");
+                    warnedMissingReferenceProvider = true;
+                }
+                DispatchClearPass(commandBuffer, imageIndex, /*clearSwapchain*/ true);
                 SwapChain().InsertBarrierToPresent(commandBuffer, imageIndex);
             }
         }
@@ -2243,7 +2325,7 @@ namespace Vulkan
         for (size_t i = 0; i < nodeTrans.size(); i++)
         {
             auto& node = nodeTrans[i];
-            const size_t blasIndex = node.modelId / 10;
+            const size_t blasIndex = Assets::Scene::DecodeModelIndex(node.modelId);
             if (blasIndex >= rt_->blas.size())
             {
                 SPDLOG_WARN("Skipping TLAS instance with stale model index {} (BLAS count {})", blasIndex,
@@ -2256,7 +2338,16 @@ namespace Vulkan
                 rt_->blas[blasIndex], glm::transpose(node.worldTS), node.instanceId, includeInGpuAs));
         }
 
-        int instanceCount = static_cast<int>(instances.size());
+        constexpr size_t maxTlasInstanceCount = 65535;
+        if (instances.size() > maxTlasInstanceCount)
+        {
+            const size_t droppedCount = instances.size() - maxTlasInstanceCount;
+            SPDLOG_ERROR("TLAS instance capacity exceeded: requested {}, capacity {}, dropping {} instances",
+                         instances.size(), maxTlasInstanceCount, droppedCount);
+            instances.resize(maxTlasInstanceCount);
+        }
+
+        const int instanceCount = static_cast<int>(instances.size());
         if (instanceCount > 0)
         {
             auto* data = reinterpret_cast<VkAccelerationStructureInstanceKHR*>(

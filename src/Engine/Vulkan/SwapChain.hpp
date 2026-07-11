@@ -40,6 +40,8 @@ namespace Vulkan
 		ESwapChainOutputMode OutputMode() const { return outputMode_; }
 		uint32_t HDROutputMode() const { return static_cast<uint32_t>(outputMode_); }
 		bool IsHDR() const { return outputMode_ != ESwapChainOutputMode::SDR; }
+		VkImageUsageFlags ImageUsage() const { return imageUsage_; }
+		bool SupportsUsage(VkImageUsageFlagBits usage) const { return (imageUsage_ & usage) != 0; }
 
 		void UpdateRenderViewport( int32_t x, int32_t y, uint32_t width, uint32_t height) const;
 		void UpdateOutputViewport( int32_t x, int32_t y, uint32_t width, uint32_t height) const;
@@ -71,6 +73,7 @@ namespace Vulkan
 		VkPresentModeKHR presentMode_;
 		VkFormat format_;
 		VkColorSpaceKHR colorSpace_;
+		VkImageUsageFlags imageUsage_{};
 		VkExtent2D extent_{};
 		mutable VkExtent2D renderExtent_{};
 		mutable VkOffset2D renderOffset_{};

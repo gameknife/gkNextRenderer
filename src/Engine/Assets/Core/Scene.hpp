@@ -25,8 +25,24 @@ namespace Assets
         static constexpr uint32_t kSunShadowCascadeCount = 4;
         static constexpr uint32_t kSunShadowResolution = 1024;
         static constexpr uint32_t kMaxIndirectDrawCount = 65535;
+        static constexpr uint32_t kModelSectionStride = 10;
         static constexpr uint32_t kSoftMeshShaderDrawSlotCount = 1 + kSunShadowCascadeCount;
         static constexpr uint32_t kSunShadowCascadeMask = (1u << kSunShadowCascadeCount) - 1u;
+        static constexpr uint32_t DecodeModelIndex(uint32_t encodedModelSection)
+        {
+            return encodedModelSection / kModelSectionStride;
+        }
+        static constexpr bool TryEncodeModelSection(
+            uint32_t modelIndex, uint32_t sectionIndex, uint32_t& encodedModelSection)
+        {
+            if (sectionIndex >= kModelSectionStride ||
+                modelIndex > (std::numeric_limits<uint32_t>::max() - sectionIndex) / kModelSectionStride)
+            {
+                return false;
+            }
+            encodedModelSection = modelIndex * kModelSectionStride + sectionIndex;
+            return true;
+        }
         static constexpr std::array<int32_t, 16> kSunShadowHighCascadeSchedule = {
             1, -1, 2, -1, 1, -1, 3, -1,
             1, -1, 2, -1, 1, -1, -1, -1,

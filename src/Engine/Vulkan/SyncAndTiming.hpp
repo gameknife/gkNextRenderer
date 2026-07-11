@@ -102,6 +102,17 @@ namespace Vulkan
     public:
         static void Insert(
             VkCommandBuffer commandBuffer,
+            VkPipelineStageFlags srcStageMask,
+            VkPipelineStageFlags dstStageMask,
+            VkImage image,
+            VkImageSubresourceRange subresourceRange,
+            VkAccessFlags srcAccessMask,
+            VkAccessFlags dstAccessMask,
+            VkImageLayout oldLayout,
+            VkImageLayout newLayout);
+
+        static void Insert(
+            VkCommandBuffer commandBuffer,
             VkImage image,
             VkImageSubresourceRange subresourceRange,
             VkAccessFlags srcAccessMask,

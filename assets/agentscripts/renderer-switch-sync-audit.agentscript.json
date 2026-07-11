@@ -1,0 +1,24 @@
+{
+  "name": "renderer-switch-sync-audit",
+  "target": "gkNextRenderer",
+  "scene": "assets/models/playground.glb",
+  "defaults": { "waitFrames": 2, "stepTimeoutMs": 15000 },
+  "viewport": { "width": 1279, "height": 719 },
+  "steps": [
+    { "type": "wait-until", "query": "engine.status", "op": "eq", "value": "Running", "timeoutMs": 15000 },
+    { "type": "exec", "line": "r.rendererType 0" },
+    { "type": "wait-frames", "n": 8 },
+    { "type": "exec", "line": "r.rendererType 1" },
+    { "type": "wait-frames", "n": 8 },
+    { "type": "exec", "line": "r.rendererType 2" },
+    { "type": "wait-frames", "n": 8 },
+    { "type": "exec", "line": "r.rendererType 3" },
+    { "type": "wait-frames", "n": 8 },
+    { "type": "exec", "line": "r.rendererType 4" },
+    { "type": "wait-frames", "n": 8 },
+    { "type": "exec", "line": "r.rendererType 0" },
+    { "type": "wait-frames", "n": 8 },
+    { "type": "assert", "query": "engine.totalFrames", "op": "ge", "value": 48 },
+    { "type": "quit" }
+  ]
+}

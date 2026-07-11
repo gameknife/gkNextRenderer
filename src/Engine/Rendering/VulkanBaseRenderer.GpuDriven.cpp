@@ -58,7 +58,10 @@ namespace Vulkan
             size_t requiredJointSize = totalJoints * sizeof(glm::mat4);
             if (!skin_.jointBuffer || skin_.jointBufferSize < requiredJointSize)
             {
-                Vulkan::BufferUtil::CreateDeviceBufferLocal(*ctx_.commandPool, "JointMatrices", flags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, requiredJointSize, skin_.jointBuffer, skin_.jointMemory);
+                Vulkan::BufferUtil::CreateDeviceBufferLocal(
+                    *ctx_.commandPool, "JointMatrices", flags,
+                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                    requiredJointSize, skin_.jointBuffer, skin_.jointMemory);
                 skin_.jointBufferSize = (uint32_t)requiredJointSize;
             }
 
@@ -115,7 +118,13 @@ namespace Vulkan
             }
 
             uint32_t proxyIdx = std::numeric_limits<uint32_t>::max();
-            const uint32_t skinnedProxyModelId = modelId * 10;
+            uint32_t skinnedProxyModelId = 0;
+            if (!Assets::Scene::TryEncodeModelSection(modelId, 0, skinnedProxyModelId) ||
+                skinnedProxyModelId >= scene.Offsets().size())
+            {
+                SPDLOG_ERROR("Skipping skinning for model {}: invalid encoded model offset", modelId);
+                continue;
+            }
             const auto& nodeProxys = scene.GetNodeProxys();
             for (uint32_t nodeIdx = 0; nodeIdx < nodeProxys.size(); ++nodeIdx)
             {
@@ -130,7 +139,7 @@ namespace Vulkan
                 continue;
             }
 
-            uint32_t vertexOffset = scene.Offsets()[modelId * 10].vertexOffset;
+            uint32_t vertexOffset = scene.Offsets()[skinnedProxyModelId].vertexOffset;
             uint32_t vertexCount = model->NumberOfVertices();
 
             gpuScene.custom_data_0 = proxyIdx;
@@ -319,7 +328,7 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
             1, &copyRegion);
 
         GetViewStorageImage(Assets::Bindless::RT_MINIGBUFFER)->InsertBarrier(commandBuffer,
-            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+            VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
     }
 
@@ -477,6 +486,16 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
     {
         if (!VisualDebug())
         {
+            return;
+        }
+        if (!SwapChain().SupportsUsage(VK_IMAGE_USAGE_STORAGE_BIT))
+        {
+            static bool warnedMissingStorage = false;
+            if (!warnedMissingStorage)
+            {
+                SPDLOG_WARN("Visual debugger requires swapchain STORAGE usage; skipping overlay");
+                warnedMissingStorage = true;
+            }
             return;
         }
 

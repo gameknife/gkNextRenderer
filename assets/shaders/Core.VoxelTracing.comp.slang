@@ -18,6 +18,11 @@ void OutputColor(int2 ipos, float3 Total)
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
+    const uint2 outputSize = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_DENOISED);
+    if (any(DTid.xy >= outputSize))
+    {
+        return;
+    }
     START_SHADERCLOCK()
 
     let Camera = Bindless.GetGpuscene().Camera[0];
@@ -27,7 +32,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     FVoxelRayCaster rayCasterVoxel;
 
     int2 ipos = int2(DTid.xy);
-    int2 size = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_DENOISED);
+    int2 size = int2(outputSize);
     uint4 RandomSeed = InitRandomSeed(ipos.x, ipos.y, Camera.TotalFrames);
 
     // 第一次Tracing

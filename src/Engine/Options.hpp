@@ -32,6 +32,7 @@ public:
 	bool ForceSoftGen{};
 	bool HardwareQuery{};
 	bool Validation{};
+	bool SyncValidation{};
 	bool FastExit{true};
 	bool AgentValidation{};
 	bool AgentValidationUI{};

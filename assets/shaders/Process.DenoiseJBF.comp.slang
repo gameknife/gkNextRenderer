@@ -64,6 +64,11 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
     UniformBufferObject Camera = Bindless.GetGpuscene().Camera[0];
 
     let OutImage = Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED);
+    const uint2 outputSize = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_DENOISED);
+    if (any(dispatchThreadId.xy >= outputSize))
+    {
+        return;
+    }
     // Diffuse/specular source is routed by the renderer: the a-trous output when the
     // variance-guided path is active, otherwise the temporal accumulation buffer.
     // Source slots are absolute screen-space slots; resolve into the active view's bank.

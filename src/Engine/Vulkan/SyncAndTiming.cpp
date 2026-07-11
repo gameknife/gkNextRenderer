@@ -173,6 +173,8 @@ namespace Vulkan
 
     void ImageMemoryBarrier::Insert(
         VkCommandBuffer commandBuffer,
+        VkPipelineStageFlags srcStageMask,
+        VkPipelineStageFlags dstStageMask,
         VkImage image,
         VkImageSubresourceRange subresourceRange,
         VkAccessFlags srcAccessMask,
@@ -192,8 +194,21 @@ namespace Vulkan
         barrier.subresourceRange = subresourceRange;
 
         vkCmdPipelineBarrier(commandBuffer,
-            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0,
+            srcStageMask, dstStageMask, 0,
             0, nullptr, 0, nullptr, 1, &barrier);
+    }
+
+    void ImageMemoryBarrier::Insert(
+        VkCommandBuffer commandBuffer,
+        VkImage image,
+        VkImageSubresourceRange subresourceRange,
+        VkAccessFlags srcAccessMask,
+        VkAccessFlags dstAccessMask,
+        VkImageLayout oldLayout,
+        VkImageLayout newLayout)
+    {
+        Insert(commandBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+               image, subresourceRange, srcAccessMask, dstAccessMask, oldLayout, newLayout);
     }
 
     void ImageMemoryBarrier::FullInsert(

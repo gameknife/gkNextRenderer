@@ -6,7 +6,9 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/GameInstance.hpp"
 #include "Engine/Runtime/Input/SyntheticInput.hpp"
+#include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
+#include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
 
 #include <SDL3/SDL.h>
@@ -167,6 +169,21 @@ namespace Runtime::Agent
             {"screenshots", json::array()},
             {"exitCode", 0},
         };
+        const auto& options = engine_.GetOptions();
+        const auto& renderer = engine_.GetRenderer();
+        const VkPhysicalDeviceProperties gpu = renderer.Device().DeviceProperties();
+        report_["environment"] = {
+            {"gpu", gpu.deviceName},
+            {"vendorId", gpu.vendorID},
+            {"deviceId", gpu.deviceID},
+            {"driverVersion", gpu.driverVersion},
+            {"vulkanApiVersion", gpu.apiVersion},
+            {"validation", options.Validation},
+            {"synchronizationValidation", options.SyncValidation},
+            {"renderer", GetRendererName(renderer.CurrentLogicRendererType())},
+            {"rendererType", static_cast<int>(renderer.CurrentLogicRendererType())},
+            {"extent", {{"width", options.Width}, {"height", options.Height}}},
+        };
         SPDLOG_INFO("[AgentDriver] loaded script '{}' -> report '{}'", name_, reportPath_);
     }
 
@@ -303,6 +320,11 @@ namespace Runtime::Agent
         report_["passed"] = exitCode == 0;
         report_["exitCode"] = exitCode;
         report_["framesRendered"] = engine_.GetTotalFrames();
+        report_["finalState"] = {
+            {"renderer", GetRendererName(engine_.GetRenderer().CurrentLogicRendererType())},
+            {"rendererType", static_cast<int>(engine_.GetRenderer().CurrentLogicRendererType())},
+            {"sceneNodeCount", engine_.GetScene().Nodes().size()},
+        };
         WriteReport();
         engine_.RequestExit(exitCode);
         closeRequested_ = true;
@@ -840,6 +862,10 @@ namespace Runtime::Agent
         if (query == "engine.status")
         {
             return StatusToString(engine_.GetEngineStatus());
+        }
+        if (query == "engine.rendererType")
+        {
+            return static_cast<int64_t>(engine_.GetRenderer().CurrentLogicRendererType());
         }
         if (query == "scene.nodeCount")
         {

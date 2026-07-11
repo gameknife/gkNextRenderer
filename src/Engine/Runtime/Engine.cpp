@@ -183,7 +183,8 @@ namespace NextRenderer
             validationLayers.push_back("VK_LAYER_KHRONOS_validation");
         }
 
-        Vulkan::Instance* instance = new Vulkan::Instance(*window, validationLayers, VK_API_VERSION_1_2);
+        Vulkan::Instance* instance = new Vulkan::Instance(
+            *window, validationLayers, VK_API_VERSION_1_2, GOption->SyncValidation);
 
         const auto& physicalDevices = instance->PhysicalDevices();
         const uint32_t selectedGpuIdx = GOption->GpuIdx < physicalDevices.size() ? GOption->GpuIdx : 0;
@@ -759,6 +760,10 @@ bool NextEngine::Tick(bool forcingDelta)
 
         {
             SCOPED_CPU_TIMER("draw frame");
+            if (screenShot_.hasPending || screenShot_.captureFramesRemaining == 1)
+            {
+                renderer_->RequestScreenShotCapture();
+            }
             renderer_->DrawFrame();
         }
         frameState_.totalFrames = renderer_->FrameCount();
@@ -1009,8 +1014,9 @@ void NextEngine::RequestScreenShot(FScreenShotSpec spec)
     spec.filename = ResolveScreenShotFilename(spec.filename, "screenshot");
     if (spec.sync)
     {
-        renderer_->Device().WaitIdle();
-        Runtime::ScreenShot::SaveSwapChainToFile(renderer_.get(), spec.filename, spec.x, spec.y, spec.width, spec.height);
+        SPDLOG_WARN("Synchronous screenshot requests are deferred to the current frame before present");
+        screenShot_.pending = std::move(spec);
+        screenShot_.hasPending = true;
         return;
     }
 

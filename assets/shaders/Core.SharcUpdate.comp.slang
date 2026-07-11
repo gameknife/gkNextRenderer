@@ -5,6 +5,11 @@ import Shader.PathTracing;
 [numthreads(8, 8, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
+    const uint2 size = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_SINGLE_DIFFUSE);
+    if (any(DTid.xy >= size))
+    {
+        return;
+    }
     FVisibilityBufferRayCaster rayCaster;
     FHardwareRayTracer tracer;
     FHardwareDirectIlluminator dIlluminator;

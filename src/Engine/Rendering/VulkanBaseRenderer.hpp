@@ -191,6 +191,7 @@ namespace Vulkan
 
 		// Shared render resources used by logic renderers
 		void CaptureScreenShot();
+		void RequestScreenShotCapture() { screenshot_.captureRequested = true; }
 		const RenderImage* GetStorageImage(uint32_t bindlessIdx) const;
 		// Screen-space RT image of the view currently being recorded (its bank). C++ counterpart
 		// of the shader-side Bindless::GetViewStorageTexture; resolves slot through the active
@@ -343,6 +344,9 @@ namespace Vulkan
 			std::unique_ptr<Image> image;
 			std::unique_ptr<DeviceMemory> imageMemory;
 			std::unique_ptr<ImageView> imageView;
+			bool captureRequested = false;
+			bool captureReady = false;
+			bool initialized = false;
 		};
 
 		struct FrameGenerationResources
