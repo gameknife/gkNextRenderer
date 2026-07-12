@@ -43,14 +43,6 @@
       </h2>
       <form hx-post="/task/add" hx-target="#todo-panel" hx-swap="innerHTML" hx-on::after-request="this.reset()">
         <div class="form-field">
-          <label>provider</label>
-          <select id="chat-provider" class="select" name="provider" form="chat-send-form" hx-get="/chat/session?id={{.SessionID}}" hx-include="#chat-provider" hx-trigger="change" hx-target="#chat-panel" hx-swap="outerHTML">
-            {{range .Providers}}<option value="{{.ID}}" {{if .Active}}selected{{end}} {{if not .Configured}}disabled{{end}}>{{.DisplayName}} ({{.ID}})</option>{{end}}
-          </select>
-          <input type="hidden" id="chat-profile" name="profile" value="{{.SelectedProfile}}" form="chat-send-form">
-        </div>
-
-        <div class="form-field">
           <label>标题</label>
           <input class="input" name="title" placeholder="请输入任务标题" required>
         </div>
@@ -2086,6 +2078,18 @@
           </span>
           LLM
         </h2>
+
+        <div class="form-field">
+          <label>provider</label>
+          <select id="chat-provider" class="select" name="provider" form="chat-send-form"
+                  hx-get="/chat/session?id={{.SessionID}}" hx-include="#chat-provider"
+                  hx-trigger="change" hx-target="#chat-panel" hx-swap="outerHTML">
+            {{range .Providers}}
+            <option value="{{.ID}}" {{if .Active}}selected{{end}} {{if not .Configured}}disabled{{end}}>{{.DisplayName}} ({{.ID}})</option>
+            {{end}}
+          </select>
+          <input type="hidden" id="chat-profile" name="profile" value="{{.SelectedProfile}}" form="chat-send-form">
+        </div>
 
         <div class="form-field">
           <label>model</label>
