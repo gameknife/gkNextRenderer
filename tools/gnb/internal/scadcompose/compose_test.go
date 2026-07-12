@@ -167,7 +167,7 @@ func TestComposeGridWithJitterAndScatter(t *testing.T) {
 		Grids: []GridRule{{At: [2]float64{-42, 36}, Cols: 4, Rows: 3, Cell: [2]float64{16, 14}, Seed: 7,
 			Jitter:   &Jitter{Dx: 1.2, Dy: 1, Rot: 12},
 			Children: []Call{{Module: "oc_bldg_house", Args: "seed = $seed"}}}},
-		Scatters: []ScatterRule{{Region: [4]float64{-80, 80, -58, -22}, N: 16, Seed: 11, Rot: &rotOff,
+		Scatters: []ScatterRule{{Region: [4]float64{-80, -58, 80, -22}, N: 16, Seed: 11, Rot: &rotOff,
 			Children: []Call{{Module: "oc_prop_well"}}}},
 	}
 	result := mustCompose(t, spec, testCatalog(t))
@@ -207,6 +207,17 @@ func TestCallUnmarshalForms(t *testing.T) {
 	}
 	if calls[0].Module != "oc_prop_well" || calls[1].Args != "seed = 1" {
 		t.Errorf("unexpected calls: %+v", calls)
+	}
+}
+
+func TestCallUnmarshalDoubleEncoded(t *testing.T) {
+	// LLM artifact: the object form wrapped in a string must be unwrapped.
+	var calls []Call
+	if err := json.Unmarshal([]byte(`["{\"module\": \"oc_bldg_house\", \"args\": \"seed = $seed\"}"]`), &calls); err != nil {
+		t.Fatal(err)
+	}
+	if calls[0].Module != "oc_bldg_house" || calls[0].Args != "seed = $seed" {
+		t.Errorf("double-encoded call not unwrapped: %+v", calls)
 	}
 }
 

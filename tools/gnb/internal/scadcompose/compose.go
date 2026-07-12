@@ -143,8 +143,8 @@ func Compose(spec *Spec, catalog *Catalog, specPath string, specHash string) (*R
 	}
 	for i, s := range spec.Scatters {
 		where := fmt.Sprintf("scatters[%d]", i)
-		if s.N <= 0 || s.Region[0] >= s.Region[1] || s.Region[2] >= s.Region[3] {
-			return nil, fmt.Errorf("%s: need n > 0 and region x0 < x1, y0 < y1", where)
+		if s.N <= 0 || s.Region[0] >= s.Region[2] || s.Region[1] >= s.Region[3] {
+			return nil, fmt.Errorf("%s: need n > 0 and region = [x0, y0, x1, y1] with x0 < x1, y0 < y1", where)
 		}
 		if err := checkChildren(where, s.Children); err != nil {
 			return nil, err
@@ -268,8 +268,9 @@ func Compose(spec *Spec, catalog *Catalog, specPath string, specHash string) (*R
 		if s.Rot != nil && !*s.Rot {
 			rot = ", rot = false"
 		}
+		// Spec region is [x0, y0, x1, y1]; lay_scatter takes (n, x0, x1, y0, y1).
 		fmt.Fprintf(&b, "lay_scatter(%d, %s, %s, %s, %s, seed = %d%s)\n    %s\n",
-			s.N, num(s.Region[0]), num(s.Region[1]), num(s.Region[2]), num(s.Region[3]), s.Seed, rot,
+			s.N, num(s.Region[0]), num(s.Region[2]), num(s.Region[1]), num(s.Region[3]), s.Seed, rot,
 			childrenStmt(s.Children, "$seed"))
 	}
 	for _, a := range spec.Alongs {

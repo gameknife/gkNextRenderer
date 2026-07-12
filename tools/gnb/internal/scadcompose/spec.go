@@ -21,15 +21,25 @@ type Call struct {
 }
 
 func (c *Call) UnmarshalJSON(data []byte) error {
+	type callAlias Call
 	if len(data) > 0 && data[0] == '"' {
 		var name string
 		if err := json.Unmarshal(data, &name); err != nil {
 			return err
 		}
+		// LLM-authored specs sometimes double-encode the object form as a
+		// string ("{\"module\": ...}"); unwrap it instead of bouncing the spec.
+		trimmed := strings.TrimSpace(name)
+		if strings.HasPrefix(trimmed, "{") {
+			var alias callAlias
+			if err := json.Unmarshal([]byte(trimmed), &alias); err == nil && alias.Module != "" {
+				*c = Call(alias)
+				return nil
+			}
+		}
 		c.Module = name
 		return nil
 	}
-	type callAlias Call
 	var alias callAlias
 	if err := json.Unmarshal(data, &alias); err != nil {
 		return err
@@ -119,9 +129,9 @@ type RingRule struct {
 	Children []Call     `json:"children"`
 }
 
-// ScatterRule scatters children in a region.
+// ScatterRule scatters children in a rectangle.
 type ScatterRule struct {
-	Region   [4]float64 `json:"region"` // x0, x1, y0, y1
+	Region   [4]float64 `json:"region"` // [x0, y0, x1, y1] — min corner, max corner
 	N        int        `json:"n"`
 	Seed     int        `json:"seed"`
 	Rot      *bool      `json:"rot"` // default true
@@ -163,23 +173,29 @@ type Spec struct {
 	Alongs     []AlongRule       `json:"alongs"`
 }
 
+// ParseSpec parses spec JSON bytes (strict: unknown fields are errors).
+// `origin` labels error messages (a path or e.g. "llm-reply").
+func ParseSpec(raw []byte, origin string) (*Spec, error) {
+	decoder := json.NewDecoder(strings.NewReader(string(raw)))
+	decoder.DisallowUnknownFields()
+	spec := &Spec{}
+	if err := decoder.Decode(spec); err != nil {
+		return nil, fmt.Errorf("%s: %w", origin, err)
+	}
+	if spec.Name == "" {
+		return nil, fmt.Errorf("%s: spec has no \"name\"", origin)
+	}
+	if spec.Fn == 0 {
+		spec.Fn = 12
+	}
+	return spec, nil
+}
+
 // LoadSpec reads and parses a spec file.
 func LoadSpec(path string) (*Spec, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	decoder := json.NewDecoder(strings.NewReader(string(raw)))
-	decoder.DisallowUnknownFields()
-	spec := &Spec{}
-	if err := decoder.Decode(spec); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	if spec.Name == "" {
-		return nil, fmt.Errorf("%s: spec has no \"name\"", path)
-	}
-	if spec.Fn == 0 {
-		spec.Fn = 12
-	}
-	return spec, nil
+	return ParseSpec(raw, path)
 }

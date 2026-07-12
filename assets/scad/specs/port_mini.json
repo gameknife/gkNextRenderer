@@ -23,9 +23,9 @@
     { "pts": [[-100, -60], [100, -60]], "step": 20, "seed": 6, "children": ["hc_prop_lamp"] }
   ],
   "scatters": [
-    { "region": [-104, 104, -80, -66], "n": 12, "seed": 21,
+    { "region": [-104, -80, 104, -66], "n": 12, "seed": 21,
       "children": ["hc_nature_tree", "hc_nature_pine"] },
-    { "region": [-104, 104, 66, 80], "n": 12, "seed": 22,
+    { "region": [-104, 66, 104, 80], "n": 12, "seed": 22,
       "children": ["hc_nature_tree", "hc_nature_pine"] }
   ]
 }

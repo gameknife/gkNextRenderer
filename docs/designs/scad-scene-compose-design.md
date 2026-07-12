@@ -1,7 +1,7 @@
 ---
 title: "SCAD Scene Compose：基于既有 module 库的大规模场景组合系统"
 category: design
-status: M0–M3 已落地（kit 拆分 / ScadLibrary / catalog / 布局组合子 / spec+compose），M4 LLM 待做
+status: M0–M4 全部落地（kit 拆分 / ScadLibrary / catalog / 布局组合子 / spec+compose / LLM generate）
 owner: engine
 created: 2026-07-11
 last_updated: 2026-07-11
@@ -267,14 +267,31 @@ children 多于一个自动包 `lay_pick`）：
 **v1 未覆盖（后续按需）**：`roadWidth` 自动路网（当前用 ground 色块或 kit 路模块摆）、
 landmark `clearCells` 占格冲突检测、加权 pick、稀疏 layout（fill+override）、sea/sky 环境。
 
-### 6.3 与 LLM 的衔接（经 ScadLibrary，不复用 ScadStudio）
+### 6.3 LLM 场景生成：`gnb scad generate`（已落地）
 
 **决策（2026-07-11）：不在 ScadStudio 上扩展**——它的定位是"agent 生成 scad 源码"。
-kit 浏览与组合测试由独立应用 **ScadLibrary** 承载（见 §6.5）。
+CLI 形态落在 gnb（复用 `gnb llm` 的 llama.cpp 基建）；ScadLibrary 的 GUI 对话集成留作后续。
 
-- catalog.json（或其摘要）注入 prompt context = LLM 的零件菜单；LLM 产出/修改的是 **spec**，
-  不是 60 KB scad——小、结构化、可机器校验，失败可回喂（借鉴 ScadStudio M7 的修复回路模式）。
-- 远期对话式场景生成挂在 ScadLibrary（或 gnb chat）上：对话 → spec diff → compose → 重载视口。
+```
+gnb scad generate "机场旁的老城区：西侧停一架客机…" [--model id] [--repairs 3] [--temp 0.4] [--debug]
+```
+
+实现（`tools/gnb/internal/scadgen/`，menu/prompt/generate + 单测）：
+- **零件菜单**：catalog.json 压缩为每 module 一行 `name(params) 宽x深 h高`（ok:false 的剔除），
+  ~20KB 注入 user prompt；system prompt = schema 全字段示例 + 8 条硬规则 + few-shot。
+- **自修复回路**：LLM 输出 → 抽 JSON（容忍 markdown fence/前后缀文字）→ `ParseSpec` 严格解析 →
+  `Compose` 校验 → 失败把错误回喂（默认 3 轮）；全过后写 `specs/<name>.json` 并走标准
+  compose 路径出 `gen/<name>.scad`。`--debug` 失败时落盘完整对话记录。
+- **实测（Gemma-4-E4B Q4_K_M 本地）**：验收题「机场旁的老城区」2 轮通过（1 轮自修复），
+  客机/大巴/民居街区/集市/树林/路灯要素齐备，渲染 0 warning。布局美感（间距、配色、越界）
+  受小模型上限约束——`--model` 可切 12B，prompt 迭代空间也大。
+
+**实测得出的 schema 适配教训**（对任何 LLM 目标格式通用）：
+1. schema 里的 `...` 省略号会被小模型逐字输出 → 示例必须是完整合法 JSON；
+2. 对象包成字符串（双重编码）是高频伪影 → `Call.UnmarshalJSON` 容错解开，比回喂修复省轮次；
+3. 字段约定要顺应通用直觉：region 原设计 `[x0,x1,y0,y1]` 模型三轮都写成 `[x0,y0,x1,y1]`
+   （min/max 角点是通用约定）——最终**改 schema 顺应模型**而不是反复纠正；
+4. 校验错误信息要携带"怎么改"（顺序/形态），模型才能在回喂轮里修对。
 
 ### 6.5 ScadLibrary 应用（已落地，target `ScadLibrary`）
 
@@ -314,7 +331,7 @@ Spec 层对此透明：同一份 spec，未来可由 compose 选择输出「单 
 | **M2 catalog** | `ScadCatalog` 工具 + `gnb scad catalog`（签名 + bbox 求值 → catalog.json，含 scaleClass/footprint/paramList） | 293 modules 覆盖（290 ok / 3 必填参数），footprint 抽查正确（oc_bldg_house 10.6×8.1×h5.6）；ScadLibrary 优先读 catalog（日志确认）+ tooltip 尺寸 + 组合台按 footprint 自适应间距 | ✅ 2026-07-11 |
 | **M2.5 layout 组合子** | `lib/kit_layout.scad`（lay_grid/row/ring/scatter/along/pick/jitter，§5） | `layout_demo.scad` 街区级 demo 0 warning 出图；$var 穿透 children 探针验证；PRNG 平方项修复格线伪影 | ✅ 2026-07-11 |
 | **M3 compose** | spec v1 schema + `gnb scad compose` + catalog 校验器（`tools/gnb/internal/scadcompose/`，12 单测） | mixed_town spec 产物与手摆版逐字等价（11/224/6068）；port_mini 40 行 spec 生成 3×2 新城市 0 warning；scaleClass/未声明 kit/矩阵不齐 校验全部生效 | ✅ 2026-07-11 |
-| **M4 LLM 场景生成** | ScadLibrary 对话出 spec / gnb chat 集成 | 对话生成一个新主题场景（如「机场旁的老城区」）| 待做 |
+| **M4 LLM 场景生成** | `gnb scad generate`（scadgen 包：菜单 prompt + 自修复回路 + --debug 对话落盘） | 「机场旁的老城区」实测 2 轮通过（Gemma-4-E4B 本地），要素齐备渲染 0 warning；schema 适配 3 教训落地（无省略号示例/双重编码容错/region 顺应通用约定） | ✅ 2026-07-11 |
 
 ## 9. 风险与开放问题
 
