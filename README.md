@@ -8,6 +8,7 @@
 ![Desktop CI](https://github.com/gameknife/gkNextEngine/actions/workflows/desktop.yml/badge.svg)
 ![Android CI](https://github.com/gameknife/gkNextEngine/actions/workflows/android.yml/badge.svg)
 ![iOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/ios.yml/badge.svg)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ![Play ground](docs/gallery/4_playground.avif)
 
@@ -379,3 +380,9 @@ Android 主机侧仍需要提供 JDK / SDK / NDK；项目内的 vcpkg 依赖与�
 ## 第三方依赖
 
 cpptrace · cxxopts · sdl3 · glm · imgui · stb · curl · nlohmann-json · tinygltf · draco · fmt · meshoptimizer · ktx · joltphysics · xxhash · spdlog · cpp-base64 · catch2 · entt · libwebp · vulkan-loader · libavif
+
+---
+
+## 许可协议
+
+gkNextEngine 以 [MIT 协议](LICENSE) 开源。源自 [RayTracingInVulkan](https://github.com/GPSnoopy/RayTracingInVulkan) 的部分代码仍遵循 BSD 3-Clause 协议,详见 [LICENSE](LICENSE) 中的第三方声明。

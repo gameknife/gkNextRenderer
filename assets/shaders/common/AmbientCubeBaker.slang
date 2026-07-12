@@ -299,8 +299,8 @@ public struct FGpuProbeGenerator : IProbeGenerator
         AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
         VoxelData* Voxels = Bindless.GetGpuscene().Voxels;
 
-        uint4 upacked = UnpackNibblesLow(Voxels[voxelIdx].distanceToSolid);
-        if (upacked.x < 15 && cubeIdx >= 0) // 只处理表面，增值算法的时候可以具体的把他做好
+        uint4 unpacked = UnpackNibblesLow(Voxels[voxelIdx].distanceToSolid);
+        if (unpacked.x < 15 && cubeIdx >= 0) // 只处理表面，增值算法的时候可以具体的把他做好
         {
             uint iterate = Bindless.GetGpuscene().Camera[0].TotalFrames;
 

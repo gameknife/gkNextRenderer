@@ -163,7 +163,7 @@ namespace Assets
         glm::vec3 GetLocalAABBMin() const {return local_aabb_min;}
         glm::vec3 GetLocalAABBMax() const {return local_aabb_max;}
 
-        uint32_t NumberOfVertices() const { return verticeCount; }
+        uint32_t NumberOfVertices() const { return vertexCount; }
         uint32_t NumberOfIndices() const { return indiceCount; }
         uint32_t SectionCount() const { return sectionCount; }
         void SetSectionCount(uint32_t count) { sectionCount = count; }
@@ -194,7 +194,7 @@ namespace Assets
         glm::vec3 local_aabb_min;
         glm::vec3 local_aabb_max;
 
-        uint32_t verticeCount;
+        uint32_t vertexCount;
         uint32_t indiceCount;
 
         uint32_t sectionCount;

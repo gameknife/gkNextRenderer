@@ -54,11 +54,6 @@ Device::Device(
 
 	const auto queueFamilies = GetEnumerateVector(physicalDevice, vkGetPhysicalDeviceQueueFamilyProperties);
 
-	// for ( auto queue : queueFamilies )
-	// {
-	// 	std::cout << "Queue Family: " << queue.queueFlags << " count: " << queue.queueCount << std::endl;
-	// }
-	
 
 	// Find the graphics queue.
 	const auto graphicsFamily = FindQueue(queueFamilies, "graphics", VK_QUEUE_GRAPHICS_BIT, 0, 1);

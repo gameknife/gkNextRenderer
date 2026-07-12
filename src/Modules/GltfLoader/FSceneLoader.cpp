@@ -734,7 +734,7 @@ namespace Assets
             materials.push_back(fmat);
         }
 
-        // export whole scene into a big buffer, with vertice indices materials
+        // export whole scene into a big buffer, with vertices, indices, materials
         for (tinygltf::Mesh& mesh : model.meshes)
         {
             bool hasTangent = false;
@@ -743,18 +743,18 @@ namespace Assets
             std::vector<glm::vec4> weights;
             std::vector<glm::uvec4> joints;
 
-            uint32_t vertextOffset = 0;
+            uint32_t vertexOffset = 0;
             uint32_t sectionIdx = 0;
-            for (tinygltf::Primitive& primtive : mesh.primitives)
+            for (tinygltf::Primitive& primitive : mesh.primitives)
             {
-                if (primtive.mode != TINYGLTF_MODE_TRIANGLES)
+                if (primitive.mode != TINYGLTF_MODE_TRIANGLES)
                 {
                     continue;
                 }
 
-                if (primtive.indices != -1)
+                if (primitive.indices != -1)
                 {
-                    const tinygltf::Accessor& indexAccessor = model.accessors[primtive.indices];
+                    const tinygltf::Accessor& indexAccessor = model.accessors[primitive.indices];
                     if (indexAccessor.count == 0)
                     {
                         continue;
@@ -762,23 +762,23 @@ namespace Assets
                 }
                
                 int posIdx = -1;
-                if (primtive.attributes.find("POSITION") != primtive.attributes.end()) posIdx = primtive.attributes["POSITION"];
+                if (primitive.attributes.find("POSITION") != primitive.attributes.end()) posIdx = primitive.attributes["POSITION"];
                 int normIdx = -1;
-                if (primtive.attributes.find("NORMAL") != primtive.attributes.end()) normIdx = primtive.attributes["NORMAL"];
+                if (primitive.attributes.find("NORMAL") != primitive.attributes.end()) normIdx = primitive.attributes["NORMAL"];
                 int uvIdx = -1;
-                if (primtive.attributes.find("TEXCOORD_0") != primtive.attributes.end()) uvIdx = primtive.attributes["TEXCOORD_0"];
+                if (primitive.attributes.find("TEXCOORD_0") != primitive.attributes.end()) uvIdx = primitive.attributes["TEXCOORD_0"];
                 int tanIdx = -1;
-                if (primtive.attributes.find("TANGENT") != primtive.attributes.end()) tanIdx = primtive.attributes["TANGENT"];
+                if (primitive.attributes.find("TANGENT") != primitive.attributes.end()) tanIdx = primitive.attributes["TANGENT"];
 
-                if (primtive.attributes.find("TEXCOORD_1") != primtive.attributes.end())
+                if (primitive.attributes.find("TEXCOORD_1") != primitive.attributes.end())
                 {
                      // SPDLOG_WARN("Mesh '{}': TEXCOORD_1 found but ignored.", mesh.name);
                 }
                 
                 int jointsIdx = -1;
-                if (primtive.attributes.find("JOINTS_0") != primtive.attributes.end()) jointsIdx = primtive.attributes["JOINTS_0"];
+                if (primitive.attributes.find("JOINTS_0") != primitive.attributes.end()) jointsIdx = primitive.attributes["JOINTS_0"];
                 int weightsIdx = -1;
-                if (primtive.attributes.find("WEIGHTS_0") != primtive.attributes.end()) weightsIdx = primtive.attributes["WEIGHTS_0"];
+                if (primitive.attributes.find("WEIGHTS_0") != primitive.attributes.end()) weightsIdx = primitive.attributes["WEIGHTS_0"];
 
                 if (posIdx == -1) continue;
 
@@ -819,9 +819,9 @@ namespace Assets
                 
                 sectionIdx++;
                 
-                if (primtive.indices != -1)
+                if (primitive.indices != -1)
                 {
-                    const tinygltf::Accessor& indexAccessor = model.accessors[primtive.indices];
+                    const tinygltf::Accessor& indexAccessor = model.accessors[primitive.indices];
                     const tinygltf::BufferView& indexView = model.bufferViews[indexAccessor.bufferView];
                     int strideIndex = indexAccessor.ByteStride(indexView);
 
@@ -830,17 +830,17 @@ namespace Assets
                         if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT )
                         {
                             uint16* data = reinterpret_cast<uint16*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
-                            indices.push_back(*data + vertextOffset);
+                            indices.push_back(*data + vertexOffset);
                         }
                         else if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT )
                         {
                             uint32* data = reinterpret_cast<uint32*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
-                            indices.push_back(*data + vertextOffset);
+                            indices.push_back(*data + vertexOffset);
                         }
                         else if( indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE )
                         {
                             uint8_t* data = reinterpret_cast<uint8_t*>(&model.buffers[indexView.buffer].data[indexView.byteOffset + indexAccessor.byteOffset + i * strideIndex]);
-                            indices.push_back(*data + vertextOffset);
+                            indices.push_back(*data + vertexOffset);
                         }
                         else
                         {
@@ -853,11 +853,11 @@ namespace Assets
                 {
                     for (size_t i = 0; i < positionAccessor.count; ++i)
                     {
-                        indices.push_back(static_cast<uint32_t>(i) + vertextOffset);
+                        indices.push_back(static_cast<uint32_t>(i) + vertexOffset);
                     }
                 }
 
-                vertextOffset += static_cast<uint32_t>(positionAccessor.count);
+                vertexOffset += static_cast<uint32_t>(positionAccessor.count);
             }
             
             models.push_back(Assets::Model(mesh.name, std::move(vertices), std::move(indices), !hasTangent));
@@ -1083,7 +1083,6 @@ namespace Assets
             }
             i++;
         }
-        //printf("model.cameras: %d\n", i);
         return true;
     }
 

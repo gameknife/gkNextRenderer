@@ -312,7 +312,7 @@ namespace Assets
         });
     }
 
-    uint32_t GlobalTexturePool::TryGetTexureIndex(const std::string& textureName) const
+    uint32_t GlobalTexturePool::TryGetTextureIndex(const std::string& textureName) const
     {
         if (textureNameMap_.find(textureName) != textureNameMap_.end())
         {
@@ -351,11 +351,11 @@ namespace Assets
 
         // load parse bind texture into newTextureIdx with transfer queue
 
-        uint8_t* copyedData = nullptr;
+        uint8_t* copiedData = nullptr;
         if (bytelength > 0)
         {
-            copyedData = new uint8_t[bytelength];
-            memcpy(copyedData, data, bytelength);
+            copiedData = new uint8_t[bytelength];
+            memcpy(copiedData, data, bytelength);
         }
         if (textureCpuSources_.size() <= newTextureIdx)
         {
@@ -367,9 +367,9 @@ namespace Assets
         cpuSource.Srgb = srgb;
         cpuSource.Hdr = hdr;
         cpuSource.Bytes.clear();
-        if (copyedData && bytelength > 0)
+        if (copiedData && bytelength > 0)
         {
-            cpuSource.Bytes.assign(copyedData, copyedData + bytelength);
+            cpuSource.Bytes.assign(copiedData, copiedData + bytelength);
         }
         const bool streamHDRAtLoad = hdr && hdrStreamingPolicy_ && hdrStreamingPolicy_();
         const EHDRTextureResidency initialHDRResidency =
@@ -391,7 +391,7 @@ namespace Assets
             residency.LastTouchedFrame = 0;
         }
         auto textureLoadTask =
-            [this, hdr, srgb, texname, mime, copyedData, bytelength, newTextureIdx, initialHDRResidency](Tasks::ResTask& task)
+            [this, hdr, srgb, texname, mime, copiedData, bytelength, newTextureIdx, initialHDRResidency](Tasks::ResTask& task)
             {
                 TextureTaskContext taskContext{};
                 const auto timer = std::chrono::high_resolution_clock::now();
@@ -432,7 +432,7 @@ namespace Assets
                 if (mime.find("image/ktx") != std::string::npos)
                 {
                     auto loadKtxFromMemory = [&]() -> bool {
-                        result = ktxTexture2_CreateFromMemory(copyedData, bytelength, KTX_TEXTURE_CREATE_CHECK_GLTF_BASISU_BIT, &kTexture);
+                        result = ktxTexture2_CreateFromMemory(copiedData, bytelength, KTX_TEXTURE_CREATE_CHECK_GLTF_BASISU_BIT, &kTexture);
                         if (KTX_SUCCESS != result) return false;
                         result = ktxTexture2_TranscodeBasis(kTexture, KTX_TTF_BC7_RGBA, 0);
                         if (KTX_SUCCESS != result) return false;
@@ -457,7 +457,7 @@ namespace Assets
                 }
                 else if (mime.find("image/webp") != std::string::npos)
                 {
-                     stbdata = WebPDecodeRGBA(copyedData, bytelength, &width, &height);
+                     stbdata = WebPDecodeRGBA(copiedData, bytelength, &width, &height);
                      if (stbdata)
                      {
                          size = width * height * 4;
@@ -477,7 +477,7 @@ namespace Assets
                     // load from texture files
                     if (hdr)
                     {
-                        const FHDRTexturePayload payload = LoadHDRTexturePayload(texname, copyedData, bytelength);
+                        const FHDRTexturePayload payload = LoadHDRTexturePayload(texname, copiedData, bytelength);
                         width = payload.Width;
                         height = payload.Height;
                         channels = 4;
@@ -503,7 +503,7 @@ namespace Assets
                         if (!std::filesystem::exists(cacheFileName))
                         {
                             // load from stbi and compress to ktx and cache
-                            stbdata = stbi_load_from_memory(copyedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha);
+                            stbdata = stbi_load_from_memory(copiedData, static_cast<uint32_t>(bytelength), &width, &height, &channels, STBI_rgb_alpha);
                             format = srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
                             size = width * height * 4 * sizeof(uint8_t);
 
@@ -604,13 +604,13 @@ namespace Assets
                 task.SetContext(taskContext);
             };
 
-        auto textureCompleteTask = [this, copyedData](Tasks::ResTask& task)
+        auto textureCompleteTask = [this, copiedData](Tasks::ResTask& task)
             {
                 TextureTaskContext taskContext{};
                 task.GetContext(taskContext);
                 textureImages_[taskContext.textureId]->MainThreadPostLoading(mainThreadCommandPool_);
                 SPDLOG_INFO("{}", taskContext.outputInfo.data());
-                delete[] copyedData;
+                delete[] copiedData;
 
                 if (taskContext.needFlushHDRSH)
                 {

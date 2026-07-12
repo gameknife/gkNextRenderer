@@ -2,11 +2,11 @@
 
 namespace Bindless
 {
-    public static const int RT_ACCUMLATE_DIFFUSE = 0;
+    public static const int RT_ACCUMULATE_DIFFUSE = 0;
     public static const int RT_SINGLE_DIFFUSE = 1;
     public static const int RT_MINIGBUFFER = 2;
-    public static const int RT_OBJEDCTID_0 = 3;
-    public static const int RT_OBJEDCTID_1 = 4;
+    public static const int RT_OBJECTID_0 = 3;
+    public static const int RT_OBJECTID_1 = 4;
     public static const int RT_MOTIONVECTOR = 5;
     public static const int RT_ALBEDO = 6;
     public static const int RT_NORMAL = 7;
@@ -15,10 +15,10 @@ namespace Bindless
     public static const int RT_DENOISED = 9;
     
     public static const int RT_PREV_DEPTHBUFFER = 10;
-    public static const int RT_ACCUMLATE_SPECULAR = 11;
+    public static const int RT_ACCUMULATE_SPECULAR = 11;
     public static const int RT_SINGLE_SPECULAR = 12;
 
-    public static const int RT_ACCUMLATE_ALBEDO = 13;
+    public static const int RT_ACCUMULATE_ALBEDO = 13;
 
     public static const int RT_MOTIONMOMENT = 14;
 

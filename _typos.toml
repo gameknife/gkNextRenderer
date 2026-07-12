@@ -1,0 +1,54 @@
+# typos (https://github.com/crate-ci/typos) 拼写检查配置
+# 运行:typos            (仓库根目录)
+# 只检查第一方代码与文档,排除第三方与资产数据。
+
+[files]
+extend-exclude = [
+    "src/ThirdParty/",
+    "assets/shaders/third_party/",
+    "external/",
+    "out/",
+    "android/",
+    "ios/",
+    ".vcpkg/",
+    "assets/models/",
+    "assets/paks/",
+    "assets/fonts/",
+    "assets/textures/",
+    "assets/locale/",
+    "assets/scad/lib/",
+    "traces/",
+    "*.mpd",
+    "*.ldr",
+    "*.dat",
+    "*.gltf",
+    "*.glb",
+    "*.spv",
+    "package-lock.json",
+    "*.patch",
+    "*.diff",
+    # 历史文档:记录了修缮前的拼写错误原文,不参与检查
+    "docs/plans/release-code-polish-plan.md",
+]
+
+[default.extend-words]
+# 图形学 / 领域术语
+lod = "lod"             # Level of Detail
+Lod = "Lod"
+metalness = "metalness" # PBR 术语
+ue = "ue"               # Unreal Engine
+technic = "technic"     # LEGO Technic
+cll = "cll"             # HDR maxCLL (Content Light Level)
+tese = "tese"           # .tese 曲面细分着色器扩展名
+# 标识符约定
+iy = "iy"               # 循环变量 ix/iy/iz
+iz = "iz"
+eis = "eis"             # MagicaLego EIS_* 枚举前缀
+normaly = "normaly"     # GPUVertex posx/posy/normalx/normaly 分量字段模式
+# 专有名词
+eto = "eto"             # Kenta Eto(论文作者引用)
+fo = "fo"               # Windows tasklist /FO 参数
+nd = "nd"               # WinAPI FROM_LEFT_2ND_BUTTON_PRESSED
+# 历史资产名(文档中保留原始文件名记录)
+acient = "acient"
+unparseable = "unparseable"

@@ -699,7 +699,7 @@ void FUiDevPanels::DrawOverlay(const NextUI::Statistics& statistics, Runtime::Fr
         : 0;
     const uint32_t mainTasks = Tasks::TaskCoordinator::GetInstance()->GetMainTaskCount();
     const uint32_t lowTasks = Tasks::TaskCoordinator::GetInstance()->GetParralledTaskCount();
-    const uint32_t completeTasks = Tasks::TaskCoordinator::GetInstance()->GetComleteTaskQueueCount();
+    const uint32_t completeTasks = Tasks::TaskCoordinator::GetInstance()->GetCompleteTaskQueueCount();
 
     auto FormatVisibleOverTotal = [](uint32_t visibleCount, uint32_t totalCount)
     {

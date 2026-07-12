@@ -148,14 +148,14 @@ public struct FHiVoxelDDARayTracer : IRayTracer
     {
         return TraceOcclusionDDA(rayOrigin, rayDir, 80.0f);
     }
-    public bool TraceSegment(float3 rayOrigin, float3 rayTaget, float epsilon)
+    public bool TraceSegment(float3 rayOrigin, float3 rayTarget, float epsilon)
     {
-        float rayLength = length(rayTaget - rayOrigin);
+        float rayLength = length(rayTarget - rayOrigin);
         Vertex outVertex;
         NodeProxy outNode;
         float4 tempColor;
         float hitDist = 0;
-        return TraceRay(rayOrigin, (rayTaget - rayOrigin) / rayLength, rayLength - epsilon, outVertex, outNode, tempColor, hitDist);
+        return TraceRay(rayOrigin, (rayTarget - rayOrigin) / rayLength, rayLength - epsilon, outVertex, outNode, tempColor, hitDist);
     }
     public bool TraceRayDDA(float3 rayOrigin, float3 rayDir, float maxDistance, float3 boxMin, float3 boxMax, bool useBounds, inout Vertex outVertex, inout NodeProxy outNode)
     {
@@ -485,7 +485,7 @@ public struct FSoftwareRayTracer : IRayTracer
 
         return false;
     }
-    public bool TraceSegment(float3 rayOrigin, float3 rayTaget, float epsilon)
+    public bool TraceSegment(float3 rayOrigin, float3 rayTarget, float epsilon)
     {
         return false;
     }

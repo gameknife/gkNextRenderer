@@ -289,7 +289,7 @@ namespace Assets
             {
                 SCOPED_CPU_TIMER("update nodeproxy");
 
-                nodeProxys.clear();
+                nodeProxies.clear();
                 indirectDrawBatchCount_ = 0;
 
                 uint64_t expandedTriangleCapacity = 0;
@@ -353,7 +353,7 @@ namespace Assets
                                 proxy.reserved1 = selectedBit;
                                 proxy.reserved2 = stateBits;
                                 proxy.jointMatrixOffset = nodeJointOffset;
-                                nodeProxys.push_back(proxy);
+                                nodeProxies.push_back(proxy);
                                 indirectDrawBatchCount_++;
                             }
                         }
@@ -368,14 +368,14 @@ namespace Assets
                     std::max<uint32_t>(1u, static_cast<uint32_t>(expandedTriangleCapacity));
             }
 
-            if (!nodeProxys.empty())
+            if (!nodeProxies.empty())
             {
                 {
                     SCOPED_CPU_TIMER("upload nodeproxy");
                     NodeProxy* data = reinterpret_cast<NodeProxy*>(
                         sceneDynamicBufferMemory_->Map(
-                            Assets::GPU_SCENE_DYNAMIC_NODES_OFFSET, sizeof(NodeProxy) * nodeProxys.size()));
-                    std::memcpy(data, nodeProxys.data(), nodeProxys.size() * sizeof(NodeProxy));
+                            Assets::GPU_SCENE_DYNAMIC_NODES_OFFSET, sizeof(NodeProxy) * nodeProxies.size()));
+                    std::memcpy(data, nodeProxies.data(), nodeProxies.size() * sizeof(NodeProxy));
                     sceneDynamicBufferMemory_->Unmap();
                 }
             }

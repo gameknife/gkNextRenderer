@@ -127,7 +127,7 @@ namespace Assets
 
         const uint32_t GetLightCount() const { return lightCount_; }
         const uint32_t GetIndicesCount() const { return indicesCount_; }
-        const uint32_t GetVerticeCount() const { return verticeCount_; }
+        const uint32_t GetVertexCount() const { return vertexCount_; }
         const uint32_t GetIndirectDrawBatchCount() const { return indirectDrawBatchCount_; }
         const uint32_t GetMaxSceneTriangles() const { return maxSceneTriangles_; }
 
@@ -178,7 +178,7 @@ namespace Assets
         void MarkTransformDirty();
         void MarkSelectionDirty();
 
-        std::vector<NodeProxy>& GetNodeProxys() { return nodeProxys; }
+        std::vector<NodeProxy>& GetNodeProxies() { return nodeProxies; }
 
         void OverrideModelView(glm::mat4& OutMatrix);
 
@@ -344,7 +344,7 @@ namespace Assets
 
         uint32_t lightCount_{};
         uint32_t indicesCount_{};
-        uint32_t verticeCount_{};
+        uint32_t vertexCount_{};
         uint32_t indirectDrawBatchCount_{};
         uint32_t maxSceneTriangles_{1};
         uint32_t requiredGpuDrivenTriangleCapacity_{1};
@@ -361,7 +361,7 @@ namespace Assets
         bool sceneDirty_ = true;
         bool materialDirty_ = true;
 
-        std::vector<NodeProxy> nodeProxys;
+        std::vector<NodeProxy> nodeProxies;
 
         glm::mat4 overrideModelView;
         bool requestOverrideModelView = false;

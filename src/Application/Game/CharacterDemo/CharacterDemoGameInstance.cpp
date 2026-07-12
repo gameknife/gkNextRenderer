@@ -856,7 +856,7 @@ bool CharacterDemoGameInstance::HasLineOfSightToPlayer() const
 
     const Assets::RayCastResult hit =
         GetEngine().GetScene().GetCPUAccelerationStructure().RayCastInCPU(origin, delta / distance);
-    if (!hit.Hitted)
+    if (!hit.Hit)
     {
         return true;
     }

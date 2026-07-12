@@ -202,7 +202,7 @@ C++ 侧与 SoftwareTracing 几乎同构，[SoftwareModernRenderer.cpp:70](../../
 
 - 没有 reproject、A-trous、object/motion/depth/normal/albedo 等公共输出；
 - base 仍无条件执行 GPU cull、visibility 和 CSM；
-- `RequiresObjectIdHistory()` 继承默认 `true`，于是会把本 renderer 未写入的 `RT_OBJEDCTID_0` 复制到 history；
+- `RequiresObjectIdHistory()` 继承默认 `true`，于是会把本 renderer 未写入的 `RT_OBJECTID_0` 复制到 history；
 - dispatch 使用 `SwapChain().RenderExtent()` 而不是 active view extent，[VoxelTracingRenderer.cpp:42](../../src/Engine/Rendering/VoxelTracing/VoxelTracingRenderer.cpp#L42)；shader 又没有越界 early-return。当前 renderer 被用于不同尺寸 secondary view 时会越过该 bank 的有效 extent。
 
 因此 VoxelTracing 不应继续被当作“与另外四个 renderer 只有 shader不同”的实现；它需要显式的 produced-output 与 post-process compatibility 标志。

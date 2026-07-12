@@ -33,7 +33,7 @@ last_updated: 2026-06-13
 `NoAmbientDeferred::Renderer::Render()` 的完整管线只有两个 pass（`SwModernNoAmbientRenderer.cpp:35-62`）：
 
 ```
-Core.SwModernNoAmbient.comp   (shading → RT_SINGLE_DIFFUSE / RT_OBJEDCTID_0 / RT_PREV_DEPTHBUFFER)
+Core.SwModernNoAmbient.comp   (shading → RT_SINGLE_DIFFUSE / RT_OBJECTID_0 / RT_PREV_DEPTHBUFFER)
 Process.ComposeSimple.comp    (直接 tonemap RT_SINGLE_DIFFUSE → RT_DENOISED)
 ```
 
@@ -72,15 +72,15 @@ if (config_.userSettings.TAA || config_.userSettings.DLSS) {
 
 ```
 Core.SwModernNoAmbient.comp   (额外产出 RT_MOTIONVECTOR / RT_NORMAL)
-Process.ReProjectSimple.comp  (新增：reproject + history blend → RT_ACCUMLATE_DIFFUSE)   ← 线性 HDR 域
-Process.ComposeSimple.comp    (读 RT_ACCUMLATE_DIFFUSE，tonemap 不变)
-copy RT_ACCUMLATE_DIFFUSE → RT_SINGLE_PREV_DIFFUSE  (供下一帧做 history)
+Process.ReProjectSimple.comp  (新增：reproject + history blend → RT_ACCUMULATE_DIFFUSE)   ← 线性 HDR 域
+Process.ComposeSimple.comp    (读 RT_ACCUMULATE_DIFFUSE，tonemap 不变)
+copy RT_ACCUMULATE_DIFFUSE → RT_SINGLE_PREV_DIFFUSE  (供下一帧做 history)
 ```
 
 设计要点：
 - **累积在 tonemap 之前的线性 HDR 域**，compose 仍只 tonemap 一次（同时修抖动与过曝）。
 - 本路径是单张全色 `RT_SINGLE_DIFFUSE`，**不直接复用** `Process.ReProject.comp`（它假设 diffuse 已 demodulate + 独立 albedo/specular 三张图），而是写一个单缓冲的极简版。
-- 复用已有资源：`RT_ACCUMLATE_DIFFUSE` / `RT_SINGLE_PREV_DIFFUSE` / `RT_MOTIONVECTOR` / `RT_NORMAL` / `RT_OBJEDCTID_0/1` / `RT_MOTIONMOMENT` 均已在 `VulkanBaseRenderer.cpp:558-576` 创建；history `RT_OBJEDCTID_1` 由 base `PostRender::CopyObjectIdHistory`（`VulkanBaseRenderer.GpuDriven.cpp:632-655`）每帧维护，**无需改动**。
+- 复用已有资源：`RT_ACCUMULATE_DIFFUSE` / `RT_SINGLE_PREV_DIFFUSE` / `RT_MOTIONVECTOR` / `RT_NORMAL` / `RT_OBJECTID_0/1` / `RT_MOTIONMOMENT` 均已在 `VulkanBaseRenderer.cpp:558-576` 创建；history `RT_OBJECTID_1` 由 base `PostRender::CopyObjectIdHistory`（`VulkanBaseRenderer.GpuDriven.cpp:632-655`）每帧维护，**无需改动**。
 
 ## 4. 修复计划（分步，可直接执行）
 
@@ -88,7 +88,7 @@ copy RT_ACCUMLATE_DIFFUSE → RT_SINGLE_PREV_DIFFUSE  (供下一帧做 history)
 
 文件：`assets/shaders/Core.SwModernNoAmbient.comp.slang`
 
-命中分支（line 163-165 附近，写 `RT_SINGLE_DIFFUSE` / `RT_OBJEDCTID_0` / `RT_PREV_DEPTHBUFFER` 处）额外写：
+命中分支（line 163-165 附近，写 `RT_SINGLE_DIFFUSE` / `RT_OBJECTID_0` / `RT_PREV_DEPTHBUFFER` 处）额外写：
 - `RT_NORMAL` ← `normalize(hitVertex.Normal)`（世界法线，`float4(N,1)`）。
 - `RT_MOTIONVECTOR` ← 复用 `Common.CalculateMotionVector(Camera, hitNode, hitVertex, pixel)`（`Shading.slang:78-100`，用 `ViewProjectionUnJit`/`PrevViewProjectionUnJit`/`node.combinedPrevTS`；内部会同时写 `RT_MOTIONMOMENT`）。
   - 若直接调用不便（该 helper 在某 struct 内），可内联其逻辑：当前/历史世界位置分别用 `ViewProjectionUnJit` 与 `PrevViewProjectionUnJit*combinedPrevTS` 投到屏幕，差值即 motion；并按 `distance(currPos, prevPos)>0.02` 写 `RT_MOTIONMOMENT = TemporalFrames`，否则递减。
@@ -102,17 +102,17 @@ miss（天空）分支（line 64-67 附近）补齐，避免读到陈旧值：
 
 新文件：`assets/shaders/Process.ReProjectSimple.comp.slang`（`[numthreads(8,8,1)]`）。需让构建系统收录该 `.slang`（参考其它 `Process.*.comp.slang` 的 glob/CMake 收录方式；新增文件可能需 `--reconfigure`）。
 
-输入（全部 bindless storage image）：`RT_SINGLE_DIFFUSE`(当前全色)、`RT_MOTIONVECTOR`、`RT_OBJEDCTID_0`、`RT_OBJEDCTID_1`、`RT_MOTIONMOMENT`、`RT_NORMAL`、history color = `RT_SINGLE_PREV_DIFFUSE`。
-输出：`RT_ACCUMLATE_DIFFUSE`。
+输入（全部 bindless storage image）：`RT_SINGLE_DIFFUSE`(当前全色)、`RT_MOTIONVECTOR`、`RT_OBJECTID_0`、`RT_OBJECTID_1`、`RT_MOTIONMOMENT`、`RT_NORMAL`、history color = `RT_SINGLE_PREV_DIFFUSE`。
+输出：`RT_ACCUMULATE_DIFFUSE`。
 
 逻辑（线性域，参考 `Process.ReProject.comp.slang` 但只处理单缓冲）：
 1. `current = RT_SINGLE_DIFFUSE[ipos]`。
 2. `motion = RT_MOTIONVECTOR[ipos].rg`；`previpos = floor(ipos + motion)`。
-3. history 有效性：`previpos` 在界内 且 `FetchPrimitiveIndex(RT_OBJEDCTID_0[ipos]) == FetchPrimitiveIndex(RT_OBJEDCTID_1[previpos])` 且 `RT_MOTIONMOMENT[ipos]==0`，否则 `useHistory=false`。
+3. history 有效性：`previpos` 在界内 且 `FetchPrimitiveIndex(RT_OBJECTID_0[ipos]) == FetchPrimitiveIndex(RT_OBJECTID_1[previpos])` 且 `RT_MOTIONMOMENT[ipos]==0`，否则 `useHistory=false`。
 4. `history = bilinearSample(RT_SINGLE_PREV_DIFFUSE, ipos+motion)`（用 `FilterHistoryColor` 同款 subpixel 双线性，可裁掉它的多 primitive id 校验、仅保留有效性判断）。
 5. **邻域 YCoCg AABB clamp** 抑制 ghosting：把 `Process.ReProject.comp.slang:204-221` 注释掉的那段启用（对 3×3 或 5×5 邻域取 `rgb2ycocg` 的 min/max，`history = clamp` 回 AABB）。
 6. `out = useHistory ? lerp(historyClamped, current.rgb, 1.0/max(1,TemporalFrames)) : current.rgb;`
-7. 写 `RT_ACCUMLATE_DIFFUSE[ipos] = float4(out, 1)`。
+7. 写 `RT_ACCUMULATE_DIFFUSE[ipos] = float4(out, 1)`。
 
 push constant 用 `ZeroBindCustomPushConstantPipeline`（仿 `SoftwareModernRenderer.cpp:29`），至少传 `TemporalFrames` 与 history 的 bindless id（非 ReferenceMode 下即 `RT_SINGLE_PREV_DIFFUSE`）。
 
@@ -127,15 +127,15 @@ push constant 用 `ZeroBindCustomPushConstantPipeline`（仿 `SoftwareModernRend
 - 非 ReferenceMode 下 history 用 `Assets::Bindless::RT_SINGLE_PREV_DIFFUSE`；ReferenceMode 用 `GetTemporalStorageImage`（仿 `SoftwareModernRenderer.cpp:32-43`，单张 diffuse 即可）。
 
 `cpp::Render`（在 shading 之后、compose 之前插入）：
-1. shading 后的 barrier 增加 `RT_MOTIONVECTOR`、`RT_NORMAL`（write→read），保留现有 `RT_SINGLE_DIFFUSE` / `RT_OBJEDCTID_0` / `RT_PREV_DEPTHBUFFER`。
-2. `SCOPED_GPU_TIMER("reproject pass")`：bind `accumulatePipeline_`，dispatch `Math::GetSafeDispatchCount(w,8) × GetSafeDispatchCount(h,8)`；之后对 `RT_ACCUMLATE_DIFFUSE` 加 barrier（write→read）。
+1. shading 后的 barrier 增加 `RT_MOTIONVECTOR`、`RT_NORMAL`（write→read），保留现有 `RT_SINGLE_DIFFUSE` / `RT_OBJECTID_0` / `RT_PREV_DEPTHBUFFER`。
+2. `SCOPED_GPU_TIMER("reproject pass")`：bind `accumulatePipeline_`，dispatch `Math::GetSafeDispatchCount(w,8) × GetSafeDispatchCount(h,8)`；之后对 `RT_ACCUMULATE_DIFFUSE` 加 barrier（write→read）。
 3. compose pass 不变（但其源已切到 accumulate，见 Step A4）。
-4. `SCOPED_GPU_TIMER("copy pass")`：`vkCmdCopyImage` 把 `RT_ACCUMLATE_DIFFUSE` → `RT_SINGLE_PREV_DIFFUSE`（仿 `SoftwareModernRenderer.cpp:102-125`，只拷 diffuse 一张，注意前后 layout barrier）。
+4. `SCOPED_GPU_TIMER("copy pass")`：`vkCmdCopyImage` 把 `RT_ACCUMULATE_DIFFUSE` → `RT_SINGLE_PREV_DIFFUSE`（仿 `SoftwareModernRenderer.cpp:102-125`，只拷 diffuse 一张，注意前后 layout barrier）。
 
 ### Step A4 — compose 读累积结果
 
 文件：`assets/shaders/Process.ComposeSimple.comp.slang:58`
-- `LightingImage` 源从 `Bindless.RT_SINGLE_DIFFUSE` 改为 `Bindless.RT_ACCUMLATE_DIFFUSE`。
+- `LightingImage` 源从 `Bindless.RT_SINGLE_DIFFUSE` 改为 `Bindless.RT_ACCUMULATE_DIFFUSE`。
 - tonemap / edge 高光段（line 77-112）保持不变。
 
 ## 5. 验证计划

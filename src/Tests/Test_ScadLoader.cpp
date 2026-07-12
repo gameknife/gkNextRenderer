@@ -852,13 +852,13 @@ TEST_CASE("Scad loader: Z-up converts to engine Y-up", "[Unit][Scad]")
     CHECK(models[0].GetLocalAABBMax().y == Catch::Approx(1.0f).margin(1e-5f));
 }
 
-TEST_CASE("Scad loader: loads the bundled ancient_city sample when present", "[Unit][Scad]")
+TEST_CASE("Scad loader: loads the bundled old_city sample when present", "[Unit][Scad]")
 {
     const std::filesystem::path samplePath =
-        std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets/scad/acient_city.scad"));
+        std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets/scad/old_city.scad"));
     if (!std::filesystem::exists(samplePath))
     {
-        WARN("assets/scad/acient_city.scad not present in runtime root; skipping sample load");
+        WARN("assets/scad/old_city.scad not present in runtime root; skipping sample load");
         return;
     }
 
@@ -871,7 +871,7 @@ TEST_CASE("Scad loader: loads the bundled ancient_city sample when present", "[U
     std::vector<Assets::Skeleton> skeletons;
 
     REQUIRE(Assets::FScadLoader::LoadScadScene(
-        "assets/scad/acient_city.scad",
+        "assets/scad/old_city.scad",
         environment, nodes, models, materials, lights, tracks, skeletons));
 
     CHECK(nodes.size() > 1);
@@ -886,10 +886,12 @@ TEST_CASE("Scad loader: loads the bundled ancient_city sample when present", "[U
         sceneMax = glm::max(sceneMax, model.GetLocalAABBMax());
     }
 
+    // old_city.scad: terrain footprint 340 x 340 plus the official roads that
+    // run past the terrain edge to the map border (see the scene header comment).
     const glm::vec3 extent = sceneMax - sceneMin;
-    CHECK(extent.x == Catch::Approx(330.0f).margin(2.0f));
-    CHECK(extent.z == Catch::Approx(260.0f).margin(2.0f));
-    CHECK(extent.y > 30.0f);
+    CHECK(extent.x == Catch::Approx(352.0f).margin(2.0f));
+    CHECK(extent.z == Catch::Approx(352.0f).margin(2.0f));
+    CHECK(extent.y > 10.0f);
 
     REQUIRE_FALSE(environment.cameras.empty());
     const Assets::Camera& camera = environment.cameras[0];

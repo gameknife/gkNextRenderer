@@ -62,10 +62,10 @@ last_updated: 2026-06-21
 
 | 顺序 | Pass | Shader | 主要 I/O |
 | --- | --- | --- | --- |
-| 1 | 着色 | `Core.SwModernNoAmbient.comp.slang` | 读 `RT_MINIGBUFFER`；写 `RT_SINGLE_DIFFUSE` / `RT_OBJEDCTID_0` / `RT_PREV_DEPTHBUFFER` / `RT_MOTIONVECTOR` / `RT_MOTIONMOMENT` / `RT_NORMAL` |
-| 2 | 时序累积 | `Process.ReProjectSimple.comp.slang` | 读 `RT_SINGLE_DIFFUSE` + history，写 `RT_ACCUMLATE_DIFFUSE`（push const 16B：TemporalFrames / prevDiffuseIdx / historyValid / taaEnabled） |
-| 3 | 合成 | `Process.ComposeSimple.comp.slang` | 读 `RT_ACCUMLATE_DIFFUSE`，描边 + tonemap → `RT_DENOISED` |
-| 4 | history copy | `TemporalResolve::CopyToHistory` | `RT_ACCUMLATE_DIFFUSE` → `RT_SINGLE_PREV_DIFFUSE` |
+| 1 | 着色 | `Core.SwModernNoAmbient.comp.slang` | 读 `RT_MINIGBUFFER`；写 `RT_SINGLE_DIFFUSE` / `RT_OBJECTID_0` / `RT_PREV_DEPTHBUFFER` / `RT_MOTIONVECTOR` / `RT_MOTIONMOMENT` / `RT_NORMAL` |
+| 2 | 时序累积 | `Process.ReProjectSimple.comp.slang` | 读 `RT_SINGLE_DIFFUSE` + history，写 `RT_ACCUMULATE_DIFFUSE`（push const 16B：TemporalFrames / prevDiffuseIdx / historyValid / taaEnabled） |
+| 3 | 合成 | `Process.ComposeSimple.comp.slang` | 读 `RT_ACCUMULATE_DIFFUSE`，描边 + tonemap → `RT_DENOISED` |
+| 4 | history copy | `TemporalResolve::CopyToHistory` | `RT_ACCUMULATE_DIFFUSE` → `RT_SINGLE_PREV_DIFFUSE` |
 
 GTAO pass 将插入第 1 与第 2 之间（§4）。
 
@@ -109,7 +109,7 @@ color = float4(ambient + direct, 1.0f);   // ← ambient 与 direct 已合并，
 
 - `RT_NORMAL`：**世界空间法线**（`float4(normalize(hitVertex.Normal), 1)`，line 171）。
 - `RT_PREV_DEPTHBUFFER`：**NDC 深度** `clipPos.z / clipPos.w`（line 161、169）。
-- `RT_MOTIONVECTOR`、`RT_MOTIONMOMENT`、`RT_OBJEDCTID_0`：供时序 / 描边用。
+- `RT_MOTIONVECTOR`、`RT_MOTIONMOMENT`、`RT_OBJECTID_0`：供时序 / 描边用。
 
 GTAO 所需「深度 + 法线 + 相机矩阵」三要素齐备：法线现成；视空间位置由 NDC 深度 + `Camera.ProjectionInverse` 反算（着色 pass 重建主光线已用同一套矩阵，line 49-52）。UBO 内 `ModelView / Projection / ProjectionInverse / ModelViewInverse / ViewProjection` 均可用。
 

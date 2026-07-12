@@ -756,15 +756,15 @@ public float4 interpolateAmbientCubesStable<T : IAmbientCubeSampler>(float3 inPo
     return float4(0.0, 0.0, 0.0, 1.0);
 }
 
-public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipSetp,
+public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipStep,
                       in VoxelData* Cubes, uint baseOffset, float cubeUnit)
 {
-    skipSetp = 1;
+    skipStep = 1;
     // Early out if position is outside the probe grid
     if (pos.x <= 0 || pos.y <= 0 || pos.z <= 0 ||
         pos.x > CUBE_SIZE_XY - 2 || pos.y > CUBE_SIZE_Z - 2 || pos.z > CUBE_SIZE_XY - 2)
     {
-        skipSetp = 1;
+        skipStep = 1;
         return false;
     }
 
@@ -815,22 +815,22 @@ public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uin
 
     if (unpack0.x > 1)
     {
-        skipSetp = max(1, unpack0.x);
+        skipStep = max(1, unpack0.x);
     }
 
     return false;
 }
 
-public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipSetp,
+public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipStep,
                       in VoxelData* Cubes)
 {
-    return inSolid(pos, rayDir, offsetDist, matId, skipSetp, Cubes, 0, GetAmbientCubeUnit());
+    return inSolid(pos, rayDir, offsetDist, matId, skipStep, Cubes, 0, GetAmbientCubeUnit());
 }
 
-public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipSetp,
+public bool inSolid(float3 pos, float3 rayDir, inout float offsetDist, inout uint matId, inout float skipStep,
                       in VoxelData* Cubes, uint baseOffset)
 {
-    return inSolid(pos, rayDir, offsetDist, matId, skipSetp, Cubes, baseOffset, GetAmbientCubeUnit());
+    return inSolid(pos, rayDir, offsetDist, matId, skipStep, Cubes, baseOffset, GetAmbientCubeUnit());
 }
 
 public interface IProbeGenerator

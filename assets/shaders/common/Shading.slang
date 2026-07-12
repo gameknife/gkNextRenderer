@@ -308,8 +308,8 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
         float t = 0;
         float4 tempColor;
         float hitDist = 0;
-        bool hitted = HWTracer.TraceRay(origin.xyz, direction.xyz, PT_MAX_TRACE_DISTANCE, outVertex, outNode, tempColor, hitDist);
-        if (hitted)
+        bool hit = HWTracer.TraceRay(origin.xyz, direction.xyz, PT_MAX_TRACE_DISTANCE, outVertex, outNode, tempColor, hitDist);
+        if (hit)
         {
             // 计算命中点到相机的距离
             float4 cameraPos = mul(Camera.ModelViewInverse, float4(0, 0, 0, 1));
@@ -333,7 +333,7 @@ public struct FHardwarePrimaryRayCaster : IPrimaryRayCaster
         {
             outPixelOffset = float2(0, 0);
         }
-        return hitted;
+        return hit;
     }
 
     ConstantBuffer<UniformBufferObject> Camera;
@@ -449,8 +449,8 @@ public struct FVisibilityBufferRayCaster : IPrimaryRayCaster
         // 确保偏移后的位置在屏幕范围内
         offsetPos = clamp(offsetPos, int2(0, 0), isize - int2(1, 1));
 
-        uint offsetedPackValue = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[offsetPos];
-        uint2 finalVBuffer = uint2((offsetedPackValue >> 17) & 0x7FFF, offsetedPackValue & 0x1FFFF); 
+        uint offsetPackValue = Bindless.GetViewStorageTexture<uint>(Bindless.RT_MINIGBUFFER)[offsetPos];
+        uint2 finalVBuffer = uint2((offsetPackValue >> 17) & 0x7FFF, offsetPackValue & 0x1FFFF); 
 
         float2 finalUV = (float2(offsetPos) / float2(isize)) * 2.0 - 1.0;
         

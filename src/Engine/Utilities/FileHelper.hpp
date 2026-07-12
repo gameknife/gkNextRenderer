@@ -75,8 +75,8 @@ namespace Utilities
 
         static std::string GetNormalizedFilePath( const char* srcPath )
         {
-            std::string normlizedPath = GetRuntimeRoot().append(srcPath).string();
-            std::filesystem::path fullPath(normlizedPath);
+            std::string normalizedPath = GetRuntimeRoot().append(srcPath).string();
+            std::filesystem::path fullPath(normalizedPath);
             std::filesystem::path directory = fullPath.parent_path();
             std::string pattern = fullPath.filename().string();
 
@@ -84,13 +84,13 @@ namespace Utilities
             {
                 for (const auto& entry : std::filesystem::directory_iterator(directory)) {
                     if (entry.is_regular_file() && entry.path().filename().string() == pattern) {
-                        normlizedPath =  std::filesystem::absolute(entry.path()).string();
+                        normalizedPath =  std::filesystem::absolute(entry.path()).string();
                         break;
                     }
                 }    
             }
             
-            return normlizedPath;
+            return normalizedPath;
         }
     }
 

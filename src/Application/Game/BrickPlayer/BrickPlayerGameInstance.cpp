@@ -791,7 +791,7 @@ void BrickPlayerGameInstance::PerformRaycast()
 
 bool BrickPlayerGameInstance::UpdateHitStateFromRaycast(const Assets::RayCastResult& result)
 {
-    if (!result.Hitted)
+    if (!result.Hit)
     {
         return false;
     }

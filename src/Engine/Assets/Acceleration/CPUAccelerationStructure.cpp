@@ -355,7 +355,7 @@ RayCastResult FCPUAccelerationStructure::RayCastInCPU(vec3 rayOrigin, vec3 rayDi
                 normalWS = -normalWS;
             result.HitPoint = vec4(hitPos, 0);
             result.Normal = normalWS;
-            result.Hitted = true;
+            result.Hit = true;
             result.T = globalT;
             result.InstanceId = instContext.nodeId;
             result.MaterialId = FetchMaterialId(context.extinfos[primIdx].matIdx, ray.hit.inst);

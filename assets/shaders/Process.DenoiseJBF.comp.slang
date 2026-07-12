@@ -75,9 +75,9 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
     let vb = Bindless.GetGpuscene().custom_data_0;
     let FinalImage = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(vb, int(Camera.DenoiseDiffuseSourceSlot)));
     let FinalImageSpec = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(vb, int(Camera.DenoiseSpecularSourceSlot)));
-    let AccumlateAlbedo = Bindless.GetViewStorageTexture<float4>(Bindless.RT_ACCUMLATE_ALBEDO);
-    let ObjectId0 = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
-    let ObjectId1 = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_1);
+    let AccumulateAlbedo = Bindless.GetViewStorageTexture<float4>(Bindless.RT_ACCUMULATE_ALBEDO);
+    let ObjectId0 = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJECTID_0);
+    let ObjectId1 = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJECTID_1);
 
     const int2 globalOffset = int2(Camera.ViewportRect.xy);
     const int2 ipos = int2(dispatchThreadId.xy) + globalOffset;
@@ -89,7 +89,7 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
     }
     else
     {
-        Total = FinalImage[ipos].rgb * AccumlateAlbedo[ipos].rgb + FinalImageSpec[ipos].rgb;
+        Total = FinalImage[ipos].rgb * AccumulateAlbedo[ipos].rgb + FinalImageSpec[ipos].rgb;
     }
 
     float selectedEdge = saturate(ComputeEdgeStrengthTwoSided(ObjectId0, ipos, OBJECT_ID_FLAG_SELECTED) * 0.80 +

@@ -35,18 +35,18 @@ related: src/Engine/Rendering/PathTracing/PathTracingRenderer.cpp, assets/shader
 | Bindless 槽 | 名称 | 内容 | 降噪是否已用 |
 |---|---|---|---|
 | 1 / 12 | `RT_SINGLE_DIFFUSE` / `RT_SINGLE_SPECULAR` | 当前帧 **已解调** 漫反射辐照度 / 镜面 | ✅ |
-| 0 / 11 / 13 | `RT_ACCUMLATE_*` | 时域累积结果 | ✅ |
+| 0 / 11 / 13 | `RT_ACCUMULATE_*` | 时域累积结果 | ✅ |
 | 20-22 | `RT_SINGLE_PREV_*` | 历史帧 | ✅ |
 | 6 | `RT_ALBEDO` | primary albedo（解调用） | ✅ 仅 compose 重调制 |
 | 7 | `RT_NORMAL` | 世界法线 | ⚠️ JBF 中法线权重被注释 |
 | 5 | `RT_MOTIONVECTOR` | 屏幕空间 motion | ✅ |
-| 3 / 4 | `RT_OBJEDCTID_0/1` | 当前/历史 instance id | ✅ 拒绝历史 |
+| 3 / 4 | `RT_OBJECTID_0/1` | 当前/历史 instance id | ✅ 拒绝历史 |
 | 14 | `RT_MOTIONMOMENT` | 视为"disocclusion 倒计时"的 uint | ✅ 二值 reset |
 | 10 | `RT_PREV_DEPTHBUFFER` | 上一帧深度 | ❌ 未用于边缘停止 |
 | **15 / 16** | **`RT_DIFFUSE_HITDIST` / `RT_SPECULAR_HITDIST`** | **漫反/镜面命中距离** | ❌ **完全未用** |
 | 17 | `RT_SPECULAR_ALBEDO` | 镜面 albedo（金属用） | ❌ 未用于解调 |
 
-**关键发现：解调已正确做到**——`PathTracingRenderer.slang` 中 primary 表面 albedo 不计入 `OutSingleDiffuse`（只在二次及之后 bounce 乘 albedo），compose 时 `Total = Total * AccumlateAlbedo + CenterSpec` 重新调制。这是降噪的前提，且已具备。**hitDist 和 prev-depth 是白送的信号，但当前一律没用。**
+**关键发现：解调已正确做到**——`PathTracingRenderer.slang` 中 primary 表面 albedo 不计入 `OutSingleDiffuse`（只在二次及之后 bounce 乘 albedo），compose 时 `Total = Total * AccumulateAlbedo + CenterSpec` 重新调制。这是降噪的前提，且已具备。**hitDist 和 prev-depth 是白送的信号，但当前一律没用。**
 
 ### 1.3 当前各遍的具体做法
 

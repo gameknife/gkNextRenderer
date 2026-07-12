@@ -116,7 +116,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 {
     const UniformBufferObject camera = Bindless.GetGpuscene().Camera[0];
     let OutImage = Bindless.GetViewStorageTexture<float4>(Bindless.RT_DENOISED);
-    let ObjectIdImage = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
+    let ObjectIdImage = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJECTID_0);
 
     const uint2 fullSize = Bindless.GetViewStorageTextureDimensions<float4>(Bindless.RT_DENOISED);
     const int2 pixel = int2(DTid.xy);

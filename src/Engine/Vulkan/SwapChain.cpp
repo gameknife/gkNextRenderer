@@ -11,7 +11,6 @@
 #include <algorithm>
 #include <limits>
 
-#include "Engine/Vulkan/DebugUtilities.hpp"
 
 float GAndroidMagicScale = 1.0f;
 

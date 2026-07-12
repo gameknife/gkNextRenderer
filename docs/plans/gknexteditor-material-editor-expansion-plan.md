@@ -61,7 +61,7 @@ CPU 侧 `Assets::Material`（`src/Engine/Assets/Data/Material.hpp:8`），`align
 | `Metalness` | `float` | 金属度 | |
 | `RefractionIndex2` | `float` | 折射用第二 IOR | saver 写入 `extras.ior2` |
 | `NormalTextureScale` | `float` | 法线强度 | saver/loader 走 `normalTexture.scale` |
-| `Reserverd2` / `Reserverd3` | `float` | **空闲** | 可用于新增标量参数，无需扩容结构体 |
+| `Reserved2` / `Reserved3` | `float` | **空闲** | 可用于新增标量参数，无需扩容结构体 |
 
 着色模型枚举（`Material.hpp:40` / `BasicTypes.slang:365`）：
 
@@ -125,7 +125,7 @@ ImNodeFlow 已不再是材质编辑器依赖。`src/Application/Editor/gkNextEdi
 
 ### 4.1 材质属性完整暴露（字段 → 控件映射）
 
-下面是编辑器应当暴露的完整字段表（**复用现有字段，不需要扩容结构体**；空闲 `Reserverd2/3` 留作后续 specular tint / anisotropy 等扩展）：
+下面是编辑器应当暴露的完整字段表（**复用现有字段，不需要扩容结构体**；空闲 `Reserved2/3` 留作后续 specular tint / anisotropy 等扩展）：
 
 | UI 分组 | 字段 | 控件 | 范围/步长 | 写回目标 | 条件可见 |
 | --- | --- | --- | --- | --- | --- |
@@ -141,7 +141,7 @@ ImNodeFlow 已不再是材质编辑器依赖。`src/Application/Editor/gkNextEdi
 | Normal | Normal Scale | SliderFloat | 0–2 | `NormalTextureScale` | 有法线贴图时 |
 | Textures | Albedo / MRA / Normal / Emissive | 贴图槽控件（见 4.3） | — | 对应 `*TextureId` | 始终 |
 
-> Emissive 注（按 D3）：**沿用现有 `Diffuse.rgb` 承载辐射亮度的约定，不新增字段、不改落盘格式**。编辑器提供 "Emissive Color × Strength" 两个控件，内部合成 `rgb = color × strength` 写入 `Diffuse.rgb`，并保持与 saver 反解逻辑（`FSceneSaver.cpp:252-262` 的 ÷strength / ×50 约定）一致。**不**启用 `Reserverd` 显式 strength 字段。
+> Emissive 注（按 D3）：**沿用现有 `Diffuse.rgb` 承载辐射亮度的约定，不新增字段、不改落盘格式**。编辑器提供 "Emissive Color × Strength" 两个控件，内部合成 `rgb = color × strength` 写入 `Diffuse.rgb`，并保持与 saver 反解逻辑（`FSceneSaver.cpp:252-262` 的 ÷strength / ×50 约定）一致。**不**启用 `Reserved` 显式 strength 字段。
 
 实现建议：把上表做成一个 `struct MaterialFieldDesc { const char* group; const char* label; EWidget widget; float min,max; /*getter/setter on Material*/ }` 的静态数组，UI 遍历渲染。这样 Phase 1 之后新增字段只需加一行。
 
@@ -248,7 +248,7 @@ ImNodeFlow 已不再是材质编辑器依赖。`src/Application/Editor/gkNextEdi
 | `src/Application/Editor/gkNextEditor/Panels/ContentBrowserPanel.cpp` | Material Browser 增 CRUD 入口（`:734`、`:806`） |
 | `src/Application/Editor/gkNextEditor/Panels/PropertiesPanel.cpp` | 编辑入口/引用展示（`:363-410`） |
 | `src/Application/Editor/gkNextEditor/Core/EditorUiState.hpp` | 记录材质选择与材质预览窗口/交互状态 |
-| `src/Engine/Assets/Data/Material.hpp` + `assets/shaders/common/BasicTypes.slang` | 按 D3 本期**不改**（不启用 `Reserverd`）；列此仅为提醒：若未来要动则必须成对改 |
+| `src/Engine/Assets/Data/Material.hpp` + `assets/shaders/common/BasicTypes.slang` | 按 D3 本期**不改**（不启用 `Reserved`）；列此仅为提醒：若未来要动则必须成对改 |
 | `src/Engine/Assets/{Savers/FSceneSaver,Loaders/FSceneLoader}.cpp` | 按 D3 本期**不改落盘格式**；仅在往返测试中作为验证对象 |
 | `src/Engine/Assets/Core/Scene*.{cpp,hpp}` | 新增 `RemoveMaterial(id)`（含 D4 重映射+索引修正）/`DuplicateMaterial`/`UpdateMaterial(id)` 接口 |
 
@@ -266,7 +266,7 @@ ImNodeFlow 已不再是材质编辑器依赖。`src/Application/Editor/gkNextEdi
 
 ## 8. 风险与未决问题
 
-1. **结构体对齐同步**：`Material.hpp` 与 `BasicTypes.slang` 必须严格同序同对齐。按 D3 本期**不动结构体**，风险较低；除非未来启用 `Reserverd2/3`，届时尤其小心 16 字节对齐。
+1. **结构体对齐同步**：`Material.hpp` 与 `BasicTypes.slang` 必须严格同序同对齐。按 D3 本期**不动结构体**，风险较低；除非未来启用 `Reserved2/3`，届时尤其小心 16 字节对齐。
 2. **Emissive strength**：按 D3 沿用 `Diffuse.rgb` 反解约定，不改落盘格式；风险点仅在编辑器 color×strength 合成与 saver 反解（×50/÷50）保持一致，需往返单测兜底。
 3. **删除材质的引用一致性（D4 重点风险）**：`RenderComponent` 用**索引**引用材质，删除后必须同时做两件事——(a) 指向被删材质的引用重映射到默认材质；(b) 所有大于被删索引的引用整体 −1 修正。建议集中在 `Scene::RemoveMaterial(id)` 内完成，UI 层不要各自实现。必须有覆盖"删除中间某个材质后其余物体仍指向正确材质"的单测。
 4. **第三方目录清理**：材质编辑器不再构建、链接、引用 ImNodeFlow，且 `src/ThirdParty/ImNodeFlow` 已物理删除。未来如重新引入节点图能力，必须单开设计文档重新立项。

@@ -128,7 +128,7 @@ namespace Editor
                                                        [engine, path](Assets::RayCastResult result) mutable
                                                        {
                                                            const glm::vec3 translation =
-                                                               result.Hitted ? result.HitPoint : glm::vec3(0.0f);
+                                                               result.Hit ? result.HitPoint : glm::vec3(0.0f);
                                                            engine->RequestAddSceneReference(path, translation);
                                                            return true;
                                                        });
@@ -151,7 +151,7 @@ namespace Editor
                             ctx.engine.RayCast(origin, dir,
                                                   [scene, materialId](Assets::RayCastResult result)
                                                   {
-                                                      if (result.Hitted)
+                                                      if (result.Hit)
                                                       {
                                                           Assets::Node* node =
                                                               scene->GetNodeByInstanceId(result.InstanceId);

@@ -15,7 +15,7 @@
 
 #include "Engine/Runtime/Engine.hpp"
 
-#define PROVOKING_VERTICE 1
+#define PROVOKING_VERTEX 1
 
 using namespace glm;
 
@@ -220,7 +220,7 @@ namespace Assets
         vertices_(std::move(vertices)),
         indices_(std::move(indices))
     {
-        verticeCount = uint32_t(vertices_.size());
+        vertexCount = uint32_t(vertices_.size());
         indiceCount = uint32_t(indices_.size());
         
         local_aabb_min = glm::vec3(999999, 999999, 999999);

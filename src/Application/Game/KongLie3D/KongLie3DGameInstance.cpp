@@ -674,7 +674,7 @@ bool KongLie3DGameInstance::OnMouseButton(SDL_Event& event)
         bool handled = false;
         GetEngine().RayCast(rayOrigin, rayDir, [this, &handled](Assets::RayCastResult result)
         {
-            if (!result.Hitted)
+            if (!result.Hit)
             {
                 return true;
             }
@@ -1281,7 +1281,7 @@ void KongLie3DGameInstance::UpdateHoveredPieceTooltip(double deltaSeconds)
     std::string hoveredPieceId;
     GetEngine().RayCast(rayOrigin, rayDir, [this, &hoveredPieceId](Assets::RayCastResult result)
     {
-        if (!result.Hitted)
+        if (!result.Hit)
         {
             return true;
         }

@@ -108,7 +108,7 @@ function(gk_enable_fast_dev_link target)
 endfunction()
 
 
-# libray and app
+# library and app
 if ( ANDROID )
 add_library(gkNextRenderer SHARED
 	${src_files_assets}

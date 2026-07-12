@@ -226,7 +226,7 @@ void Runtime::DrawProfileDebugOverlay(NextEngine& engine, const NextUI::Statisti
         if (BeginStatTable("##SceneStats"))
         {
             DrawValueRow("Nodes", FormatCount(scene.Nodes().size()));
-            DrawValueRow("Instances", FormatCount(scene.GetNodeProxys().size()));
+            DrawValueRow("Instances", FormatCount(scene.GetNodeProxies().size()));
             DrawValueRow("Models", FormatCount(scene.Models().size()));
             DrawValueRow("Materials", FormatCount(scene.Materials().size()));
             DrawValueRow("Textures", FormatCount(statistics.TextureCount));

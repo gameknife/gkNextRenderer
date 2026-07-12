@@ -220,7 +220,7 @@ namespace Vulkan
     void VulkanBaseRenderer::CreateTopLevelStructures(VkCommandBuffer commandBuffer)
     {
         const auto& debugUtils = Device().DebugUtils();
-        const uint64_t requestedCapacity = std::max<size_t>(1, GetScene().GetNodeProxys().size());
+        const uint64_t requestedCapacity = std::max<size_t>(1, GetScene().GetNodeProxies().size());
         const uint64_t deviceLimit = rt_->properties->MaxInstanceCount();
         if (requestedCapacity > deviceLimit)
         {

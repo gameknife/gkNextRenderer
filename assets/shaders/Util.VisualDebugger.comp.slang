@@ -51,13 +51,13 @@ float3 UintToStableColor(uint value)
     return rgb + m;
 }
 
-#define DRAW(IMAGE, quadx, quady, divider, ipos, isize, multipler) {                                                              \
+#define DRAW(IMAGE, quadx, quady, divider, ipos, isize, multiplier) {                                                              \
         int2 uv = int2(0, 0);                                      \
         if (DrawQuad(quadx, quady, divider, ipos, isize, uv)) {                                                          \
             int2 ssize;                                            \
             IMAGE.GetDimensions(ssize.x, ssize.y);                 \
             float4 col = IMAGE[uv * ssize / isize]; \
-            Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = col * multipler;} \
+            Bindless.GetStorageTexture<float4>(Bindless.RT_SWAPCHAIN0 + pushConsts.SwapChainIdx)[ipos] = col * multiplier;} \
 }
 
 #define DRAWNORMAL(IMAGE, quadx, quady, divider, ipos, isize) {                                                         \
@@ -111,12 +111,12 @@ float3 UintToStableColor(uint value)
 
 bool DrawQuad(float quadx, float quady, float divider, int2 ipos, int2 isize, out int2 uv)
 {
-    float elementx = isize.x / divider;
-    float elementy = isize.y / divider;
+    float elementX = isize.x / divider;
+    float elementY = isize.y / divider;
 
-    if(ipos.x >= elementx * quadx + pushConsts.offset_x && ipos.x < elementx * (quadx + 1) + pushConsts.offset_x && ipos.y > elementy * quady + pushConsts.offset_y && ipos.y < elementy * (quady + 1) + pushConsts.offset_y)
+    if(ipos.x >= elementX * quadx + pushConsts.offset_x && ipos.x < elementX * (quadx + 1) + pushConsts.offset_x && ipos.y > elementY * quady + pushConsts.offset_y && ipos.y < elementY * (quady + 1) + pushConsts.offset_y)
     {
-        uv = uint2((ipos - float2(elementx * quadx + pushConsts.offset_x, elementy * quady + pushConsts.offset_y)) * float2(divider, divider));
+        uv = uint2((ipos - float2(elementX * quadx + pushConsts.offset_x, elementY * quady + pushConsts.offset_y)) * float2(divider, divider));
         return true;
     }
     uv = int2(0, 0);
@@ -141,7 +141,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_ALBEDO)), 0, 0, 4, ipos, isize, 1);
     DRAWNORMAL(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_NORMAL)), 1, 0, 4, ipos, isize);
     DRAWDEPTH(Bindless.GetStorageTexture<float>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_PREV_DEPTHBUFFER)), 2, 0, 4, ipos, isize, 1.0f);
-    DRAWINT(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_OBJEDCTID_0)), 3, 0, 4, ipos, isize);
+    DRAWINT(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_OBJECTID_0)), 3, 0, 4, ipos, isize);
 
 // line 2/3 left
 #ifdef SHADER_CLOCK
@@ -157,7 +157,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_DENOISED)), 0.5, 0.5, 2, ipos, isize, 1);
 
     // line back
-    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_ACCUMLATE_DIFFUSE)), 0, 3, 4, ipos, isize, 0.005);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_ACCUMULATE_DIFFUSE)), 0, 3, 4, ipos, isize, 0.005);
     DRAWINTX(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_MINIGBUFFER)), 1, 3, 4, ipos, isize);
     DRAWINTY(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_MINIGBUFFER)), 2, 3, 4, ipos, isize);
     DRAWINT(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_MOTIONMOMENT)), 3, 3, 4, ipos, isize);

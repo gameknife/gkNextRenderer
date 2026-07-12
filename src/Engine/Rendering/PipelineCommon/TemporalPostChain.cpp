@@ -66,13 +66,13 @@ namespace Vulkan::PipelineCommon
                 {Assets::Bindless::RT_SINGLE_SPECULAR, ERenderStage::Compute, EResourceAccess::ShaderRead},
                 {Assets::Bindless::RT_ALBEDO, ERenderStage::Compute, EResourceAccess::ShaderRead},
                 {Assets::Bindless::RT_NORMAL, ERenderStage::Compute, EResourceAccess::ShaderRead},
-                {Assets::Bindless::RT_OBJEDCTID_0, ERenderStage::Compute, EResourceAccess::ShaderRead},
-                {Assets::Bindless::RT_OBJEDCTID_1, ERenderStage::Compute, EResourceAccess::ShaderRead},
+                {Assets::Bindless::RT_OBJECTID_0, ERenderStage::Compute, EResourceAccess::ShaderRead},
+                {Assets::Bindless::RT_OBJECTID_1, ERenderStage::Compute, EResourceAccess::ShaderRead},
                 {Assets::Bindless::RT_MOTIONVECTOR, ERenderStage::Compute, EResourceAccess::ShaderRead},
                 {Assets::Bindless::RT_MOTIONMOMENT, ERenderStage::Compute, EResourceAccess::ShaderRead},
-                {Assets::Bindless::RT_ACCUMLATE_DIFFUSE, ERenderStage::Compute, EResourceAccess::ShaderWrite},
-                {Assets::Bindless::RT_ACCUMLATE_SPECULAR, ERenderStage::Compute, EResourceAccess::ShaderWrite},
-                {Assets::Bindless::RT_ACCUMLATE_ALBEDO, ERenderStage::Compute, EResourceAccess::ShaderWrite},
+                {Assets::Bindless::RT_ACCUMULATE_DIFFUSE, ERenderStage::Compute, EResourceAccess::ShaderWrite},
+                {Assets::Bindless::RT_ACCUMULATE_SPECULAR, ERenderStage::Compute, EResourceAccess::ShaderWrite},
+                {Assets::Bindless::RT_ACCUMULATE_ALBEDO, ERenderStage::Compute, EResourceAccess::ShaderWrite},
             }, "temporal reproject");
 
             FReprojectPushConstants push{};
@@ -96,11 +96,11 @@ namespace Vulkan::PipelineCommon
         {
             SCOPED_GPU_TIMER("compose pass");
             baseRenderer.TransitionActiveViewImages(commandBuffer, {
-                {Assets::Bindless::RT_ACCUMLATE_DIFFUSE, ERenderStage::Compute, EResourceAccess::ShaderRead},
-                {Assets::Bindless::RT_ACCUMLATE_SPECULAR, ERenderStage::Compute, EResourceAccess::ShaderRead},
-                {Assets::Bindless::RT_ACCUMLATE_ALBEDO, ERenderStage::Compute, EResourceAccess::ShaderRead},
-                {Assets::Bindless::RT_OBJEDCTID_0, ERenderStage::Compute, EResourceAccess::ShaderRead},
-                {Assets::Bindless::RT_OBJEDCTID_1, ERenderStage::Compute, EResourceAccess::ShaderRead},
+                {Assets::Bindless::RT_ACCUMULATE_DIFFUSE, ERenderStage::Compute, EResourceAccess::ShaderRead},
+                {Assets::Bindless::RT_ACCUMULATE_SPECULAR, ERenderStage::Compute, EResourceAccess::ShaderRead},
+                {Assets::Bindless::RT_ACCUMULATE_ALBEDO, ERenderStage::Compute, EResourceAccess::ShaderRead},
+                {Assets::Bindless::RT_OBJECTID_0, ERenderStage::Compute, EResourceAccess::ShaderRead},
+                {Assets::Bindless::RT_OBJECTID_1, ERenderStage::Compute, EResourceAccess::ShaderRead},
                 {Assets::Bindless::RT_DENOISED, ERenderStage::Compute, EResourceAccess::ShaderWrite},
             }, "temporal compose");
             composePipeline_->BindPipeline(commandBuffer,
@@ -112,9 +112,9 @@ namespace Vulkan::PipelineCommon
         {
             SCOPED_GPU_TIMER("copy pass");
             baseRenderer.ActiveRenderView().TemporalResolve().CopyToHistory(baseRenderer, commandBuffer, {
-                {Assets::Bindless::RT_ACCUMLATE_DIFFUSE, ETemporalChannel::Diffuse},
-                {Assets::Bindless::RT_ACCUMLATE_SPECULAR, ETemporalChannel::Specular},
-                {Assets::Bindless::RT_ACCUMLATE_ALBEDO, ETemporalChannel::Albedo},
+                {Assets::Bindless::RT_ACCUMULATE_DIFFUSE, ETemporalChannel::Diffuse},
+                {Assets::Bindless::RT_ACCUMULATE_SPECULAR, ETemporalChannel::Specular},
+                {Assets::Bindless::RT_ACCUMULATE_ALBEDO, ETemporalChannel::Albedo},
             });
         }
     }

@@ -174,7 +174,7 @@ public:
     }
     
     // Get the front element.
-    // If the queue is empty, wait till a element is avaiable.
+    // If the queue is empty, wait till a element is available.
     bool dequeue(T& result, bool wait)
     {
         std::unique_lock<std::mutex> lock(m);
@@ -182,7 +182,7 @@ public:
         {
             while (q.empty())
             {
-                // release lock as long as the wait and reaquire it afterwards.
+                // release lock as long as the wait and reacquire it afterwards.
                 c.wait(lock);
             }     
         }
@@ -314,7 +314,7 @@ public:
 
     uint32_t GetMainTaskCount();
 
-    uint32_t GetComleteTaskQueueCount()
+    uint32_t GetCompleteTaskQueueCount()
     {
         return uint32_t(completeTaskQueue_.size());
     }
@@ -339,7 +339,7 @@ public:
 
 private:
     std::vector< std::unique_ptr<TaskThread> > threads_;
-    // low-level thread, use for parrallel task
+    // low-level thread, use for parallel task
     std::vector< std::unique_ptr<TaskThread> > lowThreads_;
     tsqueue<ResTask> mainthreadTaskQueue_;
     tsqueue<ResTask> completeTaskQueue_;

@@ -97,7 +97,7 @@ namespace Assets
 		float T;
 		uint32_t InstanceId;
 		uint32_t MaterialId;
-		uint32_t Hitted;
+		uint32_t Hit;
 	};
 
 }

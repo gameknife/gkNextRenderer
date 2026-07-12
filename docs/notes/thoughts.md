@@ -57,15 +57,15 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
 
 - **[光追加速结构]** raytracing框架下的acceleration struct是一个非常好的抽象。他对场景管理实际上是一种非常好的概括。高速的trace性能，大胆设想一下，整个渲染管线完全抛弃光栅化也不是不行。一次primary ray的对pc来说代价其实很小。考虑可以做一种实验性的renderer，尝试下性能和开销。
 
-- **[Visbiliy Buffer]** 其实10年前就提出了，最近翻出来研究，发现和现代渲染架构算是绑死的，目前这套bindless架构十分适合实现他，于是很快就写了一个modern deferred renderer，目前已经搬兼容了安卓平台。可以看出，几乎所有情况，visibility buffer都会比传统gbuffer的方式快，在场景overdraw严重的工况下，visibiliy buffer最多可以快到一倍。在安卓手机上尤为明显。看来带宽友好哈cache friendly的方式确实提效明显。
+- **[Visbiliy Buffer]** 其实10年前就提出了，最近翻出来研究，发现和现代渲染架构算是绑死的，目前这套bindless架构十分适合实现他，于是很快就写了一个modern deferred renderer，目前已经搬兼容了安卓平台。可以看出，几乎所有情况，visibility buffer都会比传统gbuffer的方式快，在场景overdraw严重的工况下，visibility buffer最多可以快到一倍。在安卓手机上尤为明显。看来带宽友好哈cache friendly的方式确实提效明显。
 
 - **[Multi Draw Indirect]** 功能已经出来挺久了，基本上，可以将drawcall的消耗完全的在cpu释放，让drawcall的组织，通过cs移交给gpu。包括视锥裁剪，遮挡剔除，LOD切换等。这些工作，其实也非常时候GPU并行。为了验证MDI，我专门修复了baserendering，制作了一个多达2w+ instance node的场景，用于测试。目前在这个无剔除的渲染结构上，可以看出MDI相对于传统的CPU drawcall，已经快出好几倍了。帧耗时是0.7ms vs 2.5ms。后续准备把剔除和LOD也在这个场景上制作了，关注后续效果。
     - 安卓下面mid虽然可以正常工作，但发现了极大问题。在pc上，2w个drawcall的调用，和组成instance调用的开销区别非常小。但是在安卓下，天差地别，mid几乎和直接cpu裸掉2w次drawcall差不多了，需要详细的profile
 
 - **[GPU Stats]** 安卓系统上没有一个很好的gpu profile工具，高通的snapdragon profiler有点ptsd。考虑先通过vulkan的timequery和native的timequery，自建一个stats系统。来发现一下gpu上的性能问题。借此机会，重新梳理下stats系统的搭建。之前gkEngine上做得有点浅了。当然，计划分几步，第一步先解决掉安卓上的profile问题。
 
-- **[Android RayTracing]** 高通和mali从上一代的旗舰开始，都配备了RayTracing架构，虽然都支持RayQuery。一开始，我觉得也就是个噱头吧，RTX都还跑不明白。结果这次在我的SG 8gen2上实现了RayQuery，性能出乎意料。PrimaryRay加上bindless的材质shading，1920分辨率下，居然能拉到100-120fps，gputimer的结果在6-8ms之间。看起来，通过ray-tracing来做间接光照的hybird管线是没有任何问题的。考虑把skyvisibility, shadow, second bounce在hybird管线实现下，争取能在安卓上跑出一个可用的效果。
-    - 初步实现了一个Hybird Rendering管线，Direction Light和Indirect light分别两条ray，通过32帧的reproject temporal sample，得到了一个较好的groundtruth效果。Indirect打到物件，会尝试reproject到上一帧的结果，有值的话直接复用，实现二次反弹。
+- **[Android RayTracing]** 高通和mali从上一代的旗舰开始，都配备了RayTracing架构，虽然都支持RayQuery。一开始，我觉得也就是个噱头吧，RTX都还跑不明白。结果这次在我的SG 8gen2上实现了RayQuery，性能出乎意料。PrimaryRay加上bindless的材质shading，1920分辨率下，居然能拉到100-120fps，gputimer的结果在6-8ms之间。看起来，通过ray-tracing来做间接光照的hybrid管线是没有任何问题的。考虑把skyvisibility, shadow, second bounce在hybrid管线实现下，争取能在安卓上跑出一个可用的效果。
+    - 初步实现了一个Hybrid Rendering管线，Direction Light和Indirect light分别两条ray，通过32帧的reproject temporal sample，得到了一个较好的groundtruth效果。Indirect打到物件，会尝试reproject到上一帧的结果，有值的话直接复用，实现二次反弹。
     - 最终这个每像素2ray的管线，在android上也有较为良好的性能，同时间接光照的渲染效果接近PathTracing的Renderer
 
 - **[ImGUI]** 对ImGUI一直有一些偏见，可能是因为Unity PTSD。但其实ImGUI的设计真的十分精妙，之前确实没有看过他的实现。同时，Dear ImGUI的页面上，有大量的扩展作品，基本上，涵盖了编辑器的所有了。渲染器初步feature做差不多之后，考虑用ImGUI再搭建一个Editor的Application，用来搞一些材质编辑之类的事情，更好的测试渲染器在真实生产环境下的适应能力。
@@ -87,7 +87,7 @@ gkNextRenderer.exe --width=1920 --height=1080 --benchmark --next-scenes
     - 慢慢的，gkNextRenderer开始往Engine方面走了，一方面，通过引入动画导入，引入MagicaLego小游戏。在运行时效果上对渲染器提出了更高的要求，对reproject算法进行了多次提升和修正，并全面的支持了场景的动态化更新，使得渲染器可以更好的胜任实时游戏的要求。一方面，场景复杂度的提升，开始开发gkNextEditor，基于imgui架构，很容易的开发出了一个编辑器的雏形，并开始为材质编辑，场景编辑等功能提供更全面的手段。
     - 所以2025年的目标，可能除了继续进化渲染器的效果和效率，向gkNextEngine更进一步将会是一个更重要的目标。MagicaLego对引擎提出的要求相对较低，准备引入一个更game的例子，来推进gkNextEngine的发展。具体这个game是哪一种，还有待考虑，希望也是一个类似MagicaLego的思路，游戏的设计和逻辑遵从经典，无需思考。
     - ScriptBinding也是必须要做的一个事情，公司的项目重度使用Puerts的Binding。脚本确实带来了很多的好处，当然也有一些弊端。不只是当初的“为了热更”，更多的，是为了开发效率，为了开发成本。虽然UE有LiveCoding，但论开发效率还是比不上脚本的快速重载。希望借此机会，轻装上阵，仔细研究一下ScriptBinding，在没有镣铐的情况下探索真正的最佳实践。
-    - 写了好多渲染方面之外的计划，但本项目的核心目标还是没有变，基于路径追踪的下一代渲染（游戏）框架。因此，一直没有认真研究的RESTIR等技术，也需要逐步的加入进来，近期读了挺多文章，其实各种REST算法，有点类似于现在HybirdRenderer里的重用间接光照，确实对PT有一些改变。倒是有一片RESTIR PT，准备从他开始上手研究。
+    - 写了好多渲染方面之外的计划，但本项目的核心目标还是没有变，基于路径追踪的下一代渲染（游戏）框架。因此，一直没有认真研究的RESTIR等技术，也需要逐步的加入进来，近期读了挺多文章，其实各种REST算法，有点类似于现在HybridRenderer里的重用间接光照，确实对PT有一些改变。倒是有一片RESTIR PT，准备从他开始上手研究。
 
 - **LDraw** 
     - 最近和gemini聊天，聊到乐高积木，彻底打开了我的大门。原来乐高的很多官方套件，都有3D说明书，包括纸质说明书，其实都有一套背后的系统在运作。这个系统就叫LDraw，所有能找到的乐高零件，在LDraw的Library里都有描述。在这个基础上，目前其实在乐高的MOC圈子内，也有很成熟的一套体系，可以开发MOC套组，导出预览图，说明书，零件购买清单。国内外也有很多厂商，可以直接接受这个购买清单，给你发货。国外主要有2个主流的订单网站，国内也有高砖，精砖等公司做这个业务，他们同时也是国内各大类乐高玩具的供应商。因此，我将MagicaLego进行了一个升级，单开了一个BricksPlayer的App，这个App从零开始，都是由Claude Code和Codex协作完成的，对LDraw系统本身的理解，以及LDraw的抽象，和gkNextEngine的整合，以及对引擎必要的扩展，全部都在我的自然语言引导下，由这两个Cli独立完成，最终的代码质量，交互体验，性能都让人惊艳。最终LDraw都导入，还反哺了下gkNextRenderer，相当于拥有了无数多的高质量实例场景，以及无数多的压力测试场景。

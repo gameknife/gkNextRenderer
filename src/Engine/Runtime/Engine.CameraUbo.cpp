@@ -229,10 +229,10 @@ Assets::UniformBufferObject NextEngine::GetUniformBufferObject(const VkOffset2D 
     const int specularAtrousIterations = denoiserOn ? std::clamp(config_.userSettings.DenoiseAtrousSpecularIterations, 0, 6) : 0;
     ubo.DenoiseDiffuseSourceSlot = (diffuseAtrousIterations > 0)
         ? static_cast<uint32_t>(Assets::Bindless::RT_ATROUS_OUT)
-        : static_cast<uint32_t>(Assets::Bindless::RT_ACCUMLATE_DIFFUSE);
+        : static_cast<uint32_t>(Assets::Bindless::RT_ACCUMULATE_DIFFUSE);
     ubo.DenoiseSpecularSourceSlot = (specularAtrousIterations > 0)
         ? static_cast<uint32_t>(Assets::Bindless::RT_ATROUS_SPEC_OUT)
-        : static_cast<uint32_t>(Assets::Bindless::RT_ACCUMLATE_SPECULAR);
+        : static_cast<uint32_t>(Assets::Bindless::RT_ACCUMULATE_SPECULAR);
     ubo.GTAORadius = std::max(config_.userSettings.GTAORadius, 0.01f);
     ubo.GTAOStrength = std::max(config_.userSettings.GTAOStrength, 0.0f);
     ubo.GTAOThickness = std::max(config_.userSettings.GTAOThickness, 0.01f);

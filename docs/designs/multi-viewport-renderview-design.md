@@ -125,7 +125,7 @@ last_updated: 2026-06-27
 
 `CreateRenderImages()` 一次性创建**一整套**全屏 RT，按 `Bindless::RT_*` 固定 slot 注册进 bindless storage 数组（`VulkanBaseRenderer.cpp:740-813`）。slot 常量定义在 `assets/shaders/common/BindlessTexture.slang`：
 
-- 屏幕空间 RT：`RT_ACCUMLATE_DIFFUSE=0` … `RT_GTAO=30`（每视口私有的核心区）。
+- 屏幕空间 RT：`RT_ACCUMULATE_DIFFUSE=0` … `RT_GTAO=30`（每视口私有的核心区）。
 - 全局 / 共享 slot：`RT_SWAPCHAIN0..2 = 100..102`、`RT_REMOTE_ENCODE0..3 = 60..67`、`RT_TEMP_USAGE0 = 50`。
 - `RT_COUNT = 128`。
 - Bindless 三个数组：`SampleTextureArray`(set0,binding0)、`StorageTextureArray`(set0,binding1，RT_* 在此)、`ShadowMapArray`(set0,binding2)。
@@ -230,7 +230,7 @@ gs.custom_data_1 = view.outputSampleSlot; // 离屏输出 slot（或沿用 SwapC
 
 ### 4.2 用 Bindless slot 分段给每个视口一套独立 RT（完整时域历史）
 
-**问题**：屏幕空间 RT（`RT_ACCUMLATE_DIFFUSE` … `RT_GTAO`，约 0..30）当前是单例全屏，多视口要各一套。
+**问题**：屏幕空间 RT（`RT_ACCUMULATE_DIFFUSE` … `RT_GTAO`，约 0..30）当前是单例全屏，多视口要各一套。
 
 **方案（选定）—— RT slot bank 分段 + push constant 携带基址**：
 
@@ -245,7 +245,7 @@ gs.custom_data_1 = view.outputSampleSlot; // 离屏输出 slot（或沿用 SwapC
   public int ViewRT(uint viewBase, int rtSlot) { return int(viewBase) + rtSlot; }
   ```
 
-  shader 里 `GetStorageTexture(RT_ACCUMLATE_DIFFUSE)` → `GetStorageTexture(ViewRT(gs.custom_data_0, RT_ACCUMLATE_DIFFUSE))`。**主视口 `custom_data_0==0`，行为不变**。
+  shader 里 `GetStorageTexture(RT_ACCUMULATE_DIFFUSE)` → `GetStorageTexture(ViewRT(gs.custom_data_0, RT_ACCUMULATE_DIFFUSE))`。**主视口 `custom_data_0==0`，行为不变**。
 
 - **哪些 slot 加 base、哪些不加**：屏幕空间、与相机绑定、需要历史的 RT（diffuse/spec 累积、单帧、minigbuffer、objectid、motion、albedo/normal、hitdist、atrous ping/pong、ambient、gtao、prev-depth、单帧 prev）→ **加 base，每视口一套**。真正全局 / 世界空间 / 输出类（swapchain、remote encode、shadow map 在独立 binding、SHARC/Ambient 是设备地址 buffer 而非 bindless image）→ **不加 base，共享**。需要在 §7 Phase 1 给出一张**"逐 RT slot：私有 vs 共享"清单**并据此改 shader。
 

@@ -2,12 +2,10 @@
 #include "Engine/Assets/GPU/Texture.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/CommandExecution.hpp"
-#include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/MemoryAndShader.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include <cstring>
 
-#include "Engine/Vulkan/CommandExecution.hpp"
 
 namespace Assets {
 

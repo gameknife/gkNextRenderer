@@ -69,10 +69,14 @@ endif()
 
 if(NOT ANDROID AND NOT IOS AND Vulkan_SLANGC)
     get_filename_component(slangc_tool_dir "${Vulkan_SLANGC}" DIRECTORY)
+    # Windows SDK 将 slang*.dll 与 slangc.exe 放同一目录;macOS/Linux SDK 将
+    # libslang* 放在 bin/ 的兄弟目录 lib/ 下(slangc 的 rpath 为 @loader_path/../lib
+    # 且兜底同目录),两处都拷到 tools/slang/,与 slangc 同目录即可加载。
     file(GLOB slang_tool_files CONFIGURE_DEPENDS
         "${slangc_tool_dir}/slangc*"
         "${slangc_tool_dir}/slang*.dll"
         "${slangc_tool_dir}/libslang*"
+        "${slangc_tool_dir}/../lib/libslang*"
     )
     if(slang_tool_files)
         set(slang_tool_stamp "${CMAKE_CURRENT_BINARY_DIR}/slang-tool.stamp")

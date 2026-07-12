@@ -2,7 +2,6 @@
 #include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/SwapChain.hpp"
-#include "Engine/Vulkan/GpuResources.hpp"
 #include "Engine/Vulkan/DescriptorSystem.hpp"
 #include "Engine/Assets/GPU/Texture.hpp"
 #include <array>

@@ -46,7 +46,7 @@ namespace Vulkan
     void VulkanBaseRenderer::UpdateSkinningBuffers()
     {
         auto& scene = GetScene();
-        uint32_t vertCount = scene.GetVerticeCount();
+        uint32_t vertCount = scene.GetVertexCount();
         if (vertCount == 0) return;
 
         int flags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
@@ -140,10 +140,10 @@ namespace Vulkan
                 SPDLOG_ERROR("Skipping skinning for model {}: invalid encoded model offset", modelId);
                 continue;
             }
-            const auto& nodeProxys = scene.GetNodeProxys();
-            for (uint32_t nodeIdx = 0; nodeIdx < nodeProxys.size(); ++nodeIdx)
+            const auto& nodeProxies = scene.GetNodeProxies();
+            for (uint32_t nodeIdx = 0; nodeIdx < nodeProxies.size(); ++nodeIdx)
             {
-                if (nodeProxys[nodeIdx].modelId == skinnedProxyModelId)
+                if (nodeProxies[nodeIdx].modelId == skinnedProxyModelId)
                 {
                     proxyIdx = nodeIdx;
                     break;
@@ -677,9 +677,9 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
     {
         SCOPED_GPU_TIMER("objectid copy");
         TransitionActiveViewImages(commandBuffer, {
-            {Assets::Bindless::RT_OBJEDCTID_0, PipelineCommon::ERenderStage::Transfer,
+            {Assets::Bindless::RT_OBJECTID_0, PipelineCommon::ERenderStage::Transfer,
              PipelineCommon::EResourceAccess::TransferRead, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL},
-            {Assets::Bindless::RT_OBJEDCTID_1, PipelineCommon::ERenderStage::Transfer,
+            {Assets::Bindless::RT_OBJECTID_1, PipelineCommon::ERenderStage::Transfer,
              PipelineCommon::EResourceAccess::TransferWrite, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL},
         }, "object id history copy");
 
@@ -689,18 +689,18 @@ commandBuffer, gpuScene, 0, indirectDrawBatchCount, maxSceneTriangles);
         copyRegion.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
         copyRegion.dstOffset = {0, 0, 0};
         copyRegion.extent = {
-            GetViewStorageImage(Assets::Bindless::RT_OBJEDCTID_0)->GetImage().Extent().width,
-            GetViewStorageImage(Assets::Bindless::RT_OBJEDCTID_0)->GetImage().Extent().height, 1};
+            GetViewStorageImage(Assets::Bindless::RT_OBJECTID_0)->GetImage().Extent().width,
+            GetViewStorageImage(Assets::Bindless::RT_OBJECTID_0)->GetImage().Extent().height, 1};
 
         vkCmdCopyImage(commandBuffer,
-            GetViewStorageImage(Assets::Bindless::RT_OBJEDCTID_0)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            GetViewStorageImage(Assets::Bindless::RT_OBJEDCTID_1)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            GetViewStorageImage(Assets::Bindless::RT_OBJECTID_0)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            GetViewStorageImage(Assets::Bindless::RT_OBJECTID_1)->GetImage().Handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             1, &copyRegion);
 
         TransitionActiveViewImages(commandBuffer, {
-            {Assets::Bindless::RT_OBJEDCTID_0, PipelineCommon::ERenderStage::Compute,
+            {Assets::Bindless::RT_OBJECTID_0, PipelineCommon::ERenderStage::Compute,
              PipelineCommon::EResourceAccess::ShaderRead | PipelineCommon::EResourceAccess::ShaderWrite},
-            {Assets::Bindless::RT_OBJEDCTID_1, PipelineCommon::ERenderStage::Compute,
+            {Assets::Bindless::RT_OBJECTID_1, PipelineCommon::ERenderStage::Compute,
              PipelineCommon::EResourceAccess::ShaderRead | PipelineCommon::EResourceAccess::ShaderWrite},
         }, "object id history ready");
     }

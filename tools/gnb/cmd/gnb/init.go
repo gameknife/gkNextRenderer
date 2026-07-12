@@ -18,8 +18,8 @@ const (
 
 func newInitCommand() *cobra.Command {
 	var (
-		branch string
-		repo   string
+		branch  string
+		repo    string
 		shallow bool
 	)
 	cmd := &cobra.Command{

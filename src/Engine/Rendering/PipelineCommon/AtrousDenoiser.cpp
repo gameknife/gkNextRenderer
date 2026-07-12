@@ -93,9 +93,9 @@ namespace Vulkan::PipelineCommon
             const bool filterSpecular = i < specularIterations;
 
             FFusedAtrousPushConstants push{};
-            push.diffuseInSlot = getSourceSlot(i, Assets::Bindless::RT_ACCUMLATE_DIFFUSE, diffusePingPong);
+            push.diffuseInSlot = getSourceSlot(i, Assets::Bindless::RT_ACCUMULATE_DIFFUSE, diffusePingPong);
             push.diffuseOutSlot = getOutputSlot(i, diffuseIterations, Assets::Bindless::RT_ATROUS_OUT, diffusePingPong);
-            push.specularInSlot = getSourceSlot(i, Assets::Bindless::RT_ACCUMLATE_SPECULAR, specularPingPong);
+            push.specularInSlot = getSourceSlot(i, Assets::Bindless::RT_ACCUMULATE_SPECULAR, specularPingPong);
             push.specularOutSlot = getOutputSlot(i, specularIterations, Assets::Bindless::RT_ATROUS_SPEC_OUT, specularPingPong);
             push.stepSize = 1u << i;
             push.firstIteration = (i == 0) ? 1u : 0u;
@@ -109,7 +109,7 @@ namespace Vulkan::PipelineCommon
             baseRenderer.TransitionActiveViewImages(commandBuffer, {
                 {Assets::Bindless::RT_NORMAL, ERenderStage::Compute, EResourceAccess::ShaderRead},
                 {Assets::Bindless::RT_PREV_DEPTHBUFFER, ERenderStage::Compute, EResourceAccess::ShaderRead},
-                {Assets::Bindless::RT_OBJEDCTID_0, ERenderStage::Compute, EResourceAccess::ShaderRead},
+                {Assets::Bindless::RT_OBJECTID_0, ERenderStage::Compute, EResourceAccess::ShaderRead},
             }, "atrous guides");
             if (filterDiffuse)
             {

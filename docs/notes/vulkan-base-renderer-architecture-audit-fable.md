@@ -113,7 +113,7 @@ LogicRendererBase 契约:`OnDeviceSet / CreateSwapChain / DeleteSwapChain / Rend
 
 #### A1. 全部 RT 每帧 `UNDEFINED→GENERAL` 转换,时域历史依赖 UB 存活 ★★★(影响:规范层面;实机默认无症状)
 
-`InitializeBarriers`([VulkanBaseRenderer.cpp:1720](../../src/Engine/Rendering/VulkanBaseRenderer.cpp:1720))对**所有** bindless RT(含 `RT_ACCUMLATE_*`、`RT_SINGLE_PREV_*`、`RT_OBJEDCTID_1`、`RT_PREV_DEPTHBUFFER` 等历史图)每帧插入 `oldLayout=UNDEFINED, srcAccess=0` 的转换。Vulkan 规范允许实现此时**丢弃图像内容**;整个时域累积/重投影/prev-depth 链路事实上依赖桌面驱动"UNDEFINED 转换不真丢数据"的实现行为。同一模式还出现在:
+`InitializeBarriers`([VulkanBaseRenderer.cpp:1720](../../src/Engine/Rendering/VulkanBaseRenderer.cpp:1720))对**所有** bindless RT(含 `RT_ACCUMULATE_*`、`RT_SINGLE_PREV_*`、`RT_OBJECTID_1`、`RT_PREV_DEPTHBUFFER` 等历史图)每帧插入 `oldLayout=UNDEFINED, srcAccess=0` 的转换。Vulkan 规范允许实现此时**丢弃图像内容**;整个时域累积/重投影/prev-depth 链路事实上依赖桌面驱动"UNDEFINED 转换不真丢数据"的实现行为。同一模式还出现在:
 
 - `TemporalResolve::CopyToHistory`([TemporalResolve.cpp:37](../../src/Engine/Rendering/PipelineCommon/TemporalResolve.cpp:37))拷贝后**不把 layout 转回 GENERAL**,留在 TRANSFER_SRC/DST,靠下一帧的 UNDEFINED 转换"归位"。
 - `SwapChain::InsertBarrierToWrite`([SwapChain.cpp:355](../../src/Engine/Vulkan/SwapChain.cpp:355))同样 UNDEFINED→GENERAL:在 `ComposeViewToSwapchainSubrect`(reference 四分屏逐视口合成)中,合成第 2..4 个子矩形时会对**已含前面子矩形内容**的 swapchain image 做 UNDEFINED 转换——按规范前面的内容可被丢弃。`DispatchVisualDebugger` 叠加绘制同理。
@@ -255,7 +255,7 @@ node proxy 的 modelId 编码(`modelId*10 + lod?`)在 `DispatchSkinning`(×10)�
 | --- | --- | --- | --- |
 | D1 | 每帧 5×全 bank image barrier(见 B5) | InitializeBarriers | 与 A1 一并处理 |
 | D2 | 多视口下每视口全套 CSM cull+draw | DispatchSunShadow | 与 B1 一并处理 |
-| D3 | 蒙皮 update 每请求线性扫 nodeProxys | [GpuDriven.cpp:120](../../src/Engine/Rendering/VulkanBaseRenderer.GpuDriven.cpp:120) | modelId→proxyIdx 建 map |
+| D3 | 蒙皮 update 每请求线性扫 nodeProxies | [GpuDriven.cpp:120](../../src/Engine/Rendering/VulkanBaseRenderer.GpuDriven.cpp:120) | modelId→proxyIdx 建 map |
 | D4 | AtrousDenoiser/TemporalResolve 管线按 view 各建一份 | RenderView::CreateSwapChain | 管线可共享,仅状态 per-view |
 | D5 | 非 primary bank 全套 31 张 RT(Transient 缩略图同价) | CreateRenderTargetBank | 可按 schedule 裁剪历史类 RT |
 | D6 | UpdateSkinningBuffers 每帧遍历全部 node 求 joint 总数 | [GpuDriven.cpp:47](../../src/Engine/Rendering/VulkanBaseRenderer.GpuDriven.cpp:47) | 可由 Scene 维护计数 |

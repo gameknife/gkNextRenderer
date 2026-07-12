@@ -8,6 +8,7 @@
 ![Desktop CI](https://github.com/gameknife/gkNextEngine/actions/workflows/desktop.yml/badge.svg)
 ![Android CI](https://github.com/gameknife/gkNextEngine/actions/workflows/android.yml/badge.svg)
 ![iOS CI](https://github.com/gameknife/gkNextEngine/actions/workflows/ios.yml/badge.svg)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ![Kitchen Scene](docs/gallery/4_playground.avif)
 
@@ -373,3 +374,11 @@ Issues and PRs are welcome.
 ## Third-Party Dependencies
 
 cpptrace · cxxopts · sdl3 · glm · imgui · stb · curl · nlohmann-json · tinygltf · draco · fmt · meshoptimizer · ktx · joltphysics · xxhash · spdlog · cpp-base64 · catch2 · entt · libwebp · vulkan-loader · libavif
+
+---
+
+## License
+
+gkNextEngine is released under the [MIT License](LICENSE). Portions derived from
+[RayTracingInVulkan](https://github.com/GPSnoopy/RayTracingInVulkan) remain under the
+BSD 3-Clause License; see the third-party notices in [LICENSE](LICENSE).

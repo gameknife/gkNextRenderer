@@ -9,7 +9,7 @@ COMPILE_DB="$COMPILE_DIR/compile_commands.json"
 
 CLANG_TIDY_BIN=${CLANG_TIDY:-/opt/homebrew/opt/llvm/bin/clang-tidy}
 CHECKS=${CHECKS:--*,readability-identifier-naming}
-HEADER_FILTER=${HEADER_FILTER:-"^(?!.*(ThirdParty|external)/).*"}
+HEADER_FILTER=${HEADER_FILTER:-"src/(Engine|Modules|Gameplay|Application|Tests)/"}
 FIX=${FIX:-0}
 
 if [[ ! -f "$COMPILE_DB" ]]; then

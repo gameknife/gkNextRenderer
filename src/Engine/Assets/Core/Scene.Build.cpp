@@ -87,10 +87,10 @@ namespace Assets
         selectionState_.Clear();
         hoveredId_ = SceneSelectionState::invalidNodeId;
         lockedIds_.clear();
-        nodeProxys.clear();
+        nodeProxies.clear();
         indirectDrawBatchCount_ = 0;
         indicesCount_ = 0;
-        verticeCount_ = 0;
+        vertexCount_ = 0;
         lightCount_ = 0;
         gpuDrivenStat_ = {};
         shadowGpuDrivenStats_.fill({});
@@ -203,10 +203,10 @@ namespace Assets
     void Scene::RebuildMeshBuffer(Vulkan::CommandPool& commandPool, bool supportRayTracing)
     {
 
-        nodeProxys.clear();
+        nodeProxies.clear();
         indirectDrawBatchCount_ = 0;
         indicesCount_ = 0;
-        verticeCount_ = 0;
+        vertexCount_ = 0;
         lightCount_ = 0;
         gpuDrivenStat_ = {};
         shadowGpuDrivenStats_.fill({});
@@ -347,7 +347,7 @@ namespace Assets
                 }
             }
 
-            // create 6 plane bodys, it makes negtive space, so keep the bottom plane only
+            // create 6 plane bodies, it makes negative space, so keep the bottom plane only
             // physicsEngine->CreatePlaneBody(sceneAABBMin_, glm::vec3(1,0,0), NextMotionType::Static);
             // physicsEngine->CreatePlaneBody(sceneAABBMax_, glm::vec3(-1,0,0), NextMotionType::Static);
             if (hasSceneBounds)
@@ -492,7 +492,7 @@ namespace Assets
         // 一些数据
         lightCount_ = static_cast<uint32_t>(lights_.size());
         indicesCount_ = static_cast<uint32_t>(indices.size());
-        verticeCount_ = static_cast<uint32_t>(vertices.size());
+        vertexCount_ = static_cast<uint32_t>(vertices.size());
 
         // The GPU-driven primitive buffers contain expanded triangles per instance, not just
         // the unique model geometry stored in the index buffer. Sizing them from indicesCount_

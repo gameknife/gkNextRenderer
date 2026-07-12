@@ -87,7 +87,7 @@ public struct ALIGN_16 VoxelData
 
 | 字节 | 含义 | 写入处 | 读取处 |
 | --- | --- | --- | --- |
-| X | **SDF skip 距离**（chamfer/jump-flood 结果，单位=体素数） | `ProbeBaker.cpp:273-274`（`RebuildDistanceField`） | `inSolid` 的 `skipSetp`（`AmbientCube.slang:719-722`） |
+| X | **SDF skip 距离**（chamfer/jump-flood 结果，单位=体素数） | `ProbeBaker.cpp:273-274`（`RebuildDistanceField`） | `inSolid` 的 `skipStep`（`AmbientCube.slang:719-722`） |
 | Y | **inside**（6 轴距离乘积，≈0 表示在固体内） | `ProbeBaker.cpp:218-219` | `inSolid`：`unpack0.y==0 → 实心`（`:683-687`） |
 | Z/W | distPZ / distNZ（到表面的方向距离 0–255） | 同上 | soft 命中长度插值 |
 

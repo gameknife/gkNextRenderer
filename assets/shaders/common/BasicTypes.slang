@@ -6,7 +6,7 @@
 #define ALIGN_8
 #endif
 
-public static const int MAX_NODES = 65535; // 256;
+public static const int MAX_NODES = 65535;
 public static const int MAX_MATERIALS = 16384;
 public static const int MAX_HDR_SH = 100;
 
@@ -356,15 +356,15 @@ public struct ALIGN_16 RayCastContext
     public float4 Direction;
     public float TMin;
     public float TMax;
-    public float Reversed0;
-    public float Reversed1;
+    public float Reserved0;
+    public float Reserved1;
     // out
     public float4 HitPoint;
     public float4 Normal;
     public float T;
     public uint InstanceId;
     public uint MaterialId;
-    public uint Hitted;
+    public uint Hit;
 };
 
 #ifndef __cplusplus
@@ -398,8 +398,8 @@ public struct ALIGN_16 Material
     
     public float RefractionIndex2;
     public float NormalTextureScale;
-    public float Reserverd2;
-    public float Reserverd3;
+    public float Reserved2;
+    public float Reserved3;
 };
 
 public struct ALIGN_16 Vertex
@@ -579,7 +579,7 @@ public struct ALIGN_8 GPUScene
         get { return (NodeProxy*)(Camera_SceneDynamicBase_Address.y + GPU_SCENE_DYNAMIC_NODES_OFFSET); }
     }
 
-    /* Global Vertice Buffer */
+    /* Global Vertex Buffer */
     uint64_t2 Reorders_Vertices_Address;
     public property uint* Reorders
     {

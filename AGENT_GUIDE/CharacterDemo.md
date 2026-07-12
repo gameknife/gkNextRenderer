@@ -1,6 +1,6 @@
 # CharacterDemo + NextGameplay 代码结构梳理
 
-本文梳理 **CharacterDemo** 小游戏（`src/Application/Game/CharacterDemo/`）及其依赖的**共享游戏层 NextGameplay**（`src/Engine/NextGameplay/`）的代码结构。两者是一套"引擎共享层 + 一个示例消费者"的组合，理解时需要一起看，所以合并成一篇。
+本文梳理 **CharacterDemo** 小游戏（`src/Application/Game/CharacterDemo/`）及其依赖的**共享游戏层 NextGameplay**（`src/Gameplay/`）的代码结构。两者是一套"引擎共享层 + 一个示例消费者"的组合，理解时需要一起看，所以合并成一篇。
 
 > 与 `AGENT_GUIDE/Brotato3D.md`、`AGENT_GUIDE/MagicaLego.md` 同属"游戏代码梳理"系列。Brotato3D 是**自包含**的上帝类游戏；CharacterDemo 则相反——它把可复用的角色/AI 能力沉到 `NextGameplay` 引擎库里，自己只做**编排 + 输入 + 调试 UI**。
 
@@ -24,7 +24,7 @@ gkNextUnitTests (exe) ─links──► NextGameplay        （Test_GameplayComp
 
 ## 2. 分层与文件地图
 
-### 2.1 NextGameplay（共享层，`src/Engine/NextGameplay/`）
+### 2.1 NextGameplay（共享层，`src/Gameplay/`）
 
 | 文件 | 角色 | 关键内容 |
 | --- | --- | --- |

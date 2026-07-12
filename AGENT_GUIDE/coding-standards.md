@@ -47,6 +47,12 @@
   - ✅ `#define VK_CHECK_RESULT(x)`
   - ❌ `#define vk_check_result(x)`
 
+**`F` 类名前缀（约定，clang-tidy 不强制）:**
+
+- 仓库中并存两类类名：带 `F` 前缀（`FSceneLoader`、`FCVarSystem`、`FAIService`）与不带前缀（`Scene`、`Engine`、`VulkanBaseRenderer`）。
+- 约定：**服务型/子系统型类**（loader、evaluator、system、service、backend 等以"提供能力"为主的类）使用 `F` 前缀；**领域对象与核心框架类**（Scene、Node、Model、Engine、各 Renderer/Pipeline）不加前缀。
+- 两者都满足 PascalCase 检查；新代码按上述语义二选一即可，**不要**对既有类做批量改名。
+
 **审查建议:**
 - [ ] 检查命名是否符合上述规范
 - [ ] 特别注意 API 符号名称（如 Vulkan 函数封装）保持一致性

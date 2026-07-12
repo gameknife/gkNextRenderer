@@ -362,7 +362,7 @@ bool EditorGameInstance::OnCursorPosition(double xpos, double ypos)
         RayCastFromViewport(*target, mousePos,
                             [this](Assets::RayCastResult result)
                             {
-                                if (result.Hitted)
+                                if (result.Hit)
                                 {
                                     GetEngine().GetScene().SetHoveredId(result.InstanceId);
                                 }
@@ -431,7 +431,7 @@ bool EditorGameInstance::OnMouseButton(SDL_Event& event)
         RayCastFromViewport(*eventTarget, mousePos,
                             [this, toggleSelection](Assets::RayCastResult result)
                             {
-                                if (result.Hitted)
+                                if (result.Hit)
                                 {
                                     if (GetEngine().GetScene().IsLocked(result.InstanceId))
                                     {

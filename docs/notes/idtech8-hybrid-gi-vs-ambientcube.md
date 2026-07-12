@@ -150,7 +150,7 @@ struct VoxelData {          // 16 B
 ### 2.4 运行期消费（防漏光的 8-tap 插值）
 
 - `interpolateAmbientCubes(Stable)`：在级联内做 8-tap 三线性，但**每个 tap 用 VoxelData 的方向 SDF（`distanceToSolid`）做几何拒绝**——若探针到采样点的距离超过该方向"到固体"的距离，丢弃该 tap → **确定性防漏光**。失败/未分配则回退更粗级联。
-- `inSolid()` 用同一 SDF 给 DDA 空跳（`skipSetp`）。
+- `inSolid()` 用同一 SDF 给 DDA 空跳（`skipStep`）。
 - 另有独立的 chamfer + jump-flood 距离场重建（`Bake.DistanceField*`）做空间跳步加速。
 
 ### 2.5 稀疏存储（已落地）

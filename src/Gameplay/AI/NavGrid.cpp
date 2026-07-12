@@ -629,7 +629,7 @@ bool FNavGrid::SampleBaseCell(Assets::CPU::FCPUAccelerationStructure& bvh, int g
 
     const glm::vec3 rayOrigin(worldCenter.x, settings_.sampleCeiling, worldCenter.z);
     const Assets::RayCastResult centerHit = bvh.RayCastInCPU(rayOrigin, rayDir);
-    if (!centerHit.Hitted)
+    if (!centerHit.Hit)
     {
         return false;
     }
@@ -645,7 +645,7 @@ bool FNavGrid::SampleBaseCell(Assets::CPU::FCPUAccelerationStructure& bvh, int g
 
     const glm::vec3 clearOrigin(worldCenter.x, groundY + 0.1f, worldCenter.z);
     const Assets::RayCastResult clearHit = bvh.RayCastInCPU(clearOrigin, upDir);
-    if (clearHit.Hitted && clearHit.T < settings_.clearanceHeight)
+    if (clearHit.Hit && clearHit.T < settings_.clearanceHeight)
     {
         return false;
     }
@@ -668,7 +668,7 @@ bool FNavGrid::SampleBaseCell(Assets::CPU::FCPUAccelerationStructure& bvh, int g
             const glm::vec2 offset = unitOffset * settings_.agentRadius;
             const glm::vec3 sampleOrigin(worldCenter.x + offset.x, settings_.sampleCeiling, worldCenter.z + offset.y);
             const Assets::RayCastResult sampleHit = bvh.RayCastInCPU(sampleOrigin, rayDir);
-            if (!sampleHit.Hitted)
+            if (!sampleHit.Hit)
             {
                 return false;
             }
@@ -687,7 +687,7 @@ bool FNavGrid::SampleBaseCell(Assets::CPU::FCPUAccelerationStructure& bvh, int g
 
             const glm::vec3 sampleClearOrigin(sampleOrigin.x, sampleGroundY + 0.1f, sampleOrigin.z);
             const Assets::RayCastResult sampleClearHit = bvh.RayCastInCPU(sampleClearOrigin, upDir);
-            if (sampleClearHit.Hitted && sampleClearHit.T < settings_.clearanceHeight)
+            if (sampleClearHit.Hit && sampleClearHit.T < settings_.clearanceHeight)
             {
                 return false;
             }

@@ -66,7 +66,7 @@ namespace Assets
 		uint32_t RegisterTexture(const std::string& textureName, std::unique_ptr<TextureImage> textureImage,
 		                         ETextureLifetime lifetime = ETextureLifetime::ETL_Transient);
 		void ReleaseTexture(uint32_t textureIdx);
-		uint32_t TryGetTexureIndex(const std::string& textureName) const;
+		uint32_t TryGetTextureIndex(const std::string& textureName) const;
 		uint32_t RequestNewTextureFileAsync(const std::string& filename, bool hdr,
 		                                    ETextureLifetime lifetime = ETextureLifetime::ETL_Transient);
 		uint32_t RequestNewTextureMemAsync(const std::string& texname, const std::string& mime, bool hdr,

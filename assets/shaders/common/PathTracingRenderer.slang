@@ -619,7 +619,7 @@ public struct FPathTracingRenderer{
 
         OutAlbedo = Bindless.GetViewStorageTexture<float4>(Bindless.RT_ALBEDO);
         OutNormal = Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL);
-        OutObjectID = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_0);
+        OutObjectID = Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJECTID_0);
         OutMotionVector = Bindless.GetViewStorageTexture<float4>(Bindless.RT_MOTIONVECTOR);
         OutPrevDepth = Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER);
         OutSingleDiffuse = Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE);

@@ -38,7 +38,6 @@
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
-#include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Utilities/ImGui.hpp"
 #include "Engine/Utilities/Math.hpp"
 #include "Engine/Utilities/StbImage.hpp"

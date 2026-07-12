@@ -101,9 +101,10 @@ gnb shot --target AirportSim --ui  # 截图包含 ImGui，适合验证 HUD / 面
 
 机制（gnb 统一编排，所有 target 行为一致）：
 - gnb 启动目标并建立带一次性 token 的 loopback 控制通道，等待稳定帧后请求截图到**固定路径** `out/build/<preset>/screenshots/agent_validation.jpg`（覆盖式，无时间戳），确认落盘后请求退出。
-- 默认截图隐藏 ImGui；传 `gnb shot --ui` 时会追加 `--agent-validation-ui`，让截图包含当帧 UI。
+- 默认截图隐藏 ImGui；传 `gnb shot --ui` 让截图包含当帧 UI（gnb 在截图请求里带上 ui 参数）。
 - 窗口用 `SDL_WINDOW_HIDDEN` 创建：**不弹窗、不抢焦点**，不会打断你的 dev loop；present 自动切 immediate mode，渲染不受 vsync 限制，wall-clock 很快（几秒一张图）。
-- AGENT 读那张 `agent_validation.jpg` 即可肉眼判断。需要换帧数用 `--frames`，换输出路径用 `--agent-validation-out <path-without-ext>`。
+- AGENT 读那张 `agent_validation.jpg` 即可肉眼判断。需要换帧数用 `--frames`;输出路径固定为上述 `agent_validation.jpg`。
+- 注意用 `./gnb.sh`（Windows `gnb.bat`）入口可在 gnb 源码变更后自动重建;直接调根目录 `gnb` 二进制不会自动更新。
 
 **何时用哪条路径：**
 - **改了某个场景/材质/光照/着色，只想看一眼对不对** → `gnb shot --scene <X>`（最轻、最快）。
@@ -165,19 +166,26 @@ gnb validate --script assets/agentscripts/smoke.agentscript.json --visible  # �
 
 ```
 src/
-├── Engine/                  # Engine library (gkNextEngine.lib)
+├── Engine/                  # Engine core library (gkNextEngine.lib) — must not depend on Modules/
 │   ├── Common/              # CoreMinimal.hpp + shared platform abstraction
-│   ├── Runtime/             # Engine runtime: ECS, scripting, reflection, command history
-│   ├── Assets/              # Asset loading (glTF/textures), Scene, GPU resources, CPU acceleration
+│   ├── Runtime/             # Engine runtime: ECS, reflection, command history, config, editor UI host
+│   ├── Assets/              # Scene, core asset data, GPU resources, CPU acceleration
 │   ├── Vulkan/              # Vulkan backend + RayTracing/ (HW ray tracing)
 │   ├── Rendering/           # Render pipelines
 │   │   ├── PathTracing/     # Full path tracing
 │   │   ├── SoftwareTracing/ # Software ray tracing
 │   │   ├── SoftwareModern/  # Modern rasterization + software GI + NoAmbient deferred
 │   │   ├── Shadow/          # GPU CSM shadow pass (4 cascades, bindless sampling)
-│   │   └── PipelineCommon/  # Shared pipeline utilities
-│   ├── NextGameplay/        # Gameplay primitives shared across games
+│   │   ├── PipelineCommon/  # Shared pipeline utilities
+│   │   ├── Preview/         # RenderView services (thumbnails, offscreen cameras)
+│   │   └── Upscaler/        # IUpscaler abstraction (impl injected by NextStreamline)
 │   └── Utilities/           # Misc helpers
+├── Modules/                 # 16 optional engine modules (static libs, linked per app; see src/Modules/README.md)
+│   ├── GltfLoader/, LDrawLoader/, ScadLoader/, SplatLoader/, SceneExport/  # Content pipelines
+│   ├── NextQuickJS/, NextPhysics/, NextAudio/, NextAI/, NextRmlUi/         # Runtime capabilities
+│   ├── NextRemote/, NextStreamline/, NextTui/, RenderViews/                # Presentation / streaming
+│   └── DevTools/, LiveCoding/                                              # Development tooling
+├── Gameplay/                # Gameplay primitives shared across games (CharacterActor, NavGrid A*, AI, rig, sim)
 ├── Application/             # Subproject entry points (per role)
 │   ├── Render/, Editor/, Game/, Util/   # See "Subprojects" above
 ├── Tests/                   # Catch2 unit tests (gkNextUnitTests)

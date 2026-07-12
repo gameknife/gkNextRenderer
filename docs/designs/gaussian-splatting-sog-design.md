@@ -138,7 +138,7 @@ shN?:   { count, bands(1..3), codebook:[256 float], files:[centroids, labels] } 
 - **问题**：`FSceneLoaderFn` 只产 mesh 型 `Model`，**高斯不是 mesh**，需新增并行产物通道（见 §6.2）。
 
 ### 4.2 场景 / 节点 / 组件
-- `Assets::Scene`（`src/Engine/Assets/Core/Scene.hpp`）持有 `models_ / nodes_ / nodeProxys`，`Reload(...)` 负责 GPU 上传。
+- `Assets::Scene`（`src/Engine/Assets/Core/Scene.hpp`）持有 `models_ / nodes_ / nodeProxies`，`Reload(...)` 负责 GPU 上传。
 - `Assets::Node`（`src/Engine/Assets/Core/Node.h`）支持任意 `Component`（`AddComponent/GetComponentPtr`）。
 - `Runtime::RenderComponent`（`src/Engine/Runtime/Components/RenderComponent.h`）是 mesh 渲染组件范式（`REFLECT_COMPONENT` 反射、`modelId_` 引用 `Model`）。→ 高斯将新增并行的 `GaussianSplatComponent` + `SplatModel`。
 

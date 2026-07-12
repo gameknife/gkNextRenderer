@@ -1012,7 +1012,7 @@ void MagicaLegoUserInterface::DrawRightBar()
     ImGui::SetNextWindowSize(ImVec2(sideBarWidth, viewportSize.y - titlebarSize - padding * 2));
     ImGui::SetNextWindowBgAlpha(currentAlpha * 0.6f);
 
-    if (ImGui::Begin("Color Pallete", nullptr, PanelFlags))
+    if (ImGui::Begin("Color Palette", nullptr, PanelFlags))
     {
         std::vector<const char*> types;
         static int currentType = 0;

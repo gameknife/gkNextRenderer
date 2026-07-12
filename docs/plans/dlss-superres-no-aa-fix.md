@@ -71,7 +71,7 @@ last_updated: 2026-06-20
    - `motion = CalculateMotionVector(...) * float2(size)`，`size = 渲染分辨率`，写入 `RT_MOTIONVECTOR`（渲染像素单位）。
    - `CalculateMotionVector` 用 **UnJit** 矩阵、返回 `prev - curr`（半 NDC）—— `assets/shaders/common/Shading.slang:78-99`。
 5. **ReProject(引擎 TAA) → compose** —— `src/Engine/Rendering/SoftwareModern/SoftwareModernNoAmbientRenderer.cpp:79-103`
-   - ReProjectSimple 累积到 `RT_ACCUMLATE_DIFFUSE`，由 push const `TAAEnabled = settings.TAA?1:0` 控制（L85）。
+   - ReProjectSimple 累积到 `RT_ACCUMULATE_DIFFUSE`，由 push const `TAAEnabled = settings.TAA?1:0` 控制（L85）。
    - ComposeSimple 写出最终低分辨率颜色 `RT_DENOISED`（compose 在 ReProject 之后）。
 6. **resolve（关键分叉）** —— `VulkanBaseRenderer.cpp:1379-1410`
    - 若 `upscaler_ && SupportDLSS() && settings.DLSS`：`upscaler_->Evaluate(BuildUpscalerFrameInputs(...))`（L1382）。

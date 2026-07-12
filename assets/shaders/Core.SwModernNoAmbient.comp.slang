@@ -77,7 +77,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
             : float4(0, 0, 0, 1);
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(pixel, skyColor);
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT).Store(pixel, float4(0));
-        Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(pixel, 0);
+        Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJECTID_0).Store(pixel, 0);
         Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(pixel, 1000);
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_MOTIONVECTOR).Store(pixel, float4(0));
         Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL).Store(pixel, float4(0));
@@ -229,7 +229,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     Bindless.GetViewStorageTexture<float4>(Bindless.RT_SINGLE_DIFFUSE).Store(
         pixel, float4(color.rgb + specularColor.rgb, color.a));
     Bindless.GetViewStorageTexture<float4>(Bindless.RT_AMBIENT).Store(pixel, ambientColor);
-    Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJEDCTID_0).Store(pixel, Common.EncodeObjectId(hitNode.instanceId, selected, hovered, locked, danger));
+    Bindless.GetViewStorageTexture<uint>(Bindless.RT_OBJECTID_0).Store(pixel, Common.EncodeObjectId(hitNode.instanceId, selected, hovered, locked, danger));
     Bindless.GetViewStorageTexture<float>(Bindless.RT_PREV_DEPTHBUFFER).Store(pixel, ndcDepth);
     Bindless.GetViewStorageTexture<float4>(Bindless.RT_MOTIONVECTOR).Store(pixel, float4(motion, 0, 0));
     Bindless.GetViewStorageTexture<float4>(Bindless.RT_NORMAL).Store(pixel, float4(normalize(hitVertex.Normal), 1));

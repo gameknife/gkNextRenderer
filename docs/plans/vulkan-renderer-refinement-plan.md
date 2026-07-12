@@ -82,7 +82,7 @@ Rendering 单文件分布（主要矛盾在 `VulkanBaseRenderer.*` 与五个 Log
 
 `SoftwareTracingRenderer`、`SoftwareModernRenderer`、`NoAmbientDeferred::Renderer`、`PathTracingRenderer` 共享同一套「时间累积 + 历史回拷」骨架，却各自复制粘贴。三处确认重复：
 
-1. **历史图回拷（copy pass）逐通道复制**。`SoftwareTracingRenderer.cpp` 与 `SoftwareModernRenderer.cpp` 的 copy pass **几乎逐字相同**：对 `RT_ACCUMLATE_{DIFFUSE,SPECULAR,ALBEDO}` 各做一遍「barrier→TRANSFER_SRC / barrier history→TRANSFER_DST / `vkCmdCopyImage`」。
+1. **历史图回拷（copy pass）逐通道复制**。`SoftwareTracingRenderer.cpp` 与 `SoftwareModernRenderer.cpp` 的 copy pass **几乎逐字相同**：对 `RT_ACCUMULATE_{DIFFUSE,SPECULAR,ALBEDO}` 各做一遍「barrier→TRANSFER_SRC / barrier history→TRANSFER_DST / `vkCmdCopyImage`」。
    - 证据：`SoftwareTracing/SoftwareTracingRenderer.cpp:90-126`（三通道）、`SoftwareModern/SoftwareModernRenderer.cpp:103-124`（三通道，与前者同形）、`SoftwareModern/SwModernNoAmbientRenderer.cpp` copy pass（单通道，同形）。
 2. **ReferenceMode 历史图分配块**复制。三个渲染器的 `CreateSwapChain` 都有同一段 `if (GOption->ReferenceMode) { prevSingleXxxId_ = GetTemporalStorageImage(...) } else { prevSingleXxxId_ = Bindless::RT_SINGLE_PREV_XXX }`。
    - 证据：`SoftwareTracingRenderer.cpp:30-44`、`SoftwareModernRenderer.cpp:32-42`、`SwModernNoAmbientRenderer.cpp:34-45`。

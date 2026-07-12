@@ -74,7 +74,7 @@
   - `image/webp` → `WebPDecodeRGBA`（`Texture.cpp:412`，已链接 `libwebp`）。
   - `image/ktx*` → KTX2 transcode BC7（`WITH_KTX2`）。
   - 其它 → `stbi_load_from_memory` → **压成 KTX2/BC7 落 cache**（`Texture.cpp:454-509`）后上传。
-  - **源压缩字节 `copyedData` 在上传后 `delete[]`**（`Texture.cpp:571`），GPU 上是 BC7 块，**没有保留 CPU 端 RGBA 或源字节**。
+  - **源压缩字节 `copiedData` 在上传后 `delete[]`**（`Texture.cpp:571`），GPU 上是 BC7 块，**没有保留 CPU 端 RGBA 或源字节**。
 - `TextureImage`（`TextureImage.hpp`）**不暴露 width/height/format，也没有回读 API**。
 - WebP **编码**（`webp/encode.h` / `WebPEncodeRGBA`）当前未使用，但 `libwebp` 已是依赖，编码能力可用。
 - glTF 读取侧已支持 `EXT_texture_webp`（`FSceneLoader.cpp:386-392,438-444`）。
@@ -165,7 +165,7 @@ SCAD/glTF 的一个 `Assets::Model` 可能含多个 section（`Vertex::MaterialI
 
 在 `GlobalTexturePool` 增加"保存所需的 CPU 源"留存。两种粒度，**推荐 (A)**：
 
-- **(A) 保留原始压缩源字节 + mime**（最省、无损、最简单）：`RequestNewTextureMemAsync` 在 `delete[] copyedData` 前，把 `(texname → {bytes, mime, srgb})` 存入一个 `std::unordered_map`（仅在编辑器/需要保存的构建里开启，受开关控制以免常驻内存翻倍）。保存时若纹理要求保持原格式即可直接 embed；要求转 webp/raw 时先解码再编码。
+- **(A) 保留原始压缩源字节 + mime**（最省、无损、最简单）：`RequestNewTextureMemAsync` 在 `delete[] copiedData` 前，把 `(texname → {bytes, mime, srgb})` 存入一个 `std::unordered_map`（仅在编辑器/需要保存的构建里开启，受开关控制以免常驻内存翻倍）。保存时若纹理要求保持原格式即可直接 embed；要求转 webp/raw 时先解码再编码。
 - **(B) 保留解码后的 RGBA + w/h**：占内存更多，但编辑器若会运行时改像素则需要它。
 
 新增接口建议：

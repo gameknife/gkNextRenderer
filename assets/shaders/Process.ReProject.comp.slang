@@ -182,7 +182,7 @@ float3 FilterHistoryColor( RWTexture2D<float4> prevFrameTexture, float2 subpixel
     float3 history = lerp(lerp(historyColor[0], historyColor[1], subpixel.x),
                             lerp(historyColor[2], historyColor[3], subpixel.x),
                             subpixel.y);
-    history = clamp(history, 0.0, 1600.0); // kill the negative valuse
+    history = clamp(history, 0.0, 1600.0); // kill the negative values
     return history;
 }
 
@@ -209,12 +209,12 @@ void main(uint3 DTid : SV_DispatchThreadID)
     let PrevSpecular = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(vb, Bindless.RT_SINGLE_PREV_SPECULAR));
     let PrevAlbedo = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(vb, Bindless.RT_SINGLE_PREV_ALBEDO));
 
-    let AccumlateDiffuse = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_ACCUMLATE_DIFFUSE));
-    let AccumlateSpecular = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_ACCUMLATE_SPECULAR));
-    let AccumlateAlbedo = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_ACCUMLATE_ALBEDO));
+    let AccumulateDiffuse = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_ACCUMULATE_DIFFUSE));
+    let AccumulateSpecular = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_ACCUMULATE_SPECULAR));
+    let AccumulateAlbedo = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_ACCUMULATE_ALBEDO));
 
-    let ObjectId0 = Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_OBJEDCTID_0));
-    let ObjectId1 = Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_OBJEDCTID_1));
+    let ObjectId0 = Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_OBJECTID_0));
+    let ObjectId1 = Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_OBJECTID_1));
     let MotionVector = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_MOTIONVECTOR));
     let NormalBuffer = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_NORMAL));
 
@@ -226,24 +226,24 @@ void main(uint3 DTid : SV_DispatchThreadID)
             const float prevCount = clamp(PrevDiffuse[ipos].a, 0.0, nMax);
             if (prevCount >= nMax)
             {
-                AccumlateDiffuse[ipos] = PrevDiffuse[ipos];
-                AccumlateSpecular[ipos] = PrevSpecular[ipos];
-                AccumlateAlbedo[ipos] = PrevAlbedo[ipos];
+                AccumulateDiffuse[ipos] = PrevDiffuse[ipos];
+                AccumulateSpecular[ipos] = PrevSpecular[ipos];
+                AccumulateAlbedo[ipos] = PrevAlbedo[ipos];
                 return;
             }
 
             const float newCount = min(prevCount + 1.0, nMax);
             const float currWeight = clamp(1.0 / newCount, 0.0, 1.0);
 
-            AccumlateDiffuse[ipos] = float4(lerp(PrevDiffuse[ipos].rgb, SourceDiffuse[ipos].rgb, currWeight), newCount);
-            AccumlateSpecular[ipos] = float4(lerp(PrevSpecular[ipos].rgb, SourceSpecular[ipos].rgb, currWeight), newCount);
-            AccumlateAlbedo[ipos] = float4(lerp(PrevAlbedo[ipos].rgb, SourceAlbedo[ipos].rgb, currWeight), newCount);
+            AccumulateDiffuse[ipos] = float4(lerp(PrevDiffuse[ipos].rgb, SourceDiffuse[ipos].rgb, currWeight), newCount);
+            AccumulateSpecular[ipos] = float4(lerp(PrevSpecular[ipos].rgb, SourceSpecular[ipos].rgb, currWeight), newCount);
+            AccumulateAlbedo[ipos] = float4(lerp(PrevAlbedo[ipos].rgb, SourceAlbedo[ipos].rgb, currWeight), newCount);
         }
         else
         {
-            AccumlateDiffuse[ipos] = lerp(PrevDiffuse[ipos], SourceDiffuse[ipos], clamp(1.0 / 512.0, 0.0, 1.0));
-            AccumlateSpecular[ipos] = lerp(PrevSpecular[ipos], SourceSpecular[ipos], clamp(1.0 / 512.0, 0.0, 1.0));
-            AccumlateAlbedo[ipos] = lerp(PrevAlbedo[ipos], SourceAlbedo[ipos], clamp(1.0 / 512.0, 0.0, 1.0));
+            AccumulateDiffuse[ipos] = lerp(PrevDiffuse[ipos], SourceDiffuse[ipos], clamp(1.0 / 512.0, 0.0, 1.0));
+            AccumulateSpecular[ipos] = lerp(PrevSpecular[ipos], SourceSpecular[ipos], clamp(1.0 / 512.0, 0.0, 1.0));
+            AccumulateAlbedo[ipos] = lerp(PrevAlbedo[ipos], SourceAlbedo[ipos], clamp(1.0 / 512.0, 0.0, 1.0));
         }
         return;
     }
@@ -386,15 +386,15 @@ void main(uint3 DTid : SV_DispatchThreadID)
         const float3 currDiffuseEst = lerp(currDiffuseSample.rgb, spatialDiffuseSample.rgb, spatialFallback);
         const float3 currSpecularEst = lerp(currSpecularSample.rgb, spatialSpecularSample.rgb, spatialFallback);
 
-        AccumlateDiffuse[ipos] = float4(lerp(historyDiffuse, currDiffuseEst, currKeep), historyLen);
-        AccumlateSpecular[ipos] = float4(lerp(historySpecular, currSpecularEst, currKeep), historyLen);
-        AccumlateAlbedo[ipos].rgb = lerp(historyAlbedo, currAlbedoSample.rgb, currKeep);
+        AccumulateDiffuse[ipos] = float4(lerp(historyDiffuse, currDiffuseEst, currKeep), historyLen);
+        AccumulateSpecular[ipos] = float4(lerp(historySpecular, currSpecularEst, currKeep), historyLen);
+        AccumulateAlbedo[ipos].rgb = lerp(historyAlbedo, currAlbedoSample.rgb, currKeep);
     }
     else
     {
         // Disocclusion: drop history, restart the accumulation counter (carried in alpha).
-        AccumlateDiffuse[ipos] = float4(currDiffuseSample.rgb, 1.0);
-        AccumlateSpecular[ipos] = float4(currSpecularSample.rgb, 1.0);
-        AccumlateAlbedo[ipos] = currAlbedoSample;
+        AccumulateDiffuse[ipos] = float4(currDiffuseSample.rgb, 1.0);
+        AccumulateSpecular[ipos] = float4(currSpecularSample.rgb, 1.0);
+        AccumulateAlbedo[ipos] = currAlbedoSample;
     }
 }

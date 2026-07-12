@@ -43,10 +43,10 @@ historySpecular = ClampHistoryVariance(SourceSpecular, ipos, imageMax, historySp
 `PathTracingRenderer::Render`（`src/Engine/Rendering/PathTracing/PathTracingRenderer.cpp:349`）每帧顺序：
 
 1. RT pass → `RT_SINGLE_DIFFUSE`（1spp，已解调）。
-2. **reproject pass** → 读 `PrevDiffuse`（= 上一帧的 `RT_ACCUMLATE_DIFFUSE`，由 `CopyToHistory` 拷来），写 `RT_ACCUMLATE_DIFFUSE`。**钳制盒子建立在当前帧 1spp `SourceDiffuse` 上。**
-3. a-trous pass → 读 `RT_ACCUMLATE_DIFFUSE`，ping-pong 落 `RT_ATROUS_OUT`，**累积 buffer 不被改写**。
+2. **reproject pass** → 读 `PrevDiffuse`（= 上一帧的 `RT_ACCUMULATE_DIFFUSE`，由 `CopyToHistory` 拷来），写 `RT_ACCUMULATE_DIFFUSE`。**钳制盒子建立在当前帧 1spp `SourceDiffuse` 上。**
+3. a-trous pass → 读 `RT_ACCUMULATE_DIFFUSE`，ping-pong 落 `RT_ATROUS_OUT`，**累积 buffer 不被改写**。
 4. compose → 读 `RT_ATROUS_OUT`。
-5. copy pass → `RT_ACCUMLATE_DIFFUSE` 拷进历史，供下一帧。
+5. copy pass → `RT_ACCUMULATE_DIFFUSE` 拷进历史，供下一帧。
 
 **因此喂给 ReProject 的历史是"纯时域累积值"（a-trous 之前），这本身是对的（SVGF 惯例，避免空间过糊自激反馈）。问题不在数据流，而在钳制盒子的来源是 1spp 噪声。**
 

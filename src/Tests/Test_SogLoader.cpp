@@ -5,8 +5,10 @@
 #include "Engine/Assets/Core/Node.h"
 #include "Modules/SplatLoader/GaussianSplatComponent.h"
 #include "Modules/SplatLoader/SplatModule.hpp"
+#include "Engine/Utilities/FileHelper.hpp"
 #include "TestCommon.hpp"
 
+#include <filesystem>
 #include <glm/gtc/quaternion.hpp>
 #include <thread>
 
@@ -59,6 +61,14 @@ TEST_CASE("Gaussian splat component properties", "[Unit][SOG][GaussianSplatCompo
 
 TEST_CASE_METHOD(EngineTestFixture, "SOG scene loads and renders on Vulkan", "[.Integration][SOG]")
 {
+    const std::filesystem::path samplePath =
+        std::filesystem::path(Utilities::FileHelper::GetPlatformFilePath("assets/sog/Grape.sog"));
+    if (!std::filesystem::exists(samplePath))
+    {
+        WARN("assets/sog/Grape.sog not present (optional sample); skipping integration load");
+        return;
+    }
+
     engine_->RequestLoadScene({.filename = "assets/sog/Grape.sog"});
 
     bool loaded = false;

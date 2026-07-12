@@ -832,7 +832,7 @@ bool NextRendererGameInstance::OnMouseButton(SDL_Event& event)
         Runtime::EngineHelper::GetScreenToWorldRay(mousePos, org, dir);
 		GetEngine().RayCast( org, dir, [this](Assets::RayCastResult result)
 		{
-			if (result.Hitted)
+			if (result.Hit)
 			{
 				GetEngine().GetScene().GetRenderCamera().FocalDistance = result.T;
 				Runtime::EngineHelper::DrawAuxPoint( result.HitPoint, glm::vec4(0.2, 1, 0.2, 1), 2, 60 );
