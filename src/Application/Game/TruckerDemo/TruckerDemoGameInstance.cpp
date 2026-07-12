@@ -175,15 +175,57 @@ bool TruckerDemoGameInstance::OnKey(SDL_Event& e)
     const bool down = e.type == SDL_EVENT_KEY_DOWN;
     switch (e.key.key) { case SDLK_W: forward_ = down; break; case SDLK_S: reverse_ = down; break;
     case SDLK_A: left_ = down; break; case SDLK_D: right_ = down; break; case SDLK_SPACE: handbrake_ = down; break;
-    case SDLK_F: if (down) interactRequested_ = true; break; case SDLK_R: if (down) ResetVehicle(); break; default: return false; }
+    case SDLK_F: if (down) interactRequested_ = true; break; case SDLK_R: if (down) ResetVehicle(); break;
+    case SDLK_C:
+        if (down)
+        {
+            cameraYawOffset_ = 0.0f;
+            cameraPitch_ = glm::radians(18.0f);
+            cameraArmLength_ = 9.0f;
+        }
+        break;
+    default: return false; }
+    return true;
+}
+
+bool TruckerDemoGameInstance::OnCursorPosition(double xpos, double ypos)
+{
+    const glm::dvec2 current(xpos, ypos);
+    if (!hasMousePosition_)
+    {
+        lastMousePosition_ = current;
+        hasMousePosition_ = true;
+        return true;
+    }
+
+    const glm::dvec2 delta = current - lastMousePosition_;
+    lastMousePosition_ = current;
+    constexpr float sensitivity = 0.005f;
+    cameraYawOffset_ -= static_cast<float>(delta.x) * sensitivity;
+    cameraPitch_ = glm::clamp(cameraPitch_ - static_cast<float>(delta.y) * sensitivity,
+                              glm::radians(-10.0f), glm::radians(75.0f));
+    cameraYawOffset_ = std::remainder(cameraYawOffset_, glm::two_pi<float>());
+    return true;
+}
+
+bool TruckerDemoGameInstance::OnScroll(double, double yoffset)
+{
+    cameraArmLength_ = glm::clamp(cameraArmLength_ - static_cast<float>(yoffset) * 0.8f, 4.5f, 18.0f);
     return true;
 }
 
 bool TruckerDemoGameInstance::OverrideRenderCamera(Assets::Camera& camera) const
 {
-    glm::vec3 forward = rotation_ * glm::vec3(1, 0, 0); forward.y = 0; if (glm::length(forward) < 0.1f) forward = {1,0,0};
-    forward = glm::normalize(forward); glm::vec3 target = position_ + glm::vec3(0, 1.2f, 0) + forward * speed_ * 0.15f;
-    camera.ModelView = glm::lookAt(target - forward * 9.0f + glm::vec3(0, 4.2f, 0), target, glm::vec3(0,1,0));
+    glm::vec3 vehicleForward = rotation_ * glm::vec3(1, 0, 0); vehicleForward.y = 0;
+    if (glm::length(vehicleForward) < 0.1f) vehicleForward = {1,0,0};
+    vehicleForward = glm::normalize(vehicleForward);
+    const glm::quat orbitYaw = glm::angleAxis(cameraYawOffset_, glm::vec3(0, 1, 0));
+    const glm::vec3 orbitForward = orbitYaw * vehicleForward;
+    const glm::vec3 target = position_ + glm::vec3(0, 1.2f, 0) + vehicleForward * speed_ * 0.15f;
+    const float horizontalArm = std::cos(cameraPitch_) * cameraArmLength_;
+    const glm::vec3 cameraPosition = target - orbitForward * horizontalArm +
+                                     glm::vec3(0, std::sin(cameraPitch_) * cameraArmLength_, 0);
+    camera.ModelView = glm::lookAt(cameraPosition, target, glm::vec3(0,1,0));
     camera.FieldOfView = 62.0f; return true;
 }
 
@@ -198,7 +240,8 @@ bool TruckerDemoGameInstance::OnRenderUI()
     ImGui::Begin("Trucker MVP", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
     ImGui::Text("Speed  %4.1f km/h", speed_ * 3.6f); ImGui::Text("Surface  %s", SurfaceName());
     ImGui::Text("Mission  %s", MissionName()); ImGui::Text("Time  %.1fs", elapsed_);
-    ImGui::Separator(); ImGui::Text("W/S throttle  A/D steer  Space brake"); ImGui::Text("F load/unload when stopped  R recover");
+    ImGui::Separator(); ImGui::Text("W/S throttle  A/D steer  Space brake"); ImGui::Text("F load/unload  R recover  C reset camera");
+    ImGui::Text("Mouse orbit  Wheel zoom (%.1fm)", cameraArmLength_);
     if (mission_ == EMission::AtPickup) ImGui::TextColored({1, .8f, .2f, 1}, "STOP AND PRESS F TO LOAD");
     if (mission_ == EMission::AtDropoff) ImGui::TextColored({1, .8f, .2f, 1}, "STOP AND PRESS F TO DELIVER");
     if (mission_ == EMission::Complete) ImGui::TextColored({.2f, 1, .3f, 1}, "MISSION COMPLETE - %.1fs", elapsed_);

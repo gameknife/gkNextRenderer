@@ -15,6 +15,8 @@ public:
     bool OnRenderUI() override;
     bool ShouldRenderUiDuringScreenshot() const override { return true; }
     bool OnKey(SDL_Event& event) override;
+    bool OnCursorPosition(double xpos, double ypos) override;
+    bool OnScroll(double xoffset, double yoffset) override;
     bool OverrideRenderCamera(Assets::Camera& camera) const override;
     void BeforeSceneRebuild(std::vector<std::shared_ptr<Assets::Node>>& nodes,
                             std::vector<Assets::Model>&, std::vector<Assets::FMaterial>&,
@@ -47,4 +49,9 @@ private:
     bool interactRequested_ = false;
     EMission mission_ = EMission::Driving;
     ESurface surface_ = ESurface::Grass;
+    glm::dvec2 lastMousePosition_{0.0};
+    bool hasMousePosition_ = false;
+    float cameraYawOffset_ = 0.0f;
+    float cameraPitch_ = glm::radians(18.0f);
+    float cameraArmLength_ = 9.0f;
 };
