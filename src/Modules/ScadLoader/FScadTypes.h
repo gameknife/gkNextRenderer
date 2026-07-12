@@ -39,7 +39,7 @@ namespace Assets
         float smoothAngleDegrees = 35.0f;
     };
 
-    namespace scad
+    namespace Scad
     {
         inline constexpr double kPi = 3.14159265358979323846;
         inline constexpr double kDeg2Rad = kPi / 180.0;
@@ -200,5 +200,5 @@ namespace Assets
             Scope elseChildren;         // else-branch for "if"
             std::string modifiers;      // any of '*','!','#','%'
         };
-    } // namespace scad
+    } // namespace Scad
 } // namespace Assets

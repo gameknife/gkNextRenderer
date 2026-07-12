@@ -17,7 +17,7 @@
 
 #include "Modules/ScadLoader/FScadGeometry.h" // TriSoup
 
-namespace Assets::scad
+namespace Assets::Scad
 {
     class ScadCsg
     {
@@ -37,4 +37,4 @@ namespace Assets::scad
         // Convex hull of all input vertices.
         static TriSoup Hull(const std::vector<TriSoup>& parts, bool& outOk);
     };
-} // namespace Assets::scad
+} // namespace Assets::Scad

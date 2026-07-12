@@ -19,7 +19,7 @@
 #include <string>
 #include <unordered_map>
 
-using namespace Assets::scad;
+using namespace Assets::Scad;
 
 namespace
 {

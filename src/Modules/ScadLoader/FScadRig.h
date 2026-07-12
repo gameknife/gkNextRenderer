@@ -22,7 +22,7 @@
 
 namespace Assets
 {
-    namespace scad
+    namespace Scad
     {
         struct SceneEvalResult;
     }
@@ -48,7 +48,7 @@ namespace Assets
 
         // Builds a rig from an already-evaluated scene (unit-test entry point).
         static bool BuildRig(
-            const scad::SceneEvalResult& evalResult,
+            const Scad::SceneEvalResult& evalResult,
             const ScadRigLoadOptions& options,
             FRigAsset& outAsset,
             std::string& outError,

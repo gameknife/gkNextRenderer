@@ -170,9 +170,9 @@ int main(int argc, const char* argv[]) noexcept
         int totalFailed = 0;
         for (const ScadLibrary::FKitInfo& kit : kits)
         {
-            Assets::scad::ScadProgram program;
+            Assets::Scad::ScadProgram program;
             std::string error;
-            if (!Assets::scad::LoadScadProgram(kit.filePath, program, error))
+            if (!Assets::Scad::LoadScadProgram(kit.filePath, program, error))
             {
                 std::cerr << kit.name << ": failed to load program: " << error << std::endl;
                 return 1;
@@ -197,13 +197,13 @@ int main(int argc, const char* argv[]) noexcept
                 // Evaluate `module();` with default arguments against the kit's
                 // resolved definition tables.
                 const std::string source = "$fn = " + std::to_string(fnSegments) + ";\n" + moduleInfo.name + "();\n";
-                std::vector<Assets::scad::Token> tokens;
-                Assets::scad::Scope scope;
-                Assets::scad::EvalResult result;
+                std::vector<Assets::Scad::Token> tokens;
+                Assets::Scad::Scope scope;
+                Assets::Scad::EvalResult result;
                 Assets::ScadLoadOptions loadOptions{};
-                bool ok = Assets::scad::ScadLexer::Tokenize(source, tokens, error) &&
-                          Assets::scad::ScadParser::Parse(tokens, scope, error) &&
-                          Assets::scad::ScadEvaluator::Evaluate(scope, program.modules, program.functions,
+                bool ok = Assets::Scad::ScadLexer::Tokenize(source, tokens, error) &&
+                          Assets::Scad::ScadParser::Parse(tokens, scope, error) &&
+                          Assets::Scad::ScadEvaluator::Evaluate(scope, program.modules, program.functions,
                                                                 loadOptions, result, error);
                 if (ok && result.triangleCount > 0)
                 {

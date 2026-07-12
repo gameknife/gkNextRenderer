@@ -1,5 +1,11 @@
 #pragma once
 
+// Sister implementation: AirportSim/DecisionScheduler.h shares the same Layer 0
+// (deterministic simulation) / Layer 1 (LLM decision) split. The two copies are
+// intentionally independent — each demo stays self-contained and disposable —
+// so fixes here do not need to be ported, but check the sibling when touching
+// the scheduling contract itself.
+
 #include "StudioSimTypes.h"
 
 #include <chrono>

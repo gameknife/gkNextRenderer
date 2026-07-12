@@ -15,7 +15,7 @@
 
 #include "Modules/ScadLoader/FScadGeometry.h" // TriSoup
 
-namespace Assets::scad
+namespace Assets::Scad
 {
     class ScadTess
     {
@@ -28,4 +28,4 @@ namespace Assets::scad
                                    bool center,
                                    TriSoup& out);
     };
-} // namespace Assets::scad
+} // namespace Assets::Scad

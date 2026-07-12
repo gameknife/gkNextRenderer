@@ -42,10 +42,10 @@ namespace Assets
             {
             }
 
-            bool Build(const scad::SceneEvalResult& evalResult, std::string& outError)
+            bool Build(const Scad::SceneEvalResult& evalResult, std::string& outError)
             {
-                const scad::SceneNode* rootBone = nullptr;
-                for (const scad::SceneNode& root : evalResult.roots)
+                const Scad::SceneNode* rootBone = nullptr;
+                for (const Scad::SceneNode& root : evalResult.roots)
                 {
                     if (!IsBone(root.name))
                     {
@@ -103,12 +103,12 @@ namespace Assets
             // bone children are collected for recursion with their accumulated
             // local transform.
             void CollapseInto(
-                const scad::SceneNode& node,
+                const Scad::SceneNode& node,
                 const glm::dmat4& accum,
                 std::map<uint32_t, RigBucket>& buckets,
-                std::vector<std::pair<const scad::SceneNode*, glm::dmat4>>& childBones)
+                std::vector<std::pair<const Scad::SceneNode*, glm::dmat4>>& childBones)
             {
-                for (const scad::SceneMeshBucket& mesh : node.meshes)
+                for (const Scad::SceneMeshBucket& mesh : node.meshes)
                 {
                     RigBucket& bucket = buckets[RigQuantizeColor(mesh.color)];
                     bucket.color = mesh.color;
@@ -119,7 +119,7 @@ namespace Assets
                     }
                 }
 
-                for (const scad::SceneNode& child : node.children)
+                for (const Scad::SceneNode& child : node.children)
                 {
                     if (IsBone(child.name))
                     {
@@ -132,7 +132,7 @@ namespace Assets
                 }
             }
 
-            void BuildBone(const scad::SceneNode& boneNode, const glm::dmat4& pivotScad, int32_t parentIndex)
+            void BuildBone(const Scad::SceneNode& boneNode, const glm::dmat4& pivotScad, int32_t parentIndex)
             {
                 if (!seenBones_.insert(boneNode.name).second)
                 {
@@ -145,7 +145,7 @@ namespace Assets
                 FRigBone bone;
                 bone.name = boneNode.name;
                 bone.parent = parentIndex;
-                scad::ScadLocalToEngineTRS(pivotScad, Scale(), bone.bindT, bone.bindR, bone.bindS);
+                Scad::ScadLocalToEngineTRS(pivotScad, Scale(), bone.bindT, bone.bindR, bone.bindS);
 
                 const glm::dmat3 linear(pivotScad);
                 if (glm::determinant(linear) < 0.0)
@@ -166,7 +166,7 @@ namespace Assets
                 }
 
                 std::map<uint32_t, RigBucket> buckets;
-                std::vector<std::pair<const scad::SceneNode*, glm::dmat4>> childBones;
+                std::vector<std::pair<const Scad::SceneNode*, glm::dmat4>> childBones;
                 CollapseInto(boneNode, glm::dmat4(1.0), buckets, childBones);
                 BuildParts(boneIndex, buckets);
 
@@ -204,10 +204,10 @@ namespace Assets
                         std::vector<glm::vec3> localPos(bucket.tris.size());
                         for (size_t i = 0; i < localPos.size(); ++i)
                         {
-                            localPos[i] = scad::ScadToWorldPos(bucket.tris[i], Scale());
+                            localPos[i] = Scad::ScadToWorldPos(bucket.tris[i], Scale());
                         }
                         const std::vector<glm::vec3> normals =
-                            scad::ScadComputeSmoothNormals(localPos, options_.smoothAngleDegrees);
+                            Scad::ScadComputeSmoothNormals(localPos, options_.smoothAngleDegrees);
 
                         const uint32_t vertexOffset = static_cast<uint32_t>(vertices.size());
                         vertices.reserve(vertices.size() + localPos.size());
@@ -244,7 +244,7 @@ namespace Assets
 
             // ---------------- Animation clips ----------------
 
-            void ParseClips(const scad::SceneEvalResult& evalResult)
+            void ParseClips(const Scad::SceneEvalResult& evalResult)
             {
                 for (const auto& [varName, value] : evalResult.topLevelVariables)
                 {
@@ -267,7 +267,7 @@ namespace Assets
                     clip.name = clipName;
                     std::map<int32_t, size_t> channelByBone;
 
-                    for (const scad::Value& row : value.vec)
+                    for (const Scad::Value& row : value.vec)
                     {
                         ParseClipRow(clip, channelByBone, row);
                     }
@@ -276,7 +276,7 @@ namespace Assets
                 }
             }
 
-            void ParseClipRow(FRigClip& clip, std::map<int32_t, size_t>& channelByBone, const scad::Value& row)
+            void ParseClipRow(FRigClip& clip, std::map<int32_t, size_t>& channelByBone, const Scad::Value& row)
             {
                 if (!row.IsVec() || row.vec.empty())
                 {
@@ -285,15 +285,15 @@ namespace Assets
                 }
 
                 // Metadata row: ["loop", bool]
-                if (row.vec.size() == 2 && row.vec[0].type == scad::Value::Type::Str && row.vec[0].str == "loop")
+                if (row.vec.size() == 2 && row.vec[0].type == Scad::Value::Type::Str && row.vec[0].str == "loop")
                 {
                     clip.loop = row.vec[1].IsTruthy();
                     return;
                 }
 
                 if (row.vec.size() != 3 ||
-                    row.vec[0].type != scad::Value::Type::Str ||
-                    row.vec[1].type != scad::Value::Type::Str ||
+                    row.vec[0].type != Scad::Value::Type::Str ||
+                    row.vec[1].type != Scad::Value::Type::Str ||
                     !row.vec[2].IsVec())
                 {
                     Warn(fmt::format("clip '{}': channel row must be [bone, channel, keys]; ignored", clip.name));
@@ -326,7 +326,7 @@ namespace Assets
                 FRigChannel& channel = clip.channels[found->second];
 
                 float lastTime = -1.0f;
-                for (const scad::Value& key : row.vec[2].vec)
+                for (const Scad::Value& key : row.vec[2].vec)
                 {
                     if (!key.IsVec() || key.vec.size() < 2 || !key.vec[0].IsNumber())
                     {
@@ -353,7 +353,7 @@ namespace Assets
 
                     if (channelName == "pos")
                     {
-                        channel.position.Keys.push_back({time, scad::ScadToWorldPos(v, Scale())});
+                        channel.position.Keys.push_back({time, Scad::ScadToWorldPos(v, Scale())});
                     }
                     else if (channelName == "rot")
                     {
@@ -363,7 +363,7 @@ namespace Assets
                         glm::vec3 t(0.0f);
                         glm::quat r(1.0f, 0.0f, 0.0f, 0.0f);
                         glm::vec3 s(1.0f);
-                        scad::ScadLocalToEngineTRS(scad::ScadRotateXYZ(v), Scale(), t, r, s);
+                        Scad::ScadLocalToEngineTRS(Scad::ScadRotateXYZ(v), Scale(), t, r, s);
                         channel.rotation.Keys.push_back({time, r});
                     }
                     else // scale
@@ -384,8 +384,8 @@ namespace Assets
         std::string& outError,
         std::vector<std::string>* outWarnings)
     {
-        scad::ScadProgram program;
-        if (!scad::LoadScadProgram(filename, program, outError))
+        Scad::ScadProgram program;
+        if (!Scad::LoadScadProgram(filename, program, outError))
         {
             return false;
         }
@@ -394,8 +394,8 @@ namespace Assets
         evalOptions.scadToWorldScale = options.scadToWorldScale;
         evalOptions.smoothAngleDegrees = options.smoothAngleDegrees;
 
-        scad::SceneEvalResult result;
-        if (!scad::ScadEvaluator::EvaluateScene(
+        Scad::SceneEvalResult result;
+        if (!Scad::ScadEvaluator::EvaluateScene(
                 program.mainTopLevel, program.modules, program.functions, evalOptions, result, outError))
         {
             return false;
@@ -412,7 +412,7 @@ namespace Assets
     }
 
     bool FScadRigLoader::BuildRig(
-        const scad::SceneEvalResult& evalResult,
+        const Scad::SceneEvalResult& evalResult,
         const ScadRigLoadOptions& options,
         FRigAsset& outAsset,
         std::string& outError,

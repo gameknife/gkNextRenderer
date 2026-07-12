@@ -1,5 +1,7 @@
 #include "Modules/NextPhysics/JoltPhysicsBackend.hpp"
 
+#include "Engine/Common/CoreMinimal.hpp"
+
 // The Jolt headers don't include Jolt.h. Always include Jolt.h before including any other Jolt header.
 // You can use Jolt.h in your precompiled header to speed up compilation.
 #include <Jolt/Jolt.h>
@@ -682,6 +684,16 @@ NextBodyID FJoltPhysicsBackend::CreateMeshBody(const NextMeshShapeHandle& meshSh
 		return {};
 	}
 	const RefConst<MeshShapeSettings>& meshShapeSettings = joltMeshShape->settings_;
+
+	// Cooking can drop every triangle (e.g. centimeter-scale meshes fall below Jolt's
+	// degenerate-triangle threshold). Feeding such settings to CreateAndAddBody trips a
+	// fatal assert, so validate here and skip the physics body instead.
+	if (const Shape::ShapeResult cooked = meshShapeSettings->Create(); cooked.HasError())
+	{
+		SPDLOG_WARN("[Physics] mesh shape cooking failed ({}); skipping collision body",
+		            cooked.GetError().c_str());
+		return {};
+	}
 	
 	const float epsilon = 0.001f;
 	bool isUniformScale = (glm::abs(scale.x - 1.0f) < epsilon && 

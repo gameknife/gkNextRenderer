@@ -15,7 +15,7 @@
 #include <glm/gtx/quaternion.hpp>
 
 using namespace Assets;
-using namespace Assets::scad;
+using namespace Assets::Scad;
 
 namespace
 {

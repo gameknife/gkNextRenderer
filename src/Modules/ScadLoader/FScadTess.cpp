@@ -12,7 +12,7 @@
 #include <mapbox/earcut.hpp>
 #endif
 
-namespace Assets::scad
+namespace Assets::Scad
 {
     namespace
     {
@@ -190,4 +190,4 @@ namespace Assets::scad
     }
 
 #endif // GK_WITH_EARCUT
-} // namespace Assets::scad
+} // namespace Assets::Scad

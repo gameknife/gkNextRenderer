@@ -26,7 +26,7 @@
 
 #include "Modules/ScadLoader/FScadTypes.h"
 
-namespace Assets::scad
+namespace Assets::Scad
 {
     struct ColorBucket
     {
@@ -108,4 +108,4 @@ namespace Assets::scad
                                   SceneEvalResult& outResult,
                                   std::string& outError);
     };
-} // namespace Assets::scad
+} // namespace Assets::Scad

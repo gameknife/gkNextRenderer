@@ -3,7 +3,7 @@
 #include <cctype>
 #include <cstdlib>
 
-namespace Assets::scad
+namespace Assets::Scad
 {
     namespace
     {
@@ -241,4 +241,4 @@ namespace Assets::scad
         outTokens.push_back(eof);
         return true;
     }
-} // namespace Assets::scad
+} // namespace Assets::Scad

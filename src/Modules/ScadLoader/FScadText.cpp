@@ -19,7 +19,7 @@
 #include FT_FREETYPE_H
 #include FT_OUTLINE_H
 
-namespace Assets::scad
+namespace Assets::Scad
 {
     namespace
     {
@@ -212,11 +212,11 @@ namespace Assets::scad
         ScadTess::ExtrudeEvenOdd(allContours, height, center, out);
         return true;
     }
-} // namespace Assets::scad
+} // namespace Assets::Scad
 
 #else // GK_WITH_FREETYPE
 
-namespace Assets::scad
+namespace Assets::Scad
 {
     bool ScadText::Available() { return false; }
 
@@ -225,6 +225,6 @@ namespace Assets::scad
     {
         return false;
     }
-} // namespace Assets::scad
+} // namespace Assets::Scad
 
 #endif // GK_WITH_FREETYPE

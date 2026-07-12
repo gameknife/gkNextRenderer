@@ -12,7 +12,7 @@
 #include <manifold/manifold.h>
 #endif
 
-namespace Assets::scad
+namespace Assets::Scad
 {
 #if GK_WITH_MANIFOLD
     namespace
@@ -251,4 +251,4 @@ namespace Assets::scad
     }
 
 #endif // GK_WITH_MANIFOLD
-} // namespace Assets::scad
+} // namespace Assets::Scad

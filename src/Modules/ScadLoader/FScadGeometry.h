@@ -13,7 +13,7 @@
 
 #include <glm/glm.hpp>
 
-namespace Assets::scad
+namespace Assets::Scad
 {
     using TriSoup = std::vector<glm::dvec3>;
 
@@ -48,4 +48,4 @@ namespace Assets::scad
                                        int segments,
                                        TriSoup& out);
     };
-} // namespace Assets::scad
+} // namespace Assets::Scad

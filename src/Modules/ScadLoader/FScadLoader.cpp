@@ -122,7 +122,7 @@ namespace Assets
 
         bool AttachSceneMeshesToNode(
             const std::string& baseName,
-            const std::vector<scad::SceneMeshBucket>& meshBuckets,
+            const std::vector<Scad::SceneMeshBucket>& meshBuckets,
             size_t startBucket,
             size_t maxBucketCount,
             double scale,
@@ -145,7 +145,7 @@ namespace Assets
 
             for (size_t bucketIndex = startBucket; bucketIndex < endBucket; ++bucketIndex)
             {
-                const scad::SceneMeshBucket& bucket = meshBuckets[bucketIndex];
+                const Scad::SceneMeshBucket& bucket = meshBuckets[bucketIndex];
                 const size_t triCount = bucket.tris.size() / 3;
                 if (triCount == 0)
                 {
@@ -155,9 +155,9 @@ namespace Assets
                 std::vector<glm::vec3> localPos(triCount * 3);
                 for (size_t i = 0; i < localPos.size(); ++i)
                 {
-                    localPos[i] = scad::ScadToWorldPos(bucket.tris[i], scale);
+                    localPos[i] = Scad::ScadToWorldPos(bucket.tris[i], scale);
                 }
-                const std::vector<glm::vec3> normals = scad::ScadComputeSmoothNormals(localPos, smoothAngleDegrees);
+                const std::vector<glm::vec3> normals = Scad::ScadComputeSmoothNormals(localPos, smoothAngleDegrees);
 
                 const uint32_t vertexOffset = static_cast<uint32_t>(vertices.size());
                 vertices.reserve(vertices.size() + localPos.size());
@@ -223,7 +223,7 @@ namespace Assets
         }
 
         void BuildScadSceneNodeRecursive(
-            const scad::SceneNode& sceneNode,
+            const Scad::SceneNode& sceneNode,
             const std::shared_ptr<Node>& parent,
             double scale,
             float smoothAngleDegrees,
@@ -235,7 +235,7 @@ namespace Assets
             glm::vec3 localTranslation(0.0f);
             glm::quat localRotation(1.0f, 0.0f, 0.0f, 0.0f);
             glm::vec3 localScale(1.0f);
-            scad::ScadLocalToEngineTRS(sceneNode.localTransform, scale, localTranslation, localRotation, localScale);
+            Scad::ScadLocalToEngineTRS(sceneNode.localTransform, scale, localTranslation, localRotation, localScale);
 
             auto node = Node::CreateNode(
                 sceneNode.name,
@@ -293,7 +293,7 @@ namespace Assets
                 }
             }
 
-            for (const scad::SceneNode& child : sceneNode.children)
+            for (const Scad::SceneNode& child : sceneNode.children)
             {
                 BuildScadSceneNodeRecursive(child, node, scale, smoothAngleDegrees, nodes, models, materials, cache);
             }
@@ -312,18 +312,18 @@ namespace Assets
         const ScadLoadOptions& options)
     {
         // ---- Resolve the use/include closure ----
-        scad::ScadProgram program;
+        Scad::ScadProgram program;
         std::string programErr;
-        if (!scad::LoadScadProgram(filename, program, programErr))
+        if (!Scad::LoadScadProgram(filename, program, programErr))
         {
             SPDLOG_ERROR("SCAD: {}", programErr);
             return false;
         }
 
         // ---- Evaluate ----
-        scad::SceneEvalResult result;
+        Scad::SceneEvalResult result;
         std::string evalErr;
-        scad::ScadEvaluator::EvaluateScene(program.mainTopLevel, program.modules, program.functions, options, result, evalErr);
+        Scad::ScadEvaluator::EvaluateScene(program.mainTopLevel, program.modules, program.functions, options, result, evalErr);
 
         if (result.roots.empty())
         {
@@ -335,7 +335,7 @@ namespace Assets
         // ---- Recreate the SCAD user-module hierarchy ----
         ScadBuildCache buildCache;
         size_t rootCount = 0;
-        for (const scad::SceneNode& root : result.roots)
+        for (const Scad::SceneNode& root : result.roots)
         {
             BuildScadSceneNodeRecursive(root, nullptr, scale, options.smoothAngleDegrees, nodes, models, materials, buildCache);
             ++rootCount;

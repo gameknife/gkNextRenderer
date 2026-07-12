@@ -20,7 +20,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 
-namespace Assets::scad
+namespace Assets::Scad
 {
     namespace
     {
@@ -372,4 +372,4 @@ namespace Assets::scad
         }
         return out;
     }
-} // namespace Assets::scad
+} // namespace Assets::Scad

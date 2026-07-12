@@ -15,7 +15,7 @@
 
 #include "Modules/ScadLoader/FScadTypes.h"
 
-namespace Assets::scad
+namespace Assets::Scad
 {
     // Parsed use/include closure of a .scad program: merged definition tables
     // plus the executable top level of the main file (and its includes).
@@ -49,4 +49,4 @@ namespace Assets::scad
 
     // Per-corner smoothed normals for a triangle soup (see FScadLoader).
     std::vector<glm::vec3> ScadComputeSmoothNormals(const std::vector<glm::vec3>& pos, float angleThresholdDeg);
-} // namespace Assets::scad
+} // namespace Assets::Scad

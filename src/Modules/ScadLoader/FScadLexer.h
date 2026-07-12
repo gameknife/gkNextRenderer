@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace Assets::scad
+namespace Assets::Scad
 {
     enum class Tok
     {
@@ -60,4 +60,4 @@ namespace Assets::scad
         // Returns false on a fatal lexing error (outError filled with line info).
         static bool Tokenize(const std::string& source, std::vector<Token>& outTokens, std::string& outError);
     };
-} // namespace Assets::scad
+} // namespace Assets::Scad
