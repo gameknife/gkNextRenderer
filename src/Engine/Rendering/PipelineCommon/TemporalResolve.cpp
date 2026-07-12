@@ -77,7 +77,7 @@ namespace Vulkan::PipelineCommon
         VkCommandBuffer commandBuffer,
         std::initializer_list<FTemporalCopy> copies)
     {
-        // Pure C++ image copy (no shader to read custom_data_0): resolve the accumulation/history
+        // Pure C++ image copy (no shader to read CustomData0): resolve the accumulation/history
         // slots into the active RenderView's bank here. Base 0 == primary, unchanged.
         const uint32_t viewBase = baseRenderer.ActiveViewBankBase();
         for (const auto& copy : copies)

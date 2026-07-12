@@ -7,7 +7,7 @@ import Shader.GpuScene;
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     let scene = Bindless.GetGpuscene();
-    uint slot = min(scene.custom_data_0, 4u);
+    uint slot = min(scene.CustomData0, 4u);
 
     SoftMeshShaderResources softMeshShader = scene.SoftMeshShader[0];
     uint* counters = (uint*)softMeshShader.Counters;
@@ -16,7 +16,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     uint totalTri = counters[slot * 2];
     uint itemCount = counters[slot * 2 + 1];
-    uint triangleCapacity = scene.custom_data_2;
+    uint triangleCapacity = scene.CustomData2;
     totalTri = min(totalTri, triangleCapacity);
     itemCount = min(itemCount, uint(MAX_NODES));
 

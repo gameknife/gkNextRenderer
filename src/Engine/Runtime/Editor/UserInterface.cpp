@@ -1,50 +1,47 @@
 #include "Engine/Runtime/Editor/UserInterface.hpp"
 #include "Engine/Runtime/Editor/UserInterface.Internal.hpp"
 
+#include "Engine/Assets/GPU/Texture.hpp"
+#include "Engine/Assets/GPU/TextureImage.hpp"
+#include "Engine/Options.hpp"
+#include "Engine/Rendering/VulkanBaseRenderer.hpp"
+#include "Engine/Runtime/Config/UserSettings.hpp"
+#include "Engine/Runtime/Editor/FontLoader.h"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Interface/DebugUiProvider.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Engine/Runtime/Config/UserSettings.hpp"
-#include "Engine/Runtime/Editor/FontLoader.h"
-#include "ThirdParty/imgui-custom/imgui_impl_sdl3_custom.h"
+#include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
 #include "Engine/Utilities/Exception.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
-#include "Engine/Vulkan/Device.hpp"
-#include "Engine/Vulkan/MemoryAndShader.hpp"
-#include "Engine/Vulkan/Instance.hpp"
-#include "Engine/Vulkan/GraphicsPipelineBuilder.hpp"
-#include "Engine/Vulkan/RenderingPipeline.hpp"
-#include "Engine/Vulkan/CommandExecution.hpp"
-#include "Engine/Vulkan/SwapChain.hpp"
-#include "Engine/Vulkan/WindowSurface.hpp"
-
-#include <imgui.h>
-#include <imgui_freetype.h>
-#include <imgui_stdlib.h>
-#include <SDL3/SDL.h>
-
-#include <algorithm>
-#include <array>
-#include <cstddef>
-#include <cmath>
-#include <cstring>
-#include <filesystem>
-#include <fmt/chrono.h>
-#include <fmt/format.h>
-
-#include "Engine/Assets/GPU/TextureImage.hpp"
-#include "Engine/Assets/GPU/Texture.hpp"
-#include "Engine/Options.hpp"
-#include "Engine/Rendering/VulkanBaseRenderer.hpp"
-#include "Engine/Runtime/Subsystems/TaskCoordinator.hpp"
-#include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 #include "Engine/Utilities/ImGui.hpp"
 #include "Engine/Utilities/Math.hpp"
 #include "Engine/Utilities/StbImage.hpp"
+#include "Engine/Vulkan/CommandExecution.hpp"
+#include "Engine/Vulkan/Device.hpp"
 #include "Engine/Vulkan/GpuResources.hpp"
+#include "Engine/Vulkan/GraphicsPipelineBuilder.hpp"
+#include "Engine/Vulkan/Instance.hpp"
+#include "Engine/Vulkan/MemoryAndShader.hpp"
+#include "Engine/Vulkan/RenderingPipeline.hpp"
+#include "Engine/Vulkan/SwapChain.hpp"
+#include "Engine/Vulkan/WindowSurface.hpp"
 
-extern float GAndroidMagicScale;
-extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
+#include "ThirdParty/fontawesome/IconsFontAwesome6.h"
+#include "ThirdParty/imgui-custom/imgui_impl_sdl3_custom.h"
+
+#include <SDL3/SDL.h>
+#include <fmt/chrono.h>
+#include <fmt/format.h>
+#include <imgui.h>
+#include <imgui_freetype.h>
+#include <imgui_stdlib.h>
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstddef>
+#include <cstring>
+#include <filesystem>
 
 namespace NextUI
 {
@@ -251,7 +248,7 @@ UserInterface::UserInterface(NextEngine* engine, Vulkan::CommandPool& commandPoo
 
     // Window scaling and style.
 #if ANDROID
-    const float scaleFactor = 0.75f / static_cast<float>(GAndroidMagicScale);
+    const float scaleFactor = 0.75f / Vulkan::SwapChain::UiContentScale();
 #else
     const float scaleFactor = 1.0f;
 #endif
@@ -923,11 +920,12 @@ void UserInterface::DrawLine(float fromx, float fromy, float tox, float toy, flo
 void UserInterface::PreRender()
 {
     BeginRendererBackendFrame();
+    ImGui_ImplSDL3_SetFramebufferScaleBias(Vulkan::SwapChain::UiContentScale());
     ImGui_ImplSDL3_NewFrame();
 #if ANDROID
     auto& io = ImGui::GetIO();
-    io.DisplayFramebufferScale.x *= GAndroidMagicScale;
-    io.DisplayFramebufferScale.y *= GAndroidMagicScale;
+    io.DisplayFramebufferScale.x *= Vulkan::SwapChain::UiContentScale();
+    io.DisplayFramebufferScale.y *= Vulkan::SwapChain::UiContentScale();
 #endif
     ImGui::NewFrame();
 }

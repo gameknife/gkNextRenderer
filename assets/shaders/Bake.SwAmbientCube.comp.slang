@@ -8,8 +8,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
     FHiVoxelDDARayTracer tracer;
     FGpuProbeGenerator probeGen;
 
-    uint cascadeIndex = Bindless.GetGpuscene().custom_data_1;
-    uint activeProbeIdx = DTid.x + Bindless.GetGpuscene().custom_data_0;
+    uint cascadeIndex = Bindless.GetGpuscene().CustomData1;
+    uint activeProbeIdx = DTid.x + Bindless.GetGpuscene().CustomData0;
     uint activeBrickIndex = activeProbeIdx / uint(GPU_SCENE_AMBIENT_BRICK_VOLUME);
     uint localProbeOffset = activeProbeIdx % uint(GPU_SCENE_AMBIENT_BRICK_VOLUME);
     int3 probePos;

@@ -45,8 +45,15 @@ namespace Vulkan
 
 		void UpdateRenderViewport( int32_t x, int32_t y, uint32_t width, uint32_t height) const;
 		void UpdateOutputViewport( int32_t x, int32_t y, uint32_t width, uint32_t height) const;
-		
+
+		// Android renders at a fixed 1280px logical resolution: this is the
+		// logical-to-native ratio (< 1 on high-DPI devices, 1.0 elsewhere).
+		// UI code uses it to rescale fonts and ImGui framebuffer output.
+		static float UiContentScale() { return uiContentScale_; }
+
 	private:
+
+		static float uiContentScale_;
 
 		struct SupportDetails
 		{

@@ -185,9 +185,10 @@ public struct ALIGN_16 NodeProxy
     public float4x4 combinedPrevTS;
 
     public uint matId[16];
-    
-    public uint visible;
-    public uint nort;
+
+    public uint visible;        // RenderParticipation bit mask
+    public uint excludeFromAS;  // 1 for non-first sections of multi-section models: only
+                                // section 0 becomes a TLAS instance (its BLAS covers the model)
     public uint reserved1;
     public uint reserved2;
 };
@@ -224,8 +225,8 @@ public struct ALIGN_8 AmbientCube
  
     public uint SunDirect;
     public uint SkyEmissiveDirect;
-    public uint skyVisibility_pznzpyny;
-    public uint skyVisibility_pxnxs0s1;
+    public uint SkyVisibilityPZNZPYNY; // 8-bit sky visibility per face: +Z / -Z / +Y / -Y
+    public uint SkyVisibilityPXNXS0S1; // +X / -X + two spare lanes
 };
 
 // 8 bytes per voxel. matId stays a full uint; distanceToSolid stores 8 packed 4-bit channels:
@@ -427,12 +428,12 @@ public struct ALIGN_16 GPUVertex
 public struct ALIGN_16 GPUScene
 {
     // Unified push-constant header: kept FIRST so it aliases the header of every custom push
-    // constant (see ZeroBindCustomPushConstantPipeline). custom_data_0 == active RenderView RT
-    // bank base, readable via gpuScene.custom_data_0 in *all* passes regardless of which pipeline.
+    // constant (see ZeroBindCustomPushConstantPipeline). CustomData0 == active RenderView RT
+    // bank base, readable via gpuScene.CustomData0 in *all* passes regardless of which pipeline.
     uint32_t SwapChainIndex;
-    uint32_t custom_data_0;
-    uint32_t custom_data_1;
-    uint32_t custom_data_2;
+    uint32_t CustomData0;
+    uint32_t CustomData1;
+    uint32_t CustomData2;
 
     uint64_t Camera;
     uint64_t SceneDynamicBase;
@@ -458,9 +459,9 @@ public struct ALIGN_8 GPUScene
 {
     // Unified push-constant header (FIRST; aliases every custom push constant's header).
     public uint SwapChainIndex;
-    public uint custom_data_0;
-    public uint custom_data_1;
-    public uint custom_data_2;
+    public uint CustomData0;
+    public uint CustomData1;
+    public uint CustomData2;
 
     /* Scene Info */
     public UniformBufferObject *Camera;
@@ -562,9 +563,9 @@ public struct ALIGN_8 GPUScene
 {
     // Unified push-constant header (FIRST; aliases every custom push constant's header).
     public uint32_t SwapChainIndex;
-    public uint32_t custom_data_0;
-    public uint32_t custom_data_1;
-    public uint32_t custom_data_2;
+    public uint32_t CustomData0;
+    public uint32_t CustomData1;
+    public uint32_t CustomData2;
 
     /* Scene Info */
     uint64_t2 Camera_SceneDynamicBase_Address;

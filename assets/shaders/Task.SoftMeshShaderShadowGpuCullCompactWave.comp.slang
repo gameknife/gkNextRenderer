@@ -24,10 +24,10 @@ void main(uint3 DTid : SV_DispatchThreadID)
     SoftMeshShaderVisibleItem* visibleItems = (SoftMeshShaderVisibleItem*)softMeshShader.VisibleItems;
     uint* counters = (uint*)softMeshShader.Counters;
 
-    uint activeCascadeMask = scene.custom_data_0;
-    uint maxSceneTriangles = scene.custom_data_2;
+    uint activeCascadeMask = scene.CustomData0;
+    uint maxSceneTriangles = scene.CustomData2;
 
-    bool inRange = (DTid.x < scene.custom_data_1) && (DTid.x < MAX_NODES);
+    bool inRange = (DTid.x < scene.CustomData1) && (DTid.x < MAX_NODES);
     NodeProxy node;
     ModelData model;
     uint triangleCount = 0;

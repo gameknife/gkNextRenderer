@@ -41,6 +41,9 @@ IMGUI_IMPL_API bool     ImGui_ImplSDL3_InitForOther(SDL_Window* window);
 IMGUI_IMPL_API void     ImGui_ImplSDL3_Shutdown();
 IMGUI_IMPL_API void     ImGui_ImplSDL3_NewFrame();
 IMGUI_IMPL_API bool     ImGui_ImplSDL3_ProcessEvent(const SDL_Event* event);
+// Extra multiplier applied to io.DisplayFramebufferScale (gkNext: Android renders at a
+// fixed logical resolution; the engine pushes SwapChain::UiContentScale() here).
+IMGUI_IMPL_API void     ImGui_ImplSDL3_SetFramebufferScaleBias(float scale);
 
 // Gamepad selection automatically starts in AutoFirst mode, picking first available SDL_Gamepad. You may override this.
 // When using manual mode, caller is responsible for opening/closing gamepad.

@@ -2,11 +2,11 @@ import Shader.Bindless;
 struct PushConsts
 {
     // Unified push-constant header (offset 0..15): aliases gpuScene's header so
-    // gpuScene.custom_data_0 (active view RT bank base) is valid in this custom pass. Params follow.
+    // gpuScene.CustomData0 (active view RT bank base) is valid in this custom pass. Params follow.
     uint _ViewHdr_SwapChainIndex;
-    uint _ViewHdr_custom_data_0;
-    uint _ViewHdr_custom_data_1;
-    uint _ViewHdr_custom_data_2;
+    uint _ViewHdr_CustomData0;
+    uint _ViewHdr_CustomData1;
+    uint _ViewHdr_CustomData2;
 
     uint SwapChainIdx;
     uint offset_x;
@@ -138,27 +138,27 @@ void main(uint3 DTid : SV_DispatchThreadID)
     //ipos = int2(ipos.x, ipos.y);
     isize = int2(pushConsts.output_w, pushConsts.output_h);
     // line 1
-    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_ALBEDO)), 0, 0, 4, ipos, isize, 1);
-    DRAWNORMAL(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_NORMAL)), 1, 0, 4, ipos, isize);
-    DRAWDEPTH(Bindless.GetStorageTexture<float>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_PREV_DEPTHBUFFER)), 2, 0, 4, ipos, isize, 1.0f);
-    DRAWINT(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_OBJECTID_0)), 3, 0, 4, ipos, isize);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_ALBEDO)), 0, 0, 4, ipos, isize, 1);
+    DRAWNORMAL(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_NORMAL)), 1, 0, 4, ipos, isize);
+    DRAWDEPTH(Bindless.GetStorageTexture<float>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_PREV_DEPTHBUFFER)), 2, 0, 4, ipos, isize, 1.0f);
+    DRAWINT(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_OBJECTID_0)), 3, 0, 4, ipos, isize);
 
 // line 2/3 left
 #ifdef SHADER_CLOCK
-    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_SHADER_TIMER)), 0, 1, 4, ipos, isize, 1);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SHADER_TIMER)), 0, 1, 4, ipos, isize, 1);
 #endif
-    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_MOTIONVECTOR)), 0, 2, 4, ipos, isize, 1);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_MOTIONVECTOR)), 0, 2, 4, ipos, isize, 1);
 
     // line 2/3 right
-    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_SINGLE_SPECULAR)), 3, 1, 4, ipos, isize, 0.005);
-    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_SINGLE_DIFFUSE)), 3, 2, 4, ipos, isize, 0.005);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SINGLE_SPECULAR)), 3, 1, 4, ipos, isize, 0.005);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SINGLE_DIFFUSE)), 3, 2, 4, ipos, isize, 0.005);
     
     // center
-    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_DENOISED)), 0.5, 0.5, 2, ipos, isize, 1);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_DENOISED)), 0.5, 0.5, 2, ipos, isize, 1);
 
     // line back
-    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_ACCUMULATE_DIFFUSE)), 0, 3, 4, ipos, isize, 0.005);
-    DRAWINTX(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_MINIGBUFFER)), 1, 3, 4, ipos, isize);
-    DRAWINTY(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_MINIGBUFFER)), 2, 3, 4, ipos, isize);
-    DRAWINT(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_MOTIONMOMENT)), 3, 3, 4, ipos, isize);
+    DRAW(Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_ACCUMULATE_DIFFUSE)), 0, 3, 4, ipos, isize, 0.005);
+    DRAWINTX(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_MINIGBUFFER)), 1, 3, 4, ipos, isize);
+    DRAWINTY(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_MINIGBUFFER)), 2, 3, 4, ipos, isize);
+    DRAWINT(Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_MOTIONMOMENT)), 3, 3, 4, ipos, isize);
 }

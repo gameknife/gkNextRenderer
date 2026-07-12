@@ -236,7 +236,7 @@ namespace Assets
         }
 
         proxy.jointMatrixOffset = 0; // Default
-        proxy.nort = 0; // Default
+        proxy.excludeFromAS = 0; // Default
 
         return proxy;
     }

@@ -73,9 +73,9 @@ namespace Vulkan
         ambient_.clearCache->BindPipeline(commandBuffer, GetScene(), imageIndex);
 
         Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex, 0);
-        gpuScene.custom_data_0 = cubePoolTotal;
-        gpuScene.custom_data_1 = 0;
-        gpuScene.custom_data_2 = residencyTotal;
+        gpuScene.CustomData0 = cubePoolTotal;
+        gpuScene.CustomData1 = 0;
+        gpuScene.CustomData2 = residencyTotal;
 
         vkCmdPushConstants(commandBuffer, ambient_.clearCache->PipelineLayout().Handle(),
                            VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
@@ -172,8 +172,8 @@ namespace Vulkan
         }
 
         Assets::GPUScene gpuScene = GetScene().FetchGPUScene(imageIndex, 0);
-        gpuScene.custom_data_0 = static_cast<uint32_t>(offsetInActiveProbes);
-        gpuScene.custom_data_1 = cascadeIndex;
+        gpuScene.CustomData0 = static_cast<uint32_t>(offsetInActiveProbes);
+        gpuScene.CustomData1 = cascadeIndex;
 
         vkCmdPushConstants(commandBuffer, pipeline->PipelineLayout().Handle(),
                            VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);

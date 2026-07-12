@@ -4,11 +4,11 @@ import Shader.Math;
 struct PushConsts
 {
     // Unified push-constant header (offset 0..15): aliases gpuScene's header so
-    // gpuScene.custom_data_0 (active view RT bank base) is valid in this custom pass. Params follow.
+    // gpuScene.CustomData0 (active view RT bank base) is valid in this custom pass. Params follow.
     uint _ViewHdr_SwapChainIndex;
-    uint _ViewHdr_custom_data_0;
-    uint _ViewHdr_custom_data_1;
-    uint _ViewHdr_custom_data_2;
+    uint _ViewHdr_CustomData0;
+    uint _ViewHdr_CustomData1;
+    uint _ViewHdr_CustomData2;
 
     bool ProgressiveRender;
     int TemporalFrames;
@@ -192,7 +192,7 @@ float3 FilterHistoryColor( RWTexture2D<float4> prevFrameTexture, float2 subpixel
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     int2 ipos = int2(DTid.xy);
-    uint2 isize = Bindless.GetStorageTextureDimensions<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_SINGLE_DIFFUSE));
+    uint2 isize = Bindless.GetStorageTextureDimensions<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SINGLE_DIFFUSE));
     if (any(DTid.xy >= isize))
     {
         return;
@@ -200,23 +200,23 @@ void main(uint3 DTid : SV_DispatchThreadID)
     int2 imageSize = int2(isize);
     int2 imageMax = imageSize - int2(1, 1);
 
-    let SourceDiffuse = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_SINGLE_DIFFUSE));
-    let SourceSpecular = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_SINGLE_SPECULAR));
-    let SourceAlbedo = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_ALBEDO));
+    let SourceDiffuse = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SINGLE_DIFFUSE));
+    let SourceSpecular = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_SINGLE_SPECULAR));
+    let SourceAlbedo = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_ALBEDO));
 
-    let vb = pushConsts._ViewHdr_custom_data_0;
+    let vb = pushConsts._ViewHdr_CustomData0;
     let PrevDiffuse = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(vb, Bindless.RT_SINGLE_PREV_DIFFUSE));
     let PrevSpecular = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(vb, Bindless.RT_SINGLE_PREV_SPECULAR));
     let PrevAlbedo = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(vb, Bindless.RT_SINGLE_PREV_ALBEDO));
 
-    let AccumulateDiffuse = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_ACCUMULATE_DIFFUSE));
-    let AccumulateSpecular = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_ACCUMULATE_SPECULAR));
-    let AccumulateAlbedo = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_ACCUMULATE_ALBEDO));
+    let AccumulateDiffuse = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_ACCUMULATE_DIFFUSE));
+    let AccumulateSpecular = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_ACCUMULATE_SPECULAR));
+    let AccumulateAlbedo = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_ACCUMULATE_ALBEDO));
 
-    let ObjectId0 = Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_OBJECTID_0));
-    let ObjectId1 = Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_OBJECTID_1));
-    let MotionVector = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_MOTIONVECTOR));
-    let NormalBuffer = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_NORMAL));
+    let ObjectId0 = Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_OBJECTID_0));
+    let ObjectId1 = Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_OBJECTID_1));
+    let MotionVector = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_MOTIONVECTOR));
+    let NormalBuffer = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_NORMAL));
 
     if (pushConsts.ProgressiveRender)
     {
@@ -274,7 +274,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
     const bool miss = current_primitive_index0 == OBJECT_ID_INVALID_INSTANCE;
     
-    uint moment = Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_MOTIONMOMENT))[ipos];
+    uint moment = Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_MOTIONMOMENT))[ipos];
 
     if (miss || !inside || moment > 0)
     {

@@ -6,9 +6,9 @@ import Shader.Bindless;
 struct PushConsts
 {
     uint _ViewHdr_SwapChainIndex;
-    uint _ViewHdr_custom_data_0;
-    uint _ViewHdr_custom_data_1;
-    uint _ViewHdr_custom_data_2;
+    uint _ViewHdr_CustomData0;
+    uint _ViewHdr_CustomData1;
+    uint _ViewHdr_CustomData2;
 
     uint srcIndex;
     uint outYIndex;

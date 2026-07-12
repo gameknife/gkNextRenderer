@@ -349,7 +349,7 @@ namespace Assets
                                 NodeProxy proxy = node->GetNodeProxy();
                                 proxy.combinedPrevTS = combined;
                                 proxy.modelId = encodedModelSection;
-                                proxy.nort = section == 0 ? 0 : 1;
+                                proxy.excludeFromAS = section == 0 ? 0 : 1;
                                 proxy.reserved1 = selectedBit;
                                 proxy.reserved2 = stateBits;
                                 proxy.jointMatrixOffset = nodeJointOffset;

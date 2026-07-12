@@ -226,9 +226,9 @@ namespace Vulkan::PipelineCommon
 	                                    uint32_t customData0, uint32_t customData1, uint32_t customData2)
 	{
 		Assets::GPUScene customGpuScene = gpuScene;
-		customGpuScene.custom_data_0 = customData0;
-		customGpuScene.custom_data_1 = customData1;
-		customGpuScene.custom_data_2 = customData2;
+		customGpuScene.CustomData0 = customData0;
+		customGpuScene.CustomData1 = customData1;
+		customGpuScene.CustomData2 = customData2;
 		BindPipeline(commandBuffer, customGpuScene);
 	}
 
@@ -239,8 +239,8 @@ namespace Vulkan::PipelineCommon
 		const auto& device = swapChain.Device();
 
 		// Custom passes share the GPUScene push-constant block: the first 16 bytes are the unified
-		// header (SwapChainIndex + custom_data_0/1/2) that aliases gpuScene's header, so
-		// gpuScene.custom_data_0 (the active view RT bank base) is valid even though this pipeline
+		// header (SwapChainIndex + CustomData0/1/2) that aliases gpuScene's header, so
+		// gpuScene.CustomData0 (the active view RT bank base) is valid even though this pipeline
 		// pushes a custom struct. The caller's params live right after the header (offset 16). Using
 		// the full GPUScene size keeps the range identical to the gpuScene block the shader declares.
 		VkPushConstantRange pushConstantRange{};
@@ -287,7 +287,7 @@ namespace Vulkan::PipelineCommon
 		alignas(16) uint8_t buffer[sizeof(Assets::GPUScene)] = {};
 		uint32_t* header = reinterpret_cast<uint32_t*>(buffer);
 		header[0] = 0; // SwapChainIndex (unused by custom passes)
-		header[1] = viewBankBase; // custom_data_0
+		header[1] = viewBankBase; // CustomData0
 		header[2] = 0;
 		header[3] = 0;
 		const uint32_t copySize = std::min<uint32_t>(pushConstantSize_, sizeof(buffer) - kHeaderSize);

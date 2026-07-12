@@ -27,9 +27,9 @@ void main(uint3 DTid : SV_DispatchThreadID)
     SoftMeshShaderResources softMeshShader = scene.SoftMeshShader[0];
     SoftMeshShaderVisibleItem* visibleItems = (SoftMeshShaderVisibleItem*)softMeshShader.VisibleItems;
     uint* counters = (uint*)softMeshShader.Counters;
-    uint cap = scene.custom_data_2;
+    uint cap = scene.CustomData2;
 
-    bool inRange = (DTid.x < scene.custom_data_1) && (DTid.x < MAX_NODES);
+    bool inRange = (DTid.x < scene.CustomData1) && (DTid.x < MAX_NODES);
 
     bool shouldDraw = false;
     bool occluded = false;

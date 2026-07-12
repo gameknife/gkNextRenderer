@@ -2452,7 +2452,7 @@ namespace Vulkan
                 continue;
             }
             const bool includeInGpuAs =
-                (node.visible & Runtime::RenderParticipation::gpuAs) != 0u && !node.nort;
+                (node.visible & Runtime::RenderParticipation::gpuAs) != 0u && !node.excludeFromAS;
             instances.push_back(RayTracing::TopLevelAccelerationStructure::CreateInstance(
                 rt_->blas[blasIndex], glm::transpose(node.worldTS), node.instanceId, includeInGpuAs));
         }

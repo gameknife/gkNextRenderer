@@ -2,6 +2,9 @@
 
 namespace Bindless
 {
+    // --- Screen-space RT slots (0..30): per-RenderView, resolved through ViewRT() ---
+
+    // G-buffer / primary signals
     public static const int RT_ACCUMULATE_DIFFUSE = 0;
     public static const int RT_SINGLE_DIFFUSE = 1;
     public static const int RT_MINIGBUFFER = 2;
@@ -11,24 +14,28 @@ namespace Bindless
     public static const int RT_ALBEDO = 6;
     public static const int RT_NORMAL = 7;
     public static const int RT_SHADER_TIMER = 8;
-
     public static const int RT_DENOISED = 9;
-    
     public static const int RT_PREV_DEPTHBUFFER = 10;
     public static const int RT_ACCUMULATE_SPECULAR = 11;
     public static const int RT_SINGLE_SPECULAR = 12;
-
     public static const int RT_ACCUMULATE_ALBEDO = 13;
-
     public static const int RT_MOTIONMOMENT = 14;
-
     public static const int RT_DIFFUSE_HITDIST = 15;
     public static const int RT_SPECULAR_HITDIST = 16;
     public static const int RT_SPECULAR_ALBEDO = 17;
 
-    // Variance-guided a-trous wavelet ping-pong (Phase 2). RGBA16F: rgb = filtered color, a = variance.
+    // Variance-guided a-trous wavelet ping-pong. RGBA16F: rgb = filtered color, a = variance.
     public static const int RT_ATROUS_PING = 18;
     public static const int RT_ATROUS_PONG = 19;
+
+    // Temporal history of the single-frame signals
+    public static const int RT_SINGLE_PREV_DIFFUSE = 20;
+    public static const int RT_SINGLE_PREV_SPECULAR = 21;
+    public static const int RT_SINGLE_PREV_ALBEDO = 22;
+
+    public static const int RT_MINIGBUFFER_DRAW = 23;
+
+    // A-trous outputs, splat accumulation, ambient & AO
     public static const int RT_ATROUS_OUT = 24;
     public static const int RT_ATROUS_SPEC_OUT = 25;
     public static const int RT_SPLAT_ACCUM = 26;
@@ -37,12 +44,7 @@ namespace Bindless
     public static const int RT_AMBIENT = 29;
     public static const int RT_GTAO = 30;
 
-    public static const int RT_SINGLE_PREV_DIFFUSE = 20;
-    public static const int RT_SINGLE_PREV_SPECULAR = 21;
-    public static const int RT_SINGLE_PREV_ALBEDO = 22;
-
-    public static const int RT_MINIGBUFFER_DRAW = 23;
-
+    // --- Global / shared slots: absolute, must NOT be remapped through ViewRT() ---
     public static const int RT_TEMP_USAGE0 = 50;
     public static const int RT_REMOTE_ENCODE0_Y = 60;
     public static const int RT_REMOTE_ENCODE0_UV = 61;
@@ -64,7 +66,7 @@ namespace Bindless
     // independent temporal history. Bank k occupies [k*kViewRtBankStride, k*kViewRtBankStride + RT_X].
     // Bank 0 == the legacy global layout above (primary view), so existing absolute slots are
     // unchanged and the primary view is bit-for-bit identical. The active view's bank base travels
-    // in GPUScene.custom_data_0; resolve a logical screen-space RT slot through ViewRT(base, RT_X).
+    // in GPUScene.CustomData0; resolve a logical screen-space RT slot through ViewRT(base, RT_X).
     // Stride is sized to clear the screen-space range (0..~30) plus headroom while staying below the
     // global/shared slots (RT_TEMP_USAGE0=50, RT_REMOTE_*=60.., RT_SWAPCHAIN*=100..).
     public static const int kViewRtBankStride = 256;
@@ -102,7 +104,7 @@ namespace Bindless
     }
 
     // Resolve a logical screen-space RT slot into the active RenderView's bank.
-    // viewBase comes from GPUScene.custom_data_0 (0 for the primary view => absolute slot, no change).
+    // viewBase comes from GPUScene.CustomData0 (0 for the primary view => absolute slot, no change).
     // Global / world-space / output slots (swapchain, remote encode, temp) must NOT be remapped:
     // pass those as absolute slots directly, not through ViewRT().
     public int ViewRT(uint viewBase, int rtSlot)

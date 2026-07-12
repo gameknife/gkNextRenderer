@@ -157,9 +157,9 @@ namespace Vulkan
             uint32_t vertexOffset = scene.Offsets()[skinnedProxyModelId].vertexOffset;
             uint32_t vertexCount = model->NumberOfVertices();
 
-            gpuScene.custom_data_0 = proxyIdx;
-            gpuScene.custom_data_1 = vertexOffset;
-            gpuScene.custom_data_2 = vertexCount;
+            gpuScene.CustomData0 = proxyIdx;
+            gpuScene.CustomData1 = vertexOffset;
+            gpuScene.CustomData2 = vertexCount;
 
             vkCmdPushConstants(commandBuffer, skin_.pipeline->PipelineLayout().Handle(),
                                VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(Assets::GPUScene), &gpuScene);
@@ -245,7 +245,7 @@ namespace Vulkan
                                         VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
             
             overlay_.gpuCullCompactPipeline->BindPipeline(
-                commandBuffer, gpuScene, gpuScene.custom_data_0, indirectDrawBatchCount, maxSceneTriangles);
+                commandBuffer, gpuScene, gpuScene.CustomData0, indirectDrawBatchCount, maxSceneTriangles);
             uint32_t groupCount = (indirectDrawBatchCount + 63) / 64;
             vkCmdDispatch(commandBuffer, groupCount, 1, 1);
 

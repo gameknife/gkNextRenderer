@@ -112,7 +112,7 @@ namespace Vulkan
     //
     // Bank 0 is reserved for the primary view == the legacy global layout (absolute slots
     // unchanged). Banks 1..kMaxConcurrentBanks-1 are handed out for secondary / offscreen views.
-    // A view's bank base (k * Assets::Bindless::kViewRtBankStride) travels in GPUScene.custom_data_0.
+    // A view's bank base (k * Assets::Bindless::kViewRtBankStride) travels in GPUScene.CustomData0.
     class FBankAllocator
     {
     public:

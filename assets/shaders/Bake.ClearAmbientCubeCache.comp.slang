@@ -24,9 +24,9 @@ float4 AmbientCubeClearSky()
 void main(uint3 DTid : SV_DispatchThreadID)
 {
     uint idx = DTid.x;
-    // custom_data_0 = cube-pool element count, custom_data_2 = residency entry count.
-    uint cubeTotal = Bindless.GetGpuscene().custom_data_0;
-    uint residencyTotal = Bindless.GetGpuscene().custom_data_2;
+    // CustomData0 = cube-pool element count, CustomData2 = residency entry count.
+    uint cubeTotal = Bindless.GetGpuscene().CustomData0;
+    uint residencyTotal = Bindless.GetGpuscene().CustomData2;
 
     AmbientCube* Cubes = Bindless.GetGpuscene().Cubes;
     AmbientBrickResidency* Residency = Bindless.GetGpuscene().AmbientResidency;
@@ -42,8 +42,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
         Cubes[idx].NegX = 0;
         Cubes[idx].SunDirect = 0;
         Cubes[idx].SkyEmissiveDirect = packRGB9E5(clearSky.rgb);
-        Cubes[idx].skyVisibility_pznzpyny = PackBytes(uint4(255u, 255u, 255u, 255u));
-        Cubes[idx].skyVisibility_pxnxs0s1 = PackBytes(uint4(255u, 255u, 0u, 0u));
+        Cubes[idx].SkyVisibilityPZNZPYNY = PackBytes(uint4(255u, 255u, 255u, 255u));
+        Cubes[idx].SkyVisibilityPXNXS0S1 = PackBytes(uint4(255u, 255u, 0u, 0u));
     }
 
     if (idx < residencyTotal)

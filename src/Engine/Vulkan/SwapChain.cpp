@@ -12,9 +12,9 @@
 #include <limits>
 
 
-float GAndroidMagicScale = 1.0f;
-
 namespace Vulkan {
+
+float SwapChain::uiContentScale_ = 1.0f;
 
 namespace
 {
@@ -105,14 +105,14 @@ SwapChain::SwapChain(const class Device& device, const VkPresentModeKHR presentM
 	float aspect = extent.width / static_cast<float>(extent.height);
     if( aspect < 1.0 )
     {
-        GAndroidMagicScale = 1280.f / float(extent.height);
+        uiContentScale_ = 1280.f / float(extent.height);
         
     	extent.height = 1280;
 	    extent.width = floorf(1280 * aspect);
     }
     else
     {
-        GAndroidMagicScale = 1280.f / float(extent.width);
+        uiContentScale_ = 1280.f / float(extent.width);
         
         extent.height = 1280;
 	    extent.width = floorf(1280 / aspect);

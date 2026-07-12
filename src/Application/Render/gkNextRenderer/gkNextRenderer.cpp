@@ -36,7 +36,6 @@
 #include "Modules/ScadLoader/ScadModule.hpp"
 #include "Application/Common/DemoScenes.hpp"
 
-extern float GAndroidMagicScale;
 
 namespace
 {
@@ -421,9 +420,9 @@ static void UpdateUiScaledMetrics()
 {
     float scale = 1.0f;
 
-    if (GAndroidMagicScale < 1.0f)
+    if (Vulkan::SwapChain::UiContentScale() < 1.0f)
     {
-        scale *= 0.75f / GAndroidMagicScale;
+        scale *= 0.75f / Vulkan::SwapChain::UiContentScale();
     }
 
     if (ImGui::GetCurrentContext() != nullptr)

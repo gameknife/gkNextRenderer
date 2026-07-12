@@ -209,8 +209,8 @@ float AmbientCubeSkyVisibility(AmbientCube cube, float3 normal)
     float wnz = max(-normal.z, 0.0);
     float sum = wx + wnx + wy + wny + wz + wnz;
 
-    uint4 unpacked0 = UnpackBytes(cube.skyVisibility_pznzpyny);
-    uint4 unpacked1 = UnpackBytes(cube.skyVisibility_pxnxs0s1);
+    uint4 unpacked0 = UnpackBytes(cube.SkyVisibilityPZNZPYNY);
+    uint4 unpacked1 = UnpackBytes(cube.SkyVisibilityPXNXS0S1);
 
     float skyvis = 0.0;
     skyvis += float(unpacked0.x) * wz;
@@ -304,7 +304,7 @@ public AmbientCube ZeroAmbientCube()
     AmbientCube c;
     c.PosZ = 0; c.NegZ = 0; c.PosY = 0; c.NegY = 0; c.PosX = 0; c.NegX = 0;
     c.SunDirect = 0; c.SkyEmissiveDirect = 0;
-    c.skyVisibility_pznzpyny = 0; c.skyVisibility_pxnxs0s1 = 0;
+    c.SkyVisibilityPZNZPYNY = 0; c.SkyVisibilityPXNXS0S1 = 0;
     return c;
 }
 

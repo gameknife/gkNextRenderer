@@ -15,12 +15,12 @@ VertexOutput main(uint vertexIndex: SV_VertexID)
     VertexOutput output;
     let scene = Bindless.GetGpuscene();
 
-    uint cascadeIdx = min(scene.custom_data_0, 3u);
+    uint cascadeIdx = min(scene.CustomData0, 3u);
     uint slot = cascadeIdx + 1;
 
     SoftMeshShaderResources softMeshShader = scene.SoftMeshShader[0];
     uint* prims = (uint*)softMeshShader.ShadowPrim;
-    uint prim = prims[scene.custom_data_2 + vertexIndex / 3];
+    uint prim = prims[scene.CustomData2 + vertexIndex / 3];
     uint corner = vertexIndex % 3;
     uint instanceIdx = (prim >> 17) & 0x7FFF;
     uint triangleIdx = prim & 0x1FFFF;

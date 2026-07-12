@@ -9,11 +9,11 @@ import Shader.Bindless;
 struct PushConsts
 {
     // Unified push-constant header (offset 0..15): aliases gpuScene's header so
-    // gpuScene.custom_data_0 (active view RT bank base) is valid in this custom pass. Params follow.
+    // gpuScene.CustomData0 (active view RT bank base) is valid in this custom pass. Params follow.
     uint _ViewHdr_SwapChainIndex;
-    uint _ViewHdr_custom_data_0;
-    uint _ViewHdr_custom_data_1;
-    uint _ViewHdr_custom_data_2;
+    uint _ViewHdr_CustomData0;
+    uint _ViewHdr_CustomData1;
+    uint _ViewHdr_CustomData2;
 
     uint DiffuseInSlot;     // rgb = diffuse, a = variance/historyLen on first iteration
     uint DiffuseOutSlot;    // rgb = filtered diffuse, a = variance
@@ -230,14 +230,14 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     // Dynamic slot values are absolute screen-space slots; resolve into the active view's bank.
-    let vb = pushConsts._ViewHdr_custom_data_0;
+    let vb = pushConsts._ViewHdr_CustomData0;
     let DiffuseIn = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(vb, int(pushConsts.DiffuseInSlot)));
     let DiffuseOut = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(vb, int(pushConsts.DiffuseOutSlot)));
     let SpecularIn = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(vb, int(pushConsts.SpecularInSlot)));
     let SpecularOut = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(vb, int(pushConsts.SpecularOutSlot)));
-    let NormalBuffer = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_NORMAL));
-    let DepthBuffer = Bindless.GetStorageTexture<float>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_PREV_DEPTHBUFFER));
-    let ObjectId0 = Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_custom_data_0, Bindless.RT_OBJECTID_0));
+    let NormalBuffer = Bindless.GetStorageTexture<float4>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_NORMAL));
+    let DepthBuffer = Bindless.GetStorageTexture<float>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_PREV_DEPTHBUFFER));
+    let ObjectId0 = Bindless.GetStorageTexture<uint>(Bindless.ViewRT(pushConsts._ViewHdr_CustomData0, Bindless.RT_OBJECTID_0));
 
     const uint2 isize = Bindless.GetStorageTextureDimensions<float4>(Bindless.ViewRT(vb, int(filterDiffuse ? pushConsts.DiffuseInSlot : pushConsts.SpecularInSlot)));
     const int2 imageMax = int2(isize) - int2(1, 1);

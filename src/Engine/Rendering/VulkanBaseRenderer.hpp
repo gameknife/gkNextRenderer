@@ -244,7 +244,7 @@ namespace Vulkan
 		FViewRenderState& PrimaryViewState() { return renderViews_->Primary().State(); }
 		const FViewRenderState& PrimaryViewState() const { return renderViews_->Primary().State(); }
 
-		// RT bank base of the view currently being recorded; injected into GPUScene.custom_data_0
+		// RT bank base of the view currently being recorded; injected into GPUScene.CustomData0
 		// so shaders resolve screen-space RT slots through Bindless::ViewRT. 0 == primary view.
 		uint32_t ActiveViewBankBase() const { return activeViewContext_.bankBase; }
 		void SetActiveViewBankBase(uint32_t bankBase) { activeViewContext_.bankBase = bankBase; }

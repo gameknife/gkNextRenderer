@@ -36,7 +36,6 @@
 
 #include <SDL3/SDL_dialog.h>
 
-extern std::unique_ptr<Vulkan::VulkanBaseRenderer> GApplication;
 
 namespace
 {

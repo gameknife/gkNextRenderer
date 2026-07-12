@@ -7,7 +7,7 @@ import Shader.GpuScene;
 void main(uint3 Gid : SV_GroupID, uint3 Lid : SV_GroupThreadID)
 {
     let scene = Bindless.GetGpuscene();
-    uint slot = min(scene.custom_data_0, 4u);
+    uint slot = min(scene.CustomData0, 4u);
 
     SoftMeshShaderResources softMeshShader = scene.SoftMeshShader[0];
     SoftMeshShaderVisibleItem* visibleItems = (SoftMeshShaderVisibleItem*)softMeshShader.VisibleItems;

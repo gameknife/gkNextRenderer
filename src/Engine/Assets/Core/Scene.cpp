@@ -825,7 +825,7 @@ namespace Assets
         gpuScene.SwapChainIndex = imageIndex;
         // Active RenderView RT bank base -> shaders resolve screen-space slots via Bindless::ViewRT.
         // Primary view == 0, so the absolute (legacy) layout is unchanged.
-        gpuScene.custom_data_0 = viewBankBase;
+        gpuScene.CustomData0 = viewBankBase;
 
         return gpuScene;
     }

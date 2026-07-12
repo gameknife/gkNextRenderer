@@ -235,8 +235,8 @@ namespace Vulkan::Shadow
         pipelineLayout_->BindDescriptorSets(commandBuffer, 0, VK_PIPELINE_BIND_POINT_GRAPHICS);
 
         Assets::GPUScene gpuScene = gpuSceneBase;
-        gpuScene.custom_data_0 = cascade;
-        gpuScene.custom_data_2 = cascade * scene.GetMaxSceneTriangles();
+        gpuScene.CustomData0 = cascade;
+        gpuScene.CustomData2 = cascade * scene.GetMaxSceneTriangles();
         vkCmdPushConstants(commandBuffer, pipelineLayout_->Handle(),
                            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                            0, sizeof(Assets::GPUScene), &gpuScene);
