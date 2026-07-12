@@ -7,12 +7,12 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <thread>
 
 class MagicaLegoGameInstance;
 
 namespace MagicaLego
 {
-    using EAIProviderType = NextAI::EAIProviderType;
     using EAIStatus = NextAI::EAIStatus;
 
     struct FAIResponse
@@ -44,7 +44,7 @@ namespace MagicaLego
     {
     public:
         explicit FAIService(MagicaLegoGameInstance* gi);
-        ~FAIService() = default;
+		~FAIService();
 
         bool LoadConfig();
         bool IsConfigured() const;
@@ -66,12 +66,10 @@ namespace MagicaLego
         std::vector<FColorSemantic> GetColorSemantics();
 
         std::string GetProviderName() const;
-        EAIProviderType GetProviderType() const;
-        bool SwitchProvider(EAIProviderType type);
-        bool IsProviderConfigured(EAIProviderType type) const;
-        static std::vector<std::pair<EAIProviderType, std::string>> GetAvailableProviders();
-        static std::string ProviderTypeToString(EAIProviderType type);
-        static EAIProviderType StringToProviderType(const std::string& name);
+		std::string GetProviderId() const;
+		bool SwitchProvider(const std::string& providerId);
+		bool IsProviderConfigured(const std::string& providerId) const;
+		std::vector<NextAI::FAIProviderDescriptor> GetAvailableProviders() const;
 
     private:
         std::string BuildSystemPrompt();
@@ -87,5 +85,6 @@ namespace MagicaLego
         std::atomic<bool> hasPendingResult_{false};
         FAIResponse pendingResult_;
         std::mutex resultMutex_;
+		std::jthread worker_;
     };
 }

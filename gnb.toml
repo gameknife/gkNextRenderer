@@ -1,6 +1,49 @@
 [gnb]
 min_version = "0.1.0"
 
+[ai]
+default_profile = "general"
+
+[ai.providers.localllm]
+kind = "llama-cpp"
+display_name = "Local Llama"
+runtime = "external.llm"
+
+[ai.profiles.general]
+provider = "localllm"
+temperature = 0.7
+max_output_tokens = 2048
+
+[ai.profiles.scad-scene]
+provider = "localllm"
+temperature = 0.4
+max_output_tokens = 4096
+
+[ai.profiles.scad-studio]
+provider = "localllm"
+temperature = 0.4
+max_output_tokens = 4096
+
+[ai.profiles.magicalego-script]
+provider = "localllm"
+temperature = 0.4
+max_output_tokens = 4096
+
+[ai.profiles.editor]
+provider = "localllm"
+temperature = 0.3
+max_output_tokens = 4096
+tool_sets = ["repo-read", "engine-editor"]
+max_steps = 12
+max_tool_calls = 32
+timeout_seconds = 300
+
+[ai.profiles.simulation]
+provider = "localllm"
+temperature = 0.4
+max_output_tokens = 1024
+max_concurrency = 1
+
 [vcpkg]
 ref = "2026.04.27"
 binary_cache = ".vcpkg_bincache"

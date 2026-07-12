@@ -1,0 +1,7 @@
+{"jsonrpc":"2.0","id":"2","method":"session.create","params":{"profile":"general"}}
+{"jsonrpc":"2.0","id":"2","result":{"sessionId":"session-fixture"}}
+{"jsonrpc":"2.0","id":"3","method":"llm.chat","params":{"sessionId":"session-fixture","messages":[{"role":"user","content":"ping"}],"stream":true}}
+{"jsonrpc":"2.0","method":"run.event","params":{"runId":"run-fixture","sequence":1,"type":"content.delta","visibility":"user","content":"po"}}
+{"jsonrpc":"2.0","method":"run.event","params":{"runId":"run-fixture","sequence":2,"type":"content.delta","visibility":"user","content":"ng"}}
+{"jsonrpc":"2.0","method":"run.event","params":{"runId":"run-fixture","sequence":3,"type":"run.completed","visibility":"internal","usage":{"promptTokens":3,"completionTokens":1}}}
+{"jsonrpc":"2.0","id":"3","result":{"runId":"run-fixture","content":"pong","finishReason":"stop"}}

@@ -1163,7 +1163,7 @@ namespace ScadStudio
         }
         else
         {
-            ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Not configured (assets/configs/ai_config.json)");
+			ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "gnb bridge/provider not configured");
         }
         const bool controlsDisabled = ai_.IsGenerating();
         if (controlsDisabled)
@@ -1175,18 +1175,18 @@ namespace ScadStudio
         ImGui::SetNextItemWidth(115.0f);
         if (ImGui::BeginCombo("##provider", ai_.ProviderName().c_str()))
         {
-            const NextAI::EAIProviderType currentType = ai_.ProviderType();
-            for (const auto& [type, name] : ai_.Providers())
+			const std::string currentId = ai_.ProviderId();
+			for (const auto& provider : ai_.Providers())
             {
-                const bool configured = ai_.IsProviderConfigured(type);
-                const bool selected = (type == currentType);
+				const bool configured = provider.configured && provider.available;
+				const bool selected = provider.id == currentId;
                 if (!configured)
                 {
                     ImGui::BeginDisabled();
                 }
-                if (ImGui::Selectable(name.c_str(), selected))
+				if (ImGui::Selectable(provider.displayName.c_str(), selected))
                 {
-                    ai_.SwitchProvider(type);
+					ai_.SwitchProvider(provider.id);
                 }
                 if (!configured)
                 {

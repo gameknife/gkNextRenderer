@@ -1,58 +1,46 @@
 #pragma once
+
 #include "Engine/Common/CoreMinimal.hpp"
 #include "Modules/NextAI/AI/AIChat.hpp"
+
 #include <functional>
-#include <map>
-#include <memory>
-#include <nlohmann/json_fwd.hpp>
-#include <string>
-#include <vector>
+#include <mutex>
+#include <thread>
 
 namespace NextAI
 {
-    enum class EAIProviderType
-    {
-        Gemini,
-        Ollama,
-        Zhipu,
-        DeepSeek,
-        OpenAI,
-        LocalLlama
-    };
-
     struct FAIResponse
     {
         bool success = false;
         std::string text;
         std::string message;
         double elapsedMs = 0.0;
-
-        static FAIResponse Success(const std::string& generatedText, double elapsedMs = 0.0)
-        {
-            return {true, generatedText, "", elapsedMs};
-        }
-
-        static FAIResponse Failure(const std::string& errorMessage, double elapsedMs = 0.0)
-        {
-            return {false, "", errorMessage, elapsedMs};
-        }
+        static FAIResponse Success(const std::string& text, double elapsedMs = 0.0) { return {true, text, "", elapsedMs}; }
+        static FAIResponse Failure(const std::string& message, double elapsedMs = 0.0) { return {false, "", message, elapsedMs}; }
     };
 
-    enum class EAIStatus
+    enum class EAIStatus { NotConfigured, Ready, Generating, Error };
+
+    struct FAIProviderDescriptor
     {
-        NotConfigured,
-        Ready,
-        Generating,
-        Error
+        std::string id;
+        std::string displayName;
+        std::string kind;
+        std::string defaultModel;
+        std::vector<std::string> models;
+        bool configured = false;
+        bool available = false;
     };
 
-    class IAIProvider;
+    class FGnbAgentClient;
 
+    // Client-only compatibility facade. Provider routing, credentials, sessions and
+    // inference all live in the gnb sidecar; this class contains no provider protocol.
     class FAIService
     {
     public:
         FAIService();
-        explicit FAIService(std::string configPath);
+        explicit FAIService(std::string ignoredLegacyConfigPath);
         ~FAIService();
 
         bool LoadConfig();
@@ -62,39 +50,35 @@ namespace NextAI
 
         FAIResponse GenerateText(const std::string& prompt);
         void GenerateTextAsync(const std::string& prompt, std::function<void(FAIResponse)> callback);
-
-        // Multi-message chat with optional tool calling (used by FAgentLoop).
         FChatResponse Chat(const FChatRequest& request);
         FChatResponse ChatStream(const FChatRequest& request, FChatStreamCallback onDelta);
-        bool SupportsTools() const;
+        bool SupportsTools() const { return configured_; }
 
-        std::string GetProviderName() const;
-        EAIProviderType GetProviderType() const { return providerType_; }
-        bool SwitchProvider(EAIProviderType type);
-        bool IsProviderConfigured(EAIProviderType type) const;
-        std::vector<std::string> GetProviderModels(EAIProviderType type) const;
-        std::string GetCurrentModel() const;
+        std::string GetProviderName() const { return currentProviderId_; }
+        const std::string& GetProviderId() const { return currentProviderId_; }
+        bool SwitchProvider(const std::string& providerId);
+        bool IsProviderConfigured(const std::string& providerId) const;
+        std::vector<std::string> GetProviderModels(const std::string& providerId) const;
+        std::string GetCurrentModel() const { return currentModelId_; }
         bool SetCurrentModel(std::string model);
-        static std::vector<std::pair<EAIProviderType, std::string>> GetAvailableProviders();
-        static std::string ProviderTypeToString(EAIProviderType type);
-        static EAIProviderType StringToProviderType(const std::string& name);
+        bool SetProfile(std::string profileId);
+        const std::vector<FAIProviderDescriptor>& GetAvailableProviders() const { return providers_; }
 
     private:
-        FAIResponse CallProvider(const std::string& prompt);
-        std::unique_ptr<IAIProvider> CreateProvider(EAIProviderType type);
-        nlohmann::json GetProviderConfig(EAIProviderType type) const;
-        std::string GetProviderDefaultModel(EAIProviderType type) const;
-        void UpdateProviderConfigCache();
+        bool RefreshCatalog();
+        bool RecreateSession();
+        FChatResponse ChatViaGnb(const FChatRequest& request, FChatStreamCallback onDelta = {});
 
-        std::string configPath_ = "assets/configs/ai_config.json";
-        std::unique_ptr<IAIProvider> provider_;
-        EAIProviderType providerType_ = EAIProviderType::Gemini;
-        std::unique_ptr<nlohmann::json> fullConfig_;
-        std::map<EAIProviderType, bool> providerConfigCache_;
-        std::map<EAIProviderType, std::vector<std::string>> providerModels_;
-        std::map<EAIProviderType, std::string> providerModelSelection_;
+        std::unique_ptr<FGnbAgentClient> client_;
+        std::vector<FAIProviderDescriptor> providers_;
+        std::string sessionId_;
+        std::string currentProfileId_ = "general";
+        std::string currentProviderId_;
+        std::string currentModelId_;
         bool configured_ = false;
         EAIStatus status_ = EAIStatus::NotConfigured;
         std::string statusMessage_;
+        std::mutex asyncThreadsMutex_;
+        std::vector<std::jthread> asyncThreads_;
     };
 }

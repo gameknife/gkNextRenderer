@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -22,6 +23,7 @@ import (
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/runner"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/targetgraph"
+	validatepkg "github.com/gameknife/gknextrenderer/tools/gnb/internal/validate"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/vcpkg"
 	"github.com/spf13/cobra"
 )
@@ -36,6 +38,9 @@ type appContext struct {
 
 func main() {
 	repoRootCandidates := []string{"."}
+	if explicit := explicitRepoRoot(); explicit != "" {
+		repoRootCandidates = []string{explicit}
+	}
 	if executable, err := os.Executable(); err == nil {
 		if resolvedExecutable, resolveErr := filepath.EvalSymlinks(executable); resolveErr == nil {
 			executable = resolvedExecutable
@@ -64,6 +69,8 @@ func main() {
 			return runDashboard(ctx, dashboardCmdOpts{})
 		},
 	}
+	var repoRootFlag string
+	root.PersistentFlags().StringVar(&repoRootFlag, "repo-root", "", "explicit repository root (also GNB_REPO_ROOT)")
 	// Commands listed here run without a discovered repository — everything
 	// else fails fast with a friendly hint instead of crashing inside a
 	// command implementation that assumed a repo root.
@@ -116,11 +123,27 @@ func main() {
 	root.AddCommand(newLocCommand(ctx))
 	root.AddCommand(newGitCommand(ctx))
 	root.AddCommand(newLLMCommand(ctx))
+	root.AddCommand(newAgentCommand(ctx))
 	root.AddCommand(newInitCommand())
 
 	if err := root.Execute(); err != nil {
 		fatal(err)
 	}
+}
+
+func explicitRepoRoot() string {
+	if value := strings.TrimSpace(os.Getenv("GNB_REPO_ROOT")); value != "" {
+		return value
+	}
+	for i, arg := range os.Args[1:] {
+		if strings.HasPrefix(arg, "--repo-root=") {
+			return strings.TrimPrefix(arg, "--repo-root=")
+		}
+		if arg == "--repo-root" && i+2 < len(os.Args) {
+			return os.Args[i+2]
+		}
+	}
+	return ""
 }
 
 func newInfoCommand(ctx appContext) *cobra.Command {
@@ -532,16 +555,12 @@ func newShotCommand(ctx appContext) *cobra.Command {
 			"  gnb shot --target ScadStudio --scene assets/scad/beer_cup.scad --frames 60\n" +
 			"  gnb shot --target AirportSim --ui",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			runArgs := shotRunArgs(frames, includeUI, args)
-			opts := runner.Options{Target: target, Preset: ctx.preset, Args: runArgs}
-			if scene != "" {
-				opts.Scenes = append(opts.Scenes, scene)
-			}
-			if err := runner.Run(ctx.repoRoot, opts); err != nil {
+			out := filepath.Join(filepath.Dir(platform.BinDir(ctx.repoRoot, ctx.preset)), "screenshots", "agent_validation")
+			opts := validatepkg.Options{RepoRoot: ctx.repoRoot, Preset: ctx.preset, Target: target, Scene: scene, Args: args}
+			if err := validatepkg.Shot(context.Background(), opts, frames, includeUI, out); err != nil {
 				return err
 			}
-			shot := filepath.Join(filepath.Dir(platform.BinDir(ctx.repoRoot, ctx.preset)),
-				"screenshots", "agent_validation.jpg")
+			shot := out + ".jpg"
 			console.Info("screenshot: " + shot)
 			return nil
 		},
@@ -614,13 +633,6 @@ func newValidateCommand(ctx appContext) *cobra.Command {
 				height = hints.Viewport.Height
 			}
 
-			runArgs := validateRunArgs(scriptPath, report, width, height, visible, syncValidation, args)
-			opts := runner.Options{Target: target, Preset: ctx.preset, Args: runArgs}
-			if scene != "" {
-				opts.Scenes = append(opts.Scenes, scene)
-			}
-			err := runner.Run(ctx.repoRoot, opts)
-
 			reportPath := report
 			if reportPath == "" {
 				reportName := hints.Name
@@ -632,6 +644,9 @@ func newValidateCommand(ctx appContext) *cobra.Command {
 			} else if !filepath.IsAbs(reportPath) {
 				reportPath = filepath.Join(filepath.Dir(platform.BinDir(ctx.repoRoot, ctx.preset)), reportPath)
 			}
+			opts := validatepkg.Options{RepoRoot: ctx.repoRoot, Preset: ctx.preset, Target: target, Scene: scene,
+				Script: scriptPath, Report: reportPath, Width: width, Height: height, Visible: visible, SyncValidation: syncValidation, Args: args}
+			err := validatepkg.Run(context.Background(), opts)
 			console.Info("agent report: " + reportPath)
 			return err
 		},
@@ -645,26 +660,6 @@ func newValidateCommand(ctx appContext) *cobra.Command {
 	cmd.Flags().BoolVar(&visible, "visible", false, "show the desktop window while replaying the agent script")
 	cmd.Flags().BoolVar(&syncValidation, "sync-validation", false, "enable Vulkan core and synchronization validation")
 	return cmd
-}
-
-func validateRunArgs(scriptPath string, report string, width int, height int, visible bool, syncValidation bool, trailingArgs []string) []string {
-	runArgs := []string{"--agent-script=" + scriptPath}
-	if report != "" {
-		runArgs = append(runArgs, "--agent-report="+report)
-	}
-	if visible {
-		runArgs = append(runArgs, "--agent-visible-window")
-	}
-	if syncValidation {
-		runArgs = append(runArgs, "--sync-validation")
-	}
-	if width > 0 {
-		runArgs = append(runArgs, fmt.Sprintf("--width=%d", width))
-	}
-	if height > 0 {
-		runArgs = append(runArgs, fmt.Sprintf("--height=%d", height))
-	}
-	return append(runArgs, trailingArgs...)
 }
 
 func loadValidateScriptHints(scriptPath string) validateScriptHints {

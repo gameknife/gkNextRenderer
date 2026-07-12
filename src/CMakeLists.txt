@@ -67,10 +67,7 @@ set(UNIT_TEST_SOURCES
 	Application/Game/NextRA/Sim/SyncHash.cpp
 	Application/Game/NextRA/Sim/Systems/OrderApplySystem.cpp
 	Application/Game/Brotato3D/Brotato3DPcgGenerator.cpp
-	Tests/Test_AIChatProtocol.cpp
-	Tests/Test_LlamaPidFile.cpp
-	Tests/Test_AgentLoop.cpp
-	Tests/Test_RepoTools.cpp
+	Tests/Test_GnbAgentClient.cpp
 	Tests/Test_ScadPromptContext.cpp
 	Tests/Test_ScadSessionStore.cpp
 	Tests/Test_Rgb9e5Pack.cpp
@@ -697,7 +694,7 @@ set(GK_DESKTOP_RUNTIME_TARGETS
 	BrickPlayer CharacterDemo TruckerDemo StudioSim AirportSim CitySolSim gkNextEditor FlappyJs)
 foreach(t IN LISTS GK_DESKTOP_RUNTIME_TARGETS)
 	gk_target_runtime_modules(${t} MODULES
-		DevTools LiveCoding NextAudio NextPhysics AgentDriver NextStreamline
+		DevTools LiveCoding NextAudio NextPhysics NextStreamline
 		GltfLoader NextRemote NextTui)
 endforeach()
 
@@ -762,6 +759,9 @@ if ( TARGET NextAI )
 			target_link_libraries(${t} PRIVATE NextAI)
 		endif()
 	endforeach()
+endif()
+if (WIN32)
+	target_link_libraries(gkNextEngine PUBLIC ws2_32)
 endif()
 if ( TARGET NextRmlUi )
 	find_package(RmlUi CONFIG REQUIRED)

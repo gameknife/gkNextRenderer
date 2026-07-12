@@ -132,19 +132,6 @@ namespace NextAI
 
     using FChatStreamCallback = std::function<void(const std::string& delta)>;
 
-    // Serializers for OpenAI-compatible /v1/chat/completions endpoints
-    // (Zhipu, DeepSeek, llama-server, Ollama-with-tools).
-    nlohmann::json BuildOpenAIChatRequestBody(const FChatRequest& req, bool injectThinkingControl = false);
-    FChatResponse ParseOpenAIChatResponse(const nlohmann::json& body);
-
-    // Serializers for Gemini generateContent.
-    nlohmann::json BuildGeminiChatRequestBody(const FChatRequest& req);
-    FChatResponse ParseGeminiChatResponse(const nlohmann::json& body);
-
-    // Legacy Ollama /api/generate (no tool calling, single-turn).
-    nlohmann::json BuildOllamaGenerateRequestBody(const FChatRequest& req);
-    FChatResponse ParseOllamaGenerateResponse(const nlohmann::json& body);
-
     const char* ToolParamTypeToString(EToolParamType t);
     const char* ChatRoleToString(EChatRole r);
 }

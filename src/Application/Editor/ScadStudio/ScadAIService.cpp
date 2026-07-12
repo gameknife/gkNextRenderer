@@ -87,8 +87,14 @@ namespace ScadStudio
         if (auto* ai = NextAI::GetAIService(engine_))
         {
             ai->LoadConfig();
+			ai->SetProfile("scad-studio");
         }
     }
+
+	ScadAIService::~ScadAIService()
+	{
+		if (worker_.joinable()) { worker_.request_stop(); worker_.join(); }
+	}
 
     bool ScadAIService::IsConfigured() const
     {
@@ -102,27 +108,27 @@ namespace ScadStudio
         return ai ? ai->GetProviderName() : std::string("None");
     }
 
-    NextAI::EAIProviderType ScadAIService::ProviderType() const
+	std::string ScadAIService::ProviderId() const
     {
         auto* ai = NextAI::GetAIService(engine_);
-        return ai ? ai->GetProviderType() : NextAI::EAIProviderType::Gemini;
+		return ai ? ai->GetProviderId() : std::string();
     }
 
-    std::vector<std::pair<NextAI::EAIProviderType, std::string>> ScadAIService::Providers() const
+	std::vector<NextAI::FAIProviderDescriptor> ScadAIService::Providers() const
     {
-        return NextAI::FAIService::GetAvailableProviders();
+		auto* ai = NextAI::GetAIService(engine_); return ai ? ai->GetAvailableProviders() : std::vector<NextAI::FAIProviderDescriptor>{};
     }
 
-    bool ScadAIService::IsProviderConfigured(NextAI::EAIProviderType type) const
-    {
-        auto* ai = NextAI::GetAIService(engine_);
-        return ai && ai->IsProviderConfigured(type);
-    }
-
-    bool ScadAIService::SwitchProvider(NextAI::EAIProviderType type)
+	bool ScadAIService::IsProviderConfigured(const std::string& providerId) const
     {
         auto* ai = NextAI::GetAIService(engine_);
-        if (!ai || !ai->SwitchProvider(type))
+		return ai && ai->IsProviderConfigured(providerId);
+    }
+
+	bool ScadAIService::SwitchProvider(const std::string& providerId)
+    {
+        auto* ai = NextAI::GetAIService(engine_);
+		if (!ai || !ai->SwitchProvider(providerId))
         {
             return false;
         }
@@ -133,7 +139,7 @@ namespace ScadStudio
     std::vector<std::string> ScadAIService::CurrentProviderModels() const
     {
         auto* ai = NextAI::GetAIService(engine_);
-        return ai ? ai->GetProviderModels(ai->GetProviderType()) : std::vector<std::string>{};
+		return ai ? ai->GetProviderModels(ai->GetProviderId()) : std::vector<std::string>{};
     }
 
     std::string ScadAIService::CurrentModel() const
@@ -304,7 +310,7 @@ namespace ScadStudio
             std::lock_guard<std::mutex> lock(mutex_);
             pending_ = FScadGenResult{};
             pending_.success = false;
-            pending_.error = "AI service not configured. Check assets/configs/ai_config.json";
+			pending_.error = "gnb bridge/provider not configured";
             hasPending_.store(true);
             return;
         }
@@ -331,7 +337,8 @@ namespace ScadStudio
             streamingText_.clear();
         }
 
-        std::thread([this, request = std::move(request)]() mutable
+		if (worker_.joinable()) worker_.join();
+        worker_ = std::jthread([this, request = std::move(request)](std::stop_token) mutable
         {
             auto* svc = NextAI::GetAIService(engine_);
             NextAI::FChatResponse response = svc->ChatStream(request, [this](const std::string& delta)
@@ -370,7 +377,7 @@ namespace ScadStudio
                 hasPending_.store(true);
             }
             generating_.store(false);
-        }).detach();
+        });
     }
 
     FScadGenResult ScadAIService::TakePendingResult()

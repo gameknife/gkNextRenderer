@@ -203,23 +203,28 @@ type testVM struct {
 }
 
 type chatVM struct {
-	SessionID     string
-	Models        []chatModelVM
-	Sessions      []chatSessionVM
-	SelectedModel string
-	Messages      []llm.ChatMessage
-	Context       chatContextVM
-	Error         string
-	Flash         string
-	ServerRunning bool
-	RunningModel  string
-	Endpoint      string
+	SessionID        string
+	Models           []chatModelVM
+	Sessions         []chatSessionVM
+	SelectedModel    string
+	SelectedProvider string
+	SelectedProfile  string
+	Providers        []chatProviderVM
+	Messages         []llm.ChatMessage
+	Context          chatContextVM
+	Error            string
+	Flash            string
+	ServerRunning    bool
+	RunningModel     string
+	Endpoint         string
 }
 
 type chatSessionVM struct {
 	ID             string
 	Title          string
 	ModelID        string
+	ProviderID     string
+	ProfileID      string
 	UpdatedAt      time.Time
 	RelativeTime   string
 	MessageCount   int
@@ -241,6 +246,14 @@ type chatModelVM struct {
 	Downloaded bool
 	Active     bool
 	Running    bool
+}
+
+type chatProviderVM struct {
+	ID          string
+	DisplayName string
+	Kind        string
+	Configured  bool
+	Active      bool
 }
 
 const (

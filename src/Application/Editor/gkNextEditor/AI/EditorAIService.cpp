@@ -7,8 +7,6 @@
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Reflection/PropertyAccessor.h"
 #include "Engine/Runtime/Scene/SceneList.hpp"
-#include "Modules/NextAI/AI/AgentLoop.hpp"
-#include "Modules/NextAI/AI/Tools/RepoTools.hpp"
 #include "Modules/NextQuickJS/NextQuickJSModule.hpp"
 #include "Modules/NextQuickJS/QuickJSEngine.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
@@ -35,19 +33,35 @@ namespace Editor
         {
             qjs->SetEditorBindingsCallback([this](void* ctx) { executor_.RegisterEditorBindings(ctx); });
         }
-        LoadAgentConfig();
+		gnbClient_ = NextAI::GetGnbAgentClient(engine_);
+		if (gnbClient_ && gnbClient_->IsAvailable())
+		{
+			try
+			{
+				for (const auto& item : gnbClient_->Request("providers.list").get())
+				{
+					providerCatalog_.push_back({item.value("id", ""), item.value("displayName", item.value("id", "")),
+						item.value("defaultModel", ""), item.value("configured", false) && item.value("available", false)});
+				}
+				const auto profiles = gnbClient_->Request("profiles.list").get();
+				if (profiles.contains("editor")) currentProviderId_ = profiles["editor"].value("provider", "localllm");
+				auto selected = std::find_if(providerCatalog_.begin(), providerCatalog_.end(), [this](const auto& option) { return option.id == currentProviderId_; });
+				if (selected != providerCatalog_.end()) currentModelId_ = selected->defaultModel;
+				gnbSessionId_ = gnbClient_->CreateSession("editor", currentProviderId_, currentModelId_).get().value("id", "");
+			}
+			catch (const std::exception& exception) { SPDLOG_WARN("[EditorAI] session create failed: {}", exception.what()); }
+		}
     }
 
-    FEditorAIService::~FEditorAIService() = default;
+    FEditorAIService::~FEditorAIService()
+	{
+		RequestCancel();
+		if (runThread_.joinable()) { runThread_.request_stop(); runThread_.join(); }
+	}
 
     void FEditorAIService::EnsureToolRegistry()
     {
         if (toolRegistryInitialized_) return;
-
-        NextAI::FRepoToolsOptions repoOpts;
-        repoOpts.repoRoot = Utilities::FileHelper::GetPlatformFilePath(".");
-        // Read-only knowledge tools; run_cmd whitelist still active.
-        NextAI::RegisterRepoTools(toolRegistry_, repoOpts);
 
         FEditorToolsOptions editorOpts;
         editorOpts.engine = &engine_;
@@ -56,14 +70,60 @@ namespace Editor
         editorOpts.deferHighRiskActions = true;
         RegisterEditorTools(toolRegistry_, editorOpts);
 
+		if (gnbClient_ && gnbClient_->IsAvailable())
+		{
+			std::vector<NextAI::FGnbRemoteTool> remoteTools;
+			for (const auto& schema : toolRegistry_.BuildSchemas())
+			{
+				nlohmann::json properties = nlohmann::json::object();
+				nlohmann::json required = nlohmann::json::array();
+				for (const auto& param : schema.params)
+				{
+					properties[param.name] = {{"type", NextAI::ToolParamTypeToString(param.type)}, {"description", param.description}};
+					if (param.required) required.push_back(param.name);
+				}
+				auto* localTool = toolRegistry_.Find(schema.name);
+				NextAI::FGnbRemoteTool remote;
+				remote.name = schema.name; remote.description = schema.description;
+				remote.inputSchema = {{"type", "object"}, {"properties", properties}, {"required", required}};
+				remote.mutating = localTool && (localTool->RequiresMainThread() || localTool->IsHighRisk());
+				remote.handler = [this, name = schema.name](const nlohmann::json& arguments)
+				{
+					auto* tool = toolRegistry_.Find(name);
+					if (!tool) throw std::runtime_error("unknown editor tool: " + name);
+					NextAI::FToolCallContext context; context.cancelFlag = &cancelRequested_;
+					return tool->Execute(arguments, context);
+				};
+				remoteTools.push_back(std::move(remote));
+			}
+			try { gnbClient_->RegisterTools(std::move(remoteTools)).get(); }
+			catch (const std::exception& exception) { SPDLOG_ERROR("[EditorAI] remote tool registration failed: {}", exception.what()); }
+		}
+
         toolRegistryInitialized_ = true;
         SPDLOG_INFO("[EditorAI] tool registry initialized ({} tools)", toolRegistry_.Size());
     }
 
     void FEditorAIService::PumpMainThread()
     {
-        // Drain queued tool tasks (agent worker may be waiting on these).
-        dispatcher_.DrainOnce();
+		if (gnbClient_)
+		{
+			gnbClient_->PumpEvents();
+			for (const auto& event : gnbClient_->DrainEvents())
+			{
+				NextAI::FAgentToolEvent uiEvent;
+				uiEvent.step = event.payload.value("step", 0);
+				uiEvent.toolName = event.payload.value("name", "");
+				uiEvent.detail = event.payload.value("content", event.payload.value("error", ""));
+				uiEvent.summary = event.payload.value("arguments", "");
+				if (event.type == "tool.call") uiEvent.phase = NextAI::FAgentToolEvent::EPhase::Call;
+				else if (event.type == "tool.result") uiEvent.phase = NextAI::FAgentToolEvent::EPhase::Result;
+				else if (event.type == "run.cancelled") uiEvent.phase = NextAI::FAgentToolEvent::EPhase::Cancelled;
+				else if (event.type == "run.completed") uiEvent.phase = NextAI::FAgentToolEvent::EPhase::Final;
+				else continue;
+				agentEventSink_.Emit(uiEvent);
+			}
+		}
         // Collect any deferred actions that the executor accumulated this frame.
         HarvestDeferredActions();
     }
@@ -126,37 +186,44 @@ namespace Editor
         return prompt;
     }
 
-    void FEditorAIService::LoadAgentConfig()
-    {
-        // Best-effort: read useAgentLoop / maxAgentSteps from the same ai_config.json
-        // that FAIService consumes. Missing keys leave defaults.
-        try
-        {
-            std::string path = Utilities::FileHelper::GetPlatformFilePath("assets/configs/ai_config.json");
-            std::ifstream f(path);
-            if (!f.is_open()) return;
-            nlohmann::json j;
-            f >> j;
-            if (j.contains("useAgentLoop") && j["useAgentLoop"].is_boolean())
-            {
-                useAgentLoop_ = j["useAgentLoop"].get<bool>();
-            }
-            if (j.contains("maxAgentSteps") && j["maxAgentSteps"].is_number_integer())
-            {
-                SetMaxAgentSteps(j["maxAgentSteps"].get<int>());
-            }
-        }
-        catch (const std::exception& e)
-        {
-            SPDLOG_WARN("EditorAIService: failed to read agent config: {}", e.what());
-        }
-    }
-
     bool FEditorAIService::IsAIConfigured() const
     {
-        auto* ai = NextAI::GetAIService(engine_);
-        return ai && ai->IsConfigured();
+		return gnbClient_ && gnbClient_->IsAvailable();
     }
+
+	bool FEditorAIService::SelectProvider(const std::string& providerId)
+	{
+		if (!gnbClient_ || status_ == EEditorAIStatus::Generating) return false;
+		auto selected = std::find_if(providerCatalog_.begin(), providerCatalog_.end(), [&providerId](const auto& option) { return option.id == providerId; });
+		if (selected == providerCatalog_.end() || !selected->configured) return false;
+		try
+		{
+			const std::string session = gnbClient_->CreateSession("editor", selected->id, selected->defaultModel).get().value("id", "");
+			if (session.empty()) return false;
+			currentProviderId_ = selected->id; currentModelId_ = selected->defaultModel; gnbSessionId_ = session; conversation_.clear();
+			return true;
+		}
+		catch (const std::exception& exception) { statusMessage_ = exception.what(); return false; }
+	}
+
+	void FEditorAIService::ClearConversation()
+	{
+		conversation_.clear();
+		if (gnbClient_ && gnbClient_->IsAvailable())
+		{
+			try { gnbSessionId_ = gnbClient_->CreateSession("editor", currentProviderId_, currentModelId_).get().value("id", ""); }
+			catch (const std::exception& exception) { SPDLOG_WARN("[EditorAI] reset session failed: {}", exception.what()); }
+		}
+	}
+
+	void FEditorAIService::RequestCancel()
+	{
+		cancelRequested_.store(true);
+		if (gnbClient_ && !activeRunId_.empty() && gnbClient_->IsAvailable())
+		{
+			(void)gnbClient_->Cancel(activeRunId_);
+		}
+	}
 
     std::vector<ScriptLogEntry> FEditorAIService::TakeLog()
     {
@@ -610,11 +677,10 @@ Editor.log(message)
 
     void FEditorAIService::GenerateAsync(const std::string& userPrompt, const EditorContext& ctx)
     {
-        auto* ai = NextAI::GetAIService(engine_);
-        if (!ai || !ai->IsConfigured())
+        if (!gnbClient_ || !gnbClient_->IsAvailable())
         {
             status_ = EEditorAIStatus::Error;
-            statusMessage_ = "AI service not configured. Check assets/configs/ai_config.json";
+			statusMessage_ = "gnb bridge unavailable: " + NextAI::GetGnbAgentClientError(engine_);
             return;
         }
 
@@ -626,109 +692,39 @@ Editor.log(message)
         // carries the full multi-turn history.
         conversation_.push_back(NextAI::FChatMessage::User(userPrompt));
 
-        if (useAgentLoop_ && ai->SupportsTools())
-        {
-            RunAgentLoopAsync(userPrompt, ctx);
-        }
-        else
-        {
-            RunLegacyAsync(userPrompt, ctx);
-        }
+		RunGnbAgentAsync(userPrompt, ctx);
     }
 
-    void FEditorAIService::RunLegacyAsync(const std::string& userPrompt, const EditorContext& ctx)
-    {
-        (void)userPrompt; // current turn already recorded in conversation_
-        std::string fullPrompt = BuildSystemPrompt(ctx);
-        fullPrompt += "\n## Conversation\n";
-        for (const auto& msg : conversation_)
-        {
-            const char* who = (msg.role == NextAI::EChatRole::Assistant) ? "Assistant" : "User";
-            fullPrompt += fmt::format("{}: {}\n", who, msg.content);
-        }
-        fullPrompt += "Assistant:";
-
-        std::thread([this, fullPrompt]() {
-            auto* ai = NextAI::GetAIService(engine_);
-            auto response = ai->GenerateText(fullPrompt);
-
-            {
-                std::lock_guard<std::mutex> lock(resultMutex_);
-                pendingResponse_ = response;
-                hasPendingResult_ = true;
-            }
-        }).detach();
-    }
-
-    void FEditorAIService::RunAgentLoopAsync(const std::string& userPrompt, const EditorContext& ctx)
+	void FEditorAIService::RunGnbAgentAsync(const std::string& userPrompt, const EditorContext& ctx)
     {
         EnsureToolRegistry();
-
-        // Rebuild the (dynamic, selection-aware) system prompt each turn and prepend
-        // it to the persistent conversation history. The current user turn is already
-        // the last entry in conversation_ (appended by GenerateAsync).
-        NextAI::FChatRequest seed;
-        seed.messages.push_back(NextAI::FChatMessage::System(BuildAgentSystemPrompt(ctx)));
-        for (const auto& msg : conversation_)
-        {
-            seed.messages.push_back(msg);
-        }
-
-        NextAI::FAgentOptions opts;
-        opts.maxSteps = maxAgentSteps_;
-        opts.temperature = 0.3f;
-        // Only force a tool call (grounding retry) when the request actually concerns
-        // the scene or project source. For casual chat / conceptual questions, leave
-        // the reminder empty so the model can answer directly instead of being pushed
-        // into scanning scene nodes or files. FAgentOptions defaults the reminder to a
-        // non-empty string, so the empty branch must be explicit.
-        if (NeedsGroundingReminder(userPrompt))
-        {
-            opts.groundingReminder =
-                "You produced a final answer without calling any tool. If the user's request "
-                "requires looking at or modifying the scene/source, call the appropriate tool "
-                "first. Retry now.";
-        }
-        else
-        {
-            opts.groundingReminder.clear();
-        }
-
-        std::thread([this, seed = std::move(seed), opts]() mutable {
-            auto* ai = NextAI::GetAIService(engine_);
-            NextAI::FChatProviderFn provider =
-                [ai](const NextAI::FChatRequest& req) { return ai->Chat(req); };
-
-            NextAI::FAgentResult result = NextAI::FAgentLoop::Run(
-                std::move(seed), toolRegistry_, std::move(provider), opts,
-                &agentEventSink_, &dispatcher_, &cancelRequested_);
-
-            NextAI::FAIResponse legacyShaped;
-            if (result.success)
-            {
-                legacyShaped = NextAI::FAIResponse::Success(result.finalContent);
-            }
-            else if (result.cancelled)
-            {
-                legacyShaped = NextAI::FAIResponse::Failure("cancelled by user");
-            }
-            else if (result.maxStepsExceeded)
-            {
-                legacyShaped = NextAI::FAIResponse::Failure(
-                    fmt::format("agent loop hit max steps ({})", opts.maxSteps));
-            }
-            else
-            {
-                legacyShaped = NextAI::FAIResponse::Failure(
-                    result.errorMessage.empty() ? "agent loop failed" : result.errorMessage);
-            }
-
-            {
-                std::lock_guard<std::mutex> lock(resultMutex_);
-                pendingResponse_ = legacyShaped;
-                hasPendingResult_ = true;
-            }
-        }).detach();
+		if (runThread_.joinable()) runThread_.join();
+		static std::atomic<uint64_t> nextRun{1};
+		activeRunId_ = fmt::format("editor-{}", nextRun++);
+		const std::string runId = activeRunId_;
+		const std::string systemPrompt = BuildAgentSystemPrompt(ctx);
+		const std::string sessionId = gnbSessionId_;
+		runThread_ = std::jthread([this, systemPrompt, userPrompt, sessionId, runId](std::stop_token)
+		{
+			NextAI::FAIResponse response;
+			try
+			{
+				nlohmann::json messages = nlohmann::json::array({
+					{{"role", "system"}, {"content", systemPrompt}},
+					{{"role", "user"}, {"content", userPrompt}}
+				});
+				const auto result = gnbClient_->Request("agent.run", {
+					{"sessionId", sessionId}, {"runId", runId}, {"messages", messages},
+					{"profile", "editor"}, {"maxOutputTokens", 4096}
+				}).get();
+				response = NextAI::FAIResponse::Success(result.value("content", ""));
+			}
+			catch (const std::exception& exception)
+			{
+				response = NextAI::FAIResponse::Failure(cancelRequested_ ? "cancelled by user" : exception.what());
+			}
+			{ std::lock_guard lock(resultMutex_); pendingResponse_ = std::move(response); hasPendingResult_ = true; }
+		});
     }
 
     void FEditorAIService::ConsumePendingResult(EditorContext& ctx)
@@ -762,40 +758,6 @@ Editor.log(message)
         {
             conversation_.push_back(NextAI::FChatMessage::Assistant(response.text));
             TrimConversation();
-        }
-
-        if (useAgentLoop_)
-        {
-            // Agent loop already executed tools during the run; the final text is
-            // just a natural-language summary. Anything high-risk landed in
-            // pendingActions_ via HarvestDeferredActions() during PumpMainThread().
-            status_ = EEditorAIStatus::Idle;
-            statusMessage_ = pendingActions_.empty() ? "Done" : "Waiting confirmation";
-            return;
-        }
-
-        status_ = EEditorAIStatus::Executing;
-        statusMessage_ = "Executing...";
-
-        auto blocks = ExtractFromResponse(response.text);
-        for (const auto& block : blocks)
-        {
-            if (block.type == FCodeBlock::EType::EditorScript)
-            {
-                executor_.ExecuteScriptText(block.code, &ctx, true);
-                auto deferredActions = executor_.TakeDeferredActions();
-                for (auto& deferred : deferredActions)
-                {
-                    FPendingEditorAction pendingAction;
-                    pendingAction.id = nextPendingActionId_++;
-                    pendingAction.request = std::move(deferred);
-                    pendingActions_.push_back(std::move(pendingAction));
-                }
-            }
-            else
-            {
-                executor_.EvalJavaScript(block.code);
-            }
         }
 
         status_ = EEditorAIStatus::Idle;

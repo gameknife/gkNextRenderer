@@ -3,7 +3,6 @@
 #include "AI/EditorAIService.hpp"
 #include "Panels/imgui_markdown_custom.h"
 #include "Engine/Runtime/Engine.hpp"
-#include "Modules/NextAI/AIService.hpp"
 #include "ThirdParty/fontawesome/IconsFontAwesome6.h"
 
 #include <algorithm>
@@ -11,7 +10,6 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <sstream>
-#include "Modules/NextAI/NextAIModule.hpp"
 
 namespace Editor
 {
@@ -66,12 +64,7 @@ namespace Editor
 
     static void DrawProviderSelector(NextEngine& engine, FEditorAIService& service)
     {
-        auto* ai = NextAI::GetAIService(engine);
-        if (!ai)
-        {
-            ImGui::TextDisabled("AI service unavailable");
-            return;
-        }
+		(void)engine;
 
         // Status indicator
         auto status = service.GetStatus();
@@ -89,7 +82,7 @@ namespace Editor
         }
         else
         {
-            if (ai->IsConfigured())
+            if (service.IsAIConfigured())
             {
                 ImGui::TextColored(ImVec4(0.3f, 0.9f, 0.3f, 1.0f), ICON_FA_CIRCLE_CHECK " Ready");
             }
@@ -111,35 +104,36 @@ namespace Editor
         }
 
         ImGui::SetNextItemWidth(120.0f);
-        auto providers = NextAI::FAIService::GetAvailableProviders();
-        auto currentType = ai->GetProviderType();
-        std::string currentName = ai->GetProviderName();
+		const auto& providers = service.GetProviderCatalog();
+		const std::string& currentId = service.GetCurrentProviderId();
+		std::string currentName = currentId;
+		if (auto current = std::find_if(providers.begin(), providers.end(), [&currentId](const auto& option) { return option.id == currentId; }); current != providers.end()) currentName = current->displayName;
 
         if (ImGui::BeginCombo("##ProviderSelect", currentName.c_str()))
         {
-            for (const auto& [type, name] : providers)
+            for (const auto& option : providers)
             {
-                bool isSelected = (type == currentType);
-                bool isConfigured = ai->IsProviderConfigured(type);
+				const bool isSelected = option.id == currentId;
+				const bool isConfigured = option.configured;
 
                 if (!isConfigured)
                 {
                     ImGui::BeginDisabled();
                 }
 
-                if (ImGui::Selectable(name.c_str(), isSelected))
+				if (ImGui::Selectable(option.displayName.c_str(), isSelected))
                 {
-                    if (type != currentType)
+					if (!isSelected)
                     {
-                        if (ai->SwitchProvider(type))
+						if (service.SelectProvider(option.id))
                         {
-                            chatHistory.push_back({fmt::format("Switched to {} provider", name), false});
+							chatHistory.push_back({fmt::format("Switched to {} provider", option.displayName), false});
                             chatScrollToBottom = true;
                         }
                         else
                         {
                             chatHistory.push_back(
-                                {fmt::format("Failed to switch to {}: {}", name, ai->GetStatusMessage()), false, true});
+								{fmt::format("Failed to switch to {}: {}", option.displayName, service.GetStatusMessage()), false, true});
                             chatScrollToBottom = true;
                         }
                     }
@@ -150,7 +144,7 @@ namespace Editor
                     ImGui::EndDisabled();
                     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
                     {
-                        ImGui::SetTooltip("Not configured in ai_config.json");
+						ImGui::SetTooltip("Provider is not configured in gnb AI catalog");
                     }
                 }
 
@@ -294,31 +288,11 @@ namespace Editor
         ImGui::EndChild();
     }
 
-    static void DrawAgentSettings(FEditorAIService& service)
-    {
-        if (!ImGui::CollapsingHeader("Agent Settings"))
-        {
-            return;
-        }
-        bool useAgent = service.IsAgentLoopEnabled();
-        if (ImGui::Checkbox("Use Agent Loop (multi-step tool calling)", &useAgent))
-        {
-            service.SetAgentLoopEnabled(useAgent);
-        }
-        int maxSteps = service.GetMaxAgentSteps();
-        if (ImGui::SliderInt("Max Steps", &maxSteps, 1, 30))
-        {
-            service.SetMaxAgentSteps(maxSteps);
-        }
-        ImGui::TextDisabled("Agent loop becomes active once Phase 7 wires it in.");
-    }
-
     static void DrawAIAssistantTab(EditorContext& ctx, FEditorAIService& service)
     {
         auto status = service.GetStatus();
         bool generating = (status == EEditorAIStatus::Generating);
 
-        DrawAgentSettings(service);
         DrawAgentStepsSection(service);
 
         if (ImGui::Button(ICON_FA_ERASER " New Chat"))

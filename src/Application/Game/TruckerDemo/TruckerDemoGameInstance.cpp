@@ -10,7 +10,7 @@
 #include "Engine/Assets/Core/Scene.hpp"
 #include "Engine/Runtime/Components/PhysicsComponent.h"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Interface/AgentDriver.hpp"
+#include "Engine/Runtime/Interface/AgentQueries.hpp"
 #include "Modules/ScadLoader/ScadModule.hpp"
 
 std::unique_ptr<NextGameInstanceBase> CreateGameInstance(Vulkan::WindowConfig& config,

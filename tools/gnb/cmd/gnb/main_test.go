@@ -131,22 +131,6 @@ func TestShotRunArgsKeepsDefaultCaptureClean(t *testing.T) {
 	}
 }
 
-func TestValidateRunArgsIncludesScriptAndViewport(t *testing.T) {
-	got := validateRunArgs(`P:\repo\assets\agentscripts\smoke.agentscript.json`, "agent_reports/custom.json", 1280, 720, true, true, []string{"--locale=zhCN"})
-	want := []string{
-		`--agent-script=P:\repo\assets\agentscripts\smoke.agentscript.json`,
-		"--agent-report=agent_reports/custom.json",
-		"--agent-visible-window",
-		"--sync-validation",
-		"--width=1280",
-		"--height=720",
-		"--locale=zhCN",
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("validateRunArgs() = %#v, want %#v", got, want)
-	}
-}
-
 func TestLoadValidateScriptHints(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "smoke.agentscript.json")

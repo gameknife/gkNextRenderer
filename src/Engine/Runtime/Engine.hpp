@@ -9,7 +9,8 @@
 #include "Engine/Rendering/RenderView.hpp"
 #include "Engine/Rendering/VulkanBaseRenderer.hpp"
 #include "Engine/Runtime/Command/CommandHistory.hpp"
-#include "Engine/Runtime/Interface/AgentDriver.hpp"
+#include "Engine/Runtime/Interface/AgentQueries.hpp"
+#include "Engine/Runtime/AgentControlServer.hpp"
 #include "Engine/Runtime/Interface/DebugDraw.hpp"
 #include "Engine/Runtime/Scene/SceneList.hpp"
 #include "Engine/Runtime/Interface/ScriptRuntime.hpp"
@@ -19,6 +20,7 @@
 #include "Engine/Runtime/RuntimeFwd.hpp"
 #include "Engine/Utilities/FileHelper.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
+#include <nlohmann/json_fwd.hpp>
 
 namespace NextRenderer
 {
@@ -209,11 +211,6 @@ public:
         shaderHotReloaderFactory_ = std::move(factory);
     }
     
-    void SetAgentDriverFactory(Runtime::Agent::AgentDriverFactory factory)
-    {
-        agentDriverFactory_ = std::move(factory);
-    }
-    
     void SetUiOverlayFactory(std::function<std::unique_ptr<Runtime::IUiOverlay>(NextEngine&)> factory)
     {
         uiOverlayFactory_ = std::move(factory);
@@ -287,7 +284,8 @@ private:
     void OnScroll(double xoffset, double yoffset);
     void OnDropFile(const char* path);
     void TickGamepadInput();
-    void TickAgentValidation();
+	nlohmann::json HandleAgentControlCommand(const std::string& method, const nlohmann::json& params);
+	std::optional<Runtime::Agent::FAgentQueryValue> QueryAgentControl(const std::string& query) const;
     bool HandleDebugShortcut(SDL_Keycode key);
 
     // Lifecycle helpers
@@ -344,18 +342,6 @@ private:
         bool IsCapturing() const { return hasPending || captureFramesRemaining > 0; }
     };
 
-    // Agent validation: render to a stable frame, capture one screenshot to a fixed path,
-    // then auto-exit. Centralized here so every target behaves identically.
-    struct FAgentValidationState
-    {
-        bool active = false;
-        bool captured = false;
-        bool includeUi = false;
-        uint32_t waitFrames = 90;
-        uint32_t postCaptureFrames = 0;
-        std::string outputPath = "screenshots/agent_validation";
-    };
-
     // Main-thread task queues
     struct FTaskQueues
     {
@@ -391,8 +377,8 @@ private:
     FInputState inputState_{};
     FProgressiveRenderState progressiveRender_{};
     FScreenShotState screenShot_{};
-    FAgentValidationState agentValidation_{};
-    std::unique_ptr<Runtime::Agent::IAgentDriver> agentDriver_;
+	std::unique_ptr<Runtime::Agent::FAgentControlServer> agentControl_;
+	Runtime::Agent::FAgentQueryRegistry agentQueries_;
     int requestedExitCode_ = 0;
     FTaskQueues taskQueues_{};
     NextRenderer::EApplicationStatus status_{};
@@ -404,7 +390,6 @@ private:
     std::vector<std::unique_ptr<Runtime::IRenderFrameConsumer>> renderFrameConsumers_{};
     Runtime::ScriptRuntimeFactory scriptRuntimeFactory_;
     Runtime::ShaderHotReloaderFactory shaderHotReloaderFactory_;
-    Runtime::Agent::AgentDriverFactory agentDriverFactory_;
     std::function<std::unique_ptr<NextAudio>()> audioFactory_;
     std::function<std::unique_ptr<NextPhysics>()> physicsFactory_;
     std::unique_ptr<Runtime::IScriptRuntime> scriptRuntime_;

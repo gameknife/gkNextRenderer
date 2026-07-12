@@ -8,14 +8,16 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
+	aiconfig "github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/config"
 )
 
 type Config struct {
-	GNB      GNBConfig      `toml:"gnb"`
-	Vcpkg    VcpkgConfig    `toml:"vcpkg"`
-	External ExternalConfig `toml:"external"`
-	Paks     PaksConfig     `toml:"paks"`
-	Targets  TargetsConfig  `toml:"targets"`
+	GNB      GNBConfig       `toml:"gnb"`
+	Vcpkg    VcpkgConfig     `toml:"vcpkg"`
+	External ExternalConfig  `toml:"external"`
+	Paks     PaksConfig      `toml:"paks"`
+	Targets  TargetsConfig   `toml:"targets"`
+	AI       aiconfig.Config `toml:"ai"`
 }
 
 type GNBConfig struct {
@@ -183,6 +185,16 @@ func Load(repoRoot string) (Config, error) {
 		cfg.External.VulkanSDK.Root = "external/VulkanSDK"
 	}
 	applyLLMDefaults(&cfg.External.LLM)
+	aiconfig.ApplyDefaults(&cfg.AI)
+	if err := aiconfig.LoadUserOverride(&cfg.AI); err != nil {
+		return cfg, err
+	}
+	if err := aiconfig.LoadSecrets(&cfg.AI); err != nil {
+		return cfg, err
+	}
+	if err := cfg.AI.Validate(); err != nil {
+		return cfg, err
+	}
 	return cfg, nil
 }
 

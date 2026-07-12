@@ -1,5 +1,5 @@
+#include "Engine/Common/CoreMinimal.hpp"
 #include "Engine/Vulkan/Instance.hpp"
-#include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/DebugUtilities.hpp"
 #include "Engine/Vulkan/WindowSurface.hpp"
 #include "Engine/Vulkan/VulkanInterposer.hpp"

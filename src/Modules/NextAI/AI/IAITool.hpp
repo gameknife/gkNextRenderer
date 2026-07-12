@@ -29,7 +29,7 @@ namespace NextAI
         virtual FToolSchema Schema() const = 0;
 
         // Tools that mutate engine state (scene/QuickJS/Vulkan) must return true so
-        // FAgentLoop marshals Execute through FMainThreadDispatcher.
+		// The gnb client invokes registered Engine tools from its main-thread event pump.
         virtual bool RequiresMainThread() const { return false; }
 
         // High-risk tools should not execute eagerly; FEditorAIService translates

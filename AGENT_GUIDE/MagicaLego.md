@@ -148,37 +148,11 @@ end
 ## AI 助手集成
 
 ### 核心文件
-- `MagicaLegoAIService.hpp/.cpp` - 薄封装，委托给引擎级 `NextAI::AIService`（`src/Engine/Runtime/Subsystems/AIService.{hpp,cpp}`）
-- 配置文件: `assets/configs/ai_config.json`
+- `MagicaLegoAIService.hpp/.cpp` - 薄封装，通过 client-only `NextAI::FAIService` 连接长生命周期 `gnb agent bridge --stdio`
+- 配置文件：仓库 `gnb.toml` 的 `[ai]`、可选用户 `gnb-ai.toml` 与 secrets JSON
 
 ### 配置格式
-多 provider 配置，默认 `provider: localllm`（复用 `gnb llm` 启动的本地 llama-server，详见 AGENTS.md 的 Local LLM 段），可切到 `gemini` / `ollama` / `zhipu` / `deepseek` / `openai`：
-```json
-{
-    "provider": "localllm",
-    "useAgentLoop": true,
-    "localllm": {
-        "endpoint": "http://127.0.0.1:8765",
-        "defaultModel": "",
-        "pidFile": "external/llm/run/server.pid",
-        "autoDiscoverPid": true
-    },
-    "gemini":   { "endpoint": "...", "defaultModel": "gemini-3-flash-preview", "models": ["gemini-3-flash-preview"] },
-    "ollama":   { "endpoint": "http://localhost:11434", "defaultModel": "gemma3:12b", "models": ["gemma3:12b"] },
-    "zhipu":    { "endpoint": "...", "defaultModel": "glm-4.7", "models": ["glm-4.7"] },
-    "deepseek": { "endpoint": "https://api.deepseek.com/v1", "defaultModel": "deepseek-chat", "models": ["deepseek-chat"] },
-    "openai":   { "endpoint": "https://api.openai.com/v1", "defaultModel": "gpt-4.1-mini", "models": ["gpt-4.1-mini"] }
-}
-```
-敏感信息不要写入 `ai_config.json`。默认从本地 `GKNEXT_AI_SECRETS` 指定文件、Windows `%LOCALAPPDATA%/gkNextEngine/ai_secrets.json`、或平台用户数据目录 `gkNextEngine/ai_secrets.json` 读取：
-```json
-{
-    "openai": { "apiKey": "..." },
-    "deepseek": { "apiKey": "..." },
-    "gemini": { "apiKey": "..." },
-    "zhipu": { "apiKey": "..." }
-}
-```
+MagicaLego 使用 `magicalego-script` profile。Provider/model 使用字符串 ID，由 `gnb llm providers` 动态列出；游戏进程不读取 endpoint、API key 或 llama PID。外部 provider 的 key 通过 provider 的 `api_key_env` 或 `GKNEXT_AI_SECRETS` 指向的用户 secrets JSON 交给 gnb。
 
 ### 功能特性
 - **脚本生成**: 用自然语言描述，AI 生成 mlscript
@@ -259,5 +233,5 @@ namespace MagicaLego
 - `src/Application/Game/MagicaLego/MagicaLegoAIService.cpp`
 - `src/Application/Game/MagicaLego/MagicaLegoConstants.hpp`
 - `src/Application/Game/MagicaLego/MagicaLegoUIHelpers.hpp`
-- `assets/configs/ai_config.json`
+- `gnb.toml`（`[ai.profiles.magicalego-script]`）
 - `assets/scripts/*.mlscript`

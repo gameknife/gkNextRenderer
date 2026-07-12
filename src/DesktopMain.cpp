@@ -2,9 +2,6 @@
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Engine.hpp"
 #include "Engine/Runtime/Platform/PlatformCommon.h"
-#if GK_MODULE_AGENTDRIVER
-#include "Modules/AgentDriver/AgentDriverModule.hpp"
-#endif
 #if GK_MODULE_GLTFLOADER
 #include "Modules/GltfLoader/GltfModule.hpp"
 #endif
@@ -130,9 +127,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 #endif
 #if GK_MODULE_LIVECODING
     Modules::LiveCoding::Install(*GApplication);
-#endif
-#if GK_MODULE_AGENTDRIVER
-    Modules::AgentDriver::Install(*GApplication);
 #endif
 #if GK_MODULE_GLTFLOADER
     Modules::Gltf::Register();

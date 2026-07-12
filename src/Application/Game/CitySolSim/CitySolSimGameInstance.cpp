@@ -20,7 +20,7 @@
 #include "Engine/Options.hpp"
 #include "Engine/Runtime/Config/CVarSystem.hpp"
 #include "Engine/Runtime/Engine.hpp"
-#include "Engine/Runtime/Interface/AgentDriver.hpp"
+#include "Engine/Runtime/Interface/AgentQueries.hpp"
 #include "Engine/Runtime/Scene/NodeUtils.h"
 #include "Engine/Runtime/Scene/SceneBuilder.h"
 #include "Modules/ScadLoader/ScadModule.hpp"

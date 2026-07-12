@@ -39,7 +39,7 @@ namespace Editor
     };
 
     // All tools registered here have RequiresMainThread()=true. Caller must own a
-    // FMainThreadDispatcher and pass it to FAgentLoop::Run so writes hit the main
+    // gnb remote-tool dispatcher invokes these handlers from the Engine main
     // thread (Scene / QuickJS are not thread-safe).
     void RegisterEditorTools(NextAI::FToolRegistry& registry, const FEditorToolsOptions& options);
 }

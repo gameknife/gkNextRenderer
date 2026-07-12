@@ -4,8 +4,8 @@
 #include "AI/EditorScriptExecutor.hpp"
 #include "Modules/NextAI/AIService.hpp"
 #include "Modules/NextAI/AI/IAITool.hpp"
-#include "Modules/NextAI/AI/MainThreadDispatcher.hpp"
 #include "Modules/NextAI/AI/ToolRegistry.hpp"
+#include "Modules/NextAI/GnbClient/GnbAgentClient.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -45,15 +45,19 @@ namespace Editor
         FDeferredEditorAction request;
     };
 
+	struct FGnbProviderOption
+	{
+		std::string id;
+		std::string displayName;
+		std::string defaultModel;
+		bool configured = false;
+	};
+
     class FEditorAIService
     {
     public:
         explicit FEditorAIService(NextEngine& engine);
         ~FEditorAIService();
-
-        // Build the legacy single-shot system prompt with scene context (still used when
-        // useAgentLoop_=false).
-        std::string BuildSystemPrompt(const EditorContext& ctx);
 
         // Build the lean agent-mode system prompt (tools-first; no scene context dump).
         std::string BuildAgentSystemPrompt(const EditorContext& ctx);
@@ -77,11 +81,14 @@ namespace Editor
         void ExecuteDirect(const std::string& input, EditorContext& ctx);
 
         // Reset the multi-turn conversation history (e.g. a "New Chat" button).
-        void ClearConversation() { conversation_.clear(); }
+        void ClearConversation();
 
         EEditorAIStatus GetStatus() const { return status_; }
         const std::string& GetStatusMessage() const { return statusMessage_; }
         bool IsAIConfigured() const;
+		const std::vector<FGnbProviderOption>& GetProviderCatalog() const { return providerCatalog_; }
+		const std::string& GetCurrentProviderId() const { return currentProviderId_; }
+		bool SelectProvider(const std::string& providerId);
 
         const std::vector<FPendingEditorAction>& GetPendingActions() const { return pendingActions_; }
         bool ConfirmPendingAction(uint64_t actionId, EditorContext& ctx);
@@ -93,28 +100,21 @@ namespace Editor
         // Get the raw AI response for display
         const std::string& GetLastResponse() const { return lastResponse_; }
 
-        // Agent loop integration (sink populated only when useAgentLoop_=true; see Phase 7).
+        // Unified gnb Agent event sink consumed by the panel.
         NextAI::FInMemoryAgentEventSink& GetAgentEventSink() { return agentEventSink_; }
 
         // Request cancellation of an in-flight Generate. The flag is consumed at the
         // next agent-loop step boundary or async checkpoint.
-        void RequestCancel() { cancelRequested_.store(true); }
+        void RequestCancel();
         bool IsCancelRequested() const { return cancelRequested_.load(); }
 
-        // User-tunable config (loaded from ai_config.json fields useAgentLoop / maxAgentSteps).
-        bool IsAgentLoopEnabled() const { return useAgentLoop_; }
-        void SetAgentLoopEnabled(bool v) { useAgentLoop_ = v; }
-        int GetMaxAgentSteps() const { return maxAgentSteps_; }
-        void SetMaxAgentSteps(int n) { maxAgentSteps_ = (n < 1 ? 1 : (n > 30 ? 30 : n)); }
-
     private:
-        void LoadAgentConfig();
         void EnsureToolRegistry();
-        void RunAgentLoopAsync(const std::string& userPrompt, const EditorContext& ctx);
-        void RunLegacyAsync(const std::string& userPrompt, const EditorContext& ctx);
+		void RunGnbAgentAsync(const std::string& userPrompt, const EditorContext& ctx);
         void HarvestDeferredActions();
         void TrimConversation();
 
+		std::string BuildSystemPrompt(const EditorContext& ctx);
         std::string BuildSceneContext(const EditorContext& ctx);
         std::string BuildSelectionContext(const EditorContext& ctx);
         std::string BuildSceneAssetCatalog();
@@ -139,13 +139,17 @@ namespace Editor
         // Agent infrastructure.
         NextAI::FInMemoryAgentEventSink agentEventSink_;
         std::atomic<bool> cancelRequested_{false};
-        bool useAgentLoop_ = true;
-        int maxAgentSteps_ = 12;
 
-        NextAI::FMainThreadDispatcher dispatcher_;
         NextAI::FToolRegistry toolRegistry_;
         bool toolRegistryInitialized_ = false;
         EditorContext* currentContext_ = nullptr;
+		NextAI::FGnbAgentClient* gnbClient_ = nullptr;
+		std::string gnbSessionId_;
+		std::string activeRunId_;
+		std::jthread runThread_;
+		std::vector<FGnbProviderOption> providerCatalog_;
+		std::string currentProviderId_ = "localllm";
+		std::string currentModelId_;
 
         // Persistent multi-turn chat history (user/assistant text turns only). The
         // dynamic system prompt is rebuilt and prepended per request, and agent-loop

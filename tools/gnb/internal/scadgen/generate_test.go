@@ -54,10 +54,10 @@ func TestBuildKitMenu(t *testing.T) {
 
 func TestExtractJSON(t *testing.T) {
 	cases := map[string]string{
-		"{\"a\": 1}":                                  `{"a": 1}`,
-		"```json\n{\"a\": 1}\n```":                    `{"a": 1}`,
+		"{\"a\": 1}":               `{"a": 1}`,
+		"```json\n{\"a\": 1}\n```": `{"a": 1}`,
 		"好的，这是 spec：\n```\n{\"a\": 1}\n```\n希望有帮助": `{"a": 1}`,
-		"前言 {\"a\": {\"b\": 2}} 后记":                  `{"a": {"b": 2}}`,
+		"前言 {\"a\": {\"b\": 2}} 后记":                `{"a": {"b": 2}}`,
 	}
 	for input, want := range cases {
 		got, err := ExtractJSON(input)
@@ -108,6 +108,26 @@ func TestGenerateRepairLoop(t *testing.T) {
 	repair := transcripts[1][len(transcripts[1])-1]
 	if repair.Role != "user" || !strings.Contains(repair.Content, "oc_bldg_castle") {
 		t.Errorf("repair prompt should quote the failing module, got: %s", repair.Content)
+	}
+}
+
+func TestGenerateFirstShot(t *testing.T) {
+	catalog, err := scadcompose.LoadCatalog(writeTestCatalog(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	chat := func(ctx context.Context, messages []Message) (string, error) {
+		return `{"name":"first-shot","kits":["old_city"],"placements":[{"module":"oc_prop_well","at":[1,2]}]}`, nil
+	}
+	outcome, err := Generate(context.Background(), chat, catalog, "menu", "一口井", Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome.Rounds != 1 || outcome.Spec.Name != "first-shot" {
+		t.Fatalf("unexpected first-shot outcome: rounds=%d name=%q", outcome.Rounds, outcome.Spec.Name)
+	}
+	if !strings.Contains(outcome.Source, "translate([1, 2, 0]) oc_prop_well();") {
+		t.Fatalf("unexpected composed source:\n%s", outcome.Source)
 	}
 }
 

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,8 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai"
+	"github.com/gameknife/gknextrenderer/tools/gnb/internal/ai/workflow/scadscene"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/console"
-	"github.com/gameknife/gknextrenderer/tools/gnb/internal/llm"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/platform"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/runner"
 	"github.com/gameknife/gknextrenderer/tools/gnb/internal/scadcompose"
@@ -34,55 +36,35 @@ func newScadCommand(ctx appContext) *cobra.Command {
 func newScadGenerateCommand(ctx appContext) *cobra.Command {
 	var name string
 	var modelID string
+	var providerID string
+	var profileID string
 	var repairs int
 	var temperature float64
 	var debug bool
 	cmd := &cobra.Command{
 		Use:   "generate <场景描述>",
-		Short: "用本地 LLM 从自然语言生成 scene spec 并展开为 .scad",
-		Long: "把 kit catalog 作为零件菜单注入 prompt，让本地 LLM（gnb llm 基建）输出 scene\n" +
+		Short: "通过 AI provider 从自然语言生成 scene spec 并展开为 .scad",
+		Long: "把 kit catalog 作为零件菜单注入 prompt，让配置的 AI provider 输出 scene\n" +
 			"spec JSON；compose 校验失败会把错误回喂给模型自修复。成功后写\n" +
 			"assets/scad/specs/<name>.json + assets/scad/gen/<name>.scad（含 build assets 镜像）。",
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			request := strings.Join(args, " ")
 			libDir := filepath.Join(ctx.repoRoot, "assets", "scad", "lib")
-			catalog, err := scadcompose.LoadCatalog(filepath.Join(libDir, "catalog.json"))
-			if err != nil {
-				return err
-			}
-			menu, err := scadgen.BuildKitMenu(filepath.Join(libDir, "catalog.json"))
+			catalogPath := filepath.Join(libDir, "catalog.json")
+			menu, err := scadgen.BuildKitMenu(catalogPath)
 			if err != nil {
 				return err
 			}
 
-			cfg, err := selectLLMModel(ctx.cfg.External.LLM, modelID)
-			if err != nil {
-				return err
-			}
-			srv := llm.NewServer(ctx.repoRoot, cfg)
 			runCtx, cancel := context.WithTimeout(cmd.Context(), 15*time.Minute)
 			defer cancel()
-			info, err := srv.EnsureRunningOrReuse(runCtx)
+			runtime, err := ai.NewRuntime(ctx.repoRoot, ctx.cfg)
 			if err != nil {
 				return err
 			}
-			client := llm.NewClient(info.BaseURL())
-			chat := func(chatCtx context.Context, messages []scadgen.Message) (string, error) {
-				chatMessages := make([]llm.ChatMessage, len(messages))
-				for i, message := range messages {
-					chatMessages[i] = llm.ChatMessage{Role: message.Role, Content: message.Content}
-				}
-				return client.Chat(chatCtx, llm.ChatRequest{
-					Messages:    chatMessages,
-					Temperature: temperature,
-					MaxTokens:   4096,
-				})
-			}
-
-			console.Info("generating spec via " + cfg.Active + " ...")
-			outcome, err := scadgen.Generate(runCtx, chat, catalog, menu, request,
-				scadgen.Options{MaxRepairs: repairs})
+			console.Info("generating spec via AI workflow ...")
+			rawOutcome, err := runtime.Workflows.Run(runCtx, scadscene.Name, scadscene.Input{CatalogPath: catalogPath, Menu: menu, Request: request, MaxRepairs: repairs, Temperature: temperature, Profile: profileID, Provider: providerID, Model: modelID}, nil)
 			if err != nil {
 				var genErr *scadgen.GenerateError
 				if debug && errors.As(err, &genErr) {
@@ -97,10 +79,14 @@ func newScadGenerateCommand(ctx appContext) *cobra.Command {
 				}
 				return err
 			}
+			var outcome scadscene.Output
+			if err := json.Unmarshal(rawOutcome, &outcome); err != nil {
+				return err
+			}
 			for _, warning := range outcome.Warnings {
 				console.Warn(warning)
 			}
-			specName := outcome.Spec.Name
+			specName := outcome.Name
 			if name != "" {
 				specName = name
 			}
@@ -122,6 +108,8 @@ func newScadGenerateCommand(ctx appContext) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&name, "name", "", "override the scene name chosen by the model")
 	cmd.Flags().StringVar(&modelID, "model", "", "override the active LLM model")
+	cmd.Flags().StringVar(&providerID, "provider", "", "override the AI provider id")
+	cmd.Flags().StringVar(&profileID, "profile", "scad-scene", "AI profile")
 	cmd.Flags().IntVar(&repairs, "repairs", 3, "max self-repair rounds after the first reply")
 	cmd.Flags().Float64Var(&temperature, "temp", 0.4, "sampling temperature")
 	cmd.Flags().BoolVar(&debug, "debug", false, "dump the chat transcript on failure")

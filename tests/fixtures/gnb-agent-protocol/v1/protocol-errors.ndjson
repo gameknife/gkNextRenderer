@@ -1,0 +1,4 @@
+{"jsonrpc":"2.0","id":"bad-version","method":"initialize","params":{"protocolVersion":99,"client":{"name":"fixture-client","version":"1.0.0"}}}
+{"jsonrpc":"2.0","id":"bad-version","error":{"code":-32001,"message":"unsupported protocol version","data":{"category":"protocol_version","supportedVersions":[1],"retryable":false}}}
+{"jsonrpc":"2.0","id":"unknown","method":"unknown.method","params":{}}
+{"jsonrpc":"2.0","id":"unknown","error":{"code":-32601,"message":"method not found","data":{"category":"protocol","retryable":false}}}

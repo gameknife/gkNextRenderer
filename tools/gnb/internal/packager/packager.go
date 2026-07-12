@@ -2,6 +2,7 @@ package packager
 
 import (
 	"archive/zip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -13,6 +14,11 @@ import (
 )
 
 func Package(repoRoot string, preset string, variant string, version string) error {
+	if variant == "windows" || variant == "linux" || variant == "macos" {
+		if err := prepareGnbSidecar(repoRoot, filepath.Join(repoRoot, "out", "build", preset), version); err != nil {
+			return err
+		}
+	}
 	switch variant {
 	case "windows":
 		return zipPaths(repoRoot, filepath.Join(repoRoot, "gkNextRenderer-windows.zip"), filepath.Join(repoRoot, "out", "build", preset), []string{
@@ -37,6 +43,37 @@ func Package(repoRoot string, preset string, variant string, version string) err
 	default:
 		return fmt.Errorf("unknown package variant %q", variant)
 	}
+}
+
+func prepareGnbSidecar(repoRoot, buildRoot, version string) error {
+	source := filepath.Join(repoRoot, "gnb"+platformExeExt())
+	if _, err := os.Stat(source); err != nil {
+		console.Warn("AI sidecar unavailable; package omits %s", source)
+		return nil
+	}
+	destination := filepath.Join(buildRoot, "bin", "gnb"+platformExeExt())
+	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+		return err
+	}
+	in, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(destination)
+	if err != nil {
+		return err
+	}
+	if _, err = io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return err
+	}
+	if err := out.Close(); err != nil {
+		return err
+	}
+	manifest := map[string]any{"protocolVersion": 1, "gnbVersion": fallbackVersion(version), "executable": filepath.Base(destination)}
+	raw, _ := json.MarshalIndent(manifest, "", "  ")
+	return os.WriteFile(filepath.Join(buildRoot, "bin", "gnb-agent-manifest.json"), raw, 0o644)
 }
 
 func fallbackVersion(version string) string {

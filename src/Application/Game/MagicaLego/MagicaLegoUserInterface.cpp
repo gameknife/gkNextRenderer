@@ -1560,16 +1560,16 @@ void MagicaLegoUserInterface::DrawAISection()
         }
 
         ImGui::SetNextItemWidth(120.0f);
-        auto providers = MagicaLego::FAIService::GetAvailableProviders();
-        auto currentType = aiService_->GetProviderType();
+		auto providers = aiService_->GetAvailableProviders();
+		const std::string currentId = aiService_->GetProviderId();
         std::string currentName = aiService_->GetProviderName();
 
         if (ImGui::BeginCombo("##ProviderSelect", currentName.c_str()))
         {
-            for (const auto& [type, name] : providers)
+			for (const auto& provider : providers)
             {
-                bool isSelected = (type == currentType);
-                bool isConfigured = aiService_->IsProviderConfigured(type);
+				const bool isSelected = provider.id == currentId;
+				const bool isConfigured = provider.configured && provider.available;
 
                 // Show unconfigured providers as disabled
                 if (!isConfigured)
@@ -1577,23 +1577,23 @@ void MagicaLegoUserInterface::DrawAISection()
                     ImGui::BeginDisabled();
                 }
 
-                if (ImGui::Selectable(name.c_str(), isSelected))
+				if (ImGui::Selectable(provider.displayName.c_str(), isSelected))
                 {
-                    if (type != currentType)
+					if (!isSelected)
                     {
-                        if (aiService_->SwitchProvider(type))
+						if (aiService_->SwitchProvider(provider.id))
                         {
-                            consoleOutput_.push_back(fmt::format("> [AI] Switched to {} provider", name));
-                            aiChatHistory_.push_back({fmt::format("Switched to {} provider", name), false, false});
+							consoleOutput_.push_back(fmt::format("> [AI] Switched to {} provider", provider.displayName));
+							aiChatHistory_.push_back({fmt::format("Switched to {} provider", provider.displayName), false, false});
                             aiChatScrollToBottom_ = true;
                             scrollToBottom_ = true;
                         }
                         else
                         {
                             consoleOutput_.push_back(fmt::format("> [AI] Failed to switch to {}: {}",
-                                name, aiService_->GetStatusMessage()));
+								provider.displayName, aiService_->GetStatusMessage()));
                             aiChatHistory_.push_back(
-                                {fmt::format("Failed to switch to {}: {}", name, aiService_->GetStatusMessage()),
+								{fmt::format("Failed to switch to {}: {}", provider.displayName, aiService_->GetStatusMessage()),
                                  false, true});
                             aiChatScrollToBottom_ = true;
                             scrollToBottom_ = true;
@@ -1606,7 +1606,7 @@ void MagicaLegoUserInterface::DrawAISection()
                     ImGui::EndDisabled();
                     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
                     {
-                        ImGui::SetTooltip("Not configured in ai_config.json");
+						ImGui::SetTooltip("Provider is not configured in gnb.toml/user AI config");
                     }
                 }
 

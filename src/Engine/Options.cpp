@@ -43,8 +43,8 @@ Options::Options(const int argc, const char* argv[])
 		("agent-visible-window", "Keep the desktop window visible while running agent validation or an agent script.", cxxopts::value<bool>(AgentVisibleWindow)->default_value("false")->implicit_value("true"))
 		("agent-validation-frames", "Frames to render before the agent validation screenshot.", cxxopts::value<uint32_t>(AgentValidationFrames)->default_value("90"))
 		("agent-validation-out", "Output path (without extension) for the agent validation screenshot.", cxxopts::value<std::string>(AgentValidationOutput)->default_value("screenshots/agent_validation"))
-		("agent-script", "Run an agent input validation script (.agentscript.json). Implies hidden agent validation mode.", cxxopts::value<std::string>(AgentScript)->default_value(""))
-		("agent-report", "Output JSON report path for --agent-script.", cxxopts::value<std::string>(AgentReport)->default_value(""))
+		("agent-control", "Loopback endpoint for gnb runtime control (host:port).", cxxopts::value<std::string>(AgentControl)->default_value(""))
+		("agent-control-token", "One-time token for gnb runtime control.", cxxopts::value<std::string>(AgentControlToken)->default_value(""))
 		("hidden-window", "Create the window hidden (no focus steal / no popup). Implied by --agent-validation; useful for unit tests.", cxxopts::value<bool>(HiddenWindow)->default_value("false")->implicit_value("true"))
 		("tui", "Render the hidden swapchain into the current terminal using truecolor block characters.", cxxopts::value<bool>(Tui)->default_value("false")->implicit_value("true"))
 		("tui-fps", "Maximum terminal refresh rate for --tui.", cxxopts::value<uint32_t>(TuiFps)->default_value("30"))
@@ -83,14 +83,6 @@ Options::Options(const int argc, const char* argv[])
 		if (SyncValidation)
 		{
 			Validation = true;
-		}
-		if (!AgentScript.empty())
-		{
-			AgentValidation = true;
-			if (!AgentVisibleWindow)
-			{
-				HiddenWindow = true;
-			}
 		}
 		DisableStreamline = DisableStreamline || disableStreamlineForApplication || AgentValidation;
 

@@ -10,6 +10,7 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <thread>
 
 class NextEngine;
 
@@ -34,14 +35,15 @@ namespace ScadStudio
     {
     public:
         explicit ScadAIService(NextEngine& engine);
+		~ScadAIService();
 
         bool IsConfigured() const;
         bool IsGenerating() const { return generating_.load(); }
         std::string ProviderName() const;
-        NextAI::EAIProviderType ProviderType() const;
-        std::vector<std::pair<NextAI::EAIProviderType, std::string>> Providers() const;
-        bool IsProviderConfigured(NextAI::EAIProviderType type) const;
-        bool SwitchProvider(NextAI::EAIProviderType type);
+		std::string ProviderId() const;
+		std::vector<NextAI::FAIProviderDescriptor> Providers() const;
+		bool IsProviderConfigured(const std::string& providerId) const;
+		bool SwitchProvider(const std::string& providerId);
         std::vector<std::string> CurrentProviderModels() const;
         std::string CurrentModel() const;
         bool SetCurrentModel(const std::string& model);
@@ -74,6 +76,7 @@ namespace ScadStudio
         mutable std::mutex mutex_;
         FScadGenResult pending_;
         std::string streamingText_;
+		std::jthread worker_;
 
         // Plain-text turn history (no embedded source); the live source is injected into
         // the latest user message at request-build time. Main-thread only.

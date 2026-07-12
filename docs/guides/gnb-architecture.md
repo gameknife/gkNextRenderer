@@ -172,7 +172,7 @@ dashboard 的 Git 标签页、`gnb git` 命令都复用它——想改 git 行�
 | `handlers_git.go` | Git 标签页：状态、分支、暂存/提交、stash、commit message 生成 |
 | `handlers_jobs.go` | 构建/运行/测试任务的启动、取消、SSE 流式日志，以及 JobSpec 构造器 |
 
-每个文件顶部都有一行注释说明职责。`chat_tools.go`（聊天的工具调用循环）、`jobs.go`（任务执行/缓冲）、`chat.go`（会话持久化）、`tests.go`、`ansi.go`、`activation.go` 按机制单独成文件。
+每个文件顶部都有一行注释说明职责。`jobs.go`（任务执行/缓冲）、`chat.go`（会话持久化）、`tests.go`、`ansi.go`、`activation.go` 按机制单独成文件。Dashboard 不再持有独立的聊天工具循环。
 
 ### 9.3 视图模型与渲染
 
@@ -186,11 +186,16 @@ dashboard 的 Git 标签页、`gnb git` 命令都复用它——想改 git 行�
 - 浏览器通过 `GET /jobs/{id}/stream`（`handleJobStream`）建立 SSE，实时追加日志行；`JobSnapshot` 用于首屏把已有缓冲渲染出来。
 - `buildJobSpec` / `runJobSpec` / `testJobSpec` 负责把一个 target 翻译成具体命令行。
 
-### 9.5 聊天与工具调用（`chat.go` + `chat_tools.go`）
+### 9.5 聊天与工具调用
 
-- `ChatStore`（`chat.go`）管理多会话，持久化到一个 JSON 文件（`chatStorePath`）。
-- `runChatToolLoop`（[chat_tools.go:89](../../tools/gnb/internal/dashboard/chat_tools.go)）是**本地 LLM 智能体**的核心：多轮地让模型产出「工具调用 JSON」，执行**只读**工具（列目录、找文件、搜文本、找符号、读文件、跑只读命令），把结果回灌给模型，直到模型给出最终回答。`validateReadOnlyCommand` 保证 `run_cmd` 工具只能跑安全命令。
-- 引擎层和 dashboard 复用同一个 `llama-server`，host/port/model 通过 `external/llm/run/server.pid` 自动发现。
+- `ChatStore` 管理 v2 多会话，持久化 profile、provider 和 model 字符串 ID。
+- Dashboard、CLI、SCAD 和 commit message 共用 `internal/ai` 的 Router、Agent、Tool Registry、Session 与 Workflow；repo tools 位于 `internal/repotools`。
+- provider/model 由 catalog 动态提供；endpoint、API key、LocalLlama 生命周期和 PID 发现只存在于 gnb，不进入 Engine。
+- Engine 应用通过 `gnb agent bridge --stdio` 的协议 v1 薄客户端发起 chat/agent/workflow；Editor 场景工具以 remote tool 回调在主线程执行。
+
+### 9.6 验证控制面
+
+`internal/validate` 解释 `.agentscript.json`，启动目标进程并通过随机 loopback TCP 端口和一次性 token 调用 Engine 原子控制端点。等待、断言、report、截图编排和进程监管都属于 gnb；Engine 只提供 input/query/cvar/exec/screenshot/quit 原语。`gnb shot` 复用同一控制面完成 wait-frame → screenshot → wait-file → quit。
 
 ## 10. 实操指南
 
